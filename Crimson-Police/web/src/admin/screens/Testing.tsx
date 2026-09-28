@@ -36,6 +36,20 @@ const STATUS_ICON: Record<TestLocationStatus, IconName> = { passed: 'checkCircle
 
 type StatusFilter = 'all' | 'todo' | 'failed' | 'passed';
 
+/** The server clock (os.time) ticking locally: the skew is taken from the last reply's serverTime. */
+function useServerNow(serverTime: number | undefined): number {
+  const [tick, setTick] = useState(() => Math.floor(Date.now() / 1000));
+  const [skew, setSkew] = useState(0);
+  useEffect(() => {
+    if (typeof serverTime === 'number' && serverTime > 0) setSkew(serverTime - Math.floor(Date.now() / 1000));
+  }, [serverTime]);
+  useEffect(() => {
+    const id = window.setInterval(() => setTick(Math.floor(Date.now() / 1000)), 30000);
+    return () => window.clearInterval(id);
+  }, []);
+  return tick + skew;
+}
+
 function timeAgo(ts: number, now: number): string {
   const s = Math.max(0, Math.floor(now - ts));
   if (s < 60) return t('test.ui.ago_now');
@@ -290,19 +304,19 @@ function matchesFilter(loc: TestLocationRow, filter: StatusFilter): boolean {
 
 interface CatalogProps {
   view: TestsView;
+  now: number;
   pending: TestPendingRecord[];
   canStart: boolean;
   onTest: (preset: StartPreset) => void;
   onRecord: (p: TestPendingRecord) => void;
 }
 
-function Catalog({ view, pending, canStart, onTest, onRecord }: CatalogProps) {
+function Catalog({ view, now, pending, canStart, onTest, onRecord }: CatalogProps) {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<StatusFilter>('all');
   const [type, setType] = useState('');
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const missions = asList(view.missions);
-  const now = view.serverTime || Math.floor(Date.now() / 1000);
 
   const types = useMemo(() => {
     const seen = new Map<string, string>();
@@ -881,7 +895,7 @@ export default function AdminTesting() {
   const lobby = st ? st.lobby : null;
   const enabled = view ? view.config.enabled : true;
   const canStart = enabled && !active;
-  const now = view?.serverTime || Math.floor(Date.now() / 1000);
+  const now = useServerNow(st?.serverTime ?? view?.serverTime);
 
   const openStart = (p: StartPreset | null) => {
     if (active) {
@@ -956,7 +970,7 @@ export default function AdminTesting() {
                   <EmptyState icon="layers" title={t('test.ui.empty_title')} text={t('test.ui.empty_text')} />
                 </Card>
               ) : (
-                <Catalog view={view} pending={pending} canStart={canStart} onTest={openStart} onRecord={setRecording} />
+                <Catalog view={view} now={now} pending={pending} canStart={canStart} onTest={openStart} onRecord={setRecording} />
               )}
             </>
           ) : null}

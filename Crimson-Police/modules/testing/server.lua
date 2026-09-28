@@ -43,7 +43,7 @@
     CP.Testing.pendingInvites(src) -> { TestInvite, ... }
     CP.Testing.onRunEnded(run, state, endReason)               (hook from CP.Runs, test runs only)
   Net
-    callbacks admin:getTests (testRun) · test:state (testRun) · test:candidates (testRun) ·
+    callbacks admin:getTests (testRun) · test:state (testRun or builderEdit: own data only) · test:candidates (testRun) ·
               test:pendingInvites (anyone: their own invitations)
     actions   server:admin:startTest { missionId, location, tier, useStartRoute, testers } (testRun)
               server:admin:recordTest { missionId, location, tier, result, note } (testRun; builderEdit for a
@@ -310,8 +310,29 @@ local function ensureNormalized(def, status)
     return d
 end
 
+-- Archived custom missions (ids and versions). CP.Builder has no listing hook for them yet (requested:
+-- archivedDefs / getArchived); until it has, the ids and versions are read (read-only) from its
+-- cp_custom_missions rows and the definitions from the archived files (CP.Missions.parse + normalize).
+local function archivedRows(id)
+    db()
+    local sql = "SELECT id, published_version FROM cp_custom_missions WHERE status = 'archived'"
+    local params = {}
+    if id then
+        sql = sql .. ' AND id = ?'
+        params[1] = id
+    end
+    local ok, rows = pcall(MySQL.query.await, sql, params)
+    if not ok then
+        warnOnce('archivedRows', 'reading the archived custom missions failed: %s', tostring(rows))
+        return {}
+    end
+    return type(rows) == 'table' and rows or {}
+end
+
+local archivedCache = {}   -- id -> { hash, def } (the file only changes on archive/restore or a hand edit)
+
 -- Archived custom missions are unregistered from CP.Missions: ask the builder, else read the file.
-local function archivedMission(id)
+local function archivedMission(id, version)
     local ok, def = call('Builder', 'getArchived', id)
     if ok and type(def) == 'table' then
         local d = ensureNormalized(def, 'archived')
@@ -323,12 +344,24 @@ local function archivedMission(id)
         local path = dir .. 'archived/' .. id .. '.lua'
         local content = LoadResourceFile(CP.resource, path)
         if content and content ~= '' then
+            local hash = U.hashHex(content)
+            local cached = archivedCache[id]
+            if cached and cached.hash == hash then
+                if version ~= nil then cached.def.version = version end
+                return cached.def
+            end
             local okP, raw = call('Missions', 'parse', content, '@' .. path)
             if okP and type(raw) == 'table' and raw.id == id then
-                raw.defHash = U.hashHex(content)
+                raw.defHash = hash
                 raw.filePath = path
+                raw.version = version or raw.version
                 local d = ensureNormalized(raw, 'archived')
-                if d then d.status = 'archived'; return d end
+                if d then
+                    d.status = 'archived'
+                    if d.version == nil and version ~= nil then d.version = version end
+                    archivedCache[id] = { hash = hash, def = d }
+                    return d
+                end
             end
         end
     end
@@ -339,7 +372,12 @@ local function resolveMission(id)
     if type(id) ~= 'string' or #id > 40 or not id:match(MISSION_ID) then return nil, 'err.test_unknown_mission' end
     local ok, def = call('Missions', 'get', id)
     if ok and type(def) == 'table' then return def end
-    local arch = archivedMission(id)
+    local version
+    if not has('Builder', 'getArchived') then
+        local row = archivedRows(id)[1]
+        version = row and tonumber(row.published_version) or nil
+    end
+    local arch = archivedMission(id, version)
     if arch then return arch end
     return nil, 'err.test_unknown_mission'
 end
@@ -1356,6 +1394,15 @@ local function allMissions()
                 if d then d.status = 'archived'; byId[d.id] = d end
             end
         end
+    elseif not has('Builder', 'archivedDefs') then
+        -- Fallback until the builder lists them: archived rows + their archived files.
+        for _, row in ipairs(archivedRows()) do
+            local id = row.id
+            if type(id) == 'string' and #id <= 40 and id:match(MISSION_ID) and not byId[id] then
+                local d = archivedMission(id, tonumber(row.published_version))
+                if d then byId[id] = d end
+            end
+        end
     end
     return byId
 end
@@ -1537,9 +1584,10 @@ CP.Net.callback('admin:getTests', function(src)
     return Testing.list()
 end, { rate = 3 })
 
+-- Only the caller's own lobby, test and results: admins, and Mission Builder users (their draft tests).
 CP.Net.callback('test:state', function(src)
     local ok, errKey = allowed(src, 'testRun')
-    if not ok then return nil, errKey end
+    if not ok and not can(src, 'builderEdit') then return nil, errKey end
     return Testing.state(src)
 end, { rate = 4 })
 

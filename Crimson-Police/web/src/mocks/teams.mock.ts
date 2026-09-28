@@ -1,13 +1,30 @@
 // Browser mocks of the teams slice: getUnit + unit actions, sup:getOperation + operation actions.
 // URL variants for screenshots and checks:
-//   ?teams=leader (default) | member | solo | invites | locked      the Unit screen
-//   ?op=joining (default) | running | waiting | none | cooldown | empty   the Cross-Department panel
+//   ?teams=leader (default) | member | solo | invites | locked | lockedoff | long | full   the Unit screen
+//   ?op=joining (default) | running | waiting | none | cooldown | empty | fresh   the Cross-Department panel
+//   &lua=1   answer like Lua does: empty lists arrive as {} objects and nil fields are missing keys
 import { emitDebug, registerMock } from '../shared/nui';
 import type { EligibleMission, OperationInfo, OperationParticipant, OperationView, UnitScreenView } from '../types/teams';
 import { devState } from './devState';
 import { MOCK_DEPARTMENTS } from './samples';
 
 const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams();
+const LUA = params.get('lua') === '1';
+
+/** What a Lua table looks like after msgpack/JSON: [] -> {} and null (nil) keys dropped. */
+function luaify<T>(v: T): T {
+  if (Array.isArray(v)) return (v.length === 0 ? {} : v.map((x) => luaify(x))) as T;
+  if (v && typeof v === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [k, x] of Object.entries(v as Record<string, unknown>)) {
+      if (x === null || x === undefined) continue;
+      out[k] = luaify(x);
+    }
+    return out as T;
+  }
+  return v;
+}
+const reply = <T,>(v: T): T => (LUA ? luaify(v) : v);
 const nowS = () => Math.floor(Date.now() / 1000);
 const INVITE_TTL = 120;
 const MAX_UNIT = 4;
@@ -25,6 +42,7 @@ const P = {
   rosa: { src: 33, name: 'Rosa Delgado', callsign: 'F-07', rank: 'Special Agent', departmentShort: 'FIB' },
   owen: { src: 36, name: 'Owen Fraser', callsign: null, rank: 'Trooper', departmentShort: 'SAST' },
   priya: { src: 38, name: 'Priya Nair', callsign: 'F-19', rank: 'Agent', departmentShort: 'FIB' },
+  long: { src: 41, name: 'Maximiliano Bartholomew Montgomery-Fitzgerald', callsign: 'F-123456789-LONGCALL', rank: 'Senior Supervisory Special Agent in Charge', departmentShort: 'FIB' },
 } satisfies Record<string, Person>;
 
 const ME_SRC = 12;
@@ -59,6 +77,15 @@ const units: { unit: MockUnit | null; invites: MockInvite[]; pool: Person[]; onR
   } else if (v === 'locked') {
     units.unit = { id: 8, leader: ME_SRC, locked: true, members: [], pending: [] };
     units.onRun = true;
+  } else if (v === 'lockedoff') {
+    // The unit is on its run; the viewer abandoned it and is still a member.
+    units.unit = { id: 8, leader: P.maria.src, locked: true, members: [P.maria, P.dana], pending: [] };
+  } else if (v === 'long') {
+    units.unit = { id: 4, leader: P.long.src, locked: false, members: [P.long, P.owen], pending: [{ p: P.dana, expiresAt: t + 48 }] };
+    units.pool = [P.priya, { ...P.long, src: 42, name: 'Alexandria Konstantinopoulou-Vanderbilt the Third' }, P.rosa];
+    units.invites = [{ unitId: 7, from: P.long, expiresAt: t + 9, size: 3 }];
+  } else if (v === 'full') {
+    units.unit = { id: 2, leader: ME_SRC, locked: false, members: [P.maria, P.dana, P.grace], pending: [] };
   } else if (v === 'invites') {
     units.invites = [
       { unitId: 5, from: P.grace, expiresAt: t + 103, size: 2 },
@@ -130,7 +157,7 @@ function pushUnit() {
   emitDebug('push', { topic: 'unit', data: { unitId: units.unit?.id ?? false } }, 50);
 }
 
-registerMock('request', 'getUnit', () => unitView());
+registerMock('request', 'getUnit', () => reply(unitView()));
 
 registerMock('action', 'server:unitInvite', (target: unknown) => {
   const src = Number(typeof target === 'object' && target ? (target as { targetSrc?: number }).targetSrc : target);
@@ -218,6 +245,12 @@ function baseInfo(id: number, missionId: string, launchedAt: number): MockOp['in
 (function initOps() {
   const v = params.get('op') ?? 'joining';
   const t = nowS();
+  if (v === 'fresh') {
+    // Just launched: nobody joined yet (the list Lua sends as {}).
+    ops.lastLaunch = t - 3;
+    ops.op = { info: baseInfo(9, 'prison_break', t - 3), joinEndsAt: t + JOIN_WINDOW - 3 };
+    return;
+  }
   if (v === 'none' || v === 'empty') {
     ops.lastLaunch = t - 7200;
     return;
@@ -301,7 +334,7 @@ function pushOp() {
   emitDebug('push', { topic: 'operation', data: { id: ops.op?.info.id ?? false, status: ops.op?.info.status ?? false } }, 50);
 }
 
-registerMock('request', 'sup:getOperation', () => opView());
+registerMock('request', 'sup:getOperation', () => reply(opView()));
 
 for (const scope of ['sup', 'admin'] as const) {
   registerMock('action', `server:${scope}:opLaunch`, (payload: { missionId?: string } | null) => {

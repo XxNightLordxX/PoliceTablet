@@ -99,6 +99,9 @@ local NO_VEHICLE_PENALTIES = {
     gang_shootout = true, hostage_rescue = true, prison_break = true, weekly_boss_kingpin = true,
 }
 
+-- The playable map (Los Santos and Blaine County): every point must be inside it.
+local MAP = { x = { -4000, 4600 }, y = { -4200, 8000 } }
+
 -- ARCHITECTURE 3.3: every objective field (and the keys of its sub-tables) per block.
 local COMMON = { block = true, label = true, minSeconds = true, presenceRange = true }
 local FIELDS = {
@@ -193,6 +196,8 @@ local function checkCommon(id, def)
                 if d <= z.radius then H.ok(false, ('%s is %.0f m inside no-build zone %s'):format(path, z.radius - d, z.label)) end
             end
             H.ok(v.z > 0 and v.z < 400, ('%s: ground height %.2f is plausible'):format(path, v.z))
+            H.ok(v.x >= MAP.x[1] and v.x <= MAP.x[2] and v.y >= MAP.y[1] and v.y <= MAP.y[2],
+                ('%s (%.0f, %.0f) is inside the GTA V map'):format(path, v.x, v.y))
             if v.w ~= nil then H.ok(v.w >= 0 and v.w < 360, path .. ': heading in 0..360') end
         end)
     end
@@ -270,9 +275,16 @@ local function checkRoute(id, li, route, want)
     for i = 2, #pts do gaps[#gaps + 1] = { d2(pts[i - 1], pts[i]), i - 1 } end
     if route.loop then gaps[#gaps + 1] = { d2(pts[#pts], pts[1]), #pts } end
     for _, g in ipairs(gaps) do
-        H.ok(g[1] <= 200, ('%s gap after waypoint %d is %.0f m'):format(where, g[2], g[1]))
-        if g[1] > 150 then note('%s gap after waypoint %d is %.0f m (straight road)', where, g[2], g[1]) end
+        -- Route recording: a waypoint at least every 150 m (Config.Builder.route.maxGap).
+        H.ok(g[1] <= Config.Builder.route.maxGap, ('%s gap after waypoint %d is %.0f m (150 m max)'):format(where, g[2], g[1]))
         H.ok(g[1] >= 2, ('%s has no duplicate waypoints (%d)'):format(where, g[2]))
+    end
+    -- Contiguous on the ground: no height jump a road cannot have (30% grade + 3 m of node noise),
+    -- which catches a waypoint on a bridge or freeway above the road it belongs to.
+    for i = 2, #pts + (route.loop and 1 or 0) do
+        local a, b = pts[i - 1], pts[(i - 1) % #pts + 1]
+        local dz = math.abs(a.z - b.z)
+        H.ok(dz <= 0.3 * d2(a, b) + 3, ('%s waypoints %d-%d climb %.1f m in %.0f m'):format(where, i - 1, (i - 1) % #pts + 1, dz, d2(a, b)))
     end
     local len = routeLength(pts, route.loop)
     if want.loop ~= nil then H.eq(route.loop == true, want.loop, where .. ' loop flag') end
@@ -338,7 +350,13 @@ do
                 end
             end
             H.eq(inside, 1, ('beat_patrol: district %d start circle holds only the first checkpoint'):format(i))
+            for j, p in ipairs(cps) do
+                H.ok(d2(p, loc.start.coords) <= 1500, ('beat_patrol: district %d checkpoint %d is in the district (%.0f m from the start)'):format(i, j, d2(p, loc.start.coords)))
+            end
         end
+        -- minSeconds flags a run as too_fast: it must stay below a fast legal run (5 stops of
+        -- stopFor seconds plus the drives between them).
+        H.ok(o.minSeconds <= o.count * o.stopFor + 30, ('beat_patrol: minSeconds %d leaves room for a fast legal run'):format(o.minSeconds))
     end
 end
 
@@ -386,6 +404,9 @@ do
                 end
             end
             H.ok(inside >= 1, ('business_check: area %d start circle holds its first door'):format(i))
+            for j, d in ipairs(doors) do
+                H.ok(d2(d.coords, loc.start.coords) <= 1500, ('business_check: area %d door %d is in the area (%.0f m from the start)'):format(i, j, d2(d.coords, loc.start.coords)))
+            end
         end
         H.ok(total >= 12, ('business_check: %d businesses in total (12+)'):format(total))
     end
@@ -448,6 +469,13 @@ do
         H.eq(o.timerStart, 'first', 'evoc_course: clock starts at the first checkpoint')
         H.eq(o.failIfUndriveable, true, 'evoc_course: fails when undriveable')
         H.ok(type(o.medals) == 'table', 'evoc_course: medal times on')
+        -- A gold run must never be refused and flagged too_fast: minSeconds (counted from the start
+        -- marker) stays well below the fastest layout's gold time (counted from checkpoint 1).
+        local fastestGold = math.huge
+        for _, loc in ipairs(def.locations) do
+            if type(loc.medals) == 'table' then fastestGold = math.min(fastestGold, loc.medals.gold) end
+        end
+        H.ok(o.minSeconds <= fastestGold - 5, ('evoc_course: minSeconds %d is below every gold time (fastest %d s)'):format(o.minSeconds, fastestGold))
         local b = bonusMap(def.bonuses)
         H.ok(b.medal_gold and b.medal_gold.points == 50, 'evoc_course: gold +50')
         H.ok(b.medal_silver and b.medal_silver.points == 25, 'evoc_course: silver +25')

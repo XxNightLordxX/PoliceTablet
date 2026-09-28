@@ -94,7 +94,10 @@ export default function Leaderboard() {
   const { data, loading, error, refetch } = useRequest<BoardView>('getBoard', args, { pollMs: REFRESH_MS });
 
   // A stale reply for other args must not be shown as the current board.
-  const board = data && data.period === period && data.filter === effectiveFilter ? data : null;
+  const board =
+    data && data.period === period && data.filter === effectiveFilter && (effectiveFilter !== 'department' || !data.department || data.department === department)
+      ? data
+      : null;
   const rows = asList(board?.rows);
   const me = board?.me ?? null;
   const minRuns = board?.minRuns ?? 3;

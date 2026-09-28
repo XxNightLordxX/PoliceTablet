@@ -678,22 +678,31 @@ function Ops.join(src, opId)
     if not src then return false, 'err.invalid_payload' end
     local officer, errKey = getOfficer(src)
     if not officer then return false, errKey or 'err.not_police' end
-    -- No yields below: the checks and the change happen together.
-    local cur = op
-    if not cur then return false, 'err.op_none' end
-    if opId ~= nil and opId ~= cur.id then return false, 'err.op_not_found' end
-    local now = os.time()
-    if cur.status ~= 'joining' or cur.joinClosed or not cur.joinEndsAt or now >= cur.joinEndsAt then
-        return false, 'err.op_join_closed'
-    end
-    for _, p in ipairs(cur.participants) do
-        if p.src == src or p.citizenid == officer.citizenid then return false, 'err.op_already_joined' end
-    end
     local max = maxFor()
-    if #cur.participants >= max then return false, 'err.op_full' end
+    -- The operation's state; run once before and once after the checks that may yield.
+    local function stateCheck()
+        local c = op
+        if not c then return nil, 'err.op_none' end
+        if opId ~= nil and opId ~= c.id then return nil, 'err.op_not_found' end
+        if c.status ~= 'joining' or c.joinClosed or not c.joinEndsAt or os.time() >= c.joinEndsAt then
+            return nil, 'err.op_join_closed'
+        end
+        for _, p in ipairs(c.participants) do
+            if p.src == src or p.citizenid == officer.citizenid then return nil, 'err.op_already_joined' end
+        end
+        if #c.participants >= max then return nil, 'err.op_full' end
+        return c
+    end
+    local cur, why = stateCheck()
+    if not cur then return false, why end
     if inArena(src) then return false, 'err.in_arena' end
     if onRun(src) then return false, 'err.already_on_run' end
-    if isOnCall(src) then return false, 'err.on_call' end
+    if isOnCall(src) then return false, 'err.on_call' end          -- may yield (active-call lookup)
+    -- No yields below: the state is checked again and the change happens with it.
+    cur, why = stateCheck()
+    if not cur then return false, why end
+    if onRun(src) then return false, 'err.already_on_run' end
+    local now = os.time()
     cur.participants[#cur.participants + 1] = {
         src = src, citizenid = officer.citizenid, name = CP.U.clip(officer.name or '?', 64),
         callsign = officer.callsign and CP.U.clip(officer.callsign, 32) or nil,

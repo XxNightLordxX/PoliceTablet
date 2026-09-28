@@ -140,7 +140,7 @@ function Notice({ icon, tone, title, text, action }: { icon: IconName; tone: 'in
   );
 }
 
-function CardStatus({ card, offset, stamp, onUnlocked }: { card: TypeCard; offset: number; stamp: unknown; onUnlocked: () => void }) {
+function CardStatus({ card, offset, stamp, onUnlocked, readyText }: { card: TypeCard; offset: number; stamp: unknown; onUnlocked: () => void; readyText?: string }) {
   if (card.locked) {
     const left = secondsUntil(card.locked.until, offset);
     return (
@@ -179,7 +179,7 @@ function CardStatus({ card, offset, stamp, onUnlocked }: { card: TypeCard; offse
   return (
     <div className="run_ui-status run_ui-status--ready">
       <Icon name="checkCircle" size={14} />
-      <span className="run_ui-status__text">{t('board.card.ready')}</span>
+      <span className="run_ui-status__text">{readyText ?? t('board.card.ready')}</span>
     </div>
   );
 }
@@ -306,7 +306,7 @@ function BossCardView({
         </div>
       </div>
       <div className="run_ui-type__foot">
-        <CardStatus card={statusCard} offset={offset} stamp={stamp} onUnlocked={onUnlocked} />
+        <CardStatus card={statusCard} offset={offset} stamp={stamp} onUnlocked={onUnlocked} readyText={t('board.boss.ready')} />
         <Button variant={blocked ? 'secondary' : 'primary'} icon="flame" disabled={blocked || busy} onClick={() => onAccept(boss)}>
           {t('board.boss.accept')}
         </Button>

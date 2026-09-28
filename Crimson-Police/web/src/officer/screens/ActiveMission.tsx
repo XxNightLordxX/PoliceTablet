@@ -215,15 +215,15 @@ function RouteStatus({ route, test, stamp }: { route: RunRoute | null; test: boo
 }
 
 function RouteCard({
-  view, stamp, gpsBusy, recalcBusy, onGps, onRecalc,
+  view, recalcsLeft, stamp, gpsBusy, recalcBusy, onGps, onRecalc,
 }: {
-  view: ActiveMissionData; stamp: unknown; gpsBusy: boolean; recalcBusy: boolean; onGps: () => void; onRecalc: () => void;
+  view: ActiveMissionData; recalcsLeft: number; stamp: unknown; gpsBusy: boolean; recalcBusy: boolean; onGps: () => void; onRecalc: () => void;
 }) {
   const route = view.route ?? null;
   const status = route?.status ?? 'disabled';
   const arrived = status === 'arrived';
   const routeOn = status === 'on' || status === 'off';
-  const left = Math.max(0, Math.floor(Number(view.recalcsLeft) || 0));
+  const left = recalcsLeft;
   return (
     <Card
       title={t('run.route.title')}
@@ -411,6 +411,9 @@ export default function ActiveMission() {
   const [recalcBusy, setRecalcBusy] = useState(false);
   const [logSending, setLogSending] = useState<string | null>(null);
   const [loggedPoint, setLoggedPoint] = useState<number | null>(null);
+  // Recalculations left as the recalcRoute reply reported them, until the next server view arrives
+  // (a local copy of the view would restart the timer from its stale value).
+  const [recalcsOverride, setRecalcsOverride] = useState<number | null>(null);
 
   // A 'run' push carrying the view (or null when the run ended) applies at once; the refetch confirms it.
   usePush<ActiveMissionData | null>('run', (view) => {
@@ -427,10 +430,21 @@ export default function ActiveMission() {
   // The view object itself is the reset key: every fresh server value restarts the local countdowns.
   const stamp = view;
 
+  useEffect(() => {
+    setRecalcsOverride(null);
+  }, [data]);
+
   // The log panel stays "sent" for a point until the server moves on to another point (or closes it).
+  // If the server keeps asking for the same point (it refused the log), the buttons come back after 6 s.
   const logPoint = view?.log ? view.log.point : null;
   useEffect(() => {
-    if (loggedPoint !== null && logPoint !== loggedPoint) setLoggedPoint(null);
+    if (loggedPoint === null) return;
+    if (logPoint !== loggedPoint) {
+      setLoggedPoint(null);
+      return;
+    }
+    const id = window.setTimeout(() => setLoggedPoint(null), 6000);
+    return () => window.clearTimeout(id);
   }, [logPoint, loggedPoint]);
 
   const openBoard = () => navigate('board');
@@ -450,8 +464,7 @@ export default function ActiveMission() {
     setRecalcBusy(false);
     setConfirmRecalc(false);
     if (res.ok && res.data && typeof res.data.recalcsLeft === 'number') {
-      const leftNow = res.data.recalcsLeft;
-      setData((prev) => (prev ? { ...prev, recalcsLeft: leftNow } : prev));
+      setRecalcsOverride(Math.max(0, Math.floor(res.data.recalcsLeft)));
     } else if (!res.ok) {
       errorToast(res.error);
     }
@@ -506,7 +519,7 @@ export default function ActiveMission() {
   const typeName = typeLabel(session, view.missionType);
   const activeOthers = asArray(view.partners).filter((p) => p.status === 'active' && !isMe(p, view, session)).length;
   const logOpen = view.state === 'in_progress' && !!view.log && asArray(view.log.choices).length > 0;
-  const recalcsLeft = Math.max(0, Math.floor(Number(view.recalcsLeft) || 0));
+  const recalcsLeft = recalcsOverride ?? Math.max(0, Math.floor(Number(view.recalcsLeft) || 0));
   // The route card shows while this participant still heads to the start; once In progress an arrived or
   // untracked route is a chip in the hero instead.
   const routing = !!view.route && (view.route.status === 'on' || view.route.status === 'off');
@@ -565,6 +578,7 @@ export default function ActiveMission() {
           {showRoute ? (
             <RouteCard
               view={view}
+              recalcsLeft={recalcsLeft}
               stamp={stamp}
               gpsBusy={gpsBusy}
               recalcBusy={recalcBusy}

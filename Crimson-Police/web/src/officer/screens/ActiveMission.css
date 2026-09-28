@@ -143,20 +143,21 @@
 /* ── start route ──────────────────────────────────────────────────────────── */
 .cp-card.run_ui-route.is-off { border-color: rgba(var(--cp-warning-rgb), 0.6); }
 .run_ui-route__status {
-  --r: var(--cp-info-rgb);
-  --r-solid: var(--cp-info);
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 10px 12px;
   border-radius: var(--cp-radius-sm);
-  border: 1px solid rgba(var(--r), 0.35);
-  background: rgba(var(--r), 0.1);
+  border: 1px solid rgba(var(--cp-info-rgb), 0.35);
+  background: rgba(var(--cp-info-rgb), 0.1);
 }
-.run_ui-route__status > svg { flex: none; color: var(--r-solid); }
-.run_ui-route__status.is-off { --r: var(--cp-warning-rgb); --r-solid: var(--cp-warning); }
-.run_ui-route__status.is-arrived { --r: var(--cp-success-rgb); --r-solid: var(--cp-success); }
-.run_ui-route__status.is-disabled { --r: var(--cp-text-rgb); --r-solid: var(--cp-muted); background: rgba(var(--cp-text-rgb), 0.04); border-color: var(--cp-border); }
+.run_ui-route__status > svg { flex: none; color: var(--cp-info); }
+.run_ui-route__status.is-off { border-color: rgba(var(--cp-warning-rgb), 0.45); background: rgba(var(--cp-warning-rgb), 0.1); }
+.run_ui-route__status.is-off > svg { color: var(--cp-warning); }
+.run_ui-route__status.is-arrived { border-color: rgba(var(--cp-success-rgb), 0.35); background: rgba(var(--cp-success-rgb), 0.1); }
+.run_ui-route__status.is-arrived > svg { color: var(--cp-success); }
+.run_ui-route__status.is-disabled { border-color: var(--cp-border); background: rgba(var(--cp-text-rgb), 0.04); }
+.run_ui-route__status.is-disabled > svg { color: var(--cp-muted); }
 .run_ui-route__grow { flex: 1; min-width: 0; }
 .run_ui-route__line { font-weight: 700; }
 .run_ui-route__sub { font-size: var(--cp-fs-sm); color: var(--cp-muted); line-height: 1.4; }
@@ -216,7 +217,7 @@
   border: 1.5px solid var(--cp-border-strong);
 }
 .run_ui-obj.is-current .run_ui-obj__mark { color: var(--cp-primary-contrast); background: var(--cp-primary); border-color: var(--cp-primary); }
-.run_ui-obj.is-done .run_ui-obj__mark { color: #06140c; background: var(--cp-success); border-color: var(--cp-success); }
+.run_ui-obj.is-done .run_ui-obj__mark { color: var(--cp-bg); background: var(--cp-success); border-color: var(--cp-success); }
 .run_ui-obj__body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; padding-top: 2px; }
 .run_ui-obj__row { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .run_ui-obj__label { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; }

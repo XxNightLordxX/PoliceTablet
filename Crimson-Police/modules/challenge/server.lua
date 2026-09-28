@@ -91,6 +91,7 @@ local SCORING = { average = true, total = true, top10 = true }
 
 local seasons = { at = 0, loaded = false, current = nil, latest = nil, byId = {}, list = {} }
 local collectCache = {}    -- seasonId -> data
+local collectGen = 0       -- bumped by invalidate(): aggregates read before it are not cached
 local bannerCache = nil    -- { at, row }
 local busy = false
 local booted = false
@@ -421,6 +422,7 @@ local function collect(seasonId, fresh)
     local season = C.seasonById(seasonId)
     if not season then return nil end
     db()
+    local gen = collectGen
     local data = { at = os.time(), season = season, officers = {}, weeks = {}, bounties = {} }
     for _, r in ipairs(MySQL.query.await(OFFICER_SQL, { seasonId }) or {}) do
         local dept = tostring(r.department)
@@ -442,7 +444,7 @@ local function collect(seasonId, fresh)
     for _, r in ipairs(MySQL.query.await('SELECT week, objective, winner FROM cp_dept_bounties WHERE season_id = ? AND week >= 1', { seasonId }) or {}) do
         data.bounties[int(r.week)] = { objective = tostring(r.objective), winner = r.winner ~= nil and tostring(r.winner) or nil }
     end
-    collectCache[seasonId] = data
+    if gen == collectGen then collectCache[seasonId] = data end
     return data
 end
 C._collect = collect
@@ -637,6 +639,7 @@ end
 
 -- ── caches and banner ───────────────────────────────────────────────────────
 function C.invalidate()
+    collectGen = collectGen + 1
     collectCache = {}
     bannerCache = nil
 end
@@ -901,7 +904,7 @@ function C.startSeason(src, name)
         db()
         local prev = C.currentSeason(true)
         if prev then
-            local okEnd, err = endSeasonInternal(src, prev, 'season_start')
+            local okEnd, err = endSeasonInternal(src, prev, CP.L('challenge.audit_replaced', { name = name }))
             if not okEnd then return false, err end
         end
         local now = os.time()

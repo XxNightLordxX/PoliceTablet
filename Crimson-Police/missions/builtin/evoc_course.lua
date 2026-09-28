@@ -3,8 +3,10 @@
   Emergency vehicle operations course: drive every checkpoint in order in a police vehicle (a
   missed one must be driven through before the next counts). Each wall or vehicle contact adds
   2 s. Gold / Silver / Bronze by course time replace the common time bonus; no contact +10.
-  Layouts (checkpoint markers only, no cones or props) on open airfield ground: LSIA (runway
-  and taxiway west of the terminal), Sandy Shores Airfield runway, McKenzie Field (Grapeseed).
+  Layouts (checkpoint markers only, no cones or props) on open airfield ground: LSIA (runways
+  and taxiways west of the terminal), Sandy Shores Airfield runway, McKenzie Field (Grapeseed:
+  a slalom down the airstrip and back, kept on the flat strip and clear of Seaview Rd).
+  Checkpoint heights are ground + 1 m (the marker is drawn 1 m below the point).
   Blocks: checkpoint_route (use = 'all', drive-through, medals from location.medals).
   Start: the course start marker; the course clock starts at checkpoint 1 (timerStart = 'first').
 ]]
@@ -72,23 +74,23 @@ RegisterMission({
     },
     {
       label       = 'McKenzie Field, Grapeseed',
-      start       = { coords = vec3(2101.72, 4774.79, 40.95), radius = 20.0 },  -- course start marker
-      medals      = { gold = 40, silver = 50, bronze = 60 },  -- seconds, first to last checkpoint (691 m)
-      checkpoints = {
-        vec3(2070.00, 4760.00, 40.95),
-        vec3(2027.22, 4733.43, 40.95),
-        vec3(1976.83, 4723.18, 40.95),
-        vec3(1936.59, 4691.17, 40.95),
-        vec3(1886.20, 4680.91, 40.95),
-        vec3(1834.36, 4650.12, 40.95),
-        vec3(1802.03, 4612.98, 40.95),
-        vec3(1819.24, 4587.90, 40.95),
-        vec3(1868.78, 4599.97, 40.95),
-        vec3(1916.82, 4638.92, 40.95),
-        vec3(1977.54, 4650.68, 40.95),
-        vec3(2025.58, 4689.63, 40.95),
-        vec3(2079.65, 4703.81, 40.95),
-        vec3(2107.75, 4750.02, 40.95),
+      start       = { coords = vec3(2101.72, 4774.79, 41.21), radius = 20.0 },  -- course start marker, hangar apron
+      medals      = { gold = 36, silver = 44, bronze = 55 },  -- seconds, first to last checkpoint (481 m)
+      checkpoints = {                   -- all on the flat airstrip (ground 40.1-40.8), 27 m+ from Seaview Rd
+        vec3(2082.69, 4763.20, 41.21),
+        vec3(2054.52, 4740.16, 41.41),
+        vec3(2016.05, 4740.98, 41.27),
+        vec3(1990.26, 4712.44, 41.34),
+        vec3(1952.58, 4711.43, 41.09),
+        vec3(1924.41, 4688.39, 40.67),
+        vec3(1918.17, 4720.54, 41.06),
+        vec3(1949.09, 4744.76, 41.62),
+        vec3(1987.14, 4752.47, 41.26),
+        vec3(2018.07, 4776.70, 41.23),
+        vec3(2055.72, 4785.32, 41.22),
+        vec3(2094.17, 4792.10, 41.22),
+        vec3(2108.81, 4765.75, 41.24),
+        vec3(2078.26, 4748.22, 41.38),
       },
     },
   },
@@ -97,7 +99,7 @@ RegisterMission({
     {
       block             = 'checkpoint_route',
       label             = 'Drive the course',
-      minSeconds        = 45,                -- quicker than this is rejected
+      minSeconds        = 25,                -- quicker than this is rejected; below every layout's gold time
       checkpoints       = 'checkpoints',
       use               = 'all',
       radius            = 8.0,

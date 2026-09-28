@@ -79,7 +79,10 @@ export default function AdminLeaderboards() {
   const { data, loading, error, refetch } = useRequest<AdminBoards>('admin:getBoards', args, { pollMs: 60000 });
   const runsReq = useRequest<AdminBoards>('admin:getBoards', { ...args, citizenid: officer?.citizenid }, { skip: !officer });
 
-  const board = data && data.period === period && data.filter === eff ? data : null;
+  const board =
+    data && data.period === period && data.filter === eff && (eff !== 'department' || !data.department || !department || data.department === department)
+      ? data
+      : null;
   const rows = asList(list === 'ranked' ? board?.rows : board?.unranked);
   const q = search.trim().toLowerCase();
   const shown = q

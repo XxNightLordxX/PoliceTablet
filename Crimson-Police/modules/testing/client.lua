@@ -14,8 +14,8 @@
       route waypoints (with lines between waypoints), drawn every frame only within DRAW_RANGE of the player
       and only while the player is near the test area; otherwise the loop sleeps 500 ms
     * live counts pushed to the NUI: CP.Tablet.push('test', { controls, focused, key, debugOn, runId,
-      debug = DebugData|false, prompt = { invites }|false }) (App passes `debug` to DebugOverlay; the
-      geometry stays in Lua)
+      allowTeleport, debugOverlay (Config.Testing), debug = DebugData|false, prompt = { invites }|false })
+      (App passes `debug` to DebugOverlay; the geometry stays in Lua)
     * the invitation toast (client:testInvite)
 
   Client actions (CP.Tablet.registerClientAction, NUI 'client' endpoint)
@@ -87,9 +87,11 @@ end
 
 local function pushNui(extra)
     if not (CP.Tablet and CP.Tablet.push) then return end
+    local cfg = Config.Testing or {}
     local data = {
         controls = state.controls and state.inRun, focused = state.focused, key = keyLabel(),
         debugOn = state.debugOn, runId = state.runId or false,
+        allowTeleport = cfg.allowTeleport ~= false, debugOverlay = cfg.debugOverlay ~= false,
     }
     if type(extra) == 'table' then
         for k, v in pairs(extra) do data[k] = v end
@@ -115,6 +117,10 @@ local function applyHudFlag(runId)
             local run = currentRun()
             if run and run.id == runId then
                 if CP.Tablet and CP.Tablet.hud then CP.Tablet.hud({ testControls = true }) end
+                -- The panel mounts with this HUD: give it the bound key, focus and config now.
+                SetTimeout(250, function()
+                    if t == state.hudToken and state.controls and state.runId == runId then pushNui() end
+                end)
                 return
             end
             Wait(500)
@@ -325,6 +331,8 @@ local function teleportTo(x, y, z)
     local deadline = GetGameTimer() + 1500
     while not IsScreenFadedOut() and GetGameTimer() < deadline do Wait(0) end
     local ok, err = pcall(function()
+        -- Crimson-Arena rule 13: re-check right before every move (the fade took time).
+        if arenaForeign() then error('in_arena', 0) end
         FreezeEntityPosition(ent, true)
         SetEntityCoords(ent, x, y, z + 1.0, false, false, false, false)
         local gz = groundZ(x, y, z)

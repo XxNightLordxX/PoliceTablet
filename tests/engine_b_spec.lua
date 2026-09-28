@@ -32,6 +32,7 @@ _G.NetworkGetEntityFromNetworkId = function(n) return netToEnt[n] or 0 end
 _G.GiveWeaponToPed = function(e, w) ents[e].weapon = w end
 _G.SetPedArmour = function(e, a) ents[e].armour = a end
 _G.GetEntityHealth = function(e) return ents[e] and ents[e].health or 200 end
+_G.GetEntityModel = function(e) return ents[e] and ents[e].model or 0 end
 _G.GetVehicleEngineHealth = function(e) return ents[e] and ents[e].engine or 1000.0 end
 _G.GetVehicleBodyHealth = function(e) return ents[e] and ents[e].body or 1000.0 end
 _G.GetEntityType = function(e) return ents[e] and ents[e].type or 0 end
@@ -144,8 +145,12 @@ CP.Leaderboard = { invalidate = function() rec('lb.invalidate', true) end }
 CP.Challenge = { currentSeason = function() return { id = 3 } end }
 CP.AntiCheat = {
     checkEvent = function(run, src, index, ev) if ev.type == 'forged' then return false, 'forged' end return true end,
-    flag = function(run, src, reason, detail) rec('ac.flag', { reason = reason, detail = detail }); run.flagged = { reason = reason } end,
+    flag = function(run, src, reason, detail)
+        rec('ac.flag', { reason = reason, detail = detail, src = src })
+        if src then run.participants[src].flagged = { reason = reason } else run.flagged = { reason = reason } end
+    end,
     presenceOk = function(run, p) return p.src ~= 99 end,
+    presenceShare = function(p) return 0.4 end,
 }
 local unitA = { id = 11, leader = 1, members = { 1, 3 }, locked = true }
 CP.Units = {
@@ -666,6 +671,7 @@ H.ok((Runs.cooldowns('CIT2').types.tactical or 0) > os.time(), 'disconnect: type
 H.eq(D.payTier.tier, 'standard', 'disconnect drops the pay tier')
 listeners.unload(1)
 H.eq(D.state, 'ended', 'last participant gone -> run ended')
+H.eq(D.endState, 'failed', 'a run whose last participant failed ends failed')
 H.eq(rowsOf(D.id)[2].end_reason, 'disconnected', 'unload -> disconnected')
 H.eq(last('ops.ended')[1], 7, 'CP.Operations.onRunEnded')
 H.eq(last('ops.ended')[2], 'failed', 'operation told the run failed')
@@ -799,6 +805,164 @@ listeners.loaded(3)
 H.advance(5000)
 H.ok(#inv.removed > removedBefore, 'orphaned items swept when the player loads')
 H.eq(inv.searches[#inv.searches].meta.cpItem, true, 'sweep searches cpItem metadata')
+
+-- ── review: create re-checks after its lookups (they may yield) ─────────────
+H.reset()
+local origBase = CP.Payouts.baseFor
+local nested
+CP.Payouts.baseFor = function(m)
+    CP.Payouts.baseFor = origBase
+    nested = Runs.create({ mission = mission, locationIndex = 1, missionType = 'patrol', members = { O[5] }, leaderSrc = 5 })
+    return 800
+end
+local raced, racedErr = Runs.create({ mission = mission, locationIndex = 1, missionType = 'patrol', members = { O[5] }, leaderSrc = 5 })
+CP.Payouts.baseFor = origBase
+H.eq(raced, nil, 'an accept that raced another one for the same officer is refused')
+H.eq(racedErr, 'err.already_on_run', 'race refusal reason')
+H.ok(type(nested) == 'table' and Runs.getBySrc(5) == nested, 'the run that won the race stays')
+Runs.removeParticipant(nested, 5, 'cancelled')
+
+local winner
+Config.Limits.maxConcurrentRuns = #Runs.all() + 1
+CP.Payouts.baseFor = function(m)
+    CP.Payouts.baseFor = origBase
+    winner = Runs.create({ mission = mission, locationIndex = 1, missionType = 'patrol', members = { O[6] }, leaderSrc = 6 })
+    return 800
+end
+local capped, cappedErr = Runs.create({ mission = mission, locationIndex = 1, missionType = 'patrol', members = { O[5] }, leaderSrc = 5 })
+CP.Payouts.baseFor = origBase
+Config.Limits.maxConcurrentRuns = 12
+H.eq(capped, nil, 'two racing accepts never pass the server cap together')
+H.eq(cappedErr, 'err.server_busy', 'cap refusal reason')
+H.eq(Runs.isOnMission(5), false, 'the refused officer is on no run')
+H.ok(type(winner) == 'table', 'the accept that got the last slot runs')
+Runs.removeParticipant(winner, 6, 'cancelled')
+
+-- ── review: entity health before the first sync, late spawns, pending spawns ─
+H.reset()
+local N = Runs.create({ mission = mission, locationIndex = 1, missionType = 'patrol', members = { O[2] }, leaderSrc = 2 })
+Runs.markArrived(N, 2)
+local nv, nvNet = Runs.spawnVehicle(N, { obj = 1, model = 'sultan', coords = vec4(1, 2, 3, 4), role = 'car' })
+ents[nv].health = 0          -- server-created, no client has synced it yet
+H.advance(1000)
+H.eq(N.entities[nvNet].dead, false, 'a vehicle that reads health 0 before its first sync is not a wreck')
+ents[nv].health = 1000
+H.advance(1000)
+ents[nv].health = 0
+H.advance(1000)
+H.eq(N.entities[nvNet].dead, true, 'health 0 after a synced value is a wreck')
+
+local lateHandle
+local realCreatePed = _G.CreatePed
+_G.CreatePed = function(_, model, x, y, z)
+    local e = newEnt('ped', model, x, y, z)
+    ents[e].exists = false   -- the entity only appears after the spawn wait
+    lateHandle = e
+    return e
+end
+local tracked = 0
+for _ in pairs(N.entities) do tracked = tracked + 1 end
+Config.Limits.maxEntities = tracked + 1
+local lateResult = 'pending'
+CreateThread(function() lateResult = Runs.spawnPed(N, { obj = 1, model = 'g_m_y_lost_01', coords = vec4(0, 0, 0, 0) }) end)
+_G.CreatePed = realCreatePed
+H.eq(Runs.canSpawn(N, 1, false), false, 'a spawn still waiting for its entity counts toward the caps')
+H.advance(3500)
+H.eq(lateResult, nil, 'a spawn whose entity never appeared in time returns nil')
+H.ok(Runs.canSpawn(N, 1, false), 'the failed spawn no longer counts toward the caps')
+Config.Limits.maxEntities = 80
+H.ok(not deleted[lateHandle], 'nothing to delete while the entity does not exist')
+ents[lateHandle].exists = true
+H.advance(1000)
+H.ok(deleted[lateHandle], 'an entity that appears late is still deleted')
+
+-- ── review: objective events past the last objective reach CP.AntiCheat ─────
+local checked = {}
+local origCheck = CP.AntiCheat.checkEvent
+CP.AntiCheat.checkEvent = function(run, src, index, ev)
+    checked[#checked + 1] = index
+    if index > run.objectiveIndex then return false, 'err.unexpected_event' end
+    return true
+end
+local evBefore = #callsOf('onEvent')
+H.fire('crimson-police:server:objective', 2, N.id, 99, { type = 'hit' })
+CP.AntiCheat.checkEvent = origCheck
+H.eq(checked[#checked], 99, 'an event for an objective past the last one is checked (and flagged) by CP.AntiCheat')
+H.eq(#callsOf('onEvent'), evBefore, 'and never reaches a block')
+
+-- ── review: a stale off-duty signal does not remove an officer ─────────────
+listeners.lost(2, 'off_duty')      -- recheck[2] is nil: the live check says they are on duty again
+H.ok(Runs.isParticipant(N, 2), 'an off-duty signal the live check no longer confirms is ignored')
+recheck[2] = 'off_duty'
+listeners.lost(2, 'off_duty')
+recheck[2] = nil
+H.eq(Runs.isParticipant(N, 2), false, 'a confirmed off-duty signal removes the officer')
+H.eq(rowsOf(N.id)[1].end_reason, 'off_duty', 'end reason off_duty')
+
+-- ── review: reclassify only turns real_call into real_call_cancelled ────────
+MySQL.insert.await("INSERT INTO cp_mission_runs (run_uuid, mission_type, mission_id, citizenid, department, state, end_reason, points_base) VALUES (?, 'tactical', 'test_mission', 'CIT7', 'sast', 'abandoned', 'force_recall', 200)", { 'fr-run' })
+H.eq(Runs.reclassify('CIT7', 'fr-run', 'real_call_cancelled'), false, 'a stored force recall never becomes real_call_cancelled')
+H.eq(rowsOf('fr-run')[1].end_reason, 'force_recall', 'the force recall row is unchanged')
+H.reset()
+local R = Runs.create({ mission = mission, locationIndex = 1, missionType = 'tactical', members = { O[1], O[3] }, leaderSrc = 1 })
+Runs.markArrived(R, 1)
+Runs.removeParticipant(R, 3, 'force_recall')
+H.eq(Runs.reclassify('CIT3', R.id, 'real_call_cancelled'), false, 'an in-memory force recall is not reclassified')
+H.eq(R.payTier.tier, 'reinforced', 'the pay tier stays after a refused reclassify')
+local vR = Runs.view(R, 1)
+H.eq(vR.me, 1, 'view.me is the viewer')
+H.eq(vR.isBoss, false, 'view.isBoss')
+Runs.removeParticipant(R, 1, 'cancelled')
+
+-- ── review: presence flags go through CP.AntiCheat.flag ─────────────────────
+H.reset()
+local origPresence = CP.AntiCheat.presenceOk
+CP.AntiCheat.presenceOk = function(run, p) return p.src ~= 6 end
+local P2 = Runs.create({ mission = mission, locationIndex = 1, missionType = 'tactical', members = { O[5], O[6] }, leaderSrc = 5 })
+H.eq(Runs.view(P2, 6).startIn, 600, 'view.startIn before the start')
+Runs.markArrived(P2, 5)
+H.eq(Runs.view(P2, 5).startIn, nil, 'no startIn once in progress')
+H.advance(6000)
+H.ok(Runs.objectiveComplete(P2, 1), 'presence run: objective 1')
+H.ok(Runs.objectiveComplete(P2, 2), 'presence run: objective 2')
+CP.AntiCheat.presenceOk = origPresence
+local pf = last('ac.flag')
+H.eq(pf.reason, 'presence', 'presence flag raised through CP.AntiCheat.flag')
+H.eq(pf.src, 6, 'on the absent participant')
+H.ok(type(pf.detail) == 'string' and pf.detail:find('40%', 1, true) ~= nil, 'with the presence share in the detail')
+local prow = H.sql('SELECT citizenid, flagged, flag_reason FROM cp_mission_runs WHERE run_uuid = ? ORDER BY citizenid', { P2.id })
+H.eq(prow[1].flagged, 0, 'the present participant is not flagged')
+H.eq(prow[2].flagged, 1, 'the absent participant is flagged')
+H.eq(prow[2].flag_reason, 'presence', 'flag reason presence')
+
+-- ── review: every run ticks on its own ──────────────────────────────────────
+H.reset()
+local slowTicks = 0
+CP.Blocks.register('slow_block', {
+    tick = function() slowTicks = slowTicks + 1; if slowTicks == 1 then Wait(3500) end end,
+})
+local slowMission = CP.U.deepcopy(mission)
+slowMission.id, slowMission.items, slowMission.scaling = 'slow_mission', {}, {}
+slowMission.objectives = { { block = 'slow_block', label = 'Slow', minSeconds = 0 } }
+local S1 = Runs.create({ mission = slowMission, locationIndex = 1, missionType = 'patrol', members = { O[2] }, leaderSrc = 2 })
+local S2 = Runs.create({ mission = mission, locationIndex = 1, missionType = 'patrol', members = { O[3] }, leaderSrc = 3 })
+Runs.markArrived(S1, 2)
+Runs.markArrived(S2, 3)
+local function ticksOf(run)
+    local n = 0
+    for _, c in ipairs(calls) do if c.name == 'tick' and c.ctx.run == run then n = n + 1 end end
+    return n
+end
+local s2Before = ticksOf(S2)
+local s2Remaining = Runs.remaining(S2)
+H.advance(3000)
+H.eq(slowTicks, 1, 'a busy tick is not re-entered')
+H.ok(ticksOf(S2) - s2Before >= 2, 'another run keeps ticking while one tick waits')
+H.ok(Runs.remaining(S2) < s2Remaining - 2, 'and its timer keeps running')
+H.advance(2000)
+H.ok(slowTicks >= 2, 'the slow run ticks again once its tick finished')
+Runs.removeParticipant(S1, 2, 'cancelled')
+Runs.removeParticipant(S2, 3, 'cancelled')
 
 -- ── resource stop: entities deleted, nothing written ────────────────────────
 H.reset()

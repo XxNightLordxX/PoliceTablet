@@ -16,8 +16,9 @@
       death. (The engine leaves ped health deaths to this module because CP.Npc.onDeath exists.) The killer is GetPedSourceOfDeath resolved to a
       player (the player's own ped, or the driver of the killing vehicle); when the engine names nobody,
       the last weapon hit by a player in the last 5 s. Then, exactly once per ped:
-      CP.Runs.entityDied(run, netId, killerSrc), CP.AntiCheat.onNpcKilled(run, killerSrc) for a killer
-      who is not an active participant, the bag state 'dead', and the onDeath listeners.
+      CP.AntiCheat.onNpcKilled(run, killerSrc) for a killer who is not an active participant (first:
+      the death can end the run inside entityDied, and an ended run takes no flag),
+      CP.Runs.entityDied(run, netId, killerSrc), the bag state 'dead', and the onDeath listeners.
       Whether a death fails the mission (a surrendered, cuffed, restrained or unarmed ped killed by a
       participant, run.fail_killed_unarmed) is decided by the owning block's onEntityDead, which keeps
       its own "shot already in flight" grace.
@@ -26,19 +27,23 @@
       CP.Runs.penalize(run, 'shot_surrendered', { src }) and { type = 'shot', netId, src } to the owning
       block; any damage to a ped whose role is 'hostage' -> the onDamaged listeners, plus
       { type = 'damaged', netId, attacker } to the owning block when the attacker is a participant.
-      The attacker is the entity named by parentGlobalId when it resolves (an NPC owned by the sender is
-      not the sender), otherwise the sender.
+      The attacker is the sender, except that a parentGlobalId naming an NPC the sender owns (a
+      hostile on the host shooting a hostage) is nobody. A parent naming another player (a forged
+      packet) is still the sender: nobody can be blamed for someone else's packet.
     - A 1 s health poll for the case weaponDamageEvent never covers: a client damaging a ped it owns
       itself (the run host usually owns every mission ped). A health+armour drop with no weapon event
-      in the last 2 s is attributed with GetPedSourceOfDamage (players only, never "no source").
+      in the last 2 s is attributed with GetPedSourceOfDamage: an NPC, a vehicle's driver, or a player
+      only when that player owns the ped (any other player's hit came as a weaponDamageEvent, and the
+      source it left behind names nobody for later damage). Never "no source".
 
   Public API
     CP.Npc.setState(run, netId, state, extra) -> boolean
         state: 'idle'|'hostile'|'fleeing'|'surrendered'|'cuffed'|'dead'|'restrained'|'freed'|'safe'|
                'driving'|'stopped'. extra (optional table) is merged into the bag: cfg merges into
                bag.cfg, task = { action, args } is a one-off client task for the run host
-               (CP.Npc.task), any other key is copied (run, obj, state and seq are protected).
-               A state change drops the previous task. Setting the same state with no extra is a no-op.
+               (CP.Npc.task) identified by bag.taskSeq (the seq it was written with), any other key
+               is copied (run, obj, state, seq and taskSeq are protected). A state change drops the
+               previous task. Setting the same state with no extra is a no-op.
     CP.Npc.getState(netId) -> state|nil
     CP.Npc.isNeutralised(netId) -> boolean                 dead or cuffed
     CP.Npc.rollSurrender(run, netId, chance) -> boolean    one roll per ped with the run's NPC rng
@@ -73,7 +78,7 @@ local STATES = {
 }
 -- Shooting a ped in one of these states costs shot_surrendered.
 local PROTECTED = { surrendered = true, cuffed = true, restrained = true }
-local BAG_PROTECTED = { run = true, obj = true, state = true, seq = true }
+local BAG_PROTECTED = { run = true, obj = true, state = true, seq = true, taskSeq = true }
 
 local TICK_MS             = 1000   -- death watcher / health poll / cuff reach sampling
 local GONE_TICKS          = 1      -- checks without the entity before it counts as dead (before the engine's
@@ -203,6 +208,15 @@ local function playerFromPed(ped)
     return playerMap[ped]
 end
 
+-- The player who owns (simulates) an entity, or nil (server-owned, unknown).
+local function ownerOf(e)
+    if type(NetworkGetEntityOwner) ~= 'function' then return nil end
+    local ok, o = pcall(NetworkGetEntityOwner, e)
+    o = ok and tonumber(o) or nil
+    if o and o > 0 then return o end
+    return nil
+end
+
 -- src|nil, kind: 'player' (the player's ped), 'vehicle' (the driver of a vehicle), 'npc', 'object'
 local function attackerOf(ent)
     if not exists(ent) then return nil, nil end
@@ -261,7 +275,7 @@ local function currentState(rec, e)
     local bag = e and readBag(e) or nil
     if bag and bag.state then
         rec.state = bag.state
-        if type(bag.cuff) == 'table' then rec.cuff = bag.cuff end
+        rec.cuff = type(bag.cuff) == 'table' and bag.cuff or nil
         if bag.obj ~= nil then rec.obj = bag.obj end
         if bag.role ~= nil then rec.role = bag.role end
     end
@@ -313,7 +327,7 @@ function Npc.setState(run, netId, state, extra)
     local nb = U.copy(bag)
     nb.state = state
     nb.seq = (tonumber(bag.seq) or 0) + 1
-    if changed then nb.task = nil end
+    if changed then nb.task, nb.taskSeq = nil, nil end
     if type(extra) == 'table' then
         for k, v in pairs(extra) do
             if k == 'cfg' then
@@ -323,7 +337,13 @@ function Npc.setState(run, netId, state, extra)
                     nb.cfg = c
                 end
             elseif k == 'task' then
-                nb.task = type(v) == 'table' and U.serialize(v) or nil
+                -- taskSeq identifies this one-off task: later writes of the bag (a cfg merge,
+                -- enableCuff) keep it, so the host never runs the same task twice
+                if type(v) == 'table' then
+                    nb.task, nb.taskSeq = U.serialize(v), nb.seq
+                else
+                    nb.task, nb.taskSeq = nil, nil
+                end
             elseif not BAG_PROTECTED[k] then
                 nb[k] = U.serialize(v)
             end
@@ -331,7 +351,7 @@ function Npc.setState(run, netId, state, extra)
     end
     if state == 'dead' then
         nb.cuff = nil
-        nb.task = nil
+        nb.task, nb.taskSeq = nil, nil
     end
     if not writeBag(e, nb) then return false end
     if changed then
@@ -472,16 +492,20 @@ local function damaged(run, netId, rec, attacker)
     return true
 end
 
--- The player behind a weapon damage packet: the parent entity when it resolves (an NPC owned by
--- the sender is not the sender), otherwise the sender. Returns src|nil, kind.
+-- The player behind a weapon damage packet. A client only sends damage caused by entities it
+-- controls, so parentGlobalId is trusted only as far as the sender could have sent it: an NPC
+-- parent the sender owns (a hostile on the host shooting a hostage) is nobody; the sender's own ped
+-- or vehicle is the sender; a parent naming another player's ped or a vehicle another player drives
+-- is still the sender (a forged packet must never cost someone else a penalty or fail the run for
+-- them), and so is an NPC the sender does not own. Returns src|nil, kind.
 local function shooterOf(src, data)
     local parent = toInt(tonumber(data.parentGlobalId), 1, MAX_NETID)
     if parent then
         local pe = NetworkGetEntityFromNetworkId(parent)
         if exists(pe) then
             local s, kind = attackerOf(pe)
-            if s then return s, kind end
-            if kind == 'npc' then return nil, 'npc' end
+            if s then return src, kind end
+            if kind == 'npc' and ownerOf(pe) == src then return nil, 'npc' end
         end
     end
     return src, 'player'
@@ -537,6 +561,12 @@ local function healthDropped(run, netId, rec, e)
     local srcEnt = GetPedSourceOfDamage(e)
     if not exists(srcEnt) or srcEnt == e then return end
     local attacker, kind = attackerOf(srcEnt)
+    if attacker and kind == 'player' and ownerOf(e) ~= attacker then
+        -- A player who does not own the ped reaches it through weaponDamageEvent, which already
+        -- handled that hit; GetPedSourceOfDamage keeps naming them after later damage with no source
+        -- of its own (a fall, a fire), so this drop is nobody's shot.
+        attacker, kind = nil, 'unknown'
+    end
     if attacker and inArena(attacker) then return end
     local state = currentState(rec, e)
     if attacker then rec.lastDamage = { src = attacker, at = t } end
@@ -568,19 +598,22 @@ local function died(run, netId, rec, e)
     if killer and inArena(killer) then killer = nil end
     local isPart = killer ~= nil and activeParticipant(run, killer) ~= nil
     local prev = rec.state
-    if CP.Runs and CP.Runs.entityDied then
-        local ok, err = pcall(CP.Runs.entityDied, run, netId, killer)
-        if not ok then CP.err(TAG, 'entityDied(%s, %s) failed: %s', tostring(run.id), netId, tostring(err)) end
-    end
+    -- Outside help first: entityDied runs the owning block's onEntityDead, which can complete the
+    -- last objective (or fail the run) and end it on the spot. CP.AntiCheat.onNpcKilled ignores ended
+    -- runs, so a flag raised after that would never reach the rows endRun writes.
     if killer and not isPart and CP.AntiCheat and CP.AntiCheat.onNpcKilled then
         local ok, err = pcall(CP.AntiCheat.onNpcKilled, run, killer)
         if not ok then CP.err(TAG, 'onNpcKilled failed: %s', tostring(err)) end
+    end
+    if CP.Runs and CP.Runs.entityDied then
+        local ok, err = pcall(CP.Runs.entityDied, run, netId, killer)
+        if not ok then CP.err(TAG, 'entityDied(%s, %s) failed: %s', tostring(run.id), netId, tostring(err)) end
     end
     if e and exists(e) then
         local bag = readBag(e)
         if bag and bag.state ~= 'dead' then
             local nb = U.copy(bag)
-            nb.state, nb.cuff, nb.task = 'dead', nil, nil
+            nb.state, nb.cuff, nb.task, nb.taskSeq = 'dead', nil, nil, nil
             nb.seq = (tonumber(bag.seq) or 0) + 1
             writeBag(e, nb)
         end
@@ -633,12 +666,14 @@ local function checkPed(run, netId, info, rec)
         died(run, netId, rec, e)
         return
     end
+    -- the bag is the truth (state, cuff, obj, role): a record created after the last setState
+    -- (or one whose state was written elsewhere) must still sample reach and watch for hits
+    currentState(rec, e)
     local total = hp + (GetPedArmour(e) or 0)
     if rec.hp and total < rec.hp - 0.5 and (PROTECTED[rec.state] or rec.role == 'hostage') then
         healthDropped(run, netId, rec, e)
     end
     rec.hp = total
-    if rec.state == 'surrendered' then currentState(rec, e) end
     sampleReach(run, rec, e)
 end
 
@@ -650,17 +685,29 @@ local function tick()
     for _, run in pairs(list) do
         if isLive(run) and type(run.entities) == 'table' then
             live[run.id] = true
-            for key, info in pairs(run.entities) do
+            -- A death runs the owning block, which can end the run (every record removed) or start
+            -- the next objective (new records, and a spawn that yields): never walk run.entities
+            -- itself while that happens.
+            local snapshot = {}
+            for key, info in pairs(run.entities) do snapshot[#snapshot + 1] = { key, info } end
+            for _, kv in ipairs(snapshot) do
+                local key, info = kv[1], kv[2]
                 local netId = toInt(tonumber(key), 1, MAX_NETID)
                 if netId and type(info) == 'table' and isPedRecord(netId, info) then
                     seen[netId] = true
-                    local rec = recFor(run, netId, info)
-                    if not info.dead and not rec.dead then
-                        local okc, err = pcall(checkPed, run, netId, info, rec)
-                        if not okc then CP.err(TAG, 'check of ped %s in run %s failed: %s', netId, tostring(run.id), tostring(err)) end
-                    elseif info.dead then
-                        rec.dead = true
-                        rec.state = 'dead'
+                    if info.dead then
+                        -- the engine's own death (or ours): mark an existing record, never create one
+                        local r = peds[netId]
+                        if r and r.runId == run.id then
+                            r.dead = true
+                            r.state = 'dead'
+                        end
+                    elseif isLive(run) and run.entities[key] == info then
+                        local rec = recFor(run, netId, info)
+                        if not rec.dead then
+                            local okc, err = pcall(checkPed, run, netId, info, rec)
+                            if not okc then CP.err(TAG, 'check of ped %s in run %s failed: %s', netId, tostring(run.id), tostring(err)) end
+                        end
                     end
                 end
             end

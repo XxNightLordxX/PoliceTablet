@@ -11,7 +11,8 @@
 // client; this panel shows the numbers.
 // Invitation prompt: when the Lua testing client opens it (F9 with invitations waiting) it gives NUI focus
 // and pushes 'test' { prompt: { invites } }; Accept/Decline call action server:testRespond { inviteId, accepted },
-// Escape / Close release the focus (client action testPanel { open: false }).
+// Escape / Close release the focus (client action testPanel { open: false }). Escape also releases a focus
+// the Lua client holds for the HUD panel while no panel is on screen (safety net).
 import { useCallback, useEffect, useState } from 'react';
 import { Button, Countdown, Icon } from '../shared/components';
 import { cx } from '../shared/cx';
@@ -177,12 +178,31 @@ function InvitePrompt({ invites, onClose }: { invites: TestInvite[]; onClose: ()
 export default function DebugOverlay({ debug, hud }: DebugOverlayProps) {
   const scale = useHudScale();
   const [prompt, setPrompt] = useState<TestInvite[] | null>(null);
+  const [focused, setFocused] = useState(false);
 
   usePush<TestPush | null>('test', (d) => {
-    if (!d || typeof d !== 'object' || !('prompt' in d)) return;
+    if (!d || typeof d !== 'object') return;
+    if (typeof d.focused === 'boolean') setFocused(d.focused);
+    if (!('prompt' in d)) return;
     const p = d.prompt;
     setPrompt(p && typeof p === 'object' ? asList(p.invites) : null);
   });
+
+  // Safety net: the Lua client holds NUI focus for the HUD test panel but the panel is not on screen
+  // (no HUD with testControls): Escape still gives the game its input back.
+  const panelShown = !!hud && hud.testControls === true;
+  useEffect(() => {
+    if (!focused || prompt || panelShown) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !e.repeat) {
+        e.preventDefault();
+        setFocused(false);
+        void clientAction('testPanel', { open: false });
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [focused, prompt, panelShown]);
 
   const closePrompt = useCallback(() => {
     setPrompt(null);

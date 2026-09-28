@@ -4,7 +4,8 @@
   10 m marker in a police vehicle. Markers and blips only; nothing spawns.
   Districts: Strawberry & Davis, La Mesa & Mirror Park, Harmony & Route 68, Sandy Shores,
   Paleto Bay, and Banham Canyon & Chumash on the Great Ocean Highway. Every checkpoint is a
-  public road, fuel forecourt or car park.
+  public road (on a road node), fuel forecourt or car park, never at a police station or
+  hospital; heights are ground + 1 m.
   Blocks: checkpoint_route (use = 'random', count = 5).
   Start: location.start is the district's FIRST checkpoint (radius 30 m, no other checkpoint
   inside it). checkpoint_route always uses the pool point inside location.start first and
@@ -51,8 +52,8 @@ RegisterMission({
         vec3(1208.95, -1402.57, 35.22),       -- Ron gas station, El Burro Heights
         vec3(1211.00, -1264.00, 35.20),       -- El Burro Heights underpass
         vec3(1149.15, -981.26, 46.32),        -- Rob's Liquor, El Rancho Blvd
-        vec3(1130.00, -777.00, 57.60),        -- Mirror Park, south lake road
-        vec3(1240.00, -600.00, 69.80),        -- Mirror Park Blvd
+        vec3(1126.50, -759.50, 57.81),        -- West Mirror Drive, south of the lake
+        vec3(1172.50, -600.00, 64.03),        -- Mirror Park Blvd, by the lake
         vec3(1181.38, -330.85, 69.32),        -- LTD Gasoline, Mirror Park
       },
     },
@@ -63,7 +64,7 @@ RegisterMission({
         vec3(263.89, 2606.46, 44.98),         -- Globe Oil, Harmony
         vec3(543.73, 2683.96, 42.05),         -- 24/7 car park, Route 68
         vec3(616.00, 2745.00, 42.10),         -- Suburban car park, Route 68
-        vec3(800.00, 2688.50, 40.90),         -- Route 68, east of Harmony
+        vec3(809.75, 2699.25, 40.34),         -- Route 68, east of Harmony
         vec3(1039.96, 2671.13, 39.55),        -- Gas station, Route 68
         vec3(1137.77, 2663.54, 37.90),        -- Motor motel, Route 68
         vec3(1175.04, 2640.22, 37.75),        -- Los Santos Customs, Harmony
@@ -75,7 +76,7 @@ RegisterMission({
       start       = { coords = vec3(2005.06, 3773.89, 32.40), radius = 30.0 },  -- Gas station, Alhambra Dr (the first checkpoint)
       checkpoints = {
         vec3(2005.06, 3773.89, 32.40),        -- Gas station, Alhambra Dr
-        vec3(1962.00, 3826.00, 32.30),        -- Trailer park, Zancudo Ave
+        vec3(1951.25, 3782.25, 32.31),        -- Zancudo Ave, Sandy Shores
         vec3(1968.92, 3731.40, 32.30),        -- 24/7 car park, Alhambra Dr
         vec3(1707.17, 3746.41, 34.40),        -- Ammu-Nation car park, Sandy Shores
         vec3(1398.00, 3597.00, 34.80),        -- Liquor Ace, Sandy Shores
@@ -92,10 +93,10 @@ RegisterMission({
         vec3(15.76, 6500.74, 31.50),          -- Discount Store, Paleto Bay
         vec3(110.99, 6626.39, 31.79),         -- Beeker's Garage, Paleto Bay
         vec3(179.86, 6602.84, 31.87),         -- Ron gas station, Paleto Bay
-        vec3(465.02, 6619.42, 22.72),         -- Great Ocean Hwy, east of Paleto
-        vec3(-436.00, 5998.00, 31.40),        -- Sheriff's office, Great Ocean Hwy
-        vec3(-316.64, 6070.49, 31.35),        -- Ammu-Nation car park, Paleto Bay
+        vec3(456.25, 6565.50, 26.97),         -- Great Ocean Hwy, east of Paleto
+        vec3(-347.50, 6321.25, 30.00),        -- Procopio Dr, west Paleto Bay
         vec3(-268.00, 6218.50, 31.50),        -- Herr Kutz, Paleto Bay
+        vec3(-316.64, 6070.49, 31.35),        -- Ammu-Nation car park, Paleto Bay
       },
     },
     {
@@ -107,9 +108,9 @@ RegisterMission({
         vec3(-3028.70, 590.13, 7.80),         -- 24/7 car park, Ineseno Rd
         vec3(-3229.90, 1003.06, 12.73),       -- 24/7 car park, Barbareno Rd
         vec3(-3155.00, 1062.00, 20.60),       -- Chumash Plaza, Great Ocean Hwy
-        vec3(-3152.00, 1250.00, 21.50),       -- Great Ocean Hwy, north Chumash
+        vec3(-3101.50, 1242.75, 20.25),       -- Great Ocean Hwy, north Chumash
+        vec3(-2971.00, 106.75, 14.00),        -- Great Ocean Hwy, south Banham Canyon
         vec3(-2096.24, -320.29, 13.17),       -- Xero Gas, Pacific Bluffs
-        vec3(-3025.00, 82.00, 11.60),         -- Great Ocean Hwy, south Banham Canyon
       },
     },
   },
@@ -118,7 +119,7 @@ RegisterMission({
     {
       block             = 'checkpoint_route',
       label             = 'Patrol the district checkpoints',
-      minSeconds        = 90,                -- 5 stops of 10 s plus the drives between them
+      minSeconds        = 70,                -- 5 stops of 10 s plus 1 km+ of driving; a fast legal run takes ~90 s
       checkpoints       = 'checkpoints',
       use               = 'random',
       count             = 5,

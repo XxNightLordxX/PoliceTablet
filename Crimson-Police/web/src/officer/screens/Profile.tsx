@@ -10,6 +10,7 @@ import {
   Stat, Table, TierBadge, Toggle, XpBadge, type IconName, type TableColumn,
 } from '../../shared/components';
 import { cx } from '../../shared/cx';
+import { normalizeResult } from '../../shared/data';
 import { formatDateTime, formatDuration, formatMoney, formatMultiplier, formatNumber, formatPercent } from '../../shared/format';
 import { useAction, useRequest } from '../../shared/hooks';
 import { t, tOr } from '../../shared/i18n';
@@ -61,9 +62,12 @@ function Line({ label, value, tone, strong, note }: { label: string; value: stri
 }
 
 /** The points and cash breakdown of one run, in the HUD result card's presentation (cp-result classes). */
-export function RunBreakdown({ result, cashStatus }: { result: RunResult; cashStatus?: string }) {
-  const p = result.points;
-  const c = (result as Partial<RunResult>).cash;
+export function RunBreakdown({ result: raw, cashStatus }: { result: RunResult; cashStatus?: string }) {
+  // Row JSON from Lua: lists may be {} and fields may be missing; public profiles have no cash block at all.
+  const hasCash = !!(raw as Partial<RunResult>).cash && typeof raw.cash === 'object';
+  const result = normalizeResult(raw);
+  const p = raw.points && typeof raw.points === 'object' ? result.points : null;
+  const c = hasCash ? result.cash : null;
   const status = cashStatus || c?.status || '';
   const kind = result.result === 'completed' || result.result === 'failed' ? result.result : 'abandoned';
   return (

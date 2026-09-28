@@ -1057,8 +1057,23 @@ local op5 = data.id
 H.eq(O.active().idleSince, H.time, 'idle clock starts at the launch')
 act('server:joinOperation', 2, op5)
 act('server:joinOperation', 5, op5)
-ok = act('server:sup:opStart', 1)
-H.eq(ok, true, 'started')
+-- A join whose on-call lookup waits (CP.Calls may query the database) checks the operation again
+-- afterwards: here Start now happens meanwhile, so the late joiner is refused and never listed.
+local realOnCall = CP.Calls.isOnCall
+CP.Calls.isOnCall = function(s)
+    if s == 4 then
+        CP.Calls.isOnCall = realOnCall
+        ok = act('server:sup:opStart', 1)
+    end
+    return realOnCall(s)
+end
+local okJ, whyJ = act('server:joinOperation', 4, op5)
+CP.Calls.isOnCall = realOnCall
+H.eq(ok, true, 'started while the join waited')
+H.eq(okJ, false, 'the late join is refused')
+H.eq(whyJ, 'err.op_join_closed', 'with join closed')
+H.eq(#O.active().participants, 2, 'the late joiner is not in the list')
+H.eq(#created[#created].members, 2, 'nor on the run')
 H.eq(O.active().idleSince, nil, 'an operation with a run is not idle')
 run = runsById['run-' .. runSeq]
 endRunStub(run, 'failed')

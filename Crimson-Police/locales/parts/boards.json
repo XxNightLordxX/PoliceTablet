@@ -195,6 +195,7 @@
   "challenge.webhook_standing_line": "{rank}. {department} · {score} ({active} active officers)",
   "challenge.webhook_top10": "Top 10 officers",
   "challenge.webhook_top_line": "{rank}. {name} · {department} · {points} pts",
+  "challenge.audit_replaced": "Ended by starting the season {name}",
 
   "profile.loading": "Loading the profile…",
   "profile.subtitle_own": "Your XP, badges and the last 20 runs",

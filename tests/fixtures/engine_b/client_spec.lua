@@ -19,17 +19,28 @@ _G.NetworkGetEntityIsNetworked = function(e) return networked[e] ~= nil end
 _G.NetworkGetNetworkIdFromEntity = function(e) return networked[e] or 0 end
 _G.NetworkDoesNetworkIdExist = function(n) return fromNet[n] ~= nil end
 _G.NetworkGetEntityFromNetworkId = function(n) return fromNet[n] or 0 end
-_G.DoesEntityExist = function(e) return e == 500 or e == 600 or e == me.ped end
+_G.DoesEntityExist = function(e) return e == 500 or e == 600 or e == 700 or e == me.ped end
 _G.NetworkHasControlOfEntity = function(e) return controlled[e] == true end
 _G.NetworkRequestControlOfEntity = function(e) controlled[e] = true end
 _G.IsVehicleSirenOn = function() return me.siren end
 _G.IsPedArmed = function() return me.armed end
 _G.IsPedShooting = function() return me.shooting end
-_G.IsEntityAPed = function(e) return e == 600 end
+_G.IsEntityAPed = function(e) return e == 600 or e == 700 end
 _G.IsPedAPlayer = function() return false end
 local waypoint
 _G.SetNewWaypoint = function(x, y) waypoint = { x, y } end
-_G.Entity = function() return { state = {} } end
+_G.Entity = function(e)
+    -- Entity(e).state is only valid for networked entities (it reads the network id).
+    if not networked[e] then error('Entity() on a local entity ' .. tostring(e)) end
+    return { state = {} }
+end
+local blips, nextBlip = {}, 900
+_G.AddBlipForRadius = function(x, y, z, r) nextBlip = nextBlip + 1; blips[nextBlip] = { x = x, y = y, z = z, r = r }; return nextBlip end
+_G.SetBlipColour = function(b, c) if blips[b] then blips[b].colour = c end end
+_G.SetBlipAlpha = function(b, a) if blips[b] then blips[b].alpha = a end end
+_G.DoesBlipExist = function(b) return blips[b] ~= nil end
+_G.RemoveBlip = function(b) blips[b] = nil end
+local function blipCount() local n = 0; for _ in pairs(blips) do n = n + 1 end return n end
 
 -- ── stubs ───────────────────────────────────────────────────────────────────
 local hudLog, results, actions, routeLog = {}, {}, {}, {}
@@ -239,6 +250,51 @@ TriggerEvent('onResourceStop', 'Crimson-Police')
 H.eq(#callsOf('stop'), stopsBefore + 1, 'blocks stopped on resource stop')
 H.eq(Runs.current(), nil, 'no run after resource stop')
 H.eq(hudState, nil, 'HUD hidden on resource stop')
+
+-- ── review: pedestrian hits on local-only peds, the Manhunt start circle ────
+me.veh = 500
+H.fire('crimson-police:client:start', nil, 'run-4', {
+    missionId = 'manhunt', mission = { id = 'manhunt', label = 'Manhunt', objectives = { { block = 'test_block', label = 'Search' } } },
+    location = { start = { coords = vec3(1740.0, 3720.0, 33.8), radius = 600.0 } }, start = { coords = vec3(1740.0, 3720.0, 33.8), radius = 600.0 },
+    expectedTier = 'standard', seed = 1, host = 1, startRoute = true, participants = { { src = 1, status = 'active', arrived = false } },
+})
+H.eq(blipCount(), 1, 'a 600 m start circle is shown on the map at accept')
+local circle = blips[nextBlip]
+H.eq(circle and circle.r, 600.0, 'with the start radius')
+H.reset()
+local okHit, errHit = pcall(TriggerEvent, 'gameEventTriggered', 'CEventNetworkEntityDamage', { 700, 500, 0, 0, 0, 0, 0 })
+H.ok(okHit, 'a local-only ped hit never touches its state bag: ' .. tostring(errHit))
+H.eq(#serverEvents('crimson-police:server:telemetry'), 0, 'and is not reported')
+H.fire('crimson-police:client:inProgress', nil, 'run-4', { objectives = { { block = 'test_block', label = 'Search' } }, remaining = 720 })
+H.fire('crimson-police:client:objective', nil, 'run-4', 1, { action = 'prepare' })
+H.eq(blipCount(), 1, 'the circle stays while the objective is prepared')
+H.fire('crimson-police:client:objective', nil, 'run-4', 1, { action = 'start' })
+H.eq(blipCount(), 0, 'the block takes over the circle when the objective starts')
+H.fire('crimson-police:client:runEnded', nil, 'run-4', 'abandoned', 'quit', nil)
+
+H.fire('crimson-police:client:start', nil, 'run-5', {
+    missionId = 'manhunt', mission = { id = 'manhunt', label = 'Manhunt', objectives = { { block = 'test_block', label = 'Search' } } },
+    location = { start = { coords = vec3(0, 0, 0), radius = 600.0 } }, start = { coords = vec3(0, 0, 0), radius = 600.0 },
+    expectedTier = 'standard', seed = 1, host = 1, startRoute = true, participants = { { src = 1, status = 'active', arrived = false } },
+})
+H.eq(blipCount(), 1, 'circle for the next run')
+H.fire('crimson-police:client:participants', nil, 'run-5', { { src = 1, status = 'active', arrived = true } })
+H.eq(blipCount(), 0, 'the circle goes when this officer is inside it')
+H.fire('crimson-police:client:runEnded', nil, 'run-5', 'abandoned', 'quit', nil)
+H.fire('crimson-police:client:start', nil, 'run-6', {
+    missionId = 'manhunt', mission = { id = 'manhunt', label = 'Manhunt', objectives = { { block = 'test_block', label = 'Search' } } },
+    location = { start = { coords = vec3(0, 0, 0), radius = 600.0 } }, start = { coords = vec3(0, 0, 0), radius = 600.0 },
+    expectedTier = 'standard', seed = 1, host = 1, startRoute = true, participants = { { src = 1, status = 'active', arrived = false } },
+})
+H.fire('crimson-police:client:runEnded', nil, 'run-6', 'abandoned', 'start_timeout', nil)
+H.eq(blipCount(), 0, 'the circle is removed when the run ends')
+H.fire('crimson-police:client:start', nil, 'run-7', {
+    missionId = 'beat_patrol', mission = { id = 'beat_patrol', label = 'Beat Patrol', objectives = { { block = 'test_block', label = 'A' } } },
+    location = { start = { coords = vec3(0, 0, 0), radius = 10.0 } }, start = { coords = vec3(0, 0, 0), radius = 10.0 },
+    expectedTier = 'standard', seed = 1, host = 1, startRoute = true, participants = {},
+})
+H.eq(blipCount(), 0, 'a point start gets no circle')
+TriggerEvent('onResourceStop', 'Crimson-Police')
 
 print(('RESULT %d %d'):format(H.passes, H.failures))
 return H

@@ -8,13 +8,18 @@
     - apply / task / nearestParticipant for the block client halves (run host only: the caller has
       control of the ped, see CP.Runs.control).
     - A light host AI loop (500 ms, only while it manages a ped) that keeps combat on the nearest active
-      participant, walks flee routes point by point, drives recorded routes waypoint by waypoint,
-      recovers stuck peds and re-plays the kneel / cuffed poses if something interrupted them.
+      participant (with no participant in reach a hostile stands still: it never guards, since a
+      guarding ped attacks every player, bystanders included), walks flee routes point by point,
+      drives recorded routes waypoint by waypoint, recovers stuck peds and re-plays the kneel /
+      cuffed poses if something interrupted them.
+    - Drop protection on EVERY client (participant or not) for every ped with a Crimson-Police cp bag:
+      SetPedDropsWeaponsWhenDead false and SetPedMoney 0 once per entity handle, because the client
+      that owns a ped when it dies creates the pickups and ownership moves to the nearest player.
     - The cp state bag change handler (AddStateBagChangeHandler('cp', nil, ...)): on the host of the
       local player's run it applies the bag cfg once control is gained and re-tasks the ped when its
       state changes: hostile -> combat, fleeing -> flee (bag.fleePoints / cfg.fleePoints route when
       present), surrendered -> hands up then kneel, cuffed -> cuffed pose + frozen, restrained -> kneel,
-      and a server task = { action, args } for any state. When this client becomes the host
+      and a server task = { action, args } for any state (run once per bag.taskSeq). When this client becomes the host
       (crimson-police:client:hostChanged) every known ped of the run is re-applied and re-tasked.
     - One global ox_target option set (exports.ox_target:addGlobalPed): 'crimson-police:cuff' with the
       default label (locale npc.cuff) and 'crimson-police:cuff:<n>' for other labels a block passed to
@@ -37,6 +42,7 @@
     CP.Npc.task(entity, action, args) -> boolean     (needs control; repeated identical tasks are ignored
                                                      unless args.force)
         'combat'       { target = ped?, behaviour? }        TaskCombatPed on the nearest active participant
+                                                            (none: TaskStandStill until one is back)
         'flee'         { points = { vec3 }?, startIndex?, from = ped?, vehicle?, speed?, drivingStyle?, style?, stopRange? }
                        on foot: TaskFollowNavMeshToCoord along points, then TaskSmartFleePed from the
                        nearest participant; as a driver: the points as a road route, else
@@ -556,6 +562,14 @@ local function smartFlee(ped, a)
     a.issuedAt = now()
 end
 
+-- No participant to fight: stay put without looking for targets. TaskGuardCurrentPosition would
+-- attack any ped of a hated group, and CRIMSONPOLICE_HOSTILE hates PLAYER, i.e. every player, so a
+-- bystander walking past would be shot ("hostile only to participants", Hard rule "NPCs only").
+local function hold(ped)
+    ClearPedTasks(ped)
+    TaskStandStill(ped, -1)
+end
+
 local ACTIONS = {}
 
 function ACTIONS.combat(ped, a)
@@ -581,7 +595,7 @@ function ACTIONS.combat(ped, a)
         TaskCombatPed(ped, target, 0, 16)
     else
         a.guarding = true
-        TaskGuardCurrentPosition(ped, 20.0, 20.0, true)
+        hold(ped)
     end
 end
 
@@ -828,7 +842,7 @@ local function stepCombat(ped, a, t)
     if not best then
         if not a.guarding then
             a.guarding, a.target = true, nil
-            TaskGuardCurrentPosition(ped, 20.0, 20.0, true)
+            hold(ped)
         end
         return
     end
@@ -964,9 +978,11 @@ ensureLoop = function()
 end
 
 -- ── The cp state bag (host re-tasking) ──────────────────────────────────────
+-- The one-off server task's id: taskSeq (the bag seq it was written with) survives later writes of
+-- the bag, so a cfg merge or enableCuff never replays it; seq is the fallback for older bags.
 local function taskKey(value)
     if type(value.task) ~= 'table' then return nil end
-    return tostring(value.seq)
+    return tostring(value.taskSeq or value.seq)
 end
 
 local function retask(ent, value, settled)
@@ -1025,14 +1041,54 @@ local function forgetRun()
     for ped in pairs(ai) do ai[ped] = nil end
 end
 
+-- Nothing a non-participant can take: weapons and cash of a dying ped are dropped by whichever
+-- client owns it at that moment, and OneSync hands ownership to the nearest player (a partner, or
+-- a bystander), not only to the run host that ran apply. So every client that sees a mission ped
+-- (any run, participant or not) marks it once per entity handle; a local flag, no control needed.
+local dropSafe, dropPending, dropCount = {}, {}, 0
+
+local function markDropSafe(netId, ent)
+    if dropSafe[netId] == ent then return end
+    SetPedDropsWeaponsWhenDead(ent, false)
+    SetPedMoney(ent, 0)
+    if dropSafe[netId] == nil then dropCount = dropCount + 1 end
+    dropSafe[netId] = ent
+    if dropCount > 256 then
+        for n, e in pairs(dropSafe) do
+            if not DoesEntityExist(e) then
+                dropSafe[n] = nil
+                dropCount = dropCount - 1
+            end
+        end
+    end
+end
+
+local function protectDrops(netId, value)
+    if type(value.run) ~= 'string' or value.state == 'dead' then return end
+    local ent = NetworkDoesNetworkIdExist(netId) and NetworkGetEntityFromNetworkId(netId) or 0
+    if ent and ent ~= 0 and DoesEntityExist(ent) then
+        if validPed(ent) then markDropSafe(netId, ent) end
+        return
+    end
+    -- the bag of a ped streaming in can arrive before the ped itself
+    if dropPending[netId] then return end
+    dropPending[netId] = true
+    CreateThread(function()
+        local e = entityFromNet(netId, ENTITY_WAIT_MS)
+        dropPending[netId] = nil
+        if e and validPed(e) then markDropSafe(netId, e) end
+    end)
+end
+
 local ensureCuffOption
 
 AddStateBagChangeHandler('cp', nil, function(bagName, _, value)
     if type(value) ~= 'table' then return end
-    local run = currentRun()
-    if not run or value.run ~= run.id then return end
     local netId = tonumber(tostring(bagName):match('^entity:(%d+)$'))
     if not netId then return end
+    protectDrops(netId, value)
+    local run = currentRun()
+    if not run or value.run ~= run.id then return end
     local prev = bags[netId]
     bags[netId] = value
     if type(value.cuff) == 'table' then ensureCuffOption(value.cuff.label) end
@@ -1072,7 +1128,12 @@ RegisterNetEvent('crimson-police:client:hostChanged', function(runId, hostSrc)
 end)
 
 RegisterNetEvent('crimson-police:client:runEnded', function(runId)
-    if type(runId) == 'string' then partCache[runId] = nil end
+    if type(runId) ~= 'string' then return end
+    partCache[runId] = nil
+    -- modules/runs clears current() after this handler: a stale end of an earlier run keeps the AI
+    -- of the run this player is on now
+    local run = currentRun()
+    if run and run.id ~= runId then return end
     forgetRun()
 end)
 

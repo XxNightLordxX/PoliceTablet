@@ -44,6 +44,9 @@ local VEHICLE_EVERY = 5           -- seconds between vehicle telemetry samples w
 local ACTIONS = { prepare = true, start = true, update = true, stop = true }
 local RUN_OVER = joaat('WEAPON_RUN_OVER_BY_CAR')
 local RAMMED = joaat('WEAPON_RAMMED_BY_CAR')
+local START_CIRCLE_MIN = 200.0    -- a start this wide is a search circle (Manhunt): shown on the map at accept
+local START_CIRCLE_COLOUR = 1
+local START_CIRCLE_ALPHA = 90
 
 local current = nil
 local token = 0
@@ -196,6 +199,28 @@ local function stopAllBlocks(run)
     end
 end
 
+-- ── the start circle (Manhunt: "the 600 m search circle, shown on the map when the type is accepted") ──
+-- Shown from client:start until this player is inside it or the first objective starts (the block then
+-- draws its own search circle); a local radius blip, removed at every cleanup.
+local function showStartCircle(run, start)
+    if type(start) ~= 'table' then return end
+    local radius = tonumber(start.radius)
+    if not radius or radius < START_CIRCLE_MIN then return end
+    local x, y, z = CP.U.xyz(start.coords)
+    if not x then return end
+    local blip = AddBlipForRadius(x + 0.0, y + 0.0, (z or 0.0) + 0.0, radius + 0.0)
+    if not blip or blip == 0 then return end
+    SetBlipColour(blip, START_CIRCLE_COLOUR)
+    SetBlipAlpha(blip, START_CIRCLE_ALPHA)
+    run.startCircle = blip
+end
+
+local function hideStartCircle(run)
+    if not run or not run.startCircle then return end
+    if DoesBlipExist(run.startCircle) then RemoveBlip(run.startCircle) end
+    run.startCircle = nil
+end
+
 local function routeStop()
     if CP.Route and CP.Route.stop then
         local ok, err = pcall(CP.Route.stop)
@@ -209,6 +234,7 @@ local function cleanup()
     if not run then return end
     current = nil
     token = token + 1
+    hideStartCircle(run)
     stopAllBlocks(run)
     routeStop()
     CP.log(TAG, 'run %s cleaned up', tostring(run.id))
@@ -306,6 +332,8 @@ RegisterNetEvent(CP.e('client:start'), function(runId, data)
         route = { status = current.startRoute and 'on' or 'disabled' },
         objectives = {}, detail = false, message = false, testControls = isTestAdmin(data.test),
     })
+    showStartCircle(current, data.start)
+    startTelemetry(current)
     local start = type(data.start) == 'table' and data.start.coords or nil
     if start then
         if CP.Route and CP.Route.begin then
@@ -317,7 +345,6 @@ RegisterNetEvent(CP.e('client:start'), function(runId, data)
             if x then SetNewWaypoint(x + 0.0, y + 0.0) end
         end
     end
-    startTelemetry(current)
     CP.log(TAG, 'run %s started (%s, host %s)', runId, tostring(data.missionId), tostring(data.host))
 end)
 
@@ -359,6 +386,7 @@ RegisterNetEvent(CP.e('client:objective'), function(runId, index, msg)
             b.stopped = false
         end
         current.objectiveIndex = index
+        hideStartCircle(current)
         b.prepared = true
         b.started = true
         hud({ detail = false })
@@ -419,6 +447,7 @@ RegisterNetEvent(CP.e('client:participants'), function(runId, list)
     for _, p in ipairs(list) do
         if type(p) == 'table' and tonumber(p.src) == me and p.arrived and not current.arrived then
             current.arrived = true
+            hideStartCircle(current)
             routeStop()
         end
     end

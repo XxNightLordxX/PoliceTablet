@@ -197,6 +197,8 @@ export interface TestPush {
   focused?: boolean;
   key?: string;                  // the bound key of +crimsonpolice_testpanel (default F9)
   debugOn?: boolean;
+  allowTeleport?: boolean;       // Config.Testing.allowTeleport (the Lua client reads it)
+  debugOverlay?: boolean;        // Config.Testing.debugOverlay
   runId?: string | false;
   debug?: TestDebugData | false | null;
   prompt?: false | { invites: TestInvite[] };

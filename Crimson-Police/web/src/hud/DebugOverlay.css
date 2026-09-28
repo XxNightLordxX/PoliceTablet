@@ -1,8 +1,9 @@
-/* Test-mode debug overlay (top left, no NUI focus) and the invitation prompt. Only --cp-* variables. */
+/* Test-mode debug overlay (left edge below the chat, no NUI focus) and the invitation prompt.
+   Only --cp-* variables. */
 
 .testing-dbg {
   position: fixed;
-  top: 24px;
+  top: 30vh;
   left: 24px;
   z-index: 15;
   width: 300px;

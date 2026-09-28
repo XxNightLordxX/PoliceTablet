@@ -69,7 +69,8 @@ local CATCHUP_DELAY_MS = 60000
 local HALF_DAY = 43200
 
 local cache = {}          -- key -> { at, ranked, all, updatedAt, meta }
-local inflight = {}       -- key -> promise
+local inflight = {}       -- key -> { p = promise, gen = generation }
+local generation = 0      -- bumped by invalidate(): a board computed before it is never cached
 local seasonPointsCache = {}   -- citizenid -> { at, value }
 local announceCache = nil      -- { at, key, list }
 local booted = false
@@ -426,20 +427,24 @@ local function getBoardData(opts)
     local c = cache[q.key]
     if not opts.fresh and c and os.time() - c.at < cacheSeconds() then return c end
     local wait = inflight[q.key]
-    if wait and not opts.fresh then
-        local res = Citizen.Await(wait)
+    if wait and wait.gen == generation and not opts.fresh then
+        local res = Citizen.Await(wait.p)
         if res then return res end
     end
     local p = promise.new()
-    inflight[q.key] = p
+    local gen = generation
+    local slot = { p = p, gen = gen }
+    inflight[q.key] = slot
     local ok, res = pcall(compute, q)
-    inflight[q.key] = nil
+    if inflight[q.key] == slot then inflight[q.key] = nil end
     if not ok then
         p:resolve(nil)
         CP.err(TAG, 'board %s failed: %s', q.key, tostring(res))
         error(res, 0)
     end
-    cache[q.key] = res
+    -- invalidate() ran while this query was in flight (a void, approval or new row): the result may
+    -- predate that change, so it is returned once but not cached.
+    if gen == generation then cache[q.key] = res end
     p:resolve(res)
     return res
 end
@@ -523,6 +528,7 @@ end
 
 -- ── caches ──────────────────────────────────────────────────────────────────
 function LB.invalidate()
+    generation = generation + 1
     cache = {}
     seasonPointsCache = {}
     announceCache = nil
@@ -536,11 +542,12 @@ function LB.seasonPoints(citizenid)
     local c = seasonPointsCache[citizenid]
     if c and c.seasonId == season.id and os.time() - c.at < cacheSeconds() then return c.value end
     db()
+    local gen = generation
     local v = MySQL.scalar.await(
         'SELECT COALESCE(SUM(final_points), 0) AS points FROM cp_mission_runs WHERE season_id = ? AND citizenid = ? AND voided = 0 AND flagged = 0',
         { int(season.id), citizenid })
     local value = int(v)
-    seasonPointsCache[citizenid] = { at = os.time(), seasonId = season.id, value = value }
+    if gen == generation then seasonPointsCache[citizenid] = { at = os.time(), seasonId = season.id, value = value } end
     return value
 end
 
@@ -578,6 +585,7 @@ function LB.announcements()
         return U.deepcopy(announceCache.list)
     end
     local list = {}
+    local gen = generation
     local weekRanked = LB.ranking({ period = 'range', filter = 'overall', from = prevWeek, to = curWeek })
     local weekTop = topEntries(weekRanked, 3)
     if #weekTop > 0 then
@@ -596,7 +604,7 @@ function LB.announcements()
             entries = monthTop, period = os.date('%Y-%m', prevMonth + HALF_DAY),
         }
     end
-    announceCache = { at = now, key = key, list = list }
+    if gen == generation then announceCache = { at = now, key = key, list = list } end
     return U.deepcopy(list)
 end
 
@@ -737,7 +745,7 @@ end
 local PROFILE_RUNS_SQL = [[
 SELECT r.id, r.mission_type, r.mission_id, r.state, r.end_reason, r.final_points, r.cash_paid, r.cash_status,
   r.flagged, r.voided, r.breakdown, UNIX_TIMESTAMP(r.created_at) AS created_ts,
-  (SELECT COUNT(*) FROM cp_disputes d WHERE d.run_id = r.id AND d.status = 'open') AS open_disputes
+  (SELECT COUNT(*) FROM cp_disputes d WHERE d.run_id = r.id) AS disputes
 FROM cp_mission_runs r
 WHERE r.citizenid = ?
 ORDER BY r.created_at DESC, r.id DESC
@@ -749,8 +757,17 @@ local function disputable(row, own, nowTs)
     local windowS = num(cfg('Disputes', 'windowHours', 48)) * 3600
     local created = num(row.created_ts)
     if created <= 0 or nowTs - created > windowS then return false end
-    return num(row.open_disputes) == 0
+    -- modules/disputes allows one dispute per row, ever: an open one blocks (err.dispute_open) and a
+    -- decided one is final (err.dispute_final), so any cp_disputes row hides the button.
+    return num(row.disputes) == 0
 end
+
+-- RunResult fields (§9.6) a public profile may show: everything but the cash block, and none of the extra
+-- keys some rows carry (a manual award's free-text admin reason, for example).
+local PUBLIC_BREAKDOWN = {
+    runId = true, missionLabel = true, missionType = true, result = true, endReason = true, test = true, tier = true,
+    payTier = true, participants = true, departments = true, durationS = true, points = true, flagged = true,
+}
 
 local function profileRun(row, own, nowTs)
     local bd = U.jsonField(row.breakdown)
@@ -759,7 +776,11 @@ local function profileRun(row, own, nowTs)
         if own then
             if type(bd.cash) == 'table' then bd.cash.status = row.cash_status end
         else
-            bd.cash = nil
+            local pub = {}
+            for k, v in pairs(bd) do
+                if PUBLIC_BREAKDOWN[k] then pub[k] = v end
+            end
+            bd = pub
         end
     end
     local label = LB.missionLabel(row.mission_type, row.mission_id, bd)

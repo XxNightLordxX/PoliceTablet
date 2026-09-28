@@ -752,6 +752,154 @@ do
     H.eq(#missing, 0, 'locale keys used in Lua: ' .. table.concat(missing, ', '))
 end
 
+-- ════════════════════════════════════════════════════════════════════════════
+-- integration with the REAL run engine (modules/runs/server.lua): the contract calls CP.Testing makes
+-- (create with an admin record, testSkip/testRestart/pauseTimer/anchor/endRun/failRun, entitiesFor,
+-- remaining) and the onRunEnded hook, with nothing written to cp_mission_runs
+-- ════════════════════════════════════════════════════════════════════════════
+do
+    T._reset()
+    for s in pairs(onRun) do onRun[s] = nil end
+    for s in pairs(offline) do offline[s] = nil end
+    for k in pairs(reserved) do reserved[k] = nil end
+    local reservations = {}
+    CP.Route = { begin = function() end, stop = function() end }
+    CP.Draw.reserve = function(runId, missionId, index)
+        reservations[runId] = missionId .. '#' .. index
+        reserved[missionId .. '#' .. index] = true
+        return true
+    end
+    CP.Draw.release = function(runId)
+        if reservations[runId] then reserved[reservations[runId]] = nil end
+        reservations[runId] = nil
+        return true
+    end
+    CP.Alerts.set = function() return true end
+    CP.Alerts.clear = function() return true end
+    CP.Payouts = { baseFor = function() return 800 end }
+    CP.Scoring = {
+        P = function() return 200 end,
+        compute = function(_, _, result, opts)
+            return { P = 200, bonuses = {}, penalties = {}, subtotal = 200, mTeam = 1, mCross = 1, mStreak = 1,
+                capped = false, tod = false, failedShare = opts.failedShare, final = result == 'completed' and 200 or 0 }
+        end,
+    }
+    CP.Cash = { compute = function() return 800, { B = 800, mTier = 1.0, mMod = 1.0, amount = 800 } end }
+    H.sql('DELETE FROM cp_mission_runs')
+    CP.Runs = nil
+    H.load('modules/runs/server.lua')
+    local R = CP.Runs
+    H.clockMs = H.clockMs + 5000
+    H.reset()
+
+    -- an invited on-duty officer (2) and the non-police admin (1)
+    local okI, inv = T.invite(1, { 2 }, { missionId = 'gang_shootout' })
+    H.eq(okI, true, 'real engine: invite')
+    local okA = T.respond(2, { inviteId = inv.lobby.invites[1].inviteId, accepted = true })
+    H.eq(okA, true, 'real engine: accepted')
+    local ok, data = T.start(1, { missionId = 'gang_shootout', location = 1, tier = 'heavy', testers = { 2 } })
+    H.eq(ok, true, 'real engine: CP.Runs.create accepts the test (admin record + officer)')
+    local run = ok and R.get(data.runId) or nil
+    H.ok(run ~= nil, 'real engine: the run exists')
+    if run then
+        H.eq(run.participants[1].isOfficer, false, 'real engine: the non-police admin is not an officer (no duty re-checks)')
+        H.eq(run.participants[2].isOfficer, true, 'real engine: the tester is an officer')
+        H.eq(run.expectedTier, 'heavy', 'real engine: the forced tier whatever the number of testers')
+        H.eq(run.test.adminSrc, 1, 'real engine: test.adminSrc')
+        H.eq(run.test.useStartRoute, false, 'real engine: the start route is off by default')
+        H.eq(reserved['gang_shootout#1'], true, 'real engine: the test still reserves its location')
+        H.eq(run.modifier, nil, 'real engine: no modifier on a test')
+        local starts = eventsTo('client:start', 2)
+        H.eq(#starts, 1, 'real engine: client:start to the tester')
+        H.eq(starts[1] and starts[1].args[2].test.adminSrc, 1, 'real engine: the tester sees the test table')
+
+        -- Accepted: the time controls wait for In progress; teleport goes to the start
+        local okT, tp = T.control(1, { control = 'teleport', target = 'objective' })
+        H.eq(okT, true, 'real engine: teleport before In progress')
+        H.eq(tp.coords.x, 100.0, 'real engine: CP.Runs.anchor = the start before In progress')
+        local okP, errP = T.control(1, { control = 'pause' })
+        H.eq(errP, 'err.test_not_in_progress', 'real engine: no timer to pause yet')
+
+        R.markArrived(run, 1)
+        H.eq(run.state, 'in_progress', 'real engine: the first arrival starts the objectives')
+        H.eq(run.tier and run.tier.tier, 'heavy', 'real engine: forced tier at In progress')
+        okP = T.control(1, { control = 'pause' })
+        H.eq(okP, true, 'real engine: pause')
+        H.eq(run.timer.paused, true, 'real engine: CP.Runs.pauseTimer paused the timer')
+        T.control(1, { control = 'resume' })
+        H.eq(run.timer.paused, false, 'real engine: resume')
+        local okS = T.control(1, { control = 'skip' })
+        H.eq(okS, true, 'real engine: skip')
+        H.eq(run.objectiveIndex, 2, 'real engine: CP.Runs.testSkip started objective 2')
+        local okR = T.control(1, { control = 'restart' })
+        H.eq(okR, true, 'real engine: restart')
+        okT, tp = T.control(1, { control = 'teleport', target = 'objective' })
+        H.eq(tp.coords.x, 1.0, 'real engine: CP.Runs.anchor = the current objective (checkpoint 1)')
+        H.reset()
+        local okD = T.control(1, { control = 'debug' })
+        H.eq(okD, true, 'real engine: debug on')
+        local dbg = lastEvent('client:test')
+        dbg = dbg and dbg.args[1].debug
+        H.ok(type(dbg) == 'table' and dbg.counts.entities == 0, 'real engine: counts from CP.Runs.entitiesFor')
+        H.ok(type(dbg) == 'table' and type(dbg.remaining) == 'number', 'real engine: timer from CP.Runs.remaining')
+        H.eq(type(dbg) == 'table' and dbg.objective.index, 2, 'real engine: current objective in the debug data')
+
+        -- force complete: the result screen shows what the run would have earned, nothing is written
+        H.reset()
+        local okC = T.control(1, { control = 'complete' })
+        H.eq(okC, true, 'real engine: force complete')
+        H.eq(R.get(data.runId), nil, 'real engine: the run is gone')
+        H.eq(reserved['gang_shootout#1'], nil, 'real engine: the location is released')
+        local ended = eventsTo('client:runEnded', 2)
+        local rr = ended[1] and ended[1].args[4]
+        H.eq(ended[1] and ended[1].args[2], 'completed', 'real engine: completed for the tester')
+        H.ok(type(rr) == 'table' and rr.test == true, 'real engine: the RunResult is marked test')
+        H.eq(type(rr) == 'table' and rr.cash.amount, 800, 'real engine: the cash it would have earned is shown')
+        H.eq(type(rr) == 'table' and rr.points.final, 200, 'real engine: the points it would have earned are shown')
+        H.eq(tonumber(H.sql('SELECT COUNT(*) AS n FROM cp_mission_runs')[1].n), 0, 'real engine: no cp_mission_runs row')
+        local st = T.state(1)
+        H.ok(st.active == false, 'real engine: no active test after the end (onRunEnded hook)')
+        H.eq(st.pending[1] and st.pending[1].endState, 'completed', 'real engine: waiting for a result')
+        H.eq(st.pending[1] and st.pending[1].tier, 'heavy', 'real engine: recorded tier')
+        local okRec = T.record(1, { missionId = 'gang_shootout', location = 1, tier = 'heavy', result = 'passed' })
+        H.eq(okRec, true, 'real engine: the result is recorded')
+        local cd = R.cooldowns('OFF00002')
+        H.eq(next(cd.missions or {}), nil, 'real engine: a test starts no mission cooldown')
+        H.eq(next(cd.types or {}), nil, 'real engine: a test starts no type cooldown')
+    end
+
+    -- End test: failRun with its reason, for everyone
+    H.clockMs = H.clockMs + 5000
+    H.reset()
+    ok, data = T.start(1, { missionId = 'beat_patrol', location = 2 })
+    H.eq(ok, true, 'real engine: solo test')
+    run = ok and R.get(data.runId) or nil
+    if run then
+        H.eq(run.expectedTier, 'standard', 'real engine: Auto tier = the tier for one tester')
+        local okE = T.control(1, { control = 'end' })
+        H.eq(okE, true, 'real engine: End test')
+        local ended = eventsTo('client:runEnded', 1)
+        local e = ended[#ended]
+        H.eq(e and e.args[3], 'mission_failed', 'real engine: ended as mission_failed')
+        H.eq(e and e.args[4] and e.args[4].failReason, 'test.ended_by_admin', 'real engine: with the End test reason')
+        H.eq(R.get(data.runId), nil, 'real engine: cleaned up')
+        H.eq(T.state(1).pending[1].endedBy, 'end', 'real engine: pending entry says who ended it')
+    end
+
+    -- the admin abandons alone: the engine ends the run, the hook still fires
+    H.clockMs = H.clockMs + 5000
+    ok, data = T.start(1, { missionId = 'gang_shootout', location = 3 })
+    run = ok and R.get(data.runId) or nil
+    if run then
+        R.removeParticipant(run, 1, 'quit')
+        H.eq(R.get(data.runId), nil, 'real engine: abandoned by the only tester')
+        local st = T.state(1)
+        H.ok(st.active == false, 'real engine: no stale active test after an abandon')
+        H.eq(st.pending[1].endState, 'abandoned', 'real engine: abandoned test waits for a result')
+    end
+    CP.Runs = R
+end
+
 print = realPrint
 
 -- ════════════════════════════════════════════════════════════════════════════

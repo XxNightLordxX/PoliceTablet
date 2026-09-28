@@ -143,7 +143,7 @@ const TOM: RunPartner = { src: 31, name: 'Tom Reed', callsign: '2L-33', departme
 interface Cooldown { until: number; who?: string }
 
 const board = {
-  unitSize: ['unit', 'member'].includes(boardVariant) ? 3 : 1,
+  unitSize: ['unit', 'member'].includes(boardVariant) ? 3 : boardVariant === 'locked' ? 2 : 1,
   isLeader: boardVariant !== 'member',
   typeCooldowns: {} as Record<string, Cooldown>,
   emptyPool: {} as Record<string, boolean>,
@@ -512,7 +512,8 @@ function view(r: MockRunState): ActiveMissionData {
     objectives: r.objectives,
     remaining: remainingOf(r),
     paused: r.frozen !== null,
-    partners: r.partners,
+    // The viewer follows the dev panel's department (the run may have been built before it was picked).
+    partners: r.partners.map((p) => (p.src === ME_SRC ? { ...me(), status: p.status, arrived: p.arrived } : p)),
     expected: expectedOf(r),
     modifier: r.modifier,
     test: r.test,

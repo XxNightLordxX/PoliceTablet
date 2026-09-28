@@ -5,6 +5,7 @@
 // (modules/testing/client.lua) gives focus with the +crimsonpolice_testpanel key (default F9) and tells
 // this panel through push 'test' { focused, key, debugOn } (TestPush). While focused, F9 or Escape
 // releases the cursor (client action testPanel { open: false }).
+// The same push carries Config.Testing's allowTeleport / debugOverlay: those buttons are disabled when off.
 // Buttons call client actions of the Lua testing client:
 //   testControl { control: 'skip' | 'restart' | 'pause' | 'resume' | 'complete' | 'fail' | 'end' }
 //   teleport { target: 'start' | 'objective' } · toggleDebug { enabled }
@@ -32,6 +33,7 @@ interface Btn {
   key: string;
   icon: IconName;
   label: string;
+  hint?: string;
   disabled?: boolean;
   active?: boolean;
   tone?: 'danger' | 'success';
@@ -42,6 +44,8 @@ export default function TestControls({ hud }: TestControlsProps) {
   const [focused, setFocused] = useState(false);
   const [key, setKey] = useState('F9');
   const [debugOn, setDebugOn] = useState(false);
+  const [allowTeleport, setAllowTeleport] = useState(true);
+  const [debugOverlay, setDebugOverlay] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<Confirmable | null>(null);
 
@@ -50,6 +54,8 @@ export default function TestControls({ hud }: TestControlsProps) {
     if (typeof d.focused === 'boolean') setFocused(d.focused);
     if (typeof d.key === 'string' && d.key) setKey(d.key);
     if (typeof d.debugOn === 'boolean') setDebugOn(d.debugOn);
+    if (typeof d.allowTeleport === 'boolean') setAllowTeleport(d.allowTeleport);
+    if (typeof d.debugOverlay === 'boolean') setDebugOverlay(d.debugOverlay);
     if (d.debug === false || d.debug === null) setDebugOn(false);
   });
 
@@ -95,21 +101,31 @@ export default function TestControls({ hud }: TestControlsProps) {
 
   const rows: Btn[][] = [
     [
-      { key: 'skip', icon: 'chevronRight', label: t('test.control.skip_short'), disabled: !inObjectives, onClick: () => void control('skip', 'test.ui.skipped') },
-      { key: 'restart', icon: 'refresh', label: t('test.control.restart_short'), disabled: !inObjectives, onClick: () => void control('restart', 'test.ui.restarted') },
+      { key: 'skip', icon: 'chevronRight', label: t('test.control.skip_short'), hint: t('test.control.skip'), disabled: !inObjectives, onClick: () => void control('skip', 'test.ui.skipped') },
+      { key: 'restart', icon: 'refresh', label: t('test.control.restart_short'), hint: t('test.control.restart'), disabled: !inObjectives, onClick: () => void control('restart', 'test.ui.restarted') },
       {
         key: paused ? 'resume' : 'pause', icon: paused ? 'play' : 'pause', label: t(paused ? 'test.control.resume_short' : 'test.control.pause_short'),
+        hint: t(paused ? 'test.control.resume' : 'test.control.pause'),
         disabled: !inObjectives || !hud.timer, active: paused, onClick: () => void control(paused ? 'resume' : 'pause'),
       },
     ],
     [
-      { key: 'tp_start', icon: 'mapPin', label: t('test.control.teleport_start_short'), onClick: () => void call('tp_start', 'teleport', { target: 'start' }) },
-      { key: 'tp_obj', icon: 'target', label: t('test.control.teleport_objective_short'), disabled: !inObjectives, onClick: () => void call('tp_obj', 'teleport', { target: 'objective' }) },
-      { key: 'debug', icon: 'eye', label: t('test.control.debug_short'), active: debugOn, onClick: () => void call('debug', 'toggleDebug', { enabled: !debugOn }) },
+      {
+        key: 'tp_start', icon: 'mapPin', label: t('test.control.teleport_start_short'), hint: t(allowTeleport ? 'test.control.teleport_start' : 'err.test_teleport_disabled'),
+        disabled: !allowTeleport, onClick: () => void call('tp_start', 'teleport', { target: 'start' }),
+      },
+      {
+        key: 'tp_obj', icon: 'target', label: t('test.control.teleport_objective_short'), hint: t(allowTeleport ? 'test.control.teleport_objective' : 'err.test_teleport_disabled'),
+        disabled: !allowTeleport || !inObjectives, onClick: () => void call('tp_obj', 'teleport', { target: 'objective' }),
+      },
+      {
+        key: 'debug', icon: 'eye', label: t('test.control.debug_short'), hint: t(debugOverlay ? 'test.control.debug' : 'err.test_debug_disabled'),
+        disabled: !debugOverlay, active: debugOn, onClick: () => void call('debug', 'toggleDebug', { enabled: !debugOn }),
+      },
     ],
     [
-      { key: 'complete', icon: 'checkCircle', label: t('test.control.complete_short'), tone: 'success', onClick: () => setConfirm('complete') },
-      { key: 'fail', icon: 'xCircle', label: t('test.control.fail_short'), tone: 'danger', onClick: () => setConfirm('fail') },
+      { key: 'complete', icon: 'checkCircle', label: t('test.control.complete_short'), hint: t('test.control.complete'), tone: 'success', onClick: () => setConfirm('complete') },
+      { key: 'fail', icon: 'xCircle', label: t('test.control.fail_short'), hint: t('test.control.fail'), tone: 'danger', onClick: () => setConfirm('fail') },
       { key: 'end', icon: 'x', label: t('test.control.end'), tone: 'danger', onClick: () => setConfirm('end') },
     ],
   ];
@@ -167,7 +183,7 @@ export default function TestControls({ hud }: TestControlsProps) {
               disabled={!focused || b.disabled || busy !== null}
               aria-pressed={b.active || undefined}
               onClick={b.onClick}
-              title={b.label}
+              title={b.hint ?? b.label}
             >
               {busy === b.key ? <Spinner size={12} /> : <Icon name={b.icon} size={14} />}
               <span className="testing-hud__btn-label">{b.label}</span>

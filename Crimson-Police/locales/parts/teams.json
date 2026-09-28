@@ -164,7 +164,7 @@
   "sup.crossdept.tier_expected_hint": "Set when the run moves to In progress",
   "sup.crossdept.tier_set_hint": "Can only go down from here",
   "sup.crossdept.join_closes": "Joining closes in",
-  "sup.crossdept.join_closes_hint": "Or when you tap Start now",
+  "sup.crossdept.join_closes_hint": "Or earlier with Start now",
   "sup.crossdept.time_left": "Time left",
   "sup.crossdept.run_in_progress": "The run is in progress",
   "sup.crossdept.run_state": "Run",
@@ -225,6 +225,6 @@
   "unit.ui.expires_in": "Time left to answer",
   "sup.crossdept.left_count": "{n} left the run",
   "sup.crossdept.joining_closed": "Joining closed at the start",
-  "unit.ui.locked_text_off_run": "Your unit accepted a mission type, so invites are closed until the unit's mission ends. You are no longer on that run, so leaving the unit abandons nothing.",
+  "unit.ui.locked_text_off_run": "Invites stay closed until the unit's mission ends. You are no longer on that run, so leaving the unit abandons nothing.",
   "admin.action.opAutoCancel": "Cross-Department Mission auto-cancelled"
 }

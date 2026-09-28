@@ -142,5 +142,6 @@
   "run.empty.open_board": "Open the Mission Board",
   "run.hero.at_start": "At the start",
   "run.hero.start_label": "Reach the start",
-  "run.hero.start_hint": "Otherwise the run ends as Abandoned"
+  "run.hero.start_hint": "Otherwise the run ends as Abandoned",
+  "board.boss.ready": "Ready · your attempt for this week"
 }

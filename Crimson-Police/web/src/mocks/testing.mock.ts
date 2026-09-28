@@ -3,6 +3,8 @@
 //   testactive=1  a running test of mine        testdebug=1  debug overlay data (push 'test')
 //   testfocus=1   the HUD panel has NUI focus   testprompt=1 the F9 invitation prompt
 //   testinvite=0  no invitation banner for me    testempty=1  an empty test log (everything "Not tested")
+//   testlong=1    edge cases: very long mission/location/player names and notes, a mission without locations
+//   testlua=1     Lua-shaped replies: empty lists sent as {} objects, false for missing values
 import { emitDebug, registerMock } from '../shared/nui';
 import { MOCK_DEPARTMENTS, mockLocale } from './samples';
 import type {
@@ -44,13 +46,26 @@ const MISSIONS: MockMission[] = [
   { id: 'custom_harbor_sweep', label: 'Harbor Sweep', type: 'investigation', typeLabel: 'Investigation', source: 'custom', version: 1, maxOfficers: 2, locations: ['Terminal A', 'Terminal B', 'Elysian cranes'], status: 'archived' },
 ];
 
+if (params.get('testlong') === '1') {
+  MISSIONS.unshift({
+    id: 'custom_extremely_long_mission_identifier_x', label: 'Operation Midnight Harbour Container Terminal Sweep and Clear (Extended Night Shift Edition)',
+    type: 'investigation', typeLabel: 'Investigation', source: 'custom', version: 12, maxOfficers: 4,
+    locations: ['Elysian Island container terminal north gate by the big blue crane next to the rail yard', 'Terminal B'],
+  });
+  MISSIONS.push({ id: 'custom_no_locations', label: 'Broken draft copy', type: 'patrol', typeLabel: 'Patrol', source: 'custom', version: 1, maxOfficers: 1, locations: [] });
+}
+
 const TESTERS = [
   { cid: 'ADM00001', name: 'Alex Mercer' },
   { cid: 'ABC12345', name: 'John Doe' },
   { cid: 'FIB00042', name: 'Dana Whitfield' },
 ];
 
-const NOTES = ['spawn 3 is inside a wall', 'Wave 2 spawns too close to the start', 'Truck gets stuck at the Fleeca ramp', 'Checkpoint 7 is off the road', 'Hostage 2 clips through the counter'];
+if (params.get('testlong') === '1') TESTERS.push({ cid: 'LONG0001', name: 'Maximilian Alexander Montgomery-Worthington III' });
+
+const NOTES = [
+  ...(params.get('testlong') === '1' ? ['Spawn points 3, 4 and 7 are inside the warehouse wall and the second wave never spawns because the armed cap is reached by the first wave staying alive behind the containers'] : []),
+  'spawn 3 is inside a wall', 'Wave 2 spawns too close to the start', 'Truck gets stuck at the Fleeca ramp', 'Checkpoint 7 is off the road', 'Hostage 2 clips through the counter'];
 
 // Deterministic "random" so every load looks the same.
 let seed = 7;

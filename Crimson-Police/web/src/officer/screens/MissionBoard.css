@@ -5,19 +5,26 @@
 
 /* ── notices (board-wide states) ──────────────────────────────────────────── */
 .run_ui-notice {
-  --n: var(--cp-info-rgb);
-  --n-solid: var(--cp-info);
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 10px 14px;
   border-radius: var(--cp-radius);
-  border: 1px solid rgba(var(--n), 0.42);
-  background: linear-gradient(90deg, rgba(var(--n), 0.16), rgba(var(--n), 0.04) 75%);
+  border: 1px solid rgba(var(--cp-info-rgb), 0.42);
+  background: linear-gradient(90deg, rgba(var(--cp-info-rgb), 0.16), rgba(var(--cp-info-rgb), 0.04) 75%);
 }
-.run_ui-notice--warning { --n: var(--cp-warning-rgb); --n-solid: var(--cp-warning); }
-.run_ui-notice--danger { --n: var(--cp-danger-rgb); --n-solid: var(--cp-danger); }
-.run_ui-notice--accent { --n: var(--cp-accent-rgb); --n-solid: var(--cp-accent); }
+.run_ui-notice--warning {
+  border-color: rgba(var(--cp-warning-rgb), 0.42);
+  background: linear-gradient(90deg, rgba(var(--cp-warning-rgb), 0.16), rgba(var(--cp-warning-rgb), 0.04) 75%);
+}
+.run_ui-notice--danger {
+  border-color: rgba(var(--cp-danger-rgb), 0.42);
+  background: linear-gradient(90deg, rgba(var(--cp-danger-rgb), 0.16), rgba(var(--cp-danger-rgb), 0.04) 75%);
+}
+.run_ui-notice--accent {
+  border-color: rgba(var(--cp-accent-rgb), 0.42);
+  background: linear-gradient(90deg, rgba(var(--cp-accent-rgb), 0.16), rgba(var(--cp-accent-rgb), 0.04) 75%);
+}
 .run_ui-notice__icon {
   display: inline-flex;
   align-items: center;
@@ -26,10 +33,13 @@
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  color: var(--n-solid);
-  background: rgba(var(--n), 0.16);
-  border: 1px solid rgba(var(--n), 0.4);
+  color: var(--cp-info);
+  background: rgba(var(--cp-info-rgb), 0.16);
+  border: 1px solid rgba(var(--cp-info-rgb), 0.4);
 }
+.run_ui-notice--warning .run_ui-notice__icon { color: var(--cp-warning); background: rgba(var(--cp-warning-rgb), 0.16); border-color: rgba(var(--cp-warning-rgb), 0.4); }
+.run_ui-notice--danger .run_ui-notice__icon { color: var(--cp-danger); background: rgba(var(--cp-danger-rgb), 0.16); border-color: rgba(var(--cp-danger-rgb), 0.4); }
+.run_ui-notice--accent .run_ui-notice__icon { color: var(--cp-accent-text); background: rgba(var(--cp-accent-rgb), 0.16); border-color: rgba(var(--cp-accent-rgb), 0.4); }
 .run_ui-notice__text { display: flex; flex-direction: column; gap: 1px; flex: 1; min-width: 0; }
 .run_ui-notice__title { font-weight: 700; }
 .run_ui-notice__sub { font-size: var(--cp-fs-sm); color: var(--cp-muted); line-height: 1.4; }
