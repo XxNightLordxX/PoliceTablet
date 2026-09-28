@@ -58,6 +58,10 @@ export interface OfficerRun {
   state: string; endReason: string; tier: string; participants: number; points: number; cashPaid: number; cash: number;
   cashStatus: string; flagged: boolean; voided: boolean; flagReason: string | null; createdAt: number;
 }
+export interface OfficerSuspension {
+  id: number; action: 'suspend' | 'unsuspend' | 'autoSuspend'; actor: string; actorName: string | null;
+  role: 'supervisor' | 'admin' | 'console'; days: number | null; reason: string | null; createdAt: number;
+}
 export interface OfficerDetail {
   citizenid: string; name: string; callsign: string | null; rank: string | null;
   department: string | null; departmentShort: string; departmentLabel: string | null;
@@ -66,6 +70,8 @@ export interface OfficerDetail {
   cash: { total: number; week: number };
   stats: { runs: number; completed: number; failed: number; abandoned: number; flagged: number; voided: number };
   suspension: { suspended: boolean; untilTs: number | null };
+  /** The last suspend / unsuspend / automatic suspension entries (cp_audit), newest first. */
+  suspensions: OfficerSuspension[];
   runs: OfficerRun[]; disputes: DisputeView[]; online: boolean; own: boolean; known: boolean; maxAward: number;
 }
 

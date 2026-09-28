@@ -186,6 +186,18 @@ local function citizenOf(src)
     return nil
 end
 
+-- Whether citizenid is (or was) a participant of the still-running run runUuid: their own row is only
+-- written when they leave, so the cp_mission_runs check alone misses a reviewer who is still on it.
+local function inLiveRun(citizenid, runUuid)
+    if type(citizenid) ~= 'string' or citizenid == '' or type(runUuid) ~= 'string' or not has('Runs', 'get') then return false end
+    local ok, run = call('Runs', 'get', runUuid)
+    if not ok or type(run) ~= 'table' or type(run.participants) ~= 'table' then return false end
+    for _, p in pairs(run.participants) do
+        if type(p) == 'table' and p.citizenid == citizenid then return true end
+    end
+    return false
+end
+
 local function windowSeconds()
     local h = num(Config.Disputes and Config.Disputes.windowHours, 48)
     if h < 0 then h = 0 end
@@ -269,7 +281,8 @@ local function ownRuns(citizenid, uuids)
     return out
 end
 
-local function views(rows, viewerCitizenid)
+-- dropOwn: leave out disputes about runs the viewer took part in (the review lists never show them).
+local function views(rows, viewerCitizenid, dropOwn)
     local uuids, seen = {}, {}
     for _, r in ipairs(rows) do
         if r.run_uuid and not seen[r.run_uuid] then seen[r.run_uuid] = true; uuids[#uuids + 1] = r.run_uuid end
@@ -277,9 +290,12 @@ local function views(rows, viewerCitizenid)
     local own = ownRuns(viewerCitizenid, uuids)
     local out = {}
     for _, r in ipairs(rows) do
-        local v = viewOf(r, viewerCitizenid)
-        if own[r.run_uuid] then v.canHandle = false end
-        out[#out + 1] = v
+        local mine = own[r.run_uuid] or inLiveRun(viewerCitizenid, r.run_uuid)
+        if not (mine and dropOwn) then
+            local v = viewOf(r, viewerCitizenid)
+            if mine then v.canHandle = false end
+            out[#out + 1] = v
+        end
     end
     return out
 end
@@ -298,7 +314,7 @@ function D.forSupervisor(src)
     sql = sql .. ' AND r.run_uuid NOT IN (SELECT y.run_uuid FROM cp_mission_runs y WHERE y.citizenid = ?)'
     params[#params + 1] = citizenid
     sql = sql .. (' ORDER BY d.created_at, d.id LIMIT %d'):format(LIST_LIMIT)
-    return views(query(sql, params) or {}, citizenid ~= '' and citizenid or nil)
+    return views(query(sql, params) or {}, citizenid ~= '' and citizenid or nil, true)
 end
 
 function D.forAdmin(excludeCitizenid)
@@ -309,7 +325,8 @@ function D.forAdmin(excludeCitizenid)
         params[#params + 1] = excludeCitizenid
     end
     sql = sql .. (' ORDER BY d.created_at, d.id LIMIT %d'):format(LIST_LIMIT)
-    return views(query(sql, params) or {}, excludeCitizenid)
+    local viewer = type(excludeCitizenid) == 'string' and excludeCitizenid ~= '' and excludeCitizenid or nil
+    return views(query(sql, params) or {}, viewer, viewer ~= nil)
 end
 
 function D.forOfficer(citizenid, goesTo, viewerSrc)
@@ -464,6 +481,7 @@ function D.handle(src, disputeId, decision, reason, awardPoints, opts)
     local okR, allowed, eR = call('Permissions', 'canReviewRun', src, d.run_uuid)
     if not okR then return false, 'err.internal' end
     if not allowed then return false, eR or 'err.own_run' end
+    if inLiveRun(citizenOf(src), d.run_uuid) then return false, 'err.own_run' end
 
     local points
     if decision == 'approve' and kind == 'failed' then
@@ -487,7 +505,7 @@ function D.handle(src, disputeId, decision, reason, awardPoints, opts)
                 return false, (ok and e) or 'err.internal'
             end
         elseif kind == 'flagged' then
-            local ok, res, e = call('Admin', 'approveFlagged', src, d.run_id, reason, { skipPermission = true, noAudit = true })
+            local ok, res, e = call('Admin', 'approveFlagged', src, d.run_id, reason, { skipPermission = true, noAudit = true, quiet = true })
             if not ok or (res == false and e ~= 'err.not_flagged') then
                 if ok and e == 'err.already_voided' then
                     local done = restoreVoided(d)
