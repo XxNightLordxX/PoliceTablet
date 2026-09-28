@@ -4,6 +4,7 @@
 //   testfocus=1   the HUD panel has NUI focus   testprompt=1 the F9 invitation prompt
 //   testinvite=0  no invitation banner for me    testempty=1  an empty test log (everything "Not tested")
 import { emitDebug, registerMock } from '../shared/nui';
+import { MOCK_DEPARTMENTS, mockLocale } from './samples';
 import type {
   TestActive, TestCandidate, TestDebugData, TestInvite, TestLobby, TestLobbyInvite, TestLocationRow, TestMissionRow,
   TestPendingRecord, TestsView, TestState,
@@ -343,6 +344,10 @@ registerMock('client', 'testPanel', (p: { open?: boolean }) => {
 });
 
 // ── URL shortcuts for the HUD pieces ──────────────────────────────────────────
+// In game the HUD gets the full locale with the login 'theme' message; in the browser the HUD alone only
+// has the bundled ui.json fallback, so these shortcuts send the merged mock locale the same way.
+const hudShortcut = ['testdebug', 'testfocus', 'testprompt'].some((k) => params.get(k) === '1') || params.get('hud') === 'test';
+if (hudShortcut && !params.get('ui')) emitDebug('theme', { theme: MOCK_DEPARTMENTS.sast.theme, locale: mockLocale }, 500);
 
 if (params.get('testdebug') === '1' || params.get('testfocus') === '1') {
   emitDebug('push', {

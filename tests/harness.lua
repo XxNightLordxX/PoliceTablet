@@ -20,7 +20,7 @@ H.commands = {}
 H.exportsMock = {}   -- H.exportsMock['sc-dispatch'] = { ClearNotification = function(...) end }
 H.clockMs = 0
 H.time = 1790000000  -- fake os.time()
-H.db = 'cp_test'
+H.db = os.getenv('CP_TEST_DB') or 'cp_test'   -- tests/run.lua gives every run its own database
 H.failures = 0
 H.passes = 0
 

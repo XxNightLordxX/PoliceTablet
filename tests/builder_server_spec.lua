@@ -591,6 +591,21 @@ local function body()
     H.eq(lastAudit().action, 'create', 'create audited'); H.eq(lastAudit().category, 'builder', 'category builder')
     local ok2, data2 = act(1, 'create', { type = 'tactical', label = 'Dockside Raid' })
     H.ok(ok2 and data2.id == 'custom_dockside_raid_2', 'a second mission with the same label gets _2')
+    do
+        -- a race: the id looks free, but another create took it first -> INSERT IGNORE inserts nothing, next id
+        local realScalar = MySQL.scalar.await
+        local fooled = false
+        MySQL.scalar.await = function(sql, params)
+            if not fooled and sql:find('AS taken', 1, true) then fooled = true; return nil end
+            return realScalar(sql, params)
+        end
+        local okRace, race = act(1, 'create', { type = 'tactical', label = 'Dockside Raid' })
+        MySQL.scalar.await = realScalar
+        H.ok(fooled and okRace and race.id == 'custom_dockside_raid_3', 'an id clash on insert moves on to the next free id: ' .. tostring(race and race.id))
+        H.eq(row('custom_dockside_raid').created_by, 'SUP00001', 'the existing mission is untouched')
+        act(1, 'discardDraft', { id = 'custom_dockside_raid_3' })
+        H.eq(row('custom_dockside_raid_3'), nil, 'race copy discarded')
+    end
     H.eq(select(2, act(1, 'create', { type = 'traffic' })), 'err.builder_bad_type', 'unknown mission type')
     H.eq(select(2, act(4, 'create', { type = 'patrol' })), 'err.no_permission', 'officers cannot build')
     local okDef, defaultData = act(3, 'create', { type = 'patrol' })
@@ -615,6 +630,22 @@ local function body()
     local okBad, savedBad = act(1, 'save', { id = id, definition = (function() local d = validDef(); d.timeLimit = 60; return d end)() })
     H.ok(okBad and savedBad.valid == false and hasError(savedBad.errors, 'builder.error.time_limit'), 'an invalid draft is stored and reported')
     act(1, 'save', { id = id, definition = validDef() })
+
+    -- validate (stored draft, or a definition in the payload) and unlock
+    do
+        local okV, v = act(1, 'validate', { id = id })
+        H.ok(okV and v.valid == true and v.armed == 13 and v.requiredTier == 'heavy' and v.maxHostiles == 40, 'validate the stored draft')
+        local d = validDef(); d.payout = 500; d.items = { { name = 'bandage', count = 2 } }
+        local okV2, v2 = act(2, 'validate', { id = id, definition = d })
+        H.ok(okV2 and v2.valid == false and hasError(v2.errors, 'builder.error.payout_field')
+            and hasError(v2.errors, 'builder.error.item_forbidden'), 'validate a payload definition (read-only, any builder)')
+        H.ok((act(1, 'unlock', { id = id })), 'unlock')
+        H.eq(row(id).locked_by, nil, 'unlock clears the own lock')
+        local okL, lk = act(1, 'lock', { id = id })
+        H.ok(okL and lk.lock and lk.lock.mine and lk.lock.name == 'John Doe', 'lock again')
+        act(2, 'unlock', { id = id })
+        H.eq(row(id).locked_by, 'SUP00001', 'unlock never clears someone else\'s lock')
+    end
 
     -- autosave throttle and lock renewal
     H.sql('UPDATE cp_custom_missions SET locked_until = NOW() + INTERVAL 1 MINUTE WHERE id = ?', { id })

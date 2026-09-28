@@ -2055,12 +2055,13 @@ local function insertDraft(label, def, actor)
         local id = uniqueId(label)
         if not id then return nil, 'err.internal' end
         def.id = id
-        local ok = pcall(MySQL.insert.await, [[INSERT INTO cp_custom_missions (id, mission_type, status, draft_version,
-            draft_definition, draft_tested, file_path, edited_in_code, locked_by, locked_until, created_by, updated_by)
-            VALUES (?, ?, 'draft', 1, ?, 0, NULL, 0, ?, NOW() + INTERVAL ? MINUTE, ?, ?)]],
+        -- INSERT IGNORE: a clash with an id taken a moment ago inserts nothing (0 rows) and we try the next one
+        local ok, n = pcall(MySQL.update.await, [[INSERT IGNORE INTO cp_custom_missions (id, mission_type, status,
+            draft_version, draft_definition, draft_tested, file_path, edited_in_code, locked_by, locked_until,
+            created_by, updated_by) VALUES (?, ?, 'draft', 1, ?, 0, NULL, 0, ?, NOW() + INTERVAL ? MINUTE, ?, ?)]],
             { id, def.type, encode(def), actor.citizenid, math.max(1, math.floor(tonumber(cfgB().editLockMinutes) or 30)),
               actor.citizenid, actor.citizenid })
-        if ok and fetchRow(id) then
+        if ok and (tonumber(n) or 0) > 0 then
             if actor.src and actor.src > 0 then holders[actor.src] = actor.citizenid end
             return id
         end
@@ -2166,7 +2167,7 @@ local function storeDraft(src, payload, explicit)
         and U.trim(def.label) ~= '' and ('custom_' .. B.slug(def.label)) ~= row.id:gsub('_%d+$', '') then
         local candidate = uniqueId(def.label, row.id)
         if candidate and candidate ~= row.id then
-            local n = MySQL.update.await('UPDATE cp_custom_missions SET id = ? WHERE id = ? AND published_version IS NULL',
+            local n = MySQL.update.await('UPDATE IGNORE cp_custom_missions SET id = ? WHERE id = ? AND published_version IS NULL',
                 { candidate, row.id })
             if (tonumber(n) or 0) > 0 then
                 previousId, newId = row.id, candidate

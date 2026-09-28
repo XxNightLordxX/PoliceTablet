@@ -95,10 +95,10 @@ export default function TestControls({ hud }: TestControlsProps) {
 
   const rows: Btn[][] = [
     [
-      { key: 'skip', icon: 'chevronRight', label: t('test.control.skip'), disabled: !inObjectives, onClick: () => void control('skip', 'test.ui.skipped') },
-      { key: 'restart', icon: 'refresh', label: t('test.control.restart'), disabled: !inObjectives, onClick: () => void control('restart', 'test.ui.restarted') },
+      { key: 'skip', icon: 'chevronRight', label: t('test.control.skip_short'), disabled: !inObjectives, onClick: () => void control('skip', 'test.ui.skipped') },
+      { key: 'restart', icon: 'refresh', label: t('test.control.restart_short'), disabled: !inObjectives, onClick: () => void control('restart', 'test.ui.restarted') },
       {
-        key: paused ? 'resume' : 'pause', icon: paused ? 'play' : 'pause', label: t(paused ? 'test.control.resume' : 'test.control.pause'),
+        key: paused ? 'resume' : 'pause', icon: paused ? 'play' : 'pause', label: t(paused ? 'test.control.resume_short' : 'test.control.pause_short'),
         disabled: !inObjectives || !hud.timer, active: paused, onClick: () => void control(paused ? 'resume' : 'pause'),
       },
     ],

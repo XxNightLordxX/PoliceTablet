@@ -831,7 +831,8 @@ Rules for blocks:
 | `client:participants` | runId, list `{ src, name, callsign, departmentShort, status, arrived }` | runs |
 | `client:runEnded` | runId, result, endReason, breakdown (RunResult §9.6) | runs |
 | `client:routeWarning` | runId, secondsLeft or nil | route |
-| `client:routeRecalc` | runId, ok | route |
+| `client:routeRecalc` | runId, ok, recalcsLeft | route |
+| `client:routeStatus` | runId, status (`'arrived'`…) | route |
 | `client:pickup` | runId, dropOff (vec3) | downed |
 | `client:requestEMS` | runId | downed |
 | `client:operation` | state (`launched`|`started`|`ended`|`cancelled`), missionLabel | operations |
@@ -862,6 +863,8 @@ Rules for blocks:
 | `server:setHideName` | boolean | leaderboard |
 | `server:logoFailed` | deptKey | tablet |
 | `server:testRespond` | `{ inviteId, accepted }` | testing |
+| `server:pickupDone` | runId, ok (plain event, no reqId) | downed |
+| `server:npcCuff` | runId, netId (plain event, no reqId) | npc |
 
 Events with "three args, no reqId" are plain `RegisterNetEvent` handlers (client Lua → server);
 all others use `CP.Net.action` (UI → server, with reply).

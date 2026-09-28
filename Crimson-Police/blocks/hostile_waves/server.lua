@@ -307,8 +307,9 @@ local function checkLocation(o, loc, li, strict)
     return true
 end
 
--- Built-in files are trusted for model/weapon lists and placement guardrails (they follow the
--- mission cards); custom and draft missions get every Mission Builder guardrail.
+-- Built-in files are trusted for model/weapon lists, the spawn-point count and the distance from the
+-- start (they follow the mission cards); no-build zones, ranges and the armed budget apply to every
+-- mission; custom and draft missions get every Mission Builder guardrail.
 local function validate(obj, mission, location)
     if type(obj) ~= 'table' then return bad('block.hostile_waves.invalid.objective') end
     local c = cfg()

@@ -88,11 +88,31 @@ local function toSrc(src)
     return n
 end
 
+-- At most n bytes, never ending in half a UTF-8 character: the cp_officers columns count characters,
+-- and MariaDB's strict mode rejects the whole upsert for a string cut inside a multi-byte character
+-- (CP.U.clip cuts bytes). Names and callsigns are free text, e.g. "José" or "Łukasz".
+local function clipText(s, n)
+    if s == nil then return nil end
+    s = tostring(s)
+    if #s <= n then return s end
+    s = s:sub(1, n)
+    local last = #s
+    local j = last
+    while j > 1 and j > last - 3 and s:byte(j) >= 0x80 and s:byte(j) < 0xC0 do j = j - 1 end
+    local lead = s:byte(j)
+    if lead >= 0xC0 then
+        local need = (lead >= 0xF0 and 4) or (lead >= 0xE0 and 3) or 2
+        if last - j + 1 < need then return s:sub(1, j - 1) end
+    end
+    return s
+end
+A._clipText = clipText   -- exposed for tests/core_spec.lua only
+
 local function nonEmpty(v, max)
     if type(v) ~= 'string' then return nil end
     local s = CP.U.trim(v)
     if s == '' then return nil end
-    return CP.U.clip(s, max)
+    return clipText(s, max)
 end
 
 local function describe(v)
@@ -196,7 +216,7 @@ local function sanitizeDepartment(key, cfg)
     local short = nonEmpty(cfg.short, 16)
     local label = nonEmpty(cfg.label, 64)
     if not short then
-        short = CP.U.clip(key:upper(), 16)
+        short = clipText(key:upper(), 16)
         warnOnce(key .. '.short', 'Department %s has no short tag; using %s', key, short)
     end
     if not label then
@@ -350,14 +370,14 @@ function A.getOfficer(src)
     return {
         src = n,
         citizenid = info.citizenid,
-        name = CP.U.clip(info.name, 64),
+        name = clipText(info.name, 64),
         department = dept.key,
         departmentLabel = dept.label,
         departmentShort = dept.short,
         job = info.job.name,
-        rank = CP.U.clip(info.job.gradeName or CP.L('common.unknown'), 40),
+        rank = clipText(info.job.gradeName or CP.L('common.unknown'), 40),
         gradeLevel = info.job.gradeLevel,
-        callsign = info.callsign and CP.U.clip(info.callsign, 32) or nil,
+        callsign = info.callsign and clipText(info.callsign, 32) or nil,
         onduty = true,
         isSupervisor = info.job.gradeLevel >= dept.supervisorGrade,
         isAdmin = A.isAdmin(n),
@@ -501,8 +521,8 @@ function A.refreshOfficerRow(src)
           VALUES (?, NULLIF(?, ''), NULLIF(?, ''), ?, ?)
           ON DUPLICATE KEY UPDATE callsign = VALUES(callsign), rank_label = VALUES(rank_label),
             display_name = VALUES(display_name), department = VALUES(department)]],
-        { info.citizenid, CP.U.clip(info.callsign or '', 32), CP.U.clip(info.job.gradeName or '', 40),
-          CP.U.clip(info.name, 64), deptKey })
+        { info.citizenid, clipText(info.callsign or '', 32), clipText(info.job.gradeName or '', 40),
+          clipText(info.name, 64), deptKey })
     if not ok then
         CP.err(TAG, 'refreshing cp_officers for %s failed: %s', info.citizenid, tostring(err))
         return false

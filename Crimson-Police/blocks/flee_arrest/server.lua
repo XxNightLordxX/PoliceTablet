@@ -57,7 +57,8 @@
     { type = 'knock_start' } / { type = 'knock' }  door mode, within KNOCK_RANGE + slack of the door;
                                      'knock' at least TIMED_SHARE × knock.duration after 'knock_start'
     { type = 'aim', netId }          an unarmed fleeing suspect aimed at within givesUp.aim (+ slack)
-    { type = 'stunned', netId }      IsPedBeingStunned seen by a client; a participant within STUN_RANGE
+    { type = 'stunned', netId }      IsPedBeingStunned seen by a client; the reporter within
+                                     STUN_REPORT_RANGE and a participant within STUN_RANGE
     { type = 'low_health', netId }   an armed suspect: re-checked with server-side health
     { type = 'cuffed', netId }       CP.Npc (CP.Runs.dispatch) after a validated cuff (cp bag says cuffed)
     { type = 'shot', netId, src }    CP.Npc: a surrendered/cuffed suspect was shot (penalty recorded there)
@@ -85,6 +86,7 @@ local REACH_SLACK        = 2.0     -- metres of position lag allowed around inte
 local KNOCK_RANGE        = 2.5     -- ox_target distance of "Knock and announce"
 local CUFF_RANGE         = 3.0     -- CP.Npc.enableCuff default maxDistance (ARCHITECTURE §5.11)
 local STUN_RANGE         = 30.0    -- a stun needs a participant this close to the suspect
+local STUN_REPORT_RANGE  = 50.0    -- ...and the reporter this close (clients only look within 40 m)
 local TIMED_SHARE        = 0.8     -- a timed interaction must last at least this share of its duration
 local FIRE_RELEASE       = 1.5     -- an armed inmate goes back to fleeing beyond fireWithin × this
 local DOOR_STEP          = 1.0     -- metres outside the door where a surrendering suspect stands
@@ -967,7 +969,9 @@ local function onEvent(ctx, src, ev)
             local allowed
             if p.armed then allowed = ctx.obj.armedGivesUp.stun == true else allowed = ctx.obj.givesUp.stun == true end
             if not allowed then return false, 'disabled' end
-            if nearestOf(party(ctx), pedCoords(p)) > STUN_RANGE then return false, 'too_far' end
+            local pc, sc = pedCoords(p), ctx.coords(src)
+            if not pc or not sc or U.dist(pc, sc) > STUN_REPORT_RANGE then return false, 'too_far' end
+            if nearestOf(party(ctx), pc) > STUN_RANGE then return false, 'too_far' end
             surrenderPed(ctx, st, p)
             ok = true
         elseif t == 'low_health' then

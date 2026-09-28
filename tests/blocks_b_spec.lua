@@ -1174,6 +1174,21 @@ do -- flee_arrest: every NPC spawns calm (neutral) until the server makes it hos
     for _, s in ipairs(SS.spawned) do H.eq(s.opts.cfg.group, 'neutral', 'inmate spawns neutral (armed: ' .. tostring(s.opts.armed) .. ')') end
 end
 
+do -- flee_arrest: a stun report must come from a participant near the suspect
+    place(1, 4000, 4000, 30); place(2, 4000, 4000, 30)
+    local ctx, S = makeCtx('flee_arrest', { mode = 'scatter' }, scatterLoc, { srcs = { 1, 2 } })
+    FA.start(ctx)
+    local a = U.filter(S.spawned, function(s) return s.opts.armed end)[1].netId
+    nearTo(2, S, a, 5.0)
+    local c = posOf(S, a)
+    place(1, c.x + 120.0, c.y, c.z)
+    local _, why = FA.onEvent(ctx, 1, { type = 'stunned', netId = a })
+    H.eq(why, 'too_far', 'a far-away participant cannot report a stun for someone else')
+    H.eq(NPC.states[a], 'fleeing', 'the armed inmate did not give up')
+    H.eq(FA.onEvent(ctx, 2, { type = 'stunned', netId = a }), true, 'the participant next to him can')
+    H.eq(NPC.states[a], 'surrendered', 'armed inmate gave up after the stun')
+end
+
 do -- validation guardrails added in review
     local loc = hwLocation(12)
     loc.bossZone = vec4(470.0, -974.0, 30.0, 0.0)          -- Mission Row PD no-build zone

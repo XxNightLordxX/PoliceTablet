@@ -15,8 +15,11 @@ Each file's header lists the fields it reads (with defaults), the evidence it ac
   field/min/max vars). Built-in missions (`mission.source == 'builtin'`) are trusted on the allowed model and weapon
   lists, the spawn-point count (1.5 × largest wave, 1 point per NPC) and the minimum distance from the start (the
   Hostage Rescue hostiles are inside a store, so they are closer than 30 m to its start). Ranges, types, the
-  40-armed budget and required points are checked for every mission. flee_arrest scatter spawn points inside
-  `Config.Builder.noBuildZones` are refused for every mission (card rule: "nothing spawns inside the prison walls").
+  40-armed budget, required points and `Config.Builder.noBuildZones` are checked for every mission: every spawn
+  point (waves, boss spot, hostage spots, suspects, associates, inmates), the protect_rescue safe marker, the
+  flee_arrest door marker and every fleeTo / route waypoint (docs/CRIMSON_ARENA.md rule 7; the loader only sees
+  location keys, not points written into an objective). Custom missions also keep the boss spot and the hostage
+  spots `Config.Builder.minSpawnFromStart` away from the start, like every other spawn point.
   When `location` is nil, `validate` walks `mission.locations`.
 - **Text defaults** (`knock.label`, `cuff.label`, `target.label`, `boss.label`) are filled with `CP.L(...)` text, so
   translated labels end up in the objective. A label written in a mission file wins.
@@ -56,10 +59,32 @@ Each file's header lists the fields it reads (with defaults), the evidence it ac
 - **Armed inmates**: switch to `hostile` when a participant is within fireWithin and back to `fleeing` beyond
   1.5 × fireWithin. Exactly `round(suspects × armedShare)` are armed (2 of 5). Armed ones give up only when
   stunned or under armedGivesUp.belowHealth, which the server polls every tick (no random roll).
+- **flee_arrest relationship group**: every flee_arrest NPC spawns with `cfg.group = 'neutral'`, armed or not.
+  Door-mode NPCs must not open fire before the knock and armed inmates only within fireWithin; CP.Npc's combat
+  task puts a ped in `CRIMSONPOLICE_HOSTILE` when the server turns it `hostile` (and apply reads the state first).
+- **stunned** evidence: the reporter must be within 50 m of the suspect (clients only look within 40 m) and some
+  participant within 30 m.
+- **hostile_waves surrender**: besides the host's `low_health` report, `tick` checks the server-side health of
+  every hostile that has not rolled yet. The report can reach the server before the damage syncs (it is then
+  refused as `health_ok` and the client never re-reports), so the poll is what guarantees the one roll.
+- **Spawning** in all three blocks runs under a re-entry flag that is cleared by a pcall wrapper even when a
+  spawn throws, so one failed CreatePed never freezes the objective; the next tick retries.
+- **Host AI** (all three clients): control is requested before every task (OneSync gives ownership to the
+  closest player, usually the officer next to the ped), and a ped only counts as applied/tasked when
+  `CP.Npc.apply`/`CP.Npc.task` did not return false; otherwise the next loop (500 ms) retries. Without this a
+  freed hostage owned by the officer who cut its restraints never got its `follow` task.
+- **Progress bars** ("Cut restraints", "Knock and announce") still running when the objective or run stops are
+  cancelled (`lib.cancelProgress`) in the client cleanup. Lock-on aim (`IsPlayerTargettingEntity`) counts as
+  aiming for `givesUp.aim` like free aim.
 - **protect_rescue** watches its hostages for the whole run, including while objective 1 is current: deaths come
-  from `onEntityDead`, damage comes from `CP.Npc.onDamaged` and dispatched `shot`/`damaged` events. Hits by the
-  same attacker on the same hostage within 1 s count once (one bullet can arrive through two channels).
-  `no_hostage_hurt` is lost by any damage from anyone. `hostage_hit` needs a participant attacker.
+  from `onEntityDead`, damage comes from `CP.Npc.onDamaged` (server-only). `onEvent` cannot tell a CP.Npc dispatch
+  from client evidence of the same shape (both arrive as `{ type = 'shot'|'damaged', netId, ... }`), so while
+  onDamaged is listened to, `shot`/`damaged` events are acknowledged and change nothing (CP.Npc always calls
+  onDamaged for the same hit); only without onDamaged do they count. Hits by the same attacker on the same
+  hostage within 1 s count once. `no_hostage_hurt` is lost by any damage from anyone and is recorded only once
+  minSeconds has passed since the objective started (a completion refused as too fast must not keep it).
+  `hostage_hit` needs a participant attacker. One pending "Cut restraints" per participant: a new `free_start`
+  replaces that participant's previous one.
 - **presence**: hostile_waves = nearest non-neutralised hostile, else the start point; protect_rescue = nearest
   living hostage, else the safe point; flee_arrest = nearest suspect not neutralised, else the door or start.
 - **HUD**: server `ctx.hud({ detail, value, max })` only when it changes. flee_arrest also sends
@@ -70,6 +95,11 @@ Each file's header lists the fields it reads (with defaults), the evidence it ac
   resource stop.
 
 ## Requests to other modules
+
+Status after the review (modules/runs and modules/npc as written now): 1, 2 and 4–8 are implemented there
+(`opts.points` hints in `run.score.values`, `objectiveEvent` to every objective that is not stopped, `onEntityDead`/
+`dispatch` for any prepared objective, `cfg.group`, `cfg.fleePoints`, translated cuff labels, restrained kneel,
+no retask for `freed`). 3 is still open (the engine logs block rejections and does not flag them).
 
 1. **modules/runs**: `ctx.award` / `ctx.penalize` pass `opts.points` as the per-occurrence value for ids that are
    neither in `Config.Bonuses` nor in the mission's list: `hostage_hit` (`-hitPenalty`), `kingpin_alive`
@@ -116,4 +146,5 @@ Each file's header lists the fields it reads (with defaults), the evidence it ac
   `accuracy` / `armour` (armed suspects and inmates; defaults are the hostile_waves defaults), `cuff.maxDistance`;
   protect_rescue `target.icon` / `target.distance`.
 - Extra evidence types beyond §6.2's examples: `free_start`, `knock_start`, `knock`, `aim`, `stunned`, `low_health`.
+- Extra locale keys from the review: `block.protect_rescue.invalid.points_start`, `block.flee_arrest.invalid.route_zone`.
 - `ctx.award`/`ctx.penalize` opts carry `points` (request 1).

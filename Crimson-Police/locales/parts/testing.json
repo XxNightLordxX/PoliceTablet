@@ -9,7 +9,6 @@
   "tier.heavy": "Heavy",
   "tier.major": "Major",
   "tier.critical": "Critical",
-
   "err.already_on_run": "You are already on a mission.",
   "err.busy": "Please wait a moment.",
   "err.in_arena": "You can't take a mission while you are in the arena.",
@@ -43,7 +42,6 @@
   "err.test_teleport_disabled": "Teleporting is turned off in Config.Testing.",
   "err.test_tester_not_ready": "A tester has not accepted the invitation for this mission. Refresh and try again.",
   "err.test_unknown_mission": "That mission does not exist.",
-
   "test.keybind_label": "Crimson-Police: test controls and invitations",
   "test.admin_rank": "Admin",
   "test.location_n": "Location {n}",
@@ -68,7 +66,6 @@
   "test.webhook_field_note": "Note",
   "test.webhook_builtin": "Built-in",
   "test.webhook_no_note": "No note",
-
   "test.control.skip": "Skip objective",
   "test.control.restart": "Restart objective",
   "test.control.pause": "Pause timer",
@@ -84,7 +81,6 @@
   "test.control.fail": "Force fail",
   "test.control.fail_short": "Fail",
   "test.control.end": "End test",
-
   "test.debug.title": "Debug overlay",
   "test.debug.objective_index": "{index}/{total}",
   "test.debug.no_objective": "Heading to the start",
@@ -99,7 +95,6 @@
   "test.debug.zones": "{n} zones",
   "test.debug.start_radius": "Start {r} m",
   "test.debug.host": "AI host",
-
   "test.ui.subtitle": "Run any mission at any location and tier. Nothing is saved or paid.",
   "test.ui.refresh": "Refresh",
   "test.ui.start_test": "Start a test",
@@ -111,7 +106,6 @@
   "test.ui.empty_filter_text": "Try another search, type or status filter.",
   "test.ui.empty_todo_title": "Everything is tested",
   "test.ui.empty_todo_text": "Every location has a current result.",
-
   "test.ui.invites_title": "Test invitations",
   "test.ui.invite_line": "{from} invited you to test {mission}",
   "test.ui.invite_expires": "Expires in",
@@ -122,7 +116,6 @@
   "test.ui.prompt_sub": "Accept to join the test with a full team. Nothing is saved or paid.",
   "test.ui.prompt_from": "from {from}",
   "test.ui.prompt_hint": "Esc closes this without answering.",
-
   "test.ui.draft": "Draft",
   "test.ui.active_subtitle": "Location {n} · {location}",
   "test.ui.state": "State",
@@ -152,7 +145,6 @@
   "test.ui.confirm_complete_short": "End the test as Completed?",
   "test.ui.panel_hint": "to use the controls",
   "test.ui.panel_release": "{key} / Esc to release",
-
   "test.ui.pending_title": "Waiting for a result",
   "test.ui.pending_subtitle": "Mark each ended test Passed or Failed so the catalog stays current.",
   "test.ui.record": "Record result",
@@ -168,7 +160,6 @@
   "test.ui.ago_min": "{n} min ago",
   "test.ui.ago_hour": "{n} h ago",
   "test.ui.ago_day": "{n} d ago",
-
   "test.ui.stat_missions": "Missions",
   "test.ui.stat_locations": "{n} locations",
   "test.ui.stat_passed": "Passed",
@@ -176,7 +167,6 @@
   "test.ui.stat_failed": "Failed",
   "test.ui.stat_changed": "Changed since test",
   "test.ui.stat_untested": "Not tested",
-
   "test.ui.search": "Search missions",
   "test.ui.filter": "Filter by result",
   "test.ui.filter_all": "All",
@@ -218,7 +208,6 @@
   "test.ui.no_locations": "This mission has no locations.",
   "test.ui.testing_now": "Testing now",
   "test.ui.in_use": "In use",
-
   "test.ui.start_title": "Start a test run",
   "test.ui.start_desc": "Invite testers first if you want a team, then start. Cooldowns, caps and the Cross-Department lock don't apply.",
   "test.ui.mission": "Mission",
@@ -258,7 +247,6 @@
   "test.ui.start_solo": "Start test",
   "test.ui.start_with": "Start with {n} tester(s)",
   "test.ui.started": "Test started. Use the HUD controls (F9) or this screen.",
-
   "test.ui.record_title": "Record the test result",
   "test.ui.record_desc": "{mission} · location {n} ({location})",
   "test.ui.result": "Result",
@@ -270,5 +258,9 @@
   "test.ui.record_save": "Save result",
   "test.ui.record_draft_note": "A pass at the tier the draft's maxOfficers reaches lets it be published.",
   "test.ui.recorded_passed": "Recorded as Passed.",
-  "test.ui.recorded_failed": "Recorded as Failed."
+  "test.ui.recorded_failed": "Recorded as Failed.",
+  "test.control.skip_short": "Skip",
+  "test.control.restart_short": "Restart",
+  "test.control.pause_short": "Pause",
+  "test.control.resume_short": "Resume"
 }

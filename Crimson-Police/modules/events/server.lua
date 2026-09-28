@@ -113,7 +113,6 @@ local function bossDef()
     return def
 end
 
-
 -- Start of this week's attempt window: the reset of the week's first boss day. A run row is written
 -- when the run ends, so a boss run accepted late on the last boss day of last week (Sunday) and ended
 -- after the weekly reset has a row dated this week; it belongs to last week's attempt and must not use

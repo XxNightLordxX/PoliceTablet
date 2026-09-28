@@ -369,10 +369,10 @@ function Catalog({ view, pending, canStart, onTest, onRecord }: CatalogProps) {
           <table className="cp-table cp-table--dense testing-table" aria-label={t('test.ui.catalog')}>
             <thead>
               <tr>
-                <th style={{ width: '27%' }}>{t('test.ui.col_location')}</th>
+                <th>{t('test.ui.col_location')}</th>
                 <th>{t('test.ui.col_result')}</th>
                 <th>{t('test.ui.col_tier')}</th>
-                <th className="testing-num">{t('test.ui.col_testers')}</th>
+                <th className="testing-num testing-col-testers">{t('test.ui.col_testers')}</th>
                 <th>{t('test.ui.col_tester')}</th>
                 <th>{t('test.ui.col_when')}</th>
                 <th className="testing-col-note">{t('test.ui.col_note')}</th>
@@ -432,18 +432,21 @@ function MissionGroup({ m, locs, now, pending, canStart, collapsed, onToggle, on
             {m.status === 'archived' ? <Badge size="sm" tone="grey" icon="inbox">{t('test.ui.archived')}</Badge> : null}
             {m.disabled ? <Badge size="sm" tone="grey" icon="lock">{t('test.ui.disabled')}</Badge> : null}
             {m.editedInCode ? <Badge size="sm" tone="warning" icon="edit">{t('test.ui.edited_in_code')}</Badge> : null}
-            <span className="testing-group__tier" title={t('test.ui.max_tier_hint')}>
-              {t('test.ui.max_tier', { n: m.maxOfficers })} <TierBadge tier={m.maxTier} size="sm" />
-            </span>
-            <span className="testing-group__summary cp-num">
-              {s.passed ? <span className="is-passed">{t('test.ui.sum_passed', { n: s.passed })}</span> : null}
-              {s.failed ? <span className="is-failed">{t('test.ui.sum_failed', { n: s.failed })}</span> : null}
-              {s.changed ? <span className="is-changed">{t('test.ui.sum_changed', { n: s.changed })}</span> : null}
-              {s.untested ? <span className="is-untested">{t('test.ui.sum_untested', { n: s.untested })}</span> : null}
-            </span>
-            <Button size="sm" variant="secondary" icon="play" disabled={!canStart} onClick={() => onTest({ missionId: m.id, location: 'random' })}>
-              {t('test.ui.test_random')}
-            </Button>
+            <div className="testing-group__right">
+              <span className="testing-group__tier" title={t('test.ui.max_tier_hint')}>
+                <span className="testing-group__tier-text">{t('test.ui.max_tier', { n: m.maxOfficers })}</span>
+                <TierBadge tier={m.maxTier} size="sm" />
+              </span>
+              <span className="testing-group__summary cp-num">
+                {s.passed ? <span className="is-passed">{t('test.ui.sum_passed', { n: s.passed })}</span> : null}
+                {s.failed ? <span className="is-failed">{t('test.ui.sum_failed', { n: s.failed })}</span> : null}
+                {s.changed ? <span className="is-changed">{t('test.ui.sum_changed', { n: s.changed })}</span> : null}
+                {s.untested ? <span className="is-untested">{t('test.ui.sum_untested', { n: s.untested })}</span> : null}
+              </span>
+              <Button size="sm" variant="secondary" icon="play" disabled={!canStart} onClick={() => onTest({ missionId: m.id, location: 'random' })}>
+                {t('test.ui.test_random')}
+              </Button>
+            </div>
           </div>
         </td>
       </tr>
@@ -478,7 +481,7 @@ function MissionGroup({ m, locs, now, pending, canStart, collapsed, onToggle, on
                   </div>
                 </td>
                 <td>{last ? <TierBadge tier={last.tier} size="sm" /> : <span className="testing-muted">—</span>}</td>
-                <td className="testing-num cp-num">{last ? last.testers : <span className="testing-muted">—</span>}</td>
+                <td className="testing-num testing-col-testers cp-num">{last ? last.testers : <span className="testing-muted">—</span>}</td>
                 <td className="testing-ellipsis" title={last ? last.testedBy : undefined}>
                   {last ? last.testedByName : <span className="testing-muted">—</span>}
                 </td>
@@ -936,7 +939,7 @@ export default function AdminTesting() {
                   <Stat size="sm" icon="layers" label={t('test.ui.stat_missions')} value={totals?.missions ?? 0} hint={t('test.ui.stat_locations', { n: totals?.locations ?? 0 })} />
                 </Card>
                 <Card padding="sm">
-                  <Stat size="sm" icon="checkCircle" tone="primary" label={t('test.ui.stat_passed')} value={totals?.passed ?? 0} hint={t('test.ui.stat_tested', { n: tested })} />
+                  <Stat size="sm" icon="checkCircle" tone={totals?.passed ? 'success' : 'neutral'} label={t('test.ui.stat_passed')} value={totals?.passed ?? 0} hint={t('test.ui.stat_tested', { n: tested })} />
                 </Card>
                 <Card padding="sm">
                   <Stat size="sm" icon="xCircle" tone={totals?.failed ? 'danger' : 'neutral'} label={t('test.ui.stat_failed')} value={totals?.failed ?? 0} />
