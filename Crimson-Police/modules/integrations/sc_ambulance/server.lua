@@ -17,6 +17,9 @@
 --   CP.Ambulance.revive(src) -> boolean
 --       TriggerClientEvent('hospital:client:Revive', src) for one numeric, connected server id
 --       (never -1, never nil). false when refused or when sc-ambulance is not started (no handler).
+--       Refused and logged for an in-arena player (CP.Alerts.inArena: a foreign crimsonArena value or a
+--       routing bucket other than 0): Crimson-Arena revives and moves its own players
+--       (docs/CRIMSON_ARENA.md rule 3).
 
 CP.Ambulance = CP.Ambulance or {}
 local A = CP.Ambulance
@@ -78,6 +81,17 @@ function A.doctorCount()
     return n
 end
 
+-- CP.Alerts.inArena (guarded: an error counts as in the arena, so nobody is revived by mistake).
+local function inArena(src)
+    if not (CP.Alerts and CP.Alerts.inArena) then return false end
+    local ok, res = pcall(CP.Alerts.inArena, src)
+    if not ok then
+        logError('inArena', 'CP.Alerts.inArena failed: %s', tostring(res))
+        return true
+    end
+    return res == true
+end
+
 function A.revive(src)
     local n = tonumber(src)
     n = n and math.tointeger(n)
@@ -87,6 +101,10 @@ function A.revive(src)
     end
     if GetPlayerName(n) == nil then
         CP.log(TAG, 'revive: player %d is not connected', n)
+        return false
+    end
+    if inArena(n) then
+        CP.warn(TAG, 'revive refused for player %d: they are in Crimson-Arena, which handles their revive', n)
         return false
     end
     if not started() then return false end
