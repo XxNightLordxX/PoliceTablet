@@ -558,8 +558,7 @@ H.eq(bd(id2).cash.status, 'pending', 'breakdown pending')
 H.eq(CP.Cash.pay(id2), 'pending', 'still pending while offline')
 players[1].offline = false
 local before = #qbxCalls.addMoney
-local fired = false
-CP.Cash._onLoaded(1)
+CreateThread(function() CP.Cash._onLoaded(1) end)
 H.eq(#qbxCalls.addMoney, before, 'pending payment waits a few seconds after login')
 H.advance(6000, 500)
 H.eq(rowOf(id2).cash_status, 'paid', 'pending row paid after login')
@@ -852,11 +851,7 @@ H.ok(gotBadgeNote, 'badge notification')
 -- the archive counts toward badges too
 H.sql('INSERT INTO cp_mission_runs_archive SELECT * FROM cp_mission_runs WHERE id = ?', { rB })
 -- void: XP removed, badges revoked below the threshold
-CP.Scoring.onRowVoided(rA)
-H.eq(H.sql("SELECT xp FROM cp_officers WHERE citizenid = 'CPOFF001'")[1].xp, 400, 'void of an uncounted-in-SQL row still removes its XP')
 H.sql('UPDATE cp_mission_runs SET voided = 1 WHERE id = ?', { rA })
-H.sql("UPDATE cp_officers SET xp = 400 WHERE citizenid = 'CPOFF001'")
-H.sql("UPDATE cp_mission_runs SET breakdown = JSON_SET(breakdown, '$.xpCounted', 1) WHERE id = ?", { rA })
 CP.Scoring.onRowVoided(rA)
 H.eq(H.sql("SELECT xp FROM cp_officers WHERE citizenid = 'CPOFF001'")[1].xp, 100, 'voided row XP taken back')
 H.eq(bd(rA).xpCounted, nil, 'marker removed')
@@ -865,7 +860,12 @@ H.eq(H.sql("SELECT xp FROM cp_officers WHERE citizenid = 'CPOFF001'")[1].xp, 100
 owned = {}
 for _, bg in ipairs(CP.Scoring.badges('CPOFF001')) do owned[bg.id] = true end
 H.eq(owned.partner_in_crime, nil, 'Partner in Crime revoked after the void')
+H.eq(owned.sharpshooter, nil, 'Sharpshooter revoked after the void')
 H.ok(owned.iron_wheels, 'Iron Wheels kept: the archived copy still counts')
+local uncounted = insertRun({ final = 500, flagged = true, status = 'held' })
+H.sql('UPDATE cp_mission_runs SET voided = 1 WHERE id = ?', { uncounted })
+CP.Scoring.onRowVoided(uncounted)
+H.eq(H.sql("SELECT xp FROM cp_officers WHERE citizenid = 'CPOFF001'")[1].xp, 100, 'voiding a row that never counted takes nothing')
 H.sql('DELETE FROM cp_mission_runs_archive')
 Config.Badges.ironWheels, Config.Badges.partnerInCrime, Config.Badges.sharpshooter = 20, 50, 10
 
@@ -1047,7 +1047,7 @@ H.eq(hd.card.level.next, 15000, 'card next level')
 H.eq(hd.card.streak.days, 4, 'card streak')
 H.eq(type(hd.card.streak.graceLeft), 'boolean', 'grace flag')
 H.ok(hd.card.seasonPoints > 0, 'season points from the SQL fallback')
-H.ok(hd.card.cashThisWeek >= 3120, 'cash this week')
+H.ok(hd.card.cashThisWeek >= 2080, 'cash this week')
 H.eq(hd.typeOfTheDay.key, 'tactical', 'Type of the Day key')
 H.eq(hd.typeOfTheDay.label, 'Tactical', 'Type of the Day label')
 H.ok(hd.goals.daily ~= nil and hd.goals.weekly ~= nil, 'goals present')

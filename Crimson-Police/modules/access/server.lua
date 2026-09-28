@@ -42,9 +42,10 @@
 --       fires onLost(src, 'suspended'). Not audited here: the caller (modules/admin, modules/anticheat)
 --       writes the audit entry.
 --   CP.Access.refreshOfficerRow(src) -> boolean
---       Upsert cp_officers callsign (32 chars), rank_label (40), display_name (64) and department for a
+--       Upsert cp_officers callsign (32), rank_label (40), display_name (64) and department for a
 --       player whose active job is in a department (on duty or not). Runs on character load, on a
---       job/grade change and when the tablet opens.
+--       job/grade change and when the tablet opens. Every text value (here and in the officer table) is
+--       cut to that many bytes without splitting a UTF-8 character (strict mode rejects half a character).
 --   CP.Access.onLost(fn(src, endReason))
 --       Fired right after a qbx duty/job/group event for a player whose last known active job (seeded at
 --       start, on load and by the first getOfficer/recheck) was a department job and who no longer qualifies: 'job_change' (the active job changed, including to
@@ -106,7 +107,6 @@ local function clipText(s, n)
     end
     return s
 end
-A._clipText = clipText   -- exposed for tests/core_spec.lua only
 
 local function nonEmpty(v, max)
     if type(v) ~= 'string' then return nil end

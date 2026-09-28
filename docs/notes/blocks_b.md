@@ -96,10 +96,11 @@ Each file's header lists the fields it reads (with defaults), the evidence it ac
 
 ## Requests to other modules
 
-Status after the review (modules/runs and modules/npc as written now): 1, 2 and 4–8 are implemented there
+Status after the review (modules/runs and modules/npc as written now): 1–8 are implemented there
 (`opts.points` hints in `run.score.values`, `objectiveEvent` to every objective that is not stopped, `onEntityDead`/
-`dispatch` for any prepared objective, `cfg.group`, `cfg.fleePoints`, translated cuff labels, restrained kneel,
-no retask for `freed`). 3 is still open (the engine logs block rejections and does not flag them).
+`dispatch` for any prepared objective, block rejections only logged, `cfg.group`, `cfg.fleePoints`, translated
+cuff labels, restrained kneel, no retask for `freed`). Since the review, `shot`/`damaged` events are no-ops for
+protect_rescue while `onDamaged` is listened to (see above), so request 8 only needs `onDamaged` to keep firing.
 
 1. **modules/runs**: `ctx.award` / `ctx.penalize` pass `opts.points` as the per-occurrence value for ids that are
    neither in `Config.Bonuses` nor in the mission's list: `hostage_hit` (`-hitPenalty`), `kingpin_alive`

@@ -47,9 +47,22 @@ local function toAmount(amount)
     return math.floor(n + 0.5)
 end
 
+-- At most max bytes without splitting a UTF-8 character (the text lands in Renewed-Banking's JSON
+-- history; half a character would show as garbage there).
 local function text(v, max)
     if v == nil then return '' end
-    return CP.U.clip(tostring(v), max)
+    local s = tostring(v)
+    if #s <= max then return s end
+    s = s:sub(1, max)
+    local last = #s
+    local j = last
+    while j > 1 and j > last - 3 and s:byte(j) >= 0x80 and s:byte(j) < 0xC0 do j = j - 1 end
+    local lead = s:byte(j)
+    if lead >= 0xC0 then
+        local need = (lead >= 0xF0 and 4) or (lead >= 0xE0 and 3) or 2
+        if last - j + 1 < need then return s:sub(1, j - 1) end
+    end
+    return s
 end
 
 local function safeMessage(message)
