@@ -21,8 +21,10 @@ test once it has started. The flow is therefore:
 3. **Start** (`server:admin:startTest { …, testers = accepted srcs }`) re-validates every tester and calls
    `CP.Runs.create`. Unanswered invitations are withdrawn.
 
-`/CrimsonPoliceAdmin test <missionId> [tier] [location]` → `CP.Testing.command(src, args)` uses the accepted
-invitations of the same mission as testers.
+`/CrimsonPoliceAdmin test <missionId> [tier] [location]`: modules/admin parses it itself and calls
+`CP.Testing.start(src, { missionId, tier, location, useStartRoute = Config.Testing.useStartRoute, testers = {} })`
+(a solo test). `CP.Testing.command(src, args)` (same syntax) also takes the accepted invitations of that mission
+as testers; it is used only if modules/admin routes the subcommand to it (see requests).
 
 Invitations: one lobby per admin (one mission). Unanswered invitations expire after 120 s, accepted ones
 after 15 min without a start; inviting for another mission withdraws the old lobby (accepted testers are told).
@@ -49,8 +51,11 @@ Seats: `Config.Testing.maxTesters - 1` (pending + accepted) besides the admin.
   Cross-Department lock are never checked (and `CP.Runs` skips them for tests).
 - **Any mission.** `CP.Missions.get(id)` whatever its status (built-in, custom, `Config.DisabledMissions`).
   Archived custom missions are unregistered from `CP.Missions`, so they come from `CP.Builder.getArchived(id)`
-  (catalog: `CP.Builder.archivedDefs()`), else from `missions/custom/archived/<id>.lua` through
-  `CP.Missions.parse` + `normalize` when those exist (see requests).
+  (catalog: `CP.Builder.archivedDefs()`) when the builder offers them. It does not yet, so the fallback reads
+  (read-only) `SELECT id, published_version FROM cp_custom_missions WHERE status = 'archived'` and loads
+  `missions/custom/archived/<id>.lua` with `CP.Missions.parse` + `normalize` (`defHash` = hash of that file,
+  `version` = `published_version`, parsed once per file content). Archived missions are therefore in the
+  catalog and startable from the Admin UI.
 - **Controls** (`server:test:control`, only `run.test.adminSrc`): `skip` → `CP.Runs.testSkip`, `restart` →
   `CP.Runs.testRestart` (both only In progress), `pause`/`resume` → `CP.Runs.pauseTimer`, `complete` →
   `CP.Runs.endRun(run, 'completed', 'completed')`, `fail` → `CP.Runs.failRun(run, 'test.fail_forced')`
@@ -72,10 +77,12 @@ Seats: `Config.Testing.maxTesters - 1` (pending + accepted) besides the admin.
   presence (anchor + `presenceRange`), `safe`/`safeRadius`, `center`/`startRadius`, `blockTraffic` around the
   start; the current checkpoint radius is attached to its points. Caps: 240 points, 16 routes, 1200 waypoints.
 - **Debug data to the NUI** goes through `CP.Tablet.push('test', { controls, focused, key, debugOn, runId,
-  debug })` — the path the foundation's App already wires into `<DebugOverlay debug>` — not through
-  `CP.Tablet.hud({ debug })` (which would resend the whole HUD every 2 s). DebugOverlay still reads `hud.debug`
-  as a fallback. The in-world markers are drawn by the Lua client (only within 250 m, only while within 600 m of
-  the test area, otherwise the loop sleeps 500 ms).
+  allowTeleport, debugOverlay, debug })` — the path the foundation's App already wires into
+  `<DebugOverlay debug>` — not through `CP.Tablet.hud({ debug })` (which would resend the whole HUD every 2 s).
+  DebugOverlay still reads `hud.debug` as a fallback. The panel sits at the left edge below the chat (30 vh). The
+  in-world markers are drawn by the Lua client (only within 250 m, only while within 600 m of the test area,
+  otherwise the loop sleeps 500 ms). `allowTeleport` / `debugOverlay` are `Config.Testing` read by the client at
+  push time; the HUD panel disables those buttons when they are off (the server refuses them anyway).
 - **HUD flag.** The run client already sets `testControls` at `client:start`; this client re-asserts it with
   `CP.Tablet.hud({ testControls = true })` only while `CP.Runs.current().id` is the admin's run (it never
   creates a HUD of its own), and again at `client:inProgress`.
@@ -83,6 +90,9 @@ Seats: `Config.Testing.maxTesters - 1` (pending + accepted) besides the admin.
   HUD panel; without → the invitation prompt when invitations wait. Never while a Crimson-Police UI is open.
   Released by F9/Escape in the NUI (client action `testPanel { open = false }`), when the test ends or this
   player leaves the run, on a foreign crimsonArena value, and on resource stop — only when this module took it.
+  Safety net: DebugOverlay (always mounted) also releases on Escape when the Lua client reports a focus but no
+  HUD panel is on screen. After the HUD flag is set the client re-pushes the panel state (bound key, focus,
+  config) so a panel that mounted after the first push still shows the right key.
 - **Result screen.** Test runs keep going through `CP.Runs` settle, which returns the RunResult with
   `test = true` (what the run would have earned) and writes nothing.
 - **Recording.** Only for a test that this admin (citizenid) actually ran in the last 6 h (a "waiting for a
@@ -95,11 +105,14 @@ Seats: `Config.Testing.maxTesters - 1` (pending + accepted) besides the admin.
 - **Catalog "Changed since test".** The last row per (mission, location) (`MAX(id)`) is "changed" when its
   `def_hash` differs from the mission's current `defHash`, when it has no `def_hash` (rows from before
   migration 002), or (custom missions) when its `mission_version` differs from the current version.
-- **Drafts.** `startDraft(src, def, opts)` accepts `builderEdit` (or `testRun`), normalises `def` with
-  `CP.Missions.normalize(def, { source = 'custom', version = def.version, status = 'draft' })` and starts with
+- **Drafts.** `startDraft(src, def, opts)` accepts `builderEdit` (or `testRun`); a definition that already has
+  the loader fields (what `server:builder:test` passes) is used as it is, otherwise it is normalised with
+  `CP.Missions.normalize(def, { source = 'custom', version = def.version, status = 'draft' })`; it starts with
   `test.draft = true`. Recording a draft result (`server:admin:recordTest` or its alias `server:test:record`,
   permission `builderEdit`/`testRun`) writes `cp_mission_tests` too and calls
-  `CP.Builder.onDraftTested(missionId, version, tierName, passed, src)`.
+  `CP.Builder.onDraftTested(missionId, version, tierName, passed, src)`. `test:state` (own lobby, test and
+  results only) is open to `testRun` or `builderEdit`, so a Supervisor UI builder screen can list the draft
+  tests waiting for a result.
 - **The admin leaves.** When the admin who started a test disconnects, the test ends for everyone
   (`failRun(run, 'test.ended_admin_left')`); their "waiting for a result" entries are kept by citizenid.
 - **Audit of starts**: `CP.Admin.audit(src, role, 'audit', 'testStart'|'testDraft', '<missionId>#<loc>', nil,
@@ -130,19 +143,17 @@ Seats: `Config.Testing.maxTesters - 1` (pending + accepted) besides the admin.
 
 - **CP.Builder** (builder_server):
   - `getArchived(id) -> def|nil` and `archivedDefs() -> { def, ... }` (normalised with loader fields,
-    `status = 'archived'`), so archived custom missions can be tested and appear in the catalog. Until then an
-    archived mission is only testable through `CP.Missions.parse` of `missions/custom/archived/<id>.lua`.
-  - `server:builder:test` should pass `CP.Testing.startDraft` the draft **in mission-file units** (fractions,
-    milliseconds — what `CP.Missions.normalize` accepts), with `def.version` = the draft version.
-  - Record draft results through `server:test:record { missionId, location, tier, result, note }` (Supervisor
-    UI) — it calls `onDraftTested` — or call `CP.Testing.record(src, payload)` from your own action. For tester
-    invitations on drafts use `CP.Testing.invite(src, targets, { missionId, missionLabel, draft = true })`.
-- **CP.Admin** (admin): `/CrimsonPoliceAdmin test <missionId> [tier] [location]` → `CP.Testing.command(src,
-  { missionId, tier?, location? })` (returns `ok, data|errKey`; the caller shows the toast/console line).
-  `audit(...)` with category `audit` and `webhook('builder', title, description, fields)` where fields are
-  `{ { name, value, inline } }`.
-- **CP.Missions** (engine_a): `parse(luaSource, chunkName)` from ARCHITECTURE §5.6 is not implemented yet
-  (used for archived files, guarded).
+    `status = 'archived'`). Until they exist this slice reads the archived ids/versions from `cp_custom_missions`
+    (read-only) and parses the archived files itself; with the hooks that fallback is skipped.
+  - `server:builder:test` already passes a normalised definition (loader fields, `version` = draft version) ✓.
+  - The Supervisor UI builder screen has no way yet to record a draft test result: list `test:state`'s `pending`
+    (entries with `draft = true`) and record through `server:test:record { missionId, location, tier, result,
+    note }` — it calls `onDraftTested`. For tester invitations on drafts use
+    `CP.Testing.invite(src, targets, { missionId, missionLabel, draft = true })`.
+- **CP.Admin** (admin): the `test` subcommand calls `CP.Testing.start` with `testers = {}` and resolves the
+  mission with `CP.Missions.get` only, so archived missions and accepted invitations are not usable from the
+  command. Routing it to `CP.Testing.command(src, { missionId, tier?, location? })` (returns `ok, data|errKey`)
+  fixes both. `webhook(category, title, description, fields)` with `{ { name, value, inline } }` matches ✓.
 - **Officer UI owners** (Unit / Home screens): optionally list `test:pendingInvites` (push topic `invites`) with
   Accept/Decline → `server:testRespond { inviteId, accepted }`; the F9 prompt already covers officers.
 - **CP.Runs** (engine_b): nothing required. Error keys it may return from `create` (`err.invalid_mission`, …) are
@@ -151,9 +162,15 @@ Seats: `Config.Testing.maxTesters - 1` (pending + accepted) besides the admin.
 ## Verification
 
 - `luac5.4 -p` on both Lua files.
-- `lua5.4 tests/run.lua testing`: 270 assertions (gates, invitations, arena gates, controls, teleport, debug
+- `lua5.4 tests/run.lua testing`: 342 assertions (gates, invitations, arena gates, controls, teleport, debug
   stream and geometry, end hook, recording with SQL on MariaDB, the catalog query with "Changed since test",
-  archived missions, the command, drafts and `onDraftTested`, invitation expiry, the CP.Net wrappers, locale
-  coverage, and the client: key mapping, focus, prompt, HUD flag, teleport arena re-check, debug data, arena
-  flag handler).
-- `npx tsc --noEmit` clean; build into a private dir; screenshots `testing-*.png` (1920×1080 and 1280×720).
+  archived missions (builder hooks and the cp_custom_missions fallback), the command, drafts and
+  `onDraftTested`, invitation expiry, the CP.Net wrappers, locale coverage, an **integration run against the real
+  `modules/runs/server.lua`** (admin record accepted by `CP.Runs.create`, forced tier, reservation, pause/skip/
+  restart/anchor/debug/complete/end, the RunResult of a test shows the would-be points and cash, no
+  `cp_mission_runs` row, no cooldown, the onRunEnded hook after complete/end/abandon), and the client: key
+  mapping, focus, prompt, HUD flag and re-push, teleport arena re-check (also after the fade), config switches,
+  debug data, arena flag handler).
+- `npx tsc --noEmit` clean; build into a private dir; screenshots `testing-review-*.png` (1920×1080 and
+  1280×720). Mock URL switches for edge cases: `testlong=1` (very long mission/location/player names and notes, a
+  mission without locations) and `testlua=1` (replies shaped like Lua: empty lists as `{}` objects).

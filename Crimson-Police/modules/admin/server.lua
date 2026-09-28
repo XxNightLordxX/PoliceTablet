@@ -64,7 +64,7 @@
       sup:getReviewQueue         reviewFlagged|handleDisputes -> { flagged, disputes, canReview, canHandle }
       admin:getFlagged           admin -> { flagged }
       admin:searchOfficers       { query } -> { officers }
-      admin:getOfficer           { citizenid } -> OfficerDetail
+      admin:getOfficer           { citizenid } -> OfficerDetail (incl. suspensions = the last 10 suspend/unsuspend/autoSuspend entries)
       admin:getDepartments       -> { departments, cashSource, showSociety }
       admin:getPermissions       -> { supervisor = { { action, enabled } }, adminOnly, always }
       admin:getAudit             { category, action, actor, from, to, page } -> AuditPage
@@ -83,6 +83,7 @@ local EXPORT_MAX = 5000
 local FLAGGED_LIMIT = 200
 local SEARCH_LIMIT = 25
 local RECENT_RUNS = 25
+local SUSPENSION_HISTORY = 10
 local WEBHOOK_GAP_MS = 2100        -- Discord: at most 30 posts a minute per webhook
 local WEBHOOK_QUEUE_MAX = 100
 local WEBHOOK_RETRIES = 3
@@ -1414,6 +1415,18 @@ CP.Net.callback('admin:getOfficer', function(src, args)
         local ok, list = call('Disputes', 'forOfficer', cid, 'admin', src)
         if ok and type(list) == 'table' then disputes = list end
     end
+    -- Suspension history: every suspend / unsuspend / automatic suspension written to cp_audit.
+    local suspensions = {}
+    for _, r in ipairs(query(([[SELECT a.id, a.actor, a.role, a.action, a.new_value, a.reason, UNIX_TIMESTAMP(a.created_at) AS created_ts,
+        o.display_name FROM cp_audit a LEFT JOIN cp_officers o ON o.citizenid = a.actor
+        WHERE a.target = ? AND a.action IN ('suspend', 'unsuspend', 'autoSuspend')
+        ORDER BY a.created_at DESC, a.id DESC LIMIT %d]]):format(SUSPENSION_HISTORY), { cid }) or {}) do
+        suspensions[#suspensions + 1] = {
+            id = math.tointeger(tonumber(r.id)), action = r.action, actor = r.actor, actorName = r.display_name, role = r.role,
+            days = r.action ~= 'unsuspend' and math.tointeger(tonumber(r.new_value)) or nil,
+            reason = r.reason, createdAt = math.floor(num(r.created_ts, 0)),
+        }
+    end
     local _, viewerCid = viewerDepartment(src)
     local dept = o and o.department or nil
     local deptInfo = dept and CP.Access and CP.Access.department and CP.Access.department(dept) or nil
@@ -1431,6 +1444,7 @@ CP.Net.callback('admin:getOfficer', function(src, args)
             flagged = math.floor(num(stats.flagged, 0)), voided = math.floor(num(stats.voided, 0)),
         },
         suspension = { suspended = suspensionOf(o and o.suspended_ts) ~= nil, untilTs = suspensionOf(o and o.suspended_ts) },
+        suspensions = suspensions,
         runs = runs, disputes = disputes, online = online ~= nil, own = viewerCid ~= nil and viewerCid == cid,
         known = o ~= nil, maxAward = MAX_AWARD,
     }
