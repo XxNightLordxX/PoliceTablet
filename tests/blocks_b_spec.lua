@@ -1027,6 +1027,409 @@ do -- scatter: caps, rescale, escape, no spawn inside the prison, killing an una
 end
 
 -- ════════════════════════════════════════════════════════════════════════════
+-- review fixes (server halves)
+-- ════════════════════════════════════════════════════════════════════════════
+do -- hostile_waves: the server polls hostile health every tick (a report that beat the sync still rolls)
+    place(1, 1000, 1000, 30)
+    local ctx, S = makeCtx('hostile_waves', { waves = { 3 } }, hwLocation(12))
+    HW.start(ctx)
+    local a, b = S.spawned[1].netId, S.spawned[2].netId
+    local rolls = #NPC.rolls
+    local _, why = HW.onEvent(ctx, 1, { type = 'low_health', netId = a })
+    H.eq(why, 'health_ok', 'early report refused: the server has not seen the damage yet')
+    NPC.rollResult = true
+    setHealth(S, a, 110)
+    HW.tick(ctx, 1)
+    H.eq(NPC.states[a], 'surrendered', 'tick poll rolled once the server saw the damage')
+    H.eq(#NPC.rolls, rolls + 1, 'one roll for the polled hostile')
+    H.ok(NPC.cuffs[a] ~= nil, 'the polled surrender enables Cuff suspect')
+    NPC.rollResult = false
+    setHealth(S, b, 105)
+    HW.tick(ctx, 1); HW.tick(ctx, 1)
+    H.eq(#NPC.rolls, rolls + 2, 'a hostile nobody reported is rolled by the poll, once')
+    H.eq(NPC.states[b], 'hostile', 'lost roll: still hostile')
+    _, why = HW.onEvent(ctx, 1, { type = 'low_health', netId = b })
+    H.eq(why, 'duplicate', 'a later report does not roll again')
+    local ctx0, S0 = makeCtx('hostile_waves', { waves = { 2 }, surrender = { chance = 0 } }, hwLocation(12))
+    HW.start(ctx0)
+    setHealth(S0, S0.spawned[1].netId, 101)
+    local before = #NPC.rolls
+    HW.tick(ctx0, 1)
+    H.eq(#NPC.rolls, before, 'surrender chance 0: never rolled')
+end
+
+do -- a spawn that throws never freezes spawning (the re-entry flag is always cleared)
+    local function throwOnce(ctx)
+        local real, left = ctx.spawnPed, 1
+        ctx.spawnPed = function(opts)
+            if left > 0 then left = left - 1; error('CreatePed failed (test)') end
+            return real(opts)
+        end
+    end
+    place(1, 1000, 1000, 30)
+    local ctx, S = makeCtx('hostile_waves', { waves = { 3 } }, hwLocation(12))
+    throwOnce(ctx)
+    HW.start(ctx)
+    H.eq(#S.spawned, 0, 'hw: nothing from the throwing spawn')
+    H.eq(ctx.state.spawning, false, 'hw: spawning flag cleared after the error')
+    HW.tick(ctx, 1)
+    H.eq(#S.spawned, 3, 'hw: the next tick spawns the wave')
+
+    local pctx, PS = makeCtx('protect_rescue', {}, prLoc, { index = 2 })
+    throwOnce(pctx)
+    PR.prepare(pctx)
+    H.eq(#PS.spawned, 0, 'pr: nothing from the throwing spawn')
+    H.eq(pctx.state.spawning, false, 'pr: spawning flag cleared after the error')
+    H.step(1000)
+    H.eq(#PS.spawned, 3, 'pr: the prepare retry spawns every hostage')
+
+    local sctx, SS = makeCtx('flee_arrest', { mode = 'scatter' }, scatterLoc)
+    throwOnce(sctx)
+    FA.start(sctx)
+    H.eq(#SS.spawned, 0, 'fa scatter: nothing from the throwing spawn')
+    H.eq(sctx.state.spawning, false, 'fa scatter: spawning flag cleared')
+    FA.tick(sctx, 1)
+    H.eq(#SS.spawned, 5, 'fa scatter: the next tick spawns every inmate')
+    H.eq(#U.filter(SS.spawned, function(s) return s.opts.armed end), 2, 'fa scatter: still exactly 2 armed')
+
+    place(1, 3000, 3000, 10)
+    local dctx, DS = makeCtx('flee_arrest', {}, doorLoc)
+    throwOnce(dctx)
+    FA.start(dctx)
+    H.eq(#DS.spawned, 0, 'fa door: nothing from the throwing spawn')
+    FA.tick(dctx, 1)
+    H.eq(#DS.spawned, 2, 'fa door: suspect and associate on the next tick')
+end
+
+do -- protect_rescue: no_hostage_hurt waits for minSeconds; one pending cut per participant
+    local srcs = { 1, 2, 3 }
+    local function freeAll(ctx, S)
+        for i, s in ipairs(S.spawned) do
+            nearTo(srcs[i], S, s.netId)
+            PR.onEvent(ctx, srcs[i], { type = 'free_start', netId = s.netId })
+        end
+        advanceMs(6000)
+        for i, s in ipairs(S.spawned) do
+            H.eq(PR.onEvent(ctx, srcs[i], { type = 'freed', netId = s.netId }), true, 'freed by participant ' .. srcs[i])
+            moveEnt(S, s.netId, 2050, 2000, 20)
+        end
+    end
+    local ctx, S = makeCtx('protect_rescue', {}, prLoc, { index = 2, srcs = srcs })
+    PR.prepare(ctx)
+    PR.start(ctx)
+    -- one participant cannot run two cuts at once
+    local h1, h2 = S.spawned[1].netId, S.spawned[2].netId
+    nearTo(1, S, h1)
+    PR.onEvent(ctx, 1, { type = 'free_start', netId = h1 })
+    nearTo(1, S, h2)
+    PR.onEvent(ctx, 1, { type = 'free_start', netId = h2 })
+    advanceMs(6000)
+    nearTo(1, S, h1)
+    local _, why = PR.onEvent(ctx, 1, { type = 'freed', netId = h1 })
+    H.eq(why, 'not_started', 'a second free_start replaced the first cut')
+    nearTo(1, S, h2)
+    H.eq(PR.onEvent(ctx, 1, { type = 'freed', netId = h2 }), true, 'the latest cut still counts')
+
+    -- a completion refused as too fast records no bonus; a hit before the real completion costs it
+    ctx, S = makeCtx('protect_rescue', {}, prLoc, { index = 2, srcs = srcs })
+    PR.prepare(ctx)
+    PR.start(ctx)
+    freeAll(ctx, S)
+    S.minOk = false
+    PR.tick(ctx, 1)
+    H.eq(S.completes, 0, 'refused before minSeconds')
+    H.eq(#awardsOf(S, 'no_hostage_hurt'), 0, 'no bonus recorded by a refused early completion')
+    NPC.damaged[1](ctx.run, S.spawned[1].netId, nil)
+    advanceMs(10000)
+    S.minOk = true
+    PR.tick(ctx, 1)
+    H.eq(S.completes, 1, 'completed after minSeconds')
+    H.eq(#awardsOf(S, 'no_hostage_hurt'), 0, 'hurt after the refused attempt: no no_hostage_hurt')
+
+    ctx, S = makeCtx('protect_rescue', {}, prLoc, { index = 2, srcs = srcs })
+    PR.prepare(ctx)
+    PR.start(ctx)
+    freeAll(ctx, S)
+    S.minOk = false
+    PR.tick(ctx, 1)
+    H.eq(#awardsOf(S, 'no_hostage_hurt'), 0, 'clean but early: nothing yet')
+    advanceMs(10000)
+    S.minOk = true
+    PR.tick(ctx, 1)
+    H.eq(S.completes, 1, 'clean rescue completed')
+    H.eq(#awardsOf(S, 'no_hostage_hurt'), 1, 'clean rescue: no_hostage_hurt once minSeconds passed')
+end
+
+do -- flee_arrest: every NPC spawns calm (neutral) until the server makes it hostile
+    place(1, 3000, 3000, 10)
+    local ctx, S = makeCtx('flee_arrest', { responses = { surrender = 0, flee = 0, fight = 1 } }, doorLoc)
+    FA.start(ctx)
+    for _, s in ipairs(S.spawned) do H.eq(s.opts.cfg.group, 'neutral', 'door NPC spawns neutral: ' .. s.opts.role) end
+    H.eq(withRole(S, 'suspect')[1].opts.armed, true, 'the fighting suspect still carries his pistol')
+    H.eq(NPC.states[withRole(S, 'associate')[1].netId], nil, 'associate not hostile before the knock')
+    knockOpen(ctx, S)
+    H.eq(NPC.states[withRole(S, 'associate')[1].netId], 'hostile', 'associate turns hostile at the knock')
+    local sctx, SS = makeCtx('flee_arrest', { mode = 'scatter' }, scatterLoc)
+    FA.start(sctx)
+    for _, s in ipairs(SS.spawned) do H.eq(s.opts.cfg.group, 'neutral', 'inmate spawns neutral (armed: ' .. tostring(s.opts.armed) .. ')') end
+end
+
+do -- validation guardrails added in review
+    local loc = hwLocation(12)
+    loc.bossZone = vec4(470.0, -974.0, 30.0, 0.0)          -- Mission Row PD no-build zone
+    loc.bossNear = vec4(1005.0, 1000.0, 30.0, 0.0)         -- 5 m from the start
+    local ok, why = HW.validate({ boss = { spawn = 'bossZone' } }, builtin, loc)
+    H.eq(why, 'block.hostile_waves.invalid.spawns_zone', 'boss spot in a no-build zone refused (builtin too)')
+    ok, why = HW.validate({ boss = { spawn = 'bossNear' } }, custom, loc)
+    H.eq(why, 'block.hostile_waves.invalid.spawns_start', 'custom boss spot too close to the start')
+    H.eq(HW.validate({ boss = { spawn = 'bossNear' } }, builtin, loc), true, 'builtin boss spot near the start trusted')
+    ok, why = HW.validate({ spawns = { vec4(470.0, -974.0, 30.0, 0.0) } }, builtin, loc)
+    H.eq(why, 'block.hostile_waves.invalid.spawns_zone', 'inline spawn point in a no-build zone refused (builtin too)')
+
+    local near = { label = 'Store', start = { coords = vec3(1995.0, 2000.0, 20.0), radius = 60.0 },
+        hostages = prLoc.hostages, safe = prLoc.safe }
+    ok, why = PR.validate({}, custom, near)
+    H.eq(why, 'block.protect_rescue.invalid.points_start', 'custom hostage spots within 30 m of the start refused')
+    H.eq(PR.validate({}, builtin, near), true, 'builtin hostage spots near the start trusted (inside a store)')
+    local zoned = { label = 'Clinic', start = { coords = vec3(250.0, -595.0, 43.0), radius = 60.0 },
+        hostages = { vec4(308.0, -595.0, 43.0, 0.0) }, safe = vec3(150.0, -595.0, 43.0) }
+    ok, why = PR.validate({ count = 1 }, builtin, zoned)
+    H.eq(why, 'block.protect_rescue.invalid.points_zone', 'hostage spot in a no-build zone refused (builtin too)')
+
+    local badRoute = { label = 'Breakout B', start = scatterLoc.start, spawns = scatterLoc.spawns,
+        routes = { { vec3(4100.0, 4000.0, 30.0), vec3(2344.0, 2565.0, 46.0) } } }   -- into the Crimson-Arena match area
+    ok, why = FA.validate({ mode = 'scatter' }, builtin, badRoute)
+    H.eq(why, 'block.flee_arrest.invalid.route_zone', 'escape route through a no-build zone refused')
+    local d = U.copy(doorLoc); d.door = vec4(470.0, -974.0, 30.0, 0.0)
+    ok, why = FA.validate({}, builtin, d)
+    H.eq(why, 'block.flee_arrest.invalid.route_zone', 'door marker in a no-build zone refused')
+    d = U.copy(doorLoc); d.fleeTo = { vec3(3060.0, 3000.0, 10.0), vec3(308.0, -595.0, 43.0) }
+    ok, why = FA.validate({}, builtin, d)
+    H.eq(why, 'block.flee_arrest.invalid.route_zone', 'fleeTo point in a no-build zone refused')
+    d = U.copy(doorLoc); d.suspect = vec4(1560.0, 815.0, 76.0, 0.0)
+    ok, why = FA.validate({}, builtin, d)
+    H.eq(why, 'block.flee_arrest.invalid.points_zone', 'door-mode suspect in a no-build zone refused (builtin too)')
+    H.eq(FA.validate({}, builtin, doorLoc), true, 'the normal door location is still valid')
+end
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- client halves (stubbed natives, undefined globals are errors): host control before every task,
+-- traffic block, blips, targets, progress cancelled on stop
+-- ════════════════════════════════════════════════════════════════════════════
+do
+    local saved = {}
+    for _, k in ipairs({ 'GetEntityCoords', 'GetEntityHealth', 'GetEntityMaxHealth', 'DoesEntityExist' }) do saved[k] = _G[k] end
+    local savedNpc = { apply = CP.Npc.apply, task = CP.Npc.task }
+    local ME = 1
+    local CE, byNet = {}, {}
+    local blips, nextBlip = {}, 0
+    local roads = { zones = {}, removed = {}, off = {}, back = {}, cleared = 0 }
+    local targets, zones, removedZones = {}, {}, {}
+    local tasks, controlCalls = {}, 0
+    local aiming, targetting, stunned = {}, {}, {}
+    local progress = { active = false, cancel = false, cancelled = 0 }
+    local function newBlip() nextBlip = nextBlip + 1; blips[nextBlip] = true; return nextBlip end
+    local function openBlips() local n = 0; for _ in pairs(blips) do n = n + 1 end; return n end
+    local function addEnt(netId, handle, coords, bag)
+        CE[handle] = { coords = coords, health = 200, maxHealth = 200, bag = bag, control = false, grant = false }
+        byNet[netId] = handle
+    end
+    local function tasksFor(e, action)
+        return U.filter(tasks, function(t) return t.e == e and (action == nil or t.action == action) end)
+    end
+    local function steps(n, ms) for _ = 1, n do H.step(ms or 1000) end end
+    local stub = {
+        PlayerPedId = function() return ME end,
+        PlayerId = function() return 0 end,
+        NetworkDoesNetworkIdExist = function(n) return byNet[n] ~= nil end,
+        NetworkGetEntityFromNetworkId = function(n) return byNet[n] or 0 end,
+        DoesEntityExist = function(e) return e == ME or CE[e] ~= nil end,
+        GetEntityCoords = function(e)
+            if e == ME then return H.players[1].coords end
+            return CE[e] and CE[e].coords or vec3(0.0, 0.0, 0.0)
+        end,
+        GetEntityHealth = function(e) return CE[e] and CE[e].health or 0 end,
+        GetEntityMaxHealth = function(e) return CE[e] and CE[e].maxHealth or 0 end,
+        Entity = function(e) return { state = { cp = CE[e] and CE[e].bag or nil } } end,
+        NetworkHasControlOfEntity = function(e) return CE[e] ~= nil and CE[e].control == true end,
+        AddRoadNodeSpeedZone = function(...) roads.zones[#roads.zones + 1] = { ... }; return #roads.zones end,
+        RemoveRoadNodeSpeedZone = function(id) roads.removed[#roads.removed + 1] = id end,
+        SetRoadsInArea = function(...) roads.off[#roads.off + 1] = { ... } end,
+        SetRoadsBackToOriginal = function(...) roads.back[#roads.back + 1] = { ... } end,
+        ClearAreaOfVehicles = function() roads.cleared = roads.cleared + 1 end,
+        AddBlipForEntity = function() return newBlip() end,
+        AddBlipForCoord = function() return newBlip() end,
+        SetBlipSprite = function() end, SetBlipColour = function() end, SetBlipScale = function() end,
+        SetBlipAsShortRange = function() end,
+        BeginTextCommandSetBlipName = function() end, AddTextComponentSubstringPlayerName = function() end,
+        EndTextCommandSetBlipName = function() end,
+        DoesBlipExist = function(b) return blips[b] == true end,
+        RemoveBlip = function(b) blips[b] = nil end,
+        DrawMarker = function() end,
+        IsPedBeingStunned = function(e) return stunned[e] == true end,
+        IsPlayerFreeAimingAtEntity = function(_, e) return aiming[e] == true end,
+        IsPlayerTargettingEntity = function(_, e) return targetting[e] == true end,
+    }
+    for k, v in pairs(stub) do _G[k] = v end
+    lib.progressBar = function(opts)
+        progress.last, progress.active, progress.cancel = opts, true, false
+        Wait(opts.duration)
+        progress.active = false
+        return not progress.cancel
+    end
+    lib.progressActive = function() return progress.active end
+    lib.cancelProgress = function() progress.cancel = true; progress.cancelled = progress.cancelled + 1 end
+    H.exportsMock.ox_target = {
+        addLocalEntity = function(ent, opts) targets[ent] = opts end,
+        removeLocalEntity = function(ent) targets[ent] = nil end,
+        addSphereZone = function(o) zones[#zones + 1] = o; return #zones end,
+        removeZone = function(id) removedZones[id] = true end,
+    }
+    CP.Npc.apply = function(e) return CE[e] ~= nil and CE[e].control == true end
+    CP.Npc.task = function(e, action, args)
+        if not (CE[e] and CE[e].control) then return false end
+        tasks[#tasks + 1] = { e = e, action = action, args = args }
+        return true
+    end
+    local function clientCtx(obj, location, o)
+        o = o or {}
+        local c = { runId = 'crun-' .. tostring(o.tag), index = o.index or 1, obj = obj, base = obj, mission = {},
+            location = location, isHost = o.isHost ~= false, test = false, radioSilence = o.radioSilence == true,
+            state = {}, participants = { 1 }, seed = 1 }
+        c.reports, c.lines = {}, {}
+        c.report = function(ev) c.reports[#c.reports + 1] = ev end
+        c.hudDetail = function(text) c.lines[#c.lines + 1] = text or false end
+        c.control = function(e)
+            controlCalls = controlCalls + 1
+            if CE[e] and CE[e].grant then CE[e].control = true end
+            return CE[e] ~= nil and CE[e].control == true
+        end
+        c.getEntity = function(n) return byNet[n] end
+        return c
+    end
+    local function reportsOf(c, kind)
+        return U.filter(c.reports, function(r) return r.type == kind end)
+    end
+
+    CP.Blocks._list.hostile_waves, CP.Blocks._list.protect_rescue, CP.Blocks._list.flee_arrest = nil, nil, nil
+    setmetatable(_G, { __index = function(_, k) error('undefined global ' .. tostring(k), 2) end })
+    H.load('blocks/hostile_waves/client.lua')
+    H.load('blocks/protect_rescue/client.lua')
+    H.load('blocks/flee_arrest/client.lua')
+    local HWc, PRc, FAc = CP.Blocks.get('hostile_waves'), CP.Blocks.get('protect_rescue'), CP.Blocks.get('flee_arrest')
+    H.ok(HWc ~= HW and PRc ~= PR and FAc ~= FA and HWc.update and PRc.update and FAc.update, 'client halves registered')
+    place(1, 1990, 2000, 20)
+
+    -- protect_rescue: a freed hostage owned by another client still gets its follow task
+    local pc = clientCtx(U.deepcopy(PR.defaults({})), prLoc, { tag = 'pr', index = 2 })
+    addEnt(7001, 71, vec3(2000.0, 2000.0, 20.0), { state = 'restrained', cfg = { group = 'neutral' } })
+    PRc.prepare(pc)
+    PRc.update(pc, { peds = { { netId = 7001, state = 'restrained', index = 1 } } })
+    steps(1)
+    H.eq(#tasksFor(71), 0, 'pr: no control, no task')
+    H.ok(controlCalls > 0, 'pr: control requested')
+    CE[71].grant = true
+    steps(1)
+    H.eq(#tasksFor(71, 'kneel'), 1, 'pr: restrained hostage kneels once control arrives')
+    CE[71].control, CE[71].grant = false, false          -- the officer who cuts the restraints owns it now
+    CE[71].bag = { state = 'freed', cfg = { group = 'neutral' } }
+    PRc.update(pc, { peds = { { netId = 7001, state = 'freed', index = 1 } } })
+    steps(3)
+    H.eq(#tasksFor(71, 'follow'), 0, 'pr: follow cannot be issued without control')
+    CE[71].grant = true
+    steps(1)
+    local follow = tasksFor(71, 'follow')
+    H.eq(#follow, 1, 'pr: follow issued as soon as control is back (not lost for good)')
+    H.near(follow[1] and follow[1].args.coords.x or 0, 2050, 0.01, 'pr: follow to the safe marker')
+    -- Cut restraints target, progress cancelled when the objective stops mid-cut
+    CE[71].bag = { state = 'restrained' }
+    PRc.update(pc, { peds = { { netId = 7001, state = 'restrained', index = 1 } } })
+    PRc.start(pc)
+    steps(1)
+    local opt = targets[71] and targets[71][1]
+    H.ok(opt and opt.name == 'crimson-police:cut_restraints', 'pr: Cut restraints target on the restrained hostage')
+    H.eq(opt and opt.canInteract(71), true, 'pr: target usable while current')
+    opt.onSelect()
+    H.eq(#reportsOf(pc, 'free_start'), 1, 'pr: free_start reported')
+    H.eq(progress.active, true, 'pr: progress bar running')
+    PRc.stop(pc)
+    H.eq(progress.cancelled, 1, 'pr: stop cancels the running progress bar')
+    H.eq(targets[71], nil, 'pr: stop removes the target')
+    H.eq(openBlips(), 0, 'pr: stop removes the blips')
+    steps(8)
+    H.eq(#reportsOf(pc, 'freed'), 0, 'pr: no freed report after the cancelled cut')
+
+    -- flee_arrest: fleeing inmate re-tasked once control arrives; lock-on aim counts as aiming
+    place(1, 4000, 4000, 30)
+    local fc = clientCtx(U.deepcopy(FA.defaults({ mode = 'scatter' })), scatterLoc, { tag = 'fa' })
+    addEnt(7101, 81, vec3(4040.0, 4000.0, 30.0), { state = 'fleeing', cfg = {} })
+    FAc.prepare(fc)
+    FAc.start(fc)
+    FAc.update(fc, { peds = { { netId = 7101, role = 'inmate', state = 'fleeing', armed = false, route = 1 } }, mode = 'scatter' })
+    steps(2)
+    H.eq(#tasksFor(81, 'flee'), 0, 'fa: no control, no flee task')
+    CE[81].grant = true
+    steps(2)
+    local flee = tasksFor(81, 'flee')
+    H.eq(#flee, 1, 'fa: flee issued once control arrives')
+    H.eq(flee[1] and #flee[1].args.points or 0, 2, 'fa: along its escape route')
+    place(1, 4045, 4000, 30)
+    targetting[81] = true
+    steps(2)
+    H.ok(#reportsOf(fc, 'aim') >= 1, 'fa: lock-on aim within givesUp.aim reported')
+    FAc.stop(fc)
+    -- door: knock progress cancelled when the objective stops, zone removed
+    place(1, 3041, 3000, 10)
+    local dc = clientCtx(U.deepcopy(FA.defaults({})), doorLoc, { tag = 'door' })
+    FAc.prepare(dc)
+    FAc.start(dc)
+    local zone = zones[#zones]
+    H.ok(zone and zone.name:find('crimson-police:knock', 1, true) == 1, 'fa: knock zone named crimson-police:*')
+    zone.options[1].onSelect()
+    H.eq(#reportsOf(dc, 'knock_start'), 1, 'fa: knock_start reported')
+    FAc.stop(dc)
+    H.eq(progress.cancelled, 2, 'fa: stop cancels the knock progress bar')
+    H.eq(removedZones[#zones], true, 'fa: stop removes the knock zone')
+    steps(4)
+    H.eq(#reportsOf(dc, 'knock'), 0, 'fa: no knock report after the cancelled progress')
+
+    -- hostile_waves: traffic blocked around the start and restored at stop; apply/combat retried
+    place(1, 1000, 1000, 30)
+    local hloc = hwLocation(12)
+    local hc = clientCtx(U.deepcopy(HW.defaults({ waves = { 2 } })), hloc, { tag = 'hw' })
+    addEnt(7201, 91, vec3(1060.0, 1000.0, 30.0), { state = 'hostile', cfg = { behaviour = 'balanced' } })
+    HWc.prepare(hc)
+    HWc.start(hc)
+    H.eq(#roads.zones, 1, 'hw: road speed zone added'); H.eq(#roads.off, 1, 'hw: roads switched off in the box')
+    H.eq(roads.cleared, 1, 'hw: area cleared of ambient vehicles once')
+    H.near(roads.zones[1][4], 120.0, 0.01, 'hw: traffic blocked within blockTraffic metres')
+    HWc.update(hc, { peds = { { netId = 7201, role = 'hostile', state = 'hostile', wave = 1 } } })
+    steps(2)
+    H.eq(#tasksFor(91, 'combat'), 0, 'hw: no control, no combat task')
+    H.eq(openBlips(), 1, 'hw: hostile blip')
+    CE[91].grant = true
+    steps(1)
+    H.eq(#tasksFor(91, 'combat'), 1, 'hw: combat task once control arrives')
+    CE[91].health = 110
+    steps(1)
+    H.eq(#reportsOf(hc, 'low_health'), 1, 'hw: host reports the low health once')
+    HWc.stop(hc)
+    H.eq(#roads.removed, 1, 'hw: speed zone removed at stop'); H.eq(#roads.back, 1, 'hw: roads back to original at stop')
+    H.eq(openBlips(), 0, 'hw: blips removed at stop')
+    local rc = clientCtx(U.deepcopy(HW.defaults({ waves = { 2 } })), hloc, { tag = 'hw2', radioSilence = true })
+    HWc.prepare(rc); HWc.start(rc)
+    HWc.update(rc, { peds = { { netId = 7201, role = 'hostile', state = 'hostile', wave = 1 } } })
+    steps(1)
+    H.eq(openBlips(), 0, 'hw: radio silence, no blips')
+    TriggerEvent('onResourceStop', 'Crimson-Police')
+    H.eq(#roads.back, 2, 'hw: resource stop restores the traffic too')
+
+    setmetatable(_G, nil)
+    for k, v in pairs(saved) do _G[k] = v end
+    CP.Npc.apply, CP.Npc.task = savedNpc.apply, savedNpc.task
+end
+
+-- ════════════════════════════════════════════════════════════════════════════
 -- locale part: valid JSON, every referenced key present
 -- ════════════════════════════════════════════════════════════════════════════
 do

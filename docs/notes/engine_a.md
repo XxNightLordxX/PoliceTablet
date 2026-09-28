@@ -25,7 +25,19 @@ Files: `modules/missions/server.lua`, `modules/missions/client.lua`, `modules/dr
   difficulty 1..#`Config.Difficulty.pointsByStars`, `timeLimit`/`startTimeout` 60–3600 s, `cooldown`
   0–86400 s, `vehiclePenalties` boolean, at least one location with `start = { coords, radius }` (a bare
   vector start is converted with radius 50 and a warning), at least one objective, a registered block per
-  objective, the block's `defaults` and `validate(obj, mission, location)` for **every** location.
+  objective, the block's `defaults` and `validate(obj, mission, location)` for **every** location, no
+  item named `armour`, `bandage`, `ammo-*` or `weapon_*` (any case; docs/CRIMSON_ARENA.md rule 4), and no
+  point of any location (start and every named data key, recursively) inside a
+  `Config.Builder.noBuildZones` zone (2D distance, as the blocks and the builder measure it; rule 7 —
+  this also covers Crimson-Arena's Trailer Park and lobby zones).
+- **Loader fields before the guardrails**: `source`, `isBoss`, `status`, `version` and `filePath` are set on
+  the copy *before* the blocks' `validate` runs, because the blocks exempt built-in missions
+  (`mission.source == 'builtin'`) from the Mission Builder's allowed model/weapon lists. (Before this fix
+  the real `prison_break` and `weekly_boss_kingpin` were rejected at load.) `meta.source` other than
+  `'custom'` means `'builtin'`.
+- **`parse(luaSource, chunkName)`** (ARCHITECTURE §5.6) runs one file's source in the same sandbox and
+  returns the raw definition (not normalised); `chunkName` may be given with or without the leading `@`
+  (CP.Builder passes the path, CP.Testing `'@' .. path`).
 - **Soft checks (warning only; the builder enforces them as guardrails for custom missions)**: fewer
   locations than expected (built-in 5, or 3 for `armored_truck_escort`, `evoc_course`,
   `weekly_boss_kingpin`; custom `Config.Builder.minLocations`), locations closer than
@@ -45,6 +57,9 @@ Files: `modules/missions/server.lua`, `modules/missions/client.lua`, `modules/dr
   change them for the rest of the resource. `error`, `os`, `require`, `load` are not available.
 - Validation reasons returned by `normalize` are English developer-facing text (console, builder), not
   locale keys.
+- The `crimson-police:client:missions` broadcast uses `TriggerLatentClientEvent(name, -1, 200000, list)`
+  (the full list of 14 built-ins is about 60 kB of JSON), falling back to `TriggerClientEvent` where the
+  native is missing (tests).
 - `getMissionDefs` returns `nil, 'err.not_ready'` before the first load; the client retries (3 s, growing to
   15 s, 12 attempts) and ignores a callback reply once a push has arrived.
 - `server:admin:reloadMissions` (§8.3 owner "missions") is registered here: `CP.Permissions.can(src,
@@ -63,6 +78,7 @@ Files: `modules/missions/server.lua`, `modules/missions/client.lua`, `modules/dr
   single most recent mission of any member", then the whole pool. A pool of one always repeats.
 - The no-repeat rule is strict: if every candidate's locations are in use, the accept fails with
   `err.no_location` instead of falling back to an avoided mission.
+- **Player clearance** ignores players for whom `CP.Alerts.inArena` is true (docs/CRIMSON_ARENA.md rule 7).
 - **Reservations** allow several holders per spot (a test run can reserve a spot a live run holds, and
   vice versa the live draw skips it). `server:acceptType` holds a provisional `pending:<src>:<ms>`
   reservation around `CP.Runs.create`, and reserves under `run.id` itself if the engine did not. A sweep
@@ -79,8 +95,9 @@ Files: `modules/missions/server.lua`, `modules/missions/client.lua`, `modules/dr
   (`cards = {}`, `boss = nil`).
 - **acceptType**: payload is the type key (a `{ missionType }`/`{ type }` table is tolerated). Checks in
   order: officer (the leader's own `CP.Access` error key is returned), unit leader, unit not locked, unit
-  size, Cross-Department lock, every member an officer (`err.member_unavailable`), then per member: foreign
-  crimsonArena flag (`err.in_arena`), active run, real call, hourly cap, type cooldown (own / `err.member_*`
+  size, Cross-Department lock, every member an officer (`err.member_unavailable`), then per member:
+  `CP.Alerts.inArena` (foreign crimsonArena flag or routing bucket ≠ 0, docs/CRIMSON_ARENA.md rule 5;
+  `err.in_arena`; without modules/alerts: `foreignFlag` + `GetPlayerRoutingBucket`), active run, real call, hourly cap, type cooldown (own / `err.member_*`
   variants), then `CP.Runs.capsOk` (always reported as `err.server_busy`), then the boss checks. Invites
   close (`CP.Units.lock`) only after every check passed; the unit is unlocked on any later failure.
   Rate: 1 accept per 1.5 s per player (plus CP.Net's 3/s) and an in-flight guard per unit member
@@ -93,9 +110,15 @@ Files: `modules/missions/server.lua`, `modules/missions/client.lua`, `modules/dr
 ### CP.Events
 - `bossAvailable` also refuses while a Cross-Department Mission is active (`err.operation_locked`), and when
   the boss mission is missing or disabled (`err.boss_unavailable`).
-- "Used this week" = any `weekly_boss_kingpin` row of that citizenid since `CP.Schedule.weekStart()` whose
-  `end_reason` is not `real_call`, `force_recall` or `cancelled` (voided rows still count: the attempt was
-  used). Positive results are cached per citizenid for the week.
+- "Used this week" = any `weekly_boss_kingpin` row (`mission_type = 'tactical'`, which also uses
+  `idx_draw`) of that citizenid created since the reset of **the week's first boss day** (Friday with the
+  default config; the week start itself when the week's first day is a boss day) whose `end_reason` is not
+  `real_call`, `force_recall` or `cancelled` (voided rows still count: the attempt was used). Rows are
+  written when a run ends, so a boss run accepted on Sunday night that ends after Monday's reset has a row
+  dated in the new week; counting from the week start would have used up next weekend's attempt.
+  Positive results are cached per citizenid for the week.
+- The boss card is also locked by the hourly cap (`board.locked_hourly` / `board.locked_hourly_member`),
+  which the accept enforces for the boss (it counts as Tactical for the hourly cap).
 - `bossCard.available` = the unit may take this week's attempt (`locked == nil`); `busy` and `onCall` are
   separate flags as on the type cards. `typeOfTheDay` is true when the Type of the Day is `tactical`
   (boss runs are Tactical runs). Cash: `CP.Cash.range('weekly_boss', officers)` when it returns a
@@ -117,6 +140,8 @@ Files: `modules/missions/server.lua`, `modules/missions/client.lua`, `modules/dr
   "Only when > 0": `runArchiveMonths`/`auditDays` of 0 turn the step off, and the INSERT … SELECT / DELETE
   only run when rows are past the cutoff. Rows are copied with `INSERT IGNORE` and only rows present in the
   archive are deleted (multi-table DELETE with a join), so a half-finished run can safely repeat.
+- At the daily reset the retention job runs in its own thread *after* the daily listeners fire, so a slow
+  archive never delays Type of the Day, goals, streaks or the cash cap.
 - If the server clock moves backwards to an earlier day, nothing fires (a warning is printed).
 - Day/week/month arithmetic uses `os.time` date normalisation (not `ts - resetHour * 3600`), so DST never
   shifts a day.
@@ -156,3 +181,7 @@ Files: `modules/missions/server.lua`, `modules/missions/client.lua`, `modules/dr
   `err.operation_locked`, `err.on_call`, `err.already_on_run`, `modifier.*`. The access keys are passed
   through from `CP.Access.getOfficer`; `CP.Runs.create`'s error key is passed through as-is (runs' part).
 - **Tablet** — `Session.config.tiers` labels: `CP.Scaling.label(name)`.
+- **Web UI (Mission Board)** — Lua cannot send `null` inside a table: `BoardCard.locked`, `BoardData.boss`,
+  `BoardData.operation` and `BoardData.activeRunId` arrive *missing* (undefined) when they are null in
+  §9.4. Test them with `!value` / `value == null`, never `=== null`.
+- **CP.Testing / CP.Builder** — `CP.Missions.parse` now exists (§5.6); both already prefer it.

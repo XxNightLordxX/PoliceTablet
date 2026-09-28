@@ -246,7 +246,9 @@ function R.status(run, src)
         if st.mode ~= 'route' then return { status = 'disabled', recalcsLeft = 0, distance = dist } end
         local now = GetGameTimer()
         return {
-            status = st.offSince and 'off' or 'on',
+            -- 'off' only once the warning is shown (SPEC: off the line for warnAfter s shows the warning; the
+            -- Active Mission screen shows "on route, or the off-route countdown").
+            status = st.warned and 'off' or 'on',
             secondsLeft = st.warned and secondsLeftOf(st, now) or nil,
             recalcsLeft = recalcsLeft(st),
             distance = dist,

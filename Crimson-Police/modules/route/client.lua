@@ -68,10 +68,6 @@ local function playerPos()
     return vector3(c.x, c.y, c.z)
 end
 
-local function maxDeviation()
-    return tonumber(Config.Route.maxDeviation) or 120.0
-end
-
 local function hudRoute(route)
     if CP.Tablet and CP.Tablet.hud then CP.Tablet.hud({ route = route }) end
 end
@@ -118,11 +114,11 @@ local function showRoute()
         return
     end
     local r = { distance = cur.distance }
+    -- 'off' only while the server's warning is shown: SPEC warns after Config.Route.warnAfter s off the line
+    -- (the server decides when; a short excursion past maxDeviation shows no warning).
     if cur.warning ~= nil then
         r.status = 'off'
         r.secondsLeft = cur.warning
-    elseif cur.metres and cur.metres > maxDeviation() then
-        r.status = 'off'
     else
         r.status = 'on'
     end
