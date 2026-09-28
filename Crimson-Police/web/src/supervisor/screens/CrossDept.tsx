@@ -1,11 +1,16 @@
 // Supervisor UI · Cross-Department Mission (screen key 'sup_crossdept', title key 'ui.screen.sup_crossdept').
-// STUB: the owner of this screen replaces this whole file. Contract:
-//   - default-export a component that takes no props;
-//   - get data with hooks: useSession(), useRequest(), useAction(), usePush(), t(), useNavigate();
-//   - wrap the content in <Screen title={t('ui.screen.sup_crossdept')}> from ../../shared/components;
-//   - browser mocks go in src/mocks/<feature>.mock.ts, text in locales/parts/<slice>.json.
-import { ScreenStub } from '../../shared/components';
+// The active operation (mission, launcher, joined participants by department, tier, status) with Start now,
+// Relaunch after a fail and Cancel, or the launch form when none is active. Everything lives in the
+// reusable OperationPanel (also used by the Admin UI → Missions screen); this screen uses the supervisor
+// actions server:sup:op*. Visible with the launchCrossDept permission (screen registry).
+import { Screen } from '../../shared/components';
+import { t } from '../../shared/i18n';
+import OperationPanel from '../components/OperationPanel';
 
 export default function SupCrossDept() {
-  return <ScreenStub titleKey="ui.screen.sup_crossdept" icon="globe" />;
+  return (
+    <Screen title={t('ui.screen.sup_crossdept')} subtitle={t('sup.crossdept.screen_subtitle')}>
+      <OperationPanel scope="sup" />
+    </Screen>
+  );
 }

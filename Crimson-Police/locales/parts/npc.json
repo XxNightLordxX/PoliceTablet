@@ -1,0 +1,14 @@
+{
+  "npc.cuff": "Cuff suspect",
+  "npc.shot_surrendered": "You shot a suspect who had given up: -{points} points.",
+  "err.npc_invalid": "That request was not valid.",
+  "err.npc_not_on_run": "You are not on this mission.",
+  "err.npc_run_not_active": "The mission is not in progress yet.",
+  "err.npc_not_arrived": "Reach the mission area first.",
+  "err.npc_in_arena": "You can't do that while you are in the arena.",
+  "err.npc_not_officer": "Only on-duty officers can do that.",
+  "err.npc_unknown": "That person is not part of your mission.",
+  "err.npc_not_surrendered": "That suspect has not given up.",
+  "err.npc_too_far": "You are too far away to cuff them.",
+  "err.npc_too_fast": "Keep cuffing until the bar finishes."
+}

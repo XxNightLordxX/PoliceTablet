@@ -26,7 +26,8 @@
 -- CP.Schedule._runRetention(ts?) -> { archived = n, auditDeleted = n } runs the retention job now.
 --
 -- Contract interpretations: the retention job also runs once 120 s after start (idempotent catch-up);
--- a clock that moves back to an earlier day fires nothing.
+-- at the daily reset it runs in its own thread after the daily listeners, so a slow archive never
+-- delays them; a clock that moves back to an earlier day fires nothing.
 
 CP.Schedule = CP.Schedule or {}
 local Schedule = CP.Schedule
@@ -225,8 +226,10 @@ function Schedule._check(ts)
     if cur.day ~= prev.day then
         fired.daily = true
         CP.log(TAG, 'daily reset: %s -> %s', prev.day, cur.day)
-        runRetention(ts)
         fire('daily', cur.day)
+        -- The retention job runs in its own thread so a slow archive never delays the reset listeners
+        -- (Type of the Day, goals, streaks, the daily cash cap) or the next boundary check.
+        CreateThread(function() runRetention(ts) end)
     end
     if cur.week ~= prev.week then
         fired.weekly = true

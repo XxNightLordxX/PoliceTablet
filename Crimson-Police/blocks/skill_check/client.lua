@@ -9,11 +9,14 @@
     (AddExplosion with damage scale 0: effect only, hurts nobody). Blips per armed target (none under
     Radio Silence), a small marker within 30 m, and the HUD line via ctx.hudDetail. No networked
     entities are created here and there are no NPCs (hostChanged only records the flag).
+    The block's client state is kept per run and objective in this file (stateOf), so it also works
+    when the engine hands every hook a fresh ctx.state table.
 
   Objective fields read: checks [easy, medium, medium, hard], missPenalty [30], target { label, icon },
     explosion [true]
   Evidence sent (ctx.report)
-    { type = 'check', target, index, success }   one skill-check round
+    { type = 'check', target, index, success, seq }   one skill-check round (seq counts this client's
+        reports: two misses in a row on the same round are never identical reports)
   Bonuses / penalties: none on the client (the server records no_missed_checks).
 ]]
 
@@ -28,7 +31,31 @@ local EXPLOSION_TYPE  = 2      -- sticky bomb
 local ANIM_DICT       = 'amb@medic@standing@kneel@base'
 local ANIM_CLIP       = 'base'
 
-local live = {}   -- [state] = ctx, for resource-stop cleanup
+local live = {}     -- [state] = ctx, for resource-stop cleanup
+local states = {}   -- ['<runId>:<index>'] = state, one per objective across every hook call
+
+local function keyOf(ctx)
+    return tostring(ctx.runId) .. ':' .. tostring(ctx.index)
+end
+
+local function stateOf(ctx)
+    local key = keyOf(ctx)
+    local st = states[key]
+    if not st then
+        st = type(ctx.state) == 'table' and ctx.state or {}
+        st.runKey = tostring(ctx.runId)
+        states[key] = st
+    end
+    return st
+end
+
+-- Drop the states of other runs that are no longer running (late snapshots after a stop).
+local function purge(ctx)
+    local run = tostring(ctx.runId)
+    for key, st in pairs(states) do
+        if st.runKey ~= run and not st.alive then states[key] = nil end
+    end
+end
 
 local function v3(t)
     return vector3((t.x or 0.0) + 0.0, (t.y or 0.0) + 0.0, (t.z or 0.0) + 0.0)
@@ -124,6 +151,7 @@ local function stopAnim(st)
     if st.animating then
         st.animating = false
         StopAnimTask(PlayerPedId(), ANIM_DICT, ANIM_CLIP, 1.0)
+        RemoveAnimDict(ANIM_DICT)   -- lib.requestAnimDict loaded it for this defuse
     end
 end
 
@@ -140,7 +168,8 @@ local function defuse(ctx, st, i)
         st.round = k
         local ok = lib.skillCheck(rounds[k], KEYS)
         if not st.alive or st.cancelled then break end
-        ctx.report({ type = 'check', target = i, index = k, success = ok == true })
+        st.seq = (st.seq or 0) + 1
+        ctx.report({ type = 'check', target = i, index = k, success = ok == true, seq = st.seq })
         if not ok then
             say(st, CP.L('block.skill_check.hud.miss', { seconds = tonumber(ctx.obj.missPenalty) or 0 }))
             break
@@ -275,17 +304,20 @@ local function cleanup(ctx, st)
         ctx.hudDetail(nil)
     end
     live[st] = nil
+    if states[keyOf(ctx)] == st then states[keyOf(ctx)] = nil end
 end
 
 CP.Blocks.register(BLOCK, {
     prepare = function(ctx)
-        local st = ctx.state
+        purge(ctx)
+        local st = stateOf(ctx)
         st.zones = st.zones or {}
         st.blips = st.blips or {}
     end,
 
     start = function(ctx)
-        local st = ctx.state
+        purge(ctx)
+        local st = stateOf(ctx)
         st.zones = st.zones or {}
         st.blips = st.blips or {}
         st.alive = true
@@ -301,7 +333,9 @@ CP.Blocks.register(BLOCK, {
 
     update = function(ctx, data)
         if type(data) ~= 'table' then return end
-        local st = ctx.state
+        local st = stateOf(ctx)
+        st.zones = st.zones or {}
+        st.blips = st.blips or {}
         if data.kind == 'explode' then
             -- Plays even when it arrives together with the run's end.
             explode(ctx, st, data)
@@ -313,11 +347,11 @@ CP.Blocks.register(BLOCK, {
 
     -- No NPCs in this block: nothing to re-task when the host changes.
     hostChanged = function(ctx, isHost)
-        ctx.state.isHost = isHost == true
+        stateOf(ctx).isHost = isHost == true
     end,
 
     stop = function(ctx)
-        cleanup(ctx, ctx.state)
+        cleanup(ctx, stateOf(ctx))
     end,
 })
 

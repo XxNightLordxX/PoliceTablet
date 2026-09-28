@@ -54,8 +54,18 @@ _G.GetEntityCoords = function(ent)
     return playerCoords(ent)
 end
 
-local timerAdjust = {}
-CP.Runs = { adjustTimer = function(run, seconds) timerAdjust[#timerAdjust + 1] = seconds end }
+local serverSpeeds = {}   -- server GetEntitySpeed (OneSync copy of the entity)
+_G.GetEntitySpeed = function(ent) return serverSpeeds[ent] or 0.0 end
+
+local timerAdjust, timerPause = {}, {}
+CP.Runs = {
+    adjustTimer = function(run, seconds) timerAdjust[#timerAdjust + 1] = seconds end,
+    pauseTimer = function(run, paused)
+        timerPause[#timerPause + 1] = paused
+        run.timer = run.timer or {}
+        run.timer.paused = paused
+    end,
+}
 
 H.load('blocks/checkpoint_route/server.lua')
 H.load('blocks/interact_points/server.lua')
@@ -263,9 +273,13 @@ do
     at(1, st.points[2])
     CR.tick(ctx, 1); advance(10000); CR.tick(ctx, 1)
     vehicles[5001].class = 4
-    okE, why = CR.onEvent(ctx, 1, { type = 'checkpoint', index = 2, vehClass = 4 })
+    okE, why = CR.onEvent(ctx, 1, { type = 'checkpoint', index = 2, vehClass = 4, model = joaat('police') })
     H.ok(okE == false and why == 'not_police_vehicle', 'fallback class 4 rejected')
-    H.eq(CR.onEvent(ctx, 1, { type = 'checkpoint', index = 2, vehClass = 18 }), true, 'fallback class 18 accepted')
+    okE, why = CR.onEvent(ctx, 1, { type = 'checkpoint', index = 2, vehClass = 18 })
+    H.ok(okE == false and why == 'not_police_vehicle', 'fallback class without the model rejected')
+    okE, why = CR.onEvent(ctx, 1, { type = 'checkpoint', index = 2, vehClass = 18, model = joaat('sultan2') })
+    H.ok(okE == false and why == 'not_police_vehicle', 'fallback class for another model rejected')
+    H.eq(CR.onEvent(ctx, 1, { type = 'checkpoint', index = 2, vehClass = 18, model = joaat('police') }), true, 'fallback class 18 for the model the server sees accepted')
     _G.GetVehicleClass = serverClass
     -- extra police models from Config.PoliceVehicles.models
     Config.PoliceVehicles.models = { 'police9' }
@@ -306,10 +320,56 @@ do
     H.eq(lastSend(ctx).current, 1, 'restart sends a snapshot')
 end
 
+-- Server-side stop verification: the server's own samples must see the participant stopped inside the
+-- marker, in a vehicle when one is required, for the stop time.
+do
+    H.clockMs = 150000
+    local loc = { label = 'District', start = { coords = vec3(300.0, 0.0, 30.0), radius = 30.0 }, spots = spots(8) }
+    local obj = CR.defaults({ checkpoints = 'spots', use = 'random', count = 5, contactPenalty = 0, failIfUndriveable = false })
+    local ctx = fakeCtx({ obj = obj, location = loc, seed = 777 })
+    CR.prepare(ctx); CR.start(ctx)
+    H.eq(#timerPause, 0, 'beat patrol (no medals) never holds the run timer')
+    local st = ctx.state
+    local p1 = st.points[1]
+    addVehicle(5101, 151, { class = 18 })
+    H.players[1] = { coords = vec3(p1.x, p1.y, p1.z), vehicle = 5101 }
+    serverSpeeds[5101] = 12.0
+    for _ = 1, 12 do advance(1000); CR.tick(ctx, 1) end
+    H.eq(st.near[1], nil, 'moving inside the marker: no stop time on the server')
+    local okE, why = CR.onEvent(ctx, 1, { type = 'checkpoint', index = 1 })
+    H.ok(okE == false and why == 'not_held', 'circling inside the marker is not a stop')
+    serverSpeeds[5101] = 2.0   -- creeping still counts (the client stops at 1.5 m/s; the server allows lag)
+    for _ = 1, 9 do advance(1000); CR.tick(ctx, 1) end
+    H.eq(CR.onEvent(ctx, 1, { type = 'checkpoint', index = 1 }), true, 'stopped (server speed) for 9 s accepted')
+    local p2 = st.points[2]
+    H.players[1] = { coords = vec3(p2.x, p2.y, p2.z), vehicle = 0 }
+    for _ = 1, 12 do advance(1000); CR.tick(ctx, 1) end
+    H.eq(st.near[1], nil, 'on foot with a police vehicle required: no stop time')
+    H.players[1].vehicle = 5101
+    serverSpeeds[5101] = nil
+    okE, why = CR.onEvent(ctx, 1, { type = 'checkpoint', index = 2 })
+    H.ok(okE == false and why == 'not_held', 'getting in at the end does not count the time on foot')
+    -- a server-side class from CP.Qbx.vehicleClass (when the integrations module offers it) is used
+    -- instead of the reported one
+    _G.GetVehicleClass = nil
+    CP.Qbx = { vehicleClass = function(model) return model == joaat('police') and 18 or 4 end }
+    for _ = 1, 10 do advance(1000); CR.tick(ctx, 1) end
+    H.eq(CR.onEvent(ctx, 1, { type = 'checkpoint', index = 2 }), true, 'class from CP.Qbx.vehicleClass, no reported class needed')
+    addVehicle(5102, 152, { class = 18, model = joaat('buffalo') })
+    H.players[1].vehicle = 5102
+    local p3 = st.points[3]
+    H.players[1].coords = vec3(p3.x, p3.y, p3.z)
+    for _ = 1, 10 do advance(1000); CR.tick(ctx, 1) end
+    okE, why = CR.onEvent(ctx, 1, { type = 'checkpoint', index = 3, vehClass = 18, model = joaat('buffalo') })
+    H.ok(okE == false and why == 'not_police_vehicle', 'the server class beats a reported class 18')
+    CP.Qbx = nil
+    _G.GetVehicleClass = serverClass
+end
+
 -- EVOC Course: every checkpoint, drive-through, medals from the location, contact seconds.
 local function evoc(opts)
     H.clockMs = 500000
-    timerAdjust = {}
+    timerAdjust, timerPause = {}, {}
     local loc = { start = { coords = vec3(0.0, 0.0, 0.0), radius = 30.0 }, course = { points = spots(4) }, medals = { gold = 60, silver = 80, bronze = 100 } }
     local obj = CR.defaults({ block = 'checkpoint_route', checkpoints = 'course', stopFor = 0, medals = true, radius = 10.0 })
     local ctx = fakeCtx({ obj = obj, location = loc, seed = 42 })
@@ -400,6 +460,54 @@ do -- timerStart = 'start'
     local c2 = fakeCtx({ obj = obj, location = loc })
     CR.prepare(c2); CR.start(c2)
     H.ok(c2.state.courseStartMs ~= nil, 'start: clock runs from the objective start')
+end
+
+do -- EVOC: "the timer starts at the first checkpoint": the run timer is held until checkpoint 1
+    local ctx, st = evoc()
+    H.eq(timerPause[1], true, 'medal course holds the run timer at the start marker')
+    H.eq(lastSend(ctx).course.held, true, 'the snapshot tells the client the timer waits')
+    CR.tick(ctx, 1)
+    H.eq(#timerPause, 1, 'held once')
+    at(1, st.points[1]); CR.onEvent(ctx, 1, { type = 'checkpoint', index = 1 })
+    H.eq(timerPause[2], false, 'checkpoint 1 starts the run timer')
+    H.eq(lastSend(ctx).course.held, false, 'the snapshot says the timer runs')
+    at(1, st.points[2]); advance(5000); CR.onEvent(ctx, 1, { type = 'checkpoint', index = 2 })
+    H.eq(#timerPause, 2, 'later checkpoints do not touch the timer')
+    CR.stop(ctx)
+    H.eq(#timerPause, 2, 'stop after the release changes nothing')
+
+    -- nobody crosses checkpoint 1: the timer starts anyway after the grace
+    local c2 = evoc()
+    advance(119000); CR.tick(c2, 1)
+    H.eq(timerPause[#timerPause], true, 'still held before the grace ends')
+    advance(1000); CR.tick(c2, 1)
+    H.eq(timerPause[#timerPause], false, 'grace over: the run timer starts without checkpoint 1')
+    H.eq(lastSend(c2).course.held, false, 'the client hears the timer runs')
+    H.eq(c2.state.courseStartMs, nil, 'the course clock still waits for checkpoint 1')
+
+    -- stop and restart
+    local c3 = evoc()
+    CR.stop(c3)
+    H.eq(timerPause[#timerPause], false, 'stop releases a held timer')
+    local c4 = evoc()
+    at(1, c4.state.points[1]); CR.onEvent(c4, 1, { type = 'checkpoint', index = 1 })
+    CR.restart(c4)
+    H.eq(timerPause[#timerPause], true, 'restart holds the timer again until checkpoint 1')
+
+    -- not held: a later objective, timerStart = 'start', or a timer somebody else paused
+    local loc = ctx.location
+    timerPause = {}
+    local c5 = fakeCtx({ obj = CR.defaults({ checkpoints = 'course', stopFor = 0, medals = true }), location = loc, index = 2 })
+    CR.prepare(c5); CR.start(c5)
+    H.eq(#timerPause, 0, 'a medal course after another objective does not hold the timer')
+    local c6 = fakeCtx({ obj = CR.defaults({ checkpoints = 'course', stopFor = 0, medals = true, timerStart = 'start' }), location = loc })
+    CR.prepare(c6); CR.start(c6)
+    H.eq(#timerPause, 0, "timerStart = 'start' does not hold the timer")
+    local c7 = fakeCtx({ obj = CR.defaults({ checkpoints = 'course', stopFor = 0, medals = true }), location = loc })
+    c7.run.timer = { remaining = 240, paused = true }
+    CR.prepare(c7); CR.start(c7)
+    at(1, c7.state.points[1]); CR.onEvent(c7, 1, { type = 'checkpoint', index = 1 })
+    H.eq(#timerPause, 0, 'a timer paused by the test controls is left alone')
 end
 
 do -- undriveable
@@ -623,6 +731,37 @@ do
     H.ok(okE == false and why == 'objective_over', 'events after completion rejected')
 end
 
+do -- the follow-up ("Secure door") also needs the server to see the officer at the door for its time
+    H.clockMs = 1500000
+    local loc = { start = { coords = vec3(200.0, 1000.0, 20.0), radius = 40.0 }, businesses = businesses(12) }
+    local ctx, openN
+    for s2 = 1, 500 do
+        local c = fakeCtx({ obj = IP.defaults(CP.U.deepcopy(businessObj)), location = loc, seed = s2 })
+        IP.prepare(c)
+        for n, p in ipairs(c.state.points) do if p.outcome == 'open' then openN = n end end
+        if openN then ctx = c; break end
+    end
+    IP.start(ctx)
+    local op = ctx.state.points[openN]
+    at(1, op.coords)
+    IP.tick(ctx, 1); advance(5000); IP.tick(ctx, 1)
+    H.eq(IP.onEvent(ctx, 1, { type = 'interact', point = openN, seq = 1 }), true, 'open door checked')
+    at(1, vec3(op.coords.x + 60.0, op.coords.y, op.coords.z))
+    IP.tick(ctx, 1); advance(5000); IP.tick(ctx, 1)
+    at(1, op.coords)
+    local okE, why = IP.onEvent(ctx, 1, { type = 'followup', point = openN, seq = 2 })
+    H.ok(okE == false and why == 'too_quick', 'walking away and back does not count as securing the door')
+    ctx.srcs = { 1, 2 }
+    at(2, vec3(op.coords.x + 80.0, op.coords.y, op.coords.z))
+    IP.tick(ctx, 1); advance(4000); IP.tick(ctx, 1)
+    at(2, op.coords)
+    okE, why = IP.onEvent(ctx, 2, { type = 'followup', point = openN, seq = 1 })
+    H.ok(okE == false and why == 'too_quick', 'a partner who just walked up cannot report the follow-up')
+    H.eq(IP.onEvent(ctx, 1, { type = 'followup', point = openN, seq = 3 }), true, 'secured after 4 s at the door (5 s - tolerance)')
+    H.eq(op.status, 'log', 'waits for the log')
+    ctx.srcs = { 1 }
+end
+
 do -- Secure the scene: one point, 8 s, minSeconds retry
     H.clockMs = 2000000
     local loc = { start = { coords = vec3(0.0, 0.0, 0.0), radius = 80.0 }, scene = vec3(50.0, 50.0, 10.0) }
@@ -696,6 +835,7 @@ do
     H.eq(sp.opts.tag, 'shared:devices', 'device tag')
     H.eq(#ctx.run.shared.devices, 1, 'device shared with the next objective')
     H.eq(ctx.run.shared.devices[1].netId, sp.netId, 'shared device netId')
+    H.eq(ctx.run.shared.devices[1].model, 'prop_ld_bomb', 'shared device carries its model (for re-creation)')
     H.near(ctx.run.shared.devices[1].coords.x, st.points[devices[1]].coords.x, 1e-6, 'shared device coords')
     H.eq(IP.checklist(ctx)[1].value, 1, 'devices checklist 1')
     H.eq(IP.checklist(ctx)[1].max, 2, 'devices checklist of 2')
@@ -819,7 +959,7 @@ local function defuseCtx(opts)
         local c = vec3(i * 10.0, 4000.0, 5.0)
         props[netId * 10] = { netId = netId, coords = c }
         byNet[netId] = netId * 10
-        ctx.run.shared.devices[i] = { netId = netId, coords = c }
+        ctx.run.shared.devices[i] = { netId = netId, coords = c, model = opts.model, heading = opts.heading }
     end
     SC.prepare(ctx)
     SC.start(ctx)
@@ -942,6 +1082,49 @@ do -- timeout: armed devices go off for the host; restart; location targets; no 
     H.eq(#c3.calls.award, 0, 'no bonus without devices')
 end
 
+do -- device props deleted when the search objective ended are re-created (cap respected), same devices
+    local ctx, st = defuseCtx({ devices = 2, model = 'prop_bomb_01', heading = 45.0 })
+    H.eq(#ctx.calls.spawn, 0, 'props that exist are not re-created')
+    byNet[801], byNet[802] = nil, nil   -- the engine deleted objective 1's entities
+    ctx.capOk = false
+    SC.tick(ctx, 1)
+    H.eq(#ctx.calls.spawn, 0, 're-creation waits for the spawn cap')
+    ctx.capOk = true
+    SC.tick(ctx, 1)
+    H.eq(#ctx.calls.spawn, 2, 'both device props re-created')
+    local sp = ctx.calls.spawn[1]
+    H.eq(sp.kind, 'object', 're-created device is an object')
+    H.eq(sp.opts.model, 'prop_bomb_01', 'same model as the search spawned')
+    H.eq(sp.opts.role, 'device', 're-created device role')
+    H.eq(sp.opts.frozen, true, 're-created device is frozen')
+    H.near(sp.opts.coords.w, 45.0, 1e-6, 'heading kept')
+    H.near(sp.opts.coords.x, 10.0, 1e-6, 'at the device coords')
+    H.eq(st.targets[1].netId, sp.netId, 'the target follows the new prop')
+    H.eq(#st.targets, 2, 'no duplicate target for a re-created prop')
+    SC.rescale(ctx); SC.tick(ctx, 1)
+    H.eq(#st.targets, 2, 'still no duplicate after a sync')
+    H.eq(#ctx.calls.spawn, 2, 'nothing more spawned while the props exist')
+    at(1, vec3(10.0, 4000.0, 5.0))
+    for k = 1, 4 do H.eq(round(ctx, 1, 1, k, true), true, 'defusing the re-created device, round ' .. k) end
+    H.eq(st.targets[1].status, 'defused', 're-created device defused')
+    byNet[st.targets[1].netId] = nil
+    SC.tick(ctx, 1)
+    H.eq(#ctx.calls.spawn, 2, 'a defused device is not re-created')
+    -- a model that never spawns: give up after a few tries, the device still works at its coords
+    local c2, s2 = defuseCtx({ devices = 1 })
+    byNet[801] = nil
+    c2.spawnObject = function(opts) c2.calls.spawn[#c2.calls.spawn + 1] = { opts = opts }; return nil, nil end
+    for _ = 1, 6 do SC.tick(c2, 1) end
+    H.eq(#c2.calls.spawn, 3, 'gives up after 3 failed re-creations')
+    H.eq(c2.calls.spawn[1].opts.model, 'prop_ld_bomb', 'default device model')
+    at(1, vec3(10.0, 4000.0, 5.0))
+    H.eq(round(c2, 1, 1, 1, true), true, 'defusing works without the prop')
+    -- location targets have no prop to re-create
+    local c3 = fakeCtx({ obj = SC.defaults({ targets = 'panels' }), location = { panels = { vec3(0.0, 0.0, 0.0) } } })
+    SC.prepare(c3); SC.start(c3); SC.tick(c3, 1)
+    H.eq(#c3.calls.spawn, 0, 'location targets spawn nothing')
+end
+
 do -- a device added to shared.devices later is picked up (rescale/tick)
     local ctx, st = defuseCtx({ devices = 1 })
     props[8990] = { netId = 899, coords = vec3(99.0, 4000.0, 5.0) }
@@ -995,6 +1178,7 @@ end
 local serverImpl = { checkpoint_route = CR, interact_points = IP, skill_check = SC }
 do
     local speeds, blips, zones, removedZones, explosions, sounds = {}, {}, {}, {}, {}, 0
+    local removedDicts = {}
     local nextBlip = 0
     local function newBlip() nextBlip = nextBlip + 1; blips[nextBlip] = true; return nextBlip end
     local stub = {
@@ -1023,6 +1207,7 @@ do
         PlaySoundFrontend = function() sounds = sounds + 1 end,
         TaskPlayAnim = function() end,
         StopAnimTask = function() end,
+        RemoveAnimDict = function(dict) removedDicts[#removedDicts + 1] = dict end,
         AddExplosion = function(x, y, z, kind, damage, audible, invisible, shake)
             explosions[#explosions + 1] = { x = x, y = y, z = z, kind = kind, damage = damage }
         end,
@@ -1127,8 +1312,10 @@ do
     speeds[9001] = 20.0
     local ec = clientCtx(CP.U.deepcopy(eobj))
     ec.state = {}
+    H.eq(lastSend(ectx).course.held, true, 'EVOC server holds the run timer before checkpoint 1')
     CRc.update(ec, lastSend(ectx)); CRc.start(ec)
     steps(1)
+    H.ok(tostring(lastLine(ec)):find('timer starts at checkpoint 1', 1, true) ~= nil, 'HUD says the timer waits: ' .. tostring(lastLine(ec)))
     H.eq(ec.reports[1] and ec.reports[1].index, 1, 'drive-through gate reported at speed')
     serverImpl.checkpoint_route.onEvent(ectx, 1, ec.reports[1])
     CRc.update(ec, lastSend(ectx))
@@ -1144,6 +1331,12 @@ do
     for _, r in ipairs(ec.reports) do if r.type == 'undriveable' then und = r end end
     H.ok(und ~= nil and und.netId == 91, 'undriveable vehicle reported')
     H.ok(tostring(lastLine(ec)):find('Time', 1, true) ~= nil or tostring(lastLine(ec)):find('Contact', 1, true) ~= nil, 'course line on the HUD: ' .. tostring(lastLine(ec)))
+    ec.state.transient = nil
+    local before = #ec.lines
+    steps(5, 100)   -- half a second of frames
+    local line = tostring(lastLine(ec))
+    H.ok(line:find('Time %d+ s') ~= nil and line:find('%d%.%d') == nil, 'running course clock in whole seconds: ' .. line)
+    H.ok(#ec.lines - before <= 2, ('HUD line sent at most once a second (%d updates)'):format(#ec.lines - before))
     CRc.stop(ec)
     vehicles[9001].engine = 1000.0
 
@@ -1162,6 +1355,7 @@ do
     zones[1].options[1].onSelect()
     H.eq(ic.reports[1] and ic.reports[1].type, 'interact', 'progress bar finished -> interact reported')
     H.eq(ic.reports[1].point, 1, 'interact point')
+    H.eq(ic.reports[1].seq, 1, 'interact report carries a sequence number')
     H.eq(lib._lastProgress.duration, 5000, 'progress duration from the objective')
     H.eq(lib._lastProgress.canCancel, true, 'progress can be cancelled')
     H.eq(lib._lastProgress.disable.move, true, 'movement disabled')
@@ -1177,6 +1371,7 @@ do
     H.ok(tostring(lastLine(ic)):find('Secure door', 1, true) ~= nil, 'follow-up hint: ' .. tostring(lastLine(ic)))
     zones[5].options[1].onSelect()
     H.eq(ic.reports[2] and ic.reports[2].type, 'followup', 'follow-up reported')
+    H.eq(ic.reports[2].seq, 2, 'sequence number counts up')
     snap = CP.U.deepcopy(snap)
     snap.points[1].status = 'log'
     snap.log = { point = 1, choices = { { id = 'secure', label = 'Secure' } } }
@@ -1219,12 +1414,23 @@ do
     zones[zbase + 1].options[1].onSelect()
     steps(5)
     H.eq(#kc.reports, 3, 'three rounds reported, stopped at the miss')
+    H.eq(removedDicts[#removedDicts], 'amb@medic@standing@kneel@base', 'the kneel animation dictionary is released after the defuse')
     H.ok(kc.reports[1].index == 1 and kc.reports[1].success == true and kc.reports[3].success == false, 'rounds reported in order')
     skillResults = {}
     zones[zbase + 2].options[1].onSelect()
     steps(5)
     H.eq(kc.reports[4].index, 3, 'a device resumes at its next round')
     H.eq(#kc.reports, 5, 'rounds 3 and 4 of device 2')
+    SCc.update(kc, { kind = 'state', checks = 4, targets = {
+        { coords = { x = 10.0, y = 0.0, z = 0.0 }, netId = 801, status = 'armed', next = 3, streak = 1 },
+        { coords = { x = 20.0, y = 0.0, z = 0.0 }, netId = 802, status = 'defused', next = 5, streak = 0 },
+    } })
+    skillResults = { false }
+    zones[zbase + 1].options[1].onSelect()
+    steps(5)
+    local m1, m2 = kc.reports[3], kc.reports[6]
+    H.ok(m1.index == m2.index and m1.success == false and m2.success == false and m1.seq ~= m2.seq,
+        'two misses in a row on the same round are distinct reports (seq)')
     SCc.update(kc, { kind = 'explode', target = 1, coords = { x = 10.0, y = 0.0, z = 0.0 }, by = 1, effect = true })
     H.eq(#explosions, 1, 'the reporting participant plays the explosion')
     H.eq(explosions[1].damage, 0.0, 'explosion damage scale 0')
@@ -1233,6 +1439,54 @@ do
     SCc.hostChanged(kc, false)
     SCc.stop(kc)
     H.ok(removedZones[zbase + 1] and removedZones[zbase + 2], 'stop removes the defuse zones')
+
+    -- The engine may hand every hook a fresh ctx (and ctx.state): each block keeps one state per run/objective.
+    local function fresh(base)
+        local c = {}
+        for k, v in pairs(base) do c[k] = v end
+        c.state = {}
+        return c
+    end
+    do
+        local z0 = #zones
+        local fc = clientCtx(CP.U.deepcopy(iobj))
+        fc.runId = 'run-fresh'
+        IPc.prepare(fresh(fc))
+        IPc.update(fresh(fc), lastSend(ictx))   -- snapshot before start, as the engine may deliver it
+        IPc.start(fresh(fc))
+        H.eq(#zones - z0, 4, 'fresh ctx.state per hook: the pending snapshot still registers the zones')
+        zones[z0 + 1].options[1].onSelect()
+        H.eq(fc.reports[1] and fc.reports[1].type, 'interact', 'fresh ctx.state per hook: targets work')
+        IPc.stop(fresh(fc))
+        local gone = true
+        for id = z0 + 1, #zones do if not removedZones[id] then gone = false end end
+        H.ok(gone, 'fresh ctx.state per hook: stop removes every zone')
+        H.eq(openBlips(), 0, 'fresh ctx.state per hook: stop removes the blips')
+
+        local cf = clientCtx(CP.U.deepcopy(sobj))
+        cf.runId = 'run-fresh'
+        H.players[1] = { coords = vec3(2000.0, 0.0, 30.0), vehicle = 9001 }
+        CRc.prepare(fresh(cf)); CRc.update(fresh(cf), lastSend(sctx)); CRc.start(fresh(cf))
+        H.eq(openBlips(), 2, 'checkpoint_route with fresh ctx.state: blips shown')
+        CRc.update(fresh(cf), lastSend(sctx))
+        H.eq(openBlips(), 2, 'a later snapshot reaches the same state')
+        CRc.stop(fresh(cf))
+        H.eq(openBlips(), 0, 'checkpoint_route with fresh ctx.state: stop removes the blips')
+        local n = #cf.reports
+        steps(10)
+        H.eq(#cf.reports, n, 'checkpoint_route loop ended')
+
+        local z1 = #zones
+        local kf = clientCtx(CP.U.deepcopy(kobj), { index = 2 })
+        kf.runId = 'run-fresh'
+        SCc.prepare(fresh(kf)); SCc.start(fresh(kf))
+        SCc.update(fresh(kf), { kind = 'state', checks = 4, targets = {
+            { coords = { x = 10.0, y = 0.0, z = 0.0 }, netId = 801, status = 'armed', next = 1, streak = 0 },
+        } })
+        H.eq(#zones - z1, 1, 'skill_check with fresh ctx.state: zone added after start')
+        SCc.stop(fresh(kf))
+        H.ok(removedZones[z1 + 1] == true, 'skill_check with fresh ctx.state: stop removes the zone')
+    end
 
     setmetatable(_G, nil)
 end

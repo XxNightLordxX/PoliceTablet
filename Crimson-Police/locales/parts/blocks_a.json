@@ -5,6 +5,7 @@
   "block.checkpoint_route.fail_undriveable": "Your vehicle is no longer driveable",
   "block.checkpoint_route.hud.progress": "Checkpoint {n} of {total}",
   "block.checkpoint_route.hud.course_time": "Time {time} s (+{penalty} s)",
+  "block.checkpoint_route.hud.timer_waits": "The timer starts at checkpoint 1",
   "block.checkpoint_route.hud.next_street": "Next: {street}, {zone}",
   "block.checkpoint_route.hud.hold": "Hold still: {seconds} s",
   "block.checkpoint_route.hud.hold_done": "Checkpoint cleared",

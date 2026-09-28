@@ -2,8 +2,10 @@
 -- gang_shootout, hostage_rescue, bomb_disposal, armored_truck_escort, prison_break and
 -- weekly_boss_kingpin. Each file is run in the mission loader's sandbox and checked against the
 -- mission catalog, its mission card, ARCHITECTURE §3.3 (objective fields, location keys) and the
--- built-in guardrails (location count and spacing, no-build zones, 30 m from the start, spawn counts,
--- road routes, the armed-NPC budget, bonus ids, no payout field). The objectives are then run through
+-- built-in guardrails (location count and spacing, map bounds, no-build zones for points and route
+-- segments, 30 m from the start, points of a location kept together, heights, headings facing the
+-- approach, spawn counts, contiguous road / escape / flee routes, the armed-NPC budget, bonus ids, no
+-- payout field). The objectives are then run through
 -- the real blocks' defaults/validate (for the blocks that exist) and through CP.Missions.normalize.
 -- Run it on its own to see the report lines (sizes, route lengths, nearest distances):
 --   cd /home/user/PoliceTablet && lua5.4 tests/run.lua missions_b
@@ -253,6 +255,40 @@ local NOT_PLACED = { label = true, start = true, center = true, route = true, ro
 local ZONES = Config.Builder.noBuildZones
 local PRISON_MIDDLE = vec3(1693.33, 2569.51, 45.55)   -- stock qb-prison middle point (reference, see INTEGRATIONS)
 
+-- GTA V map bounds (Los Santos and Blaine County, land and coast)
+local MAP = { minX = -4000, maxX = 4600, minY = -4200, maxY = 8000, minZ = 0.5, maxZ = 900 }
+-- Points of one location stay together: every placed point within NEAR m (2D) of its start, except
+-- the keys a card spreads further (the manhunt circle, the escort road route, prison escape routes).
+local NEAR = 150.0
+local FAR_KEYS = {
+    manhunt              = { clues = true, hiding = true },           -- inside the 600 m circle (checked below)
+    armored_truck_escort = { route = true, ambushPoints = true },     -- along the road route (checked below)
+    prison_break         = { routes = true },                         -- escape routes into the countryside (checked below)
+}
+-- Heights: every point within this many metres of its start's z (a typo'd or wildly wrong z shows up).
+local DZ_NEAR, DZ_FAR = 8.0, 25.0
+-- Route-like lists: no jump between consecutive points over this many metres.
+local MAX_JUMP = 250.0
+-- Hostile spawn keys whose heading must face the approach (within FACE_MAX degrees of the start).
+local FACE_KEYS = { spawns = true, associates = true, boss = true }
+local FACE_MAX = 90.0
+
+-- Angle (degrees) between a vec4's heading (GTA: forward = (-sin h, cos h)) and the direction to target.
+local function facingError(p, target)
+    local fx, fy = -math.sin(math.rad(p.w)), math.cos(math.rad(p.w))
+    local tx, ty = target.x - p.x, target.y - p.y
+    local l = math.sqrt(tx * tx + ty * ty)
+    if l < 0.01 then return 0 end
+    return math.deg(math.acos(math.max(-1, math.min(1, (fx * tx + fy * ty) / l))))
+end
+
+-- Largest gap between consecutive points of a list.
+local function maxJump(pts)
+    local m = 0
+    for i = 2, #pts do m = math.max(m, d2(pts[i - 1], pts[i])) end
+    return m
+end
+
 -- ── armed NPCs before scaling (Mission Builder rules) ────────────────────────
 local function armedOf(obj)
     if obj.block == 'hostile_waves' then
@@ -339,13 +375,28 @@ local function checkMission(id)
             nVec = nVec + 1
             H.ok(type(v.x) == 'number' and type(v.y) == 'number' and type(v.z) == 'number' and v.x == v.x and v.y == v.y and v.z == v.z,
                 id .. ': numeric vector at ' .. path)
-            H.ok(v.x > -4200 and v.x < 4600 and v.y > -4200 and v.y < 8200 and v.z > 0.5 and v.z < 900, id .. ': on the map at ' .. path)
+            H.ok(v.x >= MAP.minX and v.x <= MAP.maxX and v.y >= MAP.minY and v.y <= MAP.maxY and v.z > MAP.minZ and v.z < MAP.maxZ,
+                ('%s: on the map at %s (%.1f, %.1f, %.1f)'):format(id, path, v.x, v.y, v.z))
             if v.w ~= nil then H.ok(v.w >= 0 and v.w < 360, id .. ': heading 0-360 at ' .. path) end
             for _, z in ipairs(ZONES) do
                 local d = d2(v, z.coords)
                 H.ok(d > z.radius, ('%s: %s is %.0f m from %s (no-build radius %.0f)'):format(id, path, d, z.label, z.radius))
             end
         end)
+    end
+
+    -- route-like lists (road routes, escape routes, flee paths): no segment cuts through a no-build zone
+    for li, loc in ipairs(locs) do
+        local paths = {}
+        if type(loc.route) == 'table' and isList(loc.route.points) then paths[#paths + 1] = { 'route', loc.route.points } end
+        if isList(loc.routes) then for r, pts in ipairs(loc.routes) do paths[#paths + 1] = { 'routes.' .. r, pts } end end
+        if isList(loc.fleeTo) then paths[#paths + 1] = { 'fleeTo', loc.fleeTo } end
+        for _, pth in ipairs(paths) do
+            for _, z in ipairs(ZONES) do
+                local d = distToPolyline(z.coords, pth[2])
+                H.ok(d > z.radius, ('%s: location %d %s passes %.0f m from %s (no-build radius %.0f)'):format(id, li, pth[1], d, z.label, z.radius))
+            end
+        end
     end
 
     -- placed points 30 m+ from the start (hostile spawns always; every other ped/prop/marker too)
@@ -362,6 +413,32 @@ local function checkMission(id)
                         H.ok(d3(p, s) >= Config.Builder.minSpawnFromStart, ('%s: location %d hostile %s is %.1f m from the start (30 m+)'):format(id, li, path, d))
                     end
                     H.ok(d >= Config.Builder.minSpawnFromStart, ('%s: location %d %s is %.1f m from the start (30 m+)'):format(id, li, path, d))
+                end)
+            end
+        end
+    end
+
+    -- points of one location together, heights consistent, hostiles facing the approach
+    local far, dzMax = 0, 0
+    for li, loc in ipairs(locs) do
+        local s = loc.start.coords
+        local farKeys = FAR_KEYS[id] or {}
+        for k, v in pairs(loc) do
+            if k ~= 'label' and k ~= 'start' then
+                eachVec(v, k, function(p, path)
+                    local d = d2(p, s)
+                    if not farKeys[k] then
+                        far = math.max(far, d)
+                        H.ok(d <= NEAR, ('%s: location %d %s is %.0f m from the start (within %.0f m)'):format(id, li, path, d, NEAR))
+                    end
+                    local dz = math.abs(p.z - s.z)
+                    dzMax = math.max(dzMax, dz)
+                    local limit = farKeys[k] and DZ_FAR or DZ_NEAR
+                    H.ok(dz <= limit, ('%s: location %d %s is %.1f m above/below the start (within %.0f m)'):format(id, li, path, dz, limit))
+                    if FACE_KEYS[k] and p.w ~= nil then
+                        local e = facingError(p, s)
+                        H.ok(e <= FACE_MAX, ('%s: location %d %s faces %.0f deg away from the approach (within %.0f)'):format(id, li, path, e, FACE_MAX))
+                    end
                 end)
             end
         end
@@ -436,8 +513,8 @@ local function checkMission(id)
     checkEntries(def.bonuses, BONUSES[id], 'bonus', 1)
     checkEntries(def.penalties, PENALTIES[id], 'penalty', -1)
 
-    report('%-21s %d locations, %d vectors, nearest location gap %.0f m, nearest point to a start %.1f m (hostile %.1f m), %d armed',
-        id, #locs, nVec, minGap, nearest, nearestHostile, armed)
+    report('%-21s %d locations, %d vectors, nearest location gap %.0f m, nearest point to a start %.1f m (hostile %.1f m), farthest %.0f m, max dz %.1f m, %d armed',
+        id, #locs, nVec, minGap, nearest, nearestHostile, far, dzMax, armed)
     return def
 end
 
@@ -471,6 +548,9 @@ do
         H.ok(#loc.fleeTo >= 3, ('warrant: location %d has 3+ fleeTo points'):format(li))
         H.ok(d2(loc.suspect, loc.door) <= 3, ('warrant: location %d suspect at the door'):format(li))
         H.ok(d2(loc.door, loc.start.coords) <= loc.start.radius, ('warrant: location %d door within the 50 m start'):format(li))
+        H.ok(facingError(loc.door, loc.start.coords) <= 90, ('warrant: location %d door heading faces out, towards the street'):format(li))
+        H.ok(d2(loc.fleeTo[1], loc.door) <= 50, ('warrant: location %d flee path starts at the house'):format(li))
+        H.ok(maxJump(loc.fleeTo) <= MAX_JUMP, ('warrant: location %d flee path has no jump over %.0f m'):format(li, MAX_JUMP))
         -- fleeTo leads away from the front: each point further from the start than the door
         local prev = d2(loc.door, loc.start.coords)
         for k, p in ipairs(loc.fleeTo) do
@@ -598,15 +678,13 @@ do
         local ends = d2(pts[1], pts[#pts])
         H.ok(ends >= R.minStartEndGap, ('truck: route %d start and end %.0f m apart (300 m+)'):format(li, ends))
         H.ok(d2(loc.start.coords, pts[1]) < 1, ('truck: route %d starts at the depot (the start)'):format(li))
-        local maxGap, over = 0, 0
+        local maxGap = 0
         for i = 2, #pts do
             local g = d2(pts[i - 1], pts[i])
             maxGap = math.max(maxGap, g)
-            if g > R.maxGap then over = over + 1 end
-            H.ok(g <= 200, ('truck: route %d waypoint gap %d is %.0f m'):format(li, i, g))
+            H.ok(g <= R.maxGap, ('truck: route %d waypoint gap %d is %.0f m (a waypoint every %.0f m)'):format(li, i, g, R.maxGap))
             H.ok(g >= 5, ('truck: route %d no duplicate waypoints'):format(li))
         end
-        if over > 0 then report('route %d: %d waypoint gaps over %.0f m (straight road)', li, over, R.maxGap) end
         H.ok(#loc.ambushPoints >= Config.Blocks.escort.ambushPoints[3], ('truck: route %d has 5+ ambush points'):format(li))
         for i, a in ipairs(loc.ambushPoints) do
             H.ok(distToPolyline(a, pts) <= 15, ('truck: route %d ambush point %d is on the route'):format(li, i))
@@ -662,6 +740,10 @@ do
         end
         for r, route in ipairs(loc.routes) do
             H.ok(#route >= 3, ('prison: location %d route %d has 3+ points'):format(li, r))
+            local fromSpawn = math.huge
+            for _, sp in ipairs(loc.spawns) do fromSpawn = math.min(fromSpawn, d2(route[1], sp)) end
+            H.ok(fromSpawn <= 100, ('prison: location %d route %d starts at the breakout (%.0f m from a spawn)'):format(li, r, fromSpawn))
+            H.ok(maxJump(route) <= MAX_JUMP, ('prison: location %d route %d has no jump over %.0f m'):format(li, r, MAX_JUMP))
             local first, lastP = route[1], route[#route]
             H.ok(d2(lastP, PRISON_MIDDLE) > d2(first, PRISON_MIDDLE) + 150, ('prison: location %d route %d heads away from the prison'):format(li, r))
         end

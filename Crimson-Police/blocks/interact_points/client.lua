@@ -9,13 +9,16 @@
     (ctx.hudDetail). Small markers within 40 m; blips per point (hidden search: one area blip);
     no blips under Radio Silence. Only participants' clients register targets. No networked entities
     are created here and there are no NPCs (hostChanged only records the flag).
+    The block's client state is kept per run and objective in this file (stateOf), so it also works
+    when the engine hands every hook a fresh ctx.state table.
 
   Objective fields read
     target { label, icon, radius [1.5] } · progress { label, duration (ms), anim } · hidden { label }
     · label (blip text fallback). Outcomes, follow-ups and the log come from the server snapshot.
   Evidence sent (ctx.report)
-    { type = 'interact', point }   the main action's progress bar finished at that point
-    { type = 'followup', point }   the follow-up action's progress bar finished
+    { type = 'interact', point, seq }   the main action's progress bar finished at that point
+    { type = 'followup', point, seq }   the follow-up action's progress bar finished
+        (seq counts this client's reports, so a retry after a rejected report is never an exact duplicate)
     ('log' is sent by the tablet's Active Mission screen, not by this file)
   Bonuses / penalties: none on the client (the server records correct_log, wrong_log, fastBonus.id).
 ]]
@@ -34,7 +37,31 @@ local ANIMS = {
     mechanic  = { dict = 'mini@repair', clip = 'fixing_a_ped', flag = 1 },
 }
 
-local live = {}   -- [state] = ctx, for resource-stop cleanup
+local live = {}     -- [state] = ctx, for resource-stop cleanup
+local states = {}   -- ['<runId>:<index>'] = state, one per objective across every hook call
+
+local function keyOf(ctx)
+    return tostring(ctx.runId) .. ':' .. tostring(ctx.index)
+end
+
+local function stateOf(ctx)
+    local key = keyOf(ctx)
+    local st = states[key]
+    if not st then
+        st = type(ctx.state) == 'table' and ctx.state or {}
+        st.runKey = tostring(ctx.runId)
+        states[key] = st
+    end
+    return st
+end
+
+-- Drop the states of other runs that are no longer running (late snapshots after a stop).
+local function purge(ctx)
+    local run = tostring(ctx.runId)
+    for key, st in pairs(states) do
+        if st.runKey ~= run and not st.alive then states[key] = nil end
+    end
+end
 
 local function v3(t)
     return vector3((t.x or 0.0) + 0.0, (t.y or 0.0) + 0.0, (t.z or 0.0) + 0.0)
@@ -172,7 +199,8 @@ local function interact(ctx, st, n, kind, duration, label)
     })
     st.busy = false
     if ok and st.alive then
-        ctx.report({ type = (kind == 'main') and 'interact' or 'followup', point = n })
+        st.seq = (st.seq or 0) + 1
+        ctx.report({ type = (kind == 'main') and 'interact' or 'followup', point = n, seq = st.seq })
     end
 end
 
@@ -311,17 +339,20 @@ local function cleanup(ctx, st)
         ctx.hudDetail(nil)
     end
     live[st] = nil
+    if states[keyOf(ctx)] == st then states[keyOf(ctx)] = nil end
 end
 
 CP.Blocks.register(BLOCK, {
     prepare = function(ctx)
-        local st = ctx.state
+        purge(ctx)
+        local st = stateOf(ctx)
         st.zones = st.zones or {}
         st.blips = st.blips or {}
     end,
 
     start = function(ctx)
-        local st = ctx.state
+        purge(ctx)
+        local st = stateOf(ctx)
         st.zones = st.zones or {}
         st.blips = st.blips or {}
         st.alive = true
@@ -337,17 +368,19 @@ CP.Blocks.register(BLOCK, {
 
     update = function(ctx, data)
         if type(data) ~= 'table' or data.kind ~= 'state' then return end
-        local st = ctx.state
+        local st = stateOf(ctx)
+        st.zones = st.zones or {}
+        st.blips = st.blips or {}
         if st.alive then apply(ctx, st, data) else st.pending = data end
     end,
 
     -- No NPCs in this block: nothing to re-task when the host changes.
     hostChanged = function(ctx, isHost)
-        ctx.state.isHost = isHost == true
+        stateOf(ctx).isHost = isHost == true
     end,
 
     stop = function(ctx)
-        cleanup(ctx, ctx.state)
+        cleanup(ctx, stateOf(ctx))
     end,
 })
 

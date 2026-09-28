@@ -8,8 +8,9 @@
 --     or test runs. The effects are applied by the engine (CP.Runs / CP.Scaling / blocks).
 --   * Weekly Boss availability: enabled, the reset-adjusted weekday is in Config.Events.weeklyBoss.days,
 --     hidden while a Cross-Department Mission is active, once per officer per week (any
---     weekly_boss_kingpin row since the week start, except end_reason real_call / force_recall /
---     cancelled), and the Weekly Boss card of the Mission Board (BoardCard & { available }).
+--     weekly_boss_kingpin row since the reset of the week's first boss day, except end_reason
+--     real_call / force_recall / cancelled), and the Weekly Boss card of the Mission Board
+--     (BoardCard & { available }; locked by the hourly cap too, which the boss counts toward).
 --
 -- Public API (server)
 --   CP.Events.typeOfTheDay(dayKey?) -> typeKey|nil
@@ -24,6 +25,9 @@
 --
 -- Contract interpretations (details in docs/notes/engine_a.md)
 --   * voided boss rows still use the week's attempt; bossAvailable also refuses during an operation
+--   * the attempt window starts at the reset of the week's first boss day (Friday by default), not at
+--     the week start: rows are written when a run ends, so a boss run accepted on Sunday night that ends
+--     after Monday's reset belongs to last week and must not use up this week's attempt
 --   * bossCard.available = the unit may take this week's attempt (busy/onCall are separate flags);
 --     typeOfTheDay is true when the Type of the Day is tactical
 --   * rollModifier uses CP.U.rng(CP.U.hash(run.seed .. ':modifier'))
@@ -72,12 +76,25 @@ local function weekKeyNow()
     return os.date('%Y-%m-%d', weekStartNow())
 end
 
-local function isBossDay()
-    local today = weekdayNow()
+local function isBossWeekday(name)
     for _, d in ipairs(bossCfg().days or {}) do
-        if tostring(d):lower() == today then return true end
+        if tostring(d):lower() == name then return true end
     end
     return false
+end
+
+local function isBossDay()
+    return isBossWeekday(weekdayNow())
+end
+
+local function hourlyCap()
+    return tonumber(Config.Limits and Config.Limits.maxCompletionsHour) or 8
+end
+
+local function completionsLastHour(citizenid)
+    if not (CP.Runs and CP.Runs.completionsLastHour) then return 0 end
+    local ok, n = pcall(CP.Runs.completionsLastHour, citizenid)
+    return ok and tonumber(n) or 0
 end
 
 local function operationLocked()
@@ -96,14 +113,31 @@ local function bossDef()
     return def
 end
 
+
+-- Start of this week's attempt window: the reset of the week's first boss day. A run row is written
+-- when the run ends, so a boss run accepted late on the last boss day of last week (Sunday) and ended
+-- after the weekly reset has a row dated this week; it belongs to last week's attempt and must not use
+-- up this week's. With a boss day on the week's first day the window starts at the week start itself.
+local function attemptWindowStart()
+    local weekStart = weekStartNow()
+    if not (CP.Schedule and CP.Schedule.dayStart and CP.Schedule.weekday) then return weekStart end
+    for i = 0, 6 do
+        local probe = weekStart + i * 86400 + 7200   -- 2 h into the day: safe across DST changes
+        if isBossWeekday(CP.Schedule.weekday(probe)) then
+            return i == 0 and weekStart or CP.Schedule.dayStart(probe)
+        end
+    end
+    return weekStart
+end
+
 -- True when this officer already used this week's attempt.
 local function usedThisWeek(citizenid)
     local weekKey = weekKeyNow()
     if usedCache[citizenid] == weekKey then return true end
     CP.Migrations.ready()
     local n = MySQL.scalar.await(
-        "SELECT COUNT(*) AS n FROM cp_mission_runs WHERE citizenid = ? AND mission_id = ? AND created_at >= FROM_UNIXTIME(?) AND end_reason NOT IN (?, ?, ?)",
-        { citizenid, BOSS_ID, weekStartNow(), BOSS_EXEMPT_REASONS[1], BOSS_EXEMPT_REASONS[2], BOSS_EXEMPT_REASONS[3] })
+        "SELECT COUNT(*) AS n FROM cp_mission_runs WHERE citizenid = ? AND mission_type = 'tactical' AND mission_id = ? AND created_at >= FROM_UNIXTIME(?) AND end_reason NOT IN (?, ?, ?)",
+        { citizenid, BOSS_ID, attemptWindowStart(), BOSS_EXEMPT_REASONS[1], BOSS_EXEMPT_REASONS[2], BOSS_EXEMPT_REASONS[3] })
     if CP.U.num(n) > 0 then
         usedCache[citizenid] = weekKey
         return true
@@ -261,6 +295,21 @@ function Events.bossCard(src)
                 end
             else
                 locked = { reason = CP.L('board.boss_not_eligible') }
+            end
+        end
+    end
+
+    -- The boss counts toward the hourly cap (Mission cards: Weekly Boss): the accept refuses it then.
+    if not locked then
+        local max = hourlyCap()
+        for _, o in ipairs(officers) do
+            if completionsLastHour(o.citizenid) >= max then
+                if o.src == src then
+                    locked = { reason = CP.L('board.locked_hourly', { max = max }) }
+                else
+                    locked = { reason = CP.L('board.locked_hourly_member', { name = o.name or '?', max = max }) }
+                end
+                break
             end
         end
     end

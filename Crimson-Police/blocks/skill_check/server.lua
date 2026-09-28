@@ -9,6 +9,11 @@
     participant who missed; damage scale 0) and the run fails for everyone. Done when every target is
     defused; no_missed_checks when nobody missed a round. One participant works a target at a time
     (the lock frees itself after 15 s without a round). Powers Bomb Disposal's defusing.
+    Device props: the search objective spawned them, and the engine may delete an objective's entities
+    when that objective ends (ARCHITECTURE §7.1 stop). While this objective runs, an armed device whose
+    prop no longer exists is spawned again here (same model, coords and heading from run.shared.devices,
+    role 'device', frozen; it waits for ctx.canSpawn like any spawn). Distances always fall back to the
+    device's recorded coords, so defusing never depends on the prop.
 
   Objective fields read (defaults: ARCHITECTURE §3.3 and Config.Blocks.skill_check)
     targets      'shared:devices' (devices found by an earlier interact_points hidden search) or a
@@ -24,6 +29,7 @@
     { type = 'check', target, index, success }   one round: index must be the target's next round,
                                                  the reporter within 5 m of the target (server coords)
 
+  Evidence may also carry seq (the client's report counter); it is not used here.
   Messages sent (ctx.send): { kind = 'state', targets, checks } after every change;
     { kind = 'explode', target, coords, by, effect } when a target goes off (by = reporting src, or the
     run host when the timer runs out)
@@ -38,6 +44,8 @@ local REACH        = 5.0      -- metres from the target (zone radius + interacti
 local LOCK_MS      = 15000    -- another participant may take over a target after this long idle
 local MIN_ROUND_MS = 250      -- rounds from one participant closer than this are rejected
 local ICON         = 'fa-solid fa-bomb'
+local DEVICE_PROP  = 'prop_ld_bomb'   -- model for a re-created device prop when the shared entry has none
+local SPAWN_TRIES  = 3        -- failed re-creations of one prop before giving up (coords still work)
 
 local function cfg() return Config.Blocks[BLOCK] end
 local function now() return GetGameTimer() end
@@ -98,8 +106,15 @@ local function resolvePoints(key, location)
     return out
 end
 
-local function newTarget(coords, netId)
-    return { coords = vec3Of(coords), netId = netId, status = 'armed', next = 1, streak = 0, misses = 0 }
+-- shared = the netId the device had in run.shared.devices (its identity; netId may change when the
+-- prop is re-created), model/heading for that re-creation.
+local function newTarget(coords, netId, extra)
+    extra = type(extra) == 'table' and extra or {}
+    return {
+        coords = vec3Of(coords), netId = netId, shared = netId,
+        model = type(extra.model) == 'string' and extra.model or nil, heading = tonumber(extra.heading),
+        status = 'armed', next = 1, streak = 0, misses = 0,
+    }
 end
 
 local function ensure(ctx)
@@ -125,17 +140,46 @@ local function sync(ctx, st)
     if type(devs) ~= 'table' then return false end
     local have = {}
     for _, t in ipairs(st.targets) do
-        if t.netId then have[t.netId] = true end
+        if t.shared then have[t.shared] = true end
     end
     local added = false
     for _, d in ipairs(devs) do
         if type(d) == 'table' and d.netId and not have[d.netId] and isVec(d.coords) then
-            st.targets[#st.targets + 1] = newTarget(d.coords, d.netId)
+            st.targets[#st.targets + 1] = newTarget(d.coords, d.netId, d)
             have[d.netId] = true
             added = true
         end
     end
     return added
+end
+
+local function entityGone(netId)
+    if not netId then return true end
+    local ent = NetworkGetEntityFromNetworkId(netId)
+    return not ent or ent == 0 or not DoesEntityExist(ent)
+end
+
+-- Re-create the prop of every armed shared device whose entity is gone. Returns true when it spawned any.
+local function restoreProps(ctx, st)
+    local changed = false
+    for _, t in ipairs(st.targets) do
+        if t.shared and t.status == 'armed' and (t.spawnFails or 0) < SPAWN_TRIES and entityGone(t.netId) then
+            if not ctx.canSpawn(1, false) then break end   -- cap reached: wait, retried next tick
+            local coords = t.coords
+            if t.heading then coords = vector4(t.coords.x, t.coords.y, t.coords.z, t.heading + 0.0) end
+            local _, netId = ctx.spawnObject({ model = t.model or DEVICE_PROP, coords = coords, role = 'device', tag = SHARED, frozen = true })
+            if netId then
+                t.netId = netId
+                changed = true
+            else
+                t.spawnFails = (t.spawnFails or 0) + 1
+                if t.spawnFails >= SPAWN_TRIES then
+                    CP.warn('blocks', 'skill_check: could not re-create device prop %s; the device stays at its coords', tostring(t.model or DEVICE_PROP))
+                end
+            end
+        end
+    end
+    return changed
 end
 
 local function targetCoords(t)
@@ -332,6 +376,7 @@ CP.Blocks.register(BLOCK, {
     start = function(ctx)
         local st = ensure(ctx)
         sync(ctx, st)
+        restoreProps(ctx, st)
         st.resent = false
         if #st.targets == 0 then
             CP.warn('blocks', 'skill_check: objective %s started with no targets', tostring(ctx.index))
@@ -343,6 +388,7 @@ CP.Blocks.register(BLOCK, {
         local st = ensure(ctx)
         if st.completed or st.failed then return end
         local changed = sync(ctx, st)
+        if restoreProps(ctx, st) then changed = true end
         if not st.resent then
             st.resent = true
             changed = true

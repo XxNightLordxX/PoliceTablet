@@ -128,7 +128,6 @@ RegisterMission({
       block      = 'hostile_waves',
       label      = 'Neutralise the hostage takers',
       minSeconds = 30,
-      spawns     = 'spawns',
       waves      = { 4 },                                        -- one wave of 4 inside, scaled by tier
       weapons    = { 'WEAPON_PISTOL', 'WEAPON_MICROSMG' },
       accuracy   = 25,                                           -- plus the tier's accuracy

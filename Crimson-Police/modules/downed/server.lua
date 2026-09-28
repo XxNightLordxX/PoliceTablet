@@ -3,7 +3,8 @@
 --
 -- Owns: the downed poll, the Failed result for a participant who goes down (end_reason 'downed'), the free
 -- NPC pick-up when no EMS is on duty, the EMS request when EMS is on duty, the server -> client events
--- client:pickup (runId, dropOff vector3) and client:requestEMS (runId), and the plain net event
+-- client:pickup (runId, dropOff vector3), client:pickupCancel (runId) (a pick-up already sent was cancelled
+-- on the server: in the arena, recovered, unload) and client:requestEMS (runId), and the plain net event
 -- server:pickupDone (runId, ok) the client sends when the pick-up has finished (ok = false: it gave up).
 --
 -- Public API
@@ -16,18 +17,19 @@
 -- Flow (every Config.Downed.checkEvery s, active participants of every run that has not ended; in-arena
 -- srcs are skipped):
 --   CP.Qbx.isDowned(src) (metadata isdead / inlaststand; sc-ambulance resurrects the ped, so ped death is not
---   used) -> once per participant per run: run.stats.downs + 1, CP.Alerts.hold(src) (the flag stays),
---   CP.Runs.removeParticipant(run, src, 'downed', { keepFlag = true }), then:
+--   used) -> once per participant per run: CP.Alerts.hold(src) (the flag stays), CP.Runs.removeParticipant
+--   (run, src, 'downed', { keepFlag = true }), run.stats.downs + 1 (only when the engine did not already
+--   count it inside removeParticipant), then:
 --   * no EMS (CP.Ambulance.doctorCount() == 0): toast downed.pickup_soon; after Config.Downed.pickupDelay s
 --     re-check (still downed, not in the arena, still no EMS) -> client:pickup (runId, the nearest
 --     Config.Downed.dropOffs point to the server-side ped) -> ~1.5 s for the fade -> re-check -> CP.Ambulance
 --     .revive(src) -> server:pickupDone from the client (or 30 s) -> CP.Alerts.clear(src). No pick-up bill
 --     (hospital:client:Revive never bills).
---   * EMS on duty: CP.Alerts.clear(src) at once; if our flag was on when they went down (sc-ambulance then
---     suppressed its own automatic EMS alert), wait until 11 s after CP.Alerts.foreignClearedAt(src) if that
---     is recent (sc-ambulance drops EMS requests for 10 s after an arena exit), re-check, then
---     client:requestEMS (runId) exactly once. Without our flag sc-ambulance's own automatic alert has already
---     gone out, so no second request is sent.
+--   * EMS on duty: CP.Alerts.clear(src) at once. If our flag was on when they went down (so sc-ambulance
+--     suppressed its own automatic EMS alert): wait until 11 s after the last arena exit
+--     (CP.Alerts.foreignClearedAt[src]; sc-ambulance drops EMS requests for 10 s after one), re-check, then
+--     client:requestEMS (runId) exactly once. Without our flag sc-ambulance's own automatic alert has
+--     already gone out, so no second request is sent.
 --   A failed re-check cancels the pick-up / request and clears our flag. Each downed participant has one
 --   entry per run, so nothing fires twice (also when the 2 s poll still sees metadata "down" right after the
 --   revive). A disconnect (playerDropped) or character unload (CP.Qbx.onPlayerUnload) cancels it.
@@ -159,10 +161,16 @@ end
 
 local function cancelEntry(src, e, reason)
     if not PENDING[e.stage] then return false end
+    local clientBusy = e.stage == 'pickup' or e.stage == 'revived'
     e.stage = 'cancelled'
     e.cancelReason = reason
     CP.log(TAG, 'downed follow-up of %d cancelled (%s)', src, tostring(reason))
     releaseFlag(src)
+    -- client:pickup was already sent: tell the client to stop (it fades back in and never teleports),
+    -- unless it is the client itself that gave up.
+    if clientBusy and reason ~= 'client_abort' then
+        TriggerClientEvent(CP.e('client:pickupCancel'), src, e.runId)
+    end
     return true
 end
 
@@ -189,7 +197,7 @@ local function emsPath(src, e)
         notify(src, 'info', 'downed.ems_on_duty')
         return
     end
-    local cleared = alerts('foreignClearedAt', src)
+    local cleared = CP.Alerts and type(CP.Alerts.foreignClearedAt) == 'table' and CP.Alerts.foreignClearedAt[src] or nil
     if type(cleared) == 'number' then
         local waitS = cleared + EMS_GAP_S - os.time()
         if waitS > 0 then Wait(waitS * 1000) end
@@ -244,7 +252,11 @@ local function ensureRunEnds(run)
 end
 
 local function process(run, src, e)
+    run.stats = run.stats or {}
+    local downsBefore = tonumber(run.stats.downs) or 0
     runsCall('removeParticipant', run, src, 'downed', { keepFlag = true })
+    -- run.stats.downs + 1 for this down, unless the engine already counted it inside removeParticipant.
+    if (tonumber(run.stats.downs) or 0) <= downsBefore then run.stats.downs = downsBefore + 1 end
     ensureRunEnds(run)
     if not current(src, e) then return end
     if doctorCount() > 0 then
@@ -264,8 +276,6 @@ local function onDowned(run, src)
     }
     entries[src] = e
     alerts('hold', src, true)                      -- keepFlag: the flag stays until the pick-up / EMS request
-    run.stats = run.stats or {}
-    run.stats.downs = (tonumber(run.stats.downs) or 0) + 1
     CP.log(TAG, '%d went down on run %s (flag %s)', src, tostring(run.id), tostring(e.flagged))
     CreateThread(function()
         local ok, err = pcall(process, run, src, e)

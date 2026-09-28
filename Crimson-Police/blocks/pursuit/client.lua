@@ -12,10 +12,11 @@
       (ctx.hudDetail): follow progress / lost countdown, escape countdown, lights hint, stop and
       detain progress, aim hint.
     - on the run host only: CP.Npc.apply once it has control of each suspect, seats them, locks the
-      car, then drives: CP.Npc.task(driver, 'driveRoute', { vehicle, points, loop, speed (m/s),
-      drivingStyle, style, stopRange }) from the next waypoint of the route (a loop is re-tasked lap by
-      lap, an open route ends in a free flee), or CP.Npc.task(driver, 'flee', { vehicle, speed,
-      drivingStyle, style }) for a free flee; a stuck car is re-tasked every RETASK_MS. After a stop the
+      car, then drives: CP.Npc.task(driver, 'driveRoute', { vehicle, points, loop, speed (m/s), style,
+      stopRange, force }) from the next waypoint of the route (a loop is re-tasked lap by lap, an open
+      route ends in a free flee), or CP.Npc.task(driver, 'flee', { vehicle, speed, style, force }) for a
+      free flee; a stuck car is re-tasked every RETASK_MS (force: CP.Npc ignores identical repeats).
+      CP.Npc maps the style name ('cautious' | 'reckless') to the driving flags. After a stop the
       occupants leave the car (TaskLeaveVehicle); fleeing -> CP.Npc 'flee', hostile -> 'combat', and on
       first sight (new host) surrendered -> 'kneel', cuffed -> 'cuffed'. The arrest target ("Detain
       driver" / "Cuff suspect") is CP.Npc's (enableCuff). Everything is re-applied after hostChanged.
@@ -47,12 +48,6 @@ local RETASK_MS     = 10000
 local STUCK_MPS     = 2.0
 local ROUTE_END     = 30.0
 local STOP_RANGE    = 8.0
-
--- TaskVehicleDriveToCoordLongrange driving styles. Both keep to the road network.
-local STYLES = {
-    cautious = 786603,       -- stops for vehicles, peds and lights
-    reckless = 1074528293,   -- rushed: swerves around traffic, ignores lights
-}
 
 local active = {}
 
@@ -192,10 +187,11 @@ local function driverSetup(ped, reckless)
     SetDriverAggressiveness(ped, reckless and 1.0 or 0.4)
 end
 
-local function taskDrive(S, v, veh, driver)
+-- force: a lap or stuck re-task repeats the same arguments, which CP.Npc.task ignores without it.
+local function taskDrive(S, v, veh, driver, force)
     local obj = S.ctx.obj
     local speed = (tonumber(obj.speed) or 120) / 3.6
-    local style = STYLES[obj.style] or STYLES.reckless
+    local style = obj.style or 'reckless'
     local route = routeInfo(S)
     local d = S.drive[v.netId] or {}
     S.drive[v.netId] = d
@@ -205,15 +201,15 @@ local function taskDrive(S, v, veh, driver)
         if #pts > 0 then
             d.mode, d.last = 'route', pts[#pts]
             CP.Npc.task(driver, 'driveRoute', {
-                vehicle = veh, points = pts, loop = route.loop, speed = speed, drivingStyle = style,
-                style = obj.style, stopRange = STOP_RANGE,
+                vehicle = veh, points = pts, loop = route.loop, speed = speed, style = style,
+                stopRange = STOP_RANGE, force = force,
             })
             return
         end
         d.free = true
     end
     d.mode, d.last = 'flee', nil
-    CP.Npc.task(driver, 'flee', { vehicle = veh, speed = speed, drivingStyle = style, style = obj.style })
+    CP.Npc.task(driver, 'flee', { vehicle = veh, speed = speed, style = style, force = force })
 end
 
 local function monitorDrive(S, v, veh, driver)
@@ -226,25 +222,27 @@ local function monitorDrive(S, v, veh, driver)
     if d.mode == 'route' and d.last and #(pos - d.last) <= ROUTE_END then
         local route = routeInfo(S)
         if not (route and route.loop) then d.free = true end
-        taskDrive(S, v, veh, driver)
+        taskDrive(S, v, veh, driver, true)
         return
     end
     if GetEntitySpeed(veh) < STUCK_MPS and GetGameTimer() - (d.at or 0) >= RETASK_MS then
-        taskDrive(S, v, veh, driver)
+        taskDrive(S, v, veh, driver, true)
     end
 end
 
 -- Control + CP.Npc.apply once per entity handle (a new handle after streaming or a new host re-applies).
 local function applyPed(S, net, ped)
-    if S.applied[net] == ped then return true end
-    if not S.ctx.control(ped, CONTROL_MS) then return false end
+    if S.applied[net] == ped then return true, false end
+    if not S.ctx.control(ped, CONTROL_MS) then return false, false end
     local bag = bagOf(ped)
     CP.Npc.apply(ped, (bag and bag.cfg) or {})
     driverSetup(ped, S.ctx.obj.style ~= 'cautious')
     S.applied[net] = ped
     S.tasked[net] = nil
     S.left[net] = nil
-    return true
+    S.freshAt = S.freshAt or {}
+    S.freshAt[net] = true
+    return true, true
 end
 
 local function hostVehicle(S, v)
@@ -287,20 +285,23 @@ local function hostVehicle(S, v)
     end
 end
 
+-- Live surrenders and cuffs are animated by CP.Npc's state bag handler; a new host re-issues them.
 local function hostSuspect(S, info, ped)
     if not applyPed(S, info.netId, ped) then return end
     local state = (bagOf(ped) or {}).state or info.state
     if IsPedInAnyVehicle(ped, false) then return end
     if S.tasked[info.netId] == state then return end
+    local first = S.freshAt and S.freshAt[info.netId]
     if state == 'fleeing' then
         CP.Npc.task(ped, 'flee', {})
     elseif state == 'hostile' then
         CP.Npc.task(ped, 'combat', {})
-    elseif state == 'surrendered' then
+    elseif first and state == 'surrendered' then
         CP.Npc.task(ped, 'kneel', {})
-    elseif state == 'cuffed' then
+    elseif first and state == 'cuffed' then
         CP.Npc.task(ped, 'cuffed', {})
     end
+    if S.freshAt then S.freshAt[info.netId] = nil end
     S.tasked[info.netId] = state
 end
 

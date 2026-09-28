@@ -29,7 +29,9 @@
 --   Un-marking: the entry goes; within Config.Calls.dodgeWindow s of that free abandon, an un-mark of the
 --   same call (or of an id the sender never marked, so a different id form cannot slip through) turns it into
 --   a normal abandon: CP.Runs.reclassify(citizenid, runId, 'real_call_cancelled') (audited, toast
---   calls.reclassified).
+--   calls.reclassified). Listeners run in their own threads and the mark yields twice (the mdt_dispatch
+--   lookup, then the row write in removeParticipant): an un-mark that arrives during either wait is kept and
+--   applied once the free abandon is written, so a quick on/off toggle cannot keep it free.
 -- callClearedByOfficer removes that call for everyone; playerDropped removes the player's entries; an
 -- sc-dispatch restart wipes every entry (sc-dispatch deactivates every call when it starts or stops).
 
@@ -44,6 +46,7 @@ local aliases = {}                -- aliases[src][rawKey] = callKey (the id form
 local seen = {}                   -- seen[src][rawKey] = os.time() of every non-NPC mark (real or not)
 local freeAbandons = {}           -- freeAbandons[src] = { runId, citizenid, at, key, raw, missionId }
 local abandonLog = {}             -- abandonLog[citizenid] = { ts, ... } free abandons in the last 24 h
+local pendingMarks = {}           -- pendingMarks[src] = { { raw, unmarkedAt }, ... } marks still being looked up
 
 -- ── helpers ─────────────────────────────────────────────────────────────────
 local function toSrc(src)
@@ -163,22 +166,51 @@ local function countFreeAbandons(citizenid, now)
 end
 
 -- ── responding ──────────────────────────────────────────────────────────────
-local function endForRealCall(run, src, p, key, raw, now)
+-- The free abandon becomes a normal one (the un-mark came within Config.Calls.dodgeWindow s).
+local function dodge(src, fa, at)
+    CP.log(TAG, '%d un-marked %s within the dodge window: run %s becomes real_call_cancelled', src, tostring(fa.key), tostring(fa.runId))
+    runsCall('reclassify', fa.citizenid, fa.runId, 'real_call_cancelled')
+    notify(src, 'warning', 'calls.reclassified', { seconds = tonumber(Config.Calls.dodgeWindow) or 60 })
+    audit(fa.citizenid or src, 'real_call_cancelled', fa.runId, fa.key,
+        ('un-marked real call %s after %d s'):format(fa.key, math.max(0, at - fa.at)))
+end
+
+-- unmarkedAt: the un-mark already arrived while the mark was being looked up.
+local function endForRealCall(run, src, p, key, raw, now, unmarkedAt)
     local citizenid = p.citizenid
-    freeAbandons[src] = { runId = run.id, citizenid = citizenid, at = now, key = key, raw = raw, missionId = run.missionId }
+    -- busy while CP.Runs.removeParticipant writes the row (it yields): an un-mark that arrives meanwhile is
+    -- applied right after it, because CP.Runs.reclassify needs the written row.
+    local fa = { runId = run.id, citizenid = citizenid, at = now, key = key, raw = raw, missionId = run.missionId,
+        busy = true, cancelAt = unmarkedAt }
+    freeAbandons[src] = fa
     CP.log(TAG, '%d responds to real call %s: leaving run %s (real_call)', src, key, tostring(run.id))
     runsCall('removeParticipant', run, src, 'real_call')
+    fa.busy = false
     notify(src, 'info', 'calls.run_ended')
     local n = citizenid and countFreeAbandons(citizenid, now) or 1
     audit(citizenid or src, 'free_abandon', run.id, key,
         ('free abandon on real call %s (mission %s; %d in the last 24 h)'):format(key, tostring(run.missionId), n))
+    if fa.cancelAt then
+        if freeAbandons[src] == fa then freeAbandons[src] = nil end
+        dodge(src, fa, fa.cancelAt)
+    end
 end
 
 local function onMarked(src, callId, raw, now)
     local s = seen[src]
     if not s then s = {}; seen[src] = s end
     s[raw] = now
+    -- The lookup yields (database): an un-mark handled meanwhile is recorded on this pending mark.
+    local mark = { raw = raw, unmarkedAt = nil }
+    local list = pendingMarks[src]
+    if not list then list = {}; pendingMarks[src] = list end
+    list[#list + 1] = mark
     local uid = lookup(callId)
+    list = pendingMarks[src]
+    if list then
+        for i = #list, 1, -1 do if list[i] == mark then table.remove(list, i) end end
+        if #list == 0 then pendingMarks[src] = nil end
+    end
     if not uid then
         CP.log(TAG, 'responding %d -> %s ignored: not an active mdt_dispatch call', src, raw)
         return
@@ -190,9 +222,9 @@ local function onMarked(src, callId, raw, now)
         CP.log(TAG, 'responding %d -> %s: a call about their own run, not a real call for them', src, key)
         return
     end
-    record(src, key, raw, now)
+    if not mark.unmarkedAt then record(src, key, raw, now) end   -- already un-marked: no responding entry
     if type(run) == 'table' and type(p) == 'table' and p.status == 'active' and run.state ~= 'ended' then
-        endForRealCall(run, src, p, key, raw, now)
+        endForRealCall(run, src, p, key, raw, now, mark.unmarkedAt)
     end
 end
 
@@ -200,6 +232,14 @@ local function onUnmarked(src, raw, now)
     local al = aliases[src]
     local key = (al and al[raw]) or raw
     local known = (responding[src] and responding[src][key] ~= nil) or (seen[src] and seen[src][raw] ~= nil) or false
+    -- A mark whose lookup is still running: this un-mark applies to it when it is the same id (or an id we
+    -- cannot match, as below), so a quick on/off toggle cannot slip past the dodge rule.
+    local pending = pendingMarks[src]
+    if pending then
+        for _, mark in ipairs(pending) do
+            if (mark.raw == raw or not known) and not mark.unmarkedAt then mark.unmarkedAt = now end
+        end
+    end
     removeEntry(src, key)
     if al then al[raw] = nil end
     local fa = freeAbandons[src]
@@ -210,12 +250,12 @@ local function onUnmarked(src, raw, now)
     end
     local same = fa.key == key or fa.key == raw or fa.raw == raw
     if not same and known then return end          -- un-marked a different call they had marked
+    if fa.busy then                                -- the free abandon is still being written
+        if not fa.cancelAt then fa.cancelAt = now end
+        return
+    end
     freeAbandons[src] = nil
-    CP.log(TAG, '%d un-marked %s within the dodge window: run %s becomes real_call_cancelled', src, raw, tostring(fa.runId))
-    runsCall('reclassify', fa.citizenid, fa.runId, 'real_call_cancelled')
-    notify(src, 'warning', 'calls.reclassified', { seconds = tonumber(Config.Calls.dodgeWindow) or 60 })
-    audit(fa.citizenid or src, 'real_call_cancelled', fa.runId, fa.key,
-        ('un-marked real call %s after %d s'):format(fa.key, now - fa.at))
+    dodge(src, fa, now)
 end
 
 local function onResponding(src, callId, isResponding)
@@ -324,6 +364,7 @@ AddEventHandler('playerDropped', function()
     aliases[src] = nil
     seen[src] = nil
     freeAbandons[src] = nil
+    pendingMarks[src] = nil
 end)
 
 CreateThread(function()

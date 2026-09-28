@@ -1,0 +1,295 @@
+/* Admin UI · Officers (oversight slice). Only --cp-* variables. */
+
+.oversight-off-soft {
+  color: var(--cp-muted);
+  font-size: var(--cp-fs-sm);
+}
+
+.oversight-off-layout {
+  display: grid;
+  grid-template-columns: minmax(270px, 320px) minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+/* ── search list ─────────────────────────────────────────────────────────── */
+.oversight-off-list {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 170px);
+  min-height: 320px;
+  overflow: hidden;
+}
+.oversight-off-list .cp-card__body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
+.oversight-off-list__search {
+  padding: 14px 14px 10px;
+  border-bottom: 1px solid var(--cp-border);
+}
+.oversight-off-list__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 34px;
+  padding: 4px 10px 4px 16px;
+  font-size: var(--cp-fs-xs);
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--cp-subtle);
+}
+.oversight-off-list__items {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 8px 10px;
+  overflow-y: auto;
+  min-height: 0;
+  flex: 1;
+}
+.oversight-off-result {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--cp-radius-sm);
+  background: transparent;
+  color: var(--cp-text);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+.oversight-off-result:hover {
+  background: var(--cp-surface-2);
+}
+.oversight-off-result:focus-visible {
+  outline: 2px solid var(--cp-accent);
+  outline-offset: 1px;
+}
+.oversight-off-result.is-active {
+  background: rgba(var(--cp-primary-rgb), 0.16);
+  border-color: rgba(var(--cp-primary-rgb), 0.45);
+}
+.oversight-off-result__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(var(--cp-text-rgb), 0.2);
+  flex: none;
+}
+.oversight-off-result__dot.is-online {
+  background: var(--cp-success);
+}
+.oversight-off-result__who {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+.oversight-off-result__name {
+  font-weight: 650;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.oversight-off-result__sub {
+  font-size: var(--cp-fs-xs);
+  color: var(--cp-subtle);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.oversight-off-result__tags {
+  display: inline-flex;
+  gap: 4px;
+  flex: none;
+}
+
+/* ── detail ──────────────────────────────────────────────────────────────── */
+.oversight-off-main {
+  min-width: 0;
+}
+.oversight-off-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.oversight-off-head__row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.oversight-off-head__avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  border-radius: var(--cp-radius);
+  background: rgba(var(--cp-primary-rgb), 0.18);
+  color: var(--cp-primary-text);
+  flex: none;
+}
+.oversight-off-head__who {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  flex: 1;
+}
+.oversight-off-head__name {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: var(--cp-fs-xl);
+  font-weight: 750;
+}
+.oversight-off-head__line {
+  color: var(--cp-muted);
+}
+.oversight-off-head__cid {
+  font-family: var(--cp-mono);
+  font-size: var(--cp-fs-xs);
+  color: var(--cp-subtle);
+}
+.oversight-off-head__tags {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  max-width: 45%;
+}
+.oversight-off-own {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+  padding: 8px 10px;
+  border-radius: var(--cp-radius-sm);
+  background: rgba(var(--cp-warning-rgb), 0.1);
+  border: 1px solid rgba(var(--cp-warning-rgb), 0.3);
+  color: var(--cp-warning);
+  font-size: var(--cp-fs-sm);
+}
+
+.oversight-off-susp {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.oversight-off-susp__state {
+  font-size: var(--cp-fs-lg);
+  font-weight: 700;
+  color: var(--cp-success);
+}
+.oversight-off-susp__state.is-on {
+  color: var(--cp-danger);
+}
+
+.oversight-off-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.oversight-off-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: var(--cp-radius-pill);
+  background: rgba(var(--cp-accent-rgb), 0.12);
+  border: 1px solid rgba(var(--cp-accent-rgb), 0.28);
+  color: var(--cp-accent-text);
+  font-size: var(--cp-fs-sm);
+  font-weight: 600;
+}
+.oversight-off-badge .oversight-off-soft {
+  font-size: var(--cp-fs-xs);
+}
+
+.oversight-off-disputes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.oversight-off-dispute {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  border-radius: var(--cp-radius-sm);
+  background: var(--cp-surface-2);
+  border: 1px solid var(--cp-border);
+}
+.oversight-off-dispute__main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+.oversight-off-dispute__title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.oversight-off-dispute__reason,
+.oversight-off-quote {
+  font-style: italic;
+  line-height: 1.4;
+}
+.oversight-off-quote {
+  padding: 10px 12px;
+  border-radius: var(--cp-radius-sm);
+  background: var(--cp-surface-2);
+  border-left: 3px solid var(--cp-accent);
+}
+
+.oversight-off-run {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.oversight-off-run__name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.oversight-off-run__sub {
+  font-size: var(--cp-fs-xs);
+  color: var(--cp-subtle);
+}
+.oversight-off-cash {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  font-weight: 600;
+}
+.oversight-off-cash .oversight-off-soft {
+  font-size: var(--cp-fs-xs);
+  font-weight: 500;
+}
+.oversight-off-void {
+  color: var(--cp-danger);
+}
+
+.oversight-off-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}

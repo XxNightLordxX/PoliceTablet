@@ -1,8 +1,8 @@
 -- modules/downed/client.lua · CP.Downed (client): the NPC pick-up of a downed participant and the EMS
 -- request from their own client (docs/ARCHITECTURE.md §5.15, CRIMSON_ARENA rules 3 and 13).
 --
--- Owns the handlers of client:pickup (runId, dropOff) and client:requestEMS (runId) and sends the plain net
--- event server:pickupDone (runId, ok).
+-- Owns the handlers of client:pickup (runId, dropOff), client:pickupCancel (runId) and client:requestEMS
+-- (runId) and sends the plain net event server:pickupDone (runId, ok).
 --
 -- Public API
 --   CP.Downed.busy() -> boolean      a pick-up is running on this client
@@ -12,8 +12,8 @@
 -- timeout), detach from any entity or vehicle, SetEntityCoords to the drop-off, wait for collision, fade in,
 -- clear the overlay, server:pickupDone (runId, true). The Crimson-Arena value (LocalPlayer.state.crimsonArena
 -- with a source other than 'crimson-police') is re-checked before the fade, while waiting for the revive and
--- right before SetEntityCoords; every abort path fades back in, clears the overlay and sends
--- server:pickupDone (runId, false). Nothing here revives anyone: the server sends sc-ambulance's own
+-- right before SetEntityCoords, and so is a server cancel (client:pickupCancel); every abort path fades back
+-- in, clears the overlay and sends server:pickupDone (runId, false). Nothing here revives anyone: the server sends sc-ambulance's own
 -- hospital:client:Revive (through CP.Ambulance).
 -- client:requestEMS: CP.Ambulance.sendEMSRequest() (sc-ambulance's standard EMS request, sent only after
 -- the server removed our flag) and a toast.
@@ -43,15 +43,17 @@ local function foreignFlag()
     return type(v) == 'table' and v.active == true and v.source ~= 'crimson-police'
 end
 
+-- true / false from metadata isdead / inlaststand; nil when no character is loaded (CP.Qbx.getPlayerData
+-- returns {} after a logout or during a character switch), which must never read as "revived".
 local function metadataDown()
     local pd = CP.Qbx and CP.Qbx.getPlayerData and CP.Qbx.getPlayerData() or {}
     local md = type(pd) == 'table' and pd.metadata or nil
-    if type(md) ~= 'table' then return false end
+    if type(md) ~= 'table' then return nil end
     return md.isdead == true or md.inlaststand == true
 end
 
 local function revived()
-    return not IsEntityDead(PlayerPedId()) and not metadataDown()
+    return metadataDown() == false and not IsEntityDead(PlayerPedId())
 end
 
 local function overlay(o)
@@ -87,6 +89,11 @@ local function detach(ped)
     if IsPedInAnyVehicle(ped, false) then ClearPedTasksImmediately(ped) end
 end
 
+-- The server cancelled this pick-up (client:pickupCancel): in the arena, recovered, unload.
+local function cancelled()
+    return active ~= nil and active.cancelled == true
+end
+
 local function runPickup(runId, dest)
     if foreignFlag() then return abort(runId, 'arena') end
     DoScreenFadeOut(FADE_MS)
@@ -96,6 +103,8 @@ local function runPickup(runId, dest)
     local ok = false
     while GetGameTimer() < deadline do
         if foreignFlag() then return abort(runId, 'arena') end
+        if cancelled() then return abort(runId, 'cancelled by the server') end
+        if metadataDown() == nil then return abort(runId, 'no character loaded') end
         if revived() then
             ok = true
             break
@@ -104,6 +113,7 @@ local function runPickup(runId, dest)
     end
     if not ok then return abort(runId, 'not revived') end
     if foreignFlag() then return abort(runId, 'arena') end
+    if cancelled() then return abort(runId, 'cancelled by the server') end
     local ped = PlayerPedId()
     detach(ped)
     RequestCollisionAtCoord(dest.x, dest.y, dest.z)
@@ -133,6 +143,10 @@ RegisterNetEvent(CP.e('client:pickup'), function(runId, dropOff)
         end
         active = nil
     end)
+end)
+
+RegisterNetEvent(CP.e('client:pickupCancel'), function(runId)
+    if active and active.runId == runId then active.cancelled = true end
 end)
 
 RegisterNetEvent(CP.e('client:requestEMS'), function(runId)

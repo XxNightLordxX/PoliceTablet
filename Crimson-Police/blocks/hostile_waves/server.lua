@@ -8,7 +8,9 @@
     nextWave.afterSeconds after the wave began. The boss (if any) arrives after the last wave by the
     same rule; it never scales. A hostile under surrender.belowHealth health gets exactly one
     surrender roll (CP.Npc.rollSurrender with surrender.chance) when the host reports it and the
-    server confirms the health. Spawn points are picked with the objective rng: distinct points,
+    server confirms the health; the server also polls the health of every hostile each tick, so a
+    report that arrived before the damage synced (or never arrived) cannot cost the roll. Spawn
+    points are picked with the objective rng: distinct points,
     free ones (no living hostile on them) first, reused (with a small offset) only when a wave is
     larger than the point list. Spawning respects the run caps (ctx.canSpawn: a wave that does not fit
     waits and is re-checked every tick, counts are never cut) and rescale (only the NPCs still missing
@@ -40,6 +42,7 @@
     { type = 'low_health', netId }   host client: a hostile looks under belowHealth. The server re-checks
                                      GetEntityHealth against the configured / GetEntityMaxHealth max
                                      (health above the 100-point death threshold), then rolls once.
+                                     tick runs the same server-side check for every hostile.
     { type = 'cuffed', netId }       CP.Npc (via CP.Runs.dispatch) after a validated "Cuff suspect"; the
                                      cp bag must say cuffed. A cuff the event missed is picked up by tick.
     { type = 'shot', netId, src }    CP.Npc: a participant shot a surrendered/cuffed hostile
@@ -173,12 +176,19 @@ local function pedCoords(p)
     return nil
 end
 
+-- Server-side max health (GetEntityMaxHealth, else GetPedMaxHealth; 0 when neither answers).
+local function serverMaxHealth(e)
+    local m = GetEntityMaxHealth and tonumber(GetEntityMaxHealth(e)) or nil
+    if (not m or m <= 0) and GetPedMaxHealth then m = tonumber(GetPedMaxHealth(e)) end
+    return m or 0
+end
+
 -- Health as a share of the part above GTA's 100-point death threshold (nil when unknown or dead).
 local function healthRatio(p)
     if not p.entity or not DoesEntityExist(p.entity) then return nil end
     local hp = tonumber(GetEntityHealth(p.entity)) or 0
     if hp <= 0 then return nil end
-    local serverMax = GetEntityMaxHealth and tonumber(GetEntityMaxHealth(p.entity)) or 0
+    local serverMax = serverMaxHealth(p.entity)
     local max = math.max(tonumber(p.maxHealth) or 200, serverMax or 0)
     if max > 100 then return (hp - 100) / (max - 100) end
     return hp / math.max(max, 1)
@@ -263,23 +273,36 @@ local function checkLocation(o, loc, li, strict)
     if #pts == 0 then
         return bad('block.hostile_waves.invalid.spawns_missing', { key = tostring(o.spawns), location = li })
     end
+    local start = loc.start and loc.start.coords
+    -- no-build zones for every mission (docs/CRIMSON_ARENA.md rule 7: the loader only sees location
+    -- keys, not points written into the objective); the distance from the start for custom missions
+    local function spawnOk(list)
+        for _, p in ipairs(list) do
+            if inNoBuild(p) then
+                return bad('block.hostile_waves.invalid.spawns_zone', { location = li })
+            end
+            if strict and start and U.dist(p, start) < Config.Builder.minSpawnFromStart then
+                return bad('block.hostile_waves.invalid.spawns_start', { location = li, min = Config.Builder.minSpawnFromStart })
+            end
+        end
+        return true
+    end
     if strict then
         local need = math.ceil(c.spawnPointsPerHostile * maxWave(o) - 1e-9)
         if #pts < need then
             return bad('block.hostile_waves.invalid.spawns_count', { location = li, min = need, have = #pts })
         end
-        local start = loc.start and loc.start.coords
-        for _, p in ipairs(pts) do
-            if start and U.dist(p, start) < Config.Builder.minSpawnFromStart then
-                return bad('block.hostile_waves.invalid.spawns_start', { location = li, min = Config.Builder.minSpawnFromStart })
-            end
-            if inNoBuild(p) then
-                return bad('block.hostile_waves.invalid.spawns_zone', { location = li })
-            end
-        end
     end
-    if type(o.boss) == 'table' and o.boss.spawn ~= nil and #pointList(loc, o.boss.spawn) == 0 then
-        return bad('block.hostile_waves.invalid.spawns_missing', { key = tostring(o.boss.spawn), location = li })
+    local ok, why = spawnOk(pts)
+    if not ok then return false, why end
+    if type(o.boss) == 'table' and o.boss.spawn ~= nil then
+        local bp = pointList(loc, o.boss.spawn)
+        if #bp == 0 then
+            return bad('block.hostile_waves.invalid.spawns_missing', { key = tostring(o.boss.spawn), location = li })
+        end
+        -- the boss spot is a spawn point too: the same guardrails as the wave spawns
+        ok, why = spawnOk(bp)
+        if not ok then return false, why end
     end
     return true
 end
@@ -534,11 +557,7 @@ local function spawnWave(ctx, st, w, budget)
     return ws.spawned >= target, budget
 end
 
-local function advance(ctx, st)
-    if st.spawning or st.stopped or st.failed then return end
-    local n = waveCount(ctx)
-    if n == 0 then return end
-    st.spawning = true
+local function advanceLoop(ctx, st, n)
     if st.wave == 0 then startWave(ctx, st, 1) end
     local budget = SPAWNS_PER_TICK
     while not st.stopped do
@@ -558,7 +577,18 @@ local function advance(ctx, st)
             break
         end
     end
+end
+
+-- The spawning flag guards against re-entry while ctx.spawnPed yields; it is always cleared, even
+-- when a spawn throws, so one bad spawn can never freeze the waves for the rest of the run.
+local function advance(ctx, st)
+    if st.spawning or st.stopped or st.failed then return end
+    local n = waveCount(ctx)
+    if n == 0 then return end
+    st.spawning = true
+    local ok, err = pcall(advanceLoop, ctx, st, n)
     st.spawning = false
+    if not ok then CP.err(BLOCK, 'spawning for run %s failed: %s', tostring(ctx.run and ctx.run.id), tostring(err)) end
 end
 
 local function allOut(ctx, st)
@@ -693,6 +723,17 @@ local function refresh(ctx, st)
     end
 end
 
+-- Server-side health poll (every tick): a hostile under belowHealth gets its one roll even when the
+-- host's 'low_health' report reached the server before the damage did (the server's copy of the
+-- health lags the owner's) or never arrived at all. The report only makes the roll come sooner.
+local function pollHealth(ctx, st)
+    for _, p in pairs(st.peds) do
+        if p.state == 'hostile' and not p.rolled and (tonumber(surrenderCfg(ctx, p).chance) or 0) > 0 then
+            checkLowHealth(ctx, st, p)
+        end
+    end
+end
+
 -- ── Hooks ───────────────────────────────────────────────────────────────────
 local function start(ctx)
     local st = stateOf(ctx)
@@ -708,6 +749,7 @@ local function tick(ctx, dt)
         local ws = st.waves[st.wave]
         if ws then ws.elapsed = ws.elapsed + (tonumber(dt) or 1) end
         refresh(ctx, st)
+        pollHealth(ctx, st)
         advance(ctx, st)
     end
     tryComplete(ctx, st)

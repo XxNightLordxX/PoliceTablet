@@ -1,0 +1,181 @@
+/* Officer UI · Home (economy slice). Only --cp-* variables; classes prefixed economy-. */
+
+.economy-muted { color: var(--cp-muted); }
+
+/* ── champions banner ─────────────────────────────────────────────────────── */
+.economy-champions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-radius: var(--cp-radius);
+  border: 1px solid rgba(var(--cp-xp-gold-rgb), 0.45);
+  background: linear-gradient(90deg, rgba(var(--cp-xp-gold-rgb), 0.16), rgba(var(--cp-xp-gold-rgb), 0.03) 70%);
+}
+.economy-champions__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  flex: none;
+  border-radius: 50%;
+  color: var(--cp-bg);
+  background: var(--cp-xp-gold);
+}
+.economy-champions__text { display: flex; flex-direction: column; min-width: 0; }
+.economy-champions__eyebrow {
+  font-size: var(--cp-fs-xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--cp-xp-gold);
+}
+.economy-champions__line { font-weight: 600; }
+
+/* ── officer card ─────────────────────────────────────────────────────────── */
+.economy-officer__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  gap: 20px;
+  align-items: center;
+}
+.economy-officer__main { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.economy-officer__who { display: flex; align-items: center; gap: 16px; min-width: 0; }
+.economy-officer__avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 60px;
+  height: 60px;
+  flex: none;
+  border-radius: 50%;
+  font-size: var(--cp-fs-xl);
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: var(--cp-primary-contrast);
+  background: var(--cp-primary);
+  box-shadow: 0 0 0 3px var(--cp-surface), 0 0 0 5px rgba(var(--cp-accent-rgb), 0.55);
+}
+.economy-officer__ident { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.economy-officer__name {
+  font-size: var(--cp-fs-xl);
+  font-weight: 700;
+  line-height: 1.15;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.economy-officer__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  color: var(--cp-muted);
+  font-size: var(--cp-fs-sm);
+}
+.economy-officer__dot { color: var(--cp-subtle); }
+.economy-officer__level { display: flex; }
+
+.economy-officer__stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  align-self: stretch;
+  align-items: center;
+  border-left: 1px solid var(--cp-border);
+}
+.economy-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 16px;
+  min-width: 0;
+  align-self: stretch;
+  justify-content: center;
+}
+.economy-stat + .economy-stat { border-left: 1px solid var(--cp-border); }
+.economy-stat__label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--cp-fs-xs);
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--cp-muted);
+  white-space: nowrap;
+}
+.economy-stat__value {
+  font-size: var(--cp-fs-xl);
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.economy-stat__hint {
+  font-size: var(--cp-fs-sm);
+  color: var(--cp-muted);
+  line-height: 1.35;
+}
+.economy-stat__hint.is-success { color: var(--cp-success); }
+.economy-stat__hint.is-accent { color: var(--cp-accent-text); }
+
+.economy-xp { display: flex; flex-direction: column; gap: 6px; }
+.economy-xp__hint { font-size: var(--cp-fs-sm); color: var(--cp-muted); }
+
+/* ── goals ────────────────────────────────────────────────────────────────── */
+.economy-home__row > .cp-card { height: 100%; }
+.economy-home__row > .cp-card > .cp-card__body { flex: 1; }
+.economy-goal .cp-card__body { display: flex; flex-direction: column; gap: 12px; }
+.economy-goal__label { font-size: var(--cp-fs-md); font-weight: 600; }
+.economy-goal__foot { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-top: auto; }
+.economy-goal__hint { font-size: var(--cp-fs-sm); color: var(--cp-subtle); line-height: 1.35; }
+.economy-goal.is-done .economy-goal__label { color: var(--cp-success); }
+
+/* ── type of the day ──────────────────────────────────────────────────────── */
+.economy-tod__body { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+.economy-tod__tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 14px;
+  border-radius: var(--cp-radius-pill);
+  font-size: var(--cp-fs-lg);
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: var(--cp-accent-contrast);
+  background: var(--cp-accent);
+  box-shadow: 0 4px 14px rgba(var(--cp-accent-rgb), 0.3);
+}
+.economy-tod__text { margin: 0; font-weight: 600; line-height: 1.35; }
+.economy-tod__note { margin: 0; font-size: var(--cp-fs-sm); color: var(--cp-muted); }
+
+/* ── announcements ────────────────────────────────────────────────────────── */
+.economy-news__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.economy-news__item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: var(--cp-radius-sm);
+  background: var(--cp-surface-2);
+  border: 1px solid var(--cp-border);
+}
+.economy-news__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex: none;
+  border-radius: var(--cp-radius-sm);
+  color: var(--cp-accent-text);
+  background: rgba(var(--cp-accent-rgb), 0.12);
+}
+.economy-news__item.is-weekly_top .economy-news__icon,
+.economy-news__item.is-officer_of_week .economy-news__icon {
+  color: var(--cp-xp-gold);
+  background: rgba(var(--cp-xp-gold-rgb), 0.14);
+}
+.economy-news__text { line-height: 1.4; padding-top: 3px; }

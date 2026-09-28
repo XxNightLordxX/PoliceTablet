@@ -31,11 +31,17 @@
   Evidence accepted (onEvent)
     { type = 'free_start', netId }   a participant started cutting (within target.distance + slack)
     { type = 'freed', netId }        cutting finished: same participant, in range, at least
-                                     FREE_SHARE × freeTime after its free_start
+                                     FREE_SHARE × freeTime after its free_start (one pending cut
+                                     per participant: a new free_start replaces the previous one)
     { type = 'shot', netId, src }    CP.Npc (CP.Runs.dispatch): a participant shot a restrained hostage
     { type = 'damaged', netId, attacker }  CP.Npc (CP.Runs.dispatch): a hostage took damage
-    CP.Npc.onDamaged(run, netId, attackerSrc) is also listened to; one hit per hostage and attacker
-    is counted per HIT_WINDOW_MS, so the same bullet reported twice costs once.
+    CP.Npc.onDamaged(run, netId, attackerSrc) is the damage channel: it is server-only and fires for
+    every hit on a hostage. While it is listened to, 'shot' / 'damaged' are acknowledged without
+    effect, because onEvent cannot tell a dispatch from the same shape sent as client evidence
+    (a client could otherwise cost the team hostage_hit). Without onDamaged they count instead.
+    One hit per hostage and attacker is counted per HIT_WINDOW_MS (one bullet, one penalty).
+    no_hostage_hurt is recorded only once minSeconds has passed since the start (a completion
+    refused as too fast must not keep a bonus a later hit would have cost).
 
   Bonus / penalty ids recorded (shared)
     hostage_hit      ctx.penalize, count 1 per counted hit by participant fire (points hint -hitPenalty)
@@ -45,7 +51,7 @@
   ctx.state
     block, rng, peds = { [tostring(netId)] = { netId, entity, index, state, hurt } }, spawned, order,
     freeing = { [netIdKey] = { [srcKey] = ms } }, lastHit = { ['netId:src'] = ms }, hurt, hits,
-    bonusGiven, current, dirty, hudText, completed, failed, stopped
+    bonusGiven, current, startedAt, dirty, hudText, completed, failed, stopped
 ]]
 
 local BLOCK = 'protect_rescue'
@@ -181,15 +187,19 @@ local function checkLocation(o, loc, li, strict)
     if #pointList(loc, o.safe) == 0 then
         return bad('block.protect_rescue.invalid.points_missing', { key = tostring(o.safe), location = li })
     end
-    if strict then
-        if #pts < o.count then
-            return bad('block.protect_rescue.invalid.points_count', { location = li, min = o.count, have = #pts })
-        end
-        for _, p in ipairs(pts) do
-            if inNoBuild(p) then return bad('block.protect_rescue.invalid.points_zone', { location = li }) end
-        end
-        if inNoBuild(pointList(loc, o.safe)[1]) then return bad('block.protect_rescue.invalid.points_zone', { location = li }) end
+    if strict and #pts < o.count then
+        return bad('block.protect_rescue.invalid.points_count', { location = li, min = o.count, have = #pts })
     end
+    -- no-build zones for every mission (docs/CRIMSON_ARENA.md rule 7); NPC spots are spawn points, so
+    -- custom missions also keep them Config.Builder.minSpawnFromStart away from the start
+    local start = loc.start and loc.start.coords
+    for _, p in ipairs(pts) do
+        if inNoBuild(p) then return bad('block.protect_rescue.invalid.points_zone', { location = li }) end
+        if strict and start and U.dist(p, start) < Config.Builder.minSpawnFromStart then
+            return bad('block.protect_rescue.invalid.points_start', { location = li, min = Config.Builder.minSpawnFromStart })
+        end
+    end
+    if inNoBuild(pointList(loc, o.safe)[1]) then return bad('block.protect_rescue.invalid.points_zone', { location = li }) end
     return true
 end
 
@@ -308,24 +318,7 @@ local function setPed(ctx, st, p, state)
     st.dirty = true
 end
 
--- Spawns the hostages still missing (distinct spots first); false while waiting for room.
-local function spawnMissing(ctx, st)
-    local want = target(ctx)
-    if st.spawned >= want then return true end
-    if st.spawning or st.stopped then return false end
-    local pts = pointList(ctx.location, ctx.obj.npcs)
-    if #pts == 0 then
-        local s = ctx.location and ctx.location.start and ctx.location.start.coords
-        if s then pts = { s } end
-        CP.warn(BLOCK, 'no hostage points at %s for run %s; using the start point', tostring(ctx.obj.npcs), tostring(ctx.run and ctx.run.id))
-    end
-    if #pts == 0 then return false end
-    if not st.order or #st.order ~= #pts then
-        local idx = {}
-        for i = 1, #pts do idx[i] = i end
-        st.order = rngOf(ctx):shuffle(idx)
-    end
-    st.spawning = true
+local function spawnLoop(ctx, st, want, pts)
     local ok = true
     while st.spawned < want do
         if not ctx.canSpawn(1, false) then ok = false break end
@@ -348,7 +341,34 @@ local function spawnMissing(ctx, st)
         st.dirty = true
         if st.stopped then ok = false break end
     end
+    return ok
+end
+
+-- Spawns the hostages still missing (distinct spots first); false while waiting for room. The
+-- spawning flag (re-entry while ctx.spawnPed yields) is always cleared, even when a spawn throws.
+local function spawnMissing(ctx, st)
+    local want = target(ctx)
+    if st.spawned >= want then return true end
+    if st.spawning or st.stopped then return false end
+    local pts = pointList(ctx.location, ctx.obj.npcs)
+    if #pts == 0 then
+        local s = ctx.location and ctx.location.start and ctx.location.start.coords
+        if s then pts = { s } end
+        CP.warn(BLOCK, 'no hostage points at %s for run %s; using the start point', tostring(ctx.obj.npcs), tostring(ctx.run and ctx.run.id))
+    end
+    if #pts == 0 then return false end
+    if not st.order or #st.order ~= #pts then
+        local idx = {}
+        for i = 1, #pts do idx[i] = i end
+        st.order = rngOf(ctx):shuffle(idx)
+    end
+    st.spawning = true
+    local okCall, ok = pcall(spawnLoop, ctx, st, want, pts)
     st.spawning = false
+    if not okCall then
+        CP.err(BLOCK, 'spawning hostages for run %s failed: %s', tostring(ctx.run and ctx.run.id), tostring(ok))
+        return false
+    end
     return ok and st.spawned >= want
 end
 
@@ -432,7 +452,12 @@ local function tryComplete(ctx, st)
             if p.state ~= 'safe' then return end
         end
     end
-    if not st.hurt and not st.bonusGiven then
+    -- The bonus must be recorded before ctx.complete (completing the last objective ends the run
+    -- and scores it), but a completion refused for minSeconds would leave it recorded while a
+    -- hostage can still be hurt: award it only once the minimum time has passed.
+    local minMs = (tonumber(ctx.obj.minSeconds) or 0) * 1000
+    local early = st.startedAt ~= nil and now() - st.startedAt < minMs
+    if not early and not st.hurt and not st.bonusGiven then
         st.bonusGiven = true
         ctx.award('no_hostage_hurt', { count = 1 })
     end
@@ -469,6 +494,7 @@ local function start(ctx)
     local st = stateOf(ctx)
     listen()
     st.current = true
+    st.startedAt = st.startedAt or now()
     spawnMissing(ctx, st)
     checkGone(ctx, st)
     if st.failed then return end
@@ -522,6 +548,8 @@ local function onEvent(ctx, src, ev)
         if not inReach(ctx, src, p) then return false, 'too_far' end
         local sk = tostring(src)
         if t == 'free_start' then
+            -- one cut at a time per participant (one progress bar): a new start replaces the last one
+            for _, bySrc in pairs(st.freeing) do bySrc[sk] = nil end
             st.freeing[key] = st.freeing[key] or {}
             st.freeing[key][sk] = now()
         else
@@ -533,6 +561,15 @@ local function onEvent(ctx, src, ev)
         end
     elseif t == 'shot' or t == 'damaged' then
         if not p then return false, 'unknown_entity' end
+        -- onEvent cannot tell a CP.Npc dispatch from client evidence (server:objective delivers the
+        -- same shape), and a client must never be able to cost the team hostage_hit or the
+        -- no_hostage_hurt bonus. CP.Npc.onDamaged, which is server-only, reports every hit on a
+        -- hostage (both events are always sent together with it), so while it is listened to these
+        -- events are acknowledged and change nothing. Without it they are the only damage channel.
+        if listening then
+            flush(ctx, st)
+            return true
+        end
         local attacker = ev.src or ev.attacker
         if t == 'shot' and attacker == nil then attacker = src end
         hit(ctx, st, key, attacker)
@@ -589,6 +626,7 @@ local function restart(ctx)
     st.rng = keep
     st = stateOf(ctx)
     st.current = current
+    if current then st.startedAt = now() end
     spawnMissing(ctx, st)
     if current then releaseIdle(ctx, st) end
     st.dirty = true

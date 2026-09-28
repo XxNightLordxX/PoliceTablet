@@ -40,6 +40,7 @@
   "block.protect_rescue.invalid.points_missing": "Protect and rescue: location {location} has no points under {key}",
   "block.protect_rescue.invalid.points_count": "Protect and rescue: location {location} needs at least {min} NPC spots (it has {have})",
   "block.protect_rescue.invalid.points_zone": "Protect and rescue: a point at location {location} is inside a no-build zone",
+  "block.protect_rescue.invalid.points_start": "Protect and rescue: every NPC spot at location {location} must be at least {min} m from the start",
 
   "block.flee_arrest.knock": "Knock and announce",
   "block.flee_arrest.cuff": "Cuff suspect",
@@ -77,6 +78,7 @@
   "block.flee_arrest.invalid.points_count": "Flee and arrest: location {location} needs at least {min} associate spawn points (it has {have})",
   "block.flee_arrest.invalid.points_start": "Flee and arrest: every spawn point at location {location} must be at least {min} m from the start",
   "block.flee_arrest.invalid.points_zone": "Flee and arrest: a spawn point at location {location} is inside a no-build zone",
+  "block.flee_arrest.invalid.route_zone": "Flee and arrest: the door or an escape route point at location {location} is inside a no-build zone",
 
   "run.fail_killed_unarmed": "Mission failed: a surrendered or unarmed person was killed",
   "bonus.kingpin_alive": "Kingpin arrested alive",

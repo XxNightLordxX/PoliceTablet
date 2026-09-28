@@ -5,8 +5,9 @@
       selecting it reports 'knock_start', runs lib.progressBar(knock.duration) and reports 'knock';
       a marker over the door (DrawMarker only within MARKER_RANGE, otherwise Wait(750)) and a door
       blip until the knock (no blip with Radio Silence);
-    - every participant checks the suspects near them: 'aim' when IsPlayerFreeAimingAtEntity on an
-      unarmed fleeing suspect within givesUp.aim, 'stunned' when IsPedBeingStunned (throttled per
+    - every participant checks the suspects near them: 'aim' when IsPlayerFreeAimingAtEntity (or
+      lock-on IsPlayerTargettingEntity) on an unarmed fleeing suspect within givesUp.aim, 'stunned'
+      when IsPedBeingStunned (throttled per
       suspect); the server re-checks both with server-side distances;
     - suspect blips (after the knock in door mode; none with Radio Silence);
     - HUD lines (ctx.hudDetail): the escape countdown from the server, or "stay close" while this
@@ -14,7 +15,8 @@
     - on the run host only: CP.Npc.apply once it has control of each suspect, then the task for its
       cp state: fleeing -> flee along the route (scatter: location[obj.routes][route]; door:
       location[obj.fleeTo]), hostile -> combat, and (on first sight / after hostChanged)
-      surrendered -> kneel, cuffed -> cuffed. The "Cuff suspect" target is CP.Npc's (enableCuff).
+      surrendered -> kneel, cuffed -> cuffed. Control is requested before every task and a refused
+      task is retried on the next loop. The "Cuff suspect" target is CP.Npc's (enableCuff).
 
   Objective fields read: mode, door, knock.label / duration, fleeTo, routes, givesUp.aim / stun /
     close (ctx.obj); location points.
@@ -215,27 +217,41 @@ local function markerLoop(S)
 end
 
 -- ── Host AI and reports ─────────────────────────────────────────────────────
+-- The host must own the ped before CP.Npc.apply / CP.Npc.task do anything (OneSync hands ownership
+-- to the closest player, often the officer chasing the suspect): control is requested for every
+-- task, and a task only counts as done when CP.Npc.task took it (otherwise the next loop retries).
+local function hasControl(ctx, ent)
+    if NetworkHasControlOfEntity(ent) then return true end
+    return ctx.control(ent, CONTROL_MS) == true
+end
+
 local function hostAi(S, info, ent, state)
     local ctx = S.ctx
-    local fresh = false
     if S.applied[info.netId] ~= ent then
-        if not ctx.control(ent, CONTROL_MS) then return end
+        if not hasControl(ctx, ent) then return end
         local bag = bagOf(ent)
-        CP.Npc.apply(ent, (bag and bag.cfg) or {})
+        if CP.Npc.apply(ent, (bag and bag.cfg) or {}) == false then return end
         S.applied[info.netId] = ent
         S.tasked[info.netId] = nil
-        fresh = true
     end
-    if S.tasked[info.netId] == state then return end
+    local prev = S.tasked[info.netId]
+    if prev == state then return end
+    -- first = nothing tasked since (re)applying: poses for peds that were already surrendered/cuffed
+    local first = prev == nil
+    local action, args
     if state == 'fleeing' then
         local pts = routePoints(S, info)
-        CP.Npc.task(ent, 'flee', { points = #pts > 0 and pts or nil })
+        action, args = 'flee', { points = #pts > 0 and pts or nil }
     elseif state == 'hostile' then
-        CP.Npc.task(ent, 'combat', {})
-    elseif fresh and state == 'surrendered' then
-        CP.Npc.task(ent, 'kneel', {})
-    elseif fresh and state == 'cuffed' then
-        CP.Npc.task(ent, 'cuffed', {})
+        action, args = 'combat', {}
+    elseif first and state == 'surrendered' then
+        action, args = 'kneel', {}
+    elseif first and state == 'cuffed' then
+        action, args = 'cuffed', {}
+    end
+    if action then
+        if not hasControl(ctx, ent) then return end
+        if CP.Npc.task(ent, action, args) == false then return end
     end
     S.tasked[info.netId] = state
 end
@@ -282,7 +298,9 @@ local function loop(S)
                                 if IsPedBeingStunned(ent, 0) then reportOnce(S, 'stunned', info.netId) end
                             end
                             if state == 'fleeing' and not info.armed then
-                                if gu.aim and d <= gu.aim and IsPlayerFreeAimingAtEntity(PlayerId(), ent) then
+                                -- free aim or lock-on (controller) aim both count as aiming at them
+                                if gu.aim and d <= gu.aim and (IsPlayerFreeAimingAtEntity(PlayerId(), ent)
+                                    or IsPlayerTargettingEntity(PlayerId(), ent)) then
                                     reportOnce(S, 'aim', info.netId)
                                 end
                                 if type(gu.close) == 'table' and d <= (tonumber(gu.close.distance) or 0) then close = true end
@@ -314,6 +332,8 @@ end
 local function cleanup(S)
     S.alive = false
     S.current = false
+    -- a "Knock and announce" progress bar still running when the objective or run ends is cancelled
+    if S.busy and lib.progressActive and lib.progressActive() then lib.cancelProgress() end
     dropDoor(S)
     for k in pairs(S.blips) do dropBlip(S, k) end
     if S.hint then

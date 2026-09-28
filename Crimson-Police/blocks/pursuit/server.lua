@@ -112,6 +112,7 @@ local RESEND_MS          = 15000
 local UNDRIVEABLE_ENGINE = 100.0
 local ARMED_BELOW        = 0.5
 local MAX_SEATS          = 4
+local MISSING_TICKS      = 2        -- ticks an entity must be missing before it counts as gone (as the engine)
 local DEFAULT_ARREST_MS  = 5000
 local DEFAULT_FAST_S     = 120
 local DEFAULT_AHEAD      = 50.0
@@ -939,8 +940,10 @@ local function watchVehicles(ctx, st, dt, list)
         local v = st.vehicles[key]
         if v.state == 'fleeing' or v.state == 'waiting' then
             if not exists(v.entity) then
-                stopVehicle(ctx, st, v, true)
+                v.missing = (v.missing or 0) + 1
+                if v.missing >= MISSING_TICKS then stopVehicle(ctx, st, v, true) end
             elseif v.state == 'fleeing' then
+                v.missing = 0
                 local speed = kmh(v.entity)
                 if speed > math.max(MOVED_KMH, s.speed * 2) then v.moved = true end
                 if st.mode == 'stop' and #v.occupants > 0 then
@@ -969,9 +972,13 @@ local function watchPeds(ctx, st, dt, list)
             if p.state == 'surrendered' and bagCuffed(p) then
                 markCuffed(ctx, st, p)
             elseif not exists(p.entity) then
-                p.state = 'dead'
-                st.dirty = true
+                p.missing = (p.missing or 0) + 1
+                if p.missing >= MISSING_TICKS then
+                    p.state = 'dead'
+                    st.dirty = true
+                end
             else
+                p.missing = 0
                 local v = st.vehicles[p.vehicle]
                 local c = GetEntityCoords(p.entity)
                 local near = nearestOf(list, c)
@@ -998,7 +1005,8 @@ local function watchPeds(ctx, st, dt, list)
                 else
                     p.far = 0
                 end
-                if not p.armed and (p.state == 'fleeing' or p.state == 'stopped') and st.mode == 'stop' then
+                local onFootNow = p.state == 'fleeing' or (p.state == 'stopped' and not inVehicle(p))
+                if not p.armed and onFootNow and st.mode == 'stop' then
                     if near <= fa.closeDistance then
                         p.close = (p.close or 0) + dt
                         if p.close >= fa.closeSeconds then surrender(ctx, st, p) end
@@ -1210,6 +1218,7 @@ local function onEvent(ctx, src, ev)
         else
             if p.state == 'surrendered' or p.state == 'cuffed' then return false, 'duplicate' end
             if not onFoot(p) then return false, 'wrong_state' end
+            if t ~= 'low_health' and inVehicle(p) then return false, 'in_vehicle' end
             if t == 'aim' then
                 if p.armed then return false, 'armed' end
                 if not ctx.obj.surrenderOnAim and p.state == 'stopped' then return false, 'disabled' end

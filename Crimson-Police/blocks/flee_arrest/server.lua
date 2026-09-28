@@ -24,6 +24,13 @@
     A suspect or inmate more than escape.distance from every participant for escape.seconds
     escapes: the run fails. Killing an unarmed, surrendered or cuffed suspect/inmate (a participant
     kill) fails the run for everyone.
+    Every NPC spawns in the neutral relationship group (cfg.group = 'neutral'), armed or not; only
+    the 'hostile' state (fight response, associates after the knock, an armed inmate within
+    fireWithin) puts it in CRIMSONPOLICE_HOSTILE through CP.Npc's combat task, so nobody opens fire
+    before the knock or from beyond fireWithin.
+    validate: spawn points, the door marker and every fleeTo / route waypoint must lie outside
+    Config.Builder.noBuildZones for every mission; custom missions also get the allowed lists, the
+    associate spawn-point count and the minimum distance of spawn points from the start.
 
   Objective fields read (defaults: ARCHITECTURE §3.3 and Config.Blocks.flee_arrest)
     minSeconds [30] · presenceRange [presenceRange[3] = 250] · label
@@ -62,6 +69,7 @@
     inmate cuffed alive (associates earn nothing)
   Fail reason keys: block.flee_arrest.fail_escaped · block.flee_arrest.fail_setup (no usable spawn point
     outside the no-build zones) · run.fail_killed_unarmed
+  Spawning is guarded: the re-entry flag is cleared even when a spawn throws (retried next tick).
 
   ctx.state
     block, mode, rng, response, knocked, knockStart = { [src] = ms }, peds = { [tostring(netId)] =
@@ -203,11 +211,18 @@ local function pedCoords(p)
     return nil
 end
 
+-- Server-side max health (GetEntityMaxHealth, else GetPedMaxHealth; 0 when neither answers).
+local function serverMaxHealth(e)
+    local m = GetEntityMaxHealth and tonumber(GetEntityMaxHealth(e)) or nil
+    if (not m or m <= 0) and GetPedMaxHealth then m = tonumber(GetPedMaxHealth(e)) end
+    return m or 0
+end
+
 local function healthRatio(p)
     if not p.entity or not DoesEntityExist(p.entity) then return nil end
     local hp = tonumber(GetEntityHealth(p.entity)) or 0
     if hp <= 0 then return nil end
-    local serverMax = GetEntityMaxHealth and tonumber(GetEntityMaxHealth(p.entity)) or 0
+    local serverMax = serverMaxHealth(p.entity)
     local max = math.max(tonumber(p.maxHealth) or 200, serverMax or 0)
     if max > 100 then return (hp - 100) / (max - 100) end
     return hp / math.max(max, 1)
@@ -371,6 +386,14 @@ local function checkLocation(o, loc, li, strict)
         end
         return true
     end
+    -- markers and route waypoints: never inside a no-build zone (docs/CRIMSON_ARENA.md rule 7), for
+    -- every mission (the loader only sees location keys, not points written into the objective)
+    local function pathOk(list)
+        for _, p in ipairs(list) do
+            if inNoBuild(p) then return bad('block.flee_arrest.invalid.route_zone', { location = li }) end
+        end
+        return true
+    end
     local function need(key)
         return bad('block.flee_arrest.invalid.points_missing', { key = tostring(key), location = li })
     end
@@ -380,13 +403,24 @@ local function checkLocation(o, loc, li, strict)
         -- nothing ever spawns inside the prison walls (or any no-build zone): checked for every mission
         local ok, why = spawnOk(pts)
         if not ok then return false, why end
-        if #routeList(loc, o.routes) == 0 then return need(o.routes) end
+        local routes = routeList(loc, o.routes)
+        if #routes == 0 then return need(o.routes) end
+        for _, r in ipairs(routes) do
+            ok, why = pathOk(r)
+            if not ok then return false, why end
+        end
         return true
     end
-    if #pointList(loc, o.door) == 0 then return need(o.door) end
+    local door = pointList(loc, o.door)
+    if #door == 0 then return need(o.door) end
     local sp = pointList(loc, o.suspect)
     if #sp == 0 then return need(o.suspect) end
     if (tonumber(o.responses.flee) or 0) > 0 and #pointList(loc, o.fleeTo) == 0 then return need(o.fleeTo) end
+    do
+        local ok, why = pathOk(door)
+        if ok then ok, why = pathOk(pointList(loc, o.fleeTo)) end
+        if not ok then return false, why end
+    end
     local count = math.floor(tonumber(o.associates.count) or 0)
     local ap = {}
     if count > 0 then
@@ -396,12 +430,11 @@ local function checkLocation(o, loc, li, strict)
             return bad('block.flee_arrest.invalid.points_count', { location = li, min = count, have = #ap })
         end
     end
-    if strict then
-        local ok, why = spawnOk(sp)
-        if not ok then return false, why end
-        ok, why = spawnOk(ap)
-        if not ok then return false, why end
-    end
+    -- no-build zones for every mission; the distance from the start only for custom missions
+    local ok, why = spawnOk(sp)
+    if not ok then return false, why end
+    ok, why = spawnOk(ap)
+    if not ok then return false, why end
     return true
 end
 
@@ -562,7 +595,11 @@ local function spawnOne(ctx, st, role, point, armed, extra)
         opts.weapon = r:pick((assoc and assoc.weapons) or obj.weapons) or cfg().weapons[1]
         opts.accuracy, opts.armour = ctx.combat((assoc and assoc.accuracy) or obj.accuracy, (assoc and assoc.armour) or obj.armour)
     end
-    opts.cfg.group = armed and 'hostile' or 'neutral'
+    -- Every flee_arrest NPC starts calm (CRIMSONPOLICE_NEUTRAL), armed or not: door-mode NPCs wait
+    -- inside until the knock reveals the response, and armed inmates only open fire within
+    -- fireWithin. They join CRIMSONPOLICE_HOSTILE (which hates PLAYER) only when the server turns
+    -- them 'hostile' (CP.Npc's combat task sets the group; apply reads the state first).
+    opts.cfg.group = 'neutral'
     local ent, netId = ctx.spawnPed(opts)
     if not netId then return nil end
     local p = { netId = netId, entity = ent, role = role, armed = armed == true, state = 'idle', far = 0, close = 0 }
@@ -629,11 +666,8 @@ local function reveal(ctx, st)
     ctx.hud({ message = { text = CP.L(RESPONSE_TEXT[st.response] or RESPONSE_TEXT.fight), kind = 'warning' } })
 end
 
-local function spawnDoor(ctx, st)
-    if st.spawning or st.stopped then return false end
+local function spawnDoorLoop(ctx, st)
     local obj = ctx.obj
-    if not st.response then st.response = rollResponse(ctx) end
-    st.spawning = true
     local ok = true
     if st.counts.suspect < 1 then
         local armed = st.response == 'fight'
@@ -664,11 +698,31 @@ local function spawnDoor(ctx, st)
             end
         end
     end
-    st.spawning = false
     return ok
 end
 
+-- The spawning flag (re-entry while ctx.spawnPed yields) is always cleared, even when a spawn
+-- throws, so one failed spawn can never stop the objective from spawning again on the next tick.
+local function guardedSpawn(ctx, st, loop)
+    st.spawning = true
+    local okCall, ok = pcall(loop, ctx, st)
+    st.spawning = false
+    if not okCall then
+        CP.err(BLOCK, 'spawning for run %s failed: %s', tostring(ctx.run and ctx.run.id), tostring(ok))
+        return false
+    end
+    return ok
+end
+
+local function spawnDoor(ctx, st)
+    if st.spawning or st.stopped then return false end
+    if not st.response then st.response = rollResponse(ctx) end
+    return guardedSpawn(ctx, st, spawnDoorLoop)
+end
+
 -- ── Scatter mode ────────────────────────────────────────────────────────────
+local spawnScatterLoop
+
 local function spawnScatter(ctx, st)
     if st.spawning or st.stopped then return false end
     local obj = ctx.obj
@@ -686,8 +740,13 @@ local function spawnScatter(ctx, st)
     local routes = routeList(ctx.location, obj.routes)
     if not st.pointOrder or #st.pointOrder ~= #pts then st.pointOrder = rngOf(ctx):shuffle(indices(#pts)) end
     if #routes > 0 and (not st.routeOrder or #st.routeOrder ~= #routes) then st.routeOrder = rngOf(ctx):shuffle(indices(#routes)) end
-    local share = tonumber(obj.armedShare) or 0
-    st.spawning = true
+    return guardedSpawn(ctx, st, function()
+        return spawnScatterLoop(ctx, st, want, pts, routes)
+    end)
+end
+
+spawnScatterLoop = function(ctx, st, want, pts, routes)
+    local share = tonumber(ctx.obj.armedShare) or 0
     local ok = true
     while st.counts.inmate < want do
         if st.nextArmed == nil then
@@ -710,7 +769,6 @@ local function spawnScatter(ctx, st)
         setPed(ctx, st, p, 'fleeing')
         if st.stopped then ok = false break end
     end
-    st.spawning = false
     return ok
 end
 

@@ -8,8 +8,9 @@
     - red entity blips on hostiles that are not neutralised (none with Radio Silence);
     - a HUD line (ctx.hudDetail) when a surrendered hostile is close enough to cuff;
     - on the run host only: CP.Npc.apply + the task for the current cp state once the host has control
-      of each hostile (again after hostChanged), and one 'low_health' report per hostile whose health
-      drops under surrender.belowHealth (boss: boss.surrender.belowHealth).
+      of each hostile (again after hostChanged; retried until CP.Npc took both), and one 'low_health'
+      report per hostile whose health drops under surrender.belowHealth (boss: boss.surrender.belowHealth;
+      the server also polls health itself, the report only makes the roll come sooner).
     The "Cuff suspect" target itself is CP.Npc's (enableCuff). No networked entity is created here.
 
   Objective fields read: blockTraffic, behaviour, surrender.belowHealth / .chance,
@@ -121,21 +122,29 @@ local function healthRatio(ent)
     return hp / math.max(max, 1)
 end
 
+-- The host must own the ped before CP.Npc.apply / CP.Npc.task do anything (OneSync hands ownership
+-- to whoever is closest, often another participant): request it every time it is needed.
+local function hasControl(ctx, ent)
+    if NetworkHasControlOfEntity(ent) then return true end
+    return ctx.control(ent, CONTROL_MS) == true
+end
+
+local FIRST_TASK = { hostile = 'combat', surrendered = 'kneel', cuffed = 'cuffed' }
+
 local function hostAi(S, info, ent, state, bag)
     local ctx = S.ctx
     if S.applied[info.netId] ~= ent then
-        if not ctx.control(ent, CONTROL_MS) then return end
+        if not hasControl(ctx, ent) then return end
         local cfg = (bag and bag.cfg) or {}
-        CP.Npc.apply(ent, cfg)
-        S.applied[info.netId] = ent
-        -- first sight or new host: task for the current state (later changes: CP.Npc's bag handler)
-        if state == 'hostile' then
-            CP.Npc.task(ent, 'combat', { behaviour = cfg.behaviour or ctx.obj.behaviour })
-        elseif state == 'surrendered' then
-            CP.Npc.task(ent, 'kneel', {})
-        elseif state == 'cuffed' then
-            CP.Npc.task(ent, 'cuffed', {})
+        if CP.Npc.apply(ent, cfg) == false then return end
+        -- first sight or new host: task for the current state (later changes: CP.Npc's bag handler).
+        -- Only a task that went through marks the ped as handled; otherwise the next loop retries.
+        local action = FIRST_TASK[state]
+        if action then
+            local args = action == 'combat' and { behaviour = cfg.behaviour or ctx.obj.behaviour } or {}
+            if CP.Npc.task(ent, action, args) == false then return end
         end
+        S.applied[info.netId] = ent
     end
     if state == 'hostile' and not S.reported[info.netId] then
         local s = ctx.obj.surrender or {}

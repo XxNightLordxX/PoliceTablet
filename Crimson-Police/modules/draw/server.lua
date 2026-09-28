@@ -7,7 +7,8 @@
 --     abandoned missions of that type per citizenid, union over the unit; Config.Draw.avoidLast, and
 --     avoidLastLarge with largePool+ missions in the pool; a pool of one may repeat)
 --   * location picking (reserved spots skipped; spots with a non-participant player within
---     Config.Draw.playerClearance skipped while another spot is free; server-side ped coords) and the
+--     Config.Draw.playerClearance skipped while another spot is free; server-side ped coords; players
+--     in Crimson-Arena are ignored, docs/CRIMSON_ARENA.md rule 7) and the
 --     location reservations (several holders per spot are allowed so a test run can still reserve)
 --   * the Mission Board data (BoardData, ARCHITECTURE §9.4) and the accept of a mission type
 --
@@ -27,8 +28,9 @@
 -- Net
 --   callback 'getMissionTypes' -> BoardData
 --   action 'server:acceptType' (payload = a Config.MissionTypes key, or 'weekly_boss') -> { runId }
---       leader only; every member must be an officer (CP.Access.getOfficer), carry no foreign
---       crimsonArena flag (err.in_arena), have no active run, not be on a real call, be under the hourly
+--       leader only; every member must be an officer (CP.Access.getOfficer), not be in Crimson-Arena
+--       (CP.Alerts.inArena: foreign crimsonArena flag or routing bucket <> 0, docs/CRIMSON_ARENA.md rule 5;
+--       err.in_arena), have no active run, not be on a real call, be under the hourly
 --       cap and off the type cooldown; server caps (CP.Runs.capsOk); refused while a Cross-Department
 --       Mission is active; the Weekly Boss also needs CP.Events.bossAvailable for every member.
 --       Then CP.Units.lock(unit), the draw, CP.Runs.create (the unit is unlocked again on failure).
@@ -115,6 +117,24 @@ local function isOnCall(src)
     if not (CP.Calls and CP.Calls.isOnCall) then return false end
     local _, onCall = safe(CP.Calls.isOnCall, src)
     return onCall == true
+end
+
+-- docs/CRIMSON_ARENA.md rules 5 and 7: a foreign crimsonArena flag or a routing bucket other than 0.
+-- CP.Alerts.inArena is the gate; the fallbacks only apply while modules/alerts is not loaded.
+local function inArena(src)
+    if CP.Alerts and CP.Alerts.inArena then
+        local _, res = safe(CP.Alerts.inArena, src)
+        return res == true
+    end
+    if CP.Alerts and CP.Alerts.foreignFlag then
+        local _, foreign = safe(CP.Alerts.foreignFlag, src)
+        if foreign == true then return true end
+    end
+    if GetPlayerRoutingBucket then
+        local ok, bucket = pcall(GetPlayerRoutingBucket, src)
+        if ok and tonumber(bucket) and tonumber(bucket) ~= 0 then return true end
+    end
+    return false
 end
 
 local function onMission(src)
@@ -341,12 +361,13 @@ function Draw.isReserved(missionId, index)
     return set ~= nil and next(set) ~= nil
 end
 
--- Coordinates of every player who is not a participant (server-side ped coords).
+-- Coordinates of every player who is not a participant (server-side ped coords). Players in
+-- Crimson-Arena (foreign flag or another routing bucket) are ignored (docs/CRIMSON_ARENA.md rule 7).
 local function otherPlayerCoords(participants)
     local out = {}
     for _, id in ipairs(GetPlayers() or {}) do
         local s = tonumber(id)
-        if s and not participants[s] then
+        if s and not participants[s] and not inArena(s) then
             local ped = GetPlayerPed(s)
             if ped and ped ~= 0 then
                 local c = GetEntityCoords(ped)
@@ -648,10 +669,7 @@ local function accept(src, typeKey)
     local max = hourlyCap()
     for _, o in ipairs(officers) do
         local own = o.src == src
-        if CP.Alerts and CP.Alerts.foreignFlag then
-            local _, foreign = safe(CP.Alerts.foreignFlag, o.src)
-            if foreign then return false, 'err.in_arena' end
-        end
+        if inArena(o.src) then return false, 'err.in_arena' end
         if onMission(o.src) then return false, own and 'err.already_on_run' or 'err.member_on_run' end
         if isOnCall(o.src) then return false, own and 'err.on_call' or 'err.member_on_call' end
         if completionsLastHour(o.citizenid) >= max then return false, own and 'err.hourly_cap' or 'err.member_hourly_cap' end

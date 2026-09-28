@@ -1,11 +1,340 @@
-// Admin UI · Leaderboards (screen key 'admin_leaderboards', title key 'ui.screen.admin_leaderboards').
-// STUB: the owner of this screen replaces this whole file. Contract:
-//   - default-export a component that takes no props;
-//   - get data with hooks: useSession(), useRequest(), useAction(), usePush(), t(), useNavigate();
-//   - wrap the content in <Screen title={t('ui.screen.admin_leaderboards')}> from ../../shared/components;
-//   - browser mocks go in src/mocks/<feature>.mock.ts, text in locales/parts/<slice>.json.
-import { ScreenStub } from '../../shared/components';
+// Admin UI · Leaderboards (screen key 'admin_leaderboards', callback admin:getBoards).
+// Every board and period with the full ranked list (real names, hidden-name marker, cash paid per officer),
+// officers still below the minimum, and the payments left in 'paying' after a crash (with the
+// Renewed-Banking transaction id to check). Row actions: open the officer's runs in this board and void
+// one (server:admin:voidRun { rowId, reason }), award points (server:admin:awardPoints
+// { citizenid, points, reason }); both are implemented by modules/admin.
+import { useMemo, useState } from 'react';
+import {
+  Badge, Button, Card, ConfirmDialog, Dialog, EmptyState, ErrorState, Field, Grid, Icon, IconButton, LoadingBlock, Money,
+  NumberInput, Row, Screen, SearchInput, SegmentedControl, Select, Spacer, Stat, Table, Tabs, Textarea, TextInput,
+  type TableColumn,
+} from '../../shared/components';
+import { cx } from '../../shared/cx';
+import { formatDateTime, formatMoney, formatNumber } from '../../shared/format';
+import { useAction, useRequest } from '../../shared/hooks';
+import { t, tOr } from '../../shared/i18n';
+import { useSession } from '../../shared/session';
+import { asList, type AdminBoardRow, type AdminBoards, type AdminRun, type BoardPeriod, type StuckPayment } from '../../types/boards';
+import { BOARD_PERIODS, RankCell, boardFilters, filterLabel, formatClock, formatDay } from '../../officer/screens/Leaderboard';
+import { StateBadge, missionTypeLabel } from '../../officer/screens/Profile';
+import './Leaderboards.css';
+
+const AWARD_LIMIT = 10000;
+interface AwardForm { citizenid: string; name?: string; points: number | null; reason: string }
+
+function StuckPanel({ list }: { list: StuckPayment[] }) {
+  return (
+    <Card
+      title={t('admin.boards.stuck_title')}
+      subtitle={t('admin.boards.stuck_hint')}
+      icon="alert"
+      highlight={list.length ? 'warning' : undefined}
+      actions={list.length ? <Badge tone="warning" size="sm">{formatNumber(list.length)}</Badge> : null}
+      padding="sm"
+      className="boards-stuck"
+    >
+      {list.length ? (
+        <ul className="boards-stuck__list">
+          {list.map((p) => (
+            <li key={p.rowId} className="boards-stuck__item">
+              <div className="boards-stuck__head">
+                <span className="boards-strong">{p.name || p.citizenid}</span>
+                {p.callsign ? <span className="boards-muted">{p.callsign}</span> : null}
+                <Spacer />
+                <Money amount={p.amount} className="boards-stuck__amount" />
+              </div>
+              <div className="boards-stuck__meta">
+                <span>{p.missionLabel}</span>
+                <span className="cp-num">{formatDateTime(p.createdAt)}</span>
+                <span className="cp-num">{t('admin.boards.row_id', { id: p.rowId })}</span>
+              </div>
+              <code className="boards-stuck__trans cp-selectable" title={t('admin.boards.trans_hint')}>{p.transId}</code>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <EmptyState compact icon="checkCircle" title={t('admin.boards.stuck_none')} text={t('admin.boards.stuck_none_text')} />
+      )}
+    </Card>
+  );
+}
 
 export default function AdminLeaderboards() {
-  return <ScreenStub titleKey="ui.screen.admin_leaderboards" icon="podium" />;
+  const session = useSession();
+  const { run, busy } = useAction();
+  const departments = asList(session.config?.departments);
+  const [period, setPeriod] = useState<BoardPeriod>('weekly');
+  const [filter, setFilter] = useState('overall');
+  const [department, setDepartment] = useState(departments[0]?.key ?? '');
+  const [list, setList] = useState<'ranked' | 'unranked'>('ranked');
+  const [search, setSearch] = useState('');
+  const [officer, setOfficer] = useState<AdminBoardRow | null>(null);
+  const [voidRun, setVoidRun] = useState<AdminRun | null>(null);
+  const [award, setAward] = useState<AwardForm | null>(null);
+
+  const allTime = period === 'alltime';
+  const eff = allTime ? 'overall' : filter;
+  const args = useMemo(() => ({ period, filter: eff, ...(eff === 'department' ? { department } : {}) }), [period, eff, department]);
+  const { data, loading, error, refetch } = useRequest<AdminBoards>('admin:getBoards', args, { pollMs: 60000 });
+  const runsReq = useRequest<AdminBoards>('admin:getBoards', { ...args, citizenid: officer?.citizenid }, { skip: !officer });
+
+  const board = data && data.period === period && data.filter === eff ? data : null;
+  const rows = asList(list === 'ranked' ? board?.rows : board?.unranked);
+  const q = search.trim().toLowerCase();
+  const shown = q
+    ? rows.filter((r) => [r.realName, r.name, r.callsign ?? '', r.citizenid].some((v) => v.toLowerCase().includes(q)))
+    : rows;
+  const ranked = asList(board?.rows);
+  const stuck = asList(board?.stuck);
+  const totalPoints = ranked.reduce((s, r) => s + (Number(r.points) || 0), 0);
+  const totalCash = [...ranked, ...asList(board?.unranked)].reduce((s, r) => s + (Number(r.cash) || 0), 0);
+  const officerRuns = runsReq.data && runsReq.data.citizenid === officer?.citizenid ? asList(runsReq.data.runs) : [];
+
+  const openAward = (r?: AdminBoardRow | null) => setAward({ citizenid: r?.citizenid ?? '', name: r?.realName, points: null, reason: '' });
+  const awardValid = !!award && /^[A-Za-z0-9_-]{1,50}$/.test(award.citizenid.trim()) && award.points !== null && award.points !== 0 && !!award.reason.trim();
+
+  const submitAward = async () => {
+    if (!award || !awardValid) return;
+    const res = await run('server:admin:awardPoints', { citizenid: award.citizenid.trim(), points: award.points, reason: award.reason.trim() }, {
+      success: 'admin.boards.awarded', successVars: { points: formatNumber(award.points ?? 0), who: award.name ?? award.citizenid },
+    });
+    if (res.ok) {
+      setAward(null);
+      void refetch();
+      if (officer) void runsReq.refetch();
+    }
+  };
+
+  const submitVoid = async (reason: string) => {
+    if (!voidRun) return;
+    const res = await run('server:admin:voidRun', { rowId: voidRun.id, reason }, { success: 'admin.boards.voided' });
+    if (res.ok) {
+      setVoidRun(null);
+      void refetch();
+      void runsReq.refetch();
+    }
+  };
+
+  const columns: TableColumn<AdminBoardRow>[] = [
+    { key: 'rank', header: t('leaderboard.col.rank'), width: 76, render: (r) => <RankCell rank={r.rank} /> },
+    {
+      key: 'officer',
+      header: t('leaderboard.col.officer'),
+      render: (r) => (
+        <span className="boards-admin-officer">
+          <span className="boards-admin-officer__name">
+            {r.realName}
+            {r.hidden ? <Badge size="sm" icon="eye" title={t('admin.boards.hidden_hint', { shown: r.name })}>{t('admin.boards.hidden')}</Badge> : null}
+          </span>
+          <span className="boards-admin-officer__sub cp-num">{[r.callsign || t('common.no_callsign'), r.citizenid].join(' · ')}</span>
+        </span>
+      ),
+    },
+    { key: 'dept', header: t('leaderboard.col.dept'), width: 80, render: (r) => (r.departmentShort ? <Badge size="sm">{r.departmentShort}</Badge> : null) },
+    { key: 'runs', header: t('leaderboard.col.runs'), numeric: true, width: 72, render: (r) => formatNumber(r.runs) },
+    { key: 'failed', header: t('leaderboard.col.failed'), numeric: true, width: 72, render: (r) => formatNumber(r.failed) },
+    { key: 'points', header: allTime ? t('leaderboard.col.xp') : t('leaderboard.col.points'), numeric: true, width: 100, render: (r) => <span className="boards-strong">{formatNumber(r.points)}</span> },
+    { key: 'cash', header: t('admin.boards.col.cash'), numeric: true, width: 110, render: (r) => <Money amount={r.cash} /> },
+    {
+      key: 'actions',
+      header: '',
+      width: 84,
+      align: 'right',
+      render: (r) => (
+        <span className="boards-row-actions">
+          <IconButton icon="plus" size="sm" variant="ghost" label={t('admin.boards.award_for', { name: r.realName })} onClick={(e) => { e.stopPropagation(); openAward(r); }} />
+          <Icon name="chevronRight" size={16} className="boards-row-chevron" />
+        </span>
+      ),
+    },
+  ];
+
+  const runColumns: TableColumn<AdminRun>[] = [
+    { key: 'createdAt', header: t('profile.col.when'), width: 118, render: (r) => <span className="boards-muted cp-num">{formatDateTime(r.createdAt)}</span> },
+    {
+      key: 'mission',
+      header: t('profile.col.mission'),
+      render: (r) => (
+        <span className="boards-admin-officer">
+          <span className="boards-strong">{r.missionLabel}</span>
+          <span className="boards-admin-officer__sub">{`${missionTypeLabel(r.missionType, session)} · ${r.departmentShort} · #${r.id}`}</span>
+        </span>
+      ),
+    },
+    {
+      key: 'state',
+      header: t('profile.col.result'),
+      render: (r) => (
+        <span className="boards-admin-result">
+          <StateBadge state={r.state} />
+          <span className="boards-muted">{tOr(`reason.${r.endReason}`, 'common.unknown')}</span>
+        </span>
+      ),
+    },
+    {
+      key: 'flags',
+      header: '',
+      width: 100,
+      render: (r) => (
+        <span className="boards-admin-flags">
+          {r.voided ? <Badge tone="danger" size="sm">{t('profile.voided')}</Badge> : null}
+          {r.flagged ? <Badge tone="warning" size="sm" title={r.flagReason ? tOr(`profile.flag_reason.${r.flagReason}`, 'result.flag_generic') : undefined}>{t('profile.flagged')}</Badge> : null}
+        </span>
+      ),
+    },
+    { key: 'points', header: t('profile.col.points'), numeric: true, width: 76, render: (r) => <span className={cx(r.voided && 'boards-struck')}>{formatNumber(r.points)}</span> },
+    { key: 'cash', header: t('profile.col.cash'), numeric: true, width: 96, render: (r) => <Money amount={r.cash} /> },
+    {
+      key: 'void',
+      header: '',
+      width: 92,
+      align: 'right',
+      render: (r) =>
+        r.voided || r.missionType === 'goal' ? null : (
+          <Button size="sm" variant="danger" icon="xCircle" onClick={() => setVoidRun(r)}>
+            {t('admin.boards.void')}
+          </Button>
+        ),
+    },
+  ];
+
+  const tabs = BOARD_PERIODS.map((p) => ({ key: p, label: t(`leaderboard.period.${p}`) }));
+  const filterOptions = boardFilters(session).map((f) => ({ value: f, label: filterLabel(f, session) }));
+
+  return (
+    <Screen
+      title={t('ui.screen.admin_leaderboards')}
+      subtitle={t('admin.boards.subtitle')}
+      actions={
+        <>
+          {board ? <Badge size="sm" icon="clock">{t('leaderboard.updated', { time: formatClock(board.updatedAt) })}</Badge> : null}
+          <IconButton icon="refresh" label={t('leaderboard.refresh')} loading={loading && !!data} onClick={() => void refetch()} />
+          <Button variant="primary" icon="plus" onClick={() => openAward(null)}>{t('admin.boards.award')}</Button>
+        </>
+      }
+      className="boards-admin-boards"
+    >
+      <div className="boards-admin-toolbar">
+        <Tabs items={tabs} value={period} onChange={setPeriod} aria-label={t('leaderboard.periods')} />
+        <Row gap={2} wrap>
+          <Select value={eff} onChange={setFilter} options={filterOptions} disabled={allTime} aria-label={t('leaderboard.filters')} className="boards-admin-select" />
+          {eff === 'department' ? (
+            <Select value={department} onChange={setDepartment} options={departments.map((d) => ({ value: d.key, label: `${d.short} · ${d.label}` }))} aria-label={t('leaderboard.department')} className="boards-admin-select" />
+          ) : null}
+          <SegmentedControl
+            size="sm"
+            value={list}
+            onChange={setList}
+            items={[
+              { key: 'ranked', label: t('admin.boards.ranked'), badge: board ? formatNumber(asList(board.rows).length) : undefined },
+              { key: 'unranked', label: t('admin.boards.unranked'), badge: board ? formatNumber(asList(board.unranked).length) : undefined },
+            ]}
+            aria-label={t('admin.boards.list')}
+          />
+          <Spacer />
+          <SearchInput value={search} onChange={setSearch} placeholder={t('admin.boards.search')} className="boards-admin-search" />
+        </Row>
+      </div>
+
+      {board ? (
+        <div className="boards-admin-stats">
+          <Stat size="sm" label={t('admin.boards.stat.window')} value={period === 'alltime' ? t('leaderboard.period.alltime') : period === 'season' ? (board.season?.name ?? '–') : formatDay(board.window?.from)} icon="calendar" />
+          <Stat size="sm" label={t('admin.boards.stat.ranked')} value={formatNumber(ranked.length)} hint={t('admin.boards.stat.min', { n: board.minRuns })} icon="users" />
+          <Stat size="sm" label={allTime ? t('admin.boards.stat.xp') : t('admin.boards.stat.points')} value={formatNumber(totalPoints)} icon="star" />
+          <Stat size="sm" label={t('admin.boards.stat.cash')} value={formatMoney(totalCash)} icon="dollar" tone="success" />
+          <Stat size="sm" label={t('admin.boards.stat.stuck')} value={formatNumber(stuck.length)} icon="alert" tone={stuck.length ? 'warning' : 'neutral'} />
+        </div>
+      ) : null}
+
+      {!board && loading ? (
+        <LoadingBlock />
+      ) : !board && error ? (
+        <ErrorState error={error} onRetry={() => void refetch()} />
+      ) : (
+        <Grid cols="minmax(0, 1fr) 360px" gap={4} align="start" className="boards-admin-boards-grid">
+          <Table
+            columns={columns}
+            rows={shown}
+            rowKey={(r) => r.citizenid}
+            onRowClick={(r) => setOfficer(r)}
+            maxHeight={520}
+            dense
+            loading={loading && !board}
+            empty={
+              period === 'season' && board && !board.season
+                ? t('leaderboard.no_season_title')
+                : q
+                  ? t('admin.boards.no_match')
+                  : list === 'ranked'
+                    ? t('leaderboard.empty_text', { n: board?.minRuns ?? 3 })
+                    : t('admin.boards.unranked_empty')
+            }
+            aria-label={t('ui.screen.admin_leaderboards')}
+          />
+          <StuckPanel list={stuck} />
+        </Grid>
+      )}
+
+      <Dialog
+        open={!!officer}
+        onClose={() => setOfficer(null)}
+        size="lg"
+        title={officer ? t('admin.boards.runs_title', { name: officer.realName }) : ''}
+        description={officer ? t('admin.boards.runs_desc', { board: `${t(`leaderboard.period.${period}`)} · ${filterLabel(eff, session)}` }) : undefined}
+        footer={
+          <>
+            <Button variant="secondary" icon="plus" onClick={() => openAward(officer)}>{t('admin.boards.award')}</Button>
+            <Button variant="primary" onClick={() => setOfficer(null)}>{t('common.close')}</Button>
+          </>
+        }
+      >
+        {runsReq.error && !runsReq.data ? (
+          <ErrorState compact error={runsReq.error} onRetry={() => void runsReq.refetch()} />
+        ) : (
+          <Table columns={runColumns} rows={officerRuns} rowKey={(r) => r.id} dense loading={runsReq.loading} maxHeight={400} empty={t('admin.boards.runs_empty')} />
+        )}
+      </Dialog>
+
+      <ConfirmDialog
+        open={!!voidRun}
+        tone="danger"
+        title={t('admin.boards.void_title')}
+        message={voidRun ? t('admin.boards.void_message', { mission: voidRun.missionLabel, when: formatDateTime(voidRun.createdAt), points: formatNumber(voidRun.points) }) : ''}
+        confirmLabel={t('admin.boards.void')}
+        reason={{ required: true, maxLength: 255, placeholder: t('admin.boards.void_placeholder') }}
+        onConfirm={submitVoid}
+        onCancel={() => setVoidRun(null)}
+        busy={busy}
+      />
+
+      <Dialog
+        open={!!award}
+        onClose={() => (busy ? undefined : setAward(null))}
+        size="sm"
+        title={t('admin.boards.award_title')}
+        description={t('admin.boards.award_desc')}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setAward(null)} disabled={busy}>{t('common.cancel')}</Button>
+            <Button variant="primary" icon="plus" loading={busy} disabled={!awardValid} onClick={() => void submitAward()}>{t('admin.boards.award')}</Button>
+          </>
+        }
+      >
+        {award ? (
+          <div className="boards-award-form">
+            <Field label={t('admin.boards.citizenid')} required hint={award.name ? award.name : undefined}>
+              <TextInput value={award.citizenid} onChange={(v) => setAward({ ...award, citizenid: v, name: undefined })} maxLength={50} placeholder="ABC12345" />
+            </Field>
+            <Field label={t('admin.boards.points')} required hint={t('admin.boards.points_hint')}>
+              <NumberInput value={award.points} onChange={(v) => setAward({ ...award, points: v })} min={-AWARD_LIMIT} max={AWARD_LIMIT} integer stepper />
+            </Field>
+            <Field label={t('common.reason')} required>
+              <Textarea value={award.reason} onChange={(v) => setAward({ ...award, reason: v })} maxLength={255} rows={3} placeholder={t('admin.boards.reason_placeholder')} />
+            </Field>
+          </div>
+        ) : null}
+      </Dialog>
+    </Screen>
+  );
 }

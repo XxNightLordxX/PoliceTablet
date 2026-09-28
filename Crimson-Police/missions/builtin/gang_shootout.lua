@@ -100,7 +100,6 @@ RegisterMission({
       block        = 'hostile_waves',
       label        = 'Neutralise all hostiles',
       minSeconds   = 60,                                       -- quicker than this is rejected
-      spawns       = 'spawns',
       waves        = { 7, 7, 6 },                              -- base counts, scaled by tier
       nextWave     = { aliveAtMost = 2, afterSeconds = 90 },
       weapons      = { 'WEAPON_PISTOL', 'WEAPON_MICROSMG' },

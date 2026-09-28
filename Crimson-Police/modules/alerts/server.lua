@@ -2,9 +2,9 @@
 -- of the crimsonArena state bag (docs/ARCHITECTURE.md §5.14, docs/CRIMSON_ARENA.md rules 1, 2, 3, 9, 11).
 --
 -- Owns: the replicated player state bag key 'crimsonArena' (the name is fixed by sc-dispatch,
--- sc-ambulance and Crimson-Arena), the intent table `wanted`, the re-assert of our flag after another
+-- sc-ambulance and Crimson-Arena), the intent table 'wanted', the re-assert of our flag after another
 -- resource wiped it, the in-arena detection for active participants (they leave the run as 'quit'),
--- `foreignClearedAt`, the start/stop cleanup, and the dispatch backstop that clears shots-fired,
+-- foreignClearedAt, the start/stop cleanup, and the dispatch backstop that clears shots-fired,
 -- person-down and person-dead calls that slipped through while a participant carries the flag.
 --
 -- Our value is always { active = true, source = 'crimson-police' }. A value is FOREIGN when it is a table
@@ -27,7 +27,8 @@
 --   CP.Alerts.has(src) -> boolean              wanted[src] ~= nil (the intent, not the live bag)
 --   CP.Alerts.foreignFlag(src) -> boolean      the live value is foreign (Crimson-Arena's)
 --   CP.Alerts.inArena(src) -> boolean          foreignFlag(src) or GetPlayerRoutingBucket(src) ~= 0
---   CP.Alerts.foreignClearedAt(src) -> ts|nil  os.time() when a foreign value last changed to nil
+--   CP.Alerts.foreignClearedAt[src] -> ts|nil  table (read only): os.time() when a foreign value last changed
+--                                              to nil (Crimson-Arena let the player go)
 --   CP.Alerts.hold(src, on)                    CP.Downed: keep the flag of a downed participant (keepFlag)
 --   CP.Alerts.onInArena(fn(src, run))          listeners, called once per run when an active participant
 --                                              becomes in-arena (after this module removed them)
@@ -36,8 +37,9 @@
 -- In-arena participants (CRIMSON_ARENA rule 1): the 1 s reconcile checks every active participant of every
 -- run (accepted or in progress, tests and operations included) and the change handler reacts to a foreign
 -- value at once. This module itself drops the intent (without touching the bag), stops the route check,
--- cancels a pending downed pick-up/EMS request, sends the toast run.left_for_arena and calls
--- CP.Runs.removeParticipant(run, src, 'quit'); onInArena listeners are informed afterwards.
+-- cancels a pending downed pick-up/EMS request and calls CP.Runs.removeParticipant(run, src, 'quit',
+-- { notify = 'run.left_for_arena' }) (the engine sends the toast only when it really removed them, so the
+-- engine's own 1 s arena re-check never doubles it); onInArena listeners are informed afterwards.
 --
 -- Backstop (CP.Dispatch listeners, receivedAt = os.time() captured at receipt by the integration):
 --   shots fired   from a src whose intent is on, or an arrived active participant of an In-progress run,
@@ -72,6 +74,7 @@ local arenaListeners = {}
 local recentClears = {}           -- recentClears[uniqueId] = os.time()
 
 A.wanted = wanted
+A.foreignClearedAt = foreignCleared
 
 -- ── helpers ─────────────────────────────────────────────────────────────────
 local function toSrc(src)
@@ -175,9 +178,12 @@ local function serverCoords(src)
 end
 
 -- Remember kind transitions; a foreign value that turned into nil is Crimson-Arena letting go.
-local function observe(src, kind)
+-- prevKind is the value the change handler saw before the change (FiveM calls the handler before the
+-- value is set), so an exit is recorded even when this module never saw the foreign value itself
+-- (e.g. Crimson-Police restarted while the player was in a match).
+local function observe(src, kind, prevKind)
     local prev = lastKind[src]
-    if prev == 'foreign' and kind == 'none' then
+    if (prev == 'foreign' or prevKind == 'foreign') and kind == 'none' then
         foreignCleared[src] = os.time()
         CP.log(TAG, 'foreign crimsonArena value of %d was removed', src)
     end
@@ -201,12 +207,6 @@ end
 function A.has(src)
     src = toSrc(src)
     return src ~= nil and wanted[src] ~= nil
-end
-
-function A.foreignClearedAt(src)
-    src = toSrc(src)
-    if not src then return nil end
-    return foreignCleared[src]
 end
 
 function A.hold(src, on)
@@ -285,6 +285,8 @@ local function reassert(src)
     end
 end
 
+-- Called from queued work (never from inside the change handler): re-assert now, or once the 250 ms
+-- since the last re-assert of this src have passed.
 local function queueReassert(src)
     if reassertQueued[src] then return end
     local delay = 0
@@ -292,6 +294,10 @@ local function queueReassert(src)
     if last then
         local since = GetGameTimer() - last
         if since < REASSERT_GAP_MS then delay = REASSERT_GAP_MS - since end
+    end
+    if delay <= 0 then
+        reassert(src)
+        return
     end
     reassertQueued[src] = true
     SetTimeout(delay, function() reassert(src) end)
@@ -315,11 +321,10 @@ local function handleInArena(run, src)
     forgetIntent(src)                              -- the bag itself is left alone (it is not ours now)
     if CP.Route and CP.Route.stop then pcall(CP.Route.stop, run, src) end
     if CP.Downed and CP.Downed.cancel then pcall(CP.Downed.cancel, src, 'in_arena') end
-    if CP.Tablet and CP.Tablet.notify then pcall(CP.Tablet.notify, src, 'warning', 'run.left_for_arena') end
     CreateThread(function()
         local cur = run.participants and run.participants[src]
         if cur and cur.status == 'active' and run.state ~= 'ended' then
-            runsCall('removeParticipant', run, src, 'quit')
+            runsCall('removeParticipant', run, src, 'quit', { notify = 'run.left_for_arena' })
         end
         for i = 1, #arenaListeners do
             local ok, err = pcall(arenaListeners[i], src, run)
@@ -342,8 +347,8 @@ local function checkArena(src)
 end
 
 -- ── state bag change handler: queue work only ───────────────────────────────
-local function onBagChange(src, kind)
-    observe(src, kind)
+local function onBagChange(src, kind, prevKind)
+    observe(src, kind, prevKind)
     if kind == 'none' then
         if wanted[src] then queueReassert(src) end
     elseif kind == 'foreign' then
@@ -357,7 +362,8 @@ if type(AddStateBagChangeHandler) == 'function' then
         src = ok and toSrc(src) or nil
         if not src then return end
         local kind = classify(value)
-        SetTimeout(0, function() onBagChange(src, kind) end)
+        local prevKind = classify(bagValue(src))   -- read only: the old value (not set yet)
+        SetTimeout(0, function() onBagChange(src, kind, prevKind) end)
     end)
 else
     CP.err(TAG, 'AddStateBagChangeHandler is not available: only the 1 s reconcile watches the crimsonArena flag')
@@ -443,12 +449,17 @@ local function delayMs()
     return math.floor(s * 1000)
 end
 
+-- An id of second s can only be created during second s (plus a few ms for sc-dispatch's unawaited
+-- unique_id update), so an earlier clear of it only counts once it ran at s + 2 or later. A clear that ran
+-- sooner (e.g. the t + 1 id of the previous second's event) may have come before the call existed.
 local function clearIds(fmt, src, t, jobs)
     if not (CP.Dispatch and CP.Dispatch.clearNotification) then return end
     local now = os.time()
     for dt = -1, 1 do
-        local id = fmt:format(src, t + dt)
-        if not recentClears[id] then
+        local s = t + dt
+        local id = fmt:format(src, s)
+        local doneAt = recentClears[id]
+        if not (doneAt and doneAt >= s + 2) then
             recentClears[id] = now
             local ok, err = pcall(CP.Dispatch.clearNotification, id, jobs)
             if not ok then CP.err(TAG, 'clearNotification(%s) failed: %s', id, tostring(err)) end

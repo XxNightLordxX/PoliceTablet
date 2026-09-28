@@ -19,7 +19,9 @@
 --       route from where the player is. data = { recalcsLeft }. errKeys: err.route_inactive,
 --       err.route_arrived, err.route_disabled, err.route_no_recalcs, err.busy, err.timeout. Yields.
 --   CP.Route.stop()                               clears the waypoint (when it is still ours), the blip and
---                                                 the reports. Never touches the HUD (the run engine hides it).
+--                                                 the reports; that run is never begun again on this client
+--                                                 (CP.Runs calls it on arrival and at the end). Never touches
+--                                                 the HUD (the run engine owns it).
 --   CP.Route.current() -> { runId, arrived, routeOn } | nil
 -- Client actions: setGps (re-sets the waypoint to the start; the polyline stays the same), recalcRoute.
 -- Events handled: client:routeWarning (runId, secondsLeft|nil) -> HUD { route = { status, secondsLeft,
@@ -262,6 +264,7 @@ function R.stop()
     if not cur then return end
     local target = cur.target
     local pending = cur.recalcPending
+    markEnded(cur.runId)                -- stopped (arrival or run end): never begun again for this run
     removeBlip()
     clearOurWaypoint(target)
     cur = nil

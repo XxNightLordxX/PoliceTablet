@@ -4,7 +4,8 @@
     From prepare (the hostages spawn then) on the run host only: CP.Npc.apply once it has control of
     each hostage, then the task for its cp state (restrained -> kneel, idle/safe -> cower,
     freed -> follow to the safe marker, re-issued every RETASK_MS while walking); again after
-    hostChanged.
+    hostChanged. Control is requested before every task (the officer next to a hostage often owns
+    it) and a task that CP.Npc.task refused is retried on the next loop.
     While the objective is current on this participant's client:
     - ox_target "Cut restraints" (exports.ox_target:addLocalEntity, option crimson-police:cut_restraints)
       on every restrained hostage, re-attached when the entity handle changes, removed in stop;
@@ -163,24 +164,37 @@ local function ensureTarget(S, netId, ent)
 end
 
 -- ── Host AI ─────────────────────────────────────────────────────────────────
+-- The host must own the hostage before CP.Npc.apply / CP.Npc.task do anything. OneSync hands
+-- ownership to the closest player, which is usually the officer who just cut the restraints, so
+-- control is requested for every task, and a task only counts as done when CP.Npc.task took it.
+local function hasControl(ctx, ent)
+    if NetworkHasControlOfEntity(ent) then return true end
+    return ctx.control(ent, CONTROL_MS) == true
+end
+
 local function hostAi(S, info, ent, state)
     local ctx = S.ctx
     if S.applied[info.netId] ~= ent then
-        if not ctx.control(ent, CONTROL_MS) then return end
+        if not hasControl(ctx, ent) then return end
         local bag = bagOf(ent)
-        CP.Npc.apply(ent, (bag and bag.cfg) or {})
+        if CP.Npc.apply(ent, (bag and bag.cfg) or {}) == false then return end
         S.applied[info.netId] = ent
         S.tasked[info.netId] = nil
     end
     local t = S.tasked[info.netId]
     local at = GetGameTimer()
     if t and t.state == state and not (state == 'freed' and at - t.at >= RETASK_MS) then return end
+    local action, args
     if state == 'restrained' then
-        CP.Npc.task(ent, 'kneel', {})
+        action, args = 'kneel', {}
     elseif state == 'freed' and S.safe then
-        CP.Npc.task(ent, 'follow', { coords = S.safe })
+        action, args = 'follow', { coords = S.safe }
     elseif state == 'idle' or state == 'safe' then
-        CP.Npc.task(ent, 'cower', {})
+        action, args = 'cower', {}
+    end
+    if action then
+        if not hasControl(ctx, ent) then return end
+        if CP.Npc.task(ent, action, args) == false then return end
     end
     S.tasked[info.netId] = { state = state, at = at }
 end
@@ -241,6 +255,8 @@ end
 local function cleanup(S)
     S.alive = false
     S.current = false
+    -- a "Cut restraints" progress bar still running when the objective or run ends is cancelled
+    if S.busy and lib.progressActive and lib.progressActive() then lib.cancelProgress() end
     for netId in pairs(S.targets) do dropTarget(S, netId) end
     for k in pairs(S.blips) do dropBlip(S, k) end
     if S.hint then

@@ -4,8 +4,13 @@
   suspect's rolled response (surrenders 50% / flees out the back 30% / fights with a pistol 20%) and the
   armed associates, cuff the suspect, then search the property at the yard marker.
   Locations (6 houses): Grove Street (Davis), Forum Drive (Strawberry), Mirror Park, Wild Oats Drive
-  (Vinewood Hills), Sandy Shores and Paleto Bay. Each has a front door, the suspect's spot just inside,
-  fleeTo points out the back, four associate spawns (the count scales) and a yard marker.
+  (Vinewood Hills), Sandy Shores and Paleto Bay. Each has a front door, the suspect's spot, fleeTo points
+  out the back, four associate spawns (the count scales) and a yard marker. The suspect waits on the door
+  step, 1.2 m beside the door: none of these houses can be relied on to have an interior a ped can walk
+  out of (most have none, and story-mode doors are locked in multiplayer), so a ped placed behind the
+  facade would be stuck in the walls. From beside the door, the block's surrender move (1 m past the
+  door, away from where he waited) keeps him on the step, and a fleeing suspect runs round the house to
+  fleeTo. Associates and the yard marker are in the front and side yard for the same reason.
   Blocks: flee_arrest (door mode) → interact_points.
 ]]
 
@@ -28,91 +33,91 @@ RegisterMission({
       label      = 'Grove Street, Davis',
       start      = { coords = vec3(95.47, -1933.18, 20.80), radius = 50.0 },   -- the street in front of the house
       door       = vec4(114.33, -1961.14, 21.33, 34.0),   -- "Knock and announce"; heading faces out
-      suspect    = vec4(115.00, -1962.13, 21.33, 34.0),   -- inside, behind the front door
+      suspect    = vec4(113.17, -1961.56, 21.33, 34.0),   -- on the door step, beside the door (see the header)
       fleeTo     = {   -- out the back, in order
         vec3(128.29, -1978.26, 21.00), vec3(133.38, -1996.54, 20.90),
         vec3(140.71, -2018.13, 20.80), vec3(156.89, -2034.96, 20.80),
       },
-      associates = {   -- armed associates (base 1, scales)
-        vec4(123.90, -1961.92, 21.23, 34.0), vec4(111.47, -1970.31, 21.23, 34.0),
-        vec4(118.57, -1976.37, 21.23, 34.0), vec4(128.50, -1966.06, 21.23, 34.0),
+      associates = {   -- armed associates (base 1, scales): front and side yard, away from the start
+        vec4(107.41, -1963.40, 21.23, 34.0), vec4(102.97, -1963.97, 21.23, 34.0),
+        vec4(101.61, -1967.31, 21.23, 34.0), vec4(97.71, -1965.11, 21.23, 34.0),
       },
-      yard       = vec3(124.65, -1971.07, 21.10),   -- "Search the property"
+      yard       = vec3(105.19, -1963.69, 21.10),   -- "Search the property": front yard, beside the path to the door
     },
     {
       label      = 'Forum Drive, Strawberry',
       start      = { coords = vec3(-40.29, -1459.24, 30.30), radius = 50.0 },   -- the street in front of the house
       door       = vec4(-14.29, -1441.24, 31.10, 180.0),   -- "Knock and announce"; heading faces out
-      suspect    = vec4(-14.29, -1440.04, 31.10, 180.0),   -- inside, behind the front door
+      suspect    = vec4(-13.09, -1441.54, 31.10, 180.0),   -- on the door step, beside the door (see the header)
       fleeTo     = {   -- out the back, in order
         vec3(-16.29, -1419.24, 30.80), vec3(-10.29, -1401.24, 30.60),
         vec3(-4.29, -1379.24, 30.40), vec3(-8.29, -1356.24, 30.20),
       },
-      associates = {   -- armed associates (base 1, scales)
-        vec4(-21.79, -1435.24, 31.00, 180.0), vec4(-6.79, -1435.24, 31.00, 180.0),
-        vec4(-9.29, -1426.24, 31.00, 180.0), vec4(-23.29, -1429.24, 31.00, 180.0),
+      associates = {   -- armed associates (base 1, scales): front and side yard, away from the start
+        vec4(-7.29, -1443.24, 31.00, 180.0), vec4(-3.29, -1445.24, 31.00, 180.0),
+        vec4(-0.29, -1443.24, 31.00, 180.0), vec4(1.71, -1447.24, 31.00, 180.0),
       },
-      yard       = vec3(-17.29, -1427.24, 30.90),   -- "Search the property"
+      yard       = vec3(-5.29, -1444.24, 30.90),   -- "Search the property": front yard, beside the path to the door
     },
     {
       label      = 'Mirror Park',
       start      = { coords = vec3(1223.42, -540.34, 69.20), radius = 50.0 },   -- the street in front of the house
       door       = vec4(1241.42, -566.34, 69.65, 90.0),   -- "Knock and announce"; heading faces out
-      suspect    = vec4(1242.62, -566.34, 69.65, 90.0),   -- inside, behind the front door
+      suspect    = vec4(1241.12, -567.54, 69.65, 90.0),   -- on the door step, beside the door (see the header)
       fleeTo     = {   -- out the back, in order
         vec3(1263.42, -564.34, 70.00), vec3(1281.42, -570.34, 70.50),
         vec3(1303.42, -576.34, 71.20), vec3(1326.42, -572.34, 72.00),
       },
-      associates = {   -- armed associates (base 1, scales)
-        vec4(1247.42, -558.84, 69.55, 90.0), vec4(1247.42, -573.84, 69.55, 90.0),
-        vec4(1256.42, -571.34, 69.55, 90.0), vec4(1253.42, -557.34, 69.55, 90.0),
+      associates = {   -- armed associates (base 1, scales): front and side yard, away from the start
+        vec4(1239.42, -573.34, 69.55, 90.0), vec4(1237.42, -577.34, 69.55, 90.0),
+        vec4(1239.42, -580.34, 69.55, 90.0), vec4(1235.42, -582.34, 69.55, 90.0),
       },
-      yard       = vec3(1255.42, -563.34, 69.80),   -- "Search the property"
+      yard       = vec3(1238.42, -575.34, 69.80),   -- "Search the property": front yard, beside the path to the door
     },
     {
       label      = 'Wild Oats Drive, Vinewood Hills',
       start      = { coords = vec3(-140.35, 524.73, 137.20), radius = 50.0 },   -- the street in front of the house
       door       = vec4(-174.35, 502.73, 137.42, 0.0),   -- "Knock and announce"; heading faces out
-      suspect    = vec4(-174.35, 501.53, 137.42, 0.0),   -- inside, behind the front door
+      suspect    = vec4(-175.55, 503.03, 137.42, 0.0),   -- on the door step, beside the door (see the header)
       fleeTo     = {   -- out the back, in order
-        vec3(-190.35, 496.73, 137.30), vec3(-204.35, 506.73, 137.60),
+        vec3(-191.35, 505.73, 137.30), vec3(-204.35, 506.73, 137.60),
         vec3(-226.35, 510.73, 138.00), vec3(-252.35, 512.73, 138.50),
       },
-      associates = {   -- armed associates (base 1, scales)
-        vec4(-166.35, 504.23, 137.32, 0.0), vec4(-182.35, 504.23, 137.32, 0.0),
-        vec4(-164.35, 498.73, 137.32, 0.0), vec4(-184.35, 498.73, 137.32, 0.0),
+      associates = {   -- armed associates (base 1, scales): front and side yard, away from the start
+        vec4(-181.35, 504.73, 137.32, 0.0), vec4(-185.35, 506.73, 137.32, 0.0),
+        vec4(-188.35, 504.73, 137.32, 0.0), vec4(-190.35, 508.73, 137.32, 0.0),
       },
-      yard       = vec3(-183.35, 504.73, 137.40),   -- "Search the property"
+      yard       = vec3(-183.35, 505.73, 137.40),   -- "Search the property": front yard, beside the path to the door
     },
     {
       label      = 'Sandy Shores',
       start      = { coords = vec3(1960.84, 3786.37, 32.90), radius = 50.0 },   -- the street in front of the house
       door       = vec4(1973.60, 3815.30, 33.43, 211.5),   -- "Knock and announce"; heading faces out
-      suspect    = vec4(1972.97, 3816.32, 33.43, 211.5),   -- inside, behind the front door
+      suspect    = vec4(1974.78, 3815.67, 33.43, 211.5),   -- on the door step, beside the door (see the header)
       fleeTo     = {   -- out the back, in order
         vec3(1960.59, 3830.79, 33.20), vec3(1960.95, 3847.42, 33.00),
         vec3(1964.91, 3863.93, 32.80), vec3(1968.87, 3880.43, 32.60),
       },
-      associates = {   -- armed associates (base 1, scales)
-        vec4(1964.07, 3816.50, 33.33, 211.5), vec4(1976.86, 3824.33, 33.33, 211.5),
-        vec4(1970.03, 3830.70, 33.33, 211.5), vec4(1959.66, 3820.83, 33.33, 211.5),
+      associates = {   -- armed associates (base 1, scales): front and side yard, away from the start
+        vec4(1980.61, 3817.25, 33.33, 211.5), vec4(1985.07, 3817.64, 33.33, 211.5),
+        vec4(1986.58, 3820.91, 33.33, 211.5), vec4(1990.38, 3818.54, 33.33, 211.5),
       },
-      yard       = vec3(1963.73, 3825.67, 33.30),   -- "Search the property"
+      yard       = vec3(1982.84, 3817.44, 33.30),   -- "Search the property": front yard, beside the path to the door
     },
     {
       label      = 'Paleto Bay',
       start      = { coords = vec3(-373.45, 6222.69, 31.30), radius = 50.0 },   -- the street in front of the house
       door       = vec4(-374.34, 6191.08, 31.73, 53.7),   -- "Knock and announce"; heading faces out
-      suspect    = vec4(-373.37, 6190.37, 31.73, 53.7),   -- inside, behind the front door
+      suspect    = vec4(-375.29, 6190.29, 31.73, 53.7),   -- on the door step, beside the door (see the header)
       fleeTo     = {   -- out the back, in order
         vec3(-355.43, 6179.67, 31.60), vec3(-344.47, 6164.18, 31.50),
         vec3(-330.29, 6146.32, 31.50), vec3(-309.39, 6135.92, 31.40),
       },
-      associates = {   -- armed associates (base 1, scales)
-        vec4(-365.06, 6193.57, 31.63, 53.7), vec4(-373.94, 6181.48, 31.63, 53.7),
-        vec4(-365.21, 6178.17, 31.63, 53.7), vec4(-359.34, 6191.23, 31.63, 53.7),
+      associates = {   -- armed associates (base 1, scales): front and side yard, away from the start
+        vec4(-380.10, 6186.62, 31.63, 53.7), vec4(-384.08, 6184.58, 31.63, 53.7),
+        vec4(-384.24, 6180.98, 31.63, 53.7), vec4(-388.65, 6181.74, 31.63, 53.7),
       },
-      yard       = vec3(-361.28, 6185.21, 31.60),   -- "Search the property"
+      yard       = vec3(-382.09, 6185.60, 31.60),   -- "Search the property": front yard, beside the path to the door
     },
   },
 

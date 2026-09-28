@@ -37,6 +37,7 @@
     CP.Runs.view(run, src) -> ActiveMissionView (§9.4) / summary(run) -> LiveRun (§9.5)
     CP.Runs.isParticipant(run, src) / activeSrcs(run) -> { src... } / host(run) -> src
     CP.Runs.testSkip(run) / testRestart(run) / anchor(run) -> vec3    (test runs only)
+    Internal (same slice, used by tests): CP.Runs._tick() one 1 s tick, CP.Runs._jobRecheck() one recheck pass
   Net
     callback 'getRun' -> ActiveMissionView|nil for the caller's run
     action   'server:abandon' (runId) -> removeParticipant(run, src, 'quit')
@@ -439,6 +440,8 @@ local function pedCoords(src)
     return GetEntityCoords(ped)
 end
 
+local objectiveHud   -- forward declaration (defined with the HUD helpers below)
+
 local function getCtx(run, i)
     local cache = ctxCache[run.id]
     if not cache then
@@ -458,7 +461,7 @@ local function getCtx(run, i)
         ctx.award = function(id, opts) return Runs.award(run, id, opts) end
         ctx.penalize = function(id, opts) return Runs.penalize(run, id, opts) end
         ctx.send = function(data) return Runs.objectiveEvent(run, i, data) end
-        ctx.hud = function(patch) return Runs._objectiveHud(run, i, patch) end
+        ctx.hud = function(patch) return objectiveHud(run, i, patch) end
         ctx.spawnPed = function(opts)
             opts = type(opts) == 'table' and opts or {}
             opts.obj = i
@@ -587,7 +590,7 @@ local function refreshHud(run, force)
 end
 
 -- ctx.hud: detail/value/max belong to objective i's HUD entry; everything else is a top-level HUD patch.
-function Runs._objectiveHud(run, i, patch)
+objectiveHud = function(run, i, patch)
     if type(run) ~= 'table' or type(patch) ~= 'table' or run.state == 'ended' then return end
     local o = run.objectives[i]
     if not o then return end
@@ -1432,7 +1435,11 @@ local function rescale(run, endReason)
     if run.state ~= 'in_progress' then
         if run.state == 'accepted' and not forcedTier(run) then
             local n = #Runs.activeSrcs(run)
+            local old = run.expectedTier
             if n > 0 then run.expectedTier = tierName(tierFor(n)) or run.expectedTier end
+            if run.expectedTier ~= old then
+                Runs.send(run, 'client:tierChanged', run.id, run.expectedTier, run.expectedTier)
+            end
         end
         return
     end
@@ -1689,8 +1696,6 @@ local function startRun(run)
     run.timer.running = true
     sendTimer(run)
     startObjective(run, 1)
-    if run.state ~= 'in_progress' then return end
-    pushRun(run)
 end
 
 function Runs.markArrived(run, src)
@@ -1703,10 +1708,11 @@ function Runs.markArrived(run, src)
     call('Alerts', 'set', src)
     Runs.hudFor(run, src, { route = { status = 'arrived', distance = 0 } })
     CP.log(TAG, 'run %s: %d arrived at the start', run.id, src)
-    if run.state == 'accepted' then startRun(run) end
+    local first = run.state == 'accepted'
+    if first then startRun(run) end
     if run.state == 'ended' then return end
     broadcastParticipants(run)
-    pushRun(run)
+    if not first then pushRun(run) end
 end
 
 -- ── objectives ──────────────────────────────────────────────────────────────
@@ -1723,8 +1729,13 @@ local function completeObjective(run, index, data, bypass)
         if elapsed < minSec then
             if not o.tooFastFlagged and not run.test and elapsed < minSec - 1 then
                 o.tooFastFlagged = true
-                CP.log(TAG, 'run %s objective %d completed after %.1f s (minimum %d s): too_fast', run.id, index, elapsed, minSec)
-                call('AntiCheat', 'flag', run, nil, 'too_fast', ('objective %d after %.1f s (min %d s)'):format(index, elapsed, minSec))
+                local detail = ('objective %d after %.1f s (min %d s)'):format(index, elapsed, minSec)
+                CP.log(TAG, 'run %s: %s: too_fast', run.id, detail)
+                if has('AntiCheat', 'flag') then
+                    call('AntiCheat', 'flag', run, nil, 'too_fast', detail)
+                elseif not run.flagged then
+                    run.flagged = { reason = 'too_fast', detail = detail }
+                end
             end
             return false
         end
@@ -1744,7 +1755,6 @@ local function completeObjective(run, index, data, bypass)
     Runs.hud(run, { message = { text = label('run.objective_complete', { label = objectiveLabel(run, index) }), kind = 'success' } })
     if index < #run.mission.objectives then
         startObjective(run, index + 1)
-        if run.state == 'in_progress' then pushRun(run) end
     else
         Runs.endRun(run, 'completed', 'completed')
     end
@@ -2193,7 +2203,10 @@ local function sanitize(v, depth)
     end
     return nil, false
 end
-Runs._sanitize = function(v) local out, ok = sanitize(v, 0); return ok and out or nil end
+local function cleanEvidence(v)
+    local out, ok = sanitize(v, 0)
+    return ok and out or nil
+end
 
 local function recheckOk(run, p)
     if run.test and not p.isOfficer then return true end
@@ -2227,7 +2240,7 @@ RegisterNetEvent(CP.e('server:objective'), function(runId, index, evidence)
         CP.log(TAG, 'run %s: objective event %s from %d ignored (state %s)', runId, tostring(index), src, run.state)
         return
     end
-    local ev = Runs._sanitize(evidence)
+    local ev = cleanEvidence(evidence)
     if type(ev) ~= 'table' or type(ev.type) ~= 'string' or #ev.type > 32 then
         CP.log(TAG, 'run %s: malformed evidence from %d', runId, src)
         return
@@ -2415,7 +2428,7 @@ function Runs._jobRecheck()
     end
 end
 
-function Runs._maintenance()
+local function maintenance()
     local now = os.time()
     for id, e in pairs(endedRuns) do
         if now - e.at > ENDED_KEEP_S then endedRuns[id] = nil end
@@ -2461,10 +2474,12 @@ local function arenaExitSweeps()
 end
 
 CreateThread(function()
+    local n = 0
     while true do
         Wait(1000)
         Runs._tick()
-        if next(orphans) ~= nil then pcall(arenaExitSweeps) end
+        n = n + 1
+        if n % 5 == 0 and next(orphans) ~= nil then pcall(arenaExitSweeps) end
     end
 end)
 
@@ -2479,7 +2494,7 @@ end)
 CreateThread(function()
     while true do
         Wait(60000)
-        local ok, err = pcall(Runs._maintenance)
+        local ok, err = pcall(maintenance)
         if not ok then CP.err(TAG, 'maintenance failed: %s', tostring(err)) end
     end
 end)
@@ -2498,7 +2513,7 @@ AddEventHandler('playerDropped', function()
 end)
 
 local hooked = false
-function Runs._registerHooks()
+local function registerHooks()
     if hooked then return true end
     if not (CP.Access and CP.Access.onLost and CP.Qbx and CP.Qbx.onPlayerUnload) then return false end
     hooked = true
@@ -2532,7 +2547,7 @@ end
 CreateThread(function()
     Wait(0)
     for _ = 1, 30 do
-        if Runs._registerHooks() then break end
+        if registerHooks() then break end
         Wait(1000)
     end
     if not hooked then CP.warn(TAG, 'CP.Access.onLost / CP.Qbx.onPlayerUnload are not available: job and unload checks rely on the recheck loop') end

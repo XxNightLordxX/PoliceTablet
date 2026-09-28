@@ -21,20 +21,22 @@
 -- Every 1 s, with the SERVER-SIDE ped position:
 --   * arrival: within location.start.radius (2D) of location.start.coords -> CP.Runs.markArrived(run, src),
 --     then the flag (CP.Alerts.set, idempotent if CP.Runs already set it) and client:routeStatus 'arrived';
---     the checks stop for that participant. For Manhunt the start is the search circle (its centre and
---     radius), so the route leads to the centre until the officer is inside the circle.
+--     the checks stop for that participant. For Manhunt the start is the search circle: when the first
+--     objective is a search_area, its starting circle (location[obj.center], obj.startRadius) is used if it
+--     is larger than location.start, so the route leads to the centre until the officer is inside it.
 --   * off route: the last reported metres > Config.Route.maxDeviation, or no accepted report for
 --     Config.Route.reportTimeout s (off from the moment the timeout passed). After Config.Route.warnAfter s
 --     off route: client:routeWarning (runId, secondsLeft) every second; after Config.Route.abandonAfter s off
 --     route in one stretch: CP.Runs.removeParticipant(run, src, 'off_route'). A report within maxDeviation
---     ends the stretch (client:routeWarning (runId, nil) when a warning was shown).
+--     ends the stretch (client:routeWarning (runId, nil) when a warning was shown). When the warning appears
+--     or goes (and after a granted recalculation) the run view is pushed to the tablet (push topic 'run').
 --   * drift: the straight-line distance to the start grows more than Config.Route.maxDrift past the closest
 --     it has been -> 'off_route', whatever the client reports.
 --   * in-arena participants (CP.Alerts.inArena) are not route-checked and cannot arrive (CP.Alerts removes
 --     them from the run); their reports are ignored.
 -- Reports: at most one per 0.9 s per player; ignored unless the runId is the sender's active run, metres is
--- a finite number >= 0 and the reported coords lie within Config.Route.maxDeviation of the server-side ped
--- position (a report that fails is treated as missing). Recalculate: Config.Route.maxRecalcs per
+-- a finite number >= 0 and the reported coords lie within Config.Route.maxDeviation (at least 150 m) of the
+-- server-side ped position (a report that fails is treated as missing). Recalculate: Config.Route.maxRecalcs per
 -- participant per run; a granted recalculation ends the current off-route stretch (the new line starts
 -- where the officer is).
 
@@ -44,6 +46,7 @@ local TAG = 'route'
 local MAX_RUN_ID = 64
 local MAX_METRES = 100000.0
 local REPORT_MIN_GAP_MS = 900
+local POSITION_TOLERANCE = 150.0   -- metres between the reported and the server-side position (at least)
 
 local states = {}     -- states[runId][src] = st
 local stopped = {}    -- stopped[runId][src] = true after an explicit stop (the safety net leaves them alone)
@@ -86,13 +89,30 @@ local function serverCoords(src)
     return nil
 end
 
+local function isPoint(v)
+    local t = type(v)
+    if t ~= 'vector3' and t ~= 'vector4' and t ~= 'table' then return false end
+    local x, y = CP.U.xyz(v)
+    return type(x) == 'number' and type(y) == 'number'
+end
+
+-- The start circle: location.start, or, when the first objective is a search_area (Manhunt), its starting
+-- search circle (location[obj.center], obj.startRadius) if that is the larger circle.
 local function startOf(run)
     local loc = type(run) == 'table' and run.location or nil
     local start = type(loc) == 'table' and loc.start or nil
-    if type(start) ~= 'table' or start.coords == nil then return nil end
-    local x = CP.U.xyz(start.coords)
-    if type(x) ~= 'number' then return nil end
-    return { coords = start.coords, radius = tonumber(start.radius) or 50.0 }
+    if type(start) ~= 'table' or not isPoint(start.coords) then return nil end
+    local out = { coords = start.coords, radius = tonumber(start.radius) or 50.0 }
+    local mission = run.mission
+    local first = type(mission) == 'table' and type(mission.objectives) == 'table' and mission.objectives[1] or nil
+    if type(first) == 'table' and first.block == 'search_area' then
+        local centre = type(first.center) == 'string' and loc[first.center] or first.center
+        local radius = tonumber(first.startRadius)
+        if isPoint(centre) and radius and radius > out.radius then
+            out.coords, out.radius = centre, radius
+        end
+    end
+    return out
 end
 
 local function routeEnabled(run)
@@ -146,12 +166,28 @@ local function sendWarning(src, runId, secondsLeft)
     TriggerClientEvent(CP.e('client:routeWarning'), src, runId, secondsLeft)
 end
 
+-- The tablet (Active Mission screen / run bar) shows the route status from CP.Runs.view and refreshes on
+-- push topic 'run': push the view when the warning appears or goes, and after a recalculation (SPEC: the
+-- off-route warning shows "on the HUD and the tablet"). The NUI counts secondsLeft down locally.
+local function pushView(runId, src)
+    if not (CP.Tablet and CP.Tablet.push and CP.Runs and CP.Runs.view) then return end
+    CreateThread(function()
+        local _, run = runsCall('get', runId)
+        if type(run) ~= 'table' or run.state == 'ended' then return end
+        local _, view = runsCall('view', run, src)
+        if type(view) == 'table' then pcall(CP.Tablet.push, src, 'run', view) end
+    end)
+end
+
 local function endStretch(st, src, runId)
     local wasWarned = st.warned
     st.offSince = nil
     st.offCause = nil
     st.warned = false
-    if wasWarned then sendWarning(src, runId, nil) end
+    if wasWarned then
+        sendWarning(src, runId, nil)
+        pushView(runId, src)
+    end
 end
 
 -- ── public API ──────────────────────────────────────────────────────────────
@@ -306,11 +342,13 @@ local function checkOne(run, src, st, now)
             return
         end
         if elapsed >= secondsMs(c.warnAfter, 10) then
-            if not st.warned then
+            local first = not st.warned
+            if first then
                 st.warned = true
                 CP.log(TAG, '%d off route on run %s (%s): warned', src, tostring(run.id), tostring(st.offCause))
             end
             sendWarning(src, run.id, secondsLeftOf(st, now))
+            if first then pushView(run.id, src) end
         end
     end
 end
@@ -389,7 +427,10 @@ RegisterNetEvent(CP.e('server:routeStatus'), function(runId, metres, coords)
     local reported = toVec(coords)
     if not reported then return end
     local server = serverCoords(n)
-    if server and CP.U.dist2d(reported, server) > (tonumber(Config.Route.maxDeviation) or 120.0) then
+    -- The tolerance never drops below POSITION_TOLERANCE: a smaller maxDeviation must not reject honest
+    -- reports sent at speed (the server-side position lags the client by a sync interval).
+    local tolerance = math.max(tonumber(Config.Route.maxDeviation) or 120.0, POSITION_TOLERANCE)
+    if server and CP.U.dist2d(reported, server) > tolerance then
         CP.log(TAG, 'report of %d ignored: reported position is %.0f m from the server position', n, CP.U.dist2d(reported, server))
         return
     end
@@ -429,6 +470,7 @@ RegisterNetEvent(CP.e('server:recalcRoute'), function(runId)
         end
     end
     TriggerClientEvent(CP.e('client:routeRecalc'), n, runId, ok, recalcsLeft(st))
+    if ok then pushView(runId, n) end
 end)
 
 AddEventHandler('playerDropped', function()

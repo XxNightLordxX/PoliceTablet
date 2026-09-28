@@ -1,0 +1,28 @@
+/* Admin UI · Seasons & Challenge (boards slice). Only --cp-* variables; classes prefixed boards-. */
+
+.boards-season-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 14px 20px;
+}
+.boards-note {
+  margin-top: 12px;
+  font-size: var(--cp-fs-sm);
+  color: var(--cp-muted);
+}
+.boards-override {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+.boards-override .cp-select,
+.boards-override select {
+  flex: 1;
+  min-width: 0;
+}
+@media (max-width: 1100px) {
+  .boards-admin-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}

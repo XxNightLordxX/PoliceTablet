@@ -144,7 +144,7 @@ local function hwLocation(n, cx, cy)
 end
 
 local prLoc = {
-    label = 'Store', start = { coords = vec3(1990.0, 2000.0, 20.0), radius = 60.0 },
+    label = 'Store', start = { coords = vec3(1960.0, 2000.0, 20.0), radius = 60.0 },
     hostages = { vec4(2000.0, 2000.0, 20.0, 0.0), vec4(2010.0, 2000.0, 20.0, 0.0), vec4(2020.0, 2000.0, 20.0, 0.0) },
     safe = vec3(2050.0, 2000.0, 20.0),
 }
@@ -548,11 +548,19 @@ do -- spawn in prepare (waiting for room), damage while not current, free, walk 
     H.eq(S.penalties[1].opts.src, nil, 'hostage_hit is shared')
     H.eq(PR.onEvent(ctx, 1, { type = 'shot', netId = h1, src = 1 }), true, 'shot event accepted')
     H.eq(#S.penalties, 1, 'same hit through shot + onDamaged counts once')
+    NPC.damaged[1](ctx.run, h1, 1)
+    H.eq(#S.penalties, 1, 'the same bullet reported twice by onDamaged counts once')
     advanceMs(1500)
-    PR.onEvent(ctx, 1, { type = 'damaged', netId = h1, attacker = 1 })
+    NPC.damaged[1](ctx.run, h1, 1)
     H.eq(#S.penalties, 2, 'a later hit counts again')
-    PR.onEvent(ctx, 55, { type = 'damaged', netId = h1, attacker = 55 })
+    NPC.damaged[1](ctx.run, h1, 55)
     H.eq(#S.penalties, 2, 'non-participant hit costs nothing')
+    -- 'shot' / 'damaged' can also arrive as client evidence (same shape through server:objective):
+    -- while CP.Npc.onDamaged is listened to they are acknowledged and change nothing
+    advanceMs(1500)
+    H.eq(PR.onEvent(ctx, 1, { type = 'damaged', netId = h1, attacker = 1 }), true, 'damaged event acknowledged')
+    H.eq(PR.onEvent(ctx, 1, { type = 'shot', netId = h1, src = 1 }), true, 'shot event acknowledged')
+    H.eq(#S.penalties, 2, 'forgeable shot/damaged events never cost hostage_hit')
 
     PR.start(ctx)
     H.eq(lastHud(S, 'detail'), 'block.protect_rescue.detail', 'pr HUD line when current')

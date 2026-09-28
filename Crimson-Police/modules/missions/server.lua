@@ -24,6 +24,7 @@
 --   CP.Missions.byType(missionType) -> list   sorted by id, never the Weekly Boss
 --   CP.Missions.isEnabled(id) -> boolean      loaded, status 'published', not in Config.DisabledMissions
 --   CP.Missions.normalize(def, meta) -> def|nil, err   pure; meta = { source, version, filePath, defHash, editedInCode, status }
+--   CP.Missions.parse(luaSource, chunkName) -> def|nil, err   one file's source in the loader sandbox (raw def)
 --   CP.Missions.serializeForClient(def) -> table
 --   CP.Missions.register(def) -> def|nil, err  publish/restore without a reload (loader fields read from def)
 --   CP.Missions.unregister(id) -> boolean      archive without a reload (custom missions only)
@@ -31,6 +32,7 @@
 --   callback 'getMissionDefs' -> list of serialized definitions (err.not_ready before the first load)
 --   action 'server:admin:reloadMissions' (permission reloadMissions) -> summary
 --   event 'crimson-police:client:missions' (list) to every client after each load / register / unregister
+--       (sent with TriggerLatentClientEvent: the list is tens of kB)
 --
 -- Contract interpretations (details in docs/notes/engine_a.md)
 --   * CP.Builder.loadPublished() entries: a definition with loader fields, { def, meta }, or meta only
@@ -39,6 +41,12 @@
 --   * design rules the builder enforces for custom missions (location count and gap, armed budget,
 --     maxBlocks) are warnings here; playability rules reject the mission
 --   * validation reasons are English developer-facing text (console, builder), not locale keys
+--   * the loader fields (source, isBoss, status, version, filePath) are set BEFORE the blocks' validate()
+--     runs, because the blocks exempt built-in missions (mission.source == 'builtin') from the builder's
+--     allowed model/weapon lists
+--   * docs/CRIMSON_ARENA.md: a mission is rejected when an item is named armour, bandage, ammo-* or
+--     weapon_* (rule 4), or when any point of a location lies inside a Config.Builder.noBuildZones zone
+--     (rule 7; 2D distance, as the blocks and the builder measure it)
 
 CP.Missions = CP.Missions or {}
 local Missions = CP.Missions
@@ -47,6 +55,7 @@ local TAG = 'missions'
 local BOSS_ID = 'weekly_boss_kingpin'
 local BUILTIN_DIR = 'missions/builtin/'
 local INDEX_FILE = BUILTIN_DIR .. 'index.lua'
+local LATENT_BPS = 200000  -- bytes per second for the definitions broadcast (latent event)
 
 -- ARCHITECTURE §3.3: default minimum believable seconds per block.
 local DEFAULT_MIN_SECONDS = {
@@ -134,6 +143,29 @@ local function blockPresenceDefault(blockId)
     return tonumber(Config.AntiCheat and Config.AntiCheat.presenceRadius) or 150.0
 end
 
+-- The first vector inside v (recursively) that lies in a Config.Builder.noBuildZones zone (2D, like the
+-- blocks and the builder): returns zone, path. nil when every point is outside.
+local function pointInNoBuildZone(v, path, depth)
+    depth = depth or 0
+    if depth > 12 then return nil end
+    local zones = Config.Builder and Config.Builder.noBuildZones
+    if type(zones) ~= 'table' or #zones == 0 then return nil end
+    if isVec(v) then
+        for _, z in ipairs(zones) do
+            if z.coords and CP.U.dist2d(v, z.coords) <= (tonumber(z.radius) or 0) then return z, path end
+        end
+        return nil
+    end
+    if type(v) ~= 'table' then return nil end
+    for k, x in pairs(v) do
+        if type(x) == 'table' or isVec(x) then
+            local z, where = pointInNoBuildZone(x, path .. '.' .. tostring(k), depth + 1)
+            if z then return z, where end
+        end
+    end
+    return nil
+end
+
 local function detailDefault(name, fallback)
     local d = Config.Blocks and Config.Blocks.details and Config.Blocks.details[name]
     if type(d) == 'table' and tonumber(d[3]) then return tonumber(d[3]) end
@@ -161,6 +193,15 @@ local function runMissionFile(content, chunkName)
     end
     if type(collected[1]) ~= 'table' then return nil, 'RegisterMission expects a table' end
     return collected[1]
+end
+
+-- ARCHITECTURE §5.6: run one mission file's source in the loader sandbox and return the raw definition
+-- (used by the Mission Builder for custom files and hand-edit reloads, and by CP.Testing).
+-- chunkName may be given with or without the leading '@'.
+function Missions.parse(luaSource, chunkName)
+    local name = tostring(chunkName or 'mission')
+    if name:sub(1, 1) == '@' then name = name:sub(2) end
+    return runMissionFile(luaSource, name)
 end
 
 local function readIndex()
@@ -240,6 +281,14 @@ local function normalizeEntries(list, field, warn)
     return out
 end
 
+-- docs/CRIMSON_ARENA.md rule 4: Crimson-Arena takes items with these names from players it believes
+-- owe them, so a mission may never hand them out (and weapons are never mission items).
+local function forbiddenItem(name)
+    local lower = name:lower()
+    return lower == 'armour' or lower == 'bandage' or lower:sub(1, 5) == 'ammo-' or lower:sub(1, 7) == 'weapon_'
+end
+
+-- Returns the item list, or nil and a reason when a forbidden item name is used.
 local function normalizeItems(list, warn)
     local out = {}
     if list == nil then return out end
@@ -250,6 +299,8 @@ local function normalizeItems(list, warn)
     for i, it in ipairs(list) do
         if type(it) ~= 'table' or type(it.name) ~= 'string' or it.name == '' then
             warn(('items entry %d has no name; ignored'):format(i))
+        elseif forbiddenItem(it.name) then
+            return nil, ('items entry %d: "%s" can never be a mission item (armour, bandage, ammo-* and weapons are not allowed)'):format(i, it.name)
         else
             local count = tonumber(it.count) or 1
             if count < 1 then count = 1 end
@@ -327,6 +378,13 @@ function Missions.normalize(def, meta)
             d[k] = nil
         end
     end
+    -- Loader fields first: the blocks' validate() reads mission.source (built-in missions are exempt
+    -- from the Mission Builder's allowed lists), so it must be set before the guardrails run.
+    local source = meta.source == 'custom' and 'custom' or 'builtin'
+    d.source = source
+    d.version = source == 'custom' and tonumber(meta.version) or nil
+    d.filePath = meta.filePath
+    d.status = meta.status or 'published'
 
     -- identity
     if type(d.id) ~= 'string' or not d.id:match('^[%a][%w_]*$') or #d.id > 40 then
@@ -336,6 +394,7 @@ function Missions.normalize(def, meta)
     if d.description ~= nil and type(d.description) ~= 'string' then return nil, 'description must be text' end
     d.description = d.description or ''
     local isBoss = d.id == BOSS_ID
+    d.isBoss = isBoss
     if isBoss and d.type ~= 'tactical' then
         warn('the Weekly Boss is always stored as a Tactical mission; type set to tactical')
         d.type = 'tactical'
@@ -394,8 +453,13 @@ function Missions.normalize(def, meta)
         if not ok then return nil, err end
         if loc.label == nil then loc.label = CP.L('run.location_default', { n = i }) end
         if type(loc.label) ~= 'string' then return nil, ('location %d: label must be text'):format(i) end
+        -- docs/CRIMSON_ARENA.md rule 7: no point of a mission inside a Config.Builder.noBuildZones zone
+        -- (police stations, hospitals, the prison interior and Crimson-Arena's match area and lobby).
+        local zone, where = pointInNoBuildZone(loc, 'location')
+        if zone then
+            return nil, ('location %d (%s): %s is inside the no-build zone "%s"'):format(i, loc.label, where, tostring(zone.label))
+        end
     end
-    local source = meta.source or 'builtin'
     local minLocations = source == 'custom' and (tonumber(Config.Builder and Config.Builder.minLocations) or 3)
         or (THREE_LOCATIONS_OK[d.id] and 3 or 5)
     if #d.locations < minLocations then
@@ -474,18 +538,15 @@ function Missions.normalize(def, meta)
 
     -- the rest
     d.scaling = normalizeScaling(d, warn)
-    d.items = normalizeItems(d.items, warn)
+    local items, itemErr = normalizeItems(d.items, warn)
+    if not items then return nil, itemErr end
+    d.items = items
     d.bonuses = normalizeEntries(d.bonuses, 'bonuses', warn)
     d.penalties = normalizeEntries(d.penalties, 'penalties', warn)
 
-    -- loader fields
-    d.source = source
-    d.version = source == 'custom' and tonumber(meta.version) or nil
-    d.filePath = meta.filePath
+    -- remaining loader fields (source, version, filePath, status and isBoss are set above)
     d.defHash = meta.defHash or stableHash(def)
     d.editedInCode = meta.editedInCode == true or CP.U.truthy(meta.editedInCode)
-    d.isBoss = isBoss
-    d.status = meta.status or 'published'
     return d, nil, warnings
 end
 
@@ -507,7 +568,13 @@ local function broadcast()
     local list = {}
     for _, def in ipairs(sortedDefs()) do list[#list + 1] = Missions.serializeForClient(def) end
     clientList = list
-    TriggerClientEvent(CP.e('client:missions'), -1, clientList)
+    -- The full list is tens of kB (every location of every mission): send it as a latent event so it
+    -- is streamed instead of flooding every client's reliable channel at once.
+    if TriggerLatentClientEvent then
+        TriggerLatentClientEvent(CP.e('client:missions'), -1, LATENT_BPS, clientList)
+    else
+        TriggerClientEvent(CP.e('client:missions'), -1, clientList)
+    end
     CP.log(TAG, 'sent %d mission definitions to clients', #clientList)
 end
 

@@ -195,9 +195,17 @@ CP.Runs = {
     end,
     get = function(id) return rs.runs[id] end,
 }
-local onCall, foreign = {}, {}
+local onCall, foreign, bucket = {}, {}, {}
 CP.Calls = { isOnCall = function(src) return onCall[src] == true end }
-CP.Alerts = { foreignFlag = function(src) return foreign[src] == true end }
+CP.Alerts = {
+    foreignFlag = function(src) return foreign[src] == true end,
+    inArena = function(src) return foreign[src] == true or (bucket[src] or 0) ~= 0 end,
+}
+-- FiveM server natives the harness does not provide.
+GetPlayerRoutingBucket = function(src) return bucket[tonumber(src)] or 0 end
+TriggerLatentClientEvent = function(name, target, bps, ...)
+    H.events[#H.events + 1] = { kind = 'latent', name = name, target = target, bps = bps, args = { ... } }
+end
 local opLocked = false
 CP.Operations = {
     isLocked = function() return opLocked end,
@@ -389,6 +397,14 @@ do
     H.eq(res.auditDeleted, 0, 'auditDays 0 = keep')
     Config.Retention.runArchiveMonths = 12
     Config.Retention.auditDays = 180
+    -- the daily reset runs the retention job (in its own thread, after the daily listeners)
+    local nBefore = #daily
+    f = S._check(T0 + 86400)
+    H.ok(f.daily, 'next day fires')
+    H.eq(#daily, nBefore + 1, 'daily listeners fired')
+    H.eq(H.sql('SELECT COUNT(*) AS n FROM cp_mission_runs WHERE created_at < FROM_UNIXTIME(?)', { T0 - 300 * 86400 })[1].n, 0, 'the old row was archived at the daily reset')
+    H.eq(H.sql('SELECT COUNT(*) AS n FROM cp_mission_runs_archive')[1].n, 3, 'archive holds it')
+    S._check(T0 + 30)   -- back to the test day (clock moved back: nothing fires)
     H.sql('DELETE FROM cp_mission_runs')
     H.sql('DELETE FROM cp_mission_runs_archive')
 end
@@ -497,6 +513,8 @@ do
     local pushes = H.findEvents('crimson-police:client:missions')
     H.ok(#pushes >= 1, 'definitions broadcast after load')
     H.eq(pushes[#pushes].target, -1, 'broadcast to everyone')
+    H.eq(pushes[#pushes].kind, 'latent', 'the large list is sent as a latent event')
+    H.ok((tonumber(pushes[#pushes].bps) or 0) > 0, 'latent event bandwidth set')
     H.eq(#pushes[#pushes].args[1], 10, 'full list')
     local reply = cb('getMissionDefs', 5)
     H.eq(reply.ok, true, 'getMissionDefs ok')
@@ -552,6 +570,65 @@ do
     local d3 = U.deepcopy(base); d3.id = 'weekly_boss_kingpin'; d3.type = 'patrol'
     local n3 = M.normalize(d3, {})
     H.eq(n3.type, 'tactical', 'boss is always tactical')
+    H.eq(n3.isBoss, true, 'isBoss set by the loader')
+
+    -- the loader fields are set before the blocks' validate(): built-in missions are exempt from the
+    -- Mission Builder's allowed lists (the real blocks check mission.source == 'builtin')
+    local seenSource, seenBoss = {}, {}
+    CP.Blocks.register('strict_block', {
+        validate = function(obj, mission, location)
+            seenSource[#seenSource + 1] = mission.source
+            seenBoss[#seenBoss + 1] = mission.isBoss
+            if mission.source ~= 'builtin' and obj.model ~= 'allowed_ped' then return false, 'model not allowed' end
+            return true
+        end,
+    })
+    local sd = U.deepcopy(base); sd.objectives = { { block = 'strict_block', model = 's_m_y_prisoner_01' } }
+    local sb = M.normalize(sd, { source = 'builtin' })
+    H.ok(sb ~= nil, 'a built-in mission passes a block guardrail meant for custom missions')
+    H.eq(seenSource[#seenSource], 'builtin', 'validate sees mission.source = builtin')
+    H.eq(seenBoss[#seenBoss], false, 'validate sees mission.isBoss')
+    local sc, scErr = M.normalize(U.deepcopy(sd), { source = 'custom' })
+    H.ok(sc == nil and tostring(scErr):find('model not allowed', 1, true), 'the same file as a custom mission is held to the guardrail')
+    H.eq(seenSource[#seenSource], 'custom', 'validate sees mission.source = custom')
+    local sBoss = U.deepcopy(sd); sBoss.id = 'weekly_boss_kingpin'; sBoss.type = 'tactical'
+    H.ok(M.normalize(sBoss, { source = 'builtin' }) ~= nil, 'the built-in Weekly Boss passes')
+    H.eq(seenBoss[#seenBoss], true, 'validate sees the boss flag')
+
+    -- mission items Crimson-Arena takes away are never mission items (docs/CRIMSON_ARENA.md rule 4)
+    for _, name in ipairs({ 'armour', 'Bandage', 'ammo-9', 'WEAPON_PISTOL', 'weapon_stungun' }) do
+        local di = U.deepcopy(base); di.items = { { name = 'radio', count = 1 }, { name = name, count = 1 } }
+        local r, e = M.normalize(di, {})
+        H.ok(r == nil and tostring(e):find('never be a mission item', 1, true), 'forbidden mission item ' .. name)
+    end
+    local okItems = U.deepcopy(base); okItems.items = { { name = 'radio', count = 2 }, { name = 'armoured_vest_box' } }
+    local ni = M.normalize(okItems, {})
+    H.ok(ni ~= nil and #ni.items == 2, 'ordinary item names are kept')
+
+    -- no point of a location inside a no-build zone (docs/CRIMSON_ARENA.md rule 7)
+    local dz = U.deepcopy(base); dz.locations = { { start = { coords = vec3(-282.0, -2030.0, 30.0), radius = 30.0 } } }
+    local rz, ez = M.normalize(dz, {})
+    H.ok(rz == nil and tostring(ez):find('Crimson-Arena lobby', 1, true), 'start inside the Crimson-Arena lobby rejected (' .. tostring(ez) .. ')')
+    dz = U.deepcopy(base)
+    dz.locations = { { start = { coords = vec3(1.0, 2.0, 3.0), radius = 10.0 }, spawns = { vec4(900.0, 0.0, 0.0, 0.0), vec4(2344.0, 2565.0, 46.0, 0.0) } } }
+    rz, ez = M.normalize(dz, {})
+    H.ok(rz == nil and tostring(ez):find('Trailer Park', 1, true) and tostring(ez):find('spawns', 1, true), 'a nested point inside the arena match zone rejected')
+    dz.locations[1].spawns[2] = vec4(2344.0, 2800.0, 46.0, 0.0)   -- 235 m away: outside the 160 m zone
+    H.ok(M.normalize(dz, {}) ~= nil, 'points outside every zone are fine')
+    dz = U.deepcopy(base); dz.locations = { { start = { coords = vec3(470.0, -974.0, 30.0), radius = 30.0 } } }
+    H.eq(M.normalize(dz, { source = 'builtin' }), nil, 'no-build zones apply to built-in missions too')
+
+    -- parse: the loader sandbox for one file's source (used by the Mission Builder and CP.Testing)
+    local raw, perr = M.parse(files['missions/builtin/tac_one.lua'], 'missions/builtin/tac_one.lua')
+    H.ok(raw ~= nil and raw.id == 'tac_one', 'parse returns the raw definition (' .. tostring(perr) .. ')')
+    H.eq(raw.payout, 5000, 'parse does not normalise (raw fields kept)')
+    H.eq(M.get('tac_one').payout, nil, 'the registry copy is still normalised')
+    local _, e1 = M.parse("error('x')", '@missions/custom/x.lua')
+    H.ok(tostring(e1):find('missions/custom/x.lua:1', 1, true) and not tostring(e1):find('@', 1, true), 'chunk name with or without @')
+    local p2, e2 = M.parse(files['missions/builtin/bad_twice.lua'], 'missions/builtin/bad_twice.lua')
+    H.ok(p2 == nil and tostring(e2):find('exactly one', 1, true), 'parse: one RegisterMission call')
+    H.eq(M.parse('', 'x.lua'), nil, 'parse: empty source')
+    H.eq(M.parse("os.exit(1)", 'x.lua'), nil, 'parse: sandboxed')
 
     -- register / unregister
     H.reset()
@@ -643,10 +720,13 @@ do
 
     -- Weekly Boss availability (DB: once per officer per week)
     H.sql('DELETE FROM cp_mission_runs')
-    insertRun('CIDA', 'tactical', 'weekly_boss_kingpin', 'abandoned', 'quit', WEEK_START + 3600)       -- used this week
-    insertRun('CIDB', 'tactical', 'weekly_boss_kingpin', 'abandoned', 'real_call', WEEK_START + 7200)  -- exempt
-    insertRun('CIDB', 'tactical', 'weekly_boss_kingpin', 'abandoned', 'cancelled', WEEK_START + 7300)  -- exempt
+    insertRun('CIDA', 'tactical', 'weekly_boss_kingpin', 'abandoned', 'quit', FRIDAY - 3600)           -- used this week
+    insertRun('CIDB', 'tactical', 'weekly_boss_kingpin', 'abandoned', 'real_call', FRIDAY - 3000)      -- exempt
+    insertRun('CIDB', 'tactical', 'weekly_boss_kingpin', 'abandoned', 'cancelled', FRIDAY - 2900)      -- exempt
     insertRun('CIDC', 'tactical', 'weekly_boss_kingpin', 'completed', 'completed', WEEK_START - 3600)  -- last week
+    -- Last Sunday's run that ended after Monday's reset: the row is dated this week but it was last
+    -- week's attempt (rows are written when the run ends).
+    insertRun('CIDD', 'tactical', 'weekly_boss_kingpin', 'completed', 'completed', WEEK_START + 600)
 
     local ok, why = E.bossAvailable(1, officers[1])
     H.eq(ok, false, 'not on a monday'); H.eq(why, 'err.boss_not_today', 'not today key')
@@ -657,6 +737,10 @@ do
     H.eq(why, 'err.boss_used', 'used this week (quit)')
     H.eq(E.bossAvailable(2, officers[2]), true, 'real_call and cancelled do not use the attempt')
     H.eq(E.bossAvailable(3), true, 'last week does not count; officer looked up')
+    H.eq(E.bossAvailable(4, officers[4]), true, 'a Sunday-night run that ended after the weekly reset uses last week\'s attempt')
+    insertRun('CIDD', 'tactical', 'weekly_boss_kingpin', 'abandoned', 'idle', FRIDAY - 40000)          -- Friday 00:53
+    H.eq(select(2, E.bossAvailable(4, officers[4])), 'err.boss_used', 'a Friday row uses the attempt')
+    H.sql("DELETE FROM cp_mission_runs WHERE citizenid = 'CIDD'")
     H.eq(select(2, E.bossAvailable(77)), 'err.not_police', 'non-officer')
     opLocked = true
     H.eq(select(2, E.bossAvailable(2, officers[2])), 'err.operation_locked', 'hidden while an operation is active')
@@ -700,6 +784,17 @@ do
     H.eq(card.locked.reason, 'The Weekly Boss is on cooldown', 'mission cooldown lock')
     H.eq(card.locked['until'], FRIDAY + 600, 'cooldown until')
     rs.cooldowns.CIDB = nil
+    rs.hourly.CIDB = 8
+    card = E.bossCard(2)
+    H.eq(card.locked and card.locked.reason, 'Hourly limit reached (8 completed runs per hour)', 'boss card: hourly cap lock')
+    H.eq(card.available, false, 'boss card: not available at the hourly cap')
+    rs.hourly.CIDB = nil
+    setUnit({ 2, 3 })
+    rs.hourly.CIDC = 8
+    card = E.bossCard(2)
+    H.eq(card.locked and card.locked.reason, 'Carl C reached the hourly limit (8 completed runs per hour)', 'boss card: member hourly cap')
+    rs.hourly.CIDC = nil
+    clearUnits()
     CP.Cash = { range = function(key, members) return 3000, 3000 end }
     H.eq(E.bossCard(2).cash[1], 3000, 'CP.Cash.range used when it knows the boss')
     CP.Cash = nil
@@ -776,6 +871,11 @@ do
     H.ok(not picked[1], 'spot with a non-participant nearby skipped')
     H.ok(picked[2], 'participant nearby does not block')
     H.ok(picked[3] and picked[4] and picked[5], 'other spots drawn')
+    bucket[50] = 4210                                           -- the bystander is in Crimson-Arena
+    picked = {}
+    for s = 1, 200 do picked[D.pickLocation(pa, { 1 }, U.rng(U.hash('pick' .. s)))] = true end
+    H.ok(picked[1], 'players in Crimson-Arena never block a spot')
+    bucket[50] = nil
     for i = 2, 5 do D.reserve('res' .. i, 'patrol_a', i) end
     H.eq(D.pickLocation(pa, { 1 }, U.rng(9)), 1, 'the only free spot is used even with a bystander')
     for i = 2, 5 do D.release('res' .. i) end
@@ -954,6 +1054,15 @@ do
     ok, data = act('server:acceptType', 1, 'patrol')
     H.eq(data, 'err.in_arena', 'foreign crimsonArena flag on a member')
     foreign[2] = nil
+    bucket[2] = 4210
+    ok, data = act('server:acceptType', 1, 'patrol')
+    H.eq(data, 'err.in_arena', 'a member in another routing bucket (CP.Alerts.inArena)')
+    local alerts = CP.Alerts
+    CP.Alerts = { foreignFlag = alerts.foreignFlag }
+    ok, data = act('server:acceptType', 1, 'patrol')
+    H.eq(data, 'err.in_arena', 'routing bucket fallback without CP.Alerts.inArena')
+    CP.Alerts = alerts
+    bucket[2] = nil
     rs.onMission[2] = true
     ok, data = act('server:acceptType', 1, 'patrol')
     H.eq(data, 'err.member_on_run', 'member already on a run')
@@ -1060,7 +1169,7 @@ do
     H.eq(data, 'err.boss_not_today', 'boss only on its days')
     H.time = FRIDAY
     H.sql('DELETE FROM cp_mission_runs')
-    insertRun('CIDA', 'tactical', 'weekly_boss_kingpin', 'abandoned', 'quit', WEEK_START + 3600)
+    insertRun('CIDA', 'tactical', 'weekly_boss_kingpin', 'abandoned', 'quit', FRIDAY - 3600)
     ok, data = act('server:acceptType', 1, 'weekly_boss')
     H.eq(data, 'err.boss_used', 'boss once per week')
     setUnit({ 2, 1 })
@@ -1117,6 +1226,50 @@ do
     H.eq(client.get(42), nil, 'bad id')
     CP.Net.request = realRequest
     CP.Missions = serverMissions
+end
+
+-- ═══ Integration: the real built-in mission files with the real blocks ═══════
+-- The blocks exempt built-in missions from the Mission Builder's allowed model lists
+-- (mission.source == 'builtin'): Prison Break's inmates and the Kingpin's boss model must load.
+do
+    local fakeBlocks = CP.Blocks._list
+    CP.Blocks._list = {}
+    local blockIds = { 'checkpoint_route', 'escort', 'flee_arrest', 'hostile_waves', 'interact_points',
+        'protect_rescue', 'pursuit', 'search_area', 'skill_check' }
+    local allLoaded = true
+    for _, b in ipairs(blockIds) do
+        local ok, err = pcall(H.load, 'blocks/' .. b .. '/server.lua')
+        if not ok then
+            allLoaded = false
+            print(('  (real-file check skipped: blocks/%s/server.lua does not load: %s)'):format(b, tostring(err)))
+        end
+    end
+    if allLoaded then
+        local M = CP.Missions
+        local indexSrc = realLoad('Crimson-Police', 'missions/builtin/index.lua')
+        local ids = assert(load(indexSrc, '@index', 't', {}))()
+        H.eq(#ids, 14, 'index lists the 13 missions plus the Weekly Boss')
+        local real = {}
+        for _, id in ipairs(ids) do
+            local path = 'missions/builtin/' .. id .. '.lua'
+            local content = realLoad('Crimson-Police', path)
+            local raw, perr = M.parse(content, path)
+            H.ok(raw ~= nil and raw.id == id, 'real file parses: ' .. id .. ' (' .. tostring(perr) .. ')')
+            if raw then
+                local def, err = M.normalize(raw, { source = 'builtin', filePath = path, defHash = U.hashHex(content) })
+                H.ok(def ~= nil, 'real built-in mission loads: ' .. id .. ' (' .. tostring(err) .. ')')
+                real[id] = def
+            end
+        end
+        H.ok(real.prison_break ~= nil, 'Prison Break loads with its prison-clothes models')
+        H.ok(real.weekly_boss_kingpin ~= nil and real.weekly_boss_kingpin.isBoss == true, 'the Weekly Boss loads and is the boss')
+        if real.gang_shootout then
+            local heavy = CP.Scaling.apply(real.gang_shootout, 'heavy')
+            H.eq(table.concat(heavy[1].waves, ','), '11,11,9', 'Gang Shootout at Heavy: 7/7/6 x 1.5, halves up')
+            H.eq(real.gang_shootout.objectives[1].presenceRange, Config.Blocks.hostile_waves.presenceRange[3], 'real block presence default')
+        end
+    end
+    CP.Blocks._list = fakeBlocks
 end
 
 return H
