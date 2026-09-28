@@ -383,6 +383,51 @@ do
     local p2 = cb('getProfile', 11, { citizenid = 'LB1' }).data
     for _, r in ipairs(p2.runs) do if r.id == lb1Failed then H.eq(r.canDispute, false, 'open dispute blocks') end end
     H.eq(p2.own, true, 'own by citizenid')
+    -- modules/disputes: one dispute per row, ever (a decided one is final: err.dispute_final)
+    H.sql("UPDATE cp_disputes SET status = 'rejected', handled_at = NOW() WHERE run_id = ?", { lb1Failed })
+    local p3 = cb('getProfile', 11, nil).data
+    for _, r in ipairs(p3.runs) do if r.id == lb1Failed then H.eq(r.canDispute, false, 'a decided dispute is final') end end
+    H.sql('DELETE FROM cp_disputes WHERE run_id = ?', { lb1Failed })
+end
+
+-- public profile: the breakdown keeps only RunResult fields without cash (no admin notes)
+do
+    H.sql("UPDATE cp_mission_runs SET breakdown = JSON_SET(breakdown, '$.reason', 'admin note') WHERE id = ?", { lb1Failed })
+    local pub = cb('getProfile', 13, 'LB1').data
+    local r
+    for _, x in ipairs(pub.runs) do if x.id == lb1Failed then r = x end end
+    H.eq(r.breakdown.cash, nil, 'no cash block in a public breakdown')
+    H.eq(r.breakdown.reason, nil, 'no extra fields in a public breakdown')
+    H.eq(r.breakdown.points.final, 15, 'public breakdown keeps the points')
+    H.eq(r.breakdown.missionLabel, 'Beat Patrol', 'public breakdown keeps the label')
+    local own = cb('getProfile', 11, nil).data
+    for _, x in ipairs(own.runs) do if x.id == lb1Failed then r = x end end
+    H.eq(r.breakdown.reason, 'admin note', 'the own breakdown is complete')
+    H.sql("UPDATE cp_mission_runs SET breakdown = JSON_REMOVE(breakdown, '$.reason') WHERE id = ?", { lb1Failed })
+end
+
+-- cache: invalidate() while a board query is in flight -> that result is not cached
+do
+    LB.invalidate()
+    local realQuery = MySQL.query.await
+    local boardQueries, injected = 0, false
+    MySQL.query.await = function(sql, params)
+        local res = realQuery(sql, params)
+        if sql:find('GROUP BY r.citizenid', 1, true) and sql:find('r.created_at >= FROM_UNIXTIME', 1, true) then
+            boardQueries = boardQueries + 1
+            if not injected then
+                injected = true
+                LB.invalidate()   -- e.g. a void committed while this query ran
+            end
+        end
+        return res
+    end
+    local ok1 = cb('getBoard', 13, { period = 'monthly' }).ok
+    local ok2 = cb('getBoard', 13, { period = 'monthly' }).ok
+    local ok3 = cb('getBoard', 13, { period = 'monthly' }).ok
+    MySQL.query.await = realQuery
+    H.ok(ok1 and ok2 and ok3, 'boards served')
+    H.eq(boardQueries, 2, 'the board read before invalidate() was not cached; the next one was')
 end
 
 -- profile: someone else (hidden name, no cash, no breakdown cash)
@@ -869,6 +914,10 @@ do
     H.eq(audits[1].action, 'season_end', 'season two ended first')
     H.eq(audits[1].role, 'console', 'console role')
     H.eq(audits[1].new, '-', 'no champion without runs')
+    local part = io.open('Crimson-Police/locales/parts/boards.json', 'r')
+    H.ok(part ~= nil and part:read('a'):find('"challenge.audit_replaced"', 1, true) ~= nil, 'replacement reason is a locale key of this part')
+    if part then part:close() end
+    H.eq(audits[1].reason, CP.L('challenge.audit_replaced', { name = 'Season Three' }), 'localized reason for the replaced season')
     H.eq(audits[2].action, 'season_start', 'then started')
     H.eq(H.sql('SELECT COUNT(*) AS n FROM cp_seasons WHERE active = 1')[1].n, 1, 'one active season')
     H.eq(C.currentSeason().id, s3.id, 'season three current')

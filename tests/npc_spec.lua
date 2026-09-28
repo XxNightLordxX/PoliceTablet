@@ -65,11 +65,14 @@ _G.GetPedSourceOfDeath = function(e) local x = W.ents[e]; return x and x.killer 
 _G.GetPedSourceOfDamage = function(e) local x = W.ents[e]; return x and x.damager or 0 end
 _G.NetworkGetEntityFromNetworkId = function(n) return W.byNet[n] or 0 end
 _G.WasEventCanceled = function() return W.canceled end
+W.owner = {}   -- [entity] = src of the client that owns it (default: nobody, -1)
+_G.NetworkGetEntityOwner = function(e) return W.owner[e] or -1 end
 
 -- ── Stubs of the other modules ──────────────────────────────────────────────
-local R = { runs = {}, dispatched = {}, died = {}, penal = {}, outside = {}, notes = {}, arena = {}, offduty = {} }
+local R = { runs = {}, dispatched = {}, died = {}, penal = {}, outside = {}, notes = {}, arena = {}, offduty = {}, order = {} }
 local function reset()
-    R.dispatched, R.died, R.penal, R.outside, R.notes = {}, {}, {}, {}, {}
+    R.dispatched, R.died, R.penal, R.outside, R.notes, R.order = {}, {}, {}, {}, {}, {}
+    R.onDied = nil
 end
 CP.Runs = {
     get = function(id) return R.runs[id] end,
@@ -84,13 +87,20 @@ CP.Runs = {
     end,
     entityDied = function(run, netId, killer)
         R.died[#R.died + 1] = { run = run.id, netId = netId, killer = killer }
+        R.order[#R.order + 1] = 'entityDied'
         if run.entities[netId] then run.entities[netId].dead = true end
+        if R.onDied then R.onDied(run, netId, killer) end
     end,
     penalize = function(run, id, opts)
         R.penal[#R.penal + 1] = { run = run.id, id = id, src = opts and opts.src, count = opts and opts.count }
     end,
 }
-CP.AntiCheat = { onNpcKilled = function(run, src) R.outside[#R.outside + 1] = { run = run.id, src = src } end }
+-- like the real one, onNpcKilled ignores a run that has already ended
+CP.AntiCheat = { onNpcKilled = function(run, src)
+    R.order[#R.order + 1] = 'onNpcKilled'
+    if run.state == 'ended' then return end
+    R.outside[#R.outside + 1] = { run = run.id, src = src }
+end }
 CP.Tablet = { notify = function(src, kind, key, vars) R.notes[#R.notes + 1] = { src = src, kind = kind, key = key, vars = vars } end }
 CP.Alerts = { inArena = function(src) return R.arena[src] == true end }
 CP.Access = {
@@ -203,6 +213,22 @@ Npc.setState(run, n1, 'surrendered')
 H.eq(bag(e1).task, nil, 'state change drops the task')
 Npc.setState(run, n1, 'cuffed')
 H.eq(Npc.isNeutralised(n1), true, 'cuffed is neutralised')
+-- a one-off task keeps its id (taskSeq) through later writes, so the host runs it once
+local nt, nte = spawnPed(run, { coords = vec3(19.0, 0.0, 0.0) })
+Npc.setState(run, nt, 'surrendered', { task = { action = 'handsUp', args = {} } })
+local tb = bag(nte)
+H.eq(tb.taskSeq, tb.seq, 'a task carries the seq it was written with')
+Npc.enableCuff(run, nt, {})
+H.eq(bag(nte).taskSeq, tb.taskSeq, 'enableCuff keeps the task id')
+H.ok(bag(nte).seq > tb.seq, 'enableCuff still bumps seq')
+Npc.setState(run, nt, 'surrendered', { cfg = { note = 1 } })
+H.eq(bag(nte).taskSeq, tb.taskSeq, 'a cfg merge keeps the task id')
+H.eq(bag(nte).task and bag(nte).task.action, 'handsUp', 'and the task')
+Npc.setState(run, nt, 'surrendered', { taskSeq = 99 })
+H.eq(bag(nte).taskSeq, tb.taskSeq, 'taskSeq cannot be set through extra')
+Npc.setState(run, nt, 'cuffed')
+H.eq(bag(nte).task, nil, 'a state change drops the task')
+H.eq(bag(nte).taskSeq, nil, 'and its id')
 -- a ped of another run cannot be changed through this run
 local runB = newRun('run-b', { 5 })
 local nb, _ = spawnPed(runB, {})
@@ -447,6 +473,72 @@ tick(2)
 H.eq(#R.died, 0, 'ended run: no deaths')
 R.runs['run-e'] = nil
 
+-- an outside kill that ends the run inside entityDied (the block completes the last objective)
+-- is still flagged: anti-cheat hears about it first
+reset()
+local runO = newRun('run-o', { 1 })
+local ko, keo = spawnPed(runO, { coords = vec3(0.0, 0.0, 0.0) })
+tick(1)
+R.onDied = function(r) r.state = 'ended' end
+W.ents[keo].health = 0
+W.ents[keo].killer = 700          -- player 7, not on the run
+tick(1)
+H.eq(R.died[1] and R.died[1].netId, ko, 'outside kill reported')
+H.eq(#R.outside, 1, 'an outside kill that ends the run is still flagged')
+H.eq(R.order[1], 'onNpcKilled', 'anti-cheat before entityDied')
+H.eq(R.order[2], 'entityDied', 'then entityDied')
+R.runs['run-o'] = nil
+-- deaths that change run.entities while the watcher walks it
+reset()
+local runM = newRun('run-m', { 1 })
+local ma, mae = spawnPed(runM, { coords = vec3(0.0, 0.0, 0.0) })
+local mb, mbe = spawnPed(runM, { coords = vec3(1.0, 0.0, 0.0) })
+tick(1)
+local errs, oldErr = 0, CP.err
+CP.err = function(...) errs = errs + 1; return oldErr(...) end
+R.onDied = function(r)
+    R.onDied = nil     -- the next objective starts: many new records mid-walk
+    for i = 1, 40 do spawnPed(r, { coords = vec3(50.0 + i, 0.0, 0.0) }) end
+end
+W.ents[mae].health = 0
+W.ents[mbe].health = 0
+tick(1)
+H.eq(errs, 0, 'records added during a death: no watcher error')
+H.eq(count(R.died, function(x) return x.netId == ma or x.netId == mb end), 2, 'both deaths of that tick reported')
+tick(1)
+H.eq(count(R.died, function(x) return x.netId == ma or x.netId == mb end), 2, 'still once each')
+reset()
+local mc, mce = spawnPed(runM, { coords = vec3(2.0, 0.0, 0.0) })
+local md, mde = spawnPed(runM, { coords = vec3(3.0, 0.0, 0.0) })
+tick(1)
+R.onDied = function(r)   -- the death ends the run: endRun removes every record
+    r.state = 'ended'
+    for k in pairs(r.entities) do r.entities[k] = nil end
+end
+W.ents[mce].health = 0
+W.ents[mde].health = 0
+tick(1)
+CP.err = oldErr
+H.eq(errs, 0, 'records removed during a death: no watcher error')
+H.eq(count(R.died, function(x) return x.netId == mc or x.netId == md end), 1, 'a run ended by a death: nothing more reported for it')
+R.runs['run-m'] = nil
+-- a ped whose bag says surrendered and cuffable without a setState through this module (a record
+-- created afterwards) is still sampled for reach, so its cuff goes through
+reset()
+local runF = newRun('run-f', { 1 })
+local nf, nfe = spawnPed(runF, { coords = vec3(0.0, 0.0, 0.0), obj = 1 })
+local bf = bag(nfe)
+bf.state = 'surrendered'
+bf.cuff = { label = CP.L('npc.cuff'), duration = 3000, maxDistance = 3.0 }
+Entity(nfe).state:set('cp', bf, true)
+local saved1 = H.players[1].coords
+place(1, 1.0, 0.0, 0.0)
+tick(2)
+cuff(1, 'run-f', nf)
+H.eq(bag(nfe).state, 'cuffed', 'bag-only surrendered ped: reach sampled, cuff accepted')
+H.players[1].coords = saved1
+R.runs['run-f'] = nil
+
 -- ── weaponDamageEvent ───────────────────────────────────────────────────────
 local damages = {}
 Npc.onDamaged(function(r, netId, attacker) damages[#damages + 1] = { run = r.id, netId = netId, attacker = attacker } end)
@@ -491,17 +583,41 @@ H.eq(#R.penal, 4, 'the parent is the sender\'s own ped')
 H.eq(R.penal[4].src, 2, 'penalty for the parent player')
 bump(2100)
 local ownNpc, ownNpcEnt = spawnPed(run, { coords = vec3(12.0, 0.0, 0.0) })
+W.owner[ownNpcEnt] = 2
 wde(2, { hitGlobalIds = { s1 }, weaponType = PISTOL, parentGlobalId = ownNpc })
 H.eq(#R.penal, 4, 'an NPC owned by the sender is not the sender')
+-- forged parents: a packet can never blame another player, nor hide behind an NPC it does not own
+bump(2100)
+W.byNet[64997] = 100   -- player 1's ped, named by player 2's packet
+local p1Before = count(R.penal, function(x) return x.src == 1 end)
+wde(2, { hitGlobalIds = { s1 }, weaponType = PISTOL, parentGlobalId = 64997 })
+H.eq(#R.penal, 5, 'a parent naming another player: still a shot')
+H.eq(R.penal[5] and R.penal[5].src, 2, 'forged parent: the sender pays, never the named player')
+H.eq(count(R.penal, function(x) return x.src == 1 end), p1Before, 'the named player is not penalised')
+bump(2100)
+local strayNpc, strayNpcEnt = spawnPed(run, { coords = vec3(12.5, 0.0, 0.0) })
+W.owner[strayNpcEnt] = 1
+wde(2, { hitGlobalIds = { s1 }, weaponType = PISTOL, parentGlobalId = strayNpc })
+H.eq(#R.penal, 6, 'an NPC the sender does not own does not hide the sender')
+H.eq(R.penal[6] and R.penal[6].src, 2, 'NPC parent owned by someone else: the sender')
+bump(2100)
+local p2veh = spawnVehicle(100)   -- a vehicle driven by player 1, named by player 2's packet
+W.nextNet = W.nextNet + 1
+local p2vehNet = W.nextNet
+W.byNet[p2vehNet] = p2veh
+wde(2, { hitGlobalIds = { s1 }, weaponType = PISTOL, parentGlobalId = p2vehNet })
+H.eq(#R.penal, 6, 'a vehicle parent is not a shot')
+reset()
+bump(2100)
 R.arena[2] = true
 wde(2, { hitGlobalIds = { s1 }, weaponType = PISTOL })
-H.eq(#R.penal, 4, 'in-arena sender ignored')
+H.eq(#R.penal, 0, 'in-arena sender ignored')
 R.arena[2] = nil
 local hostileN = spawnPed(run, { coords = vec3(13.0, 0.0, 0.0) })
 Npc.setState(run, hostileN, 'hostile')
 tick(1)
 wde(1, { hitGlobalIds = { hostileN }, weaponType = PISTOL })
-H.eq(#R.penal, 4, 'shooting a hostile is fine')
+H.eq(#R.penal, 0, 'shooting a hostile is fine')
 wde(1, { hitGlobalIds = { 'x', -4, 1e12 }, weaponType = PISTOL })
 wde(1, 'not a table')
 H.ok(true, 'malformed packets do not raise')
@@ -535,6 +651,7 @@ H.eq(count(R.penal, function(x) return x.src == 2 end), 0, 'melee on a hostage i
 -- ── Health poll (the shooter owns the ped: no weaponDamageEvent) ────────────
 reset()
 local p1, pe1 = spawnPed(run, { coords = vec3(15.0, 0.0, 0.0) })
+W.owner[pe1] = 1   -- the run host simulates it: its own shots raise no weaponDamageEvent
 Npc.setState(run, p1, 'surrendered')
 tick(4)
 W.ents[pe1].health = 150
@@ -572,6 +689,40 @@ tick(1)
 H.eq(#damages, nd2 + 1, 'hostage hurt by an NPC (health poll)')
 H.eq(damages[#damages].attacker, nil, 'NPC damage: attacker nil')
 H.eq(#R.penal, 0, 'freed hostage hurt by an NPC: no penalty')
+
+-- A stale damage source: player 2 (not the owner) hit the ped through weaponDamageEvent while it
+-- was hostile; later damage with no source of its own must not be pinned on them.
+reset()
+local st1, ste1 = spawnPed(run, { coords = vec3(17.0, 0.0, 0.0) })
+W.owner[ste1] = 1
+Npc.setState(run, st1, 'hostile')
+tick(1)
+wde(2, { hitGlobalIds = { st1 }, weaponType = PISTOL })
+W.ents[ste1].health = 120
+W.ents[ste1].damager = 200          -- GetPedSourceOfDamage still names player 2
+Npc.setState(run, st1, 'surrendered')
+tick(4)
+W.ents[ste1].health = 100           -- e.g. a fall: no weapon event, the old source stays
+tick(1)
+H.eq(#R.penal, 0, 'stale non-owner damage source: no shot_surrendered')
+local sh, she = spawnPed(run, { coords = vec3(18.0, 0.0, 0.0), role = 'hostage', armed = false, obj = 2 })
+W.owner[she] = 1
+Npc.setState(run, sh, 'restrained')
+tick(1)
+local nd3 = #damages
+W.ents[she].health = 150
+W.ents[she].damager = 200
+tick(1)
+H.eq(#damages, nd3 + 1, 'hostage hurt with a stale source: still reported as hurt')
+H.eq(damages[#damages].attacker, nil, 'stale non-owner source: attacker unknown')
+H.eq(#R.penal, 0, 'stale non-owner source on a hostage: no shot penalty')
+H.eq(count(R.dispatched, function(x) return x.ev.type == 'damaged' end), 0, 'stale source: no damaged dispatch')
+W.ents[she].damager = 100           -- the owner itself
+bump(2100)
+W.ents[she].health = 130
+tick(1)
+H.eq(count(R.penal, function(x) return x.src == 1 end), 1, 'the owner shooting its own restrained hostage is penalised')
+H.eq(damages[#damages].attacker, 1, 'owner damage attributed')
 
 -- ── Registry pruning ────────────────────────────────────────────────────────
 reset()

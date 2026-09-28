@@ -435,7 +435,7 @@ function MissionGroup({ m, locs, now, pending, canStart, collapsed, onToggle, on
           <div className="testing-group__row">
             <button type="button" className="testing-group__toggle" onClick={onToggle} aria-expanded={!collapsed}>
               <Icon name={collapsed ? 'chevronRight' : 'chevronDown'} size={15} />
-              <span className="testing-group__label">{m.label}</span>
+              <span className="testing-group__label" title={m.label}>{m.label}</span>
               <span className="testing-group__id">{m.id}</span>
             </button>
             <Badge size="sm" tone="neutral" variant="outline">{m.typeLabel}</Badge>
@@ -478,7 +478,7 @@ function MissionGroup({ m, locs, now, pending, canStart, collapsed, onToggle, on
                 <td>
                   <div className="testing-loc__name">
                     <span className="testing-loc__index cp-num">#{loc.index}</span>
-                    <span className="testing-loc__label">{loc.label}</span>
+                    <span className="testing-loc__label" title={loc.label}>{loc.label}</span>
                     {loc.active ? <Badge size="sm" tone="warning" dot>{t('test.ui.testing_now')}</Badge> : loc.reserved ? <Badge size="sm" tone="neutral" dot>{t('test.ui.in_use')}</Badge> : null}
                   </div>
                 </td>
@@ -514,8 +514,8 @@ function MissionGroup({ m, locs, now, pending, canStart, collapsed, onToggle, on
                 <td className="testing-col-actions">
                   <div className="testing-loc__actions">
                     {record ? (
-                      <Button size="sm" variant="primary" icon="edit" onClick={() => onRecord(record)}>
-                        {t('test.ui.record')}
+                      <Button size="sm" variant="primary" icon="edit" onClick={() => onRecord(record)} title={t('test.ui.record')} aria-label={t('test.ui.record')}>
+                        <span className="testing-hide-sm">{t('test.ui.record')}</span>
                       </Button>
                     ) : null}
                     <IconButton
@@ -760,7 +760,7 @@ function StartDialog({ open, preset, view, lobby, onClose, onChanged, onStarted 
                       onChange={(v) => setSelected((s) => ({ ...s, [c.src]: v }))}
                       label={
                         <span className="testing-cand__label">
-                          <span className="testing-cand__name">{c.name}</span>
+                          <span className="testing-cand__name" title={c.name}>{c.name}</span>
                           <span className="testing-muted">
                             {[orNull(c.callsign), orNull(c.rank)].filter(Boolean).join(' · ')}
                           </span>

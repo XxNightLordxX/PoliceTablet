@@ -253,7 +253,9 @@
   align-items: center;
   flex-wrap: wrap;
   gap: 6px 8px;
-  min-width: 0;
+  /* take the cell's width without widening the table (long mission names ellipsize instead) */
+  width: 0;
+  min-width: 100%;
 }
 .testing-group__right {
   display: flex;
@@ -265,9 +267,12 @@
 }
 .testing-group__toggle {
   display: inline-flex;
+  flex: 0 1 auto;
   align-items: center;
   gap: 8px;
   min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
   padding: 2px 4px 2px 0;
   border: 0;
   background: transparent;
@@ -280,11 +285,17 @@
   border-radius: var(--cp-radius-xs);
 }
 .testing-group__label {
+  min-width: 0;
   font-weight: 700;
   font-size: var(--cp-fs-md);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .testing-group__id {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 260px;
   font-family: var(--cp-mono);
   font-size: var(--cp-fs-xs);
   color: var(--cp-subtle);
@@ -329,6 +340,7 @@
   font-size: var(--cp-fs-sm);
 }
 .testing-loc__label {
+  max-width: 380px;
   font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -499,6 +511,10 @@
   flex: 1;
   min-width: 0;
 }
+.testing-cand .cp-checkbox__label {
+  min-width: 0;
+  overflow: hidden;
+}
 .testing-cand__label {
   display: flex;
   flex-direction: column;
@@ -513,6 +529,9 @@
 }
 .testing-cand__label .testing-muted {
   font-size: var(--cp-fs-xs);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .testing-cand__tags {
   display: inline-flex;
@@ -596,6 +615,12 @@
     display: none;
   }
   .testing-group__id {
+    display: none;
+  }
+  .testing-loc__label {
+    max-width: 200px;
+  }
+  .testing-hide-sm {
     display: none;
   }
   .testing-active__grid {

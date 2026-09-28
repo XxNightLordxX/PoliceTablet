@@ -964,6 +964,19 @@ H.ok(slowTicks >= 2, 'the slow run ticks again once its tick finished')
 Runs.removeParticipant(S1, 2, 'cancelled')
 Runs.removeParticipant(S2, 3, 'cancelled')
 
+-- ── review: a cuffed NPC frees the armed cap (bag state cached briefly) ─────
+H.reset()
+local Q = Runs.create({ mission = mission, locationIndex = 1, missionType = 'patrol', members = { O[2] }, leaderSrc = 2 })
+Runs.markArrived(Q, 2)
+local qp = Runs.spawnPed(Q, { obj = 1, model = 'g_m_y_lost_01', coords = vec4(0, 0, 0, 0), armed = true, weapon = 'WEAPON_PISTOL' })
+Config.Limits.maxArmedAlive = 1
+H.eq(Runs.canSpawn(Q, 1, true), false, 'the armed cap counts the armed NPC')
+bags[qp].cp = { run = Q.id, obj = 1, state = 'cuffed', armed = true }
+H.advance(600)
+H.ok(Runs.canSpawn(Q, 1, true), 'a cuffed NPC no longer counts as armed and alive')
+Config.Limits.maxArmedAlive = 25
+Runs.removeParticipant(Q, 2, 'cancelled')
+
 -- ── resource stop: entities deleted, nothing written ────────────────────────
 H.reset()
 local M = Runs.create({ mission = mission, locationIndex = 1, missionType = 'patrol', members = { O[3] }, leaderSrc = 3 })

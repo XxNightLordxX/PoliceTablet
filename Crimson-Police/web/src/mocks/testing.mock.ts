@@ -201,8 +201,17 @@ function activeFor(missionId: string, locationIndex: number, tier: string, teste
   };
 }
 
+if (params.get('testlong') === '1') {
+  state.pending.unshift({
+    key: 'run-pend-long', missionId: 'custom_extremely_long_mission_identifier_x',
+    missionLabel: 'Operation Midnight Harbour Container Terminal Sweep and Clear (Extended Night Shift Edition)', locationIndex: 1,
+    locationLabel: 'Elysian Island container terminal north gate by the big blue crane next to the rail yard',
+    tier: 'critical', testers: 8, endState: 'failed', endReason: 'mission_failed', endedBy: 'admin_left', endedAt: now() - 7200, draft: true,
+  });
+}
+
 if (params.get('testactive') === '1') {
-  state.active = activeFor('bomb_disposal', 1, 'critical', [
+  state.active = activeFor(params.get('testlong') === '1' ? 'custom_extremely_long_mission_identifier_x' : 'bomb_disposal', 1, 'critical', [
     { src: 12, name: 'John Doe', departmentShort: 'SAST', callsign: '2L-14' },
     { src: 9, name: 'Dana Whitfield', departmentShort: 'FIB', callsign: false },
   ], false);

@@ -258,7 +258,9 @@ H.eq(np, 100, 'a participant who left is not a target')
 W.ents[100].dead = true
 clear()
 H.advance(3600)
-H.ok(called('TaskGuardCurrentPosition', function(a) return a[1] == P1 end), 'no live participant: guard position')
+H.ok(called('TaskStandStill', function(a) return a[1] == P1 end), 'no live participant: stands still')
+H.ok(not called('TaskGuardCurrentPosition'), 'never guards (a guarding hostile attacks any player, bystanders too)')
+H.ok(not called('TaskCombatPed', function(a) return a[1] == P1 end), 'no target: no combat')
 W.ents[100].dead = nil
 H.fire('crimson-police:client:participants', 1, 'run-1', { { src = 1, status = 'active' }, { src = 2, status = 'active' } })
 clear()
@@ -491,9 +493,19 @@ H.advance(3000)
 H.ok(called('FreezeEntityPosition', function(a) return a[1] == P8 and a[2] == true end), 'cuffed -> frozen')
 H.ok(called('TaskPlayAnim', function(a) return a[1] == P8 and a[2] == 'mp_arresting' and a[3] == 'idle' end), 'cuffed -> cuffed idle')
 clear()
-v = U.deepcopy(v); v.task = { action = 'cower', args = {} }; v.seq = 6
+v = U.deepcopy(v); v.task = { action = 'cower', args = {} }; v.seq = 6; v.taskSeq = 6
 bagChange(P8, 808, v)
 H.ok(called('TaskCower', function(a) return a[1] == P8 end), 'a server task is run')
+-- a later write of the bag (cfg merge, enableCuff) keeps taskSeq: the task is not run again
+Npc.task(P8, 'wander', {})
+clear()
+v = U.deepcopy(v); v.seq = 7; v.cfg.note = 'x'
+bagChange(P8, 808, v)
+H.ok(not called('TaskCower', function(a) return a[1] == P8 end), 'same taskSeq: the task is not replayed')
+clear()
+v = U.deepcopy(v); v.task = { action = 'cower', args = {} }; v.seq = 8; v.taskSeq = 8
+bagChange(P8, 808, v)
+H.ok(called('TaskCower', function(a) return a[1] == P8 end), 'a new task (new taskSeq) is run')
 -- fleeing with route points from cfg
 local P9 = addPed(5009, 809, 0, 100, 0)
 clear()
@@ -504,17 +516,48 @@ local P10 = addPed(5010, 810, 0, 200, 0)
 clear()
 bagChange(P10, 810, { run = 'run-1', obj = 2, role = 'hostage', state = 'restrained', armed = false, cfg = { group = 'neutral' }, seq = 1 })
 H.ok(called('TaskPlayAnim', function(a) return a[1] == P10 and a[3] == 'idle_a' end), 'restrained -> kneeling at once')
--- another run's bag is ignored
+-- another run's bag: no AI, but the ped is still made drop-safe (whoever owns it when it dies drops)
 local P11 = addPed(5021, 821, 0, 300, 0)
 clear()
-bagChange(P11, 821, { run = 'run-2', state = 'hostile', armed = true, cfg = {}, seq = 1 })
-H.ok(not called('SetPedDropsWeaponsWhenDead', function(a) return a[1] == P11 end), 'another run: not applied')
--- not the host: nothing is tasked
+bagChange(P11, 821, { run = 'run-2', state = 'hostile', armed = true, cfg = { weapon = 'WEAPON_PISTOL', accuracy = 40 }, seq = 1 })
+H.ok(not called('SetPedAccuracy', function(a) return a[1] == P11 end), 'another run: cfg not applied')
+H.ok(not called('SetPedRelationshipGroupHash', function(a) return a[1] == P11 end), 'another run: group untouched')
+H.ok(not called('TaskCombatPed', function(a) return a[1] == P11 end), 'another run: no AI')
+H.ok(called('SetPedDropsWeaponsWhenDead', function(a) return a[1] == P11 and a[2] == false end), 'another run: no weapon drops')
+H.ok(called('SetPedMoney', function(a) return a[1] == P11 and a[2] == 0 end), 'another run: no cash drops')
+clear()
+bagChange(P11, 821, { run = 'run-2', state = 'fleeing', armed = true, cfg = {}, seq = 2 })
+H.ok(not called('SetPedDropsWeaponsWhenDead', function(a) return a[1] == P11 end), 'drop protection once per entity handle')
+-- a bag that arrives before its ped streams in: marked as soon as the ped exists
+clear()
+cpH.fn('entity:830', 'cp', { run = 'run-9', state = 'idle', armed = true, cfg = {}, seq = 1 })
+H.advance(200)
+local P11b = addPed(5030, 830, 0, 320, 0)
+H.advance(400)
+H.ok(called('SetPedDropsWeaponsWhenDead', function(a) return a[1] == P11b and a[2] == false end), 'late stream-in: drop-safe once it exists')
+-- bags that are not Crimson-Police mission peds are left alone
+local P11c = addPed(5031, 831, 0, 330, 0)
+clear()
+cpH.fn('entity:831', 'cp', { something = 'else' })
+cpH.fn('entity:100', 'cp', { run = 'run-9', state = 'idle' })
+H.advance(1600)
+H.ok(not called('SetPedDropsWeaponsWhenDead'), 'foreign cp values and player peds untouched')
+-- not the host: nothing is tasked (the ped is still drop-safe: ownership can move to this client)
 W.run.isHost = false
 local P12 = addPed(5022, 822, 0, 400, 0)
 clear()
 bagChange(P12, 822, { run = 'run-1', state = 'hostile', armed = true, cfg = {}, seq = 1 })
 H.ok(not called('TaskCombatPed', function(a) return a[1] == P12 end), 'not the host: no AI')
+H.ok(called('SetPedDropsWeaponsWhenDead', function(a) return a[1] == P12 and a[2] == false end), 'not the host: drop-safe')
+-- a non-participant (no run at all) still makes mission peds drop-safe
+local savedRun = W.run
+W.run = nil
+local P12b = addPed(5024, 824, 0, 420, 0)
+clear()
+bagChange(P12b, 824, { run = 'run-1', state = 'hostile', armed = true, cfg = {}, seq = 1 })
+H.ok(called('SetPedDropsWeaponsWhenDead', function(a) return a[1] == P12b and a[2] == false end), 'non-participant client: drop-safe')
+H.ok(not called('SetPedAccuracy'), 'non-participant client: nothing else')
+W.run = savedRun
 H.advance(600)
 -- becoming the host re-applies and re-tasks every known ped of the run
 clear()
@@ -611,6 +654,15 @@ H.eq(#H.findEvents('crimson-police:server:npcCuff'), 0, 'not surrendered: nothin
 local before = #W.options
 TriggerEvent('onClientResourceStart', 'ox_target')
 H.eq(#W.options, before + 2, 'ox_target restart re-adds every option')
+-- a stale end of an earlier run keeps the AI of the current one
+Npc.task(P6, 'cuffed', { instant = true, force = true })
+clear()
+Npc.task(P6, 'cuffed', { instant = true })
+H.ok(not called('SetEnableHandcuffs', function(a) return a[1] == P6 end), 'AI state primed (the same pose is ignored)')
+H.fire('crimson-police:client:runEnded', 1, 'run-old')
+clear()
+Npc.task(P6, 'cuffed', { instant = true })
+H.ok(not called('SetEnableHandcuffs', function(a) return a[1] == P6 end), 'stale run end: AI state kept')
 H.fire('crimson-police:client:runEnded', 1, 'run-1')
 clear()
 Npc.task(P6, 'cuffed', { instant = true })

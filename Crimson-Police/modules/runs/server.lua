@@ -624,16 +624,27 @@ objectiveHud = function(run, i, patch)
 end
 
 -- ── entities (ARCHITECTURE §6.1) ────────────────────────────────────────────
+-- The NPC state of an entity from its cp bag. Reading a bag decodes the whole value, and blocks ask
+-- canSpawn for every NPC they place, so the state is re-read at most every BAG_STATE_TTL_MS per entity.
+local BAG_STATE_TTL_MS = 500
+local function bagState(e)
+    local now = GetGameTimer()
+    if e.bagStateAt and now - e.bagStateAt < BAG_STATE_TTL_MS then return e.bagState end
+    local st
+    if e.entity and DoesEntityExist(e.entity) then
+        local bag = Entity(e.entity).state.cp
+        st = type(bag) == 'table' and bag.state or nil
+    end
+    e.bagState, e.bagStateAt = st, now
+    return st
+end
+
 local function entityCounts(run)
     local total, armedAlive = 0, 0
     for _, e in pairs(run.entities) do
         total = total + 1
         if e.armed and not e.dead then
-            local st
-            if e.entity and DoesEntityExist(e.entity) then
-                local bag = Entity(e.entity).state.cp
-                st = type(bag) == 'table' and bag.state or nil
-            end
+            local st = bagState(e)
             if st ~= 'cuffed' and st ~= 'dead' then armedAlive = armedAlive + 1 end
         end
     end

@@ -63,7 +63,8 @@ Every `server:sup:op*` / `server:admin:op*` handler calls `CP.Permissions.can(sr
 - Invites expire after `INVITE_TTL = 120` s (constant in the file header). One open invite per (unit, target).
   Joining a unit drops the other open invites to that officer. Accepting while in another (unlocked) unit moves
   the officer (the old unit gets its normal leave handling).
-- Invite targets must be on-duty officers (`getOfficer`), not on a run, not in the arena, not in a full unit.
+- Inviters in the arena are refused (`err.in_arena`, ARCHITECTURE §0.14 gates invites). Invite targets must be
+  on-duty officers (`getOfficer`), not on a run, not in the arena, not in a full unit.
   Accepting refuses in-arena players with `err.in_arena` (CRIMSON_ARENA rule 5), players on a run, full and locked units.
 - **Leader succession**: `members` is kept in join order; when the leader leaves, `members[1]` (longest-standing)
   leads. A unit left with one member dissolves. Invites of the unit stay open when the leader changes.
@@ -78,7 +79,8 @@ Every `server:sup:op*` / `server:admin:op*` handler calls `CP.Permissions.can(sr
   itself ends the run as disconnected / off_duty / job_change / suspended); invites to that player are cancelled.
 - The leave action calls `getOfficer` (rule 7) but still lets a player who no longer qualifies leave their unit.
 - The invite toast is `CP.Tablet.notify(target, 'info', 'unit.invite_received', …, { title = 'unit.invite_title' })`.
-  The units client only adds a frontend sound when the `unit` push for that player carries `invited = true`.
+  The invitee gets exactly one `unit` push for a new invite, carrying `invited = true`; the units client only adds a
+  frontend sound on it. The inviter's expiry toast names the invitee.
 
 ### CP.Operations
 - Status machine and board lock as in the file header. `isLocked()` is true for joining, running and waiting.
@@ -94,10 +96,17 @@ Every `server:sup:op*` / `server:admin:op*` handler calls `CP.Permissions.can(sr
   leaderSrc = first joiner, operationId, isBoss = false })`. Cooldowns, no-repeat, hourly cap, server cap and the
   modifier are left to CP.Runs / CP.Events (they read `operationId`).
 - **Relaunch** is only possible in `waiting` (after a fail, everyone left, or a window that closed without a start).
-  It opens a new join window with an empty list, is **not** a new launch (the 30-min cooldown and `created_at` stay),
-  and resets the idle timer. The launch cooldown counts from the last `created_at` (persisted).
-- **Idle auto-cancel** applies in `waiting`: `Config.CrossDept.idleCancel` seconds after the last run ended, the join
-  window closed, or the last relaunch. Joining never auto-cancels (the window itself is at most `joinWindow`).
+  It opens a new join window with an empty list and is **not** a new launch (the 30-min cooldown and `created_at`
+  stay). The launch cooldown counts from the last `created_at` (persisted).
+- **Idle auto-cancel** ("auto-cancels after 30 minutes with no run in progress"): the idle clock starts at the launch
+  and again when the operation's run ends, is cleared while a run exists, and is **not** reset by a relaunch. The
+  cancel fires in `waiting` once `Config.CrossDept.idleCancel` seconds have passed; an open join window is never cut
+  short (a relaunch 28 minutes after a fail still gets its full window; if no run starts, it is cancelled as soon as
+  the window closes).
+- **Join** re-checks the operation state after the checks that may yield (`CP.Calls.isOnCall` can query the
+  database), so two joins can never pass the cap together and a join can never land after Start now copied the list.
+- The cancel reason is 1–200 **characters** (UTF-8, like the UI's `maxLength`); control characters become spaces;
+  invalid UTF-8 is `err.invalid_payload`.
 - **Cancel** needs a reason (1–200 characters, shown to participants). The lock lifts at once; everyone still on the
   run gets `CP.Runs.removeParticipant(run, src, 'cancelled')`. The auto-cancel reason is `sup.crossdept.reason_idle`
   (audited as `opAutoCancel` by `'console'`).
@@ -123,20 +132,25 @@ Every `server:sup:op*` / `server:admin:op*` handler calls `CP.Permissions.can(sr
   is synchronous (it needs the id). Times are written with `FROM_UNIXTIME(os.time())`, read with `UNIX_TIMESTAMP`.
 
 ### Web
+- Both screens normalise the callback data first (`asArray` for every list, missing nil fields → `null`), because
+  Lua sends an empty list as `{}` and drops nil keys: `invites`, `invitable`, `unit.members`, `unit.pending`,
+  `operation.participants`, `operation.departments`, `eligibleMissions` are all empty in common states.
+- The locked banner says "leaving abandons your run" only while the viewer is still on the unit's run.
 - `OperationPanel` default export, props `{ scope: 'sup' | 'admin' }` (stable). It calls `sup:getOperation` for both
   scopes and `server:<scope>:op*`. It never wraps itself in `<Screen>`.
 - With no operation active the panel shows a launch form (eligible missions + cooldown countdown); the Mission List
   and Admin Missions screens may also launch with `server:<scope>:opLaunch { missionId }`.
-- Mocks: `?teams=leader|member|solo|invites|locked` (Unit) and `?op=joining|running|waiting|none|cooldown|empty`
-  (panel). `server:joinOperation` and `getMissionTypes` are **not** mocked here (the Mission Board slice owns them).
+- Mocks: `?teams=leader|member|solo|invites|locked|lockedoff|long|full` (Unit) and
+  `?op=joining|running|waiting|none|cooldown|empty|fresh` (panel); add `&lua=1` to answer like Lua (empty lists as
+  `{}` objects, nil fields missing). `server:joinOperation` and `getMissionTypes` are **not** mocked here (the Mission Board slice owns them).
 
 ## Deviations / additions to the contract
 - `client:operation` carries an optional third argument `extra = { id, relaunched }`.
 - UnitView / BoardData.operation / OperationView carry the extra fields listed above (all optional in TS).
 - `CP.Units.view`, `CP.Operations.view`, `CP.Operations.cooldownLeft`, `CP.Operations.eligible` are public helpers
   beyond §5.16/§5.17 (used by the callbacks and useful for the Mission List / admin screens).
-- Test DB: `tests/teams_spec.lua` runs its SQL on `cp_test_teams`, rebuilt from `sql/migrations` exactly like
-  `cp_test` (same pattern as `engine_a_spec`), so a parallel `tests/run.lua` that drops `cp_test` cannot break it.
+- Test DB: `tests/teams_spec.lua` runs its SQL on `<run database>_teams` (`CP_TEST_DB` + `_teams`), rebuilt from
+  `sql/migrations` and dropped at the end, so neither other specs nor a parallel run of this spec can interfere.
 
 ## Requests to other modules
 - **runs**: `afterRunEnded → unlockUnit(run)` also runs for operation runs (it unlocks the first joiner's unit);
@@ -145,13 +159,17 @@ Every `server:sup:op*` / `server:admin:op*` handler calls `CP.Permissions.can(sr
   safety net exists). `create` must keep accepting up to `Config.CrossDept.maxParticipants` members for operation
   runs (no `maxOfficers`/`maxUnitSize` check) and treat `'cancelled'` as a no-cooldown end reason (it does).
 - **draw**: keep `CP.Units.lock(unit)` right before the draw and `unlock` on failure (done). A forming unit (leader +
-  pending invites) is dissolved by `lock`, so `run.unit` is nil for that leader — expected.
+  pending invites) is dissolved by `lock`, so `run.unit` is nil for that leader — expected. **Race:** `accept` reads
+  `unitMembers(src)` before the checks that yield (`getOfficer`, hourly cap, cooldowns) and locks afterwards, so an
+  invitee who accepts during those yields is in the locked unit but not on the run. Lock the unit before the
+  yielding checks (unlock on every failure), or re-read `CP.Units.members(src)` after `lock` and refuse if it changed.
 - **Mission Board (web)**: while `BoardData.operation` is set, show only that card: `missionLabel`, `launcher`,
   `status`, `joined`/`max` (+ `min`), `joinEndsIn` countdown, and a Join button (`canJoin`) → `action('server:joinOperation', operation.id)`.
   Refetch on pushes `board`/`operation`. Join errors: `err.op_join_closed`, `err.op_full`, `err.op_already_joined`,
   `err.op_not_found`, `err.in_arena`, `err.already_on_run`, `err.on_call` (all in `teams.json`).
 - **Admin Missions (web)**: `import OperationPanel from '../../supervisor/components/OperationPanel'` and render
-  `<OperationPanel scope="admin" />`.
+  `<OperationPanel scope="admin" />` — still missing in `admin/screens/Missions.tsx` at review time, so the Admin UI
+  has no launch / start now / relaunch / cancel yet.
 - **Supervisor Mission List (web)**: Launch → `action('server:sup:opLaunch', { missionId })` for missions where
   `CP.Operations.eligible(def)` holds (published, open to every department, 2+ officers, not the boss); then
   `navigate('sup_crossdept')`. Launch errors: `err.op_active`, `err.op_cooldown`, `err.op_disabled`,
@@ -165,10 +183,12 @@ Every `server:sup:op*` / `server:admin:op*` handler calls `CP.Permissions.can(sr
   `ui.screen.unit`, `ui.screen.sup_crossdept` (ui).
 
 ## Tests
-`lua5.4 tests/run.lua teams` → 385 assertions, 0 failed. Covers invites (validation, TTL expiry, decline, forming
+`lua5.4 tests/run.lua teams` → 409 assertions, 0 failed. Covers invites (validation, TTL expiry, decline, forming
 units, moving between units, cap with open invites), leader succession, dissolve, lock/unlock (incl. the
 member-still-on-run guard and the safety net), leave mid-run (quit) vs operation run, drop/unload/onLost cleanup,
 the arena gates; operations: restart cancel, cooldown from the persisted `created_at`, permissions (sup/admin
 scopes), eligibility, launch/join/start (run options), fail → waiting → relaunch, window end (auto start / not
 enough), everyone left, idle auto-cancel, cancel of a running operation (`cancelled` for every participant),
-completion, the vanished-run safety net, the tick thread, and every SQL statement of the slice on MariaDB.
+completion, the vanished-run safety net, the tick thread, the idle clock across a relaunch, the join re-check after
+a yielding lookup, reason length in characters, the inviter arena gate, one push per new invite, and every SQL
+statement of the slice on MariaDB.

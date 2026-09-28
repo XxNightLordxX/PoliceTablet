@@ -53,6 +53,8 @@
 --           server:sup:opRelaunch / server:admin:opRelaunch -            -> { id }
 --           server:sup:opCancel / server:admin:opCancel   { reason }     -> { id }   (reason 1-200 characters)
 --           server:joinOperation                          operationId | { operationId } -> { id, joined, max }
+--                   (the operation state is checked again after the checks that may yield, so a join never
+--                   passes the cap or lands after Start now copied the list)
 --   callback sup:getOperation -> OperationView
 --       { operation = null | { id, missionId, missionLabel, missionType, missionTypeLabel, difficulty,
 --           launcher, launcherCallsign, launcherDepartment, launchedAt, status, runState, runId,

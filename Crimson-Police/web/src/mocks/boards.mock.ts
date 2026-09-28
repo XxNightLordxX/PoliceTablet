@@ -4,7 +4,7 @@
 // the screens can be clicked through: hide-name, disputes, season start/end, bounty override, void, award.
 // server:dispute, server:admin:voidRun and server:admin:awardPoints belong to other modules: registered as
 // fallbacks so their owners' mocks win.
-import { registerMock } from '../shared/nui';
+import { registerMock, type MockFn, type MockKind } from '../shared/nui';
 import type { BoardRow, RunResult } from '../shared/types';
 import type {
   ActivityRun, AdminBoardRow, AdminBoards, AdminRun, BoardView, BountyHistoryRow, BountyView, ChallengeData, ChallengeDepartment,
@@ -82,6 +82,50 @@ const POOL: MockOfficer[] = [
   citizenid, name, callsign, dept, rank, hide, weekly, runs, failed, xp,
 }) as MockOfficer);
 
+// ── edge-case modes for screenshots: ?boards=edge (64-char names, 32-char callsigns, missing callsigns,
+// big numbers) and ?boards=empty (every list arrives as {} the way Lua encodes an empty table) ─────────
+const MOCK_MODE = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('boards') : null;
+const LONG_NAME = 'Maximilian Alexander Montgomery-Fitzgerald Wolfeschlegelsteinhausen';
+if (MOCK_MODE === 'edge') {
+  POOL.forEach((o, i) => {
+    if (i % 3 === 0) o.name = `${o.name.split(' ')[0]} ${LONG_NAME}`.slice(0, 64);
+    if (i % 2 === 1) o.callsign = null;
+    else if (i % 4 === 0) o.callsign = `${o.callsign ?? 'X'}-SUPERVISOR-UNIT-ALPHA-XRAY`.slice(0, 32);
+  });
+  POOL[0].weekly = 32767;
+  POOL[0].xp = 2147480000;
+  POOL[0].runs = 999;
+}
+/** Lua's empty table: arrives as {} instead of []. */
+const LUA_EMPTY = {} as unknown as never[];
+function emptied(name: string, data: unknown): unknown {
+  if (MOCK_MODE !== 'empty' || !data || typeof data !== 'object') return data;
+  const d = { ...(data as Record<string, unknown>) };
+  const clear = (...keys: string[]) => keys.forEach((k) => { d[k] = LUA_EMPTY; });
+  switch (name) {
+    case 'getBoard': clear('rows'); d.ranked = 0; d.me = { ...(d.me as object), rank: 0, points: 0, runs: 0, failed: 0 }; break;
+    case 'getProfile': clear('runs', 'badges'); d.xp = 0; d.seasonPoints = 0; d.callsign = null; d.level = { label: 'Probationary', badge: 'grey', xp: 0, next: 1000 }; break;
+    case 'getChallenge':
+      clear('topContributors');
+      d.departments = (d.departments as ChallengeDepartment[]).map((x) => ({ ...x, score: 0, activeOfficers: 0, officers: 0, points: 0, completed: 0, unitRuns: 0, bonus: 0 }));
+      d.bounty = d.bounty ? { ...(d.bounty as object), leader: null, leaderKey: null, rates: LUA_EMPTY } : null;
+      break;
+    case 'getDeptContributors': clear('contributors'); break;
+    case 'admin:getSeasons': clear('bountyHistory', 'seasons', 'standings'); d.current = null; d.latest = null; d.bounty = null; break;
+    case 'admin:getBoards': clear('rows', 'unranked', 'stuck'); if ('runs' in d) clear('runs'); break;
+    case 'sup:getDeptReport': clear('officers', 'standings'); d.standing = null; d.bounty = null; d.season = null; break;
+    case 'sup:getOfficerActivity': clear('runs'); break;
+    default: break;
+  }
+  return d;
+}
+function reg(kind: MockKind, name: string, fn: MockFn, opts?: { fallback?: boolean }): void {
+  registerMock(kind, name, (payload: unknown) => {
+    const out = fn(payload);
+    return kind === 'request' ? emptied(name, out) : out;
+  }, opts);
+}
+
 const byCid = (cid: string) => POOL.find((o) => o.citizenid === cid);
 const hidden = new Set(POOL.filter((o) => o.hide).map((o) => o.citizenid));
 const publicName = (o: MockOfficer) => (hidden.has(o.citizenid) ? o.callsign ?? 'Hidden officer' : o.name);
@@ -124,6 +168,7 @@ const SEASONS: SeasonListRow[] = [
   { id: 2, name: 'Season 2 · Summer Heat', startsAt: now() - 94 * DAY, endsAt: now() - 25 * DAY, active: false, champion: 'fib', championShort: 'FIB' },
   { id: 3, name: 'Season 3 · Autumn Offensive', startsAt: now() - 25 * DAY, endsAt: null, active: true, champion: null, championShort: null },
 ];
+if (MOCK_MODE === 'edge') SEASONS[2].name = 'Season 3 · The Very Long Autumn Offensive Against Organised Crime'.slice(0, 64);
 const currentSeason = () => SEASONS.find((s) => s.active) ?? null;
 const latestSeason = () => currentSeason() ?? SEASONS[SEASONS.length - 1] ?? null;
 const SEASON_WEEKS = 8;
@@ -133,7 +178,7 @@ function seasonView(s: SeasonListRow): SeasonView {
   return { id: s.id, name: s.name, startsAt: s.startsAt, endsAt: s.endsAt ?? null, active: s.active, week, weeksLeft };
 }
 
-registerMock('request', 'getBoard', (args: { period?: string; filter?: string; department?: string } | null) => {
+reg('request', 'getBoard', (args: { period?: string; filter?: string; department?: string } | null) => {
   const period = args?.period ?? 'weekly';
   const filter = period === 'alltime' ? 'overall' : args?.filter ?? 'overall';
   const me = viewer();
@@ -176,6 +221,7 @@ const MISSIONS: [string, string, string][] = [
   ['Manhunt', 'investigation', 'manhunt'], ['Hostage Rescue', 'tactical', 'hostage_rescue'], ['Stolen Vehicle Takedown', 'investigation', 'stolen_vehicle_takedown'],
   ['Street Race Bust', 'patrol', 'street_race_bust'],
 ];
+if (MOCK_MODE === 'edge') MISSIONS[0][0] = 'Armored Truck Escort Through Blaine County And All The Way Back';
 const END_REASONS: [string, string][] = [
   ['completed', 'completed'], ['completed', 'completed'], ['failed', 'time_limit'], ['completed', 'completed'], ['abandoned', 'real_call'],
   ['completed', 'completed'], ['failed', 'downed'], ['completed', 'completed'], ['abandoned', 'quit'], ['completed', 'completed'],
@@ -253,7 +299,7 @@ function runsFor(cid: string, own: boolean): ProfileRunView[] {
 }
 
 let hideOwn = false;
-registerMock('request', 'getProfile', (args: { citizenid?: string } | string | null) => {
+reg('request', 'getProfile', (args: { citizenid?: string } | string | null) => {
   const me = viewer();
   const cid = typeof args === 'string' ? args : args?.citizenid;
   const own = !cid || cid === me.citizenid;
@@ -287,14 +333,14 @@ registerMock('request', 'getProfile', (args: { citizenid?: string } | string | n
   return profile;
 });
 
-registerMock('action', 'server:setHideName', (value: unknown) => {
+reg('action', 'server:setHideName', (value: unknown) => {
   const v = typeof value === 'object' && value !== null ? (value as { hideName?: unknown }).hideName : value;
   if (typeof v !== 'boolean') throw new Error('err.invalid_payload');
   hideOwn = v;
   return { hideName: v };
 });
 
-registerMock('action', 'server:dispute', (payload: { rowId?: number; reason?: string } | null) => {
+reg('action', 'server:dispute', (payload: { rowId?: number; reason?: string } | null) => {
   if (!payload?.rowId || !payload.reason?.trim()) throw new Error('err.invalid_payload');
   disputed.add(payload.rowId);
   return { disputeId: 900 + disputed.size };
@@ -338,7 +384,7 @@ function contributors(dept: string, limit = 50): Contributor[] {
     .map((e, i) => ({ rank: i + 1, citizenid: e.o.citizenid, name: publicName(e.o), callsign: e.o.callsign, points: e.points, runs: e.runs, active: e.runs >= 3 }));
 }
 
-registerMock('request', 'getChallenge', () => {
+reg('request', 'getChallenge', () => {
   const me = viewer();
   const season = currentSeason();
   const view: ChallengeData = {
@@ -351,7 +397,7 @@ registerMock('request', 'getChallenge', () => {
   return view;
 });
 
-registerMock('request', 'getDeptContributors', (args: { department?: string } | null) => {
+reg('request', 'getDeptContributors', (args: { department?: string } | null) => {
   const key = args?.department ?? 'sast';
   const d = DEPTS[key];
   if (!d) throw new Error('err.unknown_department');
@@ -384,7 +430,7 @@ function history(): BountyHistoryRow[] {
   return out;
 }
 
-registerMock('request', 'admin:getSeasons', () => {
+reg('request', 'admin:getSeasons', () => {
   const cur = currentSeason();
   const latest = latestSeason();
   const data: SeasonsAdmin = {
@@ -400,7 +446,7 @@ registerMock('request', 'admin:getSeasons', () => {
   return data;
 });
 
-registerMock('action', 'server:admin:startSeason', (payload: { name?: string } | null) => {
+reg('action', 'server:admin:startSeason', (payload: { name?: string } | null) => {
   const name = (payload?.name ?? '').trim();
   if (!name || name.length > 64) throw new Error('err.invalid_season_name');
   const cur = currentSeason();
@@ -416,7 +462,7 @@ registerMock('action', 'server:admin:startSeason', (payload: { name?: string } |
   return seasonView(s);
 });
 
-registerMock('action', 'server:admin:endSeason', () => {
+reg('action', 'server:admin:endSeason', () => {
   const cur = currentSeason();
   if (!cur) throw new Error('err.no_season');
   cur.active = false;
@@ -426,7 +472,7 @@ registerMock('action', 'server:admin:endSeason', () => {
   return { season: seasonView(cur), champion: 'fib', standings: standings(), top10: [] };
 });
 
-registerMock('action', 'server:admin:overrideBounty', (payload: { objective?: string } | null) => {
+reg('action', 'server:admin:overrideBounty', (payload: { objective?: string } | null) => {
   if (!currentSeason()) throw new Error('err.no_season');
   if (!BOUNTIES.some((b) => b.id === payload?.objective)) throw new Error('err.invalid_bounty');
   bountyObjective = payload?.objective as string;
@@ -440,6 +486,7 @@ const STUCK: StuckPayment[] = [
   { rowId: 48214, runUuid: '7c9e6679-7425-40de-944b-e07fc1f90ae7', citizenid: 'FIB00190', name: 'Elena Sokolova', callsign: 'F-190',
     missionLabel: 'Armored Truck Escort', amount: 1170, createdAt: sqlTime(now() - 5 * 3600), transId: 'CP-7c9e6679-7425-40de-944b-e07fc1f90ae7-FIB00190' },
 ];
+if (MOCK_MODE === 'edge') { STUCK[0].name = LONG_NAME.slice(0, 64); STUCK[0].callsign = null; }
 const awarded: Record<string, number> = {};
 
 function adminRow(e: Entry, rank: number): AdminBoardRow {
@@ -455,7 +502,7 @@ function adminRuns(cid: string): AdminRun[] {
   }));
 }
 
-registerMock('request', 'admin:getBoards', (args: { period?: string; filter?: string; department?: string; citizenid?: string } | null) => {
+reg('request', 'admin:getBoards', (args: { period?: string; filter?: string; department?: string; citizenid?: string } | null) => {
   const period = args?.period ?? 'weekly';
   const filter = period === 'alltime' ? 'overall' : args?.filter ?? 'overall';
   const department = filter === 'department' ? args?.department ?? 'fib' : undefined;
@@ -477,13 +524,13 @@ registerMock('request', 'admin:getBoards', (args: { period?: string; filter?: st
   return data;
 });
 
-registerMock('action', 'server:admin:voidRun', (payload: { rowId?: number; reason?: string } | null) => {
+reg('action', 'server:admin:voidRun', (payload: { rowId?: number; reason?: string } | null) => {
   if (!payload?.rowId || !payload.reason?.trim()) throw new Error('err.invalid_payload');
   voided.add(payload.rowId);
   return true;
 }, { fallback: true });
 
-registerMock('action', 'server:admin:awardPoints', (payload: { citizenid?: string; points?: number; reason?: string } | null) => {
+reg('action', 'server:admin:awardPoints', (payload: { citizenid?: string; points?: number; reason?: string } | null) => {
   if (!payload?.citizenid || !payload.points || !payload.reason?.trim()) throw new Error('err.invalid_payload');
   if (!byCid(payload.citizenid)) throw new Error('err.unknown_officer');
   awarded[payload.citizenid] = (awarded[payload.citizenid] ?? 0) + payload.points;
@@ -504,7 +551,7 @@ function reportOfficers(dept: string): ReportOfficer[] {
   });
 }
 
-registerMock('request', 'sup:getDeptReport', () => {
+reg('request', 'sup:getDeptReport', () => {
   const me = viewer();
   const key = me.department === 'fib' ? 'fib' : 'sast';
   const season = currentSeason();
@@ -523,7 +570,7 @@ registerMock('request', 'sup:getDeptReport', () => {
   return report;
 });
 
-registerMock('request', 'sup:getOfficerActivity', (args: { citizenid?: string } | null) => {
+reg('request', 'sup:getOfficerActivity', (args: { citizenid?: string } | null) => {
   const o = args?.citizenid ? byCid(args.citizenid) : undefined;
   if (!o) throw new Error('err.unknown_officer');
   const me = viewer();

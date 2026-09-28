@@ -31,6 +31,9 @@
     * client:tierChanged may carry the rescaled objectives as a 4th argument (ctx.obj is updated).
     * client:runEnded's breakdown may carry failReason (a locale key) for mission_failed; a nil breakdown
       (silent removal) cleans up without the result screen.
+    * A start whose radius is at least 200 m is a search circle (Manhunt: "the 600 m search circle, shown on
+      the map when the type is accepted"): a local radius blip from client:start until this officer is
+      inside it or the first objective starts (the block then draws its own circle), removed at cleanup.
 ]]
 
 CP.Runs = CP.Runs or {}

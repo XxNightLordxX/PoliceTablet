@@ -29,11 +29,13 @@
 --   CP.Units.view(src) -> UnitView (§9.4) plus the slice fields documented below
 -- Net (CP.Net)
 --   action   server:unitInvite (targetSrc | { targetSrc })          -> { unitId, expiresIn }
+--            an in-arena inviter gets err.in_arena, an in-arena target err.unit_target_unavailable
 --   action   server:unitRespond ({ accepted, unitId } | boolean)    -> { unitId|nil, accepted }
 --            a bare boolean answers the newest invite; accepting refuses in-arena players (err.in_arena)
 --   action   server:unitLeave ()                                     -> { left = true, abandoned = bool }
 --   callback getUnit -> UnitView
--- Pushes: topic 'unit' ({ unitId|false, invited? }) to every member and every invitee on each change,
+-- Pushes: topic 'unit' ({ unitId|false, invited? }; invited = true only on the push that delivers a new
+-- invite) to every member and every invitee on each change,
 -- topic 'board' to members (the board depends on the unit size). Toasts via CP.Tablet.notify.
 -- Listeners: playerDropped, CP.Qbx.onPlayerUnload (character switch) and CP.Access.onLost (off duty,
 -- job change, suspended) take the player out of their unit and cancel invites to them; the run itself is
