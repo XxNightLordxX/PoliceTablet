@@ -130,6 +130,24 @@ function summarise(): TestsView {
 
 // ── players ───────────────────────────────────────────────────────────────────
 
+/** testlua=1: shape replies like Lua does (json.encode of an empty table is an object, not a list). */
+const luaShaped = params.get('testlua') === '1';
+function lua<T>(v: T): T {
+  if (!luaShaped) return v;
+  const walk = (x: unknown): unknown => {
+    if (Array.isArray(x)) return x.length === 0 ? {} : x.map(walk);
+    if (x && typeof x === 'object') {
+      const out: Record<string, unknown> = {};
+      Object.entries(x as Record<string, unknown>).forEach(([k, val]) => {
+        if (val !== undefined && val !== null) out[k] = walk(val);
+      });
+      return out;
+    }
+    return x;
+  };
+  return walk(v) as T;
+}
+
 const CANDIDATES: TestCandidate[] = [
   { src: 12, name: 'John Doe', callsign: '2L-14', rank: 'Sergeant', departmentShort: 'SAST', role: 'officer', admin: false, onRun: false, inArena: false, invite: false },
   { src: 15, name: 'Maria Lopez', callsign: '2L-21', rank: 'Trooper', departmentShort: 'SAST', role: 'officer', admin: false, onRun: false, inArena: false, invite: false },
@@ -139,6 +157,12 @@ const CANDIDATES: TestCandidate[] = [
   { src: 41, name: 'Tess Okafor', callsign: '2L-30', rank: 'Corporal', departmentShort: 'SAST', role: 'officer', admin: false, onRun: false, inArena: true, invite: false },
   { src: 44, name: 'Victor Hale', callsign: '1A-09', rank: 'Lieutenant', departmentShort: 'SAST', role: 'officer', admin: true, onRun: false, inArena: false, invite: false },
 ];
+if (params.get('testlong') === '1') {
+  CANDIDATES.unshift({
+    src: 57, name: 'Maximilian Alexander Montgomery-Worthington III', callsign: '2L-1234567890', rank: 'Senior Special Agent in Charge',
+    departmentShort: 'FIB', role: 'officer', admin: true, onRun: false, inArena: false, invite: false,
+  });
+}
 
 // ── my test state ─────────────────────────────────────────────────────────────
 
@@ -155,6 +179,12 @@ const state: { lobby: TestLobby; active: TestActive | null; pending: TestPending
     { inviteId: 'ti7', missionId: 'hostage_rescue', missionLabel: 'Hostage Rescue', from: 'Sam Porter', fromCallsign: false, expiresIn: 96 },
   ],
 };
+
+// Lua-shaped mode starts with nothing waiting, so the empty lists arrive as {} objects.
+if (luaShaped) {
+  state.pending = [];
+  state.invites = [];
+}
 
 function activeFor(missionId: string, locationIndex: number, tier: string, testers: { src: number; name: string; departmentShort: string | false; callsign: string | false }[], route: boolean): TestActive {
   const m = catalog.find((x) => x.id === missionId) ?? catalog[0];
@@ -220,27 +250,29 @@ export function sampleDebug(): TestDebugData {
 
 // ── registrations ─────────────────────────────────────────────────────────────
 
-registerMock('request', 'admin:getTests', () => summarise());
+registerMock('request', 'admin:getTests', () => lua(summarise()));
 
 registerMock('request', 'test:state', (): TestState => {
   lobbyCount();
-  return {
+  return lua({
     lobby: { ...state.lobby, invites: [...state.lobby.invites] },
     active: state.active ?? false,
     pending: state.pending,
     invites: state.invites,
     serverTime: now(),
-  };
+  });
 });
 
 registerMock('request', 'test:candidates', () =>
-  CANDIDATES.map((c) => {
-    const inv = state.lobby.invites.find((i) => i.src === c.src);
-    return { ...c, invite: inv ? inv.status : false };
-  }),
+  lua(
+    CANDIDATES.map((c) => {
+      const inv = state.lobby.invites.find((i) => i.src === c.src);
+      return { ...c, invite: inv ? inv.status : false };
+    }),
+  ),
 );
 
-registerMock('request', 'test:pendingInvites', () => state.invites);
+registerMock('request', 'test:pendingInvites', () => lua(state.invites));
 
 registerMock('action', 'server:test:invite', (p: { missionId: string; targets: number[] }) => {
   const m = catalog.find((x) => x.id === p?.missionId);

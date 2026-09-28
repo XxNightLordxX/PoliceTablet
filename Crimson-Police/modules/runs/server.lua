@@ -62,6 +62,17 @@
     * penalty_points stores the positive sum of the penalties; bonus_points the sum of the bonuses.
     * Engine-recorded personal ids: pedestrian_hit and lights_siren (penalize), weapons fired go to
       run.stats.weaponsFired / p.firedWeapon, vehicle damage to p.vehicle.
+    * create re-checks "already on a run" and the server caps with no yield right before the run is
+      registered (its lookups may yield, so two racing accepts can never both pass).
+    * Server-side health is sync data (0 until a client synced a server-created entity): health 0 only
+      counts as a death/wreck after a positive value was seen; engine health <= -3999 always counts.
+    * Spawns waiting for their entity count toward the caps; an entity that appears after the spawn wait
+      is deleted when it does (model-checked), so nothing is left behind.
+    * reclassify(..., 'real_call_cancelled') only replaces a real_call end reason.
+    * Presence flags go through CP.AntiCheat.flag (audited like every flag); an off-duty CP.Access.onLost
+      signal is re-verified with CP.Access.recheck (stale duty events are ignored).
+    * Every run ticks in its own thread; a run whose previous tick is still busy is skipped that second.
+    * ActiveMissionView extras (web/src/types/run_ui.ts): me, isBoss, operationId, startIn.
 ]]
 
 CP.Runs = CP.Runs or {}

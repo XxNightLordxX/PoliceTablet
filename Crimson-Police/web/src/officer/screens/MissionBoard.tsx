@@ -140,7 +140,11 @@ function Notice({ icon, tone, title, text, action }: { icon: IconName; tone: 'in
   );
 }
 
-function CardStatus({ card, offset, stamp, onUnlocked, readyText }: { card: TypeCard; offset: number; stamp: unknown; onUnlocked: () => void; readyText?: string }) {
+function CardStatus({
+  card, offset, stamp, onUnlocked, readyText, blocker,
+}: {
+  card: TypeCard; offset: number; stamp: unknown; onUnlocked: () => void; readyText?: string; blocker?: Blocker;
+}) {
   if (card.locked) {
     const left = secondsUntil(card.locked.until, offset);
     return (
@@ -173,6 +177,14 @@ function CardStatus({ card, offset, stamp, onUnlocked, readyText }: { card: Type
         <span className="run_ui-status__text">
           <strong>{t('board.card.busy')}</strong> · {t('board.card.busy_text')}
         </span>
+      </div>
+    );
+  }
+  if (blocker) {
+    return (
+      <div className="run_ui-status run_ui-status--muted">
+        <Icon name={blocker.icon} size={14} />
+        <span className="run_ui-status__text">{blocker.text}</span>
       </div>
     );
   }
@@ -244,7 +256,7 @@ function TypeCardView({
       </div>
 
       <div className="run_ui-type__foot">
-        <CardStatus card={card} offset={offset} stamp={stamp} onUnlocked={onUnlocked} />
+        <CardStatus card={card} offset={offset} stamp={stamp} onUnlocked={onUnlocked} blocker={board} />
         <Button
           variant={blocked ? 'secondary' : 'primary'}
           icon="play"
@@ -306,7 +318,7 @@ function BossCardView({
         </div>
       </div>
       <div className="run_ui-type__foot">
-        <CardStatus card={statusCard} offset={offset} stamp={stamp} onUnlocked={onUnlocked} readyText={t('board.boss.ready')} />
+        <CardStatus card={statusCard} offset={offset} stamp={stamp} onUnlocked={onUnlocked} readyText={t('board.boss.ready')} blocker={board} />
         <Button variant={blocked ? 'secondary' : 'primary'} icon="flame" disabled={blocked || busy} onClick={() => onAccept(boss)}>
           {t('board.boss.accept')}
         </Button>

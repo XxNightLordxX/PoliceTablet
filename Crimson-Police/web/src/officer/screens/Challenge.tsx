@@ -125,10 +125,10 @@ export function BountyCard({ bounty, myDepartment, actions, footer }: { bounty: 
                     {r.short}
                   </span>
                   <span className="boards-rate__track" aria-hidden>
-                    <span className="boards-rate__fill" style={{ width: `${maxRate > 0 ? Math.max(r.rate > 0 ? 4 : 0, (r.rate / maxRate) * 100) : 0}%`, backgroundColor: r.colour }} />
+                    <span className="boards-rate__fill" style={{ width: `${maxRate > 0 ? Math.max(Number(r.rate) > 0 ? 4 : 0, ((Number(r.rate) || 0) / maxRate) * 100) : 0}%`, backgroundColor: r.colour }} />
                   </span>
                   <span className="boards-rate__value cp-num" title={t('challenge.rate_hint', { count: r.count, n: r.activeOfficers })}>
-                    {r.rate.toFixed(2)}
+                    {(Number(r.rate) || 0).toFixed(2)}
                   </span>
                 </div>
               ))}
