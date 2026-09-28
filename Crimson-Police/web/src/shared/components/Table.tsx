@@ -46,7 +46,8 @@ function cellValue<R>(row: R, key: string): ReactNode {
 export function Table<R>({
   columns, rows, rowKey, onRowClick, highlightRow, empty, loading, stickyHeader = true, maxHeight, dense, footer, className, ...aria
 }: TableProps<R>) {
-  const list = rows ?? [];
+  // Lua encodes an empty table as {} (not []), so anything that is not an array counts as no rows.
+  const list: R[] = Array.isArray(rows) ? rows : [];
   const wrapStyle: CSSProperties | undefined = maxHeight !== undefined ? { maxHeight, overflow: 'auto' } : undefined;
   const keyOf = (row: R, i: number) => (rowKey ? rowKey(row, i) : ((row as { id?: string | number }).id ?? i));
   const onKey = (row: R, i: number) => (e: KeyboardEvent<HTMLTableRowElement>) => {

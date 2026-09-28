@@ -5,8 +5,12 @@
     runs the local stop timer ("Hold still: 6 s") and reports the checkpoint when it counts; during a
     course it watches the driven vehicle for wall/vehicle contacts and for becoming undriveable.
     Everything the server decides arrives as a full snapshot through update(); the HUD line is
-    composed here with ctx.hudDetail. Radio Silence: no blips, the HUD names the next street instead.
+    composed here with ctx.hudDetail (the running course clock in whole seconds, so the line changes
+    at most once a second; "the timer starts at checkpoint 1" while the server holds the run timer).
+    Radio Silence: no blips, the HUD names the next street instead.
     No networked entities are created here; this block has no NPCs (hostChanged only records the flag).
+    The block's client state is kept per run and objective in this file (stateOf), so it also works
+    when the engine hands every hook a fresh ctx.state table.
 
   Objective fields read: radius [10], stopFor [10], policeVehicle [true], contactPenalty [2]
     (the server sends the checkpoint list, course state and which checks to run)
@@ -33,7 +37,31 @@ local UNDRIVE_TRIES    = 3       -- reports per course vehicle (the server verif
 local STATUS_MS        = 700     -- lifetime of status lines refreshed every frame
 local EVENT_MS         = 4000    -- lifetime of one-off lines
 
-local live = {}   -- [state] = ctx, for resource-stop cleanup
+local live = {}     -- [state] = ctx, for resource-stop cleanup
+local states = {}   -- ['<runId>:<index>'] = state, one per objective across every hook call
+
+local function keyOf(ctx)
+    return tostring(ctx.runId) .. ':' .. tostring(ctx.index)
+end
+
+local function stateOf(ctx)
+    local key = keyOf(ctx)
+    local st = states[key]
+    if not st then
+        st = type(ctx.state) == 'table' and ctx.state or {}
+        st.runKey = tostring(ctx.runId)
+        states[key] = st
+    end
+    return st
+end
+
+-- Drop the states of other runs that are no longer running (late snapshots after a stop).
+local function purge(ctx)
+    local run = tostring(ctx.runId)
+    for key, st in pairs(states) do
+        if st.runKey ~= run and not st.alive then states[key] = nil end
+    end
+end
 
 local function v3(t)
     return vector3((t.x or 0.0) + 0.0, (t.y or 0.0) + 0.0, (t.z or 0.0) + 0.0)
@@ -95,8 +123,11 @@ local function baseLine(ctx, st, t)
     if not d.current then return nil end
     local text = CP.L('block.checkpoint_route.hud.progress', { n = d.current, total = d.total })
     if st.courseRunning and d.medals then
-        local elapsed = (t - (st.courseStartLocal or t)) / 1000
-        text = text .. ' · ' .. CP.L('block.checkpoint_route.hud.course_time', { time = fmt(elapsed), penalty = (d.course and d.course.penalty) or 0 })
+        -- Whole seconds: the HUD line (an NUI message) changes once a second, not every frame.
+        local elapsed = math.floor((t - (st.courseStartLocal or t)) / 1000)
+        text = text .. ' · ' .. CP.L('block.checkpoint_route.hud.course_time', { time = elapsed, penalty = (d.course and d.course.penalty) or 0 })
+    elseif d.course and d.course.held then
+        text = text .. ' · ' .. CP.L('block.checkpoint_route.hud.timer_waits')
     end
     if ctx.radioSilence then
         if not st.street then st.street = streetLine(st.points[d.current]) end
@@ -330,17 +361,20 @@ local function cleanup(ctx, st)
         ctx.hudDetail(nil)
     end
     live[st] = nil
+    if states[keyOf(ctx)] == st then states[keyOf(ctx)] = nil end
 end
 
 CP.Blocks.register(BLOCK, {
     prepare = function(ctx)
-        local st = ctx.state
+        purge(ctx)
+        local st = stateOf(ctx)
         st.blips = st.blips or {}
         st.track = st.track or {}
     end,
 
     start = function(ctx)
-        local st = ctx.state
+        purge(ctx)
+        local st = stateOf(ctx)
         st.blips = st.blips or {}
         st.track = st.track or {}
         st.points = st.points or {}
@@ -357,17 +391,17 @@ CP.Blocks.register(BLOCK, {
 
     update = function(ctx, data)
         if type(data) ~= 'table' or data.kind ~= 'state' then return end
-        local st = ctx.state
+        local st = stateOf(ctx)
         if st.alive then apply(ctx, st, data) else st.pending = data end
     end,
 
     -- No NPCs in this block: nothing to re-task when the host changes.
     hostChanged = function(ctx, isHost)
-        ctx.state.isHost = isHost == true
+        stateOf(ctx).isHost = isHost == true
     end,
 
     stop = function(ctx)
-        cleanup(ctx, ctx.state)
+        cleanup(ctx, stateOf(ctx))
     end,
 })
 

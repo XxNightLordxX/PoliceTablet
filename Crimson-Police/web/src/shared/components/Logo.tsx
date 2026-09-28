@@ -46,8 +46,9 @@ export function Watermark({ logo, department, tabletHeight = 800, className }: W
   const { ok, loaded, onLoad, onError } = useLogo(url, department);
   if (!logo || !url || logo.watermark === false || !ok) return null;
 
-  const opacity = Math.max(0, Math.min(0.25, Number(logo.opacity) || 0));
-  const size = Math.max(0.05, Math.min(1, Number(logo.size) || 0.6));
+  // SPEC defaults: opacity 0.08 (clamped 0–0.25), size 0.6 of the tablet height (clamped 0.05–1).
+  const opacity = Math.max(0, Math.min(0.25, typeof logo.opacity === 'number' && isFinite(logo.opacity) ? logo.opacity : 0.08));
+  const size = Math.max(0.05, Math.min(1, typeof logo.size === 'number' && logo.size > 0 ? logo.size : 0.6));
   const style: CSSProperties = {
     height: Math.round(size * tabletHeight),
     opacity: loaded ? opacity : 0,

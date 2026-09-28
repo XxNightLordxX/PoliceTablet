@@ -54,6 +54,8 @@
     { type = 'low_health', netId }   an armed suspect: re-checked with server-side health
     { type = 'cuffed', netId }       CP.Npc (CP.Runs.dispatch) after a validated cuff (cp bag says cuffed)
     { type = 'shot', netId, src }    CP.Npc: a surrendered/cuffed suspect was shot (penalty recorded there)
+    { type = 'damaged', netId }      CP.Npc (CP.Runs.dispatch): an armed suspect's health is re-checked
+                                     against armedGivesUp.belowHealth at once; always accepted
 
   Bonus / penalty ids recorded (shared)
     aliveBonus.id ['suspect_alive'; Prison Break: 'inmate_alive'] ctx.award count 1 for every suspect or
@@ -888,7 +890,8 @@ local function onEvent(ctx, src, ev)
     else
         local netId = tonumber(ev.netId)
         local p = netId and st.peds[tostring(netId)] or nil
-        if not p then return false, (t == 'aim' or t == 'stunned' or t == 'low_health' or t == 'cuffed' or t == 'shot') and 'unknown_entity' or 'unknown_event' end
+        local known = t == 'aim' or t == 'stunned' or t == 'low_health' or t == 'cuffed' or t == 'shot' or t == 'damaged'
+        if not p then return false, known and 'unknown_entity' or 'unknown_event' end
         if t == 'aim' then
             local gu = ctx.obj.givesUp
             if p.armed then return false, 'armed' end
@@ -930,6 +933,13 @@ local function onEvent(ctx, src, ev)
             markCuffed(ctx, st, p)
             ok = true
         elseif t == 'shot' then
+            ok = true
+        elseif t == 'damaged' then
+            local below = ctx.obj.armedGivesUp.belowHealth
+            if p.armed and moving(p) and below then
+                local ratio = healthRatio(p)
+                if ratio and ratio > 0 and ratio < below then surrenderPed(ctx, st, p) end
+            end
             ok = true
         else
             return false, 'unknown_event'

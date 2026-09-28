@@ -46,8 +46,8 @@
 --       player whose active job is in a department (on duty or not). Runs on character load, on a
 --       job/grade change and when the tablet opens.
 --   CP.Access.onLost(fn(src, endReason))
---       Fired right after a qbx duty/job/group event for a player whose last known active job was a
---       department job and who no longer qualifies: 'job_change' (the active job changed, including to
+--       Fired right after a qbx duty/job/group event for a player whose last known active job (seeded at
+--       start, on load and by the first getOfficer/recheck) was a department job and who no longer qualifies: 'job_change' (the active job changed, including to
 --       'unemployed'), 'off_duty', 'suspended'. Listeners check whether the player is on a run.
 --   Server export GetDepartment(src) -> deptKey|nil   the department of the player's active job
 --                                                      (whether or not they are on duty)
@@ -337,7 +337,9 @@ function A.getOfficer(src)
     if not n or not (CP.Qbx and CP.Qbx.getInfo) then return nil, 'err.not_police' end
     local info = CP.Qbx.getInfo(n)
     if not info then return nil, 'err.not_police' end
-    lastJob[n] = info.job.name
+    -- Only seed: the qbx event handlers (evaluate) own later changes, so a lookup racing a job switch
+    -- cannot hide the onLost signal.
+    if lastJob[n] == nil then lastJob[n] = info.job.name end
     local c = build()
     local deptKey = c.byJob[info.job.name]
     local dept = deptKey and c.byKey[deptKey]
@@ -381,7 +383,7 @@ function A.recheck(src, jobName)
     local info = CP.Qbx.getInfo(n)
     if not info then return true end
     local job = info.job.name
-    lastJob[n] = job
+    if lastJob[n] == nil then lastJob[n] = job end
     if (type(jobName) == 'string' and jobName ~= '' and job ~= jobName) or not build().byJob[job] then
         return false, 'job_change'
     end

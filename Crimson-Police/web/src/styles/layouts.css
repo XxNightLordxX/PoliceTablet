@@ -164,7 +164,7 @@
   display: flex;
   flex-direction: column;
   flex: none;
-  width: 252px;
+  width: 268px;
   padding: 16px 12px 14px;
   background: rgba(var(--cp-surface-rgb), 0.72);
   border-right: 1px solid var(--cp-border);

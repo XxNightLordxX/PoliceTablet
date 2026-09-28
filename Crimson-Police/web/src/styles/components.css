@@ -1173,7 +1173,7 @@
   padding: 13px 12px 14px 14px;
   overflow: hidden;
   border-radius: var(--cp-radius);
-  background: rgba(var(--cp-surface-rgb), 0.97);
+  background: var(--cp-surface);
   border: 1px solid var(--cp-border);
   border-left: 3px solid var(--t-solid);
   box-shadow: var(--cp-shadow-lg);

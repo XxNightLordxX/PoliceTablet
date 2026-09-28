@@ -44,6 +44,8 @@
                                      cp bag must say cuffed. A cuff the event missed is picked up by tick.
     { type = 'shot', netId, src }    CP.Npc: a participant shot a surrendered/cuffed hostile
                                      (shot_surrendered is recorded by CP.Npc); accepted, nothing else.
+    { type = 'damaged', netId }      CP.Npc (CP.Runs.dispatch): the same server-side health check as
+                                     low_health (still one roll per hostile); always accepted.
 
   Bonus / penalty ids recorded (shared)
     hostile_arrested   ctx.award, count 1 for every hostile cuffed
@@ -725,6 +727,10 @@ local function onEvent(ctx, src, ev)
         ok, why = onCuffed(ctx, st, src, p)
     elseif ev.type == 'shot' then
         if not p then return false, 'unknown_entity' end
+        ok = true
+    elseif ev.type == 'damaged' then
+        if not p then return false, 'unknown_entity' end
+        if p.state == 'hostile' and not p.rolled then checkLowHealth(ctx, st, p) end
         ok = true
     else
         return false, 'unknown_event'

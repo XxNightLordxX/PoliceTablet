@@ -41,7 +41,7 @@ layouts/                  TabletFrame, Header, Sidebar, RunBar, Officer/Supervis
 officer/screens/          Home, MissionBoard, Unit, ActiveMission, Leaderboard, Challenge, Profile
 supervisor/screens/       MissionList, CrossDept, LiveMissions, ReviewQueue, Payouts, Builder, DeptReport
 admin/screens/            Payouts, Missions, Seasons, Leaderboards, Officers, Departments, Permissions, Audit, Testing
-hud/                      Hud, ResultScreen, FadeOverlay (done) · TestControls, DebugOverlay, BuilderOverlay (stubs)
+hud/                      Hud, ResultScreen, FadeOverlay, HudColumn (done) · TestControls, DebugOverlay, BuilderOverlay (stubs)
 mocks/                    browser-only: index.ts (loads *.mock.ts), core.mock.ts, samples.ts, DevPanel, Gallery
 styles/                   base.css (tokens), components.css, layouts.css, hud.css
 ```

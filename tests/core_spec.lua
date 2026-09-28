@@ -890,6 +890,13 @@ do
     TriggerEvent('QBCore:Server:SetDuty', 11, false)
     H.eq(lastLost().src, 11, 'known again after PlayerLoaded')
 
+    -- a lookup racing the job-switch event must not hide the signal
+    qbxPlayers[10].PlayerData.job = { name = 'fib', label = 'FIB', onduty = true, grade = { name = 'Agent', level = 1 } }
+    H.ok(CP.Access.getOfficer(10) ~= nil, 'lookup between the switch and its event')
+    TriggerEvent('QBCore:Server:OnJobUpdate', 10, qbxPlayers[10].PlayerData.job)
+    H.eq(lastLost().src, 10, 'job change still reported')
+    H.eq(lastLost().reason, 'job_change', 'job_change after a racing lookup')
+
     H.eq(CP.Access.suspend('CPT00003', 2, 0, 'auto'), true, 'suspend an online officer')
     H.eq(lastLost().src, 3, 'a new suspension fires onLost')
     H.eq(lastLost().reason, 'suspended', 'suspended')

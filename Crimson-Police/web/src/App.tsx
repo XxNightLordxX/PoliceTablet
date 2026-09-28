@@ -11,6 +11,7 @@ import BuilderOverlay from './hud/BuilderOverlay';
 import DebugOverlay from './hud/DebugOverlay';
 import { FadeOverlay } from './hud/FadeOverlay';
 import { Hud } from './hud/Hud';
+import { HudColumn } from './hud/HudColumn';
 import { ResultScreen } from './hud/ResultScreen';
 import { Toasts } from './shared/components';
 import { closeTopLayer, useHudScale, usePush, useViewport } from './shared/hooks';
@@ -202,10 +203,10 @@ export default function App() {
       <SessionContext.Provider value={sessionValue}>
         <NavigationContext.Provider value={nav}>
           {showColumn ? (
-            <div className={`cp-hud-column${uiOpen ? ' is-over-ui' : ''}`} style={{ transform: `translateY(-50%) scale(${hudScale})` }}>
+            <HudColumn scale={hudScale} overUi={uiOpen}>
               {showHud && hud ? <Hud hud={hud} /> : null}
               {result ? <ResultScreen key={resultSeq} result={result} onDismiss={dismissResult} /> : null}
-            </div>
+            </HudColumn>
           ) : null}
 
           <DebugOverlay debug={debug} hud={hud} />
