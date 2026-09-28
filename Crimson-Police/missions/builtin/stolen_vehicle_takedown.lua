@@ -6,12 +6,14 @@
   (5 s). After the stop each suspect has a 20% chance to run on foot. A suspect more than 400 m
   from every participant for 20 s has escaped (fail). Car stopped within 2 min +15; ramming at
   over 100 km/h -10 each; PIT stops mean contact, so no heavy-damage penalty.
-  Last-seen areas and flee routes: the motor motel on Route 68 (west through Harmony), Rob's
-  Liquor at Banham Canyon (north on the Great Ocean Hwy), the Paleto Bay Ron station (east along
-  the coast), the Grove Street LTD (Davis Ave, Strawberry Ave, Adam's Apple Blvd) and the
-  Little Seoul LTD (south towards La Puerta).
+  Last-seen areas and flee routes (road waypoints on the GTA vehicle-node network at every
+  junction or turn and at least every 100 m; the car free-flees after the last one): a car park on
+  Route 68 in east Harmony (west along Route 68), the Rob's Liquor car park at Banham Canyon
+  (north on the Great Ocean Hwy to Chumash), the Paleto Bay Ron station (east along the Great
+  Ocean Hwy), the Grove Street LTD (Davis Ave, Strawberry Ave, Adam's Apple Blvd) and the
+  Little Seoul LTD (Lindsay Circus, Palomino Ave, South Rockford Dr, Dutch London St).
   Blocks: pursuit (mode = 'stop', spawn = location.spawn, route = location.route).
-  Start: a circle of 60 m centred 35-50 m from the stolen car (never on top of it).
+  Start: a 60 m circle centred on the approach road 35-50 m from the stolen car (never on top of it).
 ]]
 
 RegisterMission({
@@ -30,121 +32,149 @@ RegisterMission({
 
   locations = {
     {
-      label  = 'Motor motel, Route 68',
-      start  = { coords = vec3(1178.00, 2686.50, 38.09), radius = 60.0 },  -- last seen here, 44 m from the car
-      spawn  = vec4(1137.80, 2668.00, 37.90, 27.91),   -- the stolen car
-      -- 15 waypoints, 1250 m flee route
+      label  = "Route 68, east Harmony",
+      start  = { coords = vec3(1167.25, 2683.25, 38.03), radius = 60.0 },  -- last seen here, 36 m from the car
+      spawn  = vec4(1137.00, 2664.50, 37.50, 352.96),   -- the stolen car
+      -- 16 road waypoints, 1271 m flee route: Route 68
       route  = {
         points = {
-          vec3(1137.80, 2668.00, 37.90),
-          vec3(1128.00, 2686.50, 37.98),
-          vec3(1014.40, 2687.10, 39.49),
-          vec3(900.80, 2687.70, 39.20),
-          vec3(787.20, 2688.30, 40.79),
-          vec3(673.60, 2688.90, 42.03),
-          vec3(560.00, 2689.50, 42.15),
-          vec3(495.00, 2680.75, 42.19),
-          vec3(430.00, 2672.00, 42.87),
-          vec3(370.00, 2652.50, 44.52),
-          vec3(310.00, 2633.00, 45.00),
-          vec3(225.00, 2640.00, 45.12),
-          vec3(140.00, 2705.00, 53.98),
-          vec3(60.00, 2766.00, 58.04),
-          vec3(-30.00, 2830.00, 57.72),
+          vec3(1137.00, 2664.50, 37.00),
+          vec3(1139.50, 2684.75, 37.28),
+          vec3(1039.75, 2690.00, 38.34),
+          vec3(948.50, 2695.00, 39.41),
+          vec3(857.75, 2698.00, 39.78),
+          vec3(761.75, 2700.00, 39.12),
+          vec3(663.00, 2700.25, 39.75),
+          vec3(576.25, 2693.00, 40.94),
+          vec3(487.00, 2681.25, 42.06),
+          vec3(398.75, 2667.50, 43.31),
+          vec3(309.00, 2643.00, 43.50),
+          vec3(221.75, 2626.25, 45.94),
+          vec3(142.75, 2660.25, 48.84),
+          vec3(74.75, 2727.50, 54.69),
+          vec3(-0.75, 2786.00, 56.94),
+          vec3(-43.25, 2808.00, 54.66),
         },
         loop   = false,
       },
     },
     {
       label  = "Rob's Liquor, Banham Canyon",
-      start  = { coords = vec3(-2991.00, 352.00, 14.40), radius = 60.0 },  -- last seen here, 41 m from the car
-      spawn  = vec4(-2981.38, 392.08, 14.94, 7.87),   -- the stolen car
-      -- 12 waypoints, 1067 m flee route
+      start  = { coords = vec3(-3003.00, 334.25, 14.56), radius = 60.0 },  -- last seen here, 41 m from the car
+      spawn  = vec4(-2970.50, 359.75, 14.41, 33.93),   -- the stolen car
+      -- 15 road waypoints, 1043 m flee route: Great Ocean Hwy
       route  = {
         points = {
-          vec3(-2981.38, 392.08, 14.94),
-          vec3(-2988.00, 440.00, 15.20),
-          vec3(-2989.00, 520.00, 15.60),
-          vec3(-3005.00, 630.00, 16.30),
-          vec3(-3040.00, 750.00, 17.30),
-          vec3(-3064.00, 815.00, 17.95),
-          vec3(-3088.00, 880.00, 18.60),
-          vec3(-3128.00, 990.00, 19.80),
-          vec3(-3147.00, 1080.00, 20.70),
-          vec3(-3152.00, 1190.00, 21.40),
-          vec3(-3140.00, 1310.00, 22.20),
-          vec3(-3110.00, 1430.00, 23.00),
+          vec3(-2970.50, 359.75, 13.91),
+          vec3(-2979.75, 373.50, 13.88),
+          vec3(-2995.25, 375.50, 13.66),
+          vec3(-2992.50, 399.25, 13.88),
+          vec3(-2986.25, 494.00, 14.28),
+          vec3(-2993.75, 578.50, 17.50),
+          vec3(-3014.50, 665.75, 21.22),
+          vec3(-3062.50, 744.25, 20.56),
+          vec3(-3121.25, 823.75, 16.06),
+          vec3(-3154.50, 913.25, 13.38),
+          vec3(-3145.00, 997.25, 16.06),
+          vec3(-3114.75, 1087.50, 19.44),
+          vec3(-3106.25, 1183.00, 19.31),
+          vec3(-3097.00, 1278.50, 19.19),
+          vec3(-3084.25, 1337.00, 19.22),
         },
         loop   = false,
       },
     },
     {
-      label  = 'Ron gas station, Paleto Bay',
-      start  = { coords = vec3(145.00, 6615.00, 31.82), radius = 60.0 },  -- last seen here, 39 m from the car
-      spawn  = vec4(182.00, 6603.00, 31.87, 294.44),   -- the stolen car
-      -- 12 waypoints, 1113 m flee route
+      label  = "Ron gas station, Paleto Bay",
+      start  = { coords = vec3(184.75, 6559.50, 32.00), radius = 60.0 },  -- last seen here, 41 m from the car
+      spawn  = vec4(197.50, 6598.75, 31.25, 178.34),   -- the stolen car
+      -- 16 road waypoints, 1246 m flee route: Great Ocean Hwy
       route  = {
         points = {
-          vec3(182.00, 6603.00, 31.87),
-          vec3(215.00, 6618.00, 31.83),
-          vec3(300.00, 6624.00, 29.80),
-          vec3(400.00, 6622.00, 23.13),
-          vec3(465.00, 6619.00, 22.72),
-          vec3(560.00, 6606.00, 23.06),
-          vec3(680.00, 6588.00, 24.43),
-          vec3(800.00, 6565.00, 25.38),
-          vec3(920.00, 6545.00, 26.32),
-          vec3(1040.00, 6522.00, 27.52),
-          vec3(1160.00, 6500.00, 29.56),
-          vec3(1280.00, 6482.00, 31.55),
+          vec3(197.50, 6598.75, 30.75),
+          vec3(196.50, 6564.25, 31.03),
+          vec3(198.00, 6545.50, 30.91),
+          vec3(282.75, 6570.25, 29.16),
+          vec3(378.75, 6572.00, 26.81),
+          vec3(468.25, 6563.50, 25.97),
+          vec3(555.75, 6543.25, 26.78),
+          vec3(649.50, 6522.50, 27.19),
+          vec3(743.50, 6502.50, 25.41),
+          vec3(839.00, 6491.50, 21.41),
+          vec3(935.00, 6486.25, 20.09),
+          vec3(1031.00, 6484.75, 19.97),
+          vec3(1127.00, 6485.25, 20.03),
+          vec3(1223.00, 6486.50, 19.81),
+          vec3(1318.75, 6486.50, 18.97),
+          vec3(1379.00, 6478.00, 19.03),
         },
         loop   = false,
       },
     },
     {
-      label  = 'LTD Gasoline, Grove Street',
-      start  = { coords = vec3(-82.83, -1790.92, 29.50), radius = 60.0 },  -- last seen here, 37 m from the car
-      spawn  = vec4(-66.00, -1758.00, 29.53, 289.86),   -- the stolen car
-      -- 15 waypoints, 1148 m flee route
+      label  = "LTD Gasoline, Grove Street",
+      start  = { coords = vec3(-104.25, -1764.50, 29.88), radius = 60.0 },  -- last seen here, 40 m from the car
+      spawn  = vec4(-64.75, -1756.75, 28.75, 22.70),   -- the stolen car
+      -- 24 road waypoints, 1205 m flee route: Davis Ave > Strawberry Ave > Adam's Apple Blvd
       route  = {
         points = {
-          vec3(-66.00, -1758.00, 29.53),
-          vec3(-30.00, -1745.00, 29.47),
-          vec3(41.67, -1682.67, 29.25),
-          vec3(113.33, -1620.33, 29.30),
-          vec3(185.00, -1558.00, 29.26),
-          vec3(213.00, -1462.00, 29.36),
-          vec3(241.00, -1366.00, 29.35),
-          vec3(262.00, -1268.00, 29.29),
-          vec3(293.00, -1164.00, 29.28),
-          vec3(221.50, -1155.00, 29.31),
-          vec3(150.00, -1146.00, 29.33),
-          vec3(82.50, -1137.00, 29.47),
-          vec3(15.00, -1128.00, 29.69),
-          vec3(-43.00, -1121.00, 26.50),
-          vec3(-120.00, -1111.00, 26.93),
+          vec3(-64.75, -1756.75, 28.25),
+          vec3(-75.00, -1732.25, 28.31),
+          vec3(-56.25, -1724.25, 28.31),
+          vec3(-71.00, -1720.00, 28.34),
+          vec3(-134.50, -1731.75, 29.12),
+          vec3(-115.75, -1724.25, 28.97),
+          vec3(-60.50, -1642.50, 28.34),
+          vec3(9.50, -1578.25, 28.34),
+          vec3(63.00, -1506.00, 28.31),
+          vec3(92.00, -1483.75, 28.28),
+          vec3(145.25, -1416.50, 28.25),
+          vec3(154.25, -1394.25, 28.28),
+          vec3(199.00, -1351.75, 28.31),
+          vec3(228.25, -1278.00, 28.31),
+          vec3(230.50, -1258.00, 28.31),
+          vec3(222.50, -1245.25, 28.31),
+          vec3(229.50, -1223.75, 28.31),
+          vec3(210.50, -1130.50, 28.31),
+          vec3(112.25, -1129.00, 28.31),
+          vec3(13.75, -1134.25, 27.84),
+          vec3(-76.00, -1137.25, 24.78),
+          vec3(-97.75, -1138.00, 24.81),
+          vec3(-116.25, -1131.50, 24.69),
+          vec3(-122.50, -1131.75, 24.66),
         },
         loop   = false,
       },
     },
     {
-      label  = 'LTD Gasoline, Little Seoul',
-      start  = { coords = vec3(-770.00, -955.00, 19.08), radius = 60.0 },  -- last seen here, 48 m from the car
-      spawn  = vec4(-724.60, -938.00, 19.21, 168.69),   -- the stolen car
-      -- 11 waypoints, 845 m flee route
+      label  = "LTD Gasoline, Little Seoul",
+      start  = { coords = vec3(-745.50, -892.00, 20.78), radius = 60.0 },  -- last seen here, 42 m from the car
+      spawn  = vec4(-720.00, -925.50, 18.50, 225.81),   -- the stolen car
+      -- 22 road waypoints, 878 m flee route: Lindsay Circus > Palomino Ave > South Rockford Dr > Dutch London St
       route  = {
         points = {
-          vec3(-724.60, -938.00, 19.21),
-          vec3(-728.00, -955.00, 19.22),
-          vec3(-640.00, -955.00, 21.46),
-          vec3(-575.00, -955.00, 21.38),
-          vec3(-510.00, -955.00, 23.53),
-          vec3(-510.00, -1080.00, 20.40),
-          vec3(-510.00, -1145.00, 18.59),
-          vec3(-510.00, -1210.00, 18.19),
-          vec3(-508.00, -1330.00, 19.98),
-          vec3(-505.00, -1450.00, 24.07),
-          vec3(-390.00, -1455.00, 28.10),
+          vec3(-720.00, -925.50, 18.00),
+          vec3(-711.00, -934.25, 18.00),
+          vec3(-710.75, -950.25, 17.84),
+          vec3(-701.75, -957.25, 18.25),
+          vec3(-657.50, -957.00, 20.47),
+          vec3(-638.25, -957.00, 20.50),
+          vec3(-643.75, -979.50, 20.12),
+          vec3(-662.50, -1037.00, 16.44),
+          vec3(-737.25, -1089.75, 10.44),
+          vec3(-756.75, -1101.25, 9.69),
+          vec3(-768.50, -1117.50, 9.69),
+          vec3(-769.00, -1135.25, 9.69),
+          vec3(-709.00, -1213.50, 9.66),
+          vec3(-692.25, -1222.50, 9.66),
+          vec3(-683.75, -1251.00, 9.66),
+          vec3(-653.75, -1343.00, 9.59),
+          vec3(-654.25, -1361.75, 9.59),
+          vec3(-647.25, -1380.00, 9.66),
+          vec3(-651.50, -1461.00, 9.66),
+          vec3(-680.25, -1549.25, 14.38),
+          vec3(-719.00, -1600.75, 21.19),
+          vec3(-735.25, -1608.25, 22.59),
         },
         loop   = false,
       },
@@ -155,7 +185,7 @@ RegisterMission({
     {
       block              = 'pursuit',
       label              = 'Stop the stolen car and arrest the suspects',
-      minSeconds         = 40,               -- quicker than this is rejected
+      minSeconds         = 30,               -- quicker than this is rejected (a fast PIT, 5 s stopped, 2 x 5 s cuffs)
       mode               = 'stop',
       vehicles           = 1,
       models             = { 'sultan', 'buffalo', 'kuruma' },   -- four-door cars for up to 4 suspects

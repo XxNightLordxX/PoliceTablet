@@ -262,9 +262,10 @@ AddEventHandler('gameEventTriggered', function(name, args)
     local veh = GetVehiclePedIsIn(ped, false)
     if veh == 0 or GetPedInVehicleSeat(veh, -1) ~= ped then return end
     if not (attacker == veh or (attacker == ped and (weapon == RUN_OVER or weapon == RAMMED))) then return end
+    -- Networked first: Entity(e).state and NetworkGetNetworkIdFromEntity warn for local-only peds.
+    if not NetworkGetEntityIsNetworked(victim) then return end
     local st = Entity(victim).state
     if st and st.cp ~= nil then return end
-    if not NetworkGetEntityIsNetworked(victim) then return end
     local netId = NetworkGetNetworkIdFromEntity(victim)
     current.pedHits = current.pedHits or {}
     if current.pedHits[netId] then return end

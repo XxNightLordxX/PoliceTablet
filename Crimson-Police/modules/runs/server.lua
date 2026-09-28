@@ -2173,7 +2173,12 @@ function Runs.view(run, src)
         end
     end
     local remaining = Runs.remaining(run)
+    local startIn = nil
+    if not started and p and not p.arrived and p.deadline then startIn = math.max(0, p.deadline - os.time()) end
     return {
+        -- Optional extras for the Active Mission screen (web/src/types/run_ui.ts): the viewer, the boss flag,
+        -- the operation and the seconds left to reach the start.
+        me = src, isBoss = run.isBoss == true, operationId = run.operationId, startIn = startIn,
         runId = run.id,
         missionLabel = run.mission.label or run.missionId,
         description = run.mission.description or '',
@@ -2526,11 +2531,24 @@ local function tickRun(run, nowMs)
     if run.timerSentAt and now - run.timerSentAt >= TIMER_RESYNC_S then sendTimer(run) end
 end
 
+-- Every run ticks in its own thread: a block tick that waits (a wave spawning, a row being written) never
+-- delays the timers and checks of the other runs. A run whose previous tick is still busy is skipped.
 function Runs._tick()
-    local nowMs = GetGameTimer()
     for _, run in ipairs(Runs.all()) do
-        local ok, err = pcall(tickRun, run, nowMs)
-        if not ok then CP.err(TAG, 'tick of run %s failed: %s', tostring(run.id), tostring(err)) end
+        local nowMs = GetGameTimer()
+        if run.ticking then
+            if not run.tickStuckWarned and nowMs - (run.tickStartedAt or nowMs) > TICK_STUCK_MS then
+                run.tickStuckWarned = true
+                CP.warn(TAG, 'the tick of run %s has been busy for over %d s', tostring(run.id), TICK_STUCK_MS // 1000)
+            end
+        else
+            run.ticking, run.tickStartedAt = true, nowMs
+            CreateThread(function()
+                local ok, err = pcall(tickRun, run, GetGameTimer())
+                run.ticking = false
+                if not ok then CP.err(TAG, 'tick of run %s failed: %s', tostring(run.id), tostring(err)) end
+            end)
+        end
     end
 end
 
