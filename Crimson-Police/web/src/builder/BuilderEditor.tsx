@@ -220,7 +220,7 @@ export function BuilderEditor({ id, scope, config, onClose, onRenamed, onOpen }:
             <span className="builder_client-mono">{rec.id}</span>
             <span aria-hidden>·</span>
             <span className={cx('builder_client-save-state', ed.dirty && !ed.readOnly && 'is-dirty')}>
-              {ed.saving || ed.validating ? <Icon name="refresh" size={12} className="builder_client-spin" /> : <Icon name={ed.dirty ? 'edit' : 'check'} size={12} />}
+              {ed.saving || ed.validating ? <Icon name="refresh" size={12} className="builder_client-spin" /> : <Icon name={ed.readOnly ? 'lock' : ed.dirty ? 'edit' : 'check'} size={12} />}
               {saveState}
             </span>
             {ed.toolBusy ? <Badge size="sm" tone="accent" icon="radio">{t('builder.editor.tool_running')}</Badge> : null}

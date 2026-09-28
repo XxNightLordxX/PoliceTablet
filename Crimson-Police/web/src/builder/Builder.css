@@ -311,6 +311,7 @@
 .builder_client-state__row > :last-child { color: var(--cp-text); }
 .builder_client-publish { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; align-items: start; }
 .builder_client-publish__meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 16px 0 6px; }
+.builder_client-publish__meta .builder_client-mono { word-break: break-all; }
 .builder_client-publish > .cp-card:last-child:nth-child(3) { grid-column: 1 / -1; }
 .builder_client-problems { display: flex; flex-direction: column; gap: 12px; max-height: 340px; overflow: auto; }
 .builder_client-problems__group ul { margin: 4px 0 0; padding-left: 18px; color: var(--cp-muted); font-size: var(--cp-fs-sm); display: flex; flex-direction: column; gap: 3px; }

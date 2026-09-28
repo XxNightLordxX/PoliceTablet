@@ -114,7 +114,7 @@
   "builder.confirm.rollback.button": "Roll back",
   "builder.confirm.rollback.message": "The previous version (v{previous}) is restored from its .bak file and published as a new version. v{version} is kept as a backup.",
   "builder.confirm.rollback.title": "Roll back {mission}?",
-  "builder.count_of": "{have} / {need}",
+  "builder.count_of": "{have} placed · min {need}",
   "builder.cp.contact": "Contact penalty",
   "builder.cp.count": "Checkpoints used",
   "builder.cp.group": "Checkpoints",
