@@ -10,10 +10,12 @@
         (correct_log +5 / wrong_log -5 each);
       · hidden devices (Bomb Disposal search): N of the points (hidden.count, scales) hide a device;
         searching one reveals it: the device prop is spawned (ctx.spawnObject, OneSync) and added to
-        run.shared.devices = { { netId, coords, point } } for the next objective (skill_check). Done when
-        every device is found and spawned. Spawn caps are respected (a found device waits for ctx.canSpawn).
+        run.shared.devices = { { netId, coords, point, model, heading } } for the next objective
+        (skill_check). Done when every device is found and spawned. Spawn caps are respected (a found
+        device waits for ctx.canSpawn).
     Every action is validated with server-side coordinates and a server-side dwell time (the participant
-    was sampled at the point for the progress duration), and each point is accepted once, in its state.
+    was sampled at the point, in that point's state, for the progress or follow-up duration), and each
+    point is accepted once, in its state.
 
   Objective fields read (defaults: ARCHITECTURE §3.3 and Config.Blocks.interact_points)
     points     location key: vec3/vec4, list of them, or list of { coords, heading, label }
@@ -379,7 +381,10 @@ local function spawnDevice(ctx, st, n)
     p.netId = netId
     ctx.run.shared = ctx.run.shared or {}
     ctx.run.shared.devices = ctx.run.shared.devices or {}
-    table.insert(ctx.run.shared.devices, { netId = netId, coords = vec3Of(p.coords), point = n })
+    table.insert(ctx.run.shared.devices, {
+        netId = netId, coords = vec3Of(p.coords), point = n,
+        model = hidden.prop or DEVICE_PROP, heading = p.heading,   -- lets skill_check re-create a deleted prop
+    })
     return true
 end
 
@@ -427,11 +432,18 @@ local function reach(ctx)
     return (tonumber(target.radius) or TARGET_RADIUS) + REACH_SLACK
 end
 
-local function heldFor(st, src, n)
+-- Seconds the server has sampled src at point n while the point was in `status` (pending or followup).
+local function heldFor(st, src, n, status)
     local bySrc = st.near[src]
-    local since = bySrc and bySrc[n]
-    if not since then return 0 end
-    return (now() - since) / 1000
+    local e = bySrc and bySrc[n]
+    if not e or e.status ~= status then return 0 end
+    return (now() - e.at) / 1000
+end
+
+local function markNear(st, src, n, status, t)
+    local bySrc = st.near[src] or {}
+    st.near[src] = bySrc
+    bySrc[n] = { at = t, status = status }
 end
 
 -- ── Evidence ────────────────────────────────────────────────────────────────
@@ -443,7 +455,7 @@ local function onInteract(ctx, st, src, ev)
     local c = ctx.coords(src)
     if not c or CP.U.dist(c, p.coords) > reach(ctx) then return false, 'too_far' end
     local need = (tonumber(ctx.obj.progress and ctx.obj.progress.duration) or 0) / 1000 - DWELL_SLACK
-    if need > 0 and heldFor(st, src, n) < need then return false, 'too_quick' end
+    if need > 0 and heldFor(st, src, n, 'pending') < need then return false, 'too_quick' end
 
     p.by, p.checkedAt = src, now()
     if st.hidden then
@@ -458,6 +470,7 @@ local function onInteract(ctx, st, src, ev)
         local o = p.outcome ~= nil and outcomeDef(ctx.obj, p.outcome) or nil
         if o and type(o.followUp) == 'table' then
             p.status = 'followup'
+            markNear(st, src, n, 'followup', p.checkedAt)   -- the checker is at the door now
         else
             resolve(ctx, st, n)
         end
@@ -477,7 +490,7 @@ local function onFollowUp(ctx, st, src, ev)
     local o = outcomeDef(ctx.obj, p.outcome)
     local f = o and o.followUp or {}
     local need = (tonumber(f.duration) or 0) / 1000 - DWELL_SLACK
-    if need > 0 and (now() - (p.checkedAt or now())) / 1000 < need then return false, 'too_quick' end
+    if need > 0 and heldFor(st, src, n, 'followup') < need then return false, 'too_quick' end
     p.followedBy = src
     resolve(ctx, st, n)
     sendState(ctx, st)
@@ -703,7 +716,7 @@ CP.Blocks.register(BLOCK, {
             tryComplete(ctx, st)
             return
         end
-        -- Server-side dwell: who has been at which open point, and since when.
+        -- Server-side dwell: who has been at which open point (main action or follow-up), since when.
         local r = reach(ctx)
         local t = now()
         for _, src in ipairs(ctx.participants()) do
@@ -711,8 +724,10 @@ CP.Blocks.register(BLOCK, {
             local bySrc = st.near[src] or {}
             st.near[src] = bySrc
             for n, p in ipairs(st.points) do
-                if c and p.status == 'pending' and CP.U.dist(c, p.coords) <= r then
-                    bySrc[n] = bySrc[n] or t
+                local open = p.status == 'pending' or p.status == 'followup'
+                if c and open and CP.U.dist(c, p.coords) <= r then
+                    local e = bySrc[n]
+                    if not e or e.status ~= p.status then bySrc[n] = { at = t, status = p.status } end
                 else
                     bySrc[n] = nil
                 end

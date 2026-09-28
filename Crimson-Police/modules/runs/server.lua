@@ -1364,15 +1364,14 @@ local function settle(run, p, result, endReason, others)
 end
 
 -- ── lifecycle helpers ───────────────────────────────────────────────────────
-local function endMessageKind(result, endReason)
-    if endReason == 'real_call' or endReason == 'force_recall' or endReason == 'cancelled' then return 'info' end
-    if result == 'completed' then return 'success' end
-    if result == 'failed' then return 'error' end
-    return 'warning'
+local function responsive(src)
+    if not playerOnline(src) then return false end
+    if GetPlayerLastMsg then return num(GetPlayerLastMsg(src), 0) <= HOST_STALE_MS end
+    return true
 end
-Runs._endMessageKind = endMessageKind
 
-local function migrateHost(run, reason)
+-- Host succession follows the join order. needFresh: only hand over to a responsive participant.
+local function migrateHost(run, reason, needFresh)
     local current = run.host
     local candidates = {}
     for _, src in ipairs(run.order) do
@@ -1382,10 +1381,10 @@ local function migrateHost(run, reason)
     local stillOk = current and run.participants[current] and run.participants[current].status == 'active'
     local pick = nil
     for _, src in ipairs(candidates) do
-        if playerOnline(src) then pick = src; break end
+        if responsive(src) then pick = src; break end
     end
     if not pick then
-        if stillOk then return false end
+        if stillOk or needFresh then return false end
         pick = candidates[1]
     end
     if not pick or pick == current then return false end
@@ -2379,9 +2378,9 @@ local function tickRun(run, nowMs)
     local host = run.host
     local hp = host and run.participants[host]
     if not hp or hp.status ~= 'active' or not playerOnline(host) then
-        migrateHost(run, 'offline')
-    elseif GetPlayerLastMsg and num(GetPlayerLastMsg(host), 0) > HOST_STALE_MS then
-        migrateHost(run, 'unresponsive')
+        migrateHost(run, 'offline', false)
+    elseif not responsive(host) then
+        migrateHost(run, 'unresponsive', true)
     end
 
     local i = run.objectiveIndex

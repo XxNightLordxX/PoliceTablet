@@ -234,6 +234,19 @@ local function monitorDrive(S, v, veh, driver)
     end
 end
 
+-- Control + CP.Npc.apply once per entity handle (a new handle after streaming or a new host re-applies).
+local function applyPed(S, net, ped)
+    if S.applied[net] == ped then return true end
+    if not S.ctx.control(ped, CONTROL_MS) then return false end
+    local bag = bagOf(ped)
+    CP.Npc.apply(ped, (bag and bag.cfg) or {})
+    driverSetup(ped, S.ctx.obj.style ~= 'cautious')
+    S.applied[net] = ped
+    S.tasked[net] = nil
+    S.left[net] = nil
+    return true
+end
+
 local function hostVehicle(S, v)
     local veh = entityFor(v.netId)
     if not veh then return end
@@ -251,17 +264,7 @@ local function hostVehicle(S, v)
         local info = S.byNet[net]
         local ped = entityFor(net)
         if info and ped then
-            if S.applied[net] ~= ped then
-                if S.ctx.control(ped, CONTROL_MS) then
-                    local bag = bagOf(ped)
-                    CP.Npc.apply(ped, (bag and bag.cfg) or {})
-                    driverSetup(ped, S.ctx.obj.style ~= 'cautious')
-                    S.applied[net] = ped
-                    S.tasked[net] = nil
-                    S.left[net] = nil
-                end
-            end
-            if S.applied[net] == ped then
+            if applyPed(S, net, ped) then
                 local state = (bagOf(ped) or {}).state or info.state
                 if state == 'driving' then
                     if not IsPedInVehicle(ped, veh, false) then SetPedIntoVehicle(ped, veh, info.seat or -1) end
@@ -285,7 +288,7 @@ local function hostVehicle(S, v)
 end
 
 local function hostSuspect(S, info, ped)
-    if S.applied[info.netId] ~= ped then return end   -- applied in hostVehicle
+    if not applyPed(S, info.netId, ped) then return end
     local state = (bagOf(ped) or {}).state or info.state
     if IsPedInAnyVehicle(ped, false) then return end
     if S.tasked[info.netId] == state then return end
@@ -345,7 +348,7 @@ local function ramLoop(S)
     end)
 end
 
-local function hudText(S, me, myPos)
+local function hudText(S, myPos)
     local d = S.data
     local obj = S.ctx.obj
     if d.mode == 'follow' then
@@ -450,7 +453,7 @@ local function loop(S)
                     local net = NetworkGetNetworkIdFromEntity(myVeh)
                     if net and net ~= 0 then reportOnce(S, 'undriveable', net) end
                 end
-                setHint(S, hudText(S, me, myPos))
+                setHint(S, hudText(S, myPos))
             end
             Wait(fast and FAST_MS or SLOW_MS)
         end
