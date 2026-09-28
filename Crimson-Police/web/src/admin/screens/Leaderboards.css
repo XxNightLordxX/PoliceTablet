@@ -29,14 +29,21 @@
   line-height: 1.25;
 }
 .boards-admin-officer__name {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
   font-weight: 650;
+}
+.boards-admin-officer__name > .cp-badge {
+  flex: none;
 }
 .boards-admin-officer__sub {
   font-size: var(--cp-fs-xs);
   color: var(--cp-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .boards-admin-result {
   display: inline-flex;

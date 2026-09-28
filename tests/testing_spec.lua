@@ -897,6 +897,55 @@ do
         H.ok(st.active == false, 'real engine: no stale active test after an abandon')
         H.eq(st.pending[1].endState, 'abandoned', 'real engine: abandoned test waits for a result')
     end
+
+    -- archived custom missions without the builder hooks: cp_custom_missions rows + the archived file
+    CP.Builder.archivedDefs, CP.Builder.getArchived = nil, nil
+    H.sql("DELETE FROM cp_custom_missions WHERE id IN ('custom_arch', 'custom_live')")
+    H.sql([[INSERT INTO cp_custom_missions (id, mission_type, status, published_version, file_path, created_by, updated_by)
+        VALUES ('custom_arch', 'tactical', 'archived', 5, 'missions/custom/archived/custom_arch.lua', 'SUP00006', 'SUP00006'),
+               ('custom_live', 'tactical', 'published', 2, 'missions/custom/custom_live.lua', 'SUP00006', 'SUP00006')]])
+    local ARCH_FILE = "RegisterMission({ id = 'custom_arch', label = 'Archived Raid' })"
+    local realLoad = LoadResourceFile
+    local parsed = 0
+    _G.LoadResourceFile = function(res, path)
+        if path == 'missions/custom/archived/custom_arch.lua' then return ARCH_FILE end
+        return realLoad(res, path)
+    end
+    CP.Missions.parse = function(content, chunk)
+        parsed = parsed + 1
+        if content ~= ARCH_FILE then return nil, 'unexpected file' end
+        local d = mission('custom_arch', { label = 'Archived Raid' })
+        d.source, d.defHash, d.status, d.isBoss = nil, nil, nil, nil
+        return d
+    end
+    local view = T.list()
+    local arch
+    for _, m in ipairs(view.missions) do if m.id == 'custom_arch' then arch = m end end
+    H.ok(arch ~= nil, 'archived mission listed from cp_custom_missions + its archived file')
+    H.eq(arch and arch.status, 'archived', 'status archived')
+    H.eq(arch and arch.version, 5, 'version from the published_version column')
+    H.eq(arch and arch.source, 'custom', 'a custom mission')
+    local n = parsed
+    T.list()
+    H.eq(parsed, n, 'an unchanged archived file is not parsed again')
+    H.clockMs = H.clockMs + 5000
+    ok, data = T.start(1, { missionId = 'custom_arch', location = 1 })
+    H.eq(ok, true, 'an archived custom mission can be started without the builder hook')
+    run = ok and R.get(data.runId) or nil
+    H.eq(run and run.version, 5, 'the run carries the archived version')
+    if run then T.control(1, { control = 'end' }) end
+    local okRec = T.record(1, { missionId = 'custom_arch', location = 1, result = 'failed', note = 'spawn 3 is inside a wall' })
+    H.eq(okRec, true, 'archived test recorded')
+    local row = H.sql("SELECT mission_version, def_hash FROM cp_mission_tests WHERE mission_id = 'custom_arch'")[1]
+    H.eq(row and row.mission_version, 5, 'mission_version of the archived mission')
+    H.eq(row and row.def_hash, CP.U.hashHex(ARCH_FILE), 'def_hash = hash of the archived file')
+    _G.LoadResourceFile = realLoad
+
+    -- test:state is the caller's own data: admins and Mission Builder users (draft tests)
+    local res = H.callback('crimson-police:test:state', 6, {})
+    H.eq(res.ok, true, 'test:state for a supervisor with builderEdit (their draft tests)')
+    res = H.callback('crimson-police:test:state', 2, {})
+    H.eq(res.error, 'err.no_permission', 'test:state refused for an officer')
     CP.Runs = R
 end
 
@@ -1072,8 +1121,36 @@ do
     H.eq(st.focused, false, 'Crimson-Arena rule 8: a foreign value releases our focus')
     H.eq(st.debugOn, false, 'and stops the overlay')
 
+    -- Config.Testing switches travel with the push (the HUD panel disables those buttons)
+    H.ok(lastPush().data.allowTeleport == true and lastPush().data.debugOverlay == true, 'allowTeleport / debugOverlay pushed')
+    Config.Testing.allowTeleport = false
+    clientActions.testPanel({ open = true })
+    H.eq(lastPush().data.allowTeleport, false, 'Config.Testing.allowTeleport read at call time')
+    clientActions.testPanel({ open = false })
+    Config.Testing.allowTeleport = true
+
+    -- Crimson-Arena rule 13: a foreign value that arrives during the fade-out still stops the move
+    local realFade = DoScreenFadeOut
+    _G.DoScreenFadeOut = function() fades[#fades + 1] = 'out'; LocalPlayer.state.crimsonArena = { active = true, matchId = 'm3' } end
+    local movedBefore = #moved
+    local okF, errF = clientActions.teleport({ target = 'start' })
+    H.eq(errF, 'err.in_arena', 'teleport refused when the arena flag arrives during the fade')
+    H.eq(#moved, movedBefore, 'SetEntityCoords never called')
+    H.eq(fades[#fades], 'in', 'the screen fades back in')
+    H.eq(frozen[#frozen], false, 'nothing stays frozen')
+    _G.DoScreenFadeOut = realFade
+    LocalPlayer.state.crimsonArena = nil
+
+    -- a new test: the HUD flag is set, then the freshly mounted panel gets the key/config push
+    currentRun = { id = 'run-10' }
+    H.fire('crimson-police:client:test', 1, { controls = true, runId = 'run-10', debug = false })
+    H.step(0)
+    local pushesBefore = #nuiPushes
+    H.advance(300, 50)
+    H.ok(#nuiPushes > pushesBefore and lastPush().data.key == 'F7', 'the panel gets the bound key after the HUD flag')
+
     -- the test ends
-    H.fire('crimson-police:client:test', 1, { controls = false, runId = 'run-9', debug = false })
+    H.fire('crimson-police:client:test', 1, { controls = false, runId = 'run-10', debug = false })
     H.eq(st.controls, false, 'controls off')
     local okN, errN = clientActions.testControl({ control = 'skip' })
     H.eq(errN, 'err.test_no_active', 'no controls after the end')

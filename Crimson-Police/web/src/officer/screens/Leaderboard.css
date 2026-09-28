@@ -56,13 +56,39 @@
 
 /* rows */
 .boards-officer {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 8px;
   min-width: 0;
+  max-width: 100%;
+}
+.boards-officer > * {
+  flex: none;
 }
 .boards-officer__name {
+  flex: 0 1 auto;
+  min-width: 0;
   font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Tables whose one flexible column (officer / mission / season) takes the width the fixed columns leave:
+   a 64-character name or a long custom mission label is cut with an ellipsis (full text in the tooltip)
+   instead of pushing the numbers and row actions out of view. Every other column sets a width. */
+.boards-fixed .cp-table {
+  table-layout: fixed;
+}
+.boards-fixed .cp-table th,
+.boards-fixed .cp-table td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.boards-ellipsis {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

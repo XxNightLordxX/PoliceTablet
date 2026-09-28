@@ -74,14 +74,14 @@ export default function AdminSeasons() {
   };
 
   const historyColumns: TableColumn<BountyHistoryRow>[] = [
-    { key: 'season', header: t('admin.seasons.col.season'), render: (r) => <span className="boards-strong">{r.seasonName}</span> },
+    { key: 'season', header: t('admin.seasons.col.season'), render: (r) => <span className="boards-strong boards-ellipsis" title={r.seasonName}>{r.seasonName}</span> },
     { key: 'week', header: t('admin.seasons.col.week'), numeric: true, width: 70, render: (r) => formatNumber(r.week) },
     {
       key: 'objective',
       header: t('admin.seasons.col.objective'),
       render: (r) => (
-        <Row gap={2}>
-          <span>{r.label}</span>
+        <Row gap={2} className="boards-cell-row">
+          <span className="boards-ellipsis" title={r.label}>{r.label}</span>
           {r.current ? <Badge tone="accent" size="sm">{t('admin.seasons.this_week')}</Badge> : null}
         </Row>
       ),
@@ -100,7 +100,7 @@ export default function AdminSeasons() {
   ];
 
   const seasonColumns: TableColumn<SeasonListRow>[] = [
-    { key: 'name', header: t('admin.seasons.col.name'), render: (r) => <span className="boards-strong">{r.name}</span> },
+    { key: 'name', header: t('admin.seasons.col.name'), render: (r) => <span className="boards-strong boards-ellipsis" title={r.name}>{r.name}</span> },
     { key: 'startsAt', header: t('admin.seasons.col.started'), width: 150, render: (r) => formatDateTime(r.startsAt) },
     { key: 'endsAt', header: t('admin.seasons.col.ended'), width: 150, render: (r) => (r.endsAt ? formatDateTime(r.endsAt) : '–') },
     {
@@ -217,13 +217,13 @@ export default function AdminSeasons() {
           rowKey={(r) => `${r.seasonId}-${r.week}`}
           dense
           maxHeight={320}
-          className="boards-flat-table"
+          className="boards-flat-table boards-fixed"
           empty={t('admin.seasons.history_empty')}
         />
       </Card>
 
       <Card title={t('admin.seasons.seasons')} icon="trophy" padding="none">
-        <Table columns={seasonColumns} rows={asList(data.seasons)} rowKey={(r) => r.id} dense className="boards-flat-table" empty={t('admin.seasons.seasons_empty')} />
+        <Table columns={seasonColumns} rows={asList(data.seasons)} rowKey={(r) => r.id} dense className="boards-flat-table boards-fixed" empty={t('admin.seasons.seasons_empty')} />
       </Card>
 
       <Dialog

@@ -14,7 +14,7 @@ import { t } from '../../shared/i18n';
 import { useNavigate } from '../../shared/navigation';
 import { useSession } from '../../shared/session';
 import { asList, type BountyView, type ChallengeData, type ChallengeDepartment, type Contributor, type DeptContributors } from '../../types/boards';
-import { RankCell } from './Leaderboard';
+import { CallsignText, RankCell } from './Leaderboard';
 import './Challenge.css';
 
 /** "3d 4h" / "5h 12m" / "8m" until the week closes. */
@@ -168,8 +168,8 @@ function ContributorsDialog({ dept, onClose }: { dept: ChallengeDepartment | nul
   const minRuns = data?.minRunsActive ?? 3;
   const columns: TableColumn<Contributor>[] = [
     { key: 'rank', header: t('leaderboard.col.rank'), width: 70, render: (c, i) => <RankCell rank={c.rank ?? i + 1} /> },
-    { key: 'name', header: t('leaderboard.col.officer'), render: (c) => <span className="boards-officer__name">{c.name}</span> },
-    { key: 'callsign', header: t('leaderboard.col.callsign'), width: 110, render: (c) => c.callsign || <span className="boards-muted">{t('common.no_callsign')}</span> },
+    { key: 'name', header: t('leaderboard.col.officer'), render: (c) => <span className="boards-ellipsis boards-officer__name" title={c.name}>{c.name}</span> },
+    { key: 'callsign', header: t('leaderboard.col.callsign'), width: 120, render: (c) => <CallsignText callsign={c.callsign} /> },
     { key: 'runs', header: t('leaderboard.col.runs'), numeric: true, width: 80, render: (c) => formatNumber(c.runs ?? 0) },
     { key: 'points', header: t('leaderboard.col.points'), numeric: true, width: 100, render: (c) => formatNumber(c.points) },
     {
@@ -191,6 +191,7 @@ function ContributorsDialog({ dept, onClose }: { dept: ChallengeDepartment | nul
         <ErrorState compact error={error} onRetry={() => void refetch()} />
       ) : (
         <Table
+          className="boards-fixed"
           columns={columns}
           rows={rows}
           rowKey={(c, i) => c.citizenid ?? i}

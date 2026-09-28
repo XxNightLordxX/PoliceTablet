@@ -30,7 +30,7 @@ function ActivityDialog({ officer, onClose }: { officer: ReportOfficer | null; o
       header: t('profile.col.mission'),
       render: (r) => (
         <span className="boards-mission">
-          <span className="boards-mission__label">{r.missionLabel}</span>
+          <span className="boards-mission__label" title={r.missionLabel}>{r.missionLabel}</span>
           <span className="boards-mission__type">
             {[missionTypeLabel(r.missionType, session), r.participants > 1 ? t('result.participants', { n: r.participants }) : t('result.solo'), formatDuration(r.durationS)].join(' · ')}
           </span>
@@ -58,7 +58,7 @@ function ActivityDialog({ officer, onClose }: { officer: ReportOfficer | null; o
       {error && !current ? (
         <ErrorState compact error={error} onRetry={() => void refetch()} />
       ) : (
-        <Table columns={columns} rows={runs} rowKey={(r) => r.id} dense loading={loading} maxHeight={400} empty={t('sup.report.activity_empty')} />
+        <Table className="boards-fixed" columns={columns} rows={runs} rowKey={(r) => r.id} dense loading={loading} maxHeight={400} empty={t('sup.report.activity_empty')} />
       )}
     </Dialog>
   );
@@ -86,24 +86,30 @@ export default function DeptReport() {
       header: t('leaderboard.col.officer'),
       render: (o) => (
         <span className="boards-report-cell">
-          <span className="boards-strong">{o.name}</span>
+          <span className="boards-report-cell__name">
+            <span className="boards-strong boards-ellipsis" title={o.name}>{o.name}</span>
+            {o.flagged ? (
+              <Badge tone="warning" size="sm" icon="alert" title={t('sup.report.col.flagged')}>
+                {formatNumber(o.flagged)}
+              </Badge>
+            ) : null}
+          </span>
           <span className="boards-report-cell__sub">{[o.rank, o.callsign || t('common.no_callsign')].filter(Boolean).join(' · ')}</span>
         </span>
       ),
     },
-    { key: 'runs', header: t('sup.report.col.runs'), numeric: true, width: 70, render: (o) => formatNumber(o.runs) },
-    { key: 'completed', header: t('sup.report.col.completed'), numeric: true, width: 96, render: (o) => formatNumber(o.completed) },
+    { key: 'runs', header: t('sup.report.col.runs'), numeric: true, width: 68, render: (o) => formatNumber(o.runs) },
+    { key: 'completed', header: t('sup.report.col.completed'), numeric: true, width: 104, render: (o) => formatNumber(o.completed) },
     {
       key: 'failed',
       header: t('sup.report.col.failed_abandoned'),
       numeric: true,
-      width: 110,
+      width: 124,
       render: (o) => <span className="boards-muted">{`${formatNumber(o.failed)} / ${formatNumber(o.abandoned)}`}</span>,
     },
-    { key: 'flagged', header: t('sup.report.col.flagged'), numeric: true, width: 80, render: (o) => (o.flagged ? <Badge tone="warning" size="sm">{formatNumber(o.flagged)}</Badge> : <span className="boards-muted">0</span>) },
-    { key: 'points', header: t('sup.report.col.points'), numeric: true, width: 90, render: (o) => <span className="boards-strong">{formatNumber(o.points)}</span> },
+    { key: 'points', header: t('sup.report.col.points'), numeric: true, width: 84, render: (o) => <span className="boards-strong">{formatNumber(o.points)}</span> },
     { key: 'cash', header: t('sup.report.col.cash'), numeric: true, width: 100, render: (o) => <Money amount={o.cash} /> },
-    { key: 'last', header: t('sup.report.col.last'), width: 118, render: (o) => <span className="boards-when cp-num">{o.lastRunAt ? formatDateTime(o.lastRunAt) : '–'}</span> },
+    { key: 'last', header: t('sup.report.col.last'), width: 120, render: (o) => <span className="boards-when cp-num">{o.lastRunAt ? formatDateTime(o.lastRunAt) : '–'}</span> },
     { key: 'open', header: '', width: 36, align: 'right', render: () => <Icon name="chevronRight" size={16} className="boards-row-chevron" /> },
   ];
 
@@ -190,7 +196,7 @@ export default function DeptReport() {
           onRowClick={(o) => setOpen(o)}
           dense
           maxHeight={360}
-          className="boards-flat-table"
+          className="boards-flat-table boards-fixed"
           empty={
             <EmptyState compact icon="inbox" title={q ? t('sup.report.no_match') : t('sup.report.no_activity')} text={q ? undefined : t('sup.report.no_activity_text')} />
           }

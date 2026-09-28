@@ -179,12 +179,12 @@ export default function Profile() {
       header: t('profile.col.mission'),
       render: (r) => (
         <span className="boards-mission">
-          <span className="boards-mission__label">{r.missionLabel}</span>
+          <span className="boards-mission__label" title={r.missionLabel}>{r.missionLabel}</span>
           <span className="boards-mission__type">{missionTypeLabel(r.missionType, session)}</span>
         </span>
       ),
     },
-    { key: 'state', header: t('profile.col.result'), width: 230, render: (r) => <ResultCell state={r.state} endReason={r.endReason} flagged={r.flagged} voided={r.voided} /> },
+    { key: 'state', header: t('profile.col.result'), width: 196, render: (r) => <ResultCell state={r.state} endReason={r.endReason} flagged={r.flagged} voided={r.voided} /> },
     {
       key: 'points',
       header: t('profile.col.points'),
@@ -209,7 +209,7 @@ export default function Profile() {
     columns.push({
       key: 'actions',
       header: '',
-      width: 100,
+      width: 116,
       align: 'right',
       render: (r) =>
         r.canDispute ? (
@@ -348,7 +348,7 @@ export default function Profile() {
           dense
           stickyHeader
           empty={<EmptyState compact icon="inbox" title={t('profile.no_runs')} text={own ? t('profile.no_runs_text') : undefined} />}
-          className="boards-history"
+          className="boards-history boards-fixed"
           aria-label={t('profile.history')}
         />
       </Card>

@@ -127,7 +127,7 @@ export default function AdminLeaderboards() {
       render: (r) => (
         <span className="boards-admin-officer">
           <span className="boards-admin-officer__name">
-            {r.realName}
+            <span className="boards-ellipsis" title={r.realName}>{r.realName}</span>
             {r.hidden ? <Badge size="sm" icon="eye" title={t('admin.boards.hidden_hint', { shown: r.name })}>{t('admin.boards.hidden')}</Badge> : null}
           </span>
           <span className="boards-admin-officer__sub cp-num">{[r.callsign || t('common.no_callsign'), r.citizenid].join(' · ')}</span>
@@ -154,13 +154,13 @@ export default function AdminLeaderboards() {
   ];
 
   const runColumns: TableColumn<AdminRun>[] = [
-    { key: 'createdAt', header: t('profile.col.when'), width: 112, render: (r) => <span className="boards-when cp-num">{formatDateTime(r.createdAt)}</span> },
+    { key: 'createdAt', header: t('profile.col.when'), width: 118, render: (r) => <span className="boards-when cp-num">{formatDateTime(r.createdAt)}</span> },
     {
       key: 'mission',
       header: t('profile.col.mission'),
       render: (r) => (
         <span className="boards-mission">
-          <span className="boards-mission__label">{r.missionLabel}</span>
+          <span className="boards-mission__label" title={r.missionLabel}>{r.missionLabel}</span>
           <span className="boards-mission__type">{`${missionTypeLabel(r.missionType, session)} · ${r.departmentShort} · #${r.id}`}</span>
         </span>
       ),
@@ -168,15 +168,15 @@ export default function AdminLeaderboards() {
     {
       key: 'state',
       header: t('profile.col.result'),
-      width: 210,
+      width: 180,
       render: (r) => <ResultCell state={r.state} endReason={r.endReason} flagged={r.flagged} voided={r.voided} flagReason={r.flagReason} />,
     },
-    { key: 'points', header: t('profile.col.points'), numeric: true, width: 70, render: (r) => <span className={cx(r.voided && 'boards-struck')}>{formatNumber(r.points)}</span> },
-    { key: 'cash', header: t('profile.col.cash'), numeric: true, width: 90, render: (r) => <Money amount={r.cash} /> },
+    { key: 'points', header: t('profile.col.points'), numeric: true, width: 72, render: (r) => <span className={cx(r.voided && 'boards-struck')}>{formatNumber(r.points)}</span> },
+    { key: 'cash', header: t('profile.col.cash'), numeric: true, width: 88, render: (r) => <Money amount={r.cash} /> },
     {
       key: 'void',
       header: '',
-      width: 92,
+      width: 108,
       align: 'right',
       render: (r) =>
         r.voided || r.missionType === 'goal' ? null : (
@@ -242,6 +242,7 @@ export default function AdminLeaderboards() {
       ) : (
         <Grid cols="minmax(0, 1fr) 360px" gap={4} align="start" className="boards-admin-boards-grid">
           <Table
+            className="boards-fixed"
             columns={columns}
             rows={shown}
             rowKey={(r) => r.citizenid}
@@ -280,7 +281,7 @@ export default function AdminLeaderboards() {
         {runsReq.error && !runsReq.data ? (
           <ErrorState compact error={runsReq.error} onRetry={() => void runsReq.refetch()} />
         ) : (
-          <Table columns={runColumns} rows={officerRuns} rowKey={(r) => r.id} dense loading={runsReq.loading} maxHeight={400} empty={t('admin.boards.runs_empty')} />
+          <Table className="boards-fixed" columns={runColumns} rows={officerRuns} rowKey={(r) => r.id} dense loading={runsReq.loading} maxHeight={400} empty={t('admin.boards.runs_empty')} />
         )}
       </Dialog>
 

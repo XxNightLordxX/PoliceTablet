@@ -141,6 +141,9 @@
 .boards-mission__type {
   font-size: var(--cp-fs-xs);
   color: var(--cp-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .boards-resultcell {
   display: flex;

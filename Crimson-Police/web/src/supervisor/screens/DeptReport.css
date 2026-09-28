@@ -103,9 +103,21 @@
   min-width: 0;
   line-height: 1.25;
 }
+.boards-report-cell__name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.boards-report-cell__name > .cp-badge {
+  flex: none;
+}
 .boards-report-cell__sub {
   font-size: var(--cp-fs-xs);
   color: var(--cp-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .boards-report-result {
   display: inline-flex;

@@ -42,7 +42,7 @@
         clawed back), CP.AntiCheat.onVoided for mission rows, invalidate. Reason required. Reviewers who
         took part are refused (CP.Permissions.canReviewRun, err.own_run); supervisors only for runs
         involving their department (err.other_department).
-        opts (approveFlagged, used by CP.Disputes): { skipPermission = true, noAudit = true }
+        opts (approveFlagged, used by CP.Disputes): { skipPermission = true, noAudit = true, quiet = true (no toast) }
     CP.Admin.forceRecall(src, runId, targetSrc, reason) -> ok, data|errKey
     CP.Admin.getRow(rowId) -> row|nil, errKey        one cp_mission_runs row (flagged/voided as booleans)
     CP.Admin.runDepartments(runUuid) -> { deptKey, ... }   departments of every row (and live participant)
@@ -241,6 +241,40 @@ local function onlineSrc(citizenid)
     if type(citizenid) ~= 'string' or not has('Qbx', 'getByCitizenId') then return nil end
     local ok, s = call('Qbx', 'getByCitizenId', citizenid)
     return ok and toSrc(s) or nil
+end
+
+-- The character citizenid of a player src (nil for the console or a player without a character).
+local function citizenOf(src)
+    local n = toSrc(src)
+    if not n then return nil end
+    local ok, info = call('Qbx', 'getInfo', n)
+    if ok and type(info) == 'table' and type(info.citizenid) == 'string' and info.citizenid ~= '' then return info.citizenid end
+    return nil
+end
+
+-- Whether citizenid is (or was) a participant of the still-running run runUuid. Their own row is only
+-- written when they leave, so the cp_mission_runs check alone misses a reviewer who is still on the run.
+local function inLiveRun(citizenid, runUuid)
+    if type(citizenid) ~= 'string' or citizenid == '' or type(runUuid) ~= 'string' or not has('Runs', 'get') then return false end
+    local ok, run = call('Runs', 'get', runUuid)
+    if not ok or type(run) ~= 'table' or type(run.participants) ~= 'table' then return false end
+    for _, p in pairs(run.participants) do
+        if type(p) == 'table' and p.citizenid == citizenid then return true end
+    end
+    return false
+end
+
+-- A mission definition by id (ids are lower case; a typed 'Gang_Shootout' still finds it).
+local function findMission(id)
+    if type(id) ~= 'string' or id == '' or #id > 64 or not has('Missions', 'get') then return nil end
+    local ok, def = call('Missions', 'get', id)
+    if ok and type(def) == 'table' then return def end
+    local low = id:lower()
+    if low ~= id then
+        ok, def = call('Missions', 'get', low)
+        if ok and type(def) == 'table' then return def end
+    end
+    return nil
 end
 
 local function deptShort(key)
@@ -538,6 +572,8 @@ local function ownRunCheck(src, runUuid)
     local ok, allowed, errKey = call('Permissions', 'canReviewRun', src, runUuid)
     if not ok then return false, 'err.internal' end
     if not allowed then return false, errKey or 'err.own_run' end
+    -- Still on that run (no row of theirs yet): also their own run.
+    if inLiveRun(citizenOf(src), runUuid) then return false, 'err.own_run' end
     return true
 end
 
@@ -573,7 +609,9 @@ function Admin.approveFlagged(src, rowId, reason, opts)
     if not opts.noAudit then
         Admin.audit(src, roleOf(src), 'flags', 'approveFlagged', rowTarget(row), row.flag_reason, 'approved', reason)
     end
-    notify(onlineSrc(row.citizenid), 'success', 'admin.notice.run_approved', { mission = Admin.missionLabel(row.mission_id) })
+    if not opts.quiet then
+        notify(onlineSrc(row.citizenid), 'success', 'admin.notice.run_approved', { mission = Admin.missionLabel(row.mission_id) })
+    end
     CP.log(TAG, 'row %d approved by %s', row.id, tostring(src))
     return true, { rowId = row.id }
 end
@@ -778,8 +816,7 @@ SUB.payout = function(src, args)
         end
         return reply(src, 'success', 'admin.cmd.payout_type_set', { type = typeLabel(typeKey), amount = amount })
     elseif what == 'mission' then
-        local missionId = args[2] or ''
-        local def = has('Missions', 'get') and CP.Missions.get(missionId) or nil
+        local def = findMission(args[2])
         if not def then return reply(src, 'error', 'err.unknown_mission') end
         local amount, valid = parseAmount(args[3])
         if not valid then
@@ -887,6 +924,7 @@ SUB.reload = function(src)
 end
 
 local function tierExists(name)
+    if name == 'auto' then return true end   -- CP.Testing: the tier the number of testers reaches
     for _, row in ipairs(Config.Scaling or {}) do
         if row.tier == name then return true end
     end
@@ -897,8 +935,9 @@ SUB.test = function(src, args)
     if tonumber(src) == 0 then return reply(src, 'error', 'err.not_in_game') end
     local okP, eP = can(src, 'testRun')
     if not okP then return reply(src, 'error', eP) end
-    local def = has('Missions', 'get') and CP.Missions.get(args[1] or '') or nil
+    local def = findMission(args[1])
     if not def then return reply(src, 'error', 'err.unknown_mission') end
+    if #args > 3 then return reply(src, 'error', 'admin.cmd.test_bad_arg', { arg = tostring(args[4]) }) end
     local tier, location
     for i = 2, math.min(#args, 3) do
         local a = tostring(args[i]):lower()
@@ -914,11 +953,21 @@ SUB.test = function(src, args)
         end
     end
     if CP.Alerts and CP.Alerts.inArena and CP.Alerts.inArena(src) then return reply(src, 'error', 'err.in_arena') end
-    if not has('Testing', 'start') then return reply(src, 'error', 'err.module_unavailable') end
-    local ok, e = outcome(call('Testing', 'start', src, {
-        missionId = def.id, location = location or 'random', tier = tier,
-        useStartRoute = Config.Testing and Config.Testing.useStartRoute == true or false, testers = {},
-    }))
+    local ok, e
+    if has('Testing', 'command') then
+        -- CP.Testing's own parser also brings the testers who accepted this admin's invitations.
+        local words = { def.id }
+        if tier then words[#words + 1] = tier end
+        if location then words[#words + 1] = tostring(location) end
+        ok, e = outcome(call('Testing', 'command', src, words))
+    elseif has('Testing', 'start') then
+        ok, e = outcome(call('Testing', 'start', src, {
+            missionId = def.id, location = location or 'random', tier = tier,
+            useStartRoute = Config.Testing and Config.Testing.useStartRoute == true or false, testers = {},
+        }))
+    else
+        return reply(src, 'error', 'err.module_unavailable')
+    end
     if not ok then return reply(src, 'error', e) end
     return reply(src, 'success', 'admin.cmd.test_started', { mission = def.label or def.id })
 end
@@ -1077,6 +1126,12 @@ CP.Net.callback('getMissionList', function(src)
         local depts = {}
         for _, d in ipairs(type(def.departments) == 'table' and def.departments or {}) do depts[#depts + 1] = d end
         local maxO = math.floor(num(def.maxOfficers, 1))
+        local eligible = #depts == 0 and maxO >= 2 and not def.isBoss and enabled
+        if has('Operations', 'eligible') then
+            -- The same rule CP.Operations applies when the launch arrives.
+            local okE, e = call('Operations', 'eligible', def)
+            if okE then eligible = e == true end
+        end
         list[#list + 1] = {
             id = def.id, label = def.label or def.id, type = def.type, typeLabel = typeLabel(def.type),
             source = def.source == 'custom' and 'custom' or 'builtin', builtin = def.source ~= 'custom',
@@ -1086,7 +1141,7 @@ CP.Net.callback('getMissionList', function(src)
             cooldown = math.floor(num(def.cooldown, 0)), timeLimit = math.floor(num(def.timeLimit, 0)),
             locations = #(def.locations or {}), enabled = enabled, isBoss = def.isBoss == true,
             departments = depts, runningNow = running[def.id] or {},
-            crossDeptEligible = #depts == 0 and maxO >= 2 and not def.isBoss and enabled,
+            crossDeptEligible = eligible,
         }
     end
     table.sort(list, function(a, b)
@@ -1187,7 +1242,11 @@ function Admin.flaggedRows(dept, excludeCitizenid)
         params[#params + 1] = excludeCitizenid
     end
     sql = sql .. (' ORDER BY r.created_at DESC, r.id DESC LIMIT %d'):format(FLAGGED_LIMIT)
-    local rows = query(sql, params) or {}
+    local rows = {}
+    for _, r in ipairs(query(sql, params) or {}) do
+        -- A run the viewer is still on (their own row is not written yet) is their own run too.
+        if not inLiveRun(excludeCitizenid, r.run_uuid) then rows[#rows + 1] = r end
+    end
     local uuids, seen = {}, {}
     for _, r in ipairs(rows) do
         if not seen[r.run_uuid] then seen[r.run_uuid] = true; uuids[#uuids + 1] = r.run_uuid end

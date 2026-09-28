@@ -46,6 +46,16 @@ export function formatClock(ts: number | null | undefined): string {
   return new Date(ts * 1000).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 }
 
+/** A callsign cell (ellipsised, full text as tooltip), or "No callsign" when Qbox has none. */
+export function CallsignText({ callsign }: { callsign: string | null | undefined }) {
+  if (!callsign) return <span className="boards-ellipsis boards-muted">{t('common.no_callsign')}</span>;
+  return (
+    <span className="boards-ellipsis" title={callsign}>
+      {callsign}
+    </span>
+  );
+}
+
 /** Rank cell: gold/silver/bronze medals for 1–3, a dash when not ranked. */
 export function RankCell({ rank }: { rank: number }) {
   if (!rank) return <span className="boards-rank boards-rank--none">–</span>;
@@ -118,12 +128,12 @@ export default function Leaderboard() {
       header: t('leaderboard.col.officer'),
       render: (r) => (
         <span className="boards-officer">
-          <span className="boards-officer__name">{r.name}</span>
+          <span className="boards-officer__name" title={r.name}>{r.name}</span>
           {r.citizenid === myCid ? <Badge tone="accent" size="sm">{t('leaderboard.you')}</Badge> : null}
         </span>
       ),
     },
-    { key: 'callsign', header: t('leaderboard.col.callsign'), width: 130, render: (r) => r.callsign || <span className="boards-muted">{t('common.no_callsign')}</span> },
+    { key: 'callsign', header: t('leaderboard.col.callsign'), width: 130, render: (r) => <CallsignText callsign={r.callsign} /> },
     { key: 'departmentShort', header: t('leaderboard.col.dept'), width: 90, render: (r) => (r.departmentShort ? <Badge size="sm">{r.departmentShort}</Badge> : null) },
     { key: 'runs', header: allTime ? t('leaderboard.col.runs_life') : t('leaderboard.col.runs'), numeric: true, width: 90, render: (r) => formatNumber(r.runs) },
     { key: 'failed', header: t('leaderboard.col.failed'), numeric: true, width: 84, render: (r) => formatNumber(r.failed) },
@@ -148,10 +158,12 @@ export default function Leaderboard() {
       <td>
         <span className="boards-officer">
           <span className="boards-pinned__label">{t('leaderboard.your_position')}</span>
-          <span className="boards-officer__name">{me.name}</span>
+          <span className="boards-officer__name" title={me.name}>{me.name}</span>
         </span>
       </td>
-      <td>{me.callsign || <span className="boards-muted">{t('common.no_callsign')}</span>}</td>
+      <td>
+        <CallsignText callsign={me.callsign} />
+      </td>
       <td>{me.departmentShort ? <Badge size="sm">{me.departmentShort}</Badge> : null}</td>
       <td className="cp-num" style={{ textAlign: 'right' }}>{formatNumber(me.runs)}</td>
       <td className="cp-num" style={{ textAlign: 'right' }}>{formatNumber(me.failed)}</td>
@@ -207,7 +219,7 @@ export default function Leaderboard() {
       ) : (
         <>
           <Table
-            className="boards-board"
+            className="boards-board boards-fixed"
             columns={columns}
             rows={rows}
             rowKey={(r) => r.citizenid}
