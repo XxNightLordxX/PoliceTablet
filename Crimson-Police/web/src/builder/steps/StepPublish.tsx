@@ -119,7 +119,7 @@ export function StepPublish({ ed, cfg, def, ro, goTo }: StepProps) {
               <Button variant="ghost" icon="trash" onClick={() => setConfirm('discard')}>{t(rec?.version ? 'builder.list.discard' : 'builder.list.delete')}</Button>
             ) : null}
             <span className="cp-spacer" />
-            <Button icon="globe" disabled={!ready} onClick={() => setConfirm('publish')} title={ready ? undefined : t('builder.pub.not_ready')}>{t('builder.pub.publish')}</Button>
+            <Button variant="primary" icon="globe" disabled={!ready} onClick={() => setConfirm('publish')} title={ready ? undefined : t('builder.pub.not_ready')}>{t('builder.pub.publish')}</Button>
           </div>
         </Card>
         <Card title={t('builder.pub.problems')} icon="alert" padding="md"

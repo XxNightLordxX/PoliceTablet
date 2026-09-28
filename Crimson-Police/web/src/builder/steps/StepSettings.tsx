@@ -25,7 +25,7 @@ export function StepSettings({ ed, cfg, def, ro, scope, goTo }: StepProps) {
     return (
       <div className="builder_client-step">
         <EmptyState icon="layers" title={t('builder.settings.none_title')} text={t('builder.settings.none_text')}
-          action={<Button icon="plus" onClick={() => goTo('blocks')}>{t('builder.settings.go_blocks')}</Button>} />
+          action={<Button variant="primary" icon="plus" onClick={() => goTo('blocks')}>{t('builder.settings.go_blocks')}</Button>} />
       </div>
     );
   }

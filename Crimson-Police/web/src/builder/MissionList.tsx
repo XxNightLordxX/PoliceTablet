@@ -219,7 +219,7 @@ export function MissionList({ scope, config, onOpen }: MissionListProps) {
         {can('builderEdit') ? (
           <>
             <Button variant="secondary" icon="layers" size="sm" onClick={() => setDupOpen(true)} disabled={!builtins.length}>{t('builder.list.from_builtin')}</Button>
-            <Button icon="plus" size="sm" onClick={() => setCreating(true)}>{t('builder.list.new')}</Button>
+            <Button variant="primary" icon="plus" size="sm" onClick={() => setCreating(true)}>{t('builder.list.new')}</Button>
           </>
         ) : null}
       </div>
@@ -233,7 +233,7 @@ export function MissionList({ scope, config, onOpen }: MissionListProps) {
           icon="tool"
           title={t('builder.list.empty_title')}
           text={t('builder.list.empty_text')}
-          action={can('builderEdit') ? <Button icon="plus" onClick={() => setCreating(true)}>{t('builder.list.new')}</Button> : undefined}
+          action={can('builderEdit') ? <Button variant="primary" icon="plus" onClick={() => setCreating(true)}>{t('builder.list.new')}</Button> : undefined}
         />
       ) : (
         <Table
@@ -305,7 +305,7 @@ function NewMissionDialog({ open, config, onClose, onCreated }: { open: boolean;
       footer={
         <>
           <Button variant="ghost" onClick={onClose} disabled={busy}>{t('common.cancel')}</Button>
-          <Button icon="plus" onClick={submit} loading={busy} disabled={!type}>{t('builder.new.create')}</Button>
+          <Button variant="primary" icon="plus" onClick={submit} loading={busy} disabled={!type}>{t('builder.new.create')}</Button>
         </>
       }
     >
@@ -354,7 +354,7 @@ function DuplicateDialog({ open, builtins, typeLabel, onClose, onDone }: {
       footer={
         <>
           <Button variant="ghost" onClick={onClose} disabled={busy}>{t('common.cancel')}</Button>
-          <Button icon="swap" onClick={submit} loading={busy} disabled={!pick}>{t('builder.dup.button')}</Button>
+          <Button variant="primary" icon="swap" onClick={submit} loading={busy} disabled={!pick}>{t('builder.dup.button')}</Button>
         </>
       }
     >

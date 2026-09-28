@@ -274,7 +274,7 @@ export default function AdminMissions() {
         <>
           <IconButton icon="refresh" label={t('builder.list.refresh')} variant="ghost" onClick={refetchAll} />
           {can('reloadMissions') ? <Button variant="secondary" icon="refresh" onClick={() => setConfirm({ kind: 'reload' })}>{t('admin.missions.reload')}</Button> : null}
-          {can('builderEdit') ? <Button icon="plus" onClick={() => { setEditorMemory('admin', { openId: null }); setTab('builder'); }}>{t('admin.missions.new')}</Button> : null}
+          {can('builderEdit') ? <Button variant="primary" icon="plus" onClick={() => { setEditorMemory('admin', { openId: null }); setTab('builder'); }}>{t('admin.missions.new')}</Button> : null}
         </>
       }
     >

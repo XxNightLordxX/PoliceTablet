@@ -119,7 +119,7 @@ export function StepLocations({ ed, cfg, def, ro, scope }: StepProps) {
         <div className="builder_client-split__main">
           {!loc ? (
             <EmptyState icon="mapPin" title={t('builder.loc.none_title')} text={t('builder.loc.none_text', { min: minLoc })}
-              action={!ro ? <Button icon="plus" onClick={addLocation}>{t('builder.loc.add')}</Button> : undefined} />
+              action={!ro ? <Button variant="primary" icon="plus" onClick={addLocation}>{t('builder.loc.add')}</Button> : undefined} />
           ) : (
             <>
               <div className="builder_client-loc-head">

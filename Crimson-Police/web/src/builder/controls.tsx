@@ -207,7 +207,7 @@ export function GroupTitle({ children, aside }: { children: ReactNode; aside?: R
   );
 }
 
-/** "3 / 11" count badge: success when enough, warning when short. */
+/** "3 placed · min 11" count badge: success when enough, warning when short. */
 export function CountBadge({ have, need, max }: { have: number; need: number; max?: number }) {
   const ok = have >= need && (max === undefined || have <= max);
   return (

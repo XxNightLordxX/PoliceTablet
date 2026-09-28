@@ -102,8 +102,8 @@ function HostileWaves({ cfg, obj, ro, set, patch }: PanelProps) {
         </Grid>
       </Group>
       <Group title={t('builder.hw.hostiles_group')}>
-        <MultiPick label={t('builder.field.weapons')} value={strs(obj, 'weapons', [])} options={allowedWeapons} disabled={ro} onChange={(v) => set('weapons', v)} />
-        <MultiPick label={t('builder.field.peds')} value={strs(obj, 'peds', [])} options={allowedPeds} disabled={ro} onChange={(v) => set('peds', v)} />
+        <MultiPick label={t('builder.field.weapons')} value={strs(obj, 'weapons', listOf(cfg, b, 'weapons'))} options={allowedWeapons} disabled={ro} onChange={(v) => set('weapons', v)} />
+        <MultiPick label={t('builder.field.peds')} value={strs(obj, 'peds', listOf(cfg, b, 'peds'))} options={allowedPeds} disabled={ro} onChange={(v) => set('peds', v)} />
         <Grid cols={3} gap={3}>
           <RangeNumber label={t('builder.field.accuracy')} value={num(obj, 'accuracy', 25)} range={r('accuracy', [5, 60, 25])} disabled={ro} onChange={(v) => set('accuracy', v)} />
           <RangeNumber label={t('builder.field.armour')} value={num(obj, 'armour', 0)} range={armourR} disabled={ro} onChange={(v) => set('armour', v)} />
@@ -122,7 +122,7 @@ function HostileWaves({ cfg, obj, ro, set, patch }: PanelProps) {
             if (!on) o.boss = false;
             else {
               const w = allowedWeapons.includes('WEAPON_ASSAULTRIFLE') ? 'WEAPON_ASSAULTRIFLE' : allowedWeapons[allowedWeapons.length - 1];
-              o.boss = { model: strs(o, 'peds', allowedPeds)[0] ?? allowedPeds[0], health: healthR.max, armour: armourR.max, weapon: w };
+              o.boss = { model: strs(o, 'peds', listOf(cfg, b, 'peds'))[0] ?? allowedPeds[0], health: healthR.max, armour: armourR.max, weapon: w };
             }
           })} />
         {boss ? (

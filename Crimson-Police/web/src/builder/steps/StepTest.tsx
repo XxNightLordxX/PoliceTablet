@@ -98,7 +98,7 @@ export function StepTest({ ed, cfg, def, ro }: StepProps) {
             <div className="builder_client-actions-row">
               <span className="builder_client-muted">{t('builder.test.nothing_saved')}</span>
               <span className="cp-spacer" />
-              <Button icon="play" onClick={start} loading={busy} disabled={ro || !def.locations.length}>{t('builder.test.start')}</Button>
+              <Button variant="primary" icon="play" onClick={start} loading={busy} disabled={ro || !def.locations.length}>{t('builder.test.start')}</Button>
             </div>
           </div>
         </Card>
@@ -137,7 +137,7 @@ export function StepTest({ ed, cfg, def, ro }: StepProps) {
                 <div className="builder_client-actions-row">
                   <span className="cp-spacer" />
                   <Button variant="danger" icon="xCircle" onClick={() => record('failed')} loading={busy} disabled={memo.location === 'random' && !recLocation}>{t('builder.test.failed')}</Button>
-                  <Button icon="checkCircle" onClick={() => record('passed')} loading={busy} disabled={memo.location === 'random' && !recLocation}>{t('builder.test.passed')}</Button>
+                  <Button variant="primary" icon="checkCircle" onClick={() => record('passed')} loading={busy} disabled={memo.location === 'random' && !recLocation}>{t('builder.test.passed')}</Button>
                 </div>
               </div>
             </Card>
