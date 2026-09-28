@@ -65,9 +65,11 @@ exposes that is not listed here is private to that module (keep it `local`).
       those on `Crimson-Arena`). Never call any `exports['Crimson-Arena']` function or trigger its events.
     - The `crimsonArena` state bag may belong to Crimson-Arena. `CP.Alerts.set` never overwrites a
       value whose `source` is not `'crimson-police'`, and `CP.Alerts.clear` only removes a value whose
-      `source == 'crimson-police'`. A player carrying a foreign flag (`CP.Alerts.foreignFlag(src)`) cannot
-      accept or join a mission (`err.in_arena`); if a foreign flag replaces ours mid-run, Crimson-Police
-      leaves it alone (the player keeps their run; their alerts are suppressed by Crimson-Arena anyway).
+      `source == 'crimson-police'`. **The full, verified rule set is `docs/CRIMSON_ARENA.md` (mandatory):**
+      `CP.Alerts.inArena(src)` (foreign flag or routing bucket ≠ 0) gates accept/join/invites/tests
+      (`err.in_arena`); a participant who becomes in-arena mid-run leaves as `quit`; our flag is re-asserted
+      when Crimson-Arena wipes it; downed pick-ups re-check; mission items carry `{ cpRun, cpItem }` metadata;
+      anti-cheat/route/telemetry ignore in-arena players; never touch routing buckets, teams or friendly fire.
     - Client-side game state is global across resources: relationship groups are named
       `CRIMSONPOLICE_HOSTILE` / `CRIMSONPOLICE_NEUTRAL`, key mappings `crimsonpolice_*`, ox_target option
       names `crimson-police:*`, blip/zone names prefixed `crimson-police`. Never change the `PLAYER`
@@ -565,6 +567,8 @@ client actions `setGps`, `recalcRoute` registered with `CP.Tablet.registerClient
 - `clear(src)` → only when the current value's `source == 'crimson-police'`; sets it to nil (replicated)
 - `has(src) -> boolean` (our flag is on)
 - `foreignFlag(src) -> boolean` — a `crimsonArena` value with `active == true` whose `source` is not `'crimson-police'` (Crimson-Arena's). `set` does nothing (returns false) while a foreign flag is present.
+- `inArena(src) -> boolean` — `foreignFlag(src) or GetPlayerRoutingBucket(src) ~= 0` (the gate every module uses)
+- `wanted` intent table, re-assert of our flag after a foreign wipe, `foreignClearedAt[src]` — see docs/CRIMSON_ARENA.md rules 1–3 and 9
 - Start: removes leftover Crimson-Police flags from every online player. Stop: clears all.
 - Backstop listeners (shots fired within `Config.Alerts.backstopRadius` of the run's start or the
   participant's objective area; person down/dead while flagged) → clear after `Config.Alerts.backstopDelay` s.

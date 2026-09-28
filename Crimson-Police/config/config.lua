@@ -389,6 +389,8 @@ Config.Builder = {
     { label = 'Pillbox Hill Medical',      coords = vec3(308.19, -595.35, 43.29),  radius = 100.0 },
     { label = 'Paleto Bay Medical',        coords = vec3(-254.54, 6331.78, 32.43), radius = 80.0 },
     { label = 'Bolingbroke interior',      coords = vec3(1768.73, 2570.43, 44.73), radius = 180.0 },  -- widen or move to fit your prison
+    { label = 'Crimson-Arena Trailer Park', coords = vec3(2344.43, 2565.06, 46.67), radius = 160.0 },  -- live match boundary (up to 135 m) + push-back
+    { label = 'Crimson-Arena lobby',        coords = vec3(-282.01, -2030.46, 30.15), radius = 60.0 },   -- where arena players return after a match
   },
 }
 
