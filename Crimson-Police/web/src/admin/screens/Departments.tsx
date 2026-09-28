@@ -38,8 +38,8 @@ function ThemePreview({ dept, title }: { dept: DepartmentView; title: string }) 
   return (
     <div className="oversight-dep-preview" style={vars} aria-label={t('admin.depts.preview_title', { name: dept.label })}>
       <div className="oversight-dep-preview__header">
-        <span className="oversight-dep-preview__logo">
-          {dept.logo ? <DeptLogo logo={dept.logo} department={dept.key} size={30} /> : <Icon name="shield" size={20} />}
+        <span className="oversight-dep-preview__logo" data-initials={dept.short.slice(0, 4)}>
+          {dept.logo ? <DeptLogo logo={dept.logo} department={dept.key} size={30} /> : null}
         </span>
         <div className="oversight-dep-preview__titles">
           <strong>{title}</strong>
@@ -93,12 +93,10 @@ function DeptCard({ d, showSociety, onPreview }: { d: DepartmentView; showSociet
       }
     >
       <div className="oversight-dep-card__head">
-        <span className="oversight-dep-card__logo" style={{ background: d.theme.primary }}>
-          {d.logo ? (
-            <DeptLogo logo={d.logo} department={d.key} size={40} alt={d.short} />
-          ) : (
-            <span className="oversight-dep-card__initials" style={{ color: d.theme.text }}>{d.short.slice(0, 4)}</span>
-          )}
+        {/* The initials show whenever the span is empty: no logo configured, or the image failed to load
+            (DeptLogo then renders nothing and reports logoFailed). */}
+        <span className="oversight-dep-card__logo" style={{ background: d.theme.primary, color: d.theme.text }} data-initials={d.short.slice(0, 4)}>
+          {d.logo ? <DeptLogo logo={d.logo} department={d.key} size={40} alt={d.short} /> : null}
         </span>
         <div className="oversight-dep-card__titles">
           <strong>{d.label}</strong>

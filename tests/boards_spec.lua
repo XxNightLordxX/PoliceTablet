@@ -924,6 +924,18 @@ do
     H.ok(s2.id < s3.id, 'ids increase')
     H.eq(C.championBanner('fib'), nil, 'the last ended season had no champion: no banner')
     H.eq(C.endSeason(22), false, 'officers cannot end a season')
+    -- permission first, then the payload (ARCHITECTURE §0.7)
+    local n1, e1 = act('server:admin:startSeason', 22, 'not a table')
+    H.eq(n1, false, 'officer start refused')
+    H.eq(e1, 'err.no_permission', 'start: permission checked before the payload')
+    local n2, e2 = act('server:admin:overrideBounty', 22, 42)
+    H.eq(e2, 'err.no_permission', 'override: permission checked before the payload')
+    H.eq(n2, false, 'officer override refused')
+    local n3, e3 = act('server:admin:endSeason', 22, 'x')
+    H.eq(e3, 'err.no_permission', 'end: permission checked before the payload')
+    H.eq(n3, false, 'officer end refused')
+    H.eq(cb('sup:getOfficerActivity', 22, 'bad').error, 'err.no_permission', 'activity: permission checked before the args')
+    H.eq(cb('sup:getOfficerActivity', 21, 'bad').error, 'err.invalid_payload', 'activity: a supervisor gets the payload error')
     H.ok(#logs > 0, 'debug lines were formatted')
 end
 

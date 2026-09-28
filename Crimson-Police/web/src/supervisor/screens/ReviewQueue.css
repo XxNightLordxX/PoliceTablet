@@ -13,6 +13,26 @@
   min-width: 0;
   padding: 3px 0;
 }
+/* Long names (64 characters) and labels must never push the decision buttons out of the table: both
+   queue tables use fixed column widths and the mission column takes what is left. */
+.oversight-rq-table table {
+  table-layout: fixed;
+}
+.oversight-rq-table td {
+  overflow: hidden;
+}
+.oversight-rq-who__sub > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.oversight-rq-table .oversight-rq-mission__name {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.25;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
 .oversight-rq-who__name,
 .oversight-rq-mission__name {
   font-weight: 650;

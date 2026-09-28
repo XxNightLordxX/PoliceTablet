@@ -8,11 +8,12 @@
 // Weekly Boss and the operation are the spec's exceptions), and there is no reroll.
 //
 // Data:    request 'getMissionTypes' → BoardData (ARCHITECTURE §9.4; extras in src/types/run_ui.ts),
-//          refetched on push topics 'board', 'operation' and 'run', every 30 s, and when a cooldown ends.
+//          refetched (one coalesced call per burst) on push topics 'board' and 'operation', on 'run' when the
+//          active run starts or ends, every 30 s, and when a cooldown or the join window ends.
 // Actions: 'server:acceptType' (payload = the type key, or 'weekly_boss' for the boss card) after a
 //          confirm dialog, then navigate('active'); 'server:joinOperation' (payload = operation id).
 // Text:    locales/parts/run_ui.json (board.*); locked reasons arrive translated from the server.
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   Badge, Button, Card, ConfirmDialog, Countdown, EmptyState, ErrorState, Icon, LoadingBlock, MoneyRange, Points, ProgressBar, Screen,
 } from '../../shared/components';
@@ -30,6 +31,10 @@ import './MissionBoard.css';
 
 const BOSS_KEY = 'weekly_boss';
 const POLL_MS = 30000;
+/** Pushes come in bursts ('operation' + 'board', 'unit' + 'board', 'run' + 'board'): one refetch per burst. */
+const PUSH_DEBOUNCE_MS = 150;
+/** getMissionTypes allows 4 calls per second; a refused refetch is retried once after this long. */
+const RATE_RETRY_MS = 1200;
 
 const TYPE_ICONS: Record<string, IconName> = {
   patrol: 'car',
@@ -90,6 +95,12 @@ function boardBlocker(data: MissionBoardData): Blocker {
   return null;
 }
 
+/** Config.Events.todMultiplier as text (BoardData.todMultiplier when the server sends it, else the default 2). */
+function todMultiplierText(data: MissionBoardData | null): string {
+  const m = Number(data?.todMultiplier);
+  return String(isFinite(m) && m > 0 ? Math.round(m * 100) / 100 : 2);
+}
+
 function poolText(n: number): string {
   if (n <= 0) return t('board.card.pool_none');
   return n === 1 ? t('board.card.pool_one') : t('board.card.pool_many', { n: formatNumber(n) });
@@ -141,9 +152,9 @@ function Notice({ icon, tone, title, text, action }: { icon: IconName; tone: 'in
 }
 
 function CardStatus({
-  card, offset, stamp, onUnlocked, readyText, blocker,
+  card, offset, stamp, onUnlocked, readyText, blocker, unit,
 }: {
-  card: TypeCard; offset: number; stamp: unknown; onUnlocked: () => void; readyText?: string; blocker?: Blocker;
+  card: TypeCard; offset: number; stamp: unknown; onUnlocked: () => void; readyText?: string; blocker?: Blocker; unit: boolean;
 }) {
   if (card.locked) {
     const left = secondsUntil(card.locked.until, offset);
@@ -165,7 +176,7 @@ function CardStatus({
       <div className="run_ui-status run_ui-status--call">
         <Icon name="radio" size={14} />
         <span className="run_ui-status__text">
-          <strong>{t('board.card.on_call')}</strong> · {t('board.card.on_call_text')}
+          <strong>{t('board.card.on_call')}</strong> · {unit ? t('board.card.on_call_text_unit') : t('board.card.on_call_text')}
         </span>
       </div>
     );
@@ -201,9 +212,9 @@ function cardBlocked(card: TypeCard, board: Blocker): boolean {
 }
 
 function TypeCardView({
-  card, size, board, offset, stamp, busy, onAccept, onUnlocked,
+  card, size, board, offset, stamp, busy, todX, onAccept, onUnlocked,
 }: {
-  card: TypeCard; size: number; board: Blocker; offset: number; stamp: unknown; busy: boolean;
+  card: TypeCard; size: number; board: Blocker; offset: number; stamp: unknown; busy: boolean; todX: string;
   onAccept: (card: TypeCard) => void; onUnlocked: () => void;
 }) {
   const blocked = cardBlocked(card, board);
@@ -219,11 +230,11 @@ function TypeCardView({
           <Icon name={icon} size={20} />
         </span>
         <div className="run_ui-type__titles">
-          <div className="run_ui-type__label">{card.label}</div>
+          <div className="run_ui-type__label" title={card.label}>{card.label}</div>
           <div className="run_ui-type__tags">
             {modeBadge(card, size)}
             {card.typeOfTheDay ? (
-              <Badge size="sm" tone="accent" variant="solid" icon="zap" title={t('board.card.tod_hint')}>
+              <Badge size="sm" tone="accent" variant="solid" icon="zap" title={t('board.card.tod_hint', { multiplier: todX })}>
                 {t('board.card.tod')}
               </Badge>
             ) : null}
@@ -239,7 +250,7 @@ function TypeCardView({
           <span className="run_ui-stat__value">
             <Points value={card.points} />
           </span>
-          {card.typeOfTheDay ? <span className="run_ui-stat__hint is-accent">{t('board.card.tod_points')}</span> : null}
+          {card.typeOfTheDay ? <span className="run_ui-stat__hint is-accent">{t('board.card.tod_points', { multiplier: todX })}</span> : null}
         </div>
         <div className="run_ui-stat run_ui-stat--wide">
           <span className="run_ui-stat__label">{t('board.card.cash')}</span>
@@ -256,7 +267,7 @@ function TypeCardView({
       </div>
 
       <div className="run_ui-type__foot">
-        <CardStatus card={card} offset={offset} stamp={stamp} onUnlocked={onUnlocked} blocker={board} />
+        <CardStatus card={card} offset={offset} stamp={stamp} onUnlocked={onUnlocked} blocker={board} unit={size > 1} />
         <Button
           variant={blocked ? 'secondary' : 'primary'}
           icon="play"
@@ -272,9 +283,9 @@ function TypeCardView({
 }
 
 function BossCardView({
-  boss, size, board, offset, stamp, busy, onAccept, onUnlocked,
+  boss, size, board, offset, stamp, busy, todX, onAccept, onUnlocked,
 }: {
-  boss: BossCard; size: number; board: Blocker; offset: number; stamp: unknown; busy: boolean;
+  boss: BossCard; size: number; board: Blocker; offset: number; stamp: unknown; busy: boolean; todX: string;
   onAccept: (card: BossCard) => void; onUnlocked: () => void;
 }) {
   const unavailable = !boss.available && !boss.locked;
@@ -296,7 +307,7 @@ function BossCardView({
           <div className="run_ui-type__tags">
             {modeBadge(boss, size)}
             {boss.typeOfTheDay ? (
-              <Badge size="sm" tone="accent" variant="solid" icon="zap" title={t('board.card.tod_hint')}>
+              <Badge size="sm" tone="accent" variant="solid" icon="zap" title={t('board.card.tod_hint', { multiplier: todX })}>
                 {t('board.card.tod')}
               </Badge>
             ) : null}
@@ -318,7 +329,7 @@ function BossCardView({
         </div>
       </div>
       <div className="run_ui-type__foot">
-        <CardStatus card={statusCard} offset={offset} stamp={stamp} onUnlocked={onUnlocked} readyText={t('board.boss.ready')} blocker={board} />
+        <CardStatus card={statusCard} offset={offset} stamp={stamp} onUnlocked={onUnlocked} readyText={t('board.boss.ready')} blocker={board} unit={size > 1} />
         <Button variant={blocked ? 'secondary' : 'primary'} icon="flame" disabled={blocked || busy} onClick={() => onAccept(boss)}>
           {t('board.boss.accept')}
         </Button>
@@ -328,7 +339,11 @@ function BossCardView({
 }
 
 function opStatus(op: BoardOperation): { tone: 'success' | 'warning' | 'primary' | 'neutral'; text: string } {
-  if (op.status === 'joining') return { tone: 'success', text: t('board.op.status_joining') };
+  if (op.status === 'joining') {
+    // joinEndsIn is only sent while the window is open; without it Start now closed joining a moment ago.
+    const open = typeof op.joinEndsIn === 'number' && op.joinEndsIn > 0;
+    return open ? { tone: 'success', text: t('board.op.status_joining') } : { tone: 'primary', text: t('board.op.status_starting') };
+  }
   if (op.status === 'running') {
     return { tone: 'primary', text: op.runState === 'in_progress' ? t('board.op.status_in_progress') : t('board.op.status_running') };
   }
@@ -344,7 +359,8 @@ function joinHint(op: BoardOperation, activeRunId: string | null): string {
   }
   if (op.status === 'running') return t('board.op.closed_running');
   if (op.status === 'waiting') return t('board.op.closed_waiting');
-  if (op.joinEndsIn !== null && op.joinEndsIn !== undefined && op.joinEndsIn <= 0) return t('board.op.closed');
+  // CP.Operations.boardCard sends joinEndsIn only while the join window is open (nil once Start now closed it).
+  if (op.joinEndsIn === null || op.joinEndsIn === undefined || op.joinEndsIn <= 0) return t('board.op.closed');
   if (op.joined >= op.max) return t('board.op.full');
   if (activeRunId) return t('board.op.on_run');
   if (op.canJoin) return t('board.op.can_join');
@@ -435,13 +451,43 @@ type Pending = null | { kind: 'type'; card: TypeCard } | { kind: 'boss'; card: B
 export default function MissionBoard() {
   const session = useSession();
   const navigate = useNavigate();
-  const { data, loading, error, refetch } = useRequest<MissionBoardData>('getMissionTypes', {}, { pushTopic: 'board', pollMs: POLL_MS });
+  const { data, loading, error, refetch } = useRequest<MissionBoardData>('getMissionTypes', {}, { pollMs: POLL_MS });
   const { run, busy } = useAction();
   const [pending, setPending] = useState<Pending>(null);
   const [joining, setJoining] = useState(false);
 
-  usePush('operation', () => void refetch());
-  usePush('run', () => void refetch());
+  // Live updates: push topics 'board', 'operation' and 'run' (active run and cooldowns) schedule one
+  // coalesced refetch, so a burst of pushes never runs into the callback's rate limit (a refused refetch
+  // would leave the old board up until the next poll).
+  const refetchRef = useRef(refetch);
+  refetchRef.current = refetch;
+  const timer = useRef<number | null>(null);
+  const retried = useRef(false);
+  const schedule = useCallback((delay: number = PUSH_DEBOUNCE_MS) => {
+    if (timer.current !== null) return;
+    timer.current = window.setTimeout(() => {
+      timer.current = null;
+      void refetchRef.current().then((res) => {
+        if (!res.ok && res.error === 'err.rate_limited' && !retried.current) {
+          retried.current = true;
+          schedule(RATE_RETRY_MS);
+        } else {
+          retried.current = false;
+        }
+      });
+    }, delay);
+  }, []);
+  useEffect(() => () => {
+    if (timer.current !== null) window.clearTimeout(timer.current);
+  }, []);
+  usePush('board', () => schedule());
+  usePush('operation', () => schedule());
+  // 'run' carries the officer's run view every few seconds during a run; the board only changes when a
+  // run starts or ends (active run, cooldowns), i.e. when the pushed runId differs from activeRunId.
+  usePush<{ runId?: unknown } | null | undefined>('run', (view) => {
+    const runId = view && typeof view === 'object' && typeof view.runId === 'string' ? view.runId : null;
+    if (runId !== (data?.activeRunId ?? null)) schedule();
+  });
 
   // A fresh stamp per board fetch restarts every countdown from the server's values.
   const [stamp, setStamp] = useState(0);
@@ -456,7 +502,9 @@ export default function MissionBoard() {
   const blocker = data ? boardBlocker(data) : null;
   const onCall = cards.some((c) => c.onCall) || !!data?.boss?.onCall;
   const allBusy = cards.length > 0 && cards.every((c) => c.busy);
+  const todX = todMultiplierText(data);
   const refresh = () => void refetch();
+  const refreshSoon = () => schedule(300);
 
   const accept = async () => {
     if (!pending) return;
@@ -540,14 +588,14 @@ export default function MissionBoard() {
                 joining={joining}
                 onJoin={() => void join(operation)}
                 onOpenRun={() => navigate('active')}
-                onClosed={refresh}
+                onClosed={refreshSoon}
               />
             </>
           ) : (
             <>
               <UnitLine data={data} onUnit={() => navigate('unit')} />
               {onCall && !data.activeRunId ? (
-                <Notice icon="radio" tone="warning" title={t('board.notice.on_call_title')} text={t('board.notice.on_call_text')} />
+                <Notice icon="radio" tone="warning" title={t('board.notice.on_call_title')} text={size > 1 ? t('board.notice.on_call_text_unit') : t('board.notice.on_call_text')} />
               ) : null}
               {allBusy && !onCall && !data.activeRunId ? (
                 <Notice icon="activity" tone="warning" title={t('board.notice.busy_title')} text={t('board.notice.busy_text')} />
@@ -561,8 +609,9 @@ export default function MissionBoard() {
                   offset={offset}
                   stamp={stamp}
                   busy={busy}
+                  todX={todX}
                   onAccept={(card) => setPending({ kind: 'boss', card })}
-                  onUnlocked={refresh}
+                  onUnlocked={refreshSoon}
                 />
               ) : null}
 
@@ -577,8 +626,9 @@ export default function MissionBoard() {
                       offset={offset}
                       stamp={stamp}
                       busy={busy}
+                      todX={todX}
                       onAccept={(c) => setPending({ kind: 'type', card: c })}
-                      onUnlocked={refresh}
+                      onUnlocked={refreshSoon}
                     />
                   ))}
                 </div>

@@ -633,7 +633,7 @@ CP.Net.action('server:sup:setTypePayout', function(src, payload)
     return true, {
         key = res.key, label = res.label, amount = res.amount, default = res.default, min = res.supMin, max = res.supMax,
         adminLocked = res.adminLocked, cooldownLeft = res.cooldownLeft, updatedByName = res.updatedByName,
-        updatedAt = res.updatedAt, stored = res.stored, canEdit = false,
+        updatedAt = res.updatedAt, stored = res.stored, canEdit = not res.adminLocked and res.cooldownLeft <= 0,
     }
 end, { rate = 2 })
 

@@ -83,7 +83,8 @@ function EditDialog({
   const reasonOk = reason.trim().length > 0;
   const canSave = valid && inRange && changed && reasonOk && !busy;
   const delta = amount !== null ? deltaText(amount, row.default) : null;
-  const cooldownMin = minutes(view?.cooldownSeconds ?? 1800);
+  const cooldownSec = view?.cooldownSeconds ?? 1800;
+  const cooldownMin = minutes(cooldownSec);
 
   const save = async () => {
     if (!canSave || amount === null) return;
@@ -142,7 +143,7 @@ function EditDialog({
         </Field>
         <div className="economy-pay-edit__note">
           <Icon name="info" size={14} />
-          <span>{t('sup.payouts.edit_note', { minutes: cooldownMin })}</span>
+          <span>{cooldownSec > 0 ? t('sup.payouts.edit_note', { minutes: cooldownMin }) : t('sup.payouts.edit_note_no_cooldown')}</span>
         </div>
       </div>
     </Dialog>
@@ -153,7 +154,8 @@ export default function SupPayouts() {
   const { data, loading, error, refetch } = useRequest<SupPayoutsView>('sup:getPayouts', {}, { pushTopic: 'payouts' });
   const [editing, setEditing] = useState<SupPayoutType | null>(null);
   const types = useMemo(() => (Array.isArray(data?.types) ? data!.types : []), [data]);
-  const cooldownMin = minutes(data?.cooldownSeconds ?? 1800);
+  const cooldownSec = data?.cooldownSeconds ?? 1800;
+  const cooldownMin = minutes(cooldownSec);
   const share = data?.rangeShare ?? { min: 0.5, max: 2 };
 
   const columns: TableColumn<SupPayoutType>[] = [
@@ -230,7 +232,9 @@ export default function SupPayouts() {
           <Icon name="clock" size={16} />
           <div>
             <div className="economy-pay-rule__title">{t('sup.payouts.rule_cooldown')}</div>
-            <div className="economy-pay-rule__text">{t('sup.payouts.rule_cooldown_text', { minutes: cooldownMin })}</div>
+            <div className="economy-pay-rule__text">
+              {cooldownSec > 0 ? t('sup.payouts.rule_cooldown_text', { minutes: cooldownMin }) : t('sup.payouts.rule_cooldown_none')}
+            </div>
           </div>
         </div>
         <div className="economy-pay-rule">

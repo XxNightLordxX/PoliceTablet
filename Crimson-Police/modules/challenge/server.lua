@@ -1167,12 +1167,17 @@ CP.Net.callback('admin:getSeasons', function(src)
     return C.adminView()
 end)
 
+-- Every handler asks CP.Permissions first (ARCHITECTURE §0.7), then validates the payload.
 CP.Net.action('server:admin:startSeason', function(src, payload)
+    local ok, errKey = allowed(src, 'seasons')
+    if not ok then return false, errKey or 'err.no_permission' end
     if type(payload) ~= 'table' then return false, 'err.invalid_payload' end
     return C.startSeason(src, payload.name)
 end, { rate = 2 })
 
 CP.Net.action('server:admin:endSeason', function(src, payload)
+    local ok, errKey = allowed(src, 'seasons')
+    if not ok then return false, errKey or 'err.no_permission' end
     if payload ~= nil and type(payload) ~= 'table' then return false, 'err.invalid_payload' end
     local reason = payload and payload.reason or nil
     if reason ~= nil and (type(reason) ~= 'string' or #reason > 255) then return false, 'err.invalid_payload' end
@@ -1180,6 +1185,8 @@ CP.Net.action('server:admin:endSeason', function(src, payload)
 end, { rate = 2 })
 
 CP.Net.action('server:admin:overrideBounty', function(src, payload)
+    local ok, errKey = allowed(src, 'bountyOverride')
+    if not ok then return false, errKey or 'err.no_permission' end
     if type(payload) ~= 'table' then return false, 'err.invalid_payload' end
     return C.overrideBounty(src, payload.objective)
 end, { rate = 2 })
@@ -1191,6 +1198,8 @@ CP.Net.callback('sup:getDeptReport', function(src, args)
 end)
 
 CP.Net.callback('sup:getOfficerActivity', function(src, args)
+    local ok, permErr = CP.Permissions.can(src, 'viewMissionList')
+    if not ok then return nil, permErr or 'err.no_permission' end
     if type(args) ~= 'table' then return nil, 'err.invalid_payload' end
     if not validCitizenId(args.citizenid) then return nil, 'err.invalid_citizenid' end
     local dept, errKey = reportDepartment(src, { department = args.department })

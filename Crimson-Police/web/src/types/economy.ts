@@ -2,6 +2,23 @@
 // (modules/payouts/server.lua; documented in docs/notes/economy.md). HomeData and Goal are contract
 // shapes and live in src/shared/types.ts.
 
+/** getHome typeOfTheDay (§9.4 key/label) plus the Config values the Home text shows (extras, optional). */
+export interface HomeTypeOfTheDay {
+  key: string;
+  label: string;
+  /** Config.Events.todMultiplier (points only). */
+  multiplier?: number;
+  /** Config.Scoring.scoreCap (× P); the multiplier is applied after it. */
+  cap?: number;
+}
+
+/** getHome card.streak (§9.4 days/graceLeft) plus the extra graceDays (Config.Scoring.streakGraceDays; 0 = off). */
+export interface HomeStreak {
+  days: number;
+  graceLeft: boolean;
+  graceDays?: number;
+}
+
 /** One mission type row of the Supervisor UI → Payouts screen (callback 'sup:getPayouts'). */
 export interface SupPayoutType {
   key: string;

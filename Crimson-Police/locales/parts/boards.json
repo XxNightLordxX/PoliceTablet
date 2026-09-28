@@ -120,7 +120,7 @@
   "leaderboard.you": "You",
   "leaderboard.your_position": "You",
   "leaderboard.open_own": "Open your profile",
-  "leaderboard.unranked": "{points} pts · {n} more completed run(s) to rank",
+  "leaderboard.unranked_runs": "{n} more completed run(s) to rank",
   "leaderboard.medal.1": "First place",
   "leaderboard.medal.2": "Second place",
   "leaderboard.medal.3": "Third place",

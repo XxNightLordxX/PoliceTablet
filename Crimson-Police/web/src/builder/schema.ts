@@ -92,14 +92,38 @@ export const KEY_FIELDS: Record<string, string[]> = {
   search_area: ['center', 'clues', 'hiding'],
 };
 
+/** The location key a block uses when the objective leaves the field out (each block's defaults()). */
+const DEFAULT_KEYS: Record<string, Record<string, string>> = {
+  hostile_waves: { spawns: 'spawns' },
+  escort: { route: 'route', ambushPoints: 'ambushPoints' },
+  protect_rescue: { npcs: 'hostages', safe: 'safe' },
+  flee_arrest: { door: 'door', suspect: 'suspect', fleeTo: 'fleeTo', 'associates.spawns': 'associates', spawns: 'spawns', routes: 'routes' },
+  search_area: { center: 'center', clues: 'clues', hiding: 'hiding' },
+};
+const DOOR_ONLY = new Set(['door', 'suspect', 'fleeTo', 'associates.spawns']);
+const SCATTER_ONLY = new Set(['spawns', 'routes']);
+
+/** The location key objective field `field` names: its own value, else the block's default key. */
+export function keyOf(o: BuilderObjective, field: string): string | null {
+  const v = getAt(o, field);
+  if (typeof v === 'string' && v !== '') return v;
+  if (v !== undefined && v !== null) return null;
+  if (o.block === 'flee_arrest') {
+    const scatter = o.mode === 'scatter';
+    if ((scatter && DOOR_ONLY.has(field)) || (!scatter && SCATTER_ONLY.has(field))) return null;
+  }
+  if (o.block === 'hostile_waves' && field === 'boss.spawn') return null;
+  return DEFAULT_KEYS[o.block]?.[field] ?? null;
+}
+
 /** Every location key referenced by the objectives (except objective `skip`, 1-based). */
 export function usedKeys(def: BuilderDefinition, skip?: number): Set<string> {
   const out = new Set<string>();
   asArray(def.objectives).forEach((o, i) => {
     if (skip !== undefined && i + 1 === skip) return;
     (KEY_FIELDS[o.block] ?? []).forEach((f) => {
-      const v = getAt(o, f);
-      if (typeof v === 'string' && v !== SHARED_DEVICES) out.add(v);
+      const v = keyOf(o, f);
+      if (v && v !== SHARED_DEVICES) out.add(v);
     });
   });
   return out;
@@ -235,7 +259,7 @@ function strField(o: BuilderObjective, path: string): string | null {
 export function pointSpecs(cfg: BuilderConfig, obj: BuilderObjective, index: number): PointSpec[] {
   const out: PointSpec[] = [];
   const add = (field: string, s: Omit<PointSpec, 'key' | 'field' | 'objective'>) => {
-    const key = strField(obj, field);
+    const key = keyOf(obj, field);
     if (!key || key === SHARED_DEVICES) return;
     if (out.some((p) => p.key === key)) return;
     out.push({ ...s, key, field, objective: index });

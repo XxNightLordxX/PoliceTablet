@@ -530,5 +530,15 @@
   "admin.audit.prev": "Previous",
   "admin.audit.next": "Next",
   "admin.audit.empty": "No audit entries yet",
-  "admin.audit.empty_filtered": "No audit entries match these filters"
+  "admin.audit.empty_filtered": "No audit entries match these filters",
+  "admin.officers.susp_action.autoSuspend": "Automatic",
+  "admin.officers.susp_action.suspend": "Suspended",
+  "admin.officers.susp_action.unsuspend": "Lifted",
+  "admin.officers.susp_by": "{who} · {date}",
+  "admin.officers.susp_days": "{n} days",
+  "admin.officers.susp_history": "Suspension history",
+  "admin.officers.susp_none": "No suspensions on record",
+  "admin.officers.susp_system": "Anti-exploit (voided runs)",
+  "sup.missions.none": "No missions are loaded",
+  "sup.missions.none_text": "Check the server console: every mission file that failed to load is listed there."
 }

@@ -36,7 +36,7 @@ do
     end
     H.load('shared/locale.lua')
 end
-H.eq(CP.L('bonus.fast_finish'), 'Finished within 75% of the time limit', 'economy locale part loaded')
+H.eq(CP.L('bonus.fast_finish', { pct = 75 }), 'Finished within 75% of the time limit', 'economy locale part loaded')
 
 -- ── stubs ───────────────────────────────────────────────────────────────────
 local DEPTS = {
@@ -423,6 +423,13 @@ local okA, dataA = actionReply(2)
 H.eq(okA, true, 'sup action ok')
 H.eq(dataA.amount, 420, 'sup action returns the entry')
 H.eq(dataA.canEdit, false, 'no edit during the cooldown')
+Config.Payouts.supervisorCooldown = 0
+tick()
+H.fire('crimson-police:server:sup:setTypePayout', 2, { type = 'patrol', amount = 260, reason = 'no cooldown configured' }, 'r1b')
+okA, dataA = actionReply(2)
+H.eq(okA, true, 'sup action without a configured cooldown')
+H.eq(dataA.canEdit, true, 'supervisorCooldown = 0: the type stays editable')
+Config.Payouts.supervisorCooldown = 1800
 tick()
 H.fire('crimson-police:server:sup:setTypePayout', 2, { type = 'training', amount = 'lots', reason = 'x' }, 'r2')
 okA, dataA = actionReply(2)
@@ -573,6 +580,39 @@ addMoneyResult = true
 H.eq(CP.Cash.payPending(1), 1, 'payPending pays it')
 H.eq(rowOf(id3).cash_status, 'paid', 'paid now')
 
+-- review: officers already online when the resource starts get their pending rows once (no PlayerLoaded)
+players[4].offline = true
+local sw1 = insertRun({ uuid = 'swp-1111', amount = 410 })
+local sw2 = insertRun({ uuid = 'swp-2222', amount = 420, cid = 'CPFIB001', dept = 'fib' })
+H.eq(CP.Cash.pay(sw2), 'pending', 'offline FIB officer -> pending')
+addMoneyResult = false
+H.eq(CP.Cash.pay(sw1), 'pending', 'online officer whose AddMoney failed -> pending')
+addMoneyResult = true
+before = #qbxCalls.addMoney
+H.eq(CP.Cash._startupSweep(), 1, 'start-up sweep pays the pending rows of online officers')
+H.eq(rowOf(sw1).cash_status, 'paid', 'online officer paid by the sweep')
+H.eq(rowOf(sw2).cash_status, 'pending', 'offline officer still pending')
+H.eq(#qbxCalls.addMoney, before + 1, 'one AddMoney from the sweep')
+H.eq(CP.Cash._startupSweep(), 0, 'a second sweep pays nothing again')
+H.eq(#qbxCalls.addMoney, before + 1, 'still one AddMoney')
+players[4].offline = false
+
+-- review: a completed row left 'none' (the engine's pay never ran, e.g. a crash after the insert) is paid on
+-- the next login/sweep; award rows, failed rows and flagged rows are not touched
+local un1 = insertRun({ uuid = 'unpd-1111', amount = 430 })
+local unAward = insertRun({ type = 'manual_award', mission = 'manual_award', amount = 0 })
+local unFailed = insertRun({ state = 'failed', amount = 0 })
+local unFlagged = insertRun({ status = 'held', flagged = true, amount = 440 })
+before = #qbxCalls.addMoney
+H.eq(CP.Cash.payPending(1), 1, 'payPending pays the unclaimed completed row')
+H.eq(rowOf(un1).cash_status, 'paid', 'unclaimed row paid')
+H.eq(rowOf(un1).cash_paid, 430, 'unclaimed row amount from its breakdown')
+H.eq(rowOf(unAward).cash_status, 'none', 'manual award row untouched')
+H.eq(rowOf(unFailed).cash_status, 'none', 'failed row untouched')
+H.eq(rowOf(unFlagged).cash_status, 'held', 'flagged row untouched')
+H.eq(#qbxCalls.addMoney, before + 1, 'one AddMoney')
+H.eq(CP.Cash.payPending(1), 0, 'nothing left to pay')
+
 -- daily cap per reset-day
 H.sql('DELETE FROM cp_mission_runs')
 Config.Cash.dailyCap = 1500
@@ -624,6 +664,29 @@ H.eq(#banking.refunds, 1, 'society refunded')
 CP.Banking.depositSociety = nil
 addMoneyResult = true
 Config.Cash.source = 'server'
+
+-- review: a Lua error after the claim but before any money moved puts the row back to pending; an error
+-- once money may have moved leaves it paying (never paid twice)
+local realDepartment = CP.Access.department
+CP.Access.department = function() error('boom before money') end
+before = #qbxCalls.addMoney
+local e1 = insertRun({ uuid = 'ffff-6666', amount = 300 })
+H.eq(CP.Cash.pay(e1), 'pending', 'error before money moved -> pending, not stuck in paying')
+H.eq(rowOf(e1).cash_status, 'pending', 'row pending after the error')
+H.eq(#qbxCalls.addMoney, before, 'no money moved')
+CP.Access.department = realDepartment
+H.eq(CP.Cash.pay(e1), 'paid', 'the pending row is paid on the next attempt')
+H.eq(#qbxCalls.addMoney, before + 1, 'paid exactly once')
+local realDeposit = CP.Banking.recordDeposit
+CP.Banking.recordDeposit = function() error('boom after money') end
+local e2 = insertRun({ uuid = 'ffff-7777', amount = 310 })
+H.eq(CP.Cash.pay(e2), 'paying', 'error after AddMoney -> stays paying')
+H.eq(rowOf(e2).cash_status, 'paying', 'row still paying (manual check)')
+H.eq(#qbxCalls.addMoney, before + 2, 'money moved once')
+CP.Banking.recordDeposit = realDeposit
+H.eq(CP.Cash.pay(e2), 'paying', 'a paying row is not retried')
+H.eq(#qbxCalls.addMoney, before + 2, 'never paid twice')
+H.sql("UPDATE cp_mission_runs SET cash_status = 'paid' WHERE id = ?", { e2 })
 
 -- flagged / held / release / void / forfeit
 H.sql('DELETE FROM cp_mission_runs')
@@ -765,6 +828,30 @@ H.eq(find(b.bonuses, 'no_weapons_fired'), nil, 'a weapon was fired: no bonus')
 run = fakeRun({ mission = DEFS.manhunt, pointsBase = 160, fired = 0 })
 b = CP.Scoring.compute(run, fakeP({ result = 'completed' }), 'completed', { durationS = 590 })
 H.eq(find(b.bonuses, 'no_weapons_fired').points, 10, 'nobody fired: end-evaluated bonus')
+
+-- review: the fast-finish label follows Config.Scoring.common.fastShare (no hard-coded 75%)
+b = CP.Scoring.compute(fakeRun({ duration = 300 }), fakeP({ result = 'completed' }), 'completed', { durationS = 300 })
+H.eq(find(b.bonuses, 'fast_finish').label, 'Finished within 75% of the time limit', 'fast-finish label from config (default)')
+Config.Scoring.common.fastShare = 0.6
+b = CP.Scoring.compute(fakeRun({ duration = 300 }), fakeP({ result = 'completed' }), 'completed', { durationS = 300 })
+H.eq(find(b.bonuses, 'fast_finish').label, 'Finished within 60% of the time limit', 'fast-finish label follows fastShare')
+H.eq(find(b.bonuses, 'fast_finish').points, 40, 'fast finish still +20% of P at 300/600 s')
+b = CP.Scoring.compute(fakeRun({ duration = 400 }), fakeP({ result = 'completed' }), 'completed', { durationS = 400 })
+H.eq(find(b.bonuses, 'fast_finish'), nil, 'over 60% of the time limit: no fast bonus')
+Config.Scoring.common.fastShare = 0.75
+
+-- review: a card entry without a value of its own (not in Config.Bonuses) uses the block's recorded value
+DEFS.valueless = def('valueless', 'tactical', 2, { label = 'Valueless', bonuses = { { id = 'crate_secured' } },
+    penalties = { { id = 'crate_dropped' } } })
+run = fakeRun({ mission = DEFS.valueless, shared = { crate_secured = 2, crate_dropped = 1 },
+    values = { crate_secured = 12, crate_dropped = -7 }, kinds = { crate_secured = 'bonus', crate_dropped = 'penalty' } })
+b = CP.Scoring.compute(run, fakeP({ result = 'completed' }), 'completed', { durationS = 590 })
+H.eq(find(b.bonuses, 'crate_secured').points, 24, 'listed id without a value: recorded per-occurrence value x count')
+H.eq(find(b.penalties, 'crate_dropped').points, -7, 'listed penalty without a value: recorded value')
+run = fakeRun({ mission = DEFS.valueless, shared = { crate_secured = 2 } })
+b = CP.Scoring.compute(run, fakeP({ result = 'completed' }), 'completed', { durationS = 590 })
+H.eq(find(b.bonuses, 'crate_secured'), nil, 'listed id with no value anywhere adds nothing')
+DEFS.valueless = nil
 
 -- failed, abandoned, presence
 b = CP.Scoring.compute(fakeRun(), fakeP({ result = 'failed' }), 'failed', { failedShare = 0.5 })
@@ -1046,10 +1133,16 @@ H.eq(hd.card.level.label, 'Senior Patrol', 'card level')
 H.eq(hd.card.level.next, 15000, 'card next level')
 H.eq(hd.card.streak.days, 4, 'card streak')
 H.eq(type(hd.card.streak.graceLeft), 'boolean', 'grace flag')
+H.eq(hd.card.streak.graceDays, 1, 'streak extra: Config.Scoring.streakGraceDays')
+Config.Scoring.streakGraceDays = 0
+H.eq(H.callback('crimson-police:getHome', 1).data.card.streak.graceDays, 0, 'grace days off -> 0 (the UI shows no grace state)')
+Config.Scoring.streakGraceDays = 1
 H.ok(hd.card.seasonPoints > 0, 'season points from the SQL fallback')
 H.ok(hd.card.cashThisWeek >= 2080, 'cash this week')
 H.eq(hd.typeOfTheDay.key, 'tactical', 'Type of the Day key')
 H.eq(hd.typeOfTheDay.label, 'Tactical', 'Type of the Day label')
+H.near(hd.typeOfTheDay.multiplier, 2.0, 1e-9, 'Type of the Day extra: Config.Events.todMultiplier')
+H.near(hd.typeOfTheDay.cap, 2.0, 1e-9, 'Type of the Day extra: Config.Scoring.scoreCap')
 H.ok(hd.goals.daily ~= nil and hd.goals.weekly ~= nil, 'goals present')
 H.eq(#hd.announcements, 0, 'no announcements without modules/leaderboard')
 H.eq(hd.champions, nil, 'no champions banner without modules/challenge')

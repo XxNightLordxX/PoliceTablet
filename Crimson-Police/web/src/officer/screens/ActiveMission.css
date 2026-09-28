@@ -266,7 +266,7 @@
 .run_ui-partner__main { flex: 1; min-width: 0; }
 .run_ui-partner__name { display: flex; align-items: center; gap: 6px; min-width: 0; font-weight: 600; }
 .run_ui-partner__text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.run_ui-partner__sub { font-size: var(--cp-fs-sm); color: var(--cp-muted); }
+.run_ui-partner__sub { font-size: var(--cp-fs-sm); color: var(--cp-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .run_ui-partner__sub.is-muted { color: var(--cp-subtle); font-style: italic; }
 .run_ui-partner__tags { display: flex; align-items: center; gap: 5px; flex: none; }
 .run_ui-partners__note {

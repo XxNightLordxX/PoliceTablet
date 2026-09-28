@@ -340,3 +340,16 @@ button.boards-dept:focus-visible {
   color: var(--cp-muted);
   font-weight: 600;
 }
+/* ranks 4-5 line up with the medals of 1-3 */
+.boards-tile > .boards-rank,
+.boards-tile > .boards-medal {
+  box-sizing: border-box;
+  min-height: 26px;
+  align-items: center;
+}
+.boards-tile__callsign {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

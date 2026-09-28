@@ -232,7 +232,9 @@ export default function SupMissionList() {
           rows={filtered}
           rowKey={(m) => m.id}
           loading={loading}
-          empty={<EmptyState compact icon="search" title={t('sup.missions.empty')} />}
+          empty={missions.length
+            ? <EmptyState compact icon="search" title={t('sup.missions.empty')} />
+            : <EmptyState compact icon="layers" title={t('sup.missions.none')} text={t('sup.missions.none_text')} />}
           aria-label={t('ui.screen.sup_missions')}
         />
         <div className="oversight-footnote">

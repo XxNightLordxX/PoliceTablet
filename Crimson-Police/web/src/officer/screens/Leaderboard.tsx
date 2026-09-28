@@ -141,7 +141,7 @@ export default function Leaderboard() {
       key: 'points',
       header: allTime ? t('leaderboard.col.xp') : t('leaderboard.col.points'),
       numeric: true,
-      width: 130,
+      width: 140,
       render: (r) => (
         <span className="boards-points">
           {formatNumber(r.points)} <small>{allTime ? t('leaderboard.xp') : t('common.pts')}</small>
@@ -158,7 +158,14 @@ export default function Leaderboard() {
       <td>
         <span className="boards-officer">
           <span className="boards-pinned__label">{t('leaderboard.your_position')}</span>
-          <span className="boards-officer__name" title={me.name}>{me.name}</span>
+          <span className="boards-pinned__who">
+            <span className="boards-officer__name" title={me.name}>{me.name}</span>
+            {me.rank > 0 ? null : (
+              <span className="boards-unranked" title={t('leaderboard.unranked_runs', { n: Math.max(1, minRuns - me.runs) })}>
+                {t('leaderboard.unranked_runs', { n: Math.max(1, minRuns - me.runs) })}
+              </span>
+            )}
+          </span>
         </span>
       </td>
       <td>
@@ -168,13 +175,9 @@ export default function Leaderboard() {
       <td className="cp-num" style={{ textAlign: 'right' }}>{formatNumber(me.runs)}</td>
       <td className="cp-num" style={{ textAlign: 'right' }}>{formatNumber(me.failed)}</td>
       <td className="cp-num" style={{ textAlign: 'right' }}>
-        {me.rank > 0 ? (
-          <span className="boards-points">
-            {formatNumber(me.points)} <small>{allTime ? t('leaderboard.xp') : t('common.pts')}</small>
-          </span>
-        ) : (
-          <span className="boards-unranked">{t('leaderboard.unranked', { n: Math.max(1, minRuns - me.runs), points: formatNumber(me.points) })}</span>
-        )}
+        <span className="boards-points">
+          {formatNumber(me.points)} <small>{allTime ? t('leaderboard.xp') : t('common.pts')}</small>
+        </span>
       </td>
     </tr>
   ) : null;

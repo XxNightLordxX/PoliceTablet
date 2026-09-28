@@ -1,7 +1,7 @@
 // Browser mocks for the oversight slice: Supervisor Mission List, Live Missions, Review Queue and Admin
 // Officers, Departments, Permissions and Audit Log. Stateful: approving, voiding, recalling, suspending or
 // answering a dispute changes what the next request returns.
-import { registerMock } from '../shared/nui';
+import { registerMock as registerRawMock } from '../shared/nui';
 import type {
   AuditExport, AuditFilters, AuditPage, AuditRow, DepartmentsData, DisputeView, FlaggedRow, LiveRunsData, MissionListData,
   MissionListEntry, OfficerDetail, OfficerSearchData, OfficerSearchRow, PermissionsData, ReviewQueueData,
@@ -10,6 +10,36 @@ import { BROKEN_LOGO, FIB_LOGO, SAST_LOGO } from './logos';
 
 const now = () => Math.floor(Date.now() / 1000);
 const H = 3600;
+
+// ── Lua encoding and screenshot modes ─────────────────────────────────────────
+// Lua encodes an empty table as {} (never []): every answer below goes through luaify(), so each screen
+// is always exercised with the shapes the server really sends. ?oversight=edge fills the data with
+// 64-character names, 32-character callsigns, missing callsigns, long labels/reasons and big numbers;
+// ?oversight=empty answers every list empty (as {}).
+const MODE = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('oversight') : null;
+const EDGE = MODE === 'edge';
+const EMPTY = MODE === 'empty';
+const LONG_NAME = 'Maximilian Alexander Montgomery-Fitzgerald Wolfeschlegelsteinhausen'.slice(0, 64);
+const LONG_CALLSIGN = '2L-14-SUPERVISOR-UNIT-ALPHA-XRAY'.slice(0, 32);
+const LONG_REASON = 'The suspect vehicle spawned inside the tunnel wall at the second checkpoint, so nobody could reach it and '
+  + 'the timer ran out while we were still trying to push it out with two cruisers; the whole unit saw it happen.';
+
+function luaify<T>(v: T): T {
+  if (Array.isArray(v)) return (v.length ? v.map(luaify) : {}) as unknown as T;
+  if (v && typeof v === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [k, x] of Object.entries(v as Record<string, unknown>)) if (x !== null && x !== undefined) out[k] = luaify(x);
+    return out as T;
+  }
+  return v;
+}
+type MockFnArgs = Parameters<typeof registerRawMock>;
+function registerMock(kind: MockFnArgs[0], name: string, fn: MockFnArgs[2], opts?: MockFnArgs[3]) {
+  registerRawMock(kind, name, async (...args: unknown[]) => luaify(await (fn as (...a: unknown[]) => unknown)(...args)), opts);
+}
+const asList = <T,>(v: T[] | Record<string, never>): T[] => (Array.isArray(v) ? v : []);
+/** In ?oversight=empty mode every list of the answer is empty. */
+const emptyIf = <T,>(list: T[]): T[] => (EMPTY ? [] : list);
 
 // ── Mission List ──────────────────────────────────────────────────────────────
 const missions: MissionListEntry[] = [
@@ -52,7 +82,18 @@ function m(id: string, label: string, type: string, difficulty: number, minOffic
 
 let operation: MissionListData['operation'] = null;
 
-registerMock('request', 'getMissionList', (): MissionListData => ({ missions, canLaunch: true, crossDeptEnabled: true, operation }));
+if (EDGE) {
+  missions[0].label = 'Armored Truck Escort Through Blaine County And All The Way Back';
+  missions[1].runningNow = [
+    { runId: 'run-bc-1', src: 14, name: LONG_NAME, callsign: LONG_CALLSIGN, departmentShort: 'SAST', test: false },
+    { runId: 'run-bc-2', src: 15, name: 'Dana Whitfield', callsign: null, departmentShort: 'FIB', test: true },
+    { runId: 'run-bc-3', src: 16, name: 'Ray Chen', callsign: '4A-02', departmentShort: 'SAST', test: false },
+  ];
+  missions[2].basePayout = 25000;
+  missions[5].cooldown = 86400;
+}
+
+registerMock('request', 'getMissionList', (): MissionListData => ({ missions: emptyIf(missions), canLaunch: true, crossDeptEnabled: true, operation }));
 registerMock('action', 'server:sup:opLaunch', (p: { missionId: string }) => {
   if (operation) throw new Error('err.operation_locked');
   const mission = missions.find((x) => x.id === p?.missionId);
@@ -88,7 +129,17 @@ const liveRuns: LiveRunsData['runs'] = [
   },
 ];
 
-registerMock('request', 'sup:getLiveRuns', (): LiveRunsData => ({ runs: liveRuns.filter((r) => r.participants.some((p) => p.status === 'active')), serverTime: now(), canRecall: true }));
+if (EDGE) {
+  liveRuns[0].missionLabel = 'Armored Truck Escort Through Blaine County And All The Way Back';
+  liveRuns[0].participants[0].name = LONG_NAME;
+  liveRuns[0].participants[0].callsign = LONG_CALLSIGN;
+  liveRuns[0].participants[1].callsign = null;
+  liveRuns[0].remaining = 7199;
+  liveRuns[1].test = true;
+  liveRuns[1].operationId = 12;
+}
+
+registerMock('request', 'sup:getLiveRuns', (): LiveRunsData => ({ runs: emptyIf(liveRuns.filter((r) => r.participants.some((p) => p.status === 'active'))), serverTime: now(), canRecall: true }));
 registerMock('action', 'server:sup:forceRecall', (p: { runId: string; src: number }) => {
   const run = liveRuns.find((r) => r.runId === p?.runId);
   const part = run?.participants.find((x) => x.src === p?.src);
@@ -144,8 +195,22 @@ function dispute(id: number, rowId: number, cid: string, name: string, callsign:
   };
 }
 
-registerMock('request', 'sup:getReviewQueue', (): ReviewQueueData => ({ flagged, disputes: disputes.filter((d) => d.status === 'open' && d.goesTo === 'supervisor'), canReview: true, canHandle: true }));
-registerMock('request', 'admin:getFlagged', () => ({ flagged }));
+if (EDGE) {
+  flagged[0].name = LONG_NAME;
+  flagged[0].callsign = LONG_CALLSIGN;
+  flagged[0].missionLabel = 'Armored Truck Escort Through Blaine County And All The Way Back';
+  flagged[0].flagDetail = `Killed by: ${LONG_NAME} [QWE90876] ×3, Tony Vega [QWE90877], Jo Smith [QWE90878] (5 kills)`;
+  flagged[0].otherReasons = ['speed', 'too_fast', 'unexpected_event'];
+  flagged[1].callsign = null;
+  flagged[1].points = 32767;
+  flagged[1].cash = 43750;
+  disputes[0].name = LONG_NAME;
+  disputes[0].callsign = null;
+  disputes[0].reason = LONG_REASON;
+}
+
+registerMock('request', 'sup:getReviewQueue', (): ReviewQueueData => ({ flagged: emptyIf(flagged), disputes: emptyIf(disputes.filter((d) => d.status === 'open' && d.goesTo === 'supervisor')), canReview: true, canHandle: true }));
+registerMock('request', 'admin:getFlagged', () => ({ flagged: emptyIf(flagged) }));
 registerMock('request', 'admin:getDisputes', () => ({ disputes: [...disputes, ...Object.values(officerDetails).flatMap((o) => o.disputes)].filter((d) => d.status === 'open') }));
 
 function reviewFlagged(p: { rowId: number; decision: string; reason: string }) {
@@ -219,6 +284,13 @@ function detailOf(o: OfficerSearchRow): OfficerDetail {
     cash: { total: Math.round(o.xp * 3.1), week: 1040 },
     stats: { runs: 148, completed: 121, failed: 17, abandoned: 10, flagged: 3, voided: 1 },
     suspension: { suspended: !!o.suspendedUntil, untilTs: o.suspendedUntil },
+    suspensions: o.suspendedUntil
+      ? [
+          { id: 7001, action: 'autoSuspend', actor: 'console', actorName: null, role: 'console', days: 7, reason: '3 voided runs in 30 days', createdAt: now() - 3 * 24 * H },
+          { id: 6120, action: 'unsuspend', actor: 'ADMIN001', actorName: 'Server Admin', role: 'admin', days: null, reason: 'Appeal accepted by command', createdAt: now() - 40 * 24 * H },
+          { id: 6002, action: 'suspend', actor: 'ADMIN001', actorName: 'Server Admin', role: 'admin', days: 14, reason: 'Farming Beat Patrol with an alt unit', createdAt: now() - 45 * 24 * H },
+        ]
+      : [],
     runs,
     disputes: [
       dispute(410 + officers.indexOf(o), 8990, o.citizenid, o.name, o.callsign, 'Warrant Service', 'investigation', 'Investigation', 'failed', null,
@@ -228,6 +300,29 @@ function detailOf(o: OfficerSearchRow): OfficerDetail {
     ],
     online: o.online, own: false, known: true, maxAward: 10000,
   };
+  if (EDGE) {
+    d.name = LONG_NAME;
+    d.callsign = LONG_CALLSIGN;
+    d.rank = 'Deputy Assistant Chief of the Highway Patrol';
+    d.xp = 2147480000;
+    d.level = levelOf(2147480000);
+    d.cash = { total: 2147480000, week: 25000 };
+    d.runs[0].missionLabel = 'Armored Truck Escort Through Blaine County And All The Way Back';
+    d.disputes[0].reason = LONG_REASON;
+    d.suspensions = [{ id: 1, action: 'suspend', actor: 'ADMIN001', actorName: LONG_NAME, role: 'admin', days: 3650, reason: LONG_REASON, createdAt: now() - H }];
+  }
+  if (EMPTY) {
+    d.callsign = null;
+    d.level = levelOf(0);
+    d.xp = 0;
+    d.streakDays = 0;
+    d.cash = { total: 0, week: 0 };
+    d.stats = { runs: 0, completed: 0, failed: 0, abandoned: 0, flagged: 0, voided: 0 };
+    d.badges = [];
+    d.runs = [];
+    d.disputes = [];
+    d.suspensions = [];
+  }
   officerDetails[o.citizenid] = d;
   return d;
 }
@@ -240,7 +335,8 @@ function run(id: number, missionLabel: string, missionType: string, missionTypeL
 registerMock('request', 'admin:searchOfficers', (a: { query?: string }): OfficerSearchData => {
   const q = String(a?.query ?? '').trim().toLowerCase();
   const list = q ? officers.filter((o) => o.name.toLowerCase().includes(q) || (o.callsign ?? '').toLowerCase().includes(q) || o.citizenid.toLowerCase().includes(q)) : officers;
-  return { officers: list, query: q };
+  // Empty mode still lists one officer (the record is where the empty lists are).
+  return { officers: EMPTY ? list.slice(0, 1) : list, query: q };
 });
 registerMock('request', 'admin:getOfficer', (a: { citizenid?: string }): OfficerDetail => {
   const o = officers.find((x) => x.citizenid.toLowerCase() === String(a?.citizenid ?? '').toLowerCase());
@@ -257,6 +353,8 @@ registerMock('action', 'server:admin:suspend', (p: { citizenid: string; days: nu
   o.suspendedUntil = days === 0 ? null : now() + days * 24 * H;
   const d = detailOf(o);
   d.suspension = { suspended: days > 0, untilTs: o.suspendedUntil };
+  d.suspensions = [{ id: now(), action: days === 0 ? 'unsuspend' : 'suspend', actor: 'ADMIN001', actorName: 'Server Admin', role: 'admin',
+    days: days === 0 ? null : days, reason: String(p.reason).trim(), createdAt: now() }, ...asList(d.suspensions)];
   return { citizenid: o.citizenid, days, untilTs: o.suspendedUntil };
 });
 registerMock('action', 'server:admin:voidRun', (p: { rowId?: number; runUuid?: string; reason: string }) => {
@@ -284,7 +382,7 @@ registerMock('action', 'server:admin:awardPoints', (p: { citizenid: string; poin
 registerMock('request', 'admin:getDepartments', (): DepartmentsData => ({
   cashSource: 'society',
   showSociety: true,
-  departments: [
+  departments: EMPTY ? [] : [
     {
       key: 'fib', label: 'Federal Investigation Bureau', short: 'FIB', jobs: ['fib'], supervisorGrade: 3, societyAccount: 'fib',
       theme: { primary: '#1c2541', accent: '#c9a227', background: '#0b0c10', surface: '#1a1b24', text: '#ffffff' },
@@ -301,11 +399,18 @@ registerMock('request', 'admin:getDepartments', (): DepartmentsData => ({
       logo: { url: BROKEN_LOGO, watermark: true, opacity: 0.08, size: 0.6, grayscale: false },
       members: 12, suspended: 0, onDuty: 0, societyBalance: null,
     },
+    ...(EDGE
+      ? [{
+          key: 'sahp_highway_long', label: 'San Andreas Highway Patrol and Commercial Vehicle Enforcement', short: 'SAHPCV', jobs: [],
+          supervisorGrade: 9999, societyAccount: 'sahp_highway_patrol_account', theme: { primary: '#ffffff', accent: '#000000', background: '#ffffff', surface: '#f1f1f1', text: '#111111' },
+          logo: null, members: 1234567, suspended: 42, onDuty: 0, societyBalance: 2147480000,
+        }]
+      : []),
   ],
 }));
 
 // ── Permissions ───────────────────────────────────────────────────────────────
-registerMock('request', 'admin:getPermissions', (): PermissionsData => ({
+registerMock('request', 'admin:getPermissions', (): PermissionsData => (EMPTY ? { supervisor: [], adminOnly: [], always: [] } : {
   supervisor: [
     { action: 'setTypePayout', enabled: true }, { action: 'launchCrossDept', enabled: true }, { action: 'forceRecall', enabled: true },
     { action: 'reviewFlagged', enabled: true }, { action: 'handleDisputes', enabled: true }, { action: 'builderEdit', enabled: true },
@@ -343,12 +448,20 @@ function filterAudit(f: AuditFilters): AuditRow[] {
     (to === null || r.createdAt < to));
 }
 
+if (EDGE) {
+  audit[0].actorName = LONG_NAME;
+  audit[0].reason = LONG_REASON;
+  audit[0].target = '5f1c2a9e-7d4b-4c1a-9e3f-2b8d6a0c4e11';
+  audit[1].oldValue = 'config:2500 (set by an admin before the season started)'.slice(0, 64);
+  audit[1].newValue = '25000';
+}
+
 registerMock('request', 'admin:getAudit', (f: AuditFilters): AuditPage => {
-  const rows = filterAudit(f ?? {});
+  const rows = EMPTY ? [] : filterAudit(f ?? {});
   const pageSize = 50;
   const pages = Math.max(1, Math.ceil(rows.length / pageSize));
   const page = Math.min(Math.max(1, Number(f?.page ?? 1)), pages);
-  return { rows: rows.slice((page - 1) * pageSize, page * pageSize), page, pages, total: rows.length, pageSize, actions: [...new Set(audit.map((r) => r.action))].sort() };
+  return { rows: rows.slice((page - 1) * pageSize, page * pageSize), page, pages, total: rows.length, pageSize, actions: EMPTY ? [] : [...new Set(audit.map((r) => r.action))].sort() };
 });
 registerMock('request', 'admin:exportAudit', (f: AuditFilters): AuditExport => {
   const rows = filterAudit(f ?? {});

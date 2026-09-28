@@ -58,6 +58,8 @@ export interface RecordingOverlay {
   /** label of the no-build zone the current end is in */
   zone: string | false;
   tooLong: boolean;
+  /** metres Backspace removes (Config.Builder.route.undoMetres) */
+  undoMetres?: number;
   minLength: number;
   maxLength: number;
   /** short feedback text (translated), e.g. "Stop point 1 added" */

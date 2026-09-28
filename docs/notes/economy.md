@@ -19,10 +19,16 @@ Files: `Crimson-Police/modules/{scoring,goals,cash,payouts}/server.lua`,
 Push topics sent: `payouts` (`{ kind = 'type', key }` / `{ kind = 'mission', missionId }`) and `board`
 (`{ reason = 'payouts' }`) to every online player after any payout change. Lua listeners: `CP.Qbx.onDutyChange`,
 `onJobChange`, `onPlayerLoaded` (x2: duty tracking, pending cash 5 s later), `onPlayerUnload`, `playerDropped`.
+Threads: the forfeiture job (at start, then every 10 min) and one start-up sweep 15 s after the resource starts that
+pays the pending rows of players who are already online (they never fire PlayerLoaded again).
 
 ## Response shapes I defined (TypeScript in `web/src/types/economy.ts`)
 
 ```ts
+// getHome: HomeData (§9.4); typeOfTheDay also carries the extras { multiplier (Config.Events.todMultiplier),
+// cap (Config.Scoring.scoreCap) } and card.streak the extra graceDays (Config.Scoring.streakGraceDays; 0 = no
+// grace, the Home hint then says nothing about grace) (web/src/types/economy.ts HomeTypeOfTheDay, HomeStreak)
+
 // sup:getPayouts
 SupPayoutsView = { types: SupPayoutType[]; rangeShare: { min, max }; cooldownSeconds; requireReason: true;
   limits: { min, max }; serverTime }
@@ -65,10 +71,12 @@ Scoring
    `common.pedestrianHit`, `lights_siren` once for beat_patrol/business_check, `shot_surrendered` x
    `common.shotSurrendered`) and ids with a per-occurrence value hint in `run.score.values` (kingpin_alive,
    inmate_alive, hostage_hit, ...). An unlisted id that only exists in Config.Bonuses (e.g. hostile_arrested on the
-   Kingpin, recorded by hostile_waves) does **not** count: the mission did not opt in. (d) the common ones: fast_finish
-   (duration <= fastShare x run.timeLimit, not when `run.flags.medals`), modifier (`Config.Events.modifierPoints` x P,
-   label "Modifier: <name>"), first_run, no_vehicle_damage (`p.vehicle.seen`, engine and body > noDamageAbove),
-   heavy_damage (body < heavyDamageBelow, not when `vehiclePenalties == false`).
+   Kingpin, recorded by hostile_waves) does **not** count: the mission did not opt in. A card entry with no value
+   of its own that is not in Config.Bonuses uses the recorded hint (each). (d) the common ones: fast_finish
+   (duration <= fastShare x run.timeLimit, not when `run.flags.medals`; label "Finished within {pct}% ..." with pct
+   from fastShare), modifier (`Config.Events.modifierPoints` x P, label "Modifier: <name>"), first_run,
+   no_vehicle_damage (`p.vehicle.seen`, engine and body > noDamageAbove), heavy_damage (body < heavyDamageBelow, not
+   when `vehiclePenalties == false`).
 4. Failed = floor(failedCredit x P x share) with no bonuses, multipliers or Type of the Day; `subtotal` shows the credit
    and mTeam/mCross/mStreak are reported as 1.0 (not applied). Abandoned = 0.
 5. Presence (runs with 2+ participants, `CP.AntiCheat.presenceOk(run, p) == false`): SPEC 6.4 / Anti-exploit say the
@@ -119,7 +127,12 @@ Cash
 16. `pay(rowId)`: offline check first (online = `CP.Qbx.getByCitizenId`): an offline officer's row goes
     none/held -> `pending` (no money moves); otherwise the claim `UPDATE ... SET cash_status = 'paying' WHERE id = ? AND
     cash_status IN ('none','held','pending') AND state = 'completed' AND flagged = 0 AND voided = 0` must change the row.
-    The extra guards mean a flagged or voided row is never paid, whatever calls pay.
+    The extra guards mean a flagged or voided row is never paid, whatever calls pay. After the claim, the rest runs
+    under pcall: a Lua error before the first call that can move money (society withdrawal or AddMoney) puts the
+    row back to `pending`; an error after that leaves it `paying` (manual check), so nothing is ever paid twice.
+    `payPending(src)` (login + 5 s, start-up sweep) pays `pending` rows and also completed, unflagged, unvoided
+    mission rows still `none` with `cash_base > 0` (the engine's pay never ran: a crash right after the row insert,
+    or a skipped lock wait); no money moved on either and `pay()` claims them like any other row.
 17. Daily cap: the sum of paid/capped cash of rows created on the **same reset-day as the row** (a pending row paid
     later is capped against its own day). Payments of one officer are serialised in-process, so two rows cannot both
     pass the cap check.
@@ -159,8 +172,13 @@ Payouts
     modules/admin is not loaded the entry is written to cp_audit directly (no webhook) so no change goes unaudited.
 
 UI
-27. Home refreshes on push `run` (a run ended) and every 60 s. `announcements` may arrive as `{}` from Lua and is
-    treated as empty. Supervisor Payouts counts cooldowns down locally and refetches when one ends.
+27. Home refreshes on the push `run` that carries no data (the run ended; its rows, XP, goals and cash are written
+    by then) and every 60 s; the per-tick `run` pushes during a run do not refetch it. `announcements` / `goals`
+    may arrive as `{}` / `[]` from Lua and are treated as empty. Announcement kinds `weekly_top3` / `monthly_top3`
+    (modules/leaderboard) get the trophy / podium icons. The Type of the Day text shows the configured multiplier
+    and cap (extras above). Supervisor Payouts counts cooldowns down locally and refetches when one ends.
+    Browser mocks: `?economy=empty|lua|edge|error` (`lua` = empties the way Lua encodes them, `edge` = long names,
+    huge numbers, top level, a 1.5x multiplier).
 
 Tests: `tests/economy_spec.lua` uses its own database `cp_test_economy` (same migrations as cp_test, like the
 engine_a spec) so parallel runs of other specs cannot reset its tables; every SQL statement of the slice runs there.
@@ -183,7 +201,8 @@ engine_a spec) so parallel runs of other specs cannot reset its tables; every SQ
   voided run -> clear the flag/void, `CP.Scoring.onRowApproved(rowId)`, `CP.Cash.release(rowId)`; a failed-run award
   -> `CP.Scoring.manualAward`.
 - **leaderboard**: `seasonPoints(citizenid) -> number`, `announcements() -> { { kind, text } }` (kinds the Home screen
-  styles: `officer_of_week`, `weekly_top`, `monthly_top`, `season`, `bounty`, `info`); give the Officer of the Week /
+  styles: `weekly_top3`, `monthly_top3` (what modules/leaderboard sends today), `officer_of_week`, `weekly_top`,
+  `monthly_top`, `season`, `bounty`, `info`; any other kind gets the info icon); give the Officer of the Week /
   season badge ids a `badge.<id>` label in your part (`CP.Scoring.badges` labels every row of cp_badges). The All-time
   board can read cp_officers.xp. Profile: `CP.Scoring.xpLevel(xp)`, `CP.Scoring.badges(citizenid)`.
 - **challenge**: `currentSeason() -> { id, name }|nil`, `championBanner(dept) -> { season = <name>, department =

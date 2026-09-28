@@ -57,6 +57,23 @@ local state = {}                 -- runId -> { idleDone, kills, killers = { [src
 local lastPresenceMs = nil
 
 -- ── helpers ─────────────────────────────────────────────────────────────────
+
+-- Clip to at most n characters without cutting a UTF-8 sequence in half, dropping bytes that are not valid
+-- UTF-8 first. The cp_* columns are utf8mb4 (VARCHAR(n) counts characters) and MariaDB's strict mode
+-- refuses a broken sequence (error 1366), so a byte clip (CP.U.clip) of an accented reason could make
+-- the whole insert fail.
+local function clip(s, n)
+    if s == nil then return nil end
+    s = tostring(s)
+    for _ = 1, 64 do
+        local len, bad = utf8.len(s)
+        if len then break end
+        s = s:sub(1, bad - 1) .. s:sub(bad + 1)
+    end
+    if not utf8.len(s) then s = s:gsub('[\128-\255]', '?') end
+    if utf8.len(s) <= n then return s end
+    return s:sub(1, utf8.offset(s, n + 1) - 1)
+end
 local function toSrc(v)
     local n = tonumber(v)
     if not n then return nil end
@@ -184,8 +201,8 @@ end
 
 function AC.flag(run, src, reason, detail)
     if type(run) ~= 'table' or type(reason) ~= 'string' or reason == '' then return false end
-    reason = U.clip(reason, 64)
-    if detail ~= nil then detail = U.clip(tostring(detail), 255) end
+    reason = clip(reason, 64)
+    if detail ~= nil then detail = clip(tostring(detail), 255) end
     if run.test then
         CP.log(TAG, 'test run %s would be flagged %s (%s)', tostring(run.id), reason, tostring(detail))
         return false

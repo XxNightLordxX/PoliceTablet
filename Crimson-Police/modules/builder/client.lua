@@ -1067,7 +1067,7 @@ local function runRecording(tool)
             distance = st.distance, loop = o.loop,
             toStart = (o.loop and first and last and #wps > 2) and math.floor(U.dist2d(first, last) + 0.5) or false,
             zone = zone and tostring(zone.label) or false,
-            tooLong = length > (tonumber(r.maxLength) or 8000.0),
+            tooLong = length > (tonumber(r.maxLength) or 8000.0), undoMetres = undoMetres,
             minLength = tonumber(r.minLength) or 800.0, maxLength = tonumber(r.maxLength) or 8000.0,
             message = (st.message and now < st.messageUntil) and st.message or false,
         }
@@ -1088,7 +1088,7 @@ local function runRecording(tool)
         overlay({ kind = 'recording', key = o.key, label = o.label or o.key, length = res.length, points = #pts,
             samples = rec:count(), stops = #stops, maxStops = maxStops, stopsEnabled = o.stops, paused = false,
             offRoad = false, rejected = st.rejected, waiting = 'checking', distance = false, loop = o.loop,
-            toStart = false, zone = false, tooLong = false, minLength = tonumber(r.minLength) or 800.0,
+            toStart = false, zone = false, tooLong = false, undoMetres = undoMetres, minLength = tonumber(r.minLength) or 800.0,
             maxLength = tonumber(r.maxLength) or 8000.0, message = CP.L('builder.rec.checking') })
         res.unreachable = (#pts >= 2 and not res.cancelled) and unreachableOf(pts) or {}
         return res

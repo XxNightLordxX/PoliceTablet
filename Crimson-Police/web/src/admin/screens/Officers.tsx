@@ -21,6 +21,10 @@ import './Officers.css';
 const endLabel = (reason: string) => (hasKey(`sup.end.${reason}`) ? t(`sup.end.${reason}`) : reason);
 const cashLabel = (status: string) => (hasKey(`result.cash_status.${status}`) ? t(`result.cash_status.${status}`) : status);
 const stateTone = (s: string) => (s === 'completed' ? 'success' : s === 'failed' ? 'danger' : 'grey');
+/** Date with the year (suspensions can run for years; formatDateTime leaves the year out). */
+const fullDate = (ts: number | null | undefined) =>
+  ts ? new Date(ts * 1000).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+const badgeDate = (v: unknown) => (typeof v === 'string' ? v.slice(0, 10) : typeof v === 'number' ? fullDate(v) : '');
 
 function useDebounced<T>(value: T, ms: number): T {
   const [v, setV] = useState(value);
@@ -67,6 +71,10 @@ function Detail({ citizenid }: { citizenid: string }) {
   const disputes = asArray(o.disputes);
   const runs = asArray(o.runs);
   const badges = asArray(o.badges);
+  const suspensions = asArray(o.suspensions);
+  const suspension = o.suspension ?? { suspended: false, untilTs: null };
+  const cash = o.cash ?? { total: 0, week: 0 };
+  const stats = o.stats ?? { runs: 0, completed: 0, failed: 0, abandoned: 0, flagged: 0, voided: 0 };
   const level = o.level;
   const levelNext = level && level.next ? level.next : null;
 
@@ -165,7 +173,7 @@ function Detail({ citizenid }: { citizenid: string }) {
           </div>
           <div className="oversight-off-head__tags">
             <Badge tone={o.online ? 'success' : 'grey'} dot>{o.online ? t('admin.officers.online') : t('admin.officers.offline')}</Badge>
-            {o.suspension.suspended ? <Badge tone="danger" icon="lock">{t('admin.officers.suspended_short')}</Badge> : null}
+            {suspension.suspended ? <Badge tone="danger" icon="lock">{t('admin.officers.suspended_short')}</Badge> : null}
             {o.streakDays > 0 ? <Badge tone="accent" icon="flame">{t('admin.officers.streak', { n: o.streakDays })}</Badge> : null}
             {loading ? <Spinner size={16} /> : null}
           </div>
@@ -179,20 +187,20 @@ function Detail({ citizenid }: { citizenid: string }) {
           <Stat size="sm" icon="star" tone="accent" label={t('admin.officers.stat.xp')} value={formatNumber(o.xp)}
             hint={levelNext ? t('admin.officers.stat.next', { xp: formatNumber(levelNext) }) : level ? level.label : undefined} />
         </Card>
-        <Card padding="sm"><Stat size="sm" icon="dollar" label={t('admin.officers.stat.cash_total')} value={<Money amount={o.cash.total} />} /></Card>
-        <Card padding="sm"><Stat size="sm" icon="calendar" label={t('admin.officers.stat.cash_week')} value={<Money amount={o.cash.week} />} /></Card>
+        <Card padding="sm"><Stat size="sm" icon="dollar" label={t('admin.officers.stat.cash_total')} value={<Money amount={cash.total} />} /></Card>
+        <Card padding="sm"><Stat size="sm" icon="calendar" label={t('admin.officers.stat.cash_week')} value={<Money amount={cash.week} />} /></Card>
         <Card padding="sm">
-          <Stat size="sm" icon="activity" label={t('admin.officers.stat.runs')} value={formatNumber(o.stats.runs)}
-            hint={t('admin.officers.stat.runs_hint', { completed: o.stats.completed, failed: o.stats.failed, abandoned: o.stats.abandoned })} />
+          <Stat size="sm" icon="activity" label={t('admin.officers.stat.runs')} value={formatNumber(stats.runs)}
+            hint={t('admin.officers.stat.runs_hint', { completed: stats.completed, failed: stats.failed, abandoned: stats.abandoned })} />
         </Card>
       </div>
 
       <Grid cols="1fr 1fr" gap={4} align="stretch">
-        <Card title={t('admin.officers.suspension')} icon="lock" highlight={o.suspension.suspended ? 'danger' : undefined}>
+        <Card title={t('admin.officers.suspension')} icon="lock" highlight={suspension.suspended ? 'danger' : undefined}>
           <div className="oversight-off-susp">
-            {o.suspension.suspended ? (
+            {suspension.suspended ? (
               <>
-                <div className="oversight-off-susp__state is-on">{t('admin.officers.suspended_until', { date: formatDateTime(o.suspension.untilTs) })}</div>
+                <div className="oversight-off-susp__state is-on">{t('admin.officers.suspended_until', { date: fullDate(suspension.untilTs) })}</div>
                 <div className="oversight-off-soft">{t('admin.officers.suspended_text')}</div>
                 <Row gap={2}>
                   <Button variant="secondary" icon="check" onClick={() => setUnsuspend(true)} disabled={busy}>{t('admin.officers.unsuspend')}</Button>
@@ -202,22 +210,50 @@ function Detail({ citizenid }: { citizenid: string }) {
             ) : (
               <>
                 <div className="oversight-off-susp__state">{t('admin.officers.not_suspended')}</div>
-                <div className="oversight-off-soft">{t('admin.officers.stat.flag_hint', { flagged: o.stats.flagged, voided: o.stats.voided })}</div>
+                <div className="oversight-off-soft">{t('admin.officers.stat.flag_hint', { flagged: stats.flagged, voided: stats.voided })}</div>
                 <Row gap={2}>
                   <Button variant="danger" icon="lock" onClick={() => setSuspend({ open: true, days: 7, reason: '' })} disabled={busy}>{t('admin.officers.suspend')}</Button>
                 </Row>
               </>
             )}
+            <div className="oversight-off-susp-hist">
+              <span className="oversight-off-susp-hist__title">{t('admin.officers.susp_history')}</span>
+              {suspensions.length ? (
+                <ul>
+                  {suspensions.map((h) => (
+                    <li key={h.id}>
+                      <Badge size="sm" tone={h.action === 'unsuspend' ? 'success' : h.action === 'autoSuspend' ? 'warning' : 'danger'}>
+                        {hasKey(`admin.officers.susp_action.${h.action}`) ? t(`admin.officers.susp_action.${h.action}`) : h.action}
+                      </Badge>
+                      <span className="oversight-off-susp-hist__main">
+                        <span className="oversight-off-susp-hist__line">
+                          {h.days ? <strong className="cp-num">{t('admin.officers.susp_days', { n: h.days })}</strong> : null}
+                          <span className="oversight-off-soft">
+                            {t('admin.officers.susp_by', {
+                              who: h.action === 'autoSuspend' ? t('admin.officers.susp_system') : h.actor === 'console' ? t('admin.actor.console') : (h.actorName || h.actor),
+                              date: fullDate(h.createdAt),
+                            })}
+                          </span>
+                        </span>
+                        {h.reason ? <span className="oversight-off-susp-hist__reason" title={h.reason}>{h.reason}</span> : null}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <span className="oversight-off-soft">{t('admin.officers.susp_none')}</span>
+              )}
+            </div>
           </div>
         </Card>
         <Card title={t('admin.officers.badges')} icon="medal" subtitle={t('admin.officers.badges_count', { n: badges.length })}>
           {badges.length ? (
             <div className="oversight-off-badges">
               {badges.map((b) => (
-                <span key={b.id} className="oversight-off-badge" title={b.earnedAt}>
+                <span key={b.id} className="oversight-off-badge" title={String(b.earnedAt ?? '')}>
                   <Icon name="medal" size={14} />
                   <span>{b.label}</span>
-                  <span className="oversight-off-soft">{b.earnedAt}</span>
+                  <span className="oversight-off-soft">{badgeDate(b.earnedAt)}</span>
                 </span>
               ))}
             </div>

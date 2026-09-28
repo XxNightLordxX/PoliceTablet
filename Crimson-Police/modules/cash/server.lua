@@ -20,7 +20,9 @@
 --   CP.Cash.compute(run, p) -> amount, breakdown       breakdown = RunResult.cash { B, mTier, mMod, amount, status }
 --       status: 'held' for a completed, flagged, non-test row, else 'none'. Reads p.result (set by the engine).
 --   CP.Cash.pay(rowId) -> status|nil                   'paid'|'capped'|'unfunded'|'pending'|'paying'|nil (nothing done)
---   CP.Cash.payPending(src) -> n                       pays the player's pending rows (also run 5 s after login)
+--   CP.Cash.payPending(src) -> n                       pays the player's pending rows, and completed mission rows left
+--                                                      'none' with cash (never claimed); run 5 s after login and once
+--                                                      for every online player 15 s after the resource starts
 --   CP.Cash.release(rowId) -> status|nil               after an approved flag (flagged already 0): pay now or pending
 --   CP.Cash.forfeit(rowId) -> boolean                  a voided row's held/pending cash -> forfeited
 --   CP.Cash.range(missionType, members) -> min, max    board card range per officer: missionType is a type key or
@@ -39,6 +41,7 @@ local BOSS_ID = 'weekly_boss_kingpin'
 local BOSS_KEY = 'weekly_boss'
 local PENDING_DELAY_MS = 5000          -- Renewed-Banking loads the player's history cache asynchronously
 local FORFEIT_EVERY_MS = 10 * 60 * 1000
+local STARTUP_SWEEP_MS = 15000         -- pending rows of players already online when the resource starts
 local LOCK_WAIT_MS = 15000
 local FINAL = { paid = true, capped = true, unfunded = true, forfeited = true }
 
@@ -228,6 +231,8 @@ local function refundSociety(account, amount)
     return false
 end
 
+local payClaimed
+
 -- Pays one claimed-or-claimable row. Runs under the citizenid lock.
 local function payRow(row)
     local rowId = math.floor(CP.U.num(row.id))
@@ -266,6 +271,21 @@ local function payRow(row)
         return nil
     end
 
+    -- From here the row is 'paying'. A Lua error before any money moved puts it back to pending (it would
+    -- otherwise be stuck for a manual check); after money may have moved it stays paying.
+    local progress = { moved = false }
+    local okP, res = pcall(payClaimed, row, rowId, cid, src, progress)
+    if okP then return res end
+    if not progress.moved then
+        backToPending(rowId, 'error before any money moved: ' .. tostring(res))
+        return 'pending'
+    end
+    CP.err(TAG, 'row %d: error after money may have moved; it stays paying for a manual check: %s', rowId, tostring(res))
+    return 'paying'
+end
+
+-- The claimed part of payRow (row is 'paying'). progress.moved = true right before the first call that can move money.
+payClaimed = function(row, rowId, cid, src, progress)
     local bd = CP.U.jsonField(row.breakdown)
     local amount = amountOf(row, bd)
     local capped = false
@@ -301,8 +321,12 @@ local function payRow(row)
     local account = dept and dept.societyAccount
     local withdrew = false
     if amount > 0 and society then
-        local okW = type(account) == 'string' and account ~= '' and CP.Banking and CP.Banking.withdrawSociety
-            and CP.Banking.withdrawSociety(account, amount)
+        local okW = false
+        if type(account) == 'string' and account ~= '' and CP.Banking and CP.Banking.withdrawSociety then
+            progress.moved = true
+            okW = CP.Banking.withdrawSociety(account, amount) == true
+            if not okW then progress.moved = false end
+        end
         if not okW then
             setFinal(rowId, 'unfunded', 0)
             CP.warn(TAG, 'row %d unfunded: society account %s could not cover %d', rowId, tostring(account), amount)
@@ -319,6 +343,7 @@ local function payRow(row)
 
     if amount > 0 then
         local moneyAccount = (Config.Cash and Config.Cash.account) or 'bank'
+        progress.moved = true
         local okMoney = CP.Qbx.addMoney and CP.Qbx.addMoney(src, moneyAccount, amount, 'crimson-police-mission')
         if not okMoney then
             if withdrew then
@@ -331,6 +356,7 @@ local function payRow(row)
                 return 'paying'
             end
             CP.err(TAG, 'row %d: Qbox AddMoney(%s, %d) failed for %s', rowId, moneyAccount, amount, cid)
+            progress.moved = false
             backToPending(rowId, 'Qbox AddMoney failed')
             return 'pending'
         end
@@ -379,9 +405,14 @@ function Cash.payPending(src)
     local info = CP.Qbx and CP.Qbx.getInfo and CP.Qbx.getInfo(src)
     if not info or not info.citizenid then return 0 end
     db()
+    -- 'pending' rows, plus completed mission rows still 'none' although they carry cash (the engine's pay never
+    -- ran or was skipped, e.g. a crash right after the row insert): no money moved on either, and pay() claims
+    -- them like any other row. Manual award and goal rows never carry cash.
     local ok, rows = pcall(MySQL.query.await, [[
         SELECT id FROM cp_mission_runs
-        WHERE citizenid = ? AND cash_status = 'pending' AND state = 'completed' AND flagged = 0 AND voided = 0
+        WHERE citizenid = ? AND state = 'completed' AND flagged = 0 AND voided = 0
+          AND (cash_status = 'pending'
+               OR (cash_status = 'none' AND mission_type NOT IN ('manual_award', 'goal') AND cash_base > 0))
         ORDER BY id
     ]], { info.citizenid })
     if not ok then
@@ -576,7 +607,25 @@ CreateThread(function()
     end
 end)
 
+-- After a resource (re)start, officers who are already online never fire PlayerLoaded again: pay their
+-- pending rows once, after Renewed-Banking has had time to (re)build its caches.
+local function startupSweep()
+    if not (CP.Qbx and CP.Qbx.getOnlinePlayers) then return 0 end
+    local n = 0
+    for _, src in ipairs(CP.Qbx.getOnlinePlayers()) do
+        n = n + (Cash.payPending(src) or 0)
+    end
+    return n
+end
+
+CreateThread(function()
+    Wait(STARTUP_SWEEP_MS)
+    local ok, err = pcall(startupSweep)
+    if not ok then CP.err(TAG, 'pending payments sweep at start failed: %s', tostring(err)) end
+end)
+
 -- Test hooks (not part of the contract).
 Cash._forfeitureJob = forfeitureJob
+Cash._startupSweep = startupSweep
 Cash._onLoaded = onLoaded
 Cash._fmtMoney = fmtMoney

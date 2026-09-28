@@ -9,7 +9,8 @@
 // Business Check log panel (view.log) and Abandon behind a confirm dialog. Empty state when no run.
 //
 // Data:    request 'getRun' → ActiveMissionView | null (ARCHITECTURE §9.4; optional extras in
-//          src/types/run_ui.ts), live via push topic 'run' (the view, or nil when the run ended).
+//          src/types/run_ui.ts), live via push topic 'run' (the view is applied as it is; nil — the run
+//          ended — arrives as a missing field and triggers a getRun), plus a 15 s safety poll.
 // Actions: 'server:abandon' (payload = runId) · client actions 'setGps', 'recalcRoute' and
 //          'logResult' { point, choice } (the route and log toasts come from Lua; errors are toasted here).
 // Text:    locales/parts/run_ui.json (run.*), plus the foundation's hud.* / common.* / tier.* keys.
@@ -85,7 +86,7 @@ function HeroStat({ icon, label, children, hint, tone, className }: { icon: Icon
   );
 }
 
-function Hero({ view, session, stamp }: { view: ActiveMissionData; session: Session; stamp: unknown }) {
+function Hero({ view, session, stamp, routeCard }: { view: ActiveMissionData; session: Session; stamp: unknown; routeCard: boolean }) {
   const inProgress = view.state === 'in_progress';
   const payLower = inProgress && tierIndex(view.payTier) >= 0 && tierIndex(view.tier) >= 0 && tierIndex(view.payTier) < tierIndex(view.tier);
   const hasTimer = view.remaining !== null && view.remaining !== undefined;
@@ -96,6 +97,7 @@ function Hero({ view, session, stamp }: { view: ActiveMissionData; session: Sess
   if (hasTimer && view.paused) timerHint = t('run.hero.timer_paused');
   else if (hasTimer) timerHint = t('run.hero.timer_running');
   else if (showStart) timerHint = t('run.hero.start_hint');
+  else if (inProgress) timerHint = t('run.hero.timer_none');
   else timerHint = t('run.hero.timer_waiting');
 
   return (
@@ -128,8 +130,8 @@ function Hero({ view, session, stamp }: { view: ActiveMissionData; session: Sess
               {view.modifier.label}
             </Badge>
           ) : null}
-          {inProgress && view.route?.status === 'arrived' ? <Badge tone="success" icon="mapPin">{t('run.hero.at_start')}</Badge> : null}
-          {inProgress && (!view.route || view.route.status === 'disabled') ? <Badge tone="neutral" icon="navigation">{t('hud.route.disabled')}</Badge> : null}
+          {inProgress && !routeCard && view.route?.status === 'arrived' ? <Badge tone="success" icon="mapPin">{t('run.hero.at_start')}</Badge> : null}
+          {inProgress && !routeCard && (!view.route || view.route.status === 'disabled') ? <Badge tone="neutral" icon="navigation">{t('hud.route.disabled')}</Badge> : null}
           {view.isBoss ? <Badge tone="accent" variant="outline" icon="flame">{t('run.hero.boss')}</Badge> : null}
           {view.operationId ? <Badge tone="primary" variant="outline" icon="globe">{t('run.hero.operation')}</Badge> : null}
         </div>
@@ -290,7 +292,7 @@ function ObjectivesCard({ view }: { view: ActiveMissionData }) {
       {pending ? (
         <p className="run_ui-objectives__pending">
           <Icon name="info" size={14} />
-          <span>{t('hud.objectives_pending')}</span>
+          <span>{t('run.objectives.pending')}</span>
         </p>
       ) : null}
       {objectives.length ? (
@@ -337,7 +339,8 @@ function PartnerRow({ p, me }: { p: RunPartner; me: boolean }) {
 function PartnersCard({ view, session }: { view: ActiveMissionData; session: Session }) {
   const partners = asArray(view.partners);
   const active = partners.filter((p) => p.status === 'active').length;
-  const departments = new Set(partners.filter((p) => p.status === 'active').map((p) => p.departmentShort)).size;
+  // Departments still on the run (the cross-department bonus needs 2+); a missing tag is not a department.
+  const departments = new Set(partners.filter((p) => p.status === 'active' && !!p.departmentShort).map((p) => p.departmentShort)).size;
   return (
     <Card
       title={t('run.partners.title')}
@@ -403,7 +406,7 @@ function LogPanel({ log, sending, sent, onPick }: { log: RunLog; sending: string
 export default function ActiveMission() {
   const session = useSession();
   const navigate = useNavigate();
-  const { data, loading, error, refetch, setData } = useRequest<ActiveMissionData | null>('getRun', {}, { pushTopic: 'run', pollMs: POLL_MS });
+  const { data, loading, error, refetch, setData } = useRequest<ActiveMissionData | null>('getRun', {}, { pollMs: POLL_MS });
   const { run, busy } = useAction();
   const [confirmAbandon, setConfirmAbandon] = useState(false);
   const [confirmRecalc, setConfirmRecalc] = useState(false);
@@ -415,9 +418,13 @@ export default function ActiveMission() {
   // (a local copy of the view would restart the timer from its stale value).
   const [recalcsOverride, setRecalcsOverride] = useState<number | null>(null);
 
-  // A 'run' push carrying the view (or null when the run ended) applies at once; the refetch confirms it.
-  usePush<ActiveMissionData | null>('run', (view) => {
-    if (view === null || (view && typeof view === 'object' && typeof view.runId === 'string')) setData(view);
+  // Push topic 'run' carries this officer's full view (CP.Runs.view), applied as it is: no extra getRun
+  // per push (the RunBar already refetches on every push and getRun allows 6 calls per second). When
+  // the run ended the push carries nil, which reaches the NUI as a missing field (undefined, not null):
+  // ask the server then, so the empty state (or a new run) shows at once.
+  usePush<ActiveMissionData | null | undefined>('run', (view) => {
+    if (view && typeof view === 'object' && typeof view.runId === 'string') setData(view);
+    else void refetch();
   });
 
   // Show the loading block only for the very first fetch (later refetches keep the current content).
@@ -490,7 +497,9 @@ export default function ActiveMission() {
     const res = await run<AbandonResult>('server:abandon', view.runId);
     setConfirmAbandon(false);
     if (res.ok) setData(null);
-    else void refetch();
+    // Also after a success: the refetch supersedes any getRun still in flight from before the abandon
+    // (useRequest applies only the latest reply), so an old view can never bring the run back.
+    void refetch();
   };
 
   if (!view) {
@@ -523,7 +532,10 @@ export default function ActiveMission() {
   // The route card shows while this participant still heads to the start; once In progress an arrived or
   // untracked route is a chip in the hero instead.
   const routing = !!view.route && (view.route.status === 'on' || view.route.status === 'off');
-  const showRoute = view.state === 'accepted' || routing;
+  // A test run without the start route ('disabled'): the card (Set GPS) stays until this officer arrives.
+  const mine = asArray(view.partners).find((p) => isMe(p, view, session));
+  const untracked = view.route?.status === 'disabled' && !!mine && mine.status === 'active' && !mine.arrived;
+  const showRoute = view.state === 'accepted' || routing || untracked;
 
   const abandonMessage = (
     <div className="run_ui-confirm">
@@ -555,7 +567,7 @@ export default function ActiveMission() {
         </div>
       ) : null}
 
-      <Hero view={view} session={session} stamp={stamp} />
+      <Hero view={view} session={session} stamp={stamp} routeCard={showRoute} />
 
       {view.radioSilence ? (
         <div className="run_ui-notice run_ui-notice--accent" role="note">

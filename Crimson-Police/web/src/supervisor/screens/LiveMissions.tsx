@@ -2,7 +2,7 @@
 // Runs involving the supervisor's department: participants, mission type, drawn mission, tier and time
 // left (counting down locally). Force recall ends one officer's run as Abandoned with no cooldown.
 // Data: callback sup:getLiveRuns (modules/admin, polled every 10 s) · action server:sup:forceRecall { runId, src, reason }.
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Badge, Button, Card, ConfirmDialog, Countdown, EmptyState, ErrorState, Icon, IconButton, LoadingBlock, Row, Screen, TierBadge,
 } from '../../shared/components';
@@ -112,9 +112,14 @@ export default function SupLiveMissions() {
   const canRecall = !!data?.canRecall && can('forceRecall');
   const isAdminView = !session.officer;
 
+  // Every answer (poll, push or refresh) re-syncs the local countdowns, also when `remaining` did not
+  // change (a paused test timer), so a countdown never runs ahead of the server.
+  useEffect(() => {
+    if (data) setFetchKey((k) => k + 1);
+  }, [data]);
+
   const reload = async () => {
     await refetch();
-    setFetchKey((k) => k + 1);
   };
 
   const confirmRecall = async (reason: string) => {

@@ -98,6 +98,9 @@
 .oversight-live-person__sub {
   font-size: var(--cp-fs-xs);
   color: var(--cp-subtle);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .oversight-live-person__status {
   display: inline-flex;

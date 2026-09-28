@@ -153,6 +153,9 @@
   text-overflow: ellipsis;
 }
 .run_ui-stat__value .cp-points__suffix { font-size: var(--cp-fs-sm); font-weight: 600; color: var(--cp-muted); }
+/* A wide cash range (admin payouts go up to $25,000) wraps after its en dash instead of being cut off. */
+.run_ui-stat--wide .run_ui-stat__value,
+.run_ui-stat--wide .run_ui-stat__value .cp-money { white-space: normal; line-height: 1.2; }
 .run_ui-stat__hint {
   font-size: var(--cp-fs-xs);
   color: var(--cp-subtle);

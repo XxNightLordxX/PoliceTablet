@@ -23,6 +23,18 @@ local function printed(needle)
     return false
 end
 
+-- ── MariaDB client charset: oxmysql talks utf8mb4; the harness' mysql CLI would default to latin1 and
+-- mangle every non-ASCII string (the UTF-8 clipping tests below need the real encoding) ────────────
+do
+    local realPopen = io.popen
+    io.popen = function(cmd, mode)
+        if type(cmd) == 'string' and cmd:match('^mysql %-uroot ') and not cmd:find('default%-character%-set', 1) then
+            cmd = cmd:gsub('^mysql %-uroot ', 'mysql --default-character-set=utf8mb4 -uroot ', 1)
+        end
+        return realPopen(cmd, mode)
+    end
+end
+
 -- ── natives the harness does not have ──────────────────────────────────────
 local convars = {}
 _G.GetConvar = function(name, default) local v = convars[name]; if v == nil then return default end return v end
@@ -1004,6 +1016,112 @@ H.ok(ex.data.csv:find("'=HYPERLINK", 1, true) ~= nil, 'formula cells neutralised
 H.ok(ex.data.csv:find('""quoted""', 1, true) ~= nil, 'quotes escaped')
 H.eq(cb('admin:exportAudit', 1, {}).error, 'err.rate_limited', 'export rate limited')
 H.clockMs = H.clockMs + 5000
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- 10. review fixes: live participants, UTF-8 clipping, test command, eligibility, history, toasts
+-- ════════════════════════════════════════════════════════════════════════════
+resetDb()
+for k in pairs(notifies) do notifies[k] = nil end
+H.clockMs = H.clockMs + 120000
+
+-- A reviewer still ON the run has no row of their own yet: it is still their run.
+local L1 = 'cccccccc-3333-4000-8000-000000000001'
+newRun(L1, 'gang_shootout', { participant(2, 'sast'), participant(3, 'sast', 'left') })
+local liveRow = addRow({ run_uuid = L1, citizenid = 'OFF00003', state = 'failed', end_reason = 'downed', flagged = 1, flag_reason = 'speed', cash_status = 'none' })
+local q2 = cb('sup:getReviewQueue', 2)
+local seen2 = false
+for _, f in ipairs(q2.data.flagged) do if f.rowId == liveRow then seen2 = true end end
+H.eq(seen2, false, 'a flagged row of a run the supervisor is still on is not in their queue')
+local q7 = cb('sup:getReviewQueue', 7)
+local seen7 = false
+for _, f in ipairs(q7.data.flagged) do if f.rowId == liveRow then seen7 = true end end
+H.eq(seen7, true, 'another supervisor of the department sees it')
+ok, res = act('server:sup:reviewFlagged', 2, { rowId = liveRow, decision = 'approve', reason = 'I was there' })
+H.eq(res, 'err.own_run', 'a participant still on the run cannot approve it')
+ok, res = act('server:sup:reviewFlagged', 2, { rowId = liveRow, decision = 'void', reason = 'I was there' })
+H.eq(res, 'err.own_run', 'nor void it')
+local adminFlaggedLive = cb('admin:getFlagged', 1).data.flagged
+H.ok(#adminFlaggedLive >= 1, 'admins not on the run see it')
+
+H.clockMs = H.clockMs + 21000
+ok, res = act('server:dispute', 3, { rowId = liveRow, reason = 'Lag spike, not a teleport' })
+H.eq(ok, true, 'the officer who left disputes the flagged row')
+local liveDispute = res.disputeId
+local supList = CP.Disputes.forSupervisor(2)
+local listed = false
+for _, d in ipairs(supList) do if d.id == liveDispute then listed = true end end
+H.eq(listed, false, 'the dispute is hidden from a supervisor still on that run')
+ok, res = act('server:sup:handleDispute', 2, { disputeId = liveDispute, decision = 'approve', reason = 'ok' })
+H.eq(res, 'err.own_run', 'and they cannot answer it')
+H.eq(H.sql('SELECT status FROM cp_disputes WHERE id = ?', { liveDispute })[1].status, 'open', 'the dispute stays open')
+
+-- A supervisor who was not on the run answers it: one toast for the officer (no double "approved").
+for k in pairs(notifies) do notifies[k] = nil end
+ok, res = act('server:sup:handleDispute', 7, { disputeId = liveDispute, decision = 'approve', reason = 'Lag confirmed' })
+H.eq(ok, true, 'another supervisor approves the dispute')
+H.eq(H.sql('SELECT flagged FROM cp_mission_runs WHERE id = ?', { liveRow })[1].flagged, 0, 'the row is approved')
+local toasts3 = {}
+for _, n in ipairs(notifies) do if n.src == 3 then toasts3[#toasts3 + 1] = n.key end end
+H.eq(#toasts3, 1, 'the officer gets exactly one toast')
+H.eq(toasts3[1], 'admin.notice.dispute_approved', 'the dispute toast, not a second run_approved one')
+runs[L1] = nil
+
+-- UTF-8: clip on character boundaries (utf8mb4 columns count characters; a cut sequence is refused).
+local accented = string.rep('a', 254) .. string.rep('é', 20)
+local uid = co(CP.Admin.audit, 0, 'console', 'audit', 'utf8Test', string.rep('ü', 80), nil, nil, accented)
+H.ok(type(uid) == 'number' and uid > 0, 'an audit entry with a long accented reason is written')
+local ur = H.sql('SELECT CHAR_LENGTH(reason) AS c, CHAR_LENGTH(target) AS t, reason FROM cp_audit WHERE id = ?', { uid })[1]
+H.eq(ur.c, 255, 'reason clipped to 255 characters')
+H.eq(ur.t, 64, 'target clipped to 64 characters')
+H.eq(ur.reason:sub(-2), 'é', 'the last character is whole')
+local emojiId = co(CP.Admin.audit, 0, 'console', 'audit', 'utf8Test', nil, nil, nil, string.rep('😀', 300))
+H.eq(H.sql('SELECT CHAR_LENGTH(reason) AS c FROM cp_audit WHERE id = ?', { emojiId })[1].c, 255, '4-byte characters: 255 of them')
+local badId = co(CP.Admin.audit, 0, 'console', 'audit', 'utf8Test', nil, nil, nil, 'abc\195')
+H.eq(H.sql('SELECT reason FROM cp_audit WHERE id = ?', { badId })[1].reason, 'abc', 'an invalid byte is dropped, not stored')
+local failRow = addRow({ run_uuid = 'cccccccc-3333-4000-8000-000000000002', citizenid = 'OFF00003', state = 'failed', end_reason = 'mission_failed' })
+H.clockMs = H.clockMs + 21000
+ok, res = act('server:dispute', 3, { rowId = failRow, reason = string.rep('ł', 300) })
+H.eq(ok, true, 'a dispute with a long non-ASCII reason is filed')
+H.eq(H.sql('SELECT CHAR_LENGTH(reason) AS c FROM cp_disputes WHERE id = ?', { res.disputeId })[1].c, 255, 'dispute reason clipped to 255 characters')
+H.eq(#require('cjson').decode('"' .. ('é'):rep(3) .. '"'), 6, 'cjson sanity')
+
+-- /CrimsonPoliceAdmin test goes through CP.Testing.command when it exists (accepted testers, 'auto').
+CP.Testing.command = function(src, args) record('testCommand', src, args); return true end
+command(1, 'test', 'Gang_Shootout', 'auto', '2')
+local tc = lastCall('testCommand')
+H.eq(tc[1], 1, 'test command by the admin')
+H.eq(tc[2][1], 'gang_shootout', 'mission id normalised to the stored id')
+H.eq(tc[2][2], 'auto', "tier 'auto' passed on")
+H.eq(tc[2][3], '2', 'location passed on')
+H.eq(lastNotify(1).key, 'admin.cmd.test_started', 'test started reply')
+command(1, 'test', 'gang_shootout', 'heavy', '2', 'extra')
+H.eq(lastNotify(1).key, 'admin.cmd.test_bad_arg', 'too many test arguments refused')
+CP.Testing.command = nil
+command(0, 'payout', 'mission', 'GANG_SHOOTOUT', '1500', 'Upper', 'case')
+H.eq(lastCall('setMission')[2], 'gang_shootout', 'payout mission finds a mission typed in upper case')
+
+-- Cross-Department eligibility follows CP.Operations.eligible when it exists.
+CP.Operations.eligible = function(def) return def.id == 'beat_patrol' end
+local ml2 = cb('getMissionList', 2)
+local el = {}
+for _, m in ipairs(ml2.data.missions) do el[m.id] = m.crossDeptEligible end
+H.eq(el.beat_patrol, true, 'eligible per CP.Operations')
+H.eq(el.gang_shootout, false, 'not eligible per CP.Operations')
+CP.Operations.eligible = nil
+
+-- Suspension history on the officer record.
+ok = act('server:admin:suspend', 1, { citizenid = 'OFF00006', days = 3, reason = 'Farming é' })
+H.eq(ok, true, 'suspended')
+ok = act('server:admin:suspend', 1, { citizenid = 'OFF00006', days = 0, reason = 'Appeal accepted' })
+H.eq(ok, true, 'lifted')
+local rec = cb('admin:getOfficer', 1, { citizenid = 'OFF00006' }).data
+H.eq(#rec.suspensions, 2, 'two history entries')
+H.eq(rec.suspensions[1].action, 'unsuspend', 'newest first')
+H.eq(rec.suspensions[2].action, 'suspend', 'then the suspension')
+H.eq(rec.suspensions[2].days, 3, 'with its length')
+H.eq(rec.suspensions[2].reason, 'Farming é', 'and its reason')
+H.eq(rec.suspensions[2].actorName, 'Ada Min', 'and who did it')
+H.eq(rec.suspension.suspended, false, 'not suspended now')
 
 -- ════════════════════════════════════════════════════════════════════════════
 -- 9. every locale key used by the Lua files exists in the part

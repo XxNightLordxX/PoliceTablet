@@ -32,23 +32,31 @@ function useDebounced<T>(value: T, ms: number): T {
   return v;
 }
 
-function copyText(text: string, el: HTMLTextAreaElement | null): boolean {
+/**
+ * Copy the CSV. FiveM's CEF usually refuses navigator.clipboard (the promise rejects), so the selected
+ * textarea + execCommand('copy') goes first; the async API is only a fallback whose result is awaited.
+ * The text stays selected either way, so Ctrl+C works when both fail.
+ */
+async function copyText(text: string, el: HTMLTextAreaElement | null): Promise<boolean> {
+  if (el) {
+    el.focus();
+    el.select();
+    try {
+      if (document.execCommand('copy')) return true;
+    } catch {
+      /* try the async API below */
+    }
+  }
   try {
-    if (navigator.clipboard && window.isSecureContext) {
-      void navigator.clipboard.writeText(text);
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+      await navigator.clipboard.writeText(text);
       return true;
     }
   } catch {
-    /* fall back below */
+    /* not allowed here */
   }
-  if (!el) return false;
-  el.focus();
-  el.select();
-  try {
-    return document.execCommand('copy');
-  } catch {
-    return false;
-  }
+  if (el) el.select();
+  return false;
 }
 
 export default function AdminAudit() {
@@ -70,7 +78,13 @@ export default function AdminAudit() {
     return f;
   }, [category, action, actorQ, from, to, page]);
 
-  useEffect(() => setPage(1), [category, action, actorQ, from, to]);
+  // A filter change goes back to page 1 before the next fetch (an effect would first fetch the old page).
+  const filterKey = `${category}|${action}|${actorQ}|${from}|${to}`;
+  const [shownKey, setShownKey] = useState(filterKey);
+  if (shownKey !== filterKey) {
+    setShownKey(filterKey);
+    setPage(1);
+  }
 
   const { data, loading, error, refetch } = useRequest<AuditPage>('admin:getAudit', filters);
   const [exporting, setExporting] = useState(false);
@@ -93,9 +107,9 @@ export default function AdminAudit() {
     else toast('error', t(res.error || 'err.internal'));
   };
 
-  const copy = () => {
+  const copy = async () => {
     if (!exported) return;
-    if (copyText(exported.csv, area.current)) toast('success', t('admin.audit.copied'));
+    if (await copyText(exported.csv, area.current)) toast('success', t('admin.audit.copied'));
     else toast('warning', t('admin.audit.copy_failed'));
   };
 
@@ -211,7 +225,7 @@ export default function AdminAudit() {
         footer={
           <>
             <Button variant="ghost" onClick={() => setExported(null)}>{t('common.close')}</Button>
-            <Button variant="primary" icon="check" onClick={copy}>{t('admin.audit.copy')}</Button>
+            <Button variant="primary" icon="check" onClick={() => void copy()}>{t('admin.audit.copy')}</Button>
           </>
         }
       >

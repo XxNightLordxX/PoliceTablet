@@ -98,6 +98,31 @@ Each Lua file's header comment documents its public API, net names and rules.
 - Departments: the theme preview is the department's `--cp-*` set (`themeVars`) on a mini tablet, read-only.
 - Audit dates are `YYYY-MM-DD` strings (server local days); the server also accepts unix seconds.
 
+### Review pass (adversarial review)
+- **Own run = also a live run.** A participant's row is written only when they leave, so a supervisor still ON a run
+  had no row yet and could approve/void a partner's flagged row (or answer the dispute about it). CP.Admin
+  (`ownRunCheck`, the flagged lists) and CP.Disputes (`handle`, the review lists, the new-dispute toasts) now also treat
+  "citizenid is a participant of `CP.Runs.get(runUuid)`" as their own run (`err.own_run`; hidden from their queue).
+- **UTF-8-safe clipping.** `CP.U.clip` cuts bytes; the cp_* columns are utf8mb4 and MariaDB strict mode refuses a cut
+  sequence (error 1366), so an accented 255-character reason made the audit/dispute insert fail. The three modules clip
+  by characters with a local `clip()` (invalid bytes dropped first); webhook texts too (Discord counts characters).
+- `/CrimsonPoliceAdmin test` goes through `CP.Testing.command` when present (it adds the testers who accepted this
+  admin's invitations and accepts tier `auto`); more than `[tier] [location]` is refused. Mission ids in `payout
+  mission` / `test` are matched case-insensitively.
+- `getMissionList.crossDeptEligible` uses `CP.Operations.eligible(def)` when present (the rule the launch applies).
+- A dispute approval of a flagged row calls `approveFlagged(..., { quiet = true })`: one toast for the officer.
+- New-dispute toasts respect `Config.Permissions.supervisor.handleDisputes` (off → admins are told instead).
+- `admin:getOfficer` adds `suspensions` (the last 10 `suspend` / `unsuspend` / `autoSuspend` audit entries) for the
+  spec's "suspensions"; the Officers screen shows them under Suspension (dates with the year).
+- UI: Review Queue tables use fixed column widths (a 64-character name pushed Approve/Void off the table); Live Missions
+  countdowns resync on every poll (a paused timer no longer runs ahead); the audit Copy button uses the selected
+  textarea + `execCommand('copy')` first (FiveM's CEF rejects `navigator.clipboard`) and only reports success when it
+  worked; a filter change goes back to page 1 without first fetching the old page; department cards/preview show the
+  initials when the logo is missing or fails; Mission List says "No missions are loaded" when the list is empty.
+- Mocks: every answer goes through `luaify()` (empty lists as `{}`, nil fields left out, like Lua sends them);
+  `?oversight=edge` (64-character names, 32-character callsigns, missing callsigns, long labels/reasons, huge numbers)
+  and `?oversight=empty` (every list empty) for screenshots.
+
 ## Response shapes (defined here; TS in `web/src/types/oversight.ts`)
 - `getMissionList` → `{ missions = { { id, label, type, typeLabel, source, builtin, version, difficulty, minOfficers,
   maxOfficers, basePayout, payoutSource, cooldown, timeLimit, locations, enabled, isBoss, departments, runningNow =
@@ -115,7 +140,8 @@ Each Lua file's header comment documents its public API, net names and rules.
   xp, suspendedUntil, online } }, query }` (25 max; empty query lists officers by name)
 - `admin:getOfficer { citizenid }` → `{ citizenid, name, callsign, rank, department, departmentShort, departmentLabel,
   xp, level, streakDays, badges, cash = { total (incl. archive), week }, stats = { runs, completed, failed, abandoned,
-  flagged, voided }, suspension = { suspended, untilTs }, runs (25 newest), disputes (failed-run disputes),
+  flagged, voided }, suspension = { suspended, untilTs }, suspensions = { { id, action, actor, actorName, role, days,
+  reason, createdAt } } (10 newest), runs (25 newest), disputes (failed-run disputes),
   online, own, known, maxAward }`
 - `admin:getDepartments` → `{ departments = { { key, label, short, jobs, supervisorGrade, societyAccount, theme,
   logo|nil, members, suspended, onDuty, societyBalance|nil } }, cashSource, showSociety }`
@@ -136,11 +162,20 @@ Each Lua file's header comment documents its public API, net names and rules.
   prefer the automatic resolution.
 - **leaderboard (Profile)**: `canDispute` can use `CP.Disputes.eligible(row, citizenid, os.time())` plus "no dispute
   row yet" so the button matches the server's rules exactly (one dispute per row, decision final).
+- **shared (CP.U.clip)**: clips bytes, so any module clipping user text (names, reasons) can cut a UTF-8 character
+  and MariaDB strict mode then refuses the whole insert (error 1366). A character-safe clip in shared/utils.lua would fix
+  every caller; this slice uses its own.
+- **permissions**: `CP.Permissions.canReviewRun` only looks at cp_mission_runs rows; it could also check
+  `CP.Runs.get(runUuid)` participants (this slice does it on top).
+- **migrations**: an index on `cp_audit (action, target)` would keep the Review Queue's `runFlagged` lookup and the
+  officer suspension history fast once the audit table grows (180 days).
+- **tests/harness.lua**: the mysql CLI runs with the latin1 client charset, unlike oxmysql (utf8mb4); oversight_spec
+  adds `--default-character-set=utf8mb4` for its own process.
 - **locale merge**: this part copies `common.*`, `ui.*`, `result.cash_status.*` and shared `err.*` texts verbatim;
   `err.reason_required`, `err.unknown_mission`, `err.unknown_officer`, `err.invalid_points` use economy.json's text.
 
 ## Tests
-`lua5.4 tests/run.lua oversight` — 629 assertions: audit/webhooks (clipping, role/category mapping, 429 retry,
+`lua5.4 tests/run.lua oversight` — 674 assertions: audit/webhooks (clipping, role/category mapping, 429 retry,
 disabled convars), every `/CrimsonPoliceAdmin` subcommand (console and in game), approve/void/voidRun with the
 department, own-run and switch checks, force recall, live runs, mission list, disputes (filing rules, lists,
 answers, forfeits, award failure), anticheat (duplicates, order, speed, buckets, rate limit, outside help,

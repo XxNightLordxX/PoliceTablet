@@ -5,9 +5,12 @@
 //
 // URL variants (screenshots and manual checks):
 //   ?board=normal (default) | unit | member | locked | busy | oncall | boss | bossused
-//          | operation | opjoined | oprunning | opwaiting | empty | error
-//   ?runv=none | accepted | offroute | progress | test | log | silence | boss
+//          | operation | opjoined | oprunning | opwaiting | opclosed | empty | error | edge
+//   ?runv=none | accepted | offroute | progress | test | log | silence | boss | untracked | edge
 //          (default: none, or progress while the dev panel's "run" toggle / ?run=1 is on)
+//   &oncall=1 puts the viewer (or, in a unit, someone in it) on a real call with any board variant.
+// 'edge' answers the way Lua's JSON encoding really arrives: empty lists as {} objects, nil fields
+// missing (undefined, not null), no optional extras, very long names and labels, missing callsigns.
 // A type accepted in browser mode starts a simulated run: accepted → In progress after ~10 s → the
 // objectives advance every few seconds → completed (result card). Abandon puts the type on cooldown.
 import { emitDebug, registerMock } from '../shared/nui';
@@ -148,7 +151,7 @@ const board = {
   typeCooldowns: {} as Record<string, Cooldown>,
   emptyPool: {} as Record<string, boolean>,
   busy: boardVariant === 'busy',
-  onCall: boardVariant === 'oncall',
+  onCall: boardVariant === 'oncall' || params.get('oncall') === '1',   // &oncall=1 combines it with any variant
   tod: 'tactical' as string | null,
   boss: ['boss', 'bossused'].includes(boardVariant),
   bossUsed: boardVariant === 'bossused',
@@ -166,7 +169,7 @@ const board = {
   }
   if (boardVariant === 'boss' || boardVariant === 'bossused') board.tod = 'tactical';
   if (boardVariant === 'normal') board.tod = 'patrol';
-  if (['operation', 'opjoined', 'oprunning', 'opwaiting'].includes(boardVariant)) {
+  if (['operation', 'opjoined', 'oprunning', 'opwaiting', 'opclosed'].includes(boardVariant)) {
     board.op = {
       id: 7, missionLabel: 'Hostage Rescue', missionType: 'tactical', missionTypeLabel: 'Tactical',
       description: 'Armed robbers are holding hostages inside a bank. Neutralise the hostiles, cut the hostages free and walk them out to the safe point. Watch your fire.',
@@ -180,6 +183,10 @@ const board = {
       board.op.runState = 'in_progress';
       board.op.joined = 6;
       board.op.joinEndsAt = null;
+    } else if (boardVariant === 'opclosed') {
+      // The launcher tapped Start now: still 'joining' for a moment, but the window is closed (no joinEndsIn).
+      board.op.joinEndsAt = null;
+      board.op.runState = null;
     } else if (boardVariant === 'opwaiting') {
       board.op.status = 'waiting';
       board.op.joined = 0;
@@ -231,7 +238,7 @@ function operationCard(): BoardOperation | null {
   if (!o) return null;
   const t = nowS();
   const open = o.status === 'joining' && o.joinEndsAt !== null && o.joinEndsAt > t;
-  if (o.status === 'joining' && !open) {
+  if (o.status === 'joining' && !open && boardVariant !== 'opclosed') {
     // The join window closed: the operation starts with whoever joined.
     o.status = 'running';
     o.runState = 'accepted';
@@ -428,6 +435,22 @@ function variantRun(kind: string): MockRunState | null {
     ];
     return r;
   }
+  if (kind === 'untracked') {
+    // A test run started with the start route off: In progress (a partner arrived), this officer still driving.
+    const tp = findType('training') as MockType;
+    const r = newRun(tp, missionOf('training', 'stolen_vehicle_takedown'), { partners: [me(), { ...TOM }], test: true });
+    startRun(r, 455);
+    r.partners = r.partners.map((p) => (p.src === ME_SRC ? { ...p, arrived: false } : { ...p, arrived: true }));
+    r.route = { status: 'disabled', secondsLeft: null, distance: null };
+    r.recalcsLeft = 0;
+    return r;
+  }
+  if (kind === 'edge') {
+    const tp = findType('tactical') as MockType;
+    const r = newRun(tp, missionOf('tactical', 'gang_shootout'));
+    startRun(r, 900);
+    return r;
+  }
   if (kind === 'boss') {
     const r = newRun(null, BOSS, { partners: [me(), { ...MARIA }, { ...DANA }], isBoss: true, missionType: 'tactical' });
     startRun(r, 766);
@@ -617,6 +640,60 @@ function finishRun(r: MockRunState, result: RunResult['result'], endReason: stri
   notify(result === 'completed' ? 'success' : 'info', L(`run.ended_${endReason}`), 250);
 }
 
+// ── edge answers (Lua-encoded shapes) ─────────────────────────────────────────
+
+/** BoardData as CP.Draw.boardCards encodes it for a unit of 4: nil fields missing, one very long label. */
+function edgeBoard(): unknown {
+  const t = nowS();
+  return {
+    cards: [
+      { key: 'patrol', label: 'Patrol and Community Engagement Operations Detail', points: 12000, cash: [25000, 31250], pool: 128, mode: 'unit',
+        busy: false, onCall: false, typeOfTheDay: true },
+      { key: 'training', label: 'Training', points: 100, cash: [455, 455], pool: 1, mode: 'unit', busy: false, onCall: false, typeOfTheDay: false,
+        locked: { reason: 'Christopher Montgomery-Wellington III has Training on cooldown for a very long time indeed', until: t + 3 * 3600 + 125 } },
+      { key: 'investigation', label: 'Investigation', points: 160, cash: [780, 975], pool: 0, mode: 'unit', busy: false, onCall: false, typeOfTheDay: false,
+        locked: { reason: L('board.locked_empty', { type: 'Investigation', size: 4 }) } },
+      { key: 'tactical', label: 'Tactical', points: 200, cash: [1040, 1300], pool: 5, mode: 'unit', busy: true, onCall: false, typeOfTheDay: false },
+    ],
+    unit: { size: 4, isLeader: true },
+    todMultiplier: 1.5,   // the optional extra requested from modules/draw (Config.Events.todMultiplier)
+  };
+}
+
+/** ActiveMissionView as CP.Runs.view encodes it: no extras (me, isBoss, startIn …), nil fields missing,
+ *  an objective list that arrived as {} and a crowd of partners with long names and no callsign. */
+function edgeView(r: MockRunState): unknown {
+  return {
+    runId: r.runId,
+    missionLabel: 'Operation Midnight Harbour: Coordinated Multi-Agency Warehouse Takedown',
+    description: 'A very long description written by a Mission Builder author who had a lot to say about this mission, its background, '
+      + 'the suspects involved, the layout of the warehouse district and every single thing the officers should keep in mind while they work.',
+    missionType: 'tactical',
+    state: 'in_progress',
+    tier: 'heavy',
+    tierExpected: false,
+    payTier: 'reinforced',
+    route: { status: 'on', distance: 12850 },
+    objectives: {},
+    paused: false,
+    partners: [
+      { src: ME_SRC, name: me().name, callsign: me().callsign, departmentShort: me().departmentShort, status: 'active', arrived: false },
+      { src: 41, name: 'Christopher Montgomery-Wellington III of Vinewood Hills', departmentShort: 'FIB', status: 'active', arrived: true },
+      { src: 42, name: 'Alexandria Konstantinopoulou-Vasquez', callsign: 'CALLSIGN-THAT-IS-32-CHARACTERS-X', departmentShort: '', status: 'active', arrived: true },
+      { src: 43, name: 'X', callsign: null, departmentShort: 'SAST', status: 'left', arrived: false },
+    ],
+    expected: { cash: 1196, points: 253 },
+    test: false,
+    recalcsLeft: 0,
+    radioSilence: false,
+    log: { point: 3, choices: [
+      { id: 'secure', label: 'Secure' },
+      { id: 'found_open', label: 'Found open – secured' },
+      { id: 'forced_entry', label: 'Signs of forced entry – reported to dispatch and secured' },
+    ] },
+  };
+}
+
 // ── mocks ─────────────────────────────────────────────────────────────────────
 
 registerMock('request', 'getMissionTypes', () => {
@@ -625,12 +702,14 @@ registerMock('request', 'getMissionTypes', () => {
     throw new Error('err.internal');
   }
   syncRunToggle();
-  if (boardVariant === 'empty') return { ...boardData(), cards: [], boss: null };
+  if (boardVariant === 'empty') return { ...boardData(), cards: {}, boss: undefined };
+  if (boardVariant === 'edge') return edgeBoard();
   return boardData();
 });
 
 registerMock('request', 'getRun', () => {
   syncRunToggle();
+  if (mockRun && runVariant === 'edge') return edgeView(mockRun);
   return mockRun ? view(mockRun) : null;
 });
 

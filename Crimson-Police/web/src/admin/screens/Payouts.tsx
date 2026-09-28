@@ -240,7 +240,7 @@ export default function AdminPayouts() {
       render: (r) => (
         <span className="economy-admin-pay-name">
           <span className="economy-admin-pay-name__label">{r.label}</span>
-          <span className="economy-admin-pay-name__sub">{t('admin.payouts.type_missions', { n: r.missions })}</span>
+          <span className="economy-admin-pay-name__sub">{r.missions === 1 ? t('admin.payouts.type_missions_one') : t('admin.payouts.type_missions', { n: r.missions })}</span>
         </span>
       ),
     },

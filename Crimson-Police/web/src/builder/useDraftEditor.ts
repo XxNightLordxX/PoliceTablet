@@ -55,7 +55,7 @@ export interface DraftEditor {
   takeLock: () => Promise<boolean>;
   releaseLock: () => Promise<void>;
   place: (spec: PointSpec, location: number) => Promise<boolean>;
-  record: (spec: PointSpec, location: number) => Promise<boolean>;
+  recordRoute: (spec: PointSpec, location: number) => Promise<boolean>;
   testDrive: (spec: PointSpec, location: number) => Promise<boolean>;
 }
 
@@ -97,21 +97,17 @@ export function useDraftEditor(id: string, scope: BuilderScope, ui: BuilderUi, c
   recordRef.current = record;
   const mounted = useRef(true);
 
-  const readOnlyReason: ReadOnlyReason = !record
-    ? null
-    : record.source === 'builtin'
-      ? 'builtin'
-      : record.dbStatus === 'archived'
-        ? 'archived'
-        : lockLostBy
-          ? 'lost'
-          : record.lock && !record.lock.mine && !(lock && lock.mine)
-            ? 'locked'
-            : !record.can.edit && !(lock && lock.mine)
-              ? 'permission'
-              : !(lock && lock.mine)
-                ? 'locked'
-                : null;
+  const lockHeld = !!(lock && lock.mine);
+  let readOnlyReason: ReadOnlyReason = null;
+  if (record) {
+    if (record.source === 'builtin') readOnlyReason = 'builtin';
+    else if (record.dbStatus === 'archived') readOnlyReason = 'archived';
+    else if (lockLostBy) readOnlyReason = 'lost';
+    else if (lockHeld) readOnlyReason = null;
+    else if (record.lock && !record.lock.mine) readOnlyReason = 'locked';
+    else if (!record.can.edit) readOnlyReason = 'permission';
+    else readOnlyReason = 'locked';
+  }
   const readOnly = readOnlyReason !== null;
 
   useEffect(() => {
@@ -267,7 +263,7 @@ export function useDraftEditor(id: string, scope: BuilderScope, ui: BuilderUi, c
     const d = defRef.current;
     if (!d || !lockMine() || !dirtyRef.current) return true;
     const at = rev.current;
-    const res = await action<BuilderAutosaveResult>('server:builder:autosave', { id: idRef.current, definition: d }, );
+    const res = await action<BuilderAutosaveResult>('server:builder:autosave', { id: idRef.current, definition: d });
     if (!mounted.current) return res.ok;
     if (res.ok && res.data) {
       setSavedAt(res.data.savedAt);
@@ -431,6 +427,6 @@ export function useDraftEditor(id: string, scope: BuilderScope, ui: BuilderUi, c
   return {
     id, record, def, loading, error, readOnly, readOnlyReason, lock, lockLostBy, dirty, saving, savedAt, errors, armedServer,
     validating, toolBusy, update, save, autosaveNow, validateNow, refresh, takeLock, releaseLock,
-    place, record: recordRoute, testDrive,
+    place, recordRoute, testDrive,
   };
 }

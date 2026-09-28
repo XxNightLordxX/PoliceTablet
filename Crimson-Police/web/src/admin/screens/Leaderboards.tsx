@@ -154,7 +154,7 @@ export default function AdminLeaderboards() {
   ];
 
   const runColumns: TableColumn<AdminRun>[] = [
-    { key: 'createdAt', header: t('profile.col.when'), width: 118, render: (r) => <span className="boards-when cp-num">{formatDateTime(r.createdAt)}</span> },
+    { key: 'createdAt', header: t('profile.col.when'), width: 124, render: (r) => <span className="boards-when cp-num">{formatDateTime(r.createdAt)}</span> },
     {
       key: 'mission',
       header: t('profile.col.mission'),
@@ -171,7 +171,7 @@ export default function AdminLeaderboards() {
       width: 180,
       render: (r) => <ResultCell state={r.state} endReason={r.endReason} flagged={r.flagged} voided={r.voided} flagReason={r.flagReason} />,
     },
-    { key: 'points', header: t('profile.col.points'), numeric: true, width: 72, render: (r) => <span className={cx(r.voided && 'boards-struck')}>{formatNumber(r.points)}</span> },
+    { key: 'points', header: t('profile.col.points'), numeric: true, width: 84, render: (r) => <span className={cx(r.voided && 'boards-struck')}>{formatNumber(r.points)}</span> },
     { key: 'cash', header: t('profile.col.cash'), numeric: true, width: 88, render: (r) => <Money amount={r.cash} /> },
     {
       key: 'void',

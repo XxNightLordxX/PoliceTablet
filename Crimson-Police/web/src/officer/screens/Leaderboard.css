@@ -152,11 +152,20 @@
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
+.boards-pinned__who {
+  display: flex;
+  flex: 0 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.2;
+}
 .boards-unranked {
-  font-size: var(--cp-fs-sm);
+  font-size: var(--cp-fs-xs);
   font-weight: 600;
   color: var(--cp-warning);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .boards-footnote {

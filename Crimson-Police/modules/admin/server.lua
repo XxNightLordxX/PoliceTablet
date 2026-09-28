@@ -40,8 +40,9 @@
         CP.Scoring.onRowApproved, CP.Leaderboard.invalidate. void: voided = 1, CP.Scoring.onRowVoided,
         cash untouched (held cash is forfeited by CP.Cash after the dispute window; a paid run is not
         clawed back), CP.AntiCheat.onVoided for mission rows, invalidate. Reason required. Reviewers who
-        took part are refused (CP.Permissions.canReviewRun, err.own_run); supervisors only for runs
-        involving their department (err.other_department).
+        took part are refused (CP.Permissions.canReviewRun, plus a participant still on the live run who
+        has no row yet: err.own_run); supervisors only for runs involving their department
+        (err.other_department). Texts are clipped by characters, never inside a UTF-8 sequence.
         opts (approveFlagged, used by CP.Disputes): { skipPermission = true, noAudit = true, quiet = true (no toast) }
     CP.Admin.forceRecall(src, runId, targetSrc, reason) -> ok, data|errKey
     CP.Admin.getRow(rowId) -> row|nil, errKey        one cp_mission_runs row (flagged/voided as booleans)
@@ -110,6 +111,23 @@ local SUPERVISOR_ORDER = {
 
 local warned = {}
 
+-- Clip to at most n characters without cutting a UTF-8 sequence in half, dropping bytes that are not valid
+-- UTF-8 first. The cp_* columns are utf8mb4 (VARCHAR(n) counts characters) and MariaDB's strict mode
+-- refuses a broken sequence (error 1366), so a byte clip (CP.U.clip) of an accented reason could make
+-- the whole insert fail.
+local function clip(s, n)
+    if s == nil then return nil end
+    s = tostring(s)
+    for _ = 1, 64 do
+        local len, bad = utf8.len(s)
+        if len then break end
+        s = s:sub(1, bad - 1) .. s:sub(bad + 1)
+    end
+    if not utf8.len(s) then s = s:gsub('[\128-\255]', '?') end
+    if utf8.len(s) <= n then return s end
+    return s:sub(1, utf8.offset(s, n + 1) - 1)
+end
+
 -- ── small helpers ───────────────────────────────────────────────────────────
 local function toSrc(v)
     local n = tonumber(v)
@@ -164,7 +182,7 @@ local function cleanText(v, max)
     if type(v) ~= 'string' then return nil end
     local s = U.trim(v:gsub('[%c]', ' '))
     if s == '' then return nil end
-    return U.clip(s, max or MAX_REASON)
+    return clip(s, max or MAX_REASON)
 end
 
 local function str(v, n)
@@ -173,7 +191,7 @@ local function str(v, n)
         local ok, s = pcall(json.encode, U.serialize(v))
         v = ok and s or tostring(v)
     end
-    return U.clip(tostring(v), n)
+    return clip(tostring(v), n)
 end
 
 local function validUuid(v)
@@ -329,9 +347,10 @@ local function webhookUrl(category)
     return url
 end
 
+-- Discord limits count characters: clip on a character boundary (a cut sequence would make the JSON invalid).
 local function clipText(s, n)
-    s = tostring(s or '')
-    if #s > n then s = s:sub(1, n - 1) .. '…' end
+    s = clip(tostring(s or ''), 1000000)
+    if utf8.len(s) > n then s = clip(s, n - 1) .. '…' end
     return s
 end
 
@@ -433,13 +452,13 @@ local function resolveActor(actor)
         if not n then return 'console', CP.L('admin.actor.console'), 0 end
         local ok, info = call('Qbx', 'getInfo', n)
         if ok and type(info) == 'table' and type(info.citizenid) == 'string' then
-            return U.clip(info.citizenid, 50), info.name, n
+            return clip(info.citizenid, 50), info.name, n
         end
-        return U.clip(('player:%d'):format(n), 50), GetPlayerName and GetPlayerName(n) or nil, n
+        return clip(('player:%d'):format(n), 50), GetPlayerName and GetPlayerName(n) or nil, n
     end
     local s = U.trim(tostring(actor))
     if s == '' then return 'console', CP.L('admin.actor.console'), 0 end
-    return U.clip(s, 50), nil, nil
+    return clip(s, 50), nil, nil
 end
 
 local function resolveRole(role, actorId, src)
@@ -497,7 +516,7 @@ function Admin.audit(actor, role, category, action, target, old, new, reason)
         actor = actorId,
         role = resolveRole(role, actorId, src),
         category = CATEGORIES[category] and category or 'audit',
-        action = U.clip(action, 40),
+        action = clip(action, 40),
         target = str(target, 64),
         old_value = str(old, 64),
         new_value = str(new, 64),
@@ -721,7 +740,7 @@ function Admin.forceRecall(src, runId, targetSrc, reason)
     reason = cleanText(reason)
     local ok = call('Runs', 'removeParticipant', run, target, 'force_recall', { notify = 'admin.notice.force_recalled' })
     if not ok then return false, 'err.internal' end
-    Admin.audit(src, roleOf(src), 'audit', 'forceRecall', U.clip(p.citizenid, 64), run.missionId, 'force_recall', reason)
+    Admin.audit(src, roleOf(src), 'audit', 'forceRecall', clip(p.citizenid, 64), run.missionId, 'force_recall', reason)
     return true, { runId = runId, src = target }
 end
 
@@ -860,7 +879,7 @@ SUB.season = function(src, args)
     if what == 'start' then
         local name = joinFrom(args, 2)
         if not name then return reply(src, 'error', 'err.season_name') end
-        name = U.clip(name, 64)
+        name = clip(name, 64)
         if not has('Challenge', 'startSeason') then return reply(src, 'error', 'err.module_unavailable') end
         local ok, e = outcome(call('Challenge', 'startSeason', src, name))
         if not ok then return reply(src, 'error', e) end

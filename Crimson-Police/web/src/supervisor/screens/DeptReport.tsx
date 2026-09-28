@@ -24,7 +24,7 @@ function ActivityDialog({ officer, onClose }: { officer: ReportOfficer | null; o
   const current = data && data.officer?.citizenid === officer?.citizenid ? data : null;
   const runs = asList(current?.runs);
   const columns: TableColumn<ActivityRun>[] = [
-    { key: 'createdAt', header: t('profile.col.when'), width: 112, render: (r) => <span className="boards-when cp-num">{formatDateTime(r.createdAt)}</span> },
+    { key: 'createdAt', header: t('profile.col.when'), width: 124, render: (r) => <span className="boards-when cp-num">{formatDateTime(r.createdAt)}</span> },
     {
       key: 'mission',
       header: t('profile.col.mission'),
@@ -40,11 +40,11 @@ function ActivityDialog({ officer, onClose }: { officer: ReportOfficer | null; o
     {
       key: 'state',
       header: t('profile.col.result'),
-      width: 210,
+      width: 180,
       render: (r) => <ResultCell state={r.state} endReason={r.endReason} flagged={r.flagged} voided={r.voided} flagReason={r.flagReason} />,
     },
-    { key: 'points', header: t('profile.col.points'), numeric: true, width: 70, render: (r) => <span className={cx((r.voided || r.flagged) && 'boards-struck')}>{formatNumber(r.points)}</span> },
-    { key: 'cash', header: t('profile.col.cash'), numeric: true, width: 90, render: (r) => <Money amount={r.cash} /> },
+    { key: 'points', header: t('profile.col.points'), numeric: true, width: 84, render: (r) => <span className={cx((r.voided || r.flagged) && 'boards-struck')}>{formatNumber(r.points)}</span> },
+    { key: 'cash', header: t('profile.col.cash'), numeric: true, width: 92, render: (r) => <Money amount={r.cash} /> },
   ];
   return (
     <Dialog
@@ -99,7 +99,7 @@ export default function DeptReport() {
       ),
     },
     { key: 'runs', header: t('sup.report.col.runs'), numeric: true, width: 68, render: (o) => formatNumber(o.runs) },
-    { key: 'completed', header: t('sup.report.col.completed'), numeric: true, width: 104, render: (o) => formatNumber(o.completed) },
+    { key: 'completed', header: t('sup.report.col.completed'), numeric: true, width: 112, render: (o) => formatNumber(o.completed) },
     {
       key: 'failed',
       header: t('sup.report.col.failed_abandoned'),
@@ -110,7 +110,7 @@ export default function DeptReport() {
     { key: 'points', header: t('sup.report.col.points'), numeric: true, width: 84, render: (o) => <span className="boards-strong">{formatNumber(o.points)}</span> },
     { key: 'cash', header: t('sup.report.col.cash'), numeric: true, width: 100, render: (o) => <Money amount={o.cash} /> },
     { key: 'last', header: t('sup.report.col.last'), width: 120, render: (o) => <span className="boards-when cp-num">{o.lastRunAt ? formatDateTime(o.lastRunAt) : '–'}</span> },
-    { key: 'open', header: '', width: 36, align: 'right', render: () => <Icon name="chevronRight" size={16} className="boards-row-chevron" /> },
+    { key: 'open', header: '', width: 44, align: 'right', render: () => <Icon name="chevronRight" size={16} className="boards-row-chevron" /> },
   ];
 
   if (!data && loading) {

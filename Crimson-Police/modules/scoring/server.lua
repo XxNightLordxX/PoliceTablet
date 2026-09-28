@@ -456,10 +456,17 @@ local function scoreLines(run, p, P, opts)
     local listed, order = listedEntries(mission)
     local stats = run.stats or {}
 
+    local hints = run.score and run.score.values or {}
+    local kinds = run.score and run.score.kinds or {}
+
     -- 1. the mission card (in file order), end-evaluated ids included
     for _, id in ipairs(order) do
         local l = listed[id]
         local per, each = entryValue(id, l.entry, P)
+        if per == nil and tonumber(hints[id]) then
+            -- Listed without a value of its own and not in Config.Bonuses: the block's per-occurrence value.
+            per, each = tonumber(hints[id]), true
+        end
         if per then
             if END_EVALUATED[id] then
                 local earned = (id == 'no_participant_downed' and num(stats.downs, 0) == 0)
@@ -480,8 +487,6 @@ local function scoreLines(run, p, P, opts)
     for id in pairs(run.score and run.score.shared or {}) do recorded[id] = true end
     for id in pairs(p.score or {}) do recorded[id] = true end
     local extras = CP.U.keys(recorded)
-    local hints = run.score and run.score.values or {}
-    local kinds = run.score and run.score.kinds or {}
     for _, id in ipairs(extras) do
         if not listed[id] and not END_EVALUATED[id] then
             local count = countOf(run, p, id)
@@ -504,8 +509,10 @@ local function scoreLines(run, p, P, opts)
     -- 3. common end-evaluated bonuses and penalties
     local duration = durationOf(run, opts)
     local limit = num(run.timeLimit, num(mission.timeLimit, 0))
-    if not (run.flags and run.flags.medals) and limit > 0 and duration <= num(common.fastShare, 0.75) * limit then
-        total = total + addLine(bonuses, penalties, 'fast_finish', num(common.fastBonus, 0) * P, 1, false, false)
+    local fastShare = num(common.fastShare, 0.75)
+    if not (run.flags and run.flags.medals) and limit > 0 and duration <= fastShare * limit then
+        total = total + addLine(bonuses, penalties, 'fast_finish', num(common.fastBonus, 0) * P, 1, false, false,
+            { pct = math.floor(fastShare * 100 + 0.5) })
     end
     if run.modifier then
         local modLabel = CP.L('modifier.' .. tostring(run.modifier))
@@ -962,7 +969,12 @@ local function typeOfTheDayCard()
     if not ok or type(key) ~= 'string' then return nil end
     local t = Config.MissionTypes and Config.MissionTypes[key]
     if not t then return nil end
-    return { key = key, label = t.label or key }
+    -- key/label are the contract (§9.4); multiplier and cap (Config values) are extras for the Home text.
+    return {
+        key = key, label = t.label or key,
+        multiplier = num(Config.Events and Config.Events.todMultiplier, 2.0),
+        cap = num(scoringCfg().scoreCap, 2.0),
+    }
 end
 
 local function homeData(officer)
@@ -984,7 +996,8 @@ local function homeData(officer)
             name = officer.name or cid,
             xp = xp,
             level = Scoring.xpLevel(xp),
-            streak = { days = st.days, graceLeft = st.graceLeft },
+            -- graceDays (Config.Scoring.streakGraceDays) is an extra: 0 = no grace, so the UI says nothing about it.
+            streak = { days = st.days, graceLeft = st.graceLeft, graceDays = graceDays() },
             seasonPoints = seasonPoints(cid),
             cashThisWeek = CP.Cash and CP.Cash.earnedThisWeek and CP.Cash.earnedThisWeek(cid) or 0,
         },

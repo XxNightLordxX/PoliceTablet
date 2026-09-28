@@ -93,7 +93,7 @@ if (MOCK_MODE === 'edge') {
     else if (i % 4 === 0) o.callsign = `${o.callsign ?? 'X'}-SUPERVISOR-UNIT-ALPHA-XRAY`.slice(0, 32);
   });
   POOL[0].weekly = 32767;
-  POOL[0].xp = 2147480000;
+  POOL[0].xp = 1250000;
   POOL[0].runs = 999;
 }
 /** Lua's empty table: arrives as {} instead of []. */

@@ -23,10 +23,13 @@ export type BoardOperation = NonNullable<BoardData['operation']> & {
   runState?: 'accepted' | 'in_progress' | null;
 };
 
-/** Callback 'getMissionTypes'. `serverTime` (optional) is os.time() when the board was built. */
+/** Callback 'getMissionTypes'. Optional extras (requested from modules/draw, docs/notes/run_ui.md):
+ *  `serverTime` = os.time() when the board was built; `todMultiplier` = Config.Events.todMultiplier (the
+ *  Type of the Day's points multiplier; the board assumes the default 2 without it). */
 export interface MissionBoardData extends Omit<BoardData, 'operation'> {
   operation: BoardOperation | null;
   serverTime?: number;
+  todMultiplier?: number;
 }
 
 /** Reply of server:acceptType. */

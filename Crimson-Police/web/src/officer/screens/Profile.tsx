@@ -173,7 +173,7 @@ export default function Profile() {
   };
 
   const columns: TableColumn<ProfileRunView>[] = [
-    { key: 'createdAt', header: t('profile.col.when'), width: 112, render: (r) => <span className="boards-when cp-num">{formatDateTime(r.createdAt)}</span> },
+    { key: 'createdAt', header: t('profile.col.when'), width: 124, render: (r) => <span className="boards-when cp-num">{formatDateTime(r.createdAt)}</span> },
     {
       key: 'mission',
       header: t('profile.col.mission'),
@@ -184,12 +184,12 @@ export default function Profile() {
         </span>
       ),
     },
-    { key: 'state', header: t('profile.col.result'), width: 196, render: (r) => <ResultCell state={r.state} endReason={r.endReason} flagged={r.flagged} voided={r.voided} /> },
+    { key: 'state', header: t('profile.col.result'), width: 180, render: (r) => <ResultCell state={r.state} endReason={r.endReason} flagged={r.flagged} voided={r.voided} /> },
     {
       key: 'points',
       header: t('profile.col.points'),
       numeric: true,
-      width: 72,
+      width: 84,
       render: (r) => <span className={cx('boards-points', (r.voided || r.flagged) && 'is-struck')}>{formatNumber(r.points)}</span>,
     },
   ];
@@ -198,7 +198,7 @@ export default function Profile() {
       key: 'cash',
       header: t('profile.col.cash'),
       numeric: true,
-      width: 104,
+      width: 96,
       render: (r) => (
         <span className="boards-cash">
           <Money amount={r.cash} />
@@ -209,7 +209,7 @@ export default function Profile() {
     columns.push({
       key: 'actions',
       header: '',
-      width: 116,
+      width: 124,
       align: 'right',
       render: (r) =>
         r.canDispute ? (

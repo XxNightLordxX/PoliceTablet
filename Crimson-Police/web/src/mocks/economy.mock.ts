@@ -1,7 +1,9 @@
 // Browser-mode mocks for the economy slice: getHome, sup:getPayouts, admin:getPayouts and the three
 // payout actions. State is kept in memory so a change on one screen shows on the others.
 // URL switch for screenshots: ?economy=empty (no goals / no Type of the Day / no announcements, a fresh
-// officer) or ?economy=error (every economy request fails with err.internal).
+// officer), ?economy=lua (the same empties the way Lua encodes them: {} / [] for empty tables, keys of nil
+// values missing, no callsign), ?economy=edge (long names and labels, huge numbers, top XP level, a
+// config multiplier of 1.5) or ?economy=error (every economy request fails with err.internal).
 import { registerMock } from '../shared/nui';
 import type { HomeData } from '../shared/types';
 import type {
@@ -125,6 +127,38 @@ registerMock('request', 'getHome', (): HomeData => {
   fail();
   const d = MOCK_DEPARTMENTS[devState.department] ?? MOCK_DEPARTMENTS.sast;
   const o = d.officer;
+  if (mode === 'lua') {
+    // Lua: nil values are missing keys, an empty table arrives as {} or [].
+    return {
+      card: {
+        rank: o.rank, departmentShort: o.departmentShort, name: o.name, xp: 0,
+        level: { label: 'Probationary', badge: 'grey', xp: 0 },
+        streak: { days: 0, graceLeft: false }, seasonPoints: 0, cashThisWeek: 0,
+      },
+      goals: [],
+      announcements: {},
+    } as unknown as HomeData;
+  }
+  if (mode === 'edge') {
+    return {
+      card: {
+        rank: 'Senior Deputy Chief Inspector', departmentShort: o.departmentShort,
+        name: 'Maximilian Alexander Montgomery-Worthington III', xp: 1234567,
+        level: { label: 'Elite', badge: 'platinum', xp: 40000 },
+        streak: { days: 12, graceLeft: false }, seasonPoints: 987654, cashThisWeek: 12345678,
+      },
+      goals: {
+        daily: { id: 'any_3', label: 'Complete 3 missions of any type, including at least one with a unit of officers from another department', count: 3, progress: 5, done: true, points: 50 },
+      },
+      typeOfTheDay: { key: 'investigation', label: 'Investigation', multiplier: 1.5, cap: 2.5 },
+      announcements: [
+        { kind: 'weekly_top3', text: 'Last week\'s top 3: Maximilian Alexander Montgomery-Worthington III (2L-114) 12,480 · Dana Whitfield 11,920 · Christopherson-Vanderbilt 9,875' },
+        { kind: 'monthly_top3', text: 'August top 3: Ray Chen · Maria Lopez · Earl Hutchins' },
+        { kind: 'something_new', text: 'An announcement of a kind this screen does not know yet' },
+      ],
+      champions: { season: 'Season 12 · The Very Long Summer Heatwave Championship Series', department: "Blaine County Sheriff's Office" },
+    } as unknown as HomeData;
+  }
   if (mode === 'empty') {
     return {
       card: {
@@ -176,9 +210,16 @@ function supView(): SupPayoutsView {
   };
 }
 
+function edgeTypes<T extends { label: string }>(list: T[]): T[] {
+  return list.map((x, i) => (i === 1 ? { ...x, label: 'Training & Certification (Advanced Driving and Firearms)' } : x));
+}
+
 registerMock('request', 'sup:getPayouts', () => {
   fail();
-  return supView();
+  const v = supView();
+  if (mode === 'lua') return { ...v, types: {} } as unknown as SupPayoutsView;
+  if (mode === 'edge') return { ...v, types: edgeTypes(v.types) };
+  return v;
 });
 
 registerMock('action', 'server:sup:setTypePayout', (p: SupSetTypePayload) => {
@@ -207,7 +248,16 @@ function adminView(): AdminPayoutsView {
 
 registerMock('request', 'admin:getPayouts', () => {
   fail();
-  return adminView();
+  const v = adminView();
+  if (mode === 'lua') return { ...v, types: {}, missions: {} } as unknown as AdminPayoutsView;
+  if (mode === 'edge') {
+    return {
+      ...v,
+      types: edgeTypes(v.types),
+      missions: v.missions.map((m, i) => (i === 0 ? { ...m, label: 'Beat Patrol through the Entire Vinewood Hills and Downtown Area' } : m)),
+    };
+  }
+  return v;
 });
 
 registerMock('action', 'server:admin:setTypePayout', (p: AdminSetTypePayload) => {

@@ -37,10 +37,16 @@
   flex: none;
   overflow: hidden;
 }
-.oversight-dep-card__initials {
+.oversight-dep-card__logo:empty::after,
+.oversight-dep-preview__logo:empty::after {
+  content: attr(data-initials);
   font-weight: 800;
   font-size: var(--cp-fs-sm);
   letter-spacing: 0.04em;
+}
+.oversight-dep-preview__logo:empty::after {
+  font-size: 10px;
+  color: var(--cp-primary-text, var(--cp-text));
 }
 .oversight-dep-card__titles {
   display: flex;

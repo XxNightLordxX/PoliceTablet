@@ -38,13 +38,16 @@ interfaces for the same shapes are in `web/src/types/boards.ts`.
   when they hide it.
 - **Cache**: one entry per (period, filter, department, window start/season) for `Config.Leaderboard.cacheSeconds`,
   concurrent misses share one query; `invalidate()` drops boards, season points and announcements and calls
-  `CP.Challenge.invalidate()`.
+  `CP.Challenge.invalidate()`. A board (or season-points / challenge aggregate) whose query was in flight when
+  `invalidate()` ran is returned once but not cached, so a void never survives in the cache for another minute.
 - **Profile**: last 20 rows of any type (manual awards and goal rewards are listed and labelled, never
   disputable). Own profile: cash, `cashStatus` (the row's column, also written into `breakdown.cash.status`).
-  Someone else's profile: name → callsign when hidden, `cash = 0`, `cashStatus = ''`, `breakdown.cash`
-  removed, `canDispute = false`; flagged/voided rows are still listed with their badges.
+  Someone else's profile: name → callsign when hidden, `cash = 0`, `cashStatus = ''`, the breakdown reduced to
+  the RunResult (§9.6) fields without `cash` (extra keys such as a manual award's admin `reason` are dropped),
+  `canDispute = false`; flagged/voided rows are still listed with their badges.
   `canDispute` = own row, not an award row, flagged or voided or failed, within `Config.Disputes.windowHours`,
-  and no **open** `cp_disputes` row (a handled dispute does not block; `modules/disputes` has the last word).
+  and no `cp_disputes` row at all for it (`modules/disputes` allows one dispute per row, ever: an open one is
+  `err.dispute_open`, a decided one `err.dispute_final`, so the button is hidden in both cases).
   Extra fields: `departmentLabel`, `seasonPoints`, `disputeWindowHours`, `runs[i].createdTs`, `badges[i].kind`
   (`week` | `champion` | `top10` | `achievement`). Badges come from `CP.Scoring.badges` (fallback: `cp_badges`),
   newest first; this slice labels its own badge ids (`officer_of_week_*`, `season_<id>_champion`, `season_<id>_top10`).
@@ -85,7 +88,7 @@ interfaces for the same shapes are in `web/src/types/boards.ts`.
   the second (`''` otherwise, also when `Config.Challenge.enabled = false`); trophy `season_<id>_champion` for the
   champion's active officers; `season_<id>_top10` for the season board's top 10 (minRuns applies); one board
   webhook with standings and top 10; audit `season_end` (new = champion or `-`). `startSeason` ends the running
-  season first (audit `season_end` with reason `season_start`, then `season_start`).
+  season first (audit `season_end` with the localized reason `challenge.audit_replaced`, then `season_start`).
 - **championBanner(dept)** = the most recent ended season's champion (nil when that season had none, or `dept`
   is another department). Shape `{ season, seasonId, department (label), departmentKey, short }`.
 - **currentSeason()** is cached (reloaded every 5 min and after every change), so the run engine can call it for
@@ -96,8 +99,8 @@ interfaces for the same shapes are in `web/src/types/boards.ts`.
   voided/flagged included in run counts; points only from counted rows; cash = `SUM(cash_paid)`).
   `sup:getOfficerActivity` accepts officers whose stored department is the supervisor's, or who have a row in it
   this week (else `err.other_department`, unknown → `err.unknown_officer`) and returns only that department's rows.
-- Admin actions: seasons → `seasons`, override → `bountyOverride` (both admin-only in CP.Permissions).
-  `err.busy` while another season change runs.
+- Admin actions: seasons → `seasons`, override → `bountyOverride` (both admin-only in CP.Permissions), checked
+  before the payload is validated (as are the `sup:*` callbacks). `err.busy` while another season change runs.
 
 ### Web
 - The breakdown dialog renders the HUD result card's `cp-result__*` classes (hud.css) with its own markup
@@ -107,6 +110,13 @@ interfaces for the same shapes are in `web/src/types/boards.ts`.
   (Profile.tsx). Shared helper classes (`boards-muted`, `boards-strong`, `boards-struck`, `boards-flat-table`)
   live in Leaderboard.css, which every boards screen imports through these exports.
 - Award points: 1–10,000 points (modules/admin's `MAX_AWARD`), reason required. Void run: reason required.
+- Every run/officer table uses `table-layout: fixed` (class `boards-fixed`, Leaderboard.css): the officer / mission
+  column takes what the fixed-width columns leave and long names, callsigns and mission labels are cut with an
+  ellipsis (full text as tooltip), so a 64-character name never pushes points, cash or the Void/Dispute buttons
+  out of view. The pinned own row shows "N more completed run(s) to rank" under the name when unranked.
+- Browser mocks have two extra modes for screenshots: `?boards=edge` (64-character names, 32-character callsigns,
+  missing callsigns, a long season name and mission label, big numbers) and `?boards=empty` (every list arrives as
+  `{}` the way Lua encodes an empty table).
 - Mocks for `server:dispute`, `server:admin:voidRun`, `server:admin:awardPoints` are registered as fallbacks
   (the owners' mocks win; oversight.mock.ts already registers the admin ones).
 

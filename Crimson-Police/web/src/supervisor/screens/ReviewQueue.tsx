@@ -32,7 +32,7 @@ const cashLabel = (status: string) => (hasKey(`result.cash_status.${status}`) ? 
 function Officer({ name, callsign, dept }: { name: string; callsign: string | null; dept: string }) {
   return (
     <div className="oversight-rq-who">
-      <span className="oversight-rq-who__name">{name}</span>
+      <span className="oversight-rq-who__name" title={name}>{name}</span>
       <span className="oversight-rq-who__sub">
         <Badge size="sm" variant="outline">{dept}</Badge>
         <span>{callsign || t('common.no_callsign')}</span>
@@ -44,7 +44,7 @@ function Officer({ name, callsign, dept }: { name: string; callsign: string | nu
 function Mission({ label, type, state, endReason, when }: { label: string; type: string; state: string; endReason: string; when?: number }) {
   return (
     <div className="oversight-rq-mission">
-      <span className="oversight-rq-mission__name">{label}</span>
+      <span className="oversight-rq-mission__name" title={label}>{label}</span>
       <span className="oversight-rq-mission__sub">
         <span>{type}</span>
         <Badge size="sm" tone={stateTone(state)}>{t(`sup.state.${state}`)}</Badge>
@@ -167,9 +167,9 @@ export default function SupReviewQueue() {
   const flagColumns: TableColumn<FlaggedRow>[] = [
     { key: 'officer', header: t('sup.review.col.officer'), width: 150, render: (r) => <Officer name={r.name} callsign={r.callsign} dept={r.departmentShort} /> },
     { key: 'mission', header: t('sup.review.col.mission'), render: (r) => <Mission label={r.missionLabel} type={r.missionTypeLabel} state={r.state} endReason={r.endReason} when={r.createdAt} /> },
-    { key: 'flag', header: t('sup.review.col.flag'), width: 190, render: (r) => <FlagCell row={r} /> },
+    { key: 'flag', header: t('sup.review.col.flag'), width: 160, render: (r) => <FlagCell row={r} /> },
     {
-      key: 'held', header: t('sup.review.col.held'), width: 90, numeric: true,
+      key: 'held', header: t('sup.review.col.held'), width: 96, numeric: true,
       render: (r) => (
         <div className="oversight-rq-held">
           <Points value={r.points} />
@@ -177,13 +177,13 @@ export default function SupReviewQueue() {
         </div>
       ),
     },
-    { key: 'actions', header: '', width: 200, align: 'right', render: flagActions },
+    { key: 'actions', header: '', width: 244, align: 'right', render: flagActions },
   ];
 
   const disputeColumns: TableColumn<DisputeView>[] = [
-    { key: 'officer', header: t('sup.review.col.officer'), width: 158, render: (r) => <Officer name={r.name} callsign={r.callsign} dept={r.departmentShort} /> },
+    { key: 'officer', header: t('sup.review.col.officer'), width: 156, render: (r) => <Officer name={r.name} callsign={r.callsign} dept={r.departmentShort} /> },
     {
-      key: 'mission', header: t('sup.review.col.mission'), width: 180,
+      key: 'mission', header: t('sup.review.col.mission'), width: 170,
       render: (r) => (
         <div className="oversight-rq-mission">
           <span className="oversight-rq-mission__name">{r.missionLabel}</span>
@@ -195,8 +195,8 @@ export default function SupReviewQueue() {
       ),
     },
     { key: 'reason', header: t('sup.review.col.officer_reason'), render: (r) => <span className="oversight-rq-quote oversight-rq-clamp" title={r.reason}>{r.reason}</span> },
-    { key: 'when', header: t('sup.review.col.filed'), width: 104, render: (r) => <span className="cp-num oversight-rq-soft oversight-rq-date">{formatDateTime(r.createdAt)}</span> },
-    { key: 'actions', header: '', width: 200, align: 'right', render: disputeActions },
+    { key: 'when', header: t('sup.review.col.filed'), width: 116, render: (r) => <span className="cp-num oversight-rq-soft oversight-rq-date">{formatDateTime(r.createdAt)}</span> },
+    { key: 'actions', header: '', width: 250, align: 'right', render: disputeActions },
   ];
 
   const tabs = [
@@ -215,6 +215,7 @@ export default function SupReviewQueue() {
         rows={flagged}
         rowKey={(r) => r.rowId}
         loading={loading}
+        className="oversight-rq-table"
         empty={<EmptyState icon="shieldCheck" title={t('sup.review.empty_flagged_title')} text={t('sup.review.empty_flagged_text')} />}
         aria-label={t('sup.review.tab.flagged')}
       />
@@ -226,6 +227,7 @@ export default function SupReviewQueue() {
         rows={disputes}
         rowKey={(r) => r.id}
         loading={loading}
+        className="oversight-rq-table"
         empty={<EmptyState icon="inbox" title={t('sup.review.empty_disputes_title')} text={t('sup.review.empty_disputes_text')} />}
         aria-label={t('sup.review.tab.disputes')}
       />

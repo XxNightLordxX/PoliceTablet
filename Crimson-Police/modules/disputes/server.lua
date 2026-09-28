@@ -13,6 +13,8 @@
                                 CP.Cash.release when its cash is still held, CP.Leaderboard.invalidate
                  failed row  -> CP.Scoring.manualAward(src, citizenid, awardPoints, reason)
         reject   keeps the row as it is; a voided row whose cash is still held (or pending) is forfeited (CP.Cash.forfeit)
+      "Took part" also covers a participant still on the live run (no row of theirs yet): refused and
+      left out of their lists.
       The dispute is claimed first (UPDATE ... WHERE status = 'open'), so two reviewers can never both
       answer it; a failed manual award re-opens it. Every answer is audited (category flags) and posted
       to the flags webhook; filing posts to the flags webhook. The officer gets a toast when online.
@@ -49,6 +51,23 @@ local LIST_LIMIT = 200
 local NON_MISSION_TYPES = { manual_award = true, goal = true }
 
 -- ── helpers ─────────────────────────────────────────────────────────────────
+
+-- Clip to at most n characters without cutting a UTF-8 sequence in half, dropping bytes that are not valid
+-- UTF-8 first. The cp_* columns are utf8mb4 (VARCHAR(n) counts characters) and MariaDB's strict mode
+-- refuses a broken sequence (error 1366), so a byte clip (CP.U.clip) of an accented reason could make
+-- the whole insert fail.
+local function clip(s, n)
+    if s == nil then return nil end
+    s = tostring(s)
+    for _ = 1, 64 do
+        local len, bad = utf8.len(s)
+        if len then break end
+        s = s:sub(1, bad - 1) .. s:sub(bad + 1)
+    end
+    if not utf8.len(s) then s = s:gsub('[\128-\255]', '?') end
+    if utf8.len(s) <= n then return s end
+    return s:sub(1, utf8.offset(s, n + 1) - 1)
+end
 local function toSrc(v)
     local n = tonumber(v)
     if not n then return nil end
@@ -94,7 +113,7 @@ local function cleanText(v, max)
     if type(v) ~= 'string' then return nil end
     local s = U.trim(v:gsub('[%c]', ' '))
     if s == '' then return nil end
-    return U.clip(s, max or 255)
+    return clip(s, max or 255)
 end
 
 local function query(sql, params)
@@ -358,6 +377,12 @@ local function runDepartments(runUuid)
     return out
 end
 
+-- Supervisors answer disputes only while Config.Permissions.supervisor.handleDisputes is on.
+local function supervisorsHandle()
+    local sup = Config.Permissions and Config.Permissions.supervisor
+    return type(sup) == 'table' and sup.handleDisputes == true
+end
+
 -- Toast the staff who can answer a new dispute (never participants of the run).
 local function tellStaff(goesTo, runUuid, label)
     if not (has('Qbx', 'getOnlinePlayers') and has('Qbx', 'getInfo')) then return end
@@ -367,11 +392,16 @@ local function tellStaff(goesTo, runUuid, label)
     for _, d in ipairs(runDepartments(runUuid)) do depts[d] = true end
     local participants = {}
     for _, r in ipairs(query('SELECT citizenid FROM cp_mission_runs WHERE run_uuid = ?', { runUuid }) or {}) do participants[r.citizenid] = true end
+    local okR, run = call('Runs', 'get', runUuid)
+    if okR and type(run) == 'table' and type(run.participants) == 'table' then
+        for _, p in pairs(run.participants) do if type(p) == 'table' and p.citizenid then participants[p.citizenid] = true end end
+    end
     local targets = {}
     for _, s in ipairs(list) do
         local okI, info = call('Qbx', 'getInfo', s)
         if okI and type(info) == 'table' and not participants[info.citizenid] then
-            if goesTo == 'admin' then
+            -- With the supervisors' switch off, admins are the only ones who can answer it.
+            if goesTo == 'admin' or not supervisorsHandle() then
                 if isAdmin(s) then targets[#targets + 1] = s end
             elseif type(info.job) == 'table' and info.job.onduty then
                 local dk = CP.Access.departmentForJob(info.job.name)
@@ -493,7 +523,7 @@ function D.handle(src, disputeId, decision, reason, awardPoints, opts)
     local handler = tonumber(src) == 0 and 'console' or (citizenOf(src) or ('player:' .. tostring(src)))
     local status = decision == 'approve' and 'approved' or 'rejected'
     local claimed = update("UPDATE cp_disputes SET status = ?, handled_by = ?, handled_at = NOW() WHERE id = ? AND status = 'open'",
-        { status, U.clip(handler, 50), id })
+        { status, clip(handler, 50), id })
     if claimed == nil then return false, 'err.internal' end
     if claimed == 0 then return false, 'err.dispute_closed' end
 
