@@ -33,6 +33,24 @@ export function StateBadge({ state }: { state: string }) {
   return <Badge tone={tone} size="sm">{tOr(`profile.state.${state}`, 'common.unknown')}</Badge>;
 }
 
+/** "How it ended": state badge (+ voided/flagged badges) over the end reason. Shared by every run table. */
+export function ResultCell({ state, endReason, flagged, voided, flagReason }: { state: string; endReason: string; flagged?: boolean; voided?: boolean; flagReason?: string | null }) {
+  return (
+    <span className="boards-resultcell">
+      <span className="boards-resultcell__top">
+        <StateBadge state={state} />
+        {voided ? <Badge tone="danger" size="sm" icon="xCircle">{t('profile.voided')}</Badge> : null}
+        {flagged ? (
+          <Badge tone="warning" size="sm" icon="alert" title={flagReason ? tOr(`profile.flag_reason.${flagReason}`, 'result.flag_generic') : undefined}>
+            {t('profile.flagged')}
+          </Badge>
+        ) : null}
+      </span>
+      <span className="boards-resultcell__reason">{tOr(`reason.${endReason}`, 'common.unknown')}</span>
+    </span>
+  );
+}
+
 function Line({ label, value, tone, strong, note }: { label: string; value: string; tone?: 'plus' | 'minus' | 'mult'; strong?: boolean; note?: boolean }) {
   return (
     <div className={cx('cp-result__line', tone && `is-${tone}`, strong && 'is-strong', note && 'is-note')}>
@@ -151,7 +169,7 @@ export default function Profile() {
   };
 
   const columns: TableColumn<ProfileRunView>[] = [
-    { key: 'createdAt', header: t('profile.col.when'), width: 118, render: (r) => <span className="boards-when cp-num">{formatDateTime(r.createdAt)}</span> },
+    { key: 'createdAt', header: t('profile.col.when'), width: 112, render: (r) => <span className="boards-when cp-num">{formatDateTime(r.createdAt)}</span> },
     {
       key: 'mission',
       header: t('profile.col.mission'),
@@ -162,32 +180,12 @@ export default function Profile() {
         </span>
       ),
     },
-    {
-      key: 'state',
-      header: t('profile.col.result'),
-      render: (r) => (
-        <span className="boards-result">
-          <StateBadge state={r.state} />
-          <span className="boards-result__reason">{tOr(`reason.${r.endReason}`, 'common.unknown')}</span>
-        </span>
-      ),
-    },
-    {
-      key: 'flags',
-      header: '',
-      width: 96,
-      render: (r) => (
-        <span className="boards-flags">
-          {r.voided ? <Badge tone="danger" size="sm" icon="xCircle">{t('profile.voided')}</Badge> : null}
-          {r.flagged ? <Badge tone="warning" size="sm" icon="alert">{t('profile.flagged')}</Badge> : null}
-        </span>
-      ),
-    },
+    { key: 'state', header: t('profile.col.result'), width: 230, render: (r) => <ResultCell state={r.state} endReason={r.endReason} flagged={r.flagged} voided={r.voided} /> },
     {
       key: 'points',
       header: t('profile.col.points'),
       numeric: true,
-      width: 84,
+      width: 72,
       render: (r) => <span className={cx('boards-points', (r.voided || r.flagged) && 'is-struck')}>{formatNumber(r.points)}</span>,
     },
   ];
@@ -196,7 +194,7 @@ export default function Profile() {
       key: 'cash',
       header: t('profile.col.cash'),
       numeric: true,
-      width: 112,
+      width: 104,
       render: (r) => (
         <span className="boards-cash">
           <Money amount={r.cash} />
@@ -207,7 +205,7 @@ export default function Profile() {
     columns.push({
       key: 'actions',
       header: '',
-      width: 104,
+      width: 100,
       align: 'right',
       render: (r) =>
         r.canDispute ? (

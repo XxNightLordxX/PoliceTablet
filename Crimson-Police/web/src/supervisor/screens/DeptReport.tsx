@@ -10,12 +10,12 @@ import {
 import { cx } from '../../shared/cx';
 import { formatDateTime, formatDuration, formatMoney, formatNumber } from '../../shared/format';
 import { useRequest } from '../../shared/hooks';
-import { t, tOr } from '../../shared/i18n';
+import { t } from '../../shared/i18n';
 import { useSession } from '../../shared/session';
 import { asList, type ActivityRun, type DeptReport as DeptReportData, type OfficerActivity, type ReportOfficer } from '../../types/boards';
-import { BountyCard, DeptBars } from '../../officer/screens/Challenge';
+import { BountyCard } from '../../officer/screens/Challenge';
 import { formatDay } from '../../officer/screens/Leaderboard';
-import { StateBadge, missionTypeLabel } from '../../officer/screens/Profile';
+import { ResultCell, missionTypeLabel } from '../../officer/screens/Profile';
 import './DeptReport.css';
 
 function ActivityDialog({ officer, onClose }: { officer: ReportOfficer | null; onClose: () => void }) {
@@ -24,14 +24,14 @@ function ActivityDialog({ officer, onClose }: { officer: ReportOfficer | null; o
   const current = data && data.officer?.citizenid === officer?.citizenid ? data : null;
   const runs = asList(current?.runs);
   const columns: TableColumn<ActivityRun>[] = [
-    { key: 'createdAt', header: t('profile.col.when'), width: 118, render: (r) => <span className="boards-muted cp-num">{formatDateTime(r.createdAt)}</span> },
+    { key: 'createdAt', header: t('profile.col.when'), width: 112, render: (r) => <span className="boards-when cp-num">{formatDateTime(r.createdAt)}</span> },
     {
       key: 'mission',
       header: t('profile.col.mission'),
       render: (r) => (
-        <span className="boards-report-cell">
-          <span className="boards-strong">{r.missionLabel}</span>
-          <span className="boards-report-cell__sub">
+        <span className="boards-mission">
+          <span className="boards-mission__label">{r.missionLabel}</span>
+          <span className="boards-mission__type">
             {[missionTypeLabel(r.missionType, session), r.participants > 1 ? t('result.participants', { n: r.participants }) : t('result.solo'), formatDuration(r.durationS)].join(' · ')}
           </span>
         </span>
@@ -40,30 +40,11 @@ function ActivityDialog({ officer, onClose }: { officer: ReportOfficer | null; o
     {
       key: 'state',
       header: t('profile.col.result'),
-      render: (r) => (
-        <span className="boards-report-result">
-          <StateBadge state={r.state} />
-          <span className="boards-muted">{tOr(`reason.${r.endReason}`, 'common.unknown')}</span>
-        </span>
-      ),
+      width: 210,
+      render: (r) => <ResultCell state={r.state} endReason={r.endReason} flagged={r.flagged} voided={r.voided} flagReason={r.flagReason} />,
     },
-    {
-      key: 'flags',
-      header: '',
-      width: 120,
-      render: (r) => (
-        <span className="boards-report-flags">
-          {r.voided ? <Badge tone="danger" size="sm">{t('profile.voided')}</Badge> : null}
-          {r.flagged ? (
-            <Badge tone="warning" size="sm" icon="alert">
-              {r.flagReason ? tOr(`profile.flag_reason.${r.flagReason}`, 'profile.flagged') : t('profile.flagged')}
-            </Badge>
-          ) : null}
-        </span>
-      ),
-    },
-    { key: 'points', header: t('profile.col.points'), numeric: true, width: 76, render: (r) => <span className={cx((r.voided || r.flagged) && 'boards-struck')}>{formatNumber(r.points)}</span> },
-    { key: 'cash', header: t('profile.col.cash'), numeric: true, width: 96, render: (r) => <Money amount={r.cash} /> },
+    { key: 'points', header: t('profile.col.points'), numeric: true, width: 70, render: (r) => <span className={cx((r.voided || r.flagged) && 'boards-struck')}>{formatNumber(r.points)}</span> },
+    { key: 'cash', header: t('profile.col.cash'), numeric: true, width: 90, render: (r) => <Money amount={r.cash} /> },
   ];
   return (
     <Dialog
@@ -122,7 +103,7 @@ export default function DeptReport() {
     { key: 'flagged', header: t('sup.report.col.flagged'), numeric: true, width: 80, render: (o) => (o.flagged ? <Badge tone="warning" size="sm">{formatNumber(o.flagged)}</Badge> : <span className="boards-muted">0</span>) },
     { key: 'points', header: t('sup.report.col.points'), numeric: true, width: 90, render: (o) => <span className="boards-strong">{formatNumber(o.points)}</span> },
     { key: 'cash', header: t('sup.report.col.cash'), numeric: true, width: 100, render: (o) => <Money amount={o.cash} /> },
-    { key: 'last', header: t('sup.report.col.last'), width: 118, render: (o) => <span className="boards-muted cp-num">{o.lastRunAt ? formatDateTime(o.lastRunAt) : '–'}</span> },
+    { key: 'last', header: t('sup.report.col.last'), width: 118, render: (o) => <span className="boards-when cp-num">{o.lastRunAt ? formatDateTime(o.lastRunAt) : '–'}</span> },
     { key: 'open', header: '', width: 36, align: 'right', render: () => <Icon name="chevronRight" size={16} className="boards-row-chevron" /> },
   ];
 
@@ -172,9 +153,17 @@ export default function DeptReport() {
             </div>
           )}
           {asList(data.standings).length > 1 && data.season ? (
-            <div className="boards-standing__bars">
-              <DeptBars departments={asList(data.standings)} myDepartment={dept?.key} compact />
-            </div>
+            <ol className="boards-mini-standings" aria-label={t('sup.report.all_departments')}>
+              {asList(data.standings).map((d, i) => (
+                <li key={d.key} className={cx('boards-mini-standing', d.key === dept?.key && 'is-mine')}>
+                  <span className="boards-mini-standing__rank cp-num">{d.rank ?? i + 1}</span>
+                  <span className="boards-mini-standing__strip" style={{ backgroundColor: d.colour }} aria-hidden />
+                  <span className="boards-mini-standing__name">{d.short}</span>
+                  <span className="boards-mini-standing__meta">{t('challenge.active_officers', { n: d.activeOfficers })}</span>
+                  <span className="boards-mini-standing__score cp-num">{formatNumber(d.score)}</span>
+                </li>
+              ))}
+            </ol>
           ) : null}
         </Card>
         <BountyCard bounty={data.bounty} myDepartment={dept?.key} />

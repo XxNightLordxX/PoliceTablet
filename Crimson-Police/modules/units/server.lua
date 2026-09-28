@@ -160,8 +160,9 @@ local function pendingCount(unit, now)
     return n
 end
 
--- Push 'unit' to every member and invitee (plus extra srcs), 'board' to members.
-local function pushUnit(unit, extra)
+-- Push 'unit' to every member and invitee (plus extra srcs), 'board' to members. invitedSrc (optional)
+-- gets its 'unit' push with invited = true (the units client plays the invite cue on it).
+local function pushUnit(unit, extra, invitedSrc)
     local sent = {}
     local id = unit and unit.id or false
     if unit then
@@ -175,7 +176,7 @@ local function pushUnit(unit, extra)
         for target in pairs(unit.invites) do
             if not sent[target] then
                 sent[target] = true
-                push(target, 'unit', { unitId = id })
+                push(target, 'unit', { unitId = id, invited = target == invitedSrc or nil })
             end
         end
     end
@@ -393,6 +394,8 @@ local function invite(src, target)
     local me, errKey = getOfficer(src)
     if not me then return false, errKey or 'err.not_police' end
     if target == src then return false, 'err.unit_invite_self' end
+    -- ARCHITECTURE §0.14 / CRIMSON_ARENA.md: in-arena players take no part in invites.
+    if inArena(src) then return false, 'err.in_arena' end
     if onRun(src) then return false, 'err.unit_on_run' end
 
     local them = getOfficer(target)
@@ -424,8 +427,7 @@ local function invite(src, target)
         name = me.name or '?', callsign = me.callsign or CP.L('unit.no_callsign'),
         department = me.departmentShort or '', seconds = INVITE_TTL,
     }, { title = 'unit.invite_title', duration = INVITE_TOAST_MS })
-    pushUnit(unit)
-    push(target, 'unit', { unitId = unit.id, invited = true })
+    pushUnit(unit, nil, target)
     CP.log(TAG, 'unit %d: %d invited %d', unit.id, src, target)
     return true, { unitId = unit.id, expiresIn = INVITE_TTL }
 end
@@ -727,7 +729,7 @@ function Units._sweep()
                 unit.inviteFrom[target] = nil
                 notify(target, 'info', 'unit.invite_expired_you', { name = from and from.name or '?' })
                 if from and from.src and indexOf(unit.members, from.src) then
-                    notify(from.src, 'info', 'unit.invite_expired', { seconds = INVITE_TTL })
+                    notify(from.src, 'info', 'unit.invite_expired', { name = from.targetName or ('#' .. target), seconds = INVITE_TTL })
                 end
                 push(target, 'unit', { unitId = unitIdBySrc[target] or false })
             end

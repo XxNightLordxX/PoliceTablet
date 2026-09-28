@@ -382,6 +382,18 @@ do
     H.eq(A.revive(1.5), false, 'integer only')
     H.eq(A.revive(99), false, 'not connected')
     H.eq(#H.findEvents('hospital:client:Revive'), 1, 'refused revives send nothing')
+
+    -- CRIMSON_ARENA rule 3: never revive an in-arena player (Crimson-Arena revives its own)
+    CP.Alerts = { inArena = function(src) return src == 1 end }
+    local refusedBefore = countLogs('revive refused for player 1')
+    H.eq(A.revive(1), false, 'in-arena player is not revived')
+    H.eq(countLogs('revive refused for player 1') - refusedBefore, 1, 'in-arena refusal logged')
+    H.eq(A.revive(2), true, 'players outside the arena are still revived')
+    CP.Alerts = { inArena = function() error('alerts broken') end }
+    H.eq(A.revive(2), false, 'an inArena error refuses the revive (fail closed)')
+    CP.Alerts = nil
+    H.eq(#H.findEvents('hospital:client:Revive'), 2, 'only the revive outside the arena was sent')
+    H.eq(lastEvent('hospital:client:Revive').target, 2, 'revive target outside the arena')
 end
 
 -- ════════════════════════════════════════════════════════════════════════════
@@ -407,6 +419,13 @@ do
     H.eq(B.recordDeposit('CPT00001', 10, 'x', nil, nil, nil), true, 'nil issuer/receiver become strings')
     H.eq(transactions[3].issuer, '', 'issuer never nil')
     H.eq(transactions[3].transId, nil, 'transId optional')
+    -- long text is cut without splitting a UTF-8 character
+    H.eq(B.recordDeposit('CPT00001', 10, ('m'):rep(199) .. 'é', 'x', ('r'):rep(98) .. '€', nil), true, 'long texts')
+    local tl = transactions[#transactions]
+    H.eq(#tl.message, 199, 'message cut before the split character')
+    H.ok(utf8.len(tl.message) ~= nil, 'message stays valid UTF-8')
+    H.eq(#tl.receiver, 98, 'receiver cut before the split character')
+    H.ok(utf8.len(tl.receiver) ~= nil, 'receiver stays valid UTF-8')
     H.eq(B.recordDeposit('bad', 10, 'x', 'a', 'b'), false, 'rejected arguments -> false')
     H.eq(B.recordDeposit(nil, 10, 'x', 'a', 'b'), false, 'account required')
     H.eq(B.recordDeposit('CPT00001', -1, 'x', 'a', 'b'), false, 'negative refused')
@@ -606,6 +625,32 @@ do
     A.refreshOfficerRow(1)
     H.eq(H.sql('SELECT callsign FROM cp_officers WHERE citizenid = ?', { 'CPT00001' })[1].callsign, '2L-99', 'upsert updates the callsign')
     qbxPlayers[1].PlayerData.metadata.callsign = '2L-14'
+
+    -- A multi-byte character at the column limit is dropped whole: oxmysql talks utf8mb4 and strict mode
+    -- rejects half a character (the harness's mysql client is latin1, so these writes switch to utf8mb4).
+    local realUpdate = MySQL.update.await
+    MySQL.update.await = function(sql, params) return realUpdate('SET NAMES utf8mb4; ' .. sql, params) end
+    H.ok(not pcall(H.sql, "SET NAMES utf8mb4; INSERT INTO cp_officers (citizenid, display_name) VALUES ('UTFCTRL1', ?)",
+        { ('a'):rep(63) .. '\195' }), 'control: strict mode rejects a name cut inside a character')
+    addPlayer(20, 'CPT00020', ('a'):rep(62), 'é', 'sast', 1, ('R'):rep(39) .. '€', true, ('C'):rep(31) .. 'ñ')
+    local u = A.getOfficer(20)
+    H.eq(#u.name, 63, 'name cut before the split é')
+    H.ok(utf8.len(u.name) ~= nil, 'officer name stays valid UTF-8')
+    H.eq(#u.callsign, 31, 'callsign cut before the split ñ')
+    H.eq(#u.rank, 39, 'rank cut before the split €')
+    H.eq(A.refreshOfficerRow(20), true, 'row with multi-byte text at the limits is written')
+    local r20 = H.sql('SET NAMES utf8mb4; SELECT callsign, rank_label, display_name FROM cp_officers WHERE citizenid = ?', { 'CPT00020' })[1]
+    H.eq(r20 and r20.display_name, ('a'):rep(62) .. ' ', 'stored name')
+    H.eq(r20 and r20.callsign, ('C'):rep(31), 'stored callsign')
+    H.eq(r20 and r20.rank_label, ('R'):rep(39), 'stored rank')
+    qbxPlayers[20].PlayerData.charinfo = { firstname = 'José', lastname = 'Núñez' }
+    H.eq(A.getOfficer(20).name, 'José Núñez', 'short multi-byte names are kept whole')
+    H.eq(A.refreshOfficerRow(20), true, 'short multi-byte name written')
+    H.eq(H.sql('SET NAMES utf8mb4; SELECT display_name FROM cp_officers WHERE citizenid = ?', { 'CPT00020' })[1].display_name,
+        'José Núñez', 'multi-byte name stored')
+    MySQL.update.await = realUpdate
+    qbxPlayers[20] = nil
+    H.sql("DELETE FROM cp_officers WHERE citizenid IN ('CPT00020', 'UTFCTRL1')")
 
     -- GetDepartment export
     H.eq(exported.GetDepartment(1), 'sast', 'export GetDepartment')
@@ -958,6 +1003,17 @@ _G.IsEntityPlayingAnim = function() return playing end
 _G.StopAnimTask = function() playing = false end
 _G.IsEntityDead = function() return false end
 _G.LocalPlayer = { state = { isLoggedIn = true } }
+_G.PlayerId = function() return 0 end
+_G.GetPlayerServerId = function() return 7 end
+local bagHandlers = {}
+_G.AddStateBagChangeHandler = function(key, bag, fn) bagHandlers[#bagHandlers + 1] = { key = key, bag = bag, fn = fn } end
+local progressActive, progressCancels = false, 0
+lib.progressActive = function() return progressActive end
+lib.cancelProgress = function()
+    if not progressActive then error('No progress bar is active') end
+    progressActive = false
+    progressCancels = progressCancels + 1
+end
 _G.GetStreetNameAtCoord = function() return 777, 0 end
 _G.GetStreetNameFromHashKey = function(h) if h == 777 then return 'Main St' end return '' end
 
@@ -1046,6 +1102,14 @@ do
     H.eq(CP.Ambulance.sendEMSRequest(), false, 'sc-ambulance stopped')
     stopped['sc-ambulance'] = nil
     H.eq(#H.findEvents('hospital:server:EMSDownAlert'), 2, 'two requests in total')
+    -- Crimson-Arena's value (no source): sc-ambulance would drop it, and the debounce is not used up
+    H.clockMs = H.clockMs + 5100
+    LocalPlayer.state.crimsonArena = { active = true, matchId = 'm1' }
+    H.eq(CP.Ambulance.sendEMSRequest(), false, 'no EMS request while Crimson-Arena owns the player')
+    LocalPlayer.state.crimsonArena = { active = true, source = 'crimson-police' }
+    H.eq(CP.Ambulance.sendEMSRequest(), true, 'our own flag does not block the request (downed clears it first anyway)')
+    LocalPlayer.state.crimsonArena = nil
+    H.eq(#H.findEvents('hospital:server:EMSDownAlert'), 3, 'three requests in total')
 end
 
 -- CP.Tablet (client)
@@ -1078,6 +1142,7 @@ do
     H.eq(focus[#focus][2], true, 'cursor')
     H.eq(propCount(), 1, 'tablet prop created')
     H.eq(objects[nextObj].model, joaat('prop_cs_tablet'), 'Config.Tablet.prop')
+    H.eq(objects[nextObj].net, false, 'the prop is a local object (CRIMSON_ARENA rule 8)')
     H.eq(attached[#attached].bone, 60309, 'attached to the hand bone')
     H.eq(anims[#anims].dict, 'amb@code_human_in_bus_passenger_idles@female@tablet@base', 'tablet animation')
     H.eq(anims[#anims].flag, 49, 'upper body loop')
@@ -1099,6 +1164,9 @@ do
     H.eq(lastNui('close') ~= nil, true, 'close message')
     H.eq(propCount(), 0, 'prop removed on close')
     H.eq(playing, false, 'animation stopped')
+    local focusCalls = #focus
+    H.eq(T.close(), false, 'closing a closed UI')
+    H.eq(#focus, focusCalls, 'closing a closed UI never touches the NUI focus')
     tick(1100)
 
     -- the command toggles
@@ -1281,6 +1349,13 @@ do
     H.eq(lastNui('theme').theme.primary, '#a4161a', 'default theme after unload')
     H.eq(CP.Access.current(), nil, 'access cleared on unload')
     tick(2000)
+    -- a character unload with no Crimson-Police UI open leaves the NUI focus alone (another resource's
+    -- UI, e.g. the character selection, may hold it)
+    local focusBeforeUnload = #focus
+    H.fire('QBCore:Client:OnPlayerUnload', nil)
+    tick(100)
+    H.eq(#focus, focusBeforeUnload, 'unload with the tablet closed never releases the focus')
+    tick(2000)
 
     -- exports: OpenTablet and the ox_inventory item
     H.clockMs = H.clockMs + 1000
@@ -1295,6 +1370,78 @@ do
     H.eq(T.isOpen(), false, 'other items ignored')
     clientExports.useTablet({ name = 'crimson_police_tablet' }, 3)
     H.eq(T.isOpen(), true, 'tablet item opens the Officer UI')
+
+    -- Crimson-Arena (CRIMSON_ARENA rule 8)
+    H.eq(#bagHandlers, 1, 'one crimsonArena change handler')
+    H.eq(bagHandlers[1] and bagHandlers[1].key, 'crimsonArena', 'handler key')
+    H.eq(bagHandlers[1] and bagHandlers[1].bag, 'player:7', 'only the local player bag')
+    local arenaHandler = bagHandlers[1].fn
+    arenaHandler('player:7', 'crimsonArena', { active = true, source = 'crimson-police' })
+    arenaHandler('player:7', 'crimsonArena', nil)
+    arenaHandler('player:7', 'crimsonArena', { active = false, matchId = 'm0' })
+    tick(100)
+    H.eq(T.isOpen(), true, 'our own flag, nil and inactive values keep the tablet open')
+    T.hud({ runId = 'r10', phase = 'objectives' })
+    T.overlay({ kind = 'fade', text = 'x' })
+    CP.Runs = { current = function() return { id = 'r10' } end }
+    progressActive = true
+    local focusBefore = #focus
+    arenaHandler('player:7', 'crimsonArena', { active = true, matchId = 'm1' })
+    H.eq(T.isOpen(), true, 'the change handler only queues the work')
+    tick(100)
+    H.eq(T.isOpen(), false, 'Crimson-Arena placing the player closes the tablet')
+    H.eq(propCount(), 0, 'prop deleted')
+    H.eq(playing, false, 'animation stopped')
+    H.eq(#focus, focusBefore + 1, 'the open UI released its own focus once')
+    H.eq(focus[#focus][1], false, 'focus released')
+    H.eq(lastNui('hud').hud, nil, 'HUD hidden')
+    H.eq(lastNui('overlay').overlay, nil, 'overlay hidden')
+    H.eq(progressCancels, 1, "the run's progress bar is cancelled")
+
+    -- nothing opens while the local value is foreign
+    LocalPlayer.state.crimsonArena = { active = true, matchId = 'm1' }
+    local sessionCalls = #callbackCalls
+    H.clockMs = H.clockMs + 1000
+    H.commands.CrimsonPolice.fn()
+    H.eq(T.isOpen(), false, 'command refused in the arena')
+    H.eq(lastNui('notify').notification.text, CP.L('err.in_arena'), 'err.in_arena toast')
+    H.clockMs = H.clockMs + 1000
+    H.commands.crimsonpolice_tablet.fn()
+    H.eq(T.isOpen(), false, 'key mapping refused in the arena')
+    clientExports.OpenTablet()
+    H.eq(T.isOpen(), false, 'OpenTablet refused in the arena')
+    clientExports.useTablet({ name = 'crimson_police_tablet' })
+    H.eq(T.isOpen(), false, 'tablet item refused in the arena')
+    H.eq(#callbackCalls, sessionCalls, 'no session is even requested')
+    nuiCb.switchUi({ ui = 'officer' }, function(r) reply = r end)
+    H.eq(reply.error, 'err.in_arena', 'switchUi refused in the arena')
+    H.fire('crimson-police:client:openAdmin', nil, { ui = 'admin', title = 'Crimson-Police', roles = { admin = true }, theme = {}, actions = {} })
+    H.eq(T.isOpen(), false, 'Admin UI refused in the arena')
+    focusBefore = #focus
+    arenaHandler('player:7', 'crimsonArena', { active = true, matchId = 'm1' })
+    tick(100)
+    H.eq(#focus, focusBefore, 'a foreign value with nothing open never touches the focus')
+    H.eq(progressCancels, 1, 'no progress bar running -> nothing cancelled')
+
+    -- placed while the session request was on its way
+    LocalPlayer.state.crimsonArena = nil
+    local realAwait = lib.callback.await
+    lib.callback.await = function(name, delay, args)
+        LocalPlayer.state.crimsonArena = { active = true, matchId = 'm2' }
+        return realAwait(name, delay, args)
+    end
+    H.clockMs = H.clockMs + 1000
+    H.commands.CrimsonPolice.fn()
+    H.eq(T.isOpen(), false, 'a session that arrives after the placement does not open')
+    lib.callback.await = realAwait
+
+    -- back from the arena: the tablet opens again
+    LocalPlayer.state.crimsonArena = nil
+    CP.Runs = nil
+    H.clockMs = H.clockMs + 1000
+    H.commands.CrimsonPolice.fn()
+    H.eq(T.isOpen(), true, 'opens again after leaving the arena')
+    H.eq(propCount(), 1, 'with its prop')
 
     -- resource stop cleans up
     TriggerEvent('onResourceStop', 'Crimson-Police')

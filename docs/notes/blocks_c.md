@@ -21,8 +21,8 @@ Search-area fugitives: `idle` (hidden) → `fleeing` → `surrendered` → `cuff
 
 - pursuit: `ramPenaltyId` (`hard_ram`; Pursuit Sim sets `ram`) per counted ram · `detainBonus` (`racer_detained`) per
   detained suspect · `allDetainedBonus` (`all_racers_detained`) once · `fastStop.id` (`vehicle_stopped_fast`) once ·
-  `medal_gold` | `medal_silver` | `medal_bronze` (follow mode).
-- escort: `truck_healthy` once, when the truck arrives above 50 % health.
+  `medal_gold` | `medal_silver` | `medal_bronze` (follow mode, only once the full `duration` was held).
+- escort: `truck_healthy` once, when the truck's health at its arrival was above 50 %.
 - search_area: `clues_first` once, when every clue was checked before the first arrest.
 
 Ids are recorded whenever the event happens; the mission file gives the value (ids outside `Config.Bonuses` need
@@ -52,16 +52,22 @@ the first `ctx.complete()` call, so they exist when the engine scores the run in
 5. **Stopped** = below `stopped.speed` for `stopped.seconds` in a row, counted only once the car has been faster
    than 15 km/h (or 30 s after it fled) **and while a participant is within 50 m** (a PIT/box-in needs officers
    there; a racer waiting at a light far away is not stopped). A wrecked or vanished car counts as stopped.
-6. **After the stop** the occupants are set `stopped` (host: `TaskLeaveVehicle`). Only once the server sees them out
-   of the car (or 6 s later) do they switch to `fleeing` (footFlee roll) / `hostile` (armed) / `surrendered`
-   (`surrenderOnAim = false`), so CP.Npc never tasks a flee while a ped still sits in the stopped car.
+6. **After the stop** the occupants are set `stopped` (host: `TaskLeaveVehicle`, repeated every 2.5 s while they are
+   still seated, warping them out with flag 16 from the 3rd attempt). Only once the server sees them out of the car
+   do they switch to `fleeing` (footFlee roll) / `hostile` (armed) / `surrendered` (`surrenderOnAim = false`): there
+   is no time-out that switches a seated suspect, because CP.Npc's `flee` for a ped in the driver's seat is a
+   vehicle flee (the stopped car would drive off again) and a suspect surrendered in a seat cannot be cuffed.
    Give-ups: aim within 25 m of a waiting suspect (`surrenderOnAim`), aim within `flee_arrest.aimDistance` of a
-   running one (always), stun (participant within 30 m), or a participant within `flee_arrest.closeDistance` for
-   `closeSeconds`; armed ones only by stun or below 50 % health. Arrest = `CP.Npc.enableCuff` with `arrest`.
+   running one (always), stun (a participant within 30 m and the reporter within 60 m), or a participant within
+   `flee_arrest.closeDistance` for `closeSeconds`; armed ones only by stun or below 50 % health. Arrest = `CP.Npc.enableCuff` with `arrest`.
 7. **Completion (stop mode)**: every suspect cuffed or dead without a participant kill (a crash death cannot block
-   the run); `all_racers_detained` only when all were cuffed. `onTimeout` returns `'completed'` for
-   `all_or_timeout_any` with ≥ 1 detained. Killing an unarmed/surrendered/cuffed suspect (participant killer) fails
-   with `run.fail_killed_unarmed` (3 s grace for an armed suspect that just gave up).
+   the run); with `all_or_timeout_any` (Street Race Bust) at least one racer must also be detained, so racers that
+   all died in crashes leave the run to fail at the time limit ("Fail if: the time limit ends with no racer
+   detained"). `all_racers_detained` only when all were cuffed. `onTimeout` returns `'completed'` for
+   `all_or_timeout_any` with ≥ 1 detained. Killing an unarmed/surrendered/cuffed suspect by an **active**
+   participant fails with `run.fail_killed_unarmed` (3 s grace for an armed suspect that just gave up); a kill by a
+   player who already left the run is an outside kill (CP.Npc / CP.AntiCheat flag it), never a fail. The same rule
+   holds for the escort driver and the search_area fugitives and witness.
 8. **Rams**: the ramming driver's client reports the rising edge of `IsEntityTouchingEntity` with the pre-impact
    speed, only when `ramSpeed == 0` or the speed is above it. The server accepts it when the reporter is in a
    vehicle, within 12 m (+2) of the suspect car (server coords), the speed is at most the reporter's highest
@@ -73,21 +79,27 @@ the first `ctx.complete()` call, so they exist when the engine scores the run in
     per tick (nearest participant distance) from the flee on; `inRange += dt` while ≤ `hold`; the average over all
     samples sets the medal (`< gold`, `< silver`, `< bronze`). Lost = more than `lost.distance` for `lost.seconds`
     in a row. Undriveable = a vehicle the participant drove during the objective reaching engine ≤ 0 on the server,
-    or a client report confirmed by engine ≤ 100 or tank ≤ 0. If every suspect is gone (dead without a participant
-    kill) the objective completes with the medal earned so far. `prepare` sets `run.flags.medals = true`.
+    or a client report confirmed by engine ≤ 100 or tank ≤ 0. A medal is only awarded once the full `duration` was
+    held. If every suspect is gone (dead without a participant kill) the objective ends **without** a medal (a
+    getaway driver rammed into a wall after a few seconds must not become a Gold medal once minSeconds pass).
+    `prepare` sets `run.flags.medals = true`.
 11. **Escort progress**: the truck spawns at `route.points[1]` facing `points[2]`; a waypoint is passed within 20 m
     (4 waypoints of look-ahead for cut corners). Reaching a stop waypoint (never the first or last) starts its wait;
     the wait never counts toward `stoppedFail`. Stopped = below 1 m/s, counted once the truck moved (3 m/s) or 30 s
     after it spawned. Destroyed = `onEntityDead` for the truck, entity health ≤ 0, engine ≤ −3999, or the entity
-    missing for 2 ticks in a row (the engine's MISSING_TICKS; every block entity uses the same tolerance). Health % = min(engine, body) / baseline, baseline = 1000 × toughness after the host's `toughened`
-    report (else 1000). A participant killing the (unarmed) driver fails the run; otherwise a dead driver just
+    missing for 2 ticks in a row (the engine's MISSING_TICKS; every block entity uses the same tolerance).
+    Health % = min(engine, body) / baseline, baseline = 1000 × toughness after the host's `toughened` report (else
+    1000); the host reads the toughness from the truck's cp bag `cfg.toughness` (else `ctx.obj.toughness`).
+    `truck_healthy` uses the health **at the moment the truck arrives** ("arrives above 50% health"), recorded once
+    before the first `ctx.complete()`. A participant killing the (unarmed) driver fails the run; otherwise a dead driver just
     leaves the truck stuck (stoppedFail).
 12. **Escort waves**: `ambush.waves` waves at distinct random `ambushPoints` (cycled when there are more waves than
     points; spread over the route when the location has none), sorted along the route. A wave triggers within
     120 m of its point or once the truck passed its nearest waypoint; its `carsPerWave` is read at that moment. A car
     spawns together with its crew once `canSpawn(perCar + 1, false)` and `canSpawn(perCar, true)` both hold.
-    Cars are placed at the point, 7 m apart along the road, alternating 4.5 m left/right, facing the truck;
-    attackers are seated with the server `SetPedIntoVehicle` and set `hostile`. **Complete** = truck within
+    Cars are placed at the point, 7 m apart along the road, alternating 4.5 m left/right, facing the truck, and
+    doors-locked (the crew can get out, nobody can get in); attackers are seated with the server `SetPedIntoVehicle`
+    and set `hostile`. **Complete** = truck within
     `arrival` of the last waypoint, no triggered wave still waiting to spawn, and no living attacker within
     `clearRadius` of the truck (attackers further away do not block; waves not triggered by the arrival are
     dropped). Rescale drops planned waves beyond the new count and lowers counts still missing.
@@ -105,17 +117,31 @@ the first `ctx.complete()` call, so they exist when the engine scores the run in
     current circle (0 inside).
 16. **Presence**: pursuit = nearest suspect not neutralised (its car while driving), escort = the truck,
     search_area = distance beyond the circle edge.
-17. **Nothing to take**: every mission vehicle is locked (`SetVehicleDoorsLocked(veh, 2)` on the server and by the
-    host); peds inside can still get out. NPCs are unarmed except escort attackers (and pursuit with
+17. **Nothing to take**: every mission vehicle (pursuit cars, the escorted truck, every ambush car) is locked
+    (`SetVehicleDoorsLocked(veh, 2)` on the server; pursuit cars and the truck again by the host); peds inside can
+    still get out. NPCs are unarmed except escort attackers (and pursuit with
     `neverShoots = false`); CP.Npc.apply sets no weapon drops.
 18. **HUD**: the server only sends `ctx.hud({ message = { text, kind } })` for events (car fleeing/stopped, ambush,
     stop, wave cleared, arrival, circle shrinks, fugitive running). The HUD line is the client's `ctx.hudDetail`;
     progress counts come from `checklist`.
 19. **Driving**: the clients pass the objective's style name (`cautious`/`reckless`, `careful`/`normal`/`fast`) and
     the speed in m/s to `CP.Npc.task`; CP.Npc owns the mapping to lane-following driving flags. Lap-end and
-    stuck re-tasks (and every escort segment) pass `force = true`, because CP.Npc ignores identical repeats.
+    stuck re-tasks (and every escort segment) pass `force = true`, because CP.Npc ignores identical repeats. The
+    lap end (the waypoint just behind the car when the lap was tasked) only counts after the car first got 30 m
+    away from it, so a racer is re-tasked once per lap, not on every loop pass at the start line.
+20. **Host control**: the host calls `ctx.control` before anything it does to a run entity (not only on first
+    sight); when control comes back from another client the entity is re-applied (`CP.Npc.apply`) and re-tasked,
+    because local config and tasks may not survive an ownership change. A new escorted truck (test restart) is
+    toughened again; clue zones are rebuilt when a clue number gets a new spot; a clue check still in its progress
+    bar is cancelled when the objective stops.
 
 ## Requests to other modules
+
+- **modules/npc (design question, not blocking)**: escort attackers are `CRIMSONPOLICE_HOSTILE`, which only hates
+  `PLAYER`; the truck driver is `CRIMSONPOLICE_NEUTRAL`. Attackers therefore never shoot the truck or its driver
+  on purpose, so "the truck is destroyed" / `truck_healthy` only depend on stray fire and collisions. If ambushes
+  should attack the truck, CP.Npc `combat` needs a target option (the driver or the vehicle) that its AI loop does
+  not re-target to the nearest participant; the block would then pass it.
 
 - **modules/npc (client `CP.Npc.task`)** — checked against the landed module header; the args these blocks pass:
   - `'driveRoute'`: `{ vehicle = entity, points = { vector3, ... }, loop, speed = m/s, style = name, stopRange, force }`.

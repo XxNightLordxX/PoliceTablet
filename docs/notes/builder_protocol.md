@@ -212,7 +212,8 @@ Built-ins: `source: 'builtin'`, `readOnly: true`, `definition` = the built-in fi
   limits: { label: 64, description: 500, objectiveLabel: 64, locationLabel: 64 },
   percentFields: Record<blockId, string[]>, secondsFields: Record<blockId, string[]>,
   spawnFields: Record<blockId, string[]>, forbiddenItems: ['armour', 'bandage', 'ammo-*', 'weapon_*'],
-  useStartRoute: Config.Testing.useStartRoute }
+  useStartRoute: Config.Testing.useStartRoute,
+  permissions: { builderEdit, builderEditAny, builderPublish, builderArchive, builderRollback, breakEditLock } } // mine; admins all true
 ```
 
 ### BuilderError (in `errors` lists)

@@ -72,6 +72,9 @@ local TAG = 'runs'
 local BOSS_ID = 'weekly_boss_kingpin'
 local LIGHTS_MISSIONS = { beat_patrol = true, business_check = true }
 local SPAWN_WAIT_MS = 3000          -- wait for a server-created entity to exist
+local LATE_SPAWN_MS = 30000         -- an entity that appears after SPAWN_WAIT_MS is still deleted within this
+local TICK_STUCK_MS = 30000         -- a run tick still busy after this long is reported once
+local COOLDOWN_LOAD_WAIT_MS = 5000  -- concurrent callers wait this long for a cooldown rebuild in flight
 local HOST_STALE_MS = 15000         -- a host silent this long hands the AI to the next participant
 local ENDED_KEEP_S = 900            -- ended runs kept for reclassify (the dodge window is 60 s)
 local HOURLY_CACHE_S = 10
@@ -104,6 +107,7 @@ local TYPE_COOLDOWN = set({ 'quit', 'off_route', 'start_timeout', 'idle', 'job_c
 local MISSION_COOLDOWN = set({ 'quit', 'off_route', 'start_timeout', 'idle', 'job_change', 'off_duty', 'suspended',
     'real_call_cancelled', 'downed', 'disconnected', 'completed', 'time_limit', 'mission_failed' })
 local TELEMETRY_KINDS = set({ 'vehicle', 'ped_hit', 'lights_siren', 'weapon_fired' })
+local LOST_REASONS = set({ 'off_duty', 'job_change', 'suspended' })   -- CP.Access.recheck / onLost reasons
 
 local runs = {}          -- runId -> run (accepted or in_progress)
 local bySrc = {}         -- src -> runId (active participants only)
@@ -625,13 +629,40 @@ local function entityCounts(run)
     return total, armedAlive
 end
 
+-- Spawns still waiting for their entity to exist count toward the caps too, so two spawns that interleave
+-- (a block tick and a net event) can never pass the caps together.
+local function pendingOf(run)
+    local ps = run.pendingSpawns
+    if not ps then
+        ps = { total = 0, armed = 0 }
+        run.pendingSpawns = ps
+    end
+    return ps
+end
+
 function Runs.canSpawn(run, n, armed)
     if type(run) ~= 'table' or run.state == 'ended' then return false end
     n = math.max(0, math.floor(num(n, 1)))
     local total, armedAlive = entityCounts(run)
-    if total + n > num(limits().maxEntities, 80) then return false end
-    if armed and armedAlive + n > num(limits().maxArmedAlive, 25) then return false end
+    local ps = pendingOf(run)
+    if total + ps.total + n > num(limits().maxEntities, 80) then return false end
+    if armed and armedAlive + ps.armed + n > num(limits().maxArmedAlive, 25) then return false end
     return true
+end
+
+-- Run fn (which creates and tracks one entity) while it counts as a pending spawn.
+local function withPending(run, armed, fn)
+    local ps = pendingOf(run)
+    ps.total = ps.total + 1
+    if armed then ps.armed = ps.armed + 1 end
+    local ok, entity, netId = pcall(fn)
+    ps.total = math.max(0, ps.total - 1)
+    if armed then ps.armed = math.max(0, ps.armed - 1) end
+    if not ok then
+        CP.err(TAG, 'run %s: spawn failed: %s', tostring(run.id), tostring(entity))
+        return nil
+    end
+    return entity, netId
 end
 
 local function waitExists(entity)
@@ -642,6 +673,31 @@ local function waitExists(entity)
         Wait(0)
     end
     return true
+end
+
+-- A server-created entity that did not exist in time may still appear later (the RPC reaches a client
+-- late): delete it when it does, so nothing is left behind. The model check keeps a reused handle safe.
+local function sameHash(a, b)
+    a, b = math.tointeger(tonumber(a) or 0), math.tointeger(tonumber(b) or 0)
+    if not a or not b then return false end
+    return (a & 0xFFFFFFFF) == (b & 0xFFFFFFFF)   -- signed or unsigned 32-bit forms
+end
+
+local function deleteWhenItAppears(entity, hash)
+    if not entity or entity == 0 then return end
+    CreateThread(function()
+        local deadline = GetGameTimer() + LATE_SPAWN_MS
+        while GetGameTimer() < deadline do
+            if DoesEntityExist(entity) then
+                if not hash or not GetEntityModel or sameHash(GetEntityModel(entity), hash) then
+                    DeleteEntity(entity)
+                    CP.log(TAG, 'late entity %s deleted', tostring(entity))
+                end
+                return
+            end
+            Wait(500)
+        end
+    end)
 end
 
 local function netIdOf(entity)
@@ -667,7 +723,7 @@ end
 local function track(run, entity, kind, opts, extraCfg)
     if not waitExists(entity) then
         CP.warn(TAG, 'run %s: %s %s did not appear within %d ms', run.id, kind, tostring(opts.model), SPAWN_WAIT_MS)
-        if entity and entity ~= 0 and DoesEntityExist(entity) then DeleteEntity(entity) end
+        deleteWhenItAppears(entity, modelHash(opts.model))
         return nil
     end
     if run.state == 'ended' then
@@ -708,10 +764,12 @@ function Runs.spawnPed(run, opts)
         return nil
     end
     if not Runs.canSpawn(run, 1, opts.armed == true) then return nil end
-    local ped = CreatePed(4, hash, x, y, z, h, true, true)
-    local entity, netId = track(run, ped, 'ped', opts, {
-        weapon = opts.weapon, accuracy = opts.accuracy, armour = opts.armour, health = opts.health, model = opts.model,
-    })
+    local entity, netId = withPending(run, opts.armed == true, function()
+        local ped = CreatePed(4, hash, x, y, z, h, true, true)
+        return track(run, ped, 'ped', opts, {
+            weapon = opts.weapon, accuracy = opts.accuracy, armour = opts.armour, health = opts.health, model = opts.model,
+        })
+    end)
     if not entity then return nil end
     if opts.armed and opts.weapon then
         local w = modelHash(opts.weapon)
@@ -735,14 +793,16 @@ function Runs.spawnVehicle(run, opts)
         return nil
     end
     if not Runs.canSpawn(run, 1, false) then return nil end
-    local veh
-    if CreateVehicleServerSetter then
-        local vtype = opts.vehicleType or (type(opts.model) == 'string' and VEHICLE_TYPES[opts.model:lower()]) or 'automobile'
-        veh = CreateVehicleServerSetter(hash, vtype, x, y, z, h)
-    else
-        veh = CreateVehicle(hash, x, y, z, h, true, true)
-    end
-    local entity, netId = track(run, veh, 'vehicle', opts, { model = opts.model })
+    local entity, netId = withPending(run, false, function()
+        local veh
+        if CreateVehicleServerSetter then
+            local vtype = opts.vehicleType or (type(opts.model) == 'string' and VEHICLE_TYPES[opts.model:lower()]) or 'automobile'
+            veh = CreateVehicleServerSetter(hash, vtype, x, y, z, h)
+        else
+            veh = CreateVehicle(hash, x, y, z, h, true, true)
+        end
+        return track(run, veh, 'vehicle', opts, { model = opts.model })
+    end)
     if not entity then return nil end
     if type(opts.plate) == 'string' and opts.plate ~= '' and SetVehicleNumberPlateText then
         SetVehicleNumberPlateText(entity, opts.plate:sub(1, 8))
@@ -759,8 +819,10 @@ function Runs.spawnObject(run, opts)
         return nil
     end
     if not Runs.canSpawn(run, 1, false) then return nil end
-    local obj = CreateObjectNoOffset(hash, x, y, z, true, true, false)
-    local entity, netId = track(run, obj, 'object', opts, { model = opts.model })
+    local entity, netId = withPending(run, false, function()
+        local obj = CreateObjectNoOffset(hash, x, y, z, true, true, false)
+        return track(run, obj, 'object', opts, { model = opts.model })
+    end)
     if not entity then return nil end
     if type(opts.coords) == 'vector4' or (type(opts.coords) == 'table' and (opts.coords.w or opts.coords[4])) then
         SetEntityHeading(entity, h)
@@ -830,10 +892,21 @@ function Runs.entityDied(run, netId, killerSrc)
     end
 end
 
-local function vehicleWrecked(entity)
-    if GetVehicleEngineHealth and GetVehicleEngineHealth(entity) <= -3999.0 then return true end
-    if GetEntityHealth and GetEntityHealth(entity) <= 0 then return true end
-    return false
+-- Server-side health comes from the owner's sync data: a server-created entity reads 0 until a client has
+-- created and synced it. A health of 0 therefore only counts after a positive value was seen once.
+local function healthGone(e)
+    local h = GetEntityHealth and tonumber(GetEntityHealth(e.entity)) or nil
+    if not h then return false end
+    if h > 0 then
+        e.healthSeen = true
+        return false
+    end
+    return e.healthSeen == true
+end
+
+local function vehicleWrecked(e)
+    if GetVehicleEngineHealth and (tonumber(GetVehicleEngineHealth(e.entity)) or 0) <= -3999.0 then return true end
+    return healthGone(e)
 end
 
 local function deleteAllEntities(run)
@@ -854,9 +927,9 @@ local function entityBookkeeping(run)
         else
             e.missing = 0
             if not e.dead then
-                if e.kind == 'vehicle' and vehicleWrecked(e.entity) then
+                if e.kind == 'vehicle' and vehicleWrecked(e) then
                     died[#died + 1] = netId
-                elseif e.kind == 'ped' and not pedDeathsByNpc and GetEntityHealth(e.entity) <= 0 then
+                elseif e.kind == 'ped' and not pedDeathsByNpc and healthGone(e) then
                     died[#died + 1] = netId
                 end
             elseif e.deadAt and now - e.deadAt >= corpseCleanup() then
@@ -1042,7 +1115,13 @@ end
 local function loadCooldowns(citizenid)
     local c = cdEntry(citizenid)
     if c.loaded then return c end
-    c.loaded = true
+    if c.loading then
+        -- Another caller is rebuilding right now: wait for it instead of answering from a half-built cache.
+        local deadline = GetGameTimer() + COOLDOWN_LOAD_WAIT_MS
+        while c.loading and GetGameTimer() < deadline do Wait(50) end
+        return c
+    end
+    c.loading = true
     db()
     local ok, rows = pcall(MySQL.query.await, [[
         SELECT mission_type, mission_id, end_reason, UNIX_TIMESTAMP(created_at) AS created_ts
@@ -1050,11 +1129,12 @@ local function loadCooldowns(citizenid)
         WHERE citizenid = ? AND created_at >= NOW() - INTERVAL ? SECOND
           AND mission_type NOT IN ('manual_award', 'goal')
     ]], { citizenid, rebuildWindow() })
+    c.loading = false
     if not ok then
-        c.loaded = false
         CP.err(TAG, 'cooldown rebuild for %s failed: %s', tostring(citizenid), tostring(rows))
         return c
     end
+    c.loaded = true
     for _, row in ipairs(rows or {}) do
         local ts = U.num(row.created_ts)
         local reason = row.end_reason
@@ -1284,7 +1364,18 @@ local function settle(run, p, result, endReason, others)
 
     if (result == 'completed' or result == 'failed') and #run.order >= 2 and has('AntiCheat', 'presenceOk') then
         local ok, present = call('AntiCheat', 'presenceOk', run, p)
-        if ok and present == false and not p.flagged then p.flagged = { reason = 'presence' } end
+        if ok and present == false and not p.flagged then
+            -- Through CP.AntiCheat.flag so the flag is audited and posted like every other one (the Review
+            -- Queue reads its detail there); the local record is the fallback and the test-run preview.
+            if not run.test and has('AntiCheat', 'flag') then
+                local okS, share = call('AntiCheat', 'presenceShare', p)
+                local detail = ('%s in range for %s of the run (needs %d%%)'):format(tostring(p.name or p.citizenid),
+                    (okS and tonumber(share)) and ('%d%%'):format(math.floor(tonumber(share) * 100 + 0.5)) or '?',
+                    math.floor(num(Config.AntiCheat and Config.AntiCheat.presenceShare, 0.70) * 100 + 0.5))
+                call('AntiCheat', 'flag', run, p.src, 'presence', detail)
+            end
+            if not p.flagged then p.flagged = { reason = 'presence' } end
+        end
     end
 
     local amount, cash = computeCash(run, p, result)
@@ -1622,6 +1713,19 @@ function Runs.create(opts)
     local okU, unit = call('Units', 'unitOf', leader)
     if okU and type(unit) == 'table' then run.unit = unit end
 
+    -- The lookups above may yield (database, other modules). Re-check, with no yield until the run is
+    -- registered, what another accept could have changed meanwhile: nobody ends up on two runs and two
+    -- racing accepts never pass the server caps together.
+    for _, src in ipairs(run.order) do
+        if Runs.isOnMission(src) then
+            return nil, (src == leader) and 'err.already_on_run' or 'err.member_on_run'
+        end
+    end
+    if not test and not opts.operationId then
+        local okCaps, capsErr = Runs.capsOk(missionType)
+        if not okCaps then return nil, capsErr end
+    end
+
     runs[id] = run
     for _, src in ipairs(run.order) do bySrc[src] = id end
     call('Draw', 'reserve', id, mission.id, locationIndex)
@@ -1705,7 +1809,7 @@ function Runs.markArrived(run, src)
     if not p or p.status ~= 'active' or p.arrived then return end
     p.arrived = true
     p.arrivedAt = os.time()
-    call('Alerts', 'set', src)
+    call('Alerts', 'set', src, run)
     Runs.hudFor(run, src, { route = { status = 'arrived', distance = 0 } })
     CP.log(TAG, 'run %s: %d arrived at the start', run.id, src)
     local first = run.state == 'accepted'
@@ -1867,7 +1971,7 @@ function Runs.removeParticipant(run, src, endReason, opts)
         run.state = 'ended'
         run.endedAt = os.time()
         run.endReason = endReason
-        run.endState = 'abandoned'
+        run.endState = result == 'failed' and 'failed' or 'abandoned'
         cleanupRun(run)
     else
         if run.host == src then migrateHost(run, 'left') end
@@ -1887,7 +1991,7 @@ function Runs.removeParticipant(run, src, endReason, opts)
     pushNone(src)
 
     if lastOut then
-        local state = result == 'failed' and 'failed' or 'abandoned'
+        local state = run.endState
         CP.log(TAG, 'run %s ended: nobody left (%s)', run.id, state)
         afterRunEnded(run, state)
     else
@@ -1940,8 +2044,16 @@ function Runs.endRun(run, state, endReason)
     afterRunEnded(run, state)
 end
 
+-- Which stored end reasons a reclassification may replace: an un-marked real call only turns a real_call
+-- leave into real_call_cancelled (a force recall or a cancelled operation never becomes a normal abandon).
+local RECLASSIFY_FROM = {
+    real_call_cancelled = { list = { real_call = true }, sql = "('real_call')" },
+}
+local RECLASSIFY_ANY = { list = { real_call = true, force_recall = true, cancelled = true }, sql = "('real_call', 'force_recall', 'cancelled')" }
+
 function Runs.reclassify(citizenid, runId, newEndReason)
     if type(citizenid) ~= 'string' or type(runId) ~= 'string' or not RESULT[newEndReason] then return false end
+    local from = RECLASSIFY_FROM[newEndReason] or RECLASSIFY_ANY
     local run = runs[runId] or (endedRuns[runId] and endedRuns[runId].run)
     local p
     if run then
@@ -1949,19 +2061,19 @@ function Runs.reclassify(citizenid, runId, newEndReason)
             if q.citizenid == citizenid then p = q; break end
         end
     end
-    if run and run.test then
-        if p then p.endReason = newEndReason end
-        return true
-    end
     if p then
         if p.status == 'active' then return false end
         if p.endReason == newEndReason then return true end
+        if not from.list[p.endReason] then return false end
+    end
+    if run and run.test then
+        if p then p.endReason, p.result = newEndReason, RESULT[newEndReason] end
+        return p ~= nil
     end
     db()
     local ok, n = pcall(MySQL.update.await, [[
         UPDATE cp_mission_runs SET end_reason = ?, state = ?, breakdown = JSON_SET(breakdown, '$.endReason', ?)
-        WHERE run_uuid = ? AND citizenid = ? AND end_reason IN ('real_call', 'force_recall', 'cancelled')
-    ]], { newEndReason, RESULT[newEndReason], newEndReason, runId, citizenid })
+        WHERE run_uuid = ? AND citizenid = ? AND end_reason IN ]] .. from.sql, { newEndReason, RESULT[newEndReason], newEndReason, runId, citizenid })
     if not ok then
         CP.err(TAG, 'reclassify %s/%s failed: %s', citizenid, runId, tostring(n))
         return false
@@ -2213,7 +2325,7 @@ local function recheckOk(run, p)
     if not has('Access', 'recheck') then return true end
     local ok, qualifies, reason = call('Access', 'recheck', p.src, p.job)
     if ok and qualifies == false then
-        Runs.removeParticipant(run, p.src, reason or 'job_change')
+        Runs.removeParticipant(run, p.src, LOST_REASONS[reason] and reason or 'job_change')
         return false
     end
     return true
@@ -2236,7 +2348,7 @@ RegisterNetEvent(CP.e('server:objective'), function(runId, index, evidence)
         CP.warn(TAG, 'objective event from %d who is not an active participant of run %s', src, runId)
         return
     end
-    if run.state ~= 'in_progress' or not index or not run.objectives[index] then
+    if run.state ~= 'in_progress' or not index or index < 1 then
         CP.log(TAG, 'run %s: objective event %s from %d ignored (state %s)', runId, tostring(index), src, run.state)
         return
     end
@@ -2246,6 +2358,8 @@ RegisterNetEvent(CP.e('server:objective'), function(runId, index, evidence)
         return
     end
     if inArena(src) then return end
+    -- CP.AntiCheat sees every well-formed event, also one for an objective past the last (an executor's
+    -- event for a later objective flags the run 'unexpected_event' there).
     if has('AntiCheat', 'checkEvent') then
         local okCall, ok, reason = call('AntiCheat', 'checkEvent', run, src, index, ev)
         if okCall and ok == false then
@@ -2253,12 +2367,14 @@ RegisterNetEvent(CP.e('server:objective'), function(runId, index, evidence)
             return
         end
     end
-    if index ~= run.objectiveIndex or run.objectives[index].status ~= 'active' then
+    local o = run.objectives[index]
+    if not o or index ~= run.objectiveIndex or o.status ~= 'active' then
         CP.log(TAG, 'run %s: evidence for objective %d from %d is out of order (current %d)', runId, index, src, run.objectiveIndex)
         return
     end
     if not recheckOk(run, p) then return end
-    if run.state ~= 'in_progress' or index ~= run.objectiveIndex then return end
+    -- The re-check may yield: the participant, the run or the objective may have changed meanwhile.
+    if run.state ~= 'in_progress' or p.status ~= 'active' or index ~= run.objectiveIndex or o.status ~= 'active' then return end
     local okCall, ok, reason = callBlock(run, index, 'onEvent', src, ev)
     if okCall and ok == false then
         CP.log(TAG, 'run %s: block rejected %s from %d (%s)', runId, ev.type, src, tostring(reason))
@@ -2522,7 +2638,17 @@ local function registerHooks()
         local run, p = Runs.getBySrc(src)
         if not run then return end
         if run.test and not p.isOfficer then return end
-        if endReason ~= 'off_duty' and endReason ~= 'job_change' and endReason ~= 'suspended' then endReason = 'job_change' end
+        if not LOST_REASONS[endReason] then endReason = 'job_change' end
+        -- Duty signals can be stale or superseded (INTEGRATIONS: SetDuty re-entrancy / ordering): an off-duty
+        -- signal only removes the officer while the live check still agrees at this moment.
+        if endReason == 'off_duty' and has('Access', 'recheck') then
+            local ok, qualifies, reason = call('Access', 'recheck', src, p.job)
+            if ok and qualifies ~= false then
+                CP.log(TAG, 'off-duty signal for %d ignored: back on duty', src)
+                return
+            end
+            if ok and LOST_REASONS[reason] then endReason = reason end
+        end
         Runs.removeParticipant(run, src, endReason)
     end)
     CP.Qbx.onPlayerUnload(function(src)

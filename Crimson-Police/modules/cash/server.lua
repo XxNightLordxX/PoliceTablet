@@ -403,11 +403,11 @@ function Cash.release(rowId)
     db()
     local row = readRow(rowId)
     if not row then return nil end
+    if CP.U.truthy(row.voided) then return nil end
     if CP.U.truthy(row.flagged) then
         CP.warn(TAG, 'release(%d) was called while the row is still flagged; clear the flag first', rowId)
         return nil
     end
-    if CP.U.truthy(row.voided) then return nil end
     return Cash.pay(rowId)
 end
 

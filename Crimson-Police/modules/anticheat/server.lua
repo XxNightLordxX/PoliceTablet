@@ -34,7 +34,8 @@
     CP.AntiCheat.flag(run, src|nil, reason, detail) -> boolean (true when newly recorded)
     CP.AntiCheat.onNpcKilled(run, killerSrc)
     CP.AntiCheat.presenceOk(run, p) -> boolean      share >= Config.AntiCheat.presenceShare (true for solo
-                                                    runs and when nothing was sampled)
+                                                    runs and when nothing was sampled); a failing participant is
+                                                    flagged 'presence' with the share as detail (once)
     CP.AntiCheat.presenceShare(p) -> number|nil     inRange / total
     CP.AntiCheat.onVoided(citizenid) -> suspended (boolean)
     CP.AntiCheat.evidenceSignature(evidence) -> string   (pure; coords/time excluded, keys sorted)
@@ -384,7 +385,15 @@ function AC.presenceOk(run, p)
     if #(run.order or {}) < 2 then return true end
     local share = AC.presenceShare(p)
     if share == nil then return true end
-    return share >= num(cfg().presenceShare, 0.70)
+    local need = num(cfg().presenceShare, 0.70)
+    if share >= need then return true end
+    -- Record why (once per participant) so the Review Queue can show the share.
+    if p.src and not run.test then
+        AC.flag(run, p.src, 'presence', CP.L('admin.anticheat.presence_detail', {
+            share = math.floor(share * 100 + 0.5), need = math.floor(need * 100 + 0.5),
+        }))
+    end
+    return false
 end
 
 -- ── idle check and bucket tracking ──────────────────────────────────────────

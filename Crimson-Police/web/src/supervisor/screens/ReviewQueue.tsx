@@ -26,6 +26,7 @@ type Detail = { kind: 'flag'; row: FlaggedRow } | { kind: 'dispute'; row: Disput
 const flagLabel = (reason: string | null | undefined) => (reason && hasKey(`flag.${reason}`) ? t(`flag.${reason}`) : t('flag.flagged'));
 const endLabel = (reason: string) => (hasKey(`sup.end.${reason}`) ? t(`sup.end.${reason}`) : reason);
 const stateTone = (s: string) => (s === 'completed' ? 'success' : s === 'failed' ? 'danger' : 'grey');
+const resultText = (state: string, endReason: string) => (state === 'completed' ? t(`sup.state.${state}`) : `${t(`sup.state.${state}`)} · ${endLabel(endReason)}`);
 const cashLabel = (status: string) => (hasKey(`result.cash_status.${status}`) ? t(`result.cash_status.${status}`) : status);
 
 function Officer({ name, callsign, dept }: { name: string; callsign: string | null; dept: string }) {
@@ -40,7 +41,7 @@ function Officer({ name, callsign, dept }: { name: string; callsign: string | nu
   );
 }
 
-function Mission({ label, type, state, endReason }: { label: string; type: string; state: string; endReason: string }) {
+function Mission({ label, type, state, endReason, when }: { label: string; type: string; state: string; endReason: string; when?: number }) {
   return (
     <div className="oversight-rq-mission">
       <span className="oversight-rq-mission__name">{label}</span>
@@ -49,6 +50,7 @@ function Mission({ label, type, state, endReason }: { label: string; type: strin
         <Badge size="sm" tone={stateTone(state)}>{t(`sup.state.${state}`)}</Badge>
         {state !== 'completed' ? <span title={endReason}>{endLabel(endReason)}</span> : null}
       </span>
+      {when ? <span className="oversight-rq-mission__when cp-num">{formatDateTime(when)}</span> : null}
     </div>
   );
 }
@@ -81,7 +83,7 @@ function FlagDetail({ row }: { row: FlaggedRow }) {
         <KeyValue label={t('sup.review.detail.officer')}>{row.name}</KeyValue>
         <KeyValue label={t('sup.review.detail.mission')}>{row.missionLabel}</KeyValue>
         <KeyValue label={t('sup.review.detail.location')}>{row.location || '—'}</KeyValue>
-        <KeyValue label={t('sup.review.detail.result')}>{t(`sup.state.${row.state}`)} · {endLabel(row.endReason)}</KeyValue>
+        <KeyValue label={t('sup.review.detail.result')}>{resultText(row.state, row.endReason)}</KeyValue>
         <KeyValue label={t('sup.review.detail.participants')}><span className="cp-num">{t('sup.review.participants_value', { n: row.participants, d: row.departments })}</span></KeyValue>
         <KeyValue label={t('sup.review.detail.duration')}><span className="cp-num">{formatDuration(row.durationS)}</span></KeyValue>
         <KeyValue label={t('sup.review.detail.points')}><Points value={row.points} /></KeyValue>
@@ -108,7 +110,7 @@ function DisputeDetail({ row }: { row: DisputeView }) {
       <Grid cols={3} gap={3}>
         <KeyValue label={t('sup.review.detail.officer')}>{row.name}</KeyValue>
         <KeyValue label={t('sup.review.detail.mission')}>{row.missionLabel}</KeyValue>
-        <KeyValue label={t('sup.review.detail.result')}>{t(`sup.state.${row.state}`)} · {endLabel(row.endReason)}</KeyValue>
+        <KeyValue label={t('sup.review.detail.result')}>{resultText(row.state, row.endReason)}</KeyValue>
         <KeyValue label={t('sup.review.detail.points')}><Points value={row.points} /></KeyValue>
         <KeyValue label={t('sup.review.detail.cash')}><Money amount={row.cash} /> <span className="oversight-rq-soft">{cashLabel(row.cashStatus)}</span></KeyValue>
         <KeyValue label={t('sup.review.detail.filed')}><span className="cp-num">{formatDateTime(row.createdAt)}</span></KeyValue>
@@ -163,11 +165,11 @@ export default function SupReviewQueue() {
   );
 
   const flagColumns: TableColumn<FlaggedRow>[] = [
-    { key: 'officer', header: t('sup.review.col.officer'), width: 170, render: (r) => <Officer name={r.name} callsign={r.callsign} dept={r.departmentShort} /> },
-    { key: 'mission', header: t('sup.review.col.mission'), render: (r) => <Mission label={r.missionLabel} type={r.missionTypeLabel} state={r.state} endReason={r.endReason} /> },
-    { key: 'flag', header: t('sup.review.col.flag'), width: 210, render: (r) => <FlagCell row={r} /> },
+    { key: 'officer', header: t('sup.review.col.officer'), width: 150, render: (r) => <Officer name={r.name} callsign={r.callsign} dept={r.departmentShort} /> },
+    { key: 'mission', header: t('sup.review.col.mission'), render: (r) => <Mission label={r.missionLabel} type={r.missionTypeLabel} state={r.state} endReason={r.endReason} when={r.createdAt} /> },
+    { key: 'flag', header: t('sup.review.col.flag'), width: 190, render: (r) => <FlagCell row={r} /> },
     {
-      key: 'held', header: t('sup.review.col.held'), width: 104, numeric: true,
+      key: 'held', header: t('sup.review.col.held'), width: 90, numeric: true,
       render: (r) => (
         <div className="oversight-rq-held">
           <Points value={r.points} />
@@ -175,14 +177,13 @@ export default function SupReviewQueue() {
         </div>
       ),
     },
-    { key: 'when', header: t('sup.review.col.when'), width: 104, render: (r) => <span className="cp-num oversight-rq-soft">{formatDateTime(r.createdAt)}</span> },
-    { key: 'actions', header: '', width: 214, align: 'right', render: flagActions },
+    { key: 'actions', header: '', width: 200, align: 'right', render: flagActions },
   ];
 
   const disputeColumns: TableColumn<DisputeView>[] = [
-    { key: 'officer', header: t('sup.review.col.officer'), width: 170, render: (r) => <Officer name={r.name} callsign={r.callsign} dept={r.departmentShort} /> },
+    { key: 'officer', header: t('sup.review.col.officer'), width: 158, render: (r) => <Officer name={r.name} callsign={r.callsign} dept={r.departmentShort} /> },
     {
-      key: 'mission', header: t('sup.review.col.mission'), width: 190,
+      key: 'mission', header: t('sup.review.col.mission'), width: 180,
       render: (r) => (
         <div className="oversight-rq-mission">
           <span className="oversight-rq-mission__name">{r.missionLabel}</span>
@@ -194,8 +195,8 @@ export default function SupReviewQueue() {
       ),
     },
     { key: 'reason', header: t('sup.review.col.officer_reason'), render: (r) => <span className="oversight-rq-quote oversight-rq-clamp" title={r.reason}>{r.reason}</span> },
-    { key: 'when', header: t('sup.review.col.filed'), width: 104, render: (r) => <span className="cp-num oversight-rq-soft">{formatDateTime(r.createdAt)}</span> },
-    { key: 'actions', header: '', width: 214, align: 'right', render: disputeActions },
+    { key: 'when', header: t('sup.review.col.filed'), width: 104, render: (r) => <span className="cp-num oversight-rq-soft oversight-rq-date">{formatDateTime(r.createdAt)}</span> },
+    { key: 'actions', header: '', width: 200, align: 'right', render: disputeActions },
   ];
 
   const tabs = [

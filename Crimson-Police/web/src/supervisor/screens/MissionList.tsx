@@ -122,9 +122,11 @@ export default function SupMissionList() {
           <div className="oversight-mission__meta">
             <span>{m.typeLabel}</span>
             <span aria-hidden>·</span>
-            <Badge size="sm" tone={m.source === 'custom' ? 'primary' : 'neutral'} variant="outline">
-              {m.source === 'custom' ? t('sup.missions.source.custom_v', { version: m.version ?? 1 }) : t('sup.missions.source.builtin')}
-            </Badge>
+            {m.source === 'custom' ? (
+              <Badge size="sm" tone="primary" icon="tool">{t('sup.missions.source.custom_v', { version: m.version ?? 1 })}</Badge>
+            ) : (
+              <span>{t('sup.missions.source.builtin')}</span>
+            )}
             {m.isBoss ? <Badge size="sm" tone="accent" icon="star">{t('sup.missions.boss')}</Badge> : null}
             {asArray(m.departments).length ? (
               <Badge size="sm" tone="warning" variant="outline">{t('sup.missions.departments_only', { depts: asArray(m.departments).map(deptShort).join(', ') })}</Badge>
@@ -133,11 +135,11 @@ export default function SupMissionList() {
         </div>
       ),
     },
-    { key: 'difficulty', header: t('sup.missions.col.difficulty'), width: 96, render: (m) => <Stars value={m.difficulty} /> },
+    { key: 'difficulty', header: t('sup.missions.col.difficulty'), width: 88, render: (m) => <Stars value={m.difficulty} /> },
     {
       key: 'officers',
       header: t('sup.missions.col.officers'),
-      width: 84,
+      width: 76,
       align: 'center',
       render: (m) => (
         <span className="oversight-officers cp-num">
@@ -149,7 +151,7 @@ export default function SupMissionList() {
     {
       key: 'payout',
       header: t('sup.missions.col.payout'),
-      width: 150,
+      width: 138,
       numeric: true,
       render: (m) => (
         <span className="oversight-payout" title={t(`sup.missions.payout_hint.${m.payoutSource}`)}>
@@ -160,18 +162,18 @@ export default function SupMissionList() {
         </span>
       ),
     },
-    { key: 'cooldown', header: t('sup.missions.col.cooldown'), width: 96, numeric: true, render: (m) => <span className="cp-num">{cooldownText(m.cooldown)}</span> },
-    { key: 'running', header: t('sup.missions.col.running'), width: 190, render: (m) => <Runners m={m} /> },
+    { key: 'cooldown', header: t('sup.missions.col.cooldown'), width: 86, numeric: true, render: (m) => <span className="cp-num">{cooldownText(m.cooldown)}</span> },
+    { key: 'running', header: t('sup.missions.col.running'), width: 168, render: (m) => <Runners m={m} /> },
     {
       key: 'actions',
       header: '',
-      width: 118,
+      width: 104,
       align: 'right',
       render: (m) =>
         m.crossDeptEligible && canLaunch ? (
           <Button
             size="sm"
-            variant="primary"
+            variant="secondary"
             icon="globe"
             disabled={!!operation || busy}
             title={operation ? t('sup.missions.op_active', { mission: operation.missionLabel }) : t('sup.missions.launch_hint')}

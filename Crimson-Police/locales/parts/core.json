@@ -3,6 +3,7 @@
   "access.unsuspended_notice": "Your Crimson-Police suspension has been lifted.",
   "common.unknown": "Unknown",
   "err.busy": "Please wait a moment.",
+  "err.in_arena": "You can't take a mission while you are in the arena.",
   "err.internal": "Something went wrong. Please try again.",
   "err.invalid_citizenid": "Enter a valid citizen ID.",
   "err.invalid_days": "Enter a whole number of days from 0 to 3650.",

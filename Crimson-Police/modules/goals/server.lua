@@ -62,7 +62,7 @@ local function validGoals(list)
     return out
 end
 
--- The goal of `kind` for citizenid in the period that contains ts.
+-- The goal of 'kind' for citizenid in the period that contains ts.
 local function pick(kind, citizenid, ts)
     local list = validGoals(Config.Goals and Config.Goals[kind])
     if #list == 0 then return nil end
@@ -82,7 +82,7 @@ local function labelOf(goal)
     return CP.L('goals.unnamed', { count = math.floor(num(goal.count, 1)) })
 end
 
--- Counted runs since `start` that match the goal.
+-- Counted runs since 'start' that match the goal.
 local function progressOf(goal, citizenid, start)
     local sql = {
         [[SELECT COUNT(*) AS n FROM cp_mission_runs

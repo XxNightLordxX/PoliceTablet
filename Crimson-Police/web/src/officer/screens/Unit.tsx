@@ -9,6 +9,7 @@ import { useMemo, useState } from 'react';
 import {
   Badge, Button, Card, ConfirmDialog, Countdown, EmptyState, ErrorState, Grid, Icon, LoadingBlock, Screen, SearchInput, Stack,
 } from '../../shared/components';
+import { asArray } from '../../shared/data';
 import { useAction, useRequest } from '../../shared/hooks';
 import { t } from '../../shared/i18n';
 import { useNavigate } from '../../shared/navigation';
@@ -28,6 +29,26 @@ function initials(name: string): string {
 
 function subline(rank: string | null | undefined, callsign: string | null | undefined): string {
   return [rank || null, callsign || t('common.no_callsign')].filter(Boolean).join(' · ');
+}
+
+/** Lua sends empty lists as {} (or leaves them out) and nil fields as missing keys: make every list an array. */
+function normalizeView(v: UnitScreenView): UnitScreenView {
+  const unit = v.unit ?? null;
+  return {
+    ...v,
+    unit: unit
+      ? {
+          ...unit,
+          locked: !!unit.locked,
+          members: asArray(unit.members).map((m) => ({ ...m, callsign: m.callsign ?? null })),
+          pending: asArray(unit.pending).map((p) => ({ ...p, callsign: p.callsign ?? null })),
+        }
+      : null,
+    invites: asArray(v.invites).map((i) => ({ ...i, fromCallsign: i.fromCallsign ?? null })),
+    invitable: asArray(v.invitable).map((o) => ({ ...o, callsign: o.callsign ?? null })),
+    onRun: !!v.onRun,
+    inviteBlocked: v.inviteBlocked ?? null,
+  };
 }
 
 function matches(o: UnitInvitableView, q: string): boolean {
@@ -291,7 +312,8 @@ function InvitePicker({ view, onInvite, busyKey }: { view: UnitScreenView; busyK
 // ── screen ────────────────────────────────────────────────────────────────────
 
 export default function Unit() {
-  const { data, loading, error, refetch } = useRequest<UnitScreenView>('getUnit', {}, { pushTopic: 'unit', pollMs: 20000 });
+  const { data: raw, loading, error, refetch } = useRequest<UnitScreenView>('getUnit', {}, { pushTopic: 'unit', pollMs: 20000 });
+  const data = useMemo(() => (raw ? normalizeView(raw) : null), [raw]);
   const { run } = useAction();
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [confirmLeave, setConfirmLeave] = useState(false);
@@ -340,11 +362,13 @@ export default function Unit() {
       ) : (
         <>
           {unit?.locked || data.onRun ? (
-            <div className={cx('teams-banner', onUnitRun || unit?.locked ? 'teams-banner--warning' : 'teams-banner--info')} role="status">
+            <div className={cx('teams-banner', unit?.locked ? 'teams-banner--warning' : 'teams-banner--info')} role="status">
               <Icon name="lock" size={18} />
               <div>
                 <div className="teams-banner__title">{unit?.locked ? t('unit.ui.locked_title') : t('unit.ui.on_run_title')}</div>
-                <div className="teams-banner__text">{unit?.locked ? t('unit.ui.locked_text') : t('unit.ui.on_run_text')}</div>
+                <div className="teams-banner__text">
+                  {unit?.locked ? (data.onRun ? t('unit.ui.locked_text') : t('unit.ui.locked_text_off_run')) : t('unit.ui.on_run_text')}
+                </div>
               </div>
             </div>
           ) : null}

@@ -110,18 +110,25 @@ function DeptCard({ d, showSociety, onPreview }: { d: DepartmentView; showSociet
       </div>
       <div className="oversight-dep-card__strip" style={{ background: `linear-gradient(90deg, ${d.theme.primary}, ${d.theme.accent})` }} aria-hidden />
       <Swatches theme={d.theme} />
-      <Grid cols={showSociety ? 4 : 3} gap={3} className="oversight-dep-card__stats">
+      <Grid cols={3} gap={3} className="oversight-dep-card__stats">
         <KeyValue label={t('admin.depts.members')}><span className="cp-num">{formatNumber(d.members)}</span></KeyValue>
         <KeyValue label={t('admin.depts.on_duty')}>
           <span className="cp-num oversight-dep-duty"><span className={d.onDuty ? 'oversight-dep-dot is-on' : 'oversight-dep-dot'} />{formatNumber(d.onDuty)}</span>
         </KeyValue>
         <KeyValue label={t('admin.depts.suspended')}><span className="cp-num">{formatNumber(d.suspended)}</span></KeyValue>
-        {showSociety ? (
-          <KeyValue label={t('admin.depts.society')}>
-            {d.societyBalance === null || d.societyBalance === undefined ? <span className="oversight-dep-soft">{t('admin.depts.society_unknown')}</span> : <Money amount={d.societyBalance} />}
-          </KeyValue>
-        ) : null}
       </Grid>
+      {showSociety ? (
+        <div className="oversight-dep-society">
+          <span className="oversight-dep-society__icon" aria-hidden><Icon name="dollar" size={16} /></span>
+          <div className="oversight-dep-society__text">
+            <span className="oversight-dep-card__label">{t('admin.depts.society')}</span>
+            <code>{d.societyAccount}</code>
+          </div>
+          <span className="oversight-dep-society__value">
+            {d.societyBalance === null || d.societyBalance === undefined ? <span className="oversight-dep-soft">{t('admin.depts.society_unknown')}</span> : <Money amount={d.societyBalance} />}
+          </span>
+        </div>
+      ) : null}
       <div className="oversight-dep-card__meta">
         <div>
           <span className="oversight-dep-card__label">{t('admin.depts.jobs')}</span>
@@ -133,12 +140,6 @@ function DeptCard({ d, showSociety, onPreview }: { d: DepartmentView; showSociet
           <span className="oversight-dep-card__label">{t('admin.depts.supervisor_grade')}</span>
           <span className="cp-num">{d.supervisorGrade >= 1000 ? t('admin.depts.no_supervisors') : t('admin.depts.grade', { n: d.supervisorGrade })}</span>
         </div>
-        {showSociety ? (
-          <div>
-            <span className="oversight-dep-card__label">{t('admin.depts.society_account')}</span>
-            <code>{d.societyAccount}</code>
-          </div>
-        ) : null}
       </div>
     </Card>
   );

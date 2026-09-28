@@ -13,14 +13,14 @@ import {
 import { cx } from '../../shared/cx';
 import { formatDateTime, formatMoney, formatNumber } from '../../shared/format';
 import { useAction, useRequest } from '../../shared/hooks';
-import { t, tOr } from '../../shared/i18n';
+import { t } from '../../shared/i18n';
 import { useSession } from '../../shared/session';
 import { asList, type AdminBoardRow, type AdminBoards, type AdminRun, type BoardPeriod, type StuckPayment } from '../../types/boards';
 import { BOARD_PERIODS, RankCell, boardFilters, filterLabel, formatClock, formatDay } from '../../officer/screens/Leaderboard';
-import { StateBadge, missionTypeLabel } from '../../officer/screens/Profile';
+import { ResultCell, missionTypeLabel } from '../../officer/screens/Profile';
 import './Leaderboards.css';
 
-const AWARD_LIMIT = 10000;
+const AWARD_MAX = 10000;   // modules/admin: 1 to 10,000 points per manual award
 interface AwardForm { citizenid: string; name?: string; points: number | null; reason: string }
 
 function StuckPanel({ list }: { list: StuckPayment[] }) {
@@ -92,7 +92,7 @@ export default function AdminLeaderboards() {
   const officerRuns = runsReq.data && runsReq.data.citizenid === officer?.citizenid ? asList(runsReq.data.runs) : [];
 
   const openAward = (r?: AdminBoardRow | null) => setAward({ citizenid: r?.citizenid ?? '', name: r?.realName, points: null, reason: '' });
-  const awardValid = !!award && /^[A-Za-z0-9_-]{1,50}$/.test(award.citizenid.trim()) && award.points !== null && award.points !== 0 && !!award.reason.trim();
+  const awardValid = !!award && /^[A-Za-z0-9_-]{1,50}$/.test(award.citizenid.trim()) && award.points !== null && award.points >= 1 && award.points <= AWARD_MAX && !!award.reason.trim();
 
   const submitAward = async () => {
     if (!award || !awardValid) return;
@@ -151,40 +151,25 @@ export default function AdminLeaderboards() {
   ];
 
   const runColumns: TableColumn<AdminRun>[] = [
-    { key: 'createdAt', header: t('profile.col.when'), width: 118, render: (r) => <span className="boards-muted cp-num">{formatDateTime(r.createdAt)}</span> },
+    { key: 'createdAt', header: t('profile.col.when'), width: 112, render: (r) => <span className="boards-when cp-num">{formatDateTime(r.createdAt)}</span> },
     {
       key: 'mission',
       header: t('profile.col.mission'),
       render: (r) => (
-        <span className="boards-admin-officer">
-          <span className="boards-strong">{r.missionLabel}</span>
-          <span className="boards-admin-officer__sub">{`${missionTypeLabel(r.missionType, session)} · ${r.departmentShort} · #${r.id}`}</span>
+        <span className="boards-mission">
+          <span className="boards-mission__label">{r.missionLabel}</span>
+          <span className="boards-mission__type">{`${missionTypeLabel(r.missionType, session)} · ${r.departmentShort} · #${r.id}`}</span>
         </span>
       ),
     },
     {
       key: 'state',
       header: t('profile.col.result'),
-      render: (r) => (
-        <span className="boards-admin-result">
-          <StateBadge state={r.state} />
-          <span className="boards-muted">{tOr(`reason.${r.endReason}`, 'common.unknown')}</span>
-        </span>
-      ),
+      width: 210,
+      render: (r) => <ResultCell state={r.state} endReason={r.endReason} flagged={r.flagged} voided={r.voided} flagReason={r.flagReason} />,
     },
-    {
-      key: 'flags',
-      header: '',
-      width: 100,
-      render: (r) => (
-        <span className="boards-admin-flags">
-          {r.voided ? <Badge tone="danger" size="sm">{t('profile.voided')}</Badge> : null}
-          {r.flagged ? <Badge tone="warning" size="sm" title={r.flagReason ? tOr(`profile.flag_reason.${r.flagReason}`, 'result.flag_generic') : undefined}>{t('profile.flagged')}</Badge> : null}
-        </span>
-      ),
-    },
-    { key: 'points', header: t('profile.col.points'), numeric: true, width: 76, render: (r) => <span className={cx(r.voided && 'boards-struck')}>{formatNumber(r.points)}</span> },
-    { key: 'cash', header: t('profile.col.cash'), numeric: true, width: 96, render: (r) => <Money amount={r.cash} /> },
+    { key: 'points', header: t('profile.col.points'), numeric: true, width: 70, render: (r) => <span className={cx(r.voided && 'boards-struck')}>{formatNumber(r.points)}</span> },
+    { key: 'cash', header: t('profile.col.cash'), numeric: true, width: 90, render: (r) => <Money amount={r.cash} /> },
     {
       key: 'void',
       header: '',
@@ -239,7 +224,7 @@ export default function AdminLeaderboards() {
 
       {board ? (
         <div className="boards-admin-stats">
-          <Stat size="sm" label={t('admin.boards.stat.window')} value={period === 'alltime' ? t('leaderboard.period.alltime') : period === 'season' ? (board.season?.name ?? '–') : formatDay(board.window?.from)} icon="calendar" />
+          <Stat size="sm" label={t('admin.boards.stat.window')} value={period === 'alltime' ? t('leaderboard.period.alltime') : period === 'season' ? (board.season?.name ?? '–') : t('admin.boards.stat.since', { from: formatDay(board.window?.from) })} icon="calendar" />
           <Stat size="sm" label={t('admin.boards.stat.ranked')} value={formatNumber(ranked.length)} hint={t('admin.boards.stat.min', { n: board.minRuns })} icon="users" />
           <Stat size="sm" label={allTime ? t('admin.boards.stat.xp') : t('admin.boards.stat.points')} value={formatNumber(totalPoints)} icon="star" />
           <Stat size="sm" label={t('admin.boards.stat.cash')} value={formatMoney(totalCash)} icon="dollar" tone="success" />
@@ -326,8 +311,8 @@ export default function AdminLeaderboards() {
             <Field label={t('admin.boards.citizenid')} required hint={award.name ? award.name : undefined}>
               <TextInput value={award.citizenid} onChange={(v) => setAward({ ...award, citizenid: v, name: undefined })} maxLength={50} placeholder="ABC12345" />
             </Field>
-            <Field label={t('admin.boards.points')} required hint={t('admin.boards.points_hint')}>
-              <NumberInput value={award.points} onChange={(v) => setAward({ ...award, points: v })} min={-AWARD_LIMIT} max={AWARD_LIMIT} integer stepper />
+            <Field label={t('admin.boards.points')} required>
+              <NumberInput value={award.points} onChange={(v) => setAward({ ...award, points: v })} min={1} max={AWARD_MAX} integer stepper formatRange={formatNumber} />
             </Field>
             <Field label={t('common.reason')} required>
               <Textarea value={award.reason} onChange={(v) => setAward({ ...award, reason: v })} maxLength={255} rows={3} placeholder={t('admin.boards.reason_placeholder')} />

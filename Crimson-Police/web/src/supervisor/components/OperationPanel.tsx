@@ -15,6 +15,7 @@ import {
   Badge, Button, Card, ConfirmDialog, Countdown, EmptyState, ErrorState, Field, Grid, Icon, KeyValue, LoadingBlock, Select, Stat, TierBadge,
   type BadgeTone,
 } from '../../shared/components';
+import { asArray } from '../../shared/data';
 import { formatDateTime, formatMultiplier } from '../../shared/format';
 import { useAction, useRequest } from '../../shared/hooks';
 import { t, tOr } from '../../shared/i18n';
@@ -27,6 +28,33 @@ export interface OperationPanelProps {
 }
 
 const minutes = (seconds: number) => Math.max(1, Math.round((Number(seconds) || 0) / 60));
+
+/** Lua sends empty lists as {} (or leaves them out) and nil fields as missing keys: make every list an array. */
+function normalizeView(v: OperationView): OperationView {
+  const op = v.operation ?? null;
+  return {
+    ...v,
+    cooldownLeft: Math.max(0, Number(v.cooldownLeft) || 0),
+    cooldown: Number(v.cooldown) || 0,
+    enabled: v.enabled !== false,
+    canLaunch: !!v.canLaunch,
+    launchBlocked: v.launchBlocked ?? null,
+    eligibleMissions: asArray(v.eligibleMissions),
+    operation: op
+      ? {
+          ...op,
+          participants: asArray(op.participants).map((p) => ({ ...p, callsign: p.callsign ?? null, arrived: !!p.arrived })),
+          departments: asArray(op.departments),
+          joined: Number(op.joined) || 0,
+          attempt: Number(op.attempt) || 1,
+          tierExpected: !!op.tierExpected,
+          canStart: !!op.canStart,
+          canRelaunch: !!op.canRelaunch,
+          canCancel: op.canCancel !== false,
+        }
+      : null,
+  };
+}
 
 const STATUS_TONE: Record<string, BadgeTone> = { joining: 'accent', running: 'primary', waiting: 'warning' };
 const STATUS_HIGHLIGHT: Record<string, 'accent' | 'primary' | 'warning'> = { joining: 'accent', running: 'primary', waiting: 'warning' };
@@ -360,7 +388,8 @@ function LaunchForm({ view, stamp, scope, onDone }: { view: OperationView; stamp
 // ── panel ─────────────────────────────────────────────────────────────────────
 
 export default function OperationPanel({ scope }: OperationPanelProps) {
-  const { data, loading, error, refetch } = useRequest<OperationView>('sup:getOperation', {}, { pushTopic: 'operation', pollMs: 10000 });
+  const { data: raw, loading, error, refetch } = useRequest<OperationView>('sup:getOperation', {}, { pushTopic: 'operation', pollMs: 10000 });
+  const data = useMemo(() => (raw ? normalizeView(raw) : null), [raw]);
   const refresh = () => void refetch();
 
   if (!data && loading) return <LoadingBlock />;

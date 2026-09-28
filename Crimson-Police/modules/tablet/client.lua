@@ -33,6 +33,12 @@
 -- actions, switchUi { ui } -> getSession for that UI; replies { ok = true, data = Session } and re-opens.
 -- The UI closes on duty loss, on a switch away from the job it was opened with (or out of every
 -- department) and on character unload (the Admin UI only on unload).
+-- Crimson-Arena (docs/CRIMSON_ARENA.md rule 8): while the local player carries a foreign crimsonArena
+-- value (Crimson-Arena's, not { source = 'crimson-police' }) the command, key mapping, tablet item,
+-- OpenTablet, switchUi and client:openAdmin refuse with the toast err.in_arena; when such a value
+-- arrives, every Crimson-Police UI closes (prop deleted, animation stopped), the HUD and overlays are
+-- hidden and a progress bar of the player's current run is cancelled. NUI focus is only released when
+-- a Crimson-Police UI was open, never unconditionally. The tablet prop is a local (non-networked) object.
 -- Exports: OpenTablet() (the same checks as /CrimsonPolice), useTablet(data, slot) for ox_inventory.
 --
 -- ox_inventory item (optional): set Config.Tablet.item = 'crimson_police_tablet' and add to
@@ -80,6 +86,17 @@ local state = {
     commandRegistered = false,
 }
 local clientActions = {}
+
+-- ── Crimson-Arena ───────────────────────────────────────────────────────────
+-- Crimson-Arena writes { active = true, matchId } (no source); ours is { active = true, source = 'crimson-police' }.
+local function isForeignArena(v)
+    return type(v) == 'table' and v.active == true and v.source ~= 'crimson-police'
+end
+
+local function inForeignArena()
+    local st = LocalPlayer and LocalPlayer.state
+    return isForeignArena(st and st.crimsonArena)
+end
 
 -- ── NUI transport ───────────────────────────────────────────────────────────
 function T.send(msg)
@@ -173,14 +190,18 @@ local function wantsProp()
     return state.open and state.ui ~= 'admin'
 end
 
-local function deleteProp()
-    local obj = state.prop
-    state.prop = nil
+local function deleteObject(obj)
     if obj and DoesEntityExist(obj) then
         DetachEntity(obj, true, false)
         SetEntityAsMissionEntity(obj, true, true)
         DeleteEntity(obj)
     end
+end
+
+local function deleteProp()
+    local obj = state.prop
+    state.prop = nil
+    deleteObject(obj)
 end
 
 local function stopProp()
@@ -203,11 +224,8 @@ local function createProp(ped)
         return nil
     end
     local c = GetEntityCoords(ped)
-    local obj = CreateObject(model, c.x, c.y, c.z + 0.2, true, true, false)
-    if not obj or obj == 0 or not DoesEntityExist(obj) then
-        -- Entity lockdown can refuse networked client objects: hold a local one instead.
-        obj = CreateObject(model, c.x, c.y, c.z + 0.2, false, false, false)
-    end
+    -- A local object only (docs/CRIMSON_ARENA.md rule 8): nothing networked is created by this client.
+    local obj = CreateObject(model, c.x, c.y, c.z + 0.2, false, false, false)
     SetModelAsNoLongerNeeded(model)
     if not obj or obj == 0 or not DoesEntityExist(obj) then return nil end
     SetEntityCollision(obj, false, false)
@@ -231,8 +249,9 @@ local function startProp()
             local obj = createProp(ped)
             if obj then
                 if token ~= state.propToken or not wantsProp() then
-                    state.prop = obj
-                    deleteProp()
+                    -- Closed (or reopened by a newer thread) while the model loaded: drop only this
+                    -- object, never state.prop, which may already be the newer thread's prop.
+                    deleteObject(obj)
                     return
                 end
                 state.prop = obj
@@ -276,9 +295,15 @@ local function showUi(ui, session)
     CP.log(TAG, '%s UI opened', ui)
 end
 
+local function refuseInArena()
+    T.notify('error', CP.L('err.in_arena'))
+    return false, 'err.in_arena'
+end
+
 function T.open(ui)
     if ui == nil then ui = 'officer' end
     if not UIS[ui] then return false, 'err.invalid_ui' end
+    if inForeignArena() then return refuseInArena() end
     if state.opening then return false, 'err.busy' end
     state.opening = true
     local ok, res = pcall(CP.Net.request, 'getSession', { ui = ui })
@@ -292,6 +317,8 @@ function T.open(ui)
         T.notify('error', CP.L(errKey))
         return false, errKey
     end
+    -- Crimson-Arena may have placed the player while the session was on its way.
+    if inForeignArena() then return refuseInArena() end
     showUi(ui, res.data)
     return true
 end
@@ -300,7 +327,9 @@ function T.close()
     local wasOpen = state.open
     state.open = false
     state.ui = nil
-    SetNuiFocus(false, false)
+    -- Only our own focus: releasing it unconditionally would take it from another resource's UI
+    -- (docs/CRIMSON_ARENA.md rule 8).
+    if wasOpen then SetNuiFocus(false, false) end
     stopProp()
     T.send({ type = 'close' })
     if wasOpen then CP.log(TAG, 'UI closed') end
@@ -392,6 +421,10 @@ end)
 
 RegisterNetEvent(CP.e('client:openAdmin'), function(session)
     if type(session) ~= 'table' or session.ui ~= 'admin' then return end
+    if inForeignArena() then
+        refuseInArena()
+        return
+    end
     showUi('admin', session)
 end)
 
@@ -469,12 +502,14 @@ end)
 RegisterNUICallback('switchUi', function(body, cb)
     local ui = type(body) == 'table' and body.ui or nil
     if type(ui) ~= 'string' or not UIS[ui] then return cb({ ok = false, error = 'err.invalid_ui' }) end
+    if inForeignArena() then return cb({ ok = false, error = 'err.in_arena' }) end
     CreateThread(function()
         local ok, res = pcall(CP.Net.request, 'getSession', { ui = ui })
         if not ok or type(res) ~= 'table' then res = { ok = false, error = 'err.internal' } end
         if not res.ok or type(res.data) ~= 'table' then
             return cb({ ok = false, error = res.error or 'err.no_response' })
         end
+        if inForeignArena() then return cb({ ok = false, error = 'err.in_arena' }) end
         if state.open then showUi(ui, res.data) end
         cb({ ok = true, data = res.data })
     end)
@@ -515,8 +550,32 @@ local function registerCommand()
     RegisterKeyMapping(KEY_MAPPING, CP.L('tablet.keybind_label'), 'keyboard', key)
 end
 
+-- Crimson-Arena placed the local player (fighter or spectator): nothing of Crimson-Police stays on
+-- screen or holds focus (docs/CRIMSON_ARENA.md rule 8).
+local function onArenaPlaced()
+    CP.log(TAG, 'Crimson-Arena placed the player: Crimson-Police UI, HUD and overlays hidden')
+    if state.open then T.close() else stopProp() end
+    if state.hud then T.hud(nil) end
+    if state.overlay then T.overlay(nil) end
+    -- A progress bar during a Crimson-Police run is a mission step (lib.cancelProgress raises when none runs).
+    local run = CP.Runs and CP.Runs.current and CP.Runs.current()
+    if run and lib and lib.progressActive and lib.cancelProgress then
+        local ok, active = pcall(lib.progressActive)
+        if ok and active then pcall(lib.cancelProgress) end
+    end
+end
+
+local function watchArena()
+    local bag = ('player:%d'):format(GetPlayerServerId(PlayerId()))
+    AddStateBagChangeHandler('crimsonArena', bag, function(_, _, value)
+        -- The handler only queues work: the bag still holds the old value while it runs.
+        if isForeignArena(value) then SetTimeout(0, onArenaPlaced) end
+    end)
+end
+
 CreateThread(function()
     registerCommand()
+    watchArena()
     if not CP.Qbx then
         CP.err(TAG, 'modules/integrations/qbx is missing: the tablet cannot follow duty or job changes')
         return

@@ -20,6 +20,9 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.oversight-rq-date {
+  white-space: nowrap;
+}
 .oversight-rq-who__sub,
 .oversight-rq-mission__sub {
   display: flex;
@@ -28,6 +31,11 @@
   gap: 6px;
   font-size: var(--cp-fs-sm);
   color: var(--cp-muted);
+}
+.oversight-rq-who__sub {
+  flex-wrap: nowrap;
+  white-space: nowrap;
+  overflow: hidden;
 }
 
 .oversight-rq-flag {
@@ -109,4 +117,9 @@
   font-size: var(--cp-fs-xs);
   color: var(--cp-subtle);
   word-break: break-all;
+}
+
+.oversight-rq-mission__when {
+  font-size: var(--cp-fs-xs);
+  color: var(--cp-subtle);
 }

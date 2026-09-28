@@ -716,11 +716,13 @@ local function badgesFor(citizenid)
             list[#list + 1] = { id = tostring(r.badge_id), earnedTs = tonumber(r.earned_ts) }
         end
     end
+    -- newest first
+    table.sort(list, function(a, c) return (a.earnedTs or 0) > (c.earnedTs or 0) end)
     local out = {}
     for _, b in ipairs(list) do
         local label, kind = badgeLabel(b.id)
         if not label then
-            label = type(b.label) == 'string' and b.label ~= '' and b.label or nil
+            label = type(b.label) == 'string' and b.label ~= '' and b.label ~= ('badge.' .. b.id) and b.label or nil
             if not label then
                 local key = 'badge.' .. b.id
                 label = CP.Locale.has(key) and CP.L(key) or b.id
@@ -831,7 +833,9 @@ local function normaliseStuck(list)
                 callsign = p.callsign,
                 missionLabel = p.missionLabel or LB.missionLabel(p.missionType or p.mission_type, p.missionId or p.mission_id, nil),
                 amount = int(p.amount or p.cashBase or p.cash_base),
-                createdAt = p.createdAt or (p.created_ts and sqlTs(p.created_ts)) or '',
+                createdAt = (type(p.createdAt) == 'number' and sqlTs(p.createdAt))
+                    or (type(p.createdAt) == 'string' and p.createdAt)
+                    or (p.created_ts and sqlTs(p.created_ts)) or '',
                 transId = p.transId or (runUuid and cid and ('CP-%s-%s'):format(runUuid, cid)) or '',
             }
         end

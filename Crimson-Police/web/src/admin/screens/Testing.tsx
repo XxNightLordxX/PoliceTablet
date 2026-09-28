@@ -424,7 +424,7 @@ function MissionGroup({ m, locs, now, pending, canStart, collapsed, onToggle, on
               <span className="testing-group__label">{m.label}</span>
               <span className="testing-group__id">{m.id}</span>
             </button>
-            <Badge size="sm" tone="primary">{m.typeLabel}</Badge>
+            <Badge size="sm" tone="neutral" variant="outline">{m.typeLabel}</Badge>
             <Badge size="sm" tone="neutral">
               {m.source === 'custom' ? t('test.ui.custom_v', { v: m.version === false ? '—' : m.version }) : t('test.ui.builtin')}
             </Badge>

@@ -4,7 +4,7 @@
 // Data: callback sup:getLiveRuns (modules/admin, polled every 10 s) · action server:sup:forceRecall { runId, src, reason }.
 import { useState } from 'react';
 import {
-  Badge, Button, Card, ConfirmDialog, Countdown, EmptyState, ErrorState, Grid, Icon, IconButton, LoadingBlock, Row, Screen, TierBadge,
+  Badge, Button, Card, ConfirmDialog, Countdown, EmptyState, ErrorState, Icon, IconButton, LoadingBlock, Row, Screen, TierBadge,
 } from '../../shared/components';
 import { asArray } from '../../shared/data';
 import { formatDateTime } from '../../shared/format';
@@ -135,11 +135,11 @@ export default function SupLiveMissions() {
     );
   else
     body = (
-      <Grid min={420} gap={4} align="start">
+      <div className="oversight-live-list">
         {runs.map((r) => (
           <RunCard key={r.runId} run={r} canRecall={canRecall} fetchKey={fetchKey} onRecall={(p) => setTarget({ run: r, p })} />
         ))}
-      </Grid>
+      </div>
     );
 
   return (

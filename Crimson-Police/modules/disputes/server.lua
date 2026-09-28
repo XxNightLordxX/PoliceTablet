@@ -12,7 +12,7 @@
                  voided row  -> voided = 0 (and flagged = 0), CP.Scoring.onRowApproved (XP back),
                                 CP.Cash.release when its cash is still held, CP.Leaderboard.invalidate
                  failed row  -> CP.Scoring.manualAward(src, citizenid, awardPoints, reason)
-        reject   keeps the row as it is; a voided row whose cash is still held is forfeited (CP.Cash.forfeit)
+        reject   keeps the row as it is; a voided row whose cash is still held (or pending) is forfeited (CP.Cash.forfeit)
       The dispute is claimed first (UPDATE ... WHERE status = 'open'), so two reviewers can never both
       answer it; a failed manual award re-opens it. Every answer is audited (category flags) and posted
       to the flags webhook; filing posts to the flags webhook. The officer gets a toast when online.
@@ -426,7 +426,7 @@ local function restoreVoided(d)
     if n == nil then return false, 'err.internal' end
     if n == 0 then return true end     -- already restored
     call('Scoring', 'onRowApproved', d.run_id)
-    if d.cash_status == 'held' then call('Cash', 'release', d.run_id) end
+    if d.cash_status == 'held' or d.cash_status == 'pending' then call('Cash', 'release', d.run_id) end
     call('Leaderboard', 'invalidate')
     return true
 end
@@ -504,7 +504,7 @@ function D.handle(src, disputeId, decision, reason, awardPoints, opts)
                 return false, e
             end
         end
-    elseif kind == 'voided' and d.cash_status == 'held' then
+    elseif kind == 'voided' and (d.cash_status == 'held' or d.cash_status == 'pending') then
         call('Cash', 'forfeit', d.run_id)
     end
 

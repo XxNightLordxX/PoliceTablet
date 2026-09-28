@@ -4,6 +4,12 @@
   color: var(--cp-subtle);
 }
 
+.oversight-live-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
 .oversight-live-card__title {
   display: inline-flex;
   align-items: center;
@@ -24,6 +30,7 @@
 .oversight-live-fact {
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
   gap: 5px;
   min-width: 0;
 }
@@ -48,9 +55,9 @@
   list-style: none;
   margin: 0;
   padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+  gap: 6px 8px;
 }
 .oversight-live-person {
   display: flex;
@@ -96,11 +103,11 @@
   display: inline-flex;
   flex: none;
 }
-.oversight-live-recall {
+.cp-btn.oversight-live-recall {
   flex: none;
   color: var(--cp-danger);
 }
-.oversight-live-recall:hover {
+.cp-btn.oversight-live-recall:hover {
   background: rgba(var(--cp-danger-rgb), 0.12);
 }
 .oversight-live-recall-placeholder {

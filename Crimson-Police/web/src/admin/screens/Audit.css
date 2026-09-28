@@ -11,11 +11,27 @@
   flex-wrap: wrap;
   gap: 10px 12px;
 }
-.oversight-aud-filters__row > .cp-field {
-  min-width: 150px;
+.oversight-aud-f-cat {
+  width: 150px;
+}
+.oversight-aud-f-action {
+  width: 180px;
+}
+.oversight-aud-f-date {
+  width: 138px;
 }
 .oversight-aud-filters__grow {
-  flex: 1 1 200px;
+  flex: 1 1 140px;
+  min-width: 140px;
+}
+.oversight-aud-nowrap {
+  white-space: nowrap;
+}
+.oversight-aud-table table {
+  table-layout: fixed;
+}
+.oversight-aud-table td {
+  overflow: hidden;
 }
 .oversight-aud-filters__clear {
   margin-left: auto;
@@ -71,7 +87,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 70px;
+  max-width: 76px;
   padding: 1px 5px;
   border-radius: var(--cp-radius-xs);
 }

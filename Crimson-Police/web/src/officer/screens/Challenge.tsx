@@ -5,7 +5,7 @@
 // screen and the Supervisor Department Report.
 import { useState, type ReactNode } from 'react';
 import {
-  Badge, Card, Dialog, EmptyState, ErrorState, Grid, Icon, LoadingBlock, Screen, Stack, Table, type TableColumn,
+  Badge, Card, Dialog, EmptyState, ErrorState, Grid, Icon, LoadingBlock, Screen, Table, type TableColumn,
 } from '../../shared/components';
 import { cx } from '../../shared/cx';
 import { formatNumber } from '../../shared/format';
@@ -58,18 +58,17 @@ export function DeptBars({
             </span>
             <span className="boards-dept__main">
               <span className="boards-dept__head">
-                <span className="boards-dept__swatch" style={{ backgroundColor: d.colour }} aria-hidden />
-                <span className="boards-dept__name">{d.label}</span>
+                <span className="boards-dept__name" title={d.label}>{d.label}</span>
                 <Badge size="sm">{d.short}</Badge>
-                {mine ? <Badge tone="accent" size="sm">{t('challenge.your_department')}</Badge> : null}
                 <span className="boards-dept__score cp-num">{formatNumber(d.score)}</span>
               </span>
               <span className="boards-dept__track" aria-hidden>
                 <span className="boards-dept__fill" style={{ width: `${pct}%`, backgroundColor: d.colour }} />
               </span>
               <span className="boards-dept__meta">
+                {mine ? <span className="boards-dept__mine">{t('challenge.your_department')}</span> : null}
                 <span>{t('challenge.active_officers', { n: d.activeOfficers })}</span>
-                {d.points !== undefined ? <span className="cp-num">{t('challenge.season_points', { n: formatNumber(d.points) })}</span> : null}
+                {d.points !== undefined && !compact ? <span className="cp-num">{t('challenge.season_points', { n: formatNumber(d.points) })}</span> : null}
                 {d.bonus ? <span className="boards-dept__bonus cp-num">{t('challenge.bonus', { n: formatNumber(d.bonus) })}</span> : null}
                 {!compact && mode ? <span className="boards-dept__mode">{modeText(mode)}</span> : null}
               </span>
@@ -78,11 +77,11 @@ export function DeptBars({
           </>
         );
         return onSelect ? (
-          <button key={d.key} type="button" className={cx('boards-dept', mine && 'is-mine')} onClick={() => onSelect(d)} aria-label={t('challenge.open_contributors', { dept: d.label })}>
+          <button key={d.key} type="button" className={cx('boards-dept', mine && 'is-mine')} style={{ borderLeftColor: d.colour }} onClick={() => onSelect(d)} aria-label={t('challenge.open_contributors', { dept: d.label })}>
             {body}
           </button>
         ) : (
-          <div key={d.key} className={cx('boards-dept', mine && 'is-mine')}>
+          <div key={d.key} className={cx('boards-dept', mine && 'is-mine')} style={{ borderLeftColor: d.colour }}>
             {body}
           </div>
         );
@@ -122,7 +121,7 @@ export function BountyCard({ bounty, myDepartment, actions, footer }: { bounty: 
               {rates.map((r) => (
                 <div key={r.key} className={cx('boards-rate', r.key === myDepartment && 'is-mine')}>
                   <span className="boards-rate__dept">
-                    <span className="boards-dept__swatch" style={{ backgroundColor: r.colour }} aria-hidden />
+                    <span className="boards-rate__strip" style={{ backgroundColor: r.colour }} aria-hidden />
                     {r.short}
                   </span>
                   <span className="boards-rate__track" aria-hidden>
@@ -142,19 +141,17 @@ export function BountyCard({ bounty, myDepartment, actions, footer }: { bounty: 
   );
 }
 
-function ContributorList({ list, onOpen }: { list: Contributor[]; onOpen?: (c: Contributor) => void }) {
+function ContributorTiles({ list, onOpen }: { list: Contributor[]; onOpen?: (c: Contributor) => void }) {
   if (!list.length) return <EmptyState compact icon="users" title={t('challenge.no_contributors')} text={t('challenge.no_contributors_text')} />;
   return (
-    <ol className="boards-contributors">
+    <ol className="boards-tiles">
       {list.map((c, i) => (
         <li key={c.citizenid ?? `${c.name}-${i}`}>
-          <button type="button" className="boards-contributor" onClick={onOpen && c.citizenid ? () => onOpen(c) : undefined} disabled={!onOpen || !c.citizenid}>
+          <button type="button" className="boards-tile" onClick={onOpen && c.citizenid ? () => onOpen(c) : undefined} disabled={!onOpen || !c.citizenid}>
             <RankCell rank={c.rank ?? i + 1} />
-            <span className="boards-contributor__who">
-              <span className="boards-contributor__name">{c.name}</span>
-              <span className="boards-contributor__callsign">{c.callsign || t('common.no_callsign')}</span>
-            </span>
-            <span className="boards-contributor__points cp-num">
+            <span className="boards-tile__name">{c.name}</span>
+            <span className="boards-tile__callsign">{c.callsign || t('common.no_callsign')}</span>
+            <span className="boards-tile__points cp-num">
               {formatNumber(c.points)} <small>{t('common.pts')}</small>
             </span>
           </button>
@@ -254,18 +251,16 @@ export default function Challenge() {
             ) : null}
           </span>
         </div>
-        <Grid cols="minmax(0, 3fr) minmax(0, 2fr)" gap={4} align="start">
+        <Grid cols="minmax(0, 3fr) minmax(0, 2fr)" gap={4} align="stretch">
           <Card title={t('challenge.standings')} subtitle={modeText(data?.mode)} icon="barChart">
             <DeptBars departments={asList(data?.departments)} myDepartment={myDept} onSelect={setSelected} />
             <p className="boards-card-note">{t('challenge.tap_department')}</p>
           </Card>
-          <Stack gap={4}>
-            <BountyCard bounty={data?.bounty ?? null} myDepartment={myDept} />
-            <Card title={t('challenge.top_contributors', { dept: mine?.short ?? session.officer?.departmentShort ?? '' })} icon="users" padding="sm">
-              <ContributorList list={asList(data?.topContributors).slice(0, 5)} onOpen={(c) => navigate('profile', { citizenid: c.citizenid })} />
-            </Card>
-          </Stack>
+          <BountyCard bounty={data?.bounty ?? null} myDepartment={myDept} />
         </Grid>
+        <Card title={t('challenge.top_contributors', { dept: mine?.short ?? session.officer?.departmentShort ?? '' })} icon="users" padding="sm">
+          <ContributorTiles list={asList(data?.topContributors).slice(0, 5)} onOpen={(c) => navigate('profile', { citizenid: c.citizenid })} />
+        </Card>
       </>
     );
   }

@@ -106,7 +106,7 @@ export default function Leaderboard() {
 
   const tabs = BOARD_PERIODS.map((p) => ({ key: p, label: t(`leaderboard.period.${p}`), icon: p === 'alltime' ? ('star' as const) : undefined }));
   const filters = boardFilters(session).map((f) => ({ key: f, label: filterLabel(f, session), disabled: allTime && f !== 'overall' }));
-  const deptOptions = asList(session.config?.departments).map((d) => ({ value: d.key, label: `${d.short} · ${d.label}` }));
+  const deptOptions = asList(session.config?.departments).map((d) => ({ value: d.key, label: d.short }));
 
   const columns: TableColumn<BoardRow>[] = [
     { key: 'rank', header: t('leaderboard.col.rank'), width: 76, render: (r) => <RankCell rank={r.rank} /> },
@@ -187,7 +187,7 @@ export default function Leaderboard() {
         <Row wrap gap={2} className="boards-filters">
           <SegmentedControl items={filters} value={effectiveFilter} onChange={setFilter} size="sm" aria-label={t('leaderboard.filters')} />
           {effectiveFilter === 'department' ? (
-            <Select value={department} onChange={setDepartment} options={deptOptions} aria-label={t('leaderboard.department')} className="boards-dept-select" />
+            <Select value={department} onChange={setDepartment} options={deptOptions} aria-label={t('leaderboard.department')} title={asList(session.config?.departments).find((d) => d.key === department)?.label} className="boards-dept-select" />
           ) : null}
           <Spacer />
           {allTime ? <span className="boards-hint"><Icon name="info" size={13} /> {t('leaderboard.alltime_hint')}</span> : null}

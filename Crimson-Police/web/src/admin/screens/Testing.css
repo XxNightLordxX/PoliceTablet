@@ -258,7 +258,9 @@
 .testing-group__right {
   display: flex;
   align-items: center;
-  gap: 10px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 6px 10px;
   margin-left: auto;
 }
 .testing-group__toggle {
@@ -317,7 +319,8 @@
 .testing-loc__name {
   display: flex;
   align-items: center;
-  gap: 8px;
+  flex-wrap: wrap;
+  gap: 4px 8px;
   min-width: 0;
 }
 .testing-loc__index {
@@ -334,7 +337,8 @@
 .testing-loc__result {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  flex-wrap: wrap;
+  gap: 2px 8px;
   white-space: nowrap;
 }
 .testing-loc__was {

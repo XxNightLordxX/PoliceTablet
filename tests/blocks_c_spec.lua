@@ -531,6 +531,123 @@ do -- escape on foot and killing an unarmed suspect
     H.eq(ctx2.calls.fail[1], 'run.fail_killed_unarmed', 'a participant killing an unarmed suspect fails')
 end
 
+do -- a suspect still in the stopped car stays 'stopped' (never a vehicle flee from the seat) until it is out
+    H.clockMs = 3100000
+    at(1, 1040.0, 1000.0); at(2, 5000.0, 5000.0)
+    H.players[1].vehicle = nil
+    local ctx = stolenCtx({ footFlee = 1.0 })
+    PU.start(ctx)
+    local car = spawnsOf(ctx, 'vehicle')[1]
+    local sus = spawnsOf(ctx, 'ped')
+    at(1, 1010.0, 1000.0)
+    tickN(PU, ctx, 1)
+    E(car.netId).speed = 30.0
+    tickN(PU, ctx, 1)
+    E(car.netId).speed = 0.0
+    tickN(PU, ctx, 5)
+    H.eq(ctx.state.vehicles[tostring(car.netId)].state, 'stopped', 'in car: car stopped')
+    tickN(PU, ctx, 12)                          -- well past the old 6 s exit timeout, still seated
+    H.eq(npc.states[sus[1].netId], 'stopped', 'in car: a seated suspect is not told to flee (would drive off)')
+    H.eq(npc.states[sus[2].netId], 'stopped', 'in car: the passenger waits in its seat too')
+    local ok, why = PU.onEvent(ctx, 1, { type = 'aim', netId = sus[1].netId })
+    H.eq(why, 'in_vehicle', 'in car: aiming at a seated suspect does nothing')
+    E(sus[1].netId).inVehicle = 0
+    tickN(PU, ctx, 1)
+    H.eq(npc.states[sus[1].netId], 'fleeing', 'in car: out of the car it runs on foot (footFlee 1.0)')
+    H.eq(npc.states[sus[2].netId], 'stopped', 'in car: the other one is still seated')
+
+    -- racers (surrenderOnAim = false) surrender only once out of the car as well
+    at(1, 600.0, 180.0)
+    local robj = PU.defaults({
+        block = 'pursuit', mode = 'stop', vehicles = 1, route = 'race', models = { 'sultan' },
+        complete = 'all_or_timeout_any', surrenderOnAim = false, footFlee = 0,
+    })
+    local rctx = fakeCtx({ obj = robj, location = raceLoc, mission = builtin })
+    PU.start(rctx)
+    local rcar = spawnsOf(rctx, 'vehicle')[1]
+    local rdrv = spawnsOf(rctx, 'ped')[1]
+    E(rcar.netId).speed = 35.0
+    tickN(PU, rctx, 1)
+    setPos(rcar.netId, 600.0, 170.0)
+    E(rcar.netId).speed = 0.0
+    tickN(PU, rctx, 15)
+    H.eq(npc.states[rdrv.netId], 'stopped', 'in car: a seated racer does not surrender in its seat')
+    E(rdrv.netId).inVehicle = 0
+    tickN(PU, rctx, 1)
+    H.eq(npc.states[rdrv.netId], 'surrendered', 'in car: out of the car the racer gives up')
+end
+
+do -- kills and stuns: only ACTIVE participants count; the stun reporter must be close too
+    H.clockMs = 3200000
+    at(1, 1040.0, 1000.0); at(2, 1045.0, 1000.0)
+    local ctx = stolenCtx()
+    PU.start(ctx)
+    local sus = spawnsOf(ctx, 'ped')
+    ctx.srcs = { 1 }                            -- participant 2 left the run (still in run.participants)
+    PU.onEntityDead(ctx, sus[1].netId, 2)
+    H.eq(#ctx.calls.fail, 0, 'left participant: killing an unarmed suspect is an outside kill, not a fail')
+    PU.onEntityDead(ctx, sus[2].netId, 1)
+    H.eq(ctx.calls.fail[1], 'run.fail_killed_unarmed', 'active participant: killing an unarmed suspect fails')
+
+    local ctx2 = stolenCtx({ footFlee = 1.0 })
+    PU.start(ctx2)
+    local car2 = spawnsOf(ctx2, 'vehicle')[1]
+    local s2 = spawnsOf(ctx2, 'ped')
+    at(1, 1010.0, 1000.0); at(2, 1500.0, 1000.0)
+    tickN(PU, ctx2, 1)
+    E(car2.netId).speed = 30.0
+    tickN(PU, ctx2, 1)
+    E(car2.netId).speed = 0.0
+    tickN(PU, ctx2, 5)
+    for _, sp in ipairs(s2) do E(sp.netId).inVehicle = 0 end
+    tickN(PU, ctx2, 1)
+    H.eq(npc.states[s2[1].netId], 'fleeing', 'stun: suspect running')
+    setPos(s2[1].netId, 1010.0, 1000.0)
+    local ok, why = PU.onEvent(ctx2, 2, { type = 'stunned', netId = s2[1].netId })
+    H.eq(why, 'too_far', 'stun: a report from 490 m away is rejected even with a partner next to the suspect')
+    at(2, 1050.0, 1000.0)
+    ok = PU.onEvent(ctx2, 2, { type = 'stunned', netId = s2[1].netId })
+    H.eq(ok, true, 'stun: a report from 40 m (partner within 30 m) is accepted')
+    H.eq(npc.states[s2[1].netId], 'surrendered', 'stun: the suspect gives up')
+end
+
+do -- Street Race Bust: racers that all die in crashes with none detained never complete; the time limit fails
+    H.clockMs = 3300000
+    at(1, 600.0, 180.0)
+    local obj = PU.defaults({
+        block = 'pursuit', mode = 'stop', vehicles = 2, route = 'race', models = { 'sultan' },
+        complete = 'all_or_timeout_any', surrenderOnAim = false, footFlee = 0,
+    })
+    local ctx = fakeCtx({ obj = obj, location = raceLoc, mission = builtin })
+    PU.start(ctx)
+    local drv = spawnsOf(ctx, 'ped')
+    PU.onEntityDead(ctx, drv[1].netId, nil)
+    PU.onEntityDead(ctx, drv[2].netId, nil)
+    tickN(PU, ctx, 2)
+    H.eq(ctx.calls.complete, 0, 'race: every racer dead and none detained is not a completion')
+    H.eq(#ctx.calls.fail, 0, 'race: ... and no immediate fail either')
+    H.eq(PU.onTimeout(ctx), nil, 'race: the time limit then fails (none detained)')
+
+    -- one detained, the other dead in a crash: completes (nothing left to stop), no all-detained bonus
+    local ctx2 = fakeCtx({ obj = PU.defaults(U.deepcopy(obj)), location = raceLoc, mission = builtin })
+    PU.start(ctx2)
+    local c2 = spawnsOf(ctx2, 'vehicle')
+    local d2 = spawnsOf(ctx2, 'ped')
+    E(c2[1].netId).speed = 35.0
+    tickN(PU, ctx2, 1)
+    setPos(c2[1].netId, 600.0, 170.0)
+    E(c2[1].netId).speed = 0.0
+    tickN(PU, ctx2, 5)
+    E(d2[1].netId).inVehicle = 0
+    tickN(PU, ctx2, 1)
+    npc.states[d2[1].netId] = 'cuffed'
+    tickN(PU, ctx2, 1)
+    H.eq(ctx2.calls.complete, 0, 'race: one detained, one still racing')
+    PU.onEntityDead(ctx2, d2[2].netId, nil)
+    H.eq(ctx2.calls.complete, 1, 'race: one detained and the other dead in a crash completes')
+    H.eq(count(ctx2.calls.award, 'all_racers_detained'), 0, 'race: no all-detained bonus with a dead racer')
+end
+
 -- Pursuit Sim: follow mode, spawn 50 m ahead, medals by average distance, lost, undriveable, any ram.
 local simLoc = { label = 'Sim', start = { coords = vec4(0.0, 0.0, 30.0, 0.0), radius = 30.0 } }
 local function simCtx(extra)
@@ -603,6 +720,19 @@ do
     tickN(PU, ctx5, 1)
     H.eq(ctx5.calls.fail[1], 'block.pursuit.fail_undriveable', 'sim: server sees the engine at 0 and fails')
     H.players[1].vehicle = nil
+
+    -- the getaway driver dies in a crash after a few seconds of close following: no medal for that
+    local ctx7 = simCtx()
+    PU.start(ctx7)
+    local d7 = spawnsOf(ctx7, 'ped')[1]
+    at(1, 0.0, 30.0)
+    tickN(PU, ctx7, 5)
+    PU.onEntityDead(ctx7, d7.netId, nil)
+    tickN(PU, ctx7, 1)
+    H.eq(#ctx7.calls.fail, 0, 'sim: target died without a participant kill: no fail')
+    H.eq(ctx7.calls.complete >= 1, true, 'sim: nothing left to follow: the objective ends')
+    H.eq(count(ctx7.calls.award, 'medal_gold') + count(ctx7.calls.award, 'medal_silver')
+        + count(ctx7.calls.award, 'medal_bronze'), 0, 'sim: no medal without the full follow duration')
 
     local ctx6 = simCtx()
     PU.start(ctx6)
@@ -807,6 +937,14 @@ do
     for _, w in ipairs(st.waves) do if w.triggered then waves = waves + 1 end end
     H.eq(waves, 2, 'escort: both waves triggered along the route')
     H.eq(#spawnsOf(ctx, 'vehicle', 'ambush_car'), 4, 'escort: 2 cars per wave')
+    do
+        local lockedEnts = {}
+        for _, l in ipairs(calls.locked) do if l.state == 2 then lockedEnts[l.veh] = true end end
+        local all = true
+        for _, c in ipairs(spawnsOf(ctx, 'vehicle', 'ambush_car')) do all = all and lockedEnts[c.ent] == true end
+        H.ok(all, 'escort: every ambush car is doors-locked (nothing a non-participant can take)')
+        H.ok(lockedEnts[truck.ent] == true, 'escort: the truck is doors-locked')
+    end
     H.eq(#spawnsOf(ctx, 'ped', 'attacker'), 8, 'escort: 2 attackers per car')
     H.eq(spawnsOf(ctx, 'ped', 'attacker')[1].opts.armed, true, 'escort: attackers armed')
     H.eq(npc.states[spawnsOf(ctx, 'ped', 'attacker')[1].netId], 'hostile', 'escort: attackers hostile')
@@ -881,14 +1019,39 @@ do -- stopped too long outside a stop, destroyed, driver killed, unhealthy arriv
     local ctx5 = escCtx({ ambush = { waves = 1, carsPerWave = 1, perCar = 1 } }, shortLoc)
     ES.start(ctx5)
     local t5 = spawnsOf(ctx5, 'vehicle', 'escort')[1]
-    driveTo(ctx5, t5.netId, 540.0)
+    driveTo(ctx5, t5.netId, 500.0)
     H.eq(#spawnsOf(ctx5, 'ped', 'attacker'), 1, 'escort: 1 x 1 x 1 ambush')
+    H.ok(not ctx5.state.truck.arrived, 'escort: 500 m is not the destination yet')
     E(t5.netId).engine = 400.0
+    driveTo(ctx5, t5.netId, 540.0)
+    H.eq(ctx5.state.truck.arrived, true, 'escort: arrived at 40 % health')
     tickN(ES, ctx5, 1)
     H.eq(ctx5.calls.complete, 0, 'escort: the attacker next to the destination blocks completion')
+    E(t5.netId).engine = 1000.0   -- repaired after the arrival: the bonus still goes by the arrival
     ES.onEntityDead(ctx5, spawnsOf(ctx5, 'ped', 'attacker')[1].netId, 1)
     H.eq(ctx5.calls.complete, 1, 'escort: completes when the last attacker nearby dies')
-    H.eq(count(ctx5.calls.award, 'truck_healthy'), 0, 'escort: 40 % health earns no bonus')
+    H.eq(count(ctx5.calls.award, 'truck_healthy'), 0, 'escort: arrived at 40 % health earns no bonus')
+
+    -- healthy on arrival, shot up while the area is cleared: "arrives above 50 %" still earns it
+    local ctx6 = escCtx({ ambush = { waves = 1, carsPerWave = 1, perCar = 1 } }, shortLoc)
+    ES.start(ctx6)
+    local t6 = spawnsOf(ctx6, 'vehicle', 'escort')[1]
+    driveTo(ctx6, t6.netId, 540.0)
+    H.eq(ctx6.state.truck.arrived, true, 'escort: arrived healthy')
+    H.eq(ctx6.state.truck.arrivalHealth, 100, 'escort: health recorded at the arrival')
+    E(t6.netId).engine, E(t6.netId).body = 300.0, 300.0
+    ES.onEntityDead(ctx6, spawnsOf(ctx6, 'ped', 'attacker')[1].netId, 1)
+    H.eq(ctx6.calls.complete, 1, 'escort: complete after the clear')
+    H.eq(count(ctx6.calls.award, 'truck_healthy'), 1, 'escort: truck_healthy goes by the health on arrival')
+
+    -- the unarmed driver killed by a player who already LEFT the run: an outside kill, not a fail
+    local ctx7 = escCtx()
+    ES.start(ctx7)
+    ctx7.srcs = { 1 }                            -- participant 2 left (still in run.participants)
+    local d7 = spawnsOf(ctx7, 'ped', 'escort_driver')[1]
+    ES.onEntityDead(ctx7, d7.netId, 2)
+    H.eq(#ctx7.calls.fail, 0, 'escort: a driver killed by a former participant does not fail the run')
+    H.eq(ctx7.state.truck.driver.dead, true, 'escort: the driver is down (the truck will stall)')
 end
 
 do -- caps and rescale
@@ -1170,6 +1333,32 @@ do -- escape, kills, witness lost, stun, clue bonus lost to an early arrest
     H.eq(SA.presence(ctx4, 1), U.dist2d(vec3(5000.0, 0.0, 30.0), ctx4.state.circle.center) - 50, 'presence outside: metres from the edge')
 end
 
+do -- kills by former participants, stun reports from far away
+    H.clockMs = 9700000
+    at(1, 0.0, 0.0); at(2, 10.0, 0.0)
+    local ctx = huntCtx(nil, { 1, 2 })
+    SA.start(ctx)
+    local f = fugitivesOf(ctx)[1]
+    local w = spawnsOf(ctx, 'ped', 'witness')[1]
+    ctx.srcs = { 1 }                            -- participant 2 left (still in run.participants)
+    SA.onEntityDead(ctx, w.netId, 2)
+    H.eq(#ctx.calls.fail, 0, 'hunt: the witness killed by a former participant is not a fail')
+    SA.onEntityDead(ctx, f.netId, 2)
+    H.eq(#ctx.calls.fail, 0, 'hunt: a fugitive killed by a former participant is not a fail')
+
+    local ctx2 = huntCtx(nil, { 1, 2 })
+    SA.start(ctx2)
+    local f2 = fugitivesOf(ctx2)[1]
+    local p2 = E(f2.netId).coords
+    at(1, p2.x + 10.0, p2.y, p2.z)
+    at(2, p2.x + 300.0, p2.y, p2.z)
+    local ok, why = SA.onEvent(ctx2, 2, { type = 'stunned', netId = f2.netId })
+    H.eq(why, 'too_far', 'hunt: a stun reported from 300 m is rejected even with a partner close by')
+    at(2, p2.x + 35.0, p2.y, p2.z)
+    ok = SA.onEvent(ctx2, 2, { type = 'stunned', netId = f2.netId })
+    H.eq(ok, true, 'hunt: a stun reported from 35 m (partner within 30 m) is accepted')
+end
+
 do -- caps and rescale
     H.clockMs = 9800000
     at(1, 0.0, 0.0)
@@ -1190,6 +1379,242 @@ do -- caps and rescale
     H.eq(#ctx.calls.delete, n, 'restart: every entity deleted')
     H.eq(#fugitivesOf(ctx), 4, 'restart: fugitives respawned')
     H.eq(SA.onTimeout(ctx), nil, 'timeout fails the search')
+end
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- client halves (run host AI) with mocked client natives, driven by the harness thread scheduler
+-- ════════════════════════════════════════════════════════════════════════════
+local CL = { tasks = {}, applied = {}, leaves = {}, reports = {}, maxHealth = {}, zones = {}, removed = {} }
+do
+    CP.Npc = {
+        apply = function(e) CL.applied[#CL.applied + 1] = e; return true end,
+        task = function(e, action, args) CL.tasks[#CL.tasks + 1] = { e = e, action = action, args = args }; return true end,
+    }
+    local me = newEnt('ped', vec3(9000.0, 9000.0, 30.0))   -- the local player, far from everything
+    local noop = function() end
+    local function falsy() return false end
+    for _, name in ipairs({ 'SetVehicleEngineOn', 'SetBlockingOfNonTemporaryEvents', 'SetPedKeepTask',
+        'SetPedCanBeDraggedOut', 'SetPedConfigFlag', 'SetDriverAbility', 'SetDriverAggressiveness', 'SetEntityHealth',
+        'SetVehicleEngineHealth', 'SetVehicleBodyHealth', 'SetVehiclePetrolTankHealth', 'SetVehicleStrong',
+        'SetVehicleExplodesOnHighExplosionDamage', 'TaskVehicleTempAction', 'DrawMarker', 'TaskStartScenarioInPlace' }) do
+        _G[name] = noop
+    end
+    for _, name in ipairs({ 'IsEntityTouchingEntity', 'IsPedBeingStunned', 'IsPlayerFreeAimingAtEntity', 'IsVehicleSirenOn',
+        'IsPedDeadOrDying' }) do
+        _G[name] = falsy
+    end
+    _G.PlayerPedId = function() return me end
+    _G.PlayerId = function() return 0 end
+    _G.GetPedInVehicleSeat = function() return 0 end
+    _G.IsVehicleDriveable = function() return true end
+    _G.NetworkGetEntityIsNetworked = function() return true end
+    _G.NetworkGetNetworkIdFromEntity = function(e) return ents[e] and ents[e].netId or 0 end
+    _G.NetworkDoesNetworkIdExist = function(n) return byNet[n] ~= nil end
+    _G.NetworkHasControlOfEntity = function(e) return ents[e] ~= nil and ents[e].owned == true end
+    _G.IsPedInVehicle = function(ped, veh) return ents[ped] ~= nil and ents[ped].inVehicle == veh end
+    _G.IsPedInAnyVehicle = function(ped) return ents[ped] ~= nil and (ents[ped].inVehicle or 0) ~= 0 end
+    _G.TaskLeaveVehicle = function(ped, veh, flag) CL.leaves[#CL.leaves + 1] = { ped = ped, veh = veh, flag = flag } end
+    _G.SetEntityMaxHealth = function(e, hp) CL.maxHealth[#CL.maxHealth + 1] = { e = e, hp = hp } end
+    _G.Entity = function(e) return { state = { cp = ents[e] and ents[e].bag or nil } } end
+    H.exportsMock.ox_target = {
+        addSphereZone = function(o) CL.zones[#CL.zones + 1] = o; return #CL.zones end,
+        removeZone = function(id) CL.removed[id] = true end,
+    }
+    local progress = { active = false, cancelled = false, cancels = 0 }
+    CL.progress = progress
+    lib.progressActive = function() return progress.active end
+    lib.cancelProgress = function() progress.cancels = progress.cancels + 1; progress.cancelled = true end
+    lib.progressBar = function(o)
+        progress.active, progress.cancelled = true, false
+        local deadline = H.clockMs + (o.duration or 0)
+        while H.clockMs < deadline and not progress.cancelled do Wait(100) end
+        progress.active = false
+        return not progress.cancelled
+    end
+end
+
+local function clientCtx(runId, obj, loc)
+    local c = {
+        runId = runId, index = 1, obj = obj, base = obj, location = loc, isHost = true, radioSilence = true,
+        state = {}, participants = { 1 }, seed = 1,
+        report = function(ev) CL.reports[#CL.reports + 1] = ev end,
+        hudDetail = function() end,
+        control = function(e)
+            if ents[e] and ents[e].controllable ~= false then ents[e].owned = true; return true end
+            return false
+        end,
+    }
+    return c
+end
+local function countTasks(e, action)
+    local n = 0
+    for _, t in ipairs(CL.tasks) do if t.e == e and t.action == action then n = n + 1 end end
+    return n
+end
+local function lastTask(e, action)
+    for i = #CL.tasks, 1, -1 do
+        local t = CL.tasks[i]
+        if t.e == e and t.action == action then return t end
+    end
+end
+local function countOf(list, e)
+    local n = 0
+    for _, x in ipairs(list) do if x == e then n = n + 1 end end
+    return n
+end
+
+H.load('blocks/pursuit/client.lua')
+H.load('blocks/escort/client.lua')
+H.load('blocks/search_area/client.lua')
+local PC, EC, SC = CP.Blocks.get('pursuit'), CP.Blocks.get('escort'), CP.Blocks.get('search_area')
+H.ok(PC and PC.update and EC and EC.update and SC and SC.update, 'client halves registered')
+
+do -- pursuit host: a loop route is tasked once, not re-tasked every pass while the car sits at the lap end
+    H.clockMs = 20000000
+    local veh, vehNet = newEnt('vehicle', loopPts[1])
+    local drv, drvNet = newEnt('ped', loopPts[1])
+    ents[drv].inVehicle = veh
+    ents[drv].bag = { state = 'driving', cfg = {} }
+    ents[veh].speed = 20.0
+    local obj = PU.defaults({ block = 'pursuit', route = 'race', speed = 108, style = 'reckless' })
+    local cctx = clientCtx('run-cl-1', obj, raceLoc)
+    PC.prepare(cctx)
+    PC.start(cctx)
+    PC.update(cctx, { kind = 'state', mode = 'stop', fled = true, trigger = 'arrive',
+        vehicles = { { netId = vehNet, index = 1, state = 'fleeing', occupants = { drvNet } } },
+        suspects = { { netId = drvNet, vehicle = vehNet, seat = -1, state = 'driving' } } })
+    H.step(1000)
+    H.eq(countTasks(drv, 'driveRoute'), 1, 'pursuit client: the racer gets its route')
+    local t1 = lastTask(drv, 'driveRoute')
+    H.near(t1.args.speed, 30.0, 1e-6, 'pursuit client: speed passed in m/s')
+    H.eq(t1.args.loop, true, 'pursuit client: loop route')
+    H.eq(countOf(CL.applied, drv), 1, 'pursuit client: CP.Npc.apply once')
+    for _ = 1, 3 do H.step(1000) end
+    H.eq(countTasks(drv, 'driveRoute'), 1, 'pursuit client: no forced re-task while the car is still at the lap end')
+    ents[veh].coords = vec3(200.0, 0.0, 30.0)
+    H.step(1000)
+    H.eq(countTasks(drv, 'driveRoute'), 1, 'pursuit client: under way, still one task')
+    ents[veh].coords = vec3(10.0, 0.0, 30.0)
+    H.step(1000)
+    H.eq(countTasks(drv, 'driveRoute'), 2, 'pursuit client: back at the lap end: one new lap')
+    H.eq(lastTask(drv, 'driveRoute').args.force, true, 'pursuit client: the new lap is forced')
+    H.step(1000); H.step(1000)
+    H.eq(countTasks(drv, 'driveRoute'), 2, 'pursuit client: ... and only one')
+
+    -- control lost to another client and regained: config re-applied and the drive re-tasked
+    ents[drv].owned = false
+    H.step(1000)
+    H.eq(countOf(CL.applied, drv), 2, 'pursuit client: re-applied after control came back')
+    H.eq(countTasks(drv, 'driveRoute'), 3, 'pursuit client: re-tasked after control came back')
+    ents[veh].owned, ents[veh].controllable = false, false
+    local before = #CL.tasks
+    H.step(1000)
+    H.eq(#CL.tasks, before, 'pursuit client: nothing is tasked without control of the car')
+    ents[veh].controllable = nil
+
+    -- stopped: the driver is told to get out, again and again, then warped out
+    PC.update(cctx, { kind = 'state', mode = 'stop', fled = true, trigger = 'arrive',
+        vehicles = { { netId = vehNet, index = 1, state = 'stopped', occupants = { drvNet } } },
+        suspects = { { netId = drvNet, vehicle = vehNet, seat = -1, state = 'stopped' } } })
+    ents[drv].bag = { state = 'stopped', cfg = {} }
+    local first = #CL.leaves
+    H.step(1000)
+    H.eq(#CL.leaves, first + 1, 'pursuit client: stopped suspect told to leave the car')
+    H.eq(CL.leaves[#CL.leaves].flag, 256, 'pursuit client: a normal exit first')
+    H.step(1000)
+    H.eq(#CL.leaves, first + 1, 'pursuit client: no repeat within the retry interval')
+    for _ = 1, 5 do H.step(1000) end
+    H.eq(#CL.leaves, first + 3, 'pursuit client: the exit is retried while the suspect is still seated')
+    H.eq(CL.leaves[#CL.leaves].flag, 16, 'pursuit client: the third attempt warps the suspect out')
+    ents[drv].inVehicle = 0
+    local n = #CL.leaves
+    for _ = 1, 4 do H.step(1000) end
+    H.eq(#CL.leaves, n, 'pursuit client: no more exits once out')
+    PC.stop(cctx)
+    H.step(1000)
+end
+
+do -- escort host: toughness from the cp bag, a new truck (test restart) is toughened again, control regained
+    H.clockMs = 21000000
+    local truck, truckNet = newEnt('vehicle', routePts[1])
+    local drv, drvNet = newEnt('ped', routePts[1])
+    ents[truck].bag = { state = 'idle', cfg = { toughness = 2.0 } }
+    ents[drv].bag = { state = 'driving', cfg = {} }
+    ents[drv].inVehicle = truck
+    local obj = ES.defaults({ block = 'escort' })
+    local cctx = clientCtx('run-cl-2', obj, escLoc)
+    local function snap(tn, dn, gen)
+        return { kind = 'state', truck = { netId = tn, driver = dn, wp = 2, gen = gen or 1, arrived = false,
+            toughened = false, health = 100, stoppedFor = 0, stoppedFail = 60 }, waves = {}, attackers = {}, completed = false }
+    end
+    EC.prepare(cctx)
+    EC.start(cctx)
+    EC.update(cctx, snap(truckNet, drvNet))
+    H.step(500)
+    H.eq(CL.maxHealth[#CL.maxHealth] and CL.maxHealth[#CL.maxHealth].hp, 2000, 'escort client: toughness 2.0 from the cp bag cfg')
+    local rep = CL.reports[#CL.reports]
+    H.ok(rep and rep.type == 'toughened' and rep.netId == truckNet, 'escort client: toughened reported')
+    H.eq(countTasks(drv, 'driveRoute'), 1, 'escort client: the truck gets its route')
+    H.step(500); H.step(500)
+    H.eq(countTasks(drv, 'driveRoute'), 1, 'escort client: no repeat while nothing changed')
+    ents[drv].owned = false
+    H.step(500)
+    H.eq(countTasks(drv, 'driveRoute'), 2, 'escort client: re-tasked after control of the driver came back')
+    -- a new truck with a new driver (test restart)
+    local truck2, truck2Net = newEnt('vehicle', routePts[1])
+    local drv2, drv2Net = newEnt('ped', routePts[1])
+    ents[truck2].bag = { state = 'idle', cfg = { toughness = 1.5 } }
+    ents[drv2].bag = { state = 'driving', cfg = {} }
+    ents[drv2].inVehicle = truck2
+    local n = #CL.maxHealth
+    EC.update(cctx, snap(truck2Net, drv2Net))
+    H.step(500)
+    H.eq(#CL.maxHealth, n + 1, 'escort client: the new truck is toughened too')
+    H.eq(CL.maxHealth[#CL.maxHealth].hp, 1500, 'escort client: with its own toughness')
+    H.eq(CL.reports[#CL.reports].netId, truck2Net, 'escort client: toughened reported for the new truck')
+    H.eq(countTasks(drv2, 'driveRoute'), 1, 'escort client: the new driver gets the route')
+    EC.stop(cctx)
+    H.step(1000)
+end
+
+do -- search_area: a clue check still running when the objective stops is cancelled; restarted clues re-zone
+    H.clockMs = 22000000
+    local obj = SA.defaults({ block = 'search_area' })
+    local cctx = clientCtx('run-cl-3', obj, huntLoc)
+    local fug, fugNet = newEnt('ped', vec3(400.0, 0.0, 30.0))
+    ents[fug].bag = { state = 'idle', cfg = {} }
+    local function snap(x)
+        return { kind = 'state', circle = { x = 0.0, y = 0.0, z = 30.0, r = 600, n = 0 },
+            clues = { { i = 1, x = x, y = 0.0, z = 30.0, kind = 'prop', model = 'prop_cs_heist_bag_02', netId = 777, status = 'pending' } },
+            fugitives = { { netId = fugNet, state = 'idle' } }, checked = 0, clueTotal = 1, arrests = 0, neutralised = 0,
+            total = 1, entered = true }
+    end
+    SC.prepare(cctx)
+    SC.start(cctx)
+    SC.update(cctx, snap(200.0))
+    H.step(1000)
+    H.eq(#CL.zones, 1, 'search client: a target zone on the clue')
+    H.eq(CL.zones[1].options[1].name, 'crimson-police:check_clue', 'search client: option name prefixed crimson-police')
+    H.eq(countTasks(fug, 'cower'), 1, 'search client: the hidden fugitive cowers')
+    ents[fug].owned = false
+    H.step(1000)
+    H.eq(countTasks(fug, 'cower'), 2, 'search client: re-tasked after control of the fugitive came back')
+    -- a restart moved clue 1: the old zone goes, a new one is made at the new spot
+    SC.update(cctx, snap(-200.0))
+    H.ok(CL.removed[1] == true, 'search client: the old clue zone is removed')
+    H.step(1000)
+    H.eq(#CL.zones, 2, 'search client: a new zone for the moved clue')
+    H.eq(CL.zones[2].coords.x, -200.0, 'search client: at its new spot')
+    -- start checking, then the objective stops mid-progress
+    local reports = #CL.reports
+    CL.zones[2].options[1].onSelect()
+    H.eq(CL.reports[reports + 1] and CL.reports[reports + 1].type, 'clue_start', 'search client: clue_start reported')
+    H.eq(CL.progress.active, true, 'search client: progress bar running')
+    SC.stop(cctx)
+    H.eq(CL.progress.cancels, 1, 'search client: stop cancels the running clue check')
+    H.ok(CL.removed[2] == true, 'search client: zones removed at stop')
+    for _ = 1, 50 do H.step(100) end
+    H.eq(#CL.reports, reports + 1, 'search client: no clue report after the objective stopped')
 end
 
 -- ── locale: every key the six files use exists in blocks_c.json ────────────

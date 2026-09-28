@@ -15,13 +15,18 @@
       when running), when stunned, or when a participant stays within flee_arrest.closeDistance for
       closeSeconds. Surrendered suspects are arrested with CP.Npc.enableCuff (arrest.label /
       arrest.duration: "Detain driver" 3 s on Street Race Bust). Done when every suspect is
-      neutralised (cuffed, or dead without a participant kill). complete = 'all_or_timeout_any' also
-      completes at the time limit when at least one suspect was detained (onTimeout).
+      neutralised (cuffed, or dead without a participant kill). complete = 'all_or_timeout_any'
+      (Street Race Bust) also needs at least one suspect detained before it completes early, and
+      completes at the time limit when at least one was detained (onTimeout); none detained fails.
       A suspect more than escape.distance from every participant for escape.seconds escapes: fail.
+      Occupants only switch from 'stopped' to fleeing / hostile / surrendered once they are out of
+      the car (the host client retries the exit and finally warps them out).
     - follow (Pursuit Sim): stay within hold metres of the suspect vehicle (or its driver on foot
       after a wreck) for a total of duration seconds. More than lost.distance from every participant
       for lost.seconds straight fails, and so does the officer's vehicle becoming undriveable
-      (failIfUndriveable). The average distance sets the medal; run.flags.medals = true.
+      (failIfUndriveable). The average distance sets the medal, awarded only when the full duration
+      was held; run.flags.medals = true. A target that died without a participant kill ends the
+      objective without a medal.
     Vehicles start when the objective starts (trigger 'arrive' or { ahead }) or, with trigger
     { distance, lights }, when a participant with lights on is within distance (client evidence
     'lights_near', checked with server coords), when any participant gets within FLEE_CLOSE, or when
@@ -61,7 +66,8 @@
                                         plausible against the server's samples, once per RAM_COOLDOWN_MS
     { type = 'lights_near', netId }     lights/siren on within trigger.distance of a waiting car
     { type = 'aim', netId }             an unarmed suspect on foot aimed at (server distance + weapon check)
-    { type = 'stunned', netId }         a suspect seen stunned; a participant within STUN_RANGE
+    { type = 'stunned', netId }         a suspect seen stunned; a participant within STUN_RANGE and the
+                                        reporter within STUN_REPORT (server coords)
     { type = 'low_health', netId }      an armed suspect (neverShoots = false) re-checked below 50 % health
     { type = 'undriveable', netId }     follow mode: the reporter's vehicle, confirmed by server engine/tank health
     { type = 'cuffed', netId }          CP.Npc after a validated cuff (the cp bag says cuffed)
@@ -90,7 +96,8 @@ local U = CP.U
 
 local REACH_SLACK        = 2.0      -- metres of position lag allowed around interaction ranges
 local CUFF_RANGE         = 3.0      -- CP.Npc.enableCuff default maxDistance (ARCHITECTURE §5.11)
-local STUN_RANGE         = 30.0     -- a stun needs a participant this close to the suspect
+local STUN_RANGE         = 30.0     -- a stun needs a participant this close to the suspect...
+local STUN_REPORT        = 60.0     -- ...and the reporter this close (the client only watches within 60 m)
 local AIM_STOPPED        = 25.0     -- a suspect waiting at the stopped car gives up when aimed at from this close
 local RAM_RANGE          = 12.0     -- a ram report needs the reporter this close to the suspect vehicle
 local RAM_COOLDOWN_MS    = 2500     -- one ram per participant and vehicle in this window
@@ -99,7 +106,6 @@ local RAM_MAX_KMH        = 400.0
 local LIGHTS_SLACK       = 10.0
 local FLEE_CLOSE         = 15.0     -- a waiting car flees when any participant gets this close
 local FLEE_DAMAGE        = 25.0     -- ...or when its body health drops this much
-local EXIT_TIMEOUT_MS    = 6000     -- occupants count as out of the car this long after the stop
 local NEVER_MOVED_MS     = 30000    -- a fleeing car that never got going can be stopped after this long
 local MOVED_KMH          = 15.0     -- faster than this, a car has been moving
 local STOP_NEAR          = 50.0     -- a stop only counts with a participant this close to the car
@@ -239,12 +245,14 @@ local function indices(n)
     return t
 end
 
+-- An ACTIVE participant only: run.participants also keeps everyone who already left, and a kill by a
+-- player who left the run is an outside kill (CP.Npc -> CP.AntiCheat.onNpcKilled flags it), not a
+-- reason to fail the run for the officers still on it.
 local function isParticipant(ctx, src)
     src = tonumber(src)
     if not src then return false end
-    if ctx.run and type(ctx.run.participants) == 'table' and ctx.run.participants[src] then return true end
     for _, s in ipairs(ctx.participants() or {}) do
-        if s == src then return true end
+        if tonumber(s) == src then return true end
     end
     return false
 end
@@ -859,11 +867,14 @@ end
 local function tryComplete(ctx, st)
     if st.completed or st.failed or st.halted then return end
     if st.mode == 'follow' then
-        if st.follow.inRange < (tonumber(ctx.obj.duration) or 0) and not st.targetGone then return end
+        local held = st.follow.inRange >= (tonumber(ctx.obj.duration) or 0)
+        if not held and not st.targetGone then return end
         if not st.medalDone then
             st.medalDone = true
             st.average = st.follow.samples > 0 and st.follow.sum / st.follow.samples or 0
-            st.medal = medalFor(ctx.obj, st.average)
+            -- A medal needs the full follow: a target that died early (e.g. rammed into a wall) must not
+            -- turn a few seconds of close following into a Gold medal once minSeconds has passed.
+            st.medal = held and medalFor(ctx.obj, st.average) or nil
             if st.medal then ctx.award(st.medal, { count = 1 }) end
         end
         if ctx.complete({ average = U.round(st.average), medal = st.medal }) ~= false then st.completed = true end
@@ -875,6 +886,9 @@ local function tryComplete(ctx, st)
         total = total + 1
         if not neutralised(p) then return end
     end
+    -- Street Race Bust: Completed only with a racer detained. Racers that all died in crashes leave
+    -- nothing to do, and the time limit then fails the run (onTimeout: none detained), as the card says.
+    if ctx.obj.complete == 'all_or_timeout_any' and st.detained < 1 then return end
     if ctx.obj.allDetainedBonus and not st.allDone and total > 0 and st.detained >= total then
         st.allDone = true
         ctx.award(ctx.obj.allDetainedBonus, { count = 1 })
@@ -983,7 +997,11 @@ local function watchPeds(ctx, st, dt, list)
                 local c = GetEntityCoords(p.entity)
                 local near = nearestOf(list, c)
                 if p.state == 'stopped' then
-                    if not inVehicle(p) or now() - (p.stoppedAt or 0) >= EXIT_TIMEOUT_MS then
+                    -- Only once the suspect is out of the car: CP.Npc's 'flee' for a ped still in the
+                    -- driver's seat is a VEHICLE flee (the stopped car would drive off again), and a
+                    -- surrendered ped in a seat cannot be cuffed. The host client retries the exit and
+                    -- warps the ped out after a few tries, so this does not wait forever.
+                    if not inVehicle(p) then
                         if p.fleeRoll then
                             setPed(ctx, st, p, 'fleeing')
                         elseif p.armed then
@@ -1227,7 +1245,9 @@ local function onEvent(ctx, src, ev)
                 if not pc or not sc or U.dist(pc, sc) > range + REACH_SLACK then return false, 'too_far' end
                 if not holdsWeapon(src) then return false, 'no_weapon' end
             elseif t == 'stunned' then
-                if nearestOf(party(ctx), entCoords(p.entity)) > STUN_RANGE then return false, 'too_far' end
+                local pc, sc = entCoords(p.entity), ctx.coords(src)
+                if not pc or not sc or U.dist(pc, sc) > STUN_REPORT + REACH_SLACK then return false, 'too_far' end
+                if nearestOf(party(ctx), pc) > STUN_RANGE then return false, 'too_far' end
             else
                 if not p.armed then return false, 'unarmed' end
                 local ratio = healthRatio(p)

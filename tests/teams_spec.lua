@@ -2,11 +2,11 @@
 --
 -- Other modules are stubbed (Access, Qbx, Tablet, Runs, Alerts, Calls, Permissions, Missions, Draw,
 -- Admin); CP.Scaling is the real module. Every SQL statement of the slice runs against MariaDB. The
--- spec uses its own database (cp_test_teams, rebuilt from sql/migrations like cp_test) so parallel runs
--- of other specs that reset cp_test cannot interfere.
+-- spec uses its own database (<run database>_teams, rebuilt from sql/migrations and dropped at the end)
+-- so neither other specs nor a parallel run of this spec can interfere.
 
 local H = dofile('tests/harness.lua')
-H.db = 'cp_test_teams'
+H.db = (os.getenv('CP_TEST_DB') or 'cp_test') .. '_teams'
 H.resetDatabase()
 H.boot({ side = 'server' })
 
@@ -303,6 +303,10 @@ arena[6] = true
 ok, data = act('server:unitInvite', 1, 6)
 H.eq(data, 'err.unit_target_unavailable', 'in-arena officer cannot be invited')
 arena[6] = nil
+arena[1] = true
+ok, data = act('server:unitInvite', 1, 2)
+H.eq(data, 'err.in_arena', 'an in-arena officer cannot send invites')
+arena[1] = nil
 H.eq(U.unitOf(1), nil, 'refused invites create no unit')
 
 -- First invite: the inviter leads a forming unit.
@@ -319,9 +323,16 @@ local n = lastNote(2, 'unit.invite_received')
 H.ok(n ~= nil, 'invitee got a toast')
 H.eq(n and n.opts and n.opts.title, 'unit.invite_title', 'toast title key')
 H.eq(n and n.vars.department, 'SAST', 'toast names the department')
-local invitedPush = false
-for _, p in ipairs(pushes) do if p.src == 2 and p.topic == 'unit' and p.data.invited == true then invitedPush = true end end
+local invitedPush, unitPushes = false, 0
+for _, p in ipairs(pushes) do
+    if p.src == 2 and p.topic == 'unit' then
+        unitPushes = unitPushes + 1
+        if p.data.invited == true then invitedPush = true end
+    end
+end
 H.ok(invitedPush, 'invitee got a unit push with invited = true')
+H.eq(unitPushes, 1, 'exactly one unit push to the invitee (no duplicate refetch)')
+H.eq(pushedTo(2, 'board'), false, 'no board push to an invitee (not a member yet)')
 H.eq(U.members(1)[1], 1, 'forming unit members')
 
 ok, data = act('server:unitInvite', 1, 2)
@@ -428,6 +439,7 @@ U._sweep()
 H.eq(unit.invites[3], nil, 'invite expired after 120 s')
 H.ok(lastNote(3, 'unit.invite_expired_you') ~= nil, 'invitee told the invite expired')
 H.ok(lastNote(1, 'unit.invite_expired') ~= nil, 'inviter told the invite expired')
+H.eq(lastNote(1, 'unit.invite_expired').vars.name, 'Tom Reed', 'the expiry toast names the invitee')
 H.ok(pushedTo(3, 'unit'), 'invitee view refreshed')
 ok, data = act('server:unitRespond', 3, true)
 H.eq(data, 'err.unit_no_invite', 'expired invite cannot be accepted')
@@ -1030,6 +1042,44 @@ H.eq(select(2, O.cancel(0, 'x')), 'err.op_none', 'Ops.cancel with nothing active
 local okE, whyE = O.eligible(MISSIONS.gang_shootout)
 H.ok(okE and whyE == nil, 'eligible(gang_shootout)')
 
+-- Reason length is counted in characters (UTF-8), control characters become spaces.
+H.eq(select(2, O.cancel(0, string.rep('é', 150))), 'err.op_none', '150 accented characters (300 bytes) pass')
+H.eq(select(2, O.cancel(0, string.rep('é', 201))), 'err.op_reason_too_long', '201 characters refused')
+H.eq(select(2, O.cancel(0, '\n\t\n')), 'err.op_reason_required', 'only control characters = no reason')
+H.eq(select(2, O.cancel(0, 'bad \255 bytes')), 'err.invalid_payload', 'invalid UTF-8 refused')
+
+-- Idle clock ("auto-cancels after 30 minutes with no run in progress"): a relaunch does not reset it,
+-- an open join window is never cut short, and a run clears it.
+H.time = H.time + 1800
+ok, data = act('server:sup:opLaunch', 1, { missionId = 'gang_shootout' })
+H.eq(ok, true, 'launch for the idle clock')
+local op5 = data.id
+H.eq(O.active().idleSince, H.time, 'idle clock starts at the launch')
+act('server:joinOperation', 2, op5)
+act('server:joinOperation', 5, op5)
+ok = act('server:sup:opStart', 1)
+H.eq(ok, true, 'started')
+H.eq(O.active().idleSince, nil, 'an operation with a run is not idle')
+run = runsById['run-' .. runSeq]
+endRunStub(run, 'failed')
+local failedAt = H.time
+H.eq(O.active().idleSince, failedAt, 'idle clock restarts when the run ends')
+H.time = H.time + 1700
+ok = act('server:sup:opRelaunch', 9)
+H.eq(ok, true, 'relaunch 28 minutes after the fail')
+H.eq(O.active().idleSince, failedAt, 'relaunch keeps the idle clock')
+H.time = H.time + 200
+O._tick()
+H.eq(O.active() and O.active().status, 'joining', 'an open join window is not auto-cancelled')
+H.time = H.time + 101
+O._tick()
+H.eq(O.active() and O.active().status, 'waiting', 'window closed without participants -> waiting')
+res = cb('sup:getOperation', 1)
+H.eq(res.data.operation.idleCancelIn, 0, 'auto-cancel is due')
+O._tick()
+H.eq(O.active(), nil, 'auto-cancelled: more than 30 minutes without a run')
+H.eq(H.sql('SELECT status FROM cp_operations WHERE id = ?', { op5 })[1].status, 'cancelled', 'row cancelled')
+
 -- The tick loop runs by itself: joining window end through the thread.
 H.time = H.time + 1800
 ok, data = act('server:sup:opLaunch', 1, { missionId = 'gang_shootout' })
@@ -1039,4 +1089,5 @@ H.time = H.time + 300
 H.advance(2000, 500)
 H.eq(O.active() and O.active().status, 'running', 'tick thread starts the run at window end')
 
+os.execute(('mysql -uroot -e "DROP DATABASE IF EXISTS %s;"'):format(H.db))
 return H

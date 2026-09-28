@@ -7,15 +7,13 @@
 
 .oversight-off-layout {
   display: grid;
-  grid-template-columns: minmax(270px, 320px) minmax(0, 1fr);
+  grid-template-columns: minmax(250px, 300px) minmax(0, 1fr);
   gap: 18px;
   align-items: start;
 }
 
 /* ── search list ─────────────────────────────────────────────────────────── */
 .oversight-off-list {
-  position: sticky;
-  top: 0;
   display: flex;
   flex-direction: column;
   max-height: calc(100vh - 170px);
@@ -284,12 +282,33 @@
   font-size: var(--cp-fs-xs);
   font-weight: 500;
 }
-.oversight-off-void {
+.cp-btn.oversight-off-void {
   color: var(--cp-danger);
+}
+.oversight-off-nowrap {
+  white-space: nowrap;
+}
+.oversight-off-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 12px;
+}
+.oversight-off-result-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 2px 0;
 }
 
 .oversight-off-form {
   display: flex;
   flex-direction: column;
   gap: 14px;
+}
+
+.oversight-off-table table {
+  table-layout: fixed;
+}
+.oversight-off-table td {
+  overflow: hidden;
 }

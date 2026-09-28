@@ -51,7 +51,7 @@
   "unit.no_callsign": "no callsign",
   "unit.invite_withdrawn": "The unit invite from {name} was withdrawn.",
   "unit.invite_declined": "{name} declined your unit invite.",
-  "unit.invite_expired": "A unit invite expired without an answer.",
+  "unit.invite_expired": "{name} did not answer your unit invite in time.",
   "unit.invite_expired_you": "The unit invite from {name} expired.",
   "unit.invite_cancelled": "{name} is no longer available, so your invite was cancelled.",
   "unit.joined": "You joined {name}'s unit.",
@@ -224,5 +224,7 @@
   "sup.crossdept.launch_confirm": "Every on-duty officer is notified and every Mission Board shows only {mission} until it is completed or cancelled. The next launch is possible {minutes} minutes from now.",
   "unit.ui.expires_in": "Time left to answer",
   "sup.crossdept.left_count": "{n} left the run",
-  "sup.crossdept.joining_closed": "Joining closed at the start"
+  "sup.crossdept.joining_closed": "Joining closed at the start",
+  "unit.ui.locked_text_off_run": "Your unit accepted a mission type, so invites are closed until the unit's mission ends. You are no longer on that run, so leaving the unit abandons nothing.",
+  "admin.action.opAutoCancel": "Cross-Department Mission auto-cancelled"
 }

@@ -270,7 +270,9 @@ registerMock('action', 'server:admin:voidRun', (p: { rowId?: number; runUuid?: s
       return { voided: 1 };
     }
   }
-  throw new Error('err.row_not_found');
+  // A row from another screen's mock data (e.g. Admin Leaderboards): accept it.
+  if (!p.rowId && !p.runUuid) throw new Error('err.invalid_payload');
+  return { voided: 1 };
 });
 registerMock('action', 'server:admin:awardPoints', (p: { citizenid: string; points: number; reason: string }) => {
   if (!p?.reason) throw new Error('err.reason_required');
@@ -305,10 +307,10 @@ registerMock('request', 'admin:getDepartments', (): DepartmentsData => ({
 // ── Permissions ───────────────────────────────────────────────────────────────
 registerMock('request', 'admin:getPermissions', (): PermissionsData => ({
   supervisor: [
-    { action: 'breakEditLock', enabled: false }, { action: 'builderArchive', enabled: true }, { action: 'builderEdit', enabled: true },
-    { action: 'builderEditAny', enabled: false }, { action: 'builderPublish', enabled: true }, { action: 'builderRollback', enabled: false },
-    { action: 'forceRecall', enabled: true }, { action: 'handleDisputes', enabled: true }, { action: 'launchCrossDept', enabled: true },
-    { action: 'reviewFlagged', enabled: true }, { action: 'setTypePayout', enabled: true },
+    { action: 'setTypePayout', enabled: true }, { action: 'launchCrossDept', enabled: true }, { action: 'forceRecall', enabled: true },
+    { action: 'reviewFlagged', enabled: true }, { action: 'handleDisputes', enabled: true }, { action: 'builderEdit', enabled: true },
+    { action: 'builderPublish', enabled: true }, { action: 'builderArchive', enabled: true }, { action: 'builderEditAny', enabled: false },
+    { action: 'builderRollback', enabled: false }, { action: 'breakEditLock', enabled: false },
   ],
   adminOnly: ['setMissionPayout', 'clearPayout', 'manualAward', 'handleFailedDispute', 'voidAnyRun', 'seasons', 'bountyOverride', 'suspend', 'reloadMissions', 'testRun', 'openAdmin'],
   always: ['viewMissionList'],

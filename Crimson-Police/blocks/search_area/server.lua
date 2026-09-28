@@ -38,7 +38,8 @@
   Evidence accepted (onEvent)
     { type = 'clue_start', clue }   a participant started checking clue n (1-based, the list the server sends)
     { type = 'clue', clue }         ...and finished it
-    { type = 'stunned', netId }     a fugitive seen stunned; a participant within STUN_RANGE
+    { type = 'stunned', netId }     a fugitive seen stunned; a participant within STUN_RANGE and the
+                                    reporter within STUN_REPORT (server coords)
     { type = 'cuffed', netId }      CP.Npc after a validated cuff (the cp bag says cuffed)
     { type = 'shot', netId, src }   CP.Npc: a surrendered/cuffed fugitive was shot (penalty recorded there)
 
@@ -59,7 +60,8 @@ local U = CP.U
 local CLUE_RANGE         = 2.5      -- ox_target distance of a clue
 local REACH_SLACK        = 2.0      -- metres of position lag allowed around interaction ranges
 local TIMED_SHARE        = 0.8      -- a timed interaction must last at least this share of its duration
-local STUN_RANGE         = 30.0     -- a stun needs a participant this close to the fugitive
+local STUN_RANGE         = 30.0     -- a stun needs a participant this close to the fugitive...
+local STUN_REPORT        = 40.0     -- ...and the reporter this close (the client only watches within 40 m)
 local CUFF_RANGE         = 3.0      -- CP.Npc.enableCuff default maxDistance
 local CENTER_SHARE       = 0.7      -- the new centre lies within this share of the new radius of a fugitive
 local CENTER_TRIES       = 12
@@ -150,12 +152,13 @@ local function indices(n)
     return t
 end
 
+-- An ACTIVE participant only: a player who already left the run is an outside killer (flagged by
+-- CP.Npc / CP.AntiCheat), not a reason to fail the run for the officers still on it.
 local function isParticipant(ctx, src)
     src = tonumber(src)
     if not src then return false end
-    if ctx.run and type(ctx.run.participants) == 'table' and ctx.run.participants[src] then return true end
     for _, s in ipairs(ctx.participants() or {}) do
-        if s == src then return true end
+        if tonumber(s) == src then return true end
     end
     return false
 end
@@ -700,7 +703,9 @@ local function onEvent(ctx, src, ev)
             if f.state == 'surrendered' or f.state == 'cuffed' then return false, 'duplicate' end
             if f.state ~= 'fleeing' and f.state ~= 'idle' then return false, 'wrong_state' end
             if not ctx.obj.givesUp.stun then return false, 'disabled' end
-            if nearestOf(party(ctx), entCoords(f.entity)) > STUN_RANGE then return false, 'too_far' end
+            local fc, sc = entCoords(f.entity), ctx.coords(src)
+            if not fc or not sc or U.dist(fc, sc) > STUN_REPORT + REACH_SLACK then return false, 'too_far' end
+            if nearestOf(party(ctx), fc) > STUN_RANGE then return false, 'too_far' end
             f.ran = true
             surrender(ctx, st, f)
             ok = true

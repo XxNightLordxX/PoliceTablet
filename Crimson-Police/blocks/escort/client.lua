@@ -5,8 +5,10 @@
       the arrival marker at the destination (DrawMarker only within MARKER_RANGE, otherwise Wait(750));
     - a HUD line (ctx.hudDetail): truck health, stop wait, stopped countdown, attackers alive, and at the
       destination how many attackers are still within clearRadius;
-    - on the run host only: control of the truck and its driver, CP.Npc.apply on the driver, the
-      driver seated and kept in the truck, doors locked, the toughness applied once
+    - on the run host only: control of the truck, its driver and the attackers before anything is done
+      to them (re-applied and re-tasked when control comes back from another client), CP.Npc.apply on
+      the driver, the driver seated and kept in the truck, doors locked, the toughness (cp bag
+      cfg.toughness, else ctx.obj.toughness) applied once
       (SetEntityMaxHealth / SetEntityHealth / SetVehicleEngineHealth / SetVehicleBodyHealth /
       SetVehiclePetrolTankHealth = 1000 × toughness, SetVehicleStrong) and reported ('toughened');
       then the route, segment by segment: CP.Npc.task(driver, 'driveRoute', { vehicle, points = the
@@ -41,7 +43,7 @@ local function S_of(ctx)
     local k = keyOf(ctx)
     local S = active[k]
     if not S then
-        S = { key = k, blips = {}, applied = {}, data = {}, alive = true }
+        S = { key = k, blips = {}, applied = {}, lost = {}, data = {}, alive = true }
         active[k] = S
     end
     S.ctx = ctx
@@ -149,6 +151,29 @@ local function ensureDestBlip(S)
 end
 
 -- ── Host AI ─────────────────────────────────────────────────────────────────
+-- Control of a run entity before anything is done to it (ctx.control returns at once when this client
+-- already owns it). regained = another client owned it since the last check: re-apply and re-task.
+local function own(S, key, ent)
+    if NetworkHasControlOfEntity(ent) then
+        local regained = S.lost[key] == true
+        S.lost[key] = nil
+        return true, regained
+    end
+    if not S.ctx.control(ent, CONTROL_MS) then
+        S.lost[key] = true
+        return false, false
+    end
+    S.lost[key] = nil
+    return true, true
+end
+
+-- The truck's toughness from its cp bag cfg (the server passes cfg = { toughness }), else the objective's.
+local function toughnessOf(S, truck)
+    local bag = bagOf(truck)
+    local t = type(bag) == 'table' and type(bag.cfg) == 'table' and tonumber(bag.cfg.toughness) or nil
+    return t or tonumber(S.ctx.obj.toughness) or 1.0
+end
+
 local function toughen(veh, t)
     local hp = math.floor(1000 * t + 0.5)
     SetEntityMaxHealth(veh, hp)
@@ -176,12 +201,13 @@ local function hostTruck(S)
     local truck = entityFor(d.netId)
     if not truck then return end
     local fresh = false
-    if S.applied.truck ~= truck then
-        if not ctx.control(truck, CONTROL_MS) then return end
+    local ownTruck, regainedTruck = own(S, 'truck', truck)
+    if not ownTruck then return end
+    if S.applied.truck ~= truck or regainedTruck then
         SetVehicleDoorsLocked(truck, 2)
         SetVehicleEngineOn(truck, true, true, false)
         if not d.toughened and not S.toughSent then
-            toughen(truck, tonumber(ctx.obj.toughness) or 1.0)
+            toughen(truck, toughnessOf(S, truck))
             S.toughSent = true
             ctx.report({ type = 'toughened', netId = d.netId })
         end
@@ -190,8 +216,9 @@ local function hostTruck(S)
     end
     local driver = d.driver and entityFor(d.driver) or nil
     if not driver or IsPedDeadOrDying(driver, true) then return end
-    if S.applied.driver ~= driver then
-        if not ctx.control(driver, CONTROL_MS) then return end
+    local ownDriver, regainedDriver = own(S, 'driver', driver)
+    if not ownDriver then return end
+    if S.applied.driver ~= driver or regainedDriver then
         local bag = bagOf(driver)
         CP.Npc.apply(driver, (bag and bag.cfg) or {})
         setupDriver(driver)
@@ -233,11 +260,14 @@ end
 local function hostAttackers(S)
     for _, net in ipairs(S.data.attackers or {}) do
         local ped = entityFor(net)
-        if ped and S.applied[net] ~= ped and S.ctx.control(ped, CONTROL_MS) then
-            local bag = bagOf(ped)
-            CP.Npc.apply(ped, (bag and bag.cfg) or {})
-            CP.Npc.task(ped, 'combat', {})
-            S.applied[net] = ped
+        if ped and not IsPedDeadOrDying(ped, true) then
+            local owned, regained = own(S, 'a' .. tostring(net), ped)
+            if owned and (S.applied[net] ~= ped or regained) then
+                local bag = bagOf(ped)
+                CP.Npc.apply(ped, (bag and bag.cfg) or {})
+                CP.Npc.task(ped, 'combat', {})
+                S.applied[net] = ped
+            end
         end
     end
 end
@@ -362,6 +392,14 @@ CP.Blocks.register(BLOCK, {
     update = function(ctx, data)
         local S = S_of(ctx)
         if type(data) ~= 'table' or data.kind ~= 'state' then return end
+        local net = data.truck and data.truck.netId or nil
+        if net ~= S.truckNet then
+            -- a new truck (test restart): toughen, apply and task it from scratch
+            S.truckNet = net
+            S.toughSent = false
+            S.applied, S.lost = {}, {}
+            S.drive = nil
+        end
         S.data = data
         if data.truck and data.truck.toughened then S.toughSent = true end
     end,
@@ -369,7 +407,7 @@ CP.Blocks.register(BLOCK, {
     hostChanged = function(ctx, isHost)
         local S = S_of(ctx)
         S.isHost = isHost == true
-        S.applied = {}
+        S.applied, S.lost = {}, {}
         S.drive = nil
         S.toughSent = S.data.truck and S.data.truck.toughened or false
     end,

@@ -462,9 +462,13 @@ do
     H.eq(dept.department, 'fib', 'admin department filter defaults to the first department')
     H.eq(cb('admin:getBoards', 1, { citizenid = 'x y' }).error, 'err.invalid_citizenid', 'bad citizenid')
     -- CP.Cash.stuckPayments wins when present
-    CP.Cash = { stuckPayments = function() return { { id = 7, run_uuid = 'u7', citizenid = 'Z9', mission_type = 'patrol', mission_id = 'beat_patrol', amount = 250 } } end }
+    CP.Cash = { stuckPayments = function() return { { id = 7, run_uuid = 'u7', citizenid = 'Z9', mission_type = 'patrol', mission_id = 'beat_patrol', amount = 250 },
+        { id = 8, runUuid = 'u8', citizenid = 'Z8', name = 'Zed Eight', missionId = 'beat_patrol', missionLabel = 'Beat Patrol', amount = 300,
+          createdAt = NOW - 60, transId = 'CP-u8-Z8' } } end }
     local viaCash = cb('admin:getBoards', 1, {}).data
     H.eq(viaCash.stuck[1].transId, 'CP-u7-Z9', 'normalised from CP.Cash')
+    H.eq(viaCash.stuck[2].createdAt, os.date('%Y-%m-%d %H:%M:%S', NOW - 60), 'CP.Cash createdAt seconds -> text')
+    H.eq(viaCash.stuck[2].missionLabel, 'Beat Patrol', 'CP.Cash mission label kept')
     CP.Cash = nil
     H.sql('DELETE FROM cp_mission_runs WHERE id = ?', { stuckId })
     LB.invalidate()
@@ -506,6 +510,26 @@ do
     H.eq(list[2].kind, 'monthly_top3', 'monthly kind')
     H.eq(list[2].entries[1].points, 270, 'monthly points')
     H.eq(list[2].period, '2026-08', 'monthly period')
+end
+
+-- CP.Scoring provides the XP level and the badge list when it is loaded
+do
+    CP.Scoring = {
+        xpLevel = function(xp) return { label = 'Scored ' .. xp, badge = 'gold', xp = 15000, next = 40000 } end,
+        badges = function()
+            return {
+                { id = 'iron_wheels', label = 'Iron Wheels', earnedAt = '2026-09-01 10:00:00', earnedTs = NOW - 20 * 86400 },
+                { id = 'officer_of_week_2026-09-14', label = 'badge.officer_of_week_2026-09-14', earnedAt = '2026-09-21 00:00:00', earnedTs = NOW - 2 * 86400 },
+                { id = 'mystery', label = 'badge.mystery', earnedAt = '2026-09-02 10:00:00', earnedTs = NOW - 19 * 86400 },
+            }
+        end,
+    }
+    local p = cb('getProfile', 11, nil).data
+    H.eq(p.level.label, 'Scored 5000', 'CP.Scoring.xpLevel used')
+    H.eq(p.badges[1].kind, 'week', 'newest badge first, own label for the weekly badge')
+    H.eq(p.badges[2].label, 'mystery', 'missing badge text falls back to the id')
+    H.eq(p.badges[3].label, 'Iron Wheels', 'scoring label kept')
+    CP.Scoring = nil
 end
 
 -- mission labels

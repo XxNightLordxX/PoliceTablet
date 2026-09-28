@@ -120,7 +120,7 @@ local function parseKey(key)
     return tonumber(y), tonumber(m), tonumber(d)
 end
 
--- A timestamp inside the reset-adjusted day `key` (30 minutes after its reset).
+-- A timestamp inside the reset-adjusted day 'key' (30 minutes after its reset).
 local function keyTime(key)
     local y, m, d = parseKey(key)
     if not y then return nil end
@@ -366,7 +366,7 @@ local function listedEntries(mission)
     return map, order
 end
 
--- Per-occurrence value and `each` of a listed entry.
+-- Per-occurrence value and 'each' of a listed entry.
 local function entryValue(id, e, P)
     local cfg = Config.Bonuses and Config.Bonuses[id]
     local per

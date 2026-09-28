@@ -101,6 +101,11 @@ local ADMIN_ONLY = {
     'bountyOverride', 'suspend', 'reloadMissions', 'testRun', 'openAdmin',
 }
 local SUPERVISOR_ALWAYS = { 'viewMissionList' }
+-- Config.Permissions.supervisor in the spec's order (the Permissions screen lists them this way).
+local SUPERVISOR_ORDER = {
+    'setTypePayout', 'launchCrossDept', 'forceRecall', 'reviewFlagged', 'handleDisputes', 'builderEdit',
+    'builderPublish', 'builderArchive', 'builderEditAny', 'builderRollback', 'breakEditLock',
+}
 
 local warned = {}
 
@@ -1427,7 +1432,13 @@ CP.Net.callback('admin:getPermissions', function(src)
     for k in pairs(sup) do
         if type(k) == 'string' then keys[#keys + 1] = k end
     end
-    table.sort(keys)
+    local order = {}
+    for i, k in ipairs(SUPERVISOR_ORDER) do order[k] = i end
+    table.sort(keys, function(a, b)
+        local ia, ib = order[a] or 1000, order[b] or 1000
+        if ia ~= ib then return ia < ib end
+        return a < b
+    end)
     local list = {}
     local adminOnlySet = {}
     for _, a in ipairs(ADMIN_ONLY) do adminOnlySet[a] = true end

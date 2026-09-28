@@ -117,17 +117,21 @@ function Detail({ citizenid }: { citizenid: string }) {
       ),
     },
     {
-      key: 'result', header: t('admin.officers.col.result'), width: 170,
+      key: 'result', header: t('admin.officers.col.result'), width: 172,
       render: (r) => (
-        <Row gap={1} wrap>
-          <Badge size="sm" tone={stateTone(r.state)}>{t(`sup.state.${r.state}`)}</Badge>
+        <div className="oversight-off-result-cell">
+          <Row gap={1} wrap>
+            <Badge size="sm" tone={stateTone(r.state)}>{t(`sup.state.${r.state}`)}</Badge>
+            {r.flagged ? <Badge size="sm" tone="warning" icon="flag">{r.flagReason && hasKey(`flag.${r.flagReason}`) ? t(`flag.${r.flagReason}`) : t('flag.flagged')}</Badge> : null}
+            {r.voided ? <Badge size="sm" tone="danger">{t('admin.officers.voided')}</Badge> : null}
+          </Row>
           {r.state !== 'completed' ? <span className="oversight-off-soft">{endLabel(r.endReason)}</span> : null}
-        </Row>
+        </div>
       ),
     },
-    { key: 'points', header: t('admin.officers.col.points'), width: 90, numeric: true, render: (r) => <Points value={r.points} /> },
+    { key: 'points', header: t('admin.officers.col.points'), width: 74, numeric: true, render: (r) => <Points value={r.points} /> },
     {
-      key: 'cash', header: t('admin.officers.col.cash'), width: 130, numeric: true,
+      key: 'cash', header: t('admin.officers.col.cash'), width: 106, numeric: true,
       render: (r) => (
         <div className="oversight-off-cash">
           <Money amount={r.cashPaid > 0 ? r.cashPaid : r.cash} />
@@ -135,19 +139,9 @@ function Detail({ citizenid }: { citizenid: string }) {
         </div>
       ),
     },
+    { key: 'date', header: t('admin.officers.col.date'), width: 104, render: (r) => <span className="cp-num oversight-off-soft oversight-off-nowrap">{formatDateTime(r.createdAt)}</span> },
     {
-      key: 'flags', header: t('admin.officers.col.flags'), width: 150,
-      render: (r) => (
-        <Row gap={1} wrap>
-          {r.flagged ? <Badge size="sm" tone="warning" icon="flag">{r.flagReason && hasKey(`flag.${r.flagReason}`) ? t(`flag.${r.flagReason}`) : t('flag.flagged')}</Badge> : null}
-          {r.voided ? <Badge size="sm" tone="danger">{t('admin.officers.voided')}</Badge> : null}
-          {!r.flagged && !r.voided ? <span className="oversight-off-soft">—</span> : null}
-        </Row>
-      ),
-    },
-    { key: 'date', header: t('admin.officers.col.date'), width: 120, render: (r) => <span className="cp-num oversight-off-soft">{formatDateTime(r.createdAt)}</span> },
-    {
-      key: 'actions', header: '', width: 84, align: 'right',
+      key: 'actions', header: '', width: 66, align: 'right',
       render: (r) => (!r.voided && !o.own ? (
         <Button size="sm" variant="ghost" className="oversight-off-void" onClick={() => setVoidRow(r)}>{t('admin.officers.void')}</Button>
       ) : null),
@@ -180,7 +174,7 @@ function Detail({ citizenid }: { citizenid: string }) {
         {!o.known ? <div className="oversight-off-own"><Icon name="info" size={14} />{t('admin.officers.unknown_row')}</div> : null}
       </Card>
 
-      <Grid cols={4} gap={3}>
+      <div className="oversight-off-stats">
         <Card padding="sm">
           <Stat size="sm" icon="star" tone="accent" label={t('admin.officers.stat.xp')} value={formatNumber(o.xp)}
             hint={levelNext ? t('admin.officers.stat.next', { xp: formatNumber(levelNext) }) : level ? level.label : undefined} />
@@ -191,7 +185,7 @@ function Detail({ citizenid }: { citizenid: string }) {
           <Stat size="sm" icon="activity" label={t('admin.officers.stat.runs')} value={formatNumber(o.stats.runs)}
             hint={t('admin.officers.stat.runs_hint', { completed: o.stats.completed, failed: o.stats.failed, abandoned: o.stats.abandoned })} />
         </Card>
-      </Grid>
+      </div>
 
       <Grid cols="1fr 1fr" gap={4} align="stretch">
         <Card title={t('admin.officers.suspension')} icon="lock" highlight={o.suspension.suspended ? 'danger' : undefined}>
@@ -262,7 +256,7 @@ function Detail({ citizenid }: { citizenid: string }) {
       </Card>
 
       <Card title={t('admin.officers.runs')} icon="list" subtitle={t('admin.officers.runs_hint', { n: runs.length })} padding="none">
-        <Table columns={runColumns} rows={runs} rowKey={(r) => r.id} dense empty={t('admin.officers.no_runs')} />
+        <Table columns={runColumns} rows={runs} rowKey={(r) => r.id} dense className="oversight-off-table" empty={t('admin.officers.no_runs')} />
       </Card>
 
       <Dialog

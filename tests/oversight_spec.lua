@@ -449,10 +449,10 @@ Config.Permissions.supervisor.reviewFlagged = true
 
 ok, res = act('server:sup:reviewFlagged', 2, { rowId = rowA, decision = 'approve', reason = 'Verified on camera' })
 H.eq(ok, true, 'supervisor approves a flagged run of their department')
-local ra = H.sql('SELECT flagged, flag_reason, voided, JSON_TYPE(JSON_EXTRACT(breakdown, "$.flagged")) AS jf FROM cp_mission_runs WHERE id = ?', { rowA })[1]
+local ra = H.sql('SELECT flagged, flag_reason, voided, LOWER(JSON_TYPE(JSON_EXTRACT(breakdown, "$.flagged"))) AS jf FROM cp_mission_runs WHERE id = ?', { rowA })[1]
 H.eq(ra.flagged, 0, 'flag cleared')
 H.eq(ra.flag_reason, 'outside_help', 'flag_reason kept')
-H.eq(ra.jf, 'NULL', 'breakdown flag cleared')
+H.eq(ra.jf, 'null', 'breakdown flag cleared (JSON null)')
 H.eq(lastCall('cashRelease')[1], rowA, 'held cash released')
 H.eq(lastCall('onRowApproved')[1], rowA, 'scoring hook')
 H.eq(H.sql("SELECT COUNT(*) AS n FROM cp_audit WHERE action = 'approveFlagged' AND category = 'flags' AND actor = 'SUP00002'")[1].n, 1, 'approval audited')
@@ -650,6 +650,7 @@ H.eq(#forSup, 3, 'supervisor sees the flagged/voided disputes of their departmen
 local forSup7 = co(CP.Disputes.forSupervisor, 7)
 H.eq(#forSup7, 2, 'never disputes about runs they took part in')
 H.eq(#co(CP.Disputes.forSupervisor, 4), 0, 'other departments see nothing')
+H.eq(#co(CP.Disputes.forSupervisor, 1), 3, 'an admin without a department sees every supervisor dispute')
 local forAdmin = co(CP.Disputes.forAdmin)
 H.eq(#forAdmin, 4, 'admin sees every open dispute')
 local kinds = {}
@@ -844,6 +845,10 @@ H.eq(pr.participants[3].presence.inRange, 50, 'always in range')
 H.eq(pr.participants[6].presence.inRange, 15, 'in range 3 of 10 samples')
 H.eq(CP.AntiCheat.presenceOk(pr, pr.participants[3]), true, '100% present')
 H.eq(CP.AntiCheat.presenceOk(pr, pr.participants[6]), false, '30% < presenceShare')
+H.eq(pr.participants[6].flagged and pr.participants[6].flagged.reason, 'presence', 'a failing participant is flagged presence')
+H.ok(pr.participants[6].flagged.detail:find('30%', 1, true) ~= nil, 'with the share as detail')
+H.eq(H.sql("SELECT old_value FROM cp_audit WHERE action = 'runFlagged' AND target = 'run-pr' AND new_value = 'presence'")[1].old_value, 'OFF00006', 'participant flag recorded with the citizenid')
+H.eq(pr.participants[3].flagged, nil, 'a present participant is not flagged')
 H.near(CP.AntiCheat.presenceShare(pr.participants[6]), 0.3, 1e-9, 'share')
 Config.AntiCheat.presenceShare = 0.25
 H.eq(CP.AntiCheat.presenceOk(pr, pr.participants[6]), true, 'presenceShare read at call time')
@@ -961,6 +966,8 @@ H.eq(gp.ok, true, 'permissions')
 local perm = {}
 for _, p in ipairs(gp.data.supervisor) do perm[p.action] = p.enabled end
 H.eq(perm.forceRecall, true, 'on')
+H.eq(gp.data.supervisor[1].action, 'setTypePayout', 'listed in the spec order')
+H.eq(gp.data.supervisor[11].action, 'breakEditLock', 'last in the spec order')
 H.eq(perm.builderRollback, false, 'off')
 H.eq(#gp.data.adminOnly, 11, 'admin-only list')
 

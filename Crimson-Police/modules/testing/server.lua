@@ -230,12 +230,18 @@ local function can(src, action)
     return false, errKey or 'err.no_permission'
 end
 
--- utf8-safe clip to n characters (VARCHAR counts characters); nil for invalid UTF-8.
+-- Clip to at most n bytes without splitting a UTF-8 character (fits VARCHAR(n) whatever the connection
+-- charset); nil for invalid UTF-8.
 local function clipText(s, n)
-    local len = utf8.len(s)
-    if not len then return nil end
-    if len <= n then return s end
-    return s:sub(1, utf8.offset(s, n + 1) - 1)
+    if not utf8.len(s) then return nil end
+    if #s <= n then return s end
+    local cut = n
+    while cut > 0 do
+        local b = s:byte(cut + 1)
+        if not b or b < 0x80 or b >= 0xC0 then break end
+        cut = cut - 1
+    end
+    return s:sub(1, cut)
 end
 
 -- ── tiers ───────────────────────────────────────────────────────────────────

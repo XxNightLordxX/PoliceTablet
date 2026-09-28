@@ -10,7 +10,8 @@
     - 'stunned' reports for fugitives seen stunned (IsPedBeingStunned); the server re-checks distances;
     - a HUD line (ctx.hudDetail): enter the area, clues checked and circle size, escape countdown, and
       "stay close" while this player is within givesUp.close.distance of a fugitive on the run;
-    - on the run host only: CP.Npc.apply once it has control of each fugitive and the witness, then
+    - on the run host only: control of each fugitive and the witness before anything is done to it
+      (re-applied and re-tasked when control comes back from another client), CP.Npc.apply, then
       the task for its cp state: idle (hiding) -> 'cower', fleeing -> 'flee', and on first sight (new
       host) surrendered -> 'kneel', cuffed -> 'cuffed'; the witness stands at its spot
       (TaskStartScenarioInPlace). The "Cuff suspect" target is CP.Npc's (enableCuff).
@@ -46,7 +47,7 @@ local function S_of(ctx)
     local S = active[k]
     if not S then
         S = { key = k, data = {}, clues = {}, fugitives = {}, zones = {}, blips = {}, applied = {}, tasked = {},
-            lastReport = {}, alive = true }
+            lost = {}, lastReport = {}, alive = true }
         active[k] = S
     end
     S.ctx = ctx
@@ -223,10 +224,27 @@ local function markerLoop(S)
 end
 
 -- ── Host AI and reports ─────────────────────────────────────────────────────
+-- Control of a run ped before anything is done to it (ctx.control returns at once when this client
+-- already owns it). regained = another client owned it since the last check: re-apply and re-task.
+local function own(S, net, ent)
+    if NetworkHasControlOfEntity(ent) then
+        local regained = S.lost[net] == true
+        S.lost[net] = nil
+        return true, regained
+    end
+    if not S.ctx.control(ent, CONTROL_MS) then
+        S.lost[net] = true
+        return false, false
+    end
+    S.lost[net] = nil
+    return true, true
+end
+
 local function hostPed(S, net, ent, state, witness)
     local fresh = false
-    if S.applied[net] ~= ent then
-        if not S.ctx.control(ent, CONTROL_MS) then return end
+    local owned, regained = own(S, net, ent)
+    if not owned then return end
+    if S.applied[net] ~= ent or regained then
         local bag = bagOf(ent)
         CP.Npc.apply(ent, (bag and bag.cfg) or {})
         S.applied[net] = ent
@@ -341,6 +359,8 @@ end
 local function cleanup(S)
     S.alive = false
     S.current = false
+    -- a clue check still running would otherwise keep the player frozen in its progress bar
+    if S.busy and lib.progressActive and lib.progressActive() then pcall(lib.cancelProgress) end
     for i in pairs(S.zones) do dropZone(S, i) end
     for k in pairs(S.blips) do dropBlip(S, k) end
     if S.hint then
@@ -369,8 +389,10 @@ CP.Blocks.register(BLOCK, {
         S.data = data
         local clues = {}
         for _, cl in ipairs(data.clues or {}) do clues[cl.i] = cl end
-        for i in pairs(S.clues) do
-            if not clues[i] then
+        for i, old in pairs(S.clues) do
+            local new = clues[i]
+            -- gone, or a different clue under the same number (test restart): drop its zone and blip
+            if not new or new.x ~= old.x or new.y ~= old.y or new.z ~= old.z or new.netId ~= old.netId then
                 dropZone(S, i)
                 dropBlip(S, 'c' .. i)
             end
@@ -389,6 +411,7 @@ CP.Blocks.register(BLOCK, {
         S.isHost = isHost == true
         S.applied = {}
         S.tasked = {}
+        S.lost = {}
     end,
 
     stop = function(ctx)

@@ -82,9 +82,7 @@
 }
 .oversight-dep-swatch__label {
   font-size: var(--cp-fs-xs);
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
+  font-weight: 650;
   color: var(--cp-subtle);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -121,6 +119,41 @@
   background: var(--cp-success);
 }
 
+.oversight-dep-society {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--cp-radius-sm);
+  background: rgba(var(--cp-success-rgb), 0.07);
+  border: 1px solid rgba(var(--cp-success-rgb), 0.22);
+}
+.oversight-dep-society__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--cp-radius-sm);
+  background: rgba(var(--cp-success-rgb), 0.15);
+  color: var(--cp-success);
+  flex: none;
+}
+.oversight-dep-society__text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+  min-width: 0;
+}
+.oversight-dep-society__text code {
+  align-self: flex-start;
+}
+.oversight-dep-society__value {
+  font-size: var(--cp-fs-lg);
+  font-weight: 750;
+}
+
 .oversight-dep-card__meta {
   display: flex;
   flex-wrap: wrap;
@@ -139,6 +172,7 @@
   color: var(--cp-subtle);
 }
 .oversight-dep-card__meta code,
+.oversight-dep-society code,
 .oversight-dep-jobs code {
   font-family: var(--cp-mono);
   font-size: var(--cp-fs-sm);

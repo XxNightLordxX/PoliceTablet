@@ -43,11 +43,16 @@ Files: `modules/integrations/{qbx,sc_dispatch,sc_ambulance,renewed_banking}/`, `
 ### CP.Ambulance
 - `doctorCount()` = min(`GetDoctorCount()`, live count of on-duty `ambulance` players via
   `CP.Qbx.getOnlinePlayers` + `getInfo`) when the live list is available; export `0` always gives `0`.
-- `revive(src)` returns a boolean; it refuses non-integer, non-positive and disconnected ids, and sends
+- `revive(src)` returns a boolean; it refuses non-integer, non-positive and disconnected ids, refuses and
+  logs an in-arena src (`CP.Alerts.inArena`, guarded; an error there refuses too, CRIMSON_ARENA rule 3), and sends
   nothing while sc-ambulance is stopped (the event would have no handler).
-- Client `sendEMSRequest()` returns a boolean and refuses a second request within 5 s.
+- Client `sendEMSRequest()` returns a boolean and refuses a second request within 5 s. It also returns
+  `false` (without using up the 5 s) while the local player carries Crimson-Arena's `crimsonArena` value:
+  sc-ambulance drops such a request anyway.
 
 ### CP.Banking
+- Texts are cut to their limits (message 200, issuer/receiver 100, transId 128 bytes) without splitting a
+  UTF-8 character.
 - All four functions return booleans (`societyBalance` a number or nil) and never raise. `0` amounts are
   not sent (a $0 history entry) and return `true`. Title = `Config.Tablet.title`. The message has `'`
   and `\` removed; issuer/receiver are never nil (`''`).
@@ -63,6 +68,9 @@ Files: `modules/integrations/{qbx,sc_dispatch,sc_ambulance,renewed_banking}/`, `
   defaults to the first job name (Renewed-Banking creates one account per job). A job listed in two
   departments belongs to the first key (sorted), with a warning.
 - `department()` / `departments()` return copies.
+- Text limits (officer name 64, callsign 32, rank 40, department label 64 / short 16) are applied in bytes
+  without splitting a UTF-8 character: the cp_officers columns count characters and MariaDB strict mode
+  (oxmysql connects as utf8mb4) rejects the whole upsert for a string that ends in half a character.
 - `getOfficer` returns `err.not_police` when the player has no loaded character. Crimson-Police and
   SC-Dispatch suspension lookups are cached for 15 s (`suspend()` updates the cache at once).
 - `recheck(src, jobName)` returns `true` for a player without a character (the drop/unload path ends the
@@ -106,7 +114,14 @@ Files: `modules/integrations/{qbx,sc_dispatch,sc_ambulance,renewed_banking}/`, `
   `detail`) to `false` clears it. `hud(nil)` sends `{ type = 'hud' }` (hud missing = null).
 - The command toggles the Officer UI. The key mapping is `crimsonpolice_tablet` (rule 14 prefix),
   always registered with default key `Config.Tablet.keybind` (`''` = unbound, bindable in GTA settings).
-- Prop: `Config.Tablet.prop`, networked (local fallback under entity lockdown), bone 60309 with the
+- Crimson-Arena (CRIMSON_ARENA rule 8): a `crimsonArena` change handler on the local player's bag; a
+  foreign value (active, `source ~= 'crimson-police'`) closes every Crimson-Police UI (prop deleted,
+  animation stopped), hides the HUD and overlays and cancels a progress bar while a run is current
+  (`lib.progressActive` first: `lib.cancelProgress` raises when none runs). While the local value is
+  foreign, the command, key mapping, item, `OpenTablet`, `switchUi` and `client:openAdmin` refuse with the
+  toast `err.in_arena` (also re-checked when the session reply arrives). `SetNuiFocus(false, false)` is only
+  called when a Crimson-Police UI was open (never on an unload or close with nothing open).
+- Prop: `Config.Tablet.prop`, a local (non-networked) object (CRIMSON_ARENA rule 8), bone 60309 with the
   offsets tuned for `amb@code_human_in_bus_passenger_idles@female@tablet@base` / `base` (flag 49); the
   animation is re-applied every second while the UI is open if something cleared it.
 - The NUI `action` endpoint only forwards names starting with `server:`.
@@ -145,6 +160,19 @@ Files: `modules/integrations/{qbx,sc_dispatch,sc_ambulance,renewed_banking}/`, `
   list of sources.
 - **web**: `session.logo` / `officer.callsign` may be missing (undefined); the `theme` message always has
   a theme; `switchUi` also produces an `open` message; `logoFailed` payload `{ department, url }` is right.
-- **locale merge**: `core.json` also defines the shared-layer keys `err.internal`, `err.rate_limited`,
+- **locale merge**: `core.json` also defines `err.in_arena` (same text as engine_a/engine_b/teams), and
+  the shared-layer keys `err.internal`, `err.rate_limited`,
   `err.refused`, `err.timeout`, `err.no_response` (returned by `shared/net.lua` through the NUI bridge)
   and the `tier.*` labels; other parts defining them must use the same text.
+
+## Requests from other slices
+
+- **safety** (CRIMSON_ARENA rule 3): `CP.Ambulance.revive` refuses and logs an in-arena src. Done.
+- **blocks_a** asked for `CP.Qbx.vehicleClass(model)` (qbx_core's `GetVehicleClass` export). Declined:
+  the spec's module rules limit `modules/integrations/qbx/` to the qbx_core exports and events listed in
+  the Appendix, and that export is not listed (it also asks a random client for the class table).
+  checkpoint_route already falls back when `CP.Qbx.vehicleClass` is missing.
+- **cash** calls `CP.Banking.depositSociety` (Renewed-Banking `addAccountMoney`) for a society refund when it
+  exists. Not added: `addAccountMoney` is not among the Appendix's Renewed-Banking calls (INTEGRATIONS.md
+  only names it as an option needing a spec decision). cash already keeps such a row `paying` for a manual
+  check, which is safe.

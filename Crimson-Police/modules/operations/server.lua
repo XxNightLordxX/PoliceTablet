@@ -16,7 +16,9 @@
 --            run.operationId). Nobody can join any more.
 --   waiting  the run failed, every participant left, or the window closed without enough participants /
 --            without a free location: still active (the board stays locked); any supervisor may relaunch
---            (a new join window) or cancel. Config.CrossDept.idleCancel seconds without a run → auto-cancel.
+--            (a new join window) or cancel. Config.CrossDept.idleCancel seconds with no run (counted from the
+--            launch or the end of the last run; a relaunch does not reset it) → auto-cancel once no join
+--            window is open.
 --   completed  the run was Completed: the lock lifts.            (final, ended_at set)
 --   cancelled  cancelled by a supervisor/admin, by the idle rule, or by a restart.   (final, ended_at set)
 -- The board lock (isLocked) holds for joining, running and waiting. Cancelling a running operation ends
@@ -216,9 +218,12 @@ end
 
 local function cleanReason(reason)
     if type(reason) ~= 'string' then return nil, 'err.op_reason_required' end
-    reason = CP.U.trim(reason):gsub('[%c]', ' ')
+    reason = CP.U.trim((reason:gsub('%c', ' ')))
     if reason == '' then return nil, 'err.op_reason_required' end
-    if #reason > REASON_MAX then return nil, 'err.op_reason_too_long' end
+    -- Characters, not bytes (the UI counts characters; accented text is multi-byte).
+    local len = utf8.len(reason)
+    if not len then return nil, 'err.invalid_payload' end
+    if len > REASON_MAX then return nil, 'err.op_reason_too_long' end
     return reason
 end
 
@@ -387,14 +392,16 @@ local function mayStart(src, cur)
     return not (okS and ownerSrc)
 end
 
-local function toWaiting(cur, reason)
+-- fromRun: the operation's run just ended (the idle clock starts now). Otherwise (a join window closed
+-- without a run) the clock keeps counting from the launch or the end of the last run.
+local function toWaiting(cur, reason, fromRun)
     cur.status = 'waiting'
     cur.runId = nil
     cur.runMissingSince = nil
     cur.joinEndsAt = nil
     cur.joinClosed = nil
     cur.waitingReason = reason
-    cur.idleSince = os.time()
+    if fromRun or not cur.idleSince then cur.idleSince = os.time() end
     dbStatus(cur.id, 'waiting', false)
     broadcast(nil)
     notifySupervisors('warning', 'sup.crossdept.notify_waiting_' .. reason, { mission = cur.missionLabel })
@@ -515,6 +522,7 @@ local function doStart(cur, actorSrc, auto)
     cur.joinClosed = nil
     cur.waitingReason = nil
     cur.startedAt = os.time()
+    cur.idleSince = nil                        -- a run exists: not idle
     dbStatus(cur.id, 'running', false)
     broadcast('started', cur.missionLabel, { id = cur.id })
     notifyMany(srcs, 'success', 'officer.op.started_participant', { mission = cur.missionLabel })
@@ -614,7 +622,8 @@ local function doRelaunch(src)
     cur.joinClosed = nil
     cur.waitingReason = nil
     cur.windowBy = actor.citizenid or cur.windowBy
-    cur.idleSince = now
+    -- The idle clock (no run since ...) keeps running: a relaunch opens a join window, it is not a run.
+    cur.idleSince = cur.idleSince or now
     cur.attempt = (cur.attempt or 1) + 1
     dbStatus(cur.id, 'joining', false)
     broadcast('launched', cur.missionLabel, { id = cur.id, relaunched = true })
@@ -723,7 +732,7 @@ function Ops.onRunEnded(run, state)
     else
         local reason = state == 'failed' and 'failed' or 'abandoned'
         webhook(reason, cur)
-        toWaiting(cur, reason)
+        toWaiting(cur, reason, true)
     end
 end
 

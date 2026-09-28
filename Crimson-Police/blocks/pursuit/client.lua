@@ -11,15 +11,18 @@
     - blips for suspect vehicles and suspects on foot (none with Radio Silence) and a HUD line
       (ctx.hudDetail): follow progress / lost countdown, escape countdown, lights hint, stop and
       detain progress, aim hint.
-    - on the run host only: CP.Npc.apply once it has control of each suspect, seats them, locks the
-      car, then drives: CP.Npc.task(driver, 'driveRoute', { vehicle, points, loop, speed (m/s), style,
-      stopRange, force }) from the next waypoint of the route (a loop is re-tasked lap by lap, an open
-      route ends in a free flee), or CP.Npc.task(driver, 'flee', { vehicle, speed, style, force }) for a
-      free flee; a stuck car is re-tasked every RETASK_MS (force: CP.Npc ignores identical repeats).
-      CP.Npc maps the style name ('cautious' | 'reckless') to the driving flags. After a stop the
-      occupants leave the car (TaskLeaveVehicle); fleeing -> CP.Npc 'flee', hostile -> 'combat', and on
-      first sight (new host) surrendered -> 'kneel', cuffed -> 'cuffed'. The arrest target ("Detain
-      driver" / "Cuff suspect") is CP.Npc's (enableCuff). Everything is re-applied after hostChanged.
+    - on the run host only: control of every suspect and car before anything is done to them (re-apply
+      and re-task when control comes back from another client), CP.Npc.apply once per entity handle,
+      seats them, locks the car, then drives: CP.Npc.task(driver, 'driveRoute', { vehicle, points,
+      loop, speed (m/s), style, stopRange, force }) from the next waypoint of the route (a loop is
+      re-tasked lap by lap, an open route ends in a free flee), or CP.Npc.task(driver, 'flee', {
+      vehicle, speed, style, force }) for a free flee; a stuck car is re-tasked every RETASK_MS (force:
+      CP.Npc ignores identical repeats). CP.Npc maps the style name ('cautious' | 'reckless') to the
+      driving flags. After a stop the occupants leave the car (TaskLeaveVehicle, repeated every
+      EXIT_RETRY_MS, warping them out from the EXIT_WARP_TRY-th attempt: the server keeps them
+      'stopped' until they are out); fleeing -> CP.Npc 'flee', hostile -> 'combat', and on first sight
+      (new host) surrendered -> 'kneel', cuffed -> 'cuffed'. The arrest target ("Detain driver" /
+      "Cuff suspect") is CP.Npc's (enableCuff). Everything is re-applied after hostChanged.
 
   Objective fields read: mode, route, speed, style, trigger, surrenderOnAim, ramSpeed, failIfUndriveable,
     neverShoots (ctx.obj); location[route].
@@ -37,7 +40,7 @@ local FAST_MS       = 250
 local SLOW_MS       = 1000
 local RAM_POLL_MS   = 50
 local RAM_IDLE_MS   = 500
-local RAM_WATCH     = 25.0
+local RAM_WATCH     = 50.0     -- fast ram polling within this range (at 500 ms a closing car covers 25 m)
 local RAM_REPORT_MS = 2500
 local REPORT_MS     = 1500
 local AIM_HOLD_MS   = 800
@@ -48,6 +51,8 @@ local RETASK_MS     = 10000
 local STUCK_MPS     = 2.0
 local ROUTE_END     = 30.0
 local STOP_RANGE    = 8.0
+local EXIT_RETRY_MS = 2500     -- a stopped suspect still in the car is told to get out again this often...
+local EXIT_WARP_TRY = 3        -- ...and warped out (TaskLeaveVehicle flag 16) from this attempt on
 
 local active = {}
 
@@ -59,7 +64,7 @@ local function S_of(ctx)
     if not S then
         S = {
             key = k, vehicles = {}, suspects = {}, byNet = {}, blips = {}, applied = {}, tasked = {},
-            drive = {}, left = {}, lastReport = {}, aimSince = {}, touching = {}, alive = true, data = {},
+            drive = {}, left = {}, lost = {}, lastReport = {}, aimSince = {}, touching = {}, alive = true, data = {},
         }
         active[k] = S
     end
@@ -178,6 +183,23 @@ local function setHint(S, text)
 end
 
 -- ── Host AI ─────────────────────────────────────────────────────────────────
+-- Control of a run entity before anything is done to it (ctx.control returns at once when this client
+-- already owns it). regained = another client owned it since the last check: its config and tasks may
+-- not have migrated, so the caller re-applies and re-tasks.
+local function own(S, key, ent)
+    if NetworkHasControlOfEntity(ent) then
+        local regained = S.lost[key] == true
+        S.lost[key] = nil
+        return true, regained
+    end
+    if not S.ctx.control(ent, CONTROL_MS) then
+        S.lost[key] = true
+        return false, false
+    end
+    S.lost[key] = nil
+    return true, true
+end
+
 local function driverSetup(ped, reckless)
     SetBlockingOfNonTemporaryEvents(ped, true)
     SetPedKeepTask(ped, true)
@@ -196,6 +218,7 @@ local function taskDrive(S, v, veh, driver, force)
     local d = S.drive[v.netId] or {}
     S.drive[v.netId] = d
     d.at = GetGameTimer()
+    d.armed = false                  -- the new end point only counts once the car has left it behind
     if route and not d.free then
         local pts = remaining(route, GetEntityCoords(veh))
         if #pts > 0 then
@@ -219,21 +242,30 @@ local function monitorDrive(S, v, veh, driver)
         return
     end
     local pos = GetEntityCoords(veh)
-    if d.mode == 'route' and d.last and #(pos - d.last) <= ROUTE_END then
-        local route = routeInfo(S)
-        if not (route and route.loop) then d.free = true end
-        taskDrive(S, v, veh, driver, true)
-        return
+    if d.mode == 'route' and d.last then
+        -- d.last is the final tasked waypoint; on a loop it is the waypoint just behind the car when it was
+        -- tasked, so it only counts as reached after the car first got ROUTE_END away from it (otherwise
+        -- every loop pass would re-task with force until the car left it behind).
+        if #(pos - d.last) > ROUTE_END then
+            d.armed = true
+        elseif d.armed then
+            local route = routeInfo(S)
+            if not (route and route.loop) then d.free = true end
+            taskDrive(S, v, veh, driver, true)
+            return
+        end
     end
     if GetEntitySpeed(veh) < STUCK_MPS and GetGameTimer() - (d.at or 0) >= RETASK_MS then
         taskDrive(S, v, veh, driver, true)
     end
 end
 
--- Control + CP.Npc.apply once per entity handle (a new handle after streaming or a new host re-applies).
+-- Control every time (tasks need it), CP.Npc.apply once per entity handle: a new handle after streaming,
+-- a new host, or control regained from another client re-applies.
 local function applyPed(S, net, ped)
-    if S.applied[net] == ped then return true, false end
-    if not S.ctx.control(ped, CONTROL_MS) then return false, false end
+    local ok, regained = own(S, 'p' .. tostring(net), ped)
+    if not ok then return false, false end
+    if S.applied[net] == ped and not regained then return true, false end
     local bag = bagOf(ped)
     CP.Npc.apply(ped, (bag and bag.cfg) or {})
     driverSetup(ped, S.ctx.obj.style ~= 'cautious')
@@ -249,8 +281,9 @@ local function hostVehicle(S, v)
     local veh = entityFor(v.netId)
     if not veh then return end
     local fresh = false
-    if S.applied[v.netId] ~= veh then
-        if not S.ctx.control(veh, CONTROL_MS) then return end
+    local owned, regained = own(S, 'v' .. tostring(v.netId), veh)
+    if not owned then return end
+    if S.applied[v.netId] ~= veh or regained then
         SetVehicleDoorsLocked(veh, 2)
         SetVehicleEngineOn(veh, true, true, false)
         S.applied[v.netId] = veh
@@ -262,14 +295,24 @@ local function hostVehicle(S, v)
         local info = S.byNet[net]
         local ped = entityFor(net)
         if info and ped then
-            if applyPed(S, net, ped) then
+            local okPed, freshPed = applyPed(S, net, ped)
+            if okPed then
                 local state = (bagOf(ped) or {}).state or info.state
                 if state == 'driving' then
                     if not IsPedInVehicle(ped, veh, false) then SetPedIntoVehicle(ped, veh, info.seat or -1) end
-                    if (info.seat or -1) == -1 then driver = ped end
-                elseif IsPedInVehicle(ped, veh, false) and not S.left[net] then
-                    S.left[net] = true
-                    TaskLeaveVehicle(ped, veh, 256)
+                    if (info.seat or -1) == -1 then
+                        driver = ped
+                        if freshPed then fresh = true end   -- a driver (re)applied here needs its drive task again
+                    end
+                elseif IsPedInVehicle(ped, veh, false) then
+                    -- out of the stopped car: the server switches the suspect on only once it is out
+                    local l = S.left[net]
+                    local t = GetGameTimer()
+                    if not l or t - l.at >= EXIT_RETRY_MS then
+                        local tries = (l and l.tries or 0) + 1
+                        S.left[net] = { at = t, tries = tries }
+                        TaskLeaveVehicle(ped, veh, tries >= EXIT_WARP_TRY and 16 or 256)
+                    end
                 end
             end
         end
@@ -450,7 +493,7 @@ local function loop(S)
                     end
                 end
                 if d.mode == 'follow' and obj.failIfUndriveable and myVeh ~= 0 and GetPedInVehicleSeat(myVeh, -1) == me
-                    and not IsVehicleDriveable(myVeh, false) then
+                    and NetworkGetEntityIsNetworked(myVeh) and not IsVehicleDriveable(myVeh, false) then
                     local net = NetworkGetNetworkIdFromEntity(myVeh)
                     if net and net ~= 0 then reportOnce(S, 'undriveable', net) end
                 end
@@ -504,7 +547,7 @@ CP.Blocks.register(BLOCK, {
     hostChanged = function(ctx, isHost)
         local S = S_of(ctx)
         S.isHost = isHost == true
-        S.applied, S.tasked, S.drive, S.left = {}, {}, {}, {}
+        S.applied, S.tasked, S.drive, S.left, S.lost = {}, {}, {}, {}, {}
     end,
 
     stop = function(ctx)

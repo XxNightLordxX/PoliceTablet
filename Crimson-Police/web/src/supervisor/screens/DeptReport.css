@@ -39,9 +39,49 @@
   flex: 1;
   min-width: 0;
 }
-.boards-standing__bars {
-  padding-top: 12px;
+.boards-mini-standings {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 10px 0 0;
   border-top: 1px solid var(--cp-border);
+  list-style: none;
+}
+.boards-mini-standing {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 8px;
+  border-radius: var(--cp-radius-sm);
+  font-size: var(--cp-fs-sm);
+}
+.boards-mini-standing.is-mine {
+  background: rgba(var(--cp-accent-rgb), 0.08);
+}
+.boards-mini-standing__rank {
+  width: 18px;
+  color: var(--cp-muted);
+  font-weight: 700;
+}
+.boards-mini-standing__strip {
+  width: 4px;
+  height: 16px;
+  flex: none;
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px rgba(var(--cp-text-rgb), 0.3);
+}
+.boards-mini-standing__name {
+  font-weight: 700;
+}
+.boards-mini-standing__meta {
+  flex: 1;
+  min-width: 0;
+  color: var(--cp-muted);
+  font-size: var(--cp-fs-xs);
+}
+.boards-mini-standing__score {
+  font-weight: 750;
 }
 .boards-report-stats {
   display: grid;

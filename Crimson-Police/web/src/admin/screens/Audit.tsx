@@ -20,6 +20,7 @@ const CATEGORIES = ['audit', 'flags', 'builder', 'operations'] as const;
 const CATEGORY_TONE: Record<string, 'primary' | 'warning' | 'accent' | 'neutral'> = { audit: 'primary', flags: 'warning', builder: 'accent', operations: 'neutral' };
 const ROLE_TONE: Record<string, 'danger' | 'primary' | 'grey'> = { admin: 'danger', supervisor: 'primary', console: 'grey' };
 
+const shortTarget = (s: string) => (s.length > 26 ? `${s.slice(0, 24)}…` : s);
 const actionLabel = (a: string) => (hasKey(`admin.action.${a}`) ? t(`admin.action.${a}`) : a);
 
 function useDebounced<T>(value: T, ms: number): T {
@@ -107,9 +108,9 @@ export default function AdminAudit() {
   };
 
   const columns: TableColumn<AuditRow>[] = [
-    { key: 'time', header: t('admin.audit.col.time'), width: 118, render: (r) => <span className="cp-num oversight-aud-soft">{formatDateTime(r.createdAt)}</span> },
+    { key: 'time', header: t('admin.audit.col.time'), width: 112, render: (r) => <span className="cp-num oversight-aud-soft oversight-aud-nowrap">{formatDateTime(r.createdAt)}</span> },
     {
-      key: 'actor', header: t('admin.audit.col.actor'), width: 190,
+      key: 'actor', header: t('admin.audit.col.actor'), width: 172,
       render: (r) => (
         <div className="oversight-aud-actor">
           <span className="oversight-aud-actor__name">{r.actor === 'console' ? t('admin.actor.console') : (r.actorName || r.actor)}</span>
@@ -121,7 +122,7 @@ export default function AdminAudit() {
       ),
     },
     {
-      key: 'action', header: t('admin.audit.col.action'), width: 190,
+      key: 'action', header: t('admin.audit.col.action'), width: 184,
       render: (r) => (
         <div className="oversight-aud-action">
           <strong>{actionLabel(r.action)}</strong>
@@ -129,9 +130,9 @@ export default function AdminAudit() {
         </div>
       ),
     },
-    { key: 'target', header: t('admin.audit.col.target'), width: 150, render: (r) => (r.target ? <code className="oversight-aud-code" title={r.target}>{r.target}</code> : <span className="oversight-aud-soft">—</span>) },
+    { key: 'target', header: t('admin.audit.col.target'), width: 150, render: (r) => (r.target ? <code className="oversight-aud-code" title={r.target}>{shortTarget(r.target)}</code> : <span className="oversight-aud-soft">—</span>) },
     {
-      key: 'change', header: t('admin.audit.col.change'), width: 170,
+      key: 'change', header: t('admin.audit.col.change'), width: 176,
       render: (r) => (r.oldValue || r.newValue ? (
         <span className="oversight-aud-change" title={`${r.oldValue ?? '—'} → ${r.newValue ?? '—'}`}>
           <span className="oversight-aud-old">{r.oldValue ?? '—'}</span>
@@ -157,19 +158,19 @@ export default function AdminAudit() {
     >
       <Card padding="sm" className="oversight-aud-filters">
         <div className="oversight-aud-filters__row">
-          <Field label={t('admin.audit.filter.category')}>
+          <Field label={t('admin.audit.filter.category')} className="oversight-aud-f-cat">
             <Select value={category} onChange={setCategory} options={[{ value: '', label: t('admin.audit.all_categories') }, ...CATEGORIES.map((c) => ({ value: c, label: t(`admin.category.${c}`) }))]} />
           </Field>
-          <Field label={t('admin.audit.filter.action')}>
+          <Field label={t('admin.audit.filter.action')} className="oversight-aud-f-action">
             <Select value={action} onChange={setAction} options={[{ value: '', label: t('admin.audit.all_actions') }, ...actions.map((a) => ({ value: a, label: actionLabel(a) }))]} />
           </Field>
           <Field label={t('admin.audit.filter.actor')} className="oversight-aud-filters__grow">
             <SearchInput value={actor} onChange={setActor} placeholder={t('admin.audit.actor_placeholder')} />
           </Field>
-          <Field label={t('admin.audit.filter.from')}>
+          <Field label={t('admin.audit.filter.from')} className="oversight-aud-f-date">
             <TextInput type="date" value={from} onChange={setFrom} max={to || undefined} />
           </Field>
-          <Field label={t('admin.audit.filter.to')}>
+          <Field label={t('admin.audit.filter.to')} className="oversight-aud-f-date">
             <TextInput type="date" value={to} onChange={setTo} min={from || undefined} />
           </Field>
           <Button variant="ghost" icon="x" disabled={!filtered} onClick={clear} className="oversight-aud-filters__clear">{t('admin.audit.clear')}</Button>
@@ -185,6 +186,7 @@ export default function AdminAudit() {
           rowKey={(r) => r.id}
           loading={loading}
           dense
+          className="oversight-aud-table"
           empty={<EmptyState compact icon="fileText" title={filtered ? t('admin.audit.empty_filtered') : t('admin.audit.empty')} />}
           aria-label={t('ui.screen.admin_audit')}
         />

@@ -39,15 +39,16 @@
     { type = 'shot', netId, src }   CP.Npc: a surrendered/cuffed ped was shot (penalty recorded there)
 
   Bonus / penalty ids recorded (shared)
-    truck_healthy   ctx.award once when the truck arrives above HEALTHY_SHARE (50 %) of its health
+    truck_healthy   ctx.award once (recorded before ctx.complete) when the truck's health at the moment
+                    it arrived was above HEALTHY_SHARE (50 %)
   Fail reason keys: block.escort.fail_destroyed · block.escort.fail_stopped · block.escort.fail_setup ·
     run.fail_killed_unarmed (a participant killed the unarmed driver)
 
   ctx.state
     block, rng, points, stops = { [waypoint] = wait }, truck = { netId, entity, driver = { netId, entity,
-    dead }, wp, served, stop = { at, left } | nil, stoppedFor, moved, spawnedAt, arrived, toughened,
-    baseline, health, gen }, waves = { { k, point, wp, triggered, dropped, want, cars = { carKey } } },
-    cars = { [key] = { netId, entity, wave, want, crew = { pedKey } } }, peds = { [key] = { netId,
+    dead }, wp, served, stop = { at, left } | nil, stoppedFor, moved, spawnedAt, arrived, arrivalHealth,
+    toughened, baseline, health, gen }, waves = { { k, point, wp, triggered, dropped, want, cars = { carKey } } },
+    cars = { [key] = { netId, entity, wave, want, crew = { pedKey } } } (every car doors-locked), peds = { [key] = { netId,
     entity, wave, state } }, dirty, sentAt, completed, failed, halted
 ]]
 
@@ -202,12 +203,13 @@ local function indices(n)
     return t
 end
 
+-- An ACTIVE participant only: a player who already left the run is an outside killer (flagged by
+-- CP.Npc / CP.AntiCheat), not a reason to fail the run for the officers still on it.
 local function isParticipant(ctx, src)
     src = tonumber(src)
     if not src then return false end
-    if ctx.run and type(ctx.run.participants) == 'table' and ctx.run.participants[src] then return true end
     for _, s in ipairs(ctx.participants() or {}) do
-        if s == src then return true end
+        if tonumber(s) == src then return true end
     end
     return false
 end
@@ -545,6 +547,8 @@ local function spawnWave(ctx, st, w)
         local ent, netId = ctx.spawnVehicle({ model = rngOf(ctx):pick(models) or 'sultan', coords = place,
             role = 'ambush_car', tag = 'wave' .. w.k })
         if not netId then return false end
+        -- nothing a non-participant can take: the crew can still get out, nobody can get in
+        if SetVehicleDoorsLocked and exists(ent) then pcall(SetVehicleDoorsLocked, ent, 2) end
         local key = tostring(netId)
         local car = { netId = netId, entity = ent, coords = place, wave = w.k, want = perCar, crew = {} }
         st.cars[key] = car
@@ -682,6 +686,7 @@ local function watchTruck(ctx, st, dt)
         triggerWaves(ctx, st, c)
         if U.dist(c, st.points[#st.points]) <= ctx.obj.arrival then
             tr.arrived = true
+            tr.arrivalHealth = health          -- truck_healthy: "the truck ARRIVES above 50% health"
             tr.stop = nil
             tr.stoppedFor = 0
             st.dirty = true
@@ -725,8 +730,7 @@ local function tryComplete(ctx, st)
     if attackersNear(st, GetEntityCoords(tr.entity), ctx.obj.clearRadius) > 0 then return end
     if not st.healthDone then
         st.healthDone = true
-        local health = truckHealth(ctx, st)
-        tr.health = health
+        local health = tr.arrivalHealth or truckHealth(ctx, st)
         if health > HEALTHY_SHARE * 100 then ctx.award('truck_healthy', { count = 1 }) end
     end
     if ctx.complete({ health = tr.health }) ~= false then st.completed = true end
