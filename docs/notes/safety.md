@@ -34,7 +34,9 @@ start, the sampled line is unchanged) → `{ runId }`; `recalcRoute` (payload ig
   the last accepted report (so silence warns 20 s and abandons 40 s after the last report with the default
   numbers). The warning is sent after `warnAfter` s off and then every second with the seconds left; the
   abandon comes after `abandonAfter` s off in one stretch. A report within `maxDeviation` ends the stretch
-  and withdraws a shown warning (`client:routeWarning(runId, nil)`).
+  and withdraws a shown warning (`client:routeWarning(runId, nil)`). The route status (server `status()` and
+  the client HUD) is `'off'` only while that warning is shown: before `warnAfter` s nothing warns (SPEC; the
+  Active Mission screen shows "on route, or the off-route countdown").
 - **A report counts only** when the runId is the sender's active run with a route state, metres is a finite
   number ≥ 0 and the reported coords are within `maxDeviation` (2D, but never less than 150 m, so a small
   configured `maxDeviation` cannot reject honest reports sent at speed while the server position lags) of the

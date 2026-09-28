@@ -1111,7 +1111,12 @@ do
     CP.Route.begin(r, 75)
     runFor(4000, reporter(75, 'r-sl-3', 10.0))
     H.eq(#pushes, 0, 'nothing pushed while on route')
-    runFor(12000, reporter(75, 'r-sl-3', 300.0))
+    runFor(6000, reporter(75, 'r-sl-3', 300.0))
+    H.eq(CP.Route.status(r, 75).status, 'on', 'off the line for less than warnAfter: no warning, status on')
+    H.eq(CP.Route.status(r, 75).secondsLeft, nil, '...and no countdown')
+    H.eq(#pushes, 0, 'nothing pushed before the warning')
+    runFor(6000, reporter(75, 'r-sl-3', 300.0))
+    H.eq(CP.Route.status(r, 75).status, 'off', 'status off once the warning shows')
     H.eq(#pushes, 1, 'view pushed when the warning appears')
     H.eq(pushes[1] and pushes[1].topic, 'run', "push topic 'run'")
     H.eq(pushes[1] and pushes[1].src, 75, 'to that participant')
@@ -1263,11 +1268,12 @@ do
     runFor(2000)
     rep = sent('server:routeStatus')
     H.near(rep[#rep].args[2], 150.0, 1e-6, 'distance to the fixed polyline')
-    H.eq(lastHudRoute().status, 'off', 'HUD off beyond maxDeviation')
+    H.eq(lastHudRoute().status, 'on', 'no off-route warning on the HUD before the server sends it (warnAfter)')
 
     -- server warning -> HUD seconds + one toast; withdrawn -> on
     TriggerEvent(CP.e('client:routeWarning'), 'c-run-1', 20)
     TriggerEvent(CP.e('client:routeWarning'), 'c-run-1', 19)
+    H.eq(lastHudRoute().status, 'off', 'HUD off with the warning')
     H.eq(lastHudRoute().secondsLeft, 19, 'HUD shows the seconds left')
     local warnToasts = 0
     for _, t in ipairs(cstate.toasts) do if t.kind == 'warning' and t.text:find('within 20 s', 1, true) then warnToasts = warnToasts + 1 end end

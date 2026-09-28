@@ -97,7 +97,9 @@ Files: `modules/missions/server.lua`, `modules/missions/client.lua`, `modules/dr
   order: officer (the leader's own `CP.Access` error key is returned), unit leader, unit not locked, unit
   size, Cross-Department lock, every member an officer (`err.member_unavailable`), then per member:
   `CP.Alerts.inArena` (foreign crimsonArena flag or routing bucket ≠ 0, docs/CRIMSON_ARENA.md rule 5;
-  `err.in_arena`; without modules/alerts: `foreignFlag` + `GetPlayerRoutingBucket`), active run, real call, hourly cap, type cooldown (own / `err.member_*`
+  `err.in_arena`; without modules/alerts: `foreignFlag` + `GetPlayerRoutingBucket`; ARCHITECTURE §5.7
+  names `foreignFlag`, but §0.14 makes docs/CRIMSON_ARENA.md mandatory and its rule 5 gates the accept
+  with `inArena`, the stricter superset), active run, real call, hourly cap, type cooldown (own / `err.member_*`
   variants), then `CP.Runs.capsOk` (always reported as `err.server_busy`), then the boss checks. Invites
   close (`CP.Units.lock`) only after every check passed; the unit is unlocked on any later failure.
   Rate: 1 accept per 1.5 s per player (plus CP.Net's 3/s) and an in-flight guard per unit member
