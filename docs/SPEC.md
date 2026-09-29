@@ -1433,6 +1433,8 @@ Database upgrades
 
 Crimson-Police creates and upgrades its own tables, so an update never needs a manual SQL import and never wipes run history, leaderboards, payouts or custom missions.
 
+With Config.Database.enabled = false (database off), the same tables, built by the same migrations, are kept as JSON documents in Crimson-Police/saves/ by an engine inside the resource that runs the same queries, so every feature works exactly as with a database; the server owner keeps and backs up that folder, and /CrimsonPoliceAdmin storage copy database-to-files | files-to-database moves the data between the two.
+
 - Every schema change is a numbered file in sql/migrations/: 001_initial.sql (the schema above), then 002_<what_changed>.sql, 003_… and so on. A released file is never edited; every later change gets a new file.
 
 - On start, modules/migrations/ creates cp_schema_migrations if it is missing, runs every file whose number is not recorded there yet, in order, and records each one when it finishes. Other modules wait for it before their first query.
@@ -1441,11 +1443,11 @@ Crimson-Police creates and upgrades its own tables, so an update never needs a m
 
 - If a statement fails, the runner stops, prints the file and the error, and Crimson-Police does not start, so it never runs on a half-upgraded database. MySQL applies table changes at once and can't roll them back, so migrations are written to be safe to run again (CREATE TABLE IF NOT EXISTS, and IF NOT EXISTS on columns and indexes where the database supports it).
 
-- Migrations only add: new tables, new columns with defaults, new indexes. They never DROP or TRUNCATE a table, and never delete rows of runs, officers, seasons, badges, payouts, disputes, audit entries, tests or custom missions. To change a column, a migration adds the new column and copies the data across; the old column stays.
+- Migrations only add: new tables, new columns with defaults, new indexes. With the database off the same files run on the saves folder, which takes these forms: CREATE TABLE [IF NOT EXISTS], ALTER TABLE t ADD [COLUMN] [IF NOT EXISTS] ... [FIRST | AFTER c], ADD [UNIQUE] INDEX/KEY [IF NOT EXISTS] [name] (cols), several ADDs in one ALTER, and CREATE [UNIQUE] INDEX [IF NOT EXISTS] name ON t (cols). A NOT NULL DATETIME or DATE column added to a table that has rows needs a DEFAULT (MariaDB would fill in zero dates, which the saves folder does not hold). They never DROP or TRUNCATE a table, and never delete rows of runs, officers, seasons, badges, payouts, disputes, audit entries, tests or custom missions. To change a column, a migration adds the new column and copies the data across; the old column stays.
 
-- On start the console prints "Crimson-Police database at version N" and each file it applied.
+- On start the console prints "Crimson-Police database at version N" (with the database off: "Crimson-Police saves folder at version N") and each file it applied.
 
-- Updating the resource: replace the code but keep your config/, logos/ and missions/custom/ folders. If a custom mission file goes missing anyway, the server rewrites it from the database on start.
+- Updating the resource: replace the code but keep your config/, logos/ and missions/custom/ folders (and saves/ with the database off). If a custom mission file goes missing anyway, the server rewrites it from the database (or the saves folder) on start.
 
 ## Architecture, folders & events
 
@@ -1571,6 +1573,20 @@ Config = {}
 
 Config.Debug  = false            -- true = each module prints tagged debug lines
 Config.Locale = 'en'
+
+-- ── Storage ─────────────────────────────────────────────────────────────────
+-- enabled = true:  keep everything in your MySQL/MariaDB database through oxmysql. The tables are
+--                  created automatically on start; there is no SQL file to import.
+-- enabled = false: database off. Everything is saved as files in the resource's saves folder
+--                  (Crimson-Police/saves). Keep that folder when you update the resource, and back it up.
+-- Changing this moves no data: Crimson-Police starts with what the other storage holds (nothing, the
+-- first time). To take your data along, use /CrimsonPoliceAdmin storage copy (see the README).
+-- folder only matters when enabled = false: a folder inside the Crimson-Police folder (FXServer only lets
+-- a resource write inside resource folders). A full path works when it points inside the resource.
+Config.Database = {
+  enabled = true,
+  folder  = 'saves',
+}
 
 -- ── Tablet and commands ─────────────────────────────────────────────────────
 Config.Tablet = {

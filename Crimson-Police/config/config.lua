@@ -5,6 +5,20 @@ Config = {}
 Config.Debug  = false            -- true = each module prints tagged debug lines
 Config.Locale = 'en'
 
+-- ── Storage ─────────────────────────────────────────────────────────────────
+-- enabled = true:  keep everything in your MySQL/MariaDB database through oxmysql. The tables are
+--                  created automatically on start; there is no SQL file to import.
+-- enabled = false: database off. Everything is saved as files in the resource's saves folder
+--                  (Crimson-Police/saves). Keep that folder when you update the resource, and back it up.
+-- Changing this moves no data: Crimson-Police starts with what the other storage holds (nothing, the
+-- first time). To take your data along, use /CrimsonPoliceAdmin storage copy (see the README).
+-- folder only matters when enabled = false: a folder inside the Crimson-Police folder (FXServer only lets
+-- a resource write inside resource folders). A full path works when it points inside the resource.
+Config.Database = {
+  enabled = true,
+  folder  = 'saves',
+}
+
 -- ── Tablet and commands ─────────────────────────────────────────────────────
 Config.Tablet = {
   title        = 'Crimson-Police',       -- app title on every screen

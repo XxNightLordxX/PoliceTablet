@@ -76,6 +76,10 @@ local function fail(file, stmt, err)
 end
 
 local function run()
+    -- One start-up line naming the storage (Config.Database): the database, or the saves folder. In files
+    -- mode MySQL is CP.Storage's engine, so the same migrations build the same tables there.
+    print(('[crimson-police] storage: %s'):format(CP.Storage and CP.Storage.describe and CP.Storage.describe()
+        or 'MySQL/MariaDB through oxmysql'))
     local ok, err = pcall(MySQL.query.await, [[
         CREATE TABLE IF NOT EXISTS cp_schema_migrations (
           version    INT PRIMARY KEY,
@@ -88,6 +92,7 @@ local function run()
     local applied = {}
     local rows = MySQL.query.await('SELECT version FROM cp_schema_migrations') or {}
     for _, row in ipairs(rows) do applied[tonumber(row.version)] = true end
+    local fresh = next(applied) == nil
 
     for _, file in ipairs(FILES) do
         local num = tonumber(file:match('^(%d+)_'))
@@ -114,7 +119,13 @@ local function run()
         if num > version then version = num end
     end
 
-    print(('[crimson-police] Crimson-Police database at version %d'):format(version))
+    local store = CP.Storage and CP.Storage.name and CP.Storage.name() or 'database'
+    print(('[crimson-police] Crimson-Police %s at version %d'):format(store, version))
+    if fresh and store == 'database' and CP.Storage and CP.Storage.hasSavedData and CP.Storage.hasSavedData() then
+        -- a new database next to a saves folder with data (Config.Database.enabled switched back on)
+        local cmd = (Config.Tablet and Config.Tablet.adminCommand) or 'CrimsonPoliceAdmin'
+        CP.warn(TAG, 'the database is new, but the saves folder holds data from running with the database off. Nothing is copied by itself: to bring it over, run "%s storage copy files-to-database" in the server console, then restart Crimson-Police.', cmd)
+    end
     isReady = true
     readyPromise:resolve(true)
 end

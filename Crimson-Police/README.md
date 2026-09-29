@@ -33,8 +33,10 @@ named `Crimson-Police`.
 ## Install
 
 1. Copy the `Crimson-Police` folder into your resources.
-2. No SQL import is needed. The resource creates and upgrades its own `cp_*` tables on start
-   (`sql/migrations/`). Your database user must be allowed to create and alter tables.
+2. You never import any SQL, on a new install or on an update. With the database on (the default)
+   Crimson-Police creates and upgrades its own `cp_*` tables on start (`sql/migrations/`); your
+   database user must be allowed to create and alter tables. To run without a database, see
+   [Database off](#database-off) below.
 3. Give admins the ace in `server.cfg`:
    ```
    add_ace group.admin crimsonpolice.admin allow
@@ -57,6 +59,68 @@ named `Crimson-Police`.
    },
    ```
 
+## Database off
+
+Set `enabled = false` in the `Config.Database` block of `config/config.lua` and Crimson-Police keeps all
+of its data without MySQL/MariaDB. Every feature works exactly the same: runs, points and XP, cash payouts,
+leaderboards, seasons, payout settings, disputes, suspensions, the audit log and custom missions.
+
+A `config.lua` kept from a version before this option has no `Config.Database` block (a single
+`Config.Database.enabled = false` line then stops `config.lua` with an error and the database stays on).
+Add the whole block:
+
+```lua
+Config.Database = {
+  enabled = false,
+  folder  = 'saves',
+}
+```
+
+- Everything is saved in `Crimson-Police/saves/`: small JSON documents, one per table (a big table
+  is split into documents of 500 rows), plus `_tables.json`, which describes them. Each change is
+  written to its document straight away; nothing else is stored. `Config.Database.folder` can name
+  another folder inside the Crimson-Police folder. FXServer only lets a resource write inside resource
+  folders, so a folder elsewhere on the machine does not work (the console says so on start).
+- Keep the `saves` folder when you update the resource, and back it up like you would a database.
+  Don't edit the files while the server is running. You can open and read them; if you edit one with
+  the server stopped, it must stay valid JSON (any editor or formatter is fine). A document that no
+  longer reads correctly stops Crimson-Police on start with its name and line, and nothing in the
+  folder is changed.
+- Don't delete documents to save space: a missing document is reported in the console on start, and
+  its rows are gone until you put it back from a backup.
+- Keep oxmysql started: it is still a dependency, and Crimson-Police reads SC-Dispatch's calls
+  through it. With the database off, Crimson-Police creates no tables and saves nothing in your
+  database, unless you copy data there (see below).
+- The console names the storage on start (`[crimson-police] storage: ...`).
+  `/CrimsonPoliceAdmin storage` shows the storage in use, the rows of every table and the size of
+  the saves folder.
+
+**Switching an existing server.** Changing `enabled` moves no data by itself: Crimson-Police starts with
+what the other storage holds, which is nothing the first time (the console warns about it). That
+includes cash payouts still waiting for an officer to come online and the records of custom missions
+(their versions and published state; the Lua files in `missions/custom/` stay where they are). Back up
+both, copy the data, then switch and restart:
+
+- Database to saves folder: `/CrimsonPoliceAdmin storage copy database-to-files`, then set
+  `Config.Database.enabled = false` and restart Crimson-Police.
+- Saves folder to database: `/CrimsonPoliceAdmin storage copy files-to-database` (missing tables are
+  created in the database first), then set `Config.Database.enabled = true` and restart Crimson-Police.
+
+Run the copy from the server console, or in game with the `crimsonpolice.admin` ace. It copies every
+Crimson-Police table and keeps every id. It refuses to start while a mission run is active, and it
+refuses a target that already has data unless you add `force`, which replaces that data. If a copy
+fails, the target is left empty and the source is untouched, so you can fix the problem and run it
+again. The copy is written to the audit log. You can also switch first and copy afterwards. In that
+case, restart Crimson-Police once more after the copy.
+
+**Which to use.** The saves folder is fine for normal servers. It was tested with 50,000 runs: every
+board and admin screen answered in under a quarter of a second, start-up read the folder in about
+1.5 s, the loaded tables took about 75 MB of the server's memory, and the folder took about 42 MB.
+Archived runs (`cp_mission_runs_archive`) stay in memory too, because the all-time board and badges
+read them. For a very large history (hundreds of thousands of runs, or retention switched off for
+years), use a database: the saves folder keeps every table in the server's memory (about 1.2 KB per
+run) and reads the whole folder on every start (about 1.5 s per 50,000 runs).
+
 ## Server owner checklist
 
 - Set each department's `supervisorGrade` in `config/config.lua` to your real Qbox grade level.
@@ -73,8 +137,8 @@ named `Crimson-Police`.
 - SC-Dispatch only exempts on-duty `police`, `bcso` and `fib` from shots-fired calls outside
   missions. Adding `sast` is an edit you make in SC-Dispatch yourself; Crimson-Police never edits it.
 - Set the server machine's time zone; daily/weekly resets and the Weekly Boss days use server time.
-- Back up your database before every update. When updating, keep `config/`, `logos/` and
-  `missions/custom/`.
+- Back up your database (or, with the database off, the `saves` folder) before every update. When
+  updating, keep `config/`, `logos/`, `missions/custom/` and `saves/`.
 - Crimson-Arena can run alongside: see `docs/CRIMSON_ARENA.md` in the repository.
 
 ## Adding a department

@@ -662,9 +662,12 @@ do
     qbxPlayers[1].PlayerData.metadata.callsign = '2L-14'
 
     -- A multi-byte character at the column limit is dropped whole: oxmysql talks utf8mb4 and strict mode
-    -- rejects half a character (the harness's mysql client is latin1, so these writes switch to utf8mb4).
+    -- rejects half a character (the harness's mysql client is latin1, so these writes switch to utf8mb4;
+    -- the saves folder engine of files mode is utf8mb4 already and takes no SET NAMES).
     local realUpdate = MySQL.update.await
-    MySQL.update.await = function(sql, params) return realUpdate('SET NAMES utf8mb4; ' .. sql, params) end
+    if H.storage ~= 'files' then
+        MySQL.update.await = function(sql, params) return realUpdate('SET NAMES utf8mb4; ' .. sql, params) end
+    end
     H.ok(not pcall(H.sql, "SET NAMES utf8mb4; INSERT INTO cp_officers (citizenid, display_name) VALUES ('UTFCTRL1', ?)",
         { ('a'):rep(63) .. '\195' }), 'control: strict mode rejects a name cut inside a character')
     addPlayer(20, 'CPT00020', ('a'):rep(62), 'é', 'sast', 1, ('R'):rep(39) .. '€', true, ('C'):rep(31) .. 'ñ')

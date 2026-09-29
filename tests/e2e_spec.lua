@@ -48,8 +48,11 @@ do
     H.sql('DELETE FROM mdt_dispatch')
 end
 
+local REAL_NOW = os.time()   -- H.boot fakes os.time()
 H.boot({ side = 'server' })
-H.time = tonumber(H.sql('SELECT UNIX_TIMESTAMP(NOW()) AS t')[1].t)
+-- The fake clock starts at the database clock (NOW() in runs/builder SQL). In files mode NOW() is os.time()
+-- itself, so it starts at the real time instead, like a database run.
+H.time = H.storage == 'files' and REAL_NOW or tonumber(H.sql('SELECT UNIX_TIMESTAMP(NOW()) AS t')[1].t)
 local U = CP.U
 local cjson = require('cjson')
 
@@ -718,10 +721,10 @@ do
     H.eq(r14.state, 'completed', 'the absent partner keeps the run result')
     H.eq(r14.final_points, 0, 'but gets 0 points')
     H.eq(r14.cash_paid, 0, 'and $0')
-    H.eq(tonumber(r14.flagged), 1, 'and the row is flagged for review')
+    H.eq(H.bit(r14.flagged), 1, 'and the row is flagged for review')
     H.eq(r14.flag_reason, 'presence', "flag_reason 'presence'")
     local r13 = rows('run_uuid = ? AND citizenid = ?', { run.id, CID[13] })[1] or {}
-    H.eq(tonumber(r13.flagged), 0, 'the partner who was there is not flagged')
+    H.eq(H.bit(r13.flagged), 0, 'the partner who was there is not flagged')
     H.eq(r13.cash_paid, 920, 'and is paid at the Reinforced tier')
     H.ok(r13.final_points > 0, 'with points')
     CP.Units.remove(13, { reason = 'left', silent = true })
@@ -1150,7 +1153,7 @@ do
     H.eq(run.state, 'ended', 'the flagged run still completes')
     local r = rows('run_uuid = ?', { run.id })[1] or {}
     H.eq(r.state, 'completed', 'completed')
-    H.eq(tonumber(r.flagged), 1, 'row flagged')
+    H.eq(H.bit(r.flagged), 1, 'row flagged')
     H.eq(r.flag_reason, 'speed', 'flag_reason speed')
     H.eq(r.cash_status, 'held', 'cash held')
     H.eq(r.cash_paid, 0, 'nothing paid yet')
@@ -1185,7 +1188,7 @@ do
     ok, data = act('server:sup:reviewFlagged', 8, { rowId = r.id, decision = 'approve', reason = 'GPS glitch, route checked' })
     H.eq(ok, true, 'another FIB supervisor approves: ' .. tostring(data))
     r = rows('id = ?', { r.id })[1] or {}
-    H.eq(tonumber(r.flagged), 0, 'no longer flagged')
+    H.eq(H.bit(r.flagged), 0, 'no longer flagged')
     H.eq(r.cash_status, 'paid', 'the held cash is paid on approval')
     H.eq(r.cash_paid, 250, '$250')
     local n, amount = paidTo()
@@ -1264,7 +1267,7 @@ do
     local ok, data = act('server:sup:reviewFlagged', 3, { rowId = r.id, decision = 'void', reason = 'teleport' })
     H.eq(ok, true, 'a SAST supervisor voids it: ' .. tostring(data))
     r = rows('id = ?', { r.id })[1] or {}
-    H.eq(tonumber(r.voided), 1, 'voided')
+    H.eq(H.bit(r.voided), 1, 'voided')
     H.eq(r.cash_status, 'held', 'the held cash stays held during the dispute window')
     H.eq(CP.Cash._forfeitureJob(), 0, 'not forfeited inside the 48 h window')
     local xp0 = tonumber((H.sql('SELECT xp FROM cp_officers WHERE citizenid = ?', { cid })[1] or {}).xp) or 0
@@ -1281,7 +1284,7 @@ do
     ok, data = act('server:sup:handleDispute', 3, { disputeId = disputeId, decision = 'approve', reason = 'crash confirmed' })
     H.eq(ok, true, 'dispute approved: ' .. tostring(data))
     r = rows('id = ?', { r.id })[1] or {}
-    H.eq(tonumber(r.voided), 0, 'the run is restored')
+    H.eq(H.bit(r.voided), 0, 'the run is restored')
     H.eq(r.cash_status, 'paid', 'and its held cash released')
     H.eq(r.cash_paid, 250, '$250')
     local xp1 = tonumber((H.sql('SELECT xp FROM cp_officers WHERE citizenid = ?', { cid })[1] or {}).xp) or 0

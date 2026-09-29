@@ -3,12 +3,12 @@
 -- Other modules are stubbed (CP.Qbx, CP.Access, CP.Missions, CP.Draw, CP.Banking, CP.Tablet, CP.Admin,
 -- CP.Events, CP.AntiCheat, CP.Challenge); modules/permissions, scaling and schedule are the real ones.
 -- Every SQL statement of the slice runs against MariaDB. The spec uses its own database
--- (cp_test_economy, rebuilt from sql/migrations like cp_test) so other specs that reset cp_test in
+-- (<run database>_economy, rebuilt from sql/migrations like cp_test) so other specs that reset cp_test in
 -- parallel cannot interfere. The fake clock is aligned with the database clock (NOW()).
 
 local REAL_NOW = os.time()
 local H = dofile('tests/harness.lua')
-H.db = 'cp_test_economy'
+H.db = (os.getenv('CP_TEST_DB') or 'cp_test') .. '_economy'   -- per run: parallel runs never share it
 H.resetDatabase()
 H.boot({ side = 'server' })
 H.time = REAL_NOW
@@ -279,7 +279,7 @@ H.eq(res.adminLocked, false, 'supervisor value is not locked')
 H.ok(res.cooldownLeft > 1700, 'cooldown started')
 local tp = H.sql('SELECT amount, admin_locked, updated_by FROM cp_type_payouts WHERE mission_type = ?', { 'patrol' })[1]
 H.eq(tp.amount, 300, 'stored amount')
-H.eq(tp.admin_locked, 0, 'stored unlocked')
+H.eq(H.bit(tp.admin_locked), 0, 'stored unlocked')
 H.eq(tp.updated_by, 'CPSUP001', 'stored updated_by citizenid')
 H.eq(audits[#audits].action, 'setTypePayout', 'audited')
 H.eq(audits[#audits].role, 'supervisor', 'audit role')
@@ -465,8 +465,8 @@ H.ok(ok, 'set without modules/admin')
 local au = H.sql('SELECT actor, role, category, action, target, old_value, new_value, reason FROM cp_audit')[1]
 H.eq(au.action, 'setMissionPayout', 'fallback audit row')
 H.eq(au.actor, 'CPADM001', 'fallback audit actor')
-H.eq(au.old_value, 900, 'fallback audit old')
-H.eq(au.new_value, 950, 'fallback audit new')
+H.eq(tonumber(au.old_value), 900, 'fallback audit old')
+H.eq(tonumber(au.new_value), 950, 'fallback audit new')
 CP.Admin = savedAdmin
 CP.Payouts.setMission(3, 'manhunt', nil, 'cleanup')
 CP.Payouts.setMission(3, 'gang_shootout', nil, 'cleanup')
@@ -1229,4 +1229,6 @@ players[4].onduty = false
 denied = H.callback('crimson-police:getHome', 4)
 H.eq(denied.error, 'err.not_on_duty', 'off duty')
 
+-- Under tests/run.lua (CP_TEST_DB set) the per-run database is dropped; a direct run keeps it for inspection.
+if os.getenv('CP_TEST_DB') then os.execute(('mysql -uroot -e "DROP DATABASE IF EXISTS %s;"'):format(H.db)) end
 return H

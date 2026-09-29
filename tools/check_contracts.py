@@ -30,11 +30,30 @@ def strip_lua_comments(s):
     s = re.sub(r'--\[(=*)\[.*?\]\1\]', '', s, flags=re.S)
     return re.sub(r'--[^\n]*', '', s)
 
+def manifest_scripts(key):
+    """Plain file entries (no glob, no @resource) of a fxmanifest script list, e.g. modules/storage/memsql.lua."""
+    try:
+        text = read(os.path.join(RES, 'fxmanifest.lua'))
+    except OSError:
+        return []
+    m = re.search(key + r'\s*\{(.*?)\}', strip_lua_comments(text), flags=re.S)
+    if not m:
+        return []
+    out = []
+    for entry in re.findall(r"['\"]([^'\"]+)['\"]", m.group(1)):
+        if entry.startswith('@') or '*' in entry:
+            continue
+        path = os.path.join(RES, entry)
+        if os.path.exists(path):
+            out.append(path)
+    return out
+
 def lua_files(side):
     shared = glob.glob(os.path.join(RES, 'shared', '*.lua'))
     if side == 'server':
         own = glob.glob(os.path.join(RES, 'modules', '**', 'server.lua'), recursive=True) + \
               glob.glob(os.path.join(RES, 'blocks', '**', 'server.lua'), recursive=True)
+        own += [p for p in manifest_scripts('server_scripts') if p not in own]
     else:
         own = glob.glob(os.path.join(RES, 'modules', '**', 'client.lua'), recursive=True) + \
               glob.glob(os.path.join(RES, 'blocks', '**', 'client.lua'), recursive=True)

@@ -40,6 +40,13 @@ exposes that is not listed here is private to that module (keep it `local`).
    read with `CP.U.jsonField(v)`; write with `json.encode(CP.U.serialize(t))`. COUNT/SUM results may be
    numbers or numeric strings: wrap with `tonumber(v) or 0` (`CP.U.num`). Callsigns are truncated to 32
    characters and names to 64 before writing (`CP.U.clip`).
+   **Database off** (`Config.Database.enabled = false`): modules/storage replaces this resource's `MySQL` global
+   with `CP.Storage.MemSQL.shim`, an in-resource engine that runs the same SQL on tables kept as files in the saves folder
+   (§5.29). Modules never test the mode: they keep their SQL, and new SQL must stay inside the construct list at
+   the top of `modules/storage/memsql.lua` (anything else fails there with "the saves folder engine (files mode)
+   does not support ..."). Reads of another resource's table (today only sc-dispatch's `mdt_dispatch`) still go
+   read-only to the real oxmysql. The only code that sends `cp_` statements to the real oxmysql in files mode
+   is the admin's storage copy (`/CrimsonPoliceAdmin storage copy`, §5.29). FiveM resource KVP is never used.
 7. **Server authority.** The client never sends points or cash amounts. Clients report objective
    events and telemetry; the server validates. Every `sup:*`/`admin:*` handler calls
    `CP.Permissions.can(src, action)` first, and every officer action calls `CP.Access.getOfficer(src)`.
@@ -104,6 +111,9 @@ PoliceTablet/                      (git repo)
     missions/custom/archived/
     modules/<feature>/server.lua   (+ client.lua where needed)
     modules/integrations/<name>/server.lua (+ client.lua)
+    modules/storage/memsql.lua     CP.Storage.MemSQL: SQL engine + saves folder for database-off mode (server)
+    modules/storage/server.lua     CP.Storage: picks MySQL/MariaDB or the saves folder (Config.Database)
+    saves/                         database-off data (JSON documents, _tables.json); only README.md is committed
     blocks/<block_id>/server.lua + client.lua
     web/                           React 18 + TS + Vite; builds to web/dist (committed)
     sql/migrations/001_initial.sql, 002_test_def_hash.sql
@@ -112,7 +122,9 @@ PoliceTablet/                      (git repo)
 fxmanifest loads: `@ox_lib/init.lua`, config/config.lua, config/blocks.lua, shared/*.lua
 (alphabetical: init, locale, net, utils), then `modules/**/server.lua` (server) /
 `modules/**/client.lua` (client), then `blocks/**/server.lua` / `blocks/**/client.lua`.
-Server also gets `@oxmysql/lib/MySQL.lua`. `files` ships web/dist, locales/*.json and logos/*.
+Server also gets `@oxmysql/lib/MySQL.lua`, then `modules/storage/memsql.lua` and
+`modules/storage/server.lua` before every other server module (so the `MySQL` global is settled before
+any module can query). `files` ships web/dist, locales/*.json and logos/*.
 
 Extra module folders beyond the spec's table (allowed: "each feature in its own folder"):
 - `modules/missions/` — the mission registry: loads built-in and custom mission files, normalises
@@ -659,6 +671,8 @@ officer (`client:operation` (state, missionLabel)). Actions `server:sup:op*` and
   `payout type <type> <amount|clear> <reason>`, `payout mission <id> <amount|clear> <reason>`,
   `award <citizenid> <points> <reason>`, `season start <name>` / `season end`,
   `suspend <citizenid> <days>`, `reload`, `test <missionId> [tier] [location]`. No args → `CP.Tablet.openAdmin(src)`.
+  Also `storage` (the storage in use, rows per `cp_` table, the saves folder's size) and
+  `storage copy database-to-files|files-to-database [force]` (§5.29); console or the `Config.AdminAce` ace only.
 - `audit(actor, role, category, action, target, old, new, reason)` — `actor` = src or citizenid or 'console';
   writes `cp_audit` and posts to the category webhook (`cp_webhook_audit|flags|builder|operations`, convars)
 - `webhook(category, title, description, fields)` (category 'board' also allowed)
@@ -687,6 +701,102 @@ publish (Lua export with `SaveResourceFile`), archive/restore, rollback (.bak), 
 `loadPublished() -> { def, ... }` *(hook for CP.Missions.loadAll)*, `onReload()`,
 `onDraftTested(missionId, version, tierName, passed, src)` *(hook from CP.Testing)*. Publishing requires a passed test at the tier `CP.Scaling.tierFor(maxOfficers)` (`draft_tested = 1`).
 Client: placement tool, route recording, test drive; overlays through `CP.Tablet.overlay`.
+
+### 5.29 CP.Storage (with CP.Storage.MemSQL) — modules/storage (S)
+Where Crimson-Police keeps its data (`Config.Database`). `enabled = true` (the default): MySQL/MariaDB through
+oxmysql, exactly as before, tables built by the migrations runner, no SQL import. `enabled = false` ("database
+off"): Crimson-Police never sends a query to oxmysql for its own data; every `cp_` table lives in the saves folder
+(`Config.Database.folder`, default `saves` inside the resource; FXServer's file sandbox only lets a resource write
+inside resource folders, so an absolute path must point inside the resource). The mode is called `'files'` in code
+and "the saves folder" in player- and owner-facing text (`CP.Storage.name()` gives `'database'` or `'saves folder'`
+for console lines). FiveM resource KVP is never used. The module's one global table is `CP.Storage`; the engine's
+code is `CP.Storage.MemSQL` (memsql.lua creates `CP.Storage` and puts it there).
+
+- **Load order.** fxmanifest loads `@oxmysql/lib/MySQL.lua`, then `modules/storage/memsql.lua` (it only defines
+  `CP.Storage.MemSQL`), then `modules/storage/server.lua` (`CP.Storage`), before every other server module. In files mode
+  `server.lua` opens the saves folder and replaces this resource's `MySQL` global with the shim at file load (the
+  one exception to ground rule 5, so no module ever holds the wrong `MySQL`). The `modules/**/server.lua` glob
+  loads `server.lua` a second time; that load returns at once. The migrations runner then builds the same tables
+  in the engine (only the migrations the saves folder has not recorded yet) and prints `storage: ...`.
+- **CP.Storage** (server): `mode() -> 'database'|'files'`, `name() -> 'database'|'saves folder'`,
+  `folder() -> full path|nil` (files mode), `describe() -> text` (the runner's start-up line), `loadError() ->
+  text|nil` (a saves folder that could not be created, written or read: every statement then fails with that
+  text and nothing in the folder is changed; for a folder outside the resource it names FXServer's sandbox),
+  `hasSavedData() -> bool` (the configured folder holds saves), `realMySQL` (oxmysql's `MySQL`, files mode), `db`
+  (the engine, files mode), `MemSQL` (the engine's code). A new saves folder is announced on start (nothing was
+  copied from the database), and so is a new database next to a saves folder with data (the migrations runner),
+  each naming the storage copy command.
+- **CP.Storage.MemSQL** (server; it also runs under plain lua5.4 in the tests, with the global `json`):
+  `new({ store }) -> db`; `db:exec(sql, params) -> { kind = 'rows', cols, types, rows, n } | { kind = 'write',
+  affected, changed, insertId, info, warnings }`, synchronous and atomic (a failing statement changes nothing),
+  and saved before it returns (every changed document written as `.tmp` first, then renamed into place in a
+  crash-safe order; a save that fails part way is undone in memory and in the folder); with `db.slice` (set by
+  CP.Storage on a server: `{ wait = Citizen.Wait, ms = 4 }`) a SELECT run from a thread gives the server its turn
+  every 4 ms, and every other statement waits for it; `db:load()`; `db:bulk(fn)` (the write-through paused, every document saved once at
+  the end: bulk imports and the storage copy); `db:tableNames()`; `folderStore(dir)` (the saves folder: its file
+  layout and crash-safe save sequence are in the header of memsql.lua); `luaRows(res)` (engine rows typed like
+  oxmysql).
+- **The shim**, `CP.Storage.MemSQL.shim(db, { realMySQL, resource }) -> MySQL`: `query`, `single`, `scalar`, `insert` and
+  `update` (each callable with a callback, and with `.await`), plus `ready`. It copies oxmysql's return shapes,
+  typing (TINYINT(1) as booleans, DECIMAL and SUM as strings, DATETIME/DATE as milliseconds, text always as
+  strings, UPDATE counting matched rows), error text and parameter checks. Any other key (`prepare`,
+  `transaction`, ...) raises. It routes by the tables a statement names: only `cp_` tables go to the engine; only
+  other resources' tables (today sc-dispatch's `mdt_dispatch`, Hard rule 15) go read-only to `realMySQL` (nil,
+  and one warning, when oxmysql is not started); a statement mixing both, or writing another resource's table,
+  is an error.
+- **Supported SQL** (the full list is the header of memsql.lua; anything else fails with "the saves folder
+  engine (files mode) does not support ..."):
+  - SELECT [DISTINCT] with aliases or `*`, FROM a table, a derived table or DUAL, [INNER] JOIN and LEFT
+    [OUTER] JOIN ... ON, WHERE, GROUP BY, ORDER BY, LIMIT/OFFSET (numbers or `?`), UNION ALL in derived tables.
+  - INSERT [IGNORE] ... VALUES (one or more rows) or SELECT, ON DUPLICATE KEY UPDATE with `VALUES(c)`; UPDATE
+    [IGNORE] with an alias; DELETE FROM t [WHERE] and DELETE a FROM t a [INNER|LEFT] JOIN ....
+  - CREATE TABLE [IF NOT EXISTS] (PRIMARY KEY, UNIQUE, KEY/INDEX) or LIKE; ALTER TABLE ADD [COLUMN] [IF NOT
+    EXISTS] ... [FIRST|AFTER c], ADD [UNIQUE] INDEX/KEY [IF NOT EXISTS], several ADDs in one ALTER; CREATE [UNIQUE]
+    INDEX [IF NOT EXISTS] ... ON t; types INT,
+    TINYINT, SMALLINT, MEDIUMINT, BIGINT, VARCHAR(n), DECIMAL(p,s), DATETIME, DATE, ENUM, JSON.
+  - `+ - *`, comparisons, AND/OR/NOT, IS [NOT] NULL, [NOT] IN (list or subquery), [NOT] EXISTS, scalar and
+    correlated subqueries, [NOT] LIKE, CASE, `± INTERVAL n SECOND|MINUTE|HOUR`; COUNT SUM MAX MIN GROUP_CONCAT;
+    COALESCE IFNULL NULLIF IF GREATEST LEAST ROUND, DATE DATE_FORMAT UNIX_TIMESTAMP FROM_UNIXTIME NOW
+    CURRENT_TIMESTAMP TIMESTAMPDIFF, SUBSTRING_INDEX CHAR_LENGTH LOWER UUID, JSON_SET JSON_REMOVE JSON_EXTRACT
+    JSON_UNQUOTE JSON_VALUE JSON_VALID JSON_CONTAINS JSON_TYPE.
+  - MariaDB semantics: utf8mb4_general_ci comparison with MariaDB's own weight and LOWER() tables for every BMP
+    character (`tools/gen_collation.py`) and PAD SPACE order, NULL logic, strict mode with its errors and
+    warnings, BIGINT overflow as MariaDB's error 1690, NULLs first when ascending, MariaDB's error messages.
+    NOW(), DATE() and UNIX_TIMESTAMP follow the FXServer's local time zone; a DATE is saved as its calendar day.
+    A comparison of two parameters or literals uses utf8mb4_general_ci (the connection collation with
+    `charset=utf8mb4`; a connection string without a charset makes MariaDB use utf8mb4_unicode_ci there).
+  - Not supported (unused today): comma, RIGHT and CROSS joins, HAVING, BETWEEN, WITH, window functions, UNION
+    without ALL, AVG and DISTINCT inside an aggregate, `/ % DIV MOD REGEXP`, other INTERVAL units, TEXT, CHAR and
+    TIMESTAMP columns, fractional seconds, ALTER forms other than ADD, RENAME/DROP/SET/SHOW, Lua table
+    parameters, `MySQL.prepare`, transactions. A migration that adds a NOT NULL DATETIME or DATE column to a
+    table with rows needs a DEFAULT.
+- **Rule for new SQL.** Modules never test the mode: every statement is written once and must run in both. A
+  new or changed statement must use only the constructs above, or the change must extend the engine with
+  MariaDB's exact behaviour. The whole suite must then pass in all three storage modes, and
+  `lua5.4 tests/run.lua --storage=shadow` must report 0 differences (plus `--fuzz` after an engine change;
+  §11). A statement on another resource's table may only read, and never together with a `cp_` table.
+- **Storage copy** (CP.Admin, `/CrimsonPoliceAdmin storage copy database-to-files|files-to-database [force]`,
+  console or the admin ace). It copies every `cp_` table except `cp_schema_migrations` between MariaDB and a
+  saves folder engine. The MariaDB side is the real oxmysql (`MySQL` in database mode, `CP.Storage.realMySQL` in
+  files mode). The files side is `CP.Storage.db` in files mode, or else an engine opened on
+  `Config.Database.folder` for the command. The copy:
+  - first runs on the target the migrations the source has (the same `sql/migrations` files);
+  - keeps ids and AUTO_INCREMENT counters, and writes into an engine inside one `db:bulk`;
+  - reads DATETIME with `UNIX_TIMESTAMP` and writes it with `FROM_UNIXTIME`, and moves DATE as `YYYY-MM-DD`;
+  - is refused while a run or a Cross-Department Mission is active, and into a target with rows unless `force`
+    (which empties it first);
+  - empties the target again on any failure (the source is only read);
+  - is audited as `storageCopy`, also in the target's `cp_audit` when the target is not the storage in use.
+  `/CrimsonPoliceAdmin storage` prints the mode, the saves folder path, the rows of every table and the
+  folder's size.
+- Tests: `tests/memsql_spec.lua` (the engine: MariaDB's answers, the collation table checked against the local
+  MariaDB, a crash and a refused file operation at every point of a save, FXServer's inverted `os.rename`, hand-edited
+  and missing documents, the SELECT slicing), `tests/storage_spec.lua` (files mode end to end, a restart, and
+  50,000 runs with their timings, an fsync per document written, how long a board holds the server thread, and
+  sizes), `tests/storage_copy_spec.lua` (the storage command and both copy
+  directions in both modes, MariaDB and a temporary saves folder together). `lua5.4 tests/run.lua --storage=files`
+  runs the whole suite in files mode, and `--storage=shadow` checks the engine against MariaDB statement by
+  statement (§11).
 
 ---
 
@@ -1089,3 +1199,22 @@ interface RunResult { runId: string; missionLabel: string; missionType: string;
   `H.exportsMock['sc-dispatch'] = { ... }`, `H.players[src] = { coords = vec3(...), ace = {...} }`, and
   `return H` at the end. Specs run in separate processes; the database is rebuilt once per run.
   Never leave a spec that fails.
+- Storage modes (`CP_TEST_STORAGE`, or `lua5.4 tests/run.lua --storage=<mode>`); the suite must pass in all three:
+  - `database` (default): MySQL and `H.sql` go to MariaDB.
+  - `files`: `Config.Database.enabled = false`; the real modules/storage files load, every module query and `H.sql`
+    goes to CP.Storage.MemSQL and a temporary saves folder built by the real migrations runner (other resources' tables stay
+    on MariaDB). A spec that compares a TINYINT(1) column accepts both the number and the boolean (`H.bit(v)`).
+  - `shadow`: the specs get MariaDB's answers (as in database mode) while every statement also runs, in lockstep, on
+    a MariaDB twin read the way oxmysql reads it (`tests/shadow/twin.cjs`: node + mysql2 with oxmysql's options,
+    typeCast, parseArguments, parseResponse and error text; `cd tests/shadow && npm install` once) and on the
+    engine through its MySQL drop-in, both from the migrated empty schema, NOW() pinned to the same second. Every
+    difference (result, error, affected rows, insert id, value type, row order under ORDER BY, and every table and
+    AUTO_INCREMENT counter at the end of each spec) is appended to `CP_SHADOW_REPORT`; the run fails unless the
+    report is empty. `--fuzz[=N]` runs `tests/shadow/fuzz_*.lua` the same way for seeds 1..N: random aggregates
+    (`fuzz_agg`), row queries and writes (`fuzz_rows`), functions, types and stores (`fuzz_funcs`), and every column
+    type Crimson-Police uses fed every kind of value by INSERT / UPDATE in strict mode and with IGNORE, errors,
+    warnings and notes included (`fuzz_store`; seed 1 runs its whole grid). What the engine deliberately does not
+    copy (zero dates, warnings of expression evaluation, ...) is listed in the header of
+    `modules/storage/memsql.lua`; the fuzz scripts keep clear of it.
+  - A check that only means something on MariaDB is skipped with `H.skipIn(mode, reason)`; run.lua lists every skip.
+  - A spec's `REPORT ...` lines are shown under its result (tests/storage_spec.lua prints its timings and sizes).
