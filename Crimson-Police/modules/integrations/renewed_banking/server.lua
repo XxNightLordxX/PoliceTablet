@@ -1,31 +1,4 @@
--- modules/integrations/renewed_banking/server.lua · CP.Banking: the only code that talks to Renewed-Banking.
---
--- Owns exports['Renewed-Banking']:handleTransaction, removeAccountMoney, getAccountMoney and
--- addAccountMoney (verified signatures in docs/INTEGRATIONS.md; addAccountMoney is not in the spec's
--- Appendix, INTEGRATIONS.md "addAccountMoney" names it as the only refund path for a society withdrawal).
--- Personal money itself moves through Qbox (CP.Qbx.addMoney); Renewed-Banking only keeps the history, so
--- a payout needs both calls.
---
--- Public API (docs/ARCHITECTURE.md §5.1). Every function returns false/nil instead of raising when
--- Renewed-Banking is stopped or rejects the call. Amounts are rounded half up to whole dollars;
--- an amount of 0 is never sent (a $0 history entry) and returns true.
---   CP.Banking.recordDeposit(citizenid, amount, message, issuer, receiver, transId) -> boolean
---       handleTransaction(citizenid, Config.Tablet.title, amount, message, issuer, receiver, 'deposit', transId).
---       true = Renewed-Banking accepted the arguments. It still drops the entry silently when the
---       player's history is not loaded yet (right after QBCore:Server:PlayerLoaded), so pending payouts
---       should wait a few seconds after the player loads.
---   CP.Banking.withdrawSociety(account, amount) -> boolean
---       removeAccountMoney(account, amount): false when the account is unknown or cannot cover it.
---   CP.Banking.recordSocietyWithdraw(account, amount, message, issuer, receiver, transId) -> boolean
---       handleTransaction(account, Config.Tablet.title, amount, message, issuer, receiver, 'withdraw', transId).
---   CP.Banking.societyBalance(account) -> number|nil   getAccountMoney(account); nil for an unknown account.
---   CP.Banking.depositSociety(account, amount) -> boolean
---       addAccountMoney(account, amount): puts money back into a society account (CP.Cash's refund when a
---       society-funded payout's AddMoney failed after withdrawSociety). Society/shared accounts only:
---       Renewed-Banking returns false for a citizenid or an unknown account (and while its account cache
---       loads after a restart). It records no history entry.
--- message: apostrophes and backslashes are removed (Renewed-Banking doubles them in the stored text).
--- issuer/receiver: never nil (nil becomes ''). transId: e.g. ('CP-%s-%s'):format(runUuid, citizenid).
+-- CP.Banking: the only code that talks to Renewed-Banking.
 
 CP.Banking = CP.Banking or {}
 local B = CP.Banking
@@ -34,21 +7,21 @@ local RESOURCE = 'Renewed-Banking'
 
 local errorLoggedAt = {}
 
-local function logError(key, fmt, ...)
+local function LogError(key, fmt, ...)
     local now = os.time()
     if errorLoggedAt[key] and now - errorLoggedAt[key] < 60 then return end
     errorLoggedAt[key] = now
     CP.err(TAG, fmt, ...)
 end
 
-local function available()
+local function Available()
     if GetResourceState(RESOURCE) == 'started' then return true end
-    logError('stopped', 'Renewed-Banking is not started: bank entries and society accounts are unavailable')
+    LogError('stopped', 'Renewed-Banking is not started: bank entries and society accounts are unavailable')
     return false
 end
 
 -- A non-negative whole amount, or nil.
-local function toAmount(amount)
+local function ToAmount(amount)
     local n = tonumber(amount)
     if not n or n ~= n or n == math.huge or n == -math.huge or n < 0 then return nil end
     return CP.U.round(n)
@@ -56,7 +29,7 @@ end
 
 -- At most max bytes without splitting a UTF-8 character (the text lands in Renewed-Banking's JSON
 -- history; half a character would show as garbage there).
-local function text(v, max)
+local function Text(v, max)
     if v == nil then return '' end
     local s = tostring(v)
     if #s <= max then return s end
@@ -72,30 +45,31 @@ local function text(v, max)
     return s
 end
 
-local function safeMessage(message)
-    local s = text(message, 200)
-    return (s:gsub("['\\]", ''))
+local function SafeMessage(message)
+    local s = Text(message, 200)
+    return (s:gsub('[\'\\]', ''))
 end
 
-local function title()
+local function Title()
     local t = Config.Tablet and Config.Tablet.title
     if type(t) == 'string' and t ~= '' then return t end
     return 'Crimson-Police'
 end
 
-local function transaction(account, amount, message, issuer, receiver, transType, transId)
+local function Transaction(account, amount, message, issuer, receiver, transType, transId)
     if type(account) ~= 'string' or account == '' then return false end
-    local n = toAmount(amount)
+    local n = ToAmount(amount)
     if not n then return false end
     if n == 0 then return true end
-    if not available() then return false end
-    local tid = transId ~= nil and text(transId, 128) or nil
-    local args = { account, title(), n, safeMessage(message), text(issuer, 100), text(receiver, 100), transType, tid }
+    if not Available() then return false end
+    local tid = transId ~= nil and Text(transId, 128) or nil
+    local args = { account, Title(), n, SafeMessage(message), Text(issuer, 100), Text(receiver, 100), transType, tid }
     local ok, res = pcall(function()
-        return exports[RESOURCE]:handleTransaction(args[1], args[2], args[3], args[4], args[5], args[6], args[7], args[8])
+        return exports[RESOURCE]:handleTransaction(args[1], args[2], args[3], args[4], args[5], args[6], args[7],
+            args[8])
     end)
     if not ok then
-        logError('handleTransaction', "exports['Renewed-Banking']:handleTransaction failed: %s", tostring(res))
+        LogError('handleTransaction', 'exports[\'Renewed-Banking\']:handleTransaction failed: %s', tostring(res))
         return false
     end
     if type(res) ~= 'table' then
@@ -107,22 +81,22 @@ local function transaction(account, amount, message, issuer, receiver, transType
 end
 
 function B.recordDeposit(citizenid, amount, message, issuer, receiver, transId)
-    return transaction(citizenid, amount, message, issuer, receiver, 'deposit', transId)
+    return Transaction(citizenid, amount, message, issuer, receiver, 'deposit', transId)
 end
 
 function B.recordSocietyWithdraw(account, amount, message, issuer, receiver, transId)
-    return transaction(account, amount, message, issuer, receiver, 'withdraw', transId)
+    return Transaction(account, amount, message, issuer, receiver, 'withdraw', transId)
 end
 
 function B.withdrawSociety(account, amount)
     if type(account) ~= 'string' or account == '' then return false end
-    local n = toAmount(amount)
+    local n = ToAmount(amount)
     if not n then return false end
     if n == 0 then return true end
-    if not available() then return false end
+    if not Available() then return false end
     local ok, res = pcall(function() return exports[RESOURCE]:removeAccountMoney(account, n) end)
     if not ok then
-        logError('removeAccountMoney', "exports['Renewed-Banking']:removeAccountMoney failed: %s", tostring(res))
+        LogError('removeAccountMoney', 'exports[\'Renewed-Banking\']:removeAccountMoney failed: %s', tostring(res))
         return false
     end
     CP.log(TAG, 'withdraw %d from %s -> %s', n, account, tostring(res))
@@ -131,10 +105,10 @@ end
 
 function B.societyBalance(account)
     if type(account) ~= 'string' or account == '' then return nil end
-    if not available() then return nil end
+    if not Available() then return nil end
     local ok, res = pcall(function() return exports[RESOURCE]:getAccountMoney(account) end)
     if not ok then
-        logError('getAccountMoney', "exports['Renewed-Banking']:getAccountMoney failed: %s", tostring(res))
+        LogError('getAccountMoney', 'exports[\'Renewed-Banking\']:getAccountMoney failed: %s', tostring(res))
         return nil
     end
     if type(res) == 'number' then return res end
@@ -143,13 +117,13 @@ end
 
 function B.depositSociety(account, amount)
     if type(account) ~= 'string' or account == '' then return false end
-    local n = toAmount(amount)
+    local n = ToAmount(amount)
     if not n then return false end
     if n == 0 then return true end
-    if not available() then return false end
+    if not Available() then return false end
     local ok, res = pcall(function() return exports[RESOURCE]:addAccountMoney(account, n) end)
     if not ok then
-        logError('addAccountMoney', "exports['Renewed-Banking']:addAccountMoney failed: %s", tostring(res))
+        LogError('addAccountMoney', 'exports[\'Renewed-Banking\']:addAccountMoney failed: %s', tostring(res))
         return false
     end
     CP.log(TAG, 'deposit %d into %s -> %s', n, account, tostring(res))

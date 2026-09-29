@@ -1,68 +1,161 @@
 /* Admin UI · Payouts (economy slice). Only --cp-* variables; classes prefixed economy-admin-pay-. */
 
-.economy-admin-pay-summary { display: inline-flex; gap: 8px; flex-wrap: wrap; }
+.economy-admin-pay-summary {
+    display: inline-flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
 
 .economy-admin-pay-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
 }
-.economy-admin-pay-search { flex: 1 1 220px; max-width: 320px; }
 
-.economy-admin-pay-name { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.economy-admin-pay-name__label { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; flex-wrap: wrap; }
-.economy-admin-pay-name__sub { font-size: var(--cp-fs-xs); color: var(--cp-subtle); }
+.economy-admin-pay-search {
+    flex: 1 1 220px;
+    max-width: 320px;
+}
 
-.economy-admin-pay-amount { font-weight: 700; font-size: var(--cp-fs-md); }
-.economy-admin-pay-muted { color: var(--cp-muted); font-size: var(--cp-fs-sm); }
-.economy-admin-pay-changed { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.economy-admin-pay-name {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.economy-admin-pay-name__label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 700;
+    flex-wrap: wrap;
+}
+
+.economy-admin-pay-name__sub {
+    font-size: var(--cp-fs-xs);
+    color: var(--cp-subtle);
+}
+
+.economy-admin-pay-amount {
+    font-weight: 700;
+    font-size: var(--cp-fs-md);
+}
+
+.economy-admin-pay-muted {
+    color: var(--cp-muted);
+    font-size: var(--cp-fs-sm);
+}
+
+.economy-admin-pay-changed {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+}
+
 .economy-admin-pay-changed__name {
-  font-size: var(--cp-fs-sm);
-  font-weight: 600;
-  max-width: 180px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+    font-size: var(--cp-fs-sm);
+    font-weight: 600;
+    max-width: 180px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
-.economy-admin-pay-changed__at { font-size: var(--cp-fs-xs); color: var(--cp-muted); }
-.economy-admin-pay-source { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.economy-admin-pay-actions { display: inline-flex; align-items: center; gap: 4px; justify-content: flex-end; }
 
-.economy-admin-pay-stars { display: inline-flex; gap: 1px; font-size: var(--cp-fs-md); letter-spacing: 0; }
-.economy-admin-pay-star { color: var(--cp-border-strong); }
-.economy-admin-pay-star.is-on { color: var(--cp-xp-gold); }
+.economy-admin-pay-changed__at {
+    font-size: var(--cp-fs-xs);
+    color: var(--cp-muted);
+}
 
-.economy-admin-pay-footnote { margin: 0; font-size: var(--cp-fs-sm); color: var(--cp-subtle); }
+.economy-admin-pay-source {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
 
-.economy-admin-pay-edit { display: flex; flex-direction: column; gap: 16px; }
+.economy-admin-pay-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    justify-content: flex-end;
+}
+
+.economy-admin-pay-stars {
+    display: inline-flex;
+    gap: 1px;
+    font-size: var(--cp-fs-md);
+    letter-spacing: 0;
+}
+
+.economy-admin-pay-star {
+    color: var(--cp-border-strong);
+}
+
+.economy-admin-pay-star.is-on {
+    color: var(--cp-xp-gold);
+}
+
+.economy-admin-pay-footnote {
+    margin: 0;
+    font-size: var(--cp-fs-sm);
+    color: var(--cp-subtle);
+}
+
+.economy-admin-pay-edit {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
 .economy-admin-pay-edit__facts {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-  padding: 12px 14px;
-  border-radius: var(--cp-radius);
-  background: var(--cp-surface-2);
-  border: 1px solid var(--cp-border);
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    padding: 12px 14px;
+    border-radius: var(--cp-radius);
+    background: var(--cp-surface-2);
+    border: 1px solid var(--cp-border);
 }
+
 .economy-admin-pay-review {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  padding: 10px 14px;
-  border-radius: var(--cp-radius);
-  border: 1px dashed rgba(var(--cp-accent-rgb), 0.5);
-  background: rgba(var(--cp-accent-rgb), 0.06);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    padding: 10px 14px;
+    border-radius: var(--cp-radius);
+    border: 1px dashed rgba(var(--cp-accent-rgb), 0.5);
+    background: rgba(var(--cp-accent-rgb), 0.06);
 }
-.economy-admin-pay-review__label { font-weight: 700; }
-.economy-admin-pay-review__change { display: inline-flex; align-items: center; gap: 6px; font-size: var(--cp-fs-md); }
-.economy-admin-pay-review__old { color: var(--cp-muted); text-decoration: line-through; }
+
+.economy-admin-pay-review__label {
+    font-weight: 700;
+}
+
+.economy-admin-pay-review__change {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: var(--cp-fs-md);
+}
+
+.economy-admin-pay-review__old {
+    color: var(--cp-muted);
+    text-decoration: line-through;
+}
+
 .economy-admin-pay-note {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  font-size: var(--cp-fs-sm);
-  color: var(--cp-muted);
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: var(--cp-fs-sm);
+    color: var(--cp-muted);
 }
-.economy-admin-pay-note svg { flex: none; margin-top: 2px; }
+
+.economy-admin-pay-note svg {
+    flex: none;
+    margin-top: 2px;
+}

@@ -1,79 +1,67 @@
---[[ blocks/search_area/client.lua · objective block "search_area" (client half)
-
-  What it does (while the objective is current on this participant's client)
-    - the search circle as a radius blip with a centre blip, redrawn whenever the server shrinks it;
-      blips for clues not yet checked and for fugitives on the run (none of these with Radio Silence);
-    - an ox_target sphere zone on every clue not yet checked (option crimson-police:check_clue, label by
-      clue kind); selecting it reports 'clue_start', runs lib.progressBar(clueProgress) and reports
-      'clue'; a marker over each clue not yet checked (DrawMarker only within MARKER_RANGE, otherwise
-      Wait(750));
-    - 'stunned' reports for fugitives seen stunned (IsPedBeingStunned); the server re-checks distances;
-    - a HUD line (ctx.hudDetail): enter the area, clues checked and circle size, escape countdown, and
-      "stay close" while this player is within givesUp.close.distance of a fugitive on the run;
-    - on the run host only: control of each fugitive and the witness before anything is done to it
-      (re-applied and re-tasked when control comes back from another client), CP.Npc.apply, then
-      the task for its cp state: idle (hiding) -> 'cower', fleeing -> 'flee', and on first sight (new
-      host) surrendered -> 'kneel', cuffed -> 'cuffed'; the witness stands at its spot
-      (TaskStartScenarioInPlace). The "Cuff suspect" target is CP.Npc's (enableCuff).
-
-  Objective fields read: clueProgress.label / duration, givesUp.close, runDistance (ctx.obj).
-  Evidence sent: { type = 'clue_start', clue }, { type = 'clue', clue }, { type = 'stunned', netId }
-  Server data (update): { kind = 'state', circle = { x, y, z, r, n }, clues = { { i, x, y, z, kind, model,
-    netId, status } }, fugitives = { { netId, state } }, checked, clueTotal, arrests, neutralised, total,
-    entered, escaping }
-]]
+-- Objective block "search_area" (client half)
 
 local BLOCK = 'search_area'
 local U = CP.U
 
-local OPTION       = 'crimson-police:check_clue'
-local FAST_MS      = 250
-local SLOW_MS      = 1000
-local WATCH_RANGE  = 40.0
-local REPORT_MS    = 1500
-local CONTROL_MS   = 250
+local OPTION = 'crimson-police:check_clue'
+local FAST_MS = 250
+local SLOW_MS = 1000
+local WATCH_RANGE = 40.0
+local REPORT_MS = 1500
+local CONTROL_MS = 250
 local MARKER_RANGE = 150.0
-local CLUE_RANGE   = 2.5
-local SEARCH_ANIM  = { dict = 'amb@prop_human_bum_bin@idle_b', clip = 'idle_d' }
-local TALK_ANIM    = { dict = 'missfbi3_party_d', clip = 'stand_talk_loop_a_male1' }
+local CLUE_RANGE = 2.5
+local SEARCH_ANIM = { dict = 'amb@prop_human_bum_bin@idle_b', clip = 'idle_d' }
+local TALK_ANIM = { dict = 'missfbi3_party_d', clip = 'stand_talk_loop_a_male1' }
 local WITNESS_SCENARIO = 'WORLD_HUMAN_STAND_MOBILE'
 
 local active = {}
 
-local function keyOf(ctx) return tostring(ctx.runId) .. ':' .. tostring(ctx.index) end
+local function KeyOf(ctx) return tostring(ctx.runId) .. ':' .. tostring(ctx.index) end
 
 local function S_of(ctx)
-    local k = keyOf(ctx)
+    local k = KeyOf(ctx)
     local S = active[k]
     if not S then
-        S = { key = k, data = {}, clues = {}, fugitives = {}, zones = {}, blips = {}, applied = {}, tasked = {},
-            lost = {}, lastReport = {}, alive = true }
+        S = {
+            key = k,
+            data = {},
+            clues = {},
+            fugitives = {},
+            zones = {},
+            blips = {},
+            applied = {},
+            tasked = {},
+            lost = {},
+            lastReport = {},
+            alive = true,
+        }
         active[k] = S
     end
     S.ctx = ctx
     return S
 end
 
-local function isHost(S)
+local function IsHost(S)
     if S.isHost ~= nil then return S.isHost end
     return S.ctx.isHost == true
 end
 
-local function entityFor(netId)
+local function EntityFor(netId)
     if not netId or not NetworkDoesNetworkIdExist(netId) then return nil end
     local e = NetworkGetEntityFromNetworkId(netId)
     if e and e ~= 0 and DoesEntityExist(e) then return e end
     return nil
 end
 
-local function bagOf(ent)
+local function BagOf(ent)
     local st = Entity(ent).state
     return st and st.cp or nil
 end
 
-local function clueVec(cl) return vector3(cl.x + 0.0, cl.y + 0.0, cl.z + 0.0) end
+local function ClueVec(cl) return vector3(cl.x + 0.0, cl.y + 0.0, cl.z + 0.0) end
 
-local function clueLabel(cl)
+local function ClueLabel(cl)
     if cl.kind == 'witness' then return CP.L('block.search_area.target_witness') end
     local model = tostring(cl.model or '')
     if model:find('bag') then return CP.L('block.search_area.target_bag') end
@@ -81,24 +69,27 @@ local function clueLabel(cl)
     return CP.L('block.search_area.target_clue')
 end
 
--- ── Blips ───────────────────────────────────────────────────────────────────
-local function dropBlip(S, k)
+-- ============================================================================
+--                                    BLIPS
+-- ============================================================================
+
+local function DropBlip(S, k)
     local b = S.blips[k]
     if not b then return end
     if DoesBlipExist(b.id) then RemoveBlip(b.id) end
     S.blips[k] = nil
 end
 
-local function nameBlip(id, label)
+local function NameBlip(id, label)
     BeginTextCommandSetBlipName('STRING')
     AddTextComponentSubstringPlayerName(label)
     EndTextCommandSetBlipName(id)
 end
 
-local function drawCircle(S)
+local function DrawCircle(S)
     local c = S.data.circle
-    dropBlip(S, 'circle')
-    dropBlip(S, 'center')
+    DropBlip(S, 'circle')
+    DropBlip(S, 'center')
     S.circleKey = nil
     if not c or S.ctx.radioSilence then return end
     local area = AddBlipForRadius(c.x + 0.0, c.y + 0.0, c.z + 0.0, c.r + 0.0)
@@ -109,36 +100,39 @@ local function drawCircle(S)
     SetBlipSprite(mid, 1)
     SetBlipColour(mid, 1)
     SetBlipScale(mid, 0.6)
-    nameBlip(mid, CP.L('block.search_area.blip_area', { radius = math.floor(c.r + 0.5) }))
+    NameBlip(mid, CP.L('block.search_area.blip_area', { radius = math.floor(c.r + 0.5) }))
     S.blips.center = { id = mid }
     S.circleKey = ('%d:%d'):format(c.n or 0, math.floor(c.r))
 end
 
-local function ensureCoordBlip(S, k, v, label)
+local function EnsureCoordBlip(S, k, v, label)
     if S.blips[k] then return end
     local id = AddBlipForCoord(v.x, v.y, v.z)
     SetBlipSprite(id, 1)
     SetBlipColour(id, 5)
     SetBlipScale(id, 0.6)
     SetBlipAsShortRange(id, true)
-    nameBlip(id, label)
+    NameBlip(id, label)
     S.blips[k] = { id = id }
 end
 
-local function ensureEntityBlip(S, k, ent, label)
+local function EnsureEntityBlip(S, k, ent, label)
     local b = S.blips[k]
     if b and b.ent == ent and DoesBlipExist(b.id) then return end
-    dropBlip(S, k)
+    DropBlip(S, k)
     local id = AddBlipForEntity(ent)
     SetBlipSprite(id, 1)
     SetBlipColour(id, 1)
     SetBlipScale(id, 0.7)
-    nameBlip(id, label)
+    NameBlip(id, label)
     S.blips[k] = { id = id, ent = ent }
 end
 
--- ── Clues ───────────────────────────────────────────────────────────────────
-local function checkClue(S, cl)
+-- ============================================================================
+--                                    CLUES
+-- ============================================================================
+
+local function CheckClue(S, cl)
     if S.busy then return end
     S.busy = true
     local ctx = S.ctx
@@ -158,49 +152,51 @@ local function checkClue(S, cl)
     S.busy = false
 end
 
-local function dropZone(S, i)
+local function DropZone(S, i)
     local id = S.zones[i]
     if not id then return end
     S.zones[i] = nil
     pcall(function() exports.ox_target:removeZone(id) end)
 end
 
-local function ensureZone(S, cl)
+local function EnsureZone(S, cl)
     if S.zones[cl.i] then return end
     S.zones[cl.i] = exports.ox_target:addSphereZone({
-        coords = clueVec(cl),
+        coords = ClueVec(cl),
         radius = 1.2,
         debug = false,
         name = 'crimson-police:clue:' .. S.key .. ':' .. tostring(cl.i),
-        options = { {
-            name = OPTION,
-            label = clueLabel(cl),
-            icon = cl.kind == 'witness' and 'fas fa-comments' or 'fas fa-magnifying-glass',
-            distance = CLUE_RANGE,
-            canInteract = function()
-                local now = S.clues[cl.i]
-                return S.alive and S.current and not S.busy and now ~= nil and now.status == 'pending'
-            end,
-            onSelect = function() CreateThread(function() checkClue(S, S.clues[cl.i] or cl) end) end,
-        } },
+        options = {
+            {
+                name = OPTION,
+                label = ClueLabel(cl),
+                icon = cl.kind == 'witness' and 'fas fa-comments' or 'fas fa-magnifying-glass',
+                distance = CLUE_RANGE,
+                canInteract = function()
+                    local now = S.clues[cl.i]
+                    return S.alive and S.current and not S.busy and now ~= nil and now.status == 'pending'
+                end,
+                onSelect = function() CreateThread(function() CheckClue(S, S.clues[cl.i] or cl) end) end,
+            },
+        },
     })
 end
 
-local function syncClues(S)
+local function SyncClues(S)
     for i, cl in pairs(S.clues) do
         if cl.status == 'pending' and S.current then
-            ensureZone(S, cl)
+            EnsureZone(S, cl)
             if not S.ctx.radioSilence then
-                ensureCoordBlip(S, 'c' .. i, clueVec(cl), CP.L('block.search_area.blip_clue'))
+                EnsureCoordBlip(S, 'c' .. i, ClueVec(cl), CP.L('block.search_area.blip_clue'))
             end
         else
-            dropZone(S, i)
-            dropBlip(S, 'c' .. i)
+            DropZone(S, i)
+            DropBlip(S, 'c' .. i)
         end
     end
 end
 
-local function markerLoop(S)
+local function MarkerLoop(S)
     if S.drawing then return end
     S.drawing = true
     CreateThread(function()
@@ -209,10 +205,10 @@ local function markerLoop(S)
             local drew = false
             for _, cl in pairs(S.clues) do
                 if cl.status == 'pending' then
-                    local v = clueVec(cl)
+                    local v = ClueVec(cl)
                     if #(pos - v) <= MARKER_RANGE then
-                        DrawMarker(2, v.x, v.y, v.z + 1.0, 0.0, 0.0, 0.0, 180.0, 0.0, 0.0,
-                            0.3, 0.3, 0.3, 240, 200, 40, 180, true, true, 2, false, nil, nil, false)
+                        DrawMarker(2, v.x, v.y, v.z + 1.0, 0.0, 0.0, 0.0, 180.0, 0.0, 0.0, 0.3, 0.3, 0.3, 240, 200, 40,
+                            180, true, true, 2, false, nil, nil, false)
                         drew = true
                     end
                 end
@@ -223,10 +219,12 @@ local function markerLoop(S)
     end)
 end
 
--- ── Host AI and reports ─────────────────────────────────────────────────────
+-- ============================================================================
+--                             HOST AI AND REPORTS
+-- ============================================================================
 -- Control of a run ped before anything is done to it (ctx.control returns at once when this client
 -- already owns it). regained = another client owned it since the last check: re-apply and re-task.
-local function own(S, net, ent)
+local function Own(S, net, ent)
     if NetworkHasControlOfEntity(ent) then
         local regained = S.lost[net] == true
         S.lost[net] = nil
@@ -240,12 +238,12 @@ local function own(S, net, ent)
     return true, true
 end
 
-local function hostPed(S, net, ent, state, witness)
+local function HostPed(S, net, ent, state, witness)
     local fresh = false
-    local owned, regained = own(S, net, ent)
+    local owned, regained = Own(S, net, ent)
     if not owned then return end
     if S.applied[net] ~= ent or regained then
-        local bag = bagOf(ent)
+        local bag = BagOf(ent)
         CP.Npc.apply(ent, (bag and bag.cfg) or {})
         S.applied[net] = ent
         S.tasked[net] = nil
@@ -272,7 +270,7 @@ local function hostPed(S, net, ent, state, witness)
     S.tasked[net] = state
 end
 
-local function reportOnce(S, kind, netId)
+local function ReportOnce(S, kind, netId)
     local k = kind .. ':' .. tostring(netId)
     local t = GetGameTimer()
     local last = S.lastReport[k]
@@ -281,13 +279,13 @@ local function reportOnce(S, kind, netId)
     S.ctx.report({ type = kind, netId = netId })
 end
 
-local function setHint(S, text)
+local function SetHint(S, text)
     if S.hint == text then return end
     S.hint = text
     S.ctx.hudDetail(text)
 end
 
-local function hudText(S, close)
+local function HudText(S, close)
     local d = S.data
     if d.escaping then return CP.L('block.search_area.hud_escaping', { seconds = d.escaping }) end
     if close then return CP.L('block.search_area.hint_close') end
@@ -299,7 +297,7 @@ local function hudText(S, close)
     return CP.L('block.search_area.hud_find', { done = d.neutralised or 0, total = d.total or 0, radius = r })
 end
 
-local function loop(S)
+local function Loop(S)
     if S.looping then return end
     S.looping = true
     CreateThread(function()
@@ -309,46 +307,47 @@ local function loop(S)
                 local ctx = S.ctx
                 local gu = ctx.obj.givesUp or {}
                 local myPos = GetEntityCoords(PlayerPedId())
-                local host = isHost(S)
+                local host = IsHost(S)
                 local close = false
                 local c = S.data.circle
                 local key = c and ('%d:%d'):format(c.n or 0, math.floor(c.r)) or nil
-                if key ~= S.circleKey and not ctx.radioSilence then drawCircle(S) end
-                syncClues(S)
+                if key ~= S.circleKey and not ctx.radioSilence then DrawCircle(S) end
+                SyncClues(S)
                 if host then
                     for _, cl in pairs(S.clues) do
                         if cl.kind == 'witness' and cl.netId then
-                            local e = entityFor(cl.netId)
-                            if e and not IsPedDeadOrDying(e, true) then hostPed(S, cl.netId, e, 'idle', true) end
+                            local e = EntityFor(cl.netId)
+                            if e and not IsPedDeadOrDying(e, true) then HostPed(S, cl.netId, e, 'idle', true) end
                         end
                     end
                 end
                 for _, f in ipairs(S.fugitives) do
-                    local ent = entityFor(f.netId)
+                    local ent = EntityFor(f.netId)
                     local k = 'f' .. tostring(f.netId)
                     if ent then
-                        local state = (bagOf(ent) or {}).state or f.state
-                        if host and state ~= 'dead' then hostPed(S, f.netId, ent, state, false) end
+                        local state = (BagOf(ent) or {}).state or f.state
+                        if host and state ~= 'dead' then HostPed(S, f.netId, ent, state, false) end
                         local d = #(GetEntityCoords(ent) - myPos)
                         if state == 'fleeing' or state == 'idle' then
                             if d <= WATCH_RANGE then
                                 fast = true
-                                if IsPedBeingStunned(ent, 0) then reportOnce(S, 'stunned', f.netId) end
+                                if IsPedBeingStunned(ent, 0) then ReportOnce(S, 'stunned', f.netId) end
                             end
-                            if state == 'fleeing' and type(gu.close) == 'table' and d <= (tonumber(gu.close.distance) or 0) then
+                            if state == 'fleeing' and type(gu.close) == 'table'
+                                and d <= (tonumber(gu.close.distance) or 0) then
                                 close = true
                             end
                         end
                         if not ctx.radioSilence and (state == 'fleeing' or state == 'surrendered') then
-                            ensureEntityBlip(S, k, ent, CP.L('block.search_area.blip_fugitive'))
+                            EnsureEntityBlip(S, k, ent, CP.L('block.search_area.blip_fugitive'))
                         else
-                            dropBlip(S, k)
+                            DropBlip(S, k)
                         end
                     else
-                        dropBlip(S, k)
+                        DropBlip(S, k)
                     end
                 end
-                setHint(S, hudText(S, close))
+                SetHint(S, HudText(S, close))
             end
             Wait(fast and FAST_MS or SLOW_MS)
         end
@@ -356,13 +355,13 @@ local function loop(S)
     end)
 end
 
-local function cleanup(S)
+local function Cleanup(S)
     S.alive = false
     S.current = false
     -- a clue check still running would otherwise keep the player frozen in its progress bar
     if S.busy and lib.progressActive and lib.progressActive() then pcall(lib.cancelProgress) end
-    for i in pairs(S.zones) do dropZone(S, i) end
-    for k in pairs(S.blips) do dropBlip(S, k) end
+    for i in pairs(S.zones) do DropZone(S, i) end
+    for k in pairs(S.blips) do DropBlip(S, k) end
     if S.hint then
         S.hint = nil
         S.ctx.hudDetail(nil)
@@ -379,8 +378,8 @@ CP.Blocks.register(BLOCK, {
         local S = S_of(ctx)
         S.alive = true
         S.current = true
-        loop(S)
-        markerLoop(S)
+        Loop(S)
+        MarkerLoop(S)
     end,
 
     update = function(ctx, data)
@@ -393,8 +392,8 @@ CP.Blocks.register(BLOCK, {
             local new = clues[i]
             -- gone, or a different clue under the same number (test restart): drop its zone and blip
             if not new or new.x ~= old.x or new.y ~= old.y or new.z ~= old.z or new.netId ~= old.netId then
-                dropZone(S, i)
-                dropBlip(S, 'c' .. i)
+                DropZone(S, i)
+                DropBlip(S, 'c' .. i)
             end
         end
         S.clues = clues
@@ -402,7 +401,7 @@ CP.Blocks.register(BLOCK, {
         local keep = {}
         for _, f in ipairs(S.fugitives) do keep['f' .. tostring(f.netId)] = true end
         for k in pairs(S.blips) do
-            if k:sub(1, 1) == 'f' and not keep[k] then dropBlip(S, k) end
+            if k:sub(1, 1) == 'f' and not keep[k] then DropBlip(S, k) end
         end
     end,
 
@@ -415,12 +414,12 @@ CP.Blocks.register(BLOCK, {
     end,
 
     stop = function(ctx)
-        local S = active[keyOf(ctx)]
-        if S then cleanup(S) end
+        local S = active[KeyOf(ctx)]
+        if S then Cleanup(S) end
     end,
 })
 
 AddEventHandler('onResourceStop', function(res)
     if res ~= GetCurrentResourceName() then return end
-    for _, S in pairs(active) do cleanup(S) end
+    for _, S in pairs(active) do Cleanup(S) end
 end)

@@ -1,118 +1,131 @@
 /* Supervisor UI · Live Missions (oversight slice). Only --cp-* variables. */
 
 .oversight-live-muted {
-  color: var(--cp-subtle);
+    color: var(--cp-subtle);
 }
 
 .oversight-live-list {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
 }
 
 .oversight-live-card__title {
-  display: inline-flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
 }
 
 .oversight-live-card__facts {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
-  padding: 10px 12px;
-  margin-bottom: 12px;
-  border-radius: var(--cp-radius-sm);
-  background: var(--cp-surface-2);
-  border: 1px solid var(--cp-border);
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    padding: 10px 12px;
+    margin-bottom: 12px;
+    border-radius: var(--cp-radius-sm);
+    background: var(--cp-surface-2);
+    border: 1px solid var(--cp-border);
 }
+
 .oversight-live-fact {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 5px;
-  min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 5px;
+    min-width: 0;
 }
+
 .oversight-live-fact__label {
-  font-size: var(--cp-fs-xs);
-  font-weight: 700;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-  color: var(--cp-subtle);
-  white-space: nowrap;
+    font-size: var(--cp-fs-xs);
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--cp-subtle);
+    white-space: nowrap;
 }
+
 .oversight-live-fact__value {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-weight: 650;
-  font-size: var(--cp-fs-md);
-  white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-weight: 650;
+    font-size: var(--cp-fs-md);
+    white-space: nowrap;
 }
 
 .oversight-live-people {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
-  gap: 6px 8px;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+    gap: 6px 8px;
 }
+
 .oversight-live-person {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 44px;
-  padding: 6px 8px 6px 10px;
-  border-radius: var(--cp-radius-sm);
-  border: 1px solid rgba(var(--cp-text-rgb), 0.06);
-  background: rgba(var(--cp-text-rgb), 0.025);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 44px;
+    padding: 6px 8px 6px 10px;
+    border-radius: var(--cp-radius-sm);
+    border: 1px solid rgba(var(--cp-text-rgb), 0.06);
+    background: rgba(var(--cp-text-rgb), 0.025);
 }
+
 .oversight-live-person.is-left {
-  opacity: 0.58;
+    opacity: 0.58;
 }
+
 .oversight-live-person__avatar {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: var(--cp-surface-3);
-  color: var(--cp-muted);
-  flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--cp-surface-3);
+    color: var(--cp-muted);
+    flex: none;
 }
+
 .oversight-live-person__who {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex: 1;
 }
+
 .oversight-live-person__name {
-  font-weight: 650;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+    font-weight: 650;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
+
 .oversight-live-person__sub {
-  font-size: var(--cp-fs-xs);
-  color: var(--cp-subtle);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+    font-size: var(--cp-fs-xs);
+    color: var(--cp-subtle);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
+
 .oversight-live-person__status {
-  display: inline-flex;
-  flex: none;
+    display: inline-flex;
+    flex: none;
 }
+
 .cp-btn.oversight-live-recall {
-  flex: none;
-  color: var(--cp-danger);
+    flex: none;
+    color: var(--cp-danger);
 }
+
 .cp-btn.oversight-live-recall:hover {
-  background: rgba(var(--cp-danger-rgb), 0.12);
+    background: rgba(var(--cp-danger-rgb), 0.12);
 }
+
 .oversight-live-recall-placeholder {
-  width: 0;
+    width: 0;
 }

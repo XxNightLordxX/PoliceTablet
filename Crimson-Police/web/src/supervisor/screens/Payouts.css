@@ -1,67 +1,122 @@
 /* Supervisor UI · Payouts (economy slice). Only --cp-* variables; classes prefixed economy-. */
 
 .economy-pay-rules {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
 }
-.economy-pay-rule {
-  display: flex;
-  gap: 10px;
-  align-items: flex-start;
-  padding: 10px 12px;
-  border-radius: var(--cp-radius);
-  border: 1px solid var(--cp-border);
-  background: var(--cp-surface);
-  color: var(--cp-accent-text);
-}
-.economy-pay-rule > div { min-width: 0; }
-.economy-pay-rule__title { font-size: var(--cp-fs-sm); font-weight: 700; color: var(--cp-text); }
-.economy-pay-rule__text { font-size: var(--cp-fs-xs); color: var(--cp-muted); line-height: 1.4; margin-top: 2px; }
 
-.economy-pay-type { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; }
-.economy-pay-type.is-locked { color: var(--cp-muted); }
-.economy-pay-amount { font-weight: 700; font-size: var(--cp-fs-md); }
-.economy-muted-num { color: var(--cp-muted); }
-.economy-pay-range { font-weight: 600; }
+.economy-pay-rule {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    padding: 10px 12px;
+    border-radius: var(--cp-radius);
+    border: 1px solid var(--cp-border);
+    background: var(--cp-surface);
+    color: var(--cp-accent-text);
+}
+
+.economy-pay-rule > div {
+    min-width: 0;
+}
+
+.economy-pay-rule__title {
+    font-size: var(--cp-fs-sm);
+    font-weight: 700;
+    color: var(--cp-text);
+}
+
+.economy-pay-rule__text {
+    font-size: var(--cp-fs-xs);
+    color: var(--cp-muted);
+    line-height: 1.4;
+    margin-top: 2px;
+}
+
+.economy-pay-type {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 700;
+}
+
+.economy-pay-type.is-locked {
+    color: var(--cp-muted);
+}
+
+.economy-pay-amount {
+    font-weight: 700;
+    font-size: var(--cp-fs-md);
+}
+
+.economy-muted-num {
+    color: var(--cp-muted);
+}
+
+.economy-pay-range {
+    font-weight: 600;
+}
 
 .economy-pay-cooldown {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 10px;
-  border-radius: var(--cp-radius-pill);
-  font-size: var(--cp-fs-sm);
-  font-weight: 600;
-  color: var(--cp-warning);
-  background: rgba(var(--cp-warning-rgb), 0.12);
-  border: 1px solid rgba(var(--cp-warning-rgb), 0.3);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px;
+    border-radius: var(--cp-radius-pill);
+    font-size: var(--cp-fs-sm);
+    font-weight: 600;
+    color: var(--cp-warning);
+    background: rgba(var(--cp-warning-rgb), 0.12);
+    border: 1px solid rgba(var(--cp-warning-rgb), 0.3);
 }
-.economy-pay-current { display: inline-flex; flex-direction: column; align-items: flex-end; gap: 1px; }
+
+.economy-pay-current {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 1px;
+}
+
 .economy-pay-current__who {
-  font-size: var(--cp-fs-xs);
-  font-weight: 500;
-  color: var(--cp-muted);
-  white-space: nowrap;
+    font-size: var(--cp-fs-xs);
+    font-weight: 500;
+    color: var(--cp-muted);
+    white-space: nowrap;
 }
 
-.economy-pay-footnote { margin: 0; font-size: var(--cp-fs-sm); color: var(--cp-subtle); }
+.economy-pay-footnote {
+    margin: 0;
+    font-size: var(--cp-fs-sm);
+    color: var(--cp-subtle);
+}
 
-.economy-pay-edit { display: flex; flex-direction: column; gap: 16px; }
+.economy-pay-edit {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
 .economy-pay-edit__facts {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-  padding: 12px 14px;
-  border-radius: var(--cp-radius);
-  background: var(--cp-surface-2);
-  border: 1px solid var(--cp-border);
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    padding: 12px 14px;
+    border-radius: var(--cp-radius);
+    background: var(--cp-surface-2);
+    border: 1px solid var(--cp-border);
 }
+
 .economy-pay-edit__note {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  font-size: var(--cp-fs-sm);
-  color: var(--cp-muted);
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: var(--cp-fs-sm);
+    color: var(--cp-muted);
 }
-.economy-pay-edit__note .cp-icon, .economy-pay-edit__note svg { flex: none; margin-top: 2px; }
+
+.economy-pay-edit__note .cp-icon,
+.economy-pay-edit__note svg {
+    flex: none;
+    margin-top: 2px;
+}

@@ -12,8 +12,9 @@ Checks:
   4. Locale: every CP.L('key') / t('key') / returned 'err.*' key exists in the merged locale;
      conflicting duplicate keys across parts; locales/en.json (the only file shared/locale.lua loads)
      exists and equals the merge of the parts (regenerate with --merge).
-  5. NUI build: web/dist/build-stamp.json (written by `npm run build`) matches the current sources, so the
-     shipped web/dist is the reviewed web/src (rebuild with `cd Crimson-Police/web && npm run build`).
+  5. NUI build: web/dist/build-stamp.json (written by `npm run build`) matches the current sources (web/src,
+     the build config and locales/parts/*.json), so the shipped web/dist is the reviewed web/src (rebuild with
+     `cd Crimson-Police/web && npm run build`). tools/check_all.sh also rebuilds and compares every file.
 """
 import json, os, re, sys, glob
 from collections import defaultdict
@@ -222,7 +223,7 @@ def nui_source_hash():
         for fn in fns:
             if fn != '.DS_Store': files.append(os.path.join(dp, fn))
     files += [os.path.join(web_dir, f) for f in ('index.html', 'package.json', 'tsconfig.json', 'vite.config.ts')]
-    files.append(os.path.join(RES, 'locales', 'parts', 'ui.json'))
+    files += glob.glob(os.path.join(RES, 'locales', 'parts', '*.json'))   # src/mocks/samples.ts bundles every part
     items = sorted((os.path.relpath(p, RES).replace(os.sep, '/'), p) for p in files)
     h = hashlib.sha256()
     for r, p in items:
@@ -239,8 +240,8 @@ else:
     except Exception:
         stamp = None
     if stamp != nui_source_hash():
-        problems['nui-build'].append('web/dist is stale (web/src or the build config changed since the last build): '
-                                     'run cd Crimson-Police/web && npm run build')
+        problems['nui-build'].append('web/dist is stale (web/src, the build config or locales/parts changed since the '
+                                     'last build): run cd Crimson-Police/web && npm run build')
 
 total = 0
 for cat, items in problems.items():

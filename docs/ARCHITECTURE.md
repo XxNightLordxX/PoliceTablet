@@ -1187,7 +1187,15 @@ interface RunResult { runId: string; missionLabel: string; missionType: string;
 
 ## 11. Verification (every slice must pass before it is done)
 
+`tools/check_all.sh` runs every check below in one command; `docs/TESTING.md` covers the set-up and how to
+read a failure.
+
 - `luac5.4 -p` on every Lua file it wrote.
+- `python3 tools/lint_fivem.py`: the FiveM pitfall rules (wrong-side natives, late `source`, client `os`/`io`,
+  unguarded focus release, raising callback awaits, orphan mode, `os.rename` answers, server `os.execute`,
+  CRIMSON_ARENA natives); deliberate uses and bugs awaiting their fix are listed in `tools/lint_baseline.txt`.
+- `python3 tools/restyle.py --check` lists no file: every Lua and web source is formatted to `docs/STYLE.md`
+  (`python3 tools/restyle.py <files>` formats them).
 - `cd Crimson-Police/web && npm run build` (tsc + vite) passes, for slices that touch web/.
 - SQL: every query string it wrote must run against the MariaDB test database (`mysql -uroot cp_test`,
   schema already applied) — test SELECTs with sample params.
@@ -1197,8 +1205,10 @@ interface RunResult { runId: string; missionLabel: string; missionType: string;
   `H.load('modules/x/server.lua')`, stub other modules' tables (`CP.Runs = {...}`) as needed,
   `H.eq/H.ok/H.near`, `H.sql(...)` to reset tables, `H.fire(event, src, ...)` / `H.callback(name, src, args)`,
   `H.exportsMock['sc-dispatch'] = { ... }`, `H.players[src] = { coords = vec3(...), ace = {...} }`, and
-  `return H` at the end. Specs run in separate processes; the database is rebuilt once per run.
-  Never leave a spec that fails.
+  `return H` at the end. Specs run in separate processes, two at a time (`--jobs=N`), each on its own copy
+  of the run database, which is rebuilt once per run. SQL `NOW()` is the spec's clock (`H.time` after
+  `H.boot`) in every storage mode. Never leave a spec that fails, and never make a check depend on a random
+  roll, the wall clock or the machine's time zone: the assertion counts are the same in every run and mode.
 - Storage modes (`CP_TEST_STORAGE`, or `lua5.4 tests/run.lua --storage=<mode>`); the suite must pass in all three:
   - `database` (default): MySQL and `H.sql` go to MariaDB.
   - `files`: `Config.Database.enabled = false`; the real modules/storage files load, every module query and `H.sql`

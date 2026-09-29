@@ -134,8 +134,16 @@ function errorText(err, query, parameters, includeParameters) {
   }\n${message}`;
 }
 
-const socketPath = process.env.CP_SHADOW_SOCKET || '/run/mysqld/mysqld.sock';
-const user = process.env.CP_SHADOW_USER || 'root';
+// The server the harness's mysql CLI talks to, from the variables the CLI reads (docs/TESTING.md): no
+// MYSQL_HOST (or 'localhost') means the local socket, like the CLI; any other host means TCP.
+const env = process.env;
+const host = env.CP_SHADOW_HOST || env.MYSQL_HOST || '';
+const server = host && host !== 'localhost'
+  ? { host, port: Number(env.CP_SHADOW_PORT || env.MYSQL_TCP_PORT || 3306) }
+  : { socketPath: env.CP_SHADOW_SOCKET || env.MYSQL_UNIX_PORT || '/run/mysqld/mysqld.sock' };
+const password = env.CP_SHADOW_PASSWORD ?? env.MYSQL_PWD;
+if (password !== undefined) server.password = password;
+const user = env.CP_SHADOW_USER || 'root';
 const conns = new Map();
 let admin = null;
 
@@ -144,7 +152,7 @@ async function conn(db) {
   if (c) return c;
   const flags = ['CONNECT_WITH_DB'];   // oxmysql getConnectionOptions
   c = await mysql.createConnection({
-    socketPath, user, database: db,
+    ...server, user, database: db,
     connectTimeout: 60000, trace: false, supportBigNumbers: true, jsonStrings: true,
     typeCast, namedPlaceholders: false, flags,
   });
@@ -156,7 +164,7 @@ async function handle(req) {
   if (req.op === 'reset') {
     const c = conns.get(req.db);
     if (c) { conns.delete(req.db); await c.end().catch(() => {}); }
-    if (!admin) admin = await mysql.createConnection({ socketPath, user });
+    if (!admin) admin = await mysql.createConnection({ ...server, user });
     const name = String(req.db).replace(/`/g, '');
     await admin.query(`DROP DATABASE IF EXISTS \`${name}\``);
     await admin.query(`CREATE DATABASE \`${name}\` CHARACTER SET utf8mb4`);
@@ -165,7 +173,7 @@ async function handle(req) {
   if (req.op === 'drop') {
     const c = conns.get(req.db);
     if (c) { conns.delete(req.db); await c.end().catch(() => {}); }
-    if (!admin) admin = await mysql.createConnection({ socketPath, user });
+    if (!admin) admin = await mysql.createConnection({ ...server, user });
     await admin.query(`DROP DATABASE IF EXISTS \`${String(req.db).replace(/`/g, '')}\``);
     return { ok: true };
   }

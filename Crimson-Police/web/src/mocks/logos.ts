@@ -1,4 +1,5 @@
 // Placeholder department logos for browser mode (inline SVG data URIs; no external URLs).
+
 const svg = (s: string) => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(s)}`;
 
 export const SAST_LOGO = svg(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
@@ -16,5 +17,5 @@ export const FIB_LOGO = svg(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 
 <text x="256" y="274" text-anchor="middle" font-family="Georgia, serif" font-weight="700" font-size="74" fill="#1c2541">FIB</text>
 </svg>`);
 
-/** A URL that fails to load, to exercise the "no watermark, no broken image" path. */
+// A URL that fails to load, to exercise the "no watermark, no broken image" path.
 export const BROKEN_LOGO = './logos/does-not-exist.png';

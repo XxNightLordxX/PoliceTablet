@@ -1,4 +1,5 @@
--- tests/shared_spec.lua · the shared layer, the migrations splitter and the harness itself.
+-- The shared layer, the migrations splitter and the harness itself.
+
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'server' })
 
@@ -65,10 +66,13 @@ for _, s in ipairs(stmts) do H.ok(not s:find('%-%-'), 'no comments left in state
 
 -- the harness talks to MariaDB
 H.sql('DELETE FROM cp_officers')
-MySQL.insert.await('INSERT INTO cp_officers (citizenid, callsign, department) VALUES (?, ?, ?)', { 'T1', "O'Neil", 'sast' })
-H.eq(MySQL.scalar.await('SELECT callsign FROM cp_officers WHERE citizenid = ?', { 'T1' }), "O'Neil", 'quote escaping')
-H.eq(MySQL.update.await('UPDATE cp_officers SET xp = xp + ? WHERE citizenid = ?', { 5, 'T1' }), 1, 'update affected rows')
-local row = MySQL.single.await('SELECT xp, UNIX_TIMESTAMP(NOW()) AS now_ts FROM cp_officers WHERE citizenid = ?', { 'T1' })
+MySQL.insert.await('INSERT INTO cp_officers (citizenid, callsign, department) VALUES (?, ?, ?)',
+    { 'T1', 'O\'Neil', 'sast' })
+H.eq(MySQL.scalar.await('SELECT callsign FROM cp_officers WHERE citizenid = ?', { 'T1' }), 'O\'Neil', 'quote escaping')
+H.eq(MySQL.update.await('UPDATE cp_officers SET xp = xp + ? WHERE citizenid = ?', { 5, 'T1' }), 1,
+    'update affected rows')
+local row = MySQL.single.await('SELECT xp, UNIX_TIMESTAMP(NOW()) AS now_ts FROM cp_officers WHERE citizenid = ?',
+    { 'T1' })
 H.eq(row.xp, 5, 'single row')
 H.ok(row.now_ts > 1700000000, 'unix timestamp')
 

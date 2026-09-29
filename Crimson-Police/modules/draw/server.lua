@@ -1,52 +1,4 @@
--- modules/draw/server.lua · CP.Draw: mission pools, the random draw, locations and the Mission Board.
---
--- Owns
---   * the pool of a mission type for an officer or unit: published, enabled, of that type, open to
---     every member's department, supporting the unit's size, off per-mission cooldown for every member
---   * the random draw with the no-repeat rules (cp_mission_runs history: the last completed or
---     abandoned missions of that type per citizenid, union over the unit; Config.Draw.avoidLast, and
---     avoidLastLarge with largePool+ missions in the pool; a pool of one may repeat)
---   * location picking (reserved spots skipped; spots with a non-participant player within
---     Config.Draw.playerClearance skipped while another spot is free; server-side ped coords; players
---     in Crimson-Arena are ignored, docs/CRIMSON_ARENA.md rule 7) and the
---     location reservations (several holders per spot are allowed so a test run can still reserve)
---   * the Mission Board data (BoardData, ARCHITECTURE §9.4) and the accept of a mission type
---
--- Public API (server)
---   CP.Draw.pool(missionType, members) -> { def, ... }, reasonKey|nil, info   members = officers (§3.1) or srcs
---       reasonKey: 'board.locked_empty' | 'board.locked_empty_solo' | 'board.locked_mission_cooldown'
---       info = { cooldownUntil = ts|nil } (earliest per-mission cooldown end when that emptied the pool)
---   CP.Draw.draw(missionType, members, opts) -> def, locationIndex | nil, errKey
---       opts = { rng = CP.U.rng(...), participants = { src... } }; errKeys err.pool_empty,
---       err.pool_cooldown, err.no_location
---   CP.Draw.pickLocation(def, participantSrcs, rng, opts) -> index|nil     opts = { exclude = { [index] = true } }
---   CP.Draw.reserve(runId, missionId, index) -> wasFree
---   CP.Draw.release(runId) -> boolean
---   CP.Draw.isReserved(missionId, index) -> boolean
---   CP.Draw.recordLast(citizenid, missionType, missionId)   (CP.Runs: a completed or abandoned row was written)
---   CP.Draw.boardCards(src) -> BoardData | nil, errKey
--- Net
---   callback 'getMissionTypes' -> BoardData
---   action 'server:acceptType' (payload = a Config.MissionTypes key, or 'weekly_boss') -> { runId }
---       leader only; every member must be an officer (CP.Access.getOfficer), not be in Crimson-Arena
---       (CP.Alerts.inArena: foreign crimsonArena flag or routing bucket <> 0, docs/CRIMSON_ARENA.md rule 5;
---       err.in_arena), have no active run, not be on a real call, be under the hourly
---       cap and off the type cooldown; server caps (CP.Runs.capsOk); refused while a Cross-Department
---       Mission is active; the Weekly Boss also needs CP.Events.bossAvailable for every member.
---       Then CP.Units.lock(unit), the draw, CP.Runs.create (the unit is unlocked again on failure).
--- Internal (same slice): CP.Draw._eligibility(def, officers, size?, now?) -> ok, why, untilTs, officer
---
--- Contract interpretations (details in docs/notes/engine_a.md)
---   * history = distinct missions of the type with state completed/abandoned (failed rows and the Weekly
---     Boss never count); a unit whose histories cover the whole pool relaxes to avoidLast, then to "not the
---     unit's most recent mission", then the whole pool; no fallback to avoided missions for locations
---   * board: points = best CP.Scoring.P in the pool, cash = CP.Cash.range(key, officers) (fallback from
---     payouts x tier); locked priority member unavailable > type cooldown > hourly cap > empty pool
---   * the Weekly Boss is not blocked by the Tactical type cooldown (it has no type), everything else applies
---   * capsOk failures are reported as err.server_busy; CP.Access / CP.Runs.create error keys pass through
---   * after CP.Units.lock the unit must still hold exactly the members that were checked (an invite accepted
---     while the checks yielded): otherwise err.busy, unlocked, and the leader accepts again
---   * BoardData extras: serverTime (os.time) and todMultiplier (Config.Events.todMultiplier)
+-- CP.Draw: mission pools, the random draw, locations and the Mission Board.
 
 CP.Draw = CP.Draw or {}
 local Draw = CP.Draw
@@ -65,8 +17,11 @@ local inFlight = {}    -- inFlight[src] = true while an accept for that player i
 local memSeq = 0
 local drawRng = nil
 
--- ── helpers ─────────────────────────────────────────────────────────────────
-local function rng()
+-- ============================================================================
+--                                   HELPERS
+-- ============================================================================
+
+local function Rng()
     if not drawRng then
         local seed = os.time() ~ (GetGameTimer and GetGameTimer() or 0) ~ CP.U.hash(tostring({}))
         drawRng = CP.U.rng(seed & 0x7FFFFFFF)
@@ -74,7 +29,7 @@ local function rng()
     return drawRng
 end
 
-local function safe(fn, ...)
+local function Safe(fn, ...)
     if type(fn) ~= 'function' then return false, nil end
     local ok, a, b, c = pcall(fn, ...)
     if not ok then
@@ -84,53 +39,55 @@ local function safe(fn, ...)
     return true, a, b, c
 end
 
-local function getOfficer(src)
+local function GetOfficer(src)
     if not (CP.Access and CP.Access.getOfficer) then return nil, 'err.not_police' end
     return CP.Access.getOfficer(src)
 end
 
-local function unitOf(src)
+local function UnitOf(src)
     if not (CP.Units and CP.Units.unitOf) then return nil end
-    local _, unit = safe(CP.Units.unitOf, src)
+    local _, unit = Safe(CP.Units.unitOf, src)
     return type(unit) == 'table' and unit or nil
 end
 
-local function unitMembers(src)
+local function UnitMembers(src)
     if CP.Units and CP.Units.members then
-        local _, list = safe(CP.Units.members, src)
+        local _, list = Safe(CP.Units.members, src)
         if type(list) == 'table' and #list > 0 then return list end
     end
     return { src }
 end
 
-local function isLeader(src)
-    if not unitOf(src) then return true end   -- a solo officer leads themselves
+local function IsLeader(src)
+    if not UnitOf(src) then
+        return true
+    end -- a solo officer leads themselves
     if not (CP.Units and CP.Units.isLeader) then return false end
-    local _, leader = safe(CP.Units.isLeader, src)
+    local _, leader = Safe(CP.Units.isLeader, src)
     return leader == true
 end
 
-local function operationLocked()
+local function OperationLocked()
     if not (CP.Operations and CP.Operations.isLocked) then return false end
-    local _, locked = safe(CP.Operations.isLocked)
+    local _, locked = Safe(CP.Operations.isLocked)
     return locked == true
 end
 
-local function isOnCall(src)
+local function IsOnCall(src)
     if not (CP.Calls and CP.Calls.isOnCall) then return false end
-    local _, onCall = safe(CP.Calls.isOnCall, src)
+    local _, onCall = Safe(CP.Calls.isOnCall, src)
     return onCall == true
 end
 
 -- docs/CRIMSON_ARENA.md rules 5 and 7: a foreign crimsonArena flag or a routing bucket other than 0.
 -- CP.Alerts.inArena is the gate; the fallbacks only apply while modules/alerts is not loaded.
-local function inArena(src)
+local function InArena(src)
     if CP.Alerts and CP.Alerts.inArena then
-        local _, res = safe(CP.Alerts.inArena, src)
+        local _, res = Safe(CP.Alerts.inArena, src)
         return res == true
     end
     if CP.Alerts and CP.Alerts.foreignFlag then
-        local _, foreign = safe(CP.Alerts.foreignFlag, src)
+        local _, foreign = Safe(CP.Alerts.foreignFlag, src)
         if foreign == true then return true end
     end
     if GetPlayerRoutingBucket then
@@ -140,29 +97,29 @@ local function inArena(src)
     return false
 end
 
-local function onMission(src)
+local function OnMission(src)
     if not CP.Runs then return false end
     if CP.Runs.isOnMission then
-        local _, on = safe(CP.Runs.isOnMission, src)
+        local _, on = Safe(CP.Runs.isOnMission, src)
         if on then return true end
     end
     if CP.Runs.getBySrc then
-        local _, run = safe(CP.Runs.getBySrc, src)
+        local _, run = Safe(CP.Runs.getBySrc, src)
         if run then return true end
     end
     return false
 end
 
-local function capsOk(missionType)
+local function CapsOk(missionType)
     if not (CP.Runs and CP.Runs.capsOk) then return true end
-    local ok, capOk = safe(CP.Runs.capsOk, missionType)
+    local ok, capOk = Safe(CP.Runs.capsOk, missionType)
     if not ok then return true end
     return capOk ~= false
 end
 
-local function cooldownsOf(citizenid)
+local function CooldownsOf(citizenid)
     if CP.Runs and CP.Runs.cooldowns then
-        local _, cd = safe(CP.Runs.cooldowns, citizenid)
+        local _, cd = Safe(CP.Runs.cooldowns, citizenid)
         if type(cd) == 'table' then
             cd.types = type(cd.types) == 'table' and cd.types or {}
             cd.missions = type(cd.missions) == 'table' and cd.missions or {}
@@ -172,36 +129,36 @@ local function cooldownsOf(citizenid)
     return { types = {}, missions = {} }
 end
 
-local function completionsLastHour(citizenid)
+local function CompletionsLastHour(citizenid)
     if not (CP.Runs and CP.Runs.completionsLastHour) then return 0 end
-    local _, n = safe(CP.Runs.completionsLastHour, citizenid)
+    local _, n = Safe(CP.Runs.completionsLastHour, citizenid)
     return tonumber(n) or 0
 end
 
-local function hourlyCap()
+local function HourlyCap()
     return tonumber(Config.Limits and Config.Limits.maxCompletionsHour) or 8
 end
 
-local function toOfficers(members)
+local function ToOfficers(members)
     local out = {}
     for _, m in ipairs(members or {}) do
         if type(m) == 'table' and m.citizenid then
             out[#out + 1] = m
         elseif tonumber(m) then
-            local o = getOfficer(tonumber(m))
+            local o = GetOfficer(tonumber(m))
             if o then out[#out + 1] = o end
         end
     end
     return out
 end
 
-local function srcsOf(officers)
+local function SrcsOf(officers)
     local out = {}
     for _, o in ipairs(officers) do out[#out + 1] = o.src end
     return out
 end
 
-local function typeKeysByPoints()
+local function TypeKeysByPoints()
     local keys = CP.U.keys(Config.MissionTypes or {})
     table.sort(keys, function(a, b)
         local pa = tonumber(Config.MissionTypes[a].points) or 0
@@ -212,14 +169,16 @@ local function typeKeysByPoints()
     return keys
 end
 
-local function typeLabel(key)
+local function TypeLabel(key)
     local t = Config.MissionTypes and Config.MissionTypes[key]
     return (t and t.label) or tostring(key)
 end
 
--- ── eligibility and pool ────────────────────────────────────────────────────
+-- ============================================================================
+--                             ELIGIBILITY AND POOL
+-- ============================================================================
 -- ok, why ('disabled'|'size'|'department'|'cooldown'), untilTs (cooldown), officer (who blocks it)
-local function eligibility(def, officers, size, now)
+local function Eligibility(def, officers, size, now)
     now = now or os.time()
     size = size or #officers
     if not (CP.Missions and CP.Missions.isEnabled and CP.Missions.isEnabled(def.id)) then return false, 'disabled' end
@@ -231,23 +190,23 @@ local function eligibility(def, officers, size, now)
     end
     local untilTs, who
     for _, o in ipairs(officers) do
-        local u = tonumber(cooldownsOf(o.citizenid).missions[def.id])
+        local u = tonumber(CooldownsOf(o.citizenid).missions[def.id])
         if u and u > now and (not untilTs or u > untilTs) then untilTs, who = u, o end
     end
     if untilTs then return false, 'cooldown', untilTs, who end
     return true
 end
-Draw._eligibility = eligibility
+Draw._eligibility = Eligibility
 
 function Draw.pool(missionType, members)
-    local officers = toOfficers(members)
+    local officers = ToOfficers(members)
     local size = math.max(#(members or {}), #officers)
     if size < 1 then size = 1 end
     local list, cooldownUntil = {}, nil
     local byType = (CP.Missions and CP.Missions.byType and CP.Missions.byType(missionType)) or {}
     local now = os.time()
     for _, def in ipairs(byType) do
-        local ok, why, untilTs = eligibility(def, officers, size, now)
+        local ok, why, untilTs = Eligibility(def, officers, size, now)
         if ok then
             list[#list + 1] = def
         elseif why == 'cooldown' and untilTs and (not cooldownUntil or untilTs < cooldownUntil) then
@@ -266,8 +225,11 @@ function Draw.pool(missionType, members)
     return list, nil, {}
 end
 
--- ── history (no-repeat) ─────────────────────────────────────────────────────
-local function pruneRecent(now)
+-- ============================================================================
+--                             HISTORY (no-repeat)
+-- ============================================================================
+
+local function PruneRecent(now)
     now = now or os.time()
     for cid, byType in pairs(recent) do
         for t, list in pairs(byType) do
@@ -281,10 +243,10 @@ local function pruneRecent(now)
 end
 
 -- Distinct missions of that type the officer last completed or abandoned, newest first.
-local function historyFor(citizenid, missionType)
+local function HistoryFor(citizenid, missionType)
     CP.Migrations.ready()
     local rows = MySQL.query.await(
-        "SELECT mission_id, UNIX_TIMESTAMP(MAX(created_at)) AS last_ts, MAX(id) AS last_id FROM cp_mission_runs WHERE citizenid = ? AND mission_type = ? AND state IN ('completed', 'abandoned') AND mission_id <> ? GROUP BY mission_id",
+        'SELECT mission_id, UNIX_TIMESTAMP(MAX(created_at)) AS last_ts, MAX(id) AS last_id FROM cp_mission_runs WHERE citizenid = ? AND mission_type = ? AND state IN (\'completed\', \'abandoned\') AND mission_id <> ? GROUP BY mission_id',
         { citizenid, missionType, BOSS_ID }) or {}
     local byId = {}
     for _, r in ipairs(rows) do
@@ -326,7 +288,10 @@ function Draw.recordLast(citizenid, missionType, missionId)
     while #list > 5 do table.remove(list) end
 end
 
--- ── locations ───────────────────────────────────────────────────────────────
+-- ============================================================================
+--                                  LOCATIONS
+-- ============================================================================
+
 function Draw.reserve(runId, missionId, index)
     index = tonumber(index)
     if runId == nil or type(missionId) ~= 'string' or not index then return false end
@@ -366,11 +331,11 @@ end
 
 -- Coordinates of every player who is not a participant (server-side ped coords). Players in
 -- Crimson-Arena (foreign flag or another routing bucket) are ignored (docs/CRIMSON_ARENA.md rule 7).
-local function otherPlayerCoords(participants)
+local function OtherPlayerCoords(participants)
     local out = {}
     for _, id in ipairs(GetPlayers() or {}) do
         local s = tonumber(id)
-        if s and not participants[s] and not inArena(s) then
+        if s and not participants[s] and not InArena(s) then
             local ped = GetPlayerPed(s)
             if ped and ped ~= 0 then
                 local c = GetEntityCoords(ped)
@@ -384,7 +349,7 @@ end
 function Draw.pickLocation(def, participantSrcs, rngObj, opts)
     opts = opts or {}
     if type(def) ~= 'table' or type(def.locations) ~= 'table' or #def.locations == 0 then return nil end
-    local r = rngObj or rng()
+    local r = rngObj or Rng()
     local reserveOn = not (Config.Limits and Config.Limits.reserveLocations == false)
     local participants = {}
     for _, s in ipairs(participantSrcs or {}) do
@@ -399,7 +364,7 @@ function Draw.pickLocation(def, participantSrcs, rngObj, opts)
     if #free == 0 then return nil end
     local clearance = tonumber(Config.Draw and Config.Draw.playerClearance) or 0
     if clearance > 0 and #free > 1 then
-        local others = otherPlayerCoords(participants)
+        local others = OtherPlayerCoords(participants)
         if #others > 0 then
             local clear = {}
             for _, i in ipairs(free) do
@@ -418,10 +383,13 @@ function Draw.pickLocation(def, participantSrcs, rngObj, opts)
     return index
 end
 
--- ── draw ────────────────────────────────────────────────────────────────────
+-- ============================================================================
+--                                     DRAW
+-- ============================================================================
+
 function Draw.draw(missionType, members, opts)
     opts = opts or {}
-    local officers = toOfficers(members)
+    local officers = ToOfficers(members)
     local list, reason = Draw.pool(missionType, members)
     if #list == 0 then
         return nil, reason == 'board.locked_mission_cooldown' and 'err.pool_cooldown' or 'err.pool_empty'
@@ -436,7 +404,7 @@ function Draw.draw(missionType, members, opts)
     end
     if #list > 1 and k > 0 then
         local hist = {}
-        for i, o in ipairs(officers) do hist[i] = historyFor(o.citizenid, missionType) end
+        for i, o in ipairs(officers) do hist[i] = HistoryFor(o.citizenid, missionType) end
         local function lastN(n)
             local set = {}
             for _, h in ipairs(hist) do
@@ -457,15 +425,17 @@ function Draw.draw(missionType, members, opts)
             local latest
             for _, h in ipairs(hist) do
                 local e = h[1]
-                if e and (not latest or e.at > latest.at or (e.at == latest.at and e.seq > latest.seq)) then latest = e end
+                if e and (not latest or e.at > latest.at or (e.at == latest.at and e.seq > latest.seq)) then
+                    latest = e
+                end
             end
             if latest then candidates = without({ [latest.id] = true }) end
         end
         if #candidates == 0 then candidates = list end
     end
 
-    local r = opts.rng or rng()
-    local participants = opts.participants or srcsOf(officers)
+    local r = opts.rng or Rng()
+    local participants = opts.participants or SrcsOf(officers)
     for _, def in ipairs(r:shuffle(candidates)) do
         local index = Draw.pickLocation(def, participants, r, opts)
         if index then
@@ -476,10 +446,13 @@ function Draw.draw(missionType, members, opts)
     return nil, 'err.no_location'
 end
 
--- ── Mission Board ───────────────────────────────────────────────────────────
-local function cardCash(key, officers, list, size)
+-- ============================================================================
+--                                MISSION BOARD
+-- ============================================================================
+
+local function CardCash(key, officers, list, size)
     if CP.Cash and CP.Cash.range then
-        local ok, lo, hi = safe(CP.Cash.range, key, officers)
+        local ok, lo, hi = Safe(CP.Cash.range, key, officers)
         if ok and type(lo) == 'number' and type(hi) == 'number' then
             return { math.floor(lo + 0.5), math.floor(hi + 0.5) }
         end
@@ -493,7 +466,7 @@ local function cardCash(key, officers, list, size)
     for _, def in ipairs(list) do
         local base
         if CP.Payouts and CP.Payouts.baseFor then
-            local ok, b = safe(CP.Payouts.baseFor, def)
+            local ok, b = Safe(CP.Payouts.baseFor, def)
             if ok and type(b) == 'number' then base = b end
         end
         if not base then
@@ -507,12 +480,12 @@ local function cardCash(key, officers, list, size)
     return { CP.U.round(lo * tierCash), CP.U.round(hi * tierCash * modCash) }
 end
 
-local function cardPoints(key, list)
+local function CardPoints(key, list)
     local best
     for _, def in ipairs(list) do
         local p
         if CP.Scoring and CP.Scoring.P then
-            local ok, v = safe(CP.Scoring.P, def)
+            local ok, v = Safe(CP.Scoring.P, def)
             if ok and type(v) == 'number' then p = v end
         end
         if not p then
@@ -524,38 +497,38 @@ local function cardPoints(key, list)
     return math.floor(best or tonumber(Config.MissionTypes[key].points) or 0)
 end
 
-local function typeCooldown(officers, key, now)
+local function TypeCooldown(officers, key, now)
     local untilTs, who
     for _, o in ipairs(officers) do
-        local u = tonumber(cooldownsOf(o.citizenid).types[key])
+        local u = tonumber(CooldownsOf(o.citizenid).types[key])
         if u and u > now and (not untilTs or u > untilTs) then untilTs, who = u, o end
     end
     return untilTs, who
 end
 
-local function hourlyBlocked(officers)
-    local max = hourlyCap()
+local function HourlyBlocked(officers)
+    local max = HourlyCap()
     for _, o in ipairs(officers) do
-        if completionsLastHour(o.citizenid) >= max then return o end
+        if CompletionsLastHour(o.citizenid) >= max then return o end
     end
     return nil
 end
 
 function Draw.boardCards(src)
-    local viewer, errKey = getOfficer(src)
+    local viewer, errKey = GetOfficer(src)
     if not viewer then return nil, errKey or 'err.not_police' end
 
-    local srcs = unitMembers(src)
+    local srcs = UnitMembers(src)
     local size = #srcs
     local officers, missing = {}, false
     for _, m in ipairs(srcs) do
-        local o = (m == src) and viewer or getOfficer(m)
+        local o = (m == src) and viewer or GetOfficer(m)
         if o then officers[#officers + 1] = o else missing = true end
     end
 
     local activeRunId = nil
     if CP.Runs and CP.Runs.getBySrc then
-        local _, run = safe(CP.Runs.getBySrc, src)
+        local _, run = Safe(CP.Runs.getBySrc, src)
         if type(run) == 'table' then activeRunId = run.id end
     end
 
@@ -563,7 +536,7 @@ function Draw.boardCards(src)
         cards = {},
         boss = nil,
         operation = nil,
-        unit = { size = size, isLeader = isLeader(src) },
+        unit = { size = size, isLeader = IsLeader(src) },
         activeRunId = activeRunId,
         -- Extras (web/src/types/run_ui.ts): the server clock for the locked.until countdowns and the Type
         -- of the Day multiplier the card texts show.
@@ -572,9 +545,9 @@ function Draw.boardCards(src)
     }
 
     -- While a Cross-Department Mission is active the board shows only its card.
-    if operationLocked() then
+    if OperationLocked() then
         if CP.Operations.boardCard then
-            local _, card = safe(CP.Operations.boardCard, src)
+            local _, card = Safe(CP.Operations.boardCard, src)
             data.operation = type(card) == 'table' and card or nil
         end
         return data
@@ -584,48 +557,56 @@ function Draw.boardCards(src)
     local tod = CP.Events and CP.Events.typeOfTheDay and CP.Events.typeOfTheDay() or nil
     local onCall = false
     for _, m in ipairs(srcs) do
-        if isOnCall(m) then onCall = true; break end
+        if IsOnCall(m) then onCall = true; break end
     end
-    local hourlyWho = hourlyBlocked(officers)
+    local hourlyWho = HourlyBlocked(officers)
 
-    for _, key in ipairs(typeKeysByPoints()) do
-        local label = typeLabel(key)
+    for _, key in ipairs(TypeKeysByPoints()) do
+        local label = TypeLabel(key)
         local list, reasonKey, info = Draw.pool(key, missing and srcs or officers)
         local card = {
             key = key,
             label = label,
-            points = cardPoints(key, list),
-            cash = cardCash(key, officers, list, size),
+            points = CardPoints(key, list),
+            cash = CardCash(key, officers, list, size),
             pool = #list,
             mode = size > 1 and 'unit' or 'solo',
             locked = nil,
-            busy = not capsOk(key),
+            busy = not CapsOk(key),
             onCall = onCall,
             typeOfTheDay = tod == key,
         }
-        local cdUntil, cdWho = typeCooldown(officers, key, now)
+        local cdUntil, cdWho = TypeCooldown(officers, key, now)
         if missing then
             card.locked = { reason = CP.L('board.member_unavailable') }
         elseif cdUntil then
             if cdWho.src == src then
                 card.locked = { reason = CP.L('board.locked_cooldown', { type = label }), ['until'] = cdUntil }
             else
-                card.locked = { reason = CP.L('board.locked_cooldown_member', { type = label, name = cdWho.name or '?' }), ['until'] = cdUntil }
+                card.locked = {
+                    reason = CP.L('board.locked_cooldown_member', { type = label, name = cdWho.name or '?' }),
+                    ['until'] = cdUntil,
+                }
             end
         elseif hourlyWho then
             if hourlyWho.src == src then
-                card.locked = { reason = CP.L('board.locked_hourly', { max = hourlyCap() }) }
+                card.locked = { reason = CP.L('board.locked_hourly', { max = HourlyCap() }) }
             else
-                card.locked = { reason = CP.L('board.locked_hourly_member', { name = hourlyWho.name or '?', max = hourlyCap() }) }
+                card.locked = {
+                    reason = CP.L('board.locked_hourly_member', { name = hourlyWho.name or '?', max = HourlyCap() }),
+                }
             end
         elseif #list == 0 then
-            card.locked = { reason = CP.L(reasonKey, { type = label, size = size }), ['until'] = info and info.cooldownUntil or nil }
+            card.locked = {
+                reason = CP.L(reasonKey, { type = label, size = size }),
+                ['until'] = info and info.cooldownUntil or nil,
+            }
         end
         data.cards[#data.cards + 1] = card
     end
 
     if CP.Events and CP.Events.bossCard then
-        local _, boss = safe(CP.Events.bossCard, src)
+        local _, boss = Safe(CP.Events.bossCard, src)
         data.boss = type(boss) == 'table' and boss or nil
     end
     return data
@@ -635,8 +616,11 @@ CP.Net.callback('getMissionTypes', function(src)
     return Draw.boardCards(src)
 end, { rate = 4 })
 
--- ── accept ──────────────────────────────────────────────────────────────────
-local function parseType(payload)
+-- ============================================================================
+--                                    ACCEPT
+-- ============================================================================
+
+local function ParseType(payload)
     if type(payload) == 'table' then payload = payload.missionType or payload.type end
     if type(payload) ~= 'string' or #payload == 0 or #payload > 32 then return nil end
     if payload == BOSS_KEY then return payload end
@@ -644,22 +628,22 @@ local function parseType(payload)
     return nil
 end
 
-local function unlockUnit(unit)
-    if unit and CP.Units and CP.Units.unlock then safe(CP.Units.unlock, unit) end
+local function UnlockUnit(unit)
+    if unit and CP.Units and CP.Units.unlock then Safe(CP.Units.unlock, unit) end
 end
 
-local function accept(src, typeKey)
-    local leader, errKey = getOfficer(src)
+local function Accept(src, typeKey)
+    local leader, errKey = GetOfficer(src)
     if not leader then return false, errKey or 'err.not_police' end
 
-    local unit = unitOf(src)
+    local unit = UnitOf(src)
     if unit then
-        if not isLeader(src) then return false, 'err.not_leader' end
+        if not IsLeader(src) then return false, 'err.not_leader' end
         if unit.locked then return false, 'err.unit_locked' end
     end
-    local srcs = unitMembers(src)
+    local srcs = UnitMembers(src)
     if #srcs > (tonumber(Config.Limits and Config.Limits.maxUnitSize) or 4) then return false, 'err.unit_too_large' end
-    if operationLocked() then return false, 'err.operation_locked' end
+    if OperationLocked() then return false, 'err.operation_locked' end
 
     local isBoss = typeKey == BOSS_KEY
     local missionType = isBoss and 'tactical' or typeKey
@@ -668,25 +652,27 @@ local function accept(src, typeKey)
     local officers = {}
     for _, m in ipairs(srcs) do
         local o = leader
-        if m ~= src then o = getOfficer(m) end
+        if m ~= src then o = GetOfficer(m) end
         if not o then return false, 'err.member_unavailable' end
         officers[#officers + 1] = o
     end
 
-    local max = hourlyCap()
+    local max = HourlyCap()
     for _, o in ipairs(officers) do
         local own = o.src == src
-        if inArena(o.src) then return false, 'err.in_arena' end
-        if onMission(o.src) then return false, own and 'err.already_on_run' or 'err.member_on_run' end
-        if isOnCall(o.src) then return false, own and 'err.on_call' or 'err.member_on_call' end
-        if completionsLastHour(o.citizenid) >= max then return false, own and 'err.hourly_cap' or 'err.member_hourly_cap' end
+        if InArena(o.src) then return false, 'err.in_arena' end
+        if OnMission(o.src) then return false, own and 'err.already_on_run' or 'err.member_on_run' end
+        if IsOnCall(o.src) then return false, own and 'err.on_call' or 'err.member_on_call' end
+        if CompletionsLastHour(o.citizenid) >= max then
+            return false, own and 'err.hourly_cap' or 'err.member_hourly_cap'
+        end
         if not isBoss then
-            local u = tonumber(cooldownsOf(o.citizenid).types[missionType])
+            local u = tonumber(CooldownsOf(o.citizenid).types[missionType])
             if u and u > now then return false, own and 'err.type_cooldown' or 'err.member_type_cooldown' end
         end
     end
 
-    if not capsOk(missionType) then return false, 'err.server_busy' end
+    if not CapsOk(missionType) then return false, 'err.server_busy' end
 
     if isBoss then
         if not (CP.Events and CP.Events.bossAvailable) then return false, 'err.boss_unavailable' end
@@ -700,24 +686,24 @@ local function accept(src, typeKey)
     end
 
     -- Invites close now: the draw depends on the unit's size and every member's cooldowns.
-    if unit and CP.Units and CP.Units.lock then safe(CP.Units.lock, unit) end
+    if unit and CP.Units and CP.Units.lock then Safe(CP.Units.lock, unit) end
     local function fail(key)
-        unlockUnit(unit)
+        UnlockUnit(unit)
         return false, key
     end
     -- The checks above may yield (database lookups): an invite accepted meanwhile would put an officer in
     -- the locked unit who is not on the run and was never checked (docs/notes/teams.md). The unit must still
     -- be exactly the members that were checked; otherwise the leader tries again.
     if unit then
-        local now2 = unitMembers(src)
+        local now2 = UnitMembers(src)
         local same = #now2 == #srcs
         if same then
             local set = {}
             for _, m in ipairs(srcs) do set[m] = true end
-            for _, m in ipairs(now2) do if not set[m] then same = false; break end end
+            for _, m in ipairs(now2) do if not set[m] then same = false break end end
         end
         -- (a forming unit, leader + pending invites, dissolves at lock: then unitOf is nil and members { src })
-        local after = unitOf(src)
+        local after = UnitOf(src)
         if after ~= nil and after ~= unit then same = false end
         if not same then
             CP.log(TAG, 'unit of %s changed during the accept; refused', tostring(src))
@@ -729,9 +715,9 @@ local function accept(src, typeKey)
     if isBoss then
         def = CP.Missions and CP.Missions.get(BOSS_ID)
         if not def then return fail('err.boss_unavailable') end
-        local ok, why = eligibility(def, officers, #officers, now)
+        local ok, why = Eligibility(def, officers, #officers, now)
         if not ok then return fail(why == 'cooldown' and 'err.boss_cooldown' or 'err.boss_not_eligible') end
-        index = Draw.pickLocation(def, srcs, rng())
+        index = Draw.pickLocation(def, srcs, Rng())
         if not index then return fail('err.no_location') end
     else
         local second
@@ -761,26 +747,27 @@ local function accept(src, typeKey)
     end
     if type(run) ~= 'table' then return fail(createErr or 'err.run_create_failed') end
     if run.id and not byHolder[run.id] then Draw.reserve(run.id, def.id, index) end
-    CP.log(TAG, '%s accepted %s: %s #%d (run %s, %d officer(s))', tostring(src), typeKey, def.id, index, tostring(run.id), #officers)
+    CP.log(TAG, '%s accepted %s: %s #%d (run %s, %d officer(s))', tostring(src), typeKey, def.id, index,
+        tostring(run.id), #officers)
     return true, { runId = run.id }
 end
 
 CP.Net.action('server:acceptType', function(src, payload)
-    local typeKey = parseType(payload)
+    local typeKey = ParseType(payload)
     if not typeKey then return false, 'err.invalid_type' end
     if not CP.Net.rateOk(src, 'draw:acceptType', 1, 1500) then return false, 'err.rate_limited' end
 
-    local srcs = unitMembers(src)
+    local srcs = UnitMembers(src)
     for _, m in ipairs(srcs) do
         if inFlight[m] then return false, 'err.busy' end
     end
     for _, m in ipairs(srcs) do inFlight[m] = true end
-    local okCall, ok, data = pcall(accept, src, typeKey)
+    local okCall, ok, data = pcall(Accept, src, typeKey)
     for _, m in ipairs(srcs) do inFlight[m] = nil end
     if not okCall then
         CP.err(TAG, 'server:acceptType failed: %s', tostring(ok))
-        local unit = unitOf(src)
-        if unit and unit.locked and not onMission(src) then unlockUnit(unit) end
+        local unit = UnitOf(src)
+        if unit and unit.locked and not OnMission(src) then UnlockUnit(unit) end
         return false, 'err.internal'
     end
     return ok, data
@@ -808,6 +795,6 @@ CreateThread(function()
                 end
             end
         end
-        pruneRecent(now)
+        PruneRecent(now)
     end
 end)

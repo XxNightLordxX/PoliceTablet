@@ -1,19 +1,4 @@
--- modules/access/client.lua · CP.Access (client): the latest officer and department the server sent.
---
--- Display data only: the server re-checks access on every request and action. The tablet
--- (modules/tablet/client.lua) calls setSession with every Session it receives (opening a UI, switching
--- UI and the silent theme fetch at login) and clear() when the character unloads or is no longer an
--- officer. This module also clears itself on character unload and when the player goes off duty.
---
--- Public API
---   CP.Access.current() -> officer|nil
---       a copy of { citizenid, name, department, departmentLabel, departmentShort, rank, callsign|nil,
---       gradeLevel, roles = { officer, supervisor, admin }, theme, logo|nil } from the latest Session;
---       nil when the player is not (or no longer) a qualifying officer.
---   CP.Access.department() -> { key, label, short, theme, logo|nil }|nil
---   CP.Access.roles() -> { officer, supervisor, admin }   (all false without a session)
---   CP.Access.setSession(session)   used by modules/tablet
---   CP.Access.clear()               used by modules/tablet
+-- CP.Access (client): the latest officer and department the server sent.
 
 CP.Access = CP.Access or {}
 local A = CP.Access
@@ -22,7 +7,7 @@ local TAG = 'access'
 local current = nil
 local roles = { officer = false, supervisor = false, admin = false }
 
-local function copyTable(t)
+local function CopyTable(t)
     if type(t) ~= 'table' then return nil end
     return CP.U.deepcopy(t)
 end
@@ -48,7 +33,7 @@ function A.setSession(session)
             theme, logo = current.theme, current.logo
         end
     else
-        theme, logo = copyTable(session.theme), copyTable(session.logo)
+        theme, logo = CopyTable(session.theme), CopyTable(session.logo)
     end
     current = {
         citizenid = o.citizenid,
@@ -82,8 +67,8 @@ function A.department()
         key = current.department,
         label = current.departmentLabel,
         short = current.departmentShort,
-        theme = copyTable(current.theme),
-        logo = copyTable(current.logo),
+        theme = CopyTable(current.theme),
+        logo = CopyTable(current.logo),
     }
 end
 

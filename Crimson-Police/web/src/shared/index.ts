@@ -1,5 +1,6 @@
-// src/shared · one import point for screen code:
-//   import { useRequest, useAction, t, useSession, useNavigate, Button, Card } from '../../shared';
+// Src/shared · one import point for screen code:
+// import { useRequest, useAction, t, useSession, useNavigate, Button, Card } from '../../shared';
+
 export * from './types';
 export * from './nui';
 export * from './hooks';

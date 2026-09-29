@@ -1,29 +1,51 @@
--- tests/builder_client_spec.lua · the builder_client slice: modules/builder/client.lua (CP.Builder, client side).
--- Pure logic: the route recorder (snapping cadence is the runner's; waypoints at turns and every maxGap, duplicates,
--- undo, stop points), the placement spot checks, the client-action payload parsers, driving styles, thinning and
--- headings. Runtime against stubbed natives: the async start / result protocol of builder_protocol.md §6, the
--- refusals (Crimson-Arena rule 13, busy, dead, on a run, disabled), a placement run, a route recording run
--- (off-road rejection, road-surface acceptance, undo and return, stop points, unreachable waypoints), a test drive
--- (local entities, stop waits, a waypoint marked failed after testDriveTimeout, cleanup), cancellation, the builder
--- events, character unload and resource stop.
--- The builder_client slice writes no SQL, so this spec runs no queries.
+-- The builder_client slice: modules/builder/client.lua (CP.Builder, client side).
+
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'client' })
 
--- ── fake world ──────────────────────────────────────────────────────────────
+-- ============================================================================
+--                                  FAKE WORLD
+-- ============================================================================
+
 local vec = vector3
 local W = {
-    ped = 100, pos = { x = 1017.5, y = -3108.4, z = 5.9 }, heading = 90.0, dead = false,
-    veh = 0, driver = false,
-    aim = nil, groundZ = 5.0, water = false, blocked = false, normalZ = 1.0,
-    keys = {}, ents = {}, nextEnt = 5000, deleted = {}, created = {},
-    blips = {}, removedBlips = 0, waypoints = {}, waypointOff = 0,
-    tasks = {}, tempActions = {}, stuckTargets = {},
-    nodeDx = 0.0, nodeDz = 0.0, onRoad = false, pathCalls = 0, noPathCall = nil,
-    zonesLive = 0, zonesMade = 0, coordsNoOffset = {}, playerMoves = 0, capsules = 0, notVehicle = false,
+    ped = 100,
+    pos = { x = 1017.5, y = -3108.4, z = 5.9 },
+    heading = 90.0,
+    dead = false,
+    veh = 0,
+    driver = false,
+    aim = nil,
+    groundZ = 5.0,
+    water = false,
+    blocked = false,
+    normalZ = 1.0,
+    keys = {},
+    ents = {},
+    nextEnt = 5000,
+    deleted = {},
+    created = {},
+    blips = {},
+    removedBlips = 0,
+    waypoints = {},
+    waypointOff = 0,
+    tasks = {},
+    tempActions = {},
+    stuckTargets = {},
+    nodeDx = 0.0,
+    nodeDz = 0.0,
+    onRoad = false,
+    pathCalls = 0,
+    noPathCall = nil,
+    zonesLive = 0,
+    zonesMade = 0,
+    coordsNoOffset = {},
+    playerMoves = 0,
+    capsules = 0,
+    notVehicle = false,
 }
 
-local function newEnt(kind, x, y, z, net)
+local function NewEnt(kind, x, y, z, net)
     W.nextEnt = W.nextEnt + 1
     local e = W.nextEnt
     W.ents[e] = { kind = kind, coords = { x = x, y = y, z = z }, net = net }
@@ -43,7 +65,10 @@ end
 _G.GetEntityHeading = function() return W.heading end
 _G.IsEntityDead = function(e) if e == W.ped then return W.dead end return false end
 _G.GetVehiclePedIsIn = function() return W.veh end
-_G.GetPedInVehicleSeat = function(veh, seat) if veh == W.veh and seat == -1 and W.driver then return W.ped end return 0 end
+_G.GetPedInVehicleSeat = function(veh, seat)
+    if veh == W.veh and seat == -1 and W.driver then return W.ped end
+    return 0
+end
 _G.GetGameplayCamCoord = function() return vec(W.pos.x, W.pos.y, W.pos.z + 1.5) end
 _G.GetGameplayCamRot = function() return vec(0.0, 0.0, 0.0) end
 _G.StartExpensiveSynchronousShapeTestLosProbe = function() return 1 end
@@ -63,9 +88,9 @@ _G.IsModelAPed = function() return true end
 _G.IsModelAVehicle = function() return not W.notVehicle end
 _G.HasModelLoaded = function() return true end
 _G.GetModelDimensions = function() return vec(-1.0, -2.4, -0.6), vec(1.0, 2.4, 1.0) end
-_G.CreatePed = function(_, _, x, y, z, _, net) return newEnt('ped', x, y, z, net) end
-_G.CreateVehicle = function(_, x, y, z, _, net) return newEnt('vehicle', x, y, z, net) end
-_G.CreatePedInsideVehicle = function(veh, _, _, seat, net) return newEnt('driver', 0.0, 0.0, 0.0, net) end
+_G.CreatePed = function(_, _, x, y, z, _, net) return NewEnt('ped', x, y, z, net) end
+_G.CreateVehicle = function(_, x, y, z, _, net) return NewEnt('vehicle', x, y, z, net) end
+_G.CreatePedInsideVehicle = function(veh, _, _, seat, net) return NewEnt('driver', 0.0, 0.0, 0.0, net) end
 _G.DoesEntityExist = function(e) return W.ents[e] ~= nil end
 _G.DeleteEntity = function(e) W.deleted[#W.deleted + 1] = e; W.ents[e] = nil end
 _G.SetEntityCoordsNoOffset = function(e, x, y, z) W.coordsNoOffset[#W.coordsNoOffset + 1] = e end
@@ -85,34 +110,80 @@ _G.CalculateTravelDistanceBetweenPoints = function(ax, ay, az, bx, by, bz)
     return math.sqrt((bx - ax) ^ 2 + (by - ay) ^ 2 + (bz - az) ^ 2)
 end
 _G.TaskVehicleDriveToCoordLongrange = function(driver, veh, x, y, z, speed, style, stop)
-    W.tasks[#W.tasks + 1] = { driver = driver, veh = veh, x = x, y = y, z = z, speed = speed, style = style, stop = stop }
+    W.tasks[#W.tasks + 1] = {
+        driver = driver,
+        veh = veh,
+        x = x,
+        y = y,
+        z = z,
+        speed = speed,
+        style = style,
+        stop = stop,
+    }
     if W.stuckTargets[x] then return end
     local ent = W.ents[veh]
     if ent then ent.coords = { x = x, y = y, z = z } end
 end
-_G.TaskVehicleTempAction = function(driver, veh, action, ms) W.tempActions[#W.tempActions + 1] = { action = action, ms = ms } end
+_G.TaskVehicleTempAction = function(driver, veh, action, ms)
+    W.tempActions[#W.tempActions + 1] = { action = action, ms = ms }
+end
 _G.GetEntitySpeed = function() return 10.0 end
 _G.IsVehicleDriveable = function() return true end
 _G.IsDisabledControlJustPressed = function(_, c) return W.keys[c] == true end
 _G.IsDisabledControlPressed = function() return false end
 _G.IsControlPressed = function() return false end
-for _, n in ipairs({ 'RequestModel', 'SetModelAsNoLongerNeeded', 'SetEntityAsMissionEntity', 'SetEntityAlpha', 'SetEntityCollision',
-    'FreezeEntityPosition', 'SetEntityInvincible', 'SetEntityVisible', 'SetEntityHeading', 'SetBlockingOfNonTemporaryEvents',
-    'SetPedCanRagdoll', 'SetVehicleDoorsLocked', 'SetVehicleEngineOn', 'SetVehicleOnGroundProperly', 'SetPedKeepTask',
-    'SetPedCanBeDraggedOut', 'SetDriverAbility', 'SetDriverAggressiveness', 'SetBlipSprite', 'SetBlipColour',
-    'BeginTextCommandSetBlipName', 'EndTextCommandSetBlipName', 'AddTextComponentSubstringPlayerName', 'DisableControlAction',
-    'PlaySoundFrontend', 'DrawMarker', 'DrawLine', 'SetDrawOrigin', 'SetTextScale', 'SetTextFont', 'SetTextCentre',
-    'SetTextOutline', 'SetTextColour', 'BeginTextCommandDisplayText', 'EndTextCommandDisplayText', 'ClearDrawOrigin' }) do
+for _, n in ipairs({
+    'RequestModel',
+    'SetModelAsNoLongerNeeded',
+    'SetEntityAsMissionEntity',
+    'SetEntityAlpha',
+    'SetEntityCollision',
+    'FreezeEntityPosition',
+    'SetEntityInvincible',
+    'SetEntityVisible',
+    'SetEntityHeading',
+    'SetBlockingOfNonTemporaryEvents',
+    'SetPedCanRagdoll',
+    'SetVehicleDoorsLocked',
+    'SetVehicleEngineOn',
+    'SetVehicleOnGroundProperly',
+    'SetPedKeepTask',
+    'SetPedCanBeDraggedOut',
+    'SetDriverAbility',
+    'SetDriverAggressiveness',
+    'SetBlipSprite',
+    'SetBlipColour',
+    'BeginTextCommandSetBlipName',
+    'EndTextCommandSetBlipName',
+    'AddTextComponentSubstringPlayerName',
+    'DisableControlAction',
+    'PlaySoundFrontend',
+    'DrawMarker',
+    'DrawLine',
+    'SetDrawOrigin',
+    'SetTextScale',
+    'SetTextFont',
+    'SetTextCentre',
+    'SetTextOutline',
+    'SetTextColour',
+    'BeginTextCommandDisplayText',
+    'EndTextCommandDisplayText',
+    'ClearDrawOrigin',
+}) do
     _G[n] = function() end
 end
 local bagHandlers = {}
-_G.AddStateBagChangeHandler = function(key, bag, fn) bagHandlers[#bagHandlers + 1] = { key = key, bag = bag, fn = fn } end
+_G.AddStateBagChangeHandler = function(key, bag, fn)
+    bagHandlers[#bagHandlers + 1] = { key = key, bag = bag, fn = fn }
+end
 _G.LocalPlayer = { state = {} }
 _G.lib.zones = {
     sphere = function(o)
         W.zonesLive, W.zonesMade = W.zonesLive + 1, W.zonesMade + 1
         W.lastZone = o
-        return { remove = function() W.zonesLive = W.zonesLive - 1 end }
+        return {
+            remove = function() W.zonesLive = W.zonesLive - 1 end,
+        }
     end,
 }
 
@@ -126,15 +197,20 @@ do
     CP.L = function(key, vars)
         local text = strings[key]
         if text == nil then return realL(key, vars) end
-        return (text:gsub('{([%w_]+)}', function(k)
-            local v = vars and vars[k]
-            if v == nil then return '{' .. k .. '}' end
-            return tostring(v)
-        end))
+        return (
+            text:gsub('{([%w_]+)}', function(k)
+                local v = vars and vars[k]
+                if v == nil then return '{' .. k .. '}' end
+                return tostring(v)
+            end)
+        )
     end
 end
 
--- ── CP.Tablet, CP.Runs, CP.Qbx stand-ins ────────────────────────────────────
+-- ============================================================================
+--                     CP.Tablet, CP.Runs, CP.Qbx STAND-INS
+-- ============================================================================
+
 local T = { isOpen = true, closes = 0, opens = {}, overlays = {}, pushes = {}, toasts = {}, actions = {} }
 CP.Tablet = {
     isOpen = function() return T.isOpen end,
@@ -146,35 +222,49 @@ CP.Tablet = {
     registerClientAction = function(name, fn) T.actions[name] = fn end,
 }
 local currentRun = nil
-CP.Runs = { current = function() return currentRun end }
+CP.Runs = {
+    current = function() return currentRun end,
+}
 local unloadFns = {}
-CP.Qbx = { onUnload = function(fn) unloadFns[#unloadFns + 1] = fn end }
+CP.Qbx = {
+    onUnload = function(fn) unloadFns[#unloadFns + 1] = fn end,
+}
 
 H.load('modules/builder/client.lua')
 local B = CP.Builder
 
-local function act(name, payload) return T.actions[name](payload) end
-local function frame(keys, ms)
+local function Act(name, payload) return T.actions[name](payload) end
+local function Frame(keys, ms)
     W.keys = {}
     for _, k in ipairs(keys or {}) do W.keys[k] = true end
     H.step(ms or 16)
     W.keys = {}
 end
-local function frames(n, ms) for _ = 1, n do frame(nil, ms) end end
-local function lastOverlay(kind)
+local function Frames(n, ms) for _ = 1, n do Frame(nil, ms) end end
+local function LastOverlay(kind)
     for i = #T.overlays, 1, -1 do
         local o = T.overlays[i]
         if o and (not kind or o.kind == kind) then return o end
     end
     return nil
 end
-local function lastPush() return T.pushes[#T.pushes] end
-local function has(list, v) for _, x in ipairs(list) do if x == v then return true end end return false end
+local function LastPush() return T.pushes[#T.pushes] end
+local function Has(list, v) for _, x in ipairs(list) do if x == v then return true end end return false end
 local KEY = { E = 38, BACK = 194, ENTER = 191, P = 199, X = 73, WHEEL_UP = 15 }
 local DOCKS = { x = 1017.52, y = -3108.44, z = 5.9 }
 
--- ── registration ────────────────────────────────────────────────────────────
-for _, name in ipairs({ 'builderPlace', 'builderRecord', 'builderTestDrive', 'builderResult', 'builderCancel', 'builderWaypoint' }) do
+-- ============================================================================
+--                                 REGISTRATION
+-- ============================================================================
+
+for _, name in ipairs({
+    'builderPlace',
+    'builderRecord',
+    'builderTestDrive',
+    'builderResult',
+    'builderCancel',
+    'builderWaypoint',
+}) do
     H.ok(type(T.actions[name]) == 'function', 'client action registered: ' .. name)
 end
 H.ok(H.handlers[CP.e('client:builder')] ~= nil, 'crimson-police:client:builder handler registered')
@@ -186,12 +276,16 @@ H.eq(bagHandlers[1].bag, 'player:7', 'on the local player bag')
 H.eq(#unloadFns, 1, 'a character unload handler')
 H.eq(B.active(), nil, 'no tool at start')
 
--- ── pure helpers ────────────────────────────────────────────────────────────
+-- ============================================================================
+--                                 PURE HELPERS
+-- ============================================================================
+
 H.near(B.headingOf({ x = 0, y = 0 }, { x = 0, y = 10 }), 0.0, 1e-6, 'heading north = 0')
 H.near(B.headingOf({ x = 0, y = 0 }, { x = -10, y = 0 }), 90.0, 1e-6, 'heading west = 90')
 H.near(B.headingOf({ x = 0, y = 0 }, { x = 0, y = -10 }), 180.0, 1e-6, 'heading south = 180')
 H.near(B.headingOf({ x = 0, y = 0 }, { x = 10, y = 0 }), 270.0, 1e-6, 'heading east = 270')
-H.near(B.routeLength({ { x = 0, y = 0, z = 0 }, { x = 30, y = 40, z = 0 }, { x = 30, y = 40, z = 12 } }), 62.0, 1e-6, 'route length')
+H.near(B.routeLength({ { x = 0, y = 0, z = 0 }, { x = 30, y = 40, z = 0 }, { x = 30, y = 40, z = 12 } }), 62.0, 1e-6,
+    'route length')
 H.eq(B.routeLength({}), 0.0, 'empty route length')
 do
     local pts = {}
@@ -211,7 +305,10 @@ H.eq(B.drivingStyle('fast'), 786492, 'fast style')
 H.eq(B.drivingStyle('reckless'), 786492, 'reckless keeps to its lanes')
 H.eq(B.drivingStyle('nonsense'), 786475, 'unknown style is normal')
 
--- ── the route recorder ──────────────────────────────────────────────────────
+-- ============================================================================
+--                              THE ROUTE RECORDER
+-- ============================================================================
+
 do
     local rec = B.newRecorder({ turnAngle = 30, maxGap = 150 })
     -- 400 m straight north, one sample every 25 m
@@ -280,206 +377,369 @@ do
     H.eq(#rec3:waypoints(), 2, 'a gentle bend keeps only the ends')
 end
 
--- ── placement checks ────────────────────────────────────────────────────────
+-- ============================================================================
+--                               PLACEMENT CHECKS
+-- ============================================================================
+
 do
-    local good = { hit = true, x = 1050, y = -3108, z = 5.0, groundZ = 5.0, normalZ = 1.0, water = false, blocked = false, distance = 30 }
-    local function spot(over)
+    local good = {
+        hit = true,
+        x = 1050,
+        y = -3108,
+        z = 5.0,
+        groundZ = 5.0,
+        normalZ = 1.0,
+        water = false,
+        blocked = false,
+        distance = 30,
+    }
+    local function Spot(over)
         local s = {}
         for k, v in pairs(good) do s[k] = v end
         for k, v in pairs(over or {}) do if v == 'NIL' then s[k] = nil else s[k] = v end end
         return s
     end
-    local ctx = { kind = 'ped', points = {}, multiple = true, max = 3, zones = Config.Builder.noBuildZones, spawn = true,
-        start = DOCKS, minFromStart = 30, otherStarts = {}, minLocationGap = 100, minGap = 0, maxDistance = 50 }
-    H.eq(B.checkSpot(spot(), ctx), true, 'a good spot')
-    local function reason(s, c)
+    local ctx = {
+        kind = 'ped',
+        points = {},
+        multiple = true,
+        max = 3,
+        zones = Config.Builder.noBuildZones,
+        spawn = true,
+        start = DOCKS,
+        minFromStart = 30,
+        otherStarts = {},
+        minLocationGap = 100,
+        minGap = 0,
+        maxDistance = 50,
+    }
+    H.eq(B.checkSpot(Spot(), ctx), true, 'a good spot')
+    local function Reason(s, c)
         local ok, key, vars = B.checkSpot(s, c or ctx)
         return ok and 'ok' or key, vars
     end
-    H.eq(reason({ hit = false }), 'builder.place.reason.no_hit', 'nothing aimed at')
-    H.eq(reason(nil), 'builder.place.reason.no_hit', 'no spot')
-    H.eq(reason(spot({ distance = 60 })), 'builder.place.reason.far', 'too far away')
-    H.eq(reason(spot({ x = 470.63, y = -974.11, z = 30.18, groundZ = 30.18 })), 'builder.place.reason.zone', 'in a no-build zone')
-    local _, zv = reason(spot({ x = 470.63, y = -974.11 }))
+    H.eq(Reason({ hit = false }), 'builder.place.reason.no_hit', 'nothing aimed at')
+    H.eq(Reason(nil), 'builder.place.reason.no_hit', 'no spot')
+    H.eq(Reason(Spot({ distance = 60 })), 'builder.place.reason.far', 'too far away')
+    H.eq(Reason(Spot({ x = 470.63, y = -974.11, z = 30.18, groundZ = 30.18 })), 'builder.place.reason.zone',
+        'in a no-build zone')
+    local _, zv = Reason(Spot({ x = 470.63, y = -974.11 }))
     H.eq(zv.zone, 'Mission Row PD and FIB HQ', 'zone label in the reason vars')
-    H.eq(reason(spot({ water = true })), 'builder.place.reason.water', 'in water')
-    H.eq(reason(spot({ z = 9.0 })), 'builder.place.reason.not_ground', 'on a roof or wall above the ground')
-    H.eq(reason(spot({ groundZ = 'NIL' })), 'builder.place.reason.not_ground', 'no ground found')
-    H.eq(reason(spot({ normalZ = 0.4 })), 'builder.place.reason.steep', 'too steep')
-    H.eq(reason(spot({ blocked = 'NIL' })), 'builder.place.reason.checking', 'probe pending')
-    H.eq(reason(spot({ blocked = true })), 'builder.place.reason.blocked', 'inside a wall or object')
-    local k, v = reason(spot({ x = 1030 }))
+    H.eq(Reason(Spot({ water = true })), 'builder.place.reason.water', 'in water')
+    H.eq(Reason(Spot({ z = 9.0 })), 'builder.place.reason.not_ground', 'on a roof or wall above the ground')
+    H.eq(Reason(Spot({ groundZ = 'NIL' })), 'builder.place.reason.not_ground', 'no ground found')
+    H.eq(Reason(Spot({ normalZ = 0.4 })), 'builder.place.reason.steep', 'too steep')
+    H.eq(Reason(Spot({ blocked = 'NIL' })), 'builder.place.reason.checking', 'probe pending')
+    H.eq(Reason(Spot({ blocked = true })), 'builder.place.reason.blocked', 'inside a wall or object')
+    local k, v = Reason(Spot({ x = 1030 }))
     H.eq(k, 'builder.place.reason.start', 'spawn too close to the start')
     H.eq(v.min, 30, 'min distance in vars')
     -- markers: aimed surface counts, no ground or probe checks
     local mctx = { kind = 'marker', points = {}, multiple = true, max = 5, zones = {}, maxDistance = 50 }
-    H.eq(reason(spot({ z = 9.0, blocked = 'NIL' }), mctx), 'ok', 'a marker on a raised surface')
-    H.eq(reason(spot({ water = true }), mctx), 'builder.place.reason.water', 'markers not in water')
+    H.eq(Reason(Spot({ z = 9.0, blocked = 'NIL' }), mctx), 'ok', 'a marker on a raised surface')
+    H.eq(Reason(Spot({ water = true }), mctx), 'builder.place.reason.water', 'markers not in water')
     -- max
     local full = { kind = 'marker', points = { {}, {}, {} }, multiple = true, max = 3, zones = {} }
-    H.eq(reason(spot(), full), 'builder.place.reason.max', 'every point placed')
+    H.eq(Reason(Spot(), full), 'builder.place.reason.max', 'every point placed')
     -- start gap (2D) to other starts
-    local sctx = { kind = 'start', points = {}, multiple = false, zones = {}, otherStarts = { { x = 1100, y = -3108, z = 50 } },
-        minLocationGap = 100, maxDistance = 50 }
-    H.eq(reason(spot(), sctx), 'builder.place.reason.gap', 'a start closer than minLocationGap to another start')
+    local sctx = {
+        kind = 'start',
+        points = {},
+        multiple = false,
+        zones = {},
+        otherStarts = { { x = 1100, y = -3108, z = 50 } },
+        minLocationGap = 100,
+        maxDistance = 50,
+    }
+    H.eq(Reason(Spot(), sctx), 'builder.place.reason.gap', 'a start closer than minLocationGap to another start')
     sctx.otherStarts = { { x = 1200, y = -3108, z = 5 } }
-    H.eq(reason(spot(), sctx), 'ok', 'a start far enough from the others')
+    H.eq(Reason(Spot(), sctx), 'ok', 'a start far enough from the others')
     -- spacing between points of one key
-    local gctx = { kind = 'marker', points = { { x = 1050, y = -3100, z = 5 } }, multiple = true, max = 5, zones = {}, minGap = 40 }
-    H.eq(reason(spot(), gctx), 'builder.place.reason.spacing', 'closer than minGap to a placed point')
+    local gctx = {
+        kind = 'marker',
+        points = { { x = 1050, y = -3100, z = 5 } },
+        multiple = true,
+        max = 5,
+        zones = {},
+        minGap = 40,
+    }
+    H.eq(Reason(Spot(), gctx), 'builder.place.reason.spacing', 'closer than minGap to a placed point')
     gctx.minGap = 5
-    H.eq(reason(spot(), gctx), 'ok', 'spacing satisfied')
+    H.eq(Reason(Spot(), gctx), 'ok', 'spacing satisfied')
 end
 
--- ── payload parsing ─────────────────────────────────────────────────────────
+-- ============================================================================
+--                               PAYLOAD PARSING
+-- ============================================================================
+
 do
-    local base = { missionId = 'custom_dockside_raid', location = 1, key = 'spawns', kind = 'ped', heading = true, multiple = true,
-        min = 2, max = 3, points = {}, start = DOCKS, spawn = true, otherStarts = {} }
-    local function with(over)
+    local base = {
+        missionId = 'custom_dockside_raid',
+        location = 1,
+        key = 'spawns',
+        kind = 'ped',
+        heading = true,
+        multiple = true,
+        min = 2,
+        max = 3,
+        points = {},
+        start = DOCKS,
+        spawn = true,
+        otherStarts = {},
+    }
+    local function With(over)
         local p = {}
         for k, v in pairs(base) do p[k] = v end
         for k, v in pairs(over or {}) do if v == 'NIL' then p[k] = nil else p[k] = v end end
         return p
     end
-    local o = assert(B.parsePlace(with()))
+    local o = assert(B.parsePlace(With()))
     H.eq(o.ui, 'supervisor', 'ui defaults to supervisor')
     H.eq(o.min, 2, 'min')
     H.eq(o.max, 3, 'max')
     H.eq(o.heading, true, 'heading')
     H.eq(o.spawn, true, 'spawn')
     H.eq(o.start.w, nil, 'the start carries no heading')
-    H.eq(select(2, B.parsePlace(with({ kind = 'tree' }))), 'err.invalid_payload', 'bad kind')
-    H.eq(select(2, B.parsePlace(with({ missionId = 'bad id!' }))), 'err.invalid_payload', 'bad mission id')
-    H.eq(select(2, B.parsePlace(with({ location = 0 }))), 'err.invalid_payload', 'bad location')
-    H.eq(select(2, B.parsePlace(with({ key = '1abc' }))), 'err.invalid_payload', 'bad key')
-    H.eq(select(2, B.parsePlace(with({ ui = 'officer' }))), 'err.invalid_payload', 'bad ui')
-    H.eq(select(2, B.parsePlace(with({ heading = 'yes' }))), 'err.invalid_payload', 'heading must be boolean')
-    H.eq(select(2, B.parsePlace(with({ max = 0 }))), 'err.invalid_payload', 'max at least 1')
-    H.eq(select(2, B.parsePlace(with({ points = { { x = 'a', y = 0, z = 0 } } }))), 'err.invalid_payload', 'bad point')
-    H.eq(select(2, B.parsePlace(with({ points = { { x = 99999, y = 0, z = 0 } } }))), 'err.invalid_payload', 'point off the map')
-    H.eq(select(2, B.parsePlace(with({ minGap = -1 }))), 'err.invalid_payload', 'negative minGap')
-    H.eq(select(2, B.parsePlace(with({ model = 'bad model' }))), 'err.invalid_payload', 'bad model name')
+    H.eq(select(2, B.parsePlace(With({ kind = 'tree' }))), 'err.invalid_payload', 'bad kind')
+    H.eq(select(2, B.parsePlace(With({ missionId = 'bad id!' }))), 'err.invalid_payload', 'bad mission id')
+    H.eq(select(2, B.parsePlace(With({ location = 0 }))), 'err.invalid_payload', 'bad location')
+    H.eq(select(2, B.parsePlace(With({ key = '1abc' }))), 'err.invalid_payload', 'bad key')
+    H.eq(select(2, B.parsePlace(With({ ui = 'officer' }))), 'err.invalid_payload', 'bad ui')
+    H.eq(select(2, B.parsePlace(With({ heading = 'yes' }))), 'err.invalid_payload', 'heading must be boolean')
+    H.eq(select(2, B.parsePlace(With({ max = 0 }))), 'err.invalid_payload', 'max at least 1')
+    H.eq(select(2, B.parsePlace(With({ points = { { x = 'a', y = 0, z = 0 } } }))), 'err.invalid_payload', 'bad point')
+    H.eq(select(2, B.parsePlace(With({ points = { { x = 99999, y = 0, z = 0 } } }))), 'err.invalid_payload',
+        'point off the map')
+    H.eq(select(2, B.parsePlace(With({ minGap = -1 }))), 'err.invalid_payload', 'negative minGap')
+    H.eq(select(2, B.parsePlace(With({ model = 'bad model' }))), 'err.invalid_payload', 'bad model name')
     H.eq(select(2, B.parsePlace('x')), 'err.invalid_payload', 'not a table')
     -- aliases of the task text
-    local a = assert(B.parsePlace(with({ max = 'NIL', count = 4, points = 'NIL', existing = { { x = 1, y = 2, z = 3, w = 400 } } })))
+    local a = assert(
+        B.parsePlace(With({ max = 'NIL', count = 4, points = 'NIL', existing = { { x = 1, y = 2, z = 3, w = 400 } } })))
     H.eq(a.max, 4, 'count is an alias of max')
     H.eq(#a.points, 1, 'existing is an alias of points')
     H.eq(a.points[1].w, 40.0, 'headings are normalised')
     -- a single point keeps the last existing one
-    local s = assert(B.parsePlace(with({ multiple = false, min = 'NIL', max = 'NIL', points = { { x = 1, y = 1, z = 1 }, { x = 2, y = 2, z = 2 } } })))
+    local s = assert(B.parsePlace(With({
+        multiple = false,
+        min = 'NIL',
+        max = 'NIL',
+        points = { { x = 1, y = 1, z = 1 }, { x = 2, y = 2, z = 2 } },
+    })))
     H.eq(s.max, 1, 'single: max 1')
     H.eq(s.min, 1, 'single: min 1')
     H.eq(#s.points, 1, 'single: one point kept')
     H.eq(s.points[1].x, 2.0, 'single: the last point kept')
     -- extra points beyond max are dropped; min is capped by max
-    local m = assert(B.parsePlace(with({ min = 5, max = 2, points = { { x = 1, y = 1, z = 1 }, { x = 2, y = 2, z = 2 }, { x = 3, y = 3, z = 3 } } })))
+    local m = assert(B.parsePlace(With({
+        min = 5,
+        max = 2,
+        points = { { x = 1, y = 1, z = 1 }, { x = 2, y = 2, z = 2 }, { x = 3, y = 3, z = 3 } },
+    })))
     H.eq(#m.points, 2, 'points beyond max dropped')
     H.eq(m.min, 2, 'min capped by max')
     -- areas and starts: radius clamped, no heading
-    local st = assert(B.parsePlace(with({ kind = 'start', heading = true, multiple = true, radius = 500 })))
+    local st = assert(B.parsePlace(With({ kind = 'start', heading = true, multiple = true, radius = 500 })))
     H.eq(st.radius, 150.0, 'start radius clamped to 150')
     H.eq(st.heading, false, 'starts carry no heading')
     H.eq(st.multiple, false, 'one start per location')
-    local ar = assert(B.parsePlace(with({ kind = 'area', radiusMin = 10, radiusMax = 40, radius = 5 })))
+    local ar = assert(B.parsePlace(With({ kind = 'area', radiusMin = 10, radiusMax = 40, radius = 5 })))
     H.eq(ar.radius, 10, 'area radius clamped to radiusMin')
     H.eq(ar.radiusMax, 40, 'radiusMax')
-    H.eq(select(2, B.parsePlace(with({ kind = 'area', radiusMin = 50, radiusMax = 40 }))), 'err.invalid_payload', 'radiusMax below radiusMin')
-    local mk = assert(B.parsePlace(with({ kind = 'marker', radius = 75 })))
+    H.eq(select(2, B.parsePlace(With({ kind = 'area', radiusMin = 50, radiusMax = 40 }))), 'err.invalid_payload',
+        'radiusMax below radiusMin')
+    local mk = assert(B.parsePlace(With({ kind = 'marker', radius = 75 })))
     H.eq(mk.showRadius, 75, 'a marker radius is only drawn')
     H.eq(mk.radius, nil, 'a marker returns no radius')
-    local h0 = assert(B.parsePlace(with({ heading = false, points = { { x = 1, y = 1, z = 1, w = 90 } } })))
+    local h0 = assert(B.parsePlace(With({ heading = false, points = { { x = 1, y = 1, z = 1, w = 90 } } })))
     H.eq(h0.points[1].w, nil, 'no heading: w removed')
     -- labels: trimmed, at most 64 characters (UTF-8)
     local long = string.rep('é', 80)
-    local lb = assert(B.parsePlace(with({ label = '  ' .. long .. '  ' })))
+    local lb = assert(B.parsePlace(With({ label = '  ' .. long .. '  ' })))
     H.eq(utf8.len(lb.label), 64, 'label clipped to 64 characters')
-    H.eq(assert(B.parsePlace(with({ label = '   ' }))).label, nil, 'blank label dropped')
-    H.eq(select(2, B.parsePlace(with({ label = 5 }))), 'err.invalid_payload', 'label must be text')
+    H.eq(assert(B.parsePlace(With({ label = '   ' }))).label, nil, 'blank label dropped')
+    H.eq(select(2, B.parsePlace(With({ label = 5 }))), 'err.invalid_payload', 'label must be text')
 
     local r = assert(B.parseRecord({ missionId = 'm1', location = 2, key = 'route', block = 'escort' }))
-    H.eq(r.stops, true, "block = 'escort' enables stops")
+    H.eq(r.stops, true, 'block = \'escort\' enables stops')
     H.eq(r.loop, false, 'loop defaults to false')
-    local r2 = assert(B.parseRecord({ missionId = 'm1', location = 2, key = 'raceLoop', stops = false, loop = true, block = 'escort' }))
+    local r2 = assert(
+        B.parseRecord({ missionId = 'm1', location = 2, key = 'raceLoop', stops = false, loop = true, block = 'escort' }))
     H.eq(r2.stops, false, 'explicit stops wins over the block alias')
     H.eq(r2.loop, true, 'loop')
-    H.eq(select(2, B.parseRecord({ missionId = 'm1', location = 2, key = 'route', loop = 1 })), 'err.invalid_payload', 'loop must be boolean')
+    H.eq(select(2, B.parseRecord({ missionId = 'm1', location = 2, key = 'route', loop = 1 })), 'err.invalid_payload',
+        'loop must be boolean')
 
     local route = { points = { { x = 0, y = 0, z = 0 }, { x = 0, y = 100, z = 0 } }, stops = { { at = 2, wait = 10 } } }
-    local td = assert(B.parseTestDrive({ missionId = 'm1', location = 1, key = 'route', route = route, vehicle = 'stockade', speed = 60, style = 'reckless' }))
+    local td = assert(B.parseTestDrive({
+        missionId = 'm1',
+        location = 1,
+        key = 'route',
+        route = route,
+        vehicle = 'stockade',
+        speed = 60,
+        style = 'reckless',
+    }))
     H.eq(td.vehicle, 'stockade', 'escort vehicle allowed')
     H.eq(td.style, 'reckless', 'style kept')
     H.eq(#td.stops, 1, 'stops kept')
-    local td2 = assert(B.parseTestDrive({ missionId = 'm1', location = 1, key = 'route', route = route, vehicle = 'sultan', speed = 60, style = 'drifting' }))
+    local td2 = assert(B.parseTestDrive({
+        missionId = 'm1',
+        location = 1,
+        key = 'route',
+        route = route,
+        vehicle = 'sultan',
+        speed = 60,
+        style = 'drifting',
+    }))
     H.eq(td2.style, 'normal', 'unknown style falls back to normal')
-    H.eq(select(2, B.parseTestDrive({ missionId = 'm1', location = 1, key = 'route', route = route, vehicle = 'adder', speed = 60 })),
-        'err.builder_bad_vehicle', 'a vehicle outside Config.Builder.allowed')
-    H.eq(select(2, B.parseTestDrive({ missionId = 'm1', location = 1, key = 'route', route = route, vehicle = 'sultan', speed = 400 })),
-        'err.invalid_payload', 'speed out of range')
-    H.eq(select(2, B.parseTestDrive({ missionId = 'm1', location = 1, key = 'route', route = { points = { { x = 0, y = 0, z = 0 } } }, vehicle = 'sultan', speed = 60 })),
-        'err.invalid_payload', 'a route needs two points')
-    H.eq(select(2, B.parseTestDrive({ missionId = 'm1', location = 1, key = 'route', route = { points = route.points, stops = { { at = 9, wait = 10 } } }, vehicle = 'sultan', speed = 60 })),
-        'err.invalid_payload', 'a stop outside the route')
+    H.eq(select(
+        2,
+        B.parseTestDrive({
+            missionId = 'm1',
+            location = 1,
+            key = 'route',
+            route = route,
+            vehicle = 'adder',
+            speed = 60,
+        })
+    ), 'err.builder_bad_vehicle', 'a vehicle outside Config.Builder.allowed')
+    H.eq(select(
+        2,
+        B.parseTestDrive({
+            missionId = 'm1',
+            location = 1,
+            key = 'route',
+            route = route,
+            vehicle = 'sultan',
+            speed = 400,
+        })
+    ), 'err.invalid_payload', 'speed out of range')
+    H.eq(select(
+        2,
+        B.parseTestDrive({
+            missionId = 'm1',
+            location = 1,
+            key = 'route',
+            route = { points = { { x = 0, y = 0, z = 0 } } },
+            vehicle = 'sultan',
+            speed = 60,
+        })
+    ), 'err.invalid_payload', 'a route needs two points')
+    H.eq(select(
+        2,
+        B.parseTestDrive({
+            missionId = 'm1',
+            location = 1,
+            key = 'route',
+            route = { points = route.points, stops = { { at = 9, wait = 10 } } },
+            vehicle = 'sultan',
+            speed = 60,
+        })
+    ), 'err.invalid_payload', 'a stop outside the route')
 end
 
--- ── refusals ────────────────────────────────────────────────────────────────
-local placePayload = { missionId = 'custom_dockside_raid', location = 1, key = 'spawns', kind = 'ped', model = 'g_m_y_lost_01',
-    heading = true, multiple = true, min = 2, max = 3, points = {}, start = DOCKS, spawn = true, otherStarts = {},
-    ui = 'admin', label = 'Hostile spawn points' }
-local recordPayload = { missionId = 'custom_quarry_escort', location = 1, key = 'route', block = 'escort', label = 'Escort route' }
-local drivePayload = { missionId = 'custom_quarry_escort', location = 1, key = 'route', vehicle = 'stockade', speed = 60, style = 'reckless',
-    route = { points = { { x = 1000, y = -3000, z = 5 }, { x = 1000, y = -2900, z = 5 }, { x = 1100, y = -2900, z = 5 }, { x = 1200, y = -2900, z = 5 } },
-        stops = { { at = 2, wait = 5 } } } }
+-- ============================================================================
+--                                   REFUSALS
+-- ============================================================================
+
+local placePayload = {
+    missionId = 'custom_dockside_raid',
+    location = 1,
+    key = 'spawns',
+    kind = 'ped',
+    model = 'g_m_y_lost_01',
+    heading = true,
+    multiple = true,
+    min = 2,
+    max = 3,
+    points = {},
+    start = DOCKS,
+    spawn = true,
+    otherStarts = {},
+    ui = 'admin',
+    label = 'Hostile spawn points',
+}
+local recordPayload = {
+    missionId = 'custom_quarry_escort',
+    location = 1,
+    key = 'route',
+    block = 'escort',
+    label = 'Escort route',
+}
+local drivePayload = {
+    missionId = 'custom_quarry_escort',
+    location = 1,
+    key = 'route',
+    vehicle = 'stockade',
+    speed = 60,
+    style = 'reckless',
+    route = {
+        points = {
+            { x = 1000, y = -3000, z = 5 },
+            { x = 1000, y = -2900, z = 5 },
+            { x = 1100, y = -2900, z = 5 },
+            { x = 1200, y = -2900, z = 5 },
+        },
+        stops = { { at = 2, wait = 5 } },
+    },
+}
 do
     LocalPlayer.state.crimsonArena = { active = true, source = 'crimson-arena', matchId = 3 }
-    H.eq(select(2, act('builderPlace', placePayload)), 'err.in_arena', 'placement refused in Crimson-Arena')
-    H.eq(select(2, act('builderRecord', recordPayload)), 'err.in_arena', 'recording refused in Crimson-Arena')
-    H.eq(select(2, act('builderTestDrive', drivePayload)), 'err.in_arena', 'test drive refused in Crimson-Arena')
-    H.eq(select(2, act('builderWaypoint', { coords = { x = 1, y = 2, z = 3 } })), 'err.in_arena', 'GPS waypoint refused in Crimson-Arena')
+    H.eq(select(2, Act('builderPlace', placePayload)), 'err.in_arena', 'placement refused in Crimson-Arena')
+    H.eq(select(2, Act('builderRecord', recordPayload)), 'err.in_arena', 'recording refused in Crimson-Arena')
+    H.eq(select(2, Act('builderTestDrive', drivePayload)), 'err.in_arena', 'test drive refused in Crimson-Arena')
+    H.eq(select(2, Act('builderWaypoint', { coords = { x = 1, y = 2, z = 3 } })), 'err.in_arena',
+        'GPS waypoint refused in Crimson-Arena')
     H.eq(#W.waypoints, 0, 'no waypoint set in the arena')
     LocalPlayer.state.crimsonArena = { active = false, source = 'crimson-arena' }
-    H.eq((act('builderWaypoint', { coords = { x = 1, y = 2, z = 3 } })), true, 'an inactive arena value does not refuse')
+    H.eq((Act('builderWaypoint', { coords = { x = 1, y = 2, z = 3 } })), true,
+        'an inactive arena value does not refuse')
     H.eq(W.waypoints[1].x, 1, 'GPS waypoint set')
-    H.eq(select(2, act('builderWaypoint', { coords = 'here' })), 'err.invalid_payload', 'waypoint needs coords')
+    H.eq(select(2, Act('builderWaypoint', { coords = 'here' })), 'err.invalid_payload', 'waypoint needs coords')
     LocalPlayer.state.crimsonArena = nil
     W.dead = true
-    H.eq(select(2, act('builderPlace', placePayload)), 'err.builder_dead', 'refused while dead')
+    H.eq(select(2, Act('builderPlace', placePayload)), 'err.builder_dead', 'refused while dead')
     W.dead = false
     currentRun = { runId = 'r1' }
-    H.eq(select(2, act('builderRecord', recordPayload)), 'err.builder_on_run', 'refused on a mission run')
+    H.eq(select(2, Act('builderRecord', recordPayload)), 'err.builder_on_run', 'refused on a mission run')
     currentRun = nil
     Config.Builder.enabled = false
-    H.eq(select(2, act('builderPlace', placePayload)), 'err.builder_disabled', 'refused while the builder is disabled')
+    H.eq(select(2, Act('builderPlace', placePayload)), 'err.builder_disabled', 'refused while the builder is disabled')
     Config.Builder.enabled = true
-    H.eq(select(2, act('builderPlace', { missionId = 'x' })), 'err.invalid_payload', 'a bad payload')
+    H.eq(select(2, Act('builderPlace', { missionId = 'x' })), 'err.invalid_payload', 'a bad payload')
     W.notVehicle = true
-    H.eq(select(2, act('builderTestDrive', drivePayload)), 'err.builder_bad_vehicle', 'a model that is no vehicle')
+    H.eq(select(2, Act('builderTestDrive', drivePayload)), 'err.builder_bad_vehicle', 'a model that is no vehicle')
     W.notVehicle = false
     H.eq(B.active(), nil, 'nothing started by the refusals')
     H.eq(T.closes, 0, 'the tablet stayed open')
-    local okC, dataC = act('builderCancel', {})
+    local okC, dataC = Act('builderCancel', {})
     H.eq(okC, true, 'builderCancel answers')
     H.eq(dataC.cancelled, false, 'nothing to cancel')
-    local okR, dataR = act('builderResult', {})
+    local okR, dataR = Act('builderResult', {})
     H.eq(okR, true, 'builderResult answers')
     H.eq(dataR, nil, 'no result yet')
 end
 
--- ── a placement run ─────────────────────────────────────────────────────────
+-- ============================================================================
+--                               A PLACEMENT RUN
+-- ============================================================================
+
 do
     T.isOpen = true
     W.aim = { x = 1050.0, y = -3108.4, z = 5.0 }
-    local ok, data = act('builderPlace', placePayload)
+    local ok, data = Act('builderPlace', placePayload)
     H.eq(ok, true, 'placement starts')
     H.eq(data.started, true, 'immediate { started = true }')
     H.eq(B.active(), 'placement', 'the placement tool runs')
-    H.eq(select(2, act('builderRecord', recordPayload)), 'err.builder_busy', 'one tool at a time')
-    frame()
+    H.eq(select(2, Act('builderRecord', recordPayload)), 'err.builder_busy', 'one tool at a time')
+    Frame()
     H.eq(T.closes, 1, 'the tablet closed into placement mode')
     local ghost = W.created[#W.created]
     H.eq(ghost.kind, 'ped', 'a ped ghost')
     H.eq(ghost.net, false, 'the ghost is local (not networked)')
-    frames(3)
-    local ov = lastOverlay('placement')
+    Frames(3)
+    local ov = LastOverlay('placement')
     H.ok(ov ~= nil, 'placement overlay shown')
     H.eq(ov.key, 'spawns', 'overlay key')
     H.eq(ov.label, 'Hostile spawn points', 'overlay label')
@@ -488,54 +748,54 @@ do
     H.eq(ov.mode, 'ped', 'overlay mode')
     H.eq(ov.heading, 90, 'overlay heading starts at the player heading')
     H.ok(W.capsules > 0, 'the ped volume was probed')
-    frames(10)
-    H.eq(lastOverlay('placement').valid, true, 'a valid spot')
-    frame({ KEY.E })
-    frames(10)
-    H.eq(lastOverlay('placement').placed, 1, 'one point placed')
+    Frames(10)
+    H.eq(LastOverlay('placement').valid, true, 'a valid spot')
+    Frame({ KEY.E })
+    Frames(10)
+    H.eq(LastOverlay('placement').placed, 1, 'one point placed')
     -- too close to the start
     W.aim = { x = 1030.0, y = -3108.4, z = 5.0 }
-    frames(12)
-    ov = lastOverlay('placement')
+    Frames(12)
+    ov = LastOverlay('placement')
     H.eq(ov.valid, false, 'a spawn point near the start is invalid')
     H.eq(ov.reason, CP.L('builder.place.reason.start', { min = 30 }), 'reason text translated')
     H.ok(tostring(ov.reason):find('30', 1, true) ~= nil, 'the reason names 30 m')
-    frame({ KEY.E })
-    frames(10)
-    H.eq(lastOverlay('placement').placed, 1, 'an invalid spot is not placed')
+    Frame({ KEY.E })
+    Frames(10)
+    H.eq(LastOverlay('placement').placed, 1, 'an invalid spot is not placed')
     -- in water
     W.aim = { x = 1050.0, y = -3090.0, z = 5.0 }
     W.water = true
-    frames(12)
-    H.eq(lastOverlay('placement').reason, CP.L('builder.place.reason.water'), 'water is refused')
+    Frames(12)
+    H.eq(LastOverlay('placement').reason, CP.L('builder.place.reason.water'), 'water is refused')
     W.water = false
     -- blocked by a wall
     W.blocked = true
     W.aim = { x = 1051.0, y = -3090.0, z = 5.0 }
-    frames(12)
-    H.eq(lastOverlay('placement').reason, CP.L('builder.place.reason.blocked'), 'a wall is refused')
+    Frames(12)
+    H.eq(LastOverlay('placement').reason, CP.L('builder.place.reason.blocked'), 'a wall is refused')
     W.blocked = false
     -- rotate and place a second point
     W.aim = { x = 1052.0, y = -3090.0, z = 5.0 }
-    frame({ KEY.WHEEL_UP })
-    frames(12)
-    H.eq(lastOverlay('placement').heading, 100, 'scroll rotates by 10 degrees')
-    H.eq(lastOverlay('placement').valid, true, 'the new spot is valid')
-    frame({ KEY.E })
-    frames(10)
-    H.eq(lastOverlay('placement').placed, 2, 'two points placed')
-    frame({ KEY.BACK })
-    frames(10)
-    H.eq(lastOverlay('placement').placed, 1, 'Backspace undoes the last point')
-    frame({ KEY.E })
-    frames(10)
-    H.eq(lastOverlay('placement').placed, 2, 'placed again')
+    Frame({ KEY.WHEEL_UP })
+    Frames(12)
+    H.eq(LastOverlay('placement').heading, 100, 'scroll rotates by 10 degrees')
+    H.eq(LastOverlay('placement').valid, true, 'the new spot is valid')
+    Frame({ KEY.E })
+    Frames(10)
+    H.eq(LastOverlay('placement').placed, 2, 'two points placed')
+    Frame({ KEY.BACK })
+    Frames(10)
+    H.eq(LastOverlay('placement').placed, 1, 'Backspace undoes the last point')
+    Frame({ KEY.E })
+    Frames(10)
+    H.eq(LastOverlay('placement').placed, 2, 'placed again')
     local pushesBefore = #T.pushes
-    frame({ KEY.ENTER })
-    frame()
+    Frame({ KEY.ENTER })
+    Frame()
     H.eq(B.active(), nil, 'Enter ends the tool')
     H.eq(#T.pushes, pushesBefore + 1, 'the result was pushed')
-    local p = lastPush()
+    local p = LastPush()
     H.eq(p.topic, 'builder', 'push topic builder')
     H.eq(p.data.event, 'clientResult', 'push event clientResult')
     H.eq(p.data.id, 'custom_dockside_raid', 'push mission id')
@@ -550,7 +810,7 @@ do
     H.eq(res.points[1].w, 90.0, 'first point heading')
     H.eq(res.points[2].w, 100.0, 'second point heading after rotating')
     H.eq(res.seq, 1, 'first result seq')
-    H.ok(has(W.deleted, ghost.e), 'the ghost was deleted')
+    H.ok(Has(W.deleted, ghost.e), 'the ghost was deleted')
     H.eq(T.overlays[#T.overlays], false, 'the overlay was cleared')
     H.eq(W.zonesLive, 0, 'every zone removed')
     H.ok(W.zonesMade > 0, 'the start keep-out circle was drawn as a zone')
@@ -559,34 +819,45 @@ do
     H.eq(#T.opens, 0, 'the tablet reopens after a moment')
     H.advance(400)
     H.eq(T.opens[1], 'admin', 'the tablet reopened on the UI the tool came from')
-    local okR, pulled = act('builderResult', {})
+    local okR, pulled = Act('builderResult', {})
     H.eq(okR, true, 'builderResult')
     H.eq(pulled.seq, 1, 'the pending result')
-    H.eq(select(2, act('builderResult', {})), nil, 'a result is handed out once')
+    H.eq(select(2, Act('builderResult', {})), nil, 'a result is handed out once')
 end
 
--- ── a start placement: radius and single point ──────────────────────────────
+-- ============================================================================
+--                  A START PLACEMENT: radius and single point
+-- ============================================================================
+
 do
     T.isOpen = true
     W.aim = { x = 1300.0, y = -3108.4, z = 5.0 }
     W.pos = { x = 1290.0, y = -3108.4, z = 5.9 }
-    local ok = act('builderPlace', { missionId = 'custom_dockside_raid', location = 2, key = 'start', kind = 'start', multiple = false,
-        radius = 60, points = {}, otherStarts = { DOCKS } })
+    local ok = Act('builderPlace', {
+        missionId = 'custom_dockside_raid',
+        location = 2,
+        key = 'start',
+        kind = 'start',
+        multiple = false,
+        radius = 60,
+        points = {},
+        otherStarts = { DOCKS },
+    })
     H.eq(ok, true, 'start placement starts')
-    frames(5)
-    H.eq(lastOverlay('placement').radius, 60, 'overlay radius')
-    frame({ KEY.WHEEL_UP })
-    frames(10)
-    H.eq(lastOverlay('placement').radius, 65, 'scroll grows the radius by 5 m')
-    frame({ KEY.E })
-    frames(3)
+    Frames(5)
+    H.eq(LastOverlay('placement').radius, 60, 'overlay radius')
+    Frame({ KEY.WHEEL_UP })
+    Frames(10)
+    H.eq(LastOverlay('placement').radius, 65, 'scroll grows the radius by 5 m')
+    Frame({ KEY.E })
+    Frames(3)
     W.aim = { x = 1310.0, y = -3108.4, z = 5.0 }
-    frames(3)
-    frame({ KEY.E })   -- a single point: placing again replaces it
-    frames(3)
-    frame({ KEY.ENTER })
-    frame()
-    local res = lastPush().data.result
+    Frames(3)
+    Frame({ KEY.E }) -- a single point: placing again replaces it
+    Frames(3)
+    Frame({ KEY.ENTER })
+    Frame()
+    local res = LastPush().data.result
     H.eq(#res.points, 1, 'one start')
     H.eq(res.points[1].x, 1310.0, 'the last placement replaced the first')
     H.eq(res.points[1].w, nil, 'a start carries no heading')
@@ -595,47 +866,57 @@ do
     H.eq(res.seq, 2, 'seq increases')
     H.advance(400)
     H.eq(T.opens[#T.opens], 'supervisor', 'reopened on the default UI')
-    act('builderResult', {})
+    Act('builderResult', {})
     -- a start near another location's start
     T.isOpen = true
     W.pos = { x = 1017.5, y = -3108.4, z = 5.9 }
     W.aim = { x = 1060.0, y = -3108.4, z = 5.0 }
-    act('builderPlace', { missionId = 'custom_dockside_raid', location = 2, key = 'start', kind = 'start', points = {}, otherStarts = { DOCKS } })
-    frames(5)
-    H.eq(lastOverlay('placement').reason, CP.L('builder.place.reason.gap', { min = 100 }), 'too close to another start')
-    local okC, dc = act('builderCancel', {})
+    Act('builderPlace', {
+        missionId = 'custom_dockside_raid',
+        location = 2,
+        key = 'start',
+        kind = 'start',
+        points = {},
+        otherStarts = { DOCKS },
+    })
+    Frames(5)
+    H.eq(LastOverlay('placement').reason, CP.L('builder.place.reason.gap', { min = 100 }), 'too close to another start')
+    local okC, dc = Act('builderCancel', {})
     H.eq(okC and dc.cancelled, true, 'builderCancel stops the tool')
-    frame()
-    H.eq(lastPush().data.result.cancelled, true, 'a cancelled result')
-    H.eq(#lastPush().data.result.points, 0, 'a cancelled start placement keeps the existing points')
+    Frame()
+    H.eq(LastPush().data.result.cancelled, true, 'a cancelled result')
+    H.eq(#LastPush().data.result.points, 0, 'a cancelled start placement keeps the existing points')
     H.advance(400)
-    act('builderResult', {})
+    Act('builderResult', {})
 end
 
--- ── a route recording run ───────────────────────────────────────────────────
+-- ============================================================================
+--                            A ROUTE RECORDING RUN
+-- ============================================================================
+
 do
     T.isOpen = true
-    W.veh = newEnt('player_vehicle', 1000.0, -3000.0, 5.0, true)
+    W.veh = NewEnt('player_vehicle', 1000.0, -3000.0, 5.0, true)
     W.driver = false
     local vehEnt = W.ents[W.veh]
-    local function drive(x, y, keys)
+    local function Drive(x, y, keys)
         vehEnt.coords = { x = x, y = y, z = 5.0 }
-        frame(keys)
+        Frame(keys)
     end
-    local ok = act('builderRecord', recordPayload)
+    local ok = Act('builderRecord', recordPayload)
     H.eq(ok, true, 'recording starts')
-    frames(20)
-    H.eq(lastOverlay('recording').waiting, 'vehicle', 'waits for the player to drive')
+    Frames(20)
+    H.eq(LastOverlay('recording').waiting, 'vehicle', 'waits for the player to drive')
     W.driver = true
     -- north 200 m in 5 m steps; a stop at 100 m; a stretch where the node is 12 m above but the car is on a road
     for i = 0, 40 do
         local y = -3000.0 + i * 5.0
         if i == 10 then W.nodeDz, W.onRoad = 12.0, true end
         if i == 11 then W.nodeDz, W.onRoad = 0.0, false end
-        drive(1000.0, y, i == 20 and { KEY.E } or nil)
+        Drive(1000.0, y, i == 20 and { KEY.E } or nil)
     end
-    frames(10)
-    local ov = lastOverlay('recording')
+    Frames(10)
+    local ov = LastOverlay('recording')
     H.eq(ov.stops, 1, 'E added a stop point')
     H.eq(ov.stopsEnabled, true, 'stops enabled for an escort')
     H.eq(ov.maxStops, 5, 'max stops from Config.Blocks.escort.stops')
@@ -646,38 +927,38 @@ do
     for i = 1, 40 do
         local x = 1000.0 + i * 5.0
         W.nodeDx = (x >= 1050 and x < 1100) and 50.0 or 0.0
-        drive(x, -2800.0)
+        Drive(x, -2800.0)
     end
     W.nodeDx = 0.0
-    frames(10)
-    ov = lastOverlay('recording')
+    Frames(10)
+    ov = LastOverlay('recording')
     H.eq(ov.rejected, 2, 'two off-road samples rejected')
     -- undo 100 m: wait until the driver is back at the end of the recording
-    frame({ KEY.BACK })
-    frames(10)
-    ov = lastOverlay('recording')
+    Frame({ KEY.BACK })
+    Frames(10)
+    ov = LastOverlay('recording')
     H.eq(ov.waiting, 'return', 'after an undo the recording waits for the driver to come back')
     H.eq(ov.distance, 100, 'distance back to the end')
     H.ok(tostring(ov.message):find('100', 1, true) ~= nil, 'the undo message names the metres')
-    drive(1110.0, -2800.0)
-    frames(12)
-    H.eq(lastOverlay('recording').waiting, false, 'recording again near the end')
-    for i = 1, 38 do drive(1110.0 + i * 5.0, -2800.0) end
+    Drive(1110.0, -2800.0)
+    Frames(12)
+    H.eq(LastOverlay('recording').waiting, false, 'recording again near the end')
+    for i = 1, 38 do Drive(1110.0 + i * 5.0, -2800.0) end
     -- pause: no samples while paused
-    frame({ KEY.P })
-    frames(10)
-    H.eq(lastOverlay('recording').paused, true, 'P pauses')
-    local samples = lastOverlay('recording').samples
-    for i = 1, 10 do drive(1300.0 + i * 5.0, -2800.0) end
-    frames(10)
-    H.eq(lastOverlay('recording').samples, samples, 'no samples while paused')
-    drive(1300.0, -2800.0, { KEY.P })
-    frames(10)
-    H.eq(lastOverlay('recording').paused, false, 'P resumes')
+    Frame({ KEY.P })
+    Frames(10)
+    H.eq(LastOverlay('recording').paused, true, 'P pauses')
+    local samples = LastOverlay('recording').samples
+    for i = 1, 10 do Drive(1300.0 + i * 5.0, -2800.0) end
+    Frames(10)
+    H.eq(LastOverlay('recording').samples, samples, 'no samples while paused')
+    Drive(1300.0, -2800.0, { KEY.P })
+    Frames(10)
+    H.eq(LastOverlay('recording').paused, false, 'P resumes')
     W.pathCalls, W.noPathCall = 0, 2
-    frame({ KEY.X })
-    for _ = 1, 20 do frame() end
-    local p = lastPush()
+    Frame({ KEY.X })
+    for _ = 1, 20 do Frame() end
+    local p = LastPush()
     H.eq(p.data.id, 'custom_quarry_escort', 'recording result pushed')
     local res = p.data.result
     H.eq(res.kind, 'recording', 'result kind recording')
@@ -689,7 +970,8 @@ do
     for _, q in ipairs(pts) do if q.x == 1000.0 and q.y == -2800.0 then corner = true end end
     H.ok(corner, 'the corner is a waypoint')
     for i = 2, #pts do
-        H.ok(math.sqrt((pts[i].x - pts[i - 1].x) ^ 2 + (pts[i].y - pts[i - 1].y) ^ 2) <= 150.0 + 1e-6, 'waypoints at most 150 m apart (' .. i .. ')')
+        H.ok(math.sqrt((pts[i].x - pts[i - 1].x) ^ 2 + (pts[i].y - pts[i - 1].y) ^ 2) <= 150.0 + 1e-6,
+            'waypoints at most 150 m apart (' .. i .. ')')
     end
     local stop = res.route.stops[1]
     H.ok(stop ~= nil, 'the stop point is in the route')
@@ -700,54 +982,63 @@ do
     H.eq(#res.rejectedSamples, 2, 'rejected positions returned')
     H.eq(res.rejectedSamples[1].x, 1050.0, 'first rejected sample')
     H.eq(res.length, math.floor(B.routeLength(pts) + 0.5), 'length = sum of the waypoint distances')
-    H.ok(res.length >= 495 and res.length <= 520, 'about 500 m recorded: 200 north, 300 east after the undo (' .. res.length .. ')')
+    H.ok(res.length >= 495 and res.length <= 520,
+        'about 500 m recorded: 200 north, 300 east after the undo (' .. res.length .. ')')
     H.eq(#res.unreachable, 1, 'one waypoint without a road path to the next')
     H.eq(res.unreachable[1], 2, 'the second waypoint is unreachable')
     H.eq(res.droppedStops, 0, 'no stop dropped')
     H.eq(res.route.loop, nil, 'not a loop')
     local sawChecking = false
-    for _, o in ipairs(T.overlays) do if o and o.kind == 'recording' and o.waiting == 'checking' then sawChecking = true end end
+    for _, o in ipairs(T.overlays) do
+        if o and o.kind == 'recording' and o.waiting == 'checking' then sawChecking = true end
+    end
     H.ok(sawChecking, 'the overlay shows the road-path check')
     H.advance(400)
     H.eq(T.opens[#T.opens], 'supervisor', 'reopened after recording')
-    act('builderResult', {})
+    Act('builderResult', {})
     W.pathCalls, W.noPathCall = 0, nil
 end
 
--- ── a recording with fewer than two waypoints is cancelled ──────────────────
+-- ============================================================================
+--            A RECORDING WITH FEWER THAN TWO WAYPOINTS IS CANCELLED
+-- ============================================================================
+
 do
     T.isOpen = true
-    act('builderRecord', { missionId = 'custom_quarry_escort', location = 1, key = 'raceLoop', loop = true })
-    frames(3)
-    frame({ KEY.X })
-    frames(3)
-    local res = lastPush().data.result
+    Act('builderRecord', { missionId = 'custom_quarry_escort', location = 1, key = 'raceLoop', loop = true })
+    Frames(3)
+    Frame({ KEY.X })
+    Frames(3)
+    local res = LastPush().data.result
     H.eq(res.cancelled, true, 'nothing recorded: cancelled')
     H.eq(res.route.loop, true, 'loop flag kept')
     H.eq(#res.unreachable, 0, 'no path checks for an empty route')
     H.ok(T.toasts[#T.toasts].text == CP.L('builder.rec.nothing'), 'a warning toast')
     H.advance(400)
-    act('builderResult', {})
+    Act('builderResult', {})
 end
 
--- ── a test drive ────────────────────────────────────────────────────────────
+-- ============================================================================
+--                                 A TEST DRIVE
+-- ============================================================================
+
 do
     T.isOpen = true
     W.veh, W.driver = 0, false
-    W.pos = { x = 0.0, y = 0.0, z = 0.0 }       -- far from the route start
-    W.stuckTargets = { [1100] = true }          -- waypoint 3 is never reached
+    W.pos = { x = 0.0, y = 0.0, z = 0.0 }         -- far from the route start
+    W.stuckTargets = { [1100] = true }            -- waypoint 3 is never reached
     W.tasks, W.tempActions = {}, {}
     local offBefore = W.waypointOff
-    local ok = act('builderTestDrive', drivePayload)
+    local ok = Act('builderTestDrive', drivePayload)
     H.eq(ok, true, 'test drive starts')
-    frames(5)
+    Frames(5)
     H.eq(W.waypoints[#W.waypoints].x, 1000.0, 'a GPS waypoint leads to the route start')
-    H.eq(lastOverlay('testdrive').waiting, 'approach', 'overlay: approach')
+    H.eq(LastOverlay('testdrive').waiting, 'approach', 'overlay: approach')
     W.pos = { x = 1000.0, y = -3002.0, z = 5.0 }  -- at the start: the spawn point must be clear
-    frames(12)
-    H.eq(lastOverlay('testdrive').waiting, 'clear', 'overlay: clear the spawn point')
+    Frames(12)
+    H.eq(LastOverlay('testdrive').waiting, 'clear', 'overlay: clear the spawn point')
     W.pos = { x = 1020.0, y = -3010.0, z = 5.0 }
-    frames(12)
+    Frames(12)
     local veh, driver
     for _, c in ipairs(W.created) do
         if c.kind == 'vehicle' then veh = c end
@@ -761,124 +1052,134 @@ do
     H.near(W.tasks[1].speed, 60 / 3.6, 1e-6, 'speed in m/s')
     H.eq(W.tasks[1].style, 786492, 'reckless drives lane-keeping')
     H.eq(W.tempActions[1].ms, 5000, 'waits out the escort stop at waypoint 2')
-    H.eq(lastOverlay('testdrive').stopLeft ~= false, true, 'overlay: stop countdown')
+    H.eq(LastOverlay('testdrive').stopLeft ~= false, true, 'overlay: stop countdown')
     H.advance(6000, 100)
     H.eq(W.tasks[#W.tasks].x, 1100.0, 'driving to waypoint 3')
-    H.eq(lastOverlay('testdrive').waypoint, 3, 'overlay waypoint 3')
-    H.ok(type(lastOverlay('testdrive').timeLeft) == 'number', 'overlay: time left')
+    H.eq(LastOverlay('testdrive').waypoint, 3, 'overlay waypoint 3')
+    H.ok(type(LastOverlay('testdrive').timeLeft) == 'number', 'overlay: time left')
     H.advance(31000, 100)
-    H.ok(has(lastOverlay('testdrive').failed, 3), 'waypoint 3 marked failed after testDriveTimeout')
+    H.ok(Has(LastOverlay('testdrive').failed, 3), 'waypoint 3 marked failed after testDriveTimeout')
     H.advance(2000, 100)
-    local p = lastPush()
+    local p = LastPush()
     local res = p.data.result
     H.eq(res.kind, 'testdrive', 'result kind testdrive')
     H.eq(res.completed, true, 'the drive completed')
     H.eq(res.cancelled, false, 'not cancelled')
     H.eq(#res.failed, 1, 'one failed waypoint')
     H.eq(res.failed[1], 3, 'waypoint 3 failed')
-    H.ok(has(W.deleted, veh.e) and has(W.deleted, driver.e), 'vehicle and driver deleted')
+    H.ok(Has(W.deleted, veh.e) and Has(W.deleted, driver.e), 'vehicle and driver deleted')
     H.ok(W.removedBlips >= 1, 'blip removed')
     H.ok(W.waypointOff > offBefore, 'the GPS waypoint was cleared')
     H.eq(W.playerMoves, 0, 'the player is never moved')
     H.advance(400)
-    act('builderResult', {})
+    Act('builderResult', {})
     W.stuckTargets = {}
     -- X stops a drive
     T.isOpen = true
-    act('builderTestDrive', drivePayload)
-    frames(5)
-    frame({ KEY.X })
-    frames(3)
-    res = lastPush().data.result
+    Act('builderTestDrive', drivePayload)
+    Frames(5)
+    Frame({ KEY.X })
+    Frames(3)
+    res = LastPush().data.result
     H.eq(res.cancelled, true, 'X stops the drive')
     H.eq(res.completed, false, 'not completed')
     H.advance(400)
-    act('builderResult', {})
+    Act('builderResult', {})
 end
 
--- ── Crimson-Arena: a running tool stops without reopening the tablet ────────
+-- ============================================================================
+--                                CRIMSON-ARENA
+-- ============================================================================
+-- A running tool stops without reopening the tablet.
+
 do
     T.isOpen = true
     W.aim = { x = 1050.0, y = -3108.4, z = 5.0 }
-    act('builderPlace', placePayload)
-    frames(3)
+    Act('builderPlace', placePayload)
+    Frames(3)
     local opens = #T.opens
     bagHandlers[1].fn('player:7', 'crimsonArena', { active = true, source = 'crimson-arena' })
     H.eq(B.active(), 'placement', 'the bag handler only queues work')
-    frames(3)
+    Frames(3)
     H.eq(B.active(), nil, 'the arena value stopped the tool')
-    H.eq(lastPush().data.result.cancelled, true, 'cancelled result')
+    H.eq(LastPush().data.result.cancelled, true, 'cancelled result')
     H.advance(500)
     H.eq(#T.opens, opens, 'the tablet does not reopen for the arena')
-    act('builderResult', {})
+    Act('builderResult', {})
     -- the own crimsonArena value (source crimson-police) does not stop a tool
-    act('builderPlace', placePayload)
-    frames(2)
+    Act('builderPlace', placePayload)
+    Frames(2)
     bagHandlers[1].fn('player:7', 'crimsonArena', { active = true, source = 'crimson-police' })
     LocalPlayer.state.crimsonArena = { active = true, source = 'crimson-police' }
-    frames(20)
-    H.eq(B.active(), 'placement', "Crimson-Police's own value does not stop the tool")
+    Frames(20)
+    H.eq(B.active(), 'placement', 'Crimson-Police\'s own value does not stop the tool')
     -- the value arriving directly (no bag event) is caught by the tool's own check
     LocalPlayer.state.crimsonArena = { active = true, source = 'crimson-arena' }
-    frames(20)
+    Frames(20)
     H.eq(B.active(), nil, 'the tool checks the arena value itself')
     LocalPlayer.state.crimsonArena = nil
     H.advance(500)
     H.eq(#T.opens, opens, 'still no reopen')
-    act('builderResult', {})
+    Act('builderResult', {})
 end
 
--- ── builder events, death, unload and resource stop ─────────────────────────
+-- ============================================================================
+--               BUILDER EVENTS, DEATH, UNLOAD AND RESOURCE STOP
+-- ============================================================================
+
 do
     T.isOpen = true
-    act('builderPlace', placePayload)
-    frames(2)
+    Act('builderPlace', placePayload)
+    Frames(2)
     local pushAt = #T.pushes
     H.fire(CP.e('client:builder'), nil, { event = 'lockBroken', id = 'another_mission', by = 'Ada Admin' })
     local fwd = T.pushes[pushAt + 1]
-    H.ok(fwd and fwd.topic == 'builder' and fwd.data.event == 'lockBroken' and fwd.data.id == 'another_mission' and fwd.data.by == 'Ada Admin',
-        'a lock break is forwarded to the open builder screen (push builder lockBroken with who did it)')
-    frames(2)
+    H.ok(
+        fwd and fwd.topic == 'builder' and fwd.data.event == 'lockBroken' and fwd.data.id == 'another_mission'
+            and fwd.data.by == 'Ada Admin',
+        'a lock break is forwarded to the open builder screen (push builder lockBroken with who did it)'
+    )
+    Frames(2)
     H.eq(B.active(), 'placement', 'an event for another mission changes nothing')
     H.fire(CP.e('client:builder'), nil, { event = 'lockBroken', id = 'custom_dockside_raid' })
-    frames(2)
+    Frames(2)
     H.eq(B.active(), nil, 'a broken lock stops the tool of that mission')
-    H.eq(lastPush().data.result.cancelled, true, 'cancelled by the broken lock')
+    H.eq(LastPush().data.result.cancelled, true, 'cancelled by the broken lock')
     local opens = #T.opens
     H.advance(400)
     H.eq(#T.opens, opens + 1, 'reopens after a broken lock (the editor shows the banner)')
     -- a pending result of a deleted mission is dropped
     H.fire(CP.e('client:builder'), nil, { event = 'deleted', id = 'custom_dockside_raid' })
-    H.eq(select(2, act('builderResult', {})), nil, 'deleted: the pending result is dropped')
+    H.eq(select(2, Act('builderResult', {})), nil, 'deleted: the pending result is dropped')
     local pushAt2 = #T.pushes
     H.fire(CP.e('client:builder'), nil, { event = 'nonsense', id = 'x' })
     H.fire(CP.e('client:builder'), nil, 'bad')
     H.eq(#T.pushes, pushAt2, 'unknown or malformed builder events are not forwarded')
     -- death stops a tool, no reopen
     T.isOpen = false
-    act('builderPlace', placePayload)
-    frames(2)
+    Act('builderPlace', placePayload)
+    Frames(2)
     W.dead = true
-    frames(20)
+    Frames(20)
     H.eq(B.active(), nil, 'death stops the tool')
     W.dead = false
     opens = #T.opens
     H.advance(400)
     H.eq(#T.opens, opens, 'no reopen after death')
-    act('builderResult', {})
+    Act('builderResult', {})
     -- unload: cancel, no reopen, pending result cleared
-    act('builderPlace', placePayload)
-    frames(2)
+    Act('builderPlace', placePayload)
+    Frames(2)
     unloadFns[1]()
-    frames(2)
+    Frames(2)
     H.eq(B.active(), nil, 'unload stops the tool')
     H.advance(400)
     H.eq(#T.opens, opens, 'no reopen after unload')
     unloadFns[1]()
-    H.eq(select(2, act('builderResult', {})), nil, 'unload clears the pending result')
+    H.eq(select(2, Act('builderResult', {})), nil, 'unload clears the pending result')
     -- resource stop: entities and overlay cleaned up at once
-    act('builderPlace', placePayload)
-    frames(3)
+    Act('builderPlace', placePayload)
+    Frames(3)
     local ghost = W.created[#W.created].e
     local live = W.zonesLive
     H.ok(live > 0, 'zones live while placing')
@@ -890,19 +1191,23 @@ do
     H.eq(T.overlays[#T.overlays], false, 'overlay cleared on resource stop')
 end
 
--- ── locale: every text key the client uses exists ───────────────────────────
+-- ============================================================================
+--                LOCALE: every text key the client uses exists
+-- ============================================================================
+
 do
     local fh = assert(io.open(H.root .. 'modules/builder/client.lua', 'r'))
     local src = fh:read('a')
     fh:close()
     local missing = {}
-    for key in src:gmatch("'(builder%.[%w_%.]+)'") do
+    for key in src:gmatch('\'(builder%.[%w_%.]+)\'') do
         if key ~= 'builder.' and not key:match('%.$') and strings[key] == nil then missing[#missing + 1] = key end
     end
-    for key in src:gmatch("'(err%.[%w_]+)'") do
+    for key in src:gmatch('\'(err%.[%w_]+)\'') do
         if strings[key] == nil then missing[#missing + 1] = key end
     end
-    H.eq(table.concat(missing, ', '), '', 'every builder.* / err.* key of the client is in locales/parts/builder_client.json')
+    H.eq(table.concat(missing, ', '), '',
+        'every builder.* / err.* key of the client is in locales/parts/builder_client.json')
 end
 
 return H

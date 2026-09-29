@@ -1,8 +1,5 @@
-// src/builder · the Mission Builder component library (Supervisor UI → Mission Builder, Admin UI → Missions).
-//   BuilderWorkspace  mission list + editor (the whole builder)
-//   MissionList       drafts, tested, published and archived custom missions with status, version and lock
-//   BuilderEditor     the step editor of one mission
-// Protocol: docs/notes/builder_protocol.md · notes: docs/notes/builder_client.md.
+// Src/builder · the Mission Builder component library (Supervisor UI → Mission Builder, Admin UI → Missions).
+
 import './Builder.css';
 
 export { BuilderWorkspace } from './BuilderWorkspace';

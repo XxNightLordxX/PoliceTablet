@@ -1,145 +1,159 @@
 /* Supervisor UI · Review Queue (oversight slice). Only --cp-* variables. */
 
 .oversight-rq-soft {
-  color: var(--cp-muted);
-  font-size: var(--cp-fs-sm);
+    color: var(--cp-muted);
+    font-size: var(--cp-fs-sm);
 }
 
 .oversight-rq-who,
 .oversight-rq-mission {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-  padding: 3px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    padding: 3px 0;
 }
+
 /* Long names (64 characters) and labels must never push the decision buttons out of the table: both
    queue tables use fixed column widths and the mission column takes what is left. */
 .oversight-rq-table table {
-  table-layout: fixed;
+    table-layout: fixed;
 }
+
 .oversight-rq-table td {
-  overflow: hidden;
+    overflow: hidden;
 }
+
 .oversight-rq-who__sub > span:last-child {
-  overflow: hidden;
-  text-overflow: ellipsis;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
+
 .oversight-rq-table .oversight-rq-mission__name {
-  white-space: normal;
-  overflow-wrap: anywhere;
-  line-height: 1.25;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    line-height: 1.25;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
 }
+
 .oversight-rq-who__name,
 .oversight-rq-mission__name {
-  font-weight: 650;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+    font-weight: 650;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
+
 .oversight-rq-date {
-  white-space: nowrap;
+    white-space: nowrap;
 }
+
 .oversight-rq-who__sub,
 .oversight-rq-mission__sub {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
-  font-size: var(--cp-fs-sm);
-  color: var(--cp-muted);
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    font-size: var(--cp-fs-sm);
+    color: var(--cp-muted);
 }
+
 .oversight-rq-who__sub {
-  flex-wrap: nowrap;
-  white-space: nowrap;
-  overflow: hidden;
+    flex-wrap: nowrap;
+    white-space: nowrap;
+    overflow: hidden;
 }
 
 .oversight-rq-flag {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
-  min-width: 0;
-  padding: 3px 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    min-width: 0;
+    padding: 3px 0;
 }
+
 .oversight-rq-flag__detail {
-  max-width: 100%;
-  font-size: var(--cp-fs-sm);
-  color: var(--cp-text);
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+    max-width: 100%;
+    font-size: var(--cp-fs-sm);
+    color: var(--cp-text);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
 }
+
 .oversight-rq-flag__also {
-  font-size: var(--cp-fs-xs);
-  color: var(--cp-warning);
+    font-size: var(--cp-fs-xs);
+    color: var(--cp-warning);
 }
 
 .oversight-rq-held {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 2px;
-  font-weight: 650;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+    font-weight: 650;
 }
 
 .oversight-rq-quote {
-  font-style: italic;
-  color: var(--cp-text);
+    font-style: italic;
+    color: var(--cp-text);
 }
+
 .oversight-rq-clamp {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  font-size: var(--cp-fs-sm);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    font-size: var(--cp-fs-sm);
 }
 
 .oversight-rq-note {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: -6px;
-  font-size: var(--cp-fs-sm);
-  color: var(--cp-subtle);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: -6px;
+    font-size: var(--cp-fs-sm);
+    color: var(--cp-subtle);
 }
 
 .oversight-rq-detail {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
 }
+
 .oversight-rq-detail__box {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 12px 14px;
-  border-radius: var(--cp-radius-sm);
-  background: var(--cp-surface-2);
-  border: 1px solid var(--cp-border);
-  border-left: 3px solid var(--cp-danger);
-  line-height: 1.45;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 12px 14px;
+    border-radius: var(--cp-radius-sm);
+    background: var(--cp-surface-2);
+    border: 1px solid var(--cp-border);
+    border-left: 3px solid var(--cp-danger);
+    line-height: 1.45;
 }
+
 .oversight-rq-detail__label {
-  font-size: var(--cp-fs-xs);
-  font-weight: 700;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-  color: var(--cp-subtle);
+    font-size: var(--cp-fs-xs);
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--cp-subtle);
 }
+
 .oversight-rq-uuid {
-  font-family: var(--cp-mono);
-  font-size: var(--cp-fs-xs);
-  color: var(--cp-subtle);
-  word-break: break-all;
+    font-family: var(--cp-mono);
+    font-size: var(--cp-fs-xs);
+    color: var(--cp-subtle);
+    word-break: break-all;
 }
 
 .oversight-rq-mission__when {
-  font-size: var(--cp-fs-xs);
-  color: var(--cp-subtle);
+    font-size: var(--cp-fs-xs);
+    color: var(--cp-subtle);
 }

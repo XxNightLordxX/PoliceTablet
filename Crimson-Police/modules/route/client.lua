@@ -1,33 +1,5 @@
--- modules/route/client.lua · CP.Route (client): the GPS route to the mission start and the reports the
--- server checks (docs/ARCHITECTURE.md §5.12, SPEC "Route to the start").
---
--- Owns: the start waypoint, a temporary route blip used to read GTA's GPS route, the fixed polyline sampled
--- from it, the reports to server:routeStatus, the route part of the HUD (HudState.route) and the client
--- actions setGps and recalcRoute (NUI 'client' endpoint, registered with CP.Tablet.registerClientAction).
---
--- Public API
---   CP.Route.begin(runId, startCoords, opts?) -> boolean
---       Sets the waypoint (SetNewWaypoint) and a GPS route to the start, waits for the route to exist,
---       samples it every Config.Route.sampleEvery m with GetPosAlongGpsTypeRoute over GetGpsBlipRouteLength
---       into a fixed polyline (never recalculated automatically; when sampling fails the straight line from
---       the player to the start is used and logged), then reports every Config.Route.reportEvery s the 2D
---       distance from the player to that polyline (CP.U.distToPolyline) and the player's coords.
---       opts = { startRoute = false (test run without the route: waypoint only, no reports, HUD 'disabled'),
---       radius }. Idempotent for the same runId. CP.Runs calls it on client:start; this file also reacts to
---       client:start itself, so a missed call cannot skip the route.
---   CP.Route.recalculate() -> ok, data|errKey     asks the server (server:recalcRoute); on ok resamples the
---       route from where the player is. data = { recalcsLeft }. errKeys: err.route_inactive,
---       err.route_arrived, err.route_disabled, err.route_no_recalcs, err.busy, err.timeout. Yields.
---   CP.Route.stop()                               clears the waypoint (when it is still ours), the blip and
---                                                 the reports; that run is never begun again on this client
---                                                 (CP.Runs calls it on arrival and at the end). Never touches
---                                                 the HUD (the run engine owns it).
---   CP.Route.current() -> { runId, arrived, routeOn } | nil
--- Client actions: setGps (re-sets the waypoint to the start; the polyline stays the same), recalcRoute.
--- Events handled: client:routeWarning (runId, secondsLeft|nil) -> HUD { route = { status, secondsLeft,
--- distance } } and one toast when a warning first appears; client:routeRecalc (runId, ok, recalcsLeft);
--- client:routeStatus (runId, RouteStatus) and client:participants (runId, list) -> 'arrived';
--- client:start (fallback begin) and client:runEnded (fallback stop).
+-- CP.Route (client): the GPS route to the mission start and the reports the server checks (docs/ARCHITECTURE.md §5.12,
+-- SPEC "Route to the start").
 
 CP.Route = CP.Route or {}
 local R = CP.Route
@@ -42,15 +14,18 @@ local tokenSeq = 0
 local latestStart = nil             -- runId of the latest client:start
 local endedRuns, endedCount = {}, 0 -- runs that ended on this client (begin refuses them)
 
-local function markEnded(runId)
+local function MarkEnded(runId)
     if endedRuns[runId] then return end
     if endedCount >= 50 then endedRuns, endedCount = {}, 0 end
     endedRuns[runId] = true
     endedCount = endedCount + 1
 end
 
--- ── helpers ─────────────────────────────────────────────────────────────────
-local function toVec3(v)
+-- ============================================================================
+--                                   HELPERS
+-- ============================================================================
+
+local function ToVec3(v)
     local t = type(v)
     if t ~= 'vector3' and t ~= 'vector4' and t ~= 'table' then return nil end
     local x, y, z = CP.U.xyz(v)
@@ -59,32 +34,32 @@ local function toVec3(v)
     return vector3(x + 0.0, y + 0.0, z + 0.0)
 end
 
-local function valid(token)
+local function Valid(token)
     return cur ~= nil and cur.token == token
 end
 
-local function playerPos()
+local function PlayerPos()
     local c = GetEntityCoords(PlayerPedId())
     return vector3(c.x, c.y, c.z)
 end
 
-local function hudRoute(route)
+local function HudRoute(route)
     if CP.Tablet and CP.Tablet.hud then CP.Tablet.hud({ route = route }) end
 end
 
-local function toast(kind, key, vars)
+local function Toast(kind, key, vars)
     if CP.Tablet and CP.Tablet.notify then CP.Tablet.notify(kind, CP.L(key, vars)) end
 end
 
 -- Cumulative lengths so the HUD can show the distance still to drive along the fixed line.
-local function setPolyline(pts)
+local function SetPolyline(pts)
     local cum = { 0.0 }
     for i = 2, #pts do cum[i] = cum[i - 1] + CP.U.dist2d(pts[i - 1], pts[i]) end
     cur.polyline = pts
     cur.cum = cum
 end
 
-local function remainingAlong(pos)
+local function RemainingAlong(pos)
     local pts, cum = cur.polyline, cur.cum
     if not pts or #pts < 2 then return math.floor(CP.U.dist2d(pos, cur.target) + 0.5) end
     local px, py = pos.x, pos.y
@@ -107,10 +82,10 @@ local function remainingAlong(pos)
     return math.floor(left + 0.5)
 end
 
-local function showRoute()
+local function ShowRoute()
     if not cur or cur.arrived then return end
     if not cur.routeOn then
-        hudRoute({ status = 'disabled' })
+        HudRoute({ status = 'disabled' })
         return
     end
     local r = { distance = cur.distance }
@@ -122,7 +97,7 @@ local function showRoute()
     else
         r.status = 'on'
     end
-    hudRoute(r)
+    HudRoute(r)
 end
 
 local function removeBlip()
@@ -135,12 +110,12 @@ local function removeBlip()
     end
 end
 
-local function setWaypoint()
+local function SetWaypoint()
     if cur then SetNewWaypoint(cur.target.x + 0.0, cur.target.y + 0.0) end
 end
 
 -- Only remove the waypoint when it still points at our start (the player may have set their own).
-local function clearOurWaypoint(target)
+local function ClearOurWaypoint(target)
     if not IsWaypointActive() then return end
     local blip = GetFirstBlipInfoId(WAYPOINT_SPRITE)
     if not blip or not DoesBlipExist(blip) then return end
@@ -148,18 +123,21 @@ local function clearOurWaypoint(target)
     if CP.U.dist2d(c, target) <= 15.0 then SetWaypointOff() end
 end
 
--- ── sampling ────────────────────────────────────────────────────────────────
-local function waitForRoute(token)
+-- ============================================================================
+--                                   SAMPLING
+-- ============================================================================
+
+local function WaitForRoute(token)
     local deadline = GetGameTimer() + ROUTE_WAIT_MS
     while GetGameTimer() < deadline do
-        if not valid(token) then return false end
+        if not Valid(token) then return false end
         if GetGpsBlipRouteFound() and (GetGpsBlipRouteLength() or 0) > 0 then return true end
         Wait(100)
     end
     return false
 end
 
-local function pickSlot()
+local function PickSlot()
     for _, slot in ipairs(SLOT_TYPES) do
         local ok, pos = GetPosAlongGpsTypeRoute(true, 0.0, slot)
         if ok and pos then return slot end
@@ -168,10 +146,10 @@ local function pickSlot()
 end
 
 -- Returns a polyline from the player to the start (the GPS route, or the straight line).
-local function samplePolyline(token)
+local function SamplePolyline(token)
     local target = cur.target
     local runId = cur.runId
-    local start = playerPos()
+    local start = PlayerPos()
     local pts
     local blip = AddBlipForCoord(target.x, target.y, target.z)
     cur.blip = blip
@@ -183,11 +161,11 @@ local function samplePolyline(token)
     AddTextComponentSubstringPlayerName(CP.L('route.blip'))
     EndTextCommandSetBlipName(blip)
     SetBlipRoute(blip, true)
-    if waitForRoute(token) and valid(token) then
+    if WaitForRoute(token) and Valid(token) then
         local length = tonumber(GetGpsBlipRouteLength()) or 0
         local step = tonumber(Config.Route.sampleEvery) or 50.0
         if step < 5.0 then step = 5.0 end
-        local slot = pickSlot()
+        local slot = PickSlot()
         if slot and length > 0 then
             pts = { start }
             local d, n = step, 0
@@ -198,59 +176,65 @@ local function samplePolyline(token)
                 n = n + 1
                 if n % 40 == 0 then
                     Wait(0)
-                    if not valid(token) then break end
+                    if not Valid(token) then break end
                 end
             end
             pts[#pts + 1] = target
             if #pts < 3 then pts = nil end
         end
     end
-    if valid(token) then removeBlip() end
+    if Valid(token) then removeBlip() end
     if not pts then
         CP.warn(TAG, 'no GPS route to the start of run %s: using the straight line', runId)
         pts = { start, target }
-        if valid(token) then toast('warning', 'route.no_gps') end
+        if Valid(token) then Toast('warning', 'route.no_gps') end
     else
         CP.log(TAG, 'route of run %s sampled: %d points', runId, #pts)
     end
     return pts
 end
 
-local function resample(token)
+local function Resample(token)
     cur.sampling = true
-    setWaypoint()
-    local pts = samplePolyline(token)
-    if not valid(token) then return false end
-    setPolyline(pts)
+    SetWaypoint()
+    local pts = SamplePolyline(token)
+    if not Valid(token) then return false end
+    SetPolyline(pts)
     cur.metres = 0
     cur.warning = nil
     cur.sampling = false
     return true
 end
 
--- ── reports ─────────────────────────────────────────────────────────────────
-local function reportOnce()
-    local pos = playerPos()
+-- ============================================================================
+--                                   REPORTS
+-- ============================================================================
+
+local function ReportOnce()
+    local pos = PlayerPos()
     local metres = CP.U.distToPolyline(pos, cur.polyline)
     if metres == math.huge then return end
     cur.metres = metres
-    cur.distance = remainingAlong(pos)
+    cur.distance = RemainingAlong(pos)
     TriggerServerEvent(CP.e('server:routeStatus'), cur.runId, metres + 0.0, pos)
-    showRoute()
+    ShowRoute()
 end
 
-local function routeThread(token)
-    if not resample(token) then return end
-    showRoute()
-    while valid(token) and not cur.arrived do
-        if cur.polyline and not cur.sampling then reportOnce() end
+local function RouteThread(token)
+    if not Resample(token) then return end
+    ShowRoute()
+    while Valid(token) and not cur.arrived do
+        if cur.polyline and not cur.sampling then ReportOnce() end
         local every = tonumber(Config.Route.reportEvery) or 2
         if every < 1 then every = 1 end
         Wait(math.floor(every * 1000))
     end
 end
 
--- ── public API ──────────────────────────────────────────────────────────────
+-- ============================================================================
+--                                  PUBLIC API
+-- ============================================================================
+
 function R.current()
     if not cur then return nil end
     return { runId = cur.runId, arrived = cur.arrived, routeOn = cur.routeOn }
@@ -260,9 +244,9 @@ function R.stop()
     if not cur then return end
     local target = cur.target
     local pending = cur.recalcPending
-    markEnded(cur.runId)                -- stopped (arrival or run end): never begun again for this run
+    MarkEnded(cur.runId) -- stopped (arrival or run end): never begun again for this run
     removeBlip()
-    clearOurWaypoint(target)
+    ClearOurWaypoint(target)
     cur = nil
     if pending then pending.done = true; pending.p:resolve({ ok = false, stopped = true }) end
 end
@@ -273,11 +257,11 @@ function R.begin(runId, startCoords, opts)
     if cur and cur.runId == runId then
         if opts.startRoute == false and cur.routeOn then
             cur.routeOn = false
-            showRoute()
+            ShowRoute()
         end
         return true
     end
-    local target = toVec3(startCoords)
+    local target = ToVec3(startCoords)
     if not target then
         CP.warn(TAG, 'begin for run %s without start coords', runId)
         return false
@@ -285,29 +269,40 @@ function R.begin(runId, startCoords, opts)
     if cur then R.stop() end
     tokenSeq = tokenSeq + 1
     cur = {
-        runId = runId, target = target, radius = tonumber(opts.radius), token = tokenSeq,
-        routeOn = opts.startRoute ~= false, arrived = false,
-        polyline = nil, cum = nil, metres = nil, distance = nil, warning = nil, sampling = false,
+        runId = runId,
+        target = target,
+        radius = tonumber(opts.radius),
+        token = tokenSeq,
+        routeOn = opts.startRoute ~= false,
+        arrived = false,
+        polyline = nil,
+        cum = nil,
+        metres = nil,
+        distance = nil,
+        warning = nil,
+        sampling = false,
     }
-    setWaypoint()
+    SetWaypoint()
     local token = tokenSeq
     if cur.routeOn then
-        CreateThread(function() routeThread(token) end)   -- the HUD line appears once the route is sampled
+        CreateThread(function()
+            RouteThread(token)
+        end) -- the HUD line appears once the route is sampled
     else
-        showRoute()
+        ShowRoute()
     end
     return true
 end
 
-local function markArrived()
+local function MarkArrived()
     if not cur or cur.arrived then return end
     local target = cur.target
     cur.arrived = true
     cur.warning = nil
     removeBlip()
-    clearOurWaypoint(target)
-    hudRoute({ status = 'arrived' })
-    toast('success', 'route.arrived')
+    ClearOurWaypoint(target)
+    HudRoute({ status = 'arrived' })
+    Toast('success', 'route.arrived')
 end
 
 function R.recalculate()
@@ -326,30 +321,33 @@ function R.recalculate()
         end
     end)
     local res = Citizen.Await(pending.p)
-    if not valid(token) then return false, 'err.route_inactive' end
+    if not Valid(token) then return false, 'err.route_inactive' end
     cur.recalcPending = nil
     if res.timeout then return false, 'err.timeout' end
     if not res.ok then return false, 'err.route_no_recalcs' end
-    if not resample(token) then return false, 'err.route_inactive' end
-    showRoute()
+    if not Resample(token) then return false, 'err.route_inactive' end
+    ShowRoute()
     local left = tonumber(res.left) or 0
-    toast('info', 'route.recalculated', { left = left })
+    Toast('info', 'route.recalculated', { left = left })
     return true, { recalcsLeft = left }
 end
 
--- ── server events ───────────────────────────────────────────────────────────
+-- ============================================================================
+--                                SERVER EVENTS
+-- ============================================================================
+
 RegisterNetEvent(CP.e('client:routeWarning'), function(runId, secondsLeft)
     if not cur or cur.runId ~= runId or cur.arrived then return end
     if type(secondsLeft) == 'number' then
         local first = cur.warning == nil
         cur.warning = math.max(0, math.floor(secondsLeft))
-        showRoute()
-        if first then toast('warning', 'route.warning', { seconds = cur.warning }) end
+        ShowRoute()
+        if first then Toast('warning', 'route.warning', { seconds = cur.warning }) end
     else
         local was = cur.warning ~= nil
         cur.warning = nil
-        showRoute()
-        if was then toast('success', 'route.back_on') end
+        ShowRoute()
+        if was then Toast('success', 'route.back_on') end
     end
 end)
 
@@ -363,7 +361,7 @@ end)
 
 RegisterNetEvent(CP.e('client:routeStatus'), function(runId, status)
     if not cur or cur.runId ~= runId then return end
-    if type(status) == 'table' and status.status == 'arrived' then markArrived() end
+    if type(status) == 'table' and status.status == 'arrived' then MarkArrived() end
 end)
 
 RegisterNetEvent(CP.e('client:participants'), function(runId, list)
@@ -371,7 +369,7 @@ RegisterNetEvent(CP.e('client:participants'), function(runId, list)
     local me = GetPlayerServerId(PlayerId())
     for _, e in ipairs(list) do
         if type(e) == 'table' and tonumber(e.src) == me and e.arrived == true then
-            markArrived()
+            MarkArrived()
             return
         end
     end
@@ -394,7 +392,7 @@ end)
 
 RegisterNetEvent(CP.e('client:runEnded'), function(runId)
     if type(runId) ~= 'string' then return end
-    markEnded(runId)
+    MarkEnded(runId)
     if cur and cur.runId == runId then R.stop() end
 end)
 
@@ -403,7 +401,10 @@ AddEventHandler('onResourceStop', function(res)
     R.stop()
 end)
 
--- ── client actions (registered once every module has loaded) ───────────────
+-- ============================================================================
+--           CLIENT ACTIONS (registered once every module has loaded)
+-- ============================================================================
+
 CreateThread(function()
     Wait(0)
     if not (CP.Tablet and CP.Tablet.registerClientAction) then
@@ -412,8 +413,8 @@ CreateThread(function()
     end
     CP.Tablet.registerClientAction('setGps', function()
         if not cur then return false, 'err.route_inactive' end
-        setWaypoint()
-        toast('info', 'route.gps_set')
+        SetWaypoint()
+        Toast('info', 'route.gps_set')
         return true, { runId = cur.runId }
     end)
     CP.Tablet.registerClientAction('recalcRoute', function()

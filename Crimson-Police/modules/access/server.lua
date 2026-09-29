@@ -1,66 +1,17 @@
--- modules/access/server.lua · CP.Access (server): departments, roles, duty, active job, rank and
--- callsign, suspension checks.
---
--- Owns: the sanitised copy of Config.Departments (theme and logo validation with ONE console warning
--- per bad key), who counts as an officer / supervisor / admin, the Crimson-Police suspension
--- (cp_officers.suspended_until), the stored copy of rank, callsign and name (cp_officers), the
--- immediate "no longer qualifies" signal (onLost) and the server export GetDepartment.
--- All framework data comes through CP.Qbx; SC-Dispatch suspensions through CP.Dispatch.
---
--- Public API (docs/ARCHITECTURE.md §5.2)
---   CP.Access.departmentForJob(jobName) -> deptKey|nil
---   CP.Access.department(key) -> dept|nil       (a copy)
---       dept = { key, label, short, jobs = { jobName... }, supervisorGrade, societyAccount,
---                theme = { primary, accent, background, surface, text },
---                logo = { url|nil, file|nil, watermark, opacity, size, grayscale } }
---       Colours must be 6-digit hex: a missing or invalid one falls back to the Crimson-Police default
---       (one warning per department and key); a missing text colour is picked with CP.U.contrastText
---       for the background (an invalid one too, with a warning). logo.url is the configured https://
---       url, else https://cfx-nui-Crimson-Police/logos/<file> (file names only: no folders);
---       opacity is clamped to 0-0.25 (default 0.08), size to 0.05-1 (default 0.6), watermark defaults
---       to true, grayscale to false.
---   CP.Access.departments() -> { dept, ... }     sorted by key (copies)
---   CP.Access.getOfficer(src) -> officer|nil, errKey
---       officer = { src, citizenid, name, department, departmentLabel, departmentShort, job, rank,
---                   gradeLevel, callsign|nil, onduty = true, isSupervisor, isAdmin }   (§3.1)
---       Only the ACTIVE Qbox job counts (a department job held as a second sc-multijob job gives no
---       access). errKeys, in check order: err.not_police (no character, or the active job is in no
---       department), err.not_on_duty, err.suspended (Crimson-Police), err.suspended_dispatch
---       (SC-Dispatch, checked for the active job). Suspension lookups are cached for 15 s.
---   CP.Access.isAdmin(src) -> boolean            IsPlayerAceAllowed(src, Config.AdminAce); 0 = console = true
---   CP.Access.isSupervisor(src) -> boolean       a qualifying officer whose grade >= supervisorGrade
---   CP.Access.role(src) -> 'admin'|'supervisor'|'officer'|nil   (the highest)
---   CP.Access.recheck(src, jobName) -> ok, endReason
---       For a run participant who accepted with jobName: 'job_change' (active job differs from jobName,
---       or is in no department), 'off_duty', 'suspended' (either suspension). A player without a loaded
---       character returns true: the drop/unload paths end the run as disconnected.
---   CP.Access.isSuspended(citizenid) -> boolean, untilTs|nil
---   CP.Access.suspend(citizenid, days, actorSrc, reason) -> ok, errKey
---       0 days lifts it. days: a whole number 0-3650 (err.invalid_days); citizenid as stored by Qbox
---       (err.invalid_citizenid). When actorSrc is a player it must pass CP.Permissions.can(actorSrc,
---       'suspend') (err.no_permission). An online officer is told on their tablet and a new suspension
---       fires onLost(src, 'suspended'). Not audited here: the caller (modules/admin, modules/anticheat)
---       writes the audit entry.
---   CP.Access.refreshOfficerRow(src) -> boolean
---       Upsert cp_officers callsign (32), rank_label (40), display_name (64) and department for a
---       player whose active job is in a department (on duty or not). Runs on character load, on a
---       job/grade change and when the tablet opens. Every text value (here and in the officer table) is
---       cut to that many bytes without splitting a UTF-8 character (strict mode rejects half a character).
---   CP.Access.onLost(fn(src, endReason))
---       Fired right after a qbx duty/job/group event for a player whose last known active job (seeded at
---       start, on load and by the first getOfficer/recheck) was a department job and who no longer qualifies: 'job_change' (the active job changed, including to
---       'unemployed'), 'off_duty', 'suspended'. Listeners check whether the player is on a run.
---   Server export GetDepartment(src) -> deptKey|nil   the department of the player's active job
---                                                      (whether or not they are on duty)
--- getOfficer, isSupervisor, role, recheck, isSuspended, suspend and refreshOfficerRow may yield
--- (database): call them from a handler or thread.
+-- CP.Access (server): departments, roles, duty, active job, rank and callsign, suspension checks.
 
 CP.Access = CP.Access or {}
 local A = CP.Access
 local TAG = 'access'
 
 -- The Crimson-Police default theme (the neutral admin theme; the NUI uses the same values).
-local DEFAULT_THEME = { primary = '#a4161a', accent = '#e5383b', background = '#0b090a', surface = '#161a1d', text = '#f5f3f4' }
+local DEFAULT_THEME = {
+    primary = '#a4161a',
+    accent = '#e5383b',
+    background = '#0b090a',
+    surface = '#161a1d',
+    text = '#f5f3f4',
+}
 local COLOUR_KEYS = { 'primary', 'accent', 'background', 'surface' }
 local LOGO_EXTENSIONS = { png = true, webp = true, svg = true, jpg = true, jpeg = true }
 local NO_SUPERVISOR_GRADE = 1000
@@ -74,14 +25,17 @@ local dispatchCache = {}     -- citizenid|job -> { suspended = bool, at = os.tim
 local lastJob = {}           -- src -> last known active job name
 local lostListeners = {}
 
--- ── helpers ─────────────────────────────────────────────────────────────────
-local function warnOnce(key, fmt, ...)
+-- ============================================================================
+--                                   HELPERS
+-- ============================================================================
+
+local function WarnOnce(key, fmt, ...)
     if warned[key] then return end
     warned[key] = true
     CP.warn(TAG, fmt, ...)
 end
 
-local function toSrc(src)
+local function ToSrc(src)
     local n = tonumber(src)
     if not n then return nil end
     n = math.tointeger(n)
@@ -92,7 +46,7 @@ end
 -- At most n bytes, never ending in half a UTF-8 character: the cp_officers columns count characters,
 -- and MariaDB's strict mode rejects the whole upsert for a string cut inside a multi-byte character
 -- (CP.U.clip cuts bytes). Names and callsigns are free text, e.g. "José" or "Łukasz".
-local function clipText(s, n)
+local function ClipText(s, n)
     if s == nil then return nil end
     s = tostring(s)
     if #s <= n then return s end
@@ -108,26 +62,30 @@ local function clipText(s, n)
     return s
 end
 
-local function nonEmpty(v, max)
+local function NonEmpty(v, max)
     if type(v) ~= 'string' then return nil end
     local s = CP.U.trim(v)
     if s == '' then return nil end
-    return clipText(s, max)
+    return ClipText(s, max)
 end
 
-local function describe(v)
+local function Describe(v)
     if v == nil then return 'missing' end
     return ('"%s"'):format(tostring(v))
 end
 
-local function notify(src, kind, key, vars)
+local function Notify(src, kind, key, vars)
     if CP.Tablet and CP.Tablet.notify then CP.Tablet.notify(src, kind, key, vars) end
 end
 
--- ── department sanitising ───────────────────────────────────────────────────
-local function sanitizeTheme(deptKey, theme)
+-- ============================================================================
+--                            DEPARTMENT SANITISING
+-- ============================================================================
+
+local function SanitizeTheme(deptKey, theme)
     if theme ~= nil and type(theme) ~= 'table' then
-        warnOnce(deptKey .. '.theme', 'Department %s: theme must be a table; using the Crimson-Police default colours', deptKey)
+        WarnOnce(deptKey .. '.theme', 'Department %s: theme must be a table; using the Crimson-Police default colours',
+            deptKey)
         theme = nil
     end
     theme = theme or {}
@@ -137,9 +95,9 @@ local function sanitizeTheme(deptKey, theme)
         if CP.U.isHexColour(v) then
             out[k] = v:lower()
         else
-            warnOnce(('%s.theme.%s'):format(deptKey, k),
+            WarnOnce(('%s.theme.%s'):format(deptKey, k),
                 'Department %s: theme.%s is %s, not a 6-digit hex colour such as #1f4e8c; using the Crimson-Police default %s',
-                deptKey, k, describe(v), DEFAULT_THEME[k])
+                deptKey, k, Describe(v), DEFAULT_THEME[k])
             out[k] = DEFAULT_THEME[k]
         end
     end
@@ -150,16 +108,16 @@ local function sanitizeTheme(deptKey, theme)
         out.text = text:lower()
     else
         out.text = CP.U.contrastText(out.background)
-        warnOnce(deptKey .. '.theme.text',
+        WarnOnce(deptKey .. '.theme.text',
             'Department %s: theme.text is %s, not a 6-digit hex colour; picked %s for contrast with the background',
-            deptKey, describe(text), out.text)
+            deptKey, Describe(text), out.text)
     end
     return out
 end
 
-local function sanitizeLogo(deptKey, logo)
+local function SanitizeLogo(deptKey, logo)
     if logo ~= nil and type(logo) ~= 'table' then
-        warnOnce(deptKey .. '.logo', 'Department %s: logo must be a table; no logo is shown', deptKey)
+        WarnOnce(deptKey .. '.logo', 'Department %s: logo must be a table; no logo is shown', deptKey)
         logo = nil
     end
     logo = logo or {}
@@ -167,10 +125,12 @@ local function sanitizeLogo(deptKey, logo)
 
     local url = logo.url
     if url ~= nil then
-        if type(url) == 'string' and url:sub(1, 8):lower() == 'https://' and #url > 8 and #url <= 512 and not url:find('[%s"\'<>\\]') then
+        if type(url) == 'string' and url:sub(1, 8):lower() == 'https://' and #url > 8 and #url <= 512
+            and not url:find('[%s"\'<>\\]') then
             out.url = url
         else
-            warnOnce(deptKey .. '.logo.url', 'Department %s: logo.url must be a direct https:// image link; it is ignored', deptKey)
+            WarnOnce(deptKey .. '.logo.url',
+                'Department %s: logo.url must be a direct https:// image link; it is ignored', deptKey)
         end
     end
     local file = logo.file
@@ -181,9 +141,9 @@ local function sanitizeLogo(deptKey, logo)
             out.file = file
             out.url = ('https://cfx-nui-%s/logos/%s'):format(CP.resource, file)
         else
-            warnOnce(deptKey .. '.logo.file',
+            WarnOnce(deptKey .. '.logo.file',
                 'Department %s: logo.file %s must be a PNG, WebP or SVG file name in logos/ (no folders); no logo is shown',
-                deptKey, describe(file))
+                deptKey, Describe(file))
         end
     end
     if url == nil and file == nil then
@@ -192,36 +152,39 @@ local function sanitizeLogo(deptKey, logo)
 
     local opacity = tonumber(logo.opacity)
     if logo.opacity ~= nil and (opacity == nil or opacity ~= opacity) then
-        warnOnce(deptKey .. '.logo.opacity', 'Department %s: logo.opacity must be a number from 0.0 to 0.25; using 0.08', deptKey)
+        WarnOnce(deptKey .. '.logo.opacity',
+            'Department %s: logo.opacity must be a number from 0.0 to 0.25; using 0.08', deptKey)
         opacity = nil
     end
     if opacity then
         local clamped = CP.U.clamp(opacity, 0.0, 0.25)
         if clamped ~= opacity then
-            warnOnce(deptKey .. '.logo.opacity', 'Department %s: logo.opacity %s is outside 0.0-0.25; using %s', deptKey, tostring(opacity), tostring(clamped))
+            WarnOnce(deptKey .. '.logo.opacity', 'Department %s: logo.opacity %s is outside 0.0-0.25; using %s',
+                deptKey, tostring(opacity), tostring(clamped))
         end
         out.opacity = clamped
     end
 
     local size = tonumber(logo.size)
     if logo.size ~= nil and (size == nil or size ~= size or size <= 0) then
-        warnOnce(deptKey .. '.logo.size', 'Department %s: logo.size must be a share of the tablet height above 0; using 0.6', deptKey)
+        WarnOnce(deptKey .. '.logo.size',
+            'Department %s: logo.size must be a share of the tablet height above 0; using 0.6', deptKey)
         size = nil
     end
     if size then out.size = CP.U.clamp(size, 0.05, 1.0) end
     return out
 end
 
-local function sanitizeDepartment(key, cfg)
-    local short = nonEmpty(cfg.short, 16)
-    local label = nonEmpty(cfg.label, 64)
+local function SanitizeDepartment(key, cfg)
+    local short = NonEmpty(cfg.short, 16)
+    local label = NonEmpty(cfg.label, 64)
     if not short then
-        short = clipText(key:upper(), 16)
-        warnOnce(key .. '.short', 'Department %s has no short tag; using %s', key, short)
+        short = ClipText(key:upper(), 16)
+        WarnOnce(key .. '.short', 'Department %s has no short tag; using %s', key, short)
     end
     if not label then
         label = short
-        warnOnce(key .. '.label', 'Department %s has no label; using %s', key, label)
+        WarnOnce(key .. '.label', 'Department %s has no label; using %s', key, label)
     end
 
     local jobs, rawJobs = {}, cfg.jobs
@@ -232,16 +195,17 @@ local function sanitizeDepartment(key, cfg)
         end
     end
     if #jobs == 0 then
-        warnOnce(key .. '.jobs', 'Department %s lists no Qbox job names in jobs: nobody can use it', key)
+        WarnOnce(key .. '.jobs', 'Department %s lists no Qbox job names in jobs: nobody can use it', key)
     end
 
     local grade = tonumber(cfg.supervisorGrade)
     if not grade or grade ~= grade then
-        warnOnce(key .. '.supervisorGrade', 'Department %s: supervisorGrade must be a Qbox grade level; nobody in it is a supervisor', key)
+        WarnOnce(key .. '.supervisorGrade',
+            'Department %s: supervisorGrade must be a Qbox grade level; nobody in it is a supervisor', key)
         grade = NO_SUPERVISOR_GRADE
     end
 
-    local society = nonEmpty(cfg.societyAccount, 50)
+    local society = NonEmpty(cfg.societyAccount, 50)
     if not society then society = jobs[1] or key end
 
     return {
@@ -251,13 +215,13 @@ local function sanitizeDepartment(key, cfg)
         jobs = jobs,
         supervisorGrade = math.floor(grade),
         societyAccount = society,
-        theme = sanitizeTheme(key, cfg.theme),
-        logo = sanitizeLogo(key, cfg.logo),
+        theme = SanitizeTheme(key, cfg.theme),
+        logo = SanitizeLogo(key, cfg.logo),
     }
 end
 
 -- The sanitised departments, rebuilt only when Config.Departments is replaced.
-local function build()
+local function Build()
     local source = Config.Departments
     if cache.built and cache.source == source then return cache end
     local list, byKey, byJob = {}, {}, {}
@@ -268,16 +232,18 @@ local function build()
         for _, k in ipairs(keys) do
             local cfg = source[k]
             if type(k) ~= 'string' or not k:match('^[%w_]+$') or #k > 32 then
-                warnOnce('key.' .. tostring(k), 'Config.Departments key %s must be letters, digits or _ (at most 32); it is ignored', describe(k))
+                WarnOnce('key.' .. tostring(k),
+                    'Config.Departments key %s must be letters, digits or _ (at most 32); it is ignored', Describe(k))
             elseif type(cfg) ~= 'table' then
-                warnOnce('entry.' .. k, 'Config.Departments.%s must be a table; it is ignored', k)
+                WarnOnce('entry.' .. k, 'Config.Departments.%s must be a table; it is ignored', k)
             else
-                local d = sanitizeDepartment(k, cfg)
+                local d = SanitizeDepartment(k, cfg)
                 list[#list + 1] = d
                 byKey[k] = d
                 for _, j in ipairs(d.jobs) do
                     if byJob[j] and byJob[j] ~= k then
-                        warnOnce('job.' .. j, 'Qbox job %s is listed in departments %s and %s; %s is used', j, byJob[j], k, byJob[j])
+                        WarnOnce('job.' .. j, 'Qbox job %s is listed in departments %s and %s; %s is used', j, byJob[j],
+                            k, byJob[j])
                     else
                         byJob[j] = k
                     end
@@ -285,7 +251,7 @@ local function build()
             end
         end
     else
-        warnOnce('departments', 'Config.Departments is missing: nobody can use Crimson-Police')
+        WarnOnce('departments', 'Config.Departments is missing: nobody can use Crimson-Police')
     end
     cache = { built = true, source = source, list = list, byKey = byKey, byJob = byJob }
     return cache
@@ -293,33 +259,39 @@ end
 
 function A.departmentForJob(jobName)
     if type(jobName) ~= 'string' then return nil end
-    return build().byJob[jobName]
+    return Build().byJob[jobName]
 end
 
 function A.department(key)
     if type(key) ~= 'string' then return nil end
-    local d = build().byKey[key]
+    local d = Build().byKey[key]
     return d and CP.U.deepcopy(d) or nil
 end
 
 function A.departments()
     local out = {}
-    for i, d in ipairs(build().list) do out[i] = CP.U.deepcopy(d) end
+    for i, d in ipairs(Build().list) do out[i] = CP.U.deepcopy(d) end
     return out
 end
 
--- ── roles ───────────────────────────────────────────────────────────────────
+-- ============================================================================
+--                                    ROLES
+-- ============================================================================
+
 function A.isAdmin(src)
     local n = tonumber(src)
     if n == 0 then return true end
-    n = toSrc(n)
+    n = ToSrc(n)
     if not n then return false end
     local ace = type(Config.AdminAce) == 'string' and Config.AdminAce ~= '' and Config.AdminAce or 'crimsonpolice.admin'
     local allowed = IsPlayerAceAllowed(n, ace)
     return allowed == true or allowed == 1
 end
 
--- ── suspensions ─────────────────────────────────────────────────────────────
+-- ============================================================================
+--                                 SUSPENSIONS
+-- ============================================================================
+
 function A.isSuspended(citizenid)
     if type(citizenid) ~= 'string' or citizenid == '' then return false, nil end
     local now = os.time()
@@ -340,7 +312,7 @@ function A.isSuspended(citizenid)
     return false, nil
 end
 
-local function dispatchSuspended(citizenid, jobName)
+local function DispatchSuspended(citizenid, jobName)
     if not (CP.Dispatch and CP.Dispatch.isSuspended) then return false end
     local key = citizenid .. '|' .. tostring(jobName)
     local now = os.time()
@@ -351,33 +323,36 @@ local function dispatchSuspended(citizenid, jobName)
     return suspended
 end
 
--- ── officers ────────────────────────────────────────────────────────────────
+-- ============================================================================
+--                                   OFFICERS
+-- ============================================================================
+
 function A.getOfficer(src)
-    local n = toSrc(src)
+    local n = ToSrc(src)
     if not n or not (CP.Qbx and CP.Qbx.getInfo) then return nil, 'err.not_police' end
     local info = CP.Qbx.getInfo(n)
     if not info then return nil, 'err.not_police' end
     -- Only seed: the qbx event handlers (evaluate) own later changes, so a lookup racing a job switch
     -- cannot hide the onLost signal.
     if lastJob[n] == nil then lastJob[n] = info.job.name end
-    local c = build()
+    local c = Build()
     local deptKey = c.byJob[info.job.name]
     local dept = deptKey and c.byKey[deptKey]
     if not dept then return nil, 'err.not_police' end
     if not info.job.onduty then return nil, 'err.not_on_duty' end
     if A.isSuspended(info.citizenid) then return nil, 'err.suspended' end
-    if dispatchSuspended(info.citizenid, info.job.name) then return nil, 'err.suspended_dispatch' end
+    if DispatchSuspended(info.citizenid, info.job.name) then return nil, 'err.suspended_dispatch' end
     return {
         src = n,
         citizenid = info.citizenid,
-        name = clipText(info.name, 64),
+        name = ClipText(info.name, 64),
         department = dept.key,
         departmentLabel = dept.label,
         departmentShort = dept.short,
         job = info.job.name,
-        rank = clipText(info.job.gradeName or CP.L('common.unknown'), 40),
+        rank = ClipText(info.job.gradeName or CP.L('common.unknown'), 40),
         gradeLevel = info.job.gradeLevel,
-        callsign = info.callsign and clipText(info.callsign, 32) or nil,
+        callsign = info.callsign and ClipText(info.callsign, 32) or nil,
         onduty = true,
         isSupervisor = info.job.gradeLevel >= dept.supervisorGrade,
         isAdmin = A.isAdmin(n),
@@ -398,21 +373,24 @@ function A.role(src)
 end
 
 function A.recheck(src, jobName)
-    local n = toSrc(src)
+    local n = ToSrc(src)
     if not n or not (CP.Qbx and CP.Qbx.getInfo) then return true end
     local info = CP.Qbx.getInfo(n)
     if not info then return true end
     local job = info.job.name
     if lastJob[n] == nil then lastJob[n] = job end
-    if (type(jobName) == 'string' and jobName ~= '' and job ~= jobName) or not build().byJob[job] then
+    if (type(jobName) == 'string' and jobName ~= '' and job ~= jobName) or not Build().byJob[job] then
         return false, 'job_change'
     end
     if not info.job.onduty then return false, 'off_duty' end
-    if A.isSuspended(info.citizenid) or dispatchSuspended(info.citizenid, job) then return false, 'suspended' end
+    if A.isSuspended(info.citizenid) or DispatchSuspended(info.citizenid, job) then return false, 'suspended' end
     return true
 end
 
--- ── onLost ──────────────────────────────────────────────────────────────────
+-- ============================================================================
+--                                    onLost
+-- ============================================================================
+
 function A.onLost(fn)
     if type(fn) ~= 'function' then
         CP.warn(TAG, 'an onLost listener must be a function (got %s)', type(fn))
@@ -421,7 +399,7 @@ function A.onLost(fn)
     lostListeners[#lostListeners + 1] = fn
 end
 
-local function fireLost(src, reason)
+local function FireLost(src, reason)
     CP.log(TAG, 'player %d no longer qualifies (%s)', src, reason)
     for i = 1, #lostListeners do
         local fn = lostListeners[i]
@@ -432,37 +410,39 @@ local function fireLost(src, reason)
     end
 end
 
-local function seed(src)
+local function Seed(src)
     local info = CP.Qbx.getInfo(src)
     if info then lastJob[src] = info.job.name end
 end
 
 -- Compare the player's current state with their last known active job.
-local function evaluate(src)
-    local n = toSrc(src)
+local function Evaluate(src)
+    local n = ToSrc(src)
     if not n then return end
     local info = CP.Qbx.getInfo(n)
     if not info then return end
     local prev = lastJob[n]
     local job = info.job.name
     lastJob[n] = job
-    local c = build()
+    local c = Build()
     if not prev or not c.byJob[prev] then return end
     local reason
     if job ~= prev or not c.byJob[job] then
         reason = 'job_change'
     elseif not info.job.onduty then
         reason = 'off_duty'
-    elseif A.isSuspended(info.citizenid) or dispatchSuspended(info.citizenid, job) then
+    elseif A.isSuspended(info.citizenid) or DispatchSuspended(info.citizenid, job) then
         reason = 'suspended'
     end
-    if reason then fireLost(n, reason) end
+    if reason then FireLost(n, reason) end
 end
 
 function A.suspend(citizenid, days, actorSrc, reason)
     if type(citizenid) ~= 'string' then return false, 'err.invalid_citizenid' end
     citizenid = CP.U.trim(citizenid)
-    if citizenid == '' or #citizenid > 50 or not citizenid:match('^[%w_%-]+$') then return false, 'err.invalid_citizenid' end
+    if citizenid == '' or #citizenid > 50 or not citizenid:match('^[%w_%-]+$') then
+        return false, 'err.invalid_citizenid'
+    end
     local d = tonumber(days)
     if not d or d ~= d or d < 0 or d > MAX_SUSPEND_DAYS or d ~= math.floor(d) then return false, 'err.invalid_days' end
     d = math.floor(d)
@@ -475,7 +455,8 @@ function A.suspend(citizenid, days, actorSrc, reason)
     CP.Migrations.ready()
     local now = os.time()
     if d == 0 then
-        local ok, err = pcall(MySQL.update.await, 'UPDATE cp_officers SET suspended_until = NULL WHERE citizenid = ?', { citizenid })
+        local ok, err = pcall(MySQL.update.await, 'UPDATE cp_officers SET suspended_until = NULL WHERE citizenid = ?',
+            { citizenid })
         if not ok then
             CP.err(TAG, 'lifting the suspension of %s failed: %s', citizenid, tostring(err))
             return false, 'err.internal'
@@ -492,27 +473,27 @@ function A.suspend(citizenid, days, actorSrc, reason)
         end
         suspensionCache[citizenid] = { untilTs = untilTs, at = now }
     end
-    CP.log(TAG, '%s %s (%d days) by %s: %s', d == 0 and 'unsuspended' or 'suspended', citizenid, d,
-        tostring(actorSrc), tostring(reason or ''))
+    CP.log(TAG, '%s %s (%d days) by %s: %s', d == 0 and 'unsuspended' or 'suspended', citizenid, d, tostring(actorSrc),
+        tostring(reason or ''))
 
     local target = CP.Qbx and CP.Qbx.getByCitizenId and CP.Qbx.getByCitizenId(citizenid)
     if target then
         if d > 0 then
-            fireLost(target, 'suspended')
-            notify(target, 'error', 'access.suspended_notice', { days = d })
+            FireLost(target, 'suspended')
+            Notify(target, 'error', 'access.suspended_notice', { days = d })
         else
-            notify(target, 'success', 'access.unsuspended_notice')
+            Notify(target, 'success', 'access.unsuspended_notice')
         end
     end
     return true
 end
 
 function A.refreshOfficerRow(src)
-    local n = toSrc(src)
+    local n = ToSrc(src)
     if not n or not (CP.Qbx and CP.Qbx.getInfo) then return false end
     local info = CP.Qbx.getInfo(n)
     if not info then return false end
-    local deptKey = build().byJob[info.job.name]
+    local deptKey = Build().byJob[info.job.name]
     if not deptKey then return false end
     CP.Migrations.ready()
     -- '' stands for NULL so the parameter list never has holes.
@@ -520,9 +501,13 @@ function A.refreshOfficerRow(src)
         [[INSERT INTO cp_officers (citizenid, callsign, rank_label, display_name, department)
           VALUES (?, NULLIF(?, ''), NULLIF(?, ''), ?, ?)
           ON DUPLICATE KEY UPDATE callsign = VALUES(callsign), rank_label = VALUES(rank_label),
-            display_name = VALUES(display_name), department = VALUES(department)]],
-        { info.citizenid, clipText(info.callsign or '', 32), clipText(info.job.gradeName or '', 40),
-          clipText(info.name, 64), deptKey })
+            display_name = VALUES(display_name), department = VALUES(department)]], {
+            info.citizenid,
+            ClipText(info.callsign or '', 32),
+            ClipText(info.job.gradeName or '', 40),
+            ClipText(info.name, 64),
+            deptKey,
+        })
     if not ok then
         CP.err(TAG, 'refreshing cp_officers for %s failed: %s', info.citizenid, tostring(err))
         return false
@@ -531,41 +516,47 @@ function A.refreshOfficerRow(src)
     return true
 end
 
--- ── export ──────────────────────────────────────────────────────────────────
-local function getDepartment(src)
+-- ============================================================================
+--                                    EXPORT
+-- ============================================================================
+
+local function GetDepartment(src)
     local ok, key = pcall(function()
-        local n = toSrc(src)
+        local n = ToSrc(src)
         if not n or not (CP.Qbx and CP.Qbx.getInfo) then return nil end
         local info = CP.Qbx.getInfo(n)
         if not info then return nil end
-        return build().byJob[info.job.name]
+        return Build().byJob[info.job.name]
     end)
     if ok then return key end
     CP.err(TAG, 'GetDepartment failed: %s', tostring(key))
     return nil
 end
 
-exports('GetDepartment', getDepartment)
+exports('GetDepartment', GetDepartment)
 
--- ── wiring (at runtime, once every module is loaded) ───────────────────────
+-- ============================================================================
+--               WIRING (at runtime, once every module is loaded)
+-- ============================================================================
+
 CreateThread(function()
-    build()   -- validate Config.Departments now so its warnings appear at start
+    Build() -- validate Config.Departments now so its warnings appear at start
     if not CP.Qbx then
         CP.err(TAG, 'modules/integrations/qbx is missing: access cannot follow duty or job changes')
         return
     end
-    CP.Qbx.onDutyChange(function(src) evaluate(src) end)
-    CP.Qbx.onGroupUpdate(function(src) evaluate(src) end)
+    CP.Qbx.onDutyChange(function(src) Evaluate(src) end)
+    CP.Qbx.onGroupUpdate(function(src) Evaluate(src) end)
     CP.Qbx.onJobChange(function(src, job)
-        evaluate(src)
-        if type(job) == 'table' and build().byJob[job.name] then A.refreshOfficerRow(src) end
+        Evaluate(src)
+        if type(job) == 'table' and Build().byJob[job.name] then A.refreshOfficerRow(src) end
     end)
     CP.Qbx.onPlayerLoaded(function(src)
-        seed(src)
+        Seed(src)
         A.refreshOfficerRow(src)
     end)
     CP.Qbx.onPlayerUnload(function(src) lastJob[src] = nil end)
-    for _, src in ipairs(CP.Qbx.getOnlinePlayers()) do seed(src) end
+    for _, src in ipairs(CP.Qbx.getOnlinePlayers()) do Seed(src) end
 end)
 
 AddEventHandler('playerDropped', function()

@@ -1,9 +1,4 @@
--- modules/migrations/server.lua · applies sql/migrations/NNN_*.sql in order on start.
---
--- Every other module calls CP.Migrations.ready() before its first query: it blocks the
--- calling thread until the database is at the latest version. If a migration fails the
--- resource prints the file and the error and stops itself, so it never runs on a
--- half-upgraded database.
+-- Applies sql/migrations/NNN_*.sql in order on start.
 
 CP.Migrations = {}
 
@@ -35,7 +30,7 @@ function CP.Migrations.version()
 end
 
 -- Split a file into statements at every ';' that ends a line (after stripping '--' comments).
-local function splitStatements(sql)
+local function SplitStatements(sql)
     local statements, current = {}, {}
     for line in (sql .. '\n'):gmatch('(.-)\r?\n') do
         local code = line:gsub('%-%-.*$', '')
@@ -52,12 +47,18 @@ local function splitStatements(sql)
     if rest:match('%S') then statements[#statements + 1] = rest end
     return statements
 end
-CP.Migrations._split = splitStatements
+CP.Migrations._split = SplitStatements
 
 -- Errors that mean "this change is already there": re-running is safe.
-local IDEMPOTENT = { 'Duplicate column name', 'Duplicate key name', 'ER_DUP_FIELDNAME', 'ER_DUP_KEYNAME', 'already exists' }
+local IDEMPOTENT = {
+    'Duplicate column name',
+    'Duplicate key name',
+    'ER_DUP_FIELDNAME',
+    'ER_DUP_KEYNAME',
+    'already exists',
+}
 
-local function isIdempotentError(msg)
+local function IsIdempotentError(msg)
     msg = tostring(msg)
     for _, needle in ipairs(IDEMPOTENT) do
         if msg:find(needle, 1, true) then return true end
@@ -65,7 +66,7 @@ local function isIdempotentError(msg)
     return false
 end
 
-local function fail(file, stmt, err)
+local function Fail(file, stmt, err)
     CP.err(TAG, 'Migration %s failed. Crimson-Police will not start until it is fixed.', file)
     CP.err(TAG, 'Statement: %s', (stmt or ''):sub(1, 400))
     CP.err(TAG, 'Error: %s', tostring(err))
@@ -75,11 +76,11 @@ local function fail(file, stmt, err)
     end)
 end
 
-local function run()
+local function Run()
     -- One start-up line naming the storage (Config.Database): the database, or the saves folder. In files
     -- mode MySQL is CP.Storage's engine, so the same migrations build the same tables there.
-    print(('[crimson-police] storage: %s'):format(CP.Storage and CP.Storage.describe and CP.Storage.describe()
-        or 'MySQL/MariaDB through oxmysql'))
+    print(('[crimson-police] storage: %s'):format(
+        CP.Storage and CP.Storage.describe and CP.Storage.describe() or 'MySQL/MariaDB through oxmysql'))
     local ok, err = pcall(MySQL.query.await, [[
         CREATE TABLE IF NOT EXISTS cp_schema_migrations (
           version    INT PRIMARY KEY,
@@ -87,7 +88,7 @@ local function run()
           applied_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
         )
     ]])
-    if not ok then return fail('cp_schema_migrations', 'CREATE TABLE cp_schema_migrations', err) end
+    if not ok then return Fail('cp_schema_migrations', 'CREATE TABLE cp_schema_migrations', err) end
 
     local applied = {}
     local rows = MySQL.query.await('SELECT version FROM cp_schema_migrations') or {}
@@ -96,23 +97,23 @@ local function run()
 
     for _, file in ipairs(FILES) do
         local num = tonumber(file:match('^(%d+)_'))
-        if not num then return fail(file, nil, 'file name must start with a number, e.g. 003_name.sql') end
+        if not num then return Fail(file, nil, 'file name must start with a number, e.g. 003_name.sql') end
         if not applied[num] then
             local sql = LoadResourceFile(GetCurrentResourceName(), DIR .. file)
-            if not sql then return fail(file, nil, 'file not found in ' .. DIR) end
-            for _, stmt in ipairs(splitStatements(sql)) do
+            if not sql then return Fail(file, nil, 'file not found in ' .. DIR) end
+            for _, stmt in ipairs(SplitStatements(sql)) do
                 local okStmt, errStmt = pcall(MySQL.query.await, stmt)
                 if not okStmt then
-                    if isIdempotentError(errStmt) then
+                    if IsIdempotentError(errStmt) then
                         CP.log(TAG, '%s: already applied (%s)', file, tostring(errStmt):sub(1, 120))
                     else
-                        return fail(file, stmt, errStmt)
+                        return Fail(file, stmt, errStmt)
                     end
                 end
             end
             local okRec, errRec = pcall(MySQL.insert.await,
                 'INSERT IGNORE INTO cp_schema_migrations (version, name) VALUES (?, ?)', { num, file })
-            if not okRec then return fail(file, 'INSERT INTO cp_schema_migrations', errRec) end
+            if not okRec then return Fail(file, 'INSERT INTO cp_schema_migrations', errRec) end
             print(('[crimson-police] applied migration %s'):format(file))
             applied[num] = true
         end
@@ -124,7 +125,9 @@ local function run()
     if fresh and store == 'database' and CP.Storage and CP.Storage.hasSavedData and CP.Storage.hasSavedData() then
         -- a new database next to a saves folder with data (Config.Database.enabled switched back on)
         local cmd = (Config.Tablet and Config.Tablet.adminCommand) or 'CrimsonPoliceAdmin'
-        CP.warn(TAG, 'the database is new, but the saves folder holds data from running with the database off. Nothing is copied by itself: to bring it over, run "%s storage copy files-to-database" in the server console, then restart Crimson-Police.', cmd)
+        CP.warn(TAG,
+            'the database is new, but the saves folder holds data from running with the database off. Nothing is copied by itself: to bring it over, run "%s storage copy files-to-database" in the server console, then restart Crimson-Police.',
+            cmd)
     end
     isReady = true
     readyPromise:resolve(true)
@@ -137,5 +140,5 @@ CreateThread(function()
         MySQL.ready(function() p:resolve(true) end)
         Citizen.Await(p)
     end
-    run()
+    Run()
 end)

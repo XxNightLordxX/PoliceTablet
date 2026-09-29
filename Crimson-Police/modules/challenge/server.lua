@@ -1,75 +1,4 @@
--- modules/challenge/server.lua · CP.Challenge (server): seasons, the department challenge, the weekly
--- bounty and the supervisor Department Report.
---
--- Owns
---   * cp_seasons (start / end, the cached current season every run row is tagged with)
---   * cp_dept_bounties: one row per (season_id, week) with week = 1, 2 ... counted in weekly resets since
---     the season started (week 1 runs from the season start to the first weekly reset). The objective is
---     picked with CP.U.rng(CP.U.hash('<seasonId>:<week>')) from Config.Challenge.bounties, so a restart
---     picks the same one; an admin may override the current week's objective while it is open.
---     winner: NULL = week still open, '' = closed without a winner, else the winning department key.
---     week = 0 (objective 'season_champion') stores the season's champion department at season end.
---   * the season end: champion by Config.Challenge.scoring and the tie-break, "Season X Champions" banner
---     data, trophy badges season_<id>_champion (champion members with minRunsActive completed runs),
---     season_<id>_top10 badges (top 10 of the season board), the board webhook with the results
---   * callbacks getChallenge, getDeptContributors, admin:getSeasons, sup:getDeptReport,
---     sup:getOfficerActivity and the actions server:admin:startSeason, server:admin:endSeason,
---     server:admin:overrideBounty
---
--- Challenge rules (SPEC "Department challenge")
---   Season rows = cp_mission_runs with season_id = the season, voided = 0 AND flagged = 0, grouped by the
---   row's department (the department at the end of the run, so transfers keep old points; joint runs
---   count for each participant's own department). Active officer = minRunsActive completed runs
---   (manual_award / goal rows never count as runs) in that department this season.
---   Weekly bounty bonus = floor(bountyBonus x the winning department's season points that week), added
---   to that department's points pool once its week is closed:
---     average: (points of active officers + bonuses) / active officers
---     total:   all points + bonuses
---     top10:   the 10 best officers' points + bonuses
---   Ranking and tie-break: score, then completed runs, then unit runs (2+ participants).
---   Bounty winner: highest count per active officer (season-to-date active officers) for the objective
---   (most_tactical: completed Tactical runs, most_cross: completed runs with 2+ departments, most_unit:
---   completed runs with 2+ participants, most_completed: completed runs), tie-break completed runs then
---   unit runs that week; no winner when every count is 0 or the tie cannot be broken. Weeks close at the
---   weekly reset, as a catch-up after start (a server that was down across the reset) and at season end.
---   A department added to Config.Departments mid-season simply starts at 0.
---
--- Public API (docs/ARCHITECTURE.md §5.23)
---   CP.Challenge.currentSeason(reload?) -> { id, name, startsAt, endsAt|nil, active = true } | nil   (cached)
---   CP.Challenge.latestSeason() -> the active season, else the last ended one (the Season board)
---   CP.Challenge.seasonById(id) -> season | nil
---   CP.Challenge.startSeason(src, name) -> ok, seasonView | errKey   (ends the running season first)
---   CP.Challenge.endSeason(src, reason?) -> ok, { season, standings, champion, top10 } | errKey
---   CP.Challenge.standings(seasonId?) -> { seasonId, mode, departments = { { key, label, short, colour,
---       score, activeOfficers, officers, points, completed, unitRuns, bonus, rank } } }
---   CP.Challenge.bounty(weekKey?) -> { seasonId, week, id, label, winner|nil, closed, startsAt, endsAt,
---       overridden } | nil        (weekKey = 'YYYY-MM-DD' of a week start; default the current week)
---   CP.Challenge.overrideBounty(src, objective) -> ok, bountyView | errKey
---   CP.Challenge.championBanner(dept?) -> { season, department (label), departmentKey, short } | nil
---       the last ended season's champion; nil when dept is given and is not the champion
---   CP.Challenge.invalidate()  (hook, called by CP.Leaderboard.invalidate) drops the challenge caches
---   callback getChallenge -> ChallengeView (§9.4) plus { enabled, mode, minRunsActive, myDepartment,
---       season.week, season.startsAt, departments[i].rank/points/bonus, bounty.leaderKey/week/endsIn/
---       overridden/rates = { { key, short, colour, count, activeOfficers, rate } }, topContributors[i].citizenid }
---   callback getDeptContributors({ department }) -> { department = { key, label, short, colour }, season,
---       minRunsActive, contributors = { { rank, citizenid, name, callsign, points, runs, active } } }
---   callback admin:getSeasons ('seasons') -> { current, latest, standings, bounty, bountyHistory = { {
---       seasonId, seasonName, week, objective, label, winner, winnerShort, bonus, closed, current,
---       startsAt, endsAt } }, seasons = { { id, name, startsAt, endsAt, active, champion, championShort } },
---       bounties = { { id, label } }, enabled, weeklyBounty, mode, seasonWeeks, minRunsActive }
---   action server:admin:startSeason { name }    ('seasons', audited 'season_start')
---   action server:admin:endSeason               ('seasons', audited 'season_end')
---   action server:admin:overrideBounty { objective }   ('bountyOverride', audited 'bounty_override')
---   callback sup:getDeptReport({ department? })  (supervisors and admins: CP.Permissions 'viewMissionList';
---       department only for admins) -> { department, season, standing, standings, bounty, week = { key,
---       startsAt }, officers = { { citizenid, name, callsign, rank, runs, completed, failed, abandoned,
---       flagged, points, cash, lastRunAt, lastRunTs } } }
---   callback sup:getOfficerActivity({ citizenid, department? }) -> { officer = { citizenid, name, callsign,
---       rank, departmentShort }, week, runs = { { id, missionLabel, missionType, state, endReason, points,
---       cash, cashStatus, flagged, flagReason, voided, participants, departments, tier, durationS,
---       createdAt, createdTs } } }   only officers of the supervisor's department (err.other_department)
--- Test hooks: CP.Challenge._boot(), _weekIndex(season, ts), _weekWindow(season, n), _pickBounty(seasonId, week),
---   _closeDueWeeks(season, nowTs, includeCurrent), _collect(seasonId, fresh), _standingsFrom(data)
+-- CP.Challenge (server): seasons, the department challenge, the weekly bounty and the supervisor Department Report.
 
 CP.Challenge = CP.Challenge or {}
 local C = CP.Challenge
@@ -86,7 +15,12 @@ local BOOT_DELAY_MS = 1500
 local HISTORY_LIMIT = 60
 local CONTRIBUTORS_LIMIT = 200
 local ACTIVITY_LIMIT = 100
-local BOUNTY_KINDS = { most_tactical = 'tactical', most_cross = 'cross', most_unit = 'unit', most_completed = 'completed' }
+local BOUNTY_KINDS = {
+    most_tactical = 'tactical',
+    most_cross = 'cross',
+    most_unit = 'unit',
+    most_completed = 'completed',
+}
 local SCORING = { average = true, total = true, top10 = true }
 
 local seasons = { at = 0, loaded = false, current = nil, latest = nil, byId = {}, list = {} }
@@ -97,49 +31,52 @@ local busy = false
 local booted = false
 local warned = {}
 
--- ── helpers ─────────────────────────────────────────────────────────────────
-local function num(v) return tonumber(v) or 0 end
-local function int(v) return math.floor(num(v) + 0.0) end
+-- ============================================================================
+--                                   HELPERS
+-- ============================================================================
 
-local function cfg(section, key, default)
+local function Num(v) return tonumber(v) or 0 end
+local function Int(v) return math.floor(Num(v) + 0.0) end
+
+local function Cfg(section, key, default)
     local s = Config[section]
     local v = type(s) == 'table' and s[key] or nil
     if v == nil then return default end
     return v
 end
 
-local function cacheSeconds() return math.max(0, num(cfg('Leaderboard', 'cacheSeconds', 60))) end
-local function minActive() return math.max(0, int(cfg('Challenge', 'minRunsActive', 3))) end
-local function challengeOn() return cfg('Challenge', 'enabled', true) ~= false end
-local function bountiesOn() return challengeOn() and cfg('Challenge', 'weeklyBounty', true) ~= false end
-local function bonusShare() return math.max(0, num(cfg('Challenge', 'bountyBonus', 0.10))) end
-local function seasonWeeks() return math.max(0, int(cfg('Leaderboard', 'seasonWeeks', 8))) end
+local function CacheSeconds() return math.max(0, Num(Cfg('Leaderboard', 'cacheSeconds', 60))) end
+local function MinActive() return math.max(0, Int(Cfg('Challenge', 'minRunsActive', 3))) end
+local function ChallengeOn() return Cfg('Challenge', 'enabled', true) ~= false end
+local function BountiesOn() return ChallengeOn() and Cfg('Challenge', 'weeklyBounty', true) ~= false end
+local function BonusShare() return math.max(0, Num(Cfg('Challenge', 'bountyBonus', 0.10))) end
+local function SeasonWeeks() return math.max(0, Int(Cfg('Leaderboard', 'seasonWeeks', 8))) end
 
-local function warnOnce(key, fmt, ...)
+local function WarnOnce(key, fmt, ...)
     if warned[key] then return end
     warned[key] = true
     CP.warn(TAG, fmt, ...)
 end
 
-local function scoringMode()
-    local m = cfg('Challenge', 'scoring', 'average')
+local function ScoringMode()
+    local m = Cfg('Challenge', 'scoring', 'average')
     if not SCORING[m] then
-        warnOnce('scoring', 'Config.Challenge.scoring %s is not average, total or top10; using average', tostring(m))
+        WarnOnce('scoring', 'Config.Challenge.scoring %s is not average, total or top10; using average', tostring(m))
         return 'average'
     end
     return m
 end
 
-local function db()
+local function Db()
     if CP.Migrations and CP.Migrations.ready then CP.Migrations.ready() end
 end
 
-local function has(mod, fn)
+local function Has(mod, fn)
     return type(CP[mod]) == 'table' and type(CP[mod][fn]) == 'function'
 end
 
-local function call(mod, fn, ...)
-    if not has(mod, fn) then return false end
+local function Call(mod, fn, ...)
+    if not Has(mod, fn) then return false end
     local res = table.pack(pcall(CP[mod][fn], ...))
     if not res[1] then
         CP.err(TAG, 'CP.%s.%s failed: %s', mod, fn, tostring(res[2]))
@@ -148,21 +85,21 @@ local function call(mod, fn, ...)
     return true, table.unpack(res, 2, res.n)
 end
 
-local function validCitizenId(v)
+local function ValidCitizenId(v)
     return type(v) == 'string' and #v >= 1 and #v <= 50 and v:match('^[%w_%-]+$') ~= nil
 end
 
-local function nonEmpty(s)
+local function NonEmpty(s)
     if type(s) ~= 'string' then return nil end
     s = U.trim(s)
     if s == '' then return nil end
     return s
 end
 
-local function sqlTs(ts) return os.date('%Y-%m-%d %H:%M:%S', math.floor(num(ts))) end
+local function SqlTs(ts) return os.date('%Y-%m-%d %H:%M:%S', math.floor(Num(ts))) end
 
-local function fmtInt(n)
-    local s = tostring(math.floor(num(n)))
+local function FmtInt(n)
+    local s = tostring(math.floor(Num(n)))
     local neg = s:sub(1, 1) == '-'
     if neg then s = s:sub(2) end
     local out = s:reverse():gsub('(%d%d%d)', '%1,'):reverse()
@@ -170,79 +107,90 @@ local function fmtInt(n)
     return (neg and '-' or '') .. out
 end
 
-local function placeholders(n)
+local function Placeholders(n)
     local t = {}
     for i = 1, n do t[i] = '?' end
     return table.concat(t, ', ')
 end
 
--- ── calendar ────────────────────────────────────────────────────────────────
-local function resetHour()
-    local h = int(cfg('Time', 'resetHour', 0))
+-- ============================================================================
+--                                   CALENDAR
+-- ============================================================================
+
+local function ResetHour()
+    local h = Int(Cfg('Time', 'resetHour', 0))
     if h < 0 or h > 23 then h = 0 end
     return h
 end
 
-local function weekStart(ts)
-    if has('Schedule', 'weekStart') then return CP.Schedule.weekStart(ts) end
+local function WeekStart(ts)
+    if Has('Schedule', 'weekStart') then return CP.Schedule.weekStart(ts) end
     ts = ts or os.time()
     local t = os.date('*t', ts)
     local y, m, d, wday = t.year, t.month, t.day, t.wday
-    if t.hour < resetHour() then
+    if t.hour < ResetHour() then
         local p = os.date('*t', os.time({ year = y, month = m, day = d - 1, hour = 12 }))
         y, m, d, wday = p.year, p.month, p.day, p.wday
     end
-    return os.time({ year = y, month = m, day = d - (wday - 2) % 7, hour = resetHour(), min = 0, sec = 0 })
+    return os.time({ year = y, month = m, day = d - (wday - 2) % 7, hour = ResetHour(), min = 0, sec = 0 })
 end
 
-local function noonOf(ts)
+local function NoonOf(ts)
     local t = os.date('*t', ts)
     return os.time({ year = t.year, month = t.month, day = t.day, hour = 12, min = 0, sec = 0 })
 end
 
 -- Week number (1-based) of ts in the season: weekly resets passed since the season started, plus one.
-local function weekIndex(season, ts)
-    local days = math.floor((noonOf(weekStart(ts)) - noonOf(weekStart(season.startsAt))) / 86400 + 0.5)
+local function WeekIndex(season, ts)
+    local days = math.floor((NoonOf(WeekStart(ts)) - NoonOf(WeekStart(season.startsAt))) / 86400 + 0.5)
     if days < 0 then return 1 end
     return math.min(MAX_WEEK, math.floor(days / 7 + 0.5) + 1)
 end
 
-local function rawWeekStart(season, n)
-    local t = os.date('*t', weekStart(season.startsAt))
-    return os.time({ year = t.year, month = t.month, day = t.day + 7 * (n - 1), hour = resetHour(), min = 0, sec = 0 })
+local function RawWeekStart(season, n)
+    local t = os.date('*t', WeekStart(season.startsAt))
+    return os.time({ year = t.year, month = t.month, day = t.day + 7 * (n - 1), hour = ResetHour(), min = 0, sec = 0 })
 end
 
 -- [from, to) of week n (clipped to the season's start and end).
-local function weekWindow(season, n)
-    local from = math.max(rawWeekStart(season, n), season.startsAt)
-    local to = rawWeekStart(season, n + 1)
+local function WeekWindow(season, n)
+    local from = math.max(RawWeekStart(season, n), season.startsAt)
+    local to = RawWeekStart(season, n + 1)
     if season.endsAt and season.endsAt < to then to = season.endsAt end
     return from, to
 end
 
 -- A timestamp inside the reset-adjusted day whose date is dayTs (midnight of that date).
-local function insideDay(dayTs)
+local function InsideDay(dayTs)
     local t = os.date('*t', dayTs + HALF_DAY)
-    return os.time({ year = t.year, month = t.month, day = t.day, hour = resetHour(), min = 30, sec = 0 })
+    return os.time({ year = t.year, month = t.month, day = t.day, hour = ResetHour(), min = 30, sec = 0 })
 end
 
-local function weeksLeft(season, nowTs)
+local function WeeksLeft(season, nowTs)
     if not season.active then return 0 end
-    local endTs = season.startsAt + seasonWeeks() * WEEK_S
+    local endTs = season.startsAt + SeasonWeeks() * WEEK_S
     return math.max(0, math.ceil((endTs - nowTs) / WEEK_S))
 end
 
-C._weekIndex = weekIndex
-C._weekWindow = weekWindow
+C._weekIndex = WeekIndex
+C._weekWindow = WeekWindow
 
--- ── departments ─────────────────────────────────────────────────────────────
-local function departmentList()
+-- ============================================================================
+--                                 DEPARTMENTS
+-- ============================================================================
+
+local function DepartmentList()
     local out = {}
-    if has('Access', 'departments') then
-        local ok, list = call('Access', 'departments')
+    if Has('Access', 'departments') then
+        local ok, list = Call('Access', 'departments')
         if ok and type(list) == 'table' then
             for _, d in ipairs(list) do
-                out[#out + 1] = { key = d.key, label = d.label, short = d.short, colour = d.theme and d.theme.primary or '#a4161a' }
+                out[#out + 1] = {
+                    key = d.key,
+                    label = d.label,
+                    short = d.short,
+                    colour = d.theme and d.theme.primary or '#a4161a',
+                }
             end
             return out
         end
@@ -255,45 +203,55 @@ local function departmentList()
     for _, k in ipairs(keys) do
         local d = Config.Departments[k]
         local primary = type(d.theme) == 'table' and d.theme.primary or nil
-        out[#out + 1] = { key = k, label = tostring(d.label or k), short = tostring(d.short or k:upper()),
-            colour = U.isHexColour(primary) and primary:lower() or '#a4161a' }
+        out[#out + 1] = {
+            key = k,
+            label = tostring(d.label or k),
+            short = tostring(d.short or k:upper()),
+            colour = U.isHexColour(primary) and primary:lower() or '#a4161a',
+        }
     end
     return out
 end
 
-local function deptInfo(key)
-    for _, d in ipairs(departmentList()) do
+local function DeptInfo(key)
+    for _, d in ipairs(DepartmentList()) do
         if d.key == key then return d end
     end
     return nil
 end
 
-local function deptShort(key)
-    local d = deptInfo(key)
+local function DeptShort(key)
+    local d = DeptInfo(key)
     return d and d.short or (type(key) == 'string' and key:upper() or '')
 end
 
-local function isDepartment(key)
+local function IsDepartment(key)
     return type(key) == 'string' and type(Config.Departments) == 'table' and type(Config.Departments[key]) == 'table'
 end
 
--- ── seasons ─────────────────────────────────────────────────────────────────
-local function seasonFrom(row)
+-- ============================================================================
+--                                   SEASONS
+-- ============================================================================
+
+local function SeasonFrom(row)
     return {
-        id = int(row.id), name = tostring(row.name), startsAt = int(row.starts_ts),
-        endsAt = row.ends_ts ~= nil and int(row.ends_ts) or nil, active = U.truthy(row.active),
+        id = Int(row.id),
+        name = tostring(row.name),
+        startsAt = Int(row.starts_ts),
+        endsAt = row.ends_ts ~= nil and Int(row.ends_ts) or nil,
+        active = U.truthy(row.active),
     }
 end
 
-local function loadSeasons()
-    db()
+local function LoadSeasons()
+    Db()
     local rows = MySQL.query.await(
         'SELECT id, name, UNIX_TIMESTAMP(starts_at) AS starts_ts, UNIX_TIMESTAMP(ends_at) AS ends_ts, active FROM cp_seasons ORDER BY id DESC',
         {}) or {}
     local s = { at = os.time(), loaded = true, byId = {}, list = {} }
     local actives = 0
     for _, row in ipairs(rows) do
-        local season = seasonFrom(row)
+        local season = SeasonFrom(row)
         s.byId[season.id] = season
         s.list[#s.list + 1] = season
         if season.active then
@@ -301,41 +259,48 @@ local function loadSeasons()
             if not s.current then s.current = season end
         end
     end
-    if actives > 1 then warnOnce('actives', '%d seasons are marked active in cp_seasons; season %d is used', actives, s.current.id) end
+    if actives > 1 then
+        WarnOnce('actives', '%d seasons are marked active in cp_seasons; season %d is used', actives, s.current.id)
+    end
     s.latest = s.current or s.list[1]
     seasons = s
     return s
 end
 
-local function ensureSeasons(reload)
-    if reload or not seasons.loaded or os.time() - seasons.at > SEASON_RELOAD_S then loadSeasons() end
+local function EnsureSeasons(reload)
+    if reload or not seasons.loaded or os.time() - seasons.at > SEASON_RELOAD_S then LoadSeasons() end
     return seasons
 end
 
 function C.currentSeason(reload)
-    local s = ensureSeasons(reload).current
+    local s = EnsureSeasons(reload).current
     return s and U.copy(s) or nil
 end
 
 function C.latestSeason()
-    local s = ensureSeasons(false).latest
+    local s = EnsureSeasons(false).latest
     return s and U.copy(s) or nil
 end
 
 function C.seasonById(id)
-    id = int(id)
-    local s = ensureSeasons(false).byId[id]
-    if not s then s = ensureSeasons(true).byId[id] end
+    id = Int(id)
+    local s = EnsureSeasons(false).byId[id]
+    if not s then s = EnsureSeasons(true).byId[id] end
     return s and U.copy(s) or nil
 end
 
--- ── bounties ────────────────────────────────────────────────────────────────
-local function bountyList()
+-- ============================================================================
+--                                   BOUNTIES
+-- ============================================================================
+
+local function BountyList()
     local out = {}
-    for _, b in ipairs(cfg('Challenge', 'bounties', {}) or {}) do
+    for _, b in ipairs(Cfg('Challenge', 'bounties', {}) or {}) do
         if type(b) == 'table' and type(b.id) == 'string' and b.id ~= '' and #b.id <= 40 then
             if not BOUNTY_KINDS[b.id] then
-                warnOnce('bounty.' .. b.id, 'Config.Challenge.bounties id %s is not one of most_tactical, most_cross, most_unit, most_completed; it counts completed runs', b.id)
+                WarnOnce('bounty.' .. b.id,
+                    'Config.Challenge.bounties id %s is not one of most_tactical, most_cross, most_unit, most_completed; it counts completed runs',
+                    b.id)
             end
             local key = 'challenge.bounty.' .. b.id
             out[#out + 1] = { id = b.id, label = CP.Locale.has(key) and CP.L(key) or tostring(b.label or b.id) }
@@ -344,44 +309,45 @@ local function bountyList()
     return out
 end
 
-local function bountyLabel(id)
-    for _, b in ipairs(bountyList()) do
+local function BountyLabel(id)
+    for _, b in ipairs(BountyList()) do
         if b.id == id then return b.label end
     end
     local key = 'challenge.bounty.' .. tostring(id)
     return CP.Locale.has(key) and CP.L(key) or tostring(id)
 end
 
-local function isBounty(id)
-    for _, b in ipairs(bountyList()) do
+local function IsBounty(id)
+    for _, b in ipairs(BountyList()) do
         if b.id == id then return true end
     end
     return false
 end
 
-local function pickBounty(seasonId, week)
-    local list = bountyList()
+local function PickBounty(seasonId, week)
+    local list = BountyList()
     if #list == 0 then return nil end
-    local rng = U.rng(U.hash(('%d:%d'):format(int(seasonId), int(week))))
+    local rng = U.rng(U.hash(('%d:%d'):format(Int(seasonId), Int(week))))
     local b = rng:pick(list)
     return b and b.id or nil
 end
-C._pickBounty = pickBounty
+C._pickBounty = PickBounty
 
 local BOUNTY_ROW_SQL = 'SELECT objective, winner FROM cp_dept_bounties WHERE season_id = ? AND week = ?'
 
 -- The bounty row of week n (created with the seeded pick when missing).
-local function ensureBounty(season, n)
-    if not bountiesOn() or n < 1 or n > MAX_WEEK then return nil end
-    db()
+local function EnsureBounty(season, n)
+    if not BountiesOn() or n < 1 or n > MAX_WEEK then return nil end
+    Db()
     local row = MySQL.single.await(BOUNTY_ROW_SQL, { season.id, n })
     if not row then
-        local id = pickBounty(season.id, n)
+        local id = PickBounty(season.id, n)
         if not id then
-            warnOnce('nobounties', 'Config.Challenge.bounties is empty: no weekly bounty')
+            WarnOnce('nobounties', 'Config.Challenge.bounties is empty: no weekly bounty')
             return nil
         end
-        MySQL.update.await('INSERT IGNORE INTO cp_dept_bounties (season_id, week, objective) VALUES (?, ?, ?)', { season.id, n, id })
+        MySQL.update.await('INSERT IGNORE INTO cp_dept_bounties (season_id, week, objective) VALUES (?, ?, ?)',
+            { season.id, n, id })
         row = MySQL.single.await(BOUNTY_ROW_SQL, { season.id, n })
         if not row then return nil end
         CP.log(TAG, 'season %d week %d bounty: %s', season.id, n, id)
@@ -389,7 +355,10 @@ local function ensureBounty(season, n)
     return { week = n, objective = tostring(row.objective), winner = row.winner ~= nil and tostring(row.winner) or nil }
 end
 
--- ── season aggregates ───────────────────────────────────────────────────────
+-- ============================================================================
+--                              SEASON AGGREGATES
+-- ============================================================================
+
 local OFFICER_SQL = [[
 SELECT r.department, r.citizenid,
   SUM(r.final_points) AS points,
@@ -410,68 +379,80 @@ FROM cp_mission_runs r
 WHERE r.season_id = ? AND r.voided = 0 AND r.flagged = 0
 GROUP BY r.department, day_ts]]
 
-local function emptyWeek()
+local function EmptyWeek()
     return { points = 0, completed = 0, unit = 0, tactical = 0, cross = 0 }
 end
 
 -- Every aggregate the standings, bounties and contributor lists need, cached per season.
-local function collect(seasonId, fresh)
-    seasonId = int(seasonId)
+local function Collect(seasonId, fresh)
+    seasonId = Int(seasonId)
     local c = collectCache[seasonId]
-    if not fresh and c and os.time() - c.at < cacheSeconds() then return c end
+    if not fresh and c and os.time() - c.at < CacheSeconds() then return c end
     local season = C.seasonById(seasonId)
     if not season then return nil end
-    db()
+    Db()
     local gen = collectGen
     local data = { at = os.time(), season = season, officers = {}, weeks = {}, bounties = {} }
     for _, r in ipairs(MySQL.query.await(OFFICER_SQL, { seasonId }) or {}) do
         local dept = tostring(r.department)
         data.officers[dept] = data.officers[dept] or {}
-        data.officers[dept][tostring(r.citizenid)] = { points = int(r.points), completed = int(r.completed), unitRuns = int(r.unit_runs) }
+        data.officers[dept][tostring(r.citizenid)] = {
+            points = Int(r.points),
+            completed = Int(r.completed),
+            unitRuns = Int(r.unit_runs),
+        }
     end
-    for _, r in ipairs(MySQL.query.await(DAY_SQL, { resetHour(), seasonId }) or {}) do
-        local n = weekIndex(season, insideDay(int(r.day_ts)))
+    for _, r in ipairs(MySQL.query.await(DAY_SQL, { ResetHour(), seasonId }) or {}) do
+        local n = WeekIndex(season, InsideDay(Int(r.day_ts)))
         local dept = tostring(r.department)
         data.weeks[n] = data.weeks[n] or {}
-        local w = data.weeks[n][dept] or emptyWeek()
-        w.points = w.points + int(r.points)
-        w.completed = w.completed + int(r.completed)
-        w.unit = w.unit + int(r.unit_runs)
-        w.tactical = w.tactical + int(r.tactical)
-        w.cross = w.cross + int(r.cross_runs)
+        local w = data.weeks[n][dept] or EmptyWeek()
+        w.points = w.points + Int(r.points)
+        w.completed = w.completed + Int(r.completed)
+        w.unit = w.unit + Int(r.unit_runs)
+        w.tactical = w.tactical + Int(r.tactical)
+        w.cross = w.cross + Int(r.cross_runs)
         data.weeks[n][dept] = w
     end
-    for _, r in ipairs(MySQL.query.await('SELECT week, objective, winner FROM cp_dept_bounties WHERE season_id = ? AND week >= 1', { seasonId }) or {}) do
-        data.bounties[int(r.week)] = { objective = tostring(r.objective), winner = r.winner ~= nil and tostring(r.winner) or nil }
+    for _, r in
+        ipairs(MySQL.query.await(
+            'SELECT week, objective, winner FROM cp_dept_bounties WHERE season_id = ? AND week >= 1',
+            { seasonId }
+        ) or {})
+    do
+        data.bounties[Int(r.week)] = {
+            objective = tostring(r.objective),
+            winner = r.winner ~= nil and tostring(r.winner) or nil,
+        }
     end
     if gen == collectGen then collectCache[seasonId] = data end
     return data
 end
-C._collect = collect
+C._collect = Collect
 
-local function activeCount(data, dept)
+local function ActiveCount(data, dept)
     local n = 0
     for _, o in pairs((data and data.officers[dept]) or {}) do
-        if o.completed >= minActive() then n = n + 1 end
+        if o.completed >= MinActive() then n = n + 1 end
     end
     return n
 end
 
-local function weekStats(data, n, dept)
+local function WeekStats(data, n, dept)
     local w = data and data.weeks[n]
-    return (w and w[dept]) or emptyWeek()
+    return (w and w[dept]) or EmptyWeek()
 end
 
-local function bonusFor(data, dept)
+local function BonusFor(data, dept)
     local total = 0
     if not data then return 0 end
     for n, b in pairs(data.bounties) do
-        if b.winner == dept then total = total + math.floor(bonusShare() * weekStats(data, n, dept).points) end
+        if b.winner == dept then total = total + math.floor(BonusShare() * WeekStats(data, n, dept).points) end
     end
     return total
 end
 
-local function standingsCompare(a, b)
+local function StandingsCompare(a, b)
     if a.scoreRaw ~= b.scoreRaw then return a.scoreRaw > b.scoreRaw end
     if a.completed ~= b.completed then return a.completed > b.completed end
     if a.unitRuns ~= b.unitRuns then return a.unitRuns > b.unitRuns end
@@ -479,10 +460,10 @@ local function standingsCompare(a, b)
 end
 
 -- Standings list for every department in Config.Departments (0 for departments without rows).
-local function standingsFrom(data)
-    local mode = scoringMode()
+local function StandingsFrom(data)
+    local mode = ScoringMode()
     local list = {}
-    for _, d in ipairs(departmentList()) do
+    for _, d in ipairs(DepartmentList()) do
         local offs = (data and data.officers[d.key]) or {}
         local total, activePts, active, officers, completed, unitRuns = 0, 0, 0, 0, 0, 0
         local pts = {}
@@ -492,12 +473,12 @@ local function standingsFrom(data)
             completed = completed + o.completed
             unitRuns = unitRuns + o.unitRuns
             pts[#pts + 1] = o.points
-            if o.completed >= minActive() then
+            if o.completed >= MinActive() then
                 active = active + 1
                 activePts = activePts + o.points
             end
         end
-        local bonus = bonusFor(data, d.key)
+        local bonus = BonusFor(data, d.key)
         local raw
         if mode == 'total' then
             raw = total + bonus
@@ -509,45 +490,77 @@ local function standingsFrom(data)
             raw = active > 0 and (activePts + bonus) / active or 0
         end
         list[#list + 1] = {
-            key = d.key, label = d.label, short = d.short, colour = d.colour,
-            score = U.round(raw), scoreRaw = raw, activeOfficers = active, officers = officers,
-            points = total, completed = completed, unitRuns = unitRuns, bonus = bonus,
+            key = d.key,
+            label = d.label,
+            short = d.short,
+            colour = d.colour,
+            score = U.round(raw),
+            scoreRaw = raw,
+            activeOfficers = active,
+            officers = officers,
+            points = total,
+            completed = completed,
+            unitRuns = unitRuns,
+            bonus = bonus,
         }
     end
-    table.sort(list, standingsCompare)
+    table.sort(list, StandingsCompare)
     for i, e in ipairs(list) do e.rank = i end
     return list
 end
-C._standingsFrom = standingsFrom
+C._standingsFrom = StandingsFrom
 
-local function publicStanding(e)
-    return { key = e.key, label = e.label, short = e.short, colour = e.colour, score = e.score,
-        activeOfficers = e.activeOfficers, officers = e.officers, points = e.points, completed = e.completed,
-        unitRuns = e.unitRuns, bonus = e.bonus, rank = e.rank }
+local function PublicStanding(e)
+    return {
+        key = e.key,
+        label = e.label,
+        short = e.short,
+        colour = e.colour,
+        score = e.score,
+        activeOfficers = e.activeOfficers,
+        officers = e.officers,
+        points = e.points,
+        completed = e.completed,
+        unitRuns = e.unitRuns,
+        bonus = e.bonus,
+        rank = e.rank,
+    }
 end
 
-local function publicStandings(list)
+local function PublicStandings(list)
     local out = {}
-    for i, e in ipairs(list) do out[i] = publicStanding(e) end
+    for i, e in ipairs(list) do out[i] = PublicStanding(e) end
     return out
 end
 
 function C.standings(seasonId)
     local season = seasonId and C.seasonById(seasonId) or C.currentSeason()
-    local data = season and collect(season.id) or nil
-    return { seasonId = season and season.id or nil, mode = scoringMode(), departments = publicStandings(standingsFrom(data)) }
+    local data = season and Collect(season.id) or nil
+    return {
+        seasonId = season and season.id or nil,
+        mode = ScoringMode(),
+        departments = PublicStandings(StandingsFrom(data)),
+    }
 end
 
 -- Per-department bounty counts per active officer for week n, best first.
-local function bountyRates(data, n, objective)
+local function BountyRates(data, n, objective)
     local kind = BOUNTY_KINDS[objective] or 'completed'
     local list = {}
-    for _, d in ipairs(departmentList()) do
-        local w = weekStats(data, n, d.key)
-        local active = activeCount(data, d.key)
+    for _, d in ipairs(DepartmentList()) do
+        local w = WeekStats(data, n, d.key)
+        local active = ActiveCount(data, d.key)
         local count = w[kind] or 0
-        list[#list + 1] = { key = d.key, short = d.short, colour = d.colour, count = count, activeOfficers = active,
-            rate = active > 0 and count / active or 0, completed = w.completed, unit = w.unit }
+        list[#list + 1] = {
+            key = d.key,
+            short = d.short,
+            colour = d.colour,
+            count = count,
+            activeOfficers = active,
+            rate = active > 0 and count / active or 0,
+            completed = w.completed,
+            unit = w.unit,
+        }
     end
     table.sort(list, function(a, b)
         if a.rate ~= b.rate then return a.rate > b.rate end
@@ -558,64 +571,78 @@ local function bountyRates(data, n, objective)
     return list
 end
 
-local function pickWinner(rates)
+local function PickWinner(rates)
     local top, second = rates[1], rates[2]
     if not top or top.rate <= 0 then return '' end
-    if second and second.rate == top.rate and second.completed == top.completed and second.unit == top.unit then return '' end
+    if second and second.rate == top.rate and second.completed == top.completed and second.unit == top.unit then
+        return ''
+    end
     return top.key
 end
 
-local function publicRates(rates)
+local function PublicRates(rates)
     local out = {}
     for i, r in ipairs(rates) do
-        out[i] = { key = r.key, short = r.short, colour = r.colour, count = r.count, activeOfficers = r.activeOfficers,
-            rate = math.floor(r.rate * 100 + 0.5) / 100 }
+        out[i] = {
+            key = r.key,
+            short = r.short,
+            colour = r.colour,
+            count = r.count,
+            activeOfficers = r.activeOfficers,
+            rate = math.floor(r.rate * 100 + 0.5) / 100,
+        }
     end
     return out
 end
 
 -- Close week n (store its winner) once. Returns true when this call closed it.
-local function closeWeek(season, n, data)
-    local b = ensureBounty(season, n)
+local function CloseWeek(season, n, data)
+    local b = EnsureBounty(season, n)
     if not b or b.winner ~= nil then return false end
-    local winner = pickWinner(bountyRates(data, n, b.objective))
-    local changed = MySQL.update.await('UPDATE cp_dept_bounties SET winner = ? WHERE season_id = ? AND week = ? AND winner IS NULL',
+    local winner = PickWinner(BountyRates(data, n, b.objective))
+    local changed = MySQL.update.await(
+        'UPDATE cp_dept_bounties SET winner = ? WHERE season_id = ? AND week = ? AND winner IS NULL',
         { winner, season.id, n })
-    if num(changed) <= 0 then return false end
-    CP.log(TAG, 'season %d week %d bounty %s closed: %s', season.id, n, b.objective, winner ~= '' and winner or 'no winner')
+    if Num(changed) <= 0 then return false end
+    CP.log(TAG, 'season %d week %d bounty %s closed: %s', season.id, n, b.objective,
+        winner ~= '' and winner or 'no winner')
     return true
 end
 
-local function closeDueWeeks(season, nowTs, includeCurrent)
-    if not bountiesOn() then return 0 end
-    local cur = weekIndex(season, nowTs)
+local function CloseDueWeeks(season, nowTs, includeCurrent)
+    if not BountiesOn() then return 0 end
+    local cur = WeekIndex(season, nowTs)
     local last = includeCurrent and cur or cur - 1
     if last < 1 then return 0 end
-    local data = collect(season.id, true)
+    local data = Collect(season.id, true)
     if not data then return 0 end
     local closed = 0
     for n = 1, math.min(last, MAX_WEEK) do
-        if closeWeek(season, n, data) then closed = closed + 1 end
+        if CloseWeek(season, n, data) then closed = closed + 1 end
     end
     if closed > 0 then collectCache[season.id] = nil end
     return closed
 end
-C._closeDueWeeks = closeDueWeeks
+C._closeDueWeeks = CloseDueWeeks
 
-local function bountyView(season, data, nowTs)
-    local n = weekIndex(season, nowTs)
-    local b = ensureBounty(season, n)
+local function BountyView(season, data, nowTs)
+    local n = WeekIndex(season, nowTs)
+    local b = EnsureBounty(season, n)
     if not b then return nil end
-    local rates = bountyRates(data, n, b.objective)
-    local leaderKey = pickWinner(rates)
+    local rates = BountyRates(data, n, b.objective)
+    local leaderKey = PickWinner(rates)
     if leaderKey == '' then leaderKey = nil end
-    local _, to = weekWindow(season, n)
+    local _, to = WeekWindow(season, n)
     return {
-        id = b.objective, label = bountyLabel(b.objective),
-        leader = leaderKey and deptShort(leaderKey) or nil, leaderKey = leaderKey,
-        week = n, endsIn = math.max(0, to - nowTs), closed = b.winner ~= nil,
-        overridden = b.objective ~= pickBounty(season.id, n),
-        rates = publicRates(rates),
+        id = b.objective,
+        label = BountyLabel(b.objective),
+        leader = leaderKey and DeptShort(leaderKey) or nil,
+        leaderKey = leaderKey,
+        week = n,
+        endsIn = math.max(0, to - nowTs),
+        closed = b.winner ~= nil,
+        overridden = b.objective ~= PickBounty(season.id, n),
+        rates = PublicRates(rates),
     }
 end
 
@@ -626,37 +653,47 @@ function C.bounty(weekKey)
     if weekKey ~= nil then
         local y, m, d = tostring(weekKey):match('^(%d%d%d%d)%-(%d%d)%-(%d%d)$')
         if not y then return nil end
-        ts = os.time({ year = int(y), month = int(m), day = int(d), hour = resetHour(), min = 30, sec = 0 })
+        ts = os.time({ year = Int(y), month = Int(m), day = Int(d), hour = ResetHour(), min = 30, sec = 0 })
     end
-    local n = weekIndex(season, ts)
-    local b = ensureBounty(season, n)
+    local n = WeekIndex(season, ts)
+    local b = EnsureBounty(season, n)
     if not b then return nil end
-    local from, to = weekWindow(season, n)
-    return { seasonId = season.id, week = n, id = b.objective, label = bountyLabel(b.objective),
-        winner = (b.winner ~= nil and b.winner ~= '') and b.winner or nil, closed = b.winner ~= nil,
-        startsAt = from, endsAt = to, overridden = b.objective ~= pickBounty(season.id, n) }
+    local from, to = WeekWindow(season, n)
+    return {
+        seasonId = season.id,
+        week = n,
+        id = b.objective,
+        label = BountyLabel(b.objective),
+        winner = (b.winner ~= nil and b.winner ~= '') and b.winner or nil,
+        closed = b.winner ~= nil,
+        startsAt = from,
+        endsAt = to,
+        overridden = b.objective ~= PickBounty(season.id, n),
+    }
 end
 
--- ── caches and banner ───────────────────────────────────────────────────────
+-- ============================================================================
+--                              CACHES AND BANNER
+-- ============================================================================
+
 function C.invalidate()
     collectGen = collectGen + 1
     collectCache = {}
     bannerCache = nil
 end
 
-local function invalidateAll()
+local function InvalidateAll()
     C.invalidate()
-    if has('Leaderboard', 'invalidate') then
+    if Has('Leaderboard', 'invalidate') then
         -- CP.Leaderboard.invalidate calls C.invalidate as well; both are cheap.
-        call('Leaderboard', 'invalidate')
+        Call('Leaderboard', 'invalidate')
     end
 end
 
-local function latestChampion()
+local function LatestChampion()
     if bannerCache and os.time() - bannerCache.at < SEASON_RELOAD_S then return bannerCache.row end
-    db()
-    local row = MySQL.single.await(
-        [[SELECT s.id, s.name, b.winner FROM cp_seasons s
+    Db()
+    local row = MySQL.single.await([[SELECT s.id, s.name, b.winner FROM cp_seasons s
           LEFT JOIN cp_dept_bounties b ON b.season_id = s.id AND b.week = ?
           WHERE s.active = 0 AND s.ends_at IS NOT NULL
           ORDER BY s.id DESC LIMIT 1]], { CHAMPION_WEEK })
@@ -665,81 +702,104 @@ local function latestChampion()
 end
 
 function C.championBanner(dept)
-    local row = latestChampion()
+    local row = LatestChampion()
     if not row then return nil end
-    local winner = nonEmpty(row.winner)
+    local winner = NonEmpty(row.winner)
     if not winner then return nil end
     if dept ~= nil and dept ~= winner then return nil end
-    local d = deptInfo(winner)
-    return { season = tostring(row.name), seasonId = int(row.id), department = d and d.label or winner, departmentKey = winner,
-        short = d and d.short or winner:upper() }
+    local d = DeptInfo(winner)
+    return {
+        season = tostring(row.name),
+        seasonId = Int(row.id),
+        department = d and d.label or winner,
+        departmentKey = winner,
+        short = d and d.short or winner:upper(),
+    }
 end
 
--- ── permissions, audit, webhook ─────────────────────────────────────────────
-local function allowed(src, action)
+-- ============================================================================
+--                         PERMISSIONS, AUDIT, WEBHOOK
+-- ============================================================================
+
+local function Allowed(src, action)
     local n = tonumber(src)
     if n == 0 then return true end
-    if not n or not has('Permissions', 'can') then return false, 'err.no_permission' end
+    if not n or not Has('Permissions', 'can') then return false, 'err.no_permission' end
     return CP.Permissions.can(n, action)
 end
 
-local function audit(src, action, target, old, new, reason)
+local function Audit(src, action, target, old, new, reason)
     local n = tonumber(src) or 0
     local actor = n == 0 and 'console' or n
     local role = n == 0 and 'console' or 'admin'
-    if not has('Admin', 'audit') then
-        CP.warn(TAG, 'CP.Admin.audit is not available: %s %s by %s not written to the audit log', action, tostring(target), tostring(actor))
+    if not Has('Admin', 'audit') then
+        CP.warn(TAG, 'CP.Admin.audit is not available: %s %s by %s not written to the audit log', action,
+            tostring(target), tostring(actor))
         return
     end
-    call('Admin', 'audit', actor, role, 'audit', action, target,
-        old ~= nil and U.clip(tostring(old), 64) or nil, new ~= nil and U.clip(tostring(new), 64) or nil,
-        reason ~= nil and U.clip(tostring(reason), 255) or nil)
+    Call('Admin', 'audit', actor, role, 'audit', action, target, old ~= nil and U.clip(tostring(old), 64) or nil,
+        new ~= nil and U.clip(tostring(new), 64) or nil, reason ~= nil and U.clip(tostring(reason), 255) or nil)
 end
 
-local function webhook(title, description, fields)
-    if not has('Admin', 'webhook') then
+local function Webhook(title, description, fields)
+    if not Has('Admin', 'webhook') then
         CP.log(TAG, 'no CP.Admin.webhook: %s', title)
         return false
     end
-    return call('Admin', 'webhook', 'board', title, description, fields)
+    return Call('Admin', 'webhook', 'board', title, description, fields)
 end
 
--- ── views ───────────────────────────────────────────────────────────────────
-local function seasonView(season, nowTs)
+-- ============================================================================
+--                                    VIEWS
+-- ============================================================================
+
+local function SeasonView(season, nowTs)
     if not season then return nil end
     nowTs = nowTs or os.time()
     local at = season.active and nowTs or (season.endsAt or nowTs)
-    return { id = season.id, name = season.name, startsAt = season.startsAt, endsAt = season.endsAt, active = season.active,
-        week = weekIndex(season, at), weeksLeft = weeksLeft(season, nowTs) }
+    return {
+        id = season.id,
+        name = season.name,
+        startsAt = season.startsAt,
+        endsAt = season.endsAt,
+        active = season.active,
+        week = WeekIndex(season, at),
+        weeksLeft = WeeksLeft(season, nowTs),
+    }
 end
 
 -- Names for a list of citizenids: { [cid] = { name, callsign, hideName, rank } }.
-local function officerNames(cids)
+local function OfficerNames(cids)
     local out = {}
     if #cids == 0 then return out end
-    db()
+    Db()
     for i = 1, #cids, 100 do
         local chunk = {}
         for j = i, math.min(#cids, i + 99) do chunk[#chunk + 1] = cids[j] end
         local rows = MySQL.query.await(
-            ('SELECT citizenid, display_name, callsign, rank_label, hide_name FROM cp_officers WHERE citizenid IN (%s)'):format(placeholders(#chunk)),
-            chunk) or {}
+            ('SELECT citizenid, display_name, callsign, rank_label, hide_name FROM cp_officers WHERE citizenid IN (%s)'):format(
+                Placeholders(#chunk)
+            ), chunk) or {}
         for _, r in ipairs(rows) do
-            out[tostring(r.citizenid)] = { name = nonEmpty(r.display_name), callsign = nonEmpty(r.callsign),
-                rank = nonEmpty(r.rank_label), hideName = U.truthy(r.hide_name) }
+            out[tostring(r.citizenid)] = {
+                name = NonEmpty(r.display_name),
+                callsign = NonEmpty(r.callsign),
+                rank = NonEmpty(r.rank_label),
+                hideName = U.truthy(r.hide_name),
+            }
         end
     end
     return out
 end
 
-local function publicName(e)
-    if has('Leaderboard', 'publicName') then return CP.Leaderboard.publicName(e) end
+local function PublicName(e)
+    if Has('Leaderboard', 'publicName') then return CP.Leaderboard.publicName(e) end
     if e.hideName then return e.callsign or CP.L('leaderboard.hidden_name') end
     return e.name or e.callsign or CP.L('common.unknown')
 end
 
 -- The department's officers this season, best first.
-local function contributors(data, dept, limit)
+local function Contributors(data, dept, limit)
     local list = {}
     for cid, o in pairs((data and data.officers[dept]) or {}) do
         list[#list + 1] = { citizenid = cid, points = o.points, runs = o.completed }
@@ -754,11 +814,18 @@ local function contributors(data, dept, limit)
         out[i] = list[i]
         cids[i] = list[i].citizenid
     end
-    local names = officerNames(cids)
+    local names = OfficerNames(cids)
     for i, e in ipairs(out) do
         local n = names[e.citizenid] or {}
-        out[i] = { rank = i, citizenid = e.citizenid, name = publicName({ name = n.name, callsign = n.callsign, hideName = n.hideName }),
-            callsign = n.callsign, points = e.points, runs = e.runs, active = e.runs >= minActive() }
+        out[i] = {
+            rank = i,
+            citizenid = e.citizenid,
+            name = PublicName({ name = n.name, callsign = n.callsign, hideName = n.hideName }),
+            callsign = n.callsign,
+            points = e.points,
+            runs = e.runs,
+            active = e.runs >= MinActive(),
+        }
     end
     return out
 end
@@ -767,27 +834,48 @@ function C.view(officer)
     local nowTs = os.time()
     local season = C.currentSeason()
     local out = {
-        enabled = challengeOn(), mode = scoringMode(), minRunsActive = minActive(), myDepartment = officer.department,
-        season = nil, departments = {}, bounty = nil, topContributors = {},
+        enabled = ChallengeOn(),
+        mode = ScoringMode(),
+        minRunsActive = MinActive(),
+        myDepartment = officer.department,
+        season = nil,
+        departments = {},
+        bounty = nil,
+        topContributors = {},
     }
     if season then
-        out.season = { id = season.id, name = season.name, weeksLeft = weeksLeft(season, nowTs), week = weekIndex(season, nowTs), startsAt = season.startsAt }
+        out.season = {
+            id = season.id,
+            name = season.name,
+            weeksLeft = WeeksLeft(season, nowTs),
+            week = WeekIndex(season, nowTs),
+            startsAt = season.startsAt,
+        }
     end
     if not out.enabled then return out end
-    local data = season and collect(season.id) or nil
-    out.departments = publicStandings(standingsFrom(data))
+    local data = season and Collect(season.id) or nil
+    out.departments = PublicStandings(StandingsFrom(data))
     if season and data then
-        out.bounty = bountyView(season, data, nowTs)
-        local top = contributors(data, officer.department, 5)
+        out.bounty = BountyView(season, data, nowTs)
+        local top = Contributors(data, officer.department, 5)
         for i, c in ipairs(top) do
-            out.topContributors[i] = { name = c.name, callsign = c.callsign, points = c.points, citizenid = c.citizenid, runs = c.runs }
+            out.topContributors[i] = {
+                name = c.name,
+                callsign = c.callsign,
+                points = c.points,
+                citizenid = c.citizenid,
+                runs = c.runs,
+            }
         end
     end
     return out
 end
 
--- ── season start / end ──────────────────────────────────────────────────────
-local function validName(name)
+-- ============================================================================
+--                              SEASON START / END
+-- ============================================================================
+
+local function ValidName(name)
     if type(name) ~= 'string' then return nil end
     name = U.trim(name)
     -- 1 to 64 characters (cp_seasons.name is VARCHAR(64) utf8mb4, the Seasons screen's maxLength counts
@@ -797,54 +885,69 @@ local function validName(name)
     return name
 end
 
-local function awardBadge(citizenid, badgeId, ts)
-    return num(MySQL.update.await('INSERT IGNORE INTO cp_badges (citizenid, badge_id, earned_at) VALUES (?, ?, FROM_UNIXTIME(?))',
+local function AwardBadge(citizenid, badgeId, ts)
+    return Num(MySQL.update.await(
+        'INSERT IGNORE INTO cp_badges (citizenid, badge_id, earned_at) VALUES (?, ?, FROM_UNIXTIME(?))',
         { citizenid, U.clip(badgeId, 40), ts }))
 end
 
-local function decideChampion(list)
-    if not challengeOn() then return '' end
+local function DecideChampion(list)
+    if not ChallengeOn() then return '' end
     local top, second = list[1], list[2]
     if not top or (top.scoreRaw <= 0 and top.completed <= 0) then return '' end
-    if second and second.scoreRaw == top.scoreRaw and second.completed == top.completed and second.unitRuns == top.unitRuns then return '' end
+    if second and second.scoreRaw == top.scoreRaw and second.completed == top.completed
+        and second.unitRuns == top.unitRuns then
+        return ''
+    end
     return top.key
 end
 
-local function seasonResultsWebhook(season, list, champion, top10)
+local function SeasonResultsWebhook(season, list, champion, top10)
     local lines = {}
     for i, e in ipairs(list) do
-        lines[i] = CP.L('challenge.webhook_standing_line', { rank = i, department = e.short, score = fmtInt(e.score), active = e.activeOfficers })
+        lines[i] = CP.L('challenge.webhook_standing_line',
+            { rank = i, department = e.short, score = FmtInt(e.score), active = e.activeOfficers })
     end
     local topLines = {}
     for i, e in ipairs(top10) do
-        topLines[i] = CP.L('challenge.webhook_top_line', { rank = i, name = e.name, department = e.departmentShort, points = fmtInt(e.points) })
+        topLines[i] = CP.L('challenge.webhook_top_line',
+            { rank = i, name = e.name, department = e.departmentShort, points = FmtInt(e.points) })
     end
     local fields = {
-        { name = CP.L('challenge.webhook_standings'), value = #lines > 0 and table.concat(lines, '\n') or CP.L('common.none'), inline = false },
-        { name = CP.L('challenge.webhook_top10'), value = #topLines > 0 and table.concat(topLines, '\n') or CP.L('common.none'), inline = false },
+        {
+            name = CP.L('challenge.webhook_standings'),
+            value = #lines > 0 and table.concat(lines, '\n') or CP.L('common.none'),
+            inline = false,
+        },
+        {
+            name = CP.L('challenge.webhook_top10'),
+            value = #topLines > 0 and table.concat(topLines, '\n') or CP.L('common.none'),
+            inline = false,
+        },
     }
-    local d = champion ~= '' and deptInfo(champion) or nil
+    local d = champion ~= '' and DeptInfo(champion) or nil
     local desc = d and CP.L('challenge.webhook_champion', { department = d.label, season = season.name })
         or CP.L('challenge.webhook_no_champion', { season = season.name })
-    webhook(CP.L('challenge.webhook_season_title', { season = season.name }), desc, fields)
+    Webhook(CP.L('challenge.webhook_season_title', { season = season.name }), desc, fields)
 end
 
-local function endSeasonInternal(src, season, reason)
-    db()
+local function EndSeasonInternal(src, season, reason)
+    Db()
     local endTs = os.time()
-    local changed = MySQL.update.await('UPDATE cp_seasons SET active = 0, ends_at = FROM_UNIXTIME(?) WHERE id = ? AND active = 1',
+    local changed = MySQL.update.await(
+        'UPDATE cp_seasons SET active = 0, ends_at = FROM_UNIXTIME(?) WHERE id = ? AND active = 1',
         { endTs, season.id })
-    loadSeasons()
-    if num(changed) <= 0 then return false, 'err.no_season' end
+    LoadSeasons()
+    if Num(changed) <= 0 then return false, 'err.no_season' end
     season = C.seasonById(season.id) or season
     season.endsAt = season.endsAt or endTs
     season.active = false
-    invalidateAll()
+    InvalidateAll()
 
-    closeDueWeeks(season, endTs, true)
-    local data = collect(season.id, true) or { officers = {}, weeks = {}, bounties = {} }
-    local list = standingsFrom(data)
-    local champion = decideChampion(list)
+    CloseDueWeeks(season, endTs, true)
+    local data = Collect(season.id, true) or { officers = {}, weeks = {}, bounties = {} }
+    local list = StandingsFrom(data)
+    local champion = DecideChampion(list)
     MySQL.update.await(
         'INSERT INTO cp_dept_bounties (season_id, week, objective, winner) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE winner = VALUES(winner)',
         { season.id, CHAMPION_WEEK, CHAMPION_OBJECTIVE, champion })
@@ -852,30 +955,44 @@ local function endSeasonInternal(src, season, reason)
     local trophies = 0
     if champion ~= '' then
         for cid, o in pairs(data.officers[champion] or {}) do
-            if o.completed >= minActive() then trophies = trophies + awardBadge(cid, ('season_%d_champion'):format(season.id), endTs) end
-        end
-    end
-    local top10 = {}
-    if has('Leaderboard', 'ranking') then
-        local ok, ranked = call('Leaderboard', 'ranking', { period = 'season', seasonId = season.id, filter = 'overall', fresh = true })
-        if ok and type(ranked) == 'table' then
-            for i = 1, math.min(10, #ranked) do
-                local e = ranked[i]
-                awardBadge(e.citizenid, ('season_%d_top10'):format(season.id), endTs)
-                top10[i] = { rank = i, citizenid = e.citizenid, name = publicName(e), departmentShort = deptShort(e.department), points = e.points }
+            if o.completed >= MinActive() then
+                trophies = trophies + AwardBadge(cid, ('season_%d_champion'):format(season.id), endTs)
             end
         end
     end
-    seasonResultsWebhook(season, list, champion, top10)
-    audit(src, 'season_end', ('season:%d'):format(season.id), season.name, champion ~= '' and champion or '-', reason)
-    invalidateAll()
+    local top10 = {}
+    if Has('Leaderboard', 'ranking') then
+        local ok, ranked = Call('Leaderboard', 'ranking',
+            { period = 'season', seasonId = season.id, filter = 'overall', fresh = true })
+        if ok and type(ranked) == 'table' then
+            for i = 1, math.min(10, #ranked) do
+                local e = ranked[i]
+                AwardBadge(e.citizenid, ('season_%d_top10'):format(season.id), endTs)
+                top10[i] = {
+                    rank = i,
+                    citizenid = e.citizenid,
+                    name = PublicName(e),
+                    departmentShort = DeptShort(e.department),
+                    points = e.points,
+                }
+            end
+        end
+    end
+    SeasonResultsWebhook(season, list, champion, top10)
+    Audit(src, 'season_end', ('season:%d'):format(season.id), season.name, champion ~= '' and champion or '-', reason)
+    InvalidateAll()
     CP.log(TAG, 'season %d (%s) ended: champion %s, %d trophies, %d top 10 badges', season.id, season.name,
         champion ~= '' and champion or 'none', trophies, #top10)
-    return true, { season = seasonView(season, endTs), standings = publicStandings(list),
-        champion = champion ~= '' and champion or nil, top10 = top10 }
+    return true,
+        {
+            season = SeasonView(season, endTs),
+            standings = PublicStandings(list),
+            champion = champion ~= '' and champion or nil,
+            top10 = top10,
+        }
 end
 
-local function guarded(fn)
+local function Guarded(fn)
     if busy then return false, 'err.busy' end
     busy = true
     local res = table.pack(pcall(fn))
@@ -888,71 +1005,75 @@ local function guarded(fn)
 end
 
 function C.endSeason(src, reason)
-    local ok, errKey = allowed(src, 'seasons')
+    local ok, errKey = Allowed(src, 'seasons')
     if not ok then return false, errKey or 'err.no_permission' end
     if reason ~= nil and type(reason) ~= 'string' then return false, 'err.invalid_payload' end
-    return guarded(function()
+    return Guarded(function()
         local season = C.currentSeason(true)
         if not season then return false, 'err.no_season' end
-        return endSeasonInternal(src, season, reason and U.trim(reason) or nil)
+        return EndSeasonInternal(src, season, reason and U.trim(reason) or nil)
     end)
 end
 
 function C.startSeason(src, name)
-    local ok, errKey = allowed(src, 'seasons')
+    local ok, errKey = Allowed(src, 'seasons')
     if not ok then return false, errKey or 'err.no_permission' end
-    name = validName(name)
+    name = ValidName(name)
     if not name then return false, 'err.invalid_season_name' end
-    return guarded(function()
-        db()
+    return Guarded(function()
+        Db()
         local prev = C.currentSeason(true)
         if prev then
-            local okEnd, err = endSeasonInternal(src, prev, CP.L('challenge.audit_replaced', { name = name }))
+            local okEnd, err = EndSeasonInternal(src, prev, CP.L('challenge.audit_replaced', { name = name }))
             if not okEnd then return false, err end
         end
         local now = os.time()
-        local id = MySQL.insert.await('INSERT INTO cp_seasons (name, starts_at, active) VALUES (?, FROM_UNIXTIME(?), 1)', { name, now })
-        loadSeasons()
+        local id = MySQL.insert.await(
+            'INSERT INTO cp_seasons (name, starts_at, active) VALUES (?, FROM_UNIXTIME(?), 1)', { name, now })
+        LoadSeasons()
         local season = id and C.seasonById(id)
         if not season then return false, 'err.internal' end
-        ensureBounty(season, 1)
-        audit(src, 'season_start', ('season:%d'):format(season.id), prev and prev.name or nil, name, nil)
-        invalidateAll()
+        EnsureBounty(season, 1)
+        Audit(src, 'season_start', ('season:%d'):format(season.id), prev and prev.name or nil, name, nil)
+        InvalidateAll()
         CP.log(TAG, 'season %d (%s) started', season.id, name)
-        return true, seasonView(season, now)
+        return true, SeasonView(season, now)
     end)
 end
 
 function C.overrideBounty(src, objective)
-    local ok, errKey = allowed(src, 'bountyOverride')
+    local ok, errKey = Allowed(src, 'bountyOverride')
     if not ok then return false, errKey or 'err.no_permission' end
-    if not bountiesOn() then return false, 'err.bounty_disabled' end
-    if type(objective) ~= 'string' or not isBounty(objective) then return false, 'err.invalid_bounty' end
-    return guarded(function()
+    if not BountiesOn() then return false, 'err.bounty_disabled' end
+    if type(objective) ~= 'string' or not IsBounty(objective) then return false, 'err.invalid_bounty' end
+    return Guarded(function()
         local season = C.currentSeason(true)
         if not season then return false, 'err.no_season' end
         local nowTs = os.time()
-        local n = weekIndex(season, nowTs)
-        local b = ensureBounty(season, n)
+        local n = WeekIndex(season, nowTs)
+        local b = EnsureBounty(season, n)
         if not b then return false, 'err.bounty_disabled' end
         if b.winner ~= nil then return false, 'err.bounty_closed' end
         if b.objective ~= objective then
-            local changed = MySQL.update.await('UPDATE cp_dept_bounties SET objective = ? WHERE season_id = ? AND week = ? AND winner IS NULL',
+            local changed = MySQL.update.await(
+                'UPDATE cp_dept_bounties SET objective = ? WHERE season_id = ? AND week = ? AND winner IS NULL',
                 { objective, season.id, n })
-            if num(changed) <= 0 then return false, 'err.bounty_closed' end
-            audit(src, 'bounty_override', ('season:%d:week:%d'):format(season.id, n), b.objective, objective, nil)
-            invalidateAll()
+            if Num(changed) <= 0 then return false, 'err.bounty_closed' end
+            Audit(src, 'bounty_override', ('season:%d:week:%d'):format(season.id, n), b.objective, objective, nil)
+            InvalidateAll()
         end
-        local data = collect(season.id, true)
-        return true, bountyView(season, data, nowTs)
+        local data = Collect(season.id, true)
+        return true, BountyView(season, data, nowTs)
     end)
 end
 
--- ── admin: seasons screen ───────────────────────────────────────────────────
-local function bountyHistory()
-    db()
-    local rows = MySQL.query.await(
-        [[SELECT b.season_id, b.week, b.objective, b.winner, s.name
+-- ============================================================================
+--                            ADMIN: seasons screen
+-- ============================================================================
+
+local function BountyHistory()
+    Db()
+    local rows = MySQL.query.await([[SELECT b.season_id, b.week, b.objective, b.winner, s.name
           FROM cp_dept_bounties b JOIN cp_seasons s ON s.id = b.season_id
           WHERE b.week >= 1
           ORDER BY b.season_id DESC, b.week DESC
@@ -960,38 +1081,55 @@ local function bountyHistory()
     local out = {}
     local nowTs = os.time()
     for _, r in ipairs(rows) do
-        local sid, n = int(r.season_id), int(r.week)
+        local sid, n = Int(r.season_id), Int(r.week)
         local season = C.seasonById(sid)
         local winner = r.winner ~= nil and tostring(r.winner) or nil
         local bonus = 0
         if season and winner and winner ~= '' then
-            local data = collect(sid)
-            bonus = math.floor(bonusShare() * weekStats(data, n, winner).points)
+            local data = Collect(sid)
+            bonus = math.floor(BonusShare() * WeekStats(data, n, winner).points)
         end
         local from, to = 0, 0
-        if season then from, to = weekWindow(season, n) end
+        if season then from, to = WeekWindow(season, n) end
         out[#out + 1] = {
-            seasonId = sid, seasonName = tostring(r.name), week = n, objective = tostring(r.objective),
-            label = bountyLabel(tostring(r.objective)), winner = winner ~= '' and winner or nil,
-            winnerShort = (winner and winner ~= '') and deptShort(winner) or nil, bonus = bonus,
-            closed = winner ~= nil, current = season ~= nil and season.active and weekIndex(season, nowTs) == n or false,
-            startsAt = from, endsAt = to,
+            seasonId = sid,
+            seasonName = tostring(r.name),
+            week = n,
+            objective = tostring(r.objective),
+            label = BountyLabel(tostring(r.objective)),
+            winner = winner ~= '' and winner or nil,
+            winnerShort = (winner and winner ~= '') and DeptShort(winner) or nil,
+            bonus = bonus,
+            closed = winner ~= nil,
+            current = season ~= nil and season.active and WeekIndex(season, nowTs) == n or false,
+            startsAt = from,
+            endsAt = to,
         }
     end
     return out
 end
 
-local function seasonsList()
-    db()
+local function SeasonsList()
+    Db()
     local champs = {}
-    for _, r in ipairs(MySQL.query.await('SELECT season_id, winner FROM cp_dept_bounties WHERE week = ?', { CHAMPION_WEEK }) or {}) do
-        champs[int(r.season_id)] = r.winner ~= nil and tostring(r.winner) or ''
+    for _, r in
+        ipairs(
+            MySQL.query.await('SELECT season_id, winner FROM cp_dept_bounties WHERE week = ?', { CHAMPION_WEEK }) or {})
+    do
+        champs[Int(r.season_id)] = r.winner ~= nil and tostring(r.winner) or ''
     end
     local out = {}
-    for _, s in ipairs(ensureSeasons(true).list) do
-        local champ = nonEmpty(champs[s.id])
-        out[#out + 1] = { id = s.id, name = s.name, startsAt = s.startsAt, endsAt = s.endsAt, active = s.active,
-            champion = champ, championShort = champ and deptShort(champ) or nil }
+    for _, s in ipairs(EnsureSeasons(true).list) do
+        local champ = NonEmpty(champs[s.id])
+        out[#out + 1] = {
+            id = s.id,
+            name = s.name,
+            startsAt = s.startsAt,
+            endsAt = s.endsAt,
+            active = s.active,
+            champion = champ,
+            championShort = champ and DeptShort(champ) or nil,
+        }
     end
     return out
 end
@@ -1001,23 +1139,28 @@ function C.adminView()
     local current = C.currentSeason(true)
     local latest = C.latestSeason()
     local focus = current or latest
-    local data = focus and collect(focus.id) or nil
+    local data = focus and Collect(focus.id) or nil
     return {
-        current = current and seasonView(current, nowTs) or nil,
-        latest = (not current and latest) and seasonView(latest, nowTs) or nil,
-        standings = publicStandings(standingsFrom(data)),
-        bounty = (current and data) and bountyView(current, data, nowTs) or nil,
-        bountyHistory = bountyHistory(),
-        seasons = seasonsList(),
-        bounties = bountyList(),
-        enabled = challengeOn(), weeklyBounty = bountiesOn(), mode = scoringMode(),
-        seasonWeeks = seasonWeeks(), minRunsActive = minActive(),
+        current = current and SeasonView(current, nowTs) or nil,
+        latest = (not current and latest) and SeasonView(latest, nowTs) or nil,
+        standings = PublicStandings(StandingsFrom(data)),
+        bounty = (current and data) and BountyView(current, data, nowTs) or nil,
+        bountyHistory = BountyHistory(),
+        seasons = SeasonsList(),
+        bounties = BountyList(),
+        enabled = ChallengeOn(),
+        weeklyBounty = BountiesOn(),
+        mode = ScoringMode(),
+        seasonWeeks = SeasonWeeks(),
+        minRunsActive = MinActive(),
     }
 end
 
--- ── supervisor: department report ───────────────────────────────────────────
+-- ============================================================================
+--                        SUPERVISOR: department report
+-- ============================================================================
 -- The department a supervisor/admin looks at: their own; admins may pass args.department.
-local function reportDepartment(src, args)
+local function ReportDepartment(src, args)
     local ok, errKey = CP.Permissions.can(src, 'viewMissionList')
     if not ok then return nil, errKey or 'err.no_permission' end
     if args ~= nil and type(args) ~= 'table' then return nil, 'err.invalid_payload' end
@@ -1025,7 +1168,7 @@ local function reportDepartment(src, args)
     local dept = officer and officer.department or nil
     local wanted = args and args.department
     if wanted ~= nil and wanted ~= '' then
-        if not isDepartment(wanted) then return nil, 'err.unknown_department' end
+        if not IsDepartment(wanted) then return nil, 'err.unknown_department' end
         if wanted ~= dept then
             if not CP.Access.isAdmin(src) then return nil, 'err.other_department' end
             dept = wanted
@@ -1033,7 +1176,7 @@ local function reportDepartment(src, args)
     end
     if not dept then
         if not CP.Access.isAdmin(src) then return nil, 'err.not_police' end
-        local list = departmentList()
+        local list = DepartmentList()
         dept = list[1] and list[1].key or nil
     end
     if not dept then return nil, 'err.unknown_department' end
@@ -1061,33 +1204,46 @@ LEFT JOIN cp_officers o ON o.citizenid = s.citizenid
 ORDER BY s.points DESC, s.runs DESC, s.citizenid ASC]]
 
 function C.deptReport(dept)
-    db()
+    Db()
     local nowTs = os.time()
-    local ws = weekStart(nowTs)
+    local ws = WeekStart(nowTs)
     local season = C.currentSeason()
-    local data = season and collect(season.id) or nil
-    local list = standingsFrom(data)
+    local data = season and Collect(season.id) or nil
+    local list = StandingsFrom(data)
     local standing = nil
     for _, e in ipairs(list) do
-        if e.key == dept then standing = publicStanding(e); standing.of = #list end
+        if e.key == dept then standing = PublicStanding(e); standing.of = #list end
     end
     local officers = {}
     for _, r in ipairs(MySQL.query.await(ACTIVITY_SQL, { dept, ws }) or {}) do
         officers[#officers + 1] = {
-            citizenid = tostring(r.citizenid), name = nonEmpty(r.display_name) or CP.L('common.unknown'),
-            callsign = nonEmpty(r.callsign), rank = nonEmpty(r.rank_label) or '',
-            runs = int(r.runs), completed = int(r.completed), failed = int(r.failed), abandoned = int(r.abandoned),
-            flagged = int(r.flagged), points = int(r.points), cash = int(r.cash),
-            lastRunAt = r.last_ts and sqlTs(r.last_ts) or '', lastRunTs = int(r.last_ts),
+            citizenid = tostring(r.citizenid),
+            name = NonEmpty(r.display_name) or CP.L('common.unknown'),
+            callsign = NonEmpty(r.callsign),
+            rank = NonEmpty(r.rank_label) or '',
+            runs = Int(r.runs),
+            completed = Int(r.completed),
+            failed = Int(r.failed),
+            abandoned = Int(r.abandoned),
+            flagged = Int(r.flagged),
+            points = Int(r.points),
+            cash = Int(r.cash),
+            lastRunAt = r.last_ts and SqlTs(r.last_ts) or '',
+            lastRunTs = Int(r.last_ts),
         }
     end
     return {
-        department = deptInfo(dept),
-        season = season and { id = season.id, name = season.name, weeksLeft = weeksLeft(season, nowTs), week = weekIndex(season, nowTs) } or nil,
-        enabled = challengeOn(),
-        standing = (season and challengeOn()) and standing or nil,
-        standings = challengeOn() and publicStandings(list) or {},
-        bounty = (season and data) and bountyView(season, data, nowTs) or nil,
+        department = DeptInfo(dept),
+        season = season and {
+            id = season.id,
+            name = season.name,
+            weeksLeft = WeeksLeft(season, nowTs),
+            week = WeekIndex(season, nowTs),
+        } or nil,
+        enabled = ChallengeOn(),
+        standing = (season and ChallengeOn()) and standing or nil,
+        standings = ChallengeOn() and PublicStandings(list) or {},
+        bounty = (season and data) and BountyView(season, data, nowTs) or nil,
         week = { key = os.date('%Y-%m-%d', ws), startsAt = ws },
         officers = officers,
     }
@@ -1102,15 +1258,17 @@ WHERE r.citizenid = ? AND r.department = ? AND r.created_at >= FROM_UNIXTIME(?)
 ORDER BY r.created_at DESC, r.id DESC
 LIMIT ?]]
 
-local function missionLabel(missionType, missionId, bd)
-    if has('Leaderboard', 'missionLabel') then return CP.Leaderboard.missionLabel(missionType, missionId, bd) end
+local function MissionLabel(missionType, missionId, bd)
+    if Has('Leaderboard', 'missionLabel') then return CP.Leaderboard.missionLabel(missionType, missionId, bd) end
     return tostring(missionId)
 end
 
 function C.officerActivity(dept, citizenid)
-    db()
-    local ws = weekStart(os.time())
-    local orow = MySQL.single.await('SELECT citizenid, display_name, callsign, rank_label, department FROM cp_officers WHERE citizenid = ?', { citizenid })
+    Db()
+    local ws = WeekStart(os.time())
+    local orow = MySQL.single.await(
+        'SELECT citizenid, display_name, callsign, rank_label, department FROM cp_officers WHERE citizenid = ?',
+        { citizenid })
     local inDept = orow ~= nil and orow.department == dept
     if not inDept then
         inDept = MySQL.scalar.await(
@@ -1123,24 +1281,43 @@ function C.officerActivity(dept, citizenid)
     for _, r in ipairs(MySQL.query.await(OFFICER_RUNS_SQL, { citizenid, dept, ws, ACTIVITY_LIMIT }) or {}) do
         local bd = U.jsonField(r.breakdown)
         runs[#runs + 1] = {
-            id = int(r.id), missionLabel = missionLabel(r.mission_type, r.mission_id, type(bd) == 'table' and bd or nil),
-            missionType = tostring(r.mission_type), state = tostring(r.state), endReason = tostring(r.end_reason),
-            points = int(r.final_points), cash = int(r.cash_paid), cashStatus = tostring(r.cash_status),
-            flagged = U.truthy(r.flagged), flagReason = r.flag_reason, voided = U.truthy(r.voided),
-            participants = int(r.participants), departments = int(r.departments_n), tier = tostring(r.tier),
-            durationS = int(r.duration_s), createdAt = sqlTs(r.created_ts), createdTs = int(r.created_ts),
+            id = Int(r.id),
+            missionLabel = MissionLabel(r.mission_type, r.mission_id, type(bd) == 'table' and bd or nil),
+            missionType = tostring(r.mission_type),
+            state = tostring(r.state),
+            endReason = tostring(r.end_reason),
+            points = Int(r.final_points),
+            cash = Int(r.cash_paid),
+            cashStatus = tostring(r.cash_status),
+            flagged = U.truthy(r.flagged),
+            flagReason = r.flag_reason,
+            voided = U.truthy(r.voided),
+            participants = Int(r.participants),
+            departments = Int(r.departments_n),
+            tier = tostring(r.tier),
+            durationS = Int(r.duration_s),
+            createdAt = SqlTs(r.created_ts),
+            createdTs = Int(r.created_ts),
         }
     end
-    local d = deptInfo(nonEmpty(orow.department) or dept)
+    local d = DeptInfo(NonEmpty(orow.department) or dept)
     return {
-        officer = { citizenid = citizenid, name = nonEmpty(orow.display_name) or CP.L('common.unknown'), callsign = nonEmpty(orow.callsign),
-            rank = nonEmpty(orow.rank_label) or '', departmentShort = d and d.short or '' },
+        officer = {
+            citizenid = citizenid,
+            name = NonEmpty(orow.display_name) or CP.L('common.unknown'),
+            callsign = NonEmpty(orow.callsign),
+            rank = NonEmpty(orow.rank_label) or '',
+            departmentShort = d and d.short or '',
+        },
         week = { key = os.date('%Y-%m-%d', ws), startsAt = ws },
         runs = runs,
     }
 end
 
--- ── net handlers ────────────────────────────────────────────────────────────
+-- ============================================================================
+--                                 NET HANDLERS
+-- ============================================================================
+
 CP.Net.callback('getChallenge', function(src)
     local officer, errKey = CP.Access.getOfficer(src)
     if not officer then return nil, errKey end
@@ -1153,14 +1330,14 @@ CP.Net.callback('getDeptContributors', function(src, args)
     if args ~= nil and type(args) ~= 'table' then return nil, 'err.invalid_payload' end
     local dept = args and args.department
     if dept == nil or dept == '' then dept = officer.department end
-    if not isDepartment(dept) then return nil, 'err.unknown_department' end
+    if not IsDepartment(dept) then return nil, 'err.unknown_department' end
     local season = C.currentSeason()
-    local data = season and collect(season.id) or nil
+    local data = season and Collect(season.id) or nil
     return {
-        department = deptInfo(dept),
+        department = DeptInfo(dept),
         season = season and { id = season.id, name = season.name } or nil,
-        minRunsActive = minActive(),
-        contributors = data and contributors(data, dept, CONTRIBUTORS_LIMIT) or {},
+        minRunsActive = MinActive(),
+        contributors = data and Contributors(data, dept, CONTRIBUTORS_LIMIT) or {},
     }
 end)
 
@@ -1172,14 +1349,14 @@ end)
 
 -- Every handler asks CP.Permissions first (ARCHITECTURE §0.7), then validates the payload.
 CP.Net.action('server:admin:startSeason', function(src, payload)
-    local ok, errKey = allowed(src, 'seasons')
+    local ok, errKey = Allowed(src, 'seasons')
     if not ok then return false, errKey or 'err.no_permission' end
     if type(payload) ~= 'table' then return false, 'err.invalid_payload' end
     return C.startSeason(src, payload.name)
 end, { rate = 2 })
 
 CP.Net.action('server:admin:endSeason', function(src, payload)
-    local ok, errKey = allowed(src, 'seasons')
+    local ok, errKey = Allowed(src, 'seasons')
     if not ok then return false, errKey or 'err.no_permission' end
     if payload ~= nil and type(payload) ~= 'table' then return false, 'err.invalid_payload' end
     local reason = payload and payload.reason or nil
@@ -1188,14 +1365,14 @@ CP.Net.action('server:admin:endSeason', function(src, payload)
 end, { rate = 2 })
 
 CP.Net.action('server:admin:overrideBounty', function(src, payload)
-    local ok, errKey = allowed(src, 'bountyOverride')
+    local ok, errKey = Allowed(src, 'bountyOverride')
     if not ok then return false, errKey or 'err.no_permission' end
     if type(payload) ~= 'table' then return false, 'err.invalid_payload' end
     return C.overrideBounty(src, payload.objective)
 end, { rate = 2 })
 
 CP.Net.callback('sup:getDeptReport', function(src, args)
-    local dept, errKey = reportDepartment(src, args)
+    local dept, errKey = ReportDepartment(src, args)
     if not dept then return nil, errKey end
     return C.deptReport(dept)
 end)
@@ -1204,39 +1381,42 @@ CP.Net.callback('sup:getOfficerActivity', function(src, args)
     local ok, permErr = CP.Permissions.can(src, 'viewMissionList')
     if not ok then return nil, permErr or 'err.no_permission' end
     if type(args) ~= 'table' then return nil, 'err.invalid_payload' end
-    if not validCitizenId(args.citizenid) then return nil, 'err.invalid_citizenid' end
-    local dept, errKey = reportDepartment(src, { department = args.department })
+    if not ValidCitizenId(args.citizenid) then return nil, 'err.invalid_citizenid' end
+    local dept, errKey = ReportDepartment(src, { department = args.department })
     if not dept then return nil, errKey end
     return C.officerActivity(dept, args.citizenid)
 end)
 
--- ── start and the weekly reset ──────────────────────────────────────────────
-local function weeklyReset()
+-- ============================================================================
+--                          START AND THE WEEKLY RESET
+-- ============================================================================
+
+local function WeeklyReset()
     local season = C.currentSeason(true)
     if season then
         local nowTs = os.time()
-        closeDueWeeks(season, nowTs, false)
-        ensureBounty(season, weekIndex(season, nowTs))
+        CloseDueWeeks(season, nowTs, false)
+        EnsureBounty(season, WeekIndex(season, nowTs))
     end
-    invalidateAll()
+    InvalidateAll()
 end
 
 function C._boot()
     if booted then return end
     booted = true
-    if has('Schedule', 'onWeekly') then
-        CP.Schedule.onWeekly(function() weeklyReset() end)
+    if Has('Schedule', 'onWeekly') then
+        CP.Schedule.onWeekly(function() WeeklyReset() end)
     else
         CP.warn(TAG, 'CP.Schedule is missing: weekly bounties only close at season end')
     end
     local ok, err = pcall(function()
-        loadSeasons()
+        LoadSeasons()
         local season = seasons.current
         if season then
             -- Catch-up for weeks that ended while the server was down, then this week's bounty.
-            closeDueWeeks(season, os.time(), false)
-            ensureBounty(season, weekIndex(season, os.time()))
-            CP.log(TAG, 'season %d (%s), week %d', season.id, season.name, weekIndex(season, os.time()))
+            CloseDueWeeks(season, os.time(), false)
+            EnsureBounty(season, WeekIndex(season, os.time()))
+            CP.log(TAG, 'season %d (%s), week %d', season.id, season.name, WeekIndex(season, os.time()))
         end
     end)
     if not ok then CP.err(TAG, 'start failed: %s', tostring(err)) end

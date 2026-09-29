@@ -1,5 +1,5 @@
-// src/shared/components · the shared UI toolkit. Import from here:
-//   import { Button, Card, Table, Money, TierBadge } from '../../shared/components';
+// Src/shared/components · the shared UI toolkit. Import from here:
+// import { Button, Card, Table, Money, TierBadge } from '../../shared/components';
 // Props are documented on each component and in web/README.md.
 
 export { Icon, ICON_NAMES } from './Icon';
@@ -24,7 +24,16 @@ export { Dialog, ConfirmDialog, LayerRootContext } from './Dialog';
 export type { DialogProps, ConfirmDialogProps } from './Dialog';
 
 export { Field, TextInput, SearchInput, NumberInput, Select, Textarea, Toggle, Checkbox } from './Form';
-export type { FieldProps, TextInputProps, NumberInputProps, SelectProps, SelectOption, TextareaProps, ToggleProps, CheckboxProps } from './Form';
+export type {
+    FieldProps,
+    TextInputProps,
+    NumberInputProps,
+    SelectProps,
+    SelectOption,
+    TextareaProps,
+    ToggleProps,
+    CheckboxProps,
+} from './Form';
 
 export { ProgressBar, Stat, EmptyState, ErrorState, Spinner, LoadingBlock } from './Feedback';
 export type { ProgressBarProps, StatProps, EmptyStateProps, Tone } from './Feedback';

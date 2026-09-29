@@ -1,34 +1,33 @@
--- tests/int_duplicates_spec.lua · every built-in mission can be duplicated into a custom mission that passes the
--- Mission Builder guardrails and can be published after its test.
---
--- The REAL loader (CP.Missions.loadAll at start: missions/builtin/index.lua and every built-in file), the REAL
--- blocks and the REAL builder (modules/builder/server.lua) on MariaDB; stubs only for access, qbx, admin audit,
--- tablet pushes and CP.Testing.startDraft (the test run itself is modules/testing's job). For each of the 14
--- built-ins:
---   * server:builder:duplicate (B.sanitize, the standard-bonus filter and B.customBonusFields) gives a draft
---     whose record has no guardrail errors;
---   * B.validate(draft, { publish = true }) (every builder guardrail, the blocks' validate() as a custom mission
---     and CP.Missions.normalize) finds nothing; server:builder:save and server:builder:validate agree;
---   * server:builder:test at the required tier, a passed result (B.onDraftTested) and server:builder:publish
---     write missions/custom/<id>.lua, which CP.Missions registers as a custom mission.
--- Also: a search_area mission's start radius follows the search circle (Config.Blocks.search_area.startRadius)
--- instead of the 20-150 m start-marker limit, and a mission without one keeps that limit.
--- Mission files are written to a temporary folder missions/custom/test_dup_<n>/ that is removed at the end.
+-- Every built-in mission can be duplicated into a custom mission that passes the Mission Builder guardrails and can be
+-- published after its test.
+
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'server' })
 
 local U = CP.U
 local cjson = require('cjson')
 
--- ── console: keep the module log lines out of the test output ───────────────
+-- ============================================================================
+--                                   CONSOLE
+-- ============================================================================
+-- Keep the module log lines out of the test output.
+
 local realPrint = print
 _G.print = function(...)
-    local line = table.concat((function(...) local t = {} for i = 1, select('#', ...) do t[i] = tostring((select(i, ...))) end return t end)(...), ' ')
+    local line = table.concat((function(...)
+        local t = {}
+        for i = 1, select('#', ...) do t[i] = tostring((select(i, ...))) end
+        return t
+    end)(...), ' ')
     if line:find('crimson%-police') then return end
     realPrint(line)
 end
 
--- ── locale: every part merged, served as en.json (block reasons come translated) ─────
+-- ============================================================================
+--                                    LOCALE
+-- ============================================================================
+-- Every part merged, served as en.json (block reasons come translated).
+
 local merged = {}
 do
     local p = io.popen('ls ' .. H.root .. 'locales/parts/*.json 2>/dev/null')
@@ -48,12 +47,15 @@ LoadResourceFile = function(res, path)
 end
 H.load('shared/locale.lua')
 
--- ── temporary export folder ─────────────────────────────────────────────────
+-- ============================================================================
+--                           TEMPORARY EXPORT FOLDER
+-- ============================================================================
+
 local TMP = ('missions/custom/test_dup_%d/'):format(os.clock() * 1e6 // 1 + math.random(1, 1e6))
 Config.Builder.exportPath = TMP
 _G.GetResourcePath = function() return H.root:sub(1, -2) end
 
-local function fileExists(rel)
+local function FileExists(rel)
     local f = io.open(H.root .. rel, 'r')
     if f then f:close(); return true end
     return false
@@ -61,10 +63,18 @@ end
 
 local BUILTINS = assert(load(LoadResourceFile('Crimson-Police', 'missions/builtin/index.lua'), '@index', 't', {}))()
 
-local function body()
-    -- ── stubs of the modules outside the builder ────────────────────────────
+local function Body()
+    -- ---- STUBS OF THE MODULES OUTSIDE THE BUILDER --------------------------
     local players = {
-        [1] = { citizenid = 'SUP00001', name = 'John Doe', rank = 'Sergeant', dept = 'sast', short = 'SAST', grade = 3, sup = true },
+        [1] = {
+            citizenid = 'SUP00001',
+            name = 'John Doe',
+            rank = 'Sergeant',
+            dept = 'sast',
+            short = 'SAST',
+            grade = 3,
+            sup = true,
+        },
     }
     CP.Access = {
         isAdmin = function(src) return src == 0 end,
@@ -72,8 +82,18 @@ local function body()
         getOfficer = function(src)
             local p = players[src]
             if not p then return nil, 'err.not_police' end
-            return { src = src, citizenid = p.citizenid, name = p.name, department = p.dept, departmentShort = p.short,
-                rank = p.rank, gradeLevel = p.grade, isSupervisor = true, isAdmin = false, onduty = true }
+            return {
+                src = src,
+                citizenid = p.citizenid,
+                name = p.name,
+                department = p.dept,
+                departmentShort = p.short,
+                rank = p.rank,
+                gradeLevel = p.grade,
+                isSupervisor = true,
+                isAdmin = false,
+                onduty = true,
+            }
         end,
         departmentForJob = function() return nil end,
         department = function() return nil end,
@@ -94,23 +114,50 @@ local function body()
     CP.Admin = { audit = function() end }
     CP.Tablet = { push = function() end, notify = function() end }
     local started = {}
-    CP.Testing = { startDraft = function(src, def, opts)
-        started[#started + 1] = { src = src, def = def, opts = opts }
-        return true, { runId = 'run-' .. #started, missionId = def.id, locationIndex = opts.location, tier = opts.tier, testers = 1 }
-    end }
-    CP.Alerts = { inArena = function() return false end }
-    CP.Npc = CP.Npc or { setState = function() end, getState = function() end, rollSurrender = function() return false end,
-        enableCuff = function() end, onDeath = function() end, onDamaged = function() end }
+    CP.Testing = {
+        startDraft = function(src, def, opts)
+            started[#started + 1] = { src = src, def = def, opts = opts }
+            return true,
+                {
+                    runId = 'run-' .. #started,
+                    missionId = def.id,
+                    locationIndex = opts.location,
+                    tier = opts.tier,
+                    testers = 1,
+                }
+        end,
+    }
+    CP.Alerts = {
+        inArena = function() return false end,
+    }
+    CP.Npc = CP.Npc
+        or {
+            setState = function() end,
+            getState = function() end,
+            rollSurrender = function() return false end,
+            enableCuff = function() end,
+            onDeath = function() end,
+            onDamaged = function() end,
+        }
 
     H.load('modules/scaling/server.lua')
     H.load('modules/permissions/server.lua')
-    for _, b in ipairs({ 'checkpoint_route', 'interact_points', 'skill_check', 'hostile_waves', 'protect_rescue',
-        'flee_arrest', 'pursuit', 'escort', 'search_area' }) do
+    for _, b in ipairs({
+        'checkpoint_route',
+        'interact_points',
+        'skill_check',
+        'hostile_waves',
+        'protect_rescue',
+        'flee_arrest',
+        'pursuit',
+        'escort',
+        'search_area',
+    }) do
         H.load('blocks/' .. b .. '/server.lua')
     end
     H.sql('DELETE FROM cp_custom_missions')
-    H.sql("DELETE FROM cp_officers WHERE citizenid = 'SUP00001'")
-    H.sql("INSERT INTO cp_officers (citizenid, display_name, department) VALUES ('SUP00001', 'John Doe', 'sast')")
+    H.sql('DELETE FROM cp_officers WHERE citizenid = \'SUP00001\'')
+    H.sql('INSERT INTO cp_officers (citizenid, display_name, department) VALUES (\'SUP00001\', \'John Doe\', \'sast\')')
     H.load('modules/builder/server.lua')
     H.load('modules/missions/server.lua')
     H.step(10)   -- CP.Missions.loadAll (built-ins + CP.Builder.loadPublished)
@@ -123,7 +170,7 @@ local function body()
     end
     H.eq(#BUILTINS, 14, 'fourteen built-in missions')
 
-    -- ── helpers: actions through CP.Net ─────────────────────────────────────
+    -- ---- HELPERS: actions through CP.Net -----------------------------------
     local reqN = 0
     local function act(name, payload)
         reqN = reqN + 1
@@ -144,16 +191,19 @@ local function body()
         return table.concat(out, ' | ')
     end
     local function row(id)
-        return H.sql('SELECT id, status, published_version, draft_version, draft_tested, file_path, draft_definition FROM cp_custom_missions WHERE id = ?', { id })[1]
+        return H.sql(
+            'SELECT id, status, published_version, draft_version, draft_tested, file_path, draft_definition FROM cp_custom_missions WHERE id = ?',
+            { id })[1]
     end
 
-    -- ── every built-in: duplicate -> validate -> save -> test -> passed -> publish ──
+    -- ---- EVERY BUILT-IN: duplicate -> validate -> save -> test -> passed -> publish ----
     local published = 0
     local publishedIds = {}
     for _, source in ipairs(BUILTINS) do
         local tag = 'duplicate of ' .. source
         local okDu, du = act('duplicate', { id = source })
-        H.ok(okDu and type(du) == 'table' and type(du.id) == 'string', tag .. ': server:builder:duplicate (' .. tostring(okDu and '' or du) .. ')')
+        H.ok(okDu and type(du) == 'table' and type(du.id) == 'string',
+            tag .. ': server:builder:duplicate (' .. tostring(okDu and '' or du) .. ')')
         if okDu then
             local id = du.id
             local rec = du.record
@@ -165,31 +215,40 @@ local function body()
             H.eq(messages(errors), '', tag .. ': B.validate(publish = true) passes')
             -- the builder UI saves the record it was given, then asks for the publish validation
             local okS, saved = act('save', { id = id, definition = rec.definition })
-            H.ok(okS and saved.valid == true, tag .. ': server:builder:save says valid (' .. messages(okS and saved.errors or {}) .. ')')
+            H.ok(okS and saved.valid == true,
+                tag .. ': server:builder:save says valid (' .. messages(okS and saved.errors or {}) .. ')')
             id = okS and saved.id or id
             local okV, val = act('validate', { id = id })
-            H.ok(okV and val.valid == true, tag .. ': server:builder:validate (publish checks) says valid (' .. messages(okV and val.errors or {}) .. ')')
+            H.ok(
+                okV and val.valid == true,
+                tag .. ': server:builder:validate (publish checks) says valid (' .. messages(okV and val.errors or {})
+                    .. ')'
+            )
             -- test at the tier maxOfficers reaches, pass it, publish
             local okT, test = act('test', { id = id })
-            H.ok(okT and type(test) == 'table' and test.tier == test.requiredTier, tag .. ': test run started at the required tier (' .. tostring(okT and '' or test) .. ')')
+            H.ok(okT and type(test) == 'table' and test.tier == test.requiredTier,
+                tag .. ': test run started at the required tier (' .. tostring(okT and '' or test) .. ')')
             if okT then
-                H.eq(B.onDraftTested(id, test.version, test.tier, true, 1), true, tag .. ': a passed test marks the draft tested')
+                H.eq(B.onDraftTested(id, test.version, test.tier, true, 1), true,
+                    tag .. ': a passed test marks the draft tested')
                 local okP, pub = act('publish', { id = id })
-                H.ok(okP and type(pub) == 'table' and pub.version == 1, tag .. ': published as version 1 (' .. tostring(okP and '' or pub) .. ')')
+                H.ok(okP and type(pub) == 'table' and pub.version == 1,
+                    tag .. ': published as version 1 (' .. tostring(okP and '' or pub) .. ')')
                 if okP then
                     published = published + 1
                     publishedIds[source] = id
-                    H.ok(fileExists(pub.filePath), tag .. ': mission file written')
+                    H.ok(FileExists(pub.filePath), tag .. ': mission file written')
                     local live = CP.Missions.get(id)
-                    H.ok(live ~= nil and live.source == 'custom' and live.status == 'published', tag .. ': registered as a published custom mission')
+                    H.ok(live ~= nil and live.source == 'custom' and live.status == 'published',
+                        tag .. ': registered as a published custom mission')
                     local r = row(id)
                     H.ok(r.status == 'published' and r.published_version == 1, tag .. ': row published')
                     -- the written file loads back through the builder's own reload check untouched
                     local text = LoadResourceFile('Crimson-Police', pub.filePath)
                     local parsed = B.parse(text, pub.filePath)
                     local back = parsed and B.sanitize(B.fromFileUnits(parsed), id)
-                    H.eq(messages(back and B.validate(back, { publish = true }) or { { message = 'does not load' } }), '',
-                        tag .. ': the published file passes the guardrails again (reload)')
+                    H.eq(messages(back and B.validate(back, { publish = true }) or { { message = 'does not load' } }),
+                        '', tag .. ': the published file passes the guardrails again (reload)')
                 end
             end
         end
@@ -197,7 +256,7 @@ local function body()
     H.eq(published, 14, 'all 14 built-in missions duplicated, tested and published')
     H.eq(#B.onReload().rejected, 0, 'a reload rejects none of the published copies')
 
-    -- ── a custom mission published before the rename (policeVehicle) keeps loading, silently ─────
+    -- ---- A CUSTOM MISSION PUBLISHED BEFORE THE RENAME (policeVehicle) keeps loading, silently ----
     do
         local id = publishedIds.beat_patrol
         local r = H.sql('SELECT file_path, published_definition FROM cp_custom_missions WHERE id = ?', { id })[1]
@@ -227,23 +286,31 @@ local function body()
             'loaded: policeVehicle = false is read as vehicleRequired = false')
         local noisy = 0
         for _, line in ipairs(warned) do
-            if line:find(id, 1, true) or line:find('policeVehicle', 1, true) or line:find('vehicleRequired', 1, true) then noisy = noisy + 1 end
+            if line:find(id, 1, true) or line:find('policeVehicle', 1, true)
+                or line:find('vehicleRequired', 1, true) then
+                noisy = noisy + 1
+            end
         end
         H.eq(noisy, 0, 'no warning about the old name (' .. table.concat(warned, ' | ') .. ')')
         -- the builder shows it with the new name, and a copy is written with the new name
         local res = H.callback('crimson-police:builder:get', 1, { id = id })
         local rec = res and res.ok and res.data
-        H.ok(rec and rec.definition.objectives[1].vehicleRequired == false and rec.definition.objectives[1].policeVehicle == nil,
-            'builder:get shows vehicleRequired = false')
+        H.ok(
+            rec and rec.definition.objectives[1].vehicleRequired == false
+                and rec.definition.objectives[1].policeVehicle == nil,
+            'builder:get shows vehicleRequired = false'
+        )
         H.ok(rec and rec.publishedDefinition.objectives[1].vehicleRequired == false, 'the published copy too')
         H.eq(#(rec and rec.errors or { 1 }), 0, 'no guardrail error for the old name')
         local okC, copy = act('duplicate', { id = id })
         local cobj = okC and copy.record.definition.objectives[1]
         H.ok(cobj and cobj.vehicleRequired == false and cobj.policeVehicle == nil, 'its copy uses vehicleRequired')
         local draft = okC and cjson.decode(row(copy.id).draft_definition)
-        H.ok(draft and draft.objectives[1].vehicleRequired == false and draft.objectives[1].policeVehicle == nil, 'the stored copy uses vehicleRequired')
+        H.ok(draft and draft.objectives[1].vehicleRequired == false and draft.objectives[1].policeVehicle == nil,
+            'the stored copy uses vehicleRequired')
         local lua = okC and B.exportLua(draft, { version = 1, publisher = 'test', at = 0 }) or ''
-        H.ok(lua:find('vehicleRequired = false', 1, true) ~= nil and lua:find('policeVehicle', 1, true) == nil, 'exported with vehicleRequired')
+        H.ok(lua:find('vehicleRequired = false', 1, true) ~= nil and lua:find('policeVehicle', 1, true) == nil,
+            'exported with vehicleRequired')
         -- an old draft saved from an outdated tablet is stored with the new name
         local d = U.deepcopy(copy.record.definition)
         d.objectives[1].vehicleRequired = nil
@@ -254,15 +321,18 @@ local function body()
             'a saved policeVehicle is stored as vehicleRequired')
     end
 
-    -- ── the start radius of a search_area mission follows its search circle ─────
+    -- ---- THE START RADIUS OF A search_area MISSION FOLLOWS ITS SEARCH CIRCLE ----
     do
         local okDu, du = act('duplicate', { id = 'manhunt' })
         local d = okDu and du.record.definition
-        H.ok(d and d.locations[1].start.radius == 600, 'the Manhunt copy keeps its 600 m search circle as the start radius')
+        H.ok(d and d.locations[1].start.radius == 600,
+            'the Manhunt copy keeps its 600 m search circle as the start radius')
         local function startErrors(def)
             local out = {}
             for _, e in ipairs(B.validate(def)) do
-                if e.key == 'builder.error.start_radius' or e.key == 'builder.error.start_radius_search' then out[#out + 1] = e end
+                if e.key == 'builder.error.start_radius' or e.key == 'builder.error.start_radius_search' then
+                    out[#out + 1] = e
+                end
             end
             return out
         end
@@ -302,26 +372,38 @@ local function body()
             'builder:config: the search circle range comes with the blocks')
     end
 
-    -- ── the builder UI shows and enforces the same start radius (static checks of web/src/builder) ──
+    -- ---- THE BUILDER UI SHOWS AND ENFORCES THE SAME START RADIUS (static checks of web/src/builder) ----
     do
         local function src(rel)
             local f = io.open(H.root .. 'web/src/builder/' .. rel, 'r')
             if not f then return '' end
-            local text = f:read('a'); f:close(); return text
+            local text = f:read('a')
+            f:close()
+            return text
         end
-        local schema, steps, editor, apply = src('schema.ts'), src('steps/StepLocations.tsx'), src('useDraftEditor.ts'), src('applyResult.ts')
-        H.ok(schema:find("o.block === 'search_area'", 1, true) and schema:find("rangeOf(cfg, 'search_area', 'startRadius', [200, 1000, 600])", 1, true),
-            'schema.ts: the search circle is the first search_area objective, with the search_area range')
-        H.ok(steps:find('radiusRange={startRadiusRange(cfg, def)}', 1, true) and steps:find('disabled={ro || !!search}', 1, true),
-            'Locations step: the start radius shows the search circle and is locked to it')
-        H.ok(editor:find('syncStartRadius(next, configRef.current, cur)', 1, true) and editor:find('startRadiusRange(config, d)', 1, true),
-            'editor: every edit keeps the start radii on the search circle; placing a start uses its radius')
+        local schema, steps, editor, apply =
+            src('schema.ts'), src('steps/StepLocations.tsx'), src('useDraftEditor.ts'), src('applyResult.ts')
+        H.ok(
+            schema:find('o.block === \'search_area\'', 1, true)
+                and schema:find('rangeOf(cfg, \'search_area\', \'startRadius\', [200, 1000, 600])', 1, true),
+            'schema.ts: the search circle is the first search_area objective, with the search_area range'
+        )
+        H.ok(
+            steps:find('radiusRange={startRadiusRange(cfg, def)}', 1, true)
+                and steps:find('disabled={ro || !!search}', 1, true),
+            'Locations step: the start radius shows the search circle and is locked to it'
+        )
+        H.ok(
+            editor:find('syncStartRadius(next, configRef.current, cur)', 1, true)
+                and editor:find('startRadiusRange(config, d)', 1, true),
+            'editor: every edit keeps the start radii on the search circle; placing a start uses its radius'
+        )
         H.ok(apply:find('startRadiusRange(cfg, input)', 1, true), 'placement results are clamped to the same range')
         H.ok(editor:find('syncStartRadius(d, configRef.current)', 1, true),
             'editor: opening an editable draft saved before the rule puts its start radii on the search circle')
     end
 
-    -- ── the published copies use only the builder's allowed lists (none of them needed an exception) ──
+    -- ---- THE PUBLISHED COPIES USE ONLY THE BUILDER'S ALLOWED LISTS (none of them needed an exception) ----
     do
         local allowed = Config.Builder.allowed
         local function inList(list, v) return U.contains(list, v) end
@@ -331,17 +413,18 @@ local function body()
         -- the builder's pickers show a name for every allowed model and weapon (builder.name.<value>)
         for _, listKey in ipairs({ 'peds', 'weapons', 'vehicles', 'escortVehicles' }) do
             for _, v in ipairs(allowed[listKey] or {}) do
-                H.ok(type(merged['builder.name.' .. v:lower()]) == 'string', ('builder.name.%s (allowed.%s) has a display name'):format(v:lower(), listKey))
+                H.ok(type(merged['builder.name.' .. v:lower()]) == 'string',
+                    ('builder.name.%s (allowed.%s) has a display name'):format(v:lower(), listKey))
             end
         end
     end
 end
 
-local okBody, errBody = pcall(body)
+local okBody, errBody = pcall(Body)
 H.sql('DELETE FROM cp_custom_missions')
-H.sql("DELETE FROM cp_officers WHERE citizenid = 'SUP00001'")
+H.sql('DELETE FROM cp_officers WHERE citizenid = \'SUP00001\'')
 os.execute(('rm -rf %s%s'):format(H.root, TMP))
 H.ok(okBody, 'spec body ran: ' .. tostring(errBody))
-H.ok(not fileExists(TMP), 'temporary mission folder removed')
+H.ok(not FileExists(TMP), 'temporary mission folder removed')
 
 return H

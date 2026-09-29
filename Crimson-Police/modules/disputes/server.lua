@@ -1,51 +1,5 @@
---[[ modules/disputes/server.lua · CP.Disputes (server): officers' disputes about their flagged, voided or
-  failed runs (cp_disputes) and how supervisors and admins answer them.
-
-  Owns
-    * filing: an officer may dispute one of their OWN rows that is flagged, voided or failed, within
-      Config.Disputes.windowHours of the run (read at call time). One dispute per row, ever: an open one
-      blocks a second (err.dispute_open) and a decided one is final (err.dispute_final). Manual awards and
-      goal rows cannot be disputed. goes_to = 'supervisor' for flagged or voided rows (the department's
-      supervisors), 'admin' for failed rows. The insert is atomic (INSERT ... SELECT ... WHERE NOT EXISTS).
-      Filing toasts the online staff who can answer it (tellStaff, never participants of the run): admins
-      for 'admin' disputes or while Config.Permissions.supervisor.handleDisputes is off, else the on-duty
-      supervisors of the run's departments, or the admins when every online supervisor of those
-      departments took part in the run.
-    * answering (decision final, reason required, never by a participant of that run):
-        approve  flagged row -> CP.Admin.approveFlagged (flag cleared, held cash released, XP)
-                 voided row  -> voided = 0 (and flagged = 0), CP.Scoring.onRowApproved (XP back),
-                                CP.Cash.release when its cash is still held, CP.Leaderboard.invalidate
-                 failed row  -> CP.Scoring.manualAward(src, citizenid, awardPoints, reason)
-        reject   keeps the row as it is; a voided row whose cash is still held (or pending) is forfeited (CP.Cash.forfeit)
-      "Took part" also covers a participant still on the live run (no row of theirs yet): refused and
-      left out of their lists.
-      The dispute is claimed first (UPDATE ... WHERE status = 'open'), so two reviewers can never both
-      answer it; a failed manual award re-opens it. Every answer is audited (category flags) and posted
-      to the flags webhook; filing posts to the flags webhook. The officer gets a toast when online.
-
-  Public API (docs/ARCHITECTURE.md §5.24)
-    CP.Disputes.eligible(row, citizenid, nowTs) -> ok, errKey|nil, kind    pure; kind 'voided'|'flagged'|'failed'
-        row = { citizenid, mission_type, state, flagged, voided, created_ts }
-    CP.Disputes.kindOf(row) -> 'voided'|'flagged'|'failed'|nil      CP.Disputes.goesTo(kind) -> 'supervisor'|'admin'
-    CP.Disputes.forSupervisor(src) -> { DisputeView }   open supervisor disputes about runs involving their
-        department (every department for an admin without a department), never runs they took part in
-    CP.Disputes.forAdmin(excludeCitizenid?) -> { DisputeView }   every open dispute (both kinds)
-    CP.Disputes.forOfficer(citizenid, goesTo?, viewerSrc?) -> { DisputeView }   that officer's disputes (any status)
-    CP.Disputes.supervisorCanAnswer(runUuid) -> boolean   switch on and an online supervisor of the run's
-        departments who did not take part (on or off duty); false = only an admin can answer it now
-    CP.Disputes.handle(src, disputeId, decision, reason, awardPoints, opts) -> ok, data|errKey
-        decision 'approve'|'reject'; awardPoints 1..10000 for an approved failed-run dispute;
-        opts.adminOnly = true refuses non-admins (the admin endpoint)
-    DisputeView = { id, rowId, runUuid, citizenid, name, callsign, department, departmentShort, missionId,
-      missionLabel, missionType, missionTypeLabel, kind, state, endReason, tier, participants, points, cash,
-      cashStatus, flagged, voided, flagReason, reason, goesTo, status, handledBy, createdAt, handledAt,
-      runAt, canHandle }
-  Net
-    action   server:dispute               { rowId, reason }                 officer (CP.Access.getOfficer)
-    action   server:sup:handleDispute     { disputeId, decision, reason }   handleDisputes (flagged/voided)
-    action   server:admin:handleDispute   { disputeId, decision, reason, awardPoints }  admin (any kind)
-    callback admin:getDisputes            -> { disputes = CP.Disputes.forAdmin(own citizenid) }
-]]
+-- CP.Disputes (server): officers' disputes about their flagged, voided or failed runs (cp_disputes) and how
+-- supervisors and admins answer them.
 
 CP.Disputes = CP.Disputes or {}
 local D = CP.Disputes
@@ -56,13 +10,15 @@ local MAX_AWARD = 10000
 local LIST_LIMIT = 200
 local NON_MISSION_TYPES = { manual_award = true, goal = true }
 
--- ── helpers ─────────────────────────────────────────────────────────────────
+-- ============================================================================
+--                                   HELPERS
+-- ============================================================================
 
 -- Clip to at most n characters without cutting a UTF-8 sequence in half, dropping bytes that are not valid
 -- UTF-8 first. The cp_* columns are utf8mb4 (VARCHAR(n) counts characters) and MariaDB's strict mode
 -- refuses a broken sequence (error 1366), so a byte clip (CP.U.clip) of an accented reason could make
 -- the whole insert fail.
-local function clip(s, n)
+local function Clip(s, n)
     if s == nil then return nil end
     s = tostring(s)
     for _ = 1, 64 do
@@ -74,7 +30,7 @@ local function clip(s, n)
     if utf8.len(s) <= n then return s end
     return s:sub(1, utf8.offset(s, n + 1) - 1)
 end
-local function toSrc(v)
+local function ToSrc(v)
     local n = tonumber(v)
     if not n then return nil end
     n = math.tointeger(n)
@@ -82,13 +38,13 @@ local function toSrc(v)
     return n
 end
 
-local function has(modName, fnName)
+local function Has(modName, fnName)
     local m = CP[modName]
     return type(m) == 'table' and type(m[fnName]) == 'function'
 end
 
-local function call(modName, fnName, ...)
-    if not has(modName, fnName) then return false end
+local function Call(modName, fnName, ...)
+    if not Has(modName, fnName) then return false end
     local res = table.pack(pcall(CP[modName][fnName], ...))
     if not res[1] then
         CP.err(TAG, 'CP.%s.%s failed: %s', modName, fnName, tostring(res[2]))
@@ -97,17 +53,17 @@ local function call(modName, fnName, ...)
     return true, table.unpack(res, 2, res.n)
 end
 
-local function db()
+local function Db()
     if CP.Migrations and CP.Migrations.ready then CP.Migrations.ready() end
 end
 
-local function num(v, default)
+local function Num(v, default)
     local n = tonumber(v)
     if n == nil or n ~= n then return default end
     return n
 end
 
-local function int(v, lo, hi)
+local function Int(v, lo, hi)
     local n = tonumber(v)
     if not n or n ~= n or n % 1 ~= 0 then return nil end
     n = math.tointeger(n)
@@ -115,15 +71,15 @@ local function int(v, lo, hi)
     return n
 end
 
-local function cleanText(v, max)
+local function CleanText(v, max)
     if type(v) ~= 'string' then return nil end
     local s = U.trim(v:gsub('[%c]', ' '))
     if s == '' then return nil end
-    return clip(s, max or 255)
+    return Clip(s, max or 255)
 end
 
-local function query(sql, params)
-    db()
+local function Query(sql, params)
+    Db()
     local ok, res = pcall(MySQL.query.await, sql, params or {})
     if not ok then
         CP.err(TAG, 'query failed: %s', tostring(res))
@@ -132,8 +88,8 @@ local function query(sql, params)
     return type(res) == 'table' and res or {}
 end
 
-local function single(sql, params)
-    db()
+local function Single(sql, params)
+    Db()
     local ok, res = pcall(MySQL.single.await, sql, params or {})
     if not ok then
         CP.err(TAG, 'query failed: %s', tostring(res))
@@ -142,8 +98,8 @@ local function single(sql, params)
     return type(res) == 'table' and res or nil, true
 end
 
-local function update(sql, params)
-    db()
+local function Update(sql, params)
+    Db()
     local ok, res = pcall(MySQL.update.await, sql, params or {})
     if not ok then
         CP.err(TAG, 'update failed: %s', tostring(res))
@@ -152,70 +108,72 @@ local function update(sql, params)
     return tonumber(res) or 0
 end
 
-local function isAdmin(src)
+local function IsAdmin(src)
     return CP.Access ~= nil and CP.Access.isAdmin ~= nil and CP.Access.isAdmin(src) == true
 end
 
-local function can(src, action, ctx)
-    if not has('Permissions', 'can') then return false, 'err.no_permission' end
-    local ok, allowed, errKey = call('Permissions', 'can', src, action, ctx)
+local function Can(src, action, ctx)
+    if not Has('Permissions', 'can') then return false, 'err.no_permission' end
+    local ok, allowed, errKey = Call('Permissions', 'can', src, action, ctx)
     if not ok then return false, 'err.internal' end
     if not allowed then return false, errKey or 'err.no_permission' end
     return true
 end
 
-local function roleOf(src)
+local function RoleOf(src)
     if tonumber(src) == 0 then return 'console' end
-    return isAdmin(src) and 'admin' or 'supervisor'
+    return IsAdmin(src) and 'admin' or 'supervisor'
 end
 
-local function deptShort(key)
+local function DeptShort(key)
     if type(key) ~= 'string' then return '' end
     local d = CP.Access and CP.Access.department and CP.Access.department(key)
     return d and d.short or key:upper()
 end
 
-local function typeLabel(t)
+local function TypeLabel(t)
     local mt = Config.MissionTypes and Config.MissionTypes[t]
     return mt and mt.label or tostring(t or '')
 end
 
-local function missionLabel(id)
-    if has('Admin', 'missionLabel') then return CP.Admin.missionLabel(id) end
-    local def = has('Missions', 'get') and CP.Missions.get(id) or nil
+local function MissionLabel(id)
+    if Has('Admin', 'missionLabel') then return CP.Admin.missionLabel(id) end
+    local def = Has('Missions', 'get') and CP.Missions.get(id) or nil
     return type(def) == 'table' and def.label or tostring(id or '')
 end
 
-local function audit(...)
-    if has('Admin', 'audit') then call('Admin', 'audit', ...) end
+local function Audit(...)
+    if Has('Admin', 'audit') then Call('Admin', 'audit', ...) end
 end
 
-local function webhook(...)
-    if has('Admin', 'webhook') then call('Admin', 'webhook', ...) end
+local function Webhook(...)
+    if Has('Admin', 'webhook') then Call('Admin', 'webhook', ...) end
 end
 
-local function notify(src, kind, key, vars)
-    if toSrc(src) and has('Tablet', 'notify') then call('Tablet', 'notify', src, kind, key, vars) end
+local function Notify(src, kind, key, vars)
+    if ToSrc(src) and Has('Tablet', 'notify') then Call('Tablet', 'notify', src, kind, key, vars) end
 end
 
-local function onlineSrc(citizenid)
-    if type(citizenid) ~= 'string' or not has('Qbx', 'getByCitizenId') then return nil end
-    local ok, s = call('Qbx', 'getByCitizenId', citizenid)
-    return ok and toSrc(s) or nil
+local function OnlineSrc(citizenid)
+    if type(citizenid) ~= 'string' or not Has('Qbx', 'getByCitizenId') then return nil end
+    local ok, s = Call('Qbx', 'getByCitizenId', citizenid)
+    return ok and ToSrc(s) or nil
 end
 
-local function citizenOf(src)
+local function CitizenOf(src)
     if tonumber(src) == 0 then return nil end
-    local ok, info = call('Qbx', 'getInfo', src)
+    local ok, info = Call('Qbx', 'getInfo', src)
     if ok and type(info) == 'table' then return info.citizenid end
     return nil
 end
 
 -- Whether citizenid is (or was) a participant of the still-running run runUuid: their own row is only
 -- written when they leave, so the cp_mission_runs check alone misses a reviewer who is still on it.
-local function inLiveRun(citizenid, runUuid)
-    if type(citizenid) ~= 'string' or citizenid == '' or type(runUuid) ~= 'string' or not has('Runs', 'get') then return false end
-    local ok, run = call('Runs', 'get', runUuid)
+local function InLiveRun(citizenid, runUuid)
+    if type(citizenid) ~= 'string' or citizenid == '' or type(runUuid) ~= 'string' or not Has('Runs', 'get') then
+        return false
+    end
+    local ok, run = Call('Runs', 'get', runUuid)
     if not ok or type(run) ~= 'table' or type(run.participants) ~= 'table' then return false end
     for _, p in pairs(run.participants) do
         if type(p) == 'table' and p.citizenid == citizenid then return true end
@@ -223,13 +181,16 @@ local function inLiveRun(citizenid, runUuid)
     return false
 end
 
-local function windowSeconds()
-    local h = num(Config.Disputes and Config.Disputes.windowHours, 48)
+local function WindowSeconds()
+    local h = Num(Config.Disputes and Config.Disputes.windowHours, 48)
     if h < 0 then h = 0 end
     return math.floor(h * 3600)
 end
 
--- ── pure rules ──────────────────────────────────────────────────────────────
+-- ============================================================================
+--                                  PURE RULES
+-- ============================================================================
+
 function D.kindOf(row)
     if type(row) ~= 'table' then return nil end
     if U.truthy(row.voided) then return 'voided' end
@@ -250,12 +211,15 @@ function D.eligible(row, citizenid, nowTs)
     if NON_MISSION_TYPES[row.mission_type] then return false, 'err.not_disputable' end
     local kind = D.kindOf(row)
     if not kind then return false, 'err.not_disputable' end
-    local created = num(row.created_ts, 0)
-    if (nowTs or os.time()) - created > windowSeconds() then return false, 'err.dispute_window' end
+    local created = Num(row.created_ts, 0)
+    if (nowTs or os.time()) - created > WindowSeconds() then return false, 'err.dispute_window' end
     return true, nil, kind
 end
 
--- ── views ───────────────────────────────────────────────────────────────────
+-- ============================================================================
+--                                    VIEWS
+-- ============================================================================
+
 local VIEW_SQL = [[SELECT d.id, d.run_id, d.citizenid, d.reason, d.goes_to, d.status, d.handled_by,
   UNIX_TIMESTAMP(d.created_at) AS created_ts, UNIX_TIMESTAMP(d.handled_at) AS handled_ts,
   r.run_uuid, r.department, r.mission_type, r.mission_id, r.state, r.end_reason, r.tier, r.participants,
@@ -266,7 +230,7 @@ local VIEW_SQL = [[SELECT d.id, d.run_id, d.citizenid, d.reason, d.goes_to, d.st
   JOIN cp_mission_runs r ON r.id = d.run_id
   LEFT JOIN cp_officers o ON o.citizenid = d.citizenid]]
 
-local function viewOf(r, viewerCitizenid)
+local function ViewOf(r, viewerCitizenid)
     local kind
     if r.goes_to == 'admin' then
         kind = 'failed'
@@ -276,23 +240,42 @@ local function viewOf(r, viewerCitizenid)
         kind = 'flagged'
     end
     return {
-        id = math.tointeger(tonumber(r.id)), rowId = math.tointeger(tonumber(r.run_id)), runUuid = r.run_uuid,
-        citizenid = r.citizenid, name = r.display_name or r.citizenid, callsign = r.callsign,
-        department = r.department, departmentShort = deptShort(r.department),
-        missionId = r.mission_id, missionLabel = missionLabel(r.mission_id), missionType = r.mission_type,
-        missionTypeLabel = typeLabel(r.mission_type), kind = kind, state = r.state, endReason = r.end_reason,
-        tier = r.tier, participants = math.floor(num(r.participants, 1)), points = math.floor(num(r.final_points, 0)),
-        cash = math.floor(num(r.cash_amount, 0)), cashStatus = r.cash_status,
-        flagged = U.truthy(r.flagged), voided = U.truthy(r.voided), flagReason = r.flag_reason,
-        reason = r.reason, goesTo = r.goes_to, status = r.status, handledBy = r.handled_by,
-        createdAt = math.floor(num(r.created_ts, 0)), handledAt = tonumber(r.handled_ts) and math.floor(tonumber(r.handled_ts)) or nil,
-        runAt = math.floor(num(r.run_ts, 0)),
+        id = math.tointeger(tonumber(r.id)),
+        rowId = math.tointeger(tonumber(r.run_id)),
+        runUuid = r.run_uuid,
+        citizenid = r.citizenid,
+        name = r.display_name or r.citizenid,
+        callsign = r.callsign,
+        department = r.department,
+        departmentShort = DeptShort(r.department),
+        missionId = r.mission_id,
+        missionLabel = MissionLabel(r.mission_id),
+        missionType = r.mission_type,
+        missionTypeLabel = TypeLabel(r.mission_type),
+        kind = kind,
+        state = r.state,
+        endReason = r.end_reason,
+        tier = r.tier,
+        participants = math.floor(Num(r.participants, 1)),
+        points = math.floor(Num(r.final_points, 0)),
+        cash = math.floor(Num(r.cash_amount, 0)),
+        cashStatus = r.cash_status,
+        flagged = U.truthy(r.flagged),
+        voided = U.truthy(r.voided),
+        flagReason = r.flag_reason,
+        reason = r.reason,
+        goesTo = r.goes_to,
+        status = r.status,
+        handledBy = r.handled_by,
+        createdAt = math.floor(Num(r.created_ts, 0)),
+        handledAt = tonumber(r.handled_ts) and math.floor(tonumber(r.handled_ts)) or nil,
+        runAt = math.floor(Num(r.run_ts, 0)),
         canHandle = r.status == 'open' and (viewerCitizenid == nil or viewerCitizenid ~= r.citizenid),
     }
 end
 
 -- Runs the viewer took part in (for canHandle when the list is not already filtered).
-local function ownRuns(citizenid, uuids)
+local function OwnRuns(citizenid, uuids)
     local out = {}
     if not citizenid or #uuids == 0 then return out end
     local marks, params = {}, { citizenid }
@@ -300,24 +283,30 @@ local function ownRuns(citizenid, uuids)
         marks[#marks + 1] = '?'
         params[#params + 1] = uuids[i]
     end
-    for _, r in ipairs(query(('SELECT DISTINCT run_uuid FROM cp_mission_runs WHERE citizenid = ? AND run_uuid IN (%s)'):format(table.concat(marks, ', ')), params) or {}) do
+    for _, r in
+        ipairs(Query(
+            ('SELECT DISTINCT run_uuid FROM cp_mission_runs WHERE citizenid = ? AND run_uuid IN (%s)'):format(
+                table.concat(marks, ', ')),
+            params
+        ) or {})
+    do
         out[r.run_uuid] = true
     end
     return out
 end
 
 -- dropOwn: leave out disputes about runs the viewer took part in (the review lists never show them).
-local function views(rows, viewerCitizenid, dropOwn)
+local function Views(rows, viewerCitizenid, dropOwn)
     local uuids, seen = {}, {}
     for _, r in ipairs(rows) do
         if r.run_uuid and not seen[r.run_uuid] then seen[r.run_uuid] = true; uuids[#uuids + 1] = r.run_uuid end
     end
-    local own = ownRuns(viewerCitizenid, uuids)
+    local own = OwnRuns(viewerCitizenid, uuids)
     local out = {}
     for _, r in ipairs(rows) do
-        local mine = own[r.run_uuid] or inLiveRun(viewerCitizenid, r.run_uuid)
+        local mine = own[r.run_uuid] or InLiveRun(viewerCitizenid, r.run_uuid)
         if not (mine and dropOwn) then
-            local v = viewOf(r, viewerCitizenid)
+            local v = ViewOf(r, viewerCitizenid)
             if mine then v.canHandle = false end
             out[#out + 1] = v
         end
@@ -328,9 +317,9 @@ end
 function D.forSupervisor(src)
     local officer = CP.Access and CP.Access.getOfficer and CP.Access.getOfficer(src) or nil
     local dept = officer and officer.department or nil
-    if not dept and not isAdmin(src) then return {} end
-    local citizenid = officer and officer.citizenid or citizenOf(src) or ''
-    local sql = VIEW_SQL .. " WHERE d.status = 'open' AND d.goes_to = 'supervisor'"
+    if not dept and not IsAdmin(src) then return {} end
+    local citizenid = officer and officer.citizenid or CitizenOf(src) or ''
+    local sql = VIEW_SQL .. ' WHERE d.status = \'open\' AND d.goes_to = \'supervisor\''
     local params = {}
     if dept then
         sql = sql .. ' AND r.run_uuid IN (SELECT x.run_uuid FROM cp_mission_runs x WHERE x.department = ?)'
@@ -339,11 +328,11 @@ function D.forSupervisor(src)
     sql = sql .. ' AND r.run_uuid NOT IN (SELECT y.run_uuid FROM cp_mission_runs y WHERE y.citizenid = ?)'
     params[#params + 1] = citizenid
     sql = sql .. (' ORDER BY d.created_at, d.id LIMIT %d'):format(LIST_LIMIT)
-    return views(query(sql, params) or {}, citizenid ~= '' and citizenid or nil, true)
+    return Views(Query(sql, params) or {}, citizenid ~= '' and citizenid or nil, true)
 end
 
 function D.forAdmin(excludeCitizenid)
-    local sql = VIEW_SQL .. " WHERE d.status = 'open'"
+    local sql = VIEW_SQL .. ' WHERE d.status = \'open\''
     local params = {}
     if type(excludeCitizenid) == 'string' and excludeCitizenid ~= '' then
         sql = sql .. ' AND r.run_uuid NOT IN (SELECT y.run_uuid FROM cp_mission_runs y WHERE y.citizenid = ?)'
@@ -351,7 +340,7 @@ function D.forAdmin(excludeCitizenid)
     end
     sql = sql .. (' ORDER BY d.created_at, d.id LIMIT %d'):format(LIST_LIMIT)
     local viewer = type(excludeCitizenid) == 'string' and excludeCitizenid ~= '' and excludeCitizenid or nil
-    return views(query(sql, params) or {}, viewer, viewer ~= nil)
+    return Views(Query(sql, params) or {}, viewer, viewer ~= nil)
 end
 
 function D.forOfficer(citizenid, goesTo, viewerSrc)
@@ -363,28 +352,31 @@ function D.forOfficer(citizenid, goesTo, viewerSrc)
         params[#params + 1] = goesTo
     end
     sql = sql .. ' ORDER BY d.created_at DESC, d.id DESC LIMIT 50'
-    local viewer = viewerSrc ~= nil and citizenOf(viewerSrc) or nil
-    return views(query(sql, params) or {}, viewer)
+    local viewer = viewerSrc ~= nil and CitizenOf(viewerSrc) or nil
+    return Views(Query(sql, params) or {}, viewer)
 end
 
--- ── filing ──────────────────────────────────────────────────────────────────
+-- ============================================================================
+--                                    FILING
+-- ============================================================================
+
 local ROW_SQL = [[SELECT id, run_uuid, citizenid, department, mission_type, mission_id, state, flagged, voided,
   cash_status, UNIX_TIMESTAMP(created_at) AS created_ts FROM cp_mission_runs WHERE id = ?]]
 
-local function runDepartments(runUuid)
-    if has('Admin', 'runDepartments') then
-        local ok, list = call('Admin', 'runDepartments', runUuid)
+local function RunDepartments(runUuid)
+    if Has('Admin', 'runDepartments') then
+        local ok, list = Call('Admin', 'runDepartments', runUuid)
         if ok and type(list) == 'table' then return list end
     end
     local out = {}
-    for _, r in ipairs(query('SELECT DISTINCT department FROM cp_mission_runs WHERE run_uuid = ?', { runUuid }) or {}) do
+    for _, r in ipairs(Query('SELECT DISTINCT department FROM cp_mission_runs WHERE run_uuid = ?', { runUuid }) or {}) do
         out[#out + 1] = r.department
     end
     return out
 end
 
 -- Supervisors answer disputes only while Config.Permissions.supervisor.handleDisputes is on.
-local function supervisorsHandle()
+local function SupervisorsHandle()
     local sup = Config.Permissions and Config.Permissions.supervisor
     return type(sup) == 'table' and sup.handleDisputes == true
 end
@@ -392,34 +384,38 @@ end
 -- The online staff for a dispute about runUuid (never participants of the run): admins, the on-duty
 -- supervisors of the run's departments, whether a supervisor of those departments took part in the run
 -- (supTookPart) and whether another one is online off duty (supOther). nil when qbx is unavailable.
-local function onlineStaff(runUuid)
-    if not (has('Qbx', 'getOnlinePlayers') and has('Qbx', 'getInfo')) then return nil end
-    local ok, list = call('Qbx', 'getOnlinePlayers')
+local function OnlineStaff(runUuid)
+    if not (Has('Qbx', 'getOnlinePlayers') and Has('Qbx', 'getInfo')) then return nil end
+    local ok, list = Call('Qbx', 'getOnlinePlayers')
     if not ok or type(list) ~= 'table' then return nil end
     local depts = {}
-    for _, d in ipairs(runDepartments(runUuid)) do depts[d] = true end
+    for _, d in ipairs(RunDepartments(runUuid)) do depts[d] = true end
     local participants = {}
-    for _, r in ipairs(query('SELECT citizenid FROM cp_mission_runs WHERE run_uuid = ?', { runUuid }) or {}) do participants[r.citizenid] = true end
-    local okR, run = call('Runs', 'get', runUuid)
+    for _, r in ipairs(Query('SELECT citizenid FROM cp_mission_runs WHERE run_uuid = ?', { runUuid }) or {}) do
+        participants[r.citizenid] = true
+    end
+    local okR, run = Call('Runs', 'get', runUuid)
     if okR and type(run) == 'table' and type(run.participants) == 'table' then
-        for _, p in pairs(run.participants) do if type(p) == 'table' and p.citizenid then participants[p.citizenid] = true end end
+        for _, p in pairs(run.participants) do
+            if type(p) == 'table' and p.citizenid then participants[p.citizenid] = true end
+        end
     end
     local function supervisorOfRun(info)
         if type(info.job) ~= 'table' or not (CP.Access and CP.Access.departmentForJob) then return false end
         local dk = CP.Access.departmentForJob(info.job.name)
         local dept = dk and depts[dk] and CP.Access.department(dk)
-        return dept ~= nil and dept ~= false and num(info.job.gradeLevel, -1) >= num(dept.supervisorGrade, math.huge)
+        return dept ~= nil and dept ~= false and Num(info.job.gradeLevel, -1) >= Num(dept.supervisorGrade, math.huge)
     end
     local admins, supervisors = {}, {}
     local supTookPart, supOther = false, false
     for _, s in ipairs(list) do
-        local okI, info = call('Qbx', 'getInfo', s)
+        local okI, info = Call('Qbx', 'getInfo', s)
         if okI and type(info) == 'table' then
             local sup = supervisorOfRun(info)
             if participants[info.citizenid] then
                 if sup then supTookPart = true end
             else
-                if isAdmin(s) then admins[#admins + 1] = s end
+                if IsAdmin(s) then admins[#admins + 1] = s end
                 if sup and info.job.onduty then
                     supervisors[#supervisors + 1] = s
                 elseif sup then
@@ -435,11 +431,11 @@ end
 -- disputes, or for every dispute while the supervisors' switch is off. A flagged/voided-run dispute goes to
 -- the on-duty supervisors of the run's departments; when every online supervisor of those departments
 -- took part in the run (so none of them may answer it), the admins are told instead.
-local function tellStaff(goesTo, runUuid, label)
-    local st = onlineStaff(runUuid)
+local function TellStaff(goesTo, runUuid, label)
+    local st = OnlineStaff(runUuid)
     if not st then return end
     local targets
-    if goesTo == 'admin' or not supervisorsHandle() then
+    if goesTo == 'admin' or not SupervisorsHandle() then
         -- With the supervisors' switch off, admins are the only ones who can answer it.
         targets = st.admins
     elseif #st.supervisors > 0 then
@@ -450,8 +446,8 @@ local function tellStaff(goesTo, runUuid, label)
     else
         targets = {}
     end
-    if #targets > 0 and has('Tablet', 'notifyMany') then
-        call('Tablet', 'notifyMany', targets, 'info', 'admin.notice.new_dispute', { mission = label })
+    if #targets > 0 and Has('Tablet', 'notifyMany') then
+        Call('Tablet', 'notifyMany', targets, 'info', 'admin.notice.new_dispute', { mission = label })
     end
 end
 
@@ -461,9 +457,9 @@ end
 -- matching the admins tellStaff notifies). true when that cannot be told (qbx unavailable): left to the
 -- supervisors, as before.
 function D.supervisorCanAnswer(runUuid)
-    if not supervisorsHandle() then return false end
+    if not SupervisorsHandle() then return false end
     if type(runUuid) ~= 'string' or runUuid == '' then return true end
-    local st = onlineStaff(runUuid)
+    local st = OnlineStaff(runUuid)
     if not st then return true end
     return #st.supervisors > 0 or st.supOther
 end
@@ -476,23 +472,23 @@ function D.file(src, payload)
     if CP.Access and CP.Access.getOfficer then officer, errKey = CP.Access.getOfficer(src) end
     if not officer then return false, errKey or 'err.not_police' end
     if type(payload) ~= 'table' then return false, 'err.invalid_payload' end
-    local rowId = int(payload.rowId, 1, 2147483647)
+    local rowId = Int(payload.rowId, 1, 2147483647)
     if not rowId then return false, 'err.invalid_row' end
-    local reason = cleanText(payload.reason, 255)
+    local reason = CleanText(payload.reason, 255)
     if not reason then return false, 'err.reason_required' end
     if not CP.Net.rateOk(src, 'disputes:file', 3, 60000) then return false, 'err.rate_limited' end
 
-    local row, okQ = single(ROW_SQL, { rowId })
+    local row, okQ = Single(ROW_SQL, { rowId })
     if not okQ then return false, 'err.internal' end
     if not row then return false, 'err.row_not_found' end
     local ok, e, kind = D.eligible(row, officer.citizenid, os.time())
     if not ok then return false, e end
 
-    local prev = single('SELECT id, status FROM cp_disputes WHERE run_id = ? ORDER BY id DESC LIMIT 1', { rowId })
+    local prev = Single('SELECT id, status FROM cp_disputes WHERE run_id = ? ORDER BY id DESC LIMIT 1', { rowId })
     if prev then return false, prev.status == 'open' and 'err.dispute_open' or 'err.dispute_final' end
 
     local goesTo = D.goesTo(kind)
-    db()
+    Db()
     local okI, id = pcall(MySQL.insert.await, INSERT_SQL, { rowId, officer.citizenid, reason, goesTo, rowId })
     if not okI then
         CP.err(TAG, 'dispute insert failed: %s', tostring(id))
@@ -501,18 +497,30 @@ function D.file(src, payload)
     id = tonumber(id)
     if not id or id <= 0 then return false, 'err.dispute_open' end
 
-    local label = missionLabel(row.mission_id)
-    webhook('flags', CP.L('admin.webhook.dispute_filed', { mission = label }), CP.L('admin.webhook.dispute_filed_desc', { goes_to = CP.L('admin.dispute.goes_to.' .. goesTo) }), {
-        { name = CP.L('admin.webhook.field.officer'), value = ('%s (%s)'):format(officer.name or officer.citizenid, officer.citizenid), inline = true },
-        { name = CP.L('admin.webhook.field.run'), value = ('#%d · %s'):format(rowId, CP.L('admin.dispute.kind.' .. kind)), inline = true },
-        { name = CP.L('admin.webhook.field.reason'), value = reason, inline = false },
-    })
-    CreateThread(function() tellStaff(goesTo, row.run_uuid, label) end)
+    local label = MissionLabel(row.mission_id)
+    Webhook('flags', CP.L('admin.webhook.dispute_filed', { mission = label }),
+        CP.L('admin.webhook.dispute_filed_desc', { goes_to = CP.L('admin.dispute.goes_to.' .. goesTo) }), {
+            {
+                name = CP.L('admin.webhook.field.officer'),
+                value = ('%s (%s)'):format(officer.name or officer.citizenid, officer.citizenid),
+                inline = true,
+            },
+            {
+                name = CP.L('admin.webhook.field.run'),
+                value = ('#%d · %s'):format(rowId, CP.L('admin.dispute.kind.' .. kind)),
+                inline = true,
+            },
+            { name = CP.L('admin.webhook.field.reason'), value = reason, inline = false },
+        })
+    CreateThread(function() TellStaff(goesTo, row.run_uuid, label) end)
     CP.log(TAG, 'dispute %d filed by %s about row %d (%s -> %s)', id, officer.citizenid, rowId, kind, goesTo)
     return true, { disputeId = id, goesTo = goesTo, kind = kind }
 end
 
--- ── answering ───────────────────────────────────────────────────────────────
+-- ============================================================================
+--                                  ANSWERING
+-- ============================================================================
+
 local LOAD_SQL = [[SELECT d.id, d.run_id, d.citizenid, d.goes_to, d.status,
   r.run_uuid, r.mission_id, r.mission_type, r.state, r.flagged, r.voided, r.cash_status
   FROM cp_disputes d JOIN cp_mission_runs r ON r.id = d.run_id WHERE d.id = ?]]
@@ -521,30 +529,32 @@ local RESTORE_SQL = [[UPDATE cp_mission_runs SET voided = 0, flagged = 0,
   breakdown = IF(JSON_VALID(breakdown), JSON_SET(breakdown, '$.flagged', NULL), breakdown)
   WHERE id = ? AND voided = 1]]
 
-local function restoreVoided(d)
-    local n = update(RESTORE_SQL, { d.run_id })
+local function RestoreVoided(d)
+    local n = Update(RESTORE_SQL, { d.run_id })
     if n == nil then return false, 'err.internal' end
-    if n == 0 then return true end     -- already restored
-    call('Scoring', 'onRowApproved', d.run_id)
-    if d.cash_status == 'held' or d.cash_status == 'pending' then call('Cash', 'release', d.run_id) end
-    call('Leaderboard', 'invalidate')
+    if n == 0 then
+        return true
+    end -- already restored
+    Call('Scoring', 'onRowApproved', d.run_id)
+    if d.cash_status == 'held' or d.cash_status == 'pending' then Call('Cash', 'release', d.run_id) end
+    Call('Leaderboard', 'invalidate')
     return true
 end
 
-local function reopen(id)
-    update("UPDATE cp_disputes SET status = 'open', handled_by = NULL, handled_at = NULL WHERE id = ?", { id })
+local function Reopen(id)
+    Update('UPDATE cp_disputes SET status = \'open\', handled_by = NULL, handled_at = NULL WHERE id = ?', { id })
 end
 
 function D.handle(src, disputeId, decision, reason, awardPoints, opts)
     opts = type(opts) == 'table' and opts or {}
-    local id = int(disputeId, 1, 2147483647)
+    local id = Int(disputeId, 1, 2147483647)
     if not id then return false, 'err.invalid_dispute' end
     if decision ~= 'approve' and decision ~= 'reject' then return false, 'err.invalid_decision' end
-    reason = cleanText(reason, 255)
+    reason = CleanText(reason, 255)
     if not reason then return false, 'err.reason_required' end
-    if opts.adminOnly and not isAdmin(src) then return false, 'err.no_permission' end
+    if opts.adminOnly and not IsAdmin(src) then return false, 'err.no_permission' end
 
-    local d, okQ = single(LOAD_SQL, { id })
+    local d, okQ = Single(LOAD_SQL, { id })
     if not okQ then return false, 'err.internal' end
     if not d then return false, 'err.dispute_not_found' end
     d.run_id = math.tointeger(tonumber(d.run_id)) or d.run_id
@@ -552,86 +562,92 @@ function D.handle(src, disputeId, decision, reason, awardPoints, opts)
 
     local kind = d.goes_to == 'admin' and 'failed' or (U.truthy(d.voided) and 'voided' or 'flagged')
     if d.goes_to == 'admin' then
-        local ok, e = can(src, 'handleFailedDispute')
+        local ok, e = Can(src, 'handleFailedDispute')
         if not ok then return false, e end
     else
         local ctx = nil
-        if not isAdmin(src) then ctx = { departments = runDepartments(d.run_uuid) } end
-        local ok, e = can(src, 'handleDisputes', ctx)
+        if not IsAdmin(src) then ctx = { departments = RunDepartments(d.run_uuid) } end
+        local ok, e = Can(src, 'handleDisputes', ctx)
         if not ok then return false, e end
     end
-    if not has('Permissions', 'canReviewRun') then return false, 'err.no_permission' end
-    local okR, allowed, eR = call('Permissions', 'canReviewRun', src, d.run_uuid)
+    if not Has('Permissions', 'canReviewRun') then return false, 'err.no_permission' end
+    local okR, allowed, eR = Call('Permissions', 'canReviewRun', src, d.run_uuid)
     if not okR then return false, 'err.internal' end
     if not allowed then return false, eR or 'err.own_run' end
-    if inLiveRun(citizenOf(src), d.run_uuid) then return false, 'err.own_run' end
+    if InLiveRun(CitizenOf(src), d.run_uuid) then return false, 'err.own_run' end
 
     local points
     if decision == 'approve' and kind == 'failed' then
-        points = int(awardPoints, 1, MAX_AWARD)
+        points = Int(awardPoints, 1, MAX_AWARD)
         if not points then return false, 'err.invalid_points' end
-        if not has('Scoring', 'manualAward') then return false, 'err.module_unavailable' end
+        if not Has('Scoring', 'manualAward') then return false, 'err.module_unavailable' end
     end
 
-    local handler = tonumber(src) == 0 and 'console' or (citizenOf(src) or ('player:' .. tostring(src)))
+    local handler = tonumber(src) == 0 and 'console' or (CitizenOf(src) or ('player:' .. tostring(src)))
     local status = decision == 'approve' and 'approved' or 'rejected'
-    local claimed = update("UPDATE cp_disputes SET status = ?, handled_by = ?, handled_at = NOW() WHERE id = ? AND status = 'open'",
-        { status, clip(handler, 50), id })
+    local claimed = Update(
+        'UPDATE cp_disputes SET status = ?, handled_by = ?, handled_at = NOW() WHERE id = ? AND status = \'open\'',
+        { status, Clip(handler, 50), id })
     if claimed == nil then return false, 'err.internal' end
     if claimed == 0 then return false, 'err.dispute_closed' end
 
     if decision == 'approve' then
         if kind == 'failed' then
-            local ok, res, e = call('Scoring', 'manualAward', src, d.citizenid, points, reason)
+            local ok, res, e = Call('Scoring', 'manualAward', src, d.citizenid, points, reason)
             if not ok or res == false or (res == nil and type(e) == 'string') then
-                reopen(id)
+                Reopen(id)
                 return false, (ok and e) or 'err.internal'
             end
         elseif kind == 'flagged' then
-            local ok, res, e = call('Admin', 'approveFlagged', src, d.run_id, reason, { skipPermission = true, noAudit = true, quiet = true })
+            local ok, res, e = Call('Admin', 'approveFlagged', src, d.run_id, reason,
+                { skipPermission = true, noAudit = true, quiet = true })
             if not ok or (res == false and e ~= 'err.not_flagged') then
                 if ok and e == 'err.already_voided' then
-                    local done = restoreVoided(d)
-                    if not done then reopen(id); return false, 'err.internal' end
+                    local done = RestoreVoided(d)
+                    if not done then Reopen(id); return false, 'err.internal' end
                 else
-                    reopen(id)
+                    Reopen(id)
                     return false, (ok and e) or 'err.internal'
                 end
             end
         else
-            local done, e = restoreVoided(d)
+            local done, e = RestoreVoided(d)
             if not done then
-                reopen(id)
+                Reopen(id)
                 return false, e
             end
         end
     elseif kind == 'voided' and (d.cash_status == 'held' or d.cash_status == 'pending') then
-        call('Cash', 'forfeit', d.run_id)
+        Call('Cash', 'forfeit', d.run_id)
     end
 
-    local label = missionLabel(d.mission_id)
+    local label = MissionLabel(d.mission_id)
     local newValue = status
     if points then newValue = ('+%d'):format(points) end
-    audit(src, roleOf(src), 'flags', decision == 'approve' and 'disputeApproved' or 'disputeRejected',
+    Audit(src, RoleOf(src), 'flags', decision == 'approve' and 'disputeApproved' or 'disputeRejected',
         ('#%s %s'):format(tostring(d.run_id), tostring(d.citizenid)), kind, newValue, reason)
-    notify(onlineSrc(d.citizenid), decision == 'approve' and 'success' or 'warning',
-        decision == 'approve' and 'admin.notice.dispute_approved' or 'admin.notice.dispute_rejected', { mission = label })
+    Notify(OnlineSrc(d.citizenid), decision == 'approve' and 'success' or 'warning',
+        decision == 'approve' and 'admin.notice.dispute_approved' or 'admin.notice.dispute_rejected',
+        { mission = label })
     CP.log(TAG, 'dispute %d %s by %s', id, status, tostring(handler))
     return true, { disputeId = id, status = status, kind = kind, points = points }
 end
 
--- ── net ─────────────────────────────────────────────────────────────────────
+-- ============================================================================
+--                                     NET
+-- ============================================================================
+
 CP.Net.action('server:dispute', function(src, payload)
     return D.file(src, payload)
 end, { rate = 2 })
 
 CP.Net.action('server:sup:handleDispute', function(src, payload)
     if type(payload) ~= 'table' then return false, 'err.invalid_payload' end
-    local id = int(payload.disputeId, 1, 2147483647)
+    local id = Int(payload.disputeId, 1, 2147483647)
     if not id then return false, 'err.invalid_dispute' end
     -- The supervisor endpoint answers flagged/voided disputes only (failed runs go to admins).
-    if not isAdmin(src) then
-        local row = single('SELECT goes_to FROM cp_disputes WHERE id = ?', { id })
+    if not IsAdmin(src) then
+        local row = Single('SELECT goes_to FROM cp_disputes WHERE id = ?', { id })
         if row and row.goes_to == 'admin' then return false, 'err.no_permission' end
     end
     return D.handle(src, id, payload.decision, payload.reason, payload.awardPoints)
@@ -643,7 +659,7 @@ CP.Net.action('server:admin:handleDispute', function(src, payload)
 end, { rate = 3 })
 
 CP.Net.callback('admin:getDisputes', function(src)
-    local ok, e = can(src, 'openAdmin')
+    local ok, e = Can(src, 'openAdmin')
     if not ok then return nil, e end
-    return { disputes = D.forAdmin(citizenOf(src)) }
+    return { disputes = D.forAdmin(CitizenOf(src)) }
 end, { rate = 3 })

@@ -1,16 +1,4 @@
--- modules/units/client.lua · CP.Units (client): the invite cue.
---
--- Units live on the server (modules/units/server.lua). The Unit screen (NUI) lists members, invites
--- and the invite picker, and every answer goes through the tablet (server:unitRespond). This half only
--- makes an incoming invite noticeable while the tablet is closed: the server's toast
--- (CP.Tablet.notify 'unit.invite_received', rendered by modules/tablet) is paired with a short frontend
--- sound when the 'unit' push for this player carries { invited = true }. Nothing is created in the game
--- world, so there is nothing to clean up on resource stop.
---
--- Public API (client)
---   CP.Units.lastInviteAt() -> GetGameTimer() of the last invite cue, or nil
--- Events handled: crimson-police:client:push (topic 'unit' only; the tablet module forwards every push
--- to the NUI itself, this handler never touches the NUI).
+-- CP.Units (client): the invite cue.
 
 CP.Units = CP.Units or {}
 local Units = CP.Units

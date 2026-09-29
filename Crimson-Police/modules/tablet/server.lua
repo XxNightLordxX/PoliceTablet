@@ -1,37 +1,5 @@
--- modules/tablet/server.lua · CP.Tablet (server): sessions for the three UIs, toasts, live pushes,
--- the Admin UI opener and the department logo checks.
---
--- Owns the callback getSession, the action server:logoFailed and the server side of the client events
--- crimson-police:client:notify / client:push / client:openAdmin (docs/ARCHITECTURE.md §8.1).
---
--- Public API (docs/ARCHITECTURE.md §5.4)
---   callback getSession(args) -> Session (§9.2)
---       args = { ui = 'officer'|'supervisor'|'admin' (default 'officer'), silent = bool }
---       officer:    an officer (CP.Access.getOfficer) -> its errKey otherwise (err.not_police,
---                   err.not_on_duty, err.suspended, err.suspended_dispatch)
---       supervisor: an officer whose grade is at or above supervisorGrade, or an officer who is also
---                   an admin -> err.not_supervisor otherwise
---       admin:      the ace Config.AdminAce, on duty or not, police or not -> err.not_admin otherwise
---       roles = { officer, supervisor (= officer and (isSupervisor or admin)), admin }; officer is set
---       whenever the player qualifies as an officer (also in the Admin UI); theme = the department's
---       theme (Config.AdminTheme, validated, for the Admin UI); logo = the department logo, or nil for
---       the Admin UI, a department without a logo, or a logo file missing from logos/.
---       config = { missionTypes (key,label,points; by points), departments (key,label,short,primary),
---                  tiers (name, label = CP.Scaling.label(name), else CP.L('tier.<name>')), maxRecalcs, disputeWindowHours,
---                  periods, filters }, locale = CP.Locale.all(), serverTime = os.time().
---       Opening the Officer/Supervisor UI refreshes the stored rank/callsign (CP.Access.refreshOfficerRow);
---       silent = true (the theme fetch at login) skips that. nil fields arrive in the NUI as missing keys.
---   CP.Tablet.notify(src, kind, key, vars, opts) -> boolean
---       kind 'info'|'success'|'warning'|'error'; key/vars a locale key and its variables (translated on
---       the client); opts = { title = localeKey, duration = ms }
---   CP.Tablet.notifyMany(srcs, kind, key, vars)       the same toast for a list of players (deduplicated)
---   CP.Tablet.push(src, topic, data) -> boolean       NUI { type = 'push', topic, data } (vectors serialised)
---   CP.Tablet.openAdmin(src) -> ok, errKey            builds the admin session and opens the Admin UI
---       (client:openAdmin); err.not_admin, err.not_in_game (console). Called by modules/admin.
---   action server:logoFailed (deptKey | { department, url })   the NUI could not load a department logo:
---       one console warning per department (err.unknown_department for an unknown one).
--- At start every file-based department logo is checked with LoadResourceFile: one warning per missing
--- file, and that department's session carries no logo (no broken image in the NUI).
+-- CP.Tablet (server): sessions for the three UIs, toasts, live pushes, the Admin UI opener and the department logo
+-- checks.
 
 CP.Tablet = CP.Tablet or {}
 local T = CP.Tablet
@@ -41,14 +9,20 @@ local UIS = { officer = true, supervisor = true, admin = true }
 local KINDS = { info = true, success = true, warning = true, error = true }
 local PERIODS = { 'weekly', 'monthly', 'season', 'alltime' }
 local FILTER_EXTRAS = { 'unit', 'cross', 'department' }
-local DEFAULT_THEME = { primary = '#a4161a', accent = '#e5383b', background = '#0b090a', surface = '#161a1d', text = '#f5f3f4' }
+local DEFAULT_THEME = {
+    primary = '#a4161a',
+    accent = '#e5383b',
+    background = '#0b090a',
+    surface = '#161a1d',
+    text = '#f5f3f4',
+}
 local THEME_KEYS = { 'primary', 'accent', 'background', 'surface' }
 
 local missingLogo = {}         -- deptKey -> true when logos/<file> is not in the resource
 local logoFailedWarned = {}    -- deptKey -> true once the NUI failure was reported
 local themeWarned = {}
 
-local function toSrc(src)
+local function ToSrc(src)
     local n = tonumber(src)
     if not n then return nil end
     n = math.tointeger(n)
@@ -56,7 +30,10 @@ local function toSrc(src)
     return n
 end
 
--- ── session parts ───────────────────────────────────────────────────────────
+-- ============================================================================
+--                                SESSION PARTS
+-- ============================================================================
+
 local function adminTheme()
     local cfg = type(Config.AdminTheme) == 'table' and Config.AdminTheme or {}
     local out = {}
@@ -67,7 +44,8 @@ local function adminTheme()
             out[k] = DEFAULT_THEME[k]
             if not themeWarned[k] then
                 themeWarned[k] = true
-                CP.warn(TAG, 'Config.AdminTheme.%s is not a 6-digit hex colour; using the Crimson-Police default %s', k, DEFAULT_THEME[k])
+                CP.warn(TAG, 'Config.AdminTheme.%s is not a 6-digit hex colour; using the Crimson-Police default %s', k,
+                    DEFAULT_THEME[k])
             end
         end
     end
@@ -104,7 +82,7 @@ local function missionTypes()
 end
 
 -- Tier labels come from CP.Scaling.label (the one place that names tiers), the locale as a fallback.
-local function tierLabel(name)
+local function TierLabel(name)
     if CP.Scaling and type(CP.Scaling.label) == 'function' then
         local ok, label = pcall(CP.Scaling.label, name)
         if ok and type(label) == 'string' and label ~= '' then return label end
@@ -112,7 +90,7 @@ local function tierLabel(name)
     return CP.L('tier.' .. name)
 end
 
-local function sessionConfig()
+local function SessionConfig()
     local types = missionTypes()
     local depts = {}
     for _, d in ipairs(CP.Access.departments()) do
@@ -122,7 +100,7 @@ local function sessionConfig()
     if type(Config.Scaling) == 'table' then
         for _, row in ipairs(Config.Scaling) do
             if type(row) == 'table' and type(row.tier) == 'string' then
-                tiers[#tiers + 1] = { name = row.tier, label = tierLabel(row.tier) }
+                tiers[#tiers + 1] = { name = row.tier, label = TierLabel(row.tier) }
             end
         end
     end
@@ -142,14 +120,14 @@ local function sessionConfig()
     }
 end
 
-local function sessionLogo(dept)
+local function SessionLogo(dept)
     if not dept or type(dept.logo) ~= 'table' or not dept.logo.url then return nil end
     if missingLogo[dept.key] then return nil end
     local l = dept.logo
     return { url = l.url, watermark = l.watermark, opacity = l.opacity, size = l.size, grayscale = l.grayscale }
 end
 
-local function sessionOfficer(o)
+local function SessionOfficer(o)
     return {
         citizenid = o.citizenid,
         name = o.name,
@@ -163,7 +141,7 @@ local function sessionOfficer(o)
 end
 
 -- The Session (§9.2) for 'ui', or nil and an error key. May yield.
-local function buildSession(src, ui)
+local function BuildSession(src, ui)
     if not CP.Access then return nil, 'err.internal' end
     local isAdmin = CP.Access.isAdmin(src)
     local officer, officerErr = CP.Access.getOfficer(src)
@@ -190,7 +168,7 @@ local function buildSession(src, ui)
     else
         local dept = CP.Access.department(officer.department)
         theme = dept and dept.theme or CP.U.copy(DEFAULT_THEME)
-        logo = sessionLogo(dept)
+        logo = SessionLogo(dept)
     end
     local actions = {}
     if CP.Permissions and CP.Permissions.actionsFor then actions = CP.Permissions.actionsFor(src) end
@@ -199,12 +177,12 @@ local function buildSession(src, ui)
         ui = ui,
         title = type(title) == 'string' and title ~= '' and title or 'Crimson-Police',
         roles = roles,
-        officer = officer and sessionOfficer(officer) or nil,
+        officer = officer and SessionOfficer(officer) or nil,
         theme = theme,
         logo = logo,
         actions = actions,
         locale = CP.Locale.all(),
-        config = sessionConfig(),
+        config = SessionConfig(),
         serverTime = os.time(),
     }
 end
@@ -214,7 +192,7 @@ CP.Net.callback('getSession', function(src, args)
     local ui = args and args.ui
     if ui == nil then ui = 'officer' end
     if type(ui) ~= 'string' or not UIS[ui] then return nil, 'err.invalid_ui' end
-    local session, errKey = buildSession(src, ui)
+    local session, errKey = BuildSession(src, ui)
     if not session then
         CP.log(TAG, 'getSession %s for %s refused: %s', ui, tostring(src), tostring(errKey))
         return nil, errKey
@@ -225,9 +203,12 @@ CP.Net.callback('getSession', function(src, args)
     return session
 end, { rate = 4 })
 
--- ── client helpers ──────────────────────────────────────────────────────────
+-- ============================================================================
+--                                CLIENT HELPERS
+-- ============================================================================
+
 function T.notify(src, kind, key, vars, opts)
-    local n = toSrc(src)
+    local n = ToSrc(src)
     if not n or type(key) ~= 'string' or key == '' then return false end
     if not KINDS[kind] then kind = 'info' end
     if type(opts) ~= 'table' then opts = {} end
@@ -246,7 +227,7 @@ function T.notifyMany(srcs, kind, key, vars)
     if type(srcs) ~= 'table' then return 0 end
     local seen, sent = {}, 0
     for _, src in ipairs(srcs) do
-        local n = toSrc(src)
+        local n = ToSrc(src)
         if n and not seen[n] then
             seen[n] = true
             if T.notify(n, kind, key, vars) then sent = sent + 1 end
@@ -256,14 +237,14 @@ function T.notifyMany(srcs, kind, key, vars)
 end
 
 function T.push(src, topic, data)
-    local n = toSrc(src)
+    local n = ToSrc(src)
     if not n or type(topic) ~= 'string' or topic == '' then return false end
     TriggerClientEvent(CP.e('client:push'), n, topic, CP.U.serialize(data))
     return true
 end
 
-local function openAdminNow(src)
-    local session, errKey = buildSession(src, 'admin')
+local function OpenAdminNow(src)
+    local session, errKey = BuildSession(src, 'admin')
     if not session then
         T.notify(src, 'error', errKey or 'err.not_admin')
         return false, errKey or 'err.not_admin'
@@ -274,17 +255,20 @@ local function openAdminNow(src)
 end
 
 function T.openAdmin(src)
-    local n = toSrc(src)
+    local n = ToSrc(src)
     if not n then
         CP.warn(TAG, 'the Admin UI can only be opened in game')
         return false, 'err.not_in_game'
     end
-    if coroutine.isyieldable() then return openAdminNow(n) end
-    CreateThread(function() openAdminNow(n) end)
+    if coroutine.isyieldable() then return OpenAdminNow(n) end
+    CreateThread(function() OpenAdminNow(n) end)
     return true
 end
 
--- ── logos ───────────────────────────────────────────────────────────────────
+-- ============================================================================
+--                                    LOGOS
+-- ============================================================================
+
 CP.Net.action('server:logoFailed', function(src, payload)
     local deptKey, url
     if type(payload) == 'string' then
@@ -305,7 +289,8 @@ CP.Net.action('server:logoFailed', function(src, payload)
     if not dept then return false, 'err.unknown_department' end
     if not logoFailedWarned[dept.key] then
         logoFailedWarned[dept.key] = true
-        CP.warn(TAG, 'Department %s: the tablet could not load its logo %s (reported by player %d). Check %s; the tablet shows no watermark for it.',
+        CP.warn(TAG,
+            'Department %s: the tablet could not load its logo %s (reported by player %d). Check %s; the tablet shows no watermark for it.',
             dept.key, tostring(dept.logo and dept.logo.url), src,
             dept.logo and dept.logo.file and ('logos/' .. dept.logo.file) or 'logo.url in Config.Departments')
     end
@@ -327,7 +312,8 @@ CreateThread(function()
                 missingLogo[dept.key] = true
                 if not warnedFile[file] then
                     warnedFile[file] = true
-                    CP.warn(TAG, 'Department %s: logos/%s is missing; its tablet shows no logo or watermark until the file is added and the resource restarted',
+                    CP.warn(TAG,
+                        'Department %s: logos/%s is missing; its tablet shows no logo or watermark until the file is added and the resource restarted',
                         dept.key, file)
                 end
             end

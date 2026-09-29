@@ -1,19 +1,4 @@
--- shared/net.lua · the request/action plumbing between the NUI, the client and the server.
---
--- Two kinds of server entry points, both registered through CP.Net so every one gets
--- rate limiting, error handling and a uniform reply shape { ok, data, error }:
---
---   CP.Net.callback('getBoard', function(src, args) return data end)
---       -> ox_lib callback 'crimson-police:getBoard'. Return data, or nil, 'error_key'.
---
---   CP.Net.action('server:acceptType', function(src, payload) return true, data end)
---       -> net event 'crimson-police:server:acceptType' (payload, reqId). Return
---          ok (boolean) and data (on success) or an error locale key (on failure).
---          When the client passed a reqId it receives 'crimson-police:client:actionResult'.
---
--- On the client, CP.Net.request(name, args) and CP.Net.action(name, payload) call them and
--- wait for the reply; the tablet's NUI bridge (modules/tablet/client.lua) forwards the UI's
--- 'request' and 'action' NUI callbacks to these two functions.
+-- The request/action plumbing between the NUI, the client and the server.
 
 CP = CP or {}
 CP.Net = CP.Net or {}
@@ -21,7 +6,7 @@ CP.Net = CP.Net or {}
 local RESULT_EVENT = 'crimson-police:client:actionResult'
 
 if IsDuplicityVersion() then
-    -- ── Server ──────────────────────────────────────────────────────────────
+    -- ---- SERVER ------------------------------------------------------------
     local buckets = {}   -- buckets[src][key] = { n, resetAt }
 
     -- At most `max` calls per `windowMs` for (src, key). Returns true when allowed.
@@ -44,7 +29,7 @@ if IsDuplicityVersion() then
         buckets[source] = nil
     end)
 
-    local function reply(src, reqId, ok, data)
+    local function Reply(src, reqId, ok, data)
         if reqId ~= nil and src and src > 0 then
             TriggerClientEvent(RESULT_EVENT, src, reqId, ok == true, data)
         end
@@ -58,17 +43,17 @@ if IsDuplicityVersion() then
             local src = source
             if type(reqId) ~= 'string' and type(reqId) ~= 'number' then reqId = nil end
             if not CP.Net.rateOk(src, eventName, max, 1000) then
-                return reply(src, reqId, false, 'err.rate_limited')
+                return Reply(src, reqId, false, 'err.rate_limited')
             end
             local okCall, ok, data = pcall(handler, src, payload)
             if not okCall then
                 CP.err('net', '%s failed: %s', eventName, tostring(ok))
-                return reply(src, reqId, false, 'err.internal')
+                return Reply(src, reqId, false, 'err.internal')
             end
             if ok then
-                reply(src, reqId, true, data)
+                Reply(src, reqId, true, data)
             else
-                reply(src, reqId, false, data or 'err.refused')
+                Reply(src, reqId, false, data or 'err.refused')
             end
         end)
     end
@@ -93,7 +78,7 @@ if IsDuplicityVersion() then
         end)
     end
 else
-    -- ── Client ──────────────────────────────────────────────────────────────
+    -- ---- CLIENT ------------------------------------------------------------
     local pending, nextId = {}, 0
 
     RegisterNetEvent(RESULT_EVENT, function(reqId, ok, data)

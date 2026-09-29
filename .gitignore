@@ -5,3 +5,7 @@ Crimson-Police/web/.vite/
 # database-off saves (Config.Database.enabled = false): server data, never committed
 Crimson-Police/saves/*
 !Crimson-Police/saves/README.md
+# temporary mission folders of an interrupted test run (tests/builder_server_spec.lua, int_duplicates_spec.lua)
+Crimson-Police/missions/custom/test_*/
+# Python bytecode of tools/*.py
+__pycache__/

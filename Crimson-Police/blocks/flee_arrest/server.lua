@@ -1,160 +1,78 @@
---[[ blocks/flee_arrest/server.lua · objective block "flee_arrest" (server half)
-
-  What it does
-    Suspects who must be taken into custody ("Cuff suspect", CP.Npc.enableCuff) after they give up.
-    Two modes:
-    - door (Warrant Service): the suspect waits inside at `suspect`, armed associates at
-      `associates.spawns` (count scales). Participants use ox_target "Knock and announce" at the
-      `door` (knock.duration progress; 'knock_start' then 'knock', both checked with server-side
-      distance and the elapsed time). The suspect's response is rolled with the objective rng when
-      the objective starts and revealed at the knock (or when a door-mode NPC dies first):
-      surrender (placed DOOR_STEP in front of the door, facing out: out = the door's vec4 heading,
-      turned round when the location start is clearly behind it; whether he waited inside or on the
-      step beside the door), flee (runs out the back along `fleeTo`)
-      or fight (spawned with a pistol from `weapons`). Associates always fight. Done when the
-      suspect is cuffed (or was killed while armed and fighting) and every associate is
-      neutralised (killed, or gave up and cuffed).
-    - scatter (Prison Break): `suspects` inmates (scale) in prison clothes spawn at `spawns`
-      (already outside the fence; spawn points inside a Config.Builder.noBuildZones zone are never
-      used) and flee along the `routes`; round(suspects × armedShare) of them carry a pistol and turn
-      to fight while a participant is within fireWithin. Done when every inmate is neutralised.
-    Unarmed suspects give up when a participant aims at them within givesUp.aim metres (client
-    'aim' report, server distance check), when stunned (client 'stunned' report, a participant must
-    be within STUN_RANGE) or when a participant stays within givesUp.close.distance for
-    givesUp.close.seconds (server-side distance sampling every tick). Armed suspects give up only
-    when stunned (armedGivesUp.stun) or below armedGivesUp.belowHealth health (server polls health).
-    A suspect or inmate more than escape.distance from every participant for escape.seconds
-    escapes: the run fails. Killing an unarmed, surrendered or cuffed suspect/inmate (a participant
-    kill) fails the run for everyone.
-    Every NPC spawns in the neutral relationship group (cfg.group = 'neutral'), armed or not; only
-    the 'hostile' state (fight response, associates after the knock, an armed inmate within
-    fireWithin) puts it in CRIMSONPOLICE_HOSTILE through CP.Npc's combat task, so nobody opens fire
-    before the knock or from beyond fireWithin.
-    validate: spawn points, the door marker and every fleeTo / route waypoint must lie outside
-    Config.Builder.noBuildZones for every mission; custom missions also get the allowed lists, the
-    associate spawn-point count and the minimum distance of spawn points from the start, and:
-    aliveBonus.id must be a Config.Bonuses id with no points / pctOfPoints of its own (the file value
-    is never passed as a hint either: only built-in files value their own id), givesUp.close is either
-    off or exactly Config.Blocks.flee_arrest closeDistance / closeSeconds, knock.duration and
-    cuff.duration are 1000-30000 ms, and cuff.maxDistance (when set) is at most CUFF_RANGE.
-
-  Objective fields read (defaults: ARCHITECTURE §3.3 and Config.Blocks.flee_arrest)
-    minSeconds [30] · presenceRange [presenceRange[3] = 250] · label
-    mode          'door' | 'scatter'                                    ['door']
-    door mode     door ['door'] vec4 key · suspect ['suspect'] vec4 key · fleeTo ['fleeTo'] list key
-                  knock { label [locale block.flee_arrest.knock], duration [3000] ms }
-                  responses { surrender [0.5], flee [0.3], fight [0.2] } (Config responses / 100)
-                  associates { count [1], spawns ['associates'], weapons [= weapons],
-                    accuracy [hostile_waves.accuracy[3] = 25], armour [hostile_waves.armour[3] = 0] }
-    scatter mode  spawns ['spawns'] list key · routes ['routes'] list of lists of vec3 (or { points })
-                  suspects [5] · armedShare [0.4]
-    common        models [door: Config.Blocks.hostile_waves.peds; scatter: { 's_m_y_prisoner_01' }]
-                  weapons [Config.Blocks.flee_arrest.weapons] · accuracy / armour (armed suspects)
-                    [hostile_waves defaults, + tier via ctx.combat] · fireWithin [15.0]
-                  escape { distance [escapeDistance[3] = 400], seconds [escapeSeconds[3] = 20] }
-                  givesUp { aim [aimDistance[3] = 10.0] | false, stun [true],
-                    close { distance [closeDistance = 3.0], seconds [closeSeconds = 3] } | false }
-                    (the builder's list form { 'aim', 'stun', 'close' } is accepted)
-                  armedGivesUp { stun [true], belowHealth [0.5] | false }
-                  cuff { label [locale block.flee_arrest.cuff], duration [5000], maxDistance }
-                  aliveBonus { id ['suspect_alive'], points (built-in files only: hint for ids outside Config.Bonuses), each }
-
-  Evidence accepted (onEvent)
-    { type = 'knock_start' } / { type = 'knock' }  door mode, within KNOCK_RANGE + slack of the door;
-                                     'knock' at least TIMED_SHARE × knock.duration after 'knock_start'
-    { type = 'aim', netId }          an unarmed fleeing suspect aimed at within givesUp.aim (+ slack)
-    { type = 'stunned', netId }      IsPedBeingStunned seen by a client; the reporter within
-                                     STUN_REPORT_RANGE and a participant within STUN_RANGE
-    { type = 'low_health', netId }   an armed suspect: re-checked with server-side health
-    { type = 'cuffed', netId }       CP.Npc (CP.Runs.dispatch) after a validated cuff (cp bag says cuffed)
-    { type = 'shot', netId, src }    CP.Npc: a surrendered/cuffed suspect was shot (penalty recorded there)
-    { type = 'damaged', netId }      CP.Npc (CP.Runs.dispatch): an armed suspect's health is re-checked
-                                     against armedGivesUp.belowHealth at once; always accepted
-
-  Bonus / penalty ids recorded (shared)
-    aliveBonus.id ['suspect_alive'; Prison Break: 'inmate_alive'] ctx.award count 1 for every suspect or
-    inmate cuffed alive (associates earn nothing)
-  Fail reason keys: block.flee_arrest.fail_escaped · block.flee_arrest.fail_setup (no usable spawn point
-    outside the no-build zones) · run.fail_killed_unarmed
-  Spawning is guarded: the re-entry flag is cleared even when a spawn throws (retried next tick).
-
-  ctx.state
-    block, mode, rng, response, knocked, knockStart = { [src] = ms }, peds = { [tostring(netId)] =
-    { netId, entity, role = 'suspect'|'associate'|'inmate', armed, state, route, far, close,
-    surrenderedAt } }, counts = { suspect, associate, inmate, armedInmates }, pointOrder,
-    assocOrder, routeOrder, nextArmed, escaping, dirty, hudText, completed, failed, stopped
-]]
+-- Objective block "flee_arrest" (server half)
 
 local BLOCK = 'flee_arrest'
 local U = CP.U
 
-local REACH_SLACK        = 2.0     -- metres of position lag allowed around interaction ranges
-local KNOCK_RANGE        = 2.5     -- ox_target distance of "Knock and announce"
-local CUFF_RANGE         = 3.0     -- CP.Npc.enableCuff default maxDistance (ARCHITECTURE §5.11)
-local STUN_RANGE         = 30.0    -- a stun needs a participant this close to the suspect
-local STUN_REPORT_RANGE  = 50.0    -- ...and the reporter this close (clients only look within 40 m)
-local TIMED_SHARE        = 0.8     -- a timed interaction must last at least this share of its duration
-local FIRE_RELEASE       = 1.5     -- an armed inmate goes back to fleeing beyond fireWithin × this
-local DOOR_STEP          = 1.0     -- metres outside the door where a surrendering suspect stands
-local DOOR_FLIP_DOT      = 0.25    -- the door heading is turned round when the start is this clearly behind it
-local REUSE_OFFSET       = 1.25
-local SURRENDER_GRACE_MS = 3000    -- a kill this soon after an armed suspect gave up is a shot in flight
-local DEFAULT_KNOCK_MS   = 3000
-local DEFAULT_CUFF_MS    = 5000
-local DEFAULT_SUSPECTS   = 5
-local DEFAULT_SHARE      = 0.4
-local DEFAULT_FIRE       = 15.0
-local DEFAULT_BELOW      = 0.5
-local PRISON_MODEL       = 's_m_y_prisoner_01'
-local CUSTOM_TIMED_MS    = { 1000, 30000 }   -- custom missions: knock and cuff progress times (ms)
+local REACH_SLACK = 2.0                  -- metres of position lag allowed around interaction ranges
+local KNOCK_RANGE = 2.5                  -- ox_target distance of "Knock and announce"
+local CUFF_RANGE = 3.0                   -- CP.Npc.enableCuff default maxDistance (ARCHITECTURE §5.11)
+local STUN_RANGE = 30.0                  -- a stun needs a participant this close to the suspect
+local STUN_REPORT_RANGE = 50.0           -- ...and the reporter this close (clients only look within 40 m)
+local TIMED_SHARE = 0.8                  -- a timed interaction must last at least this share of its duration
+local FIRE_RELEASE = 1.5                 -- an armed inmate goes back to fleeing beyond fireWithin × this
+local DOOR_STEP = 1.0                    -- metres outside the door where a surrendering suspect stands
+local DOOR_FLIP_DOT = 0.25               -- the door heading is turned round when the start is this clearly behind it
+local REUSE_OFFSET = 1.25
+local SURRENDER_GRACE_MS = 3000          -- a kill this soon after an armed suspect gave up is a shot in flight
+local DEFAULT_KNOCK_MS = 3000
+local DEFAULT_CUFF_MS = 5000
+local DEFAULT_SUSPECTS = 5
+local DEFAULT_SHARE = 0.4
+local DEFAULT_FIRE = 15.0
+local DEFAULT_BELOW = 0.5
+local PRISON_MODEL = 's_m_y_prisoner_01'
+local CUSTOM_TIMED_MS = { 1000, 30000 }  -- custom missions: knock and cuff progress times (ms)
 
-local function cfg() return Config.Blocks[BLOCK] end
-local function now() return GetGameTimer() end
+local function Cfg() return Config.Blocks[BLOCK] end
+local function Now() return GetGameTimer() end
 
--- ── Small helpers ───────────────────────────────────────────────────────────
-local function isNum(v) return type(v) == 'number' and v == v end
-local function isInt(v) return isNum(v) and math.floor(v) == v end
-local function inRange(v, r, scale)
+-- ============================================================================
+--                                SMALL HELPERS
+-- ============================================================================
+
+local function IsNum(v) return type(v) == 'number' and v == v end
+local function IsInt(v) return IsNum(v) and math.floor(v) == v end
+local function InRange(v, r, scale)
     scale = scale or 1
-    return isNum(v) and type(r) == 'table' and v >= r[1] * scale - 1e-9 and v <= r[2] * scale + 1e-9
+    return IsNum(v) and type(r) == 'table' and v >= r[1] * scale - 1e-9 and v <= r[2] * scale + 1e-9
 end
 
-local function bad(key, vars)
+local function Bad(key, vars)
     return false, CP.L(key, vars)
 end
 
-local function isVec(v)
+local function IsVec(v)
     local t = type(v)
     if t == 'vector3' or t == 'vector4' then return true end
     if t ~= 'table' then return false end
     local x, y, z = v.x or v[1], v.y or v[2], v.z or v[3]
-    return isNum(x) and isNum(y) and isNum(z)
+    return IsNum(x) and IsNum(y) and IsNum(z)
 end
 
-local function headingOf(p)
+local function HeadingOf(p)
     if type(p) == 'vector4' then return p.w + 0.0 end
     if type(p) == 'table' then return (tonumber(p.w or p[4] or p.heading) or 0.0) + 0.0 end
     return 0.0
 end
 
-local function toVec4(p, dx, dy)
+local function ToVec4(p, dx, dy)
     local x, y, z = U.xyz(p)
-    return vector4(x + (dx or 0.0), y + (dy or 0.0), z + 0.0, headingOf(p))
+    return vector4(x + (dx or 0.0), y + (dy or 0.0), z + 0.0, HeadingOf(p))
 end
 
-local function pointList(location, ref)
+local function PointList(location, ref)
     local v = ref
     if type(v) == 'string' then v = location and location[v] end
     if v == nil then return {} end
-    if isVec(v) then return { v } end
+    if IsVec(v) then return { v } end
     if type(v) ~= 'table' then return {} end
     if type(v.points) == 'table' then v = v.points end
     local out = {}
     for i = 1, #v do
         local p = v[i]
-        if isVec(p) then
+        if IsVec(p) then
             out[#out + 1] = p
-        elseif type(p) == 'table' and isVec(p.coords) then
+        elseif type(p) == 'table' and IsVec(p.coords) then
             out[#out + 1] = p.coords
         end
     end
@@ -162,34 +80,34 @@ local function pointList(location, ref)
 end
 
 -- routes: a list of routes (each a list of vec3 or { points = {...} }); a bare list of points is one route.
-local function routeList(location, ref)
+local function RouteList(location, ref)
     local v = ref
     if type(v) == 'string' then v = location and location[v] end
     if type(v) ~= 'table' then return {} end
-    if type(v.points) == 'table' or isVec(v[1]) then
-        local one = pointList(nil, v)
+    if type(v.points) == 'table' or IsVec(v[1]) then
+        local one = PointList(nil, v)
         return #one > 0 and { one } or {}
     end
     local out = {}
     for i = 1, #v do
-        local r = pointList(nil, v[i])
+        local r = PointList(nil, v[i])
         if #r > 0 then out[#out + 1] = r end
     end
     return out
 end
 
-local function inNoBuild(p)
+local function InNoBuild(p)
     for _, z in ipairs((Config.Builder and Config.Builder.noBuildZones) or {}) do
         if U.dist2d(p, z.coords) <= (z.radius or 0) then return true end
     end
     return false
 end
 
-local function outsideZones(points)
-    return U.filter(points, function(p) return not inNoBuild(p) end)
+local function OutsideZones(points)
+    return U.filter(points, function(p) return not InNoBuild(p) end)
 end
 
-local function allAllowed(list, allowed)
+local function AllAllowed(list, allowed)
     if type(list) ~= 'table' or #list == 0 then return false end
     for _, v in ipairs(list) do
         if type(v) ~= 'string' then return false end
@@ -199,24 +117,24 @@ local function allAllowed(list, allowed)
 end
 
 -- Only a built-in mission file may pass its own bonus values (aliveBonus.points) as a value hint.
-local function trustedFile(ctx)
+local function TrustedFile(ctx)
     local m = ctx.mission or (ctx.run and ctx.run.mission)
     return type(m) == 'table' and m.source == 'builtin'
 end
 
 -- Custom missions: timed actions (knock, cuff) take 1-30 s like every builder progress time, and a cuff
 -- can never reach further than CP.Npc.enableCuff's own range.
-local function customTimed(field, ms)
-    if inRange(ms, CUSTOM_TIMED_MS) then return true end
-    return bad('block.flee_arrest.invalid.range', { field = field, min = CUSTOM_TIMED_MS[1], max = CUSTOM_TIMED_MS[2] })
+local function CustomTimed(field, ms)
+    if InRange(ms, CUSTOM_TIMED_MS) then return true end
+    return Bad('block.flee_arrest.invalid.range', { field = field, min = CUSTOM_TIMED_MS[1], max = CUSTOM_TIMED_MS[2] })
 end
 
-local function customCuffRange(v)
-    if v == nil or (isNum(v) and v > 0 and v <= CUFF_RANGE + 1e-9) then return true end
-    return bad('block.flee_arrest.invalid.range', { field = 'cuff.maxDistance', min = 0, max = CUFF_RANGE })
+local function CustomCuffRange(v)
+    if v == nil or (IsNum(v) and v > 0 and v <= CUFF_RANGE + 1e-9) then return true end
+    return Bad('block.flee_arrest.invalid.range', { field = 'cuff.maxDistance', min = 0, max = CUFF_RANGE })
 end
 
-local function isParticipant(ctx, src)
+local function IsParticipant(ctx, src)
     src = tonumber(src)
     if not src then return false end
     if ctx.run and type(ctx.run.participants) == 'table' and ctx.run.participants[src] then return true end
@@ -226,7 +144,7 @@ local function isParticipant(ctx, src)
     return false
 end
 
-local function rngOf(ctx)
+local function RngOf(ctx)
     local st = ctx.state
     if not st.rng then
         st.rng = ctx.rng or U.rng(((ctx.run and ctx.run.seed) or 1) + (ctx.index or 0))
@@ -234,29 +152,29 @@ local function rngOf(ctx)
     return st.rng
 end
 
-local function pedCoords(p)
+local function PedCoords(p)
     if p.entity and DoesEntityExist(p.entity) then return GetEntityCoords(p.entity) end
     return nil
 end
 
 -- Server-side max health (GetEntityMaxHealth, else GetPedMaxHealth; 0 when neither answers).
-local function serverMaxHealth(e)
+local function ServerMaxHealth(e)
     local m = GetEntityMaxHealth and tonumber(GetEntityMaxHealth(e)) or nil
     if (not m or m <= 0) and GetPedMaxHealth then m = tonumber(GetPedMaxHealth(e)) end
     return m or 0
 end
 
-local function healthRatio(p)
+local function HealthRatio(p)
     if not p.entity or not DoesEntityExist(p.entity) then return nil end
     local hp = tonumber(GetEntityHealth(p.entity)) or 0
     if hp <= 0 then return nil end
-    local serverMax = serverMaxHealth(p.entity)
+    local serverMax = ServerMaxHealth(p.entity)
     local max = math.max(tonumber(p.maxHealth) or 200, serverMax or 0)
     if max > 100 then return (hp - 100) / (max - 100) end
     return hp / math.max(max, 1)
 end
 
-local function party(ctx)
+local function Party(ctx)
     local out = {}
     for _, src in ipairs(ctx.participants() or {}) do
         local c = ctx.coords(src)
@@ -265,7 +183,7 @@ local function party(ctx)
     return out
 end
 
-local function nearestOf(list, coords)
+local function NearestOf(list, coords)
     local best = math.huge
     if not coords then return best end
     for i = 1, #list do
@@ -275,27 +193,30 @@ local function nearestOf(list, coords)
     return best
 end
 
-local function u32(h)
+local function U32(h)
     h = tonumber(h)
     if not h then return nil end
     return math.floor(h) & 0xFFFFFFFF
 end
 
 -- The officer reporting an aim must hold a weapon (server-side selected weapon when available).
-local function holdsWeapon(src)
+local function HoldsWeapon(src)
     if not GetSelectedPedWeapon then return true end
     local ped = GetPlayerPed(src)
     if not ped or ped == 0 then return false end
-    local w = u32(GetSelectedPedWeapon(ped))
-    return w ~= nil and w ~= 0 and w ~= u32(joaat('WEAPON_UNARMED'))
+    local w = U32(GetSelectedPedWeapon(ped))
+    return w ~= nil and w ~= 0 and w ~= U32(joaat('WEAPON_UNARMED'))
 end
 
-local function neutralised(p)
+local function Neutralised(p)
     return p.state == 'dead' or p.state == 'cuffed'
 end
 
--- ── Defaults and validation ─────────────────────────────────────────────────
-local function normaliseGivesUp(g, c)
+-- ============================================================================
+--                           DEFAULTS AND VALIDATION
+-- ============================================================================
+
+local function NormaliseGivesUp(g, c)
     if g == nil then g = {} end
     if g == false then return { aim = false, stun = false, close = false } end
     if type(g) ~= 'table' then g = {} end
@@ -317,8 +238,8 @@ local function normaliseGivesUp(g, c)
     return g
 end
 
-local function defaults(obj)
-    local c = cfg()
+local function Defaults(obj)
+    local c = Cfg()
     local hw = Config.Blocks.hostile_waves
     if obj.minSeconds == nil then obj.minSeconds = 30 end
     if obj.presenceRange == nil then obj.presenceRange = c.presenceRange[3] end
@@ -333,7 +254,7 @@ local function defaults(obj)
     if type(obj.escape) ~= 'table' then obj.escape = {} end
     if obj.escape.distance == nil then obj.escape.distance = c.escapeDistance[3] end
     if obj.escape.seconds == nil then obj.escape.seconds = c.escapeSeconds[3] end
-    obj.givesUp = normaliseGivesUp(obj.givesUp, c)
+    obj.givesUp = NormaliseGivesUp(obj.givesUp, c)
     if obj.armedGivesUp == false then obj.armedGivesUp = { stun = false, belowHealth = false } end
     if type(obj.armedGivesUp) ~= 'table' then obj.armedGivesUp = {} end
     if obj.armedGivesUp.stun == nil then obj.armedGivesUp.stun = true end
@@ -377,8 +298,8 @@ local function defaults(obj)
     return obj
 end
 
-local function armedCount(obj)
-    local o = defaults(U.deepcopy(obj))
+local function ArmedCount(obj)
+    local o = Defaults(U.deepcopy(obj))
     if o.mode == 'scatter' then
         return (tonumber(o.armedShare) or 0) > 0 and math.floor(tonumber(o.suspects) or 0) or 0
     end
@@ -387,8 +308,8 @@ local function armedCount(obj)
     return n
 end
 
-local function requiredPoints(obj)
-    local o = defaults(U.deepcopy(obj))
+local function RequiredPoints(obj)
+    local o = Defaults(U.deepcopy(obj))
     local out = {}
     local function add(k) if type(k) == 'string' and not U.contains(out, k) then out[#out + 1] = k end end
     if o.mode == 'scatter' then
@@ -403,13 +324,14 @@ local function requiredPoints(obj)
     return out
 end
 
-local function checkLocation(o, loc, li, strict)
+local function CheckLocation(o, loc, li, strict)
     local start = loc.start and loc.start.coords
     local function spawnOk(list)
         for _, p in ipairs(list) do
-            if inNoBuild(p) then return bad('block.flee_arrest.invalid.points_zone', { location = li }) end
+            if InNoBuild(p) then return Bad('block.flee_arrest.invalid.points_zone', { location = li }) end
             if strict and start and U.dist(p, start) < Config.Builder.minSpawnFromStart then
-                return bad('block.flee_arrest.invalid.points_start', { location = li, min = Config.Builder.minSpawnFromStart })
+                return Bad('block.flee_arrest.invalid.points_start',
+                    { location = li, min = Config.Builder.minSpawnFromStart })
             end
         end
         return true
@@ -418,20 +340,20 @@ local function checkLocation(o, loc, li, strict)
     -- every mission (the loader only sees location keys, not points written into the objective)
     local function pathOk(list)
         for _, p in ipairs(list) do
-            if inNoBuild(p) then return bad('block.flee_arrest.invalid.route_zone', { location = li }) end
+            if InNoBuild(p) then return Bad('block.flee_arrest.invalid.route_zone', { location = li }) end
         end
         return true
     end
     local function need(key)
-        return bad('block.flee_arrest.invalid.points_missing', { key = tostring(key), location = li })
+        return Bad('block.flee_arrest.invalid.points_missing', { key = tostring(key), location = li })
     end
     if o.mode == 'scatter' then
-        local pts = pointList(loc, o.spawns)
+        local pts = PointList(loc, o.spawns)
         if #pts == 0 then return need(o.spawns) end
         -- nothing ever spawns inside the prison walls (or any no-build zone): checked for every mission
         local ok, why = spawnOk(pts)
         if not ok then return false, why end
-        local routes = routeList(loc, o.routes)
+        local routes = RouteList(loc, o.routes)
         if #routes == 0 then return need(o.routes) end
         for _, r in ipairs(routes) do
             ok, why = pathOk(r)
@@ -439,23 +361,23 @@ local function checkLocation(o, loc, li, strict)
         end
         return true
     end
-    local door = pointList(loc, o.door)
+    local door = PointList(loc, o.door)
     if #door == 0 then return need(o.door) end
-    local sp = pointList(loc, o.suspect)
+    local sp = PointList(loc, o.suspect)
     if #sp == 0 then return need(o.suspect) end
-    if (tonumber(o.responses.flee) or 0) > 0 and #pointList(loc, o.fleeTo) == 0 then return need(o.fleeTo) end
+    if (tonumber(o.responses.flee) or 0) > 0 and #PointList(loc, o.fleeTo) == 0 then return need(o.fleeTo) end
     do
         local ok, why = pathOk(door)
-        if ok then ok, why = pathOk(pointList(loc, o.fleeTo)) end
+        if ok then ok, why = pathOk(PointList(loc, o.fleeTo)) end
         if not ok then return false, why end
     end
     local count = math.floor(tonumber(o.associates.count) or 0)
     local ap = {}
     if count > 0 then
-        ap = pointList(loc, o.associates.spawns)
+        ap = PointList(loc, o.associates.spawns)
         if #ap == 0 then return need(o.associates.spawns) end
         if strict and #ap < count then
-            return bad('block.flee_arrest.invalid.points_count', { location = li, min = count, have = #ap })
+            return Bad('block.flee_arrest.invalid.points_count', { location = li, min = count, have = #ap })
         end
     end
     -- no-build zones for every mission; the distance from the start only for custom missions
@@ -466,115 +388,147 @@ local function checkLocation(o, loc, li, strict)
     return true
 end
 
-local function validate(obj, mission, location)
-    if type(obj) ~= 'table' then return bad('block.flee_arrest.invalid.objective') end
-    local c = cfg()
+local function Validate(obj, mission, location)
+    if type(obj) ~= 'table' then return Bad('block.flee_arrest.invalid.objective') end
+    local c = Cfg()
     local hw = Config.Blocks.hostile_waves
-    local o = defaults(U.deepcopy(obj))
+    local o = Defaults(U.deepcopy(obj))
     local strict = not (type(mission) == 'table' and mission.source == 'builtin')
     local allowed = Config.Builder.allowed
 
-    if o.mode ~= 'door' and o.mode ~= 'scatter' then return bad('block.flee_arrest.invalid.mode') end
-    if not isNum(o.minSeconds) or o.minSeconds < 0 then return bad('block.flee_arrest.invalid.min_seconds') end
-    if not inRange(o.presenceRange, c.presenceRange) then
-        return bad('block.flee_arrest.invalid.range', { field = 'presenceRange', min = c.presenceRange[1], max = c.presenceRange[2] })
+    if o.mode ~= 'door' and o.mode ~= 'scatter' then return Bad('block.flee_arrest.invalid.mode') end
+    if not IsNum(o.minSeconds) or o.minSeconds < 0 then return Bad('block.flee_arrest.invalid.min_seconds') end
+    if not InRange(o.presenceRange, c.presenceRange) then
+        return Bad('block.flee_arrest.invalid.range',
+            { field = 'presenceRange', min = c.presenceRange[1], max = c.presenceRange[2] })
     end
-    if not inRange(o.escape.distance, c.escapeDistance) then
-        return bad('block.flee_arrest.invalid.range', { field = 'escape.distance', min = c.escapeDistance[1], max = c.escapeDistance[2] })
+    if not InRange(o.escape.distance, c.escapeDistance) then
+        return Bad('block.flee_arrest.invalid.range',
+            { field = 'escape.distance', min = c.escapeDistance[1], max = c.escapeDistance[2] })
     end
-    if not inRange(o.escape.seconds, c.escapeSeconds) then
-        return bad('block.flee_arrest.invalid.range', { field = 'escape.seconds', min = c.escapeSeconds[1], max = c.escapeSeconds[2] })
+    if not InRange(o.escape.seconds, c.escapeSeconds) then
+        return Bad('block.flee_arrest.invalid.range',
+            { field = 'escape.seconds', min = c.escapeSeconds[1], max = c.escapeSeconds[2] })
     end
     local g = o.givesUp
-    if g.aim ~= false and not inRange(g.aim, c.aimDistance) then
-        return bad('block.flee_arrest.invalid.range', { field = 'givesUp.aim', min = c.aimDistance[1], max = c.aimDistance[2] })
+    if g.aim ~= false and not InRange(g.aim, c.aimDistance) then
+        return Bad('block.flee_arrest.invalid.range',
+            { field = 'givesUp.aim', min = c.aimDistance[1], max = c.aimDistance[2] })
     end
-    if type(g.stun) ~= 'boolean' then return bad('block.flee_arrest.invalid.gives_up') end
-    if g.close ~= false and (type(g.close) ~= 'table' or not isNum(g.close.distance) or g.close.distance <= 0
-        or not isNum(g.close.seconds) or g.close.seconds <= 0) then
-        return bad('block.flee_arrest.invalid.gives_up')
+    if type(g.stun) ~= 'boolean' then return Bad('block.flee_arrest.invalid.gives_up') end
+    if
+        g.close ~= false
+        and (
+            type(g.close) ~= 'table'
+            or not IsNum(g.close.distance)
+            or g.close.distance <= 0
+            or not IsNum(g.close.seconds)
+            or g.close.seconds <= 0
+        )
+    then
+        return Bad('block.flee_arrest.invalid.gives_up')
     end
     -- custom missions: "a participant stays within 3 m for 3 s" is fixed (Config.Blocks closeDistance /
     -- closeSeconds), only on or off
-    if strict and g.close ~= false and (math.abs(g.close.distance - c.closeDistance) > 1e-6
-        or math.abs(g.close.seconds - c.closeSeconds) > 1e-6) then
-        return bad('block.flee_arrest.invalid.gives_up_close', { distance = c.closeDistance, seconds = c.closeSeconds })
+    if strict and g.close ~= false
+        and (math.abs(g.close.distance - c.closeDistance) > 1e-6 or math.abs(g.close.seconds - c.closeSeconds) > 1e-6) then
+        return Bad('block.flee_arrest.invalid.gives_up_close', { distance = c.closeDistance, seconds = c.closeSeconds })
     end
     local ag = o.armedGivesUp
-    if type(ag.stun) ~= 'boolean' or (ag.belowHealth ~= false and (not isNum(ag.belowHealth) or ag.belowHealth <= 0 or ag.belowHealth >= 1)) then
-        return bad('block.flee_arrest.invalid.gives_up')
+    if type(ag.stun) ~= 'boolean'
+        or (ag.belowHealth ~= false and (not IsNum(ag.belowHealth) or ag.belowHealth <= 0 or ag.belowHealth >= 1)) then
+        return Bad('block.flee_arrest.invalid.gives_up')
     end
-    if not isNum(o.fireWithin) or o.fireWithin <= 0 then return bad('block.flee_arrest.invalid.fire_within') end
-    if not isNum(o.cuff.duration) or o.cuff.duration <= 0 or type(o.cuff.label) ~= 'string' then
-        return bad('block.flee_arrest.invalid.cuff')
+    if not IsNum(o.fireWithin) or o.fireWithin <= 0 then return Bad('block.flee_arrest.invalid.fire_within') end
+    if not IsNum(o.cuff.duration) or o.cuff.duration <= 0 or type(o.cuff.label) ~= 'string' then
+        return Bad('block.flee_arrest.invalid.cuff')
     end
     if strict then
-        local ok, why = customTimed('cuff.duration', o.cuff.duration)
-        if ok then ok, why = customCuffRange(o.cuff.maxDistance) end
+        local ok, why = CustomTimed('cuff.duration', o.cuff.duration)
+        if ok then ok, why = CustomCuffRange(o.cuff.maxDistance) end
         if not ok then return false, why end
     end
-    if not allAllowed(o.weapons, strict and allowed.weapons or nil) then return bad('block.flee_arrest.invalid.weapons') end
-    if not allAllowed(o.models, strict and allowed.peds or nil) then return bad('block.flee_arrest.invalid.models') end
-    if not inRange(o.accuracy, hw.accuracy) or not inRange(o.armour, hw.armour) then
-        return bad('block.flee_arrest.invalid.combat')
+    if not AllAllowed(o.weapons, strict and allowed.weapons or nil) then
+        return Bad('block.flee_arrest.invalid.weapons')
     end
-    if type(o.aliveBonus.id) ~= 'string' or o.aliveBonus.id == '' then return bad('block.flee_arrest.invalid.alive_bonus') end
+    if not AllAllowed(o.models, strict and allowed.peds or nil) then return Bad('block.flee_arrest.invalid.models') end
+    if not InRange(o.accuracy, hw.accuracy) or not InRange(o.armour, hw.armour) then
+        return Bad('block.flee_arrest.invalid.combat')
+    end
+    if type(o.aliveBonus.id) ~= 'string' or o.aliveBonus.id == '' then
+        return Bad('block.flee_arrest.invalid.alive_bonus')
+    end
     -- custom missions: the alive bonus is a standard id (valued by the mission's capped bonuses list),
     -- never a value of its own
-    if strict and (o.aliveBonus.points ~= nil or o.aliveBonus.pctOfPoints ~= nil
-        or not (Config.Bonuses and Config.Bonuses[o.aliveBonus.id])) then
-        return bad('block.flee_arrest.invalid.alive_bonus_custom', { id = o.aliveBonus.id })
+    if
+        strict
+        and (
+            o.aliveBonus.points ~= nil
+            or o.aliveBonus.pctOfPoints ~= nil
+            or not (Config.Bonuses and Config.Bonuses[o.aliveBonus.id])
+        )
+    then
+        return Bad('block.flee_arrest.invalid.alive_bonus_custom', { id = o.aliveBonus.id })
     end
     if o.mode == 'door' then
         local r = o.responses
         for _, k in ipairs({ 'surrender', 'flee', 'fight' }) do
-            if not isNum(r[k]) or r[k] < 0 or r[k] > 1 then return bad('block.flee_arrest.invalid.responses') end
+            if not IsNum(r[k]) or r[k] < 0 or r[k] > 1 then return Bad('block.flee_arrest.invalid.responses') end
         end
-        if math.abs(r.surrender + r.flee + r.fight - 1) > 0.001 then return bad('block.flee_arrest.invalid.responses') end
-        if not isNum(o.knock.duration) or o.knock.duration <= 0 or type(o.knock.label) ~= 'string' then
-            return bad('block.flee_arrest.invalid.knock')
+        if math.abs(r.surrender + r.flee + r.fight - 1) > 0.001 then
+            return Bad('block.flee_arrest.invalid.responses')
+        end
+        if not IsNum(o.knock.duration) or o.knock.duration <= 0 or type(o.knock.label) ~= 'string' then
+            return Bad('block.flee_arrest.invalid.knock')
         end
         if strict then
-            local ok, why = customTimed('knock.duration', o.knock.duration)
+            local ok, why = CustomTimed('knock.duration', o.knock.duration)
             if not ok then return false, why end
         end
         local a = o.associates
-        if not isInt(a.count) or a.count < 0 or a.count > c.suspects[2] then
-            return bad('block.flee_arrest.invalid.range', { field = 'associates.count', min = 0, max = c.suspects[2] })
+        if not IsInt(a.count) or a.count < 0 or a.count > c.suspects[2] then
+            return Bad('block.flee_arrest.invalid.range', { field = 'associates.count', min = 0, max = c.suspects[2] })
         end
         if a.count > 0 then
-            if not allAllowed(a.weapons, strict and allowed.weapons or nil) then return bad('block.flee_arrest.invalid.weapons') end
-            if not inRange(a.accuracy, hw.accuracy) or not inRange(a.armour, hw.armour) then
-                return bad('block.flee_arrest.invalid.combat')
+            if not AllAllowed(a.weapons, strict and allowed.weapons or nil) then
+                return Bad('block.flee_arrest.invalid.weapons')
+            end
+            if not InRange(a.accuracy, hw.accuracy) or not InRange(a.armour, hw.armour) then
+                return Bad('block.flee_arrest.invalid.combat')
             end
         end
     else
-        if not isInt(o.suspects) or not inRange(o.suspects, c.suspects) then
-            return bad('block.flee_arrest.invalid.range', { field = 'suspects', min = c.suspects[1], max = c.suspects[2] })
+        if not IsInt(o.suspects) or not InRange(o.suspects, c.suspects) then
+            return Bad('block.flee_arrest.invalid.range',
+                { field = 'suspects', min = c.suspects[1], max = c.suspects[2] })
         end
-        if not inRange(o.armedShare, c.armedChance, 0.01) then
-            return bad('block.flee_arrest.invalid.range', { field = 'armedShare', min = c.armedChance[1] / 100, max = c.armedChance[2] / 100 })
+        if not InRange(o.armedShare, c.armedChance, 0.01) then
+            return Bad('block.flee_arrest.invalid.range',
+                { field = 'armedShare', min = c.armedChance[1] / 100, max = c.armedChance[2] / 100 })
         end
     end
-    local armed = armedCount(o)
+    local armed = ArmedCount(o)
     if armed > Config.Builder.maxHostiles then
-        return bad('block.flee_arrest.invalid.armed_budget', { max = Config.Builder.maxHostiles, have = armed })
+        return Bad('block.flee_arrest.invalid.armed_budget', { max = Config.Builder.maxHostiles, have = armed })
     end
     if type(location) == 'table' then
-        return checkLocation(o, location, 1, strict)
+        return CheckLocation(o, location, 1, strict)
     end
     if type(mission) == 'table' and type(mission.locations) == 'table' then
         for li, loc in ipairs(mission.locations) do
-            local ok, why = checkLocation(o, loc, li, strict)
+            local ok, why = CheckLocation(o, loc, li, strict)
             if not ok then return false, why end
         end
     end
     return true
 end
 
--- ── Run state ───────────────────────────────────────────────────────────────
-local function stateOf(ctx)
-    defaults(ctx.obj)
+-- ============================================================================
+--                                  RUN STATE
+-- ============================================================================
+
+local function StateOf(ctx)
+    Defaults(ctx.obj)
     local st = ctx.state
     if not st.block then
         st.block = BLOCK
@@ -587,62 +541,68 @@ local function stateOf(ctx)
     return st
 end
 
-local function int(v) return math.max(0, math.floor((tonumber(v) or 0) + 0.5)) end
+local function Int(v) return math.max(0, math.floor((tonumber(v) or 0) + 0.5)) end
 
-local function assocTarget(ctx)
-    return ctx.obj.mode == 'door' and int(ctx.obj.associates and ctx.obj.associates.count) or 0
+local function AssocTarget(ctx)
+    return ctx.obj.mode == 'door' and Int(ctx.obj.associates and ctx.obj.associates.count) or 0
 end
 
-local function inmateTarget(ctx)
-    return ctx.obj.mode == 'scatter' and int(ctx.obj.suspects) or 0
+local function InmateTarget(ctx)
+    return ctx.obj.mode == 'scatter' and Int(ctx.obj.suspects) or 0
 end
 
-local function indices(n)
+local function Indices(n)
     local t = {}
     for i = 1, n do t[i] = i end
     return t
 end
 
-local function placed(pts, order, i)
+local function Placed(pts, order, i)
     local k = ((i - 1) % #pts) + 1
     local lap = (i - 1) // #pts
     local base = pts[order[k] or k]
-    if lap == 0 then return toVec4(base) end
+    if lap == 0 then return ToVec4(base) end
     local a = lap * 2.39996 + k
-    return toVec4(base, math.cos(a) * REUSE_OFFSET * lap, math.sin(a) * REUSE_OFFSET * lap)
+    return ToVec4(base, math.cos(a) * REUSE_OFFSET * lap, math.sin(a) * REUSE_OFFSET * lap)
 end
 
-local function setPed(ctx, st, p, state)
+local function SetPed(ctx, st, p, state)
     if p.state == state then return end
     p.state = state
     CP.Npc.setState(ctx.run, p.netId, state)
     st.dirty = true
 end
 
-local function surrenderPed(ctx, st, p)
+local function SurrenderPed(ctx, st, p)
     p.state = 'surrendered'
     p.close, p.far = 0, 0
-    p.surrenderedAt = now()
+    p.surrenderedAt = Now()
     CP.Npc.setState(ctx.run, p.netId, 'surrendered')
     local cuff = ctx.obj.cuff
     CP.Npc.enableCuff(ctx.run, p.netId, {
         label = cuff.label or CP.L('block.flee_arrest.cuff'),
-        duration = cuff.duration, maxDistance = cuff.maxDistance,
+        duration = cuff.duration,
+        maxDistance = cuff.maxDistance,
     })
     st.dirty = true
 end
 
-local function spawnOne(ctx, st, role, point, armed, extra)
+local function SpawnOne(ctx, st, role, point, armed, extra)
     local obj = ctx.obj
-    local r = rngOf(ctx)
+    local r = RngOf(ctx)
     local opts = {
-        model = r:pick(obj.models) or PRISON_MODEL, coords = point, role = role, armed = armed == true,
-        cfg = extra or {}, tag = role .. (st.counts[role] + 1),
+        model = r:pick(obj.models) or PRISON_MODEL,
+        coords = point,
+        role = role,
+        armed = armed == true,
+        cfg = extra or {},
+        tag = role .. (st.counts[role] + 1),
     }
     if armed then
         local assoc = role == 'associate' and obj.associates or nil
-        opts.weapon = r:pick((assoc and assoc.weapons) or obj.weapons) or cfg().weapons[1]
-        opts.accuracy, opts.armour = ctx.combat((assoc and assoc.accuracy) or obj.accuracy, (assoc and assoc.armour) or obj.armour)
+        opts.weapon = r:pick((assoc and assoc.weapons) or obj.weapons) or Cfg().weapons[1]
+        opts.accuracy, opts.armour = ctx.combat((assoc and assoc.accuracy) or obj.accuracy,
+            (assoc and assoc.armour) or obj.armour)
     end
     -- Every flee_arrest NPC starts calm (CRIMSONPOLICE_NEUTRAL), armed or not: door-mode NPCs wait
     -- inside until the knock reveals the response, and armed inmates only open fire within
@@ -658,17 +618,20 @@ local function spawnOne(ctx, st, role, point, armed, extra)
     return p
 end
 
--- ── Door mode ───────────────────────────────────────────────────────────────
-local function rollResponse(ctx)
+-- ============================================================================
+--                                  DOOR MODE
+-- ============================================================================
+
+local function RollResponse(ctx)
     local rs = ctx.obj.responses
-    local x = rngOf(ctx):next()
+    local x = RngOf(ctx):next()
     local s, f = tonumber(rs.surrender) or 0, tonumber(rs.flee) or 0
     if x < s then return 'surrender' end
     if x < s + f then return 'flee' end
     return 'fight'
 end
 
-local function hasHeading(p)
+local function HasHeading(p)
     if type(p) == 'vector4' then return true end
     return type(p) == 'table' and tonumber(p.w or p[4] or p.heading) ~= nil
 end
@@ -677,7 +640,7 @@ end
 -- it is turned round when the location start (where the officers come from) lies clearly behind it (a
 -- door placed while facing the house). A door without a heading faces the start; with no start either,
 -- "out" is the side away from where the suspect waited.
-local function doorOutward(ctx, door, fromX, fromY)
+local function DoorOutward(ctx, door, fromX, fromY)
     local dx, dy = U.xyz(door)
     local start = ctx.location and ctx.location.start and ctx.location.start.coords
     local tx, ty, tl = 0.0, 0.0, 0.0
@@ -688,8 +651,8 @@ local function doorOutward(ctx, door, fromX, fromY)
             tl = math.sqrt(tx * tx + ty * ty)
         end
     end
-    if hasHeading(door) then
-        local r = math.rad(headingOf(door))
+    if HasHeading(door) then
+        local r = math.rad(HeadingOf(door))
         local fx, fy = -math.sin(r), math.cos(r)
         if tl > 1.0 and (fx * tx + fy * ty) / tl < -DOOR_FLIP_DOT then fx, fy = -fx, -fy end
         return fx, fy
@@ -707,13 +670,13 @@ end
 -- (the card: "the suspect inside") or on the door step next to the door (the built-in houses have no
 -- interior a ped can walk out of, docs/notes/missions_b.md), he always ends up outside, never behind the
 -- facade.
-local function moveToDoor(ctx, p)
-    local door = pointList(ctx.location, ctx.obj.door)[1]
+local function MoveToDoor(ctx, p)
+    local door = PointList(ctx.location, ctx.obj.door)[1]
     if not door or not p.entity or not DoesEntityExist(p.entity) then return end
     local dx, dy, dz = U.xyz(door)
     local sx, sy = U.xyz(GetEntityCoords(p.entity))
-    local ox, oy = doorOutward(ctx, door, sx, sy)
-    local h = headingOf(door)
+    local ox, oy = DoorOutward(ctx, door, sx, sy)
+    local h = HeadingOf(door)
     local px, py = dx, dy
     if ox then
         px, py = dx + ox * DOOR_STEP, dy + oy * DOOR_STEP
@@ -723,16 +686,16 @@ local function moveToDoor(ctx, p)
     SetEntityHeading(p.entity, h + 0.0)
 end
 
-local function applyResponse(ctx, st, p)
+local function ApplyResponse(ctx, st, p)
     if p.role == 'associate' then
-        setPed(ctx, st, p, 'hostile')
+        SetPed(ctx, st, p, 'hostile')
     elseif st.response == 'surrender' then
-        moveToDoor(ctx, p)
-        surrenderPed(ctx, st, p)
+        MoveToDoor(ctx, p)
+        SurrenderPed(ctx, st, p)
     elseif st.response == 'flee' then
-        setPed(ctx, st, p, 'fleeing')
+        SetPed(ctx, st, p, 'fleeing')
     else
-        setPed(ctx, st, p, 'hostile')
+        SetPed(ctx, st, p, 'hostile')
     end
 end
 
@@ -742,44 +705,45 @@ local RESPONSE_TEXT = {
     fight = 'block.flee_arrest.response_fight',
 }
 
-local function reveal(ctx, st)
+local function Reveal(ctx, st)
     if st.knocked then return end
     st.knocked = true
     for _, p in pairs(st.peds) do
-        if p.state == 'idle' then applyResponse(ctx, st, p) end
+        if p.state == 'idle' then ApplyResponse(ctx, st, p) end
     end
     st.dirty = true
     ctx.hud({ message = { text = CP.L(RESPONSE_TEXT[st.response] or RESPONSE_TEXT.fight), kind = 'warning' } })
 end
 
-local function spawnDoorLoop(ctx, st)
+local function SpawnDoorLoop(ctx, st)
     local obj = ctx.obj
     local ok = true
     if st.counts.suspect < 1 then
         local armed = st.response == 'fight'
-        local point = pointList(ctx.location, obj.suspect)[1] or (ctx.location and ctx.location.start and ctx.location.start.coords)
+        local point = PointList(ctx.location, obj.suspect)[1]
+            or (ctx.location and ctx.location.start and ctx.location.start.coords)
         if point and ctx.canSpawn(1, armed) then
-            local fleeTo = U.serialize(pointList(ctx.location, obj.fleeTo))
-            local p = spawnOne(ctx, st, 'suspect', toVec4(point), armed, { fleePoints = fleeTo })
-            if p and st.knocked then applyResponse(ctx, st, p) end
+            local fleeTo = U.serialize(PointList(ctx.location, obj.fleeTo))
+            local p = SpawnOne(ctx, st, 'suspect', ToVec4(point), armed, { fleePoints = fleeTo })
+            if p and st.knocked then ApplyResponse(ctx, st, p) end
             ok = p ~= nil
         else
             ok = false
         end
     end
-    local want = assocTarget(ctx)
+    local want = AssocTarget(ctx)
     if ok and st.counts.associate < want then
-        local pts = pointList(ctx.location, obj.associates.spawns)
-        if #pts == 0 then pts = pointList(ctx.location, obj.suspect) end
+        local pts = PointList(ctx.location, obj.associates.spawns)
+        if #pts == 0 then pts = PointList(ctx.location, obj.suspect) end
         if #pts == 0 then
             ok = false
         else
-            if not st.assocOrder or #st.assocOrder ~= #pts then st.assocOrder = rngOf(ctx):shuffle(indices(#pts)) end
+            if not st.assocOrder or #st.assocOrder ~= #pts then st.assocOrder = RngOf(ctx):shuffle(Indices(#pts)) end
             while st.counts.associate < want do
                 if not ctx.canSpawn(1, true) then ok = false break end
-                local p = spawnOne(ctx, st, 'associate', placed(pts, st.assocOrder, st.counts.associate + 1), true, {})
+                local p = SpawnOne(ctx, st, 'associate', Placed(pts, st.assocOrder, st.counts.associate + 1), true, {})
                 if not p then ok = false break end
-                if st.knocked then applyResponse(ctx, st, p) end
+                if st.knocked then ApplyResponse(ctx, st, p) end
                 if st.stopped then ok = false break end
             end
         end
@@ -789,7 +753,7 @@ end
 
 -- The spawning flag (re-entry while ctx.spawnPed yields) is always cleared, even when a spawn
 -- throws, so one failed spawn can never stop the objective from spawning again on the next tick.
-local function guardedSpawn(ctx, st, loop)
+local function GuardedSpawn(ctx, st, loop)
     st.spawning = true
     local okCall, ok = pcall(loop, ctx, st)
     st.spawning = false
@@ -800,38 +764,44 @@ local function guardedSpawn(ctx, st, loop)
     return ok
 end
 
-local function spawnDoor(ctx, st)
+local function SpawnDoor(ctx, st)
     if st.spawning or st.stopped then return false end
-    if not st.response then st.response = rollResponse(ctx) end
-    return guardedSpawn(ctx, st, spawnDoorLoop)
+    if not st.response then st.response = RollResponse(ctx) end
+    return GuardedSpawn(ctx, st, SpawnDoorLoop)
 end
 
--- ── Scatter mode ────────────────────────────────────────────────────────────
-local spawnScatterLoop
+-- ============================================================================
+--                                 SCATTER MODE
+-- ============================================================================
 
-local function spawnScatter(ctx, st)
+local SpawnScatterLoop
+
+local function SpawnScatter(ctx, st)
     if st.spawning or st.stopped then return false end
     local obj = ctx.obj
-    local want = inmateTarget(ctx)
+    local want = InmateTarget(ctx)
     if st.counts.inmate >= want then return true end
-    local pts = outsideZones(pointList(ctx.location, obj.spawns))
+    local pts = OutsideZones(PointList(ctx.location, obj.spawns))
     if #pts == 0 then
         if not st.failed then
-            CP.warn(BLOCK, 'no spawn point outside the no-build zones at %s for run %s', tostring(obj.spawns), tostring(ctx.run and ctx.run.id))
+            CP.warn(BLOCK, 'no spawn point outside the no-build zones at %s for run %s', tostring(obj.spawns),
+                tostring(ctx.run and ctx.run.id))
             st.failed = true
             ctx.fail('block.flee_arrest.fail_setup')
         end
         return false
     end
-    local routes = routeList(ctx.location, obj.routes)
-    if not st.pointOrder or #st.pointOrder ~= #pts then st.pointOrder = rngOf(ctx):shuffle(indices(#pts)) end
-    if #routes > 0 and (not st.routeOrder or #st.routeOrder ~= #routes) then st.routeOrder = rngOf(ctx):shuffle(indices(#routes)) end
-    return guardedSpawn(ctx, st, function()
-        return spawnScatterLoop(ctx, st, want, pts, routes)
+    local routes = RouteList(ctx.location, obj.routes)
+    if not st.pointOrder or #st.pointOrder ~= #pts then st.pointOrder = RngOf(ctx):shuffle(Indices(#pts)) end
+    if #routes > 0 and (not st.routeOrder or #st.routeOrder ~= #routes) then
+        st.routeOrder = RngOf(ctx):shuffle(Indices(#routes))
+    end
+    return GuardedSpawn(ctx, st, function()
+        return SpawnScatterLoop(ctx, st, want, pts, routes)
     end)
 end
 
-spawnScatterLoop = function(ctx, st, want, pts, routes)
+SpawnScatterLoop = function(ctx, st, want, pts, routes)
     local share = tonumber(ctx.obj.armedShare) or 0
     local ok = true
     while st.counts.inmate < want do
@@ -839,27 +809,32 @@ spawnScatterLoop = function(ctx, st, want, pts, routes)
             -- exactly round(want × share) armed overall: the chance is the share still to place
             local armedLeft = math.max(0, U.round(want * share) - st.counts.armedInmates)
             local slotsLeft = want - st.counts.inmate
-            st.nextArmed = armedLeft > 0 and (armedLeft >= slotsLeft or rngOf(ctx):next() < armedLeft / slotsLeft)
+            st.nextArmed = armedLeft > 0 and (armedLeft >= slotsLeft or RngOf(ctx):next() < armedLeft / slotsLeft)
         end
         local armed = st.nextArmed
         if not ctx.canSpawn(1, armed) then ok = false break end
         local i = st.counts.inmate + 1
         local routeIdx = st.routeOrder and st.routeOrder[((i - 1) % #st.routeOrder) + 1] or nil
-        local p = spawnOne(ctx, st, 'inmate', placed(pts, st.pointOrder, i), armed, {
-            route = routeIdx, outfit = 'prison', fleePoints = routeIdx and U.serialize(routes[routeIdx]) or nil,
+        local p = SpawnOne(ctx, st, 'inmate', Placed(pts, st.pointOrder, i), armed, {
+            route = routeIdx,
+            outfit = 'prison',
+            fleePoints = routeIdx and U.serialize(routes[routeIdx]) or nil,
         })
         if not p then ok = false break end
         st.nextArmed = nil
         p.route = routeIdx
         if armed then st.counts.armedInmates = st.counts.armedInmates + 1 end
-        setPed(ctx, st, p, 'fleeing')
+        SetPed(ctx, st, p, 'fleeing')
         if st.stopped then ok = false break end
     end
     return ok
 end
 
--- ── Neutralising, cuffs, completion ─────────────────────────────────────────
-local function markCuffed(ctx, st, p)
+-- ============================================================================
+--                       NEUTRALISING, CUFFS, COMPLETION
+-- ============================================================================
+
+local function MarkCuffed(ctx, st, p)
     if p.state == 'cuffed' then return end
     p.state = 'cuffed'
     p.far, p.close = 0, 0
@@ -868,37 +843,37 @@ local function markCuffed(ctx, st, p)
         local ab = ctx.obj.aliveBonus
         -- aliveBonus.points is a mission-file value: only built-in files may value their own id with it
         -- (custom missions value a Config.Bonuses id through their capped bonuses list instead)
-        ctx.award(ab.id, { count = 1, points = trustedFile(ctx) and ab.points or nil })
+        ctx.award(ab.id, { count = 1, points = TrustedFile(ctx) and ab.points or nil })
     end
 end
 
-local function bagCuffed(p)
+local function BagCuffed(p)
     return CP.Npc.getState and CP.Npc.getState(p.netId) == 'cuffed'
 end
 
-local function totals(ctx, st)
+local function Totals(ctx, st)
     local total, done = 0, 0
     for _, p in pairs(st.peds) do
         total = total + 1
-        if neutralised(p) then done = done + 1 end
+        if Neutralised(p) then done = done + 1 end
     end
-    local want = st.mode == 'scatter' and inmateTarget(ctx) or (1 + assocTarget(ctx))
+    local want = st.mode == 'scatter' and InmateTarget(ctx) or (1 + AssocTarget(ctx))
     return done, math.max(total, want)
 end
 
-local function allSpawned(ctx, st)
-    if st.mode == 'scatter' then return st.counts.inmate >= inmateTarget(ctx) end
-    return st.counts.suspect >= 1 and st.counts.associate >= assocTarget(ctx)
+local function AllSpawned(ctx, st)
+    if st.mode == 'scatter' then return st.counts.inmate >= InmateTarget(ctx) end
+    return st.counts.suspect >= 1 and st.counts.associate >= AssocTarget(ctx)
 end
 
-local function tryComplete(ctx, st)
+local function TryComplete(ctx, st)
     if st.completed or st.failed or st.stopped then return end
     if st.mode == 'door' and not st.knocked then return end
-    if not allSpawned(ctx, st) then return end
+    if not AllSpawned(ctx, st) then return end
     for _, p in pairs(st.peds) do
-        if not neutralised(p) then return end
+        if not Neutralised(p) then return end
     end
-    local done, total = totals(ctx, st)
+    local done, total = Totals(ctx, st)
     local arrested = 0
     for _, p in pairs(st.peds) do
         if p.state == 'cuffed' then arrested = arrested + 1 end
@@ -908,32 +883,32 @@ local function tryComplete(ctx, st)
     end
 end
 
-local function fail(ctx, st, key)
+local function Fail(ctx, st, key)
     if st.failed then return end
     st.failed = true
     ctx.fail(key)
 end
 
 -- Every tick: escapes, the close rule, armed give-ups and fire range, vanished NPCs, missed cuffs.
-local function watch(ctx, st, dt)
+local function Watch(ctx, st, dt)
     local obj = ctx.obj
-    local list = party(ctx)
+    local list = Party(ctx)
     local esc, gu, ag = obj.escape, obj.givesUp, obj.armedGivesUp
     local worst = 0
     for _, p in pairs(st.peds) do
-        if not neutralised(p) then
-            if p.state == 'surrendered' and bagCuffed(p) then
-                markCuffed(ctx, st, p)
+        if not Neutralised(p) then
+            if p.state == 'surrendered' and BagCuffed(p) then
+                MarkCuffed(ctx, st, p)
             elseif not p.entity or not DoesEntityExist(p.entity) then
                 p.state = 'dead'
                 st.dirty = true
             else
-                local near = nearestOf(list, GetEntityCoords(p.entity))
+                local near = NearestOf(list, GetEntityCoords(p.entity))
                 local moving = p.state == 'fleeing' or p.state == 'hostile'
                 if p.role ~= 'associate' and moving and #list > 0 and near > esc.distance then
                     p.far = (p.far or 0) + dt
                     if p.far >= esc.seconds then
-                        fail(ctx, st, 'block.flee_arrest.fail_escaped')
+                        Fail(ctx, st, 'block.flee_arrest.fail_escaped')
                         return
                     end
                     if p.far > worst then worst = p.far end
@@ -943,20 +918,20 @@ local function watch(ctx, st, dt)
                 if not p.armed and p.state == 'fleeing' and type(gu.close) == 'table' then
                     if near <= gu.close.distance then
                         p.close = (p.close or 0) + dt
-                        if p.close >= gu.close.seconds then surrenderPed(ctx, st, p) end
+                        if p.close >= gu.close.seconds then SurrenderPed(ctx, st, p) end
                     else
                         p.close = 0
                     end
                 end
                 if p.armed and moving then
-                    local ratio = ag.belowHealth and healthRatio(p) or nil
+                    local ratio = ag.belowHealth and HealthRatio(p) or nil
                     if ratio and ratio > 0 and ratio < ag.belowHealth then
-                        surrenderPed(ctx, st, p)
+                        SurrenderPed(ctx, st, p)
                     elseif p.role == 'inmate' then
                         if p.state == 'fleeing' and near <= obj.fireWithin then
-                            setPed(ctx, st, p, 'hostile')
+                            SetPed(ctx, st, p, 'hostile')
                         elseif p.state == 'hostile' and near > obj.fireWithin * FIRE_RELEASE then
-                            setPed(ctx, st, p, 'fleeing')
+                            SetPed(ctx, st, p, 'fleeing')
                         end
                     end
                 end
@@ -970,9 +945,12 @@ local function watch(ctx, st, dt)
     end
 end
 
--- ── HUD and client updates ──────────────────────────────────────────────────
-local function updateHud(ctx, st)
-    local done, total = totals(ctx, st)
+-- ============================================================================
+--                            HUD AND CLIENT UPDATES
+-- ============================================================================
+
+local function UpdateHud(ctx, st)
+    local done, total = Totals(ctx, st)
     local text
     if st.escaping then
         text = CP.L('block.flee_arrest.escaping', { seconds = st.escaping })
@@ -989,7 +967,7 @@ local function updateHud(ctx, st)
     end
 end
 
-local function flush(ctx, st)
+local function Flush(ctx, st)
     if st.dirty then
         st.dirty = false
         local list = {}
@@ -998,45 +976,52 @@ local function flush(ctx, st)
         end
         table.sort(list, function(a, b) return a.netId < b.netId end)
         ctx.send({
-            peds = list, mode = st.mode, knocked = st.knocked == true, escaping = st.escaping,
+            peds = list,
+            mode = st.mode,
+            knocked = st.knocked == true,
+            escaping = st.escaping,
             response = st.knocked and st.response or nil,
         })
     end
-    updateHud(ctx, st)
+    UpdateHud(ctx, st)
 end
 
--- ── Evidence ────────────────────────────────────────────────────────────────
-local function knockEvent(ctx, st, src, t)
+-- ============================================================================
+--                                   EVIDENCE
+-- ============================================================================
+
+local function KnockEvent(ctx, st, src, t)
     if st.mode ~= 'door' then return false, 'wrong_mode' end
     if st.knocked then return false, 'duplicate' end
-    local door = pointList(ctx.location, ctx.obj.door)[1]
+    local door = PointList(ctx.location, ctx.obj.door)[1]
     local sc = ctx.coords(src)
     if not door or not sc or U.dist(sc, door) > KNOCK_RANGE + REACH_SLACK then return false, 'too_far' end
     local sk = tostring(src)
     if t == 'knock_start' then
-        st.knockStart[sk] = now()
+        st.knockStart[sk] = Now()
         return true
     end
     local started = st.knockStart[sk]
     if not started then return false, 'not_started' end
-    if now() - started < (tonumber(ctx.obj.knock.duration) or 0) * TIMED_SHARE then return false, 'too_fast' end
-    reveal(ctx, st)
+    if Now() - started < (tonumber(ctx.obj.knock.duration) or 0) * TIMED_SHARE then return false, 'too_fast' end
+    Reveal(ctx, st)
     return true
 end
 
-local function moving(p) return p.state == 'fleeing' or p.state == 'hostile' end
+local function Moving(p) return p.state == 'fleeing' or p.state == 'hostile' end
 
-local function onEvent(ctx, src, ev)
-    local st = stateOf(ctx)
+local function OnEvent(ctx, src, ev)
+    local st = StateOf(ctx)
     if type(ev) ~= 'table' then return false, 'bad_event' end
     local t = ev.type
     local ok, why
     if t == 'knock_start' or t == 'knock' then
-        ok, why = knockEvent(ctx, st, src, t)
+        ok, why = KnockEvent(ctx, st, src, t)
     else
         local netId = tonumber(ev.netId)
         local p = netId and st.peds[tostring(netId)] or nil
-        local known = t == 'aim' or t == 'stunned' or t == 'low_health' or t == 'cuffed' or t == 'shot' or t == 'damaged'
+        local known = t == 'aim' or t == 'stunned' or t == 'low_health' or t == 'cuffed' or t == 'shot'
+            or t == 'damaged'
         if not p then return false, known and 'unknown_entity' or 'unknown_event' end
         if t == 'aim' then
             local gu = ctx.obj.givesUp
@@ -1044,89 +1029,93 @@ local function onEvent(ctx, src, ev)
             if p.state == 'surrendered' or p.state == 'cuffed' then return false, 'duplicate' end
             if p.state ~= 'fleeing' then return false, 'wrong_state' end
             if not gu.aim then return false, 'disabled' end
-            local pc, sc = pedCoords(p), ctx.coords(src)
+            local pc, sc = PedCoords(p), ctx.coords(src)
             if not pc or not sc or U.dist(pc, sc) > gu.aim + REACH_SLACK then return false, 'too_far' end
-            if not holdsWeapon(src) then return false, 'no_weapon' end
-            surrenderPed(ctx, st, p)
+            if not HoldsWeapon(src) then return false, 'no_weapon' end
+            SurrenderPed(ctx, st, p)
             ok = true
         elseif t == 'stunned' then
             if p.state == 'surrendered' or p.state == 'cuffed' then return false, 'duplicate' end
-            if not moving(p) then return false, 'wrong_state' end
+            if not Moving(p) then return false, 'wrong_state' end
             local allowed
             if p.armed then allowed = ctx.obj.armedGivesUp.stun == true else allowed = ctx.obj.givesUp.stun == true end
             if not allowed then return false, 'disabled' end
-            local pc, sc = pedCoords(p), ctx.coords(src)
+            local pc, sc = PedCoords(p), ctx.coords(src)
             if not pc or not sc or U.dist(pc, sc) > STUN_REPORT_RANGE then return false, 'too_far' end
-            if nearestOf(party(ctx), pc) > STUN_RANGE then return false, 'too_far' end
-            surrenderPed(ctx, st, p)
+            if NearestOf(Party(ctx), pc) > STUN_RANGE then return false, 'too_far' end
+            SurrenderPed(ctx, st, p)
             ok = true
         elseif t == 'low_health' then
             if not p.armed then return false, 'unarmed' end
             if p.state == 'surrendered' or p.state == 'cuffed' then return false, 'duplicate' end
-            if not moving(p) then return false, 'wrong_state' end
+            if not Moving(p) then return false, 'wrong_state' end
             local below = ctx.obj.armedGivesUp.belowHealth
             if not below then return false, 'disabled' end
-            local ratio = healthRatio(p)
+            local ratio = HealthRatio(p)
             if not ratio or ratio <= 0 or ratio >= below then return false, 'health_ok' end
-            surrenderPed(ctx, st, p)
+            SurrenderPed(ctx, st, p)
             ok = true
         elseif t == 'cuffed' then
             if p.state == 'cuffed' then return false, 'duplicate' end
             if p.state ~= 'surrendered' then return false, 'wrong_state' end
-            if not bagCuffed(p) then return false, 'not_cuffed' end
-            local pc, sc = pedCoords(p), ctx.coords(src)
-            if not pc or not sc or U.dist(pc, sc) > (tonumber(ctx.obj.cuff.maxDistance) or CUFF_RANGE) + REACH_SLACK then
+            if not BagCuffed(p) then return false, 'not_cuffed' end
+            local pc, sc = PedCoords(p), ctx.coords(src)
+            if not pc or not sc
+                or U.dist(pc, sc) > (tonumber(ctx.obj.cuff.maxDistance) or CUFF_RANGE) + REACH_SLACK then
                 return false, 'too_far'
             end
-            markCuffed(ctx, st, p)
+            MarkCuffed(ctx, st, p)
             ok = true
         elseif t == 'shot' then
             ok = true
         elseif t == 'damaged' then
             local below = ctx.obj.armedGivesUp.belowHealth
-            if p.armed and moving(p) and below then
-                local ratio = healthRatio(p)
-                if ratio and ratio > 0 and ratio < below then surrenderPed(ctx, st, p) end
+            if p.armed and Moving(p) and below then
+                local ratio = HealthRatio(p)
+                if ratio and ratio > 0 and ratio < below then SurrenderPed(ctx, st, p) end
             end
             ok = true
         else
             return false, 'unknown_event'
         end
     end
-    tryComplete(ctx, st)
-    flush(ctx, st)
+    TryComplete(ctx, st)
+    Flush(ctx, st)
     return ok, why
 end
 
--- ── Hooks ───────────────────────────────────────────────────────────────────
-local function spawn(ctx, st)
-    if st.mode == 'scatter' then return spawnScatter(ctx, st) end
-    return spawnDoor(ctx, st)
+-- ============================================================================
+--                                    HOOKS
+-- ============================================================================
+
+local function Spawn(ctx, st)
+    if st.mode == 'scatter' then return SpawnScatter(ctx, st) end
+    return SpawnDoor(ctx, st)
 end
 
-local function start(ctx)
-    local st = stateOf(ctx)
+local function Start(ctx)
+    local st = StateOf(ctx)
     st.stopped = nil
-    spawn(ctx, st)
+    Spawn(ctx, st)
     st.dirty = true
-    flush(ctx, st)
+    Flush(ctx, st)
 end
 
-local function tick(ctx, dt)
-    local st = stateOf(ctx)
+local function Tick(ctx, dt)
+    local st = StateOf(ctx)
     if st.stopped or st.failed then return end
     if not st.completed then
-        spawn(ctx, st)
+        Spawn(ctx, st)
         if st.failed then return end
-        watch(ctx, st, tonumber(dt) or 1)
+        Watch(ctx, st, tonumber(dt) or 1)
         if st.failed then return end
     end
-    tryComplete(ctx, st)
-    flush(ctx, st)
+    TryComplete(ctx, st)
+    Flush(ctx, st)
 end
 
-local function onEntityDead(ctx, netId, killerSrc)
-    local st = stateOf(ctx)
+local function OnEntityDead(ctx, netId, killerSrc)
+    local st = StateOf(ctx)
     local p = st.peds[tostring(netId)]
     if not p or p.state == 'dead' then return end
     local prev = p.state
@@ -1136,27 +1125,27 @@ local function onEntityDead(ctx, netId, killerSrc)
     if prev == 'cuffed' then
         protected = true
     elseif prev == 'surrendered' then
-        protected = not (p.armed and p.surrenderedAt and now() - p.surrenderedAt < SURRENDER_GRACE_MS)
+        protected = not (p.armed and p.surrenderedAt and Now() - p.surrenderedAt < SURRENDER_GRACE_MS)
     else
         protected = not p.armed
     end
-    if protected and isParticipant(ctx, killerSrc) then
-        fail(ctx, st, 'run.fail_killed_unarmed')
+    if protected and IsParticipant(ctx, killerSrc) then
+        Fail(ctx, st, 'run.fail_killed_unarmed')
         return
     end
-    if st.mode == 'door' and not st.knocked then reveal(ctx, st) end
-    tryComplete(ctx, st)
-    flush(ctx, st)
+    if st.mode == 'door' and not st.knocked then Reveal(ctx, st) end
+    TryComplete(ctx, st)
+    Flush(ctx, st)
 end
 
-local function presence(ctx, src, coords)
-    local st = stateOf(ctx)
+local function Presence(ctx, src, coords)
+    local st = StateOf(ctx)
     coords = coords or ctx.coords(src)
     if not coords then return math.huge end
     local best = math.huge
     for _, p in pairs(st.peds) do
-        if not neutralised(p) then
-            local c = pedCoords(p)
+        if not Neutralised(p) then
+            local c = PedCoords(p)
             if c then
                 local d = U.dist(coords, c)
                 if d < best then best = d end
@@ -1164,74 +1153,96 @@ local function presence(ctx, src, coords)
         end
     end
     if best == math.huge then
-        local ref = (st.mode == 'door' and pointList(ctx.location, ctx.obj.door)[1])
+        local ref = (st.mode == 'door' and PointList(ctx.location, ctx.obj.door)[1])
             or (ctx.location and ctx.location.start and ctx.location.start.coords)
         best = ref and U.dist(coords, ref) or 0
     end
     return best
 end
 
-local function checklist(ctx)
-    local st = stateOf(ctx)
+local function Checklist(ctx)
+    local st = StateOf(ctx)
     if st.mode == 'scatter' then
-        local done, total = totals(ctx, st)
-        return { { label = CP.L('block.flee_arrest.check_scatter'), done = total > 0 and done >= total and allSpawned(ctx, st), value = done, max = total } }
+        local done, total = Totals(ctx, st)
+        return {
+            {
+                label = CP.L('block.flee_arrest.check_scatter'),
+                done = total > 0 and done >= total and AllSpawned(ctx, st),
+                value = done,
+                max = total,
+            },
+        }
     end
     local suspectDone, assocDone = false, 0
     for _, p in pairs(st.peds) do
-        if p.role == 'suspect' and neutralised(p) then suspectDone = true end
-        if p.role == 'associate' and neutralised(p) then assocDone = assocDone + 1 end
+        if p.role == 'suspect' and Neutralised(p) then suspectDone = true end
+        if p.role == 'associate' and Neutralised(p) then assocDone = assocDone + 1 end
     end
     local list = {
-        { label = CP.L('block.flee_arrest.check_knock'), done = st.knocked == true, value = st.knocked and 1 or 0, max = 1 },
-        { label = CP.L('block.flee_arrest.check_suspect'), done = suspectDone, value = suspectDone and 1 or 0, max = 1 },
+        {
+            label = CP.L('block.flee_arrest.check_knock'),
+            done = st.knocked == true,
+            value = st.knocked and 1 or 0,
+            max = 1,
+        },
+        {
+            label = CP.L('block.flee_arrest.check_suspect'),
+            done = suspectDone,
+            value = suspectDone and 1 or 0,
+            max = 1,
+        },
     }
-    local want = math.max(assocTarget(ctx), st.counts.associate)
+    local want = math.max(AssocTarget(ctx), st.counts.associate)
     if want > 0 then
-        list[#list + 1] = { label = CP.L('block.flee_arrest.check_associates'), done = assocDone >= want, value = assocDone, max = want }
+        list[#list + 1] = {
+            label = CP.L('block.flee_arrest.check_associates'),
+            done = assocDone >= want,
+            value = assocDone,
+            max = want,
+        }
     end
     return list
 end
 
-local function restart(ctx)
-    local st = stateOf(ctx)
+local function Restart(ctx)
+    local st = StateOf(ctx)
     for _, p in pairs(st.peds) do ctx.delete(p.netId) end
     local keep = st.rng
     for k in pairs(st) do st[k] = nil end
     st.rng = keep
-    start(ctx)
+    Start(ctx)
 end
 
-local function rescale(ctx)
-    local st = stateOf(ctx)
+local function Rescale(ctx)
+    local st = StateOf(ctx)
     st.dirty = true
-    flush(ctx, st)
+    Flush(ctx, st)
 end
 
-local function stop(ctx)
-    local st = stateOf(ctx)
+local function Stop(ctx)
+    local st = StateOf(ctx)
     st.stopped = true
 end
 
 CP.Blocks.register(BLOCK, {
-    defaults = defaults,
-    validate = validate,
-    armedCount = armedCount,
-    requiredPoints = requiredPoints,
-    prepare = function(ctx) stateOf(ctx) end,
-    start = start,
-    tick = tick,
-    onEvent = onEvent,
-    onEntityDead = onEntityDead,
+    defaults = Defaults,
+    validate = Validate,
+    armedCount = ArmedCount,
+    requiredPoints = RequiredPoints,
+    prepare = function(ctx) StateOf(ctx) end,
+    start = Start,
+    tick = Tick,
+    onEvent = OnEvent,
+    onEntityDead = OnEntityDead,
     onParticipantLeft = function(ctx, src)
-        local st = stateOf(ctx)
+        local st = StateOf(ctx)
         st.knockStart[tostring(src)] = nil
-        flush(ctx, st)
+        Flush(ctx, st)
     end,
-    rescale = rescale,
+    rescale = Rescale,
     onTimeout = function() return nil end,
-    presence = presence,
-    checklist = checklist,
-    restart = restart,
-    stop = stop,
+    presence = Presence,
+    checklist = Checklist,
+    restart = Restart,
+    stop = Stop,
 })

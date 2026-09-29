@@ -1,53 +1,4 @@
--- modules/missions/server.lua · CP.Missions: the mission registry (loader, normaliser, validator).
---
--- Owns
---   * loading missions/builtin/index.lua (a Lua file that returns a list of ids) and every
---     missions/builtin/<id>.lua with LoadResourceFile, each run in a sandbox whose only globals are
---     RegisterMission, vec3, vec4, vector3, vector4, math, string, table (copies), pairs, ipairs,
---     tonumber, tostring and type; exactly one RegisterMission({ ... }) call per file
---   * custom missions from CP.Builder.loadPublished() (the builder owns their files and DB rows)
---   * normalising every definition (defaults from the block's defaults(), minSeconds per block,
---     presenceRange = Config.Blocks[block].presenceRange[3]) and validating it (generic checks + the
---     block's validate(obj, mission, location) for every location); invalid missions are rejected
---     with a console warning, the rest load. Payout fields in a file are ignored with a warning.
---   * loader fields: source, version (custom), filePath, defHash (CP.U.hashHex of the file content),
---     editedInCode, isBoss (weekly_boss_kingpin), status
---   * sending the definitions to clients: crimson-police:client:missions (full list, vectors as
---     { x, y, z[, w] }) after every load/change, and the getMissionDefs callback for joining players
---
--- Public API (server)
---   CP.Missions.loadAll() -> summary          summary = { loaded, builtin, custom, failed = { { id, file, error } }, warnings }
---   CP.Missions.reload() -> summary           CP.Builder.onReload() (hand edits) first, then loadAll(); summary.builder
---   CP.Missions.get(id) -> def|nil
---   CP.Missions.all() -> { [id] = def }       (a copy of the map; the defs are shared, do not mutate them)
---   CP.Missions.list() -> { def, ... }        sorted by id
---   CP.Missions.byType(missionType) -> list   sorted by id, never the Weekly Boss
---   CP.Missions.isEnabled(id) -> boolean      loaded, status 'published', not in Config.DisabledMissions
---   CP.Missions.normalize(def, meta) -> def|nil, err   pure; meta = { source, version, filePath, defHash, editedInCode, status }
---   CP.Missions.parse(luaSource, chunkName) -> def|nil, err   one file's source in the loader sandbox (raw def)
---   CP.Missions.serializeForClient(def) -> table
---   CP.Missions.register(def) -> def|nil, err  publish/restore without a reload (loader fields read from def;
---                                              always source = 'custom')
---   CP.Missions.unregister(id) -> boolean      archive without a reload (custom missions only)
--- Net
---   callback 'getMissionDefs' -> list of serialized definitions (err.not_ready before the first load)
---   action 'server:admin:reloadMissions' (permission reloadMissions) -> summary
---   event 'crimson-police:client:missions' (list) to every client after each load / register / unregister
---       (sent with TriggerLatentClientEvent: the list is tens of kB)
---
--- Contract interpretations (details in docs/notes/engine_a.md)
---   * CP.Builder.loadPublished() entries: a definition with loader fields, { def, meta }, or meta only
---     ({ id, filePath, version }) whose file is read here; if the hook throws, loaded custom missions stay
---   * reload(): CP.Builder.onReload() first, then loadAll()
---   * design rules the builder enforces for custom missions (location count and gap, armed budget,
---     maxBlocks) are warnings here; playability rules reject the mission
---   * validation reasons are English developer-facing text (console, builder), not locale keys
---   * the loader fields (source, isBoss, status, version, filePath) are set BEFORE the blocks' validate()
---     runs, because the blocks exempt built-in missions (mission.source == 'builtin') from the builder's
---     allowed model/weapon lists
---   * docs/CRIMSON_ARENA.md: a mission is rejected when an item is named armour, bandage, ammo-* or
---     weapon_* (rule 4), or when any point of a location lies inside a Config.Builder.noBuildZones zone
---     (rule 7; 2D distance, as the blocks and the builder measure it)
+-- CP.Missions: the mission registry (loader, normaliser, validator).
 
 CP.Missions = CP.Missions or {}
 local Missions = CP.Missions
@@ -60,15 +11,30 @@ local LATENT_BPS = 200000  -- bytes per second for the definitions broadcast (la
 
 -- ARCHITECTURE §3.3: default minimum believable seconds per block.
 local DEFAULT_MIN_SECONDS = {
-    checkpoint_route = 20, interact_points = 5, skill_check = 10, hostile_waves = 60,
-    protect_rescue = 15, flee_arrest = 30, pursuit = 30, escort = 60, search_area = 60,
+    checkpoint_route = 20,
+    interact_points = 5,
+    skill_check = 10,
+    hostile_waves = 60,
+    protect_rescue = 15,
+    flee_arrest = 30,
+    pursuit = 30,
+    escort = 60,
+    search_area = 60,
 }
 -- Built-in missions ship with 5+ locations, these with 3+ (Mission catalog design rules).
 local THREE_LOCATIONS_OK = { armored_truck_escort = true, evoc_course = true, weekly_boss_kingpin = true }
 -- Fields only the loader sets; a file that sets them is overridden.
 local LOADER_FIELDS = { 'source', 'version', 'filePath', 'defHash', 'editedInCode', 'isBoss', 'status' }
 -- Top-level names treated as a hand-added payout (besides anything containing "payout").
-local PAYOUT_NAMES = { cash = true, cashbase = true, basepay = true, money = true, pay = true, reward = true, rewards = true }
+local PAYOUT_NAMES = {
+    cash = true,
+    cashbase = true,
+    basepay = true,
+    money = true,
+    pay = true,
+    reward = true,
+    rewards = true,
+}
 
 local defs = {}            -- id -> normalised definition
 local loadedOnce = false
@@ -76,14 +42,17 @@ local loading = false
 local lastSummary = nil
 local clientList = {}      -- serialized definitions for clients, rebuilt on every change
 
--- ── small helpers ───────────────────────────────────────────────────────────
-local function isVec(v)
+-- ============================================================================
+--                                SMALL HELPERS
+-- ============================================================================
+
+local function IsVec(v)
     local t = type(v)
     if t == 'vector3' or t == 'vector4' then return true end
     return t == 'table' and type(v.x) == 'number' and type(v.y) == 'number' and type(v.z) == 'number'
 end
 
-local function isList(t)
+local function IsList(t)
     if type(t) ~= 'table' then return false end
     local n = #t
     for k in pairs(t) do
@@ -92,24 +61,24 @@ local function isList(t)
     return true
 end
 
-local function isInt(v)
+local function IsInt(v)
     return type(v) == 'number' and v == math.floor(v)
 end
 
-local function isPayoutField(k)
+local function IsPayoutField(k)
     if type(k) ~= 'string' then return false end
     local lower = k:lower()
     return lower:find('payout', 1, true) ~= nil or PAYOUT_NAMES[lower] == true
 end
 
-local function copyLib(lib)
+local function CopyLib(lib)
     local out = {}
     for k, v in pairs(lib) do out[k] = v end
     return out
 end
 
 -- Canonical text of a value (sorted keys) for a stable hash when there is no file content.
-local function canonical(v, out)
+local function Canonical(v, out)
     local t = type(v)
     if t == 'vector3' or t == 'vector4' or t == 'vector2' then v = CP.U.vecToTable(v); t = 'table' end
     if t ~= 'table' then
@@ -125,19 +94,19 @@ local function canonical(v, out)
     out[#out + 1] = '{'
     for _, k in ipairs(keys) do
         out[#out + 1] = tostring(k) .. '='
-        canonical(v[k], out)
+        Canonical(v[k], out)
         out[#out + 1] = ','
     end
     out[#out + 1] = '}'
 end
 
-local function stableHash(def)
+local function StableHash(def)
     local out = {}
-    canonical(def, out)
+    Canonical(def, out)
     return CP.U.hashHex(table.concat(out))
 end
 
-local function blockPresenceDefault(blockId)
+local function BlockPresenceDefault(blockId)
     local cfg = Config.Blocks and Config.Blocks[blockId]
     local range = cfg and cfg.presenceRange
     if type(range) == 'table' and tonumber(range[3]) then return tonumber(range[3]) end
@@ -146,12 +115,12 @@ end
 
 -- The first vector inside v (recursively) that lies in a Config.Builder.noBuildZones zone (2D, like the
 -- blocks and the builder): returns zone, path. nil when every point is outside.
-local function pointInNoBuildZone(v, path, depth)
+local function PointInNoBuildZone(v, path, depth)
     depth = depth or 0
     if depth > 12 then return nil end
     local zones = Config.Builder and Config.Builder.noBuildZones
     if type(zones) ~= 'table' or #zones == 0 then return nil end
-    if isVec(v) then
+    if IsVec(v) then
         for _, z in ipairs(zones) do
             if z.coords and CP.U.dist2d(v, z.coords) <= (tonumber(z.radius) or 0) then return z, path end
         end
@@ -159,30 +128,41 @@ local function pointInNoBuildZone(v, path, depth)
     end
     if type(v) ~= 'table' then return nil end
     for k, x in pairs(v) do
-        if type(x) == 'table' or isVec(x) then
-            local z, where = pointInNoBuildZone(x, path .. '.' .. tostring(k), depth + 1)
+        if type(x) == 'table' or IsVec(x) then
+            local z, where = PointInNoBuildZone(x, path .. '.' .. tostring(k), depth + 1)
             if z then return z, where end
         end
     end
     return nil
 end
 
-local function detailDefault(name, fallback)
+local function DetailDefault(name, fallback)
     local d = Config.Blocks and Config.Blocks.details and Config.Blocks.details[name]
     if type(d) == 'table' and tonumber(d[3]) then return tonumber(d[3]) end
     return fallback
 end
 
--- ── sandbox ─────────────────────────────────────────────────────────────────
+-- ============================================================================
+--                                   SANDBOX
+-- ============================================================================
 -- Runs one mission file and returns the table passed to its single RegisterMission call.
-local function runMissionFile(content, chunkName)
+local function RunMissionFile(content, chunkName)
     if type(content) ~= 'string' or content == '' then return nil, 'the file is empty' end
     local collected = {}
     local env = {
         RegisterMission = function(def) collected[#collected + 1] = def end,
-        vec3 = vec3 or vector3, vec4 = vec4 or vector4, vector3 = vector3, vector4 = vector4,
-        math = copyLib(math), string = copyLib(string), table = copyLib(table),
-        pairs = pairs, ipairs = ipairs, tonumber = tonumber, tostring = tostring, type = type,
+        vec3 = vec3 or vector3,
+        vec4 = vec4 or vector4,
+        vector3 = vector3,
+        vector4 = vector4,
+        math = CopyLib(math),
+        string = CopyLib(string),
+        table = CopyLib(table),
+        pairs = pairs,
+        ipairs = ipairs,
+        tonumber = tonumber,
+        tostring = tostring,
+        type = type,
     }
     local chunk, err = load(content, '@' .. chunkName, 't', env)
     if not chunk then return nil, 'syntax error: ' .. tostring(err) end
@@ -202,10 +182,10 @@ end
 function Missions.parse(luaSource, chunkName)
     local name = tostring(chunkName or 'mission')
     if name:sub(1, 1) == '@' then name = name:sub(2) end
-    return runMissionFile(luaSource, name)
+    return RunMissionFile(luaSource, name)
 end
 
-local function readIndex()
+local function ReadIndex()
     local content = LoadResourceFile(CP.resource, INDEX_FILE)
     if not content or content == '' then
         return nil, INDEX_FILE .. ' was not found; no built-in missions are loaded'
@@ -229,18 +209,21 @@ local function readIndex()
     return ids
 end
 
--- ── normalise and validate ──────────────────────────────────────────────────
-local function checkRange(v, lo, hi)
+-- ============================================================================
+--                            NORMALISE AND VALIDATE
+-- ============================================================================
+
+local function CheckRange(v, lo, hi)
     return type(v) == 'number' and v >= lo and v <= hi
 end
 
-local function normalizeStart(loc, i, warn)
+local function NormalizeStart(loc, i, warn)
     local start = loc.start
-    if isVec(start) then
+    if IsVec(start) then
         warn(('location %d: start should be { coords = vec3, radius = n }; using radius 50'):format(i))
         start = { coords = start, radius = 50.0 }
     end
-    if type(start) ~= 'table' or not isVec(start.coords) then
+    if type(start) ~= 'table' or not IsVec(start.coords) then
         return nil, ('location %d has no start = { coords = vec3(...), radius = n }'):format(i)
     end
     if start.radius == nil then
@@ -254,10 +237,10 @@ local function normalizeStart(loc, i, warn)
     return true
 end
 
-local function normalizeEntries(list, field, warn)
+local function NormalizeEntries(list, field, warn)
     local out = {}
     if list == nil then return out end
-    if not isList(list) then
+    if not IsList(list) then
         warn(field .. ' must be a list; ignored')
         return out
     end
@@ -267,12 +250,19 @@ local function normalizeEntries(list, field, warn)
         else
             local known = Config.Bonuses and Config.Bonuses[e.id]
             local hasValue = type(e.points) == 'number' or type(e.pctOfPoints) == 'number'
-            if (e.points ~= nil and type(e.points) ~= 'number') or (e.pctOfPoints ~= nil and type(e.pctOfPoints) ~= 'number') then
+            if (e.points ~= nil and type(e.points) ~= 'number')
+                or (e.pctOfPoints ~= nil and type(e.pctOfPoints) ~= 'number') then
                 warn(('%s entry %s: points and pctOfPoints must be numbers; ignored'):format(field, e.id))
             elseif not known and not hasValue then
-                warn(('%s entry %s is not in Config.Bonuses and has no points/pctOfPoints; ignored'):format(field, e.id))
+                warn(
+                    ('%s entry %s is not in Config.Bonuses and has no points/pctOfPoints; ignored'):format(field, e.id))
             else
-                out[#out + 1] = { id = e.id, points = e.points, pctOfPoints = e.pctOfPoints, each = e.each == true or nil }
+                out[#out + 1] = {
+                    id = e.id,
+                    points = e.points,
+                    pctOfPoints = e.pctOfPoints,
+                    each = e.each == true or nil,
+                }
                 for k, v in pairs(e) do
                     if out[#out][k] == nil and k ~= 'each' then out[#out][k] = v end
                 end
@@ -284,24 +274,26 @@ end
 
 -- docs/CRIMSON_ARENA.md rule 4: Crimson-Arena takes items with these names from players it believes
 -- owe them, so a mission may never hand them out (and weapons are never mission items).
-local function forbiddenItem(name)
+local function ForbiddenItem(name)
     local lower = name:lower()
     return lower == 'armour' or lower == 'bandage' or lower:sub(1, 5) == 'ammo-' or lower:sub(1, 7) == 'weapon_'
 end
 
 -- Returns the item list, or nil and a reason when a forbidden item name is used.
-local function normalizeItems(list, warn)
+local function NormalizeItems(list, warn)
     local out = {}
     if list == nil then return out end
-    if not isList(list) then
+    if not IsList(list) then
         warn('items must be a list; ignored')
         return out
     end
     for i, it in ipairs(list) do
         if type(it) ~= 'table' or type(it.name) ~= 'string' or it.name == '' then
             warn(('items entry %d has no name; ignored'):format(i))
-        elseif forbiddenItem(it.name) then
-            return nil, ('items entry %d: "%s" can never be a mission item (armour, bandage, ammo-* and weapons are not allowed)'):format(i, it.name)
+        elseif ForbiddenItem(it.name) then
+            return nil,
+                ('items entry %d: "%s" can never be a mission item (armour, bandage, ammo-* and weapons are not allowed)'):format(
+                    i, it.name)
         else
             local count = tonumber(it.count) or 1
             if count < 1 then count = 1 end
@@ -311,7 +303,7 @@ local function normalizeItems(list, warn)
     return out
 end
 
-local function entryPath(entry)
+local function EntryPath(entry)
     if CP.Scaling and CP.Scaling._entryPath then return CP.Scaling._entryPath(entry) end
     local path = type(entry) == 'string' and entry or (type(entry) == 'table' and entry.path)
     if type(path) ~= 'string' then return nil end
@@ -321,34 +313,38 @@ local function entryPath(entry)
     return path, type(entry) == 'table' and tonumber(entry.max) or nil
 end
 
-local function isScalable(v)
+local function IsScalable(v)
     if CP.Scaling and CP.Scaling._isScalable then return CP.Scaling._isScalable(v) end
     if type(v) == 'number' then return true end
-    if not isList(v) or #v == 0 then return false end
+    if not IsList(v) or #v == 0 then return false end
     for _, x in ipairs(v) do if type(x) ~= 'number' then return false end end
     return true
 end
 
-local function normalizeScaling(d, warn)
+local function NormalizeScaling(d, warn)
     local out = {}
     if d.scaling == nil then return out end
-    if not isList(d.scaling) then
+    if not IsList(d.scaling) then
         warn('scaling must be a list of paths; ignored')
         return out
     end
     for i, entry in ipairs(d.scaling) do
-        local path, max = entryPath(entry)
+        local path, max = EntryPath(entry)
         if not path then
             warn(('scaling entry %d is not a path like objectives.1.waves; ignored'):format(i))
         else
             local value = CP.U.getPath(d.objectives, path)
-            if not isScalable(value) then
+            if not IsScalable(value) then
                 warn(('scaling objectives.%s is not a number or a list of numbers; ignored'):format(path))
             else
                 if max then
                     local values = type(value) == 'number' and { value } or value
                     for _, v in ipairs(values) do
-                        if v > max then warn(('scaling objectives.%s: base %s is above its max %s'):format(path, tostring(v), tostring(max))) break end
+                        if v > max then
+                            warn(('scaling objectives.%s: base %s is above its max %s'):format(path, tostring(v),
+                                tostring(max)))
+                            break
+                        end
                     end
                     out[#out + 1] = { path = 'objectives.' .. path, max = max }
                 else
@@ -374,7 +370,7 @@ function Missions.normalize(def, meta)
 
     for _, k in ipairs(LOADER_FIELDS) do d[k] = nil end
     for _, k in ipairs(CP.U.keys(d)) do
-        if isPayoutField(k) then
+        if IsPayoutField(k) then
             warn(('field "%s" ignored: payouts only come from the Payouts screens'):format(tostring(k)))
             d[k] = nil
         end
@@ -407,7 +403,7 @@ function Missions.normalize(def, meta)
     -- departments: {} = every department; a { key = true } map is accepted too
     if d.departments == nil then d.departments = {} end
     if type(d.departments) ~= 'table' then return nil, 'departments must be a list of department keys' end
-    if not isList(d.departments) then
+    if not IsList(d.departments) then
         local list = {}
         for k, v in pairs(d.departments) do if v and type(k) == 'string' then list[#list + 1] = k end end
         table.sort(list)
@@ -424,21 +420,29 @@ function Missions.normalize(def, meta)
     d.minOfficers = d.minOfficers == nil and 1 or d.minOfficers
     d.maxOfficers = d.maxOfficers == nil and d.minOfficers or d.maxOfficers
     local maxUnit = tonumber(Config.Limits and Config.Limits.maxUnitSize) or 4
-    if not (isInt(d.minOfficers) and isInt(d.maxOfficers) and d.minOfficers >= 1 and d.minOfficers <= d.maxOfficers and d.maxOfficers <= maxUnit) then
+    if
+        not (
+            IsInt(d.minOfficers)
+            and IsInt(d.maxOfficers)
+            and d.minOfficers >= 1
+            and d.minOfficers <= d.maxOfficers
+            and d.maxOfficers <= maxUnit
+        )
+    then
         return nil, ('minOfficers/maxOfficers must be whole numbers with 1 <= min <= max <= %d'):format(maxUnit)
     end
-    if d.difficulty == nil then d.difficulty = detailDefault('difficulty', 2) end
+    if d.difficulty == nil then d.difficulty = DetailDefault('difficulty', 2) end
     local stars = #((Config.Difficulty and Config.Difficulty.pointsByStars) or { 1, 1, 1 })
-    if not (isInt(d.difficulty) and d.difficulty >= 1 and d.difficulty <= stars) then
+    if not (IsInt(d.difficulty) and d.difficulty >= 1 and d.difficulty <= stars) then
         return nil, ('difficulty must be 1 to %d stars'):format(stars)
     end
-    if not checkRange(d.timeLimit, 60, 3600) then return nil, 'timeLimit must be 60 to 3600 seconds' end
+    if not CheckRange(d.timeLimit, 60, 3600) then return nil, 'timeLimit must be 60 to 3600 seconds' end
     d.timeLimit = math.floor(d.timeLimit)
     if d.startTimeout == nil then d.startTimeout = tonumber(Config.Limits and Config.Limits.startTimeout) or 600 end
-    if not checkRange(d.startTimeout, 60, 3600) then return nil, 'startTimeout must be 60 to 3600 seconds' end
+    if not CheckRange(d.startTimeout, 60, 3600) then return nil, 'startTimeout must be 60 to 3600 seconds' end
     d.startTimeout = math.floor(d.startTimeout)
-    if d.cooldown == nil then d.cooldown = detailDefault('cooldown', 1200) end
-    if not checkRange(d.cooldown, 0, 86400) then return nil, 'cooldown must be 0 to 86400 seconds' end
+    if d.cooldown == nil then d.cooldown = DetailDefault('cooldown', 1200) end
+    if not CheckRange(d.cooldown, 0, 86400) then return nil, 'cooldown must be 0 to 86400 seconds' end
     d.cooldown = math.floor(d.cooldown)
     if d.vehiclePenalties == nil then
         local vp = Config.Blocks and Config.Blocks.details and Config.Blocks.details.vehiclePenalties
@@ -447,18 +451,20 @@ function Missions.normalize(def, meta)
     if type(d.vehiclePenalties) ~= 'boolean' then return nil, 'vehiclePenalties must be true or false' end
 
     -- locations
-    if not isList(d.locations) or #d.locations == 0 then return nil, 'locations must be a non-empty list' end
+    if not IsList(d.locations) or #d.locations == 0 then return nil, 'locations must be a non-empty list' end
     for i, loc in ipairs(d.locations) do
         if type(loc) ~= 'table' then return nil, ('location %d is not a table'):format(i) end
-        local ok, err = normalizeStart(loc, i, warn)
+        local ok, err = NormalizeStart(loc, i, warn)
         if not ok then return nil, err end
         if loc.label == nil then loc.label = CP.L('run.location_default', { n = i }) end
         if type(loc.label) ~= 'string' then return nil, ('location %d: label must be text'):format(i) end
         -- docs/CRIMSON_ARENA.md rule 7: no point of a mission inside a Config.Builder.noBuildZones zone
         -- (police stations, hospitals, the prison interior and Crimson-Arena's match area and lobby).
-        local zone, where = pointInNoBuildZone(loc, 'location')
+        local zone, where = PointInNoBuildZone(loc, 'location')
         if zone then
-            return nil, ('location %d (%s): %s is inside the no-build zone "%s"'):format(i, loc.label, where, tostring(zone.label))
+            return nil,
+                ('location %d (%s): %s is inside the no-build zone "%s"'):format(i, loc.label, where,
+                    tostring(zone.label))
         end
     end
     local minLocations = source == 'custom' and (tonumber(Config.Builder and Config.Builder.minLocations) or 3)
@@ -478,7 +484,7 @@ function Missions.normalize(def, meta)
     end
 
     -- objectives: block defaults, common defaults, generic checks
-    if not isList(d.objectives) or #d.objectives == 0 then return nil, 'objectives must be a non-empty list' end
+    if not IsList(d.objectives) or #d.objectives == 0 then return nil, 'objectives must be a non-empty list' end
     for i, obj in ipairs(d.objectives) do
         if type(obj) ~= 'table' then return nil, ('objective %d is not a table'):format(i) end
         local blockId = obj.block
@@ -492,7 +498,7 @@ function Missions.normalize(def, meta)
         end
         obj.block = blockId
         if obj.minSeconds == nil then obj.minSeconds = DEFAULT_MIN_SECONDS[blockId] or 0 end
-        if obj.presenceRange == nil then obj.presenceRange = blockPresenceDefault(blockId) end
+        if obj.presenceRange == nil then obj.presenceRange = BlockPresenceDefault(blockId) end
         if type(obj.label) ~= 'string' or CP.U.trim(obj.label) == '' then
             obj.label = CP.L('run.objective_default', { n = i })
         end
@@ -517,13 +523,16 @@ function Missions.normalize(def, meta)
             for li, loc in ipairs(d.locations) do
                 local okCall, res, reason = pcall(impl.validate, obj, d, loc)
                 if not okCall then
-                    return nil, ('objective %d (%s), location %d: validate failed: %s'):format(i, obj.block, li, tostring(res))
+                    return nil,
+                        ('objective %d (%s), location %d: validate failed: %s'):format(i, obj.block, li, tostring(res))
                 end
                 if res == false or res == nil then
                     if type(reason) == 'string' and CP.Locale and CP.Locale.has and CP.Locale.has(reason) then
                         reason = CP.L(reason)
                     end
-                    return nil, ('objective %d (%s), location %d (%s): %s'):format(i, obj.block, li, tostring(loc.label), tostring(reason or 'invalid'))
+                    return nil,
+                        ('objective %d (%s), location %d (%s): %s'):format(i, obj.block, li, tostring(loc.label),
+                            tostring(reason or 'invalid'))
                 end
             end
         end
@@ -538,15 +547,15 @@ function Missions.normalize(def, meta)
     end
 
     -- the rest
-    d.scaling = normalizeScaling(d, warn)
-    local items, itemErr = normalizeItems(d.items, warn)
+    d.scaling = NormalizeScaling(d, warn)
+    local items, itemErr = NormalizeItems(d.items, warn)
     if not items then return nil, itemErr end
     d.items = items
-    d.bonuses = normalizeEntries(d.bonuses, 'bonuses', warn)
-    d.penalties = normalizeEntries(d.penalties, 'penalties', warn)
+    d.bonuses = NormalizeEntries(d.bonuses, 'bonuses', warn)
+    d.penalties = NormalizeEntries(d.penalties, 'penalties', warn)
 
     -- remaining loader fields (source, version, filePath, status and isBoss are set above)
-    d.defHash = meta.defHash or stableHash(def)
+    d.defHash = meta.defHash or StableHash(def)
     d.editedInCode = meta.editedInCode == true or CP.U.truthy(meta.editedInCode)
     return d, nil, warnings
 end
@@ -555,8 +564,11 @@ function Missions.serializeForClient(def)
     return CP.U.serialize(def)
 end
 
--- ── registry ────────────────────────────────────────────────────────────────
-local function sortedDefs(filter)
+-- ============================================================================
+--                                   REGISTRY
+-- ============================================================================
+
+local function SortedDefs(filter)
     local out = {}
     for _, def in pairs(defs) do
         if not filter or filter(def) then out[#out + 1] = def end
@@ -565,9 +577,9 @@ local function sortedDefs(filter)
     return out
 end
 
-local function broadcast()
+local function Broadcast()
     local list = {}
-    for _, def in ipairs(sortedDefs()) do list[#list + 1] = Missions.serializeForClient(def) end
+    for _, def in ipairs(SortedDefs()) do list[#list + 1] = Missions.serializeForClient(def) end
     clientList = list
     -- The full list is tens of kB (every location of every mission): send it as a latent event so it
     -- is streamed instead of flooding every client's reliable channel at once.
@@ -589,11 +601,11 @@ function Missions.all()
 end
 
 function Missions.list()
-    return sortedDefs()
+    return SortedDefs()
 end
 
 function Missions.byType(missionType)
-    return sortedDefs(function(def) return def.type == missionType and not def.isBoss end)
+    return SortedDefs(function(def) return def.type == missionType and not def.isBoss end)
 end
 
 function Missions.isEnabled(id)
@@ -604,7 +616,7 @@ function Missions.isEnabled(id)
     return true
 end
 
-local function metaFromDef(def, defaults)
+local function MetaFromDef(def, defaults)
     defaults = defaults or {}
     return {
         source = def.source or defaults.source or 'custom',
@@ -618,7 +630,7 @@ end
 
 function Missions.register(def)
     if type(def) ~= 'table' then return nil, 'the definition is not a table' end
-    local meta = metaFromDef(def)
+    local meta = MetaFromDef(def)
     -- register is the Mission Builder's publish / restore path: always a custom mission, so the builder's
     -- allowed lists apply (a definition claiming source = 'builtin' cannot skip them; built-ins only come
     -- from missions/builtin through loadAll).
@@ -639,7 +651,7 @@ function Missions.register(def)
     end
     defs[d.id] = d
     CP.log(TAG, 'registered %s (%s v%s)', d.id, d.source, tostring(d.version))
-    broadcast()
+    Broadcast()
     return d
 end
 
@@ -652,21 +664,21 @@ function Missions.unregister(id)
     end
     defs[id] = nil
     CP.log(TAG, 'unregistered %s', id)
-    broadcast()
+    Broadcast()
     return true
 end
 
 -- A custom entry from CP.Builder.loadPublished(): a definition (with loader fields), { def, meta },
 -- or only meta ({ id, filePath, version, ... }) whose file is then read here.
-local function customEntry(entry)
+local function CustomEntry(entry)
     if type(entry) ~= 'table' then return nil, nil, 'entry is not a table' end
     local raw, meta
     if type(entry.def) == 'table' then
         raw = entry.def
-        meta = metaFromDef(entry.meta or entry, metaFromDef(raw))
+        meta = MetaFromDef(entry.meta or entry, MetaFromDef(raw))
     else
         raw = entry
-        meta = metaFromDef(entry)
+        meta = MetaFromDef(entry)
     end
     meta.source = 'custom'
     local content
@@ -675,12 +687,12 @@ local function customEntry(entry)
         if not content or content == '' then
             return nil, meta, ('file %s was not found'):format(tostring(meta.filePath))
         end
-        local fileDef, err = runMissionFile(content, meta.filePath)
+        local fileDef, err = RunMissionFile(content, meta.filePath)
         if not fileDef then return nil, meta, err end
         raw = fileDef
     end
     if not meta.defHash then
-        meta.defHash = (content and content ~= '') and CP.U.hashHex(content) or stableHash(raw)
+        meta.defHash = (content and content ~= '') and CP.U.hashHex(content) or StableHash(raw)
     end
     return raw, meta
 end
@@ -703,7 +715,7 @@ function Missions.loadAll()
 
     local okAll, errAll = pcall(function()
         -- built-in missions
-        local ids, indexErr = readIndex()
+        local ids, indexErr = ReadIndex()
         if not ids then
             CP.warn(TAG, '%s', indexErr)
             ids = {}
@@ -714,14 +726,17 @@ function Missions.loadAll()
             if not content or content == '' then
                 failed(id, path, 'file not found')
             else
-                local raw, err = runMissionFile(content, path)
+                local raw, err = RunMissionFile(content, path)
                 if not raw then
                     failed(id, path, err)
                 elseif raw.id ~= id then
                     failed(id, path, ('its id "%s" does not match the file name'):format(tostring(raw.id)))
                 else
                     local def, nerr, warnings = Missions.normalize(raw, {
-                        source = 'builtin', filePath = path, defHash = CP.U.hashHex(content), status = 'published',
+                        source = 'builtin',
+                        filePath = path,
+                        defHash = CP.U.hashHex(content),
+                        status = 'published',
                     })
                     summary.warnings = summary.warnings + (warnings or 0)
                     if not def then
@@ -750,7 +765,7 @@ function Missions.loadAll()
                 end
             elseif type(list) == 'table' then
                 for i, entry in ipairs(list) do
-                    local raw, meta, err = customEntry(entry)
+                    local raw, meta, err = CustomEntry(entry)
                     local label = (type(entry) == 'table' and (entry.id or (entry.def and entry.def.id))) or ('#' .. i)
                     local file = meta and meta.filePath
                     if not raw then
@@ -786,8 +801,9 @@ function Missions.loadAll()
     loading = false
     summary.loaded = summary.builtin + summary.custom
     lastSummary = summary
-    print(('[crimson-police] missions loaded: %d built-in, %d custom, %d rejected'):format(summary.builtin, summary.custom, #summary.failed))
-    broadcast()
+    print(('[crimson-police] missions loaded: %d built-in, %d custom, %d rejected'):format(summary.builtin,
+        summary.custom, #summary.failed))
+    Broadcast()
     return summary
 end
 
@@ -808,20 +824,27 @@ function Missions.reload()
     return summary
 end
 
--- ── net ─────────────────────────────────────────────────────────────────────
+-- ============================================================================
+--                                     NET
+-- ============================================================================
+
 CP.Net.callback('getMissionDefs', function(src)
     if not loadedOnce then return nil, 'err.not_ready' end
     return clientList
 end, { rate = 2 })
 
-local function plainSummary(summary)
+local function PlainSummary(summary)
     local failedList = {}
     for i, f in ipairs(summary.failed or {}) do
         failedList[i] = { id = tostring(f.id), file = f.file and tostring(f.file) or nil, error = tostring(f.error) }
     end
     return {
-        loaded = summary.loaded or 0, builtin = summary.builtin or 0, custom = summary.custom or 0,
-        warnings = summary.warnings or 0, failed = failedList, error = summary.error,
+        loaded = summary.loaded or 0,
+        builtin = summary.builtin or 0,
+        custom = summary.custom or 0,
+        warnings = summary.warnings or 0,
+        failed = failedList,
+        error = summary.error,
     }
 end
 
@@ -839,13 +862,16 @@ CP.Net.action('server:admin:reloadMissions', function(src)
         elseif CP.Access and CP.Access.role then
             role = CP.Access.role(src) or 'admin'
         end
-        pcall(CP.Admin.audit, src == 0 and 'console' or src, role, 'audit', 'reloadMissions', nil,
-            tostring(before), ('%d loaded, %d rejected'):format(summary.loaded or 0, #(summary.failed or {})), nil)
+        pcall(CP.Admin.audit, src == 0 and 'console' or src, role, 'audit', 'reloadMissions', nil, tostring(before),
+            ('%d loaded, %d rejected'):format(summary.loaded or 0, #(summary.failed or {})), nil)
     end
-    return true, plainSummary(summary)
+    return true, PlainSummary(summary)
 end, { rate = 2 })
 
--- ── start ───────────────────────────────────────────────────────────────────
+-- ============================================================================
+--                                    START
+-- ============================================================================
+
 CreateThread(function()
     Wait(0)   -- every module and block file of the resource has been loaded by now
     Missions.loadAll()

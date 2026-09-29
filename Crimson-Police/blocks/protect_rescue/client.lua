@@ -1,41 +1,21 @@
---[[ blocks/protect_rescue/client.lua · objective block "protect_rescue" (client half)
-
-  What it does
-    From prepare (the hostages spawn then) on the run host only: CP.Npc.apply once it has control of
-    each hostage, then the task for its cp state (restrained -> kneel, idle/safe -> cower,
-    freed -> follow to the safe marker, re-issued every RETASK_MS while walking); again after
-    hostChanged. Control is requested before every task (the officer next to a hostage often owns
-    it) and a task that CP.Npc.task refused is retried on the next loop.
-    While the objective is current on this participant's client:
-    - ox_target "Cut restraints" (exports.ox_target:addLocalEntity, option crimson-police:cut_restraints)
-      on every restrained hostage, re-attached when the entity handle changes, removed in stop;
-      selecting it reports 'free_start', runs lib.progressBar(freeTime) and reports 'freed';
-    - the safe marker (DrawMarker only within MARKER_RANGE, otherwise Wait(750)) and blips for the
-      hostages and the safe point (none with Radio Silence);
-    - a HUD line (ctx.hudDetail) while freed hostages are walking to the safe point.
-
-  Objective fields read: freeTime, target.label / icon / distance, safe, safeRadius (ctx.obj);
-    location[obj.safe].
-  Evidence sent: { type = 'free_start', netId }, { type = 'freed', netId }
-  Server data (update): { peds = { { netId, state, index } } }
-]]
+-- Objective block "protect_rescue" (client half)
 
 local BLOCK = 'protect_rescue'
 local U = CP.U
 
-local OPTION       = 'crimson-police:cut_restraints'
-local LOOP_MS      = 500
-local RETASK_MS    = 8000       -- re-issue "follow" to a walking hostage this often
-local CONTROL_MS   = 250
+local OPTION = 'crimson-police:cut_restraints'
+local LOOP_MS = 500
+local RETASK_MS = 8000          -- re-issue "follow" to a walking hostage this often
+local CONTROL_MS = 250
 local MARKER_RANGE = 150.0
-local FREE_ANIM    = { dict = 'mp_arresting', clip = 'a_uncuff' }
+local FREE_ANIM = { dict = 'mp_arresting', clip = 'a_uncuff' }
 
 local active = {}
 
-local function keyOf(ctx) return tostring(ctx.runId) .. ':' .. tostring(ctx.index) end
+local function KeyOf(ctx) return tostring(ctx.runId) .. ':' .. tostring(ctx.index) end
 
 local function S_of(ctx)
-    local k = keyOf(ctx)
+    local k = KeyOf(ctx)
     local S = active[k]
     if not S then
         S = { key = k, peds = {}, byNet = {}, blips = {}, targets = {}, applied = {}, tasked = {}, alive = true }
@@ -55,76 +35,82 @@ local function S_of(ctx)
     return S
 end
 
-local function isHost(S)
+local function IsHost(S)
     if S.isHost ~= nil then return S.isHost end
     return S.ctx.isHost == true
 end
 
-local function pedFor(netId)
+local function PedFor(netId)
     if not netId or not NetworkDoesNetworkIdExist(netId) then return nil end
     local e = NetworkGetEntityFromNetworkId(netId)
     if e and e ~= 0 and DoesEntityExist(e) then return e end
     return nil
 end
 
-local function bagOf(ent)
+local function BagOf(ent)
     local st = Entity(ent).state
     return st and st.cp or nil
 end
 
-local function stateOf(S, netId, ent)
-    local bag = ent and bagOf(ent)
+local function StateOf(S, netId, ent)
+    local bag = ent and BagOf(ent)
     if bag and bag.state then return bag.state end
     local info = S.byNet[netId]
     return info and info.state or nil
 end
 
--- ── Blips ───────────────────────────────────────────────────────────────────
-local function dropBlip(S, k)
+-- ============================================================================
+--                                    BLIPS
+-- ============================================================================
+
+local function DropBlip(S, k)
     local b = S.blips[k]
     if not b then return end
     if DoesBlipExist(b.id) then RemoveBlip(b.id) end
     S.blips[k] = nil
 end
 
-local function nameBlip(id, label)
+local function NameBlip(id, label)
     BeginTextCommandSetBlipName('STRING')
     AddTextComponentSubstringPlayerName(label)
     EndTextCommandSetBlipName(id)
 end
 
-local function ensureEntityBlip(S, netId, ent)
+local function EnsureEntityBlip(S, netId, ent)
     local b = S.blips[netId]
     if b and b.ent == ent and DoesBlipExist(b.id) then return end
-    dropBlip(S, netId)
+    DropBlip(S, netId)
     local id = AddBlipForEntity(ent)
     SetBlipSprite(id, 1)
     SetBlipColour(id, 3)
     SetBlipScale(id, 0.6)
     SetBlipAsShortRange(id, true)
-    nameBlip(id, CP.L('block.protect_rescue.blip'))
+    NameBlip(id, CP.L('block.protect_rescue.blip'))
     S.blips[netId] = { id = id, ent = ent }
 end
 
-local function ensureSafeBlip(S)
+local function EnsureSafeBlip(S)
     if S.blips.safe or not S.safe then return end
     local id = AddBlipForCoord(S.safe.x, S.safe.y, S.safe.z)
     SetBlipSprite(id, 1)
     SetBlipColour(id, 2)
     SetBlipScale(id, 0.8)
-    nameBlip(id, CP.L('block.protect_rescue.blip_safe'))
+    NameBlip(id, CP.L('block.protect_rescue.blip_safe'))
     S.blips.safe = { id = id }
 end
 
--- ── ox_target ───────────────────────────────────────────────────────────────
-local function dropTarget(S, netId)
+-- ============================================================================
+--                                  ox_target
+-- ============================================================================
+
+local function DropTarget(S, netId)
     local ent = S.targets[netId]
     if not ent then return end
     S.targets[netId] = nil
     pcall(function() exports.ox_target:removeLocalEntity(ent, OPTION) end)
 end
 
-local function free(S, netId)
+local function Free(S, netId)
     if S.busy then return end
     S.busy = true
     local ctx = S.ctx
@@ -144,39 +130,43 @@ local function free(S, netId)
     S.busy = false
 end
 
-local function ensureTarget(S, netId, ent)
+local function EnsureTarget(S, netId, ent)
     if S.targets[netId] == ent then return end
-    dropTarget(S, netId)
+    DropTarget(S, netId)
     local t = S.ctx.obj.target or {}
-    exports.ox_target:addLocalEntity(ent, { {
-        name = OPTION,
-        label = t.label or CP.L('block.protect_rescue.cut_restraints'),
-        icon = t.icon or 'fas fa-scissors',
-        distance = tonumber(t.distance) or 2.0,
-        canInteract = function(entity)
-            return S.alive and S.current and not S.busy and stateOf(S, netId, entity) == 'restrained'
-        end,
-        onSelect = function()
-            CreateThread(function() free(S, netId) end)
-        end,
-    } })
+    exports.ox_target:addLocalEntity(ent, {
+        {
+            name = OPTION,
+            label = t.label or CP.L('block.protect_rescue.cut_restraints'),
+            icon = t.icon or 'fas fa-scissors',
+            distance = tonumber(t.distance) or 2.0,
+            canInteract = function(entity)
+                return S.alive and S.current and not S.busy and StateOf(S, netId, entity) == 'restrained'
+            end,
+            onSelect = function()
+                CreateThread(function() Free(S, netId) end)
+            end,
+        },
+    })
     S.targets[netId] = ent
 end
 
--- ── Host AI ─────────────────────────────────────────────────────────────────
+-- ============================================================================
+--                                   HOST AI
+-- ============================================================================
 -- The host must own the hostage before CP.Npc.apply / CP.Npc.task do anything. OneSync hands
 -- ownership to the closest player, which is usually the officer who just cut the restraints, so
 -- control is requested for every task, and a task only counts as done when CP.Npc.task took it.
-local function hasControl(ctx, ent)
+local function HasControl(ctx, ent)
     if NetworkHasControlOfEntity(ent) then return true end
     return ctx.control(ent, CONTROL_MS) == true
 end
 
-local function hostAi(S, info, ent, state)
+local function HostAi(S, info, ent, state)
     local ctx = S.ctx
     if S.applied[info.netId] ~= ent then
-        if not hasControl(ctx, ent) then return end
-        local bag = bagOf(ent)
+        if not HasControl(ctx, ent) then return end
+        local bag = BagOf(ent)
         if CP.Npc.apply(ent, (bag and bag.cfg) or {}) == false then return end
         S.applied[info.netId] = ent
         S.tasked[info.netId] = nil
@@ -193,14 +183,17 @@ local function hostAi(S, info, ent, state)
         action, args = 'cower', {}
     end
     if action then
-        if not hasControl(ctx, ent) then return end
+        if not HasControl(ctx, ent) then return end
         if CP.Npc.task(ent, action, args) == false then return end
     end
     S.tasked[info.netId] = { state = state, at = at }
 end
 
--- ── Loops ───────────────────────────────────────────────────────────────────
-local function markerLoop(S)
+-- ============================================================================
+--                                    LOOPS
+-- ============================================================================
+
+local function MarkerLoop(S)
     if S.drawing or not S.safe then return end
     S.drawing = true
     CreateThread(function()
@@ -208,8 +201,8 @@ local function markerLoop(S)
         while S.alive and S.current do
             local safe = S.safe
             if U.dist(GetEntityCoords(PlayerPedId()), safe) <= MARKER_RANGE then
-                DrawMarker(1, safe.x, safe.y, safe.z - 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-                    d, d, 1.0, 60, 200, 90, 110, false, false, 2, false, nil, nil, false)
+                DrawMarker(1, safe.x, safe.y, safe.z - 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, d, d, 1.0, 60, 200, 90, 110,
+                    false, false, 2, false, nil, nil, false)
                 Wait(0)
             else
                 Wait(750)
@@ -219,7 +212,7 @@ local function markerLoop(S)
     end)
 end
 
-local function loop(S)
+local function Loop(S)
     if S.looping then return end
     S.looping = true
     CreateThread(function()
@@ -227,16 +220,24 @@ local function loop(S)
             local ctx = S.ctx
             local walking = false
             for _, info in ipairs(S.peds) do
-                local ent = pedFor(info.netId)
+                local ent = PedFor(info.netId)
                 if ent then
-                    local state = stateOf(S, info.netId, ent)
-                    if isHost(S) and state ~= 'dead' then hostAi(S, info, ent, state) end
-                    if S.current and state == 'restrained' then ensureTarget(S, info.netId, ent) else dropTarget(S, info.netId) end
-                    if S.current and not ctx.radioSilence and state ~= 'dead' then ensureEntityBlip(S, info.netId, ent) else dropBlip(S, info.netId) end
+                    local state = StateOf(S, info.netId, ent)
+                    if IsHost(S) and state ~= 'dead' then HostAi(S, info, ent, state) end
+                    if S.current and state == 'restrained' then
+                        EnsureTarget(S, info.netId, ent)
+                    else
+                        DropTarget(S, info.netId)
+                    end
+                    if S.current and not ctx.radioSilence and state ~= 'dead' then
+                        EnsureEntityBlip(S, info.netId, ent)
+                    else
+                        DropBlip(S, info.netId)
+                    end
                     if state == 'freed' then walking = true end
                 else
-                    dropTarget(S, info.netId)
-                    dropBlip(S, info.netId)
+                    DropTarget(S, info.netId)
+                    DropBlip(S, info.netId)
                 end
             end
             if S.current then
@@ -252,13 +253,13 @@ local function loop(S)
     end)
 end
 
-local function cleanup(S)
+local function Cleanup(S)
     S.alive = false
     S.current = false
     -- a "Cut restraints" progress bar still running when the objective or run ends is cancelled
     if S.busy and lib.progressActive and lib.progressActive() then lib.cancelProgress() end
-    for netId in pairs(S.targets) do dropTarget(S, netId) end
-    for k in pairs(S.blips) do dropBlip(S, k) end
+    for netId in pairs(S.targets) do DropTarget(S, netId) end
+    for k in pairs(S.blips) do DropBlip(S, k) end
     if S.hint then
         S.hint = nil
         S.ctx.hudDetail(nil)
@@ -270,16 +271,16 @@ CP.Blocks.register(BLOCK, {
     prepare = function(ctx)
         local S = S_of(ctx)
         S.alive = true
-        loop(S)
+        Loop(S)
     end,
 
     start = function(ctx)
         local S = S_of(ctx)
         S.alive = true
         S.current = true
-        if not ctx.radioSilence then ensureSafeBlip(S) end
-        loop(S)
-        markerLoop(S)
+        if not ctx.radioSilence then EnsureSafeBlip(S) end
+        Loop(S)
+        MarkerLoop(S)
     end,
 
     update = function(ctx, data)
@@ -298,12 +299,12 @@ CP.Blocks.register(BLOCK, {
     end,
 
     stop = function(ctx)
-        local S = active[keyOf(ctx)]
-        if S then cleanup(S) end
+        local S = active[KeyOf(ctx)]
+        if S then Cleanup(S) end
     end,
 })
 
 AddEventHandler('onResourceStop', function(res)
     if res ~= GetCurrentResourceName() then return end
-    for _, S in pairs(active) do cleanup(S) end
+    for _, S in pairs(active) do Cleanup(S) end
 end)

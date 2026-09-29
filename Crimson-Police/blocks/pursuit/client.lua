@@ -1,70 +1,50 @@
---[[ blocks/pursuit/client.lua · objective block "pursuit" (client half)
-
-  What it does (while the objective is current on this participant's client)
-    - every participant: reports rams of suspect vehicles by the car they drive (IsEntityTouchingEntity
-      rising edge, polled every RAM_POLL_MS only while a suspect vehicle is within RAM_WATCH; speed =
-      the pre-impact speed) when ramSpeed is 0 or the speed is above it; 'lights_near' when their lights
-      or siren are on within trigger.distance of a waiting car; 'aim' after aiming at an unarmed
-      suspect on foot for AIM_HOLD_MS (AIM_STOPPED by the car, flee_arrest.aimDistance when running);
-      'stunned' when IsPedBeingStunned; follow mode: 'undriveable' when the car they drive is no
-      longer driveable. The server re-checks every report with its own coordinates.
-    - blips for suspect vehicles and suspects on foot (none with Radio Silence) and a HUD line
-      (ctx.hudDetail): follow progress / lost countdown, escape countdown, lights hint, stop and
-      detain progress, aim hint.
-    - on the run host only: control of every suspect and car before anything is done to them (re-apply
-      and re-task when control comes back from another client), CP.Npc.apply once per entity handle,
-      seats them, locks the car, then drives: CP.Npc.task(driver, 'driveRoute', { vehicle, points,
-      loop, speed (m/s), style, stopRange, force }) from the next waypoint of the route (a loop is
-      re-tasked lap by lap, an open route ends in a free flee), or CP.Npc.task(driver, 'flee', {
-      vehicle, speed, style, force }) for a free flee; a stuck car is re-tasked every RETASK_MS (force:
-      CP.Npc ignores identical repeats). CP.Npc maps the style name ('cautious' | 'reckless') to the
-      driving flags. After a stop the occupants leave the car (TaskLeaveVehicle, repeated every
-      EXIT_RETRY_MS, warping them out from the EXIT_WARP_TRY-th attempt: the server keeps them
-      'stopped' until they are out); fleeing -> CP.Npc 'flee', hostile -> 'combat', and on first sight
-      (new host) surrendered -> 'kneel', cuffed -> 'cuffed'. The arrest target ("Detain driver" /
-      "Cuff suspect") is CP.Npc's (enableCuff). Everything is re-applied after hostChanged.
-
-  Objective fields read: mode, route, speed, style, trigger, surrenderOnAim, ramSpeed, failIfUndriveable,
-    neverShoots (ctx.obj); location[route].
-  Evidence sent: { type = 'ram', netId, speed }, { type = 'lights_near', netId }, { type = 'aim', netId },
-    { type = 'stunned', netId }, { type = 'undriveable', netId }
-  Server data (update): { kind = 'state', mode, fled, trigger, lights, vehicles = { { netId, index, state,
-    occupants } }, suspects = { { netId, vehicle, seat, state, armed } }, detained, neutralised, total,
-    stopped, vtotal, escaping, follow = { inRange, duration, hold, lost, average } }
-]]
+-- Objective block "pursuit" (client half)
 
 local BLOCK = 'pursuit'
 local U = CP.U
 
-local FAST_MS       = 250
-local SLOW_MS       = 1000
-local RAM_POLL_MS   = 50
-local RAM_IDLE_MS   = 500
-local RAM_WATCH     = 50.0     -- fast ram polling within this range (at 500 ms a closing car covers 25 m)
+local FAST_MS = 250
+local SLOW_MS = 1000
+local RAM_POLL_MS = 50
+local RAM_IDLE_MS = 500
+local RAM_WATCH = 50.0         -- fast ram polling within this range (at 500 ms a closing car covers 25 m)
 local RAM_REPORT_MS = 2500
-local REPORT_MS     = 1500
-local AIM_HOLD_MS   = 800
-local AIM_STOPPED   = 25.0
-local WATCH_RANGE   = 60.0
-local CONTROL_MS    = 250
-local RETASK_MS     = 10000
-local STUCK_MPS     = 2.0
-local ROUTE_END     = 30.0
-local STOP_RANGE    = 8.0
+local REPORT_MS = 1500
+local AIM_HOLD_MS = 800
+local AIM_STOPPED = 25.0
+local WATCH_RANGE = 60.0
+local CONTROL_MS = 250
+local RETASK_MS = 10000
+local STUCK_MPS = 2.0
+local ROUTE_END = 30.0
+local STOP_RANGE = 8.0
 local EXIT_RETRY_MS = 2500     -- a stopped suspect still in the car is told to get out again this often...
 local EXIT_WARP_TRY = 3        -- ...and warped out (TaskLeaveVehicle flag 16) from this attempt on
 
 local active = {}
 
-local function keyOf(ctx) return tostring(ctx.runId) .. ':' .. tostring(ctx.index) end
+local function KeyOf(ctx) return tostring(ctx.runId) .. ':' .. tostring(ctx.index) end
 
 local function S_of(ctx)
-    local k = keyOf(ctx)
+    local k = KeyOf(ctx)
     local S = active[k]
     if not S then
         S = {
-            key = k, vehicles = {}, suspects = {}, byNet = {}, blips = {}, applied = {}, tasked = {},
-            drive = {}, left = {}, lost = {}, lastReport = {}, aimSince = {}, touching = {}, alive = true, data = {},
+            key = k,
+            vehicles = {},
+            suspects = {},
+            byNet = {},
+            blips = {},
+            applied = {},
+            tasked = {},
+            drive = {},
+            left = {},
+            lost = {},
+            lastReport = {},
+            aimSince = {},
+            touching = {},
+            alive = true,
+            data = {},
         }
         active[k] = S
     end
@@ -72,30 +52,30 @@ local function S_of(ctx)
     return S
 end
 
-local function isHost(S)
+local function IsHost(S)
     if S.isHost ~= nil then return S.isHost end
     return S.ctx.isHost == true
 end
 
-local function entityFor(netId)
+local function EntityFor(netId)
     if not netId or not NetworkDoesNetworkIdExist(netId) then return nil end
     local e = NetworkGetEntityFromNetworkId(netId)
     if e and e ~= 0 and DoesEntityExist(e) then return e end
     return nil
 end
 
-local function bagOf(ent)
+local function BagOf(ent)
     local st = Entity(ent).state
     return st and st.cp or nil
 end
 
-local function toVec3(v)
+local function ToVec3(v)
     local x, y, z = U.xyz(v)
     if not x then return nil end
     return vector3(x + 0.0, y + 0.0, z + 0.0)
 end
 
-local function routeInfo(S)
+local function RouteInfo(S)
     if S.route ~= nil then return S.route or nil end
     local ctx = S.ctx
     local ref = ctx.obj and ctx.obj.route
@@ -105,7 +85,7 @@ local function routeInfo(S)
         local list = type(v.points) == 'table' and v.points or v
         local pts = {}
         for i = 1, #list do
-            local p = toVec3(list[i])
+            local p = ToVec3(list[i])
             if p then pts[#pts + 1] = p end
         end
         if #pts >= 2 then S.route = { points = pts, loop = v.loop == true } end
@@ -114,7 +94,7 @@ local function routeInfo(S)
 end
 
 -- Waypoints still ahead of pos: the rest of an open route, or one full lap of a loop.
-local function remaining(route, pos)
+local function Remaining(route, pos)
     local pts = route.points
     local n = #pts
     local bi, best = 1, math.huge
@@ -141,18 +121,21 @@ local function remaining(route, pos)
     return out
 end
 
--- ── Blips ───────────────────────────────────────────────────────────────────
-local function dropBlip(S, k)
+-- ============================================================================
+--                                    BLIPS
+-- ============================================================================
+
+local function DropBlip(S, k)
     local b = S.blips[k]
     if not b then return end
     if DoesBlipExist(b.id) then RemoveBlip(b.id) end
     S.blips[k] = nil
 end
 
-local function ensureBlip(S, k, ent, sprite, label, scale)
+local function EnsureBlip(S, k, ent, sprite, label, scale)
     local b = S.blips[k]
     if b and b.ent == ent and DoesBlipExist(b.id) then return end
-    dropBlip(S, k)
+    DropBlip(S, k)
     local id = AddBlipForEntity(ent)
     SetBlipSprite(id, sprite)
     SetBlipColour(id, 1)
@@ -164,8 +147,11 @@ local function ensureBlip(S, k, ent, sprite, label, scale)
     S.blips[k] = { id = id, ent = ent }
 end
 
--- ── Reports ─────────────────────────────────────────────────────────────────
-local function reportOnce(S, kind, netId, extra)
+-- ============================================================================
+--                                   REPORTS
+-- ============================================================================
+
+local function ReportOnce(S, kind, netId, extra)
     local k = kind .. ':' .. tostring(netId)
     local t = GetGameTimer()
     local last = S.lastReport[k]
@@ -176,17 +162,19 @@ local function reportOnce(S, kind, netId, extra)
     S.ctx.report(ev)
 end
 
-local function setHint(S, text)
+local function SetHint(S, text)
     if S.hint == text then return end
     S.hint = text
     S.ctx.hudDetail(text)
 end
 
--- ── Host AI ─────────────────────────────────────────────────────────────────
+-- ============================================================================
+--                                   HOST AI
+-- ============================================================================
 -- Control of a run entity before anything is done to it (ctx.control returns at once when this client
 -- already owns it). regained = another client owned it since the last check: its config and tasks may
 -- not have migrated, so the caller re-applies and re-tasks.
-local function own(S, key, ent)
+local function Own(S, key, ent)
     if NetworkHasControlOfEntity(ent) then
         local regained = S.lost[key] == true
         S.lost[key] = nil
@@ -200,7 +188,7 @@ local function own(S, key, ent)
     return true, true
 end
 
-local function driverSetup(ped, reckless)
+local function DriverSetup(ped, reckless)
     SetBlockingOfNonTemporaryEvents(ped, true)
     SetPedKeepTask(ped, true)
     SetPedCanBeDraggedOut(ped, false)
@@ -210,22 +198,27 @@ local function driverSetup(ped, reckless)
 end
 
 -- force: a lap or stuck re-task repeats the same arguments, which CP.Npc.task ignores without it.
-local function taskDrive(S, v, veh, driver, force)
+local function TaskDrive(S, v, veh, driver, force)
     local obj = S.ctx.obj
     local speed = (tonumber(obj.speed) or 120) / 3.6
     local style = obj.style or 'reckless'
-    local route = routeInfo(S)
+    local route = RouteInfo(S)
     local d = S.drive[v.netId] or {}
     S.drive[v.netId] = d
     d.at = GetGameTimer()
     d.armed = false                  -- the new end point only counts once the car has left it behind
     if route and not d.free then
-        local pts = remaining(route, GetEntityCoords(veh))
+        local pts = Remaining(route, GetEntityCoords(veh))
         if #pts > 0 then
             d.mode, d.last = 'route', pts[#pts]
             CP.Npc.task(driver, 'driveRoute', {
-                vehicle = veh, points = pts, loop = route.loop, speed = speed, style = style,
-                stopRange = STOP_RANGE, force = force,
+                vehicle = veh,
+                points = pts,
+                loop = route.loop,
+                speed = speed,
+                style = style,
+                stopRange = STOP_RANGE,
+                force = force,
             })
             return
         end
@@ -235,10 +228,10 @@ local function taskDrive(S, v, veh, driver, force)
     CP.Npc.task(driver, 'flee', { vehicle = veh, speed = speed, style = style, force = force })
 end
 
-local function monitorDrive(S, v, veh, driver)
+local function MonitorDrive(S, v, veh, driver)
     local d = S.drive[v.netId]
     if not d then
-        taskDrive(S, v, veh, driver)
+        TaskDrive(S, v, veh, driver)
         return
     end
     local pos = GetEntityCoords(veh)
@@ -249,26 +242,26 @@ local function monitorDrive(S, v, veh, driver)
         if #(pos - d.last) > ROUTE_END then
             d.armed = true
         elseif d.armed then
-            local route = routeInfo(S)
+            local route = RouteInfo(S)
             if not (route and route.loop) then d.free = true end
-            taskDrive(S, v, veh, driver, true)
+            TaskDrive(S, v, veh, driver, true)
             return
         end
     end
     if GetEntitySpeed(veh) < STUCK_MPS and GetGameTimer() - (d.at or 0) >= RETASK_MS then
-        taskDrive(S, v, veh, driver, true)
+        TaskDrive(S, v, veh, driver, true)
     end
 end
 
 -- Control every time (tasks need it), CP.Npc.apply once per entity handle: a new handle after streaming,
 -- a new host, or control regained from another client re-applies.
-local function applyPed(S, net, ped)
-    local ok, regained = own(S, 'p' .. tostring(net), ped)
+local function ApplyPed(S, net, ped)
+    local ok, regained = Own(S, 'p' .. tostring(net), ped)
     if not ok then return false, false end
     if S.applied[net] == ped and not regained then return true, false end
-    local bag = bagOf(ped)
+    local bag = BagOf(ped)
     CP.Npc.apply(ped, (bag and bag.cfg) or {})
-    driverSetup(ped, S.ctx.obj.style ~= 'cautious')
+    DriverSetup(ped, S.ctx.obj.style ~= 'cautious')
     S.applied[net] = ped
     S.tasked[net] = nil
     S.left[net] = nil
@@ -277,11 +270,11 @@ local function applyPed(S, net, ped)
     return true, true
 end
 
-local function hostVehicle(S, v)
-    local veh = entityFor(v.netId)
+local function HostVehicle(S, v)
+    local veh = EntityFor(v.netId)
     if not veh then return end
     local fresh = false
-    local owned, regained = own(S, 'v' .. tostring(v.netId), veh)
+    local owned, regained = Own(S, 'v' .. tostring(v.netId), veh)
     if not owned then return end
     if S.applied[v.netId] ~= veh or regained then
         SetVehicleDoorsLocked(veh, 2)
@@ -293,16 +286,18 @@ local function hostVehicle(S, v)
     local driver
     for _, net in ipairs(v.occupants or {}) do
         local info = S.byNet[net]
-        local ped = entityFor(net)
+        local ped = EntityFor(net)
         if info and ped then
-            local okPed, freshPed = applyPed(S, net, ped)
+            local okPed, freshPed = ApplyPed(S, net, ped)
             if okPed then
-                local state = (bagOf(ped) or {}).state or info.state
+                local state = (BagOf(ped) or {}).state or info.state
                 if state == 'driving' then
                     if not IsPedInVehicle(ped, veh, false) then SetPedIntoVehicle(ped, veh, info.seat or -1) end
                     if (info.seat or -1) == -1 then
                         driver = ped
-                        if freshPed then fresh = true end   -- a driver (re)applied here needs its drive task again
+                        if freshPed then
+                            fresh = true
+                        end -- a driver (re)applied here needs its drive task again
                     end
                 elseif IsPedInVehicle(ped, veh, false) then
                     -- out of the stopped car: the server switches the suspect on only once it is out
@@ -319,7 +314,7 @@ local function hostVehicle(S, v)
     end
     if v.state == 'fleeing' and driver then
         if fresh then S.drive[v.netId] = nil end
-        monitorDrive(S, v, veh, driver)
+        MonitorDrive(S, v, veh, driver)
     elseif v.state == 'stopped' or v.state == 'wrecked' then
         if not S.drive[v.netId] or S.drive[v.netId].mode ~= 'off' then
             S.drive[v.netId] = { mode = 'off' }
@@ -329,9 +324,9 @@ local function hostVehicle(S, v)
 end
 
 -- Live surrenders and cuffs are animated by CP.Npc's state bag handler; a new host re-issues them.
-local function hostSuspect(S, info, ped)
-    if not applyPed(S, info.netId, ped) then return end
-    local state = (bagOf(ped) or {}).state or info.state
+local function HostSuspect(S, info, ped)
+    if not ApplyPed(S, info.netId, ped) then return end
+    local state = (BagOf(ped) or {}).state or info.state
     if IsPedInAnyVehicle(ped, false) then return end
     if S.tasked[info.netId] == state then return end
     local first = S.freshAt and S.freshAt[info.netId]
@@ -348,34 +343,37 @@ local function hostSuspect(S, info, ped)
     S.tasked[info.netId] = state
 end
 
--- ── Loops ───────────────────────────────────────────────────────────────────
-local function myVehicle()
+-- ============================================================================
+--                                    LOOPS
+-- ============================================================================
+
+local function MyVehicle()
     local ped = PlayerPedId()
     local veh = GetVehiclePedIsIn(ped, false)
     if veh ~= 0 and GetPedInVehicleSeat(veh, -1) == ped then return veh end
     return nil
 end
 
-local function ramLoop(S)
+local function RamLoop(S)
     if S.ramming then return end
     S.ramming = true
     CreateThread(function()
         local lastSpeed = 0.0
         while S.alive do
             local wait = RAM_IDLE_MS
-            local veh = S.current and myVehicle() or nil
+            local veh = S.current and MyVehicle() or nil
             if veh then
                 local limit = tonumber(S.ctx.obj.ramSpeed) or 0
                 local pos = GetEntityCoords(veh)
                 local speed = GetEntitySpeed(veh) * 3.6
                 local pre = math.max(lastSpeed, speed)
                 for _, v in ipairs(S.vehicles) do
-                    local sv = entityFor(v.netId)
+                    local sv = EntityFor(v.netId)
                     if sv and #(GetEntityCoords(sv) - pos) <= RAM_WATCH then
                         wait = RAM_POLL_MS
                         local touching = IsEntityTouchingEntity(veh, sv)
                         if touching and not S.touching[v.netId] and (limit <= 0 or pre > limit) then
-                            reportOnce(S, 'ram', v.netId, { speed = math.floor(pre + 0.5) })
+                            ReportOnce(S, 'ram', v.netId, { speed = math.floor(pre + 0.5) })
                         end
                         S.touching[v.netId] = touching
                     else
@@ -392,7 +390,7 @@ local function ramLoop(S)
     end)
 end
 
-local function hudText(S, myPos)
+local function HudText(S, myPos)
     local d = S.data
     local obj = S.ctx.obj
     if d.mode == 'follow' then
@@ -401,12 +399,14 @@ local function hudText(S, myPos)
         if not d.fled then return CP.L('block.pursuit.hud_wait') end
         local dist
         for _, v in ipairs(S.vehicles) do
-            local e = entityFor(v.netId)
+            local e = EntityFor(v.netId)
             if e and v.state ~= 'wrecked' then dist = #(GetEntityCoords(e) - myPos) break end
         end
         return CP.L('block.pursuit.hud_follow', {
-            held = math.min(f.inRange or 0, f.duration or 0), duration = f.duration or 0,
-            distance = dist and math.floor(dist + 0.5) or '-', hold = f.hold or obj.hold,
+            held = math.min(f.inRange or 0, f.duration or 0),
+            duration = f.duration or 0,
+            distance = dist and math.floor(dist + 0.5) or '-',
+            hold = f.hold or obj.hold,
         })
     end
     if d.escaping then return CP.L('block.pursuit.hud_escaping', { seconds = d.escaping }) end
@@ -416,7 +416,7 @@ local function hudText(S, myPos)
     if obj.surrenderOnAim then
         for _, s in ipairs(S.suspects) do
             if s.state == 'stopped' and not s.armed then
-                local e = entityFor(s.netId)
+                local e = EntityFor(s.netId)
                 if e and #(GetEntityCoords(e) - myPos) <= AIM_STOPPED then return CP.L('block.pursuit.hint_aim') end
             end
         end
@@ -427,7 +427,7 @@ local function hudText(S, myPos)
     return CP.L('block.pursuit.hud_detain', { detained = d.detained or 0, total = d.total or 0 })
 end
 
-local function loop(S)
+local function Loop(S)
     if S.looping then return end
     S.looping = true
     CreateThread(function()
@@ -439,65 +439,75 @@ local function loop(S)
                 local d = S.data
                 local me = PlayerPedId()
                 local myPos = GetEntityCoords(me)
-                local host = isHost(S)
+                local host = IsHost(S)
                 local showBlips = not ctx.radioSilence
                 local aimRun = Config.Blocks.flee_arrest.aimDistance[3]
                 local myVeh = GetVehiclePedIsIn(me, false)
                 for _, v in ipairs(S.vehicles) do
-                    if host then hostVehicle(S, v) end
-                    local veh = entityFor(v.netId)
+                    if host then HostVehicle(S, v) end
+                    local veh = EntityFor(v.netId)
                     local k = 'v' .. tostring(v.netId)
                     if veh and showBlips and (v.state == 'fleeing' or v.state == 'waiting') then
-                        ensureBlip(S, k, veh, 225, CP.L('block.pursuit.blip_vehicle'), 0.9)
+                        EnsureBlip(S, k, veh, 225, CP.L('block.pursuit.blip_vehicle'), 0.9)
                     else
-                        dropBlip(S, k)
+                        DropBlip(S, k)
                     end
-                    if veh and v.state == 'waiting' and d.trigger == 'distance' and d.lights and myVeh ~= 0
-                        and IsVehicleSirenOn(myVeh) and #(GetEntityCoords(veh) - myPos) <= (tonumber(obj.trigger and obj.trigger.distance) or 60.0) then
-                        reportOnce(S, 'lights_near', v.netId)
+                    if
+                        veh
+                        and v.state == 'waiting'
+                        and d.trigger == 'distance'
+                        and d.lights
+                        and myVeh ~= 0
+                        and IsVehicleSirenOn(myVeh)
+                        and #(GetEntityCoords(veh) - myPos)
+                            <= (tonumber(obj.trigger and obj.trigger.distance) or 60.0)
+                    then
+                        ReportOnce(S, 'lights_near', v.netId)
                     end
                     if veh and #(GetEntityCoords(veh) - myPos) <= WATCH_RANGE then fast = true end
                 end
                 for _, s in ipairs(S.suspects) do
-                    local ped = entityFor(s.netId)
+                    local ped = EntityFor(s.netId)
                     local k = 's' .. tostring(s.netId)
                     if ped then
-                        local state = (bagOf(ped) or {}).state or s.state
-                        if host and state ~= 'dead' then hostSuspect(S, s, ped) end
-                        local onFoot = (state == 'stopped' or state == 'fleeing' or state == 'hostile') and not IsPedInAnyVehicle(ped, false)
+                        local state = (BagOf(ped) or {}).state or s.state
+                        if host and state ~= 'dead' then HostSuspect(S, s, ped) end
+                        local onFoot = (state == 'stopped' or state == 'fleeing' or state == 'hostile')
+                            and not IsPedInAnyVehicle(ped, false)
                         if showBlips and onFoot then
-                            ensureBlip(S, k, ped, 1, CP.L('block.pursuit.blip_suspect'), 0.7)
+                            EnsureBlip(S, k, ped, 1, CP.L('block.pursuit.blip_suspect'), 0.7)
                         elseif showBlips and state == 'surrendered' then
-                            ensureBlip(S, k, ped, 1, CP.L('block.pursuit.blip_suspect'), 0.6)
+                            EnsureBlip(S, k, ped, 1, CP.L('block.pursuit.blip_suspect'), 0.6)
                         else
-                            dropBlip(S, k)
+                            DropBlip(S, k)
                         end
                         if onFoot then
                             local dist = #(GetEntityCoords(ped) - myPos)
                             if dist <= WATCH_RANGE then
                                 fast = true
-                                if IsPedBeingStunned(ped, 0) then reportOnce(S, 'stunned', s.netId) end
+                                if IsPedBeingStunned(ped, 0) then ReportOnce(S, 'stunned', s.netId) end
                                 local range = state == 'stopped' and AIM_STOPPED or aimRun
-                                local aimOk = not s.armed and state ~= 'hostile' and (obj.surrenderOnAim or state == 'fleeing')
+                                local aimOk = not s.armed and state ~= 'hostile'
+                                    and (obj.surrenderOnAim or state == 'fleeing')
                                 if aimOk and dist <= range and IsPlayerFreeAimingAtEntity(PlayerId(), ped) then
                                     local since = S.aimSince[s.netId] or GetGameTimer()
                                     S.aimSince[s.netId] = since
-                                    if GetGameTimer() - since >= AIM_HOLD_MS then reportOnce(S, 'aim', s.netId) end
+                                    if GetGameTimer() - since >= AIM_HOLD_MS then ReportOnce(S, 'aim', s.netId) end
                                 else
                                     S.aimSince[s.netId] = nil
                                 end
                             end
                         end
                     else
-                        dropBlip(S, k)
+                        DropBlip(S, k)
                     end
                 end
                 if d.mode == 'follow' and obj.failIfUndriveable and myVeh ~= 0 and GetPedInVehicleSeat(myVeh, -1) == me
                     and NetworkGetEntityIsNetworked(myVeh) and not IsVehicleDriveable(myVeh, false) then
                     local net = NetworkGetNetworkIdFromEntity(myVeh)
-                    if net and net ~= 0 then reportOnce(S, 'undriveable', net) end
+                    if net and net ~= 0 then ReportOnce(S, 'undriveable', net) end
                 end
-                setHint(S, hudText(S, myPos))
+                SetHint(S, HudText(S, myPos))
             end
             Wait(fast and FAST_MS or SLOW_MS)
         end
@@ -505,10 +515,10 @@ local function loop(S)
     end)
 end
 
-local function cleanup(S)
+local function Cleanup(S)
     S.alive = false
     S.current = false
-    for k in pairs(S.blips) do dropBlip(S, k) end
+    for k in pairs(S.blips) do DropBlip(S, k) end
     if S.hint then
         S.hint = nil
         S.ctx.hudDetail(nil)
@@ -525,8 +535,8 @@ CP.Blocks.register(BLOCK, {
         local S = S_of(ctx)
         S.alive = true
         S.current = true
-        loop(S)
-        ramLoop(S)
+        Loop(S)
+        RamLoop(S)
     end,
 
     update = function(ctx, data)
@@ -540,7 +550,7 @@ CP.Blocks.register(BLOCK, {
         for _, v in ipairs(S.vehicles) do keep['v' .. tostring(v.netId)] = true end
         S.byNet = byNet
         for k in pairs(S.blips) do
-            if not keep[k] then dropBlip(S, k) end
+            if not keep[k] then DropBlip(S, k) end
         end
     end,
 
@@ -551,12 +561,12 @@ CP.Blocks.register(BLOCK, {
     end,
 
     stop = function(ctx)
-        local S = active[keyOf(ctx)]
-        if S then cleanup(S) end
+        local S = active[KeyOf(ctx)]
+        if S then Cleanup(S) end
     end,
 })
 
 AddEventHandler('onResourceStop', function(res)
     if res ~= GetCurrentResourceName() then return end
-    for _, S in pairs(active) do cleanup(S) end
+    for _, S in pairs(active) do Cleanup(S) end
 end)

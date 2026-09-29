@@ -1,6 +1,7 @@
--- tests/testing_spec.lua · the testing slice: CP.Testing server (invites, start gates, controls, debug
--- geometry, the run-end hook, recording results, the catalog view) and client (panel focus, HUD flag,
--- teleport arena re-check, debug data). Every SQL statement of modules/testing runs here on MariaDB cp_test.
+-- The testing slice: CP.Testing server (invites, start gates, controls, debug geometry, the run-end hook, recording
+-- results, the catalog view) and client (panel focus, HUD flag, teleport arena re-check, debug data). Every SQL
+-- statement of modules/testing runs here on MariaDB cp_test.
+
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'server' })
 Config.Debug = true
@@ -15,37 +16,72 @@ _G.print = function(...)
     realPrint(line)
 end
 
--- ── natives ─────────────────────────────────────────────────────────────────
+-- ============================================================================
+--                                   NATIVES
+-- ============================================================================
+
 local buckets = {}
 _G.GetPlayerRoutingBucket = function(src) return buckets[src] or 0 end
 local offline = {}
 local realName = GetPlayerName
 _G.GetPlayerName = function(src) if offline[tonumber(src)] then return nil end return realName(src) end
 
-local function events(name)
+local function Events(name)
     return H.findEvents('crimson-police:' .. name)
 end
-local function lastEvent(name)
-    local list = events(name)
+local function LastEvent(name)
+    local list = Events(name)
     return list[#list]
 end
-local function eventsTo(name, target)
+local function EventsTo(name, target)
     local out = {}
-    for _, e in ipairs(events(name)) do if e.target == target then out[#out + 1] = e end end
+    for _, e in ipairs(Events(name)) do if e.target == target then out[#out + 1] = e end end
     return out
 end
 
--- ── stubs of the modules CP.Testing calls ───────────────────────────────────
+-- ============================================================================
+--                    STUBS OF THE MODULES CP.Testing CALLS
+-- ============================================================================
 -- players: 1 = admin (not police), 2 = on-duty officer, 3 = admin who is an off-duty SAST officer,
 -- 4 = civilian, 5 = on-duty FIB officer, 6 = supervisor (builderEdit), 7 = officer in the arena
 local infos = {
-    [1] = { citizenid = 'ADM00001', name = 'Alex Mercer', job = { name = 'unemployed', gradeName = 'Freelancer', gradeLevel = 0, onduty = false } },
-    [2] = { citizenid = 'OFF00002', name = 'John Doe', callsign = '2L-14', job = { name = 'sast', gradeName = 'Trooper', gradeLevel = 1, onduty = true } },
-    [3] = { citizenid = 'ADM00003', name = 'Sam Porter', job = { name = 'sast', gradeName = 'Sergeant', gradeLevel = 3, onduty = false } },
-    [4] = { citizenid = 'CIV00004', name = 'Joe Civ', job = { name = 'unemployed', gradeName = 'Freelancer', gradeLevel = 0, onduty = false } },
-    [5] = { citizenid = 'FIB00005', name = 'Dana Whitfield', job = { name = 'fib', gradeName = 'Agent', gradeLevel = 2, onduty = true } },
-    [6] = { citizenid = 'SUP00006', name = 'Maria Lopez', callsign = '2L-21', job = { name = 'sast', gradeName = 'Lieutenant', gradeLevel = 4, onduty = true } },
-    [7] = { citizenid = 'OFF00007', name = 'Tess Okafor', job = { name = 'sast', gradeName = 'Trooper', gradeLevel = 1, onduty = true } },
+    [1] = {
+        citizenid = 'ADM00001',
+        name = 'Alex Mercer',
+        job = { name = 'unemployed', gradeName = 'Freelancer', gradeLevel = 0, onduty = false },
+    },
+    [2] = {
+        citizenid = 'OFF00002',
+        name = 'John Doe',
+        callsign = '2L-14',
+        job = { name = 'sast', gradeName = 'Trooper', gradeLevel = 1, onduty = true },
+    },
+    [3] = {
+        citizenid = 'ADM00003',
+        name = 'Sam Porter',
+        job = { name = 'sast', gradeName = 'Sergeant', gradeLevel = 3, onduty = false },
+    },
+    [4] = {
+        citizenid = 'CIV00004',
+        name = 'Joe Civ',
+        job = { name = 'unemployed', gradeName = 'Freelancer', gradeLevel = 0, onduty = false },
+    },
+    [5] = {
+        citizenid = 'FIB00005',
+        name = 'Dana Whitfield',
+        job = { name = 'fib', gradeName = 'Agent', gradeLevel = 2, onduty = true },
+    },
+    [6] = {
+        citizenid = 'SUP00006',
+        name = 'Maria Lopez',
+        callsign = '2L-21',
+        job = { name = 'sast', gradeName = 'Lieutenant', gradeLevel = 4, onduty = true },
+    },
+    [7] = {
+        citizenid = 'OFF00007',
+        name = 'Tess Okafor',
+        job = { name = 'sast', gradeName = 'Trooper', gradeLevel = 1, onduty = true },
+    },
 }
 for src in pairs(infos) do H.players[src] = { coords = vec3(0.0, 0.0, 0.0) } end
 local admins = { [1] = true, [3] = true }
@@ -58,25 +94,57 @@ local DEPTS = {
     fib = { key = 'fib', label = 'Federal Investigation Bureau', short = 'FIB' },
 }
 CP.Qbx = {
-    getInfo = function(src) local i = infos[src]; if not i then return nil end; local c = CP.U.deepcopy(i); c.src = src; return c end,
-    getOnlinePlayers = function() local out = {}; for s in pairs(infos) do if not offline[s] then out[#out + 1] = s end end; table.sort(out); return out end,
-    getByCitizenId = function(cid) for s, i in pairs(infos) do if i.citizenid == cid then return s end end return nil end,
+    getInfo = function(src)
+        local i = infos[src]
+        if not i then return nil end
+        local c = CP.U.deepcopy(i)
+        c.src = src
+        return c
+    end,
+    getOnlinePlayers = function()
+        local out = {}
+        for s in pairs(infos) do if not offline[s] then out[#out + 1] = s end end
+        table.sort(out)
+        return out
+    end,
+    getByCitizenId = function(cid)
+        for s, i in pairs(infos) do if i.citizenid == cid then return s end end
+        return nil
+    end,
 }
 CP.Access = {
-    departmentForJob = function(job) if job == 'sast' then return 'sast' elseif job == 'fib' then return 'fib' end return nil end,
+    departmentForJob = function(job)
+        if job == 'sast' then return 'sast' elseif job == 'fib' then return 'fib' end
+        return nil
+    end,
     department = function(key) return DEPTS[key] and CP.U.copy(DEPTS[key]) or nil end,
     departments = function() return { CP.U.copy(DEPTS.fib), CP.U.copy(DEPTS.sast) } end,
     isAdmin = function(src) return admins[src] == true end,
-    role = function(src) if admins[src] then return 'admin' elseif supervisors[src] then return 'supervisor' end return 'officer' end,
+    role = function(src)
+        if admins[src] then return 'admin' elseif supervisors[src] then return 'supervisor' end
+        return 'officer'
+    end,
     getOfficer = function(src)
         local i = infos[src]
         if not i then return nil, 'err.not_police' end
         local dept = CP.Access.departmentForJob(i.job.name)
         if not dept then return nil, 'err.not_police' end
         if not i.job.onduty then return nil, 'err.not_on_duty' end
-        return { src = src, citizenid = i.citizenid, name = i.name, department = dept, departmentLabel = DEPTS[dept].label,
-            departmentShort = DEPTS[dept].short, job = i.job.name, rank = i.job.gradeName, gradeLevel = i.job.gradeLevel,
-            callsign = i.callsign, onduty = true, isSupervisor = supervisors[src] == true, isAdmin = admins[src] == true }
+        return {
+            src = src,
+            citizenid = i.citizenid,
+            name = i.name,
+            department = dept,
+            departmentLabel = DEPTS[dept].label,
+            departmentShort = DEPTS[dept].short,
+            job = i.job.name,
+            rank = i.job.gradeName,
+            gradeLevel = i.job.gradeLevel,
+            callsign = i.callsign,
+            onduty = true,
+            isSupervisor = supervisors[src] == true,
+            isAdmin = admins[src] == true,
+        }
     end,
 }
 local canCalls = {}
@@ -88,7 +156,9 @@ CP.Permissions = {
         return false, 'err.no_permission'
     end,
 }
-CP.Alerts = { inArena = function(src) return arena[src] == true or (buckets[src] or 0) ~= 0 end }
+CP.Alerts = {
+    inArena = function(src) return arena[src] == true or (buckets[src] or 0) ~= 0 end,
+}
 local reserved = {}
 CP.Draw = {
     isReserved = function(id, i) return reserved[id .. '#' .. i] == true end,
@@ -99,48 +169,96 @@ CP.Admin = {
     webhook = function(...) webhooks[#webhooks + 1] = table.pack(...) end,
 }
 CP.Tablet = {
-    notify = function(src, kind, key, vars) notifies[#notifies + 1] = { src = src, kind = kind, key = key, vars = vars } end,
+    notify = function(src, kind, key, vars)
+        notifies[#notifies + 1] = { src = src, kind = kind, key = key, vars = vars }
+    end,
     push = function(src, topic, data) pushes[#pushes + 1] = { src = src, topic = topic, data = data } end,
 }
 local drafted = {}
-CP.Builder = { onDraftTested = function(...) drafted[#drafted + 1] = table.pack(...) return true end }
+CP.Builder = {
+    onDraftTested = function(...) drafted[#drafted + 1] = table.pack(...) return true end,
+}
 
-local function lastNotify(src)
+local function LastNotify(src)
     for i = #notifies, 1, -1 do if notifies[i].src == src then return notifies[i] end end
     return nil
 end
 
--- ── missions ────────────────────────────────────────────────────────────────
-local function mission(id, extra)
+-- ============================================================================
+--                                   MISSIONS
+-- ============================================================================
+
+local function Mission(id, extra)
     local def = {
-        id = id, label = 'Gang Shootout', type = 'tactical', minOfficers = 1, maxOfficers = 4, difficulty = 3,
-        timeLimit = 600, source = 'builtin', defHash = 'aaaa1111', status = 'published', isBoss = false,
+        id = id,
+        label = 'Gang Shootout',
+        type = 'tactical',
+        minOfficers = 1,
+        maxOfficers = 4,
+        difficulty = 3,
+        timeLimit = 600,
+        source = 'builtin',
+        defHash = 'aaaa1111',
+        status = 'published',
+        isBoss = false,
         locations = {
-            { label = 'Hideout A', start = { coords = vec3(100.0, 200.0, 30.0), radius = 80.0 },
-              spawns = { vec4(110.0, 210.0, 30.0, 90.0), vec4(120.0, 220.0, 30.0, 180.0) },
-              route = { points = { vec3(0.0, 0.0, 0.0), vec3(10.0, 0.0, 0.0), vec3(20.0, 0.0, 0.0) }, loop = true },
-              checkpoints = { vec3(1.0, 1.0, 1.0), vec3(2.0, 2.0, 2.0) },
-              safe = vec3(130.0, 230.0, 30.0),
-              flee = { { vec3(5.0, 5.0, 5.0), vec3(6.0, 6.0, 6.0) }, { vec3(7.0, 7.0, 7.0) } },
-              npcs = { { coords = vec4(140.0, 240.0, 30.0, 0.0), label = 'Hostage' } },
-              medals = { gold = 10 } },
-            { label = 'Hideout B', start = { coords = vec3(300.0, 400.0, 30.0), radius = 60.0 }, spawns = { vec4(310.0, 410.0, 30.0, 0.0) } },
-            { label = 'Hideout C', start = { coords = vec3(500.0, 600.0, 30.0), radius = 60.0 }, spawns = { vec4(510.0, 610.0, 30.0, 0.0) } },
+            {
+                label = 'Hideout A',
+                start = { coords = vec3(100.0, 200.0, 30.0), radius = 80.0 },
+                spawns = { vec4(110.0, 210.0, 30.0, 90.0), vec4(120.0, 220.0, 30.0, 180.0) },
+                route = { points = { vec3(0.0, 0.0, 0.0), vec3(10.0, 0.0, 0.0), vec3(20.0, 0.0, 0.0) }, loop = true },
+                checkpoints = { vec3(1.0, 1.0, 1.0), vec3(2.0, 2.0, 2.0) },
+                safe = vec3(130.0, 230.0, 30.0),
+                flee = { { vec3(5.0, 5.0, 5.0), vec3(6.0, 6.0, 6.0) }, { vec3(7.0, 7.0, 7.0) } },
+                npcs = { { coords = vec4(140.0, 240.0, 30.0, 0.0), label = 'Hostage' } },
+                medals = { gold = 10 },
+            },
+            {
+                label = 'Hideout B',
+                start = { coords = vec3(300.0, 400.0, 30.0), radius = 60.0 },
+                spawns = { vec4(310.0, 410.0, 30.0, 0.0) },
+            },
+            {
+                label = 'Hideout C',
+                start = { coords = vec3(500.0, 600.0, 30.0), radius = 60.0 },
+                spawns = { vec4(510.0, 610.0, 30.0, 0.0) },
+            },
         },
         objectives = {
-            { block = 'hostile_waves', label = 'Clear the hideout', spawns = 'spawns', presenceRange = 150.0, blockTraffic = 120.0 },
-            { block = 'checkpoint_route', label = 'Drive the route', checkpoints = 'checkpoints', radius = 12.0, presenceRange = 100.0 },
-            { block = 'protect_rescue', label = 'Rescue', npcs = 'npcs', safe = 'safe', safeRadius = 8.0, presenceRange = 60.0 },
+            {
+                block = 'hostile_waves',
+                label = 'Clear the hideout',
+                spawns = 'spawns',
+                presenceRange = 150.0,
+                blockTraffic = 120.0,
+            },
+            {
+                block = 'checkpoint_route',
+                label = 'Drive the route',
+                checkpoints = 'checkpoints',
+                radius = 12.0,
+                presenceRange = 100.0,
+            },
+            {
+                block = 'protect_rescue',
+                label = 'Rescue',
+                npcs = 'npcs',
+                safe = 'safe',
+                safeRadius = 8.0,
+                presenceRange = 60.0,
+            },
         },
     }
     for k, v in pairs(extra or {}) do def[k] = v end
     return def
 end
 local defs = {
-    gang_shootout = mission('gang_shootout'),
-    prison_break = mission('prison_break', { label = 'Prison Break', defHash = 'bbbb2222' }),
-    custom_dockside = mission('custom_dockside', { label = 'Dockside Raid', source = 'custom', version = 3, defHash = 'cccc3333', maxOfficers = 2 }),
-    beat_patrol = mission('beat_patrol', { label = 'Beat Patrol', type = 'patrol', maxOfficers = 2, defHash = 'dddd4444' }),
+    gang_shootout = Mission('gang_shootout'),
+    prison_break = Mission('prison_break', { label = 'Prison Break', defHash = 'bbbb2222' }),
+    custom_dockside = Mission('custom_dockside',
+        { label = 'Dockside Raid', source = 'custom', version = 3, defHash = 'cccc3333', maxOfficers = 2 }),
+    beat_patrol = Mission('beat_patrol',
+        { label = 'Beat Patrol', type = 'patrol', maxOfficers = 2, defHash = 'dddd4444' }),
 }
 Config.DisabledMissions = { 'prison_break' }
 local normalized = {}
@@ -157,11 +275,14 @@ CP.Missions = {
     end,
 }
 
--- ── the run engine (records calls, keeps runs) ──────────────────────────────
+-- ============================================================================
+--                  THE RUN ENGINE (records calls, keeps runs)
+-- ============================================================================
+
 local runs, created, calls = {}, {}, {}
 local runSeq = 0
-local function call(name, ...) calls[#calls + 1] = { name = name, args = table.pack(...) } end
-local function lastCall(name)
+local function Call(name, ...) calls[#calls + 1] = { name = name, args = table.pack(...) } end
+local function LastCall(name)
     for i = #calls, 1, -1 do if calls[i].name == name then return calls[i] end end
     return nil
 end
@@ -172,46 +293,66 @@ CP.Runs = {
         created[#created + 1] = opts
         runSeq = runSeq + 1
         local run = {
-            id = ('run-%d'):format(runSeq), mission = opts.mission, missionId = opts.mission.id, test = CP.U.copy(opts.test),
-            state = 'accepted', objectiveIndex = 1, location = opts.mission.locations[opts.locationIndex],
-            locationIndex = opts.locationIndex, participants = {}, order = {}, expectedTier = opts.test.forcedTier or 'standard',
-            timer = { remaining = 600, paused = false, running = false }, objectives = {}, host = opts.leaderSrc,
+            id = ('run-%d'):format(runSeq),
+            mission = opts.mission,
+            missionId = opts.mission.id,
+            test = CP.U.copy(opts.test),
+            state = 'accepted',
+            objectiveIndex = 1,
+            location = opts.mission.locations[opts.locationIndex],
+            locationIndex = opts.locationIndex,
+            participants = {},
+            order = {},
+            expectedTier = opts.test.forcedTier or 'standard',
+            timer = { remaining = 600, paused = false, running = false },
+            objectives = {},
+            host = opts.leaderSrc,
         }
         for i, o in ipairs(opts.mission.objectives) do run.objectives[i] = { status = 'pending', obj = o } end
         for _, m in ipairs(opts.members) do
-            run.participants[m.src] = { src = m.src, name = m.name, status = 'active', departmentShort = m.departmentShort, arrived = false }
+            run.participants[m.src] = {
+                src = m.src,
+                name = m.name,
+                status = 'active',
+                departmentShort = m.departmentShort,
+                arrived = false,
+            }
             run.order[#run.order + 1] = m.src
             onRun[m.src] = true
         end
         runs[run.id] = run
         return run
     end,
-    testSkip = function(run) call('testSkip', run) run.objectiveIndex = run.objectiveIndex + 1 return true end,
-    testRestart = function(run) call('testRestart', run) return true end,
-    pauseTimer = function(run, paused) call('pauseTimer', run, paused) run.timer.paused = paused end,
+    testSkip = function(run) Call('testSkip', run) run.objectiveIndex = run.objectiveIndex + 1 return true end,
+    testRestart = function(run) Call('testRestart', run) return true end,
+    pauseTimer = function(run, paused) Call('pauseTimer', run, paused) run.timer.paused = paused end,
     remaining = function(run) return run.timer.running and run.timer.remaining or nil end,
-    anchor = function(run) return run.state == 'in_progress' and vec3(111.0, 222.0, 33.0) or run.location.start.coords end,
+    anchor = function(run)
+        return run.state == 'in_progress' and vec3(111.0, 222.0, 33.0) or run.location.start.coords
+    end,
     entitiesFor = function(run)
         return {
-            { netId = 1, kind = 'ped', armed = true, dead = false }, { netId = 2, kind = 'ped', armed = true, dead = true },
-            { netId = 3, kind = 'ped', armed = false, dead = false }, { netId = 4, kind = 'vehicle', armed = false, dead = false },
+            { netId = 1, kind = 'ped', armed = true, dead = false },
+            { netId = 2, kind = 'ped', armed = true, dead = true },
+            { netId = 3, kind = 'ped', armed = false, dead = false },
+            { netId = 4, kind = 'vehicle', armed = false, dead = false },
             { netId = 5, kind = 'object', armed = false, dead = false },
         }
     end,
     endRun = function(run, state, reason)
-        call('endRun', run, state, reason)
+        Call('endRun', run, state, reason)
         run.state = 'ended'
         runs[run.id] = nil
         for _, s in ipairs(run.order) do onRun[s] = nil end
         CP.Testing.onRunEnded(run, state, reason)
     end,
     failRun = function(run, key)
-        call('failRun', run, key)
+        Call('failRun', run, key)
         run.failReason = key
         CP.Runs.endRun(run, 'failed', 'mission_failed')
     end,
 }
-local function beginRun(run)
+local function BeginRun(run)
     run.state = 'in_progress'
     run.timer.running = true
     run.tier = { tier = run.test.forcedTier or 'standard' }
@@ -222,12 +363,13 @@ H.load('modules/testing/server.lua')
 local T = CP.Testing
 
 H.sql('DELETE FROM cp_mission_tests')
-H.sql("DELETE FROM cp_officers WHERE citizenid IN ('OFF00002', 'ADM00001')")
-H.sql("INSERT INTO cp_officers (citizenid, display_name, department) VALUES ('OFF00002', 'John Doe', 'sast')")
+H.sql('DELETE FROM cp_officers WHERE citizenid IN (\'OFF00002\', \'ADM00001\')')
+H.sql('INSERT INTO cp_officers (citizenid, display_name, department) VALUES (\'OFF00002\', \'John Doe\', \'sast\')')
 
--- ════════════════════════════════════════════════════════════════════════════
--- helpers
--- ════════════════════════════════════════════════════════════════════════════
+-- ============================================================================
+--                                   HELPERS
+-- ============================================================================
+
 do
     H.eq(T._validTier('Heavy'), 'heavy', 'tier names are case-insensitive')
     H.eq(T._validTier('legendary'), nil, 'unknown tier')
@@ -243,12 +385,14 @@ do
     H.eq(T._adminRecord(99), nil, 'no character')
 end
 
--- ════════════════════════════════════════════════════════════════════════════
--- start gates
--- ════════════════════════════════════════════════════════════════════════════
+-- ============================================================================
+--                                 START GATES
+-- ============================================================================
+
 do
     local ok, err = T.start(2, { missionId = 'gang_shootout' })
-    H.eq(ok, false, 'an officer cannot start a test'); H.eq(err, 'err.no_permission', 'no permission')
+    H.eq(ok, false, 'an officer cannot start a test')
+    H.eq(err, 'err.no_permission', 'no permission')
     ok, err = T.start(0, { missionId = 'gang_shootout' })
     H.eq(err, 'err.not_in_game', 'console cannot join a test')
     ok, err = T.start(1, { missionId = 'nope' })
@@ -283,9 +427,10 @@ do
     H.eq(#created, 0, 'nothing was created by the refused starts')
 end
 
--- ════════════════════════════════════════════════════════════════════════════
--- invitations
--- ════════════════════════════════════════════════════════════════════════════
+-- ============================================================================
+--                                 INVITATIONS
+-- ============================================================================
+
 local inviteFor5, inviteFor3
 do
     arena[7] = true
@@ -302,8 +447,8 @@ do
     H.eq(#res.lobby.invites, 3, 'three invitations: officer 2, admin 3, officer 5')
     H.eq(res.lobby.missionId, 'gang_shootout', 'lobby mission')
     H.eq(res.lobby.maxTesters, 8, 'Config.Testing.maxTesters')
-    H.eq(#eventsTo('client:testInvite', 2), 1, 'client:testInvite to the officer')
-    local ev = lastEvent('client:testInvite').args[1]
+    H.eq(#EventsTo('client:testInvite', 2), 1, 'client:testInvite to the officer')
+    local ev = LastEvent('client:testInvite').args[1]
     H.eq(ev.missionLabel, 'Gang Shootout', 'invite carries the mission label')
     H.eq(ev.from, 'Alex Mercer', 'and who sent it')
     H.ok(type(ev.inviteId) == 'string', 'and an id')
@@ -328,13 +473,13 @@ do
     arena[5] = nil
     okR = T.respond(5, { inviteId = inviteFor5, accepted = true })
     H.eq(okR, true, 'accepted')
-    H.eq(lastNotify(1).key, 'test.invite_accepted', 'the admin is told')
+    H.eq(LastNotify(1).key, 'test.invite_accepted', 'the admin is told')
     okR = T.respond(3, { inviteId = inviteFor3, accepted = true })
     H.eq(okR, true, 'the admin tester accepted')
     local officerInvite = T.pendingInvites(2)[1].inviteId
     okR = T.respond(2, { inviteId = officerInvite, accepted = false })
     H.eq(okR, true, 'declined')
-    H.eq(lastNotify(1).key, 'test.invite_declined', 'the admin is told about the decline')
+    H.eq(LastNotify(1).key, 'test.invite_declined', 'the admin is told about the decline')
     okR, errR = T.respond(2, { inviteId = officerInvite, accepted = true })
     H.eq(errR, 'err.test_invite_gone', 'a declined invitation is closed')
     local st = T.state(1)
@@ -353,13 +498,15 @@ do
     arena[7] = nil
 end
 
--- ════════════════════════════════════════════════════════════════════════════
--- starting, controls, debug stream, end hook
--- ════════════════════════════════════════════════════════════════════════════
+-- ============================================================================
+--                  STARTING, CONTROLS, DEBUG STREAM, END HOOK
+-- ============================================================================
+
 local run
 do
     H.reset()
-    local ok, data = T.start(1, { missionId = 'gang_shootout', location = 1, tier = 'major', useStartRoute = false, testers = { 5, 3 } })
+    local ok, data = T.start(1,
+        { missionId = 'gang_shootout', location = 1, tier = 'major', useStartRoute = false, testers = { 5, 3 } })
     H.eq(ok, true, 'test started')
     H.eq(data.tier, 'major', 'forced tier')
     H.eq(data.testers, 3, 'admin + two testers')
@@ -375,7 +522,7 @@ do
     H.eq(opts.members[3].job, nil, 'the admin tester has no job (no duty re-checks)')
     H.eq(opts.locationIndex, 1, 'chosen location')
     run = runs[data.runId]
-    local ev = lastEvent('client:test')
+    local ev = LastEvent('client:test')
     H.eq(ev.target, 1, 'client:test to the admin')
     H.eq(ev.args[1].controls, true, 'controls on')
     H.eq(ev.args[1].debug, false, 'debug off at start')
@@ -403,7 +550,7 @@ do
     H.eq(okT, true, 'teleport before in progress')
     H.eq(tp.target, 'start', 'defaults to the start')
     H.eq(tp.coords.x, 100.0, 'start coords')
-    beginRun(run)
+    BeginRun(run)
     okT, tp = T.control(1, { control = 'teleport' })
     H.eq(tp.target, 'objective', 'defaults to the objective in progress')
     H.eq(tp.coords.y, 222.0, 'CP.Runs.anchor coords')
@@ -422,14 +569,14 @@ do
 
     okC = T.control(1, { control = 'skip' })
     H.eq(okC, true, 'skip')
-    H.eq(lastCall('testSkip').args[1], run, 'CP.Runs.testSkip')
+    H.eq(LastCall('testSkip').args[1], run, 'CP.Runs.testSkip')
     okC = T.control(1, { control = 'restart' })
-    H.eq(lastCall('testRestart').args[1], run, 'CP.Runs.testRestart')
+    H.eq(LastCall('testRestart').args[1], run, 'CP.Runs.testRestart')
     local okP, p = T.control(1, { control = 'pause' })
     H.eq(p.paused, true, 'paused')
-    H.eq(lastCall('pauseTimer').args[2], true, 'CP.Runs.pauseTimer(run, true)')
+    H.eq(LastCall('pauseTimer').args[2], true, 'CP.Runs.pauseTimer(run, true)')
     okP, p = T.control(1, { control = 'resume' })
-    H.eq(lastCall('pauseTimer').args[2], false, 'resume')
+    H.eq(LastCall('pauseTimer').args[2], false, 'resume')
 
     -- debug stream
     Config.Testing.debugOverlay = false
@@ -439,7 +586,7 @@ do
     H.reset()
     okD, d = T.control(1, { control = 'debug' })
     H.eq(d.debug, true, 'debug toggled on')
-    local dbg = lastEvent('client:test').args[1].debug
+    local dbg = LastEvent('client:test').args[1].debug
     H.ok(type(dbg) == 'table', 'debug payload sent to the admin')
     H.eq(dbg.counts.entities, 5, 'entity count')
     H.eq(dbg.counts.armedAlive, 1, 'armed alive excludes the dead')
@@ -452,20 +599,20 @@ do
     H.eq(dbg.startRadius, 80.0, 'start radius')
     H.reset()
     H.advance(2100)
-    local list = events('client:test')
+    local list = Events('client:test')
     H.ok(#list >= 1, 'the debug stream sends every 2 s')
     H.eq(list[#list].args[1].debug.geometry, nil, 'geometry only when it changed')
     Config.Limits.maxArmedAlive = 30
     H.advance(2100)
-    list = events('client:test')
+    list = Events('client:test')
     H.eq(list[#list].args[1].debug.counts.maxArmedAlive, 30, 'caps are read from Config at call time')
     Config.Limits.maxArmedAlive = 25
     okD, d = T.control(1, { control = 'debug', enabled = false })
     H.eq(d.debug, false, 'debug off')
-    H.eq(lastEvent('client:test').args[1].debug, false, 'the client is told')
+    H.eq(LastEvent('client:test').args[1].debug, false, 'the client is told')
     H.reset()
     H.advance(2100)
-    H.eq(#events('client:test'), 0, 'no stream while off')
+    H.eq(#Events('client:test'), 0, 'no stream while off')
 
     -- the geometry itself
     local g = T._geometry(run)
@@ -496,10 +643,10 @@ do
     H.reset()
     local okE = T.control(1, { control = 'complete' })
     H.eq(okE, true, 'force complete')
-    local e = lastCall('endRun')
-    H.eq(e.args[2], 'completed', "endRun(run, 'completed', ...)")
+    local e = LastCall('endRun')
+    H.eq(e.args[2], 'completed', 'endRun(run, \'completed\', ...)')
     H.eq(e.args[3], 'completed', 'end reason completed')
-    local endEv = lastEvent('client:test').args[1]
+    local endEv = LastEvent('client:test').args[1]
     H.eq(endEv.controls, false, 'controls off at the end')
     local st = T.state(1)
     H.ok(st.active == false, 'no active test after the end')
@@ -507,12 +654,13 @@ do
     H.eq(st.pending[1].tier, 'major', 'the forced tier')
     H.eq(st.pending[1].testers, 3, 'testers')
     H.eq(st.pending[1].endState, 'completed', 'end state')
-    H.eq(lastNotify(1).key, 'test.ended_record', 'the admin is reminded to record it')
+    H.eq(LastNotify(1).key, 'test.ended_record', 'the admin is reminded to record it')
 end
 
--- ════════════════════════════════════════════════════════════════════════════
--- recording results (SQL) and the catalog (SQL)
--- ════════════════════════════════════════════════════════════════════════════
+-- ============================================================================
+--                RECORDING RESULTS (SQL) and the catalog (SQL)
+-- ============================================================================
+
 do
     local ok, err = T.record(1, { missionId = 'gang_shootout', location = 2, result = 'passed' })
     H.eq(err, 'err.test_not_run', 'no test of that location was run')
@@ -526,14 +674,16 @@ do
     H.eq(err, 'err.invalid_payload', 'note must be text')
 
     local long = string.rep('é', 300)
-    local okR, data = T.record(1, { missionId = 'gang_shootout', location = 1, tier = 'major', result = 'failed', note = '  ' .. long .. '  ' })
+    local okR, data = T.record(1,
+        { missionId = 'gang_shootout', location = 1, tier = 'major', result = 'failed', note = '  ' .. long .. '  ' })
     H.eq(okR, true, 'recorded')
     if not okR then
         realPrint('record error: ' .. tostring(data))
         for _, l in ipairs(logs) do if l:find('testing', 1, true) and l:find('fail', 1, true) then realPrint(l) end end
     end
     H.eq(data.result, 'failed', 'result')
-    local rows = H.sql('SELECT mission_id, mission_version, location_index, tier, testers, result, CHAR_LENGTH(note) AS n, tested_by, def_hash FROM cp_mission_tests')
+    local rows = H.sql(
+        'SELECT mission_id, mission_version, location_index, tier, testers, result, CHAR_LENGTH(note) AS n, tested_by, def_hash FROM cp_mission_tests')
     local stored = H.sql('SELECT note FROM cp_mission_tests')[1].note
     H.eq(#rows, 1, 'one cp_mission_tests row')
     H.eq(rows[1].mission_id, 'gang_shootout', 'mission_id')
@@ -543,7 +693,8 @@ do
     H.eq(rows[1].testers, 3, 'testers')
     H.eq(rows[1].result, 'failed', 'result')
     H.ok(rows[1].n <= 255, 'the note fits VARCHAR(255)')
-    H.ok(utf8.len(stored) ~= nil and #stored <= 255 and #stored >= 250, 'clipped to 255 bytes on a character boundary (' .. #stored .. ')')
+    H.ok(utf8.len(stored) ~= nil and #stored <= 255 and #stored >= 250,
+        'clipped to 255 bytes on a character boundary (' .. #stored .. ')')
     H.eq(rows[1].tested_by, 'ADM00001', 'tested_by = the admin citizenid')
     H.eq(rows[1].def_hash, 'aaaa1111', 'def_hash = the mission defHash (migration 002)')
     local a = audits[#audits]
@@ -572,7 +723,8 @@ do
     H.eq(view.totals.locations, 12, 'every location')
     H.eq(view.missions[1].type, 'patrol', 'sorted by type points')
     -- hand-inserted rows: a newer passed row by an officer, a custom mission with an older version
-    H.sql([[INSERT INTO cp_mission_tests (mission_id, mission_version, location_index, tier, testers, result, note, tested_by, def_hash)
+    H.sql(
+        [[INSERT INTO cp_mission_tests (mission_id, mission_version, location_index, tier, testers, result, note, tested_by, def_hash)
         VALUES ('gang_shootout', NULL, 1, 'heavy', 2, 'passed', NULL, 'OFF00002', 'aaaa1111'),
                ('custom_dockside', 2, 1, 'reinforced', 1, 'passed', 'ok', 'OFF00002', 'cccc3333'),
                ('beat_patrol', NULL, 3, 'reinforced', 2, 'passed', NULL, 'OFF00002', NULL)]])
@@ -588,19 +740,26 @@ do
     view = T.list()
     byId = {}
     for _, m in ipairs(view.missions) do byId[m.id] = m end
-    H.eq(byId.gang_shootout.locations[1].status, 'changed', 'edited/reloaded mission (new defHash) = Changed since test')
+    H.eq(byId.gang_shootout.locations[1].status, 'changed',
+        'edited/reloaded mission (new defHash) = Changed since test')
     defs.gang_shootout.defHash = 'aaaa1111'
 
     -- archived custom missions come from the builder
     CP.Builder.archivedDefs = function()
-        return { mission('custom_harbor', { label = 'Harbor Sweep', source = 'custom', version = 1, defHash = 'ffff6666', status = 'archived' }) }
+        return {
+            Mission('custom_harbor',
+                { label = 'Harbor Sweep', source = 'custom', version = 1, defHash = 'ffff6666', status = 'archived' }),
+        }
     end
     view = T.list()
     byId = {}
     for _, m in ipairs(view.missions) do byId[m.id] = m end
     H.eq(byId.custom_harbor.status, 'archived', 'archived missions are in the catalog')
     CP.Builder.getArchived = function(id)
-        if id == 'custom_harbor' then return mission('custom_harbor', { label = 'Harbor Sweep', source = 'custom', version = 1, defHash = 'ffff6666' }) end
+        if id == 'custom_harbor' then
+            return Mission('custom_harbor',
+                { label = 'Harbor Sweep', source = 'custom', version = 1, defHash = 'ffff6666' })
+        end
     end
 
     -- callbacks and actions through CP.Net
@@ -615,9 +774,10 @@ do
     H.eq(res.ok, true, 'test:state')
 end
 
--- ════════════════════════════════════════════════════════════════════════════
--- archived mission start, random location, command, end/fail controls
--- ════════════════════════════════════════════════════════════════════════════
+-- ============================================================================
+--     ARCHIVED MISSION START, RANDOM LOCATION, COMMAND, end/fail CONTROLS
+-- ============================================================================
+
 do
     H.clockMs = H.clockMs + 5000
     local ok, data = T.start(1, { missionId = 'custom_harbor', location = 'random' })
@@ -627,7 +787,7 @@ do
     H.eq(r.test.forcedTier, nil, 'no tier chosen: natural scaling')
     local okE = T.control(1, { control = 'end' })
     H.eq(okE, true, 'end test')
-    H.eq(lastCall('failRun').args[2], 'test.ended_by_admin', 'ends with a failReason the HUD shows')
+    H.eq(LastCall('failRun').args[2], 'test.ended_by_admin', 'ends with a failReason the HUD shows')
     local st = T.state(1)
     H.eq(st.pending[1].endedBy, 'end', 'ended by the admin')
 
@@ -637,7 +797,7 @@ do
     ok, data = T.start(1, { missionId = 'beat_patrol', location = 'random' })
     H.eq(data.locationIndex, 3, 'random skips reserved locations')
     T.control(1, { control = 'fail' })
-    H.eq(lastCall('failRun').args[2], 'test.fail_forced', 'force fail')
+    H.eq(LastCall('failRun').args[2], 'test.fail_forced', 'force fail')
     reserved['beat_patrol#3'] = true
     H.clockMs = H.clockMs + 5000
     ok, data = T.start(1, { missionId = 'beat_patrol', location = 'random' })
@@ -659,16 +819,17 @@ do
     -- the admin leaves: the test ends for the testers
     H.fire('playerDropped', 1)
     H.step(10)
-    H.eq(lastCall('failRun').args[2], 'test.ended_admin_left', 'the test ends when its admin leaves')
+    H.eq(LastCall('failRun').args[2], 'test.ended_admin_left', 'the test ends when its admin leaves')
     H.ok(T.state(1).active == false, 'no active test left')
 end
 
--- ════════════════════════════════════════════════════════════════════════════
--- draft tests (Mission Builder)
--- ════════════════════════════════════════════════════════════════════════════
+-- ============================================================================
+--                        DRAFT TESTS (Mission Builder)
+-- ============================================================================
+
 do
     H.clockMs = H.clockMs + 5000
-    local raw = mission('custom_draft', { label = 'Draft Raid', version = 4 })
+    local raw = Mission('custom_draft', { label = 'Draft Raid', version = 4 })
     raw.source, raw.defHash, raw.status, raw.isBoss = nil, nil, nil, nil
     local ok, err = T.startDraft(2, raw, { tier = 'heavy' })
     H.eq(err, 'err.no_permission', 'an officer without builderEdit cannot test drafts')
@@ -676,7 +837,9 @@ do
     H.eq(err, 'err.test_invalid_draft', 'a draft that does not normalise')
     -- Hard rule 7: a Cross-Department Mission blocks a supervisor's draft test; only admin tests bypass it
     local savedOps = CP.Operations
-    CP.Operations = { isLocked = function() return true end }
+    CP.Operations = {
+        isLocked = function() return true end,
+    }
     ok, err = T.startDraft(6, raw, { tier = 'heavy', location = 2 })
     H.eq(err, 'err.operation_locked', 'a supervisor cannot test a draft during a Cross-Department Mission')
     ok, err = T.startDraft(3, { id = 'custom_bad', broken = true, locations = {} }, {})
@@ -689,7 +852,7 @@ do
     H.eq(opts.members[1].job, 'sast', 'the on-duty supervisor keeps their officer record')
     H.eq(normalized[#normalized].meta.status, 'draft', 'normalised as a draft')
     local r = runs[err.runId]
-    beginRun(r)
+    BeginRun(r)
     T.control(6, { control = 'complete' })
     local okR = T.record(6, { missionId = 'custom_draft', location = 2, result = 'passed', note = 'good' })
     H.eq(okR, true, 'the builder records the draft result')
@@ -699,14 +862,16 @@ do
     H.eq(d[3], 'heavy', 'tierName')
     H.eq(d[4], true, 'passed')
     H.eq(d[5], 6, 'src)')
-    local rows = H.sql("SELECT mission_version, tier, def_hash FROM cp_mission_tests WHERE mission_id = 'custom_draft'")
+    local rows = H.sql(
+        'SELECT mission_version, tier, def_hash FROM cp_mission_tests WHERE mission_id = \'custom_draft\'')
     H.eq(rows[1].mission_version, 4, 'draft version stored')
     H.eq(rows[1].def_hash, 'draft0001', 'draft hash stored')
 end
 
--- ════════════════════════════════════════════════════════════════════════════
--- invitation expiry and actions through CP.Net
--- ════════════════════════════════════════════════════════════════════════════
+-- ============================================================================
+--                 INVITATION EXPIRY AND ACTIONS THROUGH CP.Net
+-- ============================================================================
+
 do
     offline[1] = nil
     H.clockMs = H.clockMs + 5000
@@ -724,13 +889,14 @@ do
     local lbl = resD and resD.lobby and resD.lobby.missionLabel or ''
     H.ok(utf8.len(lbl) ~= nil, 'the draft label stays valid UTF-8')
     H.eq(#lbl, 64, 'clipped to 64 bytes (32 whole characters)')
-    local lastInviteEv = lastEvent('client:testInvite')
+    local lastInviteEv = LastEvent('client:testInvite')
     H.ok(lastInviteEv and utf8.len(lastInviteEv.args[1].missionLabel) ~= nil, 'the invite event carries valid UTF-8')
     T.cancelInvites(3)
 
     -- integration: CP.Testing.resolveMission is public (/CrimsonPoliceAdmin test resolves archived missions with it)
     H.ok(type(T.resolveMission) == 'function', 'CP.Testing.resolveMission is exposed')
-    H.eq(T.resolveMission('gang_shootout') and T.resolveMission('gang_shootout').id, 'gang_shootout', 'resolves a loaded mission')
+    H.eq(T.resolveMission('gang_shootout') and T.resolveMission('gang_shootout').id, 'gang_shootout',
+        'resolves a loaded mission')
     local noDef, noErr = T.resolveMission('no_such_mission')
     H.eq(noDef, nil, 'unknown mission')
     H.eq(noErr, 'err.test_unknown_mission', 'with its error key')
@@ -738,29 +904,32 @@ do
     -- the net action path (permission wrappers and reply events)
     H.reset()
     H.fire('crimson-police:server:test:invite', 2, { missionId = 'gang_shootout', targets = { 5 } }, 'r1')
-    local reply = lastEvent('client:actionResult')
+    local reply = LastEvent('client:actionResult')
     H.eq(reply.args[2], false, 'server:test:invite needs testRun')
     H.eq(reply.args[3], 'err.no_permission', 'no permission')
     H.fire('crimson-police:server:testRespond', 5, { inviteId = 'x', accepted = true }, 'r2')
-    reply = lastEvent('client:actionResult')
+    reply = LastEvent('client:actionResult')
     H.eq(reply.args[3], 'err.test_invite_gone', 'server:testRespond with an unknown invitation')
     H.fire('crimson-police:server:admin:startTest', 2, { missionId = 'gang_shootout' }, 'r3')
-    reply = lastEvent('client:actionResult')
+    reply = LastEvent('client:actionResult')
     H.eq(reply.args[3], 'err.no_permission', 'server:admin:startTest needs testRun')
     H.fire('crimson-police:server:test:control', 5, { control = 'end' }, 'r4')
-    reply = lastEvent('client:actionResult')
+    reply = LastEvent('client:actionResult')
     H.eq(reply.args[3], 'err.test_no_active', 'server:test:control only for the starter')
-    H.fire('crimson-police:server:admin:recordTest', 1, { missionId = 'gang_shootout', location = 1, result = 'passed' }, 'r5')
-    reply = lastEvent('client:actionResult')
+    H.fire('crimson-police:server:admin:recordTest', 1,
+        { missionId = 'gang_shootout', location = 1, result = 'passed' }, 'r5')
+    reply = LastEvent('client:actionResult')
     H.eq(reply.args[3], 'err.test_not_run', 'server:admin:recordTest')
     H.fire('crimson-police:server:test:cancelInvites', 3, {}, 'r6')
-    reply = lastEvent('client:actionResult')
+    reply = LastEvent('client:actionResult')
     H.eq(reply.args[2], true, 'server:test:cancelInvites')
 end
 
--- ════════════════════════════════════════════════════════════════════════════
--- locale: every key the slice uses exists in locales/parts/testing.json
--- ════════════════════════════════════════════════════════════════════════════
+-- ============================================================================
+--                                    LOCALE
+-- ============================================================================
+-- Every key the slice uses exists in locales/parts/testing.json.
+
 do
     local f = assert(io.open(H.root .. 'locales/parts/testing.json', 'r'))
     local part = json.decode(f:read('a'))
@@ -770,7 +939,7 @@ do
         local fh = assert(io.open(H.root .. file, 'r'))
         local src = fh:read('a')
         fh:close()
-        for key in src:gmatch("'((%a+)%.[%w_%.]+)'") do
+        for key in src:gmatch('\'((%a+)%.[%w_%.]+)\'') do
             local ns = key:match('^(%a+)%.')
             if (ns == 'err' or ns == 'test') and part[key] == nil then missing[#missing + 1] = key end
         end
@@ -778,11 +947,17 @@ do
     H.eq(#missing, 0, 'locale keys used in Lua: ' .. table.concat(missing, ', '))
 end
 
--- ════════════════════════════════════════════════════════════════════════════
+-- ============================================================================
+--                                      ═
+-- ============================================================================
 -- integration with the REAL run engine (modules/runs/server.lua): the contract calls CP.Testing makes
 -- (create with an admin record, testSkip/testRestart/pauseTimer/anchor/endRun/failRun, entitiesFor,
 -- remaining) and the onRunEnded hook, with nothing written to cp_mission_runs
--- ════════════════════════════════════════════════════════════════════════════
+
+-- ============================================================================
+--                                      ═
+-- ============================================================================
+
 do
     T._reset()
     for s in pairs(onRun) do onRun[s] = nil end
@@ -802,15 +977,30 @@ do
     end
     CP.Alerts.set = function() return true end
     CP.Alerts.clear = function() return true end
-    CP.Payouts = { baseFor = function() return 800 end }
+    CP.Payouts = {
+        baseFor = function() return 800 end,
+    }
     CP.Scoring = {
         P = function() return 200 end,
         compute = function(_, _, result, opts)
-            return { P = 200, bonuses = {}, penalties = {}, subtotal = 200, mTeam = 1, mCross = 1, mStreak = 1,
-                capped = false, tod = false, failedShare = opts.failedShare, final = result == 'completed' and 200 or 0 }
+            return {
+                P = 200,
+                bonuses = {},
+                penalties = {},
+                subtotal = 200,
+                mTeam = 1,
+                mCross = 1,
+                mStreak = 1,
+                capped = false,
+                tod = false,
+                failedShare = opts.failedShare,
+                final = result == 'completed' and 200 or 0,
+            }
         end,
     }
-    CP.Cash = { compute = function() return 800, { B = 800, mTier = 1.0, mMod = 1.0, amount = 800 } end }
+    CP.Cash = {
+        compute = function() return 800, { B = 800, mTier = 1.0, mMod = 1.0, amount = 800 } end,
+    }
     H.sql('DELETE FROM cp_mission_runs')
     CP.Runs = nil
     H.load('modules/runs/server.lua')
@@ -828,14 +1018,15 @@ do
     local run = ok and R.get(data.runId) or nil
     H.ok(run ~= nil, 'real engine: the run exists')
     if run then
-        H.eq(run.participants[1].isOfficer, false, 'real engine: the non-police admin is not an officer (no duty re-checks)')
+        H.eq(run.participants[1].isOfficer, false,
+            'real engine: the non-police admin is not an officer (no duty re-checks)')
         H.eq(run.participants[2].isOfficer, true, 'real engine: the tester is an officer')
         H.eq(run.expectedTier, 'heavy', 'real engine: the forced tier whatever the number of testers')
         H.eq(run.test.adminSrc, 1, 'real engine: test.adminSrc')
         H.eq(run.test.useStartRoute, false, 'real engine: the start route is off by default')
         H.eq(reserved['gang_shootout#1'], true, 'real engine: the test still reserves its location')
         H.eq(run.modifier, nil, 'real engine: no modifier on a test')
-        local starts = eventsTo('client:start', 2)
+        local starts = EventsTo('client:start', 2)
         H.eq(#starts, 1, 'real engine: client:start to the tester')
         H.eq(starts[1] and starts[1].args[2].test.adminSrc, 1, 'real engine: the tester sees the test table')
 
@@ -864,7 +1055,7 @@ do
         H.reset()
         local okD = T.control(1, { control = 'debug' })
         H.eq(okD, true, 'real engine: debug on')
-        local dbg = lastEvent('client:test')
+        local dbg = LastEvent('client:test')
         dbg = dbg and dbg.args[1].debug
         H.ok(type(dbg) == 'table' and dbg.counts.entities == 0, 'real engine: counts from CP.Runs.entitiesFor')
         H.ok(type(dbg) == 'table' and type(dbg.remaining) == 'number', 'real engine: timer from CP.Runs.remaining')
@@ -876,13 +1067,14 @@ do
         H.eq(okC, true, 'real engine: force complete')
         H.eq(R.get(data.runId), nil, 'real engine: the run is gone')
         H.eq(reserved['gang_shootout#1'], nil, 'real engine: the location is released')
-        local ended = eventsTo('client:runEnded', 2)
+        local ended = EventsTo('client:runEnded', 2)
         local rr = ended[1] and ended[1].args[4]
         H.eq(ended[1] and ended[1].args[2], 'completed', 'real engine: completed for the tester')
         H.ok(type(rr) == 'table' and rr.test == true, 'real engine: the RunResult is marked test')
         H.eq(type(rr) == 'table' and rr.cash.amount, 800, 'real engine: the cash it would have earned is shown')
         H.eq(type(rr) == 'table' and rr.points.final, 200, 'real engine: the points it would have earned are shown')
-        H.eq(tonumber(H.sql('SELECT COUNT(*) AS n FROM cp_mission_runs')[1].n), 0, 'real engine: no cp_mission_runs row')
+        H.eq(tonumber(H.sql('SELECT COUNT(*) AS n FROM cp_mission_runs')[1].n), 0,
+            'real engine: no cp_mission_runs row')
         local st = T.state(1)
         H.ok(st.active == false, 'real engine: no active test after the end (onRunEnded hook)')
         H.eq(st.pending[1] and st.pending[1].endState, 'completed', 'real engine: waiting for a result')
@@ -904,7 +1096,7 @@ do
         H.eq(run.expectedTier, 'standard', 'real engine: Auto tier = the tier for one tester')
         local okE = T.control(1, { control = 'end' })
         H.eq(okE, true, 'real engine: End test')
-        local ended = eventsTo('client:runEnded', 1)
+        local ended = EventsTo('client:runEnded', 1)
         local e = ended[#ended]
         H.eq(e and e.args[3], 'mission_failed', 'real engine: ended as mission_failed')
         H.eq(e and e.args[4] and e.args[4].failReason, 'test.ended_by_admin', 'real engine: with the End test reason')
@@ -926,11 +1118,12 @@ do
 
     -- archived custom missions without the builder hooks: cp_custom_missions rows + the archived file
     CP.Builder.archivedDefs, CP.Builder.getArchived = nil, nil
-    H.sql("DELETE FROM cp_custom_missions WHERE id IN ('custom_arch', 'custom_live')")
-    H.sql([[INSERT INTO cp_custom_missions (id, mission_type, status, published_version, file_path, created_by, updated_by)
+    H.sql('DELETE FROM cp_custom_missions WHERE id IN (\'custom_arch\', \'custom_live\')')
+    H.sql(
+        [[INSERT INTO cp_custom_missions (id, mission_type, status, published_version, file_path, created_by, updated_by)
         VALUES ('custom_arch', 'tactical', 'archived', 5, 'missions/custom/archived/custom_arch.lua', 'SUP00006', 'SUP00006'),
                ('custom_live', 'tactical', 'published', 2, 'missions/custom/custom_live.lua', 'SUP00006', 'SUP00006')]])
-    local ARCH_FILE = "RegisterMission({ id = 'custom_arch', label = 'Archived Raid' })"
+    local ARCH_FILE = 'RegisterMission({ id = \'custom_arch\', label = \'Archived Raid\' })'
     local realLoad = LoadResourceFile
     local parsed = 0
     _G.LoadResourceFile = function(res, path)
@@ -940,7 +1133,7 @@ do
     CP.Missions.parse = function(content, chunk)
         parsed = parsed + 1
         if content ~= ARCH_FILE then return nil, 'unexpected file' end
-        local d = mission('custom_arch', { label = 'Archived Raid' })
+        local d = Mission('custom_arch', { label = 'Archived Raid' })
         d.source, d.defHash, d.status, d.isBoss = nil, nil, nil, nil
         return d
     end
@@ -960,9 +1153,10 @@ do
     run = ok and R.get(data.runId) or nil
     H.eq(run and run.version, 5, 'the run carries the archived version')
     if run then T.control(1, { control = 'end' }) end
-    local okRec = T.record(1, { missionId = 'custom_arch', location = 1, result = 'failed', note = 'spawn 3 is inside a wall' })
+    local okRec = T.record(1,
+        { missionId = 'custom_arch', location = 1, result = 'failed', note = 'spawn 3 is inside a wall' })
     H.eq(okRec, true, 'archived test recorded')
-    local row = H.sql("SELECT mission_version, def_hash FROM cp_mission_tests WHERE mission_id = 'custom_arch'")[1]
+    local row = H.sql('SELECT mission_version, def_hash FROM cp_mission_tests WHERE mission_id = \'custom_arch\'')[1]
     H.eq(row and row.mission_version, 5, 'mission_version of the archived mission')
     H.eq(row and row.def_hash, CP.U.hashHex(ARCH_FILE), 'def_hash = hash of the archived file')
     _G.LoadResourceFile = realLoad
@@ -977,9 +1171,10 @@ end
 
 print = realPrint
 
--- ════════════════════════════════════════════════════════════════════════════
--- client side
--- ════════════════════════════════════════════════════════════════════════════
+-- ============================================================================
+--                                 CLIENT SIDE
+-- ============================================================================
+
 H.handlers, H.callbacks, H.commands, H.events = {}, {}, {}, {}
 CP, Config = nil, nil
 H.boot({ side = 'client' })
@@ -987,10 +1182,14 @@ Config.Debug = true
 
 local focus, keymaps, bagHandlers = {}, {}, {}
 _G.SetNuiFocus = function(a, b) focus[#focus + 1] = { a, b } end
-_G.RegisterKeyMapping = function(cmd, desc, dev, key) keymaps[#keymaps + 1] = { cmd = cmd, desc = desc, dev = dev, key = key } end
+_G.RegisterKeyMapping = function(cmd, desc, dev, key)
+    keymaps[#keymaps + 1] = { cmd = cmd, desc = desc, dev = dev, key = key }
+end
 _G.GetPlayerServerId = function() return 1 end
 _G.PlayerId = function() return 0 end
-_G.AddStateBagChangeHandler = function(key, bag, fn) bagHandlers[#bagHandlers + 1] = { key = key, bag = bag, fn = fn } end
+_G.AddStateBagChangeHandler = function(key, bag, fn)
+    bagHandlers[#bagHandlers + 1] = { key = key, bag = bag, fn = fn }
+end
 _G.LocalPlayer = { state = {} }
 _G.PlayerPedId = function() return 100 end
 _G.GetControlInstructionalButton = function() return 't_F7' end
@@ -1007,8 +1206,19 @@ _G.GetGroundZFor_3dCoord = function(x, y, z) return true, 29.5 end
 local markers = 0
 _G.DrawMarker = function() markers = markers + 1 end
 _G.DrawLine = function() end
-for _, n in ipairs({ 'SetTextScale', 'SetTextFont', 'SetTextProportional', 'SetTextColour', 'SetTextOutline', 'SetTextCentre',
-    'SetDrawOrigin', 'BeginTextCommandDisplayText', 'AddTextComponentSubstringPlayerName', 'EndTextCommandDisplayText', 'ClearDrawOrigin' }) do
+for _, n in ipairs({
+    'SetTextScale',
+    'SetTextFont',
+    'SetTextProportional',
+    'SetTextColour',
+    'SetTextOutline',
+    'SetTextCentre',
+    'SetDrawOrigin',
+    'BeginTextCommandDisplayText',
+    'AddTextComponentSubstringPlayerName',
+    'EndTextCommandDisplayText',
+    'ClearDrawOrigin',
+}) do
     _G[n] = function() end
 end
 
@@ -1021,11 +1231,13 @@ do
     CP.L = function(key, vars)
         local text = strings[key]
         if text == nil then return realL(key, vars) end
-        return (text:gsub('{([%w_]+)}', function(k)
-            local v = vars and vars[k]
-            if v == nil then return '{' .. k .. '}' end
-            return tostring(v)
-        end))
+        return (
+            text:gsub('{([%w_]+)}', function(k)
+                local v = vars and vars[k]
+                if v == nil then return '{' .. k .. '}' end
+                return tostring(v)
+            end)
+        )
     end
 end
 
@@ -1039,7 +1251,9 @@ CP.Tablet = {
     registerClientAction = function(name, fn) clientActions[name] = fn end,
 }
 local currentRun = nil
-CP.Runs = { current = function() return currentRun end }
+CP.Runs = {
+    current = function() return currentRun end,
+}
 
 H.load('modules/testing/client.lua')
 local serverReplies = {}
@@ -1050,18 +1264,22 @@ CP.Net.action = function(name, payload)
     if type(r) == 'function' then return r(payload) end
     return r or { ok = true, data = {} }
 end
-CP.Net.request = function(name) if name == 'test:pendingInvites' then return { ok = true, data = serverReplies.invites or {} } end return { ok = false } end
+CP.Net.request = function(name)
+    if name == 'test:pendingInvites' then return { ok = true, data = serverReplies.invites or {} } end
+    return { ok = false }
+end
 
 local CT = CP.Testing
 local st = CT._state()
-local function lastPush()
+local function LastPush()
     return nuiPushes[#nuiPushes]
 end
 
 do
     H.eq(keymaps[1].cmd, '+crimsonpolice_testpanel', 'key mapping +crimsonpolice_testpanel')
     H.eq(keymaps[1].key, 'F9', 'default key F9')
-    H.ok(H.commands['+crimsonpolice_testpanel'] ~= nil and H.commands['-crimsonpolice_testpanel'] ~= nil, 'both +/- commands registered')
+    H.ok(H.commands['+crimsonpolice_testpanel'] ~= nil and H.commands['-crimsonpolice_testpanel'] ~= nil,
+        'both +/- commands registered')
     for _, n in ipairs({ 'testControl', 'teleport', 'toggleDebug', 'testPanel' }) do
         H.ok(clientActions[n] ~= nil, 'client action ' .. n)
     end
@@ -1073,10 +1291,10 @@ do
     serverReplies.invites = { { inviteId = 'ti1', missionLabel = 'Gang Shootout', from = 'Alex', expiresIn = 90 } }
     H.commands['+crimsonpolice_testpanel'].fn()
     H.eq(focus[#focus][1], true, 'prompt takes NUI focus')
-    H.eq(lastPush().data.prompt.invites[1].inviteId, 'ti1', 'prompt pushed to the NUI')
+    H.eq(LastPush().data.prompt.invites[1].inviteId, 'ti1', 'prompt pushed to the NUI')
     clientActions.testPanel({ open = false })
     H.eq(focus[#focus][1], false, 'released on close')
-    H.eq(lastPush().data.prompt, false, 'prompt hidden')
+    H.eq(LastPush().data.prompt, false, 'prompt hidden')
 
     -- the invitation toast
     H.fire('crimson-police:client:testInvite', 1, { inviteId = 'ti2', missionLabel = 'Bomb Disposal', from = 'Sam' })
@@ -1096,8 +1314,8 @@ do
     tabletOpen = false
     H.commands['+crimsonpolice_testpanel'].fn()
     H.eq(focus[#focus][1], true, 'F9 focuses the panel')
-    H.eq(lastPush().data.focused, true, 'the panel knows it is focused')
-    H.eq(lastPush().data.key, 'F7', 'with the bound key')
+    H.eq(LastPush().data.focused, true, 'the panel knows it is focused')
+    H.eq(LastPush().data.key, 'F7', 'with the bound key')
     clientActions.testPanel({ open = false })
     H.eq(focus[#focus][1], false, 'F9/Esc release')
 
@@ -1127,14 +1345,24 @@ do
     LocalPlayer.state.crimsonArena = nil
 
     -- debug data: geometry stays in Lua, the NUI gets the counts
-    H.fire('crimson-police:client:test', 1, { controls = true, runId = 'run-9', debug = {
-        counts = { entities = 3, maxEntities = 80, armedAlive = 1, maxArmedAlive = 25 }, spawnPoints = 2,
-        geometry = { start = { x = 0.0, y = 0.0, z = 0.0, r = 50.0 }, points = { { x = 5.0, y = 0.0, z = 0.0, key = 'spawns', i = 1 } }, routes = {}, zones = {} },
-    } })
+    H.fire('crimson-police:client:test', 1, {
+        controls = true,
+        runId = 'run-9',
+        debug = {
+            counts = { entities = 3, maxEntities = 80, armedAlive = 1, maxArmedAlive = 25 },
+            spawnPoints = 2,
+            geometry = {
+                start = { x = 0.0, y = 0.0, z = 0.0, r = 50.0 },
+                points = { { x = 5.0, y = 0.0, z = 0.0, key = 'spawns', i = 1 } },
+                routes = {},
+                zones = {},
+            },
+        },
+    })
     H.eq(st.debugOn, true, 'debug on')
     H.ok(st.geometry ~= nil, 'geometry kept')
-    H.eq(lastPush().data.debug.geometry, nil, 'no geometry sent to the NUI')
-    H.eq(lastPush().data.debug.counts.entities, 3, 'counts sent to the NUI')
+    H.eq(LastPush().data.debug.geometry, nil, 'no geometry sent to the NUI')
+    H.eq(LastPush().data.debug.counts.entities, 3, 'counts sent to the NUI')
     H.near(CT._nearest(st.geometry, 0.0, 0.0, 0.0), -50.0, 1e-6, 'inside the start radius')
     H.advance(50, 10)
     H.ok(markers > 0, 'markers drawn near the test area')
@@ -1148,16 +1376,20 @@ do
     H.eq(st.debugOn, false, 'and stops the overlay')
 
     -- Config.Testing switches travel with the push (the HUD panel disables those buttons)
-    H.ok(lastPush().data.allowTeleport == true and lastPush().data.debugOverlay == true, 'allowTeleport / debugOverlay pushed')
+    H.ok(LastPush().data.allowTeleport == true and LastPush().data.debugOverlay == true,
+        'allowTeleport / debugOverlay pushed')
     Config.Testing.allowTeleport = false
     clientActions.testPanel({ open = true })
-    H.eq(lastPush().data.allowTeleport, false, 'Config.Testing.allowTeleport read at call time')
+    H.eq(LastPush().data.allowTeleport, false, 'Config.Testing.allowTeleport read at call time')
     clientActions.testPanel({ open = false })
     Config.Testing.allowTeleport = true
 
     -- Crimson-Arena rule 13: a foreign value that arrives during the fade-out still stops the move
     local realFade = DoScreenFadeOut
-    _G.DoScreenFadeOut = function() fades[#fades + 1] = 'out'; LocalPlayer.state.crimsonArena = { active = true, matchId = 'm3' } end
+    _G.DoScreenFadeOut = function()
+        fades[#fades + 1] = 'out'
+        LocalPlayer.state.crimsonArena = { active = true, matchId = 'm3' }
+    end
     local movedBefore = #moved
     local okF, errF = clientActions.teleport({ target = 'start' })
     H.eq(errF, 'err.in_arena', 'teleport refused when the arena flag arrives during the fade')
@@ -1173,7 +1405,7 @@ do
     H.step(0)
     local pushesBefore = #nuiPushes
     H.advance(300, 50)
-    H.ok(#nuiPushes > pushesBefore and lastPush().data.key == 'F7', 'the panel gets the bound key after the HUD flag')
+    H.ok(#nuiPushes > pushesBefore and LastPush().data.key == 'F7', 'the panel gets the bound key after the HUD flag')
 
     -- the test ends
     H.fire('crimson-police:client:test', 1, { controls = false, runId = 'run-10', debug = false })

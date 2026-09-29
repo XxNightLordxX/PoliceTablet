@@ -1,37 +1,4 @@
--- modules/cash/server.lua · CP.Cash (server): the cash formula and every payment Crimson-Police makes.
---
--- Owns
---   * cash per participant = round(B x M_tier x M_mod) (SPEC "Cash payouts"): B = run.cashBase, locked at
---     accept by CP.Payouts.baseFor; M_tier = the run's points and cash tier (Config.Scaling cash); M_mod =
---     Config.Events.modifierCash when the run rolled a modifier. Only Completed results pay; a participant
---     who failed the presence share (runs with 2+ participants) gets $0.
---   * the claim-then-pay flow of one cp_mission_runs row (cash_status none/held/pending -> paying -> paid |
---     capped | unfunded; offline -> pending), the daily cap per reset-day (Config.Cash.dailyCap), the society
---     source (Config.Cash.source = 'society': the department's Renewed-Banking account through CP.Banking),
---     the Qbox deposit (CP.Qbx.addMoney, Config.Cash.account), the Renewed-Banking history entries with the
---     transaction id CP-<run_uuid>-<citizenid>, pending payments on login, releases after an approval,
---     forfeits of voided runs and the forfeiture job (every 10 min).
---   A row is only ever paid when it is completed, not flagged and not voided, and the claim
---   UPDATE ... SET cash_status = 'paying' WHERE ... IN ('none','held','pending') changed it: paid, capped,
---   unfunded and forfeited are final. A row left in 'paying' (crash, or a failed deposit after a society
---   withdrawal that could not be refunded) is never retried automatically: see stuckPayments().
---
--- Public API (docs/ARCHITECTURE.md §5.20)
---   CP.Cash.compute(run, p) -> amount, breakdown       breakdown = RunResult.cash { B, mTier, mMod, amount, status }
---       status: 'held' for a completed, flagged, non-test row, else 'none'. Reads p.result (set by the engine).
---   CP.Cash.pay(rowId) -> status|nil                   'paid'|'capped'|'unfunded'|'pending'|'paying'|nil (nothing done)
---   CP.Cash.payPending(src) -> n                       pays the player's pending rows, and completed mission rows left
---                                                      'none' with cash (never claimed); run 5 s after login and once
---                                                      for every online player 15 s after the resource starts
---   CP.Cash.release(rowId) -> status|nil               after an approved flag (flagged already 0): pay now or pending
---   CP.Cash.forfeit(rowId) -> boolean                  a voided row's held/pending cash -> forfeited
---   CP.Cash.range(missionType, members) -> min, max    board card range per officer: missionType is a type key or
---       'weekly_boss'; members = officer tables or srcs (the unit). Covers every mission of the pool (admin
---       payouts, stars) at the unit's tier; the top also covers a modifier (never for the boss).
---   CP.Cash.stuckPayments() -> { StuckPayment... }     rows still 'paying' (not being paid right now)
---       StuckPayment = { id, runUuid, citizenid, name, missionId, missionLabel, department, amount, createdAt, transId }
---   CP.Cash.earnedThisWeek(citizenid) -> number        cash_paid of paid/capped rows since the week start
--- All functions except compute and range query the database: call them from a thread.
+-- CP.Cash (server): the cash formula and every payment Crimson-Police makes.
 
 CP.Cash = CP.Cash or {}
 local Cash = CP.Cash
@@ -48,14 +15,17 @@ local FINAL = { paid = true, capped = true, unfunded = true, forfeited = true }
 local locks = {}       -- citizenid -> true while one of their rows is being paid
 local inFlight = {}    -- rowId -> true while pay() works on it
 
--- ── helpers ─────────────────────────────────────────────────────────────────
-local function num(v, default)
+-- ============================================================================
+--                                   HELPERS
+-- ============================================================================
+
+local function Num(v, default)
     local n = tonumber(v)
     if n == nil or n ~= n or n == math.huge or n == -math.huge then return default end
     return n
 end
 
-local function toId(v)
+local function ToId(v)
     local n = tonumber(v)
     if not n then return nil end
     n = math.tointeger(n)
@@ -63,23 +33,23 @@ local function toId(v)
     return n
 end
 
-local function now()
+local function Now()
     if CP.Schedule and CP.Schedule.now then return CP.Schedule.now() end
     return os.time()
 end
 
-local function db()
+local function Db()
     if CP.Migrations and CP.Migrations.ready then CP.Migrations.ready() end
 end
 
-local function fmtMoney(n)
-    local s = tostring(math.floor(math.abs(num(n, 0)) + 0.5))
+local function FmtMoney(n)
+    local s = tostring(math.floor(math.abs(Num(n, 0)) + 0.5))
     local out = s:reverse():gsub('(%d%d%d)', '%1,'):reverse()
     if out:sub(1, 1) == ',' then out = out:sub(2) end
-    return (num(n, 0) < 0 and '-$' or '$') .. out
+    return (Num(n, 0) < 0 and '-$' or '$') .. out
 end
 
-local function tierRow(run)
+local function TierRow(run)
     local t = run.payTier
     if type(t) == 'table' then return t end
     if CP.Scaling and CP.Scaling.tierByName then
@@ -89,14 +59,14 @@ local function tierRow(run)
     return { tier = 'standard', cash = 1.0, points = 1.0 }
 end
 
-local function presenceFailed(run, p)
+local function PresenceFailed(run, p)
     if not (CP.AntiCheat and CP.AntiCheat.presenceOk) then return false end
     if type(run.order) ~= 'table' or #run.order < 2 then return false end
     local ok, present = pcall(CP.AntiCheat.presenceOk, run, p)
     return ok and present == false
 end
 
-local function withLock(key, fn)
+local function WithLock(key, fn)
     local waited = 0
     while locks[key] do
         if waited >= LOCK_WAIT_MS then
@@ -116,14 +86,16 @@ local function withLock(key, fn)
     return res
 end
 
-local function notify(src, kind, key, vars)
+local function Notify(src, kind, key, vars)
     if src and CP.Tablet and CP.Tablet.notify then CP.Tablet.notify(src, kind, key, vars) end
 end
 
--- ── compute ─────────────────────────────────────────────────────────────────
+-- ============================================================================
+--                                   COMPUTE
+-- ============================================================================
 -- Round to the nearest dollar, halves up. The epsilon absorbs float error in the product (350 * 1.15 is
 -- 402.49999999999994 in doubles, a true $402.50 that must pay $403).
-local function roundMoney(x)
+local function RoundMoney(x)
     return math.floor(x + 0.5 + 1e-7)
 end
 
@@ -131,13 +103,13 @@ function Cash.compute(run, p)
     if type(run) ~= 'table' or type(p) ~= 'table' then
         return 0, { B = 0, mTier = 1.0, mMod = 1.0, amount = 0, status = 'none' }
     end
-    local B = math.max(0, math.floor(num(run.cashBase, 0) + 0.5))
-    local mTier = num(tierRow(run).cash, 1.0)
+    local B = math.max(0, math.floor(Num(run.cashBase, 0) + 0.5))
+    local mTier = Num(TierRow(run).cash, 1.0)
     local mMod = 1.0
-    if run.modifier then mMod = num(Config.Events and Config.Events.modifierCash, 1.0) end
+    if run.modifier then mMod = Num(Config.Events and Config.Events.modifierCash, 1.0) end
     local amount = 0
-    if p.result == 'completed' and not presenceFailed(run, p) then
-        amount = math.max(0, roundMoney(B * mTier * mMod))
+    if p.result == 'completed' and not PresenceFailed(run, p) then
+        amount = math.max(0, RoundMoney(B * mTier * mMod))
     end
     local flagged = p.flagged ~= nil or run.flagged ~= nil
     local status = 'none'
@@ -145,8 +117,11 @@ function Cash.compute(run, p)
     return amount, { B = B, mTier = mTier, mMod = mMod, amount = amount, status = status }
 end
 
--- ── rows ────────────────────────────────────────────────────────────────────
-local function readRow(rowId)
+-- ============================================================================
+--                                     ROWS
+-- ============================================================================
+
+local function ReadRow(rowId)
     local ok, row = pcall(MySQL.single.await, [[
         SELECT id, run_uuid, citizenid, mission_id, mission_type, department, state, cash_status, cash_base,
                cash_multiplier, cash_paid, flagged, voided, breakdown, UNIX_TIMESTAMP(created_at) AS created_ts
@@ -160,20 +135,20 @@ local function readRow(rowId)
     return row
 end
 
-local function amountOf(row, bd)
+local function AmountOf(row, bd)
     local a = bd and type(bd.cash) == 'table' and tonumber(bd.cash.amount) or nil
-    if a == nil then a = num(row.cash_base, 0) * num(row.cash_multiplier, 1.0) end
+    if a == nil then a = Num(row.cash_base, 0) * Num(row.cash_multiplier, 1.0) end
     return math.max(0, math.floor(a + 0.5))
 end
 
-local function missionLabel(row, bd)
+local function MissionLabel(row, bd)
     if bd and type(bd.missionLabel) == 'string' and bd.missionLabel ~= '' then return bd.missionLabel end
     local def = CP.Missions and CP.Missions.get and CP.Missions.get(row.mission_id)
     if def and def.label then return def.label end
     return tostring(row.mission_id)
 end
 
-local function setFinal(rowId, status, paid)
+local function SetFinal(rowId, status, paid)
     local ok, n = pcall(MySQL.update.await, [[
         UPDATE cp_mission_runs
         SET cash_status = ?, cash_paid = ?,
@@ -187,7 +162,7 @@ local function setFinal(rowId, status, paid)
     return (tonumber(n) or 0) > 0
 end
 
-local function backToPending(rowId, why)
+local function BackToPending(rowId, why)
     local ok, n = pcall(MySQL.update.await, [[
         UPDATE cp_mission_runs
         SET cash_status = 'pending',
@@ -203,9 +178,10 @@ local function backToPending(rowId, why)
 end
 
 -- Paid (or capped) cash on the reset-day of ts, excluding the row being paid.
-local function paidOnDay(citizenid, ts)
+local function PaidOnDay(citizenid, ts)
     local startTs = CP.Schedule and CP.Schedule.dayStart and CP.Schedule.dayStart(ts) or (ts - ts % 86400)
-    local nextTs = CP.Schedule and CP.Schedule.dayStart and CP.Schedule.dayStart(startTs + 25 * 3600) or (startTs + 86400)
+    local nextTs = CP.Schedule and CP.Schedule.dayStart and CP.Schedule.dayStart(startTs + 25 * 3600)
+        or (startTs + 86400)
     local ok, total = pcall(MySQL.scalar.await, [[
         SELECT COALESCE(SUM(cash_paid), 0) AS total FROM cp_mission_runs
         WHERE citizenid = ? AND cash_status IN ('paid', 'capped')
@@ -219,7 +195,7 @@ local function paidOnDay(citizenid, ts)
 end
 
 -- Online supervisors of a department (for the unfunded warning).
-local function supervisorsOf(dept)
+local function SupervisorsOf(dept)
     local out = {}
     if not (CP.Qbx and CP.Qbx.getOnlinePlayers and CP.Access and CP.Access.getOfficer) then return out end
     for _, s in ipairs(CP.Qbx.getOnlinePlayers()) do
@@ -229,7 +205,7 @@ local function supervisorsOf(dept)
     return out
 end
 
-local function refundSociety(account, amount)
+local function RefundSociety(account, amount)
     if CP.Banking and CP.Banking.depositSociety then
         local ok, res = pcall(CP.Banking.depositSociety, account, amount)
         return ok and res == true
@@ -237,10 +213,10 @@ local function refundSociety(account, amount)
     return false
 end
 
-local payClaimed
+local PayClaimed
 
 -- Pays one claimed-or-claimable row. Runs under the citizenid lock.
-local function payRow(row)
+local function PayRow(row)
     local rowId = math.floor(CP.U.num(row.id))
     local cid = row.citizenid
     local src = CP.Qbx and CP.Qbx.getByCitizenId and CP.Qbx.getByCitizenId(cid)
@@ -280,26 +256,27 @@ local function payRow(row)
     -- From here the row is 'paying'. A Lua error before any money moved puts it back to pending (it would
     -- otherwise be stuck for a manual check); after money may have moved it stays paying.
     local progress = { moved = false }
-    local okP, res = pcall(payClaimed, row, rowId, cid, src, progress)
+    local okP, res = pcall(PayClaimed, row, rowId, cid, src, progress)
     if okP then return res end
     if not progress.moved then
-        backToPending(rowId, 'error before any money moved: ' .. tostring(res))
+        BackToPending(rowId, 'error before any money moved: ' .. tostring(res))
         return 'pending'
     end
-    CP.err(TAG, 'row %d: error after money may have moved; it stays paying for a manual check: %s', rowId, tostring(res))
+    CP.err(TAG, 'row %d: error after money may have moved; it stays paying for a manual check: %s', rowId,
+        tostring(res))
     return 'paying'
 end
 
 -- The claimed part of payRow (row is 'paying'). progress.moved = true right before the first call that can move money.
-payClaimed = function(row, rowId, cid, src, progress)
+PayClaimed = function(row, rowId, cid, src, progress)
     local bd = CP.U.jsonField(row.breakdown)
-    local amount = amountOf(row, bd)
+    local amount = AmountOf(row, bd)
     local capped = false
-    local cap = math.floor(num(Config.Cash and Config.Cash.dailyCap, 0))
+    local cap = math.floor(Num(Config.Cash and Config.Cash.dailyCap, 0))
     if cap > 0 and amount > 0 then
-        local already = paidOnDay(cid, tonumber(row.created_ts) or now())
+        local already = PaidOnDay(cid, tonumber(row.created_ts) or Now())
         if already == nil then
-            backToPending(rowId, 'daily cap lookup failed')
+            BackToPending(rowId, 'daily cap lookup failed')
             return 'pending'
         end
         if already + amount > cap then
@@ -311,14 +288,14 @@ payClaimed = function(row, rowId, cid, src, progress)
     local deptKey = row.department
     local dept = CP.Access and CP.Access.department and CP.Access.department(deptKey) or nil
     local deptLabel = dept and dept.label or tostring(deptKey)
-    local label = missionLabel(row, bd)
+    local label = MissionLabel(row, bd)
     local message = CP.L('cash.bank_message', { mission = label })
     local transId = ('CP-%s-%s'):format(tostring(row.run_uuid), tostring(cid))
 
     -- Re-fetch the player right before money moves.
     local info = CP.Qbx.getInfo and CP.Qbx.getInfo(src)
     if not info or info.citizenid ~= cid then
-        backToPending(rowId, 'the officer went offline before the payment')
+        BackToPending(rowId, 'the officer went offline before the payment')
         return 'pending'
     end
     local charName = info.name or cid
@@ -334,13 +311,14 @@ payClaimed = function(row, rowId, cid, src, progress)
             if not okW then progress.moved = false end
         end
         if not okW then
-            setFinal(rowId, 'unfunded', 0)
+            SetFinal(rowId, 'unfunded', 0)
             CP.warn(TAG, 'row %d unfunded: society account %s could not cover %d', rowId, tostring(account), amount)
-            notify(src, 'error', 'cash.unfunded', { amount = fmtMoney(amount), department = deptLabel, mission = label })
-            local sups = supervisorsOf(deptKey)
+            Notify(src, 'error', 'cash.unfunded',
+                { amount = FmtMoney(amount), department = deptLabel, mission = label })
+            local sups = SupervisorsOf(deptKey)
             if #sups > 0 and CP.Tablet and CP.Tablet.notifyMany then
                 CP.Tablet.notifyMany(sups, 'warning', 'cash.unfunded_supervisor',
-                    { name = charName, amount = fmtMoney(amount), department = deptLabel, account = tostring(account) })
+                    { name = charName, amount = FmtMoney(amount), department = deptLabel, account = tostring(account) })
             end
             return 'unfunded'
         end
@@ -351,27 +329,31 @@ payClaimed = function(row, rowId, cid, src, progress)
         local moneyAccount = (Config.Cash and Config.Cash.account) or 'bank'
         progress.moved = true
         local okMoney, whyMoney = false, nil
-        if CP.Qbx.addMoney then okMoney, whyMoney = CP.Qbx.addMoney(src, moneyAccount, amount, 'crimson-police-mission') end
+        if CP.Qbx.addMoney then
+            okMoney, whyMoney = CP.Qbx.addMoney(src, moneyAccount, amount, 'crimson-police-mission')
+        end
         if not okMoney and whyMoney == 'error' then
             -- AddMoney raised: the balance may already have changed, so the row is never retried automatically
             -- (it stays paying and is listed in stuckPayments for a manual check; no society refund either).
-            CP.err(TAG, 'row %d: Qbox AddMoney(%s, %d) raised for %s; the row stays paying for a manual check (transaction %s)',
+            CP.err(TAG,
+                'row %d: Qbox AddMoney(%s, %d) raised for %s; the row stays paying for a manual check (transaction %s)',
                 rowId, moneyAccount, amount, cid, transId)
             return 'paying'
         end
         if not okMoney then
             if withdrew then
-                if refundSociety(account, amount) then
-                    backToPending(rowId, 'Qbox AddMoney failed; the society withdrawal was refunded')
+                if RefundSociety(account, amount) then
+                    BackToPending(rowId, 'Qbox AddMoney failed; the society withdrawal was refunded')
                     return 'pending'
                 end
-                CP.err(TAG, 'row %d: Qbox AddMoney failed after %s was debited %d; the row stays paying for a manual check (transaction %s)',
+                CP.err(TAG,
+                    'row %d: Qbox AddMoney failed after %s was debited %d; the row stays paying for a manual check (transaction %s)',
                     rowId, tostring(account), amount, transId)
                 return 'paying'
             end
             CP.err(TAG, 'row %d: Qbox AddMoney(%s, %d) failed for %s', rowId, moneyAccount, amount, cid)
             progress.moved = false
-            backToPending(rowId, 'Qbox AddMoney failed')
+            BackToPending(rowId, 'Qbox AddMoney failed')
             return 'pending'
         end
         if moneyAccount == 'bank' and CP.Banking and CP.Banking.recordDeposit then
@@ -383,24 +365,25 @@ payClaimed = function(row, rowId, cid, src, progress)
     end
 
     local status = capped and 'capped' or 'paid'
-    if not setFinal(rowId, status, amount) then
-        CP.err(TAG, 'row %d: %d was paid but the status could not be written; it stays paying (transaction %s)', rowId, amount, transId)
+    if not SetFinal(rowId, status, amount) then
+        CP.err(TAG, 'row %d: %d was paid but the status could not be written; it stays paying (transaction %s)', rowId,
+            amount, transId)
         return 'paying'
     end
     CP.log(TAG, 'row %d: %s %d to %s (%s)', rowId, status, amount, cid, transId)
     if capped then
-        notify(src, 'warning', 'cash.capped', { amount = fmtMoney(amount), mission = label })
+        Notify(src, 'warning', 'cash.capped', { amount = FmtMoney(amount), mission = label })
     elseif amount > 0 then
-        notify(src, 'success', 'cash.paid', { amount = fmtMoney(amount), mission = label })
+        Notify(src, 'success', 'cash.paid', { amount = FmtMoney(amount), mission = label })
     end
     return status
 end
 
 function Cash.pay(rowId)
-    rowId = toId(rowId)
+    rowId = ToId(rowId)
     if not rowId then return nil end
-    db()
-    local row = readRow(rowId)
+    Db()
+    local row = ReadRow(rowId)
     if not row then return nil end
     if FINAL[row.cash_status] or row.cash_status == 'paying' then return row.cash_status end
     if row.state ~= 'completed' or CP.U.truthy(row.flagged) or CP.U.truthy(row.voided) then
@@ -410,7 +393,7 @@ function Cash.pay(rowId)
     end
     if inFlight[rowId] then return nil end
     inFlight[rowId] = true
-    local status = withLock(row.citizenid, function() return payRow(row) end)
+    local status = WithLock(row.citizenid, function() return PayRow(row) end)
     inFlight[rowId] = nil
     return status
 end
@@ -418,7 +401,7 @@ end
 function Cash.payPending(src)
     local info = CP.Qbx and CP.Qbx.getInfo and CP.Qbx.getInfo(src)
     if not info or not info.citizenid then return 0 end
-    db()
+    Db()
     -- 'pending' rows, plus completed mission rows still 'none' although they carry cash (the engine's pay never
     -- ran or was skipped, e.g. a crash right after the row insert): no money moved on either, and pay() claims
     -- them like any other row. Manual award and goal rows never carry cash.
@@ -443,10 +426,10 @@ function Cash.payPending(src)
 end
 
 function Cash.release(rowId)
-    rowId = toId(rowId)
+    rowId = ToId(rowId)
     if not rowId then return nil end
-    db()
-    local row = readRow(rowId)
+    Db()
+    local row = ReadRow(rowId)
     if not row then return nil end
     if CP.U.truthy(row.voided) then return nil end
     if CP.U.truthy(row.flagged) then
@@ -457,9 +440,9 @@ function Cash.release(rowId)
 end
 
 function Cash.forfeit(rowId)
-    rowId = toId(rowId)
+    rowId = ToId(rowId)
     if not rowId then return false end
-    db()
+    Db()
     local ok, n = pcall(MySQL.update.await, [[
         UPDATE cp_mission_runs
         SET cash_status = 'forfeited',
@@ -474,10 +457,10 @@ function Cash.forfeit(rowId)
 end
 
 -- Voided rows whose dispute window closed with no open dispute: held/pending -> forfeited.
-local function forfeitureJob()
-    db()
-    local hours = num(Config.Disputes and Config.Disputes.windowHours, 48)
-    local cutoff = now() - math.floor(hours * 3600)
+local function ForfeitureJob()
+    Db()
+    local hours = Num(Config.Disputes and Config.Disputes.windowHours, 48)
+    local cutoff = Now() - math.floor(hours * 3600)
     local ok, n = pcall(MySQL.update.await, [[
         UPDATE cp_mission_runs r
         SET r.cash_status = 'forfeited',
@@ -494,8 +477,11 @@ local function forfeitureJob()
     return n
 end
 
--- ── board range ─────────────────────────────────────────────────────────────
-local function poolFor(missionType, members)
+-- ============================================================================
+--                                 BOARD RANGE
+-- ============================================================================
+
+local function PoolFor(missionType, members)
     if missionType == BOSS_KEY then
         local def = CP.Missions and CP.Missions.get and CP.Missions.get(BOSS_ID)
         return def and { def } or {}
@@ -509,7 +495,7 @@ local function poolFor(missionType, members)
         local n = #members
         for _, def in ipairs(CP.Missions.byType(missionType) or {}) do
             local enabled = not CP.Missions.isEnabled or CP.Missions.isEnabled(def.id)
-            if enabled and n >= num(def.minOfficers, 1) and n <= num(def.maxOfficers, 4) then out[#out + 1] = def end
+            if enabled and n >= Num(def.minOfficers, 1) and n <= Num(def.maxOfficers, 4) then out[#out + 1] = def end
         end
     end
     return out
@@ -519,33 +505,36 @@ function Cash.range(missionType, members)
     if type(members) ~= 'table' then members = {} end
     local size = math.max(1, #members)
     local tier = CP.Scaling and CP.Scaling.tierFor and CP.Scaling.tierFor(size) or { cash = 1.0 }
-    local mTier = num(tier and tier.cash, 1.0)
+    local mTier = Num(tier and tier.cash, 1.0)
     local isBossCard = missionType == BOSS_KEY
     local modCash = 1.0
-    if not isBossCard and num(Config.Events and Config.Events.modifierChance, 0) > 0 then
-        modCash = math.max(1.0, num(Config.Events and Config.Events.modifierCash, 1.0))
+    if not isBossCard and Num(Config.Events and Config.Events.modifierChance, 0) > 0 then
+        modCash = math.max(1.0, Num(Config.Events and Config.Events.modifierCash, 1.0))
     end
     local lo, hi
-    for _, def in ipairs(poolFor(missionType, members)) do
+    for _, def in ipairs(PoolFor(missionType, members)) do
         local B = CP.Payouts and CP.Payouts.baseFor and CP.Payouts.baseFor(def) or 0
         if not lo or B < lo then lo = B end
         if not hi or B > hi then hi = B end
     end
     if not lo then
         if isBossCard then
-            lo = math.floor(num(Config.Events and Config.Events.weeklyBoss and Config.Events.weeklyBoss.payout, 0))
+            lo = math.floor(Num(Config.Events and Config.Events.weeklyBoss and Config.Events.weeklyBoss.payout, 0))
         else
             lo = CP.Payouts and CP.Payouts.typePayout and CP.Payouts.typePayout(missionType)
-                or math.floor(num(Config.MissionTypes[missionType] and Config.MissionTypes[missionType].payout, 0))
+                or math.floor(Num(Config.MissionTypes[missionType] and Config.MissionTypes[missionType].payout, 0))
         end
         hi = lo
     end
-    return roundMoney(lo * mTier), roundMoney(hi * mTier * modCash)
+    return RoundMoney(lo * mTier), RoundMoney(hi * mTier * modCash)
 end
 
--- ── reports ─────────────────────────────────────────────────────────────────
+-- ============================================================================
+--                                   REPORTS
+-- ============================================================================
+
 function Cash.stuckPayments()
-    db()
+    Db()
     local ok, rows = pcall(MySQL.query.await, [[
         SELECT r.id, r.run_uuid, r.citizenid, r.mission_id, r.department, r.cash_base, r.cash_multiplier, r.breakdown,
                UNIX_TIMESTAMP(r.created_at) AS created_ts, o.display_name
@@ -568,9 +557,9 @@ function Cash.stuckPayments()
                 citizenid = r.citizenid,
                 name = type(r.display_name) == 'string' and r.display_name or r.citizenid,
                 missionId = r.mission_id,
-                missionLabel = missionLabel(r, bd),
+                missionLabel = MissionLabel(r, bd),
                 department = r.department,
-                amount = amountOf(r, bd),
+                amount = AmountOf(r, bd),
                 createdAt = tonumber(r.created_ts),
                 transId = ('CP-%s-%s'):format(tostring(r.run_uuid), tostring(r.citizenid)),
             }
@@ -581,8 +570,8 @@ end
 
 function Cash.earnedThisWeek(citizenid)
     if type(citizenid) ~= 'string' or citizenid == '' then return 0 end
-    db()
-    local start = CP.Schedule and CP.Schedule.weekStart and CP.Schedule.weekStart() or (now() - 7 * 86400)
+    Db()
+    local start = CP.Schedule and CP.Schedule.weekStart and CP.Schedule.weekStart() or (Now() - 7 * 86400)
     local ok, total = pcall(MySQL.scalar.await, [[
         SELECT COALESCE(SUM(cash_paid), 0) AS total FROM cp_mission_runs
         WHERE citizenid = ? AND cash_status IN ('paid', 'capped') AND created_at >= FROM_UNIXTIME(?)
@@ -594,8 +583,11 @@ function Cash.earnedThisWeek(citizenid)
     return math.floor(CP.U.num(total))
 end
 
--- ── wiring ──────────────────────────────────────────────────────────────────
-local function onLoaded(src)
+-- ============================================================================
+--                                    WIRING
+-- ============================================================================
+
+local function OnLoaded(src)
     local info = CP.Qbx.getInfo(src)
     local cid = info and info.citizenid
     if not cid then return end
@@ -609,21 +601,21 @@ CreateThread(function()
     if not CP.Qbx or not CP.Qbx.onPlayerLoaded then
         CP.err(TAG, 'modules/integrations/qbx is missing: pending payments are not paid on login')
     else
-        CP.Qbx.onPlayerLoaded(onLoaded)
+        CP.Qbx.onPlayerLoaded(OnLoaded)
     end
 end)
 
 CreateThread(function()
-    db()
+    Db()
     while true do
-        forfeitureJob()
+        ForfeitureJob()
         Wait(FORFEIT_EVERY_MS)
     end
 end)
 
 -- After a resource (re)start, officers who are already online never fire PlayerLoaded again: pay their
 -- pending rows once, after Renewed-Banking has had time to (re)build its caches.
-local function startupSweep()
+local function StartupSweep()
     if not (CP.Qbx and CP.Qbx.getOnlinePlayers) then return 0 end
     local n = 0
     for _, src in ipairs(CP.Qbx.getOnlinePlayers()) do
@@ -634,12 +626,12 @@ end
 
 CreateThread(function()
     Wait(STARTUP_SWEEP_MS)
-    local ok, err = pcall(startupSweep)
+    local ok, err = pcall(StartupSweep)
     if not ok then CP.err(TAG, 'pending payments sweep at start failed: %s', tostring(err)) end
 end)
 
 -- Test hooks (not part of the contract).
-Cash._forfeitureJob = forfeitureJob
-Cash._startupSweep = startupSweep
-Cash._onLoaded = onLoaded
-Cash._fmtMoney = fmtMoney
+Cash._forfeitureJob = ForfeitureJob
+Cash._startupSweep = StartupSweep
+Cash._onLoaded = OnLoaded
+Cash._fmtMoney = FmtMoney

@@ -1,36 +1,4 @@
--- modules/events/server.lua · CP.Events: Type of the Day, run modifiers and the Weekly Boss.
---
--- Owns
---   * Type of the Day: one Config.MissionTypes key per reset-adjusted day, picked with a seed made
---     from the day key (CP.U.hash), so a restart keeps the same type. Points only (CP.Scoring doubles).
---   * Modifiers: the roll at accept (Config.Events.modifierChance, the run's seed): Armored Hostiles
---     (Tactical only), Time Crunch, Radio Silence. Never for Cross-Department Missions, the Weekly Boss
---     or test runs. The effects are applied by the engine (CP.Runs / CP.Scaling / blocks).
---   * Weekly Boss availability: enabled, the reset-adjusted weekday is in Config.Events.weeklyBoss.days,
---     hidden while a Cross-Department Mission is active, once per officer per week (any
---     weekly_boss_kingpin row since the reset of the week's first boss day, except end_reason
---     real_call / force_recall / cancelled), and the Weekly Boss card of the Mission Board
---     (BoardCard & { available }; locked by the hourly cap too, which the boss counts toward).
---
--- Public API (server)
---   CP.Events.typeOfTheDay(dayKey?) -> typeKey|nil
---   CP.Events.rollModifier(run) -> 'armored_hostiles'|'time_crunch'|'radio_silence'|nil
---   CP.Events.modifiers() -> { [key] = { label = 'modifier.<key>', tacticalOnly = bool } }
---   CP.Events.bossAvailable(src, officer?) -> ok, reasonKey
---       reasonKeys: err.boss_disabled, err.boss_unavailable, err.boss_not_today, err.operation_locked,
---       err.boss_used, or CP.Access.getOfficer's key when officer is not given and src is no officer
---   CP.Events.bossCard(src) -> card|nil   (nil while hidden: disabled, not a boss day, operation active,
---       mission missing or disabled)
--- The boss is mission id 'weekly_boss_kingpin', accepted with the key 'weekly_boss' (runs store 'tactical').
---
--- Contract interpretations (details in docs/notes/engine_a.md)
---   * voided boss rows still use the week's attempt; bossAvailable also refuses during an operation
---   * the attempt window starts at the reset of the week's first boss day (Friday by default), not at
---     the week start: rows are written when a run ends, so a boss run accepted on Sunday night that ends
---     after Monday's reset belongs to last week and must not use up this week's attempt
---   * bossCard.available = the unit may take this week's attempt (busy/onCall are separate flags);
---     typeOfTheDay is true when the Type of the Day is tactical
---   * rollModifier uses CP.U.rng(CP.U.hash(run.seed .. ':modifier'))
+-- CP.Events: Type of the Day, run modifiers and the Weekly Boss.
 
 CP.Events = CP.Events or {}
 local Events = CP.Events
@@ -45,59 +13,62 @@ local BOSS_EXEMPT_REASONS = { 'real_call', 'force_recall', 'cancelled' }
 local MODIFIER_ORDER = { 'armored_hostiles', 'time_crunch', 'radio_silence' }
 local MODIFIERS = {
     armored_hostiles = { label = 'modifier.armored_hostiles', tacticalOnly = true },
-    time_crunch      = { label = 'modifier.time_crunch' },
-    radio_silence    = { label = 'modifier.radio_silence' },
+    time_crunch = { label = 'modifier.time_crunch' },
+    radio_silence = { label = 'modifier.radio_silence' },
 }
 
 local usedCache = {}   -- usedCache[citizenid] = weekKey the attempt was seen used in (positive results only)
 
--- ── helpers ─────────────────────────────────────────────────────────────────
-local function bossCfg()
+-- ============================================================================
+--                                   HELPERS
+-- ============================================================================
+
+local function BossCfg()
     return (Config.Events and Config.Events.weeklyBoss) or {}
 end
 
-local function dayKeyNow()
+local function DayKeyNow()
     if CP.Schedule and CP.Schedule.dayKey then return CP.Schedule.dayKey() end
     return os.date('%Y-%m-%d')
 end
 
-local function weekdayNow()
+local function WeekdayNow()
     if CP.Schedule and CP.Schedule.weekday then return CP.Schedule.weekday() end
     return os.date('%A'):lower()
 end
 
-local function weekStartNow()
+local function WeekStartNow()
     if CP.Schedule and CP.Schedule.weekStart then return CP.Schedule.weekStart() end
     return os.time() - 7 * 86400
 end
 
-local function weekKeyNow()
+local function WeekKeyNow()
     if CP.Schedule and CP.Schedule.weekKey then return CP.Schedule.weekKey() end
-    return os.date('%Y-%m-%d', weekStartNow())
+    return os.date('%Y-%m-%d', WeekStartNow())
 end
 
-local function isBossWeekday(name)
-    for _, d in ipairs(bossCfg().days or {}) do
+local function IsBossWeekday(name)
+    for _, d in ipairs(BossCfg().days or {}) do
         if tostring(d):lower() == name then return true end
     end
     return false
 end
 
-local function isBossDay()
-    return isBossWeekday(weekdayNow())
+local function IsBossDay()
+    return IsBossWeekday(WeekdayNow())
 end
 
-local function hourlyCap()
+local function HourlyCap()
     return tonumber(Config.Limits and Config.Limits.maxCompletionsHour) or 8
 end
 
-local function completionsLastHour(citizenid)
+local function CompletionsLastHour(citizenid)
     if not (CP.Runs and CP.Runs.completionsLastHour) then return 0 end
     local ok, n = pcall(CP.Runs.completionsLastHour, citizenid)
     return ok and tonumber(n) or 0
 end
 
-local function operationLocked()
+local function OperationLocked()
     if CP.Operations and CP.Operations.isLocked then
         local ok, locked = pcall(CP.Operations.isLocked)
         return ok and locked == true
@@ -105,7 +76,7 @@ local function operationLocked()
     return false
 end
 
-local function bossDef()
+local function BossDef()
     if not (CP.Missions and CP.Missions.get) then return nil end
     local def = CP.Missions.get(BOSS_ID)
     if not def then return nil end
@@ -117,12 +88,12 @@ end
 -- when the run ends, so a boss run accepted late on the last boss day of last week (Sunday) and ended
 -- after the weekly reset has a row dated this week; it belongs to last week's attempt and must not use
 -- up this week's. With a boss day on the week's first day the window starts at the week start itself.
-local function attemptWindowStart()
-    local weekStart = weekStartNow()
+local function AttemptWindowStart()
+    local weekStart = WeekStartNow()
     if not (CP.Schedule and CP.Schedule.dayStart and CP.Schedule.weekday) then return weekStart end
     for i = 0, 6 do
         local probe = weekStart + i * 86400 + 7200   -- 2 h into the day: safe across DST changes
-        if isBossWeekday(CP.Schedule.weekday(probe)) then
+        if IsBossWeekday(CP.Schedule.weekday(probe)) then
             return i == 0 and weekStart or CP.Schedule.dayStart(probe)
         end
     end
@@ -130,13 +101,20 @@ local function attemptWindowStart()
 end
 
 -- True when this officer already used this week's attempt.
-local function usedThisWeek(citizenid)
-    local weekKey = weekKeyNow()
+local function UsedThisWeek(citizenid)
+    local weekKey = WeekKeyNow()
     if usedCache[citizenid] == weekKey then return true end
     CP.Migrations.ready()
     local n = MySQL.scalar.await(
-        "SELECT COUNT(*) AS n FROM cp_mission_runs WHERE citizenid = ? AND mission_type = 'tactical' AND mission_id = ? AND created_at >= FROM_UNIXTIME(?) AND end_reason NOT IN (?, ?, ?)",
-        { citizenid, BOSS_ID, attemptWindowStart(), BOSS_EXEMPT_REASONS[1], BOSS_EXEMPT_REASONS[2], BOSS_EXEMPT_REASONS[3] })
+        'SELECT COUNT(*) AS n FROM cp_mission_runs WHERE citizenid = ? AND mission_type = \'tactical\' AND mission_id = ? AND created_at >= FROM_UNIXTIME(?) AND end_reason NOT IN (?, ?, ?)',
+        {
+            citizenid,
+            BOSS_ID,
+            AttemptWindowStart(),
+            BOSS_EXEMPT_REASONS[1],
+            BOSS_EXEMPT_REASONS[2],
+            BOSS_EXEMPT_REASONS[3],
+        })
     if CP.U.num(n) > 0 then
         usedCache[citizenid] = weekKey
         return true
@@ -144,7 +122,7 @@ local function usedThisWeek(citizenid)
     return false
 end
 
-local function members(src)
+local function Members(src)
     if CP.Units and CP.Units.members then
         local ok, list = pcall(CP.Units.members, src)
         if ok and type(list) == 'table' and #list > 0 then return list end
@@ -152,22 +130,28 @@ local function members(src)
     return { src }
 end
 
-local function officerOf(src)
+local function OfficerOf(src)
     if not (CP.Access and CP.Access.getOfficer) then return nil, 'err.not_police' end
     return CP.Access.getOfficer(src)
 end
 
--- ── Type of the Day ─────────────────────────────────────────────────────────
+-- ============================================================================
+--                               TYPE OF THE DAY
+-- ============================================================================
+
 function Events.typeOfTheDay(dayKey)
     if not (Config.Events and Config.Events.typeOfTheDay) then return nil end
     local keys = CP.U.keys(Config.MissionTypes or {})
     if #keys == 0 then return nil end
-    local rng = CP.U.rng(CP.U.hash(tostring(dayKey or dayKeyNow())))
+    local rng = CP.U.rng(CP.U.hash(tostring(dayKey or DayKeyNow())))
     local key = rng:pick(keys)
     return key
 end
 
--- ── Modifiers ───────────────────────────────────────────────────────────────
+-- ============================================================================
+--                                  MODIFIERS
+-- ============================================================================
+
 function Events.modifiers()
     local out = {}
     for key, m in pairs(MODIFIERS) do
@@ -195,32 +179,35 @@ function Events.rollModifier(run)
     return key
 end
 
--- ── Weekly Boss ─────────────────────────────────────────────────────────────
+-- ============================================================================
+--                                 WEEKLY BOSS
+-- ============================================================================
+
 function Events.bossAvailable(src, officer)
-    if not bossCfg().enabled then return false, 'err.boss_disabled' end
-    if not bossDef() then return false, 'err.boss_unavailable' end
-    if not isBossDay() then return false, 'err.boss_not_today' end
-    if operationLocked() then return false, 'err.operation_locked' end
+    if not BossCfg().enabled then return false, 'err.boss_disabled' end
+    if not BossDef() then return false, 'err.boss_unavailable' end
+    if not IsBossDay() then return false, 'err.boss_not_today' end
+    if OperationLocked() then return false, 'err.operation_locked' end
     if type(officer) ~= 'table' then
-        local o, errKey = officerOf(src)
+        local o, errKey = OfficerOf(src)
         if not o then return false, errKey or 'err.not_police' end
         officer = o
     end
     if not officer.citizenid then return false, 'err.not_police' end
-    if usedThisWeek(officer.citizenid) then return false, 'err.boss_used' end
+    if UsedThisWeek(officer.citizenid) then return false, 'err.boss_used' end
     return true
 end
 
 -- Cash range for the boss card: CP.Cash.range when it knows the boss key, otherwise the boss's
 -- base payout (CP.Payouts.baseFor) times the tier's cash multiplier. The boss never rolls a modifier.
-local function bossCash(def, officers, size)
+local function BossCash(def, officers, size)
     if CP.Cash and CP.Cash.range then
         local ok, lo, hi = pcall(CP.Cash.range, BOSS_KEY, officers)
         if ok and type(lo) == 'number' and type(hi) == 'number' and hi > 0 then
             return { math.floor(lo + 0.5), math.floor(hi + 0.5) }
         end
     end
-    local base = tonumber(bossCfg().payout) or 0
+    local base = tonumber(BossCfg().payout) or 0
     if CP.Payouts and CP.Payouts.baseFor then
         local ok, b = pcall(CP.Payouts.baseFor, def)
         if ok and type(b) == 'number' then base = b end
@@ -230,26 +217,26 @@ local function bossCash(def, officers, size)
     return { amount, amount }
 end
 
-local function bossPoints(def)
+local function BossPoints(def)
     if CP.Scoring and CP.Scoring.P then
         local ok, p = pcall(CP.Scoring.P, def)
         if ok and type(p) == 'number' then return p end
     end
-    return tonumber(bossCfg().points) or 0
+    return tonumber(BossCfg().points) or 0
 end
 
 function Events.bossCard(src)
-    if not bossCfg().enabled or not isBossDay() or operationLocked() then return nil end
-    local def = bossDef()
+    if not BossCfg().enabled or not IsBossDay() or OperationLocked() then return nil end
+    local def = BossDef()
     if not def then return nil end
-    local viewer = officerOf(src)
+    local viewer = OfficerOf(src)
     if not viewer then return nil end
 
-    local srcs = members(src)
+    local srcs = Members(src)
     local size = #srcs
     local officers, locked = {}, nil
     for _, m in ipairs(srcs) do
-        local o = (m == src) and viewer or officerOf(m)
+        local o = (m == src) and viewer or OfficerOf(m)
         if o then
             officers[#officers + 1] = o
         elseif not locked then
@@ -260,8 +247,8 @@ function Events.bossCard(src)
     local card = {
         key = BOSS_KEY,
         label = def.label,
-        points = bossPoints(def),
-        cash = bossCash(def, officers, size),
+        points = BossPoints(def),
+        cash = BossCash(def, officers, size),
         pool = 1,
         mode = size > 1 and 'unit' or 'solo',
         locked = nil,
@@ -288,7 +275,10 @@ function Events.bossCard(src)
         if not ok then
             if why == 'cooldown' then
                 if who and who.src ~= src then
-                    locked = { reason = CP.L('board.boss_cooldown_member', { name = who.name or '?' }), ['until'] = untilTs }
+                    locked = {
+                        reason = CP.L('board.boss_cooldown_member', { name = who.name or '?' }),
+                        ['until'] = untilTs,
+                    }
                 else
                     locked = { reason = CP.L('board.boss_cooldown'), ['until'] = untilTs }
                 end
@@ -300,9 +290,9 @@ function Events.bossCard(src)
 
     -- The boss counts toward the hourly cap (Mission cards: Weekly Boss): the accept refuses it then.
     if not locked then
-        local max = hourlyCap()
+        local max = HourlyCap()
         for _, o in ipairs(officers) do
-            if completionsLastHour(o.citizenid) >= max then
+            if CompletionsLastHour(o.citizenid) >= max then
                 if o.src == src then
                     locked = { reason = CP.L('board.locked_hourly', { max = max }) }
                 else

@@ -1,49 +1,4 @@
--- modules/integrations/qbx/server.lua · CP.Qbx (server): the only server code that talks to qbx_core.
---
--- Owns every exports.qbx_core call on the server and the qbx_core server events Crimson-Police
--- listens to. Those events are fired by qbx_core with TriggerEvent (server-local), so they are
--- registered with AddEventHandler ONLY: a net handler would let any client spoof a duty or job
--- change (docs/INTEGRATIONS.md, qbx_core-usage). The Qbox player object is never cached: every
--- check calls GetPlayer again, because an export returns a snapshot.
---
--- Public API (docs/ARCHITECTURE.md §5.1)
---   CP.Qbx.getPlayer(src) -> player|nil
---       Raw Qbox player object (fields under player.PlayerData).
---   CP.Qbx.getInfo(src) -> info|nil
---       info = { src, citizenid, name, firstname, lastname,
---                job = { name, label, type, onduty, gradeLevel, gradeName },
---                callsign, metadata, isDead, inLastStand }
---       name = charinfo first + last name; callsign = metadata.callsign trimmed, nil when empty or
---       qbx_core's default 'NO CALLSIGN'; gradeName falls back to the job definition's grade name.
---   CP.Qbx.getByCitizenId(citizenid) -> src|nil      online players only, exact (case-sensitive) match
---   CP.Qbx.getOnlinePlayers() -> { src, ... }        loaded characters, ascending (cached for 1 s)
---   CP.Qbx.getJobs() -> table                        qbx job definitions ({} when unavailable)
---   CP.Qbx.addMoney(src, account, amount, reason) -> boolean, why|nil
---       player.Functions.AddMoney(account, amount, reason); amount rounded half up (CP.U.round); 0 returns
---       true without calling qbx_core (nothing to move); negative or invalid amounts return false.
---       why = 'error' when AddMoney raised: the balance may already have changed, so the caller must not
---       retry or refund (CP.Cash leaves the row 'paying'). A plain false (refused, offline) has no why.
---   CP.Qbx.isDowned(src) -> boolean                  metadata.isdead == true or metadata.inlaststand == true
---   Listeners (any number; each runs in its own thread, errors are caught and logged):
---   CP.Qbx.onDutyChange(fn(src, onDuty))    QBCore:Server:SetDuty. false is passed on as is; a true is
---                                           re-read from PlayerData (SetDuty can arrive stale or out of
---                                           order when sc-police / sc-ambulance force a suspended officer
---                                           off duty inside their own handler). Listeners must still
---                                           re-read getInfo(src).job.onduty before acting on "on duty".
---   CP.Qbx.onPlayerLoaded(fn(src))          QBCore:Server:PlayerLoaded (player object argument).
---   CP.Qbx.onJobChange(fn(src, job))        QBCore:Server:OnJobUpdate; job has the getInfo job shape
---                                           (read live: PlayerData is already updated when it fires).
---   CP.Qbx.onPlayerUnload(fn(src))          QBCore:Server:OnPlayerUnload (character logout / switch).
---   CP.Qbx.onGroupUpdate(fn(src))           qbx_core:server:onGroupUpdate (job or gang added/removed;
---                                           removing the active job makes it 'unemployed' without an
---                                           OnJobUpdate, so listeners re-read the job).
---   CP.Qbx.onMetaDataChange(fn(src, key, old, new), keys?)
---                                           qbx_core:server:onSetMetaData (key, oldValue, value, source),
---                                           fired by qbx_core's SetMetaData after the value is set. keys
---                                           (optional list of metadata keys) filters before any thread is
---                                           started: metadata changes constantly (hunger, thirst, stress).
---
--- All functions may be called from any thread; none of them yields.
+-- CP.Qbx (server): the only server code that talks to qbx_core.
 
 CP.Qbx = CP.Qbx or {}
 local Q = CP.Qbx
@@ -56,20 +11,23 @@ local metaListeners = {}   -- { fn, keys = { [key] = true }|nil }
 local onlineCache = { at = -1, list = {} }
 local errorLoggedAt = {}
 
--- ── helpers ─────────────────────────────────────────────────────────────────
-local function logError(key, fmt, ...)
+-- ============================================================================
+--                                   HELPERS
+-- ============================================================================
+
+local function LogError(key, fmt, ...)
     local now = os.time()
     if errorLoggedAt[key] and now - errorLoggedAt[key] < 60 then return end
     errorLoggedAt[key] = now
     CP.err(TAG, fmt, ...)
 end
 
-local function started()
+local function Started()
     return GetResourceState(RESOURCE) == 'started'
 end
 
 -- A positive integer server id, or nil.
-local function toSrc(src)
+local function ToSrc(src)
     local n = tonumber(src)
     if not n then return nil end
     n = math.tointeger(n)
@@ -77,12 +35,12 @@ local function toSrc(src)
     return n
 end
 
-local function str(v)
+local function Str(v)
     if type(v) == 'string' then return v end
     return nil
 end
 
-local function normCallsign(v)
+local function NormCallsign(v)
     if type(v) == 'number' then v = tostring(v) end
     if type(v) ~= 'string' then return nil end
     local s = CP.U.trim(v)
@@ -90,7 +48,7 @@ local function normCallsign(v)
     return s
 end
 
-local function gradeNameFromJobs(jobName, level)
+local function GradeNameFromJobs(jobName, level)
     local jobs = Q.getJobs()
     local def = jobs[jobName]
     if type(def) ~= 'table' or type(def.grades) ~= 'table' then return nil end
@@ -100,7 +58,7 @@ local function gradeNameFromJobs(jobName, level)
 end
 
 -- The job table in the shape documented above (never nil).
-local function normJob(job)
+local function NormJob(job)
     if type(job) ~= 'table' then
         return { name = 'unemployed', onduty = false, gradeLevel = 0 }
     end
@@ -108,32 +66,35 @@ local function normJob(job)
     local grade = job.grade
     if type(grade) == 'table' then
         level = tonumber(grade.level) or 0
-        gradeName = str(grade.name)
+        gradeName = Str(grade.name)
     elseif type(grade) == 'number' then
         level = grade
     end
     level = math.floor(level)
     if gradeName == '' then gradeName = nil end
-    local name = str(job.name)
+    local name = Str(job.name)
     if not name or name == '' then name = 'unemployed' end
-    if not gradeName and name ~= 'unemployed' then gradeName = gradeNameFromJobs(name, level) end
+    if not gradeName and name ~= 'unemployed' then gradeName = GradeNameFromJobs(name, level) end
     return {
         name = name,
-        label = str(job.label),
-        type = str(job.type),
+        label = Str(job.label),
+        type = Str(job.type),
         onduty = job.onduty == true,
         gradeLevel = level,
         gradeName = gradeName,
     }
 end
 
--- ── lookups ─────────────────────────────────────────────────────────────────
+-- ============================================================================
+--                                   LOOKUPS
+-- ============================================================================
+
 function Q.getPlayer(src)
-    src = toSrc(src)
-    if not src or not started() then return nil end
+    src = ToSrc(src)
+    if not src or not Started() then return nil end
     local ok, player = pcall(function() return exports.qbx_core:GetPlayer(src) end)
     if not ok then
-        logError('GetPlayer', 'exports.qbx_core:GetPlayer failed: %s', tostring(player))
+        LogError('GetPlayer', 'exports.qbx_core:GetPlayer failed: %s', tostring(player))
         return nil
     end
     if type(player) ~= 'table' or type(player.PlayerData) ~= 'table' then return nil end
@@ -141,14 +102,14 @@ function Q.getPlayer(src)
 end
 
 function Q.getInfo(src)
-    local n = toSrc(src)
+    local n = ToSrc(src)
     local player = Q.getPlayer(n)
     if not player then return nil end
     local pd = player.PlayerData
     if type(pd.citizenid) ~= 'string' or pd.citizenid == '' then return nil end
     local ci = type(pd.charinfo) == 'table' and pd.charinfo or {}
-    local first = str(ci.firstname) and CP.U.trim(ci.firstname) or ''
-    local last = str(ci.lastname) and CP.U.trim(ci.lastname) or ''
+    local first = Str(ci.firstname) and CP.U.trim(ci.firstname) or ''
+    local last = Str(ci.lastname) and CP.U.trim(ci.lastname) or ''
     local name = CP.U.trim(first .. ' ' .. last)
     if name == '' then name = GetPlayerName(n) or pd.citizenid end
     local md = type(pd.metadata) == 'table' and pd.metadata or {}
@@ -158,8 +119,8 @@ function Q.getInfo(src)
         name = name,
         firstname = first,
         lastname = last,
-        job = normJob(pd.job),
-        callsign = normCallsign(md.callsign),
+        job = NormJob(pd.job),
+        callsign = NormCallsign(md.callsign),
         metadata = md,
         isDead = md.isdead == true,
         inLastStand = md.inlaststand == true,
@@ -167,33 +128,33 @@ function Q.getInfo(src)
 end
 
 function Q.getByCitizenId(citizenid)
-    if type(citizenid) ~= 'string' or citizenid == '' or not started() then return nil end
+    if type(citizenid) ~= 'string' or citizenid == '' or not Started() then return nil end
     local ok, player = pcall(function() return exports.qbx_core:GetPlayerByCitizenId(citizenid) end)
     if not ok then
-        logError('GetPlayerByCitizenId', 'exports.qbx_core:GetPlayerByCitizenId failed: %s', tostring(player))
+        LogError('GetPlayerByCitizenId', 'exports.qbx_core:GetPlayerByCitizenId failed: %s', tostring(player))
         return nil
     end
     if type(player) ~= 'table' or type(player.PlayerData) ~= 'table' then return nil end
-    return toSrc(player.PlayerData.source)
+    return ToSrc(player.PlayerData.source)
 end
 
 -- GetQBPlayers returns a map keyed by server id and copies every player's data across the export
 -- boundary, so the source list is cached briefly and rebuilt on load/unload/drop.
 function Q.getOnlinePlayers()
-    if not started() then return {} end
+    if not Started() then return {} end
     local now = GetGameTimer()
     if onlineCache.at < 0 or now - onlineCache.at >= ONLINE_CACHE_MS then
         local ok, players = pcall(function() return exports.qbx_core:GetQBPlayers() end)
         if not ok then
-            logError('GetQBPlayers', 'exports.qbx_core:GetQBPlayers failed: %s', tostring(players))
+            LogError('GetQBPlayers', 'exports.qbx_core:GetQBPlayers failed: %s', tostring(players))
             return {}
         end
         local list, seen = {}, {}
         if type(players) == 'table' then
             for key, p in pairs(players) do
                 local src
-                if type(p) == 'table' and type(p.PlayerData) == 'table' then src = toSrc(p.PlayerData.source) end
-                src = src or toSrc(key)
+                if type(p) == 'table' and type(p.PlayerData) == 'table' then src = ToSrc(p.PlayerData.source) end
+                src = src or ToSrc(key)
                 if src and not seen[src] then
                     seen[src] = true
                     list[#list + 1] = src
@@ -209,10 +170,10 @@ function Q.getOnlinePlayers()
 end
 
 function Q.getJobs()
-    if not started() then return {} end
+    if not Started() then return {} end
     local ok, jobs = pcall(function() return exports.qbx_core:GetJobs() end)
     if not ok then
-        logError('GetJobs', 'exports.qbx_core:GetJobs failed: %s', tostring(jobs))
+        LogError('GetJobs', 'exports.qbx_core:GetJobs failed: %s', tostring(jobs))
         return {}
     end
     if type(jobs) ~= 'table' then return {} end
@@ -245,8 +206,11 @@ function Q.isDowned(src)
     return md.isdead == true or md.inlaststand == true
 end
 
--- ── listeners ───────────────────────────────────────────────────────────────
-local function addListener(kind, fn)
+-- ============================================================================
+--                                  LISTENERS
+-- ============================================================================
+
+local function AddListener(kind, fn)
     if type(fn) ~= 'function' then
         CP.warn(TAG, 'a %s listener must be a function (got %s)', kind, type(fn))
         return
@@ -257,7 +221,7 @@ end
 
 -- Each listener runs in its own thread so one that queries the database or waits never delays
 -- qbx_core's synchronous event dispatch or the other listeners.
-local function emit(kind, ...)
+local function Emit(kind, ...)
     local list = listeners[kind]
     if #list == 0 then return end
     local args = table.pack(...)
@@ -270,11 +234,11 @@ local function emit(kind, ...)
     end
 end
 
-function Q.onDutyChange(fn) addListener('duty', fn) end
-function Q.onPlayerLoaded(fn) addListener('loaded', fn) end
-function Q.onJobChange(fn) addListener('job', fn) end
-function Q.onPlayerUnload(fn) addListener('unload', fn) end
-function Q.onGroupUpdate(fn) addListener('group', fn) end
+function Q.onDutyChange(fn) AddListener('duty', fn) end
+function Q.onPlayerLoaded(fn) AddListener('loaded', fn) end
+function Q.onJobChange(fn) AddListener('job', fn) end
+function Q.onPlayerUnload(fn) AddListener('unload', fn) end
+function Q.onGroupUpdate(fn) AddListener('group', fn) end
 
 function Q.onMetaDataChange(fn, keys)
     if type(fn) ~= 'function' then
@@ -289,9 +253,13 @@ function Q.onMetaDataChange(fn, keys)
     metaListeners[#metaListeners + 1] = { fn = fn, keys = filter }
 end
 
--- ── qbx_core server events (server-local: AddEventHandler only) ─────────────
+-- ============================================================================
+--                            qbx_core SERVER EVENTS
+-- ============================================================================
+-- server-local: AddEventHandler only.
+
 AddEventHandler('QBCore:Server:SetDuty', function(src, onDuty)
-    src = toSrc(src)
+    src = ToSrc(src)
     if not src then return end
     local duty = onDuty == true
     if duty then
@@ -300,46 +268,47 @@ AddEventHandler('QBCore:Server:SetDuty', function(src, onDuty)
         duty = info ~= nil and info.job.onduty == true
     end
     CP.log(TAG, 'SetDuty %d -> %s (event said %s)', src, tostring(duty), tostring(onDuty))
-    emit('duty', src, duty)
+    Emit('duty', src, duty)
 end)
 
 AddEventHandler('QBCore:Server:PlayerLoaded', function(player)
     if type(player) ~= 'table' or type(player.PlayerData) ~= 'table' then return end
-    local src = toSrc(player.PlayerData.source)
+    local src = ToSrc(player.PlayerData.source)
     if not src then return end
     onlineCache.at = -1
     CP.log(TAG, 'PlayerLoaded %d (%s)', src, tostring(player.PlayerData.citizenid))
-    emit('loaded', src)
+    Emit('loaded', src)
 end)
 
 AddEventHandler('QBCore:Server:OnJobUpdate', function(src, job)
-    src = toSrc(src)
+    src = ToSrc(src)
     if not src then return end
     local info = Q.getInfo(src)
-    local current = info and info.job or normJob(job)
-    CP.log(TAG, 'OnJobUpdate %d -> %s (grade %d, on duty %s)', src, current.name, current.gradeLevel, tostring(current.onduty))
-    emit('job', src, current)
+    local current = info and info.job or NormJob(job)
+    CP.log(TAG, 'OnJobUpdate %d -> %s (grade %d, on duty %s)', src, current.name, current.gradeLevel,
+        tostring(current.onduty))
+    Emit('job', src, current)
 end)
 
 AddEventHandler('QBCore:Server:OnPlayerUnload', function(src)
-    src = toSrc(src)
+    src = ToSrc(src)
     if not src then return end
     onlineCache.at = -1
     CP.log(TAG, 'OnPlayerUnload %d', src)
-    emit('unload', src)
+    Emit('unload', src)
 end)
 
 AddEventHandler('qbx_core:server:onGroupUpdate', function(src, groupName, grade)
-    src = toSrc(src)
+    src = ToSrc(src)
     if not src then return end
     CP.log(TAG, 'onGroupUpdate %d %s -> %s', src, tostring(groupName), tostring(grade))
-    emit('group', src)
+    Emit('group', src)
 end)
 
 -- qbx_core SetMetaData: TriggerEvent('qbx_core:server:onSetMetaData', key, oldValue, value, source).
 AddEventHandler('qbx_core:server:onSetMetaData', function(key, old, new, src)
     if #metaListeners == 0 or type(key) ~= 'string' then return end
-    src = toSrc(src)
+    src = ToSrc(src)
     if not src then return end
     for i = 1, #metaListeners do
         local l = metaListeners[i]
