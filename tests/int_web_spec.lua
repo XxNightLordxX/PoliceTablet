@@ -215,6 +215,32 @@ do
         'the Supervisor and Admin UIs have no run bar (so they rely on the HUD)')
 end
 
+-- ── Admin UI → Officers: disputes about flagged / voided runs are approved or rejected, never awarded ──
+do
+    local off = read(WEB .. 'admin/screens/Officers.tsx')
+    local disputes = read(ROOT .. 'modules/disputes/server.lua')
+    H.ok(off ~= nil and disputes ~= nil, 'Admin Officers screen and modules/disputes exist')
+    has(disputes, "CP.Net.action('server:admin:handleDispute'", 'modules/disputes registers server:admin:handleDispute')
+    has(off, "d.status === 'open' && d.kind === 'failed'", 'Award / Dismiss only for failed-run disputes')
+    has(off, "setReview({ dispute: d, decision: 'approve' })", 'flagged/voided disputes have Approve')
+    has(off, "setReview({ dispute: d, decision: 'reject' })", 'flagged/voided disputes have Reject')
+    has(off, "run('server:admin:handleDispute', { disputeId: review.dispute.id, decision: review.decision, reason }",
+        'Approve / Reject send server:admin:handleDispute { disputeId, decision, reason } without awardPoints')
+    local review = off:match('const doReview = async(.-)};')
+    H.ok(review ~= nil and review:find('awardPoints', 1, true) == nil, 'the approve / reject call never carries award points')
+    local dialog = off:match('<ConfirmDialog%s+open={!!review}(.-)/>')
+    H.ok(dialog ~= nil and dialog:find('required: true', 1, true) ~= nil, 'the approve / reject dialog requires a reason')
+    local missing = {}
+    for key in pairs(literalKeys(off)) do if not keys[key] then missing[#missing + 1] = key end end
+    for key in off:gmatch("'(sup%.review%.[%w_]+)'") do if not keys[key] then missing[#missing + 1] = key end end
+    for _, k in ipairs({ 'admin.officers.dispute_kind.flagged', 'admin.officers.dispute_kind.voided', 'admin.officers.review_status.open',
+        'admin.officers.review_status.approved', 'admin.officers.review_status.rejected' }) do
+        if not keys[k] then missing[#missing + 1] = k end
+    end
+    table.sort(missing)
+    H.eq(#missing, 0, 'every text key of Admin Officers exists (' .. table.concat(missing, ', ') .. ')')
+end
+
 -- ── Shipped files: locales/en.json and web/dist are regenerated from their sources ───────────────────
 do
     local en = read(ROOT .. 'locales/en.json')

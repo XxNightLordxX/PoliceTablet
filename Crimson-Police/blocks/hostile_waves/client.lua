@@ -3,8 +3,13 @@
   What it does
     While the objective is current on this participant's client:
     - blocks NPC traffic within obj.blockTraffic metres of location.start.coords, area-limited only
-      (AddRoadNodeSpeedZone + SetRoadsInArea for that box + one ClearAreaOfVehicles in the radius),
-      restored in stop (RemoveRoadNodeSpeedZone, SetRoadsBackToOriginal) (ARCHITECTURE §0.14);
+      (AddRoadNodeSpeedZone + SetRoadsInArea for that box + one ClearAreaOfVehicles in the radius)
+      (ARCHITECTURE §0.14). It is restored (RemoveRoadNodeSpeedZone, SetRoadsBackToOriginal) when the
+      objective stops only if no later objective of the run follows; otherwise the block is held for the
+      rest of the run (every objective of a run shares its location: Gang Shootout / Kingpin "Secure the
+      scene", "NPC traffic is blocked within 120 m while the run is active") and restored as soon as
+      CP.Runs.current() is no longer that run (run end, silent removal) or on resource stop. A later
+      hostile_waves objective with the same area takes the held block over instead of adding a second;
     - red entity blips on hostiles that are not neutralised (none with Radio Silence);
     - a HUD line (ctx.hudDetail) when a surrendered hostile is close enough to cuff;
     - on the run host only: CP.Npc.apply + the task for the current cp state once the host has control
@@ -26,8 +31,11 @@ local LOOP_MS     = 500      -- AI / blip refresh while current
 local HINT_RANGE  = 20.0     -- metres: "cuff them" hint for a surrendered hostile this close
 local CONTROL_MS  = 250      -- control request timeout per hostile
 local TRAFFIC_Z   = 100.0    -- half height of the SetRoadsInArea box
+local HOLD_POLL_MS = 500     -- how often a held traffic block checks that its run is still going
 
 local active = {}            -- [runId:index] = S
+local held = {}              -- [runId] = { traffic, ... } kept after the objective stopped (later objectives)
+local watching = {}          -- [runId] = true while a thread waits for that run to end
 
 local function keyOf(ctx) return tostring(ctx.runId) .. ':' .. tostring(ctx.index) end
 
@@ -59,7 +67,49 @@ local function bagOf(ent)
     return st and st.cp or nil
 end
 
--- ── Traffic (area-limited, restored on stop) ────────────────────────────────
+-- ── Traffic (area-limited; held while later objectives of the run follow) ───
+local function restoreArea(t)
+    if t.zone then RemoveRoadNodeSpeedZone(t.zone) end
+    SetRoadsBackToOriginal(t.x1, t.y1, t.z1, t.x2, t.y2, t.z2, false)
+end
+
+local function currentRun(runId)
+    local run = CP.Runs and CP.Runs.current and CP.Runs.current() or nil
+    if type(run) == 'table' and run.id == runId then return run end
+    return nil
+end
+
+-- True while the run of ctx is this client's current run and has an objective after ctx.index.
+local function laterObjectives(ctx)
+    local run = currentRun(ctx.runId)
+    if not run then return false end
+    local n = type(run.objectives) == 'table' and #run.objectives or 0
+    if n == 0 and type(run.mission) == 'table' and type(run.mission.objectives) == 'table' then
+        n = #run.mission.objectives
+    end
+    return (tonumber(ctx.index) or 0) < n
+end
+
+local function releaseHeld(runId)
+    local list = held[runId]
+    held[runId] = nil
+    for _, t in ipairs(list or {}) do restoreArea(t) end
+end
+
+local function holdTraffic(S)
+    local t, runId = S.traffic, S.ctx.runId
+    S.traffic = nil
+    held[runId] = held[runId] or {}
+    table.insert(held[runId], t)
+    if watching[runId] then return end
+    watching[runId] = true
+    CreateThread(function()
+        while held[runId] and currentRun(runId) do Wait(HOLD_POLL_MS) end
+        watching[runId] = nil
+        releaseHeld(runId)
+    end)
+end
+
 local function blockTraffic(S)
     if S.traffic then return end
     local ctx = S.ctx
@@ -67,7 +117,18 @@ local function blockTraffic(S)
     local c = ctx.location and ctx.location.start and ctx.location.start.coords
     local x, y, z = U.xyz(c)
     if r <= 0 or not x then return end
-    local t = { x1 = x - r, y1 = y - r, z1 = z - TRAFFIC_Z, x2 = x + r, y2 = y + r, z2 = z + TRAFFIC_Z }
+    -- an earlier objective of this run still holds the same block: take it over
+    local list = held[ctx.runId]
+    for i, h in ipairs(list or {}) do
+        if h.cx == x and h.cy == y and h.cz == z and h.r == r then
+            table.remove(list, i)
+            if #list == 0 then held[ctx.runId] = nil end
+            S.traffic = h
+            return
+        end
+    end
+    local t = { x1 = x - r, y1 = y - r, z1 = z - TRAFFIC_Z, x2 = x + r, y2 = y + r, z2 = z + TRAFFIC_Z,
+        cx = x, cy = y, cz = z, r = r }
     t.zone = AddRoadNodeSpeedZone(x + 0.0, y + 0.0, z + 0.0, r + 0.0, 0.0, false)
     SetRoadsInArea(t.x1, t.y1, t.z1, t.x2, t.y2, t.z2, false, false)
     ClearAreaOfVehicles(x + 0.0, y + 0.0, z + 0.0, r + 0.0, false, false, false, false, false, false, 0)
@@ -78,8 +139,7 @@ local function restoreTraffic(S)
     local t = S.traffic
     if not t then return end
     S.traffic = nil
-    if t.zone then RemoveRoadNodeSpeedZone(t.zone) end
-    SetRoadsBackToOriginal(t.x1, t.y1, t.z1, t.x2, t.y2, t.z2, false)
+    restoreArea(t)
 end
 
 -- ── Blips ───────────────────────────────────────────────────────────────────
@@ -239,11 +299,15 @@ CP.Blocks.register(BLOCK, {
 
     stop = function(ctx)
         local S = active[keyOf(ctx)]
-        if S then cleanup(S) end
+        if not S then return end
+        -- the objective is done but the run goes on at the same location: keep NPC traffic out
+        if S.traffic and laterObjectives(ctx) then holdTraffic(S) end
+        cleanup(S)
     end,
 })
 
 AddEventHandler('onResourceStop', function(res)
     if res ~= GetCurrentResourceName() then return end
     for _, S in pairs(active) do cleanup(S) end
+    for _, runId in ipairs(U.keys(held)) do releaseHeld(runId) end
 end)

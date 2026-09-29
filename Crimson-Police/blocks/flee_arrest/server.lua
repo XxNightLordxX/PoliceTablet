@@ -32,7 +32,11 @@
     before the knock or from beyond fireWithin.
     validate: spawn points, the door marker and every fleeTo / route waypoint must lie outside
     Config.Builder.noBuildZones for every mission; custom missions also get the allowed lists, the
-    associate spawn-point count and the minimum distance of spawn points from the start.
+    associate spawn-point count and the minimum distance of spawn points from the start, and:
+    aliveBonus.id must be a Config.Bonuses id with no points / pctOfPoints of its own (the file value
+    is never passed as a hint either: only built-in files value their own id), givesUp.close is either
+    off or exactly Config.Blocks.flee_arrest closeDistance / closeSeconds, knock.duration and
+    cuff.duration are 1000-30000 ms, and cuff.maxDistance (when set) is at most CUFF_RANGE.
 
   Objective fields read (defaults: ARCHITECTURE §3.3 and Config.Blocks.flee_arrest)
     minSeconds [30] · presenceRange [presenceRange[3] = 250] · label
@@ -53,7 +57,7 @@
                     (the builder's list form { 'aim', 'stun', 'close' } is accepted)
                   armedGivesUp { stun [true], belowHealth [0.5] | false }
                   cuff { label [locale block.flee_arrest.cuff], duration [5000], maxDistance }
-                  aliveBonus { id ['suspect_alive'], points (hint for ids outside Config.Bonuses), each }
+                  aliveBonus { id ['suspect_alive'], points (built-in files only: hint for ids outside Config.Bonuses), each }
 
   Evidence accepted (onEvent)
     { type = 'knock_start' } / { type = 'knock' }  door mode, within KNOCK_RANGE + slack of the door;
@@ -102,6 +106,7 @@ local DEFAULT_SHARE      = 0.4
 local DEFAULT_FIRE       = 15.0
 local DEFAULT_BELOW      = 0.5
 local PRISON_MODEL       = 's_m_y_prisoner_01'
+local CUSTOM_TIMED_MS    = { 1000, 30000 }   -- custom missions: knock and cuff progress times (ms)
 
 local function cfg() return Config.Blocks[BLOCK] end
 local function now() return GetGameTimer() end
@@ -191,6 +196,24 @@ local function allAllowed(list, allowed)
         if allowed and not U.contains(allowed, v) then return false end
     end
     return true
+end
+
+-- Only a built-in mission file may pass its own bonus values (aliveBonus.points) as a value hint.
+local function trustedFile(ctx)
+    local m = ctx.mission or (ctx.run and ctx.run.mission)
+    return type(m) == 'table' and m.source == 'builtin'
+end
+
+-- Custom missions: timed actions (knock, cuff) take 1-30 s like every builder progress time, and a cuff
+-- can never reach further than CP.Npc.enableCuff's own range.
+local function customTimed(field, ms)
+    if inRange(ms, CUSTOM_TIMED_MS) then return true end
+    return bad('block.flee_arrest.invalid.range', { field = field, min = CUSTOM_TIMED_MS[1], max = CUSTOM_TIMED_MS[2] })
+end
+
+local function customCuffRange(v)
+    if v == nil or (isNum(v) and v > 0 and v <= CUFF_RANGE + 1e-9) then return true end
+    return bad('block.flee_arrest.invalid.range', { field = 'cuff.maxDistance', min = 0, max = CUFF_RANGE })
 end
 
 local function isParticipant(ctx, src)
@@ -471,6 +494,12 @@ local function validate(obj, mission, location)
         or not isNum(g.close.seconds) or g.close.seconds <= 0) then
         return bad('block.flee_arrest.invalid.gives_up')
     end
+    -- custom missions: "a participant stays within 3 m for 3 s" is fixed (Config.Blocks closeDistance /
+    -- closeSeconds), only on or off
+    if strict and g.close ~= false and (math.abs(g.close.distance - c.closeDistance) > 1e-6
+        or math.abs(g.close.seconds - c.closeSeconds) > 1e-6) then
+        return bad('block.flee_arrest.invalid.gives_up_close', { distance = c.closeDistance, seconds = c.closeSeconds })
+    end
     local ag = o.armedGivesUp
     if type(ag.stun) ~= 'boolean' or (ag.belowHealth ~= false and (not isNum(ag.belowHealth) or ag.belowHealth <= 0 or ag.belowHealth >= 1)) then
         return bad('block.flee_arrest.invalid.gives_up')
@@ -479,12 +508,23 @@ local function validate(obj, mission, location)
     if not isNum(o.cuff.duration) or o.cuff.duration <= 0 or type(o.cuff.label) ~= 'string' then
         return bad('block.flee_arrest.invalid.cuff')
     end
+    if strict then
+        local ok, why = customTimed('cuff.duration', o.cuff.duration)
+        if ok then ok, why = customCuffRange(o.cuff.maxDistance) end
+        if not ok then return false, why end
+    end
     if not allAllowed(o.weapons, strict and allowed.weapons or nil) then return bad('block.flee_arrest.invalid.weapons') end
     if not allAllowed(o.models, strict and allowed.peds or nil) then return bad('block.flee_arrest.invalid.models') end
     if not inRange(o.accuracy, hw.accuracy) or not inRange(o.armour, hw.armour) then
         return bad('block.flee_arrest.invalid.combat')
     end
     if type(o.aliveBonus.id) ~= 'string' or o.aliveBonus.id == '' then return bad('block.flee_arrest.invalid.alive_bonus') end
+    -- custom missions: the alive bonus is a standard id (valued by the mission's capped bonuses list),
+    -- never a value of its own
+    if strict and (o.aliveBonus.points ~= nil or o.aliveBonus.pctOfPoints ~= nil
+        or not (Config.Bonuses and Config.Bonuses[o.aliveBonus.id])) then
+        return bad('block.flee_arrest.invalid.alive_bonus_custom', { id = o.aliveBonus.id })
+    end
     if o.mode == 'door' then
         local r = o.responses
         for _, k in ipairs({ 'surrender', 'flee', 'fight' }) do
@@ -493,6 +533,10 @@ local function validate(obj, mission, location)
         if math.abs(r.surrender + r.flee + r.fight - 1) > 0.001 then return bad('block.flee_arrest.invalid.responses') end
         if not isNum(o.knock.duration) or o.knock.duration <= 0 or type(o.knock.label) ~= 'string' then
             return bad('block.flee_arrest.invalid.knock')
+        end
+        if strict then
+            local ok, why = customTimed('knock.duration', o.knock.duration)
+            if not ok then return false, why end
         end
         local a = o.associates
         if not isInt(a.count) or a.count < 0 or a.count > c.suspects[2] then
@@ -822,7 +866,9 @@ local function markCuffed(ctx, st, p)
     st.dirty = true
     if p.role ~= 'associate' then
         local ab = ctx.obj.aliveBonus
-        ctx.award(ab.id, { count = 1, points = ab.points })
+        -- aliveBonus.points is a mission-file value: only built-in files may value their own id with it
+        -- (custom missions value a Config.Bonuses id through their capped bonuses list instead)
+        ctx.award(ab.id, { count = 1, points = trustedFile(ctx) and ab.points or nil })
     end
 end
 

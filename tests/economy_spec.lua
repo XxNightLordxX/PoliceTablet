@@ -879,6 +879,48 @@ b = CP.Scoring.compute(run, fakeP({ result = 'completed' }), 'completed', { dura
 H.eq(find(b.bonuses, 'crate_secured'), nil, 'listed id with no value anywhere adds nothing')
 DEFS.valueless = nil
 
+-- custom missions (mission.source == 'custom'): mission-file values never raise points. Only Config.Bonuses ids
+-- carry a value of their own (clamped to Config.Builder.bonusCap, each from Config.Bonuses); trusted block hints
+-- (ctx.award opts.points: medals, kingpin_alive) still count, a positive one capped at bonusCap.points.
+DEFS.custom_cards = def('custom_cards', 'tactical', 2, { label = 'Custom Cards', source = 'custom',
+    bonuses = {
+        { id = 'crate_secured', points = 1000 },                  -- not in Config.Bonuses: file value ignored
+        { id = 'loot_found', pctOfPoints = 5 },                   -- not in Config.Bonuses: file share ignored
+        { id = 'hostile_arrested', points = 500, each = true },   -- standard id, override above the 50-point cap
+        { id = 'suspect_alive', points = 15, each = true },       -- standard id; the file's each is ignored
+        { id = 'no_participant_downed', pctOfPoints = 0.9 },      -- standard pct id above 25% of P
+        { id = 'medal_gold', points = 1000 },                     -- file value ignored, the block hint counts
+    } })
+run = fakeRun({ mission = DEFS.custom_cards,
+    shared = { crate_secured = 1, loot_found = 1, hostile_arrested = 2, suspect_alive = 3, medal_gold = 1,
+        clues_first = 1, kingpin_alive = 1, hostage_hit = 2, no_contact = 1 },
+    values = { medal_gold = 50, clues_first = 999, kingpin_alive = 100000, hostage_hit = -100, no_contact = 10 },
+    kinds = { medal_gold = 'bonus', clues_first = 'bonus', kingpin_alive = 'bonus', hostage_hit = 'penalty', no_contact = 'bonus' } })
+b = CP.Scoring.compute(run, fakeP({ result = 'completed' }), 'completed', { durationS = 590 })
+H.eq(b.P, 200, 'custom: P from the type')
+H.eq(find(b.bonuses, 'crate_secured'), nil, 'custom: a file value on an id outside Config.Bonuses is ignored')
+H.eq(find(b.bonuses, 'loot_found'), nil, 'custom: a file pctOfPoints on an id outside Config.Bonuses is ignored')
+H.eq(find(b.bonuses, 'hostile_arrested').points, 100, 'custom: a standard flat override is clamped to 50 per occurrence (x2)')
+H.eq(find(b.bonuses, 'suspect_alive').points, 15, 'custom: each comes from Config.Bonuses only (suspect_alive is once)')
+H.eq(find(b.bonuses, 'no_participant_downed').points, 50, 'custom: a standard pct override is clamped to 25% of P')
+H.eq(find(b.bonuses, 'medal_gold').points, 50, 'custom: a listed medal id is valued by the block hint, not the file')
+H.eq(find(b.bonuses, 'clues_first'), nil, 'custom: a standard id the card does not list is ignored, hint or not')
+H.eq(find(b.bonuses, 'kingpin_alive').points, 50, 'custom: an unlisted block hint above the cap is capped at 50')
+H.eq(find(b.bonuses, 'no_contact').points, 10, 'custom: an unlisted block hint under the cap counts as recorded')
+H.eq(find(b.penalties, 'hostage_hit').points, -200, 'custom: a penalty hint keeps its block-setting range (-100 x 2)')
+Config.Builder.bonusCap.points = 30
+b = CP.Scoring.compute(run, fakeP({ result = 'completed' }), 'completed', { durationS = 590 })
+H.eq(find(b.bonuses, 'medal_gold').points, 30, 'custom: hints follow Config.Builder.bonusCap.points')
+H.eq(find(b.bonuses, 'hostile_arrested').points, 60, 'custom: standard overrides follow Config.Builder.bonusCap.points')
+Config.Builder.bonusCap.points = 50
+-- the same card on a built-in mission keeps its file values (built-in files follow the mission cards)
+DEFS.custom_cards.source = 'builtin'
+b = CP.Scoring.compute(run, fakeP({ result = 'completed' }), 'completed', { durationS = 590 })
+H.eq(find(b.bonuses, 'crate_secured').points, 1000, 'builtin: the card value of its own id counts')
+H.eq(find(b.bonuses, 'medal_gold').points, 1000, 'builtin: a listed id keeps its file value over the hint')
+H.eq(find(b.bonuses, 'kingpin_alive').points, 100000, 'builtin: hints are not capped (capped by 2P later)')
+DEFS.custom_cards = nil
+
 -- failed, abandoned, presence
 b = CP.Scoring.compute(fakeRun(), fakeP({ result = 'failed' }), 'failed', { failedShare = 0.5 })
 H.eq(b.final, 25, 'failed = 25% of P x share done')

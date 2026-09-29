@@ -3,7 +3,13 @@
   What this module owns (docs/ARCHITECTURE.md §5.11, §6.1, §6.2)
     - The state, cuff, task and seq fields of every mission ped's replicated cp entity state
       bag (Entity(e).state.cp = { run, obj, role, state, armed, cfg, tag, ... }). The engine
-      (CP.Runs.spawnPed) writes the bag first; afterwards only this module changes state.
+      (CP.Runs.spawnPed) writes the bag first and keeps a server copy in run.entities[netId].bag;
+      afterwards only this module changes state.
+    - Bag trust: a client can write the state bag of an entity it owns, so the server NEVER reads the
+      bag back. The server record per net id (rec.bag, seeded from the engine's run.entities[netId].bag,
+      mirrored back into it after every write) is the only source of truth for state, cuff, obj, role
+      and seq; the replicated bag is written from it and only read by clients. A client that rewrites
+      the bag (state 'cuffed', a cuff table, another run) changes nothing on the server.
     - "Cuff suspect": blocks call enableCuff; participants' clients (modules/npc/client.lua) show one
       global ox_target option and report the finished progress bar with the plain net event
       crimson-police:server:npcCuff (runId, netId). The server validates it (active, arrived
@@ -24,6 +30,9 @@
       participant, run.fail_killed_unarmed) is decided by the owning block's onEntityDead, which keeps
       its own "shot already in flight" grace.
     - The weaponDamageEvent listener (returns at once when WasEventCanceled(); never cancels):
+      a gun hit (not melee, not a vehicle) by an active participant on a mission ped ->
+      CP.Runs.noteWeaponFired(run, src) (server-side proof for no_weapons_fired; so is a weapon kill:
+      GetPedCauseOfDeath is a gun, before entityDied);
       a participant shooting a surrendered (after SURRENDER_GRACE_MS), cuffed or restrained ped ->
       CP.Runs.penalize(run, 'shot_surrendered', { src }) and { type = 'shot', netId, src } to the owning
       block; any damage to a ped whose role is 'hostage' -> the onDamaged listeners, plus
@@ -45,7 +54,8 @@
                (CP.Npc.task) identified by bag.taskSeq (the seq it was written with), any other key
                is copied (run, obj, state, seq and taskSeq are protected). A state change drops the
                previous task. Setting the same state with no extra is a no-op.
-    CP.Npc.getState(netId) -> state|nil
+    CP.Npc.getState(netId) -> state|nil                    the server record (never the replicated bag);
+                                                           nil for a net id no live run has
     CP.Npc.isNeutralised(netId) -> boolean                 dead or cuffed
     CP.Npc.rollSurrender(run, netId, chance) -> boolean    one roll per ped with the run's NPC rng
                                                            (CP.U.rng(run.seed ~ salt)); repeated calls
@@ -132,12 +142,6 @@ end
 
 local function exists(e)
     return type(e) == 'number' and e ~= 0 and DoesEntityExist(e) == true
-end
-
-local function readBag(e)
-    local ok, v = pcall(function() return Entity(e).state.cp end)
-    if ok and type(v) == 'table' then return v end
-    return nil
 end
 
 local function writeBag(e, bag)
@@ -236,51 +240,89 @@ local function attackerOf(ent)
     return nil, 'object'
 end
 
--- ── The ped registry ────────────────────────────────────────────────────────
--- rec = { netId, runId, entity, obj, role, state, since, surrenderedAt, cuff, hp, gone, dead,
+-- ── The registry (the server's truth; the replicated bag is only ever written) ─
+-- rec = { netId, runId, entity, bag, obj, role, state, cuff, since, surrenderedAt, hp, gone, dead,
 --         near = { [src] = ms in reach }, wdeAt, lastDamage = { src, at }, dmgAt = { [key] = ms } }
-local function newRec(run, netId)
-    local rec = { netId = netId, runId = run.id, near = {}, dmgAt = {}, gone = 0 }
+-- rec.bag is the value last written to Entity(e).state.cp (seeded from the engine's copy, info.bag);
+-- state / cuff / obj / role mirror it.
+
+-- The engine's own copy of the bag it wrote at spawn (run.entities[netId].bag), or one rebuilt from the
+-- engine record (an engine without that copy): never the live bag.
+local function seedBag(run, info)
+    if type(info) == 'table' and type(info.bag) == 'table' then
+        local b = U.deepcopy(info.bag)
+        b.run = run.id
+        if not STATES[b.state] then b.state = 'idle' end
+        return b
+    end
+    return {
+        run = run.id, obj = info and info.obj, role = info and info.role, state = 'idle',
+        armed = (info and info.armed) == true, cfg = {}, tag = info and info.tag,
+    }
+end
+
+local function mirror(rec, bag)
+    rec.bag = bag
+    rec.state = bag.state or 'idle'
+    rec.cuff = type(bag.cuff) == 'table' and bag.cuff or nil
+    rec.obj = bag.obj
+    rec.role = bag.role
+end
+
+local function newRec(run, netId, info)
+    local rec = { netId = netId, runId = run.id, near = {}, dmgAt = {}, gone = 0, entity = info.entity }
+    mirror(rec, seedBag(run, info))
+    if info.dead then rec.state = 'dead' end
     peds[netId] = rec
     return rec
 end
 
+-- The record of a ped of this run, or nil when the net id is not one of this run's entities (then no
+-- record is made, and a record of another run is never replaced).
 local function recFor(run, netId, info)
-    local rec = peds[netId]
-    if rec and rec.runId ~= run.id then rec = nil end
     info = info or (type(run.entities) == 'table' and run.entities[netId]) or nil
-    if rec and info and info.entity and rec.entity and info.entity ~= rec.entity then rec = nil end
-    if not rec then rec = newRec(run, netId) end
-    if type(info) == 'table' then
-        rec.entity = rec.entity or info.entity
-        if info.obj ~= nil then rec.obj = info.obj end
-        if info.role ~= nil then rec.role = info.role end
+    local rec = peds[netId]
+    if rec and rec.runId == run.id and not (info and info.entity and rec.entity and info.entity ~= rec.entity) then
+        rec.entity = rec.entity or (info and info.entity)
+        return rec
     end
-    return rec
+    if type(info) ~= 'table' then return nil end
+    return newRec(run, netId, info)
 end
 
--- The entity of a run's ped, or nil. A net id resolved from the pool must carry this run's bag.
+-- The entity of a run's ped (the handle the engine created), or nil. Never resolved through the pool:
+-- another entity may carry that net id (or a client-written bag) by now.
 local function entityOf(run, netId, rec)
-    local info = type(run.entities) == 'table' and run.entities[netId] or nil
     if rec and exists(rec.entity) then return rec.entity end
+    local info = type(run.entities) == 'table' and run.entities[netId] or nil
     if info and exists(info.entity) then return info.entity end
-    local e = NetworkGetEntityFromNetworkId(netId)
-    if exists(e) then
-        local bag = readBag(e)
-        if bag and bag.run == run.id then return e end
-    end
     return nil
 end
 
-local function currentState(rec, e)
-    local bag = e and readBag(e) or nil
-    if bag and bag.state then
-        rec.state = bag.state
-        rec.cuff = type(bag.cuff) == 'table' and bag.cuff or nil
-        if bag.obj ~= nil then rec.obj = bag.obj end
-        if bag.role ~= nil then rec.role = bag.role end
+-- Write nb as the ped's bag and make it the server's truth (also the engine's copy, so a record made
+-- again later starts from it).
+local function commit(run, netId, rec, e, nb)
+    if not writeBag(e, nb) then return false end
+    mirror(rec, nb)
+    local info = type(run.entities) == 'table' and run.entities[netId] or nil
+    if type(info) == 'table' and info.entity == e then info.bag = nb end
+    return true
+end
+
+-- The record for this net id: its own run's while that run is live, else the one of the live run that
+-- lists the net id now (made on first use: a ped no setState has touched yet).
+local function findRec(netId)
+    local rec = peds[netId]
+    if rec and (rec.dead or isLive(runById(rec.runId))) then return rec end
+    if not (CP.Runs and CP.Runs.all) then return rec end
+    local ok, list = pcall(CP.Runs.all)
+    if not ok or type(list) ~= 'table' then return nil end
+    for _, run in pairs(list) do
+        if isLive(run) and type(run.entities) == 'table' and type(run.entities[netId]) == 'table' then
+            return recFor(run, netId, run.entities[netId])
+        end
     end
-    return rec.state
+    return rec          -- the last server state of a run that just ended (pruned on the next watcher tick)
 end
 
 local function isPedRecord(netId, info)
@@ -303,23 +345,17 @@ function Npc.setState(run, netId, state, extra)
     end
     local info = type(run.entities) == 'table' and run.entities[netId] or nil
     local rec = recFor(run, netId, info)
+    if not rec then
+        CP.warn(TAG, 'setState: net id %s is not an entity of run %s', netId, tostring(run.id))
+        return false
+    end
     local e = entityOf(run, netId, rec)
     if not e then
         CP.log(TAG, 'setState %s -> %s: the entity does not exist', netId, state)
         return false
     end
     rec.entity = e
-    local bag = readBag(e)
-    if bag and bag.run ~= nil and bag.run ~= run.id then
-        CP.warn(TAG, 'setState: net id %s belongs to run %s, not %s', netId, tostring(bag.run), tostring(run.id))
-        return false
-    end
-    if not bag then
-        bag = {
-            run = run.id, obj = info and info.obj or rec.obj, role = info and info.role or rec.role,
-            armed = (info and info.armed) == true, cfg = {}, tag = info and info.tag,
-        }
-    end
+    local bag = rec.bag
     local changed = bag.state ~= state
     if not changed and type(extra) ~= 'table' then
         rec.state = state
@@ -354,16 +390,12 @@ function Npc.setState(run, netId, state, extra)
         nb.cuff = nil
         nb.task, nb.taskSeq = nil, nil
     end
-    if not writeBag(e, nb) then return false end
+    if not commit(run, netId, rec, e, nb) then return false end
     if changed then
         rec.since = now()
         if state == 'surrendered' then rec.surrenderedAt = rec.since end
         rec.near = {}
     end
-    rec.state = state
-    rec.obj = nb.obj
-    rec.role = nb.role
-    if type(nb.cuff) == 'table' then rec.cuff = nb.cuff end
     CP.log(TAG, 'run %s ped %s: %s -> %s', tostring(run.id), netId, tostring(bag.state), state)
     return true
 end
@@ -371,24 +403,10 @@ end
 function Npc.getState(netId)
     netId = toInt(tonumber(netId), 1, MAX_NETID)
     if not netId then return nil end
-    local rec = peds[netId]
-    local e = rec and exists(rec.entity) and rec.entity or nil
-    if not e and not rec then
-        local n = NetworkGetEntityFromNetworkId(netId)
-        if exists(n) then e = n end
-    end
-    if e then
-        local bag = readBag(e)
-        if bag and bag.state then
-            if rec then rec.state = bag.state end
-            return bag.state
-        end
-    end
-    if rec then
-        if rec.dead then return 'dead' end
-        return rec.state
-    end
-    return nil
+    local rec = findRec(netId)
+    if not rec then return nil end
+    if rec.dead then return 'dead' end
+    return rec.state
 end
 
 function Npc.isNeutralised(netId)
@@ -435,19 +453,14 @@ function Npc.enableCuff(run, netId, opts)
     }
     local info = type(run.entities) == 'table' and run.entities[netId] or nil
     local rec = recFor(run, netId, info)
+    if not rec or rec.dead then return false end
     local e = entityOf(run, netId, rec)
     if not e then return false end
-    local bag = readBag(e)
-    if bag and bag.run ~= nil and bag.run ~= run.id then return false end
-    local nb = bag and U.copy(bag) or {
-        run = run.id, obj = info and info.obj or rec.obj, role = info and info.role or rec.role,
-        state = rec.state or 'idle', armed = (info and info.armed) == true, cfg = {}, tag = info and info.tag,
-    }
+    local nb = U.copy(rec.bag)
     nb.cuff = cuff
     nb.seq = (tonumber(nb.seq) or 0) + 1
-    if not writeBag(e, nb) then return false end
+    if not commit(run, netId, rec, e, nb) then return false end
     rec.entity = e
-    rec.cuff = cuff
     CP.log(TAG, 'run %s ped %s is cuffable (%s, %d ms, %.1f m)', tostring(run.id), netId, cuff.label, cuff.duration, cuff.maxDistance)
     return true
 end
@@ -512,13 +525,21 @@ local function shooterOf(src, data)
     return src, 'player'
 end
 
+-- Server-side proof that an active participant fired a weapon (no_weapons_fired): a gun hit on a mission
+-- ped (weaponDamageEvent) or a gun kill. The client's own weapon_fired telemetry adds misses.
+local function noteFired(run, src)
+    if not (CP.Runs and CP.Runs.noteWeaponFired) then return end
+    local ok, err = pcall(CP.Runs.noteWeaponFired, run, src)
+    if not ok then CP.err(TAG, 'noteWeaponFired failed: %s', tostring(err)) end
+end
+
 local function onWeaponDamage(src, data, hits)
     if inArena(src) then return end
     local attacker, kind = shooterOf(src, data)
     if attacker and attacker ~= src and inArena(attacker) then return end
     local isShot = not NOT_SHOTS[uhash(data.weaponType)]
     local t = now()
-    local done = {}
+    local done, fired = {}, {}
     for i = 1, math.min(#hits, MAX_HITS) do
         local netId = toInt(tonumber(hits[i]), 1, MAX_NETID)
         local rec = netId and peds[netId] or nil
@@ -526,11 +547,15 @@ local function onWeaponDamage(src, data, hits)
             done[netId] = true
             local run = runById(rec.runId)
             if isLive(run) then
-                local e = exists(rec.entity) and rec.entity or nil
-                local state = currentState(rec, e)
+                local state = rec.state
                 rec.wdeAt = t
                 if attacker then rec.lastDamage = { src = attacker, at = t } end
-                if attacker and isShot and kind == 'player' and PROTECTED[state] and activeParticipant(run, attacker) then
+                local gunHit = attacker ~= nil and isShot and kind == 'player' and activeParticipant(run, attacker) ~= nil
+                if gunHit and not fired[run.id] then
+                    fired[run.id] = true
+                    noteFired(run, attacker)
+                end
+                if gunHit and PROTECTED[state] then
                     shot(run, netId, rec, attacker, state)
                 end
                 if rec.role == 'hostage' then damaged(run, netId, rec, attacker) end
@@ -569,7 +594,7 @@ local function healthDropped(run, netId, rec, e)
         attacker, kind = nil, 'unknown'
     end
     if attacker and inArena(attacker) then return end
-    local state = currentState(rec, e)
+    local state = rec.state
     if attacker then rec.lastDamage = { src = attacker, at = t } end
     if attacker and kind == 'player' and PROTECTED[state] and activeParticipant(run, attacker) then
         shot(run, netId, rec, attacker, state)
@@ -578,13 +603,22 @@ local function healthDropped(run, netId, rec, e)
 end
 
 -- ── Deaths ──────────────────────────────────────────────────────────────────
+-- killerSrc|nil, how: 'player' (their own ped per GetPedSourceOfDeath), 'vehicle', 'memory' (last hit)
 local function killerOf(e, rec)
     local s, kind = attackerOf(GetPedSourceOfDeath(e))
-    if s then return s end
+    if s then return s, kind end
     if kind == 'npc' then return nil end
     local ld = rec.lastDamage
-    if ld and now() - ld.at <= KILL_MEMORY_MS then return ld.src end
+    if ld and now() - ld.at <= KILL_MEMORY_MS then return ld.src, 'memory' end
     return nil
+end
+
+-- The ped died of a gunshot (GetPedCauseOfDeath is a weapon that is not melee, a vehicle or a fall).
+local function gunDeath(e)
+    if not e or type(GetPedCauseOfDeath) ~= 'function' then return false end
+    local ok, c = pcall(GetPedCauseOfDeath, e)
+    c = ok and tonumber(c) or 0
+    return c ~= 0 and not NOT_SHOTS[uhash(c)]
 end
 
 local function died(run, netId, rec, e)
@@ -595,10 +629,13 @@ local function died(run, netId, rec, e)
         rec.state = 'dead'
         return
     end
-    local killer = e and killerOf(e, rec) or nil
+    local killer, how
+    if e then killer, how = killerOf(e, rec) end
     if killer and inArena(killer) then killer = nil end
     local isPart = killer ~= nil and activeParticipant(run, killer) ~= nil
     local prev = rec.state
+    -- A participant's gun kill is proof of gunfire; noted before entityDied, which can end the run.
+    if isPart and how == 'player' and gunDeath(e) then noteFired(run, killer) end
     -- Outside help first: entityDied runs the owning block's onEntityDead, which can complete the
     -- last objective (or fail the run) and end it on the spot. CP.AntiCheat.onNpcKilled ignores ended
     -- runs, so a flag raised after that would never reach the rows endRun writes.
@@ -610,16 +647,14 @@ local function died(run, netId, rec, e)
         local ok, err = pcall(CP.Runs.entityDied, run, netId, killer)
         if not ok then CP.err(TAG, 'entityDied(%s, %s) failed: %s', tostring(run.id), netId, tostring(err)) end
     end
-    if e and exists(e) then
-        local bag = readBag(e)
-        if bag and bag.state ~= 'dead' then
-            local nb = U.copy(bag)
-            nb.state, nb.cuff, nb.task, nb.taskSeq = 'dead', nil, nil, nil
-            nb.seq = (tonumber(bag.seq) or 0) + 1
-            writeBag(e, nb)
-        end
+    if e and exists(e) and rec.bag and rec.bag.state ~= 'dead' then
+        local nb = U.copy(rec.bag)
+        nb.state, nb.cuff, nb.task, nb.taskSeq = 'dead', nil, nil, nil
+        nb.seq = (tonumber(rec.bag.seq) or 0) + 1
+        commit(run, netId, rec, e, nb)
     end
     rec.state = 'dead'
+    rec.cuff = nil
     rec.near = {}
     for _, fn in ipairs(deathFns) do
         local ok, err = pcall(fn, run, netId, killer, isPart)
@@ -692,9 +727,7 @@ local function checkPed(run, netId, info, rec)
         return
     end
     rec.hpSeen = true
-    -- the bag is the truth (state, cuff, obj, role): a record created after the last setState
-    -- (or one whose state was written elsewhere) must still sample reach and watch for hits
-    currentState(rec, e)
+    -- the server record is the truth (state, cuff, obj, role); a client-written bag is never read
     local total = hp + (GetPedArmour(e) or 0)
     if rec.hp and total < rec.hp - 0.5 and (PROTECTED[rec.state] or rec.role == 'hostage') then
         healthDropped(run, netId, rec, e)
@@ -719,8 +752,9 @@ local function tick()
             for _, kv in ipairs(snapshot) do
                 local key, info = kv[1], kv[2]
                 local netId = toInt(tonumber(key), 1, MAX_NETID)
+                -- every entity of a live run keeps its record (a vehicle's state too); only peds are watched
+                if netId and type(info) == 'table' then seen[netId] = run.id end
                 if netId and type(info) == 'table' and isPedRecord(netId, info) then
-                    seen[netId] = true
                     if info.dead then
                         -- the engine's own death (or ours): mark an existing record, never create one
                         local r = peds[netId]
@@ -739,8 +773,8 @@ local function tick()
             end
         end
     end
-    for netId in pairs(peds) do
-        if not seen[netId] then peds[netId] = nil end
+    for netId, rec in pairs(peds) do
+        if seen[netId] == nil or seen[netId] ~= rec.runId then peds[netId] = nil end
     end
     for runId in pairs(rolls) do
         if not live[runId] then rolls[runId] = nil end
@@ -786,27 +820,27 @@ local function handleCuff(src, runId, netId)
         return refuse(src, 'err.npc_unknown', 'not a ped of this run')
     end
     local rec = recFor(run, netId, info)
-    if rec.dead then return refuse(src, 'err.npc_unknown', 'dead') end
+    if not rec or rec.dead then return refuse(src, 'err.npc_unknown', 'dead') end
     local e = entityOf(run, netId, rec)
     if not e or (GetEntityHealth(e) or 0) <= 0 then return refuse(src, 'err.npc_unknown', 'no entity') end
-    local bag = readBag(e)
-    if not bag or bag.run ~= run.id then return refuse(src, 'err.npc_unknown', 'foreign bag') end
-    if bag.state ~= 'surrendered' or type(bag.cuff) ~= 'table' then
-        return refuse(src, 'err.npc_not_surrendered', 'state ' .. tostring(bag.state))
+    -- the server record, never the replicated bag (a client could have written 'surrendered' and a cuff)
+    local cuffCfg = rec.cuff
+    if rec.state ~= 'surrendered' or type(cuffCfg) ~= 'table' then
+        return refuse(src, 'err.npc_not_surrendered', 'state ' .. tostring(rec.state))
     end
-    local range = tonumber(bag.cuff.maxDistance) or DEFAULT_CUFF_RANGE
+    local range = tonumber(cuffCfg.maxDistance) or DEFAULT_CUFF_RANGE
     local ped = GetPlayerPed(src)
     if not exists(ped) or U.dist(GetEntityCoords(ped), GetEntityCoords(e)) > range + CUFF_SLACK_M then
         return refuse(src, 'err.npc_too_far', 'too far')
     end
-    local need = math.max(0, (tonumber(bag.cuff.duration) or DEFAULT_CUFF_MS) - CUFF_DWELL_SLACK_MS)
+    local need = math.max(0, (tonumber(cuffCfg.duration) or DEFAULT_CUFF_MS) - CUFF_DWELL_SLACK_MS)
     local since = rec.near[src]
     if need > 0 and (not since or now() - since < need) then
         return refuse(src, 'err.npc_too_fast', ('in reach %s ms of %d'):format(since and tostring(now() - since) or 'no', need))
     end
     if not Npc.setState(run, netId, 'cuffed') then return refuse(src, 'err.npc_unknown', 'state write failed') end
     rec.near = {}
-    dispatch(run, bag.obj or rec.obj, src, { type = 'cuffed', netId = netId })
+    dispatch(run, rec.obj, src, { type = 'cuffed', netId = netId })
     CP.log(TAG, 'run %s: %s cuffed ped %s', tostring(run.id), src, netId)
     return true
 end

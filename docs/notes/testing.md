@@ -47,8 +47,11 @@ Seats: `Config.Testing.maxTesters - 1` (pending + accepted) besides the admin.
   reserves the location through `CP.Runs.create` → `CP.Draw.reserve`.
 - **Gates.** `testRun` permission, `Config.Testing.enabled`, `CP.Alerts.inArena` for the admin and every
   tester (Crimson-Arena rule 5; also for inviting and for accepting), not already on a run, one test per admin
-  (`err.test_already_running`), 2 s between start attempts. Cooldowns, the hourly cap, the server caps and the
-  Cross-Department lock are never checked (and `CP.Runs` skips them for tests).
+  (`err.test_already_running`), 2 s between start attempts. Cooldowns, the hourly cap and the server caps are
+  never checked (and `CP.Runs` skips them for tests). The Cross-Department lock is skipped for admin tests
+  (`Testing.start` catalog tests and admin draft tests), but checked for a non-admin draft test:
+  `Testing.startDraft` refuses a supervisor (`builderEdit`) with `err.operation_locked` while
+  `CP.Operations.isLocked()` is true (Hard rules: admin test runs are the only exception).
 - **Any mission.** `CP.Missions.get(id)` whatever its status (built-in, custom, `Config.DisabledMissions`).
   Archived custom missions are unregistered from `CP.Missions`, so they come from `CP.Builder.getArchived(id)`
   (catalog: `CP.Builder.archivedDefs()`) when the builder offers them. It does not yet, so the fallback reads

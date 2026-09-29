@@ -78,7 +78,11 @@
     detainBonus ['racer_detained'] ctx.award count 1 per detained suspect
     allDetainedBonus ['all_racers_detained'] once when every suspect was detained
     fastStop.id ['vehicle_stopped_fast'] once when every vehicle stopped within fastStop.seconds of the start
-    medal_gold | medal_silver | medal_bronze   follow mode, by average distance (medals)
+    medal_gold | medal_silver | medal_bronze   follow mode, by average distance (medals); points hint
+                                        MEDAL_POINTS (card values 50 / 25 / 10, capped on custom missions)
+  Custom missions (validate): detainBonus / allDetainedBonus / fastStop.id / ramPenaltyId are false, a
+    Config.Bonuses id or the block default (ID_DEFAULTS); fastStop.seconds at most 120; arrest.duration
+    1000-30000 ms
   Fail reason keys: block.pursuit.fail_escaped · block.pursuit.fail_lost · block.pursuit.fail_undriveable ·
     block.pursuit.fail_setup · run.fail_killed_unarmed
 
@@ -121,7 +125,16 @@ local MAX_SEATS          = 4
 local MISSING_TICKS      = 2        -- ticks an entity must be missing before it counts as gone (as the engine)
 local DEFAULT_ARREST_MS  = 5000
 local DEFAULT_FAST_S     = 120
+local CUSTOM_TIMED_MS    = { 1000, 30000 }  -- custom missions: the arrest progress time (ms)
 local DEFAULT_AHEAD      = 50.0
+-- Pursuit Sim card: "Gold under 40 m +50, Silver under 80 m +25, Bronze under 150 m +10". Passed as the
+-- trusted per-occurrence hint of every medal award, so a medal is worth its card value on a mission whose
+-- file does not list it (every custom mission: Config.Bonuses has no medal ids); a file that lists the id
+-- with its own points keeps them (built-ins). Capped by Config.Builder.bonusCap.points on custom missions.
+local MEDAL_POINTS       = { medal_gold = 50, medal_silver = 25, medal_bronze = 10 }
+-- Custom missions: bonus / penalty id fields hold a Config.Bonuses id or the block's own default id.
+local ID_DEFAULTS        = { detainBonus = 'racer_detained', allDetainedBonus = 'all_racers_detained',
+    ['fastStop.id'] = 'vehicle_stopped_fast', ramPenaltyId = 'hard_ram' }
 
 -- Two-seat models: with more than 2 suspects per vehicle a 4-seat model is picked.
 local TWO_SEATERS = {
@@ -134,6 +147,17 @@ local TWO_SEATERS = {
 
 local function cfg() return Config.Blocks[BLOCK] end
 local function now() return GetGameTimer() end
+
+-- A card value passed as a points hint; at most Config.Builder.bonusCap.points on non-built-in missions.
+local function cardPoints(ctx, v)
+    if type(v) ~= 'number' then return nil end
+    local m = ctx.mission or (ctx.run and ctx.run.mission)
+    if not (type(m) == 'table' and m.source == 'builtin') then
+        local cap = tonumber(Config.Builder and Config.Builder.bonusCap and Config.Builder.bonusCap.points)
+        if cap and v > cap then v = cap end
+    end
+    return v
+end
 
 -- ── Small helpers ───────────────────────────────────────────────────────────
 local function isNum(v) return type(v) == 'number' and v == v end
@@ -518,6 +542,24 @@ local function validate(obj, mission, location)
     if o.fastStop ~= false and (type(o.fastStop) ~= 'table' or type(o.fastStop.id) ~= 'string' or not isNum(o.fastStop.seconds) or o.fastStop.seconds <= 0) then
         return bad('block.pursuit.invalid.bonus', { field = 'fastStop' })
     end
+    if strict then
+        -- a standard id (valued only by the mission's capped bonuses list) or the block default, never an
+        -- id another block values with a hint (e.g. a medal); "stopped within 2 minutes" at most
+        local ids = { detainBonus = o.detainBonus, allDetainedBonus = o.allDetainedBonus,
+            ['fastStop.id'] = o.fastStop and o.fastStop.id or false, ramPenaltyId = o.ramPenaltyId }
+        for _, field in ipairs({ 'detainBonus', 'allDetainedBonus', 'fastStop.id', 'ramPenaltyId' }) do
+            local v = ids[field]
+            if v ~= false and v ~= ID_DEFAULTS[field] and not (Config.Bonuses and Config.Bonuses[v]) then
+                return bad('block.pursuit.invalid.bonus_custom', { field = field, default = ID_DEFAULTS[field] })
+            end
+        end
+        if o.fastStop and o.fastStop.seconds > DEFAULT_FAST_S then
+            return bad('block.pursuit.invalid.range', { field = 'fastStop.seconds', min = 1, max = DEFAULT_FAST_S })
+        end
+        if not inRange(o.arrest.duration, CUSTOM_TIMED_MS) then
+            return bad('block.pursuit.invalid.range', { field = 'arrest.duration', min = CUSTOM_TIMED_MS[1], max = CUSTOM_TIMED_MS[2] })
+        end
+    end
     if o.neverShoots == false and not allAllowed(o.weapons, strict and allowed.weapons or nil) then
         return bad('block.pursuit.invalid.weapons')
     end
@@ -875,7 +917,7 @@ local function tryComplete(ctx, st)
             -- A medal needs the full follow: a target that died early (e.g. rammed into a wall) must not
             -- turn a few seconds of close following into a Gold medal once minSeconds has passed.
             st.medal = held and medalFor(ctx.obj, st.average) or nil
-            if st.medal then ctx.award(st.medal, { count = 1 }) end
+            if st.medal then ctx.award(st.medal, { count = 1, points = cardPoints(ctx, MEDAL_POINTS[st.medal]) }) end
         end
         if ctx.complete({ average = U.round(st.average), medal = st.medal }) ~= false then st.completed = true end
         return

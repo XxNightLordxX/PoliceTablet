@@ -193,6 +193,7 @@ CP.Dispatch = {
 -- CP.Qbx, CP.Ambulance, CP.Tablet, CP.Admin
 local downed = {}
 local unloadListeners = {}
+local metaListeners = {}   -- CP.Qbx.onMetaDataChange registrations { fn, keys }
 CP.Qbx = {
     -- downed[src]: true / 'laststand' (metadata inlaststand) or 'dead' (metadata isdead only)
     isDowned = function(src) return downed[src] ~= nil and downed[src] ~= false end,
@@ -201,6 +202,7 @@ CP.Qbx = {
         return { src = src, isDead = d == 'dead', inLastStand = d == true or d == 'laststand' }
     end,
     onPlayerUnload = function(fn) unloadListeners[#unloadListeners + 1] = fn end,
+    onMetaDataChange = function(fn, keys) metaListeners[#metaListeners + 1] = { fn = fn, keys = keys } end,
 }
 local ems = { doctors = 0, revives = {} }
 CP.Ambulance = {
@@ -255,6 +257,12 @@ H.eq(#dl.responding, 1, 'calls listens to responding')
 H.eq(#dl.shots, 1, 'alerts listens to shots fired')
 H.eq(#dl.down + #dl.dead, 2, 'alerts listens to person down / dead')
 H.eq(#unloadListeners, 1, 'downed listens to character unload')
+H.eq(#metaListeners, 1, 'downed listens to qbx metadata changes')
+do
+    local keys = {}
+    for _, k in ipairs(metaListeners[1] and metaListeners[1].keys or {}) do keys[k] = true end
+    H.ok(keys.isdead and keys.inlaststand, 'metadata listener filtered to isdead / inlaststand')
+end
 
 -- advance ms in 100 ms steps, calling each(clock) after every step
 local function runFor(ms, each)
@@ -1204,6 +1212,156 @@ do
     Config.Route.maxDeviation = old
     CP.Route.stop(r, 76)
     r.state = 'ended'
+end
+
+-- ── round 3: CP.Downed.handle (endRun), the metadata listener, CP.Alerts.forget ──
+-- 1) handle (no EMS): the participant leaves with keepFlag before handle returns, then the pick-up flow
+do
+    ems.doctors = 0
+    playerRec(61).coords = vec3(-240.0, 6300.0, 32.0)
+    local r = newRun('r-dh-1', { srcs = { 61, 62 }, arrived = true, state = 'in_progress' })
+    CP.Alerts.set(61, r)
+    CP.Alerts.set(62, r)
+    downed[61] = true
+    local removedBefore, at = #rlog.removed, H.clockMs
+    H.eq(CP.Downed.handle(r, 61), true, 'handle: true')
+    H.eq(#rlog.removed, removedBefore + 1, 'handle: removed at once')
+    local e = firstRemoval(61, 'downed')
+    H.eq(e and e.keepFlag, true, "handle: end_reason 'downed' with keepFlag")
+    H.eq(e and e.at, at, 'handle: removed before its first yield (same instant)')
+    H.eq(r.participants[61].status, 'left', 'handle: left before handle returned')
+    H.ok(OURS(bag(61)) and CP.Alerts.has(61), 'handle: flag kept (the hold beats the engine clear)')
+    H.eq(CP.Downed.isPending(61), true, 'handle: pick-up pending')
+    H.eq(r.stats.downs, 1, 'handle: one down')
+    H.eq(notesFor(61, 'downed.pickup_soon'), 1, 'handle: toast pick-up soon')
+    H.eq(r.participants[62].status, 'active', 'handle: the partner is left for the engine to end')
+    H.eq(CP.Downed.handle(r, 61), false, 'handle again: no longer active, nothing done')
+    runFor(15000)
+    H.eq(#clientEvents('client:pickup', 61), 1, 'handle: pick-up after 15 s')
+    runFor(2000)
+    H.eq(countRevives(61), 1, 'handle: revived')
+    H.fire(CP.e('server:pickupDone'), 61, 'r-dh-1', true)
+    H.eq(bag(61), nil, 'handle: flag cleared after the pick-up')
+    runFor(4000)
+    H.eq(#clientEvents('client:pickup', 61), 1, 'handle: never picked up twice (the poll keeps off)')
+    H.eq(#removedFor(61), 1, 'handle: removed once')
+    downed[61] = nil
+    r.state = 'ended'
+    CP.Alerts.clear(62)
+end
+
+-- 2) handle with EMS on duty: flag cleared, then exactly one EMS request
+do
+    ems.doctors = 1
+    local r = newRun('r-dh-2', { srcs = { 63 }, arrived = true, state = 'in_progress' })
+    CP.Alerts.set(63, r)
+    downed[63] = true
+    H.eq(CP.Downed.handle(r, 63), true, 'handle (EMS): true')
+    H.eq(firstRemoval(63, 'downed') and firstRemoval(63, 'downed').keepFlag, true, 'handle (EMS): keepFlag')
+    runFor(200)
+    H.eq(bag(63), nil, 'handle (EMS): flag removed before the request')
+    local req = clientEvents('client:requestEMS', 63)
+    H.eq(#req, 1, 'handle (EMS): one EMS request')
+    H.eq(req[1] and req[1].args[1], 'r-dh-2', 'handle (EMS): request carries the run id')
+    runFor(6000)
+    H.eq(#clientEvents('client:requestEMS', 63), 1, 'handle (EMS): never twice')
+    downed[63] = nil
+end
+
+-- 3) handle refuses what is not its to handle (the engine then removes them itself)
+do
+    ems.doctors = 0
+    local r = newRun('r-dh-3', { srcs = { 64 }, arrived = true, state = 'in_progress' })
+    downed[64] = true
+    buckets[64] = 4400
+    H.eq(CP.Downed.handle(r, 64), false, 'handle: in the arena -> false')
+    buckets[64] = nil
+    H.eq(CP.Downed.handle(r, 999), false, 'handle: not a participant -> false')
+    H.eq(CP.Downed.handle(r, 'x'), false, 'handle: bad src -> false')
+    H.eq(CP.Downed.handle(nil, 64), false, 'handle: no run -> false')
+    r.state = 'ended'
+    H.eq(CP.Downed.handle(r, 64), false, 'handle: ended run -> false')
+    H.eq(#removedFor(64), 0, 'handle refusals: nothing removed')
+    downed[64] = nil
+end
+
+-- 4) the poll / metadata listener saw the down first but its thread has not run yet (CreateThread is
+--    deferred in FiveM): handle makes them leave now and that thread only does the follow-up
+do
+    ems.doctors = 0
+    local r = newRun('r-dh-4', { srcs = { 65, 66 }, arrived = true, state = 'in_progress' })
+    CP.Alerts.set(65, r)
+    downed[65] = true
+    local realCT = CreateThread
+    local queued = {}
+    CreateThread = function(fn) queued[#queued + 1] = fn end
+    metaListeners[1].fn(65, 'isdead', false, true)
+    CreateThread = realCT
+    H.eq(#queued, 1, 'race: the flow thread is queued')
+    H.eq(CP.Downed.isPending(65), true, 'race: the down is recorded')
+    H.eq(r.participants[65].status, 'active', 'race: not removed yet')
+    H.eq(CP.Downed.handle(r, 65), true, 'race: handle -> true')
+    H.eq(r.participants[65].status, 'left', 'race: removed by handle at once')
+    H.eq(firstRemoval(65, 'downed') and firstRemoval(65, 'downed').keepFlag, true, 'race: keepFlag')
+    realCT(queued[1])
+    H.eq(#removedFor(65), 1, 'race: the queued thread does not remove them again')
+    H.eq(r.stats.downs, 1, 'race: one down')
+    H.eq(notesFor(65, 'downed.pickup_soon'), 1, 'race: one follow-up')
+    runFor(15100)
+    H.eq(#clientEvents('client:pickup', 65), 1, 'race: one pick-up')
+    downed[65] = nil
+    r.state = 'ended'
+end
+
+-- 5) the metadata listener reacts at once (no 2 s poll wait); other keys, recoveries and non-participants
+--    are ignored
+do
+    ems.doctors = 1
+    alignTo(2000)
+    H.step(100)
+    local r = newRun('r-dh-5', { srcs = { 67 }, arrived = true, state = 'in_progress' })
+    CP.Alerts.set(67, r)
+    downed[67] = true
+    metaListeners[1].fn(67, 'inlaststand', false, true)
+    H.ok(firstRemoval(67, 'downed') ~= nil, 'metadata: removed at once, before the next poll')
+    H.eq(#clientEvents('client:requestEMS', 67), 1, 'metadata: the EMS flow ran')
+    metaListeners[1].fn(67, 'isdead', false, true)
+    H.eq(#removedFor(67), 1, 'metadata: a second event for the same down does nothing')
+    downed[67] = nil
+    local r2 = newRun('r-dh-5b', { srcs = { 68 }, arrived = true, state = 'in_progress' })
+    downed[68] = true
+    metaListeners[1].fn(68, 'hunger', 50, 40)
+    metaListeners[1].fn(68, 'isdead', true, false)
+    metaListeners[1].fn(68, 'isdead', false, 1)
+    H.eq(#removedFor(68), 0, 'metadata: other keys, a recovery or a non-true value do nothing')
+    downed[68] = nil
+    metaListeners[1].fn(68, 'isdead', false, true)
+    H.eq(#removedFor(68), 0, 'metadata: re-checked with CP.Qbx.isDowned (already recovered)')
+    r2.state = 'ended'
+    downed[69] = true
+    metaListeners[1].fn(69, 'isdead', false, true)
+    H.eq(#removedFor(69), 0, 'metadata: not on a run -> nothing')
+    downed[69] = nil
+end
+
+-- 6) CP.Alerts.forget drops our intent and never touches the bag
+do
+    local r = newRun('r-af-1', { srcs = { 70 }, arrived = true, state = 'in_progress' })
+    CP.Alerts.set(70, r)
+    CP.Alerts.hold(70, true)
+    H.ok(OURS(bag(70)), 'forget: flag on before')
+    buckets[70] = 7000                        -- only the routing bucket moved: our value is still on the bag
+    H.eq(CP.Alerts.forget(70), true, 'forget: an intent was dropped')
+    H.eq(CP.Alerts.has(70), false, 'forget: intent gone')
+    H.ok(OURS(bag(70)), 'forget: the bag is left alone')
+    H.eq(CP.Alerts.forget(70), false, 'forget again: nothing to drop')
+    H.eq(CP.Alerts.forget('abc'), false, 'forget: bad src')
+    r.state = 'ended'
+    runFor(5000)
+    H.ok(OURS(bag(70)), 'forget: the reconcile and the orphan grace never touch the bag afterwards')
+    buckets[70] = nil
+    H.eq(CP.Alerts.clear(70), true, 'forget dropped the hold too: a later clear removes our value')
+    H.eq(bag(70), nil, 'value removed by that clear')
 end
 
 -- ── resource stop: every value we set goes, foreign values stay ─────────────

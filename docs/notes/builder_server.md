@@ -63,6 +63,11 @@ Response shapes: all in `builder_protocol.md` §3/§4 and `web/src/types/builder
 13. **Permissions**: `builder:list/get/config`, `create`, `duplicate` and `validate` need `builderEdit` (admins
     always); editing someone else's mission needs `builderEditAny`; publish/archive/restore of someone else's need
     `builderEditAny` too; `breakLock` needs `breakEditLock`. Any custom mission may be duplicated into an own draft.
+    A duplicate keeps only standard bonuses in its lists and `B.customBonusFields` drops the objective-level ids
+    and values the blocks refuse on custom missions (flee_arrest `aliveBonus` points / non-standard id, the boss's
+    `aliveBonus` points, pursuit non-standard `detainBonus` / `allDetainedBonus` / `fastStop.id` / `ramPenaltyId`
+    and `fastStop.seconds` above 120, interact_points non-standard `fastBonus`), so the block defaults apply. A
+    saved or hand-edited definition that sets them is rejected by the block's validate instead.
     Supervisors must be on-duty officers (via CP.Permissions/CP.Access); admins may be off duty
     (identity from `CP.Qbx.getInfo`).
 14. **Header publisher text**: `<rank> <name> (<department short>, citizenid <cid>)`, e.g. "Sergeant John Doe

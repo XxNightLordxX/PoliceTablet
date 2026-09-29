@@ -79,6 +79,10 @@
       refuses give / drop / stash / vehicle moves (re-registered when ox_inventory restarts).
     * Vehicle damage (p.vehicle) is sampled by the server every VEHICLE_SAMPLE_MS from the vehicle each
       active participant drives; client 'vehicle' telemetry only adds samples.
+    * The `cp` state bag is written, never read back on the server (a client can write the bag of an
+      entity it owns): run.entities[netId].bag is the server's copy (CP.Npc seeds its record from it and
+      keeps it current), the armed-alive cap counts through CP.Npc.getState, and "is this a run entity"
+      (vehicle and pedestrian telemetry) is answered from the engine's registry only.
     * Server-side health is sync data (0 until a client synced a server-created entity): health 0 only
       counts as a death/wreck after a positive value was seen; engine health <= -3999 always counts.
     * Spawns waiting for their entity count toward the caps; an entity that appears after the spawn wait
@@ -672,27 +676,20 @@ objectiveHud = function(run, i, patch)
 end
 
 -- ── entities (ARCHITECTURE §6.1) ────────────────────────────────────────────
--- The NPC state of an entity from its cp bag. Reading a bag decodes the whole value, and blocks ask
--- canSpawn for every NPC they place, so the state is re-read at most every BAG_STATE_TTL_MS per entity.
-local BAG_STATE_TTL_MS = 500
-local function bagState(e)
-    local now = GetGameTimer()
-    if e.bagStateAt and now - e.bagStateAt < BAG_STATE_TTL_MS then return e.bagState end
-    local st
-    if e.entity and DoesEntityExist(e.entity) then
-        local bag = Entity(e.entity).state.cp
-        st = type(bag) == 'table' and bag.state or nil
-    end
-    e.bagState, e.bagStateAt = st, now
-    return st
+-- The NPC state of an entity from the server's own record, never from the replicated cp bag (a client can
+-- write the bag of an entity it owns): CP.Npc.getState, else the engine's copy of the bag it wrote (e.bag).
+local function npcState(netId, e)
+    local ok, st = call('Npc', 'getState', netId)
+    if ok and st ~= nil then return st end
+    return type(e.bag) == 'table' and e.bag.state or nil
 end
 
 local function entityCounts(run)
     local total, armedAlive = 0, 0
-    for _, e in pairs(run.entities) do
+    for netId, e in pairs(run.entities) do
         total = total + 1
         if e.armed and not e.dead then
-            local st = bagState(e)
+            local st = npcState(netId, e)
             if st ~= 'cuffed' and st ~= 'dead' then armedAlive = armedAlive + 1 end
         end
     end
@@ -814,9 +811,11 @@ local function track(run, entity, kind, opts, extraCfg)
         cfg = cfg, tag = opts.tag,
     }
     Entity(entity).state:set('cp', bag, true)
+    -- bag: the server's copy of what was written (CP.Npc seeds its record from it and mirrors every later
+    -- write back into it); the replicated bag is never read back on the server.
     run.entities[netId] = {
         entity = entity, kind = kind, obj = opts.obj, role = opts.role, armed = opts.armed == true,
-        dead = false, deadAt = nil, tag = opts.tag, model = opts.model, missing = 0,
+        dead = false, deadAt = nil, tag = opts.tag, model = opts.model, missing = 0, bag = U.deepcopy(bag),
     }
     if run.state == 'ended' then
         Runs.deleteEntity(run, netId)
@@ -1378,7 +1377,7 @@ local function computeCash(run, p, result)
             mMod = run.modifier and num(Config.Events and Config.Events.modifierCash, 1.0) or 1.0,
         }
     end
-    local amt = math.floor(num(cb.amount, num(amount, 0)) + 0.5)
+    local amt = U.round(num(cb.amount, num(amount, 0)))
     if result ~= 'completed' or amt < 0 then amt = 0 end
     cb.amount = amt
     cb.B = num(cb.B, run.cashBase or 0)
@@ -1394,7 +1393,7 @@ local function sumPoints(list, abs)
         if abs then v = math.abs(v) end
         s = s + v
     end
-    return math.floor(s + 0.5)
+    return U.round(s)
 end
 
 local function departmentAtEnd(p)
@@ -2562,11 +2561,12 @@ RegisterNetEvent(CP.e('server:objective'), function(runId, index, evidence)
     if run.state == 'in_progress' then refreshHud(run) end
 end)
 
+-- An entity one of the runs spawned (the engine's registry, never the cp bag: a client can put a cp bag
+-- on its own vehicle or on a pedestrian it runs over to dodge the damage and pedestrian penalties).
 local function isRunEntity(entity, netId)
-    local bag = Entity(entity).state.cp
-    if bag ~= nil then return true end
     for _, run in pairs(runs) do
-        if run.entities[netId] then return true end
+        local e = run.entities[netId]
+        if e and (e.entity == nil or e.entity == entity) then return true end
     end
     return false
 end

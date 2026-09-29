@@ -247,6 +247,32 @@ do -- validate
     local rp = HW.requiredPoints({ boss = { spawn = 'bossSpot' } })
     H.eq(rp[1], 'spawns', 'required spawns'); H.eq(rp[2], 'bossSpot', 'required boss spot')
     H.eq(HW.onTimeout({}), nil, 'hw onTimeout fails')
+
+    -- custom missions: the boss bonus is the block's kingpin_alive (its own constant) or a Config.Bonuses id,
+    -- never a value from the file; the optional cuff takes 1-30 s and reaches no further than 3 m
+    local bossWith = function(ab) return { boss = { model = 'g_m_y_lost_01', aliveBonus = ab } } end
+    H.eq(HW.validate({ boss = { model = 'g_m_y_lost_01' } }, custom, loc), true, 'hw custom: boss with the default kingpin_alive')
+    H.eq(HW.validate(HW.defaults({ boss = { model = 'g_m_y_lost_01' } }), custom, loc), true, 'hw custom: defaulted boss (kingpin_alive, 50) passes')
+    ok, why = HW.validate(bossWith({ id = 'kingpin_alive', points = 100000 }), custom, loc)
+    H.eq(why, 'block.hostile_waves.invalid.boss_bonus_custom', 'hw custom: a file value on kingpin_alive rejected')
+    ok, why = HW.validate(bossWith({ id = 'boss_bonus', points = 40 }), custom, loc)
+    H.eq(why, 'block.hostile_waves.invalid.boss_bonus_custom', 'hw custom: an id outside Config.Bonuses rejected')
+    ok, why = HW.validate(bossWith({ id = 'medal_gold' }), custom, loc)
+    H.eq(why, 'block.hostile_waves.invalid.boss_bonus_custom', 'hw custom: a medal id rejected')
+    H.eq(HW.validate(bossWith({ id = 'hostile_arrested' }), custom, loc), true, 'hw custom: a Config.Bonuses id without points passes')
+    ok, why = HW.validate(bossWith({ id = 'hostile_arrested', points = 45 }), custom, loc)
+    H.eq(why, 'block.hostile_waves.invalid.boss_bonus_custom', 'hw custom: a Config.Bonuses id with its own points rejected')
+    ok, why = HW.validate(bossWith({ id = 'kingpin_alive', pctOfPoints = 0.9 }), custom, loc)
+    H.eq(why, 'block.hostile_waves.invalid.boss_bonus_custom', 'hw custom: pctOfPoints rejected')
+    H.eq(HW.validate(bossWith({ id = 'boss_bonus', points = 999 }), builtin, loc), true, 'hw builtin: its own boss bonus value is trusted')
+    ok, why = HW.validate({ cuff = { duration = 100 } }, custom, loc)
+    H.eq(why, 'block.hostile_waves.invalid.range', 'hw custom: a 0.1 s cuff rejected')
+    ok, why = HW.validate({ cuff = { duration = 90000 } }, custom, loc)
+    H.eq(why, 'block.hostile_waves.invalid.range', 'hw custom: a 90 s cuff rejected')
+    ok, why = HW.validate({ cuff = { maxDistance = 40.0 } }, custom, loc)
+    H.eq(why, 'block.hostile_waves.invalid.range', 'hw custom: a 40 m cuff rejected')
+    H.eq(HW.validate({ cuff = { duration = 4000, maxDistance = 2.5 } }, custom, loc), true, 'hw custom: cuff within range passes')
+    H.eq(HW.validate({ cuff = { duration = 100, maxDistance = 40.0 } }, builtin, loc), true, 'hw builtin: cuff trusted')
 end
 
 do -- waves: start, distinct points, combat values, next wave by count and by time, low health, cuffs, completion
@@ -475,6 +501,37 @@ do -- boss after the last wave: does not scale, kingpin_alive when cuffed
     H.eq(#awardsOf(S, 'hostile_arrested'), 0, 'boss is not a hostile_arrested')
     HW.tick(ctx, 1)
     H.eq(S.completes, 1, 'complete after the boss')
+end
+
+-- The boss bonus hint on a custom mission: only the block's own constant (kingpin_alive +50), never the file's
+-- points; a Config.Bonuses id gets no hint (its value comes from the mission's capped bonuses list).
+do
+    local function cuffBoss(ab, mission)
+        place(1, 1000, 1000, 30)
+        local ctx, S = makeCtx('hostile_waves', { waves = { 1 }, boss = { model = 'g_m_y_lost_01', spawn = 'bossSpot', aliveBonus = ab } },
+            hwLocation(12), { mission = mission })
+        HW.start(ctx)
+        HW.onEntityDead(ctx, S.spawned[1].netId, 1)
+        HW.tick(ctx, 1)
+        local boss = withRole(S, 'boss')[1]
+        setHealth(S, boss.netId, 150); NPC.rollResult = true
+        HW.onEvent(ctx, 1, { type = 'low_health', netId = boss.netId })
+        NPC.states[boss.netId] = 'cuffed'
+        nearTo(1, S, boss.netId)
+        HW.onEvent(ctx, 1, { type = 'cuffed', netId = boss.netId })
+        return S
+    end
+    local S = cuffBoss({ id = 'kingpin_alive', points = 100000 }, custom)
+    local ka = awardsOf(S, 'kingpin_alive')
+    H.eq(#ka, 1, 'custom boss: kingpin_alive awarded')
+    H.eq(ka[1] and ka[1].opts.points, 50, 'custom boss: the hint is the block constant 50, never the file value')
+    S = cuffBoss({ id = 'hostile_arrested', points = 45 }, custom)
+    local ha = awardsOf(S, 'hostile_arrested')
+    H.eq(#ha, 1, 'custom boss with a Config.Bonuses id: that id is awarded (the wave hostile was killed, not cuffed)')
+    H.eq(ha[1] and ha[1].opts.points, nil, 'custom boss with a Config.Bonuses id: no hint (valued by the capped card list only)')
+    S = cuffBoss({ id = 'boss_bonus', points = 77 }, builtin)
+    local bb = awardsOf(S, 'boss_bonus')
+    H.eq(bb[1] and bb[1].opts.points, 77, 'built-in boss: the file value stays the hint')
 end
 
 do -- restart (test control) removes and respawns
@@ -730,6 +787,60 @@ do -- defaults, validate, armedCount, requiredPoints
     H.eq(table.concat(rp, ','), 'door,suspect,fleeTo,associates', 'door required points')
     H.eq(table.concat(FA.requiredPoints({ mode = 'scatter' }), ','), 'spawns,routes', 'scatter required points')
     H.eq(FA.onTimeout({}), nil, 'fa onTimeout fails')
+
+    -- custom missions: a standard alive-bonus id with no value of its own, the fixed 3 m / 3 s give-up rule,
+    -- 1-30 s knock and cuff, a cuff no further than 3 m
+    ok, why = FA.validate({ aliveBonus = { id = 'suspect_alive', points = 100000 } }, custom, doorLoc)
+    H.eq(why, 'block.flee_arrest.invalid.alive_bonus_custom', 'fa custom: aliveBonus.points rejected')
+    ok, why = FA.validate({ aliveBonus = { id = 'suspect_alive', pctOfPoints = 0.5 } }, custom, doorLoc)
+    H.eq(why, 'block.flee_arrest.invalid.alive_bonus_custom', 'fa custom: aliveBonus.pctOfPoints rejected')
+    ok, why = FA.validate({ aliveBonus = { id = 'inmate_alive' } }, custom, doorLoc)
+    H.eq(why, 'block.flee_arrest.invalid.alive_bonus_custom', 'fa custom: an id outside Config.Bonuses rejected')
+    ok, why = FA.validate({ aliveBonus = { id = 'medal_gold' } }, custom, doorLoc)
+    H.eq(why, 'block.flee_arrest.invalid.alive_bonus_custom', 'fa custom: a medal id rejected')
+    H.eq(FA.validate({ aliveBonus = { id = 'suspect_alive' } }, custom, doorLoc), true, 'fa custom: suspect_alive without points passes')
+    H.eq(FA.validate({ aliveBonus = { id = 'inmate_alive', points = 10, each = true } }, builtin, doorLoc), true, 'fa builtin: Prison Break bonus trusted')
+    ok, why = FA.validate({ givesUp = { aim = 10, stun = true, close = { distance = 500, seconds = 0.1 } } }, custom, doorLoc)
+    H.eq(why, 'block.flee_arrest.invalid.gives_up_close', 'fa custom: 500 m / 0.1 s give-up rejected')
+    ok, why = FA.validate({ givesUp = { aim = 10, stun = true, close = { distance = 3.0, seconds = 1 } } }, custom, doorLoc)
+    H.eq(why, 'block.flee_arrest.invalid.gives_up_close', 'fa custom: 3 m / 1 s give-up rejected')
+    H.eq(FA.validate({ givesUp = { aim = 10, stun = true, close = false } }, custom, doorLoc), true, 'fa custom: close rule off passes')
+    H.eq(FA.validate({ givesUp = { 'aim', 'stun', 'close' } }, custom, doorLoc), true, 'fa custom: builder list form (3 m / 3 s) passes')
+    H.eq(FA.validate({ givesUp = { aim = 10, stun = true, close = { distance = 500, seconds = 0.1 } } }, builtin, doorLoc), true, 'fa builtin: give-up trusted')
+    for _, case in ipairs({
+        { { knock = { duration = 100 } }, 'knock 0.1 s' }, { { knock = { duration = 60000 } }, 'knock 60 s' },
+        { { cuff = { duration = 300 } }, 'cuff 0.3 s' }, { { cuff = { duration = 45000 } }, 'cuff 45 s' },
+        { { cuff = { maxDistance = 25.0 } }, 'cuff from 25 m' },
+    }) do
+        ok, why = FA.validate(case[1], custom, doorLoc)
+        H.eq(why, 'block.flee_arrest.invalid.range', 'fa custom: ' .. case[2] .. ' rejected')
+        H.eq(FA.validate(case[1], builtin, doorLoc), true, 'fa builtin: ' .. case[2] .. ' trusted')
+    end
+end
+
+-- aliveBonus.points is passed as a hint only for built-in files (Prison Break's inmate_alive +10 each)
+do
+    local function cuffAtDoor(mission)
+        place(1, 3000, 3000, 10)
+        local ctx, S = makeCtx('flee_arrest', { responses = { surrender = 1, flee = 0, fight = 0 }, associates = { count = 0 },
+            aliveBonus = { id = 'suspect_alive', points = 999 } }, doorLoc, { mission = mission })
+        FA.prepare(ctx)
+        FA.start(ctx)
+        place(1, 3041, 3000, 10)
+        FA.onEvent(ctx, 1, { type = 'knock_start' })
+        advanceMs(3000)
+        FA.onEvent(ctx, 1, { type = 'knock' })
+        local sus = withRole(S, 'suspect')[1]
+        NPC.states[sus.netId] = 'cuffed'
+        place(1, 3039.5, 3000, 10)
+        FA.onEvent(ctx, 1, { type = 'cuffed', netId = sus.netId })
+        return awardsOf(S, 'suspect_alive')
+    end
+    local c = cuffAtDoor(custom)
+    H.eq(#c, 1, 'fa custom: suspect_alive awarded')
+    H.eq(c[1] and c[1].opts.points, nil, 'fa custom: the file points are never passed as a hint')
+    local b = cuffAtDoor(builtin)
+    H.eq(b[1] and b[1].opts.points, 999, 'fa builtin: the file points stay the hint')
 end
 
 local function knockOpen(ctx, S)
@@ -1470,6 +1581,44 @@ do
     H.eq(openBlips(), 0, 'hw: radio silence, no blips')
     TriggerEvent('onResourceStop', 'Crimson-Police')
     H.eq(#roads.back, 2, 'hw: resource stop restores the traffic too')
+
+    -- traffic stays blocked while a later objective of the run follows (Gang Shootout "Secure the scene"),
+    -- and is restored when the last objective stops, when the run is over, or on resource stop
+    do
+        local savedRuns = CP.Runs
+        local curRun = { id = 'crun-hwhold', objectives = { {}, {} } }
+        CP.Runs = { current = function() return curRun end }
+        local z0, b0 = #roads.zones, #roads.back
+        local o1 = clientCtx(U.deepcopy(HW.defaults({ waves = { 2 } })), hloc, { tag = 'hwhold' })
+        HWc.prepare(o1); HWc.start(o1)
+        H.eq(#roads.zones, z0 + 1, 'hw hold: traffic blocked when objective 1 starts')
+        HWc.stop(o1)
+        H.eq(#roads.back, b0, 'hw hold: objective 1 of 2 stopped, traffic stays blocked')
+        H.eq(#roads.removed, #roads.zones - 1, 'hw hold: the speed zone is kept')
+        steps(3)
+        H.eq(#roads.back, b0, 'hw hold: still blocked while the run goes on')
+        local o2 = clientCtx(U.deepcopy(HW.defaults({ waves = { 2 } })), hloc, { tag = 'hwhold', index = 2 })
+        HWc.prepare(o2); HWc.start(o2)
+        H.eq(#roads.zones, z0 + 1, 'hw hold: a later hostile_waves objective at the same place takes the held block over')
+        HWc.stop(o2)
+        H.eq(#roads.back, b0 + 1, 'hw hold: restored when the last objective stops')
+        steps(2)
+        H.eq(#roads.back, b0 + 1, 'hw hold: restored once only')
+        local o3 = clientCtx(U.deepcopy(HW.defaults({ waves = { 2 } })), hloc, { tag = 'hwhold' })
+        HWc.prepare(o3); HWc.start(o3); HWc.stop(o3)
+        H.eq(#roads.back, b0 + 1, 'hw hold: held again after objective 1')
+        curRun = nil
+        steps(1)
+        H.eq(#roads.back, b0 + 2, 'hw hold: restored once the run is over (no current run)')
+        curRun = { id = 'crun-hwother', objectives = { {}, {} } }
+        local o4 = clientCtx(U.deepcopy(HW.defaults({ waves = { 2 } })), hloc, { tag = 'hwrs' })
+        CP.Runs = { current = function() return { id = 'crun-hwrs', objectives = { {}, {} } } end }
+        HWc.prepare(o4); HWc.start(o4); HWc.stop(o4)
+        H.eq(#roads.back, b0 + 2, 'hw hold: held for run hwrs')
+        TriggerEvent('onResourceStop', 'Crimson-Police')
+        H.eq(#roads.back, b0 + 3, 'hw hold: resource stop restores a held block')
+        CP.Runs = savedRuns
+    end
 
     setmetatable(_G, nil)
     for k, v in pairs(saved) do _G[k] = v end

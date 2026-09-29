@@ -6,9 +6,12 @@ CP.U = CP.U or {}
 local U = CP.U
 
 -- ── Numbers ─────────────────────────────────────────────────────────────────
--- Round to the nearest whole number, halves up (2.5 -> 3, -2.5 -> -2).
+-- Round to the nearest whole number, halves up (2.5 -> 3, -2.5 -> -2). The 1e-7 nudge makes a true half
+-- that binary floating point stores a hair below .5 still round up: $350 x 1.15 = 402.49999999999994
+-- (really $402.50) -> 403, the same as CP.Cash pays. Every money and count rounding goes through this.
+local ROUND_NUDGE = 1e-7
 function U.round(x)
-    return math.floor(x + 0.5)
+    return math.floor(x + 0.5 + ROUND_NUDGE)
 end
 
 function U.clamp(x, lo, hi)

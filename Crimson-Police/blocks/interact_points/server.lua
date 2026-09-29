@@ -32,6 +32,8 @@
     hidden     { count [1], prop ['prop_ld_bomb'], label }
     fastBonus  { seconds, id }                      id recorded when all the work is done within seconds
                                                     of this objective's start (devices: all found)
+    Custom missions (validate): progress.anim only a Config.Builder.allowed.animations name (no raw
+    { scenario } / { dict, clip }), hidden.prop one of DEVICE_PROPS, fastBonus.id a Config.Bonuses id.
     minSeconds [5] · presenceRange [presenceRange[3] = 150] · label
 
   Evidence accepted (ctx.report from the client half; 'log' from the tablet's Active Mission screen)
@@ -55,6 +57,7 @@ local TARGET_RADIUS = 1.5             -- default ox_target sphere radius
 local TARGET_ICON   = 'fa-solid fa-clipboard-check'
 local SEARCH_ICON   = 'fa-solid fa-magnifying-glass'
 local DEVICE_PROP   = 'prop_ld_bomb'  -- default device model for hidden = { ... }
+local DEVICE_PROPS  = { DEVICE_PROP, 'prop_c4_final_green' }   -- the only device models custom missions may use
 local SHARED_TAG    = 'shared:devices'
 
 local function cfg() return Config.Blocks[BLOCK] end
@@ -552,11 +555,13 @@ local function durationOk(ms, c)
     return type(ms) == 'number' and ms >= c.progress[1] * 1000 and ms <= c.progress[2] * 1000
 end
 
-local function animOk(a)
+-- A named animation must be in Config.Builder.allowed.animations. Built-in files may also give a raw
+-- { scenario } or { dict, clip }; custom missions only the allowed names (Mission Builder guardrails).
+local function animOk(a, strict)
     if type(a) == 'string' then
         return CP.U.contains(Config.Builder and Config.Builder.allowed and Config.Builder.allowed.animations, a)
     end
-    if type(a) == 'table' then
+    if type(a) == 'table' and not strict then
         return type(a.scenario) == 'string' or (type(a.dict) == 'string' and type(a.clip) == 'string')
     end
     return false
@@ -569,6 +574,7 @@ CP.Blocks.register(BLOCK, {
         local c = cfg()
         if type(obj) ~= 'table' then return bad('block.interact_points.invalid.objective') end
         obj = applyDefaults(CP.U.deepcopy(obj))
+        local strict = not (type(mission) == 'table' and mission.source == 'builtin')
         if type(obj.points) ~= 'string' and type(obj.points) ~= 'table' and type(obj.points) ~= 'vector3' and type(obj.points) ~= 'vector4' then
             return bad('block.interact_points.invalid.points')
         end
@@ -582,7 +588,7 @@ CP.Blocks.register(BLOCK, {
         if not durationOk(obj.progress.duration, c) then
             return bad('block.interact_points.invalid.range', { field = 'progress.duration', min = c.progress[1] * 1000, max = c.progress[2] * 1000 })
         end
-        if not animOk(obj.progress.anim) then return bad('block.interact_points.invalid.anim') end
+        if not animOk(obj.progress.anim, strict) then return bad('block.interact_points.invalid.anim') end
         if type(obj.target.radius) ~= 'number' or obj.target.radius <= 0 or obj.target.radius > 10 then
             return bad('block.interact_points.invalid.range', { field = 'target.radius', min = 0.1, max = 10 })
         end
@@ -644,11 +650,19 @@ CP.Blocks.register(BLOCK, {
             if obj.roll ~= nil or (obj.logResult ~= nil and obj.logResult ~= false) then
                 return bad('block.interact_points.invalid.hidden_exclusive')
             end
+            -- custom missions: only the block's own device models
+            if strict and not CP.U.contains(DEVICE_PROPS, obj.hidden.prop) then
+                return bad('block.interact_points.invalid.hidden_prop', { props = table.concat(DEVICE_PROPS, ', ') })
+            end
         end
         if obj.fastBonus ~= nil then
             local fb = obj.fastBonus
             if type(fb) ~= 'table' or type(fb.id) ~= 'string' or type(fb.seconds) ~= 'number' or fb.seconds <= 0 then
                 return bad('block.interact_points.invalid.fast_bonus')
+            end
+            -- custom missions: a standard id, valued only by the mission's own capped bonuses list
+            if strict and not (Config.Bonuses and Config.Bonuses[fb.id]) then
+                return bad('block.interact_points.invalid.fast_bonus_custom', { id = fb.id })
             end
         end
         -- points per location

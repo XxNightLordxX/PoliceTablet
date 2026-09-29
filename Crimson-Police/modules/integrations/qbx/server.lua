@@ -18,9 +18,11 @@
 --   CP.Qbx.getByCitizenId(citizenid) -> src|nil      online players only, exact (case-sensitive) match
 --   CP.Qbx.getOnlinePlayers() -> { src, ... }        loaded characters, ascending (cached for 1 s)
 --   CP.Qbx.getJobs() -> table                        qbx job definitions ({} when unavailable)
---   CP.Qbx.addMoney(src, account, amount, reason) -> boolean
---       player.Functions.AddMoney(account, amount, reason); amount rounded half up; 0 returns true
---       without calling qbx_core (nothing to move); negative or invalid amounts return false.
+--   CP.Qbx.addMoney(src, account, amount, reason) -> boolean, why|nil
+--       player.Functions.AddMoney(account, amount, reason); amount rounded half up (CP.U.round); 0 returns
+--       true without calling qbx_core (nothing to move); negative or invalid amounts return false.
+--       why = 'error' when AddMoney raised: the balance may already have changed, so the caller must not
+--       retry or refund (CP.Cash leaves the row 'paying'). A plain false (refused, offline) has no why.
 --   CP.Qbx.isDowned(src) -> boolean                  metadata.isdead == true or metadata.inlaststand == true
 --   Listeners (any number; each runs in its own thread, errors are caught and logged):
 --   CP.Qbx.onDutyChange(fn(src, onDuty))    QBCore:Server:SetDuty. false is passed on as is; a true is
@@ -35,6 +37,11 @@
 --   CP.Qbx.onGroupUpdate(fn(src))           qbx_core:server:onGroupUpdate (job or gang added/removed;
 --                                           removing the active job makes it 'unemployed' without an
 --                                           OnJobUpdate, so listeners re-read the job).
+--   CP.Qbx.onMetaDataChange(fn(src, key, old, new), keys?)
+--                                           qbx_core:server:onSetMetaData (key, oldValue, value, source),
+--                                           fired by qbx_core's SetMetaData after the value is set. keys
+--                                           (optional list of metadata keys) filters before any thread is
+--                                           started: metadata changes constantly (hunger, thirst, stress).
 --
 -- All functions may be called from any thread; none of them yields.
 
@@ -45,6 +52,7 @@ local RESOURCE = 'qbx_core'
 local ONLINE_CACHE_MS = 1000
 
 local listeners = { duty = {}, loaded = {}, job = {}, unload = {}, group = {} }
+local metaListeners = {}   -- { fn, keys = { [key] = true }|nil }
 local onlineCache = { at = -1, list = {} }
 local errorLoggedAt = {}
 
@@ -215,7 +223,7 @@ function Q.addMoney(src, account, amount, reason)
     amount = tonumber(amount)
     if not amount or amount ~= amount or amount == math.huge or amount == -math.huge or amount < 0 then return false end
     if type(account) ~= 'string' or account == '' then return false end
-    amount = math.floor(amount + 0.5)
+    amount = CP.U.round(amount)
     if amount == 0 then return true end
     local player = Q.getPlayer(src)
     if not player or type(player.Functions) ~= 'table' then return false end
@@ -223,7 +231,7 @@ function Q.addMoney(src, account, amount, reason)
     local ok, res = pcall(function() return player.Functions.AddMoney(account, amount, why) end)
     if not ok then
         CP.err(TAG, 'AddMoney(%s, %d) for %s failed: %s', account, amount, tostring(src), tostring(res))
-        return false
+        return false, 'error'
     end
     CP.log(TAG, 'AddMoney %s %d to %s (%s) -> %s', account, amount, tostring(src), why, tostring(res))
     return res == true
@@ -267,6 +275,19 @@ function Q.onPlayerLoaded(fn) addListener('loaded', fn) end
 function Q.onJobChange(fn) addListener('job', fn) end
 function Q.onPlayerUnload(fn) addListener('unload', fn) end
 function Q.onGroupUpdate(fn) addListener('group', fn) end
+
+function Q.onMetaDataChange(fn, keys)
+    if type(fn) ~= 'function' then
+        CP.warn(TAG, 'a metadata listener must be a function (got %s)', type(fn))
+        return
+    end
+    local filter
+    if type(keys) == 'table' then
+        filter = {}
+        for _, k in ipairs(keys) do if type(k) == 'string' then filter[k] = true end end
+    end
+    metaListeners[#metaListeners + 1] = { fn = fn, keys = filter }
+end
 
 -- ── qbx_core server events (server-local: AddEventHandler only) ─────────────
 AddEventHandler('QBCore:Server:SetDuty', function(src, onDuty)
@@ -313,6 +334,22 @@ AddEventHandler('qbx_core:server:onGroupUpdate', function(src, groupName, grade)
     if not src then return end
     CP.log(TAG, 'onGroupUpdate %d %s -> %s', src, tostring(groupName), tostring(grade))
     emit('group', src)
+end)
+
+-- qbx_core SetMetaData: TriggerEvent('qbx_core:server:onSetMetaData', key, oldValue, value, source).
+AddEventHandler('qbx_core:server:onSetMetaData', function(key, old, new, src)
+    if #metaListeners == 0 or type(key) ~= 'string' then return end
+    src = toSrc(src)
+    if not src then return end
+    for i = 1, #metaListeners do
+        local l = metaListeners[i]
+        if not l.keys or l.keys[key] then
+            CreateThread(function()
+                local ok, err = pcall(l.fn, src, key, old, new)
+                if not ok then CP.err(TAG, 'metadata listener failed: %s', tostring(err)) end
+            end)
+        end
+    end
 end)
 
 AddEventHandler('playerDropped', function()

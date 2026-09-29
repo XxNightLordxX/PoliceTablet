@@ -46,6 +46,8 @@
   Bonuses / penalties recorded (shared, via ctx.award)
     medal_gold | medal_silver | medal_bronze   one of them, from course time + contact seconds (medal courses)
     no_contact                                 medal courses: no counted contact and no server-side body damage
+    Each carries the card value as its points hint (CARD_POINTS: 50 / 25 / 10, no_contact 10; capped by
+    Config.Builder.bonusCap.points on custom missions).
   Fail reason keys: block.checkpoint_route.fail_undriveable
 
   ctx.state
@@ -67,9 +69,26 @@ local BODY_CONTACT    = 10.0   -- body health lost on the course that denies no_
 local REPORT_ENGINE   = 100.0  -- an 'undriveable' report needs the engine at or below this
 local SERVER_STOP_SPEED = 3.0  -- m/s on the server's copy of the entity that still counts as stopped (client: 1.5)
 local PRESTART_GRACE  = 120    -- s the run timer may wait at the start marker for checkpoint 1 (timerStart = 'first')
+-- EVOC Course card: "Gold medal +50, Silver +25, Bronze +10 (replaces the common time bonus); no contact at
+-- all +10". Passed as the trusted per-occurrence hint of each award, so a medal course is worth its card
+-- values on a mission whose file does not list the ids (every custom mission: Config.Bonuses has no medal
+-- or no_contact entry); a file that lists them with its own points keeps those (built-ins). Capped by
+-- Config.Builder.bonusCap.points on custom missions.
+local CARD_POINTS = { medal_gold = 50, medal_silver = 25, medal_bronze = 10, no_contact = 10 }
 
 local function cfg() return Config.Blocks[BLOCK] end
 local function now() return GetGameTimer() end
+
+-- A card value passed as a points hint; at most Config.Builder.bonusCap.points on non-built-in missions.
+local function cardPoints(ctx, v)
+    if type(v) ~= 'number' then return nil end
+    local m = ctx.mission or (ctx.run and ctx.run.mission)
+    if not (type(m) == 'table' and m.source == 'builtin') then
+        local cap = tonumber(Config.Builder and Config.Builder.bonusCap and Config.Builder.bonusCap.points)
+        if cap and v > cap then v = cap end
+    end
+    return v
+end
 
 local function idx(v)
     local n = tonumber(v)
@@ -386,10 +405,10 @@ local function finish(ctx, st)
             or (st.courseTime <= m.bronze and 'bronze')
             or nil
         st.medal = medal
-        if medal then ctx.award('medal_' .. medal) end
+        if medal then ctx.award('medal_' .. medal, { count = 1, points = cardPoints(ctx, CARD_POINTS['medal_' .. medal]) }) end
         if st.contacts == 0 and not bodyContact(st) then
             st.noContact = true
-            ctx.award('no_contact')
+            ctx.award('no_contact', { count = 1, points = cardPoints(ctx, CARD_POINTS.no_contact) })
         end
     end
 end

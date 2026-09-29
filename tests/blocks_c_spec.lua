@@ -95,7 +95,7 @@ local function fakeCtx(o)
         location = o.location, tier = { tier = 'standard', count = 1.0 }, state = {},
         rng = U.rng(run.seed + (o.index or 1)),
     }
-    local c = { complete = 0, completeData = {}, fail = {}, award = {}, penalize = {}, send = {}, hud = {}, spawn = {}, delete = {} }
+    local c = { complete = 0, completeData = {}, fail = {}, award = {}, awardOpts = {}, penalize = {}, send = {}, hud = {}, spawn = {}, delete = {} }
     ctx.calls = c
     ctx.completeResult = true
     ctx.capOk = true
@@ -107,7 +107,10 @@ local function fakeCtx(o)
         return ctx.completeResult
     end
     ctx.fail = function(key) c.fail[#c.fail + 1] = key end
-    ctx.award = function(id, opts) c.award[#c.award + 1] = id end
+    ctx.award = function(id, opts)
+        c.award[#c.award + 1] = id
+        c.awardOpts[#c.awardOpts + 1] = { id = id, opts = opts }
+    end
     ctx.penalize = function(id, opts) c.penalize[#c.penalize + 1] = id end
     ctx.send = function(data) c.send[#c.send + 1] = U.deepcopy(data) end
     ctx.hud = function(patch) c.hud[#c.hud + 1] = patch end
@@ -277,6 +280,43 @@ do -- validate
     H.ok(ok == false and reasonIs(why, 'block.pursuit.invalid.points_start'), 'pu custom spawn too close to the start')
     H.eq(PU.validate(PU.defaults({ spawn = 'car', trigger = { distance = 60.0, lights = true } }), builtin, stolenLoc), true, 'pu builtin stolen vehicle valid')
     H.ok(PU.validate(nil) == false, 'pu non-table objective rejected')
+
+    -- custom missions: bonus / penalty id fields hold a Config.Bonuses id or the block default, never an id
+    -- another block values with a hint (a medal); "stopped within 2 minutes" at most; arrest 1-30 s
+    local custom = { locations = { closed } }
+    local function raceWith(extra)
+        local o = { route = 'race', vehicles = 3, complete = 'all_or_timeout_any', models = { 'sultan' } }
+        for k, v in pairs(extra) do o[k] = v end
+        return PU.defaults(o)
+    end
+    H.eq(PU.validate(raceWith({}), custom, nil), true, 'pu custom: the default racer_detained / all_racers_detained ids pass')
+    H.eq(PU.validate(raceWith({ detainBonus = 'hostile_arrested' }), custom, nil), true, 'pu custom: a Config.Bonuses id passes')
+    H.eq(PU.validate(raceWith({ detainBonus = false, allDetainedBonus = false }), custom, nil), true, 'pu custom: bonuses off pass')
+    ok, why = PU.validate(raceWith({ detainBonus = 'medal_gold' }), custom, nil)
+    H.ok(ok == false and reasonIs(why, 'block.pursuit.invalid.bonus_custom'), 'pu custom: detainBonus medal_gold rejected (it would pick up a medal hint)')
+    ok, why = PU.validate(raceWith({ allDetainedBonus = 'kingpin_alive' }), custom, nil)
+    H.ok(ok == false and reasonIs(why, 'block.pursuit.invalid.bonus_custom'), 'pu custom: allDetainedBonus outside Config.Bonuses rejected')
+    ok, why = PU.validate(raceWith({ ramPenaltyId = 'ram' }), custom, nil)
+    H.ok(ok == false and reasonIs(why, 'block.pursuit.invalid.bonus_custom'), 'pu custom: ramPenaltyId outside Config.Bonuses rejected')
+    H.eq(PU.validate(raceWith({ ramPenaltyId = 'ram' }), builtin, raceLoc), true, 'pu builtin: its own ram id is trusted (Pursuit Sim)')
+    local stopAt = { start = closed.start, race = closed.race, car = vec4(300.0, 300.0, 30.0, 0.0) }
+    local function stopWith(extra)
+        local o = { spawn = 'car', models = { 'sultan' } }
+        for k, v in pairs(extra) do o[k] = v end
+        return PU.defaults(o)
+    end
+    H.eq(PU.validate(stopWith({}), { locations = { stopAt } }, nil), true, 'pu custom: default fast stop (vehicle_stopped_fast, 120 s) passes')
+    ok, why = PU.validate(stopWith({ fastStop = { id = 'vehicle_stopped_fast', seconds = 9999 } }), { locations = { stopAt } }, nil)
+    H.ok(ok == false and reasonIs(why, 'block.pursuit.invalid.range'), 'pu custom: fastStop.seconds above 120 rejected')
+    H.eq(PU.validate(stopWith({ fastStop = { id = 'vehicle_stopped_fast', seconds = 60 } }), { locations = { stopAt } }, nil), true, 'pu custom: a stricter fast stop passes')
+    ok, why = PU.validate(stopWith({ fastStop = { id = 'no_contact', seconds = 60 } }), { locations = { stopAt } }, nil)
+    H.ok(ok == false and reasonIs(why, 'block.pursuit.invalid.bonus_custom'), 'pu custom: fastStop.id outside Config.Bonuses rejected')
+    ok, why = PU.validate(stopWith({ arrest = { duration = 100 } }), { locations = { stopAt } }, nil)
+    H.ok(ok == false and reasonIs(why, 'block.pursuit.invalid.range'), 'pu custom: a 0.1 s arrest rejected')
+    ok, why = PU.validate(stopWith({ arrest = { duration = 60000 } }), { locations = { stopAt } }, nil)
+    H.ok(ok == false and reasonIs(why, 'block.pursuit.invalid.range'), 'pu custom: a 60 s arrest rejected')
+    H.eq(PU.validate(stopWith({ arrest = { duration = 100 }, fastStop = { id = 'vehicle_stopped_fast', seconds = 9999 } }), builtin, stopAt), true,
+        'pu builtin: arrest time and fast stop trusted')
 end
 
 -- Street Race Bust: 3 racers on a loop, stop -> exit -> detain ("Detain driver" 3 s), rams, timeout.
@@ -686,12 +726,45 @@ do
     H.eq(count(ctx.calls.award, 'medal_gold'), 1, 'sim: gold medal for ~30 m average')
     H.eq(ctx.calls.completeData[1].medal, 'medal_gold', 'sim: medal in complete data')
 
+    local function hint(c, id)
+        for _, a in ipairs(c.calls.awardOpts) do if a.id == id then return a.opts and a.opts.points end end
+        return nil
+    end
+    H.eq(hint(ctx, 'medal_gold'), 50, 'sim: gold medal carries the card value as its points hint')
+    -- a custom follow objective: the card value is the medal's only value (custom files cannot list medal ids),
+    -- capped by Config.Builder.bonusCap.points
+    do
+        local function customSim()
+            local o = { block = 'pursuit', mode = 'follow', trigger = { ahead = 50.0 }, duration = 60, ramSpeed = 0, models = { 'sultan' } }
+            return fakeCtx({ obj = PU.defaults(o), location = simLoc, mission = { source = 'custom' } })
+        end
+        local function follow(c)
+            at(1, 0.0, 20.0)
+            H.players[1].vehicle = nil
+            PU.start(c)
+            local dr = spawnsOf(c, 'ped')[1]
+            E(dr.netId).inVehicle = spawnsOf(c, 'vehicle')[1].ent
+            tickN(PU, c, 60)
+        end
+        local cc = customSim()
+        follow(cc)
+        H.eq(count(cc.calls.award, 'medal_gold'), 1, 'sim custom: gold medal')
+        H.eq(hint(cc, 'medal_gold'), 50, 'sim custom: gold hint 50 (the default cap)')
+        local savedCap = Config.Builder.bonusCap.points
+        Config.Builder.bonusCap.points = 20
+        local capped = customSim()
+        follow(capped)
+        H.eq(hint(capped, 'medal_gold'), 20, 'sim custom: gold hint capped by Config.Builder.bonusCap.points')
+        Config.Builder.bonusCap.points = savedCap
+    end
+
     local ctx2 = simCtx()
     PU.start(ctx2)
     at(1, 0.0, 120.0)            -- 70 m: in range but silver
     H.players[1].vehicle = nil
     tickN(PU, ctx2, 60)
     H.eq(count(ctx2.calls.award, 'medal_silver'), 1, 'sim: silver medal for ~70 m average')
+    H.eq(hint(ctx2, 'medal_silver'), 25, 'sim: silver medal hint 25')
 
     local ctx3 = simCtx()
     PU.start(ctx3)
@@ -847,6 +920,11 @@ do -- validate
     H.eq(ok, false, 'es waves above range')
     ok, why = ES.validate(ES.defaults({ ambush = { perCar = 3, models = { 'elegy2' } } }), builtin, escLoc)
     H.ok(ok == false and reasonIs(why, 'block.escort.invalid.seats'), 'es 3 attackers need a 4-seat car')
+    -- custom missions: the block's own driver model or an allowed ped
+    H.eq(ES.validate(ES.defaults({ driver = 'a_m_m_business_01' }), { locations = { escLoc } }, escLoc), true, 'es custom: an allowed ped as the driver')
+    ok, why = ES.validate(ES.defaults({ driver = 's_m_y_swat_01' }), { locations = { escLoc } }, escLoc)
+    H.ok(ok == false and reasonIs(why, 'block.escort.invalid.driver_allowed'), 'es custom: a driver model outside the allowed list rejected')
+    H.eq(ES.validate(ES.defaults({ driver = 's_m_y_swat_01' }), builtin, escLoc), true, 'es builtin: any driver model')
     ok, why = ES.validate(ES.defaults({ vehicle = 'rhino' }), { locations = { escLoc } }, escLoc)
     H.ok(ok == false and reasonIs(why, 'block.escort.invalid.vehicle'), 'es custom vehicle outside the allowed list')
     ok, why = ES.validate(ES.defaults({ route = 'nope' }), builtin, escLoc)
@@ -964,7 +1042,11 @@ do
     setPos(near[#near].netId, 1400.0, 2700.0, 37.0)
     E(truck.netId).engine = 1400.0
     tickN(ES, ctx, 1)
-    H.eq(ctx.calls.complete, 1, 'escort: complete with no attacker within 100 m')
+    H.eq(ctx.calls.complete, 0, 'escort: an attacker left alive 230 m behind keeps its ambush wave open (neutralise each wave)')
+    H.eq(count(ctx.calls.award, 'truck_healthy'), 0, 'escort: no truck_healthy before the objective completes')
+    ES.onEntityDead(ctx, near[#near].netId, 1)
+    tickN(ES, ctx, 1)
+    H.eq(ctx.calls.complete, 1, 'escort: complete with every wave neutralised and no attacker within 100 m')
     H.eq(count(ctx.calls.award, 'truck_healthy'), 1, 'escort: truck above 50 % -> truck_healthy')
     H.eq(ES.checklist(ctx)[1].done, true, 'escort checklist escort done')
     H.eq(#ctx.calls.fail, 0, 'escort: never failed')
@@ -1190,6 +1272,29 @@ do -- validate
     H.ok(ok == false and reasonIs(why, 'block.search_area.invalid.points_missing'), 'sa missing centre')
     ok, why = SA.validate(SA.defaults({ clueProps = {} }), builtin, huntLoc)
     H.ok(ok == false and reasonIs(why, 'block.search_area.invalid.props'), 'sa empty clue props')
+
+    -- custom missions: the block's clue props only, the fixed 3 m / 3 s give-up rule, 1-30 s timed actions,
+    -- a cuff no further than CP.Npc's range
+    local custom = { locations = { huntLoc } }
+    H.eq(SA.validate(SA.defaults({ clueProps = { 'witness', 'prop_npc_phone_02' } }), custom, nil), true, 'sa custom: default clue props pass')
+    ok, why = SA.validate(SA.defaults({ clueProps = { 'prop_big_shit_01' } }), custom, nil)
+    H.ok(ok == false and reasonIs(why, 'block.search_area.invalid.props_allowed'), 'sa custom: any other clue prop rejected')
+    H.eq(SA.validate(SA.defaults({ clueProps = { 'prop_big_shit_01' } }), builtin, huntLoc), true, 'sa builtin: its own clue props are trusted')
+    ok, why = SA.validate(SA.defaults({ givesUp = { stun = true, close = { distance = 500, seconds = 0.1 } } }), custom, nil)
+    H.ok(ok == false and reasonIs(why, 'block.search_area.invalid.gives_up_close'), 'sa custom: 500 m / 0.1 s give-up rejected')
+    H.eq(SA.validate(SA.defaults({ givesUp = { stun = true, close = false } }), custom, nil), true, 'sa custom: the close rule may be off')
+    H.eq(SA.validate(SA.defaults({ givesUp = { 'stun', 'close' } }), custom, nil), true, 'sa custom: builder list form (3 m / 3 s)')
+    H.eq(SA.validate(SA.defaults({ givesUp = { stun = true, close = { distance = 500, seconds = 0.1 } } }), builtin, huntLoc), true, 'sa builtin: give-up trusted')
+    for _, case in ipairs({
+        { { clueProgress = { duration = 100 } }, 'clue check 0.1 s' }, { { clueProgress = { duration = 60000 } }, 'clue check 60 s' },
+        { { cuff = { duration = 200 } }, 'cuff 0.2 s' }, { { cuff = { duration = 45000 } }, 'cuff 45 s' },
+        { { cuff = { maxDistance = 50.0 } }, 'cuff from 50 m' },
+    }) do
+        ok, why = SA.validate(SA.defaults(case[1]), custom, nil)
+        H.ok(ok == false and reasonIs(why, 'block.search_area.invalid.range'), 'sa custom: ' .. case[2] .. ' rejected')
+        H.eq(SA.validate(SA.defaults(case[1]), builtin, huntLoc), true, 'sa builtin: ' .. case[2] .. ' trusted')
+    end
+    H.eq(SA.validate(SA.defaults({ cuff = { maxDistance = 2.5 } }), custom, nil), true, 'sa custom: a shorter cuff range passes')
 end
 
 local function huntCtx(extra, srcs)

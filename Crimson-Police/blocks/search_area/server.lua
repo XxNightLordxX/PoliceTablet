@@ -25,6 +25,9 @@
     clues        list location key (6+)                          ['clues']
     clueCount    [clues[3] = 3]
     clueProps    prop models or 'witness'                        [{ 'prop_cs_heist_bag_02', 'prop_npc_phone_02', 'witness' }]
+                 (custom missions: only these; witnessModel and peds from Config.Builder.allowed.peds;
+                 givesUp.close off or exactly flee_arrest closeDistance / closeSeconds; clueProgress and
+                 cuff durations 1000-30000 ms; cuff.maxDistance at most CUFF_RANGE)
     witnessModel (added) ped model of the witness                [the first of Config.Blocks.protect_rescue.peds]
     clueProgress { label [locale block.search_area.clue_progress], duration [4000] ms }
     hiding       vec4 list location key (6+)                     ['hiding']
@@ -67,7 +70,8 @@ local CENTER_SHARE       = 0.7      -- the new centre lies within this share of 
 local CENTER_TRIES       = 12
 local REUSE_OFFSET       = 1.5
 local RESEND_MS          = 15000
-local DEFAULT_PROPS      = { 'prop_cs_heist_bag_02', 'prop_npc_phone_02', 'witness' }
+local DEFAULT_PROPS      = { 'prop_cs_heist_bag_02', 'prop_npc_phone_02', 'witness' }   -- also the only ones custom missions may use
+local CUSTOM_TIMED_MS    = { 1000, 30000 }  -- custom missions: clue check and cuff progress times (ms)
 local DEFAULT_CLUE_MS    = 4000
 local DEFAULT_CUFF_MS    = 5000
 local DEFAULT_ESCAPE     = { distance = 300, seconds = 30 }
@@ -317,6 +321,10 @@ local function validate(obj, mission, location)
     if type(o.clueProps) ~= 'table' or #o.clueProps == 0 then return bad('block.search_area.invalid.props') end
     for _, m in ipairs(o.clueProps) do
         if type(m) ~= 'string' or m == '' then return bad('block.search_area.invalid.props') end
+        -- custom missions: only the block's own clue props (and the witness)
+        if strict and not U.contains(DEFAULT_PROPS, m) then
+            return bad('block.search_area.invalid.props_allowed', { props = table.concat(DEFAULT_PROPS, ', ') })
+        end
     end
     if type(o.witnessModel) ~= 'string' or (strict and U.contains(o.clueProps, 'witness')
         and not U.contains(Config.Builder.allowed.peds, o.witnessModel)) then
@@ -331,16 +339,33 @@ local function validate(obj, mission, location)
     if type(o.clueProgress.label) ~= 'string' or not isNum(o.clueProgress.duration) or o.clueProgress.duration <= 0 then
         return bad('block.search_area.invalid.progress')
     end
+    if strict then
+        ok, why = range('clueProgress.duration', o.clueProgress.duration, CUSTOM_TIMED_MS); if not ok then return false, why end
+    end
     local g = o.givesUp
     if type(g.stun) ~= 'boolean' or (g.close ~= false and (type(g.close) ~= 'table' or not isNum(g.close.distance)
         or g.close.distance <= 0 or not isNum(g.close.seconds) or g.close.seconds <= 0)) then
         return bad('block.search_area.invalid.gives_up')
+    end
+    -- custom missions: "a participant stays within 3 m for 3 s" (Config.Blocks.flee_arrest closeDistance /
+    -- closeSeconds) is fixed, only on or off
+    local fa = Config.Blocks.flee_arrest
+    if strict and g.close ~= false and (math.abs(g.close.distance - fa.closeDistance) > 1e-6
+        or math.abs(g.close.seconds - fa.closeSeconds) > 1e-6) then
+        return bad('block.search_area.invalid.gives_up_close', { distance = fa.closeDistance, seconds = fa.closeSeconds })
     end
     if not isNum(o.escape.distance) or o.escape.distance <= o.runDistance or not isNum(o.escape.seconds) or o.escape.seconds <= 0 then
         return bad('block.search_area.invalid.escape')
     end
     if type(o.cuff.label) ~= 'string' or not isNum(o.cuff.duration) or o.cuff.duration <= 0 then
         return bad('block.search_area.invalid.cuff')
+    end
+    if strict then
+        ok, why = range('cuff.duration', o.cuff.duration, CUSTOM_TIMED_MS); if not ok then return false, why end
+        local md = o.cuff.maxDistance
+        if md ~= nil and not (isNum(md) and md > 0 and md <= CUFF_RANGE + 1e-9) then
+            return bad('block.search_area.invalid.range', { field = 'cuff.maxDistance', min = 0, max = CUFF_RANGE })
+        end
     end
     if type(location) == 'table' then return checkLocation(o, location, 1, strict) end
     if type(mission) == 'table' and type(mission.locations) == 'table' then

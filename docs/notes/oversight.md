@@ -63,7 +63,9 @@ Each Lua file's header comment documents its public API, net names and rules.
 - The supervisor endpoint refuses failed-run (admin) disputes; the admin endpoint answers any kind.
 - `admin:getDisputes` (listed in §8.3 without an owner) is registered here: `{ disputes = forAdmin(own citizenid) }`.
 - New disputes toast online supervisors of the run's departments (not participants) or online admins
-  (`admin.notice.new_dispute`) and post to the flags webhook.
+  (`admin.notice.new_dispute`) and post to the flags webhook. A flagged/voided-run dispute whose run every online
+  supervisor of those departments took part in (none of them may answer it; no other one online, on or off duty)
+  toasts the online admins instead.
 
 ### CP.AntiCheat
 - **checkEvent** (after CP.Runs' own checks): in-progress run, active participant, not in arena (`err.in_arena`,
@@ -112,6 +114,10 @@ Each Lua file's header comment documents its public API, net names and rules.
 - `getMissionList.crossDeptEligible` uses `CP.Operations.eligible(def)` when present (the rule the launch applies).
 - A dispute approval of a flagged row calls `approveFlagged(..., { quiet = true })`: one toast for the officer.
 - New-dispute toasts respect `Config.Permissions.supervisor.handleDisputes` (off → admins are told instead).
+- Admin UI → Officers: a failed-run dispute is answered with Award points / Dismiss; a flagged or voided-run
+  dispute (listed while `handleDisputes` is off) with Approve / Reject, which calls `server:admin:handleDispute`
+  `{ disputeId, decision, reason }` without `awardPoints` (approve restores the run and releases held cash). Those
+  rows carry a "Flagged run" / "Voided run" badge and Approved / Rejected status labels.
 - `admin:getOfficer` adds `suspensions` (the last 10 `suspend` / `unsuspend` / `autoSuspend` audit entries) for the
   spec's "suspensions"; the Officers screen shows them under Suspension (dates with the year).
 - UI: Review Queue tables use fixed column widths (a 64-character name pushed Approve/Void off the table); Live Missions

@@ -581,6 +581,41 @@ function B.toRuntime(v)
     return out
 end
 
+-- Objective-level bonus fields of the blocks, made fit for a custom mission (a duplicate of a built-in):
+-- the blocks' validate() lets custom missions use only Config.Bonuses ids (or the block's own default id)
+-- and never a value written in the file, so built-in ids and values are dropped here and the block
+-- defaults apply (flee_arrest aliveBonus, hostile_waves boss.aliveBonus, pursuit detainBonus /
+-- allDetainedBonus / fastStop / ramPenaltyId, interact_points fastBonus). Changes def in place.
+local BOSS_BONUS_ID = 'kingpin_alive'
+local FAST_STOP_MAX = 120
+function B.customBonusFields(def)
+    for _, obj in ipairs(type(def) == 'table' and type(def.objectives) == 'table' and def.objectives or {}) do
+        if type(obj) == 'table' then
+            if obj.block == 'flee_arrest' and type(obj.aliveBonus) == 'table' then
+                local ab = obj.aliveBonus
+                ab.points, ab.pctOfPoints, ab.each = nil, nil, nil
+                if not bonusCfg(ab.id) then obj.aliveBonus = nil end
+            elseif obj.block == 'hostile_waves' and type(obj.boss) == 'table' and type(obj.boss.aliveBonus) == 'table' then
+                local ab = obj.boss.aliveBonus
+                ab.points, ab.pctOfPoints, ab.each = nil, nil, nil
+                if ab.id ~= BOSS_BONUS_ID and not bonusCfg(ab.id) then obj.boss.aliveBonus = nil end
+            elseif obj.block == 'pursuit' then
+                for _, k in ipairs({ 'detainBonus', 'allDetainedBonus', 'ramPenaltyId' }) do
+                    if type(obj[k]) == 'string' and not bonusCfg(obj[k]) then obj[k] = nil end
+                end
+                local fs = obj.fastStop
+                if type(fs) == 'table' then
+                    if type(fs.id) == 'string' and not bonusCfg(fs.id) then fs.id = nil end
+                    if isNum(fs.seconds) and fs.seconds > FAST_STOP_MAX then fs.seconds = FAST_STOP_MAX end
+                end
+            elseif obj.block == 'interact_points' and type(obj.fastBonus) == 'table' then
+                if not bonusCfg(obj.fastBonus.id) then obj.fastBonus = nil end
+            end
+        end
+    end
+    return def
+end
+
 -- ── sanitising (what may be stored) ────────────────────────────────────────
 local function cleanValue(v, depth, budget)
     budget.n = budget.n + 1
@@ -2193,6 +2228,7 @@ CP.Net.action('server:builder:duplicate', function(src, payload)
     for _, listKey in ipairs({ 'bonuses', 'penalties' }) do
         copy[listKey] = U.filter(copy[listKey] or {}, function(e) return type(e) == 'table' and bonusCfg(e.id) ~= nil end)
     end
+    B.customBonusFields(copy)
     local label = U.clip(L('builder.copy_label', { label = tostring(source.label or payload.id) }), LIMITS.label)
     copy.label = label
     if not (Config.MissionTypes and Config.MissionTypes[copy.type]) then copy.type = U.keys(Config.MissionTypes or {})[1] end

@@ -28,6 +28,9 @@ spawned. `netId` is the device's identity for skill_check; `model`/`heading` let
 ## Bonus / penalty ids recorded
 
 - checkpoint_route: `medal_gold` | `medal_silver` | `medal_bronze` (only on medal courses, from the course time + contact seconds), `no_contact` (only on medal courses).
+  Each carries the EVOC card value as its `opts.points` hint (50 / 25 / 10, `no_contact` 10; capped by
+  `Config.Builder.bonusCap.points` on non-built-in missions), so a custom medal course scores its medals although
+  a custom file cannot list those ids (they are not in `Config.Bonuses`); a file that lists them keeps its own points.
 - interact_points: `correct_log` (award), `wrong_log` (penalize), `fastBonus.id` (e.g. `devices_found_fast`).
 - skill_check: `no_missed_checks`.
 
@@ -48,7 +51,9 @@ All are shared (no `src`). They are always recorded; scoring decides the value. 
 4. **validate** first applies the block defaults to a copy. It returns `false, <translated text>`
    (`CP.L` of a `block.<id>.invalid.*` key), which reads fine in the console and in `t()`. It checks the
    Config.Blocks ranges, the Config.Builder.allowed animations and `Config.Builder.noBuildZones` for every
-   point. It does not apply `minSpawnFromStart` to hiding spots, because Bomb Disposal's start is at the building.
+   point. Custom missions (`mission.source ~= 'builtin'`) also get: interact_points `progress.anim` only an
+   allowed animation name (built-ins may give a raw `{ scenario }` / `{ dict, clip }`), `hidden.prop` one of the
+   block's device models (`prop_ld_bomb`, `prop_c4_final_green`), `fastBonus.id` a `Config.Bonuses` id. It does not apply `minSpawnFromStart` to hiding spots, because Bomb Disposal's start is at the building.
 5. **onEvent reject reasons** are short ids for logs (`too_far`, `not_held`, `wrong_state`, …), not locale keys.
 6. **checkpoint_route timing.** `timerStart` sets when the *course clock* (used for medals) starts. On a medal
    course that is the mission's **first** objective, `timerStart = 'first'` also holds the run timer

@@ -77,6 +77,13 @@ Scoring
    from fastShare), modifier (`Config.Events.modifierPoints` x P, label "Modifier: <name>"), first_run,
    no_vehicle_damage (`p.vehicle.seen`, engine and body > noDamageAbove), heavy_damage (body < heavyDamageBelow, not
    when `vehiclePenalties == false`).
+   Custom missions (`mission.source == 'custom'`): mission-file values never raise points. A card entry is valued
+   only when its id is in Config.Bonuses (`points` or `pctOfPoints` by the id's kind, else the config value, clamped
+   to `Config.Builder.bonusCap`: 50 points / 25% of P per occurrence; `each` from Config.Bonuses only); the
+   `points` / `pctOfPoints` / `each` a file writes on any other id are ignored, so only a block hint can value it.
+   A recorded Config.Bonuses id the card does not list is ignored even with a hint. Hints from block code (medals
+   and `no_contact` with their card values, the boss's `kingpin_alive` 50, `hostage_hit`) still count; a positive
+   one is capped at `bonusCap.points`, a penalty keeps its block-setting range (hitPenalty 0-100).
 4. Failed = floor(failedCredit x P x share) with no bonuses, multipliers or Type of the Day; `subtotal` shows the credit
    and mTeam/mCross/mStreak are reported as 1.0 (not applied). Abandoned = 0.
 5. Presence (runs with 2+ participants, `CP.AntiCheat.presenceOk(run, p) == false`): SPEC 6.4 / Anti-exploit say the

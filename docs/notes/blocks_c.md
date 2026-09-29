@@ -21,12 +21,20 @@ Search-area fugitives: `idle` (hidden) → `fleeing` → `surrendered` → `cuff
 
 - pursuit: `ramPenaltyId` (`hard_ram`; Pursuit Sim sets `ram`) per counted ram · `detainBonus` (`racer_detained`) per
   detained suspect · `allDetainedBonus` (`all_racers_detained`) once · `fastStop.id` (`vehicle_stopped_fast`) once ·
-  `medal_gold` | `medal_silver` | `medal_bronze` (follow mode, only once the full `duration` was held).
+  `medal_gold` | `medal_silver` | `medal_bronze` (follow mode, only once the full `duration` was held), each with the
+  Pursuit Sim card value as its `opts.points` hint (50 / 25 / 10, capped by `Config.Builder.bonusCap.points` on
+  non-built-in missions), so custom follow objectives score their medals (their files cannot list medal ids).
 - escort: `truck_healthy` once, when the truck's health at its arrival was above 50 %.
 - search_area: `clues_first` once, when every clue was checked before the first arrest.
 
 Ids are recorded whenever the event happens; the mission file gives the value (ids outside `Config.Bonuses` need
-`points`). Awards that belong to the completion (medal, all detained, truck healthy) are recorded once, **before**
+`points` on built-in files; custom missions value only `Config.Bonuses` ids and block hints).
+Custom-mission guardrails (validate, `mission.source ~= 'builtin'`): pursuit `detainBonus` / `allDetainedBonus` /
+`fastStop.id` / `ramPenaltyId` are `false`, a `Config.Bonuses` id or the block default, `fastStop.seconds` at most
+120, `arrest.duration` 1000-30000 ms; escort `driver` the default `s_m_m_armoured_01` or a
+`Config.Builder.allowed.peds` model; search_area `clueProps` only the block's own props (and `witness`),
+`givesUp.close` off or exactly flee_arrest's 3 m / 3 s, `clueProgress.duration` / `cuff.duration` 1000-30000 ms,
+`cuff.maxDistance` (when set) at most 3 m. Awards that belong to the completion (medal, all detained, truck healthy) are recorded once, **before**
 the first `ctx.complete()` call, so they exist when the engine scores the run inside `complete`.
 
 ## Contract interpretations
@@ -91,7 +99,9 @@ the first `ctx.complete()` call, so they exist when the engine scores the run in
     Health % = min(engine, body) / baseline, baseline = 1000 × toughness after the host's `toughened` report (else
     1000); the host reads the toughness from the truck's cp bag `cfg.toughness` (else `ctx.obj.toughness`).
     `truck_healthy` uses the health **at the moment the truck arrives** ("arrives above 50% health"), recorded once
-    before the first `ctx.complete()`. A participant killing the (unarmed) driver fails the run; otherwise a dead driver just
+    before the first `ctx.complete()`. Completion also needs every triggered (not dropped) wave neutralised
+    (each attacker killed or cuffed, however far behind: "neutralise each ambush wave"), not only no attacker
+    within `clearRadius`. A participant killing the (unarmed) driver fails the run; otherwise a dead driver just
     leaves the truck stuck (stoppedFail).
 12. **Escort waves**: `ambush.waves` waves at distinct random `ambushPoints` (cycled when there are more waves than
     points; spread over the route when the location has none), sorted along the route. A wave triggers within

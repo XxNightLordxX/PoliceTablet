@@ -14,6 +14,12 @@
 --     (not when run.flags.medals), modifier (Config.Events.modifierPoints), first_run, no_vehicle_damage,
 --     heavy_damage (not when mission.vehiclePenalties == false), pedestrian_hit, lights_siren (Beat Patrol and
 --     Business Check), shot_surrendered. Labels: CP.L('bonus.<id>') / CP.L('penalty.<id>').
+--     Custom missions (mission.source == 'custom'): mission-file value hints never raise points. A card
+--     entry is valued only when its id is in Config.Bonuses (points / pctOfPoints by the id's kind, else the
+--     config value, clamped to Config.Builder.bonusCap; each from Config.Bonuses only); the points /
+--     pctOfPoints / each of any other id are ignored. Recorded ids that are in Config.Bonuses but not on the
+--     card are ignored. Per-occurrence hints passed by block code (ctx.award opts.points: medal values,
+--     kingpin_alive, hostage_hit) still count; a positive one is capped at Config.Builder.bonusCap.points.
 --   * streaks (cp_officers.streak_days, last_complete, grace_week, grace_used): consecutive reset-adjusted
 --     days with a completed run; up to Config.Scoring.streakGraceDays missed days per week (counted from the
 --     weekly reset) are forgiven and add nothing; M_streak = 1 + min(streakMax, streakStep x days)
@@ -366,9 +372,54 @@ local function listedEntries(mission)
     return map, order
 end
 
--- Per-occurrence value and 'each' of a listed entry.
-local function entryValue(id, e, P)
+-- Custom (Mission Builder) missions: the value of a bonus or penalty never comes from the mission file
+-- beyond what the builder allows (Config.Bonuses ids, capped by Config.Builder.bonusCap).
+local function isCustom(mission)
+    return type(mission) == 'table' and mission.source == 'custom'
+end
+
+local function builderCap(P)
+    local c = Config.Builder and Config.Builder.bonusCap or {}
+    return math.abs(num(c.points, 50)), math.abs(num(c.share, 0.25)) * P
+end
+
+local function clampAbs(v, max)
+    if v > max then return max end
+    if v < -max then return -max end
+    return v
+end
+
+-- A per-occurrence value hint recorded by trusted block code (ctx.award / ctx.penalize opts.points).
+-- On custom missions a bonus hint is capped at Config.Builder.bonusCap.points (a penalty hint comes from
+-- a block setting that keeps its own range, e.g. protect_rescue hitPenalty 0-100).
+local function hintValue(hints, id, custom, P)
+    local v = tonumber(hints[id])
+    if v == nil or v ~= v or v == math.huge or v == -math.huge then return nil end
+    if custom and v > 0 then
+        local capPts = builderCap(P)
+        if v > capPts then v = capPts end
+    end
+    return v
+end
+
+-- Per-occurrence value and 'each' of a listed entry. On custom missions only Config.Bonuses ids carry a
+-- value of their own (the builder's capped override, else the config value; its each flag); a file value
+-- (points / pctOfPoints / each) on any other id is ignored, so only a trusted block hint can value it.
+local function entryValue(id, e, P, custom)
     local cfg = Config.Bonuses and Config.Bonuses[id]
+    if custom then
+        if type(cfg) ~= 'table' then return nil, false end
+        local capPts, capShare = builderCap(P)
+        local per
+        if cfg.kind == 'pct' then
+            local share = type(e.pctOfPoints) == 'number' and e.pctOfPoints or num(cfg.value, 0)
+            per = clampAbs(num(share, 0) * P, capShare)
+        else
+            local pts = type(e.points) == 'number' and e.points or num(cfg.value, 0)
+            per = clampAbs(num(pts, 0), capPts)
+        end
+        return per, cfg.each == true
+    end
     local per
     if type(e.points) == 'number' then
         per = e.points
@@ -458,14 +509,16 @@ local function scoreLines(run, p, P, opts)
 
     local hints = run.score and run.score.values or {}
     local kinds = run.score and run.score.kinds or {}
+    local custom = isCustom(mission)
 
     -- 1. the mission card (in file order), end-evaluated ids included
     for _, id in ipairs(order) do
         local l = listed[id]
-        local per, each = entryValue(id, l.entry, P)
-        if per == nil and tonumber(hints[id]) then
+        local per, each = entryValue(id, l.entry, P, custom)
+        local hint = per == nil and hintValue(hints, id, custom, P) or nil
+        if hint then
             -- Listed without a value of its own and not in Config.Bonuses: the block's per-occurrence value.
-            per, each = tonumber(hints[id]), true
+            per, each = hint, true
         end
         if per then
             if END_EVALUATED[id] then
@@ -497,8 +550,11 @@ local function scoreLines(run, p, P, opts)
                     local value = c.each and per * count or per
                     total = total + addLine(bonuses, penalties, id, value, count, c.each, per < 0)
                 end
-            elseif count > 0 and tonumber(hints[id]) then
-                local per = tonumber(hints[id])
+            elseif count > 0 and custom and Config.Bonuses and Config.Bonuses[id] ~= nil then
+                -- a standard id the custom mission did not pick: its bonuses come only from its own list
+                warnOnce('unlisted:' .. id, 'bonus/penalty %s was recorded on a custom mission that does not list it; ignored', id)
+            elseif count > 0 and hintValue(hints, id, custom, P) then
+                local per = hintValue(hints, id, custom, P)
                 total = total + addLine(bonuses, penalties, id, per * count, count, true, kinds[id] == 'penalty')
             elseif count > 0 then
                 warnOnce('unvalued:' .. id, 'bonus/penalty %s was recorded but has no value (not on the mission card, not in Config.Scoring.common, no points hint); ignored', id)

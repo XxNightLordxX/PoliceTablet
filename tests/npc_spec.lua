@@ -138,9 +138,12 @@ local function spawnPed(run, o)
     local netId, e = W.nextNet, W.nextEnt
     W.ents[e] = { exists = true, type = 1, coords = o.coords or vec3(0.0, 0.0, 0.0), health = o.health or 200, armour = o.armour or 0 }
     W.byNet[netId] = e
-    run.entities[netId] = { entity = e, kind = 'ped', obj = o.obj or 1, role = o.role or 'hostile', armed = o.armed ~= false, tag = o.tag or 'x' }
-    Entity(e).state:set('cp', { run = run.id, obj = o.obj or 1, role = o.role or 'hostile', state = 'idle',
-        armed = o.armed ~= false, cfg = o.cfg or { behaviour = 'balanced' }, tag = o.tag or 'x' }, true)
+    -- like CP.Runs track(): the bag is written once and the server keeps its own copy (info.bag)
+    local b = { run = run.id, obj = o.obj or 1, role = o.role or 'hostile', state = 'idle',
+        armed = o.armed ~= false, cfg = o.cfg or { behaviour = 'balanced' }, tag = o.tag or 'x' }
+    run.entities[netId] = { entity = e, kind = 'ped', obj = o.obj or 1, role = o.role or 'hostile', armed = o.armed ~= false, tag = o.tag or 'x',
+        bag = o.noServerCopy and nil or b }
+    Entity(e).state:set('cp', b, true)
     return netId, e
 end
 
@@ -544,22 +547,112 @@ CP.err = oldErr
 H.eq(errs, 0, 'records removed during a death: no watcher error')
 H.eq(count(R.died, function(x) return x.netId == mc or x.netId == md end), 1, 'a run ended by a death: nothing more reported for it')
 R.runs['run-m'] = nil
--- a ped whose bag says surrendered and cuffable without a setState through this module (a record
--- created afterwards) is still sampled for reach, so its cuff goes through
+-- ── bag trust: a client can write the cp bag of an entity it owns; the server never reads it back ──
 reset()
 local runF = newRun('run-f', { 1 })
-local nf, nfe = spawnPed(runF, { coords = vec3(0.0, 0.0, 0.0), obj = 1 })
-local bf = bag(nfe)
-bf.state = 'surrendered'
-bf.cuff = { label = CP.L('npc.cuff'), duration = 3000, maxDistance = 3.0 }
-Entity(nfe).state:set('cp', bf, true)
 local saved1 = H.players[1].coords
 place(1, 1.0, 0.0, 0.0)
-tick(2)
-cuff(1, 'run-f', nf)
-H.eq(bag(nfe).state, 'cuffed', 'bag-only surrendered ped: reach sampled, cuff accepted')
+do
+    -- a client writes "surrendered" and a cuff on a ped the server never surrendered: nothing changes
+    local nf, nfe = spawnPed(runF, { coords = vec3(0.0, 0.0, 0.0), obj = 1 })
+    local bf = bag(nfe)
+    bf.state = 'surrendered'
+    bf.cuff = { label = CP.L('npc.cuff'), duration = 3000, maxDistance = 3.0 }
+    Entity(nfe).state:set('cp', bf, true)       -- the client's write
+    tick(2)
+    H.eq(Npc.getState(nf), 'idle', 'client-written surrendered: getState keeps the server state')
+    cuff(1, 'run-f', nf)
+    H.eq(lastNote() and lastNote().key, 'err.npc_not_surrendered', 'client-written surrendered + cuff: the cuff is refused')
+    H.eq(count(R.dispatched, function(x) return x.ev.type == 'cuffed' end), 0, 'no cuffed event from a client-written bag')
+    -- the server surrenders it for real and makes it cuffable: the cuff goes through
+    Npc.setState(runF, nf, 'surrendered')
+    Npc.enableCuff(runF, nf, { duration = 3000 })
+    H.eq(runF.entities[nf].bag and runF.entities[nf].bag.state, 'surrendered', "the engine's copy follows the server's writes")
+    H.eq(type(runF.entities[nf].bag.cuff), 'table', "the engine's copy has the cuff")
+    tick(2)
+    cuff(1, 'run-f', nf)
+    H.eq(Npc.getState(nf), 'cuffed', 'server surrender + server cuff: accepted')
+    H.eq(count(R.dispatched, function(x) return x.ev.type == 'cuffed' and x.ev.netId == nf end), 1, 'cuffed dispatched once')
+
+    -- a client writes "cuffed" (or "dead") on a hostile: blocks (bagCuffed -> getState) never see it
+    local nh, nhe = spawnPed(runF, { coords = vec3(2.0, 0.0, 0.0) })
+    Npc.setState(runF, nh, 'hostile')
+    local bh = bag(nhe)
+    bh.state = 'cuffed'
+    Entity(nhe).state:set('cp', bh, true)
+    tick(1)
+    H.eq(Npc.getState(nh), 'hostile', 'client-written cuffed: still hostile on the server')
+    H.eq(Npc.isNeutralised(nh), false, 'client-written cuffed: not neutralised')
+    bh.state = 'dead'
+    Entity(nhe).state:set('cp', bh, true)
+    H.eq(Npc.isNeutralised(nh), false, 'client-written dead: not neutralised')
+    -- ... and a client-written run id or extra keys never survive the next server write
+    Entity(nhe).state:set('cp', { run = 'other-run', state = 'safe', cfg = { forged = true }, obj = 9, junk = 1 }, true)
+    H.eq(Npc.setState(runF, nh, 'fleeing'), true, 'a client-written foreign run id does not block the server')
+    local after = bag(nhe)
+    H.eq(after.run, 'run-f', 'server write restores the run id')
+    H.eq(after.obj, 1, 'server write restores obj')
+    H.eq(after.cfg.behaviour, 'balanced', "server write restores the engine's cfg")
+    H.eq(after.cfg.forged, nil, 'client cfg dropped')
+    H.eq(after.junk, nil, 'client keys dropped')
+    H.eq(after.state, 'fleeing', 'server state written')
+    -- a shot on a client-"surrendered" hostile is not shot_surrendered
+    local ns, nse = spawnPed(runF, { coords = vec3(3.0, 0.0, 0.0) })
+    Npc.setState(runF, ns, 'hostile')
+    tick(1)
+    local bs = bag(nse)
+    bs.state = 'surrendered'
+    Entity(nse).state:set('cp', bs, true)
+    bump(3500)
+    wde(1, { hitGlobalIds = { ns }, weaponType = PISTOL })
+    H.eq(count(R.penal, function(x) return x.id == 'shot_surrendered' end), 0, 'client-written surrendered: no shot_surrendered')
+
+    -- the server record is seeded from the engine's copy even before any setState or tick
+    local nq, nqe = spawnPed(runF, { coords = vec3(4.0, 0.0, 0.0) })
+    local bq = bag(nqe)
+    bq.state = 'cuffed'
+    Entity(nqe).state:set('cp', bq, true)
+    H.eq(Npc.getState(nq), 'idle', 'first getState: the engine copy, not the client-written bag')
+    -- an engine without that copy: rebuilt from the engine record, never read from the bag
+    local nz, nze = spawnPed(runF, { coords = vec3(5.0, 0.0, 0.0), noServerCopy = true })
+    local bz = bag(nze)
+    bz.state = 'cuffed'
+    Entity(nze).state:set('cp', bz, true)
+    H.eq(Npc.getState(nz), 'idle', 'no engine copy: idle, never the bag')
+    H.eq(Npc.setState(runF, nz, 'hostile'), true, 'no engine copy: setState works')
+    H.eq(bag(nze).run, 'run-f', 'no engine copy: run id from the server')
+    H.eq(bag(nze).role, 'hostile', 'no engine copy: role from the engine record')
+
+    -- a death is written from the server record
+    local nd9, nde9 = spawnPed(runF, { coords = vec3(6.0, 0.0, 0.0) })
+    Npc.setState(runF, nd9, 'hostile')
+    tick(1)
+    Entity(nde9).state:set('cp', { run = 'x', state = 'safe', cfg = { forged = true } }, true)
+    W.ents[nde9].health = 0
+    tick(1)
+    H.eq(bag(nde9).state, 'dead', 'death written')
+    H.eq(bag(nde9).run, 'run-f', 'death written from the server record (run)')
+    H.eq(bag(nde9).cfg.forged, nil, 'death written from the server record (cfg)')
+    H.eq(Npc.getState(nd9), 'dead', 'getState dead')
+end
 H.players[1].coords = saved1
 R.runs['run-f'] = nil
+
+-- the server code never reads the cp bag (only clients do); comments are stripped first
+do
+    local function code(file)
+        local f = assert(io.open(H.root .. file, 'r'))
+        local text = f:read('a')
+        f:close()
+        text = text:gsub('%-%-%[(=*)%[.-%]%1%]', ''):gsub('%-%-[^\n]*', '')
+        return text
+    end
+    for _, file in ipairs({ 'modules/npc/server.lua', 'modules/runs/server.lua' }) do
+        local text = code(file)
+        H.eq(text:find('state%.cp'), nil, file .. ' never reads Entity(e).state.cp')
+        H.eq(text:find("state%[%s*'cp'%s*%]"), nil, file .. " never reads Entity(e).state['cp']")
+    end
+end
 
 -- ── weaponDamageEvent ───────────────────────────────────────────────────────
 local damages = {}
@@ -746,11 +839,78 @@ tick(1)
 H.eq(count(R.penal, function(x) return x.src == 1 end), 1, 'the owner shooting its own restrained hostage is penalised')
 H.eq(damages[#damages].attacker, 1, 'owner damage attributed')
 
+-- ── Server-side proof of gunfire (no_weapons_fired): gun hits and gun kills by participants ──
+do
+    local fired = {}
+    CP.Runs.noteWeaponFired = function(r, src)
+        fired[#fired + 1] = { run = r.id, src = src, state = r.state }
+        return true
+    end
+    local function firedBy(src) return count(fired, function(x) return x.src == src end) end
+    reset()
+    local runW = newRun('run-w', { 1, 2 })
+    local w1 = spawnPed(runW, { coords = vec3(0.0, 0.0, 0.0) })
+    local w2 = spawnPed(runW, { coords = vec3(1.0, 0.0, 0.0) })
+    Npc.setState(runW, w1, 'hostile')
+    tick(1)
+    wde(1, { hitGlobalIds = { w1, w2 }, weaponType = PISTOL })
+    H.eq(firedBy(1), 1, 'a gun hit on mission peds notes the shooter once per event')
+    H.eq(fired[1] and fired[1].run, 'run-w', 'noted on the ped\'s run')
+    wde(2, { hitGlobalIds = { w1 }, weaponType = UNARMED })
+    H.eq(firedBy(2), 0, 'melee is not gunfire')
+    wde(9, { hitGlobalIds = { w1 }, weaponType = PISTOL })
+    H.eq(firedBy(9), 0, 'a non-participant is not noted')
+    local ownW, ownWe = spawnPed(runW, { coords = vec3(2.0, 0.0, 0.0) })
+    W.owner[ownWe] = 2
+    tick(1)
+    wde(2, { hitGlobalIds = { w1 }, weaponType = PISTOL, parentGlobalId = ownW })
+    H.eq(firedBy(2), 0, 'an NPC the sender owns firing is not the sender firing')
+    local vW = spawnVehicle(200)
+    W.nextNet = W.nextNet + 1
+    W.byNet[W.nextNet] = vW
+    wde(2, { hitGlobalIds = { w1 }, weaponType = PISTOL, parentGlobalId = W.nextNet })
+    H.eq(firedBy(2), 0, 'a vehicle hit is not gunfire')
+    R.arena[2] = true
+    wde(2, { hitGlobalIds = { w1 }, weaponType = PISTOL })
+    H.eq(firedBy(2), 0, 'in the arena: not noted')
+    R.arena[2] = nil
+    -- a gun kill by a participant (GetPedSourceOfDeath = their ped, cause = a gun), noted before entityDied
+    _G.GetPedCauseOfDeath = function(e) local x = W.ents[e]; return x and x.cause or 0 end
+    local k9, k9e = spawnPed(runW, { coords = vec3(3.0, 0.0, 0.0) })
+    tick(1)
+    R.onDied = function(r) r.state = 'ended' end     -- the kill ends the run
+    W.ents[k9e].health, W.ents[k9e].killer, W.ents[k9e].cause = 0, 200, PISTOL
+    tick(1)
+    H.eq(firedBy(2), 1, 'a participant\'s gun kill notes gunfire')
+    H.eq(fired[#fired].state, 'in_progress', 'noted before entityDied could end the run')
+    R.onDied = nil
+    runW.state = 'in_progress'
+    local k10, k10e = spawnPed(runW, { coords = vec3(4.0, 0.0, 0.0) })
+    tick(1)
+    local before = #fired
+    W.ents[k10e].health, W.ents[k10e].killer, W.ents[k10e].cause = 0, 100, UNARMED
+    tick(1)
+    H.eq(#fired, before, 'a melee kill notes nothing')
+    local k11, k11e = spawnPed(runW, { coords = vec3(5.0, 0.0, 0.0) })
+    tick(1)
+    W.ents[k11e].health, W.ents[k11e].killer, W.ents[k11e].cause = 0, spawnVehicle(100), PISTOL
+    tick(1)
+    H.eq(#fired, before, 'a kill from a vehicle notes nothing')
+    local k12, k12e = spawnPed(runW, { coords = vec3(6.0, 0.0, 0.0) })
+    tick(1)
+    W.ents[k12e].health, W.ents[k12e].killer, W.ents[k12e].cause = 0, 900, PISTOL
+    tick(1)
+    H.eq(#fired, before, 'a non-participant\'s gun kill notes nothing')
+    _G.GetPedCauseOfDeath = nil
+    CP.Runs.noteWeaponFired = nil
+    R.runs['run-w'] = nil
+end
+
 -- ── Registry pruning ────────────────────────────────────────────────────────
 reset()
 R.runs['run-a'] = nil
 tick(1)
-H.eq(Npc.getState(p1), 'surrendered', 'bag still readable through the pool')
+H.eq(Npc.getState(p1), nil, 'the server record goes with the run (the bag in the pool is never read)')
 W.byNet[p1] = nil
 H.eq(Npc.getState(p1), nil, 'pruned after the run is gone')
 wde(1, { hitGlobalIds = { p1 }, weaponType = PISTOL })

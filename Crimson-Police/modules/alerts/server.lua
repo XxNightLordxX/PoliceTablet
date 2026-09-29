@@ -30,6 +30,11 @@
 --   CP.Alerts.foreignClearedAt[src] -> ts|nil  table (read only): os.time() when a foreign value last changed
 --                                              to nil (Crimson-Arena let the player go)
 --   CP.Alerts.hold(src, on)                    CP.Downed: keep the flag of a downed participant (keepFlag)
+--   CP.Alerts.forget(src) -> boolean           drops our intent (wanted, hold, orphan timer, queued re-assert)
+--                                              WITHOUT touching the bag (CRIMSON_ARENA rule 1: CP.Runs uses it
+--                                              for an in-arena participant, whose bag may still hold our value
+--                                              while only the routing bucket has moved). true when an intent
+--                                              or a hold was dropped.
 --   CP.Alerts.onInArena(fn(src, run))          listeners, called once per run when an active participant
 --                                              becomes in-arena (after this module removed them)
 --   CP.Alerts.wanted                           the intent table (read only): wanted[src] = { runId, setAt }
@@ -309,6 +314,15 @@ local function forgetIntent(src)
     holds[src] = nil
     orphanSince[src] = nil
     reassertQueued[src] = nil
+end
+
+function A.forget(src)
+    src = toSrc(src)
+    if not src then return false end
+    local had = wanted[src] ~= nil or holds[src] ~= nil
+    forgetIntent(src)
+    if had then CP.log(TAG, 'intent of %d forgotten (the crimsonArena value is left alone)', src) end
+    return had
 end
 
 local function handleInArena(run, src)

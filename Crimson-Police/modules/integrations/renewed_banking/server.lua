@@ -51,7 +51,7 @@ end
 local function toAmount(amount)
     local n = tonumber(amount)
     if not n or n ~= n or n == math.huge or n == -math.huge or n < 0 then return nil end
-    return math.floor(n + 0.5)
+    return CP.U.round(n)
 end
 
 -- At most max bytes without splitting a UTF-8 character (the text lands in Renewed-Banking's JSON

@@ -732,6 +732,48 @@ H.eq(#officerView, 1, 'disputes about failed runs for the Officers screen')
 H.eq(officerView[1].status, 'approved', 'with their status')
 H.eq(officerView[1].canHandle, false, 'a decided dispute cannot be handled')
 
+-- new-dispute toasts: when every online supervisor of the department took part in the run, the admins are told
+do
+    local function toldSince(mark)
+        local told = {}
+        for i = mark + 1, #notifies do
+            if notifies[i].key == 'admin.notice.new_dispute' then told[notifies[i].src] = true end
+        end
+        return told
+    end
+    local D7 = 'bbbbbbbb-2222-4000-8000-000000000007'
+    local dAll = addRow({ run_uuid = D7, citizenid = 'OFF00003', flagged = 1, flag_reason = 'presence', cash_status = 'held' })
+    addRow({ run_uuid = D7, citizenid = 'SUP00002' })
+    addRow({ run_uuid = D7, citizenid = 'SUP00007' })
+    local mark = #notifies
+    local okA, resA = dispute(3, { rowId = dAll, reason = 'Both sergeants were on it with me' })
+    H.eq(okA and resA.goesTo, 'supervisor', 'a flagged-run dispute still goes to the supervisors')
+    local told = toldSince(mark)
+    H.eq(told[1], true, 'every sast supervisor took part: the admin is told instead')
+    H.eq(told[2] or told[7] or false, false, 'no supervisor who took part is told')
+    H.eq(told[4] or false, false, 'another department is not told')
+    local D8 = 'bbbbbbbb-2222-4000-8000-000000000008'
+    local dOne = addRow({ run_uuid = D8, citizenid = 'OFF00003', flagged = 1, flag_reason = 'presence', cash_status = 'held' })
+    addRow({ run_uuid = D8, citizenid = 'SUP00007' })
+    mark = #notifies
+    dispute(3, { rowId = dOne, reason = 'Only Sue was there' })
+    told = toldSince(mark)
+    H.eq(told[2], true, 'a supervisor who did not take part is told')
+    H.eq(told[1] or told[7] or false, false, 'while one can answer, admins and participants are not told')
+    -- with the switch off admins are told either way (unchanged)
+    local sup = Config.Permissions.supervisor
+    local was = sup.handleDisputes
+    sup.handleDisputes = false
+    local D9 = 'bbbbbbbb-2222-4000-8000-000000000009'
+    local dOff = addRow({ run_uuid = D9, citizenid = 'OFF00003', flagged = 1, flag_reason = 'presence', cash_status = 'held' })
+    mark = #notifies
+    dispute(3, { rowId = dOff, reason = 'Switch off' })
+    told = toldSince(mark)
+    H.eq(told[1], true, 'switch off: the admin is told')
+    H.eq(told[2] or told[7] or false, false, 'switch off: supervisors are not told')
+    sup.handleDisputes = was
+end
+
 -- ════════════════════════════════════════════════════════════════════════════
 -- 7. anticheat: checkEvent, flags, outside help, presence, idle
 -- ════════════════════════════════════════════════════════════════════════════

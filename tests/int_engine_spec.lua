@@ -374,4 +374,71 @@ do
     Config.Events.modifierChance = chance
 end
 
+-- ═══ 6. The cp bag is never read back; server-side gunfire; CP.Downed.handle at endRun (real downed) ═══
+do
+    local chance = Config.Events.modifierChance
+    Config.Events.modifierChance = 0
+    local ws = Missions.get('warrant_service')
+    local m = U.deepcopy(ws)
+    m.objectives[1].responses = { surrender = 1, flee = 0, fight = 0 }
+    local loc = ws.locations[1]
+    place(1, loc.start.coords); place(2, loc.start.coords)
+    local run = Runs.create({ mission = m, locationIndex = 1, missionType = 'investigation', members = { O[1], O[2] }, leaderSrc = 1 })
+    Runs.markArrived(run, 1)
+    Runs.markArrived(run, 2)
+    H.advance(1000)
+    local suspect, associate
+    for _, p in pairs(run.objectives[1].state.peds or {}) do
+        if p.role == 'suspect' then suspect = p elseif p.role == 'associate' then associate = p end
+    end
+    H.ok(suspect ~= nil and associate ~= nil, 'bag trust: peds spawned')
+    local info = run.entities[suspect.netId]
+    H.eq(info and info.bag and info.bag.run, run.id, "the engine keeps its own copy of the ped's bag")
+    -- a client rewrites the suspect's bag: the server (CP.Npc, the blocks' cuff checks, the armed cap) ignores it
+    local before = CP.Npc.getState(suspect.netId)
+    bags[suspect.entity].cp = { run = run.id, state = 'cuffed', cuff = { label = 'x', duration = 500, maxDistance = 10.0 } }
+    H.advance(1000)
+    H.eq(CP.Npc.getState(suspect.netId), before, 'a client-written "cuffed" bag leaves the server state as it was')
+    H.eq(CP.Npc.isNeutralised(suspect.netId), false, 'and the suspect is not neutralised')
+    CP.Npc.setState(run, suspect.netId, 'surrendered')
+    H.eq(bags[suspect.entity].cp.state, 'surrendered', 'the next server write replaces the client bag')
+    H.eq(bags[suspect.entity].cp.cuff, nil, 'the client cuff table is gone')
+    H.eq(run.entities[suspect.netId].bag.state, 'surrendered', "the engine's copy follows")
+    -- gunfire proven on the server: a gun hit on a mission ped by participant 1 (no client telemetry)
+    H.eq(run.participants[1].firedWeapon, nil, 'no weapon fired yet')
+    H.fire('weaponDamageEvent', 1, 1, { hitGlobalIds = { associate.netId }, weaponType = joaat('WEAPON_COMBATPISTOL') })
+    H.eq(run.participants[1].firedWeapon, true, 'weaponDamageEvent: CP.Npc -> CP.Runs.noteWeaponFired')
+    H.eq(run.stats.weaponsFired, 1, 'weaponsFired counted once')
+    -- the real CP.Downed: participant 2 is down when the run ends -> handle removes them with keepFlag
+    local downedSet = {}
+    CP.Qbx.isDowned = function(src) return downedSet[src] == true end
+    CP.Ambulance = { doctorCount = function() return 0 end, revive = function() return true end }
+    local clears, toasts = {}, {}
+    local realClear, realNotify = CP.Alerts.clear, CP.Tablet.notify
+    CP.Alerts.clear = function(src) clears[#clears + 1] = src end
+    CP.Tablet.notify = function(src, kind, key) toasts[#toasts + 1] = { src = src, key = key } end
+    H.load('modules/downed/server.lua')
+    H.step(0)
+    downedSet[2] = true
+    Runs.endRun(run, 'completed', 'completed')
+    H.eq(run.state, 'ended', 'downed at the end: run ended')
+    H.eq(run.participants[2].endReason, 'downed', "downed at the end: end_reason 'downed' (through CP.Downed.handle)")
+    H.eq(run.participants[2].result, 'failed', 'downed at the end: Failed')
+    H.eq(run.participants[1].result, 'completed', 'downed at the end: the other participant completed')
+    local c2 = 0
+    for _, s in ipairs(clears) do if s == 2 then c2 = c2 + 1 end end
+    H.eq(c2, 0, 'downed at the end: the flag is kept (keepFlag) for the pick-up')
+    H.eq(CP.Downed.isPending(2), true, 'downed at the end: the pick-up is pending')
+    local soon = 0
+    for _, t in ipairs(toasts) do if t.src == 2 and t.key == 'downed.pickup_soon' then soon = soon + 1 end end
+    H.eq(soon, 1, 'downed at the end: the pick-up flow started')
+    local row = H.sql("SELECT state, end_reason FROM cp_mission_runs WHERE run_uuid = ? AND citizenid = 'ENG2'", { run.id })[1]
+    H.eq(row and row.state, 'failed', 'downed at the end: row failed')
+    H.eq(row and row.end_reason, 'downed', 'downed at the end: row end_reason downed')
+    CP.Downed.cancel(2, 'test')
+    downedSet[2] = nil
+    CP.Alerts.clear, CP.Tablet.notify = realClear, realNotify
+    Config.Events.modifierChance = chance
+end
+
 return H

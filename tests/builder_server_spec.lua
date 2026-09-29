@@ -251,6 +251,32 @@ local function body()
         }
     end
 
+    -- ══ pure: customBonusFields (duplicates of built-ins) ═════════════════════
+    do
+        local d = { objectives = {
+            { block = 'flee_arrest', aliveBonus = { id = 'suspect_alive', points = 15 } },
+            { block = 'flee_arrest', aliveBonus = { id = 'inmate_alive', points = 10, each = true } },
+            { block = 'hostile_waves', boss = { model = 'x', aliveBonus = { id = 'kingpin_alive', points = 50 } } },
+            { block = 'hostile_waves', boss = { model = 'x', aliveBonus = { id = 'boss_down', points = 50 } } },
+            { block = 'pursuit', ramPenaltyId = 'ram', detainBonus = 'racer_detained', allDetainedBonus = 'hostile_arrested',
+              fastStop = { id = 'fast_x', seconds = 600 } },
+            { block = 'interact_points', fastBonus = { id = 'devices_found_fast', seconds = 120 } },
+            { block = 'interact_points', fastBonus = { id = 'correct_log', seconds = 120 } },
+        } }
+        B.customBonusFields(d)
+        local o = d.objectives
+        H.eq(o[1].aliveBonus.id, 'suspect_alive', 'strip: a standard alive bonus id is kept'); H.eq(o[1].aliveBonus.points, nil, 'strip: its points dropped')
+        H.eq(o[2].aliveBonus, nil, 'strip: a built-in-only alive bonus is dropped (block default)')
+        H.eq(o[3].boss.aliveBonus.id, 'kingpin_alive', 'strip: kingpin_alive kept'); H.eq(o[3].boss.aliveBonus.points, nil, 'strip: boss points dropped')
+        H.eq(o[4].boss.aliveBonus, nil, 'strip: an unknown boss bonus is dropped')
+        H.eq(o[5].ramPenaltyId, nil, 'strip: ram id outside Config.Bonuses dropped (default hard_ram)')
+        H.eq(o[5].detainBonus, nil, 'strip: racer_detained dropped (the block default comes back)')
+        H.eq(o[5].allDetainedBonus, 'hostile_arrested', 'strip: a standard id is kept')
+        H.eq(o[5].fastStop.id, nil, 'strip: fast stop id dropped'); H.eq(o[5].fastStop.seconds, 120, 'strip: fast stop at most 120 s')
+        H.eq(o[6].fastBonus, nil, 'strip: a built-in-only fast bonus is dropped')
+        H.eq(o[7].fastBonus.id, 'correct_log', 'strip: a standard fast bonus is kept')
+    end
+
     -- ══ pure: slug, sanitize ════════════════════════════════════════════════
     H.eq(B.slug('Dockside Raid'), 'dockside_raid', 'slug')
     H.eq(B.slug('  --Warehouse #12: Night!! '), 'warehouse_12_night', 'slug strips punctuation')
@@ -379,6 +405,21 @@ local function body()
     check('weapon outside the allowed list (block validate)', function(d) d.objectives[1].weapons = { 'WEAPON_RPG' } end, nil, 'objectives.1')
     check('ped outside the allowed list (block validate)', function(d) d.objectives[1].peds = { 'mp_m_freemode_01' } end, nil, 'objectives.1')
     check('block range (accuracy 90)', function(d) d.objectives[1].accuracy = 90 end, nil, 'objectives.1')
+    -- objective-level bonus values from the definition never pass for a custom mission (block validate)
+    do
+        local d = U.deepcopy(good)
+        d.objectives[1].boss = { model = 'g_m_y_lost_01' }
+        H.eq(errorAt(B.validate(d), 'objectives.1'), nil, "a boss with the block's own kingpin_alive passes")
+    end
+    check('boss bonus with its own points (block validate)', function(d)
+        d.objectives[1].boss = { model = 'g_m_y_lost_01', aliveBonus = { id = 'kingpin_alive', points = 5000 } }
+    end, nil, 'objectives.1')
+    check('boss bonus id outside Config.Bonuses (block validate)', function(d)
+        d.objectives[1].boss = { model = 'g_m_y_lost_01', aliveBonus = { id = 'boss_down', points = 40 } }
+    end, nil, 'objectives.1')
+    check('fast bonus id outside Config.Bonuses (block validate)', function(d)
+        d.objectives[2].fastBonus = { id = 'crates_fast', seconds = 60 }
+    end, nil, 'objectives.2')
     check('required points missing', function(d) d.locations[2].evidence = nil end, 'builder.error.point_missing', 'locations.2.evidence')
     check('min seconds 0', function(d) d.objectives[2].minSeconds = 0 end, 'builder.error.min_seconds', 'objectives.2.minSeconds')
     check('min seconds over the time limit', function(d) d.objectives[1].minSeconds = 700; d.objectives[2].minSeconds = 100 end,
@@ -944,6 +985,25 @@ local function body()
             H.ok(okDb and db.record.source == 'custom' and db.record.definition.type == 'tactical', 'duplicate a built-in')
             local copy = db.record.definition
             for _, e in ipairs(copy.bonuses) do H.ok(Config.Bonuses[e.id] ~= nil, 'copy keeps standard bonuses only: ' .. e.id) end
+            -- objective-level bonus ids and values of built-ins are dropped from the copy (block defaults apply)
+            for _, m in ipairs({ 'warrant_service', 'prison_break', 'bomb_disposal', 'pursuit_sim', 'weekly_boss_kingpin' }) do
+                if CP.Missions.get(m) then
+                    local okM, dm = act(2, 'duplicate', { id = m })
+                    H.ok(okM, 'duplicate ' .. m)
+                    for i, o in ipairs(okM and dm.record.definition.objectives or {}) do
+                        local tag = m .. ' objective ' .. i
+                        if type(o.aliveBonus) == 'table' then
+                            H.eq(o.aliveBonus.points, nil, tag .. ': no aliveBonus.points in the copy')
+                            H.ok(Config.Bonuses[o.aliveBonus.id] ~= nil, tag .. ': aliveBonus id is standard')
+                        end
+                        if type(o.boss) == 'table' and type(o.boss.aliveBonus) == 'table' then
+                            H.eq(o.boss.aliveBonus.points, nil, tag .. ': no boss bonus points in the copy')
+                        end
+                        if o.fastBonus ~= nil then H.ok(Config.Bonuses[o.fastBonus.id] ~= nil, tag .. ': fast bonus id is standard') end
+                        if type(o.ramPenaltyId) == 'string' then H.ok(Config.Bonuses[o.ramPenaltyId] ~= nil, tag .. ': ram id is standard') end
+                    end
+                end
+            end
             H.ok(type(copy.objectives[1].surrender) ~= 'table' or copy.objectives[1].surrender.chance >= 1, 'copy in builder units (percent)')
         end
     end

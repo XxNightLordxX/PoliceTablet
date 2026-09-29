@@ -187,8 +187,23 @@ do
     H.eq(CP.Qbx.addMoney(1, '', 5), false, 'account required')
     H.eq(CP.Qbx.addMoney(42, 'bank', 5), false, 'offline player')
     qbxPlayers[1].moneyResult = false
-    H.eq(CP.Qbx.addMoney(1, 'bank', 5), false, 'AddMoney false is passed on')
+    local okF, whyF = CP.Qbx.addMoney(1, 'bank', 5)
+    H.eq(okF, false, 'AddMoney false is passed on')
+    H.eq(whyF, nil, 'a plain refusal has no reason (the caller may put the row back to pending)')
     qbxPlayers[1].moneyResult = nil
+    -- AddMoney raised: false, 'error' (the balance may have changed: CP.Cash never retries such a row)
+    do
+        local realAdd = qbxPlayers[1].Functions.AddMoney
+        qbxPlayers[1].Functions.AddMoney = function() error('qbx exploded') end
+        local okE, whyE = CP.Qbx.addMoney(1, 'bank', 5)
+        H.eq(okE, false, 'AddMoney exception -> false')
+        H.eq(whyE, 'error', "AddMoney exception -> 'error'")
+        qbxPlayers[1].Functions.AddMoney = realAdd
+    end
+    -- a true half-dollar rounds up (CP.U.round): $350 x 1.15 = $402.50 -> $403
+    local nMoney = #moneyCalls
+    H.eq(CP.Qbx.addMoney(1, 'bank', 350 * 1.15), true, 'addMoney with a float half')
+    H.eq(moneyCalls[nMoney + 1] and moneyCalls[nMoney + 1].amount, 403, 'addMoney rounds a true half up')
 
     H.eq(CP.Qbx.isDowned(1), false, 'not downed')
     qbxPlayers[1].PlayerData.metadata.inlaststand = true
@@ -236,6 +251,26 @@ do
     H.eq(groups[#groups], 5, 'group update')
     TriggerEvent('QBCore:Server:SetDuty', 'x', false)
     H.eq(#duty, 3, 'invalid src ignored')
+
+    -- qbx_core:server:onSetMetaData (key, oldValue, value, source): server-local, filtered by key
+    H.ok(H.handlers['qbx_core:server:onSetMetaData'] and #H.handlers['qbx_core:server:onSetMetaData'] > 0, 'onSetMetaData has a handler')
+    H.eq(netEvents['qbx_core:server:onSetMetaData'], nil, 'onSetMetaData is not a net event')
+    local metas, allMetas = {}, {}
+    CP.Qbx.onMetaDataChange(function(src, key, old, new) metas[#metas + 1] = { src = src, key = key, old = old, new = new } end, { 'isdead', 'inlaststand' })
+    CP.Qbx.onMetaDataChange(function(src, key) allMetas[#allMetas + 1] = { src = src, key = key } end)
+    CP.Qbx.onMetaDataChange('not a function')
+    TriggerEvent('qbx_core:server:onSetMetaData', 'isdead', false, true, 3)
+    H.eq(#metas, 1, 'metadata listener called')
+    H.eq(metas[1] and metas[1].src, 3, 'metadata listener src (the 4th argument)')
+    H.eq(metas[1] and metas[1].key, 'isdead', 'metadata key')
+    H.eq(metas[1] and metas[1].old, false, 'metadata old value')
+    H.eq(metas[1] and metas[1].new, true, 'metadata new value')
+    TriggerEvent('qbx_core:server:onSetMetaData', 'hunger', 50, 49, 3)
+    H.eq(#metas, 1, 'a filtered listener skips other keys')
+    H.eq(#allMetas, 2, 'an unfiltered listener gets every key')
+    TriggerEvent('qbx_core:server:onSetMetaData', 'isdead', false, true, 'x')
+    TriggerEvent('qbx_core:server:onSetMetaData', 42, false, true, 3)
+    H.eq(#metas, 1, 'invalid src or key ignored')
 
     stopped.qbx_core = true
     H.eq(CP.Qbx.getInfo(1), nil, 'qbx_core stopped: no info')

@@ -90,9 +90,20 @@ Each file's header lists the fields it reads (with defaults), the evidence it ac
 - **HUD**: server `ctx.hud({ detail, value, max })` only when it changes. flee_arrest also sends
   `ctx.hud({ message = { text, kind = 'warning' } })` for the door response. The clients use `ctx.hudDetail`
   for personal hints (cuff nearby, stay close, escape countdown, hostages walking).
-- **Traffic** (hostile_waves client, every participant, while current): `AddRoadNodeSpeedZone` +
-  `SetRoadsInArea` (box around the start) + one `ClearAreaOfVehicles` in the radius. Restored in stop and on
-  resource stop.
+- **Traffic** (hostile_waves client, every participant, from the objective's start): `AddRoadNodeSpeedZone` +
+  `SetRoadsInArea` (box around the start) + one `ClearAreaOfVehicles` in the radius. When the objective stops
+  and the run (`CP.Runs.current()`) has a later objective, the block is **held**: every objective of a run
+  shares its location, so Gang Shootout / Kingpin "Secure the scene" keeps NPC traffic out ("blocked within
+  120 m while the run is active"). It is restored when the last objective stops, as soon as that run is no
+  longer the client's current run (end, silent removal; polled every 500 ms), or on resource stop. A later
+  hostile_waves objective with the same area takes the held block over instead of adding a second one.
+- **Custom-mission guardrails** (validate, `mission.source ~= 'builtin'`), on top of the allowed lists:
+  flee_arrest `aliveBonus.id` must be a `Config.Bonuses` id with no `points` / `pctOfPoints`; hostile_waves
+  `boss.aliveBonus` is `kingpin_alive` (points absent or the block's 50) or a `Config.Bonuses` id without points;
+  flee_arrest `givesUp.close` is off or exactly `closeDistance` / `closeSeconds` (3 m / 3 s); flee_arrest
+  `knock.duration` / `cuff.duration` and hostile_waves `cuff.duration` are 1000-30000 ms; `cuff.maxDistance` (when
+  set) at most 3 m. At run time the file's `aliveBonus.points` is passed as a hint only on built-in missions;
+  elsewhere the boss's `kingpin_alive` carries the block constant (50) and any other id no hint.
 
 ## Requests to other modules
 
@@ -104,8 +115,9 @@ protect_rescue while `onDamaged` is listened to (see above), so request 8 only n
 
 1. **modules/runs**: `ctx.award` / `ctx.penalize` pass `opts.points` as the per-occurrence value for ids that are
    neither in `Config.Bonuses` nor in the mission's list: `hostage_hit` (`-hitPenalty`), `kingpin_alive`
-   (`boss.aliveBonus.points`), `aliveBonus.points` (Prison Break `inmate_alive` 10). Please honour it, or
-   ignore it when the mission lists the id itself.
+   (`boss.aliveBonus.points` on built-ins, the block's 50 elsewhere), `aliveBonus.points` (built-ins only: Prison
+   Break `inmate_alive` 10). Please honour it, or ignore it when the mission lists the id itself. (Done; on custom
+   missions CP.Scoring caps a positive hint at `Config.Builder.bonusCap.points`.)
 2. **modules/runs**: send `ctx.send` updates to a client half whose objective is not current yet
    (protect_rescue spawns and sends its hostages in `prepare`). Call `onEntityDead` and `dispatch` for the owning
    objective even when it is not current (as §5.10 `entityDied` / `dispatch` say).

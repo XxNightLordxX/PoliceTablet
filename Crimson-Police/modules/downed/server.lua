@@ -13,9 +13,22 @@
 --   CP.Downed.cancel(src, reason) -> boolean   stops a pending pick-up / EMS request and removes our flag
 --                                           (CP.Alerts.clear leaves a foreign value alone). The run result
 --                                           stays 'downed'. Used for in-arena, disconnect and unload.
+--   CP.Downed.handle(run, src) -> boolean   CP.Runs.endRun: src is down (the caller checked CP.Qbx.isDowned)
+--                                           and still active in a run that is ending. Holds the flag and
+--                                           calls CP.Runs.removeParticipant(run, src, 'downed',
+--                                           { keepFlag = true }) at once, before anything here yields (the
+--                                           engine gives only the others the run's end state), then starts
+--                                           the pick-up / EMS flow below in its own thread. A down the poll
+--                                           or the metadata listener already recorded for this run, whose
+--                                           thread has not run yet (CreateThread starts on the next tick),
+--                                           only leaves now; that thread then does the follow-up alone.
+--                                           false (nothing done): not an active participant, in the arena,
+--                                           the run ended, or that down's follow-up is already past the leave
+--                                           - the engine then removes them itself.
 --
 -- Flow (every Config.Downed.checkEvery s, active participants of every run that has not ended; in-arena
--- srcs are skipped):
+-- srcs are skipped; also at once when qbx_core sets metadata isdead / inlaststand to true, through
+-- CP.Qbx.onMetaDataChange, and from CP.Downed.handle when a run ends):
 --   CP.Qbx.isDowned(src) (metadata isdead / inlaststand; sc-ambulance resurrects the ped, so ped death is not
 --   used) -> once per participant per run: CP.Alerts.hold(src) (the flag stays), CP.Runs.removeParticipant
 --   (run, src, 'downed', { keepFlag = true }), run.stats.downs + 1 (only when the engine did not already
@@ -271,19 +284,45 @@ local function ensureRunEnds(run)
     end)
 end
 
-local function process(run, src, e)
+-- The downed participant leaves the run with end_reason 'downed' (keepFlag: the hold keeps the flag),
+-- once per entry. Nothing here yields before CP.Runs.removeParticipant has run its synchronous part.
+local function removeNow(run, src, e)
+    if e.removed then return end
+    e.removed = true
     run.stats = run.stats or {}
     local downsBefore = tonumber(run.stats.downs) or 0
     runsCall('removeParticipant', run, src, 'downed', { keepFlag = true })
-    -- run.stats.downs + 1 for this down, unless the engine already counted it inside removeParticipant.
-    if (tonumber(run.stats.downs) or 0) <= downsBefore then run.stats.downs = downsBefore + 1 end
-    ensureRunEnds(run)
+    -- run.stats.downs + 1 for this down, unless the engine already counted it inside removeParticipant
+    -- (only when they really left as downed: a participant who had already left is not a down).
+    local p = run.participants and run.participants[src]
+    if (tonumber(run.stats.downs) or 0) <= downsBefore and type(p) == 'table' and p.endReason == 'downed' then
+        run.stats.downs = downsBefore + 1
+    end
+end
+
+local function followUp(src, e)
     if not current(src, e) then return end
     if doctorCount() > 0 then
         emsPath(src, e)
     else
         pickupPath(src, e)
     end
+end
+
+local function process(run, src, e)
+    removeNow(run, src, e)
+    ensureRunEnds(run)
+    followUp(src, e)
+end
+
+local function spawnFlow(run, src, e, fn)
+    CreateThread(function()
+        local ok, err = pcall(fn, run, src, e)
+        if not ok then
+            CP.err(TAG, 'downed flow for %d failed: %s', src, tostring(err))
+            if entries[src] == e then cancelEntry(src, e, 'error') end
+        end
+    end)
 end
 
 -- metadata.inlaststand at detection (CP.Qbx.getInfo): sc-ambulance's own automatic alert went out then
@@ -293,9 +332,10 @@ local function inLastStand(src)
     return ok and type(info) == 'table' and info.inLastStand == true
 end
 
-local function onDowned(run, src)
+-- Records the down (no yield: CP.Alerts.has / hold and CP.Qbx.getInfo never yield) and returns the entry.
+local function newEntry(run, src)
     local p = run.participants and run.participants[src]
-    if type(p) ~= 'table' or p.status ~= 'active' then return end
+    if type(p) ~= 'table' or p.status ~= 'active' then return nil end
     seq = seq + 1
     local e = {
         runId = run.id, citizenid = p.citizenid, since = os.time(), stage = 'down',
@@ -304,13 +344,21 @@ local function onDowned(run, src)
     entries[src] = e
     alerts('hold', src, true)                      -- keepFlag: the flag stays until the pick-up / EMS request
     CP.log(TAG, '%d went down on run %s (flag %s)', src, tostring(run.id), tostring(e.flagged))
-    CreateThread(function()
-        local ok, err = pcall(process, run, src, e)
-        if not ok then
-            CP.err(TAG, 'downed flow for %d failed: %s', src, tostring(err))
-            if entries[src] == e then cancelEntry(src, e, 'error') end
-        end
-    end)
+    return e
+end
+
+-- The poll and the metadata listener: the leave and the follow-up run in their own thread.
+local function onDowned(run, src)
+    local e = newEntry(run, src)
+    if e then spawnFlow(run, src, e, process) end
+end
+
+-- A down not yet handled for this run: active, not in the arena, downed.
+local function detect(run, src)
+    local e = entries[src]
+    if e and e.runId == run.id then return end
+    if inArena(src) or not isDowned(src) then return end
+    onDowned(run, src)
 end
 
 local function prune()
@@ -335,10 +383,7 @@ local function tick()
     end
     for _, w in ipairs(work) do
         local src = toSrc(w.src)
-        local e = src and entries[src]
-        if src and not (e and e.runId == w.run.id) and not inArena(src) and isDowned(src) then
-            onDowned(w.run, src)
-        end
+        if src then detect(w.run, src) end
     end
     prune()
 end
@@ -355,6 +400,43 @@ function D.cancel(src, reason)
     local e = src and entries[src]
     if not e then return false end
     return cancelEntry(src, e, reason or 'cancelled')
+end
+
+function D.handle(run, src)
+    src = toSrc(src)
+    if not src or type(run) ~= 'table' or run.id == nil or run.state == 'ended' then return false end
+    local p = run.participants and run.participants[src]
+    if type(p) ~= 'table' or p.status ~= 'active' then return false end
+    local e = entries[src]
+    if e and e.runId == run.id then
+        -- The poll (or the metadata listener) caught this down and its thread has not removed them yet:
+        -- they leave now; that thread skips the leave and carries on with the follow-up.
+        if not PENDING[e.stage] or e.removed then return false end
+        removeNow(run, src, e)
+        return true
+    end
+    if inArena(src) then return false end
+    e = newEntry(run, src)
+    if not e then return false end
+    removeNow(run, src, e)                         -- before our first yield
+    CP.log(TAG, '%d was down when run %s ended: follow-up started', src, tostring(run.id))
+    spawnFlow(run, src, e, function(r, s, en)
+        ensureRunEnds(r)
+        followUp(s, en)
+    end)
+    return true
+end
+
+-- ── metadata listener: react at once instead of on the next poll ─────────────
+local function onMetaData(src, key, _, new)
+    if new ~= true or (key ~= 'isdead' and key ~= 'inlaststand') then return end
+    src = toSrc(src)
+    if not src then return end
+    local _, run = runsCall('getBySrc', src)
+    if type(run) ~= 'table' or run.id == nil or run.state == 'ended' then return end
+    local p = run.participants and run.participants[src]
+    if type(p) ~= 'table' or p.status ~= 'active' then return end
+    detect(run, src)
 end
 
 -- ── net event: the client finished (or gave up on) the pick-up ─────────────
@@ -391,6 +473,9 @@ end)
 
 CreateThread(function()
     Wait(0)
+    if CP.Qbx and CP.Qbx.onMetaDataChange then
+        CP.Qbx.onMetaDataChange(onMetaData, { 'isdead', 'inlaststand' })
+    end
     if CP.Qbx and CP.Qbx.onPlayerUnload then
         CP.Qbx.onPlayerUnload(function(src) D.cancel(src, 'unload') end)
     else

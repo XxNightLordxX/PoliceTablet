@@ -90,14 +90,17 @@ local function fakeCtx(o)
         location = o.location, tier = { tier = 'standard', count = 1.0 }, state = {},
         rng = CP.U.rng(run.seed + (o.index or 1)),
     }
-    local calls = { complete = 0, fail = {}, award = {}, penalize = {}, send = {}, hud = {}, spawn = {}, delete = {}, canSpawn = 0 }
+    local calls = { complete = 0, fail = {}, award = {}, awardOpts = {}, penalize = {}, send = {}, hud = {}, spawn = {}, delete = {}, canSpawn = 0 }
     ctx.calls = calls
     ctx.completeResult = true
     ctx.capOk = true
     ctx.srcs = o.srcs or { 1 }
     ctx.complete = function(data) calls.complete = calls.complete + 1; return ctx.completeResult end
     ctx.fail = function(key) calls.fail[#calls.fail + 1] = key end
-    ctx.award = function(id, opts) calls.award[#calls.award + 1] = id end
+    ctx.award = function(id, opts)
+        calls.award[#calls.award + 1] = id
+        calls.awardOpts[#calls.awardOpts + 1] = { id = id, opts = opts }
+    end
     ctx.penalize = function(id, opts) calls.penalize[#calls.penalize + 1] = id end
     ctx.send = function(data) calls.send[#calls.send + 1] = CP.U.deepcopy(data) end
     ctx.hud = function(patch) calls.hud[#calls.hud + 1] = patch end
@@ -386,7 +389,7 @@ local function evoc(opts)
     timerAdjust, timerPause = {}, {}
     local loc = { start = { coords = vec3(0.0, 0.0, 0.0), radius = 30.0 }, course = { points = spots(4) }, medals = { gold = 60, silver = 80, bronze = 100 } }
     local obj = CR.defaults({ block = 'checkpoint_route', checkpoints = 'course', stopFor = 0, medals = true, radius = 10.0 })
-    local ctx = fakeCtx({ obj = obj, location = loc, seed = 42 })
+    local ctx = fakeCtx({ obj = obj, location = loc, seed = 42, mission = opts and opts.mission })
     addVehicle(6001, 61, { class = 18 })
     H.players[1] = { coords = vec3(0.0, 0.0, 0.0), vehicle = 6001 }
     CR.prepare(ctx)
@@ -454,6 +457,42 @@ do -- silver, no contact
     H.ok(contains(ctx.calls.award, 'medal_silver'), 'silver medal at 69 s')
     H.ok(contains(ctx.calls.award, 'no_contact'), 'no_contact bonus')
     H.eq(#ctx.calls.award, 2, 'exactly two awards')
+end
+
+-- Medal and no_contact awards carry the EVOC card values as trusted points hints (custom missions cannot
+-- list these ids: Config.Bonuses has none), capped by Config.Builder.bonusCap.points on custom missions.
+do
+    local function hintOf(ctx, id)
+        for _, a in ipairs(ctx.calls.awardOpts) do if a.id == id then return a.opts and a.opts.points end end
+        return nil
+    end
+    local function silverRun(mission)
+        local ctx, st = evoc({ mission = mission })
+        at(1, st.points[1]); CR.onEvent(ctx, 1, { type = 'checkpoint', index = 1 })
+        for k = 2, 4 do at(1, st.points[k]); advance(23000); CR.tick(ctx, 1); CR.onEvent(ctx, 1, { type = 'checkpoint', index = k }) end
+        return ctx
+    end
+    local b = silverRun({ source = 'builtin' })
+    H.eq(hintOf(b, 'medal_silver'), 25, 'built-in: silver medal hint = card value 25')
+    H.eq(hintOf(b, 'no_contact'), 10, 'built-in: no_contact hint = card value 10')
+    local c = silverRun({ source = 'custom' })
+    H.eq(hintOf(c, 'medal_silver'), 25, 'custom: silver medal hint 25 (under the cap)')
+    H.eq(hintOf(c, 'no_contact'), 10, 'custom: no_contact hint 10')
+    local ctxG, stG = evoc({ mission = { source = 'custom' } })
+    at(1, stG.points[1]); CR.onEvent(ctxG, 1, { type = 'checkpoint', index = 1 })
+    for k = 2, 4 do at(1, stG.points[k]); advance(16000); CR.onEvent(ctxG, 1, { type = 'checkpoint', index = k }) end
+    H.eq(hintOf(ctxG, 'medal_gold'), 50, 'custom: gold medal hint 50 (= the default cap)')
+    local savedCap = Config.Builder.bonusCap.points
+    Config.Builder.bonusCap.points = 30
+    local ctxC, stC = evoc({ mission = { source = 'custom' } })
+    at(1, stC.points[1]); CR.onEvent(ctxC, 1, { type = 'checkpoint', index = 1 })
+    for k = 2, 4 do at(1, stC.points[k]); advance(16000); CR.onEvent(ctxC, 1, { type = 'checkpoint', index = k }) end
+    H.eq(hintOf(ctxC, 'medal_gold'), 30, 'custom: gold medal hint capped by Config.Builder.bonusCap.points')
+    local ctxB, stB = evoc({ mission = { source = 'builtin' } })
+    at(1, stB.points[1]); CR.onEvent(ctxB, 1, { type = 'checkpoint', index = 1 })
+    for k = 2, 4 do at(1, stB.points[k]); advance(16000); CR.onEvent(ctxB, 1, { type = 'checkpoint', index = k }) end
+    H.eq(hintOf(ctxB, 'medal_gold'), 50, 'built-in: the card value is never capped')
+    Config.Builder.bonusCap.points = savedCap
 end
 
 do -- bronze; body damage seen by the server denies no_contact
@@ -615,12 +654,26 @@ do -- validate
     H.ok(ok == false and reasonIs(why, 'block.interact_points.invalid.hidden_count'), 'ip more devices than spots rejected')
     ok, why = IP.validate(IP.defaults({ points = 'spots', hidden = { count = 1 }, fastBonus = { seconds = 120 } }), mission, loc)
     H.ok(ok == false and reasonIs(why, 'block.interact_points.invalid.fast_bonus'), 'ip fast bonus needs an id')
-    H.eq(IP.validate(IP.defaults({ points = 'spots', hidden = { count = 2 }, fastBonus = { seconds = 120, id = 'devices_found_fast' } }), mission, loc), true, 'ip valid hidden search')
+    local builtinMission = { source = 'builtin', locations = { loc } }
+    H.eq(IP.validate(IP.defaults({ points = 'spots', hidden = { count = 2 }, fastBonus = { seconds = 120, id = 'devices_found_fast' } }), builtinMission, loc), true, 'ip valid hidden search')
+    -- custom missions: a standard fast-bonus id only, the block's own device models only, allowed animation names only
+    ok, why = IP.validate(IP.defaults({ points = 'spots', hidden = { count = 2 }, fastBonus = { seconds = 120, id = 'devices_found_fast' } }), mission, loc)
+    H.ok(ok == false and reasonIs(why, 'block.interact_points.invalid.fast_bonus_custom'), 'ip custom: a fast bonus outside Config.Bonuses rejected')
+    H.eq(IP.validate(IP.defaults({ points = 'spots', hidden = { count = 2 }, fastBonus = { seconds = 120, id = 'correct_log' } }), mission, loc), true, 'ip custom: a Config.Bonuses fast bonus id accepted')
+    H.eq(IP.validate(IP.defaults({ points = 'spots', hidden = { count = 2 } }), mission, loc), true, 'ip custom: the default device prop accepted')
+    H.eq(IP.validate(IP.defaults({ points = 'spots', hidden = { count = 2, prop = 'prop_c4_final_green' } }), mission, loc), true, 'ip custom: the Bomb Disposal device prop accepted')
+    ok, why = IP.validate(IP.defaults({ points = 'spots', hidden = { count = 2, prop = 'prop_big_shit_01' } }), mission, loc)
+    H.ok(ok == false and reasonIs(why, 'block.interact_points.invalid.hidden_prop'), 'ip custom: any other device prop rejected')
+    H.eq(IP.validate(IP.defaults({ points = 'spots', hidden = { count = 2, prop = 'prop_big_shit_01' } }), builtinMission, loc), true, 'ip built-in: its own device prop is trusted')
+    ok, why = IP.validate(IP.defaults({ points = 'spots', progress = { anim = { scenario = 'WORLD_HUMAN_CLIPBOARD' } } }), mission, loc)
+    H.ok(ok == false and reasonIs(why, 'block.interact_points.invalid.anim'), 'ip custom: a raw scenario table rejected')
+    ok, why = IP.validate(IP.defaults({ points = 'spots', progress = { anim = { dict = 'amb@x', clip = 'base' } } }), mission, loc)
+    H.ok(ok == false and reasonIs(why, 'block.interact_points.invalid.anim'), 'ip custom: a raw dict/clip table rejected')
     ok, why = IP.validate(IP.defaults({ points = 'nowhere' }), mission, loc)
     H.ok(ok == false and reasonIs(why, 'block.interact_points.invalid.points_missing'), 'ip missing key rejected')
     ok = IP.validate(IP.defaults({ points = 'spots', use = 'random', count = 7 }), mission, loc)
     H.eq(ok, false, 'ip count above pool rejected')
-    H.eq(IP.validate(IP.defaults({ points = 'spots', progress = { anim = { scenario = 'WORLD_HUMAN_CLIPBOARD' } } }), mission, loc), true, 'ip scenario table anim allowed')
+    H.eq(IP.validate(IP.defaults({ points = 'spots', progress = { anim = { scenario = 'WORLD_HUMAN_CLIPBOARD' } } }), builtinMission, loc), true, 'ip scenario table anim allowed (built-in)')
     H.eq(IP.validate(IP.defaults({ points = 'spots', logResult = { choices = { 'x', 'y', 'z' } } }), mission, loc), true, 'ip builder log without roll')
     local zoneLoc = { scene = vec3(310.0, -590.0, 43.0) }
     ok, why = IP.validate(IP.defaults({ points = 'scene' }), { locations = { zoneLoc } }, zoneLoc)

@@ -416,6 +416,14 @@ H.eq(A.participants[1].score.pedestrian_hit, 1, 'pedestrian hit counted once')
 local far = newEnt('ped', 'a_m_y_hipster_01', 500, 0, 0)
 H.fire('crimson-police:server:telemetry', 1, A.id, 'ped_hit', { netId = ents[far].net })
 H.eq(A.participants[1].score.pedestrian_hit, 1, 'a far ped is not a hit')
+-- "is this a run entity" comes from the engine's registry, never from a (client-writable) cp bag
+local forged = newEnt('ped', 'a_m_y_hipster_01', 6, 0, 0)
+bags[forged] = { cp = { run = A.id, state = 'idle' } }
+H.fire('crimson-police:server:telemetry', 1, A.id, 'ped_hit', { netId = ents[forged].net })
+H.eq(A.participants[1].score.pedestrian_hit, 2, 'a pedestrian carrying a client-written cp bag is still a pedestrian hit')
+local _, missionPedNet = Runs.spawnPed(A, { obj = 1, model = 'a_m_m_business_01', coords = vec4(5, 1, 0, 0), role = 'hostage' })
+H.fire('crimson-police:server:telemetry', 1, A.id, 'ped_hit', { netId = missionPedNet })
+H.eq(A.participants[1].score.pedestrian_hit, 2, "a run's own ped is not a pedestrian hit")
 H.fire('crimson-police:server:telemetry', 1, A.id, 'lights_siren', {})
 H.eq(A.participants[1].score.lights_siren, nil, 'lights only on Beat Patrol / Business Check')
 A.missionId = 'beat_patrol'
@@ -466,6 +474,14 @@ H.eq(v.recalcsLeft, 1, 'recalcs left')
 H.eq(v.log.point, 2, 'log from the current objective state')
 H.eq(v.expected.cash, 1150, 'expected cash = B x tier x modifier')
 H.eq(v.expected.points, 302, 'expected points')
+do
+    -- a true half-dollar rounds up, as CP.Cash pays: $200 x 1.15 x 1.25 = $287.50 (287.4999... in floating point)
+    local realBase = A.cashBase
+    A.cashBase = 200
+    H.ok(200 * 1.15 * 1.25 < 287.5, 'precondition: the float product is below the half')
+    H.eq(Runs.view(A, 1).expected.cash, 288, 'expected cash: a true half-dollar rounds up ($288, not $287)')
+    A.cashBase = realBase
+end
 H.eq(v.radioSilence, false, 'radio silence flag')
 H.eq(v.test, false, 'not a test')
 local s = Runs.summary(A)
@@ -970,16 +986,24 @@ H.ok(slowTicks >= 2, 'the slow run ticks again once its tick finished')
 Runs.removeParticipant(S1, 2, 'cancelled')
 Runs.removeParticipant(S2, 3, 'cancelled')
 
--- ── review: a cuffed NPC frees the armed cap (bag state cached briefly) ─────
+-- ── review: a cuffed NPC frees the armed cap; the state comes from the server (CP.Npc), never the bag ─
 H.reset()
 local Q = Runs.create({ mission = mission, locationIndex = 1, missionType = 'patrol', members = { O[2] }, leaderSrc = 2 })
 Runs.markArrived(Q, 2)
-local qp = Runs.spawnPed(Q, { obj = 1, model = 'g_m_y_lost_01', coords = vec4(0, 0, 0, 0), armed = true, weapon = 'WEAPON_PISTOL' })
+local qp, qpNet = Runs.spawnPed(Q, { obj = 1, model = 'g_m_y_lost_01', coords = vec4(0, 0, 0, 0), armed = true, weapon = 'WEAPON_PISTOL' })
 Config.Limits.maxArmedAlive = 1
 H.eq(Runs.canSpawn(Q, 1, true), false, 'the armed cap counts the armed NPC')
-bags[qp].cp = { run = Q.id, obj = 1, state = 'cuffed', armed = true }
+H.eq(Q.entities[qpNet].bag and Q.entities[qpNet].bag.state, 'idle', 'the engine keeps its own copy of the bag it wrote')
+H.eq(Q.entities[qpNet].bag and Q.entities[qpNet].bag.armed, true, 'the copy has the bag fields')
+bags[qp].cp = { run = Q.id, obj = 1, state = 'cuffed', armed = true }      -- a client writes its own bag
 H.advance(600)
-H.ok(Runs.canSpawn(Q, 1, true), 'a cuffed NPC no longer counts as armed and alive')
+H.eq(Runs.canSpawn(Q, 1, true), false, 'a client-written "cuffed" bag does not free the armed cap')
+local npcStates = { [qpNet] = 'cuffed' }
+CP.Npc = { getState = function(netId) return npcStates[netId] end }
+H.ok(Runs.canSpawn(Q, 1, true), 'a cuffed NPC (CP.Npc, the server record) no longer counts as armed and alive')
+npcStates[qpNet] = 'hostile'
+H.eq(Runs.canSpawn(Q, 1, true), false, 'hostile again: counted again')
+CP.Npc = nil
 Config.Limits.maxArmedAlive = 25
 Runs.removeParticipant(Q, 2, 'cancelled')
 

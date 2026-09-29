@@ -15,7 +15,8 @@
     hostile only to participants (CP.Npc 'hostile'). Spawns wait for the run caps (ctx.canSpawn) and are
     never cut; rescale drops planned waves not yet triggered and lowers counts still missing.
     Done when the truck is within `arrival` metres (2D, like the waypoints) of the destination (the last waypoint) with no living
-    attacker within clearRadius of it (and every triggered wave spawned). Fails when the truck is
+    attacker within clearRadius of it, every triggered wave spawned and every triggered wave neutralised
+    (each attacker killed or cuffed, wherever it is: "neutralise each ambush wave"). Fails when the truck is
     destroyed (entity health 0 only once a positive health was seen: a server-created truck reads 0 until a
     client synced it), stopped for stoppedFail seconds in a row outside a stop (after it first moved, or
     START_GRACE_MS after it spawned), or (engine) at the time limit.
@@ -24,6 +25,7 @@
     minSeconds [60] · presenceRange [presenceRange[3] = 300] · label
     route        location key { points, stops = { { at, wait [stopWait[3] = 20] } } }  ['route']
     vehicle      [Config.Blocks.escort.vehicle = 'stockade'] · driver (added) ped model ['s_m_m_armoured_01']
+                 (custom missions: that default or one of Config.Builder.allowed.peds)
     speed        [speed[3] = 60] km/h · style 'careful' | 'normal' | 'fast' [style.default = 'normal']
     toughness    [toughness[3] = 1.5] · stoppedFail [stoppedFail[3] = 60] s · arrival [arrival[3] = 20.0]
     ambushPoints location key: list of vec3/vec4                         ['ambushPoints']
@@ -352,6 +354,10 @@ local function validate(obj, mission, location)
         return bad('block.escort.invalid.vehicle')
     end
     if type(o.driver) ~= 'string' or o.driver == '' then return bad('block.escort.invalid.driver') end
+    -- custom missions: the block's own driver model or an allowed ped (Config.Builder.allowed.peds)
+    if strict and o.driver ~= DRIVER_MODEL and not U.contains(allowed.peds or {}, o.driver) then
+        return bad('block.escort.invalid.driver_allowed', { default = DRIVER_MODEL })
+    end
     ok, why = range('speed', o.speed, c.speed); if not ok then return false, why end
     if not U.contains(c.style.options, o.style) then return bad('block.escort.invalid.style') end
     ok, why = range('toughness', o.toughness, c.toughness); if not ok then return false, why end
@@ -673,6 +679,15 @@ local function pendingWaves(st)
     return false
 end
 
+-- Armored Truck Escort objective 2, "neutralise each ambush wave": a triggered wave whose attackers are
+-- not all killed or cuffed keeps the objective open, however far behind the truck they were left.
+local function openWaves(st)
+    for _, w in ipairs(st.waves) do
+        if w.triggered and not w.dropped and not waveDone(st, w) then return true end
+    end
+    return false
+end
+
 local function watchTruck(ctx, st, dt)
     local tr = st.truck
     if not tr.netId then return end
@@ -742,7 +757,7 @@ end
 local function tryComplete(ctx, st)
     if st.completed or st.failed or st.halted then return end
     local tr = st.truck
-    if not tr.arrived or not exists(tr.entity) or pendingWaves(st) then return end
+    if not tr.arrived or not exists(tr.entity) or pendingWaves(st) or openWaves(st) then return end
     if attackersNear(st, GetEntityCoords(tr.entity), ctx.obj.clearRadius) > 0 then return end
     if not st.healthDone then
         st.healthDone = true

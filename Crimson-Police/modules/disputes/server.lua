@@ -7,6 +7,10 @@
       blocks a second (err.dispute_open) and a decided one is final (err.dispute_final). Manual awards and
       goal rows cannot be disputed. goes_to = 'supervisor' for flagged or voided rows (the department's
       supervisors), 'admin' for failed rows. The insert is atomic (INSERT ... SELECT ... WHERE NOT EXISTS).
+      Filing toasts the online staff who can answer it (tellStaff, never participants of the run): admins
+      for 'admin' disputes or while Config.Permissions.supervisor.handleDisputes is off, else the on-duty
+      supervisors of the run's departments, or the admins when every online supervisor of those
+      departments took part in the run.
     * answering (decision final, reason required, never by a participant of that run):
         approve  flagged row -> CP.Admin.approveFlagged (flag cleared, held cash released, XP)
                  voided row  -> voided = 0 (and flagged = 0), CP.Scoring.onRowApproved (XP back),
@@ -383,7 +387,10 @@ local function supervisorsHandle()
     return type(sup) == 'table' and sup.handleDisputes == true
 end
 
--- Toast the staff who can answer a new dispute (never participants of the run).
+-- Toast the staff who can answer a new dispute (never participants of the run). Admins for failed-run
+-- disputes, or for every dispute while the supervisors' switch is off. A flagged/voided-run dispute goes to
+-- the on-duty supervisors of the run's departments; when every online supervisor of those departments
+-- took part in the run (so none of them may answer it), the admins are told instead.
 local function tellStaff(goesTo, runUuid, label)
     if not (has('Qbx', 'getOnlinePlayers') and has('Qbx', 'getInfo')) then return end
     local ok, list = call('Qbx', 'getOnlinePlayers')
@@ -396,19 +403,41 @@ local function tellStaff(goesTo, runUuid, label)
     if okR and type(run) == 'table' and type(run.participants) == 'table' then
         for _, p in pairs(run.participants) do if type(p) == 'table' and p.citizenid then participants[p.citizenid] = true end end
     end
-    local targets = {}
+    local function supervisorOfRun(info)
+        if type(info.job) ~= 'table' or not (CP.Access and CP.Access.departmentForJob) then return false end
+        local dk = CP.Access.departmentForJob(info.job.name)
+        local dept = dk and depts[dk] and CP.Access.department(dk)
+        return dept ~= nil and dept ~= false and num(info.job.gradeLevel, -1) >= num(dept.supervisorGrade, math.huge)
+    end
+    local admins, supervisors = {}, {}
+    local supTookPart, supOther = false, false
     for _, s in ipairs(list) do
         local okI, info = call('Qbx', 'getInfo', s)
-        if okI and type(info) == 'table' and not participants[info.citizenid] then
-            -- With the supervisors' switch off, admins are the only ones who can answer it.
-            if goesTo == 'admin' or not supervisorsHandle() then
-                if isAdmin(s) then targets[#targets + 1] = s end
-            elseif type(info.job) == 'table' and info.job.onduty then
-                local dk = CP.Access.departmentForJob(info.job.name)
-                local dept = dk and depts[dk] and CP.Access.department(dk)
-                if dept and num(info.job.gradeLevel, -1) >= num(dept.supervisorGrade, math.huge) then targets[#targets + 1] = s end
+        if okI and type(info) == 'table' then
+            local sup = supervisorOfRun(info)
+            if participants[info.citizenid] then
+                if sup then supTookPart = true end
+            else
+                if isAdmin(s) then admins[#admins + 1] = s end
+                if sup and info.job.onduty then
+                    supervisors[#supervisors + 1] = s
+                elseif sup then
+                    supOther = true   -- off duty now, but may still answer it once back on duty
+                end
             end
         end
+    end
+    local targets
+    if goesTo == 'admin' or not supervisorsHandle() then
+        -- With the supervisors' switch off, admins are the only ones who can answer it.
+        targets = admins
+    elseif #supervisors > 0 then
+        targets = supervisors
+    elseif supTookPart and not supOther then
+        -- every supervisor of the department took part: nobody there may answer it, admins can
+        targets = admins
+    else
+        targets = {}
     end
     if #targets > 0 and has('Tablet', 'notifyMany') then
         call('Tablet', 'notifyMany', targets, 'info', 'admin.notice.new_dispute', { mission = label })

@@ -35,7 +35,11 @@
                   accuracy [accuracy], behaviour [behaviour], spawn (location key; nil = a spawn point),
                   surrender [= surrender], aliveBonus { id ['kingpin_alive'], points [50] } }
                   The boss does not scale: its accuracy and armour are used as written.
-    cuff          optional { label, duration, maxDistance } passed to CP.Npc.enableCuff
+                  aliveBonus.points is a hint only on built-in files; elsewhere kingpin_alive always
+                  carries BOSS_BONUS.points and any other id no hint. Custom missions (validate) may only
+                  use kingpin_alive (points absent or 50) or a Config.Bonuses id without points.
+    cuff          optional { label, duration, maxDistance } passed to CP.Npc.enableCuff (custom missions:
+                  duration 1000-30000 ms, maxDistance at most CUFF_RANGE)
     blockTraffic  metres around location.start.coords (client half)     [blockTraffic[3] = 120.0]
 
   Evidence accepted (onEvent)
@@ -76,9 +80,20 @@ local DEFAULT_WAVES      = { 7, 7, 6 }
 local DEFAULT_BELOW      = 0.25
 local BOSS_WEAPON        = 'WEAPON_ASSAULTRIFLE'
 local BOSS_BONUS         = { id = 'kingpin_alive', points = 50 }
+local CUSTOM_TIMED_MS    = { 1000, 30000 }   -- custom missions: the cuff progress time (ms)
 
 local function cfg() return Config.Blocks[BLOCK] end
 local function now() return GetGameTimer() end
+
+-- The points hint of the boss bonus: a built-in file may value its own id (the Kingpin card); on any other
+-- mission only the block's own constant counts (BOSS_BONUS: kingpin_alive +50, capped by the scoring for
+-- custom missions), so a mission file can never raise its points.
+local function bossBonusPoints(ctx, ab)
+    local m = ctx.mission or (ctx.run and ctx.run.mission)
+    if type(m) == 'table' and m.source == 'builtin' then return ab.points end
+    if ab.id == BOSS_BONUS.id then return BOSS_BONUS.points end
+    return nil
+end
 
 -- ── Small helpers ───────────────────────────────────────────────────────────
 local function isNum(v) return type(v) == 'number' and v == v end
@@ -366,6 +381,26 @@ local function validate(obj, mission, location)
             return bad('block.hostile_waves.invalid.boss')
         end
         if type(b.aliveBonus.id) ~= 'string' or b.aliveBonus.id == '' then return bad('block.hostile_waves.invalid.boss') end
+        -- custom missions: the boss bonus is the block's own kingpin_alive (its constant value) or a
+        -- standard Config.Bonuses id (valued by the mission's capped bonuses list); never a file value
+        if strict then
+            local ab = b.aliveBonus
+            local own = ab.id == BOSS_BONUS.id and (ab.points == nil or ab.points == BOSS_BONUS.points)
+            local std = ab.id ~= BOSS_BONUS.id and ab.points == nil and Config.Bonuses ~= nil and Config.Bonuses[ab.id] ~= nil
+            if ab.pctOfPoints ~= nil or not (own or std) then
+                return bad('block.hostile_waves.invalid.boss_bonus_custom', { id = ab.id, default = BOSS_BONUS.id })
+            end
+        end
+    end
+    -- custom missions: the optional cuff action takes 1-30 s and reaches no further than CP.Npc's range
+    if strict and type(o.cuff) == 'table' then
+        if o.cuff.duration ~= nil and not inRange(o.cuff.duration, CUSTOM_TIMED_MS) then
+            return bad('block.hostile_waves.invalid.range', { field = 'cuff.duration', min = CUSTOM_TIMED_MS[1], max = CUSTOM_TIMED_MS[2] })
+        end
+        local md = o.cuff.maxDistance
+        if md ~= nil and not (isNum(md) and md > 0 and md <= CUFF_RANGE + 1e-9) then
+            return bad('block.hostile_waves.invalid.range', { field = 'cuff.maxDistance', min = 0, max = CUFF_RANGE })
+        end
     end
     if not inRange(o.blockTraffic, c.blockTraffic) then
         return bad('block.hostile_waves.invalid.range', { field = 'blockTraffic', min = c.blockTraffic[1], max = c.blockTraffic[2] })
@@ -678,7 +713,7 @@ local function markCuffed(ctx, st, p)
     st.dirty = true
     if p.role == 'boss' then
         local ab = ctx.obj.boss and ctx.obj.boss.aliveBonus or BOSS_BONUS
-        ctx.award(ab.id, { count = 1, points = ab.points })
+        ctx.award(ab.id, { count = 1, points = bossBonusPoints(ctx, ab) })
     else
         st.arrested = (st.arrested or 0) + 1
         ctx.award('hostile_arrested', { count = 1 })

@@ -1,11 +1,14 @@
 // Admin UI · Officers (screen key 'admin_officers').
 // Search any officer (name, callsign or citizen id); the record shows rank, callsign, department, XP level,
-// badges, cash earned, recent runs, the Crimson-Police suspension and disputes about failed runs.
+// badges, cash earned, recent runs, the Crimson-Police suspension and their disputes (failed runs; flagged
+// or voided runs too while the supervisors' handleDisputes switch is off).
 // Actions: suspend (days + reason) / unsuspend, answer a failed-run dispute with a manual award or dismiss
-// it, void a run from the history. The server re-checks every action (admin only).
+// it, approve or reject a flagged/voided-run dispute (no award points: approving restores the run), void a
+// run from the history. The server re-checks every action (admin only).
 // Data: callbacks admin:searchOfficers { query } and admin:getOfficer { citizenid } · actions
 // server:admin:suspend { citizenid, days, reason }, server:admin:handleDispute { disputeId, decision, reason,
-// awardPoints }, server:admin:voidRun { rowId, reason } (modules/admin, modules/disputes).
+// awardPoints } (awardPoints only for failed runs), server:admin:voidRun { rowId, reason } (modules/admin,
+// modules/disputes).
 import { useEffect, useState } from 'react';
 import {
   Badge, Button, Card, ConfirmDialog, Dialog, EmptyState, ErrorState, Field, Grid, Icon, IconButton, LoadingBlock, Money, NumberInput, Points,
@@ -62,6 +65,7 @@ function Detail({ citizenid }: { citizenid: string }) {
   const [unsuspend, setUnsuspend] = useState(false);
   const [award, setAward] = useState<{ dispute: DisputeView; points: number | null; reason: string } | null>(null);
   const [dismiss, setDismiss] = useState<DisputeView | null>(null);
+  const [review, setReview] = useState<{ dispute: DisputeView; decision: 'approve' | 'reject' } | null>(null);
   const [voidRow, setVoidRow] = useState<OfficerRun | null>(null);
 
   if (loading && !o) return <LoadingBlock />;
@@ -105,6 +109,14 @@ function Detail({ citizenid }: { citizenid: string }) {
     if (!dismiss) return;
     const res = await run('server:admin:handleDispute', { disputeId: dismiss.id, decision: 'reject', reason }, { success: 'admin.officers.dismissed_toast' });
     setDismiss(null);
+    if (res.ok) void refetch();
+  };
+  // A flagged or voided run: approve restores the run (held cash released), reject keeps it; never award points.
+  const doReview = async (reason: string) => {
+    if (!review) return;
+    const res = await run('server:admin:handleDispute', { disputeId: review.dispute.id, decision: review.decision, reason },
+      { success: review.decision === 'approve' ? 'sup.review.dispute_approved' : 'sup.review.dispute_rejected' });
+    setReview(null);
     if (res.ok) void refetch();
   };
   const doVoid = async (reason: string) => {
@@ -272,15 +284,23 @@ function Detail({ citizenid }: { citizenid: string }) {
                   <div className="oversight-off-dispute__title">
                     <strong>{d.missionLabel}</strong>
                     <span className="oversight-off-soft">{formatDateTime(d.runAt)}</span>
-                    <Badge size="sm" tone={d.status === 'open' ? 'warning' : d.status === 'approved' ? 'success' : 'grey'}>{t(`admin.officers.dispute_status.${d.status}`)}</Badge>
+                    {d.kind !== 'failed' ? <Badge size="sm" variant="outline">{t(`admin.officers.dispute_kind.${d.kind}`)}</Badge> : null}
+                    <Badge size="sm" tone={d.status === 'open' ? 'warning' : d.status === 'approved' ? 'success' : 'grey'}>
+                      {t(d.kind === 'failed' ? `admin.officers.dispute_status.${d.status}` : `admin.officers.review_status.${d.status}`)}
+                    </Badge>
                   </div>
                   <div className="oversight-off-dispute__reason">“{d.reason}”</div>
                   <div className="oversight-off-soft">{t('admin.officers.dispute_meta', { date: formatDateTime(d.createdAt), points: d.points, end: endLabel(d.endReason) })}</div>
                 </div>
-                {d.status === 'open' ? (
+                {d.status === 'open' && d.kind === 'failed' ? (
                   <Row gap={2}>
                     <Button size="sm" variant="primary" icon="plus" disabled={!d.canHandle || busy} onClick={() => setAward({ dispute: d, points: 25, reason: '' })}>{t('admin.officers.award')}</Button>
                     <Button size="sm" variant="ghost" disabled={!d.canHandle || busy} onClick={() => setDismiss(d)}>{t('admin.officers.dismiss')}</Button>
+                  </Row>
+                ) : d.status === 'open' ? (
+                  <Row gap={2}>
+                    <Button size="sm" variant="primary" icon="check" disabled={!d.canHandle || busy} onClick={() => setReview({ dispute: d, decision: 'approve' })}>{t('sup.review.approve')}</Button>
+                    <Button size="sm" variant="ghost" icon="x" disabled={!d.canHandle || busy} onClick={() => setReview({ dispute: d, decision: 'reject' })}>{t('sup.review.reject')}</Button>
                   </Row>
                 ) : null}
               </li>
@@ -364,6 +384,19 @@ function Detail({ citizenid }: { citizenid: string }) {
         reason={{ required: true, maxLength: 255, placeholder: t('admin.officers.reason_placeholder') }}
         onConfirm={doDismiss}
         onCancel={() => setDismiss(null)}
+        busy={busy}
+      />
+
+      <ConfirmDialog
+        open={!!review}
+        tone={review?.decision === 'reject' ? 'danger' : 'primary'}
+        title={review ? t(review.decision === 'approve' ? 'sup.review.dispute_approve_title' : 'sup.review.dispute_reject_title') : ''}
+        message={review ? t(review.decision === 'approve' ? 'sup.review.dispute_approve_message' : 'sup.review.dispute_reject_message',
+          { name: o.name, mission: review.dispute.missionLabel }) : null}
+        confirmLabel={review?.decision === 'reject' ? t('sup.review.reject') : t('sup.review.approve')}
+        reason={{ required: true, maxLength: 255, placeholder: t('admin.officers.reason_placeholder') }}
+        onConfirm={doReview}
+        onCancel={() => setReview(null)}
         busy={busy}
       />
 
