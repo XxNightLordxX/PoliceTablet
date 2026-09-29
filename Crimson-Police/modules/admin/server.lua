@@ -14,6 +14,17 @@
         reload                                           CP.Missions.reload, audited here
         test <missionId> [tier] [location|random]        CP.Testing.command -> CP.Testing.start (in game only;
                                                          archived custom missions through CP.Testing.resolveMission)
+        storage                                          where the data is kept (CP.Storage.mode(): the database or
+                                                         the saves folder), rows per cp_ table, the saves folder size
+        storage copy database-to-files|files-to-database [force]
+                                                         copies every cp_ table (not cp_schema_migrations) between
+                                                         MariaDB (the real oxmysql) and the saves folder engine, ids and
+                                                         AUTO_INCREMENT counters kept; refused while a run or
+                                                         operation is active, and into a target with rows unless
+                                                         force; a failure empties the target again; audited as
+                                                         storageCopy (also in the target's cp_audit when the target is
+                                                         not the storage in use). Details: the "storage" section
+                                                         of this file and docs/ARCHITECTURE.md §5.29.
       Replies: print() on the console, CP.Tablet.notify in game.
     * cp_audit rows (values clipped to the column sizes) and the category webhooks read at call time
       from the convars cp_webhook_audit / cp_webhook_flags / cp_webhook_builder / cp_webhook_operations /
@@ -511,13 +522,10 @@ local function writeAudit(entry, hookCategory, actorName)
     return tonumber(id)
 end
 
-function Admin.audit(actor, role, category, action, target, old, new, reason)
-    if type(action) ~= 'string' or action == '' then
-        CP.warn(TAG, 'audit called without an action (ignored)')
-        return nil
-    end
+-- The cp_audit row of one entry (values clipped to the column sizes) and the actor's display name.
+local function auditEntry(actor, role, category, action, target, old, new, reason)
     local actorId, actorName, src = resolveActor(actor)
-    local entry = {
+    return {
         actor = actorId,
         role = resolveRole(role, actorId, src),
         category = CATEGORIES[category] and category or 'audit',
@@ -526,7 +534,15 @@ function Admin.audit(actor, role, category, action, target, old, new, reason)
         old_value = str(old, 64),
         new_value = str(new, 64),
         reason = str(reason, MAX_REASON),
-    }
+    }, actorName
+end
+
+function Admin.audit(actor, role, category, action, target, old, new, reason)
+    if type(action) ~= 'string' or action == '' then
+        CP.warn(TAG, 'audit called without an action (ignored)')
+        return nil
+    end
+    local entry, actorName = auditEntry(actor, role, category, action, target, old, new, reason)
     local hookCategory = WEBHOOK_CONVARS[category] and category or entry.category
     if not coroutine.isyieldable() then
         CreateThread(function() writeAudit(entry, hookCategory, actorName) end)
@@ -807,7 +823,7 @@ local function usage(src)
     end
     for _, key in ipairs({ 'admin.cmd.usage_title', 'admin.cmd.usage_open', 'admin.cmd.usage_payout_type',
         'admin.cmd.usage_payout_mission', 'admin.cmd.usage_award', 'admin.cmd.usage_season', 'admin.cmd.usage_suspend',
-        'admin.cmd.usage_reload', 'admin.cmd.usage_test' }) do
+        'admin.cmd.usage_reload', 'admin.cmd.usage_test', 'admin.cmd.usage_storage', 'admin.cmd.usage_storage_copy' }) do
         reply(src, 'info', key, { cmd = c })
     end
 end
@@ -1010,6 +1026,663 @@ SUB.test = function(src, args)
     end
     if not ok then return reply(src, 'error', e) end
     return reply(src, 'success', 'admin.cmd.test_started', { mission = def.label or def.id })
+end
+
+-- ── storage: /CrimsonPoliceAdmin storage [copy database-to-files|files-to-database [force]] ───────────────
+-- The storage in use (CP.Storage.mode(): 'database' = MySQL/MariaDB through oxmysql; 'files' = database off,
+-- Config.Database.enabled = false, the saves folder engine CP.Storage.MemSQL) and a copy of every cp_ table between:
+--   the database side: the real oxmysql (the MySQL global in database mode, CP.Storage.realMySQL in files mode);
+--   the files side:    the live engine CP.Storage.db in files mode, else an engine opened on the saves folder
+--                      (Config.Database.folder) for this one command.
+-- A copy keeps every id and AUTO_INCREMENT counter, first gives the target the migrations the source has (the
+-- same sql/migrations files, statement by statement, as the migrations runner), refuses a target that already
+-- has rows unless 'force' is given (force empties it first), refuses while a run or a Cross-Department Mission is
+-- active, and on any failure empties the target again (the source is only read). cp_schema_migrations is not
+-- copied: each side keeps the record of the migrations it has run. DATETIME values travel as unix seconds
+-- (UNIX_TIMESTAMP / FROM_UNIXTIME: the same moment on both sides), DATE values as 'YYYY-MM-DD', TINYINT(1) as 0/1.
+-- Into a saves folder engine the whole copy runs with the write-through paused (db:bulk): each document is
+-- written once, at the end.
+local STORAGE_PAGE = 500          -- rows per read of a table with an integer AUTO_INCREMENT primary key
+local STORAGE_BATCH = 250         -- rows per INSERT into the database
+local MIGRATIONS_TABLE = 'cp_schema_migrations'
+local MIGRATIONS_CREATE = [[CREATE TABLE IF NOT EXISTS cp_schema_migrations (
+  version    INT PRIMARY KEY,
+  name       VARCHAR(100) NOT NULL,
+  applied_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+)]]
+-- the migrations runner's "already applied" errors (modules/migrations/server.lua)
+local MIGRATION_DONE = { 'Duplicate column name', 'Duplicate key name', 'ER_DUP_FIELDNAME', 'ER_DUP_KEYNAME', 'already exists' }
+local storageBusy = false
+
+local function storageMode()
+    if has('Storage', 'mode') then
+        local ok, m = call('Storage', 'mode')
+        if ok and m == 'files' then return 'files' end
+    end
+    return 'database'
+end
+
+-- The saves folder: CP.Storage's in files mode, else Config.Database.folder resolved the same way (a folder
+-- inside the resource folder, or an absolute path).
+local function savesFolder()
+    if has('Storage', 'folder') then
+        local ok, dir = call('Storage', 'folder')
+        if ok and type(dir) == 'string' and dir ~= '' then return dir end
+    end
+    local folder = type(Config.Database) == 'table' and Config.Database.folder or nil
+    folder = type(folder) == 'string' and U.trim(folder) or ''
+    if folder == '' then folder = 'saves' end
+    folder = folder:gsub('[/\\]+$', '')
+    if folder:match('^/') or folder:match('^%a:[/\\]') or folder:match('^[/\\][/\\]') then return folder end
+    local root = tostring(GetResourcePath and GetResourcePath(GetCurrentResourceName()) or '.')
+    root = root:gsub('[/\\]+$', '')
+    return root .. '/' .. folder
+end
+
+-- The message of an error (oxmysql's text ends with it after the query and its parameters), clipped.
+local function shortError(err)
+    local s = tostring(err or '')
+    local last = nil
+    for line in s:gmatch('[^\n]+') do
+        if line:match('%S') then last = line end
+    end
+    return clip(U.trim(last or s), 200)
+end
+
+local function sizeText(bytes)
+    if bytes >= 1048576 then return ('%.1f MB'):format(bytes / 1048576) end
+    if bytes >= 1024 then return ('%.1f KB'):format(bytes / 1024) end
+    return ('%d B'):format(bytes)
+end
+
+-- Runs and Cross-Department Missions in progress (a copy waits for none).
+local function activeRuns()
+    local n = 0
+    if has('Runs', 'all') then
+        local ok, list = call('Runs', 'all')
+        if ok and type(list) == 'table' then n = #list end
+    end
+    if has('Operations', 'active') then
+        local ok, op = call('Operations', 'active')
+        if ok and op ~= nil then n = n + 1 end
+    end
+    return n
+end
+
+-- ── the two sides ──
+-- side = { kind = 'database'|'files', live = boolean, rows(sql, params) -> list (typed like oxmysql),
+--          exec(sql, params), schema() -> { order = { name }, tables = { [name] = info } }, bulk(fn) -> pcall results,
+--          writer(table, cols) -> function(rows), raiseNext(table, n) }
+-- info = { name, cols = { column }, kinds = { [column] = 'dt'|'date'|'bool'|'val' }, lower = { [lower] = column },
+--          auto = AUTO_INCREMENT column|nil, next = next id|nil, keyset = the AUTO_INCREMENT column is the primary key }
+local function tableInfo(name) return { name = name, cols = {}, kinds = {}, lower = {} } end
+local function addColumn(info, col, kind)
+    info.cols[#info.cols + 1] = col
+    info.kinds[col] = kind
+    info.lower[col:lower()] = col
+end
+local function quoteName(name) return '`' .. name .. '`' end
+
+local function engineKind(col)
+    if col.kind == 'dt' then return 'dt' end
+    if col.kind == 'date' then return 'date' end
+    if col.kind == 'int' and tostring(col.type):upper() == 'TINYINT' and col.width == 1 then return 'bool' end
+    return 'val'
+end
+
+local function databaseKind(dataType, columnType)
+    local dt, ct = tostring(dataType or ''):lower(), tostring(columnType or ''):lower()
+    if dt == 'datetime' or dt == 'timestamp' then return 'dt' end
+    if dt == 'date' then return 'date' end
+    if ct:match('^tinyint%(1%)') then return 'bool' end
+    return 'val'
+end
+
+-- A saves folder engine (CP.Storage.MemSQL) as a side.
+local function filesSide(engine, live, dir)
+    local side = { kind = 'files', live = live, dir = dir, engine = engine }
+    function side.rows(sql, params)
+        local res = engine:exec(sql, params)
+        if type(res) ~= 'table' or res.kind ~= 'rows' then return {} end
+        return CP.Storage.MemSQL.luaRows(res)
+    end
+    function side.exec(sql, params) engine:exec(sql, params) end
+    function side.schema()
+        local out = { order = {}, tables = {} }
+        for _, name in ipairs(engine:tableNames()) do
+            local t = engine.tables[name]
+            if t and name:sub(1, 3) == 'cp_' then
+                local info = tableInfo(name)
+                for _, col in ipairs(t.cols) do addColumn(info, col.name, engineKind(col)) end
+                if t.autoCol then
+                    info.auto = t.cols[t.autoCol].name
+                    info.next = t.nextId
+                    info.keyset = type(t.pk) == 'table' and #t.pk == 1 and t.pk[1] == t.autoCol
+                end
+                out.order[#out.order + 1] = name
+                out.tables[name] = info
+            end
+        end
+        return out
+    end
+    function side.bulk(fn)
+        local res = nil
+        engine:bulk(function() res = table.pack(pcall(fn)) end)
+        return table.unpack(res, 1, res.n)
+    end
+    -- one INSERT per row: the same statement text for the whole table, so the engine parses it once
+    function side.writer(name, cols)
+        local names, values = {}, {}
+        for i, c in ipairs(cols) do
+            names[i] = quoteName(c.dst)
+            values[i] = c.wkind == 'dt' and 'FROM_UNIXTIME(?)' or '?'
+        end
+        local sql = 'INSERT INTO ' .. quoteName(name) .. ' (' .. table.concat(names, ', ') .. ') VALUES ('
+            .. table.concat(values, ', ') .. ')'
+        return function(rows)
+            for _, row in ipairs(rows) do
+                local params = {}
+                for i, c in ipairs(cols) do params[i] = row[c.src] end
+                engine:exec(sql, params)
+            end
+        end
+    end
+    function side.raiseNext(name, n)
+        local t = engine.tables[name]
+        if t and t.autoCol and n > t.nextId then t.nextId = n end
+    end
+    return side
+end
+
+-- MySQL/MariaDB through the real oxmysql as a side.
+local function databaseSide(real, live)
+    local side = { kind = 'database', live = live }
+    local function q(sql, params) return real.query.await(sql, params or {}) end
+    function side.rows(sql, params)
+        local res = q(sql, params)
+        return type(res) == 'table' and res or {}
+    end
+    function side.exec(sql, params) q(sql, params) end
+    function side.schema()
+        local out = { order = {}, tables = {} }
+        local cols = side.rows([[SELECT c.table_name AS t, c.column_name AS c, c.data_type AS d, c.column_type AS ct,
+            c.column_key AS k, c.extra AS x
+            FROM information_schema.columns c
+            INNER JOIN information_schema.tables b ON b.table_schema = c.table_schema AND b.table_name = c.table_name
+            WHERE c.table_schema = DATABASE() AND b.table_type = 'BASE TABLE'
+            ORDER BY c.table_name, c.ordinal_position]])
+        for _, r in ipairs(cols) do
+            local name = tostring(r.t)
+            if name:sub(1, 3) == 'cp_' then
+                local info = out.tables[name]
+                if not info then
+                    info = tableInfo(name)
+                    out.tables[name] = info
+                    out.order[#out.order + 1] = name
+                end
+                local col = tostring(r.c)
+                addColumn(info, col, databaseKind(r.d, r.ct))
+                if r.k == 'PRI' then info.pkCount, info.pkCol = (info.pkCount or 0) + 1, col end
+                if tostring(r.x or ''):lower():find('auto_increment', 1, true) then info.auto = col end
+            end
+        end
+        local nexts = side.rows('SELECT table_name AS t, auto_increment AS n FROM information_schema.tables WHERE table_schema = DATABASE()')
+        for _, r in ipairs(nexts) do
+            local info = out.tables[tostring(r.t)]
+            if info and info.auto and r.n ~= nil then info.next = math.tointeger(tonumber(r.n)) end
+        end
+        for _, info in pairs(out.tables) do
+            info.keyset = info.auto ~= nil and info.pkCount == 1 and info.pkCol == info.auto
+        end
+        return out
+    end
+    function side.bulk(fn) return pcall(fn) end
+    -- up to STORAGE_BATCH rows per INSERT; NULL is written as NULL (no gaps in the parameter list)
+    function side.writer(name, cols)
+        local names = {}
+        for i, c in ipairs(cols) do names[i] = quoteName(c.dst) end
+        local head = 'INSERT INTO ' .. quoteName(name) .. ' (' .. table.concat(names, ', ') .. ') VALUES '
+        return function(rows)
+            local i = 1
+            while i <= #rows do
+                local last = math.min(#rows, i + STORAGE_BATCH - 1)
+                local tuples, params = {}, {}
+                for r = i, last do
+                    local row, parts = rows[r], {}
+                    for k, c in ipairs(cols) do
+                        local v = row[c.src]
+                        if v == nil then
+                            parts[k] = 'NULL'
+                        else
+                            params[#params + 1] = v
+                            parts[k] = c.wkind == 'dt' and 'FROM_UNIXTIME(?)' or '?'
+                        end
+                    end
+                    tuples[#tuples + 1] = '(' .. table.concat(parts, ', ') .. ')'
+                end
+                q(head .. table.concat(tuples, ', '), params)
+                i = last + 1
+            end
+        end
+    end
+    function side.raiseNext(name, n)
+        q(('ALTER TABLE %s AUTO_INCREMENT = %d'):format(quoteName(name), n))
+    end
+    return side
+end
+
+-- The database side, or nil + errKey. In files mode oxmysql must be started (it only serves this copy and the
+-- read of sc-dispatch's calls there).
+local function openDatabase()
+    local real, live = MySQL, true
+    if storageMode() == 'files' then
+        real, live = CP.Storage.realMySQL, false
+        if GetResourceState and GetResourceState('oxmysql') ~= 'started' then real = nil end
+    end
+    if type(real) ~= 'table' or type(real.query) ~= 'table' or type(real.query.await) ~= 'function' then
+        return nil, 'admin.cmd.storage_no_database'
+    end
+    return databaseSide(real, live)
+end
+
+-- A folder the server can write to (created when missing, as CP.Storage does at start-up).
+local function writableFolder(dir)
+    local fs = CP.Storage.MemSQL.fs
+    local probe = dir .. '/.cp-write-test'
+    local function canWrite()
+        local ok, res = pcall(fs.write, probe, 'ok')
+        if not ok or not res then return false end
+        pcall(fs.remove, probe)
+        return true
+    end
+    if canWrite() then return true end
+    if os and os.execute then
+        local windows = package and package.config and package.config:sub(1, 1) == '\\'
+        local cmd
+        if windows then
+            cmd = ('mkdir "%s"'):format((dir:gsub('/', '\\')))
+        else
+            cmd = ("mkdir -p '%s'"):format((dir:gsub("'", "'\\''")))
+        end
+        pcall(os.execute, cmd)
+    end
+    return canWrite()
+end
+
+-- The files side, or nil + errKey + vars. In database mode the saves folder is opened for this command only:
+-- as a source it must hold Crimson-Police data, as a target it is created when missing.
+local function openFiles(asTarget)
+    local dir = savesFolder()
+    if storageMode() == 'files' then
+        local lerr = has('Storage', 'loadError') and CP.Storage.loadError() or nil
+        if lerr or type(CP.Storage.db) ~= 'table' then
+            return nil, 'admin.cmd.storage_folder_error', { path = dir, error = tostring(lerr or '?') }
+        end
+        return filesSide(CP.Storage.db, true, dir)
+    end
+    local M = CP.Storage.MemSQL
+    if type(M) ~= 'table' or type(M.new) ~= 'function' then return nil, 'err.module_unavailable' end
+    if not asTarget and not M.fs.exists(dir .. '/_tables.json') then
+        return nil, 'admin.cmd.storage_folder_empty', { path = dir }
+    end
+    if asTarget and not writableFolder(dir) then
+        return nil, 'admin.cmd.storage_folder_error', { path = dir, error = 'the folder cannot be created or written' }
+    end
+    local engine = M.new({ store = M.folderStore(dir) })
+    local ok, err = pcall(engine.load, engine)
+    if not ok then return nil, 'admin.cmd.storage_folder_error', { path = dir, error = shortError(err) } end
+    return filesSide(engine, false, dir)
+end
+
+local function sideName(side)
+    return CP.L(side.kind == 'files' and 'admin.cmd.storage_name_files' or 'admin.cmd.storage_name_database')
+end
+
+-- Rows per table and the total without cp_schema_migrations.
+local function countRows(side, schema)
+    local counts, total = {}, 0
+    for _, name in ipairs(schema.order) do
+        local r = side.rows('SELECT COUNT(*) AS n FROM ' .. quoteName(name))
+        local n = r[1] and math.tointeger(tonumber(r[1].n or 0)) or 0
+        counts[name] = n
+        if name ~= MIGRATIONS_TABLE then total = total + n end
+    end
+    return counts, total
+end
+
+-- Bytes and files of a saves folder engine's documents, _tables.json included.
+local function folderSize(engine)
+    local store = engine.store
+    if type(store) ~= 'table' or type(store.sizeOf) ~= 'function' then return nil end
+    local bytes, files = 0, 0
+    local index = CP.Storage.MemSQL.fs.read(store:path('_tables.json'))
+    if index then bytes, files = #index, 1 end
+    for _, name in ipairs(engine:tableNames()) do
+        local b, d = store:sizeOf(name)
+        bytes, files = bytes + (b or 0), files + (d or 0)
+    end
+    return bytes, files
+end
+
+-- /CrimsonPoliceAdmin storage: the mode, the saves folder, the rows of every table and the saves folder's size.
+-- The console gets every line; in game the mode, the totals and the size.
+local function storageStatus(src)
+    db()
+    local console = tonumber(src) == 0
+    local mode = storageMode()
+    local dir = savesFolder()
+    reply(src, 'info', mode == 'files' and 'admin.cmd.storage_mode_files' or 'admin.cmd.storage_mode_database')
+    if console then
+        reply(src, 'info', mode == 'files' and 'admin.cmd.storage_folder_used' or 'admin.cmd.storage_folder_unused', { path = dir })
+    end
+    local side, e, vars
+    if mode == 'files' then side, e, vars = openFiles(false) else side, e, vars = openDatabase() end
+    if not side then return reply(src, 'error', e, vars) end
+    local schema = side.schema()
+    local counts = countRows(side, schema)
+    local all = 0
+    for _, name in ipairs(schema.order) do
+        all = all + counts[name]
+        if console then reply(src, 'info', 'admin.cmd.storage_table_line', { table = name, rows = counts[name] }) end
+    end
+    reply(src, 'info', 'admin.cmd.storage_total', { tables = #schema.order, rows = all })
+    local engine = side.kind == 'files' and side.engine or nil
+    if not engine and type(CP.Storage) == 'table' and type(CP.Storage.MemSQL) == 'table' and CP.Storage.MemSQL.fs.exists(dir .. '/_tables.json') then
+        local ok, opened = pcall(function() return CP.Storage.MemSQL.new({ store = CP.Storage.MemSQL.folderStore(dir) }):load() end)
+        if ok then engine = opened end
+    end
+    local bytes, files = nil, 0
+    if engine then bytes, files = folderSize(engine) end
+    if bytes and files > 0 then
+        reply(src, 'info', 'admin.cmd.storage_size', { size = sizeText(bytes), files = files })
+    else
+        reply(src, 'info', 'admin.cmd.storage_size_empty')
+    end
+end
+
+-- A value read from the source as the target stores it.
+local function copyValue(v, kind)
+    if v == nil then return nil end
+    if kind == 'dt' then
+        local n = tonumber(v)
+        if not n then return nil end
+        return math.tointeger(n) or math.floor(n)
+    elseif kind == 'bool' then
+        if v == true then return 1 elseif v == false then return 0 end
+        local n = tonumber(v)
+        return n and (math.tointeger(n) or n) or v
+    elseif kind == 'date' then
+        return tostring(v)
+    end
+    local t = type(v)
+    if t == 'boolean' then return v and 1 or 0 end
+    if t == 'table' then return json.encode(v) end
+    return v
+end
+
+-- The migrations runner's statement split (CP.Migrations._split), for when that module is not loaded.
+local function splitMigration(sql)
+    local statements, current = {}, {}
+    for line in (sql .. '\n'):gmatch('(.-)\r?\n') do
+        local code = line:gsub('%-%-.*$', '')
+        if code:match('%S') then
+            current[#current + 1] = code
+            if code:match(';%s*$') then
+                statements[#statements + 1] = (table.concat(current, '\n'):gsub(';%s*$', ''))
+                current = {}
+            end
+        end
+    end
+    local rest = table.concat(current, '\n')
+    if rest:match('%S') then statements[#statements + 1] = rest end
+    return statements
+end
+
+-- The target gets every migration the source has run (files of this resource, statement by statement, as the
+-- runner does). Returns true, applied or false, errKey, vars.
+local function migrateTarget(source, target, srcSchema, tgtSchema)
+    if not srcSchema.tables[MIGRATIONS_TABLE] then return true, 0 end
+    local applied = {}
+    if tgtSchema.tables[MIGRATIONS_TABLE] then
+        for _, r in ipairs(target.rows('SELECT version FROM cp_schema_migrations')) do
+            local v = tonumber(r.version)
+            if v then applied[v] = true end
+        end
+    end
+    local todo = {}
+    for _, r in ipairs(source.rows('SELECT version, name FROM cp_schema_migrations ORDER BY version')) do
+        local v = math.tointeger(tonumber(r.version))
+        if v and not applied[v] then
+            local name = tostring(r.name or '')
+            local sql = name:match('^[%w_%-]+%.sql$') and LoadResourceFile(GetCurrentResourceName(), 'sql/migrations/' .. name) or nil
+            if not sql then return false, 'admin.cmd.storage_newer_source', { file = name } end
+            todo[#todo + 1] = { version = v, name = name, sql = sql }
+        end
+    end
+    if #todo == 0 then return true, 0 end
+    local split = has('Migrations', '_split') and CP.Migrations._split or splitMigration
+    target.exec(MIGRATIONS_CREATE)
+    for _, m in ipairs(todo) do
+        for _, stmt in ipairs(split(m.sql)) do
+            local ok, err = pcall(target.exec, stmt)
+            if not ok then
+                local done = false
+                for _, needle in ipairs(MIGRATION_DONE) do
+                    if tostring(err):find(needle, 1, true) then done = true; break end
+                end
+                if not done then return false, 'admin.cmd.storage_migration_failed', { file = m.name, error = shortError(err) } end
+            end
+        end
+        target.exec('INSERT IGNORE INTO cp_schema_migrations (version, name) VALUES (?, ?)', { m.version, m.name })
+    end
+    return true, #todo
+end
+
+-- Every row of one table from the source to the target (in pages of STORAGE_PAGE rows along an integer
+-- AUTO_INCREMENT key, else in one read). Returns the rows written.
+local function copyTable(source, target, sInfo, tInfo)
+    local cols, list = {}, {}
+    for _, c in ipairs(sInfo.cols) do
+        local dst = tInfo.lower[c:lower()]
+        local kind = sInfo.kinds[c]
+        cols[#cols + 1] = { src = c, dst = dst, rkind = kind, wkind = tInfo.kinds[dst] }
+        local q = quoteName(c)
+        if kind == 'dt' then
+            list[#list + 1] = 'UNIX_TIMESTAMP(' .. q .. ') AS ' .. q
+        elseif kind == 'date' then
+            list[#list + 1] = 'DATE_FORMAT(' .. q .. ", '%Y-%m-%d') AS " .. q
+        else
+            list[#list + 1] = q
+        end
+    end
+    local from = ' FROM ' .. quoteName(sInfo.name)
+    local select = 'SELECT ' .. table.concat(list, ', ') .. from
+    local write = target.writer(tInfo.name, cols)
+    local written = 0
+    local function put(rows)
+        for _, row in ipairs(rows) do
+            for _, c in ipairs(cols) do row[c.src] = copyValue(row[c.src], c.rkind) end
+        end
+        write(rows)
+        written = written + #rows
+    end
+    if sInfo.keyset then
+        local key = quoteName(sInfo.auto)
+        local function firstFrom(lo)
+            local sql = 'SELECT MIN(' .. key .. ') AS m' .. from
+            local r = lo and source.rows(sql .. ' WHERE ' .. key .. ' >= ?', { lo }) or source.rows(sql)
+            local m = r[1] and r[1].m
+            if m == nil then return nil end
+            return math.tointeger(tonumber(m))
+        end
+        -- windows of STORAGE_PAGE ids; after an empty window (a gap in the ids, or the end) jump to the next id
+        local page = select .. ' WHERE ' .. key .. ' >= ? AND ' .. key .. ' < ? ORDER BY ' .. key
+        local lo = firstFrom(nil)
+        while lo do
+            local rows = source.rows(page, { lo, lo + STORAGE_PAGE })
+            if #rows > 0 then
+                put(rows)
+                lo = lo + STORAGE_PAGE
+            else
+                lo = firstFrom(lo)
+            end
+        end
+    else
+        put(source.rows(select))
+    end
+    return written
+end
+
+-- The copy's audit entry in the target's own cp_audit too, when the target is not the storage in use (the log
+-- goes on in the storage used next).
+local function mirrorAudit(target, src, direction, old, new)
+    local entry = auditEntry(src, roleOf(src), 'audit', 'storageCopy', direction, old, new, nil)
+    local values, params = {}, {}
+    for i, col in ipairs(AUDIT_COLS) do
+        local v = entry[col]
+        if v == nil then
+            values[i] = 'NULL'
+        else
+            values[i] = '?'
+            params[#params + 1] = v
+        end
+    end
+    local sql = ('INSERT INTO cp_audit (%s) VALUES (%s)'):format(table.concat(AUDIT_COLS, ', '), table.concat(values, ', '))
+    local ok, err = pcall(target.exec, sql, params)
+    if not ok then CP.warn(TAG, 'the storage copy is not in the audit log of the %s: %s', sideName(target), shortError(err)) end
+end
+
+local function storageCopy(src, direction, force)
+    db()
+    local console = tonumber(src) == 0
+    local toFiles = direction == 'database-to-files'
+    local dbSide, e1, v1 = openDatabase()
+    if not dbSide then return reply(src, 'error', e1, v1) end
+    local filesSideOpen, e2, v2 = openFiles(toFiles)
+    if not filesSideOpen then return reply(src, 'error', e2, v2) end
+    local source, target = dbSide, filesSideOpen
+    if not toFiles then source, target = filesSideOpen, dbSide end
+    local names = { source = sideName(source), target = sideName(target), cmd = cmdName(), direction = direction,
+        path = filesSideOpen.dir }
+
+    local srcSchema = source.schema()
+    local tables = {}
+    for _, name in ipairs(srcSchema.order) do
+        if name ~= MIGRATIONS_TABLE then tables[#tables + 1] = name end
+    end
+    if #tables == 0 then return reply(src, 'error', 'admin.cmd.storage_source_empty', names) end
+
+    -- 1. a target with rows is only replaced with force
+    local tgtSchema = target.schema()
+    local before, beforeTotal = countRows(target, tgtSchema)
+    if beforeTotal > 0 and not force then
+        local list = {}
+        for _, name in ipairs(tgtSchema.order) do
+            if name ~= MIGRATIONS_TABLE and before[name] > 0 then list[#list + 1] = ('%s %d'):format(name, before[name]) end
+        end
+        names.rows, names.tables = beforeTotal, table.concat(list, ', ')
+        return reply(src, 'error', 'admin.cmd.storage_target_has_rows', names)
+    end
+
+    -- 2. the target's tables: the migrations the source has, then every source table and column must be there
+    local okM, applied, mVars = migrateTarget(source, target, srcSchema, tgtSchema)
+    if not okM then return reply(src, 'error', applied, mVars) end
+    if applied > 0 then tgtSchema = target.schema() end
+    for _, name in ipairs(tables) do
+        local t = tgtSchema.tables[name]
+        if not t then
+            return reply(src, 'error', 'admin.cmd.storage_missing_table', { table = name, source = names.source, target = names.target })
+        end
+        for _, c in ipairs(srcSchema.tables[name].cols) do
+            if not t.lower[c:lower()] then
+                return reply(src, 'error', 'admin.cmd.storage_missing_column', { table = name, column = c, source = names.source, target = names.target })
+            end
+        end
+    end
+
+    -- 3. the copy (a failure empties the target again)
+    reply(src, 'info', 'admin.cmd.storage_copy_started', names)
+    if console then reply(src, 'info', 'admin.cmd.storage_folder_used', { path = names.path }) end
+    local started = GetGameTimer and GetGameTimer() or 0
+    local copied, total, failedAt = {}, 0, nil
+    local ok, err = target.bulk(function()
+        local okIn, errIn = pcall(function()
+            if force then
+                for _, name in ipairs(tgtSchema.order) do
+                    if name ~= MIGRATIONS_TABLE and (before[name] or 0) > 0 then target.exec('DELETE FROM ' .. quoteName(name)) end
+                end
+            end
+            for _, name in ipairs(tables) do
+                failedAt = name
+                local n = copyTable(source, target, srcSchema.tables[name], tgtSchema.tables[name])
+                copied[#copied + 1] = { name = name, rows = n }
+                total = total + n
+            end
+            failedAt = nil
+            -- AUTO_INCREMENT counters: never below the source's, so no id is handed out twice
+            local after = target.schema()
+            for _, name in ipairs(tables) do
+                local s, t = srcSchema.tables[name], after.tables[name]
+                if s.next and t and t.auto and (t.next or 0) < s.next then target.raiseNext(name, s.next) end
+            end
+        end)
+        if not okIn then
+            for _, name in ipairs(tgtSchema.order) do
+                if name ~= MIGRATIONS_TABLE then pcall(target.exec, 'DELETE FROM ' .. quoteName(name)) end
+            end
+            error(errIn, 0)
+        end
+    end)
+    if not ok then
+        CP.err(TAG, 'storage copy %s failed at %s: %s', direction, tostring(failedAt or '-'), tostring(err))
+        return reply(src, 'error', 'admin.cmd.storage_copy_failed', { table = failedAt or '-', error = shortError(err),
+            source = names.source, target = names.target })
+    end
+
+    -- 4. check the target's rows, audit, summary
+    local counts = countRows(target, target.schema())
+    for _, c in ipairs(copied) do
+        if console then reply(src, 'info', 'admin.cmd.storage_copy_table', { table = c.name, rows = c.rows }) end
+        if counts[c.name] ~= c.rows then
+            reply(src, 'warning', 'admin.cmd.storage_copy_mismatch', { table = c.name, rows = c.rows, found = counts[c.name] or 0,
+                target = names.target })
+        end
+    end
+    local old = (force and beforeTotal > 0) and ('replaced %d rows'):format(beforeTotal) or nil
+    local new = ('%d tables, %d rows'):format(#copied, total)
+    Admin.audit(src, roleOf(src), 'audit', 'storageCopy', direction, old, new, nil)
+    if not target.live then mirrorAudit(target, src, direction, old, new) end
+    local ms = (GetGameTimer and GetGameTimer() or 0) - started
+    reply(src, 'success', 'admin.cmd.storage_copied', { tables = #copied, rows = total, source = names.source,
+        target = names.target, seconds = ('%.1f'):format(ms / 1000) })
+    if target.live then
+        reply(src, 'warning', 'admin.cmd.storage_next_restart')
+    elseif target.kind == 'files' then
+        reply(src, 'info', 'admin.cmd.storage_next_files')
+    else
+        reply(src, 'info', 'admin.cmd.storage_next_database')
+    end
+end
+
+SUB.storage = function(src, args)
+    local what = args[1] and args[1]:lower() or ''
+    if what == '' then return storageStatus(src) end
+    if what ~= 'copy' then return reply(src, 'error', 'admin.cmd.storage_usage', { cmd = cmdName() }) end
+    local direction = args[2] and args[2]:lower() or ''
+    local extra = args[3] and args[3]:lower() or nil
+    if (direction ~= 'database-to-files' and direction ~= 'files-to-database') or (extra ~= nil and extra ~= 'force') or #args > 3 then
+        return reply(src, 'error', 'admin.cmd.storage_usage', { cmd = cmdName() })
+    end
+    if storageBusy then return reply(src, 'error', 'admin.cmd.storage_copy_busy') end
+    local running = activeRuns()
+    if running > 0 then return reply(src, 'error', 'admin.cmd.storage_runs_active', { count = running }) end
+    storageBusy = true
+    local ok, err = pcall(storageCopy, src, direction, extra == 'force')
+    storageBusy = false
+    if not ok then
+        CP.err(TAG, 'storage copy %s failed: %s', direction, tostring(err))
+        return reply(src, 'error', 'admin.cmd.storage_copy_error', { error = shortError(err) })
+    end
 end
 
 function Admin.command(src, args)

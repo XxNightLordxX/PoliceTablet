@@ -255,7 +255,7 @@ local function dbRun(sql, params)
         while #dbQueue > 0 do
             local q = table.remove(dbQueue, 1)
             local ok, err = pcall(MySQL.update.await, q.sql, q.params)
-            if not ok then CP.err(TAG, 'database write failed: %s', tostring(err)) end
+            if not ok then CP.err(TAG, '%s write failed: %s', CP.Storage and CP.Storage.name() or 'database', tostring(err)) end
         end
         dbWorker = false
     end)

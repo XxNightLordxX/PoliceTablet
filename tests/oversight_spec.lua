@@ -284,7 +284,7 @@ H.ok(type(id1) == 'number' and id1 > 0, 'audit returns the new id')
 local a1 = H.sql('SELECT actor, role, category, action, target, old_value, new_value, reason FROM cp_audit WHERE id = ?', { id1 })[1]
 H.eq(a1.actor, 'SUP00002', 'actor src -> citizenid')
 H.eq(a1.role, 'supervisor', 'role kept')
-H.eq(a1.old_value, 250, 'old value')
+H.eq(tonumber(a1.old_value), 250, 'old value')
 H.eq(a1.reason, 'Busy week', 'reason')
 H.eq(#http.calls, 1, 'audit webhook posted')
 H.eq(http.calls[1].url, convars.cp_webhook_audit, 'posted to the audit webhook')
@@ -392,7 +392,7 @@ H.eq(countCalls('endSeason'), 1, 'season end')
 command(0, 'suspend', 'OFF00006', '7', 'Farming')
 local sus = H.sql("SELECT UNIX_TIMESTAMP(suspended_until) AS ts FROM cp_officers WHERE citizenid = 'OFF00006'")[1]
 H.eq(sus.ts, H.time + 7 * 86400, 'suspended for 7 days')
-H.eq(H.sql("SELECT new_value, reason, role FROM cp_audit WHERE action = 'suspend' AND target = 'OFF00006'")[1].new_value, 7, 'suspension audited')
+H.eq(tonumber(H.sql("SELECT new_value, reason, role FROM cp_audit WHERE action = 'suspend' AND target = 'OFF00006'")[1].new_value), 7, 'suspension audited')
 H.eq(lastNotify(6).key, 'access.suspended_notice', 'the online officer is told')
 command(0, 'suspend', 'OFF00006', '0')
 H.eq(H.sql("SELECT suspended_until FROM cp_officers WHERE citizenid = 'OFF00006'")[1].suspended_until, nil, '0 days lifts it')
@@ -462,7 +462,7 @@ Config.Permissions.supervisor.reviewFlagged = true
 ok, res = act('server:sup:reviewFlagged', 2, { rowId = rowA, decision = 'approve', reason = 'Verified on camera' })
 H.eq(ok, true, 'supervisor approves a flagged run of their department')
 local ra = H.sql('SELECT flagged, flag_reason, voided, LOWER(JSON_TYPE(JSON_EXTRACT(breakdown, "$.flagged"))) AS jf FROM cp_mission_runs WHERE id = ?', { rowA })[1]
-H.eq(ra.flagged, 0, 'flag cleared')
+H.eq(H.bit(ra.flagged), 0, 'flag cleared')
 H.eq(ra.flag_reason, 'outside_help', 'flag_reason kept')
 H.eq(ra.jf, 'null', 'breakdown flag cleared (JSON null)')
 H.eq(lastCall('cashRelease')[1], rowA, 'held cash released')
@@ -475,8 +475,8 @@ H.eq(res, 'err.not_flagged', 'cannot approve twice')
 ok, res = act('server:sup:reviewFlagged', 2, { rowId = rowB, decision = 'void', reason = 'Joined only for the cash' })
 H.eq(ok, true, 'supervisor voids a flagged run')
 local rb = H.sql('SELECT flagged, voided, cash_status FROM cp_mission_runs WHERE id = ?', { rowB })[1]
-H.eq(rb.voided, 1, 'voided')
-H.eq(rb.flagged, 1, 'stays flagged')
+H.eq(H.bit(rb.voided), 1, 'voided')
+H.eq(H.bit(rb.flagged), 1, 'stays flagged')
 H.eq(rb.cash_status, 'held', 'cash stays held until the window closes')
 H.eq(lastCall('onRowVoided')[1], rowB, 'scoring void hook')
 ok, res = act('server:sup:reviewFlagged', 2, { rowId = rowB, decision = 'void', reason = 'again' })
@@ -687,7 +687,7 @@ ok, res = act('server:sup:handleDispute', 2, { disputeId = disFlag, decision = '
 H.eq(res, 'err.reason_required', 'reason required')
 ok, res = act('server:sup:handleDispute', 2, { disputeId = disFlag, decision = 'approve', reason = 'Presence data was wrong' })
 H.eq(ok, true, 'supervisor approves a flagged-run dispute')
-H.eq(H.sql('SELECT flagged FROM cp_mission_runs WHERE id = ?', { dFlag })[1].flagged, 0, 'run restored (flag cleared)')
+H.eq(H.bit(H.sql('SELECT flagged FROM cp_mission_runs WHERE id = ?', { dFlag })[1].flagged), 0, 'run restored (flag cleared)')
 H.eq(lastCall('cashRelease')[1], dFlag, 'held cash released')
 local dRow = H.sql('SELECT status, handled_by, handled_at FROM cp_disputes WHERE id = ?', { disFlag })[1]
 H.eq(dRow.status, 'approved', 'dispute approved')
@@ -702,14 +702,14 @@ H.eq(res, 'err.dispute_closed', 'decision is final')
 ok, res = act('server:sup:handleDispute', 2, { disputeId = disVoid, decision = 'approve', reason = 'GPS glitch confirmed' })
 H.eq(ok, true, 'supervisor approves a voided-run dispute')
 local rv = H.sql('SELECT voided, flagged FROM cp_mission_runs WHERE id = ?', { dVoid })[1]
-H.eq(rv.voided, 0, 'voided run restored')
-H.eq(rv.flagged, 0, 'and unflagged')
+H.eq(H.bit(rv.voided), 0, 'voided run restored')
+H.eq(H.bit(rv.flagged), 0, 'and unflagged')
 H.eq(lastCall('onRowApproved')[1], dVoid, 'XP back')
 
 ok, res = act('server:sup:handleDispute', 2, { disputeId = disVoid2, decision = 'reject', reason = 'Void stands' })
 H.eq(ok, true, 'supervisor rejects a voided-run dispute')
 H.eq(lastCall('cashForfeit')[1], dVoid2, 'rejected dispute forfeits the held cash')
-H.eq(H.sql('SELECT voided FROM cp_mission_runs WHERE id = ?', { dVoid2 })[1].voided, 1, 'void kept')
+H.eq(H.bit(H.sql('SELECT voided FROM cp_mission_runs WHERE id = ?', { dVoid2 })[1].voided), 1, 'void kept')
 
 ok, res = act('server:admin:handleDispute', 2, { disputeId = disFail, decision = 'approve', reason = 'x', awardPoints = 10 })
 H.eq(res, 'err.no_permission', 'admin endpoint refuses supervisors')
@@ -1144,7 +1144,7 @@ H.eq(H.sql('SELECT status FROM cp_disputes WHERE id = ?', { liveDispute })[1].st
 for k in pairs(notifies) do notifies[k] = nil end
 ok, res = act('server:sup:handleDispute', 7, { disputeId = liveDispute, decision = 'approve', reason = 'Lag confirmed' })
 H.eq(ok, true, 'another supervisor approves the dispute')
-H.eq(H.sql('SELECT flagged FROM cp_mission_runs WHERE id = ?', { liveRow })[1].flagged, 0, 'the row is approved')
+H.eq(H.bit(H.sql('SELECT flagged FROM cp_mission_runs WHERE id = ?', { liveRow })[1].flagged), 0, 'the row is approved')
 local toasts3 = {}
 for _, n in ipairs(notifies) do if n.src == 3 then toasts3[#toasts3 + 1] = n.key end end
 H.eq(#toasts3, 1, 'the officer gets exactly one toast')

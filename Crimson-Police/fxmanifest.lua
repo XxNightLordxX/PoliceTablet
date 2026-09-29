@@ -21,7 +21,7 @@ dependencies {
     'Renewed-Banking',
 }
 
--- Load order: config, blocks config, shared helpers, feature modules, then objective blocks.
+-- Load order: config, blocks config, shared helpers, storage, feature modules, then objective blocks.
 -- Mission files are not scripts: modules/missions reads them with LoadResourceFile.
 shared_scripts {
     '@ox_lib/init.lua',
@@ -32,6 +32,9 @@ shared_scripts {
 
 server_scripts {
     '@oxmysql/lib/MySQL.lua',
+    -- storage first: with Config.Database.enabled = false it swaps MySQL for the saves folder engine
+    'modules/storage/memsql.lua',
+    'modules/storage/server.lua',
     'modules/**/server.lua',
     'blocks/**/server.lua',
 }

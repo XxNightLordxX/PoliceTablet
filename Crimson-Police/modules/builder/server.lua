@@ -1843,7 +1843,7 @@ local function publishDefinition(row, bdef, actor, opts)
         end
     end)
     if not okDb then
-        CP.err(TAG, 'publishing %s failed in the database: %s', row.id, tostring(dbErr))
+        CP.err(TAG, 'publishing %s failed in the %s: %s', row.id, CP.Storage and CP.Storage.name() or 'database', tostring(dbErr))
         if previous and currentPath == path then writeFile(path, previous) else removeFile(path) end
         return false, 'err.internal'
     end
@@ -1880,7 +1880,7 @@ local function rewriteMissing(row, summary)
         publishedBy = meta.publishedBy, publisher = meta.publisher or 'console', reason = 'restore_file' }
     MySQL.update.await('UPDATE cp_custom_missions SET file_path = ?, published_definition = ?, updated_at = updated_at WHERE id = ?',
         { path, encode(stored), row.id })
-    CP.warn(TAG, 'the file of custom mission %s was missing; rewrote %s from the database', row.id, path)
+    CP.warn(TAG, 'the file of custom mission %s was missing; rewrote %s from the %s', row.id, path, CP.Storage and CP.Storage.name() or 'database')
     summary.rewritten[#summary.rewritten + 1] = row.id
 end
 

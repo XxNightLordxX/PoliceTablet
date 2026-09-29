@@ -7,12 +7,34 @@
 --
 -- MySQL.* runs real queries against the local MariaDB database `cp_test` through the mysql CLI
 -- (schema from sql/migrations). Use H.sql('DELETE FROM cp_mission_runs') to reset tables.
+-- CP_SQL_LOG=<file> (or <dir>/) logs every MySQL call as JSON lines (see "optional SQL log" below).
+-- Storage modes (CP_TEST_STORAGE, H.storage; tests/run.lua --storage=... sets it for every spec):
+--   database (default)  as above: MySQL and H.sql go to MariaDB.
+--   files               database-off mode: H.boot sets Config.Database.enabled = false and loads the real
+--                       modules/storage files, so every module query goes through CP.Storage.MemSQL and a temporary
+--                       saves folder (H.savesDir(), built by the real migrations runner on the engine in
+--                       H.resetDatabase / H.resetSaves). H.sql goes to the same engine; statements that name only
+--                       other resources' tables (mdt_dispatch) go to MariaDB, as the real oxmysql would serve them.
+--   shadow              the specs run exactly as in database mode (they get the MariaDB answers), and every
+--                       MySQL call and H.sql statement also runs, in lockstep, on a MariaDB twin database read
+--                       through mysql2 the way oxmysql reads it (tests/shadow/twin.cjs) and on the saves folder
+--                       engine through its MySQL drop-in. Both start from the migrated empty schema (the real
+--                       migrations runner). Every difference in result, error, affected rows, insert id or
+--                       value type is appended to CP_SHADOW_REPORT (see "shadow mode" below).
+-- H.bit(v) reads a TINYINT(1) value in any mode. H.skipIn(mode, reason) skips a MariaDB-only check.
 -- Threads: CreateThread runs the function as a coroutine immediately; Wait(ms) advances the fake
 -- clock and yields; H.step() resumes sleeping threads. Citizen.Await works on resolved promises.
 
 local H = {}
+local REAL_TIME = os.time   -- H.boot fakes os.time(); the shadow engine runs on the real clock
+local TESTS = (debug.getinfo(1, 'S').source:match('^@(.*)/harness%.lua$') or 'tests') .. '/'
 local ROOT = (debug.getinfo(1, 'S').source:match('^@(.*)/tests/harness%.lua$') or '.') .. '/Crimson-Police/'
 H.root = ROOT
+H.storage = os.getenv('CP_TEST_STORAGE') or 'database'
+if H.storage == '' then H.storage = 'database' end
+if H.storage ~= 'database' and H.storage ~= 'files' and H.storage ~= 'shadow' then
+    error(("CP_TEST_STORAGE must be database, files or shadow (got '%s')"):format(H.storage))
+end
 H.events = {}        -- recorded TriggerClientEvent / TriggerServerEvent / TriggerEvent calls
 H.handlers = {}      -- registered event handlers by name
 H.callbacks = {}     -- lib.callback.register handlers by name
@@ -145,8 +167,10 @@ local function parseValue(s)
     return s
 end
 
--- Returns rows (list of name->value tables) of the LAST result set.
-function H.sql(sql, params)
+-- Returns rows (list of name->value tables) of the LAST result set, and its column names.
+local lastHeader = nil   -- column names of the last result set (read by the optional SQL log below)
+local function rawSql(sql, params)
+    lastHeader = nil
     local q = interpolate(sql, params)
     local tmp = os.tmpname()
     local f = assert(io.open(tmp, 'w'))
@@ -175,11 +199,13 @@ function H.sql(sql, params)
             rows[#rows + 1] = row
         end
     end
+    lastHeader = header
     return rows, header
 end
+H.sql = rawSql
 
 local function lastScalar(sql, params, extra)
-    local rows = H.sql(interpolate(sql, params) .. ';\n' .. extra, {})
+    local rows = rawSql(interpolate(sql, params) .. ';\n' .. extra, {})
     local r = rows[#rows]
     if not r then return nil end
     for _, v in pairs(r) do return v end
@@ -192,13 +218,13 @@ end
 
 local MySQL = { query = {}, single = {}, scalar = {}, insert = {}, update = {}, prepare = {}, transaction = {} }
 function MySQL.query.await(sql, params)
-    if isSelect(sql) then return (H.sql(sql, params)) end
-    local rows = H.sql(interpolate(sql, params) .. ';\nSELECT ROW_COUNT() AS affectedRows, LAST_INSERT_ID() AS insertId', {})
+    if isSelect(sql) then return (rawSql(sql, params)) end
+    local rows = rawSql(interpolate(sql, params) .. ';\nSELECT ROW_COUNT() AS affectedRows, LAST_INSERT_ID() AS insertId', {})
     return rows[#rows] or { affectedRows = 0 }
 end
-function MySQL.single.await(sql, params) return (H.sql(sql, params))[1] end
+function MySQL.single.await(sql, params) return (rawSql(sql, params))[1] end
 function MySQL.scalar.await(sql, params)
-    local rows, header = H.sql(sql, params)
+    local rows, header = rawSql(sql, params)
     if not rows[1] or not header then return nil end
     return rows[1][header[1]]
 end
@@ -219,14 +245,875 @@ for _, k in ipairs({ 'query', 'single', 'scalar', 'insert', 'update' }) do
     end })
 end
 MySQL.ready = function(cb) cb() end
+
+-- ── JSON lines for the SQL log and the shadow report ─────────────────────────
+-- enc(v): JSON that keeps integers and floats apart (floats keep a '.0'), nil holes -> null, sorted keys.
+-- sqlFrames(): resource frames on the (coroutine's) stack, innermost first, and the innermost tests/ frame.
+local function jstr(s) return cjson.encode(s) end
+local function enc(v, lvl)
+    local t = type(v)
+    if v == nil then return 'null' end
+    if t == 'boolean' then return v and 'true' or 'false' end
+    if t == 'number' then
+        if v ~= v or v == math.huge or v == -math.huge then return jstr(tostring(v)) end
+        if math.type(v) == 'integer' then return ('%d'):format(v) end
+        if v == math.floor(v) and math.abs(v) < 1e15 then return ('%.1f'):format(v) end
+        return ('%.17g'):format(v)
+    end
+    if t == 'string' then return jstr(v) end
+    if t ~= 'table' then return jstr('<' .. t .. '>') end
+    lvl = (lvl or 0) + 1
+    if lvl > 20 then return jstr('<deep>') end
+    local n, isList = 0, true
+    for k in pairs(v) do
+        if math.type(k) == 'integer' and k > 0 then
+            if k > n then n = k end
+        else
+            isList = false
+        end
+    end
+    local out = {}
+    if isList then
+        for i = 1, n do out[i] = enc(v[i], lvl) end
+        return '[' .. table.concat(out, ',') .. ']'
+    end
+    local keys = {}
+    for k in pairs(v) do keys[#keys + 1] = { s = tostring(k), k = k } end
+    table.sort(keys, function(a, b) return a.s < b.s end)
+    for i, e in ipairs(keys) do out[i] = jstr(e.s) .. ':' .. enc(v[e.k], lvl) end
+    return '{' .. table.concat(out, ',') .. '}'
+end
+-- Resource frames anywhere on the (coroutine's) stack, so a spec's stub wrapped around MySQL.* still shows
+-- the module line that called it; "from" is the innermost tests/ frame.
+local function sqlFrames()
+    local at, from = {}, nil
+    for level = 3, 200 do
+        local info = debug.getinfo(level, 'Sl')
+        if not info then break end
+        local src = info.source
+        if src:sub(1, 1) == '@' then
+            local rel = src:match('Crimson%-Police/(.*)$')
+            if rel then
+                if #at < 8 then at[#at + 1] = rel .. ':' .. tostring(info.currentline) end
+            elseif not from then
+                local t = src:match('(tests/.*)$')
+                if t and not t:match('harness%.lua$') then from = t .. ':' .. tostring(info.currentline) end
+            end
+        end
+    end
+    return at, from
+end
+
+-- The spec this Lua state runs (tests/<name>.lua on the stack when the harness loads).
+local SPEC_NAME = 'unknown'
+for level = 2, 30 do
+    local info = debug.getinfo(level, 'S')
+    if not info then break end
+    local name = info.source:match('^@.-tests/(.-)%.lua$')
+    if name and name ~= 'harness' then SPEC_NAME = name:gsub('/', '_'); break end
+end
+H.specName = SPEC_NAME
+
+-- ── optional SQL log ────────────────────────────────────────────────────────
+-- CP_SQL_LOG=<file> appends one JSON line per MySQL.*.await / MySQL.ready call and per direct H.sql call
+-- (CP_SQL_LOG=<dir>/ writes <dir>/<spec>.jsonl instead). Off when the variable is unset: nothing is wrapped.
+--   { "n": 12, "spec": "economy_spec", "db": "..", "kind": "update", "sql": "...", "params": [..],
+--     "result": .., "cols": [..], "error": "..", "at": ["modules/cash/server.lua:177", ..], "from": "tests/x.lua:9" }
+-- kind: query | single | scalar | insert | update | ready | H.sql (a spec's own statement).
+-- params: the parameter list (nil holes -> null, Lua tables -> JSON). result: exactly what the harness returned
+-- (row objects keep the column order given in cols; floats keep a '.0'; nil -> null; failed calls carry "error").
+-- at: resource frames (path under Crimson-Police/, innermost first, up to 8); from: the innermost tests/ frame.
+-- An empty "at" means the statement came from the spec itself (fixtures, resets, assertions).
+do
+    local target = os.getenv('CP_SQL_LOG')
+    if target and target ~= '' then
+        local specName = SPEC_NAME
+        local path = target:sub(-1) == '/' and (target .. specName .. '.jsonl') or target
+        local file, seq, depth = nil, 0, 0
+
+        local function encRow(row, cols)
+            local out = {}
+            for i, name in ipairs(cols) do out[i] = jstr(name) .. ':' .. enc(row[name]) end
+            return '{' .. table.concat(out, ',') .. '}'
+        end
+        local function encRows(rows, cols)
+            if type(rows) ~= 'table' or not cols then return enc(rows) end
+            local out = {}
+            for i, row in ipairs(rows) do out[i] = encRow(row, cols) end
+            return '[' .. table.concat(out, ',') .. ']'
+        end
+        local function write(kind, sql, params, resultJson, cols, err)
+            seq = seq + 1
+            local at, from = sqlFrames()
+            local np = 0
+            if type(params) == 'table' then
+                for k in pairs(params) do if math.type(k) == 'integer' and k > np then np = k end end
+            end
+            local plist = {}
+            for i = 1, np do plist[i] = enc(params[i]) end
+            local parts = {
+                '"n":' .. seq, '"spec":' .. jstr(specName), '"db":' .. jstr(H.db), '"kind":' .. jstr(kind),
+                '"sql":' .. (type(sql) == 'string' and jstr(sql) or 'null'), '"params":[' .. table.concat(plist, ',') .. ']',
+                '"result":' .. resultJson,
+            }
+            if cols then
+                local c = {}
+                for i, name in ipairs(cols) do c[i] = jstr(name) end
+                parts[#parts + 1] = '"cols":[' .. table.concat(c, ',') .. ']'
+            end
+            if err then parts[#parts + 1] = '"error":' .. jstr(tostring(err)) end
+            parts[#parts + 1] = '"at":' .. enc(at)
+            if from then parts[#parts + 1] = '"from":' .. jstr(from) end
+            if not file then file = assert(io.open(path, 'a')) end
+            file:write('{', table.concat(parts, ','), '}\n')
+            file:flush()
+        end
+
+        local function wrap(kind, fn, rowsResult)
+            return function(sql, params)
+                depth = depth + 1
+                local ok, res = pcall(fn, sql, params)
+                depth = depth - 1
+                local cols = lastHeader
+                if not ok then
+                    write(kind, sql, params, 'null', nil, res)
+                    error(res, 0)
+                end
+                local selectLike = kind == 'single' or kind == 'scalar' or kind == 'H.sql'
+                    or (kind == 'query' and type(sql) == 'string' and isSelect(sql))
+                if rowsResult and selectLike then
+                    write(kind, sql, params, encRows(res, cols), cols)
+                elseif kind == 'single' and type(res) == 'table' and cols then
+                    write(kind, sql, params, encRow(res, cols), cols)
+                else
+                    write(kind, sql, params, enc(res), selectLike and cols or nil)
+                end
+                return res
+            end
+        end
+        for _, k in ipairs({ 'query', 'single', 'scalar', 'insert', 'update' }) do
+            MySQL[k].await = wrap(k, MySQL[k].await, k == 'query')
+        end
+        local rawReady = MySQL.ready
+        MySQL.ready = function(cb)
+            write('ready', nil, nil, 'null', nil)
+            return rawReady(cb)
+        end
+        -- Direct H.sql calls from specs (the MySQL.* functions call rawSql, so nothing is logged twice).
+        local sqlLogged = wrap('H.sql', rawSql, true)
+        H.sql = function(sql, params)
+            if depth > 0 then return rawSql(sql, params) end
+            return sqlLogged(sql, params)
+        end
+        H.sqlLog = path
+    end
+end
 H.MySQL = MySQL
+
+-- ── saves folders (files and shadow modes) ──────────────────────────────────
+-- Every database name (H.db) gets its own saves folder, <root>/<H.db>/saves, where <root> is CP_TEST_SAVES
+-- (tests/run.lua makes one per run and removes it at the end) or a temporary folder removed when the spec's
+-- Lua state closes. GetResourcePath returns <root>/<H.db>.
+local function savesRoot()
+    if H.savesRoot then return H.savesRoot end
+    local root = os.getenv('CP_TEST_SAVES')
+    if not root or root == '' then
+        root = os.tmpname()
+        os.remove(root)
+        os.execute(("mkdir -p '%s'"):format(root))
+        H._savesCleanup = setmetatable({}, { __gc = function() os.execute(("rm -rf '%s'"):format(root)) end })
+    end
+    H.savesRoot = root
+    return root
+end
+function H.resourcePath() return savesRoot() .. '/' .. H.db end
+function H.savesDir() return H.resourcePath() .. '/saves' end
+
+local function memsql()
+    _G.CP = _G.CP or {}
+    if not _G.json then _G.json = { encode = function(v) return cjson.encode(v) end, decode = function(s) return cjson.decode(s) end } end
+    if not (CP.Storage and CP.Storage.MemSQL and CP.Storage.MemSQL.new) then dofile(ROOT .. 'modules/storage/memsql.lua') end
+    return CP.Storage.MemSQL
+end
+H.memsql = memsql
+
+-- fn(...) with os.time() pinned to ts (os.time(table) still converts); returns pcall's results.
+local function withClock(ts, fn, ...)
+    local saved = os.time
+    os.time = function(t) if t then return REAL_TIME(t) end return ts end
+    local res = table.pack(pcall(fn, ...))
+    os.time = saved
+    return table.unpack(res, 1, res.n)
+end
+
+-- The migrations runner's statement split (modules/migrations/server.lua).
+local function splitStatements(sql)
+    local statements, current = {}, {}
+    for line in (sql .. '\n'):gmatch('(.-)\r?\n') do
+        local code = line:gsub('%-%-.*$', '')
+        if code:match('%S') then
+            current[#current + 1] = code
+            if code:match(';%s*$') then
+                statements[#statements + 1] = table.concat(current, '\n'):gsub(';%s*$', '')
+                current = {}
+            end
+        end
+    end
+    local rest = table.concat(current, '\n')
+    if rest:match('%S') then statements[#statements + 1] = rest end
+    return statements
+end
+H.splitStatements = splitStatements
+
+-- The statements of one H.sql text: split at ';' outside quotes and comments, each with its share of the
+-- '?' parameters. A SET NAMES statement is dropped: oxmysql and the engine talk utf8mb4 already.
+local function splitSql(sql, params)
+    local out, start, i, n, q = {}, 1, 1, #sql, nil
+    local marks = {}   -- '?' positions outside quotes and comments
+    local cuts = {}
+    while i <= n do
+        local c = sql:sub(i, i)
+        if q then
+            if c == '\\' and q ~= '`' then
+                i = i + 1
+            elseif c == q then
+                if sql:sub(i + 1, i + 1) == q then i = i + 1 else q = nil end
+            end
+        elseif c == "'" or c == '"' or c == '`' then
+            q = c
+        elseif (c == '-' and sql:sub(i + 1, i + 1) == '-') or c == '#' then
+            i = (sql:find('\n', i, true) or n)
+        elseif c == '?' then
+            marks[#marks + 1] = i
+        elseif c == ';' then
+            cuts[#cuts + 1] = i
+        end
+        i = i + 1
+    end
+    cuts[#cuts + 1] = n + 1
+    local p, m = 1, 1
+    for _, cut in ipairs(cuts) do
+        local text = sql:sub(start, cut - 1)
+        local count = 0
+        while marks[m] and marks[m] < cut do count = count + 1; m = m + 1 end
+        local code = text:gsub('%-%-[^\n]*', ''):gsub('#[^\n]*', '')
+        if code:match('%S') and not code:match('^%s*[Ss][Ee][Tt]%s+[Nn][Aa][Mm][Ee][Ss]%s') then
+            local ps = nil
+            if type(params) == 'table' then
+                ps = {}
+                for k = 1, count do ps[k] = params[p + k - 1] end
+            end
+            out[#out + 1] = { sql = text:match('^%s*(.-)%s*$'), params = ps }
+        end
+        p = p + count
+        start = cut + 1
+    end
+    return out
+end
+H.splitSql = splitSql
+
+-- A module statement with a "SET NAMES x; " prefix (a spec's charset wrapper for the mysql CLI) without it.
+local function stripSetNames(sql)
+    return (sql:gsub('^%s*[Ss][Ee][Tt]%s+[Nn][Aa][Mm][Ee][Ss]%s+[%w_]+%s*;%s*', ''))
+end
+
+-- Does a statement name a table of another resource (not cp_*)? Those stay on MariaDB.
+local function namesForeignTable(sql)
+    local M = memsql()
+    local ok, ast = pcall(M.parse, sql)
+    if ok then
+        for _, name in ipairs(ast.tables) do
+            if name:sub(1, 3) ~= 'cp_' then return true end
+        end
+        return false
+    end
+    return not sql:find('cp_', 1, true)
+end
+
+-- A spec's Lua table parameter is sent as JSON text, like the MariaDB path (sqlLiteral) does.
+local function specParams(params)
+    if type(params) ~= 'table' then return params end
+    local copy, n = {}, 0
+    for k in pairs(params) do if math.type(k) == 'integer' and k > n then n = k end end
+    for i = 1, n do
+        local v = params[i]
+        if type(v) == 'table' then v = cjson.encode(v) end
+        copy[i] = v
+    end
+    return copy
+end
+
+-- The real migrations runner (modules/migrations/server.lua) on a MySQL table, before H.boot: its own CP,
+-- no console lines. Fails when the runner does not reach "ready".
+local function runMigrations(mysqlImpl)
+    local errs = {}
+    local env = setmetatable({}, { __index = _G })
+    env.CP = {
+        err = function(_, fmt, ...) errs[#errs + 1] = tostring(fmt):format(...) end,
+        log = function() end, warn = function() end,
+    }
+    env.MySQL = mysqlImpl
+    env.print = function() end
+    env.promise = { new = function()
+        local p = {}
+        function p:resolve(v) self.resolved = true; self.value = v end
+        function p:reject(e) self.resolved = true; self.err = e end
+        return p
+    end }
+    env.Citizen = { Await = function(p) return p.value end }
+    env.CreateThread = function(fn) fn() end
+    env.SetTimeout = function() end
+    env.StopResource = function() end
+    env.GetCurrentResourceName = function() return 'Crimson-Police' end
+    env.LoadResourceFile = function(_, path)
+        local f = io.open(ROOT .. path, 'r')
+        if not f then return nil end
+        local s = f:read('a'); f:close(); return s
+    end
+    local chunk = assert(loadfile(ROOT .. 'modules/migrations/server.lua', 't', env))
+    chunk()
+    if not (env.CP.Migrations and env.CP.Migrations.isReady()) then
+        error('the migrations runner failed: ' .. table.concat(errs, ' | '), 2)
+    end
+end
+
+-- ── files mode (CP_TEST_STORAGE=files) ──────────────────────────────────────
+-- Runs Crimson-Police with Config.Database.enabled = false: H.boot loads modules/storage, which swaps MySQL
+-- for the saves folder engine. The specs' own statements (H.sql) go to the same engine and come back typed
+-- like oxmysql; statements on another resource's table (mdt_dispatch fixtures) still go to MariaDB, as the
+-- real oxmysql would serve them.
+
+-- The engine the specs' statements use: the booted resource's, or (before H.boot) one over the same folder.
+local preBootDb, preBootFor = nil, nil
+local function filesEngine()
+    if CP and CP.Storage and CP.Storage.db then return CP.Storage.db end
+    local dir = H.savesDir()
+    if preBootDb and preBootFor == dir then return preBootDb end
+    local M = memsql()
+    preBootDb = M.new({ store = M.folderStore(dir) }):load()
+    preBootFor = dir
+    return preBootDb
+end
+
+local function filesSql(sql, params)
+    local rows, cols = {}, nil
+    for _, st in ipairs(splitSql(sql, params)) do
+        if namesForeignTable(st.sql) then
+            rows, cols = rawSql(st.sql, st.params)
+        else
+            local res = filesEngine():exec(st.sql, specParams(st.params))
+            if res.kind == 'rows' then
+                rows, cols = CP.Storage.MemSQL.luaRows(res), res.cols
+            else
+                rows, cols = {}, nil
+            end
+        end
+    end
+    lastHeader = cols
+    return rows, cols
+end
+if H.storage == 'files' then H.sql = filesSql end
+
+-- A spec about database-off mode itself (tests/storage_spec.lua) runs in files mode whatever CP_TEST_STORAGE
+-- says: call H.useFiles() before H.resetDatabase / H.boot.
+function H.useFiles()
+    H.storage = 'files'
+    H.sql = filesSql
+end
+
+-- A server restart inside one spec: every handler, callback, command, recorded event, sleeping thread and module
+-- table is dropped; in files mode the next H.boot loads a new engine from the same saves folder.
+function H.restart()
+    H.handlers, H.callbacks, H.commands, H.events = {}, {}, {}, {}
+    sleeping = {}
+    H.filesMySQL = nil
+    preBootDb, preBootFor = nil, nil
+    _G.CP, _G.Config, _G.MySQL = nil, nil, nil
+end
+
+-- ── shadow mode (CP_TEST_STORAGE=shadow) ────────────────────────────────────
+-- The specs get exactly what database mode gives them (MySQL.* and H.sql answered by MariaDB through the
+-- mysql CLI). Every call also runs, in lockstep, on
+--   the twin: the MariaDB database <H.db>_ox, read by tests/shadow/twin.cjs (node + mysql2 with oxmysql's
+--             options, typeCast, parseArguments, parseResponse and error text), and
+--   the engine: CP.Storage.MemSQL over the saves folder <root>/<H.db>/saves, called through its MySQL drop-in
+--             (CP.Storage.MemSQL.shim) exactly as the modules call it in files mode,
+-- both built from the migrated empty schema by the real migrations runner. NOW() is pinned to the same second
+-- on both (SET timestamp on the twin, os.time() for the engine), and the engine keeps its saves folder
+-- between specs like a restarted server. A spec's statements on another resource's table (mdt_dispatch
+-- fixtures) run on the twin only; module reads of it go through the drop-in's route to the real oxmysql,
+-- which is the twin. Statements whose text is not valid UTF-8 cannot pass through oxmysql and are skipped.
+-- Compared: errors (both texts, the twin database name read as `saves`), rows (as multisets; in order when
+-- the statement has a top-level ORDER BY), each value and its Lua type (integer, float, string, boolean),
+-- DATETIME values within 2 s, affected rows, insert ids, changed rows, warnings and info of writes. At the
+-- end of each spec (H.shadowFinish, called by tests/run.lua) every cp_ table and AUTO_INCREMENT counter of
+-- the twin is compared with the engine's.
+-- Each difference is one JSON line appended to CP_SHADOW_REPORT:
+--   { "spec", "db", "category", "kind", "sql", "params", "mariadb": {ok, r | e}, "engine": {ok, r | e},
+--     "detail", "at": [module frames], "from": "tests/x_spec.lua:12" }
+-- categories: error (one side failed), error-text, rowcount, value, type, order, result (shape),
+-- affectedRows, insertId, changedRows, warnings, info, state (end-of-spec table contents), state-autoinc.
+-- Per-spec counts (compared, differences, skipped) are appended to CP_SHADOW_REPORT .. '.stats'.
+local KINDS = { 'query', 'single', 'scalar', 'insert', 'update' }
+local Shadow = { compared = 0, diffs = 0, skipped = 0, byCat = {}, skips = {} }
+H.shadowStats = Shadow
+local SHADOW_REPORT = os.getenv('CP_SHADOW_REPORT')
+if not SHADOW_REPORT or SHADOW_REPORT == '' then SHADOW_REPORT = (os.getenv('TMPDIR') or '/tmp') .. '/cp_shadow_report.jsonl' end
+H.shadowReport = SHADOW_REPORT
+
+local function twinName(db) return db .. '_ox' end
+H.twinName = twinName
+
+local twin = nil
+local function twinStart()
+    if twin then return twin end
+    local dir = os.tmpname()
+    os.remove(dir)
+    os.execute(("mkdir -p '%s'"):format(dir))
+    local fifo = dir .. '/twin.out'
+    if not os.execute(("mkfifo '%s'"):format(fifo)) then error('shadow mode: mkfifo failed') end
+    local nodePath = os.getenv('CP_SHADOW_NODE_PATH')
+    local envs = (nodePath and nodePath ~= '') and ("NODE_PATH='" .. nodePath .. "' ") or ''
+    local check = io.popen(("cd '%sshadow' && %snode -e \"require('mysql2/promise')\" 2>&1"):format(TESTS, envs))
+    local msg = check:read('a')
+    if not check:close() then
+        os.execute(("rm -rf '%s'"):format(dir))
+        error('shadow mode needs node and the mysql2 package (cd tests/shadow && npm install): ' .. msg, 0)
+    end
+    local w = assert(io.popen(("%sexec node '%sshadow/twin.cjs' '%s'"):format(envs, TESTS, fifo), 'w'))
+    local r = assert(io.open(fifo, 'r'))
+    local hello = r:read('l')
+    os.remove(fifo)
+    os.remove(dir)
+    if not hello or not hello:find('"ready"', 1, true) then error('shadow mode: the twin did not start: ' .. tostring(hello), 0) end
+    twin = { w = w, r = r }
+    return twin
+end
+
+-- JSON numbers come back as floats from cjson: integral ones are integers, as FiveM hands JS numbers to Lua.
+local function fromTwin(v)
+    local t = type(v)
+    if t == 'number' then
+        if v == math.floor(v) and v > -2 ^ 53 and v < 2 ^ 53 then return math.tointeger(v) end
+        return v
+    elseif t == 'table' then
+        local out = {}
+        for k, x in pairs(v) do
+            if x ~= cjson.null then out[k] = fromTwin(x) end
+        end
+        return out
+    end
+    return v
+end
+
+local function twinCall(req)
+    local t = twinStart()
+    t.w:write(req, '\n')
+    t.w:flush()
+    local line = t.r:read('l')
+    if not line then error('shadow mode: the MariaDB twin (tests/shadow/twin.cjs) stopped', 0) end
+    return fromTwin(cjson.decode(line))
+end
+
+local function paramsJson(params)
+    if type(params) ~= 'table' then return '[]' end
+    local n = 0
+    for k in pairs(params) do if math.type(k) == 'integer' and k > n then n = k end end
+    local out = {}
+    for i = 1, n do out[i] = enc(params[i]) end
+    return '[' .. table.concat(out, ',') .. ']'
+end
+
+local function twinQuery(kind, sql, params, ts)
+    return twinCall(('{"op":"q","db":%s,"kind":%s,"sql":%s,"params":%s,"ts":%s}'):format(
+        jstr(twinName(H.db)), jstr(kind), jstr(sql), paramsJson(params), ts and ('%d'):format(ts) or 'null'))
+end
+
+-- The engine of H.db (loaded from its saves folder) and its MySQL drop-in. The drop-in's route to the real
+-- oxmysql (another resource's table) answers with the twin's answer to the same statement.
+local shadowEngines, lastTwin = {}, nil
+local twinForeign = {}
+for _, kind in ipairs(KINDS) do
+    twinForeign[kind] = { await = function()
+        local T = lastTwin
+        if not T then error('shadow mode: no MariaDB answer for this statement', 0) end
+        if not T.ok then error(T.e, 0) end
+        return T.r
+    end }
+end
+
+local function shadowEngine()
+    local e = shadowEngines[H.db]
+    if e then return e end
+    local M = memsql()
+    local db = M.new({ store = M.folderStore(H.savesDir()) })
+    local ok, err = withClock(REAL_TIME(), db.load, db)
+    if not ok then error('shadow mode: the saves folder could not be loaded: ' .. tostring(err), 0) end
+    e = { db = db, name = H.db, shim = M.shim(db, { realMySQL = twinForeign, resource = 'Crimson-Police' }) }
+    shadowEngines[H.db] = e
+    return e
+end
+
+local reportFile = nil
+local function clipRows(v)
+    if type(v) == 'table' and #v > 40 then
+        local out = {}
+        for i = 1, 40 do out[i] = v[i] end
+        out[41] = ('... %d rows in all'):format(#v)
+        return out
+    end
+    return v
+end
+local function report(rec)
+    Shadow.diffs = Shadow.diffs + 1
+    Shadow.byCat[rec.category] = (Shadow.byCat[rec.category] or 0) + 1
+    local at, from = sqlFrames()
+    rec.at, rec.from, rec.spec, rec.db = at, from, SPEC_NAME, H.db
+    if not reportFile then reportFile = assert(io.open(SHADOW_REPORT, 'a')) end
+    reportFile:write((enc(rec):gsub('\\/', '/')), '\n')
+    reportFile:flush()
+end
+
+-- ── comparing answers ──
+local DT_TYPES = { DATETIME = true, DATETIME2 = true, TIMESTAMP = true, TIMESTAMP2 = true, NEWDATE = true }
+
+-- Text made by SQL UUID() (a version-1 UUID, random by definition on both sides; the modules' own ids are
+-- version 4 and passed as parameters) matches any other UUID() text.
+local function sqlUuid(s)
+    return s:match('^%x%x%x%x%x%x%x%x%-%x%x%x%x%-1%x%x%x%-[89abAB]%x%x%x%-%x%x%x%x%x%x%x%x%x%x%x%x$') ~= nil
+end
+
+local function valDiff(a, b, isDT)
+    if a == nil or b == nil then
+        if a == b then return nil end
+        return 'value'
+    end
+    local ta, tb = type(a), type(b)
+    if ta ~= tb then return 'type' end
+    if ta == 'number' then
+        if math.type(a) ~= math.type(b) then return 'type' end
+        if a == b then return nil end
+        if isDT and math.abs(a - b) <= 2000 then return nil end
+        return 'value'
+    end
+    if ta == 'table' then
+        for k, v in pairs(a) do local d = valDiff(v, b[k]); if d then return d end end
+        for k, v in pairs(b) do if a[k] == nil and v ~= nil then return 'value' end end
+        return nil
+    end
+    if a == b then return nil end
+    if ta == 'string' and sqlUuid(a) and sqlUuid(b) then return nil end
+    return 'value'
+end
+
+local function rowDiff(ra, rb, dt)
+    if type(ra) ~= 'table' or type(rb) ~= 'table' then
+        if ra == nil and rb == nil then return nil end
+        return 'result'
+    end
+    local worst = nil
+    for k, v in pairs(ra) do
+        local d = valDiff(v, rb[k], dt[k])
+        if d == 'value' then return 'value', k end
+        if d then worst = worst or d end
+    end
+    for k, v in pairs(rb) do
+        if ra[k] == nil then return 'value', k end
+    end
+    return worst
+end
+
+local function canon(row)
+    local keys = {}
+    for k in pairs(row) do keys[#keys + 1] = tostring(k) end
+    table.sort(keys)
+    local out = {}
+    for i, k in ipairs(keys) do
+        local v = row[k]
+        local t = type(v) == 'number' and math.type(v) or type(v)
+        out[i] = k .. '\1' .. t .. '\1' .. (type(v) == 'table' and enc(v) or tostring(v))
+    end
+    return table.concat(out, '\2')
+end
+
+-- Rows as multisets: nil when equal, else the category and the rows left over on each side (DATETIME columns
+-- may differ by 2 s).
+local function multisetDiff(A, B, dt)
+    local byKey = {}
+    for i, r in ipairs(A) do
+        local c = canon(r)
+        local l = byKey[c]
+        if not l then l = {}; byKey[c] = l end
+        l[#l + 1] = i
+    end
+    local matchedA, restB = {}, {}
+    for _, r in ipairs(B) do
+        local l = byKey[canon(r)]
+        if l and #l > 0 then matchedA[table.remove(l)] = true else restB[#restB + 1] = r end
+    end
+    local restA = {}
+    for i, r in ipairs(A) do if not matchedA[i] then restA[#restA + 1] = r end end
+    if #restA == 0 and #restB == 0 then return nil end
+    local used, unA = {}, {}
+    for _, ra in ipairs(restA) do
+        local found = false
+        for j, rb in ipairs(restB) do
+            if not used[j] and rowDiff(ra, rb, dt) == nil then used[j] = true; found = true; break end
+        end
+        if not found then unA[#unA + 1] = ra end
+    end
+    local unB = {}
+    for j, rb in ipairs(restB) do if not used[j] then unB[#unB + 1] = rb end end
+    if #unA == 0 and #unB == 0 then return nil end
+    local cat = 'value'
+    if #unA > 0 and #unB > 0 then cat = rowDiff(unA[1], unB[1], dt) or 'value' end
+    return cat, unA, unB
+end
+
+local function rowsDiff(A, B, dt, ordered)
+    if type(A) ~= 'table' or type(B) ~= 'table' then return 'result' end
+    if #A ~= #B then return 'rowcount' end
+    local cat = multisetDiff(A, B, dt)
+    if cat then return cat end
+    if ordered then
+        for i = 1, #A do
+            if rowDiff(A[i], B[i], dt) then return 'order', ('first at row %d'):format(i) end
+        end
+    end
+    return nil
+end
+
+local function normErr(s)
+    s = tostring(s)
+    local name = twinName(H.db):gsub('%p', '%%%0')
+    return (s:gsub(name, 'saves'))
+end
+
+local function hasOrderBy(sql)
+    local ok, ast = pcall(memsql().parse, sql)
+    return ok and type(ast.order) == 'table' and #ast.order > 0
+end
+
+local WRITE_FIELDS = { 'affectedRows', 'insertId', 'changedRows', 'warningStatus', 'info' }
+local WRITE_CAT = { affectedRows = 'affectedRows', insertId = 'insertId', changedRows = 'changedRows',
+    warningStatus = 'warnings', info = 'info' }
+
+local SHADOW_TRACE = os.getenv('CP_SHADOW_TRACE')   -- set: every compared pair is written to stderr
+local function compareAnswers(kind, sql, params, T, okE, resE)
+    if SHADOW_TRACE and SHADOW_TRACE ~= '' then
+        io.stderr:write(enc({ kind = kind, sql = sql, params = params, mariadb = T, engine = { ok = okE, r = resE } }), '\n')
+    end
+    local cat, detail
+    if not T.ok or not okE then
+        if T.ok ~= okE then
+            cat = 'error'
+            detail = T.ok and 'only the engine failed' or 'only MariaDB failed'
+        elseif normErr(T.e) ~= normErr(resE) then
+            cat = 'error-text'
+        end
+    else
+        local r = T.r
+        local dt = {}
+        if T.f then for _, f in ipairs(T.f) do if DT_TYPES[f[2]] then dt[f[1]] = true end end end
+        if kind == 'scalar' then
+            cat = valDiff(r, resE, T.f and T.f[1] and DT_TYPES[T.f[1][2]])
+        elseif kind == 'insert' then
+            if valDiff(r, resE) then cat = 'insertId' end
+        elseif kind == 'update' then
+            if valDiff(r, resE) then cat = 'affectedRows' end
+        elseif kind == 'single' then
+            cat, detail = rowDiff(r, resE, dt)
+        elseif T.f then
+            if type(resE) == 'table' and resE.affectedRows ~= nil then
+                cat, detail = 'result', 'rows on MariaDB, a write result from the engine'
+            else
+                cat, detail = rowsDiff(r, resE, dt, hasOrderBy(sql))
+            end
+        elseif type(r) == 'table' and type(resE) == 'table' and r.affectedRows ~= nil then
+            for _, k in ipairs(WRITE_FIELDS) do
+                if valDiff(r[k], resE[k]) then cat = WRITE_CAT[k]; detail = k; break end
+            end
+        else
+            cat = valDiff(r, resE) and 'result' or nil
+        end
+    end
+    if cat then
+        report({ category = cat, detail = detail, kind = kind, sql = sql, params = params,
+            mariadb = T.ok and { ok = true, r = clipRows(T.r) } or { ok = false, e = T.e },
+            engine = okE and { ok = true, r = clipRows(resE) } or { ok = false, e = tostring(resE) } })
+    end
+end
+
+local function badUtf8(sql, params)
+    if not utf8.len(sql) then return true end
+    if type(params) == 'table' then
+        for _, v in pairs(params) do if type(v) == 'string' and not utf8.len(v) then return true end end
+    end
+    return false
+end
+
+-- One statement on the twin and on the engine (in that order, same pinned second); the twin's answer.
+local function pairRun(kind, sql, params, fromSpec)
+    if badUtf8(sql, params) then
+        Shadow.skipped = Shadow.skipped + 1
+        Shadow.skips[#Shadow.skips + 1] = { reason = 'text is not valid UTF-8 (oxmysql cannot send it)', sql = sql:sub(1, 160) }
+        return nil
+    end
+    local foreign = namesForeignTable(sql)
+    local ts = REAL_TIME()
+    local T = twinQuery(kind, sql, params, ts)
+    if T.twin then error('shadow mode: twin failure: ' .. tostring(T.e), 0) end
+    if foreign and fromSpec then return T end
+    Shadow.compared = Shadow.compared + 1
+    lastTwin = T
+    local okE, resE = withClock(ts, shadowEngine().shim[kind].await, sql, params)
+    lastTwin = nil
+    compareAnswers(kind, sql, params, T, okE, resE)
+    return T
+end
+
+local function shadowCompare(kind, sql, params, fromSpec)
+    if type(sql) ~= 'string' then return end
+    if fromSpec then
+        for _, st in ipairs(splitSql(sql, params)) do pairRun('query', st.sql, specParams(st.params), true) end
+    else
+        local s = stripSetNames(sql)
+        if s:match('%S') then pairRun(kind, s, params, false) end
+    end
+end
+
+-- MySQL for the modules in shadow mode: MariaDB's answer (database mode) is returned, after the comparison.
+local function makeShadowMySQL()
+    local S = {}
+    for _, kind in ipairs(KINDS) do
+        local m = {}
+        m.await = function(sql, params)
+            local okM, resM = pcall(MySQL[kind].await, sql, params)
+            shadowCompare(kind, sql, params, false)
+            if not okM then error(resM, 0) end
+            return resM
+        end
+        setmetatable(m, { __call = function(_, sql, params, cb)
+            local r = m.await(sql, params)
+            if cb then cb(r) end
+            return r
+        end })
+        S[kind] = m
+    end
+    S.prepare = MySQL.prepare
+    S.transaction = { await = function(queries)
+        for _, q in ipairs(queries) do
+            if type(q) == 'table' then S.query.await(q.query or q[1], q.values or q.parameters or q[2]) else S.query.await(q) end
+        end
+        return true
+    end }
+    S.ready = function(cb) cb() end
+    return S
+end
+
+-- MySQL for the migrations runner: the twin and the engine only (the harness database is built by the CLI).
+local function makePairMySQL()
+    local S = {}
+    for _, kind in ipairs(KINDS) do
+        S[kind] = { await = function(sql, params)
+            local T = pairRun(kind, sql, params, false)
+            if not T then return nil end
+            if not T.ok then error(T.e, 0) end
+            return T.r
+        end }
+    end
+    S.ready = function(cb) cb() end
+    return S
+end
+
+local function shadowSql(sql, params)
+    local okM, rows, header = pcall(rawSql, sql, params)
+    shadowCompare('query', sql, params, true)
+    if not okM then error(rows, 0) end
+    return rows, header
+end
+if H.storage == 'shadow' then
+    H.sql = shadowSql
+    H.shadowMySQL = makeShadowMySQL()
+end
+
+-- End of a spec: every cp_ table and AUTO_INCREMENT counter of each twin equals the engine's.
+function H.shadowFinish()
+    if H.storage ~= 'shadow' then return end
+    local savedDb = H.db
+    for name, e in pairs(shadowEngines) do
+        H.db = name
+        local T = twinQuery('query', 'SELECT table_name AS t, auto_increment AS a FROM information_schema.tables WHERE table_schema = DATABASE()', {}, nil)
+        local twinTables = {}
+        if T.ok then for _, row in ipairs(T.r) do if row.t:sub(1, 3) == 'cp_' then twinTables[row.t] = row.a or false end end end
+        local engineTables = {}
+        for _, t in ipairs(e.db.order) do engineTables[t.name] = t end
+        for tname in pairs(twinTables) do
+            if not engineTables[tname] then report({ category = 'state', detail = 'table missing in the engine', sql = tname }) end
+        end
+        for tname, t in pairs(engineTables) do
+            if twinTables[tname] == nil then
+                report({ category = 'state', detail = 'table missing on MariaDB', sql = tname })
+            else
+                local sql = 'SELECT * FROM `' .. tname .. '`'
+                local TR = twinQuery('query', sql, {}, nil)
+                local okE, resE = withClock(REAL_TIME(), e.shim.query.await, sql)
+                local dt = {}
+                if TR.f then for _, f in ipairs(TR.f) do if DT_TYPES[f[2]] then dt[f[1]] = true end end end
+                local cat, restA, restB
+                if not TR.ok or not okE then
+                    cat = 'error'
+                else
+                    cat, restA, restB = multisetDiff(TR.r, resE, dt)
+                    if cat and #TR.r ~= #resE then cat = 'rowcount' end
+                end
+                if cat then
+                    report({ category = 'state', detail = tname .. ': ' .. cat, sql = sql,
+                        mariadb = TR.ok and { ok = true, r = clipRows(restA or TR.r) } or { ok = false, e = TR.e },
+                        engine = okE and { ok = true, r = clipRows(restB or resE) } or { ok = false, e = tostring(resE) } })
+                end
+                local twinNext = twinTables[tname]
+                if t.autoCol and twinNext and twinNext ~= t.nextId then
+                    report({ category = 'state-autoinc', detail = ('%s: AUTO_INCREMENT %s on MariaDB, %s in the engine'):format(
+                        tname, tostring(twinNext), tostring(t.nextId)), sql = tname })
+                end
+            end
+        end
+    end
+    H.db = savedDb
+    local f = io.open(SHADOW_REPORT .. '.stats', 'a')
+    if f then
+        f:write(enc({ spec = SPEC_NAME, compared = Shadow.compared, diffs = Shadow.diffs, skipped = Shadow.skipped,
+            byCat = Shadow.byCat, skips = Shadow.skips }), '\n')
+        f:close()
+    end
+end
+
+-- A check that only means something on MariaDB (information_schema, the mysql CLI): skipped in `mode`.
+-- Prints "SKIP <spec>: <reason>" (tests/run.lua lists every skip) and returns true when skipped.
+function H.skipIn(mode, reason)
+    if H.storage ~= mode then return false end
+    print(('SKIP %s (%s mode): %s'):format(SPEC_NAME, mode, reason))
+    return true
+end
+
+-- TINYINT(1) the way the spec's storage hands it over: 0/1 from the harness' MariaDB, false/true from
+-- oxmysql and the saves folder engine. H.bit(v) gives 0/1 either way (anything else is returned as is).
+function H.bit(v)
+    if v == true then return 1 elseif v == false then return 0 end
+    return v
+end
 
 -- ── boot ────────────────────────────────────────────────────────────────────
 function H.load(rel)
     local path = ROOT .. rel
     local chunk, err = loadfile(path)
     if not chunk then error(err, 2) end
-    return chunk()
+    local r = chunk()
+    -- the specs call the engine synchronously: a long SELECT does not give the (fake) server its turn here
+    -- (tests/memsql_spec.lua 9.14 checks the slicing itself)
+    if rel == 'modules/storage/server.lua' and CP and CP.Storage and CP.Storage.db then CP.Storage.db.slice = nil end
+    return r
 end
 
 function H.reset()
@@ -376,16 +1263,37 @@ function H.boot(opts)
             await = function() return nil end,
         },
     }
-    _G.MySQL = MySQL
+    _G.MySQL = (H.storage == 'files' and H.filesMySQL) or (H.storage == 'shadow' and H.shadowMySQL) or MySQL
+    _G.GetResourcePath = function() return H.resourcePath() end
     _G.joaat = function(s) return require('cjson') and (#tostring(s) * 2654435761) % 4294967296 end
     _G.GetHashKey = _G.joaat
 
     H.load('config/config.lua')
+    if H.storage == 'files' then
+        Config.Database = Config.Database or {}
+        Config.Database.enabled = false
+        Config.Database.folder = 'saves'
+    end
     H.load('config/blocks.lua')
     H.load('shared/init.lua')
     H.load('shared/locale.lua')
     H.load('shared/net.lua')
     H.load('shared/utils.lua')
+    if H.storage == 'files' and server and not H.filesMySQL then
+        -- a spec run on its own (no tests/run.lua) starts from an empty saves folder: build the tables
+        local fh = io.open(H.savesDir() .. '/_tables.json', 'r')
+        if fh then fh:close() else H.resetSaves() end
+        -- what fxmanifest does: the storage files load right after @oxmysql/lib/MySQL.lua
+        H.load('modules/storage/memsql.lua')
+        H.load('modules/storage/server.lua')
+        H.filesMySQL = _G.MySQL
+        preBootDb = nil
+    end
+    if H.storage == 'shadow' and server then
+        -- a spec run on its own (no tests/run.lua): the twin and the saves folder start from the migrations
+        local fh = io.open(H.savesDir() .. '/_tables.json', 'r')
+        if fh then fh:close() else H.resetShadow() end
+    end
     if opts.migrations ~= false and server then
         -- Mark migrations as ready without running them (the schema is applied by tests/run.lua).
         CP.Migrations = CP.Migrations or { ready = function() return true end, isReady = function() return true end, version = function() return 2 end }
@@ -393,12 +1301,38 @@ function H.boot(opts)
     return H
 end
 
--- Apply sql/migrations/*.sql to cp_test from scratch (used by tests/run.lua once per run).
+-- Apply sql/migrations/*.sql to cp_test from scratch (used by tests/run.lua once per run). In files mode the
+-- saves folder of H.db is rebuilt too, in shadow mode the twin database and the saves folder.
 function H.resetDatabase()
     os.execute(('mysql -uroot -e "DROP DATABASE IF EXISTS %s; CREATE DATABASE %s CHARACTER SET utf8mb4;"'):format(H.db, H.db))
     for _, f in ipairs({ '001_initial.sql', '002_test_def_hash.sql' }) do
         os.execute(('mysql -uroot %s < %ssql/migrations/%s'):format(H.db, ROOT, f))
     end
+    if H.storage == 'files' then
+        if CP and CP.Storage and CP.Storage.db then error('H.resetDatabase must run before H.boot in files mode', 2) end
+        H.resetSaves()
+    elseif H.storage == 'shadow' then
+        H.resetShadow()
+    end
+end
+
+-- A fresh saves folder for H.db, built by the real migrations runner on the engine (files mode).
+function H.resetSaves()
+    os.execute(("rm -rf '%s'"):format(H.resourcePath()))
+    os.execute(("mkdir -p '%s'"):format(H.savesDir()))
+    preBootDb = nil
+    runMigrations(memsql().shim(filesEngine(), { resource = 'Crimson-Police' }))
+end
+
+-- A fresh twin database and saves folder for H.db, both built by the real migrations runner, every
+-- statement compared (shadow mode).
+function H.resetShadow()
+    local r = twinCall(('{"op":"reset","db":%s}'):format(jstr(twinName(H.db))))
+    if not r.ok then error('shadow mode: the twin database could not be created: ' .. tostring(r.e), 2) end
+    os.execute(("rm -rf '%s'"):format(H.resourcePath()))
+    os.execute(("mkdir -p '%s'"):format(H.savesDir()))
+    shadowEngines[H.db] = nil
+    runMigrations(makePairMySQL())
 end
 
 return H

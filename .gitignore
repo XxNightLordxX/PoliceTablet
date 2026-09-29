@@ -2,3 +2,6 @@ node_modules/
 .DS_Store
 *.log
 Crimson-Police/web/.vite/
+# database-off saves (Config.Database.enabled = false): server data, never committed
+Crimson-Police/saves/*
+!Crimson-Police/saves/README.md

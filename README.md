@@ -4,6 +4,7 @@
 department challenge and a Mission Builder.
 
 - `Crimson-Police/`: the FiveM resource. Install instructions are in `Crimson-Police/README.md`.
+- Database off: `Config.Database.enabled = false` saves all data as JSON files in `Crimson-Police/saves/` instead of MySQL/MariaDB.
 - `docs/SPEC.md`: the product spec.
 - `docs/ARCHITECTURE.md`: module APIs, run model, block interface, events and NUI protocol.
 - `docs/INTEGRATIONS.md`: verified facts about the dependency resources.
