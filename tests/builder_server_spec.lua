@@ -4,10 +4,10 @@
 -- round trip through the RegisterMission sandbox), versions, edit locks and every SQL statement of the
 -- module on MariaDB, archive/restore/rollback files and the reload (hand edit) conflict logic.
 -- Mission files are written to a temporary folder missions/custom/test_builder_<n>/ that is removed at
--- the end, whatever happens. The spec uses its own database (cp_test_builder_server).
+-- the end, whatever happens. The spec uses its own database (<run database>_builder_server).
 
 local H = dofile('tests/harness.lua')
-H.db = 'cp_test_builder_server'
+H.db = (os.getenv('CP_TEST_DB') or 'cp_test') .. '_builder_server'   -- per run: parallel runs never share it
 H.resetDatabase()
 H.boot({ side = 'server' })
 
@@ -1116,4 +1116,6 @@ os.execute(('rm -rf %s%s'):format(H.root, TMP))
 H.ok(okBody, 'spec body ran: ' .. tostring(errBody))
 H.ok(not fileExists(TMP), 'temporary mission folder removed')
 
+-- Under tests/run.lua (CP_TEST_DB set) the per-run database is dropped; a direct run keeps it for inspection.
+if os.getenv('CP_TEST_DB') then os.execute(('mysql -uroot -e "DROP DATABASE IF EXISTS %s;"'):format(H.db)) end
 return H

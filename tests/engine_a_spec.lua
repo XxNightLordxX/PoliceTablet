@@ -2,11 +2,11 @@
 --
 -- Mission files are served from memory through a LoadResourceFile override, other modules are
 -- stubbed, and every SQL statement of the slice runs against MariaDB. The spec uses its own
--- database (cp_test_engine_a, rebuilt from sql/migrations) so parallel runs of other specs that
+-- database (<run database>_engine_a, rebuilt from sql/migrations) so parallel runs of other specs that
 -- reset cp_test cannot interfere.
 
 local H = dofile('tests/harness.lua')
-H.db = 'cp_test_engine_a'
+H.db = (os.getenv('CP_TEST_DB') or 'cp_test') .. '_engine_a'   -- per run: parallel runs never share it
 H.resetDatabase()
 H.boot({ side = 'server' })
 
@@ -1335,4 +1335,6 @@ do
     CP.Blocks._list = fakeBlocks
 end
 
+-- Under tests/run.lua (CP_TEST_DB set) the per-run database is dropped; a direct run keeps it for inspection.
+if os.getenv('CP_TEST_DB') then os.execute(('mysql -uroot -e "DROP DATABASE IF EXISTS %s;"'):format(H.db)) end
 return H
