@@ -44,9 +44,11 @@ function RouteStatus({ route }: { route: ActiveMissionView['route'] }) {
 export function RunBar() {
   const { data, error, setData } = useRequest<ActiveMissionView | null>('getRun', {}, { pushTopic: 'run' });
   const { navigate, screen } = useNavigation();
-  // A 'run' push carrying the view (or null when the run ended) applies at once; the refetch confirms it.
-  usePush<ActiveMissionView | null>('run', (view) => {
-    if (view === null || (view && typeof view === 'object' && typeof view.runId === 'string')) setData(view);
+  // A 'run' push carrying the view applies at once; the refetch confirms it. The end of the run is
+  // CP.Tablet.push(src, 'run', nil): Lua drops the nil field, so `data` arrives missing (undefined), not null.
+  usePush<ActiveMissionView | null | undefined>('run', (view) => {
+    if (view === null || view === undefined) setData(null);
+    else if (typeof view === 'object' && typeof view.runId === 'string') setData(view);
   });
   if (error || !data || !data.runId) return null;
 

@@ -5,6 +5,9 @@
   30 m and has to be caught and cuffed. Fugitives are unarmed: killing one fails the mission.
   Locations (5 search regions): Sandy Shores, Grapeseed, Paleto Bay, Harmony and the Grand Senora Desert
   around the Yellow Jack Inn. Each has 6+ clue spots and 7 hiding spots inside the 600 m circle.
+  Checked against the GTA V vehicle-node roads: a spot next to a road has the road's height (+0.5 m for a
+  clue prop, +1 m for a fugitive), and a spot whose guessed height disagreed with the nearby road by more
+  than 3 m was moved onto that road, so nothing floats or starts under the ground.
   Blocks: search_area.
 ]]
 
@@ -42,18 +45,18 @@ RegisterMission({
     },
     {
       label  = 'Grapeseed',
-      start  = { coords = vec3(1780.00, 4860.00, 42.00), radius = 600.0 },   -- entering the 600 m search circle
-      center = vec3(1780.00, 4860.00, 42.00),   -- centre of the starting circle
+      start  = { coords = vec3(1780.00, 4860.00, 35.41), radius = 600.0 },   -- entering the 600 m search circle
+      center = vec3(1780.00, 4860.00, 35.41),   -- centre of the starting circle
       clues  = {   -- 7 clue spots (3 are used)
         vec3(1705.00, 4935.00, 41.20), vec3(1703.00, 4815.00, 41.20),
-        vec3(1850.00, 4900.00, 41.60), vec3(1760.00, 4760.00, 40.40),
-        vec3(1640.00, 4880.00, 41.10), vec3(1900.00, 4970.00, 42.60),
+        vec3(1888.94, 4876.03, 45.49), vec3(1760.00, 4760.00, 40.40),
+        vec3(1640.00, 4880.00, 41.10), vec3(1891.44, 4955.52, 51.39),
         vec3(1960.00, 4880.00, 41.40),
       },
       hiding = {   -- 7 hiding spots for the fugitives
-        vec4(1815.00, 4960.00, 43.20, 340.7), vec4(1690.00, 4760.00, 41.50, 138.0),
-        vec4(1930.00, 4805.00, 41.20, 249.9), vec4(1620.00, 4940.00, 42.80, 63.4),
-        vec4(1880.00, 4720.00, 40.50, 215.5), vec4(1745.00, 4990.00, 43.50, 15.1),
+        vec4(1815.00, 4960.00, 46.82, 340.7), vec4(1690.00, 4760.00, 41.50, 138.0),
+        vec4(1930.00, 4805.00, 43.77, 249.9), vec4(1620.00, 4940.00, 42.80, 63.4),
+        vec4(1880.00, 4720.00, 40.50, 215.5), vec4(1745.00, 4990.00, 48.55, 15.1),
         vec4(2000.00, 4950.00, 43.00, 292.2),
       },
     },
@@ -64,7 +67,7 @@ RegisterMission({
       clues  = {   -- 6 clue spots (3 are used)
         vec3(-106.80, 6456.30, 30.70), vec3(-46.00, 6535.70, 30.80),
         vec3(-287.90, 6204.60, 30.60), vec3(46.00, 6617.00, 30.70),
-        vec3(-67.10, 6327.90, 30.30), vec3(-189.00, 6516.70, 29.90),
+        vec3(-67.10, 6327.90, 30.30), vec3(-206.63, 6532.51, 10.59),
       },
       hiding = {   -- 7 hiding spots for the fugitives
         vec4(-56.50, 6469.00, 31.40, 331.9), vec4(-69.90, 6602.80, 31.20, 351.3),
@@ -86,7 +89,7 @@ RegisterMission({
       hiding = {   -- 7 hiding spots for the fugitives
         vec4(620.00, 2790.00, 42.50, 319.4), vec4(470.00, 2650.00, 42.00, 127.9),
         vec4(380.00, 2715.00, 42.00, 91.6), vec4(660.00, 2712.00, 41.20, 265.4),
-        vec4(560.00, 2870.00, 44.00, 0.0), vec4(820.00, 2660.00, 40.00, 257.0),
+        vec4(560.00, 2870.00, 40.79, 0.0), vec4(820.00, 2660.00, 40.00, 257.0),
         vec4(300.00, 2760.00, 42.50, 81.3),
       },
     },
@@ -102,8 +105,8 @@ RegisterMission({
       },
       hiding = {   -- 7 hiding spots for the fugitives
         vec4(2050.00, 3090.00, 47.00, 286.7), vec4(1950.00, 2950.00, 46.50, 158.2),
-        vec4(2180.00, 3030.00, 48.00, 256.0), vec4(1870.00, 3170.00, 44.00, 53.8),
-        vec4(2100.00, 3200.00, 46.50, 321.3), vec4(1800.00, 3000.00, 44.50, 110.6),
+        vec4(2178.53, 3024.12, 45.37, 256.0), vec4(1870.00, 3170.00, 44.00, 53.8),
+        vec4(2100.00, 3200.00, 46.50, 321.3), vec4(1772.25, 3032.75, 62.88, 110.6),
         vec4(2020.00, 2900.00, 47.00, 186.5),
       },
     },

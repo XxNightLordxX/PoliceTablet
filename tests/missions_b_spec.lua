@@ -268,6 +268,8 @@ local FAR_KEYS = {
 }
 -- Heights: every point within this many metres of its start's z (a typo'd or wildly wrong z shows up).
 local DZ_NEAR, DZ_FAR = 8.0, 25.0
+-- Keys that follow a road downhill/uphill away from the start (heights from the GTA V road nodes): DZ_FAR.
+local DZ_ROAD_KEYS = { warrant_service = { fleeTo = true } }   -- Wild Oats Dr drops 18 m over the 80 m flee path
 -- Route-like lists: no jump between consecutive points over this many metres.
 local MAX_JUMP = 250.0
 -- Hostile spawn keys whose heading must face the approach (within FACE_MAX degrees of the start).
@@ -434,7 +436,7 @@ local function checkMission(id)
                     end
                     local dz = math.abs(p.z - s.z)
                     dzMax = math.max(dzMax, dz)
-                    local limit = farKeys[k] and DZ_FAR or DZ_NEAR
+                    local limit = (farKeys[k] or (DZ_ROAD_KEYS[id] or {})[k]) and DZ_FAR or DZ_NEAR
                     H.ok(dz <= limit, ('%s: location %d %s is %.1f m above/below the start (within %.0f m)'):format(id, li, path, dz, limit))
                     if FACE_KEYS[k] and p.w ~= nil then
                         local e = facingError(p, s)

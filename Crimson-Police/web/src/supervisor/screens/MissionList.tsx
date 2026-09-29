@@ -116,7 +116,7 @@ export default function SupMissionList() {
       render: (m) => (
         <div className="oversight-mission">
           <div className="oversight-mission__name">
-            {m.label}
+            <span className="oversight-mission__label" title={m.label}>{m.label}</span>
             {!m.enabled ? <Badge size="sm" tone="grey">{t('sup.missions.disabled')}</Badge> : null}
           </div>
           <div className="oversight-mission__meta">
@@ -151,7 +151,7 @@ export default function SupMissionList() {
     {
       key: 'payout',
       header: t('sup.missions.col.payout'),
-      width: 138,
+      width: 128,
       numeric: true,
       render: (m) => (
         <span className="oversight-payout" title={t(`sup.missions.payout_hint.${m.payoutSource}`)}>
@@ -163,7 +163,7 @@ export default function SupMissionList() {
       ),
     },
     { key: 'cooldown', header: t('sup.missions.col.cooldown'), width: 86, numeric: true, render: (m) => <span className="cp-num">{cooldownText(m.cooldown)}</span> },
-    { key: 'running', header: t('sup.missions.col.running'), width: 168, render: (m) => <Runners m={m} /> },
+    { key: 'running', header: t('sup.missions.col.running'), width: 156, render: (m) => <Runners m={m} /> },
     {
       key: 'actions',
       header: '',

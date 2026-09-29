@@ -10,7 +10,9 @@
   out of (most have none, and story-mode doors are locked in multiplayer), so a ped placed behind the
   facade would be stuck in the walls. From beside the door, the block's surrender move (1 m past the
   door, away from where he waited) keeps him on the step, and a fleeing suspect runs round the house to
-  fleeTo. Associates and the yard marker are in the front and side yard for the same reason.
+  fleeTo. Associates and the yard marker are in the front and side yard for the same reason. fleeTo points
+  on or beside a street have that street's height (+1 m) from the GTA V vehicle nodes (Wild Oats Drive drops
+  18 m over the flee path; Grove Street's back street is 3 m below the house).
   Blocks: flee_arrest (door mode) → interact_points.
 ]]
 
@@ -35,8 +37,8 @@ RegisterMission({
       door       = vec4(114.33, -1961.14, 21.33, 34.0),   -- "Knock and announce"; heading faces out
       suspect    = vec4(113.17, -1961.56, 21.33, 34.0),   -- on the door step, beside the door (see the header)
       fleeTo     = {   -- out the back, in order
-        vec3(128.29, -1978.26, 21.00), vec3(133.38, -1996.54, 20.90),
-        vec3(140.71, -2018.13, 20.80), vec3(156.89, -2034.96, 20.80),
+        vec3(128.29, -1978.26, 21.00), vec3(133.38, -1996.54, 18.28),
+        vec3(140.71, -2018.13, 18.27), vec3(156.89, -2034.96, 18.28),
       },
       associates = {   -- armed associates (base 1, scales): front and side yard, away from the start
         vec4(107.41, -1963.40, 21.23, 34.0), vec4(102.97, -1963.97, 21.23, 34.0),
@@ -76,12 +78,12 @@ RegisterMission({
     },
     {
       label      = 'Wild Oats Drive, Vinewood Hills',
-      start      = { coords = vec3(-140.35, 524.73, 137.20), radius = 50.0 },   -- the street in front of the house
+      start      = { coords = vec3(-140.35, 524.73, 141.03), radius = 50.0 },   -- the street in front of the house
       door       = vec4(-174.35, 502.73, 137.42, 0.0),   -- "Knock and announce"; heading faces out
       suspect    = vec4(-175.55, 503.03, 137.42, 0.0),   -- on the door step, beside the door (see the header)
       fleeTo     = {   -- out the back, in order
-        vec3(-191.35, 505.73, 137.30), vec3(-204.35, 506.73, 137.60),
-        vec3(-226.35, 510.73, 138.00), vec3(-252.35, 512.73, 138.50),
+        vec3(-191.35, 505.73, 134.29), vec3(-204.35, 506.73, 132.35),
+        vec3(-226.35, 510.73, 128.77), vec3(-252.35, 512.73, 123.52),
       },
       associates = {   -- armed associates (base 1, scales): front and side yard, away from the start
         vec4(-181.35, 504.73, 137.32, 0.0), vec4(-185.35, 506.73, 137.32, 0.0),
