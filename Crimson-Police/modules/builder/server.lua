@@ -143,6 +143,9 @@ local renamed = {}        -- old id -> new id (a draft renamed while a test ran)
 local viewers = {}        -- src -> GetGameTimer() of the last builder:list/get
 local holders = {}        -- src -> citizenid that took an edit lock (released on drop/unload)
 local lastAutosave = {}   -- 'src:id' -> GetGameTimer()
+-- missionId -> { [citizenid] = true }: editors whose lock was broken. Their save/autosave no longer takes the
+-- free lock back by itself (that would silently overwrite the breaker's work); an explicit lock does.
+local brokenLocks = {}
 
 -- ── small helpers ──────────────────────────────────────────────────────────
 local function cfgB() return Config.Builder or {} end
@@ -377,6 +380,7 @@ end
 
 local function idTaken(id)
     if CP.Missions and CP.Missions.get and CP.Missions.get(id) then return true end
+    CP.Migrations.ready()
     local hit = MySQL.scalar.await('SELECT 1 AS taken FROM cp_custom_missions WHERE id = ? LIMIT 1', { id })
     return hit ~= nil
 end
@@ -1443,11 +1447,11 @@ local function srcOfCitizen(citizenid)
     return nil
 end
 
--- Tell an editor (by citizenid) that they lost the lock or the draft.
-local function tellEditor(citizenid, event, id, key, vars)
+-- Tell an editor (by citizenid) that they lost the lock or the draft. `by` = who did it (display name).
+local function tellEditor(citizenid, event, id, key, vars, by)
     local src = srcOfCitizen(citizenid)
     if not src then return end
-    TriggerClientEvent(CP.e('client:builder'), src, { event = event, id = id })
+    TriggerClientEvent(CP.e('client:builder'), src, { event = event, id = id, by = by })
     if key and CP.Tablet and CP.Tablet.notify then pcall(CP.Tablet.notify, src, 'warning', key, vars) end
 end
 
@@ -2129,8 +2133,11 @@ CP.Net.action('server:builder:lock', function(src, payload)
     if not row then return false, err end
     if not allows(perms, row, actor, 'edit') then return false, 'err.no_permission' end
     if row.status == 'archived' then return false, 'err.builder_read_only' end
+    touchViewer(src)
     local ok, fresh = acquireLock(row, actor)
     if not ok then return false, 'err.builder_locked' end
+    -- an explicit lock is the editor taking the mission back after a lock break
+    if brokenLocks[row.id] then brokenLocks[row.id][actor.citizenid] = nil end
     local names = displayNames({ fresh.lockedBy })
     return true, { id = row.id, lock = lockView(fresh, actor, names) }
 end, { rate = 4 })
@@ -2155,6 +2162,11 @@ local function storeDraft(src, payload, explicit)
     if row.status == 'archived' then return false, 'err.builder_read_only' end
     local def, serr = B.sanitize(payload.definition, row.id)
     if not def then return false, serr end
+    touchViewer(src)
+    -- after a lock break the old editor must take the lock explicitly (server:builder:lock) before storing again
+    if brokenLocks[row.id] and brokenLocks[row.id][actor.citizenid] and not (row.lockActive and row.lockedBy == actor.citizenid) then
+        return false, 'err.builder_locked'
+    end
     local okLock, fresh = acquireLock(row, actor)
     if not okLock then return false, 'err.builder_locked' end
     row = fresh
@@ -2173,6 +2185,7 @@ local function storeDraft(src, payload, explicit)
                 previousId, newId = row.id, candidate
                 def.id = newId
                 if pendingTests[previousId] then pendingTests[newId] = pendingTests[previousId]; pendingTests[previousId] = nil end
+                if brokenLocks[previousId] then brokenLocks[newId] = brokenLocks[previousId]; brokenLocks[previousId] = nil end
                 renamed[previousId] = newId
             end
         end
@@ -2221,6 +2234,7 @@ CP.Net.action('server:builder:validate', function(src, payload)
     if not actor then return false, perms end
     local row, err = loadRow(payload)
     if not row then return false, err end
+    touchViewer(src)
     local def
     if payload.definition ~= nil then
         local serr
@@ -2273,13 +2287,17 @@ CP.Net.action('server:builder:test', function(src, payload)
         def = res
     end
     local hash = defHash(draft)
-    local okStart, startRes, startErr = pcall(CP.Testing.startDraft, src, def,
+    local okStart, startRes, startData = pcall(CP.Testing.startDraft, src, def,
         { tier = tier, location = location, useStartRoute = useStartRoute })
     if not okStart then
         CP.err(TAG, 'CP.Testing.startDraft failed: %s', tostring(startRes))
         return false, 'err.internal'
     end
-    if not startRes then return false, startErr or 'err.builder_testing_unavailable' end
+    if not startRes then return false, startData or 'err.builder_testing_unavailable' end
+    -- the location that actually runs (CP.Testing picks one for 'random'); the tester records the result for it
+    if type(startData) == 'table' and isInt(tonumber(startData.locationIndex)) then
+        location = math.floor(tonumber(startData.locationIndex))
+    end
     pendingTests[row.id] = { hash = hash, version = row.draftVersion, startedBy = actor.citizenid, at = now() }
     audit(actor, 'test', row.id, 'v' .. tostring(row.draftVersion), tier, ('location %s'):format(tostring(location)))
     return true, { id = row.id, version = row.draftVersion, tier = tier, location = location, requiredTier = required }
@@ -2429,9 +2447,13 @@ CP.Net.action('server:builder:breakLock', function(src, payload)
     if not row.lockActive then return true, { id = row.id, previous = nil } end
     local names = displayNames({ row.lockedBy })
     MySQL.update.await('UPDATE cp_custom_missions SET locked_by = NULL, locked_until = NULL, updated_at = updated_at WHERE id = ?', { row.id })
+    if row.lockedBy ~= actor.citizenid then
+        brokenLocks[row.id] = brokenLocks[row.id] or {}
+        brokenLocks[row.id][row.lockedBy] = true
+    end
     local def = currentDef(row) or {}
     tellEditor(row.lockedBy, 'lockBroken', row.id, 'builder.lock_broken',
-        { name = actor.name or actor.citizenid, mission = tostring(def.label or row.id) })
+        { name = actor.name or actor.citizenid, mission = tostring(def.label or row.id) }, actor.name or actor.citizenid)
     audit(actor, 'breakLock', row.id, row.lockedBy, nil, nil)
     pushAll({ event = 'lockBroken', id = row.id, by = actor.name })
     return true, { id = row.id, previous = { citizenid = row.lockedBy, name = names[row.lockedBy] } }
@@ -2454,6 +2476,7 @@ CP.Net.action('server:builder:discardDraft', function(src, payload)
             locked_by = NULL, locked_until = NULL, updated_by = ? WHERE id = ?]], { actor.citizenid, row.id })
     end
     pendingTests[row.id] = nil
+    if deleted then brokenLocks[row.id] = nil end
     audit(actor, 'discardDraft', row.id, row.draftVersion and ('v' .. row.draftVersion) or nil, deleted and 'deleted' or nil, nil)
     pushAll({ event = deleted and 'deleted' or 'changed', id = row.id, by = actor.name })
     return true, { id = row.id, deleted = deleted }

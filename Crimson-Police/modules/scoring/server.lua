@@ -63,7 +63,7 @@ local BADGES = {
 local MAX_WALK_DAYS = 400      -- missed days examined for grace before a streak counts as broken
 local STREAK_STORE_MAX = 127   -- cp_officers.streak_days is a signed TINYINT
 local MANUAL_MAX = 10000
-local REASON_MAX = 255
+local REASON_MAX = 255         -- characters (cp_audit.reason is VARCHAR(255) utf8mb4; the UI's maxLength counts characters)
 
 local duty = {}        -- citizenid -> { onDuty = bool, firstDone = bool, since = ts }
 local srcCid = {}      -- src -> citizenid (for unload/drop)
@@ -755,6 +755,19 @@ local function checkBadges(citizenid, revoke)
     end
 end
 
+-- The five achievement badges are labelled here (badge.<id>); the leaderboard's own badge ids (Officer of the
+-- Week, season champion / top 10, e.g. officer_of_week_2026-09-21) carry dates and season names, so their
+-- labels come from CP.Leaderboard.badgeLabel.
+local function badgeLabel(id)
+    local key = 'badge.' .. id
+    if CP.Locale and CP.Locale.has and CP.Locale.has(key) then return CP.L(key) end
+    if CP.Leaderboard and CP.Leaderboard.badgeLabel then
+        local ok, label = pcall(CP.Leaderboard.badgeLabel, id)
+        if ok and type(label) == 'string' and label ~= '' then return label end
+    end
+    return CP.L(key)
+end
+
 function Scoring.badges(citizenid)
     if type(citizenid) ~= 'string' or citizenid == '' then return {} end
     db()
@@ -768,7 +781,7 @@ function Scoring.badges(citizenid)
     end
     local out = {}
     for _, r in ipairs(rows or {}) do
-        out[#out + 1] = { id = r.badge_id, label = CP.L('badge.' .. tostring(r.badge_id)), earnedAt = r.earned_at, earnedTs = tonumber(r.earned_ts) }
+        out[#out + 1] = { id = r.badge_id, label = badgeLabel(tostring(r.badge_id)), earnedAt = r.earned_at, earnedTs = tonumber(r.earned_ts) }
     end
     return out
 end
@@ -891,14 +904,17 @@ function Scoring.manualAward(actorSrc, citizenid, points, reason)
     if type(reason) ~= 'string' then return false, 'err.reason_required' end
     local r = CP.U.trim(reason)
     if r == '' then return false, 'err.reason_required' end
-    if #r > REASON_MAX then return false, 'err.reason_too_long' end
+    -- Characters, not bytes: modules/admin clips reasons to 255 characters, and an accented reason is longer in bytes.
+    local rLen = utf8.len(r)
+    if not rLen then return false, 'err.invalid_payload' end
+    if rLen > REASON_MAX then return false, 'err.reason_too_long' end
     db()
     local officer, okRead = readOfficer(citizenid)
     if not okRead then return false, 'err.internal' end
     if not officer then return false, 'err.unknown_officer' end
 
     local rowId = Scoring._insertBonusRow(citizenid, 'manual_award', 'manual_award', n, CP.L('scoring.manual_award_label'),
-        { reason = CP.U.clip(r, REASON_MAX) })
+        { reason = r })
     if not rowId then return false, 'err.internal' end
     local role = actor == 0 and 'console' or 'admin'
     if CP.Admin and CP.Admin.audit then

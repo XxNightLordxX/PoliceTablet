@@ -11,9 +11,10 @@
       surrendered and cuffable, server-side distance <= maxDistance + 0.5 m, and the officer has been
       within reach for most of the cuff duration), sets cuffed and delivers
       { type = 'cuffed', netId } to the owning objective (CP.Runs.dispatch with cp.obj).
-    - The death watcher: every 1 s over every live mission ped of every run. Health <= 0, or an entity
-      that no longer exists (a ped the engine deleted on purpose is no longer in run.entities), is a
-      death. (The engine leaves ped health deaths to this module because CP.Npc.onDeath exists.) The killer is GetPedSourceOfDeath resolved to a
+    - The death watcher: every 1 s over every live mission ped of every run. Health <= 0 (once a positive
+      health was seen, or while the server has health data for the ped: GetEntityMaxHealth > 0 or a cause
+      of death; a server-made ped reads 0 before any client synced it), or an entity that no longer exists
+      (a ped the engine deleted on purpose is no longer in run.entities), is a death. (The engine leaves ped health deaths to this module because CP.Npc.onDeath exists.) The killer is GetPedSourceOfDeath resolved to a
       player (the player's own ped, or the driver of the killing vehicle); when the engine names nobody,
       the last weapon hit by a player in the last 5 s. Then, exactly once per ped:
       CP.AntiCheat.onNpcKilled(run, killerSrc) for a killer who is not an active participant (first:
@@ -652,6 +653,27 @@ local function sampleReach(run, rec, e)
 end
 
 -- ── The 1 s watcher ─────────────────────────────────────────────────────────
+-- True when the server has real health data for the ped: a max health above 0 or a recorded cause of
+-- death. When neither native answers, a 0 is trusted (the behaviour before this check existed).
+local function healthSynced(e)
+    local known = false
+    if type(GetEntityMaxHealth) == 'function' then
+        local ok, m = pcall(GetEntityMaxHealth, e)
+        if ok and tonumber(m) then
+            known = true
+            if tonumber(m) > 0 then return true end
+        end
+    end
+    if type(GetPedCauseOfDeath) == 'function' then
+        local ok, c = pcall(GetPedCauseOfDeath, e)
+        if ok and tonumber(c) then
+            known = true
+            if tonumber(c) ~= 0 then return true end
+        end
+    end
+    return not known
+end
+
 local function checkPed(run, netId, info, rec)
     local e = entityOf(run, netId, rec)
     if not e then
@@ -663,9 +685,13 @@ local function checkPed(run, netId, info, rec)
     rec.entity = e
     local hp = GetEntityHealth(e) or 0
     if hp <= 0 then
-        died(run, netId, rec, e)
+        -- Server-side health is the owner's sync data (0 until a client created and synced a server-made
+        -- entity, as modules/runs assumes): a 0 is a death once a positive health was seen, or when the
+        -- health data is there (a max health or a cause of death).
+        if rec.hpSeen or healthSynced(e) then died(run, netId, rec, e) end
         return
     end
+    rec.hpSeen = true
     -- the bag is the truth (state, cuff, obj, role): a record created after the last setState
     -- (or one whose state was written elsewhere) must still sample reach and watch for hits
     currentState(rec, e)

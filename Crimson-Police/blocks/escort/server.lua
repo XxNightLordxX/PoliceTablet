@@ -14,9 +14,10 @@
     trigger when the truck is within AMBUSH_TRIGGER of the point (or has passed it). Attackers are
     hostile only to participants (CP.Npc 'hostile'). Spawns wait for the run caps (ctx.canSpawn) and are
     never cut; rescale drops planned waves not yet triggered and lowers counts still missing.
-    Done when the truck is within `arrival` metres of the destination (the last waypoint) with no living
+    Done when the truck is within `arrival` metres (2D, like the waypoints) of the destination (the last waypoint) with no living
     attacker within clearRadius of it (and every triggered wave spawned). Fails when the truck is
-    destroyed, stopped for stoppedFail seconds in a row outside a stop (after it first moved, or
+    destroyed (entity health 0 only once a positive health was seen: a server-created truck reads 0 until a
+    client synced it), stopped for stoppedFail seconds in a row outside a stop (after it first moved, or
     START_GRACE_MS after it spawned), or (engine) at the time limit.
 
   Objective fields read (defaults: ARCHITECTURE §3.3 and Config.Blocks.escort)
@@ -595,11 +596,23 @@ local function spawnMissing(ctx, st)
 end
 
 -- ── Truck progress ──────────────────────────────────────────────────────────
+-- Server-side health is the owner's sync data: a truck made with CreateVehicleServerSetter reads 0
+-- (entity, engine and body health) until a client has taken it over and synced it. Until a positive
+-- value was seen once, the truck counts as untouched (100 %) and a 0 is not "destroyed" (the engine's
+-- own wreck check follows the same rule).
 local function truckHealth(ctx, st)
     local tr = st.truck
     local e = tr.entity
     local engine = GetVehicleEngineHealth and tonumber(GetVehicleEngineHealth(e)) or 1000.0
     local body = GetVehicleBodyHealth and tonumber(GetVehicleBodyHealth(e)) or 1000.0
+    if not tr.synced then
+        local hp = GetEntityHealth and tonumber(GetEntityHealth(e)) or 1
+        if engine > 0 or body > 0 or (hp and hp > 0) then
+            tr.synced = true
+        else
+            return 100, engine
+        end
+    end
     local base = math.max(1.0, tr.baseline or 1000.0)
     return math.max(0, math.min(100, math.floor(math.min(engine, body) / base * 100 + 0.5))), engine
 end
@@ -672,7 +685,8 @@ local function watchTruck(ctx, st, dt)
     tr.missing = 0
     local health, engine = truckHealth(ctx, st)
     local hp = GetEntityHealth and tonumber(GetEntityHealth(e)) or 1
-    if (hp and hp <= 0) or engine <= DESTROYED_ENGINE then
+    if hp and hp > 0 then tr.hpSeen = true end
+    if (hp and hp <= 0 and tr.hpSeen) or engine <= DESTROYED_ENGINE then
         fail(ctx, st, 'block.escort.fail_destroyed')
         return
     end
@@ -684,7 +698,9 @@ local function watchTruck(ctx, st, dt)
     if not tr.arrived then
         advance(ctx, st, c)
         triggerWaves(ctx, st, c)
-        if U.dist(c, st.points[#st.points]) <= ctx.obj.arrival then
+        -- 2D, like the waypoints: the destination is a point on the road map, and a route's z (recorded
+        -- or estimated) must not shrink the arrival circle (docs/notes/missions_b.md).
+        if U.dist2d(c, st.points[#st.points]) <= ctx.obj.arrival then
             tr.arrived = true
             tr.arrivalHealth = health          -- truck_healthy: "the truck ARRIVES above 50% health"
             tr.stop = nil

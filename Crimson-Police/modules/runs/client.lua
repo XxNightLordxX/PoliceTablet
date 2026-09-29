@@ -31,6 +31,9 @@
     * client:tierChanged may carry the rescaled objectives as a 4th argument (ctx.obj is updated).
     * client:runEnded's breakdown may carry failReason (a locale key) for mission_failed; a nil breakdown
       (silent removal) cleans up without the result screen.
+    * The street · zone names of the start (client:start) and of each objective's reference point
+      (client:objective 'start' carries `area`) are resolved here once each and sent as telemetry 'area'
+      { index = 0 | objective, text }: the server shows them in this player's own Active Mission view.
     * A start whose radius is at least 200 m is a search circle (Manhunt: "the 600 m search circle, shown on
       the map when the type is accepted"): a local radius blip from client:start until this officer is
       inside it or the first objective starts (the block then draws its own circle), removed at cleanup.
@@ -282,6 +285,40 @@ local function startTelemetry(run)
     end)
 end
 
+-- ── area (street · zone) for this player's own Active Mission view ──────────
+-- The server has no street-name natives: it sends the start / objective reference point and this client
+-- answers once per point with the names (Radio Silence: "the Active Mission screen shows only street and
+-- zone names").
+local function areaText(coords)
+    local x, y, z = CP.U.xyz(coords)
+    if not x then return nil end
+    local ok, text = pcall(function()
+        x, y, z = x + 0.0, y + 0.0, (z or 0.0) + 0.0
+        local street = ''
+        local hash = GetStreetNameAtCoord(x, y, z)
+        if hash and hash ~= 0 then street = GetStreetNameFromHashKey(hash) or '' end
+        local zone = GetNameOfZone(x, y, z) or ''
+        local zoneLabel = zone ~= '' and (GetLabelText(zone) or '') or ''
+        if zoneLabel == '' or zoneLabel == 'NULL' then zoneLabel = zone end
+        local parts = {}
+        if street ~= '' then parts[#parts + 1] = street end
+        if zoneLabel ~= '' and zoneLabel ~= street then parts[#parts + 1] = zoneLabel end
+        return table.concat(parts, ' · ')
+    end)
+    if not ok or type(text) ~= 'string' or text == '' then return nil end
+    return text
+end
+
+local function reportArea(run, index, coords)
+    if not run or run ~= current or coords == nil then return end
+    run.areaSent = run.areaSent or {}
+    if run.areaSent[index] then return end
+    local text = areaText(coords)
+    if not text then return end
+    run.areaSent[index] = true
+    Runs.telemetry('area', { index = index, text = text })
+end
+
 -- Pedestrians hit by this player's vehicle (non-mission, non-player peds; the server re-checks).
 AddEventHandler('gameEventTriggered', function(name, args)
     if name ~= 'CEventNetworkEntityDamage' or not current or type(args) ~= 'table' then return end
@@ -337,6 +374,7 @@ RegisterNetEvent(CP.e('client:start'), function(runId, data)
     })
     showStartCircle(current, data.start)
     startTelemetry(current)
+    reportArea(current, 0, type(data.start) == 'table' and data.start.coords or nil)
     local start = type(data.start) == 'table' and data.start.coords or nil
     if start then
         if CP.Route and CP.Route.begin then
@@ -394,6 +432,7 @@ RegisterNetEvent(CP.e('client:objective'), function(runId, index, msg)
         b.started = true
         hud({ detail = false })
         callBlock(index, 'start')
+        reportArea(current, index, msg.area)
     elseif action == 'update' then
         if not b.stopped then callBlock(index, 'update', msg.data) end
     elseif action == 'stop' then

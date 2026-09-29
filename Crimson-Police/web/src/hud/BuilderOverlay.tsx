@@ -125,7 +125,7 @@ function Recording({ o }: { o: RecordingOverlay }) {
         {message ? <span className="builder_client-ov__warn is-info"><Icon name="info" size={13} />{message}</span> : null}
       </div>
       <div className="builder_client-ov__keys">
-        <Key k="E" label={t('builder.ov.key_stop')} off={!o.stopsEnabled} />
+        {o.stopsEnabled ? <Key k="E" label={t('builder.ov.key_stop')} /> : null}
         <Key k="⌫" label={t('builder.ov.key_undo_m', { m: num(o.undoMetres, 100) })} />
         <Key k="P" label={o.paused ? t('builder.ov.key_resume') : t('builder.ov.key_pause')} />
         <Key k="X" label={t('builder.ov.key_finish')} />

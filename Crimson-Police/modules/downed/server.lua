@@ -24,7 +24,8 @@
 --     re-check (still downed, not in the arena, still no EMS) -> client:pickup (runId, the nearest
 --     Config.Downed.dropOffs point to the server-side ped) -> ~1.5 s for the fade -> re-check -> CP.Ambulance
 --     .revive(src) -> server:pickupDone from the client (or 30 s) -> CP.Alerts.clear(src). No pick-up bill
---     (hospital:client:Revive never bills).
+--     (hospital:client:Revive never bills). A revive CP.Ambulance refuses or cannot send (false: in the
+--     arena, disconnected, sc-ambulance stopped) cancels the pick-up at once (client:pickupCancel).
 --   * EMS on duty: CP.Alerts.clear(src) at once. If our flag was on when they went down (so sc-ambulance
 --     suppressed its own automatic EMS alert): wait until 11 s after the last arena exit
 --     (CP.Alerts.foreignClearedAt[src]; sc-ambulance drops EMS requests for 10 s after one), re-check, then
@@ -228,11 +229,24 @@ local function pickupPath(src, e)
     Wait(FADE_WAIT_MS)
     if not current(src, e) or e.stage ~= 'pickup' then return end
     if not recheck(src, e) then return end
+    -- CP.Ambulance.revive returns false when it refuses (in the arena, not connected) or cannot revive
+    -- (sc-ambulance stopped: its revive event has no handler). Nobody would revive the player then, so the
+    -- pick-up is cancelled at once (the client fades back in, never teleports) instead of leaving them
+    -- behind a black screen until the client's own revive timeout.
+    local revived = false
     if not (CP.Ambulance and CP.Ambulance.revive) then
         CP.err(TAG, 'CP.Ambulance.revive is missing: %d cannot be revived', src)
     else
-        local ok, err = pcall(CP.Ambulance.revive, src)
-        if not ok then CP.err(TAG, 'revive of %d failed: %s', src, tostring(err)) end
+        local ok, res = pcall(CP.Ambulance.revive, src)
+        if not ok then
+            CP.err(TAG, 'revive of %d failed: %s', src, tostring(res))
+        else
+            revived = res == true
+        end
+    end
+    if not revived then
+        cancelEntry(src, e, 'revive_refused')
+        return
     end
     e.stage = 'revived'
     local deadline = GetGameTimer() + DONE_TIMEOUT_MS

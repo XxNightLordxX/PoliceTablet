@@ -348,7 +348,8 @@ end
 function Recorder:undo(metres)
     local n = #self.samples
     if n <= 1 then return 0.0 end
-    local target = self.cum[n] - (tonumber(metres) or 0)
+    local total = self.cum[n]
+    local target = total - (tonumber(metres) or 0)
     while #self.samples > 1 and self.cum[#self.samples] > target + 1e-6 do
         local k = #self.samples
         self.samples[k] = nil
@@ -360,7 +361,7 @@ function Recorder:undo(metres)
     for i = #self.stops, 1, -1 do
         if self.stops[i].at > wpCount then table.remove(self.stops, i) end
     end
-    return self.cum[n] - self.cum[count]
+    return total - self.cum[count]
 end
 
 function Recorder:addStop(wait, max)
@@ -1407,6 +1408,7 @@ local function refusal()
 end
 
 local function deliver(tool, result)
+    -- also after an unload or a deletion: the cancelled result clears the NUI's "tool running" memory
     state.seq = state.seq + 1
     result.seq = state.seq
     state.result = result
@@ -1515,6 +1517,11 @@ RegisterNetEvent(CP.e('client:builder'), function(data)
         CP.log(TAG, 'the %s of %s stopped: %s', tool.kind, data.id, ev)
     end
     if ev == 'deleted' and state.result and state.result.missionId == data.id then state.result = nil end
+    -- The open builder screen learns it lost the lock / the draft even when the server's 'builder' push did not
+    -- reach it (it only goes to recent viewers); the screen's handlers are idempotent.
+    if (ev == 'lockBroken' or ev == 'reloaded') and CP.Tablet and CP.Tablet.push then
+        CP.Tablet.push('builder', { event = ev, id = data.id, by = type(data.by) == 'string' and data.by or nil })
+    end
 end)
 
 AddEventHandler('onResourceStop', function(res)

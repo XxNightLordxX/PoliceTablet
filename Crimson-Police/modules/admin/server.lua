@@ -12,7 +12,8 @@
         season start <name...> | season end              CP.Challenge.startSeason / endSeason
         suspend <citizenid> <days> [reason...]           CP.Access.suspend (0 days lifts it), audited here
         reload                                           CP.Missions.reload, audited here
-        test <missionId> [tier] [location|random]        CP.Testing.start (in game only)
+        test <missionId> [tier] [location|random]        CP.Testing.command -> CP.Testing.start (in game only;
+                                                         archived custom missions through CP.Testing.resolveMission)
       Replies: print() on the console, CP.Tablet.notify in game.
     * cp_audit rows (values clipped to the column sizes) and the category webhooks read at call time
       from the convars cp_webhook_audit / cp_webhook_flags / cp_webhook_builder / cp_webhook_operations /
@@ -61,6 +62,8 @@
       server:admin:suspend       { citizenid, days, reason }             suspend -> CP.Access.suspend (audited)
     callbacks (shapes in docs/notes/oversight.md and web/src/types/oversight.ts)
       getMissionList             viewMissionList -> MissionListData
+      admin:getMissions          admin -> MissionListData, each mission + { filePath, editedInCode, defHash, status,
+                                 disabledInConfig }
       sup:getLiveRuns            viewMissionList -> { runs = { LiveRun + extras }, serverTime, canRecall }
       sup:getReviewQueue         reviewFlagged|handleDisputes -> { flagged, disputes, canReview, canHandle }
       admin:getFlagged           admin -> { flagged }
@@ -70,6 +73,8 @@
       admin:getPermissions       -> { supervisor = { { action, enabled } }, adminOnly, always }
       admin:getAudit             { category, action, actor, from, to, page } -> AuditPage
       admin:exportAudit          same filters -> { csv, rows, truncated }
+      admin:getStuckPayments     admin -> { payments = CP.Cash.stuckPayments() (StuckPayment list, docs/notes/economy.md),
+                                 serverTime }   rows left 'paying' for a manual Renewed-Banking check
 ]]
 
 CP.Admin = CP.Admin or {}
@@ -951,11 +956,26 @@ local function tierExists(name)
     return false
 end
 
+-- A mission to test: any loaded one (CP.Missions), else what CP.Testing can start (archived custom missions
+-- are unregistered from CP.Missions; SPEC Admin test mode: "custom (published or archived)").
+local function findTestMission(id)
+    local def = findMission(id)
+    if def then return def end
+    if type(id) ~= 'string' or id == '' or #id > 64 or not has('Testing', 'resolveMission') then return nil end
+    local tried = { id }
+    if id:lower() ~= id then tried[2] = id:lower() end
+    for _, candidate in ipairs(tried) do
+        local ok, d = call('Testing', 'resolveMission', candidate)
+        if ok and type(d) == 'table' and type(d.id) == 'string' then return d end
+    end
+    return nil
+end
+
 SUB.test = function(src, args)
     if tonumber(src) == 0 then return reply(src, 'error', 'err.not_in_game') end
     local okP, eP = can(src, 'testRun')
     if not okP then return reply(src, 'error', eP) end
-    local def = findMission(args[1])
+    local def = findTestMission(args[1])
     if not def then return reply(src, 'error', 'err.unknown_mission') end
     if #args > 3 then return reply(src, 'error', 'admin.cmd.test_bad_arg', { arg = tostring(args[4]) }) end
     local tier, location
@@ -1135,10 +1155,10 @@ local function operationInfo()
     }
 end
 
-CP.Net.callback('getMissionList', function(src)
-    local okP, eP = can(src, 'viewMissionList')
-    if not okP then return nil, eP end
-    if not has('Missions', 'list') then return nil, 'err.module_unavailable' end
+-- MissionListData (docs/notes/oversight.md). adminExtras adds what the Admin UI Missions screen lists besides
+-- (SPEC Interfaces: "version, Lua file path, 'edited in code' flag"): filePath, editedInCode, defHash, status,
+-- disabledInConfig (Config.DisabledMissions).
+local function missionListData(src, adminExtras)
     local running = runningByMission()
     local list = {}
     for _, def in ipairs(CP.Missions.list() or {}) do
@@ -1163,6 +1183,14 @@ CP.Net.callback('getMissionList', function(src)
             departments = depts, runningNow = running[def.id] or {},
             crossDeptEligible = eligible,
         }
+        if adminExtras then
+            local row = list[#list]
+            row.filePath = type(def.filePath) == 'string' and def.filePath or nil
+            row.editedInCode = def.editedInCode == true
+            row.defHash = type(def.defHash) == 'string' and def.defHash or nil
+            row.status = type(def.status) == 'string' and def.status or 'published'
+            row.disabledInConfig = U.contains(Config.DisabledMissions or {}, def.id)
+        end
     end
     table.sort(list, function(a, b)
         if a.type ~= b.type then return tostring(a.type) < tostring(b.type) end
@@ -1176,6 +1204,21 @@ CP.Net.callback('getMissionList', function(src)
         crossDeptEnabled = Config.CrossDept == nil or Config.CrossDept.enabled ~= false,
         operation = op,
     }
+end
+
+CP.Net.callback('getMissionList', function(src)
+    local okP, eP = can(src, 'viewMissionList')
+    if not okP then return nil, eP end
+    if not has('Missions', 'list') then return nil, 'err.module_unavailable' end
+    return missionListData(src, false)
+end, { rate = 3 })
+
+-- ARCHITECTURE §8.3 admin:getMissions: the same list for the Admin UI with the file/status extras (admin only).
+CP.Net.callback('admin:getMissions', function(src)
+    local okP, eP = can(src, 'openAdmin')
+    if not okP then return nil, eP end
+    if not has('Missions', 'list') then return nil, 'err.module_unavailable' end
+    return missionListData(src, true)
 end, { rate = 3 })
 
 local function viewerDepartment(src)
@@ -1323,6 +1366,17 @@ CP.Net.callback('admin:getFlagged', function(src)
     if not okP then return nil, eP end
     local _, citizenid = viewerDepartment(src)
     return { flagged = Admin.flaggedRows(nil, citizenid or '') }
+end, { rate = 3 })
+
+-- ARCHITECTURE §8.3: payments left in 'paying' after a crash or a failed deposit (SPEC Cash payouts: "listed in
+-- Admin UI → Leaderboards for a manual check against the Renewed-Banking history"). CP.Cash owns the query.
+CP.Net.callback('admin:getStuckPayments', function(src)
+    local okP, eP = adminOnly(src)
+    if not okP then return nil, eP end
+    if not has('Cash', 'stuckPayments') then return nil, 'err.module_unavailable' end
+    local ok, list = call('Cash', 'stuckPayments')
+    if not ok or type(list) ~= 'table' then return nil, 'err.internal' end
+    return { payments = list, serverTime = os.time() }
 end, { rate = 3 })
 
 local function suspensionOf(ts)

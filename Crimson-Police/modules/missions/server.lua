@@ -26,7 +26,8 @@
 --   CP.Missions.normalize(def, meta) -> def|nil, err   pure; meta = { source, version, filePath, defHash, editedInCode, status }
 --   CP.Missions.parse(luaSource, chunkName) -> def|nil, err   one file's source in the loader sandbox (raw def)
 --   CP.Missions.serializeForClient(def) -> table
---   CP.Missions.register(def) -> def|nil, err  publish/restore without a reload (loader fields read from def)
+--   CP.Missions.register(def) -> def|nil, err  publish/restore without a reload (loader fields read from def;
+--                                              always source = 'custom')
 --   CP.Missions.unregister(id) -> boolean      archive without a reload (custom missions only)
 -- Net
 --   callback 'getMissionDefs' -> list of serialized definitions (err.not_ready before the first load)
@@ -618,6 +619,10 @@ end
 function Missions.register(def)
     if type(def) ~= 'table' then return nil, 'the definition is not a table' end
     local meta = metaFromDef(def)
+    -- register is the Mission Builder's publish / restore path: always a custom mission, so the builder's
+    -- allowed lists apply (a definition claiming source = 'builtin' cannot skip them; built-ins only come
+    -- from missions/builtin through loadAll).
+    meta.source = 'custom'
     if not meta.defHash and meta.filePath then
         local content = LoadResourceFile(CP.resource, meta.filePath)
         if content and content ~= '' then meta.defHash = CP.U.hashHex(content) end

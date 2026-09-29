@@ -17,7 +17,7 @@
 --       theme (Config.AdminTheme, validated, for the Admin UI); logo = the department logo, or nil for
 --       the Admin UI, a department without a logo, or a logo file missing from logos/.
 --       config = { missionTypes (key,label,points; by points), departments (key,label,short,primary),
---                  tiers (name, label = CP.L('tier.<name>')), maxRecalcs, disputeWindowHours,
+--                  tiers (name, label = CP.Scaling.label(name), else CP.L('tier.<name>')), maxRecalcs, disputeWindowHours,
 --                  periods, filters }, locale = CP.Locale.all(), serverTime = os.time().
 --       Opening the Officer/Supervisor UI refreshes the stored rank/callsign (CP.Access.refreshOfficerRow);
 --       silent = true (the theme fetch at login) skips that. nil fields arrive in the NUI as missing keys.
@@ -103,6 +103,15 @@ local function missionTypes()
     return list
 end
 
+-- Tier labels come from CP.Scaling.label (the one place that names tiers), the locale as a fallback.
+local function tierLabel(name)
+    if CP.Scaling and type(CP.Scaling.label) == 'function' then
+        local ok, label = pcall(CP.Scaling.label, name)
+        if ok and type(label) == 'string' and label ~= '' then return label end
+    end
+    return CP.L('tier.' .. name)
+end
+
 local function sessionConfig()
     local types = missionTypes()
     local depts = {}
@@ -113,7 +122,7 @@ local function sessionConfig()
     if type(Config.Scaling) == 'table' then
         for _, row in ipairs(Config.Scaling) do
             if type(row) == 'table' and type(row.tier) == 'string' then
-                tiers[#tiers + 1] = { name = row.tier, label = CP.L('tier.' .. row.tier) }
+                tiers[#tiers + 1] = { name = row.tier, label = tierLabel(row.tier) }
             end
         end
     end

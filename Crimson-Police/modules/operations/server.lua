@@ -34,7 +34,7 @@
 --              departmentShort, rank, joinedAt } }, runId|nil, idleSince, waitingReason|nil, attempt }
 --   CP.Operations.isLocked() -> boolean     an operation is joining, running or waiting
 --   CP.Operations.boardCard(src) -> card|nil   BoardData.operation (§9.4) + missionType, missionTypeLabel,
---       description, min, runState
+--       description, min, runState, joinBlocked (the err.* key a Join would return while canJoin is false)
 --   CP.Operations.launch(src, missionId) -> ok, data|errKey      (permission launchCrossDept)
 --   CP.Operations.startNow(src) -> ok, data|errKey               (the one who opened the join window, an admin,
 --                                                                 or anyone allowed when that person is offline)
@@ -167,8 +167,25 @@ local function notify(src, kind, key, vars, opts)
     call('Tablet', 'notify', src, kind, key, vars, opts)
 end
 
+-- The same toast for a list of players: CP.Tablet.notifyMany (deduplicated; never a -1 broadcast), else one
+-- CP.Tablet.notify per player.
 local function notifyMany(srcs, kind, key, vars)
+    if type(srcs) ~= 'table' or #srcs == 0 then return end
+    if CP.Tablet and type(CP.Tablet.notifyMany) == 'function' then
+        call('Tablet', 'notifyMany', srcs, kind, key, vars)
+        return
+    end
     for _, s in ipairs(srcs) do notify(s, kind, key, vars) end
+end
+
+-- Clip to at most n characters without ending inside a UTF-8 sequence (the cp_audit columns count
+-- characters; a byte clip of an accented reason would lose text or break the sequence).
+local function clipChars(s, n)
+    if s == nil then return nil end
+    s = tostring(s)
+    if not utf8.len(s) then return CP.U.clip(s, n) end
+    if utf8.len(s) <= n then return s end
+    return s:sub(1, utf8.offset(s, n + 1) - 1)
 end
 
 local function push(src, topic, data)
@@ -259,10 +276,10 @@ local function roleOf(src)
 end
 
 local function audit(src, cur, action, oldV, newV, reason)
-    local target = CP.U.clip(('#%s %s'):format(tostring(cur.id), tostring(cur.missionId)), 64)
+    local target = clipChars(('#%s %s'):format(tostring(cur.id), tostring(cur.missionId)), 64)
     call('Admin', 'audit', src == 0 and 'console' or src, roleOf(src), 'operations', action, target,
-        oldV ~= nil and CP.U.clip(tostring(oldV), 64) or nil, newV ~= nil and CP.U.clip(tostring(newV), 64) or nil,
-        reason ~= nil and CP.U.clip(tostring(reason), 255) or nil)
+        oldV ~= nil and clipChars(tostring(oldV), 64) or nil, newV ~= nil and clipChars(tostring(newV), 64) or nil,
+        reason ~= nil and clipChars(tostring(reason), 255) or nil)
 end
 
 local function webhook(kind, cur, extra)
@@ -312,13 +329,15 @@ end
 -- A toast for every online player who may launch / relaunch / cancel (supervisors with the permission, admins).
 local function notifySupervisors(kind, key, vars)
     CreateThread(function()
+        local targets = {}
         for _, p in ipairs(onlinePlayers()) do
             p = toSrc(p)
             if p then
                 local ok, allowed = call('Permissions', 'can', p, 'launchCrossDept')
-                if ok and allowed then notify(p, kind, key, vars) end
+                if ok and allowed then targets[#targets + 1] = p end
             end
         end
+        notifyMany(targets, kind, key, vars)
     end)
 end
 
@@ -769,10 +788,26 @@ function Ops.boardCard(src)
         end
     end
     local open = cur.status == 'joining' and not cur.joinClosed and cur.joinEndsAt ~= nil and cur.joinEndsAt > now
-    local canJoin = open and not mine and joined < max and src ~= nil and not onRun(src) and not inArena(src) and not isOnCall(src)
+    -- joinBlocked (extra, docs/notes/run_ui.md): why this viewer cannot join, the error key Join would return.
+    local joinBlocked = nil
+    if not open then
+        joinBlocked = 'err.op_join_closed'
+    elseif mine then
+        joinBlocked = 'err.op_already_joined'
+    elseif joined >= max then
+        joinBlocked = 'err.op_full'
+    elseif src == nil then
+        joinBlocked = 'err.invalid_payload'
+    elseif inArena(src) then
+        joinBlocked = 'err.in_arena'
+    elseif onRun(src) then
+        joinBlocked = 'err.already_on_run'
+    elseif isOnCall(src) then
+        joinBlocked = 'err.on_call'
+    end
     return {
         id = cur.id, missionLabel = cur.missionLabel, launcher = cur.launcher or '?', status = cur.status,
-        joined = joined, max = max, joinedByMe = mine, canJoin = canJoin == true,
+        joined = joined, max = max, joinedByMe = mine, canJoin = joinBlocked == nil, joinBlocked = joinBlocked,
         joinEndsIn = open and (cur.joinEndsAt - now) or nil,
         missionType = cur.missionType, missionTypeLabel = typeLabel(cur.missionType),
         description = def and def.description or nil, min = minFor(def), runState = run and run.state or nil,

@@ -8,7 +8,9 @@
       `door` (knock.duration progress; 'knock_start' then 'knock', both checked with server-side
       distance and the elapsed time). The suspect's response is rolled with the objective rng when
       the objective starts and revealed at the knock (or when a door-mode NPC dies first):
-      surrender (placed just outside the door, hands up), flee (runs out the back along `fleeTo`)
+      surrender (placed DOOR_STEP in front of the door, facing out: out = the door's vec4 heading,
+      turned round when the location start is clearly behind it; whether he waited inside or on the
+      step beside the door), flee (runs out the back along `fleeTo`)
       or fight (spawned with a pistol from `weapons`). Associates always fight. Done when the
       suspect is cuffed (or was killed while armed and fighting) and every associate is
       neutralised (killed, or gave up and cuffed).
@@ -90,6 +92,7 @@ local STUN_REPORT_RANGE  = 50.0    -- ...and the reporter this close (clients on
 local TIMED_SHARE        = 0.8     -- a timed interaction must last at least this share of its duration
 local FIRE_RELEASE       = 1.5     -- an armed inmate goes back to fleeing beyond fireWithin × this
 local DOOR_STEP          = 1.0     -- metres outside the door where a surrendering suspect stands
+local DOOR_FLIP_DOT      = 0.25    -- the door heading is turned round when the start is this clearly behind it
 local REUSE_OFFSET       = 1.25
 local SURRENDER_GRACE_MS = 3000    -- a kill this soon after an armed suspect gave up is a shot in flight
 local DEFAULT_KNOCK_MS   = 3000
@@ -621,21 +624,58 @@ local function rollResponse(ctx)
     return 'fight'
 end
 
--- Stand the suspect just outside the door (on the far side from where he waited), facing out.
+local function hasHeading(p)
+    if type(p) == 'vector4' then return true end
+    return type(p) == 'table' and tonumber(p.w or p[4] or p.heading) ~= nil
+end
+
+-- The unit vector pointing out of the door (towards the street). The door's vec4 heading is its facing;
+-- it is turned round when the location start (where the officers come from) lies clearly behind it (a
+-- door placed while facing the house). A door without a heading faces the start; with no start either,
+-- "out" is the side away from where the suspect waited.
+local function doorOutward(ctx, door, fromX, fromY)
+    local dx, dy = U.xyz(door)
+    local start = ctx.location and ctx.location.start and ctx.location.start.coords
+    local tx, ty, tl = 0.0, 0.0, 0.0
+    if start then
+        local sx, sy = U.xyz(start)
+        if sx then
+            tx, ty = sx - dx, sy - dy
+            tl = math.sqrt(tx * tx + ty * ty)
+        end
+    end
+    if hasHeading(door) then
+        local r = math.rad(headingOf(door))
+        local fx, fy = -math.sin(r), math.cos(r)
+        if tl > 1.0 and (fx * tx + fy * ty) / tl < -DOOR_FLIP_DOT then fx, fy = -fx, -fy end
+        return fx, fy
+    end
+    if tl > 1.0 then return tx / tl, ty / tl end
+    if fromX then
+        local vx, vy = dx - fromX, dy - fromY
+        local len = math.sqrt(vx * vx + vy * vy)
+        if len > 0.01 then return vx / len, vy / len end
+    end
+    return nil
+end
+
+-- Stand the suspect DOOR_STEP in front of the door, facing out. Where he waited does not matter: inside
+-- (the card: "the suspect inside") or on the door step next to the door (the built-in houses have no
+-- interior a ped can walk out of, docs/notes/missions_b.md), he always ends up outside, never behind the
+-- facade.
 local function moveToDoor(ctx, p)
     local door = pointList(ctx.location, ctx.obj.door)[1]
     if not door or not p.entity or not DoesEntityExist(p.entity) then return end
     local dx, dy, dz = U.xyz(door)
     local sx, sy = U.xyz(GetEntityCoords(p.entity))
-    local vx, vy = dx - sx, dy - sy
-    local len = math.sqrt(vx * vx + vy * vy)
+    local ox, oy = doorOutward(ctx, door, sx, sy)
     local h = headingOf(door)
-    local ox, oy = 0.0, 0.0
-    if len > 0.01 then
-        ox, oy = vx / len * DOOR_STEP, vy / len * DOOR_STEP
-        h = math.deg(math.atan(-vx, vy)) % 360.0
+    local px, py = dx, dy
+    if ox then
+        px, py = dx + ox * DOOR_STEP, dy + oy * DOOR_STEP
+        h = math.deg(math.atan(-ox, oy)) % 360.0
     end
-    SetEntityCoords(p.entity, dx + ox, dy + oy, dz + 0.0, false, false, false, false)
+    SetEntityCoords(p.entity, px + 0.0, py + 0.0, dz + 0.0, false, false, false, false)
     SetEntityHeading(p.entity, h + 0.0)
 end
 

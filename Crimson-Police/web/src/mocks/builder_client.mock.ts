@@ -6,22 +6,25 @@
 // the tablet reopens on the UI the tool was started from (payload.ui). builderCancel / builderWaypoint answer
 // like the Lua client. Also: server:test:record (recording a draft test result), server:admin:reloadMissions
 // (summary), and fallbacks for builder:list / builder:get / builder:config, every server:builder:* action,
-// getMissionList and server:admin:opLaunch — builder_server.mock.ts, oversight.mock.ts and teams.mock.ts register
+// getMissionList, admin:getMissions (built from getMissionList) and server:admin:opLaunch — builder_server.mock.ts, oversight.mock.ts and teams.mock.ts register
 // the full versions, which win over these fallbacks.
 //
 // URL shortcuts (dev only):
 //   &bopen=<missionId>&bstep=blocks|details|settings|locations|scaling|test|publish&bloc=<n>&bobj=<n>
 //        open that mission in the builder (Supervisor: scope sup; Admin: Missions → Builder tab)
 //   &bov=placement|placement_bad|recording|recording_wait|testdrive   show a static tool overlay
+//   &blua=1   tool results in Lua shape (empty lists as {}), as builder_server.mock.ts does for the server
 import { emitDebug, registerMock, request } from '../shared/nui';
 import type { Session } from '../shared/types';
 import type {
   BuilderClientResult, BuilderConfig, BuilderDefinition, BuilderListEntry, BuilderRecord, Vec, Vec3, Vec4,
 } from '../types/builder_server';
 import type {
-  BuilderPlaceRequest, BuilderRecordRequest, BuilderStepKey, BuilderTestDriveRequest, BuilderToolOverlay,
+  AdminMissionsData, BuilderPlaceRequest, BuilderRecordRequest, BuilderStepKey, BuilderTestDriveRequest, BuilderToolOverlay,
 } from '../types/builder_client';
+import type { MissionListData } from '../types/oversight';
 import { setEditorMemory } from '../builder/store';
+import { MOCK_DEPARTMENTS, mockLocale } from './samples';
 
 const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams();
 const now = () => Math.floor(Date.now() / 1000);
@@ -29,6 +32,17 @@ const r2 = (n: number) => Math.round(n * 100) / 100;
 const v3 = (x: number, y: number, z: number): Vec3 => ({ x: r2(x), y: r2(y), z: r2(z) });
 const v4 = (x: number, y: number, z: number, w: number): Vec4 => ({ x: r2(x), y: r2(y), z: r2(z), w: r2(((w % 360) + 360) % 360) });
 const DOCKS: Vec3 = { x: 1017.52, y: -3108.44, z: 5.9 };
+const LUA = params.get('blua') === '1';
+/** An empty Lua list arrives as {} and nil fields are missing. */
+function luaShape(v: unknown): unknown {
+  if (Array.isArray(v)) return v.length ? v.map(luaShape) : {};
+  if (v && typeof v === 'object') {
+    const out: Record<string, unknown> = {};
+    Object.entries(v as Record<string, unknown>).forEach(([k, x]) => { if (x !== null && x !== undefined) out[k] = luaShape(x); });
+    return out;
+  }
+  return v;
+}
 
 // ── the Lua client, simulated ──────────────────────────────────────────────────────
 let pending: (BuilderClientResult & { seq: number }) | null = null;
@@ -51,7 +65,7 @@ function finish(result: BuilderClientResult, ui: string | undefined, at: number)
     pending = { ...result, seq };
     running = null;
     overlay(null);
-    emitDebug('push', { topic: 'builder', data: { event: 'clientResult', id: result.missionId, result: pending } });
+    emitDebug('push', { topic: 'builder', data: { event: 'clientResult', id: result.missionId, result: (LUA ? luaShape(pending) : pending) as never } });
     void reopen(ui);
   }, at);
 }
@@ -177,7 +191,7 @@ registerMock('client', 'builderTestDrive', (p: BuilderTestDriveRequest) => {
 registerMock('client', 'builderResult', () => {
   const r = pending;
   pending = null;
-  return r;
+  return LUA && r ? luaShape(r) : r;
 });
 
 registerMock('client', 'builderCancel', () => {
@@ -308,6 +322,23 @@ registerMock('action', 'server:builder:discardDraft', (p: { id?: string }) => {
   return { id, deleted: true };
 }, { fallback: true });
 registerMock('request', 'getMissionList', () => ({ missions: [], canLaunch: true, crossDeptEnabled: true, operation: null }), { fallback: true });
+// admin:getMissions = getMissionList plus the Admin UI extras (modules/admin); built from whichever getMissionList mock runs.
+registerMock('request', 'admin:getMissions', async (): Promise<AdminMissionsData> => {
+  const res = await request<MissionListData>('getMissionList', {});
+  const data: MissionListData = res.ok && res.data ? res.data : { missions: [], canLaunch: true, crossDeptEnabled: true, operation: null };
+  const missions = (Array.isArray(data.missions) ? data.missions : []).map((m) => {
+    const builtin = m.source !== 'custom';
+    return {
+      ...m,
+      filePath: builtin ? `missions/builtin/${m.id}.lua` : `missions/custom/${m.id}.lua`,
+      editedInCode: m.id === 'custom_vinewood_stakeout',
+      defHash: null,
+      status: 'published',
+      disabledInConfig: builtin && !m.enabled,
+    };
+  });
+  return { ...data, missions };
+}, { fallback: true });
 registerMock('action', 'server:admin:opLaunch', () => ({ operationId: 1 }), { fallback: true });
 
 // ── dev shortcuts ─────────────────────────────────────────────────────────────────
@@ -322,9 +353,13 @@ if (openId) {
 const STATIC: Record<string, BuilderToolOverlay> = {
   placement: { kind: 'placement', key: 'spawns', label: 'Hostile spawn points', mode: 'ped', placed: 7, min: 9, max: 40, multiple: true, valid: true, reason: false, heading: 245, radius: false },
   placement_bad: { kind: 'placement', key: 'spawns', label: 'Hostile spawn points', mode: 'ped', placed: 7, min: 9, max: 40, multiple: true, valid: false, reason: 'Closer than 30 m to the start', heading: 245, radius: false },
-  recording: { kind: 'recording', key: 'route', label: 'Escort route', length: 1420, points: 14, samples: 57, stops: 1, maxStops: 5, stopsEnabled: true, paused: false, offRoad: true, rejected: 3, waiting: false, distance: false, loop: false, toStart: false, zone: false, tooLong: false, minLength: 800, maxLength: 8000, message: 'Stop point 1 added (20 s)' },
-  recording_wait: { kind: 'recording', key: 'raceLoop', label: 'Race loop', length: 2380, points: 22, samples: 95, stops: 0, maxStops: 5, stopsEnabled: false, paused: true, offRoad: false, rejected: 0, waiting: 'return', distance: 140, loop: true, toStart: 610, zone: false, tooLong: false, minLength: 800, maxLength: 8000, message: 'Undid 100 m' },
+  recording: { kind: 'recording', key: 'route', label: 'Escort route', length: 1420, points: 14, samples: 57, stops: 1, maxStops: 5, stopsEnabled: true, paused: false, offRoad: true, rejected: 3, waiting: false, distance: false, loop: false, toStart: false, zone: false, tooLong: false, undoMetres: 100, minLength: 800, maxLength: 8000, message: 'Stop point 1 added (20 s)' },
+  recording_wait: { kind: 'recording', key: 'raceLoop', label: 'Race loop', length: 2380, points: 22, samples: 95, stops: 0, maxStops: 5, stopsEnabled: false, paused: true, offRoad: false, rejected: 0, waiting: 'return', distance: 140, loop: true, toStart: 610, zone: false, tooLong: false, undoMetres: 100, minLength: 800, maxLength: 8000, message: 'Undid 100 m' },
   testdrive: { kind: 'testdrive', key: 'route', label: 'Escort route', waypoint: 9, total: 24, failed: [4], timeLeft: 17, stopLeft: false, waiting: false, distance: false, speed: 60, done: false },
 };
 const bov = params.get('bov');
-if (bov && STATIC[bov]) overlay(STATIC[bov], 700);
+if (bov && STATIC[bov]) {
+  // In game the boot 'theme' message carries the locale, so the HUD overlays translate with the tablet closed.
+  if (!params.get('ui')) emitDebug('theme', { theme: MOCK_DEPARTMENTS.sast.theme, locale: mockLocale }, 400);
+  overlay(STATIC[bov], 700);
+}

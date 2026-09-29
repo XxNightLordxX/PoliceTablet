@@ -4,6 +4,9 @@
 // through. The builder client's client actions (builderPlace, builderRecord, builderTestDrive,
 // builderResult, builderCancel, builderWaypoint) are registered as fallbacks: the builder client's own
 // mock file overrides them. Use ?ui=admin to get admin permissions (rollback, break lock, edit any).
+// Review switches: &blua=1 answers like Lua does (empty lists as {}, nil fields left out), &bedge=1 adds
+// edge-case missions (very long names, unknown names, an empty new draft) and no no-build zones, &bempty=1
+// starts with no custom missions at all.
 import { emitDebug, registerMock } from '../shared/nui';
 import { mockLocale } from './samples';
 import type {
@@ -16,6 +19,28 @@ const ME_NAME = 'John Doe';
 const now = () => Math.floor(Date.now() / 1000);
 const isAdminView = () => typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('ui') === 'admin';
 const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
+const qs = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams();
+const LUA = qs.get('blua') === '1';
+const EDGE = qs.get('bedge') === '1';
+const EMPTY = qs.get('bempty') === '1';
+
+/** What a Lua table looks like after msgpack/JSON: an empty list is {}, a nil field is missing. */
+function luaShape(v: unknown): unknown {
+  if (Array.isArray(v)) return v.length ? v.map(luaShape) : {};
+  if (v && typeof v === 'object') {
+    const out: Record<string, unknown> = {};
+    Object.entries(v as Record<string, unknown>).forEach(([k, x]) => {
+      if (x !== null && x !== undefined) out[k] = luaShape(x);
+    });
+    return out;
+  }
+  return v;
+}
+
+/** registerMock, answering in Lua shape with &blua=1. */
+function reg(kind: 'request' | 'action', name: string, fn: (p: any) => unknown): void {
+  registerMock(kind, name, LUA ? async (p: unknown) => luaShape(await fn(p)) : fn);
+}
 
 function tr(key: string, vars: Record<string, string | number> = {}): string {
   const s = mockLocale[key] ?? key;
@@ -119,7 +144,7 @@ function buildConfig(): BuilderConfig {
     maxHostiles: 40, maxBlocks: 6, minLocations: 3, maxLocations: 20, minLocationGap: 100, minSpawnFromStart: 30,
     bonusCap: { points: 50, pct: 25 },
     bonuses: BONUSES,
-    noBuildZones: [
+    noBuildZones: EDGE ? [] : [
       { label: 'Mission Row PD and FIB HQ', coords: { x: 470.63, y: -974.11, z: 30.18 }, radius: 120 },
       { label: 'Sandy Shores BCSO', coords: { x: 1833.06, y: 3679.32, z: 33.19 }, radius: 80 },
       { label: 'SASP HQ', coords: { x: 1560.38, y: 815.76, z: 76.21 }, radius: 80 },
@@ -300,6 +325,31 @@ put({
   publishedBy: 'Lieutenant Jane Roe (FIB, citizenid SUP00002)',
 });
 
+if (EMPTY) store.clear();
+if (EDGE) {
+  const long = 'Operation Nightfall at the Terminal Island Container Yard (North)';
+  const d = docksideRaid();
+  put({
+    id: 'custom_operation_nightfall_at_the_ter', dbStatus: 'published', version: 12, draftVersion: 13, draftTested: false, editedInCode: true,
+    owner: { citizenid: 'XYZ98765', name: null }, updatedBy: { citizenid: 'console', name: null }, updatedAt: now() - 60,
+    lock: { citizenid: 'XYZ98765', name: null, until: now() + 600 },
+    draft: { ...d, id: 'custom_operation_nightfall_at_the_ter', label: long.slice(0, 64),
+      locations: d.locations.map((l, i) => ({ ...l, label: `${'Very long location label that keeps going and going '.slice(0, 60)} ${i + 1}` })) },
+    published: { ...d, id: 'custom_operation_nightfall_at_the_ter', label: long.slice(0, 64) }, backups: [11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1],
+    publishedAt: now() - 3600, publishedBy: 'code edit',
+  });
+  put({
+    id: 'custom_new_patrol_mission', dbStatus: 'draft', version: null, draftVersion: 1, draftTested: false, editedInCode: false,
+    owner: MEP, updatedBy: MEP, updatedAt: now() - 5, lock: { ...MEP, until: now() + 1790 },
+    draft: {
+      id: 'custom_new_patrol_mission', label: 'New Patrol mission', description: '', type: 'patrol', departments: [],
+      minOfficers: 1, maxOfficers: 4, difficulty: 2, timeLimit: 600, startTimeout: 600, cooldown: 1200, vehiclePenalties: true,
+      locations: [{ label: 'Location 1' }], objectives: [], scaling: [], items: [], bonuses: [], penalties: [],
+    },
+    published: null, backups: [], publishedAt: null, publishedBy: null,
+  });
+}
+
 const BUILTINS: BuilderBuiltinEntry[] = [
   ['armored_truck_escort', 'Armored Truck Escort', 'tactical'], ['beat_patrol', 'Beat Patrol', 'patrol'],
   ['bomb_disposal', 'Bomb Disposal', 'tactical'], ['business_check', 'Business Check', 'patrol'],
@@ -446,12 +496,12 @@ const push = (event: string, id?: string, extra: Record<string, unknown> = {}) =
   emitDebug('push', { topic: 'builder', data: { event, id, by: ME_NAME, ...extra } }, 50);
 
 // ── callbacks ───────────────────────────────────────────────────────────────
-registerMock('request', 'builder:list', () => ({
+reg('request', 'builder:list', () => ({
   missions: [...store.values()].sort((a, b) => b.updatedAt - a.updatedAt).map(entry),
   builtins: BUILTINS, me: ME, serverTime: now(),
 }));
 
-registerMock('request', 'builder:get', (args: { id?: string }) => {
+reg('request', 'builder:get', (args: { id?: string }) => {
   const m = typeof args?.id === 'string' ? store.get(args.id) : undefined;
   if (m) return record(m);
   const b = typeof args?.id === 'string' ? builtinRecord(args.id) : null;
@@ -459,7 +509,7 @@ registerMock('request', 'builder:get', (args: { id?: string }) => {
   throw new Error('err.builder_unknown_mission');
 });
 
-registerMock('request', 'builder:config', () => buildConfig());
+reg('request', 'builder:config', () => buildConfig());
 
 // ── actions ─────────────────────────────────────────────────────────────────
 function newDraft(id: string, label: string, def: BuilderDefinition): MockMission {
@@ -473,7 +523,7 @@ function newDraft(id: string, label: string, def: BuilderDefinition): MockMissio
   return m;
 }
 
-registerMock('action', 'server:builder:create', (p: { type?: string; label?: string }) => {
+reg('action', 'server:builder:create', (p: { type?: string; label?: string }) => {
   const type = MISSION_TYPES.find((t) => t.key === p?.type);
   if (!type) throw new Error('err.builder_bad_type');
   const label = p.label?.trim() || tr('builder.default_label', { type: type.label });
@@ -486,7 +536,7 @@ registerMock('action', 'server:builder:create', (p: { type?: string; label?: str
   return { id, record: record(newDraft(id, label, def)) };
 });
 
-registerMock('action', 'server:builder:duplicate', (p: { id?: string }) => {
+reg('action', 'server:builder:duplicate', (p: { id?: string }) => {
   const m = typeof p?.id === 'string' ? store.get(p.id) : undefined;
   const source = m ? clone(m.draft ?? m.published!) : builtinRecord(String(p?.id))?.definition;
   if (!source) throw new Error('err.builder_unknown_mission');
@@ -495,14 +545,14 @@ registerMock('action', 'server:builder:duplicate', (p: { id?: string }) => {
   return { id, record: record(newDraft(id, label, source)) };
 });
 
-registerMock('action', 'server:builder:lock', (p: { id?: string }) => {
+reg('action', 'server:builder:lock', (p: { id?: string }) => {
   const m = need(p?.id);
   if (m.dbStatus === 'archived') throw new Error('err.builder_read_only');
   takeLock(m);
   return { id: m.id, lock: lockView(m) };
 });
 
-registerMock('action', 'server:builder:unlock', (p: { id?: string }) => {
+reg('action', 'server:builder:unlock', (p: { id?: string }) => {
   const m = need(p?.id);
   if (m.lock?.citizenid === ME) m.lock = null;
   return { id: m.id };
@@ -538,17 +588,17 @@ function store_(p: { id?: string; definition?: BuilderDefinition }, explicit: bo
   return { ...base, previousId, errors, valid: errors.length === 0 };
 }
 
-registerMock('action', 'server:builder:save', (p) => store_(p, true));
-registerMock('action', 'server:builder:autosave', (p) => store_(p, false));
+reg('action', 'server:builder:save', (p) => store_(p, true));
+reg('action', 'server:builder:autosave', (p) => store_(p, false));
 
-registerMock('action', 'server:builder:validate', (p: { id?: string; definition?: BuilderDefinition }) => {
+reg('action', 'server:builder:validate', (p: { id?: string; definition?: BuilderDefinition }) => {
   const m = need(p?.id);
   const def = p.definition ?? m.draft ?? m.published!;
   const errors = validate(def);
   return { valid: errors.length === 0, errors, armed: armedOf(def), maxHostiles: 40, requiredTier: tierFor(def.maxOfficers) };
 });
 
-registerMock('action', 'server:builder:test', (p: { id?: string; tier?: string; location?: number | 'random' }) => {
+reg('action', 'server:builder:test', (p: { id?: string; tier?: string; location?: number | 'random' }) => {
   const m = need(p?.id);
   if (!m.draft) throw new Error('err.builder_no_draft');
   const required = tierFor(m.draft.maxOfficers);
@@ -566,7 +616,7 @@ registerMock('action', 'server:builder:test', (p: { id?: string; tier?: string; 
   return { id: m.id, version: m.draftVersion, tier, location, requiredTier: required };
 });
 
-registerMock('action', 'server:builder:publish', (p: { id?: string }) => {
+reg('action', 'server:builder:publish', (p: { id?: string }) => {
   const m = need(p?.id);
   const lock = lockView(m);
   if (lock && !lock.mine) throw new Error('err.builder_locked');
@@ -590,7 +640,7 @@ registerMock('action', 'server:builder:publish', (p: { id?: string }) => {
   return { id: m.id, version: m.version, filePath: `missions/custom/${m.id}.lua`, backup };
 });
 
-registerMock('action', 'server:builder:archive', (p: { id?: string }) => {
+reg('action', 'server:builder:archive', (p: { id?: string }) => {
   const m = need(p?.id);
   if (m.dbStatus !== 'published') throw new Error('err.builder_not_published');
   m.dbStatus = 'archived';
@@ -599,7 +649,7 @@ registerMock('action', 'server:builder:archive', (p: { id?: string }) => {
   return { id: m.id, filePath: `missions/custom/archived/${m.id}.lua` };
 });
 
-registerMock('action', 'server:builder:restore', (p: { id?: string }) => {
+reg('action', 'server:builder:restore', (p: { id?: string }) => {
   const m = need(p?.id);
   if (m.dbStatus !== 'archived') throw new Error('err.builder_not_archived');
   m.dbStatus = 'published';
@@ -608,7 +658,7 @@ registerMock('action', 'server:builder:restore', (p: { id?: string }) => {
   return { id: m.id, filePath: `missions/custom/${m.id}.lua` };
 });
 
-registerMock('action', 'server:builder:rollback', (p: { id?: string }) => {
+reg('action', 'server:builder:rollback', (p: { id?: string }) => {
   if (!isAdminView()) throw new Error('err.no_permission');
   const m = need(p?.id);
   if (m.dbStatus !== 'published' || m.version == null) throw new Error('err.builder_not_published');
@@ -623,7 +673,7 @@ registerMock('action', 'server:builder:rollback', (p: { id?: string }) => {
   return { id: m.id, version: m.version, fromVersion: from };
 });
 
-registerMock('action', 'server:builder:breakLock', (p: { id?: string }) => {
+reg('action', 'server:builder:breakLock', (p: { id?: string }) => {
   if (!isAdminView()) throw new Error('err.no_permission');
   const m = need(p?.id);
   const previous = m.lock ? { citizenid: m.lock.citizenid, name: m.lock.name } : null;
@@ -632,7 +682,7 @@ registerMock('action', 'server:builder:breakLock', (p: { id?: string }) => {
   return { id: m.id, previous };
 });
 
-registerMock('action', 'server:builder:discardDraft', (p: { id?: string }) => {
+reg('action', 'server:builder:discardDraft', (p: { id?: string }) => {
   const m = need(p?.id);
   const lock = lockView(m);
   if (lock && !lock.mine) throw new Error('err.builder_locked');

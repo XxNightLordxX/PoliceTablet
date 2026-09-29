@@ -37,8 +37,9 @@
 
   Evidence accepted (client -> server through ctx.report; the engine adds coords and time)
     { type = 'checkpoint', index, netId?, vehClass?, model?, try? }   index = the current checkpoint
-        (vehClass is used only when the server has no class for the vehicle, and only when model matches
-        the model of the vehicle the server sees the reporter in)
+        (vehClass is used only when the server has no class for the vehicle, only when model matches
+        the model of the vehicle the server sees the reporter in, only for a GTA class 0..22, and only
+        while it agrees with every earlier report for that model)
     { type = 'contact', netId? }        course running, reporter in a vehicle, at most 1 per 1.2 s, 60 counted
     { type = 'undriveable', netId }     the reporter's course vehicle; verified with its engine health
 
@@ -199,8 +200,9 @@ local function entityOf(netId)
 end
 
 -- The class of a vehicle as the server knows it, or nil. FiveM has no server-side GetVehicleClass native
--- (qbx_core only offers an export that asks a client); CP.Qbx.vehicleClass(model) is used when the
--- integrations module provides it (see the notes: requests), a GetVehicleClass global when one exists.
+-- (qbx_core only offers an export that asks a client, and modules/integrations/qbx does not wrap it:
+-- docs/notes/core.md); CP.Qbx.vehicleClass(model) is used if it ever exists, a GetVehicleClass global
+-- when one exists. Otherwise the client-reported class is used, cross-checked by clientClass below.
 local function serverClass(veh, model)
     if CP.Qbx and type(CP.Qbx.vehicleClass) == 'function' then
         local ok, c = pcall(CP.Qbx.vehicleClass, model)
@@ -213,9 +215,40 @@ local function serverClass(veh, model)
     return nil
 end
 
+-- Classes clients reported per model (the unsigned 32-bit model hash). A model's class comes from the game
+-- files and is the same on every unmodified client, so a report that contradicts an earlier one for the same
+-- model is refused and that model's class is never taken from a client again (until a restart); the
+-- server's own model list and a server-side class still apply to it.
+local reportedClass = {}      -- [model] = class | false (contradicting reports seen)
+local reportedCount = 0
+local REPORTED_MAX = 512
+local CLASS_MAX = 22          -- GTA vehicle classes 0..22
+
+-- The class a client reported for the vehicle the SERVER sees it in: only when the reported model is that
+-- vehicle's model (signed and unsigned hash forms compare equal), the class is a GTA class, and it agrees
+-- with every earlier report for that model. nil otherwise.
+local function clientClass(model, ev)
+    if type(ev) ~= 'table' or ev.model == nil or h32(ev.model) ~= model then return nil end
+    local class = idx(ev.vehClass)
+    if class == nil or class < 0 or class > CLASS_MAX then return nil end
+    local known = reportedClass[model]
+    if known == false then return nil end
+    if known == nil then
+        if reportedCount < REPORTED_MAX then
+            reportedClass[model] = class
+            reportedCount = reportedCount + 1
+        end
+    elseif known ~= class then
+        reportedClass[model] = false
+        CP.warn('blocks', 'checkpoint_route: contradicting vehicle classes reported for model %d (%d, then %d): no longer taken from clients', model, known, class)
+        return nil
+    end
+    return class
+end
+
 -- Config.PoliceVehicles: models are checked on the server; the class comes from the server where it
--- can, otherwise from the class the client reported, and then only for the model the server sees the
--- reporter drive (a report for another model is refused).
+-- can (FiveM has no server-side class native), otherwise from the class the client reported, and then
+-- only for the model the server sees the reporter in (clientClass).
 local function policeVehicleOk(veh, ev)
     local pv = Config.PoliceVehicles or {}
     local rawModel = GetEntityModel(veh)
@@ -224,10 +257,7 @@ local function policeVehicleOk(veh, ev)
         if h32(joaat(name)) == model then return true end
     end
     local class = serverClass(veh, rawModel)
-    if class == nil and type(ev) == 'table' then
-        if ev.model == nil or h32(ev.model) ~= model then return false end
-        class = idx(ev.vehClass)
-    end
+    if class == nil then class = clientClass(model, ev) end
     if class == nil then return false end
     for _, c in ipairs(pv.classes or {}) do
         if c == class then return true end

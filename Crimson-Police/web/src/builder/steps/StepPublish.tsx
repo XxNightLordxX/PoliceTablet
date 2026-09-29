@@ -9,6 +9,7 @@ import { formatDateTime } from '../../shared/format';
 import { useAction } from '../../shared/hooks';
 import { t } from '../../shared/i18n';
 import { useCan } from '../../shared/session';
+import { toast } from '../../shared/toast';
 import type { BuilderDiscardResult, BuilderPublishResult, BuilderValidateResult } from '../../types/builder_server';
 import type { BuilderStepKey } from '../../types/builder_client';
 import { locationOfError, objectiveOfError, stepOfError } from '../defUtils';
@@ -38,7 +39,8 @@ export function StepPublish({ ed, cfg, def, ro, goTo }: StepProps) {
   }, [def]);
 
   const errors = check ? asArray(check.errors) : ed.errors;
-  const required = rec?.requiredTier ?? requiredTierFor(cfg, def.maxOfficers);
+  // the draft on screen decides (the record's requiredTier is the stored draft's, stale until the next load)
+  const required = requiredTierFor(cfg, def.maxOfficers) || rec?.requiredTier || 'standard';
   const lockMine = !!ed.lock?.mine;
   const mayPublish = can('builderPublish') && !!rec?.can.publish;
   const tested = !!rec?.draftTested || cfg.testAtMaxTier === false;
@@ -55,21 +57,28 @@ export function StepPublish({ ed, cfg, def, ro, goTo }: StepProps) {
   const grouped = STEP_ORDER.map((s) => ({ step: s, list: errors.filter((e) => stepOfError(e) === s) })).filter((g) => g.list.length);
 
   const publish = async () => {
-    if (ed.dirty) await ed.autosaveNow();
+    // publishing uses the stored draft: store what is on screen first (a stored change needs a new test)
+    if (ed.dirty && !(await ed.flush())) {
+      setConfirm(null);
+      toast('error', t('builder.pub.not_stored'));
+      return;
+    }
     const res = await run<BuilderPublishResult>('server:builder:publish', { id: ed.id }, { success: 'builder.pub.published', successVars: { mission: def.label } });
     setConfirm(null);
     if (res.ok && res.data) {
       setDone(res.data);
-      forgetDraft(ed.id);
-      void ed.refresh();
-    }
+      // the server cleared the draft and released the lock: load the live version (and lock it again)
+      void ed.reload();
+    } else if (res.error === 'err.builder_not_tested') void ed.refresh();
   };
   const discard = async () => {
     const res = await run<BuilderDiscardResult>('server:builder:discardDraft', { id: ed.id });
     setConfirm(null);
-    if (res.ok) {
+    if (res.ok && res.data) {
       forgetDraft(ed.id);
-      void ed.refresh();
+      // a never-published mission is deleted; otherwise the editor goes back to the live version
+      if (res.data.deleted) ed.gone();
+      else void ed.reload();
     }
   };
 
@@ -110,7 +119,7 @@ export function StepPublish({ ed, cfg, def, ro, goTo }: StepProps) {
           </ul>
           <div className="builder_client-publish__meta">
             <KeyValue label={t('builder.pub.required_tier')}><TierBadge tier={required} size="sm" /></KeyValue>
-            <KeyValue label={t('builder.pub.next_version')}><span className="cp-num">v{rec?.draftVersion ?? ((rec?.version ?? 0) + 1)}</span></KeyValue>
+            <KeyValue label={t('builder.pub.next_version')}><span className="cp-num">{t('builder.version_short', { version: rec?.draftVersion ?? ((rec?.version ?? 0) + 1) })}</span></KeyValue>
             <KeyValue label={t('builder.pub.pool')}>{t('builder.pub.pool_text', { type: asArray(cfg.missionTypes).find((m) => m.key === def.type)?.label ?? def.type, depts: def.departments.length ? def.departments.map((k) => asArray(cfg.departments).find((d) => d.key === k)?.short ?? k).join(', ') : t('builder.pub.all_depts') })}</KeyValue>
             <KeyValue label={t('builder.pub.file')}><span className="builder_client-mono">{`${cfg.exportPath ?? 'missions/custom/'}${ed.id}.lua`}</span></KeyValue>
           </div>
@@ -148,10 +157,10 @@ export function StepPublish({ ed, cfg, def, ro, goTo }: StepProps) {
         {rec?.version ? (
           <Card title={t('builder.pub.live')} icon="globe" padding="md" muted>
             <div className="builder_client-publish__meta">
-              <KeyValue label={t('builder.pub.live_version')}><span className="cp-num">v{rec.version}</span></KeyValue>
+              <KeyValue label={t('builder.pub.live_version')}><span className="cp-num">{t('builder.version_short', { version: rec.version })}</span></KeyValue>
               <KeyValue label={t('builder.pub.published_at')}>{rec.publishedAt ? formatDateTime(rec.publishedAt) : '—'}</KeyValue>
               <KeyValue label={t('builder.pub.published_by')}>{rec.publishedBy ?? '—'}</KeyValue>
-              <KeyValue label={t('builder.pub.backups')}><span className="cp-num">{asArray(rec.backups).length ? asArray(rec.backups).map((v) => `v${v}`).join(', ') : '—'}</span></KeyValue>
+              <KeyValue label={t('builder.pub.backups')}><span className="cp-num">{asArray(rec.backups).length ? asArray(rec.backups).map((v) => t('builder.version_short', { version: v })).join(', ') : '—'}</span></KeyValue>
             </div>
           </Card>
         ) : null}

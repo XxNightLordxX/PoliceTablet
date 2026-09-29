@@ -34,8 +34,9 @@
 --       { departmentLabel, seasonPoints, disputeWindowHours, badges[i].kind }
 --       own = nil or the viewer's citizenid: cash, cash status and the breakdown's cash block are only in
 --       the own profile. runs = the last 20 rows (manual awards and goal rewards included, labelled).
---       canDispute = own row, flagged or voided or failed, not an award row, created within
---       Config.Disputes.windowHours, no open cp_disputes row. errKeys: err.unknown_officer, err.invalid_payload
+--       canDispute = CP.Disputes.eligible(row, viewer, now) (own row, flagged or voided or failed, not an award
+--       row, created within Config.Disputes.windowHours; the same rule server:dispute applies) and no cp_disputes
+--       row at all for it (one dispute per row, ever). errKeys: err.unknown_officer, err.invalid_payload
 --   action server:setHideName (boolean | { hideName = boolean }) -> { hideName }
 --   callback admin:getBoards({ period, filter, department?, citizenid? })   (CP.Permissions 'openAdmin')
 --       -> { period, filter, department?, rows = ranked rows + { cash, realName, hidden },
@@ -52,6 +53,8 @@
 --                from, to (range), seasonId (season), fresh }
 --   CP.Leaderboard.missionLabel(missionType, missionId, breakdown) -> text   (slice helper)
 --   CP.Leaderboard.publicName(entry) -> text        (slice helper: privacy-aware display name)
+--   CP.Leaderboard.badgeLabel(badgeId) -> label|nil, kind   label of this module's badge ids (officer_of_week_<week>,
+--       season_<id>_champion, season_<id>_top10); nil (kind 'achievement') for any other id
 -- Test hooks: CP.Leaderboard._weeklyJob(prevStartTs, curStartTs), CP.Leaderboard._boot()
 
 CP.Leaderboard = CP.Leaderboard or {}
@@ -701,6 +704,11 @@ local function badgeLabel(id)
     return nil, 'achievement'
 end
 
+function LB.badgeLabel(id)
+    if type(id) ~= 'string' then return nil, 'achievement' end
+    return badgeLabel(id)
+end
+
 local function badgesFor(citizenid)
     local list = {}
     local ok, fromScoring = call('Scoring', 'badges', citizenid)
@@ -751,15 +759,24 @@ WHERE r.citizenid = ?
 ORDER BY r.created_at DESC, r.id DESC
 LIMIT ?]]
 
-local function disputable(row, own, nowTs)
+local function disputable(row, own, nowTs, citizenid)
     if not own or AWARD_TYPES[row.mission_type] then return false end
+    -- modules/disputes allows one dispute per row, ever: an open one blocks (err.dispute_open) and a
+    -- decided one is final (err.dispute_final), so any cp_disputes row hides the button.
+    if num(row.disputes) ~= 0 then return false end
+    if has('Disputes', 'eligible') then
+        -- The filing rule itself, so the button never offers what server:dispute would refuse.
+        local ok, eligible = call('Disputes', 'eligible', {
+            citizenid = citizenid, mission_type = row.mission_type, state = row.state,
+            flagged = row.flagged, voided = row.voided, created_ts = row.created_ts,
+        }, citizenid, nowTs)
+        if ok then return eligible == true end
+    end
     if not (U.truthy(row.flagged) or U.truthy(row.voided) or row.state == 'failed') then return false end
     local windowS = num(cfg('Disputes', 'windowHours', 48)) * 3600
     local created = num(row.created_ts)
     if created <= 0 or nowTs - created > windowS then return false end
-    -- modules/disputes allows one dispute per row, ever: an open one blocks (err.dispute_open) and a
-    -- decided one is final (err.dispute_final), so any cp_disputes row hides the button.
-    return num(row.disputes) == 0
+    return true
 end
 
 -- RunResult fields (§9.6) a public profile may show: everything but the cash block, and none of the extra
@@ -769,7 +786,7 @@ local PUBLIC_BREAKDOWN = {
     payTier = true, participants = true, departments = true, durationS = true, points = true, flagged = true,
 }
 
-local function profileRun(row, own, nowTs)
+local function profileRun(row, own, nowTs, citizenid)
     local bd = U.jsonField(row.breakdown)
     if type(bd) ~= 'table' then bd = nil end
     if bd then
@@ -798,7 +815,7 @@ local function profileRun(row, own, nowTs)
         createdAt = sqlTs(row.created_ts),
         createdTs = int(row.created_ts),
         breakdown = bd,
-        canDispute = disputable(row, own, nowTs),
+        canDispute = disputable(row, own, nowTs, citizenid),
     }
 end
 
@@ -819,7 +836,7 @@ function LB.profile(viewer, target)
     local nowTs = os.time()
     local rows = MySQL.query.await(PROFILE_RUNS_SQL, { cid, PROFILE_RUNS }) or {}
     local runs = {}
-    for i, row in ipairs(rows) do runs[i] = profileRun(row, own, nowTs) end
+    for i, row in ipairs(rows) do runs[i] = profileRun(row, own, nowTs, cid) end
     return {
         citizenid = cid,
         name = own and viewer.name or LB.publicName(e),

@@ -149,7 +149,9 @@ local function body()
     CP.Testing = { startDraft = function(src, def, opts)
         drafts[#drafts + 1] = { src = src, def = def, opts = opts }
         if not testingOk then return false, 'err.in_arena' end
-        return true
+        -- as modules/testing: the data names the location that runs ('random' picks one)
+        return true, { runId = 'run-' .. #drafts, missionId = def.id, locationIndex = opts.location == 'random' and 3 or opts.location,
+            tier = opts.tier, testers = 1 }
     end }
     local inArena = {}
     CP.Alerts = { inArena = function(src) return inArena[src] == true end }
@@ -707,6 +709,13 @@ local function body()
     H.eq(select(2, act(1, 'test', { id = id, location = 9 })), 'err.builder_bad_location', 'unknown location')
     local okT, tdata = act(1, 'test', { id = id, location = 2 })
     H.ok(okT and tdata.tier == 'heavy' and tdata.requiredTier == 'heavy', 'test at the required tier by default: ' .. tostring(tdata))
+    H.eq(tdata.location, 2, 'the test reply names its location')
+    do
+        local okR, rdata = act(1, 'test', { id = id, location = 'random' })
+        H.ok(okR and rdata.location == 3, 'a random location test replies with the location CP.Testing picked (the tester records it)')
+        H.eq(drafts[#drafts].opts.location, 'random', 'CP.Testing still gets random')
+        act(1, 'test', { id = id, location = 2 })
+    end
     local started = drafts[#drafts]
     H.ok(started and started.opts.tier == 'heavy' and started.opts.location == 2 and started.opts.useStartRoute == false, 'CP.Testing.startDraft options')
     H.ok(started and started.def.id == id and started.def.source == 'custom', 'the draft is normalised for the test run')
@@ -803,7 +812,28 @@ local function body()
         local told = H.findEvents('crimson-police:client:builder')
         H.ok(#told == 1 and told[1].target == 1 and told[1].args[1].event == 'lockBroken', 'the editor client is told')
         H.eq(notes[#notes].key, 'builder.lock_broken', 'the editor gets a toast')
+        H.eq(told[1].args[1].by, 'Ada Admin', 'the editor client is told who broke the lock')
         H.eq(lastAudit().action, 'breakLock', 'lock break audited')
+        -- the old editor's autosave does not silently take the free lock back (it would overwrite the breaker's work)
+        H.clockMs = H.clockMs + 16 * 60 * 1000   -- src 1 last opened the builder long ago (no longer a viewer by list/get)
+        local d = validDef(); d.objectives[1].accuracy = 44
+        H.eq(select(2, act(1, 'autosave', { id = id, definition = d })), 'err.builder_locked', 'after a break the old editor cannot autosave')
+        H.eq(select(2, act(1, 'save', { id = id, definition = d })), 'err.builder_locked', 'nor save')
+        H.eq(row(id).locked_by, nil, 'the broken lock stays free')
+        H.ok(not tostring(row(id).draft_definition):find('"accuracy":44', 1, true), 'the old editor did not overwrite the draft')
+        -- their autosaves keep them a viewer, so the next lock break reaches their screen
+        local pushAt = #pushes
+        act(3, 'lock', { id = id })
+        act(3, 'breakLock', { id = id })
+        local reached = false
+        for i = pushAt + 1, #pushes do
+            if pushes[i].src == 1 and pushes[i].topic == 'builder' and pushes[i].data.event == 'lockBroken' then reached = true end
+        end
+        H.ok(reached, 'an editor who only autosaves still gets builder pushes')
+        -- an explicit lock takes the mission back
+        H.ok((act(1, 'lock', { id = id })), 'the old editor may take the lock back explicitly')
+        H.ok((act(1, 'autosave', { id = id, definition = validDef() })), 'and autosave again')
+        act(1, 'unlock', { id = id })
         -- expired locks can be taken
         act(1, 'lock', { id = id })
         H.sql('UPDATE cp_custom_missions SET locked_until = NOW() - INTERVAL 1 MINUTE WHERE id = ?', { id })

@@ -709,6 +709,24 @@ do
     local st = T.state(3)
     H.eq(st.lobby.invites[1].status, 'expired', 'shown as expired in the lobby')
 
+    -- integration: a draft invitation's label (from the Mission Builder) is clipped on a UTF-8 boundary
+    local longLabel = string.rep('é', 40)   -- 40 characters, 80 bytes
+    local okD, resD = T.invite(3, { 2 }, { missionId = 'my_draft', missionLabel = longLabel, draft = true })
+    H.eq(okD, true, 'draft invitation')
+    local lbl = resD and resD.lobby and resD.lobby.missionLabel or ''
+    H.ok(utf8.len(lbl) ~= nil, 'the draft label stays valid UTF-8')
+    H.eq(#lbl, 64, 'clipped to 64 bytes (32 whole characters)')
+    local lastInviteEv = lastEvent('client:testInvite')
+    H.ok(lastInviteEv and utf8.len(lastInviteEv.args[1].missionLabel) ~= nil, 'the invite event carries valid UTF-8')
+    T.cancelInvites(3)
+
+    -- integration: CP.Testing.resolveMission is public (/CrimsonPoliceAdmin test resolves archived missions with it)
+    H.ok(type(T.resolveMission) == 'function', 'CP.Testing.resolveMission is exposed')
+    H.eq(T.resolveMission('gang_shootout') and T.resolveMission('gang_shootout').id, 'gang_shootout', 'resolves a loaded mission')
+    local noDef, noErr = T.resolveMission('no_such_mission')
+    H.eq(noDef, nil, 'unknown mission')
+    H.eq(noErr, 'err.test_unknown_mission', 'with its error key')
+
     -- the net action path (permission wrappers and reply events)
     H.reset()
     H.fire('crimson-police:server:test:invite', 2, { missionId = 'gang_shootout', targets = { 5 } }, 'r1')

@@ -9,8 +9,8 @@
 //   Builder           the Mission Builder (src/builder, scope 'admin': admins can do every builder action)
 //   Cross-Department  <OperationPanel scope="admin" /> (launch, start now, relaunch, cancel) and the eligible
 //                     missions with their Launch buttons
-// Data: callbacks getMissionList (every loaded mission, `enabled`, `crossDeptEligible`) and builder:list (custom rows
-// incl. drafts and archived, file path, edited in code, lock, can.*). Actions: server:builder:publish / archive /
+// Data: callbacks admin:getMissions (every loaded mission: `enabled`, `crossDeptEligible`, filePath, editedInCode,
+// disabledInConfig) and builder:list (custom rows incl. drafts and archived, file path, edited in code, lock, can.*). Actions: server:builder:publish / archive /
 // restore / rollback / breakLock / duplicate, server:admin:reloadMissions (summary dialog), server:admin:opLaunch
 // { missionId }. Pushes 'builder' and 'operation' refresh the lists.
 import { useMemo, useState } from 'react';
@@ -19,14 +19,15 @@ import {
   SegmentedControl, Stat, Table, Tabs, type TableColumn,
 } from '../../shared/components';
 import { asArray } from '../../shared/data';
-import { useAction, useRequest } from '../../shared/hooks';
+import { useAction, usePush, useRequest } from '../../shared/hooks';
 import { t } from '../../shared/i18n';
 import { useCan } from '../../shared/session';
 import { toast } from '../../shared/toast';
 import OperationPanel from '../../supervisor/components/OperationPanel';
 import { BuilderWorkspace, LockBadge, StatusBadge, editorMemory, setEditorMemory } from '../../builder';
 import type { BuilderCreateResult, BuilderList, BuilderListEntry, BuilderPublishResult, BuilderRollbackResult } from '../../types/builder_server';
-import type { MissionListData, MissionListEntry } from '../../types/oversight';
+import type { MissionListEntry } from '../../types/oversight';
+import type { AdminMissionsData } from '../../types/builder_client';
 
 type Tab = 'catalog' | 'builder' | 'operation';
 type SourceFilter = 'all' | 'builtin' | 'custom';
@@ -42,6 +43,7 @@ interface CatalogRow {
   editedInCode: boolean;
   inPool: boolean;
   enabled: boolean;
+  offInConfig: boolean;
   isBoss: boolean;
   eligible: boolean;
   entry: BuilderListEntry | null;
@@ -66,8 +68,13 @@ export default function AdminMissions() {
     setTabState(next);
     setEditorMemory('admin', { tab: next });
   };
-  const missions = useRequest<MissionListData>('getMissionList', {}, { pushTopic: 'operation', pollMs: 30000 });
+  const missions = useRequest<AdminMissionsData>('admin:getMissions', {}, { pushTopic: 'operation', pollMs: 30000 });
   const builder = useRequest<BuilderList>('builder:list', {}, { pushTopic: 'builder', pollMs: 30000 });
+  // the catalog (loaded missions, pool, eligibility) changes when a custom mission joins or leaves its pool
+  usePush<{ event?: string }>('builder', (data) => {
+    const ev = data && typeof data === 'object' ? data.event : undefined;
+    if (ev === 'published' || ev === 'archived' || ev === 'restored' || ev === 'rolledBack' || ev === 'reloaded') void missions.refetch();
+  });
   const { run, busy } = useAction();
   const [query, setQuery] = useState('');
   const [source, setSource] = useState<SourceFilter>('all');
@@ -83,8 +90,9 @@ export default function AdminMissions() {
       return {
         id: m.id, label: m.label, type: m.type, typeLabel: m.typeLabel, source: builtin ? 'builtin' : 'custom',
         version: builtin ? null : entry?.version ?? m.version ?? null,
-        filePath: builtin ? `missions/builtin/${m.id}.lua` : entry?.filePath ?? `missions/custom/${m.id}.lua`,
-        editedInCode: !!entry?.editedInCode, inPool: true, enabled: m.enabled, isBoss: m.isBoss, eligible: m.crossDeptEligible,
+        filePath: m.filePath ?? entry?.filePath ?? (builtin ? `missions/builtin/${m.id}.lua` : null),
+        editedInCode: !!(m.editedInCode || entry?.editedInCode), inPool: true, enabled: m.enabled,
+        offInConfig: m.disabledInConfig ?? (builtin && !m.enabled), isBoss: m.isBoss, eligible: m.crossDeptEligible,
         entry, mission: m,
       };
     });
@@ -92,7 +100,7 @@ export default function AdminMissions() {
       out.push({
         id: e.id, label: e.label, type: e.type, typeLabel: asArray(missions.data?.missions).find((m) => m.type === e.type)?.typeLabel ?? e.type,
         source: 'custom', version: e.version, filePath: e.filePath, editedInCode: e.editedInCode, inPool: false,
-        enabled: e.status === 'published', isBoss: false, eligible: false, entry: e, mission: null,
+        enabled: e.status === 'published', offInConfig: false, isBoss: false, eligible: false, entry: e, mission: null,
       });
     });
     return out;
@@ -107,7 +115,7 @@ export default function AdminMissions() {
     total: rows.length,
     builtin: rows.filter((r) => r.source === 'builtin').length,
     custom: rows.filter((r) => r.source === 'custom').length,
-    off: rows.filter((r) => r.source === 'builtin' && !r.enabled).length,
+    off: rows.filter((r) => r.offInConfig).length,
     drafts: rows.filter((r) => r.entry?.hasDraft || r.entry?.status === 'draft' || r.entry?.status === 'tested').length,
     locked: rows.filter((r) => r.entry?.lock && !r.entry.lock.mine).length,
   }), [rows]);
@@ -185,12 +193,16 @@ export default function AdminMissions() {
     {
       key: 'source',
       header: t('admin.missions.col.source'),
-      width: 116,
-      render: (r) => (r.source === 'builtin'
-        ? <Badge size="sm" tone="grey" variant="outline" icon="lock">{t('admin.missions.builtin')}</Badge>
-        : <Badge size="sm" tone="primary" icon="tool">{t('admin.missions.custom')}</Badge>),
+      width: 124,
+      render: (r) => (
+        <div className="builder_client-status-cell">
+          {r.source === 'builtin'
+            ? <Badge size="sm" tone="grey" variant="outline" icon="lock">{t('admin.missions.builtin')}</Badge>
+            : <Badge size="sm" tone="primary" icon="tool">{t('admin.missions.custom')}</Badge>}
+          {r.version ? <span className="builder_client-muted cp-num">{t('admin.missions.version_v', { version: r.version })}</span> : null}
+        </div>
+      ),
     },
-    { key: 'version', header: t('admin.missions.col.version'), width: 76, numeric: true, render: (r) => (r.version ? <span className="cp-num">v{r.version}</span> : <span className="builder_client-muted">—</span>) },
     {
       key: 'file',
       header: t('admin.missions.col.file'),
@@ -204,28 +216,29 @@ export default function AdminMissions() {
     {
       key: 'status',
       header: t('admin.missions.col.status'),
-      width: 170,
+      width: 190,
       render: (r) => {
         if (r.source === 'builtin') {
+          if (r.offInConfig) return <Badge size="sm" tone="grey" icon="minusCircle" title={t('admin.missions.off_config_hint')}>{t('admin.missions.off_config')}</Badge>;
           return r.enabled
             ? <Badge size="sm" tone="success" icon="checkCircle">{t('admin.missions.enabled')}</Badge>
-            : <Badge size="sm" tone="grey" icon="minusCircle" title={t('admin.missions.off_config_hint')}>{t('admin.missions.off_config')}</Badge>;
+            : <Badge size="sm" tone="grey" icon="minusCircle">{t('admin.missions.not_enabled')}</Badge>;
         }
         const e = r.entry;
         return (
           <div className="builder_client-status-cell">
             {e ? <StatusBadge status={e.status} /> : <Badge size="sm" tone="success">{t('builder.status.published')}</Badge>}
             {e?.hasDraft && e.dbStatus === 'published' ? (
-              <Badge size="sm" tone={e.draftTested ? 'accent' : 'neutral'} variant="outline" icon={e.draftTested ? 'flask' : 'edit'}>
+              <Badge size="sm" tone={e.draftTested ? 'success' : 'neutral'} variant="outline" icon={e.draftTested ? 'flask' : 'edit'}>
                 {t(e.draftTested ? 'builder.list.draft_tested' : 'builder.list.draft_v', { version: e.draftVersion ?? '?' })}
               </Badge>
             ) : null}
-            {r.inPool && !r.enabled ? <Badge size="sm" tone="grey" title={t('admin.missions.off_config_hint')}>{t('admin.missions.off_config')}</Badge> : null}
+            {r.offInConfig ? <Badge size="sm" tone="grey" title={t('admin.missions.off_config_hint')}>{t('admin.missions.off_config')}</Badge> : null}
+            {e?.lock ? <LockBadge lock={e.lock} /> : null}
           </div>
         );
       },
     },
-    { key: 'lock', header: t('admin.missions.col.lock'), width: 150, render: (r) => (r.source === 'builtin' ? <span className="builder_client-muted">—</span> : <LockBadge lock={r.entry?.lock ?? null} />) },
     {
       key: 'actions',
       header: '',
@@ -317,7 +330,7 @@ export default function AdminMissions() {
               <span className="cp-spacer" />
               <span className="builder_client-muted builder_client-inline-note"><Icon name="info" size={14} />{t('admin.missions.disabled_note')}</span>
             </div>
-            <Table columns={columns} rows={filtered} rowKey={(r) => r.id} empty={t('admin.missions.none')} aria-label={t('ui.screen.admin_missions')} />
+            <Table className="builder_client-catalog" columns={columns} rows={filtered} rowKey={(r) => r.id} empty={t('admin.missions.none')} aria-label={t('ui.screen.admin_missions')} />
           </>
         )
       ) : null}

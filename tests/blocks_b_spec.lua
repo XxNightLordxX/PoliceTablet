@@ -789,6 +789,38 @@ do -- door: surrender at the door, knock checks, cuff, associate, completion
     H.eq(#awardsOf(S, 'suspect_alive'), 1, 'associates earn nothing')
 end
 
+do -- door: a suspect who waits on the door step (the built-in houses) is placed outside, never inside
+    local function surrenderAt(loc)
+        place(1, 3000, 3000, 10)
+        local ctx, S = makeCtx('flee_arrest', { responses = { surrender = 1, flee = 0, fight = 0 }, associates = { count = 0 } }, loc)
+        FA.start(ctx)
+        local sus = withRole(S, 'suspect')[1]
+        H.eq(knockOpen(ctx, S), true, 'door placement: knock')
+        H.eq(NPC.states[sus.netId], 'surrendered', 'door placement: surrendered')
+        return posOf(S, sus.netId), W.ents[entOf(S, sus.netId)].heading
+    end
+    -- the Warrant Service layout: door heading faces out (west, towards the start), the suspect 0.3 m out
+    -- and 1.2 m beside the door. The old "1 m past the door, away from where he waited" moved him inside.
+    local step = { label = 'Step', start = doorLoc.start, door = vec4(3040.0, 3000.0, 10.0, 90.0),
+        suspect = vec4(3039.7, 3001.2, 10.0, 90.0), fleeTo = doorLoc.fleeTo, associates = doorLoc.associates, yard = doorLoc.yard }
+    local p, h = surrenderAt(step)
+    H.near(p.x, 3039.0, 0.01, 'door step: 1 m in front of the door (out = the door heading)')
+    H.near(p.y, 3000.0, 0.01, 'door step: in line with the door')
+    H.near(h or -1, 90.0, 0.01, 'door step: facing out')
+    -- a door heading that points into the house (placed while facing the door): the start decides "out"
+    local inward = { label = 'Inward', start = doorLoc.start, door = vec4(3040.0, 3000.0, 10.0, 270.0),
+        suspect = vec4(3045.0, 3000.0, 10.0, 270.0), fleeTo = doorLoc.fleeTo, associates = doorLoc.associates, yard = doorLoc.yard }
+    p, h = surrenderAt(inward)
+    H.near(p.x, 3039.0, 0.01, 'inward heading: turned round towards the start')
+    H.near(h or -1, 90.0, 0.01, 'inward heading: facing out')
+    -- a door without a heading faces the start
+    local plain = { label = 'Plain', start = { coords = vec3(3040.0, 2950.0, 10.0), radius = 50.0 }, door = vec3(3040.0, 3000.0, 10.0),
+        suspect = vec4(3041.2, 3000.3, 10.0, 0.0), fleeTo = doorLoc.fleeTo, associates = doorLoc.associates, yard = doorLoc.yard }
+    p = surrenderAt(plain)
+    H.near(p.x, 3040.0, 0.01, 'door without heading: in line with the door')
+    H.near(p.y, 2999.0, 0.01, 'door without heading: 1 m towards the start')
+end
+
 do -- door: flee response, aim and escape
     place(1, 3000, 3000, 10)
     local ctx, S = makeCtx('flee_arrest', { responses = { surrender = 0, flee = 1, fight = 0 }, associates = { count = 0 } }, doorLoc)

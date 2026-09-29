@@ -382,6 +382,28 @@ H.eq(Npc.isNeutralised(k1), true, 'dead is neutralised')
 tick(3)
 H.eq(#R.died, 1, 'a death is reported exactly once')
 H.eq(#deaths, 1, 'listeners once')
+-- server-side health is sync data: a server-made ped reads 0 until a client synced it. With the health
+-- natives there, a 0 is only a death after a positive read or while the server has health data (max health).
+do
+    _G.GetEntityMaxHealth = function(e) local x = W.ents[e]; return x and x.maxHealth or 0 end
+    reset()
+    local ku, keu = spawnPed(run, { coords = vec3(3.5, 0.0, 0.0), health = 0 })
+    W.ents[keu].maxHealth = 0
+    tick(2)
+    H.eq(count(R.died, function(x) return x.netId == ku end), 0, 'unsynced ped (health 0, no max health): not a death')
+    W.ents[keu].health, W.ents[keu].maxHealth = 200, 200
+    tick(1)
+    H.eq(count(R.died, function(x) return x.netId == ku end), 0, 'synced ped alive')
+    W.ents[keu].health = 0
+    tick(1)
+    H.eq(count(R.died, function(x) return x.netId == ku end), 1, 'health 0 after a positive read: a death')
+    reset()
+    local ks, kes = spawnPed(run, { coords = vec3(3.6, 0.0, 0.0), health = 0 })
+    W.ents[kes].maxHealth = 200
+    tick(1)
+    H.eq(count(R.died, function(x) return x.netId == ks end), 1, 'health 0 with health data (max health): a death at first sight')
+    _G.GetEntityMaxHealth = nil
+end
 -- run over by a non-participant's vehicle
 place(7, 900.0, 0.0, 0.0)
 reset()

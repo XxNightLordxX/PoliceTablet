@@ -1,8 +1,10 @@
 -- modules/integrations/renewed_banking/server.lua · CP.Banking: the only code that talks to Renewed-Banking.
 --
--- Owns exports['Renewed-Banking']:handleTransaction, removeAccountMoney and getAccountMoney (verified
--- signatures in docs/INTEGRATIONS.md). Personal money itself moves through Qbox
--- (CP.Qbx.addMoney); Renewed-Banking only keeps the history, so a payout needs both calls.
+-- Owns exports['Renewed-Banking']:handleTransaction, removeAccountMoney, getAccountMoney and
+-- addAccountMoney (verified signatures in docs/INTEGRATIONS.md; addAccountMoney is not in the spec's
+-- Appendix, INTEGRATIONS.md "addAccountMoney" names it as the only refund path for a society withdrawal).
+-- Personal money itself moves through Qbox (CP.Qbx.addMoney); Renewed-Banking only keeps the history, so
+-- a payout needs both calls.
 --
 -- Public API (docs/ARCHITECTURE.md §5.1). Every function returns false/nil instead of raising when
 -- Renewed-Banking is stopped or rejects the call. Amounts are rounded half up to whole dollars;
@@ -17,6 +19,11 @@
 --   CP.Banking.recordSocietyWithdraw(account, amount, message, issuer, receiver, transId) -> boolean
 --       handleTransaction(account, Config.Tablet.title, amount, message, issuer, receiver, 'withdraw', transId).
 --   CP.Banking.societyBalance(account) -> number|nil   getAccountMoney(account); nil for an unknown account.
+--   CP.Banking.depositSociety(account, amount) -> boolean
+--       addAccountMoney(account, amount): puts money back into a society account (CP.Cash's refund when a
+--       society-funded payout's AddMoney failed after withdrawSociety). Society/shared accounts only:
+--       Renewed-Banking returns false for a citizenid or an unknown account (and while its account cache
+--       loads after a restart). It records no history entry.
 -- message: apostrophes and backslashes are removed (Renewed-Banking doubles them in the stored text).
 -- issuer/receiver: never nil (nil becomes ''). transId: e.g. ('CP-%s-%s'):format(runUuid, citizenid).
 
@@ -132,4 +139,19 @@ function B.societyBalance(account)
     end
     if type(res) == 'number' then return res end
     return nil
+end
+
+function B.depositSociety(account, amount)
+    if type(account) ~= 'string' or account == '' then return false end
+    local n = toAmount(amount)
+    if not n then return false end
+    if n == 0 then return true end
+    if not available() then return false end
+    local ok, res = pcall(function() return exports[RESOURCE]:addAccountMoney(account, n) end)
+    if not ok then
+        logError('addAccountMoney', "exports['Renewed-Banking']:addAccountMoney failed: %s", tostring(res))
+        return false
+    end
+    CP.log(TAG, 'deposit %d into %s -> %s', n, account, tostring(res))
+    return res == true
 end

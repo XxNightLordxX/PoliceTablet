@@ -48,8 +48,14 @@ export interface DraftEditor {
   validating: boolean;
   toolBusy: boolean;
   update: (fn: (d: BuilderDefinition) => void) => void;
-  save: () => Promise<boolean>;
+  save: (opts?: { quiet?: boolean }) => Promise<boolean>;
   autosaveNow: () => Promise<boolean>;
+  /** store unsaved changes now (autosave; an explicit save when autosave is rate-limited). false = not stored */
+  flush: () => Promise<boolean>;
+  /** drop the local draft and load the mission again (after publish / discard) */
+  reload: () => Promise<void>;
+  /** the mission is gone (deleted): close the editor */
+  gone: () => void;
   validateNow: () => Promise<BuilderValidateResult | null>;
   refresh: () => Promise<void>;
   takeLock: () => Promise<boolean>;
@@ -230,6 +236,7 @@ export function useDraftEditor(id: string, scope: BuilderScope, ui: BuilderUi, c
         onGone();
         break;
       case 'reloaded':
+        // a hand edit of the Lua file was accepted: the file wins, the server cleared the draft and the lock
         void fetchRecord().then((rec) => {
           if (rec && !rec.hasDraft) {
             const d = normalizeDefinition(rec.definition);
@@ -237,6 +244,7 @@ export function useDraftEditor(id: string, scope: BuilderScope, ui: BuilderUi, c
             setDirty(false);
             forgetDraft(rec.id);
           }
+          if (rec && lockRef.current?.mine && !(rec.lock && !rec.lock.mine)) void takeLock();
         });
         break;
       default:
@@ -259,12 +267,13 @@ export function useDraftEditor(id: string, scope: BuilderScope, ui: BuilderUi, c
 
   const lockMine = () => !!(lockRef.current && lockRef.current.mine);
 
-  const autosaveNow = useCallback(async (): Promise<boolean> => {
+  // 'ok' stored · 'skip' nothing to store · 'rate' refused by the 5 s autosave limit · 'error' refused
+  const autosaveRaw = useCallback(async (): Promise<'ok' | 'skip' | 'rate' | 'error'> => {
     const d = defRef.current;
-    if (!d || !lockMine() || !dirtyRef.current) return true;
+    if (!d || !lockMine() || !dirtyRef.current) return 'skip';
     const at = rev.current;
     const res = await action<BuilderAutosaveResult>('server:builder:autosave', { id: idRef.current, definition: d });
-    if (!mounted.current) return res.ok;
+    if (!mounted.current) return res.ok ? 'ok' : 'error';
     if (res.ok && res.data) {
       setSavedAt(res.data.savedAt);
       if (res.data.lock) setLock(res.data.lock);
@@ -273,17 +282,22 @@ export function useDraftEditor(id: string, scope: BuilderScope, ui: BuilderUi, c
         setDirty(false);
         rememberDraft(idRef.current, d, false);
       }
-      return true;
+      return 'ok';
     }
     if (res.error === 'err.builder_locked') {
       setLockLostBy(t('builder.someone'));
       setLock(null);
       void fetchRecord();
     }
-    return res.error === 'err.rate_limited';
+    return res.error === 'err.rate_limited' ? 'rate' : 'error';
   }, [fetchRecord]);
 
-  const save = useCallback(async (): Promise<boolean> => {
+  const autosaveNow = useCallback(async (): Promise<boolean> => {
+    const r = await autosaveRaw();
+    return r !== 'error';
+  }, [autosaveRaw]);
+
+  const save = useCallback(async (opts?: { quiet?: boolean }): Promise<boolean> => {
     const d = defRef.current;
     if (!d) return false;
     setSaving(true);
@@ -314,9 +328,22 @@ export function useDraftEditor(id: string, scope: BuilderScope, ui: BuilderUi, c
       rememberDraft(data.id, { ...d, id: data.id }, false);
     }
     setRecord((r) => (r ? { ...r, id: data.id, draftTested: data.draftTested, draftVersion: data.version, hasDraft: true } : r));
-    toast(data.valid ? 'success' : 'info', t(data.valid ? 'builder.editor.saved_valid' : 'builder.editor.saved_errors', { n: (data.errors ?? []).length }));
+    if (!opts?.quiet) {
+      const n = Array.isArray(data.errors) ? data.errors.length : 0;
+      toast(data.valid ? 'success' : 'info', t(data.valid ? 'builder.editor.saved_valid' : 'builder.editor.saved_errors', { n }));
+    }
     return true;
   }, [fetchRecord, onRenamed]);
+
+  // Test and publish use the STORED draft: make sure what the builder sees is stored first.
+  const flush = useCallback(async (): Promise<boolean> => {
+    if (!dirtyRef.current) return true;
+    if (!lockMine()) return false;
+    const r = await autosaveRaw();
+    if (r === 'ok' || r === 'skip') return true;
+    if (r === 'rate') return save({ quiet: true });
+    return false;
+  }, [autosaveRaw, save]);
 
   const validateNow = useCallback(async (): Promise<BuilderValidateResult | null> => {
     const d = defRef.current;
@@ -351,6 +378,11 @@ export function useDraftEditor(id: string, scope: BuilderScope, ui: BuilderUi, c
   const refresh = useCallback(async () => {
     await fetchRecord();
   }, [fetchRecord]);
+
+  const reload = useCallback(async () => {
+    forgetDraft(idRef.current);
+    await load();
+  }, [load]);
 
   const releaseLock = useCallback(async () => {
     if (!lockMine()) return;
@@ -426,7 +458,7 @@ export function useDraftEditor(id: string, scope: BuilderScope, ui: BuilderUi, c
 
   return {
     id, record, def, loading, error, readOnly, readOnlyReason, lock, lockLostBy, dirty, saving, savedAt, errors, armedServer,
-    validating, toolBusy, update, save, autosaveNow, validateNow, refresh, takeLock, releaseLock,
+    validating, toolBusy, update, save, autosaveNow, flush, reload, gone: onGone, validateNow, refresh, takeLock, releaseLock,
     place, recordRoute, testDrive,
   };
 }

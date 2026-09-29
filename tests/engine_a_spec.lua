@@ -641,6 +641,12 @@ do
     local nope, why = M.register({ id = 'patrol_b', label = 'x', type = 'patrol', timeLimit = 300, locations = base.locations, objectives = base.objectives })
     H.ok(nope == nil and why:find('built-in', 1, true), 'register cannot replace a built-in')
     H.eq(M.register({ id = 'x' }), nil, 'register rejects invalid')
+    local claimed = M.register({ id = 'custom_claims', label = 'Claims', type = 'patrol', minOfficers = 1, maxOfficers = 1, timeLimit = 400,
+        locations = { { start = { coords = vec3(4.0, 4.0, 4.0), radius = 20.0 } } }, objectives = { { block = 'checkpoint_route' } },
+        version = 2, source = 'builtin' })
+    H.eq(claimed and claimed.source, 'custom', 'a registered definition claiming source = builtin is still custom (builder guardrails apply)')
+    H.eq(claimed and claimed.version, 2, 'with its version')
+    M.unregister('custom_claims')
     H.eq(M.unregister('patrol_b'), false, 'built-ins cannot be unregistered')
     H.eq(M.unregister('custom_new'), true, 'unregister custom')
     H.eq(M.get('custom_new'), nil, 'gone')
@@ -1162,7 +1168,53 @@ do
     last = rs.created[#rs.created]
     H.ok(CP.Draw.isReserved(last.mission.id, last.locationIndex), 'draw reserves for the run as a fallback')
     rs.mode = 'ok'
+
+    -- an invite accepted while the checks yield (docs/notes/teams.md): the locked unit would hold an
+    -- officer who was never checked and is not on the run -> refused, unlocked, the leader tries again
+    unit.locked = false
+    local realHourly = CP.Runs.completionsLastHour
+    CP.Runs.completionsLastHour = function(cid)
+        if cid == 'CIDC' and #unit.members == 2 then
+            unit.members = { 1, 3, 4 }   -- CP.Units.members hands out copies: a new list, not the checked one
+            units[4] = unit
+        end
+        return 0
+    end
+    local createdBefore = #rs.created
+    ok, data = act('server:acceptType', 1, 'patrol')
+    CP.Runs.completionsLastHour = realHourly
+    H.eq(ok, false, 'a unit that changed during the accept is refused')
+    H.eq(data, 'err.busy', 'with err.busy (the leader accepts again)')
+    H.eq(unit.locked, false, 'and unlocked again')
+    H.eq(#rs.created, createdBefore, 'no run created')
+    unit.members = { 1, 3 }
+    units[4] = nil
+    -- a member who left during the checks: refused the same way
+    CP.Runs.completionsLastHour = function(cid)
+        if cid == 'CIDC' and #unit.members == 2 then unit.members = { 1 }; units[3] = nil end
+        return 0
+    end
+    ok, data = act('server:acceptType', 1, 'patrol')
+    CP.Runs.completionsLastHour = realHourly
+    H.eq(data, 'err.busy', 'a member who left during the accept: refused')
+    H.eq(#rs.created, createdBefore, 'still no run')
+    -- a forming unit (leader + pending invites) dissolves at lock: the leader goes solo and the accept goes on
     clearUnits()
+    local forming = { id = 99, leader = 1, members = { 1 }, locked = false }
+    units[1] = forming
+    local realLock = CP.Units.lock
+    CP.Units.lock = function(u) u.locked = true; lockCalls = lockCalls + 1; if u == forming then units[1] = nil end end
+    ok, data = act('server:acceptType', 1, 'patrol')
+    CP.Units.lock = realLock
+    H.eq(ok, true, 'a forming unit dissolved by the lock still accepts (solo)')
+    H.eq(#rs.created[#rs.created].members, 1, 'solo run')
+    CP.Draw.release(data and data.runId)
+    clearUnits()
+
+    -- BoardData extras: the server clock for the countdowns and the Type of the Day multiplier
+    local board2 = cb('getMissionTypes', 1).data
+    H.eq(board2.serverTime, H.time, 'BoardData.serverTime = os.time()')
+    H.eq(board2.todMultiplier, Config.Events.todMultiplier, 'BoardData.todMultiplier = Config.Events.todMultiplier')
 
     -- Weekly Boss
     ok, data = act('server:acceptType', 2, 'weekly_boss')

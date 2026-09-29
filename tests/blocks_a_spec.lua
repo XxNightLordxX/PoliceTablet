@@ -272,14 +272,28 @@ do
     _G.GetVehicleClass = nil
     at(1, st.points[2])
     CR.tick(ctx, 1); advance(10000); CR.tick(ctx, 1)
-    vehicles[5001].class = 4
-    okE, why = CR.onEvent(ctx, 1, { type = 'checkpoint', index = 2, vehClass = 4, model = joaat('police') })
+    -- (the harness joaat hashes by length: 'taxi' is the only four-letter model of this spec)
+    vehicles[5001].model = joaat('taxi')
+    okE, why = CR.onEvent(ctx, 1, { type = 'checkpoint', index = 2, vehClass = 4, model = joaat('taxi') })
     H.ok(okE == false and why == 'not_police_vehicle', 'fallback class 4 rejected')
+    -- a later report that contradicts the class already reported for that model is refused, and the
+    -- model's class is not taken from clients any more (unmodified clients all read the same class)
+    okE, why = CR.onEvent(ctx, 1, { type = 'checkpoint', index = 2, vehClass = 18, model = joaat('taxi') })
+    H.ok(okE == false and why == 'not_police_vehicle', 'a class contradicting an earlier report for the model is refused')
+    okE, why = CR.onEvent(ctx, 1, { type = 'checkpoint', index = 2, vehClass = 4, model = joaat('taxi') })
+    H.ok(okE == false and why == 'not_police_vehicle', 'the contradicted model stays distrusted')
+    vehicles[5001].model = joaat('police')
     okE, why = CR.onEvent(ctx, 1, { type = 'checkpoint', index = 2, vehClass = 18 })
     H.ok(okE == false and why == 'not_police_vehicle', 'fallback class without the model rejected')
     okE, why = CR.onEvent(ctx, 1, { type = 'checkpoint', index = 2, vehClass = 18, model = joaat('sultan2') })
     H.ok(okE == false and why == 'not_police_vehicle', 'fallback class for another model rejected')
-    H.eq(CR.onEvent(ctx, 1, { type = 'checkpoint', index = 2, vehClass = 18, model = joaat('police') }), true, 'fallback class 18 for the model the server sees accepted')
+    okE, why = CR.onEvent(ctx, 1, { type = 'checkpoint', index = 2, vehClass = 99, model = joaat('police') })
+    H.ok(okE == false and why == 'not_police_vehicle', 'a class outside the GTA classes 0..22 is rejected')
+    -- the server reads the model unsigned, a client sends the signed 32-bit form: the same model
+    local signed = joaat('police') >= 0x80000000 and joaat('police') - 0x100000000 or joaat('police')
+    H.ok(signed < 0, 'the test model hash has a signed form')
+    okE, why = CR.onEvent(ctx, 1, { type = 'checkpoint', index = 2, vehClass = 18, model = signed })
+    H.eq(okE, true, 'fallback class 18 for the model the server sees accepted')
     _G.GetVehicleClass = serverClass
     -- extra police models from Config.PoliceVehicles.models
     Config.PoliceVehicles.models = { 'police9' }

@@ -30,6 +30,9 @@
     CP.Testing.command(src, args) -> ok, data|errKey
         /CrimsonPoliceAdmin test <missionId> [tier] [location] (args = the words after 'test'; tier and
         location in either order); testers = the accepted invitations for that mission.
+    CP.Testing.resolveMission(missionId) -> def|nil, errKey
+        the definition a test of missionId would use: CP.Missions.get (built-in, custom, turned off), else the
+        archived custom mission (CP.Builder.getArchived, or the archived file). Used by /CrimsonPoliceAdmin test.
     CP.Testing.invite(adminSrc, targets, opts) -> ok, { lobby, skipped = { { src, error } } }|errKey
         opts = { missionId, missionLabel? (drafts), draft? }
     CP.Testing.cancelInvites(adminSrc) -> ok, lobby
@@ -381,6 +384,7 @@ local function resolveMission(id)
     if arch then return arch end
     return nil, 'err.test_unknown_mission'
 end
+Testing.resolveMission = resolveMission
 
 local function missionStatus(def)
     if def.status == 'archived' then return 'archived' end
@@ -605,7 +609,7 @@ function Testing.invite(adminSrc, targets, opts)
     if opts.draft then
         if type(missionId) ~= 'string' or #missionId > 40 or not missionId:match(MISSION_ID) then return false, 'err.test_unknown_mission' end
         if type(missionLabel) ~= 'string' or missionLabel == '' then missionLabel = missionId end
-        missionLabel = U.clip(missionLabel, 64)
+        missionLabel = clipText(missionLabel, 64) or missionId   -- never cut inside a UTF-8 sequence
     else
         local def, err = resolveMission(missionId)
         if not def then return false, err end

@@ -141,6 +141,8 @@ export function StepLocations({ ed, cfg, def, ro, scope }: StepProps) {
                     {t(s.labelKey)}
                   </button>
                 ))}
+                {loc.start ? <span className="builder_client-legend__item"><span className="builder_client-legend__swatch is-keepout" />{t('builder.map.keepout', { m: cfg.minSpawnFromStart ?? 30 })}</span> : null}
+                <span className="builder_client-legend__item"><span className="builder_client-legend__swatch is-zone" />{t('builder.map.zone')}</span>
               </div>
               <div className="builder_client-points">
                 <StartRow loc={loc} li={li} disabled={busy} onPlace={() => void ed.place(startSpec(), li)} onGps={gps}

@@ -44,6 +44,9 @@
 --     payouts x tier); locked priority member unavailable > type cooldown > hourly cap > empty pool
 --   * the Weekly Boss is not blocked by the Tactical type cooldown (it has no type), everything else applies
 --   * capsOk failures are reported as err.server_busy; CP.Access / CP.Runs.create error keys pass through
+--   * after CP.Units.lock the unit must still hold exactly the members that were checked (an invite accepted
+--     while the checks yielded): otherwise err.busy, unlocked, and the leader accepts again
+--   * BoardData extras: serverTime (os.time) and todMultiplier (Config.Events.todMultiplier)
 
 CP.Draw = CP.Draw or {}
 local Draw = CP.Draw
@@ -562,6 +565,10 @@ function Draw.boardCards(src)
         operation = nil,
         unit = { size = size, isLeader = isLeader(src) },
         activeRunId = activeRunId,
+        -- Extras (web/src/types/run_ui.ts): the server clock for the locked.until countdowns and the Type
+        -- of the Day multiplier the card texts show.
+        serverTime = os.time(),
+        todMultiplier = tonumber(Config.Events and Config.Events.todMultiplier) or 2,
     }
 
     -- While a Cross-Department Mission is active the board shows only its card.
@@ -697,6 +704,25 @@ local function accept(src, typeKey)
     local function fail(key)
         unlockUnit(unit)
         return false, key
+    end
+    -- The checks above may yield (database lookups): an invite accepted meanwhile would put an officer in
+    -- the locked unit who is not on the run and was never checked (docs/notes/teams.md). The unit must still
+    -- be exactly the members that were checked; otherwise the leader tries again.
+    if unit then
+        local now2 = unitMembers(src)
+        local same = #now2 == #srcs
+        if same then
+            local set = {}
+            for _, m in ipairs(srcs) do set[m] = true end
+            for _, m in ipairs(now2) do if not set[m] then same = false; break end end
+        end
+        -- (a forming unit, leader + pending invites, dissolves at lock: then unitOf is nil and members { src })
+        local after = unitOf(src)
+        if after ~= nil and after ~= unit then same = false end
+        if not same then
+            CP.log(TAG, 'unit of %s changed during the accept; refused', tostring(src))
+            return fail('err.busy')
+        end
     end
 
     local def, index

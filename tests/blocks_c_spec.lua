@@ -995,6 +995,15 @@ do -- stopped too long outside a stop, destroyed, driver killed, unhealthy arriv
     local ctx3 = escCtx()
     ES.start(ctx3)
     local t3 = spawnsOf(ctx3, 'vehicle', 'escort')[1]
+    -- a server-created truck reads health 0 until a client synced it: not destroyed before a positive read
+    local keepHp, keepEngine, keepBody = E(t3.netId).health, E(t3.netId).engine, E(t3.netId).body
+    E(t3.netId).health, E(t3.netId).engine, E(t3.netId).body = 0, 0.0, 0.0
+    tickN(ES, ctx3, 2)
+    H.eq(#ctx3.calls.fail, 0, 'escort: an unsynced truck (health 0 before any positive read) is not destroyed')
+    H.eq(lastSend(ctx3).truck.health, 100, 'escort: an unsynced truck shows 100 %')
+    E(t3.netId).health, E(t3.netId).engine, E(t3.netId).body = keepHp or 1000, keepEngine or 1000.0, keepBody or 1000.0
+    tickN(ES, ctx3, 1)
+    H.eq(#ctx3.calls.fail, 0, 'escort: synced truck fine')
     E(t3.netId).health = 0
     tickN(ES, ctx3, 1)
     H.eq(ctx3.calls.fail[1], 'block.escort.fail_destroyed', 'escort: server sees the truck at 0 health')
@@ -1052,6 +1061,19 @@ do -- stopped too long outside a stop, destroyed, driver killed, unhealthy arriv
     ES.onEntityDead(ctx7, d7.netId, 2)
     H.eq(#ctx7.calls.fail, 0, 'escort: a driver killed by a former participant does not fail the run')
     H.eq(ctx7.state.truck.driver.dead, true, 'escort: the driver is down (the truck will stall)')
+
+    -- arrival is 2D like the waypoints: a destination whose z is 25 m off (an estimated route z) still counts
+    local ctx8 = escCtx({ ambush = { waves = 1, carsPerWave = 1, perCar = 1 } }, shortLoc)
+    ES.start(ctx8)
+    local t8 = spawnsOf(ctx8, 'vehicle', 'escort')[1]
+    driveTo(ctx8, t8.netId, 500.0)
+    H.ok(not ctx8.state.truck.arrived, 'escort 2D: not there yet')
+    local dest = routePts[3]
+    E(t8.netId).coords = vec3(dest.x - 15.0, dest.y, dest.z + 25.0)
+    tickN(ES, ctx8, 1)
+    H.eq(ctx8.state.truck.arrived, true, 'escort 2D: 15 m away on the map, 25 m off in z, is arrived')
+    E(t8.netId).coords = vec3(dest.x - 15.0, dest.y, dest.z)
+    H.eq(#ctx8.calls.fail, 0, 'escort 2D: no fail')
 end
 
 do -- caps and rescale

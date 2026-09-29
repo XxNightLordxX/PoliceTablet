@@ -37,12 +37,14 @@
     CP.Runs.view(run, src) -> ActiveMissionView (§9.4) / summary(run) -> LiveRun (§9.5)
     CP.Runs.isParticipant(run, src) / activeSrcs(run) -> { src... } / host(run) -> src
     CP.Runs.testSkip(run) / testRestart(run) / anchor(run) -> vec3    (test runs only)
+    CP.Runs.ctx(run, index) -> ctx|nil     the engine's ctx of objective index (e.g. CP.AntiCheat presence)
     Internal (same slice, used by tests): CP.Runs._tick() one 1 s tick, CP.Runs._jobRecheck() one recheck pass
   Net
     callback 'getRun' -> ActiveMissionView|nil for the caller's run
     action   'server:abandon' (runId) -> removeParticipant(run, src, 'quit')
     event    'crimson-police:server:objective' (runId, index, evidence) -> CP.AntiCheat.checkEvent -> block onEvent
     event    'crimson-police:server:telemetry' (runId, kind, data)  kinds vehicle | ped_hit | lights_siren | weapon_fired
+             | area ({ index = 0 (start) | the current objective, text = 'street · zone' }, the sender's own view)
     client events sent: client:start, client:inProgress, client:objective, client:hud, client:tierChanged,
     client:hostChanged, client:participants, client:runEnded; push topic 'run' (view, or nil when it ended)
   Loops
@@ -72,7 +74,14 @@
     * Presence flags go through CP.AntiCheat.flag (audited like every flag); an off-duty CP.Access.onLost
       signal is re-verified with CP.Access.recheck (stale duty events are ignored).
     * Every run ticks in its own thread; a run whose previous tick is still busy is skipped that second.
-    * ActiveMissionView extras (web/src/types/run_ui.ts): me, isBoss, operationId, startIn.
+    * ActiveMissionView extras (web/src/types/run_ui.ts): me, isBoss, operationId, startIn, area (street ·
+      zone of the start / current objective as the viewer's own client resolved it: client:objective 'start'
+      carries the objective's reference point, the client answers with telemetry 'area' { index, text }).
+    * A new or closed tablet log point (view.log) pushes the 'run' topic at once; the HUD and the view
+      also refresh right after every accepted objective event, not only on the next tick.
+    * The unit is kept (and unlocked at the end) only for normal runs: test and operation runs never lock
+      one, so they never unlock one either.
+    * CP.Runs.ctx(run, index) returns the engine's own ctx of an objective (the one every hook gets).
 ]]
 
 CP.Runs = CP.Runs or {}
@@ -117,7 +126,8 @@ local TYPE_COOLDOWN = set({ 'quit', 'off_route', 'start_timeout', 'idle', 'job_c
     'real_call_cancelled', 'downed', 'disconnected' })
 local MISSION_COOLDOWN = set({ 'quit', 'off_route', 'start_timeout', 'idle', 'job_change', 'off_duty', 'suspended',
     'real_call_cancelled', 'downed', 'disconnected', 'completed', 'time_limit', 'mission_failed' })
-local TELEMETRY_KINDS = set({ 'vehicle', 'ped_hit', 'lights_siren', 'weapon_fired' })
+local TELEMETRY_KINDS = set({ 'vehicle', 'ped_hit', 'lights_siren', 'weapon_fired', 'area' })
+local AREA_MAX = 96                 -- bytes of a street · zone text a client reports for its own view
 local LOST_REASONS = set({ 'off_duty', 'job_change', 'suspended' })   -- CP.Access.recheck / onLost reasons
 
 local runs = {}          -- runId -> run (accepted or in_progress)
@@ -523,6 +533,16 @@ local function callBlock(run, i, hook, ...)
     return true, table.unpack(res, 2, res.n)
 end
 
+-- The engine's own ctx of objective `index` (the same table every block hook gets, ctx.state included),
+-- e.g. for CP.AntiCheat's presence sampling through the block's presence(ctx, src, coords). nil for an
+-- ended run or an unknown objective.
+function Runs.ctx(run, index)
+    if type(run) ~= 'table' or run.state == 'ended' or type(run.objectives) ~= 'table' then return nil end
+    index = math.tointeger(tonumber(index) or -1)
+    if not index or not run.objectives[index] or runs[run.id] ~= run then return nil end
+    return getCtx(run, index)
+end
+
 -- ── HUD objectives ──────────────────────────────────────────────────────────
 local function objectiveLabel(run, i)
     local o = run.objectives[i]
@@ -592,15 +612,30 @@ local function hudObjectives(run, includePending)
     return out
 end
 
+-- The Business Check tablet log of the current objective (view.log): its point, or '' when none is asked.
+local function logKey(run)
+    local cur = run.objectives[run.objectiveIndex]
+    local lg = cur and cur.status == 'active' and type(cur.state) == 'table' and cur.state.log or nil
+    if type(lg) ~= 'table' or lg.point == nil then return '' end
+    return tostring(lg.point)
+end
+
 local function refreshHud(run, force)
     if run.state ~= 'in_progress' then return end
     local list = hudObjectives(run, false)
     local ok, key = pcall(json.encode, list)
     if not ok then key = tostring(GetGameTimer()) end
+    -- A new (or closed) tablet log point is pushed at once, not with the throttled progress push, so the
+    -- Active Mission log panel moves on right away (docs/notes/run_ui.md).
+    local lk = logKey(run)
+    local logChanged = lk ~= (run.logKey or '')
+    run.logKey = lk
     if force or key ~= run.hudKey then
         run.hudKey = key
         Runs.hud(run, { objectives = list })
-        if force or not run.pushedAt or GetGameTimer() - run.pushedAt >= PUSH_THROTTLE_MS then pushRun(run) end
+        if force or logChanged or not run.pushedAt or GetGameTimer() - run.pushedAt >= PUSH_THROTTLE_MS then pushRun(run) end
+    elseif logChanged then
+        pushRun(run)
     end
 end
 
@@ -1520,8 +1555,10 @@ local function stopObjectives(run)
     end
 end
 
+-- Only a normal run locked a unit (CP.Draw's accept): test and operation runs never unlock one (an
+-- operation's first joiner may be in a unit that is locked for another run; docs/notes/teams.md).
 local function unlockUnit(run)
-    if run.test or not run.unit then return end
+    if run.test or run.operationId or not run.unit then return end
     call('Units', 'unlock', run.unit)
 end
 
@@ -1732,8 +1769,10 @@ function Runs.create(opts)
     end
     run.timer.remaining = run.timeLimit
 
-    local okU, unit = call('Units', 'unitOf', leader)
-    if okU and type(unit) == 'table' then run.unit = unit end
+    if not test and not opts.operationId then
+        local okU, unit = call('Units', 'unitOf', leader)
+        if okU and type(unit) == 'table' then run.unit = unit end
+    end
 
     -- The lookups above may yield (database, other modules). Re-check, with no yield until the run is
     -- registered, what another accept could have changed meanwhile: nobody ends up on two runs and two
@@ -1783,7 +1822,10 @@ local function startObjective(run, i)
     o.status = 'active'
     o.startedAt = os.time()
     o.startedAtMs = GetGameTimer()
-    Runs.send(run, 'client:objective', run.id, i, { action = 'start' })
+    -- area = the objective's reference point: each participant's client turns it into street and zone
+    -- names for its own Active Mission view (view.area; Radio Silence shows only those).
+    local okA, area = pcall(Runs.anchor, run)
+    Runs.send(run, 'client:objective', run.id, i, { action = 'start', area = okA and area or nil })
     callBlock(run, i, 'start')
     if run.state ~= 'in_progress' then return end
     refreshHud(run, true)
@@ -1908,6 +1950,7 @@ function Runs.dispatch(run, index, src, ev)
     if not impl or type(impl.onEvent) ~= 'function' then return false, 'no_handler' end
     local ok, res, reason = callBlock(run, index, 'onEvent', toSrc(src), ev)
     if not ok then return false, 'error' end
+    if run.state == 'in_progress' then refreshHud(run) end
     if res == false then return false, reason end
     return true
 end
@@ -2197,10 +2240,15 @@ function Runs.view(run, src)
     local remaining = Runs.remaining(run)
     local startIn = nil
     if not started and p and not p.arrived and p.deadline then startIn = math.max(0, p.deadline - os.time()) end
+    -- Street · zone of the current objective (else of the start), as this viewer's own client resolved it.
+    local area = nil
+    if p and type(p.area) == 'table' then
+        area = (started and p.area[run.objectiveIndex]) or p.area[0]
+    end
     return {
         -- Optional extras for the Active Mission screen (web/src/types/run_ui.ts): the viewer, the boss flag,
-        -- the operation and the seconds left to reach the start.
-        me = src, isBoss = run.isBoss == true, operationId = run.operationId, startIn = startIn,
+        -- the operation, the seconds left to reach the start and the area (street · zone).
+        me = src, isBoss = run.isBoss == true, operationId = run.operationId, startIn = startIn, area = area,
         runId = run.id,
         missionLabel = run.mission.label or run.missionId,
         description = run.mission.description or '',
@@ -2406,6 +2454,9 @@ RegisterNetEvent(CP.e('server:objective'), function(runId, index, evidence)
     if okCall and ok == false then
         CP.log(TAG, 'run %s: block rejected %s from %d (%s)', runId, ev.type, src, tostring(reason))
     end
+    -- The event may have moved the objective on (a logged door, a new tablet log point): the HUD and
+    -- the Active Mission view follow now instead of on the next tick.
+    if run.state == 'in_progress' then refreshHud(run) end
 end)
 
 local function isRunEntity(entity, netId)
@@ -2452,6 +2503,22 @@ local function telemetryPedHit(run, p, data)
     Runs.penalize(run, 'pedestrian_hit', { src = p.src })
 end
 
+-- The street and zone names of the start (index 0) or of the current objective, resolved by this
+-- participant's own client (the server has no street-name natives). Display text for that participant's
+-- own view only, never shown to anyone else; the first text per index is kept.
+local function telemetryArea(run, p, data)
+    local index = type(data) == 'table' and math.tointeger(tonumber(data.index) or -1)
+    local text = type(data) == 'table' and data.text or nil
+    if not index or index < 0 or type(text) ~= 'string' then return end
+    if index > 0 and (run.state ~= 'in_progress' or index ~= run.objectiveIndex) then return end
+    text = U.trim((text:gsub('%c', ' '):gsub('%s+', ' ')))
+    if text == '' or #text > AREA_MAX then return end
+    p.area = p.area or {}
+    if p.area[index] ~= nil then return end
+    p.area[index] = text
+    pushRun(run, { p.src })
+end
+
 RegisterNetEvent(CP.e('server:telemetry'), function(runId, kind, data)
     local src = source
     src = toSrc(src)
@@ -2475,6 +2542,8 @@ RegisterNetEvent(CP.e('server:telemetry'), function(runId, kind, data)
                 Runs.penalize(run, 'lights_siren', { src = src })
             end
         end
+    elseif kind == 'area' then
+        telemetryArea(run, p, data)
     elseif kind == 'weapon_fired' then
         if not p.telemetry.weapon then
             p.telemetry.weapon = true

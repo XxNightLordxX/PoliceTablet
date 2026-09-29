@@ -739,6 +739,7 @@ H.eq(card.status, 'joining', 'card status')
 H.eq(card.joined, 0, 'nobody joined')
 H.eq(card.max, 8, 'max 8')
 H.eq(card.canJoin, true, 'can join')
+H.eq(card.joinBlocked, nil, 'joinBlocked: nothing blocks the join')
 H.eq(card.joinedByMe, false, 'not joined')
 H.eq(card.joinEndsIn, 300, 'join window 5 min')
 
@@ -751,15 +752,19 @@ H.eq(data, 'err.invalid_payload', 'operation id validated')
 arena[3] = true
 ok, data = act('server:joinOperation', 3, opId)
 H.eq(data, 'err.in_arena', 'in-arena officer cannot join')
+H.eq(O.boardCard(3).canJoin, false, 'card: in-arena officer cannot join')
+H.eq(O.boardCard(3).joinBlocked, 'err.in_arena', 'joinBlocked = the join error (arena)')
 arena[3] = nil
 onCall[4] = true
 ok, data = act('server:joinOperation', 4, opId)
 H.eq(data, 'err.on_call', 'officer on a real call cannot join')
+H.eq(O.boardCard(4).joinBlocked, 'err.on_call', 'joinBlocked = the join error (real call)')
 onCall[4] = nil
 runBySrc[6] = { id = 'r6', order = { 6 }, participants = { [6] = { status = 'active' } } }
 ok, data = act('server:joinOperation', 6, opId)
 H.eq(data, 'err.already_on_run', 'officer on a run cannot join')
 H.eq(O.boardCard(6).canJoin, false, 'card: cannot join while on a run')
+H.eq(O.boardCard(6).joinBlocked, 'err.already_on_run', 'joinBlocked = the join error (on a run)')
 runBySrc[6] = nil
 
 clear()
@@ -772,6 +777,7 @@ H.ok(pushedTo(9, 'board'), 'join pushes the board')
 card = O.boardCard(2)
 H.eq(card.joinedByMe, true, 'joinedByMe')
 H.eq(card.canJoin, false, 'cannot join twice')
+H.eq(card.joinBlocked, 'err.op_already_joined', 'joinBlocked = the join error (already joined)')
 
 -- Start now needs 2 participants and the launcher.
 res = cb('sup:getOperation', 1)
@@ -868,6 +874,7 @@ res = cb('sup:getOperation', 9)
 H.eq(res.data.operation.canRelaunch, true, 'any supervisor may relaunch')
 H.eq(res.data.operation.idleCancelIn, 1800, 'auto-cancel countdown')
 H.eq(O.boardCard(2).canJoin, false, 'no join while waiting')
+H.eq(O.boardCard(2).joinBlocked, 'err.op_join_closed', 'joinBlocked = the join error (closed)')
 
 clear()
 ok, data = act('server:sup:opRelaunch', 9)
@@ -1103,6 +1110,43 @@ act('server:joinOperation', 5, data.id)
 H.time = H.time + 300
 H.advance(2000, 500)
 H.eq(O.active() and O.active().status, 'running', 'tick thread starts the run at window end')
+
+-- Integration (docs/notes/core.md: "use notifyMany with a list of sources"): participant toasts go through
+-- CP.Tablet.notifyMany when the tablet module provides it, one call per toast, never a -1 broadcast.
+local manyCalls = {}
+CP.Tablet.notifyMany = function(srcs, kind, key, vars)
+    manyCalls[#manyCalls + 1] = { srcs = CP.U.copy(srcs), kind = kind, key = key, vars = vars }
+    for _, s in ipairs(srcs) do CP.Tablet.notify(s, kind, key, vars) end
+    return #srcs
+end
+clear()
+removed = {}
+ok = act('server:sup:opCancel', 1, { reason = 'Wrap up' })
+H.eq(ok, true, 'cancel the running operation')
+local cancelCall
+for _, m in ipairs(manyCalls) do if m.key == 'officer.op.cancelled_participant' then cancelCall = m end end
+H.ok(cancelCall ~= nil, 'cancel toast sent through CP.Tablet.notifyMany')
+H.eq(cancelCall and #cancelCall.srcs, 2, 'to the two participants still on the run')
+H.eq(cancelCall and cancelCall.vars.reason, 'Wrap up', 'with the reason')
+for _, m in ipairs(manyCalls) do
+    for _, s in ipairs(m.srcs) do H.ok(s ~= -1, 'never a -1 broadcast') end
+end
+H.eq(#removed, 2, 'both removed from the run')
+H.eq(removed[1] and removed[1].reason, 'cancelled', 'with end reason cancelled')
+H.time = H.time + 1800
+ok, data = act('server:sup:opLaunch', 1, { missionId = 'gang_shootout' })
+act('server:joinOperation', 2, data.id)
+manyCalls = {}
+H.time = H.time + 300
+O._tick()
+H.eq(O.active() and O.active().status, 'waiting', 'window closed with too few -> waiting')
+H.advance(100, 50)
+local waitCall
+for _, m in ipairs(manyCalls) do if m.key == 'sup.crossdept.notify_waiting_not_enough' then waitCall = m end end
+H.ok(waitCall ~= nil, 'waiting toast to the supervisors through CP.Tablet.notifyMany')
+H.ok(waitCall ~= nil and contains(waitCall.srcs, 1) and contains(waitCall.srcs, 9) and not contains(waitCall.srcs, 2),
+    'only the players with launchCrossDept')
+CP.Tablet.notifyMany = nil
 
 os.execute(('mysql -uroot -e "DROP DATABASE IF EXISTS %s;"'):format(H.db))
 return H

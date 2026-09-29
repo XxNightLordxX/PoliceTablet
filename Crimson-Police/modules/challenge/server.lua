@@ -790,7 +790,10 @@ end
 local function validName(name)
     if type(name) ~= 'string' then return nil end
     name = U.trim(name)
-    if name == '' or #name > 64 or name:find('%c') then return nil end
+    -- 1 to 64 characters (cp_seasons.name is VARCHAR(64) utf8mb4, the Seasons screen's maxLength counts
+    -- characters and /CrimsonPoliceAdmin clips the name to 64 characters), not bytes.
+    local len = utf8.len(name)
+    if name == '' or not len or len > 64 or name:find('%c') then return nil end
     return name
 end
 

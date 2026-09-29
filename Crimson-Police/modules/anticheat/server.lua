@@ -20,8 +20,9 @@
     * onNpcKilled: kills of mission NPCs by players who are not active participants; at
       Config.AntiCheat.outsideKillsToFlag the run is flagged 'outside_help' naming the killer(s).
     * presence sampling every 5 s for in-progress runs that have had 2+ participants: each active
-      participant's distance from the current objective (its block's presence(ctx, src, coords), else the
-      location start) against the objective's presenceRange (fallback Config.AntiCheat.presenceRadius);
+      participant's distance from the current objective (its block's presence(ctx, src, coords) with the
+      engine's ctx from CP.Runs.ctx when available, else the location start) against the objective's
+      presenceRange (fallback Config.AntiCheat.presenceRadius);
       p.presence = { inRange, total } in seconds.
     * the idle check: Config.AntiCheat.idleCheck s after the run moved to In progress, active participants
       who have not reached the start are removed with end reason 'idle'.
@@ -305,9 +306,10 @@ function AC.onNpcKilled(run, killerSrc)
 end
 
 -- ── presence ────────────────────────────────────────────────────────────────
--- A read-only objective context for the block's presence(ctx, src, coords) (the engine's own ctx is
--- private to CP.Runs); the same fields and helpers as ARCHITECTURE §7.1, spawning delegated to CP.Runs.
-local function presenceCtx(run, i)
+-- The block's presence(ctx, src, coords) gets the engine's own ctx of that objective (CP.Runs.ctx, the table
+-- every block hook gets). Without it: a read-only objective context with the same fields and helpers as
+-- ARCHITECTURE §7.1 (spawning refused).
+local function readOnlyCtx(run, i)
     local o = run.objectives and run.objectives[i]
     local base = run.mission and run.mission.objectives and run.mission.objectives[i]
     local ctx = {
@@ -335,6 +337,14 @@ local function presenceCtx(run, i)
     ctx.spawnObject = function() return nil end
     ctx.delete = function() end
     return ctx
+end
+
+local function presenceCtx(run, i)
+    if has('Runs', 'ctx') then
+        local ok, ctx = call('Runs', 'ctx', run, i)
+        if ok and type(ctx) == 'table' then return ctx end
+    end
+    return readOnlyCtx(run, i)
 end
 
 local function presenceRange(obj)

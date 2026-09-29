@@ -23,7 +23,9 @@
 --       action; supervisors: the switched-on supervisor actions + viewMissionList; others: {}.
 --   CP.Permissions.tookPart(citizenid, runUuid) -> boolean  any cp_mission_runs row of that run for that citizenid
 --   CP.Permissions.canReviewRun(src, runUuid) -> boolean, errKey   false with err.own_run when the reviewer
---       took part (the console and players without a character can review).
+--       took part: a cp_mission_runs row of that run (tookPart), or a participant entry (active or left) of
+--       that run while it is still live in CP.Runs (a partner who is still on the run has no row yet). The
+--       console and players without a character can review.
 -- can, actionsFor, tookPart and canReviewRun may yield (database): call them from a handler or thread.
 
 CP.Permissions = CP.Permissions or {}
@@ -80,6 +82,18 @@ function P.tookPart(citizenid, runUuid)
     return res ~= nil
 end
 
+-- The reviewer is (or was) a participant of that run while it is still live (no row of theirs yet).
+local function inLiveRun(citizenid, runUuid)
+    if type(citizenid) ~= 'string' or citizenid == '' then return false end
+    if not (CP.Runs and type(CP.Runs.get) == 'function') then return false end
+    local ok, run = pcall(CP.Runs.get, runUuid)
+    if not ok or type(run) ~= 'table' or type(run.participants) ~= 'table' then return false end
+    for _, p in pairs(run.participants) do
+        if type(p) == 'table' and p.citizenid == citizenid then return true end
+    end
+    return false
+end
+
 function P.canReviewRun(src, runUuid)
     if not validRunUuid(runUuid) then return false, 'err.invalid_run' end
     local n = tonumber(src)
@@ -87,7 +101,7 @@ function P.canReviewRun(src, runUuid)
     if not n or n < 0 then return false, 'err.no_permission' end
     local info = CP.Qbx and CP.Qbx.getInfo and CP.Qbx.getInfo(n)
     if not info then return true end
-    if P.tookPart(info.citizenid, runUuid) then return false, 'err.own_run' end
+    if inLiveRun(info.citizenid, runUuid) or P.tookPart(info.citizenid, runUuid) then return false, 'err.own_run' end
     return true
 end
 

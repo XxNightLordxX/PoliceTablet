@@ -364,7 +364,7 @@ local function audit(src, role, action, target, old, new, reason)
     -- modules/admin unavailable: keep the audit trail anyway (no webhook).
     local ok, err = pcall(MySQL.insert.await,
         "INSERT INTO cp_audit (actor, role, category, action, target, old_value, new_value, reason) VALUES (?, ?, 'audit', ?, ?, ?, ?, ?)",
-        { actorId(src), auditRole, CP.U.clip(action, 40), CP.U.clip(target, 64), oldS, newS, CP.U.clip(reason or '', 255) })
+        { actorId(src), auditRole, CP.U.clip(action, 40), CP.U.clip(target, 64), oldS, newS, reason or '' })
     if not ok then CP.err(TAG, 'audit insert failed: %s', tostring(err)) end
 end
 
@@ -380,7 +380,11 @@ end
 local function cleanReason(reason, role)
     if reason ~= nil and type(reason) ~= 'string' then return nil, 'err.invalid_payload' end
     local r = reason and CP.U.trim(reason) or ''
-    if #r > REASON_MAX then return nil, 'err.reason_too_long' end
+    -- Characters, not bytes: the Payouts screens' maxLength and cp_audit.reason (VARCHAR(255) utf8mb4) count
+    -- characters, so an accented 200-character reason is valid.
+    local len = utf8.len(r)
+    if not len then return nil, 'err.invalid_payload' end
+    if len > REASON_MAX then return nil, 'err.reason_too_long' end
     if r == '' and reasonRequired(role) then return nil, 'err.reason_required' end
     return r
 end

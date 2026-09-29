@@ -977,6 +977,143 @@ H.ok(Runs.canSpawn(Q, 1, true), 'a cuffed NPC no longer counts as armed and aliv
 Config.Limits.maxArmedAlive = 25
 Runs.removeParticipant(Q, 2, 'cancelled')
 
+-- ── integration: a unit is kept and unlocked only for normal runs (docs/notes/teams.md) ──
+H.reset()
+local unlocksBefore = count('units.unlock')
+local OpRun = Runs.create({ mission = mission, locationIndex = 1, missionType = 'tactical', members = { O[1] }, leaderSrc = 1, operationId = 9 })
+H.eq(OpRun.unit, nil, 'an operation run keeps no unit (its first joiner may lead a unit locked elsewhere)')
+Runs.removeParticipant(OpRun, 1, 'cancelled')
+H.eq(count('units.unlock'), unlocksBefore, 'an operation run never unlocks a unit')
+local TestRun = Runs.create({ mission = mission, locationIndex = 1, missionType = 'tactical', members = { O[1] }, leaderSrc = 1,
+    test = { adminSrc = 1, useStartRoute = false } })
+H.eq(TestRun.unit, nil, 'a test run keeps no unit')
+Runs.removeParticipant(TestRun, 1, 'cancelled')
+H.eq(count('units.unlock'), unlocksBefore, 'a test run never unlocks a unit')
+local NormRun = Runs.create({ mission = mission, locationIndex = 1, missionType = 'tactical', members = { O[1] }, leaderSrc = 1 })
+H.eq(NormRun.unit, unitA, 'a normal run keeps the leader unit')
+Runs.removeParticipant(NormRun, 1, 'cancelled')
+H.eq(count('units.unlock'), unlocksBefore + 1, 'and unlocks it at the end')
+
+-- ── integration: ctx.state is one table across hooks; entities stay until the run ends ──
+H.reset()
+local seenState = {}
+local function seen(hook, ctx) seenState[#seenState + 1] = { hook = hook, index = ctx.index, state = ctx.state } end
+CP.Blocks.register('keep_block', {
+    prepare = function(ctx) seen('prepare', ctx); ctx.state.mark = 'obj' .. ctx.index end,
+    start = function(ctx)
+        seen('start', ctx)
+        if ctx.index == 1 then ctx.state.device = select(2, ctx.spawnObject({ model = 'prop_ld_bomb', coords = vec4(120.0, 120.0, 30.0, 0.0), role = 'device' })) end
+    end,
+    tick = function(ctx) seen('tick', ctx) end,
+    onEvent = function(ctx, src, ev) seen('onEvent', ctx); return true end,
+    checklist = function(ctx) return { { label = 'x', done = false, value = 0, max = 1 } } end,
+    stop = function(ctx) seen('stop', ctx) end,
+})
+local keepMission = CP.U.deepcopy(mission)
+keepMission.id, keepMission.items, keepMission.scaling = 'keep_mission', {}, {}
+keepMission.objectives = { { block = 'keep_block', label = 'Find', minSeconds = 0 }, { block = 'keep_block', label = 'Defuse', minSeconds = 0 } }
+local KP = Runs.create({ mission = keepMission, locationIndex = 1, missionType = 'tactical', members = { O[2] }, leaderSrc = 2 })
+Runs.markArrived(KP, 2)
+H.advance(1000)
+H.fire('crimson-police:server:objective', 2, KP.id, 1, { type = 'look' })
+local deviceNet = KP.objectives[1].state.device
+H.ok(deviceNet ~= nil and KP.entities[deviceNet] ~= nil, 'objective 1 spawned its device')
+H.ok(Runs.objectiveComplete(KP, 1), 'objective 1 done')
+H.ok(KP.entities[deviceNet] ~= nil, 'the device of a completed objective is still tracked')
+H.ok(not deleted[KP.entities[deviceNet].entity], 'and not deleted (the next objective defuses it)')
+local deviceEnt = KP.entities[deviceNet].entity
+H.advance(2000)
+H.fire('crimson-police:server:objective', 2, KP.id, 2, { type = 'look' })
+local allSame, hooks = true, {}
+for _, s in ipairs(seenState) do
+    hooks[s.hook .. s.index] = true
+    if s.state ~= KP.objectives[s.index].state or s.state.mark ~= 'obj' .. s.index then allSame = false end
+end
+H.ok(allSame, 'every hook of an objective got the same persistent ctx.state (run.objectives[i].state)')
+H.ok(hooks.prepare1 and hooks.start1 and hooks.tick1 and hooks.onEvent1 and hooks.stop1 and hooks.prepare2 and hooks.start2 and hooks.tick2 and hooks.onEvent2,
+    'prepare, start, tick, onEvent and stop were all seen')
+H.eq(Runs.ctx(KP, 2), Runs.ctx(KP, 2), 'CP.Runs.ctx returns the one ctx of an objective')
+H.eq(Runs.ctx(KP, 2).state, KP.objectives[2].state, 'CP.Runs.ctx carries the persistent state')
+H.eq(Runs.ctx(KP, 9), nil, 'CP.Runs.ctx of an unknown objective')
+H.ok(Runs.objectiveComplete(KP, 2), 'objective 2 done: the run ends')
+H.ok(deleted[deviceEnt], 'the device goes when the run ends')
+H.eq(Runs.ctx(KP, 1), nil, 'CP.Runs.ctx of an ended run')
+
+-- ── integration: the tablet log point is pushed at once; the area of the Active Mission view ──
+H.reset()
+local LG = Runs.create({ mission = mission, locationIndex = 1, missionType = 'patrol', members = { O[2] }, leaderSrc = 2 })
+local startMsg
+Runs.markArrived(LG, 2)
+for _, e in ipairs(eventsTo('crimson-police:client:objective', 2)) do
+    if e.args[2] == 1 and e.args[3].action == 'start' then startMsg = e.args[3] end
+end
+H.ok(startMsg ~= nil and startMsg.area ~= nil and startMsg.area.x == 100.0, "client:objective 'start' carries the objective's reference point")
+local pushesBefore = count('push')
+LG.objectives[1].state.log = { point = 1, choices = { { id = 'secure', label = 'Secure' } } }
+H.fire('crimson-police:server:objective', 2, LG.id, 1, { type = 'hit' })
+H.eq(count('push'), pushesBefore + 1, 'a new log point is pushed at once (inside the progress-push throttle)')
+H.eq(last('push').data.log.point, 1, 'the pushed view carries the log')
+LG.objectives[1].state.log = nil
+Runs.dispatch(LG, 1, nil, { type = 'cuffed', netId = 1 })
+H.eq(count('push'), pushesBefore + 2, 'a closed log is pushed at once')
+H.eq(last('push').data.log, nil, 'the view has no log any more')
+LG.objectives[1].state.log = { point = 2, choices = { { id = 'secure', label = 'Secure' } } }
+H.advance(1000)
+H.eq(last('push').data.log.point, 2, 'a log point set by a block tick is pushed on that tick')
+LG.objectives[1].state.log = nil
+H.fire('crimson-police:server:telemetry', 2, LG.id, 'area', { index = 0, text = 'Route 68 · Harmony' })
+H.eq(last('push').src, 2, 'the area is pushed to that participant')
+H.eq(Runs.view(LG, 2).area, 'Route 68 · Harmony', 'view.area falls back to the start')
+H.fire('crimson-police:server:telemetry', 2, LG.id, 'area', { index = 1, text = '  Joshua Rd\n · Grand Senora Desert ' })
+H.eq(Runs.view(LG, 2).area, 'Joshua Rd · Grand Senora Desert', 'view.area of the current objective, control characters removed')
+H.fire('crimson-police:server:telemetry', 2, LG.id, 'area', { index = 1, text = 'Somewhere else' })
+H.eq(Runs.view(LG, 2).area, 'Joshua Rd · Grand Senora Desert', 'the first text per point is kept')
+H.fire('crimson-police:server:telemetry', 2, LG.id, 'area', { index = 2, text = 'Not current' })
+H.eq(LG.participants[2].area[2], nil, 'an area for an objective that is not current is ignored')
+H.fire('crimson-police:server:telemetry', 2, LG.id, 'area', { index = 0, text = string.rep('x', 200) })
+H.fire('crimson-police:server:telemetry', 3, LG.id, 'area', { index = 1, text = 'Forged' })
+H.eq(Runs.view(LG, 3).area, nil, "a non-participant's text goes nowhere")
+H.eq(Runs.view(LG, 2).area, 'Joshua Rd · Grand Senora Desert', "each participant's view shows only their own client's text")
+Runs.removeParticipant(LG, 2, 'cancelled')
+
+-- ── integration: endRun leaves a downed (keepFlag) participant's flag alone; 'cancelled' starts no
+-- cooldown; cash_multiplier is rounded to 2 decimals while the breakdown keeps the exact amount ──
+H.reset()
+H.players[7] = { coords = vec3(0.0, 0.0, 0.0) }
+H.players[8] = { coords = vec3(0.0, 0.0, 0.0) }
+local O7 = { src = 7, citizenid = 'CIT77', name = 'Gil Grant', department = 'sast', departmentShort = 'SAST', job = 'sast', rank = 'Trooper' }
+local O8 = { src = 8, citizenid = 'CIT88', name = 'Hal Hart', department = 'sast', departmentShort = 'SAST', job = 'sast', rank = 'Trooper' }
+local realCompute = CP.Cash.compute
+CP.Cash.compute = function(run, p)
+    local amount = p.result == 'completed' and CP.U.round(run.cashBase * 1.15 * 1.25) or 0
+    return amount, { B = run.cashBase, mTier = 1.15, mMod = 1.25, amount = amount }
+end
+local KF = Runs.create({ mission = mission, locationIndex = 1, missionType = 'tactical', members = { O7, O8 }, leaderSrc = 7 })
+Runs.markArrived(KF, 7)
+Runs.removeParticipant(KF, 8, 'downed', { keepFlag = true })
+local clearsKF = {}
+for _, s in ipairs(log['alerts.clear'] or {}) do clearsKF[s] = true end
+H.eq(clearsKF[8], nil, 'the downed participant keeps the flag at the leave (CP.Downed owns it)')
+H.advance(6000)
+H.ok(Runs.objectiveComplete(KF, 1), 'keepFlag run: objective 1')
+H.ok(Runs.objectiveComplete(KF, 2), 'keepFlag run: objective 2 ends the run')
+local clears8 = 0
+for _, s in ipairs(log['alerts.clear'] or {}) do if s == 8 then clears8 = clears8 + 1 end end
+H.eq(clears8, 0, 'endRun never clears the flag of a participant who left with keepFlag')
+H.ok(log['alerts.clear'][#log['alerts.clear']] == 7, 'endRun clears the flags of the participants still in the run')
+local kfRow = H.sql("SELECT cash_multiplier, breakdown FROM cp_mission_runs WHERE run_uuid = ? AND citizenid = 'CIT77'", { KF.id })[1]
+H.near(tonumber(kfRow.cash_multiplier), 1.44, 1e-9, 'cash_multiplier 1.15 x 1.25 = 1.4375 is stored as 1.44')
+H.eq(CP.U.jsonField(kfRow.breakdown).cash.amount, 1150, 'the breakdown keeps the exact amount (800 x 1.4375), which CP.Cash pays')
+CP.Cash.compute = realCompute
+local CN = Runs.create({ mission = mission, locationIndex = 1, missionType = 'tactical', members = { O7 }, leaderSrc = 7 })
+local cdBefore = Runs.cooldowns('CIT77')
+local typeBefore, missionBefore = cdBefore.types.tactical, cdBefore.missions.test_mission
+Runs.markArrived(CN, 7)
+Runs.removeParticipant(CN, 7, 'cancelled')
+H.eq(Runs.cooldowns('CIT77').types.tactical, typeBefore, "'cancelled' starts no type cooldown")
+H.eq(Runs.cooldowns('CIT77').missions.test_mission, missionBefore, "'cancelled' starts no new mission cooldown")
+H.eq(H.sql("SELECT state FROM cp_mission_runs WHERE run_uuid = ?", { CN.id })[1].state, 'abandoned', "'cancelled' is abandoned")
+
 -- ── resource stop: entities deleted, nothing written ────────────────────────
 H.reset()
 local M = Runs.create({ mission = mission, locationIndex = 1, missionType = 'patrol', members = { O[3] }, leaderSrc = 3 })

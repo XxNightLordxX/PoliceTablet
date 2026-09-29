@@ -25,9 +25,22 @@
 --   CP.Tablet.registerClientAction(name, fn(payload) -> ok, data|errKey)
 --                                           handlers for the NUI 'client' endpoint (built in: logoFailed,
 --                                           forwarded to the server action server:logoFailed)
+--   CP.Tablet.panelFocus(owner, on) -> boolean
+--                                           NUI focus for a Crimson-Police HUD panel that is not the tablet
+--                                           (modules/testing: the test-control panel and the test invitation
+--                                           prompt, owner 'testing'). on = true: SetNuiFocus(true, true) unless
+--                                           a tablet UI is open or opening, another owner holds the panel
+--                                           focus, or the local crimsonArena value is foreign (false then).
+--                                           on = false: released only by the owner that holds it, and
+--                                           SetNuiFocus(false, false) is only called when no tablet UI is open.
+--                                           A tablet UI that opens takes the focus over (the owner loses it);
+--                                           a foreign crimsonArena value, a character unload and the resource
+--                                           stop release it.
+--   CP.Tablet.panelFocusOwner() -> owner|nil  who holds the panel focus (nil also after a tablet takeover)
 -- Events handled: crimson-police:client:notify ({ kind, key, vars, title, duration }, translated with
--- CP.L), client:push (topic, data), client:openAdmin (session). The run engine (CP.Runs) forwards
--- client:hud and client:runEnded to CP.Tablet.hud / CP.Tablet.result.
+-- CP.L), client:push (topic, data), client:openAdmin (session). This file registers NO handler for
+-- client:hud or client:runEnded: the run engine's client (modules/runs/client.lua) is the one path that
+-- forwards them, to CP.Tablet.hud (patches, the ended HUD, hud(nil) when it hides) and CP.Tablet.result.
 -- NUI callbacks (§9.1): ready, close, request { name, args } -> CP.Net.request, action { name, payload }
 -- -> CP.Net.action (names must start with 'server:'), client { name, payload } -> registered client
 -- actions, switchUi { ui } -> getSession for that UI; replies { ok = true, data = Session } and re-opens.
@@ -37,8 +50,11 @@
 -- value (Crimson-Arena's, not { source = 'crimson-police' }) the command, key mapping, tablet item,
 -- OpenTablet, switchUi and client:openAdmin refuse with the toast err.in_arena; when such a value
 -- arrives, every Crimson-Police UI closes (prop deleted, animation stopped), the HUD and overlays are
--- hidden and a progress bar of the player's current run is cancelled. NUI focus is only released when
--- a Crimson-Police UI was open, never unconditionally. The tablet prop is a local (non-networked) object.
+-- hidden and a progress bar of the player's current run is cancelled. While the value stays foreign, HUD
+-- patches and overlays (e.g. the run engine's ended HUD after the arena removal) are kept but not shown;
+-- they are shown again once the value is no longer foreign. NUI focus is only released when a
+-- Crimson-Police UI (the tablet, or a panel holding CP.Tablet.panelFocus) was open, never
+-- unconditionally. The tablet prop is a local (non-networked) object.
 -- Exports: OpenTablet() (the same checks as /CrimsonPolice), useTablet(data, slot) for ox_inventory.
 --
 -- ox_inventory item (optional): set Config.Tablet.item = 'crimson_police_tablet' and add to
@@ -84,6 +100,8 @@ local state = {
     notifySeq = 0,
     themeToken = 0,
     commandRegistered = false,
+    panelOwner = nil,     -- CP.Tablet.panelFocus owner holding the NUI focus while no tablet UI is open
+    arenaHidden = false,  -- a HUD/overlay was kept off screen while the crimsonArena value was foreign
 }
 local clientActions = {}
 
@@ -133,6 +151,11 @@ function T.hud(patch)
         if v == false and NULLABLE_HUD[k] then hud[k] = nil else hud[k] = v end
     end
     state.hud = hud
+    -- CRIMSON_ARENA rule 8: nothing of Crimson-Police on screen while Crimson-Arena owns the player.
+    if inForeignArena() then
+        state.arenaHidden = true
+        return
+    end
     T.send({ type = 'hud', hud = hud })
 end
 
@@ -143,6 +166,10 @@ end
 function T.overlay(o)
     if type(o) ~= 'table' then o = nil end
     state.overlay = o
+    if o and inForeignArena() then
+        state.arenaHidden = true
+        return
+    end
     T.send({ type = 'overlay', overlay = o })
 end
 
@@ -162,6 +189,36 @@ end
 
 function T.isOpen()
     return state.open
+end
+
+-- ── panel focus (a HUD panel that is not the tablet, e.g. the test controls) ─
+function T.panelFocus(owner, on)
+    if type(owner) ~= 'string' or owner == '' then return false end
+    if on then
+        if state.panelOwner == owner then return true end
+        if state.panelOwner ~= nil or state.open or state.opening or inForeignArena() then return false end
+        state.panelOwner = owner
+        SetNuiFocus(true, true)
+        CP.log(TAG, 'NUI focus taken for the %s panel', owner)
+        return true
+    end
+    if state.panelOwner ~= owner then return false end
+    state.panelOwner = nil
+    -- An open tablet UI owns the focus now: never take it from it.
+    if not state.open then SetNuiFocus(false, false) end
+    CP.log(TAG, 'NUI focus of the %s panel released', owner)
+    return true
+end
+
+function T.panelFocusOwner()
+    return state.panelOwner
+end
+
+-- Drops the panel focus whoever holds it (arena placement, unload, resource stop).
+local function releasePanelFocus()
+    local owner = state.panelOwner
+    if owner == nil then return false end
+    return T.panelFocus(owner, false)
 end
 
 -- ── prop and animation ──────────────────────────────────────────────────────
@@ -286,6 +343,8 @@ local function showUi(ui, session)
     if CP.Access and CP.Access.setSession then CP.Access.setSession(session) end
     if ui ~= 'admin' and type(session.theme) == 'table' then state.theme = session.theme end
     T.send({ type = 'open', ui = ui, session = session })
+    -- The tablet takes the NUI focus over from a panel (CP.Tablet.panelFocus); closing it releases it.
+    state.panelOwner = nil
     SetNuiFocus(true, true)
     if ui == 'admin' then
         stopProp()
@@ -441,8 +500,12 @@ end
 RegisterNUICallback('ready', function(_, cb)
     cb({ ok = true })
     sendTheme()
-    if state.hud then T.send({ type = 'hud', hud = state.hud }) end
-    if state.overlay then T.send({ type = 'overlay', overlay = state.overlay }) end
+    if (state.hud or state.overlay) and inForeignArena() then
+        state.arenaHidden = true
+    else
+        if state.hud then T.send({ type = 'hud', hud = state.hud }) end
+        if state.overlay then T.send({ type = 'overlay', overlay = state.overlay }) end
+    end
     if state.open and state.session then T.send({ type = 'open', ui = state.ui, session = state.session }) end
 end)
 
@@ -554,9 +617,18 @@ end
 -- screen or holds focus (docs/CRIMSON_ARENA.md rule 8).
 local function onArenaPlaced()
     CP.log(TAG, 'Crimson-Arena placed the player: Crimson-Police UI, HUD and overlays hidden')
+    releasePanelFocus()
     if state.open then T.close() else stopProp() end
-    if state.hud then T.hud(nil) end
-    if state.overlay then T.overlay(nil) end
+    -- Hidden on the NUI, the state is kept: the run engine keeps patching it (e.g. its ended HUD after the
+    -- arena removal), and what is still set when Crimson-Arena lets the player go is shown again.
+    if state.hud then
+        state.arenaHidden = true
+        T.send({ type = 'hud' })
+    end
+    if state.overlay then
+        state.arenaHidden = true
+        T.send({ type = 'overlay' })
+    end
     -- A progress bar during a Crimson-Police run is a mission step (lib.cancelProgress raises when none runs).
     local run = CP.Runs and CP.Runs.current and CP.Runs.current()
     if run and lib and lib.progressActive and lib.cancelProgress then
@@ -565,11 +637,24 @@ local function onArenaPlaced()
     end
 end
 
+-- Crimson-Arena let the player go: show what was kept off screen meanwhile (a HUD or overlay that is
+-- still set; the run engine hides its ended HUD itself after a few seconds).
+local function onArenaLeft()
+    if not state.arenaHidden or inForeignArena() then return end
+    state.arenaHidden = false
+    if state.hud then T.send({ type = 'hud', hud = state.hud }) end
+    if state.overlay then T.send({ type = 'overlay', overlay = state.overlay }) end
+end
+
 local function watchArena()
     local bag = ('player:%d'):format(GetPlayerServerId(PlayerId()))
     AddStateBagChangeHandler('crimsonArena', bag, function(_, _, value)
         -- The handler only queues work: the bag still holds the old value while it runs.
-        if isForeignArena(value) then SetTimeout(0, onArenaPlaced) end
+        if isForeignArena(value) then
+            SetTimeout(0, onArenaPlaced)
+        elseif state.arenaHidden then
+            SetTimeout(0, onArenaLeft)
+        end
     end)
 end
 
@@ -583,6 +668,7 @@ CreateThread(function()
     CP.Qbx.onLoaded(function() scheduleThemeRefresh(1500) end)
     CP.Qbx.onUnload(function()
         T.close()
+        releasePanelFocus()
         T.hud(nil)
         T.overlay(nil)
         state.theme = nil
@@ -609,6 +695,7 @@ end)
 
 AddEventHandler('onResourceStop', function(res)
     if res ~= CP.resource then return end
-    if state.open then SetNuiFocus(false, false) end
+    if state.open or state.panelOwner then SetNuiFocus(false, false) end
+    state.panelOwner = nil
     stopProp()
 end)

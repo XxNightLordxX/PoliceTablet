@@ -2,7 +2,7 @@
 // the same test mode admins use (server:builder:test → CP.Testing.startDraft; nothing is saved or paid). The
 // tier defaults to the one maxOfficers reaches, which publishing needs a pass at (draft_tested). When the run
 // ends, the tester records Passed or Failed here (server:test:record → CP.Builder.onDraftTested).
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Badge, Button, Card, Field, Grid, Icon, Select, Textarea, TierBadge, Toggle } from '../../shared/components';
 import { asArray } from '../../shared/data';
 import { formatDateTime } from '../../shared/format';
@@ -19,8 +19,18 @@ export function StepTest({ ed, cfg, def, ro }: StepProps) {
   const { run, busy } = useAction();
   const tablet = useTablet();
   const tiers = asArray(cfg.tiers);
-  const required = ed.record?.requiredTier ?? requiredTierFor(cfg, def.maxOfficers);
-  const [tier, setTier] = useState<string>(required);
+  // the draft on screen decides (the record's requiredTier is the stored draft's, stale until the next load)
+  const required = requiredTierFor(cfg, def.maxOfficers) || ed.record?.requiredTier || 'standard';
+  const [tier, setTierState] = useState<string>(required);
+  const picked = useRef(false);
+  const setTier = (v: string) => {
+    picked.current = true;
+    setTierState(v);
+  };
+  // the default follows maxOfficers until the builder picks a tier
+  useEffect(() => {
+    if (!picked.current) setTierState(required);
+  }, [required]);
   const [location, setLocation] = useState<string>('1');
   const [route, setRoute] = useState<boolean>(!!cfg.useStartRoute);
   const [note, setNote] = useState('');
@@ -32,7 +42,11 @@ export function StepTest({ ed, cfg, def, ro }: StepProps) {
   const blocking = ed.errors.length;
 
   const start = async () => {
-    if (ed.dirty) await ed.autosaveNow();
+    // the test runs the STORED draft: store what is on screen first
+    if (ed.dirty && !(await ed.flush())) {
+      toast('error', t('builder.test.not_stored'));
+      return;
+    }
     const loc = location === 'random' ? 'random' : Number(location);
     const res = await run<BuilderTestResult>('server:builder:test', { id: ed.id, tier, location: loc, useStartRoute: route });
     if (!res.ok || !res.data) return;
@@ -111,7 +125,7 @@ export function StepTest({ ed, cfg, def, ro }: StepProps) {
               </div>
               <div className="builder_client-state__row">
                 <span>{t('builder.test.draft_version')}</span>
-                <span className="cp-num">v{ed.record?.draftVersion ?? ed.record?.version ?? 1}</span>
+                <span className="cp-num">{t('builder.version_short', { version: ed.record?.draftVersion ?? ed.record?.version ?? 1 })}</span>
               </div>
               <div className="builder_client-state__row">
                 <span>{t('builder.test.status')}</span>

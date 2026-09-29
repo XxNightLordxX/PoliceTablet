@@ -2,7 +2,7 @@
 // the spawn keep-out circle (Config.Builder.minSpawnFromStart), every placed point per key, recorded routes with
 // stop points, waypoints a test drive did not reach, waypoints with no road path and rejected "off road" samples,
 // and the no-build zones nearby. No map tiles: the NUI must work offline.
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { cx } from '../shared/cx';
 import { formatDistance } from '../shared/format';
 import { t } from '../shared/i18n';
@@ -39,9 +39,32 @@ function niceStep(span: number): number {
   return steps.find((s) => span / s <= 8) ?? 5000;
 }
 
+/** Width / height of the map box, measured so the schematic fills it at any tablet size. */
+function useAspect(ref: RefObject<HTMLDivElement | null>): { aspect: number; width: number } {
+  const [size, setSize] = useState({ aspect: 1.8, width: 900 });
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === 'undefined') return undefined;
+    const measure = () => {
+      const r = el.getBoundingClientRect();
+      if (r.width > 0 && r.height > 0) {
+        const aspect = Math.min(6, Math.max(1.2, r.width / r.height));
+        setSize((old) => (Math.abs(old.aspect - aspect) < 0.01 && Math.abs(old.width - r.width) < 1 ? old : { aspect, width: r.width }));
+      }
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [ref]);
+  return size;
+}
+
 export function LocationMap({ location, specs, cfg, meta, focusKey, height = 260, className }: LocationMapProps) {
   const start = location.start;
   const keepOut = Number(cfg.minSpawnFromStart) || 30;
+  const boxRef = useRef<HTMLDivElement | null>(null);
+  const { aspect, width } = useAspect(boxRef);
   const data = useMemo(() => {
     const box: Box = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity };
     if (start) {
@@ -65,17 +88,17 @@ export function LocationMap({ location, specs, cfg, meta, focusKey, height = 260
     const minSpan = 160;
     const cx0 = (box.minX + box.maxX) / 2;
     const cy0 = (box.minY + box.maxY) / 2;
-    const span = Math.max(minSpan, box.maxX - box.minX, (box.maxY - box.minY) * 1.8) * 1.12;
+    const span = Math.max(minSpan, box.maxX - box.minX, (box.maxY - box.minY) * aspect) * 1.12;
     const w = span;
-    const h = span / 1.8;
+    const h = span / aspect;
     const view = { x: cx0 - w / 2, y: -(cy0 + h / 2), w, h };
     const zones = (cfg.noBuildZones ?? []).filter((z) =>
       z.coords.x + z.radius > cx0 - w / 2 && z.coords.x - z.radius < cx0 + w / 2 && z.coords.y + z.radius > cy0 - h / 2 && z.coords.y - z.radius < cy0 + h / 2);
-    return { layers, view, zones, step: niceStep(w) };
-  }, [location, specs, start, keepOut, meta, cfg.noBuildZones]);
+    return { layers, view, zones, step: niceStep(Math.min(w, h * 3)) };
+  }, [location, specs, start, keepOut, meta, cfg.noBuildZones, aspect]);
 
   const { view, step } = data;
-  const px = view.w / 900; // metres per screen pixel at the design width
+  const px = view.w / Math.max(200, width); // metres per screen pixel
   const sx = (p: { x: number }) => p.x;
   const sy = (p: { y: number }) => -p.y;
   const gridX: number[] = [];
@@ -87,13 +110,15 @@ export function LocationMap({ location, specs, cfg, meta, focusKey, height = 260
   const polyline = (pts: Vec3[]) => pts.map((p) => `${sx(p)},${sy(p)}`).join(' ');
 
   return (
-    <div className={cx('builder_client-map', className)} style={{ height }}>
+    <div ref={boxRef} className={cx('builder_client-map', className)} style={{ height }}>
       <svg viewBox={`${view.x} ${view.y} ${view.w} ${view.h}`} preserveAspectRatio="xMidYMid meet" role="img" aria-label={t('builder.map.aria')}>
         <rect x={view.x} y={view.y} width={view.w} height={view.h} className="builder_client-map__bg" />
         {gridX.map((x) => <line key={`gx${x}`} x1={x} x2={x} y1={view.y} y2={view.y + view.h} className="builder_client-map__grid" strokeWidth={px} />)}
         {gridY.map((y) => <line key={`gy${y}`} y1={y} y2={y} x1={view.x} x2={view.x + view.w} className="builder_client-map__grid" strokeWidth={px} />)}
         {data.zones.map((z) => (
-          <circle key={z.label} cx={z.coords.x} cy={-z.coords.y} r={z.radius} className="builder_client-map__zone" strokeWidth={1.5 * px} />
+          <circle key={z.label} cx={z.coords.x} cy={-z.coords.y} r={z.radius} className="builder_client-map__zone" strokeWidth={1.5 * px}>
+            <title>{t('builder.map.zone_named', { label: z.label })}</title>
+          </circle>
         ))}
         {start ? (
           <g>
@@ -118,7 +143,7 @@ export function LocationMap({ location, specs, cfg, meta, focusKey, height = 260
                     strokeWidth={3.5 * px} strokeDasharray={`${5 * px} ${4 * px}`} />
                 ) : null))}
                 {pts.map((p, i) => (
-                  <circle key={i} cx={sx(p)} cy={sy(p)} r={(failed.has(i + 1) ? 2.2 : 1.1) * dot}
+                  <circle key={i} cx={sx(p)} cy={sy(p)} r={(failed.has(i + 1) ? 2 : 0.75) * dot}
                     className={failed.has(i + 1) ? 'builder_client-map__failed' : 'builder_client-map__wp'} strokeWidth={1.5 * px} />
                 ))}
                 {(l.route.stops ?? []).map((s) => {

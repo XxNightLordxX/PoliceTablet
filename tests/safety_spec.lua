@@ -1049,6 +1049,37 @@ do
     downed[84] = nil
 end
 
+-- 4) integration: CP.Ambulance.revive refuses (false: sc-ambulance stopped, in the arena, not connected) or
+--    raises -> the pick-up is cancelled at once (the client fades back in) and the flag goes; no 30 s wait
+do
+    ems.doctors = 0
+    local realRevive = CP.Ambulance.revive
+    for i, mode in ipairs({ 'false', 'error', 'missing' }) do
+        local src = 85 + i
+        if mode == 'false' then
+            CP.Ambulance.revive = function(s) ems.revives[#ems.revives + 1] = s; return false end
+        elseif mode == 'error' then
+            CP.Ambulance.revive = function() error('sc-ambulance broken') end
+        else
+            CP.Ambulance.revive = nil
+        end
+        local r = newRun('r-rv-4' .. mode, { srcs = { src }, arrived = true, state = 'in_progress' })
+        CP.Alerts.set(src, r)
+        downed[src] = true
+        local e = untilRemoved(src, 'downed')
+        runFor(15000 - (H.clockMs - e.at) + 1700)  -- pick-up sent, fade over, revive attempted
+        H.eq(#clientEvents('client:pickup', src), 1, 'revive ' .. mode .. ': pick-up sent')
+        local pc = clientEvents('client:pickupCancel', src)
+        H.eq(#pc, 1, 'revive ' .. mode .. ': the client is told to cancel right away')
+        H.eq(pc[1] and pc[1].args[1], r.id, 'revive ' .. mode .. ': cancel carries the run id')
+        H.eq(bag(src), nil, 'revive ' .. mode .. ': flag removed')
+        H.eq(CP.Downed.isPending(src), false, 'revive ' .. mode .. ': nothing pending any more')
+        H.eq(r.participants[src].endReason, 'downed', 'revive ' .. mode .. ': the result stays downed')
+        downed[src] = nil
+    end
+    CP.Ambulance.revive = realRevive
+end
+
 -- ── review (spec lens): regressions for the fixes ───────────────────────────
 -- 1) dodge rule: an un-mark that arrives while the mark is still being looked up in mdt_dispatch
 do

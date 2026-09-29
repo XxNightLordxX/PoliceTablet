@@ -2,6 +2,7 @@
 // modules/builder/client.lua (CP.Tablet.overlay kinds 'placement' | 'recording' | 'testdrive'), the fields the
 // builder client and screens add to the client protocol of docs/notes/builder_protocol.md §6, and the editor's
 // UI-side helper types (steps, point specs). The server shapes are in ./builder_server.ts.
+import type { MissionListData, MissionListEntry } from './oversight';
 import type {
   BuilderClientResult, BuilderPlaceKind, BuilderPlacePayload, BuilderRecordPayload, BuilderRoute, BuilderTestDrivePayload, Vec, Vec3,
 } from './builder_server';
@@ -179,5 +180,17 @@ export interface BuilderTestMemory {
   startedAt: number;
   recorded?: 'passed' | 'failed';
 }
+
+// ── admin:getMissions (modules/admin: getMissionList plus the Admin UI extras) ─────────
+
+export interface AdminMissionEntry extends MissionListEntry {
+  filePath?: string | null;
+  editedInCode?: boolean;
+  defHash?: string | null;
+  status?: string;
+  /** listed in Config.DisabledMissions */
+  disabledInConfig?: boolean;
+}
+export interface AdminMissionsData extends Omit<MissionListData, 'missions'> { missions: AdminMissionEntry[] }
 
 export type { BuilderRoute, Vec, Vec3 };

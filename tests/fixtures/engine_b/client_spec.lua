@@ -296,5 +296,46 @@ H.fire('crimson-police:client:start', nil, 'run-7', {
 H.eq(blipCount(), 0, 'a point start gets no circle')
 TriggerEvent('onResourceStop', 'Crimson-Police')
 
+-- ── integration: street · zone names for this player's own Active Mission view ─
+local streets = { [11] = 'Route 68', [12] = 'Joshua Rd' }
+_G.GetStreetNameAtCoord = function(x) return x < 100 and 11 or 12, 0 end
+_G.GetStreetNameFromHashKey = function(h) return streets[h] or '' end
+_G.GetNameOfZone = function(x) return x < 100 and 'HARMO' or 'NOWHERE' end
+_G.GetLabelText = function(z) if z == 'HARMO' then return 'Harmony' end return 'NULL' end
+H.reset()
+H.fire('crimson-police:client:start', nil, 'run-8', {
+    missionId = 'x', mission = { id = 'x', label = 'X', objectives = { { block = 'test_block', label = 'A' }, { block = 'test_block', label = 'B' } } },
+    location = { start = { coords = vec3(50.0, 0.0, 0.0), radius = 10.0 } }, start = { coords = vec3(50.0, 0.0, 0.0), radius = 10.0 },
+    expectedTier = 'standard', seed = 1, host = 1, startRoute = true, participants = { { src = 1, status = 'active' } },
+})
+local function areaReports()
+    local out = {}
+    for _, e in ipairs(serverEvents('crimson-police:server:telemetry')) do if e.args[2] == 'area' then out[#out + 1] = e.args[3] end end
+    return out
+end
+H.eq(#areaReports(), 1, 'the start area is reported at accept')
+H.eq(areaReports()[1].index, 0, 'index 0 = the start')
+H.eq(areaReports()[1].text, 'Route 68 · Harmony', 'street · zone label')
+H.fire('crimson-police:client:inProgress', nil, 'run-8', { objectives = { { block = 'test_block', label = 'A' }, { block = 'test_block', label = 'B' } }, remaining = 60 })
+H.fire('crimson-police:client:objective', nil, 'run-8', 1, { action = 'prepare' })
+H.fire('crimson-police:client:objective', nil, 'run-8', 1, { action = 'start', area = vec3(500.0, 0.0, 0.0) })
+H.eq(#areaReports(), 2, 'the objective area is reported when it starts')
+H.eq(areaReports()[2].index, 1, 'for that objective')
+H.eq(areaReports()[2].text, 'Joshua Rd · NOWHERE', 'an unknown zone label falls back to the zone code')
+H.fire('crimson-police:client:objective', nil, 'run-8', 1, { action = 'start', area = vec3(500.0, 0.0, 0.0) })
+H.eq(#areaReports(), 2, 'once per point')
+H.fire('crimson-police:client:objective', nil, 'run-8', 2, { action = 'start' })
+H.eq(#areaReports(), 2, 'no point, no report')
+_G.GetStreetNameAtCoord = function() error('native missing') end
+H.fire('crimson-police:client:runEnded', nil, 'run-8', 'abandoned', 'quit', nil)
+H.fire('crimson-police:client:start', nil, 'run-9', {
+    missionId = 'x', mission = { id = 'x', label = 'X', objectives = { { block = 'test_block', label = 'A' } } },
+    location = { start = { coords = vec3(50.0, 0.0, 0.0), radius = 10.0 } }, start = { coords = vec3(50.0, 0.0, 0.0), radius = 10.0 },
+    expectedTier = 'standard', seed = 1, host = 1, startRoute = true, participants = {},
+})
+H.eq(#areaReports(), 2, 'a failing native reports nothing (and breaks nothing)')
+H.eq(Runs.current().id, 'run-9', 'the run still started')
+TriggerEvent('onResourceStop', 'Crimson-Police')
+
 print(('RESULT %d %d'):format(H.passes, H.failures))
 return H

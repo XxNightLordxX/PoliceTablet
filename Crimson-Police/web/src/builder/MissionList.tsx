@@ -134,7 +134,7 @@ export function MissionList({ scope, config, onOpen }: MissionListProps) {
         <div className="builder_client-status-cell">
           <StatusBadge status={m.status} />
           {m.hasDraft && m.dbStatus === 'published' ? (
-            <Badge size="sm" tone={m.draftTested ? 'accent' : 'neutral'} variant="outline" icon={m.draftTested ? 'flask' : 'edit'}>
+            <Badge size="sm" tone={m.draftTested ? 'success' : 'neutral'} variant="outline" icon={m.draftTested ? 'flask' : 'edit'}>
               {t(m.draftTested ? 'builder.list.draft_tested' : 'builder.list.draft_v', { version: m.draftVersion ?? '?' })}
             </Badge>
           ) : null}
@@ -146,7 +146,7 @@ export function MissionList({ scope, config, onOpen }: MissionListProps) {
       header: t('builder.list.col.version'),
       width: 90,
       numeric: true,
-      render: (m) => (m.version ? <span className="cp-num">v{m.version}</span> : <span className="builder_client-muted">—</span>),
+      render: (m) => (m.version ? <span className="cp-num">{t('builder.version_short', { version: m.version })}</span> : <span className="builder_client-muted">—</span>),
     },
     { key: 'lock', header: t('builder.list.col.lock'), width: 170, render: (m) => <LockBadge lock={m.lock} /> },
     {
