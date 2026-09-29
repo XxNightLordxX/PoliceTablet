@@ -167,7 +167,7 @@ export default function SupReviewQueue() {
   const flagColumns: TableColumn<FlaggedRow>[] = [
     { key: 'officer', header: t('sup.review.col.officer'), width: 150, render: (r) => <Officer name={r.name} callsign={r.callsign} dept={r.departmentShort} /> },
     { key: 'mission', header: t('sup.review.col.mission'), render: (r) => <Mission label={r.missionLabel} type={r.missionTypeLabel} state={r.state} endReason={r.endReason} when={r.createdAt} /> },
-    { key: 'flag', header: t('sup.review.col.flag'), width: 160, render: (r) => <FlagCell row={r} /> },
+    { key: 'flag', header: t('sup.review.col.flag'), width: 176, render: (r) => <FlagCell row={r} /> },
     {
       key: 'held', header: t('sup.review.col.held'), width: 96, numeric: true,
       render: (r) => (
@@ -177,7 +177,7 @@ export default function SupReviewQueue() {
         </div>
       ),
     },
-    { key: 'actions', header: '', width: 244, align: 'right', render: flagActions },
+    { key: 'actions', header: '', width: 228, align: 'right', render: flagActions },
   ];
 
   const disputeColumns: TableColumn<DisputeView>[] = [

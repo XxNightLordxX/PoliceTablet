@@ -121,8 +121,8 @@ export function themeVars(theme?: Partial<Theme> | null): Record<string, string>
     '--cp-primary-contrast': onFill(th.primary),
     '--cp-accent-contrast': onFill(th.accent),
     '--cp-primary-hover': mix(th.primary, WHITE, 0.12),
-    '--cp-primary-text': legibleOn(th.primary, th.surface, 3.2),
-    '--cp-accent-text': legibleOn(th.accent, th.surface, 3.2),
+    '--cp-primary-text': legibleOn(th.primary, th.surface, 4.5),   // WCAG AA for small text (FIB's navy primary)
+    '--cp-accent-text': legibleOn(th.accent, th.surface, 4.5),
     '--cp-primary-rgb': rgbVar(th.primary),
     '--cp-accent-rgb': rgbVar(th.accent),
     '--cp-bg-rgb': rgbVar(th.background),

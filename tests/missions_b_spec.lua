@@ -183,7 +183,7 @@ local function refs(obj)
         end
     elseif b == 'escort' then
         add(obj.route, 'route')
-        add(obj.ambushPoints, 'list3')
+        add(obj.ambushPoints, 'list34')   -- escort: vec3 or vec4 (heading = direction of travel)
     elseif b == 'search_area' then
         add(obj.center, 'vec3')
         add(obj.clues, 'list3')
@@ -203,6 +203,7 @@ local SHAPES = {
     vec4 = function(v) return isVec4(v) end,
     list3 = function(v) return listOf(isVec3, v) end,
     list4 = function(v) return listOf(isVec4, v) end,
+    list34 = function(v) return listOf(function(p) return isVec3(p) or isVec4(p) end, v) end,
     points = function(v) return isVec(v) or listOf(isVec, v) end,
     route = function(v) return type(v) == 'table' and listOf(isVec3, v.points) end,
     routes = function(v) return listOf(function(r) return listOf(isVec3, r) and #r >= 2 end, v) end,
@@ -703,6 +704,58 @@ do
     end)
 end
 
+-- Armored Truck Escort (integration rebuild on GTA V road nodes): every ambush point is a vec4 ON the route whose
+-- heading is the truck's direction of travel there (the block lines the ambush cars up along it); the depot heading
+-- follows the road; the destination is reached in 2D (escort `arrival`, like the waypoints) and the last waypoint
+-- is 150 m+ past the last ambush point, so no wave spawns inside the arrival / clear area.
+do
+    local function hdg(a, b) return (math.deg(math.atan(-(b.x - a.x), b.y - a.y)) + 360) % 360 end
+    local function dh(a, b) return math.abs((a - b + 180) % 360 - 180) end
+    each('armored_truck_escort', function(li, loc)
+        local pts = loc.route.points
+        for i, a in ipairs(loc.ambushPoints) do
+            H.ok(isVec4(a), ('truck: route %d ambush point %d is a vec4 (heading)'):format(li, i))
+            local best, seg = math.huge, 1
+            for j = 1, #pts - 1 do
+                local d = distToPolyline(a, { pts[j], pts[j + 1] })
+                if d < best then best, seg = d, j end
+            end
+            H.ok(best <= 8.0, ('truck: route %d ambush point %d lies on the route (%.1f m; the road node, the waypoint chord cuts curves)'):format(li, i, best))
+            H.ok(a.w ~= nil and dh(a.w, hdg(pts[seg], pts[seg + 1])) <= 30,
+                ('truck: route %d ambush point %d faces the direction of travel'):format(li, i))
+            H.ok(d2(a, pts[#pts]) >= 150, ('truck: route %d ambush point %d is 150 m+ from the destination'):format(li, i))
+            H.ok(d2(a, pts[1]) >= 200, ('truck: route %d ambush point %d is 200 m+ from the depot'):format(li, i))
+        end
+        for i = 2, #pts - 1 do
+            -- a waypoint every turn: consecutive segments of one route never fold back
+            H.ok(dh(hdg(pts[i - 1], pts[i]), hdg(pts[i], pts[i + 1])) <= 90, ('truck: route %d no U-turn at waypoint %d'):format(li, i))
+        end
+    end)
+    local o = obj('armored_truck_escort', 1)
+    H.eq(o.arrival, 20.0, 'truck: 20 m arrival circle (2D in the escort block)')
+end
+
+-- Gang Shootout / Kingpin (integration): the spawn points were moved onto the hideouts' road network (container-yard
+-- lanes, trailer-park loop, yard tracks, driveways) so none is inside a container or building; they stay spread out.
+do
+    for _, id in ipairs({ 'gang_shootout', 'weekly_boss_kingpin' }) do
+        local gap = id == 'gang_shootout' and 7.0 or 6.0
+        each(id, function(li, loc)
+            local sp = loc.spawns
+            local minGap = math.huge
+            for i = 1, #sp do
+                for j = i + 1, #sp do minGap = math.min(minGap, d2(sp[i], sp[j])) end
+                if loc.boss then minGap = math.min(minGap, d2(sp[i], loc.boss)) end
+            end
+            H.ok(minGap >= gap - 0.01, ('%s: location %d spawn points %.0f m+ apart (%.1f m)'):format(id, li, gap, minGap))
+            H.ok(d2(loc.scene, loc.start.coords) >= Config.Builder.minSpawnFromStart, ('%s: location %d scene 30 m+ from the start'):format(id, li))
+            if loc.boss then
+                H.ok(d3(loc.boss, loc.start.coords) >= Config.Builder.minSpawnFromStart, ('%s: location %d boss 30 m+ from the start'):format(id, li))
+            end
+        end)
+    end
+end
+
 -- Prison Break: outside the walls and outside the no-build circle
 do
     local o = obj('prison_break', 1)
@@ -850,16 +903,41 @@ do
                     H.eq(#n.scaling, #def.scaling, id .. ': normalize keeps every scaling path')
                     H.eq(n.isBoss, id == 'weekly_boss_kingpin', id .. ': isBoss')
                 else
-                    -- CP.Missions.normalize calls validate before it sets d.source = 'builtin', so the blocks apply
-                    -- the Mission Builder's allowed-model lists (prison clothes, the Kingpin). The block validate
-                    -- above ran with source = 'builtin' and passed; report the loader issue instead of failing.
-                    local reason = tostring(why)
-                    local strictOnly = (id == 'prison_break' and reason:find('flee_arrest.invalid.models', 1, true))
-                        or (id == 'weekly_boss_kingpin' and reason:find('hostile_waves.invalid.boss', 1, true))
-                    H.ok(strictOnly ~= nil, id .. ': normalize rejects only for the builder allowed-model list (' .. reason .. ')')
-                    report('LOADER: %s rejected by CP.Missions.normalize: %s', id, tostring(why))
+                    -- the loader sets d.source = 'builtin' before the blocks' validate (engine_a fix), so the
+                    -- Mission Builder's allowed-model lists no longer reject Prison Break's inmates or the Kingpin
+                    H.ok(false, id .. ': CP.Missions.normalize accepts it (' .. tostring(why) .. ')')
                 end
             end
+        end
+    end
+end
+
+-- ── the REAL loader end to end: CP.Missions.loadAll with every real block → all 14 built-ins valid ─
+do
+    for _, b in ipairs({ 'checkpoint_route', 'interact_points', 'skill_check', 'hostile_waves', 'protect_rescue',
+                         'flee_arrest', 'pursuit', 'escort', 'search_area' }) do
+        if not CP.Blocks.get(b) or missing[b] then
+            local okB, errB = pcall(H.load, 'blocks/' .. b .. '/server.lua')
+            H.ok(okB, 'real block loads: ' .. b .. ' (' .. tostring(errB) .. ')')
+        end
+    end
+    local content = LoadResourceFile('Crimson-Police', 'missions/builtin/index.lua')
+    local ids = content and assert(load(content, '@index.lua', 't', {}))() or {}
+    H.eq(#ids, 14, 'missions/builtin/index.lua lists all 14 built-in missions')
+    if CP.Missions and CP.Missions.loadAll then
+        local okL, summary = pcall(CP.Missions.loadAll)
+        if H.ok(okL and type(summary) == 'table', 'CP.Missions.loadAll runs (' .. tostring(not okL and summary or '') .. ')') then
+            local failed = summary.failed or {}
+            H.eq(summary.builtin, 14, 'CP.Missions.loadAll: 14 built-in missions loaded')
+            H.eq(#failed, 0, 'CP.Missions.loadAll: nothing rejected' .. (failed[1] and (' (' .. tostring(failed[1].id) .. ': ' .. tostring(failed[1].error) .. ')') or ''))
+            for _, id in ipairs(ids) do
+                local d = CP.Missions.get(id)
+                H.ok(d ~= nil and d.source == 'builtin' and d.filePath == 'missions/builtin/' .. id .. '.lua', 'loaded as a valid built-in: ' .. id)
+                H.ok(d ~= nil and CP.Missions.isEnabled(id), 'enabled: ' .. id)
+            end
+            local kp = CP.Missions.get('weekly_boss_kingpin')
+            H.ok(kp ~= nil and kp.isBoss == true, 'the Kingpin loads as the Weekly Boss')
+            report('LOADER: CP.Missions.loadAll loaded %d built-ins, %d rejected', summary.builtin or 0, #failed)
         end
     end
 end

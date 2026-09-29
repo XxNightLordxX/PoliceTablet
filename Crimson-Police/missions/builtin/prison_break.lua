@@ -7,7 +7,10 @@
   Locations (6 breakout points on the outer perimeter of Bolingbroke Penitentiary: north, north-east, east
   beyond the visitor lot, west, north-west and south-west). Nothing is placed inside the walls: every
   point is outside the 180 m Bolingbroke no-build circle around 1768.73, 2570.43 and at least 240 m from
-  the prison's middle (1693.33, 2569.51).
+  the prison's middle (1693.33, 2569.51). Breakout points, inmate spawns and escape routes are on the GTA V
+  vehicle-node network (dirt tracks and roads round the prison, never a freeway or its ramps), so every
+  height is the real ground height (+1 m for peds and waypoints) instead of one estimated z per location,
+  and every escape route follows a connected track / road away from the prison (waypoints at every turn).
   Blocks: flee_arrest (scatter mode).
 ]]
 
@@ -28,108 +31,120 @@ RegisterMission({
   locations = {
     {
       label  = 'North fence, Bolingbroke Penitentiary',
-      start  = { coords = vec3(1706.92, 2851.95, 45.80), radius = 150.0 },   -- within 150 m of the breakout point
-      spawns = {   -- 8 inmate spawns just outside the fence (none inside the walls)
-        vec4(1718.98, 2811.33, 46.30, 357.2), vec4(1713.18, 2815.61, 46.30, 357.2),
-        vec4(1708.04, 2812.85, 46.30, 357.2), vec4(1702.24, 2817.14, 46.30, 357.2),
-        vec4(1697.06, 2813.38, 46.30, 357.2), vec4(1691.21, 2816.67, 46.30, 357.2),
-        vec4(1723.36, 2819.13, 46.30, 357.2), vec4(1687.45, 2821.85, 46.30, 357.2),
+      start  = { coords = vec3(1718.50, 2842.25, 44.47), radius = 150.0 },   -- within 150 m of the breakout point
+      spawns = {   -- 8 inmate spawns on the track / road at the breakout point outside the fence (z = road + 1 m, facing away from the prison)
+        vec4(1718.50, 2842.25, 45.47, 354.7), vec4(1722.20, 2844.75, 45.44, 354.0),
+        vec4(1715.67, 2838.25, 45.43, 355.2), vec4(1725.90, 2847.25, 45.42, 353.3),
+        vec4(1714.00, 2833.83, 45.44, 355.5), vec4(1729.50, 2849.85, 45.42, 352.6),
+        vec4(1713.50, 2829.00, 45.50, 355.6), vec4(1716.25, 2825.25, 45.48, 354.9),
       },
-      routes = {   -- escape routes heading away from the prison into the countryside
-        { vec3(1758.39, 2857.97, 45.80), vec3(1798.02, 2930.29, 45.80),
-          vec3(1873.80, 2982.79, 45.80), vec3(1927.00, 3069.79, 45.80) },
-        { vec3(1700.37, 2882.30, 45.80), vec3(1724.20, 2961.25, 45.80),
-          vec3(1708.55, 3052.11, 45.80), vec3(1733.33, 3151.03, 45.80) },
-        { vec3(1771.71, 2834.66, 45.80), vec3(1854.13, 2832.09, 45.80),
-          vec3(1937.84, 2870.72, 45.80), vec3(2039.81, 2872.38, 45.80) },
+      routes = {   -- 3 escape routes along tracks and roads away from the prison (road-node waypoints at every turn, <= 110 m apart)
+        { vec3(1718.50, 2842.25, 45.47), vec3(1794.00, 2873.75, 45.53), vec3(1807.25, 2885.75, 45.44),
+          vec3(1797.50, 2899.50, 45.69), vec3(1776.25, 2905.50, 45.75), vec3(1778.75, 2922.75, 45.75),
+          vec3(1872.75, 2955.25, 45.75), vec3(1935.50, 2971.50, 45.78), vec3(1928.25, 2993.25, 45.62),
+          vec3(1959.75, 3088.00, 46.88), vec3(1971.00, 3105.50, 46.91), vec3(2008.50, 3133.00, 46.34) },
+        { vec3(1718.50, 2842.25, 45.47), vec3(1794.00, 2873.75, 45.53), vec3(1807.25, 2885.75, 45.44),
+          vec3(1797.50, 2899.50, 45.69), vec3(1776.25, 2905.50, 45.75), vec3(1778.75, 2922.75, 45.75),
+          vec3(1872.75, 2955.25, 45.75), vec3(1977.75, 2980.75, 45.78), vec3(2083.50, 2999.25, 45.09),
+          vec3(2107.00, 3002.75, 45.12), vec3(2127.25, 2987.00, 45.53) },
+        { vec3(1718.50, 2842.25, 45.47), vec3(1814.75, 2869.25, 45.53), vec3(1888.25, 2795.00, 45.50),
+          vec3(1945.25, 2750.75, 45.28), vec3(2007.25, 2674.50, 46.72), vec3(2021.50, 2674.00, 47.03),
+          vec3(2105.50, 2741.75, 48.97), vec3(2133.75, 2764.25, 49.78) },
       },
     },
     {
       label  = 'North-east fence, Bolingbroke Penitentiary',
-      start  = { coords = vec3(1918.01, 2798.55, 46.30), radius = 150.0 },   -- within 150 m of the breakout point
-      spawns = {   -- 8 inmate spawns just outside the fence (none inside the walls)
-        vec4(1899.99, 2760.20, 46.80, 315.6), vec4(1898.51, 2767.25, 46.80, 315.6),
-        vec4(1892.84, 2768.61, 46.80, 315.6), vec4(1891.36, 2775.67, 46.80, 315.6),
-        vec4(1884.99, 2776.32, 46.80, 315.6), vec4(1882.81, 2782.66, 46.80, 315.6),
-        vec4(1908.45, 2763.11, 46.80, 315.6), vec4(1883.45, 2789.03, 46.80, 315.6),
+      start  = { coords = vec3(1910.50, 2791.25, 44.28), radius = 150.0 },   -- within 150 m of the breakout point
+      spawns = {   -- 8 inmate spawns on the track / road at the breakout point outside the fence (z = road + 1 m, facing away from the prison)
+        vec4(1910.50, 2791.25, 45.28, 315.6), vec4(1908.50, 2795.08, 45.30, 316.4),
+        vec4(1913.75, 2786.50, 45.34, 314.6), vec4(1906.50, 2799.12, 45.36, 317.1),
+        vec4(1917.00, 2782.00, 45.47, 313.5), vec4(1903.75, 2804.75, 45.47, 318.2),
+        vec4(1920.25, 2778.00, 45.44, 312.6), vec4(1902.00, 2808.50, 45.50, 318.9),
       },
-      routes = {   -- escape routes heading away from the prison into the countryside
-        { vec3(1960.45, 2768.81, 46.30), vec3(2038.14, 2796.45, 46.30),
-          vec3(2129.65, 2785.25, 46.30), vec3(2227.24, 2814.83, 46.30) },
-        { vec3(1933.31, 2825.57, 46.30), vec3(2003.61, 2868.68, 46.30),
-          vec3(2052.35, 2946.93, 46.30), vec3(2136.66, 3004.31, 46.30) },
-        { vec3(1903.41, 2839.17, 46.30), vec3(1889.67, 2920.48, 46.30),
-          vec3(1916.59, 3008.66, 46.30), vec3(1904.41, 3109.91, 46.30) },
+      routes = {   -- 2 escape routes along tracks and roads away from the prison (road-node waypoints at every turn, <= 110 m apart)
+        { vec3(1910.50, 2791.25, 45.28), vec3(1976.50, 2707.50, 46.00), vec3(2007.25, 2674.50, 46.72),
+          vec3(2021.50, 2674.00, 47.03), vec3(2105.50, 2741.75, 48.97), vec3(2182.50, 2810.50, 48.31),
+          vec3(2184.00, 2912.75, 46.59), vec3(2164.00, 2961.50, 46.53), vec3(2172.00, 2969.75, 46.53) },
+        { vec3(1910.50, 2791.25, 45.28), vec3(1938.00, 2760.50, 45.47), vec3(1939.00, 2751.75, 45.53),
+          vec3(1868.75, 2822.00, 45.56), vec3(1814.75, 2869.25, 45.53), vec3(1807.75, 2889.75, 45.62),
+          vec3(1780.50, 2904.25, 45.72), vec3(1769.25, 2918.50, 45.75), vec3(1872.75, 2955.25, 45.75),
+          vec3(1935.50, 2971.50, 45.78), vec3(1928.25, 2993.25, 45.62), vec3(1924.50, 3025.75, 45.72) },
       },
     },
     {
       label  = 'East side, beyond the visitor lot',
-      start  = { coords = vec3(2029.86, 2541.71, 47.00), radius = 150.0 },   -- within 150 m of the breakout point
-      spawns = {   -- 8 inmate spawns just outside the fence (none inside the walls)
-        vec4(1988.85, 2531.05, 47.50, 265.3), vec4(1993.33, 2536.70, 47.50, 265.3),
-        vec4(1990.75, 2541.93, 47.50, 265.3), vec4(1995.23, 2547.58, 47.50, 265.3),
-        vec4(1991.66, 2552.89, 47.50, 265.3), vec4(1995.14, 2558.62, 47.50, 265.3),
-        vec4(1996.49, 2526.40, 47.50, 265.3), vec4(2000.45, 2562.20, 47.50, 265.3),
+      start  = { coords = vec3(2001.25, 2679.00, 45.34), radius = 150.0 },   -- within 150 m of the breakout point
+      spawns = {   -- 8 inmate spawns on the track / road at the breakout point outside the fence (z = road + 1 m, facing away from the prison)
+        vec4(2001.25, 2679.00, 46.34, 289.6), vec4(2005.50, 2675.88, 46.64, 288.8),
+        vec4(1995.75, 2683.00, 46.06, 290.6), vec4(2008.44, 2672.50, 46.78, 288.1),
+        vec4(1990.88, 2687.25, 45.81, 291.6), vec4(2010.81, 2668.50, 46.91, 287.3),
+        vec4(2008.30, 2663.50, 46.94, 286.6), vec4(2015.17, 2669.00, 46.99, 287.2),
       },
-      routes = {   -- escape routes heading away from the prison into the countryside
-        { vec3(2034.11, 2490.06, 47.00), vec3(2105.02, 2447.97, 47.00),
-          vec3(2154.90, 2370.43, 47.00), vec3(2240.02, 2314.28, 47.00) },
-        { vec3(2051.77, 2578.90, 47.00), vec3(2105.52, 2641.43, 47.00),
-          vec3(2190.55, 2677.08, 47.00), vec3(2260.63, 2751.16, 47.00) },
-        { vec3(2006.09, 2613.59, 47.00), vec3(2051.92, 2682.15, 47.00),
-          vec3(2063.46, 2773.62, 47.00), vec3(2116.04, 2861.00, 47.00) },
+      routes = {   -- 2 escape routes along tracks and roads away from the prison (road-node waypoints at every turn, <= 110 m apart)
+        { vec3(2001.25, 2679.00, 46.34), vec3(2021.50, 2674.00, 47.03), vec3(2105.50, 2741.75, 48.97),
+          vec3(2182.50, 2810.50, 48.31), vec3(2184.00, 2912.75, 46.59), vec3(2164.00, 2961.50, 46.53),
+          vec3(2211.00, 3011.25, 45.28), vec3(2301.50, 2994.75, 46.81) },
+        { vec3(2001.25, 2679.00, 46.34), vec3(2021.50, 2674.00, 47.03), vec3(2105.50, 2741.75, 48.97),
+          vec3(2182.50, 2810.50, 48.31), vec3(2187.50, 2849.75, 47.12), vec3(2177.25, 2865.00, 46.91),
+          vec3(2090.00, 2922.25, 47.62), vec3(2058.75, 2938.25, 47.31) },
       },
     },
     {
       label  = 'West fence, Bolingbroke Penitentiary',
-      start  = { coords = vec3(1410.31, 2604.97, 44.80), radius = 150.0 },   -- within 150 m of the breakout point
-      spawns = {   -- 8 inmate spawns just outside the fence (none inside the walls)
-        vec4(1451.74, 2613.89, 45.30, 82.9), vec4(1447.03, 2608.44, 45.30, 82.9),
-        vec4(1449.38, 2603.10, 45.30, 82.9), vec4(1444.67, 2597.64, 45.30, 82.9),
-        vec4(1448.01, 2592.19, 45.30, 82.9), vec4(1444.29, 2586.61, 45.30, 82.9),
-        vec4(1444.30, 2618.85, 45.30, 82.9), vec4(1438.83, 2583.26, 45.30, 82.9),
+      start  = { coords = vec3(1383.50, 2557.50, 37.34), radius = 150.0 },   -- within 150 m of the breakout point
+      spawns = {   -- 8 inmate spawns on the track / road at the breakout point outside the fence (z = road + 1 m, facing away from the prison)
+        vec4(1383.50, 2557.50, 38.34, 92.2), vec4(1380.00, 2559.62, 38.12, 91.8),
+        vec4(1386.88, 2555.12, 38.81, 92.7), vec4(1376.50, 2561.75, 37.91, 91.4),
+        vec4(1390.25, 2552.75, 39.28, 93.2), vec4(1393.12, 2549.75, 39.81, 93.8),
+        vec4(1372.88, 2563.88, 37.83, 91.0), vec4(1396.00, 2546.75, 40.34, 94.4),
       },
-      routes = {   -- escape routes heading away from the prison into the countryside
-        { vec3(1408.25, 2656.75, 44.80), vec3(1339.18, 2701.79, 44.80),
-          vec3(1292.62, 2781.37, 44.80), vec3(1209.94, 2841.07, 44.80) },
-        { vec3(1379.55, 2600.77, 44.80), vec3(1302.66, 2630.56, 44.80),
-          vec3(1210.87, 2621.90, 44.80), vec3(1114.13, 2654.18, 44.80) },
-        { vec3(1386.86, 2568.74, 44.80), vec3(1330.51, 2508.54, 44.80),
-          vec3(1244.06, 2476.51, 44.80), vec3(1170.90, 2405.45, 44.80) },
+      routes = {   -- 2 escape routes along tracks and roads away from the prison (road-node waypoints at every turn, <= 110 m apart)
+        { vec3(1383.50, 2557.50, 38.34), vec3(1293.50, 2605.00, 37.69), vec3(1258.50, 2670.50, 37.50),
+          vec3(1243.50, 2682.00, 37.59), vec3(1139.50, 2684.75, 38.28), vec3(1032.25, 2690.25, 39.44),
+          vec3(927.75, 2695.75, 40.66), vec3(905.75, 2696.50, 40.84) },
+        { vec3(1383.50, 2557.50, 38.34), vec3(1293.50, 2605.00, 37.69), vec3(1258.50, 2670.50, 37.50),
+          vec3(1243.50, 2682.00, 37.59), vec3(1139.50, 2684.75, 38.28), vec3(1121.75, 2782.25, 37.59),
+          vec3(1110.25, 2841.50, 38.59), vec3(1090.00, 2844.50, 38.53), vec3(1056.25, 2847.25, 40.06) },
       },
     },
     {
       label  = 'North-west fence, Bolingbroke Penitentiary',
-      start  = { coords = vec3(1487.66, 2789.20, 45.30), radius = 150.0 },   -- within 150 m of the breakout point
-      spawns = {   -- 8 inmate spawns just outside the fence (none inside the walls)
-        vec4(1525.22, 2769.57, 45.80, 43.1), vec4(1518.11, 2768.39, 45.80, 43.1),
-        vec4(1516.51, 2762.78, 45.80, 43.1), vec4(1509.39, 2761.60, 45.80, 43.1),
-        vec4(1508.48, 2755.26, 45.80, 43.1), vec4(1502.05, 2753.35, 45.80, 43.1),
-        vec4(1522.67, 2778.14, 45.80, 43.1), vec4(1495.71, 2754.27, 45.80, 43.1),
+      start  = { coords = vec3(1477.75, 2732.75, 36.72), radius = 150.0 },   -- within 150 m of the breakout point
+      spawns = {   -- 8 inmate spawns on the track / road at the breakout point outside the fence (z = road + 1 m, facing away from the prison)
+        vec4(1477.75, 2732.75, 37.72, 52.9), vec4(1474.21, 2730.83, 37.70, 53.6),
+        vec4(1481.25, 2734.95, 37.74, 52.0), vec4(1470.67, 2728.92, 37.68, 54.4),
+        vec4(1484.75, 2737.15, 37.77, 51.2), vec4(1467.12, 2727.00, 37.66, 55.2),
+        vec4(1488.25, 2739.35, 37.79, 50.4), vec4(1463.58, 2725.08, 37.64, 55.9),
       },
-      routes = {   -- escape routes heading away from the prison into the countryside
-        { vec3(1446.46, 2776.34, 45.30), vec3(1364.64, 2766.08, 45.30),
-          vec3(1277.69, 2796.73, 45.30), vec3(1176.01, 2788.86, 45.30) },
-        { vec3(1457.03, 2719.96, 45.30), vec3(1377.04, 2699.91, 45.30),
-          vec3(1307.08, 2639.86, 45.30), vec3(1209.46, 2610.38, 45.30) },
+      routes = {   -- 3 escape routes along tracks and roads away from the prison (road-node waypoints at every turn, <= 110 m apart)
+        { vec3(1477.75, 2732.75, 37.72), vec3(1380.75, 2690.50, 37.66), vec3(1311.75, 2683.00, 37.69),
+          vec3(1207.50, 2682.25, 37.75), vec3(1107.50, 2686.00, 38.62), vec3(1017.00, 2691.00, 39.56),
+          vec3(948.50, 2695.00, 40.41) },
+        { vec3(1477.75, 2732.75, 37.72), vec3(1380.75, 2690.50, 37.66), vec3(1311.75, 2683.00, 37.69),
+          vec3(1207.50, 2682.25, 37.75), vec3(1139.50, 2684.75, 38.28), vec3(1121.75, 2782.25, 37.59),
+          vec3(1128.75, 2872.75, 39.34) },
+        { vec3(1477.75, 2732.75, 37.72), vec3(1562.50, 2789.75, 38.28), vec3(1631.75, 2837.00, 39.84),
+          vec3(1723.50, 2894.00, 44.91), vec3(1815.75, 2937.25, 45.78), vec3(1904.25, 2964.00, 45.75),
+          vec3(1935.50, 2971.50, 45.78), vec3(1928.25, 2993.25, 45.62), vec3(1925.50, 3006.75, 45.69) },
       },
     },
     {
       label  = 'South-west fence, Bolingbroke Penitentiary',
-      start  = { coords = vec3(1475.66, 2367.81, 46.80), radius = 150.0 },   -- within 150 m of the breakout point
-      spawns = {   -- 8 inmate spawns just outside the fence (none inside the walls)
-        vec4(1495.48, 2405.27, 47.30, 132.8), vec4(1496.63, 2398.15, 47.30, 132.8),
-        vec4(1502.23, 2396.52, 47.30, 132.8), vec4(1503.37, 2389.40, 47.30, 132.8),
-        vec4(1509.70, 2388.45, 47.30, 132.8), vec4(1511.58, 2382.01, 47.30, 132.8),
-        vec4(1486.90, 2402.77, 47.30, 132.8), vec4(1510.63, 2375.68, 47.30, 132.8),
+      start  = { coords = vec3(1417.00, 2409.75, 58.50), radius = 150.0 },   -- within 150 m of the breakout point
+      spawns = {   -- 8 inmate spawns on the track / road at the breakout point outside the fence (z = road + 1 m, facing away from the prison)
+        vec4(1417.00, 2409.75, 59.50, 120.0), vec4(1419.25, 2414.75, 58.44, 119.5),
+        vec4(1414.25, 2405.00, 60.69, 120.5), vec4(1421.75, 2419.50, 57.47, 118.9),
+        vec4(1411.50, 2400.25, 61.91, 121.0), vec4(1409.00, 2395.50, 63.19, 121.5),
+        vec4(1424.25, 2424.50, 56.69, 118.3), vec4(1406.50, 2390.75, 64.50, 121.9),
       },
-      routes = {   -- escape routes heading away from the prison into the countryside
-        { vec3(1434.69, 2399.55, 46.80), vec3(1355.77, 2375.64, 46.80),
-          vec3(1264.90, 2391.19, 46.80), vec3(1166.00, 2366.29, 46.80) },
-        { vec3(1459.09, 2341.55, 46.80), vec3(1386.82, 2301.85, 46.80),
-          vec3(1334.40, 2226.01, 46.80), vec3(1247.45, 2172.71, 46.80) },
-        { vec3(1488.31, 2326.55, 46.80), vec3(1498.15, 2244.68, 46.80),
-          vec3(1467.06, 2157.88, 46.80), vec3(1474.40, 2056.17, 46.80) },
+      routes = {   -- 2 escape routes along tracks and roads away from the prison (road-node waypoints at every turn, <= 110 m apart)
+        { vec3(1417.00, 2409.75, 59.50), vec3(1397.50, 2359.75, 72.50), vec3(1383.00, 2352.50, 72.53),
+          vec3(1277.75, 2374.25, 73.09), vec3(1182.50, 2372.50, 57.69), vec3(1165.25, 2376.50, 57.59),
+          vec3(1162.50, 2459.50, 54.16), vec3(1150.00, 2477.00, 54.00), vec3(1121.75, 2480.25, 51.69),
+          vec3(1061.25, 2436.25, 49.56), vec3(1023.50, 2443.00, 44.78) },
+        { vec3(1417.00, 2409.75, 59.50), vec3(1397.50, 2359.75, 72.50), vec3(1383.00, 2352.50, 72.53),
+          vec3(1277.75, 2374.25, 73.09), vec3(1176.50, 2372.50, 57.59), vec3(1169.00, 2279.00, 51.91),
+          vec3(1166.50, 2256.25, 48.81), vec3(1144.75, 2247.25, 49.78), vec3(1122.50, 2267.50, 49.16) },
       },
     },
   },

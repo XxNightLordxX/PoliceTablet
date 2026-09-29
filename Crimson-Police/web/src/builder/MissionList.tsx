@@ -129,7 +129,7 @@ export function MissionList({ scope, config, onOpen }: MissionListProps) {
     {
       key: 'status',
       header: t('builder.list.col.status'),
-      width: 170,
+      width: 150,
       render: (m) => (
         <div className="builder_client-status-cell">
           <StatusBadge status={m.status} />
@@ -144,15 +144,15 @@ export function MissionList({ scope, config, onOpen }: MissionListProps) {
     {
       key: 'version',
       header: t('builder.list.col.version'),
-      width: 90,
+      width: 60,
       numeric: true,
       render: (m) => (m.version ? <span className="cp-num">{t('builder.version_short', { version: m.version })}</span> : <span className="builder_client-muted">—</span>),
     },
-    { key: 'lock', header: t('builder.list.col.lock'), width: 170, render: (m) => <LockBadge lock={m.lock} /> },
+    { key: 'lock', header: t('builder.list.col.lock'), width: 150, render: (m) => <LockBadge lock={m.lock} /> },
     {
       key: 'updated',
       header: t('builder.list.col.updated'),
-      width: 150,
+      width: 140,
       render: (m) => (
         <div className="builder_client-updated">
           <span>{m.owner.mine ? t('builder.list.owner_you') : m.owner.name ?? m.owner.citizenid}</span>

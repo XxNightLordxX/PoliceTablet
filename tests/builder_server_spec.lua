@@ -833,7 +833,8 @@ local function body()
         -- an explicit lock takes the mission back
         H.ok((act(1, 'lock', { id = id })), 'the old editor may take the lock back explicitly')
         H.ok((act(1, 'autosave', { id = id, definition = validDef() })), 'and autosave again')
-        act(1, 'unlock', { id = id })
+        H.ok((act(1, 'discardDraft', { id = id })), 'the test draft is discarded again')
+        H.eq(row(id).locked_by, nil, 'discarding releases the lock')
         -- expired locks can be taken
         act(1, 'lock', { id = id })
         H.sql('UPDATE cp_custom_missions SET locked_until = NOW() - INTERVAL 1 MINUTE WHERE id = ?', { id })

@@ -336,6 +336,8 @@ do
         H.eq(o.stopFor, 10, 'beat_patrol: stop 10 s')
         H.eq(o.policeVehicle, true, 'beat_patrol: police vehicle')
         H.eq(o.medals, false, 'beat_patrol: no medals')
+        H.eq(o.contactPenalty, 0, 'beat_patrol: contactPenalty = 0 (blocks_a request: no course clock)')
+        H.eq(o.failIfUndriveable, false, 'beat_patrol: failIfUndriveable = false (only the time limit fails)')
         H.eq(#def.bonuses + #def.penalties, 0, 'beat_patrol: common bonuses and penalties only')
         for i, loc in ipairs(def.locations) do
             local cps = loc.checkpoints

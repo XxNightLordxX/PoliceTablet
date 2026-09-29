@@ -9,7 +9,9 @@
   Locations (3 compounds, large remote properties outside every no-build zone): La Fuente Blanca ranch
   (the Madrazo ranch, Tataviam foothills east of Vinewood Hills), O'Neil Ranch (Grapeseed) and Marlowe
   Vineyards (Tongva Hills). Each has 18 hostile spawn points, the Kingpin's spawn and a scene marker, all
-  in front of the main house's facade (towards the approach), so nothing spawns inside the buildings.
+  ON the compound's own roads (the courtyard loop, yard lanes and driveways of the GTA V vehicle-node
+  network, z = road height + 1 m), so nothing spawns inside a house, barn or shed; the start is on the
+  compound's driveway (within 7.5 m of the compound's height), 30 m+ from every spawn.
   Blocks: hostile_waves (with boss) → interact_points.
 ]]
 
@@ -30,54 +32,54 @@ RegisterMission({
   locations = {
     {
       label  = 'La Fuente Blanca ranch, Tataviam foothills',
-      start  = { coords = vec3(1304.00, 1125.72, 112.00), radius = 100.0 },   -- the approach, within 100 m of the compound
-      spawns = {   -- 18 hostile spawn points in front of the main house, facing the approach
-        vec4(1387.42, 1131.19, 114.20, 93.8), vec4(1386.15, 1152.19, 114.20, 107.9),
-        vec4(1381.00, 1136.46, 114.20, 97.9), vec4(1378.21, 1143.68, 114.20, 103.6),
-        vec4(1377.93, 1124.54, 114.20, 89.1), vec4(1374.19, 1152.62, 114.20, 111.0),
-        vec4(1368.13, 1135.20, 114.20, 98.4), vec4(1368.56, 1118.32, 114.20, 83.5),
-        vec4(1360.26, 1155.04, 114.20, 117.5), vec4(1360.01, 1125.95, 114.20, 90.2),
-        vec4(1354.95, 1144.25, 114.20, 110.0), vec4(1393.15, 1124.59, 114.20, 89.3),
-        vec4(1388.76, 1158.14, 114.20, 110.9), vec4(1387.60, 1116.91, 114.20, 84.0),
-        vec4(1380.35, 1163.76, 114.20, 116.5), vec4(1381.74, 1113.84, 114.20, 81.3),
-        vec4(1375.29, 1111.28, 114.20, 78.6), vec4(1350.54, 1136.47, 114.20, 103.0),
+      start  = { coords = vec3(1330.75, 1121.00, 107.06), radius = 100.0 },   -- the approach, within 100 m of the compound
+      spawns = {   -- 18 hostile spawn points on the compound's roads and yard lanes (open ground), facing the approach
+        vec4(1368.50, 1135.00, 113.75, 110.3), vec4(1368.75, 1145.38, 113.75, 122.7),
+        vec4(1358.00, 1140.12, 113.75, 125.1), vec4(1370.50, 1129.25, 113.91, 101.7),
+        vec4(1353.75, 1144.75, 113.75, 135.9), vec4(1368.00, 1152.25, 113.75, 130.0),
+        vec4(1353.75, 1151.25, 113.75, 142.8), vec4(1361.50, 1155.75, 113.75, 138.5),
+        vec4(1373.00, 1123.75, 114.16, 93.7), vec4(1361.25, 1163.25, 113.66, 144.2),
+        vec4(1377.50, 1119.75, 114.44, 88.5), vec4(1361.25, 1170.19, 113.12, 148.2),
+        vec4(1361.25, 1177.00, 112.75, 151.4), vec4(1361.25, 1183.67, 112.54, 154.0),
+        vec4(1365.33, 1188.08, 112.69, 152.7), vec4(1371.46, 1188.21, 112.97, 148.8),
+        vec4(1355.25, 1188.00, 112.19, 159.9), vec4(1377.50, 1188.25, 113.16, 145.2),
       },
-      boss   = vec4(1392.63, 1141.35, 114.30, 100.0),   -- the Kingpin, on the front step (outside the walls)
-      scene  = vec3(1388.69, 1140.66, 114.30),   -- "Secure the scene" point
+      boss   = vec4(1365.50, 1140.25, 113.75, 119.0),   -- the Kingpin, on the yard road nearest the house (open ground)
+      scene  = vec3(1365.00, 1154.50, 112.95),   -- "Secure the scene" point
     },
     {
       label  = "O'Neil Ranch, Grapeseed",
-      start  = { coords = vec3(2440.00, 4878.00, 45.60), radius = 100.0 },   -- the approach, within 100 m of the compound
-      spawns = {   -- 18 hostile spawn points in front of the main house, facing the approach
-        vec4(2451.50, 4961.70, 46.80, 172.2), vec4(2430.60, 4960.20, 46.80, 186.5),
-        vec4(2444.30, 4956.60, 46.80, 176.9), vec4(2433.40, 4957.80, 46.80, 184.7),
-        vec4(2453.10, 4948.80, 46.80, 169.5), vec4(2424.20, 4950.30, 46.80, 192.3),
-        vec4(2438.80, 4942.50, 46.80, 181.1), vec4(2461.20, 4941.20, 46.80, 161.5),
-        vec4(2420.00, 4939.40, 46.80, 198.0), vec4(2447.70, 4932.90, 46.80, 172.0),
-        vec4(2431.80, 4932.00, 46.80, 188.6), vec4(2457.60, 4966.60, 46.80, 168.8),
-        vec4(2422.00, 4966.30, 46.80, 191.5), vec4(2463.10, 4959.30, 46.80, 164.1),
-        vec4(2416.30, 4959.00, 46.80, 196.3), vec4(2464.70, 4953.20, 46.80, 161.8),
-        vec4(2465.80, 4945.20, 46.80, 159.0), vec4(2438.20, 4925.60, 46.80, 182.2),
+      start  = { coords = vec3(2429.00, 4900.00, 40.16), radius = 100.0 },   -- the approach, within 100 m of the compound
+      spawns = {   -- 18 hostile spawn points on the compound's roads and yard lanes (open ground), facing the approach
+        vec4(2452.25, 4947.88, 45.12, 154.1), vec4(2442.75, 4938.20, 45.11, 160.2),
+        vec4(2457.25, 4952.75, 45.12, 151.8), vec4(2438.38, 4933.44, 45.00, 164.3),
+        vec4(2461.75, 4957.70, 45.12, 150.4), vec4(2466.38, 4962.67, 45.18, 149.2),
+        vec4(2469.16, 4956.22, 45.10, 144.5), vec4(2417.00, 4969.25, 46.16, 189.8),
+        vec4(2473.56, 4951.44, 45.08, 139.1), vec4(2421.88, 4975.38, 45.92, 185.4),
+        vec4(2411.25, 4963.00, 45.58, 195.7), vec4(2471.25, 4967.67, 45.33, 148.0),
+        vec4(2426.25, 4980.42, 45.86, 182.0), vec4(2478.06, 4946.94, 44.93, 133.7),
+        vec4(2432.00, 4985.50, 45.88, 178.0), vec4(2405.50, 4957.25, 44.38, 202.3),
+        vec4(2475.56, 4973.06, 45.52, 147.5), vec4(2437.00, 4991.00, 46.00, 175.0),
       },
-      boss   = vec4(2440.00, 4968.00, 46.60, 180.0),   -- the Kingpin, on the front step (outside the walls)
-      scene  = vec3(2440.00, 4964.00, 46.60),   -- "Secure the scene" point
+      boss   = vec4(2447.25, 4943.00, 45.12, 157.0),   -- the Kingpin, on the yard road nearest the house (open ground)
+      scene  = vec3(2466.22, 4959.41, 44.32),   -- "Secure the scene" point
     },
     {
       label  = 'Marlowe Vineyards, Tongva Hills',
-      start  = { coords = vec3(-1796.00, 2050.00, 139.50), radius = 100.0 },   -- the approach, within 100 m of the compound
-      spawns = {   -- 18 hostile spawn points in front of the main house, facing the approach
-        vec4(-1880.60, 2059.70, 141.20, 263.5), vec4(-1881.80, 2041.80, 141.20, 275.5),
-        vec4(-1872.80, 2052.50, 141.20, 268.1), vec4(-1874.30, 2044.90, 141.20, 273.7),
-        vec4(-1866.50, 2065.50, 141.20, 257.6), vec4(-1869.20, 2036.60, 141.20, 280.4),
-        vec4(-1861.40, 2050.30, 141.20, 269.7), vec4(-1858.90, 2069.40, 141.20, 252.9),
-        vec4(-1858.00, 2029.10, 141.20, 288.6), vec4(-1849.10, 2056.20, 141.20, 263.3),
-        vec4(-1851.50, 2038.80, 141.20, 281.4), vec4(-1883.80, 2066.80, 141.20, 259.2),
-        vec4(-1884.80, 2032.70, 141.20, 281.0), vec4(-1876.50, 2074.10, 141.20, 253.3),
-        vec4(-1877.70, 2025.50, 141.20, 286.7), vec4(-1870.70, 2074.60, 141.20, 251.8),
-        vec4(-1863.10, 2076.30, 141.20, 248.6), vec4(-1844.60, 2047.70, 141.20, 272.7),
+      start  = { coords = vec3(-1852.75, 2031.75, 135.53), radius = 100.0 },   -- the approach, within 100 m of the compound
+      spawns = {   -- 18 hostile spawn points on the compound's roads and yard lanes (open ground), facing the approach
+        vec4(-1905.75, 2031.17, 140.72, 270.6), vec4(-1910.08, 2044.62, 140.72, 257.3),
+        vec4(-1899.83, 2027.42, 140.72, 275.3), vec4(-1910.50, 2053.00, 140.72, 249.8),
+        vec4(-1895.58, 2022.42, 140.76, 282.3), vec4(-1911.00, 2059.50, 140.72, 244.5),
+        vec4(-1893.33, 2016.67, 140.99, 290.4), vec4(-1916.50, 2064.00, 140.59, 243.2),
+        vec4(-1890.42, 2011.42, 141.43, 298.4), vec4(-1895.50, 2006.75, 141.66, 300.3),
+        vec4(-1884.50, 2007.75, 141.66, 307.1), vec4(-1922.00, 2068.50, 140.47, 242.0),
+        vec4(-1877.00, 2008.50, 141.50, 313.8), vec4(-1897.88, 2000.00, 141.78, 305.1),
+        vec4(-1878.00, 2002.50, 142.00, 319.2), vec4(-1923.75, 2076.62, 139.47, 237.7),
+        vec4(-1897.00, 1994.00, 141.94, 310.5), vec4(-1878.81, 1994.50, 142.53, 325.0),
       },
-      boss   = vec4(-1886.00, 2050.00, 141.00, 270.0),   -- the Kingpin, on the front step (outside the walls)
-      scene  = vec3(-1882.00, 2050.00, 141.00),   -- "Secure the scene" point
+      boss   = vec4(-1909.58, 2038.25, 140.72, 263.5),   -- the Kingpin, on the yard road nearest the house (open ground)
+      scene  = vec3(-1909.25, 2034.00, 139.92),   -- "Secure the scene" point
     },
   },
 

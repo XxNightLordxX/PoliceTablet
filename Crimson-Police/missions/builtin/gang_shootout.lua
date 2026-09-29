@@ -4,7 +4,10 @@
   then "Secure the scene". NPC traffic is blocked within 120 m while the run is active.
   Locations (5 remote hideouts, away from civilian hotspots): Stab City trailer park on the Alamo Sea,
   the Grand Senora Desert scrapyard, the Paleto Forest sawmill, the Terminal container yard and the
-  Elysian Island docks. Each has 14 hostile spawn points (facing the approach) and a scene marker.
+  Elysian Island docks. Each has 14 hostile spawn points (facing the approach) and a scene marker, all ON
+  the hideout's roads and yard lanes (GTA V vehicle-node network: the lanes between the container stacks,
+  the trailer-park loop, the yard tracks; z = road height + 1 m), 7 m+ apart and 30 m+ from the start, so
+  none is inside a container, trailer or shed.
   Blocks: hostile_waves → interact_points.
 ]]
 
@@ -26,72 +29,72 @@ RegisterMission({
     {
       label  = 'Stab City trailer park, Alamo Sea',
       start  = { coords = vec3(104.80, 3658.60, 39.80), radius = 80.0 },
-      spawns = {   -- 14 hostile spawn points, facing the approach
-        vec4(82.31, 3690.26, 40.40, 215.4), vec4(90.81, 3693.87, 40.40, 201.6),
-        vec4(73.67, 3678.45, 40.40, 237.5), vec4(89.89, 3709.54, 40.40, 196.3),
-        vec4(61.68, 3687.26, 40.40, 236.4), vec4(95.75, 3720.39, 40.40, 188.3),
-        vec4(47.92, 3685.89, 40.40, 244.4), vec4(78.34, 3723.62, 40.40, 202.1),
-        vec4(50.43, 3700.89, 40.40, 232.1), vec4(68.22, 3740.56, 40.40, 204.1),
-        vec4(39.41, 3716.82, 40.40, 228.3), vec4(59.75, 3720.28, 40.40, 216.1),
-        vec4(107.62, 3699.63, 40.40, 176.1), vec4(66.67, 3667.95, 40.40, 256.2),
+      spawns = {   -- 14 hostile spawn points on the compound's roads and yard lanes (open ground), facing the approach
+        vec4(88.61, 3690.93, 39.73, 206.6), vec4(93.04, 3697.64, 39.76, 196.8),
+        vec4(84.20, 3683.55, 39.76, 219.5), vec4(97.55, 3704.80, 39.76, 188.9),
+        vec4(101.56, 3712.44, 39.71, 183.4), vec4(63.38, 3736.88, 39.70, 207.9),
+        vec4(102.75, 3720.88, 39.70, 181.9), vec4(54.65, 3734.25, 39.68, 213.5),
+        vec4(72.06, 3739.19, 39.72, 202.1), vec4(90.50, 3734.75, 39.72, 190.6),
+        vec4(98.88, 3728.75, 39.72, 184.8), vec4(83.50, 3739.00, 39.72, 194.8),
+        vec4(46.25, 3731.25, 39.62, 218.9), vec4(39.50, 3676.50, 39.70, 254.7),
       },
-      scene  = vec3(70.00, 3705.00, 40.10),   -- "Secure the scene" point
+      scene  = vec3(90.82, 3694.29, 38.95),   -- "Secure the scene" point
     },
     {
       label  = 'Scrapyard, Grand Senora Desert',
       start  = { coords = vec3(2317.29, 3110.80, 48.30), radius = 80.0 },
-      spawns = {   -- 14 hostile spawn points, facing the approach
-        vec4(2359.00, 3104.93, 48.60, 82.0), vec4(2349.46, 3094.54, 48.60, 63.2),
-        vec4(2356.49, 3121.51, 48.60, 105.3), vec4(2363.22, 3085.95, 48.60, 61.6),
-        vec4(2366.31, 3125.21, 48.60, 106.4), vec4(2374.60, 3073.80, 48.60, 57.2),
-        vec4(2379.67, 3132.20, 48.60, 108.9), vec4(2385.09, 3084.55, 48.60, 68.8),
-        vec4(2389.02, 3122.47, 48.60, 99.2), vec4(2402.27, 3085.37, 48.60, 73.3),
-        vec4(2405.22, 3120.57, 48.60, 96.3), vec4(2389.93, 3102.17, 48.60, 83.2),
-        vec4(2348.75, 3082.77, 48.60, 48.3), vec4(2350.85, 3128.93, 48.60, 118.4),
+      spawns = {   -- 14 hostile spawn points on the compound's roads and yard lanes (open ground), facing the approach
+        vec4(2370.44, 3107.56, 48.02, 86.5), vec4(2376.85, 3112.65, 48.11, 91.8),
+        vec4(2363.94, 3101.06, 47.86, 78.2), vec4(2385.25, 3111.25, 48.16, 90.4),
+        vec4(2378.95, 3120.60, 48.07, 99.0), vec4(2356.38, 3098.25, 47.88, 72.2),
+        vec4(2390.70, 3099.85, 48.16, 81.5), vec4(2392.30, 3108.75, 48.16, 88.4),
+        vec4(2388.50, 3091.25, 48.16, 74.6), vec4(2386.19, 3120.44, 48.13, 98.0),
+        vec4(2385.17, 3083.58, 48.16, 68.2), vec4(2348.25, 3097.15, 47.96, 66.2),
+        vec4(2379.33, 3078.08, 48.22, 62.2), vec4(2399.38, 3111.38, 48.16, 90.4),
       },
-      scene  = vec3(2375.00, 3105.00, 48.60),   -- "Secure the scene" point
+      scene  = vec3(2367.31, 3104.19, 47.15),   -- "Secure the scene" point
     },
     {
       label  = 'Sawmill, Paleto Forest',
       start  = { coords = vec3(-616.01, 5331.01, 70.50), radius = 80.0 },
-      spawns = {   -- 14 hostile spawn points, facing the approach
-        vec4(-588.89, 5302.07, 71.00, 43.1), vec4(-599.61, 5297.06, 71.00, 25.8),
-        vec4(-583.89, 5314.43, 71.00, 62.7), vec4(-593.85, 5286.34, 71.00, 26.4),
-        vec4(-570.86, 5307.93, 71.00, 62.9), vec4(-595.81, 5271.26, 71.00, 18.7),
-        vec4(-552.66, 5312.34, 71.00, 73.6), vec4(-579.32, 5269.65, 71.00, 30.9),
-        vec4(-550.97, 5294.24, 71.00, 60.5), vec4(-565.08, 5255.39, 71.00, 34.0),
-        vec4(-540.23, 5284.49, 71.00, 58.5), vec4(-565.72, 5280.05, 71.00, 44.6),
-        vec4(-611.60, 5293.85, 71.00, 6.8), vec4(-577.54, 5326.31, 71.00, 83.0),
+      spawns = {   -- 14 hostile spawn points on the compound's roads and yard lanes (open ground), facing the approach
+        vec4(-589.50, 5298.88, 70.19, 39.5), vec4(-592.50, 5292.12, 70.19, 31.2),
+        vec4(-585.50, 5307.12, 70.19, 51.9), vec4(-588.90, 5278.25, 70.39, 27.2),
+        vec4(-582.19, 5273.00, 70.44, 30.2), vec4(-595.50, 5284.25, 70.22, 23.7),
+        vec4(-582.50, 5313.58, 70.19, 62.5), vec4(-576.15, 5266.50, 70.44, 31.7),
+        vec4(-599.50, 5278.50, 71.16, 17.5), vec4(-579.67, 5320.58, 70.19, 74.0),
+        vec4(-574.36, 5259.11, 70.44, 30.1), vec4(-605.88, 5272.88, 71.75, 9.9),
+        vec4(-577.25, 5327.62, 70.19, 85.0), vec4(-576.58, 5251.33, 70.46, 26.3),
       },
-      scene  = vec3(-575.00, 5290.00, 70.80),   -- "Secure the scene" point
+      scene  = vec3(-587.50, 5303.00, 69.39),   -- "Secure the scene" point
     },
     {
       label  = 'Container yard, Terminal',
       start  = { coords = vec3(1170.00, -3092.00, 5.90), radius = 80.0 },
-      spawns = {   -- 14 hostile spawn points, facing the approach
-        vec4(1171.42, -3129.65, 6.10, 2.2), vec4(1155.16, -3126.25, 6.10, 336.6),
-        vec4(1184.81, -3127.19, 6.10, 22.8), vec4(1154.76, -3141.20, 6.10, 342.8),
-        vec4(1187.44, -3138.67, 6.10, 20.5), vec4(1139.72, -3147.35, 6.10, 331.3),
-        vec4(1199.60, -3149.48, 6.10, 27.2), vec4(1152.20, -3162.93, 6.10, 345.9),
-        vec4(1187.98, -3161.23, 6.10, 14.6), vec4(1150.96, -3176.21, 6.10, 347.3),
-        vec4(1187.89, -3176.53, 6.10, 12.0), vec4(1169.69, -3167.60, 6.10, 359.8),
-        vec4(1143.34, -3127.63, 6.10, 323.2), vec4(1198.98, -3124.81, 6.10, 41.5),
+      spawns = {   -- 14 hostile spawn points on the compound's roads and yard lanes (open ground), facing the approach
+        vec4(1166.00, -3146.86, 5.82, 355.8), vec4(1166.00, -3155.50, 5.84, 356.4),
+        vec4(1166.00, -3138.00, 5.78, 355.0), vec4(1166.00, -3130.50, 5.78, 354.1),
+        vec4(1166.00, -3163.50, 5.83, 356.8), vec4(1161.17, -3169.50, 5.84, 353.5),
+        vec4(1153.75, -3169.50, 5.88, 348.2), vec4(1166.15, -3175.95, 5.78, 357.4),
+        vec4(1145.25, -3169.50, 5.84, 342.3), vec4(1166.25, -3184.25, 5.78, 357.7),
+        vec4(1146.50, -3114.75, 5.78, 314.1), vec4(1137.17, -3169.50, 5.81, 337.0),
+        vec4(1138.50, -3114.75, 5.78, 305.8), vec4(1166.25, -3192.25, 5.78, 357.9),
       },
-      scene  = vec3(1170.00, -3150.00, 6.20),   -- "Secure the scene" point
+      scene  = vec3(1166.00, -3151.29, 5.04),   -- "Secure the scene" point
     },
     {
       label  = 'Docks, Elysian Island',
       start  = { coords = vec3(150.00, -2922.00, 6.00), radius = 80.0 },
-      spawns = {   -- 14 hostile spawn points, facing the approach
-        vec4(150.00, -2962.80, 6.10, 0.0), vec4(136.71, -2959.54, 6.10, 340.5),
-        vec4(163.77, -2960.34, 6.10, 19.8), vec4(131.11, -2969.53, 6.10, 338.3),
-        vec4(165.21, -2968.95, 6.10, 17.9), vec4(117.62, -2978.87, 6.10, 330.3),
-        vec4(181.82, -2983.34, 6.10, 27.4), vec4(130.77, -2992.97, 6.10, 344.8),
-        vec4(166.80, -2990.09, 6.10, 13.9), vec4(135.29, -3011.54, 6.10, 350.7),
-        vec4(165.08, -3010.92, 6.10, 9.6), vec4(150.54, -2995.59, 6.10, 0.4),
-        vec4(125.91, -2953.25, 6.10, 322.4), vec4(174.89, -2955.11, 6.10, 36.9),
+      spawns = {   -- 14 hostile spawn points on the compound's roads and yard lanes (open ground), facing the approach
+        vec4(150.50, -2981.00, 6.08, 0.5), vec4(141.88, -2981.06, 6.37, 352.2),
+        vec4(159.05, -2981.05, 5.88, 8.7), vec4(148.88, -2993.38, 7.02, 359.1),
+        vec4(134.92, -2983.25, 6.76, 346.2), vec4(167.25, -2981.25, 5.88, 16.2),
+        vec4(140.35, -2993.35, 7.00, 352.3), vec4(173.58, -2976.17, 5.91, 23.5),
+        vec4(131.00, -2993.38, 6.97, 345.1), vec4(173.25, -2968.50, 5.91, 26.6),
+        vec4(173.75, -2961.35, 5.92, 31.1), vec4(123.58, -2993.42, 6.52, 339.7),
+        vec4(180.25, -2979.00, 5.91, 28.0), vec4(175.75, -2952.75, 5.97, 39.9),
       },
-      scene  = vec3(150.00, -2980.00, 6.30),   -- "Secure the scene" point
+      scene  = vec3(146.17, -2981.00, 5.41),   -- "Secure the scene" point
     },
   },
 

@@ -21,6 +21,8 @@ export type BoardOperation = NonNullable<BoardData['operation']> & {
   min?: number;
   /** State of the operation's run while it exists. */
   runState?: 'accepted' | 'in_progress' | null;
+  /** Why this viewer cannot join (the err.* key server:joinOperation would return); missing when canJoin. */
+  joinBlocked?: string | null;
 };
 
 /** Callback 'getMissionTypes'. Optional extras (requested from modules/draw, docs/notes/run_ui.md):

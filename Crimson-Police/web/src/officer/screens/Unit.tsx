@@ -3,7 +3,8 @@
 // waiting for them (Accept / Decline), an invite picker of on-duty officers from any department, and
 // Leave unit (confirm; mid-run it abandons the unit's run). Data: callback getUnit (UnitView + slice
 // fields, src/types/teams.ts), live via push topic 'unit'. Actions: server:unitInvite (targetSrc),
-// server:unitRespond ({ accepted, unitId }), server:unitLeave. Invites close (locked) once the leader
+// server:unitRespond ({ accepted, unitId }), server:unitLeave. Test invitations (callback test:pendingInvites,
+// push 'invites') are answered here too with server:testRespond. Invites close (locked) once the leader
 // accepts a mission type and stay closed while the unit's run is active.
 import { useMemo, useState } from 'react';
 import {
@@ -16,6 +17,7 @@ import { useNavigate } from '../../shared/navigation';
 import { useSession } from '../../shared/session';
 import { cx } from '../../shared/cx';
 import type { UnitInvitableView, UnitInviteView, UnitLeaveResult, UnitMemberView, UnitPendingInvite, UnitScreenView } from '../../types/teams';
+import { asList, type TestInvite } from '../../types/testing';
 import './Unit.css';
 
 const DEFAULT_MAX = 4;
@@ -255,6 +257,56 @@ function InvitesCard({ view, stamp, onRespond, busyKey }: {
   );
 }
 
+/** Test invitations waiting for the viewer (SPEC Admin test mode: testers "accept on their own screen").
+ *  Callback test:pendingInvites (modules/testing, anyone: their own invitations), live via push 'invites';
+ *  Accept / Decline → server:testRespond { inviteId, accepted }. Hidden while there are none. */
+function TestInvitesCard() {
+  const { data, refetch } = useRequest<TestInvite[]>('test:pendingInvites', {}, { pushTopic: 'invites' });
+  const { run } = useAction();
+  const [busy, setBusy] = useState<string | null>(null);
+  const invites = asList(data);
+  if (!invites.length) return null;
+  const respond = async (inv: TestInvite, accepted: boolean) => {
+    setBusy(`${inv.inviteId}:${accepted ? 'yes' : 'no'}`);
+    await run('server:testRespond', { inviteId: inv.inviteId, accepted }, { success: accepted ? 'test.ui.invite_accepted' : 'test.ui.invite_declined' });
+    setBusy(null);
+    void refetch();
+  };
+  return (
+    <Card icon="flask" title={t('test.ui.invites_title')} subtitle={t('test.ui.prompt_sub')} actions={<Badge tone="accent" size="sm">{invites.length}</Badge>} padding="sm">
+      <ul className="teams-list">
+        {invites.map((inv) => (
+          <li key={inv.inviteId} className="teams-invite">
+            <div className="teams-invite__head">
+              <Avatar name={inv.from} />
+              <div className="teams-row__main">
+                <div className="teams-row__name">
+                  <span className="teams-row__text" title={inv.missionLabel}>{inv.missionLabel}</span>
+                </div>
+                <div className="teams-row__sub" title={inv.from}>
+                  {[t('test.ui.prompt_from', { from: inv.from }), inv.fromCallsign || null].filter(Boolean).join(' · ')}
+                </div>
+              </div>
+              <span className="teams-row__expires" title={t('test.ui.invite_expires')}>
+                <Icon name="clock" size={13} />
+                <Countdown seconds={inv.expiresIn} resetKey={data} warnBelow={30} dangerBelow={10} />
+              </span>
+            </div>
+            <div className="teams-invite__actions">
+              <Button size="sm" variant="ghost" icon="x" loading={busy === `${inv.inviteId}:no`} disabled={!!busy} onClick={() => void respond(inv, false)}>
+                {t('test.ui.decline')}
+              </Button>
+              <Button size="sm" variant="primary" icon="check" loading={busy === `${inv.inviteId}:yes`} disabled={!!busy} onClick={() => void respond(inv, true)}>
+                {t('test.ui.accept')}
+              </Button>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </Card>
+  );
+}
+
 function InvitePicker({ view, onInvite, busyKey }: { view: UnitScreenView; busyKey: string | null; onInvite: (o: UnitInvitableView) => void }) {
   const [query, setQuery] = useState('');
   const list = view.invitable ?? [];
@@ -375,6 +427,7 @@ export default function Unit() {
           <Grid cols="minmax(0, 1.25fr) minmax(0, 1fr)" gap={4} align="start" className="teams-grid">
             <UnitCard view={data} stamp={data} />
             <Stack gap={4}>
+              <TestInvitesCard />
               <InvitesCard view={data} stamp={data} busyKey={busyKey} onRespond={respond} />
               <InvitePicker view={data} busyKey={busyKey} onInvite={invite} />
             </Stack>

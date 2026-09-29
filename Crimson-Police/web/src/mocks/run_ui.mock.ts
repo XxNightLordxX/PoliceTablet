@@ -243,11 +243,15 @@ function operationCard(): BoardOperation | null {
     o.status = 'running';
     o.runState = 'accepted';
   }
-  const canJoin = open && !o.joinedByMe && o.joined < OP_MAX && !mockRun && !board.onCall;
+  // joinBlocked: the err.* key CP.Operations.boardCard sends while canJoin is false (same order as modules/operations).
+  const joinBlocked = !open ? 'err.op_join_closed' : o.joinedByMe ? 'err.op_already_joined' : o.joined >= OP_MAX ? 'err.op_full'
+    : mockRun ? 'err.already_on_run' : board.onCall ? 'err.on_call' : undefined;
+  const canJoin = !joinBlocked;
   return {
     id: o.id, missionLabel: o.missionLabel, launcher: o.launcher, status: o.status, joined: o.joined, max: OP_MAX,
     joinedByMe: o.joinedByMe, canJoin, joinEndsIn: open && o.joinEndsAt ? o.joinEndsAt - t : null,
     missionType: o.missionType, missionTypeLabel: o.missionTypeLabel, description: o.description, min: o.min, runState: o.runState,
+    ...(joinBlocked ? { joinBlocked } : {}),
   };
 }
 

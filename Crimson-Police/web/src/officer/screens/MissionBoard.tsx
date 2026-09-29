@@ -22,7 +22,7 @@ import { cx } from '../../shared/cx';
 import { asArray } from '../../shared/data';
 import { formatNumber } from '../../shared/format';
 import { useAction, usePush, useRequest } from '../../shared/hooks';
-import { t } from '../../shared/i18n';
+import { hasKey, t } from '../../shared/i18n';
 import { useNavigate } from '../../shared/navigation';
 import { useSession } from '../../shared/session';
 import type { Session } from '../../shared/types';
@@ -364,6 +364,13 @@ function joinHint(op: BoardOperation, activeRunId: string | null): string {
   if (op.joined >= op.max) return t('board.op.full');
   if (activeRunId) return t('board.op.on_run');
   if (op.canJoin) return t('board.op.can_join');
+  // joinBlocked (CP.Operations.boardCard): the err.* key a Join would return right now.
+  if (op.joinBlocked) {
+    if (op.joinBlocked === 'err.op_full') return t('board.op.full');
+    if (op.joinBlocked === 'err.op_join_closed') return t('board.op.closed');
+    if (op.joinBlocked === 'err.already_on_run') return t('board.op.on_run');
+    if (hasKey(op.joinBlocked)) return t(op.joinBlocked);
+  }
   return t('board.op.cannot_join');
 }
 
