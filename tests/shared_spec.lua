@@ -53,6 +53,14 @@ H.ok(not U.isHexColour('#12345'), 'bad hex')
 H.ok(U.truthy(true) and U.truthy(1) and not U.truthy(0) and not U.truthy(nil), 'truthy')
 H.eq(U.jsonField('{"a":1}').a, 1, 'jsonField string')
 H.eq(U.clip('abcdef', 3), 'abc', 'clip')
+-- clip never ends inside a UTF-8 character: MariaDB strict mode (utf8mb4) refuses the whole row (error 1366)
+local longLabel = ('a'):rep(62) .. '— rear lot'
+H.eq(U.clip(longLabel, 64), ('a'):rep(62), 'an em-dash cut at byte 64 is dropped whole')
+H.ok(utf8.len(U.clip(longLabel, 64)) ~= nil, 'clip keeps valid UTF-8')
+H.eq(U.clip('José', 4), 'Jos', 'a cut 2-byte letter is dropped')
+H.eq(U.clip('José', 5), 'José', 'a whole 2-byte letter is kept')
+H.eq(U.clip('ab😀', 5), 'ab', 'a cut 4-byte character is dropped')
+H.eq(U.clip('ab😀', 6), 'ab😀', 'a whole 4-byte character is kept')
 
 -- locale interpolation (unknown key returns the key)
 H.eq(CP.L('no.such.key'), 'no.such.key', 'unknown key')
@@ -75,5 +83,8 @@ local row = MySQL.single.await('SELECT xp, UNIX_TIMESTAMP(NOW()) AS now_ts FROM 
     { 'T1' })
 H.eq(row.xp, 5, 'single row')
 H.ok(row.now_ts > 1700000000, 'unix timestamp')
+MySQL.insert.await('INSERT INTO cp_officers (citizenid, display_name) VALUES (?, ?)', { 'T2', U.clip(longLabel, 64) })
+H.eq(MySQL.scalar.await('SELECT display_name FROM cp_officers WHERE citizenid = ?', { 'T2' }), ('a'):rep(62),
+    'a clipped non-ASCII text is stored')
 
 return H

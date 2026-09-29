@@ -29,12 +29,48 @@ interface Btn {
     onClick: () => void;
 }
 
+// ============================================================================
+//                                  LAST PUSH
+// ============================================================================
+// The panel unmounts with the HUD (Officer UI open, Crimson-Arena) and the Lua client does not push again on
+// its own, so the last values are kept here: a panel that mounts again shows the bound key and the
+// Config.Testing switches at once.
+
+interface PanelState {
+    focused: boolean;
+    key: string;
+    debugOn: boolean;
+    allowTeleport: boolean;
+    debugOverlay: boolean;
+}
+
+const lastPanel: PanelState = { focused: false, key: 'F7', debugOn: false, allowTeleport: true, debugOverlay: true };
+
+function rememberPush(d: TestPush | null | undefined) {
+    if (!d || typeof d !== 'object') return;
+    if (typeof d.focused === 'boolean') lastPanel.focused = d.focused;
+    if (typeof d.key === 'string' && d.key) lastPanel.key = d.key;
+    if (typeof d.debugOn === 'boolean') lastPanel.debugOn = d.debugOn;
+    if (typeof d.allowTeleport === 'boolean') lastPanel.allowTeleport = d.allowTeleport;
+    if (typeof d.debugOverlay === 'boolean') lastPanel.debugOverlay = d.debugOverlay;
+    if (d.debug === false || d.debug === null) lastPanel.debugOn = false;
+}
+
+// The push also arrives while no panel is mounted: listen at module level.
+if (typeof window !== 'undefined') {
+    window.addEventListener('message', (event: MessageEvent) => {
+        const msg = event.data as { type?: string; topic?: string; data?: TestPush | null } | null;
+        if (!msg || msg.type !== 'push' || msg.topic !== 'test') return;
+        rememberPush(msg.data);
+    });
+}
+
 export default function TestControls({ hud }: TestControlsProps) {
-    const [focused, setFocused] = useState(false);
-    const [key, setKey] = useState('F9');
-    const [debugOn, setDebugOn] = useState(false);
-    const [allowTeleport, setAllowTeleport] = useState(true);
-    const [debugOverlay, setDebugOverlay] = useState(true);
+    const [focused, setFocused] = useState(() => lastPanel.focused);
+    const [key, setKey] = useState(() => lastPanel.key);
+    const [debugOn, setDebugOn] = useState(() => lastPanel.debugOn);
+    const [allowTeleport, setAllowTeleport] = useState(() => lastPanel.allowTeleport);
+    const [debugOverlay, setDebugOverlay] = useState(() => lastPanel.debugOverlay);
     const [busy, setBusy] = useState<string | null>(null);
     const [confirm, setConfirm] = useState<Confirmable | null>(null);
 
@@ -51,10 +87,11 @@ export default function TestControls({ hud }: TestControlsProps) {
     const release = useCallback(() => {
         setConfirm(null);
         setFocused(false);
+        lastPanel.focused = false;
         void clientAction('testPanel', { open: false });
     }, []);
 
-    // While the panel has focus, F9 / Escape give the game back its input (a pending confirm closes first).
+    // While the panel has focus, its key or Escape gives the game its input back (a pending confirm closes first).
     useEffect(() => {
         if (!focused) return;
         const onKey = (e: KeyboardEvent) => {
@@ -78,7 +115,10 @@ export default function TestControls({ hud }: TestControlsProps) {
             toast('error', t(res.error || 'err.internal'));
             return false;
         }
-        if (name === 'toggleDebug') setDebugOn(!!res.data?.debug);
+        if (name === 'toggleDebug') {
+            setDebugOn(!!res.data?.debug);
+            lastPanel.debugOn = !!res.data?.debug;
+        }
         if (okKey) toast('success', t(okKey));
         return true;
     };

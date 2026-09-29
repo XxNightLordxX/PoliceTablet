@@ -92,7 +92,7 @@ export default function App() {
     useNuiEvent('notify', m => {
         if (m.notification) pushNotification({ ...m.notification, id: m.notification.id ?? `lua-${Date.now()}` });
     });
-    useNuiEvent('hud', m => setHud(m.hud ? normalizeHud(m.hud) : null));
+    useNuiEvent('hud', m => setHud(prev => (m.hud ? normalizeHud(m.hud, prev) : null)));
     useNuiEvent('result', m => {
         setResult(m.result ? normalizeResult(m.result) : null);
         setResultSeq(n => n + 1);

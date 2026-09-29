@@ -10,7 +10,8 @@ export interface BoardView extends Board {
     minRuns?: number;
     topN?: number;
     ranked?: number;
-    window?: { from: number; to?: number | null } | null;
+    // fromDate/toDate: 'YYYY-MM-DD' in server time; show these, never from/to read in the player's time zone.
+    window?: { from: number; to?: number | null; fromDate?: string | null; toDate?: string | null } | null;
     season?: { id: number; name: string; active: boolean } | null;
 }
 
@@ -150,7 +151,8 @@ export interface AdminBoards {
     stuck: StuckPayment[];
     minRuns: number;
     updatedAt: number;
-    window?: { from: number; to?: number | null } | null;
+    // fromDate/toDate: 'YYYY-MM-DD' in server time; show these, never from/to read in the player's time zone.
+    window?: { from: number; to?: number | null; fromDate?: string | null; toDate?: string | null } | null;
     season?: { id: number; name: string; active: boolean } | null;
     citizenid?: string;
     runs?: AdminRun[];
@@ -183,6 +185,8 @@ export interface BountyHistoryRow {
     current: boolean;
     startsAt: number;
     endsAt: number;
+    startDate?: string | null;
+    endDate?: string | null;
 }
 
 export interface SeasonListRow {

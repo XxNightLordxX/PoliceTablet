@@ -341,6 +341,7 @@ local function SpawnDevice(ctx, st, n)
     local hidden = ctx.obj.hidden or {}
     local coords = p.coords
     if p.heading then coords = vector4(p.coords.x, p.coords.y, p.coords.z, p.heading + 0.0) end
+    local round = st.round
     local _, netId = ctx.spawnObject({
         model = hidden.prop or DEVICE_PROP,
         coords = coords,
@@ -349,6 +350,11 @@ local function SpawnDevice(ctx, st, n)
         frozen = true,
     })
     if not netId then return false end
+    -- a restart (test control) while the prop was being created reopened the spot: no found device
+    if st.round ~= round then
+        ctx.delete(netId)
+        return true
+    end
     p.netId = netId
     ctx.run.shared = ctx.run.shared or {}
     ctx.run.shared.devices = ctx.run.shared.devices or {}
@@ -362,12 +368,29 @@ local function SpawnDevice(ctx, st, n)
     return true
 end
 
-local function ProcessSpawns(ctx, st)
+local function SpawnLoop(ctx, st)
     local changed = false
     while #st.pendingSpawns > 0 do
-        if not SpawnDevice(ctx, st, st.pendingSpawns[1]) then break end
-        table.remove(st.pendingSpawns, 1)
+        local queue = st.pendingSpawns -- a restart swaps in a new queue while a spawn yields
+        if not SpawnDevice(ctx, st, queue[1]) then break end
+        table.remove(queue, 1)
         changed = true
+    end
+    return changed
+end
+
+-- The spawning flag guards against re-entry while ctx.spawnObject yields (a search report and the tick
+-- run in two threads); the loop that holds it also spawns what was found meanwhile. It is always
+-- cleared, even when a spawn throws, so one bad spawn can never hold the search open.
+local function ProcessSpawns(ctx, st)
+    if st.spawning then return false end
+    st.spawning = true
+    local ok, changed = pcall(SpawnLoop, ctx, st)
+    st.spawning = false
+    if not ok then
+        CP.err('blocks', 'interact_points: spawning a device for run %s failed: %s', tostring(ctx.run and ctx.run.id),
+            tostring(changed))
+        return false
     end
     return changed
 end
@@ -856,6 +879,7 @@ CP.Blocks.register(BLOCK, {
         end
         st.found = 0
         st.pendingSpawns, st.logQueue, st.log, st.near = {}, {}, nil, {}
+        st.round = (st.round or 0) + 1
         st.ready, st.completed, st.failed = false, false, false
         st.fastChecked, st.fastAwarded = false, false
         st.startMs = Now()

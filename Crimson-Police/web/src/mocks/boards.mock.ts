@@ -34,6 +34,8 @@ const sqlTime = (ts: number) => {
     const p = (n: number) => String(n).padStart(2, '0');
     return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 };
+// 'YYYY-MM-DD' the way the server sends window dates (os.date, its own calendar).
+const dateKey = (ts: number) => sqlTime(ts).slice(0, 10);
 function weekStart(ts = now()): number {
     const d = new Date(ts * 1000);
     const back = (d.getDay() + 6) % 7;
@@ -331,6 +333,19 @@ function seasonView(s: SeasonListRow): SeasonView {
     };
 }
 
+// The board window: from/to and the same dates in server time, as the server sends them.
+function mockWindow(period: string, season: SeasonListRow | null): BoardView['window'] {
+    const range = (from: number, to?: number | null) => ({
+        from,
+        to,
+        fromDate: dateKey(from),
+        toDate: to ? dateKey(to) : null,
+    });
+    if (period === 'weekly') return range(weekStart());
+    if (period === 'monthly') return range(monthStart());
+    return period === 'season' && season ? range(season.startsAt, season.endsAt) : null;
+}
+
 reg('request', 'getBoard', (args: { period?: string; filter?: string; department?: string } | null) => {
     const period = args?.period ?? 'weekly';
     const filter = period === 'alltime' ? 'overall' : (args?.filter ?? 'overall');
@@ -364,14 +379,7 @@ reg('request', 'getBoard', (args: { period?: string; filter?: string; department
         minRuns: 3,
         topN: 25,
         ranked: ranked.length,
-        window:
-            period === 'weekly'
-                ? { from: weekStart() }
-                : period === 'monthly'
-                  ? { from: monthStart() }
-                  : period === 'season' && season
-                    ? { from: season.startsAt, to: season.endsAt }
-                    : null,
+        window: mockWindow(period, season),
         season: period === 'season' && season ? { id: season.id, name: season.name, active: season.active } : null,
     };
     return board;
@@ -797,6 +805,8 @@ function history(): BountyHistoryRow[] {
                 current: isCurrent,
                 startsAt: Math.max(ws, s.startsAt),
                 endsAt: Math.min(ws + 7 * DAY, s.endsAt ?? ws + 7 * DAY),
+                startDate: dateKey(Math.max(ws, s.startsAt)),
+                endDate: dateKey(Math.min(ws + 7 * DAY, s.endsAt ?? ws + 7 * DAY)),
             });
             if (out.length >= 14) return out;
         }
@@ -948,14 +958,7 @@ reg(
             stuck: STUCK,
             minRuns: 3,
             updatedAt: now() - 12,
-            window:
-                period === 'weekly'
-                    ? { from: weekStart() }
-                    : period === 'monthly'
-                      ? { from: monthStart() }
-                      : period === 'season' && season
-                        ? { from: season.startsAt, to: season.endsAt }
-                        : null,
+            window: mockWindow(period, season),
             season: period === 'season' && season ? { id: season.id, name: season.name, active: season.active } : null,
         };
         if (args?.citizenid) {

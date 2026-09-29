@@ -464,6 +464,32 @@ do
     H.eq(after, 0, 'a HUD that was hidden meanwhile is not resurrected')
 end
 
+-- CRIMSON_ARENA rule 8: no result card over the arena, neither one sent while foreign nor one already shown
+do
+    local function Cards(from)
+        local n = 0
+        for _, m in ipairs(NuiOf('result', from)) do if m.result ~= nil then n = n + 1 end end
+        return n
+    end
+    StartRun('run-d')
+    SetArena({ active = true, matchId = 'm5' })
+    local n0 = #nui
+    H.fire('crimson-police:client:runEnded', nil, 'run-d', 'abandoned', 'quit', Breakdown('run-d'))
+    H.eq(Cards(n0), 0, 'the result of the run the arena placement ended never reaches the NUI')
+    local n1 = #nui
+    SetArena(nil)
+    H.eq(Cards(n1), 0, 'nor once Crimson-Arena lets the player go')
+    Tick(12500)
+    StartRun('run-e')
+    local n2 = #nui
+    H.fire('crimson-police:client:runEnded', nil, 'run-e', 'completed', 'completed', Breakdown('run-e'))
+    H.eq(Cards(n2), 1, 'outside the arena the result card is shown')
+    SetArena({ active = true, matchId = 'm6' })
+    H.eq(LastNui('result').result, nil, 'a placement hides the result card on screen')
+    SetArena(nil)
+    Tick(12500)
+end
+
 -- CP.Tablet.panelFocus: the NUI focus helper for the test-control panel (modules/testing)
 do
     local f0 = #focus

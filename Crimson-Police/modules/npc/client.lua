@@ -635,6 +635,7 @@ function ACTIONS.flee(ped, a)
     end
     local veh = GetVehiclePedIsIn(ped, false)
     local pos = GetEntityCoords(ped)
+    a.from = pos
     if IsDriver(ped, veh) then
         a.vehicle = veh
         a.speed = SpeedOf(a.args, 120 / 3.6)
@@ -779,7 +780,8 @@ function ACTIONS.driveRoute(ped, a)
     a.style = StyleOf(a.args, 'normal')
     a.aggressive = Aggressive(a.args, 'normal')
     a.stopRange = tonumber(a.args.stopRange)
-    a.idx = StartIndex(a, pts, GetEntityCoords(veh), ArriveRadius(a), a.loop)
+    a.from = GetEntityCoords(veh)
+    a.idx = StartIndex(a, pts, a.from, ArriveRadius(a), a.loop)
     DriveTo(ped, veh, pts[a.idx], a)
     a.issuedAt = Now()
 end
@@ -897,20 +899,21 @@ local function StepPoints(ped, a, t)
     local pos = GetEntityCoords(driving and veh or ped)
     local radius = driving and ArriveRadius(a) or FOOT_ARRIVE
     local cur = a.points[a.idx]
-    local nextIdx = a.idx < #a.points and a.idx + 1 or (a.loop and 1 or nil)
-    local nextP = nextIdx and a.points[nextIdx] or nil
+    local hasNext = a.idx < #a.points or a.loop
+    local prev = a.idx > 1 and a.points[a.idx - 1] or a.from
     local d = U.dist(pos, cur)
-    -- reached, or passed close by: near the waypoint and already beyond it along the next segment
-    -- (a hairpin whose next point lies behind the ped is not skipped)
+    -- reached, or passed close by: near the waypoint and already beyond it along the leg being driven
+    -- (from the previous waypoint, or where the task started). Not along the next leg: on a hairpin the
+    -- next point lies on the approach side, and the turn would be cut short.
     local passed = false
-    if nextP and d <= radius * 3 then
-        passed = (pos.x - cur.x) * (nextP.x - cur.x) + (pos.y - cur.y) * (nextP.y - cur.y) > 0
+    if hasNext and prev and d <= radius * 3 then
+        passed = (pos.x - cur.x) * (cur.x - prev.x) + (pos.y - cur.y) * (cur.y - prev.y) > 0
     end
     if d <= radius or passed then
         a.idx = a.idx + 1
         if a.idx > #a.points then
             if a.loop then
-                a.idx = 1
+                a.idx, a.from = 1, cur
             elseif a.action == 'flee' then
                 a.points, a.vehicle = nil, nil
                 SmartFlee(ped, a)
@@ -1183,6 +1186,14 @@ local function LabelOf(bag)
     return l
 end
 
+-- The option that offers this bag: the one of its label, or the default one for a label that came after
+-- the MAX_OPTIONS cap (labels pile up over a session).
+local function OptionLabelOf(bag)
+    local l = LabelOf(bag)
+    if cuffOptions[l] then return l end
+    return DefaultLabel()
+end
+
 local function RangeOf(bag)
     return U.clamp(tonumber(bag.cuff and bag.cuff.maxDistance) or 3.0, 1.0, MAX_CUFF_RANGE)
 end
@@ -1205,7 +1216,7 @@ local function CanCuff(entity, distance, label)
     local run = CurrentRun()
     if not run then return false end
     local bag = CuffableBag(entity, run)
-    if not bag or LabelOf(bag) ~= label then return false end
+    if not bag or OptionLabelOf(bag) ~= label then return false end
     if (tonumber(distance) or math.huge) > RangeOf(bag) then return false end
     local me = PlayerPedId()
     if IsEntityDead(me) or IsPedInAnyVehicle(me, false) then return false end
@@ -1296,7 +1307,10 @@ end
 EnsureCuffOption = function(label)
     if type(label) ~= 'string' or label == '' then label = DefaultLabel() end
     if cuffOptions[label] then return end
-    if #optionOrder >= MAX_OPTIONS then return end
+    if #optionOrder >= MAX_OPTIONS then
+        CP.log(TAG, 'no option left for the cuff label %s: the default option offers it', label)
+        return
+    end
     optionOrder[#optionOrder + 1] = label
     cuffOptions[label] = #optionOrder == 1 and CUFF_OPTION or ('%s:%d'):format(CUFF_OPTION, #optionOrder)
     if targetReady then RegisterOption(label) end

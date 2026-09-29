@@ -20,6 +20,7 @@ local orphanSince = {}
 local arenaHandled = {}           -- arenaHandled[src] = runId already handled
 local arenaListeners = {}
 local recentClears = {}           -- recentClears[uniqueId] = os.time()
+local stale = {}                  -- stale[src] = true: our value outlived a forgotten intent (SweepStale)
 
 A.wanted = wanted
 A.foreignClearedAt = foreignCleared
@@ -120,6 +121,13 @@ local function ActiveSrcs(run)
     return out
 end
 
+local function IsDownedPending(src)
+    if not (CP.Downed and CP.Downed.isPending) then return false end
+    local ok, pending = pcall(CP.Downed.isPending, src)
+    if ok and pending then return true end
+    return false
+end
+
 local function ServerCoords(src)
     local ped = GetPlayerPed(src)
     if not ped or ped == 0 then return nil end
@@ -196,6 +204,7 @@ function A.set(src, runRef)
         wanted[src] = w
     end
     orphanSince[src] = nil
+    stale[src] = nil
     if kind ~= 'ours' then
         if not WriteOurs(src) then return false end
         CP.log(TAG, 'flag set for %d (run %s)', src, tostring(runId))
@@ -215,6 +224,7 @@ function A.clear(src, opts)
     wanted[src] = nil
     orphanSince[src] = nil
     reassertQueued[src] = nil
+    stale[src] = nil
     if Classify(BagValue(src)) == 'ours' then
         local removed = RemoveOurs(src)
         if removed then CP.log(TAG, 'flag cleared for %d', src) end
@@ -274,6 +284,8 @@ local function ForgetIntent(src)
     holds[src] = nil
     orphanSince[src] = nil
     reassertQueued[src] = nil
+    -- the bag stays; SweepStale removes our value later
+    if Classify(BagValue(src)) == 'ours' then stale[src] = true end
 end
 
 function A.forget(src)
@@ -351,11 +363,7 @@ end
 -- ============================================================================
 
 local function StillWanted(src, w)
-    if holds[src] then return true end
-    if CP.Downed and CP.Downed.isPending then
-        local ok, pending = pcall(CP.Downed.isPending, src)
-        if ok and pending then return true end
-    end
+    if holds[src] or IsDownedPending(src) then return true end
     if not (CP.Runs and CP.Runs.get) then return true end
     local run
     if w.runId ~= nil then
@@ -373,6 +381,22 @@ local function StillWanted(src, w)
     if run.state == 'ended' then return false end
     local p = run.participants and run.participants[src]
     return type(p) == 'table' and p.status == 'active'
+end
+
+-- Rule 1 leaves our value on a participant who left only because the routing bucket moved (an interior, another
+-- instancing script). Back in bucket 0 with no intent, hold or downed follow-up it goes, or sc-ambulance and
+-- sc-dispatch would stay muted for them (SPEC: removed when the run ends for any reason). Never a foreign value.
+local function SweepStale()
+    local srcs = {}
+    for src in pairs(stale) do srcs[#srcs + 1] = src end
+    for _, src in ipairs(srcs) do
+        if wanted[src] or not Connected(src) or Classify(BagValue(src)) ~= 'ours' then
+            stale[src] = nil
+        elseif BucketOf(src) == 0 and not holds[src] and not IsDownedPending(src) then
+            stale[src] = nil
+            if RemoveOurs(src) then CP.log(TAG, 'flag of %d removed: it outlived its run in another bucket', src) end
+        end
+    end
 end
 
 local function Reconcile()
@@ -416,6 +440,7 @@ local function Reconcile()
             end
         end
     end
+    SweepStale()
     local now = os.time()
     for id, at in pairs(recentClears) do
         if now - at > RECENT_CLEAR_S then recentClears[id] = nil end
@@ -517,6 +542,7 @@ AddEventHandler('playerDropped', function()
     local src = ToSrc(source)
     if not src then return end
     ForgetIntent(src)
+    stale[src] = nil
     lastKind[src] = nil
     foreignCleared[src] = nil
     lastReassertAt[src] = nil

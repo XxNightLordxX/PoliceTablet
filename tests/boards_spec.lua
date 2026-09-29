@@ -373,6 +373,7 @@ do
     H.eq(b.rows[1].cash, nil, 'no cash on public boards')
     H.eq(b.minRuns, 3, 'minRuns echoed')
     H.eq(b.window.from, WEEK, 'weekly window starts at the week reset')
+    H.eq(b.window.fromDate, '2026-09-21', 'weekly window date in server time (the tablet never converts it)')
 end
 
 -- top N smaller than the list: me pinned from outside the top
@@ -425,6 +426,7 @@ do
     H.eq(m.rows[1].citizenid, 'LB5', 'monthly: LB5 with last week runs')
     H.eq(m.rows[1].points, 1330, 'monthly points')
     H.eq(m.window.from, Ts(2026, 9, 1, 0), 'month window')
+    H.eq(m.window.fromDate, '2026-09-01', 'month window date in server time')
     local s = Cb('getBoard', 11, { period = 'season' }).data
     H.eq(#s.rows, 0, 'no season: empty board')
     H.eq(s.season, nil, 'no season info')
@@ -640,6 +642,7 @@ do
     H.eq(a.stuck[1].rowId, stuckId, 'stuck row id')
     H.eq(a.stuck[1].transId, 'CP-stuck-uuid-LB3', 'Renewed-Banking transaction id')
     H.eq(a.stuck[1].amount, 1040, 'expected amount')
+    H.eq(a.window.fromDate, '2026-09-21', 'admin board window date in server time')
     local withRuns = Cb('admin:getBoards', 1, { period = 'weekly', citizenid = 'LB2' }).data
     H.eq(#withRuns.runs, 5, 'every row of that officer in the window (voided and flagged too)')
     local allRuns = Cb('admin:getBoards', 1, { period = 'alltime', citizenid = 'LB3' }).data
@@ -998,6 +1001,9 @@ do
     H.eq(a.bountyHistory[1].current, true, 'current week flagged')
     H.eq(a.bountyHistory[2].winnerShort, 'FIB', 'winner short')
     H.eq(a.bountyHistory[2].bonus, 65, 'bonus in history')
+    H.eq(a.bountyHistory[1].startDate, '2026-09-21', 'bounty week start date in server time')
+    H.eq(a.bountyHistory[1].endDate, '2026-09-28', 'bounty week end date in server time')
+    H.eq(a.bountyHistory[3].startDate, '2026-09-10', 'week 1 starts on the season start date')
     H.eq(#a.bounties, 4, 'override options')
     H.eq(#a.seasons, 1, 'season list')
 end

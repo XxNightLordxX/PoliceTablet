@@ -1122,6 +1122,7 @@ function RecordDialog({
         const res = await run<TestRecordResult>(
             'server:admin:recordTest',
             {
+                key: entry.key,
                 missionId: entry.missionId,
                 location: entry.locationIndex,
                 tier: entry.tier,

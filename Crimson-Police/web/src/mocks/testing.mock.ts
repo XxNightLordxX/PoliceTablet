@@ -799,8 +799,17 @@ registerMock(
 registerMock(
     'action',
     'server:admin:recordTest',
-    (p: { missionId: string; location: number; tier?: string; result: 'passed' | 'failed'; note?: string }) => {
-        const idx = state.pending.findIndex(e => e.missionId === p?.missionId && e.locationIndex === p.location);
+    (p: {
+        key?: string;
+        missionId: string;
+        location: number;
+        tier?: string;
+        result: 'passed' | 'failed';
+        note?: string;
+    }) => {
+        const idx = state.pending.findIndex(
+            e => e.missionId === p?.missionId && e.locationIndex === p.location && (!p.key || e.key === p.key),
+        );
         if (idx < 0) throw new Error('err.test_not_run');
         const e = state.pending[idx];
         state.pending.splice(idx, 1);
@@ -868,7 +877,7 @@ registerMock('client', 'toggleDebug', (p: { enabled?: boolean }) => {
 
 registerMock('client', 'testPanel', (p: { open?: boolean }) => {
     const open = !!p?.open;
-    emitDebug('push', { topic: 'test', data: { controls: true, focused: open, key: 'F9', prompt: false } });
+    emitDebug('push', { topic: 'test', data: { controls: true, focused: open, key: 'F7', prompt: false } });
     return { focused: open };
 });
 
@@ -890,7 +899,7 @@ if (params.get('testdebug') === '1' || params.get('testfocus') === '1') {
             data: {
                 controls: true,
                 focused: params.get('testfocus') === '1',
-                key: 'F9',
+                key: 'F7',
                 runId: 'test-bomb-1',
                 debugOn: params.get('testdebug') === '1',
                 debug: params.get('testdebug') === '1' ? sampleDebug() : false,
@@ -907,7 +916,7 @@ if (params.get('testprompt') === '1') {
             data: {
                 controls: false,
                 focused: true,
-                key: 'F9',
+                key: 'F7',
                 prompt: {
                     invites: [
                         {

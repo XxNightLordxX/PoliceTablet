@@ -283,6 +283,11 @@ do -- defaults
         'pu armed count when shooting')
     local req = PU.requiredPoints({ route = 'race', spawn = 'car' })
     H.ok(CP.U.contains(req, 'race') and CP.U.contains(req, 'car'), 'pu required points')
+    -- a free flee (route nil) still needs its spawn point, and a route does not hide the spawn list
+    H.eq(table.concat(PU.requiredPoints({ spawn = 'spawn' }), ','), 'spawn', 'pu free flee: spawn is required')
+    H.eq(table.concat(PU.requiredPoints({ route = 'race', spawns = 'grid' }), ','), 'race,grid',
+        'pu route and spawns are both required')
+    H.eq(#PU.requiredPoints({}), 0, 'pu nothing placed: nothing required')
 end
 
 do -- validate
@@ -803,6 +808,50 @@ do -- Street Race Bust: racers that all die in crashes with none detained never 
     H.eq(Count(ctx2.calls.award, 'all_racers_detained'), 0, 'race: no all-detained bonus with a dead racer')
 end
 
+-- An open flee route ends in a free flee: the snapshot says so, so a new host never sends the car back to it.
+local openPts = { vec3(0.0, 3000.0, 30.0), vec3(200.0, 3000.0, 30.0), vec3(400.0, 3000.0, 30.0) }
+local openLoc = {
+    label = 'Open',
+    start = { coords = vec3(-150.0, 3000.0, 30.0), radius = 40.0 },
+    flee = { points = openPts, loop = false },
+}
+do
+    H.clockMs = 3500000
+    At(1, -100.0, 3000.0)
+    H.players[1].vehicle = nil
+    local obj = PU.defaults({ block = 'pursuit', mode = 'stop', route = 'flee', models = { 'sultan' } })
+    local ctx = FakeCtx({ obj = obj, location = openLoc, mission = builtin })
+    PU.start(ctx)
+    local car = SpawnsOf(ctx, 'vehicle')[1]
+    E(car.netId).speed = 30.0
+    SetPos(car.netId, 200.0, 3000.0)
+    At(1, 150.0, 3000.0)
+    TickN(PU, ctx, 1)
+    H.eq(LastSend(ctx).vehicles[1].routeDone, nil, 'open route: under way, not done')
+    SetPos(car.netId, 385.0, 3000.0)
+    At(1, 330.0, 3000.0)
+    TickN(PU, ctx, 1)
+    H.eq(LastSend(ctx).vehicles[1].routeDone, true, 'open route: done at its last waypoint')
+    SetPos(car.netId, 250.0, 3000.0)
+    At(1, 200.0, 3000.0)
+    TickN(PU, ctx, 1)
+    H.eq(LastSend(ctx).vehicles[1].routeDone, true, 'open route: stays done when the free flee turns back')
+    -- a loop is never done
+    At(1, 600.0, 180.0)
+    local lctx = FakeCtx({
+        obj = PU.defaults({ block = 'pursuit', mode = 'stop', route = 'race', models = { 'sultan' } }),
+        location = raceLoc,
+        mission = builtin,
+    })
+    PU.start(lctx)
+    local lcar = SpawnsOf(lctx, 'vehicle')[1]
+    E(lcar.netId).speed = 30.0
+    SetPos(lcar.netId, 0.0, 200.0)
+    At(1, 0.0, 150.0)
+    TickN(PU, lctx, 1)
+    H.eq(LastSend(lctx).vehicles[1].routeDone, nil, 'loop route: never done')
+end
+
 -- Pursuit Sim: follow mode, spawn 50 m ahead, medals by average distance, lost, undriveable, any ram.
 local simLoc = { label = 'Sim', start = { coords = vec4(0.0, 0.0, 30.0, 0.0), radius = 30.0 } }
 local function SimCtx(extra)
@@ -948,6 +997,42 @@ do
     H.near(PU.presence(ctx6, 1), 100.0, 1e-6, 'sim presence: distance to the suspect vehicle')
     ok = PU.onEvent(ctx6, 1, { type = 'lights_near', netId = c6.netId })
     H.eq(ok, false, 'sim: lights report without a distance trigger rejected')
+end
+
+do -- follow mode: after a wreck the target is the suspect nearest the party, whatever the table order
+    local function Split(nearFirst)
+        H.clockMs = 4600000
+        At(1, 0.0, 20.0)
+        H.players[1].vehicle = nil
+        local o = {
+            block = 'pursuit',
+            mode = 'follow',
+            trigger = { ahead = 50.0 },
+            duration = 60,
+            suspectsPerVehicle = 2,
+            models = { 'sultan' },
+        }
+        local ctx = FakeCtx({ obj = PU.defaults(o), location = simLoc, mission = { source = 'custom' } })
+        PU.start(ctx)
+        local car = SpawnsOf(ctx, 'vehicle')[1]
+        local sus = SpawnsOf(ctx, 'ped')
+        H.eq(#sus, 2, 'follow split: two suspects in the car')
+        PU.onEntityDead(ctx, car.netId, nil)
+        for _, s in ipairs(sus) do E(s.netId).inVehicle = 0 end
+        SetPos(sus[1].netId, -400.0, 50.0)
+        SetPos(sus[2].netId, 400.0, 50.0)
+        local near = nearFirst and sus[1] or sus[2]
+        At(1, E(near.netId).coords.x, 60.0)
+        TickN(PU, ctx, 15)
+        return ctx
+    end
+    for _, nearFirst in ipairs({ true, false }) do
+        local ctx = Split(nearFirst)
+        local tag = nearFirst and 'first' or 'second'
+        H.eq(#ctx.calls.fail, 0, 'follow split: 10 m behind the ' .. tag .. ' suspect is not lost')
+        H.near(ctx.state.follow.last or -1, 10.0, 1e-6, 'follow split: measured to the ' .. tag .. ' suspect')
+        H.eq(ctx.state.follow.inRange, 15, 'follow split: in range behind the ' .. tag .. ' suspect')
+    end
 end
 
 do -- caps and rescale: wait for room, spawn only what the smaller team still needs
@@ -1327,6 +1412,109 @@ do -- stopped too long outside a stop, destroyed, driver killed, unhealthy arriv
     H.eq(ctx8.state.truck.arrived, true, 'escort 2D: 15 m away on the map, 25 m off in z, is arrived')
     E(t8.netId).coords = vec3(dest.x - 15.0, dest.y, dest.z)
     H.eq(#ctx8.calls.fail, 0, 'escort 2D: no fail')
+
+    -- the truck wrecked after the escort objective completed (a later objective runs): not this block's fail
+    local ctx9 = EscCtx({ ambush = { waves = 1, carsPerWave = 1, perCar = 1 } }, shortLoc)
+    ES.start(ctx9)
+    local t9 = SpawnsOf(ctx9, 'vehicle', 'escort')[1]
+    DriveTo(ctx9, t9.netId, 540.0)
+    ES.onEntityDead(ctx9, SpawnsOf(ctx9, 'ped', 'attacker')[1].netId, 1)
+    H.eq(ctx9.calls.complete, 1, 'escort done: the objective completed')
+    ES.stop(ctx9)
+    ES.onEntityDead(ctx9, t9.netId, nil)
+    H.eq(#ctx9.calls.fail, 0, 'escort done: the parked truck wrecked during the next objective does not fail the run')
+    ES.onEntityDead(ctx9, SpawnsOf(ctx9, 'ped', 'escort_driver')[1].netId, 1)
+    H.eq(ctx9.calls.fail[1], 'run.fail_killed_unarmed', 'escort done: killing the unarmed driver still fails')
+
+    -- the escort is over: a driver killed by an NPC posts no message over the next objective
+    local ctx9b = EscCtx({ ambush = { waves = 1, carsPerWave = 1, perCar = 1 } }, shortLoc)
+    ES.start(ctx9b)
+    DriveTo(ctx9b, SpawnsOf(ctx9b, 'vehicle', 'escort')[1].netId, 540.0)
+    ES.onEntityDead(ctx9b, SpawnsOf(ctx9b, 'ped', 'attacker')[1].netId, 1)
+    H.eq(ctx9b.calls.complete, 1, 'escort done (NPC kill): the objective completed')
+    ES.stop(ctx9b)
+    local huds9b = #ctx9b.calls.hud
+    ES.onEntityDead(ctx9b, SpawnsOf(ctx9b, 'ped', 'escort_driver')[1].netId, nil)
+    H.eq(#ctx9b.calls.hud, huds9b, 'escort done: the driver killed by an NPC then posts no "driver is down" message')
+    H.eq(#ctx9b.calls.fail, 0, 'escort done: the driver killed by an NPC is no fail')
+end
+
+do -- the host (whose client drives the truck) is still far from the depot when a partner starts the run
+    H.clockMs = 7500000
+    At(1, 300.0, 4300.0)                         -- the host: 1.6 km away, out of the truck's streaming range
+    At(2, 300.0, 2700.0)                         -- the partner arrived first
+    local ctx = EscCtx()
+    ES.start(ctx)
+    local truck = SpawnsOf(ctx, 'vehicle', 'escort')[1]
+    TickN(ES, ctx, 120)
+    H.eq(#ctx.calls.fail, 0, 'escort far host: no stopped fail while nobody can drive the truck')
+    H.eq(LastSend(ctx).truck.stoppedFor, 0, 'escort far host: no stopped countdown')
+    At(1, 300.0, 2720.0)
+    TickN(ES, ctx, 29)
+    H.eq(#ctx.calls.fail, 0, 'escort far host: the start grace runs from the host coming near')
+    TickN(ES, ctx, 16)
+    H.eq(ctx.calls.fail[1], 'block.escort.fail_stopped', 'escort far host: a truck that never leaves then fails')
+
+    -- under way: the host falls 1 km behind, the truck stalls; the stopped clock waits for the host
+    local ctx2 = EscCtx()
+    ES.start(ctx2)
+    local t2 = SpawnsOf(ctx2, 'vehicle', 'escort')[1]
+    E(t2.netId).speed = 10.0
+    TickN(ES, ctx2, 1)
+    E(t2.netId).speed = 0.0
+    At(1, 300.0, 3700.0)
+    TickN(ES, ctx2, 60)
+    H.eq(#ctx2.calls.fail, 0, 'escort far host: stopped time does not count while the host is out of range')
+    At(1, 300.0, 2720.0)
+    TickN(ES, ctx2, 14)
+    H.eq(#ctx2.calls.fail, 0, 'escort far host: the host is back, 14 s stopped')
+    TickN(ES, ctx2, 1)
+    H.eq(ctx2.calls.fail[1], 'block.escort.fail_stopped', 'escort far host: 15 s stopped with the host near fails')
+    H.ok(truck ~= nil, 'escort far host: the truck spawned for the partner')
+end
+
+do -- a route that passes its destination earlier on (the other side of a divided road) is not arrived there
+    H.clockMs = 7700000
+    At(1, 300.0, 2700.0)
+    local dest = vec3(546.2, 2704.0, 41.3)
+    local passLoc = {
+        start = escLoc.start,
+        route = {
+            points = {
+                routePts[1],
+                routePts[2],
+                routePts[3],
+                routePts[4],
+                routePts[5],
+                vec3(797.5, 2760.0, 39.7),
+                vec3(671.8, 2760.0, 40.5),
+                dest,
+            },
+        },
+        ambushPoints = { ambushPts[1] },
+    }
+    local ctx = EscCtx({ ambush = { waves = 1, carsPerWave = 1, perCar = 1 } }, passLoc)
+    ES.start(ctx)
+    local t = SpawnsOf(ctx, 'vehicle', 'escort')[1]
+    DriveTo(ctx, t.netId, 546.0)
+    H.ok(U.dist2d(E(t.netId).coords, dest) <= ctx.obj.arrival,
+        'escort pass-by: waypoint 3 is inside the arrival circle')
+    H.ok(not ctx.state.truck.arrived, 'escort pass-by: passing the destination at waypoint 3 of 8 is not arriving')
+    for i = 4, 7 do
+        local p = passLoc.route.points[i]
+        E(t.netId).coords = vec3(p.x, p.y, p.z)
+        At(1, p.x, p.y + 10.0, p.z)
+        TickN(ES, ctx, 1)
+    end
+    H.eq(ctx.state.truck.wp, 8, 'escort pass-by: on the final stretch')
+    H.ok(not ctx.state.truck.arrived, 'escort pass-by: 137 m from the destination is not arrived')
+    E(t.netId).coords = vec3(dest.x + 5.0, dest.y, dest.z)
+    TickN(ES, ctx, 1)
+    H.eq(ctx.state.truck.arrived, true, 'escort pass-by: arrived at the end of the route')
+    local msg = ctx.calls.hud[#ctx.calls.hud].message
+    H.eq(msg and msg.text, 'The vehicle has arrived: no attacker may be within 100 m',
+        'escort: the arrival message gives the clear radius in whole metres (clearRadius 100.0)')
+    H.eq(#ctx.calls.fail, 0, 'escort pass-by: no fail')
 end
 
 do -- caps and rescale
@@ -1647,6 +1835,14 @@ do -- escape, kills, witness lost, stun, clue bonus lost to an early arrest
     SA.start(ctx3b)
     SA.onEntityDead(ctx3b, SpawnsOf(ctx3b, 'ped', 'witness')[1].netId, 1)
     H.eq(ctx3b.calls.fail[1], 'run.fail_killed_unarmed', 'a participant killing the witness fails')
+    -- the search is over (a later objective runs): a witness killed by an NPC changes nothing and says nothing
+    local ctx3c = HuntCtx()
+    SA.start(ctx3c)
+    SA.stop(ctx3c)
+    local huds3c, n3c = #ctx3c.calls.hud, ctx3c.state.circle.n
+    SA.onEntityDead(ctx3c, SpawnsOf(ctx3c, 'ped', 'witness')[1].netId, nil)
+    H.eq(#ctx3c.calls.hud - huds3c, 0, 'a witness killed after the search completed posts no "clue found" message')
+    H.eq(ctx3c.state.circle.n - n3c, 0, 'a witness killed after the search completed shrinks nothing')
 
     local ctx4 = HuntCtx({ fugitives = 2 })
     SA.start(ctx4)
@@ -1921,6 +2117,61 @@ do -- pursuit host: a loop route is tasked once, not re-tasked every pass while 
     H.step(1000)
 end
 
+do -- pursuit host: an open route that is done stays done when control comes back or the host changes
+    H.clockMs = 20500000
+    local veh, vehNet = NewEnt('vehicle', openPts[1])
+    local drv, drvNet = NewEnt('ped', openPts[1])
+    ents[drv].inVehicle = veh
+    ents[drv].bag = { state = 'driving', cfg = {} }
+    ents[veh].speed = 20.0
+    local obj = PU.defaults({ block = 'pursuit', route = 'flee', speed = 108 })
+    local cctx = ClientCtx('run-cl-pursuit-open', obj, openLoc)
+    local function Snap(done)
+        return {
+            kind = 'state',
+            mode = 'stop',
+            fled = true,
+            trigger = 'arrive',
+            vehicles = { { netId = vehNet, index = 1, state = 'fleeing', occupants = { drvNet }, routeDone = done } },
+            suspects = { { netId = drvNet, vehicle = vehNet, seat = -1, state = 'driving' } },
+        }
+    end
+    PC.prepare(cctx)
+    PC.start(cctx)
+    PC.update(cctx, Snap(nil))
+    H.step(1000)
+    H.eq(CountTasks(drv, 'driveRoute'), 1, 'open route client: the car gets its route')
+    ents[veh].coords = vec3(200.0, 3000.0, 30.0)
+    H.step(1000)
+    ents[veh].coords = vec3(395.0, 3000.0, 30.0)
+    H.step(1000)
+    H.eq(CountTasks(drv, 'flee'), 1, 'open route client: a free flee at the end of the route')
+    ents[veh].coords = vec3(650.0, 3000.0, 30.0)
+    H.step(1000)
+    -- another client owned the car and its driver for a while
+    ents[veh].owned, ents[drv].owned = false, false
+    H.step(1000)
+    H.eq(CountTasks(drv, 'driveRoute'), 1, 'open route client: control regained: not sent back to the route')
+    H.eq(CountTasks(drv, 'flee'), 2, 'open route client: control regained: the free flee again')
+    -- a new host that never saw the route end: the server snapshot says it is done
+    PC.hostChanged(cctx, true)
+    PC.update(cctx, Snap(true))
+    ents[veh].coords = vec3(210.0, 3040.0, 30.0)
+    H.step(1000)
+    H.eq(CountTasks(drv, 'driveRoute'), 1, 'open route client: a new host keeps the free flee')
+    H.eq(CountTasks(drv, 'flee'), 3, 'open route client: a new host tasks the free flee')
+    -- a new car under the same net id (test restart) follows its route again
+    local veh2 = NewEnt('vehicle', openPts[1])
+    byNet[vehNet] = veh2
+    ents[veh2].speed = 20.0
+    ents[drv].inVehicle = veh2
+    PC.update(cctx, Snap(nil))
+    H.step(1000)
+    H.eq(CountTasks(drv, 'driveRoute'), 2, 'open route client: a new car under the same net id gets its route')
+    PC.stop(cctx)
+    H.step(1000)
+end
+
 do -- escort host: toughness from the cp bag, a new truck (test restart) is toughened again, control regained
     H.clockMs = 21000000
     local truck, truckNet = NewEnt('vehicle', routePts[1])
@@ -2038,6 +2289,251 @@ do -- search_area: a clue check still running when the objective stops is cancel
     H.ok(CL.removed[2] == true, 'search client: zones removed at stop')
     for _ = 1, 50 do H.step(100) end
     H.eq(#CL.reports, reports + 1, 'search client: no clue report after the objective stopped')
+end
+
+-- Blip natives that keep every live blip, so a test sees one left on the map after a cleanup.
+local BL = { live = {}, n = 0 }
+do
+    local function NewBlip()
+        BL.n = BL.n + 1
+        BL.live[BL.n] = true
+        return BL.n
+    end
+    _G.AddBlipForEntity, _G.AddBlipForCoord, _G.AddBlipForRadius = NewBlip, NewBlip, NewBlip
+    for _, name in ipairs({
+        'SetBlipSprite',
+        'SetBlipColour',
+        'SetBlipScale',
+        'SetBlipRoute',
+        'SetBlipAlpha',
+        'SetBlipAsShortRange',
+        'BeginTextCommandSetBlipName',
+        'AddTextComponentSubstringPlayerName',
+        'EndTextCommandSetBlipName',
+    }) do
+        _G[name] = function() end
+    end
+    _G.DoesBlipExist = function(b) return BL.live[b] == true end
+    _G.RemoveBlip = function(b) BL.live[b] = nil end
+end
+local function LiveBlips()
+    local n = 0
+    for _ in pairs(BL.live) do n = n + 1 end
+    return n
+end
+
+-- A control that waits a frame (as CP.Runs.control does) once gate.slow is set.
+local function SlowControl(cctx, gate)
+    cctx.control = function(e)
+        if gate.slow then Wait(0) end
+        ents[e].owned = true
+        return true
+    end
+end
+
+do -- escort HUD after the arrival: an attacker left far behind still has to be neutralised
+    H.clockMs = 22500000
+    local truck, truckNet = NewEnt('vehicle', routePts[8])
+    local att, attNet = NewEnt('ped', vec3(900.0, 2689.6, 38.9))
+    ents[att].bag = { state = 'hostile', cfg = {} }
+    local obj = ES.defaults({ block = 'escort' })
+    local cctx = ClientCtx('run-cl-4', obj, escLoc)
+    cctx.isHost = false
+    local hud = {}
+    cctx.hudDetail = function(text) hud[#hud + 1] = text or false end
+    EC.prepare(cctx)
+    EC.start(cctx)
+    EC.update(cctx, {
+        kind = 'state',
+        truck = {
+            netId = truckNet,
+            wp = 9,
+            gen = 1,
+            arrived = true,
+            toughened = true,
+            health = 90,
+            stoppedFor = 0,
+            stoppedFail = 60,
+        },
+        waves = { { k = 1, triggered = true, done = false, alive = 1 } },
+        attackers = { attNet },
+        completed = false,
+    })
+    H.step(500)
+    H.eq(hud[#hud], CP.L('block.escort.hud_remaining', { count = 1 }),
+        'escort HUD: arrived with an attacker 270 m back: neutralise the rest, not "0 within 100 m"')
+    ents[att].coords = vec3(1150.0, 2695.0, 37.4)
+    H.step(500)
+    H.eq(hud[#hud], 'Clear the area: 1 attackers within 100 m',
+        'escort HUD: an attacker near the truck: clear the area (the radius in whole metres, not "100.0 m")')
+    EC.stop(cctx)
+    H.step(1000)
+    H.ok(truck ~= nil, 'escort HUD: the truck entity')
+end
+
+do -- escort host: the objective stops while the loop waits for control; nothing is drawn after the cleanup
+    H.clockMs = 23000000
+    local truck, truckNet = NewEnt('vehicle', routePts[1])
+    local drv, drvNet = NewEnt('ped', routePts[1])
+    ents[truck].bag = { state = 'idle', cfg = { toughness = 1.5 } }
+    ents[drv].bag = { state = 'driving', cfg = {} }
+    ents[drv].inVehicle = truck
+    local cctx = ClientCtx('run-cl-5', ES.defaults({ block = 'escort' }), escLoc)
+    cctx.radioSilence = false
+    local hud, gate = {}, { slow = false }
+    cctx.hudDetail = function(text) hud[#hud + 1] = text or false end
+    SlowControl(cctx, gate)
+    local base = LiveBlips()
+    EC.prepare(cctx)
+    EC.start(cctx)
+    EC.update(cctx, {
+        kind = 'state',
+        truck = {
+            netId = truckNet,
+            driver = drvNet,
+            wp = 2,
+            gen = 1,
+            arrived = false,
+            toughened = true,
+            health = 100,
+            stoppedFor = 0,
+            stoppedFail = 60,
+        },
+        waves = {},
+        attackers = {},
+        completed = false,
+    })
+    H.step(500)
+    H.eq(LiveBlips() - base, 2, 'escort client: truck and destination blips')
+    H.eq(type(hud[#hud]), 'string', 'escort client: a HUD line')
+    ents[truck].owned, gate.slow = false, true -- another client took the truck: the next pass waits for control
+    H.step(500)
+    EC.stop(cctx)                              -- ...and the objective stops meanwhile
+    H.eq(LiveBlips() - base, 0, 'escort client: stop removes the blips')
+    for _ = 1, 4 do H.step(500) end
+    H.eq(LiveBlips() - base, 0, 'escort client: the loop pass resumed after the cleanup draws no blip')
+    H.eq(hud[#hud], false, 'escort client: ...and writes no HUD line')
+end
+
+do -- search HUD: a lost clue is not left to check, so the HUD moves on to the fugitives
+    H.clockMs = 23500000
+    local cctx = ClientCtx('run-cl-6', SA.defaults({ block = 'search_area' }), huntLoc)
+    cctx.isHost = false
+    local hud = {}
+    cctx.hudDetail = function(text) hud[#hud + 1] = text or false end
+    local function Clue(i, status)
+        return {
+            i = i,
+            x = i * 100.0,
+            y = 0.0,
+            z = 30.0,
+            kind = 'prop',
+            model = 'prop_cs_heist_bag_02',
+            status = status,
+        }
+    end
+    local function Snap(third)
+        return {
+            kind = 'state',
+            circle = { x = 0.0, y = 0.0, z = 30.0, r = 150, n = 2 },
+            clues = { Clue(1, 'done'), Clue(2, 'done'), Clue(3, third) },
+            fugitives = {},
+            checked = 2,
+            clueTotal = 3,
+            arrests = 0,
+            neutralised = 0,
+            total = 1,
+            entered = true,
+        }
+    end
+    SC.prepare(cctx)
+    SC.start(cctx)
+    SC.update(cctx, Snap('pending'))
+    H.step(1000)
+    H.eq(hud[#hud], CP.L('block.search_area.hud_search', { checked = 2, total = 3, radius = 150 }),
+        'search HUD: one clue still to check')
+    SC.update(cctx, Snap('lost'))
+    H.step(1000)
+    H.eq(hud[#hud], CP.L('block.search_area.hud_find', { done = 0, total = 1, radius = 150 }),
+        'search HUD: the witness lost, no clue left: find the fugitives')
+    SC.stop(cctx)
+    H.step(1000)
+end
+
+do -- search host: the objective stops while the loop waits for control of a fugitive; no blip after the cleanup
+    H.clockMs = 24000000
+    local fug, fugNet = NewEnt('ped', vec3(100.0, 0.0, 30.0))
+    ents[fug].bag = { state = 'fleeing', cfg = {} }
+    local cctx = ClientCtx('run-cl-7', SA.defaults({ block = 'search_area' }), huntLoc)
+    cctx.radioSilence = false
+    local hud, gate = {}, { slow = false }
+    cctx.hudDetail = function(text) hud[#hud + 1] = text or false end
+    SlowControl(cctx, gate)
+    local base = LiveBlips()
+    SC.prepare(cctx)
+    SC.start(cctx)
+    SC.update(cctx, {
+        kind = 'state',
+        circle = { x = 0.0, y = 0.0, z = 30.0, r = 300, n = 1 },
+        clues = {},
+        fugitives = { { netId = fugNet, state = 'fleeing' } },
+        checked = 0,
+        clueTotal = 0,
+        arrests = 0,
+        neutralised = 0,
+        total = 1,
+        entered = true,
+    })
+    H.step(1000)
+    H.eq(LiveBlips() - base, 3, 'search client: circle, centre and fugitive blips')
+    ents[fug].owned, gate.slow = false, true -- another client took the fugitive: the next pass waits for control
+    H.step(1000)
+    SC.stop(cctx)                            -- ...and the objective stops meanwhile
+    H.eq(LiveBlips() - base, 0, 'search client: stop removes the blips')
+    for _ = 1, 4 do H.step(1000) end
+    H.eq(LiveBlips() - base, 0, 'search client: the loop pass resumed after the cleanup draws no blip')
+    H.eq(hud[#hud], false, 'search client: ...and writes no HUD line')
+end
+
+do -- pursuit host: the objective stops while the loop waits for control of the car; nothing after the cleanup
+    H.clockMs = 24500000
+    local veh, vehNet = NewEnt('vehicle', loopPts[1])
+    local drv, drvNet = NewEnt('ped', loopPts[1])
+    ents[drv].inVehicle = veh
+    ents[drv].bag = { state = 'driving', cfg = {} }
+    ents[veh].speed = 20.0
+    local cctx = ClientCtx('run-cl-pursuit-stop', PU.defaults({ block = 'pursuit', route = 'race' }), raceLoc)
+    cctx.radioSilence = false
+    local hud, gate = {}, { slow = false }
+    cctx.hudDetail = function(text) hud[#hud + 1] = text or false end
+    SlowControl(cctx, gate)
+    PC.prepare(cctx)
+    PC.start(cctx)
+    PC.update(cctx, {
+        kind = 'state',
+        mode = 'stop',
+        fled = true,
+        trigger = 'arrive',
+        vehicles = { { netId = vehNet, index = 1, state = 'fleeing', occupants = { drvNet } } },
+        suspects = { { netId = drvNet, vehicle = vehNet, seat = -1, state = 'driving' } },
+        detained = 0,
+        total = 1,
+        stopped = 0,
+        vtotal = 1,
+    })
+    local base = LiveBlips()
+    H.step(1000)
+    H.eq(LiveBlips() - base, 1, 'pursuit client: a blip on the suspect car')
+    H.eq(type(hud[#hud]), 'string', 'pursuit client: a HUD line')
+    local tasks = #CL.tasks
+    ents[veh].owned, gate.slow = false, true -- another client took the car: the next pass waits for control
+    H.step(1000)
+    PC.stop(cctx)                            -- ...and the objective stops meanwhile
+    H.eq(LiveBlips() - base, 0, 'pursuit client: stop removes the blips')
+    for _ = 1, 4 do H.step(1000) end
+    H.eq(LiveBlips() - base, 0, 'pursuit client: the loop pass resumed after the cleanup draws no blip')
+    H.eq(hud[#hud], false, 'pursuit client: ...and writes no HUD line')
+    H.eq(#CL.tasks, tasks, 'pursuit client: ...and tasks nobody')
 end
 
 -- ============================================================================

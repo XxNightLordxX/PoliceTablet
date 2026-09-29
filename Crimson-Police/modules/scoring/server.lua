@@ -616,7 +616,8 @@ function Scoring.compute(run, p, result, opts)
     local mStreak = StreakMultiplier(streakDays)
 
     local raw = subtotal * mTeam * mCross * mStreak
-    local cap = Num(ScoringCfg().scoreCap, 2.0) * P
+    local scoreCap = Num(ScoringCfg().scoreCap, 2.0)
+    local cap = scoreCap * P
     local capped = raw > cap + 1e-9
     local value = math.max(0, math.min(cap, raw))
     local final = math.floor(value + 1e-9)
@@ -625,7 +626,8 @@ function Scoring.compute(run, p, result, opts)
         local okT, key = pcall(CP.Events.typeOfTheDay)
         tod = okT and key ~= nil and key == run.missionType
     end
-    if tod then final = math.floor(final * Num(Config.Events and Config.Events.todMultiplier, 2.0) + 1e-9) end
+    local todMultiplier = Num(Config.Events and Config.Events.todMultiplier, 2.0)
+    if tod then final = math.floor(final * todMultiplier + 1e-9) end
 
     if PresenceFailed(run, p) then
         final, capped, tod = 0, false, false
@@ -636,6 +638,8 @@ function Scoring.compute(run, p, result, opts)
     out.subtotal = subtotal
     out.mTeam, out.mCross, out.mStreak = mTeam, mCross, mStreak
     out.capped, out.tod = capped, tod
+    -- extras for the result card and the Profile breakdown: the cap (whole points) and the multipliers used
+    out.cap, out.scoreCap, out.todMultiplier = math.floor(cap + 1e-9), scoreCap, todMultiplier
     out.final = math.max(0, final)
     return out
 end

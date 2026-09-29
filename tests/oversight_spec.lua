@@ -203,8 +203,12 @@ CP.Challenge = {
 CP.Testing = {
     start = function(src, opts) Record('testStart', src, opts); return true end,
 }
+local forgedArena = {}   -- forgedArena[src]: a client-written crimsonArena flag, still in bucket 0
 CP.Alerts = {
-    inArena = function(src) return buckets[tonumber(src)] ~= nil and buckets[tonumber(src)] ~= 0 end,
+    inArena = function(src)
+        if forgedArena[tonumber(src)] then return true end
+        return buckets[tonumber(src)] ~= nil and buckets[tonumber(src)] ~= 0
+    end,
 }
 CP.Operations = {
     active = function() return nil end,
@@ -741,6 +745,29 @@ H.eq(LastCall('onRowVoided')[1], rowB, 'scoring void hook')
 ok, res = Act('server:sup:reviewFlagged', 2, { rowId = rowB, decision = 'void', reason = 'again' })
 H.eq(res, 'err.already_voided', 'cannot void twice')
 
+-- an approval that lands while a void waits on its permission checks stands: the stale void is refused
+do
+    local rowRace = AddRow({
+        run_uuid = 'aaaaaaaa-1111-4000-8000-00000000001b',
+        citizenid = 'OFF00006',
+        flagged = 1,
+        flag_reason = 'speed',
+        cash_status = 'held',
+    })
+    local realReview = CP.Permissions.canReviewRun
+    CP.Permissions.canReviewRun = function(...)
+        H.sql('UPDATE cp_mission_runs SET flagged = 0 WHERE id = ?', { rowRace })
+        return realReview(...)
+    end
+    local nVoided = CountCalls('onRowVoided')
+    ok, res = Act('server:sup:reviewFlagged', 2, { rowId = rowRace, decision = 'void', reason = 'Too late' })
+    CP.Permissions.canReviewRun = realReview
+    H.eq(res, 'err.conflict', 'a void of a row approved meanwhile is refused')
+    H.eq(H.bit(H.sql('SELECT voided FROM cp_mission_runs WHERE id = ?', { rowRace })[1].voided), 0,
+        'the approval stands')
+    H.eq(CountCalls('onRowVoided'), nVoided, 'no XP removed')
+end
+
 ok, res = Act('server:admin:reviewFlagged', 2, { rowId = rowFib, decision = 'approve', reason = 'x' })
 H.eq(res, 'err.no_permission', 'admin endpoint refuses supervisors')
 ok, res = Act('server:admin:reviewFlagged', 1, { rowId = rowFib, decision = 'approve', reason = 'Checked' })
@@ -825,6 +852,51 @@ H.eq(H.sql('SELECT reason FROM cp_audit WHERE action = \'forceRecall\'')[1].reas
 ok, res = Act('server:sup:forceRecall', 1, { runId = 'run-2', src = 4 })
 H.eq(ok, true, 'admins recall any department')
 run2.participants[4].status = 'active'
+
+-- never on a run they are or were on: recalling themselves or a partner would be a free reroll (no cooldown,
+-- pay tier kept)
+do
+    local own = NewRun('run-own', 'gang_shootout', { Participant(2, 'sast'), Participant(6, 'sast') })
+    local nRemove = CountCalls('removeParticipant')
+    ok, res = Act('server:sup:forceRecall', 2, { runId = 'run-own', src = 2 })
+    H.eq(res, 'err.recall_own_run', 'a supervisor cannot recall themselves')
+    ok, res = Act('server:sup:forceRecall', 2, { runId = 'run-own', src = 6 })
+    H.eq(res, 'err.recall_own_run', 'nor a partner on their own run')
+    own.participants[2].status = 'left'
+    ok, res = Act('server:sup:forceRecall', 2, { runId = 'run-own', src = 6 })
+    H.eq(res, 'err.recall_own_run', 'nor after they left it')
+    H.eq(CountCalls('removeParticipant'), nRemove, 'nobody removed')
+    H.eq(own.participants[6].status, 'active', 'the partner stays on the run')
+    local adminOwn = NewRun('run-own-adm', 'gang_shootout', { Participant(1, 'sast'), Participant(3, 'sast') })
+    ok, res = Act('server:sup:forceRecall', 1, { runId = 'run-own-adm', src = 3 })
+    H.eq(res, 'err.recall_own_run', 'admins too')
+    H.eq(adminOwn.participants[3].status, 'active', 'the admin\'s partner stays on the run')
+    runs['run-own'], runs['run-own-adm'] = nil, nil
+    local tr = NewRun('run-own-test', 'gang_shootout', { Participant(2, 'sast'), Participant(6, 'sast') },
+        { test = { adminSrc = 1 } })
+    ok, res = Act('server:sup:forceRecall', 2, { runId = 'run-own-test', src = 6 })
+    H.eq(ok, true, 'a test run (never saved or paid) may still be recalled from')
+    runs['run-own-test'] = nil
+    local _ = tr
+end
+
+-- the target leaves while the permission check waits (a real call): nothing is recalled or audited
+do
+    local realCan = CP.Permissions.can
+    CP.Permissions.can = function(...)
+        run1.participants[3].status = 'left'
+        return realCan(...)
+    end
+    local nRemove = CountCalls('removeParticipant')
+    local nAudit = H.sql('SELECT COUNT(*) AS n FROM cp_audit WHERE action = \'forceRecall\'')[1].n
+    ok, res = Act('server:sup:forceRecall', 2, { runId = 'run-1', src = 3 })
+    CP.Permissions.can = realCan
+    H.eq(res, 'err.not_participant', 'a target who left during the permission check is not recalled')
+    H.eq(CountCalls('removeParticipant'), nRemove, 'no removal')
+    H.eq(H.sql('SELECT COUNT(*) AS n FROM cp_audit WHERE action = \'forceRecall\'')[1].n, nAudit,
+        'and no forceRecall audit entry')
+    run1.participants[3].status = 'active'
+end
 
 local lr = Cb('sup:getLiveRuns', 2)
 H.eq(lr.ok, true, 'live runs for a supervisor')
@@ -1079,6 +1151,29 @@ do
     H.eq(told[1], true, 'switch off: the admin is told')
     H.eq(told[2] or told[7] or false, false, 'switch off: supervisors are not told')
     sup.handleDisputes = was
+    -- no supervisor of the department online at all: only an admin can answer it now, so the admins are told
+    local D10 = 'bbbbbbbb-2222-4000-8000-000000000010'
+    local dNone = AddRow(
+        { run_uuid = D10, citizenid = 'OFF00003', flagged = 1, flag_reason = 'presence', cash_status = 'held' })
+    local away2, away7 = infos[2], infos[7]
+    infos[2], infos[7] = nil, nil
+    H.eq(Co(CP.Disputes.supervisorCanAnswer, D10), false, 'no supervisor online: none can answer it')
+    mark = #notifies
+    Dispute(3, { rowId = dNone, reason = 'Night shift, nobody around' })
+    told = ToldSince(mark)
+    H.eq(told[1], true, 'no supervisor of the department online: the admin is told')
+    -- one online off duty may still answer it once back on duty: left to the supervisors, as before
+    infos[2] = away2
+    away2.job.onduty = false
+    local D11 = 'bbbbbbbb-2222-4000-8000-000000000011'
+    local dOffDuty = AddRow(
+        { run_uuid = D11, citizenid = 'OFF00003', flagged = 1, flag_reason = 'presence', cash_status = 'held' })
+    mark = #notifies
+    Dispute(3, { rowId = dOffDuty, reason = 'Sam is off duty' })
+    told = ToldSince(mark)
+    H.eq(told[1] or false, false, 'a supervisor online off duty: the admins are not told')
+    away2.job.onduty = true
+    infos[7] = away7
 end
 
 -- ============================================================================
@@ -1176,8 +1271,11 @@ H.eq(oh.flagged, nil, 'participant kills are not outside help')
 Config.AntiCheat.outsideKillsToFlag = 2
 CP.AntiCheat.onNpcKilled(oh, 5)
 H.eq(oh.flagged, nil, 'below outsideKillsToFlag')
+forgedArena[5] = true
 CP.AntiCheat.onNpcKilled(oh, 5)
-H.eq(oh.flagged.reason, 'outside_help', 'outside_help at the threshold')
+forgedArena[5] = nil
+H.eq(oh.flagged and oh.flagged.reason, 'outside_help',
+    'outside_help at the threshold (a forged flag in bucket 0 counts)')
 H.ok(oh.flagged.detail:find('Otto Outsider', 1, true) ~= nil, 'names the killer')
 Config.AntiCheat.outsideKillsToFlag = 1
 local ohRow = AddRow({
@@ -1270,6 +1368,31 @@ H.eq(CP.AntiCheat.evidenceSignature({ type = 'a', netId = 3, coords = vec3(1, 2,
 H.ok(CP.AntiCheat.evidenceSignature({ type = 'a', seq = 1 }) ~= CP.AntiCheat.evidenceSignature({ type = 'a', seq = 2 }),
     'seq distinguishes')
 H.ok(#CP.AntiCheat.evidenceSignature({ blob = string.rep('z', 2000) }) < 64, 'long evidence hashed')
+
+-- a whole number past the integer range (an executor's pad = 1e19) is signed like any other number, so the
+-- duplicate filter and the speed check still see the event
+do
+    local function SafeSig(ev)
+        local okS, s = pcall(CP.AntiCheat.evidenceSignature, ev)
+        return okS and s or nil
+    end
+    H.ok(SafeSig({ type = 'x', pad = 1e19 }) ~= nil, 'a whole number past the integer range is signed')
+    H.ok(SafeSig({ type = 'x', pad = 1e19 }) ~= SafeSig({ type = 'x', pad = 1e300 }), 'and told apart from another')
+    H.eq(SafeSig({ type = 'x', pad = 3.0 }), SafeSig({ type = 'x', pad = 3 }), 'a whole float signs like the integer')
+    local big = NewRun('run-big', 'gang_shootout', { Participant(3, 'sast'), Participant(6, 'sast') })
+    H.clockMs = H.clockMs + 2000
+    H.players[3].coords = vec3(0.0, 0.0, 0.0)
+    local cOk, evOk = pcall(CP.AntiCheat.checkEvent, big, 3, 1, { type = 'interact', point = 1, pad = 1e19 })
+    H.eq(cOk and evOk, true, 'an event carrying a huge number is checked')
+    local evWhy
+    cOk, evOk, evWhy = pcall(CP.AntiCheat.checkEvent, big, 3, 1, { type = 'interact', point = 1, pad = 1e19 })
+    H.eq(cOk and evWhy, 'err.duplicate_event', 'and its exact duplicate within 1 s is dropped')
+    H.clockMs = H.clockMs + 2000
+    H.players[3].coords = vec3(5000.0, 0.0, 0.0)
+    pcall(CP.AntiCheat.checkEvent, big, 3, 1, { type = 'interact', point = 2, pad = 1e300 })
+    H.eq(big.flagged and big.flagged.reason, 'speed', 'a teleport between such events still flags speed')
+    runs['run-big'] = nil
+end
 
 -- ============================================================================
 --                              8. ADMIN CALLBACKS

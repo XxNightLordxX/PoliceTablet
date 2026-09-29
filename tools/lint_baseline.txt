@@ -5,13 +5,7 @@
 # entries of the fix round's bug list (scratchpad process/bugs.md, 2026-09-29).
 
 # Real bugs, waiting for the fix round
-FX05 Crimson-Police/shared/net.lua local res = lib.callback.await('crimson-police:' .. name, false, args) -- B6: CP.Net.request raises on the ox_lib timeout or cb_invalid; give it a timeout and a pcall inside
-FX05 Crimson-Police/modules/missions/client.lua local res = CP.Net.request('getMissionDefs') -- B6: a raise ends the mission-definition retry loop; clears once CP.Net.request cannot raise
-FX05 Crimson-Police/modules/testing/client.lua local res = CP.Net.request('test:pendingInvites', {}) -- B6: a raise kills the invites prompt thread silently; clears once CP.Net.request cannot raise
 FX06 Crimson-Police/modules/runs/server.lua local ped = CreatePed(4, hash, x, y, z, h, true, true) -- B3: run peds, vehicles and objects are deleted by the server when no player is near, and a vanished suspect counts as dead
-FX07 Crimson-Police/modules/builder/server.lua local ok, res = pcall(os.rename, abs, abs) -- B1: dirExists answers the opposite on a Linux FXServer
-FX08 Crimson-Police/modules/builder/server.lua pcall(os.execute, cmd) -- B1: ensureDir can never create a folder on FXServer; use os.createdir as CP.Storage does
-FX08 Crimson-Police/modules/admin/server.lua pcall(os.execute, cmd) -- B2: the storage copy never creates a missing saves folder on FXServer; use os.createdir as CP.Storage does
 
 # Deliberate
 FX07 Crimson-Police/modules/storage/memsql.lua function FS.rename(a, b) return os.rename(a, b) end -- the raw answer on purpose: Store:_probeRename works out per saves folder whether this runtime inverts it

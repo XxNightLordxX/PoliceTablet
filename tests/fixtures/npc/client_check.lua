@@ -371,6 +371,18 @@ Clear()
 W.ents[P3b].speed = 0.0
 H.advance(3600)
 H.ok(Called('TaskFollowNavMeshToCoord', function(a) return a[1] == P3b end), 'stuck: task re-issued')
+-- an on-foot hairpin: 6 m before the turn point (inside 3x 2.5 m) it keeps running to it
+local P3h = AddPed(5017, 817, 0, 800, 0)
+Clear()
+Npc.task(P3h, 'flee', { points = { vec3(0.0, 800.0, 0.0), vec3(10.0, 800.0, 0.0), vec3(0.0, 801.0, 0.0) } })
+H.ok(Called('TaskFollowNavMeshToCoord', function(a) return a[1] == P3h and a[2] == 10.0 end), 'foot hairpin: started')
+Move(P3h, 4, 800, 0)
+W.ents[P3h].speed = 3.0
+Clear()
+H.advance(600)
+H.ok(not Called('TaskFollowNavMeshToCoord', function(a)
+    return a[1] == P3h and a[3] == 801.0
+end), 'foot hairpin: no skip on the approach side')
 
 -- ============================================================================
 --                          TASK: driveRoute / driveTo
@@ -412,6 +424,19 @@ Move(6003, 5, 500, 0)
 H.advance(600)
 drive = LastOf('TaskVehicleDriveToCoordLongrange')
 H.ok(drive and drive[3] == 100.0, 'hairpin: keeps driving to the far waypoint')
+-- still on the approach, inside 3x the arrive radius (20 m, 60 m): the turn point is not cut short
+Move(6003, 50, 500, 0)
+Clear()
+H.advance(600)
+H.ok(not Called('TaskVehicleDriveToCoordLongrange', function(a)
+    return a[1] == P4h and a[4] == 505.0
+end), 'hairpin: no skip on the approach side within 3x the arrive radius')
+-- beyond the turn point along the leg it drives (overshot by 30 m): passed
+Move(6003, 130, 500, 0)
+Clear()
+H.advance(600)
+drive = LastOf('TaskVehicleDriveToCoordLongrange')
+H.ok(drive and drive[3] == 0.0 and drive[4] == 505.0, 'hairpin: overshooting the turn point counts as passed')
 Clear()
 Npc.task(P4h, 'driveRoute',
     { points = { vec3(0.0, 500.0, 0.0), vec3(100.0, 500.0, 0.0), vec3(0.0, 505.0, 0.0) }, startIndex = 3, force = true })
@@ -837,6 +862,39 @@ H.eq(#H.findEvents('crimson-police:server:npcCuff'), 0, 'not surrendered: nothin
 local before = #W.options
 TriggerEvent('onClientResourceStart', 'ox_target')
 H.eq(#W.options, before + 2, 'ox_target restart re-adds every option')
+-- labels pile up over a session: past the 8 options a new label falls back to the default option
+local P14 = AddPed(5024, 824, 1, 0, 0)
+local function CuffBag(label, seq)
+    return {
+        run = 'run-1',
+        obj = 1,
+        state = 'surrendered',
+        armed = false,
+        cfg = {},
+        seq = seq,
+        cuff = { label = label, duration = 3000, maxDistance = 3.0 },
+    }
+end
+local extra = { 'Arrest robber', 'Detain dealer', 'Cuff fugitive', 'Arrest thief', 'Detain courier', 'Cuff runner' }
+for i, label in ipairs(extra) do BagChange(P14, 824, CuffBag(label, i)) end
+local byName = {}
+for _, set in ipairs(W.options) do byName[set[1].name] = set[1] end
+H.ok(byName['crimson-police:cuff:8'] ~= nil and byName['crimson-police:cuff:9'] == nil, 'at most 8 options')
+H.eq(def.canInteract(P14, 2.0), false, 'a label with its own option: the default one stays hidden')
+H.eq(byName['crimson-police:cuff:8'].canInteract(P14, 2.0), true, 'a label with its own option: that one shows')
+BagChange(P14, 824, CuffBag('Arrest smuggler', 7))
+local shown = 0
+for _, o in pairs(byName) do
+    if o.canInteract(P14, 2.0) then shown = shown + 1 end
+end
+H.eq(shown, 1, 'a ninth label is still cuffable (one option shows)')
+H.eq(def.canInteract(P14, 2.0), true, 'a ninth label uses the default option')
+H.reset()
+W.progress = nil
+def.onSelect({ entity = P14 })
+H.advance(700)
+H.eq(W.progress and W.progress.label, 'Arrest smuggler', 'the progress bar keeps the ninth label')
+H.eq(#H.findEvents('crimson-police:server:npcCuff'), 1, 'a ninth label: cuff sent')
 -- a stale end of an earlier run keeps the AI of the current one
 Npc.task(P6, 'cuffed', { instant = true, force = true })
 Clear()

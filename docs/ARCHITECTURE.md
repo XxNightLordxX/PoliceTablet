@@ -39,7 +39,7 @@ exposes that is not listed here is private to that module (keep it `local`).
    boolean or a number: test with `CP.U.truthy(v)`. JSON columns may arrive as a string or a table:
    read with `CP.U.jsonField(v)`; write with `json.encode(CP.U.serialize(t))`. COUNT/SUM results may be
    numbers or numeric strings: wrap with `tonumber(v) or 0` (`CP.U.num`). Callsigns are truncated to 32
-   characters and names to 64 before writing (`CP.U.clip`).
+   characters and names to 64 before writing (`CP.U.clip`: at most n bytes, never ending inside a UTF-8 character).
    **Database off** (`Config.Database.enabled = false`): modules/storage replaces this resource's `MySQL` global
    with `CP.Storage.MemSQL.shim`, an in-resource engine that runs the same SQL on tables kept as files in the saves folder
    (§5.29). Modules never test the mode: they keep their SQL, and new SQL must stay inside the construct list at
@@ -146,7 +146,7 @@ Extra module folders beyond the spec's table (allowed: "each feature in its own 
 | `CP.Net.action(name, handler, opts)` | shared/net.lua | server: registers net event `crimson-police:<name>`; handler `(src, payload) -> ok, data|errKey`; replies to `reqId` |
 | `CP.Net.callback(name, handler, opts)` | shared/net.lua | server: ox_lib callback `crimson-police:<name>`; handler `(src, args) -> data` or `nil, errKey`; reply `{ok,data,error}` |
 | `CP.Net.rateOk(src, key, max, windowMs)` | shared/net.lua | server |
-| `CP.Net.action(name, payload, timeoutMs)`, `CP.Net.request(name, args)` | shared/net.lua | client; both return `{ ok, data, error }` |
+| `CP.Net.action(name, payload, timeoutMs)`, `CP.Net.request(name, args, timeoutMs)` | shared/net.lua | client; both return `{ ok, data, error }` and never raise (`err.timeout` after timeoutMs, default 15000; `err.no_response` when ox_lib raises) |
 | `CP.U.*` | shared/utils.lua | `round` (halves up), `clamp`, `inRange`, `copy`, `deepcopy`, `contains`, `keys`, `count`, `map`, `filter`, `getPath`, `setPath`, `hash`, `hashHex`, `startsWith`, `trim`, `rng(seed)` (`:next() :int(a,b) :chance(p) :pick(l) :shuffle(l) :sample(l,n)`), `uuid()`, `xyz`, `dist`, `dist2d`, `distToPolyline`, `vecToTable`, `tableToVec`, `serialize`, `isHexColour`, `contrastText` |
 
 Naming of `CP.Net.action` names: officer actions are `'server:<name>'` (spec events, e.g.
@@ -249,7 +249,7 @@ run = {
   state = 'accepted' | 'in_progress' | 'ended',
   test = nil | { adminSrc = 3, useStartRoute = false, forcedTier = 'heavy', draft = false },
   operationId = nil | 7,
-  seed = 123456789,               -- same for every participant; CP.U.rng(seed) for shared randomness
+  seed = 123456789,               -- server only: drives the hidden rolls (ctx.rng); never sent to a client
   host = 12,                      -- src whose client runs NPC AI
   leader = 12,
   participants = { [src] = <participant> },   -- everyone ever on the run (status tells who is left)
@@ -692,14 +692,15 @@ officer (`client:operation` (state, missionLabel)). Actions `server:sup:op*` and
 Server: `start(adminSrc, { missionId, location = index|'random', tier, useStartRoute, testers = { src } }) -> ok, errKey`,
 controls (`skip`, `restart`, `pause`, `complete`, `fail`, `end`, `teleport`), invites, `record(adminSrc, {...})`,
 `list() -> tests view`. A test run goes through `CP.Runs.create({ test = {...} })` so everything else is identical.
-`startDraft(src, def, { tier, location, useStartRoute }) -> ok, errKey` (Mission Builder test of an unpublished draft: `test.draft = true`; at the end the tester records Passed/Failed and the result goes to `CP.Builder.onDraftTested(missionId, version, tierName, passed, src)`).
-Client: test-control panel focus key (RegisterKeyMapping `+crimsonpolice_testpanel`, default F9), debug overlay drawing.
+`startDraft(src, def, { tier, location, useStartRoute }) -> ok, errKey` (Mission Builder test of an unpublished draft: `test.draft = true`; at the end the tester records Passed/Failed and the result goes to `CP.Builder.onDraftTested(missionId, version, tierName, passed, src, defHash)`, defHash = the tested definition's).
+Client: test-control panel focus key (RegisterKeyMapping `+crimsonpolice_testpanel`, default F7: sc-multijob binds F9;
+silent unless this player controls a test or has an invitation waiting), debug overlay drawing.
 
 ### 5.28 CP.Builder — modules/builder
 Server: drafts, locks, autosave, test runs of drafts (via `CP.Testing`/`CP.Runs` with `test.draft = true`),
 publish (Lua export with `SaveResourceFile`), archive/restore, rollback (.bak), reload of hand edits,
 `loadPublished() -> { def, ... }` *(hook for CP.Missions.loadAll)*, `onReload()`,
-`onDraftTested(missionId, version, tierName, passed, src)` *(hook from CP.Testing)*. Publishing requires a passed test at the tier `CP.Scaling.tierFor(maxOfficers)` (`draft_tested = 1`).
+`onDraftTested(missionId, version, tierName, passed, src, defHash)` *(hook from CP.Testing; a pass counts only for the draft content with that defHash)*. Publishing requires a passed test at the tier `CP.Scaling.tierFor(maxOfficers)` (`draft_tested = 1`).
 Client: placement tool, route recording, test drive; overlays through `CP.Tablet.overlay`.
 
 ### 5.29 CP.Storage (with CP.Storage.MemSQL) — modules/storage (S)
@@ -782,6 +783,9 @@ code is `CP.Storage.MemSQL` (memsql.lua creates `CP.Storage` and puts it there).
   `Config.Database.folder` for the command. The copy:
   - first runs on the target the migrations the source has (the same `sql/migrations` files);
   - keeps ids and AUTO_INCREMENT counters, and writes into an engine inside one `db:bulk`;
+  - into the storage in use (the server keeps writing meanwhile), raises its counters to the source's before the
+    first row and writes every row with `ON DUPLICATE KEY UPDATE`, so a row the server wrote first is replaced by
+    the copied one instead of failing the copy;
   - reads DATETIME with `UNIX_TIMESTAMP` and writes it with `FROM_UNIXTIME`, and moves DATE as `YYYY-MM-DD`;
   - is refused while a run or a Cross-Department Mission is active, and into a target with rows unless `force`
     (which empties it first);
@@ -945,7 +949,7 @@ Rules for blocks:
 
 | Event | Args | Sent by |
 |---|---|---|
-| `client:start` | runId, data `{ missionId, mission, locationIndex, location, start = { coords, radius }, expectedTier, seed, host, test, modifier, participants, startRoute = bool, startTimeout, isBoss }` | runs |
+| `client:start` | runId, data `{ missionId, mission, locationIndex, location, start = { coords, radius }, expectedTier, seed, host, test, modifier, participants, startRoute = bool, startTimeout, isBoss }` (seed = a client seed, the same for every participant and unrelated to `run.seed`, so no client can replay the server's rolls) | runs |
 | `client:inProgress` | runId, `{ tier, payTier, objectives = <scaled list>, timeLimit, remaining }` | runs |
 | `client:objective` | runId, index, `{ action = 'prepare'|'start'|'update'|'stop', data }` | runs |
 | `client:hud` | runId, patch | runs |
@@ -958,6 +962,7 @@ Rules for blocks:
 | `client:routeStatus` | runId, status (`'arrived'`…) | route |
 | `client:pickup` | runId, dropOff (vec3) | downed |
 | `client:requestEMS` | runId | downed |
+| `client:pickupCancel` | runId (the server cancelled a pick-up it had already sent; the client fades back in and never teleports) | downed |
 | `client:operation` | state (`launched`|`started`|`ended`|`cancelled`), missionLabel | operations |
 | `client:missions` | list of definitions | missions |
 | `client:notify` | `{ kind, key, vars, title, duration }` | tablet (server helper) |
@@ -1001,7 +1006,7 @@ Callbacks (read): `getSession`, `getMissionTypes`, `getUnit`, `getRun`, `getHome
 `admin:getBoards`, `admin:getStuckPayments`, `admin:searchOfficers`, `admin:getOfficer`,
 `admin:getDepartments`, `admin:getPermissions`, `admin:getAudit`, `admin:exportAudit`,
 `admin:getTests`, `admin:getFlagged`, `admin:getDisputes`, `builder:list`, `builder:get`,
-`builder:config`, `test:pendingInvites`.
+`builder:config`, `test:pendingInvites`, `test:state` (testRun or builderEdit), `test:candidates` (testRun).
 
 Actions (write), each checks `CP.Permissions.can`:
 
@@ -1023,7 +1028,10 @@ Actions (write), each checks `CP.Permissions.can`:
 | `server:admin:overrideBounty` | `{ objective }` | bountyOverride | challenge |
 | `server:admin:reloadMissions` | — | reloadMissions | missions |
 | `server:admin:startTest` | `{ missionId, location, tier, useStartRoute, testers }` | testRun | testing |
-| `server:admin:recordTest` | `{ missionId, location, tier, result, note }` | testRun | testing |
+| `server:admin:recordTest` | `{ key?, missionId, location, tier, result, note }` (key = the pending entry's run id) | testRun | testing |
+| `server:test:record` | alias of `server:admin:recordTest` (same payload) | testRun (a draft: builderEdit or testRun) | testing |
+| `server:test:invite` | `{ missionId, targets = { src } }` | testRun | testing |
+| `server:test:cancelInvites` | — | testRun | testing |
 | `server:test:control` | `{ control, ... }` | test starter only | testing |
 | `server:builder:*` | see builder section of its own module header | builderEdit/Publish/Archive/EditAny/Rollback/breakEditLock | builder |
 
@@ -1166,7 +1174,8 @@ interface RunResult { runId: string; missionLabel: string; missionType: string;
   points: { P: number; bonuses: { id: string; label: string; points: number }[];
     penalties: { id: string; label: string; points: number }[]; subtotal: number;
     mTeam: number; mCross: number; mStreak: number; capped: boolean; tod: boolean;
-    failedShare: number | null; final: number };
+    failedShare: number | null; final: number;
+    cap?: number; scoreCap?: number; todMultiplier?: number };  // completed runs: the cap in whole points and the factors used
   cash: { B: number; mTier: number; mMod: number; amount: number; status: string };
   flagged: null | { reason: string } }
 ```

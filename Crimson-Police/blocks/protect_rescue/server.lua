@@ -94,6 +94,16 @@ local function IsParticipant(ctx, src)
     return false
 end
 
+-- Still on the run: a participant who left shoots as an outsider (CP.Npc and CP.AntiCheat agree).
+local function IsActiveParticipant(ctx, src)
+    src = tonumber(src)
+    if not src then return false end
+    for _, s in ipairs(ctx.participants() or {}) do
+        if tonumber(s) == src then return true end
+    end
+    return false
+end
+
 local function RngOf(ctx)
     local st = ctx.state
     if not st.rng then
@@ -356,7 +366,7 @@ local function Hit(ctx, st, key, attacker)
     end
     attacker = tonumber(attacker)
     local pen = tonumber(ctx.obj.hitPenalty) or 0
-    if not attacker or pen <= 0 or not IsParticipant(ctx, attacker) then return true end
+    if not attacker or pen <= 0 or not IsActiveParticipant(ctx, attacker) then return true end
     local k = key .. ':' .. tostring(attacker)
     local t = Now()
     local last = st.lastHit[k]

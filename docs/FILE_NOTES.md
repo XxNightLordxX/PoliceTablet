@@ -7,6 +7,7 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
 ## Crimson-Police/blocks/checkpoint_route/client.lua
 
 ```text
+
  blocks/checkpoint_route/client.lua · objective block "checkpoint_route" (client half)
 
   What it does
@@ -36,6 +37,7 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
 ## Crimson-Police/blocks/checkpoint_route/server.lua
 
 ```text
+
  blocks/checkpoint_route/server.lua · objective block "checkpoint_route" (server half)
 
   What it does
@@ -103,13 +105,15 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
 ## Crimson-Police/blocks/escort/client.lua
 
 ```text
+
  blocks/escort/client.lua · objective block "escort" (client half)
 
   What it does (while the objective is current on this participant's client)
     - blips for the escorted truck, the destination and living attackers (none with Radio Silence);
       the arrival marker at the destination (DrawMarker only within MARKER_RANGE, otherwise Wait(750));
     - a HUD line (ctx.hudDetail): truck health, stop wait, stopped countdown, attackers alive, and at the
-      destination how many attackers are still within clearRadius;
+      destination how many attackers are still within clearRadius (or, with none that close, how many are
+      left to neutralise anywhere); nothing once a stop cleaned up while the host AI waited for control;
     - on the run host only: control of the truck, its driver and the attackers before anything is done
       to them (re-applied and re-tasked when control comes back from another client), CP.Npc.apply on
       the driver, the driver seated and kept in the truck, doors locked, the toughness (cp bag
@@ -133,6 +137,7 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
 ## Crimson-Police/blocks/escort/server.lua
 
 ```text
+
  blocks/escort/server.lua · objective block "escort" (server half)
 
   What it does
@@ -149,12 +154,14 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
     trigger when the truck is within AMBUSH_TRIGGER of the point (or has passed it). Attackers are
     hostile only to participants (CP.Npc 'hostile'). Spawns wait for the run caps (ctx.canSpawn) and are
     never cut; rescale drops planned waves not yet triggered and lowers counts still missing.
-    Done when the truck is within `arrival` metres (2D, like the waypoints) of the destination (the last waypoint) with no living
+    Done when the truck, on the final stretch (its next waypoint is the last one), is within `arrival` metres
+    (2D, like the waypoints) of the destination (the last waypoint) with no living
     attacker within clearRadius of it, every triggered wave spawned and every triggered wave neutralised
     (each attacker killed or cuffed, wherever it is: "neutralise each ambush wave"). Fails when the truck is
     destroyed (entity health 0 only once a positive health was seen: a server-created truck reads 0 until a
-    client synced it), stopped for stoppedFail seconds in a row outside a stop (after it first moved, or
-    START_GRACE_MS after it spawned), or (engine) at the time limit.
+    client synced it; not once the objective is done), stopped for stoppedFail seconds in a row outside a stop
+    while the run host, whose client drives it, is within HOST_RANGE (after it first moved, or START_GRACE_MS
+    after the host first came that close), or (engine) at the time limit.
 
   Objective fields read (defaults: ARCHITECTURE §3.3 and Config.Blocks.escort)
     minSeconds [60] · presenceRange [presenceRange[3] = 300] · label
@@ -184,7 +191,7 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
 
   ctx.state
     block, rng, points, stops = { [waypoint] = wait }, truck = { netId, entity, driver = { netId, entity,
-    dead }, wp, served, stop = { at, left } | nil, stoppedFor, moved, spawnedAt, arrived, arrivalHealth,
+    dead }, wp, served, stop = { at, left } | nil, stoppedFor, moved, nearAt, arrived, arrivalHealth,
     toughened, baseline, health, gen }, waves = { { k, point, wp, triggered, dropped, want, cars = { carKey } } },
     cars = { [key] = { netId, entity, wave, want, crew = { pedKey } } } (every car doors-locked), peds = { [key] = { netId,
     entity, wave, state } }, dirty, sentAt, completed, failed, halted
@@ -193,13 +200,15 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
 ## Crimson-Police/blocks/flee_arrest/client.lua
 
 ```text
+
  blocks/flee_arrest/client.lua · objective block "flee_arrest" (client half)
 
   What it does (while the objective is current on this participant's client)
     - door mode: ox_target sphere zone "Knock and announce" on the door (option crimson-police:knock),
       selecting it reports 'knock_start', runs lib.progressBar(knock.duration) and reports 'knock';
       a marker over the door (DrawMarker only within MARKER_RANGE, otherwise Wait(750)) and a door
-      blip until the knock (no blip with Radio Silence);
+      blip until the knock (no blip with Radio Silence); all three come back when a test restart
+      sends knocked = false again (restart sends no stop or start);
     - every participant checks the suspects near them: 'aim' when IsPlayerFreeAimingAtEntity (or
       lock-on IsPlayerTargettingEntity) on an unarmed fleeing suspect within givesUp.aim, 'stunned'
       when IsPedBeingStunned (throttled per
@@ -222,6 +231,7 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
 ## Crimson-Police/blocks/flee_arrest/server.lua
 
 ```text
+
  blocks/flee_arrest/server.lua · objective block "flee_arrest" (server half)
 
   What it does
@@ -235,7 +245,8 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
       surrender (placed DOOR_STEP in front of the door, facing out: out = the door's vec4 heading,
       turned round when the location start is clearly behind it; whether he waited inside or on the
       step beside the door), flee (runs out the back along `fleeTo`)
-      or fight (spawned with a pistol from `weapons`). Associates always fight. Done when the
+      or fight (spawned armed, the pistol from `weapons` given in hand only at the reveal so it does
+      not give the response away). Associates always fight. Done when the
       suspect is cuffed (or was killed while armed and fighting) and every associate is
       neutralised (killed, or gave up and cuffed).
     - scatter (Prison Break): `suspects` inmates (scale) in prison clothes spawn at `spawns`
@@ -312,6 +323,7 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
 ## Crimson-Police/blocks/hostile_waves/client.lua
 
 ```text
+
  blocks/hostile_waves/client.lua · objective block "hostile_waves" (client half)
 
   What it does
@@ -341,6 +353,7 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
 ## Crimson-Police/blocks/hostile_waves/server.lua
 
 ```text
+
  blocks/hostile_waves/server.lua · objective block "hostile_waves" (server half)
 
   What it does
@@ -413,6 +426,7 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
 ## Crimson-Police/blocks/interact_points/client.lua
 
 ```text
+
  blocks/interact_points/client.lua · objective block "interact_points" (client half)
 
   What it does
@@ -441,6 +455,7 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
 ## Crimson-Police/blocks/interact_points/server.lua
 
 ```text
+
  blocks/interact_points/server.lua · objective block "interact_points" (server half)
 
   What it does
@@ -495,6 +510,7 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
 ## Crimson-Police/blocks/protect_rescue/client.lua
 
 ```text
+
  blocks/protect_rescue/client.lua · objective block "protect_rescue" (client half)
 
   What it does
@@ -520,6 +536,7 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
 ## Crimson-Police/blocks/protect_rescue/server.lua
 
 ```text
+
  blocks/protect_rescue/server.lua · objective block "protect_rescue" (server half)
 
   What it does
@@ -533,9 +550,10 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
     server sees it within safeRadius of it. Completed when every hostage is safe.
     With restrained = false the hostages start cowering ('idle') and walk to safety when the
     objective starts. Hostages are watched for the whole run, also while an earlier objective is
-    current: damage by a participant costs hitPenalty (penalty hostage_hit, shared), any damage
-    loses the no_hostage_hurt bonus, a death fails the run (failIfDies), and a hostage killed by a
-    participant always fails it (run.fail_killed_unarmed).
+    current: damage by an active participant costs hitPenalty (penalty hostage_hit, shared; someone
+    who left shoots as an outsider), any damage loses the no_hostage_hurt bonus, a death fails the
+    run (failIfDies), and a hostage killed by a participant, also one who left, always fails it
+    (run.fail_killed_unarmed).
 
   Objective fields read (defaults: ARCHITECTURE §3.3 and Config.Blocks.protect_rescue)
     minSeconds [15] · presenceRange [presenceRange[3] = 150] · label
@@ -579,6 +597,7 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
 ## Crimson-Police/blocks/pursuit/client.lua
 
 ```text
+
  blocks/pursuit/client.lua · objective block "pursuit" (client half)
 
   What it does (while the objective is current on this participant's client)
@@ -596,7 +615,8 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
       and re-task when control comes back from another client), CP.Npc.apply once per entity handle,
       seats them, locks the car, then drives: CP.Npc.task(driver, 'driveRoute', { vehicle, points,
       loop, speed (m/s), style, stopRange, force }) from the next waypoint of the route (a loop is
-      re-tasked lap by lap, an open route ends in a free flee), or CP.Npc.task(driver, 'flee', {
+      re-tasked lap by lap, an open route ends in a free flee that stays a free flee after a regain or a
+      new host: the server's routeDone), or CP.Npc.task(driver, 'flee', {
       vehicle, speed, style, force }) for a free flee; a stuck car is re-tasked every RETASK_MS (force:
       CP.Npc ignores identical repeats). CP.Npc maps the style name ('cautious' | 'reckless') to the
       driving flags. After a stop the occupants leave the car (TaskLeaveVehicle, repeated every
@@ -610,20 +630,22 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
   Evidence sent: { type = 'ram', netId, speed }, { type = 'lights_near', netId }, { type = 'aim', netId },
     { type = 'stunned', netId }, { type = 'undriveable', netId }
   Server data (update): { kind = 'state', mode, fled, trigger, lights, vehicles = { { netId, index, state,
-    occupants } }, suspects = { { netId, vehicle, seat, state, armed } }, detained, neutralised, total,
+    occupants, routeDone } }, suspects = { { netId, vehicle, seat, state, armed } }, detained, neutralised, total,
     stopped, vtotal, escaping, follow = { inRange, duration, hold, lost, average } }
 ```
 
 ## Crimson-Police/blocks/pursuit/server.lua
 
 ```text
+
  blocks/pursuit/server.lua · objective block "pursuit" (server half)
 
   What it does
     Suspect vehicles (networked, ctx.spawnVehicle) with their occupants (ctx.spawnPed, seated with the
     server SetPedIntoVehicle and again by the run host) drive away from the participants. The run
     host's client drives them: along a recorded road route waypoint by waypoint (route = location key
-    { points, loop }; a loop is raced lap after lap, an open flee route ends in a free flee) or in a
+    { points, loop }; a loop is raced lap after lap, an open flee route ends in a free flee, marked
+    routeDone in the snapshot once the car is within ROUTE_END of its last waypoint) or in a
     free flee (route = nil). Two modes:
     - stop (Street Race Bust, Stolen Vehicle Takedown): stop every vehicle. A vehicle is stopped when
       the server sees it below stopped.speed km/h (GetEntitySpeed) for stopped.seconds in a row, once
@@ -641,7 +663,7 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
       Occupants only switch from 'stopped' to fleeing / hostile / surrendered once they are out of
       the car (the host client retries the exit and finally warps them out).
     - follow (Pursuit Sim): stay within hold metres of the suspect vehicle (or its driver on foot
-      after a wreck) for a total of duration seconds. More than lost.distance from every participant
+      after a wreck; with several suspects, the one nearest the party) for a total of duration seconds. More than lost.distance from every participant
       for lost.seconds straight fails, and so does the officer's vehicle becoming undriveable
       (failIfUndriveable). The average distance sets the medal, awarded only when the full duration
       was held; run.flags.medals = true. A target that died without a participant kill ends the
@@ -717,6 +739,7 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
 ## Crimson-Police/blocks/search_area/client.lua
 
 ```text
+
  blocks/search_area/client.lua · objective block "search_area" (client half)
 
   What it does (while the objective is current on this participant's client)
@@ -727,8 +750,9 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
       'clue'; a marker over each clue not yet checked (DrawMarker only within MARKER_RANGE, otherwise
       Wait(750));
     - 'stunned' reports for fugitives seen stunned (IsPedBeingStunned); the server re-checks distances;
-    - a HUD line (ctx.hudDetail): enter the area, clues checked and circle size, escape countdown, and
-      "stay close" while this player is within givesUp.close.distance of a fugitive on the run;
+    - a HUD line (ctx.hudDetail): enter the area, clues checked and circle size while a clue is still
+      pending (a lost one is handled), then fugitives in custody, escape countdown, and "stay close" while
+      this player is within givesUp.close.distance of a fugitive on the run;
     - on the run host only: control of each fugitive and the witness before anything is done to it
       (re-applied and re-tasked when control comes back from another client), CP.Npc.apply, then
       the task for its cp state: idle (hiding) -> 'cower', fleeing -> 'flee', and on first sight (new
@@ -745,6 +769,7 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
 ## Crimson-Police/blocks/search_area/server.lua
 
 ```text
+
  blocks/search_area/server.lua · objective block "search_area" (server half)
 
   What it does
@@ -807,6 +832,7 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
 ## Crimson-Police/blocks/skill_check/client.lua
 
 ```text
+
  blocks/skill_check/client.lua · objective block "skill_check" (client half)
 
   What it does
@@ -832,6 +858,7 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
 ## Crimson-Police/blocks/skill_check/server.lua
 
 ```text
+
  blocks/skill_check/server.lua · objective block "skill_check" (server half)
 
   What it does
@@ -874,6 +901,7 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
 ## Crimson-Police/config/blocks.lua
 
 ```text
+
 config/blocks.lua · Mission Builder ranges and defaults.
 Numbers are { min, max, default }; the tablet only accepts values in range,
 and the server checks them again on publish and on /CrimsonPoliceAdmin reload.
@@ -885,6 +913,7 @@ times to milliseconds (5 → 5000), the units mission files use.
 ## Crimson-Police/modules/access/client.lua
 
 ```text
+
 modules/access/client.lua · CP.Access (client): the latest officer and department the server sent.
 
 Display data only: the server re-checks access on every request and action. The tablet
@@ -906,6 +935,7 @@ Public API
 ## Crimson-Police/modules/access/server.lua
 
 ```text
+
 modules/access/server.lua · CP.Access (server): departments, roles, duty, active job, rank and
 callsign, suspension checks.
 
@@ -967,6 +997,7 @@ getOfficer, isSupervisor, role, recheck, isSuspended, suspend and refreshOfficer
 ## Crimson-Police/modules/admin/server.lua
 
 ```text
+
  modules/admin/server.lua · CP.Admin (server): supervisor and admin actions, /CrimsonPoliceAdmin, the
   audit log (cp_audit) and the Discord webhooks.
 
@@ -1018,7 +1049,8 @@ getOfficer, isSupervisor, role, recheck, isSuspended, suspend and refreshOfficer
     CP.Admin.voidFlagged(src, rowId, reason) -> ok, data|errKey
     CP.Admin.voidRun(src, rowIdOrRunUuid, reason) -> ok, data|errKey      (permission voidAnyRun)
         approve: flagged = 0 (flag_reason kept), CP.Cash.release when cash is held,
-        CP.Scoring.onRowApproved, CP.Leaderboard.invalidate. void: voided = 1, CP.Scoring.onRowVoided,
+        CP.Scoring.onRowApproved, CP.Leaderboard.invalidate. void: voided = 1 (voidFlagged only while still
+        flagged, else err.conflict), CP.Scoring.onRowVoided,
         cash untouched (held cash is forfeited by CP.Cash after the dispute window; a paid run is not
         clawed back), CP.AntiCheat.onVoided for mission rows, invalidate. Reason required. Reviewers who
         took part are refused (CP.Permissions.canReviewRun, plus a participant still on the live run who
@@ -1026,6 +1058,8 @@ getOfficer, isSupervisor, role, recheck, isSuspended, suspend and refreshOfficer
         (err.other_department). Texts are clipped by characters, never inside a UTF-8 sequence.
         opts (approveFlagged, used by CP.Disputes): { skipPermission = true, noAudit = true, quiet = true (no toast) }
     CP.Admin.forceRecall(src, runId, targetSrc, reason) -> ok, data|errKey
+        never on a run the caller is or was on (err.recall_own_run; test runs excepted); a target who left
+        while the permission check waited: err.not_participant, nothing audited
     CP.Admin.getRow(rowId) -> row|nil, errKey        one cp_mission_runs row (flagged/voided as booleans)
     CP.Admin.runDepartments(runUuid) -> { deptKey, ... }   departments of every row (and live participant)
     CP.Admin.resolveCitizenId(input) -> citizenid|nil  the stored form (cp_officers, else an online player)
@@ -1060,6 +1094,7 @@ getOfficer, isSupervisor, role, recheck, isSuspended, suspend and refreshOfficer
 ## Crimson-Police/modules/alerts/server.lua
 
 ```text
+
 modules/alerts/server.lua · CP.Alerts (server): Hard rule 16 (no mission alerts) and the only writer
 of the crimsonArena state bag (docs/ARCHITECTURE.md §5.14, docs/CRIMSON_ARENA.md rules 1, 2, 3, 9, 11).
 
@@ -1124,6 +1159,7 @@ Stop: every value we set is removed.
 ## Crimson-Police/modules/anticheat/server.lua
 
 ```text
+
  modules/anticheat/server.lua · CP.AntiCheat (server): objective-event checks, run flags, outside help,
   presence sampling, the idle check and the voids -> suspension rule.
 
@@ -1172,6 +1208,7 @@ Stop: every value we set is removed.
 ## Crimson-Police/modules/builder/client.lua
 
 ```text
+
  modules/builder/client.lua · CP.Builder (client): the Mission Builder's in-world tools.
   Protocol: docs/notes/builder_protocol.md §6 (client actions, results, overlays); shapes of the overlays and
   of the fields this client adds: web/src/types/builder_client.ts; notes: docs/notes/builder_client.md.
@@ -1201,10 +1238,12 @@ Stop: every value we set is removed.
       (the sample before the gap is kept), consecutive duplicates removed (samples closer than 1 m). E adds a
       stop point (escort only: payload.stops; at most Config.Blocks.escort.stops[2], wait = stopWait[3] s,
       interior waypoints only), Backspace undoes the last undoMetres, P pauses and resumes, X finishes. After an
-      undo, or a resume away from the end, sampling waits until the driver is back within snapEvery of the end
-      of the recording (a marker shows it). The result has the waypoints, stops, loop flag, the length (sum of the
-      waypoint distances, as the server measures it), the rejected samples (count and at most 50 positions) and
-      `unreachable` (waypoint indexes with no road path to the next one, CalculateTravelDistanceBetweenPoints).
+      undo, a resume (in a vehicle or on foot) away from the end, or getting back into a driver seat away from
+      it, sampling waits until the driver is back within snapEvery of the end of the recording (a marker shows
+      it). The result has the waypoints, stops, loop flag, the length (sum of the waypoint distances, as the
+      server measures it), the rejected samples (count and at most 50 positions) and `unreachable` (waypoint
+      indexes with no road path to the next one, CalculateTravelDistanceBetweenPoints; each segment is checked
+      while it is driven, where the game has its path nodes loaded, the last one after X).
     * test drive (overlay 'testdrive'). When the player is more than 200 m from the route start a GPS waypoint
       leads there first. A LOCAL vehicle (the block's vehicle) with a local driver drives the route waypoint by
       waypoint with TaskVehicleDriveToCoordLongrange at the block's speed and a lane-following driving style
@@ -1217,8 +1256,8 @@ Stop: every value we set is removed.
       reopens on the UI the tool was started from (payload.ui, default 'supervisor').
     * refusals (docs/CRIMSON_ARENA.md rules 8 and 13): every tool refuses with err.in_arena while the local player
       carries Crimson-Arena's crimsonArena value, and a running tool stops (no reopen) when such a value arrives;
-      also err.builder_busy (a tool runs), err.builder_dead, err.builder_on_run (the player is on a mission run)
-      and err.builder_disabled. The builder never moves the player: no SetEntityCoords on the player's ped or
+      also err.builder_busy (a tool runs), err.builder_dead, err.builder_on_run (the player is on a mission run;
+      a running tool stops, no reopen, when the player is put on one) and err.builder_disabled. The builder never moves the player: no SetEntityCoords on the player's ped or
       vehicle anywhere; builderWaypoint only sets a GPS waypoint. The routing-bucket half of CP.Alerts.inArena is
       server-side only (no client native); see the notes.
     * cleanup: ghosts, test-drive vehicle and driver, blips, zones, the GPS waypoint it set and the overlay are
@@ -1235,7 +1274,8 @@ Stop: every value we set is removed.
         recorder:endPoint() -> p|nil · recorder:count() -> samples · recorder:length() -> metres
         recorder:waypoints() -> { p, ... } (with the current end) · recorder:finish() -> points, stops, dropped
     CP.Builder.checkSpot(spot, ctx) -> ok, reasonKey|nil, vars|nil
-        spot = { hit, x, y, z, groundZ, normalZ, water, blocked = true|false|nil (not probed yet), distance }
+        spot = { hit, x, y, z, groundZ, normalZ, water, blocked = true|false|nil (not probed yet), distance,
+                 stored = { x, y, z } (the point as stored; the zone and distance checks use it, as the server) }
         ctx  = { kind, points, multiple, max, zones, spawn, start, minFromStart, otherStarts, minLocationGap,
                  minGap, maxDistance }
     CP.Builder.parsePlace(payload) / CP.Builder.parseRecord(payload) / CP.Builder.parseTestDrive(payload)
@@ -1269,6 +1309,7 @@ Stop: every value we set is removed.
 ## Crimson-Police/modules/builder/server.lua
 
 ```text
+
  modules/builder/server.lua · CP.Builder (server): the Mission Builder's drafts, edit locks, versions,
   guardrails, test runs of drafts, publishing (Lua export), archive/restore, rollback and the loading and
   reloading of custom mission files. The full protocol (definition shape, payloads, results, client
@@ -1288,7 +1329,7 @@ Stop: every value we set is removed.
     CP.Builder.onReload() -> summary                    (hook: CP.Missions.reload) hand edits of published files
         summary = { checked, unchanged, edited = { { id, version } }, rejected = { { id, error } },
                     conflicts = { id }, rewritten = { id } }
-    CP.Builder.onDraftTested(missionId, version, tierName, passed, src) -> boolean   (hook: CP.Testing)
+    CP.Builder.onDraftTested(missionId, version, tierName, passed, src, defHash) -> boolean   (hook: CP.Testing)
     Pure helpers (also used by the tests):
     CP.Builder.sanitize(input, id) -> def|nil, errKey, info    a stored-safe builder definition
     CP.Builder.validate(def, opts) -> errors, info             guardrails; opts = { publish = bool, raw = input }
@@ -1316,6 +1357,7 @@ Stop: every value we set is removed.
 ## Crimson-Police/modules/calls/server.lua
 
 ```text
+
 modules/calls/server.lua · CP.Calls (server): Hard rule 15, real calls first
 (docs/ARCHITECTURE.md §5.13, SPEC "Real calls end missions; NPC calls never do", INTEGRATIONS sc-dispatch
 and sc-npcpolice).
@@ -1357,6 +1399,7 @@ sc-dispatch restart wipes every entry (sc-dispatch deactivates every call when i
 ## Crimson-Police/modules/cash/server.lua
 
 ```text
+
 modules/cash/server.lua · CP.Cash (server): the cash formula and every payment Crimson-Police makes.
 
 Owns
@@ -1396,6 +1439,7 @@ All functions except compute and range query the database: call them from a thre
 ## Crimson-Police/modules/challenge/server.lua
 
 ```text
+
 modules/challenge/server.lua · CP.Challenge (server): seasons, the department challenge, the weekly
 bounty and the supervisor Department Report.
 
@@ -1453,7 +1497,7 @@ Public API (docs/ARCHITECTURE.md §5.23)
       minRunsActive, contributors = { { rank, citizenid, name, callsign, points, runs, active } } }
   callback admin:getSeasons ('seasons') -> { current, latest, standings, bounty, bountyHistory = { {
       seasonId, seasonName, week, objective, label, winner, winnerShort, bonus, closed, current,
-      startsAt, endsAt } }, seasons = { { id, name, startsAt, endsAt, active, champion, championShort } },
+      startsAt, endsAt, startDate, endDate } }, seasons = { { id, name, startsAt, endsAt, active, champion, championShort } },
       bounties = { { id, label } }, enabled, weeklyBounty, mode, seasonWeeks, minRunsActive }
   action server:admin:startSeason { name }    ('seasons', audited 'season_start')
   action server:admin:endSeason               ('seasons', audited 'season_end')
@@ -1473,6 +1517,7 @@ Test hooks: CP.Challenge._boot(), _weekIndex(season, ts), _weekWindow(season, n)
 ## Crimson-Police/modules/disputes/server.lua
 
 ```text
+
  modules/disputes/server.lua · CP.Disputes (server): officers' disputes about their flagged, voided or
   failed runs (cp_disputes) and how supervisors and admins answer them.
 
@@ -1484,8 +1529,8 @@ Test hooks: CP.Challenge._boot(), _weekIndex(season, ts), _weekWindow(season, n)
       supervisors), 'admin' for failed rows. The insert is atomic (INSERT ... SELECT ... WHERE NOT EXISTS).
       Filing toasts the online staff who can answer it (tellStaff, never participants of the run): admins
       for 'admin' disputes or while Config.Permissions.supervisor.handleDisputes is off, else the on-duty
-      supervisors of the run's departments, or the admins when every online supervisor of those
-      departments took part in the run.
+      supervisors of the run's departments, or the admins when none of them may answer it (every online
+      supervisor of those departments took part in the run, or none is online).
     * answering (decision final, reason required, never by a participant of that run):
         approve  flagged row -> CP.Admin.approveFlagged (flag cleared, held cash released, XP)
                  voided row  -> voided = 0 (and flagged = 0), CP.Scoring.onRowApproved (XP back),
@@ -1525,6 +1570,7 @@ Test hooks: CP.Challenge._boot(), _weekIndex(season, ts), _weekWindow(season, n)
 ## Crimson-Police/modules/downed/client.lua
 
 ```text
+
 modules/downed/client.lua · CP.Downed (client): the NPC pick-up of a downed participant and the EMS
 request from their own client (docs/ARCHITECTURE.md §5.15, CRIMSON_ARENA rules 3 and 13).
 
@@ -1549,6 +1595,7 @@ the server removed our flag) and a toast.
 ## Crimson-Police/modules/downed/server.lua
 
 ```text
+
 modules/downed/server.lua · CP.Downed (server): Hard rule 18, downed participants
 (docs/ARCHITECTURE.md §5.15, SPEC "Downed participants", CRIMSON_ARENA rules 1 and 3).
 
@@ -1606,6 +1653,7 @@ last one and the run is still open 5 s later, this module ends it as failed (see
 ## Crimson-Police/modules/draw/server.lua
 
 ```text
+
 modules/draw/server.lua · CP.Draw: mission pools, the random draw, locations and the Mission Board.
 
 Owns
@@ -1660,6 +1708,7 @@ Contract interpretations (details in docs/notes/engine_a.md)
 ## Crimson-Police/modules/events/server.lua
 
 ```text
+
 modules/events/server.lua · CP.Events: Type of the Day, run modifiers and the Weekly Boss.
 
 Owns
@@ -1698,6 +1747,7 @@ Contract interpretations (details in docs/notes/engine_a.md)
 ## Crimson-Police/modules/goals/server.lua
 
 ```text
+
 modules/goals/server.lua · CP.Goals (server): personal daily and weekly goals.
 
 Owns
@@ -1722,6 +1772,7 @@ Both query the database: call them from a thread.
 ## Crimson-Police/modules/integrations/qbx/client.lua
 
 ```text
+
 modules/integrations/qbx/client.lua · CP.Qbx (client): the only client code that talks to qbx_core.
 
 Owns exports.qbx_core:GetPlayerData() and the qbx_core client events the tablet reacts to. These
@@ -1746,6 +1797,7 @@ Listeners run in their own thread; errors are caught and logged.
 ## Crimson-Police/modules/integrations/qbx/server.lua
 
 ```text
+
 modules/integrations/qbx/server.lua · CP.Qbx (server): the only server code that talks to qbx_core.
 
 Owns every exports.qbx_core call on the server and the qbx_core server events Crimson-Police
@@ -1797,6 +1849,7 @@ All functions may be called from any thread; none of them yields.
 ## Crimson-Police/modules/integrations/renewed_banking/server.lua
 
 ```text
+
 modules/integrations/renewed_banking/server.lua · CP.Banking: the only code that talks to Renewed-Banking.
 
 Owns exports['Renewed-Banking']:handleTransaction, removeAccountMoney, getAccountMoney and
@@ -1830,6 +1883,7 @@ issuer/receiver: never nil (nil becomes ''). transId: e.g. ('CP-%s-%s'):format(r
 ## Crimson-Police/modules/integrations/sc_ambulance/client.lua
 
 ```text
+
 modules/integrations/sc_ambulance/client.lua · CP.Ambulance (client): sc-ambulance's standard EMS
 request for a downed participant.
 
@@ -1848,6 +1902,7 @@ Public API (docs/ARCHITECTURE.md §5.1)
 ## Crimson-Police/modules/integrations/sc_ambulance/server.lua
 
 ```text
+
 modules/integrations/sc_ambulance/server.lua · CP.Ambulance (server): the only server code that
 talks to sc-ambulance.
 
@@ -1875,6 +1930,7 @@ Public API (docs/ARCHITECTURE.md §5.1)
 ## Crimson-Police/modules/integrations/sc_dispatch/server.lua
 
 ```text
+
 modules/integrations/sc_dispatch/server.lua · CP.Dispatch: the only code that talks to sc-dispatch.
 
 Owns: the read-only listeners on sc-dispatch's events, the read-only mdt_dispatch lookup,
@@ -1921,6 +1977,7 @@ Public API (docs/ARCHITECTURE.md §5.1)
 ## Crimson-Police/modules/leaderboard/server.lua
 
 ```text
+
 modules/leaderboard/server.lua · CP.Leaderboard (server): the four time-boxed boards, their cache,
 the weekly/monthly recognition, public and own profiles, the hide-name privacy toggle and the admin
 board view (cash paid per officer, payments stuck in paying).
@@ -1949,7 +2006,8 @@ Board rules (SPEC "Leaderboards")
 
 Public API (docs/ARCHITECTURE.md §5.22)
   callback getBoard({ period, filter, department? }) -> Board (§9.4) plus
-      { department?, minRuns, topN, ranked, window = { from, to|nil }, season = { id, name }|nil }
+      { department?, minRuns, topN, ranked, window = { from, to|nil, fromDate, toDate|nil }, season = { id, name }|nil }
+      fromDate/toDate = 'YYYY-MM-DD' in server time; the tablet shows these, never from/to in the player's time zone
       me = the viewer's row; rank 0 when they do not have minRuns completed runs yet (never nil for
       an officer). errKeys: the CP.Access.getOfficer keys, err.invalid_period, err.invalid_filter,
       err.unknown_department, err.invalid_payload
@@ -1984,6 +2042,7 @@ Test hooks: CP.Leaderboard._weeklyJob(prevStartTs, curStartTs), CP.Leaderboard._
 ## Crimson-Police/modules/migrations/server.lua
 
 ```text
+
 modules/migrations/server.lua · applies sql/migrations/NNN_*.sql in order on start.
 
 Every other module calls CP.Migrations.ready() before its first query: it blocks the
@@ -1995,6 +2054,7 @@ half-upgraded database.
 ## Crimson-Police/modules/missions/client.lua
 
 ```text
+
 modules/missions/client.lua · CP.Missions (client): the mission definitions sent by the server.
 
 Owns the client copy of every mission definition. The server sends the full list with
@@ -2011,6 +2071,7 @@ Events: crimson-police:client:missions (list)
 ## Crimson-Police/modules/missions/server.lua
 
 ```text
+
 modules/missions/server.lua · CP.Missions: the mission registry (loader, normaliser, validator).
 
 Owns
@@ -2066,6 +2127,7 @@ Contract interpretations (details in docs/notes/engine_a.md)
 ## Crimson-Police/modules/npc/client.lua
 
 ```text
+
  modules/npc/client.lua · CP.Npc (client): host-side NPC AI helpers and "Cuff suspect".
 
   What this module owns (docs/ARCHITECTURE.md §5.11, §6.1, §6.2, §0.14)
@@ -2145,6 +2207,7 @@ Contract interpretations (details in docs/notes/engine_a.md)
 ## Crimson-Police/modules/npc/server.lua
 
 ```text
+
  modules/npc/server.lua · CP.Npc (server): the authoritative state machine of mission NPCs.
 
   What this module owns (docs/ARCHITECTURE.md §5.11, §6.1, §6.2)
@@ -2226,6 +2289,7 @@ Contract interpretations (details in docs/notes/engine_a.md)
 ## Crimson-Police/modules/operations/client.lua
 
 ```text
+
 modules/operations/client.lua · CP.Operations (client): the Cross-Department Mission toast.
 
 The server (modules/operations/server.lua) sends crimson-police:client:operation to every on-duty
@@ -2242,6 +2306,7 @@ Events handled: crimson-police:client:operation (state, missionLabel, extra = { 
 ## Crimson-Police/modules/operations/server.lua
 
 ```text
+
 modules/operations/server.lua · CP.Operations (server): Cross-Department Missions.
 
 Owns: the one active Cross-Department Mission ("operation"), the board lock for every department
@@ -2316,6 +2381,7 @@ to every department member online (and 'operation' to online admins).
 ## Crimson-Police/modules/payouts/server.lua
 
 ```text
+
 modules/payouts/server.lua · CP.Payouts (server): editable base cash payouts per mission type and per
 mission, the supervisor limits and the Payouts screens of the Supervisor UI and the Admin UI.
 
@@ -2361,6 +2427,7 @@ Every function that reads the tables may yield on the first call (cache load): c
 ## Crimson-Police/modules/permissions/server.lua
 
 ```text
+
 modules/permissions/server.lua · CP.Permissions: the one place that decides whether a role may do
 an action. Every sup:* / admin:* handler (and every builder/test action) asks can() first.
 
@@ -2395,6 +2462,7 @@ can, actionsFor, tookPart and canReviewRun may yield (database): call them from 
 ## Crimson-Police/modules/route/client.lua
 
 ```text
+
 modules/route/client.lua · CP.Route (client): the GPS route to the mission start and the reports the
 server checks (docs/ARCHITECTURE.md §5.12, SPEC "Route to the start").
 
@@ -2430,6 +2498,7 @@ client:start (fallback begin) and client:runEnded (fallback stop).
 ## Crimson-Police/modules/route/server.lua
 
 ```text
+
 modules/route/server.lua · CP.Route (server): Hard rule 17, the route to the mission start
 (docs/ARCHITECTURE.md §5.12, SPEC "Route to the start", CRIMSON_ARENA rules 5 and 6).
 
@@ -2476,6 +2545,7 @@ where the officer is).
 ## Crimson-Police/modules/runs/client.lua
 
 ```text
+
  modules/runs/client.lua · CP.Runs (client): this player's side of the run engine.
 
   Owns
@@ -2520,6 +2590,7 @@ where the officer is).
 ## Crimson-Police/modules/runs/server.lua
 
 ```text
+
  modules/runs/server.lua · CP.Runs (server): the run engine.
 
   Owns
@@ -2626,6 +2697,7 @@ where the officer is).
 ## Crimson-Police/modules/scaling/server.lua
 
 ```text
+
 modules/scaling/server.lua · CP.Scaling: tiers by participant count and scaled mission counts.
 
 Owns the reading of Config.Scaling (the tier table), the scaled copy of a mission's objectives
@@ -2656,6 +2728,7 @@ armour above 100 (NPC armour may exceed it at Critical + Armored Hostiles); unkn
 ## Crimson-Police/modules/schedule/server.lua
 
 ```text
+
 modules/schedule/server.lua · CP.Schedule: server-time calendar, reset boundaries and the retention job.
 
 Owns
@@ -2691,6 +2764,7 @@ delays them; a clock that moves back to an earlier day fires nothing.
 ## Crimson-Police/modules/scoring/server.lua
 
 ```text
+
 modules/scoring/server.lua · CP.Scoring (server): points, streaks, XP, XP levels, badges, manual awards
 and the officer Home screen.
 
@@ -2742,6 +2816,7 @@ compute, streak, the hooks, manualAward and badges query the database: call them
 ## Crimson-Police/modules/storage/memsql.lua
 
 ```text
+
 modules/storage/memsql.lua · CP.Storage.MemSQL: the SQL engine and the saves folder behind "database off"
 (Config.Database.enabled = false). fxmanifest loads it before every other server module; it only
 defines functions. modules/storage/server.lua decides whether it is used.
@@ -2849,6 +2924,7 @@ unsupported); integer literals beyond BIGINT (read as DOUBLE here); subnormal do
 ## Crimson-Police/modules/storage/server.lua
 
 ```text
+
 modules/storage/server.lua · CP.Storage: where Crimson-Police keeps its data (Config.Database).
 
   Config.Database.enabled = true   MySQL/MariaDB through oxmysql, exactly as before (nothing here runs).
@@ -2879,6 +2955,7 @@ names another one.
 ## Crimson-Police/modules/tablet/client.lua
 
 ```text
+
 modules/tablet/client.lua · CP.Tablet (client): the NUI. The only file that calls SendNUIMessage.
 
 Owns: /CrimsonPolice (Config.Tablet.command), the key mapping crimsonpolice_tablet (default key
@@ -2953,6 +3030,7 @@ Using the item opens the Officer UI with the same server checks as the command.
 ## Crimson-Police/modules/tablet/server.lua
 
 ```text
+
 modules/tablet/server.lua · CP.Tablet (server): sessions for the three UIs, toasts, live pushes,
 the Admin UI opener and the department logo checks.
 
@@ -2992,15 +3070,17 @@ file, and that department's session carries no logo (no broken image in the NUI)
 ## Crimson-Police/modules/testing/client.lua
 
 ```text
+
  modules/testing/client.lua · CP.Testing (client): the test-control panel, the debug overlay drawing
   and the test invitation prompt.
 
   Owns
-    * the key mapping +crimsonpolice_testpanel (default F9, rebindable in GTA settings). For the admin who
-      started the active test it gives NUI focus to the HUD test-control panel (hud/TestControls.tsx); with
-      no controls it opens the test invitation prompt (hud/DebugOverlay.tsx) when invitations are waiting.
+    * the key mapping +crimsonpolice_testpanel (default F7, rebindable in GTA settings; F9 is sc-multijob's).
+      For the admin who started the active test it gives NUI focus to the HUD test-control panel
+      (hud/TestControls.tsx); with no controls it opens the test invitation prompt (hud/DebugOverlay.tsx) when invitations are waiting,
+      and with nothing to open it does nothing (no server call, no toast).
       NUI focus is taken only while the panel/prompt is open and only when no Crimson-Police UI is open, and
-      it is released on close, Escape/F9 (the NUI calls the client action testPanel), when the test ends,
+      it is released on close, Escape/the key (the NUI calls the client action testPanel), when the test ends,
       on a foreign crimsonArena value and on resource stop. It is never released unconditionally.
     * the HUD flag testControls (CP.Tablet.hud({ testControls = true })) re-asserted for the admin's run
       (CP.Runs client sets it at client:start; this module only patches a HUD that belongs to that run)
@@ -3026,6 +3106,7 @@ file, and that department's session carries no logo (no broken image in the NUI)
 ## Crimson-Police/modules/testing/server.lua
 
 ```text
+
  modules/testing/server.lua · CP.Testing (server): Admin test mode.
 
   Owns
@@ -3054,7 +3135,7 @@ file, and that department's session carries no logo (no broken image in the NUI)
     CP.Testing.startDraft(src, def, opts) -> ok, data|errKey, reason
         Mission Builder test of a draft (test.draft = true). def = the draft in mission-file units (what
         CP.Missions.normalize accepts; normalised here). opts = { tier, location, useStartRoute, testers }.
-        The recorded result goes to CP.Builder.onDraftTested(missionId, version, tierName, passed, src).
+        The recorded result goes to CP.Builder.onDraftTested(missionId, version, tierName, passed, src, defHash).
     CP.Testing.command(src, args) -> ok, data|errKey
         /CrimsonPoliceAdmin test <missionId> [tier] [location] (args = the words after 'test'; tier and
         location in either order); testers = the accepted invitations for that mission.
@@ -3091,6 +3172,7 @@ file, and that department's session carries no logo (no broken image in the NUI)
 ## Crimson-Police/modules/units/client.lua
 
 ```text
+
 modules/units/client.lua · CP.Units (client): the invite cue.
 
 Units live on the server (modules/units/server.lua). The Unit screen (NUI) lists members, invites
@@ -3109,6 +3191,7 @@ to the NUI itself, this handler never touches the NUI).
 ## Crimson-Police/modules/units/server.lua
 
 ```text
+
 modules/units/server.lua · CP.Units (server): units of 2-4 officers from any department.
 
 Owns: unit membership (in memory only; nothing is stored), invites and their expiry, the unit
@@ -3165,6 +3248,7 @@ run is unlocked by the 2 s sweep (covers an engine that never called unlock).
 ## Crimson-Police/shared/init.lua
 
 ```text
+
 shared/init.lua · the CP namespace, logging, the block registry and RegisterMission().
 Loaded on both sides before every module. Only definitions live here: nothing in this
 file calls another module.
@@ -3173,6 +3257,7 @@ file calls another module.
 ## Crimson-Police/shared/locale.lua
 
 ```text
+
 shared/locale.lua · loads locales/<Config.Locale>.json (falls back to en.json).
 All player-facing text lives in locales/en.json as a flat map of dotted keys, e.g.
   "board.server_busy": "Server busy"
@@ -3182,6 +3267,7 @@ Placeholders use {name}: CP.L('run.ended_real_call') / CP.L('cash.paid', { amoun
 ## Crimson-Police/shared/net.lua
 
 ```text
+
 shared/net.lua · the request/action plumbing between the NUI, the client and the server.
 
 Two kinds of server entry points, both registered through CP.Net so every one gets
@@ -3195,7 +3281,7 @@ rate limiting, error handling and a uniform reply shape { ok, data, error }:
          ok (boolean) and data (on success) or an error locale key (on failure).
          When the client passed a reqId it receives 'crimson-police:client:actionResult'.
 
-On the client, CP.Net.request(name, args) and CP.Net.action(name, payload) call them and
+On the client, CP.Net.request(name, args, timeoutMs) and CP.Net.action(name, payload, timeoutMs) call them and
 wait for the reply; the tablet's NUI bridge (modules/tablet/client.lua) forwards the UI's
 'request' and 'action' NUI callbacks to these two functions.
 ```
@@ -3203,6 +3289,7 @@ wait for the reply; the tablet's NUI bridge (modules/tablet/client.lua) forwards
 ## Crimson-Police/web/build-stamp.mjs
 
 ```text
+
 Writes dist/build-stamp.json after `vite build`: a sha256 over every input of the NUI bundle
 (web/src/**, web/index.html, the build config and locales/parts/*.json: ui.json is the fallback text and
 src/mocks/samples.ts bundles every part). tools/check_contracts.py recomputes the same hash and fails when
@@ -3213,6 +3300,7 @@ algorithms identical: files sorted by their path relative to Crimson-Police/ (po
 ## Crimson-Police/web/src/admin/screens/Audit.tsx
 
 ```text
+
 Admin UI · Audit Log (screen key 'admin_audit').
 Every supervisor and admin action (cp_audit), newest first, filterable by category, action, actor and
 date range, 50 per page. Export shows the filtered rows as CSV in a dialog with a copy button.
@@ -3222,6 +3310,7 @@ Data: callbacks admin:getAudit { category, action, actor, from, to, page } and a
 ## Crimson-Police/web/src/admin/screens/Departments.tsx
 
 ```text
+
 Admin UI · Departments (screen key 'admin_departments').
 Each department in Config.Departments: name, tag, jobs, colours, logo thumbnail (hidden when it fails to
 load), member count, officers on duty and the society balance (only when Config.Cash.source = 'society').
@@ -3232,6 +3321,7 @@ Data: callback admin:getDepartments (modules/admin).
 ## Crimson-Police/web/src/admin/screens/Leaderboards.tsx
 
 ```text
+
 Admin UI · Leaderboards (screen key 'admin_leaderboards', callback admin:getBoards).
 Every board and period with the full ranked list (real names, hidden-name marker, cash paid per officer),
 officers still below the minimum, and the payments left in 'paying' after a crash (with the
@@ -3246,6 +3336,7 @@ a required reason -> server:admin:reviewFlagged { rowId, decision: 'approve'|'vo
 ## Crimson-Police/web/src/admin/screens/Missions.tsx
 
 ```text
+
 Admin UI · Missions (screen key 'admin_missions', title key 'ui.screen.admin_missions').
 
 Tabs
@@ -3266,6 +3357,7 @@ restore / rollback / breakLock / duplicate, server:admin:reloadMissions (summary
 ## Crimson-Police/web/src/admin/screens/Officers.tsx
 
 ```text
+
 Admin UI · Officers (screen key 'admin_officers').
 Search any officer (name, callsign or citizen id); the record shows rank, callsign, department, XP level,
 badges, cash earned, recent runs, the Crimson-Police suspension and their disputes (failed runs; flagged
@@ -3283,6 +3375,7 @@ modules/disputes).
 ## Crimson-Police/web/src/admin/screens/Payouts.tsx
 
 ```text
+
 Admin UI · Payouts (screen key 'admin_payouts', title key 'ui.screen.admin_payouts').
 Tabs Types / Missions: every mission type and every mission with its base payout and where it comes
 from; admin payouts are marked "Admin · permanent". Set (NumberInput within Config.Cash limits + reason,
@@ -3295,6 +3388,7 @@ writes: 'server:admin:setTypePayout' { type, amount|null, reason, clear } and
 ## Crimson-Police/web/src/admin/screens/Permissions.tsx
 
 ```text
+
 Admin UI · Permissions (screen key 'admin_permissions').
 A read-only view of Config.Permissions: which supervisor actions are switched on, the actions supervisors
 always have, and the actions that are always admin-only. Changes are made in config/config.lua.
@@ -3304,6 +3398,7 @@ Data: callback admin:getPermissions (modules/admin).
 ## Crimson-Police/web/src/admin/screens/Seasons.tsx
 
 ```text
+
 Admin UI · Seasons & Challenge (screen key 'admin_seasons', callback admin:getSeasons, actions
 server:admin:startSeason { name }, server:admin:endSeason, server:admin:overrideBounty { objective }).
 Current season card, department standings, this week's bounty with the override select, bounty history
@@ -3314,6 +3409,7 @@ overriding ask for confirmation.
 ## Crimson-Police/web/src/admin/screens/Testing.tsx
 
 ```text
+
 Admin UI · Testing (screen key 'admin_testing'). SPEC "Admin test mode".
 
 Data: request 'admin:getTests' (TestsView: every mission × location with its last result),
@@ -3330,6 +3426,7 @@ Flow: invite first, then Start — the start dialog invites testers, shows who a
 ## Crimson-Police/web/src/builder/BlockPanels.tsx
 
 ```text
+
 src/builder/BlockPanels.tsx · one settings panel per objective block (SPEC "Mission Builder → Block settings"),
 generated from the builder:config ranges (config/blocks.lua): every number shows its min, max and default and
 refuses values outside them; selects offer only the allowed lists (Config.Builder.allowed); chances are whole
@@ -3339,6 +3436,7 @@ percent and progress times seconds (builder units, protocol §1.1). Field paths 
 ## Crimson-Police/web/src/builder/BuilderEditor.tsx
 
 ```text
+
 src/builder/BuilderEditor.tsx · the Mission Builder editor for one mission: header (name, lifecycle, version,
 autosave state, running armed-NPC total vs Config.Builder.maxHostiles, Save / Close), the edit lock banner
 (who holds it and until when; Break lock when allowed), the step bar New mission → Details → Block settings →
@@ -3348,6 +3446,7 @@ Locations → Scaling → Test → Publish with error counts per step, and the s
 ## Crimson-Police/web/src/builder/LocationMap.tsx
 
 ```text
+
 src/builder/LocationMap.tsx · a schematic map (SVG, north up, metres) of one location: the start and its radius,
 the spawn keep-out circle (Config.Builder.minSpawnFromStart), every placed point per key, recorded routes with
 stop points, waypoints a test drive did not reach, waypoints with no road path and rejected "off road" samples,
@@ -3357,6 +3456,7 @@ and the no-build zones nearby. No map tiles: the NUI must work offline.
 ## Crimson-Police/web/src/builder/MissionList.tsx
 
 ```text
+
 src/builder/MissionList.tsx · the Mission Builder's mission list: drafts, tested drafts, published and archived
 custom missions (builder:list) with status, version, owner and edit lock, plus the built-ins to duplicate.
 Actions (server:builder:*): create, duplicate, archive, restore, rollback, breakLock, discardDraft — each gated
@@ -3367,6 +3467,7 @@ from the server; destructive ones ask for confirmation.
 ## Crimson-Police/web/src/builder/applyResult.ts
 
 ```text
+
 src/builder/applyResult.ts · writes a builder client result (docs/notes/builder_protocol.md §6) into the
 draft: placed points into definition.locations[location - 1][key] (a single vector for single-point keys,
 a list otherwise, one more list for flee paths, { coords, radius } for the start), a recorded road route
@@ -3377,6 +3478,7 @@ that the Locations step shows but the definition never stores.
 ## Crimson-Police/web/src/builder/index.ts
 
 ```text
+
 src/builder · the Mission Builder component library (Supervisor UI → Mission Builder, Admin UI → Missions).
   BuilderWorkspace  mission list + editor (the whole builder)
   MissionList       drafts, tested, published and archived custom missions with status, version and lock
@@ -3387,6 +3489,7 @@ Protocol: docs/notes/builder_protocol.md · notes: docs/notes/builder_client.md.
 ## Crimson-Police/web/src/builder/schema.ts
 
 ```text
+
 src/builder/schema.ts · the Mission Builder's knowledge of the nine objective blocks: defaults of a new
 objective in builder units (from builder:config = config/blocks.lua), the location keys each objective needs
 and how they are placed (mirrors every block's requiredPoints and strict location checks), the armed NPC
@@ -3397,6 +3500,7 @@ Field names follow ARCHITECTURE §3.3 and the "Objective fields read" headers of
 ## Crimson-Police/web/src/builder/steps/StepDetails.tsx
 
 ```text
+
 src/builder/steps/StepDetails.tsx · "Details": name, description, mission type (required), difficulty stars,
 min/max officers, time limit, start timeout, cooldown, "Available to" departments (none = every department),
 the vehicle-damage penalties toggle with its suggestion, optional items and the standard bonuses and
@@ -3406,6 +3510,7 @@ penalties (Config.Bonuses) with their caps. There is no payout field.
 ## Crimson-Police/web/src/builder/steps/StepLocations.tsx
 
 ```text
+
 src/builder/steps/StepLocations.tsx · "Locations": at least Config.Builder.minLocations locations, each with
 its start and every point its objectives need. "Place in world" starts the placement tool (client action
 builderPlace: the tablet closes, the points come back when Enter is pressed); road routes are recorded by
@@ -3416,6 +3521,7 @@ reach for re-recording. The map shows everything placed; the route checks mirror
 ## Crimson-Police/web/src/builder/steps/StepPublish.tsx
 
 ```text
+
 src/builder/steps/StepPublish.tsx · "Publish": enabled only when the draft passes every guardrail
 (server:builder:validate with the publish checks), has a passed test at the required tier (draft_tested),
 the editor holds the lock and may publish. Publishing writes missions/custom/<id>.lua (the previous file is
@@ -3425,6 +3531,7 @@ kept as a .bak) and the mission joins its type's pool at once. Discarding a draf
 ## Crimson-Police/web/src/builder/steps/StepTest.tsx
 
 ```text
+
 src/builder/steps/StepTest.tsx · "Test": a private test run of the stored draft at any tier and location, in
 the same test mode admins use (server:builder:test → CP.Testing.startDraft; nothing is saved or paid). The
 tier defaults to the one maxOfficers reaches, which publishing needs a pass at (draft_tested). When the run
@@ -3434,6 +3541,7 @@ ends, the tester records Passed or Failed here (server:test:record → CP.Builde
 ## Crimson-Police/web/src/builder/store.ts
 
 ```text
+
 src/builder/store.ts · module-level memory of the Mission Builder.
 
 A placement, route recording or test drive closes the tablet (modules/builder/client.lua), which unmounts
@@ -3447,6 +3555,7 @@ closed; the editor also pulls the Lua copy with the client action builderResult 
 ## Crimson-Police/web/src/builder/useBuilderConfig.ts
 
 ```text
+
 src/builder/useBuilderConfig.ts · builder:config (Config.Blocks ranges, allowed lists, limits and the
 caller's builder permissions), fetched once per open UI and shared by every builder component.
 Lua sends an empty list as {} (and drops nil fields), so every list of the config is normalised to an array
@@ -3456,6 +3565,7 @@ here once; the components can then use the lists directly.
 ## Crimson-Police/web/src/builder/useDraftEditor.ts
 
 ```text
+
 src/builder/useDraftEditor.ts · one open mission in the Mission Builder (docs/notes/builder_protocol.md §2–§6).
 
   builder:get { id }            → the record; an editable custom mission is locked with server:builder:lock
@@ -3472,6 +3582,7 @@ The unsaved draft is kept in the module store (store.ts), so closing the tablet 
 ## Crimson-Police/web/src/hud/BuilderOverlay.tsx
 
 ```text
+
 Mission Builder in-world overlays: the placement tool, route recording and test drive HUDs.
 
 Props: { overlay } — the `overlay` message payload whose kind is 'placement' | 'recording' | 'testdrive',
@@ -3489,6 +3600,7 @@ focus (the keys are game controls read by the Lua tool), so this panel is displa
 ## Crimson-Police/web/src/hud/DebugOverlay.tsx
 
 ```text
+
 Test-mode overlay layer: the debug overlay (live NPC/entity counts against the caps) and the test
 invitation prompt.
 
@@ -3500,15 +3612,25 @@ Props: { debug, hud }
 Rendered by App at all times (outside the tablet, no NUI focus); returns null when there is nothing to show.
 The in-world markers (spawn points, zones, route waypoints, start radius) are drawn by the Lua testing
 client; this panel shows the numbers.
-Invitation prompt: when the Lua testing client opens it (F9 with invitations waiting) it gives NUI focus
+Invitation prompt: when the Lua testing client opens it (the panel key with invitations waiting) it gives NUI focus
 and pushes 'test' { prompt: { invites } }; Accept/Decline call action server:testRespond { inviteId, accepted },
 Escape / Close release the focus (client action testPanel { open: false }). Escape also releases a focus
 the Lua client holds for the HUD panel while no panel is on screen (safety net).
 ```
 
+## Crimson-Police/web/src/hud/Hud.tsx
+
+```text
+The mission HUD (ARCHITECTURE §9.3): shown at the right edge while hud is set, without NUI focus.
+The timer and the off-route countdown count down locally; they restart only when Lua sends a new
+value (Lua sends the full merged state on every patch, so an unchanged value keeps counting), and
+count from the time that value arrived (normalizeHud), so a remount does not replay elapsed time.
+```
+
 ## Crimson-Police/web/src/hud/HudColumn.tsx
 
 ```text
+
 The right-edge column that holds the mission HUD and the result card (no NUI focus).
 Centred vertically and scaled with the viewport (useHudScale), but never taller than the screen:
 when the HUD and a long result card are shown together (or on 720p) the column scales down to fit,
@@ -3518,12 +3640,14 @@ since the player cannot scroll a HUD without focus.
 ## Crimson-Police/web/src/hud/TestControls.tsx
 
 ```text
+
 HUD test controls (Admin test mode, SPEC "Test controls").
 
 Props: { hud: HudState } — rendered by <Hud/> under the objectives only when hud.testControls is true
 (the admin who started the test). The HUD has no NUI focus by default: the Lua testing client
-(modules/testing/client.lua) gives focus with the +crimsonpolice_testpanel key (default F9) and tells
-this panel through push 'test' { focused, key, debugOn } (TestPush). While focused, F9 or Escape
+(modules/testing/client.lua) gives focus with the +crimsonpolice_testpanel key (default F7) and tells
+this panel through push 'test' { focused, key, debugOn } (TestPush), kept at module level so a panel that
+mounts again shows the last values at once. While focused, that key or Escape
 releases the cursor (client action testPanel { open: false }).
 The same push carries Config.Testing's allowTeleport / debugOverlay: those buttons are disabled when off.
 Buttons call client actions of the Lua testing client:
@@ -3536,6 +3660,7 @@ Text keys: locales/parts/testing.json (test.*).
 ## Crimson-Police/web/src/mocks/DevPanel.tsx
 
 ```text
+
 Browser dev mode only (App lazy-loads this file when isEnvBrowser(); it never runs in FiveM).
 Fakes the Lua side: opens the three UIs, sends HUD states, results, toasts and overlays.
 URL params for quick checks: ?ui=officer|supervisor|admin &dept=sast|fib|bcso &screen=<key>
@@ -3546,6 +3671,7 @@ Dev tool text is English on purpose: it is never shown to players.
 ## Crimson-Police/web/src/mocks/boards.mock.ts
 
 ```text
+
 Browser mocks for the boards slice (Leaderboard, Department Challenge, Profile & History, Admin Seasons &
 Challenge, Admin Leaderboards, Supervisor Department Report). Shapes follow modules/leaderboard and
 modules/challenge (see their header comments and src/types/boards.ts). Actions keep a little state so
@@ -3557,6 +3683,7 @@ fallbacks so their owners' mocks win.
 ## Crimson-Police/web/src/mocks/builder_client.mock.ts
 
 ```text
+
 Browser mocks for the builder client slice (modules/builder/client.lua and the builder screens).
 
 Client actions builderPlace / builderRecord / builderTestDrive play the whole in-game flow: the reply is
@@ -3578,6 +3705,7 @@ URL shortcuts (dev only):
 ## Crimson-Police/web/src/mocks/builder_server.mock.ts
 
 ```text
+
 Browser mocks for the Mission Builder server (modules/builder/server.lua, docs/notes/builder_protocol.md):
 callbacks builder:list / builder:get / builder:config and every server:builder:* action, with an
 in-memory store so create → save → test → publish → archive → restore → rollback can be clicked
@@ -3592,6 +3720,7 @@ starts with no custom missions at all.
 ## Crimson-Police/web/src/mocks/economy.mock.ts
 
 ```text
+
 Browser-mode mocks for the economy slice: getHome, sup:getPayouts, admin:getPayouts and the three
 payout actions. State is kept in memory so a change on one screen shows on the others.
 URL switch for screenshots: ?economy=empty (no goals / no Type of the Day / no announcements, a fresh
@@ -3603,6 +3732,7 @@ config multiplier of 1.5) or ?economy=error (every economy request fails with er
 ## Crimson-Police/web/src/mocks/index.ts
 
 ```text
+
 src/mocks/index.ts · browser dev mode only (main.tsx imports this only when isEnvBrowser()).
 Eagerly loads every src/mocks/*.mock.ts, so a feature adds mocks by dropping in <feature>.mock.ts:
   import { registerMock } from '../shared/nui';
@@ -3613,6 +3743,7 @@ Eagerly loads every src/mocks/*.mock.ts, so a feature adds mocks by dropping in 
 ## Crimson-Police/web/src/mocks/run_ui.mock.ts
 
 ```text
+
 Browser mocks of the run_ui slice (Mission Board + Active Mission): getMissionTypes, getRun (overrides
 core.mock.ts's fallback), server:acceptType, server:joinOperation, server:abandon and the client actions
 setGps, recalcRoute and logResult. Lua side effects are faked the way the game does them: 'board' /
@@ -3633,6 +3764,7 @@ objectives advance every few seconds → completed (result card). Abandon puts t
 ## Crimson-Police/web/src/mocks/teams.mock.ts
 
 ```text
+
 Browser mocks of the teams slice: getUnit + unit actions, sup:getOperation + operation actions.
 URL variants for screenshots and checks:
   ?teams=leader (default) | member | solo | invites | locked | lockedoff | long | full   the Unit screen
@@ -3643,10 +3775,11 @@ URL variants for screenshots and checks:
 ## Crimson-Police/web/src/mocks/testing.mock.ts
 
 ```text
+
 Browser mocks for Admin test mode (admin/screens/Testing.tsx, hud/TestControls.tsx, hud/DebugOverlay.tsx).
 URL shortcuts (with ?ui=admin&screen=admin_testing for the screen, ?hud=test for the HUD):
   testactive=1  a running test of mine        testdebug=1  debug overlay data (push 'test')
-  testfocus=1   the HUD panel has NUI focus   testprompt=1 the F9 invitation prompt
+  testfocus=1   the HUD panel has NUI focus   testprompt=1 the invitation prompt
   testinvite=0  no invitation banner for me    testempty=1  an empty test log (everything "Not tested")
   testlong=1    edge cases: very long mission/location/player names and notes, a mission without locations
   testlua=1     Lua-shaped replies: empty lists sent as {} objects, false for missing values
@@ -3655,6 +3788,7 @@ URL shortcuts (with ?ui=admin&screen=admin_testing for the screen, ?hud=test for
 ## Crimson-Police/web/src/officer/screens/ActiveMission.tsx
 
 ```text
+
 Officer UI · Active Mission (screen key 'active', title key 'ui.screen.active') · run_ui slice.
 
 The officer's current run: mission label and description (revealed only now, after the accept), state
@@ -3676,6 +3810,7 @@ Text:    locales/parts/run_ui.json (run.*), plus the foundation's hud.* / common
 ## Crimson-Police/web/src/officer/screens/Challenge.tsx
 
 ```text
+
 Officer UI · Department Challenge (screen key 'challenge', callbacks getChallenge + getDeptContributors).
 One score bar per department in its own theme colour, the season and weeks left, this week's bounty with
 the department currently leading it, and the viewer's department's top 5 contributors. Tapping a
@@ -3686,6 +3821,7 @@ screen and the Supervisor Department Report.
 ## Crimson-Police/web/src/officer/screens/Home.tsx
 
 ```text
+
 Officer UI · Home (screen key 'home', title key 'ui.screen.home').
 Officer card (callsign, rank, department tag, XP level badge and XP bar, streak with this week's grace
 day, season points, cash earned this week), today's and this week's goal, the Type of the Day in the
@@ -3697,6 +3833,7 @@ with no data) and every minute.
 ## Crimson-Police/web/src/officer/screens/Leaderboard.tsx
 
 ```text
+
 Officer UI · Leaderboard (screen key 'leaderboard', callback getBoard).
 Tabs Weekly · Monthly · Season · All-time, filter chips (Overall, the mission types, Unit, Cross-Department,
 Department + department select), the top 25 with medals for 1–3 and the viewer's own row pinned at the
@@ -3707,6 +3844,7 @@ Cash is never shown here. All-time ranks lifetime XP with the Overall filter onl
 ## Crimson-Police/web/src/officer/screens/MissionBoard.tsx
 
 ```text
+
 Officer UI · Mission Board (screen key 'board', title key 'ui.screen.board') · run_ui slice.
 
 One card per mission type (label, points, cash per officer as a range "$1,040–$1,300", missions in the
@@ -3727,6 +3865,7 @@ Text:    locales/parts/run_ui.json (board.*); locked reasons arrive translated f
 ## Crimson-Police/web/src/officer/screens/Profile.tsx
 
 ```text
+
 Officer UI · Profile & History (screen key 'profile', callback getProfile, actions server:setHideName and
 server:dispute). Own profile by default; navigate('profile', { citizenid }) opens someone's public
 profile (no cash, no cash breakdown, no toggle, no disputes). Shows the XP level badge and bar, badges,
@@ -3738,6 +3877,7 @@ be disputed (reason required).
 ## Crimson-Police/web/src/officer/screens/Unit.tsx
 
 ```text
+
 Officer UI · Unit (screen key 'unit', title key 'ui.screen.unit').
 The officer's unit (members with department tag, rank and callsign, the leader marked), invites
 waiting for them (Accept / Decline), an invite picker of on-duty officers from any department, and
@@ -3751,6 +3891,7 @@ accepts a mission type and stay closed while the unit's run is active.
 ## Crimson-Police/web/src/shared/hooks.ts
 
 ```text
+
 src/shared/hooks.ts · data hooks for screens.
 
   const { data, loading, error, refetch } = useRequest<Board>('getBoard', { period, filter }, { pushTopic: 'board' });
@@ -3762,6 +3903,7 @@ src/shared/hooks.ts · data hooks for screens.
 ## Crimson-Police/web/src/shared/i18n.tsx
 
 ```text
+
 src/shared/i18n.tsx · UI text (docs/ARCHITECTURE.md §10).
 
 Text comes from session.locale (CP.Locale.all(), i.e. locales/en.json). Keys are flat and dotted;
@@ -3775,6 +3917,7 @@ result card and toasts stay readable even before the first session arrives. Sess
 ## Crimson-Police/web/src/shared/navigation.tsx
 
 ```text
+
 src/shared/navigation.tsx · the state-based screen switch (no router).
   const navigate = useNavigate();  navigate('board');
   navigate('profile', { citizenid: row.citizenid });   const { params } = useNavigation();
@@ -3784,6 +3927,7 @@ Keys outside the open UI (or hidden by permissions) are ignored with a console w
 ## Crimson-Police/web/src/shared/nui.ts
 
 ```text
+
 src/shared/nui.ts · the NUI bridge (docs/ARCHITECTURE.md §9.1).
 
   Lua → NUI: window 'message' events whose data.type is one of
@@ -3799,6 +3943,7 @@ messages. Every call resolves (never rejects) to { ok, data?, error? } where err
 ## Crimson-Police/web/src/shared/session.tsx
 
 ```text
+
 src/shared/session.tsx · the open UI's session (ARCHITECTURE §9.2) and tablet controls.
   const session = useSession();            // Session (inside Officer/Supervisor/Admin UIs)
   const can = useCan(); can('forceRecall') // session.actions contains it
@@ -3808,6 +3953,7 @@ src/shared/session.tsx · the open UI's session (ARCHITECTURE §9.2) and tablet 
 ## Crimson-Police/web/src/shared/theme.ts
 
 ```text
+
 src/shared/theme.ts · department theming (SPEC "Departments & tablet theming").
 
 applyTheme(el, theme) writes these CSS variables on `el` (everything inside inherits them):
@@ -3825,6 +3971,7 @@ default (text falls back to the best contrast for the background, as CP.U.contra
 ## Crimson-Police/web/src/supervisor/components/OperationPanel.tsx
 
 ```text
+
 Supervisor/Admin UI · OperationPanel: the active Cross-Department Mission and its controls.
 
   import OperationPanel from '../../supervisor/components/OperationPanel';
@@ -3842,6 +3989,7 @@ officers; never the Weekly Boss) with the server-wide launch cooldown.
 ## Crimson-Police/web/src/supervisor/screens/Builder.tsx
 
 ```text
+
 Supervisor UI · Mission Builder (screen key 'sup_builder', title key 'ui.screen.sup_builder').
 The supervisor's drafts plus the published and archived custom missions (builder:list), and the step editor
 (src/builder). Actions follow session.actions: builderEdit (build, record routes, test their own missions),
@@ -3853,6 +4001,7 @@ drives close the tablet (modules/builder/client.lua) and reopen it here when the
 ## Crimson-Police/web/src/supervisor/screens/CrossDept.tsx
 
 ```text
+
 Supervisor UI · Cross-Department Mission (screen key 'sup_crossdept', title key 'ui.screen.sup_crossdept').
 The active operation (mission, launcher, joined participants by department, tier, status) with Start now,
 Relaunch after a fail and Cancel, or the launch form when none is active. Everything lives in the
@@ -3863,6 +4012,7 @@ actions server:sup:op*. Visible with the launchCrossDept permission (screen regi
 ## Crimson-Police/web/src/supervisor/screens/DeptReport.tsx
 
 ```text
+
 Supervisor UI · Department Report (screen key 'sup_report', callbacks sup:getDeptReport and
 sup:getOfficerActivity). The department's challenge standing, this week's bounty, and every officer
 of the department who played this week (runs, completed, points, cash, last run); tapping an officer
@@ -3872,6 +4022,7 @@ opens their runs of this week. Supervisors only see their own department (the se
 ## Crimson-Police/web/src/supervisor/screens/LiveMissions.tsx
 
 ```text
+
 Supervisor UI · Live Missions (screen key 'sup_live').
 Runs involving the supervisor's department: participants, mission type, drawn mission, tier and time
 left (counting down locally). Force recall ends one officer's run as Abandoned with no cooldown.
@@ -3881,6 +4032,7 @@ Data: callback sup:getLiveRuns (modules/admin, polled every 10 s) · action serv
 ## Crimson-Police/web/src/supervisor/screens/MissionList.tsx
 
 ```text
+
 Supervisor UI · Mission List (screen key 'sup_missions').
 Every mission by name, built-in and custom: type, difficulty, officers supported, current base payout
 (and where it comes from), cooldown and who is running it now. Missions open to every department that
@@ -3891,6 +4043,7 @@ Data: callback getMissionList (modules/admin) · action server:sup:opLaunch { mi
 ## Crimson-Police/web/src/supervisor/screens/Payouts.tsx
 
 ```text
+
 Supervisor UI · Payouts (screen key 'sup_payouts', title key 'ui.screen.sup_payouts').
 Per mission type: current payout, config default, the supervisor's allowed range, "Set by admin"
 (read-only), the cooldown before it can change again, and a change dialog (NumberInput clamped to the
@@ -3902,6 +4055,7 @@ write: action 'server:sup:setTypePayout' { type, amount, reason }.
 ## Crimson-Police/web/src/supervisor/screens/ReviewQueue.tsx
 
 ```text
+
 Supervisor UI · Review Queue (screen key 'sup_review').
 Tabs Flagged runs / Disputes: flagged runs involving the supervisor's department with the reason
 (e.g. outside help) and who, and disputes about flagged or voided runs. Their own runs never appear.
@@ -3913,6 +4067,7 @@ server:sup:handleDispute { disputeId, decision, reason } (modules/admin, modules
 ## Crimson-Police/web/src/types/boards.ts
 
 ```text
+
 src/types/boards.ts · shapes of the boards slice (modules/leaderboard, modules/challenge).
 The §9.4 contract types live in shared/types.ts; the interfaces here extend them with the optional
 fields the Lua modules add (documented in their header comments and docs/notes/boards.md), plus the
@@ -3922,6 +4077,7 @@ supervisor/admin shapes the contract leaves to the module owner (§9.5).
 ## Crimson-Police/web/src/types/builder_client.ts
 
 ```text
+
 src/types/builder_client.ts · shapes of the builder client slice: the in-world tool overlays sent by
 modules/builder/client.lua (CP.Tablet.overlay kinds 'placement' | 'recording' | 'testdrive'), the fields the
 builder client and screens add to the client protocol of docs/notes/builder_protocol.md §6, and the editor's
@@ -3931,6 +4087,7 @@ UI-side helper types (steps, point specs). The server shapes are in ./builder_se
 ## Crimson-Police/web/src/types/builder_server.ts
 
 ```text
+
 src/types/builder_server.ts · Mission Builder protocol shapes (docs/notes/builder_protocol.md).
 Server: modules/builder/server.lua (CP.Builder). Callbacks builder:list / builder:get / builder:config,
 actions server:builder:*, NUI push topic 'builder', client actions builderPlace / builderRecord /
@@ -3944,6 +4101,7 @@ fractions and milliseconds only when it writes the Lua file.
 ## Crimson-Police/web/src/types/economy.ts
 
 ```text
+
 src/types/economy.ts · response shapes of the economy slice's supervisor/admin callbacks and actions
 (modules/payouts/server.lua; documented in docs/notes/economy.md). HomeData and Goal are contract
 shapes and live in src/shared/types.ts.
@@ -3952,6 +4110,7 @@ shapes and live in src/shared/types.ts.
 ## Crimson-Police/web/src/types/run_ui.ts
 
 ```text
+
 src/types/run_ui.ts · response shapes of the run_ui slice (Mission Board and Active Mission screens,
 documented in docs/notes/run_ui.md). BoardData and ActiveMissionView are contract shapes
 (src/shared/types.ts, ARCHITECTURE §9.4); the types below only add the optional fields the server
@@ -3961,6 +4120,7 @@ sends (or may send) on top of them. Every extra field is optional: the screens w
 ## Crimson-Police/web/src/types/testing.ts
 
 ```text
+
 src/types/testing.ts · Admin test mode shapes (modules/testing/server.lua, docs/notes/testing.md).
 Lua sends `false` for "no value" (a Lua table cannot hold nil) and may encode an empty list as {}:
 read every list through asList().
@@ -3969,6 +4129,7 @@ read every list through asList().
 ## tests/boards_spec.lua
 
 ```text
+
 tests/boards_spec.lua · the boards slice: CP.Leaderboard (modules/leaderboard) and CP.Challenge
 (modules/challenge). Pure ranking/calendar logic plus every SQL statement of both modules, run against
 MariaDB cp_test through the harness (boards, profiles, hide-name, admin boards, stuck payments, the
@@ -3979,6 +4140,7 @@ overrides, season end, champion banner, supervisor report and officer activity).
 ## tests/builder_client_spec.lua
 
 ```text
+
 tests/builder_client_spec.lua · the builder_client slice: modules/builder/client.lua (CP.Builder, client side).
 Pure logic: the route recorder (snapping cadence is the runner's; waypoints at turns and every maxGap, duplicates,
 undo, stop points), the placement spot checks, the client-action payload parsers, driving styles, thinning and
@@ -3993,6 +4155,7 @@ The builder_client slice writes no SQL, so this spec runs no queries.
 ## tests/builder_server_spec.lua
 
 ```text
+
 tests/builder_server_spec.lua · modules/builder/server.lua (slice builder_server).
 
 Covers the guardrails, unit conversion, the Lua export (golden text of the spec's custom example and a
@@ -4005,6 +4168,7 @@ the end, whatever happens. The spec uses its own database (<run database>_builde
 ## tests/e2e_spec.lua
 
 ```text
+
 tests/e2e_spec.lua · end-to-end scenarios on the REAL server side of Crimson-Police.
 
 Every modules/**/server.lua and blocks/**/server.lua is loaded (in the fxmanifest's glob order) together with
@@ -4038,6 +4202,7 @@ Own database (<run database>_e2e, rebuilt from sql/migrations; mdt_dispatch from
 ## tests/economy_spec.lua
 
 ```text
+
 tests/economy_spec.lua · modules/scoring, goals, cash, payouts (slice economy).
 
 Other modules are stubbed (CP.Qbx, CP.Access, CP.Missions, CP.Draw, CP.Banking, CP.Tablet, CP.Admin,
@@ -4050,6 +4215,7 @@ parallel cannot interfere. The fake clock is aligned with the database clock (NO
 ## tests/engine_a_spec.lua
 
 ```text
+
 tests/engine_a_spec.lua · modules/missions, draw, scaling, schedule, events (slice engine_a).
 
 Mission files are served from memory through a LoadResourceFile override, other modules are
@@ -4061,6 +4227,7 @@ reset cp_test cannot interfere.
 ## tests/fixtures/engine_b/client_spec.lua
 
 ```text
+
 tests/fixtures/engine_b/client_spec.lua · the client half of the run engine (modules/runs/client.lua).
 Run in its own process by tests/engine_b_spec.lua (the harness boots one side per process); prints
 "RESULT <passes> <failures>" on the last line.
@@ -4069,6 +4236,7 @@ Run in its own process by tests/engine_b_spec.lua (the harness boots one side pe
 ## tests/fixtures/npc/client_check.lua
 
 ```text
+
 tests/fixtures/npc/client_check.lua · the client half of modules/npc in its own Lua state
 (H.boot side = 'client'). Run by tests/npc_spec.lua as a child process; prints "RESULT <passed> <failed>".
 Natives the checks do not model are recorded by a fallback (every capitalised global that is not
@@ -4078,6 +4246,7 @@ defined becomes a recorder), so the checks can assert on the calls the module ma
 ## tests/harness.lua
 
 ```text
+
 tests/harness.lua · a tiny FiveM/Qbox stand-in for unit tests (not shipped with the resource).
 
   local H = dofile('tests/harness.lua')
@@ -4113,6 +4282,7 @@ clock and yields; H.step() resumes sleeping threads. Citizen.Await works on reso
 ## tests/int_core_spec.lua
 
 ```text
+
 tests/int_core_spec.lua · integration of the core group (integrations, access, permissions, tablet) with
 the modules that call it: CP.Banking.depositSociety (CP.Cash's society refund), the live-run own-run check
 of CP.Permissions.canReviewRun, the session tier labels from CP.Scaling.label, and on the client the one
@@ -4124,6 +4294,7 @@ helper CP.Tablet.panelFocus that modules/testing's test-control panel needs.
 ## tests/int_duplicates_spec.lua
 
 ```text
+
 tests/int_duplicates_spec.lua · every built-in mission can be duplicated into a custom mission that passes the
 Mission Builder guardrails and can be published after its test.
 
@@ -4145,6 +4316,7 @@ Mission files are written to a temporary folder missions/custom/test_dup_<n>/ th
 ## tests/int_engine_spec.lua
 
 ```text
+
 tests/int_engine_spec.lua · integration of the engine group: the REAL modules missions, draw, scaling,
 schedule, events, runs and npc with every REAL block, on the REAL built-in mission files, with stubs only for
 the modules outside the group (access, qbx, alerts, route, payouts, scoring, cash, anticheat, tablet ...).
@@ -4168,6 +4340,7 @@ It checks the cross-module paths the slice notes and the integration list asked 
 ## tests/int_services_spec.lua
 
 ```text
+
 tests/int_services_spec.lua · integration of the services group: the REAL modules scoring, goals, cash, payouts,
 leaderboard, challenge, admin, disputes and anticheat running together (plus the real permissions, scaling and
 schedule), on stubs of CP.Qbx, CP.Access, CP.Tablet, CP.Banking, CP.Missions and CP.Runs.
@@ -4183,6 +4356,7 @@ aligned with the database clock (rows are written with FROM_UNIXTIME(os.time()))
 ## tests/int_web_spec.lua
 
 ```text
+
 tests/int_web_spec.lua · integration checks for the web group (web/src outside the Mission Builder).
 
 Static cross-checks between the screens and the Lua that feeds them, for what the integration pass
@@ -4203,6 +4377,7 @@ changed or relies on:
 ## tests/memsql_spec.lua
 
 ```text
+
 tests/memsql_spec.lua · CP.Storage.MemSQL (modules/storage/memsql.lua): the saves folder engine behind database-off
 mode (Config.Database.enabled = false) and CP.Storage (modules/storage/server.lua).
   1. constructs: every SQL construct family of the inventory, run in order through the MySQL drop-in. The
@@ -4227,6 +4402,7 @@ folder removed at the end.
 ## tests/missions_a_spec.lua
 
 ```text
+
 tests/missions_a_spec.lua · the missions_a built-in mission files and missions/builtin/index.lua.
   lua5.4 tests/run.lua missions_a
 Each file is loaded exactly as modules/missions loads it (LoadResourceFile + a sandbox whose only
@@ -4239,6 +4415,7 @@ through CP.Missions.normalize (block defaults + validate) with no warnings.
 ## tests/missions_b_spec.lua
 
 ```text
+
 tests/missions_b_spec.lua · slice missions_b: the built-in mission files warrant_service, manhunt,
 gang_shootout, hostage_rescue, bomb_disposal, armored_truck_escort, prison_break and
 weekly_boss_kingpin. Each file is run in the mission loader's sandbox and checked against the
@@ -4255,6 +4432,7 @@ Run it on its own to see the report lines (sizes, route lengths, nearest distanc
 ## tests/npc_spec.lua
 
 ```text
+
 tests/npc_spec.lua · slice npc: modules/npc/server.lua driven through a fake entity world, stubbed
 CP.Runs / CP.AntiCheat / CP.Tablet / CP.Alerts / CP.Access, the harness clock (the 1 s watcher runs
 as a harness thread) and simulated net events. The client half is checked in a separate Lua state
@@ -4265,6 +4443,7 @@ The npc slice writes no SQL, so this spec runs no queries.
 ## tests/oversight_spec.lua
 
 ```text
+
 tests/oversight_spec.lua · the oversight slice: modules/admin (audit, webhooks, /CrimsonPoliceAdmin,
 review and void, force recall, supervisor/admin callbacks), modules/disputes and modules/anticheat.
 The real CP.Access and CP.Permissions modules run on a CP.Qbx stub; every other module is a stub that
@@ -4274,6 +4453,7 @@ records its calls. Every SQL statement of the three modules runs here against Ma
 ## tests/run.lua
 
 ```text
+
 tests/run.lua · runs every tests/*_spec.lua in a fresh Lua state and prints a summary.
   lua5.4 tests/run.lua                    (all specs)
   lua5.4 tests/run.lua boards             (only specs whose file name contains "boards")
@@ -4312,6 +4492,7 @@ For hunting order, clock and time zone effects (docs/TESTING.md):
 ## tests/run_ui_spec.lua
 
 ```text
+
 tests/run_ui_spec.lua · run_ui slice (Officer Mission Board + Active Mission screens, UI only).
 
 The slice has no Lua and writes no SQL; this spec checks what the UI relies on from the Lua side and
@@ -4338,6 +4519,7 @@ the slice's own files:
 ## tests/safety_spec.lua
 
 ```text
+
 tests/safety_spec.lua · modules/route, calls, alerts, downed (slice safety: Hard rules 15-18).
 
 CP.Runs, CP.Dispatch, CP.Ambulance, CP.Qbx, CP.Tablet and CP.Admin are stubbed; the four server
@@ -4351,6 +4533,7 @@ No database is used.
 ## tests/shadow/fuzz_agg.lua
 
 ```text
+
 tests/shadow/fuzz_agg.lua · random aggregate queries, compared in shadow mode (lua5.4 tests/run.lua --fuzz): SUM /
 COUNT / MAX / MIN over CASE, AND / OR / NOT, IN lists, IS NULL, column and parameter comparisons (integer, DECIMAL,
 DATETIME and case / accent / trailing-space variants of text), GROUP BY one to three columns (NULLs included), and
@@ -4362,6 +4545,7 @@ shows an arbitrary member on MariaDB (it depends on the plan), which nothing can
 ## tests/shadow/fuzz_funcs.lua
 
 ```text
+
 tests/shadow/fuzz_funcs.lua · random expressions, compared in shadow mode (lua5.4 tests/run.lua --fuzz): arithmetic on
 INT / DECIMAL / DOUBLE / text, comparisons across types, CASE / IF / COALESCE / NULLIF / GREATEST / ROUND, the JSON
 functions on a breakdown-like document, date functions (DATE_FORMAT, DATE, UNIX_TIMESTAMP, FROM_UNIXTIME,
@@ -4374,6 +4558,7 @@ FUZZ_SEED picks the data and statements, FUZZ_N how many.
 ## tests/shadow/fuzz_rows.lua
 
 ```text
+
 tests/shadow/fuzz_rows.lua · random row queries and writes, compared in shadow mode (lua5.4 tests/run.lua --fuzz):
 SELECT with WHERE, ORDER BY (with the id as the last key: rows tied on every key come back in an order MariaDB
 does not define), LIMIT / OFFSET, LEFT JOIN, IN / EXISTS subqueries and expressions; UPDATE, DELETE,
@@ -4385,6 +4570,7 @@ conflicting row in the order MariaDB's plan reads the rows (index or table order
 ## tests/shadow/fuzz_store.lua
 
 ```text
+
 tests/shadow/fuzz_store.lua · storing values into typed columns, compared in shadow mode (lua5.4 tests/run.lua --fuzz):
 every column type Crimson-Police uses (INT, TINYINT, TINYINT(1), SMALLINT, DECIMAL, VARCHAR, ENUM, DATETIME, DATE,
 JSON, NOT NULL with and without a default) gets numbers, decimals, doubles, texts with and without a number in
@@ -4400,6 +4586,7 @@ month or day ('0000-00-00', 0, 300, '2026-00-01', and any bad date with IGNORE).
 ## tests/storage_copy_spec.lua
 
 ```text
+
 tests/storage_copy_spec.lua · /CrimsonPoliceAdmin storage and storage copy (modules/admin) with MariaDB and a
 temporary saves folder together.
   1. files mode (Config.Database.enabled = false; the live engine is the saves folder, MariaDB is reached through
@@ -4420,6 +4607,7 @@ numbers: the harness' mysql CLI types every number-like text as a number). CP_CO
 ## tests/storage_spec.lua
 
 ```text
+
 tests/storage_spec.lua · database off (Config.Database.enabled = false) from end to end: the saves folder holds
 every feature's data, survives a restart, and stays fast and small at 50,000 runs.
   1. files mode on the REAL server side (every modules/**/server.lua and blocks/**/server.lua, as in e2e_spec):
@@ -4441,6 +4629,7 @@ another resource's table: it stays on MariaDB and is read through the real oxmys
 ## tests/teams_spec.lua
 
 ```text
+
 tests/teams_spec.lua · modules/units and modules/operations (slice teams).
 
 Other modules are stubbed (Access, Qbx, Tablet, Runs, Alerts, Calls, Permissions, Missions, Draw,

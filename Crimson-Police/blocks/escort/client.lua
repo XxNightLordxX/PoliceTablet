@@ -134,6 +134,7 @@ end
 -- Control of a run entity before anything is done to it (ctx.control returns at once when this client
 -- already owns it). regained = another client owned it since the last check: re-apply and re-task.
 local function Own(S, key, ent)
+    if not (S.alive and S.current) then return false, false end
     if NetworkHasControlOfEntity(ent) then
         local regained = S.lost[key] == true
         S.lost[key] = nil
@@ -144,6 +145,8 @@ local function Own(S, key, ent)
         return false, false
     end
     S.lost[key] = nil
+    -- ctx.control waits for the hand-over: the objective may have stopped meanwhile
+    if not (S.alive and S.current) then return false, false end
     return true, true
 end
 
@@ -279,7 +282,11 @@ local function HudText(S, truck)
         local e = EntityFor(net)
         if tc and e and not IsPedDeadOrDying(e, true) and #(GetEntityCoords(e) - tc) <= radius then near = near + 1 end
     end
-    if tr.arrived then return CP.L('block.escort.hud_clear', { count = near, radius = radius }) end
+    if tr.arrived then
+        -- every attacker of a triggered wave keeps the objective open, however far behind it was left
+        if near == 0 and alive > 0 then return CP.L('block.escort.hud_remaining', { count = alive }) end
+        return CP.L('block.escort.hud_clear', { count = near, radius = math.floor(radius + 0.5) })
+    end
     if tr.stop then return CP.L('block.escort.hud_stop', { seconds = tr.stop.left or 0 }) end
     if (tr.stoppedFor or 0) > 0 then
         return CP.L('block.escort.hud_stopped', { seconds = math.max(0, (tr.stoppedFail or 60) - tr.stoppedFor) })
@@ -313,13 +320,14 @@ local function Loop(S)
     S.looping = true
     CreateThread(function()
         while S.alive do
-            if S.current then
+            if S.current and IsHost(S) then
+                HostTruck(S)
+                HostAttackers(S)
+            end
+            -- the host AI waits for control (ctx.control yields): a stop meanwhile has already cleaned up
+            if S.alive and S.current then
                 local ctx = S.ctx
                 local d = S.data
-                if IsHost(S) then
-                    HostTruck(S)
-                    HostAttackers(S)
-                end
                 local truck = d.truck and EntityFor(d.truck.netId) or nil
                 if ctx.radioSilence then
                     for k in pairs(S.blips) do DropBlip(S, k) end

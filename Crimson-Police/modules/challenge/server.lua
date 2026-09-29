@@ -6,7 +6,6 @@ local U = CP.U
 local TAG = 'challenge'
 
 local WEEK_S = 604800
-local HALF_DAY = 43200
 local SEASON_RELOAD_S = 300
 local CHAMPION_WEEK = 0
 local CHAMPION_OBJECTIVE = 'season_champion'
@@ -98,6 +97,9 @@ end
 
 local function SqlTs(ts) return os.date('%Y-%m-%d %H:%M:%S', math.floor(Num(ts))) end
 
+-- 'YYYY-MM-DD' in server time (nil for 0): the tablet shows it as is, never in the player's time zone.
+local function DateKey(ts) return Num(ts) > 0 and os.date('%Y-%m-%d', math.floor(Num(ts))) or nil end
+
 local function FmtInt(n)
     local s = tostring(math.floor(Num(n)))
     local neg = s:sub(1, 1) == '-'
@@ -158,12 +160,6 @@ local function WeekWindow(season, n)
     local to = RawWeekStart(season, n + 1)
     if season.endsAt and season.endsAt < to then to = season.endsAt end
     return from, to
-end
-
--- A timestamp inside the reset-adjusted day whose date is dayTs (midnight of that date).
-local function InsideDay(dayTs)
-    local t = os.date('*t', dayTs + HALF_DAY)
-    return os.time({ year = t.year, month = t.month, day = t.day, hour = ResetHour(), min = 30, sec = 0 })
 end
 
 local function WeeksLeft(season, nowTs)
@@ -368,8 +364,10 @@ FROM cp_mission_runs r
 WHERE r.season_id = ? AND r.voided = 0 AND r.flagged = 0
 GROUP BY r.department, r.citizenid]]
 
-local DAY_SQL = [[
-SELECT r.department, UNIX_TIMESTAMP(DATE(r.created_at - INTERVAL ? HOUR)) AS day_ts,
+-- Summed per season week, its bounds made here (WeekCase), not per DATE(): a calendar date computed in SQL
+-- follows the database's time zone, and the weeks follow the game server's calendar (WeekIndex).
+local WEEK_SQL = [[
+SELECT r.department, %s AS week,
   SUM(r.final_points) AS points,
   SUM(CASE WHEN r.state = 'completed' AND r.mission_type NOT IN ('manual_award', 'goal') THEN 1 ELSE 0 END) AS completed,
   SUM(CASE WHEN r.state = 'completed' AND r.mission_type NOT IN ('manual_award', 'goal') AND r.participants >= 2 THEN 1 ELSE 0 END) AS unit_runs,
@@ -377,7 +375,19 @@ SELECT r.department, UNIX_TIMESTAMP(DATE(r.created_at - INTERVAL ? HOUR)) AS day
   SUM(CASE WHEN r.state = 'completed' AND r.mission_type NOT IN ('manual_award', 'goal') AND r.departments_n >= 2 THEN 1 ELSE 0 END) AS cross_runs
 FROM cp_mission_runs r
 WHERE r.season_id = ? AND r.voided = 0 AND r.flagged = 0
-GROUP BY r.department, day_ts]]
+GROUP BY r.department, week]]
+
+-- CASE WHEN r.created_at < FROM_UNIXTIME(<start of week 2>) THEN 1 ... ELSE <the last week> END, and its values.
+local function WeekCase(season)
+    local last = WeekIndex(season, math.max(os.time(), season.endsAt or 0))
+    local parts, params = { 'CASE' }, {}
+    for n = 1, math.max(1, last - 1) do
+        parts[#parts + 1] = ('WHEN r.created_at < FROM_UNIXTIME(?) THEN %d'):format(n)
+        params[#params + 1] = RawWeekStart(season, n + 1)
+    end
+    parts[#parts + 1] = ('ELSE %d END'):format(last)
+    return table.concat(parts, ' '), params
+end
 
 local function EmptyWeek()
     return { points = 0, completed = 0, unit = 0, tactical = 0, cross = 0 }
@@ -402,8 +412,10 @@ local function Collect(seasonId, fresh)
             unitRuns = Int(r.unit_runs),
         }
     end
-    for _, r in ipairs(MySQL.query.await(DAY_SQL, { ResetHour(), seasonId }) or {}) do
-        local n = WeekIndex(season, InsideDay(Int(r.day_ts)))
+    local weekSql, weekParams = WeekCase(season)
+    weekParams[#weekParams + 1] = seasonId
+    for _, r in ipairs(MySQL.query.await(WEEK_SQL:format(weekSql), weekParams) or {}) do
+        local n = Int(r.week)
         local dept = tostring(r.department)
         data.weeks[n] = data.weeks[n] or {}
         local w = data.weeks[n][dept] or EmptyWeek()
@@ -1104,6 +1116,8 @@ local function BountyHistory()
             current = season ~= nil and season.active and WeekIndex(season, nowTs) == n or false,
             startsAt = from,
             endsAt = to,
+            startDate = DateKey(from),
+            endDate = DateKey(to),
         }
     end
     return out

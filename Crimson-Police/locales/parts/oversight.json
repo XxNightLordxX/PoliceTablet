@@ -39,6 +39,7 @@
   "err.not_in_game": "This can only be used in game.",
   "err.not_police": "Crimson-Police is only for officers whose active job belongs to a department.",
   "err.own_run": "You took part in this run, so you can't review it.",
+  "err.recall_own_run": "You took part in this run, so you can't recall anyone from it.",
   "err.rate_limited": "Too many requests. Wait a moment and try again.",
   "err.refused": "The server refused that request.",
   "err.other_department": "That run does not involve your department.",

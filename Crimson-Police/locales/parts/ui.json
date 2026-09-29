@@ -111,7 +111,7 @@
   "result.m_team": "Team multiplier",
   "result.m_cross": "Cross-department",
   "result.m_streak": "Streak",
-  "result.capped": "Capped at 2 × P",
+  "result.capped": "Capped at {cap} × P",
   "result.tod": "Type of the Day",
   "result.failed_share": "Failed: 25% of P × {share} of objectives done",
   "result.final": "Final points",

@@ -97,6 +97,10 @@ All are shared (no `src`). They are always recorded; scoring decides the value. 
     device prop is spawned with `role = 'device', tag = 'shared:devices', frozen = true`. The search is done
     once every device is found **and** spawned, so it waits on `ctx.canSpawn`. `fastBonus` counts from this
     objective's start, which for Bomb Disposal is the run start.
+    `ctx.spawnObject` yields until the object exists, and a search report and the tick run in two threads,
+    so spawning is guarded by `st.spawning` (the loop holding it also spawns what was found meanwhile; it
+    is cleared even when a spawn throws). A prop that finishes after a test-control restart is deleted, not
+    shared. skill_check's re-creation has the same guard (`st.restoring`) between `start` and the tick.
     ARCHITECTURE §7.1 says the engine deletes an objective's entities when it stops, so skill_check does not
     rely on the search objective's props: while it runs, an armed device whose prop no longer exists is
     spawned again by skill_check itself (same model/coords/heading, waits for `ctx.canSpawn`, gives up after

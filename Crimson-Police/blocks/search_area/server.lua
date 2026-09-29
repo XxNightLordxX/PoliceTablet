@@ -847,6 +847,8 @@ local function OnEntityDead(ctx, netId, killerSrc)
                 Fail(ctx, st, 'run.fail_killed_unarmed')
                 return
             end
+            -- the search is over (a later objective runs): no circle to shrink, no message over that objective
+            if st.completed or st.halted then return end
             ClueDone(ctx, st, cl, 'lost')
             Flush(ctx, st)
             return

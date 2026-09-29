@@ -113,7 +113,7 @@ function ActivityDialog({ officer, onClose }: { officer: ReportOfficer | null; o
                     ? [
                           officer.rank,
                           officer.callsign || t('common.no_callsign'),
-                          t('sup.report.activity_week', { from: formatDay(current?.week?.startsAt) }),
+                          t('sup.report.activity_week', { from: formatDay(current?.week?.key) }),
                       ]
                           .filter(Boolean)
                           .join(' · ')
@@ -254,7 +254,7 @@ export default function DeptReport() {
             title={t('ui.screen.sup_report')}
             subtitle={t('sup.report.subtitle', {
                 dept: dept?.label ?? session.officer?.departmentLabel ?? '',
-                from: formatDay(data.week?.startsAt),
+                from: formatDay(data.week?.key),
             })}
             actions={
                 <IconButton

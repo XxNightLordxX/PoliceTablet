@@ -191,7 +191,8 @@ function resultKey(r: BuilderClientResultEx): string {
     return r.seq !== undefined && r.seq !== null ? `seq:${r.seq}` : `json:${JSON.stringify(r)}`;
 }
 
-// Queue a result (from a push or a builderResult pull). Duplicates are ignored.
+// Queue a result (from a push or a builderResult pull). Duplicates are ignored. The running tool stays until its
+// result is applied (useDraftEditor.applyPending): its PointSpec says how the result is written.
 export function queueResult(r: unknown): void {
     if (!r || typeof r !== 'object') return;
     const res = r as BuilderClientResultEx;
@@ -200,7 +201,6 @@ export function queueResult(r: unknown): void {
     if (seen.has(k)) return;
     seen.add(k);
     results.push(res);
-    if (tool && tool.missionId === res.missionId && tool.key === res.key) tool = null;
     emit();
 }
 

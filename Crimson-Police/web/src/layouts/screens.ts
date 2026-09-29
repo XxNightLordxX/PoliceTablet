@@ -68,7 +68,6 @@ export const SUPERVISOR_SCREENS: ScreenDef<SupervisorScreenKey>[] = [
         titleKey: 'ui.screen.sup_live',
         icon: 'activity',
         component: SupLiveMissions,
-        visible: s => has(s, 'forceRecall'),
     },
     {
         key: 'sup_review',

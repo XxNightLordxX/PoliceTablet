@@ -1178,6 +1178,11 @@ end
 local function SendDebug(meta, forceGeometry)
     local run = GetRun(meta.runId)
     if not run then return false end
+    -- Crimson-Arena rule 8: nothing reaches an admin in the arena; the geometry goes again afterwards.
+    if InArena(meta.admin) then
+        meta.geomKey = nil
+        return false
+    end
     local key = ('%s:%s'):format(tostring(run.state), tostring(run.objectiveIndex))
     local withGeometry = forceGeometry or key ~= meta.geomKey or meta.geom == nil
     if withGeometry then
@@ -1344,17 +1349,31 @@ end
 --                              RECORDING RESULTS
 -- ============================================================================
 
-local function FindPending(cid, missionId, locationIndex, tier)
+-- The entry with that key (the run id) when the caller names it, else the newest of that mission and location.
+local function FindPending(cid, missionId, locationIndex, tier, key)
     local list = pending[cid]
     if not list then return nil end
     local now = os.time()
-    for i, e in ipairs(list) do
+    for _, e in ipairs(list) do
         if now - e.endedAt <= PENDING_KEEP and e.missionId == missionId and e.locationIndex == locationIndex
-            and (tier == nil or e.tier == tier) then
-            return e, i
+            and (tier == nil or e.tier == tier) and (key == nil or e.key == key) then
+            return e
         end
     end
     return nil
+end
+
+-- Take the entry off the list by identity: the list may have changed while can() yielded.
+local function ClaimPending(cid, entry)
+    local list = pending[cid]
+    for i, e in ipairs(list or {}) do
+        if e == entry then
+            table.remove(list, i)
+            if #list == 0 then pending[cid] = nil end
+            return true
+        end
+    end
+    return false
 end
 
 function Testing.record(src, payload)
@@ -1372,6 +1391,8 @@ function Testing.record(src, payload)
         tier = ValidTier(payload.tier)
         if not tier then return false, 'err.test_invalid_tier' end
     end
+    local key = payload.key
+    if key ~= nil and (type(key) ~= 'string' or key == '' or #key > 64) then return false, 'err.invalid_payload' end
     local result = payload.result
     if result ~= 'passed' and result ~= 'failed' then return false, 'err.invalid_payload' end
     local note = payload.note
@@ -1389,7 +1410,7 @@ function Testing.record(src, payload)
 
     local cid = CitizenOf(src)
     if not cid then return false, 'err.test_no_character' end
-    local entry, idx = FindPending(cid, missionId, locationIndex, tier)
+    local entry = FindPending(cid, missionId, locationIndex, tier, key)
     if not entry then return false, 'err.test_not_run' end
     local okP, errP
     if entry.draft then
@@ -1401,8 +1422,7 @@ function Testing.record(src, payload)
     if not okP then return false, errP or 'err.no_permission' end
 
     -- Claim the entry before the insert yields, so a double click cannot record it twice.
-    table.remove(pending[cid], idx)
-    if #pending[cid] == 0 then pending[cid] = nil end
+    if not ClaimPending(cid, entry) then return false, 'err.test_not_run' end
     local tierName = ValidTier(entry.tier) or 'standard'
     local version = tonumber(entry.version) and math.floor(tonumber(entry.version)) or nil
     Db()
@@ -1461,7 +1481,7 @@ function Testing.record(src, payload)
     end
     if entry.draft then
         if Has('Builder', 'onDraftTested') then
-            Call('Builder', 'onDraftTested', missionId, version, tierName, result == 'passed', src)
+            Call('Builder', 'onDraftTested', missionId, version, tierName, result == 'passed', src, entry.defHash)
         else
             WarnOnce('builder',
                 'CP.Builder.onDraftTested is not available: draft test results do not reach the builder')

@@ -640,4 +640,191 @@ do
     Config.Events.modifierChance = chance
 end
 
+-- ============================================================================
+--             7. MINIMUM TIMES: FAST, HONEST PLAY IS NOT too_fast
+-- ============================================================================
+-- Every server gate passes (knock and cuff times, reach, a real stop), so the objective's minSeconds must not
+-- refuse the completion and flag the whole run 'too_fast'.
+
+local function CountTooFast()
+    local n = 0
+    for _, reason in ipairs(log.flag or {}) do
+        if reason == 'too_fast' then n = n + 1 end
+    end
+    return n
+end
+
+local function RunEntities(run, obj, kind)
+    local out = {}
+    for netId, info in pairs(run.entities) do
+        if info.obj == obj and info.kind == kind then out[#out + 1] = { netId = netId, entity = info.entity } end
+    end
+    table.sort(out, function(a, b) return a.netId < b.netId end)
+    return out
+end
+
+local function KillBy(e, src)
+    ents[e].killer = src * 100
+    ents[e].health = 0
+end
+
+-- Warrant Service: at the door 8 s after the arrival, a 3 s knock, then a 5 s cuff or a shot suspect.
+do
+    local chance = Config.Events.modifierChance
+    Config.Events.modifierChance = 0
+    local ws = Missions.get('warrant_service')
+    local loc = ws.locations[1]
+    for _, response in ipairs({ 'surrender', 'fight' }) do
+        local m = U.deepcopy(ws)
+        m.objectives[1].responses = {
+            surrender = response == 'surrender' and 1 or 0,
+            flee = 0,
+            fight = response == 'fight' and 1 or 0,
+        }
+        Place(1, loc.start.coords)
+        Place(2, loc.start.coords)
+        local run = Runs.create({
+            mission = m,
+            locationIndex = 1,
+            missionType = 'investigation',
+            members = { O[1], O[2] },
+            leaderSrc = 1,
+        })
+        local flags = CountTooFast()
+        Runs.markArrived(run, 1)
+        Runs.markArrived(run, 2)
+        H.advance(8000)
+        local suspect, associate
+        for _, p in pairs(run.objectives[1].state.peds or {}) do
+            if p.role == 'suspect' then suspect = p elseif p.role == 'associate' then associate = p end
+        end
+        Place(1, loc.door)
+        Place(2, loc.door)
+        ObjEvent(1, run, 1, { type = 'knock_start' })
+        H.advance(3000)
+        ObjEvent(1, run, 1, { type = 'knock' })
+        KillBy(associate.entity, 2)
+        if response == 'fight' then
+            KillBy(suspect.entity, 2)
+            H.advance(2000)
+        else
+            H.advance(5000)
+            H.fire('crimson-police:server:npcCuff', 1, run.id, suspect.netId)
+            H.advance(1000)
+        end
+        H.eq(run.objectiveIndex, 2, ('warrant (%s): served 13-17 s after the arrival'):format(response))
+        H.eq(CountTooFast() - flags, 0, ('warrant (%s): a fast warrant is not flagged too_fast'):format(response))
+        Runs.removeParticipant(run, 2, 'cancelled')
+        Runs.removeParticipant(run, 1, 'cancelled')
+    end
+    Config.Events.modifierChance = chance
+end
+
+-- Stolen Vehicle Takedown: lights on, boxed in 4 s later, 5 s stopped, aimed at, two officers cuff at once.
+do
+    local chance = Config.Events.modifierChance
+    Config.Events.modifierChance = 0
+    local realSpeed = _G.GetEntitySpeed
+    _G.GetEntitySpeed = function(e) return ents[e] and ents[e].speed or 0.0 end
+    local svt = Missions.get('stolen_vehicle_takedown')
+    local loc = svt.locations[1]
+    local m = U.deepcopy(svt)
+    m.objectives[1].footFlee = 0
+    Place(1, loc.start.coords)
+    Place(2, loc.start.coords)
+    H.players[1].vehicle = NewEnt('vehicle', 'police', loc.start.coords.x, loc.start.coords.y, loc.start.coords.z)
+    local run = Runs.create({
+        mission = m,
+        locationIndex = 1,
+        missionType = 'training',
+        members = { O[1], O[2] },
+        leaderSrc = 1,
+    })
+    local flags = CountTooFast()
+    Runs.markArrived(run, 1)
+    Runs.markArrived(run, 2)
+    H.advance(1000)
+    local car = RunEntities(run, 1, 'vehicle')[1]
+    ObjEvent(1, run, 1, { type = 'lights_near', netId = car.netId })
+    ents[car.entity].speed = 20.0
+    H.advance(4000)
+    ents[car.entity].speed = 0.0
+    H.players[1].vehicle = nil
+    Place(1, ents[car.entity].coords)
+    Place(2, ents[car.entity].coords)
+    H.advance(6000)
+    local suspects = RunEntities(run, 1, 'ped')
+    H.ok(#suspects >= 2, 'svt: the suspects are in the car')
+    for i, s in ipairs(suspects) do ObjEvent(2 - i % 2, run, 1, { type = 'aim', netId = s.netId }) end
+    for i = 1, #suspects, 2 do
+        H.advance(5000)
+        H.fire('crimson-police:server:npcCuff', 1, run.id, suspects[i].netId)
+        if suspects[i + 1] then H.fire('crimson-police:server:npcCuff', 2, run.id, suspects[i + 1].netId) end
+    end
+    H.advance(1500)
+    H.eq(run.state, 'ended', 'svt: every suspect cuffed 16-21 s after the arrival ends the run')
+    H.eq(run.participants[1].result, 'completed', 'svt: completed')
+    H.eq(CountTooFast() - flags, 0, 'svt: a fast takedown is not flagged too_fast')
+    Runs.removeParticipant(run, 2, 'cancelled')
+    Runs.removeParticipant(run, 1, 'cancelled')
+    _G.GetEntitySpeed = realSpeed
+    Config.Events.modifierChance = chance
+end
+
+-- Hostage Rescue with 3 officers: 6 hostiles down 10-19 s after the arrival, then the 3 hostages cut free at once
+-- (6 s) and walked out into the safe circle (~4 m).
+do
+    local chance = Config.Events.modifierChance
+    Config.Events.modifierChance = 0
+    O[3] = {
+        src = 3,
+        citizenid = 'ENG3',
+        name = 'Cy Engine',
+        department = 'sast',
+        departmentShort = 'SAST',
+        job = 'sast',
+        rank = 'Officer',
+        callsign = 'E-3',
+    }
+    local hr = Missions.get('hostage_rescue')
+    local loc = hr.locations[1]
+    for s = 1, 3 do Place(s, loc.start.coords) end
+    local run = Runs.create({
+        mission = U.deepcopy(hr),
+        locationIndex = 1,
+        missionType = 'tactical',
+        members = { O[1], O[2], O[3] },
+        leaderSrc = 1,
+    })
+    local flags = CountTooFast()
+    for s = 1, 3 do Runs.markArrived(run, s) end
+    H.advance(10000)
+    local hostiles = RunEntities(run, 1, 'ped')
+    H.eq(#hostiles, 6, 'hostage: 4 hostiles at the heavy tier are 6')
+    for i, h in ipairs(hostiles) do
+        KillBy(h.entity, (i - 1) % 3 + 1)
+        H.advance(1500)
+    end
+    H.advance(1000)
+    H.eq(run.objectiveIndex, 2, 'hostage: every hostile down ~20 s after the arrival completes objective 1')
+    H.eq(CountTooFast() - flags, 0, 'hostage: a fast clear is not flagged too_fast')
+    local hostages = RunEntities(run, 2, 'ped')
+    for i, h in ipairs(hostages) do
+        local c = ents[h.entity].coords
+        Place(i, vec3(c.x + 1.0, c.y, c.z))
+        ObjEvent(i, run, 2, { type = 'free_start', netId = h.netId })
+    end
+    H.advance(6000)
+    for i, h in ipairs(hostages) do ObjEvent(i, run, 2, { type = 'freed', netId = h.netId }) end
+    H.advance(3000)
+    for _, h in ipairs(hostages) do ents[h.entity].coords = vec3(loc.safe.x, loc.safe.y, loc.safe.z) end
+    H.advance(1500)
+    H.eq(run.state, 'ended', 'hostage: every hostage safe ~10 s after objective 2 started ends the run')
+    H.eq(run.participants[1].result, 'completed', 'hostage: completed')
+    H.eq(CountTooFast() - flags, 0, 'hostage: a fast rescue is not flagged too_fast')
+    for s = 3, 1, -1 do Runs.removeParticipant(run, s, 'cancelled') end
+    O[3] = nil
+    Config.Events.modifierChance = chance
+end
+
 return H

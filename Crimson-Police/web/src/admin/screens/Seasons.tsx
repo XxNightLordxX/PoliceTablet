@@ -88,6 +88,7 @@ export default function AdminSeasons() {
     }, [data?.bounty?.id]);
 
     const startSeason = async () => {
+        if (busy || !name.trim()) return;
         const res = await run(
             'server:admin:startSeason',
             { name: name.trim() },
@@ -156,7 +157,7 @@ export default function AdminSeasons() {
             header: t('admin.seasons.col.window'),
             width: 150,
             render: r => (
-                <span className="boards-muted cp-num">{`${formatDay(r.startsAt)} – ${formatDay(r.endsAt)}`}</span>
+                <span className="boards-muted cp-num">{`${formatDay(r.startDate)} – ${formatDay(r.endDate)}`}</span>
             ),
         },
         {
@@ -418,7 +419,7 @@ export default function AdminSeasons() {
                         onChange={setName}
                         maxLength={64}
                         placeholder={t('admin.seasons.name_placeholder')}
-                        onEnter={() => name.trim() && void startSeason()}
+                        onEnter={() => void startSeason()}
                         autoFocus
                     />
                 </Field>

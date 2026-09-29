@@ -979,6 +979,33 @@ b = CP.Scoring.compute(run, p, 'completed', { durationS = 300, departments = 2 }
 H.eq(b.tod, false, 'another type is not doubled')
 tod = nil
 
+-- the breakdown carries the cap and the Type of the Day multiplier it used, so the result card and the Profile
+-- breakdown show Config.Scoring.scoreCap and Config.Events.todMultiplier instead of a fixed 2
+do
+    local scoreCap, todMult = Config.Scoring.scoreCap, Config.Events.todMultiplier
+    Config.Scoring.scoreCap, Config.Events.todMultiplier = 1.5, 1.5
+    tod = 'tactical'
+    b = CP.Scoring.compute(run, p, 'completed', { durationS = 300, departments = 2 })
+    H.eq(b.capped, true, 'configured cap: capped')
+    H.eq(b.cap, 300, 'breakdown.cap = Config.Scoring.scoreCap x P, in whole points')
+    H.near(b.scoreCap, 1.5, 1e-9, 'breakdown.scoreCap = Config.Scoring.scoreCap')
+    H.near(b.todMultiplier, 1.5, 1e-9, 'breakdown.todMultiplier = Config.Events.todMultiplier')
+    H.eq(b.final, 450, 'capped at 300, then x1.5 for the Type of the Day')
+    Config.Scoring.scoreCap, Config.Events.todMultiplier = scoreCap, todMult
+    tod = nil
+end
+for _, file in ipairs({ 'web/src/hud/ResultScreen.tsx', 'web/src/officer/screens/Profile.tsx' }) do
+    local f = io.open(H.root .. file, 'r')
+    local text = f and f:read('a') or ''
+    if f then f:close() end
+    H.ok(text:find('p.P * 2', 1, true) == nil, file .. ': the cap line uses breakdown.cap, not a fixed 2 x P')
+    H.ok(text:find('formatMultiplier(2, 0)', 1, true) == nil,
+        file .. ': the Type of the Day line uses breakdown.todMultiplier, not a fixed x2')
+    H.ok(text:find('t(\'result.capped\', { cap: formatFactor(limits.scoreCap) })', 1, true) ~= nil,
+        file .. ': the cap label names Config.Scoring.scoreCap')
+end
+H.eq(CP.L('result.capped', { cap = 1.5 }), 'Capped at 1.5 × P', 'the cap label takes the configured cap')
+
 -- medals, vehicle penalties, lights and siren, hints, unlisted ids, penalties floor at 0
 run = FakeRun({ mission = DEFS.beat_patrol, medals = true, pointsBase = 60 })
 p = FakeP({

@@ -101,6 +101,10 @@ start, the sampled line is unchanged) → `{ runId }`; `recalcRoute` (payload ig
   (`CP.Alerts.hold`), unless `{ force = true }`.
 - Orphans: an intent whose run no longer lists the player as active (and no pending downed follow-up) is
   removed after 3 s (leak guard).
+- Left in another bucket: when an intent is dropped while the live value is ours (a participant who left
+  because only the routing bucket moved, e.g. a qbx_core property), the bag stays as rule 1 says, and the 1 s
+  reconcile removes our value once they are back in bucket 0 with no new intent, hold or pending downed
+  follow-up. Otherwise sc-ambulance and sc-dispatch would stay muted for them after the run.
 - Backstop eligibility for shots: our intent is on, or an arrived active participant of an In-progress run;
   the radius is 3D from the location start or `CP.Runs.anchor(run)` (current objective point). Person
   down/dead: our intent only. An id of second s is skipped only when an earlier clear of it ran at s + 2 or

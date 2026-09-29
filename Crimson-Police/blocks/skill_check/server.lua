@@ -133,7 +133,7 @@ local function EntityGone(netId)
 end
 
 -- Re-create the prop of every armed shared device whose entity is gone. Returns true when it spawned any.
-local function RestoreProps(ctx, st)
+local function RestoreLoop(ctx, st)
     local changed = false
     for _, t in ipairs(st.targets) do
         if t.shared and t.status == 'armed' and (t.spawnFails or 0) < SPAWN_TRIES and EntityGone(t.netId) then
@@ -160,6 +160,22 @@ local function RestoreProps(ctx, st)
                 end
             end
         end
+    end
+    return changed
+end
+
+-- The restoring flag guards against re-entry while ctx.spawnObject yields (start, run from a net event
+-- that completed the search, and the tick in another thread); it is always cleared, even when a spawn
+-- throws, so one bad spawn can never stop the re-creation for the rest of the objective.
+local function RestoreProps(ctx, st)
+    if st.restoring then return false end
+    st.restoring = true
+    local ok, changed = pcall(RestoreLoop, ctx, st)
+    st.restoring = false
+    if not ok then
+        CP.err('blocks', 'skill_check: re-creating device props for run %s failed: %s',
+            tostring(ctx.run and ctx.run.id), tostring(changed))
+        return false
     end
     return changed
 end

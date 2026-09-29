@@ -9,9 +9,10 @@ local BOSS_KEY = 'weekly_boss'
 local RECENT_KEEP_S = 900            -- in-memory history is only a bridge until the row is in the DB
 local MEM_SEQ_BASE = 2 ^ 40          -- in-memory records sort after DB rows of the same second
 local PENDING_PREFIX = 'pending:'
+local SAME_SPOT_M = 50.0             -- a location this close to a held spot is that spot (locations are 100 m apart)
 
 local holders = {}     -- holders[missionId][index] = { [holderId] = true }
-local byHolder = {}    -- byHolder[holderId] = { missionId, index, at }
+local byHolder = {}    -- byHolder[holderId] = { missionId, index, at, coords } (coords: the start of the held spot)
 local recent = {}      -- recent[citizenid][missionType] = { { missionId, at, seq }, ... } newest first
 local inFlight = {}    -- inFlight[src] = true while an accept for that player is being processed
 local memSeq = 0
@@ -292,20 +293,65 @@ end
 --                                  LOCATIONS
 -- ============================================================================
 
-function Draw.reserve(runId, missionId, index)
+local function StartOf(location)
+    local start = type(location) == 'table' and location.start
+    return type(start) == 'table' and start.coords or nil
+end
+
+local function LocationStart(def, index)
+    return type(def) == 'table' and type(def.locations) == 'table' and StartOf(def.locations[index]) or nil
+end
+
+-- The spot a holder takes: its run's own location (a run keeps the definition it was drawn from, also after a
+-- Builder republish or a reload moved the locations), else location #index of the registered definition.
+local function HeldCoords(holderId, missionId, index)
+    if CP.Runs and CP.Runs.get then
+        local _, run = Safe(CP.Runs.get, holderId)
+        if type(run) == 'table' and tonumber(run.locationIndex) == index then
+            local coords = StartOf(run.location) or LocationStart(run.mission, index)
+            if coords then return coords end
+        end
+    end
+    return LocationStart(CP.Missions and CP.Missions.get and CP.Missions.get(missionId), index)
+end
+
+-- A holder with coordinates takes the spot there, so a reservation survives a republish that moved or reordered
+-- the locations; a holder or a query without coordinates matches by index.
+local function InUse(missionId, index, coords)
+    local byIdx = holders[missionId]
+    if not byIdx then return false end
+    for i, set in pairs(byIdx) do
+        for holderId in pairs(set) do
+            local held = byHolder[holderId] and byHolder[holderId].coords
+            if held and coords then
+                if CP.U.dist(held, coords) < SAME_SPOT_M then return true end
+            elseif i == index then
+                return true
+            end
+        end
+    end
+    return false
+end
+
+local function Reserve(holderId, missionId, index, coords)
     index = tonumber(index)
-    if runId == nil or type(missionId) ~= 'string' or not index then return false end
+    if holderId == nil or type(missionId) ~= 'string' or not index then return false end
     index = math.floor(index)
-    Draw.release(runId)
+    Draw.release(holderId)
+    coords = coords or HeldCoords(holderId, missionId, index)
+    local wasFree = not InUse(missionId, index, coords)
     local byIdx = holders[missionId] or {}
     holders[missionId] = byIdx
     local set = byIdx[index] or {}
     byIdx[index] = set
-    local wasFree = next(set) == nil
-    set[runId] = true
-    byHolder[runId] = { missionId = missionId, index = index, at = os.time() }
-    CP.log(TAG, 'reserved %s #%d for %s', missionId, index, tostring(runId))
+    set[holderId] = true
+    byHolder[holderId] = { missionId = missionId, index = index, at = os.time(), coords = coords }
+    CP.log(TAG, 'reserved %s #%d for %s', missionId, index, tostring(holderId))
     return wasFree
+end
+
+function Draw.reserve(runId, missionId, index)
+    return Reserve(runId, missionId, index, nil)
 end
 
 function Draw.release(runId)
@@ -324,9 +370,9 @@ function Draw.release(runId)
 end
 
 function Draw.isReserved(missionId, index)
-    local byIdx = holders[missionId]
-    local set = byIdx and byIdx[tonumber(index)]
-    return set ~= nil and next(set) ~= nil
+    index = tonumber(index)
+    if not index then return false end
+    return InUse(missionId, index, LocationStart(CP.Missions and CP.Missions.get and CP.Missions.get(missionId), index))
 end
 
 -- Coordinates of every player who is not a participant (server-side ped coords). Players in
@@ -358,7 +404,7 @@ function Draw.pickLocation(def, participantSrcs, rngObj, opts)
     end
     local free = {}
     for i = 1, #def.locations do
-        local skip = (reserveOn and Draw.isReserved(def.id, i)) or (opts.exclude and opts.exclude[i])
+        local skip = (reserveOn and InUse(def.id, i, LocationStart(def, i))) or (opts.exclude and opts.exclude[i])
         if not skip then free[#free + 1] = i end
     end
     if #free == 0 then return nil end
@@ -727,9 +773,14 @@ local function Accept(src, typeKey)
     end
 
     if not (CP.Runs and CP.Runs.create) then return fail('err.run_create_failed') end
+    -- The draw may yield (history lookups): a member who disconnected meanwhile had no run for playerDropped
+    -- to leave, so they are refused here (CP.Runs.create checks again after its own lookups).
+    for _, m in ipairs(srcs) do
+        if GetPlayerName(m) == nil then return fail('err.member_unavailable') end
+    end
     -- Provisional reservation so a concurrent accept can't take the spot before CP.Runs reserves it.
     local token = ('%s%d:%d'):format(PENDING_PREFIX, src, GetGameTimer())
-    Draw.reserve(token, def.id, index)
+    Reserve(token, def.id, index, LocationStart(def, index))
     local okCall, run, createErr = pcall(CP.Runs.create, {
         mission = def,
         locationIndex = index,

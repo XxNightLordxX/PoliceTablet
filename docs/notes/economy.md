@@ -56,6 +56,10 @@ StuckPayment = { id, runUuid, citizenid, name, missionId, missionLabel, departme
 manual_award / goal rows store a RunResult-shaped breakdown (P = final = the points, empty lines, cash 0) plus
 `kind`, `reason` (manual) or `period`, `periodKey`, `goalId` (goal). Every counted row also gets the internal
 breakdown key `xpCounted` (the XP idempotency marker, see below).
+A completed `CP.Scoring.compute` breakdown (RunResult `points`) also carries the optional extras `cap` (the points cap
+in whole points, floor(scoreCap x P)), `scoreCap` (Config.Scoring.scoreCap) and `todMultiplier`
+(Config.Events.todMultiplier), so the result card and the Profile breakdown show the configured cap and Type of the Day
+multiplier (`web/src/shared/data.ts pointsLimits`; a row stored without them falls back to the shipped 2 and 2).
 
 ## Contract interpretations
 

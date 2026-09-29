@@ -68,6 +68,7 @@
   "block.escort.hud_stop": "Scheduled stop: {seconds} s",
   "block.escort.hud_stopped": "The vehicle is stuck: {seconds} s left to get it moving",
   "block.escort.hud_clear": "Clear the area: {count} attackers within {radius} m",
+  "block.escort.hud_remaining": "Neutralise the remaining attackers: {count} left",
   "block.escort.msg_ambush": "Ambush ahead!",
   "block.escort.msg_stop": "The vehicle makes a scheduled stop ({seconds} s)",
   "block.escort.msg_wave_clear": "Ambush wave neutralised",

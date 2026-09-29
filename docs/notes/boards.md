@@ -109,6 +109,10 @@ interfaces for the same shapes are in `web/src/types/boards.ts`.
   `BountyCard`, `formatEndsIn` (Challenge.tsx), `RunBreakdown`, `ResultCell`, `StateBadge`, `missionTypeLabel`
   (Profile.tsx). Shared helper classes (`boards-muted`, `boards-strong`, `boards-struck`, `boards-flat-table`)
   live in Leaderboard.css, which every boards screen imports through these exports.
+- Calendar dates come from the server as `'YYYY-MM-DD'` in server time (`window.fromDate`, `bountyHistory[i].startDate`/
+  `endDate`, the report's `week.key`) and `formatDay` formats them in UTC, so a player in another time zone sees the
+  server's week and month (reading the epochs in the browser put them on the day before for anyone west of the server).
+  The weekly subtitle takes its weekday from that date, so it follows `Config.Leaderboard.weekStartsOn`.
 - Award points: 1–10,000 points (modules/admin's `MAX_AWARD`), reason required. Void run: reason required.
 - Every run/officer table uses `table-layout: fixed` (class `boards-fixed`, Leaderboard.css): the officer / mission
   column takes what the fixed-width columns leave and long names, callsigns and mission labels are cut with an

@@ -435,6 +435,10 @@ H.eq(startData.startRoute, true, 'start route on')
 H.eq(startData.expectedTier, 'reinforced', 'client:start expected tier')
 H.eq(startData.mission.locations, nil, 'mission sent without the location list')
 H.eq(#startData.participants, 2, 'participants list')
+-- the run seed drives the hidden server rolls (ctx.rng = rng(seed + i)): the clients get another shared seed
+H.ok(type(startData.seed) == 'number' and startData.seed > 0, 'client:start has a shared client seed')
+H.ok(startData.seed ~= A.seed, 'client:start does not carry the run seed')
+H.eq(LastEvent('crimson-police:client:start', 1).args[2].seed, startData.seed, 'the same client seed for everyone')
 H.eq(Count('route.begin'), 2, 'CP.Route.begin per participant')
 H.eq(Last('draw.reserve')[1], A.id, 'location reserved under the run id')
 H.eq(#inv.added, 2, 'mission items given')
@@ -1062,6 +1066,33 @@ H.advance(5000)
 H.ok(#inv.removed > removedBefore, 'orphaned items swept when the player loads')
 H.eq(inv.searches[#inv.searches].meta.cpItem, true, 'sweep searches cpItem metadata')
 
+-- A leaver whose old run is still live loses its items on the sweep, and the orphan is kept until then.
+H.reset()
+local L2 = Runs.create({
+    mission = mission,
+    locationIndex = 1,
+    missionType = 'patrol',
+    members = { O[2], O[3] },
+    leaderSrc = 2,
+})
+inv.hidden = { [3] = true }
+Runs.removeParticipant(L2, 3, 'disconnected')
+inv.hidden = nil
+H.eq(L2.state ~= 'ended', true, 'partner carries on')
+local function HeldBy(src, runId)
+    local n = 0
+    for _, s in ipairs(inv.slots[src] or {}) do
+        if s.count > 0 and s.metadata and s.metadata.cpRun == runId then n = n + s.count end
+    end
+    return n
+end
+H.ok(HeldBy(3, L2.id) > 0, 'leaver still holds the item before the sweep')
+listeners.loaded(3)
+H.advance(5000)
+H.eq(HeldBy(3, L2.id), 0, 'sweep removes items of a live run the player has left')
+H.ok(HeldBy(2, L2.id) > 0, 'active partner keeps the item')
+Runs.endRun(L2, 'failed', 'quit')
+
 -- ============================================================================
 --                                    REVIEW
 -- ============================================================================
@@ -1164,6 +1195,13 @@ H.fire('crimson-police:server:objective', 2, N.id, 99, { type = 'hit' })
 CP.AntiCheat.checkEvent = origCheck
 H.eq(checked[#checked], 99, 'an event for an objective past the last one is checked (and flagged) by CP.AntiCheat')
 H.eq(#CallsOf('onEvent'), evBefore, 'and never reaches a block')
+-- A checkEvent that throws drops the event: an unchecked event never skips the speed and duplicate checks.
+CP.AntiCheat.checkEvent = function() error('checkEvent broke') end
+H.fire('crimson-police:server:objective', 2, N.id, N.objectiveIndex, { type = 'hit' })
+CP.AntiCheat.checkEvent = origCheck
+H.eq(#CallsOf('onEvent'), evBefore, 'an event CP.AntiCheat failed to check never reaches a block')
+H.fire('crimson-police:server:objective', 2, N.id, N.objectiveIndex, { type = 'hit' })
+H.eq(#CallsOf('onEvent'), evBefore + 1, 'the same event, once checked, does')
 
 -- ============================================================================
 --                                    REVIEW
@@ -1629,6 +1667,101 @@ do
         { mission = mission, locationIndex = 1, missionType = 'tactical', members = { O8 }, leaderSrc = 8 })
     H.eq(why, 'err.on_call', 'the leader on a real call: refused')
     CP.Calls = nil
+
+    -- a member who disconnects while Runs.create waits on a lookup is never registered: the playerDropped
+    -- handler ran before the run existed, so nothing else would remove them
+    local function DropDuring(src)
+        dropped[src] = true
+        H.fire('playerDropped', src)
+    end
+    local function Discard(run)
+        if type(run) ~= 'table' then return end
+        for _, s in ipairs(Runs.activeSrcs(run)) do Runs.removeParticipant(run, s, 'cancelled') end
+    end
+    CP.Calls = {
+        isOnCall = function(src)
+            if src == 8 then DropDuring(8) end
+            return false
+        end,
+    }
+    nr, why = Runs.create({
+        mission = mission,
+        locationIndex = 1,
+        missionType = 'tactical',
+        members = { O7, O8 },
+        leaderSrc = 7,
+    })
+    CP.Calls = nil
+    dropped[8] = nil
+    Discard(nr)
+    H.eq(nr, nil, 'dropped during the accept: no run')
+    H.eq(why, 'err.member_unavailable', 'dropped during the accept: err.member_unavailable')
+    H.eq(Runs.isOnMission(7), false, 'dropped during the accept: the leader is not registered')
+    H.eq(Runs.isOnMission(8), false, 'dropped during the accept: the dropped member is not registered')
+    local realFirst = CP.Scoring.isFirstRunSinceDuty
+    CP.Scoring.isFirstRunSinceDuty = function(src)
+        if src == 8 then DropDuring(8) end
+        return false
+    end
+    nr, why = Runs.create({
+        mission = mission,
+        locationIndex = 1,
+        missionType = 'tactical',
+        members = { O7, O8 },
+        leaderSrc = 7,
+        operationId = 98,
+    })
+    CP.Scoring.isFirstRunSinceDuty = realFirst
+    dropped[8] = nil
+    Discard(nr)
+    H.eq(why, 'err.member_unavailable', 'dropped during the first-run lookup of an operation run: refused')
+    H.eq(Runs.isOnMission(8), false, 'dropped during the first-run lookup: not registered')
+    local realInfo = CP.Qbx.getInfo
+    CP.Calls = {
+        isOnCall = function(src)
+            if src == 2 then
+                CP.Qbx.getInfo = function(s)
+                    if s == 2 then return { src = 2, citizenid = 'CIT9', job = { name = 'sast' } } end
+                    return realInfo(s)
+                end
+            end
+            return false
+        end,
+    }
+    nr, why = Runs.create({
+        mission = mission,
+        locationIndex = 1,
+        missionType = 'tactical',
+        members = { O[1], O[2] },
+        leaderSrc = 1,
+    })
+    CP.Calls = nil
+    CP.Qbx.getInfo = realInfo
+    Discard(nr)
+    H.eq(why, 'err.member_unavailable', 'another character on the member\'s server id during the accept: refused')
+    H.eq(Runs.isOnMission(2), false, 'another character during the accept: not registered')
+
+    -- a fractional minSeconds (a hand-edited mission file) still raises the too_fast flag
+    local halfMission = CP.U.deepcopy(mission)
+    halfMission.objectives[1].minSeconds = 7.5
+    local flagsHalf = Count('ac.flag')
+    local HS = Runs.create({
+        mission = halfMission,
+        locationIndex = 1,
+        missionType = 'patrol',
+        members = { O7 },
+        leaderSrc = 7,
+    })
+    Runs.markArrived(HS, 7)
+    H.advance(2000)
+    local okHalf, doneHalf = pcall(Runs.objectiveComplete, HS, 1)
+    H.ok(okHalf, 'fractional minSeconds: the too_fast check does not throw')
+    H.eq(doneHalf, false, 'fractional minSeconds: early completion refused')
+    H.eq(Count('ac.flag'), flagsHalf + 1, 'fractional minSeconds: too_fast flagged')
+    H.eq(Last('ac.flag').reason, 'too_fast', 'fractional minSeconds: flag reason')
+    H.ok(tostring(Last('ac.flag').detail):find('min 7.5 s', 1, true) ~= nil,
+        'fractional minSeconds: the detail keeps the fraction')
+    Runs.removeParticipant(HS, 7, 'cancelled')
 
     -- in-arena leave: the bag is not touched (only the intent is forgotten)
     local AR = Runs.create(

@@ -441,14 +441,16 @@ local function PublicRow(e, viewer)
     }
 end
 
+-- fromDate/toDate are the window's dates in server time. The tablet shows those, because its own
+-- reading of from/to follows the player's time zone and can land on the day before.
 local function WindowView(q)
     if q.period == 'alltime' then return nil end
+    local from, to = q.from, q.to
     if q.period == 'season' then
-        local s = q.season
-        if not s then return nil end
-        return { from = s.startsAt, to = s.endsAt }
+        if not q.season then return nil end
+        from, to = q.season.startsAt, q.season.endsAt
     end
-    return { from = q.from, to = q.to }
+    return { from = from, to = to, fromDate = from and DateKey(from) or nil, toDate = to and DateKey(to) or nil }
 end
 
 local function SeasonView(q)

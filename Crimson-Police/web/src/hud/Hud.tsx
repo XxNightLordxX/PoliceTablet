@@ -1,9 +1,9 @@
 // The mission HUD (ARCHITECTURE §9.3): shown at the right edge while hud is set, without NUI focus.
-// The timer and the off-route countdown count down locally; they restart only when Lua sends a new
-// value (Lua sends the full merged state on every patch, so an unchanged value keeps counting).
 
+import { useMemo } from 'react';
 import { Badge, Icon, TierBadge } from '../shared/components';
 import { cx } from '../shared/cx';
+import { secondsSince } from '../shared/data';
 import { formatDistance, formatDuration } from '../shared/format';
 import { useCountdown } from '../shared/hooks';
 import { t } from '../shared/i18n';
@@ -11,7 +11,12 @@ import type { HudObjective, HudState } from '../shared/types';
 import TestControls from './TestControls';
 
 function Timer({ timer }: { timer: NonNullable<HudState['timer']> }) {
-    const left = useCountdown(timer.remaining, { paused: timer.paused });
+    // Counted from the arrival of the value: the HUD remounts when the Officer UI closes.
+    const start = useMemo(
+        () => (timer.paused ? timer.remaining : secondsSince(timer.remaining, timer.receivedAt)),
+        [timer.remaining, timer.paused, timer.receivedAt],
+    );
+    const left = useCountdown(start, { paused: timer.paused });
     const s = left ?? 0;
     const tone = timer.paused ? 'is-paused' : s <= 15 ? 'is-danger' : s <= 60 ? 'is-warning' : '';
     return (
@@ -26,7 +31,14 @@ function Timer({ timer }: { timer: NonNullable<HudState['timer']> }) {
 }
 
 function RouteLine({ route }: { route: NonNullable<HudState['route']> }) {
-    const left = useCountdown(route.status === 'off' ? route.secondsLeft : null);
+    const start = useMemo(
+        () =>
+            route.status === 'off' && route.secondsLeft !== null
+                ? secondsSince(route.secondsLeft, route.receivedAt)
+                : null,
+        [route.status, route.secondsLeft, route.receivedAt],
+    );
+    const left = useCountdown(start);
     switch (route.status) {
         case 'off':
             return (

@@ -45,9 +45,11 @@ Response shapes: all in `builder_protocol.md` §3/§4 and `web/src/types/builder
    path finding); the client reports `unreachable` waypoints with the recording.
 6. **Save stores incomplete drafts** and returns `errors` + `valid`; publish refuses with `err.builder_invalid`
    (the UI calls `validate` for the list), because a CP.Net action error is a single locale key.
-7. **draft_tested**: set only by `onDraftTested` for a pass of the **current** draft: same `draft_version`, same
-   content hash as when `server:builder:test` started it, at the required tier or a higher one
-   (`testAtMaxTier = false`: any tier). Any stored change of the draft content resets it to 0.
+7. **draft_tested**: set only by `onDraftTested` for a pass of the **current** draft: same `draft_version`, and
+   the `defHash` CP.Testing hands back (the content that ran) equals the stored draft's content hash (a caller
+   without it: the hash of the last test `server:builder:test` started), at the required tier or a higher one
+   (`testAtMaxTier = false`: any tier). The draft is read after the audit, right before the update. Any stored
+   change of the draft content resets it to 0.
 8. **Versions**: new draft v1; the first save of a published mission without a draft creates
    `published_version + 1`; publish consumes the draft (draft fields cleared, lock released); rollback and an
    accepted code edit publish `published_version + 1` and move an existing draft to the next number (rollback) or
@@ -60,9 +62,11 @@ Response shapes: all in `builder_protocol.md` §3/§4 and `web/src/types/builder
     file is the source of truth on start and on reload. An accepted edit keeps the developer's file (only our
     header's `version:` line is updated and an `edited:` line added), is stored as a new version with
     `edited_in_code = 1`, and the previous published version is regenerated as `<id>.v<n>.lua.bak` (the edit
-    overwrote it). Payout fields are stripped with a console warning (each load). A file that breaks the
-    guardrails or does not load stays on disk untouched and is **not** used: the last published version
-    (`published_definition`) stays live, with a warning on every reload. Conflict (the draft also changed since the
+    overwrote it). Payout fields (at any depth) are stripped with a console warning (each load). The guardrails
+    run on the builder copy (builder units), and the file itself must also pass `CP.Missions.normalize` as
+    written, because that file is what goes live. A file that breaks the guardrails or does not load stays on
+    disk untouched and is **not** used: the last published version (`published_definition`) stays live, with a
+    warning on every reload. Conflict (the draft also changed since the
     last publish, i.e. differs from `published_definition`): the file wins, the draft is written as
     `<id>.draft.lua.bak`, cleared from the row, the lock is released, the editor is told
     (`client:builder` `reloaded` + toast) and `codeEditConflict` is audited. The code-edit actor is `console`.
@@ -70,7 +74,9 @@ Response shapes: all in `builder_protocol.md` §3/§4 and `web/src/types/builder
     without it takes the file on disk as its baseline.
 12. **Ids**: `custom_` + slug of the label (`[a-z0-9_]`, slug at most 30 characters), `_2`… on a clash with any
     custom or built-in id; creation uses `INSERT IGNORE` and retries on a race. An explicit `save` of a
-    never-published draft renames the row when the label's slug changed (`previousId` in the reply).
+    never-published draft renames the row when the label's slug changed (`previousId` in the reply). A test
+    started before the rename is outdated (the id and label are part of its content); its result, sent under the
+    old id, never reaches the renamed draft (a new mission may take the old id).
 13. **Permissions**: `builder:list/get/config`, `create`, `duplicate` and `validate` need `builderEdit` (admins
     always); editing someone else's mission needs `builderEditAny`; publish/archive/restore of someone else's need
     `builderEditAny` too; `breakLock` needs `breakEditLock`. Any custom mission may be duplicated into an own draft.
@@ -111,7 +117,7 @@ Response shapes: all in `builder_protocol.md` §3/§4 and `web/src/types/builder
 - **CP.Testing**: `startDraft(src, def, { tier, location = index|'random', useStartRoute })` receives the
   **normalised** draft (`id` = mission id, `source = 'custom'`, `status = 'draft'`, `version` = draft version,
   `defHash`). Please gate it with `CP.Alerts.inArena` too, and when the tester records Passed/Failed call
-  `CP.Builder.onDraftTested(def.id, def.version, <tier name the run used>, passed, src)`.
+  `CP.Builder.onDraftTested(def.id, def.version, <tier name the run used>, passed, src, def.defHash)`.
 - **CP.Admin**: accept category `'builder'` in `audit` and post it to `cp_webhook_builder`; the actions listed in
   interpretation 17. `/CrimsonPoliceAdmin reload` → `CP.Missions.reload()` (which calls `CP.Builder.onReload()`).
 - **Builder client** (`modules/builder/client.lua`): the client actions of protocol §6 (`builderPlace`,

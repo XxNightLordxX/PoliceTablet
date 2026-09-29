@@ -38,6 +38,7 @@ local function S_of(ctx)
             applied = {},
             tasked = {},
             drive = {},
+            routeDone = {},
             left = {},
             lost = {},
             lastReport = {},
@@ -133,6 +134,8 @@ local function DropBlip(S, k)
 end
 
 local function EnsureBlip(S, k, ent, sprite, label, scale)
+    -- a loop pass resumed after the cleanup (it waited in ctx.control) draws nothing
+    if not S.alive then return end
     local b = S.blips[k]
     if b and b.ent == ent and DoesBlipExist(b.id) then return end
     DropBlip(S, k)
@@ -163,7 +166,8 @@ local function ReportOnce(S, kind, netId, extra)
 end
 
 local function SetHint(S, text)
-    if S.hint == text then return end
+    -- never a line written after the cleanup
+    if not S.alive or S.hint == text then return end
     S.hint = text
     S.ctx.hudDetail(text)
 end
@@ -175,6 +179,7 @@ end
 -- already owns it). regained = another client owned it since the last check: its config and tasks may
 -- not have migrated, so the caller re-applies and re-tasks.
 local function Own(S, key, ent)
+    if not (S.alive and S.current) then return false, false end
     if NetworkHasControlOfEntity(ent) then
         local regained = S.lost[key] == true
         S.lost[key] = nil
@@ -185,6 +190,8 @@ local function Own(S, key, ent)
         return false, false
     end
     S.lost[key] = nil
+    -- ctx.control waits for the hand-over: the objective may have stopped meanwhile
+    if not (S.alive and S.current) then return false, false end
     return true, true
 end
 
@@ -207,7 +214,10 @@ local function TaskDrive(S, v, veh, driver, force)
     S.drive[v.netId] = d
     d.at = GetGameTimer()
     d.armed = false                  -- the new end point only counts once the car has left it behind
-    if route and not d.free then
+    -- an open route, once done, stays done: kept outside S.drive (reset on every regain) and sent by the
+    -- server for a new host, so the fleeing car is never sent back to the route
+    if v.routeDone then S.routeDone[v.netId] = true end
+    if route and not S.routeDone[v.netId] then
         local pts = Remaining(route, GetEntityCoords(veh))
         if #pts > 0 then
             d.mode, d.last = 'route', pts[#pts]
@@ -222,7 +232,7 @@ local function TaskDrive(S, v, veh, driver, force)
             })
             return
         end
-        d.free = true
+        S.routeDone[v.netId] = true
     end
     d.mode, d.last = 'flee', nil
     CP.Npc.task(driver, 'flee', { vehicle = veh, speed = speed, style = style, force = force })
@@ -243,7 +253,7 @@ local function MonitorDrive(S, v, veh, driver)
             d.armed = true
         elseif d.armed then
             local route = RouteInfo(S)
-            if not (route and route.loop) then d.free = true end
+            if not (route and route.loop) then S.routeDone[v.netId] = true end
             TaskDrive(S, v, veh, driver, true)
             return
         end
@@ -277,6 +287,8 @@ local function HostVehicle(S, v)
     local owned, regained = Own(S, 'v' .. tostring(v.netId), veh)
     if not owned then return end
     if S.applied[v.netId] ~= veh or regained then
+        -- a new car under this net id (test restart) has its route ahead; a regain keeps a finished one
+        if S.applied[v.netId] ~= veh then S.routeDone[v.netId] = nil end
         SetVehicleDoorsLocked(veh, 2)
         SetVehicleEngineOn(veh, true, true, false)
         S.applied[v.netId] = veh
@@ -557,7 +569,7 @@ CP.Blocks.register(BLOCK, {
     hostChanged = function(ctx, isHost)
         local S = S_of(ctx)
         S.isHost = isHost == true
-        S.applied, S.tasked, S.drive, S.left, S.lost = {}, {}, {}, {}, {}
+        S.applied, S.tasked, S.drive, S.routeDone, S.left, S.lost = {}, {}, {}, {}, {}, {}
     end,
 
     stop = function(ctx)

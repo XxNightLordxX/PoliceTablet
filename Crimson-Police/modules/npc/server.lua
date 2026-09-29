@@ -129,6 +129,15 @@ local function InArena(src)
     return ok and res == true
 end
 
+-- For judging someone else's hit or kill: the crimsonArena flag is client-writable, so a player in bucket 0 is
+-- in this world whatever it says (a real match player is in Crimson-Arena's bucket).
+local function InArenaMatch(src)
+    if not InArena(src) then return false end
+    if type(GetPlayerRoutingBucket) ~= 'function' then return true end
+    local ok, b = pcall(GetPlayerRoutingBucket, src)
+    return not ok or (tonumber(b) or 0) ~= 0
+end
+
 local function Notify(src, kind, key, vars)
     if CP.Tablet and CP.Tablet.notify then pcall(CP.Tablet.notify, src, kind, key, vars) end
 end
@@ -509,9 +518,9 @@ local function NoteFired(run, src)
 end
 
 local function OnWeaponDamage(src, data, hits)
-    if InArena(src) then return end
+    if InArenaMatch(src) then return end
     local attacker, kind = ShooterOf(src, data)
-    if attacker and attacker ~= src and InArena(attacker) then return end
+    if attacker and attacker ~= src and InArenaMatch(attacker) then return end
     local isShot = not NOT_SHOTS[Uhash(data.weaponType)]
     local t = Now()
     local done, fired = {}, {}
@@ -569,7 +578,7 @@ local function HealthDropped(run, netId, rec, e)
         -- of its own (a fall, a fire), so this drop is nobody's shot.
         attacker, kind = nil, 'unknown'
     end
-    if attacker and InArena(attacker) then return end
+    if attacker and InArenaMatch(attacker) then return end
     local state = rec.state
     if attacker then rec.lastDamage = { src = attacker, at = t } end
     if attacker and kind == 'player' and PROTECTED[state] and ActiveParticipant(run, attacker) then
@@ -609,7 +618,7 @@ local function Died(run, netId, rec, e)
     end
     local killer, how
     if e then killer, how = KillerOf(e, rec) end
-    if killer and InArena(killer) then killer = nil end
+    if killer and InArenaMatch(killer) then killer = nil end
     local isPart = killer ~= nil and ActiveParticipant(run, killer) ~= nil
     local prev = rec.state
     -- A participant's gun kill is proof of gunfire; noted before entityDied, which can end the run.

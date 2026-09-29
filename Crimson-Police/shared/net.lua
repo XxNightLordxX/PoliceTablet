@@ -108,10 +108,26 @@ else
         return Citizen.Await(p)
     end
 
-    -- Call the ox_lib callback 'crimson-police:<name>' and wait for { ok, data, error }.
-    function CP.Net.request(name, args)
-        local res = lib.callback.await('crimson-police:' .. name, false, args)
-        if type(res) ~= 'table' then return { ok = false, error = 'err.no_response' } end
-        return res
+    -- Call the ox_lib callback 'crimson-police:<name>' and wait for { ok, data, error }. Never raises: ox_lib
+    -- raises on an unknown callback and after its own 300 s timeout, so the call runs in a thread of its own
+    -- and a request with no answer in time gives err.timeout.
+    function CP.Net.request(name, args, timeoutMs)
+        local p, done = promise.new(), false
+        local function finish(res)
+            if done then return end
+            done = true
+            p:resolve(res)
+        end
+        CreateThread(function()
+            local ok, res = pcall(lib.callback.await, 'crimson-police:' .. name, false, args)
+            if not ok then
+                CP.warn('net', '%s failed: %s', name, tostring(res))
+                res = nil
+            end
+            if type(res) ~= 'table' then res = { ok = false, error = 'err.no_response' } end
+            finish(res)
+        end)
+        SetTimeout(timeoutMs or 15000, function() finish({ ok = false, error = 'err.timeout' }) end)
+        return Citizen.Await(p)
     end
 end

@@ -429,8 +429,8 @@ end
 
 -- Toast the staff who can answer a new dispute (never participants of the run). Admins for failed-run
 -- disputes, or for every dispute while the supervisors' switch is off. A flagged/voided-run dispute goes to
--- the on-duty supervisors of the run's departments; when every online supervisor of those departments
--- took part in the run (so none of them may answer it), the admins are told instead.
+-- the on-duty supervisors of the run's departments; when no online supervisor of those departments may
+-- answer it (every one took part in the run, or none is online), the admins are told instead.
 local function TellStaff(goesTo, runUuid, label)
     local st = OnlineStaff(runUuid)
     if not st then return end
@@ -440,8 +440,8 @@ local function TellStaff(goesTo, runUuid, label)
         targets = st.admins
     elseif #st.supervisors > 0 then
         targets = st.supervisors
-    elseif st.supTookPart and not st.supOther then
-        -- every supervisor of the department took part: nobody there may answer it, admins can
+    elseif not st.supOther then
+        -- the same rule as D.supervisorCanAnswer: nobody there may answer it now, admins can
         targets = st.admins
     else
         targets = {}

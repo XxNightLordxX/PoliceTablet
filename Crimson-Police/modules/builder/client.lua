@@ -131,6 +131,8 @@ local PLACE_DISABLE = {
 local RECORD_DISABLE = { 38, 51, 73, 86, 177, 194, 199 }
 -- test drive: X stops it
 local DRIVE_DISABLE = { 73 }
+-- cancel reasons after which the tablet stays closed
+local NO_REOPEN = { arena = true, unload = true, dead = true, deleted = true, run = true }
 
 -- ============================================================================
 --                             SMALL HELPERS (pure)
@@ -380,8 +382,10 @@ function B.checkSpot(spot, ctx)
     if IsNum(ctx.maxDistance) and IsNum(spot.distance) and spot.distance > ctx.maxDistance then
         return false, 'builder.place.reason.far', { max = math.floor(ctx.maxDistance) }
     end
+    -- the distances are the server's: from the point as it is stored (a ped 1 m above the aimed ground)
+    local at = type(spot.stored) == 'table' and spot.stored or spot
     for _, z in ipairs(ctx.zones or {}) do
-        if z.coords and U.dist2d(spot, z.coords) <= (tonumber(z.radius) or 0) then
+        if z.coords and U.dist2d(at, z.coords) <= (tonumber(z.radius) or 0) then
             return false, 'builder.place.reason.zone', { zone = tostring(z.label or '?') }
         end
     end
@@ -397,19 +401,19 @@ function B.checkSpot(spot, ctx)
         if spot.blocked == nil then return false, 'builder.place.reason.checking' end
         if spot.blocked then return false, 'builder.place.reason.blocked' end
     end
-    if ctx.spawn and ctx.start and IsNum(ctx.minFromStart) and U.dist(spot, ctx.start) < ctx.minFromStart then
+    if ctx.spawn and ctx.start and IsNum(ctx.minFromStart) and U.dist(at, ctx.start) < ctx.minFromStart then
         return false, 'builder.place.reason.start', { min = math.floor(ctx.minFromStart) }
     end
     if kind == 'start' and IsNum(ctx.minLocationGap) then
         for _, s in ipairs(ctx.otherStarts or {}) do
-            if U.dist2d(spot, s) < ctx.minLocationGap then
+            if U.dist2d(at, s) < ctx.minLocationGap then
                 return false, 'builder.place.reason.gap', { min = math.floor(ctx.minLocationGap) }
             end
         end
     end
     if ctx.multiple and IsNum(ctx.minGap) and ctx.minGap > 0 then
         for _, p in ipairs(points) do
-            if U.dist(spot, p) < ctx.minGap then
+            if U.dist(at, p) < ctx.minGap then
                 return false, 'builder.place.reason.spacing', { min = math.floor(ctx.minGap) }
             end
         end
@@ -586,6 +590,10 @@ local function InForeignArena()
     return IsForeignArena(st and st.crimsonArena)
 end
 
+local function OnRun()
+    return CP.Runs ~= nil and CP.Runs.current ~= nil and CP.Runs.current() ~= nil
+end
+
 local function BuilderCfg() return Config.Builder or {} end
 local function RouteCfg() return BuilderCfg().route or {} end
 
@@ -736,6 +744,19 @@ local function NewResult(tool, cancelled)
         key = o.key,
         cancelled = cancelled == true,
     }
+end
+
+-- The ARENA_CHECK_MS check of every tool: a foreign arena value, death or a mission run stops the tool.
+local function Interrupted()
+    if InForeignArena() then B.cancel('arena') return true end
+    if IsEntityDead(PlayerPedId()) then B.cancel('dead') return true end
+    if OnRun() then
+        -- a unit member is put on the run the leader drew: the tool's controls and HUD would fight the run's
+        B.cancel('run')
+        Notify('warning', 'builder.tool_stopped_run')
+        return true
+    end
+    return false
 end
 
 -- ============================================================================
@@ -909,8 +930,7 @@ local function RunPlacement(tool)
         local now = GetGameTimer()
         if now - st.arenaAt >= ARENA_CHECK_MS then
             st.arenaAt = now
-            if InForeignArena() then B.cancel('arena') return finish(true) end
-            if IsEntityDead(PlayerPedId()) then B.cancel('dead') return finish(true) end
+            if Interrupted() then return finish(true) end
         end
         DisableControls(PLACE_DISABLE)
         local ped = PlayerPedId()
@@ -942,6 +962,7 @@ local function RunPlacement(tool)
             else
                 storeZ = baseZ
             end
+            spot.stored = RoundVec({ x = hx, y = hy, z = storeZ })
             if o.kind == 'ped' or o.kind == 'vehicle' then
                 if ProbeMatches(st.probed, hx, hy, baseZ, st.heading) then
                     spot.blocked = st.probed.blocked
@@ -1057,14 +1078,23 @@ local function InZone(p)
     return nil
 end
 
--- Waypoint indexes (1-based) with no road path to the next waypoint. Yields every few checks.
-local function UnreachableOf(points)
-    local out = {}
+local function NoPath(a, b)
+    local d = CalculateTravelDistanceBetweenPoints(a.x, a.y, a.z, b.x, b.y, b.z)
+    return not IsNum(d) or d >= NO_PATH
+end
+
+-- Waypoint indexes (1-based) with no road path to the next waypoint. known[i] is the check of segment i made while
+-- it was driven; the others are checked now, a few per frame.
+local function UnreachableOf(points, known)
+    local out, calls = {}, 0
     for i = 1, #points - 1 do
-        local a, b = points[i], points[i + 1]
-        local d = CalculateTravelDistanceBetweenPoints(a.x, a.y, a.z, b.x, b.y, b.z)
-        if not IsNum(d) or d >= NO_PATH then out[#out + 1] = i end
-        if i % PATH_CHECKS_PER_FRAME == 0 then Wait(0) end
+        local missing = known and known[i]
+        if missing == nil then
+            missing = NoPath(points[i], points[i + 1])
+            calls = calls + 1
+            if calls % PATH_CHECKS_PER_FRAME == 0 then Wait(0) end
+        end
+        if missing then out[#out + 1] = i end
     end
     return out
 end
@@ -1092,10 +1122,18 @@ local function RunRecording(tool)
         messageUntil = 0,
         waiting = false,
         distance = false,
+        seated = false,     -- in the driver seat last frame
+        noPath = {},        -- [i] = segment i (waypoint i to i + 1) has no road path, checked while driven
     }
     local function say(key, vars)
         st.message = CP.L(key, vars)
         st.messageUntil = GetGameTimer() + MESSAGE_MS
+    end
+    -- Each new segment is checked while the player is next to it: the game streams path nodes around the player
+    -- only, and CalculateTravelDistanceBetweenPoints fails (NO_PATH) where they are not loaded.
+    local function checkPaths()
+        local wps = rec.wps
+        for i = #st.noPath + 1, #wps - 1 do st.noPath[i] = NoPath(rec.samples[wps[i]], rec.samples[wps[i + 1]]) end
     end
     local function sample(pos, veh)
         st.lastPos = pos
@@ -1187,7 +1225,7 @@ local function RunRecording(tool)
             maxLength = tonumber(r.maxLength) or 8000.0,
             message = CP.L('builder.rec.checking'),
         })
-        res.unreachable = (#pts >= 2 and not res.cancelled) and UnreachableOf(pts) or {}
+        res.unreachable = (#pts >= 2 and not res.cancelled) and UnreachableOf(pts, st.noPath) or {}
         return res
     end
     while true do
@@ -1195,8 +1233,7 @@ local function RunRecording(tool)
         local now = GetGameTimer()
         if now - st.arenaAt >= ARENA_CHECK_MS then
             st.arenaAt = now
-            if InForeignArena() then B.cancel('arena') return finish(true) end
-            if IsEntityDead(PlayerPedId()) then B.cancel('dead') return finish(true) end
+            if Interrupted() then return finish(true) end
         end
         DisableControls(RECORD_DISABLE)
         local ped = PlayerPedId()
@@ -1205,8 +1242,15 @@ local function RunRecording(tool)
         st.waiting, st.distance = false, false
         if not driving then
             st.waiting = 'vehicle'
+            st.seated = false
         else
             local pos = GetEntityCoords(veh)
+            if not st.seated then
+                -- back in a driver seat away from the end (walked off, another car): drive back to the end first
+                st.seated = true
+                local e = rec:endPoint()
+                if e and not st.resumeAt and U.dist2d(pos, e) > snapEvery * 2.0 then st.resumeAt = e end
+            end
             if st.resumeAt then
                 local d = U.dist2d(pos, st.resumeAt)
                 if d <= snapEvery then
@@ -1275,6 +1319,7 @@ local function RunRecording(tool)
             if removed > 0 then
                 st.resumeAt = rec:endPoint()
                 st.lastPos = nil
+                for i = #st.noPath, #rec.wps, -1 do st.noPath[i] = nil end
                 say('builder.rec.undone', { metres = math.floor(removed + 0.5) })
                 Sound(true)
             else
@@ -1285,15 +1330,19 @@ local function RunRecording(tool)
         if Pressed(C.P) then
             st.paused = not st.paused
             if not st.paused then
+                -- on foot too: the next driving frame must not sample away from the end
                 local e = rec:endPoint()
-                local vehNow = GetVehiclePedIsIn(PlayerPedId(), false)
-                if e and vehNow ~= 0 and U.dist2d(GetEntityCoords(vehNow), e) > snapEvery * 2.0 then st.resumeAt = e end
+                local pedNow = PlayerPedId()
+                local vehNow = GetVehiclePedIsIn(pedNow, false)
+                local here = GetEntityCoords(vehNow ~= 0 and vehNow or pedNow)
+                if e and U.dist2d(here, e) > snapEvery * 2.0 then st.resumeAt = e end
                 st.lastPos = nil
             end
             say(st.paused and 'builder.rec.paused_msg' or 'builder.rec.resumed_msg')
             Sound(true)
         end
         if Pressed(C.X) then return finish(false) end
+        checkPaths()
         if now - st.overlayAt >= OVERLAY_MS then
             st.overlayAt = now
             Overlay(buildOverlay(now))
@@ -1349,8 +1398,7 @@ local function RunTestDrive(tool)
         if tool.cancel then return true end
         if now - st.arenaAt >= ARENA_CHECK_MS then
             st.arenaAt = now
-            if InForeignArena() then B.cancel('arena') return true end
-            if IsEntityDead(PlayerPedId()) then B.cancel('dead') return true end
+            if Interrupted() then return true end
         end
         DisableControls(DRIVE_DISABLE)
         if Pressed(C.X) then
@@ -1539,7 +1587,7 @@ local function Refusal()
     if InForeignArena() then return 'err.in_arena' end
     if state.tool then return 'err.builder_busy' end
     if IsEntityDead(PlayerPedId()) then return 'err.builder_dead' end
-    if CP.Runs and CP.Runs.current and CP.Runs.current() then return 'err.builder_on_run' end
+    if OnRun() then return 'err.builder_on_run' end
     return nil
 end
 
@@ -1598,7 +1646,7 @@ function B.cancel(reason)
     local tool = state.tool
     if not tool then return false end
     tool.cancel = reason or 'cancelled'
-    if reason == 'arena' or reason == 'unload' or reason == 'dead' or reason == 'deleted' then tool.noReopen = true end
+    if NO_REOPEN[reason] then tool.noReopen = true end
     return true
 end
 

@@ -185,7 +185,7 @@ RegisterMission({
     {
       block              = 'pursuit',
       label              = 'Stop the stolen car and arrest the suspects',
-      minSeconds         = 30,               -- quicker than this is rejected (a fast PIT, 5 s stopped, 2 x 5 s cuffs)
+      minSeconds         = 10,               -- quicker is rejected: 5 s stopped + a 5 s cuff (2 officers cuff at once)
       mode               = 'stop',
       vehicles           = 1,
       models             = { 'sultan', 'buffalo', 'kuruma' },   -- four-door cars for up to 4 suspects

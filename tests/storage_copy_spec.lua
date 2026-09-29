@@ -827,11 +827,63 @@ H.eq(SameTables(folderDump, DumpMaria(folderDb, true), 'database mode, files-to-
 H.eq(RowCount('SELECT xp AS n FROM cp_officers WHERE citizenid = \'CPY00001\''), 1500,
     'the database\'s change was replaced')
 
+-- files-to-database force into the database in use while the server keeps writing: an officer logs in and gets
+-- XP (their cp_officers row) after the copy emptied the tables, before it reaches cp_officers. The copy still
+-- finishes, and the database is not left empty.
+do
+    local officers = EngineCount(folderDb, 'SELECT COUNT(*) AS n FROM cp_officers')
+    local realAwait = MySQL.query.await
+    local wrote = false
+    MySQL.query.await = function(sql, params)
+        if not wrote and type(sql) == 'string' and sql:find('INSERT INTO `cp_officers`', 1, true) == 1 then
+            wrote = true
+            realAwait('INSERT INTO cp_officers (citizenid, xp) VALUES (?, 7) ON DUPLICATE KEY UPDATE xp = xp + 7',
+                { 'CPY00001' })
+        end
+        return realAwait(sql, params)
+    end
+    m0 = Mark()
+    local okCopy, errCopy = pcall(admin, 'storage', 'copy', 'files-to-database', 'force')
+    MySQL.query.await = realAwait
+    out = OutputSince(m0)
+    H.ok(okCopy, 'the copy ran (' .. tostring(errCopy) .. ')')
+    H.ok(wrote, 'the other write happened during the copy')
+    H.ok(out:find('Copied 13 tables', 1, true) ~= nil,
+        'a row written during the copy does not stop it: ' .. (out:match('[^\n]*failed[^\n]*') or out:sub(1, 300)))
+    H.eq(RowCount('SELECT COUNT(*) AS n FROM cp_officers'), officers, 'the database keeps every officer')
+    H.eq(RowCount('SELECT COUNT(*) AS n FROM cp_mission_runs'), #runs, 'and every run')
+    H.eq(RowCount('SELECT xp AS n FROM cp_officers WHERE citizenid = \'CPY00001\''), 1500,
+        'the copied row replaces the one written during the copy')
+end
+
 -- the default folder is the resource's saves folder
 Config.Database.folder = 'saves'
 m0 = Mark()
 admin('storage')
 H.ok(PrintedSince(m0, 'Saves folder: ' .. H.resourcePath() .. '/saves (not used') ~= nil,
     'saves = the folder inside the resource')
+
+-- FXServer refuses os.execute (EACCES, it runs nothing) and has os.createdir (one folder per call): a missing
+-- saves folder, its parent missing too, is still created for database-to-files
+do
+    local realExecute, realCreatedir = os.execute, os.createdir
+    os.createdir = function(path)
+        if realExecute(('mkdir \'%s\' 2>/dev/null'):format((path:gsub('\'', '\'\\\'\'')))) then return true end
+        return nil, path .. ': Directory already exists.'
+    end
+    os.execute = function() return nil, 'Permission denied', 13 end
+    local folder3 = H.resourcePath() .. '/fx saves/live'
+    Config.Database.folder = folder3
+    m0 = Mark()
+    local okCopy, errCopy = pcall(admin, 'storage', 'copy', 'database-to-files')
+    os.execute, os.createdir = realExecute, realCreatedir
+    out = OutputSince(m0)
+    H.ok(okCopy, 'the copy ran (' .. tostring(errCopy) .. ')')
+    local copied = out:match('Copied[^\n]*') or out:sub(1, 300)
+    H.ok(out:find('Copied 13 tables', 1, true) ~= nil,
+        'FXServer: the missing folder is made with os.createdir (' .. copied .. ')')
+    H.eq(#M.new({ store = M.folderStore(folder3) }):load():tableNames(), 14, 'and holds every table')
+    Config.Database.folder = 'saves'
+end
 
 return H

@@ -566,10 +566,10 @@ local function Placed(pts, order, i)
     return ToVec4(base, math.cos(a) * REUSE_OFFSET * lap, math.sin(a) * REUSE_OFFSET * lap)
 end
 
-local function SetPed(ctx, st, p, state)
+local function SetPed(ctx, st, p, state, extra)
     if p.state == state then return end
     p.state = state
-    CP.Npc.setState(ctx.run, p.netId, state)
+    CP.Npc.setState(ctx.run, p.netId, state, extra)
     st.dirty = true
 end
 
@@ -587,7 +587,8 @@ local function SurrenderPed(ctx, st, p)
     st.dirty = true
 end
 
-local function SpawnOne(ctx, st, role, point, armed, extra)
+-- holster: an armed ped whose weapon stays out of sight (not given) until DrawWeapon; it still counts as armed.
+local function SpawnOne(ctx, st, role, point, armed, extra, holster)
     local obj = ctx.obj
     local r = RngOf(ctx)
     local opts = {
@@ -609,9 +610,12 @@ local function SpawnOne(ctx, st, role, point, armed, extra)
     -- fireWithin. They join CRIMSONPOLICE_HOSTILE (which hates PLAYER) only when the server turns
     -- them 'hostile' (CP.Npc's combat task sets the group; apply reads the state first).
     opts.cfg.group = 'neutral'
+    local weapon = opts.weapon
+    if holster then opts.weapon = nil end
     local ent, netId = ctx.spawnPed(opts)
     if not netId then return nil end
     local p = { netId = netId, entity = ent, role = role, armed = armed == true, state = 'idle', far = 0, close = 0 }
+    if holster then p.weapon = weapon end
     st.peds[tostring(netId)] = p
     st.counts[role] = st.counts[role] + 1
     st.dirty = true
@@ -686,6 +690,18 @@ local function MoveToDoor(ctx, p)
     SetEntityHeading(p.entity, h + 0.0)
 end
 
+-- The holstered pistol of the fighting door suspect, given in hand now; the bag cfg gets it too, so a
+-- new host's CP.Npc.apply draws it. Returns the setState extra (nil when nothing was holstered).
+local function DrawWeapon(p)
+    local w = p.weapon
+    if not w then return nil end
+    p.weapon = nil
+    if GiveWeaponToPed and p.entity and DoesEntityExist(p.entity) then
+        GiveWeaponToPed(p.entity, joaat(w), 250, false, true)
+    end
+    return { cfg = { weapon = w } }
+end
+
 local function ApplyResponse(ctx, st, p)
     if p.role == 'associate' then
         SetPed(ctx, st, p, 'hostile')
@@ -695,7 +711,7 @@ local function ApplyResponse(ctx, st, p)
     elseif st.response == 'flee' then
         SetPed(ctx, st, p, 'fleeing')
     else
-        SetPed(ctx, st, p, 'hostile')
+        SetPed(ctx, st, p, 'hostile', DrawWeapon(p))
     end
 end
 
@@ -724,7 +740,8 @@ local function SpawnDoorLoop(ctx, st)
             or (ctx.location and ctx.location.start and ctx.location.start.coords)
         if point and ctx.canSpawn(1, armed) then
             local fleeTo = U.serialize(PointList(ctx.location, obj.fleeTo))
-            local p = SpawnOne(ctx, st, 'suspect', ToVec4(point), armed, { fleePoints = fleeTo })
+            -- a pistol in hand before the knock would give the secret response away
+            local p = SpawnOne(ctx, st, 'suspect', ToVec4(point), armed, { fleePoints = fleeTo }, not st.knocked)
             if p and st.knocked then ApplyResponse(ctx, st, p) end
             ok = p ~= nil
         else

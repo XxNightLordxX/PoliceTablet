@@ -24,7 +24,9 @@ overlays and of the protocol extensions are in `web/src/types/builder_client.ts`
 4. The NUI keeps editor state in module memory (`web/src/builder/store.ts`: open mission, step, location, the
    running tool, unsaved draft, route meta) because closing the tablet unmounts the screens. A window listener
    queues `clientResult` pushes even while no editor is mounted; on reopen the editor pulls `builderResult` too
-   (both deduplicated by `seq`), applies the result to the draft (`applyResult.ts`) and autosaves.
+   (both deduplicated by `seq`), applies the result to the draft (`applyResult.ts`) and autosaves. The running
+   tool is kept until its result is applied: its `PointSpec` says how (flee paths are a list of lists, a recorded
+   checkpoint route is thinned).
 
 ## Contract interpretations
 
@@ -49,7 +51,9 @@ overlays and of the protocol extensions are in `web/src/types/builder_client.ts`
   inside a no-build zone (2D) → water → not on the ground (aimed surface more than 0.75 m from
   `GetGroundZFor_3dCoord`, or steeper than ~45°; not for markers) → capsule probe pending / blocked (peds and
   vehicles) → spawn key closer than `minSpawnFromStart` to the start (3D, as the server) → start closer than
-  `minLocationGap` to another start (2D) → closer than `minGap` to a point of the same key.
+  `minLocationGap` to another start (2D) → closer than `minGap` to a point of the same key. The zone and
+  distance checks use the point as it is stored (`spot.stored`: rounded, a ped at ground + 1 m), which is what
+  the server checks on save and publish.
 - **Road snapping:** a sample further than `maxOffRoad` from the closest vehicle node is still accepted when the
   vehicle is on a road surface (`IsPointOnRoad`) and the node is within 4 × `maxOffRoad`: long straight roads
   have sparse nodes, and the server's own check is only on the saved waypoints. Waypoints are the snapped node
@@ -59,12 +63,17 @@ overlays and of the protocol extensions are in `web/src/types/builder_client.ts`
   than 1 m are duplicates. `length` is the sum of the waypoint distances (what the server measures).
 - **Undo and resume:** Backspace removes the last `undoMetres` of samples (never the first). Sampling then waits
   until the driver is back within `snapEvery` of the new end (overlay `waiting = 'return'`, a marker shows the
-  spot) so the route never jumps. The same applies to a resume more than 2 × `snapEvery` away from the end.
+  spot) so the route never jumps. The same applies to a resume (in a vehicle or on foot) more than 2 ×
+  `snapEvery` away from the end, and to getting back into a driver seat that far from it (another car, or after
+  walking off).
 - **Stop points** (escort): E (or the horn) adds one at the current end with `Config.Blocks.escort.stopWait`
   default seconds, at most `Config.Blocks.escort.stops[2]`; the editor lets the builder change each wait within
   the stopWait range afterwards.
-- **Unreachable waypoints:** after X the client checks each segment with `CalculateTravelDistanceBetweenPoints`
-  (≥ 100000 = no path), four per frame, and returns the indexes in `unreachable` (the map draws them dashed red).
+- **Unreachable waypoints:** each segment is checked with `CalculateTravelDistanceBetweenPoints` (≥ 100000 = no
+  path) while recording, as soon as its second waypoint is kept: the player is next to it then, and the game
+  streams path nodes around the player only (far away the native fails with 100000 too). An undo drops the checks
+  of the segments it removes. After X the rest (the last segment) is checked, four per frame, and the indexes are
+  returned in `unreachable` (the map draws them dashed red).
 - **Test drive:** more than 200 m from the route start a GPS waypoint leads there first (`waiting = 'approach'`;
   the builder never teleports anyone); the spawn point must be clear of the player (6 m); the local vehicle and a
   local driver (`s_m_m_armoured_01`, fallback `a_m_m_business_01`) drive waypoint by waypoint with
@@ -78,7 +87,9 @@ overlays and of the protocol extensions are in `web/src/types/builder_client.ts`
   HUD and controls), `err.builder_disabled` (`Config.Builder.enabled = false`), `err.builder_bad_vehicle`
   (test-drive vehicle outside `Config.Builder.allowed.vehicles` / `escortVehicles`, or not a vehicle model),
   `err.invalid_payload`. A foreign arena value arriving while a tool runs stops it (state bag handler, work
-  queued with `SetTimeout(0)`; the tool also re-checks every 250 ms) and the tablet does not reopen.
+  queued with `SetTimeout(0)`; the tool also re-checks every 250 ms) and the tablet does not reopen. The same
+  250 ms check stops a tool when the player is put on a mission run (a unit leader drew one): a
+  `builder.tool_stopped_run` toast, no reopen over the run HUD.
 - **Routing bucket:** the bucket half of `CP.Alerts.inArena` has no client native, so the client relies on the
   state bag; `server:builder:test` re-checks the full `CP.Alerts.inArena` on the server.
 - **Builder events:** `crimson-police:client:builder` `lockBroken` / `reloaded` stop a running tool of that
@@ -144,5 +155,8 @@ check reason, the payload parsers (aliases, clamping, labels, errors), driving s
 the runtime against stubbed natives: registration, refusals, a placement run (ghost local, rotate, place, undo,
 invalid spots, result, push, reopen on the right UI, builderResult once), a start placement (radius, single
 point), a recording run (vehicle wait, road-surface acceptance, off-road rejection, stop point, undo and return,
-pause, unreachable check), a test drive (approach, clear, local entities, stop wait, a waypoint failed after the
-timeout, cleanup), arena / death / unload / events / resource stop. The slice writes no SQL.
+pause, unreachable check), road paths checked while driving (a long route, an undo), a resume or another car
+away from the end, a spawn below the start (stored height), a test drive (approach, clear, local entities, stop
+wait, a waypoint failed after the timeout, cleanup), arena / mission run / death / unload / events / resource stop,
+and the NUI store with `applyResult.ts` (bundled with esbuild from `web/node_modules` and run in node; skipped
+without them). The slice writes no SQL.

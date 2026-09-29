@@ -185,10 +185,11 @@ export function useDraftEditor(
         // pull the Lua copy too (a push may have been missed); both are deduplicated by seq
         const pulled = await clientAction<BuilderClientResultEx | null>('builderResult', {});
         if (pulled.ok && pulled.data) queueResult(pulled.data);
-        const list = takeResults(idRef.current);
-        if (!list.length) return;
+        // not loaded yet: the results stay queued, load() applies them
         let next = defRef.current;
         if (!next) return;
+        const list = takeResults(idRef.current);
+        if (!list.length) return;
         const before = next;
         const tool = currentTool();
         let changed = false;

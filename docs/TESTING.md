@@ -14,7 +14,7 @@ passes (docs/ARCHITECTURE.md §11). How work flows around the checks is in docs/
 | `contracts` | `python3 tools/check_contracts.py` (module calls, events, NUI names, locale keys, build stamp) | 0.4 s |
 | `lint-fivem` | `python3 tools/lint_fivem.py`: FiveM pitfall rules FX01-FX09, known hits in `tools/lint_baseline.txt` | 1.7 s |
 | `style` | `python3 tools/restyle.py --check`: restyles a scratch copy of the tree and fails on any file that differs (docs/STYLE.md) | 26 s |
-| `suite-db` | `lua5.4 tests/run.lua`: 28 specs on MariaDB | 16–17 s |
+| `suite-db` | `lua5.4 tests/run.lua`: 30 specs on MariaDB | 16–17 s |
 | `suite-files` | `lua5.4 tests/run.lua --storage=files`: the same specs with the database off (saves folder) | 16–18 s |
 | `suite-shadow` | `lua5.4 tests/run.lua --storage=shadow`: MariaDB, the oxmysql twin and the engine compared, 0 differences | 23 s |
 | `tsc` | `cd Crimson-Police/web && npx --no-install tsc --noEmit` | 7–8 s |
@@ -159,13 +159,13 @@ Each step prints one line while the run goes on, and a summary at the end:
 
 ```
 SUMMARY
-  PASS  syntax            0.3s  123 Lua files
+  PASS  syntax            0.3s  125 Lua files
   PASS  contracts         0.4s  0 problems
-  PASS  lint-fivem        1.6s  lint_fivem PASS: 0 new hits, 8 known (baseline), 0 stale baseline lines
+  PASS  lint-fivem        1.6s  lint_fivem PASS: 0 new hits, 2 known (baseline), 0 stale baseline lines
   PASS  style            26.0s  style: every file is formatted
-  PASS  suite-db         15.7s  28 specs, 30955 passed, 0 failed, 0 crashed
-  PASS  suite-files      15.7s  28 specs, 30955 passed, 0 failed, 0 crashed
-  PASS  suite-shadow     21.9s  28 specs, 30955 passed, 0 failed, 0 crashed, 0 differences
+  PASS  suite-db         16.9s  30 specs, 31407 passed, 0 failed, 0 crashed
+  PASS  suite-files      15.9s  30 specs, 31407 passed, 0 failed, 0 crashed
+  PASS  suite-shadow     24.2s  30 specs, 31401 passed, 0 failed, 0 crashed, 0 differences
   PASS  tsc               7.3s  tsc: no errors
   PASS  build            10.0s  web/dist is up to date
 PASS: 9 passed, 0 failed in 1m 39s (logs: /tmp/cp_check.Xy12ab)
@@ -216,6 +216,8 @@ The specs pass at any wall-clock time and in any time zone: this was checked wit
 Monday 00:10, a Tuesday 20:10 and 23:00 and a New Year's Eve, and with `CP_TEST_TZ` set to
 `America/Los_Angeles` and `Pacific/Auckland`, in database and files mode. Outside UTC,
 `tests/memsql_spec.lua` leaves out its 8 UTC-only time zone checks, so its count is lower there.
+`tests/challenge_tz_spec.lua` runs its season-week checks again in child runs under three other zones
+(`America/New_York`, `Europe/Berlin`, `Asia/Kolkata`), except in shadow mode, which compares with MariaDB's UTC dates.
 
 ## Read a failure
 
@@ -265,7 +267,7 @@ ERROR 1054 (42S22) at line 1: Unknown column 'nope' in 'SELECT'
 - `could not build the run database:` the migrations failed; the `mysql` message is above it. Exit 2.
 - `SKIP <spec> (<mode> mode): <reason>`: a check that means something only on MariaDB; every skip is listed
   at the end. `REPORT` lines under a spec are timings and sizes (`storage`, `storage_copy`), not checks.
-- The last line: `28 specs, N assertions passed, F failed, C crashed (storage: <mode>)`. Exit 0 only with
+- The last line: `30 specs, N assertions passed, F failed, C crashed (storage: <mode>)`. Exit 0 only with
   0 failed, 0 crashed and, in shadow mode, 0 differences.
 - A check that fails only when specs run side by side (`tests/storage_spec.lua` holds every query under
   250 ms): rerun with `--jobs=1` before calling it a regression.

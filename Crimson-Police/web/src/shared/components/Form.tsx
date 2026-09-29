@@ -92,7 +92,7 @@ export interface TextInputProps extends Omit<InputHTMLAttributes<HTMLInputElemen
     prefix?: ReactNode;
     suffix?: ReactNode;
     invalid?: boolean;
-    // Called on Enter.
+    // Called on Enter (once while the key is held).
     onEnter?: () => void;
 }
 
@@ -113,7 +113,7 @@ export const TextInput = forwardRef<HTMLInputElement, TextInputProps>(function T
                 aria-describedby={f.describedBy}
                 onChange={e => onChange(e.target.value)}
                 onKeyDown={e => {
-                    if (e.key === 'Enter' && onEnter) onEnter();
+                    if (e.key === 'Enter' && !e.repeat && onEnter) onEnter();
                     onKeyDown?.(e);
                 }}
                 {...rest}

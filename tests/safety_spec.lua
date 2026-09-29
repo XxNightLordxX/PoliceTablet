@@ -115,6 +115,7 @@ CP.Runs = {
         if runsCfg.setFlagOnArrive then CP.Alerts.set(src, r) end
     end,
     -- A deliberately careless engine: it clears the flag even when keepFlag is passed (the hold must win).
+    -- An in-arena src only loses the intent, as the real ReleaseFlag does (CRIMSON_ARENA rule 1).
     removeParticipant = function(r, src, reason, opts)
         rlog.removed[#rlog.removed + 1] = {
             run = r.id,
@@ -128,7 +129,7 @@ CP.Runs = {
         p.status = 'left'
         p.endReason = reason
         if reason == 'downed' and runsCfg.countDowns then r.stats.downs = r.stats.downs + 1 end
-        CP.Alerts.clear(src)
+        if CP.Alerts.inArena(src) then CP.Alerts.forget(src) else CP.Alerts.clear(src) end
         CP.Route.stop(r, src)
         if opts and opts.notify then CP.Tablet.notify(src, 'warning', opts.notify) end
         if runsCfg.autoEnd and #ActiveOf(r) == 0 then r.state = 'ended' end
@@ -1417,6 +1418,57 @@ do
     buckets[70] = nil
     H.eq(CP.Alerts.clear(70), true, 'forget dropped the hold too: a later clear removes our value')
     H.eq(Bag(70), nil, 'value removed by that clear')
+end
+
+-- 7) a participant who left because only the routing bucket moved (an interior, another instancing script) keeps
+--    our value while in that bucket; back in bucket 0 with no run, hold or downed follow-up it goes, so
+--    sc-ambulance and sc-dispatch alert for them again. A foreign value or a new intent is never touched.
+do
+    local r = NewRun('r-af-2', { srcs = { 90, 91, 92, 93 }, arrived = true, state = 'in_progress' })
+    for _, s in ipairs({ 90, 91, 92, 93 }) do CP.Alerts.set(s, r) end
+    H.ok(OURS(Bag(90)) and OURS(Bag(93)), 'stale: flags on before')
+    -- qbx_core SetPlayerBucket (a property)
+    for _, s in ipairs({ 90, 91, 92, 93 }) do buckets[s] = 5 end
+    RunFor(1000)
+    H.eq(RemovedFor(90)[1] and RemovedFor(90)[1].reason, 'quit', 'stale: another bucket mid-run -> quit')
+    H.eq(NotesFor(90, 'run.left_for_arena'), 1, 'stale: toast run.left_for_arena')
+    H.eq(CP.Alerts.has(90), false, 'stale: intent dropped')
+    RunFor(3000)
+    H.ok(OURS(Bag(90)), 'stale: the bag is left alone while in another bucket')
+
+    -- back in bucket 0: removed by the next reconcile
+    buckets[90] = nil
+    RunFor(1000)
+    H.eq(Bag(90), nil, 'stale: our value removed once back in bucket 0')
+    H.eq(CP.Alerts.has(90), false, 'stale: no intent either')
+
+    -- a hold (CP.Downed keeps the flag) waits for its release
+    CP.Alerts.hold(91, true)
+    buckets[91] = nil
+    RunFor(2000)
+    H.ok(OURS(Bag(91)), 'stale: kept while held')
+    CP.Alerts.hold(91, false)
+    RunFor(1000)
+    H.eq(Bag(91), nil, 'stale: removed once the hold is released')
+
+    -- Crimson-Arena places them: its value is never removed, not even back in bucket 0
+    BagSet(92, 'crimsonArena', { active = true, matchId = 'm92' })
+    H.step(0)
+    buckets[92] = nil
+    RunFor(2000)
+    H.eq((Bag(92) or {}).matchId, 'm92', 'stale: a foreign value is left alone')
+
+    -- a new run's arrival in bucket 0 before the reconcile ran: the value is theirs again
+    local r2 = NewRun('r-af-3', { srcs = { 93 }, arrived = true, state = 'in_progress' })
+    buckets[93] = nil
+    H.ok(CP.Alerts.set(93, r2), 'stale: a new run sets the flag')
+    RunFor(2000)
+    H.ok(OURS(Bag(93)), 'stale: a new intent keeps our value')
+    H.ok(CP.Alerts.has(93), 'stale: intent recorded')
+    CP.Alerts.clear(93)
+    r2.state = 'ended'
+    BagSet(92, 'crimsonArena', nil)
+    H.step(0)
 end
 
 -- ============================================================================

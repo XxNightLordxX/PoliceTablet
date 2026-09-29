@@ -127,7 +127,7 @@ RegisterMission({
     {
       block      = 'flee_arrest',
       label      = 'Serve the arrest warrant',
-      minSeconds = 30,
+      minSeconds = 8,                                               -- the 3 s knock + the 5 s cuff; quicker is rejected
       mode       = 'door',
       door       = 'door',
       knock      = { label = 'Knock and announce', duration = 3000 },

@@ -110,8 +110,10 @@ CP.Runs.dispatch(run, cp.obj, src, ev): `{ type = 'cuffed', netId }`, `{ type = 
 15. **Routes** start at `args.startIndex`, or at the nearest point ahead (the first local minimum of the
     distance along the route, 50 m hysteresis, so an out-and-back route passing the ped is not skipped).
     A waypoint is reached within `max(12 m, 1.2 × speed, stopRange + 4 m)` (2.5 m on foot) or when passed
-    close by (within 3× that and beyond it along the next segment). A flee route ends in
-    `TaskSmartFleePed` from the nearest participant; a loop wraps.
+    close by (within 3× that and beyond it along the leg being driven, which starts at the previous
+    waypoint, or where the task started). The next leg is not used: on a hairpin its point lies on the
+    approach side, so the turn would be cut short. The last point of a route that does not loop must be
+    reached. A flee route ends in `TaskSmartFleePed` from the nearest participant; a loop wraps.
 16. **"No ragdoll/flee when hostile"**: flee attributes off, combat attributes 17 off / 58 on,
     `SetPedCanRagdollFromPlayerImpact(false)` and blocking of non-temporary events. Ragdoll from weapons
     stays on because several blocks make suspects give up when stunned (a ped that cannot ragdoll cannot
@@ -132,6 +134,8 @@ CP.Runs.dispatch(run, cp.obj, src, ev): `{ type = 'cuffed', netId }`, `{ type = 
 19. **One option per label.** ox_target labels are static, so the global option set holds
     `crimson-police:cuff` (default label) and one `crimson-police:cuff:<n>` per other label a block passes
     to enableCuff (e.g. "Detain driver"), at most 8, added the first time a bag with that label is seen.
+    Labels pile up over a client session, so a label that comes after the 8th is offered by the default
+    option (its prompt shows the default label; the progress bar shows the bag's own label).
     canInteract: the ped's `cp.run` is the local player's run, `cp.state == 'surrendered'`, `cp.cuff` set
     with this label, within `cp.cuff.maxDistance`, on foot, alive, not in the arena, no cuff running. The
     progress bar is cancelled when the suspect stops being surrendered, moves out of reach + 1 m, or

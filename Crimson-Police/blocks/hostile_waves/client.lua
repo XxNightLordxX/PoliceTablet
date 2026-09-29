@@ -144,6 +144,8 @@ local function removeBlip(S, netId)
 end
 
 local function EnsureBlip(S, netId, ent, boss)
+    -- a loop pass resumed after the cleanup (it waited in ctx.control) draws nothing
+    if not S.alive then return end
     local b = S.blips[netId]
     if b and b.ent == ent and DoesBlipExist(b.id) then return end
     removeBlip(S, netId)
@@ -161,7 +163,8 @@ local function EnsureBlip(S, netId, ent, boss)
 end
 
 local function SetHint(S, text)
-    if S.hint == text then return end
+    -- never a line written after the cleanup
+    if not S.alive or S.hint == text then return end
     S.hint = text
     S.ctx.hudDetail(text)
 end
@@ -180,9 +183,11 @@ end
 
 -- The host must own the ped before CP.Npc.apply / CP.Npc.task do anything (OneSync hands ownership
 -- to whoever is closest, often another participant): request it every time it is needed.
-local function HasControl(ctx, ent)
+-- ctx.control waits for the hand-over: an objective that stopped meanwhile tasks nobody.
+local function HasControl(S, ent)
+    if not (S.alive and S.current) then return false end
     if NetworkHasControlOfEntity(ent) then return true end
-    return ctx.control(ent, CONTROL_MS) == true
+    return S.ctx.control(ent, CONTROL_MS) == true and S.alive and S.current
 end
 
 local FIRST_TASK = { hostile = 'combat', surrendered = 'kneel', cuffed = 'cuffed' }
@@ -190,7 +195,7 @@ local FIRST_TASK = { hostile = 'combat', surrendered = 'kneel', cuffed = 'cuffed
 local function HostAi(S, info, ent, state, bag)
     local ctx = S.ctx
     if S.applied[info.netId] ~= ent then
-        if not HasControl(ctx, ent) then return end
+        if not HasControl(S, ent) then return end
         local cfg = (bag and bag.cfg) or {}
         if CP.Npc.apply(ent, cfg) == false then return end
         -- first sight or new host: task for the current state (later changes: CP.Npc's bag handler).
@@ -232,6 +237,8 @@ local function Loop(S)
                         local bag = BagOf(ent)
                         local state = (bag and bag.state) or info.state
                         if IsHost(S) then HostAi(S, info, ent, state, bag) end
+                        -- HostAi waits for control (ctx.control yields): a stop meanwhile has already cleaned up
+                        if not (S.alive and S.current) then break end
                         if state == 'hostile' or state == 'surrendered' then
                             if not ctx.radioSilence then EnsureBlip(S, info.netId, ent, info.role == 'boss') end
                             if state == 'surrendered' and U.dist(me, GetEntityCoords(ent)) <= HINT_RANGE then

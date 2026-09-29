@@ -23,6 +23,7 @@
   "err.refused": "The server refused that request.",
   "err.suspended": "You are suspended from Crimson-Police.",
   "err.suspended_dispatch": "You are suspended in SC-Dispatch and cannot use Crimson-Police.",
+  "err.tablet_closed": "The tablet was closed before that screen opened.",
   "err.timeout": "The server did not answer in time.",
   "err.unknown_action": "That action is not available.",
   "err.unknown_department": "Unknown department.",

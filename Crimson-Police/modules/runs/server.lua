@@ -1109,12 +1109,6 @@ local function RemoveItems(run, p)
     end
 end
 
-local function ActiveRunIds()
-    local ids = {}
-    for id in pairs(runs) do ids[id] = true end
-    return ids
-end
-
 local function MissionItemNames()
     local names = {}
     local ok, defs = Call('Missions', 'all')
@@ -1128,18 +1122,20 @@ local function MissionItemNames()
     return names
 end
 
--- Remove Crimson-Police mission items (metadata.cpItem) of runs that are no longer active.
+-- Remove Crimson-Police mission items (metadata.cpItem) of every run the player is not active in.
 local function SweepPlayer(src, citizenid)
     if not PlayerOnline(src) or not InventoryUp() or InArena(src) then return false end
     local names = MissionItemNames()
     local o = citizenid and orphans[citizenid]
     if o then for n in pairs(o.names) do names[n] = true end end
-    local live = ActiveRunIds()
     local complete = true
     for name in pairs(names) do
         local _, ok = RemoveSlots(src, name, { cpItem = true }, function(slot)
             local meta = slot.metadata
-            return type(meta) == 'table' and meta.cpRun ~= nil and live[meta.cpRun] == true
+            local run = type(meta) == 'table' and meta.cpRun ~= nil and runs[meta.cpRun] or nil
+            local keep = run ~= nil and Runs.isParticipant(run, src)
+            if keep then complete = false end
+            return keep
         end)
         if not ok then complete = false end
     end
@@ -1949,11 +1945,16 @@ function Runs.create(opts)
     -- The lookups above may yield (database, other modules). Re-check, with no yield until the run is
     -- registered, what another accept could have changed meanwhile: nobody ends up on two runs, two
     -- racing accepts never pass the server caps together, and a Cross-Department Mission launched during
-    -- the accept locks out every other new mission, the Weekly Boss included (Hard rule 7).
+    -- the accept locks out every other new mission, the Weekly Boss included (Hard rule 7). A member who
+    -- disconnected or switched character meanwhile had no run for playerDropped to leave, so they are
+    -- refused here.
     for _, src in ipairs(run.order) do
         if Runs.isOnMission(src) then
             return nil, (src == leader) and 'err.already_on_run' or 'err.member_on_run'
         end
+        if not PlayerOnline(src) then return nil, 'err.member_unavailable' end
+        local cid = CitizenOf(src)
+        if cid and cid ~= run.participants[src].citizenid then return nil, 'err.member_unavailable' end
     end
     if not test and not opts.operationId then
         local okLock, locked = Call('Operations', 'isLocked')
@@ -1970,6 +1971,10 @@ function Runs.create(opts)
 
     local clientMission = U.copy(mission)
     clientMission.locations = nil
+    -- The clients get their own shared seed: the run seed drives the hidden server rolls (ctx.rng), and
+    -- shared/utils.lua would let a client replay them.
+    local clientSeed = U.hash(U.uuid() .. ':client:' .. tostring(GetGameTimer())) & 0x7FFFFFFF
+    if clientSeed == 0 or clientSeed == seed then clientSeed = (seed % 0x7FFFFFFE) + 1 end
     local startRoute = not (test and test.useStartRoute == false)
     local data = {
         missionId = mission.id,
@@ -1978,7 +1983,7 @@ function Runs.create(opts)
         location = location,
         start = { coords = location.start.coords, radius = location.start.radius },
         expectedTier = run.expectedTier,
-        seed = seed,
+        seed = clientSeed,
         host = run.host,
         test = test,
         modifier = run.modifier,
@@ -2095,7 +2100,7 @@ local function CompleteObjective(run, index, data, bypass)
         if elapsed < minSec then
             if not o.tooFastFlagged and not run.test and elapsed < minSec - 1 then
                 o.tooFastFlagged = true
-                local detail = ('objective %d after %.1f s (min %d s)'):format(index, elapsed, minSec)
+                local detail = ('objective %d after %.1f s (min %g s)'):format(index, elapsed, minSec)
                 CP.log(TAG, 'run %s: %s: too_fast', run.id, detail)
                 if Has('AntiCheat', 'flag') then
                     Call('AntiCheat', 'flag', run, nil, 'too_fast', detail)
@@ -2730,11 +2735,13 @@ RegisterNetEvent(CP.e('server:objective'), function(runId, index, evidence)
     end
     if InArena(src) then return end
     -- CP.AntiCheat sees every well-formed event, also one for an objective past the last (an executor's
-    -- event for a later objective flags the run 'unexpected_event' there).
+    -- event for a later objective flags the run 'unexpected_event' there). A check that failed drops the
+    -- event: it would otherwise skip the speed and duplicate checks.
     if Has('AntiCheat', 'checkEvent') then
         local okCall, ok, reason = Call('AntiCheat', 'checkEvent', run, src, index, ev)
-        if okCall and ok == false then
-            CP.log(TAG, 'run %s: evidence %s from %d rejected by anticheat (%s)', runId, ev.type, src, tostring(reason))
+        if not okCall or ok == false then
+            CP.log(TAG, 'run %s: evidence %s from %d rejected by anticheat (%s)', runId, ev.type, src,
+                tostring(okCall and reason or 'check failed'))
             return
         end
     end

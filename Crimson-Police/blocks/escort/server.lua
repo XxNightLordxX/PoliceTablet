@@ -10,6 +10,7 @@ local AMBUSH_ROUTE = 150.0        -- builder check: an ambush point this close t
 local STOPPED_MPS = 1.0           -- below this speed (3.6 km/h) the truck is stopped
 local MOVED_MPS = 3.0
 local START_GRACE_MS = 30000
+local HOST_RANGE = 400.0          -- metres: the host's client has the truck to drive (OneSync culls at 424 m)
 local WARN_STOPPED = 5            -- the stopped countdown shows after this many seconds
 local CAR_GAP = 7.0               -- metres between ambush cars along the road
 local CAR_SIDE = 4.5              -- metres from the road centre line
@@ -185,6 +186,13 @@ local function IsParticipant(ctx, src)
         if tonumber(s) == src then return true end
     end
     return false
+end
+
+-- Only the run host's client drives the truck, and only while it streams the truck.
+local function HostNear(ctx, c)
+    local host = ctx.host and ctx.host()
+    local hc = host and ctx.coords(host)
+    return hc ~= nil and U.dist(hc, c) <= HOST_RANGE
 end
 
 local function RngOf(ctx)
@@ -463,7 +471,7 @@ local function SpawnTruck(ctx, st)
     })
     if not netId then return false end
     if SetVehicleDoorsLocked and Exists(ent) then pcall(SetVehicleDoorsLocked, ent, 2) end
-    tr.netId, tr.entity, tr.spawnedAt = netId, ent, Now()
+    tr.netId, tr.entity = netId, ent
     st.dirty = true
     return true
 end
@@ -729,8 +737,9 @@ local function WatchTruck(ctx, st, dt)
         Advance(ctx, st, c)
         TriggerWaves(ctx, st, c)
         -- 2D, like the waypoints: the destination is a point on the road map, and a route's z (recorded
-        -- or estimated) must not shrink the arrival circle (docs/notes/missions_b.md).
-        if U.dist2d(c, st.points[#st.points]) <= ctx.obj.arrival then
+        -- or estimated) must not shrink the arrival circle (docs/notes/missions_b.md). Only on the final
+        -- stretch: a route may pass its destination earlier (the other carriageway, a road under a bridge).
+        if tr.wp >= #st.points and U.dist2d(c, st.points[#st.points]) <= ctx.obj.arrival then
             tr.arrived = true
             tr.arrivalHealth = health          -- truck_healthy: "the truck ARRIVES above 50% health"
             tr.stop = nil
@@ -739,7 +748,7 @@ local function WatchTruck(ctx, st, dt)
             for _, w in ipairs(st.waves) do
                 if not w.triggered then w.dropped = true end
             end
-            Message(ctx, 'block.escort.msg_arrived', { radius = ctx.obj.clearRadius }, 'success')
+            Message(ctx, 'block.escort.msg_arrived', { radius = math.floor(ctx.obj.clearRadius + 0.5) }, 'success')
         end
     end
     if tr.arrived then return end
@@ -755,7 +764,11 @@ local function WatchTruck(ctx, st, dt)
     end
     local speed = GetEntitySpeed and tonumber(GetEntitySpeed(e)) or 0.0
     if speed >= MOVED_MPS then tr.moved = true end
-    local counting = tr.moved or (tr.spawnedAt and Now() - tr.spawnedAt >= START_GRACE_MS)
+    -- the truck only moves while the host can drive it: stopped time counts only then, and the start
+    -- grace runs from the host's first time near (a partner may start the run far from the leader)
+    local near = HostNear(ctx, c)
+    if near and not tr.nearAt then tr.nearAt = Now() end
+    local counting = near and (tr.moved or Now() - tr.nearAt >= START_GRACE_MS)
     if counting and speed < STOPPED_MPS then
         tr.stoppedFor = tr.stoppedFor + dt
         if tr.stoppedFor >= ctx.obj.stoppedFail then
@@ -917,6 +930,8 @@ local function OnEntityDead(ctx, netId, killerSrc)
     local st = StateOf(ctx)
     local tr = st.truck
     if tr.netId and netId == tr.netId then
+        -- the truck stays parked at the destination while a later objective runs: no longer a fail
+        if st.completed or st.halted then return end
         Fail(ctx, st, 'block.escort.fail_destroyed')
         return
     end
@@ -928,6 +943,8 @@ local function OnEntityDead(ctx, netId, killerSrc)
             Fail(ctx, st, 'run.fail_killed_unarmed')
             return
         end
+        -- the objective is over (a later one runs): no message over that objective
+        if st.completed or st.halted then return end
         Message(ctx, 'block.escort.msg_driver_down', nil, 'error')
         Flush(ctx, st)
         return

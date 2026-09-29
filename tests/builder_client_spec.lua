@@ -37,6 +37,7 @@ local W = {
     onRoad = false,
     pathCalls = 0,
     noPathCall = nil,
+    pathRange = nil,
     zonesLive = 0,
     zonesMade = 0,
     coordsNoOffset = {},
@@ -107,6 +108,12 @@ _G.IsPointOnRoad = function() return W.onRoad end
 _G.CalculateTravelDistanceBetweenPoints = function(ax, ay, az, bx, by, bz)
     W.pathCalls = W.pathCalls + 1
     if W.pathCalls == W.noPathCall then return 100000.0 end
+    if W.pathRange then
+        -- the game streams path nodes around the player only: further away the native fails
+        local here = W.ents[W.veh] and W.ents[W.veh].coords or W.pos
+        local function far(x, y) return math.sqrt((x - here.x) ^ 2 + (y - here.y) ^ 2) > W.pathRange end
+        if far(ax, ay) or far(bx, by) then return 100000.0 end
+    end
     return math.sqrt((bx - ax) ^ 2 + (by - ay) ^ 2 + (bz - az) ^ 2)
 end
 _G.TaskVehicleDriveToCoordLongrange = function(driver, veh, x, y, z, speed, style, stop)
@@ -466,6 +473,28 @@ do
     H.eq(Reason(Spot(), gctx), 'builder.place.reason.spacing', 'closer than minGap to a placed point')
     gctx.minGap = 5
     H.eq(Reason(Spot(), gctx), 'ok', 'spacing satisfied')
+    -- the start distance and the spacing count the point as it is stored (a ped stands 1 m above the ground), as
+    -- the server does: 29.9 m out and 3 m below the start is 30.05 m from the aimed spot, 29.97 m stored
+    local porch = { x = 1000.0, y = -3108.0, z = 10.0 }
+    local low = Spot({ x = 1029.9, y = -3108.0, z = 7.0, groundZ = 7.0 })
+    local pctx = {}
+    for key, value in pairs(ctx) do pctx[key] = value end
+    pctx.start = porch
+    H.eq(Reason(low, pctx), 'ok', '(30.05 m from the aimed spot)')
+    low.stored = { x = 1029.9, y = -3108.0, z = 8.0 }
+    H.eq(Reason(low, pctx), 'builder.place.reason.start', 'the start distance uses the stored height')
+    low.stored = { x = 1030.1, y = -3108.0, z = 8.0 }
+    H.eq(Reason(low, pctx), 'ok', '30.17 m stored is far enough')
+    local near = Spot({ x = 1050.0, y = -3108.0, z = 5.0, stored = { x = 1050.0, y = -3108.0, z = 6.0 } })
+    local nctx = {
+        kind = 'ped',
+        points = { { x = 1057.95, y = -3108.0, z = 6.0 } },
+        multiple = true,
+        max = 5,
+        zones = {},
+        minGap = 8,
+    }
+    H.eq(Reason(near, nctx), 'builder.place.reason.spacing', 'the spacing uses the stored height (7.95 m apart)')
 end
 
 -- ============================================================================
@@ -891,6 +920,40 @@ do
 end
 
 -- ============================================================================
+--              A SPAWN BELOW THE START: the stored height counts
+-- ============================================================================
+-- The server checks the start distance on the stored point (a ped at ground + 1 m), so the tool does too.
+
+do
+    T.isOpen = true
+    local porch = { x = 1017.52, y = -3108.44, z = 10.0 }
+    local payload = {}
+    for k, v in pairs(placePayload) do payload[k] = v end
+    payload.start = porch
+    W.groundZ = 7.0
+    W.aim = { x = porch.x + 29.9, y = porch.y, z = 7.0 }
+    Act('builderPlace', payload)
+    Frames(12)
+    local ov = LastOverlay('placement')
+    H.eq(ov.valid, false, 'a ped 29.97 m from the start as stored is refused (30.05 m from the aimed street)')
+    H.eq(ov.reason, CP.L('builder.place.reason.start', { min = 30 }), 'refused for the start distance')
+    W.aim = { x = porch.x + 30.2, y = porch.y, z = 7.0 }
+    Frames(12)
+    H.eq(LastOverlay('placement').valid, true, '30.27 m from the start as stored is far enough')
+    Frame({ KEY.E })
+    Frames(3)
+    Frame({ KEY.ENTER })
+    Frame()
+    local p = LastPush().data.result.points[1]
+    H.eq(p.z, 8.0, 'the ped is stored at ground + 1 m')
+    H.ok(math.sqrt((p.x - porch.x) ^ 2 + (p.y - porch.y) ^ 2 + (p.z - porch.z) ^ 2) >= 30.0,
+        'the stored point passes the server\'s 3D start distance')
+    H.advance(400)
+    Act('builderResult', {})
+    W.groundZ = 5.0
+end
+
+-- ============================================================================
 --                            A ROUTE RECORDING RUN
 -- ============================================================================
 
@@ -903,6 +966,7 @@ do
         vehEnt.coords = { x = x, y = y, z = 5.0 }
         Frame(keys)
     end
+    W.pathCalls, W.noPathCall = 0, 2 -- the second road-path check finds no path: segment 2 (checked as it is kept)
     local ok = Act('builderRecord', recordPayload)
     H.eq(ok, true, 'recording starts')
     Frames(20)
@@ -955,7 +1019,6 @@ do
     Drive(1300.0, -2800.0, { KEY.P })
     Frames(10)
     H.eq(LastOverlay('recording').paused, false, 'P resumes')
-    W.pathCalls, W.noPathCall = 0, 2
     Frame({ KEY.X })
     for _ = 1, 20 do Frame() end
     local p = LastPush()
@@ -1014,6 +1077,130 @@ do
     H.eq(res.route.loop, true, 'loop flag kept')
     H.eq(#res.unreachable, 0, 'no path checks for an empty route')
     H.ok(T.toasts[#T.toasts].text == CP.L('builder.rec.nothing'), 'a warning toast')
+    H.advance(400)
+    Act('builderResult', {})
+end
+
+-- ============================================================================
+--           A LONG ROUTE: road paths are checked next to the player
+-- ============================================================================
+-- The game streams path nodes around the player only: a segment far from where X is pressed cannot be checked
+-- there, so each one is checked while it is driven.
+
+do
+    T.isOpen = true
+    W.veh, W.driver = NewEnt('player_vehicle', 2000.0, -3000.0, 5.0, true), true
+    local vehEnt = W.ents[W.veh]
+    W.pathCalls, W.noPathCall, W.pathRange = 0, nil, 400.0
+    Act('builderRecord', { missionId = 'custom_quarry_escort', location = 1, key = 'route', label = 'Escort route' })
+    Frames(2)
+    for i = 0, 100 do -- 2.5 km north in 25 m steps
+        vehEnt.coords = { x = 2000.0, y = -3000.0 + i * 25.0, z = 5.0 }
+        Frame()
+    end
+    Frame({ KEY.X })
+    Frames(20)
+    local res = LastPush().data.result
+    H.eq(res.kind, 'recording', 'the long recording ended')
+    H.ok(res.length >= 2400, 'about 2.5 km recorded (' .. res.length .. ')')
+    H.eq(#res.unreachable, 0, 'no waypoint is reported unreachable because it is far from where X was pressed')
+    W.pathRange = nil
+    H.advance(400)
+    Act('builderResult', {})
+    -- an undo drops the checks of the segments it removes: waypoints every 150 m, the third segment fails once
+    T.isOpen = true
+    local function North(y) vehEnt.coords = { x = 2000.0, y = y, z = 5.0 }; Frame() end
+    W.pathCalls = 0
+    vehEnt.coords = { x = 2000.0, y = -3000.0, z = 5.0 }
+    Act('builderRecord', { missionId = 'custom_quarry_escort', location = 1, key = 'route' })
+    Frames(2)
+    -- to 350 m: segments 1 and 2 checked
+    for i = 1, 14 do North(-3000.0 + i * 25.0) end
+    H.eq(W.pathCalls, 2, 'two segments checked while driving')
+    W.noPathCall = 3
+    -- to 475 m: segment 3 checked, no path
+    for i = 15, 19 do North(-3000.0 + i * 25.0) end
+    Frame({ KEY.BACK })
+    Frames(3)
+    -- back at 375 m, on to 625 m: segment 3 checked again
+    North(-2625.0)
+    for i = 16, 25 do North(-3000.0 + i * 25.0) end
+    Frame({ KEY.X })
+    Frames(20)
+    res = LastPush().data.result
+    H.ok(W.pathCalls >= 4, 'the segment was checked again after the undo')
+    H.eq(#res.unreachable, 0, 'the undone segment\'s failed check is gone')
+    W.noPathCall = nil
+    H.advance(400)
+    Act('builderResult', {})
+end
+
+-- ============================================================================
+--                     BACK IN A VEHICLE AWAY FROM THE END
+-- ============================================================================
+-- The recording waits for the driver to return: a resume on foot, or another car, must not add a straight
+-- undriven jump to the route.
+
+do
+    T.isOpen = true
+    local function GetIn(x, y) W.veh, W.driver = NewEnt('player_vehicle', x, y, 5.0, true), true end
+    local function GetOut(x, y)
+        W.veh, W.driver = 0, false
+        W.pos = { x = x, y = y, z = 5.9 }
+    end
+    local function DriveTo(x, y, keys)
+        W.ents[W.veh].coords = { x = x, y = y, z = 5.0 }
+        Frame(keys)
+    end
+    GetIn(3000.0, -3000.0)
+    Act('builderRecord', { missionId = 'custom_quarry_escort', location = 1, key = 'route' })
+    Frames(2)
+    -- 500 m north: the end is at y = -2500
+    for i = 0, 20 do DriveTo(3000.0, -3000.0 + i * 25.0) end
+    Frames(10)
+    local samples = LastOverlay('recording').samples
+    -- pause, get out, walk 300 m to another car and resume on foot
+    Frame({ KEY.P })
+    GetOut(3000.0, -2500.0)
+    Frames(10)
+    W.pos = { x = 3300.0, y = -2500.0, z = 5.9 }
+    Frame({ KEY.P })
+    Frames(10)
+    H.eq(LastOverlay('recording').paused, false, 'P resumes on foot')
+    GetIn(3300.0, -2500.0)
+    for i = 1, 4 do DriveTo(3300.0, -2500.0 + i * 25.0) end
+    Frames(10)
+    local ov = LastOverlay('recording')
+    H.eq(ov.waiting, 'return', 'a resume on foot away from the end waits for the driver to come back')
+    H.eq(ov.samples, samples, 'nothing is sampled away from the end')
+    DriveTo(3000.0, -2490.0)
+    Frames(10)
+    H.eq(LastOverlay('recording').waiting, false, 'recording again at the end')
+    -- the end is at y = -2290
+    for i = 1, 8 do DriveTo(3000.0, -2490.0 + i * 25.0) end
+    Frames(10)
+    samples = LastOverlay('recording').samples
+    -- no pause: get out, and drive off in another car 300 m away
+    GetOut(3000.0, -2290.0)
+    Frames(10)
+    H.eq(LastOverlay('recording').waiting, 'vehicle', 'out of the driver seat')
+    GetIn(3300.0, -2290.0)
+    for i = 1, 4 do DriveTo(3300.0, -2290.0 + i * 25.0) end
+    Frames(10)
+    ov = LastOverlay('recording')
+    H.eq(ov.waiting, 'return', 'another car away from the end waits for the driver to come back')
+    H.eq(ov.samples, samples, 'nothing is sampled from the other car')
+    DriveTo(3000.0, -2285.0)
+    Frames(10)
+    H.eq(LastOverlay('recording').waiting, false, 'driven back to the end: recording again')
+    for i = 1, 4 do DriveTo(3000.0, -2285.0 + i * 25.0) end
+    Frame({ KEY.X })
+    Frames(20)
+    local pts = LastPush().data.result.route.points
+    local off = 0
+    for _, q in ipairs(pts) do if q.x ~= 3000.0 then off = off + 1 end end
+    H.ok(#pts >= 2, 'a route was recorded')
+    H.eq(off, 0, 'every waypoint is on the driven road (no jump to the other cars)')
     H.advance(400)
     Act('builderResult', {})
 end
@@ -1124,6 +1311,37 @@ do
 end
 
 -- ============================================================================
+--                      A MISSION RUN STOPS A RUNNING TOOL
+-- ============================================================================
+-- A unit member is put on the run the leader drew: the tool's controls and HUD would fight the run's.
+
+do
+    local function Stops(name, payload)
+        T.isOpen = true
+        H.eq((Act(name, payload)), true, name .. ' starts')
+        Frames(3)
+        local opens = #T.opens
+        currentRun = { runId = 'r2' }
+        Frames(20)
+        H.eq(B.active(), nil, 'a mission run stops the tool (' .. name .. ')')
+        H.eq(LastPush().data.result.cancelled, true, 'a cancelled result (' .. name .. ')')
+        H.eq(T.toasts[#T.toasts].text, CP.L('builder.tool_stopped_run'), 'the player is told why (' .. name .. ')')
+        H.advance(500)
+        H.eq(#T.opens, opens, 'the tablet does not reopen over the run (' .. name .. ')')
+        currentRun = nil
+        Act('builderResult', {})
+    end
+    W.aim = { x = 1050.0, y = -3108.4, z = 5.0 }
+    Stops('builderPlace', placePayload)
+    W.veh, W.driver = NewEnt('player_vehicle', 1000.0, -3000.0, 5.0, true), true
+    Stops('builderRecord', recordPayload)
+    W.veh, W.driver = 0, false
+    W.pos = { x = 0.0, y = 0.0, z = 0.0 }
+    Stops('builderTestDrive', drivePayload)
+    W.pos = { x = 1017.5, y = -3108.4, z = 5.9 }
+end
+
+-- ============================================================================
 --               BUILDER EVENTS, DEATH, UNLOAD AND RESOURCE STOP
 -- ============================================================================
 
@@ -1189,6 +1407,109 @@ do
     H.eq(W.ents[ghost], nil, 'the ghost is deleted on resource stop')
     H.eq(W.zonesLive, 0, 'zones removed on resource stop')
     H.eq(T.overlays[#T.overlays], false, 'overlay cleared on resource stop')
+end
+
+-- ============================================================================
+--                                THE NUI STORE
+-- ============================================================================
+-- web/src/builder/store.ts and applyResult.ts, bundled with esbuild and run in node: a tool result is applied with
+-- its point spec. The clientResult push must not drop the running tool: its PointSpec says how the result is written
+-- (flee paths are a list of lists, a recorded checkpoint route is thinned), and the workspace opens the editor of a
+-- pending result from it.
+
+do
+    local root = H.root
+    if root:sub(1, 1) ~= '/' then
+        local pwd = io.popen('pwd')
+        root = pwd:read('l') .. '/' .. root
+        pwd:close()
+    end
+    local esbuild = root .. 'web/node_modules/.bin/esbuild'
+    local fh = io.open(esbuild, 'r')
+    local probe = io.popen('command -v node')
+    local node = probe:read('a') ~= ''
+    probe:close()
+    if not (fh and node) then
+        print('SKIP tests/builder_client_spec.lua: the NUI store check needs node and web/node_modules (npm ci)')
+    else
+        fh:close()
+        local js = [[
+const listeners = [];
+globalThis.window = { addEventListener: (type, fn) => { if (type === 'message') listeners.push(fn); } };
+const S = require('WEB_DIR/store');
+const A = require('WEB_DIR/applyResult');
+const out = {};
+const push = result => listeners.forEach(fn =>
+    fn({ data: { type: 'push', topic: 'builder', data: { event: 'clientResult', id: result.missionId, result } } }));
+const tool = (kind, spec) =>
+    S.setTool({ kind, missionId: 'm1', location: 1, key: spec.key, spec, scope: 'sup', startedAt: 0 });
+// useDraftEditor.applyPending: the queued results of the mission, each with the spec of the tool that made it
+const applyPending = def => {
+    const list = S.takeResults('m1');
+    const t = S.currentTool();
+    for (const r of list) {
+        const spec = t && t.missionId === r.missionId && t.key === r.key ? t.spec : null;
+        const applied = A.applyResult(def, r, spec, null);
+        if (applied.def) def = applied.def;
+        out.meta = applied.meta;
+        out.message = applied.messageKey;
+    }
+    S.setTool(null);
+    return def;
+};
+const pt = i => ({ x: 100 + i, y: 200 + i, z: 30 });
+const flee = { key: 'routes', field: 'routes', labelKey: 'builder.points.flee_paths', kind: 'marker', heading: false,
+    multiple: true, lists: true, min: 2, max: 12, spawn: false, objective: 1 };
+const checkpoints = { key: 'checkpoints', field: 'checkpoints', labelKey: 'builder.points.checkpoints', kind: 'route',
+    heading: false, multiple: true, min: 2, max: 20, spawn: false, objective: 1, thinTo: 20 };
+let def = { locations: [{ label: 'L1', start: { coords: pt(0), radius: 60 } }], objectives: [] };
+const placed = (seq, n) => ({ kind: 'placement', missionId: 'm1', location: 1, key: 'routes', cancelled: false, seq,
+    points: Array.from({ length: n }, (_, i) => pt(seq * 10 + i)) });
+tool('placement', flee);
+push(placed(1, 3));
+const kept = S.currentTool();
+out.toolKept = !!kept && kept.spec === flee;
+out.autoOpen = !!kept && S.hasResults(kept.missionId);
+def = applyPending(def);
+tool('placement', flee);
+push(placed(2, 2));
+def = applyPending(def);
+out.paths = def.locations[0].routes.map(p => p.length);
+out.toolAfter = S.currentTool() === null;
+tool('recording', checkpoints);
+push({ kind: 'recording', missionId: 'm1', location: 1, key: 'checkpoints', cancelled: false, seq: 3, length: 4000,
+    rejected: 0, rejectedSamples: [], unreachable: [],
+    route: { points: Array.from({ length: 45 }, (_, i) => pt(i * 3)), stops: [] } });
+def = applyPending(def);
+out.checkpoints = def.locations[0].checkpoints.points.length;
+out.thinned = out.meta.thinned;
+console.log(JSON.stringify(out));
+]]
+        js = js:gsub('WEB_DIR', function() return root .. 'web/src/builder' end)
+        local tmp = os.tmpname()
+        local entry, bundle = tmp .. '.js', tmp .. '.cjs'
+        local f = assert(io.open(entry, 'w'))
+        f:write(js)
+        f:close()
+        local flags = '--bundle --platform=node --format=cjs --log-level=error'
+        local shell = '\'%s\' \'%s\' %s --outfile=\'%s\' 2>&1 && node \'%s\' 2>&1'
+        local cmd = shell:format(esbuild, entry, flags, bundle, bundle)
+        local p = io.popen(cmd)
+        local text = p:read('a')
+        p:close()
+        os.remove(tmp)
+        os.remove(entry)
+        os.remove(bundle)
+        local ok, got = pcall(json.decode, text:match('{.*}') or '')
+        H.ok(ok and type(got) == 'table', 'store.ts and applyResult.ts ran in node: ' .. text:sub(1, 300))
+        got = (ok and type(got) == 'table') and got or {}
+        H.eq(got.toolKept, true, 'the clientResult push keeps the running tool and its point spec')
+        H.eq(got.autoOpen, true, 'a pending result of the running tool can open its editor (BuilderWorkspace)')
+        H.eq(json.encode(got.paths), '[3,2]', 'a second flee path is added next to the first (a list of lists)')
+        H.eq(got.toolAfter, true, 'the tool is forgotten once its result is applied')
+        H.eq(got.checkpoints, 20, 'a recorded checkpoint route is thinned to checkpoint_route.checkpoints[2]')
+        H.eq(got.thinned, 45, 'the route meta says how many waypoints were recorded')
+    end
 end
 
 -- ============================================================================

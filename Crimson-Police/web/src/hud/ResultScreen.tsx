@@ -5,7 +5,15 @@
 import { useEffect, useState } from 'react';
 import { Badge, Icon, IconButton, TierBadge } from '../shared/components';
 import { cx } from '../shared/cx';
-import { formatDuration, formatMoney, formatMultiplier, formatNumber, formatPercent } from '../shared/format';
+import { pointsLimits } from '../shared/data';
+import {
+    formatDuration,
+    formatFactor,
+    formatMoney,
+    formatMultiplier,
+    formatNumber,
+    formatPercent,
+} from '../shared/format';
 import { t, tOr } from '../shared/i18n';
 import type { RunResult } from '../shared/types';
 
@@ -51,6 +59,7 @@ export function ResultScreen({ result, onDismiss }: { result: RunResult; onDismi
 
     const kind = RESULT_ICON[result.result] ? result.result : 'abandoned';
     const p = result.points;
+    const limits = pointsLimits(p);
     const c = result.cash;
     const completed = result.result === 'completed';
     const cashStatus = c.status ? tOr(`result.cash_status.${c.status}`, 'common.unknown') : '';
@@ -141,8 +150,16 @@ export function ResultScreen({ result, onDismiss }: { result: RunResult; onDismi
                 <Line label={t('result.m_team')} value={formatMultiplier(p.mTeam)} tone="mult" />
                 <Line label={t('result.m_cross')} value={formatMultiplier(p.mCross)} tone="mult" />
                 <Line label={t('result.m_streak')} value={formatMultiplier(p.mStreak)} tone="mult" />
-                {p.capped ? <Line label={t('result.capped')} value={formatNumber(p.P * 2)} note /> : null}
-                {p.tod ? <Line label={t('result.tod')} value={formatMultiplier(2, 0)} tone="mult" /> : null}
+                {p.capped ? (
+                    <Line
+                        label={t('result.capped', { cap: formatFactor(limits.scoreCap) })}
+                        value={formatNumber(limits.cap)}
+                        note
+                    />
+                ) : null}
+                {p.tod ? (
+                    <Line label={t('result.tod')} value={`×${formatFactor(limits.todMultiplier)}`} tone="mult" />
+                ) : null}
                 <div className="cp-result__final">
                     <span>{t('result.final')}</span>
                     <span className="cp-num">

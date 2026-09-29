@@ -6,11 +6,12 @@ local TAG = 'testing'
 
 local KEY_COMMAND = '+crimsonpolice_testpanel'
 local KEY_RELEASE = '-crimsonpolice_testpanel'
-local DEFAULT_KEY = 'F9'
-local DRAW_RANGE = 250.0          -- markers further than this are not drawn
-local ACTIVE_RANGE = 600.0        -- draw every frame only while this close to the test area
-local LABEL_RANGE = 25.0          -- 3D labels for points this close
+local DEFAULT_KEY = 'F7'        -- not F9: sc-multijob opens its menu with F9
+local DRAW_RANGE = 250.0        -- markers further than this are not drawn
+local ACTIVE_RANGE = 600.0      -- draw every frame only while this close to the test area
+local LABEL_RANGE = 25.0        -- 3D labels for points this close
 local INVITE_TOAST_MS = 12000
+local INVITE_WAIT_S = 120       -- when an invitation event names no expiry
 local CONTROLS = {
     skip = true,
     restart = true,
@@ -43,6 +44,7 @@ local state = {
     drawToken = 0,
     watchToken = 0,
     hudToken = 0,
+    invites = {},         -- inviteId -> GetGameTimer() when it expires (client:testInvite, the prompt's list)
 }
 
 -- ============================================================================
@@ -88,6 +90,22 @@ local function PushNui(extra)
         for k, v in pairs(extra) do data[k] = v end
     end
     CP.Tablet.push('test', data)
+end
+
+-- An invitation seen through client:testInvite (or the prompt's list) that has not expired yet.
+local function InviteWaiting()
+    local now = GetGameTimer()
+    local any = false
+    for id, untilMs in pairs(state.invites) do
+        if untilMs <= now then state.invites[id] = nil else any = true end
+    end
+    return any
+end
+
+local function RememberInvite(inv)
+    if type(inv) ~= 'table' or type(inv.inviteId) ~= 'string' then return end
+    local secs = math.max(1, tonumber(inv.expiresIn) or INVITE_WAIT_S)
+    state.invites[inv.inviteId] = GetGameTimer() + secs * 1000
 end
 
 local function CurrentRun()
@@ -330,16 +348,20 @@ local function TeleportTo(x, y, z)
     DoScreenFadeOut(300)
     local deadline = GetGameTimer() + 1500
     while not IsScreenFadedOut() and GetGameTimer() < deadline do Wait(0) end
+    local frozen = false
     local ok, err = pcall(function()
         -- Crimson-Arena rule 13: re-check right before every move (the fade took time).
         if ArenaForeign() then error('in_arena', 0) end
         FreezeEntityPosition(ent, true)
+        frozen = true
         SetEntityCoords(ent, x, y, z + 1.0, false, false, false, false)
         local gz = GroundZ(x, y, z)
         if ArenaForeign() then error('in_arena', 0) end
         SetEntityCoords(ent, x, y, gz, false, false, false, false)
     end)
-    FreezeEntityPosition(ent, false)
+    -- Undo only our own freeze, and leave the ped to Crimson-Arena once it owns it (it freezes the placed
+    -- ped for its countdown and lets it go itself).
+    if frozen and not (err == 'in_arena' and ent == ped) then FreezeEntityPosition(ent, false) end
     DoScreenFadeIn(300)
     if not ok then
         if err == 'in_arena' then return false, 'err.in_arena' end
@@ -383,7 +405,13 @@ end
 local function OpenPrompt()
     CreateThread(function()
         local res = CP.Net.request('test:pendingInvites', {})
-        local list = (type(res) == 'table' and res.ok and type(res.data) == 'table') and res.data or {}
+        local answered = type(res) == 'table' and res.ok and type(res.data) == 'table'
+        local list = answered and res.data or {}
+        -- The server's list replaces what this client saw (answered elsewhere, withdrawn); a failed request does not.
+        if answered then
+            state.invites = {}
+            for _, inv in ipairs(list) do RememberInvite(inv) end
+        end
         if #list == 0 then
             Notify('info', 'test.no_invites')
             return
@@ -402,11 +430,14 @@ local function OnPanelKey()
         return
     end
     if TabletOpen() then return end
+    local controls = state.controls and state.inRun
+    -- The key may be another resource's too (sc-multijob's F9): with nothing to open it stays silent.
+    if not controls and not InviteWaiting() then return end
     if ArenaForeign() then
         Notify('error', 'err.in_arena')
         return
     end
-    if state.controls and state.inRun then
+    if controls then
         if TakeFocus('controls') then PushNui() end
         return
     end
@@ -441,9 +472,14 @@ RegisterNetEvent(CP.e('client:test'), function(data)
         end
     end
     if data.debug ~= nil and state.controls then
-        local nuiDebug = ApplyDebug(data.debug)
-        extra = extra or {}
-        extra.debug = nuiDebug or false
+        if not ArenaForeign() then
+            local nuiDebug = ApplyDebug(data.debug)
+            extra = extra or {}
+            extra.debug = nuiDebug or false
+        elseif type(data.debug) == 'table' and type(data.debug.geometry) == 'table' then
+            -- Crimson-Arena rule 8: the overlay stays off; keep the geometry for when the player is let go.
+            state.geometry = data.debug.geometry
+        end
     end
     PushNui(extra)
 end)
@@ -452,6 +488,7 @@ RegisterNetEvent(CP.e('client:testInvite'), function(inv)
     if type(inv) ~= 'table' or type(inv.inviteId) ~= 'string' then return end
     local from = type(inv.from) == 'string' and inv.from or '?'
     local mission = type(inv.missionLabel) == 'string' and inv.missionLabel or '?'
+    RememberInvite(inv)
     Notify('info', 'test.invite_toast', { from = from, mission = mission, key = KeyLabel() },
         { title = CP.L('test.invite_title'), duration = INVITE_TOAST_MS })
 end)

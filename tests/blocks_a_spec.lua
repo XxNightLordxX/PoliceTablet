@@ -1185,6 +1185,95 @@ do -- slow search: no fast bonus; the last device waits for the cap before compl
     H.eq(ctx.calls.complete, 1, 'complete once the prop exists')
 end
 
+-- ctx.spawnObject yields until the RPC-created object exists: a search report and the engine tick (two
+-- threads) must never spawn the same device twice.
+local function SlowSpawns(ctx)
+    local spawnNow = ctx.spawnObject
+    ctx.spawnObject = function(opts)
+        Wait(50)
+        return spawnNow(opts)
+    end
+end
+
+do -- the tick while the found device's prop is still being created
+    local ctx, st = BombSearch(1)
+    local dev
+    for n, p in ipairs(st.points) do if p.device then dev = n end end
+    At(1, st.points[dev].coords)
+    IP.tick(ctx, 1)
+    Advance(3000)
+    IP.tick(ctx, 1)
+    SlowSpawns(ctx)
+    local found
+    CreateThread(function() found = IP.onEvent(ctx, 1, { type = 'interact', point = dev }) end)
+    CreateThread(function() IP.tick(ctx, 1) end)
+    H.step(100)
+    H.step(100)
+    H.eq(found, true, 'device found while its prop is being created')
+    H.eq(#ctx.calls.spawn, 1, 'the found device is spawned once')
+    H.eq(#ctx.run.shared.devices, 1, 'one shared device for one found device')
+    H.eq(ctx.calls.complete, 1, 'the search completes once the prop exists')
+end
+
+do -- a second device found while the tick is still creating the first one's prop
+    local ctx, st = BombSearch(2)
+    ctx.srcs = { 1, 2 }
+    local devices = {}
+    for n, p in ipairs(st.points) do if p.device then devices[#devices + 1] = n end end
+    At(1, st.points[devices[1]].coords)
+    At(2, st.points[devices[2]].coords)
+    IP.tick(ctx, 1)
+    Advance(3000)
+    IP.tick(ctx, 1)
+    ctx.capOk = false
+    H.eq(IP.onEvent(ctx, 1, { type = 'interact', point = devices[1] }), true, 'first device found (cap full)')
+    ctx.capOk = true
+    SlowSpawns(ctx)
+    local found
+    CreateThread(function() IP.tick(ctx, 1) end)
+    CreateThread(function() found = IP.onEvent(ctx, 2, { type = 'interact', point = devices[2] }) end)
+    for _ = 1, 4 do H.step(100) end
+    H.eq(found, true, 'second device found while the first prop is being created')
+    H.eq(#ctx.calls.spawn, 2, 'each found device is spawned once')
+    local points = {}
+    for _, d in ipairs(ctx.run.shared.devices) do points[#points + 1] = d.point end
+    table.sort(points)
+    H.eq(#points, 2, 'two shared devices')
+    H.eq(points[1], math.min(devices[1], devices[2]), 'one shared device per hiding spot (first)')
+    H.eq(points[2], math.max(devices[1], devices[2]), 'one shared device per hiding spot (second)')
+    H.eq(ctx.calls.complete, 1, 'the search completes once both props exist')
+    H.eq(st.spawning, false, 'the spawning flag is cleared')
+end
+
+do -- a restart (test control) while the found device's prop is still being created
+    local ctx, st = BombSearch(1)
+    local dev
+    for n, p in ipairs(st.points) do if p.device then dev = n end end
+    At(1, st.points[dev].coords)
+    IP.tick(ctx, 1)
+    Advance(3000)
+    IP.tick(ctx, 1)
+    SlowSpawns(ctx)
+    CreateThread(function() IP.onEvent(ctx, 1, { type = 'interact', point = dev }) end)
+    IP.restart(ctx)
+    H.step(100)
+    H.eq(#ctx.calls.spawn, 1, 'the prop was being created during the restart')
+    H.eq(#(ctx.run.shared.devices or {}), 0, 'a prop finished after the restart is no shared device')
+    H.eq(st.points[dev].netId, nil, 'the reopened spot has no prop')
+    H.eq(Count(ctx.calls.delete, ctx.calls.spawn[1].netId), 1, 'the late prop is deleted')
+    H.eq(ctx.calls.complete, 0, 'the restarted search is not complete')
+    IP.tick(ctx, 1)
+    Advance(3000)
+    IP.tick(ctx, 1)
+    local found
+    CreateThread(function() found = IP.onEvent(ctx, 1, { type = 'interact', point = dev }) end)
+    H.step(100)
+    H.eq(found, true, 'the device is found again after the restart')
+    H.eq(#ctx.run.shared.devices, 1, 'one shared device after the second find')
+    H.eq(ctx.run.shared.devices[1].netId, st.points[dev].netId, 'the shared device is the new prop')
+    H.eq(ctx.calls.complete, 1, 'the restarted search completes')
+end
+
 do -- rescale: devices not found yet shrink to the new count
     local ctx, st = BombSearch(3, 11)
     H.eq(st.total, 3, 'three devices hidden')
@@ -1457,6 +1546,24 @@ do -- device props deleted when the search objective ended are re-created (cap r
     SC.start(c3)
     SC.tick(c3, 1)
     H.eq(#c3.calls.spawn, 0, 'location targets spawn nothing')
+end
+
+do -- start (objective 1 completed from a net event) and a tick re-create a gone prop once
+    H.clockMs = 4000000
+    local ctx = FakeCtx({ obj = SC.defaults({ block = 'skill_check' }), location = {}, index = 2 })
+    ctx.run.shared.devices = { { netId = 809, coords = vec3(10.0, 4100.0, 5.0) } } -- its prop is gone
+    SC.prepare(ctx)
+    SlowSpawns(ctx)
+    CreateThread(function() SC.start(ctx) end)
+    CreateThread(function() SC.tick(ctx, 1) end)
+    H.step(100)
+    H.step(100)
+    local st = ctx.state
+    H.eq(#ctx.calls.spawn, 1, 'the gone prop is re-created once')
+    H.eq(#st.targets, 1, 'still one target')
+    H.eq(st.targets[1].netId, ctx.calls.spawn[1].netId, 'the target follows the re-created prop')
+    SC.tick(ctx, 1)
+    H.eq(#ctx.calls.spawn, 1, 'nothing more spawned while the prop exists')
 end
 
 do -- a device added to shared.devices later is picked up (rescale/tick)

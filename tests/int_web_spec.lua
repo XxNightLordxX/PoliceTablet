@@ -279,6 +279,58 @@ do
 end
 
 -- ============================================================================
+--                        SUPERVISOR UI → Live Missions
+-- ============================================================================
+-- sup:getLiveRuns needs viewMissionList; forceRecall only hides the recall buttons.
+
+do
+    local reg = Read(WEB .. 'layouts/screens.ts') or ''
+    local block = reg:match('key: \'sup_live\',(.-)}') or ''
+    H.ok(block:find('titleKey', 1, true) ~= nil, 'the registry lists Live Missions')
+    H.ok(block:find('visible', 1, true) == nil, 'Live Missions stays visible when forceRecall is off')
+    local live = Read(WEB .. 'supervisor/screens/LiveMissions.tsx')
+    Has(live, 'const canRecall = !!data?.canRecall && can(\'forceRecall\');', 'the recall buttons follow forceRecall')
+end
+
+-- ============================================================================
+--                        RUN BAR AFTER A FAILED REFETCH
+-- ============================================================================
+
+do
+    Has(runbar, 'if (!data || !data.runId) return null;', 'the run bar hides only without a run')
+    H.ok(runbar:find('if (error', 1, true) == nil, 'a failed refetch does not hide a run bar that holds a view')
+end
+
+-- ============================================================================
+--                   ADMIN UI → Seasons: one start per click
+-- ============================================================================
+
+do
+    local seasons = Read(WEB .. 'admin/screens/Seasons.tsx')
+    Has(seasons, 'if (busy || !name.trim()) return;', 'startSeason does nothing while a start is on its way')
+    Has(seasons, 'onEnter={() => void startSeason()}', 'Enter goes through the same guard')
+    local form = Read(WEB .. 'shared/components/Form.tsx')
+    Has(form, 'if (e.key === \'Enter\' && !e.repeat && onEnter) onEnter();', 'a held Enter fires onEnter once')
+end
+
+-- ============================================================================
+--                  HUD COUNTDOWNS AFTER THE OFFICER UI CLOSES
+-- ============================================================================
+-- The HUD is unmounted under the Officer UI: it counts from the time the value arrived, not from its mount.
+
+do
+    local app = Read(WEB .. 'App.tsx')
+    Has(app, 'useNuiEvent(\'hud\', m => setHud(prev => (m.hud ? normalizeHud(m.hud, prev) : null)));',
+        'a HUD patch keeps the arrival time of an unchanged countdown')
+    local data = Read(WEB .. 'shared/data.ts')
+    Has(data, 'export function secondsSince(seconds: number, receivedAt?: number): number', 'secondsSince helper')
+    local hudSrc = Read(WEB .. 'hud/Hud.tsx')
+    Has(hudSrc, 'secondsSince(timer.remaining, timer.receivedAt)', 'the timer counts from its arrival time')
+    Has(hudSrc, 'secondsSince(route.secondsLeft, route.receivedAt)',
+        'the off-route countdown counts from its arrival time')
+end
+
+-- ============================================================================
 --                                SHIPPED FILES
 -- ============================================================================
 -- locales/en.json and web/dist are regenerated from their sources.

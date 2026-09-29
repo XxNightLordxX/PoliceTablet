@@ -705,7 +705,7 @@ do
     local s, untilTs = A.isSuspended('CPT00009')
     H.eq(s, true, 'suspended (cache)')
     H.eq(untilTs, H.time + 7 * 86400, 'until')
-    H.time = H.time + 20   -- cache expired: read from the database
+    H.time = H.time + 20 -- cache expired: read from the database
     s, untilTs = A.isSuspended('CPT00009')
     H.eq(s, true, 'suspended (database)')
     H.eq(untilTs, H.time - 20 + 7 * 86400, 'until from the database')
@@ -737,6 +737,19 @@ do
     H.eq(select(2, A.suspend('CPT00009', 1.5)), 'err.invalid_days', 'fractional days')
     H.eq(select(2, A.suspend('CPT00009', 4000)), 'err.invalid_days', 'too many days')
     H.eq(select(2, A.suspend('CPT00009', 'x')), 'err.invalid_days', 'days not a number')
+    -- past 2038-01-19 03:14:07 UTC MariaDB 10.11's FROM_UNIXTIME gives NULL, which would wipe the suspension
+    local savedTime = H.time
+    H.time = 1900000000 -- 2030-03-17: 3650 days reach 2040
+    H.eq(A.suspend('LONG0001', 7, 0, 'first'), true, 'a short suspension first')
+    H.eq(A.suspend('LONG0001', 3650, 0, 'extended'), true, 'extended to 3650 days after 2028')
+    H.eq(
+        H.sql('SELECT UNIX_TIMESTAMP(suspended_until) AS ts FROM cp_officers WHERE citizenid = ?', { 'LONG0001' })[1].ts,
+        2147483647, 'capped at the last time MariaDB can store, never written as NULL')
+    H.time = H.time + 20     -- cache expired: read from the database
+    H.eq(A.isSuspended('LONG0001'), true, 'still suspended from the database')
+    H.time = 2147483647 + 60 -- past the limit nothing can be stored: refused, never a silent NULL
+    H.eq(select(2, A.suspend('LONG0001', 7, 0, 'too late')), 'err.internal', 'refused past 2038')
+    H.time = savedTime
 
     -- refreshOfficerRow (upsert with clipped values, '' -> NULL)
     H.eq(A.refreshOfficerRow(1), true, 'refresh officer 1')
@@ -1529,6 +1542,23 @@ do
     nuiCb.switchUi({ ui = 'admin' }, function(r) reply = r end)
     H.eq(reply.error, 'err.not_admin', 'switchUi refused')
     H.eq(LastNui('open').ui, 'supervisor', 'still supervisor')
+    -- closed while the session was on its way: the NUI must not draw the UI again without focus
+    local realAwait = lib.callback.await
+    lib.callback.await = function(name, delay, args)
+        if name == 'crimson-police:getSession' then T.close() end
+        return realAwait(name, delay, args)
+    end
+    reply = nil
+    local opens = CountNui('open')
+    nuiCb.switchUi({ ui = 'officer' }, function(r) reply = r end)
+    lib.callback.await = realAwait
+    H.eq(T.isOpen(), false, 'a UI closed during the switch stays closed')
+    H.eq(CountNui('open'), opens, 'no open message')
+    H.eq(reply and reply.ok, false, 'the switch is refused')
+    H.eq(reply and reply.error, 'err.tablet_closed', 'because the tablet was closed')
+    H.clockMs = H.clockMs + 1000
+    H.commands.CrimsonPolice.fn()
+    H.eq(T.isOpen(), true, 'open again')
 
     -- duty loss closes the Officer/Supervisor UI
     H.fire('QBCore:Client:SetDuty', nil, false)
@@ -1625,6 +1655,7 @@ do
     H.eq(focus[#focus][1], false, 'focus released')
     H.eq(LastNui('hud').hud, nil, 'HUD hidden')
     H.eq(LastNui('overlay').overlay, nil, 'overlay hidden')
+    H.eq(LastNui('result').result, nil, 'a result card still on screen is hidden')
     H.eq(progressCancels, 1, 'the Crimson-Police progress bar is cancelled')
     Tick(100)
     H.eq(cpBarDone, false, 'the cancelled bar returned false')
@@ -1655,6 +1686,9 @@ do
     H.eq(#callbackCalls, sessionCalls, 'no session is even requested')
     nuiCb.switchUi({ ui = 'officer' }, function(r) reply = r end)
     H.eq(reply.error, 'err.in_arena', 'switchUi refused in the arena')
+    local results = CountNui('result')
+    T.result({ runId = 'r11', result = 'abandoned' })
+    H.eq(CountNui('result'), results, 'no result card while the crimsonArena value is foreign')
     H.fire('crimson-police:client:openAdmin', nil,
         { ui = 'admin', title = 'Crimson-Police', roles = { admin = true }, theme = {}, actions = {} })
     H.eq(T.isOpen(), false, 'Admin UI refused in the arena')

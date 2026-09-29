@@ -233,7 +233,7 @@ export interface TestDebugData {
 export interface TestPush {
     controls?: boolean;
     focused?: boolean;
-    key?: string; // the bound key of +crimsonpolice_testpanel (default F9)
+    key?: string; // the bound key of +crimsonpolice_testpanel (default F7)
     debugOn?: boolean;
     allowTeleport?: boolean; // Config.Testing.allowTeleport (the Lua client reads it)
     debugOverlay?: boolean; // Config.Testing.debugOverlay

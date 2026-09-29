@@ -637,11 +637,14 @@ function Admin.approveFlagged(src, rowId, reason, opts)
     return true, { rowId = row.id }
 end
 
--- Void one row (checks done by the caller). Returns true or false, errKey.
-local function VoidRow(src, row, reason, action)
-    local n = Update('UPDATE cp_mission_runs SET voided = 1 WHERE id = ? AND voided = 0', { row.id })
+-- Void one row (checks done by the caller). flaggedOnly: only while the row is still flagged, so an approval
+-- that landed during the caller's checks stands. Returns true or false, errKey.
+local function VoidRow(src, row, reason, action, flaggedOnly)
+    local sql = 'UPDATE cp_mission_runs SET voided = 1 WHERE id = ? AND voided = 0'
+    if flaggedOnly then sql = sql .. ' AND flagged = 1' end
+    local n = Update(sql, { row.id })
     if n == nil then return false, 'err.internal' end
-    if n == 0 then return false, 'err.already_voided' end
+    if n == 0 then return false, flaggedOnly and 'err.conflict' or 'err.already_voided' end
     Call('Scoring', 'onRowVoided', row.id)
     Admin.audit(src, RoleOf(src), 'flags', action, RowTarget(row), row.flagged and 'flagged' or row.state, 'voided',
         reason)
@@ -664,7 +667,7 @@ function Admin.voidFlagged(src, rowId, reason)
     if not ok then return false, e end
     local okOwn, eOwn = OwnRunCheck(src, row.run_uuid)
     if not okOwn then return false, eOwn end
-    local done, eVoid = VoidRow(src, row, reason, 'voidFlagged')
+    local done, eVoid = VoidRow(src, row, reason, 'voidFlagged', true)
     if not done then return false, eVoid end
     Call('Leaderboard', 'invalidate')
     return true, { rowId = row.id, voided = 1 }
@@ -747,8 +750,13 @@ function Admin.forceRecall(src, runId, targetSrc, reason)
     if not IsAdmin(src) then ctx = { departments = RunDeptList(run) } end
     local okP, eP = Can(src, 'forceRecall', ctx)
     if not okP then return false, eP end
+    -- Never on a run they are or were on: recalling themselves or a partner would be a free reroll (no
+    -- cooldown, pay tier kept). A test run saves and pays nothing.
+    if not run.test and InLiveRun(CitizenOf(src), runId) then return false, 'err.recall_own_run' end
     if not Has('Runs', 'removeParticipant') then return false, 'err.module_unavailable' end
     reason = CleanText(reason)
+    -- The permission check may yield: the target may have left meanwhile (real call, abandon, run end).
+    if run.state == 'ended' or p.status ~= 'active' then return false, 'err.not_participant' end
     local ok = Call('Runs', 'removeParticipant', run, target, 'force_recall',
         { notify = 'admin.notice.force_recalled' })
     if not ok then return false, 'err.internal' end
@@ -1145,7 +1153,7 @@ end
 -- ============================================================================
 -- side = { kind = 'database'|'files', live = boolean, rows(sql, params) -> list (typed like oxmysql),
 --          exec(sql, params), schema() -> { order = { name }, tables = { [name] = info } }, bulk(fn) -> pcall results,
---          writer(table, cols) -> function(rows), raiseNext(table, n) }
+--          writer(table, cols, upsert) -> function(rows), raiseNext(table, n) }
 -- info = { name, cols = { column }, kinds = { [column] = 'dt'|'date'|'bool'|'val' }, lower = { [lower] = column },
 --          auto = AUTO_INCREMENT column|nil, next = next id|nil, keyset = the AUTO_INCREMENT column is the primary key }
 local function TableInfo(name) return { name = name, cols = {}, kinds = {}, lower = {} } end
@@ -1169,6 +1177,18 @@ local function DatabaseKind(dataType, columnType)
     if dt == 'date' then return 'date' end
     if ct:match('^tinyint%(1%)') then return 'bool' end
     return 'val'
+end
+
+-- Into the storage in use the server keeps writing during the copy (a login's cp_officers row, XP, an audit
+-- entry): a row it wrote first is replaced by the copied one instead of failing the whole copy.
+local function UpsertTail(cols, upsert)
+    if not upsert then return '' end
+    local sets = {}
+    for i, c in ipairs(cols) do
+        local q = QuoteName(c.dst)
+        sets[i] = q .. ' = VALUES(' .. q .. ')'
+    end
+    return ' ON DUPLICATE KEY UPDATE ' .. table.concat(sets, ', ')
 end
 
 -- A saves folder engine (CP.Storage.MemSQL) as a side.
@@ -1204,14 +1224,14 @@ local function FilesSide(engine, live, dir)
         return table.unpack(res, 1, res.n)
     end
     -- one INSERT per row: the same statement text for the whole table, so the engine parses it once
-    function side.writer(name, cols)
+    function side.writer(name, cols, upsert)
         local names, values = {}, {}
         for i, c in ipairs(cols) do
             names[i] = QuoteName(c.dst)
             values[i] = c.wkind == 'dt' and 'FROM_UNIXTIME(?)' or '?'
         end
         local sql = 'INSERT INTO ' .. QuoteName(name) .. ' (' .. table.concat(names, ', ') .. ') VALUES ('
-            .. table.concat(values, ', ') .. ')'
+            .. table.concat(values, ', ') .. ')' .. UpsertTail(cols, upsert)
         return function(rows)
             for _, row in ipairs(rows) do
                 local params = {}
@@ -1272,10 +1292,11 @@ local function DatabaseSide(real, live)
     end
     function side.bulk(fn) return pcall(fn) end
     -- up to STORAGE_BATCH rows per INSERT; NULL is written as NULL (no gaps in the parameter list)
-    function side.writer(name, cols)
+    function side.writer(name, cols, upsert)
         local names = {}
         for i, c in ipairs(cols) do names[i] = QuoteName(c.dst) end
         local head = 'INSERT INTO ' .. QuoteName(name) .. ' (' .. table.concat(names, ', ') .. ') VALUES '
+        local tail = UpsertTail(cols, upsert)
         return function(rows)
             local i = 1
             while i <= #rows do
@@ -1294,7 +1315,7 @@ local function DatabaseSide(real, live)
                     end
                     tuples[#tuples + 1] = '(' .. table.concat(parts, ', ') .. ')'
                 end
-                q(head .. table.concat(tuples, ', '), params)
+                q(head .. table.concat(tuples, ', ') .. tail, params)
                 i = last + 1
             end
         end
@@ -1319,7 +1340,8 @@ local function OpenDatabase()
     return DatabaseSide(real, live)
 end
 
--- A folder the server can write to (created when missing, as CP.Storage does at start-up).
+-- A folder the server can write to (created when missing, as CP.Storage does at start-up): os.createdir on
+-- FXServer (its sandbox refuses os.execute), one folder per call so the parents first; mkdir elsewhere.
 local function WritableFolder(dir)
     local fs = CP.Storage.MemSQL.fs
     local probe = dir .. '/.cp-write-test'
@@ -1330,7 +1352,14 @@ local function WritableFolder(dir)
         return true
     end
     if canWrite() then return true end
-    if os and os.execute then
+    if os and os.createdir then
+        local path = ''
+        for part, sep in dir:gmatch('([^/\\]*)([/\\]?)') do
+            path = path .. part
+            if part ~= '' then pcall(os.createdir, path) end
+            path = path .. sep
+        end
+    elseif os and os.execute then
         local windows = package and package.config and package.config:sub(1, 1) == '\\'
         local cmd
         if windows then
@@ -1539,7 +1568,7 @@ local function CopyTable(source, target, sInfo, tInfo)
     end
     local from = ' FROM ' .. QuoteName(sInfo.name)
     local select = 'SELECT ' .. table.concat(list, ', ') .. from
-    local write = target.writer(tInfo.name, cols)
+    local write = target.writer(tInfo.name, cols, target.live)
     local written = 0
     local function put(rows)
         for _, row in ipairs(rows) do
@@ -1666,6 +1695,13 @@ local function StorageCopy(src, direction, force)
                     if name ~= MIGRATIONS_TABLE and (before[name] or 0) > 0 then
                         target.exec('DELETE FROM ' .. QuoteName(name))
                     end
+                end
+            end
+            -- the storage in use hands out ids during the copy: above every copied one, never the same
+            if target.live then
+                for _, name in ipairs(tables) do
+                    local s, t = srcSchema.tables[name], tgtSchema.tables[name]
+                    if s.next and t and t.auto and (t.next or 0) < s.next then target.raiseNext(name, s.next) end
                 end
             end
             for _, name in ipairs(tables) do

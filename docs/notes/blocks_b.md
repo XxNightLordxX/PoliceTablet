@@ -51,8 +51,10 @@ Each file's header lists the fields it reads (with defaults), the evidence it ac
   leave the objective stuck (the award is given once either way).
 - **Timed interactions** (Cut restraints, Knock and announce) take two events: `*_start` and then the finish. Both
   are distance-checked on the server, and the finish must come at least 80 % of the duration after the start.
-- **Door response** is rolled when the objective starts (so a fighting suspect spawns with its pistol and counts
-  toward the armed cap) and is kept secret until the knock. A door-mode NPC dying before the knock reveals it.
+- **Door response** is rolled when the objective starts (so a fighting suspect spawns armed and counts toward the
+  armed cap) and is kept secret until the knock: his pistol is given in hand only at the reveal (server
+  `GiveWeaponToPed`, and `cfg.weapon` in the bag for a new host), never shown at the door before it. A door-mode NPC
+  dying before the knock reveals it.
   A surrendering suspect is placed 1 m outside the door with server `SetEntityCoords`, facing out.
 - **Escape**: only suspects/inmates that are `fleeing` or `hostile` (never associates, idle or surrendered ones),
   more than escape.distance from every active participant, for escape.seconds in a row.
@@ -83,8 +85,9 @@ Each file's header lists the fields it reads (with defaults), the evidence it ac
   onDamaged for the same hit); only without onDamaged do they count. Hits by the same attacker on the same
   hostage within 1 s count once. `no_hostage_hurt` is lost by any damage from anyone and is recorded only once
   minSeconds has passed since the objective started (a completion refused as too fast must not keep it).
-  `hostage_hit` needs a participant attacker. One pending "Cut restraints" per participant: a new `free_start`
-  replaces that participant's previous one.
+  `hostage_hit` needs an active participant attacker (`ctx.participants()`: someone who left shoots as an outsider,
+  as in CP.Npc and CP.AntiCheat; the kill rule above still counts them). One pending "Cut restraints" per
+  participant: a new `free_start` replaces that participant's previous one.
 - **presence**: hostile_waves = nearest non-neutralised hostile, else the start point; protect_rescue = nearest
   living hostage, else the safe point; flee_arrest = nearest suspect not neutralised, else the door or start.
 - **HUD**: server `ctx.hud({ detail, value, max })` only when it changes. flee_arrest also sends

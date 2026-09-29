@@ -104,6 +104,8 @@ local function NameBlip(id, label)
 end
 
 local function EnsureBlip(S, netId, ent)
+    -- a loop pass resumed after the cleanup (it waited in ctx.control) draws nothing
+    if not S.alive then return end
     local b = S.blips[netId]
     if b and b.ent == ent and DoesBlipExist(b.id) then return end
     DropBlip(S, netId)
@@ -206,15 +208,16 @@ end
 -- The host must own the ped before CP.Npc.apply / CP.Npc.task do anything (OneSync hands ownership
 -- to the closest player, often the officer chasing the suspect): control is requested for every
 -- task, and a task only counts as done when CP.Npc.task took it (otherwise the next loop retries).
-local function HasControl(ctx, ent)
+-- ctx.control waits for the hand-over: an objective that stopped meanwhile tasks nobody.
+local function HasControl(S, ent)
+    if not (S.alive and S.current) then return false end
     if NetworkHasControlOfEntity(ent) then return true end
-    return ctx.control(ent, CONTROL_MS) == true
+    return S.ctx.control(ent, CONTROL_MS) == true and S.alive and S.current
 end
 
 local function HostAi(S, info, ent, state)
-    local ctx = S.ctx
     if S.applied[info.netId] ~= ent then
-        if not HasControl(ctx, ent) then return end
+        if not HasControl(S, ent) then return end
         local bag = BagOf(ent)
         if CP.Npc.apply(ent, (bag and bag.cfg) or {}) == false then return end
         S.applied[info.netId] = ent
@@ -236,7 +239,7 @@ local function HostAi(S, info, ent, state)
         action, args = 'cuffed', {}
     end
     if action then
-        if not HasControl(ctx, ent) then return end
+        if not HasControl(S, ent) then return end
         if CP.Npc.task(ent, action, args) == false then return end
     end
     S.tasked[info.netId] = state
@@ -252,7 +255,8 @@ local function ReportOnce(S, kind, netId)
 end
 
 local function SetHint(S, text)
-    if S.hint == text then return end
+    -- never a line written after the cleanup
+    if not S.alive or S.hint == text then return end
     S.hint = text
     S.ctx.hudDetail(text)
 end
@@ -366,6 +370,13 @@ CP.Blocks.register(BLOCK, {
         if data.knocked and not S.knocked then
             S.knocked = true
             DropDoor(S)
+        elseif data.knocked == false and S.knocked then
+            -- a test restart: the server waits for a knock again, and restart sends no stop or start
+            S.knocked = false
+            if S.current then
+                AddDoor(S)
+                MarkerLoop(S)
+            end
         end
     end,
 

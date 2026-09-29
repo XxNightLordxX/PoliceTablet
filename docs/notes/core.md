@@ -82,7 +82,10 @@ Files: `modules/integrations/{qbx,sc_dispatch,sc_ambulance,renewed_banking}/`, `
 - `suspend()` does not write the audit log (the calling module does). When `actorSrc` is a player it
   must pass `CP.Permissions.can(actorSrc, 'suspend')`; `0`/`nil` (console, anticheat) skip that. The
   online officer gets a toast (`access.suspended_notice` / `access.unsuspended_notice`). Days must be
-  whole numbers 0-3650; citizenids `[%w_-]`, max 50 characters, used exactly as given.
+  whole numbers 0-3650; citizenids `[%w_-]`, max 50 characters, used exactly as given. The end time is capped
+  at 2147483647 (2038-01-19 03:14:07 UTC): beyond it MariaDB 10.11's `FROM_UNIXTIME` writes NULL (error 1292 in
+  strict mode) and `UNIX_TIMESTAMP` reads NULL, so from 2028 a 3650-day suspension ends there; a suspension that
+  cannot be stored at all returns `err.internal`.
 - `refreshOfficerRow` also refreshes off-duty department members; civilians get no row. Runs on
   character load, on OnJobUpdate for a department job, and on Officer/Supervisor UI open.
 - Export `GetDepartment(src)` returns the department of the active job whether or not the player is on
@@ -107,6 +110,8 @@ Files: `modules/integrations/{qbx,sc_dispatch,sc_ambulance,renewed_banking}/`, `
   getSession is rate limited to 4/s per player.
 - `switchUi` replies `{ ok, data = Session }` AND sends an `open` message for the new UI (the web
   handlers are idempotent). The prop stays when switching officer <-> supervisor and is removed for admin.
+  A UI closed while the session was on its way stays closed and the reply is `err.tablet_closed` (an `ok`
+  reply would make the web draw the UI again without NUI focus).
 - The `theme` message always carries a theme object (the Crimson-Police default when the player is not
   an officer) plus `locale`; it is sent at login, after duty/job changes (debounced 1.5 s), on unload
   and on NUI `ready` (which also re-sends the HUD, overlay and open UI).
@@ -116,10 +121,11 @@ Files: `modules/integrations/{qbx,sc_dispatch,sc_ambulance,renewed_banking}/`, `
   always registered with default key `Config.Tablet.keybind` (`''` = unbound, bindable in GTA settings).
 - Crimson-Arena (CRIMSON_ARENA rule 8): a `crimsonArena` change handler on the local player's bag; a
   foreign value (active, `source ~= 'crimson-police'`) closes every Crimson-Police UI (prop deleted,
-  animation stopped), hides the HUD and overlays and cancels a progress bar while a run is current
+  animation stopped), hides the HUD, overlays and result card and cancels a progress bar while a run is current
   (`lib.progressActive` first: `lib.cancelProgress` raises when none runs). While the local value is
   foreign, the command, key mapping, item, `OpenTablet`, `switchUi` and `client:openAdmin` refuse with the
-  toast `err.in_arena` (also re-checked when the session reply arrives). `SetNuiFocus(false, false)` is only
+  toast `err.in_arena` (also re-checked when the session reply arrives). A result card (`CP.Tablet.result`) that arrives while
+  the value is foreign is dropped, not kept for later (a 25 s notice; the run stays in the Profile history). `SetNuiFocus(false, false)` is only
   called when a Crimson-Police UI was open (never on an unload or close with nothing open).
 - Prop: `Config.Tablet.prop`, a local (non-networked) object (CRIMSON_ARENA rule 8), bone 60309 with the
   offsets tuned for `amb@code_human_in_bus_passenger_idles@female@tablet@base` / `base` (flag 49); the

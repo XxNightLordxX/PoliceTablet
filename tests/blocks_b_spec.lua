@@ -27,14 +27,21 @@ _G.DoesEntityExist = function(e)
 end
 _G.SetEntityCoords = function(e, x, y, z) if W.ents[e] then W.ents[e].coords = vec3(x, y, z) end end
 _G.SetEntityHeading = function(e, h) if W.ents[e] then W.ents[e].heading = h end end
+W.weapons = {}
+_G.GiveWeaponToPed = function(e, w, ammo, hidden, inHand)
+    W.weapons[#W.weapons + 1] = { e = e, w = w, ammo = ammo, hidden = hidden, inHand = inHand }
+end
 
 -- ============================================================================
 --                  CP.Npc STUB (modules/npc is another slice)
 -- ============================================================================
 
-local NPC = { states = {}, cuffs = {}, rolls = {}, rollResult = true, damaged = {} }
+local NPC = { states = {}, extra = {}, cuffs = {}, rolls = {}, rollResult = true, damaged = {} }
 CP.Npc = {
-    setState = function(_, netId, state) NPC.states[netId] = state end,
+    setState = function(_, netId, state, extra)
+        NPC.states[netId] = state
+        NPC.extra[netId] = extra
+    end,
     getState = function(netId) return NPC.states[netId] end,
     rollSurrender = function(_, netId, chance)
         NPC.rolls[#NPC.rolls + 1] = { netId = netId, chance = chance }
@@ -761,6 +768,20 @@ do -- spawn in prepare (waiting for room), damage while not current, free, walk 
     H.eq(#S.fails, 0, 'no fail')
 end
 
+do -- hostage_hit: a hit by someone who left the run is not participant fire
+    Place(1, 1990, 2000, 20)
+    local ctx, S = MakeCtx('protect_rescue', {}, prLoc, { index = 2, srcs = { 1, 2 } })
+    PR.prepare(ctx)
+    local h1 = S.spawned[1].netId
+    ctx.run.participants[2].status = 'left'
+    S.active = { 1 }
+    NPC.damaged[1](ctx.run, h1, 2)
+    H.eq(#S.penalties, 0, 'a hit by a participant who left costs nothing')
+    H.eq(ctx.state.hurt, true, 'the hostage still counts as hurt')
+    NPC.damaged[1](ctx.run, h1, 1)
+    H.eq(#S.penalties, 1, 'an active participant hit still costs hostage_hit')
+end
+
 do -- clean rescue: no_hostage_hurt once, completion retried after minSeconds
     Place(1, 1990, 2000, 20)
     local ctx, S = MakeCtx('protect_rescue', {}, prLoc, { index = 2 })
@@ -1150,10 +1171,19 @@ do -- door: fight response, stun, low health, death before the knock
         { responses = { surrender = 0, flee = 0, fight = 1 }, associates = { count = 0 } }, doorLoc)
     FA.start(ctx)
     local sus = S.spawned[1]
-    H.eq(sus.opts.armed, true, 'fighting suspect armed')
-    H.eq(sus.opts.weapon, 'WEAPON_PISTOL', 'with a pistol')
+    H.eq(sus.opts.armed, true, 'fighting suspect armed (counts toward the armed cap)')
+    H.eq(sus.opts.weapon, nil, 'fighting suspect: no pistol in sight before the knock')
+    local given = #W.weapons
+    FA.tick(ctx, 1)
+    H.eq(#W.weapons, given, 'fighting suspect: still no pistol while he waits')
     KnockOpen(ctx, S)
     H.eq(NPC.states[sus.netId], 'hostile', 'suspect fights')
+    local gw = W.weapons[#W.weapons]
+    H.eq(#W.weapons, given + 1, 'fighting suspect: the pistol is given at the knock')
+    H.ok(gw and gw.e == sus.entity and gw.w == joaat('WEAPON_PISTOL') and gw.inHand == true,
+        'fighting suspect: the pistol in hand')
+    local ex = NPC.extra[sus.netId]
+    H.eq(ex and ex.cfg and ex.cfg.weapon, 'WEAPON_PISTOL', 'fighting suspect: the bag cfg gets the pistol (new host)')
     Place(1, 3200, 3000, 10)
     local ok, why = FA.onEvent(ctx, 1, { type = 'stunned', netId = sus.netId })
     H.eq(why, 'too_far', 'stun needs a participant nearby')
@@ -1782,6 +1812,51 @@ do
     H.eq(removedZones[#zones], true, 'fa: stop removes the knock zone')
     Steps(4)
     H.eq(#ReportsOf(dc, 'knock'), 0, 'fa: no knock report after the cancelled progress')
+    -- door: a test restart after the knock (the server sends knocked = false again) re-arms the door
+    local rc = ClientCtx(U.deepcopy(FA.defaults({})), doorLoc, { tag = 'door-restart' })
+    FAc.prepare(rc)
+    FAc.start(rc)
+    local firstZone = #zones
+    FAc.update(rc, { peds = {}, mode = 'door', knocked = true, response = 'surrender' })
+    H.eq(removedZones[firstZone], true, 'fa restart: the knock removes the door zone')
+    FAc.update(rc, { peds = {}, mode = 'door', knocked = false })
+    H.eq(#zones, firstZone + 1, 'fa restart: a new Knock and announce zone after the restart')
+    H.eq(zones[#zones].options[1].canInteract(), true, 'fa restart: the knock can be used again')
+    zones[#zones].options[1].onSelect()
+    Steps(4)
+    H.eq(#ReportsOf(rc, 'knock'), 1, 'fa restart: the knock is reported again')
+    FAc.stop(rc)
+    H.eq(removedZones[#zones], true, 'fa restart: stop removes the new zone')
+    -- the objective stops while the host loop waits for control of an inmate: nothing after the cleanup
+    Place(1, 4000, 4000, 30)
+    local sc = ClientCtx(U.deepcopy(FA.defaults({ mode = 'scatter' })), scatterLoc, { tag = 'fa-stop' })
+    local slow = false
+    sc.control = function(e)
+        if slow then Wait(0) end
+        CE[e].control = true
+        return true
+    end
+    AddEnt(7102, 82, vec3(4040.0, 4000.0, 30.0), { state = 'fleeing', cfg = {} })
+    FAc.prepare(sc)
+    FAc.start(sc)
+    FAc.update(sc, {
+        peds = { { netId = 7102, role = 'inmate', state = 'fleeing', armed = true, route = 1 } },
+        mode = 'scatter',
+        escaping = 12,
+    })
+    local base = OpenBlips()
+    Steps(1)
+    H.eq(OpenBlips() - base, 1, 'fa stop: a blip on the inmate')
+    H.eq(sc.lines[#sc.lines], CP.L('block.flee_arrest.escaping', { seconds = 12 }), 'fa stop: the escape line')
+    local before = #tasks
+    CE[82].bag.state, CE[82].control, slow = 'hostile', false, true  -- turns to fight; control is elsewhere
+    Steps(1)
+    FAc.stop(sc)                                                     -- ...and the objective stops meanwhile
+    H.eq(OpenBlips() - base, 0, 'fa stop: stop removes the blips')
+    Steps(4)
+    H.eq(OpenBlips() - base, 0, 'fa stop: the loop pass resumed after the cleanup draws no blip')
+    H.eq(sc.lines[#sc.lines], false, 'fa stop: ...and writes no HUD line')
+    H.eq(#tasks, before, 'fa stop: ...and tasks nobody')
 
     -- hostile_waves: traffic blocked around the start and restored at stop; apply/combat retried
     Place(1, 1000, 1000, 30)
@@ -1816,6 +1891,27 @@ do
     H.eq(OpenBlips(), 0, 'hw: radio silence, no blips')
     TriggerEvent('onResourceStop', 'Crimson-Police')
     H.eq(#roads.back, 2, 'hw: resource stop restores the traffic too')
+    -- the objective stops while the host loop waits for control of a hostile: nothing after the cleanup
+    local wc = ClientCtx(U.deepcopy(HW.defaults({ waves = { 2 } })), hloc, { tag = 'hw-stop' })
+    local slowHw = false
+    wc.control = function(e)
+        if slowHw then Wait(0) end
+        CE[e].control = true
+        return true
+    end
+    AddEnt(7202, 92, vec3(1040.0, 1000.0, 30.0), { state = 'hostile', cfg = { behaviour = 'balanced' } })
+    HWc.prepare(wc)
+    HWc.start(wc)
+    HWc.update(wc, { peds = { { netId = 7202, role = 'hostile', state = 'hostile', wave = 1 } } })
+    local hwBase = OpenBlips()
+    CE[92].control, slowHw = false, true
+    Steps(1)
+    local hwTasks = #tasks
+    HWc.stop(wc)
+    H.eq(OpenBlips() - hwBase, 0, 'hw stop: stop removes the blips')
+    Steps(4)
+    H.eq(OpenBlips() - hwBase, 0, 'hw stop: the loop pass resumed after the cleanup draws no blip')
+    H.eq(#tasks, hwTasks, 'hw stop: ...and tasks nobody')
 
     -- traffic stays blocked while a later objective of the run follows (Gang Shootout "Secure the scene"),
     -- and is restored when the last objective stops, when the run is over, or on resource stop

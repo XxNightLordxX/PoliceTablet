@@ -225,6 +225,7 @@ end
 -- Control of a run ped before anything is done to it (ctx.control returns at once when this client
 -- already owns it). regained = another client owned it since the last check: re-apply and re-task.
 local function Own(S, net, ent)
+    if not (S.alive and S.current) then return false, false end
     if NetworkHasControlOfEntity(ent) then
         local regained = S.lost[net] == true
         S.lost[net] = nil
@@ -235,6 +236,8 @@ local function Own(S, net, ent)
         return false, false
     end
     S.lost[net] = nil
+    -- ctx.control waits for the hand-over: the objective may have stopped meanwhile
+    if not (S.alive and S.current) then return false, false end
     return true, true
 end
 
@@ -291,7 +294,12 @@ local function HudText(S, close)
     if close then return CP.L('block.search_area.hint_close') end
     if not d.entered then return CP.L('block.search_area.hud_enter') end
     local r = d.circle and math.floor(d.circle.r + 0.5) or 0
-    if (d.checked or 0) < (d.clueTotal or 0) then
+    -- a lost clue (the witness killed, a prop gone) counts as handled: only a pending one is left to check
+    local pending = 0
+    for _, cl in pairs(S.clues) do
+        if cl.status == 'pending' then pending = pending + 1 end
+    end
+    if pending > 0 then
         return CP.L('block.search_area.hud_search', { checked = d.checked or 0, total = d.clueTotal or 0, radius = r })
     end
     return CP.L('block.search_area.hud_find', { done = d.neutralised or 0, total = d.total or 0, radius = r })
@@ -327,6 +335,8 @@ local function Loop(S)
                     if ent then
                         local state = (BagOf(ent) or {}).state or f.state
                         if host and state ~= 'dead' then HostPed(S, f.netId, ent, state, false) end
+                        -- HostPed waits for control (ctx.control yields): a stop meanwhile has already cleaned up
+                        if not (S.alive and S.current) then break end
                         local d = #(GetEntityCoords(ent) - myPos)
                         if state == 'fleeing' or state == 'idle' then
                             if d <= WATCH_RANGE then
@@ -347,7 +357,7 @@ local function Loop(S)
                         DropBlip(S, k)
                     end
                 end
-                SetHint(S, HudText(S, close))
+                if S.alive and S.current then SetHint(S, HudText(S, close)) end
             end
             Wait(fast and FAST_MS or SLOW_MS)
         end

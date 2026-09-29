@@ -16,8 +16,10 @@ Files: `Crimson-Police/modules/runs/server.lua`, `Crimson-Police/modules/runs/cl
   spot may have several holders.
 - `create`'s lookups (`CP.Access.getOfficer`, `CP.Payouts.baseFor`, `CP.Scoring.isFirstRunSinceDuty`, ...) may
   yield, so right before the run is registered (no yield in between) it re-checks that no member is on a run
-  (`err.already_on_run` / `err.member_on_run`) and, for runs that are neither tests nor operations, the server
-  caps (`err.server_busy`). Two racing accepts can never put one officer on two runs or pass the caps together.
+  (`err.already_on_run` / `err.member_on_run`), that every member is still online (`err.member_unavailable`:
+  `playerDropped` found no run to leave, so nothing else would remove them) and, for runs that are neither tests
+  nor operations, the server caps (`err.server_busy`). Two racing accepts can never put one officer on two runs
+  or pass the caps together.
 - The modifier is rolled only for runs that are not tests, operations or the boss (`CP.Events.rollModifier`
   checks the same). Time Crunch: `timeLimit = round(timeLimit × (1 − Config.Events.timeCrunchCut))`.
 - `run.unit = CP.Units.unitOf(leaderSrc)` is kept and unlocked when the run ends (not for test runs).
@@ -132,7 +134,8 @@ Files: `Crimson-Police/modules/runs/server.lua`, `Crimson-Police/modules/runs/cl
   `run.stats.weaponsFired + 1`, `p.firedWeapon = true`. In-arena senders are ignored.
 - `server:objective`: active participant, run in progress, index an integer ≥ 1; evidence is sanitised
   (tables ≤ 32 keys, depth ≤ 3, strings ≤ 256); `CP.AntiCheat.checkEvent` sees every well-formed event, also one
-  for an objective past the last (it flags `unexpected_event` for a later objective); then index = the current
+  for an objective past the last (it flags `unexpected_event` for a later objective), and a check that fails
+  (throws) drops the event like a refusal; then index = the current
   active objective; `CP.Access.recheck` on every objective event (removes with its reason); after that re-check
   (it may yield) the participant, the run and the objective are checked again. Block rejections are logged,
   never flagged. Events for unknown runs or from non-participants are logged only (a forged event must not flag

@@ -22,6 +22,11 @@ export function formatMultiplier(m: number | null | undefined, digits = 2): stri
     return '×' + (Number(m) || 0).toFixed(digits);
 }
 
+// A config factor without trailing zeros: 2 -> "2", 1.5 -> "1.5".
+export function formatFactor(m: number | null | undefined): string {
+    return String(Math.round((Number(m) || 0) * 100) / 100);
+}
+
 // Seconds -> "m:ss" (or "h:mm:ss" from one hour). Negative values clamp to 0.
 export function formatDuration(seconds: number | null | undefined): string {
     const s = Math.max(0, Math.floor(Number(seconds) || 0));

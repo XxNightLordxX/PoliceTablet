@@ -341,11 +341,21 @@ function U.num(v, default)
     return tonumber(v) or default or 0
 end
 
--- Truncate a string to n characters (bytes) for fixed-size columns.
+-- Truncate a string to at most n bytes for fixed-size columns, never ending inside a UTF-8 character:
+-- MariaDB strict mode (oxmysql connects as utf8mb4) refuses the whole row for a broken sequence (error 1366).
 function U.clip(s, n)
     if s == nil then return nil end
     s = tostring(s)
-    if #s > n then return s:sub(1, n) end
+    if #s <= n then return s end
+    s = s:sub(1, n)
+    local last = #s
+    local j = last
+    while j > 1 and j > last - 3 and s:byte(j) >= 0x80 and s:byte(j) < 0xC0 do j = j - 1 end
+    local lead = s:byte(j)
+    if lead and lead >= 0xC0 then
+        local need = (lead >= 0xF0 and 4) or (lead >= 0xE0 and 3) or 2
+        if last - j + 1 < need then return s:sub(1, j - 1) end
+    end
     return s
 end
 

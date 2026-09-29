@@ -607,6 +607,16 @@ do
     list = Events('client:test')
     H.eq(list[#list].args[1].debug.counts.maxArmedAlive, 30, 'caps are read from Config at call time')
     Config.Limits.maxArmedAlive = 25
+    -- Crimson-Arena rule 8: nothing goes to an admin in the arena; the geometry goes again afterwards
+    arena[1] = true
+    H.reset()
+    H.advance(2100)
+    H.eq(#EventsTo('client:test', 1), 0, 'no debug stream to an in-arena admin')
+    arena[1] = nil
+    H.advance(2100)
+    list = EventsTo('client:test', 1)
+    H.ok(#list >= 1 and type(list[#list].args[1].debug.geometry) == 'table',
+        'the stream comes back after the arena, with the geometry')
     okD, d = T.control(1, { control = 'debug', enabled = false })
     H.eq(d.debug, false, 'debug off')
     H.eq(LastEvent('client:test').args[1].debug, false, 'the client is told')
@@ -861,11 +871,81 @@ do
     H.eq(d[2], 4, 'version')
     H.eq(d[3], 'heavy', 'tierName')
     H.eq(d[4], true, 'passed')
-    H.eq(d[5], 6, 'src)')
+    H.eq(d[5], 6, 'src')
+    H.eq(d[6], 'draft0001', 'defHash): the content the test ran')
     local rows = H.sql(
         'SELECT mission_version, tier, def_hash FROM cp_mission_tests WHERE mission_id = \'custom_draft\'')
     H.eq(rows[1].mission_version, 4, 'draft version stored')
     H.eq(rows[1].def_hash, 'draft0001', 'draft hash stored')
+end
+
+-- ============================================================================
+--           RECORDING THE TEST THE ADMIN PICKED (key, double click)
+-- ============================================================================
+
+do
+    -- a draft test and a catalog test of the same mission, location and tier: the key picks the one recorded
+    H.clockMs = H.clockMs + 5000
+    local raw = Mission('custom_dockside', { label = 'Dockside Raid', version = 4 })
+    raw.source, raw.defHash, raw.status, raw.isBoss = nil, nil, nil, nil
+    local ok, data = T.startDraft(1, raw, { tier = 'heavy', location = 1 })
+    H.eq(ok, true, 'a draft test of custom_dockside v4')
+    local draftKey = data.runId
+    BeginRun(runs[data.runId])
+    T.control(1, { control = 'complete' })
+    H.clockMs = H.clockMs + 5000
+    ok, data = T.start(1, { missionId = 'custom_dockside', location = 1, tier = 'heavy' })
+    H.eq(ok, true, 'then a catalog test of the published v3')
+    BeginRun(runs[data.runId])
+    T.control(1, { control = 'complete' })
+    local nDrafted = #drafted
+    local okR, res = T.record(1,
+        { key = draftKey, missionId = 'custom_dockside', location = 1, tier = 'heavy', result = 'passed' })
+    H.eq(okR, true, 'the draft row is recorded')
+    H.eq(res and res.draft, true, 'the test the admin picked, not the newest test of that location')
+    H.eq(#drafted, nDrafted + 1, 'CP.Builder.onDraftTested for the draft')
+    local rows = H.sql(
+        'SELECT mission_version, def_hash FROM cp_mission_tests WHERE mission_id = \'custom_dockside\' AND tested_by = \'ADM00001\'')
+    H.eq(rows[1] and rows[1].mission_version, 4, 'with the draft version')
+    H.eq(rows[1] and rows[1].def_hash, 'draft0001', 'and the draft def_hash')
+    local okK, errK = T.record(1, { key = draftKey, missionId = 'custom_dockside', location = 1, result = 'passed' })
+    H.eq(errK, 'err.test_not_run', 'a key that was recorded already')
+    okK, errK = T.record(1, { key = 42, missionId = 'custom_dockside', location = 1, result = 'passed' })
+    H.eq(errK, 'err.invalid_payload', 'the key must be text')
+    okR, res = T.record(1, { missionId = 'custom_dockside', location = 1, tier = 'heavy', result = 'failed' })
+    H.eq(res and res.draft, false, 'no key: the newest test of that location')
+
+    -- a double click while can() yields (a suspension lookup): one row, and the other waiting test stays
+    local raw2 = Mission('custom_twice', { label = 'Twice Raid', version = 2 })
+    raw2.source, raw2.defHash, raw2.status, raw2.isBoss = nil, nil, nil, nil
+    for _, loc in ipairs({ 1, 2 }) do
+        H.clockMs = H.clockMs + 5000
+        local okS, d = T.startDraft(6, raw2, { tier = 'heavy', location = loc })
+        H.eq(okS, true, 'a draft test at location ' .. loc)
+        BeginRun(runs[d.runId])
+        T.control(6, { control = 'complete' })
+    end
+    local realCan = CP.Permissions.can
+    CP.Permissions.can = function(...)
+        Wait(0)
+        return realCan(...)
+    end
+    local answers = {}
+    for i = 1, 2 do
+        CreateThread(function()
+            answers[i] = table.pack(pcall(T.record, 6, { missionId = 'custom_twice', location = 2, result = 'passed' }))
+        end)
+    end
+    H.step(0)
+    CP.Permissions.can = realCan
+    rows = H.sql('SELECT location_index FROM cp_mission_tests WHERE mission_id = \'custom_twice\'')
+    H.eq(#rows, 1, 'a double click records the test once')
+    H.eq(answers[1] and answers[1][2], true, 'the first click records it')
+    H.eq(answers[2] and answers[2][1], true, 'the second click does not raise')
+    H.eq(answers[2] and answers[2][3], 'err.test_not_run', 'it finds the test recorded already')
+    local left = {}
+    for _, e in ipairs(T.state(6).pending) do if e.missionId == 'custom_twice' then left[#left + 1] = e end end
+    H.ok(#left == 1 and left[1].locationIndex == 1, 'the other waiting test is kept')
 end
 
 -- ============================================================================
@@ -1192,14 +1272,17 @@ _G.AddStateBagChangeHandler = function(key, bag, fn)
 end
 _G.LocalPlayer = { state = {} }
 _G.PlayerPedId = function() return 100 end
-_G.GetControlInstructionalButton = function() return 't_F7' end
-local moved, frozen, fades = {}, {}, {}
+_G.GetControlInstructionalButton = function() return 't_F6' end
+local moved, frozen, frozenEnts, fades = {}, {}, {}, {}
 _G.GetVehiclePedIsIn = function() return 0 end
 _G.GetPedInVehicleSeat = function() return 0 end
 _G.DoScreenFadeOut = function() fades[#fades + 1] = 'out' end
 _G.DoScreenFadeIn = function() fades[#fades + 1] = 'in' end
 _G.IsScreenFadedOut = function() return true end
-_G.FreezeEntityPosition = function(e, on) frozen[#frozen + 1] = on end
+_G.FreezeEntityPosition = function(e, on)
+    frozen[#frozen + 1] = on
+    frozenEnts[#frozenEnts + 1] = e
+end
 _G.SetEntityCoords = function(e, x, y, z) moved[#moved + 1] = { e = e, x = x, y = y, z = z } end
 _G.RequestCollisionAtCoord = function() end
 _G.GetGroundZFor_3dCoord = function(x, y, z) return true, 29.5 end
@@ -1264,7 +1347,9 @@ CP.Net.action = function(name, payload)
     if type(r) == 'function' then return r(payload) end
     return r or { ok = true, data = {} }
 end
+local asked = {}
 CP.Net.request = function(name)
+    asked[#asked + 1] = name
     if name == 'test:pendingInvites' then return { ok = true, data = serverReplies.invites or {} } end
     return { ok = false }
 end
@@ -1277,29 +1362,49 @@ end
 
 do
     H.eq(keymaps[1].cmd, '+crimsonpolice_testpanel', 'key mapping +crimsonpolice_testpanel')
-    H.eq(keymaps[1].key, 'F9', 'default key F9')
+    H.eq(keymaps[1].key, 'F7', 'default key F7 (sc-multijob binds F9)')
     H.ok(H.commands['+crimsonpolice_testpanel'] ~= nil and H.commands['-crimsonpolice_testpanel'] ~= nil,
         'both +/- commands registered')
     for _, n in ipairs({ 'testControl', 'teleport', 'toggleDebug', 'testPanel' }) do
         H.ok(clientActions[n] ~= nil, 'client action ' .. n)
     end
 
-    -- no controls: F9 opens the invitation prompt only with invitations waiting
+    -- no controls and no invitation: the key does nothing (another resource may share it, sc-multijob uses F9)
     H.commands['+crimsonpolice_testpanel'].fn()
     H.eq(#focus, 0, 'no invitations: no focus')
-    H.eq(toasts[#toasts].text, CP.L('test.no_invites'), 'told there is nothing')
-    serverReplies.invites = { { inviteId = 'ti1', missionLabel = 'Gang Shootout', from = 'Alex', expiresIn = 90 } }
+    H.eq(#asked, 0, 'no invitations: the server is not asked')
+    H.eq(#toasts, 0, 'no invitations: no toast')
+    LocalPlayer.state.crimsonArena = { active = true, matchId = 'm0' }
     H.commands['+crimsonpolice_testpanel'].fn()
-    H.eq(focus[#focus][1], true, 'prompt takes NUI focus')
+    H.eq(#toasts, 0, 'nothing to open: no arena toast either')
+    LocalPlayer.state.crimsonArena = nil
+    serverReplies.invites = { { inviteId = 'ti1', missionLabel = 'Gang Shootout', from = 'Alex', expiresIn = 90 } }
+    H.fire('crimson-police:client:testInvite', 1,
+        { inviteId = 'ti1', missionLabel = 'Gang Shootout', from = 'Alex', expiresIn = 90 })
+    H.commands['+crimsonpolice_testpanel'].fn()
+    H.eq(focus[#focus][1], true, 'an invitation waits: the prompt takes NUI focus')
     H.eq(LastPush().data.prompt.invites[1].inviteId, 'ti1', 'prompt pushed to the NUI')
     clientActions.testPanel({ open = false })
     H.eq(focus[#focus][1], false, 'released on close')
     H.eq(LastPush().data.prompt, false, 'prompt hidden')
+    -- answered on the Admin UI meanwhile: one press is told so, the next ones are silent again
+    serverReplies.invites = {}
+    H.commands['+crimsonpolice_testpanel'].fn()
+    H.eq(toasts[#toasts].text, CP.L('test.no_invites'), 'told the invitation is gone')
+    local nAsked, nToasts = #asked, #toasts
+    H.commands['+crimsonpolice_testpanel'].fn()
+    H.ok(#asked == nAsked and #toasts == nToasts, 'then the key is silent again')
+    -- an invitation that expired unanswered is forgotten
+    H.fire('crimson-police:client:testInvite', 1,
+        { inviteId = 'ti0', missionLabel = 'Gang Shootout', from = 'Alex', expiresIn = 1 })
+    H.clockMs = H.clockMs + 1500
+    H.commands['+crimsonpolice_testpanel'].fn()
+    H.ok(#asked == nAsked and #toasts == nToasts + 1, 'an expired invitation: silent (only its own toast)')
 
     -- the invitation toast
     H.fire('crimson-police:client:testInvite', 1, { inviteId = 'ti2', missionLabel = 'Bomb Disposal', from = 'Sam' })
     H.ok(toasts[#toasts].text:find('Bomb Disposal', 1, true) ~= nil, 'invitation toast names the mission')
-    H.ok(toasts[#toasts].text:find('F7', 1, true) ~= nil, 'and the bound key')
+    H.ok(toasts[#toasts].text:find('F6', 1, true) ~= nil, 'and the bound key')
 
     -- controls for my test
     currentRun = { id = 'run-9' }
@@ -1315,7 +1420,7 @@ do
     H.commands['+crimsonpolice_testpanel'].fn()
     H.eq(focus[#focus][1], true, 'F9 focuses the panel')
     H.eq(LastPush().data.focused, true, 'the panel knows it is focused')
-    H.eq(LastPush().data.key, 'F7', 'with the bound key')
+    H.eq(LastPush().data.key, 'F6', 'with the bound key')
     clientActions.testPanel({ open = false })
     H.eq(focus[#focus][1], false, 'F9/Esc release')
 
@@ -1374,6 +1479,31 @@ do
     H.step(0)
     H.eq(st.focused, false, 'Crimson-Arena rule 8: a foreign value releases our focus')
     H.eq(st.debugOn, false, 'and stops the overlay')
+    -- the test goes on for the testers: the next debug tick must not bring the overlay back
+    LocalPlayer.state.crimsonArena = { active = true, matchId = 'm2' }
+    local pushedBefore = #nuiPushes
+    H.fire('crimson-police:client:test', 1, {
+        controls = true,
+        runId = 'run-9',
+        debug = {
+            counts = { entities = 4, maxEntities = 80, armedAlive = 2, maxArmedAlive = 25 },
+            geometry = { start = { x = 0.0, y = 0.0, z = 0.0, r = 40.0 }, points = {}, routes = {}, zones = {} },
+        },
+    })
+    H.eq(st.debugOn, false, 'Crimson-Arena rule 8: a debug tick does not turn the overlay back on')
+    local shown = false
+    for i = pushedBefore + 1, #nuiPushes do if type(nuiPushes[i].data.debug) == 'table' then shown = true end end
+    H.eq(shown, false, 'no debug data reaches the NUI while the value is foreign')
+    LocalPlayer.state.crimsonArena = nil
+    H.fire('crimson-police:client:test', 1, {
+        controls = true,
+        runId = 'run-9',
+        debug = { counts = { entities = 4, maxEntities = 80, armedAlive = 2, maxArmedAlive = 25 } },
+    })
+    H.eq(st.debugOn, true, 'the overlay is back once Crimson-Arena lets the player go')
+    H.eq(st.geometry and st.geometry.start.r, 40.0, 'with the geometry sent meanwhile')
+    H.fire('crimson-police:client:test', 1, { controls = true, runId = 'run-9', debug = false })
+    H.eq(st.debugOn, false, 'debug off again')
 
     -- Config.Testing switches travel with the push (the HUD panel disables those buttons)
     H.ok(LastPush().data.allowTeleport == true and LastPush().data.debugOverlay == true,
@@ -1390,13 +1520,37 @@ do
         fades[#fades + 1] = 'out'
         LocalPlayer.state.crimsonArena = { active = true, matchId = 'm3' }
     end
-    local movedBefore = #moved
+    local movedBefore, frozenBefore = #moved, #frozen
     local okF, errF = clientActions.teleport({ target = 'start' })
     H.eq(errF, 'err.in_arena', 'teleport refused when the arena flag arrives during the fade')
     H.eq(#moved, movedBefore, 'SetEntityCoords never called')
     H.eq(fades[#fades], 'in', 'the screen fades back in')
-    H.eq(frozen[#frozen], false, 'nothing stays frozen')
+    H.eq(#frozen, frozenBefore, 'never frozen, so never unfrozen either')
     _G.DoScreenFadeOut = realFade
+    LocalPlayer.state.crimsonArena = nil
+
+    -- the flag arrives during the ground probe: Crimson-Arena froze its placed ped, we must not free it
+    local realGround = GetGroundZFor_3dCoord
+    _G.GetGroundZFor_3dCoord = function()
+        LocalPlayer.state.crimsonArena = { active = true, matchId = 'm4' }
+        return true, 29.5
+    end
+    frozenBefore = #frozen
+    okF, errF = clientActions.teleport({ target = 'start' })
+    H.eq(errF, 'err.in_arena', 'teleport refused when the arena flag arrives during the ground probe')
+    H.ok(#frozen == frozenBefore + 1 and frozen[#frozen] == true,
+        'Crimson-Arena rule 8: the ped is not unfrozen once Crimson-Arena owns it')
+    LocalPlayer.state.crimsonArena = nil
+    -- driving: our own freeze of the vehicle is always undone (Crimson-Arena only freezes the ped)
+    local realIn, realSeat = GetVehiclePedIsIn, GetPedInVehicleSeat
+    _G.GetVehiclePedIsIn = function() return 200 end
+    _G.GetPedInVehicleSeat = function() return 100 end
+    frozenBefore = #frozen
+    okF, errF = clientActions.teleport({ target = 'start' })
+    H.eq(errF, 'err.in_arena', 'the same abort while driving')
+    H.ok(#frozen == frozenBefore + 2 and frozen[#frozen] == false and frozenEnts[#frozenEnts] == 200,
+        'the vehicle is unfrozen')
+    _G.GetVehiclePedIsIn, _G.GetPedInVehicleSeat, _G.GetGroundZFor_3dCoord = realIn, realSeat, realGround
     LocalPlayer.state.crimsonArena = nil
 
     -- a new test: the HUD flag is set, then the freshly mounted panel gets the key/config push
@@ -1405,7 +1559,7 @@ do
     H.step(0)
     local pushesBefore = #nuiPushes
     H.advance(300, 50)
-    H.ok(#nuiPushes > pushesBefore and LastPush().data.key == 'F7', 'the panel gets the bound key after the HUD flag')
+    H.ok(#nuiPushes > pushesBefore and LastPush().data.key == 'F6', 'the panel gets the bound key after the HUD flag')
 
     -- the test ends
     H.fire('crimson-police:client:test', 1, { controls = false, runId = 'run-10', debug = false })

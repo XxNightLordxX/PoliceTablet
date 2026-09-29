@@ -126,6 +126,9 @@ CP.Tablet = {
 CP.Alerts = {
     inArena = function(src) return R.arena[src] == true end,
 }
+-- a real match player is in bucket 4210+; a crimsonArena flag alone is client-writable
+R.bucket = {}
+_G.GetPlayerRoutingBucket = function(src) return R.bucket[tonumber(src)] or 0 end
 CP.Access = {
     getOfficer = function(src)
         if R.offduty[src] then return nil, 'err.not_on_duty' end
@@ -512,11 +515,22 @@ Reset()
 local k5, ke5 = SpawnPed(run, { coords = vec3(8.0, 0.0, 0.0) })
 Tick(1)
 R.arena[7] = true
+R.bucket[7] = 4210
 W.ents[ke5].health = 0
 W.ents[ke5].killer = 700
 Tick(1)
 H.eq(R.died[1] and R.died[1].killer, nil, 'in-arena killer dropped')
 H.eq(#R.outside, 0, 'in-arena killer not flagged')
+R.bucket[7] = nil
+-- a crimsonArena flag written by the client in bucket 0 is no excuse: outside help still flags
+Reset()
+local k5b, ke5b = SpawnPed(run, { coords = vec3(8.5, 0.0, 0.0) })
+Tick(1)
+W.ents[ke5b].health = 0
+W.ents[ke5b].killer = 700
+Tick(1)
+H.eq(R.died[1] and R.died[1].killer, 7, 'a forged arena flag in bucket 0 keeps the killer')
+H.eq(#R.outside, 1, 'a forged arena flag in bucket 0 is still outside help')
 R.arena[7] = nil
 -- an entity that vanished (still listed by the engine): dead at the next check, no killer
 Reset()
@@ -810,9 +824,11 @@ H.eq(#R.penal, 6, 'a vehicle parent is not a shot')
 Reset()
 Bump(2100)
 R.arena[2] = true
+R.bucket[2] = 4210
 Wde(2, { hitGlobalIds = { s1 }, weaponType = PISTOL })
 H.eq(#R.penal, 0, 'in-arena sender ignored')
 R.arena[2] = nil
+R.bucket[2] = nil
 local hostileN = SpawnPed(run, { coords = vec3(13.0, 0.0, 0.0) })
 Npc.setState(run, hostileN, 'hostile')
 Tick(1)
@@ -966,9 +982,11 @@ do
     Wde(2, { hitGlobalIds = { w1 }, weaponType = PISTOL, parentGlobalId = W.nextNet })
     H.eq(FiredBy(2), 0, 'a vehicle hit is not gunfire')
     R.arena[2] = true
+    R.bucket[2] = 4210
     Wde(2, { hitGlobalIds = { w1 }, weaponType = PISTOL })
     H.eq(FiredBy(2), 0, 'in the arena: not noted')
     R.arena[2] = nil
+    R.bucket[2] = nil
     -- a gun kill by a participant (GetPedSourceOfDeath = their ped, cause = a gun), noted before entityDied
     _G.GetPedCauseOfDeath = function(e) local x = W.ents[e]; return x and x.cause or 0 end
     local k9, k9e = SpawnPed(runW, { coords = vec3(3.0, 0.0, 0.0) })

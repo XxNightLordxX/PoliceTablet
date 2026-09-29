@@ -778,6 +778,7 @@
   "builder.test.title": "Test run",
   "builder.test.which_location": "Which location did you test?",
   "builder.tool_failed": "The Mission Builder tool stopped because of an error. Nothing was changed.",
+  "builder.tool_stopped_run": "The Mission Builder tool stopped because a mission started for you. Nothing was changed.",
   "builder.unit.kmh": "km/h",
   "builder.unit.m": "m",
   "builder.unit.min": "min",

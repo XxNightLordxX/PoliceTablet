@@ -25,10 +25,11 @@ import {
     type TableColumn,
 } from '../../shared/components';
 import { cx } from '../../shared/cx';
-import { normalizeResult } from '../../shared/data';
+import { normalizeResult, pointsLimits } from '../../shared/data';
 import {
     formatDateTime,
     formatDuration,
+    formatFactor,
     formatMoney,
     formatMultiplier,
     formatNumber,
@@ -131,6 +132,7 @@ export function RunBreakdown({ result: raw, cashStatus }: { result: RunResult; c
     const hasCash = !!(raw as Partial<RunResult>).cash && typeof raw.cash === 'object';
     const result = normalizeResult(raw);
     const p = raw.points && typeof raw.points === 'object' ? result.points : null;
+    const limits = pointsLimits(result.points);
     const c = hasCash ? result.cash : null;
     const status = cashStatus || c?.status || '';
     const kind = result.result === 'completed' || result.result === 'failed' ? result.result : 'abandoned';
@@ -195,8 +197,16 @@ export function RunBreakdown({ result: raw, cashStatus }: { result: RunResult; c
                     <Line label={t('result.m_team')} value={formatMultiplier(p.mTeam)} tone="mult" />
                     <Line label={t('result.m_cross')} value={formatMultiplier(p.mCross)} tone="mult" />
                     <Line label={t('result.m_streak')} value={formatMultiplier(p.mStreak)} tone="mult" />
-                    {p.capped ? <Line label={t('result.capped')} value={formatNumber(p.P * 2)} note /> : null}
-                    {p.tod ? <Line label={t('result.tod')} value={formatMultiplier(2, 0)} tone="mult" /> : null}
+                    {p.capped ? (
+                        <Line
+                            label={t('result.capped', { cap: formatFactor(limits.scoreCap) })}
+                            value={formatNumber(limits.cap)}
+                            note
+                        />
+                    ) : null}
+                    {p.tod ? (
+                        <Line label={t('result.tod')} value={`×${formatFactor(limits.todMultiplier)}`} tone="mult" />
+                    ) : null}
                     <div className="cp-result__final">
                         <span>{t('result.final')}</span>
                         <span className="cp-num">

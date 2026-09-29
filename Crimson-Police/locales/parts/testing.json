@@ -247,7 +247,7 @@
   "test.ui.waiting_withdrawn": "{n} unanswered invitation(s) will be withdrawn.",
   "test.ui.start_solo": "Start test",
   "test.ui.start_with": "Start with {n} tester(s)",
-  "test.ui.started": "Test started. Use the HUD controls (F9) or this screen.",
+  "test.ui.started": "Test started. Use the HUD controls or this screen.",
   "test.ui.record_title": "Record the test result",
   "test.ui.record_desc": "{mission} · location {n} ({location})",
   "test.ui.result": "Result",

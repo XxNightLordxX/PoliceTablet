@@ -127,7 +127,7 @@ RegisterMission({
     {
       block      = 'hostile_waves',
       label      = 'Neutralise the hostage takers',
-      minSeconds = 30,
+      minSeconds = 12,                                           -- 3 s per base hostile, as Gang Shootout (60 s for 20)
       waves      = { 4 },                                        -- one wave of 4 inside, scaled by tier
       weapons    = { 'WEAPON_PISTOL', 'WEAPON_MICROSMG' },
       accuracy   = 25,                                           -- plus the tier's accuracy
@@ -138,7 +138,7 @@ RegisterMission({
     {
       block      = 'protect_rescue',
       label      = 'Free the hostages',
-      minSeconds = 15,
+      minSeconds = 8,                                            -- one 6 s cut + the ~4 m walk into the safe circle
       npcs       = 'hostages',
       count      = 3,                                            -- hostages stay at 3
       restrained = true,

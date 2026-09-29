@@ -526,7 +526,7 @@ export default function AdminLeaderboards() {
                                 ? t('leaderboard.period.alltime')
                                 : period === 'season'
                                   ? (board.season?.name ?? '–')
-                                  : t('admin.boards.stat.since', { from: formatDay(board.window?.from) })
+                                  : t('admin.boards.stat.since', { from: formatDay(board.window?.fromDate) })
                         }
                         icon="calendar"
                     />

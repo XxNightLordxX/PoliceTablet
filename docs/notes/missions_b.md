@@ -67,8 +67,12 @@ the Crimson-Arena Skydome (1500, 3000; z 1201) even though it is in the air and 
    can happen. `kingpin_alive` comes from hostile_waves' `boss.aliveBonus` default; the file does not set it.
 5. Bomb device prop `prop_c4_final_green` (a common base-game C4 model); the interact_points default is
    `prop_ld_bomb`. Manhunt clue props: `prop_cs_heist_bag_02`, `prop_npc_phone_02`, `'witness'`.
-6. minSeconds: hostage hostiles 30, Kingpin waves 90, bomb search 3, defuse 5, escort 45 (the shortest route
-   takes about 52 s at 60 km/h), others at the block default or the card's progress time.
+6. minSeconds: hostage hostiles 12 (3 s per base hostile, the Gang Shootout pace), hostage rescue 8 (one 6 s cut
+   and the walk into the safe circle), warrant 8 (the 3 s knock + the 5 s cuff), Kingpin waves 90, bomb search 3,
+   defuse 5, escort 45 (the shortest route takes about 52 s at 60 km/h), others at the block default or the card's
+   progress time. A completion more than 1 s under minSeconds flags the whole run `too_fast`, so the value must be
+   a floor that honest play cannot reach, not a typical time: 30 s here flagged fast units (a surrender cuffed
+   ~17 s after the arrival, three officers cutting all three hostages at once).
 7. Scaling: escort waves and cars carry `max = 5` (the builder range); every other path is a plain string.
 8. Warrant Service `suspect` is on the door step, 0.3 m out and 1.2 m beside the `door` point ("inside or at
    the door"): see the placement rule above and the flee_arrest mismatch below.

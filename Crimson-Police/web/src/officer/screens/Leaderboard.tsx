@@ -43,10 +43,18 @@ export function boardFilters(session: Session): string[] {
     return list.length ? list : DEFAULT_FILTERS;
 }
 
-// "21 Sep" from os.time() seconds.
-export function formatDay(ts: number | null | undefined): string {
-    if (!ts) return '';
-    return new Date(ts * 1000).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+// A server date ('YYYY-MM-DD', the server's calendar) read and formatted in UTC, so the player's own
+// time zone never moves a week or month start to the day before.
+function formatServerDate(day: string | null | undefined, opts: Intl.DateTimeFormatOptions): string {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day ?? '');
+    if (!m) return '';
+    const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+    return d.toLocaleDateString('en-GB', { ...opts, timeZone: 'UTC' });
+}
+
+// "21 Sep" from a server date ('YYYY-MM-DD').
+export function formatDay(day: string | null | undefined): string {
+    return formatServerDate(day, { day: 'numeric', month: 'short' });
 }
 
 // "14:05" from os.time() seconds.
@@ -88,15 +96,15 @@ function windowText(board: BoardView | null, period: BoardPeriod): string {
             ? t('leaderboard.window.season', { name: board.season.name })
             : t('leaderboard.window.season_ended', { name: board.season.name });
     }
-    const from = board.window?.from;
+    const from = board.window?.fromDate;
+    if (!from) return '';
     if (period === 'monthly') {
-        return from
-            ? t('leaderboard.window.monthly', {
-                  month: new Date(from * 1000).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }),
-              })
-            : '';
+        return t('leaderboard.window.monthly', { month: formatServerDate(from, { month: 'long', year: 'numeric' }) });
     }
-    return from ? t('leaderboard.window.weekly', { from: formatDay(from) }) : '';
+    return t('leaderboard.window.weekly', {
+        weekday: formatServerDate(from, { weekday: 'long' }),
+        from: formatDay(from),
+    });
 }
 
 export default function Leaderboard() {

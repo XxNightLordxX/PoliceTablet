@@ -17,6 +17,7 @@ local LOGO_EXTENSIONS = { png = true, webp = true, svg = true, jpg = true, jpeg 
 local NO_SUPERVISOR_GRADE = 1000
 local SUSPENSION_TTL = 15
 local MAX_SUSPEND_DAYS = 3650
+local MAX_UNIX_TS = 2147483647   -- 2038-01-19 03:14:07 UTC: the last time FROM_UNIXTIME / UNIX_TIMESTAMP handle
 
 local warned = {}
 local cache = { built = false }
@@ -45,7 +46,7 @@ end
 
 -- At most n bytes, never ending in half a UTF-8 character: the cp_officers columns count characters,
 -- and MariaDB's strict mode rejects the whole upsert for a string cut inside a multi-byte character
--- (CP.U.clip cuts bytes). Names and callsigns are free text, e.g. "José" or "Łukasz".
+-- (the same rule as CP.U.clip). Names and callsigns are free text, e.g. "José" or "Łukasz".
 local function ClipText(s, n)
     if s == nil then return nil end
     s = tostring(s)
@@ -463,7 +464,13 @@ function A.suspend(citizenid, days, actorSrc, reason)
         end
         suspensionCache[citizenid] = { untilTs = nil, at = now }
     else
-        local untilTs = now + d * 86400
+        -- Beyond MAX_UNIX_TS MariaDB 10.11 writes NULL (or refuses, error 1292, in strict mode) and reads the
+        -- date back as NULL: a longer suspension ends there instead.
+        local untilTs = math.min(now + d * 86400, MAX_UNIX_TS)
+        if untilTs <= now then
+            CP.err(TAG, 'suspending %s failed: the database cannot store a date after 2038-01-19', citizenid)
+            return false, 'err.internal'
+        end
         local ok, err = pcall(MySQL.update.await,
             'INSERT INTO cp_officers (citizenid, suspended_until) VALUES (?, FROM_UNIXTIME(?)) ON DUPLICATE KEY UPDATE suspended_until = VALUES(suspended_until)',
             { citizenid, untilTs })

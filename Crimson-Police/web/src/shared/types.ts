@@ -62,11 +62,13 @@ export interface HudState {
     tier: string;
     payTier: string; // tier names
     modifier: null | { key: string; label: string };
-    timer: null | { remaining: number; paused: boolean }; // seconds; the NUI counts down locally
+    // seconds; the NUI counts down locally. receivedAt (Date.now()) is set by the NUI when the value arrives.
+    timer: null | { remaining: number; paused: boolean; receivedAt?: number };
     route: null | {
         status: 'on' | 'off' | 'arrived' | 'disabled';
         secondsLeft: number | null;
         distance: number | null;
+        receivedAt?: number;
     };
     objectives: { label: string; done: boolean; current: boolean; detail?: string; value?: number; max?: number }[];
     detail: string | null; // client-side line for the current objective
@@ -286,6 +288,11 @@ export interface RunResult {
         tod: boolean;
         failedShare: number | null;
         final: number;
+        // Extras of a completed result (CP.Scoring.compute; older rows lack them): the points cap in whole
+        // points (Config.Scoring.scoreCap × P), Config.Scoring.scoreCap and Config.Events.todMultiplier.
+        cap?: number;
+        scoreCap?: number;
+        todMultiplier?: number;
     };
     cash: { B: number; mTier: number; mMod: number; amount: number; status: string };
     flagged: null | { reason: string };

@@ -42,7 +42,7 @@ local PAYOUT_NAMES = {
     reward = true,
     rewards = true,
 }
-local FORBIDDEN_ITEMS = { 'armour', 'bandage', 'ammo-*', 'weapon_*' }
+local FORBIDDEN_ITEMS = { 'armour', 'bandage', 'ammo-*', 'weapon_*', 'money', 'black_money' }
 
 -- ARCHITECTURE §3.3 default minimum seconds per block (used when an objective has none).
 local DEFAULT_MIN_SECONDS = {
@@ -261,7 +261,6 @@ end
 -- ============================================================================
 
 local pendingTests = {}   -- missionId -> { hash, version, startedBy, at }
-local renamed = {}        -- old id -> new id (a draft renamed while a test ran)
 local viewers = {}        -- src -> GetGameTimer() of the last builder:list/get
 local holders = {}        -- src -> citizenid that took an edit lock (released on drop/unload)
 local lastAutosave = {}   -- 'src:id' -> GetGameTimer()
@@ -301,6 +300,18 @@ local function Nice(v)
 end
 local function Minutes(sec) return Nice(Round((tonumber(sec) or 0) / 60, 1)) end
 
+-- Text limits count characters, as the builder UI does (bytes for text that is not valid UTF-8).
+local function TextLen(s) return utf8.len(s) or #s end
+
+-- At most n characters, never cutting a UTF-8 character in two (the database refuses a cut character).
+local function ClipText(s, n)
+    if TextLen(s) <= n then return s end
+    if utf8.len(s) then return s:sub(1, utf8.offset(s, n + 1) - 1) end
+    local cut = n
+    while cut > 0 and (s:byte(cut + 1) or 0) >= 0x80 and s:byte(cut + 1) < 0xC0 do cut = cut - 1 end
+    return s:sub(1, cut)
+end
+
 local function IsList(t)
     if type(t) ~= 'table' then return false end
     local n = #t
@@ -330,6 +341,31 @@ local function IsPayoutField(k)
     if type(k) ~= 'string' then return false end
     local lower = k:lower()
     return lower:find('payout', 1, true) ~= nil or PAYOUT_NAMES[lower] == true
+end
+
+-- A payout field at any depth (a mission file has none, not even inside an objective or a location).
+local function HadPayout(input, depth)
+    depth = depth or 1
+    if type(input) ~= 'table' or depth > MAX_DEPTH then return false end
+    for k, v in pairs(input) do
+        if IsPayoutField(k) or HadPayout(v, depth + 1) then return true end
+    end
+    return false
+end
+
+-- Removes the payout fields at any depth; onField(path) is called for each one removed.
+local function StripPayout(t, onField, path, depth)
+    depth = depth or 1
+    if type(t) ~= 'table' or depth > MAX_DEPTH then return end
+    for _, k in ipairs(U.keys(t)) do
+        local p = path and (path .. '.' .. tostring(k)) or tostring(k)
+        if IsPayoutField(k) then
+            t[k] = nil
+            if onField then onField(p) end
+        else
+            StripPayout(t[k], onField, p, depth + 1)
+        end
+    end
 end
 
 local function Now() return os.time() end
@@ -528,9 +564,15 @@ end
 
 -- SaveResourceFile does not create folders, and a fresh clone may not have missions/custom/ or its
 -- archived/ folder: create a missing folder (under the resource) before the first write into it.
-local function DirExists(abs)
-    local ok, res = pcall(os.rename, abs, abs)
-    return ok and res == true
+-- A folder is there when a probe file can be written into it, as in CP.Storage: os.rename's answer cannot be
+-- read (FXServer's Linux build returns it inverted), and FXServer refuses os.execute but has os.createdir.
+local function DirWritable(abs)
+    local probe = abs .. '/.cp-write-test'
+    local f = io.open(probe, 'wb')
+    if not f then return false end
+    f:close()
+    os.remove(probe)
+    return true
 end
 
 local function EnsureDir(rel)
@@ -543,12 +585,21 @@ local function EnsureDir(rel)
     local okBase, base = pcall(GetResourcePath, CP.resource)
     if not okBase or type(base) ~= 'string' or base == '' then return false end
     local abs = base .. '/' .. rel:gsub('/+$', '')
-    if DirExists(abs) then return true end
-    local windows = package and package.config and package.config:sub(1, 1) == '\\'
-    local cmd = windows and ('mkdir "%s" >NUL 2>&1'):format((abs:gsub('/', '\\')))
-        or ('mkdir -p \'%s\' >/dev/null 2>&1'):format(abs)
-    pcall(os.execute, cmd)
-    if DirExists(abs) then
+    if DirWritable(abs) then return true end
+    if os.createdir then
+        -- one folder per call: the parents first
+        local path = base
+        for part in rel:gmatch('[^/]+') do
+            path = path .. '/' .. part
+            pcall(os.createdir, path)
+        end
+    else
+        local windows = package and package.config and package.config:sub(1, 1) == '\\'
+        local cmd = windows and ('mkdir "%s" >NUL 2>&1'):format((abs:gsub('/', '\\')))
+            or ('mkdir -p \'%s\' >/dev/null 2>&1'):format(abs)
+        pcall(os.execute, cmd)
+    end
+    if DirWritable(abs) then
         CP.log(TAG, 'created the missing folder %s', rel)
         return true
     end
@@ -793,10 +844,7 @@ local function CleanValue(v, depth, budget)
     budget.n = budget.n + 1
     if budget.n > MAX_NODES then budget.over = true; return nil end
     local t = type(v)
-    if t == 'string' then
-        if #v > MAX_STRING then v = v:sub(1, MAX_STRING) end
-        return v
-    end
+    if t == 'string' then return ClipText(v, MAX_STRING) end
     if t == 'number' then return (IsNum(v) and math.abs(v) <= MAX_NUMBER) and v or nil end
     if t == 'boolean' then return v end
     if t == 'vector3' or t == 'vector4' or t == 'vector2' then v = U.vecToTable(v); t = 'table' end
@@ -824,14 +872,6 @@ local function CleanValue(v, depth, budget)
     return out
 end
 
-local function HadPayout(input)
-    if type(input) ~= 'table' then return false end
-    for k in pairs(input) do
-        if IsPayoutField(k) then return true end
-    end
-    return false
-end
-
 -- Returns a builder definition that is safe to store (bounded, rounded, no loader or payout fields,
 -- explicit bonus values), or nil and an error key. info = { payout = bool }.
 function B.sanitize(input, id)
@@ -842,13 +882,9 @@ function B.sanitize(input, id)
     if type(d) ~= 'table' then return nil, 'err.invalid_payload' end
     local info = { payout = HadPayout(input) }
     for _, k in ipairs(LOADER_FIELDS) do d[k] = nil end
-    for _, k in ipairs(U.keys(d)) do
-        if IsPayoutField(k) then d[k] = nil end
-    end
+    StripPayout(d)
     if id ~= nil then d.id = id end
-    if type(d.description) == 'string' and #d.description > LIMITS.description then
-        d.description = d.description:sub(1, LIMITS.description)
-    end
+    if type(d.description) == 'string' then d.description = ClipText(d.description, LIMITS.description) end
     if type(d.departments) == 'table' and not IsList(d.departments) then
         local list = {}
         for k, v in pairs(d.departments) do if v == true and type(k) == 'string' then list[#list + 1] = k end end
@@ -1002,6 +1038,8 @@ end
 local function ItemForbidden(name)
     local lower = name:lower()
     if lower == 'armour' or lower == 'bandage' then return true end
+    -- cash items would stand in for a payout
+    if lower == 'money' or lower == 'black_money' then return true end
     if lower:sub(1, 5) == 'ammo-' then return true end
     if lower:sub(1, 7) == 'weapon_' then return true end
     return false
@@ -1014,6 +1052,31 @@ local function ItemKnown(name)
         return true
     end -- cannot check: ox_inventory decides when the item is given
     return item ~= nil
+end
+
+-- The item rules (CRIMSON_ARENA rule 4); B.validate and every test run check them.
+local function ItemErrors(items, errors)
+    if type(items) ~= 'table' or not IsList(items) then
+        AddError(errors, 'items', 'builder.error.item_name', { n = 1 })
+        return errors
+    end
+    if #items > MAX_ITEMS then AddError(errors, 'items', 'builder.error.max_items', { max = MAX_ITEMS }) end
+    for i, it in ipairs(items) do
+        local p = 'items.' .. i
+        local name = type(it) == 'table' and it.name or nil
+        if type(name) ~= 'string' or #name == 0 or #name > 50 or not name:match('^[%w_%-%.]+$') then
+            AddError(errors, p .. '.name', 'builder.error.item_name', { n = i })
+        elseif ItemForbidden(name) then
+            AddError(errors, p .. '.name', 'builder.error.item_forbidden', { name = name })
+        elseif not ItemKnown(name) then
+            AddError(errors, p .. '.name', 'builder.error.item_unknown', { name = name })
+        end
+        if type(it) ~= 'table' or not IsInt(it.count) or not InRange(it.count, ITEM_COUNT) then
+            AddError(errors, p .. '.count', 'builder.error.item_count',
+                { n = i, min = ITEM_COUNT[1], max = ITEM_COUNT[2] })
+        end
+    end
+    return errors
 end
 
 local function EffectiveObjective(impl, rtObj)
@@ -1082,10 +1145,10 @@ function B.validate(def, opts)
 
     -- details
     if HadPayout(opts.raw) or HadPayout(def) then AddError(errors, 'payout', 'builder.error.payout_field') end
-    if type(def.label) ~= 'string' or U.trim(def.label) == '' or #def.label > LIMITS.label then
+    if type(def.label) ~= 'string' or U.trim(def.label) == '' or TextLen(def.label) > LIMITS.label then
         AddError(errors, 'label', 'builder.error.label', { max = LIMITS.label })
     end
-    if def.description ~= nil and (type(def.description) ~= 'string' or #def.description > LIMITS.description) then
+    if def.description ~= nil and (type(def.description) ~= 'string' or TextLen(def.description) > LIMITS.description) then
         AddError(errors, 'description', 'builder.error.description', { max = LIMITS.description })
     end
     if type(def.type) ~= 'string' or not (Config.MissionTypes and Config.MissionTypes[def.type]) then
@@ -1167,7 +1230,8 @@ function B.validate(def, opts)
                 AddError(errors, path .. '.block', 'builder.error.unknown_block', { n = i })
             else
                 blockIds[blockId] = true
-                if type(obj.label) ~= 'string' or U.trim(obj.label) == '' or #obj.label > LIMITS.objectiveLabel then
+                if type(obj.label) ~= 'string' or U.trim(obj.label) == ''
+                    or TextLen(obj.label) > LIMITS.objectiveLabel then
                     AddError(errors, path .. '.label', 'builder.error.objective_label',
                         { n = i, max = LIMITS.objectiveLabel })
                 end
@@ -1253,7 +1317,7 @@ function B.validate(def, opts)
         if type(loc) ~= 'table' then
             AddError(errors, lp, 'builder.error.start_missing', { location = li })
         else
-            if loc.label ~= nil and (type(loc.label) ~= 'string' or #loc.label > LIMITS.locationLabel) then
+            if loc.label ~= nil and (type(loc.label) ~= 'string' or TextLen(loc.label) > LIMITS.locationLabel) then
                 AddError(errors, lp .. '.label', 'builder.error.location_label',
                     { location = li, max = LIMITS.locationLabel })
             end
@@ -1374,26 +1438,7 @@ function B.validate(def, opts)
     end
 
     -- items (CRIMSON_ARENA rule 4)
-    if type(def.items) ~= 'table' or not IsList(def.items) then
-        AddError(errors, 'items', 'builder.error.item_name', { n = 1 })
-    else
-        if #def.items > MAX_ITEMS then AddError(errors, 'items', 'builder.error.max_items', { max = MAX_ITEMS }) end
-        for i, it in ipairs(def.items) do
-            local p = 'items.' .. i
-            local name = type(it) == 'table' and it.name or nil
-            if type(name) ~= 'string' or #name == 0 or #name > 50 or not name:match('^[%w_%-%.]+$') then
-                AddError(errors, p .. '.name', 'builder.error.item_name', { n = i })
-            elseif ItemForbidden(name) then
-                AddError(errors, p .. '.name', 'builder.error.item_forbidden', { name = name })
-            elseif not ItemKnown(name) then
-                AddError(errors, p .. '.name', 'builder.error.item_unknown', { name = name })
-            end
-            if type(it) ~= 'table' or not IsInt(it.count) or not InRange(it.count, ITEM_COUNT) then
-                AddError(errors, p .. '.count', 'builder.error.item_count',
-                    { n = i, min = ITEM_COUNT[1], max = ITEM_COUNT[2] })
-            end
-        end
-    end
+    ItemErrors(def.items, errors)
 
     -- scaling paths
     if type(def.scaling) ~= 'table' or not IsList(def.scaling) then
@@ -1557,7 +1602,13 @@ local function PadKey(k, width)
 end
 
 local function SafeHeaderText(s)
-    return (tostring(s or ''):gsub('[%c]', ' '):gsub('%]%]', '] ]'))
+    s = tostring(s or ''):gsub('[%c]', ' ')
+    -- gsub does not rescan its own output (']]]' -> '] ]]'): repeat until no ]] is left
+    local n
+    repeat
+        s, n = s:gsub('%]%]', '] ]')
+    until n == 0
+    return s
 end
 
 -- Location keys in the order objectives reference them, then the rest alphabetically.
@@ -1888,7 +1939,8 @@ local function EntryView(row, actor, perms, names)
         requiredTier = def.maxOfficers and RequiredTierName(def.maxOfficers) or nil,
         can = {
             edit = canEdit and not lockedByOther and row.status ~= 'archived',
-            publish = Allows(perms, row, actor, 'publish') and row.draft ~= nil and not lockedByOther,
+            publish = Allows(perms, row, actor, 'publish') and row.draft ~= nil and not lockedByOther
+                and row.status ~= 'archived',
             archive = Allows(perms, row, actor, 'archive') and row.status == 'published',
             restore = Allows(perms, row, actor, 'archive') and row.status == 'archived',
             rollback = Allows(perms, row, actor, 'rollback') and row.status == 'published'
@@ -2201,14 +2253,21 @@ local function RewriteMissing(row, summary)
 end
 
 local function StripPayoutFields(raw, id)
-    for _, k in ipairs(U.keys(raw)) do
-        if IsPayoutField(k) then
-            CP.warn(TAG,
-                'custom mission %s: field "%s" in its Lua file is ignored; payouts only come from the Payouts screens',
-                id, tostring(k))
-            raw[k] = nil
-        end
-    end
+    StripPayout(raw, function(path)
+        CP.warn(TAG,
+            'custom mission %s: field "%s" in its Lua file is ignored; payouts only come from the Payouts screens', id,
+            path)
+    end)
+end
+
+-- Why the mission loader refuses a parsed custom mission file exactly as written, or nil when it loads.
+local function LoaderError(fileDef, version)
+    if not (CP.Missions and CP.Missions.normalize) then return nil end
+    local okCall, res, err = pcall(CP.Missions.normalize, B.toRuntime(fileDef),
+        { source = 'custom', status = 'published', version = version })
+    if not okCall then return tostring(res) end
+    if not res then return tostring(err) end
+    return nil
 end
 
 local function HandEdit(row, path, content, hash, summary)
@@ -2228,6 +2287,11 @@ local function HandEdit(row, path, content, hash, summary)
     StripPayoutFields(raw, row.id)
     local b = B.sanitize(B.fromFileUnits(raw), row.id)
     local errors = b and B.validate(b, { publish = true }) or { { message = 'invalid definition' } }
+    if #errors == 0 then
+        -- the checks above ran on the builder copy (rounded to builder units), but the file itself goes live
+        local reason = LoaderError(raw, (row.publishedVersion or 0) + 1)
+        if reason then errors = { { message = L('builder.error.not_playable', { reason = reason }) } } end
+    end
     if #errors > 0 then
         local msgs = {}
         for i = 1, math.min(3, #errors) do msgs[i] = errors[i].message end
@@ -2389,19 +2453,24 @@ function B.onReload()
     return summary
 end
 
-function B.onDraftTested(missionId, version, tierName, passed, src)
+-- defHash is the hash of the definition the test ran (server:builder:test gives it to CP.Testing, which hands it
+-- back): a pass counts only for exactly that content. Without it, the last test started here must match.
+function B.onDraftTested(missionId, version, tierName, passed, src, defHash)
     if type(missionId) ~= 'string' then return false end
     CP.Migrations.ready()
-    local id = renamed[missionId] or missionId
+    local id = missionId
+    if not FetchRow(id) then return false end
+    local actor = (tonumber(src) and tonumber(src) > 0) and GetActor(tonumber(src)) or nil
+    Audit(actor, passed and 'testPassed' or 'testFailed', id, tostring(version), tostring(tierName),
+        ('draft v%s at %s'):format(tostring(version), tostring(tierName)))
+    -- read the draft after the audit (it may yield), so a save made meanwhile is what gets checked
     local row = FetchRow(id)
     if not row then return false end
-    local actor = (tonumber(src) and tonumber(src) > 0) and GetActor(tonumber(src)) or nil
     local draft = row.draft
     local required = draft and RequiredTierName(draft.maxOfficers) or nil
     local pending = pendingTests[id]
+    local tested = type(defHash) == 'string' and defHash or (pending and pending.hash)
     local label = draft and tostring(draft.label) or id
-    Audit(actor, passed and 'testPassed' or 'testFailed', id, tostring(version), tostring(tierName),
-        ('draft v%s at %s'):format(tostring(version), tostring(tierName)))
     local function tell(kind, key, vars)
         local s = tonumber(src)
         if s and s > 0 and CP.Tablet and CP.Tablet.notify then pcall(CP.Tablet.notify, s, kind, key, vars) end
@@ -2410,11 +2479,7 @@ function B.onDraftTested(missionId, version, tierName, passed, src)
         tell('warning', 'builder.test_failed', { mission = label })
         return false
     end
-    if not draft or tonumber(version) ~= row.draftVersion then
-        tell('warning', 'builder.test_outdated', { mission = label })
-        return false
-    end
-    if pending and pending.hash ~= DefHash(draft) then
+    if not draft or tonumber(version) ~= row.draftVersion or tested ~= DefHash(draft) then
         tell('warning', 'builder.test_outdated', { mission = label })
         return false
     end
@@ -2650,7 +2715,7 @@ CP.Net.action('server:builder:create', function(src, payload)
     if type(label) ~= 'string' or U.trim(label) == '' then
         label = L('builder.default_label', { type = Config.MissionTypes[missionType].label })
     end
-    label = U.clip(U.trim(label), LIMITS.label)
+    label = ClipText(U.trim(label), LIMITS.label)
     local def = NewSkeleton(nil, label, missionType)
     local id, err = InsertDraft(label, def, actor)
     if not id then return false, err end
@@ -2684,7 +2749,7 @@ CP.Net.action('server:builder:duplicate', function(src, payload)
         end)
     end
     B.customBonusFields(copy)
-    local label = U.clip(L('builder.copy_label', { label = tostring(source.label or payload.id) }), LIMITS.label)
+    local label = ClipText(L('builder.copy_label', { label = tostring(source.label or payload.id) }), LIMITS.label)
     copy.label = label
     if not (Config.MissionTypes and Config.MissionTypes[copy.type]) then
         copy.type = U.keys(Config.MissionTypes or {})[1]
@@ -2757,15 +2822,13 @@ local function StoreDraft(src, payload, explicit)
             if (tonumber(n) or 0) > 0 then
                 previousId, newId = row.id, candidate
                 def.id = newId
-                if pendingTests[previousId] then
-                    pendingTests[newId] = pendingTests[previousId]
-                    pendingTests[previousId] = nil
-                end
+                -- the id and label are part of the tested content: a test started before the rename is outdated,
+                -- and its result (under the old id, which a new mission may take) never reaches this draft
+                pendingTests[previousId] = nil
                 if brokenLocks[previousId] then
                     brokenLocks[newId] = brokenLocks[previousId]
                     brokenLocks[previousId] = nil
                 end
-                renamed[previousId] = newId
             end
         end
     end
@@ -2858,6 +2921,8 @@ CP.Net.action('server:builder:test', function(src, payload)
     if src > 0 and CP.Alerts and CP.Alerts.inArena and CP.Alerts.inArena(src) then return false, 'err.in_arena' end
     local draft = row.draft
     if type(draft) ~= 'table' then return false, 'err.builder_no_draft' end
+    -- the item rules hold on a test run too: its items are really given
+    if #ItemErrors(draft.items == nil and {} or draft.items, {}) > 0 then return false, 'err.builder_invalid' end
     if not (CP.Testing and CP.Testing.startDraft) then return false, 'err.builder_testing_unavailable' end
     local required = RequiredTierName(draft.maxOfficers)
     local tier = payload.tier
@@ -2909,6 +2974,8 @@ CP.Net.action('server:builder:publish', function(src, payload)
     if not Allows(perms, row, actor, 'publish') then return false, 'err.no_permission' end
     if not CP.Net.rateOk(src, 'builder:publish', 1, 3000) then return false, 'err.rate_limited' end
     if row.lockActive and row.lockedBy ~= actor.citizenid then return false, 'err.builder_locked' end
+    -- the draft left over by archive stays read-only: publishing it would restore without builderArchive
+    if row.status == 'archived' then return false, 'err.builder_read_only' end
     local draft = row.draft
     if type(draft) ~= 'table' then return false, 'err.builder_no_draft' end
     draft = U.deepcopy(draft)

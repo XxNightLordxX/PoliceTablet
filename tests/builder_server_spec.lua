@@ -279,6 +279,31 @@ local function Body()
             'the builder creates a missing export folder and archived/ at start')
         H.ok(FileExists('missions/custom/.gitkeep') and FileExists('missions/custom/archived/.gitkeep'),
             'missions/custom/ and archived/ ship with a .gitkeep so a clone has them')
+        -- as on a Linux FXServer: os.rename answers inverted, os.execute is refused, os.createdir makes one folder
+        local realRename, realExecute, realErr = os.rename, os.execute, CP.err
+        local alarms = 0
+        os.rename = function(a, b)
+            local ok = realRename(a, b)
+            if ok then return nil, 'inverted' end
+            return true
+        end
+        os.execute = function() return nil, 'Permission denied' end
+        os.createdir = function(p) return realExecute(('mkdir \'%s\' 2>/dev/null'):format(p)) end
+        CP.err = function(tag, fmt, ...)
+            if tostring(fmt):find('could not be created', 1, true) then alarms = alarms + 1 end
+            return realErr(tag, fmt, ...)
+        end
+        local okFx, errFx = pcall(function()
+            H.ok(B.ensureExportDirs(), 'FXServer: the existing export folders are found')
+            H.eq(alarms, 0, 'FXServer: no false "could not be created" error for folders that exist')
+            realExecute(('rm -rf \'%s%s\''):format(H.root, TMP))
+            H.ok(B.ensureExportDirs(), 'FXServer: the missing export folders are created')
+            local function onDisk(rel) return realRename(H.root .. rel, H.root .. rel) == true end
+            H.ok(onDisk(TMP) and onDisk(TMP .. 'archived'), 'FXServer: they are on disk (os.createdir)')
+        end)
+        os.rename, os.execute, os.createdir, CP.err = realRename, realExecute, nil, realErr
+        H.ok(okFx, 'FXServer folder checks ran: ' .. tostring(errFx))
+        if not isDir(TMP .. 'archived') then os.execute(('mkdir -p \'%s%sarchived\''):format(H.root, TMP)) end
     end
     H.ok(CP.Missions.get('gang_shootout') ~= nil or CP.Missions.list()[1] ~= nil,
         'built-in missions loaded next to the builder')
@@ -493,6 +518,22 @@ local function Body()
         d.basePay = 20
         H.ok(hasError(B.validate(d), 'builder.error.payout_field'), 'a payout field in the definition is refused')
     end
+    do
+        -- payout fields below the top level (hard rule: no payout fields in mission files)
+        local raw = validDef()
+        raw.objectives[1].payout = 99999
+        raw.locations[1].reward = 5000
+        local d = B.sanitize(raw, 'custom_x')
+        H.ok(hasError(B.validate(d, { raw = raw }), 'builder.error.payout_field'),
+            'a payout field inside an objective or a location is refused')
+        local nested = U.deepcopy(good)
+        nested.objectives[2].progress.money = 10
+        H.ok(hasError(B.validate(nested), 'builder.error.payout_field'), 'and refused inside the definition itself')
+        H.ok(d.objectives[1].payout == nil and d.locations[1].reward == nil, 'nested payout fields are stripped')
+        local text = B.exportLua(d, { version = 1, publisher = 'x', at = os.time() })
+        H.ok(not text:find('payout =', 1, true) and not text:find('reward', 1, true),
+            'the mission file carries no nested payout field')
+    end
     check('time limit under 2 min', function(d) d.timeLimit = 100 end, 'builder.error.time_limit', 'timeLimit')
     check('time limit over 20 min', function(d) d.timeLimit = 1260 end, 'builder.error.time_limit')
     check('start timeout', function(d) d.startTimeout = 60 end, 'builder.error.start_timeout')
@@ -606,7 +647,16 @@ local function Body()
     check('duplicate bonus', function(d)
         d.bonuses[3] = { id = 'hostile_arrested', points = 5 }
     end, 'builder.error.bonus_duplicate')
-    for _, name in ipairs({ 'armour', 'bandage', 'ammo-9', 'Ammo-rifle', 'WEAPON_PISTOL', 'weapon_knife' }) do
+    for _, name in ipairs({
+        'armour',
+        'bandage',
+        'ammo-9',
+        'Ammo-rifle',
+        'WEAPON_PISTOL',
+        'weapon_knife',
+        'money',
+        'Black_Money',
+    }) do
         check('item ' .. name, function(d)
             d.items = { { name = name, count = 1 } }
         end, 'builder.error.item_forbidden', 'items.1.name')
@@ -908,6 +958,13 @@ local function Body()
         H.ok(ok, 'the full export round-trips: ' .. tostring(why))
         H.eq(parsed.description, d.description, 'strings with quotes, newlines and backslashes survive')
     end
+    do
+        -- a character name may hold any characters: ]]] or ]]]] cannot close the header comment either
+        local text = B.exportLua(good, { version = 2, publisher = 'Sergeant John ]]] Doe ]]]] (SAST)', at = os.time() })
+        local parsed, err = B.parse(text, 'brackets.lua')
+        H.ok(parsed ~= nil, 'a publisher with ]]] loads back: ' .. tostring(err))
+        H.eq(text:find(']]', 1, true), text:find('\n]]\n', 1, true) + 1, 'the header closes on its own ]] line')
+    end
 
     -- ══ actions: create, lock, save, versions ═══════════════════════════════
     local ok, data = act(1, 'create', { type = 'tactical', label = 'Dockside Raid' })
@@ -946,6 +1003,27 @@ local function Body()
     local okDef, defaultData = act(3, 'create', { type = 'patrol' })
     H.ok(okDef and defaultData.id:match('^custom_new_patrol_mission'),
         'default label -> id ' .. tostring(defaultData and defaultData.id))
+    do
+        -- text limits count characters (as the builder UI and the messages do) and never cut one in two: the
+        -- database refuses a cut UTF-8 character
+        local okU, u = act(1, 'create', { type = 'tactical', label = ('€'):rep(70) })
+        H.ok(okU, 'a long label of 3-byte characters creates a mission: ' .. tostring(okU or u))
+        local label = okU and u.record.definition.label or ''
+        H.ok(utf8.len(label) == 64, 'clipped to 64 whole characters (' .. tostring(utf8.len(label)) .. ')')
+        local d = validDef()
+        d.label = ('Ж'):rep(40)
+        d.description = ('字'):rep(600)
+        local okD, sd = act(1, 'save', { id = okU and u.id or 'custom_mission', definition = d })
+        H.ok(okD, 'a long description of 3-byte characters saves: ' .. tostring(okD or sd))
+        H.ok(okD and sd.valid,
+            'a 40-character label is within the 64-character limit (' .. keysOf(okD and sd.errors or {}) .. ')')
+        local stored = okD and cjson.decode(row(sd.id).draft_definition) or {}
+        H.eq(utf8.len(stored.description or ''), 500, 'the description is clipped to 500 whole characters')
+        local long = U.deepcopy(good)
+        long.label = ('Ж'):rep(65)
+        H.ok(hasError(B.validate(long), 'builder.error.label'), 'a 65-character label is too long')
+        if okD then act(1, 'discardDraft', { id = sd.id }) end
+    end
 
     -- someone else's mission
     H.eq(select(2, act(2, 'lock', { id = id })), 'err.no_permission', 'builderEditAny off: no editing others')
@@ -1126,6 +1204,32 @@ local function Body()
         act(1, 'test', { id = id })
         H.eq(B.onDraftTested(id, 1, 'critical', true, 1), true, 'a pass at a higher tier counts')
     end
+    -- a test run keeps the item rules: a saved draft with bad items never reaches CP.Testing
+    do
+        local before = #drafts
+        for _, items in ipairs({
+            { { name = 'radio', count = 1000000000 } },
+            { { name = 'money', count = 50 } },
+            { { name = 'black_money', count = 1 } },
+            { { name = 'weapon_pistol', count = 1 } },
+        }) do
+            local d = validDef()
+            d.items = items
+            act(1, 'save', { id = id, definition = d })
+            H.eq(select(2, act(1, 'test', { id = id })), 'err.builder_invalid',
+                'a test run refuses the item ' .. items[1].name .. ' x' .. items[1].count)
+        end
+        local d = validDef()
+        d.items = {}
+        for i = 1, 11 do d.items[i] = { name = 'radio', count = 1 } end
+        act(1, 'save', { id = id, definition = d })
+        H.eq(select(2, act(1, 'test', { id = id })), 'err.builder_invalid', 'a test run refuses more than 10 items')
+        H.eq(#drafts, before, 'no test run started with bad items')
+        act(1, 'save', { id = id, definition = validDef() })
+        act(1, 'test', { id = id })
+        H.eq(#drafts, before + 1, 'the fixed draft tests again')
+        H.eq(B.onDraftTested(id, 1, 'critical', true, 1), true, 'and passes again')
+    end
 
     Config.Permissions.supervisor.builderPublish = false
     H.eq(select(2, act(1, 'publish', { id = id })), 'err.no_permission', 'builderPublish off')
@@ -1266,6 +1370,13 @@ local function Body()
     -- archive and restore
     do
         H.eq(select(2, act(1, 'restore', { id = id })), 'err.builder_not_archived', 'restore needs an archived mission')
+        -- a tested draft is left over when the mission is archived
+        local leftover = validDef()
+        leftover.objectives[1].accuracy = 38
+        act(1, 'save', { id = id, definition = leftover })
+        local okLt, lt = act(1, 'test', { id = id })
+        H.ok(okLt and B.onDraftTested(id, lt.version, lt.tier, true, 1, drafts[#drafts].def.defHash),
+            'the leftover draft passed its test')
         os.execute(('rm -rf \'%s%sarchived\''):format(H.root, TMP)) -- archived/ went missing after start
         local okAr, ar = act(1, 'archive', { id = id })
         H.ok(okAr and ar.filePath == TMP .. 'archived/' .. id .. '.lua', 'archive moves the file')
@@ -1275,11 +1386,24 @@ local function Body()
         H.eq(row(id).status, 'archived', 'status archived')
         H.eq(select(2, act(1, 'archive', { id = id })), 'err.builder_not_published', 'archive twice refused')
         H.eq(select(2, act(1, 'lock', { id = id })), 'err.builder_read_only', 'archived missions are not edited')
+        -- publishing that draft would restore the mission without builderArchive
+        Config.Permissions.supervisor.builderArchive = false
+        H.eq(select(2, act(1, 'restore', { id = id })), 'err.no_permission', 'restore needs builderArchive')
+        local okLs, ls = cb(1, 'builder:list', {})
+        local entry
+        for _, e in ipairs(okLs and ls.missions or {}) do if e.id == id then entry = e end end
+        H.ok(entry and entry.hasDraft and entry.can.publish == false, 'an archived mission offers no publish')
+        H.eq(select(2, act(1, 'publish', { id = id })), 'err.builder_read_only',
+            'the leftover draft of an archived mission is not published')
+        H.eq(row(id).status, 'archived', 'the mission stays archived')
+        H.eq(CP.Missions.get(id), nil, 'and out of its pool')
+        Config.Permissions.supervisor.builderArchive = true
         local okRs, rs = act(1, 'restore', { id = id })
         H.ok(okRs and rs.filePath == TMP .. id .. '.lua' and FileExists(TMP .. id .. '.lua'), 'restore moves it back')
         H.ok(not FileExists(TMP .. 'archived/' .. id .. '.lua'), 'archived copy removed')
         H.ok(CP.Missions.get(id) and CP.Missions.get(id).version == 3, 'restored mission registered again')
         H.eq(lastAudit().action, 'restore', 'restore audited')
+        H.ok((act(1, 'discardDraft', { id = id })), 'the leftover draft is discarded')
     end
 
     -- discard
@@ -1355,7 +1479,7 @@ local function Body()
         -- a developer edits the file: new label, accuracy and a payout line
         local text = ReadRel(path)
         local edited = text:gsub('label        = \'Dockside Raid\'', 'label        = \'Dockside Raid (code)\'', 1)
-            :gsub('accuracy = 30', 'accuracy = 28', 1)
+            :gsub('accuracy = 30', 'accuracy = 28, payout = 777', 1)
             :gsub('  type         = \'tactical\',', '  type         = \'tactical\',\n  payout       = 99999,', 1)
         WriteRel(path, edited)
         local s = B.onReload()
@@ -1367,6 +1491,7 @@ local function Body()
         local stored = cjson.decode(r.published_definition)
         H.eq(stored.label, 'Dockside Raid (code)', 'published copy follows the file')
         H.eq(stored.payout, nil, 'the payout field is ignored')
+        H.eq(stored.objectives[1].payout, nil, 'a payout field inside an objective is ignored too')
         H.eq(stored.objectives[1].accuracy, 28, 'edited value stored')
         local now = ReadRel(path)
         H.ok(now:find('  version:   4', 1, true) and now:find('  edited:    ', 1, true),
@@ -1381,6 +1506,7 @@ local function Body()
         for _, d in ipairs(defs) do if d.id == id then found = d end end
         H.ok(found and found.editedInCode == true and found.version == 4 and found.payout == nil,
             'loadPublished serves the edited file')
+        H.eq(found and found.objectives[1].payout, nil, 'without the nested payout field')
         H.ok(found and found.filePath == path and found.defHash == U.hashHex(now) and found.source == 'custom',
             'loader fields')
     end
@@ -1456,6 +1582,108 @@ local function Body()
         H.ok(summary.custom >= 1 and CP.Missions.get(id) ~= nil,
             'CP.Missions.reload loads the custom mission from its file')
         H.ok(summary.builder and summary.builder.checked >= 1, 'reload summary carries the builder summary')
+    end
+    do
+        -- the file itself goes live, not the rounded builder copy: an edit the loader refuses is not accepted
+        local before = ReadRel(path)
+        local edited, n = before:gsub('duration = 6000', 'duration = 30000.4', 1)
+        H.eq(n, 1, 'the file has the progress duration to edit')
+        WriteRel(path, edited)
+        local summary = CP.Missions.reload()
+        local s = summary.builder or {}
+        H.ok(#(s.edited or {}) == 0 and #(s.rejected or {}) == 1,
+            'an edit that rounds into range but does not load as written is rejected')
+        H.eq(row(id).published_version, 5, 'no new version for it')
+        H.ok(CP.Missions.get(id) and CP.Missions.get(id).version == 5, 'the last published version stays live')
+        WriteRel(path, before)
+        H.eq(#B.onReload().edited, 0, 'restoring the file makes it current again')
+    end
+
+    -- ══ a test result only counts for the draft content that ran ═══════════
+    do
+        local function labelled(label)
+            local d = validDef()
+            d.label = label
+            return d
+        end
+        local function lastHash() return drafts[#drafts].def.defHash end
+        -- an id freed by a rename and taken again by a new mission: its test results stay with it
+        local okA, a = act(1, 'create', { type = 'tactical', label = 'Pier Watch' })
+        H.eq(okA and a.id, 'custom_pier_watch', 'a draft to rename')
+        local okRn, rn = act(1, 'save', { id = 'custom_pier_watch', definition = labelled('Quay Patrol') })
+        H.eq(okRn and rn.id, 'custom_quay_patrol', 'renamed on save')
+        local okB, b = act(1, 'create', { type = 'tactical', label = 'Pier Watch' })
+        H.eq(okB and b.id, 'custom_pier_watch', 'the freed id is taken by a new mission')
+        act(1, 'save', { id = 'custom_pier_watch', definition = labelled('Pier Watch') })
+        local okT, t = act(1, 'test', { id = 'custom_pier_watch' })
+        H.eq(okT and B.onDraftTested('custom_pier_watch', t.version, t.tier, true, 1, lastHash()), true,
+            'the new mission\'s pass counts')
+        H.eq(U.truthy(row('custom_pier_watch').draft_tested), true, 'the mission that ran is marked tested')
+        H.eq(U.truthy(row('custom_quay_patrol').draft_tested), false, 'the renamed mission is not')
+        H.eq(select(2, act(1, 'publish', { id = 'custom_quay_patrol' })), 'err.builder_not_tested',
+            'the renamed mission cannot be published untested')
+        -- renamed away and back: its tests still count
+        act(1, 'create', { type = 'tactical', label = 'Alpha Run' })
+        act(1, 'save', { id = 'custom_alpha_run', definition = labelled('Bravo Run') })
+        local okBack, back = act(1, 'save', { id = 'custom_bravo_run', definition = labelled('Alpha Run') })
+        H.eq(okBack and back.id, 'custom_alpha_run', 'renamed back')
+        local okT2, t2 = act(1, 'test', { id = 'custom_alpha_run' })
+        H.eq(okT2 and B.onDraftTested('custom_alpha_run', t2.version, t2.tier, true, 1, lastHash()), true,
+            'a draft renamed back to its old id records its pass')
+        H.eq(U.truthy(row('custom_alpha_run').draft_tested), true, 'and is marked tested')
+
+        -- an older test's pass does not count for content saved after it
+        local okC, c = act(1, 'create', { type = 'tactical', label = 'Canal Sweep' })
+        local cid = okC and c.id or 'custom_canal_sweep'
+        act(1, 'save', { id = cid, definition = labelled('Canal Sweep') })
+        act(1, 'test', { id = cid, location = 1 })
+        local hashA = lastHash()
+        local changed = labelled('Canal Sweep')
+        changed.objectives[1].accuracy = 33
+        act(1, 'save', { id = cid, definition = changed })
+        act(1, 'test', { id = cid, location = 2 })
+        local hashB = lastHash()
+        H.eq(B.onDraftTested(cid, 1, 'heavy', false, 1, hashB), false, 'the test of the current content failed')
+        H.eq(B.onDraftTested(cid, 1, 'heavy', true, 1, hashA), false,
+            'the pass of a test that ran older content does not count')
+        H.eq(notes[#notes].key, 'builder.test_outdated', 'the tester is told the test is outdated')
+        H.eq(U.truthy(row(cid).draft_tested), false, 'the current content stays untested')
+        H.eq(select(2, act(1, 'publish', { id = cid })), 'err.builder_not_tested', 'and cannot be published')
+        H.eq(B.onDraftTested(cid, 1, 'heavy', true, 1, hashB), true, 'the pass of the current content counts')
+        H.ok((act(1, 'publish', { id = cid })), 'published as v1')
+
+        -- a discarded draft's test does not count for the next draft of the same version number
+        local v2 = labelled('Canal Sweep')
+        v2.objectives[1].accuracy = 34
+        act(1, 'save', { id = cid, definition = v2 })
+        act(1, 'test', { id = cid })
+        local hashOld = lastHash()
+        act(1, 'discardDraft', { id = cid })
+        local v2b = labelled('Canal Sweep')
+        v2b.objectives[1].accuracy = 36
+        local okV2, saved2 = act(1, 'save', { id = cid, definition = v2b })
+        H.eq(okV2 and saved2.version, 2, 'the new draft is version 2 again')
+        H.eq(B.onDraftTested(cid, 2, 'heavy', true, 1, hashOld), false,
+            'the discarded draft\'s pass does not count for the new draft')
+        H.eq(B.onDraftTested(cid, 2, 'heavy', true, 1), false, 'nor a pass without a started test of this content')
+        H.eq(U.truthy(row(cid).draft_tested), false, 'the new draft stays untested')
+
+        -- a save while the result is recorded (the audit yields) is not marked tested
+        act(1, 'test', { id = cid })
+        local hashNow = lastHash()
+        local realAudit = CP.Admin.audit
+        CP.Admin.audit = function(...)
+            CP.Admin.audit = realAudit
+            realAudit(...)
+            local during = labelled('Canal Sweep')
+            during.objectives[1].accuracy = 37
+            act(1, 'autosave', { id = cid, definition = during })
+        end
+        H.eq(B.onDraftTested(cid, 2, 'heavy', true, 1, hashNow), false,
+            'content saved while the pass was recorded does not count')
+        CP.Admin.audit = realAudit
+        H.eq(U.truthy(row(cid).draft_tested), false, 'the content saved meanwhile stays untested')
+        H.ok(tostring(row(cid).draft_definition):find('"accuracy":37', 1, true) ~= nil, 'that save was stored')
     end
 
     -- the builder switch

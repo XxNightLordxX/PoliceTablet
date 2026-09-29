@@ -143,6 +143,8 @@ function T.hud(patch)
 end
 
 function T.result(result)
+    -- CRIMSON_ARENA rule 8: dropped, not kept for later: the card is a 25 s notice, the run stays in the history.
+    if InForeignArena() then return end
     T.send({ type = 'result', result = type(result) == 'table' and result or nil })
 end
 
@@ -574,7 +576,9 @@ RegisterNUICallback('switchUi', function(body, cb)
             return cb({ ok = false, error = res.error or 'err.no_response' })
         end
         if InForeignArena() then return cb({ ok = false, error = 'err.in_arena' }) end
-        if state.open then ShowUi(ui, res.data) end
+        -- Closed meanwhile (Escape, duty or job): an ok reply would make the NUI draw the UI without focus.
+        if not state.open then return cb({ ok = false, error = 'err.tablet_closed' }) end
+        ShowUi(ui, res.data)
         cb({ ok = true, data = res.data })
     end)
 end)
@@ -638,6 +642,8 @@ local function OnArenaPlaced()
         state.arenaHidden = true
         T.send({ type = 'overlay' })
     end
+    -- A result card of a run that just ended may still be on screen (the NUI hides it after 25 s).
+    T.send({ type = 'result' })
     -- Only a Crimson-Police progress bar is cancelled, never another resource's (lib.cancelProgress raises
     -- when none runs).
     if T.cpProgressActive() and lib and lib.progressActive and lib.cancelProgress then

@@ -758,7 +758,7 @@ do
     H.eq(seenBoss[#seenBoss], true, 'validate sees the boss flag')
 
     -- mission items Crimson-Arena takes away are never mission items (docs/CRIMSON_ARENA.md rule 4)
-    for _, name in ipairs({ 'armour', 'Bandage', 'ammo-9', 'WEAPON_PISTOL', 'weapon_stungun' }) do
+    for _, name in ipairs({ 'armour', 'Bandage', 'ammo-9', 'WEAPON_PISTOL', 'weapon_stungun', 'money', 'Black_Money' }) do
         local di = U.deepcopy(base)
         di.items = { { name = 'radio', count = 1 }, { name = name, count = 1 } }
         local r, e = M.normalize(di, {})
@@ -768,6 +768,13 @@ do
     okItems.items = { { name = 'radio', count = 2 }, { name = 'armoured_vest_box' } }
     local ni = M.normalize(okItems, {})
     H.ok(ni ~= nil and #ni.items == 2, 'ordinary item names are kept')
+    -- counts and entries keep the builder's limits (1-100, at most 10), whatever path the definition took
+    local bigItems = U.deepcopy(base)
+    bigItems.items = { { name = 'radio', count = 1000000000 } }
+    for i = 2, 12 do bigItems.items[i] = { name = 'radio', count = 1 } end
+    local nb = M.normalize(bigItems, { source = 'custom' })
+    H.ok(nb ~= nil and nb.items[1].count == 100, 'an item count above 100 is capped at 100')
+    H.eq(nb and #nb.items, 10, 'at most 10 items are kept')
 
     -- no point of a location inside a no-build zone (docs/CRIMSON_ARENA.md rule 7)
     local dz = U.deepcopy(base)
@@ -1118,6 +1125,61 @@ do
         'exclude option')
     H.players[50] = nil
 
+    -- a republish that moves locations while a run is live (the Builder's register path swaps the definition):
+    -- the reservation holds the spot the run uses, not the index that spot had in the old definition
+    local function RegisterMoved(version, xs)
+        local locs = {}
+        for _, x in ipairs(xs) do
+            locs[#locs + 1] = { label = 'Spot ' .. x, start = { coords = vec3(x + 0.0, 5000.0, 30.0), radius = 50.0 } }
+        end
+        return CP.Missions.register({
+            id = 'custom_moved',
+            label = 'Moved',
+            type = 'patrol',
+            minOfficers = 1,
+            maxOfficers = 1,
+            timeLimit = 400,
+            locations = locs,
+            objectives = { { block = 'checkpoint_route' } },
+            version = version,
+        })
+    end
+    local v1 = RegisterMoved(1, { 1000, 2000, 3000, 4000, 5000 })  -- A B C D E
+    rs.runs['live-moved'] = { id = 'live-moved', mission = v1, locationIndex = 3 }
+    D.reserve('live-moved', 'custom_moved', 3)                     -- a live run on C
+    local v2 = RegisterMoved(2, { 1000, 3000, 4000, 5000 })        -- B deleted: A C D E
+    H.ok(CP.Missions.get('custom_moved') == v2, 'the republish replaced the definition')
+    picked = {}
+    for s = 1, 200 do picked[D.pickLocation(v2, { 1 }, U.rng(U.hash('moved' .. s)))] = true end
+    H.ok(not picked[2], 'the spot in use (C, now #2) is still skipped after a republish moved it')
+    H.ok(picked[3], 'the spot that took its old index (D, #3) is free')
+    H.ok(picked[1] and picked[4], 'the other spots are drawn')
+    H.ok(D.isReserved('custom_moved', 2), 'isReserved follows the spot')
+    H.ok(not D.isReserved('custom_moved', 3), 'isReserved: the old index alone no longer holds another spot')
+    D.release('live-moved')
+    rs.runs['live-moved'] = nil
+    -- the provisional reservation of an accept holds the spot of the definition it drew from
+    local realCreate, realByType = CP.Runs.create, CP.Missions.byType
+    local heldAt, drawnAt
+    CP.Missions.byType = function(t) return t == 'patrol' and { v2 } or realByType(t) end
+    CP.Runs.create = function(opts)
+        local v3 = RegisterMoved(3, { 5000, 1000, 3000, 4000 })    -- republished during the create lookups
+        local drawnX = opts.mission.locations[opts.locationIndex].start.coords.x
+        for i, loc in ipairs(v3.locations) do
+            if D.isReserved('custom_moved', i) then heldAt = i end
+            if loc.start.coords.x == drawnX then drawnAt = i end
+        end
+        return realCreate(opts)
+    end
+    local okMoved, dataMoved = Act('server:acceptType', 1, 'patrol')
+    CP.Runs.create, CP.Missions.byType = realCreate, realByType
+    H.eq(okMoved, true, 'accept of the moved mission')
+    H.ok(drawnAt ~= nil and heldAt == drawnAt, 'the provisional reservation held the drawn spot, not its index')
+    D.release(dataMoved and dataMoved.runId)
+    rs.runs[dataMoved and dataMoved.runId or ''] = nil
+    rs.created[#rs.created] = nil                                  -- the accept tests below count from run-1
+    CP.Missions.unregister('custom_moved')
+
     -- draw: no-repeat from DB history
     H.sql('DELETE FROM cp_mission_runs')
     InsertRun('CIDA', 'patrol', 'patrol_a', 'completed', 'completed', T0 - 300)
@@ -1463,6 +1525,30 @@ do
     H.eq(#rs.created[#rs.created].members, 1, 'solo run')
     CP.Draw.release(data and data.runId)
     ClearUnits()
+    -- a member who disconnects while the draw yields (history lookups) is never put on a run: playerDropped
+    -- ran before the run existed, so nothing would take them off it
+    local realName, realByType2 = GetPlayerName, CP.Missions.byType
+    local gone = {}
+    _G.GetPlayerName = function(s) if gone[tonumber(s)] then return nil end return realName(s) end
+    local dropSrc
+    CP.Missions.byType = function(t)
+        if dropSrc then gone[dropSrc] = true end
+        return realByType2(t)
+    end
+    unit = SetUnit({ 1, 3 })
+    dropSrc = 3
+    createdBefore = #rs.created
+    ok, data = Act('server:acceptType', 1, 'patrol')
+    H.eq(data, 'err.member_unavailable', 'a member who dropped during the draw: refused')
+    H.eq(unit.locked, false, 'a member who dropped during the draw: unit unlocked')
+    H.eq(#rs.created, createdBefore, 'a member who dropped during the draw: no run')
+    ClearUnits()
+    gone = {}
+    dropSrc = 1
+    ok, data = Act('server:acceptType', 1, 'patrol')
+    H.eq(data, 'err.member_unavailable', 'a solo leader who dropped during the draw: refused')
+    H.eq(#rs.created, createdBefore, 'a solo leader who dropped during the draw: no run')
+    _G.GetPlayerName, CP.Missions.byType = realName, realByType2
 
     -- BoardData extras: the server clock for the countdowns and the Type of the Day multiplier
     local board2 = Cb('getMissionTypes', 1).data

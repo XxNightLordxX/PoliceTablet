@@ -7,7 +7,9 @@ local TAG = 'missions'
 local BOSS_ID = 'weekly_boss_kingpin'
 local BUILTIN_DIR = 'missions/builtin/'
 local INDEX_FILE = BUILTIN_DIR .. 'index.lua'
-local LATENT_BPS = 200000  -- bytes per second for the definitions broadcast (latent event)
+local LATENT_BPS = 200000       -- bytes per second for the definitions broadcast (latent event)
+local MAX_ITEMS = 10            -- mission items per definition (the builder's limit)
+local MAX_ITEM_COUNT = 100      -- count per item (the builder's limit)
 
 -- ARCHITECTURE §3.3: default minimum believable seconds per block.
 local DEFAULT_MIN_SECONDS = {
@@ -276,6 +278,8 @@ end
 -- owe them, so a mission may never hand them out (and weapons are never mission items).
 local function ForbiddenItem(name)
     local lower = name:lower()
+    -- cash items would stand in for a payout
+    if lower == 'money' or lower == 'black_money' then return true end
     return lower == 'armour' or lower == 'bandage' or lower:sub(1, 5) == 'ammo-' or lower:sub(1, 7) == 'weapon_'
 end
 
@@ -292,11 +296,17 @@ local function NormalizeItems(list, warn)
             warn(('items entry %d has no name; ignored'):format(i))
         elseif ForbiddenItem(it.name) then
             return nil,
-                ('items entry %d: "%s" can never be a mission item (armour, bandage, ammo-* and weapons are not allowed)'):format(
+                ('items entry %d: "%s" can never be a mission item (armour, bandage, ammo-*, weapons and money are not allowed)'):format(
                     i, it.name)
+        elseif #out >= MAX_ITEMS then
+            warn(('items entry %d: more than %d items; ignored'):format(i, MAX_ITEMS))
         else
             local count = tonumber(it.count) or 1
-            if count < 1 then count = 1 end
+            if count ~= count or count < 1 then count = 1 end
+            if count > MAX_ITEM_COUNT then
+                warn(('items entry %d: count %s is above %d; capped'):format(i, tostring(count), MAX_ITEM_COUNT))
+                count = MAX_ITEM_COUNT
+            end
             out[#out + 1] = { name = it.name, count = math.floor(count), metadata = it.metadata }
         end
     end

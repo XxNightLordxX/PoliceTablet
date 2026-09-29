@@ -22,6 +22,7 @@ local SPEED_WINDOW_MS = 3500             -- server speed samples kept per partic
 local SURRENDER_GRACE_MS = 3000          -- a kill this soon after an armed suspect gave up is a shot in flight
 local SPAWN_GAP = 8.0                    -- metres between vehicles placed from one point
 local ROUTE_BACK = 2                     -- racers start this many waypoints before the intercept point
+local ROUTE_END = 30.0                   -- an open route is done this close to its last waypoint (as the host)
 local FOLLOW_SEND_MS = 2000
 local RESEND_MS = 15000
 local UNDRIVEABLE_ENGINE = 100.0
@@ -360,7 +361,9 @@ end
 local function RequiredPoints(obj)
     local o = Defaults(U.deepcopy(obj))
     local out = {}
-    for _, k in ipairs({ o.route, o.spawn, o.spawns }) do
+    -- by field name: route is nil for a free flee, and ipairs over the values would stop at that hole
+    for _, field in ipairs({ 'route', 'spawn', 'spawns' }) do
+        local k = o[field]
         if type(k) == 'string' and not U.contains(out, k) then out[#out + 1] = k end
     end
     return out
@@ -1017,6 +1020,8 @@ end
 
 local function WatchVehicles(ctx, st, dt, list)
     local s = ctx.obj.stopped
+    local route = RouteOf(ctx.location, ctx.obj.route)
+    local routeEnd = route and not route.loop and route.points[#route.points] or nil
     for _, key in ipairs(st.vorder) do
         local v = st.vehicles[key]
         if v.state == 'fleeing' or v.state == 'waiting' then
@@ -1025,11 +1030,17 @@ local function WatchVehicles(ctx, st, dt, list)
                 if v.missing >= MISSING_TICKS then StopVehicle(ctx, st, v, true) end
             elseif v.state == 'fleeing' then
                 v.missing = 0
+                local c = GetEntityCoords(v.entity)
+                -- an open route ends in a free flee for good: a new host must not send the car back to it
+                if routeEnd and not v.routeDone and U.dist2d(c, routeEnd) <= ROUTE_END then
+                    v.routeDone = true
+                    st.dirty = true
+                end
                 local speed = Kmh(v.entity)
                 if speed > math.max(MOVED_KMH, s.speed * 2) then v.moved = true end
                 if st.mode == 'stop' and #v.occupants > 0 then
                     local counting = v.moved or (v.fleeAt and Now() - v.fleeAt >= NEVER_MOVED_MS)
-                    local near = NearestOf(list, GetEntityCoords(v.entity)) <= STOP_NEAR
+                    local near = NearestOf(list, c) <= STOP_NEAR
                     if counting and near and speed < s.speed then
                         v.slowFor = v.slowFor + dt
                         if v.slowFor >= s.seconds then StopVehicle(ctx, st, v, false) end
@@ -1114,19 +1125,22 @@ local function WatchPeds(ctx, st, dt, list)
     end
 end
 
--- Follow mode: the thing to follow is the car while its driver is in it, else the nearest suspect on foot.
-local function FollowTarget(st)
-    local v = st.vehicles[st.vorder[1] or '']
-    if v and v.state ~= 'wrecked' and Exists(v.entity) then
-        for _, key in ipairs(v.occupants) do
-            local p = st.peds[key]
-            if p and p.seat == -1 and p.state == 'driving' then return GetEntityCoords(v.entity) end
-        end
-    end
-    local best
+-- Where a suspect is: its car while it still drives it, else the ped itself.
+local function SuspectCoords(st, p)
+    local v = st.vehicles[p.vehicle]
+    local c
+    if p.state == 'driving' and v and v.state ~= 'wrecked' then c = EntCoords(v.entity) end
+    return c or EntCoords(p.entity)
+end
+
+-- Follow mode: the thing to follow is the suspect nearest the party (a car while it is driven, else on foot).
+local function FollowTarget(st, list)
+    local best, bestD
     for _, p in pairs(st.peds) do
-        if not Neutralised(p) and Exists(p.entity) then
-            best = best or GetEntityCoords(p.entity)
+        local c = not Neutralised(p) and Exists(p.entity) and SuspectCoords(st, p) or nil
+        if c then
+            local d = NearestOf(list, c)
+            if not bestD or d < bestD then best, bestD = c, d end
         end
     end
     return best
@@ -1143,7 +1157,7 @@ local function WatchFollow(ctx, st, dt, list)
         end
     end
     if not st.fled then return end
-    local target = FollowTarget(st)
+    local target = FollowTarget(st, list)
     if not target then
         if SpawnedAll(ctx, st) and st.counts.peds > 0 then st.targetGone = true end
         return
@@ -1179,7 +1193,13 @@ local function Snapshot(ctx, st)
         local v = st.vehicles[key]
         local occ = {}
         for i, pk in ipairs(v.occupants) do occ[i] = st.peds[pk] and st.peds[pk].netId or nil end
-        vehicles[#vehicles + 1] = { netId = v.netId, index = v.index, state = v.state, occupants = occ }
+        vehicles[#vehicles + 1] = {
+            netId = v.netId,
+            index = v.index,
+            state = v.state,
+            occupants = occ,
+            routeDone = v.routeDone,
+        }
     end
     for _, p in pairs(st.peds) do
         local v = st.vehicles[p.vehicle]
@@ -1436,10 +1456,7 @@ local function Presence(ctx, src, coords)
     local best = math.huge
     for _, p in pairs(st.peds) do
         if not Neutralised(p) then
-            local v = st.vehicles[p.vehicle]
-            local c
-            if p.state == 'driving' and v and v.state ~= 'wrecked' then c = EntCoords(v.entity) end
-            c = c or EntCoords(p.entity)
+            local c = SuspectCoords(st, p)
             if c then
                 local d = U.dist(coords, c)
                 if d < best then best = d end

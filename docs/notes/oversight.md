@@ -35,7 +35,8 @@ Each Lua file's header comment documents its public API, net names and rules.
 - **Manual award range:** 1–10,000 points per award (typo guard; `final_points` is SMALLINT). Same as CP.Scoring.
 - **Approve** clears `flagged` (keeps `flag_reason`) and sets the breakdown's `$.flagged` to JSON null, then
   `CP.Cash.release` (only when `cash_status = 'held'`), `CP.Scoring.onRowApproved`, `CP.Leaderboard.invalidate`.
-- **Void** sets `voided = 1` (a flagged row stays flagged: its cash stays held until CP.Cash forfeits it), then
+- **Void** sets `voided = 1` (`voidFlagged` only while the row is still flagged: an approval that landed during
+  its checks stands, `err.conflict`; a flagged row stays flagged: its cash stays held until CP.Cash forfeits it), then
   `CP.Scoring.onRowVoided`, `CP.AntiCheat.onVoided(citizenid)` (mission rows only, never manual_award/goal),
   invalidate. `voidRun` by run uuid voids every non-voided row of that run.
 - **Supervisor scope ("runs involving their department")** = any row of that run_uuid (or live participant) in
@@ -43,7 +44,9 @@ Each Lua file's header comment documents its public API, net names and rules.
   checked separately with `CP.Permissions.canReviewRun` for every reviewer, admins included.
 - **Force recall** takes an optional reason (audited); allowed for runs involving their department (any
   participant ever on the run), tests included; the recalled officer gets `admin.notice.force_recalled` through
-  `CP.Runs.removeParticipant(..., { notify = ... })`.
+  `CP.Runs.removeParticipant(..., { notify = ... })`. Never on a run the caller is or was on (`err.recall_own_run`,
+  admins too; test runs excepted): recalling themselves or a partner would be a free reroll (no cooldown, pay tier
+  kept). A target who left while the permission check waited is refused (`err.not_participant`, no audit).
 - **Read permissions:** `getMissionList` / `sup:getLiveRuns` need `viewMissionList` (supervisors and admins);
   `sup:getReviewQueue` needs `reviewFlagged` or `handleDisputes` (each list only when its switch is on); every
   `admin:*` callback needs the admin-only `openAdmin` permission.
@@ -64,8 +67,8 @@ Each Lua file's header comment documents its public API, net names and rules.
 - `admin:getDisputes` (listed in §8.3 without an owner) is registered here: `{ disputes = forAdmin(own citizenid) }`.
 - New disputes toast online supervisors of the run's departments (not participants) or online admins
   (`admin.notice.new_dispute`) and post to the flags webhook. A flagged/voided-run dispute whose run every online
-  supervisor of those departments took part in (none of them may answer it; no other one online, on or off duty)
-  toasts the online admins instead. `CP.Disputes.supervisorCanAnswer(runUuid)` (switch on and an online supervisor
+  supervisor of those departments took part in, or with no supervisor of those departments online at all (none
+  may answer it; no other one online, on or off duty), toasts the online admins instead. `CP.Disputes.supervisorCanAnswer(runUuid)` (switch on and an online supervisor
   of the run's departments who did not take part, on or off duty) is the view-time form of that rule.
 
 ### CP.AntiCheat

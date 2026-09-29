@@ -104,7 +104,8 @@ File form: `{ id = 'x', points = 5, each = true }` / `{ id = 'x', pctOfPoints = 
 
 ### 1.5 Never in a definition
 No payout field (any key containing `payout`, or `cash`, `cashBase`, `basePay`, `money`, `pay`,
-`reward`, `rewards`): refused by validate (`builder.error.payout_field`) and stripped when stored.
+`reward`, `rewards`), at any depth (also inside an objective or a location): refused by validate
+(`builder.error.payout_field`) and stripped when stored.
 Loader fields (`source`, `version`, `filePath`, `defHash`, `editedInCode`, `isBoss`, `status`) and the
 reserved `_file` key are stripped. Item names `armour`, `bandage`, `ammo-*`, `WEAPON_*` / `weapon_*`
 (any case) are refused (CRIMSON_ARENA rule 4).
@@ -240,7 +241,7 @@ for a malformed payload, `err.builder_unknown_mission`, `err.no_permission`, `er
 | `server:builder:autosave` | `{ id, definition }` | `{ id, version, savedAt, draftTested, lock }` — stored, lock renewed, not audited; at most one per 5 s | `err.builder_locked` |
 | `server:builder:validate` | `{ id, definition? }` (stored draft when omitted) | `{ valid, errors, armed, maxHostiles, requiredTier }` | |
 | `server:builder:test` | `{ id, tier?, location?, useStartRoute? }` — tier name (default: required tier), location index or `'random'` (default 1), start route (default `Config.Testing.useStartRoute`) | `{ id, version, tier, location, requiredTier }` — `CP.Testing.startDraft(src, def, opts)` with the **stored** draft (autosave first) | `err.in_arena`, `err.builder_bad_tier`, `err.builder_bad_location`, `err.builder_invalid` (not playable), `err.builder_no_draft`, `err.builder_testing_unavailable`, CP.Testing's own keys |
-| `server:builder:publish` | `{ id }` | `{ id, version, filePath, backup: string \| null }` | `err.builder_no_draft`, `err.builder_invalid` (call validate for the list), `err.builder_not_tested`, `err.builder_locked`, `err.builder_file_write` |
+| `server:builder:publish` | `{ id }` | `{ id, version, filePath, backup: string \| null }` | `err.builder_no_draft`, `err.builder_invalid` (call validate for the list), `err.builder_not_tested`, `err.builder_locked`, `err.builder_read_only` (archived: the draft left over stays until a restore), `err.builder_file_write` |
 | `server:builder:archive` | `{ id }` | `{ id, filePath }` | `err.builder_not_published`, `err.builder_file_write` |
 | `server:builder:restore` | `{ id }` | `{ id, filePath }` | `err.builder_not_archived`, `err.builder_file_write` |
 | `server:builder:rollback` | `{ id }` | `{ id, version, fromVersion }` | `err.builder_not_published`, `err.builder_no_backup`, `err.builder_invalid` |
@@ -278,7 +279,8 @@ so the client can stop an active placement/recording for that mission.
   published version stays live) and the reason is printed. Summary
   `{ checked, unchanged, edited = { { id, version } }, rejected = { { id, error } }, conflicts = { id },
   rewritten = { id } }`.
-- `CP.Builder.onDraftTested(missionId, version, tierName, passed, src) -> boolean` (from `CP.Testing`).
+- `CP.Builder.onDraftTested(missionId, version, tierName, passed, src, defHash) -> boolean` (from `CP.Testing`;
+  `defHash` is the hash of the definition the test ran, the one `server:builder:test` gave `startDraft`).
 - `CP.Builder.validate(def, opts) -> errors` and `CP.Builder.exportLua(def, meta) -> text` (pure; tests).
 
 ---

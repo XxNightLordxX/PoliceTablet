@@ -144,7 +144,9 @@ local function Encode(v, depth)
         return ('v(%.1f,%.1f,%.1f)'):format(v.x or 0, v.y or 0, v.z or 0)
     end
     if t == 'number' then
-        if v % 1 == 0 then return ('%d'):format(v) end
+        -- '%d' only takes a value with an integer form: a whole float past 2^63 (1e19) would throw
+        local i = math.tointeger(v)
+        if i then return ('%d'):format(i) end
         return ('%.3f'):format(v)
     end
     return tostring(v)
@@ -263,7 +265,8 @@ function AC.onNpcKilled(run, killerSrc)
     if type(run) ~= 'table' or not k or run.test or run.state == 'ended' then return end
     local p = run.participants and run.participants[k]
     if p and p.status == 'active' then return end
-    if InArena(k) then return end
+    -- the crimsonArena flag is client-writable: only a killer in another bucket is really in a match
+    if InArena(k) and BucketOf(k) ~= 0 then return end
     local st = StateOf(run)
     st.kills = st.kills + 1
     local entry = st.killers[k]
