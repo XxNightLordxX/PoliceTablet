@@ -8,6 +8,10 @@ local DIR = 'sql/migrations/'
 local FILES = {
     '001_initial.sql',
     '002_test_def_hash.sql',
+    '003_run_stats.sql',
+    '004_profile.sql',
+    '005_mission_calls.sql',
+    '006_item_rewards.sql',
 }
 
 local readyPromise = promise.new()

@@ -991,6 +991,11 @@ local function EndSeasonInternal(src, season, reason)
         end
     end
     SeasonResultsWebhook(season, list, champion, top10)
+    if CP.Hooks and CP.Hooks.fire then
+        local cids = {}
+        for i, e in ipairs(top10) do cids[i] = e.citizenid end
+        CP.Hooks.fire('season:ended', season.id, { champion = champion ~= '' and champion or nil, top10 = cids })
+    end
     Audit(src, 'season_end', ('season:%d'):format(season.id), season.name, champion ~= '' and champion or '-', reason)
     InvalidateAll()
     CP.log(TAG, 'season %d (%s) ended: champion %s, %d trophies, %d top 10 badges', season.id, season.name,

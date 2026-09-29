@@ -22,6 +22,8 @@ local DEFAULT_MIN_SECONDS = {
     pursuit = 30,
     escort = 60,
     search_area = 60,
+    field_contact = 30,
+    process_scene = 5,
 }
 -- Built-in missions ship with 5+ locations, these with 3+ (Mission catalog design rules).
 local THREE_LOCATIONS_OK = { armored_truck_escort = true, evoc_course = true, weekly_boss_kingpin = true }
@@ -36,6 +38,19 @@ local PAYOUT_NAMES = {
     pay = true,
     reward = true,
     rewards = true,
+    loot = true,
+    prize = true,
+    prizes = true,
+}
+-- Keys of Config.MissionTweaks entries (re-validated like the file itself).
+local TWEAK_KEYS = {
+    cooldown = true,
+    timeLimit = true,
+    startTimeout = true,
+    disabledLocations = true,
+    peds = true,
+    vehicles = true,
+    weapons = true,
 }
 
 local defs = {}            -- id -> normalised definition
@@ -67,10 +82,11 @@ local function IsInt(v)
     return type(v) == 'number' and v == math.floor(v)
 end
 
+-- A payout- or reward-like top-level name: mission files never carry pay or item rewards (Config.Rewards).
 local function IsPayoutField(k)
     if type(k) ~= 'string' then return false end
     local lower = k:lower()
-    return lower:find('payout', 1, true) ~= nil or PAYOUT_NAMES[lower] == true
+    return lower:find('payout', 1, true) ~= nil or lower:find('reward', 1, true) ~= nil or PAYOUT_NAMES[lower] == true
 end
 
 local function CopyLib(lib)
@@ -258,6 +274,9 @@ local function NormalizeEntries(list, field, warn)
             elseif not known and not hasValue then
                 warn(
                     ('%s entry %s is not in Config.Bonuses and has no points/pctOfPoints; ignored'):format(field, e.id))
+            elseif type(known) == 'table' and known.engineOnly == true then
+                warn(('%s entry %s is awarded by the engine only and cannot be listed in a mission; ignored'):format(
+                    field, e.id))
             else
                 out[#out + 1] = {
                     id = e.id,
@@ -459,6 +478,11 @@ function Missions.normalize(def, meta)
         d.vehiclePenalties = not (type(vp) == 'table' and vp.default == false)
     end
     if type(d.vehiclePenalties) ~= 'boolean' then return nil, 'vehiclePenalties must be true or false' end
+    -- quietPatrol: lights and siren after the first arrival cost -10, personal (Beat Patrol, Business Check)
+    if d.quietPatrol == nil then d.quietPatrol = false end
+    if type(d.quietPatrol) ~= 'boolean' then return nil, 'quietPatrol must be true or false' end
+    -- decisions: stricter overrides of Config.Decisions for this mission (graded by CP.Custody)
+    if d.decisions ~= nil and type(d.decisions) ~= 'table' then return nil, 'decisions must be a table' end
 
     -- locations
     if not IsList(d.locations) or #d.locations == 0 then return nil, 'locations must be a non-empty list' end
@@ -568,6 +592,126 @@ function Missions.normalize(def, meta)
     d.defHash = meta.defHash or StableHash(def)
     d.editedInCode = meta.editedInCode == true or CP.U.truthy(meta.editedInCode)
     return d, nil, warnings
+end
+
+-- ============================================================================
+--                           BUILT-IN MISSION TWEAKS
+-- ============================================================================
+-- Config.MissionTweaks[id] changes a built-in mission without editing its file. The tweaked copy goes
+-- through normalize again; a tweak that names an unknown key, leaves fewer locations than the mission needs
+-- or fails a guardrail is dropped with a warning and the file's definition is used.
+
+local PED_BLOCKS = {
+    hostile_waves = true,
+    flee_arrest = true,
+    search_area = true,
+    protect_rescue = true,
+    field_contact = true,
+}
+local VEHICLE_BLOCKS = { pursuit = true, field_contact = true }
+
+local function StringList(v)
+    if not IsList(v) or #v == 0 then return false end
+    for _, x in ipairs(v) do if type(x) ~= 'string' or x == '' then return false end end
+    return true
+end
+
+-- The tweaked raw definition, or nil and the reason the tweak is dropped.
+local function ApplyTweak(raw, tweak)
+    if type(tweak) ~= 'table' then return nil, 'the tweak is not a table' end
+    for k in pairs(tweak) do
+        if not TWEAK_KEYS[k] then return nil, ('unknown key "%s"'):format(tostring(k)) end
+    end
+    local d = CP.U.deepcopy(raw)
+    for _, k in ipairs({ 'cooldown', 'timeLimit', 'startTimeout' }) do
+        if tweak[k] ~= nil then
+            if type(tweak[k]) ~= 'number' then return nil, k .. ' must be a number' end
+            d[k] = tweak[k]
+        end
+    end
+    if tweak.disabledLocations ~= nil then
+        if not StringList(tweak.disabledLocations) then return nil, 'disabledLocations must be a list of labels' end
+        local off = {}
+        for _, l in ipairs(tweak.disabledLocations) do off[l] = true end
+        local kept = {}
+        local seen = {}
+        for _, loc in ipairs(d.locations or {}) do
+            local label = type(loc) == 'table' and loc.label or nil
+            if not (label and off[label]) then kept[#kept + 1] = loc end
+            if label then seen[label] = true end
+        end
+        local unknown = nil
+        for l in pairs(off) do if not seen[l] then unknown = l end end
+        if unknown then return nil, ('disabledLocations names an unknown location "%s"'):format(unknown) end
+        local need = THREE_LOCATIONS_OK[d.id] and 3 or 5
+        if #kept < need then
+            return nil, ('it leaves %d location(s); the mission needs %d or more'):format(#kept, need)
+        end
+        d.locations = kept
+    end
+    for _, k in ipairs({ 'peds', 'vehicles', 'weapons' }) do
+        if tweak[k] ~= nil and not StringList(tweak[k]) then return nil, k .. ' must be a list of names' end
+    end
+    for _, obj in ipairs(type(d.objectives) == 'table' and d.objectives or {}) do
+        if type(obj) == 'table' then
+            if tweak.weapons and obj.weapons ~= nil then obj.weapons = CP.U.copy(tweak.weapons) end
+            if tweak.peds and PED_BLOCKS[obj.block] then
+                if obj.peds ~= nil then
+                    obj.peds = CP.U.copy(tweak.peds)
+                elseif obj.models ~= nil then
+                    obj.models = CP.U.copy(tweak.peds)
+                end
+            end
+            if tweak.vehicles and VEHICLE_BLOCKS[obj.block] then
+                if obj.vehicles ~= nil and type(obj.vehicles) == 'table' then
+                    obj.vehicles = CP.U.copy(tweak.vehicles)
+                elseif obj.models ~= nil then
+                    obj.models = CP.U.copy(tweak.vehicles)
+                end
+            end
+        end
+    end
+    return d
+end
+
+-- The built-in definition with its Config.MissionTweaks entry applied, or def when there is none or the
+-- tweak is dropped.
+local function Tweaked(id, raw, def, meta)
+    local tweaks = Config.MissionTweaks
+    local tweak = type(tweaks) == 'table' and tweaks[id] or nil
+    if tweak == nil then return def end
+    local d, why = ApplyTweak(raw, tweak)
+    if not d then
+        CP.warn(TAG, 'Config.MissionTweaks.%s was ignored: %s', id, why)
+        return def
+    end
+    local out, err = Missions.normalize(d, meta)
+    if not out then
+        CP.warn(TAG, 'Config.MissionTweaks.%s was ignored: %s', id, tostring(err))
+        return def
+    end
+    out.tweaked = true
+    CP.log(TAG, 'mission %s: Config.MissionTweaks applied', id)
+    return out
+end
+Missions._applyTweak = ApplyTweak
+
+-- A translatable mission text: the locale key mission.<id>.<field> (mission.<id>.location.<n> for a
+-- location label) wins over the file's text; custom missions keep theirs when the locale has no key.
+function Missions.label(def, field, n)
+    if type(def) ~= 'table' or type(field) ~= 'string' then return '' end
+    local fallback
+    local key
+    if field == 'location' then
+        local loc = type(def.locations) == 'table' and def.locations[tonumber(n) or 0] or nil
+        fallback = type(loc) == 'table' and loc.label or nil
+        key = ('mission.%s.location.%s'):format(tostring(def.id), tostring(n))
+    else
+        fallback = def[field]
+        key = ('mission.%s.%s'):format(tostring(def.id), field)
+    end
+    if CP.Locale and CP.Locale.label then return CP.Locale.label(key, fallback or '') end
+    return tostring(fallback or '')
 end
 
 function Missions.serializeForClient(def)
@@ -742,17 +886,18 @@ function Missions.loadAll()
                 elseif raw.id ~= id then
                     failed(id, path, ('its id "%s" does not match the file name'):format(tostring(raw.id)))
                 else
-                    local def, nerr, warnings = Missions.normalize(raw, {
+                    local meta = {
                         source = 'builtin',
                         filePath = path,
                         defHash = CP.U.hashHex(content),
                         status = 'published',
-                    })
+                    }
+                    local def, nerr, warnings = Missions.normalize(raw, meta)
                     summary.warnings = summary.warnings + (warnings or 0)
                     if not def then
                         failed(id, path, nerr)
                     else
-                        newDefs[id] = def
+                        newDefs[id] = Tweaked(id, raw, def, meta)
                         summary.builtin = summary.builtin + 1
                     end
                 end

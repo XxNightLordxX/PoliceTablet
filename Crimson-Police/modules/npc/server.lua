@@ -446,6 +446,29 @@ function Npc.enableCuff(run, netId, opts)
     return true
 end
 
+-- A ped handed to another objective (CP.Runs.adopt): its record and its replicated bag name the new
+-- objective, so its cuff, shot and damage events go there from now on.
+function Npc.adopt(netId, obj)
+    netId = ToInt(tonumber(netId), 1, MAX_NETID)
+    obj = math.tointeger(tonumber(obj) or -1)
+    if not netId or not obj or obj < 1 then return false end
+    local rec = FindRec(netId)
+    if not rec then return false end
+    local run = RunById(rec.runId)
+    if not IsLive(run) then return false end
+    local nb = U.copy(rec.bag)
+    nb.obj = obj
+    nb.seq = (tonumber(nb.seq) or 0) + 1
+    local e = EntityOf(run, netId, rec)
+    if e then
+        if not Commit(run, netId, rec, e, nb) then return false end
+    else
+        Mirror(rec, nb)
+    end
+    CP.log(TAG, 'run %s ped %s adopted by objective %d', tostring(run.id), netId, obj)
+    return true
+end
+
 function Npc.onDeath(fn)
     if type(fn) == 'function' then deathFns[#deathFns + 1] = fn end
 end

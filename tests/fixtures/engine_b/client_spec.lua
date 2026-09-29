@@ -102,6 +102,7 @@ end
 local mission = {
     id = 'beat_patrol',
     label = 'Beat Patrol',
+    quietPatrol = true,
     objectives = { { block = 'test_block', label = 'A', count = 1 }, { block = 'test_block', label = 'B' } },
 }
 H.fire('crimson-police:client:start', nil, 'run-1', {
@@ -206,7 +207,7 @@ H.advance(5000)
 local tel = ServerEvents('crimson-police:server:telemetry')
 local kinds = {}
 for _, e in ipairs(tel) do kinds[e.args[2]] = (kinds[e.args[2]] or 0) + 1 end
-H.eq(kinds.lights_siren, 1, 'lights and siren once on Beat Patrol')
+H.eq(kinds.lights_siren, 1, 'lights and siren once on a quietPatrol mission')
 H.ok((kinds.vehicle or 0) >= 1, 'vehicle netId while driving')
 H.eq(tel[#tel].args[3].netId ~= nil, true, 'telemetry data')
 me.armed, me.shooting = true, true

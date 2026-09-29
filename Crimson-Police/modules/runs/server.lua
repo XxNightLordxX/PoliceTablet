@@ -6,7 +6,6 @@ local U = CP.U
 local TAG = 'runs'
 
 local BOSS_ID = 'weekly_boss_kingpin'
-local LIGHTS_MISSIONS = { beat_patrol = true, business_check = true }
 local SPAWN_WAIT_MS = 3000          -- wait for a server-created entity to exist
 local LATE_SPAWN_MS = 30000         -- an entity that appears after SPAWN_WAIT_MS is still deleted within this
 local TICK_STUCK_MS = 30000         -- a run tick still busy after this long is reported once
@@ -24,6 +23,27 @@ local EVIDENCE_MAX_KEYS = 32
 local EVIDENCE_MAX_DEPTH = 3
 local EVIDENCE_MAX_STRING = 256
 local ORPHAN_KEEP_S = 7 * 86400
+local REMOVAL_KEEP_S = 15           -- a recorded removal (sc-police /imp) is matched to a vanished car this long
+local DAY_CACHE_S = 10              -- completionsToday cache
+local PLATE_TRIES = 5               -- rerolls when player_vehicles already has a mission plate
+local PLATE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ0123456789'
+local SCENE_EXTEND_S = 60           -- pauseFastClock: the time limit grows by this...
+local SCENE_EXTEND_PER_BODY_S = 20  -- ...plus this per body kept
+-- Service-record counts per participant row (cp_mission_runs, 003_run_stats.sql); arrests go through noteArrest.
+local STAT_KEYS = {
+    'arrests',
+    'citations',
+    'impounds',
+    'rescues',
+    'vehicles_stopped',
+    'evidence',
+    'decisions_ok',
+    'decisions_best',
+    'decisions_bad',
+    'lethal',
+}
+local MEDALS = { medal_gold = 1, medal_silver = 2, medal_bronze = 3 }
+local VERDICTS = { best = true, ok = true, wrong = true, critical = true }
 
 -- ARCHITECTURE §4.3: end reason -> result, cooldowns.
 local RESULT = {
@@ -43,6 +63,7 @@ local RESULT = {
     completed = 'completed',
     time_limit = 'failed',
     mission_failed = 'failed',
+    vehicle_removed_external = 'abandoned',   -- a run vehicle removed by someone outside the run: not counted
 }
 local function Set(list)
     local out = {}
@@ -87,6 +108,8 @@ local endedRuns = {}     -- runId -> { at, run }
 local cooldownCache = {} -- citizenid -> { types = {}, missions = {}, loaded = bool }
 local hourCache = {}     -- citizenid -> { n, at }
 local orphans = {}       -- citizenid -> { names = { [item] = true }, at, sweptAt }
+local dayCache = {}      -- citizenid .. '|' .. type -> { n, at }
+local removals = {}      -- netId -> { src, via, dist, at } (noteExternalRemoval)
 local warned = {}
 local dbReady = false
 
@@ -174,6 +197,16 @@ end
 
 local function Label(key, vars)
     return CP.L(key, vars)
+end
+
+local function Fire(name, ...)
+    if CP.Hooks and CP.Hooks.fire then CP.Hooks.fire(name, ...) end
+end
+
+-- A HUD or objective payload with its CP.Lt texts turned into tokens (each client resolves them).
+local function Tokens(v)
+    if CP.Locale and CP.Locale.tokenize then return CP.Locale.tokenize(v) end
+    return v
 end
 
 -- ============================================================================
@@ -325,18 +358,19 @@ end
 
 function Runs.objectiveEvent(run, index, data)
     if type(run) ~= 'table' or run.state ~= 'in_progress' then return end
-    Runs.send(run, 'client:objective', run.id, index, { action = 'update', data = data })
+    Runs.send(run, 'client:objective', run.id, index, { action = 'update', data = Tokens(data) })
 end
 
+-- Text fields may be CP.Lt texts ({ key, vars }): they go out as tokens and each client resolves them.
 function Runs.hud(run, patch)
     if type(run) ~= 'table' or type(patch) ~= 'table' then return end
-    Runs.send(run, 'client:hud', run.id, patch)
+    Runs.send(run, 'client:hud', run.id, Tokens(patch))
 end
 
 function Runs.hudFor(run, src, patch)
     src = ToSrc(src)
     if type(run) ~= 'table' or not src or type(patch) ~= 'table' then return end
-    TriggerClientEvent(CP.e('client:hud'), src, run.id, patch)
+    TriggerClientEvent(CP.e('client:hud'), src, run.id, Tokens(patch))
 end
 
 local function BroadcastParticipants(run)
@@ -630,7 +664,7 @@ ObjectiveHud = function(run, i, patch)
     for k, v in pairs(patch) do
         if k == 'detail' or k == 'value' or k == 'max' then
             o.hud = o.hud or {}
-            if v == false then o.hud[k] = nil else o.hud[k] = v end
+            if v == false then o.hud[k] = nil else o.hud[k] = Tokens(v) end
             touched = true
         else
             rest[k] = v
@@ -655,7 +689,8 @@ local function EntityCounts(run)
     local total, armedAlive = 0, 0
     for netId, e in pairs(run.entities) do
         total = total + 1
-        if e.armed and not e.dead then
+        -- a hidden contact's weapon counts before it is drawn (armedTruth never leaves the server)
+        if (e.armed or e.armedTruth) and not e.dead then
             local st = NpcState(netId, e)
             if st ~= 'cuffed' and st ~= 'dead' then armedAlive = armedAlive + 1 end
         end
@@ -776,12 +811,19 @@ local function Track(run, entity, kind, opts, extraCfg)
     local cfg = {}
     if type(extraCfg) == 'table' then for k, v in pairs(extraCfg) do cfg[k] = v end end
     if type(opts.cfg) == 'table' then for k, v in pairs(opts.cfg) do cfg[k] = v end end
+    local hidden = opts.hidden == true
+    local hiddenCfg = nil
+    if hidden then
+        -- a contact: nothing truth-derived goes in the replicated bag until arm() at the draw
+        hiddenCfg = cfg
+        cfg = { model = cfg.model }
+    end
     local bag = {
         run = run.id,
         obj = opts.obj,
         role = opts.role,
         state = 'idle',
-        armed = opts.armed == true,
+        armed = (not hidden) and opts.armed == true,
         cfg = cfg,
         tag = opts.tag,
     }
@@ -793,7 +835,9 @@ local function Track(run, entity, kind, opts, extraCfg)
         kind = kind,
         obj = opts.obj,
         role = opts.role,
-        armed = opts.armed == true,
+        armed = (not hidden) and opts.armed == true,
+        armedTruth = hidden and opts.armed == true or nil,
+        hiddenCfg = hiddenCfg,
         dead = false,
         deadAt = nil,
         tag = opts.tag,
@@ -828,18 +872,69 @@ function Runs.spawnPed(run, opts)
         })
     end)
     if not entity then return nil end
-    if opts.armed and opts.weapon then
-        local w = ModelHash(opts.weapon)
-        if w then GiveWeaponToPed(entity, w, 250, false, true) end
+    -- opts.hidden (a contact): no weapon and no armour until arm(run, netId) at the draw
+    if opts.hidden ~= true then
+        if opts.armed and opts.weapon then
+            local w = ModelHash(opts.weapon)
+            if w then GiveWeaponToPed(entity, w, 250, false, true) end
+        end
+        local armour = Num(opts.armour, 0)
+        if armour > 0 then SetPedArmour(entity, math.floor(armour)) end
     end
-    local armour = Num(opts.armour, 0)
-    if armour > 0 then SetPedArmour(entity, math.floor(armour)) end
     CP.log(TAG, 'run %s: ped %s (%s) netId %d', run.id, tostring(opts.model), tostring(opts.role), netId)
     return entity, netId
 end
 
 -- Vehicle type for CreateVehicleServerSetter ('automobile' for every allowed mission model).
 local VEHICLE_TYPES = { stockade = 'automobile', stockade3 = 'automobile' }
+
+local function PlateCfg()
+    local p = Config.Custody and Config.Custody.plates or {}
+    local prefix = type(p.prefix) == 'string' and p.prefix:upper():gsub('[^%w]', '') or 'CP'
+    local length = math.floor(Num(p.length, 8))
+    if length > 8 then length = 8 end
+    if #prefix >= length then prefix = prefix:sub(1, math.max(0, length - 1)) end
+    return prefix, length
+end
+
+-- Whether a plate is in the reserved mission pattern (Config.Custody.plates).
+function Runs.isMissionPlate(plate)
+    if type(plate) ~= 'string' then return false end
+    local prefix, length = PlateCfg()
+    if #plate ~= length or plate:sub(1, #prefix) ~= prefix then return false end
+    return plate:sub(#prefix + 1):match('^[A-Z0-9]*$') ~= nil
+end
+
+-- Plates come from a stream of their own, never from the run seed: a plate is visible to every client, and a
+-- plate drawn from the seed would let a client work the seed out and replay the hidden server rolls (ctx.rng).
+local function RollPlate(run)
+    if not run.plateRng then
+        local seed = U.hash(('%s:plate:%s:%s'):format(U.uuid(), tostring(run.id), tostring(GetGameTimer())))
+        run.plateRng = U.rng(seed & 0x7FFFFFFF)
+    end
+    local prefix, length = PlateCfg()
+    local out = { prefix }
+    for _ = #prefix + 1, length do
+        local i = run.plateRng:int(1, #PLATE_CHARS)
+        out[#out + 1] = PLATE_CHARS:sub(i, i)
+    end
+    return table.concat(out)
+end
+
+-- A plate in the reserved pattern that no player owns (player_vehicles, read-only through CP.Qbx): the plate
+-- the mission asks for when it is in the pattern, else a roll. When the lookup fails the pattern alone is
+-- used; after PLATE_TRIES owned plates the last roll is used.
+local function MissionPlate(run, wanted)
+    local plate = Runs.isMissionPlate(wanted) and wanted or RollPlate(run)
+    if not Has('Qbx', 'plateOwned') then return plate end
+    for _ = 1, PLATE_TRIES do
+        local ok, owned = Call('Qbx', 'plateOwned', plate)
+        if not ok or owned ~= true then return plate end
+        CP.log(TAG, 'run %s: plate %s belongs to a player; rerolled', run.id, plate)
+        plate = RollPlate(run)
+    end
+    return plate
+end
 
 function Runs.spawnVehicle(run, opts)
     if type(run) ~= 'table' or run.state == 'ended' or type(opts) ~= 'table' then return nil end
@@ -862,9 +957,14 @@ function Runs.spawnVehicle(run, opts)
         return Track(run, veh, 'vehicle', opts, { model = opts.model })
     end)
     if not entity then return nil end
-    if type(opts.plate) == 'string' and opts.plate ~= '' and SetVehicleNumberPlateText then
-        SetVehicleNumberPlateText(entity, opts.plate:sub(1, 8))
-    end
+    -- every mission vehicle carries a reserved plate no player owns (a plate the mission asks for is used
+    -- only when it is in that pattern and no player owns it), so nothing done to a mission car can reach a
+    -- player's own car
+    local plate = MissionPlate(run, type(opts.plate) == 'string' and opts.plate:upper() or nil)
+    if run.state == 'ended' then return nil end
+    local e = run.entities[netId]
+    if e then e.plate = plate end
+    if SetVehicleNumberPlateText then SetVehicleNumberPlateText(entity, plate) end
     return entity, netId
 end
 
@@ -895,7 +995,173 @@ function Runs.deleteEntity(run, netId)
     local e = run.entities[netId]
     if not e then return false end
     run.entities[netId] = nil
+    if run.held then
+        for i, h in ipairs(run.held) do
+            if h == netId then
+                table.remove(run.held, i)
+                break
+            end
+        end
+    end
     if e.entity and DoesEntityExist(e.entity) then DeleteEntity(e.entity) end
+    return true
+end
+
+-- The draw of a hidden contact (spawnPed opts.hidden): the weapon, armour and combat settings go to the ped
+-- and its cp bag now, once. false when the entity is unknown, dead or not armed in truth.
+function Runs.arm(run, netId)
+    netId = math.tointeger(tonumber(netId) or -1)
+    if type(run) ~= 'table' or run.state == 'ended' or not netId then return false end
+    local e = run.entities[netId]
+    if not e or e.dead or e.kind ~= 'ped' then return false end
+    if e.armedGiven then return true end
+    if not e.armedTruth and not e.armed then return false end
+    e.armedGiven = true
+    local cfg = type(e.hiddenCfg) == 'table' and e.hiddenCfg or {}
+    local entity = e.entity
+    if entity and DoesEntityExist(entity) then
+        local w = ModelHash(cfg.weapon)
+        if w then GiveWeaponToPed(entity, w, 250, false, true) end
+        local armour = Num(cfg.armour, 0)
+        if armour > 0 then SetPedArmour(entity, math.floor(armour)) end
+    end
+    e.armed = true
+    -- the bag through CP.Npc when it runs this ped (its record is the server's truth), else directly
+    local okN, written = false, false
+    if Has('Npc', 'setState') then
+        okN, written = Call('Npc', 'setState', run, netId, NpcState(netId, e) or 'idle', { armed = true, cfg = cfg })
+    end
+    if not (okN and written) then
+        local bag = U.deepcopy(e.bag or {})
+        bag.armed = true
+        bag.cfg = type(bag.cfg) == 'table' and bag.cfg or {}
+        for k, v in pairs(cfg) do bag.cfg[k] = v end
+        bag.seq = (tonumber(bag.seq) or 0) + 1
+        if entity and DoesEntityExist(entity) then
+            local ok = pcall(function() Entity(entity).state:set('cp', bag, true) end)
+            if ok then e.bag = bag end
+        end
+    end
+    CP.log(TAG, 'run %s: contact %d armed', run.id, netId)
+    return true
+end
+
+-- ============================================================================
+--                     ADOPTION (one objective to another)
+-- ============================================================================
+-- An entity moves from the objective that spawned it to objective toIndex (a pursuit handing its stopped car
+-- and people to a field_contact): deaths, CP.Npc evidence and custody events go to the adopter only.
+
+local function AdoptOne(run, netId, toIndex)
+    local e = run.entities[netId]
+    if not e then return false end
+    local from = e.obj
+    e.obj = toIndex
+    if type(e.bag) == 'table' then e.bag.obj = toIndex end
+    local okN, npcDone = false, false
+    if e.kind == 'ped' and Has('Npc', 'adopt') then okN, npcDone = Call('Npc', 'adopt', netId, toIndex) end
+    if not (okN and npcDone) and e.entity and DoesEntityExist(e.entity) and type(e.bag) == 'table' then
+        pcall(function() Entity(e.entity).state:set('cp', U.deepcopy(e.bag), true) end)
+    end
+    if run.host then
+        TriggerClientEvent(CP.e('client:objective'), run.host, run.id, toIndex,
+            { action = 'adopt', op = 'adopt', netId = netId, obj = toIndex, from = from })
+    end
+    CP.log(TAG, 'run %s: %s %d moved from objective %s to %d', run.id, tostring(e.kind), netId, tostring(from), toIndex)
+    return true
+end
+
+function Runs.adopt(run, netId, toIndex)
+    netId = math.tointeger(tonumber(netId) or -1)
+    toIndex = math.tointeger(tonumber(toIndex) or -1)
+    if type(run) ~= 'table' or run.state == 'ended' or not netId or not toIndex then return false end
+    if not run.objectives[toIndex] then return false end
+    return AdoptOne(run, netId, toIndex)
+end
+
+function Runs.adoptMany(run, netIds, toIndex)
+    if type(netIds) ~= 'table' then return 0 end
+    local n = 0
+    for _, netId in ipairs(netIds) do
+        if Runs.adopt(run, netId, toIndex) then n = n + 1 end
+    end
+    return n
+end
+
+-- The objective that owns an entity now (after any adoption), or nil.
+function Runs.ownerOf(run, netId)
+    netId = math.tointeger(tonumber(netId) or -1)
+    local e = type(run) == 'table' and netId and run.entities[netId] or nil
+    return e and e.obj or nil
+end
+
+-- An event about one entity (custody: handed_over, impounded, removed) for the objective that owns it.
+function Runs.entityEvent(run, netId, ev)
+    local obj = Runs.ownerOf(run, netId)
+    if not obj or type(ev) ~= 'table' then return false, 'no_owner' end
+    return Runs.dispatch(run, obj, ev.src, ev)
+end
+
+-- ============================================================================
+--                       HELD BODIES (Process the scene)
+-- ============================================================================
+-- opts = { roles = { 'hostile', ... }, max = n }: dead peds of those roles are kept, oldest first out.
+
+function Runs.holdBodies(run, opts)
+    if type(run) ~= 'table' or run.state == 'ended' then return false end
+    opts = type(opts) == 'table' and opts or {}
+    local roles = nil
+    if type(opts.roles) == 'table' and #opts.roles > 0 then
+        roles = {}
+        for _, r in ipairs(opts.roles) do roles[tostring(r)] = true end
+    end
+    run.holdBodies = { roles = roles, max = math.max(0, math.floor(Num(opts.max, 4))) }
+    run.held = run.held or {}
+    return true
+end
+
+local function HoldBody(run, netId)
+    local hb = run.holdBodies
+    local e = run.entities[netId]
+    if not hb or not e or e.kind ~= 'ped' or e.held then return end
+    if hb.roles and not hb.roles[tostring(e.role)] then return end
+    if hb.max <= 0 then return end
+    e.held = true
+    run.held[#run.held + 1] = netId
+    while #run.held > hb.max do
+        local oldest = table.remove(run.held, 1)
+        Runs.deleteEntity(run, oldest)
+    end
+end
+
+function Runs.heldBodies(run)
+    local out = {}
+    if type(run) ~= 'table' or not run.held then return out end
+    for _, netId in ipairs(run.held) do
+        local e = run.entities[netId]
+        if e then
+            local coords = e.entity and DoesEntityExist(e.entity) and GetEntityCoords(e.entity) or e.lastCoords
+            out[#out + 1] = { netId = netId, role = e.role, coords = coords }
+        end
+    end
+    return out
+end
+
+function Runs.releaseBody(run, netId)
+    netId = math.tointeger(tonumber(netId) or -1)
+    if type(run) ~= 'table' or not netId then return false end
+    local e = run.entities[netId]
+    if not e or not e.held then return false end
+    return Runs.deleteEntity(run, netId)
+end
+
+-- Process the scene started: the fast-completion clock stops and the time limit grows by 60 s plus 20 s per
+-- body kept. Once per run.
+function Runs.pauseFastClock(run)
+    if type(run) ~= 'table' or run.state ~= 'in_progress' or run.fastClockAt then return false end
+    run.fastClockAt = os.time()
+    local bodies = run.held and #run.held or 0
+    Runs.adjustTimer(run, SCENE_EXTEND_S + SCENE_EXTEND_PER_BODY_S * bodies)
     return true
 end
 
@@ -950,6 +1216,8 @@ function Runs.entityDied(run, netId, killerSrc)
             run.stats.kills = run.stats.kills or {}
             run.stats.kills[k] = (run.stats.kills[k] or 0) + 1
         end
+        if e.entity and DoesEntityExist(e.entity) then e.lastCoords = GetEntityCoords(e.entity) end
+        if run.holdBodies then HoldBody(run, netId) end
     elseif e.kind == 'vehicle' then
         run.stats.vehiclesWrecked = (run.stats.vehiclesWrecked or 0) + 1
     end
@@ -981,6 +1249,87 @@ local function DeleteAllEntities(run)
         run.entities[netId] = nil
         if e.entity and DoesEntityExist(e.entity) then DeleteEntity(e.entity) end
     end
+    run.held = nil
+end
+
+-- The last server-side health sample of a run vehicle (each tick while it exists).
+local function SampleHealth(e)
+    local engine = GetVehicleEngineHealth and tonumber(GetVehicleEngineHealth(e.entity)) or nil
+    local body = GetVehicleBodyHealth and tonumber(GetVehicleBodyHealth(e.entity)) or nil
+    e.lastHealth = { engine = engine or 1000.0, body = body or 1000.0 }
+end
+
+-- A vanished run vehicle whose last sample was healthy was removed (deleted by a script or sc-police's /imp),
+-- not wrecked: only a last sample at 0 health (or below) counts as wrecked, as before.
+local function RemovedNotWrecked(e)
+    local h = e.lastHealth
+    if not h then return true end
+    return h.engine > 0 and h.body > 0
+end
+
+-- sc-police's police:server:Impound (modules/integrations/sc_police) or any other recorded removal of a run
+-- vehicle: remembered REMOVAL_KEEP_S so the vanished car can be matched to who removed it.
+function Runs.noteExternalRemoval(netId, src, via, dist)
+    netId = math.tointeger(tonumber(netId) or -1)
+    if not netId or netId <= 0 then return false end
+    removals[netId] = {
+        src = ToSrc(src),
+        via = type(via) == 'string' and via or 'unknown',
+        dist = tonumber(dist),
+        at = os.time(),
+    }
+    return true
+end
+
+local function TakeRemoval(netId)
+    local r = removals[netId]
+    removals[netId] = nil
+    if r and os.time() - r.at <= REMOVAL_KEEP_S then return r end
+    return nil
+end
+
+local function AuditRemoval(run, netId, src, via)
+    local who = 'unknown'
+    if src then
+        local ok, info = Call('Qbx', 'getInfo', src)
+        who = ok and type(info) == 'table' and info.citizenid or ('player:%d'):format(src)
+    end
+    CP.warn(TAG, 'run %s: vehicle %d was removed by %s (%s); the run ends as not counted', run.id, netId, who, via)
+    if Has('Admin', 'audit') then
+        Call('Admin', 'audit', src or 'console', nil, 'audit', 'vehicleRemoved', run.id, tostring(netId), via, who)
+    end
+end
+
+-- A run vehicle that vanished with a healthy last sample. A participant's recorded removal fails the mission
+-- and flags the run (sc_impound); anyone else's, or nothing recorded, ends the run as not counted.
+local function VehicleRemoved(run, netId, e)
+    local r = TakeRemoval(netId)
+    local src = r and r.src or nil
+    local via = r and r.via or 'unknown'
+    run.removedVehicles = run.removedVehicles or {}
+    run.removedVehicles[netId] = { src = src, via = via }
+    local participant = src and via ~= 'unknown' and Runs.isParticipant(run, src)
+    if participant then
+        local detail = ('vehicle %d removed by %s (%s)'):format(netId, tostring(src), via)
+        if Has('AntiCheat', 'flag') then
+            Call('AntiCheat', 'flag', run, src, 'sc_impound', detail)
+        elseif not run.flagged then
+            run.flagged = { reason = 'sc_impound', detail = detail }
+        end
+    end
+    if e.obj and run.objectives[e.obj] and run.objectives[e.obj].prepared then
+        CallBlock(run, e.obj, 'onEvent', src, { type = 'removed', netId = netId, src = src, via = via })
+    end
+    if run.state ~= 'in_progress' then return end
+    if participant then
+        Runs.failRun(run, 'reason.vehicle_removed')
+        return
+    end
+    AuditRemoval(run, netId, src, via)
+    for _, s in ipairs(Runs.activeSrcs(run)) do
+        Runs.removeParticipant(run, s, 'vehicle_removed_external', { notify = 'run.vehicle_removed_external' })
+        if run.state == 'ended' then return end
+    end
 end
 
 local function EntityBookkeeping(run)
@@ -994,12 +1343,13 @@ local function EntityBookkeeping(run)
         else
             e.missing = 0
             if not e.dead then
+                if e.kind == 'vehicle' then SampleHealth(e) end
                 if e.kind == 'vehicle' and VehicleWrecked(e) then
                     died[#died + 1] = netId
                 elseif e.kind == 'ped' and not pedDeathsByNpc and HealthGone(e) then
                     died[#died + 1] = netId
                 end
-            elseif e.deadAt and now - e.deadAt >= CorpseCleanup() then
+            elseif e.deadAt and not e.held and now - e.deadAt >= CorpseCleanup() then
                 cleanup[#cleanup + 1] = netId
             end
         end
@@ -1008,11 +1358,29 @@ local function EntityBookkeeping(run)
     for _, netId in ipairs(gone) do
         local e = run.entities[netId]
         if e then
+            local removed = false
             if not e.dead then
-                CP.log(TAG, 'run %s: %s %d vanished; counted as dead', run.id, e.kind, netId)
-                Runs.entityDied(run, netId, nil)
+                if e.kind == 'vehicle' and RemovedNotWrecked(e) then
+                    removed = true
+                else
+                    CP.log(TAG, 'run %s: %s %d vanished; counted as dead', run.id, e.kind, netId)
+                    Runs.entityDied(run, netId, nil)
+                end
             end
             run.entities[netId] = nil
+            if run.held then
+                for i, h in ipairs(run.held) do
+                    if h == netId then
+                        table.remove(run.held, i)
+                        break
+                    end
+                end
+            end
+            if removed then
+                CP.log(TAG, 'run %s: vehicle %d vanished with a healthy last sample: removed', run.id, netId)
+                VehicleRemoved(run, netId, e)
+                if run.state ~= 'in_progress' then return end
+            end
         end
     end
     for _, netId in ipairs(cleanup) do Runs.deleteEntity(run, netId) end
@@ -1320,6 +1688,49 @@ function Runs.completionsLastHour(citizenid)
     return count
 end
 
+local function DayStart()
+    local ok, ts = Call('Schedule', 'dayStart', os.time())
+    if ok and tonumber(ts) then return math.floor(tonumber(ts)) end
+    local t = os.date('*t')
+    return os.time({ year = t.year, month = t.month, day = t.day, hour = 0 })
+end
+
+-- Completed runs since the daily reset (Config.Limits.maxCompletionsDay, Config.MissionTypes dailyLimit):
+-- no manual awards, goal rows or Cross-Department Missions. Cached DAY_CACHE_S; cleared on a completion.
+function Runs.completionsToday(citizenid, missionType)
+    if type(citizenid) ~= 'string' or citizenid == '' then return 0 end
+    local key = citizenid .. '|' .. tostring(missionType or '*')
+    local cached = dayCache[key]
+    local now = os.time()
+    if cached and now - cached.at < DAY_CACHE_S then return cached.n end
+    Db()
+    local sql = [[
+        SELECT COUNT(*) AS n FROM cp_mission_runs
+        WHERE citizenid = ? AND state = 'completed' AND mission_type NOT IN ('manual_award', 'goal')
+          AND operation_id IS NULL AND created_at >= FROM_UNIXTIME(?)
+    ]]
+    local params = { citizenid, DayStart() }
+    if type(missionType) == 'string' then
+        sql = sql .. ' AND mission_type = ?'
+        params[#params + 1] = missionType
+    end
+    local ok, n = pcall(MySQL.scalar.await, sql, params)
+    if not ok then
+        CP.err(TAG, 'completionsToday(%s) failed: %s', citizenid, tostring(n))
+        return cached and cached.n or 0
+    end
+    local count = math.floor(U.num(n))
+    dayCache[key] = { n = count, at = now }
+    return count
+end
+
+local function ClearDayCache(citizenid)
+    local prefix = citizenid .. '|'
+    for k in pairs(dayCache) do
+        if k:sub(1, #prefix) == prefix then dayCache[k] = nil end
+    end
+end
+
 -- ============================================================================
 --                                     CAPS
 -- ============================================================================
@@ -1451,6 +1862,20 @@ local INSERT_COLUMNS = {
     'breakdown',
     'flagged',
     'flag_reason',
+    'location_index',
+    'arrests',
+    'citations',
+    'impounds',
+    'rescues',
+    'vehicles_stopped',
+    'evidence',
+    'decisions_ok',
+    'decisions_bad',
+    'decisions_best',
+    'lethal',
+    'medal',
+    'mission_call_id',
+    'response_s',
 }
 
 -- NULL literals for nil values so the parameter list never has holes.
@@ -1475,6 +1900,63 @@ local function InsertRow(row)
         return nil
     end
     return tonumber(id)
+end
+
+-- The participant's service-record counts for the row and RunResult.stats (every key, 0 when none).
+local function StatsOf(run, p)
+    local out = {}
+    for _, k in ipairs(STAT_KEYS) do out[k] = math.floor(Num(p.stats and p.stats[k], 0)) end
+    local kills = run.stats and run.stats.kills and Num(run.stats.kills[p.src], 0) or 0
+    if kills > out.lethal then out.lethal = math.floor(kills) end
+    return out
+end
+
+-- 1 gold, 2 silver, 3 bronze (the checkpoint_route medal awards), or nil.
+local function MedalOf(run, p)
+    local best = nil
+    for id, n in pairs(MEDALS) do
+        local count = Num(run.score and run.score.shared[id], 0) + Num(p.score and p.score[id], 0)
+        if count > 0 and (not best or n < best) then best = n end
+    end
+    return best
+end
+
+-- The decision ledger as RunResult.decisions (DecisionEntry, web/src/types/run_ui.ts).
+local function DecisionsView(run)
+    local out = {}
+    for _, d in ipairs(run.decisions or {}) do
+        out[#out + 1] = {
+            contact = d.contact,
+            kind = d.kind,
+            choice = d.choice,
+            best = d.best,
+            verdict = d.verdict,
+            by = d.by,
+            truth = d.truth,
+            facts = U.copy(d.facts or {}),
+            points = d.points,
+            discoverable = d.discoverable,
+            knownAtS = d.knownAtS,
+        }
+    end
+    return out
+end
+
+local function ResponseS(run, p)
+    if not run.missionCall or not p.arrivedAt then return nil end
+    return math.max(0, math.floor(p.arrivedAt - (run.acceptedAt or p.arrivedAt)))
+end
+
+local function MissionCallView(run, p)
+    local mc = run.missionCall
+    if not mc then return nil end
+    local responseS = ResponseS(run, p)
+    return {
+        code = mc.code,
+        responseS = responseS,
+        targetS = mc.targetS,
+        rapid = (p.score and Num(p.score.rapid_response, 0) > 0) or false,
+    }
 end
 
 local function ReadCashStatus(rowId)
@@ -1516,6 +1998,8 @@ local function Settle(run, p, result, endReason, others)
         participants = team,
         departments = nDepts,
         endReason = endReason,
+        -- Process the scene stopped the fast-completion clock (pauseFastClock)
+        fastDurationS = run.fastClockAt and run.startedAt and math.max(0, run.fastClockAt - run.startedAt) or nil,
     }
     local points = ComputePoints(run, p, result, opts)
 
@@ -1559,7 +2043,13 @@ local function Settle(run, p, result, endReason, others)
         cash = cash,
         flagged = flag and { reason = tostring(flag.reason or 'flagged') } or nil,
         failReason = (endReason == 'mission_failed' and run.failReason) or nil,
+        decisions = DecisionsView(run),
+        stats = StatsOf(run, p),
+        missionCall = MissionCallView(run, p),
+        progress = nil,
+        items = {},
     }
+    rr.stats.lethal = nil   -- private: the officer's own clean-arrest rate only, never on the result screen
     if isTest then return nil, rr end
 
     local seasonId = nil
@@ -1595,12 +2085,22 @@ local function Settle(run, p, result, endReason, others)
         breakdown = okJ and breakdownJson or nil,
         flagged = flag and 1 or 0,
         flag_reason = flag and U.clip(tostring(flag.reason or 'flagged'), 64) or nil,
+        location_index = run.locationIndex and Int(run.locationIndex, -128, 127) or nil,
+        medal = MedalOf(run, p),
+        mission_call_id = run.missionCall and tonumber(run.missionCall.id) and math.floor(tonumber(run.missionCall.id))
+            or nil,
+        response_s = ResponseS(run, p) and Int(ResponseS(run, p), 0, 32767) or nil,
     }
+    local stats = StatsOf(run, p)
+    for _, k in ipairs(STAT_KEYS) do row[k] = Int(stats[k], 0, 32767) end
     local rowId = InsertRow(row)
     p.rowId = rowId
     if not rowId then return nil, rr end
     row.id = rowId
-    if result == 'completed' then hourCache[p.citizenid] = nil end
+    if result == 'completed' then
+        hourCache[p.citizenid] = nil
+        ClearDayCache(p.citizenid)
+    end
 
     if result == 'completed' and not flag and amount > 0 and Has('Cash', 'pay') then
         Call('Cash', 'pay', rowId)
@@ -1619,6 +2119,8 @@ local function Settle(run, p, result, endReason, others)
     if result == 'completed' or result == 'abandoned' then
         Call('Draw', 'recordLast', p.citizenid, run.missionType, run.missionId)
     end
+    -- listeners may add to rr (CP.Scoring the progress, CP.Rewards the items); they may yield
+    Fire('row:settled', run, p, rowId, row, rr)
     return rowId, rr
 end
 
@@ -1685,6 +2187,7 @@ local function CleanupRun(run)
 end
 
 local function AfterRunEnded(run, state)
+    Fire('run:ended', run, state, run.endReason)
     UnlockUnit(run)
     if run.operationId then Call('Operations', 'onRunEnded', run, state) end
     if run.test then Call('Testing', 'onRunEnded', run, state, run.endReason) end
@@ -1870,7 +2373,23 @@ function Runs.create(opts)
         reserved = { missionId = mission.id, locationIndex = locationIndex },
         startTimeout = math.floor(Num(mission.startTimeout, Num(limits().startTimeout, 600))),
         pedHits = {},
+        quietPatrol = mission.quietPatrol == true,
+        decisions = {},
+        arrested = {},
+        missionCall = nil,
     }
+    -- A claimed mission call (CP.MissionCalls): { id, code, area, targetS, staff }. Rapid response needs a
+    -- server-posted call (staff = paged or created, never) and a target.
+    if type(opts.missionCall) == 'table' then
+        local mc = opts.missionCall
+        run.missionCall = {
+            id = tonumber(mc.id),
+            code = type(mc.code) == 'string' and U.clip(mc.code, 12) or nil,
+            area = type(mc.area) == 'string' and mc.area or nil,
+            targetS = tonumber(mc.targetS) and math.max(0, math.floor(tonumber(mc.targetS))) or nil,
+            staff = mc.staff == true,
+        }
+    end
     for i = 1, #mission.objectives do
         run.objectives[i] = { status = 'pending', state = {} }
     end
@@ -1907,6 +2426,7 @@ function Runs.create(opts)
             items = {},
             deadline = now + run.startTimeout,
             telemetry = { lights = false, weapon = false, pedHits = 0, vehicleAt = nil },
+            stats = {},
         }
         run.order[#run.order + 1] = src
     end
@@ -2000,6 +2520,7 @@ function Runs.create(opts)
     end
     CP.log(TAG, 'run %s created: %s #%d (%s, %d participant(s), expected %s, modifier %s%s)', id, mission.id,
         locationIndex, missionType, #run.order, run.expectedTier, tostring(run.modifier), test and ', test' or '')
+    Fire('run:created', run)
     PushRun(run)
     return run
 end
@@ -2060,6 +2581,8 @@ local function StartRun(run)
         CallBlock(run, i, 'prepare')
         if run.state ~= 'in_progress' then return end
     end
+    Fire('run:inProgress', run)
+    if run.state ~= 'in_progress' then return end
     run.timer.lastTick = GetGameTimer()
     run.timer.running = true
     SendTimer(run)
@@ -2076,8 +2599,16 @@ function Runs.markArrived(run, src)
     Call('Alerts', 'set', src, run)
     Runs.hudFor(run, src, { route = { status = 'arrived', distance = 0 } })
     CP.log(TAG, 'run %s: %d arrived at the start', run.id, src)
+    -- rapid response: a server-posted mission call reached within its response target (points only, personal)
+    local mc = run.missionCall
+    if mc and not mc.staff and mc.targetS and not run.test
+        and p.arrivedAt - (run.acceptedAt or p.arrivedAt) <= mc.targetS then
+        Runs.award(run, 'rapid_response', { src = src })
+    end
     local first = run.state == 'accepted'
     if first then StartRun(run) end
+    if run.state == 'ended' then return end
+    Fire('run:arrived', run, src, first)
     if run.state == 'ended' then return end
     BroadcastParticipants(run)
     if not first then PushRun(run) end
@@ -2210,6 +2741,105 @@ function Runs.award(run, id, opts) return Record(run, id, opts, 'bonus') end
 function Runs.penalize(run, id, opts) return Record(run, id, opts, 'penalty') end
 
 -- ============================================================================
+--                         SERVICE RECORD AND DECISIONS
+-- ============================================================================
+
+local STAT_SET = Set(STAT_KEYS)
+
+local function AddStat(p, key, n)
+    p.stats = p.stats or {}
+    p.stats[key] = (p.stats[key] or 0) + n
+end
+
+-- A service-record count (citations, impounds, rescues, vehicles_stopped, evidence, decisions_ok,
+-- decisions_best, decisions_bad, lethal) for src, or for every active participant when src is nil. Written
+-- to each row; only completed rows are ever summed. Arrests go through noteArrest.
+function Runs.noteStat(run, src, key, n)
+    if type(run) ~= 'table' or run.state == 'ended' or not STAT_SET[key] or key == 'arrests' then return false end
+    n = math.floor(Num(n, 1))
+    if n == 0 then return false end
+    if src == nil then
+        local any = false
+        for _, s in ipairs(Runs.activeSrcs(run)) do
+            AddStat(run.participants[s], key, n)
+            any = true
+        end
+        return any
+    end
+    src = ToSrc(src)
+    local p = src and run.participants[src]
+    if not p or p.status ~= 'active' then return false end
+    AddStat(p, key, n)
+    return true
+end
+
+-- One arrest per person per run, credited to the first officer who cuffed them or decided Arrest (a
+-- validated cuff of a mission suspect, or an Arrest graded best or ok). false for a repeat.
+function Runs.noteArrest(run, src, netId)
+    if type(run) ~= 'table' or run.state == 'ended' then return false end
+    src = ToSrc(src)
+    netId = math.tointeger(tonumber(netId) or -1)
+    local p = src and run.participants[src]
+    if not p or p.status ~= 'active' or not netId then return false end
+    run.arrested = run.arrested or {}
+    if run.arrested[netId] then return false end
+    run.arrested[netId] = src
+    AddStat(p, 'arrests', 1)
+    return true
+end
+
+-- A graded disposition (CP.Custody grades; the engine records). entry = { contact, kind, choice, verdict,
+-- bonusId, points, truthKey, bestChoice, facts, discoverable, knownAt, failKey, netId }. The bonus or
+-- penalty is personal to the decider; points = 0 records the grade without points (a revealed fact, a
+-- caught runner). 'critical' fails the case for everyone with failKey.
+function Runs.decide(run, src, entry)
+    if type(run) ~= 'table' or run.state ~= 'in_progress' or type(entry) ~= 'table' then return false end
+    src = ToSrc(src)
+    local p = src and run.participants[src]
+    if not p or p.status ~= 'active' or not VERDICTS[entry.verdict] then return false end
+    local verdict = entry.verdict
+    run.decisions = run.decisions or {}
+    local points = entry.points ~= nil and Num(entry.points, 0) or nil
+    local bonusCfg = type(entry.bonusId) == 'string' and Config.Bonuses and Config.Bonuses[entry.bonusId] or nil
+    local value = points
+    if value == nil and type(bonusCfg) == 'table' and bonusCfg.kind ~= 'pct' then value = Num(bonusCfg.value, 0) end
+    local rec = {
+        contact = tostring(entry.contact or ''),
+        kind = entry.kind == 'vehicle' and 'vehicle' or 'person',
+        choice = tostring(entry.choice or ''),
+        best = tostring(entry.bestChoice or ''),
+        verdict = verdict,
+        by = p.name or ('#' .. src),
+        bySrc = src,
+        truth = tostring(entry.truthKey or ''),
+        facts = type(entry.facts) == 'table' and U.copy(entry.facts) or {},
+        points = math.floor(value or 0),
+        discoverable = entry.discoverable ~= false,
+        knownAtS = entry.knownAt and run.startedAt and math.max(0, math.floor(Num(entry.knownAt, 0) - run.startedAt))
+            or nil,
+        bonusId = entry.bonusId,
+        netId = math.tointeger(tonumber(entry.netId) or -1),
+    }
+    run.decisions[#run.decisions + 1] = rec
+    if verdict == 'best' or verdict == 'ok' then Runs.noteStat(run, src, 'decisions_ok', 1) end
+    if verdict == 'best' then Runs.noteStat(run, src, 'decisions_best', 1) end
+    if verdict == 'wrong' or verdict == 'critical' then Runs.noteStat(run, src, 'decisions_bad', 1) end
+    if rec.choice == 'arrest' and (verdict == 'best' or verdict == 'ok') and rec.netId and rec.netId > 0 then
+        Runs.noteArrest(run, src, rec.netId)
+    end
+    if type(entry.bonusId) == 'string' and entry.bonusId ~= '' and points ~= 0 then
+        local negative = (value or 0) < 0 or verdict == 'wrong' or verdict == 'critical'
+        local opts = { src = src, points = points }
+        if negative then Runs.penalize(run, entry.bonusId, opts) else Runs.award(run, entry.bonusId, opts) end
+    end
+    CP.log(TAG, 'run %s: %s decided %s for %s (%s)', run.id, tostring(src), rec.choice, rec.contact, verdict)
+    if verdict == 'critical' then
+        Runs.failRun(run, type(entry.failKey) == 'string' and entry.failKey or 'reason.known_error')
+    end
+    return true
+end
+
+-- ============================================================================
 --                              LEAVING AND ENDING
 -- ============================================================================
 -- CRIMSON_ARENA rule 1: an in-arena participant's bag is never touched (it may still hold our value while
@@ -2249,6 +2879,7 @@ function Runs.removeParticipant(run, src, endReason, opts)
 
     if not opts.keepFlag then ReleaseFlag(src) end
     Call('Route', 'stop', run, src)
+    Fire('participant:left', run, src, endReason)
     if wasInProgress then
         local i = run.objectiveIndex
         if run.objectives[i] and run.objectives[i].status == 'active' then
@@ -2511,6 +3142,21 @@ function Runs.view(run, src)
     if p and type(p.area) == 'table' then
         area = (started and p.area[run.objectiveIndex]) or p.area[0]
     end
+    local mcView = nil
+    if run.missionCall then
+        local arrivedS = p and p.arrivedAt and math.max(0, p.arrivedAt - (run.acceptedAt or p.arrivedAt)) or nil
+        mcView = { code = run.missionCall.code, targetS = run.missionCall.targetS, arrivedS = arrivedS }
+    end
+    local contact = nil
+    if started and Has('Custody', 'view') then
+        local okC, cv = Call('Custody', 'view', run, run.objectiveIndex, src)
+        if okC and type(cv) == 'table' then contact = cv end
+    end
+    local intel = run.shared and run.shared.intel or nil
+    if intel ~= nil and CP.Locale and CP.Locale.resolve then intel = CP.Locale.resolve(Tokens(intel)) end
+    if type(intel) ~= 'string' or intel == '' then intel = nil end
+    local objectives = HudObjectives(run, true)
+    if CP.Locale and CP.Locale.resolveAll then objectives = CP.Locale.resolveAll(objectives) end
     return {
         -- Optional extras for the Active Mission screen (web/src/types/run_ui.ts): the viewer, the boss flag,
         -- the operation, the seconds left to reach the start and the area (street · zone).
@@ -2528,7 +3174,7 @@ function Runs.view(run, src)
         tierExpected = not started,
         payTier = started and TierName(run.payTier) or run.expectedTier,
         route = route,
-        objectives = HudObjectives(run, true),
+        objectives = objectives,
         remaining = remaining and math.max(0, math.ceil(remaining)) or nil,
         paused = run.timer and run.timer.paused == true or false,
         partners = partners,
@@ -2538,6 +3184,9 @@ function Runs.view(run, src)
         recalcsLeft = recalcs,
         radioSilence = run.modifier == 'radio_silence',
         log = logView,
+        intel = intel,
+        missionCall = mcView,
+        contact = contact,
     }
 end
 
@@ -2878,7 +3527,8 @@ RegisterNetEvent(CP.e('server:telemetry'), function(runId, kind, data)
     elseif kind == 'ped_hit' then
         TelemetryPedHit(run, p, data)
     elseif kind == 'lights_siren' then
-        if LIGHTS_MISSIONS[run.missionId] and not p.telemetry.lights then
+        -- quietPatrol missions only, and only once the run is in progress: the drive to the start is free
+        if run.quietPatrol and run.state == 'in_progress' and not p.telemetry.lights then
             local me = GetPlayerPed(src)
             if me and me ~= 0 and GetVehiclePedIsIn(me, false) ~= 0 then
                 p.telemetry.lights = true

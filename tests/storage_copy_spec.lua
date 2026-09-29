@@ -114,6 +114,16 @@ local RUN_COLS = {
     'flag_reason',
     'voided',
     'created_at',
+    'location_index',
+    'arrests',
+    'citations',
+    'impounds',
+    'decisions_ok',
+    'decisions_best',
+    'decisions_bad',
+    'medal',
+    'mission_call_id',
+    'response_s',
 }
 local TYPES = { 'patrol', 'training', 'investigation', 'tactical' }
 local MISSIONS = { 'beat_patrol', 'evoc_course', 'warrant_service', 'gang_shootout' }
@@ -154,6 +164,16 @@ local function RunRow(id, i)
         (i % 13 == 0) and 'too_fast' or nil,
         (i % 17 == 0) and 1 or 0,
         At(1789000000 + i * 97),
+        (i % 6 == 0) and nil or (i % 5 + 1),
+        i % 3,
+        i % 2,
+        (i % 10 == 0) and 1 or 0,
+        i % 4,
+        i % 3,
+        (i % 8 == 0) and 1 or 0,
+        (i % 21 == 0) and (i % 3 + 1) or nil,
+        (i % 19 == 0) and (i % 7 + 1) or nil,
+        (i % 19 == 0) and (40 + i % 90) or nil,
     }
 end
 local runs, archive = {}, {}
@@ -183,10 +203,81 @@ InsertRows('cp_officers', {
     'grace_used',
     'hide_name',
     'suspended_until',
+    'bio',
+    'avatar_kind',
+    'avatar_value',
+    'avatar_status',
+    'accent',
+    'ui_scale',
+    'calls_muted',
+    'profile_updated_at',
 }, {
-    { 'CPY00001', '101', 'Sergeant', 'Zoë O\'Brien', 'sast', 1500, 3, '2026-09-20', '2026-09-14', 1, 1, nil },
-    { 'CPY00002', nil, nil, 'Dan "The Man"', 'fib', 0, 0, nil, nil, 0, 0, At(1790500000) },
-    { 'CPY00003', 'K-9', 'Trooper', 'Back\\slash ü', 'sast', 42, 1, '2026-01-31', nil, 0, 0, nil },
+    {
+        'CPY00001',
+        '101',
+        'Sergeant',
+        'Zoë O\'Brien',
+        'sast',
+        1500,
+        3,
+        '2026-09-20',
+        '2026-09-14',
+        1,
+        1,
+        nil,
+        'Night shift – "always" ü',
+        'url',
+        'https://r2.fivemanage.com/a.png',
+        'approved',
+        '#4cc9f0',
+        '1.10',
+        1,
+        At(1789600200),
+    },
+    {
+        'CPY00002',
+        nil,
+        nil,
+        'Dan "The Man"',
+        'fib',
+        0,
+        0,
+        nil,
+        nil,
+        0,
+        0,
+        At(1790500000),
+        nil,
+        'initials',
+        nil,
+        'none',
+        nil,
+        nil,
+        0,
+        nil,
+    },
+    {
+        'CPY00003',
+        'K-9',
+        'Trooper',
+        'Back\\slash ü',
+        'sast',
+        42,
+        1,
+        '2026-01-31',
+        nil,
+        0,
+        0,
+        nil,
+        nil,
+        'preset',
+        'k9',
+        'none',
+        nil,
+        '0.85',
+        0,
+        nil,
+    },
 })
 InsertRows('cp_seasons', { 'id', 'name', 'starts_at', 'ends_at', 'active' }, {
     { 1, 'Season One', At(1780000000), At(1785000000), 0 },
@@ -284,8 +375,154 @@ InsertRows('cp_operations', { 'id', 'mission_id', 'launched_by', 'status', 'crea
     { 1, 'hostage_rescue', 'CPY00001', 'completed', At(1789100000), At(1789101000) },
 })
 Mq('ALTER TABLE cp_operations AUTO_INCREMENT = 10')
-local SOURCE_ROWS = #runs + #archive + 3 + 2 + 3 + 2 + 2 + 1 + 1 + 2 + 1 + 2 + 1   -- every table but cp_schema_migrations
-local COPIED_TABLES = 13
+-- the parity-plus tables (004-006): commendations, profile reports, mission calls, item rewards
+InsertRows('cp_commendations', {
+    'id',
+    'citizenid',
+    'kind',
+    'citation',
+    'run_uuid',
+    'department',
+    'issued_by',
+    'issuer_role',
+    'revoked',
+    'revoked_by',
+    'revoke_reason',
+    'created_at',
+    'revoked_at',
+}, {
+    {
+        1,
+        'CPY00001',
+        'valor',
+        'Ran into the fire – Zoë "safe"',
+        nil,
+        'sast',
+        'CPY00003',
+        'supervisor',
+        0,
+        nil,
+        nil,
+        At(1789700200),
+        nil,
+    },
+    {
+        4,
+        'CPY00002',
+        'teamwork',
+        'Back\\slash team',
+        ('%08x-0000-4000-8000-%012x'):format(105, 5),
+        'fib',
+        'console',
+        'admin',
+        1,
+        'console',
+        'duplicate',
+        At(1789700300),
+        At(1789700400),
+    },
+})
+InsertRows('cp_profile_reports', {
+    'id',
+    'citizenid',
+    'reporter',
+    'reason',
+    'note',
+    'department',
+    'status',
+    'handled_by',
+    'created_at',
+    'handled_at',
+}, { { 1, 'CPY00001', 'CPY00002', 'bio', 'ça va?', 'sast', 'open', nil, At(1789700500), nil } })
+InsertRows('cp_mission_calls', {
+    'id',
+    'code',
+    'mission_type',
+    'area',
+    'priority',
+    'status',
+    'outcome',
+    'created_by',
+    'paged_to',
+    'claimed_by',
+    'claimants',
+    'run_uuid',
+    'reopened',
+    'reason',
+    'created_at',
+    'claimed_at',
+    'closed_at',
+}, {
+    {
+        1,
+        'MC-0001',
+        'tactical',
+        'south_ls',
+        1,
+        'closed',
+        'completed',
+        nil,
+        nil,
+        'CPY00001',
+        2,
+        ('%08x-0000-4000-8000-%012x'):format(101, 1),
+        0,
+        nil,
+        At(1789000050),
+        At(1789000070),
+        At(1789001000),
+    },
+    {
+        3,
+        'MC-0002',
+        'patrol',
+        nil,
+        3,
+        'withdrawn',
+        nil,
+        'CPY00003',
+        'CPY00002',
+        nil,
+        0,
+        nil,
+        1,
+        'Wrong area – "oops"',
+        At(1789000100),
+        nil,
+        At(1789000200),
+    },
+})
+InsertRows('cp_item_rewards', {
+    'id',
+    'row_id',
+    'source',
+    'source_key',
+    'citizenid',
+    'item',
+    'count',
+    'value',
+    'status',
+    'created_at',
+    'given_at',
+}, {
+    {
+        1,
+        101,
+        'run',
+        ('%08x-0000-4000-8000-%012x'):format(101, 1),
+        'CPY00002',
+        'water',
+        2,
+        40,
+        'given',
+        At(1789000080),
+        At(1789000090),
+    },
+    { 5, nil, 'goal', 'patrol_2:daily:2026-09-20', 'CPY00001', 'burger', 1, 40, 'held', At(1789000500), nil },
+})
+local SOURCE_ROWS = #runs + #archive + 3 + 2 + 3 + 2 + 2 + 1 + 1 + 2 + 1 + 2 + 1 + 2 + 1 + 2 + 2   -- every table but cp_schema_migrations
+local COPIED_TABLES = 17
+local MIGRATIONS = #H.migrationFiles()
 
 -- ============================================================================
 --                 COMPARING TABLES (as the modules read them)
@@ -394,7 +631,7 @@ local function EngineNext(engine)
 end
 local function RowCount(sql) local r = Mq(sql); return r[1] and tonumber(r[1].n) or 0 end
 local function EngineCount(engine, sql) local r = M.luaRows(engine:exec(sql)); return r[1] and tonumber(r[1].n) or 0 end
--- rows of the 13 copied tables (cp_schema_migrations left out), in MariaDB and in an engine
+-- rows of the 17 copied tables (cp_schema_migrations left out), in MariaDB and in an engine
 local function MariaTotal(engine)
     local n = 0
     for _, name in ipairs(engine:tableNames()) do
@@ -515,7 +752,8 @@ admin('storage')
 H.ok(PrintedSince(m0, 'Storage: database off') ~= nil, 'status: the mode')
 H.ok(PrintedSince(m0, 'Saves folder: ' .. dir) ~= nil, 'status: the saves folder path')
 H.ok(PrintedSince(m0, 'cp_mission_runs: 0 rows') ~= nil, 'status: a line per table')
-H.ok(PrintedSince(m0, '14 tables, 2 rows in all.') ~= nil, 'status: 14 tables, the 2 migration rows')
+H.ok(PrintedSince(m0, ('18 tables, %d rows in all.'):format(MIGRATIONS)) ~= nil,
+    'status: 18 tables, the migration rows')
 H.ok(PrintedSince(m0, 'Saves folder size: ') ~= nil, 'status: the size of the saves folder')
 local n0 = #notes
 CP.Admin.command(1, { 'storage' })
@@ -573,7 +811,7 @@ local c0, w0 = os.clock(), WALL()
 Command(0, 'storage', 'copy', 'database-to-files')
 local tCopy1, wCopy1 = os.clock() - c0, WALL() - w0
 local out = OutputSince(m0)
-H.ok(out:find('Copied 13 tables and ' .. SOURCE_ROWS .. ' rows from the database to the saves folder', 1, true) ~= nil,
+H.ok(out:find('Copied 17 tables and ' .. SOURCE_ROWS .. ' rows from the database to the saves folder', 1, true) ~= nil,
     'database-to-files: the summary (' .. (out:match('Copied[^\n]*') or out:sub(-300)) .. ')')
 H.ok(out:find(('cp_mission_runs: %d rows copied'):format(#runs), 1, true) ~= nil, 'a line per table')
 H.ok(out:find('Restart Crimson-Police now', 1, true) ~= nil, 'the target is the storage in use: restart')
@@ -601,7 +839,7 @@ H.eq(copyRow[1] and copyRow[1].id, 4, 'with the next id the database would give 
 H.eq(copyRow[1] and copyRow[1].actor, 'console', 'actor console')
 H.eq(copyRow[1] and copyRow[1].target, 'database-to-files', 'target = the direction')
 H.eq(copyRow[1] and copyRow[1].old_value, nil, 'nothing replaced')
-H.eq(copyRow[1] and copyRow[1].new_value, ('13 tables, %d rows'):format(SOURCE_ROWS), 'new value = the tables and rows')
+H.eq(copyRow[1] and copyRow[1].new_value, ('17 tables, %d rows'):format(SOURCE_ROWS), 'new value = the tables and rows')
 H.eq(RowCount('SELECT COUNT(*) AS n FROM cp_audit WHERE action = \'storageCopy\''), 0,
     'the source database was only read')
 H.eq(SameTables(mariaBefore, DumpMaria(live), 'the source after the copy'), COPIED_TABLES, 'the source is unchanged')
@@ -684,7 +922,7 @@ for _, name in ipairs(live:tableNames()) do
     end
 end
 H.eq(emptied, 0, 'every table of the saves folder is empty')
-H.eq(EngineCount(live, 'SELECT COUNT(*) AS n FROM cp_schema_migrations'), 2, 'the migration record stays')
+H.eq(EngineCount(live, 'SELECT COUNT(*) AS n FROM cp_schema_migrations'), MIGRATIONS, 'the migration record stays')
 reloaded = M.new({ store = M.folderStore(dir) }):load()
 H.eq(EngineCount(reloaded, 'SELECT COUNT(*) AS n FROM cp_mission_runs'), 0, 'and it is saved empty')
 H.eq(SameTables(mariaZero, DumpMaria(live), 'the source after the failure'), COPIED_TABLES, 'the database is unchanged')
@@ -692,7 +930,7 @@ Mq('UPDATE cp_officers SET last_complete = NULL WHERE citizenid = \'CPY00002\'')
 mariaBefore = DumpMaria(live)
 m0 = Mark()
 admin('storage', 'copy', 'database-to-files')
-H.ok(PrintedSince(m0, 'Copied 13 tables') ~= nil, 'after the fix the copy needs no force (the target is empty)')
+H.ok(PrintedSince(m0, 'Copied 17 tables') ~= nil, 'after the fix the copy needs no force (the target is empty)')
 H.eq(SameTables(mariaBefore, DumpEngine(live, true), 'after the fix'), COPIED_TABLES,
     'the saves folder holds the database')
 
@@ -708,16 +946,17 @@ c0, w0 = os.clock(), WALL()
 admin('storage', 'copy', 'files-to-database')
 local tCopy2, wCopy2 = os.clock() - c0, WALL() - w0
 out = OutputSince(m0)
-H.ok(out:find('Copied 13 tables and ' .. expected .. ' rows from the saves folder to the database', 1, true) ~= nil,
+H.ok(out:find('Copied 17 tables and ' .. expected .. ' rows from the saves folder to the database', 1, true) ~= nil,
     'files-to-database into an empty database: ' .. (out:match('Copied[^\n]*') or out:sub(1, 300)))
 H.ok(out:find('set Config.Database.enabled = true', 1, true) ~= nil, 'the target is not in use: how to switch')
 Say(
     'saves folder -> database (an empty database, tables created first): %d rows, %.2f s CPU in Crimson-Police, about %d s in all',
     expected, tCopy2, wCopy2)
-H.eq(RowCount('SELECT COUNT(*) AS n FROM information_schema.tables WHERE table_schema = DATABASE()'), 14,
-    'the 14 tables were created')
+H.eq(RowCount('SELECT COUNT(*) AS n FROM information_schema.tables WHERE table_schema = DATABASE()'), 18,
+    'the 18 tables were created')
 local applied = Mq('SELECT version, name FROM cp_schema_migrations ORDER BY version')
-H.eq(#applied, 2, 'with both migrations recorded')
+H.eq(#applied, MIGRATIONS, 'with every migration recorded')
+H.eq(applied[#applied] and applied[#applied].name, '006_item_rewards.sql', 'the 006 migration ran last')
 H.eq(applied[2] and applied[2].name, '002_test_def_hash.sql', 'the 002 migration ran (def_hash exists)')
 H.eq(SameTables(engineDump, DumpMaria(live, true), 'files-to-database'), COPIED_TABLES,
     'the new database holds the saves folder')
@@ -741,7 +980,7 @@ Mq('UPDATE cp_seasons SET name = ? WHERE id = 1', { 'Changed in MariaDB' })
 engineDump = DumpEngine(live, true)
 m0 = Mark()
 admin('storage', 'copy', 'files-to-database', 'force')
-H.ok(PrintedSince(m0, 'Copied 13 tables') ~= nil, 'force: copied')
+H.ok(PrintedSince(m0, 'Copied 17 tables') ~= nil, 'force: copied')
 H.eq(SameTables(engineDump, DumpMaria(live, true), 'files-to-database force'), COPIED_TABLES,
     'force: the database holds the saves folder')
 H.eq(RowCount('SELECT COUNT(*) AS n FROM cp_seasons WHERE name = \'Changed in MariaDB\''), 0,
@@ -785,7 +1024,9 @@ do
             .. ' UNION ALL SELECT COUNT(*) FROM cp_dept_bounties UNION ALL SELECT COUNT(*) FROM cp_disputes UNION ALL SELECT COUNT(*) FROM cp_mission_payouts'
             .. ' UNION ALL SELECT COUNT(*) FROM cp_mission_runs UNION ALL SELECT COUNT(*) FROM cp_mission_runs_archive UNION ALL SELECT COUNT(*) FROM cp_mission_tests'
             .. ' UNION ALL SELECT COUNT(*) FROM cp_officers UNION ALL SELECT COUNT(*) FROM cp_operations UNION ALL SELECT COUNT(*) FROM cp_seasons'
-            .. ' UNION ALL SELECT COUNT(*) FROM cp_type_payouts) x'
+            .. ' UNION ALL SELECT COUNT(*) FROM cp_type_payouts UNION ALL SELECT COUNT(*) FROM cp_commendations'
+            .. ' UNION ALL SELECT COUNT(*) FROM cp_profile_reports UNION ALL SELECT COUNT(*) FROM cp_mission_calls'
+            .. ' UNION ALL SELECT COUNT(*) FROM cp_item_rewards) x'
     )
     expected = tonumber(r[1].n)
 end
@@ -793,12 +1034,12 @@ local copies = RowCount('SELECT COUNT(*) AS n FROM cp_audit WHERE action = \'sto
 m0 = Mark()
 admin('storage', 'copy', 'database-to-files')
 out = OutputSince(m0)
-H.ok(out:find('Copied 13 tables and ' .. expected .. ' rows from the database to the saves folder', 1, true) ~= nil,
+H.ok(out:find('Copied 17 tables and ' .. expected .. ' rows from the database to the saves folder', 1, true) ~= nil,
     'database mode, database-to-files: ' .. (out:match('Copied[^\n]*') or out:sub(1, 300)))
 H.ok(out:find('set Config.Database.enabled = false', 1, true) ~= nil, 'how to switch to the saves folder')
 local folderDb = M.new({ store = M.folderStore(folder2) }):load()
-H.eq(#folderDb:tableNames(), 14, 'the new saves folder has every table')
-H.eq(EngineCount(folderDb, 'SELECT COUNT(*) AS n FROM cp_schema_migrations'), 2, 'and both migrations')
+H.eq(#folderDb:tableNames(), 18, 'the new saves folder has every table')
+H.eq(EngineCount(folderDb, 'SELECT COUNT(*) AS n FROM cp_schema_migrations'), MIGRATIONS, 'and every migration')
 H.eq(SameTables(DumpMaria(folderDb, true), DumpEngine(folderDb, true), 'database mode, database-to-files'),
     COPIED_TABLES, 'the folder holds the database')
 H.eq(EngineNext(folderDb).cp_mission_runs, RUNS_NEXT, 'the runs counter came along')
@@ -820,7 +1061,7 @@ local folderDump = DumpEngine(folderDb, true)
 m0 = Mark()
 admin('storage', 'copy', 'files-to-database', 'force')
 out = OutputSince(m0)
-H.ok(out:find('Copied 13 tables', 1, true) ~= nil, 'force: copied')
+H.ok(out:find('Copied 17 tables', 1, true) ~= nil, 'force: copied')
 H.ok(out:find('Restart Crimson-Police now', 1, true) ~= nil, 'the database is in use: restart')
 H.eq(SameTables(folderDump, DumpMaria(folderDb, true), 'database mode, files-to-database force'), COPIED_TABLES,
     'the database holds the folder again')
@@ -848,7 +1089,7 @@ do
     out = OutputSince(m0)
     H.ok(okCopy, 'the copy ran (' .. tostring(errCopy) .. ')')
     H.ok(wrote, 'the other write happened during the copy')
-    H.ok(out:find('Copied 13 tables', 1, true) ~= nil,
+    H.ok(out:find('Copied 17 tables', 1, true) ~= nil,
         'a row written during the copy does not stop it: ' .. (out:match('[^\n]*failed[^\n]*') or out:sub(1, 300)))
     H.eq(RowCount('SELECT COUNT(*) AS n FROM cp_officers'), officers, 'the database keeps every officer')
     H.eq(RowCount('SELECT COUNT(*) AS n FROM cp_mission_runs'), #runs, 'and every run')
@@ -880,9 +1121,9 @@ do
     out = OutputSince(m0)
     H.ok(okCopy, 'the copy ran (' .. tostring(errCopy) .. ')')
     local copied = out:match('Copied[^\n]*') or out:sub(1, 300)
-    H.ok(out:find('Copied 13 tables', 1, true) ~= nil,
+    H.ok(out:find('Copied 17 tables', 1, true) ~= nil,
         'FXServer: the missing folder is made with os.createdir (' .. copied .. ')')
-    H.eq(#M.new({ store = M.folderStore(folder3) }):load():tableNames(), 14, 'and holds every table')
+    H.eq(#M.new({ store = M.folderStore(folder3) }):load():tableNames(), 18, 'and holds every table')
     Config.Database.folder = 'saves'
 end
 

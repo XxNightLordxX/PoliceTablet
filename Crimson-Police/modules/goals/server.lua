@@ -67,10 +67,27 @@ local function LabelOf(goal)
     return CP.L('goals.unnamed', { count = math.floor(Num(goal.count, 1)) })
 end
 
--- Counted runs since 'start' that match the goal.
+-- Service-record columns a stat goal may count (Config.Goals: stat = ...); completed rows only.
+local STAT_COLUMNS = {
+    arrests = true,
+    citations = true,
+    impounds = true,
+    rescues = true,
+    vehicles_stopped = true,
+    evidence = true,
+    decisions_ok = true,
+    decisions_best = true,
+}
+
+-- Counted runs since 'start' that match the goal (a stat goal: the sum of that column over them).
 local function ProgressOf(goal, citizenid, start)
+    local what = 'COUNT(*)'
+    if type(goal.stat) == 'string' then
+        if not STAT_COLUMNS[goal.stat] then return 0 end
+        what = ('COALESCE(SUM(%s), 0)'):format(goal.stat)
+    end
     local sql = {
-        [[SELECT COUNT(*) AS n FROM cp_mission_runs
+        [[SELECT ]] .. what .. [[ AS n FROM cp_mission_runs
           WHERE citizenid = ? AND state = 'completed' AND voided = 0 AND flagged = 0
             AND mission_type NOT IN ('manual_award', 'goal') AND created_at >= FROM_UNIXTIME(?)]],
     }
@@ -85,6 +102,7 @@ local function ProgressOf(goal, citizenid, start)
     end
     if goal.unit == true then sql[#sql + 1] = 'AND participants >= 2' end
     if goal.crossDepartment == true then sql[#sql + 1] = 'AND departments_n >= 2' end
+    if goal.missionCall == true then sql[#sql + 1] = 'AND mission_call_id IS NOT NULL' end
     local ok, n = pcall(MySQL.scalar.await, table.concat(sql, ' '), params)
     if not ok then
         CP.err(TAG, 'goal progress of %s (%s) failed: %s', citizenid, goal.id, tostring(n))
@@ -151,6 +169,10 @@ local function Award(kind, citizenid)
         { period = kind, periodKey = key, goalId = goal.id })
     if not rowId then return false end
     CP.log(TAG, '%s completed the %s goal %s (+%d)', citizenid, kind, goal.id, points)
+    -- period = '<daily|weekly>:<period key>', so the same goal met in a later period is a new completion
+    if CP.Hooks and CP.Hooks.fire then
+        CP.Hooks.fire('goal:completed', citizenid, goal.id, ('%s:%s'):format(kind, tostring(key)))
+    end
     if CP.Tablet and CP.Tablet.notify and CP.Qbx and CP.Qbx.getByCitizenId then
         local src = CP.Qbx.getByCitizenId(citizenid)
         if src then

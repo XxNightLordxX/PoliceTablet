@@ -557,7 +557,9 @@ H.eq(A.entities[pedNet], nil, 'corpse deleted after corpseCleanup')
 H.ok(deleted[ped], 'DeleteEntity called')
 local veh, vehNet = Runs.spawnVehicle(A,
     { obj = 1, model = 'sultan', coords = vec4(1, 2, 3, 4), role = 'car', plate = 'CP123' })
-H.eq(ents[veh].plate, 'CP123', 'plate set')
+H.ok(Runs.isMissionPlate(ents[veh].plate) and ents[veh].plate ~= 'CP123',
+    'a plate outside the reserved pattern is replaced')
+H.eq(A.entities[vehNet].plate, ents[veh].plate, 'the engine remembers the plate')
 ents[veh].engine = -4000.0
 H.advance(1000)
 H.ok(A.entities[vehNet].dead, 'wrecked vehicle detected')
@@ -598,10 +600,10 @@ local _, missionPedNet = Runs.spawnPed(A,
 H.fire('crimson-police:server:telemetry', 1, A.id, 'ped_hit', { netId = missionPedNet })
 H.eq(A.participants[1].score.pedestrian_hit, 2, 'a run\'s own ped is not a pedestrian hit')
 H.fire('crimson-police:server:telemetry', 1, A.id, 'lights_siren', {})
-H.eq(A.participants[1].score.lights_siren, nil, 'lights only on Beat Patrol / Business Check')
-A.missionId = 'beat_patrol'
+H.eq(A.participants[1].score.lights_siren, nil, 'lights only on quietPatrol missions')
+A.quietPatrol = true
 H.fire('crimson-police:server:telemetry', 1, A.id, 'lights_siren', {})
-A.missionId = 'test_mission'
+A.quietPatrol = false
 H.eq(A.participants[1].score.lights_siren, 1, 'lights and siren penalty')
 H.fire('crimson-police:server:telemetry', 3, A.id, 'weapon_fired', {})
 H.fire('crimson-police:server:telemetry', 3, A.id, 'weapon_fired', {})

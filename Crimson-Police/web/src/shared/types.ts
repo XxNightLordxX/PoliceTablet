@@ -2,9 +2,38 @@
 // its shapes from here; never redeclare them locally. If a module owner adds a field on the Lua side, add it here
 // (optional) rather than casting.
 
+import type { DecisionEntry, RunItem, RunMissionCall, RunProgress, RunStats } from '../types/run_ui';
+
 // ============================================================================
 //                                 §9.2 SESSION
 // ============================================================================
+
+// The XP level (Config.XPCurve): n is the number, label and badge the Config.XPLevels band it falls in, xp the
+// officer's XP, levelXp and nextLevelXp where level n and the next level (or prestige star) start.
+export interface LevelInfo {
+    n: number;
+    label: string;
+    badge: string;
+    xp: number;
+    levelXp: number;
+    nextLevelXp: number | null;
+    prestige: number;
+}
+// What everyone sees as an officer's picture. frame = the XP level badge colour.
+export interface Avatar {
+    kind: 'initials' | 'preset' | 'url';
+    value: string | null;
+    initials: string;
+    frame: string;
+}
+// The officer's own look (cp_officers), applied to their own tablet only.
+export interface Prefs {
+    appearance: string;
+    accent: string | null;
+    uiScale: number;
+    language: string | null;
+    callsMuted: boolean;
+}
 
 export interface Theme {
     primary: string;
@@ -33,6 +62,8 @@ export interface Session {
         rank: string;
         callsign: string | null;
         gradeLevel: number;
+        avatar?: Avatar;
+        level?: LevelInfo;
     };
     theme: Theme; // department theme, or Config.AdminTheme for admin
     logo: Logo | null; // null for admin
@@ -46,7 +77,26 @@ export interface Session {
         disputeWindowHours: number;
         periods: string[];
         filters: string[];
+        // parity-plus config values (modules/tablet getSession)
+        dispatch?: { enabled: boolean; areas: { key: string; label: string }[] };
+        leaderboardMetrics?: string[];
+        languages?: { code: string; label: string }[];
+        profile?: {
+            bioMax: number;
+            bioLines: number;
+            presets: { id: string; level: number | null }[];
+            urls: boolean;
+            appearances: string[];
+            accents: { colour: string; level: number | null }[];
+            uiScale: [number, number, number];
+        };
+        commendationKinds?: string[];
+        rewards?: { enabled: boolean };
+        format?: { currency: string; currencyAfter: boolean };
     };
+    prefs?: Prefs;
+    // how the tablet was opened: command, keybind, item, export, desk or dispatch (desk = its index)
+    access?: { via: string; desk: number | null };
     serverTime: number; // os.time() at session build
 }
 
@@ -296,6 +346,28 @@ export interface RunResult {
     };
     cash: { B: number; mTier: number; mMod: number; amount: number; status: string };
     flagged: null | { reason: string };
+    // parity-plus sections (each shown only when present; older rows lack them)
+    decisions?: DecisionEntry[];
+    progress?: RunProgress | null;
+    stats?: RunStats;
+    missionCall?: RunMissionCall | null;
+    items?: RunItem[];
+}
+
+// Sidebar badge counts (push topic 'nav').
+export interface NavCounts {
+    invites: number;
+    calls: number;
+    review: number;
+    commendations: number;
+    rewards: number;
+    onRun: boolean;
+}
+// A line of Admin UI → Permissions → Config health.
+export interface ConfigHealthItem {
+    check: string;
+    level: 'ok' | 'warn' | 'error';
+    text: string;
 }
 
 // ============================================================================
@@ -333,7 +405,19 @@ export interface Overlay {
 }
 
 // Push topics the server sends (`push` message).
-export type PushTopic = 'run' | 'unit' | 'board' | 'operation' | 'invites' | 'test' | 'builder' | 'payouts';
+export type PushTopic =
+    | 'run'
+    | 'unit'
+    | 'board'
+    | 'operation'
+    | 'invites'
+    | 'test'
+    | 'builder'
+    | 'payouts'
+    | 'calls'
+    | 'nav'
+    | 'profile'
+    | 'rewards';
 
 export type HudObjective = HudState['objectives'][number];
 export type HudRoute = NonNullable<HudState['route']>;

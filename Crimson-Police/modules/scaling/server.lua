@@ -135,10 +135,35 @@ function Scaling.apply(mission, tier)
     return objectives
 end
 
+local FEEL_KEYS = { 'accuracyAdd', 'armourAdd', 'healthMult', 'surrenderMult', 'fleeMult' }
+local FEEL_DEFAULT = { accuracyAdd = 0, armourAdd = 0, healthMult = 1.0, surrenderMult = 1.0, fleeMult = 1.0 }
+
+-- The Config.NpcDifficulty preset in use ('custom' reads its custom table); an unknown preset is 'normal'.
+local function Preset()
+    local cfg = Config.NpcDifficulty or {}
+    local name = cfg.preset or 'normal'
+    local p = name == 'custom' and cfg.custom or (type(cfg.presets) == 'table' and cfg.presets[name])
+    if type(p) ~= 'table' then p = type(cfg.presets) == 'table' and cfg.presets.normal or nil end
+    local out = {}
+    for _, k in ipairs(FEEL_KEYS) do
+        local v = type(p) == 'table' and tonumber(p[k]) or nil
+        out[k] = v or FEEL_DEFAULT[k]
+    end
+    return out
+end
+
+-- How NPCs feel under Config.NpcDifficulty (health, surrender and flee multipliers for the blocks). It never
+-- changes points or cash.
+function Scaling.feel()
+    local p = Preset()
+    return { healthMult = p.healthMult, surrenderMult = p.surrenderMult, fleeMult = p.fleeMult }
+end
+
 function Scaling.combat(baseAccuracy, baseArmour, tier, run)
     local row = Resolve(tier) or Rows()[1] or {}
-    local accuracy = (tonumber(baseAccuracy) or 0) + (tonumber(row.accuracy) or 0)
-    local armour = (tonumber(baseArmour) or 0) + (tonumber(row.armour) or 0)
+    local preset = Preset()
+    local accuracy = (tonumber(baseAccuracy) or 0) + (tonumber(row.accuracy) or 0) + preset.accuracyAdd
+    local armour = (tonumber(baseArmour) or 0) + (tonumber(row.armour) or 0) + preset.armourAdd
     if type(run) == 'table' and run.modifier == 'armored_hostiles' then
         local missionType = run.missionType or (run.mission and run.mission.type)
         if missionType == 'tactical' then

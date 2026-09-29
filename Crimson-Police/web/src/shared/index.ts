@@ -13,3 +13,5 @@ export * from './navigation';
 export * from './cx';
 export * from './data';
 export * from './components';
+// the Avatar component (the Avatar data shape is imported from './types' directly)
+export { Avatar } from './components';

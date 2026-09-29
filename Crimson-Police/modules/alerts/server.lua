@@ -399,7 +399,32 @@ local function SweepStale()
     end
 end
 
+-- arena:exited (CP.Hooks): once when a player's A.inArena turns from true to false, whether the foreign flag
+-- cleared or the routing bucket went back to 0, and never while either still holds.
+local wasInArena = {}
+
+local function ArenaExits()
+    local seen = {}
+    for _, s in ipairs(GetPlayers() or {}) do
+        local src = ToSrc(s)
+        if src then
+            seen[src] = true
+            local now = A.inArena(src)
+            if wasInArena[src] and not now then
+                CP.log(TAG, '%d left the arena', src)
+                if CP.Hooks and CP.Hooks.fire then CP.Hooks.fire('arena:exited', src) end
+            end
+            wasInArena[src] = now or nil
+        end
+    end
+    for src in pairs(wasInArena) do
+        if not seen[src] then wasInArena[src] = nil end
+    end
+end
+A._arenaExits = ArenaExits
+
 local function Reconcile()
+    ArenaExits()
     local nowMs = GetGameTimer()
     local srcs = {}
     for src in pairs(wanted) do srcs[#srcs + 1] = src end

@@ -206,6 +206,22 @@ function Q.isDowned(src)
     return md.isdead == true or md.inlaststand == true
 end
 
+-- Whether a player owns a vehicle with this plate: a read-only look at qbx_core's player_vehicles, used only
+-- to reroll a mission plate. Always the real oxmysql (CP.Storage.realMySQL with the database off), never a
+-- cp_ table in the same statement. nil when the lookup fails: the caller then uses the reserved pattern alone.
+function Q.plateOwned(plate)
+    if type(plate) ~= 'string' or plate == '' or #plate > 8 then return nil end
+    local db = (CP.Storage and CP.Storage.realMySQL) or MySQL
+    if type(db) ~= 'table' or type(db.scalar) ~= 'table' then return nil end
+    local ok, found = pcall(db.scalar.await, 'SELECT 1 FROM player_vehicles WHERE plate = ? LIMIT 1', { plate })
+    if not ok then
+        LogError('plate', 'player_vehicles plate lookup failed (mission plates use the reserved pattern only): %s',
+            tostring(found))
+        return nil
+    end
+    return found ~= nil
+end
+
 -- ============================================================================
 --                                  LISTENERS
 -- ============================================================================

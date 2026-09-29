@@ -127,7 +127,7 @@
   "cash.unfunded": "{department} could not fund your {amount} payout for {mission}",
   "cash.unfunded_supervisor": "The {department} account ({account}) could not fund {name}'s {amount} payout",
   "scoring.times": "× {n}",
-  "scoring.level_up": "New XP level: {level}",
+  "scoring.level_up": "Level up: {level}",
   "scoring.level_unnamed": "Level {xp}",
   "scoring.badge_earned": "Badge earned: {badge}",
   "scoring.manual_award": "An admin awarded you {points} points: {reason}",

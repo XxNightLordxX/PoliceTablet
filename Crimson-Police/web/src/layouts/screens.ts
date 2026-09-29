@@ -8,6 +8,7 @@ import type { Session, UiKind } from '../shared/types';
 
 import Home from '../officer/screens/Home';
 import MissionBoard from '../officer/screens/MissionBoard';
+import Dispatch from '../officer/screens/Dispatch';
 import Unit from '../officer/screens/Unit';
 import ActiveMission from '../officer/screens/ActiveMission';
 import Leaderboard from '../officer/screens/Leaderboard';
@@ -47,6 +48,13 @@ const has = (s: Session, ...actions: string[]) => Array.isArray(s.actions) && ac
 export const OFFICER_SCREENS: ScreenDef<OfficerScreenKey>[] = [
     { key: 'home', titleKey: 'ui.screen.home', icon: 'home', component: Home },
     { key: 'board', titleKey: 'ui.screen.board', icon: 'board', component: MissionBoard },
+    {
+        key: 'dispatch',
+        titleKey: 'ui.screen.dispatch',
+        icon: 'radio',
+        component: Dispatch,
+        visible: s => s.config?.dispatch?.enabled !== false,
+    },
     { key: 'unit', titleKey: 'ui.screen.unit', icon: 'users', component: Unit },
     { key: 'active', titleKey: 'ui.screen.active', icon: 'target', component: ActiveMission },
     { key: 'leaderboard', titleKey: 'ui.screen.leaderboard', icon: 'trophy', component: Leaderboard },

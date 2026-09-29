@@ -821,6 +821,9 @@ local function ParseAmount(v)
     return n, true
 end
 
+local extraUsage = {}      -- help keys of subcommands other modules registered (Admin.registerSubcommand)
+local registeredSubs = {}  -- names registered that way (a module may register its name again)
+
 local function Usage(src)
     local c = CmdName()
     if tonumber(src) ~= 0 then
@@ -841,6 +844,7 @@ local function Usage(src)
     }) do
         Reply(src, 'info', key, { cmd = c })
     end
+    for _, key in ipairs(extraUsage) do Reply(src, 'info', key, { cmd = c }) end
 end
 
 local function MissingReason(src)
@@ -1781,6 +1785,31 @@ SUB.storage = function(src, args)
         CP.err(TAG, 'storage copy %s failed: %s', direction, tostring(err))
         return Reply(src, 'error', 'admin.cmd.storage_copy_error', { error = ShortError(err) })
     end
+end
+
+-- Another module's /CrimsonPoliceAdmin subcommand (e.g. missioncall). fn(src, args) returns ok, message key
+-- (and its vars); the reply is sent here. helpKey is a usage line shown by the console help. A built-in
+-- subcommand name can't be taken.
+function Admin.registerSubcommand(name, fn, helpKey)
+    if type(name) ~= 'string' or not name:match('^[%a][%w_]*$') or type(fn) ~= 'function' then return false end
+    name = name:lower()
+    if SUB[name] and not registeredSubs[name] then
+        CP.warn(TAG, 'subcommand %s is built in; the registration was ignored', name)
+        return false
+    end
+    registeredSubs[name] = true
+    SUB[name] = function(src, rest)
+        local ok, key, vars = fn(src, rest)
+        if type(key) == 'string' and key ~= '' then
+            Reply(src, ok == false and 'error' or 'success', key, type(vars) == 'table' and vars or nil)
+        elseif ok == false then
+            Reply(src, 'error', 'err.refused')
+        end
+    end
+    if type(helpKey) == 'string' and helpKey ~= '' and not U.contains(extraUsage, helpKey) then
+        extraUsage[#extraUsage + 1] = helpKey
+    end
+    return true
 end
 
 function Admin.command(src, args)

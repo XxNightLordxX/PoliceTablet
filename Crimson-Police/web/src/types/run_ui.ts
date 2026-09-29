@@ -1,6 +1,7 @@
 // Response shapes of the run_ui slice (Mission Board and Active Mission screens,
 
-import type { ActiveMissionView, BoardCard, BoardData } from '../shared/types';
+import type { ActiveMissionView, BoardCard, BoardData, Goal, LevelInfo } from '../shared/types';
+import type { ContactView } from './custody';
 
 // ============================================================================
 //            getMissionTypes (push topics 'board' and 'operation')
@@ -67,6 +68,64 @@ export interface ActiveMissionData extends ActiveMissionView {
     startIn?: number | null;
     // Street and zone name of the current objective area (shown instead of map details, e.g. Radio Silence).
     area?: string | null;
+    // The intel line a block set (e.g. hostile_waves spawn sets), already in the player's language.
+    intel?: string | null;
+    // The claimed mission call: its code, the response target and when this viewer arrived (seconds from the claim).
+    missionCall?: null | { code: string; targetS: number; arrivedS: number | null };
+    // The current objective's contacts (field_contact, through CP.Custody.view).
+    contact?: ContactView | null;
+}
+
+// ============================================================================
+//                   RunResult ADDITIONS (the result screen)
+// ============================================================================
+
+// One graded disposition of the decision ledger. discoverable: whether the truth was lawfully findable;
+// knownAtS: when the deciding fact reached the decider (seconds from the start).
+export interface DecisionEntry {
+    contact: string;
+    kind: 'person' | 'vehicle';
+    choice: string;
+    best: string;
+    verdict: 'best' | 'ok' | 'wrong' | 'critical';
+    by: string;
+    truth: string;
+    facts: string[];
+    points: number;
+    discoverable: boolean;
+    knownAtS: number | null;
+}
+// XP before and after this row, the level, a level-up and the goals (pending = XP waits for a review).
+export interface RunProgress {
+    xpBefore: number;
+    xpAfter: number;
+    pending: boolean;
+    level: LevelInfo;
+    levelUp: boolean;
+    goals: { daily: Goal | null; weekly: Goal | null };
+}
+export type RunStatKey =
+    | 'arrests'
+    | 'citations'
+    | 'impounds'
+    | 'rescues'
+    | 'vehicles_stopped'
+    | 'evidence'
+    | 'decisions_ok'
+    | 'decisions_best'
+    | 'decisions_bad';
+export type RunStats = Partial<Record<RunStatKey, number>>;
+export interface RunMissionCall {
+    code: string;
+    responseS: number | null;
+    targetS: number;
+    rapid: boolean;
+}
+export interface RunItem {
+    name: string;
+    label: string;
+    count: number;
+    status: 'given' | 'pending' | 'held';
 }
 
 // Reply of server:abandon.

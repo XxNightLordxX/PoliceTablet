@@ -2594,7 +2594,7 @@ do
     H.load('modules/migrations/server.lua')
     _G.print = realPrint
     H.ok(CP.Migrations.isReady(), 'the migrations runner finished')
-    H.eq(CP.Migrations.version(), 2, 'at version 2')
+    H.eq(CP.Migrations.version(), H.migrationVersion(), 'at the version of the last file in FILES')
     local joined = table.concat(lines, '\n')
     H.ok(joined:find(
         '[crimson-police] storage: database off, data saved as files in the saves folder ' .. TMP .. '/runner',
@@ -2608,16 +2608,18 @@ do
         true
     ) ~= nil, 'a new saves folder is announced: nothing came over from the database')
     H.ok(
-        joined:find('[crimson-police] Crimson-Police saves folder at version 2', 1, true) ~= nil
+        joined:find(('[crimson-police] Crimson-Police saves folder at version %d'):format(H.migrationVersion()), 1,
+            true)
+                ~= nil
             and not joined:find('database at version', 1, true),
         'the version line names the saves folder, not the database'
     )
     H.eq(st.name(), 'saves folder', 'CP.Storage.name() for console text')
     local applied = st.db:exec('SELECT version, name FROM cp_schema_migrations ORDER BY version')
-    H.eq(applied.n, 2, 'the applied migrations are recorded in cp_schema_migrations')
+    H.eq(applied.n, #H.migrationFiles(), 'the applied migrations are recorded in cp_schema_migrations')
     H.ok(st.db.tables.cp_mission_tests.colIndex.def_hash ~= nil, 'and 002 added def_hash')
     local meta = cjson.decode(ReadFile(TMP .. '/runner/_tables.json'))
-    H.eq(meta.migrations and #meta.migrations.rows, 2, 'kept in _tables.json')
+    H.eq(meta.migrations and #meta.migrations.rows, #H.migrationFiles(), 'kept in _tables.json')
     lines = {}
     _G.print = function(...) lines[#lines + 1] = table.concat({ ... }, ' ') end
     st = LoadStorage({ enabled = false, folder = TMP .. '/runner' })
@@ -2636,7 +2638,8 @@ do
     H.load('modules/migrations/server.lua')
     _G.print = realPrint
     local joinedDb = table.concat(lines, '\n')
-    H.ok(joinedDb:find('Crimson-Police database at version 2', 1, true) ~= nil, 'database mode keeps its version line')
+    H.ok(joinedDb:find(('Crimson-Police database at version %d'):format(H.migrationVersion()), 1, true) ~= nil,
+        'database mode keeps its version line')
     H.ok(
         joinedDb:find('the database is new, but the saves folder holds data from running with the database off', 1,
             true)

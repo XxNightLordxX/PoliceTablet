@@ -1,6 +1,8 @@
 // Number/time formatting shared by components and screens. Numbers use en-US grouping ("$1,040") to match the spec's
 // examples.
 
+import { hasKey, t } from './i18n';
+
 const nf = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
 
 // 1040 -> "$1,040"; -50 -> "-$50". Rounded to whole dollars.
@@ -54,4 +56,40 @@ export function formatDateTime(value: number | string | null | undefined): strin
     const d = typeof value === 'number' ? new Date(value * 1000) : new Date(String(value).replace(' ', 'T'));
     if (isNaN(d.getTime())) return String(value);
     return d.toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+}
+
+// ============================================================================
+//                         DATES IN THE LOCALE'S FORMAT
+// ============================================================================
+// The locale file may name its date locale (_meta.date_locale); en-GB otherwise.
+
+function dateLocale(): string {
+    const v = hasKey('_meta.date_locale') ? t('_meta.date_locale') : '';
+    return v !== '' ? v : 'en-GB';
+}
+
+function toDate(value: number | string | null | undefined): Date | null {
+    if (value === null || value === undefined || value === '') return null;
+    const d = typeof value === 'number' ? new Date(value * 1000) : new Date(String(value).replace(' ', 'T'));
+    return isNaN(d.getTime()) ? null : d;
+}
+
+// os.time() seconds or an ISO/SQL date string -> "28 Sep 2026".
+export function fmtDate(value: number | string | null | undefined): string {
+    const d = toDate(value);
+    if (!d) return value === null || value === undefined ? '' : String(value);
+    return d.toLocaleDateString(dateLocale(), { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+// os.time() seconds or an ISO/SQL date string -> "28 Sep 2026, 14:05".
+export function fmtDateTime(value: number | string | null | undefined): string {
+    const d = toDate(value);
+    if (!d) return value === null || value === undefined ? '' : String(value);
+    return d.toLocaleString(dateLocale(), {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+    });
 }

@@ -39,6 +39,61 @@ function CP.e(name)
 end
 
 -- ============================================================================
+--                                    HOOKS
+-- ============================================================================
+-- In-resource events between modules (docs/notes/foundation.md lists them). fire() calls every listener in
+-- the caller's thread, in the order they were added, each in pcall: a failing listener is logged and the
+-- next one still runs. Listeners may only yield where the hook's contract allows it.
+CP.Hooks = CP.Hooks or { _list = {}, _byId = {}, _next = 0 }
+
+function CP.Hooks.on(name, fn)
+    if type(name) ~= 'string' or name == '' or type(fn) ~= 'function' then return nil end
+    local H = CP.Hooks
+    H._next = H._next + 1
+    local id = H._next
+    local list = H._list[name]
+    if not list then
+        list = {}
+        H._list[name] = list
+    end
+    list[#list + 1] = { id = id, fn = fn }
+    H._byId[id] = name
+    return id
+end
+
+function CP.Hooks.off(id)
+    local H = CP.Hooks
+    local name = H._byId[id]
+    if not name then return false end
+    H._byId[id] = nil
+    local list = H._list[name] or {}
+    for i, l in ipairs(list) do
+        if l.id == id then
+            table.remove(list, i)
+            break
+        end
+    end
+    return true
+end
+
+function CP.Hooks.fire(name, ...)
+    local list = CP.Hooks._list[name]
+    if not list or #list == 0 then return 0 end
+    local copy = {}
+    for i, l in ipairs(list) do copy[i] = l end
+    local n = 0
+    for _, l in ipairs(copy) do
+        local ok, err = pcall(l.fn, ...)
+        if ok then
+            n = n + 1
+        else
+            CP.err('hooks', 'a %s listener failed: %s', name, tostring(err))
+        end
+    end
+    return n
+end
+
+-- ============================================================================
 --                           OBJECTIVE BLOCK REGISTRY
 -- ============================================================================
 -- blocks/<block_id>/server.lua and client.lua each call CP.Blocks.register(id, impl)

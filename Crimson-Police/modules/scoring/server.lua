@@ -5,7 +5,6 @@ local Scoring = CP.Scoring
 local TAG = 'scoring'
 
 local BOSS_ID = 'weekly_boss_kingpin'
-local LIGHTS_MISSIONS = { beat_patrol = true, business_check = true }
 local NOT_RUNS = { manual_award = true, goal = true }
 local END_EVALUATED = { no_participant_downed = true, no_weapons_fired = true }
 -- Personal ids recorded by the engine / CP.Npc whose values live in Config.Scoring.common.
@@ -20,6 +19,8 @@ local BADGES = {
     { id = 'road_warrior', cfg = 'roadWarrior' },
     { id = 'partner_in_crime', cfg = 'partnerInCrime' },
     { id = 'joint_task_force', cfg = 'jointTaskForce' },
+    { id = 'by_the_book', cfg = 'byTheBook' },
+    { id = 'first_responder', cfg = 'firstResponder' },
 }
 local MAX_WALK_DAYS = 400      -- missed days examined for grace before a streak counts as broken
 local STREAK_STORE_MAX = 127   -- cp_officers.streak_days is a signed TINYINT
@@ -514,8 +515,24 @@ local function ScoreLines(run, p, P, opts)
         if not listed[id] and not END_EVALUATED[id] then
             local count = CountOf(run, p, id)
             local c = COMMON_RECORDED[id]
-            if count > 0 and c then
-                if id ~= 'lights_siren' or LIGHTS_MISSIONS[run.missionId or mission.id] then
+            local cfgB = Config.Bonuses and Config.Bonuses[id]
+            if count > 0 and type(cfgB) == 'table' and cfgB.engineOnly == true then
+                -- engine-awarded ids (decision grades, rapid response): never listed by a mission file, valued
+                -- by the recorded hint or Config.Bonuses, on built-in and custom missions alike
+                local per = HintValue(hints, id, false, P)
+                if per == nil then
+                    local share = Num(cfgB.value, 0)
+                    if id == 'rapid_response' then
+                        local rr = Config.MissionCalls and Config.MissionCalls.rapidResponse
+                        share = Num(rr and rr.pctOfP, share)
+                    end
+                    per = cfgB.kind == 'pct' and share * P or Num(cfgB.value, 0)
+                end
+                local each = cfgB.each == true
+                local value = each and per * count or per
+                total = total + AddLine(bonuses, penalties, id, value, count, each, kinds[id] == 'penalty')
+            elseif count > 0 and c then
+                if id ~= 'lights_siren' or mission.quietPatrol == true or run.quietPatrol == true then
                     local per = Num(common[c.key], 0)
                     local value = c.each and per * count or per
                     total = total + AddLine(bonuses, penalties, id, value, count, c.each, per < 0)
@@ -537,6 +554,8 @@ local function ScoreLines(run, p, P, opts)
 
     -- 3. common end-evaluated bonuses and penalties
     local duration = DurationOf(run, opts)
+    -- Process the scene stops the fast-completion clock (CP.Runs.pauseFastClock)
+    if opts.fastDurationS ~= nil then duration = math.min(duration, Num(opts.fastDurationS, duration)) end
     local limit = Num(run.timeLimit, Num(mission.timeLimit, 0))
     local fastShare = Num(common.fastShare, 0.75)
     if not (run.flags and run.flags.medals) and limit > 0 and duration <= fastShare * limit then
@@ -653,7 +672,11 @@ local function Levels()
     for _, l in ipairs(Config.XPLevels or {}) do
         if type(l) == 'table' then list[#list + 1] = l end
     end
-    table.sort(list, function(a, b) return Num(a.xp, 0) < Num(b.xp, 0) end)
+    table.sort(list, function(a, b)
+        local la, lb = Num(a.level, nil), Num(b.level, nil)
+        if la and lb and la ~= lb then return la < lb end
+        return Num(a.xp, 0) < Num(b.xp, 0)
+    end)
     return list
 end
 
@@ -664,33 +687,91 @@ local function LevelLabel(l)
     return CP.L('scoring.level_unnamed', { xp = math.floor(Num(l.xp, 0)) })
 end
 
+local function Curve()
+    local c = Config.XPCurve or {}
+    local maxLevel = math.max(1, math.floor(Num(c.maxLevel, 50)))
+    local first = math.max(1, Num(c.first, 100))
+    local growth = Num(c.growth, 1.07)
+    if growth <= 0 then growth = 1.0 end
+    return maxLevel, first, growth, math.max(1, math.floor(Num(c.prestigeEvery, 10000)))
+end
+
+-- XP needed to reach level n (Config.XPCurve): round(first × (growth^(n − 1) − 1) ÷ (growth − 1)).
+function Scoring.levelXp(n)
+    local maxLevel, first, growth = Curve()
+    n = math.max(1, math.min(maxLevel, math.floor(Num(n, 1))))
+    if n <= 1 then return 0 end
+    if math.abs(growth - 1.0) < 1e-9 then return math.floor(first * (n - 1) + 0.5) end
+    return math.floor(first * (growth ^ (n - 1) - 1) / (growth - 1) + 0.5)
+end
+
+function Scoring.levelOf(xp)
+    xp = math.max(0, math.floor(Num(xp, 0)))
+    local maxLevel = Curve()
+    local n = 1
+    while n < maxLevel and Scoring.levelXp(n + 1) <= xp do n = n + 1 end
+    return n
+end
+
+-- The Config.XPLevels band a level falls in: the last entry whose level is at or below n (entries without a
+-- level keep their old xp threshold, compared with the level's XP).
+local function BandOf(n, levelXp)
+    local list = Levels()
+    local cur = list[1]
+    for _, l in ipairs(list) do
+        local at = Num(l.level, nil)
+        if (at and at <= n) or (not at and Num(l.xp, 0) <= levelXp) then cur = l end
+    end
+    return cur
+end
+
+-- LevelInfo (web/src/shared/types.ts): n from Config.XPCurve, label and badge from the band of n, xp and
+-- levelXp = the XP at which level n starts, nextLevelXp = the next level (or prestige star), next = the same
+-- (kept for old callers), prestige = stars after the last level.
 function Scoring.xpLevel(xp)
     xp = math.max(0, math.floor(Num(xp, 0)))
-    local list = Levels()
-    local cur, nxt = nil, nil
-    for i, l in ipairs(list) do
-        if xp >= Num(l.xp, 0) then
-            cur = l
-            nxt = list[i + 1]
-        end
+    local maxLevel, _, _, prestigeEvery = Curve()
+    local n = Scoring.levelOf(xp)
+    local levelXp = Scoring.levelXp(n)
+    local prestige = 0
+    local nextXp
+    if n >= maxLevel then
+        prestige = math.floor((xp - levelXp) / prestigeEvery)
+        nextXp = levelXp + (prestige + 1) * prestigeEvery
+    else
+        nextXp = Scoring.levelXp(n + 1)
     end
-    if not cur then
-        cur, nxt = list[1], list[2]
-        if not cur then return { label = '', badge = 'grey', xp = 0, next = nil } end
-    end
+    local band = BandOf(n, levelXp)
     return {
-        label = LevelLabel(cur),
-        badge = tostring(cur.badge or 'grey'),
-        xp = math.floor(Num(cur.xp, 0)),
-        next = nxt and math.floor(Num(nxt.xp, 0)) or nil,
+        n = n,
+        label = band and LevelLabel(band) or '',
+        badge = band and tostring(band.badge or 'grey') or 'grey',
+        xp = levelXp,
+        levelXp = levelXp,
+        nextLevelXp = nextXp,
+        prestige = prestige,
+        next = nextXp,
+        bandStart = band ~= nil and Num(band.level, -1) == n,
     }
+end
+
+-- The level-up toast text: "Lv 24", or "Lv 25 · Senior Patrol" when a band starts at that level.
+local function LevelText(info)
+    if info.bandStart and info.label ~= '' then
+        return CP.L('scoring.level_band', { n = info.n, label = info.label })
+    end
+    return CP.L('scoring.level_n', { n = info.n })
+end
+
+local function XpOf(citizenid)
+    local row = ReadOfficer(citizenid)
+    return row and math.max(0, math.floor(CP.U.num(row.xp))) or 0
 end
 
 local function AddXp(citizenid, delta)
     delta = math.floor(Num(delta, 0))
     if delta == 0 then return end
-    local before = ReadOfficer(citizenid)
-    local oldXp = before and math.floor(CP.U.num(before.xp)) or 0
+    local oldXp = XpOf(citizenid)
     local ok, err = pcall(MySQL.query.await, [[
         INSERT INTO cp_officers (citizenid, xp) VALUES (?, ?)
         ON DUPLICATE KEY UPDATE xp = GREATEST(0, xp + ?)
@@ -700,9 +781,13 @@ local function AddXp(citizenid, delta)
         return
     end
     local newXp = math.max(0, oldXp + delta)
-    local a, b = Scoring.xpLevel(oldXp), Scoring.xpLevel(newXp)
-    if delta > 0 and b.xp > a.xp then
-        Notify(citizenid, 'success', 'scoring.level_up', { level = b.label })
+    local oldLevel, newLevel = Scoring.levelOf(oldXp), Scoring.levelOf(newXp)
+    if delta > 0 and newLevel > oldLevel then
+        -- the one level-up toast (and hook): once per level-up, naming the level reached
+        local info = Scoring.xpLevel(newXp)
+        Notify(citizenid, 'success', 'scoring.level_up', { level = LevelText(info), n = info.n })
+        local src = CP.Qbx and CP.Qbx.getByCitizenId and CP.Qbx.getByCitizenId(citizenid) or nil
+        if CP.Hooks and CP.Hooks.fire then CP.Hooks.fire('xp:levelUp', citizenid, src, oldLevel, newLevel) end
     end
     CP.log(TAG, 'XP %s %+d -> %d', citizenid, delta, newXp)
 end
@@ -737,9 +822,10 @@ end
 -- ============================================================================
 
 local BADGE_SELECT = [[
-    SELECT mission_type, mission_id, participants, departments_n,
+    SELECT mission_type, mission_id, participants, departments_n, decisions_best,
            COALESCE(JSON_CONTAINS(JSON_EXTRACT(breakdown, '$.points.bonuses[*].id'), '"no_vehicle_damage"'), 0) AS no_damage,
-           COALESCE(JSON_CONTAINS(JSON_EXTRACT(breakdown, '$.points.bonuses[*].id'), '"no_participant_downed"'), 0) AS no_downs
+           COALESCE(JSON_CONTAINS(JSON_EXTRACT(breakdown, '$.points.bonuses[*].id'), '"no_participant_downed"'), 0) AS no_downs,
+           COALESCE(JSON_CONTAINS(JSON_EXTRACT(breakdown, '$.points.bonuses[*].id'), '"rapid_response"'), 0) AS rapid
     FROM %s
     WHERE citizenid = ? AND state = 'completed' AND voided = 0 AND flagged = 0
       AND mission_type NOT IN ('manual_award', 'goal')
@@ -751,7 +837,9 @@ local function BadgeCounts(citizenid)
                COALESCE(SUM(t.mission_id = 'gang_shootout' AND t.no_downs > 0), 0) AS sharpshooter,
                COALESCE(SUM(t.mission_type = 'patrol'), 0) AS road_warrior,
                COALESCE(SUM(t.participants >= 2), 0) AS partner_in_crime,
-               COALESCE(SUM(t.departments_n >= 2), 0) AS joint_task_force
+               COALESCE(SUM(t.departments_n >= 2), 0) AS joint_task_force,
+               COALESCE(SUM(t.decisions_best), 0) AS by_the_book,
+               COALESCE(SUM(t.rapid > 0), 0) AS first_responder
         FROM (%s UNION ALL %s) t
     ]]):format(BADGE_SELECT:format('cp_mission_runs'), BADGE_SELECT:format('cp_mission_runs_archive'))
     local ok, row = pcall(MySQL.single.await, sql, { citizenid, citizenid })
@@ -889,6 +977,7 @@ function Scoring.onRowApproved(rowId)
     if row.state ~= 'completed' and row.state ~= 'failed' then return end
     local pts = math.max(0, math.floor(CP.U.num(row.final_points)))
     if ClaimXp(rowId) and pts > 0 then AddXp(row.citizenid, pts) end
+    if CP.Hooks and CP.Hooks.fire then CP.Hooks.fire('row:approved', rowId) end
     if NOT_RUNS[row.mission_type] or row.state ~= 'completed' then return end
     ApplyStreakDay(row.citizenid, DayKey(tonumber(row.created_ts) or Now()))
     CheckBadges(row.citizenid, false)
@@ -904,6 +993,53 @@ function Scoring.onRowVoided(rowId)
     local pts = math.max(0, math.floor(CP.U.num(row.final_points)))
     if ReleaseXp(rowId) and pts > 0 then AddXp(row.citizenid, -pts) end
     if not NOT_RUNS[row.mission_type] then CheckBadges(row.citizenid, true) end
+    if CP.Hooks and CP.Hooks.fire then CP.Hooks.fire('row:voided', rowId) end
+end
+
+-- ============================================================================
+--                            RESULT SCREEN PROGRESS
+-- ============================================================================
+-- RunResult.progress (web/src/types/run_ui.ts): the XP before and after this row, the level, a level-up and
+-- the goals. A flagged row's XP is added only when a supervisor approves it (pending).
+
+function Scoring.progressFor(citizenid, gained, pending)
+    if type(citizenid) ~= 'string' or citizenid == '' then return nil end
+    Db()
+    gained = math.max(0, math.floor(Num(gained, 0)))
+    local now = XpOf(citizenid)
+    local before, after = now, now
+    if pending then after = now + gained else before = math.max(0, now - gained) end
+    local goals = { daily = nil, weekly = nil }
+    if CP.Goals and CP.Goals.forOfficer then
+        local ok, g = pcall(CP.Goals.forOfficer, citizenid)
+        if ok and type(g) == 'table' then goals = { daily = g.daily, weekly = g.weekly } end
+    end
+    local lv = Scoring.xpLevel(after)
+    local level = {
+        n = lv.n,
+        label = lv.label,
+        badge = lv.badge,
+        xp = after,
+        levelXp = lv.levelXp,
+        nextLevelXp = lv.nextLevelXp,
+        prestige = lv.prestige,
+    }
+    return {
+        xpBefore = before,
+        xpAfter = after,
+        pending = pending == true,
+        level = level,
+        -- pending XP reaches no level until it is approved (the toast comes then)
+        levelUp = pending ~= true and Scoring.levelOf(after) > Scoring.levelOf(before),
+        goals = goals,
+    }
+end
+
+local function OnRowSettled(run, p, rowId, row, result)
+    if type(result) ~= 'table' or type(p) ~= 'table' or type(row) ~= 'table' then return end
+    if row.state ~= 'completed' and row.state ~= 'failed' then return end
+    local pending = CP.U.truthy(row.flagged)
+    result.progress = Scoring.progressFor(p.citizenid, row.final_points, pending)
 end
 
 -- ============================================================================
@@ -1102,7 +1238,17 @@ local function HomeData(officer)
         local ok, g = pcall(CP.Goals.forOfficer, cid)
         if ok and type(g) == 'table' then goals = { daily = g.daily, weekly = g.weekly } end
     end
+    local maxDay = math.floor(Num(Config.Limits and Config.Limits.maxCompletionsDay, 0))
+    local missionsToday = nil
+    if maxDay > 0 and CP.Runs and CP.Runs.completionsToday then
+        local ok, n = pcall(CP.Runs.completionsToday, cid)
+        missionsToday = { n = ok and tonumber(n) or 0, max = maxDay }
+    end
+    local extras = {}
+    if CP.Hooks and CP.Hooks.fire then CP.Hooks.fire('home:extras', cid, officer.src, extras) end
     return {
+        missionsToday = missionsToday,
+        extras = extras,
         card = {
             callsign = officer.callsign,
             rank = officer.rank or '',
@@ -1131,6 +1277,8 @@ end)
 -- ============================================================================
 --                                    WIRING
 -- ============================================================================
+
+if CP.Hooks and CP.Hooks.on then CP.Hooks.on('row:settled', OnRowSettled) end
 
 CreateThread(function()
     if not CP.Qbx then

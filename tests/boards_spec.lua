@@ -1004,7 +1004,7 @@ do
     H.eq(a.bountyHistory[1].startDate, '2026-09-21', 'bounty week start date in server time')
     H.eq(a.bountyHistory[1].endDate, '2026-09-28', 'bounty week end date in server time')
     H.eq(a.bountyHistory[3].startDate, '2026-09-10', 'week 1 starts on the season start date')
-    H.eq(#a.bounties, 4, 'override options')
+    H.eq(#a.bounties, #Config.Challenge.bounties, 'override options')
     H.eq(#a.seasons, 1, 'season list')
 end
 

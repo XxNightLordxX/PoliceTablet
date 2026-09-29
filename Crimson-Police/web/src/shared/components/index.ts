@@ -50,5 +50,8 @@ export type { ToastsProps } from './Toasts';
 export { Watermark, DeptLogo } from './Logo';
 export type { WatermarkProps } from './Logo';
 
+export { Avatar } from './Avatar';
+export type { AvatarProps } from './Avatar';
+
 export { ErrorBoundary } from './ErrorBoundary';
 export { ScreenStub } from './ScreenStub';

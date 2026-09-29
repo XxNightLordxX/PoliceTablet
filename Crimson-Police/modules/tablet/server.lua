@@ -17,6 +17,9 @@ local DEFAULT_THEME = {
     text = '#f5f3f4',
 }
 local THEME_KEYS = { 'primary', 'accent', 'background', 'surface' }
+local VIA = { command = true, keybind = true, item = true, export = true, desk = true, dispatch = true }
+local AVATAR_KINDS = { initials = true, preset = true, url = true }
+local DEFAULT_APPEARANCE = 'department'
 
 local missingLogo = {}         -- deptKey -> true when logos/<file> is not in the resource
 local logoFailedWarned = {}    -- deptKey -> true once the NUI failure was reported
@@ -90,6 +93,160 @@ local function TierLabel(name)
     return CP.L('tier.' .. name)
 end
 
+local function NumOr(v, default)
+    local n = tonumber(v)
+    if n == nil or n ~= n then return default end
+    return n
+end
+
+-- Accents of a department theme (theme.personalAccents): '#rrggbb' or { colour, level }.
+local function Accents(deptKey)
+    local d = deptKey and Config.Departments and Config.Departments[deptKey]
+    local list = type(d) == 'table' and type(d.theme) == 'table' and d.theme.personalAccents or nil
+    local out = {}
+    for _, a in ipairs(type(list) == 'table' and list or {}) do
+        local colour = type(a) == 'table' and a.colour or a
+        if CP.U.isHexColour(colour) then
+            out[#out + 1] = { colour = colour:lower(), level = type(a) == 'table' and tonumber(a.level) or nil }
+        end
+    end
+    return out
+end
+
+local function ProfileConfig(deptKey)
+    local p = Config.Profile or {}
+    local presets = {}
+    for _, e in ipairs(type(p.avatarPresets) == 'table' and p.avatarPresets or {}) do
+        if type(e) == 'table' and type(e.id) == 'string' then
+            presets[#presets + 1] = { id = e.id, level = tonumber(e.level) }
+        end
+    end
+    local scale = type(p.uiScale) == 'table' and p.uiScale or {}
+    local appearances = {}
+    for _, a in ipairs(type(p.appearances) == 'table' and p.appearances or { DEFAULT_APPEARANCE }) do
+        if type(a) == 'string' then appearances[#appearances + 1] = a end
+    end
+    return {
+        bioMax = math.floor(NumOr(p.bioMax, 280)),
+        bioLines = math.floor(NumOr(p.bioLines, 3)),
+        presets = presets,
+        urls = type(p.avatarUrls) == 'table' and p.avatarUrls.enabled == true or false,
+        appearances = appearances,
+        accents = Accents(deptKey),
+        uiScale = { NumOr(scale[1], 0.85), NumOr(scale[2], 1.25), NumOr(scale[3], 1.0) },
+    }
+end
+
+-- The parity-plus parts of Session.config (web/src/shared/types.ts). English is the only language shipped.
+local function ExtraConfig(deptKey)
+    local mc = Config.MissionCalls or {}
+    local areas = {}
+    for _, a in ipairs(type(mc.areas) == 'table' and mc.areas or {}) do
+        if type(a) == 'table' and type(a.key) == 'string' then
+            areas[#areas + 1] = { key = a.key, label = type(a.label) == 'string' and a.label or a.key }
+        end
+    end
+    local metrics = {}
+    local lb = Config.Leaderboard or {}
+    for _, m in ipairs(type(lb.metrics) == 'table' and lb.metrics or { 'points' }) do
+        if type(m) == 'string' then metrics[#metrics + 1] = m end
+    end
+    local kinds = {}
+    local cm = Config.Commendations or {}
+    if cm.enabled ~= false then
+        for _, k in ipairs(type(cm.kinds) == 'table' and cm.kinds or {}) do
+            if type(k) == 'string' then kinds[#kinds + 1] = k end
+        end
+    end
+    local fmt = Config.Format or {}
+    return {
+        dispatch = { enabled = mc.enabled ~= false, areas = areas },
+        leaderboardMetrics = metrics,
+        languages = { { code = 'en', label = 'English' } },
+        profile = ProfileConfig(deptKey),
+        commendationKinds = kinds,
+        rewards = { enabled = Config.Rewards and Config.Rewards.enabled == true or false },
+        format = {
+            currency = type(fmt.currency) == 'string' and fmt.currency or '$',
+            currencyAfter = fmt.currencyAfter == true,
+        },
+    }
+end
+
+local function Initials(name)
+    local out = {}
+    for word in tostring(name or ''):gmatch('[^%s]+') do
+        if #out < 2 then out[#out + 1] = word:sub(1, 1):upper() end
+    end
+    return #out > 0 and table.concat(out) or '?'
+end
+
+-- The officer's cp_officers row: XP, avatar and look (one read; nil when there is none yet).
+local function ReadProfile(citizenid)
+    if type(citizenid) ~= 'string' or citizenid == '' then return nil end
+    if CP.Migrations and CP.Migrations.ready then CP.Migrations.ready() end
+    local ok, row = pcall(MySQL.single.await, [[
+        SELECT xp, avatar_kind, avatar_value, avatar_status, appearance, accent, ui_scale, language, calls_muted
+        FROM cp_officers WHERE citizenid = ?
+    ]], { citizenid })
+    if not ok then
+        CP.err(TAG, 'reading the profile of %s failed: %s', citizenid, tostring(row))
+        return nil
+    end
+    return type(row) == 'table' and row or nil
+end
+
+local function LevelOf(xp)
+    if CP.Scoring and CP.Scoring.xpLevel then
+        local ok, lv = pcall(CP.Scoring.xpLevel, xp)
+        if ok and type(lv) == 'table' then
+            return {
+                n = tonumber(lv.n) or 1,
+                label = lv.label or '',
+                badge = lv.badge or 'grey',
+                xp = math.floor(NumOr(xp, 0)),
+                levelXp = tonumber(lv.levelXp) or 0,
+                nextLevelXp = tonumber(lv.nextLevelXp),
+                prestige = tonumber(lv.prestige) or 0,
+            }
+        end
+    end
+    return {
+        n = 1,
+        label = '',
+        badge = 'grey',
+        xp = math.floor(NumOr(xp, 0)),
+        levelXp = 0,
+        nextLevelXp = nil,
+        prestige = 0,
+    }
+end
+
+-- The picture everyone sees: an approved link or a preset, else the initials; frame = the level badge.
+local function AvatarOf(officer, row, level)
+    local kind = row and AVATAR_KINDS[row.avatar_kind] and row.avatar_kind or 'initials'
+    local value = row and type(row.avatar_value) == 'string' and row.avatar_value ~= '' and row.avatar_value or nil
+    if kind == 'url' and not (value and row.avatar_status == 'approved') then kind, value = 'initials', nil end
+    if kind == 'preset' and not value then kind = 'initials' end
+    if kind == 'initials' then value = nil end
+    return { kind = kind, value = value, initials = Initials(officer and officer.name), frame = level.badge }
+end
+
+local function PrefsOf(row)
+    local p = Config.Profile or {}
+    local scale = type(p.uiScale) == 'table' and p.uiScale or {}
+    local lo, hi, default = NumOr(scale[1], 0.85), NumOr(scale[2], 1.25), NumOr(scale[3], 1.0)
+    local uiScale = row and tonumber(row.ui_scale) or default
+    if uiScale < lo or uiScale > hi then uiScale = default end
+    return {
+        appearance = row and type(row.appearance) == 'string' and row.appearance or DEFAULT_APPEARANCE,
+        accent = row and CP.U.isHexColour(row.accent) and row.accent:lower() or nil,
+        uiScale = uiScale,
+        language = row and type(row.language) == 'string' and row.language or nil,
+        callsMuted = row ~= nil and CP.U.truthy(row.calls_muted) or false,
+    }
+end
+
 local function SessionConfig()
     local types = missionTypes()
     local depts = {}
@@ -127,8 +284,11 @@ local function SessionLogo(dept)
     return { url = l.url, watermark = l.watermark, opacity = l.opacity, size = l.size, grayscale = l.grayscale }
 end
 
-local function SessionOfficer(o)
+local function SessionOfficer(o, row)
+    local level = LevelOf(row and row.xp or 0)
     return {
+        avatar = AvatarOf(o, row, level),
+        level = level,
         citizenid = o.citizenid,
         name = o.name,
         department = o.department,
@@ -140,8 +300,8 @@ local function SessionOfficer(o)
     }
 end
 
--- The Session (§9.2) for 'ui', or nil and an error key. May yield.
-local function BuildSession(src, ui)
+-- The Session (§9.2) for 'ui', or nil and an error key. May yield. args: { via, desk } (how it was opened).
+local function BuildSession(src, ui, args)
     if not CP.Access then return nil, 'err.internal' end
     local isAdmin = CP.Access.isAdmin(src)
     local officer, officerErr = CP.Access.getOfficer(src)
@@ -173,16 +333,24 @@ local function BuildSession(src, ui)
     local actions = {}
     if CP.Permissions and CP.Permissions.actionsFor then actions = CP.Permissions.actionsFor(src) end
     local title = Config.Tablet and Config.Tablet.title
+    local row = officer and ReadProfile(officer.citizenid) or nil
+    local config = SessionConfig()
+    for k, v in pairs(ExtraConfig(officer and officer.department)) do config[k] = v end
+    args = type(args) == 'table' and args or {}
+    local via = VIA[args.via] and args.via or 'command'
+    local desk = math.tointeger(tonumber(args.desk) or -1)
     return {
         ui = ui,
         title = type(title) == 'string' and title ~= '' and title or 'Crimson-Police',
         roles = roles,
-        officer = officer and SessionOfficer(officer) or nil,
+        officer = officer and SessionOfficer(officer, row) or nil,
         theme = theme,
         logo = logo,
         actions = actions,
         locale = CP.Locale.all(),
-        config = SessionConfig(),
+        config = config,
+        prefs = PrefsOf(row),
+        access = { via = via, desk = (via == 'desk' and desk and desk > 0) and desk or nil },
         serverTime = os.time(),
     }
 end
@@ -192,7 +360,7 @@ CP.Net.callback('getSession', function(src, args)
     local ui = args and args.ui
     if ui == nil then ui = 'officer' end
     if type(ui) ~= 'string' or not UIS[ui] then return nil, 'err.invalid_ui' end
-    local session, errKey = BuildSession(src, ui)
+    local session, errKey = BuildSession(src, ui, args)
     if not session then
         CP.log(TAG, 'getSession %s for %s refused: %s', ui, tostring(src), tostring(errKey))
         return nil, errKey

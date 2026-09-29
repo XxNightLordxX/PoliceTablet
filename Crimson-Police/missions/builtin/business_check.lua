@@ -24,6 +24,7 @@ RegisterMission({
   startTimeout = 600,            -- seconds to reach the start
   cooldown     = 600,            -- per officer, seconds
   vehiclePenalties = true,       -- heavy vehicle damage is penalised here
+  quietPatrol  = true,           -- lights and siren after the first arrival cost -10, personal
 
   locations = {
     {

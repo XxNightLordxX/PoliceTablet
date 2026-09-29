@@ -2577,18 +2577,21 @@ CP.Net.callback('builder:config', function(src)
     local bonuses = {}
     for _, id in ipairs(U.keys(Config.Bonuses or {})) do
         local c = Config.Bonuses[id]
-        local pct = c.kind == 'pct'
-        local value = tonumber(c.value) or 0
-        local penalty = not pct and value < 0
-        bonuses[#bonuses + 1] = {
-            id = id,
-            kind = pct and 'pct' or 'points',
-            value = pct and RoundInt(value * 100) or value,
-            each = c.each == true,
-            block = c.block,
-            penalty = penalty,
-            labelKey = (penalty and 'penalty.' or 'bonus.') .. id,
-        }
+        -- engineOnly ids are awarded by the engine or a block setting: never offered in the builder
+        if c.engineOnly ~= true then
+            local pct = c.kind == 'pct'
+            local value = tonumber(c.value) or 0
+            local penalty = not pct and value < 0
+            bonuses[#bonuses + 1] = {
+                id = id,
+                kind = pct and 'pct' or 'points',
+                value = pct and RoundInt(value * 100) or value,
+                each = c.each == true,
+                block = c.block,
+                penalty = penalty,
+                labelKey = (penalty and 'penalty.' or 'bonus.') .. id,
+            }
+        end
     end
     local zones = {}
     for _, z in ipairs(bc.noBuildZones or {}) do

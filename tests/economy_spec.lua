@@ -227,10 +227,11 @@ local function Def(id, typ, diff, extra)
         objectives = { {}, {} },
     }
     if extra and extra.isBoss then d.isBoss = true end
+    if extra and extra.quietPatrol then d.quietPatrol = true end
     return d
 end
 local DEFS = {
-    beat_patrol = Def('beat_patrol', 'patrol', 1, { label = 'Beat Patrol' }),
+    beat_patrol = Def('beat_patrol', 'patrol', 1, { label = 'Beat Patrol', quietPatrol = true }),
     evoc_course = Def('evoc_course', 'training', 2, { label = 'EVOC Course' }),
     manhunt = Def('manhunt', 'investigation', 2,
         { label = 'Manhunt', bonuses = { { id = 'no_weapons_fired', points = 10 } } }),
@@ -1022,7 +1023,7 @@ H.eq(b.final, 0, 'never below 0')
 run = FakeRun({ mission = DEFS.gang_shootout })
 p = FakeP({ result = 'completed', score = { lights_siren = 1 }, vehicle = { engine = 400, body = 300, seen = true } })
 b = CP.Scoring.compute(run, p, 'completed', { durationS = 500 })
-H.eq(Find(b.penalties, 'lights_siren'), nil, 'lights and siren only on Beat Patrol / Business Check')
+H.eq(Find(b.penalties, 'lights_siren'), nil, 'lights and siren only on quietPatrol missions')
 H.eq(Find(b.penalties, 'heavy_damage'), nil, 'vehiclePenalties = false turns off heavy damage')
 H.eq(Find(b.bonuses, 'fast_finish'), nil, 'slow run: no fast bonus')
 run = FakeRun({
@@ -1265,18 +1266,25 @@ CP.Scoring.onRowApproved(rF2)
 H.eq(H.sql('SELECT xp FROM cp_officers WHERE citizenid = \'CPOFF001\'')[1].xp, 350, 'still flagged: nothing counted')
 
 -- XP levels
+-- one ladder: the numbered level (Config.XPCurve) and its Config.XPLevels band
 local lv = CP.Scoring.xpLevel(0)
 H.eq(lv.label, 'Probationary', 'level 0')
-H.eq(lv.next, 1000, 'next level')
-lv = CP.Scoring.xpLevel(1000)
-H.eq(lv.label, 'Patrol Officer', 'level 1000')
+H.eq(lv.n, 1, 'Lv 1 at 0 XP')
+H.eq(lv.next, 100, 'next level at 100 XP')
+lv = CP.Scoring.xpLevel(1198)
+H.eq(lv.n, 10, 'Lv 10 at 1,198 XP')
+H.eq(lv.label, 'Patrol Officer', 'Lv 10 is the Patrol Officer band')
 H.eq(lv.badge, 'bronze', 'badge colour')
-H.eq(lv.xp, 1000, 'level threshold')
+H.eq(lv.xp, 1198, 'level threshold')
+lv = CP.Scoring.xpLevel(1197)
+H.eq(lv.n, 9, 'one XP short of Lv 10')
+H.eq(lv.label, 'Probationary', 'still Probationary')
 lv = CP.Scoring.xpLevel(45000)
 H.eq(lv.label, 'Elite', 'top level')
-H.eq(lv.next, nil, 'no next level')
+H.eq(lv.n, 50, 'Lv 50')
+H.eq(lv.next, CP.Scoring.levelXp(50) + 10000, 'the next prestige star')
 notes = {}
-H.sql('UPDATE cp_officers SET xp = 990 WHERE citizenid = \'CPOFF001\'')
+H.sql('UPDATE cp_officers SET xp = 1190 WHERE citizenid = \'CPOFF001\'')
 local rL = InsertRun({ final = 20 })
 CP.Scoring.onRowCounted('CPOFF001', { id = rL, state = 'completed', mission_type = 'tactical', final_points = 20 })
 H.eq(notes[#notes] and notes[#notes].key, 'scoring.level_up', 'level-up notification')
@@ -1434,7 +1442,8 @@ H.eq(hd.card.callsign, '2L-1', 'card callsign')
 H.eq(hd.card.departmentShort, 'SAST', 'card department tag')
 H.eq(hd.card.xp, 11250, 'card xp')
 H.eq(hd.card.level.label, 'Senior Patrol', 'card level')
-H.eq(hd.card.level.next, 15000, 'card next level')
+H.eq(hd.card.level.n, CP.Scoring.levelOf(11250), 'card level number')
+H.eq(hd.card.level.next, CP.Scoring.levelXp(CP.Scoring.levelOf(11250) + 1), 'card next level')
 H.eq(hd.card.streak.days, 4, 'card streak')
 H.eq(type(hd.card.streak.graceLeft), 'boolean', 'grace flag')
 H.eq(hd.card.streak.graceDays, 1, 'streak extra: Config.Scoring.streakGraceDays')

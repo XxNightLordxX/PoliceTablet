@@ -2,7 +2,8 @@
 
 import { createContext, useContext } from 'react';
 
-export type OfficerScreenKey = 'home' | 'board' | 'unit' | 'active' | 'leaderboard' | 'challenge' | 'profile';
+export type OfficerScreenKey =
+    'home' | 'board' | 'dispatch' | 'unit' | 'active' | 'leaderboard' | 'challenge' | 'profile';
 export type SupervisorScreenKey =
     'sup_missions' | 'sup_crossdept' | 'sup_live' | 'sup_review' | 'sup_payouts' | 'sup_builder' | 'sup_report';
 export type AdminScreenKey =

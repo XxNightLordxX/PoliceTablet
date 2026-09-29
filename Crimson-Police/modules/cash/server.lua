@@ -439,6 +439,10 @@ function Cash.release(rowId)
     return Cash.pay(rowId)
 end
 
+local function FireForfeited(rowId)
+    if CP.Hooks and CP.Hooks.fire then CP.Hooks.fire('row:forfeited', rowId) end
+end
+
 function Cash.forfeit(rowId)
     rowId = ToId(rowId)
     if not rowId then return false end
@@ -453,26 +457,44 @@ function Cash.forfeit(rowId)
         CP.err(TAG, 'forfeiting row %d failed: %s', rowId, tostring(n))
         return false
     end
-    return (tonumber(n) or 0) > 0
+    local done = (tonumber(n) or 0) > 0
+    if done then FireForfeited(rowId) end
+    return done
 end
 
--- Voided rows whose dispute window closed with no open dispute: held/pending -> forfeited.
+-- Voided rows whose dispute window closed with no open dispute: held/pending -> forfeited. Row by row, each
+-- claimed by its own UPDATE, so row:forfeited (held item rewards) fires once per row that changed.
 local function ForfeitureJob()
     Db()
     local hours = Num(Config.Disputes and Config.Disputes.windowHours, 48)
     local cutoff = Now() - math.floor(hours * 3600)
-    local ok, n = pcall(MySQL.update.await, [[
-        UPDATE cp_mission_runs r
-        SET r.cash_status = 'forfeited',
-            r.breakdown = IF(r.breakdown IS NULL, NULL, JSON_SET(r.breakdown, '$.cash.status', 'forfeited'))
+    local ok, rows = pcall(MySQL.query.await, [[
+        SELECT r.id FROM cp_mission_runs r
         WHERE r.voided = 1 AND r.cash_status IN ('held', 'pending') AND r.created_at < FROM_UNIXTIME(?)
           AND NOT EXISTS (SELECT 1 FROM cp_disputes d WHERE d.run_id = r.id AND d.status = 'open')
+        ORDER BY r.id
     ]], { cutoff })
     if not ok then
-        CP.err(TAG, 'forfeiture job failed: %s', tostring(n))
+        CP.err(TAG, 'forfeiture job failed: %s', tostring(rows))
         return 0
     end
-    n = tonumber(n) or 0
+    local n = 0
+    for _, row in ipairs(rows or {}) do
+        local id = ToId(row.id)
+        local okU, changed = pcall(MySQL.update.await, [[
+            UPDATE cp_mission_runs r
+            SET r.cash_status = 'forfeited',
+                r.breakdown = IF(r.breakdown IS NULL, NULL, JSON_SET(r.breakdown, '$.cash.status', 'forfeited'))
+            WHERE r.id = ? AND r.voided = 1 AND r.cash_status IN ('held', 'pending')
+              AND NOT EXISTS (SELECT 1 FROM cp_disputes d WHERE d.run_id = r.id AND d.status = 'open')
+        ]], { id })
+        if not okU then
+            CP.err(TAG, 'forfeiture of row %s failed: %s', tostring(id), tostring(changed))
+        elseif (tonumber(changed) or 0) > 0 then
+            n = n + 1
+            FireForfeited(id)
+        end
+    end
     if n > 0 then CP.log(TAG, 'forfeited the held cash of %d voided row(s)', n) end
     return n
 end
@@ -595,6 +617,8 @@ local function OnLoaded(src)
     local again = CP.Qbx.getInfo(src)
     if not again or again.citizenid ~= cid then return end
     Cash.payPending(src)
+    -- officer:loaded (CP.Hooks): the same moment, e.g. for the Rewards locker retry
+    if CP.Hooks and CP.Hooks.fire then CP.Hooks.fire('officer:loaded', src) end
 end
 
 CreateThread(function()

@@ -1,9 +1,8 @@
-// The result card (ARCHITECTURE §9.6): shown on the HUD for 25 s or until dismissed.
-// Points: P, bonuses, penalties, subtotal, × team/cross/streak, cap and Type of the Day notes,
-// failed credit share, final. Cash: B × tier × modifier = amount, with the payment status.
+// The result card (ARCHITECTURE §9.6): points, cash, and when present the level bar, the mission call, the decision
+// ledger and item rewards. Shown on the HUD for 25 s or until dismissed.
 
 import { useEffect, useState } from 'react';
-import { Badge, Icon, IconButton, TierBadge } from '../shared/components';
+import { Badge, Icon, IconButton, ProgressBar, TierBadge } from '../shared/components';
 import { cx } from '../shared/cx';
 import { pointsLimits } from '../shared/data';
 import {
@@ -14,8 +13,9 @@ import {
     formatNumber,
     formatPercent,
 } from '../shared/format';
-import { t, tOr } from '../shared/i18n';
+import { hasKey, t, tOr } from '../shared/i18n';
 import type { RunResult } from '../shared/types';
+import type { DecisionEntry, RunItem, RunMissionCall, RunProgress } from '../types/run_ui';
 
 export const RESULT_SECONDS = 25;
 
@@ -38,6 +38,118 @@ function Line({
         <div className={cx('cp-result__line', tone && `is-${tone}`, strong && 'is-strong', note && 'is-note')}>
             <span className="cp-result__line-label">{label}</span>
             <span className="cp-result__line-value cp-num">{value}</span>
+        </div>
+    );
+}
+
+// A locale text when the key exists, else the raw value (ids from blocks that may not be labelled yet).
+function labelOr(key: string, raw: string): string {
+    return hasKey(key) ? t(key) : raw;
+}
+
+const VERDICT_TONE = { best: 'plus', ok: undefined, wrong: 'minus', critical: 'minus' } as const;
+
+function LevelBlock({ progress }: { progress: RunProgress }) {
+    const lv = progress.level;
+    const gained = Math.max(0, progress.xpAfter - progress.xpBefore);
+    const next = lv.nextLevelXp;
+    const into = Math.max(0, progress.xpAfter - lv.levelXp);
+    const span = next !== null && next > lv.levelXp ? next - lv.levelXp : 1;
+    const left = next !== null ? Math.max(0, next - progress.xpAfter) : 0;
+    return (
+        <div className="cp-result__block">
+            <div className="cp-result__block-head">
+                <Icon name="medal" size={14} />
+                <span>{t('result.level', { n: lv.n, label: lv.label })}</span>
+            </div>
+            {progress.levelUp ? (
+                <div className="cp-result__notice is-test">
+                    <Icon name="star" size={15} />
+                    <strong>{t('result.level_up', { n: lv.n })}</strong>
+                </div>
+            ) : null}
+            <ProgressBar
+                value={next !== null ? into : 1}
+                max={span}
+                size="sm"
+                label={
+                    progress.pending
+                        ? t('result.xp_pending')
+                        : t('result.xp_gained', { xp: formatNumber(gained), left: formatNumber(left), next: lv.n + 1 })
+                }
+            />
+        </div>
+    );
+}
+
+function MissionCallBlock({ call }: { call: RunMissionCall }) {
+    return (
+        <div className="cp-result__block">
+            <div className="cp-result__block-head">
+                <Icon name="radio" size={14} />
+                <span>{t('result.mission_call', { code: call.code })}</span>
+            </div>
+            <Line
+                label={
+                    call.responseS !== null
+                        ? t('result.response', {
+                              time: formatDuration(call.responseS),
+                              target: formatDuration(call.targetS),
+                          })
+                        : t('result.response_none', { target: formatDuration(call.targetS) })
+                }
+                value={call.rapid ? t('result.rapid') : ''}
+                tone={call.rapid ? 'plus' : undefined}
+            />
+        </div>
+    );
+}
+
+function DecisionsBlock({ decisions }: { decisions: DecisionEntry[] }) {
+    return (
+        <div className="cp-result__block">
+            <div className="cp-result__block-head">
+                <Icon name="gavel" size={14} />
+                <span>{t('result.decisions')}</span>
+            </div>
+            {decisions.map((d, i) => (
+                <Line
+                    key={`d${i}`}
+                    label={t('result.decision', {
+                        contact: d.contact,
+                        choice: labelOr(`custody.choice.${d.choice}`, d.choice),
+                        by: d.by,
+                        truth: labelOr(`custody.truth.${d.truth}`, d.truth),
+                        verdict: t(`result.verdict.${d.verdict}`),
+                    })}
+                    value={
+                        d.points !== 0
+                            ? formatNumber(d.points, true)
+                            : d.discoverable
+                              ? ''
+                              : t('result.not_discoverable')
+                    }
+                    tone={VERDICT_TONE[d.verdict]}
+                />
+            ))}
+        </div>
+    );
+}
+
+function ItemsBlock({ items }: { items: RunItem[] }) {
+    return (
+        <div className="cp-result__block">
+            <div className="cp-result__block-head">
+                <Icon name="gift" size={14} />
+                <span>{t('result.items')}</span>
+            </div>
+            {items.map((it, i) => (
+                <Line
+                    key={`i${i}`}
+                    label={t('result.item', { count: it.count, label: it.label || it.name })}
+                    value={t(`result.item_status.${it.status}`)}
+                />
+            ))}
         </div>
     );
 }
@@ -190,6 +302,11 @@ export function ResultScreen({ result, onDismiss }: { result: RunResult; onDismi
                     </div>
                 )}
             </div>
+
+            {result.progress ? <LevelBlock progress={result.progress} /> : null}
+            {result.missionCall ? <MissionCallBlock call={result.missionCall} /> : null}
+            {result.decisions && result.decisions.length > 0 ? <DecisionsBlock decisions={result.decisions} /> : null}
+            {result.items && result.items.length > 0 ? <ItemsBlock items={result.items} /> : null}
 
             <div
                 className="cp-result__timer"

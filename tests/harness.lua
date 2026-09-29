@@ -96,6 +96,7 @@ end
 
 function H.step(ms)
     H.clockMs = H.clockMs + (ms or 0)
+    if H._entityTick then H._entityTick(ms or 0) end
     local list = sleeping
     sleeping = {}
     for _, s in ipairs(list) do
@@ -1281,6 +1282,227 @@ function H.bit(v)
 end
 
 -- ============================================================================
+--                        SHARED ENTITY MODEL (H.entity)
+-- ============================================================================
+-- One model of server-side entities for the specs that need moving cars and people: H.entity(netId, fields)
+-- makes (or returns) the entity of that net id. Its fields back GetEntityCoords, GetEntityHeading,
+-- GetEntitySpeed, GetVehiclePedIsIn, GetPedInVehicleSeat, IsVehicleSirenOn, GetVehicleBodyHealth,
+-- GetVehicleEngineHealth, DoesEntityExist and the net id natives (installed by H.boot; a spec that defines
+-- its own natives after H.boot replaces them). H.advance moves each entity by its velocity (m/s) and applies
+-- its timeline: e:at(ms, patch) sets fields when the fake clock reaches ms.
+--   fields: coords, heading, speed, velocity = vec3, health, body, engine, seats = { [-1] = pedHandle },
+--           siren, exists, vehicle (the vehicle a ped sits in), model, kind ('ped' | 'vehicle' | 'object')
+local ENTITY_BASE = 800000
+local model = { byNet = {}, byHandle = {} }
+H.entityModel = model
+
+local entityMeta = {}
+entityMeta.__index = entityMeta
+function entityMeta:at(ms, patch)
+    self.timeline = self.timeline or {}
+    self.timeline[#self.timeline + 1] = { at = ms, patch = patch }
+    table.sort(self.timeline, function(a, b) return a.at < b.at end)
+    return self
+end
+function entityMeta:set(patch)
+    for k, v in pairs(patch or {}) do self[k] = v end
+    return self
+end
+
+function H.entity(netId, fields)
+    netId = math.tointeger(netId)
+    local e = model.byNet[netId]
+    if not e then
+        e = setmetatable({
+            netId = netId,
+            handle = ENTITY_BASE + netId,
+            kind = 'vehicle',
+            coords = Vec(0.0, 0.0, 0.0),
+            heading = 0.0,
+            speed = 0.0,
+            health = 200,
+            body = 1000.0,
+            engine = 1000.0,
+            seats = {},
+            siren = false,
+            exists = true,
+        }, entityMeta)
+        model.byNet[netId] = e
+        model.byHandle[e.handle] = e
+    end
+    if fields then e:set(fields) end
+    return e
+end
+
+-- Forget every modelled entity (a spec that reuses net ids between cases).
+function H.resetEntities()
+    model.byNet, model.byHandle = {}, {}
+end
+
+H._entityTick = function(ms)
+    if next(model.byNet) == nil then return end
+    local now = H.clockMs
+    for _, e in pairs(model.byNet) do
+        local v = e.velocity
+        if v and e.exists and ms > 0 then
+            local dt = ms / 1000
+            e.coords = Vec(e.coords.x + (v.x or 0) * dt, e.coords.y + (v.y or 0) * dt,
+                (e.coords.z or 0) + (v.z or 0) * dt)
+            e.speed = math.sqrt((v.x or 0) ^ 2 + (v.y or 0) ^ 2 + (v.z or 0) ^ 2)
+        end
+        while e.timeline and e.timeline[1] and e.timeline[1].at <= now do
+            local step = table.remove(e.timeline, 1)
+            e:set(step.patch)
+        end
+    end
+end
+
+local function ModelEntity(handle) return model.byHandle[handle] end
+
+-- Installed by H.boot: the modelled entities first, then the harness defaults (player peds are src * 100).
+local function InstallEntityNatives()
+    local playerCoords = _G.GetEntityCoords
+    _G.GetEntityCoords = function(ent)
+        local e = ModelEntity(ent)
+        if e then return e.coords end
+        return playerCoords(ent)
+    end
+    _G.DoesEntityExist = function(ent)
+        local e = ModelEntity(ent)
+        if e then return e.exists == true end
+        return true
+    end
+    _G.GetEntityHeading = function(ent)
+        local e = ModelEntity(ent)
+        return e and e.heading + 0.0 or 0.0
+    end
+    _G.GetEntitySpeed = function(ent)
+        local e = ModelEntity(ent)
+        return e and e.speed + 0.0 or 0.0
+    end
+    _G.GetVehiclePedIsIn = function(ped)
+        local e = ModelEntity(ped)
+        if e then return e.vehicle or 0 end
+        local p = H.players[math.floor((ped or 0) / 100)]
+        return p and p.vehicle or 0
+    end
+    _G.GetPedInVehicleSeat = function(veh, seat)
+        local e = ModelEntity(veh)
+        return e and e.seats[seat or -1] or 0
+    end
+    _G.IsVehicleSirenOn = function(veh)
+        local e = ModelEntity(veh)
+        return e ~= nil and e.siren == true
+    end
+    _G.GetVehicleBodyHealth = function(veh)
+        local e = ModelEntity(veh)
+        return e and e.body + 0.0 or 1000.0
+    end
+    _G.GetVehicleEngineHealth = function(veh)
+        local e = ModelEntity(veh)
+        return e and e.engine + 0.0 or 1000.0
+    end
+    _G.NetworkGetEntityFromNetworkId = function(netId)
+        local e = model.byNet[math.tointeger(tonumber(netId) or -1) or -1]
+        return e and e.handle or 0
+    end
+    _G.NetworkGetNetworkIdFromEntity = function(ent)
+        local e = ModelEntity(ent)
+        return e and e.netId or 0
+    end
+end
+
+-- ============================================================================
+--                        OTHER RESOURCES (opt-in mocks)
+-- ============================================================================
+-- ox_inventory: H.mockInventory() installs Search, CanCarryItem, AddItem, RemoveItem and Items and returns
+-- the model ({ items = { [name] = { label } }, slots = { [src] = { slot } }, full = { [src] = true }, added,
+-- removed }). ox_target: H.mockTarget() installs addBoxZone, removeZone, addLocalEntity, addEntity (options
+-- with bones kept) and returns the recorded zones and options.
+function H.mockInventory(items)
+    local inv = { items = items or {}, slots = {}, full = {}, added = {}, removed = {} }
+    H.exportsMock.ox_inventory = {
+        Items = function(name)
+            if name then return inv.items[name] end
+            return inv.items
+        end,
+        Search = function(src, kind, name, meta)
+            local out, count = {}, 0
+            for _, sl in ipairs(inv.slots[src] or {}) do
+                local ok = sl.name == name and sl.count > 0
+                for k, v in pairs(meta or {}) do if not sl.metadata or sl.metadata[k] ~= v then ok = false end end
+                if ok then
+                    out[#out + 1] = sl
+                    count = count + sl.count
+                end
+            end
+            if kind == 'count' then return count end
+            return out
+        end,
+        CanCarryItem = function(src, name, count)
+            if inv.full[src] then return false end
+            return inv.items[name] ~= nil or next(inv.items) == nil
+        end,
+        AddItem = function(src, name, count, meta)
+            if inv.full[src] then return false, 'inventory_full' end
+            inv.added[#inv.added + 1] = { src = src, name = name, count = count, meta = meta }
+            inv.slots[src] = inv.slots[src] or {}
+            local list = inv.slots[src]
+            list[#list + 1] = { slot = #list + 1, name = name, count = count, metadata = meta }
+            return true, 'ok'
+        end,
+        RemoveItem = function(src, name, count, _, slot)
+            inv.removed[#inv.removed + 1] = { src = src, name = name, count = count, slot = slot }
+            for _, sl in ipairs(inv.slots[src] or {}) do
+                if sl.name == name and (slot == nil or sl.slot == slot) then sl.count = sl.count - count end
+            end
+            return true
+        end,
+        registerHook = function() return 1 end,
+    }
+    return inv
+end
+
+function H.mockTarget()
+    local t = { zones = {}, entities = {}, localEntities = {}, removed = {} }
+    local nextZone = 0
+    H.exportsMock.ox_target = {
+        addBoxZone = function(opts)
+            nextZone = nextZone + 1
+            t.zones[nextZone] = opts
+            return nextZone
+        end,
+        removeZone = function(id)
+            t.removed[#t.removed + 1] = id
+            t.zones[id] = nil
+        end,
+        addLocalEntity = function(ent, options)
+            t.localEntities[#t.localEntities + 1] = { entity = ent, options = options }
+        end,
+        addEntity = function(netIds, options) t.entities[#t.entities + 1] = { netIds = netIds, options = options } end,
+        removeEntity = function(netIds, names) t.removed[#t.removed + 1] = { netIds = netIds, names = names } end,
+        removeLocalEntity = function(ent, names) t.removed[#t.removed + 1] = { entity = ent, names = names } end,
+    }
+    return t
+end
+
+-- A CP.Qbx.plateOwned stand-in: owned = { [plate] = true }; fail = true answers nil (a lookup error).
+function H.plateOwnedStub(owned, fail)
+    local calls = {}
+    local fn = function(plate)
+        calls[#calls + 1] = plate
+        if fail then return nil end
+        return owned ~= nil and owned[plate] == true
+    end
+    return fn, calls
+end
+
+-- A clean CP.Hooks (every listener dropped).
+function H.resetHooks()
+    if CP and CP.Hooks then CP.Hooks._list, CP.Hooks._byId = {}, {} end
+end
+
+-- ============================================================================
 --                                     BOOT
 -- ============================================================================
 
@@ -1429,6 +1651,7 @@ function H.boot(opts)
         return p and p.coords or Vec(0.0, 0.0, 0.0)
     end
     _G.DoesEntityExist = function() return true end
+    InstallEntityNatives()
     _G.GetPlayerName = function(src) return 'Player' .. tostring(src) end
     _G.Player = function(src)
         local p = H.players[tonumber(src)] or {}
@@ -1472,6 +1695,7 @@ function H.boot(opts)
         Config.Database.folder = 'saves'
     end
     H.load('config/blocks.lua')
+    if CP and CP.Hooks then H.resetHooks() end
     H.load('shared/init.lua')
     H.load('shared/locale.lua')
     H.load('shared/net.lua')
@@ -1497,10 +1721,27 @@ function H.boot(opts)
             or {
                 ready = function() return true end,
                 isReady = function() return true end,
-                version = function() return 2 end,
+                version = function() return H.migrationVersion() end,
             }
     end
     return H
+end
+
+-- The migration files in order, read from the FILES list of modules/migrations/server.lua (the runner's own list).
+function H.migrationFiles()
+    local f = assert(io.open(ROOT .. 'modules/migrations/server.lua', 'r'))
+    local src = f:read('a')
+    f:close()
+    local body = assert(src:match('local FILES = (%b{})'), 'modules/migrations/server.lua has no FILES list')
+    local out = {}
+    for name in body:gmatch('\'([^\']+%.sql)\'') do out[#out + 1] = name end
+    return out
+end
+
+-- The schema version the migrations reach: the number of the last file in FILES.
+function H.migrationVersion()
+    local files = H.migrationFiles()
+    return tonumber((files[#files] or '0'):match('^(%d+)')) or 0
 end
 
 -- Apply sql/migrations/*.sql to cp_test from scratch (used by tests/run.lua once per run). In files mode the
@@ -1510,7 +1751,7 @@ function H.resetDatabase()
         if not os.execute(cmd) then error('the test database could not be built (mysql message above): ' .. cmd, 3) end
     end
     run(('mysql -uroot -e "DROP DATABASE IF EXISTS %s; CREATE DATABASE %s CHARACTER SET utf8mb4;"'):format(H.db, H.db))
-    for _, f in ipairs({ '001_initial.sql', '002_test_def_hash.sql' }) do
+    for _, f in ipairs(H.migrationFiles()) do
         run(('mysql -uroot %s < %ssql/migrations/%s'):format(H.db, ROOT, f))
     end
     if H.storage == 'files' then

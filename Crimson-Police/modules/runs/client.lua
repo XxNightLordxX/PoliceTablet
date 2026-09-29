@@ -4,11 +4,10 @@ CP.Runs = CP.Runs or {}
 local Runs = CP.Runs
 local TAG = 'runs'
 
-local LIGHTS_MISSIONS = { beat_patrol = true, business_check = true }
 local END_HUD_MS = 12000          -- the ended HUD stays this long before it hides
 local MESSAGE_MS = 8000           -- HUD messages clear after this long
 local VEHICLE_EVERY = 5           -- seconds between vehicle telemetry samples while driving
-local ACTIONS = { prepare = true, start = true, update = true, stop = true }
+local ACTIONS = { prepare = true, start = true, update = true, stop = true, adopt = true }
 local RUN_OVER = joaat('WEAPON_RUN_OVER_BY_CAR')
 local RAMMED = joaat('WEAPON_RAMMED_BY_CAR')
 local START_CIRCLE_MIN = 200.0    -- a start this wide is a search circle (Manhunt): shown on the map at accept
@@ -26,9 +25,22 @@ function Runs.current()
     return current
 end
 
+-- The objective whose client half runs netId's AI after an adoption (nil = the one that spawned it).
+function Runs.adoptedBy(netId)
+    netId = math.tointeger(tonumber(netId) or -1)
+    return current and current.adopted and netId and current.adopted[netId] or nil
+end
+
+-- Server texts may arrive as CP.Lt tokens: they are resolved here, in this player's language, right before
+-- the NUI gets them.
+local function Resolve(v)
+    if CP.Locale and CP.Locale.resolveAll then return CP.Locale.resolveAll(v) end
+    return v
+end
+
 local function Hud(patch)
     if CP.Tablet and CP.Tablet.hud then
-        local ok, err = pcall(CP.Tablet.hud, patch)
+        local ok, err = pcall(CP.Tablet.hud, Resolve(patch))
         if not ok then CP.err(TAG, 'HUD update failed: %s', tostring(err)) end
     end
 end
@@ -234,7 +246,8 @@ local function StartTelemetry(run)
     local myToken = token
     CreateThread(function()
         local tick = 0
-        local sirenCheck = LIGHTS_MISSIONS[run.missionId] == true
+        -- quietPatrol missions: lights and siren count only once the run is in progress (after arrival)
+        local sirenCheck = type(run.mission) == 'table' and run.mission.quietPatrol == true
         while current == run and token == myToken do
             Wait(1000)
             if current ~= run or token ~= myToken then break end
@@ -245,7 +258,7 @@ local function StartTelemetry(run)
                 if tick % VEHICLE_EVERY == 0 and NetworkGetEntityIsNetworked(veh) then
                     Runs.telemetry('vehicle', { netId = NetworkGetNetworkIdFromEntity(veh) })
                 end
-                if sirenCheck and not run.sentSiren and IsVehicleSirenOn(veh) then
+                if sirenCheck and not run.sentSiren and run.state == 'in_progress' and IsVehicleSirenOn(veh) then
                     run.sentSiren = true
                     Runs.telemetry('lights_siren', {})
                 end
@@ -457,7 +470,16 @@ RegisterNetEvent(CP.e('client:objective'), function(runId, index, msg)
         CallBlock(index, 'start')
         ReportArea(current, index, msg.area)
     elseif action == 'update' then
-        if not b.stopped then CallBlock(index, 'update', msg.data) end
+        if not b.stopped then CallBlock(index, 'update', Resolve(msg.data)) end
+    elseif action == 'adopt' then
+        -- this host now runs the AI of netId in objective index's client half (CP.Runs.adopt)
+        local netId = math.tointeger(tonumber(msg.netId) or -1)
+        if not netId or netId <= 0 then return end
+        current.adopted = current.adopted or {}
+        current.adopted[netId] = index
+        local from = math.tointeger(tonumber(msg.from) or -1)
+        if from and from > 0 and from ~= index and current.blocks[from] then CallBlock(from, 'release', netId) end
+        CallBlock(index, 'adopt', netId, from)
     elseif action == 'stop' then
         if not b.stopped then
             b.stopped = true
