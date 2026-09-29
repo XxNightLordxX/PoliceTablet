@@ -344,12 +344,13 @@ Implementers of modules/integrations/* must follow it; the most important points
 - S `getByCitizenId(citizenid) -> src|nil`
 - S `getOnlinePlayers() -> { src, ... }`
 - S `getJobs() -> table` (qbx jobs)
-- S `addMoney(src, account, amount, reason) -> boolean`
+- S `addMoney(src, account, amount, reason) -> boolean, why|nil` — amount rounded with `CP.U.round`; `why = 'error'` when `AddMoney` raised (the balance may already have changed: never retry or refund; CP.Cash leaves the row `paying`); a plain refusal returns only `false`
 - S `isDowned(src) -> boolean` (`metadata.isdead == true or metadata.inlaststand == true`)
 - S `onDutyChange(fn(src, onDuty))`, `onPlayerLoaded(fn(src))`, `onJobChange(fn(src, job))`, `onPlayerUnload(fn(src))`, `onGroupUpdate(fn(src))` — register listeners (any number).
+- S `onMetaDataChange(fn(src, key, old, new), keys?)` — `qbx_core:server:onSetMetaData (key, oldValue, value, source)`, fired after the value is set; `keys` filters before any thread starts (CP.Downed uses `isdead` / `inlaststand`).
   Sources: `QBCore:Server:SetDuty (src, onDuty)`, `QBCore:Server:PlayerLoaded (player)`,
   `QBCore:Server:OnJobUpdate (src, job)`, `QBCore:Server:OnPlayerUnload (src)`,
-  `qbx_core:server:onGroupUpdate (src, groupName, grade|nil)` — all server-local: register with
+  `qbx_core:server:onGroupUpdate (src, groupName, grade|nil)`, `qbx_core:server:onSetMetaData` — all server-local: register with
   **AddEventHandler only, never RegisterNetEvent** (a net handler would let clients spoof them). SetDuty can
   arrive stale/out of order: listeners must re-read `getInfo(src).job.onduty` before acting on "on duty".
 - C `getPlayerData() -> PlayerData`, `onJobUpdate(fn(job))`, `onDutyChange(fn(onDuty))`, `onUnload(fn())`, `onLoaded(fn())`
@@ -485,7 +486,8 @@ Server:
 - `markArrived(run, src)` *(hook, from CP.Route)*
 - `removeParticipant(run, src, endReason, opts) -> rowId|nil` — `opts.keepFlag` (downed), `opts.silent`
 - `reclassify(citizenid, runId, newEndReason)` *(hook, from CP.Calls: real_call → real_call_cancelled)* — updates the row, applies the type cooldown, drops the pay tier if the run is still running
-- `endRun(run, state, endReason)` — state `'completed'|'failed'`
+- `endRun(run, state, endReason)` — state `'completed'|'failed'`; an active participant who is down at that moment (`CP.Qbx.isDowned`, not in the arena) leaves first through `CP.Downed.handle` (result Failed, end_reason `downed`) and only the others get the run's end state
+- `noteWeaponFired(run, src)` — server-side proof for `no_weapons_fired` (CP.Npc: a participant's gun hit or gun kill on a mission ped; the `weapon_fired` telemetry also goes through it)
 - `objectiveComplete(run, index, data) -> boolean` (false when minSeconds is not reached yet; flags `too_fast`)
 - `dispatch(run, index, src, ev) -> ok, reason` — deliver a SERVER-originated event (e.g. from CP.Npc: `{ type = 'cuffed', netId }`, `{ type = 'shot', netId, src }`, `{ type = 'damaged', netId, attacker }`) to the block's `onEvent` of objective `index` (the objective that owns the entity, `cp.obj`), bypassing the client anti-cheat checks
 - Test hooks (used by CP.Testing; only valid on test runs): `testSkip(run)` (mark the current objective done regardless of minSeconds and start the next), `testRestart(run)` (block `restart` for the current objective, or stop+delete its entities and `start` again), `anchor(run) -> vec3` (teleport target: the current objective's reference point, or the start before In progress)
@@ -509,7 +511,7 @@ Server:
 - Loops: 1 s timer/block tick; `Config.AntiCheat.jobRecheck` access recheck; corpse cleanup
   (`Config.Limits.corpseCleanup`); start timeout per participant; `playerDropped` → `disconnected`;
   character unload → `disconnected`; resource stop → delete all entities, no rows.
-- Entity state bag: every spawned entity gets `Entity(e).state:set('cp', { run = id, obj = i, role, state = 'idle', armed, cfg }, true)`.
+- Entity state bag: every spawned entity gets `Entity(e).state:set('cp', { run = id, obj = i, role, state = 'idle', armed, cfg }, true)`. The server keeps its own copy in `run.entities[netId].bag` and never reads the bag back (a client can write the bag of an entity it owns): the armed-alive cap counts through `CP.Npc.getState`, and "is this a run entity" (vehicle / pedestrian telemetry) is answered from `run.entities` only.
 Client:
 - `CP.Runs.current() -> clientRun|nil` (`{ id, mission, location, locationIndex, seed, isHost, test, state, tier, payTier, modifier, objectiveIndex }`)
 - `report(index, evidence)` → `server:objective` (fills `coords` = player coords and `time` = GetGameTimer())
@@ -525,7 +527,7 @@ Client:
 Server:
 - `setState(run, netId, state, extra)` — authoritative ped state in the `cp` bag:
   `'idle'|'hostile'|'fleeing'|'surrendered'|'cuffed'|'dead'|'restrained'|'freed'|'safe'|'driving'|'stopped'`
-- `getState(netId) -> state`, `isNeutralised(netId) -> boolean` (dead or cuffed)
+- `getState(netId) -> state`, `isNeutralised(netId) -> boolean` (dead or cuffed) — from the server record per net id (seeded from `run.entities[netId].bag`, mirrored back after every write), never from the replicated bag
 - `rollSurrender(run, netId, chance) -> boolean` (server rng)
 - `enableCuff(run, netId, opts)` — participants get ox_target "Cuff suspect" when state is `surrendered`
   (`opts = { label, duration = 5000, maxDistance = 3.0 }`); a validated cuff sets `cuffed` and calls the
@@ -534,7 +536,9 @@ Server:
   (server polls health; killer from `GetPedSourceOfDeath`, or the driver of the killing vehicle);
   `CP.AntiCheat.onNpcKilled` is called for non-participant killers
 - `weaponDamageEvent` listener: a participant shooting a `surrendered`/`cuffed`/`restrained` ped →
-  `CP.Runs.penalize(run, 'shot_surrendered', { src })` and the owning block's `onEvent` `{ type = 'shot', netId, src }`
+  `CP.Runs.penalize(run, 'shot_surrendered', { src })` and the owning block's `onEvent` `{ type = 'shot', netId, src }`;
+  a gun hit (not melee, not a vehicle) by an active participant on a mission ped, or a participant's gun kill
+  (noted before `entityDied`), → `CP.Runs.noteWeaponFired(run, src)`
 - `onDamaged(fn(run, netId, attackerSrc))` for blocks that care (hostages)
 Client (host runs AI; all participants see targets):
 - `apply(entity, cfg)` — model config from the `cp` bag: accuracy, armour, health, weapon,
@@ -569,6 +573,7 @@ client actions `setGps`, `recalcRoute` registered with `CP.Tablet.registerClient
 - `foreignFlag(src) -> boolean` — a `crimsonArena` value with `active == true` whose `source` is not `'crimson-police'` (Crimson-Arena's). `set` does nothing (returns false) while a foreign flag is present.
 - `inArena(src) -> boolean` — `foreignFlag(src) or GetPlayerRoutingBucket(src) ~= 0` (the gate every module uses)
 - `wanted` intent table, re-assert of our flag after a foreign wipe, `foreignClearedAt[src]` — see docs/CRIMSON_ARENA.md rules 1–3 and 9
+- `hold(src, on)` (CP.Downed keeps a downed participant's flag), `forget(src) -> boolean` — drops our intent, hold, orphan timer and queued re-assert **without touching the bag** (CP.Runs uses it when an in-arena participant leaves; CRIMSON_ARENA rule 1)
 - Start: removes leftover Crimson-Police flags from every online player. Stop: clears all.
 - Backstop listeners (shots fired within `Config.Alerts.backstopRadius` of the run's start or the
   participant's objective area; person down/dead while flagged) → clear after `Config.Alerts.backstopDelay` s.
@@ -579,6 +584,11 @@ downed → `CP.Runs.removeParticipant(run, src, 'downed', { keepFlag = true })`,
 no EMS (`CP.Ambulance.doctorCount() == 0`) → after `Config.Downed.pickupDelay` s `client:pickup`
 (runId, dropOff) then `CP.Ambulance.revive(src)` then `CP.Alerts.clear(src)`; EMS on duty →
 `CP.Alerts.clear(src)` then `client:requestEMS` (runId). Once per downed participant; cancelled on drop/unload.
+Also reacts at once to `CP.Qbx.onMetaDataChange` (`isdead` / `inlaststand` set to true).
+`handle(run, src) -> boolean` *(hook, from CP.Runs.endRun)*: holds the flag and removes the participant with
+`{ keepFlag = true }` before anything yields, then starts the pick-up / EMS flow in its own thread; false (nothing
+done) when they are not active, in the arena, the run ended, or that down is already past the leave.
+`cancel(src, reason)`, `isPending(src)`.
 Client: `client:pickup` → fade out, overlay "Picked up by an NPC unit", wait for revive, detach, move to the drop-off, fade in; `client:requestEMS` → `CP.Ambulance.sendEMSRequest()`.
 
 ### 5.16 CP.Units — modules/units
@@ -641,7 +651,8 @@ officer (`client:operation` (state, missionLabel)). Actions `server:sup:op*` and
 
 ### 5.24 CP.Disputes — modules/disputes (S)
 - `server:dispute` ({ rowId, reason }) — own flagged/voided/failed rows within `Config.Disputes.windowHours`
-- `forSupervisor(src) -> list`, `forAdmin() -> list`, `handle(src, disputeId, decision, reason, awardPoints)`
+- `forSupervisor(src) -> list`, `forAdmin() -> list`, `forOfficer(citizenid, goesTo?, viewerSrc?) -> list`, `handle(src, disputeId, decision, reason, awardPoints)`
+- `supervisorCanAnswer(runUuid) -> boolean` — switch `Config.Permissions.supervisor.handleDisputes` on and an online supervisor of the run's departments who did not take part (on or off duty). While it is false for an open flagged/voided-run dispute, the admins are the ones told about it at filing and `admin:getOfficer` lists it on the Admin UI Officers screen (Approve / Reject)
 
 ### 5.25 CP.Admin — modules/admin (S)
 - `/CrimsonPoliceAdmin` (`Config.Tablet.adminCommand`) and every subcommand of the spec (console too):
@@ -700,7 +711,9 @@ Client: placement tool, route recording, test drive; overlays through `CP.Tablet
 
 ### 6.2 NPC state (the `cp` state bag, server-authoritative)
 `Entity(e).state.cp = { run, obj, role, state, armed, cfg = { weapon, accuracy, armour, health, behaviour, model } , tag }`.
-Only the server changes `state` (via `CP.Npc.setState`). Client requests are evidence events
+Only the server changes `state` (via `CP.Npc.setState`), and the server never reads the bag back: its record per net
+id (`run.entities[netId].bag`, kept by CP.Npc) is the truth, so a client that rewrites the bag of an entity it owns
+changes nothing on the server. Client requests are evidence events
 (`{ type = 'cuffed', netId }`, `{ type = 'surrender_check', netId }`, `{ type = 'freed', netId }` …)
 that the owning block validates with server-side distances and states.
 Killing a `surrendered`, `cuffed`, `restrained` or unarmed suspect/fugitive/inmate/hostage fails the

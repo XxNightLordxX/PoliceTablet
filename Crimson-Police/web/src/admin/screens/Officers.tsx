@@ -1,7 +1,8 @@
 // Admin UI · Officers (screen key 'admin_officers').
 // Search any officer (name, callsign or citizen id); the record shows rank, callsign, department, XP level,
 // badges, cash earned, recent runs, the Crimson-Police suspension and their disputes (failed runs; flagged
-// or voided runs too while the supervisors' handleDisputes switch is off).
+// or voided runs too while the supervisors' handleDisputes switch is off, and open ones no online
+// supervisor can answer: every online supervisor of the run's departments took part, or none is online).
 // Actions: suspend (days + reason) / unsuspend, answer a failed-run dispute with a manual award or dismiss
 // it, approve or reject a flagged/voided-run dispute (no award points: approving restores the run), void a
 // run from the history. The server re-checks every action (admin only).

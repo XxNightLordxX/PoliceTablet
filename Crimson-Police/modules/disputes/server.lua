@@ -31,6 +31,8 @@
         department (every department for an admin without a department), never runs they took part in
     CP.Disputes.forAdmin(excludeCitizenid?) -> { DisputeView }   every open dispute (both kinds)
     CP.Disputes.forOfficer(citizenid, goesTo?, viewerSrc?) -> { DisputeView }   that officer's disputes (any status)
+    CP.Disputes.supervisorCanAnswer(runUuid) -> boolean   switch on and an online supervisor of the run's
+        departments who did not take part (on or off duty); false = only an admin can answer it now
     CP.Disputes.handle(src, disputeId, decision, reason, awardPoints, opts) -> ok, data|errKey
         decision 'approve'|'reject'; awardPoints 1..10000 for an approved failed-run dispute;
         opts.adminOnly = true refuses non-admins (the admin endpoint)
@@ -387,14 +389,13 @@ local function supervisorsHandle()
     return type(sup) == 'table' and sup.handleDisputes == true
 end
 
--- Toast the staff who can answer a new dispute (never participants of the run). Admins for failed-run
--- disputes, or for every dispute while the supervisors' switch is off. A flagged/voided-run dispute goes to
--- the on-duty supervisors of the run's departments; when every online supervisor of those departments
--- took part in the run (so none of them may answer it), the admins are told instead.
-local function tellStaff(goesTo, runUuid, label)
-    if not (has('Qbx', 'getOnlinePlayers') and has('Qbx', 'getInfo')) then return end
+-- The online staff for a dispute about runUuid (never participants of the run): admins, the on-duty
+-- supervisors of the run's departments, whether a supervisor of those departments took part in the run
+-- (supTookPart) and whether another one is online off duty (supOther). nil when qbx is unavailable.
+local function onlineStaff(runUuid)
+    if not (has('Qbx', 'getOnlinePlayers') and has('Qbx', 'getInfo')) then return nil end
     local ok, list = call('Qbx', 'getOnlinePlayers')
-    if not ok or type(list) ~= 'table' then return end
+    if not ok or type(list) ~= 'table' then return nil end
     local depts = {}
     for _, d in ipairs(runDepartments(runUuid)) do depts[d] = true end
     local participants = {}
@@ -427,21 +428,44 @@ local function tellStaff(goesTo, runUuid, label)
             end
         end
     end
+    return { admins = admins, supervisors = supervisors, supTookPart = supTookPart, supOther = supOther }
+end
+
+-- Toast the staff who can answer a new dispute (never participants of the run). Admins for failed-run
+-- disputes, or for every dispute while the supervisors' switch is off. A flagged/voided-run dispute goes to
+-- the on-duty supervisors of the run's departments; when every online supervisor of those departments
+-- took part in the run (so none of them may answer it), the admins are told instead.
+local function tellStaff(goesTo, runUuid, label)
+    local st = onlineStaff(runUuid)
+    if not st then return end
     local targets
     if goesTo == 'admin' or not supervisorsHandle() then
         -- With the supervisors' switch off, admins are the only ones who can answer it.
-        targets = admins
-    elseif #supervisors > 0 then
-        targets = supervisors
-    elseif supTookPart and not supOther then
+        targets = st.admins
+    elseif #st.supervisors > 0 then
+        targets = st.supervisors
+    elseif st.supTookPart and not st.supOther then
         -- every supervisor of the department took part: nobody there may answer it, admins can
-        targets = admins
+        targets = st.admins
     else
         targets = {}
     end
     if #targets > 0 and has('Tablet', 'notifyMany') then
         call('Tablet', 'notifyMany', targets, 'info', 'admin.notice.new_dispute', { mission = label })
     end
+end
+
+-- Whether a supervisor could answer a flagged/voided-run dispute about runUuid right now: the supervisors'
+-- switch is on and an online supervisor of the run's departments who did not take part in it exists (on or
+-- off duty). false means only an admin can answer it now (CP.Admin lists it on the Officers screen then,
+-- matching the admins tellStaff notifies). true when that cannot be told (qbx unavailable): left to the
+-- supervisors, as before.
+function D.supervisorCanAnswer(runUuid)
+    if not supervisorsHandle() then return false end
+    if type(runUuid) ~= 'string' or runUuid == '' then return true end
+    local st = onlineStaff(runUuid)
+    if not st then return true end
+    return #st.supervisors > 0 or st.supOther
 end
 
 local INSERT_SQL = [[INSERT INTO cp_disputes (run_id, citizenid, reason, goes_to)

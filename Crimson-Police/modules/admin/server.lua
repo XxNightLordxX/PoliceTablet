@@ -1487,10 +1487,31 @@ CP.Net.callback('admin:getOfficer', function(src, args)
     if has('Disputes', 'forOfficer') then
         -- Failed-run disputes always; with Config.Permissions.supervisor.handleDisputes off, admins are the only ones
         -- who can answer disputes about flagged or voided runs too (and are the ones told about them), so show those.
+        -- With the switch on, an open flagged/voided-run dispute is listed too while no supervisor can answer it
+        -- (every online supervisor of the run's departments took part, or none is online): the admins are the
+        -- ones told about it then (CP.Disputes tellStaff), so they must be able to answer it here.
         local supCfg = Config.Permissions and Config.Permissions.supervisor
         local supHandle = type(supCfg) == 'table' and supCfg.handleDisputes == true
-        local ok, list = call('Disputes', 'forOfficer', cid, supHandle and 'admin' or nil, src)
-        if ok and type(list) == 'table' then disputes = list end
+        local fallback = supHandle and has('Disputes', 'supervisorCanAnswer')
+        local ok, list = call('Disputes', 'forOfficer', cid, (supHandle and not fallback) and 'admin' or nil, src)
+        if ok and type(list) == 'table' then
+            if fallback then
+                local canSup = {}
+                for _, d in ipairs(list) do
+                    if type(d) == 'table' and d.goesTo == 'admin' then
+                        disputes[#disputes + 1] = d
+                    elseif type(d) == 'table' and d.status == 'open' and d.runUuid then
+                        if canSup[d.runUuid] == nil then
+                            local okS, res = call('Disputes', 'supervisorCanAnswer', d.runUuid)
+                            canSup[d.runUuid] = not okS or res ~= false
+                        end
+                        if not canSup[d.runUuid] then disputes[#disputes + 1] = d end
+                    end
+                end
+            else
+                disputes = list
+            end
+        end
     end
     -- Suspension history: every suspend / unsuspend / automatic suspension written to cp_audit.
     local suspensions = {}

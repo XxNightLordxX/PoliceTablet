@@ -968,7 +968,37 @@ H.ok(go.data.stats.runs >= 5, 'runs counted (incl. the archive)')
 H.eq(go.data.cash.week, 1234, 'cash this week from CP.Cash')
 H.ok(go.data.cash.total >= 300, 'cash earned all-time includes the archive')
 H.ok(#go.data.runs >= 1, 'recent runs')
-H.eq(#go.data.disputes, 1, 'disputes about failed runs')
+do
+    -- switch on: the failed-run dispute, plus the open flagged dispute about D7 (section 6: both sast supervisors
+    -- took part, so no supervisor can answer it and the admins were told); D8 (Sam did not take part) and D9 stay
+    -- with the supervisors
+    local D7, D8 = 'bbbbbbbb-2222-4000-8000-000000000007', 'bbbbbbbb-2222-4000-8000-000000000008'
+    local byRun, failed = {}, 0
+    for _, d in ipairs(go.data.disputes) do
+        byRun[d.runUuid] = d
+        if d.kind == 'failed' then failed = failed + 1 end
+    end
+    H.eq(failed, 1, 'disputes about failed runs')
+    H.eq(#go.data.disputes, 2, 'plus the one dispute no supervisor can answer')
+    H.ok(byRun[D7] and byRun[D7].kind == 'flagged' and byRun[D7].status == 'open' and byRun[D7].canHandle == true,
+        'every online supervisor took part: the admin sees the flagged-run dispute and can answer it')
+    H.eq(byRun[D8], nil, 'a supervisor who did not take part is online: that dispute stays with the supervisors')
+    H.eq(co(CP.Disputes.supervisorCanAnswer, D7), false, 'supervisorCanAnswer: every online supervisor took part')
+    H.eq(co(CP.Disputes.supervisorCanAnswer, D8), true, 'supervisorCanAnswer: Sam can answer it')
+    -- Sam logs off: nobody online can answer D8 either
+    local sam = infos[2]
+    infos[2] = nil
+    local off = {}
+    for _, d in ipairs(cb('admin:getOfficer', 1, { citizenid = 'OFF00003' }).data.disputes) do off[d.runUuid] = d end
+    H.ok(off[D8] ~= nil, 'no supervisor who could answer it is online: listed for the admin')
+    -- off duty still counts as able to answer it (tellStaff does not fall back to admins either)
+    sam.job.onduty = false
+    infos[2] = sam
+    off = {}
+    for _, d in ipairs(cb('admin:getOfficer', 1, { citizenid = 'OFF00003' }).data.disputes) do off[d.runUuid] = d end
+    H.eq(off[D8], nil, 'an off-duty supervisor who did not take part keeps it with the supervisors')
+    sam.job.onduty = true
+end
 do
     -- with the supervisors' dispute switch off, admins answer flagged/voided disputes too: the Officers screen lists them
     local sup = Config.Permissions.supervisor
@@ -977,9 +1007,10 @@ do
     local all = cb('admin:getOfficer', 1, { citizenid = 'OFF00003' }).data.disputes
     local kinds = {}
     for _, d in ipairs(all) do kinds[d.kind] = true end
-    H.ok(#all > 1 and kinds.failed and (kinds.flagged or kinds.voided), 'supervisor-routed disputes shown to admins when supervisors do not handle them')
+    H.ok(#all > 2 and kinds.failed and (kinds.flagged or kinds.voided), 'supervisor-routed disputes shown to admins when supervisors do not handle them')
+    H.eq(co(CP.Disputes.supervisorCanAnswer, 'bbbbbbbb-2222-4000-8000-000000000008'), false, 'supervisorCanAnswer is false with the switch off')
     sup.handleDisputes = was
-    H.eq(#cb('admin:getOfficer', 1, { citizenid = 'OFF00003' }).data.disputes, 1, 'only failed-run disputes again with the switch on')
+    H.eq(#cb('admin:getOfficer', 1, { citizenid = 'OFF00003' }).data.disputes, 2, 'failed-run disputes and the unanswerable one again with the switch on')
 end
 H.eq(go.data.suspension.suspended, false, 'not suspended')
 H.eq(cb('admin:getOfficer', 1, { citizenid = 'NOPE0000' }).error, 'err.unknown_officer', 'unknown officer')

@@ -65,7 +65,8 @@ Each Lua file's header comment documents its public API, net names and rules.
 - New disputes toast online supervisors of the run's departments (not participants) or online admins
   (`admin.notice.new_dispute`) and post to the flags webhook. A flagged/voided-run dispute whose run every online
   supervisor of those departments took part in (none of them may answer it; no other one online, on or off duty)
-  toasts the online admins instead.
+  toasts the online admins instead. `CP.Disputes.supervisorCanAnswer(runUuid)` (switch on and an online supervisor
+  of the run's departments who did not take part, on or off duty) is the view-time form of that rule.
 
 ### CP.AntiCheat
 - **checkEvent** (after CP.Runs' own checks): in-progress run, active participant, not in arena (`err.in_arena`,
@@ -115,7 +116,8 @@ Each Lua file's header comment documents its public API, net names and rules.
 - A dispute approval of a flagged row calls `approveFlagged(..., { quiet = true })`: one toast for the officer.
 - New-dispute toasts respect `Config.Permissions.supervisor.handleDisputes` (off → admins are told instead).
 - Admin UI → Officers: a failed-run dispute is answered with Award points / Dismiss; a flagged or voided-run
-  dispute (listed while `handleDisputes` is off) with Approve / Reject, which calls `server:admin:handleDispute`
+  dispute (listed while `handleDisputes` is off, or while it is open and `supervisorCanAnswer` is false, i.e. the
+  admins are the ones told about it) with Approve / Reject, which calls `server:admin:handleDispute`
   `{ disputeId, decision, reason }` without `awardPoints` (approve restores the run and releases held cash). Those
   rows carry a "Flagged run" / "Voided run" badge and Approved / Rejected status labels.
 - `admin:getOfficer` adds `suspensions` (the last 10 `suspend` / `unsuspend` / `autoSuspend` audit entries) for the
@@ -147,7 +149,8 @@ Each Lua file's header comment documents its public API, net names and rules.
 - `admin:getOfficer { citizenid }` → `{ citizenid, name, callsign, rank, department, departmentShort, departmentLabel,
   xp, level, streakDays, badges, cash = { total (incl. archive), week }, stats = { runs, completed, failed, abandoned,
   flagged, voided }, suspension = { suspended, untilTs }, suspensions = { { id, action, actor, actorName, role, days,
-  reason, createdAt } } (10 newest), runs (25 newest), disputes (failed-run disputes),
+  reason, createdAt } } (10 newest), runs (25 newest), disputes (failed-run disputes; every kind with the switch off; plus open flagged/voided ones no
+  online supervisor can answer with it on),
   online, own, known, maxAward }`
 - `admin:getDepartments` → `{ departments = { { key, label, short, jobs, supervisorGrade, societyAccount, theme,
   logo|nil, members, suspended, onDuty, societyBalance|nil } }, cashSource, showSociety }`
