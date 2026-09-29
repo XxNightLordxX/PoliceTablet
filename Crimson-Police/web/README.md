@@ -12,7 +12,7 @@ while nothing is active.
 ```
 npm install
 npm run dev         # browser dev mode on http://localhost:5173 (mocks + dev panel)
-npm run build       # tsc --noEmit && vite build → dist/ (must pass with zero errors)
+npm run build       # tsc --noEmit && vite build && node build-stamp.mjs → dist/ (zero errors; writes dist/build-stamp.json)
 npm run typecheck
 ```
 
@@ -104,13 +104,16 @@ Each screen is **one file** that already exists as a stub. Replace only that fil
 
 3. **Text** goes in your own locale part `Crimson-Police/locales/parts/<slice>.json` (flat JSON
    object, your namespace from ARCHITECTURE §10). Never hard-code English; never edit another
-   slice's part. Browser mode merges every part automatically.
+   slice's part. Browser mode merges every part automatically. In game only `locales/en.json` is
+   loaded: regenerate it with `python3 tools/check_contracts.py --merge` and commit it (the check fails
+   while it is missing or out of date).
 
 4. **Styles**: put screen CSS in a sibling file (e.g. `officer/screens/MissionBoard.css`) imported by
    your screen, prefix classes with your feature (`.board-…`) and use only the `--cp-*` variables
    below so every department theme works.
 
-5. Run `npm run build` (zero TypeScript errors) and commit `dist/`.
+5. Run `npm run build` (zero TypeScript errors) and commit `dist/` with its `build-stamp.json`.
+   `tools/check_contracts.py` fails when `dist/` was not rebuilt after a change to `src/`.
 
 ---
 

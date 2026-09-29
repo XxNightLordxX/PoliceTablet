@@ -791,9 +791,12 @@ do
     H.eq(session(1).data.ui, 'officer', 'no args -> officer')
     H.eq(session(1, { ui = 'supervisor' }).data.ui, 'supervisor', 'supervisor session')
     H.eq(session(2, { ui = 'supervisor' }).error, 'err.not_supervisor', 'grade too low')
-    local adminOfficer = session(10, { ui = 'supervisor' })
-    H.eq(adminOfficer.ok, true, 'an officer who is an admin may use the Supervisor UI')
-    H.eq(adminOfficer.data.roles.supervisor, true, 'and the role says so')
+    H.eq(CP.Access.isSupervisor(10), false, 'player 10 is an admin below supervisorGrade')
+    H.eq(session(10, { ui = 'supervisor' }).error, 'err.not_supervisor',
+        'the admin ace does not open the Supervisor UI below supervisorGrade (grade only; admins use the Admin UI)')
+    local adminOfficer = session(10, { ui = 'officer' })
+    H.eq(adminOfficer.data.roles.supervisor, false, 'no Supervisor switch for an admin below supervisorGrade')
+    H.eq(adminOfficer.data.roles.admin, true, 'the admin role is still reported')
     H.eq(session(3, { ui = 'officer' }).error, 'err.not_on_duty', 'off duty')
     H.eq(session(3, { ui = 'supervisor' }).error, 'err.not_on_duty', 'off duty supervisor UI')
     H.eq(session(4, { ui = 'officer' }).error, 'err.not_police', 'second job')
@@ -1013,6 +1016,13 @@ lib.cancelProgress = function()
     if not progressActive then error('No progress bar is active') end
     progressActive = false
     progressCancels = progressCancels + 1
+end
+-- a Crimson-Police progress bar (blocks, npc cuff): goes through this resource's lib.progressBar
+local cpBarDone
+lib.progressBar = function()
+    progressActive = true
+    while progressActive do Wait(50) end
+    return false
 end
 _G.GetStreetNameAtCoord = function() return 777, 0 end
 _G.GetStreetNameFromHashKey = function(h) if h == 777 then return 'Main St' end return '' end
@@ -1384,7 +1394,9 @@ do
     T.hud({ runId = 'r10', phase = 'objectives' })
     T.overlay({ kind = 'fade', text = 'x' })
     CP.Runs = { current = function() return { id = 'r10' } end }
-    progressActive = true
+    H.eq(T.cpProgressActive(), false, 'no Crimson-Police progress bar yet')
+    CreateThread(function() cpBarDone = lib.progressBar({ duration = 5000 }) end)
+    H.eq(T.cpProgressActive(), true, 'lib.progressBar is counted as a Crimson-Police bar')
     local focusBefore = #focus
     arenaHandler('player:7', 'crimsonArena', { active = true, matchId = 'm1' })
     H.eq(T.isOpen(), true, 'the change handler only queues the work')
@@ -1396,7 +1408,18 @@ do
     H.eq(focus[#focus][1], false, 'focus released')
     H.eq(lastNui('hud').hud, nil, 'HUD hidden')
     H.eq(lastNui('overlay').overlay, nil, 'overlay hidden')
-    H.eq(progressCancels, 1, "the run's progress bar is cancelled")
+    H.eq(progressCancels, 1, "the Crimson-Police progress bar is cancelled")
+    tick(100)
+    H.eq(cpBarDone, false, 'the cancelled bar returned false')
+    H.eq(T.cpProgressActive(), false, 'the bar is no longer counted once it returned')
+    -- another resource's progress bar (lib.progressActive() is resource-wide) is never cancelled,
+    -- even during a Crimson-Police run
+    progressActive = true
+    arenaHandler('player:7', 'crimsonArena', { active = true, matchId = 'm1' })
+    tick(100)
+    H.eq(progressCancels, 1, "a foreign resource's progress bar is left alone")
+    H.eq(progressActive, true, 'the foreign bar still runs')
+    progressActive = false
 
     -- nothing opens while the local value is foreign
     LocalPlayer.state.crimsonArena = { active = true, matchId = 'm1' }

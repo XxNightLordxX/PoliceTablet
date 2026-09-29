@@ -122,3 +122,14 @@
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
+
+.boards-admin-side {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+.boards-flagged .boards-stuck__head,
+.boards-flagged .boards-stuck__meta {
+  min-width: 0;
+}

@@ -121,6 +121,12 @@ local function notify(src, kind, key, vars)
 end
 
 -- ── compute ─────────────────────────────────────────────────────────────────
+-- Round to the nearest dollar, halves up. The epsilon absorbs float error in the product (350 * 1.15 is
+-- 402.49999999999994 in doubles, a true $402.50 that must pay $403).
+local function roundMoney(x)
+    return math.floor(x + 0.5 + 1e-7)
+end
+
 function Cash.compute(run, p)
     if type(run) ~= 'table' or type(p) ~= 'table' then
         return 0, { B = 0, mTier = 1.0, mMod = 1.0, amount = 0, status = 'none' }
@@ -131,7 +137,7 @@ function Cash.compute(run, p)
     if run.modifier then mMod = num(Config.Events and Config.Events.modifierCash, 1.0) end
     local amount = 0
     if p.result == 'completed' and not presenceFailed(run, p) then
-        amount = math.max(0, CP.U.round(B * mTier * mMod))
+        amount = math.max(0, roundMoney(B * mTier * mMod))
     end
     local flagged = p.flagged ~= nil or run.flagged ~= nil
     local status = 'none'
@@ -344,7 +350,15 @@ payClaimed = function(row, rowId, cid, src, progress)
     if amount > 0 then
         local moneyAccount = (Config.Cash and Config.Cash.account) or 'bank'
         progress.moved = true
-        local okMoney = CP.Qbx.addMoney and CP.Qbx.addMoney(src, moneyAccount, amount, 'crimson-police-mission')
+        local okMoney, whyMoney = false, nil
+        if CP.Qbx.addMoney then okMoney, whyMoney = CP.Qbx.addMoney(src, moneyAccount, amount, 'crimson-police-mission') end
+        if not okMoney and whyMoney == 'error' then
+            -- AddMoney raised: the balance may already have changed, so the row is never retried automatically
+            -- (it stays paying and is listed in stuckPayments for a manual check; no society refund either).
+            CP.err(TAG, 'row %d: Qbox AddMoney(%s, %d) raised for %s; the row stays paying for a manual check (transaction %s)',
+                rowId, moneyAccount, amount, cid, transId)
+            return 'paying'
+        end
         if not okMoney then
             if withdrew then
                 if refundSociety(account, amount) then
@@ -526,7 +540,7 @@ function Cash.range(missionType, members)
         end
         hi = lo
     end
-    return CP.U.round(lo * mTier), CP.U.round(hi * mTier * modCash)
+    return roundMoney(lo * mTier), roundMoney(hi * mTier * modCash)
 end
 
 -- ── reports ─────────────────────────────────────────────────────────────────

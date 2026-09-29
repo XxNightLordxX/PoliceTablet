@@ -55,6 +55,7 @@ end
 
 local qbxCalls = { addMoney = {} }
 local addMoneyResult = true
+local addMoneyWhy = nil
 local listeners = { duty = {}, job = {}, loaded = {}, unload = {} }
 CP.Qbx = {
     getInfo = function(src)
@@ -76,7 +77,7 @@ CP.Qbx = {
     end,
     addMoney = function(src, account, amount, reason)
         qbxCalls.addMoney[#qbxCalls.addMoney + 1] = { src = src, account = account, amount = amount, reason = reason }
-        return addMoneyResult
+        return addMoneyResult, addMoneyWhy
     end,
     onDutyChange = function(fn) table.insert(listeners.duty, fn) end,
     onJobChange = function(fn) table.insert(listeners.job, fn) end,
@@ -507,6 +508,13 @@ H.near(cb.mMod, 1.25, 1e-9, 'breakdown mMod')
 H.eq(cb.status, 'none', 'status none')
 amount, cb = CP.Cash.compute(fakeRun({ payTier = heavy }), fakeP({ result = 'completed' }))
 H.eq(amount, 1040, 'spec example: heavy Gang Shootout pays $1,040')
+-- a true half-dollar rounds up although the float product is 402.49999999999994
+amount = CP.Cash.compute(fakeRun({ cashBase = 350, payTier = { name = 'reinforced', cash = 1.15 } }), fakeP({ result = 'completed' }))
+H.eq(amount, 403, '$350 x 1.15 = $402.50 pays $403 (float error absorbed)')
+amount = CP.Cash.compute(fakeRun({ cashBase = 250, payTier = { name = 'reinforced', cash = 1.15 } }), fakeP({ result = 'completed' }))
+H.eq(amount, 288, '$250 x 1.15 = $287.50 pays $288')
+amount = CP.Cash.compute(fakeRun({ cashBase = 601, payTier = { name = 'x', cash = 1.0 } }), fakeP({ result = 'completed' }))
+H.eq(amount, 601, 'exact amounts are unchanged')
 amount, cb = CP.Cash.compute(fakeRun(), fakeP({ result = 'failed' }))
 H.eq(amount, 0, 'failed pays 0')
 amount, cb = CP.Cash.compute(fakeRun(), fakeP({ result = 'abandoned' }))
@@ -579,6 +587,24 @@ H.eq(rowOf(id3).cash_status, 'pending', 'row back to pending')
 addMoneyResult = true
 H.eq(CP.Cash.payPending(1), 1, 'payPending pays it')
 H.eq(rowOf(id3).cash_status, 'paid', 'paid now')
+
+-- AddMoney raised (CP.Qbx.addMoney -> false, 'error'): money may have moved, so the row stays paying and is
+-- never retried automatically (listed in stuckPayments)
+addMoneyResult, addMoneyWhy = false, 'error'
+local idErr = insertRun({ uuid = 'err-aaaa', amount = 710 })
+H.eq(CP.Cash.pay(idErr), 'paying', 'AddMoney exception -> stays paying')
+H.eq(rowOf(idErr).cash_status, 'paying', 'row left paying')
+addMoneyResult, addMoneyWhy = true, nil
+local beforeErr = #qbxCalls.addMoney
+CP.Cash.payPending(1)
+H.eq(rowOf(idErr).cash_status, 'paying', 'payPending does not retry an uncertain paying row')
+H.eq(#qbxCalls.addMoney, beforeErr, 'no second AddMoney for the uncertain row')
+local stuckErr = false
+for _, r in ipairs(CP.Cash.stuckPayments() or {}) do
+    if tonumber(r.id or r.rowId) == idErr then stuckErr = true end
+end
+H.ok(stuckErr, 'the uncertain row is listed in stuckPayments')
+H.sql(("UPDATE cp_mission_runs SET cash_status = 'paid' WHERE id = %d"):format(idErr))
 
 -- review: officers already online when the resource starts get their pending rows once (no PlayerLoaded)
 players[4].offline = true

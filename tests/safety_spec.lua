@@ -194,7 +194,12 @@ CP.Dispatch = {
 local downed = {}
 local unloadListeners = {}
 CP.Qbx = {
-    isDowned = function(src) return downed[src] == true end,
+    -- downed[src]: true / 'laststand' (metadata inlaststand) or 'dead' (metadata isdead only)
+    isDowned = function(src) return downed[src] ~= nil and downed[src] ~= false end,
+    getInfo = function(src)
+        local d = downed[src]
+        return { src = src, isDead = d == 'dead', inLastStand = d == true or d == 'laststand' }
+    end,
     onPlayerUnload = function(fn) unloadListeners[#unloadListeners + 1] = fn end,
 }
 local ems = { doctors = 0, revives = {} }
@@ -931,15 +936,32 @@ do
     H.eq(bag(47), nil, 'recovered: flag removed')
 end
 
--- 8) went down before the start (no flag) with EMS on duty: sc-ambulance already alerted EMS
+-- 8) went down before the start (no flag) into last stand with EMS on duty: sc-ambulance already alerted EMS
 do
     ems.doctors = 1
     newRun('r-dn-8', { srcs = { 48 }, arrived = false, state = 'accepted' })
-    downed[48] = true
+    downed[48] = 'laststand'
     H.ok(untilRemoved(48, 'downed') ~= nil, 'downed before the start')
     runFor(3000)
-    H.eq(#clientEvents('client:requestEMS', 48), 0, 'no second EMS request without our flag')
+    H.eq(#clientEvents('client:requestEMS', 48), 0, 'no second EMS request without our flag (last stand)')
+    H.eq(notesFor(48, 'downed.ems_on_duty'), 1, 'toast: EMS on duty')
     downed[48] = nil
+end
+
+-- 8b) went down before the start (no flag) straight to dead with EMS on duty: sc-ambulance sent no alert,
+-- so Crimson-Police sends exactly one EMS request
+do
+    ems.doctors = 1
+    newRun('r-dn-8b', { srcs = { 58 }, arrived = false, state = 'accepted' })
+    downed[58] = 'dead'
+    H.ok(untilRemoved(58, 'downed') ~= nil, 'downed (dead) before the start')
+    runFor(3000)
+    local req = clientEvents('client:requestEMS', 58)
+    H.eq(#req, 1, 'EMS request sent for an unflagged participant who went straight to dead')
+    H.eq(req[1] and req[1].args[1], 'r-dn-8b', 'EMS request carries the run id')
+    runFor(10000)
+    H.eq(#clientEvents('client:requestEMS', 58), 1, 'EMS request sent once')
+    downed[58] = nil
 end
 
 -- 9) the last participant went down and the engine left the run open: it ends as failed

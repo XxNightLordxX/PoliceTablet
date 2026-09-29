@@ -927,6 +927,18 @@ H.eq(go.data.cash.week, 1234, 'cash this week from CP.Cash')
 H.ok(go.data.cash.total >= 300, 'cash earned all-time includes the archive')
 H.ok(#go.data.runs >= 1, 'recent runs')
 H.eq(#go.data.disputes, 1, 'disputes about failed runs')
+do
+    -- with the supervisors' dispute switch off, admins answer flagged/voided disputes too: the Officers screen lists them
+    local sup = Config.Permissions.supervisor
+    local was = sup.handleDisputes
+    sup.handleDisputes = false
+    local all = cb('admin:getOfficer', 1, { citizenid = 'OFF00003' }).data.disputes
+    local kinds = {}
+    for _, d in ipairs(all) do kinds[d.kind] = true end
+    H.ok(#all > 1 and kinds.failed and (kinds.flagged or kinds.voided), 'supervisor-routed disputes shown to admins when supervisors do not handle them')
+    sup.handleDisputes = was
+    H.eq(#cb('admin:getOfficer', 1, { citizenid = 'OFF00003' }).data.disputes, 1, 'only failed-run disputes again with the switch on')
+end
 H.eq(go.data.suspension.suspended, false, 'not suspended')
 H.eq(cb('admin:getOfficer', 1, { citizenid = 'NOPE0000' }).error, 'err.unknown_officer', 'unknown officer')
 CP.Scoring.xpLevel, CP.Scoring.badges = nil, nil

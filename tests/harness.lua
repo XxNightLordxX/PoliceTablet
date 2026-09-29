@@ -279,6 +279,10 @@ function H.boot(opts)
     local realTime = os.time
     os.time = function(t) if t then return realTime(t) end return H.time end
     _G.LoadResourceFile = function(_, path)
+        -- Specs see CP.L keys unless they load a locale themselves (they wrap LoadResourceFile for
+        -- 'locales/en.json', as tests/e2e_spec.lua does with the merged parts) or boot with realLocale = true.
+        -- The shipped locales/en.json is checked by tests/int_web_spec.lua and tools/check_contracts.py.
+        if path == 'locales/en.json' and not opts.realLocale then return nil end
         local f = io.open(ROOT .. path, 'r')
         if not f then return nil end
         local s = f:read('a'); f:close(); return s

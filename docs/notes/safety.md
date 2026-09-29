@@ -111,9 +111,12 @@ start, the sampled line is unchanged) → `{ runId }`; `recalcRoute` (payload ig
   (e.g. Crimson-Police restarted while the player was in a match).
 
 ### CP.Downed
-- **EMS on duty and our flag was not on** (down before reaching the start): no `client:requestEMS`.
-  sc-ambulance's client sends its own EMSDownAlert on entering last stand (every down passes through last
-  stand) unless the flag suppresses it, so a second request would give EMS two calls.
+- **EMS on duty**: one `client:requestEMS` per downed participant (SPEC, ARCHITECTURE §5.15), with one
+  exception: our flag was not on when they went down (e.g. down before reaching the start) AND metadata
+  `inlaststand` was true at detection. sc-ambulance's client sends its own EMSDownAlert on entering last
+  stand unless the flag suppresses it, so a second request would give EMS two calls. An unflagged
+  participant detected as `isdead` without last stand (sc-ambulance sends no death alert with
+  DisableDefaultAlerts) still gets our request, so EMS is always called.
 - `run.stats.downs + 1` is done only when `CP.Runs.removeParticipant` did not already count the down
   (the engine does), so a down is never counted twice.
 - The pick-up re-checks EMS after the delay: EMS that came on duty meanwhile gets the EMS path instead.

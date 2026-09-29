@@ -910,6 +910,12 @@ function Testing.startDraft(src, def, opts)
         local okT, errT = can(src, 'testRun')
         if not okT then return false, errT or 'err.no_permission' end
     end
+    -- Hard rule 7: only Admin test runs bypass the Cross-Department lock; a supervisor's draft test does not.
+    local okA, isAdm = call('Access', 'isAdmin', src)
+    if not (okA and isAdm == true) then
+        local okL, locked = call('Operations', 'isLocked')
+        if okL and locked == true then return false, 'err.operation_locked' end
+    end
     if type(def) ~= 'table' or type(def.id) ~= 'string' or #def.id > 40 or not def.id:match(MISSION_ID) then
         return false, 'err.test_invalid_draft'
     end

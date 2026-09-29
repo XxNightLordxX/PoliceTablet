@@ -1485,7 +1485,11 @@ CP.Net.callback('admin:getOfficer', function(src, args)
     end
     local disputes = {}
     if has('Disputes', 'forOfficer') then
-        local ok, list = call('Disputes', 'forOfficer', cid, 'admin', src)
+        -- Failed-run disputes always; with Config.Permissions.supervisor.handleDisputes off, admins are the only ones
+        -- who can answer disputes about flagged or voided runs too (and are the ones told about them), so show those.
+        local supCfg = Config.Permissions and Config.Permissions.supervisor
+        local supHandle = type(supCfg) == 'table' and supCfg.handleDisputes == true
+        local ok, list = call('Disputes', 'forOfficer', cid, supHandle and 'admin' or nil, src)
         if ok and type(list) == 'table' then disputes = list end
     end
     -- Suspension history: every suspend / unsuspend / automatic suspension written to cp_audit.

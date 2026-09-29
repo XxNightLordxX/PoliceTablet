@@ -389,6 +389,17 @@ do
     H.eq(H.sql("SELECT mission_id FROM cp_mission_runs_archive ORDER BY id LIMIT 1")[1].mission_id, 'patrol_a', 'archived content kept')
     res = S._runRetention(T0)
     H.eq(res.archived, 0, 'nothing more to archive')
+    -- an id collision (AUTO_INCREMENT reset after a restore): the live row is kept, never deleted unarchived
+    do
+        local archivedId = H.sql('SELECT MIN(id) AS id FROM cp_mission_runs_archive')[1].id
+        H.sql("INSERT INTO cp_mission_runs (id, run_uuid, mission_type, mission_id, citizenid, department, state, end_reason, points_base, created_at) VALUES (?, 'uuid-collide', 'patrol', 'patrol_z', 'RET2', 'sast', 'completed', 'completed', 100, FROM_UNIXTIME(?))",
+            { archivedId, old + 7200 })
+        res = S._runRetention(T0)
+        H.eq(res.archived, 0, 'retention: a row whose id collides with an archived one is not deleted')
+        H.eq(H.sql("SELECT COUNT(*) AS n FROM cp_mission_runs WHERE run_uuid = 'uuid-collide'")[1].n, 1, 'retention: the colliding live row is kept')
+        H.eq(H.sql("SELECT mission_id FROM cp_mission_runs_archive WHERE id = ?", { archivedId })[1].mission_id, 'patrol_a', 'retention: the archived row is untouched')
+        H.sql("DELETE FROM cp_mission_runs WHERE run_uuid = 'uuid-collide'")
+    end
     Config.Retention.runArchiveMonths = 0
     Config.Retention.auditDays = 0
     insertRun('RET1', 'patrol', 'patrol_a', 'completed', 'completed', old)

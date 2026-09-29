@@ -26,11 +26,12 @@
 --     .revive(src) -> server:pickupDone from the client (or 30 s) -> CP.Alerts.clear(src). No pick-up bill
 --     (hospital:client:Revive never bills). A revive CP.Ambulance refuses or cannot send (false: in the
 --     arena, disconnected, sc-ambulance stopped) cancels the pick-up at once (client:pickupCancel).
---   * EMS on duty: CP.Alerts.clear(src) at once. If our flag was on when they went down (so sc-ambulance
---     suppressed its own automatic EMS alert): wait until 11 s after the last arena exit
+--   * EMS on duty: CP.Alerts.clear(src) at once, then wait until 11 s after the last arena exit
 --     (CP.Alerts.foreignClearedAt[src]; sc-ambulance drops EMS requests for 10 s after one), re-check, then
---     client:requestEMS (runId) exactly once. Without our flag sc-ambulance's own automatic alert has
---     already gone out, so no second request is sent.
+--     client:requestEMS (runId) exactly once. The only exception: our flag was off when they went down AND
+--     they were in last stand (CP.Qbx.getInfo(src).inLastStand) - sc-ambulance's client has then sent its
+--     own automatic EMSDownAlert on entering last stand, so no second request is sent. A participant who
+--     went straight to 'dead' unflagged gets our request (sc-ambulance sends no death alert).
 --   A failed re-check cancels the pick-up / request and clears our flag. Each downed participant has one
 --   entry per run, so nothing fires twice (also when the 2 s poll still sees metadata "down" right after the
 --   revive). A disconnect (playerDropped) or character unload (CP.Qbx.onPlayerUnload) cancels it.
@@ -45,7 +46,7 @@ local DONE_TIMEOUT_MS = 30000         -- revive sent, no pickupDone: clear the f
 local EMS_GAP_S = 11                  -- sc-ambulance ignores EMS requests 10 s after an arena exit
 local RUN_END_GRACE_MS = 5000
 
-local entries = {}                    -- entries[src] = { runId, citizenid, since, stage, flagged, seq }
+local entries = {}                    -- entries[src] = { runId, citizenid, since, stage, flagged, lastStand, seq }
 local seq = 0
 
 local PENDING = { down = true, pickup_wait = true, pickup = true, revived = true, ems_wait = true }
@@ -192,9 +193,14 @@ end
 local function emsPath(src, e)
     e.stage = 'ems_wait'
     releaseFlag(src)
-    if not e.flagged then
+    -- The one case sc-ambulance has certainly alerted EMS itself: no flag of ours when they went down AND
+    -- they entered last stand (its client sends EMSDownAlert on entering last stand unless suppressed; a
+    -- foreign arena value is skipped by the recheck anyway). Every other down (our flag suppressed the
+    -- automatic alert, or they went straight to 'dead', which sends no alert with DisableDefaultAlerts)
+    -- gets exactly one client:requestEMS.
+    if not e.flagged and e.lastStand then
         e.stage = 'done'
-        CP.log(TAG, '%d went down without our flag: sc-ambulance already alerted EMS itself', src)
+        CP.log(TAG, '%d entered last stand without our flag: sc-ambulance already alerted EMS itself', src)
         notify(src, 'info', 'downed.ems_on_duty')
         return
     end
@@ -280,13 +286,20 @@ local function process(run, src, e)
     end
 end
 
+-- metadata.inlaststand at detection (CP.Qbx.getInfo): sc-ambulance's own automatic alert went out then
+local function inLastStand(src)
+    if not (CP.Qbx and CP.Qbx.getInfo) then return false end
+    local ok, info = pcall(CP.Qbx.getInfo, src)
+    return ok and type(info) == 'table' and info.inLastStand == true
+end
+
 local function onDowned(run, src)
     local p = run.participants and run.participants[src]
     if type(p) ~= 'table' or p.status ~= 'active' then return end
     seq = seq + 1
     local e = {
         runId = run.id, citizenid = p.citizenid, since = os.time(), stage = 'down',
-        flagged = alerts('has', src) == true, seq = seq,
+        flagged = alerts('has', src) == true, lastStand = inLastStand(src), seq = seq,
     }
     entries[src] = e
     alerts('hold', src, true)                      -- keepFlag: the flag stays until the pick-up / EMS request

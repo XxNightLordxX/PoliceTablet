@@ -176,8 +176,10 @@ export default function App() {
 
   const locale = session?.locale ?? bootLocale ?? null;
   const uiOpen = !!(ui && session);
-  // The HUD hides while a UI is open (the tablet pins the run bar instead); the result card stays on top.
-  const showHud = !!hud && !uiOpen;
+  // The HUD hides only while the Officer UI is open (its tablet pins the run bar instead). The Supervisor and
+  // Admin UIs have no run bar, so the HUD (timer, objectives, off-route countdown) stays on top of them, as does
+  // the result card (SPEC Route to the start: the off-route warning shows on the HUD and the tablet).
+  const showHud = !!hud && !(uiOpen && ui === 'officer');
   const showColumn = showHud || !!result;
 
   // Toasts: top-right of the screen, or top-right inside the open tablet / below the admin header.

@@ -393,14 +393,58 @@ local function readFile(path)
     return nil
 end
 
-local function writeFile(path, content)
-    local ok, res = pcall(SaveResourceFile, CP.resource, path, content, -1)
-    if not ok then
-        CP.err(TAG, 'could not write %s: %s', path, tostring(res))
+-- SaveResourceFile does not create folders, and a fresh clone may not have missions/custom/ or its
+-- archived/ folder: create a missing folder (under the resource) before the first write into it.
+local function dirExists(abs)
+    local ok, res = pcall(os.rename, abs, abs)
+    return ok and res == true
+end
+
+local function ensureDir(rel)
+    if type(rel) ~= 'string' or rel == '' then return false end
+    if not rel:match('^[%w_%-%./]+$') or rel:find('..', 1, true) or rel:sub(1, 1) == '/' then
+        CP.err(TAG, 'refusing to create the export folder %q (only letters, digits, _ - . / are allowed)', rel)
         return false
     end
-    if res == false then
-        CP.err(TAG, 'could not write %s', path)
+    if type(GetResourcePath) ~= 'function' then return false end
+    local okBase, base = pcall(GetResourcePath, CP.resource)
+    if not okBase or type(base) ~= 'string' or base == '' then return false end
+    local abs = base .. '/' .. rel:gsub('/+$', '')
+    if dirExists(abs) then return true end
+    local windows = package and package.config and package.config:sub(1, 1) == '\\'
+    local cmd = windows and ('mkdir "%s" >NUL 2>&1'):format((abs:gsub('/', '\\')))
+        or ("mkdir -p '%s' >/dev/null 2>&1"):format(abs)
+    pcall(os.execute, cmd)
+    if dirExists(abs) then
+        CP.log(TAG, 'created the missing folder %s', rel)
+        return true
+    end
+    CP.err(TAG, 'the folder %s is missing and could not be created: create it by hand, or publishing and archiving fail', rel)
+    return false
+end
+
+local function ensureExportDirs()
+    local a = ensureDir(exportDir())
+    local b = ensureDir(exportDir() .. 'archived/')
+    return a and b
+end
+B.ensureExportDirs = ensureExportDirs
+
+local function saveOnce(path, content)
+    local ok, res = pcall(SaveResourceFile, CP.resource, path, content, -1)
+    if not ok then return false, tostring(res) end
+    return res ~= false, nil
+end
+
+local function writeFile(path, content)
+    local ok, why = saveOnce(path, content)
+    if not ok then
+        -- most likely a missing folder: create it and try once more
+        local dir = type(path) == 'string' and path:match('^(.*)/[^/]*$') or nil
+        if dir and ensureDir(dir .. '/') then ok, why = saveOnce(path, content) end
+    end
+    if not ok then
+        if why then CP.err(TAG, 'could not write %s: %s', path, why) else CP.err(TAG, 'could not write %s', path) end
         return false
     end
     return true
@@ -756,6 +800,22 @@ local function effectiveObjective(impl, rtObj)
     return U.deepcopy(rtObj)
 end
 
+-- The counts each block lets a custom mission scale with the tier (SPEC Scaling: only counts marked
+-- "scales"; mirrors web/src/builder/schema.ts scalables, plus interact_points' hidden devices). Anything
+-- else (accuracy, armour, penalties, timers, distances, points...) is refused, because a scaled value is
+-- never re-checked against the block ranges.
+local SCALABLE_FIELDS = {
+    hostile_waves    = { waves = true },
+    escort           = { ['ambush.waves'] = true, ['ambush.carsPerWave'] = true, ['ambush.perCar'] = true },
+    pursuit          = { vehicles = true, suspectsPerVehicle = true },
+    protect_rescue   = { count = true },
+    flee_arrest      = { suspects = true, ['associates.count'] = true },
+    search_area      = { fugitives = true },
+    interact_points  = { count = true, ['hidden.count'] = true },
+    checkpoint_route = { count = true },
+}
+B.SCALABLE_FIELDS = SCALABLE_FIELDS
+
 local function scalable(v)
     if isNum(v) then return true end
     if type(v) ~= 'table' or #v == 0 then return false end
@@ -1067,6 +1127,8 @@ function B.validate(def, opts)
             local idx = rel and tonumber(rel:match('^(%d+)')) or nil
             if not rel or not idx or idx < 1 or idx > #effObjs then
                 addError(errors, p, 'builder.error.scaling_path', { n = i })
+            elseif not (SCALABLE_FIELDS[type(effObjs[idx]) == 'table' and effObjs[idx].block or ''] or {})[rel:match('^%d+%.(.+)$') or ''] then
+                addError(errors, p, 'builder.error.scaling_field', { n = i, path = path })
             elseif not scalable(U.getPath(effObjs, rel)) then
                 addError(errors, p, 'builder.error.scaling_value', { n = i, path = path })
             elseif type(entry) == 'table' and entry.max ~= nil and not (isNum(entry.max) and entry.max > 0) then
@@ -1414,6 +1476,13 @@ local function allows(perms, row, actor, kind)
     if kind == 'rollback' then return perms.builderRollback and (mine or perms.builderEditAny) end
     if kind == 'breakLock' then return perms.breakEditLock end
     return false
+end
+
+-- Whether a custom mission shows in this actor's builder (SPEC Supervisor UI: "their drafts plus published
+-- missions"). Someone else's never-published draft is only visible to admins and builderEditAny.
+local function visibleTo(row, actor, perms)
+    if actor.isAdmin or perms.builderEditAny or ownerOf(row, actor) then return true end
+    return row.status == 'published' or row.publishedVersion ~= nil
 end
 
 local function audit(actor, action, target, old, new, reason)
@@ -1854,6 +1923,7 @@ end
 -- ── hooks ──────────────────────────────────────────────────────────────────
 function B.loadPublished()
     CP.Migrations.ready()
+    ensureExportDirs()   -- a fresh clone has no missions/custom/archived/ (SaveResourceFile makes no folders)
     local summary = syncFiles()
     if #summary.edited + #summary.rejected + #summary.rewritten > 0 then
         CP.log(TAG, 'file sync: %d edited, %d rejected, %d rewritten', #summary.edited, #summary.rejected, #summary.rewritten)
@@ -1943,7 +2013,10 @@ CP.Net.callback('builder:list', function(src)
     local actor, perms = begin(src)
     if not actor then return nil, perms end
     touchViewer(src)
-    local rows = fetchRows()
+    local rows = {}
+    for _, r in ipairs(fetchRows()) do
+        if visibleTo(r, actor, perms) then rows[#rows + 1] = r end
+    end
     local ids = {}
     for _, r in ipairs(rows) do
         ids[#ids + 1] = r.createdBy; ids[#ids + 1] = r.updatedBy; ids[#ids + 1] = r.lockedBy
@@ -1968,7 +2041,10 @@ CP.Net.callback('builder:get', function(src, args)
     if type(args) ~= 'table' or not validId(args.id) then return nil, 'err.invalid_payload' end
     touchViewer(src)
     local row = fetchRow(args.id)
-    if row then return recordView(row, actor, perms) end
+    if row then
+        if not visibleTo(row, actor, perms) then return nil, 'err.builder_unknown_mission' end
+        return recordView(row, actor, perms)
+    end
     local rec = builtinRecord(args.id)
     if rec then return rec end
     return nil, 'err.builder_unknown_mission'
@@ -2103,7 +2179,8 @@ CP.Net.action('server:builder:duplicate', function(src, payload)
     local source
     local row = fetchRow(payload.id)
     if row then
-        -- any custom mission may be copied into an own draft (builderEdit, checked by begin)
+        -- any custom mission the actor can see may be copied into an own draft (builderEdit, checked by begin)
+        if not visibleTo(row, actor, perms) then return false, 'err.builder_unknown_mission' end
         source = U.deepcopy(currentDef(row) or {})
         source._file = nil
     else

@@ -38,6 +38,8 @@
     CP.Runs.isParticipant(run, src) / activeSrcs(run) -> { src... } / host(run) -> src
     CP.Runs.testSkip(run) / testRestart(run) / anchor(run) -> vec3    (test runs only)
     CP.Runs.ctx(run, index) -> ctx|nil     the engine's ctx of objective index (e.g. CP.AntiCheat presence)
+    CP.Runs.noteWeaponFired(run, src) -> boolean   server-side proof of gunfire by an active participant
+                                           (CP.Npc: weapon hits / kills on mission NPCs); once per participant
     Internal (same slice, used by tests): CP.Runs._tick() one 1 s tick, CP.Runs._jobRecheck() one recheck pass
   Net
     callback 'getRun' -> ActiveMissionView|nil for the caller's run
@@ -64,8 +66,19 @@
     * penalty_points stores the positive sum of the penalties; bonus_points the sum of the bonuses.
     * Engine-recorded personal ids: pedestrian_hit and lights_siren (penalize), weapons fired go to
       run.stats.weaponsFired / p.firedWeapon, vehicle damage to p.vehicle.
-    * create re-checks "already on a run" and the server caps with no yield right before the run is
-      registered (its lookups may yield, so two racing accepts can never both pass).
+    * create re-checks "already on a run", the server caps and the Cross-Department lock
+      (CP.Operations.isLocked, normal runs and the boss) with no yield right before the run is registered
+      (its lookups may yield, so two racing accepts can never both pass); CP.Calls.isOnCall (may yield) is
+      re-checked for every member just before that block (err.on_call / err.member_on_call).
+    * endRun first removes every active participant who is down (CP.Qbx.isDowned) with end_reason
+      'downed' through CP.Downed.handle(run, src) (pick-up / EMS flow) or, without it, directly; only the
+      others get the run's end state (Hard rule 18). A re-entrant endRun during those leaves is ignored.
+    * An in-arena participant who leaves never has the crimsonArena bag touched (CRIMSON_ARENA rule 1):
+      CP.Alerts.forget(src) (when present) drops the intent instead of CP.Alerts.clear.
+    * Mission items (metadata.cpItem) cannot leave their holder's inventory: an ox_inventory swapItems hook
+      refuses give / drop / stash / vehicle moves (re-registered when ox_inventory restarts).
+    * Vehicle damage (p.vehicle) is sampled by the server every VEHICLE_SAMPLE_MS from the vehicle each
+      active participant drives; client 'vehicle' telemetry only adds samples.
     * Server-side health is sync data (0 until a client synced a server-created entity): health 0 only
       counts as a death/wreck after a positive value was seen; engine health <= -3999 always counts.
     * Spawns waiting for their entity count toward the caps; an entity that appears after the spawn wait
@@ -1136,6 +1149,44 @@ local function sweepPlayer(src, citizenid)
     return complete
 end
 
+-- Mission items stay with the participant they were given to (Hard rule 14, Hard rule 19): an ox_inventory
+-- swapItems hook refuses every move of a cpItem out of its holder's own inventory (give to a player, drop,
+-- stash, glovebox, trunk). Moves inside the holder's inventory are allowed. Server-side exports (our own
+-- removal, Crimson-Arena's stash) do not go through swapItems.
+local function isMissionItem(slot)
+    return type(slot) == 'table' and type(slot.metadata) == 'table' and slot.metadata.cpItem == true
+end
+
+function Runs._swapItemsHook(payload)
+    if type(payload) ~= 'table' then return true end
+    local from, to = payload.fromInventory, payload.toInventory
+    local leaves = payload.action == 'give' or from ~= to or payload.fromType ~= payload.toType
+    if not leaves then return true end
+    if isMissionItem(payload.fromSlot) then return false end
+    -- a swap sends the item in the target slot the other way
+    if payload.action == 'swap' and isMissionItem(payload.toSlot) then return false end
+    return true
+end
+
+local itemHookId = nil
+local function registerItemHook()
+    if itemHookId ~= nil then return true end
+    if not inventoryUp() then return false end
+    local ok, id = pcall(function()
+        return exports.ox_inventory:registerHook('swapItems', function(payload)
+            local okH, allowed = pcall(Runs._swapItemsHook, payload)
+            if not okH then return true end
+            return allowed
+        end, {})
+    end)
+    if not ok then
+        warnOnce('inv_hook', 'could not register the ox_inventory swapItems hook: %s', tostring(id))
+        return false
+    end
+    itemHookId = id or true
+    return true
+end
+
 local function citizenOf(src)
     local ok, info = call('Qbx', 'getInfo', src)
     return ok and type(info) == 'table' and info.citizenid or nil
@@ -1774,15 +1825,30 @@ function Runs.create(opts)
         if okU and type(unit) == 'table' then run.unit = unit end
     end
 
+    -- A member who started responding to a real call during the accept's lookups is refused (SPEC
+    -- Availability). CP.Calls.isOnCall may itself yield (active-call lookup), so it runs before the
+    -- no-yield block below.
+    if not test and not opts.operationId then
+        for _, src in ipairs(run.order) do
+            local okC, onCall = call('Calls', 'isOnCall', src)
+            if okC and onCall == true then
+                return nil, (src == leader) and 'err.on_call' or 'err.member_on_call'
+            end
+        end
+    end
+
     -- The lookups above may yield (database, other modules). Re-check, with no yield until the run is
-    -- registered, what another accept could have changed meanwhile: nobody ends up on two runs and two
-    -- racing accepts never pass the server caps together.
+    -- registered, what another accept could have changed meanwhile: nobody ends up on two runs, two
+    -- racing accepts never pass the server caps together, and a Cross-Department Mission launched during
+    -- the accept locks out every other new mission, the Weekly Boss included (Hard rule 7).
     for _, src in ipairs(run.order) do
         if Runs.isOnMission(src) then
             return nil, (src == leader) and 'err.already_on_run' or 'err.member_on_run'
         end
     end
     if not test and not opts.operationId then
+        local okLock, locked = call('Operations', 'isLocked')
+        if okLock and locked == true then return nil, 'err.operation_locked' end
         local okCaps, capsErr = Runs.capsOk(missionType)
         if not okCaps then return nil, capsErr end
     end
@@ -1999,6 +2065,16 @@ function Runs.award(run, id, opts) return record(run, id, opts, 'bonus') end
 function Runs.penalize(run, id, opts) return record(run, id, opts, 'penalty') end
 
 -- ── leaving and ending ──────────────────────────────────────────────────────
+-- CRIMSON_ARENA rule 1: an in-arena participant's bag is never touched (it may still hold our value while
+-- only the routing bucket has moved); only CP.Alerts' intent is dropped. Everyone else: CP.Alerts.clear.
+local function releaseFlag(src)
+    if inArena(src) then
+        call('Alerts', 'forget', src)
+    else
+        call('Alerts', 'clear', src)
+    end
+end
+
 function Runs.removeParticipant(run, src, endReason, opts)
     src = toSrc(src)
     opts = type(opts) == 'table' and opts or {}
@@ -2024,7 +2100,7 @@ function Runs.removeParticipant(run, src, endReason, opts)
     refreshDepartments(run)
     CP.log(TAG, 'run %s: %d left (%s -> %s), %d left in the run', run.id, src, endReason, result, #others)
 
-    if not opts.keepFlag then call('Alerts', 'clear', src) end
+    if not opts.keepFlag then releaseFlag(src) end
     call('Route', 'stop', run, src)
     if wasInProgress then
         local i = run.objectiveIndex
@@ -2071,10 +2147,37 @@ function Runs.removeParticipant(run, src, endReason, opts)
     return rowId
 end
 
+-- Participants who are down when the run ends have Failed (Hard rule 18), whatever the run's end state:
+-- they leave first with end_reason 'downed' through CP.Downed (which also starts the pick-up / EMS flow)
+-- or, without it, directly. The downed poll only sees runs that have not ended, so this is the last point
+-- where the down can be caught. Returns false when these leaves ended the run (nobody was left).
+local function removeDownedBeforeEnd(run)
+    if not has('Qbx', 'isDowned') then return true end
+    for _, src in ipairs(Runs.activeSrcs(run)) do
+        local p = run.participants[src]
+        local okD, down = call('Qbx', 'isDowned', src)
+        if p and p.status == 'active' and okD and down == true and not inArena(src) then
+            CP.log(TAG, 'run %s is ending: %d is down and has Failed', run.id, src)
+            call('Downed', 'handle', run, src)
+            if p.status == 'active' and run.state ~= 'ended' then
+                local okP, pending = call('Downed', 'isPending', src)
+                Runs.removeParticipant(run, src, 'downed', { keepFlag = okP and pending == true })
+            end
+            if run.state == 'ended' then return false end
+        end
+    end
+    return true
+end
+
 function Runs.endRun(run, state, endReason)
-    if type(run) ~= 'table' or run.state == 'ended' then return end
+    if type(run) ~= 'table' or run.state == 'ended' or run.ending then return end
     if state ~= 'completed' and state ~= 'failed' then state = 'failed' end
     endReason = RESULT[endReason] and endReason or (state == 'completed' and 'completed' or 'mission_failed')
+    run.ending = true
+    local okDown, open = pcall(removeDownedBeforeEnd, run)
+    run.ending = nil
+    if not okDown then CP.err(TAG, 'run %s: downed check at the end failed: %s', tostring(run.id), tostring(open)) end
+    if run.state == 'ended' or (okDown and open == false) then return end
     syncTimer(run)
     run.state = 'ended'
     run.endedAt = os.time()
@@ -2094,7 +2197,7 @@ function Runs.endRun(run, state, endReason)
     CP.log(TAG, 'run %s ended %s (%s) for %d participant(s)', run.id, state, endReason, #finals)
     cleanupRun(run)
     for _, src in ipairs(finals) do
-        call('Alerts', 'clear', src)
+        releaseFlag(src)
         call('Route', 'stop', run, src)
         removeItems(run, run.participants[src])
     end
@@ -2468,6 +2571,16 @@ local function isRunEntity(entity, netId)
     return false
 end
 
+local function recordVehicle(p, veh, netId)
+    local engine = num(GetVehicleEngineHealth(veh), 1000.0)
+    local body = num(GetVehicleBodyHealth(veh), 1000.0)
+    local v = p.vehicle
+    v.lastNetId = netId
+    v.seen = true
+    if engine < v.engine then v.engine = engine end
+    if body < v.body then v.body = body end
+end
+
 local function telemetryVehicle(run, p, data)
     local now = GetGameTimer()
     if p.telemetry.vehicleAt and now - p.telemetry.vehicleAt < VEHICLE_SAMPLE_MS then return end
@@ -2478,13 +2591,23 @@ local function telemetryVehicle(run, p, data)
     if GetPedInVehicleSeat(veh, -1) ~= GetPlayerPed(p.src) then return end
     if isRunEntity(veh, netId) then return end
     p.telemetry.vehicleAt = now
-    local engine = num(GetVehicleEngineHealth(veh), 1000.0)
-    local body = num(GetVehicleBodyHealth(veh), 1000.0)
-    local v = p.vehicle
-    v.lastNetId = netId
-    v.seen = true
-    if engine < v.engine then v.engine = engine end
-    if body < v.body then v.body = body end
+    recordVehicle(p, veh, netId)
+end
+
+-- The server's own sample (every VEHICLE_SAMPLE_MS per active participant, from tickRun): the vehicle the
+-- participant is driving, read with server natives. The no-damage bonus and the heavy-damage penalty never
+-- depend on the client choosing to report; its telemetry only adds samples in between.
+local function sampleVehicle(run, p, nowMs)
+    if p.vehicleSampledAt and nowMs - p.vehicleSampledAt < VEHICLE_SAMPLE_MS then return end
+    p.vehicleSampledAt = nowMs
+    local me = GetPlayerPed(p.src)
+    if not me or me == 0 then return end
+    local veh = GetVehiclePedIsIn(me, false)
+    if not veh or veh == 0 or not DoesEntityExist(veh) or GetEntityType(veh) ~= 2 then return end
+    if GetPedInVehicleSeat(veh, -1) ~= me then return end
+    local netId = NetworkGetNetworkIdFromEntity(veh)
+    if isRunEntity(veh, netId) then return end
+    recordVehicle(p, veh, netId)
 end
 
 local function telemetryPedHit(run, p, data)
@@ -2519,6 +2642,22 @@ local function telemetryArea(run, p, data)
     pushRun(run, { p.src })
 end
 
+-- A participant fired a weapon during the run (costs no_weapons_fired). Counted once per participant.
+-- Sources: the client's weapon_fired telemetry (misses too) and server-side proof of gunfire on mission
+-- NPCs (CP.Npc: weaponDamageEvent hits and weapon kills by an active participant).
+function Runs.noteWeaponFired(run, src)
+    src = toSrc(src)
+    if type(run) ~= 'table' or not src or run.state == 'ended' then return false end
+    local p = run.participants[src]
+    if not p or p.status ~= 'active' then return false end
+    if p.firedWeapon then return true end
+    p.telemetry.weapon = true
+    p.firedWeapon = true
+    run.stats.weaponsFired = (run.stats.weaponsFired or 0) + 1
+    CP.log(TAG, 'run %s: %d fired a weapon', run.id, src)
+    return true
+end
+
 RegisterNetEvent(CP.e('server:telemetry'), function(runId, kind, data)
     local src = source
     src = toSrc(src)
@@ -2545,12 +2684,7 @@ RegisterNetEvent(CP.e('server:telemetry'), function(runId, kind, data)
     elseif kind == 'area' then
         telemetryArea(run, p, data)
     elseif kind == 'weapon_fired' then
-        if not p.telemetry.weapon then
-            p.telemetry.weapon = true
-            p.firedWeapon = true
-            run.stats.weaponsFired = (run.stats.weaponsFired or 0) + 1
-            CP.log(TAG, 'run %s: %d fired a weapon', run.id, src)
-        end
+        Runs.noteWeaponFired(run, src)
     end
 end)
 
@@ -2591,6 +2725,10 @@ local function tickRun(run, nowMs)
             Runs.removeParticipant(run, src, 'start_timeout')
             if run.state == 'ended' then return end
         end
+    end
+    for _, src in ipairs(Runs.activeSrcs(run)) do
+        local p = run.participants[src]
+        if p and playerOnline(src) then sampleVehicle(run, p, nowMs) end
     end
     if run.state ~= 'in_progress' then return end
 
@@ -2778,6 +2916,20 @@ local function registerHooks()
     end
     return true
 end
+
+CreateThread(function()
+    Wait(0)
+    for _ = 1, 60 do
+        if registerItemHook() then break end
+        Wait(1000)
+    end
+end)
+
+AddEventHandler('onResourceStart', function(resource)
+    if resource ~= 'ox_inventory' then return end
+    itemHookId = nil                           -- a restarted ox_inventory drops its hooks
+    SetTimeout(1000, registerItemHook)
+end)
 
 CreateThread(function()
     Wait(0)

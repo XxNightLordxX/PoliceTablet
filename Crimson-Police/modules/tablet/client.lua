@@ -37,6 +37,9 @@
 --                                           a foreign crimsonArena value, a character unload and the resource
 --                                           stop release it.
 --   CP.Tablet.panelFocusOwner() -> owner|nil  who holds the panel focus (nil also after a tablet takeover)
+--   CP.Tablet.cpProgressActive() -> boolean  a progress bar started by Crimson-Police runs (lib.progressBar
+--                                           and lib.progressCircle of this resource's ox_lib are wrapped
+--                                           once, at load and at runtime wiring, to count them)
 -- Events handled: crimson-police:client:notify ({ kind, key, vars, title, duration }, translated with
 -- CP.L), client:push (topic, data), client:openAdmin (session). This file registers NO handler for
 -- client:hud or client:runEnded: the run engine's client (modules/runs/client.lua) is the one path that
@@ -50,8 +53,8 @@
 -- value (Crimson-Arena's, not { source = 'crimson-police' }) the command, key mapping, tablet item,
 -- OpenTablet, switchUi and client:openAdmin refuse with the toast err.in_arena; when such a value
 -- arrives, every Crimson-Police UI closes (prop deleted, animation stopped), the HUD and overlays are
--- hidden and a progress bar of the player's current run is cancelled. While the value stays foreign, HUD
--- patches and overlays (e.g. the run engine's ended HUD after the arena removal) are kept but not shown;
+-- hidden and a progress bar started by Crimson-Police itself is cancelled (CP.Tablet.cpProgressActive();
+-- another resource's bar is left alone). While the value stays foreign, HUD patches and overlays (e.g. the run engine's ended HUD after the arena removal) are kept but not shown;
 -- they are shown again once the value is no longer foreign. NUI focus is only released when a
 -- Crimson-Police UI (the tablet, or a panel holding CP.Tablet.panelFocus) was open, never
 -- unconditionally. The tablet prop is a local (non-networked) object.
@@ -115,6 +118,41 @@ local function inForeignArena()
     local st = LocalPlayer and LocalPlayer.state
     return isForeignArena(st and st.crimsonArena)
 end
+
+-- ── Crimson-Police progress bars ────────────────────────────────────────────
+-- ox_lib's `lib` table is private to this resource's Lua state, so every lib.progressBar /
+-- lib.progressCircle call that goes through it is one of ours (blocks, npc cuff). They are wrapped once
+-- to count the bars in flight; lib.progressActive() alone is resource-wide and also true for another
+-- resource's bar, which Crimson-Police must never cancel (CRIMSON_ARENA rule 8).
+local cpProgress = 0
+local wrappedProgress = setmetatable({}, { __mode = 'k' })
+
+local function wrapProgress(name)
+    if type(lib) ~= 'table' then return end
+    local ok, orig = pcall(function() return lib[name] end)
+    if not ok or type(orig) ~= 'function' or wrappedProgress[orig] then return end
+    local function wrapper(...)
+        cpProgress = cpProgress + 1
+        local res = table.pack(pcall(orig, ...))
+        cpProgress = math.max(0, cpProgress - 1)
+        if not res[1] then error(res[2], 0) end
+        return table.unpack(res, 2, res.n)
+    end
+    wrappedProgress[wrapper] = true
+    lib[name] = wrapper
+end
+
+function T.wrapProgress()
+    wrapProgress('progressBar')
+    wrapProgress('progressCircle')
+end
+
+-- true while a progress bar started by Crimson-Police runs
+function T.cpProgressActive()
+    return cpProgress > 0
+end
+
+T.wrapProgress()
 
 -- ── NUI transport ───────────────────────────────────────────────────────────
 function T.send(msg)
@@ -629,9 +667,9 @@ local function onArenaPlaced()
         state.arenaHidden = true
         T.send({ type = 'overlay' })
     end
-    -- A progress bar during a Crimson-Police run is a mission step (lib.cancelProgress raises when none runs).
-    local run = CP.Runs and CP.Runs.current and CP.Runs.current()
-    if run and lib and lib.progressActive and lib.cancelProgress then
+    -- Only a Crimson-Police progress bar is cancelled, never another resource's (lib.cancelProgress raises
+    -- when none runs).
+    if T.cpProgressActive() and lib and lib.progressActive and lib.cancelProgress then
         local ok, active = pcall(lib.progressActive)
         if ok and active then pcall(lib.cancelProgress) end
     end
@@ -659,6 +697,7 @@ local function watchArena()
 end
 
 CreateThread(function()
+    T.wrapProgress()   -- again at runtime, in case ox_lib resolved lib.progressBar only now
     registerCommand()
     watchArena()
     if not CP.Qbx then

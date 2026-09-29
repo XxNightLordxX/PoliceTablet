@@ -110,6 +110,7 @@ RegisterMission({
       label      = 'Secure the scene',
       minSeconds = 8,
       points     = 'scene',
+      target     = { label = 'Secure the scene' },   -- the ox_target option (not the locale default)
       progress   = { label = 'Securing scene', duration = 8000 },
     },
   },

@@ -181,4 +181,63 @@ local mlCss = read(WEB .. 'supervisor/screens/MissionList.css')
 has(ml, 'oversight-mission__label', 'Mission List clamps long mission labels')
 has(mlCss, '-webkit-line-clamp: 2', 'Mission List label clamp is two lines')
 
+-- ── Admin UI → Leaderboards: approve / void a flagged run (SPEC Supervisor & admin actions) ────────────
+do
+    local lb = read(WEB .. 'admin/screens/Leaderboards.tsx')
+    local adminSrv = read(ROOT .. 'modules/admin/server.lua')
+    H.ok(lb ~= nil and adminSrv ~= nil, 'Admin Leaderboards screen and modules/admin exist')
+    has(adminSrv, "CP.Net.callback('admin:getFlagged'", 'modules/admin registers admin:getFlagged')
+    has(adminSrv, "CP.Net.action('server:admin:reviewFlagged'", 'modules/admin registers server:admin:reviewFlagged')
+    has(lb, "useRequest<{ flagged: FlaggedRow[] }>('admin:getFlagged'", 'Admin Leaderboards loads the flagged runs')
+    has(lb, "run('server:admin:reviewFlagged', { rowId: review.row.rowId, decision: review.decision, reason }",
+        'Approve / Void send server:admin:reviewFlagged { rowId, decision, reason }')
+    has(lb, "onDecide(r, 'approve')", 'each flagged row has Approve')
+    has(lb, "onDecide(r, 'void')", 'each flagged row has Void')
+    local dialog = lb:match('<ConfirmDialog%s+open={!!review}(.-)/>')
+    H.ok(dialog ~= nil and dialog:find('required: true', 1, true) ~= nil, 'the review dialog requires a reason')
+    has(lb, 'void flaggedReq.refetch();', 'the flagged list refreshes after a decision')
+    local missing = {}
+    for key in pairs(literalKeys(lb)) do if not keys[key] then missing[#missing + 1] = key end end
+    for key in lb:gmatch("'(sup%.review%.[%w_]+)'") do if not keys[key] then missing[#missing + 1] = key end end
+    table.sort(missing)
+    H.eq(#missing, 0, 'every text key of Admin Leaderboards exists (' .. table.concat(missing, ', ') .. ')')
+end
+
+-- ── Mission HUD over the Supervisor / Admin UIs (only the Officer UI pins the run bar) ────────────────
+do
+    local app = read(WEB .. 'App.tsx')
+    has(app, "const showHud = !!hud && !(uiOpen && ui === 'officer');", 'the HUD hides only under the Officer UI')
+    local sup = read(WEB .. 'layouts/SupervisorLayout.tsx') or ''
+    local adm = read(WEB .. 'layouts/AdminLayout.tsx') or ''
+    local off = read(WEB .. 'layouts/OfficerLayout.tsx') or ''
+    H.ok(off:find('<RunBar', 1, true) ~= nil, 'the Officer UI pins the run bar')
+    H.ok(sup:find('<RunBar', 1, true) == nil and adm:find('<RunBar', 1, true) == nil,
+        'the Supervisor and Admin UIs have no run bar (so they rely on the HUD)')
+end
+
+-- ── Shipped files: locales/en.json and web/dist are regenerated from their sources ───────────────────
+do
+    local en = read(ROOT .. 'locales/en.json')
+    H.ok(en ~= nil, 'locales/en.json ships (shared/locale.lua loads only locales/<code>.json)')
+    local ok, data = pcall(cjson.decode, en or '')
+    H.ok(ok and type(data) == 'table', 'locales/en.json is valid JSON')
+    if ok and type(data) == 'table' then
+        local missingKeys, extra = 0, 0
+        for k in pairs(keys) do if data[k] == nil then missingKeys = missingKeys + 1 end end
+        for k in pairs(data) do if not keys[k] then extra = extra + 1 end end
+        H.eq(missingKeys, 0, 'locales/en.json has every key of locales/parts')
+        H.eq(extra, 0, 'locales/en.json has no key that is not in locales/parts')
+    end
+    local fx = read(ROOT .. 'fxmanifest.lua') or ''
+    has(fx, "'locales/*.json'", 'fxmanifest ships locales/*.json (en.json)')
+    has(fx, "'web/dist/**/*'", 'fxmanifest ships web/dist')
+    H.ok(read(ROOT .. 'web/dist/build-stamp.json') ~= nil, 'web/dist carries the build stamp of npm run build')
+    local p = io.popen('python3 ' .. ROOT .. '../tools/check_contracts.py 2>&1')
+    local out = p and p:read('a') or ''
+    if p then p:close() end
+    H.ok(out:find('TOTAL problems', 1, true) ~= nil, 'tools/check_contracts.py ran')
+    H.ok(out:find('## nui-build', 1, true) == nil, 'web/dist is built from the current web/src (no nui-build problem)')
+    H.ok(out:find('## locale-en', 1, true) == nil, 'locales/en.json equals the merged parts (no locale-en problem)')
+end
+
 return H

@@ -80,6 +80,11 @@ H.exportsMock.ox_inventory = {
         for _, s in ipairs(inv.slots[src] or {}) do if s.slot == slot then s.count = s.count - count end end
         return true
     end,
+    registerHook = function(event, fn, opts)
+        inv.hooks = inv.hooks or {}
+        inv.hooks[#inv.hooks + 1] = { event = event, fn = fn, opts = opts }
+        return #inv.hooks
+    end,
 }
 
 -- ── stubs of the other modules ──────────────────────────────────────────────
@@ -93,6 +98,7 @@ local listeners = {}
 CP.Alerts = {
     set = function(src) rec('alerts.set', src) end,
     clear = function(src) rec('alerts.clear', src) end,
+    forget = function(src) rec('alerts.forget', src) end,
     inArena = function(src) return arena[src] == true end,
     foreignClearedAt = {},
 }
@@ -1113,6 +1119,126 @@ Runs.removeParticipant(CN, 7, 'cancelled')
 H.eq(Runs.cooldowns('CIT77').types.tactical, typeBefore, "'cancelled' starts no type cooldown")
 H.eq(Runs.cooldowns('CIT77').missions.test_mission, missionBefore, "'cancelled' starts no new mission cooldown")
 H.eq(H.sql("SELECT state FROM cp_mission_runs WHERE run_uuid = ?", { CN.id })[1].state, 'abandoned', "'cancelled' is abandoned")
+
+-- ── fixes: downed at the end, operation lock / real call at create, in-arena bag, items hook,
+-- server-side vehicle samples, server-side weapon proof ──────────────────────
+do
+    H.reset()
+    H.players[7].vehicle, H.players[8].vehicle = nil, nil
+    -- a participant already down when the run completes has Failed (Hard rule 18), through CP.Downed
+    local downed = {}
+    CP.Qbx.isDowned = function(src) return downed[src] == true end
+    local handled = {}
+    CP.Downed = {
+        handle = function(run, src)
+            handled[#handled + 1] = src
+            Runs.removeParticipant(run, src, 'downed', { keepFlag = true })
+        end,
+        isPending = function(src) return false end,
+    }
+    local DN = Runs.create({ mission = mission, locationIndex = 1, missionType = 'tactical', members = { O7, O8 }, leaderSrc = 7 })
+    Runs.markArrived(DN, 7)
+    Runs.markArrived(DN, 8)
+    H.advance(6000)
+    downed[8] = true
+    H.ok(Runs.objectiveComplete(DN, 1), 'downed-at-end: objective 1')
+    local clearsB = count('alerts.clear')
+    H.ok(Runs.objectiveComplete(DN, 2), 'downed-at-end: objective 2 ends the run')
+    H.eq(DN.state, 'ended', 'downed-at-end: run ended')
+    H.eq(handled[1], 8, 'downed-at-end: CP.Downed.handle gets the downed participant (pick-up / EMS flow)')
+    local r8 = H.sql("SELECT state, end_reason, cash_base FROM cp_mission_runs WHERE run_uuid = ? AND citizenid = 'CIT88'", { DN.id })[1]
+    H.eq(r8.state, 'failed', 'downed-at-end: the downed participant has Failed')
+    H.eq(r8.end_reason, 'downed', "downed-at-end: end_reason 'downed'")
+    H.eq(DN.participants[8].result, 'failed', 'downed-at-end: result failed')
+    local r7 = H.sql("SELECT state FROM cp_mission_runs WHERE run_uuid = ? AND citizenid = 'CIT77'", { DN.id })[1]
+    H.eq(r7.state, 'completed', 'downed-at-end: the others keep the completed result')
+    local c8 = 0
+    for i = clearsB + 1, count('alerts.clear') do if log['alerts.clear'][i] == 8 then c8 = c8 + 1 end end
+    H.eq(c8, 0, 'downed-at-end: the downed participant keeps the flag (CP.Downed owns it)')
+    H.eq(DN.stats.downs, 1, 'downed-at-end: down counted')
+
+    -- without CP.Downed.handle: still Failed (flag cleared, since nothing is pending)
+    CP.Downed = nil
+    local DN2 = Runs.create({ mission = mission, locationIndex = 1, missionType = 'tactical', members = { O7, O8 }, leaderSrc = 7 })
+    Runs.markArrived(DN2, 7); Runs.markArrived(DN2, 8)
+    Runs.endRun(DN2, 'completed', 'completed')
+    H.eq(DN2.participants[8].result, 'failed', 'downed-at-end without CP.Downed: Failed')
+    H.eq(DN2.participants[7].result, 'completed', 'downed-at-end without CP.Downed: others completed')
+    -- everyone down: the run ends failed
+    downed[7] = true
+    local DN3 = Runs.create({ mission = mission, locationIndex = 1, missionType = 'tactical', members = { O7, O8 }, leaderSrc = 7 })
+    Runs.markArrived(DN3, 7); Runs.markArrived(DN3, 8)
+    Runs.endRun(DN3, 'completed', 'completed')
+    H.eq(DN3.state, 'ended', 'all downed at the end: run ended')
+    H.eq(DN3.endState, 'failed', 'all downed at the end: the run failed')
+    H.eq(DN3.participants[7].endReason, 'downed', 'all downed at the end: downed reason')
+    CP.Qbx.isDowned = nil
+    downed = {}
+
+    -- Runs.create re-checks the Cross-Department lock and real calls right before registering the run
+    CP.Operations.isLocked = function() return true end
+    local nr, why = Runs.create({ mission = mission, locationIndex = 1, missionType = 'tactical', members = { O7 }, leaderSrc = 7 })
+    H.eq(nr, nil, 'operation locked: no normal run')
+    H.eq(why, 'err.operation_locked', 'operation locked: err.operation_locked')
+    H.eq(Runs.isOnMission(7), false, 'operation locked: nobody registered')
+    nr, why = Runs.create({ mission = boss, locationIndex = 1, missionType = 'weekly_boss', members = { O7 }, leaderSrc = 7, isBoss = true })
+    H.eq(why, 'err.operation_locked', 'operation locked: no Weekly Boss either')
+    local opRun = Runs.create({ mission = mission, locationIndex = 1, missionType = 'tactical', members = { O7 }, leaderSrc = 7, operationId = 99 })
+    H.ok(opRun ~= nil, 'operation locked: the operation run itself is created')
+    Runs.removeParticipant(opRun, 7, 'cancelled')
+    CP.Operations.isLocked = nil
+    CP.Calls = { isOnCall = function(src) return src == 8 end }
+    nr, why = Runs.create({ mission = mission, locationIndex = 1, missionType = 'tactical', members = { O7, O8 }, leaderSrc = 7 })
+    H.eq(why, 'err.member_on_call', 'a member on a real call: refused')
+    nr, why = Runs.create({ mission = mission, locationIndex = 1, missionType = 'tactical', members = { O8 }, leaderSrc = 8 })
+    H.eq(why, 'err.on_call', 'the leader on a real call: refused')
+    CP.Calls = nil
+
+    -- in-arena leave: the bag is not touched (only the intent is forgotten)
+    local AR = Runs.create({ mission = mission, locationIndex = 1, missionType = 'patrol', members = { O7 }, leaderSrc = 7 })
+    local clearsA, forgetsA = count('alerts.clear'), count('alerts.forget')
+    arena[7] = true
+    H.advance(1000)
+    arena[7] = nil
+    H.eq(AR.participants[7].endReason, 'quit', 'in-arena: left as quit')
+    H.eq(count('alerts.clear'), clearsA, 'in-arena: CP.Alerts.clear is not called (the bag is left alone)')
+    H.eq(count('alerts.forget'), forgetsA + 1, 'in-arena: the intent is forgotten')
+
+    -- mission items: the swapItems hook keeps them in the holder's own inventory
+    H.ok(inv.hooks and inv.hooks[1] and inv.hooks[1].event == 'swapItems', 'swapItems hook registered on ox_inventory')
+    local hook = inv.hooks[1].fn
+    local cpSlot = { name = 'radio', metadata = { cpRun = 'x', cpItem = true } }
+    local other = { name = 'water', metadata = {} }
+    H.eq(hook({ action = 'move', fromInventory = 7, toInventory = 7, fromType = 'player', toType = 'player', fromSlot = cpSlot }), true, 'items hook: moving inside the own inventory is allowed')
+    H.eq(hook({ action = 'give', fromInventory = 7, toInventory = 8, fromType = 'player', toType = 'player', fromSlot = cpSlot }), false, 'items hook: giving to another player is refused')
+    H.eq(hook({ action = 'move', fromInventory = 7, toInventory = 'newdrop', fromType = 'player', toType = 'drop', fromSlot = cpSlot }), false, 'items hook: dropping is refused')
+    H.eq(hook({ action = 'move', fromInventory = 7, toInventory = 'police_stash', fromType = 'player', toType = 'stash', fromSlot = cpSlot }), false, 'items hook: a stash is refused')
+    H.eq(hook({ action = 'swap', fromInventory = 'police_stash', toInventory = 7, fromType = 'stash', toType = 'player', fromSlot = other, toSlot = cpSlot }), false, 'items hook: a swap sending the item out is refused')
+    H.eq(hook({ action = 'move', fromInventory = 7, toInventory = 'newdrop', fromType = 'player', toType = 'drop', fromSlot = other }), true, 'items hook: other items are untouched')
+
+    -- vehicle damage sampled by the server, with no client telemetry
+    local VS = Runs.create({ mission = mission, locationIndex = 1, missionType = 'patrol', members = { O7 }, leaderSrc = 7 })
+    Runs.markArrived(VS, 7)
+    local wreck = newEnt('vehicle', 'police', 0, 0, 0)
+    ents[wreck].driver, ents[wreck].engine, ents[wreck].body = 700, 1000.0, 1000.0
+    H.players[7].vehicle = wreck
+    H.advance(1000)
+    H.eq(VS.participants[7].vehicle.seen, true, 'server vehicle sample: seen without telemetry')
+    ents[wreck].body, ents[wreck].engine = 300.0, 400.0
+    H.advance(4000)
+    H.eq(VS.participants[7].vehicle.body, 300.0, 'server vehicle sample: lowest body health')
+    H.eq(VS.participants[7].vehicle.engine, 400.0, 'server vehicle sample: lowest engine health')
+    H.players[7].vehicle = nil
+
+    -- server-side proof of gunfire costs no_weapons_fired even without the client telemetry
+    H.eq(VS.stats.weaponsFired, 0, 'no weapon fired yet')
+    H.eq(Runs.noteWeaponFired(VS, 7), true, 'noteWeaponFired')
+    Runs.noteWeaponFired(VS, 7)
+    H.eq(VS.stats.weaponsFired, 1, 'noteWeaponFired counts once per participant')
+    H.eq(VS.participants[7].firedWeapon, true, 'noteWeaponFired marks the participant')
+    H.eq(Runs.noteWeaponFired(VS, 2), false, 'noteWeaponFired ignores non-participants')
+    Runs.removeParticipant(VS, 7, 'cancelled')
+end
 
 -- ── resource stop: entities deleted, nothing written ────────────────────────
 H.reset()

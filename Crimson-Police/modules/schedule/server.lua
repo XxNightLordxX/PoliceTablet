@@ -152,14 +152,20 @@ local function archiveRuns(nowTs)
     local maxId = CP.U.num(row and row.max_id)
     if n <= 0 or maxId <= 0 then return 0 end
     -- INSERT IGNORE keeps a re-run idempotent if an earlier run copied rows but failed to delete them.
-    MySQL.update.await(
+    local copied = CP.U.num(MySQL.update.await(
         'INSERT IGNORE INTO cp_mission_runs_archive SELECT * FROM cp_mission_runs WHERE id <= ? AND created_at < FROM_UNIXTIME(?)',
-        { maxId, cutoff })
-    -- Only rows that are safely in the archive are removed.
-    local deleted = MySQL.update.await(
-        'DELETE r FROM cp_mission_runs r INNER JOIN cp_mission_runs_archive a ON a.id = r.id WHERE r.id <= ? AND r.created_at < FROM_UNIXTIME(?)',
-        { maxId, cutoff })
-    return CP.U.num(deleted)
+        { maxId, cutoff }))
+    -- Only rows whose own copy is in the archive are removed: the archive row must match on id AND
+    -- run_uuid, citizenid and created_at. A live row whose id collides with a different archived row (an
+    -- AUTO_INCREMENT counter reset after a restore) was skipped by INSERT IGNORE and stays in place.
+    local deleted = CP.U.num(MySQL.update.await(
+        'DELETE r FROM cp_mission_runs r INNER JOIN cp_mission_runs_archive a ON a.id = r.id AND a.run_uuid = r.run_uuid AND a.citizenid = r.citizenid AND a.created_at = r.created_at WHERE r.id <= ? AND r.created_at < FROM_UNIXTIME(?)',
+        { maxId, cutoff }))
+    if deleted < n then
+        CP.warn(TAG, 'retention: %d of %d old run rows could not be archived (copied %d; an id already in cp_mission_runs_archive holds a different row); they stay in cp_mission_runs',
+            n - deleted, n, copied)
+    end
+    return deleted
 end
 
 local function purgeAudit(nowTs)

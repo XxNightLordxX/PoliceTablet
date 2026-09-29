@@ -66,8 +66,9 @@ do
 end
 
 -- ── temporary export folder ─────────────────────────────────────────────────
+-- Not created here: the builder must create a missing export folder and its archived/ itself (a fresh
+-- clone has neither, and SaveResourceFile does not create folders).
 local TMP = ('missions/custom/test_builder_%d/'):format(os.clock() * 1e6 // 1 + math.random(1, 1e6))
-os.execute(('mkdir -p %s%sarchived'):format(H.root, TMP))
 Config.Builder.exportPath = TMP
 _G.GetResourcePath = function() return H.root:sub(1, -2) end
 
@@ -172,6 +173,12 @@ local function body()
     H.load('modules/missions/server.lua')
     H.step(10)   -- CP.Missions.loadAll (built-ins + CP.Builder.loadPublished)
     local B = CP.Builder
+    do
+        local function isDir(rel) local ok, r = pcall(os.rename, H.root .. rel, H.root .. rel); return ok and r == true end
+        H.ok(isDir(TMP) and isDir(TMP .. 'archived'), 'the builder creates a missing export folder and archived/ at start')
+        H.ok(fileExists('missions/custom/.gitkeep') and fileExists('missions/custom/archived/.gitkeep'),
+            'missions/custom/ and archived/ ship with a .gitkeep so a clone has them')
+    end
     H.ok(CP.Missions.get('gang_shootout') ~= nil or CP.Missions.list()[1] ~= nil, 'built-in missions loaded next to the builder')
 
     -- ── helpers: actions and callbacks through CP.Net ───────────────────────
@@ -396,8 +403,27 @@ local function body()
     check('item count', function(d) d.items[1].count = 0 end, 'builder.error.item_count')
     check('item name', function(d) d.items[1].name = 'bad name!' end, 'builder.error.item_name')
     check('scaling path outside the objectives', function(d) d.scaling = { 'objectives.9.waves' } end, 'builder.error.scaling_path')
-    check('scaling a text field', function(d) d.scaling = { 'objectives.2.points' } end, 'builder.error.scaling_value')
+    check('scaling a text field', function(d) d.scaling = { 'objectives.2.points' } end, 'builder.error.scaling_field')
+    check('scaling an allowed count that is not a number', function(d) d.objectives[2].count = 'two'; d.scaling = { 'objectives.2.count' } end,
+        'builder.error.scaling_value')
     check('scaling max', function(d) d.scaling = { { path = 'objectives.1.waves', max = -1 } } end, 'builder.error.scaling_max')
+    -- only counts marked "scales" may scale (accuracy, armour, timers, penalties... never do)
+    for _, path in ipairs({ 'objectives.1.accuracy', 'objectives.1.armour', 'objectives.1.minSeconds', 'objectives.1.presenceRange',
+        'objectives.1.surrender.chance', 'objectives.2.progress.duration' }) do
+        check('scaling ' .. path, function(d) d.scaling = { path } end, 'builder.error.scaling_field')
+    end
+    for _, m in ipairs({ 'armored_truck_escort', 'bomb_disposal', 'gang_shootout', 'manhunt', 'prison_break',
+        'stolen_vehicle_takedown', 'street_race_bust', 'warrant_service' }) do
+        local def = CP.Missions.get(m)
+        if def then
+            for _, entry in ipairs(def.scaling or {}) do
+                local path = type(entry) == 'string' and entry or entry.path
+                local blk = def.objectives[tonumber(path:match('^objectives%.(%d+)'))].block
+                H.ok((B.SCALABLE_FIELDS[blk] or {})[path:match('^objectives%.%d+%.(.+)$')] == true,
+                    'built-in scaling path is an allowed count: ' .. m .. ' ' .. path)
+            end
+        end
+    end
     do
         local d = U.deepcopy(good)
         d.scaling = { { path = 'objectives.1.waves', max = 12 } }
@@ -670,17 +696,35 @@ local function body()
     -- lists and records
     do
         local okL, list = cb(1, 'builder:list', {})
-        H.ok(okL and #list.missions >= 3, 'builder:list returns the custom missions')
+        H.ok(okL and #list.missions >= 2, 'builder:list returns the custom missions')
+        local adminDraft = false
+        for _, m in ipairs(list.missions) do if m.id == defaultData.id then adminDraft = true end end
+        H.ok(not adminDraft, "the admin's unpublished draft is not in a supervisor's list")
         local e
         for _, m in ipairs(list.missions) do if m.id == id then e = m end end
         H.ok(e ~= nil, 'our mission is listed')
         H.eq(e.status, 'draft', 'list status'); H.eq(e.owner.name, 'John Doe', 'owner name from cp_officers')
         H.eq(e.lock.mine, true, 'lock mine'); H.eq(e.can.publish, true, 'owner may publish'); H.eq(e.requiredTier, 'heavy', 'required tier')
         H.ok(#list.builtins > 0 and list.builtins[1].readOnly == true, 'built-ins listed read-only')
+        -- SPEC Supervisor UI: "their drafts plus published missions": someone else's never-published draft is hidden
         local okL2, list2 = cb(2, 'builder:list', {})
-        for _, m in ipairs(list2.missions) do if m.id == id then e = m end end
-        H.eq(e.can.edit, false, 'not editable by another supervisor'); H.eq(e.lock.mine, false, 'lock shown to others')
-        H.eq(e.lock.name, 'John Doe', 'lock holder name')
+        local seen2 = false
+        for _, m in ipairs(list2.missions) do if m.id == id then seen2 = true end end
+        H.ok(okL2 and not seen2, "another supervisor's unpublished draft is not listed")
+        H.eq(select(2, cb(2, 'builder:get', { id = id })), 'err.builder_unknown_mission', "builder:get hides another supervisor's draft")
+        H.eq(select(2, act(2, 'duplicate', { id = id })), 'err.builder_unknown_mission', "an unseen draft cannot be duplicated")
+        Config.Permissions.supervisor.builderEditAny = true
+        e = nil
+        local _, list3 = cb(2, 'builder:list', {})
+        for _, m in ipairs(list3.missions) do if m.id == id then e = m end end
+        H.ok(e ~= nil, "builderEditAny lists other people's drafts")
+        H.eq(e.lock.mine, false, 'lock shown to others'); H.eq(e.lock.name, 'John Doe', 'lock holder name')
+        H.ok((cb(2, 'builder:get', { id = id })), 'builderEditAny may open the draft')
+        Config.Permissions.supervisor.builderEditAny = false
+        local okAdm, listAdm = cb(3, 'builder:list', {})
+        local seenAdm = false
+        for _, m in ipairs(listAdm and listAdm.missions or {}) do if m.id == id then seenAdm = true end end
+        H.ok(okAdm and seenAdm, 'admins see every draft')
         local okG, rec = cb(1, 'builder:get', { id = id })
         H.ok(okG and rec.definition.label == 'Dockside Raid' and #rec.errors == 0, 'builder:get returns the draft with its errors')
         H.eq(rec.armed, 13, 'record armed count')
@@ -766,6 +810,13 @@ local function body()
     local inPool = false
     for _, d in ipairs(CP.Missions.byType('tactical')) do if d.id == id then inPool = true end end
     H.ok(inPool, 'the published mission joins its type pool')
+    do
+        local okL, l = cb(2, 'builder:list', {})
+        local e
+        for _, m in ipairs(okL and l.missions or {}) do if m.id == id then e = m end end
+        H.ok(e ~= nil and e.can.edit == false, "a published mission is listed for other supervisors (read-only)")
+        H.ok((cb(2, 'builder:get', { id = id })), 'and can be opened by them')
+    end
     H.eq(lastAudit().action, 'publish', 'publish audited')
     local pushed = false
     for _, p in ipairs(pushes) do if p.topic == 'builder' and p.data.event == 'published' and p.data.id == id then pushed = true end end
@@ -855,6 +906,7 @@ local function body()
     -- archive and restore
     do
         H.eq(select(2, act(1, 'restore', { id = id })), 'err.builder_not_archived', 'restore needs an archived mission')
+        os.execute(("rm -rf '%s%sarchived'"):format(H.root, TMP))   -- archived/ went missing after start
         local okAr, ar = act(1, 'archive', { id = id })
         H.ok(okAr and ar.filePath == TMP .. 'archived/' .. id .. '.lua', 'archive moves the file')
         H.ok(fileExists(TMP .. 'archived/' .. id .. '.lua') and not fileExists(TMP .. id .. '.lua'), 'file in archived/ only')

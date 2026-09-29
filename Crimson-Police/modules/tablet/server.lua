@@ -169,7 +169,8 @@ local function buildSession(src, ui)
     local officer, officerErr = CP.Access.getOfficer(src)
     local roles = {
         officer = officer ~= nil,
-        supervisor = officer ~= nil and (officer.isSupervisor == true or isAdmin),
+        -- Supervisor is the job grade only (SPEC Roles); admins use the Admin UI.
+        supervisor = officer ~= nil and officer.isSupervisor == true,
         admin = isAdmin,
     }
     if ui == 'officer' then

@@ -10,7 +10,10 @@ Checks:
      crimson-police:server:* triggered by clients have a server handler (and vice versa).
   3. NUI: every request/action/clientAction name used in web/src exists in Lua.
   4. Locale: every CP.L('key') / t('key') / returned 'err.*' key exists in the merged locale;
-     conflicting duplicate keys across parts.
+     conflicting duplicate keys across parts; locales/en.json (the only file shared/locale.lua loads)
+     exists and equals the merge of the parts (regenerate with --merge).
+  5. NUI build: web/dist/build-stamp.json (written by `npm run build`) matches the current sources, so the
+     shipped web/dist is the reviewed web/src (rebuild with `cd Crimson-Police/web && npm run build`).
 """
 import json, os, re, sys, glob
 from collections import defaultdict
@@ -176,6 +179,49 @@ if '--merge' in sys.argv:
         json.dump(dict(sorted(merged.items())), f, ensure_ascii=False, indent=2)
         f.write('\n')
     print(f'merged {len(parts)} parts, {len(merged)} keys -> {rel(out)}')
+
+en_path = os.path.join(RES, 'locales', 'en.json')
+if not os.path.exists(en_path):
+    problems['locale-en'].append('locales/en.json is missing: run python3 tools/check_contracts.py --merge')
+else:
+    try:
+        en = json.load(open(en_path, encoding='utf-8'))
+    except Exception as e:
+        en = None
+        problems['locale-en'].append(f'locales/en.json is not valid JSON: {e}')
+    if en is not None and en != merged:
+        diff = sorted(set(en) ^ set(merged)) + sorted(k for k in set(en) & set(merged) if en[k] != merged[k])
+        problems['locale-en'].append(f'locales/en.json is out of date with locales/parts ({len(diff)} keys differ, e.g. {diff[:3]}): '
+                                     'run python3 tools/check_contracts.py --merge')
+
+# ── 5. NUI build stamp (same algorithm as web/build-stamp.mjs) ───────────────
+import hashlib
+def nui_source_hash():
+    web_dir = os.path.join(RES, 'web')
+    files = []
+    for dp, dns, fns in os.walk(os.path.join(web_dir, 'src')):
+        for fn in fns:
+            if fn != '.DS_Store': files.append(os.path.join(dp, fn))
+    files += [os.path.join(web_dir, f) for f in ('index.html', 'package.json', 'tsconfig.json', 'vite.config.ts')]
+    files.append(os.path.join(RES, 'locales', 'parts', 'ui.json'))
+    items = sorted((os.path.relpath(p, RES).replace(os.sep, '/'), p) for p in files)
+    h = hashlib.sha256()
+    for r, p in items:
+        h.update(r.encode('utf-8') + b'\0')
+        with open(p, 'rb') as f: h.update(f.read())
+        h.update(b'\0')
+    return h.hexdigest()
+stamp_path = os.path.join(RES, 'web', 'dist', 'build-stamp.json')
+if not os.path.exists(os.path.join(RES, 'web', 'dist', 'index.html')) or not os.path.exists(stamp_path):
+    problems['nui-build'].append('web/dist has no build-stamp.json: run cd Crimson-Police/web && npm run build')
+else:
+    try:
+        stamp = json.load(open(stamp_path, encoding='utf-8')).get('sourceHash')
+    except Exception:
+        stamp = None
+    if stamp != nui_source_hash():
+        problems['nui-build'].append('web/dist is stale (web/src or the build config changed since the last build): '
+                                     'run cd Crimson-Police/web && npm run build')
 
 total = 0
 for cat, items in problems.items():

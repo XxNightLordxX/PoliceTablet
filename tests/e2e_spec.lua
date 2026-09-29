@@ -84,7 +84,9 @@ do
     local text = cjson.encode(merged)
     local realLoad = LoadResourceFile
     -- shared/locale.lua loads locales/<Config.Locale>.json; fxmanifest ships locales/*.json (not the parts).
-    H.ok(realLoad('Crimson-Police', 'locales/en.json') ~= nil,
+    local shipped = io.open(H.root .. 'locales/en.json', 'r')
+    if shipped then shipped:close() end
+    H.ok(shipped ~= nil,
         'locales/en.json ships with the resource (shared/locale.lua reads it; every CP.L text comes from it)')
     LoadResourceFile = function(res, path)
         if path == 'locales/en.json' then return text end

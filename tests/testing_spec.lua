@@ -674,6 +674,14 @@ do
     H.eq(err, 'err.no_permission', 'an officer without builderEdit cannot test drafts')
     ok, err = T.startDraft(6, { id = 'custom_bad', broken = true, locations = {} }, {})
     H.eq(err, 'err.test_invalid_draft', 'a draft that does not normalise')
+    -- Hard rule 7: a Cross-Department Mission blocks a supervisor's draft test; only admin tests bypass it
+    local savedOps = CP.Operations
+    CP.Operations = { isLocked = function() return true end }
+    ok, err = T.startDraft(6, raw, { tier = 'heavy', location = 2 })
+    H.eq(err, 'err.operation_locked', 'a supervisor cannot test a draft during a Cross-Department Mission')
+    ok, err = T.startDraft(3, { id = 'custom_bad', broken = true, locations = {} }, {})
+    H.eq(err, 'err.test_invalid_draft', 'an admin draft test is not blocked by the Cross-Department lock')
+    CP.Operations = savedOps
     ok, err = T.startDraft(6, raw, { tier = 'heavy', location = 2 })
     H.eq(ok, true, 'a supervisor with builderEdit tests a draft')
     local opts = created[#created]

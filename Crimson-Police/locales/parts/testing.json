@@ -22,6 +22,7 @@
   "err.test_bad_command": "Usage: /CrimsonPoliceAdmin test <missionId> [tier] [location]",
   "err.test_control_failed": "That test control did not work right now.",
   "err.test_debug_disabled": "The debug overlay is turned off in Config.Testing.",
+  "err.operation_locked": "A Cross-Department Mission is active: only that mission can be started.",
   "err.test_disabled": "Test mode is turned off in Config.Testing.",
   "err.test_full": "The test is full: no more testers can join.",
   "err.test_invalid_draft": "This draft can't be test-run yet: fix its errors first.",

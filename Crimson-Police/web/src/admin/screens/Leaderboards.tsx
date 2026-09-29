@@ -4,6 +4,9 @@
 // Renewed-Banking transaction id to check). Row actions: open the officer's runs in this board and void
 // one (server:admin:voidRun { rowId, reason }), award points (server:admin:awardPoints
 // { citizenid, points, reason }); both are implemented by modules/admin.
+// Flagged runs panel (SPEC Supervisor & admin actions, "Approve or void a flagged run ... Admin UI →
+// Leaderboards"): callback admin:getFlagged (the admin's own runs are left out), each row Approve / Void with
+// a required reason -> server:admin:reviewFlagged { rowId, decision: 'approve'|'void', reason }.
 import { useMemo, useState } from 'react';
 import {
   Badge, Button, Card, ConfirmDialog, Dialog, EmptyState, ErrorState, Field, Grid, Icon, IconButton, LoadingBlock, Money,
@@ -13,8 +16,9 @@ import {
 import { cx } from '../../shared/cx';
 import { formatDateTime, formatMoney, formatNumber } from '../../shared/format';
 import { useAction, useRequest } from '../../shared/hooks';
-import { t } from '../../shared/i18n';
+import { hasKey, t } from '../../shared/i18n';
 import { useSession } from '../../shared/session';
+import type { FlaggedRow } from '../../types/oversight';
 import { asList, type AdminBoardRow, type AdminBoards, type AdminRun, type BoardPeriod, type StuckPayment } from '../../types/boards';
 import { BOARD_PERIODS, RankCell, boardFilters, filterLabel, formatClock, formatDay } from '../../officer/screens/Leaderboard';
 import { ResultCell, missionTypeLabel } from '../../officer/screens/Profile';
@@ -60,6 +64,54 @@ function StuckPanel({ list }: { list: StuckPayment[] }) {
   );
 }
 
+const flagLabel = (reason: string | null | undefined) => (reason && hasKey(`flag.${reason}`) ? t(`flag.${reason}`) : t('flag.flagged'));
+
+export function FlaggedPanel({ list, loading, onDecide }: { list: FlaggedRow[]; loading?: boolean; onDecide: (row: FlaggedRow, decision: 'approve' | 'void') => void }) {
+  return (
+    <Card
+      title={t('admin.boards.flagged_title')}
+      subtitle={t('admin.boards.flagged_hint')}
+      icon="flag"
+      highlight={list.length ? 'warning' : undefined}
+      actions={list.length ? <Badge tone="warning" size="sm">{formatNumber(list.length)}</Badge> : null}
+      padding="sm"
+      className="boards-stuck boards-flagged"
+    >
+      {!list.length && loading ? (
+        <LoadingBlock />
+      ) : list.length ? (
+        <ul className="boards-stuck__list">
+          {list.map((r) => (
+            <li key={r.rowId} className="boards-stuck__item">
+              <div className="boards-stuck__head">
+                <span className="boards-strong boards-ellipsis" title={r.name}>{r.name || r.citizenid}</span>
+                {r.callsign ? <span className="boards-muted">{r.callsign}</span> : null}
+                <Spacer />
+                <Badge size="sm" tone="danger" variant="outline" icon="flag">{flagLabel(r.flagReason)}</Badge>
+              </div>
+              <div className="boards-stuck__meta">
+                <span className="boards-ellipsis" title={r.missionLabel}>{r.missionLabel}</span>
+                <span className="cp-num">{formatDateTime(r.createdAt)}</span>
+                <span className="cp-num">{t('admin.boards.row_id', { id: r.rowId })}</span>
+              </div>
+              {r.flagDetail ? <div className="boards-stuck__meta"><span className="boards-ellipsis" title={r.flagDetail}>{r.flagDetail}</span></div> : null}
+              <Row gap={1} wrap>
+                <span className="cp-num boards-strong">{formatNumber(r.points)}</span>
+                <Money amount={r.cash} />
+                <Spacer />
+                <Button size="sm" variant="secondary" icon="check" onClick={() => onDecide(r, 'approve')}>{t('sup.review.approve')}</Button>
+                <Button size="sm" variant="danger" icon="xCircle" onClick={() => onDecide(r, 'void')}>{t('sup.review.void')}</Button>
+              </Row>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <EmptyState compact icon="shieldCheck" title={t('sup.review.empty_flagged_title')} text={t('admin.boards.flagged_none_text')} />
+      )}
+    </Card>
+  );
+}
+
 export default function AdminLeaderboards() {
   const session = useSession();
   const { run, busy } = useAction();
@@ -72,6 +124,9 @@ export default function AdminLeaderboards() {
   const [officer, setOfficer] = useState<AdminBoardRow | null>(null);
   const [voidRun, setVoidRun] = useState<AdminRun | null>(null);
   const [award, setAward] = useState<AwardForm | null>(null);
+  const [review, setReview] = useState<{ row: FlaggedRow; decision: 'approve' | 'void' } | null>(null);
+  const flaggedReq = useRequest<{ flagged: FlaggedRow[] }>('admin:getFlagged', {}, { pollMs: 60000 });
+  const flaggedRows = asList(flaggedReq.data?.flagged);
 
   const allTime = period === 'alltime';
   const eff = allTime ? 'overall' : filter;
@@ -116,6 +171,19 @@ export default function AdminLeaderboards() {
       setVoidRun(null);
       void refetch();
       void runsReq.refetch();
+    }
+  };
+
+  const submitReview = async (reason: string) => {
+    if (!review) return;
+    const res = await run('server:admin:reviewFlagged', { rowId: review.row.rowId, decision: review.decision, reason }, {
+      success: review.decision === 'approve' ? 'sup.review.approved' : 'sup.review.voided',
+    });
+    setReview(null);
+    if (res.ok) {
+      void flaggedReq.refetch();
+      void refetch();
+      if (officer) void runsReq.refetch();
     }
   };
 
@@ -261,7 +329,10 @@ export default function AdminLeaderboards() {
             }
             aria-label={t('ui.screen.admin_leaderboards')}
           />
-          <StuckPanel list={stuck} />
+          <div className="boards-admin-side">
+            <FlaggedPanel list={flaggedRows} loading={flaggedReq.loading} onDecide={(row, decision) => setReview({ row, decision })} />
+            <StuckPanel list={stuck} />
+          </div>
         </Grid>
       )}
 
@@ -294,6 +365,18 @@ export default function AdminLeaderboards() {
         reason={{ required: true, maxLength: 255, placeholder: t('admin.boards.void_placeholder') }}
         onConfirm={submitVoid}
         onCancel={() => setVoidRun(null)}
+        busy={busy}
+      />
+
+      <ConfirmDialog
+        open={!!review}
+        tone={review?.decision === 'void' ? 'danger' : 'primary'}
+        title={review ? t(review.decision === 'approve' ? 'sup.review.approve_title' : 'sup.review.void_title') : ''}
+        message={review ? t(review.decision === 'approve' ? 'sup.review.approve_message' : 'sup.review.void_message', { name: review.row.name, mission: review.row.missionLabel }) : ''}
+        confirmLabel={review ? t(review.decision === 'approve' ? 'sup.review.approve' : 'sup.review.void') : undefined}
+        reason={{ required: true, label: t('common.reason'), maxLength: 255, placeholder: t('sup.review.reason_placeholder') }}
+        onConfirm={submitReview}
+        onCancel={() => setReview(null)}
         busy={busy}
       />
 
