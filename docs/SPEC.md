@@ -111,7 +111,7 @@ Each term below means exactly this everywhere in the spec.
 | Alert suppression | The crimsonArena state bag Crimson-Police sets on each participant from the moment they reach the mission start so SC-Dispatch and SC-Ambulance skip their combat alerts |
 | Downed | A participant who is dead or in last stand |
 | Pick-up | The automatic revive and move to a drop-off point when a participant goes down with no EMS on duty |
-| Police vehicle | A vehicle whose class or model is listed in Config.PoliceVehicles (default: class 18, Emergency) |
+| Driving a vehicle | In a vehicle and in its driver seat, as the server sees it; any vehicle counts. Where a mission needs it (Beat Patrol, EVOC Course, checkpoint_route with "Vehicle required" on), a checkpoint counts only while the officer is driving a vehicle |
 | Points | Leaderboard score earned by a run |
 | XP | Lifetime points; sets the cosmetic XP level badge (never the rank) |
 | Goal | A personal daily or weekly target, such as "Complete 2 Patrol missions", that awards bonus points |
@@ -493,7 +493,7 @@ Each card is the full behaviour of one mission. Every card also gets the common 
 
 - Spawns: none; markers and blips only
 
-- Objectives: 1) drive to each checkpoint in order; 2) stop inside its 10 m marker in a police vehicle for 10 seconds
+- Objectives: 1) drive to each checkpoint in order; 2) stop inside its 10 m marker for 10 seconds; a checkpoint counts only while the officer is driving a vehicle (any vehicle, in its driver seat, checked by the server)
 
 - Scales: nothing (solo)
 
@@ -557,7 +557,7 @@ Each card is the full behaviour of one mission. Every card also gets the common 
 
 - Spawns: checkpoint markers only (no cones or props)
 
-- Objectives: drive through every checkpoint in order in a police vehicle; a missed checkpoint must be driven through before the next one counts; each wall or vehicle contact adds 2 seconds
+- Objectives: drive through every checkpoint in order; a checkpoint counts only while the officer is driving a vehicle (any vehicle, in its driver seat, checked by the server); a missed checkpoint must be driven through before the next one counts; each wall or vehicle contact adds 2 seconds
 
 - Scales: nothing (solo)
 
@@ -1123,7 +1123,7 @@ checkpoint_route
 | Use | all in order, or a random N | all |
 | Radius | 3–20 m | 10 m |
 | Stop at each for | 0–30 s | 10 s |
-| Police vehicle required | yes / no | yes |
+| Vehicle required | yes / no; when yes, a checkpoint counts only while the officer is driving a vehicle (any vehicle, checked by the server) | yes |
 | Medal times | Gold, Silver and Bronze in seconds, or off | off |
 | Contact penalty | 0–10 s per hit | 2 s |
 
@@ -1172,7 +1172,7 @@ search_area
 
 | Setting | Range | Default |
 |---|---|---|
-| Starting circle | 200–1,000 m | 600 m |
+| Starting circle | 200–1,000 m; also the start radius of every location (see Guardrails) | 600 m |
 | Clues | 1–5 | 3 |
 | Circle after each clue | list of radii | 300, 150, 50 m |
 | Fugitives | 1–5 | 1 |
@@ -1218,9 +1218,11 @@ Guardrails (checked while placing, and again by the server on publish)
 
 - At most 40 armed NPCs per mission before scaling, counting every block (hostile waves, escort attackers, and every flee_arrest suspect whenever its armed chance is above 0), with the running total shown in the builder; at run time the caps still apply (25 armed NPCs alive and 80 entities at any one moment).
 
-- Spawn points must be on the ground (not in water, inside walls or in the air), at least 30 m from the start point, and outside the no-build zones (Config.Builder.noBuildZones: police stations, hospitals and the prison interior by default).
+- Spawn points must be on the ground (not in water, inside walls or in the air), at least 30 m from the start point, and outside the no-build zones (Config.Builder.noBuildZones: police stations, hospitals, the prison interior and the Crimson-Arena Trailer Park and lobby by default).
 
 - Locations of the same mission must be at least 100 m apart, and each mission needs at least 3.
+
+- Each location's start marker has a start radius of 20–150 m, except in a mission with a search_area objective: there the search circle is the start marker (the run starts when a participant enters it, as in Manhunt), so every location's start radius equals the starting circle of its first search_area objective (that block's startRadius, 200–1,000 m, 600 m by default).
 
 - Every objective has a minimum time (minSeconds, or the block's default), the time limit is 2–20 minutes, and every block must have its required points placed.
 
@@ -1717,14 +1719,6 @@ Config.Limits = {
   reserveLocations      = true,  -- a location in use by one run can't be drawn for another
 }
 
--- ── Police vehicles ─────────────────────────────────────────────────────────
--- Used wherever a mission needs "a police vehicle" (Beat Patrol, EVOC Course,
--- and checkpoint_route with "Police vehicle required" on).
-Config.PoliceVehicles = {
-  classes = { 18 },   -- GTA vehicle classes; 18 = Emergency
-  models  = {},       -- extra model names for police cars outside class 18 (e.g. add-on unmarked cars)
-}
-
 -- ── Route to the start ──────────────────────────────────────────────────────
 Config.Route = {
   sampleEvery   = 50.0,    -- metres between points taken from the GPS route
@@ -1942,7 +1936,10 @@ Config.Builder = {
   },
   allowed = {                   -- the only models, weapons and animations builders can pick
     weapons        = { 'WEAPON_PISTOL', 'WEAPON_COMBATPISTOL', 'WEAPON_MICROSMG', 'WEAPON_SMG', 'WEAPON_PUMPSHOTGUN', 'WEAPON_ASSAULTRIFLE' },
-    peds           = { 'g_m_y_ballaeast_01', 'g_m_y_famca_01', 'g_m_y_mexgoon_01', 'g_m_y_lost_01', 'a_m_m_business_01', 'a_f_y_business_01' },
+    -- base-game ped models only. The list holds every ped a built-in mission or a block default uses
+    -- (inmates, the Kingpin, the escort driver), so a copy of any built-in mission can be published.
+    peds           = { 'g_m_y_ballaeast_01', 'g_m_y_famca_01', 'g_m_y_mexgoon_01', 'g_m_y_lost_01', 'a_m_m_business_01', 'a_f_y_business_01',
+                       's_m_y_prisoner_01', 's_m_y_prismuscl_01', 'g_m_m_armboss_01', 's_m_m_armoured_01' },
     vehicles       = { 'sultan', 'buffalo', 'elegy2', 'kuruma', 'dominator' },
     escortVehicles = { 'stockade', 'stockade3' },
     animations     = { 'clipboard', 'search', 'kneel', 'mechanic' },
@@ -1954,6 +1951,8 @@ Config.Builder = {
     { label = 'Pillbox Hill Medical',      coords = vec3(308.19, -595.35, 43.29),  radius = 100.0 },
     { label = 'Paleto Bay Medical',        coords = vec3(-254.54, 6331.78, 32.43), radius = 80.0 },
     { label = 'Bolingbroke interior',      coords = vec3(1768.73, 2570.43, 44.73), radius = 180.0 },  -- widen or move to fit your prison
+    { label = 'Crimson-Arena Trailer Park', coords = vec3(2344.43, 2565.06, 46.67), radius = 160.0 },  -- live match boundary (up to 135 m) + push-back
+    { label = 'Crimson-Arena lobby',        coords = vec3(-282.01, -2030.46, 30.15), radius = 60.0 },   -- where arena players return after a match
   },
 }
 
@@ -2049,14 +2048,14 @@ Config.Blocks = {
   },
 
   checkpoint_route = {
-    checkpoints    = { 2, 20 },
-    use            = { options = { 'all', 'random' }, default = 'all' },
-    radius         = { 3, 20, 10 },
-    stopFor        = { 0, 30, 10 },
-    policeVehicle  = { default = true },   -- uses Config.PoliceVehicles
-    medals         = { default = false },  -- when on: Gold, Silver and Bronze times in seconds
-    contactPenalty = { 0, 10, 2 },         -- seconds added per hit
-    presenceRange  = { 50, 800, 300 },     -- from the next checkpoint or the nearest partner, whichever is closer
+    checkpoints     = { 2, 20 },
+    use             = { options = { 'all', 'random' }, default = 'all' },
+    radius          = { 3, 20, 10 },
+    stopFor         = { 0, 30, 10 },
+    vehicleRequired = { default = true },   -- a checkpoint only counts while driving a vehicle (any vehicle)
+    medals          = { default = false },  -- when on: Gold, Silver and Bronze times in seconds
+    contactPenalty  = { 0, 10, 2 },         -- seconds added per hit
+    presenceRange   = { 50, 800, 300 },     -- from the next checkpoint or the nearest partner, whichever is closer
   },
 
   interact_points = {

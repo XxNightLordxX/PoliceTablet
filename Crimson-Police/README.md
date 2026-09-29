@@ -90,9 +90,15 @@ has not been driven in game. Run each mission once from **Admin UI → Testing**
 tier, nothing is saved or paid) and mark it Passed or Failed. The screen shows what still needs
 checking.
 
-## Changes from the spec
+## Spec revisions
 
-- Police-vehicle checks were replaced by "driving a vehicle" at the owner's request: Beat Patrol, EVOC Course and checkpoint routes with **Vehicle required** on count a checkpoint while the officer drives any vehicle (checked on the server).
+`docs/SPEC.md` was revised to match these owner-approved changes:
+
+- Driving a vehicle instead of a police vehicle: Beat Patrol, EVOC Course and checkpoint routes with
+  **Vehicle required** on count a checkpoint while the officer drives any vehicle (checked on the server).
+- Extra builder peds: `Config.Builder.allowed.peds` includes the inmate, Kingpin and escort-driver models.
+- Search-mission start radius: with a search area objective, every start radius equals its search circle (200–1000 m).
+- Crimson-Arena no-build zones: the Trailer Park and the lobby are in `Config.Builder.noBuildZones`.
 
 ## For developers
 
