@@ -1,8 +1,9 @@
 --[[ Crimson-Police · built-in mission
   EVOC Course · evoc_course · Training · 1 officer · 2 stars · 4 min · cooldown 10 min
-  Emergency vehicle operations course: drive every checkpoint in order in a police vehicle (a
-  missed one must be driven through before the next counts). Each wall or vehicle contact adds
-  2 s. Gold / Silver / Bronze by course time replace the common time bonus; no contact +10.
+  Emergency vehicle operations course: drive through every checkpoint in order at the wheel of a
+  vehicle (any vehicle; a missed one must be driven through before the next counts). Each wall or
+  vehicle contact adds 2 s. Gold / Silver / Bronze by course time replace the common time bonus;
+  no contact +10.
   Layouts (checkpoint markers only, no cones or props) on open airfield ground: LSIA (runways
   and taxiways west of the terminal), Sandy Shores Airfield runway, McKenzie Field (Grapeseed:
   a slalom down the airstrip and back, kept on the flat strip and clear of Seaview Rd).
@@ -14,7 +15,7 @@
 RegisterMission({
   id           = 'evoc_course',
   label        = 'EVOC Course',
-  description  = 'Emergency vehicle operations course: drive through every checkpoint in order in a police vehicle. Every contact costs 2 seconds.',
+  description  = 'Emergency vehicle operations course: drive through every checkpoint in order at the wheel of a vehicle. Every contact costs 2 seconds.',
   type         = 'training',     -- sets points and base payout; there is no payout field
   departments  = {},             -- empty = every department
   minOfficers  = 1,
@@ -104,7 +105,7 @@ RegisterMission({
       use               = 'all',
       radius            = 8.0,
       stopFor           = 0,                 -- drive-through gates
-      policeVehicle     = true,
+      vehicleRequired   = true,              -- at the wheel of a vehicle (any vehicle)
       medals            = { gold = 60, silver = 75, bronze = 90 },   -- fallback; every layout sets location.medals
       contactPenalty    = 2,                 -- seconds per wall or vehicle contact
       timerStart        = 'first',

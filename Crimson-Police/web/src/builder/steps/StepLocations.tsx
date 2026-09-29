@@ -14,7 +14,7 @@ import type { PointSpec, RouteMeta } from '../../types/builder_client';
 import { CountBadge, ErrorNotes } from '../controls';
 import { dist2d, errorsAt, errorsUnder, isRoute, listsOf, pointsOf, routeLength } from '../defUtils';
 import { KEY_COLOURS, LocationMap } from '../LocationMap';
-import { missionPointSpecs, rangeOf } from '../schema';
+import { missionPointSpecs, rangeOf, searchCircleOf, startRadiusRange, type SearchCircle } from '../schema';
 import { editorMemory, routeMetaOf, setEditorMemory, setRouteMeta, shiftRouteMeta, subscribeBuilder } from '../store';
 import { startSpec } from '../useDraftEditor';
 import { StepIntro, type StepProps } from './common';
@@ -148,7 +148,7 @@ export function StepLocations({ ed, cfg, def, ro, scope }: StepProps) {
                 <StartRow loc={loc} li={li} disabled={busy} onPlace={() => void ed.place(startSpec(), li)} onGps={gps}
                   onClear={() => setConfirm({ kind: 'clear', spec: startSpec() })}
                   errors={[...errorsAt(ed.errors, `locations.${li}.start`), ...errorsAt(ed.errors, `locations.${li}.start.radius`), ...errorsAt(ed.errors, `locations.${li}`)]}
-                  radiusRange={cfg.startRadius ?? [20, 150, 60]} ro={ro}
+                  radiusRange={startRadiusRange(cfg, def)} search={searchCircleOf(cfg, def)} ro={ro}
                   onRadius={(r) => ed.update((d) => { const s = d.locations[li - 1].start; if (s) s.radius = r; })} />
                 {specs.map((s, i) => (
                   <PointRow key={s.key} spec={s} colour={KEY_COLOURS[i % KEY_COLOURS.length]} loc={loc} li={li} ed={ed} cfg={cfg} meta={meta(s.key)} disabled={busy} ro={ro}
@@ -175,9 +175,11 @@ export function StepLocations({ ed, cfg, def, ro, scope }: StepProps) {
   );
 }
 
-function StartRow({ loc, li, disabled, ro, onPlace, onGps, onClear, errors, radiusRange, onRadius }: {
+function StartRow({ loc, li, disabled, ro, onPlace, onGps, onClear, errors, radiusRange, search, onRadius }: {
   loc: BuilderLocation; li: number; disabled: boolean; ro: boolean; onPlace: () => void; onGps: (c: Vec3) => void; onClear: () => void;
-  errors: ReturnType<typeof errorsAt>; radiusRange: [number, number, number]; onRadius: (r: number) => void;
+  errors: ReturnType<typeof errorsAt>; radiusRange: [number, number, number];
+  /** the mission's search circle: the start radius is locked to it */
+  search: SearchCircle | null; onRadius: (r: number) => void;
 }) {
   const s = loc.start;
   return (
@@ -194,9 +196,15 @@ function StartRow({ loc, li, disabled, ro, onPlace, onGps, onClear, errors, radi
         {s ? (
           <div className="builder_client-inline-field">
             <span>{t('builder.loc.start_radius')}</span>
-            <NumberInput value={s.radius} min={radiusRange[0]} max={radiusRange[1]} suffix={t('builder.unit.m')} disabled={ro} showRange={false}
+            <NumberInput value={s.radius} min={radiusRange[0]} max={radiusRange[1]} suffix={t('builder.unit.m')} disabled={ro || !!search} showRange={false}
               onChange={(v) => v !== null && onRadius(v)} />
-            <span className="builder_client-muted cp-num">{t('builder.range', { min: radiusRange[0], max: radiusRange[1], unit: ` ${t('builder.unit.m')}` })}</span>
+            {search ? (
+              <span className="builder_client-muted cp-num">
+                {t('builder.loc.start_radius_search', { n: search.objective, radius: search.radius, min: search.range.min, max: search.range.max })}
+              </span>
+            ) : (
+              <span className="builder_client-muted cp-num">{t('builder.range', { min: radiusRange[0], max: radiusRange[1], unit: ` ${t('builder.unit.m')}` })}</span>
+            )}
           </div>
         ) : null}
         <ErrorNotes errors={errors} compact />

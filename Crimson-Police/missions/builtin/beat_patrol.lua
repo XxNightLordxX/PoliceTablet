@@ -1,7 +1,8 @@
 --[[ Crimson-Police · built-in mission
   Beat Patrol · beat_patrol · Patrol · 1 officer · 1 star · 8 min · cooldown 10 min
   Drive a district beat: 5 of the district's checkpoints in order, holding 10 s inside each
-  10 m marker in a police vehicle. Markers and blips only; nothing spawns.
+  10 m marker while driving a vehicle (any vehicle; the server checks the driver seat).
+  Markers and blips only; nothing spawns.
   Districts: Strawberry & Davis, La Mesa & Mirror Park, Harmony & Route 68, Sandy Shores,
   Paleto Bay, and Banham Canyon & Chumash on the Great Ocean Highway. Every checkpoint is a
   public road (on a road node), fuel forecourt or car park, never at a police station or
@@ -16,7 +17,7 @@
 RegisterMission({
   id           = 'beat_patrol',
   label        = 'Beat Patrol',
-  description  = 'Patrol your district: drive to each checkpoint in order and hold inside its marker in a police vehicle for 10 seconds.',
+  description  = 'Patrol your district: drive to each checkpoint in order and hold inside its marker for 10 seconds while driving a vehicle.',
   type         = 'patrol',       -- sets points and base payout; there is no payout field
   departments  = {},             -- empty = every department
   minOfficers  = 1,
@@ -125,7 +126,7 @@ RegisterMission({
       count             = 5,
       radius            = 10.0,
       stopFor           = 10,                -- seconds stopped inside each marker
-      policeVehicle     = true,
+      vehicleRequired   = true,              -- at the wheel of a vehicle (any vehicle)
       medals            = false,
       contactPenalty    = 0,                 -- no course clock on a patrol
       timerStart        = 'start',

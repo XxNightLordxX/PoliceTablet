@@ -96,6 +96,7 @@
   "builder.error.spawn_start": "Location {location}: {key} spawn points must be at least {min} m from the start.",
   "builder.error.start_missing": "Location {location}: place the start point.",
   "builder.error.start_radius": "Location {location}: the start radius must be {min}–{max} m.",
+  "builder.error.start_radius_search": "Location {location}: the start is the search circle of objective {n}, so its radius must be {radius} m (a search area's starting circle is {min}–{max} m).",
   "builder.error.start_timeout": "The start timeout must be {min}–{max} minutes.",
   "builder.error.time_limit": "The time limit must be {min}–{max} minutes.",
   "builder.error.type_required": "Pick a mission type: it sets the points and the base payout.",

@@ -77,6 +77,63 @@ export function presenceOf(cfg: BuilderConfig, block: string): Rng {
   return rangeOf(cfg, block, 'presenceRange', [50, 800, 150]);
 }
 
+// ── start radius ─────────────────────────────────────────────────────────────────
+// Mirrors modules/builder/server.lua (B.validate): the start marker of a mission with a search_area objective
+// is its search circle (the run starts when a participant enters it), so every location's start radius must
+// equal the FIRST search_area objective's startRadius (its block default when unset) and is checked against
+// Config.Blocks.search_area.startRadius instead of the start-marker range (builder:config startRadius).
+
+export interface SearchCircle {
+  /** 1-based objective index */
+  objective: number;
+  radius: number;
+  range: Rng;
+}
+
+export function searchCircleOf(cfg: BuilderConfig, def: BuilderDefinition | null | undefined): SearchCircle | null {
+  const list = asArray(def?.objectives);
+  const i = list.findIndex((o) => o && o.block === 'search_area');
+  if (i < 0) return null;
+  const range = rangeOf(cfg, 'search_area', 'startRadius', [200, 1000, 600]);
+  const v = list[i].startRadius;
+  return { objective: i + 1, radius: typeof v === 'number' && Number.isFinite(v) ? v : range.def, range };
+}
+
+/** [min, max, default] a start radius may take in this mission (the search circle: exactly its radius). */
+export function startRadiusRange(cfg: BuilderConfig | null | undefined, def: BuilderDefinition | null | undefined): [number, number, number] {
+  const marker: [number, number, number] = cfg?.startRadius ?? [20, 150, 60];
+  if (!cfg) return marker;
+  const sc = searchCircleOf(cfg, def);
+  return sc ? [sc.radius, sc.radius, sc.radius] : marker;
+}
+
+/**
+ * Keeps every placed start radius in line with the mission (changes def in place): all of them equal the search
+ * circle when there is one; when the search area was removed (prev had one), radii outside the start-marker
+ * range go back to its default. Returns true when something changed.
+ */
+export function syncStartRadius(def: BuilderDefinition, cfg: BuilderConfig | null | undefined, prev?: BuilderDefinition | null): boolean {
+  if (!cfg) return false;
+  let changed = false;
+  const sc = searchCircleOf(cfg, def);
+  const [lo, hi, dflt] = cfg.startRadius ?? [20, 150, 60];
+  const hadSearch = !!prev && !!searchCircleOf(cfg, prev);
+  asArray(def.locations).forEach((l) => {
+    const s = l && l.start;
+    if (!s) return;
+    if (sc) {
+      if (s.radius !== sc.radius) {
+        s.radius = sc.radius;
+        changed = true;
+      }
+    } else if (hadSearch && !(typeof s.radius === 'number' && s.radius >= lo && s.radius <= hi)) {
+      s.radius = dflt;
+      changed = true;
+    }
+  });
+  return changed;
+}
+
 // ── location keys ────────────────────────────────────────────────────────────────
 
 /** Objective fields that name location keys, per block (for renaming, uniqueness and cleanup). */
@@ -183,7 +240,7 @@ export function newObjective(cfg: BuilderConfig, def: BuilderDefinition, block: 
     case 'checkpoint_route':
       return {
         ...base, checkpoints: key('checkpoints'), use: (optionsOf(cfg, block, 'use').def as string) ?? 'all',
-        radius: r('radius', [3, 20, 10]), stopFor: r('stopFor', [0, 30, 10]), policeVehicle: flagOf(cfg, block, 'policeVehicle', true),
+        radius: r('radius', [3, 20, 10]), stopFor: r('stopFor', [0, 30, 10]), vehicleRequired: flagOf(cfg, block, 'vehicleRequired', true),
         medals: false, contactPenalty: r('contactPenalty', [0, 10, 2]),
       };
     case 'interact_points':

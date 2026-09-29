@@ -171,7 +171,9 @@ Files: `modules/integrations/{qbx,sc_dispatch,sc_ambulance,renewed_banking}/`, `
 - **blocks_a** asked for `CP.Qbx.vehicleClass(model)` (qbx_core's `GetVehicleClass` export). Declined:
   the spec's module rules limit `modules/integrations/qbx/` to the qbx_core exports and events listed in
   the Appendix, and that export is not listed (it also asks a random client for the class table).
-  checkpoint_route already falls back when `CP.Qbx.vehicleClass` is missing.
+  checkpoint_route already falls back when `CP.Qbx.vehicleClass` is missing. (Moot since: at the owner's
+  request checkpoint_route no longer checks a vehicle class at all, only that the participant is driving;
+  see docs/notes/blocks_a.md note 8.)
 - **cash** calls `CP.Banking.depositSociety` (Renewed-Banking `addAccountMoney`) for a society refund when it
   exists. Not added: `addAccountMoney` is not among the Appendix's Renewed-Banking calls (INTEGRATIONS.md
   only names it as an option needing a spec decision). cash already keeps such a row `paying` for a manual

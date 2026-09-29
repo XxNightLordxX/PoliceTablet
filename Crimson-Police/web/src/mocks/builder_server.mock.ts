@@ -69,7 +69,7 @@ const BLOCKS: Record<string, Record<string, unknown>> = {
   },
   checkpoint_route: {
     checkpoints: [2, 20], use: { options: ['all', 'random'], default: 'all' }, radius: [3, 20, 10], stopFor: [0, 30, 10],
-    policeVehicle: { default: true }, medals: { default: false }, contactPenalty: [0, 10, 2], presenceRange: [50, 800, 300],
+    vehicleRequired: { default: true }, medals: { default: false }, contactPenalty: [0, 10, 2], presenceRange: [50, 800, 300],
   },
   interact_points: {
     points: [1, 10], use: { options: ['all', 'random'], default: 'all' }, progress: [1, 30, 5], label: 'Checking…',
@@ -136,7 +136,8 @@ function buildConfig(): BuilderConfig {
     })),
     allowed: {
       weapons: ['WEAPON_PISTOL', 'WEAPON_COMBATPISTOL', 'WEAPON_MICROSMG', 'WEAPON_SMG', 'WEAPON_PUMPSHOTGUN', 'WEAPON_ASSAULTRIFLE'],
-      peds: ['g_m_y_ballaeast_01', 'g_m_y_famca_01', 'g_m_y_mexgoon_01', 'g_m_y_lost_01', 'a_m_m_business_01', 'a_f_y_business_01'],
+      peds: ['g_m_y_ballaeast_01', 'g_m_y_famca_01', 'g_m_y_mexgoon_01', 'g_m_y_lost_01', 'a_m_m_business_01', 'a_f_y_business_01',
+        's_m_y_prisoner_01', 's_m_y_prismuscl_01', 'g_m_m_armboss_01', 's_m_m_armoured_01'],
       vehicles: ['sultan', 'buffalo', 'elegy2', 'kuruma', 'dominator'],
       escortVehicles: ['stockade', 'stockade3'],
       animations: ['clipboard', 'search', 'kneel', 'mechanic'],

@@ -3,8 +3,9 @@
 -- the modules outside the group (access, qbx, alerts, route, payouts, scoring, cash, anticheat, tablet ...).
 -- It checks the cross-module paths the slice notes and the integration list asked for:
 --   * the real loader (CP.Missions.loadAll at start, LoadResourceFile of every missions/builtin file) loads all 14
---     built-in missions: the loader sets def.source before the blocks' validate, so Prison Break's inmates and the
---     Kingpin's boss model pass (as custom missions, the Mission Builder's model lists would refuse them)
+--     built-in missions: the loader sets def.source before the blocks' validate, so a built-in file is exempt from
+--     the Mission Builder's model lists (Prison Break's inmates and the Kingpin's boss model are in those lists
+--     now, so copies of them can be published; a model outside the lists passes only in a built-in file)
 --   * CP.Runs.create reserves the location through the real CP.Draw (test runs too, CP.Runs.get returns them),
 --     rolls the modifier through the real CP.Events after the seed / type / boss / test / operation are set,
 --     and releases the reservation when the run ends
@@ -186,13 +187,21 @@ do
     for _, d in ipairs(tactical) do if d.isBoss then hasBoss = true end end
     H.eq(#tactical, 5, 'five Tactical missions in the pool')
     H.eq(hasBoss, false, 'the boss is not in the Tactical pool')
-    -- the source is what exempts them: the same files as custom missions meet the Mission Builder's model lists
+    -- their models are base-game peds of the Mission Builder's list (copies of them can be published) ...
+    H.ok(U.contains(Config.Builder.allowed.peds, 's_m_y_prisoner_01') and U.contains(Config.Builder.allowed.peds, 's_m_y_prismuscl_01'),
+        "Prison Break's inmates are in Config.Builder.allowed.peds")
+    H.ok(bossBlock ~= nil and U.contains(Config.Builder.allowed.peds, bossBlock.model), "the Kingpin's model is in Config.Builder.allowed.peds")
+    -- ... and the source is still what exempts a built-in file: a model outside the lists passes only there
     for _, id in ipairs({ 'prison_break', 'weekly_boss_kingpin' }) do
         local path = 'missions/builtin/' .. id .. '.lua'
         local raw = Missions.parse(LoadResourceFile('Crimson-Police', path), path)
+        for _, o in ipairs(raw.objectives) do
+            if type(o.models) == 'table' then o.models = { 'u_m_y_zombie_01' } end
+            if type(o.boss) == 'table' then o.boss.model = 'u_m_y_zombie_01' end
+        end
         local asCustom, why = Missions.normalize(U.deepcopy(raw), { source = 'custom', version = 1 })
-        H.eq(asCustom, nil, id .. ' as a custom mission is refused (' .. tostring(why) .. ')')
-        H.ok(Missions.normalize(U.deepcopy(raw), { source = 'builtin', filePath = path }) ~= nil, id .. ' as a built-in mission loads')
+        H.eq(asCustom, nil, id .. ' with a model outside the lists, as a custom mission, is refused (' .. tostring(why) .. ')')
+        H.ok(Missions.normalize(U.deepcopy(raw), { source = 'builtin', filePath = path }) ~= nil, id .. ' with that model as a built-in mission loads')
     end
 end
 

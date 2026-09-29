@@ -90,6 +90,10 @@ has not been driven in game. Run each mission once from **Admin UI → Testing**
 tier, nothing is saved or paid) and mark it Passed or Failed. The screen shows what still needs
 checking.
 
+## Changes from the spec
+
+- Police-vehicle checks were replaced by "driving a vehicle" at the owner's request: Beat Patrol, EVOC Course and checkpoint routes with **Vehicle required** on count a checkpoint while the officer drives any vehicle (checked on the server).
+
 ## For developers
 
 - Architecture and module contracts: `docs/ARCHITECTURE.md` in the repository.

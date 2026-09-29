@@ -152,14 +152,6 @@ Config.Limits = {
   reserveLocations      = true,  -- a location in use by one run can't be drawn for another
 }
 
--- ── Police vehicles ─────────────────────────────────────────────────────────
--- Used wherever a mission needs "a police vehicle" (Beat Patrol, EVOC Course,
--- and checkpoint_route with "Police vehicle required" on).
-Config.PoliceVehicles = {
-  classes = { 18 },   -- GTA vehicle classes; 18 = Emergency
-  models  = {},       -- extra model names for police cars outside class 18 (e.g. add-on unmarked cars)
-}
-
 -- ── Route to the start ──────────────────────────────────────────────────────
 Config.Route = {
   sampleEvery   = 50.0,    -- metres between points taken from the GPS route
@@ -377,7 +369,10 @@ Config.Builder = {
   },
   allowed = {                   -- the only models, weapons and animations builders can pick
     weapons        = { 'WEAPON_PISTOL', 'WEAPON_COMBATPISTOL', 'WEAPON_MICROSMG', 'WEAPON_SMG', 'WEAPON_PUMPSHOTGUN', 'WEAPON_ASSAULTRIFLE' },
-    peds           = { 'g_m_y_ballaeast_01', 'g_m_y_famca_01', 'g_m_y_mexgoon_01', 'g_m_y_lost_01', 'a_m_m_business_01', 'a_f_y_business_01' },
+    -- base-game ped models only. The list holds every ped a built-in mission or a block default uses
+    -- (inmates, the Kingpin, the escort driver), so a copy of any built-in mission can be published.
+    peds           = { 'g_m_y_ballaeast_01', 'g_m_y_famca_01', 'g_m_y_mexgoon_01', 'g_m_y_lost_01', 'a_m_m_business_01', 'a_f_y_business_01',
+                       's_m_y_prisoner_01', 's_m_y_prismuscl_01', 'g_m_m_armboss_01', 's_m_m_armoured_01' },
     vehicles       = { 'sultan', 'buffalo', 'elegy2', 'kuruma', 'dominator' },
     escortVehicles = { 'stockade', 'stockade3' },
     animations     = { 'clipboard', 'search', 'kneel', 'mechanic' },

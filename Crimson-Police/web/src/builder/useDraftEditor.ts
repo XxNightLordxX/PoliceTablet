@@ -23,6 +23,7 @@ import type {
 } from '../types/builder_client';
 import { applyResult } from './applyResult';
 import { clone, isRoute, listsOf, normalizeDefinition, pointsOf } from './defUtils';
+import { searchCircleOf, startRadiusRange, syncStartRadius } from './schema';
 import {
   currentTool, forgetDraft, queueResult, recallDraft, rememberDraft, renameMission, routeMetaOf, setRouteMeta, setTool,
   subscribeBuilder, takeResults, type BuilderScope,
@@ -101,6 +102,8 @@ export function useDraftEditor(id: string, scope: BuilderScope, ui: BuilderUi, c
   lockRef.current = lock;
   const recordRef = useRef<BuilderRecord | null>(null);
   recordRef.current = record;
+  const configRef = useRef<BuilderConfig | null>(config);
+  configRef.current = config;
   const mounted = useRef(true);
 
   const lockHeld = !!(lock && lock.mine);
@@ -156,6 +159,7 @@ export function useDraftEditor(id: string, scope: BuilderScope, ui: BuilderUi, c
     if (!list.length) return;
     let next = defRef.current;
     if (!next) return;
+    const before = next;
     const tool = currentTool();
     let changed = false;
     for (const r of list) {
@@ -170,6 +174,7 @@ export function useDraftEditor(id: string, scope: BuilderScope, ui: BuilderUi, c
     }
     setTool(null);
     if (changed && next) {
+      syncStartRadius(next, config, before);
       rev.current += 1;
       setDef(next);
       setDirty(true);
@@ -187,8 +192,13 @@ export function useDraftEditor(id: string, scope: BuilderScope, ui: BuilderUi, c
     const memory = recallDraft(rec.id);
     const base = memory && memory.dirty ? memory.def : rec.definition;
     const d = normalizeDefinition(base);
+    // a draft saved before the search-circle rule (start radius from the 20–150 m range): an editable one gets its
+    // start radii put on the search circle at once, as a pending change, so the locked field shows what is saved
+    const editable = rec.source === 'custom' && rec.can.edit && rec.dbStatus !== 'archived' && !(rec.lock && !rec.lock.mine);
+    const synced = editable && syncStartRadius(d, configRef.current);
     setDef(d);
-    setDirty(!!(memory && memory.dirty));
+    setDirty(!!(memory && memory.dirty) || synced);
+    if (synced) rememberDraft(rec.id, d, true);
     setErrors(Array.isArray(rec.errors) ? rec.errors : []);
     setArmedServer(typeof rec.armed === 'number' ? rec.armed : null);
     setLockLostBy(null);
@@ -258,6 +268,8 @@ export function useDraftEditor(id: string, scope: BuilderScope, ui: BuilderUi, c
     if (!cur) return;
     const next = clone(cur);
     fn(next);
+    // a search area's circle is the start marker: every start radius follows it (the server's guardrail)
+    syncStartRadius(next, configRef.current, cur);
     rev.current += 1;
     defRef.current = next;
     setDef(next);
@@ -429,9 +441,11 @@ export function useDraftEditor(id: string, scope: BuilderScope, ui: BuilderUi, c
       ui,
     };
     if (isStart) {
-      payload.radius = loc.start?.radius ?? config.startRadius[2];
-      payload.radiusMin = config.startRadius[0];
-      payload.radiusMax = config.startRadius[1];
+      // the start-marker range, or exactly the search circle when the mission has a search area
+      const [lo, hi, dflt] = startRadiusRange(config, d);
+      payload.radius = searchCircleOf(config, d) ? dflt : (loc.start?.radius ?? dflt);
+      payload.radiusMin = lo;
+      payload.radiusMax = hi;
     } else if (spec.radius) payload.radius = spec.radius;
     if (spec.minGap) payload.minGap = spec.minGap;
     return run('builderPlace', payload, spec, location, 'placement');

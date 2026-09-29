@@ -2,9 +2,13 @@
 
   What it does
     Drive to a list of checkpoints in order. Each checkpoint counts when a participant is inside its
-    radius (in a police vehicle when policeVehicle is on) and, with stopFor > 0, has stayed stopped
+    radius (driving a vehicle when vehicleRequired is on) and, with stopFor > 0, has stayed stopped
     there for stopFor seconds; with stopFor = 0 it is a drive-through gate. Only the current
     checkpoint counts, so a missed one must be driven through before the next one counts.
+    "Driving" is decided on the server only: the participant's ped is in a vehicle
+    (GetVehiclePedIsIn(ped, false) ~= 0) and in its driver seat (GetPedInVehicleSeat(veh, -1) == ped).
+    Any vehicle counts: FiveM has no server-side vehicle class, so the old "police vehicle" rule had to
+    trust the client and was replaced by "driving a vehicle" at the owner's request.
     Powers Beat Patrol (use = 'random', count = 5, stop 10 s) and EVOC Course (use = 'all',
     drive-through, medal times, contact seconds, fails when the course vehicle is undriveable).
     The server tracks every participant's position each tick (server-side coordinates) to verify the
@@ -17,7 +21,9 @@
     count              checkpoints used when use = 'random' (required for random)
     radius             metres                             [radius[3] = 10]
     stopFor            seconds stopped inside; 0 = drive through   [stopFor[3] = 10]
-    policeVehicle      checkpoint only counts in a police vehicle (Config.PoliceVehicles)  [policeVehicle.default = true]
+    vehicleRequired    checkpoint only counts while driving a vehicle (any vehicle)   [vehicleRequired.default = true]
+                       (policeVehicle, the old name that published mission files may still use, is read as an
+                       alias of vehicleRequired by defaults())
     medals             false | true | { gold, silver, bronze } seconds; location.medals (a table) overrides
                        [medals.default = false]. With medals the course time decides one medal bonus and
                        run.flags.medals = true is set in prepare (the common fast bonus is skipped).
@@ -32,14 +38,12 @@
     With use = 'random' a pool point inside location.start (the start marker) is always used first and
     the others follow in the pool's circular order from it ("Start: the first checkpoint").
     Stop checkpoints (stopFor > 0): the server's own 1 s samples must see the participant inside the
-    marker, stopped (server GetEntitySpeed <= SERVER_STOP_SPEED) and in a vehicle when one is required,
-    for stopFor - DWELL_SLACK seconds.
+    marker, stopped (server GetEntitySpeed <= SERVER_STOP_SPEED) and driving a vehicle when one is
+    required, for stopFor - DWELL_SLACK seconds.
 
   Evidence accepted (client -> server through ctx.report; the engine adds coords and time)
-    { type = 'checkpoint', index, netId?, vehClass?, model?, try? }   index = the current checkpoint
-        (vehClass is used only when the server has no class for the vehicle, only when model matches
-        the model of the vehicle the server sees the reporter in, only for a GTA class 0..22, and only
-        while it agrees with every earlier report for that model)
+    { type = 'checkpoint', index, netId?, try? }   index = the current checkpoint; nothing else in it is
+        trusted (the vehicle, the driver seat, the position and the stop time are the server's own)
     { type = 'contact', netId? }        course running, reporter in a vehicle, at most 1 per 1.2 s, 60 counted
     { type = 'undriveable', netId }     the reporter's course vehicle; verified with its engine health
 
@@ -111,11 +115,6 @@ end
 local function plain(v)
     local x, y, z = CP.U.xyz(v)
     return { x = x, y = y, z = z }
-end
-
-local function h32(v)
-    local n = math.tointeger(tonumber(v) or 0) or 0
-    return n & 0xFFFFFFFF
 end
 
 local function bad(key, vars)
@@ -218,70 +217,21 @@ local function entityOf(netId)
     return ent
 end
 
--- The class of a vehicle as the server knows it, or nil. FiveM has no server-side GetVehicleClass native
--- (qbx_core only offers an export that asks a client, and modules/integrations/qbx does not wrap it:
--- docs/notes/core.md); CP.Qbx.vehicleClass(model) is used if it ever exists, a GetVehicleClass global
--- when one exists. Otherwise the client-reported class is used, cross-checked by clientClass below.
-local function serverClass(veh, model)
-    if CP.Qbx and type(CP.Qbx.vehicleClass) == 'function' then
-        local ok, c = pcall(CP.Qbx.vehicleClass, model)
-        if ok and tonumber(c) then return idx(c) end
-    end
-    if type(GetVehicleClass) == 'function' then
-        local ok, c = pcall(GetVehicleClass, veh)
-        if ok and tonumber(c) then return idx(c) end
-    end
-    return nil
+-- The vehicle the participant is DRIVING as the server sees it, or 0: in a vehicle and in its driver seat
+-- (server natives only; any vehicle counts). Nothing the client reports is used.
+local function drivenVehicle(src)
+    local ped = GetPlayerPed(src)
+    if not ped or ped == 0 then return 0 end
+    local veh = GetVehiclePedIsIn(ped, false) or 0
+    if veh == 0 then return 0 end
+    if GetPedInVehicleSeat(veh, -1) ~= ped then return 0 end
+    return veh
 end
 
--- Classes clients reported per model (the unsigned 32-bit model hash). A model's class comes from the game
--- files and is the same on every unmodified client, so a report that contradicts an earlier one for the same
--- model is refused and that model's class is never taken from a client again (until a restart); the
--- server's own model list and a server-side class still apply to it.
-local reportedClass = {}      -- [model] = class | false (contradicting reports seen)
-local reportedCount = 0
-local REPORTED_MAX = 512
-local CLASS_MAX = 22          -- GTA vehicle classes 0..22
-
--- The class a client reported for the vehicle the SERVER sees it in: only when the reported model is that
--- vehicle's model (signed and unsigned hash forms compare equal), the class is a GTA class, and it agrees
--- with every earlier report for that model. nil otherwise.
-local function clientClass(model, ev)
-    if type(ev) ~= 'table' or ev.model == nil or h32(ev.model) ~= model then return nil end
-    local class = idx(ev.vehClass)
-    if class == nil or class < 0 or class > CLASS_MAX then return nil end
-    local known = reportedClass[model]
-    if known == false then return nil end
-    if known == nil then
-        if reportedCount < REPORTED_MAX then
-            reportedClass[model] = class
-            reportedCount = reportedCount + 1
-        end
-    elseif known ~= class then
-        reportedClass[model] = false
-        CP.warn('blocks', 'checkpoint_route: contradicting vehicle classes reported for model %d (%d, then %d): no longer taken from clients', model, known, class)
-        return nil
-    end
-    return class
-end
-
--- Config.PoliceVehicles: models are checked on the server; the class comes from the server where it
--- can (FiveM has no server-side class native), otherwise from the class the client reported, and then
--- only for the model the server sees the reporter in (clientClass).
-local function policeVehicleOk(veh, ev)
-    local pv = Config.PoliceVehicles or {}
-    local rawModel = GetEntityModel(veh)
-    local model = h32(rawModel)
-    for _, name in ipairs(pv.models or {}) do
-        if h32(joaat(name)) == model then return true end
-    end
-    local class = serverClass(veh, rawModel)
-    if class == nil then class = clientClass(model, ev) end
-    if class == nil then return false end
-    for _, c in ipairs(pv.classes or {}) do
-        if c == class then return true end
-    end
-    return false
+-- vehicleRequired, with the old policeVehicle name as an alias (published files may still use it).
+local function vehicleRequired(obj)
+    if obj.vehicleRequired ~= nil then return obj.vehicleRequired ~= false end
+    return obj.policeVehicle ~= false
 end
 
 local function sampleVehicle(st, netId)
@@ -308,13 +258,19 @@ local function bodyContact(st)
     return false
 end
 
--- "Stopped inside the marker" as the server sees it: in a vehicle when one is required, and the vehicle
--- (or the ped on foot) no faster than SERVER_STOP_SPEED (server GetEntitySpeed works for networked entities).
+-- "Stopped inside the marker" as the server sees it: driving a vehicle when one is required, and the vehicle
+-- (or the ped on foot or as a passenger) no faster than SERVER_STOP_SPEED (server GetEntitySpeed works for
+-- networked entities).
 local function stoppedNow(ctx, src)
     local ped = GetPlayerPed(src)
     if not ped or ped == 0 then return false end
-    local veh = GetVehiclePedIsIn(ped, false) or 0
-    if veh == 0 and ctx.obj.policeVehicle ~= false then return false end
+    local veh
+    if vehicleRequired(ctx.obj) then
+        veh = drivenVehicle(src)
+        if veh == 0 then return false end
+    else
+        veh = GetVehiclePedIsIn(ped, false) or 0
+    end
     local speed = tonumber(GetEntitySpeed(veh ~= 0 and veh or ped)) or 0.0
     return speed <= SERVER_STOP_SPEED
 end
@@ -427,10 +383,13 @@ local function onCheckpoint(ctx, st, src, ev)
     local radius = tonumber(obj.radius) or 10.0
     local slack = stopFor > 0 and STOP_SLACK or DRIVE_SLACK
     if CP.U.dist(c, cp) > radius + slack then return false, 'too_far' end
-    local veh = vehicleOf(src)
-    if obj.policeVehicle ~= false then
-        if veh == 0 then return false, 'not_in_vehicle' end
-        if not policeVehicleOk(veh, ev) then return false, 'not_police_vehicle' end
+    local veh
+    if vehicleRequired(obj) then
+        if vehicleOf(src) == 0 then return false, 'not_in_vehicle' end
+        veh = drivenVehicle(src)
+        if veh == 0 then return false, 'not_driving' end
+    else
+        veh = vehicleOf(src)
     end
     if stopFor > 0 then
         local n = st.near[src]
@@ -504,7 +463,9 @@ local function applyDefaults(obj)
     if obj.use == nil then obj.use = c.use.default end
     if obj.radius == nil then obj.radius = c.radius[3] + 0.0 end
     if obj.stopFor == nil then obj.stopFor = c.stopFor[3] end
-    if obj.policeVehicle == nil then obj.policeVehicle = c.policeVehicle.default end
+    if obj.vehicleRequired == nil and obj.policeVehicle ~= nil then obj.vehicleRequired = obj.policeVehicle end   -- old name
+    obj.policeVehicle = nil
+    if obj.vehicleRequired == nil then obj.vehicleRequired = c.vehicleRequired.default end
     if obj.medals == nil then obj.medals = c.medals.default end
     if obj.contactPenalty == nil then obj.contactPenalty = c.contactPenalty[3] end
     if obj.timerStart == nil then obj.timerStart = 'first' end
@@ -544,7 +505,7 @@ CP.Blocks.register(BLOCK, {
         if type(obj.minSeconds) ~= 'number' or obj.minSeconds < 0 then
             return bad('block.checkpoint_route.invalid.min_seconds')
         end
-        if type(obj.policeVehicle) ~= 'boolean' or type(obj.failIfUndriveable) ~= 'boolean' then
+        if type(obj.vehicleRequired) ~= 'boolean' or type(obj.failIfUndriveable) ~= 'boolean' then
             return bad('block.checkpoint_route.invalid.flags')
         end
         if obj.timerStart ~= 'first' and obj.timerStart ~= 'start' then

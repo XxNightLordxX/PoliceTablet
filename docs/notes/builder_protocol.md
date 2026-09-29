@@ -32,7 +32,7 @@ published file, plus the reserved `_file` key, §1.6). The Lua file is only prod
   "locations": [                      // >= Config.Builder.minLocations, at most 20
     {
       "label": "Dock 1",                                               // 1–64 characters
-      "start": { "coords": { "x": 1.0, "y": 2.0, "z": 3.0 }, "radius": 60 }, // radius 20–150 m
+      "start": { "coords": { "x": 1.0, "y": 2.0, "z": 3.0 }, "radius": 60 }, // radius 20–150 m; with a search_area: its startRadius
       "spawns": [ { "x": 1.0, "y": 2.0, "z": 3.0, "w": 90.0 } ],       // any named key: see §1.2
       "evidence": [ { "x": 1.0, "y": 2.0, "z": 3.0 } ],
       "route": { "points": [ { "x": 0, "y": 0, "z": 0 } ], "stops": [ { "at": 12, "wait": 20 } ] }

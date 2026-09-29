@@ -384,8 +384,9 @@ local function telemetry(src, run, kind, data)
 end
 local Runs = CP.Runs
 local POLICE_MODEL = 'police3'
+-- The checkpoint report carries no vehicle class or model: the server checks the driver seat itself.
 local function checkpointEv(k, veh)
-    return { type = 'checkpoint', index = k, netId = ents[veh].net, vehClass = 18, model = modelHash(POLICE_MODEL) & 0xFFFFFFFF }
+    return { type = 'checkpoint', index = k, netId = ents[veh].net }
 end
 
 do
@@ -1118,7 +1119,7 @@ local function startPatrol(src)
     local run = Runs.getBySrc(src)
     arrive(run, src)
     H.eq(run and run.state, 'in_progress', ('%s: Beat Patrol in progress'):format(CID[src]))
-    local veh = vehicleFor(src, POLICE_MODEL)
+    local veh = vehicleFor(src, 'sultan')   -- any vehicle: the checkpoints only need the officer at the wheel
     telemetry(src, run, 'vehicle', { netId = ents[veh].net })
     return run, veh
 end

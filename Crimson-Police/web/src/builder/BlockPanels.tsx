@@ -10,7 +10,7 @@ import type { BuilderConfig, BuilderDefinition, BuilderError, BuilderObjective }
 import { GroupTitle, MultiPick, OptionPick, RangeNumber, nameOf } from './controls';
 import { getAt, messageAt } from './defUtils';
 import {
-  flagOf, listOf, numOf, optionsOf, rangeOf, shrinkList, strOf, uniqueKey, SEARCH_MIN_SPOTS, SHARED_DEVICES, type Rng,
+  flagOf, listOf, numOf, optionsOf, rangeOf, searchCircleOf, shrinkList, strOf, uniqueKey, SEARCH_MIN_SPOTS, SHARED_DEVICES, type Rng,
 } from './schema';
 
 export interface PanelProps {
@@ -320,8 +320,8 @@ function CheckpointRoute({ cfg, obj, ro, set, patch }: PanelProps) {
           <RangeNumber label={t('builder.cp.contact')} unit={t('builder.unit.s')} value={num(obj, 'contactPenalty', 2)} range={r('contactPenalty', [0, 10, 2])}
             disabled={ro} onChange={(v) => set('contactPenalty', v)} />
         </Grid>
-        <Toggle checked={obj.policeVehicle !== false} disabled={ro} label={t('builder.cp.police_vehicle')} description={t('builder.cp.police_vehicle_desc')}
-          onChange={(v) => set('policeVehicle', v)} />
+        <Toggle checked={obj.vehicleRequired !== false} disabled={ro} label={t('builder.cp.vehicle_required')} description={t('builder.cp.vehicle_required_desc')}
+          onChange={(v) => set('vehicleRequired', v)} />
         <Note>{t('builder.cp.points_note', { min: cp.min, max: cp.max })}</Note>
       </Group>
       <Group title={t('builder.cp.medals_group')}>
@@ -593,7 +593,7 @@ function blockCfgResp(cfg: BuilderConfig): { surrender: number; flee: number; fi
 
 // ── search_area ─────────────────────────────────────────────────────────────────
 
-function SearchArea({ cfg, obj, ro, set, patch }: PanelProps) {
+function SearchArea({ cfg, def, obj, index, ro, set, patch }: PanelProps) {
   const b = 'search_area';
   const r = (k: string, fb: [number, number, number]) => rangeOf(cfg, b, k, fb);
   const start = num(obj, 'startRadius', 600);
@@ -624,6 +624,7 @@ function SearchArea({ cfg, obj, ro, set, patch }: PanelProps) {
         </div>
       </Field>
       <Note>{t('builder.sa.points_note', { n: SEARCH_MIN_SPOTS })}</Note>
+      {searchCircleOf(cfg, def)?.objective === index ? <Note>{t('builder.sa.start_follows', { radius: start })}</Note> : null}
     </Group>
   );
 }

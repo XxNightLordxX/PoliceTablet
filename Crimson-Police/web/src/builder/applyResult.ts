@@ -6,6 +6,7 @@
 import type { BuilderConfig, BuilderDefinition, BuilderRoute, Vec, Vec3 } from '../types/builder_server';
 import type { BuilderClientResultEx, PointSpec, RouteMeta } from '../types/builder_client';
 import { clone, isVec, listsOf, pointsOf, round2, thin } from './defUtils';
+import { startRadiusRange } from './schema';
 
 export interface Applied {
   def: BuilderDefinition | null;
@@ -40,7 +41,7 @@ export function applyResult(input: BuilderDefinition, result: BuilderClientResul
     if (key === 'start') {
       if (!pts.length) delete loc.start;
       else {
-        const [lo, hi, dflt] = cfg?.startRadius ?? [20, 150, 60];
+        const [lo, hi, dflt] = startRadiusRange(cfg, input);   // exactly the search circle when there is one
         const r = typeof result.radius === 'number' ? Math.min(hi, Math.max(lo, Math.round(result.radius))) : (loc.start?.radius ?? dflt);
         loc.start = { coords: vec3(pts[0]), radius: r };
       }

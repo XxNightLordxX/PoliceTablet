@@ -57,7 +57,7 @@ const TYPES: MockType[] = [
     key: 'patrol', label: 'Patrol', points: 60, payout: 250,
     missions: [
       { id: 'beat_patrol', label: 'Beat Patrol', timeLimit: 480, area: 'Strawberry Ave · Strawberry',
-        description: 'Patrol your district: drive to each checkpoint in order and hold inside its marker in a police vehicle for 10 seconds.',
+        description: 'Patrol your district: drive to each checkpoint in order and hold inside its marker for 10 seconds while driving a vehicle.',
         objectives: ['Patrol the checkpoints'] },
       { id: 'business_check', label: 'Business Check', timeLimit: 600, area: 'Innocence Blvd · Strawberry',
         description: 'Check the front doors of the businesses on your beat. Secure any door you find open and log every result on the tablet.',
@@ -71,7 +71,7 @@ const TYPES: MockType[] = [
     key: 'training', label: 'Training', points: 100, payout: 350,
     missions: [
       { id: 'evoc_course', label: 'EVOC Course', timeLimit: 240, area: 'LSIA · Los Santos International',
-        description: 'Emergency vehicle operations course: drive through every checkpoint in order in a police vehicle. Every contact costs 2 seconds.',
+        description: 'Emergency vehicle operations course: drive through every checkpoint in order at the wheel of a vehicle. Every contact costs 2 seconds.',
         objectives: ['Drive the course'] },
       { id: 'pursuit_sim', label: 'Pursuit Sim', timeLimit: 300, area: 'Great Ocean Hwy · Chumash',
         description: 'Pursuit training: a getaway driver flees along a set route. Stay within 150 m for a total of 3 minutes and never touch the car.',

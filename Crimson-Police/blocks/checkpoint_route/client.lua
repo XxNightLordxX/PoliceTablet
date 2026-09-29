@@ -12,11 +12,13 @@
     The block's client state is kept per run and objective in this file (stateOf), so it also works
     when the engine hands every hook a fresh ctx.state table.
 
-  Objective fields read: radius [10], stopFor [10], policeVehicle [true], contactPenalty [2]
+  Objective fields read: radius [10], stopFor [10], vehicleRequired [true], contactPenalty [2]
     (the server sends the checkpoint list, course state and which checks to run)
   Evidence sent (ctx.report)
-    { type = 'checkpoint', index, netId?, vehClass?, model?, try }   inside the current checkpoint
-        (police vehicle when required; stopped for stopFor seconds, or at once for drive-through)
+    { type = 'checkpoint', index, netId?, try }   inside the current checkpoint
+        (driving a vehicle when required; stopped for stopFor seconds, or at once for drive-through).
+        The check here only drives the HUD hint: the server decides "driving a vehicle" itself (in a
+        vehicle, in its driver seat; any vehicle counts) and trusts nothing else in the report.
     { type = 'contact', netId }       collision flag with a speed drop, a hard speed drop, or body damage
     { type = 'undriveable', netId }   the vehicle used on the course is no longer driveable
   Bonuses / penalties: none recorded on the client (the server records medal_* and no_contact).
@@ -67,23 +69,9 @@ local function v3(t)
     return vector3((t.x or 0.0) + 0.0, (t.y or 0.0) + 0.0, (t.z or 0.0) + 0.0)
 end
 
-local function h32(v)
-    local n = math.tointeger(tonumber(v) or 0) or 0
-    return n & 0xFFFFFFFF
-end
-
-local function isPoliceVehicle(veh)
-    if not veh or veh == 0 or not DoesEntityExist(veh) then return false end
-    local pv = Config.PoliceVehicles or {}
-    local model = h32(GetEntityModel(veh))
-    for _, name in ipairs(pv.models or {}) do
-        if h32(joaat(name)) == model then return true end
-    end
-    local class = GetVehicleClass(veh)
-    for _, c in ipairs(pv.classes or {}) do
-        if c == class then return true end
-    end
-    return false
+-- Driving a vehicle: in one and in its driver seat (the server checks the same with its own natives).
+local function isDriving(veh)
+    return veh ~= nil and veh ~= 0 and DoesEntityExist(veh) and GetPedInVehicleSeat(veh, -1) == PlayerPedId()
 end
 
 local function netIdOf(veh)
@@ -207,8 +195,6 @@ local function report(ctx, st, k, veh, t)
     local ev = { type = 'checkpoint', index = k, try = st.tries }
     if veh ~= 0 then
         ev.netId = netIdOf(veh)
-        ev.vehClass = GetVehicleClass(veh)
-        ev.model = GetEntityModel(veh)
         st.courseVeh = veh
     end
     ctx.report(ev)
@@ -223,7 +209,7 @@ local function checkInside(ctx, st, d, pos, veh, t)
     local r = tonumber(ctx.obj.radius) or 10.0
     local cur = st.points[d.current]
     if not inside2d(pos, cur, r) then
-        st.holdStart = nil
+        st.holdStart, st.holdShown = nil, nil
         for j = d.current + 1, math.min(d.current + 3, d.total or 0) do
             local p = st.points[j]
             if p and inside2d(pos, p, r) and st.missedHint ~= j then
@@ -233,9 +219,9 @@ local function checkInside(ctx, st, d, pos, veh, t)
         end
         return
     end
-    if ctx.obj.policeVehicle ~= false and not isPoliceVehicle(veh) then
-        st.holdStart = nil
-        say(st, CP.L('block.checkpoint_route.hud.need_police'), STATUS_MS)
+    if ctx.obj.vehicleRequired ~= false and not isDriving(veh) then
+        st.holdStart, st.holdShown = nil, nil
+        say(st, CP.L('block.checkpoint_route.hud.need_vehicle'), STATUS_MS)
         return
     end
     local stopFor = tonumber(ctx.obj.stopFor) or 0
@@ -245,7 +231,7 @@ local function checkInside(ctx, st, d, pos, veh, t)
     end
     local ent = veh ~= 0 and veh or PlayerPedId()
     if GetEntitySpeed(ent) > STOP_SPEED then
-        st.holdStart = nil
+        st.holdStart, st.holdShown = nil, nil
         say(st, CP.L('block.checkpoint_route.hud.stop_here'), STATUS_MS)
         return
     end

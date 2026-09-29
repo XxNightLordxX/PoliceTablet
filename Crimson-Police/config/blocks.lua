@@ -65,14 +65,14 @@ Config.Blocks = {
   },
 
   checkpoint_route = {
-    checkpoints    = { 2, 20 },
-    use            = { options = { 'all', 'random' }, default = 'all' },
-    radius         = { 3, 20, 10 },
-    stopFor        = { 0, 30, 10 },
-    policeVehicle  = { default = true },   -- uses Config.PoliceVehicles
-    medals         = { default = false },  -- when on: Gold, Silver and Bronze times in seconds
-    contactPenalty = { 0, 10, 2 },         -- seconds added per hit
-    presenceRange  = { 50, 800, 300 },     -- from the next checkpoint or the nearest partner, whichever is closer
+    checkpoints     = { 2, 20 },
+    use             = { options = { 'all', 'random' }, default = 'all' },
+    radius          = { 3, 20, 10 },
+    stopFor         = { 0, 30, 10 },
+    vehicleRequired = { default = true },   -- a checkpoint only counts while driving a vehicle (any vehicle)
+    medals          = { default = false },  -- when on: Gold, Silver and Bronze times in seconds
+    contactPenalty  = { 0, 10, 2 },         -- seconds added per hit
+    presenceRange   = { 50, 800, 300 },     -- from the next checkpoint or the nearest partner, whichever is closer
   },
 
   interact_points = {

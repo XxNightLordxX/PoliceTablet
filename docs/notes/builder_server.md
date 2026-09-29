@@ -26,6 +26,17 @@ Response shapes: all in `builder_protocol.md` §3/§4 and `web/src/types/builder
    `minSeconds` must be >= 1 s and the objectives' minimum times must fit in the time limit; the block default is a
    default, not a floor (the spec's own custom example uses 45 s for hostile_waves, below its default of 60).
    `publish`, `test`, `validate` (action) and reloads also run `CP.Missions.normalize` (the loader's own checks).
+   **Start radius of a search mission**: when the mission has a `search_area` objective, its search circle is the
+   start marker (the run starts when a participant enters it, as in Manhunt), so every location's start radius
+   must equal the first `search_area` objective's `startRadius` (its block default 600 when unset) and is checked
+   against `Config.Blocks.search_area.startRadius` (200–1000 m) instead of 20–150 m
+   (`builder.error.start_radius_search`). The UI locks the start radius to that circle and keeps it in sync
+   (an editable draft saved before this rule gets its start radii moved onto the circle when it is opened).
+   **Copies of built-ins** (`server:builder:duplicate`): every built-in mission's copy passes these guardrails and
+   can be published after its test (`tests/int_duplicates_spec.lua`); `Config.Builder.allowed.peds` holds every
+   base-game ped a built-in or a block default uses (inmates, the Kingpin, the escort driver).
+   **Renamed fields**: `RENAMED_FIELDS` reads an old objective field name as the new one wherever the builder
+   reads a definition (sanitize, file units, record views): checkpoint_route `policeVehicle` → `vehicleRequired`.
 4. **Spawn points** for `minSpawnFromStart` are the location keys named by the objective fields in `SPAWN_FIELDS`
    (NPC/vehicle spawns: hostile_waves spawns/boss.spawn, protect_rescue npcs, flee_arrest suspect/associates/spawns,
    pursuit spawn/spawns, escort ambushPoints, search_area hiding). Markers (interact points, doors, checkpoints,

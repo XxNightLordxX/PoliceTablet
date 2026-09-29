@@ -96,6 +96,10 @@ local SECONDS_FIELDS = {
     pursuit         = { 'arrest.duration' },
     search_area     = { 'clueProgress.duration', 'cuff.duration' },
 }
+-- Objective fields renamed after mission files were published (block -> { old name = new name }). A file or a
+-- stored draft that still uses the old name is read as the new one, silently (no warning): checkpoint_route's
+-- policeVehicle became vehicleRequired when the police-vehicle check was replaced by "driving a vehicle".
+local RENAMED_FIELDS = { checkpoint_route = { policeVehicle = 'vehicleRequired' } }
 -- Objective fields that name NPC/vehicle spawn-point location keys (>= minSpawnFromStart from the start).
 local SPAWN_FIELDS = {
     hostile_waves  = { 'spawns', 'boss.spawn' },
@@ -121,7 +125,7 @@ local ORDER_LIST = {
     'givesUp', 'aim', 'stun', 'close', 'armedGivesUp', 'cuff', 'maxDistance', 'aliveBonus', 'vehicle',
     'toughness', 'stoppedFail', 'arrival', 'ambush', 'carsPerWave', 'perCar', 'clearRadius',
     'startRadius', 'shrinkTo', 'clueCount', 'clueProps', 'clueProgress', 'fugitives', 'runDistance',
-    'stopFor', 'policeVehicle', 'medals', 'gold', 'silver', 'bronze', 'contactPenalty', 'timerStart',
+    'stopFor', 'vehicleRequired', 'medals', 'gold', 'silver', 'bronze', 'contactPenalty', 'timerStart',
     'failIfUndriveable', 'safeRadius', 'hitPenalty', 'failIfDies', 'blockTraffic', 'complete',
     'ramSpeed', 'ramPenaltyId', 'neverShoots', 'stops', 'at', 'wait', 'loop', 'presenceRange',
 }
@@ -491,7 +495,25 @@ end
 -- ── unit conversion ────────────────────────────────────────────────────────
 local function bonusCfg(id) return Config.Bonuses and Config.Bonuses[id] or nil end
 
+local function renameFields(obj)
+    local map = type(obj) == 'table' and RENAMED_FIELDS[obj.block] or nil
+    if not map then return obj end
+    for old, new in pairs(map) do
+        if obj[old] ~= nil then
+            if obj[new] == nil then obj[new] = obj[old] end
+            obj[old] = nil
+        end
+    end
+    return obj
+end
+
+local function renameAll(def)
+    for _, obj in ipairs(type(def) == 'table' and type(def.objectives) == 'table' and def.objectives or {}) do renameFields(obj) end
+    return def
+end
+
 local function convertObjective(obj, toFile)
+    renameFields(obj)
     local blockId = obj.block
     for _, path in ipairs(PERCENT_FIELDS[blockId] or {}) do
         eachPath(obj, path, function(parent, key, v)
@@ -689,6 +711,7 @@ function B.sanitize(input, id)
     -- whole percent and millisecond-exact seconds, so the Lua file round-trips
     for _, obj in ipairs(type(d.objectives) == 'table' and d.objectives or {}) do
         if type(obj) == 'table' then
+            renameFields(obj)
             for _, path in ipairs(PERCENT_FIELDS[obj.block] or {}) do
                 eachPath(obj, path, function(parent, key, v)
                     if isNum(v) then parent[key] = roundInt(v) end
@@ -858,6 +881,25 @@ local function scalable(v)
     return true
 end
 
+-- The search circle a mission's start marker must match: the first search_area objective's startRadius (its
+-- block default when the objective has none). The run of such a mission starts when a participant enters the
+-- search circle (Manhunt: "the run starts when the first participant enters it"), so every location's start
+-- radius must equal that startRadius and is checked against Config.Blocks.search_area.startRadius instead of
+-- START_RADIUS. nil when the mission has no search_area objective.
+-- Returns { index, radius, range } (range = { min, max, default }).
+local function searchCircle(rtObjectives)
+    for i, obj in ipairs(type(rtObjectives) == 'table' and rtObjectives or {}) do
+        if type(obj) == 'table' and obj.block == 'search_area' then
+            local c = Config.Blocks and Config.Blocks.search_area or {}
+            local range = type(c.startRadius) == 'table' and c.startRadius or { 200, 1000, 600 }
+            local eff = effectiveObjective(CP.Blocks.get('search_area'), obj)
+            local radius = eff.startRadius
+            if radius == nil then radius = range[3] end
+            return { index = i, radius = isNum(radius) and radius or nil, range = range }
+        end
+    end
+    return nil
+end
 -- Returns errors (list of { path, key, vars, message }) and info { armed, requiredTier }.
 -- opts.publish additionally runs CP.Missions.normalize (the loader's own checks); opts.raw is the
 -- unsanitised input (payout fields).
@@ -1026,6 +1068,7 @@ function B.validate(def, opts)
         addError(errors, 'locations', 'builder.error.max_locations', { max = MAX_LOCATIONS })
     end
     local minFromStart = tonumber(bc.minSpawnFromStart) or 30
+    local search = searchCircle(rt.objectives)
     local starts = {}
     for li, loc in ipairs(locations) do
         local lp = 'locations.' .. li
@@ -1041,7 +1084,15 @@ function B.validate(def, opts)
                 addError(errors, lp .. '.start', 'builder.error.start_missing', { location = li })
             else
                 starts[li] = startCoords
-                if not inRange(start.radius, START_RADIUS) then
+                if search then
+                    -- the start marker is the search circle: exactly its startRadius, within the search_area range
+                    if not inRange(start.radius, search.range) or not search.radius
+                        or math.abs(start.radius - search.radius) > 1e-6 then
+                        addError(errors, lp .. '.start.radius', 'builder.error.start_radius_search',
+                            { location = li, n = search.index, radius = nice(search.radius or search.range[3]),
+                              min = search.range[1], max = search.range[2] })
+                    end
+                elseif not inRange(start.radius, START_RADIUS) then
                     addError(errors, lp .. '.start.radius', 'builder.error.start_radius',
                         { location = li, min = START_RADIUS[1], max = START_RADIUS[2] })
                 end
@@ -1618,9 +1669,9 @@ local function recordView(row, actor, perms)
     local names = displayNames({ row.createdBy, row.updatedBy, row.lockedBy })
     local e = entryView(row, actor, perms, names)
     local def = currentDef(row) or {}
-    local clean = U.deepcopy(def)
+    local clean = renameAll(U.deepcopy(def))
     clean._file = nil
-    local published = row.published and U.deepcopy(row.published) or nil
+    local published = row.published and renameAll(U.deepcopy(row.published)) or nil
     local fileMeta = published and published._file or nil
     if published then published._file = nil end
     local errors, info = B.validate(clean)

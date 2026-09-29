@@ -106,7 +106,7 @@ local MAP = { x = { -4000, 4600 }, y = { -4200, 8000 } }
 local COMMON = { block = true, label = true, minSeconds = true, presenceRange = true }
 local FIELDS = {
     checkpoint_route = {
-        checkpoints = true, use = true, count = true, radius = true, stopFor = true, policeVehicle = true,
+        checkpoints = true, use = true, count = true, radius = true, stopFor = true, vehicleRequired = true,
         medals = { gold = true, silver = true, bronze = true }, contactPenalty = true, timerStart = true,
         failIfUndriveable = true,
     },
@@ -334,7 +334,8 @@ do
         H.eq(o.count, 5, 'beat_patrol: 5 per run')
         H.eq(o.radius, 10.0, 'beat_patrol: 10 m markers')
         H.eq(o.stopFor, 10, 'beat_patrol: stop 10 s')
-        H.eq(o.policeVehicle, true, 'beat_patrol: police vehicle')
+        H.eq(o.vehicleRequired, true, 'beat_patrol: driving a vehicle required')
+        H.eq(o.policeVehicle, nil, 'beat_patrol: no old policeVehicle field')
         H.eq(o.medals, false, 'beat_patrol: no medals')
         H.eq(o.contactPenalty, 0, 'beat_patrol: contactPenalty = 0 (blocks_a request: no course clock)')
         H.eq(o.failIfUndriveable, false, 'beat_patrol: failIfUndriveable = false (only the time limit fails)')
@@ -466,7 +467,8 @@ do
         H.eq(o.block, 'checkpoint_route', 'evoc_course: checkpoint_route')
         H.eq(o.use, 'all', 'evoc_course: every checkpoint in order')
         H.eq(o.stopFor, 0, 'evoc_course: drive-through')
-        H.eq(o.policeVehicle, true, 'evoc_course: police vehicle')
+        H.eq(o.vehicleRequired, true, 'evoc_course: driving a vehicle required')
+        H.eq(o.policeVehicle, nil, 'evoc_course: no old policeVehicle field')
         H.eq(o.contactPenalty, 2, 'evoc_course: 2 s per contact')
         H.eq(o.timerStart, 'first', 'evoc_course: clock starts at the first checkpoint')
         H.eq(o.failIfUndriveable, true, 'evoc_course: fails when undriveable')

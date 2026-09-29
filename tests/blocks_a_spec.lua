@@ -19,7 +19,7 @@ local vehicles, byNet, props = {}, {}, {}
 local function addVehicle(ent, netId, spec)
     spec = spec or {}
     vehicles[ent] = {
-        netId = netId, model = spec.model or joaat('police'), class = spec.class or 18,
+        netId = netId, model = spec.model or joaat('police'),
         engine = spec.engine or 1000.0, body = spec.body or 1000.0, tank = spec.tank or 1000.0, exists = true,
     }
     byNet[netId] = ent
@@ -31,9 +31,19 @@ _G.GetVehiclePedIsIn = function(ped, last)
     if last then return p.lastVehicle or p.vehicle or 0 end
     return p.vehicle or 0
 end
+-- The driver seat (-1) holds the ped (src * 100) of the player in that vehicle, unless the player is marked
+-- as a passenger (H.players[src].passenger = true).
+_G.GetPedInVehicleSeat = function(veh, seat)
+    if seat ~= -1 or not veh or veh == 0 then return 0 end
+    for src, p in pairs(H.players) do
+        if p.vehicle == veh and not p.passenger then return src * 100 end
+    end
+    return 0
+end
 _G.GetEntityModel = function(ent) return vehicles[ent] and vehicles[ent].model or 0 end
-local function serverClass(ent) return vehicles[ent] and vehicles[ent].class end
-_G.GetVehicleClass = serverClass
+-- FiveM has no server-side vehicle class: the server half must never ask for one.
+local classAsked = 0
+_G.GetVehicleClass = function() classAsked = classAsked + 1; error('the server must not read a vehicle class') end
 _G.NetworkGetEntityFromNetworkId = function(netId) return byNet[netId] or 0 end
 _G.NetworkGetNetworkIdFromEntity = function(ent)
     if vehicles[ent] then return vehicles[ent].netId end
@@ -153,7 +163,8 @@ do -- defaults
     local o = CR.defaults({ block = 'checkpoint_route', checkpoints = 'spots' })
     H.eq(o.radius, 10.0, 'cr default radius')
     H.eq(o.stopFor, 10, 'cr default stopFor')
-    H.eq(o.policeVehicle, true, 'cr default policeVehicle')
+    H.eq(o.vehicleRequired, true, 'cr default vehicleRequired')
+    H.eq(o.policeVehicle, nil, 'cr defaults write no policeVehicle')
     H.eq(o.medals, false, 'cr default medals')
     H.eq(o.contactPenalty, 2, 'cr default contactPenalty')
     H.eq(o.timerStart, 'first', 'cr default timerStart')
@@ -161,10 +172,24 @@ do -- defaults
     H.eq(o.minSeconds, 20, 'cr default minSeconds')
     H.eq(o.presenceRange, 300, 'cr default presenceRange')
     H.eq(o.use, 'all', 'cr default use')
-    local kept = CR.defaults({ checkpoints = 'x', radius = 5.0, stopFor = 0, policeVehicle = false })
+    local kept = CR.defaults({ checkpoints = 'x', radius = 5.0, stopFor = 0, vehicleRequired = false })
     H.eq(kept.radius, 5.0, 'cr keeps radius')
     H.eq(kept.stopFor, 0, 'cr keeps stopFor 0')
-    H.eq(kept.policeVehicle, false, 'cr keeps policeVehicle false')
+    H.eq(kept.vehicleRequired, false, 'cr keeps vehicleRequired false')
+    -- published mission files may still use the old name: an alias, read without a warning
+    local warned = 0
+    local realWarn = CP.warn
+    CP.warn = function(...) warned = warned + 1 end
+    local old = CR.defaults({ checkpoints = 'x', policeVehicle = false })
+    H.eq(old.vehicleRequired, false, 'the old policeVehicle = false is read as vehicleRequired = false')
+    H.eq(old.policeVehicle, nil, 'the old name is dropped by defaults')
+    H.eq(CR.defaults({ checkpoints = 'x', policeVehicle = true }).vehicleRequired, true, 'the old policeVehicle = true')
+    H.eq(CR.defaults({ checkpoints = 'x', policeVehicle = false, vehicleRequired = true }).vehicleRequired, true, 'the new name wins over the old one')
+    local oldLoc = { start = { coords = vec3(0.0, 0.0, 30.0), radius = 30.0 }, spots = spots(4) }
+    H.eq(CR.validate({ block = 'checkpoint_route', checkpoints = 'spots', policeVehicle = true }, { locations = { oldLoc } }, oldLoc), true,
+        'an objective with the old name validates')
+    CP.warn = realWarn
+    H.eq(warned, 0, 'the old name causes no warning')
     H.eq(CR.requiredPoints({ checkpoints = 'spots' })[1], 'spots', 'cr required points')
     H.eq(CR.armedCount({}), 0, 'cr armed count')
 end
@@ -195,6 +220,8 @@ do -- validate
     H.ok(ok == false and reasonIs(why, 'block.checkpoint_route.invalid.location_medals'), 'cr medals=true needs location medals')
     ok, why = CR.validate(CR.defaults({ checkpoints = 'spots', timerStart = 'later' }), mission, loc)
     H.ok(ok == false, 'cr bad timerStart')
+    ok, why = CR.validate(CR.defaults({ checkpoints = 'spots', vehicleRequired = 'yes' }), mission, loc)
+    H.ok(ok == false and reasonIs(why, 'block.checkpoint_route.invalid.flags'), 'cr vehicleRequired must be on or off')
     local evocLoc = { start = { coords = vec3(0.0, 0.0, 0.0), radius = 30.0 }, course = { points = spots(12) }, medals = { gold = 60, silver = 80, bronze = 100 } }
     H.eq(CR.validate(CR.defaults({ checkpoints = 'course', stopFor = 0, medals = true }), { locations = { evocLoc } }, evocLoc), true, 'cr route format with location medals')
     local tooMany = { start = evocLoc.start, course = spots(21) }
@@ -207,7 +234,7 @@ do -- validate
     H.ok(ok == false and reasonIs(why, 'block.checkpoint_route.invalid.points_zone'), 'cr checkpoint in a no-build zone rejected')
 end
 
--- Beat Patrol: random 5 of 8, stop 10 s in a police vehicle; the spot at the start comes first.
+-- Beat Patrol: random 5 of 8, stop 10 s while driving a vehicle (any vehicle); the spot at the start comes first.
 do
     H.clockMs = 100000
     local loc = { label = 'District', start = { coords = vec3(300.0, 0.0, 30.0), radius = 30.0 }, spots = spots(8) }
@@ -240,21 +267,28 @@ do
     okE, why = CR.onEvent(ctx, 1, { type = 'checkpoint', index = 1 })
     H.ok(okE == false and why == 'too_far', 'too far from checkpoint 1')
     at(1, st.points[1])
+    CR.tick(ctx, 1); advance(10000); CR.tick(ctx, 1)
+    H.eq(st.near[1], nil, 'on foot: no stop time')
     okE, why = CR.onEvent(ctx, 1, { type = 'checkpoint', index = 1 })
     H.ok(okE == false and why == 'not_in_vehicle', 'on foot rejected')
-    addVehicle(5000, 50, { class = 4, model = joaat('sultan') })
+    -- a passenger is not driving: the server reads the driver seat itself, whatever the client reports
+    addVehicle(5000, 50, { model = joaat('sultan') })
     H.players[1].vehicle = 5000
-    okE, why = CR.onEvent(ctx, 1, { type = 'checkpoint', index = 1 })
-    H.ok(okE == false and why == 'not_police_vehicle', 'civilian car rejected')
-    addVehicle(5001, 51, { class = 18 })
-    H.players[1].vehicle = 5001
+    H.players[1].passenger = true
+    CR.tick(ctx, 1); advance(10000); CR.tick(ctx, 1)
+    H.eq(st.near[1], nil, 'a passenger gets no stop time')
+    okE, why = CR.onEvent(ctx, 1, { type = 'checkpoint', index = 1, netId = 50, vehClass = 18, model = joaat('police') })
+    H.ok(okE == false and why == 'not_driving', 'a passenger is rejected (a reported class 18 and police model change nothing)')
+    H.players[1].passenger = nil
+    -- a non-police vehicle completes the stop when the participant drives it
     CR.tick(ctx, 1)
     okE, why = CR.onEvent(ctx, 1, { type = 'checkpoint', index = 1 })
     H.ok(okE == false and why == 'not_held', 'stop time not reached yet')
     advance(9000)
     CR.tick(ctx, 1)
-    H.eq(CR.onEvent(ctx, 1, { type = 'checkpoint', index = 1, try = 2 }), true, 'held 9 s of 10 (tolerance) accepted')
+    H.eq(CR.onEvent(ctx, 1, { type = 'checkpoint', index = 1, try = 2 }), true, 'held 9 s of 10 (tolerance) driving a civilian car: accepted')
     H.eq(st.current, 2, 'next checkpoint is current')
+    H.eq(st.vehicles[1], 50, 'the driven car is the course vehicle')
     okE, why = CR.onEvent(ctx, 1, { type = 'checkpoint', index = 1 })
     H.ok(okE == false and why == 'already_done', 'duplicate checkpoint rejected')
     H.eq(CR.checklist(ctx)[1].value, 1, 'checklist value 1')
@@ -270,49 +304,26 @@ do
     at(2, vec3(st.points[2].x + 900.0, 0.0, 30.0))
     H.near(CR.presence(ctx, 1, H.players[1].coords), 250.0, 1e-6, 'presence uses the next checkpoint')
     CR.onParticipantLeft(ctx, 2)
+    H.players[2] = nil
     ctx.srcs = { 1 }
-    -- the client-reported class is used only where the server has no GetVehicleClass
-    _G.GetVehicleClass = nil
+    -- client class evidence is ignored: a reported civilian class (4) and taxi model do not stop a driver
     at(1, st.points[2])
     CR.tick(ctx, 1); advance(10000); CR.tick(ctx, 1)
-    -- (the harness joaat hashes by length: 'taxi' is the only four-letter model of this spec)
-    vehicles[5001].model = joaat('taxi')
-    okE, why = CR.onEvent(ctx, 1, { type = 'checkpoint', index = 2, vehClass = 4, model = joaat('taxi') })
-    H.ok(okE == false and why == 'not_police_vehicle', 'fallback class 4 rejected')
-    -- a later report that contradicts the class already reported for that model is refused, and the
-    -- model's class is not taken from clients any more (unmodified clients all read the same class)
-    okE, why = CR.onEvent(ctx, 1, { type = 'checkpoint', index = 2, vehClass = 18, model = joaat('taxi') })
-    H.ok(okE == false and why == 'not_police_vehicle', 'a class contradicting an earlier report for the model is refused')
-    okE, why = CR.onEvent(ctx, 1, { type = 'checkpoint', index = 2, vehClass = 4, model = joaat('taxi') })
-    H.ok(okE == false and why == 'not_police_vehicle', 'the contradicted model stays distrusted')
-    vehicles[5001].model = joaat('police')
-    okE, why = CR.onEvent(ctx, 1, { type = 'checkpoint', index = 2, vehClass = 18 })
-    H.ok(okE == false and why == 'not_police_vehicle', 'fallback class without the model rejected')
-    okE, why = CR.onEvent(ctx, 1, { type = 'checkpoint', index = 2, vehClass = 18, model = joaat('sultan2') })
-    H.ok(okE == false and why == 'not_police_vehicle', 'fallback class for another model rejected')
-    okE, why = CR.onEvent(ctx, 1, { type = 'checkpoint', index = 2, vehClass = 99, model = joaat('police') })
-    H.ok(okE == false and why == 'not_police_vehicle', 'a class outside the GTA classes 0..22 is rejected')
-    -- the server reads the model unsigned, a client sends the signed 32-bit form: the same model
-    local signed = joaat('police') >= 0x80000000 and joaat('police') - 0x100000000 or joaat('police')
-    H.ok(signed < 0, 'the test model hash has a signed form')
-    okE, why = CR.onEvent(ctx, 1, { type = 'checkpoint', index = 2, vehClass = 18, model = signed })
-    H.eq(okE, true, 'fallback class 18 for the model the server sees accepted')
-    _G.GetVehicleClass = serverClass
-    -- extra police models from Config.PoliceVehicles.models
-    Config.PoliceVehicles.models = { 'police9' }
-    addVehicle(5002, 52, { class = 4, model = joaat('police9') })
+    H.eq(CR.onEvent(ctx, 1, { type = 'checkpoint', index = 2, vehClass = 4, model = joaat('taxi') }), true,
+        'a reported class 4 changes nothing: driving is what counts')
+    -- another vehicle for checkpoint 3 (any model, e.g. an add-on unmarked car)
+    addVehicle(5002, 52, { model = joaat('police9') })
     H.players[1].vehicle = 5002
     at(1, st.points[3])
     CR.tick(ctx, 1); advance(10000); CR.tick(ctx, 1)
-    H.eq(CR.onEvent(ctx, 1, { type = 'checkpoint', index = 3 }), true, 'add-on police model accepted')
-    Config.PoliceVehicles.models = {}
+    H.eq(CR.onEvent(ctx, 1, { type = 'checkpoint', index = 3 }), true, 'any driven vehicle accepted')
+    H.eq(classAsked, 0, 'the server never asked for a vehicle class')
     -- rescale: a scaled random count only shrinks what has not been reached
     ctx.obj.count = 4
     CR.rescale(ctx)
     H.eq(#st.points, 4, 'rescale drops one unreached checkpoint')
     -- last checkpoints, with the minimum time not reached on the first try
-    H.players[1].vehicle = 5001
-    vehicles[5001].class = 18
+    H.players[1].vehicle = 5000
     at(1, st.points[4])
     CR.tick(ctx, 1); advance(10000); CR.tick(ctx, 1)
     ctx.completeResult = false
@@ -338,7 +349,7 @@ do
 end
 
 -- Server-side stop verification: the server's own samples must see the participant stopped inside the
--- marker, in a vehicle when one is required, for the stop time.
+-- marker, driving a vehicle when one is required, for the stop time.
 do
     H.clockMs = 150000
     local loc = { label = 'District', start = { coords = vec3(300.0, 0.0, 30.0), radius = 30.0 }, spots = spots(8) }
@@ -348,7 +359,7 @@ do
     H.eq(#timerPause, 0, 'beat patrol (no medals) never holds the run timer')
     local st = ctx.state
     local p1 = st.points[1]
-    addVehicle(5101, 151, { class = 18 })
+    addVehicle(5101, 151, { model = joaat('buffalo') })
     H.players[1] = { coords = vec3(p1.x, p1.y, p1.z), vehicle = 5101 }
     serverSpeeds[5101] = 12.0
     for _ = 1, 12 do advance(1000); CR.tick(ctx, 1) end
@@ -361,26 +372,38 @@ do
     local p2 = st.points[2]
     H.players[1] = { coords = vec3(p2.x, p2.y, p2.z), vehicle = 0 }
     for _ = 1, 12 do advance(1000); CR.tick(ctx, 1) end
-    H.eq(st.near[1], nil, 'on foot with a police vehicle required: no stop time')
+    H.eq(st.near[1], nil, 'on foot with a vehicle required: no stop time')
+    -- in the stopped car, but not at the wheel
     H.players[1].vehicle = 5101
+    H.players[1].passenger = true
     serverSpeeds[5101] = nil
+    for _ = 1, 12 do advance(1000); CR.tick(ctx, 1) end
+    H.eq(st.near[1], nil, 'as a passenger: no stop time')
     okE, why = CR.onEvent(ctx, 1, { type = 'checkpoint', index = 2 })
-    H.ok(okE == false and why == 'not_held', 'getting in at the end does not count the time on foot')
-    -- a server-side class from CP.Qbx.vehicleClass (when the integrations module offers it) is used
-    -- instead of the reported one
-    _G.GetVehicleClass = nil
-    CP.Qbx = { vehicleClass = function(model) return model == joaat('police') and 18 or 4 end }
+    H.ok(okE == false and why == 'not_driving', 'a passenger is rejected')
+    H.players[1].passenger = nil
+    okE, why = CR.onEvent(ctx, 1, { type = 'checkpoint', index = 2 })
+    H.ok(okE == false and why == 'not_held', 'taking the wheel at the end does not count the time on foot or as a passenger')
     for _ = 1, 10 do advance(1000); CR.tick(ctx, 1) end
-    H.eq(CR.onEvent(ctx, 1, { type = 'checkpoint', index = 2 }), true, 'class from CP.Qbx.vehicleClass, no reported class needed')
-    addVehicle(5102, 152, { class = 18, model = joaat('buffalo') })
-    H.players[1].vehicle = 5102
-    local p3 = st.points[3]
-    H.players[1].coords = vec3(p3.x, p3.y, p3.z)
-    for _ = 1, 10 do advance(1000); CR.tick(ctx, 1) end
-    okE, why = CR.onEvent(ctx, 1, { type = 'checkpoint', index = 3, vehClass = 18, model = joaat('buffalo') })
-    H.ok(okE == false and why == 'not_police_vehicle', 'the server class beats a reported class 18')
-    CP.Qbx = nil
-    _G.GetVehicleClass = serverClass
+    H.eq(CR.onEvent(ctx, 1, { type = 'checkpoint', index = 2 }), true, 'driving and stopped for the stop time: accepted')
+    H.eq(classAsked, 0, 'still no vehicle class asked for')
+end
+
+-- vehicleRequired = false (also the old policeVehicle = false of a published file): on foot or as a passenger counts.
+do
+    H.clockMs = 170000
+    local loc = { label = 'Course', start = { coords = vec3(0.0, 0.0, 30.0), radius = 30.0 }, spots = spots(4) }
+    local obj = CR.defaults({ checkpoints = 'spots', stopFor = 0, policeVehicle = false, contactPenalty = 0, failIfUndriveable = false })
+    H.eq(obj.vehicleRequired, false, 'policeVehicle = false read as vehicleRequired = false')
+    local ctx = fakeCtx({ obj = obj, location = loc, seed = 5 })
+    CR.prepare(ctx); CR.start(ctx)
+    local st = ctx.state
+    H.players[1] = { coords = vec3(st.points[1].x, st.points[1].y, st.points[1].z), vehicle = 0 }
+    H.eq(CR.onEvent(ctx, 1, { type = 'checkpoint', index = 1 }), true, 'no vehicle required: on foot accepted')
+    addVehicle(5201, 251, { model = joaat('bus') })
+    H.players[1] = { coords = vec3(st.points[2].x, st.points[2].y, st.points[2].z), vehicle = 5201, passenger = true }
+    H.eq(CR.onEvent(ctx, 1, { type = 'checkpoint', index = 2 }), true, 'no vehicle required: a passenger accepted')
+    H.eq(st.vehicles[1], 251, 'the vehicle the participant is in is still the course vehicle')
 end
 
 -- EVOC Course: every checkpoint, drive-through, medals from the location, contact seconds.
@@ -390,7 +413,7 @@ local function evoc(opts)
     local loc = { start = { coords = vec3(0.0, 0.0, 0.0), radius = 30.0 }, course = { points = spots(4) }, medals = { gold = 60, silver = 80, bronze = 100 } }
     local obj = CR.defaults({ block = 'checkpoint_route', checkpoints = 'course', stopFor = 0, medals = true, radius = 10.0 })
     local ctx = fakeCtx({ obj = obj, location = loc, seed = 42, mission = opts and opts.mission })
-    addVehicle(6001, 61, { class = 18 })
+    addVehicle(6001, 61, { model = joaat('police3') })
     H.players[1] = { coords = vec3(0.0, 0.0, 0.0), vehicle = 6001 }
     CR.prepare(ctx)
     CR.start(ctx)
@@ -568,7 +591,7 @@ do -- undriveable
     at(1, st.points[1]); CR.onEvent(ctx, 1, { type = 'checkpoint', index = 1 })
     local okE, why = CR.onEvent(ctx, 1, { type = 'undriveable', netId = 61 })
     H.ok(okE == false and why == 'vehicle_ok', 'healthy vehicle report rejected')
-    addVehicle(7001, 71, { class = 18, engine = 50.0 })
+    addVehicle(7001, 71, { engine = 50.0 })
     okE, why = CR.onEvent(ctx, 1, { type = 'undriveable', netId = 71 })
     H.ok(okE == false and why == 'not_course_vehicle', 'somebody else\'s vehicle rejected')
     vehicles[6001].engine = 60.0
@@ -1332,16 +1355,25 @@ do
     CRc.prepare(cctx)
     CRc.update(cctx, lastSend(sctx))
     H.eq(openBlips(), 0, 'no blips before start')
-    addVehicle(9001, 91, { class = 18 })
+    addVehicle(9001, 91, { model = joaat('sultan') })
     H.players[1] = { coords = vec3(100.0, 0.0, 30.0), vehicle = 9001 }
     speeds[9001] = 0.0
     CRc.start(cctx)
     H.eq(openBlips(), 2, 'current and next checkpoint blips')
+    -- a passenger (someone else at the wheel): the HUD asks to drive, nothing is reported
+    local seat = GetPedInVehicleSeat
+    _G.GetPedInVehicleSeat = function() return 555 end
+    steps(3)
+    H.ok(tostring(lastLine(cctx)):find('driving a vehicle', 1, true) ~= nil, 'passenger: the HUD asks to drive: ' .. tostring(lastLine(cctx)))
+    steps(120)
+    H.eq(#cctx.reports, 0, 'passenger: no checkpoint report')
+    _G.GetPedInVehicleSeat = seat
     steps(3)
     H.ok(tostring(lastLine(cctx)):find('Hold still', 1, true) ~= nil, 'stop timer on the HUD: ' .. tostring(lastLine(cctx)))
     steps(100)
     local rep = cctx.reports[1]
-    H.ok(rep and rep.type == 'checkpoint' and rep.index == 1 and rep.netId == 91 and rep.vehClass == 18, 'checkpoint reported with the vehicle')
+    H.ok(rep and rep.type == 'checkpoint' and rep.index == 1 and rep.netId == 91, 'checkpoint reported with the vehicle')
+    H.ok(rep and rep.vehClass == nil and rep.model == nil, 'no vehicle class or model in the report (the server trusts neither)')
     -- the server accepts it and the next snapshot moves the client on
     serverImpl.checkpoint_route.tick(sctx, 1)
     sctx.state.near[1] = { cp = 1, since = H.clockMs - 11000 }

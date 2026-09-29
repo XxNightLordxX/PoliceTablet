@@ -99,7 +99,7 @@ end
 -- ── the contract: ARCHITECTURE §3.3 field names per block ────────────────────
 local COMMON = { block = true, label = true, minSeconds = true, presenceRange = true }
 local FIELDS = {
-    checkpoint_route = { 'checkpoints', 'use', 'count', 'radius', 'stopFor', 'policeVehicle', 'medals', 'contactPenalty', 'timerStart', 'failIfUndriveable' },
+    checkpoint_route = { 'checkpoints', 'use', 'count', 'radius', 'stopFor', 'vehicleRequired', 'medals', 'contactPenalty', 'timerStart', 'failIfUndriveable' },
     interact_points  = { 'points', 'use', 'count', 'target', 'progress', 'roll', 'logResult', 'hidden', 'fastBonus' },
     skill_check      = { 'targets', 'checks', 'missPenalty', 'failAfter', 'target', 'explosion' },
     hostile_waves    = { 'spawns', 'waves', 'nextWave', 'weapons', 'accuracy', 'armour', 'health', 'behaviour', 'surrender', 'peds', 'boss', 'blockTraffic' },

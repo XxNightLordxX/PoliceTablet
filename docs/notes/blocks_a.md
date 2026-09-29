@@ -8,7 +8,7 @@ Each file's header comment lists the fields it reads, the evidence it accepts an
 
 | Block | Client → server evidence (`ctx.report`) | Server → client (`ctx.send`) |
 |---|---|---|
-| checkpoint_route | `{ type='checkpoint', index, netId?, vehClass?, model?, try }` · `{ type='contact', netId }` · `{ type='undriveable', netId }` | `{ kind='state', points, current, done, total, finished, medals, track={contacts,undriveable}, course={running,elapsedMs,penalty,contacts,time,medal,held} }` |
+| checkpoint_route | `{ type='checkpoint', index, netId?, try }` · `{ type='contact', netId }` · `{ type='undriveable', netId }` | `{ kind='state', points, current, done, total, finished, medals, track={contacts,undriveable}, course={running,elapsedMs,penalty,contacts,time,medal,held} }` |
 | interact_points | `{ type='interact', point, seq }` · `{ type='followup', point, seq }` · `{ type='log', point, choice }` (the last one comes from the tablet) | `{ kind='state', points={ {coords,heading,label,status,outcome?,outcomeLabel?,followUp?,found?} }, hidden, found, total, done, log }` |
 | skill_check | `{ type='check', target, index, success, seq }` (one per round) | `{ kind='state', targets={ {coords,netId,status,next,streak,worker} }, checks }` · `{ kind='explode', target, coords, by, effect }` |
 
@@ -69,15 +69,21 @@ All are shared (no `src`). They are always recorded; scoring decides the value. 
 7. **Medals.** A `location.medals` table overrides `obj.medals`. `medals = true` means "take them from the
    location" (validate requires them). `no_contact` also needs no server-side body-health loss of 10 or more on
    the course vehicle.
-8. **Police vehicle.** The server checks `Config.PoliceVehicles.models` itself. FiveM has no server-side
-   `GetVehicleClass` native (qbx_core's export of that name asks a random client), so the class comes from
-   `CP.Qbx.vehicleClass(model)` when the integrations module offers it (request below), a `GetVehicleClass`
-   global if one exists, and otherwise from the class the client reported (`ev.vehClass`) — accepted only
-   when the reported `ev.model` equals the model of the vehicle the server sees the reporter in.
+8. **Driving a vehicle (was: police vehicle).** At the owner's request the police-vehicle check was removed:
+   FiveM has no server-side `GetVehicleClass` native (qbx_core's export of that name asks a random client), so
+   it had to trust the class a client reported. `vehicleRequired` (was `policeVehicle`, default on) now only
+   requires the participant to be DRIVING a vehicle, any vehicle, decided with server natives alone:
+   `GetVehiclePedIsIn(ped, false) ~= 0` and `GetPedInVehicleSeat(veh, -1) == ped`. On foot the report is
+   refused with `not_in_vehicle`, as a passenger with `not_driving`; the checkpoint report carries no
+   vehicle class or model any more (anything extra in it is ignored), and the police-vehicle list is gone
+   from config/config.lua.
+   Published mission files and stored drafts that still say `policeVehicle` keep working: `defaults()` (and
+   the builder when it reads a file or draft) reads it as `vehicleRequired`, without a warning. The lights &
+   siren penalty (Beat Patrol, Business Check) is unchanged.
 9. **Stop time.** The client counts `stopFor` while stopped (< 1.5 m/s) inside the marker. The server
    accepts the report only if its own 1 s samples had that participant inside the marker, **stopped**
-   (server `GetEntitySpeed` of the vehicle, or of the ped on foot, ≤ 3 m/s) and in a vehicle when
-   `policeVehicle` is on, for at least `stopFor − 2` s. Drive-through gates allow radius + 12 m (lag at speed).
+   (server `GetEntitySpeed` of the vehicle, or of the ped on foot, ≤ 3 m/s) and driving a vehicle when
+   `vehicleRequired` is on, for at least `stopFor − 2` s. Drive-through gates allow radius + 12 m (lag at speed).
 10. **Undriveable.** A client report is accepted only for the reporter's vehicle, and only when the server
     sees engine health ≤ 100 (or petrol tank ≤ 0). The server tick also fails the run by itself when a
     course vehicle it has seen healthy reaches engine health ≤ 0.
@@ -125,15 +131,12 @@ All are shared (no `src`). They are always recorded; scoring decides the value. 
   - A block rejecting an event (`return false, reason`) is normal (lag retries, rate limits). Please log
     it, do not flag the run. Reports carry a `try`/`seq` counter so a retry, or a second miss on the same
     skill-check round, is never an exact duplicate: CP.AntiCheat's duplicate check must not drop them.
-- **modules/integrations/qbx (CP.Qbx)**: please add `CP.Qbx.vehicleClass(model) -> class|nil` wrapping
-  `exports.qbx_core:GetVehicleClass(model)` (it may yield; model hash as `GetEntityModel` returns it on the
-  server). checkpoint_route uses it, when present, instead of the client-reported class.
   - `CP.Runs.view`: `log` = the current objective's `ctx.state.log`, as is (shape above).
 - **modules/tablet + web (Active Mission screen)**: show `view.log.choices` as buttons (labels are already
   translated). A tap must send `server:objective` (runId, current objective index,
   `{ type = 'log', point = view.log.point, choice = <id> }`), e.g. through `CP.Runs.report`.
 - **missions (built-in files)**
-  - Beat Patrol: `{ block = 'checkpoint_route', checkpoints = 'spots', use = 'random', count = 5, radius = 10.0, stopFor = 10, policeVehicle = true, contactPenalty = 0, failIfUndriveable = false }`.
+  - Beat Patrol: `{ block = 'checkpoint_route', checkpoints = 'spots', use = 'random', count = 5, radius = 10.0, stopFor = 10, vehicleRequired = true, contactPenalty = 0, failIfUndriveable = false }`.
     The card fails only on the time limit and has common bonuses only. Put `start.coords` on one of the spots.
   - EVOC Course: `{ block = 'checkpoint_route', checkpoints = 'course', use = 'all', stopFor = 0, medals = true, contactPenalty = 2, timerStart = 'first', failIfUndriveable = true }`
     with `location.medals = { gold, silver, bronze }`. Bonuses: `{ id = 'medal_gold', points = 50 }`,

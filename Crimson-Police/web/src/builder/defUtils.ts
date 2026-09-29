@@ -89,7 +89,12 @@ function fixDeep(v: unknown): unknown {
 
 const LIST_FIELDS: (keyof BuilderDefinition)[] = ['departments', 'locations', 'objectives', 'scaling', 'items', 'bonuses', 'penalties'];
 
-/** A definition with every top-level list as an array (Lua sends empty tables as {}). */
+/** Objective fields renamed after missions were published (block -> { old name: new name }), as the server's
+ *  RENAMED_FIELDS (modules/builder/server.lua): checkpoint_route's policeVehicle is now vehicleRequired. */
+const RENAMED_FIELDS: Record<string, Record<string, string>> = { checkpoint_route: { policeVehicle: 'vehicleRequired' } };
+
+/** A definition with every top-level list as an array (Lua sends empty tables as {}); renamed objective fields
+ *  under their new name. */
 export function normalizeDefinition(input: BuilderDefinition | null | undefined): BuilderDefinition {
   const d = (fixDeep(clone(input ?? {})) ?? {}) as BuilderDefinition;
   LIST_FIELDS.forEach((k) => {
@@ -100,6 +105,14 @@ export function normalizeDefinition(input: BuilderDefinition | null | undefined)
   d.locations = d.locations.map((l) => (l && typeof l === 'object' ? l : { label: '' })) as BuilderLocation[];
   d.objectives = d.objectives.filter((o) => o && typeof o === 'object') as BuilderObjective[];
   d.objectives.forEach((o) => {
+    // renamed fields: a draft or published file may still use the old name (read as the new one)
+    Object.entries(RENAMED_FIELDS[o.block] ?? {}).forEach(([oldName, newName]) => {
+      const rec = o as Record<string, unknown>;
+      if (rec[oldName] !== undefined) {
+        if (rec[newName] === undefined) rec[newName] = rec[oldName];
+        delete rec[oldName];
+      }
+    });
     // lists inside objectives
     ['waves', 'weapons', 'peds', 'models', 'checks', 'shrinkTo'].forEach((f) => {
       const v = (o as Record<string, unknown>)[f];
