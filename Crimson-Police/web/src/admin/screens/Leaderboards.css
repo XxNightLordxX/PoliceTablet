@@ -1,0 +1,154 @@
+/* Admin UI · Leaderboards (boards slice). Only --cp-* variables; classes prefixed boards-. */
+
+.boards-admin-toolbar {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.boards-admin-select {
+    min-width: 200px;
+}
+
+.boards-admin-search {
+    width: 240px;
+}
+
+.boards-admin-stats {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.boards-admin-stats > .cp-stat {
+    padding: 12px 14px;
+    border: 1px solid var(--cp-border);
+    border-radius: var(--cp-radius);
+    background: rgba(var(--cp-surface-rgb), 0.92);
+}
+
+.boards-admin-officer {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    line-height: 1.25;
+}
+
+.boards-admin-officer__name {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    font-weight: 650;
+}
+
+.boards-admin-officer__name > .cp-badge {
+    flex: none;
+}
+
+.boards-admin-officer__sub {
+    font-size: var(--cp-fs-xs);
+    color: var(--cp-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.boards-admin-result {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: var(--cp-fs-sm);
+}
+
+.boards-admin-flags {
+    display: inline-flex;
+    gap: 4px;
+    flex-wrap: wrap;
+}
+
+.boards-row-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.boards-award-form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+/* stuck payments */
+.boards-stuck__list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.boards-stuck__item {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    padding: 10px 12px;
+    border-radius: var(--cp-radius-sm);
+    border: 1px solid rgba(var(--cp-warning-rgb), 0.35);
+    background: rgba(var(--cp-warning-rgb), 0.07);
+}
+
+.boards-stuck__head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.boards-stuck__amount {
+    font-weight: 750;
+}
+
+.boards-stuck__meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px 12px;
+    font-size: var(--cp-fs-xs);
+    color: var(--cp-muted);
+}
+
+.boards-stuck__trans {
+    display: block;
+    padding: 5px 8px;
+    border-radius: var(--cp-radius-xs);
+    background: rgba(var(--cp-bg-rgb), 0.6);
+    font-family: var(--cp-mono);
+    font-size: var(--cp-fs-xs);
+    color: var(--cp-text);
+    word-break: break-all;
+}
+
+@media (max-width: 1500px) {
+    .boards-admin-boards-grid {
+        grid-template-columns: minmax(0, 1fr) !important;
+    }
+}
+
+@media (max-width: 1200px) {
+    .boards-admin-stats {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+.boards-admin-side {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-width: 0;
+}
+
+.boards-flagged .boards-stuck__head,
+.boards-flagged .boards-stuck__meta {
+    min-width: 0;
+}

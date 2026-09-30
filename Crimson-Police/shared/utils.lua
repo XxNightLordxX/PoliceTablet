@@ -1,14 +1,19 @@
--- shared/utils.lua · small helpers shared by every module (CP.U).
--- Pure Lua 5.4: no natives except where noted, so tests can load this file directly.
+-- Small helpers shared by every module (CP.U). Pure Lua 5.4: no natives except where noted, so tests can load this
+-- file directly.
 
 CP = CP or {}
 CP.U = CP.U or {}
 local U = CP.U
 
--- ── Numbers ─────────────────────────────────────────────────────────────────
--- Round to the nearest whole number, halves up (2.5 -> 3, -2.5 -> -2).
+-- ============================================================================
+--                                   NUMBERS
+-- ============================================================================
+-- Round to the nearest whole number, halves up (2.5 -> 3, -2.5 -> -2). The 1e-7 nudge makes a true half
+-- that binary floating point stores a hair below .5 still round up: $350 x 1.15 = 402.49999999999994
+-- (really $402.50) -> 403, the same as CP.Cash pays. Every money and count rounding goes through this.
+local ROUND_NUDGE = 1e-7
 function U.round(x)
-    return math.floor(x + 0.5)
+    return math.floor(x + 0.5 + ROUND_NUDGE)
 end
 
 function U.clamp(x, lo, hi)
@@ -21,7 +26,10 @@ function U.inRange(x, lo, hi)
     return type(x) == 'number' and x >= lo and x <= hi
 end
 
--- ── Tables ──────────────────────────────────────────────────────────────────
+-- ============================================================================
+--                                    TABLES
+-- ============================================================================
+
 function U.copy(t)
     local out = {}
     for k, v in pairs(t) do out[k] = v end
@@ -96,7 +104,9 @@ function U.setPath(t, path, value)
     cur[parts[#parts]] = value
 end
 
--- ── Strings and hashes ──────────────────────────────────────────────────────
+-- ============================================================================
+--                              STRINGS AND HASHES
+-- ============================================================================
 -- FNV-1a 32-bit: stable seeds from strings (dates, citizenids, file contents).
 function U.hash(s)
     s = tostring(s)
@@ -120,7 +130,9 @@ function U.trim(s)
     return (tostring(s):gsub('^%s+', ''):gsub('%s+$', ''))
 end
 
--- ── Random ──────────────────────────────────────────────────────────────────
+-- ============================================================================
+--                                    RANDOM
+-- ============================================================================
 -- Deterministic generator (never touches math.random), so a seed gives the same
 -- sequence on the server, on every client and in tests.
 --   local rng = CP.U.rng(seed); rng:next() -> [0,1); rng:int(1, 6); rng:chance(0.25)
@@ -180,7 +192,10 @@ function Rng:sample(list, n)
     return out
 end
 
--- ── UUID (server) ───────────────────────────────────────────────────────────
+-- ============================================================================
+--                                UUID (server)
+-- ============================================================================
+
 local uuidRng
 function U.uuid()
     if not uuidRng then
@@ -197,9 +212,11 @@ function U.uuid()
     return ('%s-%s-4%s-%s%s-%s'):format(hex(8), hex(4), hex(3), variant, hex(3), hex(12))
 end
 
--- ── Vectors ─────────────────────────────────────────────────────────────────
+-- ============================================================================
+--                                   VECTORS
+-- ============================================================================
 -- Accepts vector3/vector4 values or plain { x, y, z } tables.
-local function xyz(v)
+local function Xyz(v)
     if v == nil then return nil end
     local t = type(v)
     if t == 'vector3' or t == 'vector4' or t == 'vector2' then return v.x, v.y, v.z or 0.0 end
@@ -208,19 +225,19 @@ local function xyz(v)
     end
     return nil
 end
-U.xyz = xyz
+U.xyz = Xyz
 
 function U.dist(a, b)
-    local ax, ay, az = xyz(a)
-    local bx, by, bz = xyz(b)
+    local ax, ay, az = Xyz(a)
+    local bx, by, bz = Xyz(b)
     if not ax or not bx then return math.huge end
     local dx, dy, dz = ax - bx, ay - by, az - bz
     return math.sqrt(dx * dx + dy * dy + dz * dz)
 end
 
 function U.dist2d(a, b)
-    local ax, ay = xyz(a)
-    local bx, by = xyz(b)
+    local ax, ay = Xyz(a)
+    local bx, by = Xyz(b)
     if not ax or not bx then return math.huge end
     local dx, dy = ax - bx, ay - by
     return math.sqrt(dx * dx + dy * dy)
@@ -228,13 +245,13 @@ end
 
 -- Shortest 2D distance from point p to the polyline pts (list of vectors).
 function U.distToPolyline(p, pts)
-    local px, py = xyz(p)
+    local px, py = Xyz(p)
     if not px or not pts or #pts == 0 then return math.huge end
     if #pts == 1 then return U.dist2d(p, pts[1]) end
     local best = math.huge
     for i = 1, #pts - 1 do
-        local ax, ay = xyz(pts[i])
-        local bx, by = xyz(pts[i + 1])
+        local ax, ay = Xyz(pts[i])
+        local bx, by = Xyz(pts[i + 1])
         local vx, vy = bx - ax, by - ay
         local len2 = vx * vx + vy * vy
         local t = 0.0
@@ -253,7 +270,7 @@ function U.vecToTable(v)
     if t == 'vector4' or (t == 'table' and v.w ~= nil) then
         return { x = v.x, y = v.y, z = v.z, w = v.w }
     end
-    local x, y, z = xyz(v)
+    local x, y, z = Xyz(v)
     return { x = x, y = y, z = z }
 end
 
@@ -279,14 +296,18 @@ function U.serialize(v)
     return out
 end
 
--- ── Hex colours ─────────────────────────────────────────────────────────────
+-- ============================================================================
+--                                 HEX COLOURS
+-- ============================================================================
+
 function U.isHexColour(s)
     return type(s) == 'string' and s:match('^#%x%x%x%x%x%x$') ~= nil
 end
 
 -- Relative luminance of a #rrggbb colour (0 = black, 1 = white).
 function U.luminance(hex)
-    local r, g, b = tonumber(hex:sub(2, 3), 16) / 255, tonumber(hex:sub(4, 5), 16) / 255, tonumber(hex:sub(6, 7), 16) / 255
+    local r, g, b =
+        tonumber(hex:sub(2, 3), 16) / 255, tonumber(hex:sub(4, 5), 16) / 255, tonumber(hex:sub(6, 7), 16) / 255
     local function lin(c) return c <= 0.03928 and c / 12.92 or ((c + 0.055) / 1.055) ^ 2.4 end
     return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b)
 end
@@ -300,7 +321,9 @@ function U.contrastText(bgHex)
     return whiteContrast >= darkContrast and '#ffffff' or '#111111'
 end
 
--- ── Database value helpers ──────────────────────────────────────────────────
+-- ============================================================================
+--                            DATABASE VALUE HELPERS
+-- ============================================================================
 -- oxmysql may return TINYINT(1) as boolean or number and JSON as string or table.
 function U.truthy(v)
     return v == true or v == 1 or v == '1' or v == 'true'
@@ -318,11 +341,21 @@ function U.num(v, default)
     return tonumber(v) or default or 0
 end
 
--- Truncate a string to n characters (bytes) for fixed-size columns.
+-- Truncate a string to at most n bytes for fixed-size columns, never ending inside a UTF-8 character:
+-- MariaDB strict mode (oxmysql connects as utf8mb4) refuses the whole row for a broken sequence (error 1366).
 function U.clip(s, n)
     if s == nil then return nil end
     s = tostring(s)
-    if #s > n then return s:sub(1, n) end
+    if #s <= n then return s end
+    s = s:sub(1, n)
+    local last = #s
+    local j = last
+    while j > 1 and j > last - 3 and s:byte(j) >= 0x80 and s:byte(j) < 0xC0 do j = j - 1 end
+    local lead = s:byte(j)
+    if lead and lead >= 0xC0 then
+        local need = (lead >= 0xF0 and 4) or (lead >= 0xE0 and 3) or 2
+        if last - j + 1 < need then return s:sub(1, j - 1) end
+    end
     return s
 end
 

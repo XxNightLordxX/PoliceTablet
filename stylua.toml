@@ -1,0 +1,18 @@
+# StyLua settings for the owner's Lua style (docs/STYLE.md). StyLua 2.5.2:
+#   cargo install stylua --features lua54   (or a release binary from github.com/JohnnyMorganz/StyLua)
+# Run it through python3 tools/restyle.py, not on its own: StyLua spreads every if, loop and function over
+# several lines, lays out long calls one argument per line and removes the padding before trailing
+# comments; restyle.py then puts back what the author wrote on one line, packs long calls and conditions
+# the owner's way and aligns the trailing comments.
+syntax = "Lua54"
+column_width = 120
+line_endings = "Unix"
+indent_type = "Spaces"
+indent_width = 4
+quote_style = "ForceSingle"
+call_parentheses = "Input"
+collapse_simple_statement = "Never"
+space_after_function_names = "Never"
+
+[sort_requires]
+enabled = false

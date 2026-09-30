@@ -867,6 +867,22 @@ TriggerClientEvent('QBCore:Notify', source, message, type)
 - qbx_core:server:onSetMetaData has argument order (key, oldValue, newValue, source), with source LAST (player.lua:1212). The client version is (key, oldValue, newValue). It could replace or augment the 2 s downed poll.
 - No files were modified. git status in /home/user/PoliceTablet shows only pre-existing untracked Crimson-Police/, docs/ and tests/.
 
+### qbx_core player_vehicles: the mission plate check (read-only, parity-plus)
+
+- **Spec claim:** Every mission vehicle gets a plate in the reserved pattern (Config.Custody.plates) that no player owns, checked read-only against player_vehicles
+- **Evidence:** src/sc-police/sc-police/server/vehicle.lua:5-8 (`IsVehicleOwned`: `SELECT plate FROM player_vehicles WHERE plate = ?`), :313-329 (the impound handler updates player_vehicles by plate alone)
+- **Implication:** sc-police's `/imp` reaches a player's own car whenever a mission car carries a plate that is in player_vehicles, so CP.Qbx.plateOwned(plate) runs `SELECT 1 FROM player_vehicles WHERE plate = ? LIMIT 1` through the real oxmysql (CP.Storage.realMySQL when the database is off), inside pcall, never joined with a cp_ table. A plate a player owns is rerolled (5 tries); on an error the reserved pattern alone is used and the error is logged once. Crimson-Police never writes player_vehicles.
+
+```lua
+local ok, found = pcall(db.scalar.await, 'SELECT 1 FROM player_vehicles WHERE plate = ? LIMIT 1', { plate })
+```
+
+### ox_inventory calls of the parity-plus build (standard API)
+
+- **Spec claim:** requireItem, the handcuffs check, the evidence item and the optional item rewards use ox_inventory's standard exports
+- **Evidence:** the argument order of the entry above (AddItem / RemoveItem / Search); ox_inventory is not in the uploads, so these are its documented exports
+- **Implication:** every call is inside pcall after `GetResourceState('ox_inventory') == 'started'`, read as `ok and res`. Server: `Search(src, 'count', name)` (the tablet item with requireItem, a failed lookup counting as no item only while requireItem is on; Config.Custody.handcuffsItem for Detain and Cuff suspect, never used or taken), `Search(src, 'slots', name, metadata)` then `RemoveItem(src, name, count, nil, slot)` (mission items), `CanCarryItem(src, name, count)` before `AddItem(src, name, count, { cpReward = <row id> })` (item rewards: never `cpItem`, so the mission-item sweep leaves them alone), `AddItem(src, name, 1, { cpRun, cpItem = true })` (the evidence item), `Items(name)` (the start-up check of configured items; a missing item is turned off and shown in Config health). Client: `exports.ox_inventory:Search('count', item)` every second while the tablet is open with requireItem. The item snippet in items/ox_inventory_items.lua is pasted by the owner; Crimson-Police never edits ox_inventory.
+
 ## sc-dispatch
 
 ### crimsonArena state bag: how sc-dispatch reads it (IsInCrimsonArena / IsInCombatSafeZone)
@@ -1396,6 +1412,23 @@ RegisterNetEvent('sc-dispatch:client:AssignedToCall', function(info)
 - INFO: the bridges/ folder (ps-dispatch, cd_dispatch, etc.) contains optional separate resources that call AddNotification without a unique_id and without any crimsonArena check. If a server installs them, calls from other scripts get numeric row ids and are not suppressed by the flag.
 - INFO: sc-dispatch server code uses `exports['qb-core']:GetCoreObject()` (Qbox qb-core compat) and aliases `local StateBagPlayer = Player` because handlers shadow `Player`. In Crimson-Police, never name a local `Player` in a scope that also calls Player(src).state.
 - INFO: in the F10 panel the respond toggle key is WaypointKey = 'G' (config.lua:55). Pressing it again un-marks responding and sends ToggleResponding(callId, false), which is the path the 60-second dodge rule must catch.
+
+### mdt_dispatch real-call count for the Dispatch screen (read-only, parity-plus)
+
+- **Spec claim:** The Dispatch screen shows a read-only strip "SC-Dispatch: n active real calls (m Priority 1)", NPC calls excluded, refreshed every 15 s, hidden on error
+- **Evidence:** sql/schema-qbox.sql:171-184 (`priority INT DEFAULT 2`, `active TINYINT(1)`); server/main.lua:416-421 (unique_id added at runtime); the NPC call id format in the sc-npcpolice section
+- **Implication:** CP.Dispatch.realCallSummary() runs `SELECT priority, COUNT(*) AS n FROM mdt_dispatch WHERE active = 1 AND (unique_id IS NULL OR unique_id NOT LIKE ?) GROUP BY priority` with Config.Calls.npcCallPrefix LIKE-escaped plus `%` (the saves folder engine has no LEFT(); with the database off the statement still goes to the real oxmysql), in pcall, cached Config.MissionCalls.realCallCache seconds. An error (for example unique_id not yet added) returns nil and the strip is hidden. It lists no calls and gates nothing. Mission calls themselves are never written to mdt_dispatch and never create a notification.
+
+```lua
+SELECT priority, COUNT(*) AS n FROM mdt_dispatch
+WHERE active = 1 AND (unique_id IS NULL OR unique_id NOT LIKE ?) GROUP BY priority   -- { 'npccall-%' }
+```
+
+### employee_incidents: MDT commendations on the profile (read-only, optional, parity-plus)
+
+- **Spec claim:** With Config.Profile.showMdtCommendations (off by default) SC-Dispatch MDT commendations are shown read-only, tagged "MDT"
+- **Evidence:** sql/schema-qbox.sql:298-310 (`employee_incidents`: citizenid, job, type ENUM('reprimand','warning','commendation','note'), title, issued_by, created_at); server/main.lua:4305 (sc-dispatch's own read), :4317 (manual entries), :4522-4526 (a promotion writes a 'commendation' row titled "Promoted to ...")
+- **Implication:** CP.Dispatch.mdtCommendations(citizenid) runs `SELECT title, issued_by, UNIX_TIMESTAMP(created_at) AS ts FROM employee_incidents WHERE citizenid = ? AND type = 'commendation' ORDER BY created_at DESC LIMIT 10` in pcall (nil on error: the MDT tag is hidden). Promotions appear as commendations because sc-dispatch writes them that way. Never write the table.
 
 ## sc-npcpolice
 
@@ -2455,6 +2488,25 @@ RegisterNetEvent('QBCore:Client:SetDuty', function(duty)
 - Config.MugshotWebhook in config.lua:188 contains a live-looking Discord webhook URL. This is a data-hygiene note only; Crimson-Police must not reuse it.
 - Station keys in Config.Stations are 'MRPD', 'BCSO' and 'SASP' (config.lua:938, 986, 1020); FIB is separate in Config.FIBStation. There is no Paleto, Vespucci or Davis station, so the spec's four duty locations are the full set.
 - Unverified outside this source (qbx_core not provided): qbx_core's QBCore:ToggleDuty handler and Player.Functions.SetJobDuty fire TriggerEvent('QBCore:Server:SetDuty', src, onduty) and TriggerClientEvent('QBCore:Client:SetDuty', src, onduty), and the default metadata.callsign is 'NO CALLSIGN'. Check these against the server's qbx_core copy.
+
+### police:server:Impound: no job or distance check, owned plates written, the car deleted everywhere (parity-plus)
+
+- **Spec claim:** A second, read-only handler for police:server:Impound closes the /imp exploit on mission vehicles
+- **Evidence:** server/vehicle.lua:313-329 (the handler: `IsVehicleOwned(plate)` then `UPDATE player_vehicles SET state = ...` by plate, then `TriggerClientEvent('police:client:DeleteVehicle', -1, netId)`); server/commands.lua:496-515 (`/depot` and `/imp` check job type leo and duty, then `police:client:ImpoundVehicle`); client/interactions.lua:92-110 (the target is `QBCore.Functions.GetClosestVehicle(coords)`, no distance limit), :130 and :146 (the 5 s progress bar, then `TriggerServerEvent('police:server:Impound', plate, fullImpound, price or 0, body, engine, fuel, netId)`)
+- **Implication:** the net event checks neither the sender's job nor the distance, and any client can send it; it deletes the car on every client and, when the plate is in player_vehicles, changes that player's vehicle row. Crimson-Police registers a second handler (net events call every handler) in modules/integrations/sc_police: it only reads the 7th argument (netId), and when that is a vehicle of a live run it records the sender, the netId and the sender's server-side distance with `CP.Runs.noteExternalRemoval(netId, src, 'sc_impound', dist)`. It never triggers, cancels or answers any police:* event. The engine then decides when the car vanishes: a participant's removal fails the objective and flags the run `sc_impound` (never an Impound disposition); anyone else's, or a vanish with nothing recorded, ends the run as `vehicle_removed_external` (not counted, no cooldown) and audits the sender. Mission plates are kept out of player_vehicles (qbx_core section), so the handler's UPDATE never reaches a player's car.
+
+```lua
+RegisterNetEvent('police:server:Impound', function(plate, fullImpound, price, body, engine, fuel, netId)
+    local src = source
+    price = price and price or 0
+    if IsVehicleOwned(plate) then
+        ... MySQL.query('UPDATE player_vehicles SET state = ?, ... WHERE plate = ?', ...)
+    end
+    if netId then
+        TriggerClientEvent('police:client:DeleteVehicle', -1, netId)
+    end
+end)
+```
 
 ## Renewed-Banking v2.1.4
 
