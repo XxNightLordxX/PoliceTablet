@@ -586,6 +586,7 @@ do
             'street_race_bust: +20 all racers')
         H.ok(p.hard_ram and p.hard_ram.points == -10 and p.hard_ram.each, 'street_race_bust: hard_ram -10 each')
         local maxRacers = CP.U.round(o.vehicles * Config.Scaling[#Config.Scaling].count)
+        local GRID_SCOPE = 400.0 -- metres: under OneSync's 424 m default culling radius, with a margin
         for i, loc in ipairs(def.locations) do
             local pts, len = CheckRoute('street_race_bust', i, loc.route, { loop = true, min = 2000, max = 3000 })
             if pts then
@@ -603,6 +604,12 @@ do
                         ('street_race_bust: location %d slot %d is on the loop'):format(i, j))
                     H.ok(D2(s, loc.start.coords) >= Config.Builder.minSpawnFromStart,
                         ('street_race_bust: location %d slot %d is 30 m+ from the start'):format(i, j))
+                    -- OneSync hands an entity to a player's game only within 424 m: a grid further out is
+                    -- simulated by nobody and never drives (the live run of 2026-09-30 at the Little Seoul loop)
+                    H.ok(D2(s, loc.start.coords) + loc.start.radius <= GRID_SCOPE, (
+                        'street_race_bust: location %d slot %d is in range of an officer anywhere in the intercept '
+                        .. 'circle (%.0f m + %.0f m radius, at most %.0f m)'
+                    ):format(i, j, D2(s, loc.start.coords), loc.start.radius, GRID_SCOPE))
                 end
             end
         end

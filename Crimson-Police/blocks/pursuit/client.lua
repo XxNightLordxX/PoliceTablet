@@ -24,6 +24,7 @@ local PULL_AHEAD = 14.0        -- metres ahead and...
 local PULL_SIDE = 3.5          -- ...to the right where a yielding car pulls over
 local PULL_MPS = 7.0           -- speed while pulling over
 local DRIVEBY_RANGE = 40.0     -- metres: armed passengers of a fighting car shoot at the named participant
+local NEAR_STEP = 10           -- metres: the HUD gives the nearest car's distance in these steps (whole metres)
 
 local active = {}
 
@@ -48,6 +49,7 @@ local function S_of(ctx)
             lastReport = {},
             aimSince = {},
             touching = {},
+            seen = {},
             alive = true,
             data = {},
         }
@@ -97,6 +99,9 @@ local function RouteInfo(S)
     end
     return S.route or nil
 end
+
+-- A race: stop mode on a looped route (Street Race Bust). Its cars are racers on the map.
+local function IsRace(S) return (S.data.mode or 'stop') == 'stop' and (RouteInfo(S) or {}).loop == true end
 
 -- Waypoints still ahead of pos: the rest of an open route, or one full lap of a loop.
 local function Remaining(route, pos)
@@ -334,6 +339,7 @@ local function ApplyPed(S, net, ped)
     local bag = BagOf(ped)
     CP.Npc.apply(ped, (bag and bag.cfg) or {})
     DriverSetup(ped, S.ctx.obj.style ~= 'cautious')
+    SetEntityLoadCollisionFlag(ped, true)         -- far from this player it would otherwise sit dormant
     S.applied[net] = ped
     S.tasked[net] = nil
     S.left[net] = nil
@@ -342,15 +348,41 @@ local function ApplyPed(S, net, ped)
     return true, true
 end
 
+-- Config.Debug (F8): what this host's game has of each car, once per change. A car it does not have is out of
+-- its OneSync range: nobody drives it and nobody sees it on the map.
+local function NoteHost(S, netId, veh, owned)
+    if not Config.Debug then return end
+    local what
+    if not veh then
+        what = 'is not streamed to this game (out of range): it cannot be driven or blipped here'
+    elseif not owned then
+        local idx = NetworkGetEntityOwner(veh)
+        what = ('is streamed, but the game of player %s keeps control'):format(
+            idx and idx >= 0 and tostring(GetPlayerServerId(idx)) or 'none')
+    elseif IsEntityWaitingForWorldCollision(veh) then
+        what = 'is controlled by this game, but waits for world collision'
+    else
+        what = 'is controlled by this game'
+    end
+    if S.seen[netId] == what then return end
+    S.seen[netId] = what
+    CP.log(BLOCK, 'host: vehicle %d %s', netId, what)
+end
+
 local function HostVehicle(S, v)
     local veh = EntityFor(v.netId)
-    if not veh then return end
+    if not veh then
+        NoteHost(S, v.netId, nil, false)
+        return
+    end
     local fresh = false
     local owned, regained = Own(S, 'v' .. tostring(v.netId), veh)
+    NoteHost(S, v.netId, veh, owned)
     if not owned then return end
     if S.applied[v.netId] ~= veh or regained then
         -- a new car under this net id (test restart) has its route ahead; a regain keeps a finished one
         if S.applied[v.netId] ~= veh then S.routeDone[v.netId] = nil end
+        SetEntityLoadCollisionFlag(veh, true)     -- far from this player it would otherwise sit dormant
         SetVehicleDoorsLocked(veh, 2)
         SetVehicleEngineOn(veh, true, true, false)
         S.applied[v.netId] = veh
@@ -532,6 +564,27 @@ local function HudText(S, myPos)
         end
     end
     if (d.stopped or 0) < (d.vtotal or 0) then
+        -- a driver already waiting to be detained close by comes before the cars still racing
+        for _, s in ipairs(S.suspects) do
+            local e = s.state == 'surrendered' and EntityFor(s.netId) or nil
+            if e and #(GetEntityCoords(e) - myPos) <= WATCH_RANGE then
+                return CP.L('block.pursuit.hud_detain', { detained = d.detained or 0, total = d.total or 0 })
+            end
+        end
+        local near
+        for _, v in ipairs(S.vehicles) do
+            local e = (v.state == 'fleeing' or v.state == 'waiting' or v.state == 'yielding') and EntityFor(v.netId)
+                or nil
+            local dist = e and #(GetEntityCoords(e) - myPos) or nil
+            if dist and (not near or dist < near) then near = dist end
+        end
+        if near then
+            return CP.L('block.pursuit.hud_stop_near', {
+                stopped = d.stopped or 0,
+                total = d.vtotal or 0,
+                distance = math.floor(near / NEAR_STEP + 0.5) * NEAR_STEP,
+            })
+        end
         return CP.L('block.pursuit.hud_stop', { stopped = d.stopped or 0, total = d.vtotal or 0 })
     end
     return CP.L('block.pursuit.hud_detain', { detained = d.detained or 0, total = d.total or 0 })
@@ -560,7 +613,8 @@ local function Loop(S)
                     local live = v.state == 'fleeing' or v.state == 'waiting' or v.state == 'cruising'
                         or v.state == 'yielding'
                     if veh and showBlips and live and v.blip ~= false then
-                        local label = v.cruise and 'block.pursuit.blip_violator' or 'block.pursuit.blip_vehicle'
+                        local label = (v.cruise and 'block.pursuit.blip_violator')
+                            or (IsRace(S) and 'block.pursuit.blip_racer') or 'block.pursuit.blip_vehicle'
                         EnsureBlip(S, k, veh, 225, CP.L(label), 0.9)
                     else
                         DropBlip(S, k)

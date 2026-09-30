@@ -859,6 +859,101 @@ do
     H.eq(LastSend(lctx).vehicles[1].routeDone, nil, 'loop route: never done')
 end
 
+-- OneSync hands a server-made entity to a player's game only within its culling radius (424 m by default). The
+-- live run of 2026-09-30 put the grid 560 m from the intercept: no game ever had the racers, so nobody drove them
+-- and nobody saw them on the map. A race loop wider than that keeps its cars and drivers streamed across it.
+local wideLoc = {
+    label = 'Wide loop',
+    start = { coords = vec3(600.0, 200.0, 30.0), radius = 60.0 },
+    grid = { vec4(200.0, 600.0, 30.0, 90.0), vec4(209.0, 600.0, 30.0, 90.0), vec4(218.0, 600.0, 30.0, 90.0) },
+    race = { points = loopPts, loop = true },
+}
+local function WideRace()
+    return PU.defaults({
+        block = 'pursuit',
+        mode = 'stop',
+        vehicles = 3,
+        spawns = 'grid',
+        route = 'race',
+        models = { 'sultan' },
+        complete = 'all_or_timeout_any',
+        surrenderOnAim = false,
+        footFlee = 0,
+    })
+end
+do
+    H.clockMs = 3400000
+    At(1, 600.0, 200.0)
+    H.players[1].vehicle = nil
+    local cull, ignore = {}, {}
+    _G.SetEntityDistanceCullingRadius = function(e, r) cull[e] = r end
+    _G.SetEntityIgnoreRequestControlFilter = function(e, on) ignore[e] = on end
+    local ctx = FakeCtx({ obj = WideRace(), location = wideLoc, mission = builtin })
+    PU.start(ctx)
+    local span = 600.0 * math.sqrt(2)          -- the loop's diagonal
+    H.eq(#ctx.calls.spawn, 6, 'scope: 3 racer cars and 3 drivers')
+    for _, s in ipairs(ctx.calls.spawn) do
+        H.ok(cull[s.ent] ~= nil and cull[s.ent] >= span and cull[s.ent] <= span + 300.0,
+            ('scope: %s %d streams to players anywhere on the loop (culling radius %s m, loop %.0f m across)'):format(
+                s.kind, s.netId, tostring(cull[s.ent]), span))
+        H.eq(ignore[s.ent], true, ('scope: the host can always take control of %s %d'):format(s.kind, s.netId))
+    end
+    local msg = ctx.calls.hud[#ctx.calls.hud] and ctx.calls.hud[#ctx.calls.hud].message
+    H.eq(msg and msg.text, CP.L('block.pursuit.msg_race_start', { count = 3 }),
+        'race start: the HUD says the race is on and where to look (the run toast does not)')
+
+    -- a compact location keeps OneSync's default range and gets no start message
+    local small = FakeCtx({
+        obj = PU.defaults({ block = 'pursuit', mode = 'stop', spawn = 'car', models = { 'sultan' } }),
+        location = stolenLoc,
+        mission = builtin,
+    })
+    PU.start(small)
+    for _, s in ipairs(small.calls.spawn) do
+        H.eq(cull[s.ent], nil,
+            ('scope: a car 40 m from the start keeps the default range (%s %d)'):format(s.kind, s.netId))
+    end
+    H.eq(#small.calls.hud, 0, 'scope: no race message outside a race')
+    -- an open flee route 550 m long is no race: a car that outruns the officers is the escape rules' business
+    local open = FakeCtx({
+        obj = PU.defaults({ block = 'pursuit', mode = 'stop', route = 'flee', models = { 'sultan' } }),
+        location = openLoc,
+        mission = builtin,
+    })
+    PU.start(open)
+    for _, s in ipairs(open.calls.spawn) do
+        H.eq(cull[s.ent], nil, ('scope: an open flee route keeps the default range (%s %d)'):format(s.kind, s.netId))
+    end
+
+    -- nobody's game has the cars: warned once per car at 15 s, so the next live log names it
+    local owners, warns, logs = {}, {}, {}
+    _G.NetworkGetEntityOwner = function(e) return owners[e] or -1 end
+    local realWarn, realLog, realDebug = CP.warn, CP.log, Config.Debug
+    CP.warn = function(tag, m, ...) warns[#warns + 1] = tag .. ': ' .. (m):format(...) end
+    CP.log = function(tag, m, ...) logs[#logs + 1] = tag .. ': ' .. (m):format(...) end
+    Config.Debug = true
+    local cars = SpawnsOf(ctx, 'vehicle')
+    TickN(PU, ctx, 14)
+    H.eq(#warns, 0, 'scope: no warning in the first 14 s')
+    owners[cars[1].ent] = 1
+    TickN(PU, ctx, 2)
+    H.eq(#warns, 2, 'scope: the two cars no game has are warned about at 15 s')
+    H.ok(warns[1] and warns[1]:find('vehicle ' .. cars[2].netId, 1, true) and warns[1]:find('no owner', 1, true),
+        'scope: the warning names the car and says nobody owns it: ' .. tostring(warns[1]))
+    TickN(PU, ctx, 20)
+    H.eq(#warns, 2, 'scope: once per car')
+    local traced
+    for _, l in ipairs(logs) do
+        if l:find('vehicle ' .. cars[1].netId .. ' (fleeing)', 1, true) and l:find('owner 1 (host)', 1, true)
+            and l:find('waypoint', 1, true) then
+            traced = l
+        end
+    end
+    H.ok(traced ~= nil, 'scope: Config.Debug logs each car\'s waypoint, speed, owner and distance')
+    CP.warn, CP.log, Config.Debug = realWarn, realLog, realDebug
+    _G.NetworkGetEntityOwner, _G.SetEntityDistanceCullingRadius, _G.SetEntityIgnoreRequestControlFilter = nil, nil, nil
+end
+
 -- Pursuit Sim: follow mode, spawn 50 m ahead, medals by average distance, lost, undriveable, any ram.
 local simLoc = { label = 'Sim', start = { coords = vec4(0.0, 0.0, 30.0, 0.0), radius = 30.0 } }
 local function SimCtx(extra)
@@ -1962,6 +2057,7 @@ do
         'TaskVehicleTempAction',
         'DrawMarker',
         'TaskStartScenarioInPlace',
+        'SetEntityLoadCollisionFlag',
     }) do
         _G[name] = noop
     end
@@ -1971,9 +2067,12 @@ do
         'IsPlayerFreeAimingAtEntity',
         'IsVehicleSirenOn',
         'IsPedDeadOrDying',
+        'IsEntityWaitingForWorldCollision',
     }) do
         _G[name] = Falsy
     end
+    _G.GetPlayerServerId = function(idx) return idx end
+    _G.NetworkGetEntityOwner = function() return -1 end
     _G.PlayerPedId = function() return me end
     _G.PlayerId = function() return 0 end
     _G.GetPedInVehicleSeat = function() return 0 end
@@ -2327,6 +2426,74 @@ local function LiveBlips()
     local n = 0
     for _ in pairs(BL.live) do n = n + 1 end
     return n
+end
+
+do -- OneSync scope on the host: only what its game streams can be driven and blipped (the live run of 2026-09-30)
+    H.clockMs = 22200000
+    local me = PlayerPedId()
+    local saved = {
+        exists = NetworkDoesNetworkIdExist,
+        label = AddTextComponentSubstringPlayerName,
+        log = CP.log,
+        debug = Config.Debug,
+    }
+    local cull, labels, logs = {}, {}, {}
+    _G.SetEntityDistanceCullingRadius = function(e, r) cull[e] = r end
+    _G.SetEntityIgnoreRequestControlFilter = function() end
+    -- what OneSync streams to this game: an entity within its culling radius (424 m by default) of the player
+    _G.NetworkDoesNetworkIdExist = function(n)
+        local e = byNet[n]
+        if not e or not ents[e].exists then return false end
+        return U.dist2d(ents[e].coords, ents[me].coords) < (cull[e] or 424.0)
+    end
+    _G.AddTextComponentSubstringPlayerName = function(text) labels[#labels + 1] = text end
+    CP.log = function(tag, m, ...) logs[#logs + 1] = tag .. ': ' .. (m):format(...) end
+    Config.Debug = true
+
+    -- the server half starts the race with the officer at the intercept, 553-566 m from the grid
+    At(1, 600.0, 200.0)
+    H.players[1].vehicle = nil
+    ents[me].coords = vec3(600.0, 200.0, 30.0)
+    local ctx = FakeCtx({ obj = WideRace(), location = wideLoc, mission = builtin })
+    PU.start(ctx)
+    local drivers, cars = SpawnsOf(ctx, 'ped'), SpawnsOf(ctx, 'vehicle')
+    for _, d in ipairs(drivers) do ents[d.ent].bag = { state = 'driving', cfg = {} } end
+    local cctx = ClientCtx('run-cl-scope', WideRace(), wideLoc)
+    cctx.radioSilence = false
+    local hud = {}
+    cctx.hudDetail = function(text) hud[#hud + 1] = text or false end
+    local base = LiveBlips()
+    PC.prepare(cctx)
+    PC.start(cctx)
+    PC.update(cctx, LastSend(ctx))
+    H.step(1000)
+    for i, d in ipairs(drivers) do
+        H.eq(CountTasks(d.ent, 'driveRoute'), 1, ('scope: racer %d, 550+ m from the host, is driven'):format(i))
+    end
+    H.eq(LiveBlips() - base, 3, 'scope: every racer is on the host\'s map')
+    H.eq(labels[#labels], CP.L('block.pursuit.blip_racer'), 'scope: a race car\'s blip says Racer')
+    local near = math.huge
+    for _, c in ipairs(cars) do near = math.min(near, U.dist2d(ents[c.ent].coords, ents[me].coords)) end
+    H.eq(hud[#hud],
+        CP.L('block.pursuit.hud_stop_near', { stopped = 0, total = 3, distance = math.floor(near / 10 + 0.5) * 10 }),
+        'scope: the HUD gives the distance to the nearest racer, in 10 m steps')
+
+    -- a racer on the far side of the loop, 721 m from the host, is still streamed and blipped
+    ents[cars[1].ent].coords = vec3(0.0, 600.0, 30.0)
+    H.step(1000)
+    H.eq(LiveBlips() - base, 3, 'scope: a racer 721 m away stays on the map')
+    -- the host drives 2 km away: the racers leave its game, their blips go, and F8 says why
+    ents[me].coords = vec3(2600.0, 200.0, 30.0)
+    H.step(1000)
+    H.eq(LiveBlips() - base, 0, 'scope: out of range, no blip')
+    local said
+    for _, l in ipairs(logs) do if l:find('is not streamed to this game', 1, true) then said = l end end
+    H.ok(said ~= nil, 'scope: Config.Debug says in F8 that the host\'s game does not have the car')
+    PC.stop(cctx)
+    H.step(1000)
+    _G.NetworkDoesNetworkIdExist, _G.AddTextComponentSubstringPlayerName = saved.exists, saved.label
+    CP.log, Config.Debug = saved.log, saved.debug
+    _G.SetEntityDistanceCullingRadius, _G.SetEntityIgnoreRequestControlFilter = nil, nil
 end
 
 -- A control that waits a frame (as CP.Runs.control does) once gate.slow is set.

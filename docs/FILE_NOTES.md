@@ -608,9 +608,12 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
       suspect on foot for AIM_HOLD_MS (AIM_STOPPED by the car, flee_arrest.aimDistance when running);
       'stunned' when IsPedBeingStunned; follow mode: 'undriveable' when the car they drive is no
       longer driveable. The server re-checks every report with its own coordinates.
-    - blips for suspect vehicles and suspects on foot (none with Radio Silence) and a HUD line
-      (ctx.hudDetail): follow progress / lost countdown, escape countdown, lights hint, stop and
-      detain progress, aim hint.
+    - blips for suspect vehicles ("Racer" on a race loop) and suspects on foot (none with Radio Silence)
+      and a HUD line (ctx.hudDetail): follow progress / lost countdown, escape countdown, lights hint,
+      stop progress with the distance to the nearest live car this client streams, detain progress
+      (also before every car is stopped, while a surrendered suspect is within WATCH_RANGE), aim hint.
+      Blips and the host AI only reach cars this client's game streams (OneSync: within the culling
+      radius the server half sets, 424 m by default).
     - on the run host only: control of every suspect and car before anything is done to them (re-apply
       and re-task when control comes back from another client), CP.Npc.apply once per entity handle,
       seats them, locks the car, then drives: CP.Npc.task(driver, 'driveRoute', { vehicle, points,
@@ -623,7 +626,10 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
       EXIT_RETRY_MS, warping them out from the EXIT_WARP_TRY-th attempt: the server keeps them
       'stopped' until they are out); fleeing -> CP.Npc 'flee', hostile -> 'combat', and on first sight
       (new host) surrendered -> 'kneel', cuffed -> 'cuffed'. The arrest target ("Detain driver" /
-      "Cuff suspect") is CP.Npc's (enableCuff). Everything is re-applied after hostChanged.
+      "Cuff suspect") is CP.Npc's (enableCuff). Everything is re-applied after hostChanged. The host
+      sets SetEntityLoadCollisionFlag on each car and person it applies (far from the player they
+      would sit dormant without a physics grid); Config.Debug prints in F8, once per change, whether
+      the host's game streams and controls each car.
 
   Objective fields read: mode, route, speed, style, trigger, surrenderOnAim, ramSpeed, failIfUndriveable,
     neverShoots (ctx.obj); location[route].
@@ -668,6 +674,16 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
       (failIfUndriveable). The average distance sets the medal, awarded only when the full duration
       was held; run.flags.medals = true. A target that died without a participant kill ends the
       objective without a medal.
+    OneSync scope: a server-made entity is handed to a player's game (simulated, tasked, blipped) only
+    within its culling radius, 424 m by default; out of every player's range it stands still. On a race
+    (stop mode on a loop) whose widest span (start, spawn points, route points) plus SCOPE_MARGIN is above
+    that, every car and occupant gets SetEntityDistanceCullingRadius(span + SCOPE_MARGIN, at most SCOPE_MAX) and
+    SetEntityIgnoreRequestControlFilter (the first game to stream it may be a bystander's; the host
+    must still win control). Each tick NetworkGetEntityOwner is read for every live car: a car no
+    player's game has had for SCOPE_WARN_S is warned about once (always printed); Config.Debug logs
+    each car's position, waypoint, speed, owner and nearest participant every TRACE_MS, and every
+    spawn with its distance and culling radius. A race (stop mode on a loop) starting on arrival
+    shows block.pursuit.msg_race_start.
     Vehicles start when the objective starts (trigger 'arrive' or { ahead }) or, with trigger
     { distance, lights }, when a participant with lights on is within distance (client evidence
     'lights_near', checked with server coords), when any participant gets within FLEE_CLOSE, or when

@@ -13,8 +13,9 @@
   Davis & Rancho (Davis Ave, Innocence Blvd, Roy Lowenstein Blvd, Dutch London St, Autopia Pkwy).
   Blocks: pursuit (mode = 'stop', route = location.route, spawns = location.spawns).
   Start: an intercept waypoint on the loop, about half way round (radius 60 m); the race starts when
-  the first participant arrives, with the racers leaving the grid at the loop's first waypoint.
-  8 grid slots per loop: enough for the Critical tier (3 x 2.5) in a Cross-Department Mission.
+  the first participant arrives, with the racers leaving a grid up the loop 150-310 m from the intercept:
+  inside OneSync's 424 m range of an officer anywhere in the circle, so the racers are streamed, owned and
+  driving from the first second. 8 grid slots per loop: enough for the Critical tier (3 x 2.5).
 ]]
 
 RegisterMission({
@@ -35,15 +36,15 @@ RegisterMission({
     {
       label  = 'Little Seoul loop',
       start  = { coords = vec3(-539.75, -1016.75, 23.00), radius = 60.0 },  -- intercept: waypoint 26 of the loop
-      spawns = {                              -- racer grid on the loop from waypoint 1, 9 m apart
-        vec4(-1003.00, -698.75, 21.09, 128.63),
-        vec4(-1010.03, -704.37, 20.84, 128.63),
-        vec4(-1017.06, -709.99, 20.58, 128.63),
-        vec4(-1024.09, -715.61, 20.32, 128.63),
-        vec4(-1031.12, -721.23, 20.06, 128.63),
-        vec4(-1038.15, -726.84, 19.81, 128.63),
-        vec4(-1045.18, -732.46, 19.55, 128.63),
-        vec4(-1052.21, -738.08, 19.29, 128.63),
+      spawns = {                              -- racer grid 261-297 m from the intercept (418-481 m up the loop), 9 m apart
+        vec4(-662.91, -1286.73, 10.16, 210.26),
+        vec4(-667.44, -1278.96, 10.16, 210.26),
+        vec4(-671.98, -1271.18, 10.16, 210.26),
+        vec4(-676.51, -1263.41, 10.16, 210.26),
+        vec4(-681.05, -1255.64, 10.16, 210.26),
+        vec4(-684.79, -1247.52, 10.16, 196.61),
+        vec4(-687.36, -1238.89, 10.16, 196.61),
+        vec4(-689.93, -1230.27, 10.16, 196.61),
       },
       -- 37 road waypoints, 2056 m loop: San Andreas Ave > South Rockford Dr > Vespucci Blvd > South Rockford Dr > Calais Ave > Dutch London St > Calais Ave > Innocence Blvd > Calais Ave > San Andreas Ave
       route  = {
@@ -92,15 +93,15 @@ RegisterMission({
     {
       label  = 'La Mesa loop',
       start  = { coords = vec3(1248.75, -1312.25, 35.28), radius = 60.0 },  -- intercept: waypoint 19 of the loop
-      spawns = {                              -- racer grid on the loop from waypoint 1, 9 m apart
-        vec4(819.00, -1513.50, 28.16, 193.29),
-        vec4(821.07, -1522.26, 28.49, 193.29),
-        vec4(823.14, -1531.02, 28.83, 193.29),
-        vec4(825.21, -1539.78, 29.17, 193.29),
-        vec4(827.28, -1548.54, 29.50, 193.29),
-        vec4(829.35, -1557.29, 29.84, 193.29),
-        vec4(831.42, -1566.05, 30.18, 193.29),
-        vec4(833.48, -1574.81, 30.51, 193.29),
+      spawns = {                              -- racer grid 246-306 m from the intercept (250-313 m up the loop), 9 m apart
+        vec4(1300.14, -1552.38, 46.16, 26.37),
+        vec4(1304.11, -1560.39, 47.16, 26.37),
+        vec4(1308.08, -1568.41, 48.16, 26.37),
+        vec4(1312.05, -1576.42, 49.16, 26.37),
+        vec4(1316.03, -1584.43, 50.16, 26.37),
+        vec4(1320.00, -1592.45, 51.16, 26.37),
+        vec4(1324.37, -1600.23, 51.92, 38.42),
+        vec4(1329.96, -1607.28, 51.96, 38.42),
       },
       -- 39 road waypoints, 2387 m loop: Popular St > Innocence Blvd > El Rancho Blvd > Vespucci Blvd > Popular St
       route  = {
@@ -151,15 +152,15 @@ RegisterMission({
     {
       label  = 'Mirror Park loop',
       start  = { coords = vec3(1283.75, -433.25, 69.09), radius = 60.0 },  -- intercept: waypoint 20 of the loop
-      spawns = {                              -- racer grid on the loop from waypoint 1, 9 m apart
-        vec4(782.00, -557.75, 31.78, 7.32),
-        vec4(780.85, -548.82, 32.30, 7.32),
-        vec4(779.71, -539.90, 32.82, 7.32),
-        vec4(778.56, -530.97, 33.34, 7.32),
-        vec4(777.42, -522.04, 33.87, 7.32),
-        vec4(776.27, -513.12, 34.39, 7.32),
-        vec4(775.12, -504.19, 34.91, 7.32),
-        vec4(773.98, -495.26, 35.43, 7.32),
+      spawns = {                              -- racer grid 216-272 m from the intercept (241-304 m up the loop), 9 m apart
+        vec4(1152.67, -261.37, 68.66, 249.04),
+        vec4(1144.26, -258.15, 68.67, 249.04),
+        vec4(1135.86, -254.94, 68.68, 249.04),
+        vec4(1127.45, -251.72, 68.69, 249.04),
+        vec4(1119.05, -248.50, 68.70, 249.04),
+        vec4(1110.64, -245.28, 68.71, 249.04),
+        vec4(1102.44, -241.62, 68.76, 242.11),
+        vec4(1094.49, -237.41, 68.86, 242.11),
       },
       -- 38 road waypoints, 2084 m loop: Popular St > Glory Way > Mirror Park Blvd > East Mirror Dr > Mirror Park Blvd > San Andreas Ave > Supply St > Popular St
       route  = {
@@ -209,15 +210,15 @@ RegisterMission({
     {
       label  = 'Downtown Vinewood loop',
       start  = { coords = vec3(435.00, 291.00, 103.06), radius = 60.0 },  -- intercept: waypoint 26 of the loop
-      spawns = {                              -- racer grid on the loop from waypoint 1, 9 m apart
-        vec4(208.00, -299.25, 45.34, 341.31),
-        vec4(210.88, -290.72, 46.81, 341.31),
-        vec4(213.77, -282.20, 48.28, 341.31),
-        vec4(216.65, -273.67, 49.74, 341.31),
-        vec4(219.29, -265.10, 51.16, 357.65),
-        vec4(219.66, -256.11, 52.20, 357.65),
-        vec4(220.22, -247.16, 53.21, 339.75),
-        vec4(223.33, -238.71, 53.93, 339.75),
+      spawns = {                              -- racer grid 154-217 m from the intercept (154-217 m up the loop), 9 m apart
+        vec4(580.35, 240.16, 101.96, 71.67),
+        vec4(588.89, 237.33, 101.85, 71.67),
+        vec4(597.43, 234.50, 101.74, 71.67),
+        vec4(605.98, 231.67, 101.63, 71.67),
+        vec4(614.50, 228.90, 100.96, 72.30),
+        vec4(623.01, 226.19, 99.88, 72.30),
+        vec4(631.53, 223.47, 98.80, 72.30),
+        vec4(640.04, 220.75, 97.72, 72.30),
       },
       -- 47 road waypoints, 2712 m loop: Power St > Vinewood Blvd > Elgin Ave > Clinton Ave > Las Lagunas Blvd > Occupation Ave > Capital Blvd > Occupation Ave > Power St
       route  = {
@@ -276,15 +277,15 @@ RegisterMission({
     {
       label  = 'Davis & Rancho loop',
       start  = { coords = vec3(354.00, -1747.25, 29.31), radius = 60.0 },  -- intercept: waypoint 20 of the loop
-      spawns = {                              -- racer grid on the loop from waypoint 1, 9 m apart
-        vec4(-17.25, -1708.25, 28.81, 287.10),
-        vec4(-8.65, -1705.60, 28.79, 287.10),
-        vec4(-0.05, -1702.96, 28.77, 287.10),
-        vec4(8.33, -1699.76, 28.75, 297.70),
-        vec4(16.30, -1695.58, 28.75, 297.70),
-        vec4(24.27, -1691.40, 28.74, 297.70),
-        vec4(32.24, -1687.21, 28.74, 297.70),
-        vec4(40.21, -1683.03, 28.74, 297.70),
+      spawns = {                              -- racer grid 214-216 m from the intercept (448-511 m up the loop), 9 m apart
+        vec4(276.40, -1545.46, 28.75, 299.66),
+        vec4(268.58, -1549.92, 28.77, 299.66),
+        vec4(260.76, -1554.37, 28.79, 299.66),
+        vec4(252.94, -1558.82, 28.80, 299.66),
+        vec4(245.14, -1563.31, 28.81, 300.04),
+        vec4(237.35, -1567.82, 28.81, 300.04),
+        vec4(229.56, -1572.32, 28.82, 300.04),
+        vec4(221.77, -1576.83, 28.82, 300.04),
       },
       -- 47 road waypoints, 2105 m loop: Davis Ave > Innocence Blvd > Roy Lowenstein Blvd > Dutch London St > Autopia Pkwy > Davis Ave
       route  = {

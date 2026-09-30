@@ -41,6 +41,12 @@ local RAM_BOX_S = 1                      -- ...for this long before it may ram
 local RAM_MS = 3000                      -- a ram lasts this long
 local FOLLOW_BEHIND = 60.0               -- observe = follow: within this many metres...
 local FOLLOW_SECONDS = 8                 -- ...for this long
+local SCOPE_DEFAULT = 424.0              -- metres: OneSync hands an entity to a player's game only this close
+local SCOPE_MARGIN = 250.0               -- a wider location streams its cars and people this far past its span...
+local SCOPE_MAX = 2000.0                 -- ...up to this many metres
+local SCOPE_WARN_S = 15                  -- a live car that no player's game has simulated for this long: warned once
+local TRACE_MS = 10000                   -- Config.Debug: one progress line per live car this often
+local UNOWNED_WHY = 'no player\'s game has it, so it does not move and is on nobody\'s map'
 -- Pursuit Sim card: "Gold under 40 m +50, Silver under 80 m +25, Bronze under 150 m +10". Passed as the
 -- trusted per-occurrence hint of every medal award, so a medal is worth its card value on a mission whose
 -- file does not list it (every custom mission: Config.Bonuses has no medal ids); a file that lists the id
@@ -745,6 +751,53 @@ local function StartPoint(ctx)
     return s and s.coords or nil
 end
 
+-- A race loop: stop mode on a looped road route (Street Race Bust and custom races).
+local function IsRace(ctx)
+    local route = RouteOf(ctx.location, ctx.obj.route)
+    return ctx.obj.mode ~= 'follow' and route ~= nil and route.loop
+end
+
+-- The culling radius a race's cars and people need, nil when OneSync's default covers the location (or it is
+-- no race): its widest span (start, spawn points and route points) plus SCOPE_MARGIN, at most SCOPE_MAX. A
+-- server-made car out of every player's range is simulated by nobody: it stands still, off every map, so racers
+-- lapping a loop wider than that must stay streamed to the officers wherever they wait or chase on it. A car
+-- that outruns the officers on an open route is left to the escape rules.
+local function ScopeRadius(ctx)
+    local st = ctx.state
+    if st.scope ~= nil then return st.scope or nil end
+    if not IsRace(ctx) then
+        st.scope = false
+        return nil
+    end
+    local loc, obj = ctx.location, ctx.obj
+    local pts = {}
+    local start = StartPoint(ctx)
+    if start then pts[#pts + 1] = start end
+    for _, p in ipairs(PointList(loc, obj.spawns)) do pts[#pts + 1] = p end
+    for _, p in ipairs(PointList(loc, obj.spawn)) do pts[#pts + 1] = p end
+    local route = RouteOf(loc, obj.route)
+    if route then for _, p in ipairs(route.points) do pts[#pts + 1] = p end end
+    local span = 0.0
+    for i = 1, #pts do
+        for j = i + 1, #pts do
+            local d = U.dist2d(pts[i], pts[j])
+            if d > span then span = d end
+        end
+    end
+    local r = math.min(SCOPE_MAX, span + SCOPE_MARGIN)
+    st.scope = r > SCOPE_DEFAULT and r or false
+    return st.scope or nil
+end
+
+-- A wide race's car or person stays streamed to every player within its radius. The first game to stream it
+-- may be a bystander's, so the host must always win control of it (sv_filterRequestControl could refuse).
+local function KeepInScope(ctx, ent)
+    local r = ScopeRadius(ctx)
+    if not r or not Exists(ent) then return end
+    if SetEntityDistanceCullingRadius then SetEntityDistanceCullingRadius(ent, r + 0.0) end
+    if SetEntityIgnoreRequestControlFilter then SetEntityIgnoreRequestControlFilter(ent, true) end
+end
+
 -- The point `offset` metres along an open route from the route point nearest ref (negative = upstream,
 -- against the driving direction), kept within MAX_OFFSET, with the heading of the route there.
 local function AlongRoute(route, ref, offset)
@@ -1045,6 +1098,11 @@ local function FleeAll(ctx, st, why)
     if why ~= 'start' then
         local m = RESPONSE_MSG[shown or 'flee']
         ctx.hud({ message = { text = CP.L(m[1]), kind = m[2] } })
+    elseif IsRace(ctx) then
+        -- the run's own "in progress" toast says nothing about where the racers are
+        ctx.hud({
+            message = { text = CP.L('block.pursuit.msg_race_start', { count = VehTarget(ctx) }), kind = 'warning' },
+        })
     end
 end
 
@@ -1154,6 +1212,7 @@ local function SpawnOccupant(ctx, st, v)
     if hidden then opts.hidden = true end
     local ent, netId = ctx.spawnPed(opts)
     if not netId then return nil end
+    KeepInScope(ctx, ent)
     if SetPedIntoVehicle and Exists(ent) and Exists(v.entity) then pcall(SetPedIntoVehicle, ent, v.entity, seat) end
     local key = tostring(netId)
     local p = {
@@ -1188,13 +1247,19 @@ local function SpawnVehicle(ctx, st, i)
         Fail(ctx, st, 'block.pursuit.fail_setup')
         return nil
     end
+    local model = PickModel(ctx, OccTarget(ctx))
     local ent, netId = ctx.spawnVehicle({
-        model = PickModel(ctx, OccTarget(ctx)),
+        model = model,
         coords = place,
         role = 'suspect_vehicle',
         tag = 'vehicle' .. i,
     })
     if not netId then return nil end
+    KeepInScope(ctx, ent)
+    local radius = ScopeRadius(ctx)
+    CP.log(BLOCK, 'run %s: vehicle %d (%s) at %.0f %.0f, nearest participant %.0f m, culling radius %s',
+        tostring(ctx.run and ctx.run.id), netId, tostring(model), place.x, place.y,
+        math.min(NearestOf(Party(ctx), place), 99999), radius and ('%.0f m'):format(radius) or 'default')
     if SetVehicleDoorsLocked and Exists(ent) then pcall(SetVehicleDoorsLocked, ent, 2) end
     local key = tostring(netId)
     local v = {
@@ -1610,6 +1675,44 @@ local function WatchVehicles(ctx, st, dt, list)
     end
 end
 
+-- Who simulates each live car (NetworkGetEntityOwner: a player's server id, -1 = nobody). A car that no player's
+-- game has had for SCOPE_WARN_S stands still where it is and shows on nobody's map: warned once, even without
+-- Config.Debug, so a race that never starts is never silent again. Config.Debug adds a progress line per car.
+local function WatchScope(ctx, st, dt, list)
+    if not NetworkGetEntityOwner then return end
+    local t = Now()
+    local trace = Config.Debug and (not st.tracedAt or t - st.tracedAt >= TRACE_MS)
+    if trace then st.tracedAt = t end
+    local route = RouteOf(ctx.location, ctx.obj.route)
+    local host = ctx.host and ctx.host() or nil
+    for _, key in ipairs(st.vorder) do
+        local v = st.vehicles[key]
+        local live = v.state == 'fleeing' or v.state == 'waiting' or v.state == 'cruising' or v.state == 'yielding'
+        if live and Exists(v.entity) then
+            local owner = tonumber(NetworkGetEntityOwner(v.entity)) or -1
+            local c = GetEntityCoords(v.entity)
+            local near = math.min(NearestOf(list, c), 99999)
+            if owner > 0 then
+                v.unowned = 0
+            else
+                v.unowned = (v.unowned or 0) + dt
+                if not v.scopeWarned and v.unowned >= SCOPE_WARN_S then
+                    v.scopeWarned = true
+                    CP.warn(BLOCK, 'run %s: vehicle %d has had no owner for %d s (nearest participant %.0f m): %s',
+                        tostring(ctx.run and ctx.run.id), v.netId, SCOPE_WARN_S, near, UNOWNED_WHY)
+                end
+            end
+            if trace then
+                local wp = route and ('%d/%d'):format(NearestIndex(route.points, c), #route.points) or '-'
+                local who = owner > 0 and (owner == host and ('%d (host)'):format(owner) or tostring(owner)) or 'none'
+                CP.log(BLOCK,
+                    'run %s: vehicle %d (%s) at %.0f %.0f, waypoint %s, %.0f km/h, owner %s, nearest participant %.0f m',
+                    tostring(ctx.run and ctx.run.id), v.netId, v.state, c.x, c.y, wp, Kmh(v.entity), who, near)
+            end
+        end
+    end
+end
+
 -- Escapes, exits, give-ups (close, low health) and missed cuffs.
 local function WatchPeds(ctx, st, dt, list)
     local obj = ctx.obj
@@ -2005,6 +2108,7 @@ local function Tick(ctx, dt)
     SampleSpeeds(ctx, st)
     CheckTrigger(ctx, st, list)
     WatchVehicles(ctx, st, dt, list)
+    WatchScope(ctx, st, dt, list)
     WatchPeds(ctx, st, dt, list)
     if st.failed then return end
     if st.mode == 'follow' then
