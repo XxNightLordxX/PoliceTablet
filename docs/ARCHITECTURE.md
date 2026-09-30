@@ -91,11 +91,14 @@ exposes that is not listed here is private to that module (keep it `local`).
 
 ```
 PoliceTablet/                      (git repo)
-  README.md
+  README.md                        the one owner document (install, permissions, config, commands, troubleshooting);
+                                   every folder README below is a short note that points to its section
   docs/ARCHITECTURE.md             this file
   docs/SPEC.md                     the product spec (markdown)
+  docs/WEB_UI.md                   the web UI developer guide (layout, screens, NUI bridge, hooks, components)
   tests/                           Lua unit tests + MariaDB query tests (not shipped)
   Crimson-Police/                  THE RESOURCE (folder name is a Hard rule)
+    README.md                      short install note (points to the root README.md)
     fxmanifest.lua
     config/config.lua              every setting (copied verbatim from the spec)
     config/blocks.lua              Mission Builder ranges and defaults (verbatim from the spec)
@@ -108,7 +111,7 @@ PoliceTablet/                      (git repo)
     locales/parts/<slice>.json     one part per package; `python3 tools/check_contracts.py --merge` builds en.json
     items/                         crimson_police_tablet.png, ox_inventory_items.lua (the snippet an owner pastes
                                    into ox_inventory), README.md; never loaded by the resource
-    logos/sast.png, fib.png
+    logos/sast.png, fib.png        placeholder logos, README.md
     missions/builtin/index.lua     return { 'beat_patrol', ... }
     missions/builtin/<id>.lua      one RegisterMission({...}) each
     missions/custom/<id>.lua       written by the Mission Builder
@@ -119,7 +122,8 @@ PoliceTablet/                      (git repo)
     modules/storage/server.lua     CP.Storage: picks MySQL/MariaDB or the saves folder (Config.Database)
     saves/                         database-off data (JSON documents, _tables.json); only README.md is committed
     blocks/<block_id>/server.lua + client.lua
-    web/                           React 18 + TS + Vite; builds to web/dist (committed)
+    web/                           React 18 + TS + Vite; builds to web/dist (committed); README.md points to
+                                   docs/WEB_UI.md
     sql/migrations/001_initial.sql, 002_test_def_hash.sql, 003_run_stats.sql, 004_profile.sql,
                    005_mission_calls.sql, 006_item_rewards.sql
 ```
@@ -150,9 +154,10 @@ boards, rewards, access).
 
 | API | File | Notes |
 |---|---|---|
-| `CP.resource`, `CP.isServer`, `CP.prefix` | shared/init.lua | `'Crimson-Police'`, bool, `'crimson-police'` |
+| `CP.resource`, `CP.isServer`, `CP.prefix` | shared/init.lua | `GetCurrentResourceName()` (`'Crimson-Police'`; everything inside the resource follows a renamed folder, see §5.34 `folder`), bool, `'crimson-police'` |
 | `CP.log(tag, fmt, ...)`, `CP.warn`, `CP.err` | shared/init.lua | tagged `[crimson-police:<tag>]` |
 | `CP.e(name)` | shared/init.lua | `'crimson-police:' .. name` |
+| `CP.configProblem(cfg) -> nil \| 'error'\|'warn', text` | shared/init.lua | The config load check: `'error'` when `Config` is not a table (config.lua did not load), `'warn'` naming the table sections of config.lua and blocks.lua that are missing (config.lua stopped at an error, or is from an older version). The server prints it once as the file loads (tag `config`), before any module can fail on it |
 | `CP.Blocks.register(id, impl)`, `.get(id)`, `.all()` | shared/init.lua | one registry per side |
 | `CP.L(key, vars)`, `CP.Locale.all()`, `CP.Locale.has(key)` | shared/locale.lua | `{var}` placeholders |
 | `CP.Lt(key, vars) -> token`, `CP.Locale.isToken(v)`, `encode`, `tokenize(payload)`, `resolve(text, code)`, `resolveAll(payload, code)` | shared/locale.lua | A `{ key, vars }` token for text meant for a player's screen: `CP.Runs.hud`, `ctx.hud` and `ctx.send` accept it and the client resolves it right before `SendNUIMessage` (`CP.Locale.resolveAll`). CP.L is never replaced. English only: every token resolves in the server language |
@@ -461,10 +466,12 @@ Parity-plus additions to the integrations:
 
 ### 5.2 CP.Access — modules/access
 - S `departmentForJob(jobName) -> deptKey|nil`
-- S `department(key) -> sanitised dept` `{ key, label, short, jobs, supervisorGrade, societyAccount, theme = { primary, accent, background, surface, text }, logo = { url|nil, watermark, opacity, size, grayscale } }` (invalid colours fall back to the Crimson-Police default with one console warning; `text` auto-picked with `CP.U.contrastText`; `logo.url` = `https://cfx-nui-Crimson-Police/logos/<file>` or the configured https url)
+- S `department(key) -> sanitised dept` `{ key, label, short, jobs, supervisorGrade, societyAccount, theme = { primary, accent, background, surface, text }, logo = { url|nil, watermark, opacity, size, grayscale } }` (invalid colours fall back to the Crimson-Police default with one console warning; `text` auto-picked with `CP.U.contrastText`; `logo.url` = `https://cfx-nui-<CP.resource>/logos/<file>` or the configured https url)
 - S `departments() -> { dept, ... }` sorted by key
 - S `getOfficer(src) -> officer|nil, errKey` — on-duty, active job in a department, not suspended (Crimson-Police or SC-Dispatch). errKeys: `err.not_police`, `err.not_on_duty`, `err.suspended`, `err.suspended_dispatch`
-- S `isAdmin(src) -> boolean` (`IsPlayerAceAllowed(src, Config.AdminAce)`; src 0 = console = true)
+- S `isAdmin(src) -> boolean` (`IsPlayerAceAllowed(src, adminAce())`, or `IsPlayerAceAllowed(src, 'admin')` while `Config.QboxAdmins == true`: Qbox's own admin ace, which a stock Qbox server gives `group.admin`; only an explicit `true` counts, so a config.lua without the line keeps the ace alone; src 0 = console = true). Every admin check in the resource goes through it
+- S `adminAce() -> string` (`Config.AdminAce`, or `'crimsonpolice.admin'` when it is empty or not a string)
+- S `qboxAdminAce() -> 'admin'|nil` (`'admin'` while `Config.QboxAdmins == true`, else nil)
 - S `isSupervisor(src) -> boolean`
 - S `role(src) -> 'admin'|'supervisor'|'officer'|nil` (highest)
 - S `recheck(src, jobName) -> ok, endReason` — for players on a run: `'off_duty'|'job_change'|'suspended'` when they no longer qualify (job change = active job name differs from `jobName`, the one they accepted with; a job outside every department also counts as job_change)
@@ -907,7 +914,13 @@ the officer's active commendations; `season:ended` fires after the season result
   `award <citizenid> <points> <reason>`, `season start <name>` / `season end`,
   `suspend <citizenid> <days>`, `reload`, `test <missionId> [tier] [location]`. No args → `CP.Tablet.openAdmin(src)`.
   Also `storage` (the storage in use, rows per `cp_` table, the saves folder's size) and
-  `storage copy database-to-files|files-to-database [force]` (§5.29); console or the `Config.AdminAce` ace only.
+  `storage copy database-to-files|files-to-database [force]` (§5.29); console or an admin (`CP.Access.isAdmin`) only.
+  `check` runs `CP.ConfigHealth.run()` again: every line in the console (coloured by level) and the counts, in game only
+  the counts (a toast: error, warning or success).
+- A player who is not an admin and types the command gets `err.not_admin` and, once per player per start, one console
+  warning naming them and the line that makes them one: `add_ace identifier.<fivem:… or license:…> <adminAce> allow`.
+- `webhooks() -> { { category, convar, state = 'on'|'off'|'invalid' } }` in the order audit, flags, board, builder,
+  operations (Config health lists them; `invalid` = not an https:// link, that webhook is off).
 - `audit(actor, role, category, action, target, old, new, reason)` — `actor` = src or citizenid or 'console';
   writes `cp_audit` and posts to the category webhook (`cp_webhook_audit|flags|builder|operations`, convars)
 - `webhook(category, title, description, fields)` (category 'board' also allowed)
@@ -964,9 +977,17 @@ code is `CP.Storage.MemSQL` (memsql.lua creates `CP.Storage` and puts it there).
   text|nil` (a saves folder that could not be created, written or read: every statement then fails with that
   text and nothing in the folder is changed; for a folder outside the resource it names FXServer's sandbox),
   `hasSavedData() -> bool` (the configured folder holds saves), `realMySQL` (oxmysql's `MySQL`, files mode), `db`
-  (the engine, files mode), `MemSQL` (the engine's code). A new saves folder is announced on start (nothing was
-  copied from the database), and so is a new database next to a saves folder with data (the migrations runner),
-  each naming the storage copy command.
+  (the engine, files mode), `MemSQL` (the engine's code). A new saves folder is announced on start, once oxmysql is
+  connected (`realMySQL.ready`): when the real database holds Crimson-Police data (`cp_schema_migrations` has rows, or
+  the database cannot tell) the warning names the storage copy command; when it has none (a first install with the
+  database off) one plain line says the folder was created. A new database next to a saves folder with data is
+  announced by the migrations runner, naming the storage copy command.
+- **The migrations runner** (`modules/migrations`, `CP.Migrations.ready() / isReady() / version()`): a failed statement
+  stops the resource with the file, the statement and the driver's error, then one `How to fix it:` line for the usual
+  first-start errors (no CREATE/ALTER right, a wrong password, no rights on the database, an unknown database, a server
+  or host that cannot be reached). When oxmysql has not connected 30 s after start (it waits without a word) one
+  warning names `set mysql_connection_string` and `Config.Database.enabled = false` (database mode only: the saves
+  folder never waits for oxmysql).
 - **CP.Storage.MemSQL** (server; it also runs under plain lua5.4 in the tests, with the global `json`):
   `new({ store }) -> db`; `db:exec(sql, params) -> { kind = 'rows', cols, types, rows, n } | { kind = 'write',
   affected, changed, insertId, info, warnings }`, synchronous and atomic (a failing statement changes nothing),
@@ -1141,8 +1162,19 @@ nothing calls ox_inventory.
 ### 5.34 CP.ConfigHealth — modules/confighealth (WP8)
 `register(name, fn -> { { level = 'ok'|'warn'|'error', text } })` (a second register replaces it), `run() ->
 ConfigHealthItem[]` (errors first; a failing check is one error line). Runs 5 s after start (only that first run
-prints to the console) and on callback `admin:getConfigHealth` (admins). Built-in checks: items, desks, colours and
-personal accents, tweaks, locale (en.json loads; a Config.Locale other than en warns: English only), avatars;
+prints to the console, one line per problem, then one summary line: plain when every check passed, a warning with the
+counts otherwise, naming `/CrimsonPoliceAdmin check`) and on callback `admin:getConfigHealth` (admins) and the `check`
+subcommand (§5.25). Built-in checks: items (the item, its way, and its picture in `ox_inventory/web/images/<item>.png`
+while `inventory:imagepath` is ox_inventory's default), desks, colours and personal accents, tweaks, locale (en.json
+loads; a Config.Locale other than en warns: English only), avatars, departments (every job a department lists is a
+Qbox job from `CP.Qbx.getJobs()`, a missing one saying whether the department's other jobs still let players in; its
+grade ladder; warns when supervisorGrade is above every grade or is the lowest grade; an empty job list or a
+supervisorGrade that is not a number stay CP.Access's own warnings), admins (`IsPrincipalAceAllowed('group.admin',
+adminAce())`, or the Qbox ace while QboxAdmins is on; warns with the exact `add_ace` line), folder (when `CP.resource`
+is not `Crimson-Police`: a warning while `Config.Tablet.item` is set, because the ox_inventory item line names the
+folder, else an ok line; both name the item line and other scripts' `exports['<name>']`), resources (sc-police not
+running warns: no /callsign, and sc-dispatch suspensions do not keep officers off duty; sc-npcpolice, sc-multijob,
+Crimson-Arena are info lines), webhooks (`CP.Admin.webhooks()`: which are on, and a warning per invalid convar);
 CP.Rewards registers its own.
 
 ## 6. Cross-cutting conventions

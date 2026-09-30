@@ -58,7 +58,8 @@ on 4 cores; the three suites take about one minute of it (two specs at a time), 
 | `web/src` or `locales/parts` | `tsc --noEmit` | nothing: the integrator rebuilds `web/dist` (§4) |
 | Any Lua or web source | `python3 tools/restyle.py <your files>` before the gate | nothing: the `style` step checks it |
 | A Config key | the specs that read it | the SPEC config listing and `config/config.lua` |
-| Behaviour the SPEC describes | - | SPEC (owner-approved only) and "Spec revisions" in the README |
+| Behaviour the SPEC describes | - | SPEC (owner-approved only) and "Spec revisions" in the root README.md (section 12) |
+| What an owner does or sees (install, a setting, a command, a console message) | - | the root README.md, and the folder README that covers it |
 | The harness or the runner | the full gate twice, and once with `CP_TEST_JOBS=1`: the per-spec counts must be identical | ARCHITECTURE §11, the runner's header and docs/TESTING.md |
 
 ## 4. Working in parallel without conflicts

@@ -2563,9 +2563,9 @@ end
 do
     H.ok(Exists(H.root .. 'saves/README.md'), 'the resource ships its saves folder (saves/README.md)')
     local savedStorage, savedMySQL, savedCfg = CP.Storage, _G.MySQL, Config.Database
-    local function LoadStorage(cfg)
+    local function LoadStorage(cfg, real)
         CP.Storage = { MemSQL = M }   -- as memsql.lua leaves it (fxmanifest loads it first)
-        _G.MySQL = savedMySQL
+        _G.MySQL = real or savedMySQL
         Config.Database = cfg
         H.load('modules/storage/server.lua')
         return CP.Storage
@@ -2590,7 +2590,11 @@ do
     local realPrint = print
     local savedMigrations = CP.Migrations
     _G.print = function(...) lines[#lines + 1] = table.concat({ ... }, ' ') end
-    st = LoadStorage({ enabled = false, folder = TMP .. '/runner' })
+    -- the real database has run Crimson-Police before (the database was switched off): the copy hint is named
+    local usedDb = setmetatable({ scalar = {
+        await = function() return 6 end,
+    } }, { __index = savedMySQL })
+    st = LoadStorage({ enabled = false, folder = TMP .. '/runner' }, usedDb)
     H.load('modules/migrations/server.lua')
     _G.print = realPrint
     H.ok(CP.Migrations.isReady(), 'the migrations runner finished')
@@ -2628,6 +2632,65 @@ do
     H.ok(not table.concat(lines, '\n'):find('applied migration', 1, true), 'a restart applies nothing twice')
     H.ok(not table.concat(lines, '\n'):find(' is new, so ', 1, true),
         'and a saves folder with data is not announced as new')
+    -- a new saves folder: the copy hint only when the real database holds Crimson-Police data (asked once oxmysql is
+    -- connected); a first install with the database off gets one calm line instead
+    do
+        local n = 0
+        local function Announce(real)
+            n = n + 1
+            local out = {}
+            local folder = ('%s/first_%d'):format(TMP, n)
+            _G.print = function(...) out[#out + 1] = table.concat({ ... }, ' ') end
+            CP.Storage = { MemSQL = M }
+            _G.MySQL = real
+            Config.Database = { enabled = false, folder = folder }
+            H.load('modules/storage/server.lua')
+            _G.print = realPrint
+            _G.MySQL = savedMySQL
+            return table.concat(out, '\n'), folder
+        end
+        local function Real(answer)
+            return {
+                ready = function(cb) cb() end,
+                scalar = {
+                    await = function()
+                        if type(answer) == 'string' then error(answer, 0) end
+                        return answer
+                    end,
+                },
+            }
+        end
+        local CALM = '[crimson-police] first start with the database off: created the saves folder '
+        local out, folder = Announce(Real('Table \'qbox.cp_schema_migrations\' doesn\'t exist'))
+        H.ok(out:find(CALM .. folder, 1, true) ~= nil, 'no Crimson-Police tables in the database: one calm line')
+        H.ok(not out:find(' is new, so ', 1, true), 'and no copy hint')
+        out = Announce(Real(0))
+        H.ok(out:find(CALM, 1, true) ~= nil and not out:find('storage copy', 1, true),
+            'an empty cp_schema_migrations: the calm line too')
+        out, folder = Announce(Real(6))
+        H.ok(
+            out:find('the saves folder ' .. folder .. ' is new, so Crimson-Police starts with no data', 1, true) ~= nil
+                and out:find('storage copy database-to-files', 1, true) ~= nil,
+            'the database holds Crimson-Police data (switched off): the copy hint'
+        )
+        H.ok(not out:find(CALM, 1, true), 'and no calm line')
+        out = Announce(Real('connect ECONNREFUSED 127.0.0.1:3306'))
+        H.ok(out:find(' is new, so ', 1, true) ~= nil, 'the database cannot tell: the copy hint, to be safe')
+        out = Announce(nil)
+        H.ok(out:find(' is new, so ', 1, true) ~= nil, 'no oxmysql at all: the copy hint')
+        -- nothing is said before oxmysql is connected
+        local pending
+        local late = Real('Table \'x.cp_schema_migrations\' doesn\'t exist')
+        late.ready = function(cb) pending = cb end
+        out = Announce(late)
+        H.ok(not out:find(CALM, 1, true) and not out:find(' is new, so ', 1, true), 'before oxmysql is ready: nothing')
+        local after = {}
+        _G.print = function(...) after[#after + 1] = table.concat({ ... }, ' ') end
+        pending()
+        H.advance(100)
+        _G.print = realPrint
+        H.ok(table.concat(after, '\n'):find(CALM, 1, true) ~= nil, 'once it is: the calm line')
+    end
     -- switched back on: a new database next to a saves folder with data is announced (here the "database" is an
     -- empty engine behind MySQL)
     lines = {}

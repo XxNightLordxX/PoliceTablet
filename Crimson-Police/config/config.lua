@@ -2,7 +2,7 @@
 
 Config = {}
 
-Config.Debug = false             -- true = each module prints tagged debug lines
+Config.Debug = true              -- true = each module prints tagged debug lines
 Config.Locale = 'en'
 
 -- ============================================================================
@@ -17,7 +17,7 @@ Config.Locale = 'en'
 -- folder only matters when enabled = false: a folder inside the Crimson-Police folder (FXServer only lets
 -- a resource write inside resource folders). A full path works when it points inside the resource.
 Config.Database = {
-    enabled = true,
+    enabled = false,
     folder = 'saves',
 }
 
@@ -78,6 +78,8 @@ Config.Tablet = {
 }
 
 Config.AdminAce = 'crimsonpolice.admin'     -- the admin permission; supervisors come from job grade
+Config.QboxAdmins = true                    -- true = your Qbox admins (group.admin, which holds the 'admin'
+                                            -- permission) are Crimson-Police admins too; false = only AdminAce
 Config.AdminTheme = {
     primary = '#a4161a',
     accent = '#e5383b',
@@ -125,7 +127,7 @@ Config.Departments = {
         label = 'San Andreas State Troopers',        -- shown in the tablet header
         short = 'SAST',                              -- tag on boards, units and badges
         jobs = { 'sast' },                           -- Qbox job names (as in sc-police / sc-dispatch)
-        supervisorGrade = 3,                         -- Qbox grade level; set to your real grade
+        supervisorGrade = 3,                         -- Qbox grade number: this grade and up are supervisors
         societyAccount = 'sast',                     -- only used when Config.Cash.source = 'society'
         theme = {
             primary = '#1f4e8c',     -- header, buttons, active tab, progress bars

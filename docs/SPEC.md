@@ -16,7 +16,7 @@ These rules override everything else in this spec. If another section, example o
 
 - Access: only on-duty players whose active Qbox job belongs to a department in Config.Departments MAY use the Officer UI. There are no activation requirements: no activity check, no minimum officers online and no quiet timer.
 
-- Roles: there are exactly three roles: Officer, Supervisor (job grade at or above the department's supervisorGrade) and Admin (ace crimsonpolice.admin). There are no cadet, detective or other roles. Supervisors get the same missions as officers. Ranks and callsigns are read from Qbox, as SC-Police sets them, and are never edited by Crimson-Police.
+- Roles: there are exactly three roles: Officer, Supervisor (job grade at or above the department's supervisorGrade) and Admin (ace crimsonpolice.admin, or a Qbox admin, the ace admin that stock Qbox gives group.admin, while Config.QboxAdmins is true). There are no cadet, detective or other roles. Supervisors get the same missions as officers. Ranks and callsigns are read from Qbox, as SC-Police sets them, and are never edited by Crimson-Police.
 
 - Mission choice: officers and supervisors MUST only pick a mission type on the Mission Board or claim a mission call on the Dispatch screen, and the server MUST draw the mission at random. A mission call names a mission type, a priority and an area, never a mission, and the server draws the mission from that type's missions that start in the area only after the claim. A call names an area to a viewer only when that viewer's eligible pool in the area (after unit size, no-repeat, cooldowns and daily limits) holds at least 2 missions; otherwise it shows "County-wide" and draws from the same pool as the Mission Board, so a call is never narrower than the board. A call a supervisor or admin posts or pages is drawn at random like any other and can never be claimed by the issuer's own unit, so it is not an exception. The Officer UI MUST NOT list, preview or let anyone pick a specific mission, and there is no reroll. Only three exceptions exist: the Weekly Boss event card, a supervisor or admin picking one specific mission to launch as a Cross-Department Mission, and test runs (Admin test mode, and the Mission Builder's test run of a draft), which are never saved or paid.
 
@@ -88,7 +88,7 @@ Each term below means exactly this everywhere in the spec.
 | Department | An entry in Config.Departments (today SAST and FIB): its jobs, name, colours, logo and supervisor grade |
 | Officer | An on-duty player whose active Qbox job belongs to a department |
 | Supervisor | An officer whose job grade is at or above their department's supervisorGrade |
-| Admin | A player with the ace crimsonpolice.admin; does not need to be police or on duty |
+| Admin | A player with the ace crimsonpolice.admin, or a Qbox admin (ace admin) while Config.QboxAdmins is true; does not need to be police or on duty |
 | Rank | The officer's Qbox job grade name (e.g. "Sergeant"), the same ranks SC-Police and SC-Dispatch use |
 | Callsign | The officer's callsign from Qbox metadata, set with SC-Police's /callsign |
 | Mission type | Patrol, Training, Investigation or Tactical; the only thing officers pick |
@@ -260,7 +260,7 @@ Crimson-Police has three separate interfaces, all custom standalone NUI built fo
 |---|---|---|---|
 | Officer UI | On-duty member of a department in Config.Departments | /CrimsonPolice, keybind, tablet item or a mission desk | The officer's department theme and logo watermark |
 | Supervisor UI | Officer with a grade at or above their department's supervisorGrade | "Supervisor" switch inside the Officer UI | The supervisor's department theme and logo watermark |
-| Admin UI | Anyone with the ace crimsonpolice.admin, on duty or not | /CrimsonPoliceAdmin, a full-screen panel of its own, not the tablet | Neutral Crimson-Police theme, no watermark |
+| Admin UI | Anyone with the ace crimsonpolice.admin (or a Qbox admin while Config.QboxAdmins is true), on duty or not | /CrimsonPoliceAdmin, a full-screen panel of its own, not the tablet | Neutral Crimson-Police theme, no watermark |
 
 Every screen shows "Crimson-Police" as the app title. The Officer and Supervisor UIs also show the viewer's department name and tag, rank and callsign in the header, e.g. "San Andreas State Troopers · SAST · Sergeant · 2L-14". Rank and callsign are read live from Qbox, as SC-Police sets them.
 
@@ -2422,7 +2422,7 @@ Every threshold in this spec is a value in config/config.lua, in config/blocks.l
 
 Config = {}
 
-Config.Debug = false             -- true = each module prints tagged debug lines
+Config.Debug = true              -- true = each module prints tagged debug lines
 Config.Locale = 'en'
 
 -- ── Storage ─────────────────────────────────────────────────────────────────
@@ -2435,7 +2435,7 @@ Config.Locale = 'en'
 -- folder only matters when enabled = false: a folder inside the Crimson-Police folder (FXServer only lets
 -- a resource write inside resource folders). A full path works when it points inside the resource.
 Config.Database = {
-    enabled = true,
+    enabled = false,
     folder = 'saves',
 }
 
@@ -2492,6 +2492,8 @@ Config.Tablet = {
 }
 
 Config.AdminAce = 'crimsonpolice.admin'     -- the admin permission; supervisors come from job grade
+Config.QboxAdmins = true                    -- true = your Qbox admins (group.admin, which holds the 'admin'
+                                            -- permission) are Crimson-Police admins too; false = only AdminAce
 Config.AdminTheme = {
     primary = '#a4161a',
     accent = '#e5383b',
@@ -2535,7 +2537,7 @@ Config.Departments = {
         label = 'San Andreas State Troopers',        -- shown in the tablet header
         short = 'SAST',                              -- tag on boards, units and badges
         jobs = { 'sast' },                           -- Qbox job names (as in sc-police / sc-dispatch)
-        supervisorGrade = 3,                         -- Qbox grade level; set to your real grade
+        supervisorGrade = 3,                         -- Qbox grade number: this grade and up are supervisors
         societyAccount = 'sast',                     -- only used when Config.Cash.source = 'society'
         theme = {
             primary = '#1f4e8c',     -- header, buttons, active tab, progress bars
@@ -3742,6 +3744,7 @@ Supervisors work from the Supervisor UI and admins from the Admin UI. Admins can
 | Roll back a custom mission | Admin (supervisors only with builderRollback) | Admin UI → Missions; Supervisor UI → Mission Builder when allowed | Restores the previous version from its .bak file as a new version |
 | Break an edit lock | Admin (supervisors only with breakEditLock) | Admin UI → Missions; Supervisor UI → Mission Builder when allowed | Unlocks a mission someone else is editing; their changes since the last autosave are lost |
 | Reload mission files | Admin | Admin UI → Missions; /CrimsonPoliceAdmin reload | Reloads built-in and custom mission files without a restart |
+| Run the start-up check again | Admin | Admin UI → Permissions → Config health; /CrimsonPoliceAdmin check | Runs every Config health check: the console lists every line, in game a toast gives the counts |
 | Withdraw, page or create a mission call | Supervisor (missionCalls; never paging their own unit), Admin | Supervisor UI → Live Missions → Mission calls; Admin UI → Missions; /CrimsonPoliceAdmin missioncall <type> [area] | See Dispatch (mission calls) → Supervisor and admin controls |
 | Commend an officer, or revoke a commendation | Supervisor (issueCommendation; own department, never themselves or a run they took part in, 3 a day), Admin | Supervisor UI → Department Report; Admin UI → Officers | A citation with no points and no cash; revoking needs a reason |
 | Moderate a profile | Supervisor (reviewProfiles, their department), Admin | Supervisor UI → Review Queue → Profiles; Admin UI → Officers | Approve or reject a pending picture or bio, clear a bio or picture, clear or dismiss a report; reason required |
@@ -4062,11 +4065,11 @@ Phase 5 · Parity-plus (English only; see docs/notes/ for what each package buil
 
 These are settings and choices only the server owner can make. The AI builds the resource; nothing here changes its code.
 
-- ☐ Set each department's supervisorGrade to your real Qbox grade level. SC-Dispatch's roster treats grade 4 and up as command staff.
+- ☐ Set each department's supervisorGrade to your real Qbox grade level. SC-Dispatch's roster treats grade 4 and up as command staff. The start-up check (/CrimsonPoliceAdmin check) lists each department's Qbox job and grades, and warns when a job does not exist in Qbox or when nobody or everybody would be a supervisor.
 
 - ☐ Replace the placeholder payouts in Config.MissionTypes and Config.Events.weeklyBoss with amounts that fit your economy.
 
-- ☐ Give admins the ace in server.cfg, e.g. add_ace group.admin crimsonpolice.admin allow.
+- ☐ Give admins the ace in server.cfg, e.g. add_ace group.admin crimsonpolice.admin allow (not needed for Qbox admins while Config.QboxAdmins is true). The start-up check says whether group.admin can open the Admin UI, and when a player is refused /CrimsonPoliceAdmin the server console gets one line with the add_ace line that makes them an admin.
 
 - ☐ Add the webhook convars you want (cp_webhook_board, cp_webhook_audit, cp_webhook_flags, cp_webhook_builder, cp_webhook_operations) and leave out any you don't.
 

@@ -28,6 +28,7 @@ local WEBHOOK_CONVARS = {
     operations = 'cp_webhook_operations',
     board = 'cp_webhook_board',
 }
+local WEBHOOK_ORDER = { 'audit', 'flags', 'board', 'builder', 'operations' }
 local WEBHOOK_COLOURS = {
     audit = 0xA4161A,
     flags = 0xF59E0B,
@@ -299,18 +300,34 @@ local queue = {}
 local working = false
 local lastSent, blockedUntil = {}, {}
 
-local function WebhookUrl(category)
+-- 'on' and the url, 'off' (no convar or an empty one) or 'invalid' (not an https:// link: that webhook is off).
+local function WebhookState(category)
     local convar = WEBHOOK_CONVARS[category]
-    if not convar or not GetConvar then return nil end
+    if not convar or not GetConvar then return 'off' end
     local url = GetConvar(convar, '')
-    if type(url) ~= 'string' then return nil end
+    if type(url) ~= 'string' then return 'off' end
     url = U.trim(url)
-    if url == '' then return nil end
-    if url:sub(1, 8):lower() ~= 'https://' or url:find('[%s"\'<>]') then
-        WarnOnce('url.' .. category, 'convar %s must be an https:// webhook url; that webhook is off', convar)
-        return nil
+    if url == '' then return 'off' end
+    if url:sub(1, 8):lower() ~= 'https://' or url:find('[%s"\'<>]') then return 'invalid' end
+    return 'on', url
+end
+
+local function WebhookUrl(category)
+    local state, url = WebhookState(category)
+    if state == 'invalid' then
+        WarnOnce('url.' .. category, 'convar %s must be an https:// webhook url; that webhook is off',
+            WEBHOOK_CONVARS[category])
     end
     return url
+end
+
+-- Every webhook with its convar and state, in a fixed order (Config health lists them).
+function Admin.webhooks()
+    local out = {}
+    for _, category in ipairs(WEBHOOK_ORDER) do
+        out[#out + 1] = { category = category, convar = WEBHOOK_CONVARS[category], state = (WebhookState(category)) }
+    end
+    return out
 end
 
 -- Discord limits count characters: clip on a character boundary (a cut sequence would make the JSON invalid).
@@ -823,6 +840,32 @@ end
 
 local extraUsage = {}      -- help keys of subcommands other modules registered (Admin.registerSubcommand)
 local registeredSubs = {}  -- names registered that way (a module may register its name again)
+local notAdminHinted = {}  -- player identifier (or src) -> true: the console hint below, once per player per start
+local CHECK_KINDS = { error = 'error', warn = 'warning', ok = 'success' }
+
+-- The identifier a server.cfg line can name: fivem:<id> first (the same on every PC), else license:<id>.
+local function CfgIdentifier(src)
+    if not GetPlayerIdentifierByType then return nil end
+    for _, kind in ipairs({ 'fivem', 'license' }) do
+        local id = GetPlayerIdentifierByType(src, kind)
+        if type(id) == 'string' and id ~= '' then return id end
+    end
+    return nil
+end
+
+-- A player who is not an admin typed the admin command: one console line names them and the server.cfg line that
+-- makes them one, so the owner never has to guess. Once per player per start, so nobody can flood the console.
+local function HintNotAdmin(src)
+    local id = CfgIdentifier(src)
+    local key = id or ('src:' .. tostring(src))
+    if notAdminHinted[key] then return end
+    notAdminHinted[key] = true
+    local ace = Has('Access', 'adminAce') and CP.Access.adminAce() or 'crimsonpolice.admin'
+    local name = (tostring(GetPlayerName(src) or '?'):gsub('%^%d', ''))
+    CP.warn(TAG,
+        '%s (server id %s) typed /%s but is not an admin. To make them one, add this line to server.cfg and restart: add_ace identifier.%s %s allow',
+        name, tostring(src), CmdName(), id or 'license:<their license from txAdmin>', ace)
+end
 
 local function Usage(src)
     local c = CmdName()
@@ -841,6 +884,7 @@ local function Usage(src)
         'admin.cmd.usage_test',
         'admin.cmd.usage_storage',
         'admin.cmd.usage_storage_copy',
+        'admin.cmd.usage_check',
     }) do
         Reply(src, 'info', key, { cmd = c })
     end
@@ -1787,6 +1831,27 @@ SUB.storage = function(src, args)
     end
 end
 
+-- Every Config health line (the start-up run prints only the problems): all of them in the console, the counts in
+-- game (the lines are in Admin UI → Permissions → Config health).
+SUB.check = function(src)
+    local ok, list = Call('ConfigHealth', 'run')
+    if not ok or type(list) ~= 'table' then return Reply(src, 'error', 'err.module_unavailable') end
+    local n = { ok = 0, warn = 0, error = 0 }
+    for _, item in ipairs(list) do
+        if n[item.level] then n[item.level] = n[item.level] + 1 end
+    end
+    local console = tonumber(src) == 0
+    if console then
+        for _, item in ipairs(list) do
+            Reply(0, CHECK_KINDS[item.level] or 'info', 'admin.cmd.check_line',
+                { check = tostring(item.check), text = tostring(item.text) })
+        end
+    end
+    local kind = (n.error > 0 and 'error') or (n.warn > 0 and 'warning') or 'success'
+    Reply(src, kind, console and 'admin.cmd.check_done' or 'admin.cmd.check_done_ingame',
+        { ok = n.ok, warn = n.warn, error = n.error })
+end
+
 -- Another module's /CrimsonPoliceAdmin subcommand (e.g. missioncall). fn(src, args) returns ok, message key
 -- (and its vars); the reply is sent here. helpKey is a usage line shown by the console help. A built-in
 -- subcommand name can't be taken.
@@ -1815,7 +1880,10 @@ end
 function Admin.command(src, args)
     src = tonumber(src) or 0
     args = type(args) == 'table' and args or {}
-    if src ~= 0 and not IsAdmin(src) then return Reply(src, 'error', 'err.not_admin') end
+    if src ~= 0 and not IsAdmin(src) then
+        HintNotAdmin(src)
+        return Reply(src, 'error', 'err.not_admin')
+    end
     local sub = args[1] and tostring(args[1]):lower() or nil
     if not sub then
         if src == 0 then return Usage(src) end

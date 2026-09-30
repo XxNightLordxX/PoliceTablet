@@ -634,12 +634,51 @@ do
     A.departments()
     H.eq(CountLogs('[crimson-police:access]'), warnedBefore, 'one warning per bad key, ever')
     H.eq(CountLogs('logos/bcso.png is missing'), 1, 'missing logo file warned once at start')
+    -- each department warning names the setting to change
+    H.eq(CountLogs('Set supervisorGrade of Config.Departments.lspd in config/config.lua to a grade number'), 1,
+        'a missing supervisorGrade: which setting to change')
+    local savedDepartments = Config.Departments
+    Config.Departments = { nojobs = { label = 'No jobs', short = 'NJ', jobs = {}, supervisorGrade = 1 } }
+    A.departments()
+    H.eq(CountLogs('Put your police job name in jobs = { } of Config.Departments.nojobs in config/config.lua'), 1,
+        'no job names: which setting to change')
+    Config.Departments = savedDepartments
 
     -- roles and officers
     H.eq(A.isAdmin(5), true, 'ace admin')
     H.eq(A.isAdmin(1), false, 'not admin')
     H.eq(A.isAdmin(0), true, 'console is admin')
     H.eq(A.isAdmin(-3), false, 'negative src')
+
+    -- Config.QboxAdmins: Qbox's own admin ace ('admin', held by group.admin) counts too, only while it is exactly true
+    H.players[12] = { coords = vec3(0.0, 0.0, 0.0), ace = { admin = true } }       -- a Qbox admin
+    H.players[13] = { coords = vec3(0.0, 0.0, 0.0), ace = { mod = true, command = true } }
+    H.eq(Config.QboxAdmins, true, 'the shipped config.lua turns QboxAdmins on')
+    H.eq(A.adminAce(), 'crimsonpolice.admin', 'adminAce: Config.AdminAce')
+    H.eq(A.qboxAdminAce(), 'admin', 'qboxAdminAce: the Qbox admin ace while QboxAdmins is on')
+    H.eq(A.isAdmin(12), true, 'QboxAdmins on: a Qbox admin is an admin')
+    H.eq(A.isAdmin(13), false, 'a moderator (mod, command) is not')
+    H.eq(A.isAdmin(5), true, 'crimsonpolice.admin still works')
+    H.eq(A.role(12), 'admin', 'role admin for a Qbox admin')
+    Config.QboxAdmins = false
+    H.eq(A.qboxAdminAce(), nil, 'QboxAdmins off: no Qbox ace')
+    H.eq(A.isAdmin(12), false, 'QboxAdmins off: a Qbox admin is not an admin')
+    H.eq(A.isAdmin(5), true, 'QboxAdmins off: crimsonpolice.admin still works')
+    Config.QboxAdmins = nil
+    H.eq(A.isAdmin(12), false, 'no QboxAdmins line (a config.lua from an older version): off')
+    Config.QboxAdmins = 'yes'
+    H.eq(A.isAdmin(12), false, 'only true turns it on')
+    Config.QboxAdmins = true
+    H.eq(A.isAdmin(0), true, 'QboxAdmins on: the console is still admin')
+    H.eq(A.isAdmin(-12), false, 'QboxAdmins on: a negative src is still no admin')
+    Config.AdminAce = 'myserver.police'
+    H.eq(A.adminAce(), 'myserver.police', 'adminAce follows Config.AdminAce')
+    H.eq(A.isAdmin(5), false, 'a renamed ace: the old ace no longer counts')
+    H.eq(A.isAdmin(12), true, 'the Qbox admin still counts')
+    Config.AdminAce = ''
+    H.eq(A.adminAce(), 'crimsonpolice.admin', 'an empty AdminAce falls back to crimsonpolice.admin')
+    Config.AdminAce = 'crimsonpolice.admin'
+
     local o = A.getOfficer(1)
     H.eq(o.citizenid, 'CPT00001', 'officer citizenid')
     H.eq(o.department, 'sast', 'officer department')
@@ -832,6 +871,13 @@ do
     local runA, runB = '11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222'
 
     H.eq(P.can(5, 'suspend'), true, 'admin: admin-only action')
+    H.eq(P.can(12, 'suspend'), true, 'a Qbox admin (QboxAdmins on): admin-only action')
+    H.eq(P.can(12, 'openAdmin'), true, 'a Qbox admin opens the Admin UI')
+    Config.QboxAdmins = false
+    H.eq(P.can(12, 'suspend'), false, 'QboxAdmins off: refused')
+    H.eq(P.can(12, 'openAdmin'), false, 'QboxAdmins off: no Admin UI')
+    Config.QboxAdmins = true
+    H.eq(P.can(13, 'openAdmin'), false, 'a moderator never opens the Admin UI')
     H.eq(P.can(5, 'forceRecall'), true, 'admin: supervisor action')
     H.eq(P.can(5, 'builderRollback'), true, 'admin: supervisor action switched off for supervisors')
     H.eq(P.can(0, 'reloadMissions'), true, 'console')
@@ -892,6 +938,87 @@ do
         'supervisor never gets switched-off or admin-only actions')
     H.eq(#P.actionsFor(2), 0, 'officer has no actions')
     H.eq(#P.actionsFor(4), 0, 'civilian has no actions')
+    H.players[12], H.players[13] = nil, nil
+end
+
+-- ============================================================================
+--                          A RENAMED RESOURCE FOLDER
+-- ============================================================================
+-- Everything the resource reads, writes or links goes through GetCurrentResourceName() (CP.resource) or, in the
+-- NUI, GetParentResourceName(): only the ox_inventory item line and other scripts' exports name the folder.
+
+do
+    local A = CP.Access
+    local realName, realResource = GetCurrentResourceName, CP.resource
+    _G.GetCurrentResourceName = function() return 'police-tablet' end
+    CP.resource = 'police-tablet'
+    local copy = {}
+    for k, v in pairs(Config.Departments) do copy[k] = v end
+    Config.Departments = copy   -- a new table: the departments are built again
+    H.eq(A.department('sast').logo.url, 'https://cfx-nui-police-tablet/logos/sast.png',
+        'renamed: the logo link follows the folder name')
+    _G.GetCurrentResourceName, CP.resource = realName, realResource
+    copy = {}
+    for k, v in pairs(Config.Departments) do copy[k] = v end
+    Config.Departments = copy
+    H.eq(A.department('sast').logo.url, 'https://cfx-nui-Crimson-Police/logos/sast.png', 'and back')
+
+    local function ReadAll(path)
+        local f = assert(io.open(path, 'r'))
+        local s = f:read('a')
+        f:close()
+        return s
+    end
+    local function Files(dir, pattern)
+        local out = {}
+        local p = io.popen(('find \'%s\' -type f -name \'%s\' | sort'):format(dir, pattern))
+        for line in p:lines() do out[#out + 1] = line end
+        p:close()
+        return out
+    end
+    local HARD = {
+        '[LS][oa][av][de]ResourceFile%(%s*[\'"]Crimson%-Police',
+        'GetResourcePath%(%s*[\'"]Crimson%-Police',
+        'GetResourceState%(%s*[\'"]Crimson%-Police',
+        'GetResourceMetadata%(%s*[\'"]Crimson%-Police',
+        'exports%[%s*[\'"]Crimson%-Police',
+        'nui://Crimson%-Police',
+        'cfx%-nui%-Crimson%-Police',
+        'https://Crimson%-Police/',
+        '[=~]=%s*[\'"]Crimson%-Police[\'"]',
+    }
+    local found, luaFiles = {}, 0
+    for _, dir in ipairs({ 'shared', 'modules', 'blocks', 'config' }) do
+        for _, path in ipairs(Files(H.root .. dir, '*.lua')) do
+            luaFiles = luaFiles + 1
+            local src = ReadAll(path):gsub('%-%-[^\n]*', '')   -- comments may name the folder
+            for _, pat in ipairs(HARD) do
+                if src:find(pat) then found[#found + 1] = path:sub(#H.root + 1) .. ' ' .. pat end
+            end
+        end
+    end
+    H.ok(luaFiles > 50, ('the scan read the Lua files (%d)'):format(luaFiles))
+    H.eq(#found, 0,
+        'no Lua file names the folder in a file path, export, NUI link or resource check: ' .. table.concat(found, '; '))
+    local web, webFiles = {}, { H.root .. 'web/index.html' }
+    for _, pattern in ipairs({ '*.ts*', '*.css' }) do
+        for _, path in ipairs(Files(H.root .. 'web/src', pattern)) do webFiles[#webFiles + 1] = path end
+    end
+    H.ok(#webFiles > 20, ('the scan read the web files (%d)'):format(#webFiles))
+    for _, path in ipairs(webFiles) do
+        local src = ReadAll(path)
+        for _, pat in ipairs({ 'nui://Crimson%-Police', 'cfx%-nui%-Crimson%-Police', 'https://Crimson%-Police/' }) do
+            if src:find(pat) then web[#web + 1] = path:sub(#H.root + 1) end
+        end
+    end
+    H.eq(#web, 0, 'no web file links to the folder by name: ' .. table.concat(web, '; '))
+    H.ok(ReadAll(H.root .. 'web/src/shared/nui.ts'):find('window.GetParentResourceName()', 1, true) ~= nil,
+        'the NUI asks FiveM for the resource name')
+    local manifest = ReadAll(H.root .. 'fxmanifest.lua')
+    H.ok(not manifest:find('@Crimson%-Police'), 'the manifest never loads a file through the folder name')
+    H.ok(
+        ReadAll(H.root .. 'items/ox_inventory_items.lua'):find('export = \'Crimson-Police.useTablet\'', 1, true) ~= nil,
+        'the item snippet names the folder (it lives in ox_inventory: Config health says so after a rename)')
 end
 
 -- ============================================================================

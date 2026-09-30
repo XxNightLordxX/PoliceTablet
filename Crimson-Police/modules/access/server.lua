@@ -18,6 +18,8 @@ local NO_SUPERVISOR_GRADE = 1000
 local SUSPENSION_TTL = 15
 local MAX_SUSPEND_DAYS = 3650
 local MAX_UNIX_TS = 2147483647   -- 2038-01-19 03:14:07 UTC: the last time FROM_UNIXTIME / UNIX_TIMESTAMP handle
+local DEFAULT_ADMIN_ACE = 'crimsonpolice.admin'
+local QBOX_ADMIN_ACE = 'admin'   -- the ace qbx_core checks for its admins; stock Qbox gives it to group.admin
 
 local warned = {}
 local cache = { built = false }
@@ -196,13 +198,16 @@ local function SanitizeDepartment(key, cfg)
         end
     end
     if #jobs == 0 then
-        WarnOnce(key .. '.jobs', 'Department %s lists no Qbox job names in jobs: nobody can use it', key)
+        WarnOnce(key .. '.jobs',
+            'Department %s lists no Qbox job names in jobs: nobody can use it. Put your police job name in jobs = { } of Config.Departments.%s in config/config.lua',
+            key, key)
     end
 
     local grade = tonumber(cfg.supervisorGrade)
     if not grade or grade ~= grade then
         WarnOnce(key .. '.supervisorGrade',
-            'Department %s: supervisorGrade must be a Qbox grade level; nobody in it is a supervisor', key)
+            'Department %s: supervisorGrade must be a Qbox grade level; nobody in it is a supervisor. Set supervisorGrade of Config.Departments.%s in config/config.lua to a grade number, such as 3',
+            key, key)
         grade = NO_SUPERVISOR_GRADE
     end
 
@@ -279,14 +284,33 @@ end
 --                                    ROLES
 -- ============================================================================
 
+local function AceAllowed(src, ace)
+    local allowed = IsPlayerAceAllowed(src, ace)
+    return allowed == true or allowed == 1
+end
+
+-- The ace that makes a player an admin (Config.AdminAce).
+function A.adminAce()
+    local ace = Config.AdminAce
+    if type(ace) == 'string' and ace ~= '' then return ace end
+    return DEFAULT_ADMIN_ACE
+end
+
+-- The Qbox admin ace while Config.QboxAdmins is true, else nil. Only an explicit true counts: a config.lua kept
+-- from an older version has no such line, so an update never widens who is an admin by itself.
+function A.qboxAdminAce()
+    if Config.QboxAdmins == true then return QBOX_ADMIN_ACE end
+    return nil
+end
+
 function A.isAdmin(src)
     local n = tonumber(src)
     if n == 0 then return true end
     n = ToSrc(n)
     if not n then return false end
-    local ace = type(Config.AdminAce) == 'string' and Config.AdminAce ~= '' and Config.AdminAce or 'crimsonpolice.admin'
-    local allowed = IsPlayerAceAllowed(n, ace)
-    return allowed == true or allowed == 1
+    if AceAllowed(n, A.adminAce()) then return true end
+    local qbox = A.qboxAdminAce()
+    return qbox ~= nil and AceAllowed(n, qbox)
 end
 
 -- ============================================================================

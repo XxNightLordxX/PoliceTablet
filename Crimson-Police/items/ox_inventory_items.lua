@@ -11,7 +11,7 @@ return {
         description = 'Crimson-Police mission tablet',
         client = {
             image = 'crimson_police_tablet.png',
-            export = 'Crimson-Police.useTablet',
+            export = 'Crimson-Police.useTablet', -- <resource folder name>.useTablet: change it if you renamed the folder
         },
     },
 }

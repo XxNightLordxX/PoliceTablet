@@ -114,6 +114,42 @@ local function EnsureFolder(dir)
     return false, err2 or err
 end
 
+-- The real database's answer to "does it hold Crimson-Police data?": true, false, or nil when it cannot tell.
+local function DatabaseHasData(real)
+    if type(real) ~= 'table' or type(real.scalar) ~= 'table' or type(real.scalar.await) ~= 'function' then
+        return nil
+    end
+    local ok, n = pcall(real.scalar.await, 'SELECT COUNT(*) FROM cp_schema_migrations')
+    if ok then return (tonumber(n) or 0) > 0 end
+    -- no such table: Crimson-Police never ran with the database on
+    local msg = tostring(n):lower()
+    if msg:find('doesn\'t exist', 1, true) or msg:find('no such table', 1, true) then return false end
+    return nil
+end
+
+-- A new saves folder: nothing comes over from the database by itself. When the database holds Crimson-Police data
+-- (the database was switched off) the copy command is named; on a first install one calm line says the folder was
+-- made. The database is asked once oxmysql is connected.
+local function AnnounceNewFolder()
+    local path, real = folderPath, S.realMySQL
+    CreateThread(function()
+        if type(real) == 'table' and real.ready then
+            local p = promise.new()
+            real.ready(function() p:resolve(true) end)
+            Citizen.Await(p)
+        end
+        if DatabaseHasData(real) == false then
+            print(('[crimson-police] first start with the database off: created the saves folder %s'):format(path))
+            return
+        end
+        local cmd = type(Config) == 'table' and type(Config.Tablet) == 'table' and Config.Tablet.adminCommand
+            or 'CrimsonPoliceAdmin'
+        CP.warn(TAG,
+            'the saves folder %s is new, so Crimson-Police starts with no data. Nothing is copied from your database by itself: to bring your data over, run "%s storage copy database-to-files" in the server console once the resource has started, then restart Crimson-Police.',
+            path, tostring(cmd))
+    end)
+end
+
 function S.hasSavedData()
     local M = CP.Storage.MemSQL
     if not M then return false end
@@ -151,12 +187,7 @@ local function Install()
         if not ok then
             loadError = ('the saves folder %s could not be read: %s'):format(folderPath, tostring(err))
         elseif not db.store.loadedTables then
-            -- a new saves folder: nothing comes over from the database by itself
-            local cmd = type(Config) == 'table' and type(Config.Tablet) == 'table' and Config.Tablet.adminCommand
-                or 'CrimsonPoliceAdmin'
-            CP.warn(TAG,
-                'the saves folder %s is new, so Crimson-Police starts with no data. Nothing is copied from your database by itself: to bring your data over, run "%s storage copy database-to-files" in the server console once the resource has started, then restart Crimson-Police.',
-                folderPath, tostring(cmd))
+            AnnounceNewFolder()
         end
     end
     if loadError then

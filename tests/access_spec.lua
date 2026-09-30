@@ -448,10 +448,29 @@ do
     H.eq(Levels('items'), 'warn', 'items: an item ox_inventory does not know is a warning')
     H.ok(HasText('items', 'items/ox_inventory_items.lua'), 'which says where the snippet is')
     H.mockInventory({ crimson_police_tablet = { label = 'Police Tablet' } })
-    H.eq(Levels('items'), 'ok', 'items: a known item is fine')
+    -- the picture: ox_inventory/web/images/<item>.png, unless inventory:imagepath points somewhere else
+    local images = { ['web/images/crimson_police_tablet.png'] = 'png' }
+    local realImageLoad = LoadResourceFile
+    _G.LoadResourceFile = function(res, path)
+        if res == 'ox_inventory' then return images[path] end
+        return realImageLoad(res, path)
+    end
+    H.eq(Levels('items'), 'ok', 'items: a known item with its picture is fine')
     Config.Tablet.access.item = false
     H.eq(Levels('items'), 'warn,ok', 'items: an item whose way is off is a warning')
     Config.Tablet.access.item = true
+    images['web/images/crimson_police_tablet.png'] = nil
+    H.eq(Levels('items'), 'warn,ok', 'items: no picture in ox_inventory is a warning')
+    H.ok(HasText('items', 'ox_inventory/web/images and name it crimson_police_tablet.png'), 'saying where it goes')
+    _G.GetConvar = function(name, default)
+        if name == 'inventory:imagepath' then return 'https://cdn.example.com/items' end
+        return default
+    end
+    H.eq(Levels('items'), 'ok', 'items: pictures from a web host (inventory:imagepath) are not looked for')
+    _G.GetConvar = function(_, default) return default end
+    H.eq(Levels('items'), 'warn,ok', 'items: the default image path is looked in')
+    _G.GetConvar = nil
+    _G.LoadResourceFile = realImageLoad
     local realState = GetResourceState
     _G.GetResourceState = function(name) if name == 'ox_inventory' then return 'stopped' end return realState(name) end
     H.eq(Levels('items'), 'error', 'items: no ox_inventory is an error')
@@ -528,6 +547,149 @@ do
     H.eq(Levels('avatars'), 'warn,ok', 'avatars: no approval is a warning')
     urls.enabled, urls.requireApproval, urls.hosts = false, true, { 'r2.fivemanage.com', 'i.imgur.com' }
 
+    -- departments: every job a department lists is a Qbox job, and supervisorGrade splits that job's grades
+    local realDepartments = CP.Access.departments
+    local depts = {
+        { key = 'sast', short = 'SAST', jobs = { 'sast' }, supervisorGrade = 3 },
+        { key = 'fib', short = 'FIB', jobs = { 'fib', 'fbi' }, supervisorGrade = 3 },
+    }
+    CP.Access.departments = function() return depts end
+    local jobs = {
+        sast = {
+            label = 'SAST',
+            grades = {
+                [0] = { name = 'Cadet' },
+                [1] = { name = 'Trooper' },
+                [2] = { name = 'Sergeant' },
+                [3] = { name = 'Lieutenant' },
+                [4] = { name = 'Chief' },
+            },
+        },
+        fib = { label = 'FIB', grades = { ['0'] = { name = 'Agent' }, ['1'] = { name = 'Special Agent' } } },
+    }
+    CP.Qbx = {
+        getJobs = function() return jobs end,
+    }
+    H.eq(Levels('departments'), 'warn,warn,ok', 'departments: a grade above the ladder and a missing job')
+    H.ok(HasText(
+        'departments',
+        'FIB: supervisorGrade is 3, higher than every grade of Qbox job fib (0 Agent, 1 Special Agent), so nobody is a supervisor'
+    ), 'a supervisorGrade above every grade: nobody is a supervisor, with the ladder')
+    H.ok(HasText('departments', 'FIB: Qbox has no job named fbi, so that name does nothing'),
+        'a job Qbox does not have, next to one it has')
+    H.ok(HasText('departments', 'players with the department\'s other jobs can still use it'),
+        'which does not lock the department')
+    H.ok(not HasText('departments', 'nobody can use this department'), 'so it does not say nobody can use it')
+    H.ok(HasText('departments', 'jobs = { } of Config.Departments.fib in config/config.lua'), 'with the fix')
+    depts[2].jobs = { 'fbi', 'feds' }
+    H.eq(Levels('departments'), 'warn,warn,ok', 'departments: none of its jobs exists')
+    H.ok(HasText('departments', 'FIB: Qbox has no job named feds, so nobody can use this department'),
+        'then nobody can use it')
+    H.ok(HasText('departments', 'put your own police job name in jobs = { } of Config.Departments.fib'), 'with the fix')
+    depts[2].jobs = { 'fib', 'fbi' }
+    H.ok(HasText(
+        'departments',
+        'SAST: Qbox job sast (0 Cadet, 1 Trooper, 2 Sergeant, 3 Lieutenant, 4 Chief); supervisors are grade 3 Lieutenant and up'
+    ), 'a good department: its ladder and where supervisors start')
+    depts[1].supervisorGrade = 0
+    H.ok(HasText('departments', 'SAST: supervisorGrade 0 is the lowest grade of Qbox job sast'),
+        'supervisorGrade at the lowest grade: every officer is a supervisor')
+    depts[1].supervisorGrade = 2
+    H.ok(HasText('departments', 'supervisors are grade 2 Sergeant and up'), 'a middle grade is fine')
+    jobs.sast.grades = { [0] = { name = 'Cadet' }, [2] = {}, [5] = { name = 'Chief' } }
+    H.ok(HasText('departments', '(0 Cadet, 2, 5 Chief); supervisors are grade 2 and up'),
+        'a grade without a name, and a gap: the next grade up')
+    depts[2].jobs = { 'fib' }
+    Config.Departments.fib.supervisorGrade = 'x'
+    H.eq(Levels('departments'), 'ok,ok', 'departments: a supervisorGrade that is not a number is CP.Access\'s warning')
+    H.ok(HasText('departments', 'FIB: Qbox job fib exists'), 'the job itself is still checked')
+    Config.Departments.fib.supervisorGrade = 3
+    jobs = {}
+    H.eq(Levels('departments'), 'warn', 'departments: no Qbox job list at all')
+    H.ok(HasText('departments', 'qbx_core started without errors'), 'saying what to check')
+    depts = {}
+    H.eq(Levels('departments'), '', 'departments: none configured (CP.Access warns about that)')
+    CP.Access.departments, CP.Qbx = realDepartments, nil
+
+    -- admins: whether Qbox's admin group can open the Admin UI
+    local principals = { ['group.admin'] = { ['crimsonpolice.admin'] = true } }
+    _G.IsPrincipalAceAllowed = function(principal, ace)
+        return principals[principal] ~= nil and principals[principal][ace] == true
+    end
+    local qboxOn = false
+    CP.Access.adminAce = function() return 'crimsonpolice.admin' end
+    CP.Access.qboxAdminAce = function() return qboxOn and 'admin' or nil end
+    H.eq(Levels('admins'), 'ok', 'admins: group.admin has crimsonpolice.admin')
+    H.ok(HasText('admins', 'Server admins (group.admin) have crimsonpolice.admin'), 'said so')
+    principals['group.admin'] = { admin = true, command = true }
+    qboxOn = true
+    H.eq(Levels('admins'), 'ok', 'admins: QboxAdmins on and group.admin holds admin')
+    H.ok(HasText('admins', 'Config.QboxAdmins is true'), 'said so')
+    qboxOn = false
+    H.eq(Levels('admins'), 'warn', 'admins: QboxAdmins off and no ace for group.admin')
+    H.ok(HasText('admins', 'Add this line to server.cfg and restart: add_ace group.admin crimsonpolice.admin allow'),
+        'with the exact server.cfg line')
+    CP.Access.adminAce = function() return 'myserver.police' end
+    H.ok(HasText('admins', 'add_ace group.admin myserver.police allow'), 'naming Config.AdminAce')
+    CP.Access.adminAce, CP.Access.qboxAdminAce = nil, nil
+    principals['group.admin'] = { ['crimsonpolice.admin'] = true }
+    H.eq(Levels('admins'), 'ok', 'admins: without CP.Access helpers the default ace is checked')
+    _G.IsPrincipalAceAllowed = nil
+    H.eq(Levels('admins'), 'ok', 'admins: a server without IsPrincipalAceAllowed is not guessed at')
+
+    -- the folder: everything follows a rename, except names written outside it
+    H.eq(Levels('folder'), 'ok', 'folder: named Crimson-Police')
+    local realResource = CP.resource
+    CP.resource = 'police-tablet'
+    H.eq(Levels('folder'), 'ok', 'folder: renamed with no tablet item, nothing in the stack names it')
+    H.ok(HasText('folder', 'folder is named police-tablet, not Crimson-Police: everything works'), 'said so')
+    H.ok(HasText('folder', 'export = \'police-tablet.useTablet\''), 'with the item line for later')
+    Config.Tablet.item = 'crimson_police_tablet'
+    H.eq(Levels('folder'), 'warn', 'folder: renamed while the tablet item is set')
+    H.ok(HasText('folder', 'folder is named police-tablet, not Crimson-Police'), 'naming both')
+    H.ok(HasText('folder', 'export = \'police-tablet.useTablet\''), 'with the item line to paste')
+    H.ok(HasText('folder', 'exports[\'police-tablet\']'), 'and the export name for other scripts')
+    Config.Tablet.item = false
+    CP.resource = realResource
+
+    -- other resources: Crimson-Police runs without them
+    local stoppedRes = {}
+    local realResState = GetResourceState
+    _G.GetResourceState = function(name)
+        if stoppedRes[name] then return stoppedRes[name] end
+        return realResState(name)
+    end
+    H.eq(Levels('resources'), 'ok,ok,ok,ok',
+        'resources: sc-police, sc-npcpolice, sc-multijob and Crimson-Arena running')
+    stoppedRes['sc-police'] = 'missing'
+    stoppedRes['sc-npcpolice'] = 'stopped'
+    stoppedRes['Crimson-Arena'] = 'starting'
+    H.eq(Levels('resources'), 'warn,ok,ok,ok', 'resources: only sc-police missing is a warning')
+    H.ok(HasText('resources', 'Add ensure sc-police to server.cfg'), 'with the line to add')
+    H.ok(HasText('resources', 'officers cannot set their callsign with /callsign'), 'saying what is lost')
+    H.ok(not HasText('resources', '/imp'), 'not the /imp check, which only matters while sc-police runs')
+    H.ok(HasText('resources', 'sc-npcpolice is not running (optional)'), 'the others are only mentioned')
+    H.ok(HasText('resources', 'Crimson-Arena is running'), 'a resource that is starting counts as running')
+    _G.GetResourceState = realResState
+
+    -- Discord webhooks: which are on, and a value that is not a link
+    H.eq(Levels('webhooks'), '', 'webhooks: nothing without CP.Admin')
+    CP.Admin = {
+        webhooks = function()
+            return {
+                { category = 'audit', convar = 'cp_webhook_audit', state = 'on' },
+                { category = 'flags', convar = 'cp_webhook_flags', state = 'invalid' },
+                { category = 'board', convar = 'cp_webhook_board', state = 'off' },
+                { category = 'builder', convar = 'cp_webhook_builder', state = 'off' },
+                { category = 'operations', convar = 'cp_webhook_operations', state = 'on' },
+            }
+        end,
+    }
+    H.eq(Levels('webhooks'), 'warn,ok', 'webhooks: an invalid value is a warning')
+    H.ok(HasText('webhooks', 'Discord webhooks on: audit, operations. Off: board, builder'), 'the summary')
+    H.ok(HasText('webhooks', 'cp_webhook_flags in server.cfg is not an https:// link'), 'the bad convar named')
+    CP.Admin = nil
+
     -- the registry: modules add checks; a failing check is an error line; errors come first
     H.ok(Health.register('extra', function()
         return { { level = 'ok', text = 'fine' }, { level = 'bogus', text = 'x' } }
@@ -546,9 +708,73 @@ do
             ('%s: a translated line'):format(item.check))
         seen[item.check] = true
     end
-    for _, name in ipairs({ 'items', 'desks', 'colours', 'tweaks', 'locale', 'avatars' }) do
+    for _, name in ipairs({
+        'items',
+        'desks',
+        'colours',
+        'tweaks',
+        'locale',
+        'avatars',
+        'departments',
+        'admins',
+        'folder',
+        'resources',
+    }) do
         H.ok(seen[name], ('check %s listed'):format(name))
     end
+    -- Admin UI → Permissions → Config health names each check by its label
+    for _, c in ipairs(Health._checks()) do
+        if not ({ extra = true, late = true, broken = true })[c.name] then
+            H.ok(CP.Locale.has('access.health.check.' .. c.name), ('check %s has a label'):format(c.name))
+        end
+    end
+end
+
+do
+    -- a new start (the module loaded again): the checks run 5 s later; each problem prints one line, then one line
+    -- gives the counts, so a clean start is visible too
+    local realDepartments = CP.Access.departments
+    local function Start()
+        local lines = {}
+        local realPrint = print
+        _G.print = function(...)
+            local line = table.concat({ ... }, ' ')
+            -- the start-up lines only (Config.Debug may add other modules' debug lines)
+            if Contains(line, 'confighealth') or Contains(line, 'Start-up check') then lines[#lines + 1] = line end
+        end
+        H.load('modules/confighealth/server.lua')
+        H.advance(4000)
+        local early = #lines
+        H.advance(1100)
+        _G.print = realPrint
+        return lines, early
+    end
+    CP.Access.departments = function()
+        return { { key = 'sast', short = 'SAST', jobs = { 'sast' }, supervisorGrade = 3 } }
+    end
+    local lines, early = Start()
+    H.eq(early, 0, 'nothing before 5 s')
+    H.eq(#lines, 2, 'one problem: its line, then the summary')
+    H.ok(Contains(lines[1], '^3[crimson-police:confighealth]^7 departments: Qbox gave no job list'), 'the problem')
+    H.ok(Contains(lines[2], '^3[crimson-police:confighealth]^7 Start-up check: 1 warnings and 0 errors'),
+        'then the counts, yellow')
+    H.ok(Contains(lines[2], 'Type CrimsonPoliceAdmin check in the server console'), 'naming the check command')
+
+    CP.Qbx = {
+        getJobs = function()
+            return { sast = { grades = { [0] = { name = 'Cadet' }, [3] = { name = 'Lieutenant' } } } }
+        end,
+    }
+    _G.IsPrincipalAceAllowed = function(principal, ace)
+        return principal == 'group.admin' and ace == 'crimsonpolice.admin'
+    end
+    lines = Start()
+    H.eq(#lines, 1, 'nothing to fix: only the summary line')
+    H.ok(Contains(lines[1], '[crimson-police] Start-up check: all ') and Contains(lines[1], 'checks passed'),
+        'all checks passed: ' .. tostring(lines[1]))
+    H.ok(not Contains(lines[1], '^3'), 'in the normal colour')
+    _G.IsPrincipalAceAllowed, CP.Qbx = nil, nil
+    CP.Access.departments = realDepartments
 end
 
 -- ============================================================================

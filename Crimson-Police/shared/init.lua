@@ -1,5 +1,5 @@
--- The CP namespace, logging, the block registry and RegisterMission(). Loaded on both sides before every module. Only
--- definitions live here: nothing in this file calls another module.
+-- The CP namespace, logging, the block registry, the config load check and RegisterMission(). Loaded on both sides
+-- before every module. Only definitions live here: nothing in this file calls another module.
 
 CP = CP or {}
 
@@ -114,6 +114,89 @@ end
 
 function CP.Blocks.all()
     return CP.Blocks._list
+end
+
+-- ============================================================================
+--                              CONFIG LOAD CHECK
+-- ============================================================================
+-- config/config.lua and config/blocks.lua load just before this file. When one stopped at an error (a missing
+-- comma, quote or bracket) or config.lua is from an older version, every module fails in its own way: one line
+-- first says why. The table sections of config.lua and blocks.lua, in file order.
+local CONFIG_SECTIONS = {
+    'Database',
+    'Format',
+    'Tablet',
+    'AdminTheme',
+    'Permissions',
+    'Departments',
+    'MissionTypes',
+    'DisabledMissions',
+    'Difficulty',
+    'Cash',
+    'Payouts',
+    'Scaling',
+    'Rescale',
+    'Limits',
+    'Route',
+    'Calls',
+    'Alerts',
+    'Downed',
+    'AntiCheat',
+    'CrossDept',
+    'Draw',
+    'Units',
+    'MissionCalls',
+    'Custody',
+    'Decisions',
+    'Npc',
+    'NpcDifficulty',
+    'MissionTweaks',
+    'Time',
+    'Scoring',
+    'Bonuses',
+    'XPLevels',
+    'XPCurve',
+    'Badges',
+    'Goals',
+    'Leaderboard',
+    'Events',
+    'Challenge',
+    'Profile',
+    'Commendations',
+    'Rewards',
+    'Disputes',
+    'Builder',
+    'Testing',
+    'Retention',
+    'Blocks',
+}
+local MAX_NAMED_SECTIONS = 6
+
+-- nil when cfg is whole, else 'error' or 'warn' and the line to print.
+function CP.configProblem(cfg)
+    if type(cfg) ~= 'table' then
+        return 'error',
+            'config/config.lua did not load, so Crimson-Police cannot work. The first red error above names the line to fix (usually a missing comma, quote or bracket); fix it and restart the resource.'
+    end
+    local missing = {}
+    for _, name in ipairs(CONFIG_SECTIONS) do
+        if type(cfg[name]) ~= 'table' then missing[#missing + 1] = 'Config.' .. name end
+    end
+    if #missing == 0 then return nil end
+    local named = table.concat(missing, ', ', 1, math.min(#missing, MAX_NAMED_SECTIONS))
+    if #missing > MAX_NAMED_SECTIONS then named = ('%s and %d more'):format(named, #missing - MAX_NAMED_SECTIONS) end
+    return 'warn',
+        ('%s %s missing: config/config.lua (or config/blocks.lua) stopped at an error, or it is from an older version. If a red error above names one of these files, fix that line; otherwise copy the missing blocks from the config.lua of this version. Then restart the resource.'):format(
+            named, #missing == 1 and 'is' or 'are')
+end
+
+if CP.isServer then
+    local level, text = CP.configProblem(Config)
+    if level == 'error' then
+        CP.err('config', '%s', text)
+    elseif level == 'warn' then
+        CP.warn('config', '%s', text)
+    end
 end
 
 -- ============================================================================

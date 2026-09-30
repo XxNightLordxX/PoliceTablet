@@ -6,16 +6,34 @@ local Health = CP.ConfigHealth
 local TAG = 'confighealth'
 
 local START_DELAY_MS = 5000       -- the first run: after every module and ox_inventory have loaded
+local MAX_LADDER = 15             -- grades named in one department line
 local LEVELS = { ok = true, warn = true, error = true }
 local HOST_PATTERN = '^[%w][%w%-%.]*%.[%a][%a]+$'
 local EXPIRING_HOSTS = { ['cdn.discordapp.com'] = true, ['media.discordapp.net'] = true }
 local THEME_KEYS = { 'primary', 'accent', 'background', 'surface' }
+-- ox_inventory's default inventory:imagepath: where it looks for item pictures
+local OX_IMAGE_PATH = 'nui://ox_inventory/web/images'
+-- The folder name that code outside this folder uses: the ox_inventory item snippet and other scripts' exports.
+local RESOURCE_NAME = 'Crimson-Police'
+-- The group Qbox and txAdmin put server admins in.
+local QBOX_ADMIN_GROUP = 'group.admin'
+-- Resources Crimson-Police works without; warn = the line when one is not running (nil = an ok line).
+local OPTIONAL_RESOURCES = {
+    { name = 'sc-police', warn = 'health.res.sc_police' },
+    { name = 'sc-npcpolice' },
+    { name = 'sc-multijob' },
+    { name = 'Crimson-Arena' },
+}
 
 local checks = {}          -- { { name, fn } } in the order registered
 local results = nil        -- the last run: { ConfigHealthItem }
 
 local function Line(level, key, vars)
     return { level = level, text = CP.L(key, vars) }
+end
+
+local function CmdName()
+    return (Config.Tablet and Config.Tablet.adminCommand) or 'CrimsonPoliceAdmin'
 end
 
 local function IsVec(v)
@@ -93,6 +111,12 @@ local function CheckItems()
     local out = { Line('ok', 'health.item.ok', { item = item }) }
     if access.item == false and access.requireItem ~= true then
         out[#out + 1] = Line('warn', 'health.item.way_off', { item = item })
+    end
+    -- the picture: only where ox_inventory looks for it by default (inventory:imagepath may point at a web host)
+    local imagePath = GetConvar and GetConvar('inventory:imagepath', OX_IMAGE_PATH) or OX_IMAGE_PATH
+    if imagePath == OX_IMAGE_PATH then
+        local png = LoadResourceFile('ox_inventory', ('web/images/%s.png'):format(item))
+        if not png or png == '' then out[#out + 1] = Line('warn', 'health.item.no_image', { item = item }) end
     end
     return out
 end
@@ -250,12 +274,176 @@ local function CheckAvatarHosts()
     return out
 end
 
+-- ============================================================================
+--                      DEPARTMENTS: QBOX JOBS AND GRADES
+-- ============================================================================
+
+-- A Qbox job's grades from the lowest: { { level, name|nil } }.
+local function Grades(job)
+    local out = {}
+    for k, g in pairs(type(job.grades) == 'table' and job.grades or {}) do
+        local level = math.tointeger(tonumber(k))
+        if level then
+            local name = type(g) == 'table' and type(g.name) == 'string' and g.name ~= '' and g.name or nil
+            out[#out + 1] = { level = level, name = name }
+        end
+    end
+    table.sort(out, function(a, b) return a.level < b.level end)
+    return out
+end
+
+local function GradeText(g)
+    if g.name then return ('%d %s'):format(g.level, g.name) end
+    return tostring(g.level)
+end
+
+-- '0 Recruit, 1 Officer, 2 Sergeant' (at most MAX_LADDER grades)
+local function Ladder(grades)
+    local parts = {}
+    for i, g in ipairs(grades) do
+        if i > MAX_LADDER then
+            parts[#parts + 1] = '...'
+            break
+        end
+        parts[#parts + 1] = GradeText(g)
+    end
+    return table.concat(parts, ', ')
+end
+
+-- The line of one Qbox job a department lists: where its supervisorGrade falls on that job's grades.
+local function GradeLine(d, job, vars, gradeSet)
+    local grades = Grades(job)
+    vars.ladder = Ladder(grades)
+    if #grades == 0 or not gradeSet then return Line('ok', 'health.dept.job_ok', vars) end
+    local at, first = tonumber(d.supervisorGrade), nil
+    for _, g in ipairs(grades) do
+        if g.level >= at then
+            first = g
+            break
+        end
+    end
+    if not first then return Line('warn', 'health.dept.grade_high', vars) end
+    if first == grades[1] and #grades > 1 then return Line('warn', 'health.dept.grade_all', vars) end
+    vars.first = GradeText(first)
+    return Line('ok', 'health.dept.ok', vars)
+end
+
+-- Every job a department lists must be a Qbox job, and its supervisorGrade must split that job's grades. A job
+-- list that is empty and a supervisorGrade that is not a number are CP.Access's own start-up warnings.
+local function CheckDepartments()
+    local depts = CP.Access and CP.Access.departments and CP.Access.departments() or {}
+    if #depts == 0 then return {} end
+    local jobs = CP.Qbx and CP.Qbx.getJobs and CP.Qbx.getJobs() or {}
+    if next(jobs) == nil then return { Line('warn', 'health.dept.no_jobs') } end
+    local out = {}
+    for _, d in ipairs(depts) do
+        local raw = type(Config.Departments) == 'table' and Config.Departments[d.key] or nil
+        local gradeSet = type(raw) == 'table' and tonumber(raw.supervisorGrade) ~= nil
+            and tonumber(d.supervisorGrade) ~= nil
+        local names = type(d.jobs) == 'table' and d.jobs or {}
+        -- a missing job locks the department only when none of its other jobs exists either
+        local known = 0
+        for _, jobName in ipairs(names) do if type(jobs[jobName]) == 'table' then known = known + 1 end end
+        for _, jobName in ipairs(names) do
+            local vars = { dept = d.short or d.key, key = d.key, job = jobName, grade = d.supervisorGrade }
+            if type(jobs[jobName]) == 'table' then
+                out[#out + 1] = GradeLine(d, jobs[jobName], vars, gradeSet)
+            else
+                out[#out + 1] = Line('warn', known == 0 and 'health.dept.no_job' or 'health.dept.no_job_other', vars)
+            end
+        end
+    end
+    return out
+end
+
+-- ============================================================================
+--                                    ADMINS
+-- ============================================================================
+
+local function PrincipalAllowed(principal, ace)
+    local allowed = IsPrincipalAceAllowed(principal, ace)
+    return allowed == true or allowed == 1
+end
+
+-- Whether Qbox's admin group can open the Admin UI: the one server.cfg line most owners need.
+local function CheckAdmins()
+    local ace = CP.Access and CP.Access.adminAce and CP.Access.adminAce() or 'crimsonpolice.admin'
+    local qbox = CP.Access and CP.Access.qboxAdminAce and CP.Access.qboxAdminAce() or nil
+    if not IsPrincipalAceAllowed then return { Line('ok', 'health.admin.unchecked', { ace = ace }) } end
+    if PrincipalAllowed(QBOX_ADMIN_GROUP, ace) then return { Line('ok', 'health.admin.ace', { ace = ace }) } end
+    if qbox and PrincipalAllowed(QBOX_ADMIN_GROUP, qbox) then return { Line('ok', 'health.admin.qbox') } end
+    return { Line('warn', 'health.admin.none', { ace = ace }) }
+end
+
+-- ============================================================================
+--                        THE FOLDER AND OTHER RESOURCES
+-- ============================================================================
+
+-- Everything inside follows a renamed folder (GetCurrentResourceName); only names written outside it cannot. Of
+-- those, only the tablet item's export line is part of this stack, so a rename warns only while the item is set.
+local function CheckFolder()
+    local name = tostring(CP.resource)
+    if name == RESOURCE_NAME then return { Line('ok', 'health.folder.ok', { name = name }) } end
+    local vars = { name = name, expected = RESOURCE_NAME }
+    local item = Config.Tablet and Config.Tablet.item
+    if type(item) == 'string' and item ~= '' then return { Line('warn', 'health.folder.renamed', vars) } end
+    return { Line('ok', 'health.folder.renamed_no_item', vars) }
+end
+
+local function Running(name)
+    local state = GetResourceState(name)
+    return state == 'started' or state == 'starting'
+end
+
+local function CheckResources()
+    local out = {}
+    for _, r in ipairs(OPTIONAL_RESOURCES) do
+        if Running(r.name) then
+            out[#out + 1] = Line('ok', 'health.res.on', { name = r.name })
+        elseif r.warn then
+            out[#out + 1] = Line('warn', r.warn, { name = r.name })
+        else
+            out[#out + 1] = Line('ok', 'health.res.off', { name = r.name })
+        end
+    end
+    return out
+end
+
+-- ============================================================================
+--                               DISCORD WEBHOOKS
+-- ============================================================================
+
+local function CheckWebhooks()
+    if not (CP.Admin and CP.Admin.webhooks) then return {} end
+    local on, off, out = {}, {}, {}
+    for _, w in ipairs(CP.Admin.webhooks()) do
+        if w.state == 'on' then
+            on[#on + 1] = w.category
+        elseif w.state == 'invalid' then
+            out[#out + 1] = Line('warn', 'health.webhook.invalid', { convar = w.convar })
+        else
+            off[#off + 1] = w.category
+        end
+    end
+    local none = CP.L('health.webhook.none')
+    table.insert(out, 1, Line('ok', 'health.webhook.summary', {
+        on = #on > 0 and table.concat(on, ', ') or none,
+        off = #off > 0 and table.concat(off, ', ') or none,
+    }))
+    return out
+end
+
 Health.register('items', CheckItems)
 Health.register('desks', CheckDesks)
 Health.register('colours', CheckColours)
 Health.register('tweaks', CheckTweaks)
 Health.register('locale', CheckLocale)
 Health.register('avatars', CheckAvatarHosts)
+Health.register('departments', CheckDepartments)
+Health.register('admins', CheckAdmins)
+Health.register('folder', CheckFolder)
+Health.register('resources', CheckResources)
+Health.register('webhooks', CheckWebhooks)
 
 -- ============================================================================
 --                                   CALLBACK
@@ -274,7 +462,15 @@ CreateThread(function()
     if type(rewards) == 'table' and type(rewards.health) == 'function' then
         Health.register('rewards', rewards.health)
     end
-    Health.run()
+    -- the problems print one line each; then one line says how it went, so a clean start is visible too
+    local n = { ok = 0, warn = 0, error = 0 }
+    for _, item in ipairs(Health.run()) do n[item.level] = n[item.level] + 1 end
+    local vars = { ok = n.ok, warn = n.warn, error = n.error, cmd = CmdName() }
+    if n.warn + n.error > 0 then
+        CP.warn(TAG, '%s', CP.L('health.startup_problems', vars))
+    else
+        print(('[crimson-police] %s'):format(CP.L('health.startup_ok', vars)))
+    end
 end)
 
 -- Test hooks (not part of the contract).

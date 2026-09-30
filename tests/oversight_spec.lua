@@ -553,6 +553,17 @@ H.eq(CP.Admin.webhook('builder', 'Published', 'x', {}), false, 'empty convar = w
 H.eq(CP.Admin.webhook('operations', 'Launched', 'x', {}), false, 'non-https convar = webhook off')
 H.eq(CP.Admin.webhook('nope', 'x', 'x', {}), false, 'unknown category = off')
 H.eq(#http.calls, before, 'nothing posted for disabled webhooks')
+-- the list Config health shows: every webhook in a fixed order, with its convar and state
+do
+    local states = {}
+    for _, w in ipairs(CP.Admin.webhooks()) do
+        states[#states + 1] = ('%s=%s=%s'):format(w.category, w.convar, w.state)
+    end
+    H.eq(table.concat(states, ','),
+        'audit=cp_webhook_audit=on,flags=cp_webhook_flags=on,board=cp_webhook_board=off,builder=cp_webhook_builder=off,operations=cp_webhook_operations=invalid',
+        'webhooks(): on, off (no convar or an empty one) and invalid (not https)')
+    H.eq(#http.calls, before, 'listing them posts nothing')
+end
 
 -- rate limit + 429
 H.step(3000)
@@ -673,6 +684,75 @@ H.eq(LastNotify(2).key, 'err.not_admin', 'non-admins cannot use the command')
 H.eq(CountCalls('openAdmin'), 1, 'no Admin UI for a supervisor')
 Command(1, 'nosuch')
 H.eq(LastNotify(1).key, 'admin.cmd.help_ingame', 'unknown subcommand shows the in-game help')
+H.ok(CP.L('admin.cmd.help_ingame', { cmd = 'CrimsonPoliceAdmin' }):find('storage, missioncall, check.', 1, true) ~= nil,
+    'the in-game help lists missioncall and check')
+
+-- a player who is not an admin: one console line names them and the server.cfg line that makes them one
+do
+    local function Count(needle)
+        local n = 0
+        for _, l in ipairs(lines) do if l:find(needle, 1, true) then n = n + 1 end end
+        return n
+    end
+    local ids = { [5] = { fivem = 'fivem:5550001', license = 'license:5a5a' }, [6] = { license = 'license:6b6b' } }
+    _G.GetPlayerIdentifierByType = function(src, kind) return ids[tonumber(src)] and ids[tonumber(src)][kind] end
+    local HINT = 'typed /CrimsonPoliceAdmin but is not an admin'
+    local before = Count(HINT)
+    Command(5)
+    H.eq(LastNotify(5).key, 'err.not_admin', 'refused in game as before')
+    H.eq(Count(HINT), before + 1, 'and one console line about it')
+    H.ok(Printed('Player5 (server id 5) typed /CrimsonPoliceAdmin but is not an admin'), 'naming the player')
+    H.ok(Printed('add this line to server.cfg and restart: add_ace identifier.fivem:5550001 crimsonpolice.admin allow'),
+        'with the exact line (fivem identifier first)')
+    Command(5)
+    Command(5, 'award', 'OFF00003', '10', 'x')
+    H.eq(Count(HINT), before + 1, 'once per player: typing it again prints nothing new')
+    Command(6, 'check')
+    H.ok(Printed('add_ace identifier.license:6b6b crimsonpolice.admin allow'), 'no fivem id: the license is used')
+    ids[4] = {}
+    Command(4)
+    H.ok(Printed('add_ace identifier.license:<their license from txAdmin> crimsonpolice.admin allow'),
+        'no identifier at all: says where to find it')
+    Command(1)
+    H.eq(Count(HINT), before + 3, 'an admin gets no hint')
+    _G.GetPlayerIdentifierByType = nil
+end
+
+-- /CrimsonPoliceAdmin check: every Config health line in the console, the counts in game
+do
+    local health = {
+        { check = 'departments', level = 'warn', text = 'SAST: Qbox has no job named sast' },
+        { check = 'items', level = 'ok', text = 'The tablet item is off' },
+        { check = 'admins', level = 'ok', text = 'Qbox admins (group.admin) can open the Admin UI' },
+    }
+    local runs = 0
+    CP.ConfigHealth = {
+        run = function()
+            runs = runs + 1
+            return health
+        end,
+    }
+    Command(0, 'check')
+    H.eq(runs, 1, 'check runs the checks again')
+    H.ok(Printed('departments: SAST: Qbox has no job named sast'), 'the console lists the problems')
+    H.ok(Printed('items: The tablet item is off'), 'and the lines that are fine')
+    H.ok(Printed('Check: 2 OK, 1 warnings, 0 errors.'), 'then the counts')
+    Command(1, 'check')
+    local n = LastNotify(1)
+    H.eq(n.key, 'admin.cmd.check_done_ingame', 'in game: the counts')
+    H.eq(n.kind, 'warning', 'as a warning while a line needs a look')
+    H.eq(n.vars.warn, 1, 'with the warning count')
+    health = { { check = 'items', level = 'ok', text = 'fine' } }
+    Command(1, 'check')
+    H.eq(LastNotify(1).kind, 'success', 'all fine: a success toast')
+    Command(2, 'check')
+    H.eq(LastNotify(2).key, 'err.not_admin', 'admins only')
+    CP.ConfigHealth = nil
+    Command(0, 'check')
+    H.ok(Printed(CP.L('err.module_unavailable')), 'without the module: a clear refusal')
+    Command(0, 'help')
+    H.ok(Printed(CP.L('admin.cmd.usage_check', { cmd = 'CrimsonPoliceAdmin' })), 'the console help lists check')
+end
 
 -- ============================================================================
 --               3. REVIEW: approve / void flagged, void any run

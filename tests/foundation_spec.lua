@@ -143,6 +143,111 @@ do
     H.ok(db.tables.cp_mission_runs_archive.colIndex.mission_call_id ~= nil, 'the rest of 003 was applied')
 end
 
+do
+    -- a database that refuses: the plain fix under the driver's error (MariaDB / mysql2 wording)
+    local function Refusing(msg)
+        return { query = {
+            await = function() error(msg, 0) end,
+        } }
+    end
+    local function Hint(msg)
+        local r = Runner(Refusing(msg))
+        H.eq(r.cp.Migrations.isReady(), false, 'a refused start never becomes ready: ' .. msg)
+        for _, e in ipairs(r.errs) do
+            if e:find('How to fix it: ', 1, true) then return e end
+        end
+        return nil
+    end
+    local denied = Hint('CREATE command denied to user \'cp\'@\'localhost\' for table `qbox`.`cp_schema_migrations`')
+    H.ok(
+        Contains(denied, 'give it CREATE, ALTER and INDEX rights')
+            and Contains(denied, 'Config.Database.enabled = false'),
+        'no CREATE right: which rights to give, or files mode'
+    )
+    H.ok(Contains(Hint('Access denied for user \'cp\'@\'localhost\' (using password: YES)'), 'could not log in'),
+        'a wrong password: the log-in fix')
+    H.ok(Contains(Hint('Access denied for user \'cp\'@\'%\' to database \'qbox\''), 'has no rights on this database'),
+        'no rights on the database: the rights fix')
+    H.ok(Contains(Hint('Unknown database \'qbox\''), 'does not exist'), 'a database that does not exist')
+    H.ok(Contains(Hint('connect ECONNREFUSED 127.0.0.1:3306'), 'cannot reach the database server'),
+        'no server listening: the host and port fix')
+    H.ok(Contains(Hint('getaddrinfo ENOTFOUND db.example'), 'cannot find the database host'), 'an unknown host')
+    H.eq(Hint('Some other error'), nil, 'an unknown error gets no guess')
+    local r = Runner(Refusing('CREATE command denied to user'))
+    H.ok(Contains(r.errs[1], 'Migration cp_schema_migrations failed'), 'the failure line still comes first')
+end
+
+do
+    -- oxmysql that never connects: one line after 30 s; a start that finished or failed says nothing
+    local function Watch(mysqlImpl, storage)
+        local warns, timers = {}, {}
+        local env = setmetatable({}, { __index = _G })
+        env.CP = {
+            err = function() end,
+            log = function() end,
+            warn = function(_, fmt, ...) warns[#warns + 1] = tostring(fmt):format(...) end,
+            Storage = storage,
+        }
+        env.MySQL = mysqlImpl
+        env.print = function() end
+        env.promise = {
+            new = function()
+                local p = {}
+                function p:resolve(v) self.resolved = true; self.value = v end
+                return p
+            end,
+        }
+        env.Citizen = {
+            Await = function(p)
+                while not p.resolved do coroutine.yield() end
+                return p.value
+            end,
+        }
+        env.CreateThread = function(fn) coroutine.wrap(fn)() end
+        env.SetTimeout = function(ms, fn) timers[#timers + 1] = { ms = ms, fn = fn } end
+        env.StopResource = function() end
+        env.GetCurrentResourceName = function() return 'Crimson-Police' end
+        env.LoadResourceFile = function(_, path) return ReadFile(H.root .. path) end
+        assert(load(RUNNER_SRC, '=migrations', 't', env))()
+        local watchdog
+        for _, t in ipairs(timers) do if t.ms == 30000 then watchdog = t.fn end end
+        H.ok(watchdog ~= nil, 'the runner sets a 30 s watchdog')
+        if watchdog then watchdog() end
+        return warns, env
+    end
+    local warns, env = Watch({
+        ready = function() end,
+        query = {
+            await = function() error('never', 0) end,
+        },
+    })
+    H.eq(env.CP.Migrations.isReady(), false, 'oxmysql never connected: not ready')
+    H.eq(#warns, 1, 'one line after 30 s')
+    H.ok(
+        Contains(warns[1], 'still waiting for the database after 30 seconds')
+            and Contains(warns[1], 'set mysql_connection_string in server.cfg'),
+        'naming what to check'
+    )
+    local _, shim = Folder('watchdog')
+    warns, env = Watch(shim)
+    H.eq(env.CP.Migrations.isReady(), true, 'a database that answers: ready')
+    H.eq(#warns, 0, 'and the watchdog says nothing')
+    warns = Watch({
+        query = {
+            await = function() error('CREATE command denied', 0) end,
+        },
+    })
+    H.eq(#warns, 0, 'a start that failed has its own lines: the watchdog says nothing')
+    warns = Watch({ ready = function() end }, {
+        name = function() return 'saves folder' end,
+    })
+    H.eq(#warns, 0, 'the database off (saves folder): the line about oxmysql never shows')
+    warns = Watch({ ready = function() end }, {
+        name = function() return 'database' end,
+    })
+    H.eq(#warns, 1, 'the database on: it does')
+end
+
 -- ============================================================================
 --                                   MariaDB
 -- ============================================================================

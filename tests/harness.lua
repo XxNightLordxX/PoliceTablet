@@ -1689,10 +1689,13 @@ function H.boot(opts)
     _G.GetHashKey = _G.joaat
 
     H.load('config/config.lua')
+    Config.Database = Config.Database or {}
     if H.storage == 'files' then
-        Config.Database = Config.Database or {}
         Config.Database.enabled = false
         Config.Database.folder = 'saves'
+    else
+        -- database and shadow runs always talk to MariaDB, whatever the shipped config says
+        Config.Database.enabled = true
     end
     H.load('config/blocks.lua')
     if CP and CP.Hooks then H.resetHooks() end

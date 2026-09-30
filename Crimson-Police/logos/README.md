@@ -1,5 +1,11 @@
 # Department logos
 
-One file per department, named as in `Config.Departments[<key>].logo.file` (PNG, WebP or SVG).
-A square transparent PNG of at least 1024 × 1024 works best. `sast.png` and `fib.png` are
-placeholders — replace them with your own artwork and restart the resource (no UI rebuild needed).
+Full guide: section [6.7 Department logos](../../README.md#67-department-logos) of the `README.md` in the
+repository root. This note says the same in short.
+
+- One file per department, named as in `Config.Departments[<key>].logo.file` in `config/config.lua` (`sast.png`
+  for SAST, `fib.png` for FIB). PNG, WebP or SVG.
+- A square, see-through PNG of at least 1024 × 1024 pixels looks best.
+- `sast.png` and `fib.png` are placeholders. Replace them with your own art and restart Crimson-Police. Nothing
+  needs to be rebuilt.
+- Keep this folder when you update Crimson-Police.

@@ -14,8 +14,11 @@ local FILES = {
     '006_item_rewards.sql',
 }
 
+local WAIT_HINT_MS = 30000   -- no database after this long: say what to check (oxmysql waits without a word)
+
 local readyPromise = promise.new()
 local isReady = false
+local failed = false
 local version = 0
 
 -- Blocks the current thread until migrations have finished. Returns true.
@@ -70,10 +73,50 @@ local function IsIdempotentError(msg)
     return false
 end
 
+-- The usual database errors on a first start, each with the fix in plain words (matched in lower case, in order).
+local UNREACHABLE = 'oxmysql cannot reach the database server: make sure MySQL/MariaDB is running and that set mysql_connection_string in server.cfg has the right host and port, then restart.'
+local DATABASE_HINTS = {
+    {
+        'command denied',
+        'Your database user may not create or change tables: give it CREATE, ALTER and INDEX rights on the database named in set mysql_connection_string (server.cfg), or set Config.Database.enabled = false in config/config.lua to save to files instead. Then restart.',
+    },
+    {
+        'using password',
+        'oxmysql could not log in to the database: check the user name and password in set mysql_connection_string in server.cfg, then restart.',
+    },
+    {
+        'access denied',
+        'Your database user has no rights on this database: give it CREATE, ALTER, INDEX, SELECT, INSERT, UPDATE and DELETE rights, or set Config.Database.enabled = false in config/config.lua. Then restart.',
+    },
+    {
+        'unknown database',
+        'The database named in set mysql_connection_string (server.cfg) does not exist: create it or fix the name, then restart.',
+    },
+    { 'econnrefused', UNREACHABLE },
+    { 'etimedout', UNREACHABLE },
+    {
+        'enotfound',
+        'oxmysql cannot find the database host: check the host in set mysql_connection_string in server.cfg, then restart.',
+    },
+}
+
+-- The plain fix for a database error, or nil when it is not one of the usual ones.
+local function DatabaseHint(err)
+    local msg = tostring(err):lower()
+    for _, h in ipairs(DATABASE_HINTS) do
+        if msg:find(h[1], 1, true) then return h[2] end
+    end
+    return nil
+end
+CP.Migrations._hint = DatabaseHint
+
 local function Fail(file, stmt, err)
+    failed = true
     CP.err(TAG, 'Migration %s failed. Crimson-Police will not start until it is fixed.', file)
     CP.err(TAG, 'Statement: %s', (stmt or ''):sub(1, 400))
     CP.err(TAG, 'Error: %s', tostring(err))
+    local hint = DatabaseHint(err)
+    if hint then CP.err(TAG, 'How to fix it: %s', hint) end
     -- Stop the resource so nothing runs on a half-upgraded database.
     SetTimeout(0, function()
         StopResource(GetCurrentResourceName())
@@ -136,6 +179,16 @@ local function Run()
     isReady = true
     readyPromise:resolve(true)
 end
+
+-- oxmysql never answers when it cannot connect: after WAIT_HINT_MS one line says what to check. The saves folder
+-- (database off) never waits for oxmysql, so the line is only about the database.
+SetTimeout(WAIT_HINT_MS, function()
+    if isReady or failed then return end
+    if CP.Storage and CP.Storage.name and CP.Storage.name() ~= 'database' then return end
+    CP.warn(TAG,
+        'still waiting for the database after %d seconds: oxmysql has not connected. Check the oxmysql lines above and the line set mysql_connection_string in server.cfg (user name, password, host and database name), then restart. Or set Config.Database.enabled = false in config/config.lua to save to files instead.',
+        WAIT_HINT_MS // 1000)
+end)
 
 CreateThread(function()
     -- oxmysql connects asynchronously; MySQL.ready waits for it.
