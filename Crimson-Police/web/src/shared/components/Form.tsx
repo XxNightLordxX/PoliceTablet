@@ -12,6 +12,7 @@ import {
     type TextareaHTMLAttributes,
 } from 'react';
 import { cx } from '../cx';
+import { fmtPlain } from '../format';
 import { t } from '../i18n';
 import { Icon } from './Icon';
 
@@ -183,7 +184,7 @@ export function NumberInput({
     const [draft, setDraft] = useState<string>(value === null || value === undefined ? '' : String(value));
     const [invalid, setInvalid] = useState(false);
     const focused = useRef(false);
-    const fmt = formatRange ?? ((n: number) => n.toLocaleString('en-US'));
+    const fmt = formatRange ?? fmtPlain;
 
     useEffect(() => {
         if (focused.current && invalid) return;

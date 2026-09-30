@@ -131,3 +131,72 @@ export function applyTheme(el: HTMLElement | null | undefined, theme?: Partial<T
     const vars = themeVars(theme);
     for (const key of Object.keys(vars)) el.style.setProperty(key, vars[key]);
 }
+
+// ============================================================================
+//                      THE OFFICER'S LOOK (Session.prefs)
+// ============================================================================
+// Appearance and personal accent change only the officer's own tablet. The primary colour, the logo and the
+// watermark always stay the department's (SPEC Officer profile).
+
+export const APPEARANCES = ['department', 'midnight', 'high_contrast', 'colourblind'];
+
+const BLACK = '#000000';
+
+// Colour-blind safe status colours (Okabe-Ito).
+const COLOURBLIND_VARS: Record<string, string> = {
+    '--cp-success': '#0072b2',
+    '--cp-success-rgb': '0, 114, 178',
+    '--cp-danger': '#d55e00',
+    '--cp-danger-rgb': '213, 94, 0',
+    '--cp-warning': '#e69f00',
+    '--cp-warning-rgb': '230, 159, 0',
+    '--cp-info': '#56b4e9',
+    '--cp-info-rgb': '86, 180, 233',
+};
+const HIGH_CONTRAST_VARS: Record<string, string> = {
+    '--cp-muted': '#e2e2e2',
+    '--cp-subtle': '#c4c4c4',
+};
+
+// The department theme with the officer's appearance and accent applied. An accent is used only when it is one
+// of the department's personal accents (accents; the server checks the level when it is saved).
+export function mergeAppearance(
+    theme: Partial<Theme> | null | undefined,
+    appearance?: string | null,
+    accent?: string | null,
+    accents?: { colour: string }[] | null,
+): Theme {
+    const th = normalizeTheme(theme);
+    const allowed = !accents || accents.some(a => a.colour.toLowerCase() === String(accent).toLowerCase());
+    const out: Theme = { ...th, accent: isHexColour(accent) && allowed ? accent.toLowerCase() : th.accent };
+    if (appearance === 'midnight') {
+        // SPEC: background and surface 40% darker
+        out.background = mix(th.background, BLACK, 0.4);
+        out.surface = mix(th.surface, BLACK, 0.4);
+    } else if (appearance === 'high_contrast') {
+        out.background = BLACK;
+        out.surface = '#0d0d0d';
+        out.text = WHITE;
+        out.accent = legibleOn(out.accent, out.surface, 7);
+    }
+    out.primary = th.primary;
+    return out;
+}
+
+// CSS variables an appearance sets on top of the theme's (status colours, text shades).
+export function appearanceVars(appearance?: string | null): Record<string, string> {
+    if (appearance === 'colourblind') return { ...COLOURBLIND_VARS };
+    if (appearance === 'high_contrast') return { ...HIGH_CONTRAST_VARS };
+    return {};
+}
+
+const APPEARANCE_VAR_KEYS = [...Object.keys(COLOURBLIND_VARS), ...Object.keys(HIGH_CONTRAST_VARS)];
+
+// Write the theme and the appearance's extra variables on an element (the extras of another appearance go).
+export function applyAppearance(el: HTMLElement | null | undefined, theme: Theme, appearance?: string | null): void {
+    if (!el) return;
+    for (const key of APPEARANCE_VAR_KEYS) el.style.removeProperty(key);
+    applyTheme(el, theme);
+    const vars = appearanceVars(appearance);
+    for (const key of Object.keys(vars)) el.style.setProperty(key, vars[key]);
+}

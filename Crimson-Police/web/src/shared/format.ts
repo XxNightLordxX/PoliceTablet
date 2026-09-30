@@ -1,14 +1,32 @@
 // Number/time formatting shared by components and screens. Numbers use en-US grouping ("$1,040") to match the spec's
-// examples.
+// examples; the money symbol follows Config.Format (setMoneyFormat) and dates the locale's _meta.date_locale.
 
 import { hasKey, t } from './i18n';
 
 const nf = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
+const nf3 = new Intl.NumberFormat('en-US', { maximumFractionDigits: 3 });
 
-// 1040 -> "$1,040"; -50 -> "-$50". Rounded to whole dollars.
+// Config.Format (Session.config.format): the money symbol and whether it goes after the number.
+const money = { currency: '$', currencyAfter: false };
+
+// Set from the session (the tablet layouts); a missing or bad value keeps the default "$" before the number.
+export function setMoneyFormat(format: { currency?: unknown; currencyAfter?: unknown } | null | undefined): void {
+    const c = format?.currency;
+    money.currency = typeof c === 'string' && c.length > 0 && c.length <= 8 ? c : '$';
+    money.currencyAfter = format?.currencyAfter === true;
+}
+
+// 1040 -> "$1,040"; -50 -> "-$50" (or "1,040 €" with currencyAfter). Rounded to whole units.
 export function formatMoney(amount: number | null | undefined): string {
     const n = Math.round(Number(amount) || 0);
-    return (n < 0 ? '-$' : '$') + nf.format(Math.abs(n));
+    const digits = nf.format(Math.abs(n));
+    const sign = n < 0 ? '-' : '';
+    return money.currencyAfter ? `${sign}${digits} ${money.currency}` : `${sign}${money.currency}${digits}`;
+}
+
+// A plain number with grouping and at most 3 decimals: 12500 -> "12,500", 0.85 -> "0.85".
+export function fmtPlain(value: number | null | undefined): string {
+    return nf3.format(Number(value) || 0);
 }
 
 // 12500 -> "12,500". `sign` adds "+" to positive values.
@@ -55,7 +73,7 @@ export function formatDateTime(value: number | string | null | undefined): strin
     if (value === null || value === undefined || value === '') return '';
     const d = typeof value === 'number' ? new Date(value * 1000) : new Date(String(value).replace(' ', 'T'));
     if (isNaN(d.getTime())) return String(value);
-    return d.toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+    return d.toLocaleString(dateLocale(), { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
 
 // ============================================================================

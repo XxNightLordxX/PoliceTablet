@@ -25,6 +25,8 @@ export function normalizeSession(s: Session): Session {
         actions: asArray(s.actions),
         locale: s.locale && typeof s.locale === 'object' ? s.locale : {},
         config: {
+            // the parity-plus values (dispatch, profile, format, ...) pass through as they came
+            ...cfg,
             missionTypes: asArray(cfg.missionTypes),
             departments: asArray(cfg.departments),
             tiers: asArray(cfg.tiers),

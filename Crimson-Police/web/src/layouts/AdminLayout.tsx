@@ -8,6 +8,7 @@ import { t } from '../shared/i18n';
 import { useNavigation, type ScreenKey } from '../shared/navigation';
 import { useSession, useTablet } from '../shared/session';
 import { applyTheme } from '../shared/theme';
+import { NotificationBell } from './NotificationBell';
 import { ScreenHost } from './ScreenHost';
 import { screensFor } from './screens';
 import { Sidebar } from './Sidebar';
@@ -48,6 +49,7 @@ export function AdminLayout() {
                         <Icon name="user" size={14} />
                         {who}
                     </span>
+                    <NotificationBell />
                     <span className="cp-header__role cp-header__role--admin">
                         <Icon name="key" size={14} />
                         {t('ui.role.admin')}

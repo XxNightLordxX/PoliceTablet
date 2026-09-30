@@ -16,6 +16,11 @@ local DEFAULT_THEME = {
 }
 local NULLABLE_HUD = { modifier = true, timer = true, route = true, message = true, detail = true }
 local KEY_MAPPING = 'crimsonpolice_tablet'
+local DISPATCH_MAPPING = 'crimsonpolice_dispatch'
+local DESK_OPTION = 'crimson-police:desk'
+local DESK_TARGET_DISTANCE = 2.0     -- metres: how close ox_target offers "Open Crimson-Police" at a desk
+local DESK_WATCH_MS = 500            -- how often the desk distance is checked while the tablet is open there
+local ITEM_WATCH_MS = 1000           -- how often the tablet item is looked for while requireItem is on
 
 -- Tablet prop and animation (held in the hand the animation uses; offsets tuned for this clip).
 local ANIM_DICT = 'amb@code_human_in_bus_passenger_idles@female@tablet@base'
@@ -43,6 +48,11 @@ local state = {
     commandRegistered = false,
     panelOwner = nil,     -- CP.Tablet.panelFocus owner holding the NUI focus while no tablet UI is open
     arenaHidden = false,  -- a HUD/overlay was kept off screen while the crimsonArena value was foreign
+    via = nil,            -- how the open tablet was opened (command, keybind, item, export, desk, dispatch)
+    desk = nil,           -- the desk index while it was opened at a desk
+    openToken = 0,        -- bumped on every open and close: the desk and item watchers stop with it
+    deskZones = nil,      -- ox_target zone ids of the mission desks, while they exist
+    deskProps = {},       -- local laptop objects of the desks
 }
 local clientActions = {}
 
@@ -236,7 +246,7 @@ local function LoadDict(dict, timeoutMs)
 end
 
 local function WantsProp()
-    return state.open and state.ui ~= 'admin'
+    return state.open and state.ui ~= 'admin' and state.via ~= 'desk'
 end
 
 local function DeleteObject(obj)
@@ -327,25 +337,36 @@ end
 --                                 OPEN / CLOSE
 -- ============================================================================
 
-local function ShowUi(ui, session)
+local StartWatchers, StopDeskPose
+
+-- opts (optional): { via, desk, screen } how it was opened and the screen to show first.
+local function ShowUi(ui, session, opts)
     local wasProp = WantsProp()
+    local wasOpen = state.open
+    opts = type(opts) == 'table' and opts or {}
     state.ui = ui
     state.session = session
     state.open = true
+    if not wasOpen or opts.via then
+        local access = type(session.access) == 'table' and session.access or {}
+        state.via = opts.via or access.via
+        state.desk = state.via == 'desk' and (opts.desk or access.desk) or nil
+    end
     local pd = CP.Qbx and CP.Qbx.getPlayerData and CP.Qbx.getPlayerData() or {}
     state.jobName = type(pd.job) == 'table' and pd.job.name or nil
     if CP.Access and CP.Access.setSession then CP.Access.setSession(session) end
     if ui ~= 'admin' and type(session.theme) == 'table' then state.theme = session.theme end
-    T.send({ type = 'open', ui = ui, session = session })
+    T.send({ type = 'open', ui = ui, session = session, screen = opts.screen })
     -- The tablet takes the NUI focus over from a panel (CP.Tablet.panelFocus); closing it releases it.
     state.panelOwner = nil
     SetNuiFocus(true, true)
-    if ui == 'admin' then
+    if ui == 'admin' or state.via == 'desk' then
         StopProp()
     elseif not wasProp then
         StartProp()
     end
-    CP.log(TAG, '%s UI opened', ui)
+    if not wasOpen then StartWatchers() end
+    CP.log(TAG, '%s UI opened (%s)', ui, tostring(state.via))
 end
 
 local function RefuseInArena()
@@ -353,13 +374,16 @@ local function RefuseInArena()
     return false, 'err.in_arena'
 end
 
-function T.open(ui)
+-- opts (optional): { via, desk, screen }; via defaults to 'export' (another module or resource opening it).
+function T.open(ui, opts)
     if ui == nil then ui = 'officer' end
     if not UIS[ui] then return false, 'err.invalid_ui' end
+    opts = type(opts) == 'table' and opts or {}
+    local via = type(opts.via) == 'string' and opts.via or 'export'
     if InForeignArena() then return RefuseInArena() end
     if state.opening then return false, 'err.busy' end
     state.opening = true
-    local ok, res = pcall(CP.Net.request, 'getSession', { ui = ui })
+    local ok, res = pcall(CP.Net.request, 'getSession', { ui = ui, via = via, desk = opts.desk })
     state.opening = false
     if not ok then
         CP.err(TAG, 'getSession failed: %s', tostring(res))
@@ -372,7 +396,7 @@ function T.open(ui)
     end
     -- Crimson-Arena may have placed the player while the session was on its way.
     if InForeignArena() then return RefuseInArena() end
-    ShowUi(ui, res.data)
+    ShowUi(ui, res.data, { via = via, desk = opts.desk, screen = opts.screen })
     return true
 end
 
@@ -380,6 +404,9 @@ function T.close()
     local wasOpen = state.open
     state.open = false
     state.ui = nil
+    state.openToken = state.openToken + 1
+    if wasOpen and state.via == 'desk' then StopDeskPose() end
+    state.via, state.desk = nil, nil
     -- Only our own focus: releasing it unconditionally would take it from another resource's UI
     -- (docs/CRIMSON_ARENA.md rule 8).
     if wasOpen then SetNuiFocus(false, false) end
@@ -389,8 +416,8 @@ function T.close()
     return wasOpen
 end
 
--- /CrimsonPolice, the key mapping, the item and the export all land here.
-local function ToggleOfficer()
+-- /CrimsonPolice and the key mapping land here (via = 'command' or 'keybind').
+local function ToggleOfficer(via)
     local now = GetGameTimer()
     if state.lastToggleAt >= 0 and now - state.lastToggleAt < 500 then return end
     state.lastToggleAt = now
@@ -398,14 +425,26 @@ local function ToggleOfficer()
         T.close()
         return
     end
-    T.open('officer')
+    T.open('officer', { via = via })
 end
 
-local function RequestOpen()
+-- The item, the export and a desk (via = 'item', 'export' or 'desk').
+local function RequestOpen(via, desk)
     CreateThread(function()
         if state.open then return end
-        T.open('officer')
+        T.open('officer', { via = via, desk = desk })
     end)
+end
+
+-- The crimsonpolice_dispatch key mapping: the Officer UI on Dispatch (an open Officer UI just switches to it).
+local function OpenDispatch()
+    if state.open then
+        if state.ui == 'officer' and state.session then
+            T.send({ type = 'open', ui = 'officer', session = state.session, screen = 'dispatch' })
+        end
+        return
+    end
+    T.open('officer', { via = 'dispatch', screen = 'dispatch' })
 end
 
 local function IsDepartmentJob(jobName)
@@ -599,7 +638,7 @@ end)
 -- ============================================================================
 
 exports('OpenTablet', function()
-    RequestOpen()
+    RequestOpen('export')
     return true
 end)
 
@@ -607,7 +646,7 @@ exports('useTablet', function(data, slot)
     local item = Config.Tablet and Config.Tablet.item
     if not item then return end
     if type(data) == 'table' and type(data.name) == 'string' and data.name ~= item then return end
-    RequestOpen()
+    RequestOpen('item')
 end)
 
 -- ============================================================================
@@ -619,17 +658,24 @@ local function registerCommand()
     state.commandRegistered = true
     local cmd = Config.Tablet and Config.Tablet.command
     if type(cmd) ~= 'string' or cmd == '' then cmd = 'CrimsonPolice' end
-    RegisterCommand(cmd, function() CreateThread(ToggleOfficer) end, false)
-    RegisterCommand(KEY_MAPPING, function() CreateThread(ToggleOfficer) end, false)
+    RegisterCommand(cmd, function() CreateThread(function() ToggleOfficer('command') end) end, false)
+    RegisterCommand(KEY_MAPPING, function() CreateThread(function() ToggleOfficer('keybind') end) end, false)
     local key = Config.Tablet and Config.Tablet.keybind
     if type(key) ~= 'string' then key = '' end
     RegisterKeyMapping(KEY_MAPPING, CP.L('tablet.keybind_label'), 'keyboard', key)
+    RegisterCommand(DISPATCH_MAPPING, function() CreateThread(OpenDispatch) end, false)
+    local dispatchKey = Config.Tablet and Config.Tablet.dispatchKey
+    if type(dispatchKey) ~= 'string' then dispatchKey = '' end
+    RegisterKeyMapping(DISPATCH_MAPPING, CP.L('tablet.dispatch_key_label'), 'keyboard', dispatchKey)
 end
 
 -- Crimson-Arena placed the local player (fighter or spectator): nothing of Crimson-Police stays on
 -- screen or holds focus (docs/CRIMSON_ARENA.md rule 8).
+local RemoveDeskZones, CreateDeskZones
+
 local function OnArenaPlaced()
     CP.log(TAG, 'Crimson-Arena placed the player: Crimson-Police UI, HUD and overlays hidden')
+    RemoveDeskZones()
     ReleasePanelFocus()
     if state.open then T.close() else StopProp() end
     -- Hidden on the NUI, the state is kept: the run engine keeps patching it (e.g. its ended HUD after the
@@ -655,7 +701,9 @@ end
 -- Crimson-Arena let the player go: show what was kept off screen meanwhile (a HUD or overlay that is
 -- still set; the run engine hides its ended HUD itself after a few seconds).
 local function OnArenaLeft()
-    if not state.arenaHidden or InForeignArena() then return end
+    if InForeignArena() then return end
+    CreateDeskZones()
+    if not state.arenaHidden then return end
     state.arenaHidden = false
     if state.hud then T.send({ type = 'hud', hud = state.hud }) end
     if state.overlay then T.send({ type = 'overlay', overlay = state.overlay }) end
@@ -667,16 +715,229 @@ local function WatchArena()
         -- The handler only queues work: the bag still holds the old value while it runs.
         if IsForeignArena(value) then
             SetTimeout(0, OnArenaPlaced)
-        elseif state.arenaHidden then
+        elseif state.arenaHidden or not state.deskZones then
             SetTimeout(0, OnArenaLeft)
         end
     end)
 end
 
+-- ============================================================================
+--                                MISSION DESKS
+-- ============================================================================
+-- SPEC Tablet access: ox_target boxes from Config.Tablet.desks. canInteract only decides what is shown; the
+-- server checks the box (server coordinates), the department and the arena again when the session is asked for.
+
+local function DeskDepartment()
+    local pd = CP.Qbx and CP.Qbx.getPlayerData and CP.Qbx.getPlayerData() or {}
+    local job = type(pd.job) == 'table' and pd.job or nil
+    if not job or job.onduty == false or type(Config.Departments) ~= 'table' then return nil end
+    for key, dept in pairs(Config.Departments) do
+        local jobs = type(dept) == 'table' and dept.jobs or nil
+        if type(jobs) == 'string' then jobs = { jobs } end
+        for _, j in ipairs(type(jobs) == 'table' and jobs or {}) do
+            if j == job.name then return key end
+        end
+    end
+    return nil
+end
+
+local function DeskAllows(desk, deptKey)
+    if not deptKey then return false end
+    if type(desk.departments) ~= 'table' or next(desk.departments) == nil then return true end
+    for _, k in ipairs(desk.departments) do
+        if k == deptKey then return true end
+    end
+    return false
+end
+
+local function DeskList()
+    local t = Config.Tablet or {}
+    if type(t.access) == 'table' and t.access.desk == false then return {} end
+    return type(t.desks) == 'table' and t.desks or {}
+end
+
+local function TargetUp()
+    return GetResourceState('ox_target') == 'started'
+end
+
+local function SpawnDeskProp(desk)
+    if type(desk.prop) ~= 'string' or desk.prop == '' then return nil end
+    local model = joaat(desk.prop)
+    if not LoadModel(model, 5000) then
+        CP.warn(TAG, 'desk prop %s could not be loaded', desk.prop)
+        return nil
+    end
+    local c = desk.coords
+    -- a local object: only this client sees it (docs/CRIMSON_ARENA.md rule 8)
+    local obj = CreateObject(model, c.x, c.y, c.z, false, false, false)
+    SetModelAsNoLongerNeeded(model)
+    if not obj or obj == 0 then return nil end
+    SetEntityHeading(obj, (tonumber(desk.rotation) or 0.0) + 0.0)
+    FreezeEntityPosition(obj, true)
+    return obj
+end
+
+-- Created once; again only after RemoveDeskZones (resource stop, a foreign arena flag).
+CreateDeskZones = function()
+    if state.deskZones or InForeignArena() or not TargetUp() then return false end
+    local desks = DeskList()
+    if #desks == 0 then return false end
+    local ids = {}
+    for i, desk in ipairs(desks) do
+        if type(desk) == 'table' and desk.coords then
+            local index = i
+            local ok, id = pcall(function()
+                return exports.ox_target:addBoxZone({
+                    coords = desk.coords,
+                    size = desk.size or vec3(1.0, 1.0, 1.0),
+                    rotation = tonumber(desk.rotation) or 0.0,
+                    debug = Config.Debug == true,
+                    options = {
+                        {
+                            name = DESK_OPTION,
+                            label = CP.L('tablet.desk.open'),
+                            icon = 'fa-solid fa-laptop',
+                            distance = DESK_TARGET_DISTANCE,
+                            canInteract = function()
+                                return not state.open and not InForeignArena() and DeskAllows(desk, DeskDepartment())
+                            end,
+                            onSelect = function() RequestOpen('desk', index) end,
+                        },
+                    },
+                })
+            end)
+            if ok and id then
+                ids[#ids + 1] = id
+                local obj = SpawnDeskProp(desk)
+                if obj then state.deskProps[#state.deskProps + 1] = obj end
+            else
+                CP.warn(TAG, 'desk %d (%s): ox_target addBoxZone failed: %s', i, tostring(desk.label), tostring(id))
+            end
+        end
+    end
+    state.deskZones = ids
+    CP.log(TAG, '%d mission desk zones created', #ids)
+    return true
+end
+
+RemoveDeskZones = function()
+    local ids = state.deskZones
+    state.deskZones = nil
+    if ids and TargetUp() then
+        for _, id in ipairs(ids) do pcall(function() exports.ox_target:removeZone(id) end) end
+    end
+    for _, obj in ipairs(state.deskProps) do DeleteObject(obj) end
+    state.deskProps = {}
+    if ids then CP.log(TAG, 'mission desk zones removed') end
+end
+
+function T.deskZones()
+    return state.deskZones
+end
+
+-- ============================================================================
+--                    AT THE DESK: THE POSE AND THE WATCHERS
+-- ============================================================================
+
+local function DeskScenario()
+    local s = Config.Tablet and Config.Tablet.deskScenario
+    return type(s) == 'string' and s ~= '' and s or nil
+end
+
+local function StartDeskPose()
+    local scenario = DeskScenario()
+    if not scenario then return end
+    local ped = PlayerPedId()
+    if IsEntityDead(ped) or IsPedInAnyVehicle(ped, false) then return end
+    TaskStartScenarioInPlace(ped, scenario, 0, true)
+end
+
+StopDeskPose = function()
+    if not DeskScenario() then return end
+    local ped = PlayerPedId()
+    if IsPedUsingScenario(ped, DeskScenario()) then ClearPedTasks(ped) end
+end
+
+local function DeskDistance()
+    local d = tonumber(Config.Tablet and Config.Tablet.deskDistance)
+    return d and d > 0 and d or 3.0
+end
+
+-- Metres from c to the desk's box, 0 inside it (rotation = the box heading in degrees, as the server reads it).
+local function DeskGap(desk, c)
+    local centre, size = desk.coords, desk.size or { x = 1.0, y = 1.0, z = 1.0 }
+    local dx, dy, dz = c.x - centre.x, c.y - centre.y, (c.z or 0.0) - (centre.z or 0.0)
+    local r = math.rad(tonumber(desk.rotation) or 0.0)
+    local gx = math.max(0.0, math.abs(dx * math.cos(r) + dy * math.sin(r)) - (size.x or 1.0) / 2)
+    local gy = math.max(0.0, math.abs(-dx * math.sin(r) + dy * math.cos(r)) - (size.y or 1.0) / 2)
+    local gz = math.max(0.0, math.abs(dz) - (size.z or 1.0) / 2)
+    return math.sqrt(gx * gx + gy * gy + gz * gz)
+end
+
+local function WatchDesk(token)
+    local t = Config.Tablet or {}
+    local desk = type(t.desks) == 'table' and t.desks[state.desk or -1] or nil
+    if type(desk) ~= 'table' or not desk.coords then return end
+    StartDeskPose()
+    local limit = DeskDistance()
+    while token == state.openToken and state.open do
+        if DeskGap(desk, GetEntityCoords(PlayerPedId())) > limit then
+            CP.log(TAG, 'walked away from desk %s: closing the tablet', tostring(state.desk))
+            T.close()
+            return
+        end
+        Wait(DESK_WATCH_MS)
+    end
+end
+
+local function ClientItemCount(item)
+    if GetResourceState('ox_inventory') ~= 'started' then return nil end
+    local ok, res = pcall(function() return exports.ox_inventory:Search('count', item) end)
+    return ok and tonumber(res) or nil
+end
+
+-- requireItem: the item left the inventory while the tablet is open. The server checks again and closes it.
+local function WatchItem(token)
+    local t = Config.Tablet or {}
+    local item = type(t.item) == 'string' and t.item ~= '' and t.item or nil
+    if not item or type(t.access) ~= 'table' or t.access.requireItem ~= true then return end
+    local reported = false
+    while token == state.openToken and state.open do
+        Wait(ITEM_WATCH_MS)
+        if token ~= state.openToken or not state.open or state.via == 'desk' then return end
+        local n = ClientItemCount(item)
+        if n ~= nil and n <= 0 then
+            if not reported then
+                reported = true
+                TriggerServerEvent(CP.e('server:tabletItemGone'))
+            end
+        else
+            reported = false
+        end
+    end
+end
+
+StartWatchers = function()
+    state.openToken = state.openToken + 1
+    local token = state.openToken
+    if state.via == 'desk' then
+        CreateThread(function() WatchDesk(token) end)
+    elseif state.ui ~= 'admin' then
+        CreateThread(function() WatchItem(token) end)
+    end
+end
+
+RegisterNetEvent(CP.e('client:closeTablet'), function(errKey)
+    if not state.open or state.ui == 'admin' then return end
+    T.close()
+    if type(errKey) == 'string' and errKey ~= '' then T.notify('error', CP.L(errKey)) end
+end)
+
 CreateThread(function()
     T.wrapProgress()   -- again at runtime, in case ox_lib resolved lib.progressBar only now
     registerCommand()
     WatchArena()
+    CreateDeskZones()
     if not CP.Qbx then
         CP.err(TAG, 'modules/integrations/qbx is missing: the tablet cannot follow duty or job changes')
         return
@@ -712,6 +973,8 @@ end)
 AddEventHandler('onResourceStop', function(res)
     if res ~= CP.resource then return end
     if state.open or state.panelOwner then SetNuiFocus(false, false) end
+    if state.open and state.via == 'desk' then StopDeskPose() end
     state.panelOwner = nil
     StopProp()
+    RemoveDeskZones()
 end)

@@ -1,4 +1,4 @@
-// Admin UI · Permissions (screen key 'admin_permissions').
+// Admin UI · Permissions (screen key 'admin_permissions'): supervisor powers, admin-only actions and Config health.
 
 import {
     Badge,
@@ -16,8 +16,10 @@ import {
 import { asArray } from '../../shared/data';
 import { useRequest } from '../../shared/hooks';
 import { hasKey, t } from '../../shared/i18n';
+import type { ConfigHealthItem } from '../../shared/types';
 import type { PermissionsData } from '../../types/oversight';
 import './Permissions.css';
+import '../components/access-admin.css';
 
 interface PermRow {
     action: string;
@@ -26,6 +28,67 @@ interface PermRow {
 
 const label = (a: string) => (hasKey(`admin.perm.${a}`) ? t(`admin.perm.${a}`) : a);
 const desc = (a: string) => (hasKey(`admin.perm_desc.${a}`) ? t(`admin.perm_desc.${a}`) : '');
+
+const HEALTH_TONE = { ok: 'success', warn: 'warning', error: 'danger' } as const;
+const HEALTH_ICON = { ok: 'checkCircle', warn: 'alert', error: 'xCircle' } as const;
+
+// Config health (modules/confighealth): every check's lines, problems first.
+function ConfigHealthCard() {
+    const { data, loading, error, refetch } = useRequest<ConfigHealthItem[]>('admin:getConfigHealth', {});
+    const items = asArray(data);
+    const problems = items.filter(i => i.level !== 'ok').length;
+    return (
+        <Card
+            title={t('access.health.title')}
+            icon="activity"
+            subtitle={
+                data
+                    ? problems > 0
+                        ? t('access.health.problems', { n: problems })
+                        : t('access.health.all_ok')
+                    : t('access.health.subtitle')
+            }
+            actions={
+                <IconButton
+                    icon="refresh"
+                    label={t('access.health.recheck')}
+                    variant="secondary"
+                    size="sm"
+                    loading={loading && !!data}
+                    onClick={() => void refetch()}
+                />
+            }
+        >
+            {loading && !data ? (
+                <LoadingBlock />
+            ) : error && !data ? (
+                <ErrorState error={error} onRetry={() => void refetch()} />
+            ) : items.length === 0 ? (
+                <EmptyState compact title={t('access.health.none')} />
+            ) : (
+                <ul className="access-health">
+                    {items.map((i, n) => (
+                        <li key={`${i.check}-${n}`} className={`access-health__item access-health__item--${i.level}`}>
+                            <Badge
+                                tone={HEALTH_TONE[i.level] ?? 'grey'}
+                                size="sm"
+                                icon={HEALTH_ICON[i.level] ?? 'info'}
+                            >
+                                {t(`access.health.level.${i.level}`)}
+                            </Badge>
+                            <span className="access-health__check">
+                                {hasKey(`access.health.check.${i.check}`)
+                                    ? t(`access.health.check.${i.check}`)
+                                    : i.check}
+                            </span>
+                            <span className="access-health__text">{i.text}</span>
+                        </li>
+                    ))}
+                </ul>
+            )}
+        </Card>
+    );
+}
 
 export default function AdminPermissions() {
     const { data, loading, error, refetch } = useRequest<PermissionsData>('admin:getPermissions', {});
@@ -80,6 +143,7 @@ export default function AdminPermissions() {
     else
         body = (
             <>
+                <ConfigHealthCard />
                 <div className="oversight-perm-banner">
                     <Icon name="lock" size={16} />
                     <div>

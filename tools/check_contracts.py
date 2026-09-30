@@ -9,7 +9,7 @@ Checks:
   2. Events: crimson-police:client:* triggered by the server have a client handler, and
      crimson-police:server:* triggered by clients have a server handler (and vice versa).
   3. NUI: every request/action/clientAction name used in web/src exists in Lua.
-  4. Locale: every CP.L('key') / t('key') / returned 'err.*' key exists in the merged locale;
+  4. Locale: every CP.L('key') / CP.Lt('key') / t('key') / returned 'err.*' key exists in the merged locale;
      conflicting duplicate keys across parts; locales/en.json (the only file shared/locale.lua loads)
      exists and equals the merge of the parts (regenerate with --merge).
   5. NUI build: web/dist/build-stamp.json (written by `npm run build`) matches the current sources (web/src,
@@ -184,7 +184,8 @@ used = defaultdict(set)
 for side in ('server', 'client'):
     for p in lua_files(side):
         s = strip_lua_comments(read(p))
-        for m in re.finditer(r"CP\.L\(\s*['\"]([\w.\-]+)['\"]", s): used[m.group(1)].add(rel(p))
+        # CP.L texts and CP.Lt tokens (resolved on the client) alike
+        for m in re.finditer(r"CP\.Lt?\(\s*['\"]([\w.\-]+)['\"]", s): used[m.group(1)].add(rel(p))
         for m in re.finditer(r"['\"](err\.[\w.]+)['\"]", s): used[m.group(1)].add(rel(p))
 for w in web:
     s = read(w)

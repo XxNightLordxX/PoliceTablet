@@ -1,4 +1,5 @@
-// Admin UI · Departments (screen key 'admin_departments').
+// Admin UI · Departments (screen key 'admin_departments'): themes, members, mission desks, personal accents and a
+// preview of each officer look.
 
 import { useState, type CSSProperties } from 'react';
 import {
@@ -17,16 +18,29 @@ import {
     Money,
     ProgressBar,
     Screen,
+    SegmentedControl,
 } from '../../shared/components';
 import { asArray } from '../../shared/data';
 import { formatNumber } from '../../shared/format';
 import { useRequest } from '../../shared/hooks';
-import { t } from '../../shared/i18n';
+import { hasKey, t } from '../../shared/i18n';
 import { useSession } from '../../shared/session';
-import { themeVars } from '../../shared/theme';
+import { APPEARANCES, appearanceVars, mergeAppearance, themeVars } from '../../shared/theme';
 import type { Theme } from '../../shared/types';
+import type { DeskView, TabletAccessView } from '../../types/access';
 import type { DepartmentView, DepartmentsData } from '../../types/oversight';
 import './Departments.css';
+import '../components/access-admin.css';
+
+type Accent = { colour: string; level: number | null };
+
+function appearanceLabel(key: string): string {
+    return hasKey(`profile.edit.appearance.${key}`) ? t(`profile.edit.appearance.${key}`) : key;
+}
+
+function fmtCoord(n: number): string {
+    return (Math.round(n * 100) / 100).toFixed(2);
+}
 
 const COLOUR_KEYS: (keyof Theme)[] = ['primary', 'accent', 'background', 'surface', 'text'];
 
@@ -44,8 +58,19 @@ function Swatches({ theme }: { theme: Theme }) {
     );
 }
 
-function ThemePreview({ dept, title }: { dept: DepartmentView; title: string }) {
-    const vars = themeVars(dept.theme) as CSSProperties;
+function ThemePreview({
+    dept,
+    title,
+    appearance = 'department',
+    accent = null,
+}: {
+    dept: DepartmentView;
+    title: string;
+    appearance?: string;
+    accent?: string | null;
+}) {
+    const look = mergeAppearance(dept.theme, appearance, accent);
+    const vars = { ...themeVars(look), ...appearanceVars(appearance) } as CSSProperties;
     return (
         <div
             className="oversight-dep-preview"
@@ -108,7 +133,88 @@ function ThemePreview({ dept, title }: { dept: DepartmentView; title: string }) 
     );
 }
 
-function DeptCard({ d, showSociety, onPreview }: { d: DepartmentView; showSociety: boolean; onPreview: () => void }) {
+// The desks a department may use (departments = null: every department).
+function desksFor(access: TabletAccessView | null, dept: string): DeskView[] {
+    return asArray(access?.desks).filter(d => !d.departments || asArray(d.departments).includes(dept));
+}
+
+function AccentChips({
+    accents,
+    picked,
+    onPick,
+}: {
+    accents: Accent[];
+    picked?: string | null;
+    onPick?: (c: string) => void;
+}) {
+    if (!accents.length) return <span className="oversight-dep-soft">{t('access.depts.no_accents')}</span>;
+    return (
+        <span className="access-accents">
+            {accents.map(a => {
+                const chip = (
+                    <span
+                        className={picked === a.colour ? 'access-accent__chip is-picked' : 'access-accent__chip'}
+                        style={{ background: a.colour }}
+                    />
+                );
+                return (
+                    <span key={a.colour} className="access-accent" title={a.colour}>
+                        {onPick ? (
+                            <button type="button" aria-label={a.colour} onClick={() => onPick(a.colour)}>
+                                {chip}
+                            </button>
+                        ) : (
+                            chip
+                        )}
+                        {a.level ? t('access.depts.accent_level', { n: a.level }) : null}
+                    </span>
+                );
+            })}
+        </span>
+    );
+}
+
+function DeskList({ desks }: { desks: DeskView[] }) {
+    if (!desks.length) return <span className="oversight-dep-soft">{t('access.depts.no_desks')}</span>;
+    return (
+        <ul className="access-desks">
+            {desks.map(d => (
+                <li key={d.index} className="access-desk">
+                    <Icon name="building" size={16} />
+                    <div className="access-desk__main">
+                        <strong>{d.label}</strong>
+                        <span className="access-desk__coords">
+                            {fmtCoord(d.coords.x)}, {fmtCoord(d.coords.y)}, {fmtCoord(d.coords.z)} ·{' '}
+                            {t('access.depts.desk_size', { x: d.size.x, y: d.size.y, r: d.rotation })}
+                        </span>
+                    </div>
+                    {d.departments ? (
+                        <Badge size="sm" variant="outline">
+                            {t('access.depts.desk_restricted')}
+                        </Badge>
+                    ) : null}
+                    {d.prop ? (
+                        <Badge size="sm" icon="eye">
+                            {d.prop}
+                        </Badge>
+                    ) : null}
+                </li>
+            ))}
+        </ul>
+    );
+}
+
+function DeptCard({
+    d,
+    showSociety,
+    onPreview,
+    access,
+}: {
+    d: DepartmentView;
+    showSociety: boolean;
+    onPreview: () => void;
+    access: TabletAccessView | null;
+}) {
     return (
         <Card
             className="oversight-dep-card"
@@ -200,6 +306,20 @@ function DeptCard({ d, showSociety, onPreview }: { d: DepartmentView; showSociet
                     </span>
                 </div>
             </div>
+            {access ? (
+                <div className="oversight-dep-card__meta">
+                    <div>
+                        <span className="oversight-dep-card__label">{t('access.depts.accents')}</span>
+                        <AccentChips accents={asArray(access.accents?.[d.key])} />
+                    </div>
+                    <div>
+                        <span className="oversight-dep-card__label">
+                            {access.ways.desk ? t('access.depts.desks') : t('access.depts.desks_off')}
+                        </span>
+                        {access.ways.desk ? <DeskList desks={desksFor(access, d.key)} /> : null}
+                    </div>
+                </div>
+            ) : null}
         </Card>
     );
 }
@@ -208,6 +328,15 @@ export default function AdminDepartments() {
     const session = useSession();
     const { data, loading, error, refetch } = useRequest<DepartmentsData>('admin:getDepartments', {});
     const [preview, setPreview] = useState<DepartmentView | null>(null);
+    const [look, setLook] = useState<string>('department');
+    const [accent, setAccent] = useState<string | null>(null);
+    const { data: access } = useRequest<TabletAccessView>('admin:getTabletAccess', {});
+    const appearances = asArray(access?.appearances).length ? asArray(access?.appearances) : APPEARANCES;
+    const openPreview = (d: DepartmentView) => {
+        setLook('department');
+        setAccent(null);
+        setPreview(d);
+    };
     const departments = asArray(data?.departments);
     const showSociety = !!data?.showSociety;
 
@@ -229,7 +358,13 @@ export default function AdminDepartments() {
         body = (
             <Grid min={380} gap={4} align="start">
                 {departments.map(d => (
-                    <DeptCard key={d.key} d={d} showSociety={showSociety} onPreview={() => setPreview(d)} />
+                    <DeptCard
+                        key={d.key}
+                        d={d}
+                        showSociety={showSociety}
+                        onPreview={() => openPreview(d)}
+                        access={access}
+                    />
                 ))}
             </Grid>
         );
@@ -268,7 +403,30 @@ export default function AdminDepartments() {
                     </Button>
                 }
             >
-                {preview ? <ThemePreview dept={preview} title={session.title || t('admin.depts.preview.app')} /> : null}
+                {preview ? (
+                    <>
+                        <div className="access-look-bar">
+                            <SegmentedControl
+                                size="sm"
+                                aria-label={t('access.depts.look')}
+                                items={appearances.map(a => ({ key: a, label: appearanceLabel(a) }))}
+                                value={look}
+                                onChange={setLook}
+                            />
+                            <AccentChips
+                                accents={asArray(access?.accents?.[preview.key])}
+                                picked={accent}
+                                onPick={c => setAccent(prev => (prev === c ? null : c))}
+                            />
+                        </div>
+                        <ThemePreview
+                            dept={preview}
+                            title={session.title || t('admin.depts.preview.app')}
+                            appearance={look}
+                            accent={accent}
+                        />
+                    </>
+                ) : null}
             </Dialog>
         </Screen>
     );

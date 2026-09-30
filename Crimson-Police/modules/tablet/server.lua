@@ -21,9 +21,24 @@ local VIA = { command = true, keybind = true, item = true, export = true, desk =
 local AVATAR_KINDS = { initials = true, preset = true, url = true }
 local DEFAULT_APPEARANCE = 'department'
 
+local DESK_MARGIN = 2.0           -- metres around a desk box the server still accepts
+local NAV_CACHE_S = 5             -- a src's badge counts are built again at most this often
+local REVIEW_CACHE_S = 30         -- the Review Queue count reads the database: at most this often per src
+local NAV_PUSH_DELAY_MS = 1000    -- pushes of one burst (a claim window, a unit change) become one 'nav' push
+local NAV_WATCH_S = 600           -- 'nav' pushes go to a src that asked for its counts within this time
+-- pushes that can change a badge; each one schedules a 'nav' push to that src
+local NAV_TOPICS = { unit = true, invites = true, calls = true, profile = true, rewards = true, run = true }
+-- way -> the Config.Tablet.access switch that allows it (export is always on)
+local WAY_SWITCH = { command = 'command', keybind = 'keybind', dispatch = 'keybind', item = 'item', desk = 'desk' }
+
 local missingLogo = {}         -- deptKey -> true when logos/<file> is not in the resource
 local logoFailedWarned = {}    -- deptKey -> true once the NUI failure was reported
 local themeWarned = {}
+local lastWay = {}             -- src -> { via, desk } of the last session that passed the access checks
+local navCache = {}            -- src -> { at, counts }
+local reviewCache = {}         -- src -> { at, n }
+local navWatch = {}            -- src -> os.time() of the last getNavCounts
+local navPending = {}          -- src -> true while a 'nav' push is scheduled
 
 local function ToSrc(src)
     local n = tonumber(src)
@@ -31,6 +46,113 @@ local function ToSrc(src)
     n = math.tointeger(n)
     if not n or n <= 0 then return nil end
     return n
+end
+
+-- A guarded call into another module: false when it is missing or fails, else true and its results.
+local function Call(modName, fnName, ...)
+    local m = CP[modName]
+    if type(m) ~= 'table' or type(m[fnName]) ~= 'function' then return false end
+    local res = table.pack(pcall(m[fnName], ...))
+    if not res[1] then
+        CP.err(TAG, 'CP.%s.%s failed: %s', modName, fnName, tostring(res[2]))
+        return false
+    end
+    return true, table.unpack(res, 2, res.n)
+end
+
+-- ============================================================================
+--                                TABLET ACCESS
+-- ============================================================================
+-- SPEC Tablet access: every way ends here. A way that is switched off is refused, a desk needs the player in
+-- its box (server coordinates) and their department, and requireItem needs the item for every way but a desk.
+
+local function AccessCfg()
+    local t = Config.Tablet or {}
+    return type(t.access) == 'table' and t.access or {}
+end
+
+local function TabletItem()
+    local item = Config.Tablet and Config.Tablet.item
+    if type(item) ~= 'string' or item == '' then return nil end
+    return item
+end
+
+-- The desk at index i of Config.Tablet.desks, or nil.
+function T.desk(i)
+    local desks = Config.Tablet and Config.Tablet.desks
+    i = math.tointeger(tonumber(i) or -1)
+    if type(desks) ~= 'table' or not i or i < 1 then return nil end
+    local d = desks[i]
+    if type(d) ~= 'table' or type(d.coords) ~= 'vector3' and type(d.coords) ~= 'table' then return nil end
+    return d
+end
+
+function T.deskAllows(desk, deptKey)
+    if type(desk) ~= 'table' then return false end
+    if type(desk.departments) ~= 'table' or next(desk.departments) == nil then return true end
+    for _, k in ipairs(desk.departments) do
+        if k == deptKey then return true end
+    end
+    return false
+end
+
+-- true when coords lie in the desk's box grown by margin metres (rotation = the box heading in degrees).
+function T.inDeskBox(desk, coords, margin)
+    if type(desk) ~= 'table' or not desk.coords or not coords then return false end
+    margin = margin or DESK_MARGIN
+    local c, size = desk.coords, desk.size or { x = 1.0, y = 1.0, z = 1.0 }
+    local dx, dy, dz = coords.x - c.x, coords.y - c.y, (coords.z or 0.0) - (c.z or 0.0)
+    local r = math.rad(tonumber(desk.rotation) or 0.0)
+    local lx = dx * math.cos(r) + dy * math.sin(r)
+    local ly = -dx * math.sin(r) + dy * math.cos(r)
+    return math.abs(lx) <= (size.x or 1.0) / 2 + margin and math.abs(ly) <= (size.y or 1.0) / 2 + margin
+        and math.abs(dz) <= (size.z or 1.0) / 2 + margin
+end
+
+-- The tablet item count of src through ox_inventory (nil when the lookup fails).
+local function ItemCount(src, item)
+    if GetResourceState('ox_inventory') ~= 'started' then return nil end
+    local ok, res = pcall(function() return exports.ox_inventory:Search(src, 'count', item) end)
+    if not ok then
+        CP.warn(TAG, 'ox_inventory Search for %s failed: %s', item, tostring(res))
+        return nil
+    end
+    return tonumber(ok and res)
+end
+
+function T.hasTabletItem(src)
+    local item = TabletItem()
+    if not item then return false end
+    local n = ItemCount(src, item)
+    return n ~= nil and n > 0
+end
+
+local function InArena(src)
+    local ok, v = Call('Alerts', 'inArena', src)
+    return ok and v == true
+end
+
+-- true, or false and an error key. officer is CP.Access.getOfficer's (department, duty and suspensions checked).
+function T.checkAccess(src, officer, via, deskIndex)
+    local access = AccessCfg()
+    local switch = WAY_SWITCH[via]
+    if switch and access[switch] == false then return false, 'err.access_off' end
+    if via == 'item' and not TabletItem() then return false, 'err.access_off' end
+    if InArena(src) then return false, 'err.in_arena' end
+    if via == 'desk' then
+        local desk = T.desk(deskIndex)
+        if not desk then return false, 'err.not_at_desk' end
+        if not T.deskAllows(desk, officer and officer.department) then return false, 'err.desk_department' end
+        local ped = GetPlayerPed(src)
+        if not ped or ped == 0 then return false, 'err.not_at_desk' end
+        if not T.inDeskBox(desk, GetEntityCoords(ped), DESK_MARGIN) then return false, 'err.not_at_desk' end
+        return true
+    end
+    if access.requireItem == true then
+        -- a failed lookup counts as no item, only while the item is required
+        if not T.hasTabletItem(src) then return false, 'err.no_tablet_item' end
+    end
+    return true
 end
 
 -- ============================================================================
@@ -300,6 +422,16 @@ local function SessionOfficer(o, row)
     }
 end
 
+-- How the tablet was opened: args.via (an unknown way is the command), or, for a later request of the same
+-- tablet (switchUi, refreshSession) that names none, the way of the session that passed last.
+local function WayOf(src, args)
+    local via = VIA[args.via] and args.via or nil
+    local desk = math.tointeger(tonumber(args.desk) or -1)
+    if not via and args.via == nil and lastWay[src] then return lastWay[src].via, lastWay[src].desk end
+    via = via or 'command'
+    return via, (via == 'desk' and desk and desk > 0) and desk or nil
+end
+
 -- The Session (§9.2) for 'ui', or nil and an error key. May yield. args: { via, desk } (how it was opened).
 local function BuildSession(src, ui, args)
     if not CP.Access then return nil, 'err.internal' end
@@ -321,6 +453,16 @@ local function BuildSession(src, ui, args)
     else
         return nil, 'err.invalid_ui'
     end
+    args = type(args) == 'table' and args or {}
+    local via, desk = WayOf(src, args)
+    -- the silent session only refreshes the HUD theme at login: it opens nothing
+    if ui ~= 'admin' and args.silent ~= true then
+        local okWay, wayErr = T.checkAccess(src, officer, via, desk)
+        if not okWay then return nil, wayErr end
+        lastWay[src] = { via = via, desk = desk }
+        -- an open tablet asks for its badges: 'nav' pushes go to it from now on
+        navWatch[src] = os.time()
+    end
 
     local theme, logo
     if ui == 'admin' then
@@ -336,9 +478,6 @@ local function BuildSession(src, ui, args)
     local row = officer and ReadProfile(officer.citizenid) or nil
     local config = SessionConfig()
     for k, v in pairs(ExtraConfig(officer and officer.department)) do config[k] = v end
-    args = type(args) == 'table' and args or {}
-    local via = VIA[args.via] and args.via or 'command'
-    local desk = math.tointeger(tonumber(args.desk) or -1)
     return {
         ui = ui,
         title = type(title) == 'string' and title ~= '' and title or 'Crimson-Police',
@@ -350,7 +489,7 @@ local function BuildSession(src, ui, args)
         locale = CP.Locale.all(),
         config = config,
         prefs = PrefsOf(row),
-        access = { via = via, desk = (via == 'desk' and desk and desk > 0) and desk or nil },
+        access = { via = via, desk = desk },
         serverTime = os.time(),
     }
 end
@@ -370,6 +509,42 @@ CP.Net.callback('getSession', function(src, args)
     end
     return session
 end, { rate = 4 })
+
+-- Admin UI → Departments: the ways, the mission desks and each department's personal accents (TabletAccessView).
+CP.Net.callback('admin:getTabletAccess', function(src)
+    if not (CP.Access and CP.Access.isAdmin(src)) then return nil, 'err.not_admin' end
+    local access = AccessCfg()
+    local ways = {}
+    for _, k in ipairs({ 'command', 'keybind', 'item', 'desk', 'requireItem' }) do
+        ways[k] = k == 'requireItem' and access[k] == true or access[k] ~= false
+    end
+    local desks = {}
+    for i, d in ipairs(type(Config.Tablet and Config.Tablet.desks) == 'table' and Config.Tablet.desks or {}) do
+        if type(d) == 'table' and d.coords then
+            local size = d.size or { x = 1.0, y = 1.0, z = 1.0 }
+            desks[#desks + 1] = {
+                index = i,
+                label = type(d.label) == 'string' and d.label or ('#%d'):format(i),
+                coords = { x = d.coords.x, y = d.coords.y, z = d.coords.z },
+                size = { x = size.x, y = size.y, z = size.z },
+                rotation = tonumber(d.rotation) or 0.0,
+                departments = type(d.departments) == 'table' and CP.U.copy(d.departments) or nil,
+                prop = type(d.prop) == 'string' and d.prop or nil,
+            }
+        end
+    end
+    local accents = {}
+    for _, dept in ipairs(CP.Access.departments()) do accents[dept.key] = Accents(dept.key) end
+    local cfg = ProfileConfig(nil)
+    return {
+        ways = ways,
+        item = TabletItem(),
+        deskDistance = tonumber(Config.Tablet and Config.Tablet.deskDistance) or 3.0,
+        desks = desks,
+        accents = accents,
+        appearances = cfg.appearances,
+    }
+end, { rate = 3 })
 
 -- ============================================================================
 --                                CLIENT HELPERS
@@ -404,12 +579,113 @@ function T.notifyMany(srcs, kind, key, vars)
     return sent
 end
 
+local ScheduleNav
+
 function T.push(src, topic, data)
     local n = ToSrc(src)
     if not n or type(topic) ~= 'string' or topic == '' then return false end
     TriggerClientEvent(CP.e('client:push'), n, topic, CP.U.serialize(data))
+    if NAV_TOPICS[topic] then ScheduleNav(n) end
     return true
 end
+
+-- ============================================================================
+--                             SIDEBAR BADGE COUNTS
+-- ============================================================================
+-- NavCounts (web/src/shared/types.ts). Every count comes from its module's own cache through a guarded call: a
+-- missing module gives 0. The Review Queue count is the only one that reads the database (30 s per src).
+
+local function Count(ok, v)
+    if not ok then return 0 end
+    if type(v) == 'table' then return #v end
+    local n = math.tointeger(tonumber(v) or 0) or 0
+    return n > 0 and n or 0
+end
+
+local function InviteCount(src)
+    local ok, n = Call('Units', 'invitesFor', src)
+    if ok then return Count(true, n) end
+    local okV, view = Call('Units', 'view', src)
+    if not okV or type(view) ~= 'table' or type(view.invites) ~= 'table' then return 0 end
+    local c = 0
+    for _, inv in ipairs(view.invites) do
+        if (tonumber(inv.expiresIn) or 0) > 0 then c = c + 1 end
+    end
+    return c
+end
+
+local function Can(src, action)
+    local ok, yes = Call('Permissions', 'can', src, action)
+    return ok and yes == true
+end
+
+local function ReviewCount(src, officer)
+    if not officer or not officer.isSupervisor then return 0 end
+    local now = os.time()
+    local c = reviewCache[src]
+    if c and now - c.at < REVIEW_CACHE_S then return c.n end
+    local n = 0
+    if Can(src, 'reviewFlagged') then
+        n = n + Count(Call('Admin', 'flaggedRows', officer.department, officer.citizenid))
+    end
+    if Can(src, 'handleDisputes') then n = n + Count(Call('Disputes', 'forSupervisor', src)) end
+    if Can(src, 'reviewProfiles') then n = n + Count(Call('Profile', 'queue', officer.department)) end
+    reviewCache[src] = { at = now, n = n }
+    return n
+end
+
+function T.navCounts(src)
+    local counts = { invites = 0, calls = 0, review = 0, commendations = 0, rewards = 0, onRun = false }
+    local n = ToSrc(src)
+    if not n then return counts end
+    local now = os.time()
+    local c = navCache[n]
+    if c and now - c.at < NAV_CACHE_S then return c.counts end
+    local okO, officer = Call('Access', 'getOfficer', n)
+    officer = okO and type(officer) == 'table' and officer or nil
+    if officer then
+        counts.invites = InviteCount(n)
+        counts.calls = Count(Call('MissionCalls', 'claimableCount', n))
+        counts.review = ReviewCount(n, officer)
+        counts.commendations = Count(Call('Profile', 'newCommendations', officer.citizenid))
+        counts.rewards = Count(Call('Rewards', 'lockerCount', officer.citizenid))
+        local okR, run = Call('Runs', 'getBySrc', n)
+        counts.onRun = okR and run ~= nil
+    end
+    navCache[n] = { at = now, counts = counts }
+    return counts
+end
+
+-- A push that may change a badge: the counts are built again and pushed once, a second later.
+ScheduleNav = function(src)
+    navCache[src] = nil
+    local watched = navWatch[src]
+    if not watched or os.time() - watched > NAV_WATCH_S or navPending[src] then return end
+    navPending[src] = true
+    SetTimeout(NAV_PUSH_DELAY_MS, function()
+        navPending[src] = nil
+        if not navWatch[src] then return end
+        T.push(src, 'nav', T.navCounts(src))
+    end)
+end
+
+CP.Net.callback('getNavCounts', function(src)
+    navWatch[src] = os.time()
+    return T.navCounts(src)
+end, { rate = 4 })
+
+-- requireItem: the client saw the item leave the inventory. The server checks again and closes the tablet.
+RegisterNetEvent(CP.e('server:tabletItemGone'), function()
+    local src = source
+    if AccessCfg().requireItem ~= true then return end
+    -- each report asks ox_inventory: a flood of them is dropped
+    if not CP.Net.rateOk(src, 'tablet:itemGone', 2, 1000) then return end
+    local way = lastWay[src]
+    if way and way.via == 'desk' then return end
+    if T.hasTabletItem(src) then return end
+    CP.log(TAG, 'tablet item gone for %d: closing the tablet', src)
+    TriggerClientEvent(CP.e('client:closeTablet'), src, 'err.no_tablet_item')
+end)
 
 local function OpenAdminNow(src)
     local session, errKey = BuildSession(src, 'admin')
@@ -487,4 +763,9 @@ CreateThread(function()
             end
         end
     end
+end)
+
+AddEventHandler('playerDropped', function()
+    local src = source
+    lastWay[src], navCache[src], reviewCache[src], navWatch[src], navPending[src] = nil, nil, nil, nil, nil
 end)

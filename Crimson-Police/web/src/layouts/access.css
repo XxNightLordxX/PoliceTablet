@@ -1,0 +1,199 @@
+/* Tablet shell additions: the header picture and level, the notification bell, sidebar live dots and the ready
+   check slot. Only --cp-* variables. */
+
+/* Header officer */
+.cp-header-officer {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: 6px;
+    padding-left: 14px;
+    border-left: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.cp-header-level {
+    padding: 2px 8px;
+    border-radius: var(--cp-radius-pill);
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    background: rgba(0, 0, 0, 0.22);
+    font-size: var(--cp-fs-xs);
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+}
+
+.cp-header-level--grey {
+    border-color: var(--cp-xp-grey);
+}
+
+.cp-header-level--bronze {
+    border-color: var(--cp-xp-bronze);
+}
+
+.cp-header-level--silver {
+    border-color: var(--cp-xp-silver);
+}
+
+.cp-header-level--gold {
+    border-color: var(--cp-xp-gold);
+}
+
+.cp-header-level--platinum {
+    border-color: var(--cp-xp-platinum);
+}
+
+/* Bell */
+.cp-bell {
+    position: relative;
+    display: flex;
+}
+
+.cp-bell__button {
+    color: inherit;
+}
+
+.cp-bell__button.is-open {
+    background: rgba(255, 255, 255, 0.16);
+}
+
+.cp-bell__count {
+    position: absolute;
+    top: -3px;
+    right: -3px;
+    min-width: 17px;
+    height: 17px;
+    padding: 0 4px;
+    border-radius: var(--cp-radius-pill);
+    background: var(--cp-accent);
+    color: var(--cp-accent-contrast);
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 17px;
+    text-align: center;
+    pointer-events: none;
+}
+
+.cp-bell__panel {
+    position: absolute;
+    top: calc(100% + 10px);
+    right: 0;
+    z-index: 20;
+    width: 360px;
+    max-height: 460px;
+    overflow: auto;
+    border-radius: var(--cp-radius);
+    border: 1px solid var(--cp-border-strong);
+    background: var(--cp-surface);
+    color: var(--cp-text);
+    box-shadow: var(--cp-shadow-lg);
+}
+
+.cp-bell__head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 12px 14px 10px;
+    border-bottom: 1px solid var(--cp-border);
+}
+
+.cp-bell__head span {
+    font-size: var(--cp-fs-xs);
+    color: var(--cp-subtle);
+}
+
+.cp-bell__empty {
+    padding: 22px 14px;
+    color: var(--cp-muted);
+    text-align: center;
+}
+
+.cp-bell__list {
+    margin: 0;
+    padding: 4px 0;
+    list-style: none;
+}
+
+.cp-bell__item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 9px 14px;
+    border-bottom: 1px solid var(--cp-border);
+}
+
+.cp-bell__item:last-child {
+    border-bottom: 0;
+}
+
+.cp-bell__icon {
+    flex: none;
+    margin-top: 2px;
+    color: var(--cp-info);
+}
+
+.cp-bell__item--success .cp-bell__icon {
+    color: var(--cp-success);
+}
+
+.cp-bell__item--warning .cp-bell__icon {
+    color: var(--cp-warning);
+}
+
+.cp-bell__item--error .cp-bell__icon {
+    color: var(--cp-danger);
+}
+
+.cp-bell__text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+    min-width: 0;
+    font-size: var(--cp-fs-sm);
+    line-height: 1.35;
+}
+
+.cp-bell__time {
+    flex: none;
+    font-size: var(--cp-fs-xs);
+    color: var(--cp-subtle);
+    font-variant-numeric: tabular-nums;
+}
+
+/* Sidebar live dot */
+.nav-live-dot {
+    width: 9px;
+    height: 9px;
+    margin-left: auto;
+    border-radius: 50%;
+    background: var(--cp-success);
+    box-shadow: 0 0 0 0 rgba(var(--cp-success-rgb), 0.6);
+    animation: nav-live-pulse 1.6s var(--cp-ease) infinite;
+}
+
+@keyframes nav-live-pulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(var(--cp-success-rgb), 0.6);
+    }
+
+    70% {
+        box-shadow: 0 0 0 7px rgba(var(--cp-success-rgb), 0);
+    }
+
+    100% {
+        box-shadow: 0 0 0 0 rgba(var(--cp-success-rgb), 0);
+    }
+}
+
+/* Ready check slot above the screens */
+.cp-main-ready {
+    position: relative;
+    z-index: 2;
+    flex: none;
+    margin: 14px 26px 0;
+}
+
+.cp-main-ready:empty {
+    display: none;
+}
