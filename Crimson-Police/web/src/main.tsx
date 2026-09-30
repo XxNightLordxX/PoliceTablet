@@ -1,6 +1,7 @@
 import { createRoot } from 'react-dom/client';
 import App from './App';
-import { isEnvBrowser } from './shared/nui';
+import { QuietBoundary } from './shared/components';
+import { clientAction, fetchNui, isEnvBrowser } from './shared/nui';
 import { applyTheme, DEFAULT_THEME } from './shared/theme';
 import './styles/base.css';
 import './styles/components.css';
@@ -12,7 +13,24 @@ async function boot() {
     if (isEnvBrowser()) await import('./mocks');
     applyTheme(document.documentElement, DEFAULT_THEME);
     const el = document.getElementById('root');
-    if (el) createRoot(el).render(<App />);
+    // The last line of defence: whatever still escapes hands the NUI focus back (Lua closes the tablet and the test
+    // panel), and the app mounts again with a fresh state a moment later (Lua sends the HUD, overlay and theme again
+    // on 'ready').
+    if (el) {
+        createRoot(el).render(
+            <QuietBoundary
+                name="app"
+                onError={() => {
+                    void fetchNui('close', {});
+                    void clientAction('testPanel', { open: false });
+                }}
+                retryMs={2000}
+                onRetry={() => setTimeout(() => void fetchNui('ready', { acks: true }), 250)}
+            >
+                <App />
+            </QuietBoundary>,
+        );
+    }
 }
 
 void boot();

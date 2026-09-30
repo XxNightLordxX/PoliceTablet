@@ -120,11 +120,20 @@ local function ReleaseFlag(src)
     alerts('clear', src)
 end
 
+-- The follow-up is over, however it ended: the client undoes whatever it still shows of it (the pick-up fade and
+-- overlay, docs/ARCHITECTURE.md §5.15). Once per entry.
+local function Ended(src, e, why)
+    if e.endSent then return end
+    e.endSent = true
+    TriggerClientEvent(CP.e('client:downedEnded'), src, e.runId, tostring(why))
+end
+
 local function Finish(src, e, why)
     if entries[src] ~= e or not PENDING[e.stage] then return end
     e.stage = 'done'
     CP.log(TAG, 'pick-up of %d finished (%s)', src, tostring(why))
     ReleaseFlag(src)
+    Ended(src, e, why)
 end
 
 local function CancelEntry(src, e, reason)
@@ -139,6 +148,7 @@ local function CancelEntry(src, e, reason)
     if clientBusy and reason ~= 'client_abort' then
         TriggerClientEvent(CP.e('client:pickupCancel'), src, e.runId)
     end
+    Ended(src, e, reason)
     return true
 end
 
@@ -171,6 +181,7 @@ local function EmsPath(src, e)
         e.stage = 'done'
         CP.log(TAG, '%d entered last stand without our flag: sc-ambulance already alerted EMS itself', src)
         Notify(src, 'info', 'downed.ems_on_duty')
+        Ended(src, e, 'ems')
         return
     end
     local cleared = CP.Alerts and type(CP.Alerts.foreignClearedAt) == 'table' and CP.Alerts.foreignClearedAt[src] or nil
@@ -183,6 +194,7 @@ local function EmsPath(src, e)
     e.stage = 'ems_sent'
     TriggerClientEvent(CP.e('client:requestEMS'), src, e.runId)
     CP.log(TAG, 'EMS request sent for %d (run %s)', src, tostring(e.runId))
+    Ended(src, e, 'ems')
 end
 
 -- ============================================================================

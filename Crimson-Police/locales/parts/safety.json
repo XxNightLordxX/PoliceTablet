@@ -14,6 +14,7 @@
   "downed.dropped_off": "An NPC unit dropped you off at the hospital. There is no bill.",
   "downed.ems_on_duty": "EMS is on duty: wait for a medic.",
   "downed.ems_requested": "EMS has been called for you.",
+  "err.downed": "You can't use the tablet while you are down.",
   "err.route_inactive": "You are not on the way to a mission start.",
   "err.route_arrived": "You have already reached the mission start.",
   "err.route_disabled": "The start route is off for this run.",

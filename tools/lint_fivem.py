@@ -26,6 +26,13 @@ Rules (a hit prints `file:line: RULE message`):
                         os.execute ("Permission denied"), so the command never runs.
   FX09 arena-natives    SetPlayerTeam, NetworkSetFriendlyFireOption, SetCanAttackFriendly, a routing bucket
                         setter or CancelEvent (docs/CRIMSON_ARENA.md rules 9 to 11).
+  FX10 loop-no-yield    a while / repeat loop where one pass can go round with no Wait (no yield, no break, return
+                        or error on that path), nothing moves what the condition reads on every pass, and the
+                        condition waits on game state: a native (GetGameTimer too: it does not move while the
+                        thread runs), a function of the resource that calls one, or a variable the body sets from
+                        one. The game (or the server) hangs with no error and no crash log. Also an ipairs loop
+                        that appends to the table it walks. The parsing and the flow are in tools/lua_flow.py;
+                        `python3 tools/lua_flow.py --all <files>` explains every loop.
 
 Known hits live in tools/lint_baseline.txt, each with its reason: a real bug waiting for its fix (bugs.md of
 the fix round) or a deliberate use. A baseline line that no longer matches a hit is reported as stale, so the
@@ -34,6 +41,8 @@ re-indenting or restyling a file keeps its baseline.
 """
 import glob, json, os, re, sys
 from collections import Counter
+
+import lua_flow
 
 ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 RES = os.path.join(ROOT, 'Crimson-Police')
@@ -343,6 +352,15 @@ def lint():
             ln = next(k for k, c in enumerate(blank, 1) if CREATES.search(c))
             add(path, ln, 'FX06', 'networked entities without SetEntityOrphanMode (the default deletes them when'
                                   ' no player is near)')
+    # FX10: every file at once (a helper that always waits may live in another file)
+    findings, errors = lua_flow.loop_findings({p: read(p) for p in files})
+    for path, ln, verdict, kind, cond, where, note in findings:
+        if verdict == 'HIT':
+            add(path, ln, 'FX10', f'{kind} loop ({cond}) in {where}: {note}')
+    for path, err in errors:
+        m = re.search(r'line (\d+)', err)
+        add(path, int(m.group(1)) if m else 1, 'FX10', f'tools/lua_flow.py cannot parse this file ({err}): its '
+                                                      'loops were not checked')
     return hits, len(files), natives is not None
 
 

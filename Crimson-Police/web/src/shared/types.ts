@@ -428,7 +428,8 @@ export type ProfileRun = Profile['runs'][number];
 // Every message Lua sends to the NUI (ARCHITECTURE §9.1), keyed by `type`.
 export interface NuiMessageMap {
     // `screen` (optional) opens that screen key, e.g. 'active' right after accepting a type.
-    open: { type: 'open'; ui: UiKind; session: Session; screen?: string };
+    // `seq` (optional): the NUI confirms it shows this UI with the 'opened' endpoint ({ seq }).
+    open: { type: 'open'; ui: UiKind; session: Session; screen?: string; seq?: number };
     close: { type: 'close' };
     session: { type: 'session'; session: Session };
     notify: { type: 'notify'; notification: Notification };
@@ -443,4 +444,4 @@ export type NuiMessageType = keyof NuiMessageMap;
 export type NuiMessage = NuiMessageMap[NuiMessageType];
 
 // NUI → Lua endpoints (POST https://<resource>/<endpoint>).
-export type NuiEndpoint = 'ready' | 'close' | 'request' | 'action' | 'client' | 'switchUi';
+export type NuiEndpoint = 'ready' | 'opened' | 'close' | 'request' | 'action' | 'client' | 'switchUi';

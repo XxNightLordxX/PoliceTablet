@@ -148,6 +148,9 @@ Folders of the parity-plus build (all in the spec's Feature folders table; §5.3
 deviations, is in `docs/notes/<package>.md` (foundation, custody, missions_c, missioncalls, teams, profile,
 boards, rewards, access).
 
+`modules/diag/` (client, §5.35): the F8 command `CrimsonPoliceState`, added with the freeze fix
+(`docs/notes/freeze.md`).
+
 ---
 
 ## 2. Shared layer (already written — read the files)
@@ -529,6 +532,14 @@ Parity-plus additions (WP1, WP8; docs/notes/access.md):
 - Plain event `server:tabletItemGone` (2 a second): with requireItem on, not at a desk and the item really gone, the
   server sends `client:closeTablet` (errKey). Callback `admin:getTabletAccess` → TabletAccessView
   (web/src/types/access.ts).
+- C Down (metadata `isdead` / `inlaststand`, or a dead ped): the Officer and Supervisor UIs refuse to open
+  (`err.downed`) and close within 0.5 s when the officer goes down while they are open, so no NUI focus is held
+  while sc-ambulance's death or last stand screen is up (the owner's rule for sc-dispatch's bill). The Admin UI is
+  exempt.
+- C Every `open` sent to the NUI carries `seq`. Once the NUI said at `ready` that it confirms (`{ acks = true }`), an
+  open it does not confirm with `opened { seq }` within 6 s closes the tablet and releases the focus (a crashed or
+  never-loaded page must not hold the cursor). The NUI hands the focus back itself (`close`) when an `open` cannot
+  be shown or a layout crashes (§9.1).
 - C `open(ui, opts)` with `opts = { via, desk, screen }`; key mapping `crimsonpolice_dispatch`
   (`Config.Tablet.dispatchKey`) opens on Dispatch; mission desks are ox_target box zones (`crimson-police:desk`)
   created once, shown only to an on-duty officer of an allowed department outside Crimson-Arena (display only),
@@ -797,6 +808,12 @@ Also reacts at once to `CP.Qbx.onMetaDataChange` (`isdead` / `inlaststand` set t
 done) when they are not active, in the arena, the run ended, or that down is already past the leave.
 `cancel(src, reason)`, `isPending(src)`.
 Client: `client:pickup` → fade out, overlay "Picked up by an NPC unit", wait for revive, detach, move to the drop-off, fade in; `client:requestEMS` → `CP.Ambulance.sendEMSRequest()`.
+End of the follow-up: every way an entry leaves the pending stages (done, every cancel reason, the EMS hand-over)
+sends `client:downedEnded` (runId, reason) once. The client tracks its own fade and overlay (set before the call that
+shows them, cleared after the one that removes them); a pick-up still running for that run stops as on
+`client:pickupCancel`, otherwise anything of ours still on screen is undone. C `restore(why) -> boolean`: the same
+safety net, a no-op while a pick-up runs; CP.Runs calls it at every run cleanup. `server:pickupDone` is sent once per
+pick-up (before the screen is restored), and a pick-up whose abort fails still ends and clears `busy()`.
 
 ### 5.16 CP.Units — modules/units
 Server: `unitOf(src) -> unit|nil` (`unit = { id, leader, members = { src... }, invites = { [src] = expiresAt }, locked }`),
@@ -1177,6 +1194,13 @@ running warns: no /callsign, and sc-dispatch suspensions do not keep officers of
 Crimson-Arena are info lines), webhooks (`CP.Admin.webhooks()`: which are on, and a warning per invalid convar);
 CP.Rewards registers its own.
 
+### 5.35 CP.Diag — modules/diag (client; the freeze fix)
+F8 command `CrimsonPoliceState`: four `[crimson-police:diag]` lines with the screen fade, NUI focus (and keep input),
+scripted camera, pause menu, player control, frozen, dead, last stand and dead metadata, in a vehicle, then what
+Crimson-Police holds (tablet, panel focus, pick-up, run) and which of the rest is not ours.
+`CrimsonPoliceState unstick` first closes our tablet, releases our panel focus and runs `CP.Downed.restore`, never
+anything another resource holds. `state() -> table`, `unstick()`.
+
 ## 6. Cross-cutting conventions
 
 ### 6.1 Entities and NPCs
@@ -1348,6 +1372,7 @@ Rules for blocks:
 | `client:pickup` | runId, dropOff (vec3) | downed |
 | `client:requestEMS` | runId | downed |
 | `client:pickupCancel` | runId (the server cancelled a pick-up it had already sent; the client fades back in and never teleports) | downed |
+| `client:downedEnded` | runId, reason (`client done`, `timeout`, `recovered`, `in_arena`, `ems`, `unload`, …: the follow-up is over; a pick-up still running stops, and whatever of it is still on screen is undone) | downed |
 | `client:operation` | state (`launched`|`started`|`ended`|`cancelled`), missionLabel | operations |
 | `client:missions` | list of definitions | missions |
 | `client:notify` | `{ kind, key, vars, title, duration }` | tablet (server helper) |
@@ -1468,7 +1493,7 @@ Lua → NUI: `SendNUIMessage({ type = ..., ... })` (only modules/tablet/client.l
 
 | type | fields | meaning |
 |---|---|---|
-| `open` | `ui`, `session`, `screen?` | show a UI ('officer'\|'supervisor'\|'admin') and take focus; `screen` opens that screen (e.g. 'dispatch') |
+| `open` | `ui`, `session`, `screen?`, `seq?` | show a UI ('officer'\|'supervisor'\|'admin') and take focus; `screen` opens that screen (e.g. 'dispatch'); `seq` is confirmed with `opened` |
 | `close` | — | hide the UI (HUD stays) |
 | `session` | `session` | refreshed session |
 | `notify` | `notification = { id, kind, title?, text, duration }` | Crimson-Police toast |
@@ -1481,7 +1506,8 @@ NUI → Lua: `fetch('https://Crimson-Police/<endpoint>', { method: 'POST', body:
 
 | endpoint | body | reply |
 |---|---|---|
-| `ready` | `{}` | `{ ok: true }` |
+| `ready` | `{ acks? }` (`acks: true`: this NUI confirms every `open`) | `{ ok: true }` |
+| `opened` | `{ seq }` (the UI of that `open` rendered) | `{ ok: true }` |
 | `close` | `{}` | `{ ok: true }` |
 | `request` | `{ name, args }` | `{ ok, data?, error? }` — ox_lib callback `crimson-police:<name>` |
 | `action` | `{ name, payload }` | `{ ok, data?, error? }` — net event `crimson-police:<name>` (name includes `server:`) |
@@ -1664,7 +1690,8 @@ read a failure.
 - `luac5.4 -p` on every Lua file it wrote.
 - `python3 tools/lint_fivem.py`: the FiveM pitfall rules (wrong-side natives, late `source`, client `os`/`io`,
   unguarded focus release, raising callback awaits, orphan mode, `os.rename` answers, server `os.execute`,
-  CRIMSON_ARENA natives); deliberate uses and bugs awaiting their fix are listed in `tools/lint_baseline.txt`.
+  CRIMSON_ARENA natives, loops that can go round with no Wait (FX10, `tools/lua_flow.py`)); deliberate uses and bugs
+  awaiting their fix are listed in `tools/lint_baseline.txt`.
 - `python3 tools/restyle.py --check` lists no file: every Lua and web source is formatted to `docs/STYLE.md`
   (`python3 tools/restyle.py <files>` formats them).
 - `cd Crimson-Police/web && npm run build` (tsc + vite) passes, for slices that touch web/.

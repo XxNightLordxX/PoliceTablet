@@ -14,11 +14,11 @@ import { FadeOverlay } from './hud/FadeOverlay';
 import { Hud } from './hud/Hud';
 import { HudColumn } from './hud/HudColumn';
 import { ResultScreen } from './hud/ResultScreen';
-import { Toasts } from './shared/components';
+import { QuietBoundary, Toasts } from './shared/components';
 import { closeTopLayer, useHudScale, usePush, useViewport } from './shared/hooks';
 import { LocaleProvider, t } from './shared/i18n';
 import { NavigationContext, type NavigationValue, type ScreenKey, type ScreenParams } from './shared/navigation';
-import { fetchNui, isEnvBrowser, request, useNuiEvent } from './shared/nui';
+import { clientAction, fetchNui, isEnvBrowser, request, useNuiEvent } from './shared/nui';
 import { SessionContext, type SessionContextValue } from './shared/session';
 import { applyTheme, DEFAULT_THEME } from './shared/theme';
 import { normalizeHud, normalizeResult, normalizeSession } from './shared/data';
@@ -52,6 +52,7 @@ export default function App() {
     const [debug, setDebug] = useState<unknown>(null);
     const [screens, setScreens] = useState<ScreenState>(initialScreens);
     const [switching, setSwitching] = useState(false);
+    const [openSeq, setOpenSeq] = useState(0);
     const hudScale = useHudScale();
     const viewport = useViewport();
 
@@ -59,7 +60,8 @@ export default function App() {
     useEffect(() => {
         if (readySent) return;
         readySent = true;
-        void fetchNui('ready', {});
+        // acks: every 'open' with a seq is confirmed with 'opened' once the UI is on screen
+        void fetchNui('ready', { acks: true });
     }, []);
 
     const addToast = useCallback((n: Notification) => {
@@ -76,11 +78,21 @@ export default function App() {
     useEffect(() => subscribeToasts(addToast), [addToast]);
 
     useNuiEvent('open', m => {
-        if (!m.session) return;
-        const next = normalizeSession(m.session);
+        let next: Session;
+        try {
+            if (!m.session) throw new Error('open without a session');
+            next = normalizeSession(m.session);
+        } catch (e) {
+            // Lua already took the NUI focus: hand it back rather than keep it on a page that shows nothing.
+            console.error('[crimson-police:ui] open failed', e);
+            setUi(null);
+            void fetchNui('close', {});
+            return;
+        }
         const target: UiKind = m.ui ?? next.ui;
         setSession(next);
         setUi(target);
+        if (typeof m.seq === 'number') setOpenSeq(m.seq);
         if (m.screen && screensFor(target, next).some(s => s.key === m.screen)) {
             setScreens(prev => ({ ...prev, [target]: { key: m.screen as ScreenKey, params: {} } }));
         }
@@ -126,6 +138,9 @@ export default function App() {
     }, []);
 
     const dismissResult = useCallback(() => setResult(null), []);
+
+    // A crashed HUD or test overlay may be the panel that held the NUI focus (test controls, invitations).
+    const releaseTestFocus = useCallback(() => void clientAction('testPanel', { open: false }), []);
 
     const refreshSession = useCallback(async () => {
         if (!ui) return;
@@ -189,6 +204,12 @@ export default function App() {
 
     const locale = session?.locale ?? bootLocale ?? null;
     const uiOpen = !!(ui && session);
+
+    // The UI of that 'open' is on screen (a crashed layout closed it first): without this Lua releases the focus.
+    useEffect(() => {
+        if (uiOpen && openSeq > 0) void fetchNui('opened', { seq: openSeq });
+    }, [uiOpen, openSeq]);
+
     // The HUD hides only while the Officer UI is open (its tablet pins the run bar instead). The Supervisor and
     // Admin UIs have no run bar, so the HUD (timer, objectives, off-route countdown) stays on top of them, as does
     // the result card (SPEC Route to the start: the off-route warning shows on the HUD and the tablet).
@@ -226,35 +247,61 @@ export default function App() {
             <SessionContext.Provider value={sessionValue}>
                 <NavigationContext.Provider value={nav}>
                     {showColumn ? (
-                        <HudColumn scale={hudScale} overUi={uiOpen}>
-                            {showHud && hud ? <Hud hud={hud} /> : null}
-                            {result ? <ResultScreen key={resultSeq} result={result} onDismiss={dismissResult} /> : null}
-                        </HudColumn>
+                        <QuietBoundary
+                            name="hud column"
+                            resetKey={`${resultSeq}:${hud?.runId ?? ''}`}
+                            onError={releaseTestFocus}
+                        >
+                            <HudColumn scale={hudScale} overUi={uiOpen}>
+                                {showHud && hud ? (
+                                    <QuietBoundary name="hud" resetKey={hud.runId} onError={releaseTestFocus}>
+                                        <Hud hud={hud} />
+                                    </QuietBoundary>
+                                ) : null}
+                                {result ? (
+                                    <QuietBoundary name="result card" resetKey={resultSeq}>
+                                        <ResultScreen key={resultSeq} result={result} onDismiss={dismissResult} />
+                                    </QuietBoundary>
+                                ) : null}
+                            </HudColumn>
+                        </QuietBoundary>
                     ) : null}
 
-                    <DebugOverlay debug={debug} hud={hud} />
+                    <QuietBoundary name="debug overlay" resetKey={debug} onError={releaseTestFocus}>
+                        <DebugOverlay debug={debug} hud={hud} />
+                    </QuietBoundary>
 
-                    {overlay?.kind === 'fade' ? <FadeOverlay overlay={overlay} /> : null}
-                    {overlay &&
-                    (overlay.kind === 'placement' || overlay.kind === 'recording' || overlay.kind === 'testdrive') ? (
-                        <BuilderOverlay overlay={overlay} />
-                    ) : null}
+                    <QuietBoundary name="overlay" resetKey={overlay}>
+                        {overlay?.kind === 'fade' ? <FadeOverlay overlay={overlay} /> : null}
+                        {overlay &&
+                        (overlay.kind === 'placement' ||
+                            overlay.kind === 'recording' ||
+                            overlay.kind === 'testdrive') ? (
+                            <BuilderOverlay overlay={overlay} />
+                        ) : null}
+                    </QuietBoundary>
 
                     {uiOpen ? (
-                        ui === 'admin' ? (
-                            <AdminLayout />
-                        ) : ui === 'supervisor' ? (
-                            <SupervisorLayout />
-                        ) : (
-                            <OfficerLayout />
-                        )
+                        // A crashed layout shell (outside ScreenHost's per-screen boundary) closes the tablet, so Lua
+                        // releases the NUI focus instead of holding it on an empty page.
+                        <QuietBoundary name={`${ui} layout`} resetKey={`${ui}:${openSeq}`} onError={close}>
+                            {ui === 'admin' ? (
+                                <AdminLayout />
+                            ) : ui === 'supervisor' ? (
+                                <SupervisorLayout />
+                            ) : (
+                                <OfficerLayout />
+                            )}
+                        </QuietBoundary>
                     ) : null}
 
-                    <Toasts
-                        toasts={toasts}
-                        style={toastStyle}
-                        onDismiss={id => setToasts(list => list.filter(x => x.id !== id))}
-                    />
+                    <QuietBoundary name="toasts" resetKey={toasts}>
+                        <Toasts
+                            toasts={toasts}
+                            style={toastStyle}
+                            onDismiss={id => setToasts(list => list.filter(x => x.id !== id))}
+                        />
+                    </QuietBoundary>
 
                     {DevPanel ? (
                         <Suspense fallback={null}>

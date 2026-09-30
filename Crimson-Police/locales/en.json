@@ -2443,6 +2443,7 @@
   "err.dispute_not_found": "That dispute could not be found.",
   "err.dispute_open": "You already have an open dispute about this run.",
   "err.dispute_window": "Disputes are only possible within the dispute window after the run.",
+  "err.downed": "You can't use the tablet while you are down.",
   "err.draw_unknown_mission": "That mission could not be found.",
   "err.duplicate_event": "That event was already received.",
   "err.hourly_cap": "You reached the hourly limit of completed missions.",

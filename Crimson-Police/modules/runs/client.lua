@@ -226,6 +226,15 @@ local function RouteStop()
     end
 end
 
+-- The safety net at every run end: nothing Crimson-Police put on screen outlives the run (a pick-up that is
+-- still running keeps its fade: it ends it itself).
+local function RestoreScreen()
+    if CP.Downed and CP.Downed.restore then
+        local ok, err = pcall(CP.Downed.restore, 'run end')
+        if not ok then CP.err(TAG, 'CP.Downed.restore failed: %s', tostring(err)) end
+    end
+end
+
 -- End the local run: stop every block half, the route and the telemetry loops.
 local function Cleanup()
     local run = current
@@ -235,6 +244,7 @@ local function Cleanup()
     HideStartCircle(run)
     StopAllBlocks(run)
     RouteStop()
+    RestoreScreen()
     CP.log(TAG, 'run %s cleaned up', tostring(run.id))
 end
 

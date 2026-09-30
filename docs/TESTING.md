@@ -12,7 +12,7 @@ passes (docs/ARCHITECTURE.md §11). How work flows around the checks is in docs/
 |---|---|---:|
 | `syntax` | `luac5.4 -p` on every `.lua` file in `Crimson-Police/`, `tests/` and `tools/` | 0.3 s |
 | `contracts` | `python3 tools/check_contracts.py` (module calls, events, NUI names, locale keys, build stamp) | 0.4 s |
-| `lint-fivem` | `python3 tools/lint_fivem.py`: FiveM pitfall rules FX01-FX09, known hits in `tools/lint_baseline.txt` | 1.7 s |
+| `lint-fivem` | `python3 tools/lint_fivem.py`: FiveM pitfall rules FX01-FX10 (FX10, loops that can go round with no Wait, parses the Lua with `tools/lua_flow.py`), known hits in `tools/lint_baseline.txt` | 4.5 s |
 | `style` | `python3 tools/restyle.py --check`: restyles a scratch copy of the tree and fails on any file that differs (docs/STYLE.md) | 26 s |
 | `suite-db` | `lua5.4 tests/run.lua`: 30 specs on MariaDB | 16–17 s |
 | `suite-files` | `lua5.4 tests/run.lua --storage=files`: the same specs with the database off (saves folder) | 16–18 s |
@@ -301,6 +301,9 @@ lint_fivem FAIL: 1 new hits, 7 known (baseline), 1 stale baseline lines
   Fix the code; if the use is deliberate, add a line to `tools/lint_baseline.txt`
   (`<rule> <file> <code> -- <reason>`, `<code>` being the source line) and say why in the reason.
 - `stale:` a baseline line whose hit is gone (the bug it names was fixed): delete the line in the same commit.
+- An FX10 hit names the loop and the game state its condition waits on. `python3 tools/lua_flow.py --all <file>`
+  gives every loop of a file its verdict (HIT, bounded, pure, ok) and why; tests/freeze_spec.lua checks the rule
+  on the planted loops of `tests/fixtures/lint/fx10_loops.lua`.
 - `python3 tools/lint_fivem.py --all` also prints the hits the baseline accepts. Rule FX01 reads
   `tools/fivem_natives.txt`; `--update-natives natives.json natives_cfx.json` rebuilds it from
   runtime.fivem.net's lists.

@@ -21,6 +21,8 @@ local DESK_OPTION = 'crimson-police:desk'
 local DESK_TARGET_DISTANCE = 2.0     -- metres: how close ox_target offers "Open Crimson-Police" at a desk
 local DESK_WATCH_MS = 500            -- how often the desk distance is checked while the tablet is open there
 local ITEM_WATCH_MS = 1000           -- how often the tablet item is looked for while requireItem is on
+local DOWN_WATCH_MS = 500            -- how often a downed officer is looked for while the tablet is open
+local OPEN_ACK_MS = 6000             -- the NUI confirms it shows the UI within this, or the focus is released
 
 -- Tablet prop and animation (held in the hand the animation uses; offsets tuned for this clip).
 local ANIM_DICT = 'amb@code_human_in_bus_passenger_idles@female@tablet@base'
@@ -53,6 +55,9 @@ local state = {
     openToken = 0,        -- bumped on every open and close: the desk and item watchers stop with it
     deskZones = nil,      -- ox_target zone ids of the mission desks, while they exist
     deskProps = {},       -- local laptop objects of the desks
+    openSeq = 0,          -- bumped on every 'open' sent to the NUI
+    ackSeq = 0,           -- the last 'open' the NUI confirmed it shows ('opened')
+    nuiAcks = false,      -- the NUI said at 'ready' that it confirms every 'open'
 }
 local clientActions = {}
 
@@ -67,6 +72,15 @@ end
 local function InForeignArena()
     local st = LocalPlayer and LocalPlayer.state
     return IsForeignArena(st and st.crimsonArena)
+end
+
+-- Dead or in last stand (qbx metadata, or a dead ped). The owner's own rule for sc-dispatch's bill: never hold the
+-- NUI focus while the death or last stand screen is up, or the player is left stuck.
+local function PlayerDown()
+    local pd = CP.Qbx and CP.Qbx.getPlayerData and CP.Qbx.getPlayerData() or {}
+    local md = type(pd) == 'table' and pd.metadata or nil
+    if type(md) == 'table' and (md.isdead == true or md.inlaststand == true) then return true end
+    return IsEntityDead(PlayerPedId()) == true
 end
 
 -- ============================================================================
@@ -337,7 +351,7 @@ end
 --                                 OPEN / CLOSE
 -- ============================================================================
 
-local StartWatchers, StopDeskPose
+local StartWatchers, StopDeskPose, WatchAck
 
 -- opts (optional): { via, desk, screen } how it was opened and the screen to show first.
 local function ShowUi(ui, session, opts)
@@ -356,10 +370,12 @@ local function ShowUi(ui, session, opts)
     state.jobName = type(pd.job) == 'table' and pd.job.name or nil
     if CP.Access and CP.Access.setSession then CP.Access.setSession(session) end
     if ui ~= 'admin' and type(session.theme) == 'table' then state.theme = session.theme end
-    T.send({ type = 'open', ui = ui, session = session, screen = opts.screen })
+    state.openSeq = state.openSeq + 1
+    T.send({ type = 'open', ui = ui, session = session, screen = opts.screen, seq = state.openSeq })
     -- The tablet takes the NUI focus over from a panel (CP.Tablet.panelFocus); closing it releases it.
     state.panelOwner = nil
     SetNuiFocus(true, true)
+    WatchAck(state.openSeq)
     if ui == 'admin' or state.via == 'desk' then
         StopProp()
     elseif not wasProp then
@@ -374,6 +390,11 @@ local function RefuseInArena()
     return false, 'err.in_arena'
 end
 
+local function RefuseDown()
+    T.notify('error', CP.L('err.downed'))
+    return false, 'err.downed'
+end
+
 -- opts (optional): { via, desk, screen }; via defaults to 'export' (another module or resource opening it).
 function T.open(ui, opts)
     if ui == nil then ui = 'officer' end
@@ -381,6 +402,7 @@ function T.open(ui, opts)
     opts = type(opts) == 'table' and opts or {}
     local via = type(opts.via) == 'string' and opts.via or 'export'
     if InForeignArena() then return RefuseInArena() end
+    if ui ~= 'admin' and PlayerDown() then return RefuseDown() end
     if state.opening then return false, 'err.busy' end
     state.opening = true
     local ok, res = pcall(CP.Net.request, 'getSession', { ui = ui, via = via, desk = opts.desk })
@@ -394,8 +416,9 @@ function T.open(ui, opts)
         T.notify('error', CP.L(errKey))
         return false, errKey
     end
-    -- Crimson-Arena may have placed the player while the session was on its way.
+    -- Crimson-Arena may have placed the player (or they went down) while the session was on its way.
     if InForeignArena() then return RefuseInArena() end
+    if ui ~= 'admin' and PlayerDown() then return RefuseDown() end
     ShowUi(ui, res.data, { via = via, desk = opts.desk, screen = opts.screen })
     return true
 end
@@ -539,8 +562,9 @@ local function Reply(cb, res)
     cb(res)
 end
 
-RegisterNUICallback('ready', function(_, cb)
+RegisterNUICallback('ready', function(body, cb)
     cb({ ok = true })
+    state.nuiAcks = type(body) == 'table' and body.acks == true
     SendTheme()
     if (state.hud or state.overlay) and InForeignArena() then
         state.arenaHidden = true
@@ -548,7 +572,18 @@ RegisterNUICallback('ready', function(_, cb)
         if state.hud then T.send({ type = 'hud', hud = state.hud }) end
         if state.overlay then T.send({ type = 'overlay', overlay = state.overlay }) end
     end
-    if state.open and state.session then T.send({ type = 'open', ui = state.ui, session = state.session }) end
+    if state.open and state.session then
+        state.openSeq = state.openSeq + 1
+        T.send({ type = 'open', ui = state.ui, session = state.session, seq = state.openSeq })
+        WatchAck(state.openSeq)
+    end
+end)
+
+-- The NUI shows the UI of that 'open' (it rendered without an error).
+RegisterNUICallback('opened', function(body, cb)
+    cb({ ok = true })
+    local seq = type(body) == 'table' and math.tointeger(tonumber(body.seq) or -1) or nil
+    if seq and seq > state.ackSeq and seq <= state.openSeq then state.ackSeq = seq end
 end)
 
 RegisterNUICallback('close', function(_, cb)
@@ -917,6 +952,19 @@ local function WatchItem(token)
     end
 end
 
+-- The officer went down with the Officer or Supervisor UI open: it closes (they open it again once revived).
+local function WatchDown(token)
+    while token == state.openToken and state.open do
+        Wait(DOWN_WATCH_MS)
+        if token ~= state.openToken or not state.open then return end
+        if state.ui ~= 'admin' and PlayerDown() then
+            CP.log(TAG, 'the officer went down: closing the tablet')
+            T.close()
+            return
+        end
+    end
+end
+
 StartWatchers = function()
     state.openToken = state.openToken + 1
     local token = state.openToken
@@ -925,6 +973,21 @@ StartWatchers = function()
     elseif state.ui ~= 'admin' then
         CreateThread(function() WatchItem(token) end)
     end
+    CreateThread(function() WatchDown(token) end)
+end
+
+-- A NUI that never shows the UI (its page crashed or never loaded) must not keep the focus: with the cursor on an
+-- empty page the player has no input and no Escape. Only once the NUI said at 'ready' that it confirms.
+WatchAck = function(seq)
+    if not state.nuiAcks then return end
+    CreateThread(function()
+        Wait(OPEN_ACK_MS)
+        -- closed, opened again (a newer seq) or confirmed meanwhile
+        if not state.open or seq ~= state.openSeq or state.ackSeq >= seq then return end
+        CP.warn(TAG, 'the NUI did not show the %s UI within %d s: closed, NUI focus released', tostring(state.ui),
+            OPEN_ACK_MS // 1000)
+        T.close()
+    end)
 end
 
 RegisterNetEvent(CP.e('client:closeTablet'), function(errKey)

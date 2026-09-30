@@ -927,6 +927,7 @@ In the server console, type every command **without** the slash.
 |---|---|---|
 | `/CrimsonPolice` | Officers (on duty, department job) | Opens the tablet (**Esc** or the **X** closes it) |
 | `/CrimsonPoliceAdmin` | Admins, in game | Opens the Admin UI. Typed in the server console, it lists the subcommands |
+| `CrimsonPoliceState` | Anyone, in the **F8** console | Prints what holds the screen, the NUI focus, the camera and the controls right now, and which part is Crimson-Police's. `CrimsonPoliceState unstick` releases only Crimson-Police's own (see [11.8](#118-the-screen-froze-or-the-controls-stopped)) |
 | `/CrimsonPoliceAdmin help` | Admins, console | Lists every subcommand (in game: a one-line list) |
 | `/CrimsonPoliceAdmin check` | Admins, console | Runs the start-up check again. The console lists every line; in game you get the counts |
 | `/CrimsonPoliceAdmin payout type <type> <amount\|clear> <reason>` | Admins, console | Sets a mission type's payout for good, or clears it back to `config.lua`. Type = `patrol`, `training`, `investigation` or `tactical`. Example: `payout type tactical 1000 Summer event` |
@@ -1387,6 +1388,24 @@ The last line of the start-up check is `Start-up check: all ... checks passed` o
 If you can't find a line here, set `Config.Debug = true`, restart Crimson-Police, and keep the console output: the
 extra lines help whoever looks at it.
 
+### 11.8 The screen froze or the controls stopped
+
+First tell the two cases apart. They have different causes.
+
+- **The whole picture stopped** (the world, the HUD and the mouse), F8 does not open, and you had to close the game
+  from Task Manager. That is a script that never gives the game a turn (a loop with no `Wait`). The game writes no
+  error and no crash log for it. Crimson-Police's own loops are checked for this on every change (`tools/lint_fivem.py`
+  rule FX10), so look at the resource you used just before. Note the time. On the server, the player then drops with a
+  timeout instead of "Exiting".
+- **The world still moves but you cannot do anything.** Press **F8** and type `CrimsonPoliceState`. The last line
+  says what is stuck and whether it is Crimson-Police's: a fade, the NUI focus (a mouse cursor), a scripted camera,
+  player control, a frozen player, or sc-ambulance still counting you as down. `CrimsonPoliceState unstick` closes the
+  tablet and removes the pick-up fade, and nothing else.
+
+Crimson-Police closes the tablet when you go down (dead or last stand), and it does not open again until you are back
+up. It releases the NUI focus when the tablet page shows nothing. The downed pick-up always fades the screen back in,
+however it ends.
+
 ---
 
 ## 12. For developers
@@ -1432,6 +1451,7 @@ extra lines help whoever looks at it.
 | `tests/` | Lua unit, SQL and end-to-end tests (`lua5.4 tests/run.lua`; needs a local MariaDB) |
 | `tools/check_contracts.py` | Cross-checks of module calls, events, NUI names and locale keys |
 | `tools/lint_fivem.py` | FiveM pitfall rules; known hits in `tools/lint_baseline.txt` |
+| `tools/lua_flow.py` | The Lua parser and loop flow behind rule FX10 (`python3 tools/lua_flow.py --all <files>`) |
 
 ### Spec revisions
 
