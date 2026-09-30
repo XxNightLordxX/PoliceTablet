@@ -10,6 +10,7 @@ import {
     Icon,
     IconButton,
     NumberInput,
+    Select,
     TextInput,
     type IconName,
 } from '../../shared/components';
@@ -17,12 +18,12 @@ import { cx } from '../../shared/cx';
 import { t } from '../../shared/i18n';
 import { clientAction } from '../../shared/nui';
 import { toast } from '../../shared/toast';
-import type { BuilderLocation, BuilderRoute, Vec3 } from '../../types/builder_server';
+import type { BuilderKerbSpot, BuilderLocation, BuilderRoute, Vec3 } from '../../types/builder_server';
 import type { PointSpec, RouteMeta } from '../../types/builder_client';
 import { CountBadge, ErrorNotes } from '../controls';
 import { dist2d, errorsAt, errorsUnder, isRoute, listsOf, pointsOf, routeLength } from '../defUtils';
 import { KEY_COLOURS, LocationMap } from '../LocationMap';
-import { missionPointSpecs, rangeOf, searchCircleOf, startRadiusRange, type SearchCircle } from '../schema';
+import { KERB_RULES, missionPointSpecs, rangeOf, searchCircleOf, startRadiusRange, type SearchCircle } from '../schema';
 import { editorMemory, routeMetaOf, setEditorMemory, setRouteMeta, shiftRouteMeta, subscribeBuilder } from '../store';
 import { startSpec } from '../useDraftEditor';
 import { StepIntro, type StepProps } from './common';
@@ -695,6 +696,29 @@ function PointRow({
                             </div>
                         ) : null}
                     </>
+                ) : null}
+                {spec.ruled && Array.isArray(v) && v.length ? (
+                    <div className="builder_client-kerb">
+                        {(v as BuilderKerbSpot[]).map((spot, k) => (
+                            <div key={k} className="builder_client-kerb__row">
+                                <span className="cp-num">
+                                    {t('builder.loc.kerb_n', { n: k + 1, street: spot.street || '—' })}
+                                </span>
+                                <Select
+                                    value={spot.rule}
+                                    disabled={ro}
+                                    options={KERB_RULES.map(r => ({ value: r, label: t(`builder.fc.rule_${r}`) }))}
+                                    onChange={r =>
+                                        ed.update(d => {
+                                            const cur = d.locations[li - 1][spec.key];
+                                            if (Array.isArray(cur) && cur[k] && typeof cur[k] === 'object')
+                                                (cur[k] as BuilderKerbSpot).rule = r;
+                                        })
+                                    }
+                                />
+                            </div>
+                        ))}
+                    </div>
                 ) : null}
                 {spec.lists && lists.length ? (
                     <div className="builder_client-paths">

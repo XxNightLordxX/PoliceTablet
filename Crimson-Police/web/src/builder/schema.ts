@@ -24,7 +24,14 @@ export const BLOCK_ICONS: Record<string, IconName> = {
     protect_rescue: 'users',
     flee_arrest: 'user',
     search_area: 'search',
+    field_contact: 'idCard',
+    process_scene: 'camera',
 };
+
+// Posted rules of kerb spots (Config.Custody.parkingRules), in the order the builder offers them.
+export const KERB_RULES = ['metered', 'permit', 'no_parking', 'hydrant', 'loading', 'free'];
+// The evidence kinds an interact_points point can yield (blocks/interact_points FIND_POOL).
+export const FIND_POOL = ['narcotics', 'weapon', 'stolen_goods', 'documents'];
 
 // ============================================================================
 //                                CONFIG READERS
@@ -162,6 +169,8 @@ export const KEY_FIELDS: Record<string, string[]> = {
     protect_rescue: ['npcs', 'safe'],
     flee_arrest: ['door', 'suspect', 'fleeTo', 'associates.spawns', 'spawns', 'routes'],
     search_area: ['center', 'clues', 'hiding'],
+    field_contact: ['spots', 'car', 'peopleSpots', 'fleeTo', 'transport'],
+    process_scene: ['scene', 'coroner'],
 };
 
 // The location key a block uses when the objective leaves the field out (each block's defaults()).
@@ -178,6 +187,13 @@ const DEFAULT_KEYS: Record<string, Record<string, string>> = {
         routes: 'routes',
     },
     search_area: { center: 'center', clues: 'clues', hiding: 'hiding' },
+    process_scene: { scene: 'scene', coroner: 'coroner' },
+};
+// field_contact: which keys each mode uses (blocks/field_contact defaults)
+const CONTACT_KEYS: Record<string, Record<string, string>> = {
+    parked: { spots: 'spots', transport: 'transport' },
+    scene: { car: 'car', peopleSpots: 'peopleSpots', fleeTo: 'fleeTo', transport: 'transport' },
+    stop: { transport: 'transport' },
 };
 const DOOR_ONLY = new Set(['door', 'suspect', 'fleeTo', 'associates.spawns']);
 const SCATTER_ONLY = new Set(['spawns', 'routes']);
@@ -192,7 +208,16 @@ export function keyOf(o: BuilderObjective, field: string): string | null {
         if ((scatter && DOOR_ONLY.has(field)) || (!scatter && SCATTER_ONLY.has(field))) return null;
     }
     if (o.block === 'hostile_waves' && field === 'boss.spawn') return null;
+    if (o.block === 'field_contact')
+        return CONTACT_KEYS[typeof o.mode === 'string' ? o.mode : 'scene']?.[field] ?? null;
     return DEFAULT_KEYS[o.block]?.[field] ?? null;
+}
+
+// hostile_waves spawnSets.keys: the named location lists of the spawn sets.
+export function spawnSetKeys(o: BuilderObjective): string[] {
+    if (o.block !== 'hostile_waves') return [];
+    const ss = o.spawnSets as { keys?: unknown } | undefined;
+    return asArray(ss?.keys as string[]).filter(k => typeof k === 'string' && k !== '');
 }
 
 // Every location key referenced by the objectives (except objective `skip`, 1-based).
@@ -204,6 +229,7 @@ export function usedKeys(def: BuilderDefinition, skip?: number): Set<string> {
             const v = keyOf(o, f);
             if (v && v !== SHARED_DEVICES) out.add(v);
         });
+        spawnSetKeys(o).forEach(k => out.add(k));
     });
     return out;
 }
@@ -386,6 +412,36 @@ export function newObjective(
                 runDistance: r('runDistance', [10, 60, 30]),
             };
         }
+        case 'field_contact': {
+            const mode = (optionsOf(cfg, block, 'mode').def as string) ?? 'scene';
+            return {
+                ...base,
+                mode,
+                people: r('people', [1, 4, 1]),
+                cars: r('cars', [0, 6, 1]),
+                profileSet: (optionsOf(cfg, block, 'profileSet').def as string) ?? 'scene',
+                approach: r('approach', [10, 40, 25]),
+                probableCause: flagOf(cfg, block, 'probableCause', true),
+                custody: (optionsOf(cfg, block, 'custody').def as string) ?? 'handover',
+                returning: { chance: r('returning', [0, 100, 25]), max: 1 },
+                escapeFails: flagOf(cfg, block, 'escapeFails', true),
+                bestPoints: r('bestPoints', [0, 20, 10]),
+                car: key('car'),
+                peopleSpots: key('peopleSpots'),
+                fleeTo: key('fleeTo'),
+            };
+        }
+        case 'process_scene':
+            return {
+                ...base,
+                scene: key('scene'),
+                coroner: flagOf(cfg, block, 'coroner', true) ? key('coroner') : false,
+                bodies: r('bodies', [0, 8, 4]),
+                tag: { duration: r('tagTime', [2, 15, 5]) },
+                bag: { duration: r('bagTime', [2, 15, 6]) },
+                release: { duration: r('releaseTime', [2, 15, 8]) },
+                aliveBonus: { id: 'all_taken_alive' },
+            };
         default:
             return base;
     }
@@ -446,6 +502,22 @@ export function pointSpecs(cfg: BuilderConfig, obj: BuilderObjective, index: num
                 max: MAX_SPOTS,
                 spawn: true,
                 model: firstPed(obj.peds, allowedPed),
+            });
+            spawnSetKeys(obj).forEach(k => {
+                if (out.some(p => p.key === k)) return;
+                out.push({
+                    key: k,
+                    field: 'spawnSets.keys',
+                    objective: index,
+                    labelKey: 'builder.points.spawn_set',
+                    kind: 'ped',
+                    heading: true,
+                    multiple: true,
+                    min: Math.max(1, Math.ceil(per * largest - 1e-9)),
+                    max: MAX_SPOTS,
+                    spawn: true,
+                    model: firstPed(obj.peds, allowedPed),
+                });
             });
             if (obj.boss && typeof obj.boss === 'object') {
                 add('boss.spawn', {
@@ -701,6 +773,91 @@ export function pointSpecs(cfg: BuilderConfig, obj: BuilderObjective, index: num
             });
             break;
         }
+        case 'field_contact': {
+            const mode = strField(obj, 'mode') ?? 'scene';
+            if (mode === 'parked') {
+                add('spots', {
+                    labelKey: 'builder.points.kerb_spots',
+                    kind: 'vehicle',
+                    heading: true,
+                    multiple: true,
+                    ruled: true,
+                    min: Math.max(numOf(cfg, b, 'minSpots', 5), numField(obj, 'cars', 5)),
+                    max: MAX_SPOTS,
+                    spawn: true,
+                    model: allowedCar,
+                });
+            } else if (mode === 'scene') {
+                if (numField(obj, 'cars', 1) > 0) {
+                    add('car', {
+                        labelKey: 'builder.points.contact_car',
+                        kind: 'vehicle',
+                        heading: true,
+                        multiple: false,
+                        min: 1,
+                        max: 1,
+                        spawn: true,
+                        model: allowedCar,
+                    });
+                }
+                add('peopleSpots', {
+                    labelKey: 'builder.points.person_spots',
+                    kind: 'ped',
+                    heading: true,
+                    multiple: true,
+                    min: 3,
+                    max: 12,
+                    spawn: true,
+                    model: allowedPed,
+                });
+                add('fleeTo', {
+                    labelKey: 'builder.points.flee_paths',
+                    kind: 'marker',
+                    heading: false,
+                    multiple: true,
+                    lists: true,
+                    min: 2,
+                    max: 12,
+                    spawn: false,
+                });
+            }
+            if (mode !== 'stop' || strField(obj, 'transport')) {
+                add('transport', {
+                    labelKey: 'builder.points.transport',
+                    kind: 'vehicle',
+                    heading: true,
+                    multiple: false,
+                    min: 0,
+                    max: 1,
+                    spawn: false,
+                    model: allowedCar,
+                });
+            }
+            break;
+        }
+        case 'process_scene':
+            add('scene', {
+                labelKey: 'builder.points.scene_marker',
+                kind: 'marker',
+                heading: false,
+                multiple: false,
+                min: 1,
+                max: 1,
+                spawn: false,
+            });
+            if (obj.coroner !== false) {
+                add('coroner', {
+                    labelKey: 'builder.points.coroner',
+                    kind: 'vehicle',
+                    heading: true,
+                    multiple: false,
+                    min: 0,
+                    max: 1,
+                    spawn: false,
+                    model: allowedCar,
+                });
+            }
+            break;
         default:
             break;
     }
@@ -741,8 +898,14 @@ export function armedCount(obj: BuilderObjective): number {
             );
         case 'escort':
             return n('ambush.waves') * n('ambush.carsPerWave') * n('ambush.perCar');
-        case 'pursuit':
-            return obj.neverShoots === false ? n('vehicles') * n('suspectsPerVehicle') : 0;
+        case 'pursuit': {
+            // people rolled from a truth set that can be armed count at their maximum (hidden weapons)
+            const hidden = obj.handoff === 'contact' || typeof obj.profileSet === 'string';
+            return obj.neverShoots === false || hidden ? n('vehicles') * n('suspectsPerVehicle') : 0;
+        }
+        case 'field_contact':
+            if (obj.mode === 'parked') return 0;
+            return obj.mode === 'stop' ? 3 : n('people');
         case 'flee_arrest':
             if (obj.mode === 'scatter') return n('armedShare') > 0 ? n('suspects') : 0;
             return n('associates.count') + (n('responses.fight') > 0 ? 1 : 0);
@@ -833,6 +996,10 @@ export function scalables(cfg: BuilderConfig, obj: BuilderObjective): Scalable[]
                           max: Math.max(1, r('suspects', [1, 10, 1]) - 1),
                       },
                   ];
+        case 'field_contact':
+            return obj.mode === 'scene'
+                ? [{ field: 'people', labelKey: 'builder.scale.people', suggested: true, max: r('people', [1, 4, 1]) }]
+                : [];
         case 'search_area':
             return [
                 {

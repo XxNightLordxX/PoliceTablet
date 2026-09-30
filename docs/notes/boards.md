@@ -159,3 +159,50 @@ drop the database mid-run (seen once; re-running is green).
   on success; please return your own `err.*` keys (they are shown as toasts).
 - **locale merge**: this part copies `common.*`, `result.*`, `reason.*`, `ui.screen.*` and the core `err.*` texts
   verbatim; `err.unknown_officer` uses economy.json's text. New: `reason.manual_award`, `reason.goal`.
+
+## Parity-plus additions (WP6)
+
+### CP.Leaderboard
+- **Rank by** (`getBoard` arg `metric`, one of Config.Leaderboard.metrics; `err.invalid_metric` otherwise): points
+  (default; XP on All-time), missions (counted completed runs), arrests, impounds, citations, rescues (SUMs), calls
+  (counted completed rows with a mission_call_id) and judgement (decisions_best ÷ (decisions_ok + decisions_bad), in
+  percent with one decimal, ranked only with Config.Leaderboard.minDecisions decisions in the window; more decisions win
+  a tie). Every stat is summed from `voided = 0 AND flagged = 0 AND state = 'completed'` run rows only, and all-time
+  through the archive union. Ties: the value, (judgement) decisions, then points, fewer failed, reached first, citizenid.
+  minRunsToRank, privacy, the pinned own row and the 60 s cache work per metric; the cache key includes the metric.
+- Rows (and `me`) gain `value`, `metric`, `level = { n, badge }` (the number only) and `avatar` (CP.Profile.avatarOf; a
+  hidden name shows the callsign and its initials, never the name or picture). `lethal` is never read by a board query
+  and no payload carries kills.
+- **Service record**: `LB.serviceRecord(citizenid, seasonId|nil) -> ServiceStats, lethal` (runs and success rate count
+  failed rows too; successRate is a percentage; avgResponseS from SUM/COUNT in Lua; rapidResponses counts completed
+  rows whose breakdown holds the rapid_response bonus), `LB.personalBests(citizenid)`
+  (MIN(duration_s) of completed counted rows per mission, archive included), `LB.favouritePartner(citizenid)` (most
+  shared completed runs, self-join on run_uuid).
+- **getProfile** gains bio, avatar, level (LevelInfo: xp = the officer's XP; `next` kept), commendations,
+  mdtCommendations (Config.Profile.showMdtCommendations and CP.Dispatch.mdtCommendations, else nil), service
+  `{ lifetime, season }`, bests, favouritePartner and, on the own profile only, cleanArrestRate (arrests ÷ (arrests +
+  lethal), percent). `LB.profile(viewer, target, { staff = true })` is the admin view (real name, every run field).
+- **Weekly metric badges**: Config.Leaderboard.weeklyBadges (e.g. `{ 'arrests' }`) gives `top_<metric>_<weekKey>` to #1 of
+  the week that ended (value above 0), once per badge, before the Officer of the Week step; label
+  `profile.badge.top_metric`.
+
+### CP.Challenge
+- Bounties `most_arrests` (SUM of arrests) and `most_calls` (completed rows with a mission_call_id), per active officer
+  like the others, from counted completed rows.
+- The Department Report's officers gain arrests, citations, impounds, decisionsOk, decisionsBest, decisionsBad and calls
+  (this week's counted completed rows); activity runs gain runUuid (the Commend dialog's optional run), and
+  `sup:getOfficerActivity` adds the officer's active `commendations` with `mine` (the viewer issued it: Revoke).
+- Contributors carry `avatar`.
+
+### Web
+- Leaderboard: "Rank by" select, avatar and level on every row, dates through format.ts (a server date is formatted as
+  its noon UTC, so the player's zone never moves it); Profile: avatar, "Lv n · band", bio, Edit profile, Report profile,
+  Service record and Commendations cards; Home: level, "Missions today n/max", calls open, commendation news, the
+  RewardsLocker mount; Challenge: avatars; Department Report: the new columns, Commend and Revoke (own ones); Review
+  Queue: Profiles tab;
+  Admin Officers: profile moderation, commendations and service record (dates through format.ts).
+
+### Tests
+tests/boards_metrics_spec.lua (every metric in weekly, monthly, season and all-time, completed rows only, wrongful
+arrests, Judgement, ties, cache per metric, levels and avatars on rows, hidden names, no kills, the service record,
+stat and call goals, most_arrests and most_calls, the report columns and the weekly metric badge).

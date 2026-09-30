@@ -24,6 +24,7 @@ import { useAction, usePush, useRequest } from '../../shared/hooks';
 import { hasKey, t } from '../../shared/i18n';
 import { useNavigate } from '../../shared/navigation';
 import { useSession } from '../../shared/session';
+import { toast } from '../../shared/toast';
 import type { Session } from '../../shared/types';
 import type {
     AcceptTypeResult,
@@ -33,6 +34,8 @@ import type {
     MissionBoardData,
     TypeCard,
 } from '../../types/run_ui';
+import type { BoardCallsInfo } from '../../types/missioncalls';
+import { CallsOpenLink, DailyLimitBadge, readyCheckSentText } from '../components/MissionCallsLink';
 import './MissionBoard.css';
 
 const BOSS_KEY = 'weekly_boss';
@@ -316,6 +319,7 @@ function TypeCardView({
                                 {t('board.card.busy')}
                             </Badge>
                         ) : null}
+                        <DailyLimitBadge locked={card.locked} />
                         {card.onCall ? (
                             <Badge size="sm" tone="primary" icon="radio">
                                 {t('board.card.on_call')}
@@ -695,9 +699,11 @@ export default function MissionBoard() {
     const accept = async () => {
         if (!pending) return;
         const key = pending.kind === 'boss' ? BOSS_KEY : pending.card.key;
-        const res = await run<AcceptTypeResult>('server:acceptType', key);
+        const res = await run<AcceptTypeResult & { pending?: boolean }>('server:acceptType', key);
         setPending(null);
-        if (res.ok) navigate('active');
+        // a unit of 2+ answers the ready check first: the run starts when everyone accepted
+        if (res.ok && res.data?.pending) toast('info', readyCheckSentText());
+        else if (res.ok) navigate('active');
         else void refetch();
     };
 
@@ -793,6 +799,10 @@ export default function MissionBoard() {
                     ) : (
                         <>
                             <UnitLine data={data} onUnit={() => navigate('unit')} />
+                            <CallsOpenLink
+                                n={(data as MissionBoardData & BoardCallsInfo).callsOpen ?? 0}
+                                onOpen={() => navigate('dispatch')}
+                            />
                             {onCall && !data.activeRunId ? (
                                 <Notice
                                     icon="radio"

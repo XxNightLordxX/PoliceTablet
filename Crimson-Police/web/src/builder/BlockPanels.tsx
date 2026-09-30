@@ -27,6 +27,7 @@ import {
     shrinkList,
     strOf,
     uniqueKey,
+    FIND_POOL,
     SEARCH_MIN_SPOTS,
     SHARED_DEVICES,
     type Rng,
@@ -1306,6 +1307,587 @@ function SearchArea({ cfg, def, obj, index, ro, set, patch }: PanelProps) {
     );
 }
 
+// ============================================================================
+//                                field_contact
+// ============================================================================
+
+function FieldContact({ cfg, obj, ro, set, patch }: PanelProps) {
+    const b = 'field_contact';
+    const r = (k: string, fb: [number, number, number]) => rangeOf(cfg, b, k, fb);
+    const mode = str(obj, 'mode', 'scene');
+    return (
+        <>
+            <Group title={t('builder.fc.mode_group')}>
+                <OptionPick
+                    label={t('builder.fc.mode')}
+                    value={mode}
+                    options={optionsOf(cfg, b, 'mode').options}
+                    disabled={ro}
+                    hint={t(`builder.fc.mode_${mode}_hint`)}
+                    onChange={v =>
+                        patch((o, d) => {
+                            o.mode = v;
+                            delete o.spots;
+                            delete o.car;
+                            delete o.peopleSpots;
+                            if (v === 'parked') {
+                                o.spots = uniqueKey(d, 'spots', 0);
+                                o.cars = Math.max(numOf(cfg, b, 'minSpots', 5), num(o, 'cars', 5));
+                                o.profileSet = 'parking';
+                            } else if (v === 'scene') {
+                                o.car = uniqueKey(d, 'car', 0);
+                                o.peopleSpots = uniqueKey(d, 'peopleSpots', 0);
+                                o.cars = Math.min(1, num(o, 'cars', 1));
+                                o.profileSet = 'scene';
+                            } else {
+                                o.profileSet = 'traffic';
+                            }
+                        })
+                    }
+                />
+                <Grid cols={2} gap={3}>
+                    {mode === 'scene' ? (
+                        <RangeNumber
+                            label={t('builder.fc.people')}
+                            value={num(obj, 'people', 1)}
+                            range={r('people', [1, 4, 1])}
+                            disabled={ro}
+                            onChange={v => set('people', v)}
+                        />
+                    ) : null}
+                    {mode !== 'stop' ? (
+                        <RangeNumber
+                            label={t('builder.fc.cars')}
+                            value={num(obj, 'cars', mode === 'parked' ? 5 : 1)}
+                            range={mode === 'scene' ? { min: 0, max: 1, def: 1 } : r('cars', [0, 6, 1])}
+                            disabled={ro}
+                            onChange={v => set('cars', v)}
+                        />
+                    ) : null}
+                </Grid>
+                <OptionPick
+                    label={t('builder.fc.truths')}
+                    value={str(obj, 'profileSet', 'scene')}
+                    options={optionsOf(cfg, b, 'profileSet').options}
+                    disabled={ro}
+                    labelPrefix="builder.fc.set_"
+                    onChange={v => set('profileSet', v)}
+                />
+            </Group>
+            <Group title={t('builder.fc.rules_group')}>
+                <Grid cols={2} gap={3}>
+                    {mode === 'scene' ? (
+                        <RangeNumber
+                            label={t('builder.fc.approach')}
+                            unit={t('builder.unit.m')}
+                            value={num(obj, 'approach', 25)}
+                            range={r('approach', [10, 40, 25])}
+                            disabled={ro}
+                            onChange={v => set('approach', v)}
+                        />
+                    ) : null}
+                    {mode === 'parked' ? (
+                        <RangeNumber
+                            label={t('builder.fc.returning')}
+                            unit="%"
+                            value={num(obj, 'returning.chance', 25)}
+                            range={r('returning', [0, 100, 25])}
+                            disabled={ro}
+                            onChange={v => set('returning.chance', v)}
+                        />
+                    ) : null}
+                    <RangeNumber
+                        label={t('builder.fc.best_points')}
+                        value={num(obj, 'bestPoints', 10)}
+                        range={r('bestPoints', [0, 20, 10])}
+                        disabled={ro}
+                        onChange={v => set('bestPoints', v)}
+                    />
+                </Grid>
+                <OptionPick
+                    label={t('builder.fc.custody')}
+                    value={str(obj, 'custody', 'handover')}
+                    options={optionsOf(cfg, b, 'custody').options}
+                    disabled={ro}
+                    labelPrefix="builder.fc.custody_"
+                    onChange={v => set('custody', v)}
+                />
+                <Toggle
+                    checked={obj.probableCause !== false}
+                    onChange={v => set('probableCause', v)}
+                    disabled={ro}
+                    label={t('builder.fc.probable_cause')}
+                />
+                <Toggle
+                    checked={obj.escapeFails !== false}
+                    onChange={v => set('escapeFails', v)}
+                    disabled={ro}
+                    label={t('builder.fc.escape_fails')}
+                />
+            </Group>
+            <Note>{t(`builder.fc.spots_${mode}_note`)}</Note>
+        </>
+    );
+}
+
+// ============================================================================
+//                                process_scene
+// ============================================================================
+
+function ProcessScene({ cfg, obj, ro, set, patch }: PanelProps) {
+    const b = 'process_scene';
+    const r = (k: string, fb: [number, number, number]) => rangeOf(cfg, b, k, fb);
+    return (
+        <>
+            <Group title={t('builder.ps.group')}>
+                <RangeNumber
+                    label={t('builder.ps.bodies')}
+                    value={num(obj, 'bodies', 4)}
+                    range={r('bodies', [0, 8, 4])}
+                    disabled={ro}
+                    onChange={v => set('bodies', v)}
+                />
+                <Grid cols={3} gap={3}>
+                    <RangeNumber
+                        label={t('builder.ps.tag')}
+                        unit={t('builder.unit.s')}
+                        value={num(obj, 'tag.duration', 5)}
+                        range={r('tagTime', [2, 15, 5])}
+                        disabled={ro}
+                        onChange={v => set('tag.duration', v)}
+                    />
+                    <RangeNumber
+                        label={t('builder.ps.bag')}
+                        unit={t('builder.unit.s')}
+                        value={num(obj, 'bag.duration', 6)}
+                        range={r('bagTime', [2, 15, 6])}
+                        disabled={ro}
+                        onChange={v => set('bag.duration', v)}
+                    />
+                    <RangeNumber
+                        label={t('builder.ps.release')}
+                        unit={t('builder.unit.s')}
+                        value={num(obj, 'release.duration', 8)}
+                        range={r('releaseTime', [2, 15, 8])}
+                        disabled={ro}
+                        onChange={v => set('release.duration', v)}
+                    />
+                </Grid>
+                <Toggle
+                    checked={obj.coroner !== false}
+                    disabled={ro}
+                    label={t('builder.ps.coroner')}
+                    onChange={v =>
+                        patch((o, d) => {
+                            o.coroner = v ? uniqueKey(d, 'coroner', 0) : false;
+                        })
+                    }
+                />
+            </Group>
+            <Note>{t('builder.ps.note')}</Note>
+        </>
+    );
+}
+
+// ============================================================================
+//                    PARITY OPTIONS OF THE EXISTING BLOCKS
+// ============================================================================
+// The new rows of Mission Builder → Block settings (pursuit, interact_points, flee_arrest, skill_check,
+// hostile_waves), shown under each block's own panel. Builder units: whole percent and seconds.
+
+// Three shares that must add up to 100 (the last one takes the rest).
+function Shares({
+    label,
+    keys,
+    value,
+    disabled,
+    labelPrefix,
+    onChange,
+}: {
+    label: ReactNode;
+    keys: string[];
+    value: Record<string, number>;
+    disabled: boolean;
+    labelPrefix: string;
+    onChange: (v: Record<string, number>) => void;
+}) {
+    const sum = keys.reduce((a, k) => a + (value[k] ?? 0), 0);
+    return (
+        <Field label={label} hint={t('builder.parity.shares_hint', { sum })}>
+            <Grid cols={keys.length as 2 | 3} gap={2}>
+                {keys.map(k => (
+                    <RangeNumber
+                        key={k}
+                        label={t(`${labelPrefix}${k}`)}
+                        unit="%"
+                        value={value[k] ?? 0}
+                        range={{ min: 0, max: 100, def: 0 }}
+                        showDefault={false}
+                        disabled={disabled}
+                        onChange={n => onChange({ ...value, [k]: n })}
+                    />
+                ))}
+            </Grid>
+        </Field>
+    );
+}
+
+function PursuitParity({ cfg, obj, ro, set, patch }: PanelProps) {
+    const b = 'pursuit';
+    const r = (k: string, fb: [number, number, number]) => rangeOf(cfg, b, k, fb);
+    const resp = (obj.responses as Record<string, number> | undefined) ?? { yield: 0, flee: 100, fight: 0 };
+    const observe = obj.observe && typeof obj.observe === 'object' ? (obj.observe as Record<string, unknown>) : null;
+    const kind = observe ? (typeof observe.kind === 'string' ? observe.kind : 'pace') : 'off';
+    const over = observe && Array.isArray(observe.over) ? (observe.over as number[]) : [20, 45];
+    if (str(obj, 'mode', 'stop') !== 'stop') return null;
+    return (
+        <Group title={t('builder.pur.parity_group')}>
+            <Shares
+                label={t('builder.pur.responses')}
+                keys={['yield', 'flee', 'fight']}
+                value={resp}
+                disabled={ro}
+                labelPrefix="builder.pur.resp_"
+                onChange={v => set('responses', v)}
+            />
+            <OptionPick
+                label={t('builder.pur.handoff')}
+                value={str(obj, 'handoff', 'arrest')}
+                options={optionsOf(cfg, b, 'handoff').options}
+                disabled={ro}
+                labelPrefix="builder.pur.handoff_"
+                onChange={v => set('handoff', v)}
+            />
+            <OptionPick
+                label={t('builder.pur.observe')}
+                value={kind}
+                options={optionsOf(cfg, b, 'observe').options}
+                disabled={ro}
+                labelPrefix="builder.pur.observe_"
+                onChange={v =>
+                    patch(o => {
+                        if (v === 'off') delete o.observe;
+                        else
+                            o.observe = {
+                                kind: v,
+                                zoneSpeed: r('zoneSpeed', [50, 130, 80]).def,
+                                over: [r('overMin', [10, 60, 20]).def, r('overMax', [10, 60, 45]).def],
+                                behind: v === 'follow' ? 60 : 80,
+                                seconds: v === 'follow' ? 8 : 5,
+                                tolerance: r('paceTolerance', [0, 10, 5]).def,
+                            };
+                        if (v !== 'off' && (!o.trigger || typeof o.trigger !== 'object'))
+                            o.trigger = { distance: 60, lights: true };
+                    })
+                }
+            />
+            {observe ? (
+                <Grid cols={2} gap={3}>
+                    <RangeNumber
+                        label={t('builder.pur.zone_speed')}
+                        unit={t('builder.unit.kmh')}
+                        value={typeof observe.zoneSpeed === 'number' ? observe.zoneSpeed : 80}
+                        range={r('zoneSpeed', [50, 130, 80])}
+                        disabled={ro}
+                        onChange={v => set('observe.zoneSpeed', v)}
+                    />
+                    <RangeNumber
+                        label={t('builder.pur.pace_tolerance')}
+                        unit={t('builder.unit.kmh')}
+                        value={typeof observe.tolerance === 'number' ? observe.tolerance : 5}
+                        range={r('paceTolerance', [0, 10, 5])}
+                        disabled={ro}
+                        onChange={v => set('observe.tolerance', v)}
+                    />
+                    <RangeNumber
+                        label={t('builder.pur.over_min')}
+                        unit={t('builder.unit.kmh')}
+                        value={over[0]}
+                        range={r('overMin', [10, 60, 20])}
+                        disabled={ro}
+                        onChange={v => set('observe.over', [v, Math.max(v, over[1])])}
+                    />
+                    <RangeNumber
+                        label={t('builder.pur.over_max')}
+                        unit={t('builder.unit.kmh')}
+                        value={over[1]}
+                        range={r('overMax', [10, 60, 45])}
+                        disabled={ro}
+                        onChange={v => set('observe.over', [Math.min(v, over[0]), v])}
+                    />
+                </Grid>
+            ) : null}
+            <Grid cols={3} gap={3}>
+                <RangeNumber
+                    label={t('builder.pur.drive_by')}
+                    unit="%"
+                    value={num(obj, 'driveBy', 0)}
+                    range={r('driveBy', [0, 100, 0])}
+                    disabled={ro}
+                    onChange={v => set('driveBy', v)}
+                />
+                <RangeNumber
+                    label={t('builder.pur.ram')}
+                    unit="%"
+                    value={num(obj, 'ram', 0)}
+                    range={r('ram', [0, 100, 0])}
+                    disabled={ro}
+                    onChange={v => set('ram', v)}
+                />
+                <RangeNumber
+                    label={t('builder.pur.spawn_offset')}
+                    unit={t('builder.unit.m')}
+                    value={num(obj, 'spawnOffset', 0)}
+                    range={r('spawnOffset', [-250, 250, 0])}
+                    disabled={ro || typeof obj.route !== 'string'}
+                    onChange={v => (v === 0 ? set('spawnOffset', undefined) : set('spawnOffset', v))}
+                />
+            </Grid>
+        </Group>
+    );
+}
+
+function InteractParity({ cfg, obj, ro, set, patch }: PanelProps) {
+    const b = 'interact_points';
+    const r = (k: string, fb: [number, number, number]) => rangeOf(cfg, b, k, fb);
+    const together = obj.together && typeof obj.together === 'object' ? (obj.together as Record<string, number>) : null;
+    const hidden = obj.hidden && typeof obj.hidden === 'object' ? (obj.hidden as Record<string, unknown>) : null;
+    return (
+        <Group title={t('builder.ip.parity_group')}>
+            <Grid cols={3} gap={3}>
+                <RangeNumber
+                    label={t('builder.ip.together')}
+                    value={together ? together.count : 1}
+                    range={r('together', [1, 4, 1])}
+                    disabled={ro}
+                    note={t('builder.ip.together_note')}
+                    onChange={v =>
+                        patch(o => {
+                            if (v <= 1) delete o.together;
+                            else
+                                o.together = {
+                                    count: v,
+                                    window: together?.window ?? r('togetherWindow', [3, 15, 6]).def,
+                                    soloProgress: together?.soloProgress ?? r('soloProgress', [3, 20, 8]).def,
+                                };
+                        })
+                    }
+                />
+                {together ? (
+                    <RangeNumber
+                        label={t('builder.ip.window')}
+                        unit={t('builder.unit.s')}
+                        value={together.window}
+                        range={r('togetherWindow', [3, 15, 6])}
+                        disabled={ro}
+                        onChange={v => set('together.window', v)}
+                    />
+                ) : null}
+                {together ? (
+                    <RangeNumber
+                        label={t('builder.ip.solo')}
+                        unit={t('builder.unit.s')}
+                        value={together.soloProgress}
+                        range={r('soloProgress', [3, 20, 8])}
+                        disabled={ro}
+                        onChange={v => set('together.soloProgress', v)}
+                    />
+                ) : null}
+            </Grid>
+            {hidden ? (
+                <OptionPick
+                    label={t('builder.ip.hidden_kind')}
+                    value={typeof hidden.kind === 'string' ? hidden.kind : 'device'}
+                    options={optionsOf(cfg, b, 'hiddenKind').options}
+                    disabled={ro}
+                    labelPrefix="builder.ip.hidden_"
+                    onChange={v =>
+                        patch(o => {
+                            const h = (o.hidden ?? {}) as Record<string, unknown>;
+                            h.kind = v;
+                            if (v === 'seize') delete h.prop;
+                            else if (h.prop === undefined) h.prop = 'prop_ld_bomb';
+                            o.hidden = h;
+                        })
+                    }
+                />
+            ) : (
+                <RangeNumber
+                    label={t('builder.ip.finds')}
+                    unit="%"
+                    value={num(obj, 'finds.chance', 0)}
+                    range={r('finds', [0, 100, 0])}
+                    disabled={ro}
+                    onChange={v =>
+                        patch(o => {
+                            if (v <= 0) delete o.finds;
+                            else o.finds = { chance: v, pool: FIND_POOL.slice() };
+                        })
+                    }
+                />
+            )}
+        </Group>
+    );
+}
+
+function FleeParity({ cfg, obj, ro, set }: PanelProps) {
+    const b = 'flee_arrest';
+    const r = (k: string, fb: [number, number, number]) => rangeOf(cfg, b, k, fb);
+    return (
+        <Group title={t('builder.fa.parity_group')}>
+            <OptionPick
+                label={t('builder.fa.demeanour')}
+                value={typeof obj.demeanour === 'string' ? obj.demeanour : 'rolled'}
+                options={optionsOf(cfg, b, 'demeanour').options}
+                disabled={ro}
+                labelPrefix="builder.fa.demeanour_"
+                onChange={v => set('demeanour', v)}
+            />
+            <Grid cols={2} gap={3}>
+                <RangeNumber
+                    label={t('builder.fa.feint')}
+                    unit="%"
+                    value={num(obj, 'feint', 0)}
+                    range={r('feint', [0, 50, 0])}
+                    disabled={ro}
+                    onChange={v => set('feint', v)}
+                />
+                <OptionPick
+                    label={t('builder.fa.custody')}
+                    value={str(obj, 'custody', 'cuff')}
+                    options={optionsOf(cfg, b, 'custody').options}
+                    disabled={ro}
+                    labelPrefix="builder.fc.custody_"
+                    onChange={v => set('custody', v)}
+                />
+            </Grid>
+        </Group>
+    );
+}
+
+function SkillParity({ cfg, obj, ro, patch, set }: PanelProps) {
+    const b = 'skill_check';
+    const r = (k: string, fb: [number, number, number]) => rangeOf(cfg, b, k, fb);
+    const f = obj.onFail && typeof obj.onFail === 'object' ? (obj.onFail as Record<string, unknown>) : null;
+    const sb = f && f.setback && typeof f.setback === 'object' ? (f.setback as Record<string, unknown>) : null;
+    return (
+        <Group title={t('builder.sc.parity_group')}>
+            <OptionPick
+                label={t('builder.sc.on_fail')}
+                value={f ? 'setback' : 'fail'}
+                options={optionsOf(cfg, b, 'onFail').options}
+                disabled={ro}
+                labelPrefix="builder.sc.on_fail_"
+                onChange={v =>
+                    patch(o => {
+                        if (v === 'fail') delete o.onFail;
+                        else
+                            o.onFail = {
+                                setback: { duration: r('setbackTime', [5, 30, 10]).def },
+                                retryAfter: r('retryAfter', [10, 120, 30]).def,
+                            };
+                    })
+                }
+            />
+            {f ? (
+                <Grid cols={2} gap={3}>
+                    <RangeNumber
+                        label={t('builder.sc.setback_time')}
+                        unit={t('builder.unit.s')}
+                        value={typeof sb?.duration === 'number' ? sb.duration : 10}
+                        range={r('setbackTime', [5, 30, 10])}
+                        disabled={ro}
+                        onChange={v => set('onFail.setback.duration', v)}
+                    />
+                    <RangeNumber
+                        label={t('builder.sc.retry_after')}
+                        unit={t('builder.unit.s')}
+                        value={typeof f.retryAfter === 'number' ? f.retryAfter : 30}
+                        range={r('retryAfter', [10, 120, 30])}
+                        disabled={ro}
+                        onChange={v => set('onFail.retryAfter', v)}
+                    />
+                </Grid>
+            ) : null}
+        </Group>
+    );
+}
+
+function HostileParity({ cfg, obj, ro, patch }: PanelProps) {
+    const b = 'hostile_waves';
+    const r = (k: string, fb: [number, number, number]) => rangeOf(cfg, b, k, fb);
+    const rolled = !!obj.behaviour && typeof obj.behaviour === 'object';
+    const ss = obj.spawnSets && typeof obj.spawnSets === 'object' ? (obj.spawnSets as Record<string, unknown>) : null;
+    const keys = ss && Array.isArray(ss.keys) ? (ss.keys as string[]) : [];
+    return (
+        <Group title={t('builder.hw.parity_group')}>
+            <Toggle
+                checked={rolled}
+                disabled={ro}
+                label={t('builder.hw.behaviour_roll')}
+                onChange={v =>
+                    patch(o => {
+                        o.behaviour = v ? { hold: 30, balanced: 50, push: 20 } : 'balanced';
+                    })
+                }
+            />
+            {rolled ? (
+                <Shares
+                    label={t('builder.hw.behaviour_weights')}
+                    keys={['hold', 'balanced', 'push']}
+                    value={obj.behaviour as Record<string, number>}
+                    disabled={ro}
+                    labelPrefix="builder.opt."
+                    onChange={v => patch(o => (o.behaviour = v))}
+                />
+            ) : null}
+            <Grid cols={2} gap={3}>
+                <RangeNumber
+                    label={t('builder.hw.spawn_sets')}
+                    value={keys.length}
+                    range={r('spawnSets', [0, 4, 0])}
+                    disabled={ro}
+                    onChange={n =>
+                        patch((o, d) => {
+                            if (n <= 0) {
+                                delete o.spawnSets;
+                                return;
+                            }
+                            const list = keys.slice(0, n);
+                            while (list.length < n) list.push(uniqueKey(d, `set${list.length + 1}`, 0));
+                            o.spawnSets = {
+                                keys: list,
+                                use: Math.min(n, r('spawnSetsUsed', [1, 3, 2]).def),
+                                intel: true,
+                            };
+                        })
+                    }
+                />
+                {ss ? (
+                    <RangeNumber
+                        label={t('builder.hw.spawn_sets_used')}
+                        value={typeof ss.use === 'number' ? ss.use : 1}
+                        range={{
+                            ...r('spawnSetsUsed', [1, 3, 2]),
+                            max: Math.min(keys.length, r('spawnSetsUsed', [1, 3, 2]).max),
+                        }}
+                        disabled={ro}
+                        onChange={n => patch(o => ((o.spawnSets as Record<string, unknown>).use = n))}
+                    />
+                ) : null}
+            </Grid>
+        </Group>
+    );
+}
+
+const EXTRAS: Record<string, ComponentType<PanelProps>> = {
+    pursuit: PursuitParity,
+    interact_points: InteractParity,
+    flee_arrest: FleeParity,
+    skill_check: SkillParity,
+    hostile_waves: HostileParity,
+};
+
 const PANELS: Record<string, ComponentType<PanelProps>> = {
     hostile_waves: HostileWaves,
     escort: Escort,
@@ -1316,12 +1898,15 @@ const PANELS: Record<string, ComponentType<PanelProps>> = {
     protect_rescue: ProtectRescue,
     flee_arrest: FleeArrest,
     search_area: SearchArea,
+    field_contact: FieldContact,
+    process_scene: ProcessScene,
 };
 
 // The settings panel of one objective: label, minimum time and presence range, then the block's own settings.
 export function BlockPanel(props: PanelProps) {
     const { cfg, def, obj, index, ro, errors, set } = props;
     const Panel = PANELS[obj.block];
+    const Extra = EXTRAS[obj.block];
     const p = `objectives.${index}`;
     const presence = rangeOf(cfg, obj.block, 'presenceRange', [50, 800, 150]);
     const minDefault = asArray(cfg.blockList).find(x => x.id === obj.block)?.minSeconds ?? 30;
@@ -1365,6 +1950,7 @@ export function BlockPanel(props: PanelProps) {
             ) : (
                 <Note tone="warning">{t('builder.settings.unknown_block', { block: obj.block })}</Note>
             )}
+            {Extra ? <Extra {...props} /> : null}
         </div>
     );
 }

@@ -1269,5 +1269,576 @@ H.ok(waitCall ~= nil and Contains(waitCall.srcs, 1) and Contains(waitCall.srcs, 
     'only the players with launchCrossDept')
 CP.Tablet.notifyMany = nil
 
+-- ============================================================================
+--                     LEADER CONTROLS AND THE READY CHECK
+-- ============================================================================
+
+if O.active() then O.cancel(0, 'Clean up before the leader-control checks') end
+U._reset()
+Clear()
+removed = {}
+local function Unit3()
+    Act('server:unitInvite', 1, 2)
+    Act('server:unitRespond', 2, true)
+    Act('server:unitInvite', 1, 3)
+    Act('server:unitRespond', 3, true)
+    return U.unitOf(1)
+end
+local function HasNote(src, key)
+    return LastNote(src, key) ~= nil
+end
+local function ClientEvents(name, target)
+    local out = {}
+    for _, e in ipairs(H.events) do
+        if e.kind == 'client' and e.name == 'crimson-police:' .. name and (target == nil or e.target == target) then
+            out[#out + 1] = e
+        end
+    end
+    return out
+end
+
+-- ============================================================================
+--                                     KICK
+-- ============================================================================
+
+local u = Unit3()
+H.eq(#u.members, 3, 'unit of 3 for the leader controls')
+ok, data = Act('server:unitKick', 2, { targetSrc = 3 })
+H.eq(data, 'err.unit_not_leader', 'a member cannot kick')
+ok, data = Act('server:unitKick', 1, { targetSrc = 1 })
+H.eq(data, 'err.unit_kick_self', 'the leader cannot kick themselves')
+ok, data = Act('server:unitKick', 1, { targetSrc = 6 })
+H.eq(data, 'err.unit_not_member', 'kick of a non-member refused')
+ok, data = Act('server:unitKick', 1, { targetSrc = 'x' })
+H.eq(data, 'err.invalid_payload', 'kick payload validated')
+
+-- Locked (a type accepted): kick, make leader, disband and withdraw are all refused.
+U.lock(u)
+ok, data = Act('server:unitKick', 1, { targetSrc = 3 })
+H.eq(data, 'err.unit_locked', 'kick refused once locked')
+ok, data = Act('server:unitPromote', 1, { targetSrc = 2 })
+H.eq(data, 'err.unit_locked', 'make leader refused once locked')
+ok, data = Act('server:unitDisband', 1)
+H.eq(data, 'err.unit_locked', 'disband refused once locked')
+ok, data = Act('server:unitCancelInvite', 1, { targetSrc = 5 })
+H.eq(data, 'err.unit_locked', 'withdraw refused once locked')
+H.eq(#u.members, 3, 'nobody left the locked unit')
+res = Cb('getUnit', 1)
+H.eq(res.data.unit.canManage, false, 'no leader controls while locked')
+U.unlock(u)
+res = Cb('getUnit', 1)
+H.eq(res.data.unit.canManage, true, 'the leader manages the open unit')
+res = Cb('getUnit', 2)
+H.eq(res.data.unit.canManage, false, 'a member does not')
+
+Clear()
+ok, data = Act('server:unitKick', 1, { targetSrc = 3 })
+H.eq(ok, true, 'the leader kicks a member')
+H.eq(U.unitOf(3), nil, 'the kicked member is out')
+H.eq(#u.members, 2, 'two members left')
+H.ok(HasNote(3, 'unit.you_were_kicked'), 'the kicked member is told')
+H.ok(HasNote(1, 'unit.member_kicked') and HasNote(2, 'unit.member_kicked'), 'the others are told')
+H.eq(#removed, 0, 'a kick never touches a run (no abandon, no cooldown)')
+ok, data = Act('server:unitInvite', 1, 3)
+H.eq(data, 'err.unit_kicked_recently', 'the kicked officer cannot be re-invited by the leader')
+ok, data = Act('server:unitInvite', 2, 3)
+H.eq(data, 'err.unit_kicked_recently', 'nor by another member of that unit')
+res = Cb('getUnit', 1)
+local listed = false
+for _, o in ipairs(res.data.invitable) do if o.src == 3 then listed = true end end
+H.eq(listed, false, 'the kicked officer is not in the invite list for 60 s')
+ok, data = Act('server:unitInvite', 4, 3)
+H.eq(ok, true, 'another officer may invite them at once')
+Act('server:unitRespond', 3, false)
+-- The block belongs to the unit: an officer who joined after the kick can't bring them back either.
+Act('server:unitInvite', 1, 6)
+Act('server:unitRespond', 6, true)
+H.eq(U.unitOf(6), u, 'a new member joined after the kick')
+ok, data = Act('server:unitInvite', 6, 3)
+H.eq(data, 'err.unit_kicked_recently', 'a member who joined after the kick cannot re-invite them')
+res = Cb('getUnit', 6)
+listed = false
+for _, o in ipairs(res.data.invitable) do if o.src == 3 then listed = true end end
+H.eq(listed, false, 'nor sees them in the invite list')
+Act('server:unitLeave', 6)
+H.time = H.time + 59
+ok, data = Act('server:unitInvite', 1, 3)
+H.eq(data, 'err.unit_kicked_recently', 'still blocked after 59 s')
+H.time = H.time + 1
+ok, data = Act('server:unitInvite', 1, 3)
+H.eq(ok, true, 're-invite allowed after Config.Units.kickReinvite')
+
+-- ============================================================================
+--                              WITHDRAW AN INVITE
+-- ============================================================================
+
+Clear()
+ok = Act('server:unitInvite', 2, 5)
+H.eq(ok, true, 'a member invites (policy anyone)')
+res = Cb('getUnit', 2)
+H.eq(#res.data.pendingSent, 1, 'the inviter sees the invite they sent')
+H.eq(res.data.pendingSent[1].src, 5, 'pendingSent names the invitee')
+H.eq(#u.members + 2, 4, 'unit of 2 + 2 open invites is full')
+ok, data = Act('server:unitInvite', 1, 6)
+H.eq(data, 'err.unit_full', 'the open invites hold the slots')
+ok, data = Act('server:unitCancelInvite', 2, { targetSrc = 3 })
+H.eq(data, 'err.unit_not_inviter', 'a member cannot withdraw another member\'s invite')
+ok, data = Act('server:unitCancelInvite', 2, { targetSrc = 6 })
+H.eq(data, 'err.unit_no_invite_sent', 'no invite to withdraw')
+ok = Act('server:unitCancelInvite', 2, { targetSrc = 5 })
+H.eq(ok, true, 'the inviter withdraws their own invite')
+H.eq(u.invites[5], nil, 'invite gone')
+H.ok(HasNote(5, 'unit.invite_withdrawn'), 'the invitee is told')
+ok = Act('server:unitCancelInvite', 1, { targetSrc = 3 })
+H.eq(ok, true, 'the leader withdraws any invite')
+ok, data = Act('server:unitInvite', 1, 6)
+H.eq(ok, true, 'the freed slot is usable at once')
+Act('server:unitCancelInvite', 1, { targetSrc = 6 })
+
+-- ============================================================================
+--                                INVITE POLICY
+-- ============================================================================
+
+Config.Units.invitePolicy = 'leader'
+ok, data = Act('server:unitInvite', 2, 5)
+H.eq(data, 'err.unit_invite_leader_only', 'invitePolicy leader refuses a member\'s invite')
+res = Cb('getUnit', 2)
+H.eq(res.data.canInvite, false, 'the member cannot invite under the leader policy')
+H.eq(res.data.inviteBlocked, 'unit.blocked_policy', 'with its reason')
+ok = Act('server:unitInvite', 1, 5)
+H.eq(ok, true, 'the leader still invites')
+Act('server:unitCancelInvite', 1, { targetSrc = 5 })
+Config.Units.invitePolicy = 'anyone'
+
+-- ============================================================================
+--                                 MAKE LEADER
+-- ============================================================================
+
+Clear()
+ok, data = Act('server:unitPromote', 2, { targetSrc = 2 })
+H.eq(data, 'err.unit_not_leader', 'a member cannot make themselves leader')
+ok, data = Act('server:unitPromote', 1, { targetSrc = 1 })
+H.eq(data, 'err.unit_already_leader', 'the leader already leads')
+ok = Act('server:unitPromote', 1, { targetSrc = 2 })
+H.eq(ok, true, 'make leader')
+H.eq(u.leader, 2, 'the new leader leads')
+H.ok(U.isLeader(2) and not U.isLeader(1), 'isLeader follows')
+H.ok(HasNote(2, 'unit.you_lead') and HasNote(1, 'unit.new_leader'), 'both told')
+ok, data = Act('server:unitKick', 1, { targetSrc = 2 })
+H.eq(data, 'err.unit_not_leader', 'the old leader lost the controls')
+
+-- ============================================================================
+--                                   DISBAND
+-- ============================================================================
+
+Act('server:unitInvite', 2, 4)
+Clear()
+ok, data = Act('server:unitDisband', 1)
+H.eq(data, 'err.unit_not_leader', 'a member cannot disband')
+ok = Act('server:unitDisband', 2)
+H.eq(ok, true, 'the leader disbands')
+H.eq(U.unitOf(1), nil, 'member 1 is solo')
+H.eq(U.unitOf(2), nil, 'the leader is solo')
+H.ok(HasNote(1, 'unit.disbanded'), 'members told who disbanded')
+H.eq(LastNote(1, 'unit.disbanded').vars.name, 'Maria Lopez', 'toast names the leader')
+H.ok(HasNote(2, 'unit.you_disbanded'), 'the leader told')
+H.ok(HasNote(4, 'unit.invite_withdrawn'), 'open invites withdrawn with a toast')
+ok, data = Act('server:unitDisband', 2)
+H.eq(data, 'err.unit_none', 'nothing to disband')
+H.eq(#removed, 0, 'no run touched by any leader control')
+
+-- ============================================================================
+--                                 READY CHECK
+-- ============================================================================
+
+local readyCalls, cancelCalls = 0, {}
+local function StartCheck(unitRef, typeKey)
+    U.lock(unitRef)
+    return U.readyCheck(unitRef, typeKey or 'tactical', function() readyCalls = readyCalls + 1 end, function(key, who)
+        cancelCalls[#cancelCalls + 1] = { key = key, who = who }
+        U.unlock(unitRef)                       -- what CP.Draw's onCancel does
+    end)
+end
+local function LastCancel() return cancelCalls[#cancelCalls] end
+
+u = Unit3()
+Clear()
+H.eq(U.readyCheck(u, 'tactical', function() end, function() end), true, 'a unit of 3 gets a check')
+U._reset()
+u = Unit3()
+Clear()
+H.ok(StartCheck(u), 'ready check started')
+H.ok(u.locked, 'the unit stays locked during the check (no second accept: CP.Draw refuses a locked unit)')
+local prompts = ClientEvents('client:readyCheck')
+H.eq(#prompts, 2, 'the two members are asked, not the leader')
+local prompt = prompts[1].args[1]
+local keys = {}
+for k in pairs(prompt) do keys[#keys + 1] = k end
+table.sort(keys)
+H.eq(table.concat(keys, ','), 'expiresIn,leaderName,typeKey,typeLabel', 'the prompt carries the type only')
+H.eq(prompt.typeLabel, Config.MissionTypes.tactical.label, 'the prompt names the type')
+H.eq(prompt.expiresIn, 20, 'Config.Units.readyTimeout seconds to answer')
+H.eq(prompt.leaderName, 'John Doe', 'and the leader')
+local pushedCheck
+for _, p in ipairs(pushes) do
+    if p.src == 2 and p.topic == 'unit' and p.data.readyCheck then pushedCheck = p.data.readyCheck end
+end
+H.ok(pushedCheck ~= nil, 'the unit push carries the check')
+H.eq(pushedCheck and pushedCheck.waitingForMe, true, 'member 2 still has to answer')
+H.eq(pushedCheck and #pushedCheck.waiting, 2, 'two waiting')
+res = Cb('getUnit', 3)
+H.eq(res.data.unit.readyCheck.typeLabel, Config.MissionTypes.tactical.label, 'getUnit shows the check')
+H.eq(res.data.unit.readyCheck.waitingForMe, true, 'to a member who has to answer')
+res = Cb('getUnit', 1)
+H.eq(res.data.unit.readyCheck.waitingForMe, false, 'the leader already answered by accepting')
+
+-- A second accept while the check is pending never starts a second one.
+local secondCancel
+H.eq(U.readyCheck(u, 'patrol', function() readyCalls = readyCalls + 100 end, function(key)
+    secondCancel = key
+    U.unlock(u)                             -- what CP.Draw's onCancel does
+end), true, 'a second check for the same unit is answered')
+H.eq(secondCancel, 'err.busy', 'with err.busy, the first check keeps going')
+H.ok(u.locked, 'the second caller\'s unlock leaves the unit locked while the first check is pending')
+
+ok, data = Act('server:unitReady', 5, { accepted = true })
+H.eq(data, 'err.unit_ready_none', 'an officer outside the unit cannot answer')
+ok, data = Act('server:unitReady', 2, { accepted = 'yes' })
+H.eq(data, 'err.invalid_payload', 'the answer is a boolean')
+ok = Act('server:unitReady', 2, { accepted = true })
+H.eq(ok, true, 'member 2 ready')
+ok, data = Act('server:unitReady', 2, { accepted = true })
+H.eq(data, 'err.unit_ready_answered', 'one answer per member')
+H.eq(readyCalls, 0, 'not everyone answered yet')
+H.reset()
+ok = Act('server:unitReady', 3, true)
+H.eq(ok, true, 'member 3 ready (a bare boolean, as the key mapping may send)')
+H.eq(readyCalls, 1, 'everyone accepted: onReady once')
+H.eq(U.readyCheckOf(u), nil, 'the check is over')
+local clears = ClientEvents('client:readyCheck')
+H.eq(#clears, 2, 'the prompts close')
+H.eq(clears[1].args[1], nil, 'with nil')
+ok, data = Act('server:unitReady', 3, true)
+H.eq(data, 'err.unit_ready_none', 'nothing left to answer')
+H.eq(readyCalls, 1, 'onReady never runs twice')
+H.ok(u.locked, 'still locked: the draw follows')
+U.unlock(u)
+
+-- Decline: onCancel with who did not answer, the unit unlocked, nobody gets a cooldown.
+Clear()
+removed = {}
+StartCheck(u)
+ok = Act('server:unitReady', 2, { accepted = false })
+H.eq(ok, true, 'member 2 declines')
+H.eq(LastCancel().key, 'err.unit_ready_declined', 'onCancel with the decline key')
+H.eq(#LastCancel().who, 1, 'naming one officer')
+H.eq(LastCancel().who[1], 2, 'the one who declined')
+H.eq(u.locked, false, 'the unit unlocked')
+H.eq(readyCalls, 1, 'no draw after a decline')
+H.eq(#removed, 0, 'nobody gets a cooldown or leaves a run')
+for _, s in ipairs({ 1, 2, 3 }) do
+    local n = LastNote(s, 'unit.ready.cancel_declined')
+    H.ok(n ~= nil and n.vars.names == 'Maria Lopez', 'officer ' .. s .. ' told who was not ready')
+end
+
+-- Timeout: everyone who did not answer is named.
+Clear()
+StartCheck(u)
+Act('server:unitReady', 3, true)
+H.time = H.time + 19
+U._sweep()
+H.ok(U.readyCheckOf(u) ~= nil, 'still pending after 19 s')
+H.time = H.time + 1
+U._sweep()
+H.eq(LastCancel().key, 'err.unit_ready_timeout', 'timeout after Config.Units.readyTimeout')
+H.eq(#LastCancel().who, 1, 'only the member who did not answer')
+H.eq(LastCancel().who[1], 2, 'member 2')
+H.eq(LastNote(1, 'unit.ready.cancel_timeout').vars.names, 'Maria Lopez', 'the leader told who did not answer')
+H.eq(u.locked, false, 'unlocked after a timeout')
+
+-- A pending check keeps the lock-grace safety net away.
+Config.Units.readyTimeout = 40
+StartCheck(u)
+H.time = H.time + U._LOCK_GRACE + 1
+U._sweep()
+H.ok(u.locked and U.readyCheckOf(u) ~= nil, 'the lock safety net waits for a pending check')
+H.time = H.time + 10
+U._sweep()
+H.eq(LastCancel().key, 'err.unit_ready_timeout', 'the longer check times out')
+Config.Units.readyTimeout = 20
+
+-- A member entering the arena, taking a real call, going off duty or leaving cancels the check.
+Clear()
+StartCheck(u)
+arena[3] = true
+U._sweep()
+arena[3] = nil
+H.eq(LastCancel().key, 'err.unit_ready_cancelled', 'arena cancels')
+H.eq(LastCancel().who[1], 3, 'naming the officer in the arena')
+H.ok(HasNote(1, 'unit.ready.cancel_arena'), 'arena toast')
+StartCheck(u)
+ok, data = Act('server:unitReady', 2, true)
+arena[2] = true
+ok, data = Act('server:unitReady', 3, true)
+H.eq(readyCalls, 1, 'a member who entered the arena after answering Ready stops the draw')
+H.eq(LastCancel().who[1], 2, 'naming that member')
+U.unlock(u)
+arena[2] = nil
+StartCheck(u)
+arena[2] = true
+ok, data = Act('server:unitReady', 2, true)
+arena[2] = nil
+H.eq(data, 'err.in_arena', 'an in-arena member cannot answer Ready')
+H.ok(HasNote(1, 'unit.ready.cancel_arena'), 'and the check is cancelled')
+-- The leader entering the arena between two sweeps: the last Ready does not start the draw.
+local drawsBefore = readyCalls
+StartCheck(u)
+Act('server:unitReady', 2, true)
+arena[1] = true
+ok = Act('server:unitReady', 3, true)
+arena[1] = nil
+H.eq(readyCalls, drawsBefore, 'no draw while a member is in the arena')
+H.eq(LastCancel().who[1], 1, 'the check names the officer in the arena')
+H.eq(u.locked, false, 'and the unit unlocks')
+Clear()
+StartCheck(u)
+onCall[2] = true
+U._sweep()
+onCall[2] = nil
+H.eq(LastCancel().who[1], 2, 'a real call cancels')
+H.ok(HasNote(3, 'unit.ready.cancel_call'), 'real call toast')
+Clear()
+StartCheck(u)
+for _, fn in ipairs(lostFns) do fn(3, 'off_duty') end
+H.eq(LastCancel().who[1], 3, 'going off duty cancels')
+H.ok(HasNote(1, 'unit.ready.cancel_off_duty'), 'off-duty toast')
+H.eq(U.unitOf(3), nil, 'and the officer left the unit')
+Act('server:unitInvite', 1, 3)
+Act('server:unitRespond', 3, true)
+Clear()
+StartCheck(u)
+ok = Act('server:unitLeave', 3)
+H.eq(ok, true, 'a member leaves during the check')
+H.eq(LastCancel().who[1], 3, 'leaving cancels')
+H.ok(HasNote(2, 'unit.ready.cancel_left'), 'leave toast')
+H.eq(#removed, 0, 'no cooldown for anyone')
+H.eq(U.readyCheck(U.unitOf(1), 'tactical', function() end, function() end), true, 'a unit of 2 still checks')
+U._reset()
+H.eq(U.readyCheck({ id = 999 }, 'tactical', function() end, function() end), false,
+    'no unit: no check (the draw goes on)')
+
+-- ============================================================================
+--                           LAST PARTNERS AND NEARBY
+-- ============================================================================
+
+U._reset()
+Clear()
+local function RunOfPeople(srcs, extra)
+    local run = { id = 'ended-' .. H.time, order = {}, participants = {}, test = extra and extra.test }
+    for _, s in ipairs(srcs) do
+        run.order[#run.order + 1] = s
+        run.participants[s] = { src = s, citizenid = players[s].citizenid, status = 'left' }
+    end
+    return run
+end
+CP.Hooks.fire('run:ended', RunOfPeople({ 1, 4, 5 }), 'completed', 'completed')
+local lp = U.lastPartners(1)
+table.sort(lp)
+H.eq(table.concat(lp, ','), '4,5', 'last partners from the last ended run')
+CP.Hooks.fire('run:ended', RunOfPeople({ 1, 6 }, { test = true }), 'completed', 'completed')
+lp = U.lastPartners(1)
+H.eq(#lp, 2, 'a test run does not replace them')
+H.players[1].coords = vec3(0.0, 0.0, 0.0)
+H.players[4].coords = vec3(100.0, 0.0, 0.0)
+H.players[5].coords = vec3(600.0, 0.0, 0.0)
+H.players[6].coords = vec3(2000.0, 0.0, 0.0)
+H.players[9].coords = vec3(5000.0, 0.0, 0.0)
+H.players[2].coords = vec3(0.0, 4000.0, 0.0)
+H.players[3].coords = vec3(0.0, 200.0, 0.0)
+res = Cb('getUnit', 1, { coords = { x = 5000.0, y = 0.0, z = 0.0 } })
+local band, partner, order = {}, {}, {}
+for i, o in ipairs(res.data.invitable) do
+    band[o.src] = o.distanceBand
+    partner[o.src] = o.lastPartner
+    order[i] = o.src
+end
+H.eq(band[4], 0, 'within 250 m: band 0')
+H.eq(band[3], 0, 'band from the server position of each ped')
+H.eq(band[5], 1, 'within 1000 m: band 1')
+H.eq(band[6], 2, 'within 3000 m: band 2')
+H.eq(band[9], 3, 'further: band 3')
+H.eq(band[2], 3, 'distance, not one axis')
+H.eq(order[1] == 3 or order[1] == 4, true, 'nearest officers first')
+H.eq(band[order[#order]], 3, 'the furthest last')
+H.eq(order[#order - 1], 9, 'within a band: department (FIB before SAST), then name')
+H.eq(partner[4] and partner[5], true, 'last partners flagged')
+H.eq(partner[6], false, 'others not')
+H.time = H.time + 901
+H.eq(#U.lastPartners(1), 0, 'last partners forgotten after 900 s')
+for _, s in ipairs({ 1, 2, 3, 4, 5, 6, 9 }) do H.players[s].coords = vec3(0.0, 0.0, 0.0) end
+
+-- ============================================================================
+--                         SIZE FIT, LEVELS AND AVATARS
+-- ============================================================================
+
+local poolCalls = {}
+CP.Draw.pool = function(typeKey, members)
+    poolCalls[#poolCalls + 1] = { typeKey = typeKey, n = #members }
+    local list = {}
+    local n = typeKey == 'tactical' and (#members >= 2 and 3 or 0) or (#members == 1 and 2 or 1)
+    for i = 1, n do list[i] = MISSIONS.gang_shootout end
+    return list, nil, {}
+end
+res = Cb('getUnit', 1)
+local fit = res.data.sizeFit
+H.eq(fit.tactical.now, 0, 'solo: no tactical mission')
+H.eq(fit.tactical.plusOne, 3, 'three with a partner')
+H.eq(fit.patrol.now, 2, 'patrol counts')
+H.eq(fit.patrol.plusOne, 1, 'patrol with one more')
+local leaks = {}
+local function Walk(v, path)
+    if type(v) == 'table' then
+        for k, x in pairs(v) do Walk(x, path .. '.' .. tostring(k)) end
+    elseif v == 'gang_shootout' or v == 'Gang Shootout' or v == 'Desc gang_shootout' then
+        leaks[#leaks + 1] = path
+    end
+end
+Walk(fit, 'sizeFit')
+H.eq(#leaks, 0, 'sizeFit carries counts only, never mission ids or labels: ' .. table.concat(leaks, ', '))
+for _, entry in pairs(fit) do
+    local k = {}
+    for key in pairs(entry) do k[#k + 1] = key end
+    table.sort(k)
+    H.eq(table.concat(k, ','), 'now,plusOne', 'each entry is two numbers')
+end
+u = Unit3()
+res = Cb('getUnit', 1)
+H.eq(res.data.sizeFit.tactical.now, 3, 'unit of 3 counts at its size')
+local sawFour = false
+for _, c in ipairs(poolCalls) do if c.n == 4 then sawFour = true end end
+H.ok(sawFour, 'and asks CP.Draw.pool one bigger')
+H.eq(res.data.unit.members[1].level.n, 1, 'members carry their level')
+H.eq(res.data.unit.members[1].avatar.kind, 'initials', 'and an avatar (initials without CP.Profile)')
+H.eq(res.data.unit.members[1].avatar.initials, 'JD', 'initials of the name')
+CP.Draw.pool = nil
+U._reset()
+
+-- ============================================================================
+--                 OPERATIONS: LEAVE, REMOVE A JOINER, WAITLIST
+-- ============================================================================
+
+H.time = H.time + 1800
+Clear()
+Config.CrossDept.maxParticipants = 3
+ok, data = Act('server:sup:opLaunch', 1, { missionId = 'gang_shootout' })
+H.eq(ok, true, 'launch for the waitlist checks')
+local opId = data.id
+Act('server:joinOperation', 2, opId)
+Act('server:joinOperation', 3, opId)
+ok, data = Act('server:joinOperation', 4, opId)
+H.eq(data.joined, 3, 'three places taken')
+ok, data = Act('server:joinOperation', 5, opId)
+H.eq(ok, true, 'a join when full goes to the waitlist')
+H.eq(data.waitlisted, true, 'waitlisted')
+H.eq(data.position, 1, 'first in line')
+ok, data = Act('server:joinOperation', 6, opId)
+H.eq(data.position, 2, 'second in line')
+ok, data = Act('server:joinOperation', 5, opId)
+H.eq(data, 'err.op_waitlisted', 'no double waitlist entry')
+H.eq(O.boardCard(5).joinBlocked, 'err.op_waitlisted', 'board card knows the viewer waits')
+H.eq(O.boardCard(5).waitlistPosition, 1, 'and where')
+H.eq(O.boardCard(9).canJoin, true, 'another officer may still queue')
+H.eq(O.officerCard(5).waitlistPosition, 1, 'the Unit screen card shows the waitlist place')
+H.eq(O.officerCard(2).canLeave, true, 'a joiner may leave before the start')
+H.eq(O.officerCard(9), nil, 'no card for someone not in the operation')
+res = Cb('sup:getOperation', 1)
+H.eq(#res.data.operation.waitlist, 2, 'the panel lists the waitlist')
+H.eq(res.data.operation.participants[1].canRemove, true, 'joiners removable before the start')
+
+-- Leave before the start: no penalty, the first on the waitlist takes the place.
+Clear()
+ok = Act('server:leaveOperation', 3)
+H.eq(ok, true, 'leave before the start')
+H.ok(HasNote(3, 'officer.op.left'), 'told it costs nothing')
+H.eq(#removed, 0, 'no run touched')
+local ids = {}
+for _, p in ipairs(O.active().participants) do ids[#ids + 1] = p.src end
+H.eq(table.concat(ids, ','), '2,4,5', 'the waitlisted officer took the freed place')
+H.ok(HasNote(5, 'officer.op.waitlist_promoted'), 'and was told')
+H.eq(#O.active().waitlist, 1, 'one still waiting')
+ok, data = Act('server:leaveOperation', 3)
+H.eq(data, 'err.op_not_joined', 'cannot leave twice')
+
+-- A waitlisted officer who can no longer take a mission is skipped.
+Act('server:joinOperation', 9, opId)
+H.eq(#O.active().waitlist, 2, 'two waiting (6, 9)')
+arena[6] = true
+Clear()
+Act('server:leaveOperation', 4)
+arena[6] = nil
+ids = {}
+for _, p in ipairs(O.active().participants) do ids[#ids + 1] = p.src end
+H.eq(table.concat(ids, ','), '2,5,9', 'the in-arena officer is skipped, the next takes the place')
+H.ok(HasNote(6, 'officer.op.waitlist_skipped'), 'the skipped officer is told')
+Act('server:joinOperation', 6, opId)
+
+-- Remove a joiner: launchCrossDept, a reason, audited.
+Clear()
+ok, data = Act('server:sup:opRemoveJoiner', 2, { src = 5, reason = 'x' })
+H.eq(data, 'err.no_permission', 'remove needs launchCrossDept')
+ok, data = Act('server:admin:opRemoveJoiner', 1, { src = 5, reason = 'x' })
+H.eq(data, 'err.no_permission', 'the admin scope needs an admin')
+ok, data = Act('server:sup:opRemoveJoiner', 1, { src = 5 })
+H.eq(data, 'err.op_reason_required', 'a reason is required')
+ok, data = Act('server:sup:opRemoveJoiner', 1, { src = 5, reason = '   ' })
+H.eq(data, 'err.op_reason_required', 'a blank reason is refused')
+ok, data = Act('server:sup:opRemoveJoiner', 1, { src = 4, reason = 'Not in it' })
+H.eq(data, 'err.op_not_joined', 'only joiners can be removed')
+ok = Act('server:sup:opRemoveJoiner', 1, { src = 5, reason = 'Needed at the station' })
+H.eq(ok, true, 'removed')
+local n2 = LastNote(5, 'officer.op.removed_by_supervisor')
+H.ok(n2 ~= nil and n2.vars.reason == 'Needed at the station', 'the removed officer gets the reason')
+local audit = audits[#audits]
+H.eq(audit and audit.action, 'opRemoveJoiner', 'audited')
+H.eq(audit and audit.category, 'operations', 'in the operations category')
+H.eq(audit and audit.reason, 'Needed at the station', 'with the reason')
+H.eq(audit and audit.old, 'Dana Whitfield (CID5)', 'naming the officer')
+ids = {}
+for _, p in ipairs(O.active().participants) do ids[#ids + 1] = p.src end
+H.eq(table.concat(ids, ','), '2,9,6', 'the freed place went to the waitlist')
+ok = Act('server:sup:opRemoveJoiner', 9, { src = 6, reason = 'Other duties' })
+H.eq(ok, true, 'any supervisor with launchCrossDept may remove')
+
+-- After the start: leaving the operation and removing a joiner are refused; the waitlist closes.
+Act('server:joinOperation', 4, opId)
+Act('server:joinOperation', 3, opId)
+H.eq(#O.active().waitlist, 1, 'one waiting at the start')
+Clear()
+ok = Act('server:sup:opStart', 1)
+H.eq(ok, true, 'operation started')
+H.eq(#O.active().waitlist, 0, 'the waitlist closed at the start')
+H.ok(HasNote(3, 'officer.op.waitlist_closed'), 'and the waiting officer was told')
+ok, data = Act('server:leaveOperation', 2)
+H.eq(data, 'err.op_leave_started', 'no leaving the operation after the start')
+ok, data = Act('server:sup:opRemoveJoiner', 1, { src = 2, reason = 'Late' })
+H.eq(data, 'err.op_remove_started', 'no removing after the start')
+H.eq(O.officerCard(2).canLeave, false, 'the Unit screen card has no Leave once started')
+O.cancel(0, 'End of the waitlist checks')
+Config.CrossDept.maxParticipants = 8
+
+-- Waitlist off: a full operation refuses with err.op_full.
+H.time = H.time + 1800
+Config.CrossDept.waitlist = false
+Config.CrossDept.maxParticipants = 2
+ok, data = Act('server:sup:opLaunch', 1, { missionId = 'gang_shootout' })
+Act('server:joinOperation', 2, data.id)
+Act('server:joinOperation', 3, data.id)
+ok, data = Act('server:joinOperation', 4, data.id)
+H.eq(data, 'err.op_full', 'waitlist off: full is full')
+H.eq(O.boardCard(4).joinBlocked, 'err.op_full', 'the board card says so')
+O.cancel(0, 'End of the waitlist-off check')
+Config.CrossDept.waitlist = true
+Config.CrossDept.maxParticipants = 8
+
 os.execute(('mysql -uroot -e "DROP DATABASE IF EXISTS %s;"'):format(H.db))
 return H

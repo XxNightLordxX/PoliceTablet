@@ -3,7 +3,7 @@
 Files: `Crimson-Police/modules/units/{server,client}.lua`, `Crimson-Police/modules/operations/{server,client}.lua`,
 `Crimson-Police/web/src/officer/screens/Unit.tsx` (+ `Unit.css`), `Crimson-Police/web/src/supervisor/screens/CrossDept.tsx`,
 `Crimson-Police/web/src/supervisor/components/OperationPanel.tsx` (+ `OperationPanel.css`),
-`Crimson-Police/web/src/types/teams.ts`, `Crimson-Police/web/src/mocks/teams.mock.ts`,
+`Crimson-Police/web/src/officer/components/ReadyCheckBanner.tsx` (+ `.css`), `Crimson-Police/web/src/types/teams.ts`, `Crimson-Police/web/src/mocks/teams.mock.ts`,
 `Crimson-Police/locales/parts/teams.json`, `tests/teams_spec.lua`. Each Lua file's header lists its public API.
 
 ## Registered names
@@ -14,6 +14,14 @@ Files: `Crimson-Police/modules/units/{server,client}.lua`, `Crimson-Police/modul
 | action | `server:unitRespond` | `{ accepted, unitId }` or a bare boolean (newest invite) → `{ unitId, accepted }` |
 | action | `server:unitLeave` | — → `{ left = true, abandoned = bool }` |
 | callback | `getUnit` | → UnitView + extras (below) |
+| action | `server:unitKick` / `server:unitPromote` | `{ targetSrc }` → `{ kicked }` / `{ leader }` (leader; unit not locked) |
+| action | `server:unitDisband` | — → `{ disbanded = true }` (leader; unit not locked) |
+| action | `server:unitCancelInvite` | `{ targetSrc }` → `{ cancelled }` (inviter or leader; unit not locked) |
+| action | `server:unitReady` | `{ accepted }` or a bare boolean → `{ accepted }` (member of a unit with a pending check; the key mapping sends it without a reply id) |
+| client event | `crimson-police:client:readyCheck` | `{ typeKey, typeLabel, expiresIn, leaderName }` or nil to clear (every member but the leader) |
+| key mapping | `crimsonpolice_ready` | Config.Tablet.readyKey: answers a pending ready check with Ready |
+| action | `server:leaveOperation` | — → `{ left = true }` (joined or waitlisted, before the start) |
+| action | `server:sup:opRemoveJoiner` / `server:admin:opRemoveJoiner` | `{ src, reason }` (1–200 chars) → `{ removed }` (launchCrossDept; audited `opRemoveJoiner`) |
 | action | `server:sup:opLaunch` / `server:admin:opLaunch` | `{ missionId }` → `{ id }` |
 | action | `server:sup:opStart` / `server:admin:opStart` | — → `{ runId, participants }` |
 | action | `server:sup:opRelaunch` / `server:admin:opRelaunch` | — → `{ id }` |
@@ -21,7 +29,7 @@ Files: `Crimson-Police/modules/units/{server,client}.lua`, `Crimson-Police/modul
 | action | `server:joinOperation` | `operationId` or `{ operationId }` (nil = the active one) → `{ id, joined, max }` |
 | callback | `sup:getOperation` | → OperationView (below) |
 | client event | `crimson-police:client:operation` | `(state, missionLabel, extra = { id, relaunched })` |
-| push | `unit` | `{ unitId|false, invited? }` to every member and invitee; `board` to members |
+| push | `unit` | `{ unitId|false, invited?, readyCheck? }` to every member and invitee; `board` to members |
 | push | `operation`, `board` | `{ id|false, status|false }` to every online department member (`operation` also to admins) |
 
 Every `server:sup:op*` / `server:admin:op*` handler calls `CP.Permissions.can(src, 'launchCrossDept')` first; the
@@ -34,6 +42,14 @@ Every `server:sup:op*` / `server:admin:op*` handler calls `CP.Permissions.can(sr
 `inviteBlocked` (`unit.blocked_on_run` | `unit.blocked_locked` | `unit.blocked_full` | nil), `onRun`,
 `unit.size`, `unit.pending = { { src, name, callsign, departmentShort, expiresIn } }`, `members[].available`,
 `invites[].size`, `invitable[].inUnit`. `invitable` is only filled while `canInvite`.
+Parity additions (design WP5): `unit.canManage` (the viewer leads and the unit is not locked), `unit.readyCheck =
+{ typeLabel, expiresIn, ready = { src }, waiting = { src }, waitingForMe }` (nil when none), `members[].avatar`
+(CP.Profile.avatarFor when loaded, else initials in the level's frame colour), `members[].level = { n, badge }`,
+`invitable[].distanceBand` (0..3 from Config.Units.nearbyBands, server-side ped coordinates only),
+`invitable[].lastPartner`, `pendingSent = { { src, name, expiresIn } }` (invites the viewer sent),
+`sizeFit = { [type] = { now, plusOne } }` (CP.Draw.pool counts at the unit's size and one bigger, counts only),
+`operation` (CP.Operations.officerCard: `{ id, missionLabel, status, joined, max, waitlistPosition, joinEndsIn,
+canLeave }` for a joiner or a waitlisted officer). `inviteBlocked` may be `unit.blocked_policy`.
 
 **OperationView** (`sup:getOperation`):
 ```
@@ -50,7 +66,12 @@ Every `server:sup:op*` / `server:admin:op*` handler calls `CP.Permissions.can(sr
 ```
 
 **BoardData.operation** (`CP.Operations.boardCard`): the §9.4 fields plus `missionType`, `missionTypeLabel`,
-`description`, `min`, `runState`. `joined` counts joiners (joining) or active participants (running).
+`description`, `min`, `runState`, `waitlist` (count), `waitlistPosition`, `waitlistOpen`. `joined` counts joiners
+(joining) or active participants (running). A viewer on the waitlist gets `joinBlocked = 'err.op_waitlisted'`; a
+full operation gives `err.op_full` only with `Config.CrossDept.waitlist = false`.
+
+**OperationView additions**: `operation.participants[].canRemove`, `operation.waitlist = { { src, name, callsign,
+departmentShort, position, canRemove } }`, `operation.waitlistEnabled`.
 
 ## Contract interpretations
 
@@ -81,6 +102,40 @@ Every `server:sup:op*` / `server:admin:op*` handler calls `CP.Permissions.can(sr
 - The invite toast is `CP.Tablet.notify(target, 'info', 'unit.invite_received', …, { title = 'unit.invite_title' })`.
   The invitee gets exactly one `unit` push for a new invite, carrying `invited = true`; the units client only adds a
   frontend sound on it. The inviter's expiry toast names the invitee.
+
+### Leader controls and the ready check (CP.Units, design 2.11)
+- `kick(src, target)`, `promote(src, target)`, `disband(src)`: the leader only, refused with `err.unit_locked` once a
+  type is accepted (the unit is locked from the accept to the run's end). `cancelInvite(src, target)`: the leader or
+  the member who sent it; the slot frees at once. A kick never touches runs or cooldowns; the kicked officer can't be
+  invited by that unit (its members at the kick and anyone who joins it later) for `Config.Units.kickReinvite` seconds
+  (`err.unit_kicked_recently`), and is left out of their invite list meanwhile; a kick from another unit adds its own block. Disband tells members who disbanded and withdraws open invites.
+- `Config.Units.invitePolicy = 'leader'`: a member's invite is refused (`err.unit_invite_leader_only`); the member's
+  view shows `unit.blocked_policy`.
+- `readyCheck(unit, typeKey, onReady, onCancel)` is called by CP.Draw.accept after the lock for units of 2+ (and for a
+  mission call's winning claim). It returns false only when no check is needed (no unit, or fewer than 2), so the
+  draw follows at once. The leader's accept counts as their answer; every other member gets `client:readyCheck`
+  (type only), a toast from the units client and the `unit` push with `readyCheck`. All accepted → `onReady()` once.
+  A decline (`err.unit_ready_declined`), the timeout (`Config.Units.readyTimeout`, checked by the 2 s sweep;
+  `err.unit_ready_timeout`), or a member leaving, going off duty, disconnecting, entering the arena or taking a real
+  call (`err.unit_ready_cancelled`) → `onCancel(reasonKey, srcs)` with the officers who did not answer; everyone asked
+  gets a `unit.ready.cancel_*` toast naming them. CP.Draw unlocks the unit on cancel; nobody gets a cooldown. A second
+  check for a unit with one pending gets `onCancel('err.busy')` at once, and `unlock` is ignored while a check is
+  pending (the check clears itself before `onReady` / `onCancel` run), so that caller can't reopen the unit. The lock
+  safety net (LOCK_GRACE) skips a unit with a pending check. An in-arena member answering Ready is refused
+  (`err.in_arena`) and cancels the check; the last Ready re-checks every member for the arena before `onReady`.
+- `lastPartners(src)`: the online officers of src's last ended run (the `run:ended` hook, test runs ignored,
+  remembered 900 s by citizenid).
+
+### Waitlist and leaving an operation (CP.Operations, design 2.11)
+- `Config.CrossDept.waitlist` (default true): a join when every place is taken (or while someone waits) queues the
+  officer (`{ waitlisted = true, position }`). A place freed before the start (leave, a supervisor's remove, a drop,
+  unload or lost access) goes to the first on the list, re-checked like a join (officer, same citizenid, not on a run,
+  not in the arena, not on a real call); one who fails is skipped with a toast. The list closes at the start (toast).
+- `leave(src)` / `server:leaveOperation`: before the start only, no penalty; after it `err.op_leave_started` (the run's
+  own abandon applies). `removeJoiner(src, target, reason)` / `server:<scope>:opRemoveJoiner`: launchCrossDept, a
+  reason, before the start only (`err.op_remove_started`), audited as `opRemoveJoiner` (old = "name (citizenid)",
+  new = joined | waitlist).
+- `officerCard(src)`: the Unit screen card for a joiner or a waitlisted officer.
 
 ### CP.Operations
 - Status machine and board lock as in the file header. `isLocked()` is true for joining, running and waiting.
@@ -176,6 +231,10 @@ Every `server:sup:op*` / `server:admin:op*` handler calls `CP.Permissions.can(sr
   `err.op_mission_*`, `err.op_not_ready`.
 - **admin**: `CP.Admin.audit` with category `'operations'` and actor `'console'` / role `'console'` for the
   automatic cancel; `CP.Admin.webhook('operations', title, description, fields)` for results.
+- **draw** (WP4): `CP.Units.readyCheck` is called after the lock for units of 2+ (done); tests/e2e_spec.lua answers
+  every member's Ready at once so its unit scenarios keep drawing synchronously.
+- **Officer layout** (WP8): mount `web/src/officer/components/ReadyCheckBanner.tsx` (props optional; it follows the
+  `unit` push). The Unit screen already renders it.
 - **locale merge**: `teams.json` repeats these shared keys with the owners' exact text: `err.internal`,
   `err.invalid_payload`, `err.no_permission`, `err.not_police`, `err.not_in_game`, `err.rate_limited` (core),
   `err.busy`, `err.in_arena`, `err.already_on_run`, `err.on_call`, `err.no_location`, `err.run_create_failed`,
@@ -183,7 +242,12 @@ Every `server:sup:op*` / `server:admin:op*` handler calls `CP.Permissions.can(sr
   `ui.screen.unit`, `ui.screen.sup_crossdept` (ui).
 
 ## Tests
-`lua5.4 tests/run.lua teams` → 409 assertions, 0 failed. Covers invites (validation, TTL expiry, decline, forming
+`lua5.4 tests/run.lua teams` → 632 assertions, 0 failed (409 before the parity build; the WP5 additions cover kick,
+make leader, disband and withdraw (leader or inviter only, refused once locked, kick re-invite block, no cooldown), the
+leader-only invite policy, the ready check (all accept → onReady once; decline, timeout, leaving, off duty, a real call
+and the arena cancel it with who did not answer; the prompt carries the type only; a second check is refused), last
+partners (900 s), distance bands from server-side coordinates, sizeFit counts only, member levels and avatars, and
+operation leave, remove-joiner (permission, reason, audit) and the waitlist). Covers invites (validation, TTL expiry, decline, forming
 units, moving between units, cap with open invites), leader succession, dissolve, lock/unlock (incl. the
 member-still-on-run guard and the safety net), leave mid-run (quit) vs operation run, drop/unload/onLost cleanup,
 the arena gates; operations: restart cancel, cooldown from the persisted `created_at`, permissions (sup/admin

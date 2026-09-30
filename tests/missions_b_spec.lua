@@ -121,7 +121,21 @@ local FIELDS = {
         'timerStart',
         'failIfUndriveable',
     },
-    interact_points = { 'points', 'use', 'count', 'target', 'progress', 'roll', 'logResult', 'hidden', 'fastBonus' },
+    interact_points = {
+        'points',
+        'use',
+        'count',
+        'target',
+        'progress',
+        'roll',
+        'logResult',
+        'hidden',
+        'fastBonus',
+        'finds',
+        'together',
+    },
+    -- the parity-plus blocks (docs/notes/missions_c.md)
+    process_scene = { 'scene', 'coroner', 'bodies', 'roles', 'tag', 'bag', 'release', 'aliveBonus' },
     skill_check = { 'targets', 'checks', 'missPenalty', 'failAfter', 'target', 'explosion' },
     hostile_waves = {
         'spawns',
@@ -228,7 +242,8 @@ local NESTED = {
     boss = { 'model', 'label', 'health', 'armour', 'weapon', 'spawn', 'surrender' },
     ambush = { 'waves', 'carsPerWave', 'perCar', 'models', 'peds', 'weapons', 'accuracy', 'armour' },
     associates = { 'count', 'spawns', 'weapons', 'accuracy', 'armour' },
-    hidden = { 'count', 'prop', 'label' },
+    hidden = { 'count', 'prop', 'label', 'kind', 'action' },
+    finds = { 'chance', 'pool' },
     fastBonus = { 'seconds', 'id' },
     progress = { 'label', 'duration', 'anim' },
     clueProgress = { 'label', 'duration' },
@@ -1259,7 +1274,7 @@ end
 -- ============================================================================
 --                          THE REAL LOADER END TO END
 -- ============================================================================
--- CP.Missions.loadAll with every real block → all 14 built-ins valid.
+-- CP.Missions.loadAll with every real block → all 19 built-ins valid.
 
 do
     for _, b in ipairs({
@@ -1272,6 +1287,8 @@ do
         'pursuit',
         'escort',
         'search_area',
+        'field_contact',
+        'process_scene',
     }) do
         if not CP.Blocks.get(b) or missing[b] then
             local okB, errB = pcall(H.load, 'blocks/' .. b .. '/server.lua')
@@ -1280,7 +1297,7 @@ do
     end
     local content = LoadResourceFile('Crimson-Police', 'missions/builtin/index.lua')
     local ids = content and assert(load(content, '@index.lua', 't', {}))() or {}
-    H.eq(#ids, 14, 'missions/builtin/index.lua lists all 14 built-in missions')
+    H.eq(#ids, 19, 'missions/builtin/index.lua lists all 19 built-in missions')
     if CP.Missions and CP.Missions.loadAll then
         local okL, summary = pcall(CP.Missions.loadAll)
         if
@@ -1288,7 +1305,7 @@ do
                 'CP.Missions.loadAll runs (' .. tostring(not okL and summary or '') .. ')')
         then
             local failed = summary.failed or {}
-            H.eq(summary.builtin, 14, 'CP.Missions.loadAll: 14 built-in missions loaded')
+            H.eq(summary.builtin, 19, 'CP.Missions.loadAll: 19 built-in missions loaded')
             H.eq(
                 #failed,
                 0,

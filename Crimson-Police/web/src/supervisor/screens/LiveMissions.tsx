@@ -22,6 +22,7 @@ import { useAction, useRequest } from '../../shared/hooks';
 import { t } from '../../shared/i18n';
 import { useCan, useSession } from '../../shared/session';
 import type { LiveParticipant, LiveRunEx, LiveRunsData } from '../../types/oversight';
+import MissionCallsPanel from '../components/MissionCallsPanel';
 import './LiveMissions.css';
 
 interface RecallTarget {
@@ -254,6 +255,7 @@ export default function SupLiveMissions() {
             className="oversight-screen"
         >
             {body}
+            {can('missionCalls') ? <MissionCallsPanel scope={isAdminView ? 'admin' : 'sup'} /> : null}
             <ConfirmDialog
                 open={!!target}
                 tone="danger"

@@ -27,6 +27,7 @@ import { t } from '../../shared/i18n';
 import { useCan } from '../../shared/session';
 import { toast } from '../../shared/toast';
 import OperationPanel from '../../supervisor/components/OperationPanel';
+import MissionCallsPanel, { LocationPlays } from '../../supervisor/components/MissionCallsPanel';
 import { BuilderWorkspace, LockBadge, StatusBadge, editorMemory, setEditorMemory } from '../../builder';
 import type {
     BuilderCreateResult,
@@ -38,7 +39,7 @@ import type {
 import type { MissionListEntry } from '../../types/oversight';
 import type { AdminMissionsData } from '../../types/builder_client';
 
-type Tab = 'catalog' | 'builder' | 'operation';
+type Tab = 'catalog' | 'builder' | 'operation' | 'dispatch';
 type SourceFilter = 'all' | 'builtin' | 'custom';
 
 interface CatalogRow {
@@ -81,7 +82,8 @@ export default function AdminMissions() {
     );
     const setTab = (next: Tab) => {
         setTabState(next);
-        setEditorMemory('admin', { tab: next });
+        // the builder remembers its own three tabs; the Dispatch tab is not one of them
+        if (next !== 'dispatch') setEditorMemory('admin', { tab: next });
     };
     const missions = useRequest<AdminMissionsData>('admin:getMissions', {}, { pushTopic: 'operation', pollMs: 30000 });
     const builder = useRequest<BuilderList>('builder:list', {}, { pushTopic: 'builder', pollMs: 30000 });
@@ -514,6 +516,7 @@ export default function AdminMissions() {
                         badge: stats.drafts || undefined,
                     },
                     { key: 'operation', label: t('admin.missions.tab.operation'), icon: 'globe' },
+                    { key: 'dispatch', label: t('mc.admin.tab'), icon: 'radio' },
                 ]}
             />
             {tab === 'catalog' ? (
@@ -586,6 +589,12 @@ export default function AdminMissions() {
                 )
             ) : null}
             {tab === 'builder' ? <BuilderWorkspace scope="admin" /> : null}
+            {tab === 'dispatch' ? (
+                <div className="builder_client-op">
+                    <MissionCallsPanel scope="admin" />
+                    <LocationPlays missions={rows.map(r => ({ id: r.id, label: r.label }))} />
+                </div>
+            ) : null}
             {tab === 'operation' ? (
                 <div className="builder_client-op">
                     <OperationPanel scope="admin" />

@@ -13,3 +13,20 @@
     line-height: 1;
     user-select: none;
 }
+
+.cp-avatar--image {
+    overflow: hidden;
+}
+
+.cp-avatar__img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
+}
+
+.cp-avatar__preset {
+    width: 68%;
+    height: 68%;
+    object-fit: contain;
+}

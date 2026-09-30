@@ -504,7 +504,13 @@ local function Tick(ctx)
             for _, p in pairs(st.peds) do
                 if p.state == 'freed' then
                     local c = PedCoords(p)
-                    if c and U.dist(c, safe) <= r then SetPed(ctx, st, p, 'safe') end
+                    if c and U.dist(c, safe) <= r then
+                        SetPed(ctx, st, p, 'safe')
+                        -- the service record: one rescue for every participant in the run
+                        if CP.Runs and CP.Runs.noteStat and ctx.run then
+                            CP.Runs.noteStat(ctx.run, nil, 'rescues', 1)
+                        end
+                    end
                 end
             end
         end

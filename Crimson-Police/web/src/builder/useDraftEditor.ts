@@ -520,6 +520,7 @@ export function useDraftEditor(
             payload.radiusMax = hi;
         } else if (spec.radius) payload.radius = spec.radius;
         if (spec.minGap) payload.minGap = spec.minGap;
+        if (spec.ruled) payload.streets = true;
         return run('builderPlace', payload, spec, location, 'placement');
     };
 

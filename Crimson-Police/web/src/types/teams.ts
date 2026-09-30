@@ -2,7 +2,7 @@
 // and BoardData.operation are contract shapes (src/shared/types.ts); the types below add the optional fields the
 // server sends on top of them.
 
-import type { UnitView } from '../shared/types';
+import type { Avatar, UnitView } from '../shared/types';
 
 // ============================================================================
 //                                   getUnit
@@ -11,7 +11,57 @@ import type { UnitView } from '../shared/types';
 type BaseUnit = NonNullable<UnitView['unit']>;
 
 // A unit member (UnitView member + `available`: false when that member can no longer take missions).
-export type UnitMemberView = BaseUnit['members'][number] & { available?: boolean };
+export type UnitMemberView = BaseUnit['members'][number] & {
+    available?: boolean;
+    avatar?: Avatar;
+    // The XP level number and its badge colour (the header shows the number only).
+    level?: { n: number; badge: string };
+};
+
+// The pending ready check (the mission type only, never a mission). ready / waiting are member srcs.
+export interface ReadyCheckView {
+    typeLabel: string;
+    // Seconds left to answer (Config.Units.readyTimeout).
+    expiresIn: number;
+    ready: number[];
+    waiting: number[];
+    // The viewer still has to answer.
+    waitingForMe?: boolean;
+}
+
+// Push topic 'unit'.
+export interface UnitPushData {
+    unitId: number | false;
+    invited?: boolean;
+    readyCheck?: ReadyCheckView | null;
+}
+
+// An invite the viewer sent that is still open (the viewer may withdraw it).
+export interface UnitSentInvite {
+    src: number;
+    name: string;
+    expiresIn: number;
+}
+
+// Per mission type: how many missions the unit could draw at its size and one bigger (counts only).
+export interface SizeFitEntry {
+    now: number;
+    plusOne: number;
+}
+
+// The Cross-Department Mission the viewer joined or waits for (Unit screen card).
+export interface UnitOperationCard {
+    id: number;
+    missionLabel: string;
+    status: 'joining' | 'running' | 'waiting';
+    joined: number;
+    max: number;
+    // 1-based place on the waitlist, null when the viewer has a place.
+    waitlistPosition?: number | null;
+    joinEndsIn?: number | null;
+    // Leaving is possible until the start (no penalty).
+    canLeave: boolean;
+}
 
 // An invite the viewer's unit sent that is still open.
 export interface UnitPendingInvite {
@@ -28,13 +78,22 @@ export type UnitInfoView = Omit<BaseUnit, 'members'> & {
     // Number of members.
     size?: number;
     pending?: UnitPendingInvite[];
+    // The viewer leads and the unit has not accepted a type: kick, make leader, disband, withdraw invites.
+    canManage?: boolean;
+    readyCheck?: ReadyCheckView | null;
 };
 
 // An invite waiting for the viewer (+ `size`: members already in that unit).
 export type UnitInviteView = UnitView['invites'][number] & { size?: number };
 
 // An officer the viewer may invite (+ `inUnit`: already in another unit that is not full).
-export type UnitInvitableView = UnitView['invitable'][number] & { inUnit?: boolean };
+export type UnitInvitableView = UnitView['invitable'][number] & {
+    inUnit?: boolean;
+    // 0 = nearest band of Config.Units.nearbyBands ... 3 = further (server-side coordinates).
+    distanceBand?: 0 | 1 | 2 | 3;
+    // On the viewer's last ended run.
+    lastPartner?: boolean;
+};
 
 // Callback 'getUnit' (UnitView §9.4 plus the slice fields).
 export interface UnitScreenView {
@@ -53,6 +112,9 @@ export interface UnitScreenView {
     onRun?: boolean;
     // Seconds an invite stays open (120).
     inviteTtl?: number;
+    pendingSent?: UnitSentInvite[];
+    sizeFit?: Record<string, SizeFitEntry>;
+    operation?: UnitOperationCard | null;
 }
 
 // Reply of server:unitLeave.
@@ -77,6 +139,18 @@ export interface OperationParticipant {
     // joined (join window) · active / left (on the run) · waiting (last joiners of a failed attempt).
     status: 'joined' | 'active' | 'left' | 'waiting';
     arrived: boolean;
+    // A supervisor may remove this joiner (before the start).
+    canRemove?: boolean;
+}
+
+// An officer waiting for a freed place (Config.CrossDept.waitlist).
+export interface OperationWaitlistEntry {
+    src: number;
+    name: string;
+    callsign: string | null;
+    departmentShort: string;
+    position: number;
+    canRemove?: boolean;
 }
 
 export interface OperationInfo {
@@ -118,6 +192,8 @@ export interface OperationInfo {
     startBlocked?: string | null;
     canRelaunch: boolean;
     canCancel: boolean;
+    waitlist?: OperationWaitlistEntry[];
+    waitlistEnabled?: boolean;
 }
 
 export interface EligibleMission {

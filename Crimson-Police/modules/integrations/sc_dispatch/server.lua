@@ -99,6 +99,68 @@ function D.clearNotification(uniqueId, jobs)
 end
 
 -- ============================================================================
+--                             READ-ONLY SUMMARIES
+-- ============================================================================
+-- The Dispatch screen strip (active real calls, NPC calls left out) and the MDT commendations of a profile.
+-- Read-only, never mixed with a cp_ table; in files mode the storage shim sends them to the real oxmysql.
+
+local summaryCache = nil     -- { at, value } (value false = the lookup failed: the strip is hidden)
+
+local function LikePrefix(prefix)
+    return (prefix:gsub('[\\%%_]', '\\%0')) .. '%'
+end
+
+function D.realCallSummary()
+    local now = os.time()
+    local ttl = tonumber(Config.MissionCalls and Config.MissionCalls.realCallCache) or 15
+    if summaryCache and now - summaryCache.at < ttl then return summaryCache.value or nil end
+    local prefix = tostring(Config.Calls and Config.Calls.npcCallPrefix or 'npccall-')
+    local value = false
+    if CP.Migrations and CP.Migrations.ready then CP.Migrations.ready() end
+    local ok, rows = pcall(MySQL.query.await, [[
+        SELECT priority, COUNT(*) AS n FROM mdt_dispatch
+        WHERE active = 1 AND (unique_id IS NULL OR unique_id NOT LIKE ?) GROUP BY priority
+    ]], { LikePrefix(prefix) })
+    if not ok or type(rows) ~= 'table' then
+        LogError('summary', 'mdt_dispatch real-call count failed (the Dispatch strip is hidden): %s', tostring(rows))
+    else
+        local total, p1 = 0, 0
+        for _, r in ipairs(rows) do
+            local n = math.floor(CP.U.num(r.n))
+            total = total + n
+            if tonumber(r.priority) == 1 then p1 = p1 + n end
+        end
+        value = { total = total, p1 = p1 }
+    end
+    summaryCache = { at = now, value = value }
+    return value or nil
+end
+
+function D.mdtCommendations(citizenid)
+    if type(citizenid) ~= 'string' or citizenid == '' or #citizenid > 64 then return nil end
+    if CP.Migrations and CP.Migrations.ready then CP.Migrations.ready() end
+    local ok, rows = pcall(MySQL.query.await, [[
+        SELECT title, issued_by, UNIX_TIMESTAMP(created_at) AS ts FROM employee_incidents
+        WHERE citizenid = ? AND type = 'commendation' ORDER BY created_at DESC LIMIT 10
+    ]], { citizenid })
+    if not ok or type(rows) ~= 'table' then
+        LogError('commendations', 'employee_incidents commendations failed (the MDT tag is hidden): %s', tostring(rows))
+        return nil
+    end
+    local out = {}
+    for _, r in ipairs(rows) do
+        out[#out + 1] = {
+            title = type(r.title) == 'string' and CP.U.clip(r.title, 128) or '',
+            by = type(r.issued_by) == 'string' and CP.U.clip(r.issued_by, 64) or '',
+            at = math.floor(CP.U.num(r.ts)),
+        }
+    end
+    return out
+end
+
+D._resetSummary = function() summaryCache = nil end
+
+-- ============================================================================
 --                                  LISTENERS
 -- ============================================================================
 

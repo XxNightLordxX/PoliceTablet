@@ -13,7 +13,9 @@
   fleeTo. Associates and the yard marker are in the front and side yard for the same reason. fleeTo points
   on or beside a street have that street's height (+1 m) from the GTA V vehicle nodes (Wild Oats Drive drops
   18 m over the flee path; Grove Street's back street is 3 m below the house).
-  Blocks: flee_arrest (door mode) → interact_points.
+  The search of the property rolls a find (60%: narcotics, a weapon, stolen goods or documents), shown on
+  the tablet as virtual evidence; the scene is processed at the yard marker (at once when nobody died).
+  Blocks: flee_arrest (door mode) → interact_points → process_scene.
 ]]
 
 RegisterMission({
@@ -147,6 +149,15 @@ RegisterMission({
       points     = 'yard',
       target     = { label = 'Search the property' },
       progress   = { label = 'Searching the property', duration = 8000, anim = 'search' },
+      finds      = { chance = 0.6, pool = { 'narcotics', 'weapon', 'stolen_goods', 'documents' } },   -- virtual evidence
+    },
+    {
+      block      = 'process_scene',
+      label      = 'Process the scene',
+      minSeconds = 5,
+      scene      = 'yard',
+      coroner    = false,                                          -- release at the yard marker
+      bodies     = 4,
     },
   },
 

@@ -1,12 +1,13 @@
 // Browser mocks for the boards slice (Leaderboard, Department Challenge, Profile & History, Admin Seasons &
 
 import { registerMock, type MockFn, type MockKind } from '../shared/nui';
-import type { BoardRow, RunResult } from '../shared/types';
+import type { Avatar, LevelInfo, RunResult } from '../shared/types';
 import type {
     ActivityRun,
     AdminBoardRow,
     AdminBoards,
     AdminRun,
+    BoardRowView,
     BoardView,
     BountyHistoryRow,
     BountyView,
@@ -22,6 +23,7 @@ import type {
     SeasonListRow,
     SeasonView,
     SeasonsAdmin,
+    ServiceStats,
     StuckPayment,
 } from '../types/boards';
 import { devState } from './devState';
@@ -271,8 +273,57 @@ function entries(period: string, filter: string, department?: string): Entry[] {
     );
 }
 
-function toRow(e: Entry, rank: number, viewerCid: string): BoardRow {
+const PRESET_IDS = ['shield', 'star', 'badge', 'k9', 'motor', 'heli', 'swat', 'detective'];
+
+// The picture everyone sees (hidden names: the callsign's initials, never the picture).
+export function mockAvatar(o: MockOfficer | undefined, own = false): Avatar {
+    const frame = level(o?.xp ?? 0).badge;
+    if (!o) return { kind: 'initials', value: null, initials: '?', frame };
+    if (hidden.has(o.citizenid) && !own) {
+        return {
+            kind: 'initials',
+            value: null,
+            initials: (o.callsign ?? '?').replace(/[^\w]/g, '').slice(0, 2),
+            frame,
+        };
+    }
+    const h = hash(o.citizenid) % 3;
+    const initials = o.name
+        .split(/\s+/)
+        .slice(0, 2)
+        .map(w => w[0])
+        .join('')
+        .toUpperCase();
+    if (h === 0) return { kind: 'initials', value: null, initials, frame };
+    return { kind: 'preset', value: PRESET_IDS[hash(o.name) % PRESET_IDS.length], initials, frame };
+}
+
+// Rank by: a stat per officer (0 for points: points are the row's own).
+function metricOf(e: Entry, metric: string): number {
+    const h = hash(`${e.o.citizenid}:${metric}`);
+    switch (metric) {
+        case 'missions':
+            return e.runs;
+        case 'arrests':
+            return Math.round(e.runs * 0.8) + (h % 4);
+        case 'impounds':
+            return Math.round(e.runs * 0.3) + (h % 2);
+        case 'citations':
+            return Math.round(e.runs * 0.6) + (h % 3);
+        case 'rescues':
+            return h % 5;
+        case 'calls':
+            return Math.round(e.runs * 0.4);
+        case 'judgement':
+            return 60 + (h % 400) / 10;
+        default:
+            return e.points;
+    }
+}
+
+function toRow(e: Entry, rank: number, viewerCid: string, metric = 'points'): BoardRowView {
     const own = e.o.citizenid === viewerCid;
+    const lv = level(e.o.xp);
     return {
         rank,
         citizenid: e.o.citizenid,
@@ -282,6 +333,10 @@ function toRow(e: Entry, rank: number, viewerCid: string): BoardRow {
         points: e.points,
         runs: e.runs,
         failed: e.failed,
+        value: metricOf(e, metric),
+        metric,
+        level: { n: lv.n, badge: lv.badge },
+        avatar: mockAvatar(e.o, own),
     };
 }
 
@@ -346,66 +401,103 @@ function mockWindow(period: string, season: SeasonListRow | null): BoardView['wi
     return period === 'season' && season ? range(season.startsAt, season.endsAt) : null;
 }
 
-reg('request', 'getBoard', (args: { period?: string; filter?: string; department?: string } | null) => {
-    const period = args?.period ?? 'weekly';
-    const filter = period === 'alltime' ? 'overall' : (args?.filter ?? 'overall');
-    const me = viewer();
-    const department = filter === 'department' ? (args?.department ?? me.department) : undefined;
-    if (!['weekly', 'monthly', 'season', 'alltime'].includes(period)) throw new Error('err.invalid_period');
-    const season = latestSeason();
-    const list = period === 'season' && !season ? [] : entries(period, filter, department);
-    const ranked = list.filter(e => e.runs >= 3);
-    const rows = ranked.slice(0, 25).map((e, i) => toRow(e, i + 1, me.citizenid));
-    const mineIdx = ranked.findIndex(e => e.o.citizenid === me.citizenid);
-    const mine = list.find(e => e.o.citizenid === me.citizenid);
-    const board: BoardView = {
-        period,
-        filter,
-        department,
-        rows,
-        me: mine
-            ? toRow(mine, mineIdx >= 0 ? mineIdx + 1 : 0, me.citizenid)
-            : {
-                  rank: 0,
-                  citizenid: me.citizenid,
-                  name: me.name,
-                  callsign: me.callsign,
-                  departmentShort: me.departmentShort,
-                  points: 0,
-                  runs: 0,
-                  failed: 0,
-              },
-        updatedAt: now() - 23,
-        minRuns: 3,
-        topN: 25,
-        ranked: ranked.length,
-        window: mockWindow(period, season),
-        season: period === 'season' && season ? { id: season.id, name: season.name, active: season.active } : null,
-    };
-    return board;
-});
+reg(
+    'request',
+    'getBoard',
+    (args: { period?: string; filter?: string; department?: string; metric?: string } | null) => {
+        const period = args?.period ?? 'weekly';
+        const metric = args?.metric ?? 'points';
+        const filter = period === 'alltime' ? 'overall' : (args?.filter ?? 'overall');
+        const me = viewer();
+        const department = filter === 'department' ? (args?.department ?? me.department) : undefined;
+        if (!['weekly', 'monthly', 'season', 'alltime'].includes(period)) throw new Error('err.invalid_period');
+        const season = latestSeason();
+        const list = period === 'season' && !season ? [] : entries(period, filter, department);
+        const ranked = list
+            .filter(e => e.runs >= 3)
+            .sort((a, b) => metricOf(b, metric) - metricOf(a, metric) || b.points - a.points);
+        const rows = ranked.slice(0, 25).map((e, i) => toRow(e, i + 1, me.citizenid, metric));
+        const mineIdx = ranked.findIndex(e => e.o.citizenid === me.citizenid);
+        const mine = list.find(e => e.o.citizenid === me.citizenid);
+        const board: BoardView = {
+            period,
+            filter,
+            department,
+            metric,
+            minDecisions: metric === 'judgement' ? 10 : null,
+            rows,
+            me: mine
+                ? toRow(mine, mineIdx >= 0 ? mineIdx + 1 : 0, me.citizenid, metric)
+                : {
+                      rank: 0,
+                      citizenid: me.citizenid,
+                      name: me.name,
+                      callsign: me.callsign,
+                      departmentShort: me.departmentShort,
+                      points: 0,
+                      runs: 0,
+                      failed: 0,
+                      value: 0,
+                      metric,
+                      level: { n: 1, badge: 'grey' },
+                      avatar: { kind: 'initials', value: null, initials: '?', frame: 'grey' },
+                  },
+            updatedAt: now() - 23,
+            minRuns: 3,
+            topN: 25,
+            ranked: ranked.length,
+            window: mockWindow(period, season),
+            season: period === 'season' && season ? { id: season.id, name: season.name, active: season.active } : null,
+        };
+        return board;
+    },
+);
 
 // ============================================================================
 //                                   PROFILE
 // ============================================================================
 
 const LEVELS = [
-    { label: 'Probationary', xp: 0, badge: 'grey' },
-    { label: 'Patrol Officer', xp: 1000, badge: 'bronze' },
-    { label: 'Senior Patrol', xp: 5000, badge: 'silver' },
-    { label: 'Veteran', xp: 15000, badge: 'gold' },
-    { label: 'Elite', xp: 40000, badge: 'platinum' },
+    { label: 'Probationary', level: 1, badge: 'grey' },
+    { label: 'Patrol Officer', level: 10, badge: 'bronze' },
+    { label: 'Senior Patrol', level: 25, badge: 'silver' },
+    { label: 'Veteran', level: 38, badge: 'gold' },
+    { label: 'Elite', level: 50, badge: 'platinum' },
 ];
-function level(xp: number) {
-    let cur = LEVELS[0];
-    let next: number | null = LEVELS[1].xp;
-    LEVELS.forEach((l, i) => {
-        if (xp >= l.xp) {
-            cur = l;
-            next = LEVELS[i + 1]?.xp ?? null;
-        }
-    });
-    return { label: cur.label, badge: cur.badge, xp: cur.xp, next };
+// Config.XPCurve: level n starts at round(100 × (1.07^(n−1) − 1) ÷ 0.07) XP; a prestige star per 10,000 after 50.
+const levelXp = (n: number) => Math.round((100 * (Math.pow(1.07, n - 1) - 1)) / 0.07);
+function level(xp: number): LevelInfo & { next: number | null } {
+    let n = 1;
+    while (n < 50 && xp >= levelXp(n + 1)) n++;
+    const prestige = n === 50 ? Math.floor((xp - levelXp(50)) / 10000) : 0;
+    const band = [...LEVELS].reverse().find(l => n >= l.level) ?? LEVELS[0];
+    const start = n === 50 ? levelXp(50) + prestige * 10000 : levelXp(n);
+    const next = n === 50 ? start + 10000 : levelXp(n + 1);
+    return { n, label: band.label, badge: band.badge, xp, levelXp: start, nextLevelXp: next, prestige, next };
+}
+
+function serviceFor(cid: string, scale: number): ServiceStats {
+    const h = hash(cid);
+    const completed = Math.round((40 + (h % 60)) * scale);
+    const failed = Math.round((4 + (h % 7)) * scale);
+    return {
+        completed,
+        failed,
+        successRate: Math.round((completed * 1000) / Math.max(1, completed + failed)) / 10,
+        arrests: Math.round(completed * 0.7),
+        citations: Math.round(completed * 0.5),
+        impounds: Math.round(completed * 0.2),
+        vehiclesStopped: Math.round(completed * 0.3),
+        rescues: Math.round(completed * 0.05),
+        evidence: Math.round(completed * 0.4),
+        decisionsOk: Math.round(completed * 0.9),
+        decisionsBest: Math.round(completed * 0.75),
+        decisionsBad: Math.round(completed * 0.12),
+        calls: Math.round(completed * 0.35),
+        avgResponseS: 90 + (h % 60),
+        rapidResponses: h % 4,
+        medals: { gold: h % 4, silver: (h >> 2) % 5, bronze: (h >> 4) % 6 },
+    };
 }
 
 const MISSIONS: [string, string, string][] = [
@@ -568,6 +660,45 @@ reg('request', 'getProfile', (args: { citizenid?: string } | string | null) => {
         departmentLabel: own ? me.departmentLabel : DEPTS[(o as MockOfficer).dept].label,
         xp,
         level: level(xp),
+        avatar: mockAvatar(o, own),
+        bio:
+            hidden.has(o?.citizenid ?? '') && !own
+                ? null
+                : 'Night shift, Sandy Shores. Ask me about the Grapeseed chase.\nK9 handler in training.',
+        commendations: [
+            {
+                id: 11,
+                kind: 'valor',
+                citation: 'Held the line at the Vinewood bank until the second unit arrived.',
+                by: 'Maria Lopez',
+                byRank: 'Lieutenant',
+                at: now() - 2 * DAY,
+                runUuid: null,
+                revoked: false,
+            },
+            {
+                id: 7,
+                kind: 'teamwork',
+                citation: 'Coordinated three units through a county-wide pursuit without a single crash.',
+                by: 'Marcus Reed',
+                byRank: 'Sergeant',
+                at: now() - 19 * DAY,
+                runUuid: null,
+                revoked: false,
+            },
+        ],
+        mdtCommendations: null,
+        service: {
+            lifetime: serviceFor(cid ?? me.citizenid, 1),
+            season: serviceFor(`${cid ?? me.citizenid}:s`, 0.3),
+        },
+        bests: [
+            { missionId: 'beat_patrol', missionLabel: 'Beat Patrol', durationS: 412 },
+            { missionId: 'gang_shootout', missionLabel: 'Gang Shootout', durationS: 655 },
+            { missionId: 'pursuit_sim', missionLabel: 'Pursuit Sim', durationS: 238 },
+        ],
+        favouritePartner: { name: 'Marcus Reed', callsign: '1A-07' },
+        cleanArrestRate: own ? 96.4 : null,
         badges: own
             ? [
                   {
@@ -732,6 +863,7 @@ function contributors(dept: string, limit = 50): Contributor[] {
             points: e.points,
             runs: e.runs,
             active: e.runs >= 3,
+            avatar: mockAvatar(e.o),
         }));
 }
 
@@ -1017,6 +1149,13 @@ function reportOfficers(dept: string): ReportOfficer[] {
                 cash: Math.round(o.weekly * 5.6),
                 lastRunAt: sqlTime(t0 - (i + 1) * 5400),
                 lastRunTs: t0 - (i + 1) * 5400,
+                arrests: Math.round(completed * 0.8),
+                citations: Math.round(completed * 0.5),
+                impounds: i % 3,
+                decisionsOk: completed,
+                decisionsBest: Math.max(0, completed - (i % 3)),
+                decisionsBad: i % 2,
+                calls: Math.round(completed * 0.4),
             };
         });
 }
@@ -1056,6 +1195,7 @@ reg('request', 'sup:getOfficerActivity', (args: { citizenid?: string } | null) =
         .slice(0, Math.max(1, o.runs + 1))
         .map((r, i) => ({
             id: r.id,
+            runUuid: `run-${r.id}`,
             missionLabel: r.missionLabel,
             missionType: r.missionType,
             state: r.state,
@@ -1083,6 +1223,31 @@ reg('request', 'sup:getOfficerActivity', (args: { citizenid?: string } | null) =
         },
         week: { key: sqlTime(weekStart()).slice(0, 10), startsAt: weekStart() },
         runs,
+        // one commendation the viewer gave (Revoke offered) and one from an admin
+        commendations: [
+            {
+                id: 9001,
+                kind: 'teamwork',
+                citation: 'Covered the whole night shift when the unit was short.',
+                by: me.name,
+                byRank: me.rank,
+                at: now() - 2 * 86400,
+                runUuid: null,
+                revoked: false,
+                mine: true,
+            },
+            {
+                id: 9002,
+                kind: 'valor',
+                citation: 'Pulled two people out of a burning car on Route 68.',
+                by: 'Server console',
+                byRank: null,
+                at: now() - 9 * 86400,
+                runUuid: null,
+                revoked: false,
+                mine: false,
+            },
+        ],
     };
     return activity;
 });

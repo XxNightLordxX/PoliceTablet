@@ -192,7 +192,26 @@ local function Defaults(obj)
         if b.aliveBonus.id == nil then b.aliveBonus.id = BOSS_BONUS.id end
     end
     if obj.blockTraffic == nil then obj.blockTraffic = c.blockTraffic[3] + 0.0 end
+    if type(obj.spawnSets) == 'table' then
+        local ss = obj.spawnSets
+        if ss.use == nil then ss.use = c.spawnSetsUsed[3] end
+        if ss.intel == nil then ss.intel = true end
+    end
     return obj
+end
+
+local BEHAVIOURS = { 'hold', 'balanced', 'push' }
+
+-- behaviour: one name, or weights { hold, balanced, push } rolled once per run from the seed.
+local function BehaviourOk(b, c)
+    if type(b) == 'string' then return U.contains(c.behaviour.options, b) end
+    if type(b) ~= 'table' then return false end
+    local sum = 0
+    for k, w in pairs(b) do
+        if not U.contains(BEHAVIOURS, k) or not IsNum(w) or w < 0 then return false end
+        sum = sum + w
+    end
+    return sum > 0
 end
 
 local function MaxWave(o)
@@ -214,9 +233,23 @@ end
 local function RequiredPoints(obj)
     local o = Defaults(U.deepcopy(obj))
     local out = {}
-    if type(o.spawns) == 'string' then out[#out + 1] = o.spawns end
+    if type(o.spawnSets) == 'table' and type(o.spawnSets.keys) == 'table' then
+        for _, k in ipairs(o.spawnSets.keys) do
+            if type(k) == 'string' and not U.contains(out, k) then out[#out + 1] = k end
+        end
+    elseif type(o.spawns) == 'string' then
+        out[#out + 1] = o.spawns
+    end
     if type(o.boss) == 'table' and type(o.boss.spawn) == 'string' and o.boss.spawn ~= o.spawns then
         out[#out + 1] = o.boss.spawn
+    end
+    return out
+end
+
+local function SetPoints(o, loc, keys)
+    local out = {}
+    for _, k in ipairs(keys or {}) do
+        for _, p in ipairs(PointList(loc, k)) do out[#out + 1] = p end
     end
     return out
 end
@@ -224,6 +257,15 @@ end
 local function CheckLocation(o, loc, li, strict)
     local c = Cfg()
     local pts = PointList(loc, o.spawns)
+    if type(o.spawnSets) == 'table' then
+        for _, k in ipairs(o.spawnSets.keys) do
+            if #PointList(loc, k) == 0 then
+                return Bad('block.hostile_waves.invalid.spawns_missing', { key = tostring(k), location = li })
+            end
+        end
+        -- every set must hold the largest wave on its own share of the points used per run
+        pts = SetPoints(o, loc, o.spawnSets.keys)
+    end
     if #pts == 0 then
         return Bad('block.hostile_waves.invalid.spawns_missing', { key = tostring(o.spawns), location = li })
     end
@@ -308,7 +350,18 @@ local function Validate(obj, mission, location)
     if not InRange(o.health, c.health) then
         return Bad('block.hostile_waves.invalid.range', { field = 'health', min = c.health[1], max = c.health[2] })
     end
-    if not U.contains(c.behaviour.options, o.behaviour) then return Bad('block.hostile_waves.invalid.behaviour') end
+    if not BehaviourOk(o.behaviour, c) then return Bad('block.hostile_waves.invalid.behaviour') end
+    if o.spawnSets ~= nil then
+        local ss = o.spawnSets
+        if type(ss) ~= 'table' or type(ss.keys) ~= 'table' or #ss.keys < 1 or #ss.keys > c.spawnSets[2]
+            or not IsInt(ss.use) or not InRange(ss.use, c.spawnSetsUsed) or ss.use > #ss.keys
+            or type(ss.intel) ~= 'boolean' then
+            return Bad('block.hostile_waves.invalid.spawn_sets')
+        end
+        for _, k in ipairs(ss.keys) do
+            if type(k) ~= 'string' or k == '' then return Bad('block.hostile_waves.invalid.spawn_sets') end
+        end
+    end
     local s = o.surrender
     if not IsNum(s.belowHealth) or s.belowHealth <= 0 or s.belowHealth > 1
         or not InRange(s.chance, c.surrender, 0.01) then
@@ -325,7 +378,7 @@ local function Validate(obj, mission, location)
             or not AllAllowed({ b.model }, strict and allowed.peds or nil) then
             return Bad('block.hostile_waves.invalid.boss')
         end
-        if not U.contains(c.behaviour.options, b.behaviour) then return Bad('block.hostile_waves.invalid.boss') end
+        if not BehaviourOk(b.behaviour, c) then return Bad('block.hostile_waves.invalid.boss') end
         if type(b.surrender) ~= 'table' or not IsNum(b.surrender.belowHealth) or b.surrender.belowHealth <= 0
             or b.surrender.belowHealth > 1 or not InRange(b.surrender.chance, c.surrender, 0.01) then
             return Bad('block.hostile_waves.invalid.boss')
@@ -380,6 +433,54 @@ end
 --                                  RUN STATE
 -- ============================================================================
 
+-- The run's tactics: behaviour and spawn sets rolled once from the run seed (their own stream, so they are
+-- the same whatever else was rolled), and the intel line every participant sees on Active Mission.
+local function RollTactics(ctx, st)
+    local seed = (tonumber(ctx.run and ctx.run.seed) or 1) * 6151 + (ctx.index or 0) * 92821 + 17
+    local r = U.rng(seed)
+    r:next()
+    local b = ctx.obj.behaviour
+    if type(b) == 'table' then
+        local total = 0
+        for _, k in ipairs(BEHAVIOURS) do total = total + (tonumber(b[k]) or 0) end
+        local x = r:next() * total
+        st.behaviour = 'balanced'
+        for _, k in ipairs(BEHAVIOURS) do
+            x = x - (tonumber(b[k]) or 0)
+            if (tonumber(b[k]) or 0) > 0 and x < 0 then
+                st.behaviour = k
+                break
+            end
+        end
+    else
+        st.behaviour = b
+    end
+    local ss = ctx.obj.spawnSets
+    if type(ss) == 'table' and type(ss.keys) == 'table' then
+        local picked = r:sample(ss.keys, math.min(ss.use or 1, #ss.keys))
+        -- in the file's order, so the intel line reads the same way every time
+        local order = {}
+        for _, k in ipairs(ss.keys) do if U.contains(picked, k) then order[#order + 1] = k end end
+        st.sets = order
+        if ss.intel ~= false and ctx.run then
+            local names = {}
+            for _, k in ipairs(order) do
+                local key = ('block.hostile_waves.set.%s'):format(k)
+                names[#names + 1] = CP.Locale and CP.Locale.has and CP.Locale.has(key) and CP.L(key) or k
+            end
+            local list = #names > 1
+                    and CP.L('block.hostile_waves.intel_and', {
+                        first = table.concat(names, ', ', 1, #names - 1),
+                        last = names[#names],
+                    })
+                or names[1]
+            ctx.run.shared = ctx.run.shared or {}
+            ctx.run.shared.intel = CP.Lt and CP.Lt('block.hostile_waves.intel', { sets = list })
+                or CP.L('block.hostile_waves.intel', { sets = list })
+        end
+    end
+end
+
 local function StateOf(ctx)
     Defaults(ctx.obj)
     local st = ctx.state
@@ -389,8 +490,19 @@ local function StateOf(ctx)
         st.waves = {}
         st.wave = 0
         st.arrested = 0
+        RollTactics(ctx, st)
     end
     return st
+end
+
+local function Behaviour(ctx, st)
+    return st.behaviour or (type(ctx.obj.behaviour) == 'string' and ctx.obj.behaviour) or 'balanced'
+end
+
+-- Config.NpcDifficulty feel: health and surrender only; never points, cash or counts.
+local function Feel()
+    if CP.Scaling and CP.Scaling.feel then return CP.Scaling.feel() end
+    return { healthMult = 1.0, surrenderMult = 1.0, fleeMult = 1.0 }
 end
 
 local function WaveCount(ctx)
@@ -445,7 +557,7 @@ end
 -- Distinct points first, points with no living hostile on them before occupied ones; a wave larger
 -- than the list reuses points in the same order with a small ring offset.
 local function PickPoints(ctx, st, n)
-    local all = PointList(ctx.location, ctx.obj.spawns)
+    local all = st.sets and SetPoints(ctx.obj, ctx.location, st.sets) or PointList(ctx.location, ctx.obj.spawns)
     if #all == 0 then
         local s = StartCoords(ctx)
         if s then all = { s } end
@@ -490,6 +602,7 @@ local function SpawnHostile(ctx, st, w, point)
     local model = r:pick(obj.peds) or c.peds[1]
     local weapon = r:pick(obj.weapons) or c.weapons[1]
     local acc, arm = ctx.combat(obj.accuracy, obj.armour)
+    local health = math.floor((tonumber(obj.health) or 200) * (tonumber(Feel().healthMult) or 1.0) + 0.5)
     local ent, netId = ctx.spawnPed({
         model = model,
         coords = point,
@@ -498,8 +611,8 @@ local function SpawnHostile(ctx, st, w, point)
         weapon = weapon,
         accuracy = acc,
         armour = arm,
-        health = obj.health,
-        cfg = { behaviour = obj.behaviour, group = 'hostile', wave = w },
+        health = health,
+        cfg = { behaviour = Behaviour(ctx, st), group = 'hostile', wave = w },
         tag = 'wave' .. w,
     })
     if not netId then return false end
@@ -509,7 +622,7 @@ local function SpawnHostile(ctx, st, w, point)
         role = 'hostile',
         wave = w,
         state = 'hostile',
-        maxHealth = obj.health,
+        maxHealth = health,
     }
     CP.Npc.setState(ctx.run, netId, 'hostile')
     st.dirty = true
@@ -523,6 +636,8 @@ local function SpawnBoss(ctx, st)
     local point = PointList(ctx.location, b.spawn)[1]
     point = point and ToVec4(point) or PickPoints(ctx, st, 1)[1]
     if not point then return false end
+    local health = math.floor((tonumber(b.health) or 300) * (tonumber(Feel().healthMult) or 1.0) + 0.5)
+    local behaviour = type(b.behaviour) == 'string' and b.behaviour or Behaviour(ctx, st)
     local ent, netId = ctx.spawnPed({
         model = b.model,
         coords = point,
@@ -531,12 +646,12 @@ local function SpawnBoss(ctx, st)
         weapon = b.weapon,
         accuracy = b.accuracy,
         armour = b.armour,
-        health = b.health,
-        cfg = { behaviour = b.behaviour, group = 'hostile', boss = true, label = b.label },
+        health = health,
+        cfg = { behaviour = behaviour, group = 'hostile', boss = true, label = b.label },
         tag = 'boss',
     })
     if not netId then return false end
-    st.peds[tostring(netId)] = { netId = netId, entity = ent, role = 'boss', state = 'hostile', maxHealth = b.health }
+    st.peds[tostring(netId)] = { netId = netId, entity = ent, role = 'boss', state = 'hostile', maxHealth = health }
     st.boss = { netId = netId }
     CP.Npc.setState(ctx.run, netId, 'hostile')
     st.dirty = true
@@ -687,7 +802,7 @@ local function CheckLowHealth(ctx, st, p)
     if ratio >= (tonumber(s.belowHealth) or 0) then return false, 'health_ok' end
     p.rolled = true
     st.dirty = true
-    local chance = tonumber(s.chance) or 0
+    local chance = math.min(1.0, (tonumber(s.chance) or 0) * (tonumber(Feel().surrenderMult) or 1.0))
     if chance > 0 and RollSurrender(ctx, p, chance) then Surrender(ctx, st, p) end
     return true
 end
@@ -718,6 +833,7 @@ local function OnCuffed(ctx, st, src, p)
     local reach = ((type(ctx.obj.cuff) == 'table' and ctx.obj.cuff.maxDistance) or CUFF_RANGE) + REACH_SLACK
     if not pc or not sc or U.dist(pc, sc) > reach then return false, 'too_far' end
     MarkCuffed(ctx, st, p)
+    if CP.Runs and CP.Runs.noteArrest and ctx.run then CP.Runs.noteArrest(ctx.run, src, p.netId) end
     return true
 end
 

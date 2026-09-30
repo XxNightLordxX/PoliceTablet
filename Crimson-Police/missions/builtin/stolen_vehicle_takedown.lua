@@ -12,7 +12,12 @@
   (north on the Great Ocean Hwy to Chumash), the Paleto Bay Ron station (east along the Great
   Ocean Hwy), the Grove Street LTD (Davis Ave, Strawberry Ave, Adam's Apple Blvd) and the
   Little Seoul LTD (Lindsay Circus, Palomino Ave, South Rockford Dr, Dutch London St).
-  Blocks: pursuit (mode = 'stop', spawn = location.spawn, route = location.route).
+  Lit up, the car rolls its response: yield 25% (pulls over; the suspects stay seated until ordered out),
+  flee 65% or fight 10% (an armed passenger may shoot from the car). Steps 2-4 are a field_contact stop
+  that adopts the car and its suspects (the stolen plate is known from the start): order them out, cuff
+  each one and impound the car (the tow truck collects it).
+  Blocks: pursuit (mode = 'stop', handoff = 'contact', spawn = location.spawn, route = location.route)
+  → field_contact (mode = 'stop').
   Start: a 60 m circle centred on the approach road 35-50 m from the stolen car (never on top of it).
 ]]
 
@@ -203,7 +208,22 @@ RegisterMission({
       complete           = 'all_detained',
       ramSpeed           = 100,              -- km/h; faster contact is a hard ram
       ramPenaltyId       = 'hard_ram',
-      neverShoots        = true,
+      neverShoots        = true,             -- nobody is visibly armed; an armed passenger is a hidden truth
+      responses          = { yield = 0.25, flee = 0.65, fight = 0.10 },   -- rolled when lit up; fight needs an armed passenger
+      handoff            = 'contact',        -- the stopped car and its suspects go to the contact below
+      profileSet         = 'stolenCar',
+      driveBy            = 0.50,             -- an armed passenger of a fighting car shoots from it
+    },
+    {
+      block      = 'field_contact',
+      label      = 'Take the suspects into custody and impound the car',
+      minSeconds = 15,                       -- a 5 s cuff and the 10 s impound
+      mode       = 'stop',
+      profileSet = 'stolenCar',
+      revealed   = { 'stolen' },             -- the plate is known from the start: no correct_disposition for it
+      custody    = 'cuff',                   -- the arrest ends at the cuff, as before
+      escape     = { distance = 400, seconds = 20 },
+      bestPoints = 10,
     },
   },
 
@@ -211,6 +231,7 @@ RegisterMission({
   items     = {},
   bonuses   = {
     { id = 'vehicle_stopped_fast', points = 15 },       -- car stopped within 2 minutes of the start
+    { id = 'vehicle_impounded', points = 10, each = true },   -- the stolen car impounded
   },
   penalties = {
     { id = 'hard_ram', points = -10, each = true },     -- ramming at over 100 km/h

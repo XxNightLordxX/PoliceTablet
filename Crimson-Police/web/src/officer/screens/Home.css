@@ -68,21 +68,11 @@
 }
 
 .economy-officer__avatar {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 60px;
-    height: 60px;
-    flex: none;
-    border-radius: 50%;
     font-size: var(--cp-fs-xl);
     font-weight: 800;
-    letter-spacing: 0.02em;
     color: var(--cp-primary-contrast);
     background: var(--cp-primary);
-    box-shadow:
-        0 0 0 3px var(--cp-surface),
-        0 0 0 5px rgba(var(--cp-accent-rgb), 0.55);
+    box-shadow: 0 0 0 3px var(--cp-surface);
 }
 
 .economy-officer__ident {
@@ -316,4 +306,19 @@
     padding-top: 3px;
     min-width: 0;
     overflow-wrap: anywhere;
+}
+
+.economy-calls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    border: 1px solid rgba(var(--cp-accent-rgb), 0.45);
+    border-radius: var(--cp-radius);
+    background: rgba(var(--cp-accent-rgb), 0.08);
+    font-weight: 600;
+}
+
+.economy-calls span {
+    flex: 1;
 }

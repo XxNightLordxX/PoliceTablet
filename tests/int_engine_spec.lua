@@ -234,6 +234,8 @@ local BLOCKS = {
     'pursuit',
     'search_area',
     'skill_check',
+    'field_contact',
+    'process_scene',
 }
 for _, b in ipairs(BLOCKS) do H.load('blocks/' .. b .. '/server.lua') end
 H.load('modules/scaling/server.lua')
@@ -255,14 +257,14 @@ local function ObjEvent(src, run, index, ev) H.fire('crimson-police:server:objec
 -- ============================================================================
 --                              1. THE REAL LOADER
 -- ============================================================================
--- Every missions/builtin file, 14 valid missions.
+-- Every missions/builtin file, 19 valid missions.
 
 do
     local ids = assert(load(LoadResourceFile('Crimson-Police', 'missions/builtin/index.lua'), '@index', 't', {}))()
-    H.eq(#ids, 14, 'missions/builtin/index.lua lists 13 missions and the Weekly Boss')
-    H.eq(U.count(Missions.all()), 14, 'the loader run at start loaded all 14 built-in missions')
+    H.eq(#ids, 19, 'missions/builtin/index.lua lists 18 missions and the Weekly Boss')
+    H.eq(U.count(Missions.all()), 19, 'the loader run at start loaded all 19 built-in missions')
     local summary = Missions.loadAll()
-    H.eq(summary.builtin, 14, 'CP.Missions.loadAll: 14 built-in missions')
+    H.eq(summary.builtin, 19, 'CP.Missions.loadAll: 19 built-in missions')
     H.eq(
         #summary.failed,
         0,
@@ -290,7 +292,7 @@ do
     local tactical = Missions.byType('tactical')
     local hasBoss = false
     for _, d in ipairs(tactical) do if d.isBoss then hasBoss = true end end
-    H.eq(#tactical, 5, 'five Tactical missions in the pool')
+    H.eq(#tactical, 7, 'seven Tactical missions in the pool')
     H.eq(hasBoss, false, 'the boss is not in the Tactical pool')
     -- their models are base-game peds of the Mission Builder's list (copies of them can be published) ...
     H.ok(
@@ -729,6 +731,11 @@ do
     local svt = Missions.get('stolen_vehicle_takedown')
     local loc = svt.locations[1]
     local m = U.deepcopy(svt)
+    -- the engine path of a stop pursuit that ends at the cuffs (the card's contact hand-off and impound are
+    -- tests/missions_c_spec.lua's)
+    m.objectives = { m.objectives[1] }
+    m.objectives[1].handoff, m.objectives[1].responses, m.objectives[1].profileSet = 'arrest', nil, nil
+    m.objectives[1].driveBy = 0
     m.objectives[1].footFlee = 0
     Place(1, loc.start.coords)
     Place(2, loc.start.coords)

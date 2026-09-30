@@ -136,5 +136,20 @@
   "block.search_area.invalid.points_count": "Search area: location {location} needs at least {min} points under {key} (it has {have})",
   "block.search_area.invalid.outside": "Search area: every clue and hiding spot at location {location} must be inside the {radius} m circle",
   "block.search_area.invalid.points_zone": "Search area: a clue or hiding spot at location {location} is inside a no-build zone",
-  "block.search_area.invalid.points_start": "Search area: every hiding spot at location {location} must be at least {min} m from the start"
+  "block.search_area.invalid.points_start": "Search area: every hiding spot at location {location} must be at least {min} m from the start",
+  "block.pursuit.invalid.handoff": "After the stop must be Arrest or Contact (Contact needs Stop mode)",
+  "block.pursuit.invalid.responses": "The yield, flee and fight chances must each be 0-100% and add up to 100%",
+  "block.pursuit.invalid.spawn_offset": "The spawn offset needs a route and must stay within {max} m",
+  "block.pursuit.invalid.profile_set": "Unknown truth set for the people of the stopped car",
+  "block.pursuit.invalid.observe": "Observe first needs Stop mode, a lights trigger and its speed and window settings in range",
+  "block.pursuit.msg_yield": "The car is pulling over",
+  "block.pursuit.msg_fight": "Shots fired from the car!",
+  "block.pursuit.msg_paced": "Paced: {speed} km/h in a {zone} zone",
+  "block.pursuit.msg_followed": "Reckless driving observed",
+  "block.pursuit.msg_approach_speed": "Vehicle approaching: {speed} km/h",
+  "block.pursuit.msg_approach_weave": "Vehicle weaving between lanes",
+  "block.pursuit.msg_no_cause": "Stop without cause: the violation was not observed",
+  "block.pursuit.blip_violator": "Violator",
+  "block.pursuit.hud_observe_pace": "Pace the violator: stay within {behind} m behind it for {seconds} s",
+  "block.pursuit.hud_observe_follow": "Follow the reckless driver within {behind} m for {seconds} s"
 }

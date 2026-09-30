@@ -1,4 +1,4 @@
--- CP.Operations (server): Cross-Department Missions.
+-- CP.Operations (server): Cross-Department Missions, with leave before the start and the waitlist.
 
 CP.Operations = CP.Operations or {}
 local Ops = CP.Operations
@@ -508,6 +508,11 @@ local function DoStart(cur, actorSrc, auto)
 
     cur.status = 'running'
     cur.runId = run.id
+    -- The waitlist closes with the start: nobody on it gets a place any more.
+    local waiters = {}
+    for _, w in ipairs(cur.waitlist or {}) do waiters[#waiters + 1] = w.src end
+    cur.waitlist = {}
+    NotifyMany(waiters, 'info', 'officer.op.waitlist_closed', { mission = cur.missionLabel })
     cur.runMissingSince = nil
     cur.joinEndsAt = nil
     cur.joinClosed = nil
@@ -585,6 +590,7 @@ local function DoLaunch(src, missionId)
             createdAt = now,
             joinEndsAt = now + CfgInt('joinWindow', 300),
             participants = {},
+            waitlist = {},
             runId = nil,
             idleSince = now,
             waitingReason = nil,
@@ -624,6 +630,7 @@ local function DoRelaunch(src)
     local before = cur.waitingReason
     cur.status = 'joining'
     cur.participants = {}
+    cur.waitlist = {}
     cur.runId = nil
     cur.joinEndsAt = now + CfgInt('joinWindow', 300)
     cur.joinClosed = nil
@@ -656,6 +663,24 @@ local function Allowed(src)
     local ok, can, errKey = Call('Permissions', 'can', src, 'launchCrossDept')
     if not ok or not can then return false, errKey or 'err.no_permission' end
     return true
+end
+
+local function WaitlistOn()
+    return Cfg().waitlist ~= false
+end
+
+-- A join-list (or waitlist) entry for an officer.
+local function Entry(officer, src)
+    return {
+        src = src,
+        citizenid = officer.citizenid,
+        name = CP.U.clip(officer.name or '?', 64),
+        callsign = officer.callsign and CP.U.clip(officer.callsign, 32) or nil,
+        department = officer.department,
+        departmentShort = officer.departmentShort or '',
+        rank = officer.rank or '',
+        joinedAt = os.time(),
+    }
 end
 
 function Ops.launch(src, missionId)
@@ -701,7 +726,10 @@ function Ops.join(src, opId)
         for _, p in ipairs(c.participants) do
             if p.src == src or p.citizenid == officer.citizenid then return nil, 'err.op_already_joined' end
         end
-        if #c.participants >= max then return nil, 'err.op_full' end
+        for _, w in ipairs(c.waitlist or {}) do
+            if w.src == src or w.citizenid == officer.citizenid then return nil, 'err.op_waitlisted' end
+        end
+        if #c.participants >= max and not WaitlistOn() then return nil, 'err.op_full' end
         return c
     end
     local cur, why = stateCheck()
@@ -715,20 +743,137 @@ function Ops.join(src, opId)
     cur, why = stateCheck()
     if not cur then return false, why end
     if OnRun(src) then return false, 'err.already_on_run' end
-    local now = os.time()
-    cur.participants[#cur.participants + 1] = {
-        src = src,
-        citizenid = officer.citizenid,
-        name = CP.U.clip(officer.name or '?', 64),
-        callsign = officer.callsign and CP.U.clip(officer.callsign, 32) or nil,
-        department = officer.department,
-        departmentShort = officer.departmentShort or '',
-        rank = officer.rank or '',
-        joinedAt = now,
-    }
+    local entry = Entry(officer, src)
+    -- (while anyone waits, a freed place is theirs: new joiners queue behind them)
+    if #cur.participants >= max or #(cur.waitlist or {}) > 0 then
+        -- Every place is taken: the waitlist (Config.CrossDept.waitlist); a freed place goes to the first.
+        cur.waitlist = cur.waitlist or {}
+        cur.waitlist[#cur.waitlist + 1] = entry
+        Broadcast(nil)
+        CP.log(TAG, 'operation %d: %d waitlisted (#%d)', cur.id, src, #cur.waitlist)
+        return true, { id = cur.id, joined = #cur.participants, max = max, waitlisted = true, position = #cur.waitlist }
+    end
+    cur.participants[#cur.participants + 1] = entry
     Broadcast(nil)
     CP.log(TAG, 'operation %d: %d joined (%d/%d)', cur.id, src, #cur.participants, max)
     return true, { id = cur.id, joined = #cur.participants, max = max }
+end
+
+-- A place freed before the start goes to the first on the waitlist who can still take it (re-checked
+-- like a join; CP.Calls may wait on the database, so the state is checked again afterwards).
+local function FillFromWaitlist(cur)
+    if cur.filling then return end
+    cur.filling = true
+    local max = MaxFor()
+    while op == cur and cur.status == 'joining' and not cur.joinClosed and #cur.participants < max
+        and #(cur.waitlist or {}) > 0 do
+        local w = table.remove(cur.waitlist, 1)
+        local o = GetOfficer(w.src)
+        local fits = o and o.citizenid == w.citizenid and not InArena(w.src) and not OnRun(w.src)
+            and not IsOnCall(w.src)
+        if fits and op == cur and cur.status == 'joining' and not cur.joinClosed and #cur.participants < max then
+            w.joinedAt = os.time()
+            cur.participants[#cur.participants + 1] = w
+            Notify(w.src, 'success', 'officer.op.waitlist_promoted', { mission = cur.missionLabel })
+            CP.log(TAG, 'operation %d: %d took a freed place from the waitlist', cur.id, w.src)
+        elseif not fits then
+            Notify(w.src, 'warning', 'officer.op.waitlist_skipped', { mission = cur.missionLabel })
+        elseif op == cur and cur.status == 'joining' and not cur.joinClosed then
+            table.insert(cur.waitlist, 1, w)      -- the place went meanwhile: keep the first place in line
+            break
+        end
+    end
+    cur.filling = nil
+    Broadcast(nil)
+end
+
+-- Takes src off the join list or the waitlist. Returns 'joined' | 'waitlist' | nil.
+local function TakeOut(cur, src)
+    for i = #cur.participants, 1, -1 do
+        if cur.participants[i].src == src then
+            table.remove(cur.participants, i)
+            return 'joined'
+        end
+    end
+    for i = #(cur.waitlist or {}), 1, -1 do
+        if cur.waitlist[i].src == src then
+            table.remove(cur.waitlist, i)
+            return 'waitlist'
+        end
+    end
+    return nil
+end
+
+-- An officer leaves before the start (no penalty); once the run exists, leaving is the run's own quit.
+function Ops.leave(src)
+    src = ToSrc(src)
+    if not src then return false, 'err.invalid_payload' end
+    local cur = op
+    if not cur then return false, 'err.op_none' end
+    if cur.status ~= 'joining' or cur.joinClosed then
+        local run = RunGet(cur.runId)
+        local onIt = false
+        if run then
+            for _, s in ipairs(ActiveSrcs(run)) do if s == src then onIt = true end end
+        end
+        return false, onIt and 'err.op_leave_started' or 'err.op_not_joined'
+    end
+    local was = TakeOut(cur, src)
+    if not was then return false, 'err.op_not_joined' end
+    Notify(src, 'info', 'officer.op.left', { mission = cur.missionLabel })
+    CP.log(TAG, 'operation %d: %d left before the start (%s)', cur.id, src, was)
+    if was == 'joined' then FillFromWaitlist(cur) else Broadcast(nil) end
+    return true, { left = true }
+end
+
+-- A supervisor with launchCrossDept removes a joiner (or a waitlisted officer) before the start; audited.
+local function DoRemoveJoiner(actorSrc, target, reason)
+    local cur = op
+    if not cur then return false, 'err.op_none' end
+    if cur.status ~= 'joining' or cur.joinClosed then return false, 'err.op_remove_started' end
+    local entry
+    for _, p in ipairs(cur.participants) do if p.src == target then entry = p end end
+    for _, w in ipairs(cur.waitlist or {}) do if w.src == target then entry = w end end
+    if not entry then return false, 'err.op_not_joined' end
+    local was = TakeOut(cur, target)
+    Notify(target, 'warning', 'officer.op.removed_by_supervisor', { mission = cur.missionLabel, reason = reason })
+    Audit(actorSrc, cur, 'opRemoveJoiner', ('%s (%s)'):format(entry.name or '?', tostring(entry.citizenid)), was,
+        reason)
+    CP.log(TAG, 'operation %d: %s removed %d (%s)', cur.id, tostring(actorSrc), target, tostring(was))
+    if was == 'joined' then FillFromWaitlist(cur) else Broadcast(nil) end
+    return true, { removed = target }
+end
+
+function Ops.removeJoiner(src, target, reason)
+    local ok, errKey = Allowed(src)
+    if not ok then return false, errKey end
+    target = ToSrc(target)
+    if not target then return false, 'err.invalid_payload' end
+    local text, rErr = CleanReason(reason)
+    if not text then return false, rErr end
+    return DoRemoveJoiner(src, target, text)
+end
+
+-- The Unit screen's operation card for an officer on the join list or the waitlist (nil otherwise).
+function Ops.officerCard(src)
+    src = ToSrc(src)
+    local cur = op
+    if not src or not cur then return nil end
+    local joined, position = false, nil
+    for _, p in ipairs(cur.participants) do if p.src == src then joined = true end end
+    for i, w in ipairs(cur.waitlist or {}) do if w.src == src then position = i end end
+    if not joined and not position then return nil end
+    local open = cur.status == 'joining' and not cur.joinClosed
+    return {
+        id = cur.id,
+        missionLabel = cur.missionLabel,
+        status = cur.status,
+        joined = #cur.participants,
+        max = MaxFor(),
+        waitlistPosition = position,
+        joinEndsIn = open and cur.joinEndsAt and math.max(0, cur.joinEndsAt - os.time()) or nil,
+        canLeave = open,
+    }
 end
 
 -- A joiner who drops, unloads or no longer qualifies leaves the join list (runs handle the run itself).
@@ -736,13 +881,10 @@ local function RemoveJoiner(src)
     src = ToSrc(src)
     local cur = op
     if not src or not cur or cur.status ~= 'joining' then return end
-    for i = #cur.participants, 1, -1 do
-        if cur.participants[i].src == src then
-            table.remove(cur.participants, i)
-            Broadcast(nil)
-            CP.log(TAG, 'operation %d: %d left the join list', cur.id, src)
-        end
-    end
+    local was = TakeOut(cur, src)
+    if not was then return end
+    CP.log(TAG, 'operation %d: %d left the join list (%s)', cur.id, src, was)
+    if was == 'joined' then FillFromWaitlist(cur) else Broadcast(nil) end
 end
 
 function Ops.onRunEnded(run, state)
@@ -774,6 +916,8 @@ function Ops.boardCard(src)
     local def = MissionDef(cur.missionId)
     local max = MaxFor()
     local joined, mine = 0, false
+    local position = nil
+    for i, w in ipairs(cur.waitlist or {}) do if w.src == src then position = i end end
     local run = RunGet(cur.runId)
     if run then
         for _, s in ipairs(ActiveSrcs(run)) do
@@ -793,7 +937,9 @@ function Ops.boardCard(src)
         joinBlocked = 'err.op_join_closed'
     elseif mine then
         joinBlocked = 'err.op_already_joined'
-    elseif joined >= max then
+    elseif position then
+        joinBlocked = 'err.op_waitlisted'
+    elseif joined >= max and not WaitlistOn() then
         joinBlocked = 'err.op_full'
     elseif src == nil then
         joinBlocked = 'err.invalid_payload'
@@ -820,6 +966,9 @@ function Ops.boardCard(src)
         description = def and def.description or nil,
         min = MinFor(def),
         runState = run and run.state or nil,
+        waitlist = #(cur.waitlist or {}),
+        waitlistPosition = position,
+        waitlistOpen = open and WaitlistOn() and (joined >= max or #(cur.waitlist or {}) > 0),
     }
 end
 
@@ -862,9 +1011,21 @@ local function OpView(cur, viewer, now)
                 department = p.department,
                 status = cur.status == 'joining' and 'joined' or 'waiting',
                 arrived = false,
+                canRemove = cur.status == 'joining' and not cur.joinClosed,
             }
         end
         tier = TierName(math.max(#participants, min))
+    end
+    local waitlist = {}
+    for i, w in ipairs(cur.waitlist or {}) do
+        waitlist[#waitlist + 1] = {
+            src = w.src,
+            name = w.name,
+            callsign = w.callsign,
+            departmentShort = w.departmentShort or '',
+            position = i,
+            canRemove = cur.status == 'joining' and not cur.joinClosed,
+        }
     end
     local counts, order = {}, {}
     local joined = 0
@@ -925,6 +1086,8 @@ local function OpView(cur, viewer, now)
         startBlocked = startBlocked,
         canRelaunch = cur.status == 'waiting',
         canCancel = true,
+        waitlist = waitlist,
+        waitlistEnabled = WaitlistOn(),
     }
 end
 
@@ -1013,6 +1176,21 @@ for _, scope in ipairs({ 'sup', 'admin' }) do
         return DoCancel(src, reason, false)
     end), { rate = 2 })
 end
+
+for _, scope in ipairs({ 'sup', 'admin' }) do
+    CP.Net.action(('server:%s:opRemoveJoiner'):format(scope), Guarded(scope, function(src, payload)
+        if type(payload) ~= 'table' then return false, 'err.invalid_payload' end
+        local target = ToSrc(payload.src)
+        if not target then return false, 'err.invalid_payload' end
+        local reason, errKey = CleanReason(payload.reason)
+        if not reason then return false, errKey end
+        return DoRemoveJoiner(src, target, reason)
+    end), { rate = 2 })
+end
+
+CP.Net.action('server:leaveOperation', function(src)
+    return Ops.leave(src)
+end, { rate = 2 })
 
 CP.Net.action('server:joinOperation', function(src, payload)
     local opId, valid = ParseOpId(payload)

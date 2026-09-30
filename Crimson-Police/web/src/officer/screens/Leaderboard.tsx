@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import {
+    Avatar,
     Badge,
     EmptyState,
     ErrorState,
@@ -18,13 +19,13 @@ import {
     type TableColumn,
 } from '../../shared/components';
 import { cx } from '../../shared/cx';
-import { formatNumber } from '../../shared/format';
+import { fmtDate, fmtDateTime, formatNumber } from '../../shared/format';
 import { useRequest } from '../../shared/hooks';
-import { t } from '../../shared/i18n';
+import { hasKey, t } from '../../shared/i18n';
 import { useNavigate } from '../../shared/navigation';
 import { useSession } from '../../shared/session';
-import type { BoardRow, Session } from '../../shared/types';
-import { asList, type BoardPeriod, type BoardView } from '../../types/boards';
+import type { Session } from '../../shared/types';
+import { asList, type BoardPeriod, type BoardRowView, type BoardView } from '../../types/boards';
 import './Leaderboard.css';
 
 export const BOARD_PERIODS: BoardPeriod[] = ['weekly', 'monthly', 'season', 'alltime'];
@@ -43,24 +44,53 @@ export function boardFilters(session: Session): string[] {
     return list.length ? list : DEFAULT_FILTERS;
 }
 
-// A server date ('YYYY-MM-DD', the server's calendar) read and formatted in UTC, so the player's own
-// time zone never moves a week or month start to the day before.
-function formatServerDate(day: string | null | undefined, opts: Intl.DateTimeFormatOptions): string {
+// A server date ('YYYY-MM-DD', the server's calendar) as its noon UTC, formatted by format.ts: noon keeps the same
+// calendar day in every time zone from UTC-11 to UTC+11, so the player's own zone never moves a week start.
+function serverDateTs(day: string | null | undefined): number | null {
     const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day ?? '');
-    if (!m) return '';
-    const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
-    return d.toLocaleDateString('en-GB', { ...opts, timeZone: 'UTC' });
+    if (!m) return null;
+    return Math.floor(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12) / 1000);
 }
 
-// "21 Sep" from a server date ('YYYY-MM-DD').
+// "21 Sep 2026" from a server date ('YYYY-MM-DD').
 export function formatDay(day: string | null | undefined): string {
-    return formatServerDate(day, { day: 'numeric', month: 'short' });
+    const ts = serverDateTs(day);
+    return ts === null ? '' : fmtDate(ts);
 }
 
-// "14:05" from os.time() seconds.
+// "30 Sep 2026, 14:05" from os.time() seconds.
 export function formatClock(ts: number | null | undefined): string {
     if (!ts) return '';
-    return new Date(ts * 1000).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    return fmtDateTime(ts);
+}
+
+// Rank by label (points is XP on the All-time tab).
+export function metricLabel(metric: string, allTime = false): string {
+    if (metric === 'points' && allTime) return t('leaderboard.col.xp');
+    return hasKey(`leaderboard.metric.${metric}`) ? t(`leaderboard.metric.${metric}`) : metric;
+}
+
+// A row's value for the metric: points and XP with their unit, Judgement as a share.
+export function metricValue(r: BoardRowView, metric: string, allTime = false) {
+    if (metric === 'judgement') return <span className="boards-points">{`${r.value ?? 0}%`}</span>;
+    if (metric === 'points' || !metric) {
+        return (
+            <span className="boards-points">
+                {formatNumber(r.points)} <small>{allTime ? t('leaderboard.xp') : t('common.pts')}</small>
+            </span>
+        );
+    }
+    return <span className="boards-points">{formatNumber(r.value ?? 0)}</span>;
+}
+
+// The level number next to a name (the header and rows carry the number only).
+export function LevelTag({ level }: { level?: { n: number; badge: string } | null }) {
+    if (!level) return null;
+    return (
+        <Badge tone={level.badge as 'grey'} size="sm" className="boards-level">
+            {t('leaderboard.level', { n: level.n })}
+        </Badge>
+    );
 }
 
 // A callsign cell (ellipsised, full text as tooltip), or "No callsign" when Qbox has none.
@@ -98,13 +128,8 @@ function windowText(board: BoardView | null, period: BoardPeriod): string {
     }
     const from = board.window?.fromDate;
     if (!from) return '';
-    if (period === 'monthly') {
-        return t('leaderboard.window.monthly', { month: formatServerDate(from, { month: 'long', year: 'numeric' }) });
-    }
-    return t('leaderboard.window.weekly', {
-        weekday: formatServerDate(from, { weekday: 'long' }),
-        from: formatDay(from),
-    });
+    if (period === 'monthly') return t('leaderboard.window.monthly', { month: formatDay(from) });
+    return t('leaderboard.window.weekly', { from: formatDay(from) });
 }
 
 export default function Leaderboard() {
@@ -115,12 +140,19 @@ export default function Leaderboard() {
     const [period, setPeriod] = useState<BoardPeriod>('weekly');
     const [filter, setFilter] = useState<string>('overall');
     const [department, setDepartment] = useState<string>(myDept);
+    const [metric, setMetric] = useState<string>('points');
+    const metrics = asList(session.config?.leaderboardMetrics);
 
     const allTime = period === 'alltime';
     const effectiveFilter = allTime ? 'overall' : filter;
     const args = useMemo(
-        () => ({ period, filter: effectiveFilter, ...(effectiveFilter === 'department' ? { department } : {}) }),
-        [period, effectiveFilter, department],
+        () => ({
+            period,
+            filter: effectiveFilter,
+            ...(effectiveFilter === 'department' ? { department } : {}),
+            ...(metric !== 'points' ? { metric } : {}),
+        }),
+        [period, effectiveFilter, department, metric],
     );
     const { data, loading, error, refetch } = useRequest<BoardView>('getBoard', args, { pollMs: REFRESH_MS });
 
@@ -129,6 +161,7 @@ export default function Leaderboard() {
         data &&
         data.period === period &&
         data.filter === effectiveFilter &&
+        (data.metric ?? 'points') === metric &&
         (effectiveFilter !== 'department' || !data.department || data.department === department)
             ? data
             : null;
@@ -153,16 +186,23 @@ export default function Leaderboard() {
     }));
     const deptOptions = asList(session.config?.departments).map(d => ({ value: d.key, label: d.short }));
 
-    const columns: TableColumn<BoardRow>[] = [
+    const metricOptions = (metrics.length ? metrics : ['points']).map(m => ({
+        value: m,
+        label: metricLabel(m, allTime),
+    }));
+
+    const columns: TableColumn<BoardRowView>[] = [
         { key: 'rank', header: t('leaderboard.col.rank'), width: 76, render: r => <RankCell rank={r.rank} /> },
         {
             key: 'name',
             header: t('leaderboard.col.officer'),
             render: r => (
                 <span className="boards-officer">
+                    <Avatar avatar={r.avatar} name={r.name} size={26} />
                     <span className="boards-officer__name" title={r.name}>
                         {r.name}
                     </span>
+                    <LevelTag level={r.level} />
                     {r.citizenid === myCid ? (
                         <Badge tone="accent" size="sm">
                             {t('leaderboard.you')}
@@ -199,14 +239,15 @@ export default function Leaderboard() {
         },
         {
             key: 'points',
-            header: allTime ? t('leaderboard.col.xp') : t('leaderboard.col.points'),
+            header:
+                metric === 'points'
+                    ? allTime
+                        ? t('leaderboard.col.xp')
+                        : t('leaderboard.col.points')
+                    : metricLabel(metric, allTime),
             numeric: true,
             width: 140,
-            render: r => (
-                <span className="boards-points">
-                    {formatNumber(r.points)} <small>{allTime ? t('leaderboard.xp') : t('common.pts')}</small>
-                </span>
-            ),
+            render: r => metricValue(r, metric, allTime),
         },
     ];
 
@@ -223,9 +264,11 @@ export default function Leaderboard() {
                 <span className="boards-officer">
                     <span className="boards-pinned__label">{t('leaderboard.your_position')}</span>
                     <span className="boards-pinned__who">
+                        <Avatar avatar={me.avatar} name={me.name} size={26} />
                         <span className="boards-officer__name" title={me.name}>
                             {me.name}
                         </span>
+                        <LevelTag level={me.level} />
                         {me.rank > 0 ? null : (
                             <span
                                 className="boards-unranked"
@@ -248,9 +291,7 @@ export default function Leaderboard() {
                 {formatNumber(me.failed)}
             </td>
             <td className="cp-num" style={{ textAlign: 'right' }}>
-                <span className="boards-points">
-                    {formatNumber(me.points)} <small>{allTime ? t('leaderboard.xp') : t('common.pts')}</small>
-                </span>
+                {metricValue(me, metric, allTime)}
             </td>
         </tr>
     ) : null;
@@ -297,6 +338,16 @@ export default function Leaderboard() {
                             aria-label={t('leaderboard.department')}
                             title={asList(session.config?.departments).find(d => d.key === department)?.label}
                             className="boards-dept-select"
+                        />
+                    ) : null}
+                    {metricOptions.length > 1 ? (
+                        <Select
+                            value={metric}
+                            onChange={setMetric}
+                            options={metricOptions}
+                            aria-label={t('leaderboard.rank_by')}
+                            title={t('leaderboard.rank_by')}
+                            className="boards-metric-select"
                         />
                     ) : null}
                     <Spacer />
@@ -347,7 +398,12 @@ export default function Leaderboard() {
                     />
                     <p className="boards-footnote">
                         <Icon name="info" size={13} />
-                        <span>{t('leaderboard.rules', { n: minRuns, top: board?.topN ?? 25 })}</span>
+                        <span>
+                            {t('leaderboard.rules', { n: minRuns, top: board?.topN ?? 25 })}
+                            {metric === 'judgement'
+                                ? ` ${t('leaderboard.judgement_rule', { n: board?.minDecisions ?? 10 })}`
+                                : ''}
+                        </span>
                     </p>
                 </>
             )}

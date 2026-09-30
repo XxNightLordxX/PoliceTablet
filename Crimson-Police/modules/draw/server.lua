@@ -10,11 +10,18 @@ local RECENT_KEEP_S = 900            -- in-memory history is only a bridge until
 local MEM_SEQ_BASE = 2 ^ 40          -- in-memory records sort after DB rows of the same second
 local PENDING_PREFIX = 'pending:'
 local SAME_SPOT_M = 50.0             -- a location this close to a held spot is that spot (locations are 100 m apart)
+local ROUTE_SAMPLE_M = 50.0          -- a route is part of a footprint every 50 m (Config.Draw.zoneClearance)
+local FRESH_WEIGHT = 0.5             -- a location used server-wide within locationFreshness gets half the weight
+local LAST_LOCS_KEEP = 5             -- in-memory last locations per officer and mission (a bridge until the row)
+local DAY_SPAN_S = 108000            -- 30 h: from a day start this always lands inside the next day
 
-local holders = {}     -- holders[missionId][index] = { [holderId] = true }
-local byHolder = {}    -- byHolder[holderId] = { missionId, index, at, coords } (coords: the start of the held spot)
-local recent = {}      -- recent[citizenid][missionType] = { { missionId, at, seq }, ... } newest first
-local inFlight = {}    -- inFlight[src] = true while an accept for that player is being processed
+local holders = {} -- holders[missionId][index] = { [holderId] = true }
+local byHolder = {} -- byHolder[holderId] = { missionId, index, at, coords } (coords: the start of the held spot)
+local recent = {} -- recent[citizenid][missionType] = { { missionId, at, seq }, ... } newest first
+local inFlight = {} -- inFlight[src] = true while an accept for that player is being processed
+local usedAt = {} -- usedAt[missionId][index] = when a run last took that spot (server-wide freshness)
+local lastLocs = {} -- lastLocs[citizenid][missionId] = { { index, at }, ... } newest first
+local footprints = setmetatable({}, { __mode = 'k' }) -- footprints[def][index] = { pts, box }
 local memSeq = 0
 local drawRng = nil
 
@@ -175,6 +182,56 @@ local function TypeLabel(key)
     return (t and t.label) or tostring(key)
 end
 
+local function CompletionsToday(citizenid, missionType)
+    if not (CP.Runs and CP.Runs.completionsToday) then return 0 end
+    local _, n = Safe(CP.Runs.completionsToday, citizenid, missionType)
+    return tonumber(n) or 0
+end
+
+-- Config.Limits.maxCompletionsDay (0 = no cap) and the type's dailyLimit (nil = no limit).
+local function DailyCap()
+    return math.max(0, math.floor(tonumber(Config.Limits and Config.Limits.maxCompletionsDay) or 0))
+end
+
+local function TypeDailyLimit(key)
+    local t = Config.MissionTypes and Config.MissionTypes[key]
+    local n = t and tonumber(t.dailyLimit)
+    return n and n > 0 and math.floor(n) or nil
+end
+
+-- The first officer at a daily limit and which one ('day' or 'type'), or nil.
+local function DailyBlocked(officers, key)
+    local max, perType = DailyCap(), TypeDailyLimit(key)
+    for _, o in ipairs(officers) do
+        if max > 0 and CompletionsToday(o.citizenid) >= max then return o, 'day' end
+        if perType and CompletionsToday(o.citizenid, key) >= perType then return o, 'type' end
+    end
+    return nil
+end
+
+local function NextDayStart(now)
+    if not (CP.Schedule and CP.Schedule.dayStart) then return nil end
+    local _, today = Safe(CP.Schedule.dayStart, now)
+    if not tonumber(today) then return nil end
+    local _, nextDay = Safe(CP.Schedule.dayStart, tonumber(today) + DAY_SPAN_S)
+    return tonumber(nextDay)
+end
+
+-- The area a point belongs to: the Config.MissionCalls.areas entry whose centre is nearest (nil: no areas).
+local function AreaKeyOf(coords)
+    local areas = Config.MissionCalls and Config.MissionCalls.areas
+    if type(areas) ~= 'table' or coords == nil then return nil end
+    local best, bestD
+    for _, a in ipairs(areas) do
+        if type(a) == 'table' and type(a.key) == 'string' and a.center then
+            local d = CP.U.dist2d(coords, a.center)
+            if d < math.huge and (not bestD or d < bestD) then best, bestD = a.key, d end
+        end
+    end
+    return best
+end
+Draw._areaKeyOf = AreaKeyOf
+
 -- ============================================================================
 --                             ELIGIBILITY AND POOL
 -- ============================================================================
@@ -199,7 +256,25 @@ local function Eligibility(def, officers, size, now)
 end
 Draw._eligibility = Eligibility
 
-function Draw.pool(missionType, members)
+-- The area of location #i of a definition (its start), cached on the definition's own table.
+local function LocationArea(def, i)
+    local loc = type(def) == 'table' and type(def.locations) == 'table' and def.locations[i]
+    local start = type(loc) == 'table' and type(loc.start) == 'table' and loc.start.coords or nil
+    if not start then return nil end
+    return AreaKeyOf(start)
+end
+Draw._locationArea = LocationArea
+
+local function HasLocationIn(def, area)
+    for i = 1, #(def.locations or {}) do
+        if LocationArea(def, i) == area then return true end
+    end
+    return false
+end
+
+-- opts.area: only missions with a location in that area (a mission call that named its area).
+function Draw.pool(missionType, members, opts)
+    local area = type(opts) == 'table' and opts.area or nil
     local officers = ToOfficers(members)
     local size = math.max(#(members or {}), #officers)
     if size < 1 then size = 1 end
@@ -208,6 +283,9 @@ function Draw.pool(missionType, members)
     local now = os.time()
     for _, def in ipairs(byType) do
         local ok, why, untilTs = Eligibility(def, officers, size, now)
+        if ok and area and not HasLocationIn(def, area) then
+            ok, why = false, 'area'
+        end
         if ok then
             list[#list + 1] = def
         elseif why == 'cooldown' and untilTs and (not cooldownUntil or untilTs < cooldownUntil) then
@@ -275,6 +353,46 @@ local function HistoryFor(citizenid, missionType)
         return a.id < b.id
     end)
     return list
+end
+
+Draw.history = HistoryFor
+
+-- The no-repeat rule (Config.Draw.avoidLast / avoidLastLarge / largePool) on an eligible list, given each
+-- officer's history (HistoryFor lists, newest first). Relaxed step by step, never empty while list is not.
+function Draw.noRepeat(list, hist)
+    local cfg = Config.Draw or {}
+    local avoidLast = math.max(0, math.floor(tonumber(cfg.avoidLast) or 1))
+    local k = avoidLast
+    if #list >= (tonumber(cfg.largePool) or 4) then
+        k = math.max(avoidLast, math.floor(tonumber(cfg.avoidLastLarge) or 2))
+    end
+    if #list <= 1 or k <= 0 then return list end
+    local function lastN(n)
+        local set = {}
+        for _, h in ipairs(hist) do
+            for i = 1, math.min(n, #h) do set[h[i].id] = true end
+        end
+        return set
+    end
+    local function without(set)
+        local out = {}
+        for _, d in ipairs(list) do if not set[d.id] then out[#out + 1] = d end end
+        return out
+    end
+    local candidates = without(lastN(k))
+    -- A unit whose members' histories cover the whole pool: relax step by step, never below
+    -- "not the unit's most recent mission" while another one is eligible.
+    if #candidates == 0 and k > 1 and avoidLast > 0 then candidates = without(lastN(avoidLast)) end
+    if #candidates == 0 then
+        local latest
+        for _, h in ipairs(hist) do
+            local e = h[1]
+            if e and (not latest or e.at > latest.at or (e.at == latest.at and e.seq > latest.seq)) then latest = e end
+        end
+        if latest then candidates = without({ [latest.id] = true }) end
+    end
+    if #candidates == 0 then candidates = list end
+    return candidates
 end
 
 function Draw.recordLast(citizenid, missionType, missionId)
@@ -346,6 +464,11 @@ local function Reserve(holderId, missionId, index, coords)
     byIdx[index] = set
     set[holderId] = true
     byHolder[holderId] = { missionId = missionId, index = index, at = os.time(), coords = coords }
+    if not (type(holderId) == 'string' and holderId:sub(1, #PENDING_PREFIX) == PENDING_PREFIX) then
+        local byIndex = usedAt[missionId] or {}
+        usedAt[missionId] = byIndex
+        byIndex[index] = os.time()
+    end
     CP.log(TAG, 'reserved %s #%d for %s', missionId, index, tostring(holderId))
     return wasFree
 end
@@ -392,10 +515,207 @@ local function OtherPlayerCoords(participants)
     return out
 end
 
+-- ============================================================================
+--                        FOOTPRINTS AND ZONE CLEARANCE
+-- ============================================================================
+
+local function PointXyz(v)
+    local t = type(v)
+    if t == 'vector3' or t == 'vector4' then return v.x, v.y, v.z end
+    if t == 'table' and type(v.x) == 'number' and type(v.y) == 'number' and type(v.z) == 'number' then
+        return v.x, v.y, v.z
+    end
+    return nil
+end
+
+-- Every point of a location table: its start and every coordinate in it; a route (a list of points under a
+-- key named route) also every ROUTE_SAMPLE_M along its segments.
+local function CollectPoints(v, out, depth, inRoute)
+    if depth > 6 or type(v) ~= 'table' then return end
+    local x, y, z = PointXyz(v)
+    if x then
+        out[#out + 1] = { x, y, z }
+        return
+    end
+    local line = {}
+    for k, child in pairs(v) do
+        local cx, cy, cz = PointXyz(child)
+        if cx then
+            if inRoute and math.type(k) == 'integer' then line[k] = { cx, cy, cz } end
+            out[#out + 1] = { cx, cy, cz }
+        elseif type(child) == 'table' then
+            CollectPoints(child, out, depth + 1, inRoute or k == 'route')
+        end
+    end
+    for i = 2, #line do
+        local a, b = line[i - 1], line[i]
+        if a and b then
+            local dx, dy, dz = b[1] - a[1], b[2] - a[2], b[3] - a[3]
+            local len = math.sqrt(dx * dx + dy * dy + dz * dz)
+            local steps = math.floor(len / ROUTE_SAMPLE_M)
+            for s = 1, steps do
+                local f = s * ROUTE_SAMPLE_M / len
+                out[#out + 1] = { a[1] + dx * f, a[2] + dy * f, a[3] + dz * f }
+            end
+        end
+    end
+end
+
+local function BuildFootprint(def, index)
+    local loc = type(def) == 'table' and type(def.locations) == 'table' and def.locations[index]
+    if type(loc) ~= 'table' then return nil end
+    local pts = {}
+    CollectPoints(loc, pts, 0, false)
+    if #pts == 0 then return nil end
+    local box = { pts[1][1], pts[1][2], pts[1][1], pts[1][2] }
+    for _, p in ipairs(pts) do
+        if p[1] < box[1] then box[1] = p[1] end
+        if p[2] < box[2] then box[2] = p[2] end
+        if p[1] > box[3] then box[3] = p[1] end
+        if p[2] > box[4] then box[4] = p[2] end
+    end
+    return { pts = pts, box = box }
+end
+
+local function Footprint(def, index)
+    if type(def) ~= 'table' then return nil end
+    local byIndex = footprints[def]
+    if not byIndex then
+        byIndex = {}
+        footprints[def] = byIndex
+    end
+    local fp = byIndex[index]
+    if fp == nil then
+        fp = BuildFootprint(def, index) or false
+        byIndex[index] = fp
+    end
+    return fp or nil
+end
+
+-- The points of location #index of a mission: its start and every point, routes sampled every 50 m.
+function Draw.footprint(def, index)
+    local fp = Footprint(def, index)
+    local out = {}
+    if not fp then return out end
+    for _, p in ipairs(fp.pts) do out[#out + 1] = vector3(p[1], p[2], p[3]) end
+    return out
+end
+
+-- The footprints held right now (every reservation: runs, Cross-Department Missions and accepts in flight).
+local function HeldFootprints()
+    local out = {}
+    for holderId, h in pairs(byHolder) do
+        local def
+        if CP.Runs and CP.Runs.get
+            and not (type(holderId) == 'string' and holderId:sub(1, #PENDING_PREFIX) == PENDING_PREFIX) then
+            local _, run = Safe(CP.Runs.get, holderId)
+            if type(run) == 'table' and run.state ~= 'ended' and tonumber(run.locationIndex) == h.index then
+                def = run.mission
+            end
+        end
+        def = def or (CP.Missions and CP.Missions.get and CP.Missions.get(h.missionId))
+        local fp = def and Footprint(def, h.index)
+        if fp then out[#out + 1] = { missionId = h.missionId, index = h.index, fp = fp } end
+    end
+    return out
+end
+
+local function Near(a, b, m)
+    if a.box[1] - m > b.box[3] or b.box[1] - m > a.box[3] or a.box[2] - m > b.box[4] or b.box[2] - m > a.box[4] then
+        return false
+    end
+    local m2 = m * m
+    for _, p in ipairs(a.pts) do
+        for _, q in ipairs(b.pts) do
+            local dx, dy, dz = p[1] - q[1], p[2] - q[2], p[3] - q[3]
+            if dx * dx + dy * dy + dz * dz < m2 then return true end
+        end
+    end
+    return false
+end
+
+-- A location with any point within Config.Draw.zoneClearance of any point of another held location.
+local function ZoneBlocked(def, index, held, clearance)
+    local fp = Footprint(def, index)
+    if not fp then return false end
+    for _, h in ipairs(held) do
+        if not (h.missionId == def.id and h.index == index) and Near(fp, h.fp, clearance) then return true end
+    end
+    return false
+end
+-- Whether location #index is blocked by zone clearance right now (for specs and the admin views).
+Draw._zoneBlocked = function(def, index)
+    return ZoneBlocked(def, index, HeldFootprints(), tonumber(Config.Draw and Config.Draw.zoneClearance) or 0)
+end
+
+-- ============================================================================
+--               LAST LOCATIONS (Config.Draw.avoidLastLocations)
+-- ============================================================================
+
+function Draw.recordLocation(citizenid, missionId, index)
+    index = math.tointeger(tonumber(index) or -1)
+    if type(citizenid) ~= 'string' or type(missionId) ~= 'string' or not index or index < 1 then return end
+    local byMission = lastLocs[citizenid] or {}
+    lastLocs[citizenid] = byMission
+    local list = byMission[missionId] or {}
+    byMission[missionId] = list
+    table.insert(list, 1, { index = index, at = os.time() })
+    while #list > LAST_LOCS_KEEP do table.remove(list) end
+end
+
+-- The last n locations each officer played in that mission (cp_mission_runs.location_index and the
+-- in-memory bridge), as a set of indices.
+local function LastLocations(citizenids, missionId, n)
+    local set = {}
+    if n <= 0 then return set end
+    for _, cid in ipairs(citizenids) do
+        local seen = {}
+        local list = {}
+        local mem = lastLocs[cid] and lastLocs[cid][missionId]
+        for _, e in ipairs(mem or {}) do list[#list + 1] = { index = e.index, at = e.at } end
+        CP.Migrations.ready()
+        local ok, rows = pcall(MySQL.query.await, [[
+            SELECT location_index, UNIX_TIMESTAMP(created_at) AS created_ts FROM cp_mission_runs
+            WHERE citizenid = ? AND mission_id = ? AND location_index IS NOT NULL
+            ORDER BY created_at DESC, id DESC LIMIT ?
+        ]], { cid, missionId, n })
+        if ok and type(rows) == 'table' then
+            for _, r in ipairs(rows) do
+                list[#list + 1] = { index = math.tointeger(CP.U.num(r.location_index)), at = CP.U.num(r.created_ts) }
+            end
+        end
+        table.sort(list, function(a, b) return a.at > b.at end)
+        local taken = 0
+        for _, e in ipairs(list) do
+            if taken >= n then break end
+            if e.index and not seen[e.index] then
+                seen[e.index] = true
+                set[e.index] = true
+                taken = taken + 1
+            end
+        end
+    end
+    return set
+end
+
+-- ============================================================================
+--                                   THE PICK
+-- ============================================================================
+
+local function Filter(list, keep)
+    local out = {}
+    for _, i in ipairs(list) do if keep(i) then out[#out + 1] = i end end
+    return out
+end
+
+-- opts: exclude (hard), area (hard: only locations in that area), avoid (soft: indices to skip), nearCoords
+-- (county-wide weighting towards a unit: 1 / (1 + km / countyWeightKm) from the nearest point). Soft rules
+-- apply only while another location is left; zone clearance falls back to the reservation rule alone.
 function Draw.pickLocation(def, participantSrcs, rngObj, opts)
     opts = opts or {}
     if type(def) ~= 'table' or type(def.locations) ~= 'table' or #def.locations == 0 then return nil end
     local r = rngObj or Rng()
+    local cfg = Config.Draw or {}
     local reserveOn = not (Config.Limits and Config.Limits.reserveLocations == false)
     local participants = {}
     for _, s in ipairs(participantSrcs or {}) do
@@ -405,85 +725,105 @@ function Draw.pickLocation(def, participantSrcs, rngObj, opts)
     local free = {}
     for i = 1, #def.locations do
         local skip = (reserveOn and InUse(def.id, i, LocationStart(def, i))) or (opts.exclude and opts.exclude[i])
+            or (opts.area and LocationArea(def, i) ~= opts.area)
         if not skip then free[#free + 1] = i end
     end
     if #free == 0 then return nil end
-    local clearance = tonumber(Config.Draw and Config.Draw.playerClearance) or 0
-    if clearance > 0 and #free > 1 then
-        local others = OtherPlayerCoords(participants)
-        if #others > 0 then
-            local clear = {}
-            for _, i in ipairs(free) do
-                local start = def.locations[i].start
-                local c = start and start.coords
-                local near = false
-                for _, pc in ipairs(others) do
-                    if CP.U.dist(c, pc) <= clearance then near = true; break end
-                end
-                if not near then clear[#clear + 1] = i end
-            end
+
+    local zone = tonumber(cfg.zoneClearance) or 0
+    if zone > 0 and #free > 0 then
+        local held = HeldFootprints()
+        if #held > 0 then
+            local clear = Filter(free, function(i) return not ZoneBlocked(def, i, held, zone) end)
             if #clear > 0 then free = clear end
         end
     end
-    local index = r:pick(free)
-    return index
+    if type(opts.avoid) == 'table' and #free > 1 then
+        local kept = Filter(free, function(i) return not opts.avoid[i] end)
+        if #kept > 0 then free = kept end
+    end
+    local clearance = tonumber(cfg.playerClearance) or 0
+    if clearance > 0 and #free > 1 then
+        local others = OtherPlayerCoords(participants)
+        if #others > 0 then
+            local clear = Filter(free, function(i)
+                local c = LocationStart(def, i)
+                for _, pc in ipairs(others) do
+                    if CP.U.dist(c, pc) <= clearance then return false end
+                end
+                return true
+            end)
+            if #clear > 0 then free = clear end
+        end
+    end
+    if #free == 1 then return free[1] end
+
+    -- ---- WEIGHTS: freshness and the county-wide distance weighting ---------
+    local fresh = tonumber(cfg.locationFreshness) or 0
+    local km = tonumber(Config.MissionCalls and Config.MissionCalls.countyWeightKm) or 2.0
+    local near = type(opts.nearCoords) == 'table' and #opts.nearCoords > 0 and opts.nearCoords or nil
+    local now = os.time()
+    local weights, total, uniform = {}, 0, true
+    for n, i in ipairs(free) do
+        local w = 1.0
+        local at = usedAt[def.id] and usedAt[def.id][i]
+        if fresh > 0 and at and now - at < fresh then w = w * FRESH_WEIGHT end
+        if near and km > 0 then
+            local best = math.huge
+            for _, c in ipairs(near) do
+                local d = CP.U.dist2d(LocationStart(def, i), c)
+                if d < best then best = d end
+            end
+            if best < math.huge then w = w / (1 + best / 1000 / km) end
+        end
+        weights[n] = w
+        total = total + w
+        if w ~= weights[1] then uniform = false end
+    end
+    if uniform or total <= 0 then return (r:pick(free)) end
+    local roll = r:next() * total
+    for n, i in ipairs(free) do
+        roll = roll - weights[n]
+        if roll < 0 then return i end
+    end
+    return free[#free]
 end
 
 -- ============================================================================
 --                                     DRAW
 -- ============================================================================
 
+-- opts: rng, participants, area (a mission call that named its area: only missions and locations there),
+-- nearCoords (a county-wide call: locations weighted towards these points), avoid (extra indices to skip).
 function Draw.draw(missionType, members, opts)
     opts = opts or {}
     local officers = ToOfficers(members)
-    local list, reason = Draw.pool(missionType, members)
+    local list, reason = Draw.pool(missionType, members, { area = opts.area })
     if #list == 0 then
         return nil, reason == 'board.locked_mission_cooldown' and 'err.pool_cooldown' or 'err.pool_empty'
     end
 
     local candidates = list
-    local cfg = Config.Draw or {}
-    local avoidLast = math.max(0, math.floor(tonumber(cfg.avoidLast) or 1))
-    local k = avoidLast
-    if #list >= (tonumber(cfg.largePool) or 4) then
-        k = math.max(avoidLast, math.floor(tonumber(cfg.avoidLastLarge) or 2))
-    end
-    if #list > 1 and k > 0 then
+    if #list > 1 then
         local hist = {}
         for i, o in ipairs(officers) do hist[i] = HistoryFor(o.citizenid, missionType) end
-        local function lastN(n)
-            local set = {}
-            for _, h in ipairs(hist) do
-                for i = 1, math.min(n, #h) do set[h[i].id] = true end
-            end
-            return set
-        end
-        local function without(set)
-            local out = {}
-            for _, d in ipairs(list) do if not set[d.id] then out[#out + 1] = d end end
-            return out
-        end
-        candidates = without(lastN(k))
-        -- A unit whose members' histories cover the whole pool: relax step by step, never below
-        -- "not the unit's most recent mission" while another one is eligible.
-        if #candidates == 0 and k > 1 and avoidLast > 0 then candidates = without(lastN(avoidLast)) end
-        if #candidates == 0 then
-            local latest
-            for _, h in ipairs(hist) do
-                local e = h[1]
-                if e and (not latest or e.at > latest.at or (e.at == latest.at and e.seq > latest.seq)) then
-                    latest = e
-                end
-            end
-            if latest then candidates = without({ [latest.id] = true }) end
-        end
-        if #candidates == 0 then candidates = list end
+        candidates = Draw.noRepeat(list, hist)
     end
 
     local r = opts.rng or Rng()
     local participants = opts.participants or SrcsOf(officers)
+    local cids = {}
+    for _, o in ipairs(officers) do cids[#cids + 1] = o.citizenid end
+    local lastN = math.max(0, math.floor(tonumber(Config.Draw and Config.Draw.avoidLastLocations) or 0))
     for _, def in ipairs(r:shuffle(candidates)) do
-        local index = Draw.pickLocation(def, participants, r, opts)
+        local avoid = LastLocations(cids, def.id, lastN)
+        for i in pairs(type(opts.avoid) == 'table' and opts.avoid or {}) do avoid[i] = true end
+        local index = Draw.pickLocation(def, participants, r, {
+            exclude = opts.exclude,
+            area = opts.area,
+            avoid = avoid,
+            nearCoords = opts.nearCoords,
+        })
         if index then
             CP.log(TAG, 'drew %s #%d for %s (%d candidates of %d)', def.id, index, missionType, #candidates, #list)
             return def, index
@@ -541,6 +881,14 @@ local function CardPoints(key, list)
         if not best or p > best then best = p end
     end
     return math.floor(best or tonumber(Config.MissionTypes[key].points) or 0)
+end
+
+-- The cash range and the points of a type's card for these officers (the Mission Board's own numbers), for
+-- the mission call cards.
+function Draw.typeValues(key, officers, list)
+    officers = ToOfficers(officers)
+    list = list or Draw.pool(key, officers)
+    return CardCash(key, officers, list, math.max(1, #officers)), CardPoints(key, list)
 end
 
 local function TypeCooldown(officers, key, now)
@@ -647,8 +995,25 @@ function Draw.boardCards(src)
                 reason = CP.L(reasonKey, { type = label, size = size }),
                 ['until'] = info and info.cooldownUntil or nil,
             }
+        else
+            local dailyWho, which = DailyBlocked(officers, key)
+            if dailyWho then
+                local vars = {
+                    type = label,
+                    name = dailyWho.name or '?',
+                    max = which == 'day' and DailyCap() or TypeDailyLimit(key),
+                }
+                local lockKey = which == 'day' and 'board.locked_daily' or 'board.locked_type_daily'
+                if dailyWho.src ~= src then lockKey = lockKey .. '_member' end
+                card.locked = { reason = CP.L(lockKey, vars), ['until'] = NextDayStart(now), daily = true }
+            end
         end
         data.cards[#data.cards + 1] = card
+    end
+    -- "n mission calls open" (the calls this viewer's unit could claim), from CP.MissionCalls' cache
+    if CP.MissionCalls and CP.MissionCalls.claimableCount then
+        local _, n = Safe(CP.MissionCalls.claimableCount, src)
+        data.callsOpen = tonumber(n) or 0
     end
 
     if CP.Events and CP.Events.bossCard then
@@ -678,7 +1043,16 @@ local function UnlockUnit(unit)
     if unit and CP.Units and CP.Units.unlock then Safe(CP.Units.unlock, unit) end
 end
 
-local function Accept(src, typeKey)
+local function PedCoords(src)
+    local ped = GetPlayerPed(src)
+    if not ped or ped == 0 then return nil end
+    return GetEntityCoords(ped)
+end
+
+-- Every check of accepting a type, without changing anything: the context for the accept, or false and the
+-- error key the officer sees. A mission call claim runs exactly these (CP.MissionCalls). counts (optional):
+-- { lastHour = fn(citizenid), today = fn(citizenid, type) } in place of CP.Runs' counts (the calls' cache).
+local function CheckAccept(src, typeKey, counts)
     local leader, errKey = GetOfficer(src)
     if not leader then return false, errKey or 'err.not_police' end
 
@@ -703,14 +1077,22 @@ local function Accept(src, typeKey)
         officers[#officers + 1] = o
     end
 
-    local max = HourlyCap()
+    local max, dayMax, typeDay = HourlyCap(), DailyCap(), TypeDailyLimit(missionType)
+    local lastHour = type(counts) == 'table' and counts.lastHour or CompletionsLastHour
+    local today = type(counts) == 'table' and counts.today or CompletionsToday
     for _, o in ipairs(officers) do
         local own = o.src == src
         if InArena(o.src) then return false, 'err.in_arena' end
         if OnMission(o.src) then return false, own and 'err.already_on_run' or 'err.member_on_run' end
         if IsOnCall(o.src) then return false, own and 'err.on_call' or 'err.member_on_call' end
-        if CompletionsLastHour(o.citizenid) >= max then
+        if lastHour(o.citizenid) >= max then
             return false, own and 'err.hourly_cap' or 'err.member_hourly_cap'
+        end
+        if dayMax > 0 and today(o.citizenid) >= dayMax then
+            return false, own and 'err.daily_cap' or 'err.member_daily_cap'
+        end
+        if typeDay and today(o.citizenid, missionType) >= typeDay then
+            return false, own and 'err.type_daily_cap' or 'err.member_type_daily_cap'
         end
         if not isBoss then
             local u = tonumber(CooldownsOf(o.citizenid).types[missionType])
@@ -730,13 +1112,126 @@ local function Accept(src, typeKey)
             end
         end
     end
+    return {
+        leader = leader,
+        unit = unit,
+        srcs = srcs,
+        officers = officers,
+        isBoss = isBoss,
+        missionType = missionType,
+        now = now,
+    }
+end
 
-    -- Invites close now: the draw depends on the unit's size and every member's cooldowns.
-    if unit and CP.Units and CP.Units.lock then Safe(CP.Units.lock, unit) end
+-- true, or false and the error key: whether src could accept typeKey right now (nothing is changed).
+function Draw.check(src, typeKey, counts)
+    local ctx, errKey = CheckAccept(src, typeKey, counts)
+    if not ctx then return false, errKey end
+    return true
+end
+
+-- The response target of a claimed mission call: the unit's nearest member to the drawn start (server-side
+-- straight line) ÷ speed + grace (Config.MissionCalls.rapidResponse).
+local function ResponseTarget(srcs, start)
+    local rr = Config.MissionCalls and Config.MissionCalls.rapidResponse or {}
+    local best = nil
+    for _, m in ipairs(srcs) do
+        local c = PedCoords(m)
+        local d = c and CP.U.dist(c, start)
+        if d and d < math.huge and (not best or d < best) then best = d end
+    end
+    if not best then return nil, nil end
+    local speed = tonumber(rr.speed) or 20.0
+    if speed <= 0 then speed = 20.0 end
+    return math.floor(best / speed + (tonumber(rr.grace) or 45) + 0.5), math.floor(best + 0.5)
+end
+
+-- The draw and the run, after the checks (and the ready check of a unit).
+local function FinishAccept(src, typeKey, ctx, opts)
+    local unit, srcs, officers = ctx.unit, ctx.srcs, ctx.officers
     local function fail(key)
         UnlockUnit(unit)
         return false, key
     end
+    local def, index
+    if ctx.isBoss then
+        def = CP.Missions and CP.Missions.get(BOSS_ID)
+        if not def then return fail('err.boss_unavailable') end
+        local ok, why = Eligibility(def, officers, #officers, ctx.now)
+        if not ok then return fail(why == 'cooldown' and 'err.boss_cooldown' or 'err.boss_not_eligible') end
+        index = Draw.pickLocation(def, srcs, Rng())
+        if not index then return fail('err.no_location') end
+    else
+        local near = opts.nearCoords
+        if near == nil and opts.missionCall and not opts.area then
+            near = {}
+            for _, m in ipairs(srcs) do near[#near + 1] = PedCoords(m) end
+        end
+        local second
+        def, second = Draw.draw(ctx.missionType, officers, { participants = srcs, area = opts.area, nearCoords = near })
+        if not def then return fail(second or 'err.pool_empty') end
+        index = second
+    end
+
+    if not (CP.Runs and CP.Runs.create) then return fail('err.run_create_failed') end
+    -- The draw may yield (history lookups): a member who disconnected meanwhile had no run for playerDropped
+    -- to leave, so they are refused here (CP.Runs.create checks again after its own lookups).
+    for _, m in ipairs(srcs) do
+        if GetPlayerName(m) == nil then return fail('err.member_unavailable') end
+    end
+    local missionCall = nil
+    if type(opts.missionCall) == 'table' then
+        missionCall = CP.U.copy(opts.missionCall)
+        if missionCall.targetS == nil then
+            missionCall.targetS, missionCall.distance = ResponseTarget(srcs, LocationStart(def, index))
+        end
+    end
+    -- Provisional reservation so a concurrent accept can't take the spot before CP.Runs reserves it.
+    local token = ('%s%d:%d'):format(PENDING_PREFIX, src, GetGameTimer())
+    Reserve(token, def.id, index, LocationStart(def, index))
+    local okCall, run, createErr = pcall(CP.Runs.create, {
+        mission = def,
+        locationIndex = index,
+        missionType = ctx.missionType,
+        members = officers,
+        leaderSrc = src,
+        operationId = nil,
+        test = nil,
+        isBoss = def.isBoss == true,
+        missionCall = missionCall,
+    })
+    Draw.release(token)
+    if not okCall then
+        CP.err(TAG, 'CP.Runs.create failed: %s', tostring(run))
+        return fail('err.run_create_failed')
+    end
+    if type(run) ~= 'table' then return fail(createErr or 'err.run_create_failed') end
+    if run.id and not byHolder[run.id] then Draw.reserve(run.id, def.id, index) end
+    for _, o in ipairs(officers) do Draw.recordLocation(o.citizenid, def.id, index) end
+    CP.log(TAG, '%s accepted %s: %s #%d (run %s, %d officer(s))', tostring(src), typeKey, def.id, index,
+        tostring(run.id), #officers)
+    return true,
+        {
+            runId = run.id,
+            missionId = def.id,
+            locationIndex = index,
+            targetS = missionCall and missionCall.targetS or nil,
+            distance = missionCall and missionCall.distance or nil,
+        }
+end
+
+-- Accepting a type (the Mission Board, or a mission call that won its claim). opts: area, nearCoords,
+-- missionCall ({ id, code, area, staff }; the response target is set here from the drawn start), onDone
+-- (called with ok, data|errKey, srcs only when a unit's ready check made the accept wait).
+-- Returns true, { runId } or true, { pending = true } while a unit of 2+ answers the ready check.
+local function Accept(src, typeKey, opts)
+    opts = type(opts) == 'table' and opts or {}
+    local ctx, errKey = CheckAccept(src, typeKey)
+    if not ctx then return false, errKey end
+    local unit, srcs = ctx.unit, ctx.srcs
+
+    -- Invites close now: the draw depends on the unit's size and every member's cooldowns.
+    if unit and CP.Units and CP.Units.lock then Safe(CP.Units.lock, unit) end
     -- The checks above may yield (database lookups): an invite accepted meanwhile would put an officer in
     -- the locked unit who is not on the run and was never checked (docs/notes/teams.md). The unit must still
     -- be exactly the members that were checked; otherwise the leader tries again.
@@ -753,55 +1248,58 @@ local function Accept(src, typeKey)
         if after ~= nil and after ~= unit then same = false end
         if not same then
             CP.log(TAG, 'unit of %s changed during the accept; refused', tostring(src))
-            return fail('err.busy')
+            UnlockUnit(unit)
+            return false, 'err.busy'
         end
     end
 
-    local def, index
-    if isBoss then
-        def = CP.Missions and CP.Missions.get(BOSS_ID)
-        if not def then return fail('err.boss_unavailable') end
-        local ok, why = Eligibility(def, officers, #officers, now)
-        if not ok then return fail(why == 'cooldown' and 'err.boss_cooldown' or 'err.boss_not_eligible') end
-        index = Draw.pickLocation(def, srcs, Rng())
-        if not index then return fail('err.no_location') end
-    else
-        local second
-        def, second = Draw.draw(missionType, officers, { participants = srcs })
-        if not def then return fail(second or 'err.pool_empty') end
-        index = second
+    -- ---- THE READY CHECK (CP.Units, units of 2+; without it the draw follows at once) ----
+    local readyCheck = CP.Units and CP.Units.readyCheck
+    local wantCheck = not (Config.Units and Config.Units.readyCheck == false)
+    if unit and #srcs >= 2 and wantCheck and type(readyCheck) == 'function' and not opts.noReadyCheck then
+        local answered = false
+        local function done(ok, data, who)
+            if answered then return end
+            answered = true
+            if type(opts.onDone) == 'function' then
+                local okCb, err = pcall(opts.onDone, ok, data, who)
+                if not okCb then CP.err(TAG, 'accept callback failed: %s', tostring(err)) end
+            end
+        end
+        local function onReady()
+            CreateThread(function()
+                -- the members answered: check them again, the unit stayed locked meanwhile
+                for _, o in ipairs(ctx.officers) do
+                    local own = o.src == src
+                    if IsOnCall(o.src) then
+                        UnlockUnit(unit)
+                        return done(false, own and 'err.on_call' or 'err.member_on_call')
+                    end
+                end
+                if OperationLocked() then
+                    UnlockUnit(unit)
+                    return done(false, 'err.operation_locked')
+                end
+                local okCall, ok, data = pcall(FinishAccept, src, typeKey, ctx, opts)
+                if not okCall then
+                    CP.err(TAG, 'accept after the ready check failed: %s', tostring(ok))
+                    UnlockUnit(unit)
+                    return done(false, 'err.internal')
+                end
+                done(ok, data)
+            end)
+        end
+        local function onCancel(reasonKey, who)
+            UnlockUnit(unit)
+            done(false, type(reasonKey) == 'string' and reasonKey or 'err.ready_declined', who)
+        end
+        local okRc, res = pcall(readyCheck, unit, typeKey, onReady, onCancel)
+        if okRc and res ~= false then return true, { pending = true } end
+        CP.warn(TAG, 'the ready check could not start (%s); the draw follows at once', tostring(res))
     end
-
-    if not (CP.Runs and CP.Runs.create) then return fail('err.run_create_failed') end
-    -- The draw may yield (history lookups): a member who disconnected meanwhile had no run for playerDropped
-    -- to leave, so they are refused here (CP.Runs.create checks again after its own lookups).
-    for _, m in ipairs(srcs) do
-        if GetPlayerName(m) == nil then return fail('err.member_unavailable') end
-    end
-    -- Provisional reservation so a concurrent accept can't take the spot before CP.Runs reserves it.
-    local token = ('%s%d:%d'):format(PENDING_PREFIX, src, GetGameTimer())
-    Reserve(token, def.id, index, LocationStart(def, index))
-    local okCall, run, createErr = pcall(CP.Runs.create, {
-        mission = def,
-        locationIndex = index,
-        missionType = missionType,
-        members = officers,
-        leaderSrc = src,
-        operationId = nil,
-        test = nil,
-        isBoss = def.isBoss == true,
-    })
-    Draw.release(token)
-    if not okCall then
-        CP.err(TAG, 'CP.Runs.create failed: %s', tostring(run))
-        return fail('err.run_create_failed')
-    end
-    if type(run) ~= 'table' then return fail(createErr or 'err.run_create_failed') end
-    if run.id and not byHolder[run.id] then Draw.reserve(run.id, def.id, index) end
-    CP.log(TAG, '%s accepted %s: %s #%d (run %s, %d officer(s))', tostring(src), typeKey, def.id, index,
-        tostring(run.id), #officers)
-    return true, { runId = run.id }
+    return FinishAccept(src, typeKey, ctx, opts)
 end
+Draw.accept = Accept
 
 CP.Net.action('server:acceptType', function(src, payload)
     local typeKey = ParseType(payload)
@@ -822,6 +1320,58 @@ CP.Net.action('server:acceptType', function(src, payload)
         return false, 'err.internal'
     end
     return ok, data
+end, { rate = 3 })
+
+-- ============================================================================
+--                                LOCATION STATS
+-- ============================================================================
+-- Admin UI → Missions and Testing: how often each location of a mission was played, and when last. Rows
+-- are per participant, so they are grouped by run first (no COUNT(DISTINCT ...) in the saves folder engine).
+
+function Draw.locationStats(missionId)
+    local def = CP.Missions and CP.Missions.get and CP.Missions.get(missionId)
+    if not def then return nil, 'err.draw_unknown_mission' end
+    CP.Migrations.ready()
+    local ok, rows = pcall(MySQL.query.await, [[
+        SELECT run_uuid, location_index, UNIX_TIMESTAMP(MAX(created_at)) AS last_ts FROM cp_mission_runs
+        WHERE mission_id = ? AND location_index IS NOT NULL GROUP BY run_uuid, location_index
+    ]], { missionId })
+    if not ok then
+        CP.err(TAG, 'location stats of %s failed: %s', tostring(missionId), tostring(rows))
+        return nil, 'err.internal'
+    end
+    local byIndex = {}
+    for _, r in ipairs(type(rows) == 'table' and rows or {}) do
+        local i = math.tointeger(CP.U.num(r.location_index))
+        if i then
+            local e = byIndex[i] or { plays = 0, lastPlayed = nil }
+            byIndex[i] = e
+            e.plays = e.plays + 1
+            local ts = CP.U.num(r.last_ts)
+            if ts > 0 and (not e.lastPlayed or ts > e.lastPlayed) then e.lastPlayed = math.floor(ts) end
+        end
+    end
+    local out = {}
+    for i, loc in ipairs(def.locations or {}) do
+        local e = byIndex[i] or {}
+        out[#out + 1] = {
+            index = i,
+            label = type(loc) == 'table' and loc.label or ('#' .. i),
+            plays = e.plays or 0,
+            lastPlayed = e.lastPlayed,
+            area = LocationArea(def, i),
+        }
+    end
+    return out
+end
+
+CP.Net.callback('admin:getLocationStats', function(src, args)
+    if not (CP.Permissions and CP.Permissions.can) then return nil, 'err.no_permission' end
+    local okP, eP = CP.Permissions.can(src, 'openAdmin')
+    if not okP then return nil, eP or 'err.no_permission' end
+    local missionId = type(args) == 'table' and args.missionId or nil
+    if type(missionId) ~= 'string' or missionId == '' or #missionId > 64 then return nil, 'err.invalid_payload' end
+    return Draw.locationStats(missionId)
 end, { rate = 3 })
 
 AddEventHandler('playerDropped', function()
@@ -847,5 +1397,12 @@ CreateThread(function()
             end
         end
         PruneRecent(now)
+        local fresh = tonumber(Config.Draw and Config.Draw.locationFreshness) or 0
+        for missionId, byIndex in pairs(usedAt) do
+            for i, at in pairs(byIndex) do
+                if now - at >= fresh then byIndex[i] = nil end
+            end
+            if next(byIndex) == nil then usedAt[missionId] = nil end
+        end
     end
 end)

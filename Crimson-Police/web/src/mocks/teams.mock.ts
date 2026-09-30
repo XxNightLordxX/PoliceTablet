@@ -6,6 +6,9 @@ import type {
     OperationInfo,
     OperationParticipant,
     OperationView,
+    OperationWaitlistEntry,
+    ReadyCheckView,
+    UnitOperationCard,
     UnitScreenView,
 } from '../types/teams';
 import { devState } from './devState';
@@ -84,13 +87,64 @@ interface MockInvite {
     size: number;
 }
 
-const units: { unit: MockUnit | null; invites: MockInvite[]; pool: Person[]; onRun: boolean; inUnit: Set<number> } = {
+interface MockReadyCheck {
+    typeLabel: string;
+    expiresAt: number;
+    ready: number[];
+    waiting: number[];
+}
+
+const units: {
+    unit: MockUnit | null;
+    invites: MockInvite[];
+    pool: Person[];
+    onRun: boolean;
+    inUnit: Set<number>;
+    readyCheck: MockReadyCheck | null;
+    partners: Set<number>;
+    operation: UnitOperationCard | null;
+} = {
     unit: null,
     invites: [],
     pool: [P.maria, P.grace, P.leo, P.ana, P.marcus, P.rosa, P.owen, P.priya],
     onRun: false,
     inUnit: new Set([P.marcus.src, P.grace.src]),
+    readyCheck: null,
+    partners: new Set([P.ana.src, P.rosa.src]),
+    operation: null,
 };
+
+// Level numbers and distance bands for the mock people (the server works them out).
+const LEVELS: Record<number, number> = { 21: 14, 14: 7, 31: 3, 27: 22, 28: 9, 17: 5, 19: 31, 33: 11, 36: 1, 38: 2 };
+const BADGES = ['grey', 'bronze', 'silver', 'gold', 'platinum'];
+function levelOf(src: number) {
+    const n = LEVELS[src] ?? 4;
+    return { n, badge: BADGES[Math.min(4, Math.floor(n / 10))] };
+}
+function initialsOf(name: string) {
+    return name
+        .split(/\s+/)
+        .filter(Boolean)
+        .slice(0, 2)
+        .map(w => w[0].toUpperCase())
+        .join('');
+}
+const SIZE_FIT: Record<number, number[]> = {
+    // missions of each type by unit size 1..5 (patrol, training, investigation, tactical)
+    1: [5, 2, 2, 0],
+    2: [4, 3, 3, 5],
+    3: [2, 2, 2, 7],
+    4: [2, 2, 2, 7],
+    5: [2, 2, 2, 7],
+};
+function sizeFit(size: number) {
+    const keys = ['patrol', 'training', 'investigation', 'tactical'];
+    const now = SIZE_FIT[size] ?? SIZE_FIT[4];
+    const plus = SIZE_FIT[Math.min(size + 1, MAX_UNIT)] ?? now;
+    const out: Record<string, { now: number; plusOne: number }> = {};
+    keys.forEach((k, i) => (out[k] = { now: now[i], plusOne: size < MAX_UNIT ? plus[i] : now[i] }));
+    return out;
+}
 
 (function initUnits() {
     const v = params.get('teams') ?? 'leader';
@@ -130,6 +184,27 @@ const units: { unit: MockUnit | null; invites: MockInvite[]; pool: Person[]; onR
         units.invites = [{ unitId: 7, from: P.long, expiresAt: t + 9, size: 3 }];
     } else if (v === 'full') {
         units.unit = { id: 2, leader: ME_SRC, locked: false, members: [P.maria, P.dana, P.grace], pending: [] };
+    } else if (v === 'ready') {
+        // The leader accepted Tactical: the viewer is asked to confirm.
+        units.unit = { id: 6, leader: P.maria.src, locked: true, members: [P.maria, P.dana], pending: [] };
+        units.readyCheck = {
+            typeLabel: 'Tactical',
+            expiresAt: t + 18,
+            ready: [P.maria.src],
+            waiting: [ME_SRC, P.dana.src],
+        };
+        units.pool = units.pool.filter(p => p.src !== P.maria.src);
+    } else if (v === 'op') {
+        units.operation = {
+            id: 7,
+            missionLabel: 'Gang Shootout',
+            status: 'joining',
+            joined: 8,
+            max: 8,
+            waitlistPosition: 2,
+            joinEndsIn: 184,
+            canLeave: true,
+        };
     } else if (v === 'invites') {
         units.invites = [
             { unitId: 5, from: P.grace, expiresAt: t + 103, size: 2 },
@@ -181,10 +256,32 @@ function unitView(): UnitScreenView {
                   leader: u.leader,
                   locked: u.locked,
                   size: members.length,
-                  members: members.map(m => ({ ...m, isLeader: m.src === u.leader, available: true })),
+                  members: members.map(m => {
+                      const level = levelOf(m.src);
+                      return {
+                          ...m,
+                          isLeader: m.src === u.leader,
+                          available: true,
+                          level,
+                          avatar: {
+                              kind: 'initials' as const,
+                              value: null,
+                              initials: initialsOf(m.name),
+                              frame: level.badge,
+                          },
+                      };
+                  }),
                   pending: u.pending.map(x => ({ ...x.p, expiresIn: x.expiresAt - t })),
+                  canManage: u.leader === ME_SRC && !u.locked,
+                  readyCheck: readyView(),
               }
             : null,
+        pendingSent:
+            u && u.leader !== ME_SRC
+                ? []
+                : (u?.pending ?? []).map(x => ({ src: x.p.src, name: x.p.name, expiresIn: x.expiresAt - t })),
+        sizeFit: sizeFit(size),
+        operation: units.operation,
         invites: units.invites
             .map(i => ({
                 unitId: i.unitId,
@@ -198,15 +295,127 @@ function unitView(): UnitScreenView {
         invitable: canInvite
             ? units.pool
                   .filter(p => !taken.has(p.src))
-                  .map(p => ({ ...p, inUnit: units.inUnit.has(p.src) }))
-                  .sort((a, b) => a.departmentShort.localeCompare(b.departmentShort) || a.name.localeCompare(b.name))
+                  .map(p => ({
+                      ...p,
+                      inUnit: units.inUnit.has(p.src),
+                      lastPartner: units.partners.has(p.src),
+                      distanceBand: (p.src % 4) as 0 | 1 | 2 | 3,
+                  }))
+                  .sort(
+                      (a, b) =>
+                          a.distanceBand - b.distanceBand ||
+                          a.departmentShort.localeCompare(b.departmentShort) ||
+                          a.name.localeCompare(b.name),
+                  )
             : [],
     };
 }
 
-function pushUnit() {
-    emitDebug('push', { topic: 'unit', data: { unitId: units.unit?.id ?? false } }, 50);
+function readyView(): ReadyCheckView | null {
+    const c = units.readyCheck;
+    if (!c) return null;
+    const expiresIn = c.expiresAt - nowS();
+    if (expiresIn <= 0) {
+        units.readyCheck = null;
+        if (units.unit) units.unit.locked = false;
+        return null;
+    }
+    return {
+        typeLabel: c.typeLabel,
+        expiresIn,
+        ready: c.ready,
+        waiting: c.waiting,
+        waitingForMe: c.waiting.includes(ME_SRC),
+    };
 }
+
+function pushUnit() {
+    emitDebug('push', { topic: 'unit', data: { unitId: units.unit?.id ?? false, readyCheck: readyView() } }, 50);
+}
+
+function targetOf(payload: unknown): number {
+    return Number(typeof payload === 'object' && payload ? (payload as { targetSrc?: number }).targetSrc : payload);
+}
+
+function managed(): MockUnit {
+    const u = units.unit;
+    if (!u) throw new Error('err.unit_none');
+    if (u.locked) throw new Error('err.unit_locked');
+    if (u.leader !== ME_SRC) throw new Error('err.unit_not_leader');
+    return u;
+}
+
+registerMock('action', 'server:unitKick', (payload: unknown) => {
+    const u = managed();
+    const src = targetOf(payload);
+    const m = u.members.find(x => x.src === src);
+    if (!m) throw new Error('err.unit_not_member');
+    u.members = u.members.filter(x => x !== m);
+    if (u.members.length === 0) units.unit = null;
+    pushUnit();
+    return { kicked: src };
+});
+
+registerMock('action', 'server:unitPromote', (payload: unknown) => {
+    const u = managed();
+    const src = targetOf(payload);
+    if (!u.members.some(x => x.src === src)) throw new Error('err.unit_not_member');
+    u.leader = src;
+    pushUnit();
+    return { leader: src };
+});
+
+registerMock('action', 'server:unitDisband', () => {
+    const u = managed();
+    units.pool.push(...u.members, ...u.pending.map(x => x.p));
+    units.unit = null;
+    pushUnit();
+    return { disbanded: true };
+});
+
+registerMock('action', 'server:unitCancelInvite', (payload: unknown) => {
+    const u = units.unit;
+    if (!u) throw new Error('err.unit_none');
+    const src = targetOf(payload);
+    const inv = u.pending.find(x => x.p.src === src);
+    if (!inv) throw new Error('err.unit_no_invite_sent');
+    u.pending = u.pending.filter(x => x !== inv);
+    units.pool.push(inv.p);
+    pushUnit();
+    return { cancelled: src };
+});
+
+registerMock('action', 'server:unitReady', (payload: unknown) => {
+    const c = units.readyCheck;
+    const accepted = typeof payload === 'boolean' ? payload : !!(payload as { accepted?: boolean })?.accepted;
+    if (!c || !c.waiting.includes(ME_SRC)) throw new Error('err.unit_ready_none');
+    c.waiting = c.waiting.filter(x => x !== ME_SRC);
+    if (!accepted) {
+        units.readyCheck = null;
+        if (units.unit) units.unit.locked = false;
+    } else {
+        c.ready.push(ME_SRC);
+        // The last member answers a moment later.
+        setTimeout(() => {
+            if (units.readyCheck !== c) return;
+            c.ready.push(...c.waiting);
+            c.waiting = [];
+            units.readyCheck = null;
+            units.onRun = true;
+            pushUnit();
+        }, 2500);
+    }
+    pushUnit();
+    return { accepted };
+});
+
+registerMock('action', 'server:leaveOperation', () => {
+    if (!units.operation) throw new Error('err.op_not_joined');
+    if (!units.operation.canLeave) throw new Error('err.op_leave_started');
+    units.operation = null;
+    pushUnit();
+    return { left: true };
+});
 
 registerMock('request', 'getUnit', () => reply(unitView()));
 
@@ -437,12 +646,38 @@ function baseInfo(id: number, missionId: string, launchedAt: number): MockOp['in
             part(P.tom, 'waiting'),
         ];
         ops.op = { info, idleUntil: t + 1520 };
+    } else if (v === 'full') {
+        // Every place taken: two officers wait for a freed place.
+        const info = baseInfo(7, 'gang_shootout', t - 116);
+        info.participants = [P.maria, P.dana, P.tom, P.grace, P.leo, P.ana, P.marcus, P.rosa].map(p => ({
+            ...part(p, 'joined'),
+            canRemove: true,
+        }));
+        info.waitlist = [waiter(P.owen, 1), waiter(P.priya, 2)];
+        info.waitlistEnabled = true;
+        ops.op = { info, joinEndsAt: t + 184 };
     } else {
         const info = baseInfo(7, 'gang_shootout', t - 116);
-        info.participants = [part(P.maria, 'joined'), part(P.dana, 'joined'), part(P.tom, 'joined')];
+        info.participants = [part(P.maria, 'joined'), part(P.dana, 'joined'), part(P.tom, 'joined')].map(p => ({
+            ...p,
+            canRemove: true,
+        }));
+        info.waitlist = [];
+        info.waitlistEnabled = true;
         ops.op = { info, joinEndsAt: t + 184 };
     }
 })();
+
+function waiter(p: Person, position: number): OperationWaitlistEntry {
+    return {
+        src: p.src,
+        name: p.name,
+        callsign: p.callsign,
+        departmentShort: p.departmentShort,
+        position,
+        canRemove: true,
+    };
+}
 
 function tierFor(n: number): string {
     if (n <= 1) return 'standard';
@@ -564,6 +799,28 @@ for (const scope of ['sup', 'admin'] as const) {
         o.joinEndsAt = nowS() + JOIN_WINDOW;
         pushOp();
         return { id: o.info.id };
+    });
+
+    registerMock('action', `server:${scope}:opRemoveJoiner`, (payload: { src?: number; reason?: string } | null) => {
+        const o = ops.op;
+        if (!o) throw new Error('err.op_none');
+        if (o.info.status !== 'joining') throw new Error('err.op_remove_started');
+        const reason = String(payload?.reason ?? '').trim();
+        if (!reason) throw new Error('err.op_reason_required');
+        const src = Number(payload?.src);
+        const wasJoined = o.info.participants.some(p => p.src === src);
+        const waits = o.info.waitlist ?? [];
+        if (!wasJoined && !waits.some(w => w.src === src)) throw new Error('err.op_not_joined');
+        o.info.participants = o.info.participants.filter(p => p.src !== src);
+        let rest = waits.filter(w => w.src !== src);
+        if (wasJoined && rest.length) {
+            const first = rest[0];
+            o.info.participants.push({ ...part({ ...first, rank: '' }, 'joined'), canRemove: true });
+            rest = rest.slice(1);
+        }
+        o.info.waitlist = rest.map((w, i) => ({ ...w, position: i + 1 }));
+        pushOp();
+        return { removed: src };
     });
 
     registerMock('action', `server:${scope}:opCancel`, (payload: { reason?: string } | null) => {

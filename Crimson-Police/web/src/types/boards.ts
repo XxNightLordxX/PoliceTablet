@@ -1,11 +1,29 @@
 // Shapes of the boards slice (modules/leaderboard, modules/challenge).
 
-import type { Board, BoardRow, ChallengeView, Profile, ProfileRun } from '../shared/types';
+import type { Avatar, Board, BoardRow, ChallengeView, LevelInfo, Profile, ProfileRun } from '../shared/types';
+import type { Commendation } from './profile';
 
 export type BoardPeriod = 'weekly' | 'monthly' | 'season' | 'alltime';
 
+// Rank by (Config.Leaderboard.metrics). points ranks by XP on the All-time tab.
+export type BoardMetric =
+    'points' | 'missions' | 'arrests' | 'impounds' | 'citations' | 'rescues' | 'calls' | 'judgement';
+
+// A board row with its metric value (judgement: the Best share in percent), level number and picture.
+export interface BoardRowView extends BoardRow {
+    value?: number;
+    metric?: string;
+    level?: { n: number; badge: string };
+    avatar?: Avatar;
+}
+
 // getBoard reply: Board (§9.4) plus window/season details. me.rank = 0 means "not ranked yet".
-export interface BoardView extends Board {
+export interface BoardView extends Omit<Board, 'rows' | 'me'> {
+    rows: BoardRowView[];
+    me: BoardRowView | null;
+    metric?: string;
+    // Judgement: the decisions an officer needs in the window
+    minDecisions?: number | null;
     department?: string;
     minRuns?: number;
     topN?: number;
@@ -59,6 +77,7 @@ export interface Contributor {
     points: number;
     runs?: number;
     active?: boolean;
+    avatar?: Avatar | null;
 }
 
 // getChallenge reply: ChallengeView (§9.4) plus the optional extras.
@@ -88,12 +107,50 @@ export interface DeptContributors {
     contributors: Contributor[];
 }
 
+// The service record (counted completed rows only; runs and success rate also count failed rows). successRate is a
+// percentage; avgResponseS is null without a claimed call.
+export interface ServiceStats {
+    completed: number;
+    failed: number;
+    successRate: number;
+    arrests: number;
+    citations: number;
+    impounds: number;
+    vehiclesStopped: number;
+    rescues: number;
+    evidence: number;
+    decisionsOk: number;
+    decisionsBest: number;
+    decisionsBad: number;
+    calls: number;
+    avgResponseS: number | null;
+    // completed runs that earned the rapid_response bonus
+    rapidResponses?: number;
+    medals: { gold: number; silver: number; bronze: number };
+}
+
+export interface PersonalBest {
+    missionId?: string;
+    missionLabel: string;
+    durationS: number;
+}
+
 // getProfile reply: Profile (§9.4) plus extras. Public profiles: cash 0, cashStatus '', breakdown.cash missing.
-export interface ProfileData extends Omit<Profile, 'badges'> {
+export interface ProfileData extends Omit<Profile, 'badges' | 'level'> {
     badges: { id: string; label: string; earnedAt: string; kind?: 'week' | 'champion' | 'top10' | 'achievement' }[];
+    level: LevelInfo & { next?: number | null };
     departmentLabel?: string;
     seasonPoints?: number;
     disputeWindowHours?: number;
+    bio?: string | null;
+    avatar?: Avatar;
+    commendations?: Commendation[];
+    mdtCommendations?: { title: string; by: string; at: number }[] | null;
+    service?: { lifetime: ServiceStats | null; season: ServiceStats | null };
+    bests?: PersonalBest[];
+    favouritePartner?: { name: string; callsign: string | null; runs?: number } | null;
+    // own profile only: arrests ÷ (arrests + suspects killed), in percent
+    cleanArrestRate?: number | null;
 }
 export type ProfileRunView = ProfileRun & { createdTs?: number };
 
@@ -145,6 +202,7 @@ export interface AdminRun {
 export interface AdminBoards {
     period: string;
     filter: string;
+    metric?: string;
     department?: string;
     rows: AdminBoardRow[];
     unranked: AdminBoardRow[];
@@ -233,6 +291,14 @@ export interface ReportOfficer {
     cash: number;
     lastRunAt: string;
     lastRunTs: number;
+    // this week's counted completed rows
+    arrests?: number;
+    citations?: number;
+    impounds?: number;
+    decisionsOk?: number;
+    decisionsBest?: number;
+    decisionsBad?: number;
+    calls?: number;
 }
 
 // sup:getDeptReport
@@ -249,6 +315,7 @@ export interface DeptReport {
 
 export interface ActivityRun {
     id: number;
+    runUuid?: string;
     missionLabel: string;
     missionType: string;
     state: string;
@@ -272,6 +339,8 @@ export interface OfficerActivity {
     officer: { citizenid: string; name: string; callsign: string | null; rank: string; departmentShort: string };
     week: { key: string; startsAt: number };
     runs: ActivityRun[];
+    // active commendations, newest first (mine = the viewer issued it)
+    commendations?: Commendation[];
 }
 
 // Lua encodes an empty table as {} (not []): anything that is not an array is an empty list.

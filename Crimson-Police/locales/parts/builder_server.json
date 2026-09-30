@@ -101,5 +101,7 @@
   "builder.error.time_limit": "The time limit must be {min}–{max} minutes.",
   "builder.error.type_required": "Pick a mission type: it sets the points and the base payout.",
   "builder.error.unknown_block": "Objective {n} uses a block that does not exist.",
-  "builder.error.vehicle_penalties": "Vehicle-damage penalties must be on or off."
+  "builder.error.vehicle_penalties": "Vehicle-damage penalties must be on or off.",
+  "builder.block.field_contact": "Field contact",
+  "builder.block.process_scene": "Process the scene"
 }

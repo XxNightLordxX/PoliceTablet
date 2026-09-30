@@ -18,13 +18,15 @@ import {
     SearchInput,
     Stat,
     Table,
+    Textarea,
+    Field,
     type TableColumn,
 } from '../../shared/components';
 import { cx } from '../../shared/cx';
 import { formatDateTime, formatDuration, formatMoney, formatNumber } from '../../shared/format';
-import { useRequest } from '../../shared/hooks';
+import { useAction, useRequest } from '../../shared/hooks';
 import { t } from '../../shared/i18n';
-import { useSession } from '../../shared/session';
+import { useCan, useSession } from '../../shared/session';
 import {
     asList,
     type ActivityRun,
@@ -35,10 +37,25 @@ import {
 import { BountyCard } from '../../officer/screens/Challenge';
 import { formatDay } from '../../officer/screens/Leaderboard';
 import { ResultCell, missionTypeLabel } from '../../officer/screens/Profile';
+import { CommendationsCard } from '../../officer/components/CommendationsCard';
+import type { Commendation } from '../../types/profile';
+import { CommendDialog } from '../components/CommendDialog';
 import './DeptReport.css';
+
+// Best dispositions as a share of all of them ("–" without decisions).
+function judgementText(o: ReportOfficer): string {
+    const total = (o.decisionsOk ?? 0) + (o.decisionsBad ?? 0);
+    if (total <= 0) return '–';
+    return `${Math.round(((o.decisionsBest ?? 0) * 1000) / total) / 10}%`;
+}
 
 function ActivityDialog({ officer, onClose }: { officer: ReportOfficer | null; onClose: () => void }) {
     const session = useSession();
+    const can = useCan();
+    const [commending, setCommending] = useState(false);
+    const [revoking, setRevoking] = useState<Commendation | null>(null);
+    const [revokeReason, setRevokeReason] = useState('');
+    const { run: act, busy } = useAction();
     const { data, loading, error, refetch } = useRequest<OfficerActivity>(
         'sup:getOfficerActivity',
         { citizenid: officer?.citizenid },
@@ -46,6 +63,21 @@ function ActivityDialog({ officer, onClose }: { officer: ReportOfficer | null; o
     );
     const current = data && data.officer?.citizenid === officer?.citizenid ? data : null;
     const runs = asList(current?.runs);
+    const commendations = asList(current?.commendations);
+
+    // Revoke: only the issuer's own commendations (the server checks it too), with a reason.
+    async function revoke() {
+        if (!revoking || revokeReason.trim() === '') return;
+        const res = await act(
+            'server:sup:revokeCommendation',
+            { id: revoking.id, reason: revokeReason.trim() },
+            { success: 'profile.commend.revoked_toast' },
+        );
+        if (!res.ok) return;
+        setRevoking(null);
+        setRevokeReason('');
+        void refetch();
+    }
     const columns: TableColumn<ActivityRun>[] = [
         {
             key: 'createdAt',
@@ -120,11 +152,69 @@ function ActivityDialog({ officer, onClose }: { officer: ReportOfficer | null; o
                     : undefined
             }
             footer={
-                <Button variant="primary" onClick={onClose}>
-                    {t('common.close')}
-                </Button>
+                <>
+                    {officer && can('issueCommendation') && officer.citizenid !== session.officer?.citizenid ? (
+                        <Button variant="secondary" icon="medal" onClick={() => setCommending(true)}>
+                            {t('profile.commend.give')}
+                        </Button>
+                    ) : null}
+                    <Button variant="primary" onClick={onClose}>
+                        {t('common.close')}
+                    </Button>
+                </>
             }
         >
+            <CommendDialog
+                open={commending}
+                onClose={() => setCommending(false)}
+                officer={officer ? { citizenid: officer.citizenid, name: officer.name } : null}
+                scope="sup"
+                onDone={() => void refetch()}
+                runs={runs
+                    .filter(r => !!r.runUuid && r.state === 'completed')
+                    .map(r => ({
+                        runUuid: r.runUuid as string,
+                        label: `${r.missionLabel} · ${formatDateTime(r.createdAt)}`,
+                    }))}
+            />
+            <Dialog
+                open={!!revoking}
+                onClose={() => setRevoking(null)}
+                size="sm"
+                title={t('profile.commend.revoke_title')}
+                description={t('profile.commend.revoke_text')}
+                footer={
+                    <>
+                        <Button variant="ghost" onClick={() => setRevoking(null)}>
+                            {t('common.cancel')}
+                        </Button>
+                        <Button
+                            variant="danger"
+                            icon="xCircle"
+                            loading={busy}
+                            disabled={revokeReason.trim() === ''}
+                            onClick={() => void revoke()}
+                        >
+                            {t('profile.commend.revoke')}
+                        </Button>
+                    </>
+                }
+            >
+                <Field label={t('profile.commend.revoke_reason')}>
+                    <Textarea value={revokeReason} onChange={setRevokeReason} maxLength={255} rows={2} />
+                </Field>
+            </Dialog>
+            {commendations.length ? (
+                <CommendationsCard
+                    commendations={commendations}
+                    onRevoke={c => {
+                        if (!c.mine) return;
+                        setRevokeReason('');
+                        setRevoking(c);
+                    }}
+                    canRevoke={c => c.mine === true}
+                />
+            ) : null}
             {error && !current ? (
                 <ErrorState compact error={error} onRetry={() => void refetch()} />
             ) : (
@@ -204,6 +294,45 @@ export default function DeptReport() {
             render: o => (
                 <span className="boards-muted">{`${formatNumber(o.failed)} / ${formatNumber(o.abandoned)}`}</span>
             ),
+        },
+        {
+            key: 'arrests',
+            header: t('sup.report.col.arrests'),
+            numeric: true,
+            width: 70,
+            render: o => formatNumber(o.arrests ?? 0),
+        },
+        {
+            key: 'citations',
+            header: t('sup.report.col.citations'),
+            numeric: true,
+            width: 70,
+            render: o => formatNumber(o.citations ?? 0),
+        },
+        {
+            key: 'impounds',
+            header: t('sup.report.col.impounds'),
+            numeric: true,
+            width: 74,
+            render: o => formatNumber(o.impounds ?? 0),
+        },
+        {
+            key: 'judgement',
+            header: t('sup.report.col.judgement'),
+            numeric: true,
+            width: 84,
+            render: o => (
+                <span title={t('sup.report.judgement_hint', { best: o.decisionsBest ?? 0, ok: o.decisionsOk ?? 0 })}>
+                    {judgementText(o)}
+                </span>
+            ),
+        },
+        {
+            key: 'calls',
+            header: t('sup.report.col.calls'),
+            numeric: true,
+            width: 64,
+            render: o => formatNumber(o.calls ?? 0),
         },
         {
             key: 'points',

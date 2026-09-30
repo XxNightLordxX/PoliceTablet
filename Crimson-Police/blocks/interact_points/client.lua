@@ -12,6 +12,8 @@ local ANIMS = {
     search = { dict = 'amb@prop_human_bum_bin@base', clip = 'base', flag = 1 },
     kneel = { dict = 'amb@medic@standing@kneel@base', clip = 'base', flag = 1 },
     mechanic = { dict = 'mini@repair', clip = 'fixing_a_ped', flag = 1 },
+    notepad = { scenario = 'CODE_HUMAN_MEDIC_TIME_OF_DEATH' },
+    photo = { scenario = 'WORLD_HUMAN_PAPARAZZI' },
 }
 
 local live = {}     -- [state] = ctx, for resource-stop cleanup
@@ -76,9 +78,18 @@ local function BaseLine(ctx, st)
     local d = st.data
     if not d then return nil end
     if d.hidden then
-        return CP.L('block.interact_points.hud.devices', { found = d.found or 0, total = d.total or 0 })
+        local key = d.seize and 'block.interact_points.hud.seize' or 'block.interact_points.hud.devices'
+        return CP.L(key, { found = d.found or 0, total = d.total or 0 })
     end
     local text = CP.L('block.interact_points.hud.points', { done = d.done or 0, total = d.total or 0 })
+    if d.together then
+        text = text
+            .. ' · '
+            .. CP.L('block.interact_points.hud.together', {
+                count = d.together.count,
+                window = d.together.window or 6,
+            })
+    end
     if d.log then text = text .. ' · ' .. CP.L('block.interact_points.hud.log') end
     return text
 end
@@ -199,6 +210,10 @@ local function AddZone(ctx, st, n, kind, p)
         label = Txt(target.label)
             or CP.L(st.hidden and 'block.interact_points.target_search' or 'block.interact_points.target_default')
         duration = tonumber(progress.duration) or (Config.Blocks[BLOCK].progress[3] * 1000)
+        -- a together step with one participant left: the solo progress time (the server checks it)
+        if st.data and st.data.solo and tonumber(st.data.soloProgress) then
+            duration = tonumber(st.data.soloProgress)
+        end
         barLabel = Txt(progress.label) or CP.L('block.interact_points.progress_default')
     else
         local f = p.followUp or {}
@@ -207,7 +222,7 @@ local function AddZone(ctx, st, n, kind, p)
         barLabel = label
     end
     local wantStatus = (kind == 'main') and 'pending' or 'followup'
-    local name = ZoneName(ctx, n, kind)
+    local name = ZoneName(ctx, n, kind .. (st.data and st.data.solo and ':solo' or ''))
     local id = exports.ox_target:addSphereZone({
         coords = V3(p.coords),
         radius = tonumber(target.radius) or 1.5,
@@ -230,15 +245,16 @@ local function AddZone(ctx, st, n, kind, p)
             },
         },
     })
-    st.zones[n] = { id = id, kind = kind }
+    st.zones[n] = { id = id, kind = kind, solo = st.data and st.data.solo == true }
 end
 
 local function SyncZones(ctx, st)
     local pts = (st.data and st.data.points) or {}
+    local solo = st.data and st.data.solo == true
     for n, p in ipairs(pts) do
         local want = (p.status == 'pending' and 'main') or (p.status == 'followup' and 'follow') or nil
         local z = st.zones[n]
-        if z and z.kind ~= want then
+        if z and (z.kind ~= want or z.solo ~= solo) then
             RemoveZone(st, n)
             z = nil
         end
@@ -288,10 +304,24 @@ local function Announce(ctx, st, prev, data)
     for n, p in ipairs(data.points or {}) do
         local old = oldPts[n]
         if old and old.status ~= p.status then
-            if data.hidden and p.status == 'done' then
+            if p.status == 'held' then
+                Say(st, CP.L('block.interact_points.hud.held'))
+            elseif data.hidden and p.status == 'followup' then
+                local what = Txt(ctx.obj.hidden and ctx.obj.hidden.label) or CP.L('block.interact_points.seize_default')
+                local f = p.followUp or {}
+                Say(st, CP.L('block.interact_points.hud.found_seize',
+                    { label = what, action = Txt(f.label) or CP.L('block.interact_points.followup_default') }))
+                PlaySoundFrontend(-1, 'CHECKPOINT_NORMAL', 'HUD_MINI_GAME_SOUNDSET', false)
+            elseif p.find and p.status == 'done' then
+                Say(st, CP.L('block.interact_points.hud.find',
+                    { item = CP.L(('block.interact_points.find.%s'):format(p.find)) }))
+            elseif data.hidden and p.status == 'done' then
                 if p.found then
                     local what = Txt(ctx.obj.hidden and ctx.obj.hidden.label)
-                        or CP.L('block.interact_points.device_default')
+                        or CP.L(
+                            data.seize and 'block.interact_points.seize_default'
+                                or 'block.interact_points.device_default'
+                        )
                     Say(st, CP.L('block.interact_points.hud.found', { label = what }))
                     PlaySoundFrontend(-1, 'CHECKPOINT_NORMAL', 'HUD_MINI_GAME_SOUNDSET', false)
                 else

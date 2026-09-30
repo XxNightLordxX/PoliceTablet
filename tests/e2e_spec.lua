@@ -361,6 +361,21 @@ for _ = 1, 3 do
     H.step(1000)
 end -- start threads (mission loader, hooks, payouts cache)
 
+-- The unit ready check (tests/teams_spec.lua covers it): here every member answers Ready at once, as each
+-- officer tapping Ready on the tablet would.
+do
+    local realCheck = CP.Units.readyCheck
+    CP.Units.readyCheck = function(unit, typeKey, onReady, onCancel)
+        local started = realCheck(unit, typeKey, onReady, onCancel)
+        if started then
+            for _, m in ipairs(CP.U.copy(unit.members)) do
+                if m ~= unit.leader then H.fire('crimson-police:server:unitReady', m, { accepted = true }) end
+            end
+        end
+        return started
+    end
+end
+
 -- ============================================================================
 --               TIME: GetGameTimer and os.time advance together
 -- ============================================================================
@@ -460,7 +475,7 @@ end
 
 do
     local src, cid = 1, CID[1]
-    Config.DisabledMissions = { 'business_check', 'street_race_bust' }   -- the Patrol pool is Beat Patrol only
+    Config.DisabledMissions = { 'business_check', 'street_race_bust', 'parking_patrol', 'traffic_enforcement' }   -- the Patrol pool is Beat Patrol only
     local chance = Config.Events.modifierChance
     Config.Events.modifierChance = 0
     -- two earlier completed runs this week (yesterday) so this run is the third one the board needs
@@ -606,7 +621,14 @@ end
 --                            GANG SHOOTOUT HELPERS
 -- ============================================================================
 
-local TACTICAL_OTHERS = { 'hostage_rescue', 'bomb_disposal', 'armored_truck_escort', 'prison_break' }
+local TACTICAL_OTHERS = {
+    'hostage_rescue',
+    'bomb_disposal',
+    'armored_truck_escort',
+    'prison_break',
+    'drug_lab_raid',
+    'gang_hideout_raid',
+}
 local function FormUnit(leader, member)
     local ok, data = Act('server:unitInvite', leader, member)
     H.eq(ok, true, ('unit invite %d -> %d: %s'):format(leader, member, tostring(data)))
@@ -638,11 +660,41 @@ local function ClearHostiles(run, killer, maxSeconds)
     end
     return killed
 end
+-- Walk src to c at a believable pace (at most 40 m/s): a body can fall more than 80 m from the scene, and a jump
+-- there in one second trips the speed check (CP.AntiCheat.maxSpeed) and flags the whole run.
+local function WalkTo(src, c)
+    local at = H.players[src].coords
+    local dx, dy, dz = c.x - at.x, c.y - at.y, c.z - at.z
+    local dist = math.sqrt(dx * dx + dy * dy + dz * dz)
+    if dist > 40.0 then Secs(math.ceil(dist / 40.0)) end
+    Place(src, c)
+end
+-- Process the scene (Gang Shootout's objective 3): photograph, tag and bag every kept body, then release at the
+-- scene marker (no coroner van on this card).
+local function ProcessScene(run, src, index)
+    if run.state ~= 'in_progress' or run.objectiveIndex ~= index then return end
+    for _, b in ipairs(CP.Runs.heldBodies(run)) do
+        WalkTo(src, b.coords)
+        for _, step in ipairs({ 'tag', 'bag' }) do
+            Objective(src, run, index, { type = step .. '_begin', netId = b.netId })
+            Secs(step == 'tag' and 6 or 7)
+            Objective(src, run, index, { type = step, netId = b.netId })
+            Secs(1)
+        end
+    end
+    if run.state ~= 'in_progress' or run.objectiveIndex ~= index then return end
+    WalkTo(src, run.location.scene)
+    Objective(src, run, index, { type = 'release_begin' })
+    Secs(9)
+    Objective(src, run, index, { type = 'release' })
+    Secs(2)
+end
 local function SecureScene(run, src)
     Place(src, run.location.scene)
     Secs(10)
     Objective(src, run, 2, { type = 'interact', point = 1 })
     Secs(2)
+    ProcessScene(run, src, 3)
 end
 local function WaveTotal(list)
     local n = 0
@@ -885,7 +937,7 @@ end
 -- Failed, NPC pick-up, flag cleared.
 
 do
-    Config.DisabledMissions = { 'business_check', 'street_race_bust' }
+    Config.DisabledMissions = { 'business_check', 'street_race_bust', 'parking_patrol', 'traffic_enforcement' }
     doctors = 0
     local src = 6
     Place(src, vec3(100.0, -1300.0, 29.0))
@@ -960,7 +1012,7 @@ do
     Place(10, run.location.start.coords)
     Place(11, run.location.start.coords)
     ClearHostiles(run, 10)
-    H.eq(run.objectiveIndex, 2, 'objective 1 of 2 done together')
+    H.eq(run.objectiveIndex, 2, 'objective 1 of 3 done together')
     local mark = #H.events
     PD[11].metadata.inlaststand = true
     Secs(3)
@@ -970,7 +1022,8 @@ do
     local r11 = Rows('run_uuid = ? AND citizenid = ?', { run.id, CID[11] })[1] or {}
     H.eq(r11.state, 'failed', 'downed row failed')
     H.eq(r11.end_reason, 'downed', 'end_reason downed')
-    H.eq(r11.final_points, math.floor(0.25 * 200 * (1 / 2)), 'Failed: 25% of P x the share of objectives done (1 of 2)')
+    H.eq(r11.final_points, math.floor(0.25 * 200 * (1 / 3)),
+        'Failed: 25% of P x the share of objectives done (1 of 3: Gang Shootout now processes the scene)')
     H.eq(Flag(11), nil, 'EMS on duty: the flag is removed before the EMS request')
     H.eq(#ClientEvents('crimson-police:client:requestEMS', 11, mark), 1, 'the EMS request is sent from their client')
     H.eq(#ClientEvents('crimson-police:client:pickup', 11, mark), 0, 'no NPC pick-up while EMS is on duty')
@@ -1235,7 +1288,7 @@ end
 -- ============================================================================
 
 local function StartPatrol(src)
-    Config.DisabledMissions = { 'business_check', 'street_race_bust' }
+    Config.DisabledMissions = { 'business_check', 'street_race_bust', 'parking_patrol', 'traffic_enforcement' }
     Place(src, vec3(150.0, -1200.0, 29.0))
     local ok, data = Act('server:acceptType', src, 'patrol')
     H.eq(ok, true, ('%s accepts Patrol: %s'):format(CID[src], tostring(data)))
@@ -1582,7 +1635,7 @@ end
 do
     local chance = Config.Events.modifierChance
     Config.Events.modifierChance = 0
-    Config.DisabledMissions = { 'business_check', 'street_race_bust' }
+    Config.DisabledMissions = { 'business_check', 'street_race_bust', 'parking_patrol', 'traffic_enforcement' }
     H.sql([[INSERT INTO mdt_dispatch (id, type, message, active, unique_id) VALUES
         (701, '10-50 - Vehicle Crash', 'real call 3b', 1, 'call_3b'), (702, '911', 'real call 3c', 1, 'call_3c')]])
     Place(2, vec3(150.0, -1200.0, 29.0))

@@ -152,6 +152,8 @@ local function Body()
         'pursuit',
         'escort',
         'search_area',
+        'field_contact',
+        'process_scene',
     }) do
         H.load('blocks/' .. b .. '/server.lua')
     end
@@ -168,7 +170,7 @@ local function Body()
         local def = CP.Missions.get(id)
         H.ok(def ~= nil and def.source == 'builtin', id .. ': loaded by the real loader as a built-in')
     end
-    H.eq(#BUILTINS, 14, 'fourteen built-in missions')
+    H.eq(#BUILTINS, 19, 'nineteen built-in missions (18 and the Weekly Boss)')
 
     -- ---- HELPERS: actions through CP.Net -----------------------------------
     local reqN = 0
@@ -253,7 +255,7 @@ local function Body()
             end
         end
     end
-    H.eq(published, 14, 'all 14 built-in missions duplicated, tested and published')
+    H.eq(published, 19, 'all 19 built-in missions duplicated, tested and published')
     H.eq(#B.onReload().rejected, 0, 'a reload rejects none of the published copies')
 
     -- ---- A CUSTOM MISSION PUBLISHED BEFORE THE RENAME (policeVehicle) keeps loading, silently ----

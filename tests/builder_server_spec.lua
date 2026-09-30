@@ -258,6 +258,8 @@ local function Body()
         'pursuit',
         'escort',
         'search_area',
+        'field_contact',
+        'process_scene',
     }) do
         local ok, err = pcall(H.load, 'blocks/' .. b .. '/server.lua')
         if not ok then print('  (block ' .. b .. ' did not load: ' .. tostring(err) .. ')') end
@@ -802,6 +804,129 @@ local function Body()
         H.eq(pr.objectives[2].arrest.duration, 3000, 'arrest ms')
     end
 
+    -- ══ parity-plus: field_contact and process_scene drafts ═════════════════
+    local function withScene(d)
+        for _, loc in ipairs(d.locations) do
+            local c = loc.start.coords
+            loc.car = { x = c.x + 45.0, y = c.y + 50.0, z = 21.5, w = 180.0 }
+            loc.peopleSpots = {
+                { x = c.x + 48.0, y = c.y + 52.0, z = 21.5, w = 90.0 },
+                { x = c.x + 50.0, y = c.y + 54.0, z = 21.5, w = 90.0 },
+                { x = c.x + 52.0, y = c.y + 56.0, z = 21.5, w = 90.0 },
+            }
+            loc.fleeTo = { x = c.x + 120.0, y = c.y + 60.0, z = 21.5 }
+            loc.scene = { x = c.x + 40.0, y = c.y + 40.0, z = 21.2 }
+            loc.coroner = { x = c.x + 90.0, y = c.y + 70.0, z = 21.5, w = 0.0 }
+        end
+        d.objectives[3] = {
+            block = 'field_contact',
+            label = 'Question the loiterers',
+            minSeconds = 30,
+            presenceRange = 150,
+            mode = 'scene',
+            people = 3,
+            cars = 1,
+            profileSet = 'scene',
+            approach = 25,
+            probableCause = true,
+            custody = 'cuff',
+            returning = { chance = 25, max = 1 },
+            escapeFails = true,
+            bestPoints = 10,
+            car = 'car',
+            peopleSpots = 'peopleSpots',
+            fleeTo = 'fleeTo',
+        }
+        d.objectives[4] = {
+            block = 'process_scene',
+            label = 'Process the scene',
+            minSeconds = 5,
+            presenceRange = 150,
+            scene = 'scene',
+            coroner = 'coroner',
+            bodies = 4,
+            tag = { duration = 5 },
+            bag = { duration = 6 },
+            release = { duration = 8 },
+            aliveBonus = { id = 'all_taken_alive' },
+        }
+        return d
+    end
+    do
+        local d = B.sanitize(withScene(validDef()), 'custom_dockside_raid')
+        local errors, info = B.validate(d, { publish = true })
+        H.eq(keysOf(errors), '', 'a draft with field_contact and process_scene passes every guardrail')
+        H.eq(info.armed, 16, 'field_contact scene people count against the armed budget (13 + 3)')
+        local over = U.deepcopy(d)
+        over.objectives[1].waves = { 20, 18 } -- 38 + 3 people > 40, 38 alone fits
+        H.ok(hasError(B.validate(over), 'builder.error.armed_budget'),
+            'the armed budget includes the field_contact people')
+        over.objectives[3] = nil
+        over.objectives[4] = nil
+        H.ok(not hasError(B.validate(over), 'builder.error.armed_budget'), 'the same waves alone fit the budget')
+        -- a reward-like field on the new blocks is refused (payout stripped, points hints stripped)
+        local raw = withScene(validDef())
+        raw.objectives[3].payout = 500
+        raw.objectives[4].aliveBonus = { id = 'all_taken_alive', points = 999 }
+        raw.objectives[3].allCorrect = { id = 'all_correct', points = 99 }
+        local clean, _, sinfo = B.sanitize(raw, 'custom_dockside_raid')
+        H.ok(sinfo.payout, 'a payout on a field_contact objective is reported')
+        H.eq(clean.objectives[3].payout, nil, 'the field_contact payout is stripped')
+        B.customBonusFields(clean)
+        H.eq(clean.objectives[4].aliveBonus.points, nil, 'process_scene aliveBonus points are stripped')
+        H.eq(clean.objectives[4].aliveBonus.id, 'all_taken_alive', 'process_scene keeps the bonus id')
+        H.eq(clean.objectives[3].allCorrect.points, nil, 'field_contact allCorrect points are stripped')
+        local sk = { objectives = { { block = 'skill_check', onFail = { setback = { penalty = 'free_money' } } } } }
+        B.customBonusFields(sk)
+        H.eq(sk.objectives[1].onFail.setback.penalty, nil,
+            'a skill_check setback penalty outside Config.Bonuses is dropped')
+        -- units: process_scene seconds, parity percents, and a Lua export round trip
+        local f = B.toFileUnits(d)
+        H.eq(f.objectives[4].tag.duration, 5000, 'process_scene tag seconds -> ms')
+        H.eq(f.objectives[4].release.duration, 8000, 'process_scene release seconds -> ms')
+        H.near(f.objectives[3].returning.chance, 0.25, 1e-12, 'field_contact returning percent -> fraction')
+        local back = B.fromFileUnits(f)
+        local ok, why = Deq(Plain(back), Plain(d))
+        H.ok(ok, 'field_contact / process_scene units round trip: ' .. tostring(why))
+        local text = B.exportLua(d, { version = 1, publisher = 'x', at = os.time() })
+        local parsed = B.parse(text, '@scene_export')
+        H.ok(parsed ~= nil, 'the export with the new blocks parses back')
+        if parsed then
+            local okP, whyP = Deq(Plain(B.fromFileUnits(parsed)), Plain(d))
+            H.ok(okP, 'Lua export -> parse -> builder units round trip: ' .. tostring(whyP))
+        end
+        local pu = B.toFileUnits({
+            objectives = {
+                {
+                    block = 'pursuit',
+                    responses = { yield = 25, flee = 65, fight = 10 },
+                    driveBy = 50,
+                    observe = { kinds = { pace = 60, follow = 40 } },
+                },
+                {
+                    block = 'interact_points',
+                    finds = { chance = 60 },
+                    together = { soloProgress = 8 },
+                    hidden = { action = { duration = 4 } },
+                },
+                { block = 'skill_check', onFail = { setback = { duration = 10 } } },
+                { block = 'flee_arrest', feint = 20, demeanour = { compliant = 50, runner = 50 } },
+                { block = 'hostile_waves', behaviour = { hold = 30, balanced = 40, push = 30 } },
+            },
+        })
+        local o = pu.objectives
+        H.near(o[1].responses.flee, 0.65, 1e-12, 'pursuit responses percent -> fraction')
+        H.near(o[1].driveBy, 0.5, 1e-12, 'pursuit driveBy percent -> fraction')
+        H.near(o[1].observe.kinds.follow, 0.4, 1e-12, 'pursuit observe kinds percent -> fraction')
+        H.near(o[2].finds.chance, 0.6, 1e-12, 'interact_points finds percent -> fraction')
+        H.eq(o[2].together.soloProgress, 8000, 'together.soloProgress seconds -> ms')
+        H.eq(o[2].hidden.action.duration, 4000, 'hidden.action seconds -> ms')
+        H.eq(o[3].onFail.setback.duration, 10000, 'skill_check setback seconds -> ms')
+        H.near(o[4].feint, 0.2, 1e-12, 'flee_arrest feint percent -> fraction')
+        H.near(o[4].demeanour.runner, 0.5, 1e-12, 'flee_arrest demeanour percent -> fraction')
+        H.near(o[5].behaviour.push, 0.3, 1e-12, 'hostile_waves behaviour percent -> fraction')
+    end
+
     -- ══ Lua export: golden text of the spec's custom example ════════════════
     do
         local z3 = { x = 0.0, y = 0.0, z = 0.0 }
@@ -1151,6 +1276,22 @@ local function Body()
         for _, bo in ipairs(conf.bonuses) do if bo.id == 'no_participant_downed' then pctB = bo end end
         H.ok(pctB and pctB.kind == 'pct' and pctB.value == 10, 'bonus list in whole percent')
         H.eq(conf.percentFields.hostile_waves[1], 'surrender.chance', 'percent fields listed')
+        local listed = {}
+        for _, b in ipairs(conf.blockList or {}) do listed[b.id] = b end
+        H.ok(listed.field_contact and listed.field_contact.available and listed.field_contact.minSeconds == 30,
+            'builder:config lists field_contact (min 30 s)')
+        H.ok(listed.process_scene and listed.process_scene.available and listed.process_scene.minSeconds == 5,
+            'builder:config lists process_scene (min 5 s)')
+        H.ok(
+            listed.field_contact and listed.field_contact.presenceRange and listed.field_contact.presenceRange[1] == 50
+                and listed.field_contact.presenceRange[2] == 800,
+            'field_contact presence range 50-800'
+        )
+        H.ok(conf.blocks.field_contact.people[1] == 1 and conf.blocks.field_contact.people[2] == 4,
+            'field_contact people range 1-4')
+        H.ok(conf.blocks.process_scene.bodies[1] == 0 and conf.blocks.process_scene.bodies[2] == 8,
+            'process_scene bodies range 0-8')
+        H.eq(conf.secondsFields.process_scene[1], 'tag.duration', 'process_scene seconds fields listed')
         H.eq(select(2, cb(4, 'builder:list', {})), 'err.no_permission', 'officers get no list')
     end
 
@@ -1467,6 +1608,25 @@ local function Body()
             end
             H.ok(type(copy.objectives[1].surrender) ~= 'table' or copy.objectives[1].surrender.chance >= 1,
                 'copy in builder units (percent)')
+            -- a Builder duplicate of every parity-plus mission (and the retrofits) passes every guardrail
+            for _, m in ipairs({
+                'parking_patrol',
+                'traffic_enforcement',
+                'suspicious_activity',
+                'drug_lab_raid',
+                'gang_hideout_raid',
+                'stolen_vehicle_takedown',
+                'warrant_service',
+                'gang_shootout',
+            }) do
+                local okM, dm = act(2, 'duplicate', { id = m })
+                H.ok(okM, 'duplicate ' .. m .. ': ' .. tostring(okM or dm))
+                if okM then
+                    local d = B.sanitize(dm.record.definition, dm.id)
+                    local errors = B.validate(d, { publish = true })
+                    H.eq(keysOf(errors), '', 'the duplicate of ' .. m .. ' passes every guardrail')
+                end
+            end
         end
     end
 

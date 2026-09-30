@@ -1355,6 +1355,22 @@
     width: 92px;
 }
 
+/* Kerb spots (field_contact parked mode) */
+.builder_client-kerb {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 6px;
+}
+
+.builder_client-kerb__row {
+    display: grid;
+    grid-template-columns: 1fr 160px;
+    align-items: center;
+    gap: 8px;
+    font-size: var(--cp-fs-xs);
+}
+
 .builder_client-paths {
     display: flex;
     flex-wrap: wrap;

@@ -1,6 +1,7 @@
 // Officer UI · Home (screen key 'home', title key 'ui.screen.home').
 
 import {
+    Avatar,
     Badge,
     Button,
     Card,
@@ -23,15 +24,15 @@ import { useNavigate } from '../../shared/navigation';
 import { useSession } from '../../shared/session';
 import type { Goal, HomeData } from '../../shared/types';
 import type { HomeStreak, HomeTypeOfTheDay } from '../../types/economy';
+import type { HomeExtras } from '../../types/profile';
+import { RewardsLocker } from '../components/RewardsLocker';
 import './Home.css';
 
+// getHome plus the parity-plus extras (modules/scoring homeData: missionsToday, the home:extras hook).
+type HomeView = HomeData & { missionsToday?: { n: number; max: number } | null; extras?: HomeExtras | null };
 type Card = HomeData['card'];
-
-function initials(name: string): string {
-    const parts = name.trim().split(/\s+/).filter(Boolean);
-    if (!parts.length) return '?';
-    return (parts[0][0] + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase();
-}
+// card.level is CP.Scoring.xpLevel: the band label and badge plus the number and where the level starts
+type CardLevel = Card['level'] & { n?: number; levelXp?: number; nextLevelXp?: number | null };
 
 function ChampionsBanner({ champions }: { champions: NonNullable<HomeData['champions']> }) {
     return (
@@ -50,9 +51,10 @@ function ChampionsBanner({ champions }: { champions: NonNullable<HomeData['champ
 }
 
 function XpBar({ card }: { card: Card }) {
-    const level = card.level;
-    const next = level.next;
-    if (next === null || next === undefined || next <= level.xp) {
+    const level = card.level as CardLevel;
+    const start = level.levelXp ?? level.xp;
+    const next = level.nextLevelXp !== undefined ? level.nextLevelXp : level.next;
+    if (next === null || next === undefined || next <= start) {
         return (
             <div className="economy-xp">
                 <ProgressBar
@@ -67,8 +69,8 @@ function XpBar({ card }: { card: Card }) {
             </div>
         );
     }
-    const into = Math.max(0, card.xp - level.xp);
-    const span = Math.max(1, next - level.xp);
+    const into = Math.max(0, card.xp - start);
+    const span = Math.max(1, next - start);
     return (
         <div className="economy-xp">
             <ProgressBar
@@ -80,7 +82,9 @@ function XpBar({ card }: { card: Card }) {
                 showValue={t('officer.home.xp_progress', { xp: formatNumber(card.xp), next: formatNumber(next) })}
             />
             <div className="economy-xp__hint">
-                {t('officer.home.xp_to_next', { xp: formatNumber(Math.max(0, next - card.xp)) })}
+                {level.n
+                    ? t('officer.home.xp_to_level', { xp: formatNumber(Math.max(0, next - card.xp)), n: level.n + 1 })
+                    : t('officer.home.xp_to_next', { xp: formatNumber(Math.max(0, next - card.xp)) })}
             </div>
         </div>
     );
@@ -120,7 +124,14 @@ function CardStat({
     );
 }
 
-function OfficerCard({ card }: { card: Card }) {
+function OfficerCard({ card, missionsToday }: { card: Card; missionsToday?: HomeView['missionsToday'] }) {
+    const session = useSession();
+    const level = card.level as CardLevel;
+    const levelText = level.n
+        ? level.label
+            ? t('officer.home.level_named', { n: level.n, label: level.label })
+            : t('officer.home.level', { n: level.n })
+        : level.label;
     const streak = (card.streak ?? { days: 0, graceLeft: false }) as HomeStreak;
     const days = Math.max(0, Math.floor(streak.days ?? 0));
     const graceOff = streak.graceDays === 0;
@@ -138,9 +149,12 @@ function OfficerCard({ card }: { card: Card }) {
             <div className="economy-officer__grid">
                 <div className="economy-officer__main">
                     <div className="economy-officer__who">
-                        <div className="economy-officer__avatar" aria-hidden>
-                            {initials(card.name)}
-                        </div>
+                        <Avatar
+                            avatar={session.officer?.avatar}
+                            name={card.name}
+                            size={56}
+                            className="economy-officer__avatar"
+                        />
                         <div className="economy-officer__ident">
                             <div className="economy-officer__name" title={card.name}>
                                 {card.name}
@@ -158,7 +172,19 @@ function OfficerCard({ card }: { card: Card }) {
                                 </Badge>
                             </div>
                             <div className="economy-officer__level">
-                                <XpBadge badge={card.level.badge} label={card.level.label} />
+                                <XpBadge badge={card.level.badge} label={levelText} />
+                                {missionsToday && missionsToday.max > 0 ? (
+                                    <Badge
+                                        tone={missionsToday.n >= missionsToday.max ? 'warning' : 'neutral'}
+                                        size="sm"
+                                        icon="target"
+                                    >
+                                        {t('officer.home.missions_today', {
+                                            n: missionsToday.n,
+                                            max: missionsToday.max,
+                                        })}
+                                    </Badge>
+                                ) : null}
                             </div>
                         </div>
                     </div>
@@ -286,11 +312,26 @@ const ANNOUNCEMENT_ICONS: Record<string, IconName> = {
     monthly_top: 'podium',
     season: 'flag',
     bounty: 'target',
+    commendation: 'medal',
     info: 'info',
 };
 
-function Announcements({ list }: { list: HomeData['announcements'] }) {
-    const items = asArray(list).filter(a => a && typeof a.text === 'string');
+// "3 mission calls open" with a way to Dispatch (the home:extras callsOpen count).
+function CallsOpen({ n, onOpen }: { n: number; onOpen: () => void }) {
+    if (n <= 0) return null;
+    return (
+        <div className="economy-calls" role="note">
+            <Icon name="radio" size={16} />
+            <span>{t('officer.home.calls_open', { n })}</span>
+            <Button variant="secondary" size="sm" iconRight="chevronRight" onClick={onOpen}>
+                {t('officer.home.open_dispatch')}
+            </Button>
+        </div>
+    );
+}
+
+function Announcements({ list, news }: { list: HomeData['announcements']; news?: HomeExtras['news'] }) {
+    const items = [...asArray(news ?? undefined), ...asArray(list)].filter(a => a && typeof a.text === 'string');
     return (
         <Card title={t('officer.home.announcements')} icon="radio" className="economy-news">
             {items.length === 0 ? (
@@ -314,7 +355,7 @@ function Announcements({ list }: { list: HomeData['announcements'] }) {
 export default function Home() {
     const session = useSession();
     const navigate = useNavigate();
-    const { data, loading, error, refetch } = useRequest<HomeData>('getHome', {}, { pollMs: 60000 });
+    const { data, loading, error, refetch } = useRequest<HomeView>('getHome', {}, { pollMs: 60000 });
     // push 'run' carries the live view every few seconds during a run and no data once it ended (rows,
     // XP, goals and cash are written by then): refetch only on that last push.
     usePush('run', view => {
@@ -339,7 +380,9 @@ export default function Home() {
             {data ? (
                 <>
                     {data.champions ? <ChampionsBanner champions={data.champions} /> : null}
-                    <OfficerCard card={data.card} />
+                    <OfficerCard card={data.card} missionsToday={data.missionsToday} />
+                    <CallsOpen n={data.extras?.callsOpen ?? 0} onOpen={() => navigate('dispatch')} />
+                    <RewardsLocker />
                     <Grid cols={3} gap={4} className="economy-home__row">
                         <GoalCard kind="daily" goal={data.goals?.daily} />
                         <GoalCard kind="weekly" goal={data.goals?.weekly} />
@@ -348,7 +391,7 @@ export default function Home() {
                             onBoard={openBoard}
                         />
                     </Grid>
-                    <Announcements list={data.announcements} />
+                    <Announcements list={data.announcements} news={data.extras?.news} />
                 </>
             ) : null}
         </Screen>

@@ -2,6 +2,7 @@
 
 import { useState, type ReactNode } from 'react';
 import {
+    Avatar,
     Badge,
     Card,
     Dialog,
@@ -256,6 +257,7 @@ function ContributorTiles({ list, onOpen }: { list: Contributor[]; onOpen?: (c: 
                         disabled={!onOpen || !c.citizenid}
                     >
                         <RankCell rank={c.rank ?? i + 1} />
+                        <Avatar avatar={c.avatar} name={c.name} size={28} className="boards-tile__avatar" />
                         <span className="boards-tile__name">{c.name}</span>
                         <span className="boards-tile__callsign">{c.callsign || t('common.no_callsign')}</span>
                         <span className="boards-tile__points cp-num">
@@ -288,8 +290,11 @@ function ContributorsDialog({ dept, onClose }: { dept: ChallengeDepartment | nul
             key: 'name',
             header: t('leaderboard.col.officer'),
             render: c => (
-                <span className="boards-ellipsis boards-officer__name" title={c.name}>
-                    {c.name}
+                <span className="boards-officer">
+                    <Avatar avatar={c.avatar} name={c.name} size={24} />
+                    <span className="boards-ellipsis boards-officer__name" title={c.name}>
+                        {c.name}
+                    </span>
                 </span>
             ),
         },

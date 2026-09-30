@@ -10,5 +10,7 @@
   "err.npc_unknown": "That person is not part of your mission.",
   "err.npc_not_surrendered": "That suspect has not given up.",
   "err.npc_too_far": "You are too far away to cuff them.",
-  "err.npc_too_fast": "Keep cuffing until the bar finishes."
+  "err.npc_too_fast": "Keep cuffing until the bar finishes.",
+  "npc.contact_keybind": "Crimson-Police: contact action (plate, place in vehicle, hand over, escort)",
+  "err.npc_no_handcuffs": "You need handcuffs for that."
 }

@@ -32,8 +32,21 @@ export interface BuilderStart {
 }
 
 // A named placement: a point, a list of points, labelled points, lists of point lists (flee routes) or a road route.
+// A kerb spot of field_contact's parked mode: where the car parks, its posted rule and the street.
+export interface BuilderKerbSpot {
+    coords: Vec;
+    rule: string;
+    street?: string;
+}
+
 export type BuilderLocationValue =
-    Vec | Vec[] | { coords: Vec3; heading?: number; label?: string }[] | Vec3[][] | BuilderRoute;
+    | Vec
+    | Vec[]
+    | { coords: Vec3; heading?: number; label?: string }[]
+    | BuilderKerbSpot[]
+    | Vec3[][]
+    | BuilderRoute
+    | number;
 
 export interface BuilderLocation {
     label: string;
@@ -426,6 +439,8 @@ export interface BuilderPlacePayload {
     spawn: boolean;
     // other locations' starts (kind 'start': >= minLocationGap from each)
     otherStarts: Vec3[];
+    // kerb spots (field_contact parked mode): the result names the street at each point
+    streets?: boolean;
 }
 export interface BuilderRecordPayload {
     missionId: string;
@@ -452,6 +467,8 @@ export type BuilderClientResult =
           key: string;
           points: Vec[];
           radius?: number;
+          // with streets = true: the street name at each point, in point order
+          streets?: string[];
           cancelled: boolean;
       }
     | {

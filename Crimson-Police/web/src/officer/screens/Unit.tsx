@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import {
+    Avatar as ProfileAvatar,
     Badge,
     Button,
     Card,
@@ -17,21 +18,36 @@ import {
     Stack,
 } from '../../shared/components';
 import { asArray } from '../../shared/data';
-import { useAction, useRequest } from '../../shared/hooks';
+import { useAction, usePush, useRequest } from '../../shared/hooks';
 import { t } from '../../shared/i18n';
 import { useNavigate } from '../../shared/navigation';
 import { useSession } from '../../shared/session';
 import { cx } from '../../shared/cx';
 import type {
+    SizeFitEntry,
     UnitInvitableView,
     UnitInviteView,
     UnitLeaveResult,
     UnitMemberView,
+    UnitOperationCard,
     UnitPendingInvite,
     UnitScreenView,
 } from '../../types/teams';
 import { asList, type TestInvite } from '../../types/testing';
+import { ReadyCheckBanner } from '../components/ReadyCheckBanner';
 import './Unit.css';
+
+// A leader control waiting for its confirm dialog.
+type ManageDialog = null | { kind: 'kick' | 'promote'; m: UnitMemberView } | { kind: 'disband' };
+
+// What the rows may do (the leader, or the officer who sent an invite).
+interface RowActions {
+    canManage: boolean;
+    sent: Set<number>;
+    busyKey: string | null;
+    onManage: (d: ManageDialog) => void;
+    onWithdraw: (p: UnitPendingInvite) => void;
+}
 
 const DEFAULT_MAX = 4;
 
@@ -58,10 +74,15 @@ function normalizeView(v: UnitScreenView): UnitScreenView {
             ? {
                   ...unit,
                   locked: !!unit.locked,
+                  canManage: !!unit.canManage,
+                  readyCheck: unit.readyCheck ?? null,
                   members: asArray(unit.members).map(m => ({ ...m, callsign: m.callsign ?? null })),
                   pending: asArray(unit.pending).map(p => ({ ...p, callsign: p.callsign ?? null })),
               }
             : null,
+        pendingSent: asArray(v.pendingSent),
+        sizeFit: v.sizeFit && !Array.isArray(v.sizeFit) ? v.sizeFit : {},
+        operation: v.operation ?? null,
         invites: asArray(v.invites).map(i => ({ ...i, fromCallsign: i.fromCallsign ?? null })),
         invitable: asArray(v.invitable).map(o => ({ ...o, callsign: o.callsign ?? null })),
         onRun: !!v.onRun,
@@ -95,14 +116,24 @@ function Avatar({ name, leader, muted }: { name: string; leader?: boolean; muted
     );
 }
 
-function MemberRow({ m, isMe }: { m: UnitMemberView; isMe: boolean }) {
+function MemberRow({ m, isMe, actions }: { m: UnitMemberView; isMe: boolean; actions?: RowActions }) {
     const unavailable = m.available === false;
+    const manage = actions?.canManage && !isMe;
     return (
         <li className={cx('teams-row', m.isLeader && 'teams-row--leader', unavailable && 'teams-row--muted')}>
-            <Avatar name={m.name} leader={m.isLeader} muted={unavailable} />
+            {m.avatar ? (
+                <ProfileAvatar avatar={m.avatar} name={m.name} size={36} />
+            ) : (
+                <Avatar name={m.name} leader={m.isLeader} muted={unavailable} />
+            )}
             <div className="teams-row__main">
                 <div className="teams-row__name">
                     <span className="teams-row__text">{m.name}</span>
+                    {m.level ? (
+                        <Badge size="sm" variant="outline">
+                            {t('unit.ui.level', { n: m.level.n })}
+                        </Badge>
+                    ) : null}
                     {isMe ? (
                         <Badge size="sm" tone="primary">
                             {t('unit.ui.you')}
@@ -126,11 +157,34 @@ function MemberRow({ m, isMe }: { m: UnitMemberView; isMe: boolean }) {
                     {m.departmentShort || '?'}
                 </Badge>
             </div>
+            {manage && actions ? (
+                <div className="teams-row__actions">
+                    <Button
+                        size="sm"
+                        variant="ghost"
+                        icon="star"
+                        disabled={!!actions.busyKey}
+                        onClick={() => actions.onManage({ kind: 'promote', m })}
+                    >
+                        {t('unit.ui.promote')}
+                    </Button>
+                    <Button
+                        size="sm"
+                        variant="ghost"
+                        icon="x"
+                        disabled={!!actions.busyKey}
+                        onClick={() => actions.onManage({ kind: 'kick', m })}
+                    >
+                        {t('unit.ui.kick')}
+                    </Button>
+                </div>
+            ) : null}
         </li>
     );
 }
 
-function PendingRow({ p, stamp }: { p: UnitPendingInvite; stamp: unknown }) {
+function PendingRow({ p, stamp, actions }: { p: UnitPendingInvite; stamp: unknown; actions?: RowActions }) {
+    const canWithdraw = !!actions && (actions.canManage || actions.sent.has(p.src));
     return (
         <li className="teams-row teams-row--pending">
             <Avatar name={p.name} muted />
@@ -150,6 +204,20 @@ function PendingRow({ p, stamp }: { p: UnitPendingInvite; stamp: unknown }) {
                     {p.departmentShort || '?'}
                 </Badge>
             </div>
+            {canWithdraw && actions ? (
+                <div className="teams-row__actions">
+                    <Button
+                        size="sm"
+                        variant="ghost"
+                        icon="x"
+                        loading={actions.busyKey === `w${p.src}`}
+                        disabled={!!actions.busyKey}
+                        onClick={() => actions.onWithdraw(p)}
+                    >
+                        {t('unit.ui.withdraw')}
+                    </Button>
+                </div>
+            ) : null}
         </li>
     );
 }
@@ -171,7 +239,7 @@ function SlotRow() {
 //                                    CARDS
 // ============================================================================
 
-function UnitCard({ view, stamp }: { view: UnitScreenView; stamp: unknown }) {
+function UnitCard({ view, stamp, actions }: { view: UnitScreenView; stamp: unknown; actions: RowActions }) {
     const session = useSession();
     const navigate = useNavigate();
     const me = session.officer;
@@ -218,6 +286,17 @@ function UnitCard({ view, stamp }: { view: UnitScreenView; stamp: unknown }) {
                               ? t('unit.ui.hint_leader')
                               : t('unit.ui.hint_member', { name: leaderName ?? '?' })}
                     </span>
+                    {actions.canManage && members.length >= 2 ? (
+                        <Button
+                            size="sm"
+                            variant="ghost"
+                            icon="trash"
+                            disabled={!!actions.busyKey}
+                            onClick={() => actions.onManage({ kind: 'disband' })}
+                        >
+                            {t('unit.ui.disband')}
+                        </Button>
+                    ) : null}
                     {iLead && !unit?.locked && !view.onRun ? (
                         <Button
                             size="sm"
@@ -233,7 +312,7 @@ function UnitCard({ view, stamp }: { view: UnitScreenView; stamp: unknown }) {
         >
             <ul className="teams-list">
                 {unit ? (
-                    members.map(m => <MemberRow key={m.src} m={m} isMe={m.src === view.me} />)
+                    members.map(m => <MemberRow key={m.src} m={m} isMe={m.src === view.me} actions={actions} />)
                 ) : me ? (
                     <MemberRow
                         m={{
@@ -248,7 +327,7 @@ function UnitCard({ view, stamp }: { view: UnitScreenView; stamp: unknown }) {
                     />
                 ) : null}
                 {pending.map(p => (
-                    <PendingRow key={`p${p.src}`} p={p} stamp={stamp} />
+                    <PendingRow key={`p${p.src}`} p={p} stamp={stamp} actions={actions} />
                 ))}
                 {Array.from({ length: slots }, (_, i) => (
                     <SlotRow key={`s${i}`} />
@@ -437,19 +516,24 @@ function TestInvitesCard() {
     );
 }
 
+const BAND_TONE = ['success', 'primary', 'neutral', 'grey'] as const;
+
 function InvitePicker({
     view,
     onInvite,
+    onReinvite,
     busyKey,
 }: {
     view: UnitScreenView;
     busyKey: string | null;
     onInvite: (o: UnitInvitableView) => void;
+    onReinvite: (list: UnitInvitableView[]) => void;
 }) {
     const [query, setQuery] = useState('');
     const list = view.invitable ?? [];
     const shown = useMemo(() => list.filter(o => matches(o, query.trim())), [list, query]);
     const canInvite = view.canInvite !== false;
+    const partners = list.filter(o => o.lastPartner);
 
     return (
         <Card
@@ -478,6 +562,18 @@ function InvitePicker({
                         placeholder={t('unit.ui.search_placeholder')}
                         aria-label={t('common.search')}
                     />
+                    {partners.length ? (
+                        <Button
+                            size="sm"
+                            variant="secondary"
+                            icon="refresh"
+                            loading={busyKey === 'reinvite'}
+                            disabled={!!busyKey}
+                            onClick={() => onReinvite(partners)}
+                        >
+                            {t('unit.ui.reinvite', { n: partners.length })}
+                        </Button>
+                    ) : null}
                     {list.length === 0 ? (
                         <EmptyState
                             compact
@@ -503,6 +599,16 @@ function InvitePicker({
                                                 {o.inUnit ? (
                                                     <Badge size="sm" tone="neutral">
                                                         {t('unit.ui.in_unit')}
+                                                    </Badge>
+                                                ) : null}
+                                                {o.lastPartner ? (
+                                                    <Badge size="sm" tone="accent">
+                                                        {t('unit.ui.last_partner')}
+                                                    </Badge>
+                                                ) : null}
+                                                {o.distanceBand !== undefined ? (
+                                                    <Badge size="sm" tone={BAND_TONE[o.distanceBand] ?? 'grey'}>
+                                                        {t(`unit.ui.band_${o.distanceBand}`)}
                                                     </Badge>
                                                 ) : null}
                                             </div>
@@ -531,6 +637,91 @@ function InvitePicker({
     );
 }
 
+// Per type: how many missions the unit could draw now and with one more officer (counts only, never names).
+function SizeFitCard({ view }: { view: UnitScreenView }) {
+    const session = useSession();
+    const fit = view.sizeFit ?? {};
+    const types = (session.config?.missionTypes ?? []).filter(x => fit[x.key]);
+    if (!types.length) return null;
+    const size = view.unit ? (view.unit.size ?? view.unit.members.length) : 1;
+    const max = view.maxSize ?? DEFAULT_MAX;
+    const line = (e: SizeFitEntry) =>
+        size < max
+            ? t(size === 1 ? 'unit.ui.fit_line_solo' : 'unit.ui.fit_line', { now: e.now, plus: e.plusOne })
+            : t('unit.ui.fit_line_full', { now: e.now });
+    return (
+        <Card icon="layers" title={t('unit.ui.fit_title')} subtitle={t('unit.ui.fit_subtitle')} padding="sm">
+            <ul className="teams-fit">
+                {types.map(x => (
+                    <li key={x.key} className="teams-fit__row">
+                        <span className="teams-fit__type">{x.label}</span>
+                        <span className="teams-fit__counts">{line(fit[x.key])}</span>
+                    </li>
+                ))}
+            </ul>
+        </Card>
+    );
+}
+
+// The Cross-Department Mission the viewer joined or waits for; Leave before the start (no penalty).
+function OperationCard({
+    op,
+    stamp,
+    busyKey,
+    onLeave,
+}: {
+    op: UnitOperationCard;
+    stamp: unknown;
+    busyKey: string | null;
+    onLeave: () => void;
+}) {
+    const waiting = op.waitlistPosition ?? null;
+    return (
+        <Card
+            icon="globe"
+            title={t('unit.ui.op_title')}
+            subtitle={op.missionLabel}
+            actions={
+                waiting ? (
+                    <Badge size="sm" tone="warning">
+                        {t('unit.ui.op_waitlist', { n: waiting })}
+                    </Badge>
+                ) : (
+                    <Badge size="sm" tone="success">
+                        {t('unit.ui.op_joined', { joined: op.joined, max: op.max })}
+                    </Badge>
+                )
+            }
+            padding="sm"
+        >
+            <div className="teams-footer">
+                <span className="teams-footer__text">
+                    <Icon name="clock" size={14} />
+                    {op.joinEndsIn != null ? (
+                        <>
+                            {t('unit.ui.op_starts_in')} <Countdown seconds={op.joinEndsIn} resetKey={stamp} />
+                        </>
+                    ) : (
+                        t('unit.ui.op_started')
+                    )}
+                </span>
+                {op.canLeave ? (
+                    <Button
+                        size="sm"
+                        variant="ghost"
+                        icon="logout"
+                        loading={busyKey === 'op'}
+                        disabled={!!busyKey}
+                        onClick={onLeave}
+                    >
+                        {waiting ? t('unit.ui.op_leave_waitlist') : t('unit.ui.op_leave')}
+                    </Button>
+                ) : null}
+            </div>
+        </Card>
+    );
+}
+
 // ============================================================================
 //                                    SCREEN
 // ============================================================================
@@ -546,6 +737,8 @@ export default function Unit() {
     const { run } = useAction();
     const [busyKey, setBusyKey] = useState<string | null>(null);
     const [confirmLeave, setConfirmLeave] = useState(false);
+    const [manage, setManage] = useState<ManageDialog>(null);
+    usePush('operation', () => void refetch());
 
     const act = async (key: string, fn: () => Promise<unknown>) => {
         setBusyKey(key);
@@ -565,6 +758,32 @@ export default function Unit() {
         act(`r${inv.unitId}:${accepted ? 'yes' : 'no'}`, () =>
             run('server:unitRespond', { accepted, unitId: inv.unitId }),
         );
+    const reinvite = (list: UnitInvitableView[]) =>
+        act('reinvite', async () => {
+            for (const o of list) await run('server:unitInvite', o.src);
+        });
+    const withdraw = (p: UnitPendingInvite) =>
+        act(`w${p.src}`, () =>
+            run(
+                'server:unitCancelInvite',
+                { targetSrc: p.src },
+                {
+                    success: 'unit.ui.withdrawn_toast',
+                    successVars: { name: p.name },
+                },
+            ),
+        );
+    const leaveOperation = () =>
+        act('op', () => run('server:leaveOperation', undefined, { success: 'unit.ui.op_left_toast' }));
+    const confirmManage = async () => {
+        const d = manage;
+        if (!d) return;
+        if (d.kind === 'disband') await run('server:unitDisband');
+        else if (d.kind === 'kick') await run('server:unitKick', { targetSrc: d.m.src });
+        else await run('server:unitPromote', { targetSrc: d.m.src });
+        setManage(null);
+        void refetch();
+    };
     const leave = async () => {
         const res = await run<UnitLeaveResult>('server:unitLeave');
         setConfirmLeave(false);
@@ -575,6 +794,13 @@ export default function Unit() {
     const max = data?.maxSize ?? DEFAULT_MAX;
     const unit = data?.unit ?? null;
     const onUnitRun = !!(unit?.locked && data?.onRun);
+    const rowActions: RowActions = {
+        canManage: !!unit?.canManage,
+        sent: new Set((data?.pendingSent ?? []).map(x => x.src)),
+        busyKey,
+        onManage: setManage,
+        onWithdraw: p => void withdraw(p),
+    };
 
     return (
         <Screen
@@ -594,7 +820,8 @@ export default function Unit() {
                 <ErrorState error={error} onRetry={() => void refetch()} />
             ) : (
                 <>
-                    {unit?.locked || data.onRun ? (
+                    <ReadyCheckBanner check={unit?.readyCheck ?? null} onAnswered={() => void refetch()} />
+                    {(unit?.locked && !unit?.readyCheck) || data.onRun ? (
                         <div
                             className={cx(
                                 'teams-banner',
@@ -618,11 +845,27 @@ export default function Unit() {
                         </div>
                     ) : null}
                     <Grid cols="minmax(0, 1.25fr) minmax(0, 1fr)" gap={4} align="start" className="teams-grid">
-                        <UnitCard view={data} stamp={data} />
                         <Stack gap={4}>
+                            <UnitCard view={data} stamp={data} actions={rowActions} />
+                            <SizeFitCard view={data} />
+                        </Stack>
+                        <Stack gap={4}>
+                            {data.operation ? (
+                                <OperationCard
+                                    op={data.operation}
+                                    stamp={data}
+                                    busyKey={busyKey}
+                                    onLeave={() => void leaveOperation()}
+                                />
+                            ) : null}
                             <TestInvitesCard />
                             <InvitesCard view={data} stamp={data} busyKey={busyKey} onRespond={respond} />
-                            <InvitePicker view={data} busyKey={busyKey} onInvite={invite} />
+                            <InvitePicker
+                                view={data}
+                                busyKey={busyKey}
+                                onInvite={invite}
+                                onReinvite={l => void reinvite(l)}
+                            />
                         </Stack>
                     </Grid>
                 </>
@@ -635,6 +878,33 @@ export default function Unit() {
                 confirmLabel={onUnitRun ? t('unit.ui.leave_and_abandon') : t('unit.ui.leave')}
                 onConfirm={() => leave()}
                 onCancel={() => setConfirmLeave(false)}
+            />
+            <ConfirmDialog
+                open={manage !== null}
+                tone={manage?.kind === 'promote' ? 'primary' : 'danger'}
+                title={
+                    manage?.kind === 'disband'
+                        ? t('unit.ui.disband_title')
+                        : manage?.kind === 'kick'
+                          ? t('unit.ui.kick_title', { name: manage.m.name })
+                          : t('unit.ui.promote_title', { name: manage?.kind === 'promote' ? manage.m.name : '' })
+                }
+                message={
+                    manage?.kind === 'disband'
+                        ? t('unit.ui.disband_confirm')
+                        : manage?.kind === 'kick'
+                          ? t('unit.ui.kick_confirm', { name: manage.m.name })
+                          : t('unit.ui.promote_confirm')
+                }
+                confirmLabel={
+                    manage?.kind === 'disband'
+                        ? t('unit.ui.disband')
+                        : manage?.kind === 'kick'
+                          ? t('unit.ui.kick')
+                          : t('unit.ui.promote')
+                }
+                onConfirm={() => confirmManage()}
+                onCancel={() => setManage(null)}
             />
         </Screen>
     );

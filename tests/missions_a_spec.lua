@@ -190,6 +190,21 @@ local FIELDS = {
         ramSpeed = true,
         ramPenaltyId = true,
         neverShoots = true,
+        -- parity-plus (docs/notes/missions_c.md)
+        responses = { yield = true, flee = true, fight = true },
+        handoff = true,
+        profileSet = true,
+        driveBy = true,
+        ram = true,
+    },
+    -- Stolen Vehicle Takedown's contact step (blocks/field_contact, WP2)
+    field_contact = {
+        mode = true,
+        profileSet = true,
+        revealed = true,
+        custody = true,
+        escape = { distance = true, seconds = true },
+        bestPoints = true,
     },
 }
 -- Objective fields that name a location key.
@@ -197,6 +212,7 @@ local LOCATION_KEYS = {
     checkpoint_route = { 'checkpoints' },
     interact_points = { 'points' },
     pursuit = { 'spawn', 'spawns', 'route' },
+    field_contact = {},
 }
 
 local function CheckFields(id, where, t, allowed)
@@ -402,19 +418,24 @@ do
         'beat_patrol',
         'business_check',
         'street_race_bust',
+        'parking_patrol',
+        'traffic_enforcement',
         'evoc_course',
         'pursuit_sim',
         'stolen_vehicle_takedown',
         'warrant_service',
         'manhunt',
+        'suspicious_activity',
         'gang_shootout',
         'hostage_rescue',
         'bomb_disposal',
         'armored_truck_escort',
         'prison_break',
+        'drug_lab_raid',
+        'gang_hideout_raid',
         'weekly_boss_kingpin',
     }
-    H.eq(#(list or {}), 14, 'index.lua lists 14 built-in missions')
+    H.eq(#(list or {}), 19, 'index.lua lists 19 built-in missions (18 and the Weekly Boss)')
     for i, idv in ipairs(want) do H.eq((list or {})[i], idv, 'index.lua entry ' .. i) end
 end
 

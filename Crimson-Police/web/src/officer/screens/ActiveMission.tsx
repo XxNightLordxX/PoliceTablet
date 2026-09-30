@@ -39,6 +39,8 @@ import type {
     RunRoute,
     SetGpsResult,
 } from '../../types/run_ui';
+import { ContactPanel } from '../components/ContactPanel';
+import { IntelLine, MissionCallLine } from '../components/RunNotices';
 import './MissionBoard.css';
 import './ActiveMission.css';
 
@@ -770,7 +772,13 @@ export default function ActiveMission() {
                 </div>
             ) : null}
 
-            {logOpen && view.log ? (
+            {view.intel ? <IntelLine intel={view.intel} /> : null}
+
+            {view.missionCall ? <MissionCallLine call={view.missionCall} /> : null}
+
+            {view.state === 'in_progress' && view.contact && asArray(view.contact.entries).length > 0 ? (
+                <ContactPanel view={view.contact} runId={view.runId} />
+            ) : logOpen && view.log ? (
                 <LogPanel
                     log={view.log}
                     sending={logSending}

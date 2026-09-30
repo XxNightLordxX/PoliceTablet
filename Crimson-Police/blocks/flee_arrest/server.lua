@@ -212,6 +212,47 @@ local function Neutralised(p)
     return p.state == 'dead' or p.state == 'cuffed'
 end
 
+-- custody = 'handover': a cuffed suspect is done once handed over to the transport (CP.Custody chain).
+local function Done(p)
+    if p.state == 'dead' then return true end
+    return p.state == 'cuffed' and (not p.chain or p.handedOver == true)
+end
+
+local DEMEANOURS = { 'compliant', 'nervous', 'evasive', 'runner', 'hostile' }
+
+local function WeightedKey(rng, weights)
+    local keys, total = {}, 0
+    for _, k in ipairs(DEMEANOURS) do
+        local w = tonumber(weights[k]) or 0
+        if w > 0 then
+            keys[#keys + 1] = k
+            total = total + w
+        end
+    end
+    if total <= 0 then return nil end
+    local x = rng:next() * total
+    for _, k in ipairs(keys) do
+        x = x - (tonumber(weights[k]) or 0)
+        if x < 0 then return k end
+    end
+    return keys[#keys]
+end
+
+-- The demeanour of one person: a fixed name, a weights table, or 'rolled' (Config.Custody.demeanour for
+-- the truth a door suspect (warrant) or an inmate (evading) has). Only an armed person can be hostile.
+local function RollDemeanour(ctx, rng, truth, armed)
+    local d = ctx.obj.demeanour
+    local name
+    if type(d) == 'string' and d ~= 'rolled' then
+        name = d
+    else
+        local weights = type(d) == 'table' and d or ((Config.Custody or {}).demeanour or {})[truth] or {}
+        name = WeightedKey(rng, weights) or 'runner'
+    end
+    if name == 'hostile' and not armed then name = 'runner' end
+    return name
+end
+
 -- ============================================================================
 --                           DEFAULTS AND VALIDATION
 -- ============================================================================
@@ -264,6 +305,8 @@ local function Defaults(obj)
     if obj.cuff.duration == nil then obj.cuff.duration = DEFAULT_CUFF_MS end
     if type(obj.aliveBonus) ~= 'table' then obj.aliveBonus = {} end
     if obj.aliveBonus.id == nil then obj.aliveBonus.id = 'suspect_alive' end
+    if obj.feint == nil then obj.feint = c.feint[3] / 100 end
+    if obj.custody == nil then obj.custody = c.custody.default end
     if obj.mode == 'door' then
         if obj.door == nil then obj.door = 'door' end
         if obj.suspect == nil then obj.suspect = 'suspect' end
@@ -304,7 +347,10 @@ local function ArmedCount(obj)
         return (tonumber(o.armedShare) or 0) > 0 and math.floor(tonumber(o.suspects) or 0) or 0
     end
     local n = math.floor(tonumber(o.associates.count) or 0)
-    if (tonumber(o.responses.fight) or 0) > 0 then n = n + 1 end
+    local d = o.demeanour
+    local hostile = d ~= nil
+        and (d == 'hostile' or d == 'rolled' or (type(d) == 'table' and (tonumber(d.hostile) or 0) > 0))
+    if (d == nil and (tonumber(o.responses.fight) or 0) > 0) or hostile then n = n + 1 end
     return n
 end
 
@@ -507,6 +553,28 @@ local function Validate(obj, mission, location)
                 { field = 'armedShare', min = c.armedChance[1] / 100, max = c.armedChance[2] / 100 })
         end
     end
+    local d = o.demeanour
+    if d ~= nil then
+        if type(d) == 'string' then
+            if not U.contains(c.demeanour.options, d) then return Bad('block.flee_arrest.invalid.demeanour') end
+        elseif type(d) == 'table' then
+            local sum = 0
+            for k, w in pairs(d) do
+                if not U.contains(DEMEANOURS, k) or not IsNum(w) or w < 0 then
+                    return Bad('block.flee_arrest.invalid.demeanour')
+                end
+                sum = sum + w
+            end
+            if sum <= 0 then return Bad('block.flee_arrest.invalid.demeanour') end
+        else
+            return Bad('block.flee_arrest.invalid.demeanour')
+        end
+    end
+    if not InRange(o.feint, c.feint, 0.01) then
+        return Bad('block.flee_arrest.invalid.range',
+            { field = 'feint', min = c.feint[1] / 100, max = c.feint[2] / 100 })
+    end
+    if not U.contains(c.custody.options, o.custody) then return Bad('block.flee_arrest.invalid.custody') end
     local armed = ArmedCount(o)
     if armed > Config.Builder.maxHostiles then
         return Bad('block.flee_arrest.invalid.armed_budget', { max = Config.Builder.maxHostiles, have = armed })
@@ -577,6 +645,12 @@ local function SurrenderPed(ctx, st, p)
     p.state = 'surrendered'
     p.close, p.far = 0, 0
     p.surrenderedAt = Now()
+    p.unwatched = 0
+    -- feint: an unarmed suspect may bolt later (rolled once, at the first surrender)
+    if p.feintRoll == nil then
+        local f = tonumber(ctx.obj.feint) or 0
+        p.feintRoll = not p.armed and f > 0 and RngOf(ctx):chance(f) or false
+    end
     CP.Npc.setState(ctx.run, p.netId, 'surrendered')
     local cuff = ctx.obj.cuff
     CP.Npc.enableCuff(ctx.run, p.netId, {
@@ -781,9 +855,27 @@ local function GuardedSpawn(ctx, st, loop)
     return ok
 end
 
+local DOOR_RESPONSE = {
+    compliant = 'surrender',
+    nervous = 'surrender',
+    evasive = 'flee',
+    runner = 'flee',
+    hostile = 'fight',
+}
+
 local function SpawnDoor(ctx, st)
     if st.spawning or st.stopped then return false end
-    if not st.response then st.response = RollResponse(ctx) end
+    if not st.response then
+        if ctx.obj.demeanour ~= nil then
+            -- the door suspect's demeanour decides the response (a hostile one is armed)
+            local fight = ctx.obj.demeanour == 'hostile' or ctx.obj.demeanour == 'rolled'
+                or (type(ctx.obj.demeanour) == 'table' and (tonumber(ctx.obj.demeanour.hostile) or 0) > 0)
+            st.demeanour = RollDemeanour(ctx, RngOf(ctx), 'warrant', fight)
+            st.response = DOOR_RESPONSE[st.demeanour] or 'flee'
+        else
+            st.response = RollResponse(ctx)
+        end
+    end
     return GuardedSpawn(ctx, st, SpawnDoorLoop)
 end
 
@@ -841,7 +933,15 @@ SpawnScatterLoop = function(ctx, st, want, pts, routes)
         st.nextArmed = nil
         p.route = routeIdx
         if armed then st.counts.armedInmates = st.counts.armedInmates + 1 end
-        SetPed(ctx, st, p, 'fleeing')
+        if ctx.obj.demeanour ~= nil then
+            p.demeanour = RollDemeanour(ctx, RngOf(ctx), 'evading', armed)
+        end
+        local nervousStays = p.demeanour == 'nervous' and not RngOf(ctx):chance(0.15)
+        if p.demeanour == 'compliant' or nervousStays then
+            SurrenderPed(ctx, st, p)
+        else
+            SetPed(ctx, st, p, 'fleeing')
+        end
         if st.stopped then ok = false break end
     end
     return ok
@@ -856,6 +956,9 @@ local function MarkCuffed(ctx, st, p)
     p.state = 'cuffed'
     p.far, p.close = 0, 0
     st.dirty = true
+    if ctx.obj.custody == 'handover' and CP.Custody and CP.Custody.enableChain then
+        p.chain = CP.Custody.enableChain(ctx.run, p.netId, { obj = ctx.index }) == true
+    end
     if p.role ~= 'associate' then
         local ab = ctx.obj.aliveBonus
         -- aliveBonus.points is a mission-file value: only built-in files may value their own id with it
@@ -888,7 +991,7 @@ local function TryComplete(ctx, st)
     if st.mode == 'door' and not st.knocked then return end
     if not AllSpawned(ctx, st) then return end
     for _, p in pairs(st.peds) do
-        if not Neutralised(p) then return end
+        if not Done(p) then return end
     end
     local done, total = Totals(ctx, st)
     local arrested = 0
@@ -931,6 +1034,21 @@ local function Watch(ctx, st, dt)
                     if p.far > worst then worst = p.far end
                 else
                     p.far = 0
+                end
+                if p.state == 'surrendered' and p.feintRoll and not p.feinted then
+                    local fr = tonumber(Config.Npc and Config.Npc.feintRange) or 6.0
+                    local after = tonumber(Config.Npc and Config.Npc.feintAfter) or 5
+                    local aimed = p.aimedAt and Now() - p.aimedAt < after * 1000
+                    if near > fr and not aimed then
+                        p.unwatched = (p.unwatched or 0) + dt
+                        if p.unwatched >= after then
+                            p.feinted = true
+                            SetPed(ctx, st, p, 'fleeing')
+                            ctx.hud({ message = { text = CP.L('block.flee_arrest.msg_feint'), kind = 'warning' } })
+                        end
+                    else
+                        p.unwatched = 0
+                    end
                 end
                 if not p.armed and p.state == 'fleeing' and type(gu.close) == 'table' then
                     if near <= gu.close.distance then
@@ -1038,12 +1156,20 @@ local function OnEvent(ctx, src, ev)
         local netId = tonumber(ev.netId)
         local p = netId and st.peds[tostring(netId)] or nil
         local known = t == 'aim' or t == 'stunned' or t == 'low_health' or t == 'cuffed' or t == 'shot'
-            or t == 'damaged'
+            or t == 'damaged' or t == 'handed_over'
         if not p then return false, known and 'unknown_entity' or 'unknown_event' end
         if t == 'aim' then
             local gu = ctx.obj.givesUp
             if p.armed then return false, 'armed' end
-            if p.state == 'surrendered' or p.state == 'cuffed' then return false, 'duplicate' end
+            if p.state == 'surrendered' then
+                -- an officer covering a surrendered suspect: no feint while aimed at
+                local pc, sc = PedCoords(p), ctx.coords(src)
+                if pc and sc and U.dist(pc, sc) <= Cfg().aimDistance[2] + REACH_SLACK and HoldsWeapon(src) then
+                    p.aimedAt = Now()
+                end
+                return false, 'duplicate'
+            end
+            if p.state == 'cuffed' then return false, 'duplicate' end
             if p.state ~= 'fleeing' then return false, 'wrong_state' end
             if not gu.aim then return false, 'disabled' end
             local pc, sc = PedCoords(p), ctx.coords(src)
@@ -1082,6 +1208,13 @@ local function OnEvent(ctx, src, ev)
                 return false, 'too_far'
             end
             MarkCuffed(ctx, st, p)
+            if CP.Runs and CP.Runs.noteArrest and ctx.run then CP.Runs.noteArrest(ctx.run, src, p.netId) end
+            ok = true
+        elseif t == 'handed_over' then
+            if p.state ~= 'cuffed' or not p.chain then return false, 'wrong_state' end
+            if p.handedOver then return false, 'duplicate' end
+            p.handedOver = true
+            st.dirty = true
             ok = true
         elseif t == 'shot' then
             ok = true

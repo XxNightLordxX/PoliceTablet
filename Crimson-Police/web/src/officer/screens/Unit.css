@@ -262,3 +262,30 @@
     font-size: var(--cp-fs-sm);
     color: var(--cp-muted);
 }
+
+/* Missions the unit could draw (counts only) */
+.teams-fit {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.teams-fit__row {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: var(--cp-fs-sm);
+}
+
+.teams-fit__type {
+    font-weight: 600;
+    color: var(--cp-text);
+}
+
+.teams-fit__counts {
+    color: var(--cp-muted);
+    text-align: right;
+}

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import {
+    Avatar,
     Badge,
     Button,
     Card,
@@ -28,7 +29,7 @@ import {
     type TableColumn,
 } from '../../shared/components';
 import { asArray } from '../../shared/data';
-import { formatDateTime, formatNumber } from '../../shared/format';
+import { fmtDateTime, formatDateTime, formatNumber } from '../../shared/format';
 import { useAction, useRequest } from '../../shared/hooks';
 import { hasKey, t } from '../../shared/i18n';
 import type {
@@ -38,6 +39,10 @@ import type {
     OfficerSearchData,
     OfficerSearchRow,
 } from '../../types/oversight';
+import type { AdminOfficerProfile, Commendation } from '../../types/profile';
+import { CommendationsCard } from '../../officer/components/CommendationsCard';
+import { ServiceRecordCard } from '../../officer/components/ServiceRecordCard';
+import { CommendDialog } from '../../supervisor/components/CommendDialog';
 import './Officers.css';
 
 const endLabel = (reason: string) => (hasKey(`sup.end.${reason}`) ? t(`sup.end.${reason}`) : reason);
@@ -45,16 +50,7 @@ const cashLabel = (status: string) =>
     hasKey(`result.cash_status.${status}`) ? t(`result.cash_status.${status}`) : status;
 const stateTone = (s: string) => (s === 'completed' ? 'success' : s === 'failed' ? 'danger' : 'grey');
 // Date with the year (suspensions can run for years; formatDateTime leaves the year out).
-const fullDate = (ts: number | null | undefined) =>
-    ts
-        ? new Date(ts * 1000).toLocaleString('en-GB', {
-              day: 'numeric',
-              month: 'short',
-              year: 'numeric',
-              hour: '2-digit',
-              minute: '2-digit',
-          })
-        : '—';
+const fullDate = (ts: number | null | undefined) => (ts ? fmtDateTime(ts) : '—');
 const badgeDate = (v: unknown) => (typeof v === 'string' ? v.slice(0, 10) : typeof v === 'number' ? fullDate(v) : '');
 
 function useDebounced<T>(value: T, ms: number): T {
@@ -96,6 +92,184 @@ function ResultRow({ o, active, onSelect }: { o: OfficerSearchRow; active: boole
                 ) : null}
             </span>
         </button>
+    );
+}
+
+// Profile moderation, commendations and the service record (admin:getOfficerProfile in modules/profile).
+type ModAction =
+    | { kind: 'review'; what: 'avatar' | 'bio'; decision: 'approve' | 'reject' }
+    | { kind: 'clear'; what: 'avatar' | 'bio' }
+    | { kind: 'report'; id: number; decision: 'clear' | 'dismiss' }
+    | { kind: 'revoke'; commendation: Commendation };
+
+function ProfileModeration({ citizenid, own }: { citizenid: string; own: boolean }) {
+    const { data: p, refetch } = useRequest<AdminOfficerProfile>('admin:getOfficerProfile', { citizenid });
+    const { run, busy } = useAction();
+    const [mod, setMod] = useState<ModAction | null>(null);
+    const [commending, setCommending] = useState(false);
+    if (!p) return null;
+
+    const doMod = async (reason: string) => {
+        if (!mod) return;
+        let res;
+        if (mod.kind === 'review') {
+            res = await run('server:admin:reviewAvatar', { citizenid, decision: mod.decision, reason, what: mod.what });
+        } else if (mod.kind === 'clear') {
+            res = await run('server:admin:clearProfile', { citizenid, what: mod.what, reason });
+        } else if (mod.kind === 'report') {
+            res = await run('server:admin:handleReport', { id: mod.id, decision: mod.decision, reason });
+        } else {
+            res = await run('server:admin:revokeCommendation', { id: mod.commendation.id, reason });
+        }
+        setMod(null);
+        if (res.ok) void refetch();
+    };
+    const reports = asArray(p.reports);
+
+    return (
+        <>
+            <Grid cols="1fr 1fr" gap={4} align="stretch">
+                <Card title={t('admin.officers.profile')} icon="user">
+                    <div className="oversight-off-profile">
+                        <Avatar avatar={p.avatar} name={p.realName ?? p.name} size={56} />
+                        <div className="oversight-off-profile__text">
+                            <p className="oversight-off-profile__bio">{p.bio || t('admin.officers.no_bio')}</p>
+                            <Row gap={2} wrap>
+                                {p.bio && !own ? (
+                                    <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => setMod({ kind: 'clear', what: 'bio' })}
+                                    >
+                                        {t('admin.officers.clear_bio')}
+                                    </Button>
+                                ) : null}
+                                {p.avatar && p.avatar.kind !== 'initials' && !own ? (
+                                    <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => setMod({ kind: 'clear', what: 'avatar' })}
+                                    >
+                                        {t('admin.officers.clear_avatar')}
+                                    </Button>
+                                ) : null}
+                            </Row>
+                        </div>
+                    </div>
+                    {p.pendingAvatar ? (
+                        <div className="oversight-off-pending">
+                            <Avatar
+                                avatar={{ kind: 'url', value: p.pendingAvatar, initials: '?', frame: 'grey' }}
+                                size={44}
+                            />
+                            <span className="oversight-off-pending__text" title={p.pendingAvatar}>
+                                {t('admin.officers.pending_avatar')}
+                            </span>
+                            {!own ? (
+                                <Row gap={2}>
+                                    <Button
+                                        size="sm"
+                                        variant="primary"
+                                        onClick={() => setMod({ kind: 'review', what: 'avatar', decision: 'approve' })}
+                                    >
+                                        {t('profile.review.approve')}
+                                    </Button>
+                                    <Button
+                                        size="sm"
+                                        variant="danger"
+                                        onClick={() => setMod({ kind: 'review', what: 'avatar', decision: 'reject' })}
+                                    >
+                                        {t('profile.review.reject')}
+                                    </Button>
+                                </Row>
+                            ) : null}
+                        </div>
+                    ) : null}
+                    {p.bioPending ? (
+                        <div className="oversight-off-pending">
+                            <span className="oversight-off-pending__text">
+                                {t('admin.officers.pending_bio', { bio: p.bioPending })}
+                            </span>
+                            {!own ? (
+                                <Row gap={2}>
+                                    <Button
+                                        size="sm"
+                                        variant="primary"
+                                        onClick={() => setMod({ kind: 'review', what: 'bio', decision: 'approve' })}
+                                    >
+                                        {t('profile.review.approve')}
+                                    </Button>
+                                    <Button
+                                        size="sm"
+                                        variant="danger"
+                                        onClick={() => setMod({ kind: 'review', what: 'bio', decision: 'reject' })}
+                                    >
+                                        {t('profile.review.reject')}
+                                    </Button>
+                                </Row>
+                            ) : null}
+                        </div>
+                    ) : null}
+                    {reports.map(r => (
+                        <div key={r.id} className="oversight-off-pending">
+                            <Badge tone="warning" size="sm">
+                                {t(`profile.report.reason.${r.reason}`)}
+                            </Badge>
+                            <span className="oversight-off-pending__text">
+                                {[r.note, fmtDateTime(r.at)].filter(Boolean).join(' · ')}
+                            </span>
+                            {!own ? (
+                                <Row gap={2}>
+                                    <Button
+                                        size="sm"
+                                        variant="danger"
+                                        onClick={() => setMod({ kind: 'report', id: r.id, decision: 'clear' })}
+                                    >
+                                        {t('profile.review.clear')}
+                                    </Button>
+                                    <Button
+                                        size="sm"
+                                        variant="secondary"
+                                        onClick={() => setMod({ kind: 'report', id: r.id, decision: 'dismiss' })}
+                                    >
+                                        {t('profile.review.dismiss')}
+                                    </Button>
+                                </Row>
+                            ) : null}
+                        </div>
+                    ))}
+                </Card>
+                <CommendationsCard
+                    commendations={p.commendations}
+                    onRevoke={c => setMod({ kind: 'revoke', commendation: c })}
+                    onCommend={own ? undefined : () => setCommending(true)}
+                />
+            </Grid>
+            <ServiceRecordCard
+                lifetime={p.service?.lifetime}
+                season={p.service?.season}
+                bests={p.bests}
+                partner={p.favouritePartner}
+                compact
+            />
+            <ConfirmDialog
+                open={!!mod}
+                tone={mod && mod.kind === 'review' && mod.decision === 'approve' ? 'primary' : 'danger'}
+                title={mod ? t(`admin.officers.mod_title.${mod.kind}`) : ''}
+                message={p.realName ?? p.name}
+                reason={{ required: true, maxLength: 255, placeholder: t('admin.officers.reason_placeholder') }}
+                onConfirm={doMod}
+                onCancel={() => setMod(null)}
+                busy={busy}
+            />
+            <CommendDialog
+                open={commending}
+                onClose={() => setCommending(false)}
+                officer={{ citizenid, name: p.realName ?? p.name }}
+                scope="admin"
+                onDone={() => void refetch()}
+            />
+        </>
     );
 }
 
@@ -386,6 +560,8 @@ function Detail({ citizenid }: { citizenid: string }) {
                     />
                 </Card>
             </div>
+
+            <ProfileModeration citizenid={o.citizenid} own={!!o.own} />
 
             <Grid cols="1fr 1fr" gap={4} align="stretch">
                 <Card

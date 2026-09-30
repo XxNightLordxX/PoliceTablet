@@ -20,6 +20,10 @@ local ROUTE_END = 30.0
 local STOP_RANGE = 8.0
 local EXIT_RETRY_MS = 2500     -- a stopped suspect still in the car is told to get out again this often...
 local EXIT_WARP_TRY = 3        -- ...and warped out (TaskLeaveVehicle flag 16) from this attempt on
+local PULL_AHEAD = 14.0        -- metres ahead and...
+local PULL_SIDE = 3.5          -- ...to the right where a yielding car pulls over
+local PULL_MPS = 7.0           -- speed while pulling over
+local DRIVEBY_RANGE = 40.0     -- metres: armed passengers of a fighting car shoot at the named participant
 
 local active = {}
 
@@ -263,6 +267,64 @@ local function MonitorDrive(S, v, veh, driver)
     end
 end
 
+-- A violator (observe missions): drives its route at the rolled speed, weaving for a reckless driver.
+local function TaskCruise(S, v, veh, driver, force)
+    local route = RouteInfo(S)
+    local cruise = v.cruise or {}
+    local speed = (tonumber(cruise.speed) or tonumber(S.ctx.obj.speed) or 100) / 3.6
+    local d = S.drive[v.netId] or {}
+    S.drive[v.netId] = d
+    d.at, d.mode = GetGameTimer(), 'cruise'
+    SetDriverAggressiveness(driver, cruise.weave and 1.0 or 0.6)
+    if route then
+        local pts = Remaining(route, GetEntityCoords(veh))
+        if #pts > 0 then
+            CP.Npc.task(driver, 'driveRoute', {
+                vehicle = veh,
+                points = pts,
+                loop = route.loop,
+                speed = speed,
+                style = cruise.weave and 'reckless' or 'normal',
+                stopRange = STOP_RANGE,
+                force = force,
+            })
+            return
+        end
+    end
+    TaskVehicleDriveWander(driver, veh, speed, cruise.weave and 786988 or 786603)
+end
+
+-- A yielding car: pulls to the kerb, hazards on, then brakes and turns the engine off.
+local function PullOver(S, v, veh, driver)
+    local d = S.drive[v.netId]
+    if not d or d.mode ~= 'pull' then
+        local target = GetOffsetFromEntityInWorldCoords(veh, PULL_SIDE, PULL_AHEAD, 0.0)
+        SetVehicleIndicatorLights(veh, 0, true)
+        SetVehicleIndicatorLights(veh, 1, true)
+        TaskVehicleDriveToCoord(driver, veh, target.x, target.y, target.z, PULL_MPS, 0, GetEntityModel(veh), 786603,
+            2.0, true)
+        S.drive[v.netId] = { mode = 'pull', at = GetGameTimer(), target = target }
+        return
+    end
+    if not d.braked and (#(GetEntityCoords(veh) - d.target) < 4.0 or GetGameTimer() - d.at > 8000) then
+        d.braked = true
+        TaskVehicleTempAction(driver, veh, 27, 600000)
+    end
+end
+
+-- A boxed-in fighting car rams the participant vehicle the server named, once, for a few seconds.
+local function Ram(S, v, veh, driver)
+    local d = S.drive[v.netId]
+    if d and d.mode == 'ram' and d.target == v.ram then return end
+    local player = GetPlayerFromServerId(v.ram)
+    local ped = player ~= -1 and GetPlayerPed(player) or 0
+    local target = ped ~= 0 and GetVehiclePedIsIn(ped, false) or 0
+    if target == 0 then return end
+    S.drive[v.netId] = { mode = 'ram', target = v.ram, at = GetGameTimer() }
+    TaskVehicleChase(driver, ped)
+    SetTaskVehicleChaseBehaviorFlag(driver, 1, true)
+end
+
 -- Control every time (tasks need it), CP.Npc.apply once per entity handle: a new handle after streaming,
 -- a new host, or control regained from another client re-applies.
 local function ApplyPed(S, net, ped)
@@ -324,8 +386,19 @@ local function HostVehicle(S, v)
             end
         end
     end
-    if v.state == 'fleeing' and driver then
-        if fresh then S.drive[v.netId] = nil end
+    if v.state == 'cruising' and driver then
+        local d = S.drive[v.netId]
+        if fresh or not d or d.mode ~= 'cruise' then
+            TaskCruise(S, v, veh, driver, true)
+        elseif GetEntitySpeed(veh) < STUCK_MPS and GetGameTimer() - (d.at or 0) >= RETASK_MS then
+            TaskCruise(S, v, veh, driver, true)
+        end
+    elseif v.state == 'yielding' and driver then
+        PullOver(S, v, veh, driver)
+    elseif v.state == 'fleeing' and driver and v.ram then
+        Ram(S, v, veh, driver)
+    elseif v.state == 'fleeing' and driver then
+        if fresh or (S.drive[v.netId] and S.drive[v.netId].mode == 'ram') then S.drive[v.netId] = nil end
         MonitorDrive(S, v, veh, driver)
     elseif v.state == 'stopped' or v.state == 'wrecked' then
         if not S.drive[v.netId] or S.drive[v.netId].mode ~= 'off' then
@@ -333,6 +406,19 @@ local function HostVehicle(S, v)
             SetVehicleEngineOn(veh, false, true, true)
         end
     end
+end
+
+-- An armed passenger of a fighting car shoots from the car at the participant the server named (never a
+-- bystander); nobody else is ever targeted.
+local function DriveBy(S, info, ped)
+    if not ApplyPed(S, info.netId, ped) then return end
+    local k = 'db:' .. tostring(info.driveBy)
+    if S.tasked[info.netId] == k then return end
+    local player = GetPlayerFromServerId(info.driveBy)
+    local target = player ~= -1 and GetPlayerPed(player) or 0
+    if target == 0 or #(GetEntityCoords(target) - GetEntityCoords(ped)) > DRIVEBY_RANGE then return end
+    S.tasked[info.netId] = k
+    TaskDriveBy(ped, target, 0, 0.0, 0.0, 0.0, 300.0, 60, false, 0xC6EE6B4C)
 end
 
 -- Live surrenders and cuffs are animated by CP.Npc's state bag handler; a new host re-issues them.
@@ -422,6 +508,18 @@ local function HudText(S, myPos)
         })
     end
     if d.escaping then return CP.L('block.pursuit.hud_escaping', { seconds = d.escaping }) end
+    if not d.fled and type(obj.observe) == 'table' then
+        -- the violator's own violation and window (rolled per violator on the server)
+        local kind, watch = obj.observe.kind, nil
+        for _, v in ipairs(S.vehicles) do
+            if v.observed then return CP.L('block.pursuit.hud_lights') end
+            if v.observe then kind, watch = v.observe, v.watch end
+        end
+        watch = watch
+            or { behind = math.floor((tonumber(obj.observe.behind) or 80) + 0.5), seconds = obj.observe.seconds or 5 }
+        return CP.L(kind == 'follow' and 'block.pursuit.hud_observe_follow' or 'block.pursuit.hud_observe_pace',
+            { behind = watch.behind, seconds = watch.seconds })
+    end
     if not d.fled and d.trigger == 'distance' then
         return d.lights and CP.L('block.pursuit.hud_lights') or CP.L('block.pursuit.hud_approach')
     end
@@ -459,14 +557,17 @@ local function Loop(S)
                     if host then HostVehicle(S, v) end
                     local veh = EntityFor(v.netId)
                     local k = 'v' .. tostring(v.netId)
-                    if veh and showBlips and (v.state == 'fleeing' or v.state == 'waiting') then
-                        EnsureBlip(S, k, veh, 225, CP.L('block.pursuit.blip_vehicle'), 0.9)
+                    local live = v.state == 'fleeing' or v.state == 'waiting' or v.state == 'cruising'
+                        or v.state == 'yielding'
+                    if veh and showBlips and live and v.blip ~= false then
+                        local label = v.cruise and 'block.pursuit.blip_violator' or 'block.pursuit.blip_vehicle'
+                        EnsureBlip(S, k, veh, 225, CP.L(label), 0.9)
                     else
                         DropBlip(S, k)
                     end
                     if
                         veh
-                        and v.state == 'waiting'
+                        and (v.state == 'waiting' or v.state == 'cruising')
                         and d.trigger == 'distance'
                         and d.lights
                         and myVeh ~= 0
@@ -483,7 +584,11 @@ local function Loop(S)
                     local k = 's' .. tostring(s.netId)
                     if ped then
                         local state = (BagOf(ped) or {}).state or s.state
-                        if host and state ~= 'dead' then HostSuspect(S, s, ped) end
+                        if host and s.driveBy and IsPedInAnyVehicle(ped, false) then
+                            DriveBy(S, s, ped)
+                        elseif host and state ~= 'dead' then
+                            HostSuspect(S, s, ped)
+                        end
                         local onFoot = (state == 'stopped' or state == 'fleeing' or state == 'hostile')
                             and not IsPedInAnyVehicle(ped, false)
                         if showBlips and onFoot then

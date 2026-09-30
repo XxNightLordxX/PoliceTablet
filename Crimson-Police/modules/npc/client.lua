@@ -1,4 +1,4 @@
--- CP.Npc (client): host-side NPC AI helpers and "Cuff suspect".
+-- CP.Npc (client): host-side NPC AI helpers, "Cuff suspect" and the police action options (contacts, custody).
 
 CP.Npc = CP.Npc or {}
 local Npc = CP.Npc
@@ -140,7 +140,19 @@ local BEHAVIOUR = {
 }
 
 -- States in which a ped is calm: neutral group, no weapon in hand.
-local CALM = { surrendered = true, cuffed = true, restrained = true, freed = true, safe = true, dead = true }
+local CALM = {
+    surrendered = true,
+    cuffed = true,
+    restrained = true,
+    freed = true,
+    safe = true,
+    dead = true,
+    contacted = true,
+    escorted = true,
+    seated = true,
+    released = true,
+    handed_over = true,
+}
 local POSES = { kneel = true, cuffed = true, handsUp = true, cower = true }
 
 local ai = {}            -- [ped] = { action, args, token, at, prev, ... } peds this client tasked
@@ -729,6 +741,45 @@ function ACTIONS.follow(ped, a)
     end)
 end
 
+-- An escorted person walks beside the officer (src = the escorting officer's server id), hands cuffed.
+function ACTIONS.followPed(ped, a)
+    Release(ped, a)
+    Calm(ped)
+    SetEnableHandcuffs(ped, true)
+    local player = GetPlayerFromServerId(tonumber(a.args.src) or -1)
+    local officer = player and player ~= -1 and GetPlayerPed(player) or 0
+    if not officer or officer == 0 then
+        TaskStandStill(ped, -1)
+        return
+    end
+    a.officer = officer
+    PlayAnim(ped, CUFFED_DICT, 'idle', 49)
+    TaskFollowToOffsetOfEntity(ped, officer, 0.45, -0.6, 0.0, 1.5, -1, 1.0, true)
+    a.issuedAt = Now()
+end
+
+-- A stopped person on foot: stands still, calm, facing the nearest participant.
+function ACTIONS.stand(ped, a)
+    Release(ped, a)
+    Calm(ped)
+    local face = Npc.nearestParticipant(GetEntityCoords(ped))
+    if face then TaskTurnPedToFaceEntity(ped, face, 1500) end
+    SetPedKeepTask(ped, true)
+end
+
+-- Released, warned or cited: walks off, or drives off from the driver seat.
+function ACTIONS.leave(ped, a)
+    Release(ped, a)
+    SetEnableHandcuffs(ped, false)
+    SetBlockingOfNonTemporaryEvents(ped, true)
+    local veh = GetVehiclePedIsIn(ped, false)
+    if IsDriver(ped, veh) then
+        TaskVehicleDriveWander(ped, veh, 14.0, STYLES.careful)
+    else
+        TaskWanderStandard(ped, 10.0, 10)
+    end
+end
+
 function ACTIONS.cower(ped, a)
     Release(ped, a)
     Calm(ped)
@@ -970,6 +1021,13 @@ local function Step(ped, a, t)
         end
     elseif action == 'kneel' or action == 'cuffed' then
         StepPose(ped, a, t)
+    elseif action == 'followPed' then
+        local o = a.officer
+        if o and DoesEntityExist(o) and U.dist(GetEntityCoords(ped), GetEntityCoords(o)) > 3.0
+            and t - (a.issuedAt or 0) >= REISSUE_MS then
+            TaskFollowToOffsetOfEntity(ped, o, 0.45, -0.6, 0.0, 1.5, -1, 1.0, true)
+            a.issuedAt = t
+        end
     end
 end
 
@@ -1040,6 +1098,12 @@ local function Retask(ent, value, settled)
         Npc.task(ent, 'cuffed', { instant = settled })
     elseif s == 'restrained' then
         Npc.task(ent, 'kneel', { instant = true })
+    elseif s == 'escorted' then
+        Npc.task(ent, 'followPed', { src = value.escortBy })
+    elseif s == 'contacted' and GetVehiclePedIsIn(ent, false) == 0 then
+        Npc.task(ent, 'stand', {})
+    elseif s == 'released' then
+        Npc.task(ent, 'leave', {})
     end
 end
 
@@ -1172,6 +1236,371 @@ RegisterNetEvent('crimson-police:client:runEnded', function(runId)
     local run = CurrentRun()
     if run and run.id ~= runId then return end
     ForgetRun()
+end)
+
+-- ============================================================================
+--                   CONTACT AND CUSTODY OPTIONS (ox_target)
+-- ============================================================================
+-- Police actions on mission peds and vehicles: options read only the cp bag (its contact label, kind and
+-- actions, and its state); the server resolves the target itself and re-checks everything (CP.Custody).
+-- Seated people are reached through their door's option (bones), since the car hides them from a raycast.
+
+local CONTACT_PREFIX = 'crimson-police:contact_'
+local CUSTODY_PREFIX = 'crimson-police:custody_'
+local SEAT_PREFIX = 'crimson-police:seat_'
+local STUN_EVENT = 'crimson-police:server:stunHit'
+local CONTACT_KEY = 'crimsonpolice_contact'
+local STUNGUN = joaat('WEAPON_STUNGUN')
+local DOORS = { door_dside_f = -1, door_pside_f = 0, door_dside_r = 1, door_pside_r = 2 }
+local DOOR_ORDER = { 'door_dside_f', 'door_pside_f', 'door_dside_r', 'door_pside_r' }
+local ICONS = {
+    talk = 'fas fa-id-card',
+    frisk = 'fas fa-hand',
+    detain = 'fas fa-handcuffs',
+    searchPerson = 'fas fa-magnifying-glass',
+    explain = 'fas fa-comments',
+    warn = 'fas fa-comment-dots',
+    cite = 'fas fa-file-signature',
+    release = 'fas fa-person-walking-arrow-right',
+    arrest = 'fas fa-gavel',
+    escort = 'fas fa-people-arrows',
+    lookInside = 'fas fa-eye',
+    runPlate = 'fas fa-magnifying-glass',
+    inspect = 'fas fa-clipboard-check',
+    orderOut = 'fas fa-door-open',
+    searchVehicle = 'fas fa-box-open',
+    noAction = 'fas fa-circle-check',
+    impound = 'fas fa-truck-pickup',
+}
+local PERSON_OPTIONS = { 'talk', 'frisk', 'detain', 'searchPerson', 'explain', 'warn', 'cite', 'release', 'arrest' }
+local CUSTODY_OPTIONS = { 'escort' }
+local VEHICLE_OPTIONS = {
+    'inspect',
+    'runPlate',
+    'lookInside',
+    'orderOut',
+    'searchVehicle',
+    'cite',
+    'noAction',
+    'impound',
+}
+local SEAT_OPTIONS = { 'talk', 'warn', 'cite', 'release' }
+-- Client-side state check (only which options show; the server decides).
+local PERSON_STATES = {
+    talk = { idle = true, contacted = true, cuffed = true, seated = true },
+    frisk = { contacted = true, cuffed = true },
+    detain = { contacted = true },
+    searchPerson = { cuffed = true, escorted = true },
+    explain = { contacted = true },
+    warn = { idle = true, contacted = true, cuffed = true },
+    cite = { idle = true, contacted = true, cuffed = true },
+    release = { idle = true, contacted = true, cuffed = true },
+    arrest = { cuffed = true },
+    escort = { cuffed = true, seated = true, escorted = true },
+}
+local VEHICLE_GONE = { impounded = true, released = true }
+local contactOptions = {}   -- option names registered with ox_target (for removal)
+local contactReady = false
+
+local function ActionLabel(action) return CP.L(('custody.action.%s'):format(action)) end
+
+local function ReachOf(kind, action)
+    local r = (Config.Custody and Config.Custody.reach) or {}
+    if kind == 'vehicle' then return tonumber(r.vehicle) or 3.0 end
+    if action == 'frisk' then return tonumber(r.frisk) or 1.5 end
+    return tonumber(r.person) or 2.0
+end
+
+local function ContactBag(entity)
+    local run = CurrentRun()
+    if not run or run.state ~= 'in_progress' then return nil end
+    if not entity or entity == 0 or not DoesEntityExist(entity) or not NetworkGetEntityIsNetworked(entity) then
+        return nil
+    end
+    local bag = BagOf(entity)
+    if not bag or bag.run ~= run.id or type(bag.contact) ~= 'table' then return nil end
+    return bag
+end
+
+local function Offers(bag, action)
+    return type(bag.contact.actions) == 'table' and U.contains(bag.contact.actions, action)
+end
+
+local function CanAct()
+    if InForeignArena() or cuffing then return false end
+    if CP.Custody and CP.Custody.busy and CP.Custody.busy() then return false end
+    return not IsEntityDead(PlayerPedId())
+end
+
+local function Perform(netId, action, extra)
+    if not (CP.Custody and CP.Custody.perform) then return end
+    CreateThread(function()
+        local ok, err = pcall(CP.Custody.perform, netId, action, extra)
+        if not ok then CP.warn(TAG, '%s failed: %s', action, tostring(err)) end
+    end)
+end
+
+local function PersonOption(action, prefix)
+    return {
+        name = prefix .. action,
+        icon = ICONS[action] or 'fas fa-user',
+        label = ActionLabel(action),
+        distance = ReachOf('person', action),
+        canInteract = function(entity, distance)
+            if not CanAct() or IsPedInAnyVehicle(PlayerPedId(), false) then return false end
+            local bag = ContactBag(entity)
+            if not bag or bag.contact.kind ~= 'person' or not Offers(bag, action) then return false end
+            local states = PERSON_STATES[action]
+            if states and not states[bag.state] then return false end
+            if action == 'escort' and bag.state == 'escorted' and bag.escortBy ~= MyServerId() then return false end
+            return (tonumber(distance) or 0) <= ReachOf('person', action)
+        end,
+        onSelect = function(data)
+            local ent = type(data) == 'table' and data.entity or data
+            if type(ent) == 'number' then Perform(NetworkGetNetworkIdFromEntity(ent), action) end
+        end,
+    }
+end
+
+local function VehicleOption(action)
+    return {
+        name = CONTACT_PREFIX .. action,
+        icon = ICONS[action] or 'fas fa-car',
+        label = ActionLabel(action),
+        distance = ReachOf('vehicle', action),
+        canInteract = function(entity, distance)
+            if not CanAct() or IsPedInAnyVehicle(PlayerPedId(), false) then return false end
+            local bag = ContactBag(entity)
+            if not bag or bag.contact.kind ~= 'vehicle' or not Offers(bag, action) or VEHICLE_GONE[bag.state] then
+                return false
+            end
+            return (tonumber(distance) or 0) <= ReachOf('vehicle', action)
+        end,
+        onSelect = function(data)
+            local ent = type(data) == 'table' and data.entity or data
+            if type(ent) == 'number' then Perform(NetworkGetNetworkIdFromEntity(ent), action) end
+        end,
+    }
+end
+
+-- A door option: the person in that seat (GetPedInVehicleSeat) is the target; the server resolves it again.
+local function SeatOption(action, door)
+    local seat = DOORS[door]
+    return {
+        name = ('%s%s_%s'):format(SEAT_PREFIX, action, door),
+        icon = ICONS[action] or 'fas fa-user',
+        label = ActionLabel(action),
+        bones = { door },
+        distance = ReachOf('vehicle', action),
+        canInteract = function(entity, distance)
+            if not CanAct() or IsPedInAnyVehicle(PlayerPedId(), false) then return false end
+            local vbag = ContactBag(entity)
+            if not vbag or vbag.contact.kind ~= 'vehicle' then return false end
+            local ped = GetPedInVehicleSeat(entity, seat)
+            if not ped or ped == 0 then return false end
+            local bag = ContactBag(ped)
+            if not bag or not Offers(bag, action) then return false end
+            local states = PERSON_STATES[action]
+            if states and not states[bag.state] then return false end
+            return (tonumber(distance) or 0) <= ReachOf('vehicle', action)
+        end,
+        onSelect = function(data)
+            local ent = type(data) == 'table' and data.entity or data
+            if type(ent) == 'number' then Perform(NetworkGetNetworkIdFromEntity(ent), action, { door = door }) end
+        end,
+    }
+end
+
+local function RegisterContactOptions()
+    if contactReady then return end
+    local peds, vehicles = {}, {}
+    for _, a in ipairs(PERSON_OPTIONS) do peds[#peds + 1] = PersonOption(a, CONTACT_PREFIX) end
+    for _, a in ipairs(CUSTODY_OPTIONS) do peds[#peds + 1] = PersonOption(a, CUSTODY_PREFIX) end
+    for _, a in ipairs(VEHICLE_OPTIONS) do vehicles[#vehicles + 1] = VehicleOption(a) end
+    for _, door in ipairs(DOOR_ORDER) do
+        for _, a in ipairs(SEAT_OPTIONS) do vehicles[#vehicles + 1] = SeatOption(a, door) end
+    end
+    local ok, err = pcall(function()
+        exports.ox_target:addGlobalPed(peds)
+        exports.ox_target:addGlobalVehicle(vehicles)
+    end)
+    if not ok then
+        CP.warn(TAG, 'could not add the contact options: %s', tostring(err))
+        return
+    end
+    contactOptions = {}
+    for _, o in ipairs(peds) do contactOptions[#contactOptions + 1] = { 'ped', o.name } end
+    for _, o in ipairs(vehicles) do contactOptions[#contactOptions + 1] = { 'vehicle', o.name } end
+    contactReady = true
+end
+
+local function RemoveContactOptions()
+    if not contactReady then return end
+    local pedNames, vehNames = {}, {}
+    for _, o in ipairs(contactOptions) do
+        if o[1] == 'ped' then pedNames[#pedNames + 1] = o[2] else vehNames[#vehNames + 1] = o[2] end
+    end
+    pcall(function()
+        exports.ox_target:removeGlobalPed(pedNames)
+        exports.ox_target:removeGlobalVehicle(vehNames)
+    end)
+    contactReady = false
+end
+
+-- ============================================================================
+--                  CONTACT KEY (HUD actions without a target)
+-- ============================================================================
+-- Run plate from a vehicle, Place in vehicle, Hand over to transport, Escort on/off.
+
+local function RunBags(filter)
+    local run = CurrentRun()
+    if not run then return {} end
+    local out = {}
+    for netId, bag in pairs(bags) do
+        if bag.run == run.id and filter(bag) then
+            local e = NetworkDoesNetworkIdExist(netId) and NetworkGetEntityFromNetworkId(netId) or 0
+            if e and e ~= 0 and DoesEntityExist(e) then out[#out + 1] = { netId = netId, entity = e, bag = bag } end
+        end
+    end
+    return out
+end
+
+local function NearestOfList(list, coords, range)
+    local best, bestD = nil, range
+    for _, x in ipairs(list) do
+        local d = U.dist(GetEntityCoords(x.entity), coords)
+        if d <= bestD then best, bestD = x, d end
+    end
+    return best
+end
+
+local function TransportVan(coords)
+    local list = {}
+    for _, veh in ipairs(GetGamePool('CVehicle')) do
+        local bag = BagOf(veh)
+        local run = CurrentRun()
+        if bag and run and bag.run == run.id and bag.role == 'service' and bag.tag == 'transport' then
+            list[#list + 1] = { entity = veh, netId = NetworkGetNetworkIdFromEntity(veh), bag = bag }
+        end
+    end
+    return NearestOfList(list, coords, 8.0)
+end
+
+local function ContactKey()
+    if not CanAct() or not CurrentRun() then return end
+    local me = PlayerPedId()
+    local pos = GetEntityCoords(me)
+    local myId = MyServerId()
+    local veh = GetVehiclePedIsIn(me, false)
+    if veh ~= 0 and GetPedInVehicleSeat(veh, -1) == me then
+        Perform(0, 'runPlateFromVehicle')
+        return
+    end
+    local mine = RunBags(function(b) return b.state == 'escorted' and b.escortBy == myId end)
+    local seated = RunBags(function(b) return b.state == 'seated' and b.seatedBy == myId end)
+    local van = TransportVan(pos)
+    if van and (#mine > 0 or #seated > 0) then
+        Perform(van.netId, 'handover')
+        return
+    end
+    if #mine > 0 then
+        local last = GetVehiclePedIsIn(me, true)
+        if last ~= 0 and U.dist(GetEntityCoords(last), pos) <= 5.0 then
+            Perform(mine[1].netId, 'seat')
+        else
+            Perform(mine[1].netId, 'escort')
+        end
+        return
+    end
+    local chain = RunBags(function(b)
+        return type(b.contact) == 'table' and U.contains(b.contact.actions or {}, 'escort')
+            and (b.state == 'cuffed' or b.state == 'seated')
+    end)
+    local near = NearestOfList(chain, pos, ReachOf('person', 'escort') + 0.5)
+    if near then Perform(near.netId, 'escort') end
+end
+
+RegisterCommand(CONTACT_KEY, function() CreateThread(ContactKey) end, false)
+
+CreateThread(function()
+    local key = Config.Tablet and Config.Tablet.contactKey
+    if type(key) ~= 'string' then key = '' end
+    RegisterKeyMapping(CONTACT_KEY, CP.L('npc.contact_keybind'), 'keyboard', key)
+end)
+
+-- ============================================================================
+--                  BEHAVIOURS (client:contactAct, host only)
+-- ============================================================================
+-- The server tells the host a behaviour at the moment it starts; runs and draws play a tell first, and the
+-- state change that follows (fleeing, hostile) is re-tasked by the bag handler above.
+
+local TELLS = {
+    tell_then_draw = { 'reaction@intimidation@1h', 'intro', 48 },
+    flee_on_approach = { 'amb@world_human_stand_impatient@male@no_sign@idle_a', 'idle_a', 48 },
+    flee_on_order = { 'amb@world_human_stand_impatient@male@no_sign@idle_a', 'idle_a', 48 },
+}
+
+local function ActOn(ped, data)
+    local b = data.behaviour
+    local args = type(data.args) == 'table' and data.args or {}
+    local tell = TELLS[b]
+    if tell then
+        local veh = GetVehiclePedIsIn(ped, false)
+        if veh ~= 0 and b ~= 'tell_then_draw' then TaskLeaveVehicle(ped, veh, 256) end
+        PlayAnim(ped, tell[1], tell[2], tell[3])
+        return
+    end
+    if b == 'walk_away' then
+        local pts = PointsOf(args.points)
+        local p = pts[#pts]
+        if p then
+            TaskFollowNavMeshToCoord(ped, p.x, p.y, p.z, 1.0, -1, 1.5, false, 0.0)
+        else
+            TaskWanderStandard(ped, 10.0, 10)
+        end
+    elseif b == 'exit_and_stand' then
+        local veh = VehicleOf(args.veh)
+        if veh and GetVehiclePedIsIn(ped, false) == veh then TaskLeaveVehicle(ped, veh, 0) end
+    elseif b == 'walk_to' then
+        local veh = VehicleOf(args.veh)
+        if veh then TaskGoToEntity(ped, veh, -1, 2.5, 1.0, 0, 0) end
+    elseif b == 'drive_off' or b == 'leave' then
+        Npc.task(ped, 'leave', { force = true })
+    end
+end
+
+RegisterNetEvent('crimson-police:client:contactAct', function(data)
+    if type(data) ~= 'table' or type(data.netId) ~= 'number' then return end
+    local run = CurrentRun()
+    if not run or run.id ~= data.runId or not run.isHost then return end
+    CreateThread(function()
+        local ped = EntityFromNet(data.netId, ENTITY_WAIT_MS)
+        if not ped or not ValidPed(ped) or not Control(ped, CONTROL_MS) then return end
+        local ok, err = pcall(ActOn, ped, data)
+        if not ok then CP.warn(TAG, 'behaviour %s failed: %s', tostring(data.behaviour), tostring(err)) end
+    end)
+end)
+
+-- ============================================================================
+--              EXCESSIVE FORCE TELEMETRY (stun_hit, best effort)
+-- ============================================================================
+-- A melee or taser hit by this player on a detained, escorted, seated or compliant person. The server accepts it
+-- only when it matches a ragdoll or state change of that ped it saw within 1 s.
+
+local FORCE_STATES = { cuffed = true, escorted = true, seated = true, contacted = true }
+local stunSentAt = 0
+
+AddEventHandler('gameEventTriggered', function(name, args)
+    if name ~= 'CEventNetworkEntityDamage' or type(args) ~= 'table' then return end
+    local victim, attacker, weapon = args[1], args[2], args[7]
+    if attacker ~= PlayerPedId() or not ValidPed(victim) then return end
+    local bag = ContactBag(victim) or BagOf(victim)
+    local run = CurrentRun()
+    if not bag or not run or bag.run ~= run.id or not FORCE_STATES[bag.state] then return end
+    local melee = weapon == STUNGUN or GetWeaponDamageType(weapon) == 2
+    if not melee or Now() - stunSentAt < 500 then return end
+    stunSentAt = Now()
+    TriggerServerEvent(STUN_EVENT, NetworkGetNetworkIdFromEntity(victim))
 end)
 
 -- ============================================================================
@@ -1319,6 +1748,7 @@ end
 local function RegisterAll()
     targetReady = true
     for _, label in ipairs(optionOrder) do RegisterOption(label) end
+    RegisterContactOptions()
 end
 
 local function RemoveAll()
@@ -1329,6 +1759,7 @@ local function RemoveAll()
         local ok, err = pcall(function() exports.ox_target:removeGlobalPed(names) end)
         if not ok then CP.warn(TAG, 'could not remove the ox_target options: %s', tostring(err)) end
     end
+    RemoveContactOptions()
     targetReady = false
 end
 
@@ -1346,7 +1777,10 @@ AddEventHandler('onClientResourceStart', function(res)
 end)
 
 AddEventHandler('onClientResourceStop', function(res)
-    if res == 'ox_target' then targetReady = false end
+    if res == 'ox_target' then
+        targetReady = false
+        contactReady = false
+    end
 end)
 
 -- Crimson-Arena placed the local player: stop a cuff in progress (docs/CRIMSON_ARENA.md rule 8).
@@ -1355,6 +1789,7 @@ AddStateBagChangeHandler('crimsonArena', ('player:%d'):format(GetPlayerServerId(
         cuffing.cancelled = true
         CancelProgress()
     end
+    if Foreign(value) and CP.Custody and CP.Custody.cancel then CP.Custody.cancel() end
 end)
 
 AddEventHandler('onResourceStop', function(res)

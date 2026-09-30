@@ -304,6 +304,18 @@ local function Loop(S)
                                 end
                             end
                         end
+                        -- covering a surrendered suspect keeps a feint from starting (the server times it)
+                        if
+                            state == 'surrendered'
+                            and (tonumber(obj.feint) or 0) > 0
+                            and not info.armed
+                            and U.dist(myPos, GetEntityCoords(ent)) <= Config.Blocks[BLOCK].aimDistance[2]
+                            and (
+                                IsPlayerFreeAimingAtEntity(PlayerId(), ent) or IsPlayerTargettingEntity(PlayerId(), ent)
+                            )
+                        then
+                            ReportOnce(S, 'aim', info.netId)
+                        end
                         if showBlips and state ~= 'dead' and state ~= 'cuffed' then
                             EnsureBlip(S, info.netId, ent)
                         else

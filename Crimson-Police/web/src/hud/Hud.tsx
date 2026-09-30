@@ -8,6 +8,8 @@ import { formatDistance, formatDuration } from '../shared/format';
 import { useCountdown } from '../shared/hooks';
 import { t } from '../shared/i18n';
 import type { HudObjective, HudState } from '../shared/types';
+import type { HudContact } from '../types/custody';
+import { ContactCard } from './ContactCard';
 import TestControls from './TestControls';
 
 function Timer({ timer }: { timer: NonNullable<HudState['timer']> }) {
@@ -176,6 +178,8 @@ export function Hud({ hud }: { hud: HudState }) {
                         <span>{hud.message.text}</span>
                     </div>
                 ) : null}
+
+                <ContactCard contact={(hud as HudState & { contact?: HudContact | false | null }).contact} />
 
                 {showRoute && hud.route ? <RouteLine route={hud.route} /> : null}
 

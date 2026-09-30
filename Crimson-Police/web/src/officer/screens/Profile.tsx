@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import {
+    Avatar,
     Badge,
     Button,
     Card,
@@ -9,6 +10,7 @@ import {
     Dialog,
     EmptyState,
     ErrorState,
+    Field,
     Grid,
     Icon,
     LoadingBlock,
@@ -16,8 +18,10 @@ import {
     ProgressBar,
     Row,
     Screen,
+    Select,
     Stat,
     Table,
+    Textarea,
     TierBadge,
     Toggle,
     XpBadge,
@@ -41,7 +45,14 @@ import { useNavigate, useNavigation } from '../../shared/navigation';
 import { useSession } from '../../shared/session';
 import type { RunResult, Session } from '../../shared/types';
 import { asList, type ProfileData, type ProfileRunView } from '../../types/boards';
+import { CommendationsCard } from '../components/CommendationsCard';
+import { LookCard } from '../components/LookCard';
+import { ProfileEditDialog } from '../components/ProfileEditDialog';
+import { ServiceRecordCard } from '../components/ServiceRecordCard';
 import './Profile.css';
+
+const REPORT_REASONS = ['picture', 'bio', 'other'];
+const REPORT_NOTE_MAX = 140;
 
 const STATE_TONE = { completed: 'success', failed: 'danger', abandoned: 'neutral' } as const;
 const BADGE_ICON: Record<string, IconName> = {
@@ -255,6 +266,11 @@ export default function Profile() {
     const { run, busy } = useAction();
     const [openRun, setOpenRun] = useState<ProfileRunView | null>(null);
     const [disputeRun, setDisputeRun] = useState<ProfileRunView | null>(null);
+    const [editing, setEditing] = useState(false);
+    const [lookVersion, setLookVersion] = useState(0);
+    const [reporting, setReporting] = useState(false);
+    const [reportReason, setReportReason] = useState('picture');
+    const [reportNote, setReportNote] = useState('');
 
     // Do not show the previous profile while another one loads.
     const profile = data && (target ? data.citizenid === target : data.own) ? data : null;
@@ -268,6 +284,19 @@ export default function Profile() {
             success: value ? 'profile.hide_on' : 'profile.hide_off',
         });
         if (res.ok) setData(prev => (prev ? { ...prev, hideName: res.data?.hideName ?? value } : prev));
+    };
+
+    const sendReport = async () => {
+        if (!profile) return;
+        const res = await run(
+            'server:profile:report',
+            { citizenid: profile.citizenid, reason: reportReason, note: reportNote.trim() || undefined },
+            { success: 'profile.report.sent' },
+        );
+        if (res.ok) {
+            setReporting(false);
+            setReportNote('');
+        }
     };
 
     const sendDispute = async (reason: string) => {
@@ -381,17 +410,23 @@ export default function Profile() {
         );
     }
 
-    const level = profile.level ?? { label: '', badge: 'grey', xp: 0, next: null };
-    const hasNext = typeof level.next === 'number' && level.next > level.xp;
-    const into = Math.max(0, profile.xp - (level.xp || 0));
-    const span = hasNext ? (level.next as number) - (level.xp || 0) : 1;
-    const initials = profile.name
-        .split(/\s+/)
-        .filter(Boolean)
-        .slice(0, 2)
-        .map(w => w[0])
-        .join('')
-        .toUpperCase();
+    const level = profile.level ?? {
+        n: 1,
+        label: '',
+        badge: 'grey',
+        xp: 0,
+        levelXp: 0,
+        nextLevelXp: null,
+        prestige: 0,
+    };
+    const levelStart = level.levelXp ?? 0;
+    const levelNext = level.nextLevelXp ?? null;
+    const hasNext = typeof levelNext === 'number' && levelNext > levelStart;
+    const into = Math.max(0, profile.xp - levelStart);
+    const span = hasNext ? (levelNext as number) - levelStart : 1;
+    const levelText = level.label
+        ? t('profile.level_named', { n: level.n, label: level.label })
+        : t('profile.level', { n: level.n });
 
     return (
         <Screen
@@ -399,28 +434,45 @@ export default function Profile() {
             subtitle={own ? t('profile.subtitle_own') : t('profile.subtitle_public')}
             actions={
                 !own ? (
-                    <Button variant="ghost" icon="chevronLeft" onClick={() => navigate('leaderboard')}>
-                        {t('profile.back')}
+                    <>
+                        <Button variant="ghost" icon="flag" onClick={() => setReporting(true)}>
+                            {t('profile.report.button')}
+                        </Button>
+                        <Button variant="ghost" icon="chevronLeft" onClick={() => navigate('leaderboard')}>
+                            {t('profile.back')}
+                        </Button>
+                    </>
+                ) : (
+                    <Button variant="secondary" icon="edit" onClick={() => setEditing(true)}>
+                        {t('profile.edit.button')}
                     </Button>
-                ) : undefined
+                )
             }
             className="boards-profile-screen"
         >
             <Grid cols="minmax(0, 3fr) minmax(0, 2fr)" gap={4} align="stretch">
                 <Card padding="lg" className="boards-idcard">
                     <div className="boards-id">
-                        <span className={cx('boards-avatar', `is-${level.badge}`)} aria-hidden>
-                            {initials || '?'}
-                        </span>
+                        <Avatar
+                            avatar={profile.avatar}
+                            name={profile.name}
+                            size={64}
+                            className="boards-profile-avatar"
+                        />
                         <span className="boards-id__text">
                             <span className="boards-id__name">{profile.name}</span>
                             <span className="boards-id__line">
-                                {[profile.rank, profile.departmentShort, profile.callsign || t('common.no_callsign')]
+                                {[
+                                    profile.rank,
+                                    profile.departmentShort,
+                                    // the callsign is read live from Qbox; the own profile says how to set it
+                                    profile.callsign || t(own ? 'profile.callsign_missing' : 'common.no_callsign'),
+                                ]
                                     .filter(Boolean)
                                     .join(' · ')}
                             </span>
                             <Row gap={2} wrap>
-                                <XpBadge badge={level.badge} label={level.label} />
+                                <XpBadge badge={level.badge} label={levelText} />
                                 {own && profile.hideName ? (
                                     <Badge tone="neutral" icon="eye">
                                         {t('profile.name_hidden')}
@@ -429,6 +481,7 @@ export default function Profile() {
                             </Row>
                         </span>
                     </div>
+                    {profile.bio ? <p className="boards-bio">{profile.bio}</p> : null}
                     <ProgressBar
                         className="boards-xpbar"
                         tone="accent"
@@ -436,7 +489,7 @@ export default function Profile() {
                         max={span}
                         label={
                             hasNext
-                                ? t('profile.xp_to_next', { next: formatNumber(level.next as number) })
+                                ? t('profile.xp_to_next', { next: formatNumber(levelNext as number) })
                                 : t('profile.xp_max')
                         }
                         showValue={
@@ -515,6 +568,20 @@ export default function Profile() {
                     />
                 )}
             </Card>
+
+            <Grid cols="minmax(0, 3fr) minmax(0, 2fr)" gap={4} align="start">
+                <ServiceRecordCard
+                    lifetime={profile.service?.lifetime}
+                    season={profile.service?.season}
+                    bests={profile.bests}
+                    partner={profile.favouritePartner}
+                    cleanArrestRate={own ? profile.cleanArrestRate : null}
+                />
+                <div className="boards-profile-side">
+                    <CommendationsCard commendations={profile.commendations} mdt={profile.mdtCommendations} />
+                    {own ? <LookCard version={lookVersion} onEdit={() => setEditing(true)} /> : null}
+                </div>
+            </Grid>
 
             <Card
                 title={t('profile.history')}
@@ -607,6 +674,46 @@ export default function Profile() {
                         )}
                     </div>
                 ) : null}
+            </Dialog>
+
+            {own ? (
+                <ProfileEditDialog
+                    open={editing}
+                    onClose={() => setEditing(false)}
+                    onSaved={() => {
+                        void refetch();
+                        setLookVersion(v => v + 1);
+                    }}
+                />
+            ) : null}
+
+            <Dialog
+                open={reporting}
+                onClose={() => setReporting(false)}
+                title={t('profile.report.title', { name: profile.name })}
+                description={t('profile.report.text')}
+                size="sm"
+                footer={
+                    <>
+                        <Button variant="ghost" onClick={() => setReporting(false)}>
+                            {t('common.cancel')}
+                        </Button>
+                        <Button variant="danger" icon="flag" loading={busy} onClick={() => void sendReport()}>
+                            {t('profile.report.send')}
+                        </Button>
+                    </>
+                }
+            >
+                <Field label={t('profile.report.reason')}>
+                    <Select
+                        value={reportReason}
+                        onChange={setReportReason}
+                        options={REPORT_REASONS.map(r => ({ value: r, label: t(`profile.report.reason.${r}`) }))}
+                    />
+                </Field>
+                <Field label={t('profile.report.note')} hint={t('profile.report.note_hint')}>
+                    <Textarea value={reportNote} onChange={setReportNote} maxLength={REPORT_NOTE_MAX} rows={2} />
+                </Field>
             </Dialog>
 
             <ConfirmDialog

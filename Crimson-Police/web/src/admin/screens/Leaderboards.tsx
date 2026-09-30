@@ -52,6 +52,7 @@ import {
     formatDay,
 } from '../../officer/screens/Leaderboard';
 import { ResultCell, missionTypeLabel } from '../../officer/screens/Profile';
+import { ItemRewardsPanel } from '../components/ItemRewardsPanel';
 import './Leaderboards.css';
 
 const AWARD_MAX = 10000; // modules/admin: 1 to 10,000 points per manual award
@@ -201,6 +202,26 @@ export function FlaggedPanel({
     );
 }
 
+// Boards or Item rewards (the optional item rewards, modules/rewards)
+type AdminBoardsView = 'boards' | 'rewards';
+
+function ViewTabs({ value, onChange }: { value: AdminBoardsView; onChange: (v: AdminBoardsView) => void }) {
+    const items: { key: AdminBoardsView; label: string }[] = [
+        { key: 'boards', label: t('admin.rewards.tab_boards') },
+        { key: 'rewards', label: t('admin.rewards.tab') },
+    ];
+    return (
+        <SegmentedControl
+            size="sm"
+            value={value}
+            onChange={onChange}
+            items={items}
+            aria-label={t('admin.rewards.tabs')}
+            className="boards-admin-view"
+        />
+    );
+}
+
 export default function AdminLeaderboards() {
     const session = useSession();
     const { run, busy } = useAction();
@@ -214,6 +235,7 @@ export default function AdminLeaderboards() {
     const [voidRun, setVoidRun] = useState<AdminRun | null>(null);
     const [award, setAward] = useState<AwardForm | null>(null);
     const [review, setReview] = useState<{ row: FlaggedRow; decision: 'approve' | 'void' } | null>(null);
+    const [view, setView] = useState<AdminBoardsView>('boards');
     const flaggedReq = useRequest<{ flagged: FlaggedRow[] }>('admin:getFlagged', {}, { pollMs: 60000 });
     const flaggedRows = asList(flaggedReq.data?.flagged);
 
@@ -444,6 +466,19 @@ export default function AdminLeaderboards() {
     const tabs = BOARD_PERIODS.map(p => ({ key: p, label: t(`leaderboard.period.${p}`) }));
     const filterOptions = boardFilters(session).map(f => ({ value: f, label: filterLabel(f, session) }));
 
+    if (view === 'rewards') {
+        return (
+            <Screen
+                title={t('ui.screen.admin_leaderboards')}
+                subtitle={t('admin.rewards.subtitle')}
+                className="boards-admin-boards"
+            >
+                <ViewTabs value={view} onChange={setView} />
+                <ItemRewardsPanel />
+            </Screen>
+        );
+    }
+
     return (
         <Screen
             title={t('ui.screen.admin_leaderboards')}
@@ -468,6 +503,7 @@ export default function AdminLeaderboards() {
             }
             className="boards-admin-boards"
         >
+            <ViewTabs value={view} onChange={setView} />
             <div className="boards-admin-toolbar">
                 <Tabs items={tabs} value={period} onChange={setPeriod} aria-label={t('leaderboard.periods')} />
                 <Row gap={2} wrap>

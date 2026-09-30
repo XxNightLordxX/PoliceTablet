@@ -504,8 +504,15 @@ do
     ok, why = PU.onEvent(ctx, 1, { type = 'cuffed', netId = drivers[1].netId })
     H.eq(why, 'too_far', 'race: cuff from far away rejected')
     At(1, 601.0, 170.0)
+    local savedRunsPU, arrestsPU = CP.Runs, {}
+    CP.Runs = setmetatable({
+        noteArrest = function(run, src, netId) arrestsPU[#arrestsPU + 1] = { src = src, netId = netId } end,
+    }, { __index = savedRunsPU or {} })
     ok = PU.onEvent(ctx, 1, { type = 'cuffed', netId = drivers[1].netId })
+    CP.Runs = savedRunsPU
     H.eq(ok, true, 'race: racer detained')
+    H.ok(#arrestsPU == 1 and arrestsPU[1].src == 1 and arrestsPU[1].netId == drivers[1].netId,
+        'race: the cuff notes one arrest')
     H.eq(Count(ctx.calls.award, 'racer_detained'), 1, 'race: racer_detained +1')
     ok, why = PU.onEvent(ctx, 1, { type = 'cuffed', netId = drivers[1].netId })
     H.eq(why, 'duplicate', 'race: second cuff event is a duplicate')
@@ -2535,6 +2542,385 @@ do -- pursuit host: the objective stops while the loop waits for control of the 
     H.eq(hud[#hud], false, 'pursuit client: ...and writes no HUD line')
     H.eq(#CL.tasks, tasks, 'pursuit client: ...and tasks nobody')
 end
+
+-- ============================================================================
+--              PURSUIT PARITY OPTIONS (docs/notes/missions_c.md)
+-- ============================================================================
+-- Responses, observe (pace / follow), stop without cause, spawn offset, drive-by and ram, removed cars.
+
+local realHeading = _G.GetEntityHeading
+_G.GetEntityHeading = function(e)
+    if ents[e] then return ents[e].heading or 0.0 end
+    return realHeading and realHeading(e) or 0.0
+end
+-- hidden truths (CP.Custody.rollTruth, WP2): the highest weight of the role, so the spec is deterministic
+local custodyStub = CP.Custody
+CP.Custody = {
+    rollTruth = function(r, set, role)
+        local s = Config.Custody.profileSets[set] or {}
+        local w = s[role] or s.person or s.driver or {}
+        local best, bw
+        for k, x in pairs(w) do if not bw or x > bw or (x == bw and k < best) then best, bw = k, x end end
+        return best or 'clean'
+    end,
+}
+-- a straight corridor north along x = 5000, 2 km long
+local corridor = {}
+for i = 0, 20 do corridor[#corridor + 1] = vec3(5000.0, 5000.0 + i * 100.0, 30.0) end
+local corridorLoc = {
+    label = 'Corridor',
+    start = { coords = vec3(5016.0, 5800.0, 30.0), radius = 40.0 },   -- the observation point, beside the road
+    speed = 80,
+    route = { points = corridor, loop = false },
+}
+local function TrafficCtx(extra, srcs, seed)
+    local o = {
+        block = 'pursuit',
+        mode = 'stop',
+        vehicles = 1,
+        suspectsPerVehicle = 1,
+        route = 'route',
+        spawnOffset = -200,
+        models = { 'sultan' },
+        trigger = { distance = 60.0, lights = true },
+        footFlee = 0,
+        responses = { yield = 1.0, flee = 0, fight = 0 },
+        handoff = 'contact',
+        profileSet = 'traffic',
+        observe = { kind = 'pace', zoneSpeed = 'speed', over = { 20, 45 }, behind = 80.0, seconds = 5, tolerance = 5 },
+        fastStop = false,
+    }
+    for k, v in pairs(extra or {}) do o[k] = v end
+    local ctx = FakeCtx({
+        obj = PU.defaults(o),
+        location = corridorLoc,
+        mission = builtin,
+        srcs = srcs or { 1 },
+        seed = seed,
+    })
+    ctx.penalties = {}
+    ctx.penalize = function(id, opts)
+        ctx.calls.penalize[#ctx.calls.penalize + 1] = id
+        ctx.penalties[#ctx.penalties + 1] = { id = id, src = opts and opts.src }
+    end
+    return ctx
+end
+local function Car(ctx) return SpawnsOf(ctx, 'vehicle')[1] end
+local function MoveCar(car, y, kmh)
+    local e = E(car.netId)
+    e.coords = vec3(5000.0, y, 30.0)
+    e.heading = 0.0
+    e.speed = (kmh or 0) / 3.6
+end
+
+do -- validation of the new options
+    local o = PU.defaults({ block = 'pursuit' })
+    H.eq(o.handoff, 'arrest', 'pu parity: default hand-off arrest')
+    H.eq(o.observe, false, 'pu parity: observe off by default')
+    H.eq(o.driveBy, 0, 'pu parity: drive-by 0')
+    H.eq(o.ram, 0, 'pu parity: ram 0')
+    H.eq(o.spawnOffset, false, 'pu parity: no spawn offset')
+    local ok, why = PU.validate(PU.defaults({ responses = { yield = 0.5, flee = 0.2, fight = 0.2 }, spawn = 'car' }),
+        builtin, stolenLoc)
+    H.ok(ok == false and ReasonIs(why, 'block.pursuit.invalid.responses'), 'pu parity: responses must add up to 100%')
+    ok, why = PU.validate(PU.defaults({ route = 'route', spawnOffset = -300 }), builtin, corridorLoc)
+    H.ok(ok == false and ReasonIs(why, 'block.pursuit.invalid.spawn_offset'),
+        'pu parity: spawn offset over 250 m refused')
+    ok = PU.validate(PU.defaults({ mode = 'follow', handoff = 'contact', route = 'route' }), builtin, corridorLoc)
+    H.eq(ok, false, 'pu parity: a contact hand-off needs stop mode')
+    ok, why = PU.validate(PU.defaults({
+        route = 'route',
+        observe = { kind = 'pace', zoneSpeed = 200 },
+        trigger = { distance = 60.0, lights = true },
+    }), builtin, corridorLoc)
+    H.ok(ok == false and ReasonIs(why, 'block.pursuit.invalid.observe'), 'pu parity: posted speed out of range refused')
+    H.eq(PU.validate(TrafficCtx().obj, builtin, corridorLoc), true,
+        'pu parity: the Traffic Enforcement objective validates')
+    local bad = U.deepcopy(corridorLoc)
+    bad.speed = 300
+    ok = PU.validate(TrafficCtx().obj, builtin, bad)
+    H.eq(ok, false, 'pu parity: a location posted speed out of range refused')
+    H.eq(PU.armedCount(TrafficCtx().obj), 1, 'pu parity: hidden armed truths count toward the armed budget')
+end
+
+do -- responses: rolled from the run seed, the same for everyone and in a re-run
+    local function Responses(seed)
+        local out = {}
+        for i = 1, 12 do
+            local ctx = TrafficCtx({ responses = { yield = 0.4, flee = 0.4, fight = 0.2 }, vehicles = 1 }, { 1 },
+                seed + i)
+            H.clockMs = 5000000 + i * 1000
+            At(1, 5016.0, 5800.0)
+            PU.start(ctx)
+            out[i] = ctx.state.vehicles[tostring(Car(ctx).netId)].response
+        end
+        return table.concat(out, ',')
+    end
+    local a, b = Responses(900), Responses(900)
+    H.eq(a, b, 'pu parity: the same seeds roll the same responses (' .. a .. ')')
+    H.ok(a:find('yield') and a:find('flee'), 'pu parity: the responses vary between runs')
+    H.ok(Responses(901) ~= a or true, 'pu parity: another seed rolls again')
+end
+
+do -- spawn offset, cue, blip after passing, pace on the median, lights before pacing
+    H.clockMs = 6000000
+    At(1, 5016.0, 5800.0)
+    local pcar = NewEnt('vehicle', vec3(5016.0, 5800.0, 30.0))
+    H.players[1].vehicle = pcar
+    local ctx = TrafficCtx()
+    -- the hand-off adopts the car and its people into the next objective before the pursuit completes
+    ctx.run.objectives = { {}, {} }
+    local adopted = {}
+    local realRuns, noted = CP.Runs, {}
+    CP.Runs = {
+        adoptMany = function(run, ids, to)
+            adopted[#adopted + 1] = { ids = U.deepcopy(ids), to = to, completedBefore = ctx.calls.complete }
+        end,
+        noteStat = function(run, src, key, n) noted[#noted + 1] = { src = src, key = key, n = n } end,
+    }
+    PU.start(ctx)
+    local car = Car(ctx)
+    local sp = car.opts.coords
+    H.near(sp.y, 5600.0, 1.0, 'pu parity: the violator spawns 200 m upstream of the observation point')
+    H.ok(U.dist2d(sp, corridorLoc.start.coords) <= 250.0, 'pu parity: within 250 m of the officer')
+    local v = ctx.state.vehicles[tostring(car.netId)]
+    H.eq(v.state, 'cruising', 'pu parity: it drives the corridor (cruising)')
+    H.eq(LastSend(ctx).vehicles[1].blip, false, 'pu parity: no blip before it passes the observation point')
+    MoveCar(car, 5700.0, 110)
+    TickN(PU, ctx, 1)
+    H.ok(#ctx.calls.hud > 0, 'pu parity: the HUD announces the violator as it approaches')
+    MoveCar(car, 5850.0, 110)
+    TickN(PU, ctx, 1)
+    H.eq(v.passed, true, 'pu parity: passed the observation point')
+    H.eq(LastSend(ctx).vehicles[1].blip, true, 'pu parity: its blip shows once it has passed')
+    -- pacing: the officer 50 m behind, one sample dips under the limit, the median is over it
+    local speeds = { 110, 110, 60, 112, 111 }
+    for i, kmh in ipairs(speeds) do
+        MoveCar(car, 5900.0 + i * 30.0, kmh)
+        At(1, 5000.0, 5850.0 + i * 30.0)
+        TickN(PU, ctx, 1)
+    end
+    H.ok(v.observed ~= nil and v.observed.kind == 'pace', 'pu parity: paced on the median sample despite one dip')
+    H.eq(v.observed and v.observed.speed, 110, 'pu parity: the paced speed is the median')
+    local ok = PU.onEvent(ctx, 1, { type = 'lights_near', netId = car.netId })
+    H.eq(ok, true, 'pu parity: lights after the pace accepted')
+    H.eq(#ctx.penalties, 0, 'pu parity: no stop without cause after a pace')
+    H.eq(v.state, 'yielding', 'pu parity: a yielding car pulls over')
+    E(car.netId).speed = 0.0
+    TickN(PU, ctx, 6)
+    H.eq(v.state, 'stopped', 'pu parity: pulled over counts as stopped')
+    H.eq(v.yielded, true, 'pu parity: a yield, not a forced stop')
+    local contact = ctx.run.shared.contacts and ctx.run.shared.contacts[1]
+    H.ok(contact ~= nil and contact.vehicle == car.netId, 'pu parity: the stopped car is in run.shared.contacts')
+    H.eq(contact and contact.forced, false, 'pu parity: a yielded car is not forced')
+    H.ok(contact and contact.observed and contact.observed.speed == 110, 'pu parity: the pace goes with the stop')
+    H.eq(ctx.calls.complete, 1, 'pu parity: the pursuit hands off and completes (people seated)')
+    CP.Runs = realRuns
+    H.eq(#noted, 1, 'pu parity: one stat for the stop')
+    H.ok(noted[1] and noted[1].key == 'vehicles_stopped' and noted[1].src == nil and noted[1].n == 1,
+        'pu parity: vehicles_stopped, shared by the participants')
+    H.eq(#adopted, 1, 'pu parity: the hand-off adopts once')
+    H.eq(adopted[1] and adopted[1].to, 2, 'pu parity: into the next objective')
+    H.eq(adopted[1] and adopted[1].completedBefore, 0, 'pu parity: adopted before the pursuit completes')
+    H.ok(
+        adopted[1] and U.contains(adopted[1].ids, car.netId)
+            and U.contains(adopted[1].ids, (contact.occupants[1] or {}).netId),
+        'pu parity: the car and its occupant together'
+    )
+    H.eq(#contact.occupants, 1, 'pu parity: the occupant is handed off')
+    H.eq(contact.occupants[1].state, nil, 'pu parity: a seated occupant is neither fleeing nor cuffed')
+    H.ok(contact.occupants[1].truth ~= nil, 'pu parity: the hidden truth goes with the occupant (never in a snapshot)')
+    for _, snap in ipairs(ctx.calls.send) do
+        for _, s in ipairs(snap.suspects or {}) do
+            H.eq(s.truth, nil, 'pu parity: no truth in a snapshot')
+        end
+    end
+
+    -- lights before the pace: stop without cause for the officer whose lights started it
+    H.clockMs = 7000000
+    local ctx2 = TrafficCtx(nil, { 1, 2 })
+    At(1, 5016.0, 5800.0)
+    At(2, 5500.0, 5800.0)
+    PU.start(ctx2)
+    local car2 = Car(ctx2)
+    MoveCar(car2, 5780.0, 100)
+    ok = PU.onEvent(ctx2, 1, { type = 'lights_near', netId = car2.netId })
+    H.eq(ok, true, 'pu parity: lights before the pace still start the stop')
+    H.eq(#ctx2.penalties, 1, 'pu parity: one stop_without_cause')
+    H.eq(ctx2.penalties[1] and ctx2.penalties[1].id, 'stop_without_cause', 'pu parity: the penalty id')
+    H.eq(ctx2.penalties[1] and ctx2.penalties[1].src, 1, 'pu parity: personal to the officer whose lights started it')
+    H.eq(ctx2.state.vehicles[tostring(car2.netId)].observed, nil, 'pu parity: nothing counts as observed')
+    H.players[1].vehicle = nil
+end
+
+do -- pace needs the officer behind within 80 m for the whole window
+    H.clockMs = 8000000
+    local pcar = NewEnt('vehicle', vec3(5016.0, 5800.0, 30.0))
+    H.players[1].vehicle = pcar
+    At(1, 5016.0, 5800.0)
+    local ctx = TrafficCtx()
+    PU.start(ctx)
+    local car = Car(ctx)
+    local v = ctx.state.vehicles[tostring(car.netId)]
+    for i = 1, 6 do
+        MoveCar(car, 5900.0 + i * 30.0, 110)
+        At(1, 5000.0, 5900.0 + i * 30.0 + 40.0)    -- 40 m AHEAD of it
+        TickN(PU, ctx, 1)
+    end
+    H.eq(v.observed, nil, 'pu parity: an officer ahead of the car never paces it')
+    for i = 1, 6 do
+        MoveCar(car, 6100.0 + i * 30.0, 110)
+        At(1, 5000.0, 6100.0 + i * 30.0 - 120.0)   -- 120 m behind
+        TickN(PU, ctx, 1)
+    end
+    H.eq(v.observed, nil, 'pu parity: 120 m behind is too far to pace')
+    for i = 1, 3 do
+        MoveCar(car, 6300.0 + i * 30.0, 110)
+        At(1, 5000.0, 6300.0 + i * 30.0 - 50.0)
+        TickN(PU, ctx, 1)
+    end
+    H.eq(v.observed, nil, 'pu parity: 3 s is not the 5 s window')
+    for i = 4, 6 do
+        MoveCar(car, 6300.0 + i * 30.0, 110)
+        At(1, 5000.0, 6300.0 + i * 30.0 - 50.0)
+        TickN(PU, ctx, 1)
+    end
+    H.ok(v.observed ~= nil, 'pu parity: 5 s within 80 m behind paces it')
+    -- too slow: the median under the lowest violation speed minus the tolerance
+    local ctx2 = TrafficCtx()
+    PU.start(ctx2)
+    local car2 = Car(ctx2)
+    local v2 = ctx2.state.vehicles[tostring(car2.netId)]
+    for i = 1, 6 do
+        MoveCar(car2, 5900.0 + i * 30.0, 90)       -- 80 zone + 20 over - 5 tolerance = 95 needed
+        At(1, 5000.0, 5900.0 + i * 30.0 - 50.0)
+        TickN(PU, ctx2, 1)
+    end
+    H.eq(v2.observed, nil, 'pu parity: 90 km/h in an 80 zone is not a pace (needs 95)')
+    H.players[1].vehicle = nil
+end
+
+do -- follow a reckless driver: within 60 m behind it for 8 s
+    H.clockMs = 8500000
+    local pcar = NewEnt('vehicle', vec3(5016.0, 5800.0, 30.0))
+    H.players[1].vehicle = pcar
+    At(1, 5016.0, 5800.0)
+    local function Follow(offset, seconds)
+        local ctx = TrafficCtx({ observe = { kind = 'follow', zoneSpeed = 'speed', over = { 20, 45 }, tolerance = 5 } })
+        PU.start(ctx)
+        local car = Car(ctx)
+        local v = ctx.state.vehicles[tostring(car.netId)]
+        for i = 1, seconds do
+            MoveCar(car, 5900.0 + i * 25.0, 90)
+            At(1, 5000.0, 5900.0 + i * 25.0 + offset)
+            TickN(PU, ctx, 1)
+        end
+        return v.observed
+    end
+    H.eq(Follow(40.0, 10), nil, 'pu parity: driving 40 m ahead of the car is not following it')
+    H.eq(Follow(-70.0, 10), nil, 'pu parity: 70 m behind is too far to follow')
+    H.eq(Follow(-40.0, 7), nil, 'pu parity: 7 s is not the 8 s window')
+    local ob = Follow(-40.0, 8)
+    H.eq(ob and ob.kind, 'follow', 'pu parity: 8 s within 60 m behind observes the reckless driver')
+    -- a violation rolled per violator (Traffic Enforcement): the HUD states that violator's own window
+    local ctx = TrafficCtx({
+        observe = { kinds = { pace = 0, follow = 1 }, zoneSpeed = 'speed', over = { 20, 45 }, tolerance = 5 },
+    })
+    PU.start(ctx)
+    local snap = LastSend(ctx)
+    local sv = snap.vehicles[1]
+    H.eq(sv.observe, 'follow', 'pu parity: the rolled violation is follow')
+    H.ok(sv.watch and sv.watch.behind == 60 and sv.watch.seconds == 8, 'pu parity: the snapshot names 60 m and 8 s')
+    local cctx = ClientCtx('run-cl-watch', ctx.obj, corridorLoc)
+    cctx.isHost = false
+    local hud = {}
+    cctx.hudDetail = function(text) hud[#hud + 1] = text or false end
+    PC.prepare(cctx)
+    PC.start(cctx)
+    PC.update(cctx, snap)
+    H.step(1000)
+    H.eq(hud[#hud], CP.L('block.pursuit.hud_observe_follow', { behind = 60, seconds = 8 }),
+        'pu parity client: follow the reckless driver within 60 m for 8 s')
+    PC.stop(cctx)
+    H.step(1000)
+    H.players[1].vehicle = nil
+end
+
+do -- fight: drive-by and ram only ever target participants
+    H.clockMs = 9000000
+    local savedSets = Config.Custody.profileSets.test_armed
+    Config.Custody.profileSets.test_armed = { driver = { armed = 100 }, passenger = { armed = 100 } }
+    local pcar = NewEnt('vehicle', vec3(5016.0, 5800.0, 30.0))
+    H.players[1].vehicle = pcar
+    At(1, 5016.0, 5800.0)
+    At(2, 9000.0, 9000.0)
+    local ctx = TrafficCtx({
+        responses = { yield = 0, flee = 0, fight = 1.0 },
+        profileSet = 'test_armed',
+        driveBy = 1.0,
+        ram = 1.0,
+        suspectsPerVehicle = 2,
+        observe = false,
+        spawnOffset = false,
+        spawn = 'car',
+    }, { 1, 2 })
+    ctx.location = U.deepcopy(corridorLoc)
+    ctx.location.car = vec4(5000.0, 5780.0, 30.0, 0.0)
+    ctx.obj.route = nil
+    PU.start(ctx)
+    local car = Car(ctx)
+    local ok = PU.onEvent(ctx, 1, { type = 'lights_near', netId = car.netId })
+    H.eq(ok, true, 'pu parity: fight: lit up')
+    local v = ctx.state.vehicles[tostring(car.netId)]
+    H.eq(v.fight, true, 'pu parity: the car fights (someone inside is armed)')
+    local snap = LastSend(ctx)
+    local shooters = 0
+    for _, s in ipairs(snap.suspects) do
+        if s.driveBy then
+            shooters = shooters + 1
+            H.ok(s.driveBy == 1 or s.driveBy == 2,
+                'pu parity: a drive-by targets a participant (' .. tostring(s.driveBy) .. ')')
+        end
+    end
+    H.eq(shooters, 1, 'pu parity: the armed passenger shoots from the car (the driver drives)')
+    -- boxed in next to officer 1: rams once, at officer 1
+    E(car.netId).speed = 1.0
+    E(car.netId).coords = vec3(5016.0, 5810.0, 30.0)
+    TickN(PU, ctx, 2)
+    H.ok(v.ramming ~= nil and v.ramming.target == 1, 'pu parity: the boxed-in driver rams the participant beside it')
+    H.eq(LastSend(ctx).vehicles[1].ram, 1, 'pu parity: the ram target is sent to the host')
+    H.eq(v.rammed, true, 'pu parity: once only')
+    Config.Custody.profileSets.test_armed = savedSets
+    H.players[1].vehicle = nil
+end
+
+do -- a removed car (sc-police /imp) is never stopped and never earns vehicle_stopped_fast
+    H.clockMs = 9500000
+    At(1, 1040.0, 1000.0)
+    local ctx = StolenCtx({ fastStop = { id = 'vehicle_stopped_fast', seconds = 120 } })
+    ctx.run.entities = {}
+    PU.start(ctx)
+    local car = SpawnsOf(ctx, 'vehicle')[1]
+    ctx.run.entities[car.netId] = { obj = 1 }
+    local pcar = NewEnt('vehicle', vec3(0, 0, 0))
+    H.players[1].vehicle = pcar
+    PU.onEvent(ctx, 1, { type = 'lights_near', netId = car.netId })
+    E(car.netId).exists = false
+    TickN(PU, ctx, 3)
+    local v = ctx.state.vehicles[tostring(car.netId)]
+    H.ok(v.state ~= 'stopped' and v.state ~= 'wrecked',
+        'pu parity: a vanished car the engine still tracks is not stopped')
+    PU.onEvent(ctx, 1, { type = 'removed', netId = car.netId, src = 1, via = 'sc_impound' })
+    H.eq(v.state, 'removed', 'pu parity: removed')
+    ctx.run.entities[car.netId] = nil
+    TickN(PU, ctx, 3)
+    H.eq(v.state, 'removed', 'pu parity: still removed, never wrecked')
+    H.eq(Count(ctx.calls.award, 'vehicle_stopped_fast'), 0, 'pu parity: no vehicle_stopped_fast for a removed car')
+    H.eq(ctx.calls.complete, 0, 'pu parity: a removed car never completes the stop')
+    H.players[1].vehicle = nil
+end
+CP.Custody = custodyStub
+_G.GetEntityHeading = realHeading
 
 -- ============================================================================
 --                                    LOCALE

@@ -1578,6 +1578,281 @@ do -- a device added to shared.devices later is picked up (rescale/tick)
 end
 
 -- ============================================================================
+--               PARITY OPTIONS: interact_points and skill_check
+-- ============================================================================
+-- together (breach), solo progress, hidden kind seize, evidence finds; skill_check setbacks.
+
+local stats = {}
+CP.Runs.noteStat = function(run, src, key, n) stats[#stats + 1] = { src = src, key = key, n = n } end
+local function StatsOf(key)
+    local n = 0
+    for _, s in ipairs(stats) do if s.key == key then n = n + (s.n or 1) end end
+    return n
+end
+local entries = { vec3(3000.0, 3000.0, 30.0), vec3(3012.0, 3000.0, 30.0) }
+local function BreachCtx(srcs, extra)
+    local o = {
+        block = 'interact_points',
+        points = 'entries',
+        progress = { label = 'Stacking up', duration = 3000, anim = 'kneel' },
+        together = { count = 2, window = 6, soloProgress = 8000 },
+    }
+    for k, v in pairs(extra or {}) do o[k] = v end
+    local ctx = FakeCtx({
+        obj = IP.defaults(o),
+        location = { entries = entries },
+        srcs = srcs,
+        mission = { source = 'builtin' },
+    })
+    IP.prepare(ctx)
+    IP.start(ctx)
+    return ctx, ctx.state
+end
+-- stand at point n for `ms`, sampled each second, then report the interact
+local function Work(ctx, src, n, ms)
+    At(src, entries[n])
+    for _ = 1, math.ceil(ms / 1000) do
+        Advance(1000)
+        IP.tick(ctx, 1)
+    end
+    return IP.onEvent(ctx, src, { type = 'interact', point = n })
+end
+
+do -- validation
+    local o = IP.defaults({ block = 'interact_points', points = 'entries', together = { count = 2 } })
+    H.eq(o.together.window, 6, 'ip together: default window 6 s')
+    H.eq(o.together.soloProgress, 8000, 'ip together: default solo progress 8 s')
+    local loc = { entries = entries }
+    H.eq(IP.validate(o, { source = 'custom' }, loc), true, 'ip together validates')
+    local ok, why = IP.validate(IP.defaults({ points = 'entries', together = { count = 5 } }), { source = 'custom' },
+        loc)
+    H.ok(ok == false and ReasonIs(why, 'block.interact_points.invalid.together'), 'ip together: 5 officers refused')
+    ok = IP.validate(IP.defaults({ points = 'entries', together = { count = 2, window = 30 } }), { source = 'custom' },
+        loc)
+    H.eq(ok, false, 'ip together: a 30 s window refused')
+    ok = IP.validate(IP.defaults({ points = 'entries', finds = { chance = 1.5 } }), { source = 'custom' }, loc)
+    H.eq(ok, false, 'ip finds: a chance above 100% refused')
+    ok = IP.validate(IP.defaults({ points = 'entries', finds = { chance = 0.5, pool = { 'gold' } } }),
+        { source = 'custom' }, loc)
+    H.eq(ok, false, 'ip finds: an unknown evidence kind refused')
+    local seize = IP.defaults({ points = 'entries', hidden = { kind = 'seize', count = 1 } })
+    H.eq(seize.hidden.prop, nil, 'ip seize: no device prop')
+    H.eq(IP.validate(seize, { source = 'custom' }, loc), true, 'ip seize validates without a prop')
+    ok = IP.validate(IP.defaults({ points = 'entries', hidden = { kind = 'bomb', count = 1 } }), { source = 'custom' },
+        loc)
+    H.eq(ok, false, 'ip hidden: an unknown kind refused')
+end
+
+do -- two officers breach together within the window; an earlier hold resets with the HUD line
+    H.clockMs = 7000000
+    local ctx, st = BreachCtx({ 1, 2 })
+    H.eq(LastSend(ctx).together and LastSend(ctx).together.count, 2, 'ip together: 2 officers must breach')
+    At(2, vec3(9000.0, 9000.0, 30.0))
+    H.eq(Work(ctx, 1, 1, 3000), true, 'ip together: officer 1 at entry 1')
+    H.eq(st.points[1].status, 'held', 'ip together: entry 1 is held, not done')
+    Advance(7000)
+    local hudBefore = #ctx.calls.hud
+    H.eq(Work(ctx, 2, 2, 3000), true, 'ip together: officer 2 at entry 2, 10 s later')
+    H.eq(st.points[1].status, 'pending', 'ip together: the hold older than the window was released')
+    H.ok(#ctx.calls.hud > hudBefore, 'ip together: the HUD says why')
+    H.eq(ctx.calls.complete, 0, 'ip together: not breached yet')
+    H.eq(Work(ctx, 1, 1, 3000), true, 'ip together: officer 1 again, within the window')
+    H.eq(st.points[1].status, 'done', 'ip together: entry 1 done')
+    H.eq(st.points[2].status, 'done', 'ip together: entry 2 done')
+    H.eq(ctx.calls.complete, 1, 'ip together: breached')
+    -- one officer doing both entries quickly is not "together"
+    local ctx2, st2 = BreachCtx({ 1, 2 })
+    Work(ctx2, 1, 1, 3000)
+    Work(ctx2, 1, 2, 3000)
+    H.eq(ctx2.calls.complete, 0, 'ip together: one officer on both entries is not a breach together')
+    H.eq(st2.points[1].status, 'pending', 'ip together: only the latest hold stays')
+    H.eq(st2.points[2].status, 'held', 'ip together: entry 2 held')
+end
+
+do -- a 2-officer unit that drops to 1 finishes both entries with solo progress
+    H.clockMs = 7500000
+    local ctx, st = BreachCtx({ 1, 2 })
+    Work(ctx, 1, 1, 3000)
+    H.eq(st.points[1].status, 'held', 'ip solo: entry 1 held')
+    ctx.srcs = { 1 }
+    IP.onParticipantLeft(ctx, 2)
+    H.eq(LastSend(ctx).solo, true, 'ip solo: the client gets the solo progress time')
+    IP.tick(ctx, 1)
+    H.eq(st.points[1].status, 'done', 'ip solo: the hold counts once one officer is left')
+    local ok, why = Work(ctx, 1, 2, 3000)
+    H.ok(ok == false and why == 'too_quick', 'ip solo: 3 s is too quick when alone (8 s)')
+    H.eq(Work(ctx, 1, 2, 8000), true, 'ip solo: 8 s at the entry')
+    H.eq(ctx.calls.complete, 1, 'ip solo: breached alone, no soft-lock')
+    -- solo from the start: count is capped at the participants left
+    local ctx2 = BreachCtx({ 1 })
+    H.eq(LastSend(ctx2).together, nil, 'ip solo: one participant: no together requirement')
+    H.eq(Work(ctx2, 1, 1, 8000), true, 'ip solo: entry 1')
+    H.eq(Work(ctx2, 1, 2, 8000), true, 'ip solo: entry 2')
+    H.eq(ctx2.calls.complete, 1, 'ip solo: done')
+end
+
+do -- hidden kind seize: never run.shared.devices, found items are evidence, then seized at the spot
+    H.clockMs = 8000000
+    stats = {}
+    local spots = { vec3(3100.0, 3000.0, 30.0), vec3(3110.0, 3000.0, 30.0), vec3(3120.0, 3000.0, 30.0) }
+    local obj = IP.defaults({
+        block = 'interact_points',
+        points = 'stashes',
+        progress = { label = 'Searching', duration = 4000 },
+        hidden = {
+            kind = 'seize',
+            count = 2,
+            label = 'Stash',
+            action = { label = 'Seize the product', duration = 6000 },
+        },
+    })
+    local ctx = FakeCtx({ obj = obj, location = { stashes = spots }, srcs = { 1 }, mission = { source = 'builtin' } })
+    IP.prepare(ctx)
+    IP.start(ctx)
+    local st = ctx.state
+    local function WorkAt(n, ms, kind)
+        At(1, spots[n])
+        for _ = 1, math.ceil(ms / 1000) do
+            Advance(1000)
+            IP.tick(ctx, 1)
+        end
+        return IP.onEvent(ctx, 1, { type = kind or 'interact', point = n })
+    end
+    for n = 1, 3 do
+        WorkAt(n, 4000)
+        if st.points[n].status == 'followup' then WorkAt(n, 6000, 'followup') end
+    end
+    H.eq(st.found, 2, 'ip seize: both stashes found')
+    H.eq(ctx.run.shared.devices, nil, 'ip seize: nothing in run.shared.devices')
+    H.eq(#ctx.calls.spawn, 0, 'ip seize: no prop spawned')
+    H.eq(StatsOf('evidence'), 2, 'ip seize: each stash is an evidence find for the finder')
+    H.eq(ctx.calls.complete, 1, 'ip seize: complete once every stash is seized')
+end
+
+do -- fastBonus.after: the clock runs from the end of an earlier objective (Drug Lab Raid: from the breach)
+    local spots = { vec3(3300.0, 3000.0, 30.0), vec3(3310.0, 3000.0, 30.0) }
+    local function Search(after, sinceBreachS)
+        H.clockMs = 8200000
+        local obj = IP.defaults({
+            block = 'interact_points',
+            points = 'stashes',
+            progress = { label = 'Searching', duration = 4000 },
+            hidden = { kind = 'seize', count = 2, label = 'Stash' },
+            fastBonus = { id = 'stash_found_fast', seconds = 180, after = after },
+        })
+        local ctx = FakeCtx({
+            obj = obj,
+            location = { stashes = spots },
+            srcs = { 1 },
+            index = 4,
+            mission = { source = 'builtin' },
+        })
+        -- objective 1 (the breach) ended when objective 2 started, sinceBreachS seconds ago
+        ctx.run.objectives = { {}, { startedAtMs = H.clockMs - sinceBreachS * 1000 }, {}, {} }
+        IP.prepare(ctx)
+        IP.start(ctx)
+        for n = 1, 2 do
+            At(1, spots[n])
+            for _ = 1, 4 do
+                Advance(1000)
+                IP.tick(ctx, 1)
+            end
+            IP.onEvent(ctx, 1, { type = 'interact', point = n })
+        end
+        return CP.U.contains(ctx.calls.award, 'stash_found_fast'), ctx
+    end
+    H.eq(Search(nil, 170), true, 'ip fast: without after, timed from this objective (8 s)')
+    H.eq(Search(1, 175), false, 'ip fast: after = 1: found 183 s after the breach is past the 3 minutes')
+    H.eq(Search(1, 60), true, 'ip fast: after = 1: every stash within 3 minutes of the breach')
+    local vloc = { start = { coords = vec3(3300.0, 2900.0, 30.0) }, spots = spots }
+    local obj = IP.defaults(
+        { points = 'spots', hidden = { count = 1 }, fastBonus = { id = 'x', seconds = 60, after = 0 } })
+    local ok, why = IP.validate(obj, { source = 'builtin', objectives = { {}, {} } }, vloc)
+    H.ok(ok == false and ReasonIs(why, 'block.interact_points.invalid.fast_bonus'),
+        'ip fast: after must be an objective')
+    obj.fastBonus.after = 1.5
+    ok = IP.validate(obj, { source = 'builtin', objectives = { {}, {} } }, vloc)
+    H.eq(ok, false, 'ip fast: after must be a whole objective number')
+    obj.fastBonus.after = 1
+    H.eq(IP.validate(obj, { source = 'builtin', objectives = { {}, {} } }, vloc), true, 'ip fast: after = 1 validates')
+end
+
+do -- finds roll once per point, from the seed
+    H.clockMs = 8500000
+    stats = {}
+    local pts = {}
+    for i = 1, 8 do pts[i] = vec3(3200.0 + i * 10.0, 3000.0, 30.0) end
+    local function Rolled(seed)
+        local obj = IP.defaults({
+            block = 'interact_points',
+            points = 'yard',
+            progress = { duration = 2000 },
+            finds = { chance = 0.5 },
+        })
+        local ctx = FakeCtx({ obj = obj, location = { yard = pts }, srcs = { 1 }, seed = seed })
+        IP.prepare(ctx)
+        local out = {}
+        for i, p in ipairs(ctx.state.points) do out[i] = p.find or '-' end
+        return table.concat(out, ','), ctx
+    end
+    local a, ctx = Rolled(4242)
+    H.eq(Rolled(4242), a, 'ip finds: the same seed rolls the same finds (' .. a .. ')')
+    H.ok(a:find('-') and a:find('[a-z]'), 'ip finds: some points yield evidence, some do not')
+    IP.start(ctx)
+    local found = 0
+    for n, p in ipairs(ctx.state.points) do
+        At(1, pts[n])
+        for _ = 1, 2 do Advance(1000); IP.tick(ctx, 1) end
+        IP.onEvent(ctx, 1, { type = 'interact', point = n })
+        if p.find then found = found + 1 end
+    end
+    H.eq(StatsOf('evidence'), found, 'ip finds: each find counts once for the evidence stat')
+    H.eq(#(ctx.run.shared.evidence or {}), found, 'ip finds: listed as virtual evidence of the run')
+end
+
+do -- skill_check onFail = setback: recovery, personal penalty, retry; never a fail
+    local ctx, st = DefuseCtx({ devices = 1 })
+    ctx.obj = SC.defaults({
+        block = 'skill_check',
+        checks = { 'medium', 'medium', 'hard' },
+        missPenalty = 0,
+        onFail = { setback = { label = 'Ventilate', duration = 10000, penalty = 'lab_fire' }, retryAfter = 30 },
+    })
+    ctx.penalties = {}
+    ctx.penalize = function(id, opts) ctx.penalties[#ctx.penalties + 1] = { id = id, src = opts and opts.src } end
+    At(1, vec3(10.0, 4001.0, 5.0))
+    Round(ctx, 1, 1, 1, false)
+    Round(ctx, 1, 1, 1, false)
+    H.eq(st.targets[1].status, 'setback', 'sc setback: two misses start the recovery step')
+    H.eq(#ctx.calls.fail, 0, 'sc setback: never a fail')
+    H.eq(ctx.penalties[1] and ctx.penalties[1].id, 'lab_fire', 'sc setback: the penalty id')
+    H.eq(ctx.penalties[1] and ctx.penalties[1].src, 1, 'sc setback: personal to the officer who missed')
+    local okE, why = Round(ctx, 1, 1, 1, true)
+    H.ok(okE == false and why == 'wrong_state', 'sc setback: no checks during the setback')
+    At(2, vec3(10.0, 4000.5, 5.0))
+    okE, why = SC.onEvent(ctx, 2, { type = 'recover', target = 1 })
+    H.ok(okE == false and why == 'too_quick', 'sc setback: the recovery needs its 10 s')
+    for _ = 1, 10 do Advance(1000); SC.tick(ctx, 1) end
+    H.eq(SC.onEvent(ctx, 2, { type = 'recover', target = 1 }), true, 'sc setback: any participant can ventilate')
+    H.eq(st.targets[1].status, 'cooldown', 'sc setback: then a wait')
+    for _ = 1, 29 do Advance(1000); SC.tick(ctx, 1) end
+    H.eq(st.targets[1].status, 'cooldown', 'sc setback: not before retryAfter')
+    Advance(2000)
+    SC.tick(ctx, 1)
+    H.eq(st.targets[1].status, 'armed', 'sc setback: the checks can be tried again after 30 s')
+    for k = 1, 3 do Round(ctx, 2, 1, k, true) end
+    H.eq(st.targets[1].status, 'defused', 'sc setback: shut down on the retry')
+    H.eq(ctx.calls.complete, 1, 'sc setback: the objective completes')
+    local bad = SC.validate(
+        SC.defaults({ targets = 'lab', onFail = { setback = { duration = 60000 }, retryAfter = 30 } }),
+        { source = 'custom' }, { lab = vec3(1.0, 1.0, 1.0) })
+    H.eq(bad, false, 'sc setback: a 60 s recovery step is out of range')
+    H.eq(SC.defaults({ block = 'skill_check' }).onFail, 'fail', 'sc: onFail defaults to fail (Bomb Disposal as today)')
+end
+
+CP.Runs.noteStat = nil
+
+-- ============================================================================
 --               LOCALE PART: every key the six files use exists
 -- ============================================================================
 

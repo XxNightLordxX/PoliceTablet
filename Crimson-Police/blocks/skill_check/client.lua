@@ -78,6 +78,11 @@ local function BaseLine(ctx, st)
     for _, t in ipairs(d.targets or {}) do
         total = total + 1
         if t.status == 'defused' then done = done + 1 end
+        if t.status == 'setback' then
+            return CP.L('block.skill_check.hud.setback',
+                { action = (d.setback and d.setback.label) or CP.L('block.skill_check.recover_default') })
+        end
+        if t.status == 'cooldown' then return CP.L('block.skill_check.hud.retry', { seconds = t.retryIn or 0 }) end
     end
     return CP.L('block.skill_check.hud.progress', { done = done, total = total })
 end
@@ -180,7 +185,57 @@ local function RemoveZone(st, i)
     if z then
         pcall(function() exports.ox_target:removeZone(z) end)
         st.zones[i] = nil
+        if st.zoneKind then st.zoneKind[i] = nil end
     end
+end
+
+-- The recovery step of a setback (e.g. Ventilate): any participant, a progress bar at the target.
+local function Recover(ctx, st, i)
+    if st.busy or not st.alive then return end
+    local sb = st.data and st.data.setback or {}
+    st.busy = true
+    local ok = lib.progressBar({
+        duration = tonumber(sb.duration) or 10000,
+        label = sb.label or CP.L('block.skill_check.recover_default'),
+        useWhileDead = false,
+        canCancel = true,
+        disable = { move = true, car = true, combat = true },
+        anim = { scenario = 'WORLD_HUMAN_CLIPBOARD' },
+    })
+    st.busy = false
+    if ok and st.alive then
+        st.seq = (st.seq or 0) + 1
+        ctx.report({ type = 'recover', target = i, seq = st.seq })
+    end
+end
+
+local function AddRecoverZone(ctx, st, i, t)
+    local name = ('crimson-police:%s:%s:%s:%d:recover'):format(BLOCK, tostring(ctx.runId), tostring(ctx.index), i)
+    local sb = st.data and st.data.setback or {}
+    st.zones[i] = exports.ox_target:addSphereZone({
+        coords = V3(t.coords),
+        radius = TARGET_RADIUS,
+        debug = false,
+        drawSprite = true,
+        name = name,
+        options = {
+            {
+                name = name,
+                label = sb.label or CP.L('block.skill_check.recover_default'),
+                icon = 'fa-solid fa-fan',
+                distance = TARGET_DISTANCE,
+                canInteract = function()
+                    local cur = TargetOf(st, i)
+                    return st.alive == true and not st.busy and cur ~= nil and cur.status == 'setback'
+                end,
+                onSelect = function()
+                    CreateThread(function() Recover(ctx, st, i) end)
+                end,
+            },
+        },
+    })
+    st.zoneKind = st.zoneKind or {}
+    st.zoneKind[i] = 'recover'
 end
 
 local function ClearZones(st)
@@ -191,6 +246,8 @@ end
 local function AddZone(ctx, st, i, t)
     local target = type(ctx.obj.target) == 'table' and ctx.obj.target or {}
     local name = ('crimson-police:%s:%s:%s:%d'):format(BLOCK, tostring(ctx.runId), tostring(ctx.index), i)
+    st.zoneKind = st.zoneKind or {}
+    st.zoneKind[i] = 'check'
     st.zones[i] = exports.ox_target:addSphereZone({
         coords = V3(t.coords),
         radius = TARGET_RADIUS,
@@ -218,11 +275,14 @@ end
 
 local function SyncZones(ctx, st)
     local list = (st.data and st.data.targets) or {}
+    st.zoneKind = st.zoneKind or {}
     for i, t in ipairs(list) do
-        if t.status == 'armed' then
-            if not st.zones[i] then AddZone(ctx, st, i, t) end
-        else
-            RemoveZone(st, i)
+        local want = (t.status == 'armed' and 'check') or (t.status == 'setback' and 'recover') or nil
+        if st.zones[i] and st.zoneKind[i] ~= want then RemoveZone(st, i) end
+        if want == 'check' and not st.zones[i] then
+            AddZone(ctx, st, i, t)
+        elseif want == 'recover' and not st.zones[i] then
+            AddRecoverZone(ctx, st, i, t)
         end
     end
     for i in pairs(st.zones) do
@@ -241,7 +301,7 @@ local function Loop(ctx, st)
             local sleep = 500
             local pos = GetEntityCoords(PlayerPedId())
             for _, t in ipairs((st.data and st.data.targets) or {}) do
-                if t.status == 'armed' then
+                if t.status == 'armed' or t.status == 'setback' then
                     local c = t.coords
                     local dx, dy, dz = pos.x - c.x, pos.y - c.y, pos.z - c.z
                     if dx * dx + dy * dy + dz * dz < MARKER_DISTANCE * MARKER_DISTANCE then
@@ -271,6 +331,23 @@ local function Explode(ctx, st, data)
         -- Effect only: damage scale 0, audible, visible, camera shake.
         AddExplosion(data.coords.x + 0.0, data.coords.y + 0.0, data.coords.z + 0.0, EXPLOSION_TYPE, 0.0, true, false,
             1.0)
+    end
+end
+
+-- A setback: a harmless effect at the target (it hurts nobody) and the recovery hint.
+local function SetbackEffect(ctx, st, data)
+    Say(st, CP.L('block.skill_check.hud.setback', {
+        action = (st.data and st.data.setback and st.data.setback.label)
+            or CP.L('block.skill_check.recover_default'),
+    }))
+    if st.working == data.target then
+        st.cancelled = true
+        if lib.skillCheckActive and lib.skillCheckActive() then lib.cancelSkillCheck() end
+    end
+    if type(data.coords) == 'table' then
+        UseParticleFxAsset('core')
+        StartParticleFxNonLoopedAtCoord('exp_grd_bzgas_smoke', data.coords.x + 0.0, data.coords.y + 0.0,
+            data.coords.z + 0.0, 0.0, 0.0, 0.0, 2.0, false, false, false)
     end
 end
 
@@ -338,6 +415,10 @@ CP.Blocks.register(BLOCK, {
         if data.kind == 'explode' then
             -- Plays even when it arrives together with the run's end.
             Explode(ctx, st, data)
+            return
+        end
+        if data.kind == 'setback' then
+            SetbackEffect(ctx, st, data)
             return
         end
         if data.kind ~= 'state' then return end

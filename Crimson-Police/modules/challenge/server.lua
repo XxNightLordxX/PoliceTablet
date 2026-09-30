@@ -19,6 +19,8 @@ local BOUNTY_KINDS = {
     most_cross = 'cross',
     most_unit = 'unit',
     most_completed = 'completed',
+    most_arrests = 'arrests',
+    most_calls = 'calls',
 }
 local SCORING = { average = true, total = true, top10 = true }
 
@@ -295,7 +297,7 @@ local function BountyList()
         if type(b) == 'table' and type(b.id) == 'string' and b.id ~= '' and #b.id <= 40 then
             if not BOUNTY_KINDS[b.id] then
                 WarnOnce('bounty.' .. b.id,
-                    'Config.Challenge.bounties id %s is not one of most_tactical, most_cross, most_unit, most_completed; it counts completed runs',
+                    'Config.Challenge.bounties id %s is not one of most_tactical, most_cross, most_unit, most_completed, most_arrests, most_calls; it counts completed runs',
                     b.id)
             end
             local key = 'challenge.bounty.' .. b.id
@@ -372,7 +374,9 @@ SELECT r.department, %s AS week,
   SUM(CASE WHEN r.state = 'completed' AND r.mission_type NOT IN ('manual_award', 'goal') THEN 1 ELSE 0 END) AS completed,
   SUM(CASE WHEN r.state = 'completed' AND r.mission_type NOT IN ('manual_award', 'goal') AND r.participants >= 2 THEN 1 ELSE 0 END) AS unit_runs,
   SUM(CASE WHEN r.state = 'completed' AND r.mission_type = 'tactical' THEN 1 ELSE 0 END) AS tactical,
-  SUM(CASE WHEN r.state = 'completed' AND r.mission_type NOT IN ('manual_award', 'goal') AND r.departments_n >= 2 THEN 1 ELSE 0 END) AS cross_runs
+  SUM(CASE WHEN r.state = 'completed' AND r.mission_type NOT IN ('manual_award', 'goal') AND r.departments_n >= 2 THEN 1 ELSE 0 END) AS cross_runs,
+  SUM(CASE WHEN r.state = 'completed' AND r.mission_type NOT IN ('manual_award', 'goal') THEN r.arrests ELSE 0 END) AS arrests,
+  SUM(CASE WHEN r.state = 'completed' AND r.mission_type NOT IN ('manual_award', 'goal') AND r.mission_call_id IS NOT NULL THEN 1 ELSE 0 END) AS calls
 FROM cp_mission_runs r
 WHERE r.season_id = ? AND r.voided = 0 AND r.flagged = 0
 GROUP BY r.department, week]]
@@ -390,7 +394,7 @@ local function WeekCase(season)
 end
 
 local function EmptyWeek()
-    return { points = 0, completed = 0, unit = 0, tactical = 0, cross = 0 }
+    return { points = 0, completed = 0, unit = 0, tactical = 0, cross = 0, arrests = 0, calls = 0 }
 end
 
 -- Every aggregate the standings, bounties and contributor lists need, cached per season.
@@ -424,6 +428,8 @@ local function Collect(seasonId, fresh)
         w.unit = w.unit + Int(r.unit_runs)
         w.tactical = w.tactical + Int(r.tactical)
         w.cross = w.cross + Int(r.cross_runs)
+        w.arrests = w.arrests + Int(r.arrests)
+        w.calls = w.calls + Int(r.calls)
         data.weeks[n][dept] = w
     end
     for _, r in
@@ -789,15 +795,17 @@ local function OfficerNames(cids)
         local chunk = {}
         for j = i, math.min(#cids, i + 99) do chunk[#chunk + 1] = cids[j] end
         local rows = MySQL.query.await(
-            ('SELECT citizenid, display_name, callsign, rank_label, hide_name FROM cp_officers WHERE citizenid IN (%s)'):format(
-                Placeholders(#chunk)
-            ), chunk) or {}
+            ([[SELECT citizenid, display_name, callsign, rank_label, hide_name, xp, avatar_kind, avatar_value, avatar_status
+                FROM cp_officers WHERE citizenid IN (%s)]]):format(Placeholders(#chunk)),
+            chunk
+        ) or {}
         for _, r in ipairs(rows) do
             out[tostring(r.citizenid)] = {
                 name = NonEmpty(r.display_name),
                 callsign = NonEmpty(r.callsign),
                 rank = NonEmpty(r.rank_label),
                 hideName = U.truthy(r.hide_name),
+                row = r,
             }
         end
     end
@@ -808,6 +816,14 @@ local function PublicName(e)
     if Has('Leaderboard', 'publicName') then return CP.Leaderboard.publicName(e) end
     if e.hideName then return e.callsign or CP.L('leaderboard.hidden_name') end
     return e.name or e.callsign or CP.L('common.unknown')
+end
+
+-- The picture a contributor row shows (CP.Profile.avatarOf; initials when that module is missing).
+local function Avatar(row)
+    if type(row) ~= 'table' then return nil end
+    local ok, av = Call('Profile', 'avatarOf', row, { own = false })
+    if ok and type(av) == 'table' then return av end
+    return nil
 end
 
 -- The department's officers this season, best first.
@@ -837,6 +853,7 @@ local function Contributors(data, dept, limit)
             points = e.points,
             runs = e.runs,
             active = e.runs >= MinActive(),
+            avatar = Avatar(n.row),
         }
     end
     return out
@@ -877,6 +894,7 @@ function C.view(officer)
                 points = c.points,
                 citizenid = c.citizenid,
                 runs = c.runs,
+                avatar = c.avatar,
             }
         end
     end
@@ -1202,8 +1220,20 @@ local function ReportDepartment(src, args)
     return dept
 end
 
+-- The service-record columns of the Department Report: counted completed rows only (not voided, not flagged).
+local REPORT_DONE = 'r.voided = 0 AND r.flagged = 0 AND r.state = \'completed\' AND r.mission_type NOT IN (\'manual_award\', \'goal\')'
+local REPORT_STATS = ([[
+    SUM(CASE WHEN %s THEN r.arrests ELSE 0 END) AS arrests,
+    SUM(CASE WHEN %s THEN r.citations ELSE 0 END) AS citations,
+    SUM(CASE WHEN %s THEN r.impounds ELSE 0 END) AS impounds,
+    SUM(CASE WHEN %s THEN r.decisions_ok ELSE 0 END) AS decisions_ok,
+    SUM(CASE WHEN %s THEN r.decisions_best ELSE 0 END) AS decisions_best,
+    SUM(CASE WHEN %s THEN r.decisions_bad ELSE 0 END) AS decisions_bad,
+    SUM(CASE WHEN %s AND r.mission_call_id IS NOT NULL THEN 1 ELSE 0 END) AS calls]]):gsub('%%s', REPORT_DONE)
+
 local ACTIVITY_SQL = [[
 SELECT s.citizenid, s.runs, s.completed, s.failed, s.abandoned, s.flagged, s.points, s.cash, s.last_ts,
+  s.arrests, s.citations, s.impounds, s.decisions_ok, s.decisions_best, s.decisions_bad, s.calls,
   o.display_name, o.callsign, o.rank_label
 FROM (
   SELECT r.citizenid,
@@ -1214,7 +1244,9 @@ FROM (
     SUM(CASE WHEN r.flagged = 1 THEN 1 ELSE 0 END) AS flagged,
     SUM(CASE WHEN r.voided = 0 AND r.flagged = 0 THEN r.final_points ELSE 0 END) AS points,
     SUM(r.cash_paid) AS cash,
-    UNIX_TIMESTAMP(MAX(r.created_at)) AS last_ts
+    UNIX_TIMESTAMP(MAX(r.created_at)) AS last_ts,
+]] .. REPORT_STATS .. [[
+
   FROM cp_mission_runs r
   WHERE r.department = ? AND r.created_at >= FROM_UNIXTIME(?)
   GROUP BY r.citizenid
@@ -1249,6 +1281,13 @@ function C.deptReport(dept)
             cash = Int(r.cash),
             lastRunAt = r.last_ts and SqlTs(r.last_ts) or '',
             lastRunTs = Int(r.last_ts),
+            arrests = Int(r.arrests),
+            citations = Int(r.citations),
+            impounds = Int(r.impounds),
+            decisionsOk = Int(r.decisions_ok),
+            decisionsBest = Int(r.decisions_best),
+            decisionsBad = Int(r.decisions_bad),
+            calls = Int(r.calls),
         }
     end
     return {
@@ -1269,8 +1308,8 @@ function C.deptReport(dept)
 end
 
 local OFFICER_RUNS_SQL = [[
-SELECT r.id, r.mission_type, r.mission_id, r.state, r.end_reason, r.final_points, r.cash_paid, r.cash_status,
-  r.flagged, r.flag_reason, r.voided, r.participants, r.departments_n, r.tier, r.duration_s, r.breakdown,
+SELECT r.id, r.run_uuid, r.mission_type, r.mission_id, r.state, r.end_reason, r.final_points, r.cash_paid,
+  r.cash_status, r.flagged, r.flag_reason, r.voided, r.participants, r.departments_n, r.tier, r.duration_s, r.breakdown,
   UNIX_TIMESTAMP(r.created_at) AS created_ts
 FROM cp_mission_runs r
 WHERE r.citizenid = ? AND r.department = ? AND r.created_at >= FROM_UNIXTIME(?)
@@ -1301,6 +1340,7 @@ function C.officerActivity(dept, citizenid)
         local bd = U.jsonField(r.breakdown)
         runs[#runs + 1] = {
             id = Int(r.id),
+            runUuid = tostring(r.run_uuid),
             missionLabel = MissionLabel(r.mission_type, r.mission_id, type(bd) == 'table' and bd or nil),
             missionType = tostring(r.mission_type),
             state = tostring(r.state),
@@ -1403,7 +1443,13 @@ CP.Net.callback('sup:getOfficerActivity', function(src, args)
     if not ValidCitizenId(args.citizenid) then return nil, 'err.invalid_citizenid' end
     local dept, errKey = ReportDepartment(src, { department = args.department })
     if not dept then return nil, errKey end
-    return C.officerActivity(dept, args.citizenid)
+    local view, viewErr = C.officerActivity(dept, args.citizenid)
+    if type(view) ~= 'table' then return view, viewErr end
+    -- the officer's active commendations, the viewer's own ones marked (the issuer may revoke them)
+    local viewer = CP.Access.getOfficer(src)
+    local okList, list = Call('Profile', 'commendations', args.citizenid, { viewer = viewer and viewer.citizenid })
+    view.commendations = okList and type(list) == 'table' and list or {}
+    return view
 end)
 
 -- ============================================================================

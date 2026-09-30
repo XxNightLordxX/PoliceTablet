@@ -27,10 +27,11 @@ import { formatDateTime, formatDuration } from '../../shared/format';
 import { useAction, useRequest } from '../../shared/hooks';
 import { hasKey, t } from '../../shared/i18n';
 import { useCan } from '../../shared/session';
-import type { DisputeView, FlaggedRow, ReviewQueueData } from '../../types/oversight';
+import type { DisputeView, FlaggedRow, ReviewQueueData, ReviewTab } from '../../types/oversight';
+import { ProfilesReview } from '../components/ProfilesReview';
 import './ReviewQueue.css';
 
-type TabKey = 'flagged' | 'disputes';
+type TabKey = ReviewTab;
 type Pending =
     | { kind: 'flag'; decision: 'approve' | 'void'; row: FlaggedRow }
     | { kind: 'dispute'; decision: 'approve' | 'reject'; row: DisputeView };
@@ -198,7 +199,8 @@ export default function SupReviewQueue() {
     const { run, busy } = useAction();
     const canReview = can('reviewFlagged') && data?.canReview !== false;
     const canHandle = can('handleDisputes') && data?.canHandle !== false;
-    const [tab, setTab] = useState<TabKey>(canReview ? 'flagged' : 'disputes');
+    const canProfiles = can('reviewProfiles');
+    const [tab, setTab] = useState<TabKey>(canReview ? 'flagged' : canHandle ? 'disputes' : 'profiles');
     const [pending, setPending] = useState<Pending | null>(null);
     const [detail, setDetail] = useState<Detail | null>(null);
 
@@ -385,11 +387,13 @@ export default function SupReviewQueue() {
                   },
               ]
             : []),
+        ...(canProfiles ? [{ key: 'profiles' as const, label: t('profile.review.tab'), icon: 'user' as const }] : []),
     ];
     const current: TabKey = tabs.some(x => x.key === tab) ? tab : (tabs[0]?.key ?? 'flagged');
 
     let body;
-    if (loading && !data) body = <LoadingBlock />;
+    if (current === 'profiles') body = <ProfilesReview />;
+    else if (loading && !data) body = <LoadingBlock />;
     else if (error && !data)
         body = (
             <Card>

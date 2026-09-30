@@ -167,6 +167,8 @@ export interface PointSpec {
     placeable?: boolean;
     // route: at most this many waypoints are kept (checkpoint routes: Config.Blocks.checkpoint_route.checkpoints[2])
     thinTo?: number;
+    // kerb spots: each point is { coords, rule, street } (field_contact parked mode); the rule is picked per spot
+    ruled?: boolean;
     // test drive vehicle, speed and style for routes
     vehicle?: string;
     speed?: number;

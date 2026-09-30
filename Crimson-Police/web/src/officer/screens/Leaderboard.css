@@ -15,6 +15,14 @@
     min-width: 110px;
 }
 
+.boards-metric-select {
+    min-width: 150px;
+}
+
+.boards-level {
+    flex: none;
+}
+
 .boards-hint {
     display: inline-flex;
     align-items: center;

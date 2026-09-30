@@ -51,6 +51,7 @@ import {
     type TestState,
     type TestsView,
 } from '../../types/testing';
+import { AreaCoverageMatrix } from '../../supervisor/components/MissionCallsPanel';
 import './Testing.css';
 
 // ============================================================================
@@ -1299,6 +1300,8 @@ export default function AdminTesting() {
             {active ? <ActiveTestCard active={active} onChanged={() => void state.refetch()} /> : null}
 
             <PendingCard pending={pending} now={now} onRecord={setRecording} />
+
+            <AreaCoverageMatrix />
 
             {catalog.loading && !view ? (
                 <Card>

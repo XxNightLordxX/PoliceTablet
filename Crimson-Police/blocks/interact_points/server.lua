@@ -10,6 +10,9 @@ local SEARCH_ICON = 'fa-solid fa-magnifying-glass'
 local DEVICE_PROP = 'prop_ld_bomb'                           -- default device model for hidden = { ... }
 local DEVICE_PROPS = { DEVICE_PROP, 'prop_c4_final_green' }  -- the only device models custom missions may use
 local SHARED_TAG = 'shared:devices'
+-- the only evidence kinds a point yields
+local FIND_POOL = { 'narcotics', 'weapon', 'stolen_goods', 'documents' }
+local TogetherNeed, HoldTogether
 
 local function Cfg() return Config.Blocks[BLOCK] end
 local function Now() return GetGameTimer() end
@@ -190,6 +193,18 @@ local function OutcomeLabel(obj, id)
     return (o and Txt(o.label)) or CP.L('block.interact_points.outcome.generic', { outcome = tostring(id) })
 end
 
+-- hidden = { kind = 'seize', action = { label, duration } }: every item found must then be seized there.
+local function SeizeAction(obj)
+    local h = obj.hidden
+    return type(h) == 'table' and h.kind == 'seize' and type(h.action) == 'table' and h.action or nil
+end
+
+local function FollowUpOf(obj, p)
+    if p.seizeFollow then return SeizeAction(obj) or {} end
+    local o = p.outcome ~= nil and OutcomeDef(obj, p.outcome) or nil
+    return o and o.followUp or {}
+end
+
 local function CorrectChoice(obj, outcomeId)
     local lr = obj.logResult
     if type(lr) == 'table' and type(lr.correct) == 'table' and lr.correct[outcomeId] ~= nil then
@@ -234,6 +249,7 @@ local function Ensure(ctx)
     end
     if type(obj.hidden) == 'table' then
         st.hidden = true
+        st.seize = obj.hidden.kind == 'seize'
         local count = math.max(0, math.min(Idx(obj.hidden.count) or 1, #st.points))
         if (Idx(obj.hidden.count) or 1) > #st.points then
             CP.warn('blocks', 'interact_points: %d hidden devices but only %d spots; using %d',
@@ -249,6 +265,14 @@ local function Ensure(ctx)
             for _, p in ipairs(st.points) do p.outcome = RollOne(ctx.rng, outcomes) end
         end
         st.total, st.found = #st.points, 0
+        -- evidence finds: rolled once per point here, from the run seed
+        local f = obj.finds
+        if type(f) == 'table' and (tonumber(f.chance) or 0) > 0 then
+            local pool = type(f.pool) == 'table' and #f.pool > 0 and f.pool or FIND_POOL
+            for _, p in ipairs(st.points) do
+                if ctx.rng:chance(tonumber(f.chance) or 0) then p.find = ctx.rng:pick(pool) end
+            end
+        end
     end
     st.logQueue, st.log = {}, nil
     st.near, st.pendingSpawns = {}, {}
@@ -271,6 +295,15 @@ local function DoneCount(st)
     return n
 end
 
+-- together = { count, window, soloProgress }: count is capped at the participants still in the run, so a
+-- unit that shrinks to one officer never soft-locks (that officer then does each point with soloProgress).
+TogetherNeed = function(ctx)
+    local t = ctx.obj.together
+    if type(t) ~= 'table' then return 0 end
+    local n = #(ctx.participants() or {})
+    return math.max(1, math.min(Idx(t.count) or 2, n))
+end
+
 local function RefreshLog(ctx, st)
     local n = st.logQueue[1]
     if not n then
@@ -291,16 +324,22 @@ local function SendState(ctx, st)
             e.outcomeLabel = OutcomeLabel(ctx.obj, p.outcome)
         end
         if p.status == 'followup' then
-            local o = OutcomeDef(ctx.obj, p.outcome)
-            local f = o and o.followUp or {}
+            local f = FollowUpOf(ctx.obj, p)
             e.followUp = { label = Txt(f.label), duration = tonumber(f.duration) }
         end
         if p.found then e.found = true end
+        if p.status == 'done' and p.find then e.find = p.find end
         pts[n] = e
     end
+    local together = TogetherNeed(ctx)
     ctx.send({
         kind = 'state',
         points = pts,
+        -- together steps: how many officers must finish within the window, or solo (one participant left)
+        together = together > 1 and { count = together, window = ctx.obj.together.window } or nil,
+        solo = type(ctx.obj.together) == 'table' and together <= 1 or nil,
+        soloProgress = type(ctx.obj.together) == 'table' and ctx.obj.together.soloProgress or nil,
+        seize = st.seize == true,
         hidden = st.hidden == true,
         found = st.found,
         total = st.hidden and st.total or ActiveCount(st),
@@ -316,12 +355,21 @@ local function TryComplete(ctx, st)
     return st.completed
 end
 
+-- fastBonus.after = n: the clock starts when objective n ends (the next one starts in the same tick), so
+-- Drug Lab Raid's stashes count from the breach; otherwise from the start of this objective.
+local function FastStart(ctx, st)
+    local after = Idx(ctx.obj.fastBonus.after)
+    local list = ctx.run and ctx.run.objectives
+    local nextObj = after and after < (ctx.index or 0) and type(list) == 'table' and list[after + 1] or nil
+    return nextObj and tonumber(nextObj.startedAtMs) or st.startMs or Now()
+end
+
 local function FastBonus(ctx, st)
     local fb = ctx.obj.fastBonus
     if st.fastChecked or type(fb) ~= 'table' or type(fb.id) ~= 'string' then return end
     st.fastChecked = true
     local seconds = tonumber(fb.seconds) or 0
-    if (Now() - (st.startMs or Now())) / 1000 <= seconds then
+    if (Now() - FastStart(ctx, st)) / 1000 <= seconds then
         st.fastAwarded = true
         ctx.award(fb.id)
     end
@@ -396,7 +444,12 @@ local function ProcessSpawns(ctx, st)
 end
 
 local function WorkDone(st)
-    if st.hidden then return st.found >= st.total end
+    if st.hidden then
+        for _, p in ipairs(st.points) do
+            if p.status == 'followup' then return false end
+        end
+        return st.found >= st.total
+    end
     for _, p in ipairs(st.points) do
         if p.status ~= 'done' and p.status ~= 'dropped' then return false end
     end
@@ -413,6 +466,29 @@ local function CheckDone(ctx, st)
 end
 
 -- After the main (and follow-up) action: wait for the log, or done.
+local function NoteEvidence(ctx, src)
+    if CP.Runs and CP.Runs.noteStat and ctx.run then CP.Runs.noteStat(ctx.run, src, 'evidence', 1) end
+end
+
+-- A point's evidence find (rolled at the start): the tablet shows it, the finder's evidence stat counts it.
+local function Find(ctx, st, n, src)
+    local p = st.points[n]
+    if not p.find or p.findNoted then return end
+    p.findNoted = true
+    ctx.run.shared = ctx.run.shared or {}
+    ctx.run.shared.evidence = ctx.run.shared.evidence or {}
+    local list = ctx.run.shared.evidence
+    list[#list + 1] = { kind = p.find, objective = ctx.index, point = n, by = src }
+    NoteEvidence(ctx, src)
+    ctx.hud({
+        message = {
+            text = CP.L('block.interact_points.hud.find',
+                { item = CP.L(('block.interact_points.find.%s'):format(p.find)) }),
+            kind = 'success',
+        },
+    })
+end
+
 local function Resolve(ctx, st, n)
     local p = st.points[n]
     if ChoiceList(ctx.obj) and p.outcome ~= nil then
@@ -421,6 +497,58 @@ local function Resolve(ctx, st, n)
         RefreshLog(ctx, st)
     else
         p.status = 'done'
+    end
+    Find(ctx, st, n, p.followedBy or p.by)
+end
+
+-- A together step: each finish holds its point; once every point is held within the window by enough
+-- different officers, all are done. A hold older than the window is released (the HUD says why).
+HoldTogether = function(ctx, st, n, src)
+    local p = st.points[n]
+    local t = Now()
+    local window = (tonumber(ctx.obj.together.window) or 6) * 1000
+    p.status, p.heldAt, p.heldBy = 'held', t, src
+    local reset = false
+    for _, q in ipairs(st.points) do
+        if q.status == 'held' and t - q.heldAt > window then
+            q.status, q.heldAt, q.heldBy = 'pending', nil, nil
+            reset = true
+        end
+    end
+    local all, who, distinct = true, {}, 0
+    for _, q in ipairs(st.points) do
+        if q.status == 'pending' or q.status == 'followup' then all = false end
+        if q.status == 'held' and not who[q.heldBy] then
+            who[q.heldBy] = true
+            distinct = distinct + 1
+        end
+    end
+    if all and distinct >= TogetherNeed(ctx) then
+        for i, q in ipairs(st.points) do
+            if q.status == 'held' then
+                q.status = 'done'
+                if st.hidden and q.device then
+                    q.found = true
+                    st.found = st.found + 1
+                    if st.seize then
+                        NoteEvidence(ctx, q.heldBy)
+                        if SeizeAction(ctx.obj) then q.status, q.seizeFollow = 'followup', true end
+                    end
+                end
+                Find(ctx, st, i, q.heldBy)
+            end
+        end
+        return
+    end
+    if all then
+        -- every point held, but not by enough different officers: only the latest hold stays
+        for _, q in ipairs(st.points) do
+            if q.status == 'held' and q ~= p then q.status, q.heldAt, q.heldBy = 'pending', nil, nil end
+        end
+        reset = true
+    end
+    if reset then
+        ctx.hud({ message = { text = CP.L('block.interact_points.hud.together_reset'), kind = 'warning' } })
     end
 end
 
@@ -454,17 +582,31 @@ local function OnInteract(ctx, st, src, ev)
     if p.status ~= 'pending' then return false, 'wrong_state' end
     local c = ctx.coords(src)
     if not c or CP.U.dist(c, p.coords) > Reach(ctx) then return false, 'too_far' end
-    local need = (tonumber(ctx.obj.progress and ctx.obj.progress.duration) or 0) / 1000 - DWELL_SLACK
+    local ms = tonumber(ctx.obj.progress and ctx.obj.progress.duration) or 0
+    local together = TogetherNeed(ctx)
+    if type(ctx.obj.together) == 'table' and together <= 1 then ms = tonumber(ctx.obj.together.soloProgress) or ms end
+    local need = ms / 1000 - DWELL_SLACK
     if need > 0 and HeldFor(st, src, n, 'pending') < need then return false, 'too_quick' end
 
     p.by, p.checkedAt = src, Now()
-    if st.hidden then
+    if together > 1 then
+        HoldTogether(ctx, st, n, src)
+    elseif st.hidden then
         p.status = 'done'
         if p.device then
             p.found = true
             st.found = st.found + 1
-            st.pendingSpawns[#st.pendingSpawns + 1] = n
-            ProcessSpawns(ctx, st)
+            if st.seize then
+                -- items to seize: virtual evidence, never a prop and never run.shared.devices
+                NoteEvidence(ctx, src)
+                if SeizeAction(ctx.obj) then
+                    p.status, p.seizeFollow = 'followup', true
+                    MarkNear(st, src, n, 'followup', p.checkedAt)
+                end
+            else
+                st.pendingSpawns[#st.pendingSpawns + 1] = n
+                ProcessSpawns(ctx, st)
+            end
         end
     else
         local o = p.outcome ~= nil and OutcomeDef(ctx.obj, p.outcome) or nil
@@ -487,12 +629,15 @@ local function OnFollowUp(ctx, st, src, ev)
     if p.status ~= 'followup' then return false, 'wrong_state' end
     local c = ctx.coords(src)
     if not c or CP.U.dist(c, p.coords) > Reach(ctx) then return false, 'too_far' end
-    local o = OutcomeDef(ctx.obj, p.outcome)
-    local f = o and o.followUp or {}
+    local f = FollowUpOf(ctx.obj, p)
     local need = (tonumber(f.duration) or 0) / 1000 - DWELL_SLACK
     if need > 0 and HeldFor(st, src, n, 'followup') < need then return false, 'too_quick' end
     p.followedBy = src
-    Resolve(ctx, st, n)
+    if p.seizeFollow then
+        p.status = 'done'
+    else
+        Resolve(ctx, st, n)
+    end
     SendState(ctx, st)
     CheckDone(ctx, st)
     return true
@@ -546,7 +691,18 @@ local function ApplyDefaults(obj)
     if obj.progress.anim == nil then obj.progress.anim = c.animation end
     if type(obj.hidden) == 'table' then
         if obj.hidden.count == nil then obj.hidden.count = 1 end
-        if obj.hidden.prop == nil then obj.hidden.prop = DEVICE_PROP end
+        if obj.hidden.kind == nil then obj.hidden.kind = c.hiddenKind.default end
+        if obj.hidden.prop == nil and obj.hidden.kind ~= 'seize' then obj.hidden.prop = DEVICE_PROP end
+    end
+    if type(obj.together) == 'table' then
+        local t = obj.together
+        if t.count == nil then t.count = 2 end
+        if t.window == nil then t.window = c.togetherWindow[3] end
+        if t.soloProgress == nil then t.soloProgress = c.soloProgress[3] * 1000 end
+    end
+    if type(obj.finds) == 'table' then
+        if obj.finds.chance == nil then obj.finds.chance = c.finds[3] / 100 end
+        if obj.finds.pool == nil then obj.finds.pool = CP.U.copy(FIND_POOL) end
     end
     return obj
 end
@@ -654,24 +810,67 @@ CP.Blocks.register(BLOCK, {
                 end
             end
         end
+        -- together, finds
+        if obj.together ~= nil then
+            local t = obj.together
+            if type(t) ~= 'table' then return Bad('block.interact_points.invalid.together') end
+            local n = Idx(t.count)
+            if not n or not InRange(n, { 2, c.together[2] }) or not InRange(t.window, c.togetherWindow)
+                or not DurationOk(t.soloProgress, { progress = c.soloProgress }) then
+                return Bad('block.interact_points.invalid.together')
+            end
+        end
+        if obj.finds ~= nil then
+            local f = obj.finds
+            if type(f) ~= 'table' or type(f.chance) ~= 'number' or f.chance < 0 or f.chance > 1
+                or type(f.pool) ~= 'table' or #f.pool == 0 then
+                return Bad('block.interact_points.invalid.finds')
+            end
+            for _, k in ipairs(f.pool) do
+                if not CP.U.contains(FIND_POOL, k) then return Bad('block.interact_points.invalid.finds') end
+            end
+            if type(obj.hidden) == 'table' then return Bad('block.interact_points.invalid.hidden_exclusive') end
+        end
         -- hidden
         if obj.hidden ~= nil then
             if type(obj.hidden) ~= 'table' then return Bad('block.interact_points.invalid.hidden') end
             local n = Idx(obj.hidden.count)
-            if not n or n < 1 or type(obj.hidden.prop) ~= 'string' or obj.hidden.prop == '' then
+            if not CP.U.contains(c.hiddenKind.options, obj.hidden.kind) then
+                return Bad('block.interact_points.invalid.hidden')
+            end
+            local seize = obj.hidden.kind == 'seize'
+            if not n or n < 1 or (not seize and (type(obj.hidden.prop) ~= 'string' or obj.hidden.prop == '')) then
+                return Bad('block.interact_points.invalid.hidden')
+            end
+            local a = obj.hidden.action
+            if
+                a ~= nil
+                and (
+                    not seize
+                    or type(a) ~= 'table'
+                    or not DurationOk(a.duration, c)
+                    or (a.label ~= nil and type(a.label) ~= 'string')
+                )
+            then
                 return Bad('block.interact_points.invalid.hidden')
             end
             if obj.roll ~= nil or (obj.logResult ~= nil and obj.logResult ~= false) then
                 return Bad('block.interact_points.invalid.hidden_exclusive')
             end
             -- custom missions: only the block's own device models
-            if strict and not CP.U.contains(DEVICE_PROPS, obj.hidden.prop) then
+            if strict and not seize and not CP.U.contains(DEVICE_PROPS, obj.hidden.prop) then
                 return Bad('block.interact_points.invalid.hidden_prop', { props = table.concat(DEVICE_PROPS, ', ') })
             end
         end
         if obj.fastBonus ~= nil then
             local fb = obj.fastBonus
             if type(fb) ~= 'table' or type(fb.id) ~= 'string' or type(fb.seconds) ~= 'number' or fb.seconds <= 0 then
+                return Bad('block.interact_points.invalid.fast_bonus')
+            end
+            -- after: an earlier objective of the mission whose end starts the clock
+            local count = type(mission) == 'table' and type(mission.objectives) == 'table' and #mission.objectives or 0
+            local after = Idx(fb.after)
+            if fb.after ~= nil and (not after or after < 1 or (count > 0 and after >= count)) then
                 return Bad('block.interact_points.invalid.fast_bonus')
             end
             -- custom missions: a standard id, valued only by the mission's own capped bonuses list
@@ -748,6 +947,25 @@ CP.Blocks.register(BLOCK, {
             TryComplete(ctx, st)
             return
         end
+        -- a together step whose unit shrank to one officer: holds already made count
+        if type(ctx.obj.together) == 'table' and TogetherNeed(ctx) <= 1 then
+            local changed = false
+            for i, p in ipairs(st.points) do
+                if p.status == 'held' then
+                    p.status = 'done'
+                    if st.hidden and p.device then
+                        p.found = true
+                        st.found = st.found + 1
+                    end
+                    Find(ctx, st, i, p.heldBy)
+                    changed = true
+                end
+            end
+            if changed then
+                SendState(ctx, st)
+                CheckDone(ctx, st)
+            end
+        end
         -- Server-side dwell: who has been at which open point (main action or follow-up), since when.
         local r = Reach(ctx)
         local t = Now()
@@ -783,7 +1001,9 @@ CP.Blocks.register(BLOCK, {
     end,
 
     onParticipantLeft = function(ctx, src)
-        Ensure(ctx).near[src] = nil
+        local st = Ensure(ctx)
+        st.near[src] = nil
+        if type(ctx.obj.together) == 'table' and not st.completed then SendState(ctx, st) end
     end,
 
     -- Hidden devices not found yet (never spawned) shrink to the new count; for a scaled random
@@ -876,6 +1096,7 @@ CP.Blocks.register(BLOCK, {
             if p.status ~= 'dropped' then p.status = 'pending' end
             p.found, p.by, p.checkedAt, p.logged, p.loggedBy, p.correct, p.followedBy =
                 nil, nil, nil, nil, nil, nil, nil
+            p.heldAt, p.heldBy, p.seizeFollow = nil, nil, nil
         end
         st.found = 0
         st.pendingSpawns, st.logQueue, st.log, st.near = {}, {}, nil, {}

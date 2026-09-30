@@ -30,6 +30,7 @@ import type {
     OperationParticipant,
     OperationScope,
     OperationView,
+    OperationWaitlistEntry,
 } from '../../types/teams';
 import './OperationPanel.css';
 
@@ -59,6 +60,7 @@ function normalizeView(v: OperationView): OperationView {
                       arrived: !!p.arrived,
                   })),
                   departments: asArray(op.departments),
+                  waitlist: asArray(op.waitlist).map(w => ({ ...w, callsign: w.callsign ?? null })),
                   joined: Number(op.joined) || 0,
                   attempt: Number(op.attempt) || 1,
                   tierExpected: !!op.tierExpected,
@@ -127,7 +129,13 @@ function participantBadge(p: OperationParticipant) {
 //                          PARTICIPANTS BY DEPARTMENT
 // ============================================================================
 
-function Participants({ op }: { op: OperationInfo }) {
+// Someone a supervisor may take off the join list or the waitlist before the start.
+interface RemoveTarget {
+    src: number;
+    name: string;
+}
+
+function Participants({ op, onRemove }: { op: OperationInfo; onRemove: (p: RemoveTarget) => void }) {
     const groups = useMemo(() => {
         const map = new Map<string, OperationParticipant[]>();
         for (const p of op.participants) {
@@ -186,6 +194,16 @@ function Participants({ op }: { op: OperationInfo }) {
                                                 </span>
                                             </div>
                                             {participantBadge(p)}
+                                            {p.canRemove ? (
+                                                <Button
+                                                    size="sm"
+                                                    variant="ghost"
+                                                    icon="x"
+                                                    onClick={() => onRemove({ src: p.src, name: p.name })}
+                                                >
+                                                    {t('sup.crossdept.remove')}
+                                                </Button>
+                                            ) : null}
                                         </li>
                                     ))}
                                 </ul>
@@ -194,6 +212,45 @@ function Participants({ op }: { op: OperationInfo }) {
                     })}
                 </div>
             )}
+        </Card>
+    );
+}
+
+function Waitlist({ list, onRemove }: { list: OperationWaitlistEntry[]; onRemove: (p: RemoveTarget) => void }) {
+    if (!list.length) return null;
+    return (
+        <Card
+            icon="clock"
+            title={t('sup.crossdept.waitlist_title')}
+            subtitle={t('sup.crossdept.waitlist_subtitle', { n: list.length })}
+            padding="sm"
+        >
+            <ul className="teams-op-dept__list">
+                {list.map(w => (
+                    <li key={w.src} className="teams-op-person">
+                        <div className="teams-op-person__main">
+                            <span className="teams-op-person__name">
+                                <span className="cp-num">{w.position}.</span> {w.name}
+                            </span>
+                            <span className="teams-op-person__sub">
+                                {[w.callsign || t('common.no_callsign'), w.departmentShort || null]
+                                    .filter(Boolean)
+                                    .join(' · ')}
+                            </span>
+                        </div>
+                        {w.canRemove ? (
+                            <Button
+                                size="sm"
+                                variant="ghost"
+                                icon="x"
+                                onClick={() => onRemove({ src: w.src, name: w.name })}
+                            >
+                                {t('sup.crossdept.remove')}
+                            </Button>
+                        ) : null}
+                    </li>
+                ))}
+            </ul>
         </Card>
     );
 }
@@ -217,6 +274,7 @@ function ActiveOperation({
 }) {
     const { run } = useAction();
     const [dialog, setDialog] = useState<null | 'start' | 'relaunch' | 'cancel'>(null);
+    const [removing, setRemoving] = useState<RemoveTarget | null>(null);
 
     const call = async (name: string, payload?: unknown, success?: string) => {
         const res = await run(name, payload, { success, successVars: { mission: op.missionLabel } });
@@ -406,7 +464,37 @@ function ActiveOperation({
                 </div>
             </Card>
 
-            <Participants op={op} />
+            <Participants op={op} onRemove={setRemoving} />
+            <Waitlist list={op.waitlist ?? []} onRemove={setRemoving} />
+
+            <ConfirmDialog
+                open={removing !== null}
+                tone="danger"
+                title={t('sup.crossdept.remove_title', { name: removing?.name ?? '' })}
+                message={t('sup.crossdept.remove_confirm', { name: removing?.name ?? '', mission: op.missionLabel })}
+                confirmLabel={t('sup.crossdept.remove')}
+                reason={{
+                    label: t('common.reason'),
+                    placeholder: t('sup.crossdept.remove_reason_placeholder'),
+                    required: true,
+                    maxLength: 200,
+                }}
+                onConfirm={async reason => {
+                    const target = removing;
+                    const res = await run(
+                        `server:${scope}:opRemoveJoiner`,
+                        { src: target?.src, reason },
+                        {
+                            success: 'sup.crossdept.removed_toast',
+                            successVars: { name: target?.name ?? '' },
+                        },
+                    );
+                    setRemoving(null);
+                    onDone();
+                    return res;
+                }}
+                onCancel={() => setRemoving(null)}
+            />
 
             <ConfirmDialog
                 open={dialog === 'start'}

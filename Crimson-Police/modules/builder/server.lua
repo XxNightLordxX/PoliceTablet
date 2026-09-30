@@ -55,22 +55,64 @@ local DEFAULT_MIN_SECONDS = {
     pursuit = 30,
     escort = 60,
     search_area = 60,
+    field_contact = 30,
+    process_scene = 5,
 }
 
 -- Builder units: whole percent <-> fractions, seconds <-> milliseconds (protocol §1.1).
 local PERCENT_FIELDS = {
-    hostile_waves = { 'surrender.chance', 'boss.surrender.chance' },
-    flee_arrest = { 'responses.surrender', 'responses.flee', 'responses.fight', 'armedShare' },
-    pursuit = { 'footFlee' },
-    interact_points = { 'roll.outcomes.*.chance' },
+    hostile_waves = {
+        'surrender.chance',
+        'boss.surrender.chance',
+        'behaviour.hold',
+        'behaviour.balanced',
+        'behaviour.push',
+    },
+    flee_arrest = {
+        'responses.surrender',
+        'responses.flee',
+        'responses.fight',
+        'armedShare',
+        'feint',
+        'demeanour.compliant',
+        'demeanour.nervous',
+        'demeanour.evasive',
+        'demeanour.runner',
+        'demeanour.hostile',
+    },
+    pursuit = {
+        'footFlee',
+        'responses.yield',
+        'responses.flee',
+        'responses.fight',
+        'driveBy',
+        'ram',
+        'observe.kinds.pace',
+        'observe.kinds.follow',
+    },
+    interact_points = { 'roll.outcomes.*.chance', 'finds.chance' },
+    field_contact = {
+        'returning.chance',
+        'thief.chance',
+        'scene.occupied_car',
+        'scene.loitering',
+        'scene.casing',
+    },
 }
 local SECONDS_FIELDS = {
-    interact_points = { 'progress.duration', 'roll.outcomes.*.followUp.duration' },
+    interact_points = {
+        'progress.duration',
+        'roll.outcomes.*.followUp.duration',
+        'together.soloProgress',
+        'hidden.action.duration',
+    },
     protect_rescue = { 'freeTime' },
     flee_arrest = { 'knock.duration', 'cuff.duration' },
     hostile_waves = { 'cuff.duration' },
     pursuit = { 'arrest.duration' },
     search_area = { 'clueProgress.duration', 'cuff.duration' },
+    skill_check = { 'onFail.setback.duration' },
+    process_scene = { 'tag.duration', 'bag.duration', 'release.duration' },
 }
 -- Objective fields renamed after mission files were published (block -> { old name = new name }). A file or a
 -- stored draft that still uses the old name is read as the new one, silently (no warning): checkpoint_route's
@@ -84,6 +126,7 @@ local SPAWN_FIELDS = {
     pursuit = { 'spawn', 'spawns' },
     escort = { 'ambushPoints' },
     search_area = { 'hiding' },
+    field_contact = { 'car', 'peopleSpots', 'spots' },
 }
 
 -- Lua export: key order inside tables (unknown keys follow alphabetically), fraction and float keys.
@@ -221,6 +264,63 @@ local ORDER_LIST = {
     'at',
     'wait',
     'loop',
+    -- parity-plus fields (pursuit, interact_points, skill_check, flee_arrest, hostile_waves, field_contact,
+    -- process_scene)
+    'handoff',
+    'profileSet',
+    'yield',
+    'observe',
+    'kind',
+    'kinds',
+    'pace',
+    'zoneSpeed',
+    'over',
+    'behind',
+    'tolerance',
+    'driveBy',
+    'ram',
+    'spawnOffset',
+    'team',
+    'together',
+    'window',
+    'soloProgress',
+    'finds',
+    'pool',
+    'action',
+    'onFail',
+    'setback',
+    'penalty',
+    'retryAfter',
+    'demeanour',
+    'feint',
+    'custody',
+    'spawnSets',
+    'keys',
+    'intel',
+    'spots',
+    'rule',
+    'street',
+    'car',
+    'cars',
+    'people',
+    'peopleSpots',
+    'transport',
+    'scene',
+    'approach',
+    'probableCause',
+    'returning',
+    'thief',
+    'runAt',
+    'escapeFails',
+    'revealed',
+    'bestPoints',
+    'allCorrect',
+    'coroner',
+    'bodies',
+    'roles',
+    'tag',
+    'bag',
+    'release',
     'presenceRange',
 }
 local ORDER = {}
@@ -235,6 +335,13 @@ local FRACTION_KEYS = {
     footFlee = true,
     pctOfPoints = true,
     belowHealth = true,
+    yield = true,
+    driveBy = true,
+    ram = true,
+    feint = true,
+    occupied_car = true,
+    loitering = true,
+    casing = true,
 }
 local FLOAT_KEYS = {
     radius = true,
@@ -247,6 +354,9 @@ local FLOAT_KEYS = {
     maxDistance = true,
     ahead = true,
     startRadius = true,
+    approach = true,
+    behind = true,
+    runAt = true,
 }
 local LUA_KEYWORDS = {}
 for w in
@@ -830,6 +940,23 @@ function B.customBonusFields(def)
                 end
             elseif obj.block == 'interact_points' and type(obj.fastBonus) == 'table' then
                 if not BonusCfg(obj.fastBonus.id) then obj.fastBonus = nil end
+            elseif obj.block == 'field_contact' then
+                -- all_correct and subject_alive are valued by the mission's bonuses list in a custom mission
+                for _, k in ipairs({ 'allCorrect', 'aliveBonus' }) do
+                    local b = obj[k]
+                    if type(b) == 'table' then
+                        b.points, b.pctOfPoints = nil, nil
+                        if not BonusCfg(b.id) then obj[k] = nil end
+                    end
+                end
+            elseif obj.block == 'process_scene' then
+                -- the id only: process_scene's default carries a points hint, which a custom mission may not
+                local ab = type(obj.aliveBonus) == 'table' and obj.aliveBonus or {}
+                obj.aliveBonus = { id = type(ab.id) == 'string' and ab.id or 'all_taken_alive' }
+            elseif obj.block == 'skill_check' and type(obj.onFail) == 'table'
+                and type(obj.onFail.setback) == 'table' then
+                local pen = obj.onFail.setback.penalty
+                if pen ~= nil and not BonusCfg(pen) then obj.onFail.setback.penalty = nil end
             end
         end
     end
@@ -1100,6 +1227,7 @@ local SCALABLE_FIELDS = {
     search_area = { fugitives = true },
     interact_points = { count = true, ['hidden.count'] = true },
     checkpoint_route = { count = true },
+    field_contact = { people = true, cars = true },
 }
 B.SCALABLE_FIELDS = SCALABLE_FIELDS
 

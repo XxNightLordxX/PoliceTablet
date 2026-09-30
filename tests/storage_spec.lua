@@ -400,7 +400,7 @@ end
 -- A solo Beat Patrol from the Mission Board to the end (the real accept, route arrival and checkpoint checks).
 -- onEnd(true) is called before the last checkpoint is reported and onEnd(false) once the run has ended.
 local function BeatPatrol(src, onEnd)
-    Config.DisabledMissions = { 'business_check', 'street_race_bust' }   -- the Patrol pool is Beat Patrol only
+    Config.DisabledMissions = { 'business_check', 'street_race_bust', 'parking_patrol', 'traffic_enforcement' } -- the Patrol pool is Beat Patrol only
     local chance = Config.Events.modifierChance
     Config.Events.modifierChance = 0
     Place(src, vec3(200.0, -1000.0, 29.0))
@@ -652,7 +652,7 @@ CP.Cash.payPending(OFFICER)
 H.eq(#addMoney, moneyBefore, 'and pays nothing twice')
 H.ok((CP.Runs.cooldowns(cid).missions.beat_patrol or 0) > os.time(),
     'the Beat Patrol cooldown is rebuilt from the saves folder')
-Config.DisabledMissions = { 'business_check', 'street_race_bust' }   -- Beat Patrol is the whole Patrol pool
+Config.DisabledMissions = { 'business_check', 'street_race_bust', 'parking_patrol', 'traffic_enforcement' } -- Beat Patrol is the whole Patrol pool
 local refused, why = Act('server:acceptType', OFFICER, 'patrol')
 Config.DisabledMissions = {}
 H.eq(refused, false, 'the officer cannot take Patrol again during the cooldown (' .. tostring(why) .. ')')

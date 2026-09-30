@@ -542,6 +542,10 @@ do
     H.eq(select(2, B.parsePlace(With({ minGap = -1 }))), 'err.invalid_payload', 'negative minGap')
     H.eq(select(2, B.parsePlace(With({ model = 'bad model' }))), 'err.invalid_payload', 'bad model name')
     H.eq(select(2, B.parsePlace('x')), 'err.invalid_payload', 'not a table')
+    -- kerb spots (field_contact parked): the result names the street at each point
+    H.eq(o.streets, false, 'no street names unless asked')
+    H.eq(assert(B.parsePlace(With({ streets = true }))).streets, true, 'streets asked for kerb spots')
+    H.eq(select(2, B.parsePlace(With({ streets = 'yes' }))), 'err.invalid_payload', 'streets must be boolean')
     -- aliases of the task text
     local a = assert(
         B.parsePlace(With({ max = 'NIL', count = 4, points = 'NIL', existing = { { x = 1, y = 2, z = 3, w = 400 } } })))

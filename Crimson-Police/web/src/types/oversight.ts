@@ -282,3 +282,6 @@ export interface AuditExport {
     rows: number;
     truncated: boolean;
 }
+
+// Review Queue tabs: flagged runs, disputes and (reviewProfiles) Profiles: pictures, bios and reports.
+export type ReviewTab = 'flagged' | 'disputes' | 'profiles';

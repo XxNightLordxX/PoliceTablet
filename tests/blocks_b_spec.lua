@@ -428,7 +428,13 @@ do -- waves: start, distinct points, combat values, next wave by count and by ti
     ok, why = HW.onEvent(ctx, 1, { type = 'cuffed', netId = h1 })
     H.eq(why, 'too_far', 'cuff reporter too far')
     NearTo(1, S, h1)
+    local savedRunsHW, arrestsHW = CP.Runs, {}
+    CP.Runs = setmetatable({
+        noteArrest = function(run, src, netId) arrestsHW[#arrestsHW + 1] = { src = src, netId = netId } end,
+    }, { __index = savedRunsHW or {} })
     H.eq(HW.onEvent(ctx, 1, { type = 'cuffed', netId = h1 }), true, 'cuff accepted')
+    CP.Runs = savedRunsHW
+    H.ok(#arrestsHW == 1 and arrestsHW[1].src == 1 and arrestsHW[1].netId == h1, 'hw: the cuff notes one arrest')
     H.eq(#AwardsOf(S, 'hostile_arrested'), 1, 'hostile_arrested +1')
     H.eq(AwardsOf(S, 'hostile_arrested')[1].opts.count, 1, 'award count 1')
     ok, why = HW.onEvent(ctx, 1, { type = 'cuffed', netId = h1 })
@@ -751,6 +757,11 @@ do -- spawn in prepare (waiting for room), damage while not current, free, walk 
     H.eq(cl[1].max, 3, 'checklist max 3')
     H.eq(cl[2].value, 0, 'none safe yet')
 
+    -- the service record: one rescue for every participant per hostage brought to safety
+    local savedRuns, rescues = CP.Runs, {}
+    CP.Runs = setmetatable({
+        noteStat = function(run, src, key, n) rescues[#rescues + 1] = { src = src, key = key, n = n } end,
+    }, { __index = savedRuns or {} })
     MoveEnt(S, h1, 2051, 2001, 20)
     PR.tick(ctx, 1)
     H.eq(NPC.states[h1], 'safe', 'freed hostage safe within safeRadius')
@@ -764,6 +775,10 @@ do -- spawn in prepare (waiting for room), damage while not current, free, walk 
     end
     PR.tick(ctx, 1)
     H.eq(S.completes, 1, 'complete when every hostage is safe')
+    CP.Runs = savedRuns
+    H.eq(#rescues, 3, 'pr: one rescues stat per hostage at the safe marker')
+    H.ok(rescues[1] and rescues[1].key == 'rescues' and rescues[1].src == nil and rescues[1].n == 1,
+        'pr: rescues counts for every participant')
     H.eq(#AwardsOf(S, 'no_hostage_hurt'), 0, 'hurt hostages: no no_hostage_hurt')
     H.eq(#S.fails, 0, 'no fail')
 end
@@ -1048,7 +1063,13 @@ do -- door: surrender at the door, knock checks, cuff, associate, completion
     H.eq(why, 'armed', 'aiming does not make an armed associate give up')
     NPC.states[sus.netId] = 'cuffed'
     Place(1, 3039.5, 3000, 10)
+    local savedRunsFA, arrestsFA = CP.Runs, {}
+    CP.Runs = setmetatable({
+        noteArrest = function(run, src, netId) arrestsFA[#arrestsFA + 1] = { src = src, netId = netId } end,
+    }, { __index = savedRunsFA or {} })
     H.eq(FA.onEvent(ctx, 1, { type = 'cuffed', netId = sus.netId }), true, 'suspect cuffed')
+    CP.Runs = savedRunsFA
+    H.ok(#arrestsFA == 1 and arrestsFA[1].src == 1 and arrestsFA[1].netId == sus.netId, 'fa: the cuff notes one arrest')
     local sa = AwardsOf(S, 'suspect_alive')
     H.eq(#sa, 1, 'suspect_alive awarded')
     H.eq(sa[1].opts.count, 1, 'count 1')
@@ -1383,6 +1404,205 @@ do -- scatter: caps, rescale, escape, no spawn inside the prison, killing an una
     FA.stop(ctx)
     FA.tick(ctx, 1)
     H.eq(#S.spawned, 10, 'stopped: nothing more')
+end
+
+-- ============================================================================
+--                PARITY OPTIONS: flee_arrest and hostile_waves
+-- ============================================================================
+-- Demeanour weights, feint, custody hand-over; behaviour and spawn sets per seed, the intel line, feel.
+
+local function Tick(impl, ctx, n)
+    for _ = 1, n or 1 do
+        AdvanceMs(1000)
+        impl.tick(ctx, 1)
+    end
+end
+
+do -- flee_arrest: validation of the new options
+    H.eq(FA.validate({ demeanour = 'runner' }, custom, doorLoc), true, 'fa parity: a fixed demeanour validates')
+    H.eq(FA.validate({ demeanour = { compliant = 50, runner = 50 } }, custom, doorLoc), true,
+        'fa parity: weights validate')
+    local ok, why = FA.validate({ demeanour = 'sleepy' }, custom, doorLoc)
+    H.eq(why, 'block.flee_arrest.invalid.demeanour', 'fa parity: an unknown demeanour refused')
+    ok, why = FA.validate({ demeanour = { bored = 1 } }, custom, doorLoc)
+    H.eq(why, 'block.flee_arrest.invalid.demeanour', 'fa parity: an unknown weight refused')
+    H.eq(FA.validate({ feint = 0.6 }, custom, doorLoc), false, 'fa parity: feint above 50% refused')
+    ok, why = FA.validate({ custody = 'jail' }, custom, doorLoc)
+    H.eq(why, 'block.flee_arrest.invalid.custody', 'fa parity: an unknown custody refused')
+    H.eq(FA.defaults({}).custody, 'cuff', 'fa parity: cuff only by default')
+    H.eq(FA.defaults({}).feint, 0, 'fa parity: no feint by default')
+end
+
+do -- demeanour weights decide the door response, from the seed
+    local function Door(dem, seed)
+        H.clockMs = 5000000
+        local ctx, S = MakeCtx('flee_arrest', { demeanour = dem, associates = { count = 0 } }, doorLoc, { seed = seed })
+        FA.start(ctx)
+        return ctx.state.response, ctx.state.demeanour
+    end
+    H.eq(Door('runner', 1), 'flee', 'fa parity: a runner flees at the knock')
+    H.eq(Door('compliant', 1), 'surrender', 'fa parity: a compliant suspect surrenders')
+    H.eq(Door('hostile', 1), 'fight', 'fa parity: a hostile suspect fights (armed)')
+    local seen = {}
+    for i = 1, 20 do
+        local seed = 100003 * i + 7919
+        local r = Door({ compliant = 50, runner = 50 }, seed)
+        seen[r] = (seen[r] or 0) + 1
+        H.eq(Door({ compliant = 50, runner = 50 }, seed), r, 'fa parity: the same seed rolls the same demeanour')
+    end
+    H.ok((seen.surrender or 0) > 0 and (seen.flee or 0) > 0, 'fa parity: weights of 50/50 give both')
+    -- scatter: a compliant inmate gives up at once, a runner runs
+    H.clockMs = 5100000
+    local ctx, S = MakeCtx('flee_arrest', { mode = 'scatter', suspects = 2, armedShare = 0, demeanour = 'compliant' },
+        scatterLoc)
+    FA.start(ctx)
+    for _, s in ipairs(WithRole(S, 'inmate')) do
+        H.eq(NPC.states[s.netId], 'surrendered', 'fa parity: a compliant inmate surrenders')
+    end
+end
+
+do -- feint: only unarmed, only when nobody is within 6 m or aiming for 5 s; killing a feinting suspect still fails
+    H.clockMs = 5200000
+    local ctx, S = MakeCtx('flee_arrest',
+        { mode = 'scatter', suspects = 1, armedShare = 0, feint = 0.5, demeanour = 'runner' }, scatterLoc,
+        { seed = 77 })
+    FA.start(ctx)
+    local p = WithRole(S, 'inmate')[1]
+    local st = ctx.state
+    NearTo(1, S, p.netId, 5.0)
+    H.players[1].weapon = 'WEAPON_PISTOL'
+    FA.onEvent(ctx, 1, { type = 'aim', netId = p.netId })
+    H.eq(NPC.states[p.netId], 'surrendered', 'fa feint: gave up when aimed at')
+    local rec = st.peds[tostring(p.netId)]
+    rec.feintRoll = true   -- this suspect is the one who feints (the roll itself is tested by its weight below)
+    NearTo(1, S, p.netId, 3.0)
+    Tick(FA, ctx, 8)
+    H.eq(NPC.states[p.netId], 'surrendered', 'fa feint: an officer within 6 m keeps him down')
+    NearTo(1, S, p.netId, 12.0)
+    for _ = 1, 8 do
+        FA.onEvent(ctx, 1, { type = 'aim', netId = p.netId })   -- covered from 12 m
+        Tick(FA, ctx, 1)
+    end
+    H.eq(NPC.states[p.netId], 'surrendered', 'fa feint: an officer aiming keeps him down')
+    Tick(FA, ctx, 4)
+    H.eq(NPC.states[p.netId], 'surrendered', 'fa feint: not while the last aim is under 5 s old')
+    Tick(FA, ctx, 7)
+    H.eq(NPC.states[p.netId], 'fleeing', 'fa feint: nobody close and nobody aiming for 5 s: he bolts')
+    H.eq(rec.feinted, true, 'fa feint: marked as a feint')
+    FA.onEntityDead(ctx, p.netId, 1)
+    H.eq(S.fails[1], 'run.fail_killed_unarmed', 'fa feint: killing a feinting (unarmed) suspect still fails')
+    -- an armed suspect never rolls a feint
+    local ctx2, S2 = MakeCtx('flee_arrest', { mode = 'scatter', suspects = 1, armedShare = 1.0, feint = 0.5 },
+        scatterLoc, { seed = 78 })
+    FA.start(ctx2)
+    local a = WithRole(S2, 'inmate')[1]
+    SetHealth(S2, a.netId, 110)
+    FA.onEvent(ctx2, 1, { type = 'low_health', netId = a.netId })
+    H.eq(ctx2.state.peds[tostring(a.netId)].feintRoll, false, 'fa feint: never for an armed suspect')
+    -- the roll follows its weight: 0 never feints
+    local ctx3, S3 = MakeCtx('flee_arrest',
+        { mode = 'scatter', suspects = 1, armedShare = 0, feint = 0, demeanour = 'compliant' }, scatterLoc)
+    FA.start(ctx3)
+    H.eq(ctx3.state.peds[tostring(WithRole(S3, 'inmate')[1].netId)].feintRoll, false, 'fa feint: chance 0 never feints')
+end
+
+do -- custody = 'handover': the objective completes only once the cuffed suspect is handed over
+    H.clockMs = 5300000
+    local chains = {}
+    local saved = CP.Custody
+    CP.Custody = {
+        enableChain = function(run, netId, opts) chains[#chains + 1] = netId return true end,
+    }
+    local ctx, S = MakeCtx('flee_arrest',
+        { mode = 'scatter', suspects = 1, armedShare = 0, custody = 'handover', demeanour = 'compliant' }, scatterLoc)
+    FA.start(ctx)
+    local p = WithRole(S, 'inmate')[1]
+    NPC.states[p.netId] = 'cuffed'
+    NearTo(1, S, p.netId, 1.0)
+    FA.onEvent(ctx, 1, { type = 'cuffed', netId = p.netId })
+    H.eq(chains[1], p.netId, 'fa custody: the custody chain starts after the cuff')
+    Tick(FA, ctx, 2)
+    H.eq(S.completes, 0, 'fa custody: cuffed is not enough with a hand-over')
+    local ok = FA.onEvent(ctx, 1, { type = 'handed_over', netId = p.netId })
+    H.eq(ok, true, 'fa custody: handed over')
+    H.eq(S.completes, 1, 'fa custody: complete once handed over')
+    CP.Custody = saved
+end
+
+do -- hostile_waves: behaviour and spawn sets per seed, the intel line, NpcDifficulty feel only
+    local setsLoc = HwLocation(12, 6000.0, 6000.0)
+    setsLoc.front, setsLoc.house, setsLoc.garage = {}, {}, {}
+    for i = 1, 6 do
+        setsLoc.front[i] = vec4(6000.0 + i * 5.0, 6060.0, 30.0, 180.0)
+        setsLoc.house[i] = vec4(6000.0 + i * 5.0, 6000.0, 30.0, 180.0)
+        setsLoc.garage[i] = vec4(6000.0 + i * 5.0, 5940.0, 30.0, 0.0)
+    end
+    local function Roll(seed)
+        H.clockMs = 6000000
+        local ctx, S = MakeCtx('hostile_waves', {
+            waves = { 4 },
+            behaviour = { hold = 0.3, balanced = 0.5, push = 0.2 },
+            spawnSets = { keys = { 'front', 'house', 'garage' }, use = 2, intel = true },
+        }, setsLoc, { seed = seed })
+        HW.start(ctx)
+        return ctx, S
+    end
+    local ctx, S = Roll(31)
+    local st = ctx.state
+    H.eq(#st.sets, 2, 'hw parity: two of the three spawn sets per run')
+    local again = Roll(31)
+    H.eq(table.concat(again.state.sets, ','), table.concat(st.sets, ','), 'hw parity: the same seed, the same sets')
+    H.eq(again.state.behaviour, st.behaviour, 'hw parity: the same seed, the same behaviour')
+    local used = {}
+    for _, k in ipairs(st.sets) do for _, p in ipairs(setsLoc[k]) do used[#used + 1] = p end end
+    for _, s in ipairs(S.spawned) do
+        local inSet = false
+        for _, p in ipairs(used) do if U.dist2d(p, s.opts.coords) < 3.0 then inSet = true end end
+        H.ok(inSet, 'hw parity: every hostile spawns in one of the rolled sets')
+        H.eq(s.opts.cfg.behaviour, st.behaviour, 'hw parity: every hostile has the rolled behaviour')
+    end
+    local intel = ctx.run.shared.intel
+    H.eq(type(intel) == 'table' and intel.key, 'block.hostile_waves.intel',
+        'hw parity: an intel line token for the run')
+    local names = {}
+    for _, k in ipairs(st.sets) do
+        local key = ('block.hostile_waves.set.%s'):format(k)
+        names[#names + 1] = CP.Locale.has(key) and CP.L(key) or k
+    end
+    H.eq(intel and intel.vars and intel.vars.sets,
+        CP.L('block.hostile_waves.intel_and', { first = names[1], last = names[2] }),
+        'hw parity: the intel line names the two rolled sets')
+    local behaviours, setsSeen = {}, {}
+    for seed = 1, 30 do
+        local c = Roll(seed)
+        behaviours[c.state.behaviour] = true
+        setsSeen[table.concat(c.state.sets, ',')] = true
+    end
+    H.ok(behaviours.hold and behaviours.balanced and behaviours.push, 'hw parity: every behaviour comes up over seeds')
+    H.ok(U.count(setsSeen) >= 2, 'hw parity: different runs use different sets')
+    -- feel: 'hard' raises health, surrender chance moves; the counts and awards stay the same
+    local savedPreset = Config.NpcDifficulty.preset
+    CP.Scaling = CP.Scaling or {}
+    local savedFeel = CP.Scaling.feel
+    CP.Scaling.feel = function() return { healthMult = 1.15, surrenderMult = 0.7, fleeMult = 1.2 } end
+    local hard, SH = Roll(31)
+    CP.Scaling.feel = savedFeel
+    H.eq(#SH.spawned, #S.spawned, 'hw feel: the same number of hostiles under a harder preset')
+    H.eq(SH.spawned[1].opts.health, math.floor(200 * 1.15 + 0.5), 'hw feel: health x healthMult')
+    H.eq(S.spawned[1].opts.health, 200, 'hw feel: normal health otherwise')
+    Config.NpcDifficulty.preset = savedPreset
+    -- validation
+    local ok, why = HW.validate({ spawnSets = { keys = { 'front' }, use = 2 } }, builtin, setsLoc)
+    H.eq(why, 'block.hostile_waves.invalid.spawn_sets', 'hw parity: using more sets than exist refused')
+    ok, why = HW.validate({ behaviour = { sleep = 1 } }, builtin, setsLoc)
+    H.eq(why, 'block.hostile_waves.invalid.behaviour', 'hw parity: an unknown behaviour weight refused')
+    H.eq(HW.validate(
+        { behaviour = { hold = 1, push = 1 }, spawnSets = { keys = { 'front', 'house' }, use = 1 } },
+        builtin,
+        setsLoc
+    ), true, 'hw parity: weights and sets validate')
+    ok, why = HW.validate({ spawnSets = { keys = { 'front', 'cellar' }, use = 1 } }, builtin, setsLoc)
+    H.eq(why, 'block.hostile_waves.invalid.spawns_missing', 'hw parity: a set with no points refused')
 end
 
 -- ============================================================================

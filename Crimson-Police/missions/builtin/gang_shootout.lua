@@ -8,7 +8,8 @@
   the hideout's roads and yard lanes (GTA V vehicle-node network: the lanes between the container stacks,
   the trailer-park loop, the yard tracks; z = road height + 1 m), 7 m+ apart and 30 m+ from the start, so
   none is inside a container, trailer or shed.
-  Blocks: hostile_waves → interact_points.
+  The scene is then processed (at most 4 bodies kept; at once when nobody died), released at the marker.
+  Blocks: hostile_waves → interact_points → process_scene.
 ]]
 
 RegisterMission({
@@ -118,6 +119,14 @@ RegisterMission({
       points     = 'scene',
       target     = { label = 'Secure the scene' },   -- the ox_target option (not the locale default)
       progress   = { label = 'Securing scene', duration = 8000 },
+    },
+    {
+      block      = 'process_scene',
+      label      = 'Process the scene',
+      minSeconds = 5,
+      scene      = 'scene',
+      coroner    = false,                          -- release at the scene marker
+      bodies     = 4,                              -- at most 4 bodies kept
     },
   },
 

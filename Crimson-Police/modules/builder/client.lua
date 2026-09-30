@@ -457,9 +457,10 @@ function B.parsePlace(p)
         end
         o.model = p.model
     end
-    for _, f in ipairs({ 'heading', 'multiple', 'spawn' }) do
+    for _, f in ipairs({ 'heading', 'multiple', 'spawn', 'streets' }) do
         if p[f] ~= nil and type(p[f]) ~= 'boolean' then return nil, 'err.invalid_payload' end
     end
+    o.streets = p.streets == true   -- kerb spots: the result names the street at each point
     o.heading = p.heading == true and o.kind ~= 'area' and o.kind ~= 'start'
     o.multiple = p.multiple == true and o.kind ~= 'start'
     o.spawn = p.spawn == true
@@ -880,6 +881,17 @@ local function DrawPlaced(tool, st, pos)
     end
 end
 
+-- The street name at each placed point (kerb spots of field_contact's parked mode), in point order.
+local function StreetsOf(points)
+    local out = {}
+    for i, p in ipairs(points) do
+        local hash = GetStreetNameAtCoord(p.x + 0.0, p.y + 0.0, p.z + 0.0)
+        local name = hash and GetStreetNameFromHashKey(hash) or ''
+        out[i] = type(name) == 'string' and name or ''
+    end
+    return out
+end
+
 local function RunPlacement(tool)
     local o = tool.opts
     local bc = BuilderCfg()
@@ -922,6 +934,7 @@ local function RunPlacement(tool)
         local r = NewResult(tool, cancelled)
         r.points = st.points
         if o.kind == 'start' or o.kind == 'area' then r.radius = Round2(st.radius) end
+        if o.streets then r.streets = StreetsOf(st.points) end
         return r
     end
     Overlay(PlacementOverlay(tool, st, false, 'builder.place.reason.no_hit'))

@@ -57,7 +57,17 @@ local function Clear() calls = {} end
 --                                  FAKE WORLD
 -- ============================================================================
 
-local W = { ents = {}, byNet = {}, bags = {}, groups = {}, options = {}, removed = nil, progressResult = true }
+local W = {
+    ents = {},
+    byNet = {},
+    bags = {},
+    groups = {},
+    options = {},
+    contact = {},
+    vehicleOptions = {},
+    removed = nil,
+    progressResult = true,
+}
 local ME = 1
 local PLAYERS = { [1] = { idx = 0, ped = 100 }, [2] = { idx = 5, ped = 200 } }
 W.ents[100] = { type = 1, player = true, coords = vec3(0.0, 50.0, 0.0) }
@@ -152,9 +162,21 @@ lib.progressBar = function(opts)
 end
 lib.cancelProgress = function() Record('cancelProgress') end
 
+-- "Cuff suspect" option sets go to W.options, the police action options (contacts, custody) to W.contact
 H.exportsMock['ox_target'] = {
-    addGlobalPed = function(opts) W.options[#W.options + 1] = opts end,
-    removeGlobalPed = function(names) W.removed = names end,
+    addGlobalPed = function(opts)
+        if opts[1] and tostring(opts[1].name):find('^crimson%-police:cuff') then
+            W.options[#W.options + 1] = opts
+        else
+            W.contact[#W.contact + 1] = opts
+        end
+    end,
+    removeGlobalPed = function(names)
+        W.removed = W.removed or {}
+        for _, n in ipairs(names) do W.removed[#W.removed + 1] = n end
+    end,
+    addGlobalVehicle = function(opts) W.vehicleOptions[#W.vehicleOptions + 1] = opts end,
+    removeGlobalVehicle = function(names) W.vehicleRemoved = names end,
 }
 
 W.run = { id = 'run-1', isHost = true, participants = { 1, 2 } }
@@ -908,6 +930,104 @@ H.fire('crimson-police:client:runEnded', 1, 'run-1')
 Clear()
 Npc.task(P6, 'cuffed', { instant = true })
 H.ok(Called('SetEnableHandcuffs', function(a) return a[1] == P6 end), 'run end forgets the AI state')
+
+-- ============================================================================
+--                  POLICE ACTION OPTIONS (contacts, custody)
+-- ============================================================================
+
+do
+    W.run.state = 'in_progress'
+    local performed = {}
+    CP.Custody = {
+        perform = function(netId, action, extra)
+            performed[#performed + 1] = { netId = netId, action = action, extra = extra }
+        end,
+        busy = function() return false end,
+        cancel = function() end,
+    }
+    local byName = {}
+    for _, set in ipairs(W.contact) do for _, o in ipairs(set) do byName[o.name] = o end end
+    local vehByName = {}
+    for _, set in ipairs(W.vehicleOptions) do for _, o in ipairs(set) do vehByName[o.name] = o end end
+    H.ok(byName['crimson-police:contact_talk'] ~= nil and byName['crimson-police:contact_arrest'] ~= nil,
+        'contact options on peds')
+    H.ok(byName['crimson-police:custody_escort'] ~= nil, 'custody options on peds')
+    H.ok(vehByName['crimson-police:contact_runPlate'] ~= nil and vehByName['crimson-police:contact_impound'] ~= nil,
+        'contact options on vehicles')
+    local door = vehByName['crimson-police:seat_talk_door_dside_r']
+    H.ok(door ~= nil and door.bones and door.bones[1] == 'door_dside_r', 'per-door options carry their bone')
+    -- a person offering Talk only, in a stopped state
+    local PA = AddPed(5101, 901, 0, 1, 0)
+    W.bags[PA] = {
+        cp = {
+            run = 'run-1',
+            obj = 1,
+            state = 'contacted',
+            contact = { label = 'A', kind = 'person', actions = { 'talk', 'detain' } },
+        },
+    }
+    H.eq(byName['crimson-police:contact_talk'].canInteract(PA, 1.5), true, 'Talk shows on a stopped contact')
+    H.eq(byName['crimson-police:contact_talk'].canInteract(PA, 3.5), false, 'out of reach: hidden')
+    H.eq(byName['crimson-police:contact_frisk'].canInteract(PA, 1.0), false, 'an action the bag does not offer: hidden')
+    H.eq(byName['crimson-police:contact_arrest'].canInteract(PA, 1.0), false, 'Arrest needs a detained person')
+    W.bags[PA].cp.run = 'run-other'
+    H.eq(byName['crimson-police:contact_talk'].canInteract(PA, 1.0), false, 'another run\'s ped: hidden')
+    W.bags[PA].cp.run = 'run-1'
+    byName['crimson-police:contact_talk'].onSelect({ entity = PA })
+    H.advance(50)
+    H.eq(performed[1] and performed[1].action, 'talk', 'onSelect starts the action flow')
+    H.eq(performed[1] and performed[1].netId, 901, 'with the ped\'s net id')
+    -- a seated person through their door: GetPedInVehicleSeat resolves them
+    local CAR = 5102
+    W.ents[CAR] = { type = 2, netId = 902, coords = vec3(0.0, 1.0, 0.0) }
+    W.byNet[902] = CAR
+    W.bags[CAR] = {
+        cp = {
+            run = 'run-1',
+            obj = 1,
+            state = 'stopped',
+            contact = { label = 'V1', kind = 'vehicle', actions = { 'runPlate' } },
+        },
+    }
+    W.ents[CAR].driver = PA
+    local seatTalk = vehByName['crimson-police:seat_talk_door_dside_f']
+    W.bags[PA].cp.state = 'idle'
+    H.eq(seatTalk.canInteract(CAR, 2.0), true, 'the driver door offers Talk to the seated driver')
+    seatTalk.onSelect({ entity = CAR })
+    H.advance(50)
+    H.eq(performed[2] and performed[2].extra and performed[2].extra.door, 'door_dside_f',
+        'door options name their door')
+    H.eq(vehByName['crimson-police:contact_runPlate'].canInteract(CAR, 2.0), true, 'Run plate on the car')
+    W.bags[CAR].cp.state = 'impounded'
+    H.eq(vehByName['crimson-police:contact_runPlate'].canInteract(CAR, 2.0), false, 'an impounded car offers nothing')
+    -- behaviours reach the host only from client:contactAct
+    Clear()
+    H.fire('crimson-police:client:contactAct', 1,
+        { runId = 'run-1', netId = 901, behaviour = 'tell_then_draw', seconds = 2 })
+    H.advance(200)
+    H.ok(Called('TaskPlayAnim', function(a) return a[1] == PA and a[2] == 'reaction@intimidation@1h' end),
+        'tell_then_draw plays the tell on the host')
+    W.run.isHost = false
+    Clear()
+    H.fire('crimson-police:client:contactAct', 1, { runId = 'run-1', netId = 901, behaviour = 'walk_away' })
+    H.advance(200)
+    H.ok(not Called('TaskWanderStandard') and not Called('TaskFollowNavMeshToCoord'), 'only the host acts it out')
+    W.run.isHost = true
+    -- stun_hit telemetry: a taser hit on a detained contact
+    W.bags[PA].cp.state = 'cuffed'
+    _G.GetWeaponDamageType = function() return 3 end
+    H.reset()
+    TriggerEvent('gameEventTriggered', 'CEventNetworkEntityDamage',
+        { PA, PlayerPedId(), 0, 0, 0, 0, joaat('WEAPON_STUNGUN') })
+    H.eq(#H.findEvents('crimson-police:server:stunHit'), 1, 'a taser hit on a detained contact is reported')
+    H.reset()
+    TriggerEvent('gameEventTriggered', 'CEventNetworkEntityDamage',
+        { PA, PlayerPedId(), 0, 0, 0, 0, joaat('WEAPON_PISTOL') })
+    H.eq(#H.findEvents('crimson-police:server:stunHit'), 0, 'a gunshot is not force telemetry')
+    W.run.state = nil
+    CP.Custody = nil
+end
+
 TriggerEvent('onResourceStop', 'some-other-resource')
 H.eq(W.removed, nil, 'another resource stopping changes nothing')
 Clear()

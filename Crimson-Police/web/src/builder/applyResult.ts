@@ -3,7 +3,7 @@
 import type { BuilderConfig, BuilderDefinition, BuilderRoute, Vec, Vec3 } from '../types/builder_server';
 import type { BuilderClientResultEx, PointSpec, RouteMeta } from '../types/builder_client';
 import { clone, isVec, listsOf, pointsOf, round2, thin } from './defUtils';
-import { startRadiusRange } from './schema';
+import { KERB_RULES, startRadiusRange } from './schema';
 
 export interface Applied {
     def: BuilderDefinition | null;
@@ -67,6 +67,31 @@ export function applyResult(
                 messageKey: 'builder.result.path',
                 vars: { n: kept.length, location: li },
                 tone: kept.length ? 'success' : 'info',
+            };
+        }
+        if (spec?.ruled) {
+            // kerb spots: keep each spot's rule (and street) by position; a new spot takes the next rule in turn
+            const prev = Array.isArray(loc[key]) ? (loc[key] as unknown[]) : [];
+            const streets = result.kind === 'placement' && Array.isArray(result.streets) ? result.streets : [];
+            const spots = kept.map((p, i) => {
+                const old = prev[i] as { rule?: unknown; street?: unknown } | undefined;
+                const rule = typeof old?.rule === 'string' ? old.rule : KERB_RULES[i % KERB_RULES.length];
+                const street =
+                    typeof streets[i] === 'string' && streets[i] !== ''
+                        ? streets[i]
+                        : typeof old?.street === 'string'
+                          ? old.street
+                          : '';
+                return street ? { coords: p, rule, street } : { coords: p, rule };
+            });
+            if (spots.length) loc[key] = spots;
+            else delete loc[key];
+            return {
+                def,
+                meta: null,
+                messageKey: 'builder.result.placed',
+                vars: { n: spots.length, location: li },
+                tone: 'success',
             };
         }
         const single = spec ? !spec.multiple : isVec(loc[key]);

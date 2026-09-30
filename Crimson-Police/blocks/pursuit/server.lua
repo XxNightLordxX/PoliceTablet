@@ -33,6 +33,14 @@ local DEFAULT_ARREST_MS = 5000
 local DEFAULT_FAST_S = 120
 local CUSTOM_TIMED_MS = { 1000, 30000 }  -- custom missions: the arrest progress time (ms)
 local DEFAULT_AHEAD = 50.0
+local MAX_OFFSET = 250.0                 -- metres: spawnOffset is kept within this of the reference point
+local APPROACH_CUE = 250.0               -- the HUD announces a violator this close to a participant
+local PASS_RANGE = 300.0                 -- a violator has passed the observation point once ahead of it within this
+local RAM_BOX = 15.0                     -- a fighting car slowed with a participant this close is boxed in...
+local RAM_BOX_S = 1                      -- ...for this long before it may ram
+local RAM_MS = 3000                      -- a ram lasts this long
+local FOLLOW_BEHIND = 60.0               -- observe = follow: within this many metres...
+local FOLLOW_SECONDS = 8                 -- ...for this long
 -- Pursuit Sim card: "Gold under 40 m +50, Silver under 80 m +25, Bronze under 150 m +10". Passed as the
 -- trusted per-occurrence hint of every medal award, so a medal is worth its card value on a mission whose
 -- file does not list it (every custom mission: Config.Bonuses has no medal ids); a file that lists the id
@@ -78,6 +86,7 @@ local TWO_SEATERS = {
 }
 
 local function Cfg() return Config.Blocks[BLOCK] end
+local ZoneSpeed
 local function Now() return GetGameTimer() end
 
 -- A card value passed as a points hint; at most Config.Builder.bonusCap.points on non-built-in missions.
@@ -292,6 +301,36 @@ end
 
 local function Neutralised(p) return p.state == 'dead' or p.state == 'cuffed' end
 
+-- Contact hand-off: a person still seated in a stopped car is the field_contact objective's to work.
+local function Settled(p) return Neutralised(p) or p.state == 'seated' end
+
+local function Median(list)
+    local s = {}
+    for i = 1, #list do s[i] = list[i] end
+    table.sort(s)
+    local n = #s
+    if n == 0 then return 0 end
+    if n % 2 == 1 then return s[(n + 1) // 2] end
+    return (s[n // 2] + s[n // 2 + 1]) / 2
+end
+
+local function HasArmedWeight(setName)
+    local set = type(setName) == 'string' and ((Config.Custody or {}).profileSets or {})[setName] or nil
+    if type(set) ~= 'table' then return false end
+    for role, weights in pairs(set) do
+        if role ~= 'vehicle' and type(weights) == 'table' and (tonumber(weights.armed) or 0) > 0 then return true end
+    end
+    return false
+end
+
+-- Occupants roll hidden truths (and spawn as contacts) when the pursuit hands them to a field_contact or
+-- names a profile set.
+local function ProfileSetOf(obj)
+    if type(obj.profileSet) == 'string' then return obj.profileSet end
+    if obj.handoff == 'contact' then return 'traffic' end
+    return nil
+end
+
 -- ============================================================================
 --                           DEFAULTS AND VALIDATION
 -- ============================================================================
@@ -349,12 +388,34 @@ local function Defaults(obj)
         if obj.fastStop.id == nil then obj.fastStop.id = 'vehicle_stopped_fast' end
         if obj.fastStop.seconds == nil then obj.fastStop.seconds = DEFAULT_FAST_S end
     end
+    -- ---- PARITY OPTIONS (responses, hand-off, observe, drive-by, ram, spawn offset) ----
+    if obj.handoff == nil then obj.handoff = c.handoff.default end
+    if type(obj.responses) == 'table' then
+        for _, k in ipairs({ 'yield', 'flee', 'fight' }) do
+            if obj.responses[k] == nil then obj.responses[k] = 0 end
+        end
+    end
+    if obj.observe == nil or obj.observe == 'off' then obj.observe = false end
+    if type(obj.observe) == 'table' then
+        local ob = obj.observe
+        -- kinds = { pace = 0.7, follow = 0.3 }: each violator rolls its violation (kind is then the default)
+        if ob.kind == nil then ob.kind = type(ob.kinds) == 'table' and 'pace' or 'pace' end
+        if ob.zoneSpeed == nil then ob.zoneSpeed = c.zoneSpeed[3] end
+        if type(ob.over) ~= 'table' then ob.over = { c.overMin[3], c.overMax[3] } end
+        if ob.behind == nil then ob.behind = ob.kind == 'follow' and FOLLOW_BEHIND or 80.0 end
+        if ob.seconds == nil then ob.seconds = ob.kind == 'follow' and FOLLOW_SECONDS or 5 end
+        if ob.tolerance == nil then ob.tolerance = c.paceTolerance[3] end
+    end
+    if obj.driveBy == nil then obj.driveBy = c.driveBy[3] / 100 end
+    if obj.ram == nil then obj.ram = c.ram[3] / 100 end
+    if obj.spawnOffset == nil or obj.spawnOffset == 0 then obj.spawnOffset = false end
     return obj
 end
 
 local function ArmedCount(obj)
     local o = Defaults(U.deepcopy(obj))
-    if o.neverShoots ~= false then return 0 end
+    local hidden = HasArmedWeight(ProfileSetOf(o))
+    if o.neverShoots ~= false and not hidden then return 0 end
     return Int(o.vehicles) * Int(o.suspectsPerVehicle)
 end
 
@@ -398,6 +459,14 @@ local function CheckLocation(o, loc, li, strict)
     if #spawnPts == 0 and not route and not (loc.start and loc.start.coords) then
         return need('spawn')
     end
+    local ob = o.observe
+    if type(ob) == 'table' and type(ob.zoneSpeed) == 'string' then
+        local c = Cfg()
+        if not InRange(loc[ob.zoneSpeed], c.zoneSpeed) then
+            return Bad('block.pursuit.invalid.range',
+                { field = 'observe.zoneSpeed (' .. ob.zoneSpeed .. ')', min = c.zoneSpeed[1], max = c.zoneSpeed[2] })
+        end
+    end
     if strict then
         local start = loc.start and loc.start.coords
         for _, p in ipairs(spawnPts) do
@@ -416,6 +485,72 @@ local function CheckLocation(o, loc, li, strict)
                 return Bad('block.pursuit.invalid.loop', { location = li, max = Config.Builder.route.loopClose })
             end
         end
+    end
+    return true
+end
+
+-- The parity options (Config.Blocks.pursuit ranges; chances as fractions in the file).
+local function ValidateParity(o, c)
+    if not U.contains(c.handoff.options, o.handoff) then return Bad('block.pursuit.invalid.handoff') end
+    if o.handoff == 'contact' and o.mode ~= 'stop' then return Bad('block.pursuit.invalid.handoff') end
+    if o.responses ~= nil then
+        local r = o.responses
+        if type(r) ~= 'table' then return Bad('block.pursuit.invalid.responses') end
+        for _, k in ipairs({ 'yield', 'flee', 'fight' }) do
+            if not IsNum(r[k]) or r[k] < 0 or r[k] > 1 then return Bad('block.pursuit.invalid.responses') end
+        end
+        if math.abs(r.yield + r.flee + r.fight - 1) > 0.001 then return Bad('block.pursuit.invalid.responses') end
+    end
+    for _, k in ipairs({ 'driveBy', 'ram' }) do
+        if not InRange(o[k], c[k], 0.01) then
+            return Bad('block.pursuit.invalid.range', { field = k, min = c[k][1] / 100, max = c[k][2] / 100 })
+        end
+    end
+    if o.spawnOffset ~= false then
+        if not IsNum(o.spawnOffset) or math.abs(o.spawnOffset) > MAX_OFFSET + 1e-9 then
+            return Bad('block.pursuit.invalid.spawn_offset', { max = MAX_OFFSET })
+        end
+        if o.route == nil or o.route == false then
+            return Bad('block.pursuit.invalid.spawn_offset', { max = MAX_OFFSET })
+        end
+    end
+    if o.team ~= nil and (not IsInt(o.team) or o.team < 1 or o.team > 8) then
+        return Bad('block.pursuit.invalid.range', { field = 'team', min = 1, max = 8 })
+    end
+    local set = ProfileSetOf(o)
+    if set ~= nil and type(((Config.Custody or {}).profileSets or {})[set]) ~= 'table' then
+        return Bad('block.pursuit.invalid.profile_set')
+    end
+    local ob = o.observe
+    if ob ~= false then
+        if type(ob) ~= 'table' or (ob.kind ~= 'pace' and ob.kind ~= 'follow') then
+            return Bad('block.pursuit.invalid.observe')
+        end
+        if o.mode ~= 'stop' then return Bad('block.pursuit.invalid.observe') end
+        if ob.kinds ~= nil then
+            local k = ob.kinds
+            if type(k) ~= 'table' then return Bad('block.pursuit.invalid.observe') end
+            local sum = 0
+            for name, w in pairs(k) do
+                if (name ~= 'pace' and name ~= 'follow') or not IsNum(w) or w < 0 then
+                    return Bad('block.pursuit.invalid.observe')
+                end
+                sum = sum + w
+            end
+            if sum <= 0 then return Bad('block.pursuit.invalid.observe') end
+        end
+        local zone = ob.zoneSpeed
+        if type(zone) == 'string' then
+            zone = c.zoneSpeed[3]
+        end -- a location key: checked per location
+        local over = ob.over
+        if not InRange(zone, c.zoneSpeed) or type(over) ~= 'table' or not InRange(over[1], c.overMin)
+            or not InRange(over[2], c.overMax) or over[1] > over[2] or not InRange(ob.tolerance, c.paceTolerance)
+            or not IsNum(ob.behind) or ob.behind <= 0 or not IsNum(ob.seconds) or ob.seconds <= 0 then
+            return Bad('block.pursuit.invalid.observe')
+        end
+        local kind = TriggerOf(o)
+        if kind ~= 'distance' then return Bad('block.pursuit.invalid.observe') end
     end
     return true
 end
@@ -567,6 +702,8 @@ local function Validate(obj, mission, location)
             return Bad('block.pursuit.invalid.medals')
         end
     end
+    ok, why = ValidateParity(o, c)
+    if not ok then return false, why end
     local armed = ArmedCount(o)
     if armed > Config.Builder.maxHostiles then
         return Bad('block.pursuit.invalid.armed_budget', { max = Config.Builder.maxHostiles, have = armed })
@@ -608,9 +745,54 @@ local function StartPoint(ctx)
     return s and s.coords or nil
 end
 
--- Where the i-th vehicle is placed: spawns > spawn > ahead of the start > on the route > near the start.
+-- The point `offset` metres along an open route from the route point nearest ref (negative = upstream,
+-- against the driving direction), kept within MAX_OFFSET, with the heading of the route there.
+local function AlongRoute(route, ref, offset)
+    local pts = route.points
+    local k = NearestIndex(pts, ref)
+    local left = math.min(MAX_OFFSET, math.abs(offset))
+    local step = offset < 0 and -1 or 1
+    local cur = pts[k]
+    local i = k
+    while left > 0 do
+        local nxt = pts[i + step]
+        if not nxt then break end
+        local d = U.dist(cur, nxt)
+        if d >= left then
+            local t = left / d
+            local ax, ay, az = U.xyz(cur)
+            local bx, by, bz = U.xyz(nxt)
+            cur = vector3(ax + (bx - ax) * t, ay + (by - ay) * t, az + (bz - az) * t)
+            break
+        end
+        left = left - d
+        cur = nxt
+        i = i + step
+    end
+    -- heading: the driving direction at that point (towards the following waypoint)
+    local j = math.max(1, math.min(#pts - 1, step < 0 and i - 1 or i))
+    local h = HeadingTo(pts[j], pts[j + 1])
+    local x, y, z = U.xyz(cur)
+    return vector4(x + 0.0, y + 0.0, z + 0.0, h)
+end
+
+-- Where the i-th vehicle is placed: spawnOffset > spawns > spawn > ahead of the start > on the route > near
+-- the start.
 local function PlaceFor(ctx, st, i)
     local obj, loc = ctx.obj, ctx.location
+    if IsNum(obj.spawnOffset) and obj.spawnOffset ~= 0 then
+        local route = RouteOf(loc, obj.route)
+        local ref = StartPoint(ctx)
+        if not ref then
+            local party = Party(ctx)
+            ref = party[1] and party[1].coords or nil
+        end
+        if route and ref then
+            local p = AlongRoute(route, ref, obj.spawnOffset)
+            local x, y, z = Along(p, p.w, -(i - 1) * SPAWN_GAP)
+            return vector4(x, y, z, p.w)
+        end
+    end
     local pts = PointList(loc, obj.spawns)
     if #pts > 0 then
         if not st.spawnOrder or #st.spawnOrder ~= #pts then st.spawnOrder = RngOf(ctx):shuffle(Indices(#pts)) end
@@ -704,10 +886,20 @@ local function OccupantStopped(ctx, st, p)
     if p.state ~= 'driving' then return end
     p.stoppedAt = Now()
     p.far, p.close = 0, 0
+    local v = st.vehicles[p.vehicle]
     if st.mode == 'follow' then
         p.fleeRoll = true
+    elseif v and v.yielded then
+        p.fleeRoll = false           -- a car that pulled over: its people stay put
     else
         p.fleeRoll = RngOf(ctx):chance(tonumber(ctx.obj.footFlee) or 0)
+    end
+    -- hand-off to a contact: people who did not run stay seated for the stop (Order out, then by demeanour);
+    -- the armed people of a fighting car get out and fight
+    if ctx.obj.handoff == 'contact' and not p.fleeRoll and not (p.armed and v and v.fight) then
+        p.state = 'seated'
+        st.dirty = true
+        return
     end
     SetPed(ctx, st, p, 'stopped')
 end
@@ -735,11 +927,29 @@ local function CheckFastStop(ctx, st)
     end
 end
 
+-- run.shared.contacts: every stopped car (field_contact's stop mode reads it). Occupants are filled in
+-- at the hand-off.
+local function RecordContact(ctx, st, v)
+    local run = ctx.run
+    if not run or v.contact then return end
+    run.shared = run.shared or {}
+    run.shared.contacts = run.shared.contacts or {}
+    v.contact = {
+        vehicle = v.netId,
+        occupants = {},
+        observed = v.observed and U.copy(v.observed) or nil,
+        forced = not v.yielded,
+        profileSet = ProfileSetOf(ctx.obj),
+    }
+    run.shared.contacts[#run.shared.contacts + 1] = v.contact
+end
+
 local function StopVehicle(ctx, st, v, wrecked)
-    if v.state == 'wrecked' then return end
+    if v.state == 'wrecked' or v.state == 'removed' then return end
     local was = v.state
     v.state = wrecked and 'wrecked' or 'stopped'
     v.stoppedAt = Now()
+    v.ramming = nil
     st.dirty = true
     if was == 'stopped' then return end
     for _, key in ipairs(v.occupants) do
@@ -747,25 +957,94 @@ local function StopVehicle(ctx, st, v, wrecked)
         if p then OccupantStopped(ctx, st, p) end
     end
     if st.mode == 'stop' then
+        if not wrecked then
+            RecordContact(ctx, st, v)
+            if CP.Runs and CP.Runs.noteStat then CP.Runs.noteStat(ctx.run, nil, 'vehicles_stopped', 1) end
+        end
         ctx.hud({ message = { text = CP.L('block.pursuit.msg_stopped'), kind = 'success' } })
         CheckFastStop(ctx, st)
     end
 end
 
+-- A run vehicle deleted from outside (sc-police /imp or a script): never stopped, never a wreck, never
+-- vehicle_stopped_fast. The engine fails or ends the run by its own rule.
+local function MarkRemoved(ctx, st, v)
+    if v.state == 'removed' then return end
+    v.state = 'removed'
+    v.ramming = nil
+    st.dirty = true
+end
+
+local function NearestSrc(ctx, coords)
+    local best, bestD
+    for _, e in ipairs(Party(ctx)) do
+        local d = U.dist(e.coords, coords)
+        if not bestD or d < bestD then best, bestD = e.src, d end
+    end
+    return best, bestD or math.huge
+end
+
+local function HasArmed(st, v)
+    for _, key in ipairs(v.occupants) do
+        local p = st.peds[key]
+        if p and (p.armed or p.armedTruth) and not Neutralised(p) then return true end
+    end
+    return false
+end
+
+-- A fighting car: its armed people draw now (CP.Runs.arm for hidden contacts), and each rolls the drive-by
+-- chance (participants only, within 40 m: the client targets the participant the server names).
+local function StartFight(ctx, st, v)
+    v.fight = true
+    local driveBy = tonumber(ctx.obj.driveBy) or 0
+    local r = v.truthRng or RngOf(ctx)
+    for _, key in ipairs(v.occupants) do
+        local p = st.peds[key]
+        if p and p.armedTruth and not p.armed then
+            if CP.Runs and CP.Runs.arm then CP.Runs.arm(ctx.run, p.netId) end
+            p.armed = true
+        end
+        if p and p.armed and p.seat ~= -1 and driveBy > 0 and r:chance(driveBy) then p.driveBy = true end
+    end
+end
+
+-- The response of one car when the trigger fires (rolled at spawn: yield, flee or fight).
+local function Respond(ctx, st, v)
+    local resp = v.response or 'flee'
+    if resp == 'fight' and not HasArmed(st, v) then resp = 'flee' end
+    v.fleeAt = Now()
+    if resp == 'yield' then
+        v.state = 'yielding'
+        v.slowFor = 0
+        return 'yield'
+    end
+    v.state = 'fleeing'
+    if resp == 'fight' then StartFight(ctx, st, v) end
+    return resp
+end
+
+local RESPONSE_MSG = {
+    yield = { 'block.pursuit.msg_yield', 'success' },
+    flee = { 'block.pursuit.msg_fleeing', 'warning' },
+    fight = { 'block.pursuit.msg_fight', 'warning' },
+}
+
 local function FleeAll(ctx, st, why)
     if st.fled then return end
     st.fled = true
     st.fledAt = Now()
+    local shown
     for _, key in ipairs(st.vorder) do
         local v = st.vehicles[key]
-        if v.state == 'waiting' then
-            v.state = 'fleeing'
-            v.fleeAt = Now()
+        if v.state == 'waiting' or v.state == 'cruising' then
+            local r = Respond(ctx, st, v)
+            if not shown or r == 'fight' or (r == 'flee' and shown == 'yield') then shown = r end
         end
     end
     st.dirty = true
     if why ~= 'start' then
-        ctx.hud({ message = { text = CP.L('block.pursuit.msg_fleeing'), kind = 'warning' } })
+        local m = RESPONSE_MSG[shown or 'flee']
+        ctx.hud({ message = { text = CP.L(m[1]), kind = m[2] } })
     end
 end
 
@@ -773,11 +1052,84 @@ end
 --                                   SPAWNING
 -- ============================================================================
 
+-- Each vehicle's hidden rolls come from its own stream of the run seed (objective index and vehicle
+-- number), so every participant, and a re-run with the same seed, gets the same response and speed
+-- whatever else was rolled first. The response stays on the server until the lights trigger fires.
+-- The posted speed: a number, or a location key (each corridor has its own).
+ZoneSpeed = function(ctx)
+    local ob = ctx.obj.observe
+    local z = type(ob) == 'table' and ob.zoneSpeed or nil
+    if type(z) == 'string' then z = ctx.location and ctx.location[z] end
+    return tonumber(z) or Cfg().zoneSpeed[3]
+end
+
+-- behind / seconds of one violator's observation (a follow uses its own when the kind is rolled).
+local function ObserveParams(ob, kind)
+    if kind == 'follow' and ob.kind ~= 'follow' then
+        return tonumber(ob.followBehind) or FOLLOW_BEHIND, tonumber(ob.followSeconds) or FOLLOW_SECONDS
+    end
+    return tonumber(ob.behind) or 80.0, tonumber(ob.seconds) or 5
+end
+
+-- What the HUD asks of the officer for one violator: the same window the server grades.
+local function Watch(ob, kind)
+    local behindM, seconds = ObserveParams(ob, kind or ob.kind)
+    return { behind = math.floor(behindM + 0.5), seconds = seconds }
+end
+
+local function VehicleRng(ctx, i)
+    local seed = (tonumber(ctx.run and ctx.run.seed) or 1) * 7919 + (ctx.index or 0) * 104729 + i * 15485863
+    local r = U.rng(seed)
+    r:next()
+    return r
+end
+
+local function RollVehicle(ctx, v)
+    local obj = ctx.obj
+    local r = VehicleRng(ctx, v.index)
+    local rs = obj.responses
+    if type(rs) == 'table' then
+        local x = r:next()
+        local y, f = tonumber(rs.yield) or 0, tonumber(rs.flee) or 0
+        v.response = (x < y and 'yield') or (x < y + f and 'flee') or 'fight'
+    else
+        v.response = 'flee'
+    end
+    v.driveByRoll, v.ramRoll = r:next(), r:next()
+    local ob = obj.observe
+    if type(ob) == 'table' then
+        v.observeKind = ob.kind
+        if type(ob.kinds) == 'table' then
+            local p, f = tonumber(ob.kinds.pace) or 0, tonumber(ob.kinds.follow) or 0
+            v.observeKind = (r:next() * (p + f) < p) and 'pace' or 'follow'
+        end
+        local lo, hi = tonumber(ob.over[1]) or 20, tonumber(ob.over[2]) or 45
+        v.zone = ZoneSpeed(ctx)
+        v.targetKmh = v.zone + lo + math.floor(r:next() * (hi - lo + 1))
+    end
+    v.truthRng = r
+end
+
+-- The hidden truth of the next occupant (a profile set): rolled once per seat, kept on retries.
+local function OccupantTruth(ctx, v, seat)
+    local set = ProfileSetOf(ctx.obj)
+    if not set or not (CP.Custody and CP.Custody.rollTruth) then return nil end
+    v.truths = v.truths or {}
+    local k = tostring(seat)
+    if v.truths[k] == nil then
+        v.truths[k] = CP.Custody.rollTruth(v.truthRng or RngOf(ctx), set, seat == -1 and 'driver' or 'passenger')
+            or false
+    end
+    return v.truths[k] or nil
+end
+
 local function SpawnOccupant(ctx, st, v)
     local obj = ctx.obj
-    local armed = obj.neverShoots == false
-    if not ctx.canSpawn(1, armed) then return nil end
     local seat = #v.occupants - 1          -- -1 driver, then 0, 1, 2
+    local truth = OccupantTruth(ctx, v, seat)
+    local hidden = ProfileSetOf(obj) ~= nil
+    local armed = obj.neverShoots == false or truth == 'armed'
+    if not ctx.canSpawn(1, armed) then return nil end
     local r = RngOf(ctx)
     local x, y, z = U.xyz(EntCoords(v.entity) or v.coords)
     local opts = {
@@ -785,14 +1137,21 @@ local function SpawnOccupant(ctx, st, v)
         coords = vector4(x + 0.0, y + 0.0, z + 0.0, HeadingOf(v.coords)),
         role = seat == -1 and 'driver' or 'suspect',
         armed = armed,
-        cfg = { group = armed and 'hostile' or 'neutral', vehicle = v.netId, seat = seat, block = BLOCK },
+        cfg = {
+            group = (armed and not hidden) and 'hostile' or 'neutral',
+            vehicle = v.netId,
+            seat = seat,
+            block = BLOCK,
+        },
         tag = 'vehicle' .. v.index .. '_seat' .. (seat + 2),
     }
     if armed then
         local hw = Config.Blocks.hostile_waves
-        opts.weapon = r:pick(obj.weapons) or Config.Blocks.flee_arrest.weapons[1]
+        opts.weapon = r:pick(obj.weapons or Config.Blocks.flee_arrest.weapons) or Config.Blocks.flee_arrest.weapons[1]
         opts.accuracy, opts.armour = ctx.combat(hw.accuracy[3], hw.armour[3])
     end
+    -- a contact: no weapon, accuracy or combat settings in its bag until CP.Runs.arm at the draw
+    if hidden then opts.hidden = true end
     local ent, netId = ctx.spawnPed(opts)
     if not netId then return nil end
     if SetPedIntoVehicle and Exists(ent) and Exists(v.entity) then pcall(SetPedIntoVehicle, ent, v.entity, seat) end
@@ -802,7 +1161,9 @@ local function SpawnOccupant(ctx, st, v)
         entity = ent,
         vehicle = v.key,
         seat = seat,
-        armed = armed,
+        armed = armed and not hidden,
+        armedTruth = armed and hidden or nil,
+        truth = truth,
         state = 'driving',
         far = 0,
         close = 0,
@@ -850,11 +1211,17 @@ local function SpawnVehicle(ctx, st, i)
         far = 0,
         body = Exists(ent) and GetVehicleBodyHealth and tonumber(GetVehicleBodyHealth(ent)) or nil,
     }
+    RollVehicle(ctx, v)
     st.vehicles[key] = v
     st.vorder[#st.vorder + 1] = key
     st.counts.vehicles = st.counts.vehicles + 1
+    if type(ctx.obj.observe) == 'table' then v.state = 'cruising' end
     if st.fled then
-        v.state = 'fleeing'
+        if v.response == 'yield' then
+            v.state = 'yielding'
+        else
+            v.state = 'fleeing'
+        end
         v.fleeAt = Now()
     end
     st.dirty = true
@@ -904,9 +1271,10 @@ end
 
 local function Totals(ctx, st)
     local total, done = 0, 0
+    local contact = ctx.obj.handoff == 'contact'
     for _, p in pairs(st.peds) do
         total = total + 1
-        if Neutralised(p) then done = done + 1 end
+        if Neutralised(p) or (contact and Settled(p)) then done = done + 1 end
     end
     local want = VehTarget(ctx) * OccTarget(ctx)
     for _, key in ipairs(st.vorder) do want = want - OccTarget(ctx) + st.vehicles[key].want end
@@ -931,6 +1299,52 @@ local function MedalFor(obj, avg)
     return nil
 end
 
+-- The objective that works the stops: the next field_contact after this one (else the next objective).
+local function ContactIndex(ctx)
+    local list = (ctx.run and ctx.run.mission and ctx.run.mission.objectives)
+        or (ctx.mission and ctx.mission.objectives) or {}
+    local me = ctx.index or 0
+    for i = me + 1, #list do
+        if type(list[i]) == 'table' and list[i].block == 'field_contact' then return i end
+    end
+    return me + 1
+end
+
+-- handoff = 'contact': the stopped cars and their people (seated, or caught and cuffed) go to the
+-- field_contact objective (CP.Runs.adoptMany) before this objective completes, so their cuffs, custody
+-- events and deaths reach it and never this finished pursuit.
+local function HandOff(ctx, st)
+    st.handedOff = true
+    local to = ContactIndex(ctx)
+    local ids = {}
+    for _, key in ipairs(st.vorder) do
+        local v = st.vehicles[key]
+        if v.state == 'stopped' then
+            RecordContact(ctx, st, v)
+            local occ = {}
+            for _, pk in ipairs(v.occupants) do
+                local p = st.peds[pk]
+                if p and p.state ~= 'dead' then
+                    occ[#occ + 1] = {
+                        netId = p.netId,
+                        seat = p.seat,
+                        state = p.state == 'cuffed' and 'cuffed' or (p.ran and 'fleeing' or nil),
+                        truth = p.truth,
+                    }
+                    ids[#ids + 1] = p.netId
+                end
+            end
+            v.contact.occupants = occ
+            v.contact.observed = v.observed and U.copy(v.observed) or nil
+            ids[#ids + 1] = v.netId
+        end
+    end
+    if CP.Runs and CP.Runs.adoptMany and ctx.run and ctx.run.objectives and ctx.run.objectives[to] then
+        CP.Runs.adoptMany(ctx.run, ids, to)
+    end
+    st.adopted = ids
+end
+
 local function TryComplete(ctx, st)
     if st.completed or st.failed or st.halted then return end
     if st.mode == 'follow' then
@@ -948,10 +1362,18 @@ local function TryComplete(ctx, st)
         return
     end
     if not SpawnedAll(ctx, st) then return end
+    local contact = ctx.obj.handoff == 'contact'
     local total = 0
     for _, p in pairs(st.peds) do
         total = total + 1
-        if not Neutralised(p) then return end
+        if not (contact and Settled(p) or Neutralised(p)) then return end
+    end
+    if contact then
+        for _, key in ipairs(st.vorder) do
+            local s = st.vehicles[key].state
+            if s ~= 'stopped' and s ~= 'wrecked' then return end
+        end
+        if not st.handedOff then HandOff(ctx, st) end
     end
     -- Street Race Bust: Completed only with a racer detained. Racers that all died in crashes leave
     -- nothing to do, and the time limit then fails the run (onTimeout: none detained), as the card says.
@@ -986,7 +1408,9 @@ local function CheckTrigger(ctx, st, list)
             local d = NearestOf(list, c)
             local body = GetVehicleBodyHealth and tonumber(GetVehicleBodyHealth(v.entity)) or nil
             local hit = v.body and body and v.body - body >= FLEE_DAMAGE
-            if d <= FLEE_CLOSE or hit or (t.lights == false and d <= t.distance) then
+            -- a violator cruising past the observation point is only set off by the lights (or a hit)
+            local close = v.state ~= 'cruising' and (d <= FLEE_CLOSE or (t.lights == false and d <= t.distance))
+            if close or hit then
                 FleeAll(ctx, st, 'trigger')
                 return
             end
@@ -1018,34 +1442,167 @@ local function SampleSpeeds(ctx, st)
     end
 end
 
+-- A vehicle whose entity is gone: the engine decides (a removal reaches onEvent 'removed', a wreck
+-- onEntityDead). Without an engine record (or with the record gone and no removal) it counts as wrecked.
+local function VehicleMissing(ctx, st, v)
+    v.missing = (v.missing or 0) + 1
+    if v.missing < MISSING_TICKS then return end
+    local run = ctx.run
+    if run and run.removedVehicles and run.removedVehicles[v.netId] then
+        MarkRemoved(ctx, st, v)
+    elseif not (run and type(run.entities) == 'table' and run.entities[v.netId] ~= nil) then
+        StopVehicle(ctx, st, v, true)
+    end
+end
+
+-- GTA heading of a vehicle (0 = north, 90 = west).
+local function Forward(e)
+    local h = GetEntityHeading and tonumber(GetEntityHeading(e)) or 0.0
+    local r = math.rad(h)
+    return -math.sin(r), math.cos(r)
+end
+
+-- observe = pace | follow: a participant in a vehicle behind the violator (within behind metres) for the
+-- window; the server samples the violator's speed every second and grades the median, which may be up to
+-- tolerance under the lowest speed of the violation (zone + over[1]), so one dip does not fail a pace.
+local function WatchObserve(ctx, st, v, c, dt)
+    local ob = ctx.obj.observe
+    if type(ob) ~= 'table' or v.observed then return end
+    local kind = v.observeKind or ob.kind
+    local behindM, seconds = ObserveParams(ob, kind)
+    local fx, fy = Forward(v.entity)
+    local cx, cy = U.xyz(c)
+    local ok = false
+    for _, e in ipairs(Party(ctx)) do
+        local px, py = U.xyz(e.coords)
+        local d = U.dist(e.coords, c)
+        local behind = (px - cx) * fx + (py - cy) * fy < 0
+        if d <= behindM and behind and PlayerVehicle(e.src) ~= 0 then
+            ok = true
+            break
+        end
+    end
+    if not ok then
+        v.samples, v.observeFor = nil, 0
+        return
+    end
+    v.samples = v.samples or {}
+    v.samples[#v.samples + 1] = Kmh(v.entity)
+    v.observeFor = (v.observeFor or 0) + dt
+    if v.observeFor < seconds then return end
+    local zone = v.zone or ZoneSpeed(ctx)
+    local med = Median(v.samples)
+    if kind == 'pace' and med < zone + (tonumber(ob.over[1]) or 0) - (tonumber(ob.tolerance) or 0) then
+        -- not fast enough over the window: keep pacing (a fresh window)
+        v.samples, v.observeFor = nil, 0
+        return
+    end
+    v.observed = { kind = kind, speed = U.round(med), zone = zone }
+    st.dirty = true
+    if kind == 'pace' then
+        ctx.hud({
+            message = {
+                text = CP.L('block.pursuit.msg_paced', { speed = U.round(med), zone = zone }),
+                kind = 'success',
+            },
+        })
+    else
+        ctx.hud({ message = { text = CP.L('block.pursuit.msg_followed'), kind = 'success' } })
+    end
+end
+
+-- A cruising violator: the HUD cue as it approaches, and its blip only once it has passed the observation
+-- point (ambient traffic is never marked).
+local function WatchCruise(ctx, st, v, c, list)
+    local ob = ctx.obj.observe
+    if not v.cued and NearestOf(list, c) <= APPROACH_CUE then
+        v.cued = true
+        local key = (v.observeKind or (type(ob) == 'table' and ob.kind)) == 'follow'
+                and 'block.pursuit.msg_approach_weave'
+            or 'block.pursuit.msg_approach_speed'
+        ctx.hud({ message = { text = CP.L(key, { speed = v.targetKmh or 0 }), kind = 'info' } })
+    end
+    if not v.passed then
+        local obs = StartPoint(ctx)
+        if obs then
+            local fx, fy = Forward(v.entity)
+            local cx, cy = U.xyz(c)
+            local ox, oy = U.xyz(obs)
+            if (cx - ox) * fx + (cy - oy) * fy > 0 and U.dist2d(c, obs) <= PASS_RANGE then
+                v.passed = true
+                st.dirty = true
+            end
+        end
+    end
+end
+
+-- A fighting car slowed with a participant close (boxed in) rams the nearest participant vehicle once.
+local function WatchRam(ctx, st, v, c, speed, dt)
+    if v.ramming and Now() >= v.ramming.untilMs then
+        v.ramming = nil
+        st.dirty = true
+    end
+    if not v.fight or v.rammed then return end
+    local target, d = NearestSrc(ctx, c)
+    if target and d <= RAM_BOX and speed < ctx.obj.stopped.speed * 2 then
+        v.boxedFor = (v.boxedFor or 0) + dt
+        if v.boxedFor >= RAM_BOX_S then
+            v.rammed = true
+            if (v.ramRoll or 1) < (tonumber(ctx.obj.ram) or 0) and PlayerVehicle(target) ~= 0 then
+                v.ramming = { target = target, untilMs = Now() + RAM_MS }
+                st.dirty = true
+            end
+        end
+    else
+        v.boxedFor = 0
+    end
+end
+
 local function WatchVehicles(ctx, st, dt, list)
     local s = ctx.obj.stopped
     local route = RouteOf(ctx.location, ctx.obj.route)
     local routeEnd = route and not route.loop and route.points[#route.points] or nil
     for _, key in ipairs(st.vorder) do
         local v = st.vehicles[key]
-        if v.state == 'fleeing' or v.state == 'waiting' then
+        local live = v.state == 'fleeing' or v.state == 'waiting' or v.state == 'cruising' or v.state == 'yielding'
+        if live then
             if not Exists(v.entity) then
-                v.missing = (v.missing or 0) + 1
-                if v.missing >= MISSING_TICKS then StopVehicle(ctx, st, v, true) end
-            elseif v.state == 'fleeing' then
+                VehicleMissing(ctx, st, v)
+            else
                 v.missing = 0
                 local c = GetEntityCoords(v.entity)
-                -- an open route ends in a free flee for good: a new host must not send the car back to it
-                if routeEnd and not v.routeDone and U.dist2d(c, routeEnd) <= ROUTE_END then
-                    v.routeDone = true
-                    st.dirty = true
-                end
                 local speed = Kmh(v.entity)
-                if speed > math.max(MOVED_KMH, s.speed * 2) then v.moved = true end
-                if st.mode == 'stop' and #v.occupants > 0 then
-                    local counting = v.moved or (v.fleeAt and Now() - v.fleeAt >= NEVER_MOVED_MS)
-                    local near = NearestOf(list, c) <= STOP_NEAR
-                    if counting and near and speed < s.speed then
+                if v.state == 'cruising' then
+                    WatchCruise(ctx, st, v, c, list)
+                    WatchObserve(ctx, st, v, c, dt)
+                elseif v.state == 'yielding' then
+                    -- pulling over: counts as stopped once below the stop speed for the stop time
+                    if speed < s.speed then
                         v.slowFor = v.slowFor + dt
-                        if v.slowFor >= s.seconds then StopVehicle(ctx, st, v, false) end
+                        if v.slowFor >= s.seconds then
+                            v.yielded = true
+                            StopVehicle(ctx, st, v, false)
+                        end
                     else
                         v.slowFor = 0
+                    end
+                elseif v.state == 'fleeing' then
+                    -- an open route ends in a free flee for good: a new host must not send the car back to it
+                    if routeEnd and not v.routeDone and U.dist2d(c, routeEnd) <= ROUTE_END then
+                        v.routeDone = true
+                        st.dirty = true
+                    end
+                    if speed > math.max(MOVED_KMH, s.speed * 2) then v.moved = true end
+                    WatchRam(ctx, st, v, c, speed, dt)
+                    if st.mode == 'stop' and #v.occupants > 0 then
+                        local counting = v.moved or (v.fleeAt and Now() - v.fleeAt >= NEVER_MOVED_MS)
+                        local near = NearestOf(list, c) <= STOP_NEAR
+                        if counting and near and speed < s.speed then
+                            v.slowFor = v.slowFor + dt
+                            if v.slowFor >= s.seconds then StopVehicle(ctx, st, v, false) end
+                        else
+                            v.slowFor = 0
+                        end
                     end
                 end
             end
@@ -1081,6 +1638,7 @@ local function WatchPeds(ctx, st, dt, list)
                     -- warps the ped out after a few tries, so this does not wait forever.
                     if not InVehicle(p) then
                         if p.fleeRoll then
+                            p.ran = true
                             SetPed(ctx, st, p, 'fleeing')
                         elseif p.armed then
                             SetPed(ctx, st, p, 'hostile')
@@ -1193,22 +1751,37 @@ local function Snapshot(ctx, st)
         local v = st.vehicles[key]
         local occ = {}
         for i, pk in ipairs(v.occupants) do occ[i] = st.peds[pk] and st.peds[pk].netId or nil end
+        local observe = type(ctx.obj.observe) == 'table'
         vehicles[#vehicles + 1] = {
             netId = v.netId,
             index = v.index,
             state = v.state,
             occupants = occ,
             routeDone = v.routeDone,
+            -- observe missions: the violator's blip only once it has passed the observation point
+            blip = not observe or v.passed == true or (v.state ~= 'cruising'),
+            cruise = v.state == 'cruising' and { speed = v.targetKmh, weave = v.observeKind == 'follow' } or nil,
+            observe = v.state == 'cruising' and v.observeKind or nil,
+            watch = v.state == 'cruising' and observe and Watch(ctx.obj.observe, v.observeKind) or nil,
+            observed = v.observed and true or nil,
+            ram = v.ramming and v.ramming.target or nil,
         }
     end
     for _, p in pairs(st.peds) do
         local v = st.vehicles[p.vehicle]
+        local target
+        if p.driveBy and v and v.state == 'fleeing' and v.fight then
+            local c = EntCoords(v.entity)
+            local src, d = NearestSrc(ctx, c or v.coords)
+            if src and d <= 40.0 then target = src end
+        end
         suspects[#suspects + 1] = {
             netId = p.netId,
             vehicle = v and v.netId or nil,
             seat = p.seat,
-            state = p.state,
+            state = p.state == 'seated' and 'driving' or p.state,
             armed = p.armed,
+            driveBy = target,
         }
     end
     table.sort(suspects, function(a, b) return a.netId < b.netId end)
@@ -1293,10 +1866,17 @@ local function LightsEvent(ctx, st, src, ev)
     if st.fled then return false, 'duplicate' end
     local v = st.vehicles[tostring(tonumber(ev.netId) or '')]
     if not v then return false, 'unknown_entity' end
-    if v.state ~= 'waiting' then return false, 'wrong_state' end
+    if v.state ~= 'waiting' and v.state ~= 'cruising' then return false, 'wrong_state' end
     if GetVehiclePedIsIn and PlayerVehicle(src) == 0 then return false, 'not_in_vehicle' end
     local vc, sc = EntCoords(v.entity), ctx.coords(src)
     if not vc or not sc or U.dist(vc, sc) > t.distance + LIGHTS_SLACK then return false, 'too_far' end
+    -- observe first: lights before the violation was observed are a stop without cause, personal to the
+    -- officer whose lights started it; the stop itself goes on and is graded normally
+    if type(ctx.obj.observe) == 'table' and not v.observed and not v.noCause then
+        v.noCause = src
+        ctx.penalize('stop_without_cause', { count = 1, src = src })
+        ctx.hud({ message = { text = CP.L('block.pursuit.msg_no_cause'), kind = 'warning' } })
+    end
     FleeAll(ctx, st, 'lights')
     return true
 end
@@ -1330,6 +1910,11 @@ local function OnEvent(ctx, src, ev)
         ok, why = LightsEvent(ctx, st, src, ev)
     elseif t == 'undriveable' then
         ok, why = UndriveableEvent(ctx, st, src, ev)
+    elseif t == 'removed' then
+        local v = st.vehicles[tostring(tonumber(ev.netId) or '')]
+        if not v then return false, 'unknown_entity' end
+        MarkRemoved(ctx, st, v)
+        ok = true
     elseif t == 'aim' or t == 'stunned' or t == 'low_health' or t == 'cuffed' or t == 'shot' then
         local p = st.peds[tostring(tonumber(ev.netId) or '')]
         if not p then return false, 'unknown_entity' end
@@ -1342,6 +1927,7 @@ local function OnEvent(ctx, src, ev)
             local pc, sc = EntCoords(p.entity), ctx.coords(src)
             if not pc or not sc or U.dist(pc, sc) > CUFF_RANGE + REACH_SLACK then return false, 'too_far' end
             MarkCuffed(ctx, st, p)
+            if CP.Runs and CP.Runs.noteArrest and ctx.run then CP.Runs.noteArrest(ctx.run, src, p.netId) end
             ok = true
         else
             if p.state == 'surrendered' or p.state == 'cuffed' then return false, 'duplicate' end
@@ -1390,6 +1976,13 @@ local function Start(ctx)
     local st = StateOf(ctx)
     st.halted = nil
     st.startedAt = st.startedAt or Now()
+    -- team = n: this pursuit only runs with at least n participants when it starts (Traffic Enforcement's
+    -- second violator); otherwise it completes at once with nothing spawned and nothing handed off
+    if tonumber(ctx.obj.team) and #(ctx.participants() or {}) < tonumber(ctx.obj.team) and st.counts.vehicles == 0 then
+        st.skipped = true
+        if ctx.complete({ skipped = true }) ~= false then st.completed = true end
+        return
+    end
     Prepare(ctx)
     SpawnMissing(ctx, st)
     if not st.failed then CheckTrigger(ctx, st, Party(ctx)) end
@@ -1400,6 +1993,10 @@ end
 local function Tick(ctx, dt)
     local st = StateOf(ctx)
     if st.halted or st.failed or st.completed then return end
+    if st.skipped then
+        if ctx.complete({ skipped = true }) ~= false then st.completed = true end
+        return
+    end
     dt = tonumber(dt) or 1
     if not st.startedAt then st.startedAt = Now() end
     SpawnMissing(ctx, st)

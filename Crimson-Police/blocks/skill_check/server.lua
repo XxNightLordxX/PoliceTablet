@@ -11,6 +11,7 @@ local DEVICE_PROP = 'prop_ld_bomb'  -- model for a re-created device prop when t
 local SPAWN_TRIES = 3               -- failed re-creations of one prop before giving up (coords still work)
 
 local function Cfg() return Config.Blocks[BLOCK] end
+local Setback, SetbackLabel
 local function Now() return GetGameTimer() end
 
 local function Idx(v)
@@ -202,9 +203,16 @@ local function SendState(ctx, st)
             next = t.next,
             streak = t.streak,
             worker = t.worker,
+            retryIn = t.status == 'cooldown' and math.max(0, math.ceil(((t.retryAt or 0) - Now()) / 1000)) or nil,
         }
     end
-    ctx.send({ kind = 'state', targets = list, checks = #Checks(ctx) })
+    local sb = type(ctx.obj.onFail) == 'table' and ctx.obj.onFail.setback or nil
+    ctx.send({
+        kind = 'state',
+        targets = list,
+        checks = #Checks(ctx),
+        setback = sb and { label = SetbackLabel(ctx), duration = tonumber(sb.duration) or 10000 } or nil,
+    })
 end
 
 local function SendExplode(ctx, st, i, by)
@@ -240,6 +248,88 @@ local function CheckDone(ctx, st)
 end
 
 -- ============================================================================
+--                        SETBACK (onFail = { setback })
+-- ============================================================================
+-- failAfter misses in a row on a setback objective: never a fail. The officer who missed loses the
+-- setback's penalty (personal), any participant does the recovery step at the target (setback.duration,
+-- sampled by the server), and the checks can be tried again retryAfter seconds after the recovery.
+
+local function SetbackCfg(ctx)
+    local f = ctx.obj.onFail
+    return type(f) == 'table' and f.setback or {}
+end
+
+Setback = function(ctx, st, i, src)
+    local t = st.targets[i]
+    local sb = SetbackCfg(ctx)
+    t.status, t.worker = 'setback', nil
+    t.setbackBy, t.setbackAt = src, Now()
+    t.recoverNear = {}
+    st.setbacks = (st.setbacks or 0) + 1
+    if type(sb.penalty) == 'string' and sb.penalty ~= '' then ctx.penalize(sb.penalty, { count = 1, src = src }) end
+    ctx.send({ kind = 'setback', target = i, coords = Plain(TargetCoords(t)), by = src })
+    ctx.hud({
+        message = { text = CP.L('block.skill_check.msg_setback', { action = SetbackLabel(ctx) }), kind = 'warning' },
+    })
+end
+
+SetbackLabel = function(ctx)
+    local sb = SetbackCfg(ctx)
+    if type(sb.label) == 'string' and sb.label ~= '' then
+        if CP.Locale.has(sb.label) then return CP.L(sb.label) end
+        return sb.label
+    end
+    return CP.L('block.skill_check.recover_default')
+end
+
+local function OnRecover(ctx, st, src, ev)
+    local i = Idx(ev.target)
+    local t = i and st.targets[i]
+    if not t then return false, 'bad_target' end
+    if t.status ~= 'setback' then return false, 'wrong_state' end
+    local c = ctx.coords(src)
+    if not c or CP.U.dist(c, TargetCoords(t)) > REACH then return false, 'too_far' end
+    local need = (tonumber(SetbackCfg(ctx).duration) or 10000) / 1000 - 1.5
+    local since = t.recoverNear and t.recoverNear[src]
+    if need > 0 and (not since or (Now() - since) / 1000 < need) then return false, 'too_quick' end
+    t.status = 'cooldown'
+    t.recoveredBy, t.retryAt = src, Now() + (tonumber(ctx.obj.onFail.retryAfter) or Cfg().retryAfter[3]) * 1000
+    t.recoverNear = nil
+    ctx.hud({
+        message = {
+            text = CP.L('block.skill_check.msg_recovered', { seconds = ctx.obj.onFail.retryAfter }),
+            kind = 'info',
+        },
+    })
+    SendState(ctx, st)
+    return true
+end
+
+-- Every tick: who stands at a setback target (the recovery dwell), and cooled-down targets armed again.
+local function TickSetbacks(ctx, st)
+    local changed = false
+    local now = Now()
+    for _, t in ipairs(st.targets) do
+        if t.status == 'setback' then
+            t.recoverNear = t.recoverNear or {}
+            local tc = TargetCoords(t)
+            for _, src in ipairs(ctx.participants() or {}) do
+                local c = ctx.coords(src)
+                if c and CP.U.dist(c, tc) <= REACH then
+                    if not t.recoverNear[src] then t.recoverNear[src] = now end
+                else
+                    t.recoverNear[src] = nil
+                end
+            end
+        elseif t.status == 'cooldown' and now >= (t.retryAt or 0) then
+            t.status, t.next, t.streak, t.worker = 'armed', 1, 0, nil
+            changed = true
+        end
+    end
+    return changed
+end
+
+-- ============================================================================
 --                                   EVIDENCE
 -- ============================================================================
 
@@ -272,6 +362,11 @@ local function OnCheck(ctx, st, src, ev)
         st.misses = st.misses + 1
         local pen = tonumber(ctx.obj.missPenalty) or 0
         if pen > 0 then CP.Runs.adjustTimer(ctx.run, -pen) end
+        if t.streak >= (Idx(ctx.obj.failAfter) or Cfg().failAfter[3]) and type(ctx.obj.onFail) == 'table' then
+            Setback(ctx, st, i, src)
+            SendState(ctx, st)
+            return true
+        end
         if t.streak >= (Idx(ctx.obj.failAfter) or Cfg().failAfter[3]) then
             t.status = 'exploded'
             t.worker = nil
@@ -303,6 +398,14 @@ local function ApplyDefaults(obj)
     if type(obj.target) ~= 'table' then obj.target = {} end
     if obj.target.icon == nil then obj.target.icon = ICON end
     if obj.explosion == nil then obj.explosion = true end
+    if obj.onFail == nil then obj.onFail = c.onFail.default end
+    if obj.onFail == 'setback' then obj.onFail = { setback = {} } end
+    if type(obj.onFail) == 'table' then
+        if type(obj.onFail.setback) ~= 'table' then obj.onFail.setback = {} end
+        local sb = obj.onFail.setback
+        if sb.duration == nil then sb.duration = c.setbackTime[3] * 1000 end
+        if obj.onFail.retryAfter == nil then obj.onFail.retryAfter = c.retryAfter[3] end
+    end
     return obj
 end
 
@@ -352,6 +455,24 @@ CP.Blocks.register(BLOCK, {
             return Bad('block.skill_check.invalid.min_seconds')
         end
         if type(obj.explosion) ~= 'boolean' then return Bad('block.skill_check.invalid.flags') end
+        if obj.onFail ~= 'fail' then
+            local f = obj.onFail
+            local sb = type(f) == 'table' and f.setback or nil
+            if
+                type(sb) ~= 'table'
+                or type(sb.duration) ~= 'number'
+                or sb.duration < c.setbackTime[1] * 1000
+                or sb.duration > c.setbackTime[2] * 1000
+                or not InRange(f.retryAfter, c.retryAfter)
+                or (sb.label ~= nil and type(sb.label) ~= 'string')
+                or (
+                    sb.penalty ~= nil
+                    and (type(sb.penalty) ~= 'string' or not (Config.Bonuses and Config.Bonuses[sb.penalty]))
+                )
+            then
+                return Bad('block.skill_check.invalid.on_fail')
+            end
+        end
         if obj.targets == SHARED then
             if not HasHiddenSearch(mission, original) then return Bad('block.skill_check.invalid.no_devices') end
             return true
@@ -411,6 +532,7 @@ CP.Blocks.register(BLOCK, {
             st.resent = true
             changed = true
         end
+        if TickSetbacks(ctx, st) then changed = true end
         local tm = Now()
         for _, t in ipairs(st.targets) do
             if t.worker and tm - (t.lastAt or 0) >= LOCK_MS then
@@ -431,6 +553,7 @@ CP.Blocks.register(BLOCK, {
         if st.completed or st.failed then return false, 'objective_over' end
         Sync(ctx, st)
         if ev.type == 'check' then return OnCheck(ctx, st, src, ev) end
+        if ev.type == 'recover' then return OnRecover(ctx, st, src, ev) end
         return false, 'unknown_event'
     end,
 

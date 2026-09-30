@@ -19,9 +19,40 @@ local STATES = {
     safe = true,
     driving = true,
     stopped = true,
+    contacted = true,
+    escorted = true,
+    seated = true,
+    released = true,
+    handed_over = true,
+    impounded = true,
 }
 -- Shooting a ped in one of these states costs shot_surrendered.
-local PROTECTED = { surrendered = true, cuffed = true, restrained = true }
+local PROTECTED = {
+    surrendered = true,
+    cuffed = true,
+    restrained = true,
+    contacted = true,
+    escorted = true,
+    seated = true,
+}
+-- A melee or taser hit on a ped in one of these states costs excessive_force (detained, escorted, seated, compliant).
+local FORCE_STATES = { cuffed = true, escorted = true, seated = true, contacted = true }
+-- States in which the ped is out of the fight (the objective may count it as neutralised).
+local NEUTRALISED = { dead = true, cuffed = true, escorted = true, seated = true, handed_over = true }
+-- Roles of the people a mission is about (a participant killing one counts toward the private lethal stat).
+local SUSPECT_ROLES = {
+    suspect = true,
+    hostile = true,
+    associate = true,
+    inmate = true,
+    boss = true,
+    subject = true,
+    driver = true,
+    passenger = true,
+    pedestrian = true,
+    thief = true,
+    fugitive = true,
+}
 local BAG_PROTECTED = { run = true, obj = true, state = true, seq = true, taskSeq = true }
 
 local TICK_MS = 1000               -- death watcher / health poll / cuff reach sampling
@@ -45,6 +76,8 @@ local MAX_HITS = 32
 local MAX_NETID = 0xFFFFFF
 local MAX_RUNID = 64
 local RNG_SALT = 0x4E504331       -- 'NPC1'
+local FORCE_WINDOW_MS = 10000     -- excessive_force at most once per person in this window (without CP.Custody)
+local STUNGUN = 'WEAPON_STUNGUN'
 
 -- Weapons that do not count as "shooting" a surrendered NPC (melee, vehicles, falls).
 local NOT_SHOTS = {}
@@ -73,8 +106,15 @@ for _, name in ipairs({
 }) do
     NOT_SHOTS[(math.tointeger(joaat(name)) or 0) & 0xFFFFFFFF] = true
 end
+-- Hits that are never melee force: vehicles and falls.
+local NOT_FORCE = {}
+for _, name in ipairs({ 'WEAPON_RUN_OVER_BY_CAR', 'WEAPON_RAMMED_BY_CAR', 'WEAPON_FALL' }) do
+    NOT_FORCE[(math.tointeger(joaat(name)) or 0) & 0xFFFFFFFF] = true
+end
 
 local peds = {}          -- [netId] = rec (see recFor)
+local watches = {}       -- ['netId:src'] = { runId, netId, src, range, since } (reach sampling of police actions)
+local forceAt = {}       -- [netId] = ms of the last excessive_force (fallback without CP.Custody)
 local rolls = {}         -- [runId] = { rng, results = { [netId] = boolean } }
 local shotAt = {}        -- ['netId:src'] = ms of the last counted shot_surrendered
 local deathFns, damageFns = {}, {}
@@ -324,6 +364,11 @@ function Npc.setState(run, netId, state, extra)
         return false
     end
     local info = type(run.entities) == 'table' and run.entities[netId] or nil
+    -- a hidden contact (CP.Runs spawnPed opts.hidden) never turns hostile before its draw (CP.Runs.arm)
+    if state == 'hostile' and type(info) == 'table' and info.hiddenCfg ~= nil and not info.armedGiven then
+        CP.warn(TAG, 'setState: contact %s of run %s cannot turn hostile before its draw', netId, tostring(run.id))
+        return false
+    end
     local rec = RecFor(run, netId, info)
     if not rec then
         CP.warn(TAG, 'setState: net id %s is not an entity of run %s', netId, tostring(run.id))
@@ -390,8 +435,7 @@ function Npc.getState(netId)
 end
 
 function Npc.isNeutralised(netId)
-    local s = Npc.getState(netId)
-    return s == 'dead' or s == 'cuffed'
+    return NEUTRALISED[Npc.getState(netId)] == true
 end
 
 function Npc.rollSurrender(run, netId, chance)
@@ -498,6 +542,24 @@ local function Shot(run, netId, rec, src, state)
     return true
 end
 
+-- A melee or taser hit on a detained, escorted, seated or compliant person: excessive_force (CP.Custody keeps
+-- the once-per-person window; without it this module does).
+local function Force(run, netId, rec, src)
+    if CP.Custody and CP.Custody.noteForce then
+        local ok, err = pcall(CP.Custody.noteForce, run, netId, src)
+        if not ok then CP.err(TAG, 'noteForce failed: %s', tostring(err)) end
+        return
+    end
+    local t = Now()
+    if forceAt[netId] and t - forceAt[netId] < FORCE_WINDOW_MS then return end
+    forceAt[netId] = t
+    if CP.Runs and CP.Runs.penalize then
+        local ok, err = pcall(CP.Runs.penalize, run, 'excessive_force', { src = src })
+        if not ok then CP.err(TAG, 'penalize excessive_force failed: %s', tostring(err)) end
+    end
+    CP.log(TAG, 'run %s: %s used force on %s ped %s', tostring(run.id), src, tostring(rec.state), netId)
+end
+
 local function Damaged(run, netId, rec, attacker)
     local t = Now()
     local key = tostring(attacker or 'npc')
@@ -544,7 +606,9 @@ local function OnWeaponDamage(src, data, hits)
     if InArenaMatch(src) then return end
     local attacker, kind = ShooterOf(src, data)
     if attacker and attacker ~= src and InArenaMatch(attacker) then return end
-    local isShot = not NOT_SHOTS[Uhash(data.weaponType)]
+    local hash = Uhash(data.weaponType)
+    local isShot = not NOT_SHOTS[hash]
+    local isStun = hash == Uhash(joaat(STUNGUN))
     local t = Now()
     local done, fired = {}, {}
     for i = 1, math.min(#hits, MAX_HITS) do
@@ -564,7 +628,15 @@ local function OnWeaponDamage(src, data, hits)
                     NoteFired(run, attacker)
                 end
                 if gunHit and PROTECTED[state] then
-                    Shot(run, netId, rec, attacker, state)
+                    -- a taser on a detained, escorted, seated or compliant person is force, not a shot
+                    if isStun and FORCE_STATES[state] then
+                        Force(run, netId, rec, attacker)
+                    else
+                        Shot(run, netId, rec, attacker, state)
+                    end
+                elseif attacker and kind == 'player' and not isShot and not NOT_FORCE[hash] and FORCE_STATES[state]
+                    and ActiveParticipant(run, attacker) then
+                    Force(run, netId, rec, attacker)
                 end
                 if rec.role == 'hostage' then Damaged(run, netId, rec, attacker) end
             end
@@ -605,7 +677,12 @@ local function HealthDropped(run, netId, rec, e)
     local state = rec.state
     if attacker then rec.lastDamage = { src = attacker, at = t } end
     if attacker and kind == 'player' and PROTECTED[state] and ActiveParticipant(run, attacker) then
-        Shot(run, netId, rec, attacker, state)
+        -- no weapon is known for a health drop: on a compliant, escorted or seated person it is force
+        if FORCE_STATES[state] and state ~= 'cuffed' then
+            Force(run, netId, rec, attacker)
+        else
+            Shot(run, netId, rec, attacker, state)
+        end
     end
     if rec.role == 'hostage' then Damaged(run, netId, rec, attacker) end
 end
@@ -646,6 +723,11 @@ local function Died(run, netId, rec, e)
     local prev = rec.state
     -- A participant's gun kill is proof of gunfire; noted before entityDied, which can end the run.
     if isPart and how == 'player' and GunDeath(e) then NoteFired(run, killer) end
+    -- the private lethal stat: a participant killed one of the people the mission is about
+    if isPart and SUSPECT_ROLES[tostring(rec.role)] and CP.Runs and CP.Runs.noteStat then
+        local ok, err = pcall(CP.Runs.noteStat, run, killer, 'lethal', 1)
+        if not ok then CP.err(TAG, 'noteStat lethal failed: %s', tostring(err)) end
+    end
     -- Outside help first: entityDied runs the owning block's onEntityDead, which can complete the
     -- last objective (or fail the run) and end it on the spot. CP.AntiCheat.onNpcKilled ignores ended
     -- runs, so a flag raised after that would never reach the rows endRun writes.
@@ -702,6 +784,89 @@ local function SampleReach(run, rec, e)
 end
 
 -- ============================================================================
+--                     POLICE ACTION REACH (dwell sampling)
+-- ============================================================================
+-- CP.Custody watches every action of 3 s or more: the officer's server-side distance to the ped or vehicle is
+-- sampled each tick, and a sample out of range restarts the dwell.
+
+local function WatchKey(netId, src) return ('%d:%d'):format(netId, src) end
+
+local function InWatchReach(run, w)
+    local info = type(run.entities) == 'table' and run.entities[w.netId] or nil
+    local e = info and info.entity
+    local ped = GetPlayerPed(w.src)
+    if not Exists(e) or not Exists(ped) then return false end
+    return U.dist(GetEntityCoords(ped), GetEntityCoords(e)) <= w.range
+end
+
+function Npc.watch(run, netId, src, range)
+    netId = ToInt(tonumber(netId), 1, MAX_NETID)
+    src = tonumber(src)
+    if not IsLive(run) or not netId or not src then return false end
+    local w = { runId = run.id, netId = netId, src = src, range = tonumber(range) or DEFAULT_CUFF_RANGE }
+    w.since = InWatchReach(run, w) and Now() or nil
+    watches[WatchKey(netId, src)] = w
+    return true
+end
+
+function Npc.inReachSince(run, netId, src)
+    netId = ToInt(tonumber(netId), 1, MAX_NETID)
+    src = tonumber(src)
+    local w = netId and src and watches[WatchKey(netId, src)] or nil
+    if not w or type(run) ~= 'table' or w.runId ~= run.id then return nil end
+    if w.since and not InWatchReach(run, w) then w.since = nil end
+    return w.since
+end
+
+function Npc.unwatch(netId, src)
+    netId = ToInt(tonumber(netId), 1, MAX_NETID)
+    src = tonumber(src)
+    if netId and src then watches[WatchKey(netId, src)] = nil end
+end
+
+local function SampleWatches(live)
+    local t = Now()
+    for key, w in pairs(watches) do
+        local run = live[w.runId] and RunById(w.runId) or nil
+        if not IsLive(run) then
+            watches[key] = nil
+        elseif InWatchReach(run, w) then
+            w.since = w.since or t
+        else
+            w.since = nil
+        end
+    end
+end
+
+-- A stun_hit report (client telemetry) is real only when the server saw that ped ragdoll or change state
+-- within windowMs.
+function Npc.stunMatches(netId, windowMs)
+    netId = ToInt(tonumber(netId), 1, MAX_NETID)
+    local rec = netId and FindRec(netId) or nil
+    if not rec or rec.dead then return false end
+    local t = Now()
+    windowMs = tonumber(windowMs) or 1000
+    if rec.since and t - rec.since <= windowMs then return true end
+    if rec.ragdollAt and t - rec.ragdollAt <= windowMs then return true end
+    local run = RunById(rec.runId)
+    local e = run and EntityOf(run, netId, rec)
+    if e and type(IsPedRagdoll) == 'function' then
+        local ok, rag = pcall(IsPedRagdoll, e)
+        if ok and rag then return true end
+    end
+    return false
+end
+
+-- The live run a mission ped belongs to, or nil.
+function Npc.runOf(netId)
+    netId = ToInt(tonumber(netId), 1, MAX_NETID)
+    local rec = netId and FindRec(netId) or nil
+    local run = rec and RunById(rec.runId)
+    if IsLive(run) then return run end
+    return nil
+end
+
+-- ============================================================================
 --                               THE 1 S WATCHER
 -- ============================================================================
 -- True when the server has real health data for the ped: a max health above 0 or a recorded cause of
@@ -749,6 +914,10 @@ local function CheckPed(run, netId, info, rec)
         HealthDropped(run, netId, rec, e)
     end
     rec.hp = total
+    if type(IsPedRagdoll) == 'function' then
+        local ok, rag = pcall(IsPedRagdoll, e)
+        if ok and rag then rec.ragdollAt = Now() end
+    end
     SampleReach(run, rec, e)
 end
 
@@ -798,9 +967,13 @@ local function Tick()
     for runId in pairs(rolls) do
         if not live[runId] then rolls[runId] = nil end
     end
+    SampleWatches(live)
     local t = Now()
     for k, at in pairs(shotAt) do
         if t - at > 60000 then shotAt[k] = nil end
+    end
+    for k, at in pairs(forceAt) do
+        if t - at > 60000 then forceAt[k] = nil end
     end
 end
 
@@ -820,6 +993,16 @@ local function Refuse(src, key, why)
     CP.log(TAG, 'cuff by %s refused: %s', tostring(src), why or key)
     Notify(src, 'error', key)
     return false, key
+end
+
+-- Config.Custody.handcuffsItem: Cuff suspect needs that item in the officer's inventory (checked, never used or
+-- taken: using sc-police's handcuffs cuffs the nearest player).
+local function HandcuffsOk(src)
+    local item = Config.Custody and Config.Custody.handcuffsItem
+    if not item or item == '' then return true end
+    if GetResourceState('ox_inventory') ~= 'started' then return false end
+    local ok, n = pcall(function() return exports.ox_inventory:Search(src, 'count', item) end)
+    return ok and (tonumber(n) or 0) > 0
 end
 
 local function HandleCuff(src, runId, netId)
@@ -857,6 +1040,7 @@ local function HandleCuff(src, runId, netId)
     if not Exists(ped) or U.dist(GetEntityCoords(ped), GetEntityCoords(e)) > range + CUFF_SLACK_M then
         return Refuse(src, 'err.npc_too_far', 'too far')
     end
+    if not HandcuffsOk(src) then return Refuse(src, 'err.npc_no_handcuffs', 'no handcuffs item') end
     local need = math.max(0, (tonumber(cuffCfg.duration) or DEFAULT_CUFF_MS) - CUFF_DWELL_SLACK_MS)
     local since = rec.near[src]
     if need > 0 and (not since or Now() - since < need) then
@@ -884,6 +1068,10 @@ AddEventHandler('playerDropped', function()
     local src = tonumber(source)
     if not src then return end
     for _, rec in pairs(peds) do rec.near[src] = nil end
+    local wsuffix = ':' .. src
+    for k in pairs(watches) do
+        if k:sub(-#wsuffix) == wsuffix then watches[k] = nil end
+    end
     local suffix = ':' .. src
     for k in pairs(shotAt) do
         if k:sub(-#suffix) == suffix then shotAt[k] = nil end

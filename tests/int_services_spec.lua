@@ -271,6 +271,10 @@ H.load('modules/admin/server.lua')
 H.load('modules/disputes/server.lua')
 H.load('modules/anticheat/server.lua')
 
+-- The goals of the day and week rotate with the real date (this spec runs on the real clock): no shipped
+-- goal may complete from the rows below and add its points to the XP and board checks. Section 4 sets its own.
+Config.Goals.daily, Config.Goals.weekly = {}, {}
+
 -- ============================================================================
 --                                   HELPERS
 -- ============================================================================

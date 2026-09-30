@@ -1022,6 +1022,132 @@ do
 end
 
 -- ============================================================================
+--                                POLICE ACTIONS
+-- ============================================================================
+-- (WP2): the custody states, force, reach sampling.
+
+do
+    Reset()
+    local run = NewRun('run-c', { 1, 2 })
+    local stats = {}
+    CP.Runs.noteStat = function(r, src, key, n) stats[#stats + 1] = { src = src, key = key, n = n } end
+    -- the new states are valid; neutralised: escorted, seated and handed over (never a compliant contact)
+    local c1 = SpawnPed(run, { coords = vec3(1.0, 0.0, 0.0), role = 'subject', armed = false })
+    for _, st in ipairs({ 'contacted', 'escorted', 'seated', 'released', 'handed_over', 'impounded' }) do
+        H.ok(Npc.setState(run, c1, st), 'state ' .. st .. ' is valid')
+    end
+    H.ok(Npc.setState(run, c1, 'contacted'), 'contacted')
+    H.eq(Npc.isNeutralised(c1), false, 'a compliant contact is not neutralised')
+    for _, st in ipairs({ 'escorted', 'seated', 'handed_over' }) do
+        Npc.setState(run, c1, st)
+        H.eq(Npc.isNeutralised(c1), true, st .. ' is neutralised')
+    end
+    -- shooting a contacted, escorted or seated person is shot_surrendered
+    for _, st in ipairs({ 'contacted', 'escorted', 'seated' }) do
+        Reset()
+        Npc.setState(run, c1, st)
+        Bump(2100)
+        Wde(1, { hitGlobalIds = { c1 }, weaponType = PISTOL })
+        H.eq(Count(R.penal, function(x) return x.id == 'shot_surrendered' end), 1, 'shooting a ' .. st .. ' person')
+    end
+    -- a melee hit on a detained, escorted, seated or compliant person: excessive_force, once per 10 s
+    Reset()
+    Npc.setState(run, c1, 'cuffed')
+    Bump(10100)
+    Wde(2, { hitGlobalIds = { c1 }, weaponType = joaat('WEAPON_NIGHTSTICK') })
+    H.eq(Count(R.penal, function(x) return x.id == 'excessive_force' end), 1, 'a baton on a detained person')
+    H.eq(R.penal[1] and R.penal[1].src, 2, 'personal')
+    Bump(3000)
+    Wde(2, { hitGlobalIds = { c1 }, weaponType = joaat('WEAPON_NIGHTSTICK') })
+    H.eq(Count(R.penal, function(x) return x.id == 'excessive_force' end), 1, 'at most once per person per 10 s')
+    Bump(10100)
+    Npc.setState(run, c1, 'contacted')
+    Wde(2, { hitGlobalIds = { c1 }, weaponType = joaat('WEAPON_STUNGUN') })
+    H.eq(Count(R.penal, function(x) return x.id == 'excessive_force' end), 2, 'a taser on a compliant person')
+    H.eq(Count(R.penal, function(x) return x.id == 'shot_surrendered' end), 0, 'a taser there is not a shot')
+    Bump(10100)
+    Wde(9, { hitGlobalIds = { c1 }, weaponType = joaat('WEAPON_NIGHTSTICK') })
+    H.eq(Count(R.penal, function(x) return x.id == 'excessive_force' end), 2, 'a non-participant costs nobody')
+    Npc.setState(run, c1, 'idle')
+    Wde(2, { hitGlobalIds = { c1 }, weaponType = joaat('WEAPON_NIGHTSTICK') })
+    H.eq(Count(R.penal, function(x) return x.id == 'excessive_force' end), 2, 'a person not in custody: nothing')
+    -- the health-drop fallback on a compliant person is force too
+    Reset()
+    Npc.setState(run, c1, 'contacted')
+    local e1 = W.byNet[c1]
+    Tick(1)
+    Bump(10100)
+    -- the attacker owns the ped (its client simulates it), so no weaponDamageEvent reached the server
+    W.owner[e1] = 1
+    W.ents[e1].health, W.ents[e1].damager = 150, 100
+    Tick(1)
+    H.eq(Count(R.penal, function(x) return x.id == 'excessive_force' end), 1, 'health-drop fallback: force')
+    W.ents[e1].damager = nil
+    W.owner[e1] = nil
+    -- a hidden contact never turns hostile before its draw
+    local hc = SpawnPed(run, { coords = vec3(3.0, 0.0, 0.0), role = 'subject', armed = false })
+    run.entities[hc].hiddenCfg = { weapon = 'WEAPON_PISTOL' }
+    H.eq(Npc.setState(run, hc, 'hostile'), false, 'a hidden contact cannot turn hostile before its draw')
+    run.entities[hc].armedGiven = true
+    H.ok(Npc.setState(run, hc, 'hostile'), 'after the draw it can')
+    -- dwell sampling of police actions (peds and vehicles)
+    Place(1, 1.5, 0.0, 0.0)
+    H.ok(Npc.watch(run, c1, 1, 2.5), 'watch')
+    local since = Npc.inReachSince(run, c1, 1)
+    H.ok(since ~= nil, 'in reach from the start')
+    Tick(1)
+    Place(1, 9.0, 0.0, 0.0)
+    Tick(1)
+    H.eq(Npc.inReachSince(run, c1, 1), nil, 'a sample out of reach restarts the dwell')
+    Place(1, 1.5, 0.0, 0.0)
+    Tick(1)
+    H.ok((Npc.inReachSince(run, c1, 1) or 0) > since, 'back in reach: counted again from then')
+    Npc.unwatch(c1, 1)
+    H.eq(Npc.inReachSince(run, c1, 1), nil, 'unwatch')
+    -- stun telemetry matches a state change or a ragdoll within the window
+    Npc.setState(run, c1, 'cuffed')
+    H.ok(Npc.stunMatches(c1, 1000), 'a state change just now matches')
+    Bump(1500)
+    H.eq(Npc.stunMatches(c1, 1000), false, 'nothing within 1 s: no match')
+    _G.IsPedRagdoll = function(e) return e == e1 end
+    H.ok(Npc.stunMatches(c1, 1000), 'a ragdoll now matches')
+    _G.IsPedRagdoll = nil
+    H.eq(Npc.runOf(c1), run, 'runOf')
+    -- the lethal stat: a participant kills a person the mission is about
+    local k = SpawnPed(run, { coords = vec3(4.0, 0.0, 0.0), role = 'subject' })
+    local ke = W.byNet[k]
+    Tick(1)
+    W.ents[ke].health, W.ents[ke].killer = 0, 100
+    Tick(1)
+    H.eq(Count(stats, function(x) return x.key == 'lethal' and x.src == 1 end), 1, 'lethal for the killer')
+    local hk = SpawnPed(run, { coords = vec3(4.5, 0.0, 0.0), role = 'hostage', armed = false })
+    local hke = W.byNet[hk]
+    Tick(1)
+    W.ents[hke].health, W.ents[hke].killer = 0, 100
+    Tick(1)
+    H.eq(Count(stats, function(x) return x.key == 'lethal' end), 1, 'a hostage is not a suspect')
+    -- Config.Custody.handcuffsItem: Cuff suspect needs it
+    local sp = SpawnPed(run, { coords = vec3(1.0, 1.0, 0.0), role = 'suspect', armed = false })
+    Npc.setState(run, sp, 'surrendered')
+    Npc.enableCuff(run, sp, { duration = 1000 })
+    Config.Custody.handcuffsItem = 'handcuffs'
+    local inv = H.mockInventory({ handcuffs = { label = 'Handcuffs' } })
+    Place(1, 1.0, 1.5, 0.0)
+    Tick(1)
+    Cuff(1, run.id, sp)
+    H.eq(Npc.getState(sp), 'surrendered', 'no handcuffs: no cuff')
+    H.eq(LastNote().key, 'err.npc_no_handcuffs', 'the officer is told')
+    inv.slots[1] = { { slot = 1, name = 'handcuffs', count = 1 } }
+    Cuff(1, run.id, sp)
+    H.eq(Npc.getState(sp), 'cuffed', 'with handcuffs in the inventory')
+    H.eq(inv.removed[1], nil, 'the item is checked, never used or taken')
+    Config.Custody.handcuffsItem = false
+    H.exportsMock.ox_inventory = nil
+    CP.Runs.noteStat = nil
+    R.runs['run-c'] = nil
+end
+
+-- ============================================================================
 --                               REGISTRY PRUNING
 -- ============================================================================
 

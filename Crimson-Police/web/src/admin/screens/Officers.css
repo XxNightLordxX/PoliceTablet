@@ -416,3 +416,43 @@
 .oversight-off-table td {
     overflow: hidden;
 }
+
+/* Profile moderation */
+.oversight-off-profile {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.oversight-off-profile__text {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+}
+
+.oversight-off-profile__bio {
+    margin: 0;
+    font-size: var(--cp-fs-sm);
+    white-space: pre-line;
+    overflow-wrap: anywhere;
+}
+
+.oversight-off-pending {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 10px;
+    padding: 8px 10px;
+    border-radius: var(--cp-radius);
+    background: var(--cp-surface-2);
+}
+
+.oversight-off-pending__text {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    font-size: var(--cp-fs-sm);
+    text-overflow: ellipsis;
+}

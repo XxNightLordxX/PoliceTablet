@@ -52,8 +52,18 @@ export interface DispatchView {
     recent: RecentCall[];
 }
 
+// A unit a supervisor may page (idle leaders and solo officers, never the viewer's own unit).
+export interface PageableUnit {
+    src: number;
+    name: string;
+    callsign: string | null;
+    departmentShort: string;
+    size: number;
+}
+
 export interface SupCallsView {
     open: MissionCall[];
+    units?: PageableUnit[];
     today: {
         code: string;
         type: string;
@@ -71,4 +81,25 @@ export interface AreaCoverage {
     types: string[];
     areas: { key: string; label: string }[];
     cells: Record<string, Record<string, { missions: number; locations: number }>>;
+}
+
+// server:claimMissionCall: the run when the claim won, or pending while the unit answers its ready check.
+export interface ClaimCallResult {
+    runId?: string;
+    pending?: boolean;
+    code?: string;
+}
+
+// The Mission Board's extra field: the mission calls this viewer's unit could claim right now.
+export interface BoardCallsInfo {
+    callsOpen?: number;
+}
+
+// admin:getLocationStats: how often each location of a mission was played.
+export interface LocationPlay {
+    index: number;
+    label: string;
+    plays: number;
+    lastPlayed: number | null;
+    area: string | null;
 }

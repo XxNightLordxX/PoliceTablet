@@ -86,5 +86,17 @@
   "run.fail_killed_unarmed": "Mission failed: a surrendered or unarmed person was killed",
   "bonus.kingpin_alive": "Kingpin arrested alive",
   "bonus.inmate_alive": "Inmate arrested alive",
-  "penalty.hostage_hit": "Hostage hit by participant fire"
+  "penalty.hostage_hit": "Hostage hit by participant fire",
+  "block.flee_arrest.invalid.demeanour": "Demeanour must be rolled, a fixed demeanour or weights of compliant, nervous, evasive, runner and hostile",
+  "block.flee_arrest.invalid.custody": "After an arrest must be Cuff only or Hand over to transport",
+  "block.flee_arrest.msg_feint": "The suspect is running again!",
+  "block.hostile_waves.invalid.spawn_sets": "Spawn sets need 1-4 named location lists, 1-3 of them used per run",
+  "block.hostile_waves.intel": "Intel: expect contact {sets}",
+  "block.hostile_waves.intel_and": "{first} and {last}",
+  "block.hostile_waves.set.front": "at the front",
+  "block.hostile_waves.set.house": "in the house",
+  "block.hostile_waves.set.garage": "in the garage",
+  "block.hostile_waves.set.back": "in the back yard",
+  "block.hostile_waves.set.inside": "inside",
+  "block.hostile_waves.set.yard": "in the yard"
 }

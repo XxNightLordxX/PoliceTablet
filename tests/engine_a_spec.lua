@@ -1641,6 +1641,8 @@ do
         'pursuit',
         'search_area',
         'skill_check',
+        'field_contact',
+        'process_scene',
     }
     local allLoaded = true
     for _, b in ipairs(blockIds) do
@@ -1654,7 +1656,7 @@ do
         local M = CP.Missions
         local indexSrc = realLoad('Crimson-Police', 'missions/builtin/index.lua')
         local ids = assert(load(indexSrc, '@index', 't', {}))()
-        H.eq(#ids, 14, 'index lists the 13 missions plus the Weekly Boss')
+        H.eq(#ids, 19, 'index lists the 18 missions plus the Weekly Boss')
         local real = {}
         for _, id in ipairs(ids) do
             local path = 'missions/builtin/' .. id .. '.lua'
