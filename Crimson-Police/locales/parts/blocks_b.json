@@ -45,6 +45,8 @@
 
   "block.flee_arrest.knock": "Knock and announce",
   "block.flee_arrest.cuff": "Cuff suspect",
+  "block.flee_arrest.person_suspect": "Suspect",
+  "block.flee_arrest.person_inmate": "Inmate {n}",
   "block.flee_arrest.response_surrender": "The suspect surrenders at the door",
   "block.flee_arrest.response_flee": "The suspect is running out the back!",
   "block.flee_arrest.response_fight": "The suspect opens fire!",

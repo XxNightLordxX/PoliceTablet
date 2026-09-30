@@ -1,5 +1,5 @@
-// The result card (ARCHITECTURE §9.6): points, cash, and when present the level bar, the mission call, the decision
-// ledger and item rewards. Shown on the HUD for 25 s or until dismissed.
+// The result card (ARCHITECTURE §9.6): points, cash, and when present the level bar, the mission call, the debrief
+// (decision ledger and people) and item rewards. Shown on the HUD for 25 s or until dismissed.
 
 import { useEffect, useState } from 'react';
 import { Badge, Icon, IconButton, ProgressBar, TierBadge } from '../shared/components';
@@ -13,9 +13,10 @@ import {
     formatNumber,
     formatPercent,
 } from '../shared/format';
-import { hasKey, t, tOr } from '../shared/i18n';
+import { t, tOr } from '../shared/i18n';
 import type { RunResult } from '../shared/types';
-import type { DecisionEntry, RunItem, RunMissionCall, RunProgress } from '../types/run_ui';
+import type { RunItem, RunMissionCall, RunProgress } from '../types/run_ui';
+import { DecisionsBlock, PeopleBlock } from './Debrief';
 
 export const RESULT_SECONDS = 25;
 
@@ -41,13 +42,6 @@ function Line({
         </div>
     );
 }
-
-// A locale text when the key exists, else the raw value (ids from blocks that may not be labelled yet).
-function labelOr(key: string, raw: string): string {
-    return hasKey(key) ? t(key) : raw;
-}
-
-const VERDICT_TONE = { best: 'plus', ok: undefined, wrong: 'minus', critical: 'minus' } as const;
 
 function LevelBlock({ progress }: { progress: RunProgress }) {
     const lv = progress.level;
@@ -101,37 +95,6 @@ function MissionCallBlock({ call }: { call: RunMissionCall }) {
                 value={call.rapid ? t('result.rapid') : ''}
                 tone={call.rapid ? 'plus' : undefined}
             />
-        </div>
-    );
-}
-
-function DecisionsBlock({ decisions }: { decisions: DecisionEntry[] }) {
-    return (
-        <div className="cp-result__block">
-            <div className="cp-result__block-head">
-                <Icon name="gavel" size={14} />
-                <span>{t('result.decisions')}</span>
-            </div>
-            {decisions.map((d, i) => (
-                <Line
-                    key={`d${i}`}
-                    label={t('result.decision', {
-                        contact: d.contact,
-                        choice: labelOr(`custody.choice.${d.choice}`, d.choice),
-                        by: d.by,
-                        truth: labelOr(`custody.truth.${d.truth}`, d.truth),
-                        verdict: t(`result.verdict.${d.verdict}`),
-                    })}
-                    value={
-                        d.points !== 0
-                            ? formatNumber(d.points, true)
-                            : d.discoverable
-                              ? ''
-                              : t('result.not_discoverable')
-                    }
-                    tone={VERDICT_TONE[d.verdict]}
-                />
-            ))}
         </div>
     );
 }
@@ -305,7 +268,8 @@ export function ResultScreen({ result, onDismiss }: { result: RunResult; onDismi
 
             {result.progress ? <LevelBlock progress={result.progress} /> : null}
             {result.missionCall ? <MissionCallBlock call={result.missionCall} /> : null}
-            {result.decisions && result.decisions.length > 0 ? <DecisionsBlock decisions={result.decisions} /> : null}
+            {result.decisions ? <DecisionsBlock decisions={result.decisions} /> : null}
+            {result.people ? <PeopleBlock people={result.people} /> : null}
             {result.items && result.items.length > 0 ? <ItemsBlock items={result.items} /> : null}
 
             <div

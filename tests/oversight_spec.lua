@@ -934,12 +934,18 @@ local dFlag = AddRow(
     { run_uuid = D1, citizenid = 'OFF00003', flagged = 1, flag_reason = 'presence', cash_status = 'held' })
 local dPartner = AddRow({ run_uuid = D1, citizenid = 'OFF00006' })
 local D2 = 'bbbbbbbb-2222-4000-8000-000000000002'
+-- a case failed by a decision: the breakdown carries the ledger (each fact with its time) and the people
+local FAIL_BREAKDOWN = '{"cash":{"amount":0,"status":"none"},"decisions":[{"contact":"A","kind":"person",'
+    .. '"choice":"release","best":"arrest","verdict":"critical","by":"Olly Officer","truth":"warrant",'
+    .. '"facts":["warrant"],"factLog":[{"key":"warrant","text":"Active warrant","atS":42}],"points":0,'
+    .. '"discoverable":true,"knownAtS":42}],"people":[{"contact":"A","demeanour":"nervous","did":["ran"]}]}'
 local dFail = AddRow({
     run_uuid = D2,
     citizenid = 'OFF00003',
     state = 'failed',
     end_reason = 'mission_failed',
     final_points = 20,
+    breakdown = FAIL_BREAKDOWN,
 })
 local D3 = 'bbbbbbbb-2222-4000-8000-000000000003'
 local dVoid = AddRow({
@@ -1035,6 +1041,17 @@ H.eq(kinds.failed, 1, 'failed kind')
 H.eq(kinds.voided, 2, 'voided kind')
 H.eq(forAdmin[1].name, 'Olly Officer', 'officer name joined')
 H.eq(forAdmin[1].missionLabel, 'Gang Shootout', 'mission label')
+local failView, flagView = nil, nil
+for _, d in ipairs(forAdmin) do
+    if d.kind == 'failed' then failView = d end
+end
+for _, d in ipairs(forSup) do
+    if d.kind == 'flagged' then flagView = d end
+end
+H.eq(failView and failView.decisions and #failView.decisions, 1, 'the admin sees the whole decision ledger')
+H.eq(failView and failView.decisions[1].factLog[1].atS, 42, 'with when each fact reached the decider')
+H.eq(failView and failView.people and failView.people[1].demeanour, 'nervous', 'and the people debrief')
+H.eq(flagView and flagView.decisions, nil, 'a row without decisions shows none')
 local rq = Cb('sup:getReviewQueue', 2)
 H.eq(rq.ok, true, 'review queue')
 H.eq(#rq.data.disputes, 3, 'queue carries the disputes')

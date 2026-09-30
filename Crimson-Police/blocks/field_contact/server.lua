@@ -100,6 +100,15 @@ local function TrustedFile(ctx)
     return type(m) == 'table' and m.source == 'builtin'
 end
 
+-- The mission's card lists this bonus id (card bonuses such as vehicle_impounded are only recorded then).
+local function CardLists(ctx, id)
+    local m = ctx.mission or (ctx.run and ctx.run.mission)
+    for _, b in ipairs(type(m) == 'table' and type(m.bonuses) == 'table' and m.bonuses or {}) do
+        if type(b) == 'table' and b.id == id then return true end
+    end
+    return false
+end
+
 local function WeightedKey(rng, weights)
     local keys, total = {}, 0
     for k, w in pairs(weights or {}) do
@@ -686,6 +695,7 @@ local function Surrender(ctx, st, c)
     local run = ctx.run
     if c.state == 'fleeing' or c.state == 'hostile' then
         c.state = 'surrendered'
+        if CP.Runs.notePerson then CP.Runs.notePerson(run, c.netId, { did = 'surrendered' }) end
         CP.Npc.setState(run, c.netId, 'surrendered',
             { contact = { label = c.label, kind = c.kind, actions = U.copy(c.actions) } })
         CP.Npc.enableCuff(run, c.netId, { label = CP.L('npc.cuff'), duration = 5000 })
@@ -1015,6 +1025,11 @@ local function OnDecide(ctx, st, src, ev)
     if not c then return true end
     if c.kind == 'vehicle' and (ev.choice == 'cite' or ev.choice == 'impound') then
         ReturningDriver(ctx, st, c, ev.choice)
+    end
+    -- vehicle_impounded (a card bonus, e.g. Stolen Vehicle Takedown): each car lawfully impounded, shared
+    local good = ev.verdict == 'best' or ev.verdict == 'ok'
+    if c.kind == 'vehicle' and ev.choice == 'impound' and good and CardLists(ctx, 'vehicle_impounded') then
+        ctx.award('vehicle_impounded', { count = 1 })
     end
     st.dirty = true
     return true

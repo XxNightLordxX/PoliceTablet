@@ -1,4 +1,4 @@
--- sql/migrations/004_profile.sql · profile pictures, bio, look, language, call mute, commendations and reports.
+-- sql/migrations/004_profile.sql · profile pictures, bio, look, call mute, commendations and reports.
 ALTER TABLE cp_officers ADD COLUMN bio VARCHAR(280) NULL;
 ALTER TABLE cp_officers ADD COLUMN avatar_kind VARCHAR(12) NOT NULL DEFAULT 'initials';
 ALTER TABLE cp_officers ADD COLUMN avatar_value VARCHAR(255) NULL;
@@ -8,7 +8,6 @@ ALTER TABLE cp_officers ADD COLUMN avatar_reviewed_by VARCHAR(50) NULL;
 ALTER TABLE cp_officers ADD COLUMN appearance VARCHAR(24) NULL;
 ALTER TABLE cp_officers ADD COLUMN accent VARCHAR(7) NULL;
 ALTER TABLE cp_officers ADD COLUMN ui_scale DECIMAL(3,2) NULL;
-ALTER TABLE cp_officers ADD COLUMN language VARCHAR(8) NULL;
 ALTER TABLE cp_officers ADD COLUMN profile_updated_at DATETIME NULL;
 ALTER TABLE cp_officers ADD COLUMN calls_muted TINYINT(1) NOT NULL DEFAULT 0;
 ALTER TABLE cp_officers ADD COLUMN bio_pending VARCHAR(280) NULL;

@@ -155,7 +155,7 @@ end
 
 local ROW_SQL = [[
 SELECT citizenid, display_name, callsign, rank_label, department, xp, hide_name, bio, bio_pending, avatar_kind,
-  avatar_value, avatar_pending, avatar_status, appearance, accent, ui_scale, language, calls_muted,
+  avatar_value, avatar_pending, avatar_status, appearance, accent, ui_scale, calls_muted,
   UNIX_TIMESTAMP(profile_updated_at) AS updated_ts
 FROM cp_officers WHERE citizenid = ?]]
 
@@ -384,14 +384,8 @@ function Profile.prefsFor(citizenid)
         appearance = row and type(row.appearance) == 'string' and row.appearance or tostring(appearances[1]),
         accent = row and U.isHexColour(row.accent) and row.accent:lower() or nil,
         uiScale = scale,
-        language = row and type(row.language) == 'string' and row.language or nil,
         callsMuted = row ~= nil and U.truthy(row.calls_muted) or false,
     }
-end
-
-function Profile.languageFor(citizenid)
-    local row = ReadRow(citizenid)
-    return row and type(row.language) == 'string' and row.language ~= '' and row.language or nil
 end
 
 -- ============================================================================
@@ -473,11 +467,6 @@ local function LookChanges(officer, payload, level)
         local lo, hi = ScaleRange()
         n = math.min(hi, math.max(lo, n))
         fields[#fields + 1] = { 'ui_scale', math.floor(n * 100 + 0.5) / 100 }
-    end
-    if payload.language ~= nil then
-        -- English is the only language shipped: a language can only be cleared (the server language).
-        if payload.language ~= false and payload.language ~= '' then return nil, 'err.language_invalid' end
-        fields[#fields + 1] = { 'language', nil }
     end
     if payload.callsMuted ~= nil then
         if type(payload.callsMuted) ~= 'boolean' then return nil, 'err.invalid_payload' end

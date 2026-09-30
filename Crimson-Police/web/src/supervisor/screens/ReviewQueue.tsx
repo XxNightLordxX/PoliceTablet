@@ -22,6 +22,7 @@ import {
     TierBadge,
     type TableColumn,
 } from '../../shared/components';
+import { DecisionsBlock, PeopleBlock } from '../../hud/Debrief';
 import { asArray } from '../../shared/data';
 import { formatDateTime, formatDuration } from '../../shared/format';
 import { useAction, useRequest } from '../../shared/hooks';
@@ -188,6 +189,8 @@ function DisputeDetail({ row }: { row: DisputeView }) {
                     <span className="cp-num">{formatDateTime(row.createdAt)}</span>
                 </KeyValue>
             </Grid>
+            {row.decisions ? <DecisionsBlock decisions={row.decisions} detail /> : null}
+            {row.people ? <PeopleBlock people={row.people} /> : null}
             <div className="oversight-rq-uuid">{t('sup.review.detail.run', { id: row.runUuid, row: row.rowId })}</div>
         </div>
     );

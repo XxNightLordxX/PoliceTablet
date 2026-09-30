@@ -29,7 +29,7 @@ function withUrlLook(prefs: Prefs): Prefs {
     };
 }
 
-const DEFAULT_PREFS: Prefs = { appearance: 'department', accent: null, uiScale: 1, language: null, callsMuted: false };
+const DEFAULT_PREFS: Prefs = { appearance: 'department', accent: null, uiScale: 1, callsMuted: false };
 
 async function sessionFor(ui: UiKind): Promise<Session> {
     const s = buildSession(ui);

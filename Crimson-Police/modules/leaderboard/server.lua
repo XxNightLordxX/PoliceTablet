@@ -1024,12 +1024,17 @@ local PUBLIC_BREAKDOWN = {
     flagged = true,
 }
 
-local function ProfileRun(row, own, nowTs, citizenid)
+-- staff: an admin's view (admin:getOfficerProfile), which always keeps the debrief.
+local function ProfileRun(row, own, nowTs, citizenid, staff)
     local bd = U.jsonField(row.breakdown)
     if type(bd) ~= 'table' then bd = nil end
     if bd then
         if own then
             if type(bd.cash) == 'table' then bd.cash.status = row.cash_status end
+            -- Config.Decisions.debrief = false: the officer's history leaves the ledger and the people out
+            if not staff and Config.Decisions and Config.Decisions.debrief == false then
+                bd.decisions, bd.people = nil, nil
+            end
         else
             local pub = {}
             for k, v in pairs(bd) do
@@ -1244,7 +1249,7 @@ function LB.profile(viewer, target, opts)
     local full = own or staff
     local rows = MySQL.query.await(PROFILE_RUNS_SQL, { cid, PROFILE_RUNS }) or {}
     local runs = {}
-    for i, row in ipairs(rows) do runs[i] = ProfileRun(row, full, nowTs, cid) end
+    for i, row in ipairs(rows) do runs[i] = ProfileRun(row, full, nowTs, cid, staff) end
     if staff then
         for _, r in ipairs(runs) do r.canDispute = false end
     end

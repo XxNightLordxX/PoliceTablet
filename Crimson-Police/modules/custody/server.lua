@@ -371,6 +371,7 @@ function Custody.register(run, obj, netId, contact)
         ran = contact.ran == true,
     }
     b.contacts[netId] = c
+    if kind == 'person' then Call('Runs', 'notePerson', run, netId, { label = c.label, demeanour = c.demeanour }) end
     SetState(run, c, c.state, contact.bag)
     for _, key in ipairs(type(contact.revealed) == 'table' and contact.revealed or {}) do
         Custody.reveal(run, netId, key, nil, { revealed = true, silent = true })
@@ -495,6 +496,7 @@ function Custody.onCuffed(run, netId, src)
     c.walking = false
     -- one act, one reward: a person who ran or drew earns subject_alive for the catch, their Arrest 0 points
     if c.ran or c.drew or prev == 'hostile' or prev == 'fleeing' then c.caught = true end
+    Call('Runs', 'notePerson', run, c.netId, { did = 'cuffed' })
     SetState(run, c, 'cuffed')
     PushViews(run)
     return true
@@ -506,6 +508,9 @@ function Custody.markGone(run, netId, how)
     if not c then return false end
     c.escaped = true
     c.goneHow = how
+    if c.kind == 'person' and (how == 'escaped' or how == 'walked') then
+        Call('Runs', 'notePerson', run, c.netId, { did = how == 'walked' and 'walked_away' or 'escaped' })
+    end
     PushViews(run)
     return true
 end
@@ -515,6 +520,7 @@ function Custody.markDead(run, netId)
     if not c then return false end
     c.dead = true
     c.state = 'dead'
+    if c.kind == 'person' then Call('Runs', 'notePerson', run, c.netId, { did = 'killed' }) end
     PushViews(run)
     return true
 end
@@ -744,10 +750,12 @@ function Custody.grade(run, netId, choice, src, beginMs)
         verdict = 'critical'
         failKey = 'reason.decision_fail'
     end
-    local facts = {}
+    local facts, factLog = {}, {}
     for _, f in ipairs(c.facts) do
-        if not f.suppressed and f.sentTo[tonumber(src)] and f.sentTo[tonumber(src)].ms <= beginMs then
+        local sent = not f.suppressed and f.sentTo[tonumber(src)]
+        if sent and sent.ms <= beginMs then
             facts[#facts + 1] = f.key
+            factLog[#factLog + 1] = { key = f.key, text = FactText(c, f), at = sent.ts }
         end
     end
     local knownAt = factKey and KnownAt(c, factKey, src) or nil
@@ -761,6 +769,7 @@ function Custody.grade(run, netId, choice, src, beginMs)
         truthKey = truth,
         bestChoice = best,
         facts = facts,
+        factLog = factLog,
         discoverable = Discoverable(b, c),
         knownAt = knownAt,
         failKey = failKey,
@@ -802,6 +811,9 @@ local function StartBehaviour(run, c, behaviour, args)
     local tell = TELLS[behaviour]
     if tell then c.tellSeen = tell end
     local extra = type(args) == 'table' and args.points and { cfg = { fleePoints = args.points } } or nil
+    local did = (behaviour == 'tell_then_draw' and 'drew') or (behaviour == 'walk_away' and 'walked_away')
+        or ((behaviour == 'flee_on_approach' or behaviour == 'flee_on_order') and 'ran') or nil
+    if did then Call('Runs', 'notePerson', run, c.netId, { did = did }) end
     if behaviour == 'tell_then_draw' then
         c.drew = true
         Call('Runs', 'arm', run, c.netId)
@@ -1156,6 +1168,9 @@ function Custody.serviceVehicle(run, kind, coords, opts)
         obj = opts.obj or run.objectiveIndex,
         near = vector3(x + 0.0, y + 0.0, z + 0.0),
         dest = Vec4Of(opts.point or coords),
+        -- parked within this of dest: a placed point (transport point, coroner point) is exact; with none the
+        -- prisoner van may stop anywhere within Config.Custody.transport.parkWithin of the scene
+        parkRange = opts.point and PARK_RANGE_M or math.max(PARK_RANGE_M, Num(KindCfg(kind).parkWithin, PARK_RANGE_M)),
         target = opts.target,
         decider = opts.decider,
         status = 'pending',
@@ -1202,7 +1217,8 @@ end
 local function Arrived(run, s)
     local ent = s.veh and EntityOf(run, s.veh)
     if not ent or not s.dest then return false end
-    return U.dist(GetEntityCoords(ent), s.dest) <= PARK_RANGE_M and Num(GetEntitySpeed(ent), 0) <= PARK_SPEED
+    return U.dist(GetEntityCoords(ent), s.dest) <= (s.parkRange or PARK_RANGE_M)
+        and Num(GetEntitySpeed(ent), 0) <= PARK_SPEED
 end
 
 local function TickService(run, s)
@@ -1527,6 +1543,7 @@ end
 local function Bolt(run, c, src, behaviour)
     c.evading = true
     c.ran = true
+    Call('Runs', 'notePerson', run, c.netId, { did = 'ran' })
     Custody.reveal(run, c.netId, 'evading', src)
     local obj = ObjOf(run, c.obj)
     local points = nil

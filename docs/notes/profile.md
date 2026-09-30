@@ -1,7 +1,8 @@
 # Profile (WP6) · pictures, bio, look, reports, commendations and moderation
 
 What `modules/profile/server.lua` adds. WP9 copies the API rows below into docs/ARCHITECTURE.md. English is the only
-language in this build: a profile has no language choice (the column exists; it can only be cleared).
+language in this build: a profile has no language (no column, pref or picker; the final review removed the inert
+language field).
 
 ## CP.Profile (server)
 
@@ -9,8 +10,7 @@ language in this build: a profile has no language choice (the column exists; it 
 |---|---|
 | `avatarOf(row, { own }) -> Avatar` | Pure: the picture from a cp_officers row (approved link or preset, else initials; frame = the level badge). A hidden name (hide_name) shows the callsign's initials and never the picture unless `own` |
 | `avatarFor(citizenid, viewerSrc|nil) -> Avatar` | The same, read from the database; `own` when the viewer is that officer |
-| `prefsFor(citizenid) -> Prefs` | appearance, accent, uiScale (clamped to Config.Profile.uiScale), language (nil), callsMuted |
-| `languageFor(citizenid) -> nil` | Always the server language in this build |
+| `prefsFor(citizenid) -> Prefs` | appearance, accent, uiScale (clamped to Config.Profile.uiScale), callsMuted |
 | `commendations(citizenid, { staff, viewer }) -> Commendation[]` | Active ones newest first; `staff` adds revoked ones with issuedBy and revokeReason; `viewer` (a citizenid) adds `mine` (that viewer issued it). An issuer who hides their name is shown by callsign, without a rank, except to staff |
 | `newCommendations(citizenid) -> n` | Commendations of the last Config.Commendations.announceDays days (60 s cache) |
 | `report(src, citizenid, reason, note) -> ok, err` | Report profile (picture, bio, other; note ≤ Config.Profile.reports.reasonMax). Never your own; one per profile per reporter per day; Config.Profile.reports.perDay per reporter per day (counted from cp_profile_reports); audited (profileReport) |
@@ -23,7 +23,7 @@ language in this build: a profile has no language choice (the column exists; it 
 | Name | Payload → reply | Rules |
 |---|---|---|
 | callback `getProfileEdit` | → ProfileEdit (+ bioPending) | own |
-| action `server:profile:set` | `{ bio?, avatar? = { kind, value }, appearance?, accent?, uiScale?, language?, callsMuted? }` → `{ pending = { avatar, bio } }` | Picture and bio changes share Config.Profile.editCooldown (profile_updated_at); the look and the mute do not. A preset above the officer's level is refused; a link needs avatarUrls.enabled, counts toward avatarUrls.perDay (in memory, per day) and with requireApproval waits in avatar_pending while everyone keeps the old picture. With bioRequiresApproval a bio waits in bio_pending. accent: only the department's theme.personalAccents at or below the level (false clears). The mute saves cp_officers.calls_muted and clears CP.MissionCalls' mute cache |
+| action `server:profile:set` | `{ bio?, avatar? = { kind, value }, appearance?, accent?, uiScale?, callsMuted? }` → `{ pending = { avatar, bio } }` | Picture and bio changes share Config.Profile.editCooldown (profile_updated_at); the look and the mute do not. A preset above the officer's level is refused; a link needs avatarUrls.enabled, counts toward avatarUrls.perDay (in memory, per day) and with requireApproval waits in avatar_pending while everyone keeps the old picture. With bioRequiresApproval a bio waits in bio_pending. accent: only the department's theme.personalAccents at or below the level (false clears). The mute saves cp_officers.calls_muted and clears CP.MissionCalls' mute cache |
 | action `server:profile:report` | `{ citizenid, reason, note? }` | any officer |
 | `server:sup:reviewAvatar` / `server:admin:reviewAvatar` | `{ citizenid, decision = 'approve'|'reject', reason, what? = 'avatar'|'bio' }` | reviewProfiles, the officer's department (admins any), never your own profile, reason required; a claim UPDATE on the pending value; audited reviewAvatar / reviewBio; the officer gets a toast |
 | `server:sup:clearProfile` / `server:admin:clearProfile` | `{ citizenid, what = 'bio'|'avatar', reason }` | same rules; audited clearBio / clearAvatar |

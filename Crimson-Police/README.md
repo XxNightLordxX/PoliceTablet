@@ -5,8 +5,28 @@ Training, Investigation or Tactical), the server draws a random NPC mission scal
 completed runs pay cash through Renewed-Banking and earn leaderboard points. Supervisors get
 oversight tools and a Mission Builder; admins get a full-screen admin panel.
 
-- Officer UI: `/CrimsonPolice` (optional keybind or tablet item)
+- Officer UI: `/CrimsonPolice`, the `crimsonpolice_tablet` key mapping, the optional tablet item or a mission desk
 - Admin UI and console commands: `/CrimsonPoliceAdmin`
+
+What this build adds (the parity-plus release; the rules are in `docs/SPEC.md`):
+
+- **Dispatch**: tablet-only NPC mission calls (type, priority, area; the mission is still drawn at random after
+  the claim), first unit to claim wins, rapid-response points, re-dispatch, supervisor page/withdraw/create. They
+  never touch SC-Dispatch, and real calls always come first.
+- **Police actions and decisions**: traffic stops, parked cars and scene contacts with a hidden truth found through
+  real actions (talk, frisk, search with probable cause, run plate ...), graded dispositions, a custody chain to an
+  NPC prisoner van, a Crimson-Police tow truck for impounds, and Process the scene with a coroner van.
+- **Five new missions** (18 plus the Weekly Boss): Illegal Parking Patrol, Traffic Enforcement, Suspicious
+  Activity, Drug Lab Raid and Gang Hideout Raid.
+- **Progression**: a 50-level XP curve (the XP level names are its bands), a service record, "Rank by" boards
+  (arrests, impounds, citations, rescues, mission calls, judgement), commendations, profile pictures and bios with
+  moderation, personal accents and accessibility looks.
+- **Teams**: kick, make leader, disband, withdraw an invite, a ready check before every unit draw, operation
+  leave and waitlist.
+- **Tablet**: mission desks, an optional "require the item" mode, sidebar badges, a notification bell and a
+  Config health panel.
+- **Item rewards**: optional ox_inventory rewards, **off by default** (`Config.Rewards.enabled = false`).
+- English only: `locales/en.json` is the only language file.
 
 ## Requirements
 
@@ -50,14 +70,12 @@ named `Crimson-Police`.
    set cp_webhook_operations "https://discord.com/api/webhooks/..."   # Cross-Department Missions
    ```
 5. Put each department's logo in `logos/` (the shipped `sast.png` and `fib.png` are placeholders).
-6. Optional tablet item: set `Config.Tablet.item = 'crimson_police_tablet'` and add to
-   `ox_inventory/data/items.lua`:
-   ```lua
-   ['crimson_police_tablet'] = {
-       label = 'Police Tablet', weight = 500, stack = false, close = true,
-       client = { export = 'Crimson-Police.useTablet' },
-   },
-   ```
+6. Optional tablet item: follow `items/README.md` (paste `items/ox_inventory_items.lua` into
+   `ox_inventory/data/items.lua`, copy `items/crimson_police_tablet.png` into `ox_inventory/web/images/`, then set
+   `Config.Tablet.item = 'crimson_police_tablet'`). `Config.Tablet.access.requireItem = true` makes every way
+   except a mission desk need the item.
+7. Mission desks: two placeholder desks ship in `Config.Tablet.desks` (Mission Row PD front desk, Sandy Shores
+   office). Check their coordinates against your station MLOs, or set `Config.Tablet.access.desk = false`.
 
 ## Database off
 
@@ -141,6 +159,30 @@ run) and reads the whole folder on every start (about 1.5 s per 50,000 runs).
   updating, keep `config/`, `logos/`, `missions/custom/` and `saves/`.
 - Crimson-Arena can run alongside: see `docs/CRIMSON_ARENA.md` in the repository.
 
+Parity-plus build:
+
+- Read the amendments in `docs/SPEC.md` (Hard rules → Mission choice, Do not build → Missions, the Officer UI's
+  eighth screen Dispatch, bodies kept for Process the scene) and confirm them before go-live.
+- Test every new location at Heavy tier in **Admin UI → Testing** before go-live (see Before go-live).
+- Check the mission desk coordinates against your MLOs, or turn desks off (`Config.Tablet.access.desk`).
+- Item rewards ship off (`Config.Rewards.enabled = false`). To use them, set `enabled = true` and either switch on
+  the example pools (`useExamplePools = true`: water, burger and sprunk) or fill `Config.Rewards` with items that
+  exist in your ox_inventory and suit your economy. Admin UI → Permissions → Config health shows what is on and
+  whether every item exists.
+- Profile pictures from links are off by default; if you turn them on, set `Config.Profile.avatarUrls.hosts` to
+  hosts you trust (Imgur is blocked in the UK and some other regions; Discord links expire). Review
+  `config/banned_words.txt` for your community.
+- Tell officers never to use sc-police's `/imp` or `/depot` on mission vehicles: they use the tablet's Impound.
+  A participant's `/imp` fails the objective and flags the run; one by anyone else ends the run as not counted.
+- Optional clean-up: `tests/zone_lint_baseline.txt` (in the repository) lists built-in locations of different
+  missions closer than 200 m. They never run at the same time (the draw's zone clearance), so nothing is
+  required; moving one later needs a retest.
+- Known SC-Dispatch behaviour: when a dispatcher detaches an officer from a real call within 60 s of marking
+  them, sc-dispatch un-marks them and Crimson-Police counts a normal abandon (the 5-minute type cooldown). Ask
+  dispatchers to avoid Detach in the first minute.
+- Database off: the four new tables (mission calls, commendations, profile reports, item rewards) live in the
+  saves folder with the rest; back it up before updating, and `/CrimsonPoliceAdmin storage copy` moves them too.
+
 ## Adding a department
 
 Copy the `fib` block in `Config.Departments`, rename the key (e.g. `bcso`), set label, short, jobs,
@@ -163,6 +205,10 @@ checking.
 - Extra builder peds: `Config.Builder.allowed.peds` includes the inmate, Kingpin and escort-driver models.
 - Search-mission start radius: with a search area objective, every start radius equals its search circle (200–1000 m).
 - Crimson-Arena no-build zones: the Trailer Park and the lobby are in `Config.Builder.noBuildZones`.
+- Parity-plus (this build): mission calls may be claimed on the Dispatch screen (the mission is still drawn at
+  random after the claim); Traffic Enforcement, Illegal Parking Patrol and Suspicious Activity are allowed; the
+  Officer UI has eight screens; bodies may be kept for a Process the scene objective. English only; item rewards
+  ship off.
 
 ## For developers
 

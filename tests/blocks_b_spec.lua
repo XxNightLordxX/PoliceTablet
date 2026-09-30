@@ -1463,6 +1463,17 @@ end
 
 do -- feint: only unarmed, only when nobody is within 6 m or aiming for 5 s; killing a feinting suspect still fails
     H.clockMs = 5200000
+    -- the people debrief (CP.Runs.notePerson): a person with a demeanour, and what they did
+    local savedRunsDb, notes = CP.Runs, {}
+    CP.Runs = setmetatable({
+        notePerson = function(run, netId, patch)
+            local e = notes[netId] or { did = {} }
+            notes[netId] = e
+            e.label, e.demeanour = patch.label or e.label, patch.demeanour or e.demeanour
+            if patch.did and e.did[#e.did] ~= patch.did then e.did[#e.did + 1] = patch.did end
+            return true
+        end,
+    }, { __index = savedRunsDb or {} })
     local ctx, S = MakeCtx('flee_arrest',
         { mode = 'scatter', suspects = 1, armedShare = 0, feint = 0.5, demeanour = 'runner' }, scatterLoc,
         { seed = 77 })
@@ -1491,6 +1502,12 @@ do -- feint: only unarmed, only when nobody is within 6 m or aiming for 5 s; kil
     H.eq(rec.feinted, true, 'fa feint: marked as a feint')
     FA.onEntityDead(ctx, p.netId, 1)
     H.eq(S.fails[1], 'run.fail_killed_unarmed', 'fa feint: killing a feinting (unarmed) suspect still fails')
+    local note = notes[p.netId]
+    CP.Runs = savedRunsDb
+    H.eq(note and note.demeanour, 'runner', 'fa debrief: the demeanour is noted')
+    H.eq(note and note.label, CP.L('block.flee_arrest.person_inmate', { n = 1 }), 'fa debrief: under a readable label')
+    H.eq(note and table.concat(note.did, ','), 'ran,surrendered,feinted,ran,killed',
+        'fa debrief: what he did, in order (the engine keeps each once)')
     -- an armed suspect never rolls a feint
     local ctx2, S2 = MakeCtx('flee_arrest', { mode = 'scatter', suspects = 1, armedShare = 1.0, feint = 0.5 },
         scatterLoc, { seed = 78 })

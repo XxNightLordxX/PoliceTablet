@@ -143,7 +143,7 @@ end
 local function Row(cid)
     return H.sql(
         [[SELECT bio, bio_pending, avatar_kind, avatar_value, avatar_pending, avatar_status, appearance, accent,
-        ui_scale, language, calls_muted FROM cp_officers WHERE citizenid = ?]], { cid })[1]
+        ui_scale, calls_muted FROM cp_officers WHERE citizenid = ?]], { cid })[1]
 end
 local function OfficerRow(cid, name, dept, xp, hide, callsign)
     H.sql(
@@ -334,10 +334,14 @@ do
     H.near(tonumber(Row('P1').ui_scale), 1.25, 1e-9, 'clamped to the maximum')
     Act('server:profile:set', 11, { uiScale = 0.1 })
     H.near(tonumber(Row('P1').ui_scale), 0.85, 1e-9, 'clamped to the minimum')
-    H.eq(select(2, Act('server:profile:set', 11, { language = 'de' })), 'err.language_invalid',
-        'English is the only language: no other code')
-    H.eq(Act('server:profile:set', 11, { language = false }), true, 'the language can only be cleared')
-    H.eq(P.languageFor('P1'), nil, 'no player language')
+    -- English only: a profile has no language (no column, no pref, no picker); a language field is ignored
+    H.eq(Act('server:profile:set', 11, { language = 'de' }), true, 'a language field saves nothing')
+    H.eq(P.prefsFor('P1').language, nil, 'and no pref carries a language')
+    H.eq(P.languageFor, nil, 'there is no per-player language')
+    local mig = io.open(H.root .. 'sql/migrations/004_profile.sql', 'r')
+    local sql = mig and mig:read('a') or ''
+    if mig then mig:close() end
+    H.ok(sql ~= '' and not sql:find('language', 1, true), 'cp_officers gets no language column')
     -- call mute survives a reconnect (it is stored on cp_officers)
     H.eq(Act('server:profile:set', 11, { callsMuted = true }), true, 'calls muted')
     P._resetCaches()

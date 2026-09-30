@@ -1,6 +1,7 @@
 // Officer UI · Profile & History (screen key 'profile', callback getProfile, actions server:setHideName and
 
 import { useState } from 'react';
+import { DecisionsBlock, PeopleBlock } from '../../hud/Debrief';
 import {
     Avatar,
     Badge,
@@ -247,6 +248,8 @@ export function RunBreakdown({ result: raw, cashStatus }: { result: RunResult; c
                     </div>
                 </div>
             ) : null}
+            {raw.decisions ? <DecisionsBlock decisions={raw.decisions} /> : null}
+            {raw.people ? <PeopleBlock people={raw.people} /> : null}
         </div>
     );
 }

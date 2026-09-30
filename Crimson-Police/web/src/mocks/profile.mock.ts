@@ -77,7 +77,7 @@ const state: {
     pending: null,
     bio: 'Night shift, Sandy Shores. Ask me about the Grapeseed chase.',
     bioPending: null,
-    prefs: { appearance: 'department', accent: null, uiScale: 1, language: null, callsMuted: false },
+    prefs: { appearance: 'department', accent: null, uiScale: 1, callsMuted: false },
     urlsLeft: 3,
 };
 

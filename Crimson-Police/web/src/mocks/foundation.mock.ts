@@ -4,7 +4,7 @@ import { emitDebug } from '../shared/nui';
 import type { RunResult } from '../shared/types';
 import { sampleResult } from './samples';
 
-// A completed Traffic Enforcement style run: level-up, a claimed mission call, a decision ledger and items.
+// A completed Traffic Enforcement style run: level-up, a claimed mission call, the debrief and items.
 export function parityResult(): RunResult {
     const base = sampleResult('completed');
     return {
@@ -21,7 +21,8 @@ export function parityResult(): RunResult {
                 verdict: 'best',
                 by: 'John Doe',
                 truth: 'stolen',
-                facts: ['stolen_plate'],
+                facts: ['stolen'],
+                factLog: [{ key: 'stolen', text: 'Plate comes back STOLEN', atS: 142 }],
                 points: 10,
                 discoverable: true,
                 knownAtS: 142,
@@ -34,7 +35,11 @@ export function parityResult(): RunResult {
                 verdict: 'wrong',
                 by: 'John Doe',
                 truth: 'intoxicated',
-                facts: ['odour'],
+                facts: ['intoxicated'],
+                factLog: [
+                    { key: 'id_ok', text: 'ID checked: licence valid', atS: 150 },
+                    { key: 'intoxicated', text: 'Strong odour of alcohol', atS: 180 },
+                ],
                 points: -15,
                 discoverable: true,
                 knownAtS: 180,
@@ -48,10 +53,15 @@ export function parityResult(): RunResult {
                 by: 'Maria Lopez',
                 truth: 'narcotics',
                 facts: [],
+                factLog: [],
                 points: 0,
                 discoverable: false,
                 knownAtS: null,
             },
+        ],
+        people: [
+            { contact: 'A', demeanour: 'nervous', did: ['ran', 'surrendered', 'cuffed'] },
+            { contact: 'B', demeanour: 'compliant', did: [] },
         ],
         progress: {
             xpBefore: 1120,

@@ -28,6 +28,7 @@ import {
     XpBadge,
     type TableColumn,
 } from '../../shared/components';
+import { DecisionsBlock, PeopleBlock } from '../../hud/Debrief';
 import { asArray } from '../../shared/data';
 import { fmtDateTime, formatDateTime, formatNumber } from '../../shared/format';
 import { useAction, useRequest } from '../../shared/hooks';
@@ -734,6 +735,8 @@ function Detail({ citizenid }: { citizenid: string }) {
                                             end: endLabel(d.endReason),
                                         })}
                                     </div>
+                                    {d.decisions ? <DecisionsBlock decisions={d.decisions} detail /> : null}
+                                    {d.people ? <PeopleBlock people={d.people} /> : null}
                                 </div>
                                 {d.status === 'open' && d.kind === 'failed' ? (
                                     <Row gap={2}>

@@ -669,6 +669,11 @@
     color: var(--cp-subtle);
 }
 
+/* the facts under a decision of the debrief */
+.cp-result__line.is-fact {
+    padding-left: 12px;
+}
+
 .cp-result__final {
     display: flex;
     align-items: baseline;

@@ -125,13 +125,13 @@ end
 -- ============================================================================
 --               THE CASE-FAIL CONFIRM (from an ox_target choice)
 -- ============================================================================
--- The choice was not decided: the tablet opens and the Contact panel asks "this will fail the case".
+-- The choice was not decided: the tablet opens on Active Mission and the Contact panel asks "this will fail the case".
 
 RegisterNetEvent('crimson-police:client:contactConfirm', function(data)
     if type(data) ~= 'table' or InForeignArena() then return end
     CreateThread(function()
         if CP.Tablet and CP.Tablet.isOpen and not CP.Tablet.isOpen() and CP.Tablet.open then
-            CP.Tablet.open('officer')
+            CP.Tablet.open('officer', { screen = 'active' })
         end
         if CP.Tablet and CP.Tablet.push then CP.Tablet.push('contactConfirm', data) end
     end)

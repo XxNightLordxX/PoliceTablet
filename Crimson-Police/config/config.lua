@@ -476,7 +476,7 @@ Config.Custody = {
         model = 'policet',
         driver = 's_m_y_cop_01',
         spawnDistance = { 150.0, 250.0 },
-        parkWithin = 60.0,
+        parkWithin = 60.0,           -- metres: with no transport point it parks anywhere this close to the scene
         leaveAfter = 60,             -- seconds after the objective that called it ends; called again if needed
     },
     tow = {                          -- the tow truck; enabled = false fades the car out instead

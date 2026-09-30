@@ -164,7 +164,6 @@
   "err.appearance_invalid": "Unknown appearance.",
   "err.accent_invalid": "That colour is not in your department's palette.",
   "err.accent_locked": "That colour unlocks at a higher level.",
-  "err.language_invalid": "That language is not available.",
   "err.report_self": "You can't report your own profile.",
   "err.report_too_long": "The details can be at most 140 characters.",
   "err.report_duplicate": "You already reported this profile today.",

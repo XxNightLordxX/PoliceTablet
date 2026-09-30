@@ -494,6 +494,8 @@ do
         H.eq(run.endState, 'completed', 'parking_patrol ' .. t.tier .. ': completed')
         H.eq(#(run.decisions or {}), 5, 'parking_patrol ' .. t.tier .. ': five decisions in the ledger')
         LedgerOk(run, 'parking_patrol ' .. t.tier)
+        H.eq(run.score.shared.vehicle_impounded, nil,
+            'parking_patrol ' .. t.tier .. ': vehicle_impounded is not on its card, so an impound records none')
     end
 end
 
@@ -748,6 +750,14 @@ do -- Stolen Vehicle Takedown: the stop hands off to a contact; the stolen car i
     for _, d in ipairs(run.decisions or {}) do
         if d.choice == 'impound' then H.eq(d.points, 0, 'svt: a revealed stolen plate earns no correct_disposition') end
     end
+    H.eq(run.score.shared.vehicle_impounded, 1, 'svt: the card bonus vehicle_impounded, once for the car')
+    local rr = H.findEvents('crimson-police:client:runEnded')
+    local points = rr[#rr] and rr[#rr].args[4] and rr[#rr].args[4].points or {}
+    local found = nil
+    for _, b in ipairs(points.bonuses or {}) do
+        if b.id == 'vehicle_impounded' then found = b end
+    end
+    H.eq(found and found.points, 10, 'svt: the result card pays vehicle_impounded +10')
 end
 
 do -- Warrant Service: the property search rolls finds (virtual evidence); nobody died: the scene completes at once

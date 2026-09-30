@@ -470,6 +470,42 @@ const disputes: DisputeView[] = [
         'A civilian drove through the scene and ran over one of the hostiles. We did not ask for any help.',
         5 * H,
     ),
+    dispute(
+        303,
+        1150,
+        'KLM44521',
+        'Ava Brooks',
+        '4A-07',
+        'Traffic Enforcement',
+        'patrol',
+        'Patrol',
+        'flagged',
+        'presence',
+        'I was at the car the whole stop; my partner ran the plate from the cruiser.',
+        3 * H,
+        {
+            decisions: [
+                {
+                    contact: 'A',
+                    kind: 'person',
+                    choice: 'cite',
+                    best: 'cite',
+                    verdict: 'best',
+                    by: 'Ava Brooks',
+                    truth: 'clean',
+                    facts: ['id_ok', 'clear'],
+                    factLog: [
+                        { key: 'id_ok', text: 'ID checked: licence valid', atS: 64 },
+                        { key: 'clear', text: 'No warrant', atS: 71 },
+                    ],
+                    points: 10,
+                    discoverable: true,
+                    knownAtS: 71,
+                },
+            ],
+            people: [{ contact: 'A', demeanour: 'compliant', did: [] }],
+        },
+    ),
 ];
 
 function dispute(

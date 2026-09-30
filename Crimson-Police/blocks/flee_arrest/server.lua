@@ -634,15 +634,28 @@ local function Placed(pts, order, i)
     return ToVec4(base, math.cos(a) * REUSE_OFFSET * lap, math.sin(a) * REUSE_OFFSET * lap)
 end
 
+-- The people debrief (CP.Runs.notePerson): only a person with a demeanour (rolled or fixed), and what they did.
+local DID_OF_STATE = { fleeing = 'ran', hostile = 'drew' }
+local PERSON_LABEL = { suspect = 'block.flee_arrest.person_suspect', inmate = 'block.flee_arrest.person_inmate' }
+
+local function Note(ctx, st, p, did)
+    local d = p.demeanour or (p.role == 'suspect' and st.demeanour) or nil
+    if not d or not (CP.Runs and CP.Runs.notePerson) then return end
+    local label = CP.L(PERSON_LABEL[p.role] or PERSON_LABEL.suspect, { n = p.n or 1 })
+    CP.Runs.notePerson(ctx.run, p.netId, { label = label, demeanour = d, did = did })
+end
+
 local function SetPed(ctx, st, p, state, extra)
     if p.state == state then return end
     p.state = state
+    if DID_OF_STATE[state] then Note(ctx, st, p, DID_OF_STATE[state]) end
     CP.Npc.setState(ctx.run, p.netId, state, extra)
     st.dirty = true
 end
 
 local function SurrenderPed(ctx, st, p)
     p.state = 'surrendered'
+    Note(ctx, st, p, 'surrendered')
     p.close, p.far = 0, 0
     p.surrenderedAt = Now()
     p.unwatched = 0
@@ -688,7 +701,16 @@ local function SpawnOne(ctx, st, role, point, armed, extra, holster)
     if holster then opts.weapon = nil end
     local ent, netId = ctx.spawnPed(opts)
     if not netId then return nil end
-    local p = { netId = netId, entity = ent, role = role, armed = armed == true, state = 'idle', far = 0, close = 0 }
+    local p = {
+        netId = netId,
+        entity = ent,
+        role = role,
+        n = st.counts[role] + 1,
+        armed = armed == true,
+        state = 'idle',
+        far = 0,
+        close = 0,
+    }
     if holster then p.weapon = weapon end
     st.peds[tostring(netId)] = p
     st.counts[role] = st.counts[role] + 1
@@ -954,6 +976,7 @@ end
 local function MarkCuffed(ctx, st, p)
     if p.state == 'cuffed' then return end
     p.state = 'cuffed'
+    Note(ctx, st, p, 'cuffed')
     p.far, p.close = 0, 0
     st.dirty = true
     if ctx.obj.custody == 'handover' and CP.Custody and CP.Custody.enableChain then
@@ -1028,6 +1051,7 @@ local function Watch(ctx, st, dt)
                 if p.role ~= 'associate' and moving and #list > 0 and near > esc.distance then
                     p.far = (p.far or 0) + dt
                     if p.far >= esc.seconds then
+                        Note(ctx, st, p, 'escaped')
                         Fail(ctx, st, 'block.flee_arrest.fail_escaped')
                         return
                     end
@@ -1043,6 +1067,7 @@ local function Watch(ctx, st, dt)
                         p.unwatched = (p.unwatched or 0) + dt
                         if p.unwatched >= after then
                             p.feinted = true
+                            Note(ctx, st, p, 'feinted')
                             SetPed(ctx, st, p, 'fleeing')
                             ctx.hud({ message = { text = CP.L('block.flee_arrest.msg_feint'), kind = 'warning' } })
                         end
@@ -1270,6 +1295,7 @@ local function OnEntityDead(ctx, netId, killerSrc)
     if not p or p.state == 'dead' then return end
     local prev = p.state
     p.state = 'dead'
+    Note(ctx, st, p, 'killed')
     st.dirty = true
     local protected
     if prev == 'cuffed' then

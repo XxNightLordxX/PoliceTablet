@@ -114,8 +114,8 @@ the baseline fails. `BASELINE_MAX` stops the baseline from growing.
 
 ## Deviations and gaps
 
-- **`vehicle_impounded` is never awarded.** It is on Stolen Vehicle Takedown's card, but field_contact
-  (WP2) does not award it yet.
+- **`vehicle_impounded`** (final review): field_contact records it, shared, for each car lawfully impounded
+  (an Impound graded Best or Acceptable) when the mission's card lists it, so Stolen Vehicle Takedown pays its +10.
 - **Not built, under the English-only decision:**
   - the CP.L → CP.Lt conversion of block HUD text;
   - the French and German HUD test;

@@ -540,6 +540,33 @@ do
     H.sql('UPDATE cp_mission_runs SET breakdown = JSON_REMOVE(breakdown, \'$.reason\') WHERE id = ?', { lb1Failed })
 end
 
+-- the debrief in Profile & History: the officer's own breakdown lists the decisions and the people, never a public
+-- one; Config.Decisions.debrief = false leaves them out of the officer's history (the row keeps them)
+do
+    local saved = H.sql('SELECT breakdown FROM cp_mission_runs WHERE id = ?', { lb1Failed })[1].breakdown
+    local bd = json.decode(saved)
+    bd.decisions = { { contact = 'A', kind = 'person', choice = 'release', verdict = 'ok', truth = 'clean' } }
+    bd.people = { { contact = 'A', demeanour = 'compliant', did = {} } }
+    H.sql('UPDATE cp_mission_runs SET breakdown = ? WHERE id = ?', { json.encode(bd), lb1Failed })
+    local function RunOf(p)
+        for _, x in ipairs(p.runs) do if x.id == lb1Failed then return x end end
+    end
+    local own = RunOf(Cb('getProfile', 11, nil).data)
+    H.eq(own.breakdown.decisions and #own.breakdown.decisions, 1, 'the own history lists the decisions')
+    H.eq(own.breakdown.people and #own.breakdown.people, 1, 'and the people')
+    local pub = RunOf(Cb('getProfile', 13, 'LB1').data)
+    H.eq(pub.breakdown.decisions, nil, 'never in a public breakdown')
+    H.eq(pub.breakdown.people, nil, 'nor the people')
+    Config.Decisions.debrief = false
+    own = RunOf(Cb('getProfile', 11, nil).data)
+    H.eq(own.breakdown.decisions, nil, 'debrief = false: the own history leaves the ledger out')
+    H.eq(own.breakdown.people, nil, 'and the people')
+    local staff = LB.profile({ citizenid = 'ADMIN1' }, 'LB1', { staff = true })
+    H.eq(RunOf(staff).breakdown.decisions and #RunOf(staff).breakdown.decisions, 1, 'staff still see the ledger')
+    Config.Decisions.debrief = true
+    H.sql('UPDATE cp_mission_runs SET breakdown = ? WHERE id = ?', { saved, lb1Failed })
+end
+
 -- cache: invalidate() while a board query is in flight -> that result is not cached
 do
     LB.invalidate()

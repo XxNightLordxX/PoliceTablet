@@ -96,3 +96,17 @@ Definitions: a value is **foreign** when `type(v) == 'table' and v.active == tru
     ox_target `crimson_arena_lobby`, tables/stashes `crimson_arena_*`. Crimson-Police uses `crimson-police:*`,
     `/CrimsonPolice`, `/CrimsonPoliceAdmin`, `crimsonpolice_*` key mappings, `crimson-police:*` target names,
     `cp_*` tables. If Crimson-Police ever listens to `crimson_arena:dispatch:enter/exit`, use AddEventHandler only.
+15. **Parity-plus features.** Every new way in gates on `CP.Alerts.inArena(src)` the same way:
+    - Police actions (`server:custody`, `server:contactDecide`) and process_scene steps are refused for an
+      in-arena participant; a person being escorted by an officer who enters the arena stops and waits where they are.
+      The service-vehicle driver (transport van, tow truck, coroner van) is never an in-arena src; the AI moves on.
+    - A mission-call claim runs every accept check, so it is refused with `err.in_arena`; the client drops a call
+      toast while its own value is foreign. A unit ready check is cancelled when a member enters the arena, and the
+      last Ready re-checks every member.
+    - `getSession` refuses every way into the tablet with `err.in_arena`; mission desks (ox_target box zones) are
+      removed on a foreign value and created again when it clears.
+    - Item rewards are never given in the arena: the reward waits in the Rewards locker and is retried 10 s after the
+      `arena:exited` hook, which CP.Alerts' 1 s reconcile fires once when `inArena(src)` turns false (flag cleared,
+      or the bucket back to 0). Rewards carry `cpReward` and never `cpItem`, so rule 4's sweep leaves them alone; the
+      optional evidence item carries `{ cpRun, cpItem = true }` and is removed with the other mission items. The
+      forbidden reward names include rule 4's `armour`, `bandage`, `ammo-*` and `weapon_*`, matched case-insensitively.

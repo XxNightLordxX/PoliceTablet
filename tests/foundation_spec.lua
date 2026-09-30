@@ -649,6 +649,65 @@ do
 end
 
 do
+    -- the debrief: every fact the decider had (text and time), and the people's demeanour and what they did,
+    -- only in the result of a run that ended; Config.Decisions.debrief = false keeps them off the officer's card
+    local run = StartedRun({ 1, 2, 3 })
+    local _, a = Runs.spawnPed(run,
+        { obj = 1, model = 'a_m_y_stbla_01', coords = vec4(103, 101, 30, 0), role = 'suspect' })
+    H.ok(Runs.notePerson(run, a, { label = 'A', demeanour = 'nervous' }), 'notePerson')
+    Runs.notePerson(run, a, { did = 'ran' })
+    Runs.notePerson(run, a, { did = 'ran' })
+    Runs.notePerson(run, a, { did = 'nonsense' })
+    Runs.notePerson(run, a, { did = 'surrendered' })
+    Runs.notePerson(run, 9999, { label = 'B', demeanour = 'compliant' })
+    H.ok(not Runs.notePerson(run, 0, { label = 'C' }), 'a bad net id is refused')
+    Runs.decide(run, 1, {
+        contact = 'A',
+        kind = 'person',
+        choice = 'arrest',
+        verdict = 'best',
+        truthKey = 'warrant',
+        bestChoice = 'arrest',
+        facts = { 'warrant' },
+        factLog = { { key = 'warrant', text = 'Active warrant', at = run.startedAt + 42 } },
+        netId = a,
+    })
+    H.eq(run.decisions[1].factLog[1].text, 'Active warrant', 'the fact log keeps each fact\'s text')
+    H.eq(run.decisions[1].factLog[1].atS, 42, 'and when it reached the decider (seconds into the run)')
+    fired = {}
+    Runs.removeParticipant(run, 3, 'quit')
+    local early = nil
+    for _, f in ipairs(fired) do if f.name == 'row:settled' then early = f.args[5] end end
+    H.ok(early ~= nil, 'the leaver\'s row is settled')
+    H.eq(early and early.people, nil, 'a participant who leaves before the end never gets the people')
+    fired = {}
+    H.reset()
+    Config.Decisions.debrief = false
+    Runs.objectiveComplete(run, 1)
+    Runs.objectiveComplete(run, 2)
+    Config.Decisions.debrief = true
+    H.eq(run.state, 'ended', 'completed')
+    local rr = nil
+    for _, f in ipairs(fired) do if f.name == 'row:settled' then rr = f.args[5] end end
+    H.eq(rr and rr.people and #rr.people, 2, 'RunResult.people once the run has ended')
+    H.eq(rr.people[1].contact, 'A', 'in the order they were noted')
+    H.eq(rr.people[1].demeanour, 'nervous', 'with the demeanour')
+    H.eq(table.concat(rr.people[1].did, ','), 'ran,surrendered', 'and what they did, each once, known ones only')
+    H.eq(#rr.people[2].did, 0, 'nothing done: complied')
+    local row = RowOf(run.id, 'FND1')
+    local bd = cjson.decode(row.breakdown)
+    H.eq(bd.people and #bd.people, 2, 'the stored breakdown keeps the people (disputes)')
+    H.eq(bd.decisions and #bd.decisions, 1, 'and the ledger')
+    local sent = nil
+    for _, e in ipairs(H.findEvents('crimson-police:client:runEnded')) do
+        if e.target == 1 then sent = e.args[4] end
+    end
+    H.ok(sent ~= nil, 'the result card is sent')
+    H.eq(sent and #sent.decisions, 0, 'debrief = false: the officer\'s card has no ledger')
+    H.eq(sent and sent.people, nil, 'and no people')
+end
+
+do
     -- medal: 1 gold, 2 silver, 3 bronze from the medal awards (the best one), NULL without one
     local run = StartedRun({ 1, 2, 3 })
     Runs.award(run, 'medal_bronze', { src = 1 })
@@ -1487,7 +1546,7 @@ do
     H.eq(s.prefs.accent, '#4cc9f0', 'prefs.accent')
     H.eq(s.prefs.uiScale, 1.1, 'prefs.uiScale')
     H.eq(s.prefs.callsMuted, true, 'prefs.callsMuted')
-    H.eq(s.prefs.language, nil, 'no language set')
+    H.eq(s.prefs.language, nil, 'English only: no per-player language')
     H.eq(s.access.via, 'desk', 'access.via')
     H.eq(s.access.desk, 2, 'access.desk')
     local c = s.config
@@ -1495,8 +1554,7 @@ do
     H.eq(#c.dispatch.areas, #Config.MissionCalls.areas, 'config.dispatch.areas')
     H.eq(c.dispatch.areas[1].key, 'south_ls', 'area keys')
     H.eq(#c.leaderboardMetrics, #Config.Leaderboard.metrics, 'config.leaderboardMetrics')
-    H.eq(#c.languages, 1, 'one language')
-    H.eq(c.languages[1].code, 'en', 'English')
+    H.eq(c.languages, nil, 'English only: no language list')
     H.eq(c.profile.bioMax, Config.Profile.bioMax, 'config.profile.bioMax')
     H.eq(#c.profile.presets, #Config.Profile.avatarPresets, 'profile presets')
     H.eq(c.profile.urls, false, 'avatar links off')

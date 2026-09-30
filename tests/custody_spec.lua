@@ -804,6 +804,31 @@ do
     Runs.endRun(run, 'completed', 'completed')
 end
 
+do -- the prisoner van parks within Config.Custody.transport.parkWithin of the scene; a placed point is exact
+    W.roadPoint = RoadNear(200.0)
+    local run = HoldRun({ 1 })
+    W.place(1, 505.0, 500.0, 30.0)
+    local scene = vec3(500.0, 500.0, 30.0)
+    local van = Custody.serviceVehicle(run, 'transport', scene, { obj = 1 })
+    local pointVan = Custody.serviceVehicle(run, 'transport', scene, { obj = 1, point = vec4(520.0, 500.0, 30.0, 0.0) })
+    local coroner = Custody.serviceVehicle(run, 'coroner', scene, { obj = 1 })
+    W.tick(2)
+    H.eq(van.status, 'coming', 'the van drives in')
+    local within = Config.Custody.transport.parkWithin
+    for _, s in ipairs({ van, pointVan, coroner }) do
+        local m = W.model(run, s.veh)
+        m.coords = vec3(s.dest.x + within - 20.0, s.dest.y, s.dest.z)
+        m.speed = 0.0
+    end
+    W.tick(1)
+    H.eq(van.status, 'parked', 'no transport point: stopped within parkWithin of the scene counts as parked')
+    H.ok(not van.placed, 'driven there, never placed')
+    H.eq(pointVan.status, 'coming', 'a transport point is exact: 40 m from it is not parked yet')
+    H.eq(coroner.status, 'coming', 'the coroner van parks at its point (parkWithin is the prisoner van\'s)')
+    W.roadPoint = nil
+    Runs.endRun(run, 'completed', 'completed')
+end
+
 -- ============================================================================
 --                                 10. IMPOUND
 -- ============================================================================
@@ -1167,6 +1192,17 @@ do
     H.ok(p.evading, 'running from a lawful frisk makes them Evading')
     H.eq(Custody.grade(run, p.netId, 'arrest', 1).verdict, 'best', 'Arrest is Best')
     H.eq(Custody.grade(run, p.netId, 'cite', 1).verdict, 'ok', 'Cite is Acceptable')
+    -- the debrief: the demeanour and what they did; the ledger keeps the text of each fact the decider had
+    Custody.onCuffed(run, p.netId, 1)
+    local e = run.people and run.people[p.netId]
+    H.eq(e and e.label, p.label, 'the person is in the debrief under the contact label')
+    H.eq(e and e.demeanour, 'nervous', 'with the demeanour')
+    H.eq(e and table.concat(e.did, ','), 'ran,cuffed', 'and what they did: ran, then cuffed')
+    local entry = Custody.grade(run, p.netId, 'arrest', 1, GetGameTimer())
+    local texts = {}
+    for _, f in ipairs(entry.factLog or {}) do texts[#texts + 1] = f.text end
+    H.ok(#texts > 0 and #texts == #entry.facts, 'every fact the decider had is in the fact log')
+    H.ok(table.concat(texts, '|'):find('Ran from the officers', 1, true) ~= nil, 'as its text')
     Runs.endRun(run, 'completed', 'completed')
 end
 

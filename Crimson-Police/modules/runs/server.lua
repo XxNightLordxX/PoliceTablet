@@ -1934,11 +1934,38 @@ local function DecisionsView(run)
             by = d.by,
             truth = d.truth,
             facts = U.copy(d.facts or {}),
+            factLog = d.factLog and U.copy(d.factLog) or nil,
             points = d.points,
             discoverable = d.discoverable,
             knownAtS = d.knownAtS,
         }
     end
+    return out
+end
+
+-- The people debrief as RunResult.people (DebriefPerson, web/src/types/run_ui.ts): each person's demeanour and
+-- what they did, in the order they were first noted. Only once the run has ended, so a participant who leaves
+-- early never learns anything about a person still in play.
+local function PeopleView(run)
+    if run.state ~= 'ended' or type(run.people) ~= 'table' then return nil end
+    local list = {}
+    for _, e in pairs(run.people) do list[#list + 1] = e end
+    if #list == 0 then return nil end
+    table.sort(list, function(a, b) return a.order < b.order end)
+    local out = {}
+    for _, e in ipairs(list) do
+        out[#out + 1] = { contact = e.label, demeanour = e.demeanour, did = U.copy(e.did) }
+    end
+    return out
+end
+
+-- Config.Decisions.debrief = false: the officer's result card leaves the ledger and the people out (the stored
+-- breakdown keeps them for disputes).
+local function ForOfficer(rr)
+    if type(rr) ~= 'table' or not (Config.Decisions and Config.Decisions.debrief == false) then return rr end
+    local out = {}
+    for k, v in pairs(rr) do out[k] = v end
+    out.decisions, out.people = {}, nil
     return out
 end
 
@@ -2044,6 +2071,7 @@ local function Settle(run, p, result, endReason, others)
         flagged = flag and { reason = tostring(flag.reason or 'flagged') } or nil,
         failReason = (endReason == 'mission_failed' and run.failReason) or nil,
         decisions = DecisionsView(run),
+        people = PeopleView(run),
         stats = StatsOf(run, p),
         missionCall = MissionCallView(run, p),
         progress = nil,
@@ -2788,6 +2816,24 @@ function Runs.noteArrest(run, src, netId)
     return true
 end
 
+-- entry.factLog = { { key, text, at } } (at = os.time() the fact reached the decider): kept as
+-- { key, text, atS } with atS in seconds from the start of the run, for the debrief and disputes.
+local function FactLog(run, log)
+    if type(log) ~= 'table' then return nil end
+    local out = {}
+    for _, f in ipairs(log) do
+        if type(f) == 'table' and type(f.key) == 'string' and #out < 24 then
+            local at = tonumber(f.at)
+            out[#out + 1] = {
+                key = f.key,
+                text = type(f.text) == 'string' and U.clip(f.text, 160) or f.key,
+                atS = at and run.startedAt and math.max(0, math.floor(at - run.startedAt)) or nil,
+            }
+        end
+    end
+    return out
+end
+
 -- A graded disposition (CP.Custody grades; the engine records). entry = { contact, kind, choice, verdict,
 -- bonusId, points, truthKey, bestChoice, facts, discoverable, knownAt, failKey, netId }. The bonus or
 -- penalty is personal to the decider; points = 0 records the grade without points (a revealed fact, a
@@ -2813,6 +2859,7 @@ function Runs.decide(run, src, entry)
         bySrc = src,
         truth = tostring(entry.truthKey or ''),
         facts = type(entry.facts) == 'table' and U.copy(entry.facts) or {},
+        factLog = FactLog(run, entry.factLog),
         points = math.floor(value or 0),
         discoverable = entry.discoverable ~= false,
         knownAtS = entry.knownAt and run.startedAt and math.max(0, math.floor(Num(entry.knownAt, 0) - run.startedAt))
@@ -2835,6 +2882,41 @@ function Runs.decide(run, src, entry)
     CP.log(TAG, 'run %s: %s decided %s for %s (%s)', run.id, tostring(src), rec.choice, rec.contact, verdict)
     if verdict == 'critical' then
         Runs.failRun(run, type(entry.failKey) == 'string' and entry.failKey or 'reason.known_error')
+    end
+    return true
+end
+
+local PERSON_DID = {
+    walked_away = true,
+    ran = true,
+    drew = true,
+    surrendered = true,
+    feinted = true,
+    cuffed = true,
+    escaped = true,
+    killed = true,
+}
+
+-- The people debrief: a person's label and demeanour (patch.label, patch.demeanour) and what they did
+-- (patch.did, one of PERSON_DID; each once, in order). Server-only until the run ends (RunResult.people).
+function Runs.notePerson(run, netId, patch)
+    if type(run) ~= 'table' or run.state == 'ended' or type(patch) ~= 'table' then return false end
+    netId = math.tointeger(tonumber(netId) or -1)
+    if not netId or netId <= 0 then return false end
+    run.people = run.people or {}
+    run.peopleN = run.peopleN or 0
+    local e = run.people[netId]
+    if not e then
+        run.peopleN = run.peopleN + 1
+        e = { order = run.peopleN, label = '?', demeanour = nil, did = {}, seen = {} }
+        run.people[netId] = e
+    end
+    if type(patch.label) == 'string' and patch.label ~= '' then e.label = U.clip(patch.label, 40) end
+    if type(patch.demeanour) == 'string' and patch.demeanour ~= '' then e.demeanour = patch.demeanour end
+    local did = patch.did
+    if type(did) == 'string' and PERSON_DID[did] and not e.seen[did] then
+        e.seen[did] = true
+        e.did[#e.did + 1] = did
     end
     return true
 end
@@ -2903,7 +2985,7 @@ function Runs.removeParticipant(run, src, endReason, opts)
     -- Result, row, payment, hooks.
     local rowId, rr = Settle(run, p, result, endReason, others)
     if not opts.silent then
-        TriggerClientEvent(CP.e('client:runEnded'), src, run.id, result, endReason, rr)
+        TriggerClientEvent(CP.e('client:runEnded'), src, run.id, result, endReason, ForOfficer(rr))
         local key = opts.notify
         if key then Notify(src, 'warning', key) end
     else
@@ -2986,7 +3068,7 @@ function Runs.endRun(run, state, endReason)
         local others = {}
         for _, s in ipairs(finals) do if s ~= src then others[#others + 1] = s end end
         local _, rr = Settle(run, p, state, endReason, others)
-        TriggerClientEvent(CP.e('client:runEnded'), src, run.id, state, endReason, rr)
+        TriggerClientEvent(CP.e('client:runEnded'), src, run.id, state, endReason, ForOfficer(rr))
         PushNone(src)
     end
     AfterRunEnded(run, state)

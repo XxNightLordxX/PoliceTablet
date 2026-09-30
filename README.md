@@ -1,7 +1,7 @@
 # PoliceTablet
 
-**Crimson-Police**: a Qbox police tablet with random NPC missions, cash payouts, leaderboards, a
-department challenge and a Mission Builder.
+**Crimson-Police**: a Qbox police tablet with random NPC missions, tablet-only mission calls, police actions
+and graded decisions, cash payouts, leaderboards, a department challenge and a Mission Builder.
 
 - `Crimson-Police/`: the FiveM resource. Install instructions are in `Crimson-Police/README.md`.
 - Database off: `Config.Database.enabled = false` saves all data as JSON files in `Crimson-Police/saves/` instead of MySQL/MariaDB.
@@ -9,6 +9,8 @@ department challenge and a Mission Builder.
 - `docs/ARCHITECTURE.md`: module APIs, run model, block interface, events and NUI protocol.
 - `docs/INTEGRATIONS.md`: verified facts about the dependency resources.
 - `docs/CRIMSON_ARENA.md`: rules for running alongside Crimson-Arena.
+- `docs/notes/`: what each part of the build added, with its API and any deviation from the design (the
+  parity-plus packages: foundation, custody, missions_c, missioncalls, teams, profile, boards, rewards, access).
 - `tests/`: Lua unit, SQL and end-to-end tests (`lua5.4 tests/run.lua`; needs a local MariaDB).
 - `tools/check_contracts.py`: static cross-checks of module calls, events, NUI names and locale keys.
 - `tools/lint_fivem.py`: FiveM pitfall rules (natives on the wrong side, late `source`, raising callbacks, orphan

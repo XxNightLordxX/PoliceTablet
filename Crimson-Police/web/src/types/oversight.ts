@@ -2,6 +2,7 @@
 // header comments of those modules and in docs/notes/oversight.md.
 
 import type { LiveRun, Logo, Theme } from '../shared/types';
+import type { DebriefPerson, DecisionEntry } from './run_ui';
 
 // ============================================================================
 //                                getMissionList
@@ -127,6 +128,9 @@ export interface DisputeView {
     handledAt: number | null;
     runAt: number;
     canHandle: boolean;
+    // The disputed row's debrief (the decision ledger with each fact's time, and the people), when it has one.
+    decisions?: DecisionEntry[] | null;
+    people?: DebriefPerson[] | null;
 }
 export interface ReviewQueueData {
     flagged: FlaggedRow[];

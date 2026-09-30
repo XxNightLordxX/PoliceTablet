@@ -162,8 +162,8 @@ triggers, cancels or answers a police:* event. `ScPolice.onImpound(src, netId) -
 
 ## Deviations and notes for later packages
 
-- The case-fail confirm from an ox_target choice opens the tablet on its default screen (CP.Tablet.open has no screen
-  argument; WP8 owns it): the confirm shows on Active Mission, and the HUD card says to confirm there.
+- The case-fail confirm from an ox_target choice opens the tablet on Active Mission (CP.Tablet.open's `screen`
+  option, final review); an already open tablet keeps its screen, and the HUD card says to confirm there.
 - Tablet decisions have no progress bar; they need the officer within 25 m of the contact.
 - The mission-call line shows the response target and the arrival time only: the view carries no time since the claim
   for a live countdown (WP8 may add one to CP.Runs.view).

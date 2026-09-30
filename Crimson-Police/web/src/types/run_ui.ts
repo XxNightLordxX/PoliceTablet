@@ -81,7 +81,8 @@ export interface ActiveMissionData extends ActiveMissionView {
 // ============================================================================
 
 // One graded disposition of the decision ledger. discoverable: whether the truth was lawfully findable;
-// knownAtS: when the deciding fact reached the decider (seconds from the start).
+// knownAtS: when the deciding fact reached the decider (seconds from the start); factLog: every fact the decider
+// had when choosing, as text, with when it reached them (older rows lack it).
 export interface DecisionEntry {
     contact: string;
     kind: 'person' | 'vehicle';
@@ -91,9 +92,22 @@ export interface DecisionEntry {
     by: string;
     truth: string;
     facts: string[];
+    factLog?: DecisionFact[];
     points: number;
     discoverable: boolean;
     knownAtS: number | null;
+}
+export interface DecisionFact {
+    key: string;
+    text: string;
+    atS: number | null;
+}
+// The people debrief: each person with a demeanour, and what they did (walked_away, ran, drew, surrendered,
+// feinted, cuffed, escaped, killed; empty = stayed and complied). Only in the result of a run that ended.
+export interface DebriefPerson {
+    contact: string;
+    demeanour: string | null;
+    did: string[];
 }
 // XP before and after this row, the level, a level-up and the goals (pending = XP waits for a review).
 export interface RunProgress {

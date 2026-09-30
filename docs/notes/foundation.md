@@ -4,15 +4,15 @@ What WP1 added for every later package: migrations 003–006, CP.Hooks, CP.Lt to
 adoption, hidden spawns, reserved plates, held bodies and removed vehicles, the XP curve, mission tweaks, NPC
 difficulty and the new Session fields. WP9 copies the API rows below into docs/ARCHITECTURE.md.
 
-English is the only language in this build: CP.Lt tokens resolve in the server language, getSession lists English
-only, and no per-player language exists.
+English is the only language in this build: CP.Lt tokens resolve in the server language, and no per-player language
+exists (no column, pref, language list or picker; the final review removed the inert language field).
 
 ## Data (sql/migrations, both storage modes)
 
 | File | Adds |
 |---|---|
 | 003_run_stats.sql | cp_mission_runs and cp_mission_runs_archive (same order, for the retention job's `INSERT ... SELECT *`): location_index, arrests, citations, impounds, rescues, vehicles_stopped, evidence, decisions_ok, decisions_bad, decisions_best, lethal, medal, mission_call_id, response_s; indexes idx_location and idx_call |
-| 004_profile.sql | cp_officers: bio, avatar_kind, avatar_value, avatar_pending, avatar_status, avatar_reviewed_by, appearance, accent, ui_scale, language, profile_updated_at, calls_muted, bio_pending; tables cp_profile_reports and cp_commendations |
+| 004_profile.sql | cp_officers: bio, avatar_kind, avatar_value, avatar_pending, avatar_status, avatar_reviewed_by, appearance, accent, ui_scale, profile_updated_at, calls_muted, bio_pending; tables cp_profile_reports and cp_commendations |
 | 005_mission_calls.sql | cp_mission_calls |
 | 006_item_rewards.sql | cp_item_rewards (unique key uq_reward) |
 
@@ -85,7 +85,7 @@ NUI; the 'adopt' action calls the new objective's client half `adopt(ctx, netId,
 - CP.Goals: stat goals (`stat = 'arrests'` …) sum that column over completed rows; missionCall goals count rows with a
   mission_call_id. (Bounties most_arrests and most_calls still count completed runs until WP6.)
 - CP.Tablet getSession: officer.avatar, officer.level, prefs, access { via, desk }, config.dispatch,
-  leaderboardMetrics, languages (English), profile, commendationKinds, rewards, format.
+  leaderboardMetrics, profile, commendationKinds, rewards, format.
 
 ## Web
 

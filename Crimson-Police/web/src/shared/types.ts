@@ -2,7 +2,7 @@
 // its shapes from here; never redeclare them locally. If a module owner adds a field on the Lua side, add it here
 // (optional) rather than casting.
 
-import type { DecisionEntry, RunItem, RunMissionCall, RunProgress, RunStats } from '../types/run_ui';
+import type { DebriefPerson, DecisionEntry, RunItem, RunMissionCall, RunProgress, RunStats } from '../types/run_ui';
 
 // ============================================================================
 //                                 §9.2 SESSION
@@ -31,7 +31,6 @@ export interface Prefs {
     appearance: string;
     accent: string | null;
     uiScale: number;
-    language: string | null;
     callsMuted: boolean;
 }
 
@@ -80,7 +79,6 @@ export interface Session {
         // parity-plus config values (modules/tablet getSession)
         dispatch?: { enabled: boolean; areas: { key: string; label: string }[] };
         leaderboardMetrics?: string[];
-        languages?: { code: string; label: string }[];
         profile?: {
             bioMax: number;
             bioLines: number;
@@ -348,6 +346,7 @@ export interface RunResult {
     flagged: null | { reason: string };
     // parity-plus sections (each shown only when present; older rows lack them)
     decisions?: DecisionEntry[];
+    people?: DebriefPerson[] | null;
     progress?: RunProgress | null;
     stats?: RunStats;
     missionCall?: RunMissionCall | null;

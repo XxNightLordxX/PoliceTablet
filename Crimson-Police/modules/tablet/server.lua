@@ -284,7 +284,6 @@ local function ExtraConfig(deptKey)
     return {
         dispatch = { enabled = mc.enabled ~= false, areas = areas },
         leaderboardMetrics = metrics,
-        languages = { { code = 'en', label = 'English' } },
         profile = ProfileConfig(deptKey),
         commendationKinds = kinds,
         rewards = { enabled = Config.Rewards and Config.Rewards.enabled == true or false },
@@ -308,7 +307,7 @@ local function ReadProfile(citizenid)
     if type(citizenid) ~= 'string' or citizenid == '' then return nil end
     if CP.Migrations and CP.Migrations.ready then CP.Migrations.ready() end
     local ok, row = pcall(MySQL.single.await, [[
-        SELECT xp, avatar_kind, avatar_value, avatar_status, appearance, accent, ui_scale, language, calls_muted
+        SELECT xp, avatar_kind, avatar_value, avatar_status, appearance, accent, ui_scale, calls_muted
         FROM cp_officers WHERE citizenid = ?
     ]], { citizenid })
     if not ok then
@@ -364,7 +363,6 @@ local function PrefsOf(row)
         appearance = row and type(row.appearance) == 'string' and row.appearance or DEFAULT_APPEARANCE,
         accent = row and CP.U.isHexColour(row.accent) and row.accent:lower() or nil,
         uiScale = uiScale,
-        language = row and type(row.language) == 'string' and row.language or nil,
         callsMuted = row ~= nil and CP.U.truthy(row.calls_muted) or false,
     }
 end

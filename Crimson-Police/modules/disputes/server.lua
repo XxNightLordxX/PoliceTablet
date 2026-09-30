@@ -225,12 +225,22 @@ local VIEW_SQL = [[SELECT d.id, d.run_id, d.citizenid, d.reason, d.goes_to, d.st
   r.run_uuid, r.department, r.mission_type, r.mission_id, r.state, r.end_reason, r.tier, r.participants,
   r.final_points, r.cash_status, r.flagged, r.voided, r.flag_reason,
   JSON_VALUE(r.breakdown, '$.cash.amount') AS cash_amount, UNIX_TIMESTAMP(r.created_at) AS run_ts,
-  o.display_name, o.callsign
+  r.breakdown, o.display_name, o.callsign
   FROM cp_disputes d
   JOIN cp_mission_runs r ON r.id = d.run_id
   LEFT JOIN cp_officers o ON o.citizenid = d.citizenid]]
 
+-- The debrief of the disputed row (the decision ledger with each fact's time, and the people), when it has one.
+local function DebriefOf(r)
+    local bd = U.jsonField(r.breakdown)
+    if type(bd) ~= 'table' then return nil, nil end
+    local decisions = type(bd.decisions) == 'table' and #bd.decisions > 0 and bd.decisions or nil
+    local people = type(bd.people) == 'table' and #bd.people > 0 and bd.people or nil
+    return decisions, people
+end
+
 local function ViewOf(r, viewerCitizenid)
+    local decisions, people = DebriefOf(r)
     local kind
     if r.goes_to == 'admin' then
         kind = 'failed'
@@ -271,6 +281,8 @@ local function ViewOf(r, viewerCitizenid)
         handledAt = tonumber(r.handled_ts) and math.floor(tonumber(r.handled_ts)) or nil,
         runAt = math.floor(Num(r.run_ts, 0)),
         canHandle = r.status == 'open' and (viewerCitizenid == nil or viewerCitizenid ~= r.citizenid),
+        decisions = decisions,
+        people = people,
     }
 end
 

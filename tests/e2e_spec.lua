@@ -363,11 +363,12 @@ end -- start threads (mission loader, hooks, payouts cache)
 
 -- The unit ready check (tests/teams_spec.lua covers it): here every member answers Ready at once, as each
 -- officer tapping Ready on the tablet would.
+local autoReady = true   -- false: the members answer themselves (scenario 16)
 do
     local realCheck = CP.Units.readyCheck
     CP.Units.readyCheck = function(unit, typeKey, onReady, onCancel)
         local started = realCheck(unit, typeKey, onReady, onCancel)
-        if started then
+        if started and autoReady then
             for _, m in ipairs(CP.U.copy(unit.members)) do
                 if m ~= unit.leader then H.fire('crimson-police:server:unitReady', m, { accepted = true }) end
             end
@@ -1669,6 +1670,961 @@ do
     H.ok((Runs.cooldowns(CID[7]).types.patrol or 0) > os.time(), 'the type cooldown applies')
     Config.Events.modifierChance = chance
     Config.DisabledMissions = {}
+end
+
+-- ============================================================================
+--                       PARITY-PLUS: NATIVES AND HELPERS
+-- ============================================================================
+-- Seats, NPC vehicles and speeds on the e2e entity table (the stops and the custody chain need them), and the
+-- helpers the parity-plus scenarios share. Every run below is drawn through the real accept with its pool
+-- narrowed to one mission and one location, and gets a fixed seed right after the accept (before its
+-- objectives roll anything), so no check depends on a random value.
+
+do
+    local seatOf, vehicleOf = _G.GetPedInVehicleSeat, _G.GetVehiclePedIsIn
+    _G.SetPedIntoVehicle = function(ped, veh, seat)
+        local pe, ve = ents[ped], ents[veh]
+        if not pe or not ve then return end
+        local old = pe.vehicle and ents[pe.vehicle]
+        if old and old.seats then for s, occ in pairs(old.seats) do if occ == ped then old.seats[s] = nil end end end
+        ve.seats = ve.seats or {}
+        ve.seats[seat] = ped
+        pe.vehicle = veh
+        pe.coords = ve.coords
+    end
+    _G.GetPedInVehicleSeat = function(veh, seat)
+        local e = ents[veh]
+        if e and e.seats and e.seats[seat] then return e.seats[seat] end
+        return seatOf(veh, seat)
+    end
+    _G.GetVehiclePedIsIn = function(ped, last)
+        local e = ents[ped]
+        if e then return e.vehicle or 0 end
+        return vehicleOf(ped, last)
+    end
+    _G.GetEntitySpeed = function(e) return ents[e] and ents[e].speed or 0.0 end
+    _G.IsPedRagdoll = function(e) return ents[e] ~= nil and ents[e].ragdoll == true end
+    _G.ClearPedTasksImmediately = function() end
+end
+
+local PX = {}
+local PX_TYPES = {
+    patrol = { 'beat_patrol', 'business_check', 'street_race_bust', 'parking_patrol', 'traffic_enforcement' },
+    investigation = { 'warrant_service', 'manhunt', 'suspicious_activity' },
+    tactical = {
+        'gang_shootout',
+        'hostage_rescue',
+        'bomb_disposal',
+        'armored_truck_escort',
+        'prison_break',
+        'drug_lab_raid',
+        'gang_hideout_raid',
+    },
+}
+
+-- New officers for these scenarios, so no earlier cooldown, cap or flag reaches them.
+for i, spec in ipairs({
+    { 'Nia', 'sast' },
+    { 'Oli', 'fib' },
+    { 'Pam', 'sast' },
+    { 'Quin', 'fib' },
+    { 'Rae', 'sast' },
+    { 'Sol', 'sast' },
+    { 'Tam', 'fib' },
+    { 'Uma', 'sast' },
+    { 'Vic', 'fib' },
+    { 'Wes', 'sast' },
+    { 'Xan', 'fib' },
+    { 'Yul', 'sast' },
+    { 'Zed', 'fib' },
+    { 'Abe', 'sast' },
+}) do
+    local src = 20 + i
+    AddPlayer(src, ('E2EPX%03d'):format(src), spec[1], 'Officer', spec[2], 1)
+    CID[src] = PD[src].citizenid
+end
+
+-- The pool of missionType is missionId only, and the mission has one location, for the next accept.
+function PX.only(missionId)
+    local out = {}
+    for _, list in pairs(PX_TYPES) do
+        for _, id in ipairs(list) do if id ~= missionId then out[#out + 1] = id end end
+    end
+    Config.DisabledMissions = out
+    local def = CP.Missions.get(missionId)
+    PX.saved = { def = def, locations = def.locations }
+    def.locations = { def.locations[1] }
+    return def
+end
+
+function PX.restore()
+    if PX.saved then PX.saved.def.locations = PX.saved.locations end
+    PX.saved = nil
+    Config.DisabledMissions = {}
+end
+
+-- Accept missionType as src (a unit's leader), then fix the run's seed before any objective rolls.
+function PX.accept(src, missionType, seed)
+    local ok, data = Act('server:acceptType', src, missionType)
+    H.eq(ok, true, ('%s accepts %s: %s'):format(CID[src], missionType, tostring(data)))
+    local run = Runs.getBySrc(src)
+    if run then run.seed = seed end
+    return run
+end
+
+function PX.arriveAll(run, srcs)
+    for i, s in ipairs(srcs) do
+        local c = run.location.start.coords
+        Place(s, vec3(c.x + (i - 1) * 2.0, c.y, c.z))
+    end
+    Secs(2)
+end
+
+function PX.obj(run, i) return run.objectives[i or run.objectiveIndex] end
+function PX.st(run, i) return (CP.Runs.ctx(run, i or run.objectiveIndex) or {}).state end
+function PX.ent(run, netId)
+    local e = run.entities[netId]
+    return e and ents[e.entity]
+end
+function PX.at(run, netId)
+    local m = PX.ent(run, netId)
+    return m and m.coords or nil
+end
+
+-- src (and the partners, 2 m apart, so presence always holds) next to a point.
+function PX.go(srcs, c, off)
+    if type(srcs) ~= 'table' then srcs = { srcs } end
+    for i, s in ipairs(srcs) do Place(s, vec3(c.x + (off or 1.0) + (i - 1) * 2.0, c.y, c.z)) end
+end
+function PX.near(srcs, run, netId, off)
+    local c = PX.at(run, netId)
+    if c then PX.go(srcs, c, off) end
+end
+
+-- The custody event (4 per 2 s per player): keep one player's calls apart.
+local pxLastEvent = {}
+local function PxSpace(src)
+    local t = pxLastEvent[src]
+    if t and H.clockMs - t < 600 then Adv(600 - (H.clockMs - t), 100) end
+end
+function PX.act(src, run, netId, action, extra)
+    local key = action == 'runPlateFromVehicle' and 'runPlate' or action
+    local t = tonumber(Config.Custody.times[key]) or 0
+    PxSpace(src)
+    H.fire('crimson-police:server:custody', src, run.id, netId, action, 'begin', extra)
+    Adv(math.floor(t * 1000) + 100, 100)
+    H.fire('crimson-police:server:custody', src, run.id, netId, action, 'finish', extra)
+    pxLastEvent[src] = H.clockMs
+end
+function PX.decide(src, run, netId, choice, opts)
+    opts = opts or {}
+    return Act('server:contactDecide', src, {
+        runId = run.id,
+        netId = netId,
+        choice = choice,
+        offence = opts.offence,
+        confirmed = opts.confirmed,
+    })
+end
+
+function PX.contacts(run, index, kind)
+    local out = {}
+    for _, c in ipairs(CP.Custody.contactsOf(run, index)) do
+        if kind == nil or c.kind == kind then out[#out + 1] = c end
+    end
+    return out
+end
+
+-- A fixture of the hidden truth: every contact of the objective clean (people) or legal (cars), compliant and
+-- with no cues, so a scenario tests one decision and nothing rolled.
+function PX.tame(run, index)
+    for _, c in ipairs(PX.contacts(run, index)) do
+        c.cues = {}
+        if c.kind == 'person' then
+            c.truth, c.demeanour = 'clean', 'compliant'
+        else
+            c.truth = 'legal'
+        end
+    end
+end
+
+function PX.services(run, kind)
+    local found
+    for _, s in ipairs(CP.Custody._servicesOf(run)) do
+        if s.kind == kind and s.status ~= 'gone' then found = s end
+    end
+    return found
+end
+
+-- Take a seated person out of the car (what the run host does after Order out).
+function PX.leaveCar(run, netId)
+    local pe = PX.ent(run, netId)
+    if not pe or not pe.vehicle then return end
+    local ve = ents[pe.vehicle]
+    if ve and ve.seats then
+        for s, occ in pairs(ve.seats) do if occ == run.entities[netId].entity then ve.seats[s] = nil end end
+    end
+    pe.vehicle = nil
+end
+
+-- Catch someone on foot: aim within 10 m, then Cuff suspect (5 s within reach).
+function PX.catch(src, run, index, netId)
+    PX.near(src, run, netId, 5.0)
+    Objective(src, run, index, { type = 'aim', netId = netId })
+    PX.near(src, run, netId, 1.0)
+    Secs(6)
+    H.fire('crimson-police:server:npcCuff', src, run.id, netId)
+    Secs(1)
+end
+
+-- An arrested contact with custody = 'handover': search, escort, wait for the van, hand over at its doors.
+function PX.handOver(src, run, c)
+    PX.near(src, run, c.netId)
+    if not c.searched then PX.act(src, run, c.netId, 'searchPerson') end
+    PX.act(src, run, c.netId, 'escort')
+    local van = PX.services(run, 'transport')
+    if not van then
+        Secs(3)
+        van = PX.services(run, 'transport')
+    end
+    if not van then return false end
+    -- no client drives it in here: the service timeout places it
+    if van.status ~= 'parked' then Secs(62) end
+    local vc = van.veh and PX.at(run, van.veh)
+    if not vc then return false end
+    Place(src, vec3(vc.x + 2.0, vc.y, vc.z))
+    local pm = PX.ent(run, c.netId)
+    if pm then pm.coords = vec3(vc.x + 3.0, vc.y, vc.z) end
+    PX.act(src, run, 0, 'handover')
+    Secs(1)
+    return c.state == 'handed_over'
+end
+
+local PX_PERSON_BEST = {
+    clean = 'release',
+    minor = 'cite',
+    suspended = 'cite',
+    warrant = 'arrest',
+    armed = 'arrest',
+    narcotics = 'arrest',
+    tools = 'arrest',
+    intoxicated = 'arrest',
+    evading = 'arrest',
+}
+function PX.bestCar(c)
+    if c.truth == 'stolen' then return 'impound' end
+    if c.truth == 'violation' then return c.level == 'impound' and 'impound' or 'cite' end
+    if c.role == 'parked' then return 'noAction' end
+    return c.truth == 'legal' and 'noAction' or 'impound'
+end
+
+-- Work one person to the decision its truth needs, finding the facts lawfully first.
+function PX.workPerson(src, run, index, c)
+    if c.decided or c.state == 'dead' or c.state == 'handed_over' or c.state == 'gone' then return end
+    if c.state == 'hostile' then
+        local m = PX.ent(run, c.netId)
+        m.killer = src * 100
+        m.health = 0
+        Secs(2)
+        return
+    end
+    if c.state == 'fleeing' or c.state == 'walking' or c.state == 'surrendered' then
+        PX.catch(src, run, index, c.netId)
+    end
+    if c.vehicleOf then PX.leaveCar(run, c.netId) end
+    PX.near(src, run, c.netId)
+    if c.state ~= 'cuffed' then
+        PX.act(src, run, c.netId, 'talk')
+        PX.act(src, run, c.netId, 'frisk')
+    end
+    local truth = c.truth
+    if c.evading and PX_PERSON_BEST[truth] ~= 'arrest' then truth = 'evading' end
+    if c.observed and c.role == 'driver' and truth == 'clean' then truth = 'minor' end
+    local choice = PX_PERSON_BEST[truth] or 'release'
+    if choice == 'arrest' and c.state ~= 'cuffed' then
+        PX.act(src, run, c.netId, 'detain')
+        PX.act(src, run, c.netId, 'searchPerson')
+    end
+    PX.near(src, run, c.netId)
+    PX.decide(src, run, c.netId, choice, { offence = 'loitering', confirmed = true })
+    if choice == 'arrest' and c.custody == 'handover' then PX.handOver(src, run, c) end
+end
+
+function PX.workCar(src, run, c)
+    if c.decided or c.state == 'gone' or c.state == 'impounded' then return end
+    PX.near(src, run, c.netId)
+    if c.role == 'parked' then PX.act(src, run, c.netId, 'inspect') end
+    PX.act(src, run, c.netId, 'runPlate')
+    PX.near(src, run, c.netId)
+    PX.decide(src, run, c.netId, PX.bestCar(c), { offence = 'expired_meter', confirmed = true })
+end
+
+-- Work every contact of a field_contact objective until it completes (tow trucks and vans fall back).
+function PX.workContacts(src, run, index)
+    for _ = 1, 4 do
+        if PX.obj(run, index).status == 'done' or run.state ~= 'in_progress' then return end
+        for _, c in ipairs(PX.contacts(run, index, 'person')) do PX.workPerson(src, run, index, c) end
+        for _, c in ipairs(PX.contacts(run, index, 'vehicle')) do PX.workCar(src, run, c) end
+        Secs(3)
+        if PX.obj(run, index).status ~= 'done' then Secs(62) end
+    end
+end
+
+function PX.ledgerOk(run, what)
+    local bad = 0
+    for _, d in ipairs(run.decisions or {}) do
+        if d.verdict == 'wrong' or d.verdict == 'critical' then bad = bad + 1 end
+    end
+    H.ok(#(run.decisions or {}) > 0, what .. ': the decision ledger has entries')
+    H.eq(bad, 0, what .. ': no wrong decision in the ledger')
+end
+
+-- Pace the violator of pursuit objective n: its car passes the observation point at its rolled speed with the
+-- officer driving 50 m behind it for 8 s, then the officer lights it up from 30 m and it yields.
+function PX.paceAndStop(run, n, src)
+    local st = PX.st(run, n)
+    local key = st.vorder and st.vorder[1]
+    local v = key and st.vehicles[key]
+    if not v then return nil end
+    local car = PX.ent(run, v.netId)
+    local cruiser = VehicleFor(src, POLICE_MODEL)
+    local route = run.location.route.points
+    local k0, best = 1, math.huge
+    for i, p in ipairs(route) do
+        local d = U.dist2d(p, run.location.start.coords)
+        if d < best then best, k0 = d, i end
+    end
+    local a, b = route[k0], route[math.min(#route, k0 + 1)]
+    local len = U.dist2d(a, b)
+    local ux, uy = (b.x - a.x) / len, (b.y - a.y) / len
+    local h = math.deg(math.atan(-ux, uy)) % 360.0
+    for i = 1, 8 do
+        local px, py = a.x + ux * (i * 4.0), a.y + uy * (i * 4.0)
+        car.coords = vec3(px, py, a.z)
+        car.heading = h
+        car.speed = (v.targetKmh or 120) / 3.6
+        Place(src, vec3(px - ux * 50.0, py - uy * 50.0, a.z))
+        ents[cruiser].coords = H.players[src].coords
+        Secs(1)
+    end
+    Place(src, vec3(car.coords.x - ux * 30.0, car.coords.y - uy * 30.0, a.z))
+    ents[cruiser].coords = H.players[src].coords
+    Objective(src, run, n, { type = 'lights_near', netId = v.netId })
+    car.speed = 0.0
+    Secs(7)
+    H.players[src].vehicle = nil
+    return v
+end
+
+-- Kill every living ped of objective index until it completes (killer = that officer's ped).
+function PX.clearHostiles(run, index, killer)
+    for _ = 1, 80 do
+        if PX.obj(run, index).status == 'done' or run.state ~= 'in_progress' then return end
+        for _, e in ipairs(Runs.entitiesFor(run, { obj = index, kind = 'ped', alive = true })) do
+            local m = ents[e.entity]
+            if m and m.exists and (m.health or 0) > 0 then
+                m.killer = killer * 100
+                m.health = 0
+            end
+        end
+        Secs(3)
+    end
+end
+
+-- Breach together: two officers at the two entries within the window.
+function PX.breach(run, n, srcs)
+    local loc = run.location
+    for i = 1, 2 do Place(srcs[i], loc.entries[i]) end
+    Secs(4)
+    Objective(srcs[1], run, n, { type = 'interact', point = 1 })
+    Objective(srcs[2], run, n, { type = 'interact', point = 2 })
+    Secs(1)
+end
+
+function PX.catchAll(run, n, src)
+    for _ = 1, 3 do
+        if PX.obj(run, n).status == 'done' then return end
+        for _, p in pairs(PX.st(run, n).peds or {}) do
+            if p.state ~= 'cuffed' and p.state ~= 'dead' then PX.catch(src, run, n, p.netId) end
+        end
+        Secs(2)
+    end
+end
+
+function PX.searchAll(run, n, srcs)
+    for i, p in ipairs(PX.st(run, n).points) do
+        if p.status == 'pending' then
+            PX.go(srcs, p.coords, 0.5)
+            Secs(5)
+            Objective(srcs[1], run, n, { type = 'interact', point = i })
+            Secs(1)
+            if p.status == 'followup' then
+                Secs(7)
+                Objective(srcs[1], run, n, { type = 'followup', point = i })
+                Secs(1)
+            end
+        end
+    end
+    Secs(1)
+end
+
+function PX.shutDown(run, n, srcs)
+    PX.go(srcs, run.location.lab, 0.5)
+    Secs(1)
+    for k = 1, 3 do
+        Adv(400)
+        Objective(srcs[1], run, n, { type = 'check', target = 1, index = k, success = true })
+    end
+    Secs(1)
+end
+
+-- Process the scene: photograph, tag and bag every kept body, then release to the coroner van (placed by the
+-- service timeout: no client drives it in here). Returns the kept bodies, how many were bagged, and whether the
+-- objective was still open before the release.
+function PX.processScene(run, n, srcs)
+    if PX.obj(run, n).status == 'done' then return 0, 0, false end
+    local st = PX.st(run, n)
+    local bodies = #(st.order or {})
+    for _, netId in ipairs(st.order or {}) do
+        local c = PX.at(run, netId) or st.bodies[netId].coords
+        PX.go(srcs, c, 0.5)
+        Secs(2)
+        for _, step in ipairs({ 'tag', 'bag' }) do
+            Objective(srcs[1], run, n, { type = step .. '_begin', netId = netId })
+            Secs(step == 'tag' and 6 or 7)
+            Objective(srcs[1], run, n, { type = step, netId = netId })
+            Secs(1)
+        end
+    end
+    local bagged = 0
+    for _, b in pairs(st.bodies or {}) do if b.bagged then bagged = bagged + 1 end end
+    local openBeforeRelease = PX.obj(run, n).status ~= 'done'
+    local van = PX.services(run, 'coroner')
+    if van and van.status ~= 'parked' then Secs(62) end
+    local vc = van and van.veh and PX.at(run, van.veh) or run.location.scene
+    PX.go(srcs, vc, 1.0)
+    Secs(2)
+    Objective(srcs[1], run, n, { type = 'release_begin' })
+    Secs(9)
+    Objective(srcs[1], run, n, { type = 'release' })
+    Secs(2)
+    return bodies, bagged, openBeforeRelease
+end
+
+-- The people of objective n (a flee_arrest) who are cuffed now.
+function PX.cuffedIn(run, n)
+    local cuffed = 0
+    for _, p in pairs(PX.st(run, n).peds or {}) do if p.state == 'cuffed' then cuffed = cuffed + 1 end end
+    return cuffed
+end
+
+-- The service record columns of a raid: srcs[1] cuffed every suspect and seized the finds, so each cuffed person is
+-- one arrest on srcs[1]'s row and none on the partner's, and the finds are srcs[1]'s evidence.
+function PX.statsCheck(run, cuffed, srcs, what)
+    local lead, partner = PX.row(run, CID[srcs[1]]), PX.row(run, CID[srcs[2]])
+    H.ok(cuffed >= 1, ('%s: suspects cuffed (%d)'):format(what, cuffed))
+    H.eq(tonumber(lead.arrests), cuffed, what .. ': one arrest per cuffed person, on the cuffing officer\'s row')
+    H.eq(tonumber(partner.arrests), 0, what .. ': no arrest for the partner who cuffed nobody')
+    H.ok((tonumber(lead.evidence) or 0) >= 1, what .. ': the seized finds are the seizing officer\'s evidence')
+    H.eq(tonumber(partner.evidence), 0, what .. ': no evidence for the partner who seized nothing')
+end
+
+-- A TINYINT(1) column read back: 1/0 from MariaDB, true/false from the saves folder.
+function PX.flag(v) return v == true or tonumber(v) == 1 end
+
+function PX.row(run, cid)
+    return H.sql([[SELECT state, end_reason, final_points, cash_paid, cash_status, flagged, flag_reason, location_index,
+        arrests, citations, impounds, evidence, decisions_ok, decisions_best, decisions_bad, mission_call_id
+        FROM cp_mission_runs WHERE run_uuid = ? AND citizenid = ?]], { run.id, cid })[1] or {}
+end
+
+-- ============================================================================
+--              11. ILLEGAL PARKING PATROL WITH A RETURNING DRIVER
+-- ============================================================================
+-- A parking sweep drawn through the Mission Board: every car decided, the returning driver resolved, paid.
+
+do
+    local src = 21
+    local chance = Config.Events.modifierChance
+    Config.Events.modifierChance = 0
+    local def = PX.only('parking_patrol')
+    local fc = def.objectives[1]
+    local savedReturning, savedThief = fc.returning, fc.thief
+    fc.returning = { chance = 1, max = 1 }
+    fc.thief = { chance = 0, runAt = 15.0 }
+    Place(src, vec3(def.locations[1].start.coords.x + 300.0, def.locations[1].start.coords.y, 30.0))
+    local run = PX.accept(src, 'patrol', 1106)
+    PX.restore()
+    H.eq(run and run.missionId, 'parking_patrol', 'parking sweep: Illegal Parking Patrol drawn from the Patrol pool')
+    PX.arriveAll(run, { src })
+    H.eq(run.state, 'in_progress', 'parking sweep: in progress at the patrol entry point')
+    Secs(2)
+    local cars = PX.contacts(run, 1, 'vehicle')
+    H.eq(#cars, 5, 'parking sweep: five parked cars')
+    for _, c in ipairs(cars) do
+        H.eq(c.decided, nil, 'parking sweep: no car is decided before an officer works it')
+    end
+    -- the first car with a violation gets its ticket (or the tow), so its driver comes back
+    local first
+    for _, c in ipairs(cars) do
+        local best = PX.bestCar(c)
+        if not first and c.truth ~= 'stolen' and (best == 'cite' or best == 'impound') then first = c end
+    end
+    H.ok(first ~= nil, 'parking sweep: a car with a violation (seed 1106)')
+    PX.workCar(src, run, first)
+    local driver
+    for _, p in ipairs(PX.contacts(run, 1, 'person')) do if p.role == 'returning_driver' then driver = p end end
+    H.ok(driver ~= nil, 'parking sweep: citing or impounding a car brings its driver back')
+    H.eq(driver and driver.arguing, true, 'parking sweep: this driver argues about the ticket (seed 1106)')
+    for _, c in ipairs(cars) do PX.workCar(src, run, c) end
+    if driver then
+        Secs(10)
+        H.eq(PX.obj(run, 1).status, 'active', 'parking sweep: an arguing driver needs Explain the citation')
+        PX.near(src, run, driver.netId)
+        PX.act(src, run, driver.netId, 'explain')
+    end
+    Secs(12)
+    -- a tow truck that no client loads: the service timeout fades the car out
+    if PX.obj(run, 1).status ~= 'done' then Secs(62) end
+    Secs(3)
+    H.eq(run.state, 'ended', 'parking sweep: the run ended')
+    H.eq(run.endState, 'completed', 'parking sweep: completed')
+    H.eq(#(run.decisions or {}), 5, 'parking sweep: one decision per car in the ledger (the driver is not one)')
+    PX.ledgerOk(run, 'parking sweep')
+    local r = PX.row(run, CID[src])
+    H.eq(r.state, 'completed', 'parking sweep: row completed')
+    H.eq(r.cash_status, 'paid', 'parking sweep: paid')
+    H.eq(r.location_index, 1, 'parking sweep: the row records the drawn location')
+    H.eq(r.decisions_ok, 5, 'parking sweep: five decisions graded Best or Acceptable on the row (decisions_ok)')
+    H.eq(r.decisions_bad, 0, 'parking sweep: none wrong (decisions_bad)')
+    local cites, impounds = 0, 0
+    for _, d in ipairs(run.decisions) do
+        if d.verdict == 'best' or d.verdict == 'ok' then
+            if d.choice == 'cite' then cites = cites + 1 end
+            if d.choice == 'impound' then impounds = impounds + 1 end
+        end
+    end
+    H.eq(r.citations, cites, 'parking sweep: citations on the row match the ledger')
+    H.eq(r.impounds, impounds, 'parking sweep: impounds on the row match the ledger')
+    fc.returning, fc.thief = savedReturning, savedThief
+    Config.Events.modifierChance = chance
+end
+
+-- ============================================================================
+--                  12. TRAFFIC STOPS: PACE, CITE, FAIL, /imp
+-- ============================================================================
+-- A paced speeder who is clean, cited and graded Best; a driver released after the warrant reached the officer
+-- (after the confirm) failing the case; and an outsider's /imp on the stopped car ending the run as not counted.
+
+-- Draw Traffic Enforcement for src, pace its violator, stop it (it yields) and hand it to the contact.
+function PX.trafficStop(src, seed)
+    local def = PX.only('traffic_enforcement')
+    local saved = def.objectives[1].responses
+    def.objectives[1].responses = { yield = 1.0, flee = 0, fight = 0 }
+    local s = def.locations[1].start.coords
+    Place(src, vec3(s.x + 200.0, s.y, s.z))
+    local run = PX.accept(src, 'patrol', seed)
+    PX.restore()
+    PX.arriveAll(run, { src })
+    Secs(1)
+    local v = PX.paceAndStop(run, 1, src)
+    Secs(10)
+    def.objectives[1].responses = saved      -- read when the lights come on, so kept until the stop
+    return run, v
+end
+
+do -- 12a. the paced speeder: clean, cited, graded Best
+    local src = 22
+    local chance = Config.Events.modifierChance
+    Config.Events.modifierChance = 0
+    local run, v = PX.trafficStop(src, 1201)
+    H.eq(run.missionId, 'traffic_enforcement', 'traffic stop: Traffic Enforcement drawn from the Patrol pool')
+    H.ok(v ~= nil and v.observed ~= nil and v.observed.kind == 'pace', 'traffic stop: the violator was paced')
+    H.eq(run.objectiveIndex, 2, 'traffic stop: the stopped car is handed to the contact')
+    H.eq(CP.Runs.ownerOf(run, v.netId), 2, 'traffic stop: the car and its people were adopted by field_contact')
+    PX.tame(run, 2)
+    local car = PX.contacts(run, 2, 'vehicle')[1]
+    local driver
+    for _, p in ipairs(PX.contacts(run, 2, 'person')) do if p.role == 'driver' then driver = p end end
+    H.ok(driver ~= nil and driver.observed ~= nil, 'traffic stop: the driver carries the observed violation')
+    PX.near(src, run, car.netId)
+    PX.act(src, run, car.netId, 'orderOut')
+    Secs(4)
+    PX.leaveCar(run, driver.netId)
+    PX.near(src, run, driver.netId)
+    PX.act(src, run, driver.netId, 'talk')
+    PX.decide(src, run, driver.netId, 'cite', { offence = 'speeding' })
+    local entry
+    for _, d in ipairs(run.decisions or {}) do if d.netId == driver.netId then entry = d end end
+    H.eq(entry and entry.verdict, 'best', 'traffic stop: citing a paced speeder whose truth is clean is Best')
+    H.eq(entry and entry.bonusId, 'correct_disposition', 'traffic stop: it earns correct_disposition')
+    PX.workContacts(src, run, 2)
+    Secs(3)
+    H.eq(run.state, 'ended', 'traffic stop: the run ended')
+    H.eq(run.endState, 'completed', 'traffic stop: completed (solo: one violator only)')
+    local r = PX.row(run, CID[src])
+    H.eq(r.state, 'completed', 'traffic stop: row completed')
+    H.ok((r.citations or 0) >= 1, 'traffic stop: the citation is on the row')
+    H.ok((r.decisions_best or 0) >= 1, 'traffic stop: decisions_best on the row')
+    H.eq(r.cash_status, 'paid', 'traffic stop: paid')
+    Config.Events.modifierChance = chance
+end
+
+do -- 12b. a knowing release: the warrant reached the officer before the choice
+    local src = 23
+    local chance = Config.Events.modifierChance
+    Config.Events.modifierChance = 0
+    local run = PX.trafficStop(src, 1202)
+    H.eq(run.objectiveIndex, 2, 'knowing release: at the stop')
+    PX.tame(run, 2)
+    local car = PX.contacts(run, 2, 'vehicle')[1]
+    local driver
+    for _, p in ipairs(PX.contacts(run, 2, 'person')) do if p.role == 'driver' then driver = p end end
+    driver.truth = 'warrant'
+    PX.near(src, run, car.netId)
+    PX.act(src, run, car.netId, 'orderOut')
+    Secs(4)
+    PX.leaveCar(run, driver.netId)
+    PX.near(src, run, driver.netId)
+    PX.act(src, run, driver.netId, 'talk')
+    H.ok(CP.Custody.knownTo(run, 'warrant', driver.netId, src) ~= nil,
+        'knowing release: the warrant reached the officer')
+    local ok, data = PX.decide(src, run, driver.netId, 'release')
+    H.eq(ok, true, 'knowing release: the tablet answers')
+    H.ok(type(data) == 'table' and type(data.confirm) == 'table', 'knowing release: a confirm first, nothing decided')
+    H.eq(run.state, 'in_progress', 'knowing release: the case is still open before the confirm')
+    PX.decide(src, run, driver.netId, 'release', { confirmed = true })
+    Secs(2)
+    H.eq(run.state, 'ended', 'knowing release: the run ended')
+    H.eq(run.endState, 'failed', 'knowing release: the case failed for everyone')
+    local r = PX.row(run, CID[src])
+    H.eq(r.state, 'failed', 'knowing release: row failed')
+    H.eq(r.cash_paid, 0, 'knowing release: no cash')
+    Config.Events.modifierChance = chance
+end
+
+do -- 12c. an outsider's /imp on the stopped car: not counted for anyone
+    local src = 24
+    local chance = Config.Events.modifierChance
+    Config.Events.modifierChance = 0
+    local run, v = PX.trafficStop(src, 1203)
+    H.eq(run.objectiveIndex, 2, 'outsider /imp: at the stop')
+    local car = PX.ent(run, v.netId)
+    local cdBefore = Runs.cooldowns(CID[src])
+    local auditBefore = tonumber(H.sql('SELECT COUNT(*) AS n FROM cp_audit WHERE action = \'vehicleRemoved\'')[1].n)
+    Place(9, vec3(car.coords.x + 4.0, car.coords.y, car.coords.z))
+    H.fire('police:server:Impound', 9, 'CP123ABC', true, 0, 1000.0, 1000.0, 100, v.netId)
+    car.exists = false                         -- sc-police deletes it on every client after its progress bar
+    Secs(5)
+    H.eq(Runs.getBySrc(src), nil, 'outsider /imp: the run ended for the officer')
+    local r = PX.row(run, CID[src])
+    H.eq(r.end_reason, 'vehicle_removed_external', 'outsider /imp: end reason vehicle_removed_external')
+    H.eq(r.state, 'abandoned', 'outsider /imp: not counted (abandoned)')
+    H.eq(r.final_points, 0, 'outsider /imp: no points')
+    H.eq(r.cash_paid, 0, 'outsider /imp: no cash')
+    H.eq(PX.flag(r.flagged), false, 'outsider /imp: nobody on the team is blamed (no flag)')
+    local cdAfter = Runs.cooldowns(CID[src])
+    H.eq(cdAfter.types.patrol, cdBefore.types.patrol, 'outsider /imp: no type cooldown')
+    H.eq(cdAfter.missions.traffic_enforcement, cdBefore.missions.traffic_enforcement,
+        'outsider /imp: no mission cooldown')
+    local audits = tonumber(H.sql('SELECT COUNT(*) AS n FROM cp_audit WHERE action = \'vehicleRemoved\'')[1].n)
+    H.eq(audits, auditBefore + 1, 'outsider /imp: the sender is written to the audit log')
+    local who = H.sql('SELECT reason FROM cp_audit WHERE action = \'vehicleRemoved\' ORDER BY id DESC LIMIT 1')[1]
+    H.eq(who and who.reason, CID[9], 'outsider /imp: the audit names the sender')
+    Place(9, vec3(0.0, 0.0, 0.0))
+    Config.Events.modifierChance = chance
+end
+
+-- ============================================================================
+--                           13. SUSPICIOUS ACTIVITY
+-- ============================================================================
+
+do
+    local src = 25
+    local chance = Config.Events.modifierChance
+    Config.Events.modifierChance = 0
+    local def = PX.only('suspicious_activity')
+    local s = def.locations[1].start.coords
+    Place(src, vec3(s.x + 200.0, s.y, s.z))
+    local run = PX.accept(src, 'investigation', 1301)
+    PX.restore()
+    H.eq(run and run.missionId, 'suspicious_activity',
+        'scene contact: Suspicious Activity drawn from the Investigation pool')
+    PX.arriveAll(run, { src })
+    H.eq(run.state, 'in_progress', 'scene contact: in progress at the marker')
+    local car = run.location.car
+    Place(src, vec3(car.x + 10.0, car.y, car.z))
+    Secs(3)
+    H.ok(#PX.contacts(run, 1, 'person') >= 1, 'scene contact: people at the scene react to the officer')
+    -- the fixture: the first person has an active warrant (Talk / Check ID always finds it), so the contact ends in
+    -- an arrest and the custody chain to the transport van
+    PX.tame(run, 1)
+    local subject = PX.contacts(run, 1, 'person')[1]
+    subject.truth = 'warrant'
+    Secs(30)                                   -- a believable pace: field_contact's minSeconds is 30
+    PX.workContacts(src, run, 1)
+    H.eq(subject.state, 'handed_over', 'scene contact: the arrested person is searched, escorted and handed over')
+    Secs(2)
+    H.eq(run.state, 'ended', 'scene contact: the run ended')
+    H.eq(run.endState, 'completed', 'scene contact: completed')
+    PX.ledgerOk(run, 'scene contact')
+    local arrest
+    for _, d in ipairs(run.decisions or {}) do if d.netId == subject.netId then arrest = d end end
+    H.eq(arrest and arrest.choice, 'arrest', 'scene contact: the warrant ends in an Arrest disposition')
+    H.eq(arrest and arrest.verdict, 'best', 'scene contact: graded Best (the warrant was found lawfully)')
+    local r = PX.row(run, CID[src])
+    H.eq(r.state, 'completed', 'scene contact: row completed')
+    H.eq(r.cash_status, 'paid', 'scene contact: paid')
+    H.eq(tonumber(r.arrests), 1, 'scene contact: one person, one arrest on the row (detain, arrest and handover)')
+    H.eq(tonumber(r.decisions_best), #run.decisions, 'scene contact: every decision on the row as Best')
+    Config.Events.modifierChance = chance
+end
+
+-- ============================================================================
+--             14. DRUG LAB RAID AND GANG HIDEOUT RAID (units of 2)
+-- ============================================================================
+-- Breach together, the crew, the runners, the stash or cache, and Process the scene with the coroner van.
+
+do -- 14a. Drug Lab Raid, with Process the scene
+    local srcs = { 26, 27 }
+    local chance = Config.Events.modifierChance
+    Config.Events.modifierChance = 0
+    FormUnit(srcs[1], srcs[2])
+    local def = PX.only('drug_lab_raid')
+    local s = def.locations[1].start.coords
+    PX.go(srcs, vec3(s.x + 300.0, s.y, s.z))
+    local run = PX.accept(srcs[1], 'tactical', 1401)
+    PX.restore()
+    H.eq(run and run.missionId, 'drug_lab_raid', 'lab raid: Drug Lab Raid drawn from the Tactical pool')
+    PX.arriveAll(run, srcs)
+    H.eq(run.state, 'in_progress', 'lab raid: in progress')
+    H.eq(run.tier and run.tier.tier, 'reinforced', 'lab raid: a unit of 2 is Reinforced')
+    Secs(1)
+    PX.breach(run, 1, srcs)
+    H.eq(PX.obj(run, 1).status, 'done', 'lab raid: breached together by two officers')
+    PX.go(srcs, run.location.start.coords)
+    Secs(46)
+    PX.clearHostiles(run, 2, srcs[1])
+    H.eq(PX.obj(run, 2).status, 'done', 'lab raid: the crew neutralised')
+    Secs(2)
+    PX.catchAll(run, 3, srcs[1])
+    Secs(10)
+    H.eq(PX.obj(run, 3).status, 'done', 'lab raid: the cooks caught and cuffed')
+    local cuffed = PX.cuffedIn(run, 3)
+    PX.searchAll(run, 4, srcs)
+    Secs(10)
+    H.eq(PX.obj(run, 4).status, 'done', 'lab raid: the stash found and seized')
+    PX.shutDown(run, 5, srcs)
+    Secs(6)
+    H.eq(PX.obj(run, 5).status, 'done', 'lab raid: the lab shut down')
+    local held = #CP.Runs.heldBodies(run)
+    H.ok(held >= 1, 'lab raid: the bodies of the crew are kept for Process the scene (' .. held .. ')')
+    H.ok(held <= (PX.obj(run, 6).obj.bodies or 4), 'lab raid: never more than the objective\'s body limit')
+    local processed, bagged, openBeforeRelease = PX.processScene(run, 6, srcs)
+    H.eq(processed, held, 'lab raid: Process the scene works every kept body')
+    H.eq(bagged, held, 'lab raid: every kept body photographed, tagged and bagged')
+    H.eq(openBeforeRelease, true, 'lab raid: the scene is only done once released to the coroner')
+    H.eq(run.state, 'ended', 'lab raid: the run ended')
+    H.eq(run.endState, 'completed', 'lab raid: completed')
+    for _, src in ipairs(srcs) do
+        local r = PX.row(run, CID[src])
+        H.eq(r.state, 'completed', 'lab raid: row completed for ' .. CID[src])
+        H.eq(r.cash_status, 'paid', 'lab raid: paid ' .. CID[src])
+    end
+    PX.statsCheck(run, cuffed, srcs, 'lab raid')
+    H.eq(#CP.Runs.heldBodies(run), 0, 'lab raid: nothing kept after the run')
+    Act('server:unitLeave', srcs[2])
+    Config.Events.modifierChance = chance
+end
+
+do -- 14b. Gang Hideout Raid, the lieutenant, the runners and the cache
+    local srcs = { 28, 29 }
+    local chance = Config.Events.modifierChance
+    Config.Events.modifierChance = 0
+    FormUnit(srcs[1], srcs[2])
+    local def = PX.only('gang_hideout_raid')
+    local s = def.locations[1].start.coords
+    PX.go(srcs, vec3(s.x + 300.0, s.y, s.z))
+    local run = PX.accept(srcs[1], 'tactical', 1402)
+    PX.restore()
+    H.eq(run and run.missionId, 'gang_hideout_raid', 'hideout raid: Gang Hideout Raid drawn from the Tactical pool')
+    PX.arriveAll(run, srcs)
+    Secs(1)
+    PX.breach(run, 1, srcs)
+    H.eq(PX.obj(run, 1).status, 'done', 'hideout raid: breached together')
+    PX.go(srcs, run.location.start.coords)
+    Secs(61)
+    PX.clearHostiles(run, 2, srcs[1])
+    H.eq(PX.obj(run, 2).status, 'done', 'hideout raid: the gang and the lieutenant neutralised')
+    local intel = run.shared.intel
+    H.ok(type(intel) == 'table' and intel.key == 'block.hostile_waves.intel',
+        'hideout raid: the intel line names the rolled sets')
+    Secs(2)
+    PX.catchAll(run, 3, srcs[1])
+    Secs(10)
+    H.eq(PX.obj(run, 3).status, 'done', 'hideout raid: the runners caught')
+    local cuffed = PX.cuffedIn(run, 3)
+    PX.searchAll(run, 4, srcs)
+    Secs(10)
+    H.eq(PX.obj(run, 4).status, 'done', 'hideout raid: the weapons cache seized')
+    PX.processScene(run, 5, srcs)
+    H.eq(run.state, 'ended', 'hideout raid: the run ended')
+    H.eq(run.endState, 'completed', 'hideout raid: completed')
+    local r = PX.row(run, CID[srcs[2]])
+    H.eq(r.state, 'completed', 'hideout raid: the partner\'s row completed')
+    PX.statsCheck(run, cuffed, srcs, 'hideout raid')
+    Act('server:unitLeave', srcs[2])
+    Config.Events.modifierChance = chance
+end
+
+-- ============================================================================
+--              15. MISSION CALLS: THE CLAIM RACE AND RE-DISPATCH
+-- ============================================================================
+-- Two solo officers claim one call 400 ms apart: the one nearer the area wins, the other is told why; a real
+-- call ends the winner's run before the start, so the call reopens once, without them.
+
+-- Fire a NUI action without waiting; PX.result(id) reads its reply once it came.
+function PX.fire(name, src, payload)
+    reqN = reqN + 1
+    local id = 'px' .. reqN
+    H.fire('crimson-police:' .. name, src, payload, id)
+    return id
+end
+function PX.result(id)
+    for i = #H.events, 1, -1 do
+        local e = H.events[i]
+        if e.name == 'crimson-police:client:actionResult' and e.args[1] == id then return true, e.args[2], e.args[3] end
+    end
+    return false
+end
+function PX.callRow(id)
+    return H.sql('SELECT code, status, reopened, outcome, claimed_by, run_uuid FROM cp_mission_calls WHERE id = ?',
+        { id })[1] or {}
+end
+
+do
+    local near, far = 30, 31
+    local area
+    for _, a in ipairs(Config.MissionCalls.areas) do if a.key == 'south_ls' then area = a end end
+    Place(near, vec3(area.center.x + 300.0, area.center.y, area.center.z))
+    Place(far, vec3(area.center.x + 5000.0, area.center.y, area.center.z))
+    Secs(12)                                   -- both on duty and idle in the calls' cache
+    local ok, data = Act('server:admin:mcCreate', 5, { type = 'patrol', area = 'south_ls' })
+    H.eq(ok, true, 'mission call: an admin creates a Patrol call in South Los Santos: ' .. tostring(data))
+    local callId = data and data.id
+    H.eq(PX.callRow(callId).status, 'open', 'mission call: the call is open')
+    local toDispatch = 0
+    H.exportsMock['sc-dispatch'].AddNotification = function() toDispatch = toDispatch + 1 end
+    local idFar = PX.fire('server:claimMissionCall', far, { callId = callId })
+    Adv(400, 100)
+    local idNear = PX.fire('server:claimMissionCall', near, { callId = callId })
+    local gotFar, gotNear
+    for _ = 1, 40 do
+        gotFar, gotNear = PX.result(idFar), PX.result(idNear)
+        if gotFar and gotNear then break end
+        Adv(250)
+    end
+    local _, okFar, errFar = PX.result(idFar)
+    local _, okNear, dataNear = PX.result(idNear)
+    H.eq(okNear, true, 'mission call: inside the claim window the unit nearer the area wins: ' .. tostring(dataNear))
+    H.eq(okFar, false, 'mission call: the first click from further away loses')
+    H.eq(errFar, 'err.mc_taken_by', 'mission call: the loser is told a closer unit took it')
+    local run = Runs.getBySrc(near)
+    H.ok(run ~= nil and run.missionCall ~= nil, 'mission call: the winner\'s run carries the call')
+    H.eq(run and run.missionCall and run.missionCall.code, PX.callRow(callId).code,
+        'mission call: the run is the call\'s')
+    H.eq(run and run.missionType, 'patrol', 'mission call: the mission is drawn from the call\'s type after the claim')
+    H.eq(run and run.missionCall and run.missionCall.area, 'south_ls',
+        'mission call: the call names its area to the winner (2+ missions and 3+ locations there for them)')
+    H.eq(run and CP.MissionCalls.areaOf(run.location.start.coords), 'south_ls',
+        'mission call: the drawn mission starts in the call\'s area')
+    H.eq(Runs.getBySrc(far), nil, 'mission call: the loser has no run')
+    H.eq(PX.callRow(callId).status, 'claimed', 'mission call: claimed')
+    H.eq(toDispatch, 0, 'mission call: nothing reaches SC-Dispatch (no AddNotification)')
+    -- a real call ends the run before anyone reached the start (free, no cooldown): re-dispatched once
+    H.sql([[INSERT INTO mdt_dispatch (id, type, message, active, unique_id) VALUES
+        (7515, '10-50 - Vehicle Crash', 'real call 15', 1, 'call_px15')]])
+    H.fire('sc-dispatch:server:ToggleResponding', near, 'call_px15', true)
+    Secs(2)
+    H.eq(Runs.getBySrc(near), nil, 'mission call: the real call ends the claimed run before the start')
+    local row = PX.callRow(callId)
+    H.eq(row.status, 'open', 'mission call: re-dispatched (open again)')
+    H.eq(PX.flag(row.reopened), true, 'mission call: marked re-dispatched')
+    Secs(62)
+    H.fire('sc-dispatch:server:ToggleResponding', near, 'call_px15', false)
+    H.sql('UPDATE mdt_dispatch SET active = 0 WHERE id = 7515')
+    Secs(2)
+    H.eq(Runs.cooldowns(CID[near]).types.patrol, nil, 'mission call: the real call cost no cooldown')
+    local okAgain, errAgain = Act('server:claimMissionCall', near, { callId = callId })
+    H.eq(okAgain, false, 'mission call: the old claimant can\'t claim it again')
+    H.eq(errAgain, 'err.mc_excluded', 'mission call: excluded')
+    local okOther = Act('server:claimMissionCall', far, { callId = callId })
+    H.eq(okOther, true, 'mission call: another officer claims the re-dispatched call')
+    local run2 = Runs.getBySrc(far)
+    H.ok(run2 ~= nil, 'mission call: the second claim starts a run')
+    if run2 then Act('server:abandon', far, run2.id) end
+    Secs(2)
+    H.eq(PX.callRow(callId).status, 'closed', 'mission call: a second drop closes it (it reopens only once)')
+    H.exportsMock['sc-dispatch'].AddNotification = nil
+end
+
+-- ============================================================================
+--                       16. A UNIT READY CHECK DECLINED
+-- ============================================================================
+
+do
+    local leader, member = 32, 33
+    autoReady = false
+    FormUnit(leader, member)
+    Place(leader, vec3(150.0, -1200.0, 29.0))
+    Place(member, vec3(152.0, -1200.0, 29.0))
+    local ok, data = Act('server:acceptType', leader, 'patrol')
+    H.eq(ok, true, 'ready check: the accept waits for the unit: ' .. tostring(data))
+    H.eq(type(data) == 'table' and data.pending, true, 'ready check: pending until every member answers')
+    local asked = ClientEvents('crimson-police:client:readyCheck', member)
+    H.ok(#asked >= 1, 'ready check: the member is asked')
+    local prompt = asked[#asked] and asked[#asked].args[1] or {}
+    H.eq(prompt.typeKey, 'patrol', 'ready check: the prompt names the type')
+    H.eq(prompt.missionId, nil, 'ready check: never the mission')
+    H.eq(Runs.getBySrc(leader), nil, 'ready check: nothing is drawn before everyone accepted')
+    H.fire('crimson-police:server:unitReady', member, { accepted = false })
+    Secs(2)
+    H.eq(Runs.getBySrc(leader), nil, 'ready check: declined, no run for the leader')
+    H.eq(Runs.getBySrc(member), nil, 'ready check: nor for the member')
+    for _, s in ipairs({ leader, member }) do
+        H.eq(Runs.cooldowns(CID[s]).types.patrol, nil, 'ready check: no cooldown for ' .. CID[s])
+    end
+    local unit = CP.Units.unitOf and CP.Units.unitOf(leader)
+    H.ok(unit ~= nil and not unit.locked, 'ready check: the unit is unlocked again')
+    autoReady = true
+    Act('server:unitLeave', member)
+end
+
+-- ============================================================================
+--                     17. A MISSION DESK OPENED FROM AFAR
+-- ============================================================================
+
+do
+    local src = 34
+    local desk = Config.Tablet.desks[1]
+    H.ok(Config.Tablet.desks[2] ~= nil, 'desk: the shipped config has a second desk, far from the first')
+    Place(src, vec3(desk.coords.x + 40.0, desk.coords.y, desk.coords.z))
+    local session, err = Cb('getSession', src, { ui = 'officer', via = 'desk', desk = 1 })
+    H.eq(session, nil, 'desk: refused 40 m from the desk')
+    H.eq(err, 'err.not_at_desk', 'desk: err.not_at_desk')
+    -- standing at desk 1, the client names another desk or one that does not exist: the server checks the named one
+    Place(src, vec3(desk.coords.x + 0.5, desk.coords.y, desk.coords.z))
+    Secs(2)
+    session, err = Cb('getSession', src, { ui = 'officer', via = 'desk', desk = 2 })
+    H.eq(session, nil, 'desk: at desk 1, a request naming desk 2 is refused')
+    H.eq(err, 'err.not_at_desk', 'desk: a faked desk number gets err.not_at_desk')
+    session, err = Cb('getSession', src, { ui = 'officer', via = 'desk', desk = 99 })
+    H.eq(session, nil, 'desk: at desk 1, a request naming a desk that does not exist is refused')
+    H.eq(err, 'err.not_at_desk', 'desk: a spoofed desk index is refused')
+    Secs(2)
+    session, err = Cb('getSession', src, { ui = 'officer', via = 'desk', desk = 1 })
+    H.ok(session ~= nil, 'desk: opens inside the desk box: ' .. tostring(err))
+    H.eq(session and session.access and session.access.via, 'desk', 'desk: the session says how it was opened')
 end
 
 -- ============================================================================
