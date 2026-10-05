@@ -143,14 +143,20 @@ const data: SettingsData = {
 const history: SettingsHistoryRow[] = [
     {
         id: 1,
-        actor: 'ABC12345',
-        actorName: 'John Doe',
-        role: 'admin',
+        path: 'Tablet.deskDistance',
+        label: 'Desk distance',
         action: 'settingChanged',
-        target: 'Tablet.deskDistance',
+        old: 3,
+        oldSaved: false,
+        new: 4.5,
+        newSaved: true,
         oldValue: '3',
         newValue: '4.5',
+        by: 'ABC12345',
+        byName: 'John Doe',
         createdAt: now() - 600,
+        latest: true,
+        canRevert: true,
     },
 ];
 
@@ -174,15 +180,21 @@ registerMock('action', 'server:admin:setSetting', (p: unknown): SettingsReply =>
     x.value = none ? undefined : v;
     x.isSet = !none;
     x.changed = JSON.stringify(x.value) !== JSON.stringify(x.default);
+    for (const h of history) if (h.path === x.path) h.latest = false;
     history.unshift({
         id: history.length + 1,
-        actor: 'ABC12345',
-        actorName: 'John Doe',
-        role: 'admin',
+        path: x.path,
+        label: x.label,
         action: 'settingChanged',
-        target: x.path,
+        oldSaved: false,
+        new: x.value,
+        newSaved: true,
         newValue: JSON.stringify(x.value),
+        by: 'ABC12345',
+        byName: 'John Doe',
         createdAt: now(),
+        latest: true,
+        canRevert: true,
     });
     return reply([x]);
 });
@@ -215,6 +227,53 @@ registerMock('request', 'admin:getSettingsHistory', (): SettingsHistory => ({
     pages: 1,
     total: history.length,
 }));
+
+registerMock('action', 'server:admin:revertSetting', (p: unknown) => {
+    const { historyId, again } = (p ?? {}) as { historyId?: number; again?: boolean };
+    const h = history.find(r => r.id === historyId);
+    if (!h) throw new Error('err.history_unknown');
+    if (!h.latest && !again) throw new Error('err.setting_changed_since');
+    const x = find(h.path);
+    if (x) {
+        x.value = h.oldSaved ? h.old : x.default;
+        x.changed = h.oldSaved;
+    }
+    return reply(x ? [x] : []);
+});
+
+registerMock('request', 'admin:exportSettings', () => {
+    const settings = data.sections
+        .flatMap(sec => sec.groups.flatMap(g => g.settings))
+        .filter(x => x.changed)
+        .map(x => ({ path: x.path, value: x.value }));
+    return { text: JSON.stringify({ kind: 'crimson-police-settings', settings }), count: settings.length };
+});
+
+registerMock('request', 'admin:previewSettingsImport', (a: unknown) => {
+    const { text } = (a ?? {}) as { text?: string };
+    const doc = JSON.parse(text ?? '{}') as { settings?: { path: string; value: unknown }[] };
+    const changes = (doc.settings ?? [])
+        .filter(c => find(c.path))
+        .map(c => ({
+            path: c.path,
+            label: find(c.path)?.label ?? c.path,
+            old: JSON.stringify(find(c.path)?.value),
+            new: JSON.stringify(c.value),
+        }));
+    const unknown = (doc.settings ?? []).filter(c => !find(c.path)).map(c => c.path);
+    return {
+        changes,
+        unknown,
+        locked: [],
+        invalid: [],
+        money: [],
+        unchanged: 0,
+        previewToken: 'mock-import',
+        expiresAt: now() + 120,
+    };
+});
+
+registerMock('action', 'server:admin:importSettings', () => ({ imported: 1 }));
 
 // ============================================================================
 //                        MISSION AND LOCATION SWITCHES

@@ -414,3 +414,50 @@
     flex: 1 1 auto;
     min-width: 0;
 }
+
+/* Names, goals and the settings import */
+
+.settings-labels {
+    list-style: none;
+    margin: 0 0 8px;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.settings-labels__row {
+    display: grid;
+    grid-template-columns: minmax(160px, 1fr) minmax(160px, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+}
+
+.settings-labels__row code {
+    font-family: var(--cp-mono);
+    font-size: var(--cp-fs-xs);
+    color: var(--cp-subtle);
+}
+
+.settings-goal {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--cp-border);
+}
+
+.settings-import {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: var(--cp-fs-sm);
+}
+
+.settings-import code {
+    font-family: var(--cp-mono);
+    font-size: var(--cp-fs-xs);
+}

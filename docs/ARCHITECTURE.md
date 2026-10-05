@@ -526,6 +526,16 @@ Full admin control (P0 seams; §5.37):
   the same license; the console has none).
 - Hook `admin:changed { citizenid }` drops that officer's suspension, retirement and license caches at once.
 
+Full admin control, System (P5):
+- Turned-off departments (`Config.Departments.<key>.enabled = false`): `department(key)` and `departments()` still
+  return them (`enabled = false` in the sanitised record), so their pending and held pay still finds the society
+  account; `departmentForJob(job)` leaves them out, `offDepartmentForJob(job) -> deptKey|nil` names the one that lists
+  the job, and `getOfficer` then refuses with `err.department_off`.
+- S `explain(src, via?) -> { ok, error?, steps = { { check, ok, vars? } }, via, src, citizenid, name, job, department }`:
+  the opening checks in order (job, department on, duty, suspended, SC-Dispatch suspension, retired, arena, the way);
+  the verdict is `getOfficer` then `CP.Tablet.checkAccess` (the opening code itself), so it never disagrees with a real
+  open attempt.
+
 ### 5.3 CP.Permissions — modules/permissions (S)
 - `can(src, action, ctx) -> boolean, errKey` — admin: always true for admin and supervisor actions. Supervisor: `CP.Access.isSupervisor(src)` and `Config.Permissions.supervisor[action] == true`. Admin-only actions (never allowed for supervisors whatever the config): `setMissionPayout`, `clearPayout`, `manualAward`, `handleFailedDispute`, `voidAnyRun`, `seasons`, `bountyOverride`, `suspend`, `reloadMissions`, `testRun`, `openAdmin`. Also `viewMissionList` (supervisors and admins). errKey `err.no_permission`.
 - `actionsFor(src) -> { actionName, ... }` (for the session)
@@ -1399,6 +1409,15 @@ nothing calls ox_inventory.
   is voided, once; ones an admin cancelled or took back stay), `expected(entry)` (items and value per run at each tier,
   in Lua), `itemChoices()`. Net in §8.4.4.
 
+Full admin control, System (P5): the storage switched to in Admin UI → System is kept in the server's KVP
+(`cp_storage_mode` = `database`|`files`, `cp_storage_folder`), outside the storage itself where the settings live, and
+read by `Install` before `Config.Database` (which it then reflects); a start-up line names the override and System →
+Storage and Config health (`storage`) show it. `effective(cfg, kvp) -> { enabled, folder }, override|nil` (pure, for the
+specs), `override() -> { mode, folder }|nil`, `validFolder(f)` (relative, under `saves`, no `..`, no `//`, no full path).
+`CrimsonPoliceAdmin storagemode reset` (console) clears the KVP. Each store holds `cp_storage_meta` (`generation`,
+`state` = `active`|`left_behind`): a switch writes a new generation into both and marks the old one `left_behind`; a
+store that starts `left_behind` begins the `left_behind` maintenance lock (CP.Sysadmin, §5.41).
+
 ### 5.34 CP.ConfigHealth — modules/confighealth (WP8)
 `register(name, fn -> { { level = 'ok'|'warn'|'error', text } })` (a second register replaces it), `run() ->
 ConfigHealthItem[]` (errors first; a failing check is one error line). Runs 5 s after start (only that first run
@@ -1417,6 +1436,9 @@ running warns: no /callsign, and sc-dispatch suspensions do not keep officers of
 Crimson-Arena are info lines), webhooks (`CP.Admin.webhooks()`: which are on, and a warning per invalid convar);
 CP.Rewards registers its own, and CP.Settings registers `settings` (how many settings are changed in game, each saved
 value that is ignored, and the changes waiting for a restart).
+A line may also carry `fix` (the Settings path that fixes it: Permissions and Settings show **Open setting**) and
+`cfgLine` (a server.cfg line to paste: **Copy the line**); `run()` passes both through. CP.Sysadmin registers `storage`
+(an in-game storage choice, a store left behind).
 
 ### 5.35 CP.Diag — modules/diag (client; the freeze fix)
 F8 command `CrimsonPoliceState`: four `[crimson-police:diag]` lines with the screen fade, NUI focus (and keep input),
@@ -1424,6 +1446,8 @@ scripted camera, pause menu, player control, frozen, dead, last stand and dead m
 Crimson-Police holds (tablet, panel focus, pick-up, run) and which of the rest is not ours.
 `CrimsonPoliceState unstick` first closes our tablet, releases our panel focus and runs `CP.Downed.restore`, never
 anything another resource holds. `state() -> table`, `unstick()`.
+Admin UI → Officers → Support (P5): `client:diagUnstick` runs `unstick()`; `client:diagState (token)` answers
+`server:diagState (token, state())` (the server keeps only the answer of the player it asked, known keys only).
 
 ### 5.36 CP.Settings — modules/settings (settings changed in game)
 Server:
@@ -1445,8 +1469,8 @@ Server:
   `updated_at`. `boot()` is called by the migrations runner before it reports ready (and by the module's own thread when
   a runner did not): every row is checked again; a bad one is ignored with one warning and listed as invalid.
 - Applying: every top-level Config table a setting touches (now or before) is rebuilt from the config.lua copy, then the
-  applied settings are set on it. Restart settings (`Tablet.command|adminCommand|keybind|dispatchKey|readyKey|contactKey|
-  desks`, `Locale`, `Time.resetHour`, `Leaderboard.weekStartsOn`) apply only at boot; a later change is saved and
+  applied settings are set on it. Restart settings (`Tablet.command|adminCommand|keybind|dispatchKey|readyKey|contactKey`,
+  `Locale`, `Time.resetHour`, `Leaderboard.weekStartsOn`) apply only at boot; a later change is saved and
   reported as pending. A change under what the mission loader reads queues one `CP.Missions.reload()` (1 s debounce).
 - `set(src, path, value, none, opts) -> ok, SettingsReply | errKey` (a value equal to config.lua's is a reset; audit
   `settingChanged` / `settingReset`, old → new), `reset(src, path)`, `resetAll(src)` (`settingsResetAll`), `entry(path)`,
@@ -1507,6 +1531,40 @@ Full admin control additions (P0; the Settings screen follow-ups are P5's):
   { rows, page, pages, total }`, `historyEntry(id)`. `set`/`setMany` opts also take `reason`, `revertsId` and `confirm`.
 - Net: `server:admin:setSetting` takes `confirm` and `reason`; `server:admin:setSettings` (`{ changes = { { path, value? |
   json?, none? } }, confirm?, reason? }`) saves several as one.
+
+Full admin control, System (P5):
+- Departments: a department added in game is one record setting `Departments.<key>` (a key config.lua does not have;
+  `^[a-z0-9_]{1,32}$`; template `Settings._deptRecord`: label, short, enabled, jobs, supervisorGrade, societyAccount,
+  theme, logo); `entry()` answers it (`added = true`, nullable: none = deleted), `addedDepartments()` lists them.
+  config.lua departments keep one setting per field and gain `logo.url` (https, ≤ 512), `logo.file` (a png/webp/svg name
+  in logos/) and `theme.text` (hex), all nullable. `checkDepartments(path, clean, ctx)` is the registered validator for
+  everything under `Departments` (raw editor and Departments screen alike): a job in one department only
+  (`err.dept_job_taken`), at least one department on (`err.dept_last`); not at boot: a job moved between departments
+  while a run or a Cross-Department Mission is going (`err.dept_job_moving`), turning off a department whose officers are
+  on one (`err.dept_on_run`), jobs Qbox has (`err.dept_job_unknown`), a supervisor grade of those jobs
+  (`err.dept_grade_unknown`), a society account Renewed-Banking knows while `Cash.source = 'society'`
+  (`err.dept_account_unknown`).
+- `Tablet.desks` leaves the restart list (clients rebuild their zones on `settings:changed`); at most 50, inside the map,
+  0.3-5 m a side (`err.desk_size`), known departments (`err.desk_department`).
+- More validators: `Retention.auditDays` 0 or ≥ 30, `Retention.runArchiveMonths` 0 or ≥ 3, `Tablet.access.requireItem`
+  only with `Tablet.item` set (`err.require_item_none`), `AdminTheme` text at 4.5:1 or more on background and surface
+  (`err.theme_contrast`).
+- Templates: `Challenge.bounties` (kind `rows`: known kinds, unique, ≥ 1 while `weeklyBounty`), `Goals.daily|weekly`
+  (kind `goals`: id, label, count, optional type, mission, stat, unit, crossDepartment, missionCall, enabled; unique ids,
+  a known mission type).
+- `all()` adds `resets = { daily, weekly }` (the next reset times), `safeMode` and `added`.
+- History: `admin:getSettingsHistory` reads `history()` (full values; each row adds `latest`, `label`, `canRevert`,
+  `byName`, `oldValue`/`newValue` short texts). `revert(src, historyId, { reason, again, confirm })` sets the row's old
+  value again (a reset when it was config.lua's) through every check; a row that is no longer the last change of its
+  setting answers `err.setting_changed_since` until `again`. Audit and history action `settingReverted`.
+- `export() -> { text, count }` (the saved rows as JSON, never secrets), `previewImport(text) -> view, apply` (≤ 256 KB,
+  ≤ 1000 rows; unknown, locked and invalid paths listed and skipped, money switches never turned on by an import),
+  `import(src, apply, { reason })` (setMany in groups of 50, audit `settingsImport`).
+- Safe start: `set cp_settings_safe 1` in server.cfg: the saved rows are read but not applied for that start (nothing is
+  deleted), `set`/`setMany` answer `err.settings_safe_mode`, reset still works, a Config health error says so.
+- Console: `CrimsonPoliceAdmin settings` (lists the saved rows), `settings reset <path>`, `settings reset all`.
+- Net (P5): `server:admin:revertSetting`, `admin:exportSettings`, `admin:previewSettingsImport`,
+  `server:admin:importSettings` (§8.4.5).
 
 ### 5.37 CP.AdminKit and CP.Maintenance — modules/adminkit (S)
 
@@ -1663,6 +1721,49 @@ write a `CP.AdminKit.action` (§5.37): admins only (supervisors never pass), aud
   reset (one toast to the department's online supervisors).
 - `stuckCount()` (rows in `paying`, cached 30 s) is the `adminPayments` sidebar count (`T.registerNavCount`, admin only).
 - Actions and callbacks: §8.4.4.
+
+### 5.41 CP.Sysadmin — modules/sysadmin (S)
+Admin UI → System, the Departments tools, positions and Officers → Support (actions and callbacks in §8.4.5). Every
+action goes through `CP.AdminKit` (admins only, audited).
+- Schema: `schema() -> { order, tables = { [name] = { cols, kinds = dt|date|bool|val, keyset } } }`, built once from this
+  version's migration files in an in-memory saves folder engine, so a backup reads and writes the same columns with the
+  database on or off.
+- Backups: `saves/_backups/` (never served): `index.json`, `<name>.manifest.json` (kind manual|daily|prerestore, time,
+  by, version, migration, storage mode, rows per table, files), `<name>.t.<table>.json` (rows as objects; DATETIME as
+  unix seconds) and `<name>.f<n>.bin` (custom, archived, edited and deleted mission files named by `cp_custom_missions`,
+  department logos, the banned-words file). `backup(src, kind) -> ok, BackupView`, `backups()`, keep `Backups.keep`
+  (never the newest or the latest `prerestore`), `Backups.daily` on `CP.Schedule.onDaily` (waits for the busy lock).
+- Restore: `previewRestore(name)` (tables replaced and kept, files, money rows); `restore(src, name, reason)`: refuses
+  while runs go, takes the busy lock and the `restore` maintenance lock, makes a `prerestore` backup, reads the money
+  state (`moneySnapshot(db)`: run rows paying/paid/forfeited/capped or with cash paid or taken back, live and archive;
+  item rewards giving/given/forfeited), replaces every table except `cp_audit`, `cp_settings_history`,
+  `cp_schema_migrations`, `cp_storage_meta`, `cp_admin_requests`, `cp_admin_jobs`, `cp_dept_funding` (and keeps the
+  cp_settings rows of the money switches, `AdminControl.*` and `Retention.auditDays`), puts the money state back by id
+  (`moneyReapply(db, snap)`: a row the backup lacks comes back whole), writes the files back, one audit line
+  (`backupRestored`, critical), then `CP.Maintenance.askRestart`. AUTO_INCREMENT counters only move up (DELETE never
+  lowers them), so no id is handed out twice. A forced storage copy takes the same money snapshot of the store it
+  replaces and puts it back after `CP.Admin.storageCopy`.
+- Storage: `storageView()` (`CP.Admin.storageStatus()` plus `override`, `generation`, `state`, `maintenance`,
+  `runsGoing`, `busy`, `backups`), `switchStorage(src, enabled, folder, startEmpty)` (KVP, generation marker in both
+  stores, `storage` lock and the restart line), `storageMeta(db?)`; at start a store marked `left_behind` begins that lock.
+- Webhooks (read only): `webhooks()` = `CP.Admin.webhooks()` rows (category, convar, state, discord) plus the server.cfg
+  line with placeholders; the link never leaves the server. Problems: `CP.Problems.list` with tag and level filters.
+  Integrations: each dependency's state and version, the README §7 checklist keys, Crimson-Arena's state, players in the
+  arena and its no-build zones (view only).
+- Departments: `departmentSetup()` (each department as set now, `added`, `enabled`, the Qbox jobs with their grades and
+  who uses them, the cash source); add, save (per field for config.lua departments, the record for added ones), turn
+  on/off (typed short tag; officers online get a toast) and delete (added in game, no rows in runs, archive, officers,
+  commendations, reports, bounties or funding). Logo upload: base64 chunks of ≤ 16384 characters, one upload per admin,
+  ≤ 1 MB in all, dropped after 60 s idle, PNG or WebP by their first bytes (never SVG), saved as `logos/<key>.<ext>` and
+  set as the department's `logo.file` (shown after the next restart).
+- Desks: add here (the admin's server ped position and heading), update (move here), remove, teleport; `positionOf(path,
+  index)` reads a row setting's stored coordinates for Teleport to.
+- Support: `checkAccess(src, via)` (`CP.Access.explain` plus the fix key `sysadmin.fix.<error>`), give the tablet item
+  (`ox_inventory` CanCarryItem then AddItem; one per 60 s per player, never when they carry one or are in the arena),
+  release screen (`client:diagUnstick` to that player only), `clientState(src)` (asks `client:diagState`, waits 3 s).
+- Audit exports: `auditPart(filters, part)` (5000 rows per part), `saveAudit(filters)` (≤ 100,000 rows to
+  `saves/exports/audit-<time>.csv`), both through `CP.Admin._auditWhere` and `CP.Admin._csv`.
+- Console: `CrimsonPoliceAdmin storagemode reset`. Config health check `storage`.
 
 ## 6. Cross-cutting conventions
 
@@ -2136,6 +2237,45 @@ Audit actions (category `audit`, posted to the audit webhook; the money ones nev
 
 #### 8.4.5 System, departments and settings
 
+Every name below is admin-only (supervisors never pass) and audited; `reason` is 1-255 characters where it is asked.
+
+| Name | Payload → reply | Key | Guards |
+|---|---|---|---|
+| `admin:getStorage` | — → StorageView | storageAdmin | 1 per 5 s |
+| `server:admin:storageCopy` | `{ direction, force?, confirm?, requestId }` → StorageCopyReply | storageAdmin | I, M, T `REPLACE` when forced, no runs, `storage` lock (kept until the restart when the store in use changed) |
+| `server:admin:setStorageMode` | `{ enabled, folder?, startEmpty?, reason, confirm, requestId }` | storageAdmin | R, I, M, T `SWITCH`, no runs, folder under saves, target holds data or Start empty |
+| `server:admin:useStoreAgain` | `{ reason, confirm }` | storageAdmin | R, T `USE`, only while `left_behind` (allowed during the lock) |
+| `admin:getBackups` | — → BackupsData | storageAdmin | |
+| `server:admin:backupNow` | `{ reason? }` → BackupView | storageAdmin | busy lock, 1 per 60 s per admin |
+| `admin:previewRestore` | `{ name }` → RestorePreview (with `previewToken`) | storageAdmin | |
+| `server:admin:restoreBackup` | `{ name, previewToken, reason, confirm, requestId }` | storageAdmin | V, R, I, M, T `RESTORE`, no runs |
+| `server:admin:deleteBackup` | `{ name, reason, confirm }` | storageAdmin | R, T the backup name, never the newest or latest pre-restore |
+| `admin:getWebhooks` | — → `{ webhooks: WebhookView[] }` | openAdmin | read only, no link |
+| `admin:getProblems` | `{ tag?, level? }` → ProblemsData | openAdmin | |
+| `admin:getIntegrations` | — → IntegrationsData | openAdmin | |
+| `admin:getDepartmentSetup` | — → DepartmentSetup | departmentsAdmin | |
+| `server:admin:addDepartment` | `{ key, label, short, jobs, supervisorGrade, societyAccount?, themeFrom?, logo? }` | departmentsAdmin | the department validator (§5.36) |
+| `server:admin:saveDepartment` | `{ key, fields }` | departmentsAdmin | the same |
+| `server:admin:setDepartmentEnabled` | `{ key, enabled, reason, confirm }` | departmentsAdmin | R, T the short tag when turning off, not while its officers are on a run, never the last |
+| `server:admin:deleteDepartment` | `{ key, reason, confirm }` | departmentsAdmin | R, T the short tag, added in game only, no rows |
+| `server:admin:uploadLogo` | `{ department, uploadId, index, total, data }` → `{ received }` / `{ file, restart }` | departmentsAdmin | permission per chunk, one upload per admin, ≤ 1 MB, 60 s, PNG/WebP |
+| `server:admin:addDeskHere` / `updateDesk` / `removeDesk` | `{ label, size, rotation?, departments?, prop? }` / `{ index, ..., moveHere? }` / `{ index }` | departmentsAdmin | server position, the desk checks |
+| `server:admin:teleportToDesk` | `{ index }` | departmentsAdmin | 1 per 5 s |
+| `admin:myPosition` | — → `{ x, y, z, heading }` | openAdmin | server coordinates |
+| `server:admin:teleportTo` | `{ path, index }` | openAdmin | coordinates from the stored setting, 1 per 5 s |
+| `admin:checkAccess` | `{ src? \| citizenid?, via? }` → CheckAccessResult | playerSupport | 1 per 5 s per player |
+| `server:admin:giveTabletItem` | `{ src? \| citizenid?, reason }` | playerSupport | R, 1 per 60 s per player, item set, none carried, not in the arena |
+| `server:admin:releaseScreen` | `{ citizenid }` | playerSupport | 1 per 10 s per player |
+| `admin:getClientState` | `{ citizenid }` → ClientStateView | playerSupport | 1 per 5 s per player |
+| `admin:exportAuditPart` | audit filters + `{ part }` → AuditPartView | openAdmin | 1 per 3 s |
+| `server:admin:saveAuditExport` | `{ filters }` → AuditSaveReply | openAdmin | 1 per 30 s |
+| `server:admin:revertSetting` | `{ historyId, reason, again?, confirm? }` → SettingsReply | openAdmin | R; the Settings checks |
+| `admin:exportSettings` | — → `{ text, count }` | openAdmin | |
+| `admin:previewSettingsImport` | `{ text }` → SettingsImportPreview | openAdmin | ≤ 256 KB |
+| `server:admin:importSettings` | `{ previewToken, reason, confirm, requestId }` | openAdmin | V, R, I, T `IMPORT` |
+
+Events: `client:diagUnstick`, `client:diagState (token)` (server → one client), `server:diagState (token, state)`.
+
 ---
 
 ## 9. NUI protocol
@@ -2379,6 +2519,13 @@ interface BankingCheck { id; status; txn; amount; step?; source?; account?; soci
 // types/rewards.ts: AdminRewardsFilter, RewardInventoryCheck, RewardItemChoices, RewardPoolPreview; RewardRow gains
 // rowId and online; AdminRewardsView gains allowTakeBack. types/economy.ts: outOfRange, supervisorRange, unlock.
 ```
+
+System (web/src/types/admin_system.ts, P5): StorageView, StorageCopyReply, BackupView, BackupsData, RestorePreview,
+WebhookView (category, convar, state, discord, line; never the link), ProblemsData, IntegrationsData, DepartmentSetting,
+DepartmentSetup, DepartmentFields, CheckAccessResult, ClientStateView, AuditPartView, AuditSaveReply. Settings
+(web/src/types/settings.ts): `SettingsHistoryRow` is a cp_settings_history row (path, action, old/new with
+oldSaved/newSaved, short texts, by, byName, reason, revertsId, latest, canRevert); SettingsExport,
+SettingsImportPreview; SettingKind adds `goals`; SettingsData adds `resets`, `safeMode`, `added`.
 
 ### 9.6 RunResult (client:runEnded, result screen, Profile breakdown)
 

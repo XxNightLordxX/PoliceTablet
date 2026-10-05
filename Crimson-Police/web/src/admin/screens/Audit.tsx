@@ -1,4 +1,5 @@
-// Admin UI · Audit Log (screen key 'admin_audit').
+// Admin UI · Audit Log (screen key 'admin_audit'): filters (also by target, role, the acting player's every character
+// and reason text), export in parts of 5000 rows, and Save to server (saves/exports).
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -26,6 +27,13 @@ import { hasKey, t } from '../../shared/i18n';
 import { request } from '../../shared/nui';
 import { toast } from '../../shared/toast';
 import type { AuditExport, AuditFilters, AuditPage, AuditRow } from '../../types/oversight';
+import type { AuditPartView, AuditSaveReply } from '../../types/admin_system';
+import { useAdminAction } from '../components/kit';
+
+// The filters P0 added to the audit query (target, role, the acting player's license, reason text).
+type Filters = AuditFilters & { target?: string; role?: string; actorIdent?: string; reason?: string };
+type Row = AuditRow & { actorIdent?: string | null };
+const ROLES = ['admin', 'supervisor', 'console'] as const;
 import './Audit.css';
 
 const CATEGORIES = ['audit', 'flags', 'builder', 'operations'] as const;
@@ -84,21 +92,31 @@ export default function AdminAudit() {
     const [actor, setActor] = useState('');
     const [from, setFrom] = useState('');
     const [to, setTo] = useState('');
+    const [target, setTarget] = useState('');
+    const [role, setRole] = useState('');
+    const [ident, setIdent] = useState('');
+    const [reason, setReason] = useState('');
     const [page, setPage] = useState(1);
     const actorQ = useDebounced(actor.trim(), 350);
+    const reasonQ = useDebounced(reason.trim(), 350);
+    const targetQ = useDebounced(target.trim(), 350);
 
-    const filters: AuditFilters = useMemo(() => {
-        const f: AuditFilters = { page };
+    const filters: Filters = useMemo(() => {
+        const f: Filters = { page };
         if (category) f.category = category;
         if (action) f.action = action;
         if (actorQ) f.actor = actorQ;
         if (from) f.from = from;
         if (to) f.to = to;
+        if (targetQ) f.target = targetQ;
+        if (role) f.role = role;
+        if (ident) f.actorIdent = ident;
+        if (reasonQ) f.reason = reasonQ;
         return f;
-    }, [category, action, actorQ, from, to, page]);
+    }, [category, action, actorQ, from, to, targetQ, role, ident, reasonQ, page]);
 
     // A filter change goes back to page 1 before the next fetch (an effect would first fetch the old page).
-    const filterKey = `${category}|${action}|${actorQ}|${from}|${to}`;
+    const filterKey = `${category}|${action}|${actorQ}|${from}|${to}|${targetQ}|${role}|${ident}|${reasonQ}`;
     const [shownKey, setShownKey] = useState(filterKey);
     if (shownKey !== filterKey) {
         setShownKey(filterKey);
@@ -114,7 +132,25 @@ export default function AdminAudit() {
     const actions = asArray(data?.actions);
     const pages = data?.pages ?? 1;
     const current = data?.page ?? page;
-    const filtered = !!(category || action || actorQ || from || to);
+    const filtered = !!(category || action || actorQ || from || to || targetQ || role || ident || reasonQ);
+    const { run, busy } = useAdminAction();
+    const [part, setPart] = useState<AuditPartView | null>(null);
+    const { page: _p, ...exportFilters } = filters;
+    void _p;
+    const loadPart = async (n: number) => {
+        const res = await request<AuditPartView>('admin:exportAuditPart', { ...exportFilters, part: n });
+        if (res.ok && res.data) setPart(res.data);
+        else toast('error', t(res.error || 'err.internal'));
+    };
+    const saveToServer = async () => {
+        const res = await run<AuditSaveReply>(
+            'server:admin:saveAuditExport',
+            { filters: exportFilters },
+            { requestId: false },
+        );
+        if (res.ok && res.data)
+            toast('success', t('sysadmin.ui.audit_saved', { path: res.data.path, n: formatNumber(res.data.rows) }));
+    };
 
     const doExport = async () => {
         setExporting(true);
@@ -138,9 +174,13 @@ export default function AdminAudit() {
         setActor('');
         setFrom('');
         setTo('');
+        setTarget('');
+        setRole('');
+        setIdent('');
+        setReason('');
     };
 
-    const columns: TableColumn<AuditRow>[] = [
+    const columns: TableColumn<Row>[] = [
         {
             key: 'time',
             header: t('admin.audit.col.time'),
@@ -163,6 +203,16 @@ export default function AdminAudit() {
                             {t(`admin.role.${r.role}`)}
                         </Badge>
                         {r.actorName && r.actor !== 'console' ? <code>{r.actor}</code> : null}
+                        {r.actorIdent ? (
+                            <button
+                                type="button"
+                                className="oversight-aud-link"
+                                title={t('sysadmin.ui.audit_by_player')}
+                                onClick={() => setIdent(r.actorIdent ?? '')}
+                            >
+                                <Icon name="users" size={11} />
+                            </button>
+                        ) : null}
                     </span>
                 </div>
             ),
@@ -186,9 +236,14 @@ export default function AdminAudit() {
             width: 150,
             render: r =>
                 r.target ? (
-                    <code className="oversight-aud-code" title={r.target}>
-                        {shortTarget(r.target)}
-                    </code>
+                    <button
+                        type="button"
+                        className="oversight-aud-link"
+                        title={t('sysadmin.ui.audit_by_target')}
+                        onClick={() => setTarget(r.target ?? '')}
+                    >
+                        <code className="oversight-aud-code">{shortTarget(r.target)}</code>
+                    </button>
                 ) : (
                     <span className="oversight-aud-soft">—</span>
                 ),
@@ -238,6 +293,12 @@ export default function AdminAudit() {
                     <Button variant="primary" icon="download" loading={exporting} onClick={() => void doExport()}>
                         {t('admin.audit.export')}
                     </Button>
+                    <Button variant="secondary" icon="layers" onClick={() => void loadPart(1)}>
+                        {t('sysadmin.ui.audit_parts')}
+                    </Button>
+                    <Button variant="secondary" icon="server" loading={busy} onClick={() => void saveToServer()}>
+                        {t('sysadmin.ui.audit_save')}
+                    </Button>
                 </>
             }
             className="oversight-screen"
@@ -277,6 +338,37 @@ export default function AdminAudit() {
                     <Field label={t('admin.audit.filter.to')} className="oversight-aud-f-date">
                         <TextInput type="date" value={to} onChange={setTo} min={from || undefined} />
                     </Field>
+                </div>
+                <div className="oversight-aud-filters__row">
+                    <Field label={t('sysadmin.ui.audit_target')} className="oversight-aud-filters__grow">
+                        <SearchInput
+                            value={target}
+                            onChange={setTarget}
+                            placeholder={t('sysadmin.ui.audit_target_hint')}
+                        />
+                    </Field>
+                    <Field label={t('sysadmin.ui.audit_role')} className="oversight-aud-f-cat">
+                        <Select
+                            value={role}
+                            onChange={setRole}
+                            options={[
+                                { value: '', label: t('sysadmin.ui.audit_all_roles') },
+                                ...ROLES.map(r => ({ value: r, label: t(`admin.role.${r}`) })),
+                            ]}
+                        />
+                    </Field>
+                    <Field label={t('sysadmin.ui.audit_reason')} className="oversight-aud-filters__grow">
+                        <SearchInput
+                            value={reason}
+                            onChange={setReason}
+                            placeholder={t('sysadmin.ui.audit_reason_hint')}
+                        />
+                    </Field>
+                    {ident ? (
+                        <Badge tone="accent" icon="users">
+                            {t('sysadmin.ui.audit_player', { ident: ident.slice(-4) })}
+                        </Badge>
+                    ) : null}
                     <Button
                         variant="ghost"
                         icon="x"
@@ -340,6 +432,65 @@ export default function AdminAudit() {
                 </div>
             </div>
 
+            <Dialog
+                open={!!part}
+                onClose={() => setPart(null)}
+                size="lg"
+                title={t('sysadmin.ui.audit_parts')}
+                description={
+                    part
+                        ? t('sysadmin.ui.audit_part_desc', {
+                              part: part.part,
+                              parts: part.parts,
+                              n: formatNumber(part.total),
+                          })
+                        : undefined
+                }
+                footer={
+                    <>
+                        <Button
+                            variant="ghost"
+                            disabled={!part || part.part <= 1}
+                            onClick={() => part && void loadPart(part.part - 1)}
+                        >
+                            {t('admin.audit.prev')}
+                        </Button>
+                        <Button
+                            variant="ghost"
+                            disabled={!part || part.part >= part.parts}
+                            onClick={() => part && void loadPart(part.part + 1)}
+                        >
+                            {t('admin.audit.next')}
+                        </Button>
+                        <Button
+                            variant="primary"
+                            icon="check"
+                            onClick={() =>
+                                part &&
+                                void copyText(part.csv, area.current).then(ok =>
+                                    toast(
+                                        ok ? 'success' : 'warning',
+                                        t(ok ? 'admin.audit.copied' : 'admin.audit.copy_failed'),
+                                    ),
+                                )
+                            }
+                        >
+                            {t('admin.audit.copy')}
+                        </Button>
+                    </>
+                }
+            >
+                {part ? (
+                    <textarea
+                        ref={area}
+                        className="oversight-aud-csv"
+                        readOnly
+                        value={part.csv}
+                        spellCheck={false}
+                        aria-label={t('sysadmin.ui.audit_parts')}
+                    />
+                ) : null}
+            </Dialog>
             <Dialog
                 open={!!exported}
                 onClose={() => setExported(null)}

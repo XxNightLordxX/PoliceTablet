@@ -22,17 +22,6 @@ local FILES = {
     { name = 'blocks', path = 'config/blocks.lua' },
 }
 
--- The audit actions of this module (the Settings screen's history lists these).
-local ACTIONS = {
-    'settingChanged',
-    'settingReset',
-    'settingsResetAll',
-    'missionSwitch',
-    'locationSwitch',
-    'missionSwitchesReset',
-    'moneySwitch',
-}
-
 -- These can only change in config.lua: where the settings themselves are saved, and who is an admin (an admin
 -- changing them in game could hand admin to anyone or lock every admin out).
 -- The tablet title and the two command names are Hard rule names (a clash with another resource's command would make
@@ -95,7 +84,6 @@ local RESTART = {
     'Tablet.dispatchKey',
     'Tablet.readyKey',
     'Tablet.contactKey',
-    'Tablet.desks',
     'Locale',
     'Time.resetHour',
     'Leaderboard.weekStartsOn',
@@ -240,13 +228,14 @@ local ORDERED = {
 }
 
 local warned = {}
-local validators = {}     -- { pattern, fn } (Settings.registerValidator)
-local schema = nil        -- { list, byPath, sections } (built at the first request)
-local saved = {}          -- [path] = { value, none, by, at, invalid } : the cp_settings rows
-local applied = {}        -- [path] = { value, none } : what Config holds now
-local touched = {}        -- top-level Config keys rebuilt at least once
+local validators = {}           -- { pattern, fn } (Settings.registerValidator)
+local schema = nil              -- { list, byPath, sections } (built at the first request)
+local saved = {}                -- [path] = { value, none, by, at, invalid } : the cp_settings rows
+local applied = {}              -- [path] = { value, none } : what Config holds now
+local touched = {}              -- top-level Config keys rebuilt at least once
 local loaded = false
-local waiting = {}        -- srcs that said hello before the settings loaded
+local safeMode = false          -- set cp_settings_safe 1: the saved settings are ignored for this start
+local waiting = {}              -- srcs that said hello before the settings loaded
 local reloadQueued = false
 
 -- ============================================================================
@@ -1106,6 +1095,142 @@ end
 KNOWN['Labels'] = { tpl = MapOf(Text(nil, 64), '^[%w_%.%-]+$'), kind = 'labels', check = CheckLabels }
 
 -- ============================================================================
+--                    DEPARTMENTS, DESKS, GOALS AND BOUNTIES
+-- ============================================================================
+-- A department added in game is one record setting (Departments.<key>); a config.lua department keeps one setting per
+-- field. The cross-field rules (jobs, grades, accounts, runs going) are the department validator further down.
+
+local function CheckLogoUrl(s)
+    if s:sub(1, 8):lower() ~= 'https://' or #s <= 8 or s:find('[%s"\'<>\\]') then return 'err.dept_logo_url' end
+    return nil
+end
+
+local function CheckLogoFile(s)
+    local ext = s:match('%.(%w+)$')
+    if s:find('..', 1, true) or s:find('/', 1, true) or not ext then return 'err.dept_logo_file' end
+    ext = ext:lower()
+    if ext ~= 'png' and ext ~= 'webp' and ext ~= 'svg' then return 'err.dept_logo_file' end
+    return nil
+end
+
+local DEPT_KEY = '^[a-z0-9_]+$'
+local LOGO_URL = Text(nil, 512, CheckLogoUrl)
+local LOGO_FILE = Text('^[%w_%-%.]+$', 100, CheckLogoFile)
+local ACCENT = Alts(HEX, Record({ colour = HEX, level = Num(1, 1000, true) }, { colour = true }))
+
+local DEPT_RECORD = Record({
+    label = Text(nil, 64),
+    short = Text(nil, 16),
+    enabled = true,
+    jobs = ListOf(ID, { min = 1, max = 20, unique = true }),
+    supervisorGrade = Num(0, 100, true),
+    societyAccount = Text('^[%w_%-]+$', 50),
+    theme = Record({
+        primary = HEX,
+        accent = HEX,
+        background = HEX,
+        surface = HEX,
+        text = HEX,
+        personalAccents = ListOf(ACCENT, { max = 20 }),
+    }, { primary = true, accent = true, background = true, surface = true }),
+    logo = Record({
+        file = LOGO_FILE,
+        url = LOGO_URL,
+        watermark = true,
+        opacity = Num(0, 0.25, false),
+        size = Num(0.05, 1, false),
+        grayscale = true,
+    }),
+}, { label = true, short = true, jobs = true, supervisorGrade = true })
+Settings._deptRecord = DEPT_RECORD
+
+KNOWN['Departments.*.logo.url'] = { tpl = Alts(NIL, LOGO_URL), nullable = true, kind = 'text' }
+KNOWN['Departments.*.logo.file'] = { tpl = Alts(NIL, LOGO_FILE), nullable = true, kind = 'text' }
+KNOWN['Departments.*.theme.text'] = { tpl = Alts(NIL, HEX), nullable = true, kind = 'colour' }
+
+-- Mission desks: at most 50, inside the map, 0.3 to 5 m a side. Known departments: the department validator.
+local DESKS_MAX = 50
+local function CheckDesks(list)
+    if #list > DESKS_MAX then return 'err.setting_too_many' end
+    for _, d in ipairs(list) do
+        if not Inside(d.coords) then return 'err.setting_outside_map' end
+        for _, part in ipairs({ 'x', 'y', 'z' }) do
+            local n = d.size[part]
+            if n < 0.3 or n > 5.0 then return 'err.desk_size' end
+        end
+    end
+    return nil
+end
+KNOWN['Tablet.desks'].check = CheckDesks
+KNOWN['Tablet.desks'].tpl.max = DESKS_MAX
+
+-- The weekly bounty kinds the challenge counts (modules/challenge): one row per kind, at least one while it is on.
+local BOUNTY_KINDS = { 'most_tactical', 'most_cross', 'most_unit', 'most_completed', 'most_arrests', 'most_calls' }
+local function CheckBounties(rows, _, ctx)
+    local seen = {}
+    for _, r in ipairs(rows) do
+        if seen[r.id] then return 'err.setting_duplicate' end
+        seen[r.id] = true
+    end
+    local on = ctx and ctx.pending and ctx.pending['Challenge.weeklyBounty']
+    if on == nil then on = Effective('Challenge.weeklyBounty') end
+    if on ~= false and #rows == 0 then return 'err.setting_too_few' end
+    return nil
+end
+KNOWN['Challenge.bounties'] = {
+    tpl = ListOf(Record({ id = Enum(BOUNTY_KINDS), label = Text(nil, 64) }, { id = true, label = true }),
+        { max = #BOUNTY_KINDS }),
+    kind = 'rows',
+    check = CheckBounties,
+    rows = {
+        max = #BOUNTY_KINDS,
+        fields = { F('id', 'enum', { options = BOUNTY_KINDS }), F('label', 'text', { max = 64 }) },
+    },
+}
+
+-- Daily and weekly goals (modules/goals): id, name, count and the conditions a counted run must meet (all of them).
+local GOAL_STATS = {
+    'arrests',
+    'citations',
+    'impounds',
+    'rescues',
+    'vehicles_stopped',
+    'evidence',
+    'decisions_ok',
+    'decisions_best',
+}
+local GOAL = Record({
+    id = Text('^[%w_]+$', 32),
+    label = Text(nil, 64),
+    count = Num(1, 1000, true),
+    type = Text('^[%w_]+$', 32),
+    mission = Text('^[%w_%-]+$', 64),
+    stat = Enum(GOAL_STATS),
+    unit = true,
+    crossDepartment = true,
+    missionCall = true,
+    enabled = true,
+}, { id = true, label = true, count = true })
+local function CheckGoals(rows)
+    local seen = {}
+    local types = Effective('MissionTypes')
+    for _, g in ipairs(rows) do
+        if seen[g.id] then return 'err.setting_duplicate' end
+        seen[g.id] = true
+        if g.type and type(types) == 'table' and types[g.type] == nil then return 'err.goal_type' end
+    end
+    return nil
+end
+for _, path in ipairs({ 'Goals.daily', 'Goals.weekly' }) do
+    KNOWN[path] = {
+        tpl = ListOf(GOAL, { max = 30 }),
+        kind = 'goals',
+        check = CheckGoals,
+        options = GOAL_STATS,
+    }
+end
+
+-- ============================================================================
 --                             BONUS KIND AND VALUE
 -- ============================================================================
 -- A bonus's kind changes only together with its value (one save of both): points -500..500 whole numbers, pct
@@ -1612,6 +1737,17 @@ local function BuildSchema()
             end
         end
     end
+    -- a department's logo link and text colour are optional (config.lua leaves them out or comments them)
+    for key, d in pairs(type(DEFAULTS.Departments) == 'table' and DEFAULTS.Departments or {}) do
+        if type(key) == 'string' and type(d) == 'table' then
+            for _, leaf in ipairs({ 'logo.url', 'logo.file', 'theme.text' }) do
+                local path = ('Departments.%s.%s'):format(key, leaf)
+                if not byPath[path] and U.getPath(DEFAULTS, path) == nil then add(path, nil) end
+            end
+            local enabled = ('Departments.%s.enabled'):format(key)
+            if not byPath[enabled] then add(enabled, true) end
+        end
+    end
     -- the mission switches write these even when an older config.lua has no line for them
     if not byPath.DisabledMissions then add('DisabledMissions', {}) end
     if not byPath.DisabledLocations then add('DisabledLocations', {}) end
@@ -1660,10 +1796,48 @@ end
 Settings._schema = Schema
 Settings._resetSchema = function() schema = nil end
 
+-- A department added in game: one record setting Departments.<key> (a key config.lua does not have).
+local dynamic = {}
+local function DynamicEntry(path)
+    local key = path:match('^Departments%.([^%.]+)$')
+    if not key or #key > 32 or not key:match(DEPT_KEY) then return nil end
+    if type(DEFAULTS.Departments) == 'table' and DEFAULTS.Departments[key] ~= nil then return nil end
+    local e = dynamic[path]
+    if e then return e end
+    e = {
+        path = path,
+        key = key,
+        label = key,
+        desc = '',
+        kind = 'json',
+        tpl = DEPT_RECORD,
+        nullable = true,
+        default = nil,
+        reload = true,
+        added = true,
+        section = 'departments',
+        group = 'Departments',
+        order = 1e7,
+    }
+    dynamic[path] = e
+    return e
+end
+
 -- The entry of a path (nil for a path that is not a setting).
 function Settings.entry(path)
     if type(path) ~= 'string' or #path > 191 then return nil end
-    return Schema().byPath[path]
+    return Schema().byPath[path] or DynamicEntry(path)
+end
+
+-- The departments added in game (their keys, sorted).
+function Settings.addedDepartments()
+    local out = {}
+    for path, s in pairs(saved) do
+        local key = path:match('^Departments%.([^%.]+)$')
+        if key and not s.invalid and not s.none and DynamicEntry(path) then out[#out + 1] = key end
+    end
+    table.sort(out)
+    return out
 end
 
 -- ============================================================================
@@ -1908,7 +2082,11 @@ local function ApplyAll(atBoot)
     for path in pairs(applied) do paths[path] = true end
     for path in pairs(paths) do
         local e = Settings.entry(path)
-        if e and (atBoot or not e.restart) then applied[path] = Wanted(path) end
+        if safeMode then
+            applied[path] = nil
+        elseif e and (atBoot or not e.restart) then
+            applied[path] = Wanted(path)
+        end
         if not e then applied[path] = nil end
     end
     Rebuild()
@@ -1952,6 +2130,9 @@ end
 -- every module that waits for the database already reads them; later calls do nothing.
 function Settings.boot()
     if loaded then return true end
+    local safe = GetConvar and tostring(GetConvar('cp_settings_safe', '0')) or '0'
+    safeMode = safe == '1' or safe:lower() == 'true'
+    if safeMode then CP.warn(TAG, '%s', CP.L('settings.console_safe_mode')) end
     local ok = LoadRows()
     if ok then ApplyAll(true) end
     loaded = true
@@ -1965,6 +2146,7 @@ function Settings.boot()
 end
 
 function Settings.isLoaded() return loaded end
+function Settings.safeMode() return safeMode end
 
 -- Waits (up to timeoutMs) until the saved settings are loaded: start-up code that reads a setting once calls this.
 function Settings.waitLoaded(timeoutMs)
@@ -2079,6 +2261,19 @@ function Settings.all()
         out.total = out.total + s.count
         out.sections[#out.sections + 1] = s
     end
+    -- next to Time.resetHour and Leaderboard.weekStartsOn: when the next daily and weekly reset happen
+    local sch = CP.Schedule
+    if type(sch) == 'table' and sch.dayStart and sch.weekStart then
+        local now = sch.now and sch.now() or os.time()
+        local okD, day = pcall(sch.dayStart, now)
+        local okW, week = pcall(sch.weekStart, now)
+        out.resets = {
+            daily = okD and type(day) == 'number' and day + 86400 or nil,
+            weekly = okW and type(week) == 'number' and week + 7 * 86400 or nil,
+        }
+    end
+    out.safeMode = safeMode or nil
+    out.added = Settings.addedDepartments()
     return out
 end
 
@@ -2161,7 +2356,8 @@ local function Commit(src, path, clean, none, opts)
         if not WriteRow(path, clean, none, src) then return nil, 'err.internal' end
         saved[path] = { value = clean, none = none or nil, by = ActorId(src), at = os.time() }
     end
-    local action = opts.action or (isDefault and 'settingReset' or 'settingChanged')
+    local action = opts.action or (opts.revertsId and 'settingReverted')
+        or (isDefault and 'settingReset' or 'settingChanged')
     if not noop then History(src, path, action, oldJson, not isDefault and Encode(clean, none) or nil, opts) end
     return { path = path, before = before, beforeNone = beforeNone, clean = clean, none = none, isDefault = isDefault }
 end
@@ -2188,8 +2384,9 @@ local function AuditChange(src, c, opts)
         Audit(src, 'moneySwitch', c.path, c.before == true and 'on' or 'off', on and 'on' or 'off', opts.reason,
             { critical = true })
     else
-        Audit(src, c.isDefault and 'settingReset' or 'settingChanged', c.path, Brief(c.before, c.beforeNone),
-            Brief(c.clean, c.none), opts.reason or (#c.path > 64 and c.path or nil))
+        local action = opts.revertsId and 'settingReverted' or (c.isDefault and 'settingReset' or 'settingChanged')
+        Audit(src, action, c.path, Brief(c.before, c.beforeNone), Brief(c.clean, c.none),
+            opts.reason or (#c.path > 64 and c.path or nil))
     end
     if e and e.points then PointsNotice(src, c.path, Brief(c.before, c.beforeNone), Brief(c.clean, c.none)) end
 end
@@ -2200,6 +2397,7 @@ end
 function Settings.set(src, path, value, none, opts)
     opts = opts or {}
     if not loaded then return false, 'err.settings_not_ready' end
+    if safeMode then return false, 'err.settings_safe_mode' end
     local okC, clean = Settings.check(path, value, none, { pending = opts.pending })
     if not okC then return false, clean end
     local errM = MoneyGuard(path, clean, none, opts)
@@ -2217,6 +2415,7 @@ end
 function Settings.setMany(src, changes, opts)
     opts = opts or {}
     if not loaded then return false, 'err.settings_not_ready' end
+    if safeMode then return false, 'err.settings_safe_mode' end
     if type(changes) ~= 'table' or #changes == 0 or #changes > 50 then return false, 'err.invalid_payload' end
     local pending = {}
     for _, c in ipairs(changes) do
@@ -2277,7 +2476,8 @@ function Settings.reset(src, path, opts)
         local before = Effective(p)
         if not DeleteRow(p) then return false, 'err.internal' end
         saved[p] = nil
-        History(src, p, opts.action or 'settingReset', SavedJson(s), nil, opts)
+        History(src, p, opts.action or (opts.revertsId and 'settingReverted') or 'settingReset', SavedJson(s), nil,
+            opts)
         changes[#changes + 1] = { path = p, s = s, before = before }
     end
     Changed(paths)
@@ -2289,8 +2489,9 @@ function Settings.reset(src, path, opts)
             Audit(src, 'moneySwitch', c.path, c.before == true and 'on' or 'off', pe.default == true and 'on' or 'off',
                 opts.reason, { critical = true })
         else
-            Audit(src, 'settingReset', c.path, c.s.invalid and Brief(c.s.raw) or Brief(c.before, c.s.none),
-                Brief(pe and pe.default), opts.reason or (#c.path > 64 and c.path or nil))
+            Audit(src, opts.revertsId and 'settingReverted' or 'settingReset', c.path,
+                c.s.invalid and Brief(c.s.raw) or Brief(c.before, c.s.none), Brief(pe and pe.default),
+                opts.reason or (#c.path > 64 and c.path or nil))
         end
         if pe and pe.points and not opts.action then
             PointsNotice(src, c.path, Brief(c.before, c.s.none), Brief(pe.default, pe.default == nil))
@@ -2388,6 +2589,9 @@ function Settings._historyRow(r)
         reason = r.reason,
         revertsId = r.reverts_id ~= nil and math.tointeger(tonumber(r.reverts_id)) or nil,
         createdAt = math.floor(U.num(r.created_ts)),
+        -- short texts of the two values (the list shows these; old/new hold the full values)
+        oldValue = oldSet and Brief(old, old == nil) or nil,
+        newValue = newSet and Brief(new, new == nil) or nil,
     }
 end
 
@@ -2568,8 +2772,210 @@ local function HealthCheck()
         level = 'ok',
         text = n > 0 and CP.L('settings.health.changed', { n = n - bad }) or CP.L('settings.health.none'),
     })
+    if safeMode then
+        table.insert(out, 1,
+            { level = 'error', text = CP.L('settings.health.safe_mode'), cfgLine = 'set cp_settings_safe 0' })
+    end
     return out
 end
+
+-- ============================================================================
+--                       CROSS-FIELD CHECKS (VALIDATORS)
+-- ============================================================================
+-- The same answer from the Departments screen, the desk editor and the raw editor (they all end in Settings.check).
+
+local function Runs()
+    local out = {}
+    if CP.Runs and CP.Runs.all then
+        local ok, list = pcall(CP.Runs.all)
+        if ok and type(list) == 'table' then out = list end
+    end
+    return out
+end
+
+local function RunsGoing()
+    local n = #Runs()
+    local op = CP.Operations and CP.Operations.active and CP.Operations.active() or nil
+    if op ~= nil then n = n + 1 end
+    return n
+end
+Settings._runsGoing = RunsGoing
+
+-- Departments with officers on a run or in the Cross-Department Mission now.
+local function DepartmentsOnRuns()
+    local out = {}
+    for _, run in ipairs(Runs()) do
+        for _, p in pairs(type(run.participants) == 'table' and run.participants or {}) do
+            if type(p) == 'table' and type(p.department) == 'string' then out[p.department] = true end
+        end
+        for d in pairs(type(run.departments) == 'table' and run.departments or {}) do
+            if type(d) == 'string' then out[d] = true end
+        end
+    end
+    local op = CP.Operations and CP.Operations.active and CP.Operations.active() or nil
+    if type(op) == 'table' then
+        for _, d in ipairs(type(op.departments) == 'table' and op.departments or {}) do
+            if type(d) == 'string' then out[d] = true end
+        end
+        if next(out) == nil then out['*'] = true end
+    end
+    return out
+end
+
+local function QboxJobs()
+    if not (CP.Qbx and CP.Qbx.getJobs) then return nil end
+    local ok, jobs = pcall(CP.Qbx.getJobs)
+    if not ok or type(jobs) ~= 'table' or next(jobs) == nil then return nil end
+    return jobs
+end
+
+local function GradeExists(job, grade)
+    local grades = type(job) == 'table' and job.grades or nil
+    if type(grades) ~= 'table' or next(grades) == nil then return true end
+    return grades[grade] ~= nil or grades[tostring(grade)] ~= nil
+end
+
+-- Config.Departments as it would be after this change (path, clean value).
+local function DepartmentsAfter(path, clean, none)
+    local deps = U.deepcopy(type(Config.Departments) == 'table' and Config.Departments or {})
+    if path == 'Departments' then return type(clean) == 'table' and U.deepcopy(clean) or {} end
+    local key, rest = path:match('^Departments%.([^%.]+)%.?(.*)$')
+    if not key then return deps end
+    local v = nil
+    if not none then v = U.deepcopy(clean) end
+    if rest == '' then
+        deps[key] = v
+    else
+        deps[key] = type(deps[key]) == 'table' and deps[key] or {}
+        U.setPath(deps[key], rest, v)
+    end
+    return deps
+end
+
+local function JobMap(deps)
+    local byJob = {}
+    for key, d in pairs(deps) do
+        local jobs = type(d) == 'table' and d.jobs or nil
+        if type(jobs) == 'string' then jobs = { jobs } end
+        for _, j in ipairs(type(jobs) == 'table' and jobs or {}) do
+            if byJob[j] and byJob[j] ~= key then return nil, j end
+            byJob[j] = key
+        end
+    end
+    return byJob
+end
+
+function Settings.checkDepartments(path, clean, ctx, none)
+    ctx = ctx or {}
+    local before = type(Config.Departments) == 'table' and Config.Departments or {}
+    local after = DepartmentsAfter(path, clean, none)
+    local byJob, clash = JobMap(after)
+    if not byJob then return 'err.dept_job_taken', clash end
+    local enabled = 0
+    for _, d in pairs(after) do
+        if type(d) == 'table' and d.enabled ~= false then enabled = enabled + 1 end
+    end
+    if enabled == 0 then return 'err.dept_last' end
+    if ctx.boot then return nil end
+    local oldJobs = JobMap(before) or {}
+    local moved = false
+    for job, key in pairs(byJob) do
+        if oldJobs[job] ~= nil and oldJobs[job] ~= key then moved = true end
+    end
+    if moved and RunsGoing() > 0 then return 'err.dept_job_moving' end
+    local onRuns = nil
+    for key, d in pairs(after) do
+        local was = before[key]
+        local wasOn = type(was) == 'table' and was.enabled ~= false
+        if type(d) == 'table' and d.enabled == false and wasOn then
+            onRuns = onRuns or DepartmentsOnRuns()
+            if onRuns[key] or onRuns['*'] then return 'err.dept_on_run' end
+        end
+    end
+    local jobs = QboxJobs()
+    if jobs then
+        for key, d in pairs(after) do
+            if type(d) == 'table' and not Same(d, before[key]) then
+                for _, j in ipairs(type(d.jobs) == 'table' and d.jobs or {}) do
+                    if jobs[j] == nil then return 'err.dept_job_unknown', j end
+                    if not GradeExists(jobs[j], math.tointeger(tonumber(d.supervisorGrade) or -1)) then
+                        return 'err.dept_grade_unknown', j
+                    end
+                end
+            end
+        end
+    end
+    local source = Effective('Cash.source')
+    if source == 'society' and CP.Banking and CP.Banking.societyBalance then
+        for key, d in pairs(after) do
+            local acc = type(d) == 'table' and d.societyAccount or nil
+            local was = type(before[key]) == 'table' and before[key].societyAccount or nil
+            if type(acc) == 'string' and acc ~= was then
+                local ok, bal = pcall(CP.Banking.societyBalance, acc)
+                if ok and bal == nil and GetResourceState and GetResourceState('Renewed-Banking') == 'started' then
+                    return 'err.dept_account_unknown', acc
+                end
+            end
+        end
+    end
+    return nil
+end
+
+Settings.registerValidator('Departments', function(path, clean, ctx)
+    return (Settings.checkDepartments(path, clean, ctx))
+end)
+
+-- A desk names known departments only.
+Settings.registerValidator('Tablet.desks', function(_, clean)
+    local deps = Config.Departments or {}
+    for _, d in ipairs(type(clean) == 'table' and clean or {}) do
+        for _, k in ipairs(type(d.departments) == 'table' and d.departments or {}) do
+            if type(deps) == 'table' and deps[k] == nil then return 'err.desk_department' end
+        end
+    end
+    return nil
+end)
+
+-- Retention: the audit trail stays at least 30 days; archived runs 0 (never) or 3 months and more.
+Settings.registerValidator('Retention.auditDays', function(_, clean)
+    if type(clean) == 'number' and clean ~= 0 and clean < 30 then return 'err.retention_audit' end
+    return nil
+end)
+Settings.registerValidator('Retention.runArchiveMonths', function(_, clean)
+    if type(clean) == 'number' and clean ~= 0 and clean < 3 then return 'err.retention_archive' end
+    return nil
+end)
+
+-- requireItem without an item would lock every officer out of every way but a desk.
+Settings.registerValidator('Tablet.access.requireItem', function(_, clean, ctx)
+    local item = ctx.effective('Tablet.item')
+    if clean == true and (item == false or item == nil or item == '') then return 'err.require_item_none' end
+    return nil
+end)
+Settings.registerValidator('Tablet.item', function(_, clean, ctx)
+    if (clean == false or clean == nil) and ctx.effective('Tablet.access.requireItem') == true then
+        return 'err.require_item_none'
+    end
+    return nil
+end)
+
+-- The Admin UI stays readable: text on the background and on cards at 4.5:1 or more.
+local function Contrast(a, b)
+    if not (U.isHexColour(a) and U.isHexColour(b)) then return 21 end
+    local la, lb = U.luminance(a), U.luminance(b)
+    if la < lb then la, lb = lb, la end
+    return (la + 0.05) / (lb + 0.05)
+end
+Settings._contrast = Contrast
+Settings.registerValidator('AdminTheme', function(path, clean, ctx)
+    local function v(k)
+        if path == 'AdminTheme.' .. k then return clean end
+        return ctx.effective('AdminTheme.' .. k)
+    end
+    local text = v('text')
+    if Contrast(text, v('background')) < 4.5 or Contrast(text, v('surface')) < 4.5 then return 'err.theme_contrast' end
+    return nil
+end)
 
 -- ============================================================================
 --                                     NET
@@ -2668,61 +3074,226 @@ CP.Net.action('server:admin:resetMissionSwitches', function(src, payload)
     return Settings.resetMission(src, Payload(payload).missionId)
 end, { rate = 4 })
 
--- The settings history: the audit lines of this module, newest first (optionally of one setting).
+-- The settings history (cp_settings_history, full old and new values), newest first (optionally of one setting).
+-- Each row says whether it is still the last change of its setting (Revert asks again when it is not).
 CP.Net.callback('admin:getSettingsHistory', function(src, args)
     local ok, err = AdminOnly(src)
     if not ok then return nil, err end
-    args = Payload(args)
-    local marks, params = {}, {}
-    for i, a in ipairs(ACTIONS) do
-        marks[i] = '?'
-        params[i] = a
-    end
-    local where = ('a.action IN (%s)'):format(table.concat(marks, ', '))
-    if type(args.path) == 'string' and args.path ~= '' and #args.path <= 191 then
-        where = where .. ' AND (a.target = ? OR a.reason = ?)'
-        params[#params + 1] = args.path:sub(1, 64)
-        params[#params + 1] = args.path
-    end
     if CP.Migrations and CP.Migrations.ready then CP.Migrations.ready() end
-    local okN, total = pcall(MySQL.scalar.await, ('SELECT COUNT(*) FROM cp_audit a WHERE %s'):format(where), params)
-    if not okN then return nil, 'err.internal' end
-    total = math.floor(U.num(total))
-    local pages = math.max(1, math.ceil(total / HISTORY_PAGE))
-    local page = math.tointeger(tonumber(args.page) or 1) or 1
-    if page < 1 then page = 1 end
-    if page > pages then page = pages end
-    local q = {}
-    for i, v in ipairs(params) do q[i] = v end
-    q[#q + 1] = HISTORY_PAGE
-    q[#q + 1] = (page - 1) * HISTORY_PAGE
-    local okR, rows = pcall(
-        MySQL.query.await,
-        ([[
-        SELECT a.id, a.actor, a.role, a.action, a.target, a.old_value, a.new_value, a.reason,
-          UNIX_TIMESTAMP(a.created_at) AS created_ts, o.display_name
-        FROM cp_audit a LEFT JOIN cp_officers o ON o.citizenid = a.actor
-        WHERE %s ORDER BY a.created_at DESC, a.id DESC LIMIT ? OFFSET ?]]):format(where),
-        q
-    )
-    if not okR then return nil, 'err.internal' end
-    local out = {}
-    for _, r in ipairs(type(rows) == 'table' and rows or {}) do
-        out[#out + 1] = {
-            id = math.tointeger(tonumber(r.id)),
-            actor = r.actor,
-            actorName = r.display_name,
-            role = r.role,
-            action = r.action,
-            target = r.target,
-            oldValue = r.old_value,
-            newValue = r.new_value,
-            reason = r.reason,
-            createdAt = math.floor(U.num(r.created_ts)),
-        }
+    local res, errH = Settings.history(Payload(args))
+    if not res then return nil, errH end
+    local paths, marks, seen = {}, {}, {}
+    for _, r in ipairs(res.rows) do
+        if not seen[r.path] then
+            seen[r.path] = true
+            paths[#paths + 1] = r.path
+            marks[#marks + 1] = '?'
+        end
     end
-    return { rows = out, page = page, pages = pages, total = total }
+    local last = {}
+    if #paths > 0 then
+        local okL, rows = pcall(
+            MySQL.query.await,
+            ([[SELECT setting_key, MAX(id) AS id FROM cp_settings_history
+            WHERE setting_key IN (%s) GROUP BY setting_key]]):format(table.concat(marks, ', ')),
+            paths
+        )
+        for _, r in ipairs(okL and type(rows) == 'table' and rows or {}) do
+            last[tostring(r.setting_key)] = math.tointeger(tonumber(r.id))
+        end
+    end
+    local names = {}
+    for _, r in ipairs(res.rows) do
+        r.latest = last[r.path] == nil or last[r.path] == r.id
+        local e = Settings.entry(r.path)
+        r.label = e and e.label or r.path
+        r.canRevert = e ~= nil and not e.locked
+        if r.by and r.by ~= 'console' and names[r.by] == nil then
+            local okN, name = pcall(MySQL.scalar.await, 'SELECT display_name FROM cp_officers WHERE citizenid = ?',
+                { r.by })
+            names[r.by] = okN and name or false
+        end
+        r.byName = names[r.by] or nil
+    end
+    return res
 end, { rate = 3 })
+
+-- ============================================================================
+--                     REVERT, EXPORT AND IMPORT (SETTINGS)
+-- ============================================================================
+
+local IMPORT_MAX = 262144      -- bytes of an imported settings text
+local IMPORT_ROWS = 1000
+
+-- One history row undone: its old value set again (config.lua's value = a reset), through every check.
+function Settings.revert(src, historyId, opts)
+    opts = opts or {}
+    local h = Settings.historyEntry(historyId)
+    if not h then return false, 'err.history_unknown' end
+    local e = Settings.entry(h.path)
+    if not e then return false, 'err.setting_unknown' end
+    if e.locked then return false, 'err.setting_locked' end
+    if not opts.again then
+        local okL, lastId = pcall(MySQL.scalar.await, 'SELECT MAX(id) FROM cp_settings_history WHERE setting_key = ?',
+            { h.path })
+        if okL and math.tointeger(tonumber(lastId)) ~= h.id then return false, 'err.setting_changed_since' end
+    end
+    local sopts = { reason = opts.reason, revertsId = h.id, confirm = opts.confirm }
+    if not h.oldSaved then return Settings.reset(src, h.path, sopts) end
+    if h.old == nil then return Settings.set(src, h.path, nil, true, sopts) end
+    return Settings.set(src, h.path, h.old, false, sopts)
+end
+
+-- The settings changed in game as one JSON text (no secrets: webhook links and admin lists are never settings).
+function Settings.export()
+    local list = {}
+    for path, s in pairs(saved) do
+        local e = Settings.entry(path)
+        if e and not e.locked and not s.invalid then
+            list[#list + 1] = s.none and { path = path, none = true } or { path = path, value = Plain(s.value) }
+        end
+    end
+    table.sort(list, function(a, b) return a.path < b.path end)
+    local doc = {
+        kind = 'crimson-police-settings',
+        version = GetResourceMetadata and GetResourceMetadata(CP.resource, 'version', 0) or nil,
+        exportedAt = os.time(),
+        settings = list,
+    }
+    return { text = json.encode(doc), count = #list }
+end
+
+-- What an import would change: { changes = { path, label, old, new }, unknown, locked, invalid = { path, error },
+-- money = { path }, unchanged } and the changes to apply (value form). Nothing is saved.
+function Settings.previewImport(text)
+    if type(text) ~= 'string' or text == '' then return nil, 'err.invalid_payload' end
+    if #text > IMPORT_MAX then return nil, 'err.setting_too_big' end
+    local okJ, doc = pcall(json.decode, text)
+    if not okJ or type(doc) ~= 'table' or type(doc.settings) ~= 'table' then return nil, 'err.import_format' end
+    if #doc.settings > IMPORT_ROWS then return nil, 'err.setting_too_many' end
+    local view = { changes = {}, unknown = {}, locked = {}, invalid = {}, money = {}, unchanged = 0 }
+    local apply, seen = {}, {}
+    for _, item in ipairs(doc.settings) do
+        local path = type(item) == 'table' and item.path or nil
+        if type(path) ~= 'string' or seen[path] then
+            view.invalid[#view.invalid + 1] = { path = tostring(path), error = 'err.import_format' }
+        else
+            seen[path] = true
+            local e = Settings.entry(path)
+            local none = item.none == true
+            if not e then
+                view.unknown[#view.unknown + 1] = path
+            elseif e.locked then
+                view.locked[#view.locked + 1] = path
+            else
+                local okC, clean = Settings.check(path, item.value, none)
+                if not okC then
+                    view.invalid[#view.invalid + 1] = { path = path, error = clean }
+                elseif e.money and clean == true and Effective(path) ~= true then
+                    view.money[#view.money + 1] = path
+                else
+                    local now = Effective(path)
+                    if (none and now == nil) or (not none and Same(clean, now)) then
+                        view.unchanged = view.unchanged + 1
+                    else
+                        view.changes[#view.changes + 1] = {
+                            path = path,
+                            label = e.label,
+                            old = Brief(now, now == nil),
+                            new = Brief(clean, none),
+                        }
+                        apply[#apply + 1] = { path = path, value = clean, none = none }
+                    end
+                end
+            end
+        end
+    end
+    table.sort(view.changes, function(a, b) return a.path < b.path end)
+    return view, apply
+end
+
+-- The checked changes saved in groups of 50 (Settings.setMany); every one is checked again as it is saved.
+function Settings.import(src, apply, opts)
+    opts = opts or {}
+    local done = 0
+    for i = 1, #apply, 50 do
+        local part = {}
+        for k = i, math.min(#apply, i + 49) do part[#part + 1] = apply[k] end
+        local ok, err = Settings.setMany(src, part, { reason = opts.reason })
+        if not ok then return false, err, done end
+        done = done + #part
+    end
+    Audit(src, 'settingsImport', nil, nil, tostring(done), opts.reason)
+    return true, done
+end
+
+-- the actions with a reason, a request id or a preview go through CP.AdminKit (loaded before every module)
+local Kit = CP.AdminKit
+if Kit then
+    Kit.action('server:admin:revertSetting', 'openAdmin', function(ctx)
+        local p = ctx.payload
+        return Settings.revert(ctx.src, p.historyId,
+            { reason = ctx.reason, again = p.again == true, confirm = p.confirm })
+    end, { reason = true, rate = 2 })
+
+    CP.Net.callback('admin:exportSettings', function(src)
+        local ok, err = AdminOnly(src)
+        if not ok then return nil, err end
+        if not loaded then return nil, 'err.settings_not_ready' end
+        return Settings.export()
+    end, { rate = 1 })
+
+    Kit.callback('admin:previewSettingsImport', 'openAdmin', function(ctx)
+        if not loaded then return nil, 'err.settings_not_ready' end
+        local view, apply = Settings.previewImport(ctx.args.text)
+        if not view then return nil, apply end
+        local ids = {}
+        for _, c in ipairs(apply) do ids[#ids + 1] = c.path end
+        view.previewToken, view.expiresAt = ctx.preview('settingsImport', ids, { apply = apply })
+        return view
+    end, { rate = 1 })
+
+    Kit.action('server:admin:importSettings', 'openAdmin', function(ctx)
+        local okT, effect = ctx.consume(ctx.payload.previewToken, 'settingsImport')
+        if not okT then return false, effect end
+        local apply = type(effect) == 'table' and effect.apply or {}
+        if #apply == 0 then return false, 'err.import_nothing' end
+        local ok, res, done = Settings.import(ctx.src, apply, { reason = ctx.reason })
+        if not ok then return false, res end
+        return true, { imported = res, failedAfter = done }
+    end, { reason = true, requestId = true, confirm = 'IMPORT', rate = 1 })
+end
+
+-- ============================================================================
+--                 THE CONSOLE (WHEN THE ADMIN UI CANNOT OPEN)
+-- ============================================================================
+-- CrimsonPoliceAdmin settings | settings reset <path> | settings reset all. One of the three console-only controls.
+
+local function ConsoleSettings(src, args)
+    if (tonumber(src) or 0) ~= 0 then return false, 'settings.console.console_only' end
+    local what = args[1] and args[1]:lower() or ''
+    if what == '' then
+        local paths = {}
+        for path in pairs(saved) do paths[#paths + 1] = path end
+        table.sort(paths)
+        for _, path in ipairs(paths) do
+            local s = saved[path]
+            local text = s.invalid and ('ignored: %s'):format(CP.L(s.invalid)) or Brief(s.value, s.none)
+            print(('[crimson-police:%s] %s = %s'):format(TAG, path, text))
+        end
+        return true, 'settings.console.listed', { n = #paths, cmd = 'settings reset <path>' }
+    end
+    if what ~= 'reset' or not args[2] then return false, 'settings.console.usage' end
+    if args[2]:lower() == 'all' and not args[3] then
+        local ok, err = Settings.resetAll(0, { reason = 'console' })
+        if not ok then return false, err end
+        return true, 'settings.console.reset_all'
+    end
+    local ok, err = Settings.reset(0, args[2], { reason = 'console' })
+    if not ok then return false, err end
+    return true, 'settings.console.reset', { path = args[2] }
+end
+Settings._console = ConsoleSettings
 
 -- A client that started asks for the settings (the reply waits until they are loaded).
 RegisterNetEvent(CP.e('server:settingsHello'), function()
@@ -2738,6 +3309,9 @@ end)
 
 CreateThread(function()
     if CP.ConfigHealth and CP.ConfigHealth.register then CP.ConfigHealth.register('settings', HealthCheck) end
+    if CP.Admin and CP.Admin.registerSubcommand then
+        CP.Admin.registerSubcommand('settings', ConsoleSettings, 'settings.console.help')
+    end
     -- the migrations runner normally loads the settings before it reports ready; this covers a runner without it
     if CP.Migrations and CP.Migrations.ready then CP.Migrations.ready() end
     if not loaded then Settings.boot() end

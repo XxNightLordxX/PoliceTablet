@@ -160,7 +160,7 @@ do
     H.eq(E('Units.nearbyBands').integer, true, '{ 250, 1000, 3000 }: whole numbers')
     H.eq(E('Blocks.escort.style.default').kind, 'enum', 'a default picks one of its options')
     H.eq(E('Blocks.pursuit.responses').kind, 'json', 'chances that must add up to 100 are one setting')
-    H.eq(E('Tablet.desks').restart, true, 'desks are read at start')
+    H.eq(E('Tablet.desks').restart, false, 'desks change live (the zones are made again on every client)')
     H.eq(E('Tablet.command').restart, true, 'commands too')
     H.ok(not E('Tablet.title').restart, 'the title is read live')
     H.eq(E('Blocks.escort.speed').reload, true, 'a block range reloads the missions')

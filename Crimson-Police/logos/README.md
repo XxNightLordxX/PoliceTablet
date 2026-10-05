@@ -9,3 +9,5 @@ repository root. This note says the same in short.
 - `sast.png` and `fib.png` are placeholders. Replace them with your own art and restart Crimson-Police. Nothing
   needs to be rebuilt.
 - Keep this folder when you update Crimson-Police.
+- Or upload one in game: Admin UI → **Departments** → **Edit** → **Upload a logo** (PNG or WebP, at most 1 MB). It
+  is saved here as `<department key>.png` (or `.webp`) and shows after the next restart of Crimson-Police.

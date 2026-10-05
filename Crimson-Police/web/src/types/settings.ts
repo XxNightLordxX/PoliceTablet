@@ -16,6 +16,7 @@ export type SettingKind =
     | 'range'
     | 'rows'
     | 'labels'
+    | 'goals'
     | 'json';
 
 // One field of a row template (Settings → the six lists of tables). key = undefined for a list of bare points.
@@ -113,6 +114,12 @@ export interface SettingsData {
     pending: number;
     invalid: number;
     total: number;
+    // the next daily and weekly reset (unix seconds), shown next to Time.resetHour and Leaderboard.weekStartsOn
+    resets?: { daily?: number; weekly?: number };
+    // set cp_settings_safe 1: the saved settings are ignored for this start
+    safeMode?: boolean;
+    // departments added in game (Departments.<key> record settings)
+    added?: string[];
 }
 
 // The reply of every change: the changed settings, the Config health run right after it.
@@ -122,17 +129,46 @@ export interface SettingsReply {
     pending: number;
 }
 
+// One cp_settings_history row: the full old and new values (oldSaved = false: config.lua's value).
 export interface SettingsHistoryRow {
     id: number;
-    actor: string;
-    actorName?: string | null;
-    role: string;
+    path: string;
+    label?: string;
     action: string;
-    target?: string | null;
+    old?: unknown;
+    oldSaved: boolean;
+    new?: unknown;
+    newSaved: boolean;
+    // short texts of the two values
     oldValue?: string | null;
     newValue?: string | null;
+    by: string;
+    byName?: string | null;
     reason?: string | null;
+    revertsId?: number | null;
     createdAt: number;
+    // still the last change of its setting (Revert asks again when it is not)
+    latest?: boolean;
+    canRevert?: boolean;
+}
+
+// admin:exportSettings: the settings changed in game as one JSON text.
+export interface SettingsExport {
+    text: string;
+    count: number;
+}
+
+// admin:previewSettingsImport: what an import would change (nothing is saved yet).
+export interface SettingsImportPreview {
+    changes: { path: string; label: string; old: string; new: string }[];
+    unknown: string[];
+    locked: string[];
+    invalid: { path: string; error: string }[];
+    // money switches an import never turns on (turn them on by hand)
+    money: string[];
+    unchanged: number;
+    previewToken: string;
+    expiresAt: number;
 }
 
 export interface SettingsHistory {

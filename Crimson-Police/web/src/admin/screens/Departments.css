@@ -361,3 +361,15 @@
     display: flex;
     gap: 8px;
 }
+
+/* Department admin tools (add, edit, turn off, delete, desks) */
+
+.dept-admin-tools {
+    margin-bottom: 10px;
+}
+
+.dept-admin-jobs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 16px;
+}
