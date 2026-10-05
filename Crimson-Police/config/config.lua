@@ -1,4 +1,6 @@
 -- Every Crimson-Police setting. If this file and the spec disagree, this file wins.
+-- You never have to edit this file: an admin can change every setting in game (Admin UI → Settings). A change made
+-- there is saved over the value here and survives restarts; Reset puts this file's value back.
 
 Config = {}
 
@@ -101,7 +103,7 @@ Config.Permissions = {
         reviewFlagged = true,     -- approve or void flagged runs involving their department
         handleDisputes = true,    -- disputes about flagged or voided runs in their department
         builderEdit = true,       -- create, edit, record routes and test their own missions
-        builderPublish = true,    -- publish their own tested drafts
+        builderPublish = true,    -- publish their own drafts (testing is optional, see Config.Builder)
         builderArchive = true,    -- archive or restore their own missions
         builderEditAny = false,   -- also edit, publish and archive other people's custom missions
         builderRollback = false,  -- roll a custom mission back to its previous version
@@ -197,7 +199,10 @@ Config.MissionTypes = {
     tactical = { label = 'Tactical', points = 200, payout = 800, dailyLimit = nil },
 }
 
-Config.DisabledMissions = {}   -- built-in mission ids to turn off, e.g. { 'prison_break' }
+Config.DisabledMissions = {}   -- mission ids to turn off (built-in or custom), e.g. { 'prison_break' }
+-- Locations to turn off without removing them, by mission id: their labels (or numbers, 1 = the first), e.g.
+-- { prison_break = { 'North gate' } }. Admin UI → Missions has an on/off switch for every mission and location.
+Config.DisabledLocations = {}
 
 -- ============================================================================
 --                              DIFFICULTY (stars)
@@ -897,7 +902,9 @@ Config.Builder = {
     minLocationGap = 100.0,                    -- metres between locations of one mission
     minSpawnFromStart = 30.0,                  -- metres between any spawn point and the start point
     bonusCap = { points = 50, share = 0.25 },  -- flat bonuses and penalties: at most 50 points; percentage ones: at most 25% of P
-    testAtMaxTier = true,                      -- publishing needs a passed test at the tier maxOfficers reaches
+    requireTestToPublish = false,              -- true = supervisors may publish only a draft that passed a test
+                                               -- (admins never need one); false = testing is optional for everyone
+    testAtMaxTier = true,                      -- a test counts as passed only at the tier maxOfficers reaches
     editLockMinutes = 30,                      -- one editor at a time; renewed while they keep editing
     autosaveSeconds = 30,
     exportPath = 'missions/custom/',

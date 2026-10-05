@@ -23,6 +23,7 @@ import type {
 import type { MissionListData } from '../types/oversight';
 import { setEditorMemory } from '../builder/store';
 import { MOCK_DEPARTMENTS, mockLocale } from './samples';
+import { missionSwitch } from './settings.mock';
 
 const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams();
 const now = () => Math.floor(Date.now() / 1000);
@@ -718,6 +719,7 @@ registerMock(
                 defHash: null,
                 status: 'published',
                 disabledInConfig: builtin && !m.enabled,
+                switch: missionSwitch(m.id, m.locations, builtin && !m.enabled),
             };
         });
         return { ...data, missions };

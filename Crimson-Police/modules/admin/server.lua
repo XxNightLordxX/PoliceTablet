@@ -18,6 +18,7 @@ local WEBHOOK_GAP_MS = 2100        -- Discord: at most 30 posts a minute per web
 local WEBHOOK_QUEUE_MAX = 100
 local WEBHOOK_RETRIES = 3
 local NON_MISSION_TYPES = { manual_award = true, goal = true }
+local COMMAND_WAIT_MS = 15000      -- the command waits this long at most for the settings changed in game
 
 local ROLES = { supervisor = true, admin = true, console = true }
 local CATEGORIES = { audit = true, flags = true, builder = true, operations = true }
@@ -2083,6 +2084,9 @@ local function MissionListData(src, adminExtras)
             row.defHash = type(def.defHash) == 'string' and def.defHash or nil
             row.status = type(def.status) == 'string' and def.status or 'published'
             row.disabledInConfig = U.contains(Config.DisabledMissions or {}, def.id)
+            -- the on/off switches of the mission and each location (CP.Settings), with config.lua's values
+            local okS, switch = Call('Settings', 'missionView', def)
+            if okS then row.switch = switch end
         end
     end
     table.sort(list, function(a, b)
@@ -2753,6 +2757,8 @@ end, { rate = 2 })
 -- ============================================================================
 
 CreateThread(function()
+    -- a command name changed in game (Admin UI → Settings) is used from the next start: wait for the saved settings
+    if CP.Settings and CP.Settings.waitLoaded then CP.Settings.waitLoaded(COMMAND_WAIT_MS) end
     local name = CmdName()
     RegisterCommand(name, function(source, args)
         local src = tonumber(source) or 0

@@ -1,6 +1,7 @@
 // Shapes of the builder client slice: the in-world tool overlays sent by
 
 import type { MissionListData, MissionListEntry } from './oversight';
+import type { MissionSwitchView } from './settings';
 import type {
     BuilderClientResult,
     BuilderPlaceKind,
@@ -213,6 +214,8 @@ export interface AdminMissionEntry extends MissionListEntry {
     status?: string;
     // listed in Config.DisabledMissions
     disabledInConfig?: boolean;
+    // the on/off switches of the mission and its locations (modules/settings)
+    switch?: MissionSwitchView;
 }
 export interface AdminMissionsData extends Omit<MissionListData, 'missions'> {
     missions: AdminMissionEntry[];

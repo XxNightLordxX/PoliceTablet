@@ -100,8 +100,15 @@ export function StepTest({ ed, cfg, def, ro }: StepProps) {
                             {t('builder.test.draft_tested')}
                         </Badge>
                     ) : (
-                        <Badge tone="warning" icon="alert">
-                            {t('builder.test.not_tested')}
+                        <Badge
+                            tone={cfg.requireTestToPublish ? 'warning' : 'neutral'}
+                            icon={cfg.requireTestToPublish ? 'alert' : 'info'}
+                        >
+                            {t(
+                                cfg.requireTestToPublish
+                                    ? 'builder.test.not_tested'
+                                    : 'builder.test.not_tested_optional',
+                            )}
                         </Badge>
                     )
                 }

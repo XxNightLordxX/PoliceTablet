@@ -762,11 +762,41 @@ function Missions.byType(missionType)
     return SortedDefs(function(def) return def.type == missionType and not def.isBoss end)
 end
 
+-- Is location #index of a mission on? Config.DisabledLocations[id] lists the ones turned off, by label or number
+-- (Admin UI → Missions switches them); map replaces that table (CP.Settings asks about config.lua's own).
+function Missions.isLocationEnabled(id, index, map)
+    if map == nil then map = Config.DisabledLocations end
+    local off = type(map) == 'table' and map[id] or nil
+    if type(off) ~= 'table' then return true end
+    local def = Missions.get(id)
+    local loc = def and type(def.locations) == 'table' and def.locations[index] or nil
+    local label = type(loc) == 'table' and loc.label or nil
+    for _, v in ipairs(off) do
+        if v == index or (label ~= nil and v == label) then return false end
+    end
+    return true
+end
+
+-- The numbers of the locations of a definition that are on.
+function Missions.enabledLocations(def)
+    local out = {}
+    if type(def) ~= 'table' or type(def.locations) ~= 'table' then return out end
+    for i = 1, #def.locations do
+        if Missions.isLocationEnabled(def.id, i) then out[#out + 1] = i end
+    end
+    return out
+end
+
+-- Published, not turned off (Config.DisabledMissions) and with at least one location on. A mission turned off
+-- while a run of it goes on only stops new draws: the run finishes.
 function Missions.isEnabled(id)
     local def = Missions.get(id)
     if not def then return false end
     if (def.status or 'published') ~= 'published' then return false end
     if CP.U.contains(Config.DisabledMissions or {}, id) then return false end
+    if type(def.locations) == 'table' and #def.locations > 0 and #Missions.enabledLocations(def) == 0 then
+        return false
+    end
     return true
 end
 
@@ -813,7 +843,7 @@ function Missions.unregister(id)
     local def = Missions.get(id)
     if not def then return false end
     if def.source == 'builtin' then
-        CP.warn(TAG, 'built-in mission %s cannot be unregistered; turn it off in Config.DisabledMissions', id)
+        CP.warn(TAG, 'built-in mission %s cannot be unregistered; turn it off in Admin UI → Missions', id)
         return false
     end
     defs[id] = nil
@@ -859,6 +889,8 @@ function Missions.loadAll()
         return lastSummary or { loaded = 0, builtin = 0, custom = 0, failed = {}, warnings = 0 }
     end
     loading = true
+    -- the settings changed in game (MissionTweaks, Config.Blocks ...) are over Config once the database is ready
+    if CP.Migrations and CP.Migrations.ready then CP.Migrations.ready() end
     local summary = { loaded = 0, builtin = 0, custom = 0, failed = {}, warnings = 0 }
     local newDefs = {}
 

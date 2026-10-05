@@ -8,6 +8,7 @@ local SOUND_NAME = 'Text_Arrive_Tone'
 local SOUND_SET = 'Phone_SoundSet_Default'
 local READY_KEY = 'crimsonpolice_ready'
 local LABEL_MAX = 64
+local SETTINGS_WAIT_MS = 10000       -- the key waits this long at most for the settings changed in game
 
 local lastCueAt = nil
 local pendingCheck = nil             -- { typeLabel, expiresAt (game timer ms) } while a ready check waits for us
@@ -59,6 +60,7 @@ RegisterCommand(READY_KEY, function()
 end, false)
 
 CreateThread(function()
+    if CP.Settings and CP.Settings.ready then CP.Settings.ready(SETTINGS_WAIT_MS) end
     local key = Config.Tablet and Config.Tablet.readyKey
     if type(key) ~= 'string' then key = '' end
     RegisterKeyMapping(READY_KEY, CP.L('unit.ready.keybind_label'), 'keyboard', key)

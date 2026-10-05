@@ -1,4 +1,4 @@
-// "Publish": enabled only when the draft passes every guardrail
+// "Publish": enabled when the draft passes every guardrail (a test is optional unless the server asks for one)
 
 import { useEffect, useState } from 'react';
 import { Badge, Button, Card, ConfirmDialog, Icon, KeyValue, TierBadge } from '../../shared/components';
@@ -41,7 +41,8 @@ export function StepPublish({ ed, cfg, def, ro, goTo }: StepProps) {
     const required = requiredTierFor(cfg, def.maxOfficers) || rec?.requiredTier || 'standard';
     const lockMine = !!ed.lock?.mine;
     const mayPublish = can('builderPublish') && !!rec?.can.publish;
-    const tested = !!rec?.draftTested || cfg.testAtMaxTier === false;
+    const tested = !!rec?.draftTested;
+    const testRequired = !!cfg.requireTestToPublish;
     const hasDraft = !!rec?.hasDraft || rec?.dbStatus === 'draft';
     const items = [
         {
@@ -54,9 +55,14 @@ export function StepPublish({ ed, cfg, def, ro, goTo }: StepProps) {
             vars: { n: errors.length },
         },
         {
-            ok: tested,
-            key: tested ? 'builder.pub.check_tested' : 'builder.pub.check_not_tested',
+            ok: tested || !testRequired,
+            key: tested
+                ? 'builder.pub.check_tested'
+                : testRequired
+                  ? 'builder.pub.check_not_tested'
+                  : 'builder.pub.check_untested_optional',
             vars: { tier: t(`tier.${required}`) },
+            info: !tested && !testRequired,
         },
         { ok: lockMine, key: lockMine ? 'builder.pub.check_lock' : 'builder.pub.check_no_lock', vars: {} },
         {
@@ -150,9 +156,14 @@ export function StepPublish({ ed, cfg, def, ro, goTo }: StepProps) {
                     <ul className="builder_client-checks-list is-large">
                         {items.map(i => (
                             <li key={i.key} className={i.ok ? 'is-ok' : 'is-bad'}>
-                                <Icon name={i.ok ? 'checkCircle' : 'xCircle'} size={16} />
+                                <Icon
+                                    name={'info' in i && i.info ? 'info' : i.ok ? 'checkCircle' : 'xCircle'}
+                                    size={16}
+                                />
                                 <span>{t(i.key, i.vars)}</span>
-                                {!i.ok && i.key === 'builder.pub.check_not_tested' ? (
+                                {!tested &&
+                                (i.key === 'builder.pub.check_not_tested' ||
+                                    i.key === 'builder.pub.check_untested_optional') ? (
                                     <Button size="sm" variant="ghost" onClick={() => goTo('test')}>
                                         {t('builder.pub.go_test')}
                                     </Button>
@@ -271,11 +282,16 @@ export function StepPublish({ ed, cfg, def, ro, goTo }: StepProps) {
             </div>
             <ConfirmDialog
                 open={confirm === 'publish'}
-                title={t('builder.confirm.publish.title', { mission: def.label })}
-                message={t('builder.confirm.publish.message', {
-                    version: rec?.draftVersion ?? 1,
-                    file: `${cfg.exportPath ?? 'missions/custom/'}${ed.id}.lua`,
+                title={t(tested ? 'builder.confirm.publish.title' : 'builder.confirm.publish_untested.title', {
+                    mission: def.label,
                 })}
+                message={`${tested ? '' : `${t('builder.confirm.publish_untested.message')} `}${t(
+                    'builder.confirm.publish.message',
+                    {
+                        version: rec?.draftVersion ?? 1,
+                        file: `${cfg.exportPath ?? 'missions/custom/'}${ed.id}.lua`,
+                    },
+                )}`}
                 confirmLabel={t('builder.confirm.publish.button')}
                 onConfirm={publish}
                 onCancel={() => setConfirm(null)}

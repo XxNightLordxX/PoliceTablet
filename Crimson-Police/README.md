@@ -29,6 +29,10 @@ random NPC mission, and finished missions pay cash and earn leaderboard points.
    in the server console to see every line again.
 5. In game: officers on duty type `/CrimsonPolice`; admins type `/CrimsonPoliceAdmin`. **Esc** closes either one.
 
+You never have to edit `config/config.lua`: an admin can change every setting in game in `/CrimsonPoliceAdmin` →
+**Settings**, and switch missions and their locations on or off in **Missions** (see
+[5.7](../README.md#57-change-any-setting-in-game-the-settings-screen)). Testing missions is optional.
+
 Required resources (they start before Crimson-Police by themselves): `oxmysql`, `ox_lib`, `qbx_core`, `ox_target`,
 `ox_inventory`, `sc-dispatch`, `sc-ambulance` and `Renewed-Banking`. There is no SQL to import.
 

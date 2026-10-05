@@ -265,9 +265,16 @@ local function LocationArea(def, i)
 end
 Draw._locationArea = LocationArea
 
+-- Location #i is on (an admin can turn single locations off: Config.DisabledLocations).
+local function LocationOn(def, i)
+    if not (CP.Missions and CP.Missions.isLocationEnabled) then return true end
+    return CP.Missions.isLocationEnabled(def.id, i) ~= false
+end
+Draw._locationOn = LocationOn
+
 local function HasLocationIn(def, area)
     for i = 1, #(def.locations or {}) do
-        if LocationArea(def, i) == area then return true end
+        if LocationOn(def, i) and LocationArea(def, i) == area then return true end
     end
     return false
 end
@@ -708,9 +715,10 @@ local function Filter(list, keep)
     return out
 end
 
--- opts: exclude (hard), area (hard: only locations in that area), avoid (soft: indices to skip), nearCoords
--- (county-wide weighting towards a unit: 1 / (1 + km / countyWeightKm) from the nearest point). Soft rules
--- apply only while another location is left; zone clearance falls back to the reservation rule alone.
+-- Locations turned off are never picked. opts: exclude (hard), area (hard: only locations in that area), avoid
+-- (soft: indices to skip), nearCoords (county-wide weighting towards a unit: 1 / (1 + km / countyWeightKm) from the
+-- nearest point). Soft rules apply only while another location is left; zone clearance falls back to the
+-- reservation rule alone.
 function Draw.pickLocation(def, participantSrcs, rngObj, opts)
     opts = opts or {}
     if type(def) ~= 'table' or type(def.locations) ~= 'table' or #def.locations == 0 then return nil end
@@ -724,8 +732,8 @@ function Draw.pickLocation(def, participantSrcs, rngObj, opts)
     end
     local free = {}
     for i = 1, #def.locations do
-        local skip = (reserveOn and InUse(def.id, i, LocationStart(def, i))) or (opts.exclude and opts.exclude[i])
-            or (opts.area and LocationArea(def, i) ~= opts.area)
+        local skip = not LocationOn(def, i) or (reserveOn and InUse(def.id, i, LocationStart(def, i)))
+            or (opts.exclude and opts.exclude[i]) or (opts.area and LocationArea(def, i) ~= opts.area)
         if not skip then free[#free + 1] = i end
     end
     if #free == 0 then return nil end

@@ -33,6 +33,8 @@ say the same things in short and point back here.
    - [5.4 Logos](#54-logos)
    - [5.5 The two switches at the top: debug and storage](#55-the-two-switches-at-the-top-debug-and-storage)
    - [5.6 Other settings you may want to change](#56-other-settings-you-may-want-to-change)
+   - [5.7 Change any setting in game: the Settings screen](#57-change-any-setting-in-game-the-settings-screen)
+   - [5.8 Turn missions and locations on or off](#58-turn-missions-and-locations-on-or-off)
 6. [Optional extras](#6-optional-extras)
    - [6.1 The tablet item](#61-the-tablet-item)
    - [6.2 Mission desks](#62-mission-desks)
@@ -104,9 +106,11 @@ What is in it, one line each:
 - **Department challenge and seasons**: departments compete over a season, with a weekly bounty.
 - **Profiles**: pictures, bios, commendations and a service record, with moderation.
 - **Supervisor tools**: live missions, force recall, review of flagged runs, payouts and a department report.
-- **Admin panel**: payouts, seasons, officers, suspensions, audit log, test runs and a config check.
+- **Admin panel**: payouts, seasons, officers, suspensions, audit log, test runs, a config check, and a
+  **Settings** screen where an admin changes any setting in game: you never have to edit `config.lua`.
 - **Mission Builder**: supervisors and admins build new missions in game, with no coding.
-- **Test mode**: admins play any mission at any location and size; nothing is saved or paid.
+- **Test mode**: admins play any mission at any location and size; nothing is saved or paid. Testing is
+  optional: nothing needs a test before it is used.
 - **Item rewards**: optional ox_inventory items for finished missions. **Off** until you turn them on.
 - **No SQL to import**: Crimson-Police makes its own tables, or saves to files with the database off.
 
@@ -232,6 +236,10 @@ Then set the grade where supervisors start (`supervisorGrade`, default `3`). Sec
 [5.2](#52-supervisor-grades) explains the number. The start-up check (next step) tells you if a job name is wrong
 or if the grade means nobody, or everybody, is a supervisor.
 
+**You can also do all of this in game instead of in the file.** Start the server, type `/CrimsonPoliceAdmin`, open
+**Settings**, search for `jobs` or `supervisorGrade`, change the value and press **Save**. Department changes work at
+once. See [5.7](#57-change-any-setting-in-game-the-settings-screen).
+
 ### 3.4 Start the server and read the console
 
 Start (or restart) your server. About 5 seconds after Crimson-Police starts, it checks your setup and prints the
@@ -272,7 +280,9 @@ For example, on a stock Qbox server (no `sast` and no `fib` job) you get this li
 ```
 
 Fix what the lines say, then restart Crimson-Police (`ensure Crimson-Police` or `restart Crimson-Police` in the
-console, or restart the server). To see every check again at any time, type this in the server console:
+console, or restart the server). Most of these fixes can also be made in game in Admin UI → **Settings**, where the
+check runs again after every change ([5.7](#57-change-any-setting-in-game-the-settings-screen)). To see every check
+again at any time, type this in the server console:
 
 ```
 CrimsonPoliceAdmin check
@@ -433,8 +443,9 @@ Grades start at 0.
 
 ### 4.4 What supervisors may do
 
-Set in `Config.Permissions.supervisor` in `config/config.lua`. `true` = supervisors may do it. `false` = the
-button is hidden and the server refuses it. Admins can always do all of these.
+Set in `Config.Permissions.supervisor` in `config/config.lua`, or switch them in game in Admin UI → **Permissions**
+(each switch saves at once). `true` = supervisors may do it. `false` = the button is hidden and the server refuses
+it. Admins can always do all of these.
 
 | Setting | Default | What it allows | Limits |
 |---|---|---|---|
@@ -444,7 +455,7 @@ button is hidden and the server refuses it. Admins can always do all of these.
 | `reviewFlagged` | `true` | Approve or void flagged runs | Their department; never their own run |
 | `handleDisputes` | `true` | Answer disputes about flagged or voided runs | Their department; never their own run |
 | `builderEdit` | `true` | Mission Builder: create, edit, record routes and test | Their own missions |
-| `builderPublish` | `true` | Publish their own tested drafts | Their own missions |
+| `builderPublish` | `true` | Publish their own drafts (a test is optional) | Their own missions |
 | `builderArchive` | `true` | Archive or restore their own missions | Their own missions |
 | `builderEditAny` | `false` | Also edit, publish and archive other people's missions | All custom missions |
 | `builderRollback` | `false` | Roll a custom mission back to its previous version | Their own, or any with `builderEditAny` |
@@ -469,13 +480,16 @@ Related settings: `Config.Payouts.supervisorRange` (`{ 0.5, 2.0 }` = 50–200%),
   `breakEditLock`.
 - "Own mission" means a mission the supervisor made.
 - A supervisor can't test a draft while a Cross-Department Mission is running. An admin can.
-- Publishing needs one passed test at the biggest team size the mission allows.
+- **Testing is optional.** Anyone allowed to publish can publish a draft without testing it (the tablet asks
+  "Publish without testing?" once). To make supervisors pass a test first, switch on
+  `Config.Builder.requireTestToPublish` (Admin UI → **Settings**, section Mission builder). Admins never need one.
 
 ### 4.6 Things only admins can do
 
 These are always admin only. Setting one of them to `true` in `Config.Permissions.supervisor` does nothing.
 
 - Open the Admin UI.
+- Change settings in game (Admin UI → **Settings**), and turn missions and locations on or off.
 - Set or clear the payout of **one** mission, and clear any admin-set payout.
 - Give points by hand (manual award).
 - Answer disputes about **failed** runs.
@@ -509,9 +523,11 @@ These are always admin only. Setting one of them to `true` in `Config.Permission
 
 ## 5. First things to set in config/config.lua
 
-Every setting lives in `Crimson-Police/config/config.lua`. Each line has a short note. Restart Crimson-Police after
-a change (`restart Crimson-Police` in the console). If `config.lua` has a typing mistake, a red line says so when
-it starts (see [11.5](#115-config-and-departments)).
+Every setting lives in `Crimson-Police/config/config.lua`. Each line has a short note. **You never have to edit
+this file:** every setting below can be changed in game by an admin in Admin UI → **Settings**
+([5.7](#57-change-any-setting-in-game-the-settings-screen)), with the same note shown next to it. If you do edit the
+file, restart Crimson-Police after a change (`restart Crimson-Police` in the console). If `config.lua` has a typing
+mistake, a red line says so when it starts (see [11.5](#115-config-and-departments)).
 
 ### 5.1 Departments and jobs
 
@@ -561,7 +577,8 @@ Config.MissionTypes = {
 
 - `payout`: the cash each officer gets for a finished mission of that type, before the team-size bonus
   (up to ×1.75 for the biggest teams).
-- `points`: leaderboard points. They can only be changed here, never in game.
+- `points`: leaderboard points. Only an admin can change them: here, or in Admin UI → **Settings** (every change is
+  in the audit log). Officers and supervisors never can.
 - `dailyLimit`: finished missions of that type per officer per day. `nil` = no limit.
 - The Weekly Boss pays its own amount: `payout = 2500` in `Config.Events.weeklyBoss`.
 - `Config.Cash`: `account = 'bank'` or `'cash'`; `source = 'server'` (new money) or `'society'` (the department's
@@ -614,7 +631,8 @@ Everything else works as shipped. These are the ones owners change most:
 | `Config.Locale` | Leave it `'en'`: English is the only language shipped |
 | `Config.Tablet.keybind`, `dispatchKey`, `readyKey`, `contactKey` | Default keys for new players (`''` = none). See [8.2](#82-keys) |
 | `Config.Tablet.access` | Which ways open the tablet: `command`, `keybind`, `item`, `desk`, and `requireItem` |
-| `Config.DisabledMissions` | Built-in missions to turn off, e.g. `{ 'prison_break' }` |
+| `Config.DisabledMissions` | Missions to turn off, e.g. `{ 'prison_break' }`. Easier: the on/off switches in Admin UI → **Missions** ([5.8](#58-turn-missions-and-locations-on-or-off)) |
+| `Config.DisabledLocations` | Single locations to turn off, by mission: `{ prison_break = { 'North gate' } }`. Also switched in Admin UI → **Missions** |
 | `Config.MissionTweaks` | Change a built-in mission's cooldown or time limits, switch off some of its locations, or change its NPC models, cars or weapons, without editing its file |
 | `Config.Limits` | `maxCompletionsHour = 8` and `maxCompletionsDay = 0` (0 = no cap) finished missions per officer; `maxConcurrentRuns = 12` and `maxConcurrentTactical = 4` missions at once, server-wide |
 | `Config.NpcDifficulty.preset` | `'easy'`, `'normal'`, `'hard'` or `'custom'`. Changes how NPCs fight, never the pay |
@@ -632,7 +650,7 @@ Everything else works as shipped. These are the ones owners change most:
 | `Config.Rewards` | Item rewards, off by default (see [6.3](#63-item-rewards)) |
 | `Config.Disputes.windowHours` | How long officers have to dispute a run (48 hours) |
 | `Config.AntiCheat` | Flag limits, and the automatic suspension: 3 voided runs in 30 days = 7 days |
-| `Config.Builder` | Mission Builder on or off, what builders may pick, and `noBuildZones` |
+| `Config.Builder` | Mission Builder on or off, what builders may pick, `noBuildZones`, and `requireTestToPublish` (`false` = testing is optional, as shipped) |
 | `Config.Testing` | Admin test mode: `enabled`, `maxTesters`, `allowTeleport`, `debugOverlay` |
 | `Config.Retention` | Clean-up of old data: runs archived after 12 months, audit rows deleted after 180 days, mission calls after 90 days (0 = keep) |
 | `Config.Downed.dropOffs` | Where a downed officer is taken when no EMS is on duty |
@@ -640,6 +658,59 @@ Everything else works as shipped. These are the ones owners change most:
 
 `config/blocks.lua` holds the Mission Builder's ranges and defaults, and `config/banned_words.txt` the default list
 of words refused in bios (one per line). Read that list and change it for your community.
+
+### 5.7 Change any setting in game: the Settings screen
+
+Admins can change **every** setting of `config/config.lua` and `config/blocks.lua` in game, with no file to edit and
+no restart to do by hand. Type `/CrimsonPoliceAdmin` and open **Settings**.
+
+- **Every setting is listed**, grouped like the file (Tablet and commands, Departments, Mission types, Cash, ... and
+  the Mission Builder ranges of `blocks.lua`), with the note from `config.lua` as its description. Use the search box
+  (a name, a path like `Tablet.deskDistance`, or a word of the note), or the **Changed** and **After restart**
+  filters.
+- **Each setting has the right control**: a switch for on/off, a number box with its allowed range, a text box, a
+  colour picker, a list editor, and a text box for tables (written as JSON, for example the scaling rows).
+- **Save** checks the value on the server and uses it at once. The value next to it, `config.lua: ...`, is the
+  file's value. A setting you changed shows a **Changed** badge, and **Reset** puts the file's value back.
+  **Reset all** puts every setting back.
+- **Changes are kept.** They are saved in your database (or the saves folder with the database off) and survive
+  restarts and updates. A change made in game wins over `config.lua`. You can still edit `config.lua`: a setting you
+  never changed in game keeps following the file.
+- **A few settings are read only when Crimson-Police starts** (command names, default keys, mission desks, the
+  language, the hour of the daily reset and the first day of the week). They have an **After restart** badge: the
+  screen saves the change and shows "Running now: ... · after a restart: ...". Restart it from txAdmin or type
+  `restart Crimson-Police` in the server console when no mission is running.
+
+- **Changes to the missions' rules** (the Mission Builder ranges, mission tweaks, types, bonuses) reload the
+  missions by themselves, like **Missions → Reload**. Runs already going keep what they started with.
+- **Config health runs again after every change** and shows its result at the top, so a mistake shows at once.
+- **The History tab** lists every change made in game: who, when, which setting, old and new value. Every change is
+  also in the **Audit Log** (and the audit Discord webhook).
+- **What it refuses**: a value of the wrong kind (text for a number, a list for a switch), a number outside its range,
+  a colour that is not `#rrggbb`, an option that does not exist, and a Mission Builder export folder outside
+  `missions/custom/`. The message says why.
+- **Two kinds of setting stay in the file** and show as locked on the screen: `Config.Database` (database on or off,
+  and the saves folder), because the settings themselves are saved there; and `Config.AdminAce` and
+  `Config.QboxAdmins`, which decide who is an admin, so no one can hand admin to every player or lock every admin out
+  from the tablet. Change them in `config.lua` and restart.
+- If a saved setting is no longer allowed (for example after an update changed a setting's form), Crimson-Police
+  ignores it with one console line, uses the `config.lua` value, and the Settings screen marks it so you can change
+  or reset it.
+
+Admins only: supervisors and officers never see this screen, and the server checks every change again.
+
+### 5.8 Turn missions and locations on or off
+
+Admin UI → **Missions** has a switch next to every mission, built-in and custom:
+
+- **Off**: the mission is never drawn again (Mission Board, mission calls, Cross-Department Missions, the Weekly Boss).
+  A run of it that is already going finishes normally.
+- **Locations**: the **n/m locations** button lists every location of the mission with its own switch. A location
+  turned off is never drawn. With every location off, the mission is never drawn.
+- **Reset to default** in that window puts the mission's switches back to `config.lua`'s.
+- The switches work at once, are saved like every other setting (database or saves folder), and are in the audit log.
+  They are `Config.DisabledMissions` and `Config.DisabledLocations` in `config.lua`.
+- Nothing needs a test before it is used: a mission you just switched on is drawn at once.
 
 ---
 
@@ -1036,9 +1107,11 @@ Which of these they can use is set in `Config.Permissions.supervisor` ([4.4](#44
 | **Leaderboards** | Every board, cash paid, payments stuck in "paying", void runs, award points, and the **Item rewards** tab |
 | **Officers** | Search officers: history, suspend or unsuspend, disputes about failed runs, profile moderation, commendations, service record |
 | **Departments** | Each department's jobs, colours, logo, desks, member count and (with society payouts) account balance |
-| **Permissions** | What supervisors may do, and **Config health**: the start-up check, with a **Check again** button |
+| **Missions** (switches) | Turn any mission, or single locations of it, on or off ([5.8](#58-turn-missions-and-locations-on-or-off)) |
+| **Permissions** | What supervisors may do (a switch for each), and **Config health**: the start-up check, with a **Check again** button |
+| **Settings** | Every setting of `config.lua` and `blocks.lua`, changed in game, with a change history ([5.7](#57-change-any-setting-in-game-the-settings-screen)) |
 | **Audit Log** | Every supervisor and admin action, with filters and a CSV export |
-| **Testing** | Every mission and location with its test result, test runs, testers, and an area coverage table ([9.13](#913-testing-tools)) |
+| **Testing** | Optional: every mission and location with its test result, test runs, testers, and an area coverage table ([9.13](#913-testing-tools)) |
 
 ### 9.4 The missions
 
@@ -1150,7 +1223,9 @@ in game, with no coding:
 2. Fill in the details: name, type (it sets the points and pay), difficulty, officers, time limit, cooldown and
    which departments may get it. There is no payout field.
 3. Place spots in the world and record road routes by driving them.
-4. Test it privately. Publishing needs one passed test at the biggest team size it allows.
+4. Test it privately if you like. **Testing is optional**: a draft can be published without a test (the tablet asks
+   "Publish without testing?" once). Only when `Config.Builder.requireTestToPublish = true` must a supervisor's draft
+   pass a test first; an admin never needs one.
 5. Publish. The mission joins its type's pool, and a Lua file is written to `Crimson-Police/missions/custom/<id>.lua`
    (with a `.bak` copy of each old version).
 
@@ -1159,7 +1234,8 @@ Nothing can be placed in `Config.Builder.noBuildZones` (stations, hospitals, the
 
 ### 9.13 Testing tools
 
-Admins can play any mission on demand to check it works. **Nothing in a test run is saved or paid.**
+Admins can play any mission on demand to check it works. **Nothing in a test run is saved or paid.** Testing is
+optional: no mission, location or draft needs a test before it is used or published.
 
 - Start one in Admin UI → **Testing**, or in game with `/CrimsonPoliceAdmin test <missionId> [tier] [location|random]`,
   for example `/CrimsonPoliceAdmin test gang_shootout heavy 2`.
@@ -1168,7 +1244,8 @@ Admins can play any mission on demand to check it works. **Nothing in a test run
 - Press **F7** during the test for the controls: skip or restart an objective, pause the timer, force complete or
   fail, debug overlay, teleport to the start or the objective, and end the test.
 - After each test, mark it **Passed** or **Failed** with a note. The Testing screen shows every mission and
-  location as Passed, Failed, Not tested or Changed since test.
+  location as Passed, Failed, Not tested or Changed since test. These are notes for you: an untested mission works
+  like any other.
 
 ### 9.14 Rules to tell your officers
 
@@ -1205,9 +1282,9 @@ removal. Three voided runs in 30 days suspend an officer for 7 days by themselve
   ([5.5](#55-the-two-switches-at-the-top-debug-and-storage)).
 - ☐ You read `config/banned_words.txt` and changed it for your community ([5.6](#56-other-settings-you-may-want-to-change)).
 - ☐ Item rewards and picture links are what you want (both ship off: [6.3](#63-item-rewards), [6.4](#64-profile-pictures)).
-- ☐ **Test every mission once.** The built-in locations were placed from map data and checked by tests, but not
-  driven in game. Go to Admin UI → **Testing**, run each mission at a few locations (the Heavy tier is a good
-  check), and mark each one Passed or Failed. The screen shows what still needs a test.
+- ☐ Optional: try the missions you care about. The built-in locations were placed from map data and checked by
+  tests, but not driven in game. Admin UI → **Testing** runs any mission at any location; a location that does not
+  fit your map can simply be switched off ([5.8](#58-turn-missions-and-locations-on-or-off)). Nothing needs a test.
 - ☐ Share the rules in [9.14](#914-rules-to-tell-your-officers) with your officers, and the Detach tip in
   [7](#7-settings-to-check-in-your-other-resources) with your dispatchers.
 - ☐ Your anti-cheat allows Bomb Disposal's harmless explosion ([7](#7-settings-to-check-in-your-other-resources)).
@@ -1225,7 +1302,8 @@ removal. Three voided runs in 30 days suspend an officer for 7 days by themselve
    - `saves/` (your data, when the database is off)
 6. Compare your `config.lua` with the one in the download, and copy any new blocks into yours. At start, the
    console names any section your `config.lua` is missing, in a line like
-   `[crimson-police:config] Config.X is missing: ...`.
+   `[crimson-police:config] Config.X is missing: ...`. The settings you changed in game (Admin UI → **Settings**)
+   are kept by themselves: they live in your database or `saves/`, not in `config.lua`.
 7. Start the server (or, if you only stopped Crimson-Police, type `refresh` and then `ensure Crimson-Police` in the
    console). New tables are made by themselves (`applied migration ...` lines). There is never SQL to import.
 
@@ -1354,6 +1432,9 @@ The last line of the start-up check is `Start-up check: all ... checks passed` o
 | `Config.Challenge.scoring <x> is not average, total or top10; using average` | Use `'average'`, `'total'` or `'top10'` |
 | `Config.Challenge.bounties is empty: no weekly bounty` | Put the bounties back, or set `weeklyBounty = false` |
 | `Config.Rewards <pool>: "<item>" does not exist in ox_inventory; it is turned off` | Use an item that exists ([6.3](#63-item-rewards)) |
+| `[crimson-police] <n> setting(s) changed in game are in use (Admin UI → Settings)` | Normal: the settings an admin changed in game are used ([5.7](#57-change-any-setting-in-game-the-settings-screen)) |
+| `the saved setting <path> was ignored (<why>): config.lua's value is used.` | A setting saved in game is no longer allowed (often after an update). Open Admin UI → **Settings**, filter **Changed**, and change or reset it |
+| `the settings changed in game could not be read: ...` | The database or saves folder could not be read: see [11.4](#114-database-and-saves-folder). Until it works, `config.lua`'s values are used |
 
 ### 11.6 Missions and the Mission Builder
 
@@ -1466,6 +1547,12 @@ however it ends.
   claim); Traffic Enforcement, Illegal Parking Patrol and Suspicious Activity are allowed; the Officer UI has eight
   screens; bodies may be kept for a Process the scene objective. English only; item rewards ship off.
 - Config defaults, at the owner's request: `Config.Debug = true` and `Config.Database.enabled = false`.
+- Settings in game, at the owner's request ("admins get full control over everything in the admin tablet"): an admin
+  can change every setting of `config.lua` and `blocks.lua` in Admin UI → **Settings**, and switch missions and
+  locations on or off. This includes point settings, so the Points Hard rule now reads: officers and supervisors
+  can never change points in game; an admin can, through the Settings screen (audited) or a manual award.
+- Testing is optional, at the owner's request: publishing a Mission Builder draft needs no test
+  (`Config.Builder.requireTestToPublish = false`); with it on, supervisors need a passed test and admins never do.
 
 **Waiting for the owner's OK** (already in `docs/SPEC.md` and the code): the Roles Hard rule now also counts a Qbox
 admin (the ace `admin`) as an admin while `Config.QboxAdmins` is `true`, which ships on. To undo it without a code

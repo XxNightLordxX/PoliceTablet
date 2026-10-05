@@ -218,7 +218,9 @@ function MC.areaOf(coords)
     return nil
 end
 
+-- The area of location #i; nil for a location turned off (it counts in no area).
 local function LocationArea(def, i)
+    if CP.Draw and CP.Draw._locationOn and not CP.Draw._locationOn(def, i) then return nil end
     if CP.Draw and CP.Draw._locationArea then return CP.Draw._locationArea(def, i) end
     return nil
 end

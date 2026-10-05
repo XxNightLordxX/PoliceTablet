@@ -6,6 +6,7 @@ local Schedule = CP.Schedule
 local TAG = 'schedule'
 local CHECK_EVERY_MS = 30000
 local RETENTION_CATCHUP_DELAY_MS = 120000
+local SETTINGS_WAIT_MS = 15000            -- the first check waits this long at most for the settings changed in game
 
 local WEEKDAYS = { 'sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday' }  -- os.date wday order
 
@@ -235,6 +236,8 @@ function Schedule._check(ts)
 end
 
 CreateThread(function()
+    -- the reset hour and the first day of the week may be changed in game: record the period with those values
+    if CP.Settings and CP.Settings.waitLoaded then CP.Settings.waitLoaded(SETTINGS_WAIT_MS) end
     Schedule._check()   -- records the current period only
     while true do
         Wait(CHECK_EVERY_MS)

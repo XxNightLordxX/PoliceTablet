@@ -30,6 +30,7 @@ import AdminLeaderboards from '../admin/screens/Leaderboards';
 import AdminOfficers from '../admin/screens/Officers';
 import AdminDepartments from '../admin/screens/Departments';
 import AdminPermissions from '../admin/screens/Permissions';
+import AdminSettings from '../admin/screens/Settings';
 import AdminAudit from '../admin/screens/Audit';
 import AdminTesting from '../admin/screens/Testing';
 
@@ -119,6 +120,7 @@ export const ADMIN_SCREENS: ScreenDef<AdminScreenKey>[] = [
         component: AdminDepartments,
     },
     { key: 'admin_permissions', titleKey: 'ui.screen.admin_permissions', icon: 'key', component: AdminPermissions },
+    { key: 'admin_settings', titleKey: 'ui.screen.admin_settings', icon: 'sliders', component: AdminSettings },
     { key: 'admin_audit', titleKey: 'ui.screen.admin_audit', icon: 'fileText', component: AdminAudit },
     { key: 'admin_testing', titleKey: 'ui.screen.admin_testing', icon: 'flask', component: AdminTesting },
 ];

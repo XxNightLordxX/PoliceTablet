@@ -85,6 +85,9 @@ end
 -- clone has neither, and SaveResourceFile does not create folders).
 local TMP = ('missions/custom/test_builder_%d/'):format(os.clock() * 1e6 // 1 + math.random(1, 1e6))
 Config.Builder.exportPath = TMP
+-- The test gate is off as shipped (testing is optional); most checks below are about the gate itself, so it is on
+-- until the "testing is optional" block switches it back off.
+Config.Builder.requireTestToPublish = true
 _G.GetResourcePath = function() return H.root:sub(1, -2) end
 
 local function FileExists(rel)
@@ -1844,6 +1847,51 @@ local function Body()
         CP.Admin.audit = realAudit
         H.eq(U.truthy(row(cid).draft_tested), false, 'the content saved meanwhile stays untested')
         H.ok(tostring(row(cid).draft_definition):find('"accuracy":37', 1, true) ~= nil, 'that save was stored')
+    end
+
+    -- ══ testing is optional (requireTestToPublish = false, as shipped) ══════════
+    do
+        local function labelled(label)
+            local d = validDef()
+            d.label = label
+            return d
+        end
+        Config.Builder.requireTestToPublish = false
+        local okC, c = act(1, 'create', { type = 'tactical', label = 'Harbour Sweep' })
+        local hid = okC and c.id or 'custom_harbour_sweep'
+        act(1, 'save', { id = hid, definition = labelled('Harbour Sweep') })
+        local okCfg, conf = cb(1, 'builder:config', {})
+        H.ok(okCfg and conf.requireTestToPublish == false, 'the builder is told testing is optional')
+        local okL, list = cb(1, 'builder:list', {})
+        local entry = nil
+        for _, e in ipairs(okL and list.missions or {}) do if e.id == hid then entry = e end end
+        H.ok(entry and entry.can.publish == true and entry.draftTested == false and entry.needsTest == false,
+            'an untested draft can be published')
+        local okP, pub = act(1, 'publish', { id = hid })
+        H.ok(okP and pub.version == 1, 'a supervisor publishes without a test')
+        H.eq(lastAudit().action, 'publishUntested', 'audited as published without a test')
+        H.ok(CP.Missions.get(hid) ~= nil, 'and it is in its pool at once')
+
+        -- the owner switches the gate on: supervisors need a test, admins never do
+        Config.Builder.requireTestToPublish = true
+        local okC2, c2 = act(1, 'create', { type = 'tactical', label = 'Harbour Sweep Two' })
+        local sid = okC2 and c2.id or 'custom_harbour_sweep_two'
+        act(1, 'save', { id = sid, definition = labelled('Harbour Sweep Two') })
+        H.eq(select(2, act(1, 'publish', { id = sid })), 'err.builder_not_tested', 'the gate holds for supervisors')
+        local okL2, list2 = cb(1, 'builder:list', {})
+        local entry2 = nil
+        for _, e in ipairs(okL2 and list2.missions or {}) do if e.id == sid then entry2 = e end end
+        H.ok(entry2 and entry2.needsTest == true, 'and the list says the draft waits for a test')
+        local okCfgS, confS = cb(1, 'builder:config', {})
+        H.ok(okCfgS and confS.requireTestToPublish == true, 'and the supervisor\'s builder says so')
+        local okC3, c3 = act(3, 'create', { type = 'tactical', label = 'Harbour Sweep Three' })
+        local aid = okC3 and c3.id or 'custom_harbour_sweep_three'
+        act(3, 'save', { id = aid, definition = labelled('Harbour Sweep Three') })
+        local okCfgA, confA = cb(3, 'builder:config', {})
+        H.ok(okCfgA and confA.requireTestToPublish == false, 'an admin\'s builder never asks for a test')
+        local okPA = act(3, 'publish', { id = aid })
+        H.ok(okPA, 'an admin publishes an untested draft with the gate on')
+        Config.Builder.requireTestToPublish = false
     end
 
     -- the builder switch

@@ -50,7 +50,8 @@ layouts/                  TabletFrame, Header, Sidebar, RunBar, NotificationBell
                           Officer/Supervisor/AdminLayout, screens.ts (the screen registry)
 officer/screens/          Home, MissionBoard, Dispatch, Unit, ActiveMission, Leaderboard, Challenge, Profile
 supervisor/screens/       MissionList, CrossDept, LiveMissions, ReviewQueue, Payouts, Builder, DeptReport
-admin/screens/            Payouts, Missions, Seasons, Leaderboards, Officers, Departments, Permissions, Audit, Testing
+admin/screens/            Payouts, Missions, Seasons, Leaderboards, Officers, Departments, Permissions, Settings, Audit,
+                          Testing
 hud/                      Hud, HudColumn, ResultScreen, Debrief, ContactCard, FadeOverlay, TestControls, DebugOverlay,
                           BuilderOverlay
 mocks/                    browser-only: index.ts (loads every *.mock.ts), core.mock.ts, one <feature>.mock.ts per
@@ -93,7 +94,7 @@ the `*ScreenKey` types of `shared/navigation.tsx` and one registry entry.
    |---|---|
    | Officer | `home` `board` `dispatch` (hidden when `Config.MissionCalls.enabled = false`) `unit` `active` `leaderboard` `challenge` `profile` |
    | Supervisor | `sup_missions` `sup_crossdept` (launchCrossDept) `sup_live` `sup_review` (reviewFlagged or handleDisputes) `sup_payouts` (setTypePayout) `sup_builder` (builderEdit) `sup_report` |
-   | Admin | `admin_payouts` `admin_missions` `admin_seasons` `admin_leaderboards` `admin_officers` `admin_departments` `admin_permissions` `admin_audit` `admin_testing` |
+   | Admin | `admin_payouts` `admin_missions` `admin_seasons` `admin_leaderboards` `admin_officers` `admin_departments` `admin_permissions` `admin_settings` `admin_audit` `admin_testing` |
 
    `navigate(key, params)` passes params; read them with `useNavigation().params`
    (e.g. Leaderboard → `navigate('profile', { citizenid })`). Keys of another UI are ignored.
@@ -142,7 +143,7 @@ the `*ScreenKey` types of `shared/navigation.tsx` and one registry entry.
 | `notify` | `notification = { id, kind, title?, text, duration }` | toast (text already translated) |
 | `hud` | `hud = HudState \| null` | mission HUD (full state; null hides) |
 | `result` | `result = RunResult \| null` | result card for 25 s (null hides) |
-| `push` | `topic`, `data` | live updates: `run` `unit` `board` `operation` `invites` `test` `builder` `payouts` `calls` `nav` `profile` `rewards` |
+| `push` | `topic`, `data` | live updates: `run` `unit` `board` `operation` `invites` `test` `builder` `payouts` `calls` `nav` `profile` `rewards` `settings` |
 | `overlay` | `overlay = null \| { kind, … }` | `fade { text }`, or builder kinds `placement` `recording` `testdrive` |
 | `theme` | `theme`, `locale?` | the officer's department theme at login (HUD/toasts); optional locale for text before the first session |
 

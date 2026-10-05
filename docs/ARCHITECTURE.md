@@ -58,7 +58,11 @@ exposes that is not listed here is private to that module (keep it `local`).
     `lib.inputDialog`, `lib.alertDialog`, `lib.showTextUI`, menus. Only `lib.progressBar`/
     `lib.progressCircle` and `lib.skillCheck` during missions. ox_target prompts are allowed.
 11. **Config values are read at call time** (`Config.X.y`), never copied into locals at load
-    time, except inside functions.
+    time, except inside functions. An admin can change any setting in game (CP.Settings, §5.36): the changed
+    top-level table (`Config.Tablet`, ...) is replaced by a new one, so never keep a reference to a Config table
+    across calls, and a cache of one is rebuilt when `Config.X` is no longer the same table. Code that reads a
+    setting once at start waits for the changed settings first (`CP.Settings.waitLoaded` on the server,
+    `CP.Settings.ready` on the client).
 12. **Performance:** no per-frame loops outside active objectives. Client loops that draw markers
     run only while the objective is current and the player is near; use `Wait(500+)` when idle.
 13. **Cleanup:** anything you create (blips, zones, target options, threads, markers, props,
@@ -125,7 +129,7 @@ PoliceTablet/                      (git repo)
     web/                           React 18 + TS + Vite; builds to web/dist (committed); README.md points to
                                    docs/WEB_UI.md
     sql/migrations/001_initial.sql, 002_test_def_hash.sql, 003_run_stats.sql, 004_profile.sql,
-                   005_mission_calls.sql, 006_item_rewards.sql
+                   005_mission_calls.sql, 006_item_rewards.sql, 007_settings.sql
 ```
 
 fxmanifest loads: `@ox_lib/init.lua`, config/config.lua, config/blocks.lua, shared/*.lua
@@ -150,6 +154,9 @@ boards, rewards, access).
 
 `modules/diag/` (client, §5.35): the F8 command `CrimsonPoliceState`, added with the freeze fix
 (`docs/notes/freeze.md`).
+
+`modules/settings/` (server, client, §5.36): settings changed in game (Admin UI → Settings) over config.lua and
+blocks.lua, the mission and location switches, and the same values on every client.
 
 ---
 
@@ -578,6 +585,11 @@ Parity-plus additions (WP1): `normalize` keeps `quietPatrol` and `decisions`, ap
 engineOnly bonus ids and reward-like keys; `label(def, field, n)` (§10); the new block ids field_contact and
 process_scene are known to the loader.
 
+Settings additions (§5.36): `isLocationEnabled(id, index, map?) -> bool` (`Config.DisabledLocations[id]` lists the
+locations turned off, by label or number; `map` replaces that table), `enabledLocations(def) -> { index }`;
+`isEnabled(id)` is also false when every location of the mission is off. `loadAll` waits for `CP.Migrations.ready()`
+first, so built-in missions are normalised with the settings changed in game.
+
 ### 5.7 CP.Draw — modules/draw (S)
 - `pool(missionType, members) -> { def, ... }, reasonKey` — published, enabled, type match, open to
   every member's department, supports `#members`, off per-mission cooldown for every member
@@ -601,6 +613,9 @@ Parity-plus additions (WP4; docs/notes/missioncalls.md):
   `Config.Draw.avoidLastLocations` locations of that mission (soft); player clearance; then a weighted pick (half
   weight for a spot taken within `Config.Draw.locationFreshness`, and the county-wide weighting).
 - `footprint(def, index) -> { vec3 }` (start and every point; routes sampled every 50 m).
+- A location turned off (`CP.Missions.isLocationEnabled`) is a hard rule of `pickLocation` (also for Cross-Department
+  Missions, the Weekly Boss and a random test location) and counts in no area (`pool` with `opts.area`,
+  `CP.MissionCalls`); `_locationOn(def, i)`.
 - `check(src, typeKey, counts?) -> ok, errKey` — every accept check without changing anything (a claim runs these).
 - `accept(src, typeKey, opts)` — `opts.area`, `opts.nearCoords`, `opts.missionCall` (`{ id, code, area, staff }`; the
   response target is set here from the unit's nearest member to the drawn start), `opts.onDone`. Units of 2+ go
@@ -942,7 +957,8 @@ the officer's active commendations; `season:ended` fires after the season result
   writes `cp_audit` and posts to the category webhook (`cp_webhook_audit|flags|builder|operations`, convars)
 - `webhook(category, title, description, fields)` (category 'board' also allowed)
 - `voidRun(src, rowIdOrRunUuid, reason)`, `approveFlagged(src, rowId, reason)`, `voidFlagged(src, rowId, reason)`
-- Supervisor/admin screen callbacks and actions listed in §8.3.
+- Supervisor/admin screen callbacks and actions listed in §8.3. `admin:getMissions` adds `switch`
+  (`CP.Settings.missionView(def)`: the mission's and each location's on/off and config.lua's values).
 
 Parity-plus: `registerSubcommand(name, fn, helpKey)` with `fn(src, args) -> ok, messageKey, vars` (the reply is sent
 for it; helpKey is the console usage line; a built-in name can't be taken) — other modules add
@@ -970,7 +986,7 @@ silent unless this player controls a test or has an invitation waiting), debug o
 Server: drafts, locks, autosave, test runs of drafts (via `CP.Testing`/`CP.Runs` with `test.draft = true`),
 publish (Lua export with `SaveResourceFile`), archive/restore, rollback (.bak), reload of hand edits,
 `loadPublished() -> { def, ... }` *(hook for CP.Missions.loadAll)*, `onReload()`,
-`onDraftTested(missionId, version, tierName, passed, src, defHash)` *(hook from CP.Testing; a pass counts only for the draft content with that defHash)*. Publishing requires a passed test at the tier `CP.Scaling.tierFor(maxOfficers)` (`draft_tested = 1`).
+`onDraftTested(missionId, version, tierName, passed, src, defHash)` *(hook from CP.Testing; a pass counts only for the draft content with that defHash)*. Testing is optional: a passed test at the tier `CP.Scaling.tierFor(maxOfficers)` (`draft_tested = 1`) is needed to publish only while `Config.Builder.requireTestToPublish` is true, and only for supervisors (never admins). List entries carry `needsTest`, `builder:config` carries `requireTestToPublish` (for the viewer), and an untested publish is audited as `publishUntested`.
 Client: placement tool, route recording, test drive; overlays through `CP.Tablet.overlay`.
 
 ### 5.29 CP.Storage (with CP.Storage.MemSQL) — modules/storage (S)
@@ -1130,6 +1146,7 @@ push). Full notes: docs/notes/custody.md.
 
 ### 5.31 CP.MissionCalls — modules/missioncalls (Dispatch; WP4)
 Full notes: docs/notes/missioncalls.md.
+- Locations turned off (§5.36) count in no area.
 - `list(src) -> DispatchView` (only for officers with the tablet open: callback `getMissionCalls` and the `calls`
   push to watchers), `eligibility(src) -> { at, unit, types }` (cached per unit for
   Config.MissionCalls.eligibilityCache s; cleared on row:settled, participant:left and duty changes; no database
@@ -1192,7 +1209,8 @@ is not `Crimson-Police`: a warning while `Config.Tablet.item` is set, because th
 folder, else an ok line; both name the item line and other scripts' `exports['<name>']`), resources (sc-police not
 running warns: no /callsign, and sc-dispatch suspensions do not keep officers off duty; sc-npcpolice, sc-multijob,
 Crimson-Arena are info lines), webhooks (`CP.Admin.webhooks()`: which are on, and a warning per invalid convar);
-CP.Rewards registers its own.
+CP.Rewards registers its own, and CP.Settings registers `settings` (how many settings are changed in game, each saved
+value that is ignored, and the changes waiting for a restart).
 
 ### 5.35 CP.Diag — modules/diag (client; the freeze fix)
 F8 command `CrimsonPoliceState`: four `[crimson-police:diag]` lines with the screen fade, NUI focus (and keep input),
@@ -1200,6 +1218,48 @@ scripted camera, pause menu, player control, frozen, dead, last stand and dead m
 Crimson-Police holds (tablet, panel focus, pick-up, run) and which of the rest is not ours.
 `CrimsonPoliceState unstick` first closes our tablet, releases our panel focus and runs `CP.Downed.restore`, never
 anything another resource holds. `state() -> table`, `unstick()`.
+
+### 5.36 CP.Settings — modules/settings (settings changed in game)
+Server:
+- The schema is built from the files at the first use: `config/config.lua` and `config/blocks.lua` are read with
+  `LoadResourceFile` and tokenized; every key's description is the comment lines right above it plus the comment after
+  it on its line (and a comment continued under it at the same column); commented-out entries are never text; the
+  banner above a `Config.X` line names its section (blocks.lua is one section). A setting is a leaf of the config.lua
+  values (copied at file load, before anything changes Config): a scalar, a vector, a list, an empty table, or one of
+  the open tables edited whole (`MissionTweaks`, `DisabledLocations`, `Rewards.byType|byMission|medals|goals|levels|season`,
+  `Blocks.pursuit.responses`, `Blocks.flee_arrest.responses`); keys config.lua writes as nil (`dailyLimit = nil`) are
+  settings too.
+- Checking (`check(path, value, none) -> ok, clean | false, errKey`): the shape of the config.lua value (whole numbers
+  stay whole, decimals become floats, signs kept), known ranges, the blocks.lua `{ min, max, default }` triples,
+  options (also a Blocks `default` against its `options`), templates for what config.lua alone cannot say (`false` or an
+  item name, desks, tweaks), ordered pairs (`CrossDept.min/maxParticipants`, `Cash.min/maxPayout`), and the export folder
+  stays in `missions/custom/`. Locked (config.lua only, `err.setting_locked`): `Config.Database.*` (where the settings
+  live) and `AdminAce`/`QboxAdmins` (who is an admin).
+- Storage: `cp_settings` (007): `setting_key`, `value_json` (`{"v": value}` or `{"none": true}`), `updated_by`,
+  `updated_at`. `boot()` is called by the migrations runner before it reports ready (and by the module's own thread when
+  a runner did not): every row is checked again; a bad one is ignored with one warning and listed as invalid.
+- Applying: every top-level Config table a setting touches (now or before) is rebuilt from the config.lua copy, then the
+  applied settings are set on it. Restart settings (`Tablet.command|adminCommand|keybind|dispatchKey|readyKey|contactKey|
+  desks`, `Locale`, `Time.resetHour`, `Leaderboard.weekStartsOn`) apply only at boot; a later change is saved and
+  reported as pending. A change under what the mission loader reads queues one `CP.Missions.reload()` (1 s debounce).
+- `set(src, path, value, none, opts) -> ok, SettingsReply | errKey` (a value equal to config.lua's is a reset; audit
+  `settingChanged` / `settingReset`, old → new), `reset(src, path)`, `resetAll(src)` (`settingsResetAll`), `entry(path)`,
+  `view(path) -> SettingView`, `all() -> SettingsView`, `isLoaded()`, `waitLoaded(ms)`, `missionView(def)`,
+  `setMissionEnabled(src, id, on)` (`missionSwitch`), `setLocationEnabled(src, id, index, on)` (`locationSwitch`; the
+  label when it is unique in the mission, else the number), `resetMission(src, id)` (`missionSwitchesReset`). After every
+  change: `client:settings` to every client, the `settings` push to online admins, the hook `settings:changed (paths)`,
+  and `CP.ConfigHealth.run()` in the reply.
+- Net: callbacks `admin:getSettings`, `admin:getSettingsHistory` (`{ page, path? }`: the audit rows of the actions above);
+  actions `server:admin:setSetting` (`{ path, value? | json?, none? }`), `server:admin:resetSetting` (`{ path }`),
+  `server:admin:resetAllSettings`, `server:admin:setMissionEnabled` (`{ missionId, enabled }`),
+  `server:admin:setLocationEnabled` (`{ missionId, index, enabled }`), `server:admin:resetMissionSwitches`
+  (`{ missionId }`); plain event `server:settingsHello`. Every action needs `openAdmin`. The resource never restarts
+  itself: restart settings wait for the owner's restart.
+Client: the config.lua copy at file load; `client:settings` (`{ { path, value } | { path, none = true } }`) rebuilds the
+same tables the same way; `ready(ms) -> bool`, `received()`; a `server:settingsHello` at start. The tablet's command,
+key mappings and desks, the contact key and the ready key wait for the first list (10 s at most). On the server,
+`/CrimsonPoliceAdmin` is registered and CP.Schedule records its first period after `waitLoaded` (15 s at most), and
+`CP.Missions.loadAll` waits for `CP.Migrations.ready()`.
 
 ## 6. Cross-cutting conventions
 
@@ -1389,6 +1449,7 @@ Rules for blocks:
 | `client:contactConfirm` | `{ netId, choice, factKey }`: open the tablet with the case-fail confirm | custody |
 | `client:serviceVehicle` | `{ runId, id, op = 'drive'|'load'|'leave', kind, veh, driver, dest, target, away }` to the driving client | custody |
 | `client:closeTablet` | errKey (requireItem: the item left the inventory) | tablet |
+| `client:settings` | `{ { path, value } \| { path, none = true } }`: every setting changed in game that is in use | settings |
 
 Server → client ox_lib callback: `crimson-police:client:roadPoint` `{ near, min, max }` → `{ coords, heading }` or nil (the service-vehicle driver's client; the server validates the reply; custody).
 
@@ -1424,6 +1485,7 @@ Server → client ox_lib callback: `crimson-police:client:roadPoint` `{ near, mi
 | `server:unitDisband` | — | units |
 | `server:unitReady` | `{ accepted }` (a bare boolean from the key mapping) | units |
 | `server:leaveOperation` | — | operations |
+| `server:settingsHello` | — (plain event, 2 per 10 s; the reply waits until the settings are loaded) | settings |
 
 Events with "three args, no reqId" are plain `RegisterNetEvent` handlers (client Lua → server);
 all others use `CP.Net.action` (UI → server, with reply).
@@ -1440,7 +1502,8 @@ Callbacks (read): `getSession`, `getMissionTypes`, `getUnit`, `getRun`, `getHome
 `builder:config`, `test:pendingInvites`, `test:state` (testRun or builderEdit), `test:candidates` (testRun).
 Parity-plus: `getMissionCalls`, `getNavCounts`, `getProfileEdit`, `getRewardsLocker`, `sup:getMissionCalls`,
 `sup:getProfileQueue`, `admin:getRewards` (`{ page }`), `admin:getAreaCoverage`, `admin:getLocationStats`
-(`{ missionId }`), `admin:getOfficerProfile` (`{ citizenid }`), `admin:getConfigHealth`, `admin:getTabletAccess`;
+(`{ missionId }`), `admin:getOfficerProfile` (`{ citizenid }`), `admin:getConfigHealth`, `admin:getTabletAccess`,
+`admin:getSettings`, `admin:getSettingsHistory` (`{ page, path? }`);
 `getBoard` gains `metric`, `getSession` gains `via` and `desk`.
 
 Actions (write), each checks `CP.Permissions.can`:
@@ -1478,6 +1541,8 @@ Actions (write), each checks `CP.Permissions.can`:
 | `server:sup:clearProfile` / `server:admin:clearProfile` | `{ citizenid, what = 'bio'|'avatar', reason }` | reviewProfiles / openAdmin | profile |
 | `server:sup:handleReport` / `server:admin:handleReport` | `{ id, decision = 'clear'|'dismiss', reason }` | reviewProfiles / openAdmin | profile |
 | `server:sup:opRemoveJoiner` / `server:admin:opRemoveJoiner` | `{ src, reason }` | launchCrossDept | operations |
+| `server:admin:setSetting` / `resetSetting` / `resetAllSettings` | `{ path, value? \| json?, none? }` / `{ path }` / — → SettingsReply | openAdmin | settings |
+| `server:admin:setMissionEnabled` / `setLocationEnabled` / `resetMissionSwitches` | `{ missionId, enabled }` / `{ missionId, index, enabled }` / `{ missionId }` → MissionSwitchView | openAdmin | settings |
 
 Key mappings: `crimsonpolice_dispatch` (Config.Tablet.dispatchKey), `crimsonpolice_ready` (readyKey),
 `crimsonpolice_contact` (contactKey). ox_target option names (all `crimson-police:*`): `desk`,
@@ -1499,7 +1564,7 @@ Lua → NUI: `SendNUIMessage({ type = ..., ... })` (only modules/tablet/client.l
 | `notify` | `notification = { id, kind, title?, text, duration }` | Crimson-Police toast |
 | `hud` | `hud = HudState \| null` | mission HUD (full state) |
 | `result` | `result = RunResult` | result screen |
-| `push` | `topic`, `data` | live data for open screens: `run`, `unit`, `board`, `operation`, `invites`, `test`, `builder`, `payouts`, and `calls` (DispatchView), `nav` (NavCounts), `profile` (own profile changed), `rewards` (locker changed), `contactConfirm`; `unit` gains `readyCheck`, `run` gains `contact` |
+| `push` | `topic`, `data` | live data for open screens: `run`, `unit`, `board`, `operation`, `invites`, `test`, `builder`, `payouts`, and `calls` (DispatchView), `nav` (NavCounts), `profile` (own profile changed), `rewards` (locker changed), `contactConfirm`, `settings` (admins: a setting or switch changed, `{ paths }`); `unit` gains `readyCheck`, `run` gains `contact` |
 | `overlay` | `overlay = null \| { kind: 'placement'\|'recording'\|'testdrive'\|'fade', ... }` | full-screen/HUD overlays |
 
 NUI → Lua: `fetch('https://Crimson-Police/<endpoint>', { method: 'POST', body: JSON })`:
@@ -1629,7 +1694,8 @@ Parity-plus screen data lives in its own type files (the Lua side follows them e
 (ContactView, ContactEntry, ContactConfirm), `types/profile.ts` (ProfileEdit, Commendation, ServiceStats,
 ProfileQueueItem), `types/boards.ts` (the metric boards and profile additions), `types/teams.ts` (UnitView and
 OperationView additions), `types/rewards.ts` (RewardRow, RewardsLocker, AdminRewardsView), `types/access.ts`
-(TabletAccessView) and `types/run_ui.ts` (DecisionEntry, DecisionFact, DebriefPerson, RunProgress, RunStats,
+(TabletAccessView), `types/settings.ts` (SettingView, SettingsData, SettingsReply, SettingsHistory, MissionSwitchView) and
+`types/run_ui.ts` (DecisionEntry, DecisionFact, DebriefPerson, RunProgress, RunStats,
 RunMissionCall, RunItem and the
 ActiveMissionView extras intel, missionCall and contact). BoardData gains `callsOpen` and daily locks; HomeData
 gains `level` (LevelInfo), `missionsToday` and `extras` (callsOpen, commendations, news, rewardsWaiting).

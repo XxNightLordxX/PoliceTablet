@@ -11,10 +11,11 @@ import {
     LoadingBlock,
     Screen,
     Table,
+    Toggle,
     type TableColumn,
 } from '../../shared/components';
 import { asArray } from '../../shared/data';
-import { useRequest } from '../../shared/hooks';
+import { useAction, useRequest } from '../../shared/hooks';
 import { hasKey, t } from '../../shared/i18n';
 import type { ConfigHealthItem } from '../../shared/types';
 import type { PermissionsData } from '../../types/oversight';
@@ -91,7 +92,24 @@ function ConfigHealthCard() {
 }
 
 export default function AdminPermissions() {
-    const { data, loading, error, refetch } = useRequest<PermissionsData>('admin:getPermissions', {});
+    const { data, loading, error, refetch } = useRequest<PermissionsData>(
+        'admin:getPermissions',
+        {},
+        { pushTopic: 'settings' },
+    );
+    const { run, busy } = useAction();
+    // A switch is the setting Config.Permissions.supervisor.<action> (Admin UI → Settings), saved over config.lua.
+    const setPermission = async (action: string, enabled: boolean) => {
+        const res = await run(
+            'server:admin:setSetting',
+            { path: `Permissions.supervisor.${action}`, value: enabled },
+            {
+                success: enabled ? 'admin.perms.switched_on' : 'admin.perms.switched_off',
+                successVars: { action: label(action) },
+            },
+        );
+        if (res.ok) void refetch();
+    };
     const rows = asArray(data?.supervisor);
     const adminOnly = asArray(data?.adminOnly);
     const always = asArray(data?.always);
@@ -119,16 +137,14 @@ export default function AdminPermissions() {
             header: t('admin.perms.col.status'),
             width: 130,
             align: 'center',
-            render: r =>
-                r.enabled ? (
-                    <Badge tone="success" icon="checkCircle">
-                        {t('admin.perms.on')}
-                    </Badge>
-                ) : (
-                    <Badge tone="grey" icon="minusCircle">
-                        {t('admin.perms.off')}
-                    </Badge>
-                ),
+            render: r => (
+                <Toggle
+                    checked={r.enabled}
+                    disabled={busy}
+                    label={r.enabled ? t('admin.perms.on') : t('admin.perms.off')}
+                    onChange={v => void setPermission(r.action, v)}
+                />
+            ),
         },
     ];
 
@@ -145,7 +161,7 @@ export default function AdminPermissions() {
             <>
                 <ConfigHealthCard />
                 <div className="oversight-perm-banner">
-                    <Icon name="lock" size={16} />
+                    <Icon name="sliders" size={16} />
                     <div>
                         <strong>{t('admin.perms.readonly')}</strong>
                         <span>{t('admin.perms.edit_hint')}</span>

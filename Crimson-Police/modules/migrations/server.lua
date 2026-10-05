@@ -12,6 +12,7 @@ local FILES = {
     '004_profile.sql',
     '005_mission_calls.sql',
     '006_item_rewards.sql',
+    '007_settings.sql',
 }
 
 local WAIT_HINT_MS = 30000   -- no database after this long: say what to check (oxmysql waits without a word)
@@ -175,6 +176,11 @@ local function Run()
         CP.warn(TAG,
             'the database is new, but the saves folder holds data from running with the database off. Nothing is copied by itself: to bring it over, run "%s storage copy files-to-database" in the server console, then restart Crimson-Police.',
             cmd)
+    end
+    -- The settings an admin changed in game go over Config before any module that waits here reads it.
+    if CP.Settings and type(CP.Settings.boot) == 'function' then
+        local okS, errS = pcall(CP.Settings.boot)
+        if not okS then CP.err(TAG, 'the settings changed in game could not be loaded: %s', tostring(errS)) end
     end
     isReady = true
     readyPromise:resolve(true)

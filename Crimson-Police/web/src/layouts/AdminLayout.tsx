@@ -1,5 +1,5 @@
 // Admin UI: a separate full-screen panel (not the tablet), neutral admin theme (session.theme =
-// Config.AdminTheme), no watermark, 9-screen sidebar.
+// Config.AdminTheme), no watermark, 10-screen sidebar.
 
 import { useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { Icon, IconButton, LayerRootContext } from '../shared/components';

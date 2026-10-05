@@ -150,6 +150,8 @@ export interface BuilderListEntry {
     draftVersion: number | null;
     hasDraft: boolean;
     draftTested: boolean;
+    // publishing waits for a passed test (Config.Builder.requireTestToPublish, never for admins)
+    needsTest?: boolean;
     editedInCode: boolean;
     filePath: string | null;
     owner: BuilderPerson & { mine: boolean };
@@ -259,6 +261,8 @@ export interface BuilderConfig {
     autosaveSeconds: number;
     editLockMinutes: number;
     testAtMaxTier: boolean;
+    // a passed test is needed to publish (Config.Builder.requireTestToPublish; never for admins)
+    requireTestToPublish?: boolean;
     keepBackups: boolean;
     exportPath: string;
     route: BuilderRouteConfig;

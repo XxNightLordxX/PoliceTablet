@@ -131,6 +131,7 @@ local CONFIG_SECTIONS = {
     'Departments',
     'MissionTypes',
     'DisabledMissions',
+    'DisabledLocations',
     'Difficulty',
     'Cash',
     'Payouts',

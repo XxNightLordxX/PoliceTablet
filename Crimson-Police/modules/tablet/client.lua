@@ -23,6 +23,7 @@ local DESK_WATCH_MS = 500            -- how often the desk distance is checked w
 local ITEM_WATCH_MS = 1000           -- how often the tablet item is looked for while requireItem is on
 local DOWN_WATCH_MS = 500            -- how often a downed officer is looked for while the tablet is open
 local OPEN_ACK_MS = 6000             -- the NUI confirms it shows the UI within this, or the focus is released
+local SETTINGS_WAIT_MS = 10000       -- the start waits this long at most for the settings changed in game
 
 -- Tablet prop and animation (held in the hand the animation uses; offsets tuned for this clip).
 local ANIM_DICT = 'amb@code_human_in_bus_passenger_idles@female@tablet@base'
@@ -998,6 +999,8 @@ end)
 
 CreateThread(function()
     T.wrapProgress()   -- again at runtime, in case ox_lib resolved lib.progressBar only now
+    -- the command, keys and desks changed in game (Admin UI → Settings) come from the server first
+    if CP.Settings and CP.Settings.ready then CP.Settings.ready(SETTINGS_WAIT_MS) end
     registerCommand()
     WatchArena()
     CreateDeskZones()

@@ -19,6 +19,7 @@ import {
     Stat,
     Table,
     Tabs,
+    Toggle,
     type TableColumn,
 } from '../../shared/components';
 import { asArray } from '../../shared/data';
@@ -38,6 +39,8 @@ import type {
 } from '../../types/builder_server';
 import type { MissionListEntry } from '../../types/oversight';
 import type { AdminMissionsData } from '../../types/builder_client';
+import type { MissionSwitchView } from '../../types/settings';
+import './Settings.css';
 
 type Tab = 'catalog' | 'builder' | 'operation' | 'dispatch';
 type SourceFilter = 'all' | 'builtin' | 'custom';
@@ -56,6 +59,8 @@ interface CatalogRow {
     offInConfig: boolean;
     isBoss: boolean;
     eligible: boolean;
+    // the on/off switches of a loaded mission and its locations (null: a draft not in the pools)
+    switch: MissionSwitchView | null;
     entry: BuilderListEntry | null;
     mission: MissionListEntry | null;
 }
@@ -98,6 +103,7 @@ export default function AdminMissions() {
     const [source, setSource] = useState<SourceFilter>('all');
     const [confirm, setConfirm] = useState<Confirm>(null);
     const [summary, setSummary] = useState<ReloadSummary | null>(null);
+    const [locationsOf, setLocationsOf] = useState<string | null>(null);
 
     const rows = useMemo<CatalogRow[]>(() => {
         const entries = new Map(asArray(builder.data?.missions).map(e => [e.id, e]));
@@ -119,6 +125,7 @@ export default function AdminMissions() {
                 offInConfig: m.disabledInConfig ?? (builtin && !m.enabled),
                 isBoss: m.isBoss,
                 eligible: m.crossDeptEligible,
+                switch: m.switch ? { ...m.switch, locations: asArray(m.switch.locations) } : null,
                 entry,
                 mission: m,
             };
@@ -138,12 +145,15 @@ export default function AdminMissions() {
                 offInConfig: false,
                 isBoss: false,
                 eligible: false,
+                switch: null,
                 entry: e,
                 mission: null,
             });
         });
         return out;
     }, [missions.data, builder.data]);
+
+    const switchRow = rows.find(r => r.id === locationsOf) ?? null;
 
     const filtered = useMemo(() => {
         const q = query.trim().toLowerCase();
@@ -159,7 +169,7 @@ export default function AdminMissions() {
             total: rows.length,
             builtin: rows.filter(r => r.source === 'builtin').length,
             custom: rows.filter(r => r.source === 'custom').length,
-            off: rows.filter(r => r.offInConfig).length,
+            off: rows.filter(r => (r.switch ? !r.switch.on : r.offInConfig)).length,
             drafts: rows.filter(r => r.entry?.hasDraft || r.entry?.status === 'draft' || r.entry?.status === 'tested')
                 .length,
             locked: rows.filter(r => r.entry?.lock && !r.entry.lock.mine).length,
@@ -243,6 +253,19 @@ export default function AdminMissions() {
         if (res?.ok) refetchAll();
     };
 
+    // On/off of a mission (and of its locations in the dialog): saved over config.lua, runs already going finish.
+    const setMission = async (row: CatalogRow, enabled: boolean) => {
+        const res = await run<MissionSwitchView>(
+            'server:admin:setMissionEnabled',
+            { missionId: row.id, enabled },
+            {
+                success: enabled ? 'settings.mission.turned_on' : 'settings.mission.turned_off',
+                successVars: { mission: row.label },
+            },
+        );
+        if (res.ok) void missions.refetch();
+    };
+
     const duplicate = async (row: CatalogRow) => {
         const res = await run<BuilderCreateResult>(
             'server:builder:duplicate',
@@ -315,15 +338,13 @@ export default function AdminMissions() {
         {
             key: 'status',
             header: t('admin.missions.col.status'),
-            width: 190,
+            width: 230,
             render: r => {
+                const sw = r.switch ? (
+                    <MissionSwitch row={r} busy={busy} onToggle={setMission} onLocations={setLocationsOf} />
+                ) : null;
                 if (r.source === 'builtin') {
-                    if (r.offInConfig)
-                        return (
-                            <Badge size="sm" tone="grey" icon="minusCircle" title={t('admin.missions.off_config_hint')}>
-                                {t('admin.missions.off_config')}
-                            </Badge>
-                        );
+                    if (sw) return sw;
                     return r.enabled ? (
                         <Badge size="sm" tone="success" icon="checkCircle">
                             {t('admin.missions.enabled')}
@@ -337,6 +358,7 @@ export default function AdminMissions() {
                 const e = r.entry;
                 return (
                     <div className="builder_client-status-cell">
+                        {sw}
                         {e ? (
                             <StatusBadge status={e.status} />
                         ) : (
@@ -354,11 +376,6 @@ export default function AdminMissions() {
                                 {t(e.draftTested ? 'builder.list.draft_tested' : 'builder.list.draft_v', {
                                     version: e.draftVersion ?? '?',
                                 })}
-                            </Badge>
-                        ) : null}
-                        {r.offInConfig ? (
-                            <Badge size="sm" tone="grey" title={t('admin.missions.off_config_hint')}>
-                                {t('admin.missions.off_config')}
                             </Badge>
                         ) : null}
                         {e?.lock ? <LockBadge lock={e.lock} /> : null}
@@ -441,7 +458,7 @@ export default function AdminMissions() {
                                         onClick={() => setConfirm({ kind: 'restore', row: r })}
                                     />
                                 ) : null}
-                                {e.can.publish && e.draftTested ? (
+                                {e.can.publish && !e.needsTest ? (
                                     <Button
                                         size="sm"
                                         variant="secondary"
@@ -720,7 +737,141 @@ export default function AdminMissions() {
                     </div>
                 ) : null}
             </Dialog>
+            <LocationsDialog
+                row={switchRow}
+                busy={busy}
+                onClose={() => setLocationsOf(null)}
+                onChanged={() => void missions.refetch()}
+            />
         </Screen>
+    );
+}
+
+// ============================================================================
+//                        MISSION AND LOCATION SWITCHES
+// ============================================================================
+
+function MissionSwitch({
+    row,
+    busy,
+    onToggle,
+    onLocations,
+}: {
+    row: CatalogRow;
+    busy: boolean;
+    onToggle: (row: CatalogRow, enabled: boolean) => void;
+    onLocations: (id: string) => void;
+}) {
+    const sw = row.switch;
+    if (!sw) return null;
+    const total = sw.locations.length;
+    const on = total - sw.locationsOff;
+    return (
+        <div className="settings-switch">
+            <Toggle
+                checked={sw.on}
+                disabled={busy}
+                label={sw.on ? t('settings.mission.on') : t('settings.mission.off')}
+                onChange={v => onToggle(row, v)}
+            />
+            <Button
+                size="sm"
+                variant="ghost"
+                icon="mapPin"
+                onClick={() => onLocations(row.id)}
+                title={t('settings.mission.locations_hint')}
+            >
+                {t('settings.mission.locations', { on, total })}
+            </Button>
+            {sw.changed ? (
+                <Badge size="sm" tone="accent" icon="edit" title={t('settings.mission.changed_hint')}>
+                    {t('settings.badge.changed')}
+                </Badge>
+            ) : null}
+            {sw.on && total > 0 && on === 0 ? (
+                <Badge size="sm" tone="warning" icon="alert">
+                    {t('settings.mission.no_locations')}
+                </Badge>
+            ) : null}
+        </div>
+    );
+}
+
+function LocationsDialog({
+    row,
+    busy,
+    onClose,
+    onChanged,
+}: {
+    row: CatalogRow | null;
+    busy: boolean;
+    onClose: () => void;
+    onChanged: () => void;
+}) {
+    const { run, busy: saving } = useAction();
+    const sw = row?.switch ?? null;
+    const setLocation = async (index: number, enabled: boolean) => {
+        if (!row) return;
+        const res = await run<MissionSwitchView>('server:admin:setLocationEnabled', {
+            missionId: row.id,
+            index,
+            enabled,
+        });
+        if (res.ok) onChanged();
+    };
+    const reset = async () => {
+        if (!row) return;
+        const res = await run<MissionSwitchView>(
+            'server:admin:resetMissionSwitches',
+            { missionId: row.id },
+            { success: 'settings.mission.reset_done', successVars: { mission: row.label } },
+        );
+        if (res.ok) onChanged();
+    };
+    return (
+        <Dialog
+            open={!!row && !!sw}
+            onClose={onClose}
+            title={row ? t('settings.mission.locations_title', { mission: row.label }) : ''}
+            size="md"
+            footer={
+                <>
+                    <Button
+                        variant="ghost"
+                        icon="refresh"
+                        disabled={busy || saving || !sw?.changed}
+                        onClick={() => void reset()}
+                    >
+                        {t('settings.mission.reset')}
+                    </Button>
+                    <span className="cp-spacer" />
+                    <Button onClick={onClose}>{t('common.close')}</Button>
+                </>
+            }
+        >
+            {sw ? (
+                <div className="settings-locations">
+                    <div className="settings-muted">{t('settings.mission.locations_text')}</div>
+                    {sw.locations.map(l => (
+                        <div key={l.index} className="settings-locations__row">
+                            <span className="cp-num settings-muted">{`#${l.index}`}</span>
+                            <span className="settings-locations__label">{l.label}</span>
+                            {l.on !== l.defaultOn ? (
+                                <Badge size="sm" tone="accent">
+                                    {t('settings.badge.changed')}
+                                </Badge>
+                            ) : null}
+                            <Toggle
+                                checked={l.on}
+                                disabled={busy || saving}
+                                label={l.on ? t('settings.mission.on') : t('settings.mission.off')}
+                                onChange={v => void setLocation(l.index, v)}
+                            />
+                        </div>
+                    ))}
+                </div>
+            ) : null}
+        </Dialog>
     );
 }
 
@@ -747,12 +898,16 @@ function confirmText(c: Confirm): { title: string; message: string; button: stri
             button: t('admin.missions.confirm_launch.button'),
         };
     if (c.kind === 'publish') {
+        const message = t('builder.confirm.publish.message', {
+            version: r.entry?.draftVersion ?? 1,
+            file: r.filePath ?? '',
+        });
         return {
-            title: t('builder.confirm.publish.title', vars),
-            message: t('builder.confirm.publish.message', {
-                version: r.entry?.draftVersion ?? 1,
-                file: r.filePath ?? '',
-            }),
+            title: t(
+                r.entry?.draftTested ? 'builder.confirm.publish.title' : 'builder.confirm.publish_untested.title',
+                vars,
+            ),
+            message: r.entry?.draftTested ? message : `${t('builder.confirm.publish_untested.message')} ${message}`,
             button: t('builder.confirm.publish.button'),
         };
     }

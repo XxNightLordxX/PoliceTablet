@@ -46,6 +46,7 @@ local CUFF_DICT, CUFF_CLIP = 'mp_arresting', 'a_uncuff'
 local MAX_CUFF_RANGE = 10.0
 local MAX_OPTIONS = 8
 local FACE_MS = 600
+local SETTINGS_WAIT_MS = 10000          -- the contact key waits this long at most for the settings changed in game
 
 local ARRESTS, BUSTED, CUFFED_DICT = 'random@arrests', 'random@arrests@busted', 'mp_arresting'
 local HANDS_UP_MS, KNEEL_MS, ENTER_MS, GETUP_MS, EXIT_MS = 4000, 500, 1000, 2500, 1200
@@ -1523,6 +1524,7 @@ end
 RegisterCommand(CONTACT_KEY, function() CreateThread(ContactKey) end, false)
 
 CreateThread(function()
+    if CP.Settings and CP.Settings.ready then CP.Settings.ready(SETTINGS_WAIT_MS) end
     local key = Config.Tablet and Config.Tablet.contactKey
     if type(key) ~= 'string' then key = '' end
     RegisterKeyMapping(CONTACT_KEY, CP.L('npc.contact_keybind'), 'keyboard', key)

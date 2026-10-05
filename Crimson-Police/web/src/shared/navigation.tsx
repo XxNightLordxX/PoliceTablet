@@ -14,6 +14,7 @@ export type AdminScreenKey =
     | 'admin_officers'
     | 'admin_departments'
     | 'admin_permissions'
+    | 'admin_settings'
     | 'admin_audit'
     | 'admin_testing';
 export type ScreenKey = OfficerScreenKey | SupervisorScreenKey | AdminScreenKey;

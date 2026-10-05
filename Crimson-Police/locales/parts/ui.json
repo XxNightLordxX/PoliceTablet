@@ -42,6 +42,7 @@
   "ui.screen.admin_officers": "Officers",
   "ui.screen.admin_departments": "Departments",
   "ui.screen.admin_permissions": "Permissions",
+  "ui.screen.admin_settings": "Settings",
   "ui.screen.admin_audit": "Audit Log",
   "ui.screen.admin_testing": "Testing",
   "common.no_callsign": "No callsign",

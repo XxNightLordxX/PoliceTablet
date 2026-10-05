@@ -26,7 +26,7 @@ These rules override everything else in this spec. If another section, example o
 
 - Cash payouts: every mission pays its mission type's payout × its star multiplier (the Weekly Boss pays its own event payout from config) unless an admin has set a payout for that specific mission. Supervisors MAY change a type's payout only if no admin has set it, and only within Config.Payouts.supervisorRange. Only admins MAY set a single mission's payout. Any payout an admin sets is permanent until an admin changes or clears it.
 
-- Points: leaderboard points come from Config.MissionTypes and the scoring rules. Points MUST NOT be editable in-game, apart from an admin's logged manual award.
+- Points: leaderboard points come from Config.MissionTypes and the scoring rules. Officers and supervisors MUST NOT be able to change points in game. Only an admin MAY: by changing a point setting in the Admin UI Settings screen (every change is in the audit log) or by a logged manual award.
 
 - Server authority: the server decides draws, scaling, points and cash. The client MUST NOT send point or cash amounts; it only reports objective events, which the server validates.
 
@@ -64,7 +64,7 @@ Everything below was considered and removed. Do not add it back, even as an opti
 
 - Roles: no cadet, detective, FTO or supervisor-only missions, no grade-restricted mission pools, and no separate builder permission.
 
-- Payouts and points: no in-game editing of points (only an admin's logged manual award), no point awards from other resources, no supervisor editing of single-mission payouts, and no payout field in the Mission Builder or in exported Lua files.
+- Payouts and points: no in-game editing of points by officers or supervisors (an admin only through the logged Settings screen or a logged manual award), no point awards from other resources, no supervisor editing of single-mission payouts, and no payout field in the Mission Builder or in exported Lua files.
 
 - Leaderboards: no manual board reset; boards are time windows, and corrections are made by voiding runs.
 
@@ -296,12 +296,13 @@ Admin UI — a separate full-screen panel for server admins, covering every depa
 | Screen | Contents | Key actions |
 |---|---|---|
 | Payouts | Every mission type and every mission with its base payout; admin payouts marked "Admin · permanent" | Set or clear a type or mission payout |
-| Missions | All built-in and custom missions, version, Lua file path, "edited in code" flag, edit locks; built-in missions can only be turned off in config (Config.DisabledMissions) | Build, publish tested drafts, archive, restore or roll back custom missions; break an edit lock; reload mission files; launch, start now, relaunch or cancel a Cross-Department Mission |
+| Missions | All built-in and custom missions, version, Lua file path, "edited in code" flag, edit locks; an on/off switch for every mission and for each of its locations (saved over Config.DisabledMissions and Config.DisabledLocations; runs already going finish) | Build, publish drafts (testing is optional), archive, restore or roll back custom missions; break an edit lock; reload mission files; turn missions and locations on or off, or back to config.lua's switches; launch, start now, relaunch or cancel a Cross-Department Mission |
 | Seasons & Challenge | Current season, department standings, bounty history | Start or end a season, override this week's bounty |
 | Leaderboards | Every board and period, cash paid per officer, and any payment left in paying after a crash | Void runs, award points |
 | Officers | Search any officer: rank, callsign, history, badges, cash earned, suspensions, disputes about failed runs | Suspend, unsuspend, answer a dispute (manual award or dismiss) |
 | Departments | Each department in Config.Departments: name, jobs, colours, logo thumbnail, member count, society balance (only when Config.Cash.source = 'society') | Preview a department's tablet theme (read-only) |
-| Permissions | Read-only view of Config.Permissions: which supervisor actions are switched on | — |
+| Permissions | Config.Permissions: which supervisor actions are switched on; Config health | Switch a supervisor action on or off (a setting saved over config.lua) |
+| Settings | Every setting of config/config.lua and config/blocks.lua by section, with its comment from the file, the value in use, the config.lua value, "changed" and "after restart" badges, Config health, and the history of changes made in game | Change any setting (the server checks it), reset one or all (see Settings changed in game) |
 | Audit Log | Every supervisor and admin action, filterable | Export |
 | Testing | Every mission and each of its locations with its last test result (Passed, Failed, Not tested or Changed since test), the tier, who tested it and when | Start a test run (mission, location, tier, start route on or off), invite testers, record a result |
 
@@ -417,7 +418,7 @@ Cash per type is in Cash payouts. Custom missions join their type's pool when th
 
 Random draw rules
 
-- The pool is every published mission of the chosen type that is open to every participant's department, supports the unit's size, is not turned off in Config.DisabledMissions, and is off cooldown for every participant.
+- The pool is every published mission of the chosen type that is open to every participant's department, supports the unit's size, is not turned off (Config.DisabledMissions, or its switch in Admin UI → Missions), has at least one location that is on, and is off cooldown for every participant. A location turned off (Config.DisabledLocations) is never drawn.
 
 - The draw never gives an officer or unit the mission they last completed or abandoned in that type. With 4 or more missions in the pool it also skips the last two.
 
@@ -1717,7 +1718,7 @@ Flow
 
 - Scaling → tick which counts scale with the tier; each block suggests a default.
 
-- Test run → the builder plays it privately at any tier, in the same test mode admins use (see Admin test mode); points and cash are shown but not saved or paid. Publishing needs one passed test at the tier its maxOfficers reaches (for example Heavy for a 4-officer mission).
+- Test run → the builder plays it privately at any tier, in the same test mode admins use (see Admin test mode); points and cash are shown but not saved or paid. Testing is optional: a draft can be published untested (one confirm, "Publish without testing?"). Only while Config.Builder.requireTestToPublish is true does a supervisor's draft need one passed test at the tier its maxOfficers reaches (for example Heavy for a 4-officer mission); an admin never does.
 
 - Publish → the mission joins its type's pool for the chosen departments, and its Lua file is written.
 
@@ -1967,7 +1968,7 @@ Lua export for developers — every publish writes missions/custom/<mission_id>.
 
 ## Data model
 
-Eighteen tables (prefix cp_) hold everything. Leaderboards are computed from cp_mission_runs, which has one row per participant per run, so every point and every payment traces back to the run that earned it.
+Nineteen tables (prefix cp_) hold everything. Leaderboards are computed from cp_mission_runs, which has one row per participant per run, so every point and every payment traces back to the run that earned it.
 
 -- sql/migrations/001_initial.sql: the full schema for a fresh install
 
@@ -2260,7 +2261,15 @@ CREATE TABLE IF NOT EXISTS cp_item_rewards (
   INDEX idx_row (row_id)
 );
 
-sql/migrations/001_initial.sql creates the first fourteen tables, and 002–006 add the columns and the four tables above (see Database upgrades). Every stat column of 003 is written on every run row, and only rows with state = 'completed' are ever summed (service record, boards, goals, bounties, badges). cp_mission_calls keeps the call history for Config.Retention.missionCallDays; cp_item_rewards stays empty while Config.Rewards.enabled is false. Every table and column works the same with the database off (the saves folder). A mission type with no row in cp_type_payouts uses the payout from Config.MissionTypes, and the Weekly Boss uses Config.Events.weeklyBoss.payout until an admin sets a mission payout. Published custom missions are loaded from their Lua files; the database keeps drafts, metadata and edit locks. callsign and rank_label in cp_officers are copies refreshed from Qbox whenever the officer loads in or opens the tablet, so boards can show officers who are offline; Crimson-Police never writes them back. Voided runs stay for audit but are left out of every board. At each daily reset the server moves runs older than Config.Retention.runArchiveMonths (12) into cp_mission_runs_archive and deletes audit rows older than Config.Retention.auditDays (180); 0 turns either off. XP and badges live in cp_officers and cp_badges, so archiving never changes them or the all-time board.
+-- sql/migrations/007_settings.sql · settings an admin changed in game (Admin UI → Settings), over config.lua.
+CREATE TABLE IF NOT EXISTS cp_settings (
+  setting_key VARCHAR(191) NOT NULL PRIMARY KEY,  -- the Config key path, e.g. Tablet.deskDistance
+  value_json  JSON NOT NULL,                      -- {"v": <value>}, or {"none": true} for "not set" (nil)
+  updated_by  VARCHAR(50) NULL,                   -- citizenid, or 'console'
+  updated_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+sql/migrations/001_initial.sql creates the first fourteen tables, and 002–007 add the columns and the five tables above (see Database upgrades). cp_settings holds only the settings an admin changed in game; a setting with no row uses config.lua. Every stat column of 003 is written on every run row, and only rows with state = 'completed' are ever summed (service record, boards, goals, bounties, badges). cp_mission_calls keeps the call history for Config.Retention.missionCallDays; cp_item_rewards stays empty while Config.Rewards.enabled is false. Every table and column works the same with the database off (the saves folder). A mission type with no row in cp_type_payouts uses the payout from Config.MissionTypes, and the Weekly Boss uses Config.Events.weeklyBoss.payout until an admin sets a mission payout. Published custom missions are loaded from their Lua files; the database keeps drafts, metadata and edit locks. callsign and rank_label in cp_officers are copies refreshed from Qbox whenever the officer loads in or opens the tablet, so boards can show officers who are offline; Crimson-Police never writes them back. Voided runs stay for audit but are left out of every board. At each daily reset the server moves runs older than Config.Retention.runArchiveMonths (12) into cp_mission_runs_archive and deletes audit rows older than Config.Retention.auditDays (180); 0 turns either off. XP and badges live in cp_officers and cp_badges, so archiving never changes them or the all-time board.
 
 Database upgrades
 
@@ -2268,7 +2277,7 @@ Crimson-Police creates and upgrades its own tables, so an update never needs a m
 
 With Config.Database.enabled = false (database off), the same tables, built by the same migrations, are kept as JSON documents in Crimson-Police/saves/ by an engine inside the resource that runs the same queries, so every feature works exactly as with a database; the server owner keeps and backs up that folder, and /CrimsonPoliceAdmin storage copy database-to-files | files-to-database moves the data between the two.
 
-- Every schema change is a numbered file in sql/migrations/: 001_initial.sql (the schema above), then 002_test_def_hash.sql, 003_run_stats.sql, 004_profile.sql, 005_mission_calls.sql, 006_item_rewards.sql, and so on. A released file is never edited; every later change gets a new file.
+- Every schema change is a numbered file in sql/migrations/: 001_initial.sql (the schema above), then 002_test_def_hash.sql, 003_run_stats.sql, 004_profile.sql, 005_mission_calls.sql, 006_item_rewards.sql, 007_settings.sql, and so on. A released file is never edited; every later change gets a new file.
 
 - On start, modules/migrations/ creates cp_schema_migrations if it is missing, runs every file whose number is not recorded there yet, in order, and records each one when it finishes. Other modules wait for it before their first query.
 
@@ -2306,7 +2315,7 @@ Crimson-Police/
   blocks/<block_id>/client.lua
   web/src/                           React + TypeScript: officer/, supervisor/, admin/, hud/, shared/
   web/dist/                          Vite build loaded by fxmanifest
-  sql/migrations/                    numbered database upgrades: 001_initial.sql … 006_item_rewards.sql, applied in order on start
+  sql/migrations/                    numbered database upgrades: 001_initial.sql … 007_settings.sql, applied in order on start
   items/                             the tablet item image and the ox_inventory snippet to paste (never loaded by the resource)
   config/banned_words.txt            the default banned-word list for profile bios
 
@@ -2349,6 +2358,7 @@ Feature folders
 | modules/profile/ | server | Avatar, bio, look preferences and the call mute, commendations, profile reports and moderation |
 | modules/rewards/ | server | Item rewards: rolls, delivery, locker, held and forfeited rewards |
 | modules/confighealth/ | server | The start-up config check and Admin UI → Permissions → Config health |
+| modules/settings/ | server, client | Settings changed in game (Admin UI → Settings) over config.lua and blocks.lua, the mission and location switches, and the same values on every client |
 | modules/integrations/sc_police/ | server | The read-only police:server:Impound listener |
 | blocks/field_contact/ | server, client | The contact objective (parked, scene and stop modes) |
 | blocks/process_scene/ | server, client | The coroner objective |
@@ -2416,9 +2426,26 @@ Exports
 
 There is deliberately no export for awarding points: only goal rewards and an admin's logged manual award add points outside a run.
 
+## Settings changed in game
+
+An admin can change every setting of config/config.lua and config/blocks.lua in game, in the Admin UI Settings screen, so a server owner never has to edit a file. These rules apply:
+
+- Who: admins only (the openAdmin permission). The server checks every change again; officers and supervisors never see the screen.
+- What: every key of the two files, including the shipped defaults, the department tables, point and pay settings and the Mission Builder ranges. The exceptions change only in config.lua and show as locked: Config.Database (database on or off, and the saves folder), because the changed settings are stored there, and Config.AdminAce and Config.QboxAdmins, because they decide who is an admin (changed in game they could make every player an admin or lock every admin out). Discord webhooks are convars in server.cfg, never settings.
+- Storage: one row per changed setting in cp_settings (key path and JSON value), through the migrations, so it works with the database on and with the saves folder. A changed setting wins over config.lua; a setting with no row follows config.lua. Reset deletes the row and puts config.lua's value back; Reset all deletes every row. Setting a value equal to config.lua's is a reset.
+- Checking: a value must have the kind and shape of its config.lua value (number, whole number, text, true/false, colour, vector, list, table with the same fields), stay inside a known range (the blocks.lua { min, max, default } triples keep min ≤ default ≤ max; chances stay 0–1; positive numbers stay positive; penalties stay negative), and pick an existing option. A Mission Builder export folder outside missions/custom is refused. A saved value that is no longer allowed (after an update) is ignored with one console line and config.lua's value is used until an admin changes or resets it.
+- When it applies: at once for everything read at the moment of use. Command names, default keys, mission desks, the locale, Config.Time.resetHour and Config.Leaderboard.weekStartsOn are read at start: a change is saved and used after the next start, and the screen says so. A change to what the mission loader reads (Config.Blocks, MissionTweaks, mission types, bonuses, Mission Builder limits) reloads the missions; runs already going keep their definition. The Settings screen tells the owner to restart Crimson-Police (txAdmin or the server console); it never restarts the resource itself.
+- Clients: every client gets the changed settings when it starts and after every change, so client code reads the same values as the server.
+- After each change the Config health check runs again and its result is shown. Every change is in the audit log (who, when, the setting, old → new), which the screen lists as its history.
+- Mission switches: Admin UI → Missions has an on/off switch for every mission and for each location of it (Config.DisabledMissions and Config.DisabledLocations, saved the same way). Off stops new draws everywhere (Mission Board, mission calls, Cross-Department Missions, the Weekly Boss); a run that is already going finishes. A mission whose every location is off is never drawn.
+
 ## Config
 
 Every threshold in this spec is a value in config/config.lua, in config/blocks.lua for Mission Builder settings, or, for per-mission values, in that mission's file, so the server owner can tune the system without touching code. If this document and the config disagree, the config wins. The listing below is config/config.lua exactly as this build ships it (English only: Config.Locale stays 'en').
+
+-- Every Crimson-Police setting. If this file and the spec disagree, this file wins.
+-- You never have to edit this file: an admin can change every setting in game (Admin UI → Settings). A change made
+-- there is saved over the value here and survives restarts; Reset puts this file's value back.
 
 Config = {}
 
@@ -2513,7 +2540,7 @@ Config.Permissions = {
         reviewFlagged = true,     -- approve or void flagged runs involving their department
         handleDisputes = true,    -- disputes about flagged or voided runs in their department
         builderEdit = true,       -- create, edit, record routes and test their own missions
-        builderPublish = true,    -- publish their own tested drafts
+        builderPublish = true,    -- publish their own drafts (testing is optional, see Config.Builder)
         builderArchive = true,    -- archive or restore their own missions
         builderEditAny = false,   -- also edit, publish and archive other people's custom missions
         builderRollback = false,  -- roll a custom mission back to its previous version
@@ -2605,7 +2632,10 @@ Config.MissionTypes = {
     tactical = { label = 'Tactical', points = 200, payout = 800, dailyLimit = nil },
 }
 
-Config.DisabledMissions = {}   -- built-in mission ids to turn off, e.g. { 'prison_break' }
+Config.DisabledMissions = {}   -- mission ids to turn off (built-in or custom), e.g. { 'prison_break' }
+-- Locations to turn off without removing them, by mission id: their labels (or numbers, 1 = the first), e.g.
+-- { prison_break = { 'North gate' } }. Admin UI → Missions has an on/off switch for every mission and location.
+Config.DisabledLocations = {}
 
 -- ── Difficulty (stars) ──────────────────────────────────────────────────────
 -- Multipliers by a mission's difficulty: index 1, 2 or 3 stars.
@@ -3251,7 +3281,9 @@ Config.Builder = {
     minLocationGap = 100.0,                    -- metres between locations of one mission
     minSpawnFromStart = 30.0,                  -- metres between any spawn point and the start point
     bonusCap = { points = 50, share = 0.25 },  -- flat bonuses and penalties: at most 50 points; percentage ones: at most 25% of P
-    testAtMaxTier = true,                      -- publishing needs a passed test at the tier maxOfficers reaches
+    requireTestToPublish = false,              -- true = supervisors may publish only a draft that passed a test
+                                               -- (admins never need one); false = testing is optional for everyone
+    testAtMaxTier = true,                      -- a test counts as passed only at the tier maxOfficers reaches
     editLockMinutes = 30,                      -- one editor at a time; renewed while they keep editing
     autosaveSeconds = 30,
     exportPath = 'missions/custom/',
@@ -3674,7 +3706,7 @@ No client message can award points or cash directly. The server re-checks every 
 | Payout changed mid-run | The base payout is locked at accept; the tier is set at the start and can only go down |
 | Supervisor payout abuse | Only 50–200% of the type's config payout, at most once per 30 minutes per type, with a reason; every change is audited and posted to the audit webhook; admin-set types are locked |
 | Reviewing your own runs | Your own runs never appear in your Review Queue, and the server refuses any approval, void or dispute answer by a participant of that run |
-| Easy custom missions built to farm | Allowed lists, minimum objective times, bonus caps, a passed test at the tier maxOfficers reaches before publishing, and neutral star multipliers by default; every publish is posted to the builder webhook, and admins can archive or roll back |
+| Easy custom missions built to farm | Allowed lists, minimum objective times, bonus caps, an optional test before publishing (required for supervisors only with Config.Builder.requireTestToPublish), and neutral star multipliers by default; every publish is posted to the builder webhook, and admins can archive or roll back |
 | Double cash payments | One payment per participant per run: the row is claimed (paying) before any money moves, and a row with a final status is never paid again, and the Renewed-Banking entry carries the transaction id CP-<run_uuid>-<citizenid> |
 | Hand-editing a payout into an exported Lua file | Ignored, with a console warning; payouts only come from the Payouts screens |
 | Disconnect abuse | A disconnected participant is Failed (partial points, no cash) and gets the type cooldown, so disconnecting is never a free reroll; the run continues for anyone left |
@@ -3739,7 +3771,7 @@ Supervisors work from the Supervisor UI and admins from the Admin UI. Admins can
 | Start or end a season | Admin | Admin UI → Seasons & Challenge; /CrimsonPoliceAdmin season start <name> or season end | Opens or closes a season and its department challenge |
 | Override this week's bounty | Admin | Admin UI → Seasons & Challenge | Replaces the randomly picked bounty for the current week |
 | Suspend or unsuspend an officer | Admin | Admin UI → Officers; /CrimsonPoliceAdmin suspend <citizenid> <days> | Blocks an officer from Crimson-Police for that many days; 0 days lifts it |
-| Publish a tested draft | Supervisor (own missions; any mission with builderEditAny), Admin | Supervisor UI → Mission Builder; Admin UI → Missions | Makes the draft the live version and writes its Lua file |
+| Publish a draft (tested or not) | Supervisor (own missions; any mission with builderEditAny), Admin | Supervisor UI → Mission Builder; Admin UI → Missions | Makes the draft the live version and writes its Lua file |
 | Archive or restore a custom mission | Supervisor (own missions; any mission with builderEditAny), Admin | Supervisor UI → Mission Builder; Admin UI → Missions | Removes a custom mission from its pool, or puts it back |
 | Roll back a custom mission | Admin (supervisors only with builderRollback) | Admin UI → Missions; Supervisor UI → Mission Builder when allowed | Restores the previous version from its .bak file as a new version |
 | Break an edit lock | Admin (supervisors only with breakEditLock) | Admin UI → Missions; Supervisor UI → Mission Builder when allowed | Unlocks a mission someone else is editing; their changes since the last autosave are lost |
@@ -3759,7 +3791,7 @@ Admins can start any mission on demand, pick its location and tier, and play or 
 
 Starting a test: Admin UI → Testing, or /CrimsonPoliceAdmin test <missionId> [tier] [location] in game.
 
-- Any mission can be tested: built-in, custom (published or archived), or turned off in Config.DisabledMissions. Drafts are tested from the Mission Builder.
+- Any mission can be tested: built-in, custom (published or archived), or turned off (Config.DisabledMissions or its switch), at any location, also one turned off. Drafts are tested from the Mission Builder. Testing is optional: nothing waits for a test, and no screen blocks or warns about an untested mission.
 
 - The admin picks the location (one of the mission's numbered locations, or Random) and the tier (Standard to Critical), whatever the number of testers.
 
@@ -3901,7 +3933,7 @@ Acceptance checks
 
 - ☐ A route recorded at any speed is saved as road waypoints; the NPC vehicle drives those roads at the set speed and style, in its lane, not the builder's exact line; off-road samples are rejected; a route outside 0.8–8 km or through a no-build zone can't be saved; Test drive marks unreachable waypoints
 
-- ☐ The builder only offers models, weapons, vehicles and animations from Config.Builder.allowed and values inside config/blocks.lua; spots inside no-build zones, within 30 m of the start, or locations under 100 m apart are refused; publishing needs a passed test at the tier maxOfficers reaches
+- ☐ The builder only offers models, weapons, vehicles and animations from Config.Builder.allowed and values inside config/blocks.lua; spots inside no-build zones, within 30 m of the start, or locations under 100 m apart are refused; publishing needs no test (with Config.Builder.requireTestToPublish on, a supervisor needs a passed test at the tier maxOfficers reaches)
 
 - ☐ Only one person can edit a mission at a time; drafts autosave every 30 seconds; the published version stays live while a draft is edited; an admin can break an edit lock and roll back to the previous version
 
@@ -4043,7 +4075,7 @@ Phase 4 · Mission Builder
 |---|---|---|
 | 22. Builder UI, block settings and placement tool | modules/builder/, config/blocks.lua, web/src/supervisor/, web/src/admin/ | A mission can be drafted with every block's settings (only in-range values and allowed models) and placed in-game; no-build zones and spacing rules are enforced |
 | 23. Route recording and test drive | modules/builder/ | A route recorded at any speed is saved as road waypoints; the test drive follows those roads in lane at the set speed; the route checks refuse bad routes |
-| 24. Test, publish, versions, locks and Lua export | modules/builder/ | Publishing needs a passed test at the tier maxOfficers reaches and writes the Lua file; edit locks, autosave and rollback work; /CrimsonPoliceAdmin reload picks up a hand edit as a new version |
+| 24. Test, publish, versions, locks and Lua export | modules/builder/ | Publishing writes the Lua file (a passed test at the tier maxOfficers reaches is needed only for supervisors while Config.Builder.requireTestToPublish is on); edit locks, autosave and rollback work; /CrimsonPoliceAdmin reload picks up a hand edit as a new version |
 
 Go live after Phase 2, when units, the full catalog and the Supervisor and Admin UIs (needed to review flagged runs) are in. Steps 6–8 enforce Hard rules 15–18, so they are never skipped or postponed. Phases 3 and 4 ship once the live server has run for 2 weeks with fewer than 2 disputes a week, their checks pass and command staff sign off.
 

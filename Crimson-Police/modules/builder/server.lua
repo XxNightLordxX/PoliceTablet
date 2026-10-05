@@ -1964,6 +1964,12 @@ end
 local function OwnerOf(row, actor) return row == nil or row.createdBy == actor.citizenid end
 
 -- kind: edit | publish | archive | rollback | breakLock
+-- Testing is optional (Config.Builder.requireTestToPublish = false): when an owner switches it on, a supervisor
+-- needs a passed test before publishing; an admin never does.
+local function TestRequired(actor)
+    return CfgB().requireTestToPublish == true and not (actor and actor.isAdmin)
+end
+
 local function Allows(perms, row, actor, kind)
     local mine = OwnerOf(row, actor)
     if kind == 'edit' then return perms.builderEdit and (mine or perms.builderEditAny) end
@@ -2058,6 +2064,8 @@ local function EntryView(row, actor, perms, names)
         draftVersion = row.draftVersion,
         hasDraft = row.draft ~= nil,
         draftTested = row.draftTested,
+        -- publishing waits for a passed test (only while Config.Builder.requireTestToPublish is on, never for admins)
+        needsTest = TestRequired(actor) and not row.draftTested,
         editedInCode = row.editedInCode,
         filePath = row.filePath,
         owner = { citizenid = row.createdBy, name = names[row.createdBy], mine = row.createdBy == actor.citizenid },
@@ -2761,6 +2769,7 @@ CP.Net.callback('builder:config', function(src)
         autosaveSeconds = bc.autosaveSeconds,
         editLockMinutes = bc.editLockMinutes,
         testAtMaxTier = bc.testAtMaxTier ~= false,
+        requireTestToPublish = TestRequired(actor),
         keepBackups = bc.keepBackups ~= false,
         exportPath = ExportDir(),
         route = bc.route,
@@ -3113,13 +3122,13 @@ CP.Net.action('server:builder:publish', function(src, payload)
     draft._file = nil
     local errors = B.validate(draft, { publish = true })
     if #errors > 0 then return false, 'err.builder_invalid' end
-    if CfgB().testAtMaxTier ~= false and not row.draftTested then return false, 'err.builder_not_tested' end
+    if TestRequired(actor) and not row.draftTested then return false, 'err.builder_not_tested' end
     local version = row.draftVersion or ((row.publishedVersion or 0) + 1)
     if row.publishedVersion and version <= row.publishedVersion then version = row.publishedVersion + 1 end
     local ok, res = PublishDefinition(row, draft, actor, { reason = 'publish', version = version })
     if not ok then return false, res end
-    Audit(actor, 'publish', row.id, row.publishedVersion and ('v' .. row.publishedVersion) or nil, 'v' .. version,
-        tostring(draft.label))
+    Audit(actor, row.draftTested and 'publish' or 'publishUntested', row.id,
+        row.publishedVersion and ('v' .. row.publishedVersion) or nil, 'v' .. version, tostring(draft.label))
     PushAll({ event = 'published', id = row.id, by = actor.name })
     return true, res
 end, { rate = 2 })
