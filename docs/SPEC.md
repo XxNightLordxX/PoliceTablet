@@ -1591,7 +1591,7 @@ How cash is paid (by the server, once per participant per run)
 
 - For bank payments, record the deposit in Renewed-Banking: handleTransaction(citizenid, 'Crimson-Police', amount, 'Mission payout: <mission label>', '<department label>', '<character name>', 'deposit', 'CP-<run_uuid>-<citizenid>'). With the society source, also record a 'withdraw' on the department's account.
 
-- Write cash_paid and the final status: capped if the cap cut the amount, otherwise paid. A row still in paying after a crash is never retried automatically; it is listed in Admin UI → Leaderboards for a manual check against the Renewed-Banking history (transaction id CP-<run_uuid>-<citizenid>).
+- Write cash_paid and the final status: capped if the cap cut the amount, otherwise paid. A row still in paying after a crash is never retried automatically; it is listed in Admin UI → Payments (and Leaderboards) for a check against the Renewed-Banking history (transaction id CP-<run_uuid>-<citizenid>), which Payments → Resolve shows, and the admin then marks it paid (no money moves) or, only with the Pay again tool switched on, pays it again with its own transaction id CP-<run_uuid>-<citizenid>-r2 (the step markers saved between the money calls make sure a department is never charged twice).
 
 A flagged run's cash is held until a supervisor approves it. If the officer is offline at that moment, the payment waits (cash_status = 'pending') and is made the next time they load in. A voided run's held cash stays held until its 48-hour dispute window closes or a dispute about it is rejected, and is then forfeited (cash_status = 'forfeited'). Voiding an already-paid run does not take the money back (only the Take back money tool of Full admin control does, and it ships off).
 

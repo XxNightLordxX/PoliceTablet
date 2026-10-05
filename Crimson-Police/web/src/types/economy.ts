@@ -70,6 +70,8 @@ export interface AdminPayoutType {
     cooldownLeft: number;
     // Missions of this type (the Weekly Boss excluded).
     missions: number;
+    // A stored payout outside Cash.minPayout–maxPayout (the range changed after it was set).
+    outOfRange?: boolean | null;
 }
 
 export type PayoutSource = 'admin' | 'type' | 'event';
@@ -97,6 +99,7 @@ export interface AdminPayoutMission {
     updatedAt?: number | null;
     // A stored payout for a mission that is not loaded (archived or removed).
     missing: boolean;
+    outOfRange?: boolean | null;
 }
 
 export interface AdminPayoutsView {
@@ -106,6 +109,10 @@ export interface AdminPayoutsView {
     requireReason: boolean;
     cooldownSeconds: number;
     serverTime: number;
+    // stored payouts outside the range
+    outOfRange?: number;
+    // Config.Payouts.supervisorRange: shares of the type's Config payout
+    supervisorRange?: [number, number];
 }
 
 // Payload of 'server:sup:setTypePayout'.
@@ -120,6 +127,8 @@ export interface AdminSetTypePayload {
     amount: number | null;
     reason: string;
     clear?: boolean;
+    // keep the type open to supervisors (within their range) instead of locking it
+    unlock?: boolean;
 }
 // Payload of 'server:admin:setMissionPayout' (amount null + clear = back to the type payout).
 export interface AdminSetMissionPayload {

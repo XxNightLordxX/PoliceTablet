@@ -90,3 +90,20 @@
     justify-content: flex-end;
     margin-top: 8px;
 }
+
+.rewards-admin__filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 12px;
+}
+
+.rewards-admin__filters > * {
+    min-width: 170px;
+}
+
+.rewards-admin__actions {
+    display: inline-flex;
+    gap: 4px;
+    justify-content: flex-end;
+}

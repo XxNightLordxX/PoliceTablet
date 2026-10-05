@@ -13,6 +13,9 @@ export interface RewardRow {
     // admin:getRewards only
     citizenid?: string;
     name?: string | null;
+    // the run row it came from (run and medal rewards), and whether the officer is online now
+    rowId?: number | null;
+    online?: boolean;
 }
 
 // getRewardsLocker (reason: a locale key when canClaim is false)
@@ -38,4 +41,40 @@ export interface AdminRewardsView {
     page?: number;
     pageSize?: number;
     health?: RewardsHealthLine[];
+    // Take back is on (Config.Rewards.allowTakeBack, ships off)
+    allowTakeBack?: boolean;
+}
+
+// admin:getRewards filters
+export interface AdminRewardsFilter {
+    page?: number;
+    citizenid?: string;
+    status?: string;
+    source?: string;
+    from?: number;
+    to?: number;
+}
+
+// admin:checkRewardInventory { id }: found/count stay null while the officer is offline.
+export interface RewardInventoryCheck {
+    id: number;
+    status: string;
+    item: string;
+    label: string;
+    needed: number;
+    online: boolean;
+    found?: boolean | null;
+    count?: number | null;
+}
+
+// admin:rewardItems: the item picker (forbidden items left out).
+export interface RewardItemChoices {
+    items: { name: string; label: string }[];
+    inventory: boolean;
+}
+
+// admin:rewardPoolPreview { path, value }: the server's verdict and the expected items and value per run.
+export interface RewardPoolPreview {
+    error?: string | null;
+    expected: { key: string; tiers: { tier: string; chance: number; items: number; value: number }[] }[];
 }

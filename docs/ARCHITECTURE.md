@@ -464,6 +464,16 @@ Implementers of modules/integrations/* must follow it; the most important points
 - `withdrawSociety(account, amount) -> boolean`
 - `recordSocietyWithdraw(account, amount, message, issuer, receiver, transId)`
 - `societyBalance(account) -> number|nil`
+- Full admin control (economy): `depositSociety(account, amount) -> boolean` (`addAccountMoney`), `recordWithdraw(citizenid,
+  amount, message, issuer, receiver, transId)` (a personal `withdraw` entry: a clawback), `recordSocietyDeposit(account,
+  amount, message, issuer, receiver, transId)` (added funds, a refunded clawback), and `findTxn(transId, { citizenid,
+  account }) -> { personal = entry|nil, society = entry|nil }` with `entry = { found, amount, type, time }`: reads
+  `player_transactions` (id = citizenid) and `bank_accounts_new` (id = account) through the real oxmysql
+  (`CP.Storage.realMySQL` with the database off), read only, and returns only the entry with that `trans_id`, never the
+  rest of the history. Not found proves nothing (Renewed-Banking writes history only for a cached player).
+- **CP.Qbx** (economy): S `getMoney(src, account) -> number|nil` (`PlayerData.money[account]`; bank may be below 0),
+  `removeMoney(src, account, amount, reason) -> true | false | false, 'error'` (`player.Functions.RemoveMoney`; `'error'`
+  = it raised and the balance may have changed).
 
 Parity-plus additions to the integrations:
 - **CP.Qbx** S `plateOwned(plate) -> bool|nil` — `SELECT 1 FROM player_vehicles WHERE plate = ? LIMIT 1`, read-only,
@@ -604,6 +614,15 @@ All times are server local time; the "day" starts at `Config.Time.resetHour`.
 - `sqlTime(ts) -> 'YYYY-MM-DD HH:MM:SS'`
 - `onDaily(fn(dayKey))`, `onWeekly(fn(weekKey, prevWeekStartTs))`, `onMonthly(fn(monthStartTs))` — fired once when the boundary passes (checked every 30 s; never fired just because the resource started)
 - Retention job at each daily reset: move `cp_mission_runs` rows older than `Config.Retention.runArchiveMonths` months into `cp_mission_runs_archive` (INSERT … SELECT then DELETE, only when > 0); delete `cp_audit` rows older than `Config.Retention.auditDays` (0 = off).
+- Full admin control (economy): the archive never moves a row whose money or item rewards are unfinished
+  (`cash_status` held, pending or paying; a `cp_item_rewards` row held, pending or giving), and deletes a live row only
+  when its archive copy matches on cash status and amount paid too; the job also purges `cp_admin_requests` older than
+  7 days and `cp_settings_history` with `Config.Retention.auditDays`. It waits up to 60 s for the shared busy lock
+  (`CP.AdminKit.waitIdle`, then skips with `skipped = 'busy'`) and holds it (`cleanup`) while it works; while
+  `CP.Maintenance` holds a lock the retention job and every boundary check wait (`skipped = 'maintenance'`).
+  `cleanupView() -> CleanupView` (§9.5: last result `{ at, by, archived, kept, auditDeleted, requestsDeleted,
+  historyDeleted, durationMs, error, skipped }`, `running`, `nextRunAt`, the retention values). Callback
+  `admin:getCleanup` and action `server:admin:runCleanupNow { reason }` (§8.4.4).
 
 ### 5.6 CP.Missions — modules/missions
 Server:
@@ -1001,6 +1020,30 @@ it nor counted in it (the cap lookup of `pay` leaves it out too).
 Parity-plus: `row:forfeited (rowId)` fires from `forfeit` and the forfeiture job (one UPDATE per row); `officer:loaded
 (src)` fires right after the pending payments of a player who loaded in.
 
+Full admin control (economy, §5.40 calls these inside its AdminKit actions):
+- **Step markers**: the claimed payment writes `breakdown.cash.step = 'claimed'` with `payAmount` (after the cap),
+  `account`, `source` (`server`|`society`), `societyAccount` and `txn` before any money moves, then `'withdrawn'` after
+  the society withdrawal and `'added'` after `AddMoney` (one JSON_SET under `cash_status = 'paying'`).
+- **Waiting**: `pay`, `payPending` (and so the login payment) do nothing while `CP.Maintenance.active()`; the rows wait
+  and are paid by the sweep after the restart, or at once on `maintenance:changed (nil)`. A `left_behind` store never
+  pays. The forfeiture job skips while locked, waits up to 60 s for the shared busy lock and holds it (`forfeiture`).
+- **Departments**: the payment's department comes from `CP.Access.department`, and from `Config.Departments` when that
+  leaves a turned-off department out, so its pay still comes from its own account.
+- `amountOf(row)`, `txnOf(row)`, `department(key)`, `rowBusy(rowId, citizenid)` (pay() works on it or the officer's
+  payment lock is held), `paymentsHeld() -> kind|nil`, `nextForfeitureAt() -> ts|nil`.
+- Admin tools, each `-> ok, data | false, errKey`; a money tool claims first, then calls `audit(info) -> id|false`
+  (false: the claim is undone, `err.audit_failed`), then moves money under the officer's payment lock, then writes the
+  final state: `markPaid(rowId, audit)` (paying → paid/capped, no money), `payAgain(rowId, audit)` (claim
+  `breakdown.cash.again`; at step `withdrawn` only `AddMoney`, at `claimed` both, at `added` refused; txn `-r2`; online
+  only), `payCapRest(rowId, audit)` (claim `breakdown.cash.restPaid`; pays owed − paid with txn `-r`, `cash_paid` grows,
+  status stays capped; a refusal takes the marker back), `clawback(rowId, amount, audit)` (claim `cash_reclaimed =
+  cash_reclaimed + ? WHERE cash_reclaimed + ? <= cash_paid`; refused when the balance is lower; RemoveMoney; txn
+  `-back<n>`; the department is refunded only when `breakdown.cash.source = 'society'`), `toPending(rowId,
+  'unfunded'|'forfeited')` / `backFromPending(rowId, from)` (forfeited only with `cash_paid = 0`, never voided or
+  flagged), `adminForfeit(rowId, 'voided'|'cancel')` (held/pending → forfeited; `voided` needs no open dispute and fires
+  `row:forfeited`, `cancel` keeps the item rewards).
+- A manual cash row (`mission_id = 'manual_cash'`) is not cut by the daily cap in `pay`.
+
 ### 5.21 CP.Payouts — modules/payouts (S)
 - `typePayout(type) -> amount, adminLocked` · `missionPayout(missionId) -> amount|nil`
 - `baseFor(mission) -> B` · `sourceFor(mission) -> 'admin'|'type'|'event'`
@@ -1008,6 +1051,15 @@ Parity-plus: `row:forfeited (rowId)` fires from `forfeit` and the forfeiture job
 - `setMission(src, missionId, amount|nil, reason) -> ok, errKey` (admin only)
 - `list() -> { types = {...}, missions = {...} }`
 - Registers `server:sup:setTypePayout`, `server:admin:setTypePayout`, `server:admin:setMissionPayout`, callbacks `sup:getPayouts`, `admin:getPayouts`.
+- Full admin control (economy): `setType(src, type, amount, reason, 'admin', { unlock = true })` sets the amount and
+  leaves the type open to supervisors (audit new value `unlocked:<amount>`); `server:admin:setTypePayout` takes `unlock`.
+  `previewAdjust(src, { mode = 'pct'|'amount', value, scope = 'types'|'missions'|'both' })` (−90..+500 % in Lua, or ±
+  an amount; each value clamped to `Cash.minPayout`–`maxPayout`; the token is bound to every entry and its old value)
+  and `adjustAll(ctx)` (each change through `setType` / `setMission`, so one audit line per value, plus
+  `payoutsAdjustAll`; `lockTypes` locks every changed type, otherwise each keeps its lock state). `admin:getPayouts`
+  rows carry `outOfRange` and the view `outOfRange` (stored payouts outside the current range) and `supervisorRange`.
+  `settings:changed` on `MissionTypes.*`, `Cash.*`, `Payouts.*`, `Events.weeklyBoss.payout`, `Difficulty.cashByStars`
+  pushes `payouts` and `board`.
 
 ### 5.22 CP.Leaderboard — modules/leaderboard (S)
 - callback `getBoard({ period, filter, department })` → Board (§9.4); cache `Config.Leaderboard.cacheSeconds`
@@ -1333,6 +1385,19 @@ nothing calls ox_inventory.
 - Listens to row:settled, row:approved, row:voided, row:forfeited, goal:completed, xp:levelUp, season:ended,
   officer:loaded, arena:exited, home:extras. Net: callback `getRewardsLocker`, action `server:rewards:claim`
   (`{ id }`), callback `admin:getRewards` (`{ page }`), push `rewards`.
+- Full admin control (economy): `Usable()` checks `forbidden()` itself (an item added in game before the next check is
+  never given); `checkSetting(path, value) -> errKey|nil` is registered as the Settings validator of `Rewards` (pool
+  shape, chance 0–1, rolls 0–10, count 1–100 or `{ lo, hi }`, weight > 0, value ≥ 0, never a forbidden item), and every
+  `settings:changed` on a `Rewards.*` path runs `validate()`. Delivery (`deliver`, a grant's delivery) and the
+  forfeiture job wait while `CP.Maintenance.active()`; the forfeiture job waits for and holds the busy lock
+  (`rewardForfeiture`). `adminView(args)` takes `{ page, citizenid, status, source, from, to }` (rows gain `rowId`,
+  `online`; the view `allowTakeBack`). `checkInventory(id)` (ox_inventory `Search` for the item tagged `cpReward = id`;
+  online only), `resolve(id, 'given'|'locker', audit)` (`giving` → given, or → pending and delivered again;
+  `err.reward_found` when the item is there), `cancel(id)` (pending/held → forfeited), `takeBack(id, audit)` (given →
+  forfeited under the reward lock, `RemoveItem` of exactly the tagged slots; refused and undone when they are not all
+  there), `undoForfeit(rowId)` (on `row:forfeitUndone`: the row's forfeited rewards back to pending, held while the row
+  is voided, once; ones an admin cancelled or took back stay), `expected(entry)` (items and value per run at each tier,
+  in Lua), `itemChoices()`. Net in §8.4.4.
 
 ### 5.34 CP.ConfigHealth — modules/confighealth (WP8)
 `register(name, fn -> { { level = 'ok'|'warn'|'error', text } })` (a second register replaces it), `run() ->
@@ -1578,6 +1643,27 @@ pass), a reason, the admin's own runs and characters refused (S), and a synchron
   modifiers with their `Config.Events.modifiers` switches.
 - The sidebar count `adminLive` (admins only) is the number of live runs.
 
+### 5.40 CP.Payments — modules/payments (S; full admin control, economy)
+Admin UI → Payments, Departments → Funds and the cash health lines. Every read is a `CP.AdminKit.callback` and every
+write a `CP.AdminKit.action` (§5.37): admins only (supervisors never pass), audited. Money moves only through CP.Cash
+(§5.20) and CP.Banking (§5.1).
+- `list(args) -> PaymentsView` (§9.5): rows with `cash_status <> 'none'`, filters `status` (or `stuck`), `department`,
+  `missionType` (`manual_cash` matches the mission id), `citizenid`, `from`/`to` (`>=` and `<`), `page`, `size ≤ 50`;
+  each row's owed amount, paid, taken back, the cut of a capped row, the transaction id, account, source and step.
+- `totals(args) -> PaymentTotals`: counts, paid and taken back summed in SQL per status and department; owed amounts and
+  the cap cut read from the unfinished rows (at most 5000) and every percentage in Lua.
+- `export(args) -> { csv, rows, truncated }` (≤ 5000 rows; a cell starting with `=`, `+`, `-`, `@`, tab or CR gets a
+  leading `'`; audited `paymentsExport`), `csv(rows)`.
+- `departmentFunds(key)`: balance (shown while the source is the server too), paid from the account today / this week /
+  this season (rows with `breakdown.cash.source = 'society'`), unfunded rows, admin funding (`cp_dept_funding`) and its
+  last 5 rows, the Add funds switch and maximum. Turned-off departments included.
+- `sourcePreview()`: per department the balance and the held and pending rows it would pay after a switch to the
+  society source. `health()` (registered as ConfigHealth `cash`): a `Cash.account` other than bank or cash, a society
+  account Renewed-Banking does not know, a balance below `Cash.lowBalanceWarn`. `lowBalanceToasts()` runs on every daily
+  reset (one toast to the department's online supervisors).
+- `stuckCount()` (rows in `paying`, cached 30 s) is the `adminPayments` sidebar count (`T.registerNavCount`, admin only).
+- Actions and callbacks: §8.4.4.
+
 ## 6. Cross-cutting conventions
 
 ### 6.1 Entities and NPCs
@@ -1652,6 +1738,14 @@ Shots at surrendered NPCs are detected server-side (`weaponDamageEvent`, §5.11)
 `none` → (Completed, not flagged) claim `paying` → `paid` | `capped` | `unfunded`.
 Flagged: `held` → approve → `pending` (offline) or paid now; void → stays `held` until the dispute
 window closes or a dispute is rejected → `forfeited`. Failed/Abandoned rows stay `none` with 0.
+
+Admin transitions (full admin control, §5.20, §5.40; the money ones ship off behind `Config.Cash.allow*`):
+`paying` → `paid`/`capped` (Mark paid, no money; or Pay again, txn `-r2`, read from the step markers `claimed` →
+`withdrawn` → `added`); `unfunded` → `pending` → paid (Retry unfunded, same txn); `capped` stays `capped` with
+`cash_paid` + the rest (Pay the rest, txn `-r`, marker `restPaid`); `forfeited` (with `cash_paid = 0`, not voided) →
+`pending` → paid (Pay it after all); `held`/`pending` → `forfeited` (Forfeit now on a voided row with no open dispute;
+Cancel payment on any); `paid`/`capped` keep their status while `cash_reclaimed` grows (Take back, txn `-back<n>`).
+A manual cash payment (`manual_award` / `manual_cash`) starts `pending` and follows the normal flow outside the cap.
 
 ---
 
@@ -1994,6 +2088,52 @@ Actions (`CP.AdminKit.action`; every one: M, P, R (reason required), A):
 
 #### 8.4.4 Payments, item rewards and department money
 
+Guards (§0.3 of the build plan): P = permission key, I = request id, R = reason, T = typed word, V = preview token,
+S = never the admin's own characters or runs (strict: refused when a licence is unknown), W = a `Config.Cash.allow*`
+/ `Cash.restoreForfeited` / `Rewards.allowTakeBack` switch that ships off (`err.money_tool_off`). M (maintenance) on
+every action.
+
+| Name | Payload / args | Key | Guards |
+|---|---|---|---|
+| callback `admin:getPayments` | `{ status?, department?, missionType?, citizenid?, from?, to?, page?, size? }` → PaymentsView | payments | P |
+| callback `admin:getPaymentTotals` | `{ department?, from?, to? }` → PaymentTotals | payments | P |
+| callback `admin:exportPayments` | the getPayments filters → `{ csv, rows, truncated }` | payments | P, 1 per 3 s, audited |
+| callback `admin:checkBankingTxn` | `{ rowId }` → BankingCheck | payments | P |
+| callback `admin:previewRetryUnfunded` | `{ rowId }` or `{ department, since? }` → UnfundedPreview | payments | P |
+| callback `admin:previewCashSource` | `{}` → CashSourcePreview | payments | P |
+| callback `admin:getDepartmentFunds` | `{ department }` → DepartmentFundsView | deptFunds | P |
+| `server:admin:resolvePayment` | `{ rowId, outcome = 'paid' \| 'payAgain', checked?, reason, confirm?, requestId }` | payments | P I R S; payAgain: W `allowPayAgain`, `checked`, T the amount |
+| `server:admin:payNow` | `{ rowId, requestId }` | payments | P I |
+| `server:admin:retryPending` | `{ requestId }` | payments | P I |
+| `server:admin:retryUnfunded` | `{ rowId \| department + since?, reason, confirm, previewToken, requestId }` | payments | P I R T(total) V S W `allowUnfundedRetry`; balance ≥ total |
+| `server:admin:payCapRest` | `{ rowId, reason, confirm, requestId }` | payments | P I R T(rest) S W `allowCapTopUp` |
+| `server:admin:repayForfeited` | `{ rowId, reason, confirm, requestId }` | payments | P I R T(amount) S W `restoreForfeited` |
+| `server:admin:forfeitNow` | `{ rowId, reason }` | payments | P R S |
+| `server:admin:cancelPayment` | `{ rowId, reason, confirm }` | payments | P R T(amount) S |
+| `server:admin:clawback` | `{ rowId, amount, reason, confirm, requestId }` | payments | P I R T(amount) S W `allowClawback` |
+| `server:admin:manualCash` | `{ citizenid, amount, reason, confirm?, requestId }` | payments | P I R S W `allowManualCash`; T above `maxPayout / 2`; 1..`maxPayout`; per admin per day ≤ `manualDailyLimit` (from rows) |
+| `server:admin:addDepartmentFunds` | `{ department, amount, reason, confirm, requestId }` | deptFunds | P I R T(amount) W `allowAddFunds`; 1..`addFundsMax`; 1 per 10 s per department |
+| callback `admin:previewPayoutAdjust` | `{ mode, value, scope }` → PayoutAdjustPreview | setTypePayout | P |
+| `server:admin:adjustAllPayouts` | `{ mode, value, scope, lockTypes?, reason, confirm = 'ADJUST', previewToken, requestId }` | setTypePayout | P I R T V |
+| `server:admin:setTypePayout` (existing) | gains `unlock?: boolean` | setTypePayout | as before |
+| callback `admin:getRewards` (existing) | gains `{ citizenid?, status?, source?, from?, to? }` | openAdmin | as before |
+| callback `admin:checkRewardInventory` | `{ id }` → RewardInventoryCheck | rewardsAdmin | P |
+| callback `admin:rewardItems` | `{}` → RewardItemChoices | rewardsAdmin | P |
+| callback `admin:rewardPoolPreview` | `{ path, value }` → RewardPoolPreview | rewardsAdmin | P |
+| `server:admin:resolveReward` | `{ id, outcome = 'given' \| 'locker', reason, confirm? }` | rewardsAdmin | P R S; locker: T `LOCKER`; officer online |
+| `server:admin:deliverRewards` | `{ citizenid }` | rewardsAdmin | P S; officer online |
+| `server:admin:cancelReward` | `{ id, reason }` | rewardsAdmin | P R S |
+| `server:admin:takeBackReward` | `{ id, reason, confirm, requestId }` | rewardsAdmin | P I R T(item) S W `Rewards.allowTakeBack`; officer online |
+| callback `admin:getCleanup` | `{}` → CleanupView | cleanup | P |
+| `server:admin:runCleanupNow` | `{ reason }` | cleanup | P R; 1 per 10 min; refused while a long job runs |
+
+Audit actions (category `audit`, posted to the audit webhook; the money ones never dropped from a full queue):
+`paymentsExport`, `paymentResolve`, `paymentPayAgain`, `paymentRetry`, `paymentUnfundedRetry`, `paymentCapRest`,
+`paymentForfeitRepay`, `paymentForfeit`, `paymentCancel`, `cashClawback`, `manualCash`, `deptFund`, `payoutsAdjustAll`
+(plus one `setTypePayout` / `setMissionPayout` per value), `rewardResolve`, `rewardDeliver`, `rewardCancel`,
+`rewardTakeBack`, `cleanupRun`. Toasts: `cash.clawed_back`, `payments.toast.forfeited`, `payments.toast.cancelled`,
+`rewards.taken_back`, `rewards.cancelled`, `payments.low_balance_toast`.
+
 #### 8.4.5 System, departments and settings
 
 ---
@@ -2216,6 +2356,29 @@ The admin kit (web/src/admin/components/kit): `useAdminAction()` (`run(name, pay
 `typedWord` (Confirm stays off until the word matches; `onConfirm(reason, typed)`). `MaintenanceBanner` shows on every
 UI; `useMaintenance()` (shared/session.tsx) follows the session and the push. New admin screens: `admin_payments`,
 `admin_live`, `admin_system` (stubs until their packages fill them).
+
+Economy (web/src/types/admin_economy.ts; the item reward shapes in types/rewards.ts):
+
+```ts
+interface PaymentRow { id: number; runUuid: string; citizenid: string; name?: string | null; missionId: string;
+  missionLabel: string; missionType: string; manual: boolean; department: string; status: CashStatus; owed: number;
+  paid: number; reclaimed: number; cut: number; txn: string; account?: string | null; source?: 'server' | 'society' | null;
+  step?: 'claimed' | 'withdrawn' | 'added' | null; restPaid?: string | null; again?: string | null; voided: boolean;
+  flagged: boolean; busy: boolean; createdAt: number }
+interface PaymentsView { rows: PaymentRow[]; page: number; pages: number; total: number; size: number;
+  switches: { payAgain; unfundedRetry; capTopUp; restoreForfeited; clawback; manualCash; addFunds: boolean };
+  source: 'server' | 'society'; maxPayout: number; manualDailyLimit: number; nextForfeitIn?: number | null;
+  held?: string | null; serverTime: number }
+interface PaymentTotals { byStatus: Record<CashStatus, { count; paid; reclaimed; owed: number }>;
+  departments: { department: string; count; paid; reclaimed; unfunded; share: number }[]; paidTotal: number;
+  cut: number; cappedToday: number; partial: boolean }
+interface BankingCheck { id; status; txn; amount; step?; source?; account?; societyAccount?;
+  personal?: { found: boolean; amount?: number; type?: 'deposit' | 'withdraw'; time?: number } | null;
+  society?: (same) | null; busy: boolean; online: boolean; payAgain: boolean }
+// UnfundedPreview, DepartmentFundsView, CashSourcePreview, CleanupView, PayoutAdjustPreview: see the file.
+// types/rewards.ts: AdminRewardsFilter, RewardInventoryCheck, RewardItemChoices, RewardPoolPreview; RewardRow gains
+// rowId and online; AdminRewardsView gains allowTakeBack. types/economy.ts: outOfRange, supervisorRange, unlock.
+```
 
 ### 9.6 RunResult (client:runEnded, result screen, Profile breakdown)
 

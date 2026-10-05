@@ -225,6 +225,8 @@ local function MissionDefs()
     return {}
 end
 
+local OutOfRange
+
 local function TypeEntry(key, counts)
     local cfg = TypeCfg(key)
     local row = typeRows[key]
@@ -249,7 +251,15 @@ local function TypeEntry(key, counts)
         supMax = hi,
         cooldownLeft = left,
         missions = counts and counts[key] or 0,
+        outOfRange = row ~= nil and OutOfRange(row.amount) or nil,
     }
+end
+
+-- A stored payout outside Cash.minPayout-maxPayout (the range changed after it was set): it still pays as set.
+OutOfRange = function(amount)
+    local lo, hi = CashLimits()
+    local n = tonumber(amount)
+    return n ~= nil and (n < lo or n > hi)
 end
 
 local function MissionEntry(def)
@@ -272,6 +282,7 @@ local function MissionEntry(def)
         base = Payouts.baseFor(def),
         payoutSource = Payouts.sourceFor(def),
         missionPayout = row and row.amount or nil,
+        outOfRange = row ~= nil and OutOfRange(row.amount) or nil,
         fallback = FallbackBase(def),
         setBy = row and row.setBy or nil,
         setByName = row and row.setByName or nil,
@@ -415,7 +426,9 @@ local function WriteType(key, amount, adminLocked, actor)
     return ok
 end
 
-local function SetTypeLocked(src, key, amount, reason, role)
+-- opts.unlock (admins): the amount is set and the type stays open to supervisors, within their range again.
+local function SetTypeLocked(src, key, amount, reason, role, opts)
+    opts = type(opts) == 'table' and opts or {}
     EnsureLoaded()
     local row = typeRows[key]
     local oldAmount = Payouts.typePayout(key)
@@ -441,6 +454,10 @@ local function SetTypeLocked(src, key, amount, reason, role)
             end
             local cfgAmount = math.floor(Num(TypeCfg(key).payout, 0))
             Audit(src, 'admin', 'clearTypePayout', key, oldAmount, ('config:%d'):format(cfgAmount), reason)
+        elseif opts.unlock then
+            if row and not row.adminLocked and row.amount == amount then return false, 'err.payout_unchanged' end
+            if not WriteType(key, amount, false, actor) then return false, 'err.internal' end
+            Audit(src, 'admin', 'setTypePayout', key, oldAmount, ('unlocked:%d'):format(amount), reason)
         else
             if row and row.adminLocked and row.amount == amount then return false, 'err.payout_unchanged' end
             if not WriteType(key, amount, true, actor) then return false, 'err.internal' end
@@ -453,7 +470,7 @@ local function SetTypeLocked(src, key, amount, reason, role)
     return true, TypeEntry(key, nil)
 end
 
-function Payouts.setType(src, key, amount, reason, role)
+function Payouts.setType(src, key, amount, reason, role, opts)
     src = ToSrc(src)
     if not src then return false, 'err.no_permission' end
     if type(key) ~= 'string' or #key > TYPE_KEY_MAX or not TypeCfg(key) then return false, 'err.unknown_type' end
@@ -482,7 +499,8 @@ function Payouts.setType(src, key, amount, reason, role)
 
     local lk = 'type:' .. key
     if not Lock(lk) then return false, 'err.busy' end
-    local okCall, ok, res = pcall(SetTypeLocked, src, key, value, r, role)
+    if role ~= 'admin' then opts = nil end
+    local okCall, ok, res = pcall(SetTypeLocked, src, key, value, r, role, opts)
     Unlock(lk)
     if not okCall then
         CP.err(TAG, 'setType failed: %s', tostring(ok))
@@ -568,6 +586,120 @@ function Payouts.setMission(src, missionId, amount, reason)
 end
 
 -- ============================================================================
+--                       ADJUST ALL (ADMIN UI → PAYOUTS)
+-- ============================================================================
+-- One change for many payouts: a percentage (-90..+500, the maths in Lua) or a fixed amount, applied to every type
+-- payout and/or every admin mission payout, each new value clamped to Cash.minPayout-maxPayout. The preview shows
+-- old -> new and gives the token the action needs; every value then goes through Payouts.setType / setMission, so
+-- every check, audit line and push still runs.
+
+local ADJUST_PCT_MIN, ADJUST_PCT_MAX = -90, 500
+
+-- The entries of an adjustment: { key = 'type:<k>' | 'mission:<id>', kind, id, label, old, new } | nil, errKey.
+local function AdjustPlan(args)
+    if type(args) ~= 'table' then return nil, 'err.invalid_payload' end
+    local mode, value = args.mode, tonumber(args.value)
+    if mode ~= 'pct' and mode ~= 'amount' then return nil, 'err.invalid_payload' end
+    if not value or value ~= value or value == math.huge or value == -math.huge then
+        return nil, 'err.invalid_amount'
+    end
+    if mode == 'pct' and (value < ADJUST_PCT_MIN or value > ADJUST_PCT_MAX) then return nil, 'err.invalid_amount' end
+    if mode == 'amount' and (math.floor(value) ~= value or math.abs(value) > 10000000) then
+        return nil, 'err.invalid_amount'
+    end
+    local scope = args.scope or 'types'
+    if scope ~= 'types' and scope ~= 'missions' and scope ~= 'both' then return nil, 'err.invalid_payload' end
+    EnsureLoaded()
+    local lo, hi = CashLimits()
+    local function newOf(old)
+        local n
+        if mode == 'pct' then n = math.floor(old * (100 + value) / 100 + 0.5) else n = old + math.floor(value) end
+        if n < lo then n = lo end
+        if n > hi then n = hi end
+        return n
+    end
+    local out = {}
+    if scope ~= 'missions' then
+        for _, key in ipairs(SortedTypeKeys()) do
+            local old, locked = Payouts.typePayout(key)
+            local cfg = TypeCfg(key)
+            out[#out + 1] = {
+                key = 'type:' .. key,
+                kind = 'type',
+                id = key,
+                label = cfg and cfg.label or key,
+                old = old,
+                new = newOf(old),
+                locked = locked == true,
+            }
+        end
+    end
+    if scope ~= 'types' then
+        local ids = CP.U.keys(missionRows)
+        table.sort(ids)
+        for _, id in ipairs(ids) do
+            local def = CP.Missions and CP.Missions.get and CP.Missions.get(id)
+            if def then
+                local old = missionRows[id].amount
+                out[#out + 1] = {
+                    key = 'mission:' .. id,
+                    kind = 'mission',
+                    id = id,
+                    label = def.label or id,
+                    old = old,
+                    new = newOf(old),
+                }
+            end
+        end
+    end
+    return out
+end
+
+-- The ids a preview token is bound to: every entry with its old value, so a payout changed since the preview
+-- makes the token stale.
+local function PlanIds(plan)
+    local ids = {}
+    for _, e in ipairs(plan) do ids[#ids + 1] = ('%s=%d'):format(e.key, e.old) end
+    return ids
+end
+
+function Payouts.previewAdjust(src, args)
+    local plan, err = AdjustPlan(args)
+    if not plan then return nil, err end
+    local changes = {}
+    for _, e in ipairs(plan) do if e.new ~= e.old then changes[#changes + 1] = e end end
+    local token, expiresAt = CP.AdminKit.preview(src, 'payoutsAdjust', PlanIds(plan), { count = #changes })
+    return { previewToken = token, expiresAt = expiresAt, effect = { rows = changes, total = #plan } }
+end
+
+-- ok, { changed, failed } | false, errKey. ctx: the CP.AdminKit action context.
+function Payouts.adjustAll(ctx)
+    local p = ctx.payload
+    local plan, err = AdjustPlan(p)
+    if not plan then return false, err end
+    local okT, errT = ctx.consume(p.previewToken, 'payoutsAdjust', PlanIds(plan))
+    if not okT then return false, errT end
+    local changed, failed = 0, 0
+    for _, e in ipairs(plan) do
+        if e.new ~= e.old then
+            local ok
+            if e.kind == 'type' then
+                -- lockTypes: every type becomes admin-locked; otherwise each type keeps its lock state
+                local unlock = p.lockTypes ~= true and not e.locked
+                ok = Payouts.setType(ctx.src, e.id, e.new, ctx.reason, 'admin', { unlock = unlock })
+            else
+                ok = Payouts.setMission(ctx.src, e.id, e.new, ctx.reason)
+            end
+            if ok then changed = changed + 1 else failed = failed + 1 end
+        end
+    end
+    local what = p.mode == 'pct' and ('%+g%%'):format(tonumber(p.value))
+        or ('%+d'):format(math.floor(tonumber(p.value)))
+    ctx.audit('payoutsAdjustAll', tostring(p.scope or 'types'), nil, ('%s (%d changed)'):format(what, changed))
+    return true, { changed = changed, failed = failed }
+end
+
+-- ============================================================================
 --                                   SCREENS
 -- ============================================================================
 
@@ -605,9 +737,14 @@ end
 local function AdminView()
     local data = Payouts.list()
     local lo, hi = CashLimits()
+    local outside = 0
+    for _, e in ipairs(data.types) do if e.outOfRange then outside = outside + 1 end end
+    for _, e in ipairs(data.missions) do if e.outOfRange then outside = outside + 1 end end
     return {
         types = data.types,
         missions = data.missions,
+        outOfRange = outside,
+        supervisorRange = { RangeShares() },
         limits = { min = lo, max = hi },
         requireReason = ReasonRequired('admin'),
         cooldownSeconds = CooldownSeconds(),
@@ -663,9 +800,11 @@ end, { rate = 2 })
 CP.Net.action('server:admin:setTypePayout', function(src, payload)
     if type(payload) ~= 'table' or type(payload.type) ~= 'string' then return false, 'err.invalid_payload' end
     if payload.reason ~= nil and type(payload.reason) ~= 'string' then return false, 'err.invalid_payload' end
+    if payload.unlock ~= nil and type(payload.unlock) ~= 'boolean' then return false, 'err.invalid_payload' end
     local amount, valid = PayloadAmount(payload)
     if not valid then return false, 'err.invalid_payload' end
-    return Payouts.setType(src, payload.type, amount, payload.reason, 'admin')
+    if payload.unlock == true and amount == nil then return false, 'err.invalid_amount' end
+    return Payouts.setType(src, payload.type, amount, payload.reason, 'admin', { unlock = payload.unlock == true })
 end, { rate = 3 })
 
 CP.Net.action('server:admin:setMissionPayout', function(src, payload)
@@ -680,6 +819,31 @@ end, { rate = 3 })
 --                                    START
 -- ============================================================================
 
+-- Payout adjustments with a preview: admins only (supervisors never pass), request id, reason, typed ADJUST.
+if CP.AdminKit and CP.AdminKit.action then
+    CP.AdminKit.callback('admin:previewPayoutAdjust', 'setTypePayout', function(ctx)
+        return Payouts.previewAdjust(ctx.src, ctx.args)
+    end, { rate = 2 })
+    CP.AdminKit.action('server:admin:adjustAllPayouts', 'setTypePayout', function(ctx)
+        return Payouts.adjustAll(ctx)
+    end, { requestId = true, reason = true, confirm = 'ADJUST', rate = 1 })
+end
+
+-- A payout setting changed in Settings (a type's Config default, the cash limits, the supervisor range): open
+-- Supervisor and Admin screens get the new values.
+local function OnSettingsChanged(paths)
+    for _, path in ipairs(type(paths) == 'table' and paths or {}) do
+        local head = tostring(path):match('^([%a]+)')
+        if head == 'MissionTypes' or head == 'Cash' or head == 'Payouts' or path == 'Events.weeklyBoss.payout'
+            or path == 'Difficulty.cashByStars' then
+            PushChange({ kind = 'settings' })
+            return
+        end
+    end
+end
+
+if CP.Hooks and CP.Hooks.on then CP.Hooks.on('settings:changed', OnSettingsChanged) end
+
 CreateThread(function()
     EnsureLoaded()
 end)
@@ -689,3 +853,4 @@ Payouts._reload = function() loaded = false; EnsureLoaded() end
 Payouts._supervisorRange = SupervisorRange
 Payouts._supView = SupView
 Payouts._adminView = AdminView
+Payouts._onSettingsChanged = OnSettingsChanged
