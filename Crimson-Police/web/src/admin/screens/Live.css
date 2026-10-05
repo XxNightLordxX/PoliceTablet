@@ -1,0 +1,228 @@
+/* Admin UI · Live (live runs and units) and the Today & cooldowns / Today cards. Only --cp-* variables. */
+
+.admin-live-screen .cp-tabs {
+    margin-bottom: 14px;
+}
+
+.admin-live-muted {
+    color: var(--cp-subtle);
+}
+
+.admin-live-list {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.admin-live-card__title {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.admin-live-card__actions {
+    justify-content: flex-end;
+}
+
+.admin-live-facts {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 10px;
+    padding: 10px 12px;
+    margin-bottom: 12px;
+    border-radius: var(--cp-radius-sm);
+    background: var(--cp-surface-2);
+    border: 1px solid var(--cp-border);
+}
+
+.admin-live-fact {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 5px;
+    min-width: 0;
+}
+
+.admin-live-fact__label {
+    font-size: var(--cp-fs-xs);
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--cp-subtle);
+    white-space: nowrap;
+}
+
+.admin-live-fact__value {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-weight: 650;
+    font-size: var(--cp-fs-md);
+    white-space: nowrap;
+}
+
+.admin-live-people {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+    gap: 6px 8px;
+}
+
+.admin-live-person {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 44px;
+    padding: 6px 8px 6px 10px;
+    border-radius: var(--cp-radius-sm);
+    border: 1px solid rgba(var(--cp-text-rgb), 0.06);
+    background: rgba(var(--cp-text-rgb), 0.025);
+}
+
+.admin-live-person.is-left {
+    opacity: 0.58;
+}
+
+.admin-live-person__who {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    min-width: 0;
+    flex: 1;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.admin-live-person__who:hover .admin-live-person__name {
+    color: var(--cp-primary);
+}
+
+.admin-live-person__who--static {
+    cursor: default;
+}
+
+.admin-live-person__who--static:hover .admin-live-person__name {
+    color: inherit;
+}
+
+.admin-live-person__name {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    max-width: 100%;
+    font-weight: 650;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.admin-live-person__sub {
+    max-width: 100%;
+    font-size: var(--cp-fs-xs);
+    color: var(--cp-subtle);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.admin-live-person__placeholder {
+    width: 0;
+}
+
+/* Today & cooldowns (Officers) and Today (Missions) */
+
+.admin-runctl-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.admin-runctl-box {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px 12px;
+    border-radius: var(--cp-radius-sm);
+    background: var(--cp-surface-2);
+    border: 1px solid var(--cp-border);
+    min-width: 0;
+}
+
+.admin-runctl-box__title {
+    font-size: var(--cp-fs-xs);
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--cp-subtle);
+}
+
+.admin-runctl-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.admin-runctl-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.admin-runctl-item__text {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.admin-runctl-item__sub {
+    font-size: var(--cp-fs-xs);
+    color: var(--cp-subtle);
+}
+
+.admin-runctl-board {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 8px;
+}
+
+.admin-runctl-card {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px 10px;
+    border-radius: var(--cp-radius-sm);
+    border: 1px solid rgba(var(--cp-text-rgb), 0.08);
+    background: rgba(var(--cp-text-rgb), 0.025);
+}
+
+.admin-runctl-card.is-locked {
+    opacity: 0.7;
+}
+
+.admin-runctl-card__name {
+    font-weight: 650;
+}
+
+.admin-runctl-card__why {
+    font-size: var(--cp-fs-xs);
+    color: var(--cp-subtle);
+}
+
+.admin-runctl-actions {
+    flex-wrap: wrap;
+}

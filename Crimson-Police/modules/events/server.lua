@@ -100,13 +100,25 @@ local function AttemptWindowStart()
     return weekStart
 end
 
--- True when this officer already used this week's attempt.
-local function UsedThisWeek(citizenid)
+-- Extra attempts an admin gave this week (cp_officers.boss_extra = { week, n }).
+local function BossExtra(citizenid, weekKey)
+    local ok, row = pcall(MySQL.single.await, 'SELECT boss_extra FROM cp_officers WHERE citizenid = ?', { citizenid })
+    if not ok or type(row) ~= 'table' then return 0 end
+    local v = row.boss_extra
+    if type(v) == 'string' and v ~= '' then
+        local okJ, t = pcall(json.decode, v)
+        v = okJ and t or nil
+    end
+    if type(v) ~= 'table' or v.week ~= weekKey then return 0 end
+    return math.max(0, math.floor(tonumber(v.n) or 0))
+end
+
+-- This week's boss rows that used up an attempt (a voided row gives its attempt back), and the extra attempts.
+local function BossUsage(citizenid)
     local weekKey = WeekKeyNow()
-    if usedCache[citizenid] == weekKey then return true end
     CP.Migrations.ready()
     local n = MySQL.scalar.await(
-        'SELECT COUNT(*) AS n FROM cp_mission_runs WHERE citizenid = ? AND mission_type = \'tactical\' AND mission_id = ? AND created_at >= FROM_UNIXTIME(?) AND end_reason NOT IN (?, ?, ?)',
+        'SELECT COUNT(*) AS n FROM cp_mission_runs WHERE citizenid = ? AND mission_type = \'tactical\' AND mission_id = ? AND created_at >= FROM_UNIXTIME(?) AND voided = 0 AND end_reason NOT IN (?, ?, ?)',
         {
             citizenid,
             BOSS_ID,
@@ -115,12 +127,43 @@ local function UsedThisWeek(citizenid)
             BOSS_EXEMPT_REASONS[2],
             BOSS_EXEMPT_REASONS[3],
         })
-    if CP.U.num(n) > 0 then
+    return math.floor(CP.U.num(n)), BossExtra(citizenid, weekKey), weekKey
+end
+
+-- True when this officer already used every attempt of this week.
+local function UsedThisWeek(citizenid)
+    local weekKey = WeekKeyNow()
+    if usedCache[citizenid] == weekKey then return true end
+    local used, extra = BossUsage(citizenid)
+    if used > extra then
         usedCache[citizenid] = weekKey
         return true
     end
     return false
 end
+
+-- { used, extra, left, week } for the Admin UI (Officers → Today & cooldowns).
+function Events.bossUsage(citizenid)
+    if type(citizenid) ~= 'string' or citizenid == '' then return nil end
+    local used, extra, weekKey = BossUsage(citizenid)
+    return { used = used, extra = extra, left = math.max(0, 1 + extra - used), week = weekKey }
+end
+
+-- The weekly attempt cache of one officer (or everyone) is read again: a grant, a void or a restore changed it.
+function Events.forgetBossUsage(citizenid)
+    if type(citizenid) == 'string' and citizenid ~= '' then
+        usedCache[citizenid] = nil
+    else
+        usedCache = {}
+    end
+end
+
+CP.Hooks.on('admin:changed', function(data)
+    if type(data) == 'table' then Events.forgetBossUsage(data.citizenid) end
+end)
+-- A void or restore of any row may be a boss row: every cached "used" is read again.
+CP.Hooks.on('row:voided', function() usedCache = {} end)
+CP.Hooks.on('row:restored', function() usedCache = {} end)
 
 local function Members(src)
     if CP.Units and CP.Units.members then
@@ -139,7 +182,8 @@ end
 --                               TYPE OF THE DAY
 -- ============================================================================
 
-function Events.typeOfTheDay(dayKey)
+-- The type the day's seed picks, before any admin override.
+function Events.rolledTypeOfTheDay(dayKey)
     if not (Config.Events and Config.Events.typeOfTheDay) then return nil end
     local keys = CP.U.keys(Config.MissionTypes or {})
     if #keys == 0 then return nil end
@@ -148,14 +192,70 @@ function Events.typeOfTheDay(dayKey)
     return key
 end
 
+-- Today's override: { day, choice ('auto' | 'none' | a type), by, reason, at }. An admin's choice lives in memory and
+-- in its cp_audit row (action todOverride, target = the day), which a restart reads back; cp_audit is never replaced
+-- by a backup restore, and an override of another day is ignored, so it always ends at the daily reset.
+local tod = nil
+
+local function TodState(day)
+    if tod and tod.day == day then return tod end
+    if not (CP.Migrations and CP.Migrations.ready) then return nil end
+    local ok, row = pcall(function()
+        CP.Migrations.ready()
+        return MySQL.single.await([[SELECT new_value, actor, reason, UNIX_TIMESTAMP(created_at) AS ts FROM cp_audit
+            WHERE action = 'todOverride' AND target = ? ORDER BY id DESC LIMIT 1]], { day })
+    end)
+    if not ok then return nil end
+    tod = { day = day, choice = 'auto' }
+    if type(row) == 'table' and type(row.new_value) == 'string' then
+        tod.choice, tod.by, tod.reason, tod.at = row.new_value, row.actor, row.reason, CP.U.num(row.ts)
+    end
+    return tod
+end
+
+-- { day, type ('none' = no Type of the Day), by, reason, at } for today, or nil (the day's roll).
+function Events.todOverride()
+    local s = TodState(DayKeyNow())
+    if not s or s.choice == 'auto' then return nil end
+    if s.choice ~= 'none' and not (Config.MissionTypes and Config.MissionTypes[s.choice]) then return nil end
+    return { day = s.day, type = s.choice, by = s.by, reason = s.reason, at = s.at }
+end
+
+-- typeKey, 'none' or 'auto' (nil = 'auto': back to the roll) for today. meta = { by, reason }. ok | false, errKey.
+-- The caller writes the cp_audit row (action todOverride, target = Events.todDay(), new_value = the choice).
+function Events.setTodOverride(choice, meta)
+    choice = choice or 'auto'
+    if choice ~= 'auto' and choice ~= 'none' and not (Config.MissionTypes and Config.MissionTypes[choice]) then
+        return false, 'err.unknown_type'
+    end
+    meta = type(meta) == 'table' and meta or {}
+    tod = { day = DayKeyNow(), choice = choice, by = meta.by, reason = meta.reason, at = os.time() }
+    return true
+end
+
+function Events.todDay() return DayKeyNow() end
+
+function Events.typeOfTheDay(dayKey)
+    if not (Config.Events and Config.Events.typeOfTheDay) then return nil end
+    if dayKey == nil or dayKey == DayKeyNow() then
+        local o = Events.todOverride()
+        if o then
+            if o.type == 'none' then return nil end
+            return o.type
+        end
+    end
+    return Events.rolledTypeOfTheDay(dayKey)
+end
+
 -- ============================================================================
 --                                  MODIFIERS
 -- ============================================================================
 
 function Events.modifiers()
     local out = {}
+    local on = type(Config.Events and Config.Events.modifiers) == 'table' and Config.Events.modifiers or {}
     for key, m in pairs(MODIFIERS) do
-        out[key] = { label = m.label, tacticalOnly = m.tacticalOnly == true }
+        out[key] = { label = m.label, tacticalOnly = m.tacticalOnly == true, enabled = on[key] ~= false }
     end
     return out
 end
@@ -171,9 +271,14 @@ function Events.rollModifier(run)
     if not rng:chance(chance) then return nil end
     local missionType = run.missionType or (run.mission and run.mission.type)
     local eligible = {}
+    -- Config.Events.modifiers.<key> = false: that modifier is never rolled.
+    local on = type(Config.Events.modifiers) == 'table' and Config.Events.modifiers or {}
     for _, key in ipairs(MODIFIER_ORDER) do
-        if not MODIFIERS[key].tacticalOnly or missionType == 'tactical' then eligible[#eligible + 1] = key end
+        if on[key] ~= false and (not MODIFIERS[key].tacticalOnly or missionType == 'tactical') then
+            eligible[#eligible + 1] = key
+        end
     end
+    if #eligible == 0 then return nil end
     local key = rng:pick(eligible)
     CP.log(TAG, 'run %s rolled modifier %s', tostring(run.id), tostring(key))
     return key

@@ -702,6 +702,18 @@ surrenderMult, fleeMult }` for the blocks. Presets change how NPCs feel, never p
 - `bossAvailable(src, officer) -> ok, reasonKey` — enabled, weekday in `Config.Events.weeklyBoss.days`, not used this week (any boss row this week except end_reason real_call/force_recall/cancelled)
 - `bossCard(src) -> card|nil` (§9.4)
 
+Full admin control (P3, §5.39):
+- `typeOfTheDay(dayKey?)` answers today's admin override first; `rolledTypeOfTheDay(dayKey?)` is the seed's pick.
+  `todOverride() -> { day, type ('none' = none today), by, reason, at } | nil`; `setTodOverride(choice, meta) -> ok,
+  errKey` (`choice` a type, `'none'` or `'auto'`/nil = back to the roll); `todDay()`. The choice lives in memory and in
+  its `cp_audit` row (action `todOverride`, target = the day key, new_value = the choice), which a restart reads back:
+  a backup restore never replaces cp_audit, and another day's override is ignored, so it always ends at the daily
+  reset. No resource KVP.
+- `rollModifier(run)` skips every modifier with `Config.Events.modifiers.<key> = false`; `modifiers()` adds `enabled`.
+- The weekly attempt: a boss row counts only while `voided = 0`, and `cp_officers.boss_extra = { week, n }` adds `n`
+  attempts for that week. `bossUsage(citizenid) -> { used, extra, left, week }`; `forgetBossUsage(citizenid?)`. The
+  `usedCache` entry is dropped on `admin:changed { citizenid }`, and the whole cache on `row:voided` / `row:restored`.
+
 ### 5.10 CP.Runs — modules/runs (the engine)
 Server:
 - `create(opts) -> run|nil, errKey` — `opts = { mission, locationIndex, missionType, members = { officer }, leaderSrc, operationId, test, isBoss }`
@@ -713,6 +725,26 @@ Server:
 - `markArrived(run, src)` *(hook, from CP.Route)*
 - `removeParticipant(run, src, endReason, opts) -> rowId|nil` — `opts.keepFlag` (downed), `opts.silent`
 - `reclassify(citizenid, runId, newEndReason)` *(hook, from CP.Calls: real_call → real_call_cancelled)* — updates the row, applies the type cooldown, drops the pay tier if the run is still running
+
+Full admin control (P3, §5.39):
+- `create` refuses `err.maintenance` while `CP.Maintenance.active()` (checked at the start and again right before the
+  run is registered), for every kind of run: normal, test, operation and boss.
+- `cancelRun(run, endReason = 'cancelled', opts = { src, reason }) -> ok, errKey`: an admin's End run / End test.
+  Participants who are down leave the way every end handles them (`CP.Downed.handle`, Hard rule 18); everyone else
+  leaves together as Abandoned with `endReason` (no cooldown, no points, no pay) through the same path as `endRun`
+  (`CleanupRun`: objectives stopped, entities deleted, the reservation released, items removed, flags cleared, routes
+  stopped, rows written, `run:ended`). A Cross-Department Mission's run is ended through `CP.Operations.cancel(src,
+  reason)`, so `cp_operations` says cancelled.
+- `addTime(run, seconds, maxTotal) -> ok, totalAdded | false, errKey`: only while the timer runs
+  (`err.live_timer_not_running`; before that `adjustTimer` would raise `run.timeLimit`); `run.timeAdded` keeps the
+  total (`err.live_time_max` past `maxTotal`); `run.timeLimit` never changes, so `fast_finish` is judged on the
+  original limit.
+- `clearCooldowns(citizenid, scope, key)`: after the `cp_officers.cooldown_clears` marker was saved (CP.LiveCtl), the
+  in-memory table is rebuilt; the rebuild (`LoadCooldowns`) skips every row created at or before the marker's `all`,
+  `type[<type>]` or `mission[<id>]` time, so a clear survives a restart.
+- `completionsToday(citizenid, missionType, raw)`: the day count (no type, not `raw`) takes off today's extra runs
+  (`cp_officers.cap_extra = { day, n }`, `extraRunsToday(citizenid)`); a type's own count and the hourly count never.
+- `admin:changed { citizenid }` drops that officer's cooldown, today and last-hour caches (`_forgetOfficer`).
 - `endRun(run, state, endReason)` — state `'completed'|'failed'`; an active participant who is down at that moment (`CP.Qbx.isDowned`, not in the arena) leaves first through `CP.Downed.handle` (result Failed, end_reason `downed`) and only the others get the run's end state
 - `noteWeaponFired(run, src)` — server-side proof for `no_weapons_fired` (CP.Npc: a participant's gun hit or gun kill on a mission ped; the `weapon_fired` telemetry also goes through it)
 - `objectiveComplete(run, index, data) -> boolean` (false when minSeconds is not reached yet; flags `too_fast`)
@@ -851,6 +883,8 @@ client actions `setGps`, `recalcRoute` registered with `CP.Tablet.registerClient
   own-run call ids (`Config.Calls.ownRunCallPrefixes` + `<partnerSrc>_`) are ignored for partners;
   only `CP.Dispatch.lookupActiveCall` hits count; ends the run with `real_call` and within
   `Config.Calls.dodgeWindow` of an un-mark calls `CP.Runs.reclassify(..., 'real_call_cancelled')`.
+- An admin's **Treat as a normal abandon** (CP.LiveCtl, §5.39) uses the same `CP.Runs.reclassify` on a free abandon
+  of the last 24 h, found from the saved rows (`end_reason = 'real_call'`), never from this module's memory.
 
 ### 5.14 CP.Alerts — modules/alerts (Hard rule 16; the only writer of the crimsonArena bag)
 - `set(src)` → `Player(src).state:set('crimsonArena', { active = true, source = 'crimson-police' }, true)`
@@ -892,6 +926,11 @@ Server: `unitOf(src) -> unit|nil` (`unit = { id, leader, members = { src... }, i
 `remove(src)`; handles `server:unitInvite` (targetSrc), `server:unitRespond` ({ accepted, unitId }),
 `server:unitLeave`; callback `getUnit` → UnitView (§9.4). Pushes `unit` topic to members.
 Client: nothing beyond NUI (optional toast on invite).
+Full admin control (P3, §5.39): `adminList() -> AdminUnit[]` (§9.5), `adminGet(unitId) -> unit|nil`,
+`adminRemove(unitId, src) -> ok, data|errKey` and `adminDisband(unitId) -> ok, data|errKey`: refused while the unit is
+locked for a run (`err.live_unit_locked`), in a ready check (`err.live_unit_ready_check`) or has a member on a run
+(`err.live_unit_on_run`); the members get the leader-kick and disband toasts (`unit.admin_removed_you`,
+`unit.admin_removed`, `unit.admin_disbanded`). Units stay memory-only.
 
 Parity-plus additions (WP5; docs/notes/teams.md): `kick(src, target)`, `promote(src, target)`, `disband(src)` (leader
 only; `err.unit_locked` once a type is accepted; a kicked officer can't be invited by that unit for
@@ -1510,6 +1549,35 @@ notices, and the run history an admin reads. Every action and callback is in §8
 - Exports for other modules: `Corr.grantBadge`, `Corr.revokeBadge`, `Corr.officerRuns(cid, args)`,
   `Corr.runDetail(src, rowId, archived)`, `Corr.officerPoints(cid)`.
 
+### 5.39 CP.LiveCtl — modules/livectl (S; full admin control, live runs, units and anti-farm)
+
+The Admin UI's **Live** screen, an officer's **Today & cooldowns** card and the Missions **Today** card. Every action is
+a `CP.AdminKit.action` (§5.37, §8.4.3) with the `liveRuns` or `antiFarmOverride` key (admin-only: supervisors never
+pass), a reason, the admin's own runs and characters refused (S), and a synchronous audit row.
+
+- `liveRuns(adminSrc) -> AdminLiveRun[]` (§9.5): every run that has not ended, tests and Cross-Department Missions
+  included (`test`, `testBy`, `operationId`, `isBoss`), with `timeAdded`, `timerRunning` and `own` (the viewing
+  admin, or one of their characters, is or was on it).
+- `officerRunState(citizenid) -> AdminOfficerRunState | nil, err.unknown_officer`: cooldowns (`CP.Runs.cooldowns`
+  with type and mission names), today's counts (`completionsToday` raw, per type, the last hour) against
+  `Config.Limits` and each type's `dailyLimit`, cash today (`CP.Cash.paidToday`), today's clears and extra runs, the
+  boss attempt (`CP.Events.bossUsage`), free abandons of the last 24 h (from the rows: `end_reason = 'real_call'`),
+  and, for an online officer, the board as they see it: `CP.Draw.boardCards(src)` reduced to type keys, type labels,
+  pool sizes, lock reasons and flags. Mission ids and names never leave in that part (Hard rule Mission choice).
+- `clearCooldowns(citizenid, scope, key)`, `allowExtraRuns(citizenid, count)`, `grantBossAttempt(citizenid)`,
+  `reclassifyAbandon(citizenid, runUuid)`: the anti-farm overrides. The three markers on `cp_officers`
+  (`cooldown_clears = { day, n, all, type = {}, mission = {} }`, `cap_extra = { day, n }`, `boss_extra = { week, n }`)
+  are read, changed in Lua and written back with a compare on the old JSON text (K; `err.state_changed` when someone
+  changed it since; mission ids hold `-`). The limits come from `Config.AdminControl` and are counted in the saved
+  JSON: `cooldownClearsPerDay` clears per officer per day, extra runs 1..`extraRunsMax` once per officer per day,
+  another boss attempt once per officer per week; 0 switches a tool off (`err.live_limit_off`). A clear or extra runs
+  are refused while the officer is on a run. Treat as a normal abandon calls `CP.Runs.reclassify(cid, runUuid,
+  'real_call_cancelled')` (the dodge path: the type and mission cooldowns from now); its own WHERE on `real_call` is
+  the compare-and-set.
+- `today() -> AdminTodayData`: today's Type of the Day (with the roll and the override), the boss day and the
+  modifiers with their `Config.Events.modifiers` switches.
+- The sidebar count `adminLive` (admins only) is the number of live runs.
+
 ## 6. Cross-cutting conventions
 
 ### 6.1 Entities and NPCs
@@ -1899,6 +1967,31 @@ K = compare-and-set, M = refused during maintenance (every action). Shapes: `web
 
 #### 8.4.3 Live runs, units and anti-farm
 
+Callbacks (`CP.AdminKit.callback`; reads keep working during maintenance):
+
+| Name | Args | Key | Returns |
+|---|---|---|---|
+| `admin:getLiveRuns` | – | `liveRuns` | `AdminLiveRunsData` (§9.5) |
+| `admin:getUnits` | – | `liveRuns` | `AdminUnitsData` |
+| `admin:getOfficerRunState` | `{ citizenid }` | `antiFarmOverride` | `AdminOfficerRunState` |
+| `admin:getToday` | – | `liveRuns` | `AdminTodayData` |
+
+Actions (`CP.AdminKit.action`; every one: M, P, R (reason required), A):
+
+| Name | Payload | Key | Guards | Audit → webhook |
+|---|---|---|---|---|
+| `server:admin:recall` | `{ runId, src, reason }` | `liveRuns` | S (own run) → `Admin.forceRecall` | `forceRecall` → audit |
+| `server:admin:endRun` | `{ runId, reason, confirm }` | `liveRuns` | T `END`, S (own run), not a test (`err.live_use_end_test`) | `runEnd` → operations |
+| `server:admin:endTest` | `{ runId, reason }` | `liveRuns` | a test run only (`err.live_not_test`) | `testEnd` → builder |
+| `server:admin:addRunTime` | `{ runId, minutes, reason }` | `liveRuns` | S; 1-10 min; timer running; total ≤ `runTimeAddMax` | `runTimeAdd` → operations |
+| `server:admin:removeFromUnit` | `{ unitId, src, reason }` | `liveRuns` | not the admin's own unit; not locked, ready-checking or on a run | `unitRemove` → operations |
+| `server:admin:disbandUnit` | `{ unitId, reason }` | `liveRuns` | as remove | `unitDisband` → operations |
+| `server:admin:clearCooldowns` | `{ citizenid, scope ('all'\|'type'\|'mission'), key?, reason }` | `antiFarmOverride` | S; L 1 per 3 s per officer; K; per day | `cooldownClear` → flags |
+| `server:admin:allowExtraRuns` | `{ citizenid, count, reason }` | `antiFarmOverride` | S; L; K; 1..`extraRunsMax`, once a day | `extraRunsAllow` → flags |
+| `server:admin:grantBossAttempt` | `{ citizenid, reason }` | `antiFarmOverride` | S; L; K; once a week | `bossAttemptGrant` → flags |
+| `server:admin:reclassifyAbandon` | `{ citizenid, runUuid, reason }` | `antiFarmOverride` | S (officer and run); a free abandon of the last 24 h | `abandonReclassify` → flags |
+| `server:admin:setTypeOfDay` | `{ type (a type \| 'none' \| 'auto'), reason }` | `liveRuns` | Type of the Day on (`err.live_tod_off`) | `todOverride` → audit |
+
 #### 8.4.4 Payments, item rewards and department money
 
 #### 8.4.5 System, departments and settings
@@ -2093,6 +2186,29 @@ Missions and the Mission Builder (web/src/types/admin_missions.ts): `OverrideVie
 `OperationHistoryRow` / `DispatchHistoryRow`, `MissionStatsData`, `DeletedMission`, `ImportPreview`, `TestHistory`.
 `TestLocationStatus` gains `checked`; `TestMissionRow.switch` is the mission's `MissionSwitchView`. The admin pieces
 of Admin UI → Missions live in `web/src/builder/admin/`.
+
+Live runs, units and anti-farm (web/src/types/admin_live.ts; P3):
+
+```ts
+interface AdminLiveRun { runId; missionId; missionLabel; missionType; state; tier; remaining: number | null;
+  timerRunning: boolean; paused: boolean; timeLimit: number; timeAdded: number; test: boolean; testBy?: number;
+  operationId: number | null; isBoss: boolean; modifier?: string; acceptedAt; startedAt?; unitId?; departments: string[];
+  own: boolean; participants: { src; citizenid; name; callsign; departmentShort; status; arrived; endReason? }[] }
+interface AdminLiveRunsData { runs: AdminLiveRun[]; serverTime; addMinutesMax: number; runTimeAddMax: number }
+interface AdminUnit { id; leader: number; members: { src; name; callsign; rank; departmentShort; leader; joinedAt?;
+  onRun }[]; invites: number; locked: boolean; readyCheck?: { typeLabel }; runId?; createdAt; blocked?: errKey;
+  own: boolean }
+interface AdminOfficerRunState { citizenid; online; onRun; runId?;
+  cooldowns: { types: { key; label; until }[]; missions: { id; label; until }[] }; clears: { used; max };
+  counts: { today; maxDay?; hour; maxHour; perType: { key; label; n; limit? }[] };
+  extra: { n; usedToday; max }; cashToday; boss: { enabled; used; extra; left; grantedThisWeek };
+  freeAbandons: { runUuid; missionType; typeLabel; missionLabel; at }[];
+  board?: { cards: { key; label; pool; busy; onCall; typeOfTheDay; locked?: { reason; until? } }[];
+    boss?: { available; locked?: { reason } }; operation: boolean; serverTime; unitSize } | null; serverTime }
+interface AdminTodayData { day; todEnabled; typeOfTheDay: string | null; typeLabel?; rolled: string | null;
+  override?: { type; by?; reason?; at? }; todMultiplier; boss: { enabled; today; days };
+  modifierChance; modifiers: { key; label; tacticalOnly; enabled }[]; types: { key; label }[] }
+```
 
 The admin kit (web/src/admin/components/kit): `useAdminAction()` (`run(name, payload, { requestId? })` adds a fresh
 `requestId`), `newRequestId()`, `OfficerPicker`, `DateRangeField`, `Pager`, `PreviewTable`, `JobProgress` /
