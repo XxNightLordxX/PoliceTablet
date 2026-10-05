@@ -1176,6 +1176,7 @@ a radio-style title, the type, a priority (Tactical P1, Investigation P2, Patrol
 never names the mission. The first unit leader (or solo officer) to claim it gets a random mission of that type in
 that area. Nearby units get the first 15 seconds. Reaching the start fast earns +10% points (rapid response).
 Mission calls never go to sc-dispatch. Supervisors and admins can withdraw a call, page a unit or create a call.
+Staff-posted calls wait 2 minutes between them; an admin may **Post anyway** with a reason.
 
 ### 9.6 Police actions and custody
 
@@ -1250,6 +1251,10 @@ in game, with no coding:
 A developer can edit that file by hand, then run `/CrimsonPoliceAdmin reload` to load the change as a new version.
 Nothing can be placed in `Config.Builder.noBuildZones` (stations, hospitals, the prison, Crimson-Arena).
 
+Admins can also open any **built-in** mission in the Builder and edit it; the edit replaces the built-in under the
+same id and **Reset to original** brings the shipped file back ([9.15.2](#9152-missions-and-the-mission-builder)).
+While `Config.Builder.enabled = false` the Builder is off for supervisors only; admins keep it.
+
 ### 9.13 Testing tools
 
 Admins can play any mission on demand to check it works. **Nothing in a test run is saved or paid.** Testing is
@@ -1264,6 +1269,8 @@ optional: no mission, location or draft needs a test before it is used or publis
 - After each test, mark it **Passed** or **Failed** with a note. The Testing screen shows every mission and
   location as Passed, Failed, Not tested or Changed since test. These are notes for you: an untested mission works
   like any other.
+- **Mark checked (not played)** notes a location you looked at without playing, and **Results** removes a wrong
+  result (or shows it again). Each mission row has its on/off switch.
 
 ### 9.14 Rules to tell your officers
 
@@ -1312,8 +1319,53 @@ board, recognition and season tools are described here as they arrive.
 
 #### 9.15.2 Missions and the Mission Builder
 
-Editing built-in missions in the Mission Builder (with **Reset to original**), mission history and stats, and moving
-missions between servers are described here as they arrive.
+Everything below is in Admin UI → **Missions**. Supervisors keep the Builder as it was and get none of these tools.
+
+**Edit any built-in mission.** Every built-in mission has **Edit in Builder**. It opens the mission in the Mission
+Builder with everything in it: objectives, locations, spawns, routes, NPCs, cars, weapons, timings, bonuses and
+text. When you publish, your edit replaces the built-in under the **same id**, so the boards, run history,
+cooldowns, test results, mission calls and the on/off switches keep working. Nothing in `missions/builtin/` is ever
+written: your edit is saved in `missions/custom/overrides/` (and in your database or `saves/`), so an update of
+Crimson-Police never wipes it. The same rules as for a custom mission apply (allowed models, weapons and zones, the
+hostile limits), except that anything the shipped file already uses may stay. There is still no payout field: the
+type sets the pay. You can publish without testing (testing is optional for everyone).
+
+- **Edited** and **Original changed** badges in the catalog. "Original changed" means an update of Crimson-Police
+  changed the shipped file since you edited it. **Compare** shows what the update changed and how your edit differs;
+  then choose **Keep mine** or **Take the new original**.
+- **Reset to original** puts your edit away (it is moved to `missions/custom/overrides/archived/`, not erased) and
+  the shipped mission plays again. You type the mission id to confirm.
+- **Quick edit** (the sliders button) changes a built-in's cooldown, time limit, time to reach the start, and its
+  NPC models, cars and weapons, without the Builder. The values apply on top of an edited version too; **Fold
+  Quick edit values into the edit** makes them part of it.
+- `Config.AdminControl.editBuiltins = false` (Settings) switches editing off: the edits are kept but not played, and
+  the shipped missions play until you switch it back on.
+- Runs that are already going keep the definition they started with.
+
+**Custom missions.** **Versions** rolls a mission (or an edited built-in) back to any kept version, with a short list
+of what changes, and **Load saved draft** brings back a draft that a hand edit of the file replaced. **Change owner**
+hands a custom mission to another officer. **Delete permanently** (archived missions only; type the mission id)
+moves its files to `missions/custom/deleted/`; the **Deleted** tab brings it back. **Copy as Lua** shows the
+published file to paste on another server, and **Import** (top of the screen) checks a pasted file and makes a new
+draft from it: payout fields are dropped, a used id gets a new one, and nothing is published until you publish it.
+
+**Switches.** Every mission and location, built-in, custom or edited, has its on/off switch (catalog, Testing,
+Dispatch). Location switches are saved by the location's name: when an edit renames or removes a location, the
+catalog shows "n location switches no longer match" with **Remap**.
+
+**Load result.** A banner above the catalog says when a mission file (or an edited built-in) did not load at the last
+start or reload, with the reason. The same appears as the `missions` line in Permissions → Config health.
+
+**History and stats.** The **History** tab lists every Cross-Department Mission (who launched it, who took part, the
+points) and every mission call (who posted it, who claimed it, how fast and how it ended). The **Stats** tab shows,
+per mission and per type, the runs, completion, fail and abandon rates, the average time against the time limit,
+the average points and cash, flags and voids.
+
+**Testing and dispatch.** In **Testing**, **Mark checked (not played)** records that you looked at a location without
+playing it (its own badge, never a passed test), and **Results** lets you remove a wrong result or show it again
+(nothing is deleted). In **Dispatch**, an admin may **Post anyway** during the wait between staff-posted calls, and an
+admin may launch a Cross-Department Mission during its cooldown with **Launch anyway**. Both need a reason and go to
+the audit log.
 
 #### 9.15.3 Live runs, units and anti-farm
 
@@ -1363,7 +1415,8 @@ off departments, desks, and the Settings follow-ups are described here as they a
 5. Copy these from your old copy into the new one, replacing the new ones:
    - `config/config.lua` and `config/banned_words.txt` (and `config/blocks.lua` only if you changed it)
    - `logos/`
-   - `missions/custom/` (your Mission Builder missions, with `archived/` and the `.bak` files)
+   - `missions/custom/` (your Mission Builder missions, with `archived/`, `overrides/` (your edited built-in
+     missions), `deleted/` and the `.bak` files)
    - `saves/` (your data, when the database is off)
 6. Compare your `config.lua` with the one in the download, and copy any new blocks into yours. At start, the
    console names any section your `config.lua` is missing, in a line like
@@ -1505,7 +1558,8 @@ The last line of the start-up check is `Start-up check: all ... checks passed` o
 
 | Console line | What to do |
 |---|---|
-| `missions loaded: 19 built-in, N custom, N rejected` | Normal. "rejected" above 0 means a line above says which file and why |
+| `missions loaded: 19 built-in (N edited), N custom, N rejected` | Normal. "rejected" above 0 means a line above says which file and why; Admin UI → **Missions** shows the same as the load result |
+| `the edited version of <id> (<file>) was not loaded, the shipped mission plays: <reason>` | An edited built-in mission broke (often a hand edit of its file). Open it in Admin UI → **Missions** → **Edit in Builder** and publish again, or **Reset to original** |
 | `custom mission <id>: edited in code, saved as version <n>` | Normal: someone edited that mission's Lua file, and the edit is now live |
 | `mission <id> (<file>) was not loaded: <reason>` | For a custom mission, fix it in the Builder or the file. For a built-in one, copy the file again from the download |
 | `custom mission <id>: the edited file ... was not accepted` | A hand edit broke the mission. The old version stays live. Fix the file and run `/CrimsonPoliceAdmin reload` |

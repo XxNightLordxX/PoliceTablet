@@ -532,9 +532,15 @@ local function DoStart(cur, actorSrc, auto)
     return true, { runId = run.id, participants = #valid }
 end
 
+-- The maintenance lock (a storage copy or switch, a restore): no operation launches or starts until the restart.
+local function Locked()
+    return CP.Maintenance ~= nil and CP.Maintenance.active ~= nil and CP.Maintenance.active() ~= nil
+end
+
 local function StartRun(actorSrc, auto)
     local cur = op
     if not cur or cur.status ~= 'joining' then return false, 'err.op_not_joining' end
+    if Locked() then return false, 'err.maintenance' end
     if cur.joinClosed or busy then return false, 'err.busy' end
     busy = true
     local okCall, ok, data = pcall(DoStart, cur, actorSrc, auto)
@@ -552,12 +558,16 @@ end
 --                     ACTIONS (permission already checked)
 -- ============================================================================
 
-local function DoLaunch(src, missionId)
+-- opts = { skipCooldown = true, reason }: an admin launching during the server-wide cooldown (A13, audited).
+local function DoLaunch(src, missionId, opts)
+    opts = type(opts) == 'table' and opts or {}
     if not ready then return false, 'err.op_not_ready' end
+    if Locked() then return false, 'err.maintenance' end
     if Cfg().enabled == false then return false, 'err.op_disabled' end
     if op then return false, 'err.op_active' end
     if busy then return false, 'err.busy' end
-    if Ops.cooldownLeft() > 0 then return false, 'err.op_cooldown' end
+    local cooldownLeft = Ops.cooldownLeft()
+    if cooldownLeft > 0 and not opts.skipCooldown then return false, 'err.op_cooldown' end
     local def = MissionDef(missionId)
     if not def then return false, 'err.op_mission_unknown' end
     local okE, why = Ops.eligible(def)
@@ -598,6 +608,9 @@ local function DoLaunch(src, missionId)
         }
         Broadcast('launched', op.missionLabel, { id = id, relaunched = false })
         Audit(src, op, 'opLaunch', nil, def.id, nil)
+        if cooldownLeft > 0 then
+            Audit(src, op, 'opLaunchSkipCooldown', ('%ds left'):format(cooldownLeft), def.id, opts.reason)
+        end
         CP.log(TAG, 'operation %d launched by %s: %s', id, tostring(actor.citizenid), def.id)
         return true, { id = id }
     end)
@@ -620,6 +633,7 @@ end
 local function DoRelaunch(src)
     local cur = op
     if not cur then return false, 'err.op_none' end
+    if Locked() then return false, 'err.maintenance' end
     if cur.status ~= 'waiting' then return false, 'err.op_not_waiting' end
     if busy then return false, 'err.busy' end
     local okE = Ops.eligible(MissionDef(cur.missionId))
@@ -1158,6 +1172,12 @@ for _, scope in ipairs({ 'sup', 'admin' }) do
     CP.Net.action(('server:%s:opLaunch'):format(scope), Guarded(scope, function(src, payload)
         local missionId = ParseMissionId(payload)
         if not missionId then return false, 'err.invalid_payload' end
+        -- admins may launch during the cooldown, with a reason (audited, posted to the operations webhook)
+        if scope == 'admin' and type(payload) == 'table' and payload.skipCooldown == true then
+            local reason, errKey = CleanReason(payload.reason)
+            if not reason then return false, errKey end
+            return DoLaunch(src, missionId, { skipCooldown = true, reason = reason })
+        end
         return DoLaunch(src, missionId)
     end), { rate = 2 })
 
@@ -1237,6 +1257,113 @@ function Ops._tick()
             DoCancel(0, CP.L('sup.crossdept.reason_idle'), true)
         end
     end
+end
+
+-- ============================================================================
+--                 OPERATION HISTORY (C6; ARCHITECTURE §8.4.2)
+-- ============================================================================
+-- Past Cross-Department Missions with their participants and points from the run rows (live and archived: the union
+-- sits in a derived table, as the saves folder engine needs). Read-only; admins only.
+
+local HISTORY_PAGE = 20
+local HISTORY_STATUSES = { joining = true, running = true, waiting = true, completed = true, cancelled = true }
+
+function Ops.history(args)
+    args = type(args) == 'table' and args or {}
+    local to = math.tointeger(tonumber(args.to)) or os.time()
+    local from = math.tointeger(tonumber(args.from)) or (to - 30 * 86400)
+    if from >= to or to - from > 366 * 86400 then return nil, 'err.invalid_range' end
+    local page = math.max(1, math.tointeger(tonumber(args.page)) or 1)
+    local where = 'created_at >= FROM_UNIXTIME(?) AND created_at < FROM_UNIXTIME(?)'
+    local params = { from, to }
+    if args.status ~= nil and args.status ~= '' then
+        if not HISTORY_STATUSES[args.status] then return nil, 'err.invalid_payload' end
+        where = where .. ' AND status = ?'
+        params[#params + 1] = args.status
+    end
+    CP.Migrations.ready()
+    local okC, total = pcall(MySQL.scalar.await, 'SELECT COUNT(*) AS n FROM cp_operations WHERE ' .. where, params)
+    if not okC then return nil, 'err.internal' end
+    total = math.floor(CP.U.num(total))
+    local owhere = 'o.created_at >= FROM_UNIXTIME(?) AND o.created_at < FROM_UNIXTIME(?)'
+    if args.status ~= nil and args.status ~= '' then owhere = owhere .. ' AND o.status = ?' end
+    local okR, rows = pcall(
+        MySQL.query.await,
+        ([[SELECT o.id, o.mission_id, o.launched_by, o.status,
+        UNIX_TIMESTAMP(o.created_at) AS created_ts, UNIX_TIMESTAMP(o.ended_at) AS ended_ts, f.display_name
+        FROM cp_operations o LEFT JOIN cp_officers f ON f.citizenid = o.launched_by WHERE %s
+        ORDER BY o.id DESC LIMIT %d OFFSET %d]]):format(owhere, HISTORY_PAGE, (page - 1) * HISTORY_PAGE),
+        params
+    )
+    if not okR then
+        CP.err(TAG, 'operation history failed: %s', tostring(rows))
+        return nil, 'err.internal'
+    end
+    local list, byId, ids, marks = {}, {}, {}, {}
+    for _, r in ipairs(type(rows) == 'table' and rows or {}) do
+        local id = math.tointeger(CP.U.num(r.id))
+        local def = MissionDef(r.mission_id)
+        local e = {
+            id = id,
+            missionId = tostring(r.mission_id),
+            missionLabel = def and def.label or tostring(r.mission_id),
+            launchedBy = tostring(r.launched_by),
+            launchedByName = r.display_name and tostring(r.display_name) or nil,
+            status = tostring(r.status),
+            createdAt = math.floor(CP.U.num(r.created_ts)),
+            endedAt = r.ended_ts and math.floor(CP.U.num(r.ended_ts)) or nil,
+            participants = {},
+            points = 0,
+        }
+        list[#list + 1] = e
+        if id then
+            byId[id] = e
+            ids[#ids + 1] = id
+            marks[#marks + 1] = '?'
+        end
+    end
+    if #ids > 0 then
+        local inList = table.concat(marks, ', ')
+        local cols = 'operation_id, citizenid, department, state, final_points, voided'
+        local params2 = {}
+        for _, v in ipairs(ids) do params2[#params2 + 1] = v end
+        for _, v in ipairs(ids) do params2[#params2 + 1] = v end
+        local okP, prow = pcall(
+            MySQL.query.await,
+            ([[SELECT x.operation_id, x.citizenid, x.department, x.state,
+            x.final_points, x.voided, f.display_name FROM (SELECT %s FROM cp_mission_runs WHERE operation_id IN (%s)
+            UNION ALL SELECT %s FROM cp_mission_runs_archive WHERE operation_id IN (%s)) x
+            LEFT JOIN cp_officers f ON f.citizenid = x.citizenid]]):format(cols, inList, cols, inList),
+            params2
+        )
+        if okP then
+            for _, r in ipairs(type(prow) == 'table' and prow or {}) do
+                local e = byId[math.tointeger(CP.U.num(r.operation_id))]
+                if e then
+                    local voided = CP.U.truthy(r.voided)
+                    e.participants[#e.participants + 1] = {
+                        citizenid = tostring(r.citizenid),
+                        name = r.display_name and tostring(r.display_name) or nil,
+                        department = tostring(r.department),
+                        state = tostring(r.state),
+                        points = math.floor(CP.U.num(r.final_points)),
+                        voided = voided,
+                    }
+                    if not voided then e.points = e.points + math.floor(CP.U.num(r.final_points)) end
+                end
+            end
+        end
+    end
+    return { rows = list, page = page, pages = math.max(1, math.ceil(total / HISTORY_PAGE)), total = total }
+end
+
+do
+    local Kit = CP.AdminKit or {
+        callback = function() return false end,
+    }
+    Kit.callback('admin:getOperations', 'openAdmin', function(ctx)
+        return Ops.history(ctx.args)
+    end, { rate = 2 })
 end
 
 -- ============================================================================

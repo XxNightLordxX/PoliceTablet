@@ -631,6 +631,18 @@ locations turned off, by label or number; `map` replaces that table), `enabledLo
 `isEnabled(id)` is also false when every location of the mission is off. `loadAll` waits for `CP.Migrations.ready()`
 first, so built-in missions are normalised with the settings changed in game.
 
+Full admin control (§8.4.2): `loadAll` asks `CP.Builder.loadPublished()` first (its file sync runs before), then
+`CP.Builder.loadOverrides()`, and swaps each built-in for its override under the same id (`source = 'builtin'`,
+`overridden = true`, `overrideVersion`, `baseHash`, `shippedHash`); a broken override is logged, listed in
+`overrideFailed` and the shipped mission plays. `Config.MissionTweaks` apply on top of the override. The summary keeps
+`overridden`, `overrideFailed`, `warningTexts` (the first 200), the Builder's sync result (`builder`) and `at`.
+`loadSummary()` (callback `admin:getMissionLoad`; Config health line `missions`), `refreshBuiltin(id)` (one built-in
+loaded again after an override changes; runs going keep their definition), `rawOf(id)`, `checkTweak(id, tweak) ->
+ok | false, errKey, reason` (the loader's answer for a `MissionTweaks` entry; CP.Settings asks it on every change made
+in game, never at boot), `trial(patch) -> { checked, failed }` (A14: every mission through the loader with a settings
+patch on Config, put back before it returns) and `stats(args)` (callback `admin:getMissionStats`: counts and sums in
+SQL, rates and averages in Lua, 60 s cache per filter).
+
 ### 5.7 CP.Draw — modules/draw (S)
 - `pool(missionType, members) -> { def, ... }, reasonKey` — published, enabled, type match, open to
   every member's department, supports `#members`, off per-mission cooldown for every member
@@ -668,6 +680,9 @@ Parity-plus additions (WP4; docs/notes/missioncalls.md):
   gains `callsOpen`.
 - `noRepeat(list, hist)`, `history(citizenid, type)`, `typeValues(type, officers, list) -> cash, points`,
   `recordLocation(citizenid, missionId, index)`, `locationStats(missionId)` (callback `admin:getLocationStats`).
+
+Full admin control: the accept check (`check`, `CheckAccept`) refuses `err.maintenance` while
+`CP.Maintenance.active()`. An edited built-in is drawn under the built-in's id like the built-in it replaces.
 
 ### 5.8 CP.Scaling — modules/scaling (S)
 - `tierFor(n) -> row` (first `Config.Scaling` row with `maxParticipants >= n`, else the last)
@@ -901,6 +916,11 @@ Parity-plus: `leave(src)` / `server:leaveOperation` (before the start, no penalt
 audited `opRemoveJoiner`), the waitlist (`Config.CrossDept.waitlist`: a freed place goes to the first on it, re-checked
 like a join), `officerCard(src)`.
 
+Full admin control (§8.4.2): `history(args) -> Paged` (callback `admin:getOperations`: `cp_operations` plus
+participants and points from live and archived run rows, the union in a derived table); an admin may launch during
+the cooldown (`server:admin:opLaunch { skipCooldown = true, reason }`, audited `opLaunchSkipCooldown`); `launch`,
+`relaunch` and the start refuse `err.maintenance` while `CP.Maintenance.active()`.
+
 ### 5.18 CP.Scoring — modules/scoring (S)
 - `P(mission) -> number` (type points × `Config.Difficulty.pointsByStars[difficulty]`; boss: `Config.Events.weeklyBoss.points`)
 - `compute(run, p, result, opts) -> breakdown` (§9.6 `points`) — formula of the spec incl. cap, streak, ToD, failed credit (`objectivesDone / total`)
@@ -1043,12 +1063,29 @@ controls (`skip`, `restart`, `pause`, `complete`, `fail`, `end`, `teleport`), in
 Client: test-control panel focus key (RegisterKeyMapping `+crimsonpolice_testpanel`, default F7: sc-multijob binds F9;
 silent unless this player controls a test or has an invitation waiting), debug overlay drawing.
 
+Full admin control (§8.4.2): `markLocationChecked` (an `unplayed = 1` row, status `checked`, never a draft's pass) and
+`hideTestResult` (`hidden`, K on the old value); `list()` ignores hidden rows and gives each mission its `switch`
+(`CP.Settings.missionView`). `start` refuses `err.maintenance` while `CP.Maintenance.active()`.
+
 ### 5.28 CP.Builder — modules/builder
 Server: drafts, locks, autosave, test runs of drafts (via `CP.Testing`/`CP.Runs` with `test.draft = true`),
 publish (Lua export with `SaveResourceFile`), archive/restore, rollback (.bak), reload of hand edits,
 `loadPublished() -> { def, ... }` *(hook for CP.Missions.loadAll)*, `onReload()`,
 `onDraftTested(missionId, version, tierName, passed, src, defHash)` *(hook from CP.Testing; a pass counts only for the draft content with that defHash)*. Testing is optional: a passed test at the tier `CP.Scaling.tierFor(maxOfficers)` (`draft_tested = 1`) is needed to publish only while `Config.Builder.requireTestToPublish` is true, and only for supervisors (never admins). List entries carry `needsTest`, `builder:config` carries `requireTestToPublish` (for the viewer), and an untested publish is audited as `publishUntested`.
 Client: placement tool, route recording, test drive; overlays through `CP.Tablet.overlay`.
+
+Full admin control (§8.4.2): edited built-in missions are override rows (`cp_custom_missions.overrides_builtin = 1`,
+`base_hash` = the shipped file's hash when the edit was made or kept) with their files in
+`<exportPath>overrides/<id>.lua` (`.v<n>.lua.bak`, `.draft.lua.bak`, `<id>.base.lua` = the shipped file at that
+time, `archived/`); never in `missions/builtin/`. Override rows are admin-only in `Allows`, `VisibleTo` and `LoadRow`
+(supervisors never, whatever `builderEditAny` says) and only while `Config.AdminControl.editBuiltins` is on;
+`changeOwner` and `deleteMission` refuse them. `B.validate(def, { baseline = { def, raw } })` checks an override with
+the custom-mission rules, the shipped file as a baseline by value (a model, weapon or zone it uses is allowed, a
+number may stay at or below its shipped value). `B.loadOverrides() -> { [id] = { raw, filePath, hash, version,
+baseHash, editedInCode } }` *(hook for CP.Missions.loadAll; empty while editBuiltins is off; a missing file is written
+again from the row)*, `B.shippedOf(id) -> { path, content, raw, hash }`, `B.editBuiltinsOn()`, `B.onTestHidden(missionId,
+defHash)` (a removed pass makes that draft untested again). `Begin()` lets admins past `Builder.enabled = false`.
+Deleted custom missions go to `<exportPath>deleted/<id>-<time>/` with `row.json` and an `index.json` list.
 
 ### 5.29 CP.Storage (with CP.Storage.MemSQL) — modules/storage (S)
 Where Crimson-Police keeps its data (`Config.Database`). `enabled = true` (the default): MySQL/MariaDB through
@@ -1227,6 +1264,10 @@ Full notes: docs/notes/missioncalls.md.
   `server:claimMissionCall`, `server:sup:mcWithdraw|mcPage|mcCreate` and `server:admin:*`; plain `server:mcWatch`;
   `client:missionCall` (toast and tone, only to idle units that could claim and have not muted calls); push `calls`.
   Nothing is ever sent to SC-Dispatch.
+
+Full admin control (§8.4.2): `create(src, type, area, { skipWait, reason })` (an admin's **Post anyway** during the
+wait between staff calls; audited `mcCreateSkipWait`; the wait still applies to supervisors), `history(args) -> Paged`
+(callback `admin:getMissionCalls`), and `claim` refuses `err.maintenance` while `CP.Maintenance.active()`.
 
 ### 5.32 CP.Profile — modules/profile (pictures, bio, look, commendations, moderation; WP6)
 Full notes: docs/notes/profile.md. English only: a profile has no language (no column, pref or picker).
@@ -1732,6 +1773,41 @@ Every action of full admin control goes through `CP.AdminKit.action` (§5.37) an
 
 #### 8.4.2 Missions and the Mission Builder
 
+Guards: P = `CP.AdminKit` permission (admins and the console only), R = reason, T = typed word, V = preview token,
+K = compare-and-set, M = refused during maintenance (every action). Shapes: `web/src/types/admin_missions.ts`.
+
+| Name | Payload → reply | Key | Guards |
+|---|---|---|---|
+| `server:builder:editBuiltin` | `{ id }` → `{ id, record, existing? }` (makes the override draft from the shipped file + MissionTweaks) | editBuiltins | P, `AdminControl.editBuiltins`; audit `overrideEdit` (builder) |
+| `server:builder:keepOverride` | `{ id, reason }` → `{ id, changed = false }` | editBuiltins | P R K (`base_hash`); `overrideKeep` |
+| `server:builder:resetBuiltin` | `{ id, reason, confirm = id, takeNew? }` → `{ id }` (Reset to original / Take the new original) | editBuiltins | P R T K; `overrideReset` |
+| `server:builder:foldTweaks` | `{ id, reason }` → `{ id, version, tweaksCleared }` | editBuiltins | P R; `overrideFoldTweaks` |
+| `admin:builtinDiff` (callback) | `{ id }` → BuiltinDiff (`original`: base copy → shipped; `yours`: shipped → override) | editBuiltins | P |
+| `server:builder:publish` (existing) | an override row publishes as `overridePublish` / `publishUntested`; testing is never required of admins | editBuiltins for override rows | builder rules |
+| `server:builder:changeOwner` | `{ id, citizenid, reason }` → `{ id, owner }` | missionAdmin | P R K; refused on overrides; `missionOwner` |
+| `server:builder:deleteMission` | `{ id, reason, confirm = id }` → `{ id, folder }` (archived custom missions; not while a run, test or the operation uses it) | missionAdmin | P R T K; `missionDelete` |
+| `server:builder:undeleteMission` | `{ folder, reason }` → `{ id }` (back as archived) | missionAdmin | P R; `missionUndelete` |
+| `builder:deleted` (callback) | → `{ missions = DeletedMission[] }` | missionAdmin | P |
+| `server:builder:loadBackupDraft` | `{ id, reason? }` → `{ id, version, record }` | missionAdmin | P; `draftRecovered` |
+| `builder:versionDiff` (callback) | `{ id, version }` → VersionDiff (rollback picker; `server:builder:rollback` takes `version`) | builderRollback (as rollback) | builder rules |
+| `admin:exportMissionLua` (callback) | `{ id }` → `{ id, version, lua }` (a built-in only through its override) | missionAdmin | P; `missionExport` |
+| `admin:previewImport` (callback) | `{ lua }` (≤ 256 KB) → `{ previewToken, expiresAt, effect }` | missionAdmin | P, 1 per 10 s |
+| `server:builder:importDraft` | `{ previewToken, reason }` → `{ id, record }` (a new draft, never published) | missionAdmin | P R V; `missionImport` |
+| `admin:getMissionLoad` (callback) | → MissionLoadSummary | openAdmin | P |
+| `admin:getMissionTweak` (callback) | `{ missionId }` → MissionTweakView | openAdmin | P |
+| `server:admin:setMissionTweak` | `{ missionId, tweak?, reason? }` (no tweak = back to the file) → `{ missionId, tweak }` through `CP.Settings.set('MissionTweaks')` | openAdmin | P; `settingChanged` |
+| `admin:trialMissions` (callback) | `{ patch = { { path, value? , none? } } }` → `{ checked, failed }` | openAdmin | P |
+| `admin:getSwitchRemap` (callback) | → `{ missions = { id, label, stale, locations } }` | openAdmin | P |
+| `server:admin:remapLocationSwitches` | `{ missionId, map = { { from, to = index \| false } }, reason? }` | openAdmin | P; `locationSwitch` |
+| `admin:getMissionStats` (callback) | `{ from?, to?, missionId?, type? }` → MissionStatsData | openAdmin | P, 1 per 2 s |
+| `admin:getOperations` (callback) | `{ from?, to?, status?, page? }` → Paged OperationHistoryRow (20 a page) | openAdmin | P |
+| `admin:getMissionCalls` (callback) | `{ from?, to?, type?, area?, outcome?, issuer?, page? }` → Paged DispatchHistoryRow (25 a page) | openAdmin | P |
+| `server:admin:mcCreate` (existing) | adds `skipWait = true, reason` (admins only) | missionCalls | R; `mcCreateSkipWait` (operations) |
+| `server:admin:opLaunch` (existing) | adds `skipCooldown = true, reason` (admins only) | launchCrossDept | R; `opLaunchSkipCooldown` (operations) |
+| `server:admin:markLocationChecked` | `{ missionId, locationIndex, tier?, reason }` → `{ id, location, tier }` | testRun | P R; `testMarkChecked` |
+| `server:admin:hideTestResult` | `{ id, hidden, reason }` → `{ id, hidden }` | testRun | P R K (`hidden`); `testResultHide` |
+| `admin:getTestHistory` (callback) | `{ missionId, locationIndex }` → TestHistory (hidden rows too) | testRun | P |
+
 #### 8.4.3 Live runs, units and anti-farm
 
 #### 8.4.4 Payments, item rewards and department money
@@ -1921,6 +1997,13 @@ interface RewardPoolSlotProps { path: string; value: unknown; disabled?: boolean
   // RewardPoolEditor (P4) with handlesRewardPool(path): Settings uses it for the paths it handles
 // MissionsToday (P3, no props): Missions → catalog tab
 ```
+
+Missions and the Mission Builder (web/src/types/admin_missions.ts): `OverrideView` (builder:list `builtins[].override`,
+`BuilderListEntry.override`: overridden, shippedHash, baseHash, version, hasDraft, status, tweaks, loadError?, changed),
+`BuiltinDiff`, `VersionDiff`, `MissionLoadSummary`, `MissionTweakView`, `SwitchRemapData`, `Paged<R>` with
+`OperationHistoryRow` / `DispatchHistoryRow`, `MissionStatsData`, `DeletedMission`, `ImportPreview`, `TestHistory`.
+`TestLocationStatus` gains `checked`; `TestMissionRow.switch` is the mission's `MissionSwitchView`. The admin pieces
+of Admin UI → Missions live in `web/src/builder/admin/`.
 
 The admin kit (web/src/admin/components/kit): `useAdminAction()` (`run(name, payload, { requestId? })` adds a fresh
 `requestId`), `newRequestId()`, `OfficerPicker`, `DateRangeField`, `Pager`, `PreviewTable`, `JobProgress` /

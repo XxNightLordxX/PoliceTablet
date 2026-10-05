@@ -55,6 +55,7 @@ export interface BuilderEditorProps {
 
 function LockBanner({ ed, onDuplicate, onBreak }: { ed: DraftEditor; onDuplicate: () => void; onBreak: () => void }) {
     const can = useCan();
+    const { run: runAdmin, busy: adminBusy } = useAction();
     const rec = ed.record;
     const lock = rec?.lock ?? null;
     const other = lock && !lock.mine ? lock : null;
@@ -78,7 +79,31 @@ function LockBanner({ ed, onDuplicate, onBreak }: { ed: DraftEditor; onDuplicate
     if (reason === 'builtin') {
         text = t('builder.lock.builtin');
         tone = 'is-info';
-        if (can('builderEdit'))
+        // admins: edit the built-in itself (an override under the same id; Reset to original in Missions)
+        if (rec.canEditBuiltin)
+            action = (
+                <>
+                    <Button
+                        size="sm"
+                        variant="primary"
+                        icon="edit"
+                        disabled={adminBusy}
+                        onClick={() =>
+                            void runAdmin('server:builder:editBuiltin', { id: rec.id }).then(res => {
+                                if (res.ok) void ed.refresh();
+                            })
+                        }
+                    >
+                        {t('admin.missions.ovr.edit')}
+                    </Button>
+                    {can('builderEdit') ? (
+                        <Button size="sm" variant="secondary" icon="swap" onClick={onDuplicate}>
+                            {t('builder.lock.duplicate')}
+                        </Button>
+                    ) : null}
+                </>
+            );
+        else if (can('builderEdit'))
             action = (
                 <Button size="sm" variant="secondary" icon="swap" onClick={onDuplicate}>
                     {t('builder.lock.duplicate')}
@@ -289,6 +314,11 @@ export function BuilderEditor({ id, scope, config, onClose, onRenamed, onOpen }:
                         {rec.editedInCode ? (
                             <Badge size="sm" tone="warning" variant="outline" icon="fileText">
                                 {t('builder.list.edited_in_code')}
+                            </Badge>
+                        ) : null}
+                        {rec.overridesBuiltin ? (
+                            <Badge size="sm" tone="accent" icon="edit" title={t('admin.missions.ovr.editor_hint')}>
+                                {t('admin.missions.ovr.editor_badge')}
                             </Badge>
                         ) : null}
                     </div>

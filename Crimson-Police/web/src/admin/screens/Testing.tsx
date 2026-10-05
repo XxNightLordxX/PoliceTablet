@@ -52,6 +52,8 @@ import {
     type TestsView,
 } from '../../types/testing';
 import { AreaCoverageMatrix } from '../../supervisor/components/MissionCallsPanel';
+import { useAdminAction } from '../components/kit';
+import type { TestHistory } from '../../types/admin_missions';
 import './Testing.css';
 
 // ============================================================================
@@ -63,12 +65,14 @@ const STATUS_TONE: Record<TestLocationStatus, BadgeTone> = {
     failed: 'danger',
     untested: 'neutral',
     changed: 'warning',
+    checked: 'primary',
 };
 const STATUS_ICON: Record<TestLocationStatus, IconName> = {
     passed: 'checkCircle',
     failed: 'xCircle',
     untested: 'minusCircle',
     changed: 'refresh',
+    checked: 'eye',
 };
 
 type StatusFilter = 'all' | 'todo' | 'failed' | 'passed';
@@ -447,6 +451,15 @@ function matchesFilter(loc: TestLocationRow, filter: StatusFilter): boolean {
     return loc.status === filter;
 }
 
+// Admin tools on the catalog rows: Mark checked (not played), the results of a location (Remove result / Show
+// again) and the mission switch. Testing is optional: these are information, nothing waits on them.
+interface AdminRowTools {
+    onMark: (m: TestMissionRow, loc: TestLocationRow) => void;
+    onResults: (m: TestMissionRow, loc: TestLocationRow) => void;
+    onSwitch: (m: TestMissionRow, on: boolean) => void;
+    busy: boolean;
+}
+
 interface CatalogProps {
     view: TestsView;
     now: number;
@@ -454,9 +467,10 @@ interface CatalogProps {
     canStart: boolean;
     onTest: (preset: StartPreset) => void;
     onRecord: (p: TestPendingRecord) => void;
+    tools: AdminRowTools;
 }
 
-function Catalog({ view, now, pending, canStart, onTest, onRecord }: CatalogProps) {
+function Catalog({ view, now, pending, canStart, onTest, onRecord, tools }: CatalogProps) {
     const [search, setSearch] = useState('');
     const [filter, setFilter] = useState<StatusFilter>('all');
     const [type, setType] = useState('');
@@ -560,6 +574,7 @@ function Catalog({ view, now, pending, canStart, onTest, onRecord }: CatalogProp
                                 onToggle={() => setCollapsed(c => ({ ...c, [m.id]: !c[m.id] }))}
                                 onTest={onTest}
                                 onRecord={onRecord}
+                                tools={tools}
                             />
                         ))}
                     </table>
@@ -579,10 +594,11 @@ interface GroupProps {
     onToggle: () => void;
     onTest: (preset: StartPreset) => void;
     onRecord: (p: TestPendingRecord) => void;
+    tools: AdminRowTools;
 }
 
-function MissionGroup({ m, locs, now, pending, canStart, collapsed, onToggle, onTest, onRecord }: GroupProps) {
-    const s = m.summary ?? { passed: 0, failed: 0, untested: 0, changed: 0 };
+function MissionGroup({ m, locs, now, pending, canStart, collapsed, onToggle, onTest, onRecord, tools }: GroupProps) {
+    const s = m.summary ?? { passed: 0, failed: 0, untested: 0, changed: 0, checked: 0 };
     return (
         <tbody className={cx('testing-group', collapsed && 'is-collapsed')}>
             <tr className="testing-group__head">
@@ -648,7 +664,18 @@ function MissionGroup({ m, locs, now, pending, canStart, collapsed, onToggle, on
                                 {s.untested ? (
                                     <span className="is-untested">{t('test.ui.sum_untested', { n: s.untested })}</span>
                                 ) : null}
+                                {s.checked ? (
+                                    <span className="is-checked">{t('test.ui.sum_checked', { n: s.checked })}</span>
+                                ) : null}
                             </span>
+                            {m.switch ? (
+                                <Toggle
+                                    checked={m.switch.on}
+                                    disabled={tools.busy}
+                                    label={m.switch.on ? t('settings.mission.on') : t('settings.mission.off')}
+                                    onChange={on => tools.onSwitch(m, on)}
+                                />
+                            ) : null}
                             <Button
                                 size="sm"
                                 variant="secondary"
@@ -745,6 +772,21 @@ function MissionGroup({ m, locs, now, pending, canStart, collapsed, onToggle, on
                                               <span className="testing-hide-sm">{t('test.ui.record')}</span>
                                           </Button>
                                       ) : null}
+                                      <IconButton
+                                          icon="eye"
+                                          size="sm"
+                                          variant="ghost"
+                                          label={t('test.ui.mark_checked')}
+                                          onClick={() => tools.onMark(m, loc)}
+                                      />
+                                      <IconButton
+                                          icon="list"
+                                          size="sm"
+                                          variant="ghost"
+                                          label={t('test.ui.results')}
+                                          disabled={!last && loc.status === 'untested'}
+                                          onClick={() => tools.onResults(m, loc)}
+                                      />
                                       <IconButton
                                           icon="play"
                                           size="sm"
@@ -1226,7 +1268,121 @@ function RecordDialog({
 //                                  THE SCREEN
 // ============================================================================
 
+// Every result of one location, hidden ones too: Remove result / Show again (nothing is deleted).
+function ResultsDialog({
+    target,
+    onClose,
+    onChanged,
+}: {
+    target: { m: TestMissionRow; loc: TestLocationRow } | null;
+    onClose: () => void;
+    onChanged: () => void;
+}) {
+    const hist = useRequest<TestHistory>(
+        'admin:getTestHistory',
+        { missionId: target?.m.id, locationIndex: target?.loc.index },
+        { skip: !target },
+    );
+    const { run, busy } = useAdminAction();
+    const [hide, setHide] = useState<{ id: number; hidden: boolean } | null>(null);
+    const doHide = async (reason: string) => {
+        if (!hide) return;
+        const res = await run(
+            'server:admin:hideTestResult',
+            { id: hide.id, hidden: hide.hidden, reason },
+            { success: hide.hidden ? 'test.ui.result_removed' : 'test.ui.result_shown' },
+        );
+        setHide(null);
+        if (res.ok) {
+            void hist.refetch();
+            onChanged();
+        }
+    };
+    const results = hist.data ? asList(hist.data.results) : [];
+    return (
+        <>
+            <Dialog
+                open={!!target}
+                onClose={onClose}
+                size="lg"
+                title={target ? t('test.ui.results_title', { mission: target.m.label, n: target.loc.index }) : ''}
+                description={t('test.ui.results_text')}
+                footer={<Button onClick={onClose}>{t('common.close')}</Button>}
+            >
+                {hist.loading && !hist.data ? (
+                    <LoadingBlock />
+                ) : !results.length ? (
+                    <EmptyState compact icon="inbox" title={t('test.ui.results_none')} />
+                ) : (
+                    <div className="cp-table-wrap">
+                        <table className="cp-table cp-table--dense">
+                            <thead>
+                                <tr>
+                                    <th>{t('test.ui.col_when')}</th>
+                                    <th>{t('test.ui.col_result')}</th>
+                                    <th>{t('test.ui.col_tier')}</th>
+                                    <th>{t('test.ui.col_tester')}</th>
+                                    <th>{t('test.ui.col_note')}</th>
+                                    <th />
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {results.map(r => (
+                                    <tr key={r.id} className={cx(r.hidden && 'is-hidden')}>
+                                        <td className="testing-nowrap">{formatDateTime(r.testedAt)}</td>
+                                        <td>
+                                            {r.unplayed ? (
+                                                <StatusBadge status="checked" />
+                                            ) : (
+                                                <StatusBadge status={r.result} />
+                                            )}
+                                            {r.hidden ? (
+                                                <Badge size="sm" tone="grey">
+                                                    {t('test.ui.removed')}
+                                                </Badge>
+                                            ) : null}
+                                        </td>
+                                        <td>
+                                            <TierBadge tier={r.tier} size="sm" />
+                                        </td>
+                                        <td>{r.testedByName}</td>
+                                        <td className="testing-note">{r.note || '—'}</td>
+                                        <td>
+                                            <Button
+                                                size="sm"
+                                                variant="ghost"
+                                                icon={r.hidden ? 'eye' : 'minusCircle'}
+                                                disabled={busy}
+                                                onClick={() => setHide({ id: r.id, hidden: !r.hidden })}
+                                            >
+                                                {t(r.hidden ? 'test.ui.show_again' : 'test.ui.remove_result')}
+                                            </Button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+            </Dialog>
+            <ConfirmDialog
+                open={!!hide}
+                title={t(hide?.hidden ? 'test.ui.remove_result' : 'test.ui.show_again')}
+                message={t(hide?.hidden ? 'test.ui.remove_text' : 'test.ui.show_text')}
+                confirmLabel={t(hide?.hidden ? 'test.ui.remove_result' : 'test.ui.show_again')}
+                reason={{ required: true }}
+                onConfirm={doHide}
+                onCancel={() => setHide(null)}
+                busy={busy}
+            />
+        </>
+    );
+}
+
 export default function AdminTesting() {
+    const [markOf, setMarkOf] = useState<{ m: TestMissionRow; loc: TestLocationRow } | null>(null);
+    const [resultsOf, setResultsOf] = useState<{ m: TestMissionRow; loc: TestLocationRow } | null>(null);
+    const adminAct = useAdminAction();
     const [startOpen, setStartOpen] = useState(false);
     const [preset, setPreset] = useState<StartPreset | null>(null);
     const [recording, setRecording] = useState<TestPendingRecord | null>(null);
@@ -1372,6 +1528,25 @@ export default function AdminTesting() {
                             canStart={canStart}
                             onTest={openStart}
                             onRecord={setRecording}
+                            tools={{
+                                busy: adminAct.busy,
+                                onMark: (m, loc) => setMarkOf({ m, loc }),
+                                onResults: (m, loc) => setResultsOf({ m, loc }),
+                                onSwitch: (m, on) =>
+                                    void adminAct
+                                        .run(
+                                            'server:admin:setMissionEnabled',
+                                            { missionId: m.id, enabled: on },
+                                            {
+                                                success: on
+                                                    ? 'settings.mission.turned_on'
+                                                    : 'settings.mission.turned_off',
+                                                successVars: { mission: m.label },
+                                                requestId: false,
+                                            },
+                                        )
+                                        .then(res => res.ok && void catalog.refetch()),
+                            }}
                         />
                     )}
                 </>
@@ -1398,6 +1573,30 @@ export default function AdminTesting() {
                     setRecording(null);
                     refreshAll();
                 }}
+            />
+            <ConfirmDialog
+                open={!!markOf}
+                title={markOf ? t('test.ui.mark_title', { mission: markOf.m.label, n: markOf.loc.index }) : ''}
+                message={t('test.ui.mark_text')}
+                confirmLabel={t('test.ui.mark_checked')}
+                reason={{ required: true }}
+                onConfirm={async reason => {
+                    if (!markOf) return;
+                    const res = await adminAct.run(
+                        'server:admin:markLocationChecked',
+                        { missionId: markOf.m.id, locationIndex: markOf.loc.index, reason },
+                        { success: 'test.ui.marked' },
+                    );
+                    setMarkOf(null);
+                    if (res.ok) void catalog.refetch();
+                }}
+                onCancel={() => setMarkOf(null)}
+                busy={adminAct.busy}
+            />
+            <ResultsDialog
+                target={resultsOf}
+                onClose={() => setResultsOf(null)}
+                onChanged={() => void catalog.refetch()}
             />
         </Screen>
     );

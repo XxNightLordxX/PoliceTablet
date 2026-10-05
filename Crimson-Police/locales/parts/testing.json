@@ -263,5 +263,8 @@
   "test.control.skip_short": "Skip",
   "test.control.restart_short": "Restart",
   "test.control.pause_short": "Pause",
-  "test.control.resume_short": "Resume"
+  "test.control.resume_short": "Resume",
+  "err.invalid_location": "That mission location is not valid.",
+  "err.maintenance": "Crimson-Police is locked for maintenance until the server owner restarts it.",
+  "err.test_unknown_result": "That test result does not exist."
 }

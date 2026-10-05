@@ -1,6 +1,7 @@
 // Mission Builder protocol shapes (docs/notes/builder_protocol.md).
 
 import type { TierName } from '../shared/types';
+import type { OverrideView } from './admin_missions';
 
 // ============================================================================
 //                         VECTORS AND LOCATION VALUES
@@ -162,6 +163,9 @@ export interface BuilderListEntry {
     // tier the publishing test needs (CP.Scaling.tierFor(maxOfficers))
     requiredTier: TierName | string | null;
     can: BuilderCan;
+    // an edited built-in mission (an override under the built-in's id; admins only)
+    overridesBuiltin?: boolean;
+    override?: OverrideView;
 }
 
 export interface BuilderBuiltinEntry {
@@ -170,11 +174,16 @@ export interface BuilderBuiltinEntry {
     type: string;
     source: 'builtin';
     readOnly: true;
+    // admins while AdminControl.editBuiltins is on: Edit in Builder
+    canEdit?: boolean;
+    override?: OverrideView;
 }
 
 export interface BuilderList {
     missions: BuilderListEntry[];
     builtins: BuilderBuiltinEntry[];
+    // this admin may edit built-in missions (AdminControl.editBuiltins)
+    editBuiltins?: boolean;
     me: string | null;
     serverTime: number;
 }
@@ -195,6 +204,12 @@ export interface BuilderRecord extends Omit<BuilderListEntry, 'source' | 'owner'
     backups: number[];
     publishedAt: number | null;
     publishedBy: string | null;
+    // a draft a hand edit of the file overwrote is kept (<id>.draft.lua.bak): Load saved draft
+    draftBackup?: boolean;
+    // an edited built-in, or a built-in for an admin: the definition that plays now and the MissionTweaks on top
+    live?: BuilderDefinition | null;
+    tweaks?: Record<string, unknown> | null;
+    canEditBuiltin?: boolean;
 }
 
 // ============================================================================

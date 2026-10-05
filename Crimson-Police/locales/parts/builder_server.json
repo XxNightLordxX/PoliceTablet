@@ -103,5 +103,22 @@
   "builder.error.unknown_block": "Objective {n} uses a block that does not exist.",
   "builder.error.vehicle_penalties": "Vehicle-damage penalties must be on or off.",
   "builder.block.field_contact": "Field contact",
-  "builder.block.process_scene": "Process the scene"
+  "builder.block.process_scene": "Process the scene",
+  "builder.error.override_type": "An edited built-in mission keeps the type of the built-in mission.",
+  "err.builder_has_draft": "This mission has an unpublished draft. Publish or discard it first.",
+  "err.builder_id_taken": "Another mission already uses this id.",
+  "err.builder_unknown_owner": "There is no officer with that citizen ID in Crimson-Police.",
+  "err.edit_builtins_off": "Editing built-in missions is switched off (Settings → AdminControl → editBuiltins).",
+  "err.export_builtin": "A built-in mission ships with every copy of Crimson-Police. Only an edited built-in (its override) can be copied.",
+  "err.import_parse": "That text is not a mission file the loader can read.",
+  "err.import_too_large": "That text is too long (256 KB at most).",
+  "err.mission_in_use": "A run, a test run or the Cross-Department Mission is using this mission now. Try again when it has ended.",
+  "err.module_unavailable": "That feature is not available on this server right now.",
+  "err.override_delete": "An edited built-in mission is not deleted: use Reset to original.",
+  "err.override_no_tweaks": "This mission has no Quick edit values to fold in.",
+  "err.override_none": "This built-in mission has not been edited.",
+  "err.override_owner": "An edited built-in mission belongs to the server, not to an officer.",
+  "err.preview_missing": "Open the preview first.",
+  "err.setting_tweak": "The mission loader refuses this tweak.",
+  "err.state_changed": "Someone (or an automatic job) changed this first. Nothing was done: look again."
 }

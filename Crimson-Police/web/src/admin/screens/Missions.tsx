@@ -30,6 +30,24 @@ import { toast } from '../../shared/toast';
 import OperationPanel from '../../supervisor/components/OperationPanel';
 import MissionCallsPanel, { LocationPlays } from '../../supervisor/components/MissionCallsPanel';
 import { BuilderWorkspace, LockBadge, StatusBadge, editorMemory, setEditorMemory } from '../../builder';
+import {
+    ChangeOwnerDialog,
+    CompareDialog,
+    CopyLuaDialog,
+    DeletedMissions,
+    DispatchHistory,
+    ImportDialog,
+    LoadResultBanner,
+    LoadSummaryBody,
+    MissionStats,
+    OperationHistory,
+    OverrideBadges,
+    QuickEditDialog,
+    SwitchRemapCard,
+    VersionsDialog,
+} from '../../builder/admin';
+import { useAdminAction } from '../components/kit';
+import type { MissionLoadSummary, OverrideView } from '../../types/admin_missions';
 import type {
     BuilderCreateResult,
     BuilderList,
@@ -42,8 +60,9 @@ import { MissionsToday } from '../components/MissionsToday';
 import type { AdminMissionsData } from '../../types/builder_client';
 import type { MissionSwitchView } from '../../types/settings';
 import './Settings.css';
+import './Missions.css';
 
-type Tab = 'catalog' | 'builder' | 'operation' | 'dispatch';
+type Tab = 'catalog' | 'builder' | 'operation' | 'dispatch' | 'history' | 'stats' | 'deleted';
 type SourceFilter = 'all' | 'builtin' | 'custom';
 
 interface CatalogRow {
@@ -64,16 +83,17 @@ interface CatalogRow {
     switch: MissionSwitchView | null;
     entry: BuilderListEntry | null;
     mission: MissionListEntry | null;
+    // a built-in for an admin: its override view (Edited, Original changed) and Edit in Builder
+    override: OverrideView | null;
+    canEditBuiltin: boolean;
 }
 
-interface ReloadSummary {
-    loaded: number;
-    builtin: number;
-    custom: number;
-    warnings: number;
-    failed: { id: string; file?: string; error: string }[];
-    error?: string;
-}
+type ReloadSummary = MissionLoadSummary;
+
+// The admin-only confirmations (reason, and the mission id typed where the server asks for it).
+type AdminConfirm = { kind: 'reset' | 'delete' | 'fold' | 'launchAnyway'; row: CatalogRow } | null;
+
+type Open = { kind: 'quick' | 'compare' | 'versions' | 'copy' | 'owner'; row: CatalogRow } | null;
 
 type Confirm =
     | { kind: 'publish' | 'archive' | 'restore' | 'rollback' | 'breakLock'; row: CatalogRow }
@@ -88,8 +108,8 @@ export default function AdminMissions() {
     );
     const setTab = (next: Tab) => {
         setTabState(next);
-        // the builder remembers its own three tabs; the Dispatch tab is not one of them
-        if (next !== 'dispatch') setEditorMemory('admin', { tab: next });
+        // the builder remembers its own three tabs; the Dispatch and admin-only tabs are not among them
+        if (next === 'catalog' || next === 'builder' || next === 'operation') setEditorMemory('admin', { tab: next });
     };
     const missions = useRequest<AdminMissionsData>('admin:getMissions', {}, { pushTopic: 'operation', pollMs: 30000 });
     const builder = useRequest<BuilderList>('builder:list', {}, { pushTopic: 'builder', pollMs: 30000 });
@@ -105,9 +125,14 @@ export default function AdminMissions() {
     const [confirm, setConfirm] = useState<Confirm>(null);
     const [summary, setSummary] = useState<ReloadSummary | null>(null);
     const [locationsOf, setLocationsOf] = useState<string | null>(null);
+    const [adminConfirm, setAdminConfirm] = useState<AdminConfirm>(null);
+    const [openDialog, setOpenDialog] = useState<Open>(null);
+    const [importOpen, setImportOpen] = useState(false);
+    const admin = useAdminAction();
 
     const rows = useMemo<CatalogRow[]>(() => {
         const entries = new Map(asArray(builder.data?.missions).map(e => [e.id, e]));
+        const builtins = new Map(asArray(builder.data?.builtins).map(b => [b.id, b]));
         const out: CatalogRow[] = asArray(missions.data?.missions).map(m => {
             const entry = entries.get(m.id) ?? null;
             entries.delete(m.id);
@@ -129,6 +154,8 @@ export default function AdminMissions() {
                 switch: m.switch ? { ...m.switch, locations: asArray(m.switch.locations) } : null,
                 entry,
                 mission: m,
+                override: builtin ? (builtins.get(m.id)?.override ?? entry?.override ?? null) : null,
+                canEditBuiltin: builtin && !!builtins.get(m.id)?.canEdit,
             };
         });
         entries.forEach(e => {
@@ -149,6 +176,8 @@ export default function AdminMissions() {
                 switch: null,
                 entry: e,
                 mission: null,
+                override: e.override ?? null,
+                canEditBuiltin: false,
             });
         });
         return out;
@@ -179,6 +208,7 @@ export default function AdminMissions() {
     );
 
     const canLaunch = !!missions.data?.canLaunch && can('launchCrossDept');
+    const canMissionAdmin = can('missionAdmin');
     const eligible = rows.filter(r => r.eligible);
 
     const openInBuilder = (id: string, step: 'details' | 'blocks' | 'publish' = 'details') => {
@@ -198,7 +228,19 @@ export default function AdminMissions() {
             const res = await run<ReloadSummary>('server:admin:reloadMissions', null);
             setConfirm(null);
             if (res.ok && res.data) {
-                setSummary({ ...res.data, failed: asArray(res.data.failed) });
+                setSummary({
+                    ...res.data,
+                    failed: asArray(res.data.failed),
+                    overrideFailed: asArray(res.data.overrideFailed),
+                    warningTexts: asArray(res.data.warningTexts),
+                    builder: res.data.builder
+                        ? {
+                              ...res.data.builder,
+                              edited: asArray(res.data.builder.edited),
+                              rejected: asArray(res.data.builder.rejected),
+                          }
+                        : null,
+                });
                 refetchAll();
             }
             return;
@@ -209,10 +251,13 @@ export default function AdminMissions() {
             const res = await run(
                 'server:admin:opLaunch',
                 { missionId: row.id },
-                { success: 'admin.missions.launched', successVars: vars },
+                { success: 'admin.missions.launched', successVars: vars, silent: true },
             );
             setConfirm(null);
             if (res.ok) setTab('operation');
+            // admins may launch during the server-wide cooldown, with a reason
+            else if (res.error === 'err.op_cooldown') setAdminConfirm({ kind: 'launchAnyway', row });
+            else toast('error', t(res.error ?? 'err.internal'));
             return;
         }
         let res;
@@ -276,6 +321,51 @@ export default function AdminMissions() {
         if (res.ok && res.data) openInBuilder(res.data.id);
     };
 
+    // Edit in Builder: the built-in's override (made from the shipped file the first time)
+    const editBuiltin = async (row: CatalogRow) => {
+        const res = await admin.run('server:builder:editBuiltin', { id: row.id });
+        if (res.ok) {
+            refetchAll();
+            openInBuilder(row.id);
+        }
+    };
+
+    const doAdminConfirm = async (reason: string, typed: string) => {
+        const c = adminConfirm;
+        if (!c) return;
+        const row = c.row;
+        const vars = { mission: row.label };
+        let res;
+        if (c.kind === 'reset')
+            res = await admin.run(
+                'server:builder:resetBuiltin',
+                { id: row.id, reason, confirm: typed },
+                { success: 'admin.missions.ovr.reset_done', successVars: vars },
+            );
+        else if (c.kind === 'delete')
+            res = await admin.run(
+                'server:builder:deleteMission',
+                { id: row.id, reason, confirm: typed },
+                { success: 'admin.missions.delete.done', successVars: vars },
+            );
+        else if (c.kind === 'fold')
+            res = await admin.run(
+                'server:builder:foldTweaks',
+                { id: row.id, reason },
+                { success: 'admin.missions.ovr.folded', successVars: vars },
+            );
+        else {
+            res = await admin.run(
+                'server:admin:opLaunch',
+                { missionId: row.id, skipCooldown: true, reason },
+                { success: 'admin.missions.launched', successVars: vars },
+            );
+            if (res.ok) setTab('operation');
+        }
+        setAdminConfirm(null);
+        if (res.ok) refetchAll();
+    };
+
     const columns: TableColumn<CatalogRow>[] = [
         {
             key: 'label',
@@ -304,9 +394,12 @@ export default function AdminMissions() {
             render: r => (
                 <div className="builder_client-status-cell">
                     {r.source === 'builtin' ? (
-                        <Badge size="sm" tone="grey" variant="outline" icon="lock">
-                            {t('admin.missions.builtin')}
-                        </Badge>
+                        <>
+                            <Badge size="sm" tone="grey" variant="outline" icon="lock">
+                                {t('admin.missions.builtin')}
+                            </Badge>
+                            <OverrideBadges override={r.override} />
+                        </>
                     ) : (
                         <Badge size="sm" tone="primary" icon="tool">
                             {t('admin.missions.custom')}
@@ -404,13 +497,78 @@ export default function AdminMissions() {
                         ) : null}
                         {r.source === 'builtin' ? (
                             <>
-                                <IconButton
-                                    icon="eye"
-                                    size="sm"
-                                    variant="ghost"
-                                    label={t('admin.missions.view')}
-                                    onClick={() => openInBuilder(r.id)}
-                                />
+                                {r.override?.changed ? (
+                                    <IconButton
+                                        icon="alert"
+                                        size="sm"
+                                        variant="ghost"
+                                        label={t('admin.missions.ovr.compare')}
+                                        onClick={() => setOpenDialog({ kind: 'compare', row: r })}
+                                    />
+                                ) : null}
+                                {r.override?.overridden || r.override?.hasDraft ? (
+                                    <>
+                                        <IconButton
+                                            icon="layers"
+                                            size="sm"
+                                            variant="ghost"
+                                            label={t('admin.missions.versions.open')}
+                                            onClick={() => setOpenDialog({ kind: 'versions', row: r })}
+                                        />
+                                        {r.override?.overridden ? (
+                                            <IconButton
+                                                icon="fileText"
+                                                size="sm"
+                                                variant="ghost"
+                                                label={t('admin.missions.copy.open')}
+                                                onClick={() => setOpenDialog({ kind: 'copy', row: r })}
+                                            />
+                                        ) : null}
+                                        {r.override?.overridden && r.override.tweaks ? (
+                                            <IconButton
+                                                icon="download"
+                                                size="sm"
+                                                variant="ghost"
+                                                label={t('admin.missions.ovr.fold')}
+                                                onClick={() => setAdminConfirm({ kind: 'fold', row: r })}
+                                            />
+                                        ) : null}
+                                        <IconButton
+                                            icon="undo"
+                                            size="sm"
+                                            variant="ghost"
+                                            label={t('admin.missions.ovr.reset')}
+                                            onClick={() => setAdminConfirm({ kind: 'reset', row: r })}
+                                        />
+                                    </>
+                                ) : null}
+                                {r.switch ? (
+                                    <IconButton
+                                        icon="sliders"
+                                        size="sm"
+                                        variant="ghost"
+                                        label={t('admin.missions.quick.open')}
+                                        onClick={() => setOpenDialog({ kind: 'quick', row: r })}
+                                    />
+                                ) : null}
+                                {r.canEditBuiltin ? (
+                                    <Button
+                                        size="sm"
+                                        icon="edit"
+                                        disabled={admin.busy}
+                                        onClick={() => void editBuiltin(r)}
+                                    >
+                                        {t('admin.missions.ovr.edit')}
+                                    </Button>
+                                ) : (
+                                    <IconButton
+                                        icon="eye"
+                                        size="sm"
+                                        variant="ghost"
+                                        label={t('admin.missions.view')}
+                                        onClick={() => openInBuilder(r.id)}
+                                    />
+                                )}
                                 <Button
                                     size="sm"
                                     variant="secondary"
@@ -431,6 +589,42 @@ export default function AdminMissions() {
                                         label={t('builder.list.rollback')}
                                         onClick={() => setConfirm({ kind: 'rollback', row: r })}
                                     />
+                                ) : null}
+                                {canMissionAdmin ? (
+                                    <>
+                                        <IconButton
+                                            icon="layers"
+                                            size="sm"
+                                            variant="ghost"
+                                            label={t('admin.missions.versions.open')}
+                                            onClick={() => setOpenDialog({ kind: 'versions', row: r })}
+                                        />
+                                        {e.version ? (
+                                            <IconButton
+                                                icon="fileText"
+                                                size="sm"
+                                                variant="ghost"
+                                                label={t('admin.missions.copy.open')}
+                                                onClick={() => setOpenDialog({ kind: 'copy', row: r })}
+                                            />
+                                        ) : null}
+                                        <IconButton
+                                            icon="user"
+                                            size="sm"
+                                            variant="ghost"
+                                            label={t('admin.missions.owner.open')}
+                                            onClick={() => setOpenDialog({ kind: 'owner', row: r })}
+                                        />
+                                        {e.dbStatus === 'archived' ? (
+                                            <IconButton
+                                                icon="trash"
+                                                size="sm"
+                                                variant="ghost"
+                                                label={t('admin.missions.delete.open')}
+                                                onClick={() => setAdminConfirm({ kind: 'delete', row: r })}
+                                            />
+                                        ) : null}
+                                    </>
                                 ) : null}
                                 {e.can.breakLock ? (
                                     <IconButton
@@ -502,6 +696,11 @@ export default function AdminMissions() {
                             {t('admin.missions.reload')}
                         </Button>
                     ) : null}
+                    {canMissionAdmin ? (
+                        <Button variant="secondary" icon="download" onClick={() => setImportOpen(true)}>
+                            {t('admin.missions.import.open')}
+                        </Button>
+                    ) : null}
                     {can('builderEdit') ? (
                         <Button
                             variant="primary"
@@ -535,9 +734,24 @@ export default function AdminMissions() {
                     },
                     { key: 'operation', label: t('admin.missions.tab.operation'), icon: 'globe' },
                     { key: 'dispatch', label: t('mc.admin.tab'), icon: 'radio' },
+                    { key: 'history', label: t('admin.missions.tab.history'), icon: 'clock' },
+                    { key: 'stats', label: t('admin.missions.tab.stats'), icon: 'barChart' },
+                    ...(canMissionAdmin
+                        ? [{ key: 'deleted' as Tab, label: t('admin.missions.tab.deleted'), icon: 'trash' as const }]
+                        : []),
                 ]}
             />
             {tab === 'catalog' ? <MissionsToday /> : null}
+            {tab === 'catalog' ? <LoadResultBanner /> : null}
+            {tab === 'catalog' ? <SwitchRemapCard onChanged={() => void missions.refetch()} /> : null}
+            {tab === 'history' ? (
+                <div className="admin-missions-stack">
+                    <OperationHistory />
+                    <DispatchHistory />
+                </div>
+            ) : null}
+            {tab === 'stats' ? <MissionStats /> : null}
+            {tab === 'deleted' ? <DeletedMissions onChanged={refetchAll} /> : null}
             {tab === 'catalog' ? (
                 error ? (
                     <ErrorState error={error} onRetry={refetchAll} />
@@ -694,51 +908,73 @@ export default function AdminMissions() {
                 size="md"
                 footer={<Button onClick={() => setSummary(null)}>{t('common.close')}</Button>}
             >
-                {summary ? (
-                    <div className="builder_client-form">
-                        <Grid cols={4} gap={3}>
-                            <Stat
-                                label={t('admin.missions.sum.loaded')}
-                                value={summary.loaded}
-                                tone="success"
-                                size="sm"
-                            />
-                            <Stat label={t('admin.missions.sum.builtin')} value={summary.builtin} size="sm" />
-                            <Stat label={t('admin.missions.sum.custom')} value={summary.custom} size="sm" />
-                            <Stat
-                                label={t('admin.missions.sum.warnings')}
-                                value={summary.warnings}
-                                tone={summary.warnings ? 'warning' : 'neutral'}
-                                size="sm"
-                            />
-                        </Grid>
-                        {summary.error ? (
-                            <div className="builder_client-callout builder_client-callout--warning">
-                                <Icon name="alert" size={15} />
-                                <span>{summary.error}</span>
-                            </div>
-                        ) : null}
-                        {summary.failed.length ? (
-                            <ul className="builder_client-errors">
-                                {summary.failed.map(f => (
-                                    <li key={f.id}>
-                                        <Icon name="xCircle" size={13} />
-                                        <span>
-                                            <b>{f.id}</b>
-                                            {f.file ? ` (${f.file})` : ''}: {f.error}
-                                        </span>
-                                    </li>
-                                ))}
-                            </ul>
-                        ) : (
-                            <div className="builder_client-inline-note is-ok">
-                                <Icon name="checkCircle" size={15} />
-                                <span>{t('admin.missions.reload_clean')}</span>
-                            </div>
-                        )}
-                    </div>
-                ) : null}
+                {summary ? <LoadSummaryBody summary={summary} /> : null}
             </Dialog>
+            <ConfirmDialog
+                open={!!adminConfirm}
+                title={
+                    adminConfirm
+                        ? t(`admin.missions.confirm_${adminConfirm.kind}.title`, { mission: adminConfirm.row.label })
+                        : ''
+                }
+                message={
+                    adminConfirm
+                        ? t(`admin.missions.confirm_${adminConfirm.kind}.message`, { id: adminConfirm.row.id })
+                        : ''
+                }
+                confirmLabel={adminConfirm ? t(`admin.missions.confirm_${adminConfirm.kind}.button`) : ''}
+                tone={
+                    adminConfirm && (adminConfirm.kind === 'reset' || adminConfirm.kind === 'delete')
+                        ? 'danger'
+                        : 'primary'
+                }
+                reason={{ required: true }}
+                typedWord={
+                    adminConfirm && (adminConfirm.kind === 'reset' || adminConfirm.kind === 'delete')
+                        ? adminConfirm.row.id
+                        : undefined
+                }
+                onConfirm={doAdminConfirm}
+                onCancel={() => setAdminConfirm(null)}
+                busy={admin.busy}
+            />
+            <QuickEditDialog
+                missionId={openDialog?.kind === 'quick' ? openDialog.row.id : null}
+                label={openDialog?.row.label ?? ''}
+                onClose={() => setOpenDialog(null)}
+                onSaved={refetchAll}
+            />
+            <CompareDialog
+                id={openDialog?.kind === 'compare' ? openDialog.row.id : null}
+                label={openDialog?.row.label ?? ''}
+                onClose={() => setOpenDialog(null)}
+                onDone={refetchAll}
+            />
+            <VersionsDialog
+                id={openDialog?.kind === 'versions' ? openDialog.row.id : null}
+                label={openDialog?.row.label ?? ''}
+                onClose={() => setOpenDialog(null)}
+                onDone={refetchAll}
+            />
+            <CopyLuaDialog
+                id={openDialog?.kind === 'copy' ? openDialog.row.id : null}
+                label={openDialog?.row.label ?? ''}
+                onClose={() => setOpenDialog(null)}
+            />
+            <ChangeOwnerDialog
+                id={openDialog?.kind === 'owner' ? openDialog.row.id : null}
+                label={openDialog?.row.label ?? ''}
+                onClose={() => setOpenDialog(null)}
+                onDone={refetchAll}
+            />
+            <ImportDialog
+                open={importOpen}
+                onClose={() => setImportOpen(false)}
+                onImported={id => {
+                    refetchAll();
+                    openInBuilder(id);
+                }}
+            />
             <LocationsDialog
                 row={switchRow}
                 busy={busy}

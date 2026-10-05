@@ -23,6 +23,7 @@ import { fmtDateTime, formatDuration } from '../../shared/format';
 import { useAction, useRequest } from '../../shared/hooks';
 import { t } from '../../shared/i18n';
 import { useSession } from '../../shared/session';
+import { toast } from '../../shared/toast';
 import type { AreaCoverage, LocationPlay, MissionCall, PageableUnit, SupCallsView } from '../../types/missioncalls';
 import './MissionCallsPanel.css';
 
@@ -147,6 +148,8 @@ export default function MissionCallsPanel({ scope }: { scope: 'sup' | 'admin' })
     const [withdrawing, setWithdrawing] = useState<MissionCall | null>(null);
     const [staff, setStaff] = useState<Staff>(null);
     const [stamp, setStamp] = useState(0);
+    // Post anyway: an admin posting during the wait between staff calls (with a reason; supervisors still wait)
+    const [early, setEarly] = useState<{ type: string; area: string | null } | null>(null);
     const open = asArray(data?.open as MissionCall[] | undefined);
     const today = asArray(data?.today as TodayRow[] | undefined);
     const units = asArray(data?.units as PageableUnit[] | undefined);
@@ -171,7 +174,25 @@ export default function MissionCallsPanel({ scope }: { scope: 'sup' | 'admin' })
         const page = staff?.kind === 'page';
         const res = await run(page ? `server:${scope}:mcPage` : `server:${scope}:mcCreate`, payload, {
             success: page ? 'mc.staff.paged' : 'mc.staff.created',
+            silent: !page && scope === 'admin',
         });
+        if (res.ok) {
+            setStaff(null);
+            void reload();
+        } else if (!page && scope === 'admin') {
+            if (res.error === 'err.mc_staff_cooldown') setEarly({ type: payload.type, area: payload.area });
+            else toast('error', t(res.error ?? 'err.internal'));
+        }
+    };
+
+    const postEarly = async (reason: string) => {
+        if (!early) return;
+        const res = await run(
+            'server:admin:mcCreate',
+            { ...early, skipWait: true, reason },
+            { success: 'mc.staff.created' },
+        );
+        setEarly(null);
         if (res.ok) {
             setStaff(null);
             void reload();
@@ -290,6 +311,16 @@ export default function MissionCallsPanel({ scope }: { scope: 'sup' | 'admin' })
             {staff ? (
                 <StaffDialog staff={staff} units={units} busy={busy} onClose={() => setStaff(null)} onSubmit={submit} />
             ) : null}
+            <ConfirmDialog
+                open={!!early}
+                title={t('mc.staff.early_title')}
+                message={t('mc.staff.early_text')}
+                confirmLabel={t('mc.staff.early_button')}
+                reason={{ required: true, label: t('common.reason'), maxLength: 255 }}
+                onConfirm={postEarly}
+                onCancel={() => setEarly(null)}
+                busy={busy}
+            />
         </Card>
     );
 }

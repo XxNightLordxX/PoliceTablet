@@ -32,7 +32,61 @@ local WRAP = 100
 local BOSS_ID = 'weekly_boss_kingpin'
 local HEADER_FIRST = '--[[ Crimson-Police · custom mission (written by the Mission Builder)'
 
-local LOADER_FIELDS = { 'source', 'version', 'filePath', 'defHash', 'editedInCode', 'isBoss', 'status', '_file' }
+local LOADER_FIELDS = {
+    'source',
+    'version',
+    'filePath',
+    'defHash',
+    'editedInCode',
+    'isBoss',
+    'status',
+    '_file',
+    '_carry',
+    'overridden',
+    'baseHash',
+    'shippedHash',
+    'overrideVersion',
+    'tweaked',
+}
+-- Built-in overrides. TOP: the top-level fields of a mission file the Builder edits (an override carries every other
+-- one unchanged); CARRY_TOP: other top-level fields the loader understands, written back into an override file;
+-- BONUS_FIELDS: block fields that hold a bonus of the file itself (a custom mission may not set them; an override
+-- keeps the shipped value, or a smaller one, and meets the custom rules only where it raises one).
+local OVR = {
+    BUILTIN_DIR = 'missions/builtin/',
+    DELETED_INDEX = 'index.json',
+    HEADER = '--[[ Crimson-Police · edited built-in mission (written by the Mission Builder)',
+}
+OVR.TOP = {
+    id = true,
+    label = true,
+    description = true,
+    type = true,
+    departments = true,
+    minOfficers = true,
+    maxOfficers = true,
+    difficulty = true,
+    timeLimit = true,
+    vehiclePenalties = true,
+    startTimeout = true,
+    cooldown = true,
+    locations = true,
+    objectives = true,
+    scaling = true,
+    items = true,
+    bonuses = true,
+    penalties = true,
+}
+OVR.CARRY_TOP = { quietPatrol = true, decisions = true }
+OVR.BONUS_FIELDS = {
+    flee_arrest = { 'aliveBonus' },
+    hostile_waves = { 'boss.aliveBonus' },
+    pursuit = { 'detainBonus', 'allDetainedBonus', 'ramPenaltyId', 'fastStop' },
+    interact_points = { 'fastBonus' },
+    field_contact = { 'allCorrect', 'aliveBonus' },
+    process_scene = { 'aliveBonus' },
+    skill_check = { 'onFail.setback.penalty' },
+}
 local PAYOUT_NAMES = {
     cash = true,
     cashbase = true,
@@ -389,10 +443,18 @@ local function ExportDir()
     if p:sub(-1) ~= '/' then p = p .. '/' end
     return p
 end
-local function FilePathFor(id) return ExportDir() .. id .. '.lua' end
-local function ArchivedPathFor(id) return ExportDir() .. 'archived/' .. id .. '.lua' end
-local function BackupPathFor(id, v) return ('%s%s.v%d.lua.bak'):format(ExportDir(), id, v) end
-local function DraftBackupPathFor(id) return ExportDir() .. id .. '.draft.lua.bak' end
+-- An override of a built-in mission lives in <export>/overrides/ (never in missions/builtin/, so an update of the
+-- resource never touches it); ov = true picks that folder.
+local function OverrideDir() return ExportDir() .. 'overrides/' end
+local function DeletedDir() return ExportDir() .. 'deleted/' end
+local function FilePathFor(id, ov) return (ov and OverrideDir() or ExportDir()) .. id .. '.lua' end
+local function ArchivedPathFor(id, ov) return (ov and OverrideDir() or ExportDir()) .. 'archived/' .. id .. '.lua' end
+local function BackupPathFor(id, v, ov)
+    return ('%s%s.v%d.lua.bak'):format(ov and OverrideDir() or ExportDir(), id, v)
+end
+local function DraftBackupPathFor(id, ov) return (ov and OverrideDir() or ExportDir()) .. id .. '.draft.lua.bak' end
+-- The shipped file as it was when the override was made (or kept): what "the original changed" compares with.
+local function BasePathFor(id) return OverrideDir() .. id .. '.base.lua' end
 
 local function IsNum(v) return type(v) == 'number' and v == v and v ~= math.huge and v ~= -math.huge end
 local function IsInt(v) return IsNum(v) and math.floor(v) == v end
@@ -578,7 +640,7 @@ end
 -- ============================================================================
 
 local ROW_COLUMNS = [[id, mission_type, status, published_version, published_definition, draft_version,
-    draft_definition, draft_tested, file_path, edited_in_code, locked_by,
+    draft_definition, draft_tested, file_path, edited_in_code, locked_by, overrides_builtin, base_hash,
     UNIX_TIMESTAMP(locked_until) AS locked_until_ts,
     TIMESTAMPDIFF(SECOND, NOW(), locked_until) AS lock_left, created_by, updated_by,
     UNIX_TIMESTAMP(updated_at) AS updated_at_ts]]
@@ -605,6 +667,8 @@ local function RowOf(r)
         createdBy = tostring(r.created_by or ''),
         updatedBy = tostring(r.updated_by or ''),
         updatedAt = tonumber(r.updated_at_ts) or 0,
+        overridesBuiltin = U.truthy(r.overrides_builtin),
+        baseHash = (r.base_hash ~= nil and r.base_hash ~= '') and tostring(r.base_hash) or nil,
     }
 end
 
@@ -721,7 +785,10 @@ end
 local function EnsureExportDirs()
     local a = EnsureDir(ExportDir())
     local b = EnsureDir(ExportDir() .. 'archived/')
-    return a and b
+    local c = EnsureDir(OverrideDir())
+    local d = EnsureDir(OverrideDir() .. 'archived/')
+    local e = EnsureDir(DeletedDir())
+    return a and b and c and d and e
 end
 B.ensureExportDirs = EnsureExportDirs
 
@@ -844,8 +911,9 @@ local function BonusesToFile(list)
         if type(e) == 'table' and type(e.id) == 'string' then
             local c = BonusCfg(e.id)
             local entry = { id = e.id }
-            if c and c.kind == 'pct' then
-                local pct = IsNum(e.pct) and e.pct or (IsNum(c.value) and c.value * 100 or 0)
+            -- a mission card's own id (not in Config.Bonuses) keeps the kind it was written with
+            if (c and c.kind == 'pct') or (not c and IsNum(e.pct) and not IsNum(e.points)) then
+                local pct = IsNum(e.pct) and e.pct or (IsNum(c and c.value) and c.value * 100 or 0)
                 entry.pctOfPoints = pct / 100
             else
                 entry.points = IsNum(e.points) and e.points or (c and c.value) or 0
@@ -1257,9 +1325,213 @@ local function SearchCircle(rtObjectives)
     end
     return nil
 end
+
+-- ============================================================================
+--                 THE BASELINE OF AN OVERRIDE (S30, BY VALUE)
+-- ============================================================================
+-- An edited built-in is checked with the custom-mission rules, with the shipped file as a baseline: a model, weapon,
+-- vehicle or animation the shipped file uses is allowed; a value that stays at the shipped value (or a bonus that
+-- goes down) is accepted; anything new or raised follows the custom rules and caps. No-build zones, the map edge,
+-- the item rules and payout fields are never waived.
+
+local ExtendedAllowed, BaselinePlan, WithAllowed, WaiveBaseline
+do
+    -- deep equality, numbers by value
+    local function SameValue(a, b)
+        if type(a) == 'number' and type(b) == 'number' then return math.abs(a - b) < 1e-9 end
+        if IsVecTable(a) and IsVecTable(b) then
+            return math.abs(a.x - b.x) < 1e-6 and math.abs(a.y - b.y) < 1e-6 and math.abs(a.z - b.z) < 1e-6
+                and math.abs((a.w or 0) - (b.w or 0)) < 1e-6
+        end
+        if type(a) ~= type(b) then return false end
+        if type(a) ~= 'table' then return a == b end
+        for k, v in pairs(a) do if not SameValue(v, b[k]) then return false end end
+        for k in pairs(b) do if a[k] == nil then return false end end
+        return true
+    end
+
+    -- a is the same as b, or smaller where it is a number (same sign): a bonus that is not raised
+    local function Within(a, b)
+        if a == nil then return true end
+        if type(a) ~= type(b) then return false end
+        if type(a) == 'number' then return (a >= 0) == (b >= 0) and math.abs(a) <= math.abs(b) + 1e-9 end
+        if type(a) ~= 'table' then return a == b end
+        for k, v in pairs(a) do if not Within(v, b[k]) then return false end end
+        return true
+    end
+
+    -- Config.Builder.allowed with every name the shipped file uses added to each list.
+    function ExtendedAllowed(raw)
+        local names = {}
+        local function walk(v, depth)
+            if depth > MAX_DEPTH then return end
+            if type(v) == 'string' then
+                names[#names + 1] = v
+            elseif type(v) == 'table' then
+                for _, x in pairs(v) do walk(x, depth + 1) end
+            end
+        end
+        walk(U.serialize(raw), 1)
+        local out = {}
+        for k, list in pairs(CfgB().allowed or {}) do
+            local l = {}
+            for _, x in ipairs(type(list) == 'table' and list or {}) do l[#l + 1] = x end
+            for _, x in ipairs(names) do l[#l + 1] = x end
+            out[k] = l
+        end
+        return out
+    end
+
+    -- pcall(fn, ...) with Config.Builder.allowed swapped for ext (never left swapped: nothing here yields).
+    function WithAllowed(ext, fn, ...)
+        local cb = Config.Builder
+        if not ext or type(cb) ~= 'table' then return pcall(fn, ...) end
+        local saved = cb.allowed
+        cb.allowed = ext
+        local res = table.pack(pcall(fn, ...))
+        cb.allowed = saved
+        return table.unpack(res, 1, res.n)
+    end
+
+    local function BaselineObjective(base, i, blockId)
+        local list = type(base.objectives) == 'table' and base.objectives or {}
+        if type(list[i]) == 'table' and list[i].block == blockId then return list[i] end
+        for _, o in ipairs(list) do
+            if type(o) == 'table' and o.block == blockId then return o end
+        end
+        return nil
+    end
+
+    -- The runtime objective with its file-bonus fields set to what a custom mission would have, where they are not
+    -- raised from the baseline objective (so only a raised or new bonus meets the custom rules).
+    local function Neutralized(rtObj, obj, bo)
+        local fields = OVR.BONUS_FIELDS[obj.block]
+        if not fields or not bo then return rtObj end
+        local cleaned = B.customBonusFields({ objectives = { U.deepcopy(rtObj) } }).objectives[1] or {}
+        local probe = U.deepcopy(rtObj)
+        for _, f in ipairs(fields) do
+            if Within(U.getPath(obj, f), U.getPath(bo, f)) then
+                U.setPath(probe, f, U.deepcopy(U.getPath(cleaned, f)))
+            end
+        end
+        return probe
+    end
+
+    -- An objective of an override: trusted (left as the shipped file has it: checked as the built-in is), else the
+    -- probe to check with the custom rules (the shipped names allowed, unraised file bonuses as a custom mission has).
+    function BaselinePlan(base, obj, rtObj, i)
+        local bo = BaselineObjective(base, i, obj.block)
+        if bo ~= nil and SameValue(obj, bo) then return true, rtObj end
+        return false, Neutralized(rtObj, obj, bo)
+    end
+
+    local function BaselineArmed(base)
+        local rt = B.toRuntime(B.toFileUnits(base))
+        local armed = 0
+        for _, obj in ipairs(type(rt.objectives) == 'table' and rt.objectives or {}) do
+            local impl = type(obj) == 'table' and CP.Blocks.get(obj.block) or nil
+            if impl and type(impl.armedCount) == 'function' then
+                local ok, n = pcall(impl.armedCount, obj)
+                if ok and IsNum(n) then armed = armed + n end
+            end
+        end
+        return armed
+    end
+
+    -- A location value (by key) that the shipped file has in one of its locations.
+    local function ShippedLocationValue(base, key, v)
+        for _, loc in ipairs(type(base.locations) == 'table' and base.locations or {}) do
+            if type(loc) == 'table' and loc[key] ~= nil and SameValue(v, loc[key]) then return loc end
+        end
+        return nil
+    end
+
+    local function ShippedEntry(base, listKey, e)
+        if type(e) ~= 'table' then return false end
+        for _, b in ipairs(type(base[listKey]) == 'table' and base[listKey] or {}) do
+            if type(b) == 'table' and b.id == e.id and (b.pct == nil) == (e.pct == nil) and Within(e.points, b.points)
+                and Within(e.pct, b.pct) then
+                return true
+            end
+        end
+        return false
+    end
+
+    local NEVER_WAIVED = {
+        ['builder.error.payout_field'] = true,
+        ['builder.error.point_zone'] = true,
+        ['builder.error.point_coords'] = true,
+        ['builder.error.not_playable'] = true,
+        ['builder.error.start_missing'] = true,
+        ['builder.error.unknown_block'] = true,
+    }
+
+    -- The errors of an override that the baseline does not explain.
+    function WaiveBaseline(errors, def, base, info)
+        local out = {}
+        local baseArmed
+        for _, e in ipairs(errors) do
+            local p = tostring(e.path or '')
+            local keep = true
+            if not NEVER_WAIVED[e.key or ''] then
+                local oi, field = p:match('^objectives%.(%d+)%.([%w_]+)$')
+                local li, lkey = p:match('^locations%.(%d+)%.([%w_]+)')
+                local bl, bi = p:match('^(%a+)%.(%d+)')
+                if p == 'maxOfficers' then
+                    keep = not (def.minOfficers == base.minOfficers and def.maxOfficers == base.maxOfficers)
+                elseif p == 'difficulty' or p == 'timeLimit' or p == 'startTimeout' or p == 'cooldown' then
+                    keep = not SameValue(def[p], base[p])
+                elseif oi and (field == 'minSeconds' or field == 'presenceRange') then
+                    local o = type(def.objectives) == 'table' and def.objectives[tonumber(oi)] or nil
+                    local bo = o and BaselineObjective(base, tonumber(oi), o.block) or nil
+                    keep = not (bo and SameValue(o[field], bo[field]))
+                elseif p == 'objectives' and e.key == 'builder.error.armed_budget' then
+                    baseArmed = baseArmed or BaselineArmed(base)
+                    keep = (info.armed or 0) > baseArmed
+                elseif p == 'objectives' and e.key == 'builder.error.max_blocks' then
+                    keep = #(def.objectives or {}) > #(base.objectives or {})
+                elseif p == 'locations' and e.key == 'builder.error.max_locations' then
+                    keep = #(def.locations or {}) > #(base.locations or {})
+                elseif li and e.key == 'builder.error.location_gap' then
+                    local vars = e.vars or {}
+                    local a = def.locations[tonumber(vars.a) or 0]
+                    local b = def.locations[tonumber(vars.b) or 0]
+                    keep = not (
+                        a
+                        and b
+                        and ShippedLocationValue(base, 'start', a.start)
+                        and ShippedLocationValue(base, 'start', b.start)
+                    )
+                elseif li then
+                    local loc = def.locations[tonumber(li)]
+                    if type(loc) == 'table' then
+                        if lkey == 'start' or lkey == 'label' then
+                            keep = ShippedLocationValue(base, lkey, loc[lkey]) == nil
+                        else
+                            -- a shipped spawn list or route, measured from a shipped start
+                            local same = ShippedLocationValue(base, lkey, loc[lkey])
+                            keep = not (
+                                same and (e.key ~= 'builder.error.spawn_start' or SameValue(loc.start, same.start))
+                            )
+                        end
+                    end
+                elseif (bl == 'bonuses' or bl == 'penalties') and bi then
+                    keep = not ShippedEntry(base, bl, def[bl][tonumber(bi)])
+                elseif bl == 'scaling' and bi then
+                    local entry = def.scaling[tonumber(bi)]
+                    keep = true
+                    for _, s in ipairs(base.scaling or {}) do if SameValue(entry, s) then keep = false end end
+                end
+            end
+            if keep then out[#out + 1] = e end
+        end
+        return out
+    end
+end
+
 -- Returns errors (list of { path, key, vars, message }) and info { armed, requiredTier }.
 -- opts.publish additionally runs CP.Missions.normalize (the loader's own checks); opts.raw is the
--- unsanitised input (payout fields).
+-- unsanitised input (payout fields). opts.baseline = { def, raw } (an override of a built-in: BaselineOf).
 function B.validate(def, opts)
     opts = opts or {}
     local errors = {}
@@ -1329,6 +1601,14 @@ function B.validate(def, opts)
     -- the runtime form (file units + vec3/vec4) that blocks and the loader validate
     local rt = B.toRuntime(B.toFileUnits(def))
     rt.source = 'custom'
+    local base = type(opts.baseline) == 'table' and type(opts.baseline.def) == 'table' and opts.baseline or nil
+    local ext = base and ExtendedAllowed(base.raw) or nil
+    local rtTrusted = nil
+    if base then
+        rtTrusted = U.copy(rt)
+        rtTrusted.source = 'builtin'
+        if def.type ~= base.def.type then AddError(errors, 'type', 'builder.error.override_type') end
+    end
     local locations = (type(def.locations) == 'table' and IsList(def.locations)) and def.locations or {}
     local rtLocations = type(rt.locations) == 'table' and rt.locations or {}
 
@@ -1374,12 +1654,21 @@ function B.validate(def, opts)
                 end
                 local rtObj = type(rt.objectives) == 'table' and rt.objectives[i] or B.toRuntime(obj)
                 local eff = EffectiveObjective(impl, rtObj)
+                -- an override: an objective left as the shipped file has it is checked as the built-in is;
+                -- a changed one with the custom rules, the shipped names allowed and unraised bonuses kept
+                local trusted, probe = false, rtObj
+                if base then trusted, probe = BaselinePlan(base.def, obj, rtObj, i) end
                 -- block guardrails (the per-block authority), once per location
                 if type(impl.validate) == 'function' then
                     local seen = {}
                     local locs = #rtLocations > 0 and rtLocations or { false }
                     for li, loc in ipairs(locs) do
-                        local okCall, res, reason = pcall(impl.validate, rtObj, rt, loc or nil)
+                        local okCall, res, reason
+                        if trusted then
+                            okCall, res, reason = pcall(impl.validate, rtObj, rtTrusted, loc or nil)
+                        else
+                            okCall, res, reason = WithAllowed(ext, impl.validate, probe, rt, loc or nil)
+                        end
                         if not okCall then
                             AddError(errors, path, nil, nil,
                                 L('builder.error.block_failed', { n = i, reason = tostring(res) }))
@@ -1601,9 +1890,11 @@ function B.validate(def, opts)
         end
     end
 
-    -- the loader's own checks (publish, tests and reloads)
+    if base then errors = WaiveBaseline(errors, def, base.def, info) end
+    -- the loader's own checks (publish, tests and reloads); an override loads as the built-in it replaces
     if opts.publish and #errors == 0 and CP.Missions and CP.Missions.normalize then
-        local okCall, res, err = pcall(CP.Missions.normalize, rt, { source = 'custom', status = 'draft', version = 1 })
+        local okCall, res, err = pcall(CP.Missions.normalize, rt,
+            { source = base and 'builtin' or 'custom', status = 'draft', version = 1 })
         if not okCall then
             AddError(errors, '', 'builder.error.not_playable', { reason = tostring(res) })
         elseif not res then
@@ -1804,13 +2095,44 @@ local function AdminCommand()
 end
 
 -- The mission file text in exactly the shape of the spec's custom example.
--- meta = { version, publisher, at, edited = text|nil }
+-- meta = { version, publisher, at, edited = text|nil, override = true, carry = { top, bonuses, penalties } }
 function B.exportLua(def, meta)
     meta = meta or {}
     local f = B.toFileUnits(def)
+    -- A bonus or penalty list in file units, written back the way the shipped file wrote it where an entry is unchanged
+    -- (an override keeps the mission card's own ids, their `each` and their kind).
+    local function carried(builderList, fileList, shippedList)
+        if type(shippedList) ~= 'table' or #shippedList == 0 then return fileList end
+        local byId = {}
+        for _, e in ipairs(shippedList) do
+            if type(e) == 'table' and type(e.id) == 'string' and not byId[e.id] then byId[e.id] = e end
+        end
+        local out = {}
+        for i, e in ipairs(fileList) do
+            local old = byId[e.id]
+            local b = type(builderList) == 'table' and builderList[i] or nil
+            local same = false
+            if old and type(b) == 'table' then
+                local back = BonusesFromFile({ old })[1] or {}
+                same = back.points == b.points and back.pct == b.pct
+            end
+            if same then
+                out[i] = U.deepcopy(old)
+            else
+                if old and old.each ~= nil and e.each == nil then e.each = old.each end
+                out[i] = e
+            end
+        end
+        return out
+    end
+    local carry = meta.override and type(meta.carry) == 'table' and meta.carry or nil
+    if carry then
+        f.bonuses = carried(def.bonuses, f.bonuses, carry.bonuses)
+        f.penalties = carried(def.penalties, f.penalties, carry.penalties)
+    end
     local lines = {}
     local function add(s) lines[#lines + 1] = s end
-    add(HEADER_FIRST)
+    add(meta.override and OVR.HEADER or HEADER_FIRST)
     add('  id:        ' .. SafeHeaderText(f.id))
     add('  version:   ' .. tostring(math.floor(tonumber(meta.version) or 1)))
     add(
@@ -1843,6 +2165,22 @@ function B.exportLua(def, meta)
     top('vehiclePenalties', InlineValue(f.vehiclePenalties, 'vehiclePenalties'))
     top('startTimeout', InlineValue(f.startTimeout, 'startTimeout'))
     top('cooldown', InlineValue(f.cooldown, 'cooldown'))
+    if meta.override then
+        -- the fields the Builder does not edit, as the shipped file had them
+        local extra, seen = {}, {}
+        for k in pairs(OVR.CARRY_TOP) do extra[#extra + 1] = k; seen[k] = true end
+        for k in pairs(carry and type(carry.top) == 'table' and carry.top or {}) do
+            if not seen[k] and not OVR.TOP[k] then extra[#extra + 1] = k; seen[k] = true end
+        end
+        table.sort(extra)
+        for _, k in ipairs(extra) do
+            local v = f[k]
+            if v == nil and carry and type(carry.top) == 'table' then v = carry.top[k] end
+            if v ~= nil and type(k) == 'string' and k:match('^[%a_][%w_]*$') and not IsPayoutField(k) then
+                top(k, BlockValue(v, k, 2, WRAP - 18))
+            end
+        end
+    end
     add('')
     add('  locations = {')
     for _, loc in ipairs(f.locations or {}) do
@@ -1880,7 +2218,9 @@ end
 
 -- Header update of a hand-edited file (only inside our own header comment).
 local function RewriteHeader(content, version, edited)
-    if content:sub(1, #HEADER_FIRST) ~= HEADER_FIRST then return content end
+    if content:sub(1, #HEADER_FIRST) ~= HEADER_FIRST and content:sub(1, #OVR.HEADER) ~= OVR.HEADER then
+        return content
+    end
     local close = content:find(']]', 1, true)
     if not close then return content end
     local head, rest = content:sub(1, close - 1), content:sub(close)
@@ -1963,6 +2303,23 @@ end
 
 local function OwnerOf(row, actor) return row == nil or row.createdBy == actor.citizenid end
 
+-- AdminControl.editBuiltins (Admin UI → Settings): admins may edit built-in missions as overrides. Off: overrides
+-- are kept but not loaded (the shipped files play) and nobody can open them.
+local function EditBuiltinsOn()
+    local ac = Config.AdminControl
+    return not (type(ac) == 'table' and ac.editBuiltins == false)
+end
+B.editBuiltinsOn = EditBuiltinsOn
+
+-- Override rows are for admins only (supervisors never, whatever builderEditAny says), and only while editBuiltins
+-- is on (S4).
+local function OverrideOk(actor)
+    if not (actor and actor.isAdmin) or not EditBuiltinsOn() then return false end
+    if actor.src == 0 then return true end
+    if not (CP.Permissions and CP.Permissions.can) then return false end
+    return CP.Permissions.can(actor.src, 'editBuiltins') == true
+end
+
 -- kind: edit | publish | archive | rollback | breakLock
 -- Testing is optional (Config.Builder.requireTestToPublish = false): when an owner switches it on, a supervisor
 -- needs a passed test before publishing; an admin never does.
@@ -1971,6 +2328,11 @@ local function TestRequired(actor)
 end
 
 local function Allows(perms, row, actor, kind)
+    if row and row.overridesBuiltin then
+        -- an override is never archived or restored (Reset to original does that) and has no owner
+        if not OverrideOk(actor) or kind == 'archive' then return false end
+        return true
+    end
     local mine = OwnerOf(row, actor)
     if kind == 'edit' then return perms.builderEdit and (mine or perms.builderEditAny) end
     if kind == 'publish' then return perms.builderPublish and (mine or perms.builderEditAny) end
@@ -1983,6 +2345,7 @@ end
 -- Whether a custom mission shows in this actor's builder (SPEC Supervisor UI: "their drafts plus published
 -- missions"). Someone else's never-published draft is only visible to admins and builderEditAny.
 local function VisibleTo(row, actor, perms)
+    if row.overridesBuiltin then return OverrideOk(actor) end
     if actor.isAdmin or perms.builderEditAny or OwnerOf(row, actor) then return true end
     return row.status == 'published' or row.publishedVersion ~= nil
 end
@@ -2024,6 +2387,76 @@ local function TellEditor(citizenid, event, id, key, vars, by)
     if not src then return end
     TriggerClientEvent(CP.e('client:builder'), src, { event = event, id = id, by = by })
     if key and CP.Tablet and CP.Tablet.notify then pcall(CP.Tablet.notify, src, 'warning', key, vars) end
+end
+
+-- ============================================================================
+--                       BUILT-IN MISSIONS AND OVERRIDES
+-- ============================================================================
+
+-- The shipped file of a built-in mission: { path, content, raw, hash } (hash = the loader's defHash of the file).
+local function ShippedOf(id)
+    if type(id) ~= 'string' or #id == 0 or #id > 40 or not id:match('^[%w_]+$') then return nil end
+    local path = OVR.BUILTIN_DIR .. id .. '.lua'
+    local content = ReadFile(path)
+    if not content then return nil end
+    local raw = B.parse(content, path)
+    if type(raw) ~= 'table' or raw.id ~= id then return nil end
+    return { path = path, content = content, raw = raw, hash = U.hashHex(content) }
+end
+B.shippedOf = ShippedOf
+
+-- A built-in id the loader knows (loaded from missions/builtin/, with or without an override).
+local function IsBuiltin(id)
+    local def = CP.Missions and CP.Missions.get and CP.Missions.get(id) or nil
+    return type(def) == 'table' and def.source == 'builtin'
+end
+
+-- What the Builder keeps of a definition's own fields for writing them back: { top, bonuses, penalties } (file units).
+local function CarryOf(raw)
+    local plain = U.serialize(raw)
+    local top = {}
+    for k, v in pairs(plain) do
+        if type(k) == 'string' and not OVR.TOP[k] and not IsPayoutField(k) then
+            local loader = false
+            for _, f in ipairs(LOADER_FIELDS) do if f == k then loader = true end end
+            if not loader then top[k] = U.deepcopy(v) end
+        end
+    end
+    return {
+        top = top,
+        bonuses = U.deepcopy(type(plain.bonuses) == 'table' and plain.bonuses or {}),
+        penalties = U.deepcopy(type(plain.penalties) == 'table' and plain.penalties or {}),
+    }
+end
+
+-- The shipped definition in builder units, the baseline an override is checked against (S30).
+local function BaselineOf(shipped)
+    if not shipped then return nil end
+    local b = B.sanitize(B.fromFileUnits(shipped.raw), shipped.raw.id)
+    if not b then return nil end
+    return { def = b, raw = shipped.raw, hash = shipped.hash }
+end
+
+local function OverrideView(row, id)
+    local def = CP.Missions and CP.Missions.get and CP.Missions.get(id) or nil
+    local shipped = ShippedOf(id)
+    local tweaks = type(Config.MissionTweaks) == 'table' and Config.MissionTweaks[id] or nil
+    local view = {
+        overridden = def ~= nil and def.overridden == true,
+        shippedHash = shipped and shipped.hash or nil,
+        baseHash = row and row.baseHash or nil,
+        version = row and row.publishedVersion or nil,
+        hasDraft = row ~= nil and row.draft ~= nil,
+        status = row and row.status or nil,
+        tweaks = type(tweaks) == 'table' and U.deepcopy(tweaks) or nil,
+    }
+    local sum = CP.Missions and CP.Missions.loadSummary and CP.Missions.loadSummary() or nil
+    for _, f in ipairs(sum and sum.overrideFailed or {}) do
+        if f.id == id then view.loadError = f.error end
+    end
+    view.changed = row ~= nil and row.status == 'published' and row.publishedVersion ~= nil and view.baseHash ~= nil
+        and view.shippedHash ~= nil and view.baseHash ~= view.shippedHash
+    return view
 end
 
 -- ============================================================================
@@ -2073,6 +2506,8 @@ local function EntryView(row, actor, perms, names)
         updatedAt = row.updatedAt,
         lock = LockView(row, actor, names),
         requiredTier = def.maxOfficers and RequiredTierName(def.maxOfficers) or nil,
+        overridesBuiltin = row.overridesBuiltin or nil,
+        override = row.overridesBuiltin and OverrideView(row, row.id) or nil,
         can = {
             edit = canEdit and not lockedByOther and row.status ~= 'archived',
             publish = Allows(perms, row, actor, 'publish') and row.draft ~= nil and not lockedByOther
@@ -2094,7 +2529,7 @@ local function BackupsOf(row)
     for n = v - 1, 1, -1 do
         scanned = scanned + 1
         if scanned > MAX_BACKUP_SCAN then break end
-        if ReadFile(BackupPathFor(row.id, n)) then out[#out + 1] = n end
+        if ReadFile(BackupPathFor(row.id, n, row.overridesBuiltin)) then out[#out + 1] = n end
     end
     return out
 end
@@ -2105,10 +2540,12 @@ local function RecordView(row, actor, perms)
     local def = CurrentDef(row) or {}
     local clean = RenameAll(U.deepcopy(def))
     clean._file = nil
+    clean._carry = nil
     local published = row.published and RenameAll(U.deepcopy(row.published)) or nil
     local fileMeta = published and published._file or nil
-    if published then published._file = nil end
-    local errors, info = B.validate(clean)
+    if published then published._file = nil; published._carry = nil end
+    local baseline = row.overridesBuiltin and BaselineOf(ShippedOf(row.id)) or nil
+    local errors, info = B.validate(clean, { baseline = baseline })
     e.definition = clean
     e.publishedDefinition = published
     e.readOnly = not e.can.edit
@@ -2117,6 +2554,12 @@ local function RecordView(row, actor, perms)
     e.backups = BackupsOf(row)
     e.publishedAt = fileMeta and tonumber(fileMeta.publishedAt) or nil
     e.publishedBy = fileMeta and fileMeta.publisher or nil
+    e.draftBackup = ReadFile(DraftBackupPathFor(row.id, row.overridesBuiltin)) ~= nil
+    if row.overridesBuiltin then
+        local live = CP.Missions and CP.Missions.get and CP.Missions.get(row.id) or nil
+        e.live = live and B.fromFileUnits(live) or nil
+        e.tweaks = e.override and e.override.tweaks or nil
+    end
     return e
 end
 
@@ -2132,11 +2575,16 @@ local function BuiltinDefinition(id)
     return b, def
 end
 
-local function BuiltinRecord(id)
+local function BuiltinRecord(id, actor)
     local b, def = BuiltinDefinition(id)
     if not b then return nil end
     local errors, info = B.validate(b)
+    local tweaks = type(Config.MissionTweaks) == 'table' and Config.MissionTweaks[id] or nil
     return {
+        live = B.fromFileUnits(def),
+        tweaks = type(tweaks) == 'table' and U.deepcopy(tweaks) or nil,
+        override = actor and OverrideOk(actor) and OverrideView(FetchRow(id), id) or nil,
+        canEditBuiltin = actor ~= nil and OverrideOk(actor),
         id = id,
         label = tostring(def.label or id),
         type = def.type,
@@ -2232,7 +2680,10 @@ end
 
 -- Shared prologue: builder enabled, builderEdit (or admin), the actor. Returns actor, perms or nil, errKey.
 local function Begin(src)
-    if CfgB().enabled == false then return nil, 'err.builder_disabled' end
+    -- Builder.enabled = false switches the Builder off for supervisors; admins still manage and edit missions
+    if CfgB().enabled == false and not (src == 0 or (CP.Access and CP.Access.isAdmin and CP.Access.isAdmin(src))) then
+        return nil, 'err.builder_disabled'
+    end
     if not (CP.Permissions and CP.Permissions.can) then return nil, 'err.no_permission' end
     local ok, errKey = CP.Permissions.can(src, 'builderEdit')
     if not ok then return nil, errKey or 'err.no_permission' end
@@ -2241,9 +2692,13 @@ local function Begin(src)
     return actor, PermSet(src, actor)
 end
 
-local function LoadRow(payload)
+local function LoadRow(payload, actor)
     if type(payload) ~= 'table' or not ValidId(payload.id) then return nil, 'err.invalid_payload' end
     local row = FetchRow(payload.id)
+    if row and row.overridesBuiltin and not OverrideOk(actor) then
+        if actor and actor.isAdmin then return nil, 'err.edit_builtins_off' end
+        return nil, 'err.builder_unknown_mission'
+    end
     if not row then
         if CP.Missions and CP.Missions.get then
             local def = CP.Missions.get(payload.id)
@@ -2274,17 +2729,38 @@ local function RuntimeWithLoader(fileDefOrRuntime, row, version, filePath, hash,
     return def
 end
 
+-- The carried fields of an override: from its stored draft or published definition, else from the shipped file.
+local function CarryFor(row)
+    if not row or not row.overridesBuiltin then return nil end
+    if type(row.draft) == 'table' and type(row.draft._carry) == 'table' then return row.draft._carry end
+    if type(row.published) == 'table' and type(row.published._carry) == 'table' then return row.published._carry end
+    local shipped = ShippedOf(row.id)
+    return shipped and CarryOf(shipped.raw) or nil
+end
+
+-- An override went live, changed or was reset: the mission loader swaps that one built-in again.
+local function RefreshBuiltin(id)
+    if CP.Missions and CP.Missions.refreshBuiltin then
+        local ok, err = pcall(CP.Missions.refreshBuiltin, id)
+        if not ok then CP.err(TAG, 'reloading the built-in mission %s failed: %s', id, tostring(err)) end
+    end
+end
+
 -- Writes the file, keeps the .bak, stores the row and registers the mission.
 -- opts = { reason, version, editedInCode, keepDraft, headerEdited }
 local function PublishDefinition(row, bdef, actor, opts)
     local version = opts.version
-    local path = FilePathFor(row.id)
+    local ov = row.overridesBuiltin == true
+    local path = FilePathFor(row.id, ov)
     local at = Now()
     local publisher = PublisherText(actor)
+    local carry = CarryFor(row)
     bdef = U.deepcopy(bdef)
     bdef.id = row.id
     bdef._file = nil
-    local text = B.exportLua(bdef, { version = version, publisher = publisher, at = at, edited = opts.headerEdited })
+    bdef._carry = nil
+    local text = B.exportLua(bdef,
+        { version = version, publisher = publisher, at = at, edited = opts.headerEdited, override = ov, carry = carry })
     local parsed, perr = B.parse(text, path)
     if not parsed then
         CP.err(TAG, 'export of %s does not load back: %s', row.id, tostring(perr))
@@ -2294,12 +2770,13 @@ local function PublishDefinition(row, bdef, actor, opts)
     local previous = ReadFile(currentPath)
     local backup = nil
     if previous and CfgB().keepBackups ~= false and row.publishedVersion then
-        backup = BackupPathFor(row.id, row.publishedVersion)
+        backup = BackupPathFor(row.id, row.publishedVersion, ov)
         if not WriteFile(backup, previous) then return false, 'err.builder_file_write' end
     end
     if not WriteFile(path, text) then return false, 'err.builder_file_write' end
     local hash = U.hashHex(text)
     local stored = U.deepcopy(bdef)
+    stored._carry = carry
     stored._file = {
         hash = hash,
         version = version,
@@ -2339,7 +2816,9 @@ local function PublishDefinition(row, bdef, actor, opts)
     end
     if currentPath ~= path then RemoveFile(currentPath) end
     pendingTests[row.id] = nil
-    if CP.Missions and CP.Missions.register then
+    if ov then
+        RefreshBuiltin(row.id)
+    elseif CP.Missions and CP.Missions.register then
         local def = RuntimeWithLoader(parsed, row, version, path, hash, opts.editedInCode)
         local okReg, res, err = pcall(CP.Missions.register, def)
         if not okReg or not res then
@@ -2361,17 +2840,20 @@ local function RewriteMissing(row, summary)
         return
     end
     local meta = type(pub._file) == 'table' and pub._file or {}
-    local path = FilePathFor(row.id)
+    local path = FilePathFor(row.id, row.overridesBuiltin)
     local text = B.exportLua(pub, {
         version = row.publishedVersion or meta.version or 1,
         publisher = meta.publisher or 'console',
         at = meta.publishedAt or Now(),
+        override = row.overridesBuiltin,
+        carry = CarryFor(row),
     })
     if not WriteFile(path, text) then
         summary.rejected[#summary.rejected + 1] = { id = row.id, error = 'file missing and could not be rewritten' }
         return
     end
     local stored = U.deepcopy(pub)
+    stored._carry = CarryFor(row)
     stored._file = {
         hash = U.hashHex(text),
         version = row.publishedVersion,
@@ -2397,10 +2879,10 @@ local function StripPayoutFields(raw, id)
 end
 
 -- Why the mission loader refuses a parsed custom mission file exactly as written, or nil when it loads.
-local function LoaderError(fileDef, version)
+local function LoaderError(fileDef, version, override)
     if not (CP.Missions and CP.Missions.normalize) then return nil end
     local okCall, res, err = pcall(CP.Missions.normalize, B.toRuntime(fileDef),
-        { source = 'custom', status = 'published', version = version })
+        { source = override and 'builtin' or 'custom', status = 'published', version = version })
     if not okCall then return tostring(res) end
     if not res then return tostring(err) end
     return nil
@@ -2422,10 +2904,17 @@ local function HandEdit(row, path, content, hash, summary)
     end
     StripPayoutFields(raw, row.id)
     local b = B.sanitize(B.fromFileUnits(raw), row.id)
-    local errors = b and B.validate(b, { publish = true }) or { { message = 'invalid definition' } }
+    local baseline = row.overridesBuiltin and BaselineOf(ShippedOf(row.id)) or nil
+    if row.overridesBuiltin and not baseline then
+        summary.rejected[#summary.rejected + 1] = { id = row.id, error = 'the built-in mission file is missing' }
+        return
+    end
+    if b and row.overridesBuiltin then b._carry = CarryOf(raw) end
+    local errors = b and B.validate(b, { publish = true, baseline = baseline })
+        or { { message = 'invalid definition' } }
     if #errors == 0 then
         -- the checks above ran on the builder copy (rounded to builder units), but the file itself goes live
-        local reason = LoaderError(raw, (row.publishedVersion or 0) + 1)
+        local reason = LoaderError(raw, (row.publishedVersion or 0) + 1, row.overridesBuiltin)
         if reason then errors = { { message = L('builder.error.not_playable', { reason = reason }) } } end
     end
     if #errors > 0 then
@@ -2441,11 +2930,16 @@ local function HandEdit(row, path, content, hash, summary)
     local at = Now()
     -- keep the previous published version as its .bak (rollback target)
     if CfgB().keepBackups ~= false and type(row.published) == 'table' and prevVersion > 0 then
-        local bak = BackupPathFor(row.id, prevVersion)
+        local bak = BackupPathFor(row.id, prevVersion, row.overridesBuiltin)
         if not ReadFile(bak) then
             local meta = type(row.published._file) == 'table' and row.published._file or {}
-            WriteFile(bak, B.exportLua(row.published,
-                { version = prevVersion, publisher = meta.publisher or 'console', at = meta.publishedAt or at }))
+            WriteFile(bak, B.exportLua(row.published, {
+                version = prevVersion,
+                publisher = meta.publisher or 'console',
+                at = meta.publishedAt or at,
+                override = row.overridesBuiltin,
+                carry = CarryFor(row),
+            }))
         end
     end
     local edited = ('%s in code (reloaded with %s reload)'):format(FormatStamp(at), AdminCommand())
@@ -2458,10 +2952,18 @@ local function HandEdit(row, path, content, hash, summary)
     if type(row.draft) == 'table' then
         local pubCopy = type(row.published) == 'table' and U.deepcopy(row.published) or nil
         if pubCopy then pubCopy._file = nil end
-        if DefHash(row.draft) ~= DefHash(pubCopy) then
+        local draftCopy = U.deepcopy(row.draft)
+        draftCopy._carry = nil
+        if pubCopy then pubCopy._carry = nil end
+        if DefHash(draftCopy) ~= DefHash(pubCopy) then
             conflict = true
-            WriteFile(DraftBackupPathFor(row.id), B.exportLua(row.draft,
-                { version = row.draftVersion or version, publisher = 'unpublished builder draft', at = at }))
+            WriteFile(DraftBackupPathFor(row.id, row.overridesBuiltin), B.exportLua(row.draft, {
+                version = row.draftVersion or version,
+                publisher = 'unpublished builder draft',
+                at = at,
+                override = row.overridesBuiltin,
+                carry = CarryFor(row),
+            }))
         end
     end
     local stored = U.deepcopy(b)
@@ -2484,9 +2986,9 @@ local function HandEdit(row, path, content, hash, summary)
     Audit(nil, 'codeEdit', row.id, prevVersion, version, 'edited in code')
     if conflict then
         CP.warn(TAG, 'custom mission %s: the builder draft also changed; the file wins, the draft was saved as %s',
-            row.id, DraftBackupPathFor(row.id))
+            row.id, DraftBackupPathFor(row.id, row.overridesBuiltin))
         Audit(nil, 'codeEditConflict', row.id, row.draftVersion, version,
-            'draft saved as ' .. DraftBackupPathFor(row.id))
+            'draft saved as ' .. DraftBackupPathFor(row.id, row.overridesBuiltin))
         summary.conflicts[#summary.conflicts + 1] = row.id
     end
     print(('[crimson-police] custom mission %s: edited in code, saved as version %d'):format(row.id, version))
@@ -2498,7 +3000,7 @@ local function SyncFiles()
     local summary = { checked = 0, unchanged = 0, edited = {}, rejected = {}, conflicts = {}, rewritten = {} }
     for _, row in ipairs(FetchRows('status = \'published\'')) do
         summary.checked = summary.checked + 1
-        local path = row.filePath or FilePathFor(row.id)
+        local path = row.filePath or FilePathFor(row.id, row.overridesBuiltin)
         local content = ReadFile(path)
         local meta = type(row.published) == 'table' and type(row.published._file) == 'table' and row.published._file
             or nil
@@ -2547,12 +3049,13 @@ function B.loadPublished()
     CP.Migrations.ready()
     EnsureExportDirs() -- a fresh clone has no missions/custom/archived/ (SaveResourceFile makes no folders)
     local summary = SyncFiles()
+    B._lastSync = summary
     if #summary.edited + #summary.rejected + #summary.rewritten > 0 then
         CP.log(TAG, 'file sync: %d edited, %d rejected, %d rewritten', #summary.edited, #summary.rejected,
             #summary.rewritten)
     end
     local out = {}
-    for _, row in ipairs(FetchRows('status = \'published\'')) do
+    for _, row in ipairs(FetchRows('status = \'published\' AND overrides_builtin = 0')) do
         local path = row.filePath or FilePathFor(row.id)
         local content = ReadFile(path)
         local meta = type(row.published) == 'table' and type(row.published._file) == 'table' and row.published._file
@@ -2580,9 +3083,57 @@ function B.loadPublished()
     return out
 end
 
+-- The published overrides of built-in missions (CP.Missions.loadAll swaps each built-in for its override):
+-- { [id] = { raw, filePath, hash, version, baseHash, editedInCode } }. Empty while AdminControl.editBuiltins is off.
+-- Called after loadPublished, whose file sync has already taken in hand edits of the override files.
+function B.loadOverrides()
+    CP.Migrations.ready()
+    local out = {}
+    if not EditBuiltinsOn() then return out end
+    for _, row in ipairs(FetchRows('status = \'published\' AND overrides_builtin = 1')) do
+        local path = row.filePath or FilePathFor(row.id, true)
+        local content = ReadFile(path)
+        local meta = type(row.published) == 'table' and type(row.published._file) == 'table' and row.published._file
+            or {}
+        local hash = content and U.hashHex(content) or nil
+        local raw = nil
+        if content and hash == meta.hash then
+            local perr
+            raw, perr = B.parse(content, path)
+            if not raw then CP.warn(TAG, 'override %s: %s does not load: %s', row.id, path, tostring(perr)) end
+        end
+        if raw then
+            StripPayoutFields(raw, row.id)
+        elseif type(row.published) == 'table' then
+            -- edits that were not accepted: the last published version of the override stays live
+            local pub = U.deepcopy(row.published)
+            pub._file = nil
+            local text = B.exportLua(pub, { version = row.publishedVersion, override = true, carry = CarryFor(row) })
+            raw = B.parse(text, path)
+            hash = meta.hash or DefHash(pub)
+        end
+        if raw then
+            raw.id = row.id
+            out[row.id] = {
+                raw = raw,
+                filePath = path,
+                hash = hash,
+                version = row.publishedVersion,
+                baseHash = row.baseHash,
+                editedInCode = row.editedInCode,
+            }
+        end
+    end
+    return out
+end
+
+-- The file sync of the last load (start or reload): hand edits taken in or refused, files rewritten.
+function B.lastSync() return B._lastSync end
+
 function B.onReload()
     CP.Migrations.ready()
     local summary = SyncFiles()
+    B._lastSync = summary
     print(
         ('[crimson-police] custom mission files: %d checked, %d edited in code, %d rejected, %d conflicts, %d rewritten'):format(
             summary.checked, #summary.edited, #summary.rejected, #summary.conflicts, #summary.rewritten))
@@ -2657,6 +3208,11 @@ CP.Net.callback('builder:list', function(src)
     local missions = {}
     for _, r in ipairs(rows) do missions[#missions + 1] = EntryView(r, actor, perms, names) end
     local builtins = {}
+    local editable = OverrideOk(actor)
+    local overrideRows = {}
+    if editable then
+        for _, r in ipairs(rows) do if r.overridesBuiltin then overrideRows[r.id] = r end end
+    end
     if CP.Missions and CP.Missions.list then
         for _, def in ipairs(CP.Missions.list()) do
             if def.source == 'builtin' then
@@ -2666,6 +3222,8 @@ CP.Net.callback('builder:list', function(src)
                     type = def.type,
                     source = 'builtin',
                     readOnly = true,
+                    canEdit = editable or nil,
+                    override = editable and OverrideView(overrideRows[def.id], def.id) or nil,
                 }
             end
         end
@@ -2673,6 +3231,7 @@ CP.Net.callback('builder:list', function(src)
     return {
         missions = missions,
         builtins = builtins,
+        editBuiltins = editable,
         me = actor.citizenid ~= 'console' and actor.citizenid or nil,
         serverTime = Now(),
     }
@@ -2684,11 +3243,10 @@ CP.Net.callback('builder:get', function(src, args)
     if type(args) ~= 'table' or not ValidId(args.id) then return nil, 'err.invalid_payload' end
     TouchViewer(src)
     local row = FetchRow(args.id)
-    if row then
-        if not VisibleTo(row, actor, perms) then return nil, 'err.builder_unknown_mission' end
-        return RecordView(row, actor, perms)
-    end
-    local rec = BuiltinRecord(args.id)
+    if row and VisibleTo(row, actor, perms) then return RecordView(row, actor, perms) end
+    -- someone who may not open an override sees the built-in as it plays (read-only)
+    if row and not row.overridesBuiltin then return nil, 'err.builder_unknown_mission' end
+    local rec = BuiltinRecord(args.id, actor)
     if rec then return rec end
     return nil, 'err.builder_unknown_mission'
 end, { rate = 4 })
@@ -2871,6 +3429,8 @@ CP.Net.action('server:builder:duplicate', function(src, payload)
     if not CP.Net.rateOk(src, 'builder:create', 1, 2000) then return false, 'err.rate_limited' end
     local source
     local row = FetchRow(payload.id)
+    -- a built-in is always copied as it plays (with its override, if any)
+    if row and row.overridesBuiltin then row = nil end
     if row then
         -- any custom mission the actor can see may be copied into an own draft (builderEdit, checked by begin)
         if not VisibleTo(row, actor, perms) then return false, 'err.builder_unknown_mission' end
@@ -2904,7 +3464,7 @@ end, { rate = 2 })
 CP.Net.action('server:builder:lock', function(src, payload)
     local actor, perms = Begin(src)
     if not actor then return false, perms end
-    local row, err = LoadRow(payload)
+    local row, err = LoadRow(payload, actor)
     if not row then return false, err end
     if not Allows(perms, row, actor, 'edit') then return false, 'err.no_permission' end
     if row.status == 'archived' then return false, 'err.builder_read_only' end
@@ -2920,7 +3480,7 @@ end, { rate = 4 })
 CP.Net.action('server:builder:unlock', function(src, payload)
     local actor, perms = Begin(src)
     if not actor then return false, perms end
-    local row, err = LoadRow(payload)
+    local row, err = LoadRow(payload, actor)
     if not row then return false, err end
     MySQL.update.await(
         'UPDATE cp_custom_missions SET locked_by = NULL, locked_until = NULL, updated_at = updated_at WHERE id = ? AND locked_by = ?',
@@ -2932,12 +3492,14 @@ end, { rate = 4 })
 local function StoreDraft(src, payload, explicit)
     local actor, perms = Begin(src)
     if not actor then return false, perms end
-    local row, err = LoadRow(payload)
+    local row, err = LoadRow(payload, actor)
     if not row then return false, err end
     if not Allows(perms, row, actor, 'edit') then return false, 'err.no_permission' end
     if row.status == 'archived' then return false, 'err.builder_read_only' end
     local def, serr = B.sanitize(payload.definition, row.id)
     if not def then return false, serr end
+    -- an override keeps its id, its type and the fields of the shipped file the Builder does not edit
+    if row.overridesBuiltin then def._carry = CarryFor(row) end
     TouchViewer(src)
     -- after a lock break the old editor must take the lock explicitly (server:builder:lock) before storing again
     if brokenLocks[row.id] and brokenLocks[row.id][actor.citizenid]
@@ -2952,8 +3514,9 @@ local function StoreDraft(src, payload, explicit)
     local changed = DefHash(def) ~= DefHash(row.draft)
     local tested = row.draftTested and not changed
     local newId, previousId = row.id, nil
-    if explicit and row.publishedVersion == nil and row.status == 'draft' and type(def.label) == 'string'
-        and U.trim(def.label) ~= '' and ('custom_' .. B.slug(def.label)) ~= row.id:gsub('_%d+$', '') then
+    if explicit and not row.overridesBuiltin and row.publishedVersion == nil and row.status == 'draft'
+        and type(def.label) == 'string' and U.trim(def.label) ~= ''
+        and ('custom_' .. B.slug(def.label)) ~= row.id:gsub('_%d+$', '') then
         local candidate = UniqueId(def.label, row.id)
         if candidate and candidate ~= row.id then
             local n = MySQL.update.await(
@@ -2973,7 +3536,7 @@ local function StoreDraft(src, payload, explicit)
         end
     end
     local missionType = row.missionType
-    if row.publishedVersion == nil and type(def.type) == 'string' and Config.MissionTypes
+    if not row.overridesBuiltin and row.publishedVersion == nil and type(def.type) == 'string' and Config.MissionTypes
         and Config.MissionTypes[def.type] then
         missionType = def.type
     end
@@ -2998,7 +3561,8 @@ local function StoreDraft(src, payload, explicit)
         lock = saved and LockView(saved, actor, names) or nil,
     }
     if explicit then
-        local errors = B.validate(def, { raw = payload.definition })
+        local baseline = row.overridesBuiltin and BaselineOf(ShippedOf(row.id)) or nil
+        local errors = B.validate(def, { raw = payload.definition, baseline = baseline })
         result.previousId = previousId
         result.errors = errors
         result.valid = #errors == 0
@@ -3027,7 +3591,7 @@ end, { rate = 3 })
 CP.Net.action('server:builder:validate', function(src, payload)
     local actor, perms = Begin(src)
     if not actor then return false, perms end
-    local row, err = LoadRow(payload)
+    local row, err = LoadRow(payload, actor)
     if not row then return false, err end
     TouchViewer(src)
     local def
@@ -3038,8 +3602,10 @@ CP.Net.action('server:builder:validate', function(src, payload)
     else
         def = U.deepcopy(CurrentDef(row) or {})
         def._file = nil
+        def._carry = nil
     end
-    local errors, info = B.validate(def, { raw = payload.definition, publish = true })
+    local baseline = row.overridesBuiltin and BaselineOf(ShippedOf(row.id)) or nil
+    local errors, info = B.validate(def, { raw = payload.definition, publish = true, baseline = baseline })
     return true,
         {
             valid = #errors == 0,
@@ -3053,7 +3619,7 @@ end, { rate = 4 })
 CP.Net.action('server:builder:test', function(src, payload)
     local actor, perms = Begin(src)
     if not actor then return false, perms end
-    local row, err = LoadRow(payload)
+    local row, err = LoadRow(payload, actor)
     if not row then return false, err end
     if not Allows(perms, row, actor, 'edit') then return false, 'err.no_permission' end
     if not CP.Net.rateOk(src, 'builder:test', 1, 5000) then return false, 'err.rate_limited' end
@@ -3081,8 +3647,12 @@ CP.Net.action('server:builder:test', function(src, payload)
     rt.id = row.id
     local def = rt
     if CP.Missions and CP.Missions.normalize then
-        local okCall, res, nerr = pcall(CP.Missions.normalize, rt,
-            { source = 'custom', version = row.draftVersion, status = 'draft', defHash = DefHash(draft) })
+        local okCall, res, nerr = pcall(CP.Missions.normalize, rt, {
+            source = row.overridesBuiltin and 'builtin' or 'custom',
+            version = row.draftVersion,
+            status = 'draft',
+            defHash = DefHash(draft),
+        })
         if not okCall or not res then
             CP.log(TAG, 'draft %s is not playable: %s', row.id, tostring(okCall and nerr or res))
             return false, 'err.builder_invalid'
@@ -3109,7 +3679,7 @@ end, { rate = 2 })
 CP.Net.action('server:builder:publish', function(src, payload)
     local actor, perms = Begin(src)
     if not actor then return false, perms end
-    local row, err = LoadRow(payload)
+    local row, err = LoadRow(payload, actor)
     if not row then return false, err end
     if not Allows(perms, row, actor, 'publish') then return false, 'err.no_permission' end
     if not CP.Net.rateOk(src, 'builder:publish', 1, 3000) then return false, 'err.rate_limited' end
@@ -3120,15 +3690,24 @@ CP.Net.action('server:builder:publish', function(src, payload)
     if type(draft) ~= 'table' then return false, 'err.builder_no_draft' end
     draft = U.deepcopy(draft)
     draft._file = nil
-    local errors = B.validate(draft, { publish = true })
+    draft._carry = nil
+    local baseline = nil
+    if row.overridesBuiltin then
+        baseline = BaselineOf(ShippedOf(row.id))
+        if not baseline or not IsBuiltin(row.id) then return false, 'err.builder_unknown_mission' end
+    end
+    local errors = B.validate(draft, { publish = true, baseline = baseline })
     if #errors > 0 then return false, 'err.builder_invalid' end
+    -- testing is optional (O2): only an owner who switched Builder.requireTestToPublish on asks it of supervisors
     if TestRequired(actor) and not row.draftTested then return false, 'err.builder_not_tested' end
     local version = row.draftVersion or ((row.publishedVersion or 0) + 1)
     if row.publishedVersion and version <= row.publishedVersion then version = row.publishedVersion + 1 end
     local ok, res = PublishDefinition(row, draft, actor, { reason = 'publish', version = version })
     if not ok then return false, res end
-    Audit(actor, row.draftTested and 'publish' or 'publishUntested', row.id,
-        row.publishedVersion and ('v' .. row.publishedVersion) or nil, 'v' .. version, tostring(draft.label))
+    local action = row.draftTested and 'publish' or 'publishUntested'
+    if row.overridesBuiltin then action = row.draftTested and 'overridePublish' or 'publishUntested' end
+    Audit(actor, action, row.id, row.publishedVersion and ('v' .. row.publishedVersion) or nil, 'v' .. version,
+        row.overridesBuiltin and ('edited built-in: ' .. tostring(draft.label)) or tostring(draft.label))
     PushAll({ event = 'published', id = row.id, by = actor.name })
     return true, res
 end, { rate = 2 })
@@ -3144,7 +3723,7 @@ end
 CP.Net.action('server:builder:archive', function(src, payload)
     local actor, perms = Begin(src)
     if not actor then return false, perms end
-    local row, err = LoadRow(payload)
+    local row, err = LoadRow(payload, actor)
     if not row then return false, err end
     if not Allows(perms, row, actor, 'archive') then return false, 'err.no_permission' end
     if row.status ~= 'published' then return false, 'err.builder_not_published' end
@@ -3174,7 +3753,7 @@ end, { rate = 2 })
 CP.Net.action('server:builder:restore', function(src, payload)
     local actor, perms = Begin(src)
     if not actor then return false, perms end
-    local row, err = LoadRow(payload)
+    local row, err = LoadRow(payload, actor)
     if not row then return false, err end
     if not Allows(perms, row, actor, 'archive') then return false, 'err.no_permission' end
     if row.status ~= 'archived' then return false, 'err.builder_not_archived' end
@@ -3223,26 +3802,37 @@ end, { rate = 2 })
 CP.Net.action('server:builder:rollback', function(src, payload)
     local actor, perms = Begin(src)
     if not actor then return false, perms end
-    local row, err = LoadRow(payload)
+    local row, err = LoadRow(payload, actor)
     if not row then return false, err end
     if not Allows(perms, row, actor, 'rollback') then return false, 'err.no_permission' end
     if not CP.Net.rateOk(src, 'builder:publish', 1, 3000) then return false, 'err.rate_limited' end
     if row.status ~= 'published' or not row.publishedVersion then return false, 'err.builder_not_published' end
+    local ov = row.overridesBuiltin
     local fromVersion, content
-    for n = row.publishedVersion - 1, math.max(1, row.publishedVersion - MAX_BACKUP_SCAN), -1 do
-        content = ReadFile(BackupPathFor(row.id, n))
-        if content then fromVersion = n; break end
+    if payload.version ~= nil then
+        -- any kept version (A11), not only the newest
+        local wanted = math.tointeger(tonumber(payload.version))
+        if not wanted or wanted < 1 or wanted >= row.publishedVersion then return false, 'err.builder_no_backup' end
+        content = ReadFile(BackupPathFor(row.id, wanted, ov))
+        fromVersion = wanted
+    else
+        for n = row.publishedVersion - 1, math.max(1, row.publishedVersion - MAX_BACKUP_SCAN), -1 do
+            content = ReadFile(BackupPathFor(row.id, n, ov))
+            if content then fromVersion = n; break end
+        end
     end
     if not content then return false, 'err.builder_no_backup' end
-    local raw, perr = B.parse(content, BackupPathFor(row.id, fromVersion))
+    local raw, perr = B.parse(content, BackupPathFor(row.id, fromVersion, ov))
     if not raw or raw.id ~= row.id then
-        CP.warn(TAG, 'rollback of %s: %s does not load: %s', row.id, BackupPathFor(row.id, fromVersion),
+        CP.warn(TAG, 'rollback of %s: %s does not load: %s', row.id, BackupPathFor(row.id, fromVersion, ov),
             tostring(perr or 'wrong id'))
         return false, 'err.builder_invalid'
     end
     StripPayoutFields(raw, row.id)
     local b = B.sanitize(B.fromFileUnits(raw), row.id)
-    local errors = b and B.validate(b, { publish = true }) or { {} }
+    local baseline = ov and BaselineOf(ShippedOf(row.id)) or nil
+    if ov and not baseline then return false, 'err.builder_unknown_mission' end
+    local errors = b and B.validate(b, { publish = true, baseline = baseline }) or { {} }
     if #errors > 0 then
         CP.warn(TAG, 'rollback of %s to v%d refused: %s', row.id, fromVersion,
             tostring(errors[1] and errors[1].message))
@@ -3259,7 +3849,7 @@ end, { rate = 2 })
 CP.Net.action('server:builder:breakLock', function(src, payload)
     local actor, perms = Begin(src)
     if not actor then return false, perms end
-    local row, err = LoadRow(payload)
+    local row, err = LoadRow(payload, actor)
     if not row then return false, err end
     if not Allows(perms, row, actor, 'breakLock') then return false, 'err.no_permission' end
     if not row.lockActive then return true, { id = row.id, previous = nil } end
@@ -3283,7 +3873,7 @@ end, { rate = 2 })
 CP.Net.action('server:builder:discardDraft', function(src, payload)
     local actor, perms = Begin(src)
     if not actor then return false, perms end
-    local row, err = LoadRow(payload)
+    local row, err = LoadRow(payload, actor)
     if not row then return false, err end
     if not Allows(perms, row, actor, 'edit') then return false, 'err.no_permission' end
     if row.lockActive and row.lockedBy ~= actor.citizenid then return false, 'err.builder_locked' end
@@ -3293,6 +3883,11 @@ CP.Net.action('server:builder:discardDraft', function(src, payload)
         local n = MySQL.update.await('DELETE FROM cp_custom_missions WHERE id = ? AND published_version IS NULL',
             { row.id })
         deleted = (tonumber(n) or 0) > 0
+    elseif row.overridesBuiltin and row.status == 'draft' then
+        -- an override edited again after a reset: back to the reset state (the shipped mission keeps playing)
+        MySQL.update.await([[UPDATE cp_custom_missions SET status = 'archived', draft_definition = NULL,
+            draft_version = NULL, draft_tested = 0, locked_by = NULL, locked_until = NULL, updated_by = ? WHERE id = ?]],
+            { actor.citizenid, row.id })
     else
         MySQL.update.await(
             [[UPDATE cp_custom_missions SET draft_definition = NULL, draft_version = NULL, draft_tested = 0,
@@ -3305,6 +3900,702 @@ CP.Net.action('server:builder:discardDraft', function(src, payload)
     PushAll({ event = deleted and 'deleted' or 'changed', id = row.id, by = actor.name })
     return true, { id = row.id, deleted = deleted }
 end, { rate = 2 })
+
+-- ============================================================================
+--            FULL ADMIN CONTROL (CP.AdminKit, ARCHITECTURE §8.4.2)
+-- ============================================================================
+-- Admin-only actions and reads: each goes through CP.AdminKit (maintenance, permission, reason, typed word, audit).
+-- A spec that loads this file without modules/adminkit has none of them.
+
+-- Registered once, right below (its own function keeps these locals out of the file's limit of 200).
+local function RegisterAdminActions()
+    local Kit = CP.AdminKit
+        or {
+            action = function() return false end,
+            callback = function() return false end,
+        }
+    local IMPORT_MAX = 262144        -- bytes of Lua text one import may send
+    local DIFF_MAX = 150             -- lines a compare returns
+
+    local function kitActor(ctx)
+        local actor, err = GetActor(ctx.src)
+        if not actor then return nil, err or 'err.no_permission' end
+        return actor
+    end
+
+    local function shortHash(h) return type(h) == 'string' and h:sub(1, 8) or nil end
+
+    -- An override row the admin may change: row | nil, errKey.
+    local function overrideRow(id, actor)
+        if not ValidId(id) then return nil, 'err.invalid_payload' end
+        if not EditBuiltinsOn() then return nil, 'err.edit_builtins_off' end
+        if not OverrideOk(actor) then return nil, 'err.no_permission' end
+        local row = FetchRow(id)
+        if not row or not row.overridesBuiltin then return nil, 'err.override_none' end
+        return row
+    end
+
+    -- The first draft of an override: the shipped file with today's MissionTweaks in it (what plays now; the location
+    -- switches stay switches), in builder units, with the shipped fields the Builder does not edit carried.
+    local function builtinDraft(id, shipped)
+        local raw = U.deepcopy(shipped.raw)
+        local tweak = type(Config.MissionTweaks) == 'table' and Config.MissionTweaks[id] or nil
+        if type(tweak) == 'table' and CP.Missions and CP.Missions._applyTweak then
+            local t = U.deepcopy(tweak)
+            t.disabledLocations = nil
+            local okT, tweaked = pcall(CP.Missions._applyTweak, raw, t)
+            if okT and type(tweaked) == 'table' then raw = tweaked end
+        end
+        local b = B.sanitize(B.fromFileUnits(raw), id)
+        if not b then return nil end
+        b._carry = CarryOf(shipped.raw)
+        return b
+    end
+
+    -- Every leaf of a builder definition as path -> short text (vectors as x, y, z).
+    local function flatten(v, path, out, depth)
+        depth = depth or 0
+        if depth > MAX_DEPTH then return out end
+        if IsVecTable(v) then
+            local t = { Round(v.x, 2), Round(v.y, 2), Round(v.z, 2) }
+            if v.w ~= nil then t[4] = Round(v.w, 2) end
+            out[path] = table.concat(t, ', ')
+        elseif type(v) == 'table' then
+            for k, x in pairs(v) do
+                if k ~= '_carry' and k ~= '_file' then
+                    flatten(x, path == '' and tostring(k) or (path .. '.' .. tostring(k)), out, depth + 1)
+                end
+            end
+        elseif v ~= nil then
+            out[path] = ClipText(tostring(v), 60)
+        end
+        return out
+    end
+
+    -- { { path, from, to } } where a and b differ (sorted, at most DIFF_MAX), and whether more were left out.
+    local function diffLines(a, b)
+        local fa, fb = flatten(a or {}, '', {}), flatten(b or {}, '', {})
+        local paths, seen = {}, {}
+        for p in pairs(fa) do if not seen[p] then seen[p] = true paths[#paths + 1] = p end end
+        for p in pairs(fb) do if not seen[p] then seen[p] = true paths[#paths + 1] = p end end
+        table.sort(paths)
+        local out = {}
+        local more = false
+        for _, p in ipairs(paths) do
+            if fa[p] ~= fb[p] then
+                if #out >= DIFF_MAX then more = true; break end
+                out[#out + 1] = { path = p, from = fa[p], to = fb[p] }
+            end
+        end
+        return out, more
+    end
+
+    -- A short summary of two versions: label, locations added and removed (by label), objectives (block and label).
+    local function shortDiff(a, b)
+        a, b = a or {}, b or {}
+        local function labels(list)
+            local out = {}
+            for i, l in ipairs(type(list) == 'table' and list or {}) do
+                out[#out + 1] = type(l) == 'table' and tostring(l.label or ('#' .. i)) or ('#' .. i)
+            end
+            return out
+        end
+        local function objectives(list)
+            local out = {}
+            for _, o in ipairs(type(list) == 'table' and list or {}) do
+                if type(o) == 'table' then
+                    out[#out + 1] = ('%s: %s'):format(tostring(o.block), tostring(o.label or ''))
+                end
+            end
+            return out
+        end
+        local la, lb = labels(a.locations), labels(b.locations)
+        local added, removed = {}, {}
+        for _, l in ipairs(lb) do if not U.contains(la, l) then added[#added + 1] = l end end
+        for _, l in ipairs(la) do if not U.contains(lb, l) then removed[#removed + 1] = l end end
+        return {
+            label = a.label ~= b.label and { from = a.label, to = b.label } or nil,
+            locationsAdded = added,
+            locationsRemoved = removed,
+            objectivesFrom = objectives(a.objectives),
+            objectivesTo = objectives(b.objectives),
+        }
+    end
+
+    local function plain(def)
+        local d = U.deepcopy(def or {})
+        d._file, d._carry = nil, nil
+        return d
+    end
+
+    -- A mission a run (a test run, a mission call's run) or the Cross-Department Mission uses now: errKey | nil.
+    local function missionInUse(id)
+        if CP.Runs and CP.Runs.all then
+            local ok, runs = pcall(CP.Runs.all)
+            for _, run in ipairs(ok and type(runs) == 'table' and runs or {}) do
+                if type(run) == 'table' and run.missionId == id and run.state ~= 'ended' then
+                    return 'err.mission_in_use'
+                end
+            end
+        end
+        if CP.Operations and CP.Operations.active then
+            local ok, op = pcall(CP.Operations.active)
+            if ok and type(op) == 'table' and op.missionId == id then return 'err.mission_in_use' end
+        end
+        return nil
+    end
+
+    local function deletedIndex()
+        local text = ReadFile(DeletedDir() .. OVR.DELETED_INDEX)
+        if not text then return {} end
+        local ok, list = pcall(json.decode, text)
+        if not ok or type(list) ~= 'table' then return {} end
+        local out = {}
+        for _, e in ipairs(list) do if type(e) == 'table' and type(e.folder) == 'string' then out[#out + 1] = e end end
+        return out
+    end
+
+    local function saveDeletedIndex(list)
+        if #list == 0 then return WriteFile(DeletedDir() .. OVR.DELETED_INDEX, '[]') end
+        return WriteFile(DeletedDir() .. OVR.DELETED_INDEX, json.encode(list))
+    end
+
+    -- ---- BUILT-IN OVERRIDES (O1) -------------------------------------------
+
+    -- Open a built-in mission in the Builder: its override (made now from the shipped file when there is none).
+    Kit.action('server:builder:editBuiltin', 'editBuiltins', function(ctx)
+        local id = ctx.payload.id
+        if not ValidId(id) then return false, 'err.invalid_payload' end
+        if not EditBuiltinsOn() then return false, 'err.edit_builtins_off' end
+        local actor, aerr = kitActor(ctx)
+        if not actor then return false, aerr end
+        if not OverrideOk(actor) then return false, 'err.no_permission' end
+        if not IsBuiltin(id) then return false, 'err.builder_unknown_mission' end
+        local shipped = ShippedOf(id)
+        if not shipped then return false, 'err.builder_unknown_mission' end
+        local perms = PermSet(ctx.src, actor)
+        local row = FetchRow(id)
+        if row and not row.overridesBuiltin then return false, 'err.builder_id_taken' end
+        if row and row.status ~= 'archived' then
+            return true, { id = id, existing = true, record = RecordView(row, actor, perms) }
+        end
+        local draft = builtinDraft(id, shipped)
+        if not draft then return false, 'err.internal' end
+        local lockMinutes = math.max(1, math.floor(tonumber(CfgB().editLockMinutes) or 30))
+        local version
+        if row then
+            version = (row.publishedVersion or 0) + 1
+            local ok, err = Kit.cas(
+                [[UPDATE cp_custom_missions SET status = 'draft', draft_definition = ?, draft_version = ?,
+                draft_tested = 0, base_hash = ?, mission_type = ?, locked_by = ?, locked_until = NOW() + INTERVAL ? MINUTE,
+                updated_by = ? WHERE id = ? AND status = 'archived']], {
+                    Encode(draft),
+                    version,
+                    shipped.hash,
+                    draft.type,
+                    actor.citizenid,
+                    lockMinutes,
+                    actor.citizenid,
+                    id,
+                })
+            if not ok then return false, err end
+        else
+            version = 1
+            local ok, n = pcall(MySQL.update.await, [[INSERT IGNORE INTO cp_custom_missions (id, mission_type, status,
+                draft_version, draft_definition, draft_tested, file_path, edited_in_code, locked_by, locked_until,
+                created_by, updated_by, overrides_builtin, base_hash) VALUES (?, ?, 'draft', 1, ?, 0, NULL, 0, ?,
+                NOW() + INTERVAL ? MINUTE, ?, ?, 1, ?)]], {
+                id,
+                draft.type,
+                Encode(draft),
+                actor.citizenid,
+                lockMinutes,
+                actor.citizenid,
+                actor.citizenid,
+                shipped.hash,
+            })
+            if not ok or (tonumber(n) or 0) < 1 then return false, 'err.state_changed' end
+        end
+        if actor.src and actor.src > 0 then holders[actor.src] = actor.citizenid end
+        WriteFile(BasePathFor(id), shipped.content)
+        ctx.audit('overrideEdit', id, nil, 'v' .. version)
+        PushAll({ event = 'changed', id = id, by = actor.name })
+        return true, { id = id, record = RecordView(FetchRow(id), actor, perms) }
+    end, { rate = 2, category = 'builder' })
+
+    -- The original changed after an update: keep the override, and compare with this original from now on.
+    Kit.action('server:builder:keepOverride', 'editBuiltins', function(ctx)
+        local actor, aerr = kitActor(ctx)
+        if not actor then return false, aerr end
+        local row, err = overrideRow(ctx.payload.id, actor)
+        if not row then return false, err end
+        if row.status ~= 'published' then return false, 'err.builder_not_published' end
+        local shipped = ShippedOf(row.id)
+        if not shipped then return false, 'err.builder_unknown_mission' end
+        if row.baseHash == shipped.hash then return true, { id = row.id, changed = false } end
+        local ok, cerr
+        if row.baseHash then
+            ok, cerr = Kit.cas(
+                'UPDATE cp_custom_missions SET base_hash = ?, updated_at = updated_at WHERE id = ? AND base_hash = ?',
+                { shipped.hash, row.id, row.baseHash })
+        else
+            ok, cerr = Kit.cas(
+                'UPDATE cp_custom_missions SET base_hash = ?, updated_at = updated_at WHERE id = ? AND base_hash IS NULL',
+                { shipped.hash, row.id })
+        end
+        if not ok then return false, cerr end
+        WriteFile(BasePathFor(row.id), shipped.content)
+        ctx.audit('overrideKeep', row.id, shortHash(row.baseHash), shortHash(shipped.hash))
+        RefreshBuiltin(row.id)
+        PushAll({ event = 'changed', id = row.id, by = actor.name })
+        return true, { id = row.id, changed = false }
+    end, { rate = 2, reason = true, category = 'builder' })
+
+    -- Reset to original (and Take the new original): the override is put away and the shipped file plays again.
+    Kit.action('server:builder:resetBuiltin', 'editBuiltins', function(ctx)
+        local actor, aerr = kitActor(ctx)
+        if not actor then return false, aerr end
+        local row, err = overrideRow(ctx.payload.id, actor)
+        if not row then return false, err end
+        if row.status == 'archived' then return false, 'err.override_none' end
+        if row.lockActive and row.lockedBy ~= actor.citizenid then return false, 'err.builder_locked' end
+        local to = ArchivedPathFor(row.id, true)
+        if row.publishedVersion == nil then
+            -- never published: nothing to keep
+            local ok, cerr = Kit.cas('DELETE FROM cp_custom_missions WHERE id = ? AND published_version IS NULL',
+                { row.id })
+            if not ok then return false, cerr end
+        else
+            local from = row.filePath or FilePathFor(row.id, true)
+            if from ~= to and ReadFile(from) then MoveFile(from, to) end
+            local ok, cerr = Kit.cas([[UPDATE cp_custom_missions SET status = 'archived', file_path = ?,
+                draft_definition = NULL, draft_version = NULL, draft_tested = 0, locked_by = NULL, locked_until = NULL,
+                updated_by = ? WHERE id = ? AND status = ?]], { to, actor.citizenid, row.id, row.status })
+            if not ok then return false, cerr end
+        end
+        pendingTests[row.id] = nil
+        RefreshBuiltin(row.id)
+        ctx.audit('overrideReset', row.id, row.publishedVersion and ('v' .. row.publishedVersion) or 'draft',
+            ctx.payload.takeNew == true and 'new original' or 'original')
+        PushAll({ event = 'archived', id = row.id, by = actor.name })
+        return true, { id = row.id }
+    end, {
+        rate = 2,
+        reason = true,
+        confirm = function(p) return type(p.id) == 'string' and p.id or nil end,
+        category = 'builder',
+    })
+
+    -- Fold tweaks in: the MissionTweaks of an edited built-in become part of its file (a new version), and those
+    -- tweak keys are cleared in Settings (the location switches stay switches).
+    Kit.action('server:builder:foldTweaks', 'editBuiltins', function(ctx)
+        local actor, aerr = kitActor(ctx)
+        if not actor then return false, aerr end
+        local row, err = overrideRow(ctx.payload.id, actor)
+        if not row then return false, err end
+        if row.status ~= 'published' or type(row.published) ~= 'table' then
+            return false, 'err.builder_not_published'
+        end
+        if row.draft ~= nil then return false, 'err.builder_has_draft' end
+        if row.lockActive and row.lockedBy ~= actor.citizenid then return false, 'err.builder_locked' end
+        local tweak = type(Config.MissionTweaks) == 'table' and Config.MissionTweaks[row.id] or nil
+        local fold = {}
+        for k, v in pairs(type(tweak) == 'table' and tweak or {}) do
+            if k ~= 'disabledLocations' then fold[k] = U.deepcopy(v) end
+        end
+        if next(fold) == nil then return false, 'err.override_no_tweaks' end
+        if not (CP.Missions and CP.Missions._applyTweak) then return false, 'err.module_unavailable' end
+        local okT, tweaked = pcall(CP.Missions._applyTweak, B.toFileUnits(plain(row.published)), fold)
+        if not okT or type(tweaked) ~= 'table' then return false, 'err.setting_tweak' end
+        local b = B.sanitize(B.fromFileUnits(tweaked), row.id)
+        if not b then return false, 'err.builder_invalid' end
+        local errors = B.validate(b, { publish = true, baseline = BaselineOf(ShippedOf(row.id)) })
+        if #errors > 0 then return false, 'err.builder_invalid' end
+        local version = row.publishedVersion + 1
+        local ok, res = PublishDefinition(row, b, actor, { reason = 'foldTweaks', version = version })
+        if not ok then return false, res end
+        local map = U.deepcopy(type(Config.MissionTweaks) == 'table' and Config.MissionTweaks or {})
+        local rest = {}
+        for k, v in pairs(map[row.id] or {}) do if fold[k] == nil then rest[k] = v end end
+        map[row.id] = next(rest) ~= nil and rest or nil
+        local okS, errS = false, 'err.module_unavailable'
+        if CP.Settings and CP.Settings.set then
+            okS, errS = CP.Settings.set(ctx.src, 'MissionTweaks', map, false, { reason = ctx.reason })
+        end
+        ctx.audit('overrideFoldTweaks', row.id, 'v' .. row.publishedVersion, 'v' .. version)
+        PushAll({ event = 'published', id = row.id, by = actor.name })
+        return true,
+            { id = row.id, version = version, tweaksCleared = okS == true, settingError = (not okS) and errS or nil }
+    end, { rate = 2, reason = true, category = 'builder' })
+
+    -- Compare: what an update changed in the original (the base copy -> the shipped file) and the override against it.
+    Kit.callback('admin:builtinDiff', 'editBuiltins', function(ctx)
+        local id = ctx.args.id
+        if not ValidId(id) then return nil, 'err.invalid_payload' end
+        local shipped = ShippedOf(id)
+        if not shipped then return nil, 'err.builder_unknown_mission' end
+        local row = FetchRow(id)
+        if row and not row.overridesBuiltin then row = nil end
+        local function units(raw) return raw and B.sanitize(B.fromFileUnits(raw), id) or nil end
+        local baseContent = ReadFile(BasePathFor(id))
+        local baseRaw = baseContent and B.parse(baseContent, BasePathFor(id)) or nil
+        local new = units(shipped.raw)
+        local base = type(baseRaw) == 'table' and units(baseRaw) or nil
+        local mine = row and (row.draft or row.published) or nil
+        local original, moreOriginal = nil, false
+        if base then original, moreOriginal = diffLines(plain(base), plain(new)) end
+        local yours, moreYours = diffLines(plain(new), plain(mine or new))
+        local view = OverrideView(row, id)
+        return {
+            id = id,
+            changed = view.changed,
+            shippedHash = view.shippedHash,
+            baseHash = view.baseHash,
+            original = original,
+            originalMore = moreOriginal,
+            yours = yours,
+            yoursMore = moreYours,
+            summary = shortDiff(plain(new), plain(mine or new)),
+        }
+    end, { rate = 2 })
+
+    -- ---- MISSION ADMIN: OWNER, DELETE, BRING BACK, SAVED DRAFT -------------
+
+    Kit.action('server:builder:changeOwner', 'missionAdmin', function(ctx)
+        local p = ctx.payload
+        if not ValidId(p.id) or type(p.citizenid) ~= 'string' or #p.citizenid > 50
+            or not p.citizenid:match('^[%w_%-]+$') then
+            return false, 'err.invalid_payload'
+        end
+        local actor, aerr = kitActor(ctx)
+        if not actor then return false, aerr end
+        local row = FetchRow(p.id)
+        if not row then return false, 'err.builder_unknown_mission' end
+        -- an override is the server's built-in mission: never anyone's own (S4)
+        if row.overridesBuiltin then return false, 'err.override_owner' end
+        local known = MySQL.scalar.await('SELECT 1 AS known FROM cp_officers WHERE citizenid = ? LIMIT 1',
+            { p.citizenid })
+        if known == nil then return false, 'err.builder_unknown_owner' end
+        if row.createdBy == p.citizenid then return true, { id = row.id, owner = p.citizenid } end
+        local ok, err = Kit.cas(
+            'UPDATE cp_custom_missions SET created_by = ?, updated_at = updated_at WHERE id = ? AND created_by = ?',
+            { p.citizenid, row.id, row.createdBy })
+        if not ok then return false, err end
+        ctx.audit('missionOwner', row.id, row.createdBy, p.citizenid)
+        PushAll({ event = 'changed', id = row.id, by = actor.name })
+        return true, { id = row.id, owner = p.citizenid }
+    end, { rate = 2, reason = true, category = 'builder' })
+
+    -- Delete permanently: an archived custom mission's files go to <export>/deleted/<id>-<time>/ with its row as
+    -- row.json; nothing is erased, run history keeps the id, and Bring back puts it back as archived.
+    Kit.action('server:builder:deleteMission', 'missionAdmin', function(ctx)
+        local id = ctx.payload.id
+        if not ValidId(id) then return false, 'err.invalid_payload' end
+        local actor, aerr = kitActor(ctx)
+        if not actor then return false, aerr end
+        local row = FetchRow(id)
+        if not row then return false, 'err.builder_unknown_mission' end
+        if row.overridesBuiltin then return false, 'err.override_delete' end
+        if row.status ~= 'archived' then return false, 'err.builder_not_archived' end
+        local inUse = missionInUse(id)
+        if inUse then return false, inUse end
+        local folder = ('%s%s-%s/'):format(DeletedDir(), id, os.date('!%Y%m%d%H%M%S', Now()))
+        local candidates = { row.filePath or ArchivedPathFor(id), FilePathFor(id), DraftBackupPathFor(id) }
+        for n = 1, row.publishedVersion or 0 do candidates[#candidates + 1] = BackupPathFor(id, n) end
+        local moved, seen = {}, {}
+        for _, path in ipairs(candidates) do
+            if not seen[path] then
+                seen[path] = true
+                local content = ReadFile(path)
+                if content then
+                    local name = path:match('([^/]+)$')
+                    if not WriteFile(folder .. name, content) then return false, 'err.builder_file_write' end
+                    moved[#moved + 1] = { name = name, from = path }
+                end
+            end
+        end
+        local def = CurrentDef(row) or {}
+        local record = {
+            id = row.id,
+            missionType = row.missionType,
+            publishedVersion = row.publishedVersion,
+            published = row.published,
+            draftVersion = row.draftVersion,
+            draft = row.draft,
+            draftTested = row.draftTested,
+            filePath = row.filePath,
+            editedInCode = row.editedInCode,
+            createdBy = row.createdBy,
+            updatedBy = row.updatedBy,
+            files = moved,
+            deletedAt = Now(),
+            deletedBy = ctx.actor,
+            reason = ctx.reason,
+        }
+        if not WriteFile(folder .. 'row.json', json.encode(U.serialize(record))) then
+            return false, 'err.builder_file_write'
+        end
+        local ok, err = Kit.cas('DELETE FROM cp_custom_missions WHERE id = ? AND status = \'archived\'', { id })
+        if not ok then return false, err end
+        for _, f in ipairs(moved) do RemoveFile(f.from) end
+        local list = deletedIndex()
+        list[#list + 1] = {
+            id = id,
+            folder = folder,
+            label = tostring(def.label or id),
+            type = row.missionType,
+            version = row.publishedVersion,
+            deletedAt = Now(),
+            deletedBy = ctx.actor,
+            reason = ctx.reason,
+        }
+        saveDeletedIndex(list)
+        pendingTests[id] = nil
+        ctx.audit('missionDelete', id, row.publishedVersion and ('v' .. row.publishedVersion) or nil, folder)
+        PushAll({ event = 'deleted', id = id, by = actor.name })
+        return true, { id = id, folder = folder }
+    end, {
+        rate = 2,
+        reason = true,
+        confirm = function(p) return type(p.id) == 'string' and p.id or nil end,
+        category = 'builder',
+    })
+
+    Kit.action('server:builder:undeleteMission', 'missionAdmin', function(ctx)
+        local folder = ctx.payload.folder
+        if type(folder) ~= 'string' or #folder > 200 then return false, 'err.invalid_payload' end
+        local actor, aerr = kitActor(ctx)
+        if not actor then return false, aerr end
+        local list = deletedIndex()
+        local at = nil
+        for i, e in ipairs(list) do if e.folder == folder then at = i end end
+        if not at then return false, 'err.builder_unknown_mission' end
+        local entry = list[at]
+        local id = entry.id
+        if not ValidId(id) then return false, 'err.invalid_payload' end
+        if IdTaken(id) then return false, 'err.builder_id_taken' end
+        local text = ReadFile(folder .. 'row.json')
+        local okJ, record = pcall(json.decode, text or '')
+        if not okJ or type(record) ~= 'table' or record.id ~= id then return false, 'err.builder_file_write' end
+        local archived = ArchivedPathFor(id)
+        for _, f in ipairs(type(record.files) == 'table' and record.files or {}) do
+            local content = type(f) == 'table' and ReadFile(folder .. tostring(f.name)) or nil
+            if content then
+                local to = tostring(f.from)
+                -- the mission file comes back archived; backups and the saved draft where they were
+                if to == record.filePath or to == FilePathFor(id) then to = archived end
+                if not WriteFile(to, content) then return false, 'err.builder_file_write' end
+            end
+        end
+        local ok, err = pcall(MySQL.insert.await, [[INSERT INTO cp_custom_missions (id, mission_type, status,
+            published_version, published_definition, draft_version, draft_definition, draft_tested, file_path,
+            edited_in_code, created_by, updated_by) VALUES (?, ?, 'archived', ?, ?, ?, ?, ?, ?, ?, ?, ?)]], {
+            id,
+            tostring(record.missionType or 'patrol'),
+            math.tointeger(tonumber(record.publishedVersion)),
+            type(record.published) == 'table' and Encode(record.published) or nil,
+            math.tointeger(tonumber(record.draftVersion)),
+            type(record.draft) == 'table' and Encode(record.draft) or nil,
+            record.draftTested == true and 1 or 0,
+            archived,
+            record.editedInCode == true and 1 or 0,
+            tostring(record.createdBy or actor.citizenid),
+            actor.citizenid,
+        })
+        if not ok then
+            CP.err(TAG, 'bringing back %s failed: %s', id, tostring(err))
+            return false, 'err.internal'
+        end
+        for _, f in ipairs(type(record.files) == 'table' and record.files or {}) do
+            if type(f) == 'table' then RemoveFile(folder .. tostring(f.name)) end
+        end
+        RemoveFile(folder .. 'row.json')
+        RemoveFile(folder:gsub('/$', ''))
+        table.remove(list, at)
+        saveDeletedIndex(list)
+        ctx.audit('missionUndelete', id, folder, 'archived')
+        PushAll({ event = 'changed', id = id, by = actor.name })
+        return true, { id = id }
+    end, { rate = 2, reason = true, category = 'builder' })
+
+    -- The Deleted list (newest first).
+    Kit.callback('builder:deleted', 'missionAdmin', function()
+        local list = deletedIndex()
+        table.sort(list, function(a, b) return (tonumber(a.deletedAt) or 0) > (tonumber(b.deletedAt) or 0) end)
+        return { missions = list }
+    end, { rate = 2 })
+
+    -- Load saved draft: the draft a hand edit of the file overwrote (<id>.draft.lua.bak) becomes the draft again.
+    Kit.action('server:builder:loadBackupDraft', 'missionAdmin', function(ctx)
+        local id = ctx.payload.id
+        if not ValidId(id) then return false, 'err.invalid_payload' end
+        local actor, aerr = kitActor(ctx)
+        if not actor then return false, aerr end
+        local row = FetchRow(id)
+        if not row then return false, 'err.builder_unknown_mission' end
+        if row.overridesBuiltin and not OverrideOk(actor) then return false, 'err.edit_builtins_off' end
+        if row.status == 'archived' then return false, 'err.builder_read_only' end
+        local path = DraftBackupPathFor(row.id, row.overridesBuiltin)
+        local content = ReadFile(path)
+        if not content then return false, 'err.builder_no_backup' end
+        local raw = B.parse(content, path)
+        if type(raw) ~= 'table' or raw.id ~= row.id then return false, 'err.builder_invalid' end
+        StripPayoutFields(raw, row.id)
+        local b = B.sanitize(B.fromFileUnits(raw), row.id)
+        if not b then return false, 'err.builder_invalid' end
+        if row.overridesBuiltin then b._carry = CarryFor(row) end
+        local okLock, fresh = AcquireLock(row, actor)
+        if not okLock then return false, 'err.builder_locked' end
+        local version = fresh.draftVersion or ((fresh.publishedVersion or 0) + 1)
+        MySQL.update.await([[UPDATE cp_custom_missions SET draft_definition = ?, draft_version = ?, draft_tested = 0,
+            updated_by = ? WHERE id = ?]], { Encode(b), version, actor.citizenid, row.id })
+        pendingTests[row.id] = nil
+        ctx.audit('draftRecovered', row.id, fresh.draftVersion and ('v' .. fresh.draftVersion) or nil, 'v' .. version)
+        PushAll({ event = 'changed', id = row.id, by = actor.name })
+        return true,
+            { id = row.id, version = version, record = RecordView(FetchRow(row.id), actor, PermSet(ctx.src, actor)) }
+    end, { rate = 2, reason = 'optional', category = 'builder' })
+
+    -- Rollback picker: a short diff of a kept version against the published one (A11).
+    CP.Net.callback('builder:versionDiff', function(src, args)
+        local actor, perms = Begin(src)
+        if not actor then return nil, perms end
+        local row, err = LoadRow(args, actor)
+        if not row then return nil, err end
+        if not Allows(perms, row, actor, 'rollback') then return nil, 'err.no_permission' end
+        local version = math.tointeger(tonumber(type(args) == 'table' and args.version or nil))
+        if not version or not row.publishedVersion or version < 1 or version >= row.publishedVersion then
+            return nil, 'err.builder_no_backup'
+        end
+        local path = BackupPathFor(row.id, version, row.overridesBuiltin)
+        local content = ReadFile(path)
+        local raw = content and B.parse(content, path) or nil
+        if type(raw) ~= 'table' then return nil, 'err.builder_no_backup' end
+        local old = B.sanitize(B.fromFileUnits(raw), row.id)
+        local cur = plain(row.published)
+        local lines, more = diffLines(plain(cur), plain(old))
+        return {
+            id = row.id,
+            version = version,
+            current = row.publishedVersion,
+            summary = shortDiff(cur, old),
+            lines = lines,
+            more = more,
+        }
+    end, { rate = 4 })
+
+    -- ---- COPY AS LUA AND IMPORT (C13) --------------------------------------
+
+    Kit.callback('admin:exportMissionLua', 'missionAdmin', function(ctx)
+        local id = ctx.args.id
+        if not ValidId(id) then return nil, 'err.invalid_payload' end
+        local row = FetchRow(id)
+        -- a built-in only through its override (the shipped file is in every copy of the resource already)
+        if not row or row.publishedVersion == nil or type(row.published) ~= 'table' then
+            if IsBuiltin(id) then return nil, 'err.export_builtin' end
+            return nil, 'err.builder_not_published'
+        end
+        local content = row.filePath and ReadFile(row.filePath) or nil
+        if not content then
+            local meta = type(row.published._file) == 'table' and row.published._file or {}
+            content = B.exportLua(plain(row.published), {
+                version = row.publishedVersion,
+                publisher = meta.publisher,
+                at = meta.publishedAt,
+                override = row.overridesBuiltin,
+                carry = CarryFor(row),
+            })
+        end
+        Kit.auditSync(ctx.src, 'builder', 'missionExport', id, nil, 'v' .. tostring(row.publishedVersion), nil)
+        return { id = id, version = row.publishedVersion, lua = content }
+    end, { rate = 2 })
+
+    -- Import (preview): the Lua text runs in the loader's sandbox and is read as a new custom draft. Payout fields are
+    -- dropped and listed; the draft gets its own new id; nothing is published.
+    Kit.callback('admin:previewImport', 'missionAdmin', function(ctx)
+        local lua = ctx.args.lua
+        if type(lua) ~= 'string' or lua == '' then return nil, 'err.invalid_payload' end
+        if #lua > IMPORT_MAX then return nil, 'err.import_too_large' end
+        if not CP.Net.rateOk(ctx.src, 'builder:import', 1, 10000) then return nil, 'err.rate_limited' end
+        local raw, perr = B.parse(lua, 'import.lua')
+        if type(raw) ~= 'table' then
+            return nil, 'err.import_parse', { reason = tostring(perr) }
+        end
+        local dropped = {}
+        StripPayout(raw, function(path) dropped[#dropped + 1] = path end)
+        local b = B.sanitize(B.fromFileUnits(raw), nil)
+        if not b then return nil, 'err.import_parse' end
+        for _, listKey in ipairs({ 'bonuses', 'penalties' }) do
+            b[listKey] = U.filter(b[listKey] or {}, function(e)
+                local keep = type(e) == 'table' and BonusCfg(e.id) ~= nil
+                if not keep then
+                    dropped[#dropped + 1] = ('%s.%s'):format(listKey, tostring(type(e) == 'table' and e.id))
+                end
+                return keep
+            end)
+        end
+        B.customBonusFields(b)
+        if not (Config.MissionTypes and Config.MissionTypes[b.type]) then
+            dropped[#dropped + 1] = 'type ' .. tostring(b.type)
+            b.type = U.keys(Config.MissionTypes or {})[1]
+        end
+        local label = type(b.label) == 'string' and U.trim(b.label) ~= '' and ClipText(U.trim(b.label), LIMITS.label)
+            or L('builder.default_label', { type = tostring(b.type) })
+        b.label = label
+        b.id = nil
+        local errors = B.validate(b)
+        local messages = {}
+        for i = 1, math.min(10, #errors) do messages[i] = errors[i].message end
+        local objectives, locations = {}, {}
+        for _, o in ipairs(b.objectives or {}) do
+            objectives[#objectives + 1] = { block = tostring(o.block), label = tostring(o.label or '') }
+        end
+        for i, l in ipairs(b.locations or {}) do locations[#locations + 1] = tostring(l.label or ('#' .. i)) end
+        local effect = {
+            label = label,
+            type = b.type,
+            sourceId = type(raw.id) == 'string' and ClipText(raw.id, 40) or nil,
+            objectives = objectives,
+            locations = locations,
+            dropped = dropped,
+            errors = messages,
+            errorCount = #errors,
+        }
+        local stored = U.deepcopy(effect)
+        stored.def = b
+        local token, expiresAt = ctx.preview('missionImport', { U.hashHex(lua) }, stored)
+        return { previewToken = token, expiresAt = expiresAt, effect = effect }
+    end, { rate = 2 })
+
+    Kit.action('server:builder:importDraft', 'missionAdmin', function(ctx)
+        local actor, aerr = kitActor(ctx)
+        if not actor then return false, aerr end
+        local ok, effect = ctx.consume(ctx.payload.previewToken, 'missionImport', nil)
+        if not ok then return false, effect end
+        if type(effect) ~= 'table' or type(effect.def) ~= 'table' then return false, 'err.preview_missing' end
+        local def = U.deepcopy(effect.def)
+        local id, err = InsertDraft(def.label, def, actor)
+        if not id then return false, err end
+        ctx.audit('missionImport', id, effect.sourceId, 'v1')
+        PushAll({ event = 'changed', id = id, by = actor.name })
+        return true, { id = id, record = RecordView(FetchRow(id), actor, PermSet(ctx.src, actor)) }
+    end, { rate = 2, reason = true, category = 'builder' })
+
+    -- A test result an admin removed (C20) no longer counts for a draft: the draft is untested again when that result
+    -- was the pass of exactly this draft.
+    function B.onTestHidden(missionId, defHash)
+        if not ValidId(missionId) or type(defHash) ~= 'string' then return false end
+        local row = FetchRow(missionId)
+        if not row or not row.draftTested or type(row.draft) ~= 'table' or DefHash(row.draft) ~= defHash then
+            return false
+        end
+        MySQL.update.await('UPDATE cp_custom_missions SET draft_tested = 0, updated_at = updated_at WHERE id = ?',
+            { row.id })
+        PushAll({ event = 'changed', id = row.id })
+        return true
+    end
+end
+RegisterAdminActions()
 
 -- ============================================================================
 --                          LOCKS OF PLAYERS WHO LEAVE
