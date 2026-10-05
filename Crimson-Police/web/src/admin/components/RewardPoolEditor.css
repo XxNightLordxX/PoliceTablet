@@ -1,0 +1,52 @@
+/* Settings → Item rewards pool editor (economy). Only --cp-* variables; classes prefixed reward-pools. */
+
+.reward-pools {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.reward-pools__group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px;
+    border: 1px solid var(--cp-border);
+    border-radius: var(--cp-radius-sm);
+}
+
+.reward-pools__head,
+.reward-pools__spec {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 8px;
+}
+
+.reward-pools__spec > * {
+    min-width: 90px;
+}
+
+.reward-pools__error {
+    padding: 6px 10px;
+    border-radius: var(--cp-radius-sm);
+    background: rgba(var(--cp-danger-rgb), 0.12);
+    color: var(--cp-danger);
+    font-size: var(--cp-fs-sm);
+}
+
+.reward-pools__expected {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.reward-pools__expected-title {
+    font-size: var(--cp-fs-sm);
+    color: var(--cp-muted);
+}
+
+.reward-pools__save {
+    display: flex;
+    gap: 8px;
+}

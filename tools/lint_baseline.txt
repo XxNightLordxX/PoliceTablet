@@ -1,0 +1,11 @@
+# tools/lint_fivem.py baseline: the known hits, one per line, `<rule> <file> <code> -- <reason>`.
+# <code> is the hit's source line (comments left out); it is compared without whitespace and with " read as ',
+# so re-indenting keeps a line valid. A real bug stays here only until its fix lands: the fix makes the hit go
+# away, the lint then reports the line as stale, and the fixer deletes it in the same commit. B<n> are the
+# entries of the fix round's bug list (scratchpad process/bugs.md, 2026-09-29).
+
+# Real bugs, waiting for the fix round
+FX06 Crimson-Police/modules/runs/server.lua local ped = CreatePed(4, hash, x, y, z, h, true, true) -- B3: run peds, vehicles and objects are deleted by the server when no player is near, and a vanished suspect counts as dead
+
+# Deliberate
+FX07 Crimson-Police/modules/storage/memsql.lua function FS.rename(a, b) return os.rename(a, b) end -- the raw answer on purpose: Store:_probeRename works out per saves folder whether this runtime inverts it

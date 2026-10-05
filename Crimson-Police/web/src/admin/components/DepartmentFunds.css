@@ -1,0 +1,44 @@
+/* Departments → Funds card (economy). Only --cp-* variables; classes prefixed dept-funds. */
+
+.dept-funds {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--cp-border);
+}
+
+.dept-funds__head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.dept-funds__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 6px 12px;
+}
+
+.dept-funds__low {
+    color: var(--cp-danger);
+    font-weight: 700;
+}
+
+.dept-funds__recent {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-size: var(--cp-fs-sm);
+}
+
+.dept-funds__recent li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}

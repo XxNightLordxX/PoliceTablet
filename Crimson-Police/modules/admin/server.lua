@@ -1,0 +1,3172 @@
+-- CP.Admin (server): supervisor and admin actions, /CrimsonPoliceAdmin, the audit log (cp_audit) and the Discord
+-- webhooks.
+
+CP.Admin = CP.Admin or {}
+local Admin = CP.Admin
+local U = CP.U
+local TAG = 'admin'
+
+local MAX_AWARD = 10000            -- points per manual award (typo guard; the column holds 32767)
+local MAX_REASON = 255
+local AUDIT_PAGE = 50
+local EXPORT_MAX = 5000
+local FLAGGED_LIMIT = 200
+local SEARCH_LIMIT = 25
+local RECENT_RUNS = 25
+local SUSPENSION_HISTORY = 10
+local WEBHOOK_GAP_MS = 2100        -- Discord: at most 30 posts a minute per webhook
+local WEBHOOK_QUEUE_MAX = 100
+local WEBHOOK_RETRIES = 3
+local NON_MISSION_TYPES = { manual_award = true, goal = true }
+local COMMAND_WAIT_MS = 15000      -- the command waits this long at most for the settings changed in game
+
+local ROLES = { supervisor = true, admin = true, console = true }
+local CATEGORIES = { audit = true, flags = true, builder = true, operations = true }
+local WEBHOOK_CONVARS = {
+    audit = 'cp_webhook_audit',
+    flags = 'cp_webhook_flags',
+    builder = 'cp_webhook_builder',
+    operations = 'cp_webhook_operations',
+    board = 'cp_webhook_board',
+}
+local WEBHOOK_ORDER = { 'audit', 'flags', 'board', 'builder', 'operations' }
+local WEBHOOK_COLOURS = {
+    audit = 0xA4161A,
+    flags = 0xF59E0B,
+    builder = 0x3B82F6,
+    operations = 0x8B5CF6,
+    board = 0xF2C230,
+}
+-- ARCHITECTURE §5.3: always admin-only, whatever Config.Permissions says.
+local ADMIN_ONLY = {
+    'setMissionPayout',
+    'clearPayout',
+    'manualAward',
+    'handleFailedDispute',
+    'voidAnyRun',
+    'seasons',
+    'bountyOverride',
+    'suspend',
+    'reloadMissions',
+    'testRun',
+    'openAdmin',
+    -- full admin control (docs/ARCHITECTURE.md §5.37): admins and the console only
+    'officerRecords',
+    'pointsAdjust',
+    'bulkVoid',
+    'restoreRun',
+    'progression',
+    'antiFarmOverride',
+    'liveRuns',
+    'editBuiltins',
+    'missionAdmin',
+    'boardsAdmin',
+    'payments',
+    'rewardsAdmin',
+    'deptFunds',
+    'departmentsAdmin',
+    'storageAdmin',
+    'playerSupport',
+    'recordMove',
+    'cleanup',
+}
+local SUPERVISOR_ALWAYS = { 'viewMissionList' }
+-- Config.Permissions.supervisor in the spec's order (the Permissions screen lists them this way).
+local SUPERVISOR_ORDER = {
+    'setTypePayout',
+    'launchCrossDept',
+    'forceRecall',
+    'reviewFlagged',
+    'handleDisputes',
+    'builderEdit',
+    'builderPublish',
+    'builderArchive',
+    'builderEditAny',
+    'builderRollback',
+    'breakEditLock',
+}
+
+local warned = {}
+
+-- Clip to at most n characters without cutting a UTF-8 sequence in half, dropping bytes that are not valid
+-- UTF-8 first. The cp_* columns are utf8mb4 (VARCHAR(n) counts characters) and MariaDB's strict mode
+-- refuses a broken sequence (error 1366), so a byte clip (CP.U.clip) of an accented reason could make
+-- the whole insert fail.
+local function Clip(s, n)
+    if s == nil then return nil end
+    s = tostring(s)
+    for _ = 1, 64 do
+        local len, bad = utf8.len(s)
+        if len then break end
+        s = s:sub(1, bad - 1) .. s:sub(bad + 1)
+    end
+    if not utf8.len(s) then s = s:gsub('[\128-\255]', '?') end
+    if utf8.len(s) <= n then return s end
+    return s:sub(1, utf8.offset(s, n + 1) - 1)
+end
+
+-- ============================================================================
+--                                SMALL HELPERS
+-- ============================================================================
+
+local function ToSrc(v)
+    local n = tonumber(v)
+    if not n then return nil end
+    n = math.tointeger(n)
+    if not n or n <= 0 then return nil end
+    return n
+end
+
+local function WarnOnce(key, fmt, ...)
+    if warned[key] then return end
+    warned[key] = true
+    CP.warn(TAG, fmt, ...)
+end
+
+local function Has(modName, fnName)
+    local m = CP[modName]
+    return type(m) == 'table' and type(m[fnName]) == 'function'
+end
+
+-- pcall CP.<mod>.<fn>(...): true + results, or false when missing/failed.
+local function Call(modName, fnName, ...)
+    if not Has(modName, fnName) then return false end
+    local res = table.pack(pcall(CP[modName][fnName], ...))
+    if not res[1] then
+        CP.err(TAG, 'CP.%s.%s failed: %s', modName, fnName, tostring(res[2]))
+        return false
+    end
+    return true, table.unpack(res, 2, res.n)
+end
+
+local function Db()
+    if CP.Migrations and CP.Migrations.ready then CP.Migrations.ready() end
+end
+
+local function Num(v, default)
+    local n = tonumber(v)
+    if n == nil or n ~= n then return default end
+    return n
+end
+
+-- A whole number in [lo, hi], or nil.
+local function Int(v, lo, hi)
+    local n = tonumber(v)
+    if not n or n ~= n or n % 1 ~= 0 then return nil end
+    n = math.tointeger(n)
+    if not n or n < lo or n > hi then return nil end
+    return n
+end
+
+local function CleanText(v, max)
+    if type(v) ~= 'string' then return nil end
+    local s = U.trim(v:gsub('[%c]', ' '))
+    if s == '' then return nil end
+    return Clip(s, max or MAX_REASON)
+end
+
+local function Str(v, n)
+    if v == nil then return nil end
+    if type(v) == 'table' then
+        local ok, s = pcall(json.encode, U.serialize(v))
+        v = ok and s or tostring(v)
+    end
+    return Clip(tostring(v), n)
+end
+
+local function ValidUuid(v)
+    return type(v) == 'string' and #v > 0 and #v <= 36 and v:match('^[%w%-]+$') ~= nil
+end
+
+local function Query(sql, params)
+    Db()
+    local ok, res = pcall(MySQL.query.await, sql, params or {})
+    if not ok then
+        CP.err(TAG, 'query failed: %s', tostring(res))
+        return nil
+    end
+    return type(res) == 'table' and res or {}
+end
+
+local function Single(sql, params)
+    Db()
+    local ok, res = pcall(MySQL.single.await, sql, params or {})
+    if not ok then
+        CP.err(TAG, 'query failed: %s', tostring(res))
+        return nil, false
+    end
+    return type(res) == 'table' and res or nil, true
+end
+
+local function Update(sql, params)
+    Db()
+    local ok, res = pcall(MySQL.update.await, sql, params or {})
+    if not ok then
+        CP.err(TAG, 'update failed: %s', tostring(res))
+        return nil
+    end
+    return tonumber(res) or 0
+end
+
+local function LikeArg(s)
+    s = s:gsub('\\', '\\\\'):gsub('%%', '\\%%'):gsub('_', '\\_')
+    return '%' .. s .. '%'
+end
+
+local function RoleOf(src)
+    local n = tonumber(src)
+    if n == 0 then return 'console' end
+    if CP.Access and CP.Access.isAdmin and CP.Access.isAdmin(n) then return 'admin' end
+    return 'supervisor'
+end
+
+local function Can(src, action, ctx)
+    if not Has('Permissions', 'can') then return false, 'err.no_permission' end
+    local ok, allowed, errKey = Call('Permissions', 'can', src, action, ctx)
+    if not ok then return false, 'err.internal' end
+    if not allowed then return false, errKey or 'err.no_permission' end
+    return true
+end
+
+local function IsAdmin(src)
+    return CP.Access ~= nil and CP.Access.isAdmin ~= nil and CP.Access.isAdmin(src) == true
+end
+
+local function Notify(src, kind, key, vars)
+    if ToSrc(src) and Has('Tablet', 'notify') then Call('Tablet', 'notify', src, kind, key, vars) end
+end
+
+local function OnlineSrc(citizenid)
+    if type(citizenid) ~= 'string' or not Has('Qbx', 'getByCitizenId') then return nil end
+    local ok, s = Call('Qbx', 'getByCitizenId', citizenid)
+    return ok and ToSrc(s) or nil
+end
+
+-- The character citizenid of a player src (nil for the console or a player without a character).
+local function CitizenOf(src)
+    local n = ToSrc(src)
+    if not n then return nil end
+    local ok, info = Call('Qbx', 'getInfo', n)
+    if ok and type(info) == 'table' and type(info.citizenid) == 'string' and info.citizenid ~= '' then
+        return info.citizenid
+    end
+    return nil
+end
+
+-- Whether citizenid is (or was) a participant of the still-running run runUuid. Their own row is only
+-- written when they leave, so the cp_mission_runs check alone misses a reviewer who is still on the run.
+local function InLiveRun(citizenid, runUuid)
+    if type(citizenid) ~= 'string' or citizenid == '' or type(runUuid) ~= 'string' or not Has('Runs', 'get') then
+        return false
+    end
+    local ok, run = Call('Runs', 'get', runUuid)
+    if not ok or type(run) ~= 'table' or type(run.participants) ~= 'table' then return false end
+    for _, p in pairs(run.participants) do
+        if type(p) == 'table' and p.citizenid == citizenid then return true end
+    end
+    return false
+end
+
+-- A mission definition by id (ids are lower case; a typed 'Gang_Shootout' still finds it).
+local function FindMission(id)
+    if type(id) ~= 'string' or id == '' or #id > 64 or not Has('Missions', 'get') then return nil end
+    local ok, def = Call('Missions', 'get', id)
+    if ok and type(def) == 'table' then return def end
+    local low = id:lower()
+    if low ~= id then
+        ok, def = Call('Missions', 'get', low)
+        if ok and type(def) == 'table' then return def end
+    end
+    return nil
+end
+
+local function DeptShort(key)
+    if type(key) ~= 'string' then return '' end
+    local d = CP.Access and CP.Access.department and CP.Access.department(key)
+    return d and d.short or key:upper()
+end
+
+local function TypeLabel(t)
+    local mt = Config.MissionTypes and Config.MissionTypes[t]
+    return mt and mt.label or tostring(t or '')
+end
+
+function Admin.missionLabel(missionId)
+    if missionId == 'manual_award' then return CP.L('admin.mission.manual_award') end
+    if missionId == 'manual_adjust' then return CP.L('admin.mission.manual_adjust') end
+    if missionId == 'manual_cash' then return CP.L('admin.mission.manual_cash') end
+    if missionId == 'goal' then return CP.L('admin.mission.goal') end
+    local def = Has('Missions', 'get') and CP.Missions.get(missionId) or nil
+    if type(def) == 'table' and def.label then return def.label end
+    return tostring(missionId or '')
+end
+
+local function ActionLabel(action)
+    local key = 'admin.action.' .. tostring(action)
+    if CP.Locale and CP.Locale.has and CP.Locale.has(key) then return CP.L(key) end
+    return tostring(action)
+end
+
+local function FlagLabel(reason)
+    local key = 'flag.' .. tostring(reason)
+    if CP.Locale and CP.Locale.has and CP.Locale.has(key) then return CP.L(key) end
+    return tostring(reason)
+end
+Admin.flagLabel = FlagLabel
+
+-- ============================================================================
+--                                   WEBHOOKS
+-- ============================================================================
+
+local queue = {}
+local working = false
+local lastSent, blockedUntil = {}, {}
+local dropped = 0          -- ordinary posts dropped from a full queue since the last notice
+
+-- 'on' and the url, 'off' (no convar or an empty one) or 'invalid' (not an https:// link: that webhook is off).
+local function WebhookState(category)
+    local convar = WEBHOOK_CONVARS[category]
+    if not convar or not GetConvar then return 'off' end
+    local url = GetConvar(convar, '')
+    if type(url) ~= 'string' then return 'off' end
+    url = U.trim(url)
+    if url == '' then return 'off' end
+    if url:sub(1, 8):lower() ~= 'https://' or url:find('[%s"\'<>]') then return 'invalid' end
+    return 'on', url
+end
+
+-- A Discord webhook link: the whole host anchored (https://discord.com/api/webhooks/... or discordapp.com), so a
+-- look-alike such as discord.com.example.net never counts.
+local DISCORD_HOOKS = {
+    '^https://discord%.com/api/webhooks/%d+/[%w_%-]+$',
+    '^https://discordapp%.com/api/webhooks/%d+/[%w_%-]+$',
+}
+local function IsDiscordHook(url)
+    if type(url) ~= 'string' then return false end
+    for _, pattern in ipairs(DISCORD_HOOKS) do
+        if url:match(pattern) then return true end
+    end
+    return false
+end
+Admin._isDiscordHook = IsDiscordHook
+
+local function WebhookUrl(category)
+    local state, url = WebhookState(category)
+    if state == 'invalid' then
+        WarnOnce('url.' .. category, 'convar %s must be an https:// webhook url; that webhook is off',
+            WEBHOOK_CONVARS[category])
+    end
+    return url
+end
+
+-- Every webhook with its convar and state, in a fixed order (Config health lists them). discord = the link is a
+-- Discord webhook link (anchored host check). The link itself never leaves this module.
+function Admin.webhooks()
+    local out = {}
+    for _, category in ipairs(WEBHOOK_ORDER) do
+        local state, url = WebhookState(category)
+        out[#out + 1] = {
+            category = category,
+            convar = WEBHOOK_CONVARS[category],
+            state = state,
+            discord = state == 'on' and IsDiscordHook(url) or false,
+        }
+    end
+    return out
+end
+
+-- Discord limits count characters: clip on a character boundary (a cut sequence would make the JSON invalid).
+local function ClipText(s, n)
+    s = Clip(tostring(s or ''), 1000000)
+    if utf8.len(s) > n then s = Clip(s, n - 1) .. '…' end
+    return s
+end
+
+local function SendJob(job)
+    PerformHttpRequest(job.url, function(status, body)
+        status = tonumber(status) or 0
+        if status >= 200 and status < 300 then return end
+        if status == 429 then
+            local wait = 2.0
+            local ok, data = pcall(json.decode, body or '')
+            if ok and type(data) == 'table' and tonumber(data.retry_after) then wait = tonumber(data.retry_after) end
+            if wait > 1000 then
+                wait = wait / 1000
+            end -- very old API versions answered in ms
+            blockedUntil[job.url] = GetGameTimer() + math.ceil(wait * 1000) + 100
+        elseif status ~= 0 and status < 500 then
+            WarnOnce('status.' .. job.category .. status, 'webhook %s answered %d: check its convar', job.category,
+                status)
+            return
+        else
+            blockedUntil[job.url] = GetGameTimer() + 5000
+        end
+        job.tries = job.tries + 1
+        if job.tries <= WEBHOOK_RETRIES then
+            table.insert(queue, 1, job)
+            Admin._pumpWebhooks()
+        else
+            CP.warn(TAG, 'webhook %s dropped after %d tries (last status %d)', job.category, job.tries, status)
+        end
+    end, 'POST', job.body, { ['Content-Type'] = 'application/json' })
+end
+
+-- Once the queue has room again: one audit post saying how many ordinary posts a full queue dropped.
+local function QueueDropNotice()
+    if dropped <= 0 or #queue >= WEBHOOK_QUEUE_MAX - 1 then return end
+    local url = WebhookUrl('audit')
+    if not url then
+        dropped = 0
+        return
+    end
+    local ok, body = pcall(json.encode, {
+        username = Config.Tablet and Config.Tablet.title or 'Crimson-Police',
+        embeds = {
+            {
+                title = ClipText(CP.L('admin.webhook.dropped_title'), 256),
+                description = ClipText(CP.L('admin.webhook.dropped', { n = dropped }), 3500),
+                color = WEBHOOK_COLOURS.audit,
+                timestamp = os.date('!%Y-%m-%dT%H:%M:%SZ'),
+            },
+        },
+    })
+    dropped = 0
+    if ok then queue[#queue + 1] = { url = url, body = body, tries = 0, category = 'audit', critical = true } end
+end
+
+function Admin._pumpWebhooks()
+    if working then return end
+    working = true
+    CreateThread(function()
+        while #queue > 0 or dropped > 0 do
+            QueueDropNotice()
+            if #queue == 0 then break end
+            local now = GetGameTimer()
+            local sent = false
+            for i = 1, #queue do
+                local job = queue[i]
+                local freeAt = math.max(blockedUntil[job.url] or 0,
+                    (lastSent[job.url] or -WEBHOOK_GAP_MS) + WEBHOOK_GAP_MS)
+                if now >= freeAt then
+                    table.remove(queue, i)
+                    lastSent[job.url] = now
+                    local ok, err = pcall(SendJob, job)
+                    if not ok then CP.err(TAG, 'webhook post failed: %s', tostring(err)) end
+                    sent = true
+                    break
+                end
+            end
+            Wait(sent and 50 or 250)
+        end
+        working = false
+    end)
+end
+
+function Admin._webhookQueue() return queue end
+
+-- opts: { critical = true (never dropped from a full queue) }
+function Admin.webhook(category, title, description, fields, opts)
+    local url = WebhookUrl(category)
+    if not url then return false end
+    local embed = {
+        title = ClipText(title, 256),
+        description = ClipText(description, 3500),
+        color = WEBHOOK_COLOURS[category],
+        timestamp = os.date('!%Y-%m-%dT%H:%M:%SZ'),
+        footer = {
+            text = ClipText(('%s · %s'):format(Config.Tablet and Config.Tablet.title or 'Crimson-Police', category),
+                256),
+        },
+    }
+    local list = {}
+    if type(fields) == 'table' then
+        for _, f in ipairs(fields) do
+            if #list >= 20 then break end
+            local name = type(f) == 'table' and (f.name or f[1]) or nil
+            local value = type(f) == 'table' and (f.value or f[2]) or nil
+            if name ~= nil and value ~= nil and tostring(value) ~= '' then
+                list[#list + 1] = {
+                    name = ClipText(name, 256),
+                    value = ClipText(value, 1000),
+                    inline = type(f) == 'table' and f.inline == true,
+                }
+            end
+        end
+    end
+    if #list > 0 then embed.fields = list end
+    local ok, body = pcall(json.encode,
+        { username = Config.Tablet and Config.Tablet.title or 'Crimson-Police', embeds = { embed } })
+    if not ok then
+        CP.err(TAG, 'webhook payload could not be encoded: %s', tostring(body))
+        return false
+    end
+    opts = type(opts) == 'table' and opts or {}
+    if #queue >= WEBHOOK_QUEUE_MAX then
+        -- a post of a typed-confirmation or money action is never dropped: the oldest ordinary one goes instead
+        local victim = nil
+        for i = 1, #queue do
+            if not queue[i].critical then
+                victim = i
+                break
+            end
+        end
+        if victim then
+            table.remove(queue, victim)
+            dropped = dropped + 1
+            WarnOnce('queue_full', 'the webhook queue is full; the oldest ordinary posts are dropped')
+        elseif not opts.critical then
+            dropped = dropped + 1
+            return false
+        end
+    end
+    queue[#queue + 1] = { url = url, body = body, tries = 0, category = category, critical = opts.critical == true }
+    Admin._pumpWebhooks()
+    return true
+end
+
+function Admin._webhookDropped() return dropped end
+
+-- ============================================================================
+--                                    AUDIT
+-- ============================================================================
+-- actor -> id stored in cp_audit, display name, src (0 = console) or nil.
+local function ResolveActor(actor)
+    if actor == nil or actor == 0 or actor == '0' or actor == 'console' then
+        return 'console', CP.L('admin.actor.console'), 0
+    end
+    if type(actor) == 'number' then
+        local n = ToSrc(actor)
+        if not n then return 'console', CP.L('admin.actor.console'), 0 end
+        local ok, info = Call('Qbx', 'getInfo', n)
+        if ok and type(info) == 'table' and type(info.citizenid) == 'string' then
+            return Clip(info.citizenid, 50), info.name, n
+        end
+        return Clip(('player:%d'):format(n), 50), GetPlayerName and GetPlayerName(n) or nil, n
+    end
+    local s = U.trim(tostring(actor))
+    if s == '' then return 'console', CP.L('admin.actor.console'), 0 end
+    return Clip(s, 50), nil, nil
+end
+
+local function ResolveRole(role, actorId, src)
+    if ROLES[role] then return role end
+    if actorId == 'console' then return 'console' end
+    if src and src > 0 and CP.Access then
+        if CP.Access.isAdmin and CP.Access.isAdmin(src) then return 'admin' end
+        if CP.Access.isSupervisor and CP.Access.isSupervisor(src) then return 'supervisor' end
+    end
+    return 'console'
+end
+
+local AUDIT_COLS = {
+    'actor',
+    'role',
+    'category',
+    'action',
+    'target',
+    'old_value',
+    'new_value',
+    'reason',
+    'actor_ident',
+}
+
+local function WriteAudit(entry, hookCategory, actorName, opts)
+    opts = opts or {}
+    local values, params = {}, {}
+    for i, col in ipairs(AUDIT_COLS) do
+        local v = entry[col]
+        if v == nil then
+            values[i] = 'NULL'
+        else
+            values[i] = '?'
+            params[#params + 1] = v
+        end
+    end
+    Db()
+    local sql = ('INSERT INTO cp_audit (%s) VALUES (%s)'):format(table.concat(AUDIT_COLS, ', '),
+        table.concat(values, ', '))
+    local ok, id = pcall(MySQL.insert.await, sql, params)
+    if not ok then
+        CP.err(TAG, 'audit insert failed (%s): %s', entry.action, tostring(id))
+        id = nil
+    end
+    if opts.noWebhook then return tonumber(id) end
+    local who = actorName and actorName ~= '' and ('%s (%s)'):format(actorName, entry.actor) or entry.actor
+    local fields = {
+        { name = CP.L('admin.webhook.field.actor'), value = who, inline = true },
+        { name = CP.L('admin.webhook.field.role'), value = CP.L('admin.role.' .. entry.role), inline = true },
+    }
+    if entry.target then
+        fields[#fields + 1] = { name = CP.L('admin.webhook.field.target'), value = entry.target, inline = true }
+    end
+    if entry.old_value or entry.new_value then
+        fields[#fields + 1] = {
+            name = CP.L('admin.webhook.field.change'),
+            value = ('%s → %s'):format(entry.old_value or '—', entry.new_value or '—'),
+            inline = false,
+        }
+    end
+    if entry.reason then
+        fields[#fields + 1] = { name = CP.L('admin.webhook.field.reason'), value = entry.reason, inline = false }
+    end
+    Admin.webhook(hookCategory, ActionLabel(entry.action),
+        CP.L('admin.webhook.audit_desc', { category = hookCategory }), fields, { critical = opts.critical == true })
+    return tonumber(id)
+end
+
+-- The cp_audit row of one entry (values clipped to the column sizes) and the actor's display name.
+local function AuditEntry(actor, role, category, action, target, old, new, reason, ident)
+    local actorId, actorName, src = ResolveActor(actor)
+    if ident == nil and src and src > 0 and Has('Access', 'licenseOfSrc') then
+        local okI, lic = pcall(CP.Access.licenseOfSrc, src)
+        if okI and type(lic) == 'string' then ident = lic end
+    end
+    return {
+        actor = actorId,
+        role = ResolveRole(role, actorId, src),
+        category = CATEGORIES[category] and category or 'audit',
+        action = Clip(action, 40),
+        target = Str(target, 64),
+        old_value = Str(old, 64),
+        new_value = Str(new, 64),
+        reason = Str(reason, MAX_REASON),
+        actor_ident = Str(ident, 64),
+    },
+        actorName
+end
+
+-- opts: { noWebhook = true (a bulk row: the summary line posts), critical = true (never dropped), ident = license }
+function Admin.audit(actor, role, category, action, target, old, new, reason, opts)
+    if type(action) ~= 'string' or action == '' then
+        CP.warn(TAG, 'audit called without an action (ignored)')
+        return nil
+    end
+    opts = type(opts) == 'table' and opts or {}
+    local entry, actorName = AuditEntry(actor, role, category, action, target, old, new, reason, opts.ident)
+    local hookCategory = WEBHOOK_CONVARS[category] and category or entry.category
+    if not coroutine.isyieldable() then
+        CreateThread(function() WriteAudit(entry, hookCategory, actorName, opts) end)
+        return nil
+    end
+    return WriteAudit(entry, hookCategory, actorName, opts)
+end
+
+-- The audit row written now, in the caller's thread: its id, or false when it could not be written (a money or
+-- typed-confirmation action then moves nothing). Its webhook post is never dropped from a full queue.
+function Admin.auditSync(actor, role, category, action, target, old, new, reason, opts)
+    if type(action) ~= 'string' or action == '' or not coroutine.isyieldable() then return false end
+    opts = type(opts) == 'table' and U.copy(opts) or {}
+    if opts.critical == nil then opts.critical = true end
+    local entry, actorName = AuditEntry(actor, role, category, action, target, old, new, reason, opts.ident)
+    local hookCategory = WEBHOOK_CONVARS[category] and category or entry.category
+    local id = WriteAudit(entry, hookCategory, actorName, opts)
+    return id or false
+end
+
+-- ============================================================================
+--                                     ROWS
+-- ============================================================================
+
+local ROW_SQL = [[SELECT id, run_uuid, citizenid, department, mission_type, mission_id, state, end_reason,
+  flagged, voided, flag_reason, cash_status, final_points, UNIX_TIMESTAMP(created_at) AS created_ts
+  FROM cp_mission_runs WHERE id = ?]]
+
+local function NormaliseRow(row)
+    row.id = math.tointeger(tonumber(row.id)) or row.id
+    row.flagged = U.truthy(row.flagged)
+    row.voided = U.truthy(row.voided)
+    row.final_points = math.floor(Num(row.final_points, 0))
+    row.created_ts = math.floor(Num(row.created_ts, 0))
+    return row
+end
+
+function Admin.getRow(rowId)
+    local id = Int(rowId, 1, 2147483647)
+    if not id then return nil, 'err.invalid_row' end
+    local row, ok = Single(ROW_SQL, { id })
+    if not ok then return nil, 'err.internal' end
+    if not row then return nil, 'err.row_not_found' end
+    return NormaliseRow(row)
+end
+
+function Admin.runDepartments(runUuid)
+    local out, seen = {}, {}
+    local function add(d)
+        if type(d) == 'string' and d ~= '' and not seen[d] then
+            seen[d] = true
+            out[#out + 1] = d
+        end
+    end
+    if ValidUuid(runUuid) then
+        for _, r in ipairs(Query('SELECT DISTINCT department FROM cp_mission_runs WHERE run_uuid = ?', { runUuid }) or {}) do
+            add(r.department)
+        end
+        local run = Has('Runs', 'get') and CP.Runs.get(runUuid) or nil
+        if type(run) == 'table' and type(run.participants) == 'table' then
+            for _, p in pairs(run.participants) do add(p.department) end
+        end
+    end
+    table.sort(out)
+    return out
+end
+
+local function RowTarget(row)
+    return ('#%s %s'):format(tostring(row.id), tostring(row.citizenid))
+end
+
+-- Supervisor review of a row: the action switch, their department, never their own run.
+local function ReviewAllowed(src, action, row)
+    local ctx = nil
+    if not IsAdmin(src) then ctx = { departments = Admin.runDepartments(row.run_uuid) } end
+    local ok, errKey = Can(src, action, ctx)
+    if not ok then return false, errKey end
+    return true
+end
+
+local function OwnRunCheck(src, runUuid)
+    if not Has('Permissions', 'canReviewRun') then return false, 'err.no_permission' end
+    local ok, allowed, errKey = Call('Permissions', 'canReviewRun', src, runUuid)
+    if not ok then return false, 'err.internal' end
+    if not allowed then return false, errKey or 'err.own_run' end
+    -- Still on that run (no row of theirs yet): also their own run.
+    if InLiveRun(CitizenOf(src), runUuid) then return false, 'err.own_run' end
+    return true
+end
+
+Admin.ownRunCheck = OwnRunCheck
+
+local function ReleaseHeld(row)
+    if row.cash_status == 'held' then Call('Cash', 'release', row.id) end
+end
+
+local CLEAR_FLAG_SQL = [[UPDATE cp_mission_runs SET flagged = 0,
+  breakdown = IF(JSON_VALID(breakdown), JSON_SET(breakdown, '$.flagged', NULL), breakdown)
+  WHERE id = ? AND flagged = 1 AND voided = 0]]
+
+function Admin.approveFlagged(src, rowId, reason, opts)
+    opts = type(opts) == 'table' and opts or {}
+    reason = CleanText(reason)
+    if not reason then return false, 'err.reason_required' end
+    local row, errKey = Admin.getRow(rowId)
+    if not row then return false, errKey end
+    if row.voided then return false, 'err.already_voided' end
+    if not row.flagged then return false, 'err.not_flagged' end
+    -- a manual award, an adjustment or a goal reward is never reviewed (a supervisor can't erase a deduction)
+    if NON_MISSION_TYPES[row.mission_type] then return false, 'err.not_reviewable' end
+    if not opts.skipPermission then
+        local ok, e = ReviewAllowed(src, 'reviewFlagged', row)
+        if not ok then return false, e end
+    end
+    local okOwn, eOwn = OwnRunCheck(src, row.run_uuid)
+    if not okOwn then return false, eOwn end
+
+    local n = Update(CLEAR_FLAG_SQL, { row.id })
+    if n == nil then return false, 'err.internal' end
+    if n == 0 then return false, 'err.conflict' end
+    ReleaseHeld(row)
+    Call('Scoring', 'onRowApproved', row.id)
+    Call('Leaderboard', 'invalidate')
+    if not opts.noAudit then
+        Admin.audit(src, RoleOf(src), 'flags', 'approveFlagged', RowTarget(row), row.flag_reason, 'approved', reason)
+    end
+    if not opts.quiet then
+        Notify(OnlineSrc(row.citizenid), 'success', 'admin.notice.run_approved',
+            { mission = Admin.missionLabel(row.mission_id) })
+    end
+    CP.log(TAG, 'row %d approved by %s', row.id, tostring(src))
+    return true, { rowId = row.id }
+end
+
+local VOID_KINDS = { strike = true, correction = true }
+local VOID_CONFIRM_AT = 3          -- participants: voiding a whole run of this many asks for the typed VOID <n>
+
+-- Void one row (checks done by the caller). flaggedOnly: only while the row is still flagged, so an approval
+-- that landed during the caller's checks stands. kind: 'strike' (counts toward the automatic suspension, the
+-- default) or 'correction' (a bug or a fix: never a strike). Returns true or false, errKey.
+local function VoidRow(src, row, reason, action, flaggedOnly, kind)
+    kind = VOID_KINDS[kind] and kind or 'strike'
+    local sql = 'UPDATE cp_mission_runs SET voided = 1, void_kind = ? WHERE id = ? AND voided = 0'
+    if flaggedOnly then sql = sql .. ' AND flagged = 1' end
+    local n = Update(sql, { kind, row.id })
+    if n == nil then return false, 'err.internal' end
+    if n == 0 then return false, flaggedOnly and 'err.conflict' or 'err.already_voided' end
+    Call('Scoring', 'onRowVoided', row.id)
+    Admin.audit(src, RoleOf(src), 'flags', action, RowTarget(row), row.flagged and 'flagged' or row.state,
+        kind == 'correction' and 'voided:correction' or 'voided', reason)
+    Notify(OnlineSrc(row.citizenid), 'warning', 'admin.notice.run_voided',
+        { mission = Admin.missionLabel(row.mission_id) })
+    if not NON_MISSION_TYPES[row.mission_type] and kind == 'strike' then
+        Call('AntiCheat', 'onVoided', row.citizenid)
+    end
+    CP.Hooks.fire('admin:changed', { kind = 'void', citizenid = row.citizenid, missionId = row.mission_id })
+    return true
+end
+
+function Admin.voidFlagged(src, rowId, reason)
+    reason = CleanText(reason)
+    if not reason then return false, 'err.reason_required' end
+    local row, errKey = Admin.getRow(rowId)
+    if not row then return false, errKey end
+    if row.voided then return false, 'err.already_voided' end
+    if not row.flagged then return false, 'err.not_flagged' end
+    if NON_MISSION_TYPES[row.mission_type] then return false, 'err.not_reviewable' end
+    local ok, e = ReviewAllowed(src, 'reviewFlagged', row)
+    if not ok then return false, e end
+    local okOwn, eOwn = OwnRunCheck(src, row.run_uuid)
+    if not okOwn then return false, eOwn end
+    local done, eVoid = VoidRow(src, row, reason, 'voidFlagged', true)
+    if not done then return false, eVoid end
+    Call('Leaderboard', 'invalidate')
+    return true, { rowId = row.id, voided = 1 }
+end
+
+-- opts (admins): { kind = 'strike'|'correction', confirm = typed word (VOID <n> for a run of 3 or more),
+-- goalRowIds = goal reward rows this run completed, voided with it }.
+function Admin.voidRun(src, target, reason, opts)
+    opts = type(opts) == 'table' and opts or {}
+    reason = CleanText(reason)
+    if not reason then return false, 'err.reason_required' end
+    local okP, eP = Can(src, 'voidAnyRun')
+    if not okP then return false, eP end
+    if opts.kind ~= nil and not VOID_KINDS[opts.kind] then return false, 'err.invalid_void_kind' end
+    local rows = {}
+    local runUuid
+    if type(target) == 'string' and not tonumber(target) then
+        if not ValidUuid(target) then return false, 'err.invalid_run' end
+        runUuid = target
+        for _, r in
+            ipairs(Query(
+                [[SELECT id, run_uuid, citizenid, department, mission_type, mission_id, state, end_reason,
+            flagged, voided, flag_reason, cash_status, final_points, UNIX_TIMESTAMP(created_at) AS created_ts
+            FROM cp_mission_runs WHERE run_uuid = ? AND voided = 0 ORDER BY id]],
+                { runUuid }
+            ) or {})
+        do
+            rows[#rows + 1] = NormaliseRow(r)
+        end
+        if #rows == 0 then return false, 'err.nothing_to_void' end
+    else
+        local row, errKey = Admin.getRow(target)
+        if not row then return false, errKey end
+        if row.voided then return false, 'err.already_voided' end
+        runUuid = row.run_uuid
+        rows[1] = row
+    end
+    local okOwn, eOwn = OwnRunCheck(src, runUuid)
+    if not okOwn then return false, eOwn end
+    -- any character of the admin's player (by license, live or archived rows) is "own" too
+    if CP.AdminKit and CP.AdminKit.selfRun and CP.AdminKit.selfRun(src, runUuid) then return false, 'err.own_run' end
+    if #rows >= VOID_CONFIRM_AT and CP.AdminKit and CP.AdminKit.confirmOk
+        and not CP.AdminKit.confirmOk(opts.confirm, ('VOID %d'):format(#rows)) then
+        return false, 'err.confirm_mismatch'
+    end
+    -- goal rewards this run completed (asked in the void dialog): goal rows of the same officers only
+    local goals = {}
+    if type(opts.goalRowIds) == 'table' then
+        local cids = {}
+        for _, row in ipairs(rows) do cids[row.citizenid] = true end
+        for _, gid in ipairs(opts.goalRowIds) do
+            local g = Admin.getRow(gid)
+            if not g or g.mission_type ~= 'goal' or not cids[g.citizenid] then return false, 'err.invalid_row' end
+            if not g.voided then goals[#goals + 1] = g end
+        end
+    end
+    local voided = 0
+    local lastErr
+    for _, row in ipairs(rows) do
+        local ok, e = VoidRow(src, row, reason, 'voidRun', false, opts.kind)
+        if ok then voided = voided + 1 else lastErr = e end
+    end
+    if voided == 0 then return false, lastErr or 'err.conflict' end
+    for _, g in ipairs(goals) do VoidRow(src, g, reason, 'voidRun', false, 'correction') end
+    Call('Leaderboard', 'invalidate')
+    return true, { voided = voided, runUuid = runUuid, goals = #goals }
+end
+
+-- ============================================================================
+--                                 FORCE RECALL
+-- ============================================================================
+
+local function RunInvolves(run, dept)
+    if type(run) ~= 'table' or type(run.participants) ~= 'table' then return false end
+    for _, p in pairs(run.participants) do
+        if p.department == dept then return true end
+    end
+    return false
+end
+
+local function RunDeptList(run)
+    local out, seen = {}, {}
+    for _, p in pairs(run.participants or {}) do
+        if p.department and not seen[p.department] then
+            seen[p.department] = true
+            out[#out + 1] = p.department
+        end
+    end
+    table.sort(out)
+    return out
+end
+
+function Admin.forceRecall(src, runId, targetSrc, reason)
+    if type(runId) ~= 'string' or #runId > 64 then return false, 'err.invalid_run' end
+    local target = ToSrc(targetSrc)
+    if not target then return false, 'err.invalid_payload' end
+    local run = Has('Runs', 'get') and CP.Runs.get(runId) or nil
+    if type(run) ~= 'table' or run.state == 'ended' then return false, 'err.invalid_run' end
+    local p = run.participants and run.participants[target]
+    if not p or p.status ~= 'active' then return false, 'err.not_participant' end
+    local ctx = nil
+    if not IsAdmin(src) then ctx = { departments = RunDeptList(run) } end
+    local okP, eP = Can(src, 'forceRecall', ctx)
+    if not okP then return false, eP end
+    -- Never on a run they are or were on: recalling themselves or a partner would be a free reroll (no
+    -- cooldown, pay tier kept). A test run saves and pays nothing.
+    if not run.test and InLiveRun(CitizenOf(src), runId) then return false, 'err.recall_own_run' end
+    if not Has('Runs', 'removeParticipant') then return false, 'err.module_unavailable' end
+    reason = CleanText(reason)
+    -- The permission check may yield: the target may have left meanwhile (real call, abandon, run end).
+    if run.state == 'ended' or p.status ~= 'active' then return false, 'err.not_participant' end
+    local ok = Call('Runs', 'removeParticipant', run, target, 'force_recall',
+        { notify = 'admin.notice.force_recalled' })
+    if not ok then return false, 'err.internal' end
+    Admin.audit(src, RoleOf(src), 'audit', 'forceRecall', Clip(p.citizenid, 64), run.missionId, 'force_recall', reason)
+    return true, { runId = runId, src = target }
+end
+
+-- ============================================================================
+--                                 CITIZEN IDS
+-- ============================================================================
+
+function Admin.resolveCitizenId(input)
+    if type(input) ~= 'string' then return nil end
+    local s = U.trim(input)
+    if s == '' or #s > 50 or not s:match('^[%w_%-]+$') then return nil end
+    -- cp_officers uses a case-insensitive collation: this returns the stored spelling.
+    local row = Single('SELECT citizenid FROM cp_officers WHERE citizenid = ? LIMIT 1', { s })
+    if row and type(row.citizenid) == 'string' then return row.citizenid end
+    if OnlineSrc(s) then return s end
+    local up = s:upper()
+    if up ~= s and OnlineSrc(up) then return up end
+    return nil
+end
+
+-- ============================================================================
+--                                   COMMAND
+-- ============================================================================
+
+-- Returns whether it was good news, the key and the vars (Admin.storageCopy hands them to its caller).
+local function Reply(src, kind, key, vars)
+    if tonumber(src) == 0 then
+        local colour = ({ error = '^1', success = '^2', warning = '^3' })[kind] or '^5'
+        print(('%s[crimson-police] %s^7'):format(colour, CP.L(key, vars)))
+    else
+        Notify(src, kind, key, vars)
+    end
+    return kind ~= 'error', key, vars
+end
+
+local function CmdName()
+    return (Config.Tablet and Config.Tablet.adminCommand) or 'CrimsonPoliceAdmin'
+end
+
+local function JoinFrom(args, i)
+    local parts = {}
+    for k = i, #args do parts[#parts + 1] = tostring(args[k]) end
+    return CleanText(table.concat(parts, ' '))
+end
+
+-- Result of a delegated call: ok (anything but false/nil-with-error), errKey.
+local function Outcome(okCall, a, b)
+    if not okCall then return false, 'err.internal' end
+    if a == false or (a == nil and type(b) == 'string') then return false, b or 'err.refused' end
+    return true, a
+end
+
+local function ParseAmount(v)
+    if type(v) ~= 'string' then return nil, false end
+    if v:lower() == 'clear' then return nil, true end
+    local lo = math.floor(Num(Config.Cash and Config.Cash.minPayout, 0))
+    local hi = math.floor(Num(Config.Cash and Config.Cash.maxPayout, 25000))
+    local n = Int(v, lo, hi)
+    if not n then return nil, false end
+    return n, true
+end
+
+local extraUsage = {}      -- help keys of subcommands other modules registered (Admin.registerSubcommand)
+local registeredSubs = {}  -- names registered that way (a module may register its name again)
+local notAdminHinted = {}  -- player identifier (or src) -> true: the console hint below, once per player per start
+local CHECK_KINDS = { error = 'error', warn = 'warning', ok = 'success' }
+
+-- The identifier a server.cfg line can name: fivem:<id> first (the same on every PC), else license:<id>.
+local function CfgIdentifier(src)
+    if not GetPlayerIdentifierByType then return nil end
+    for _, kind in ipairs({ 'fivem', 'license' }) do
+        local id = GetPlayerIdentifierByType(src, kind)
+        if type(id) == 'string' and id ~= '' then return id end
+    end
+    return nil
+end
+
+-- A player who is not an admin typed the admin command: one console line names them and the server.cfg line that
+-- makes them one, so the owner never has to guess. Once per player per start, so nobody can flood the console.
+local function HintNotAdmin(src)
+    local id = CfgIdentifier(src)
+    local key = id or ('src:' .. tostring(src))
+    if notAdminHinted[key] then return end
+    notAdminHinted[key] = true
+    local ace = Has('Access', 'adminAce') and CP.Access.adminAce() or 'crimsonpolice.admin'
+    local name = (tostring(GetPlayerName(src) or '?'):gsub('%^%d', ''))
+    CP.warn(TAG,
+        '%s (server id %s) typed /%s but is not an admin. To make them one, add this line to server.cfg and restart: add_ace identifier.%s %s allow',
+        name, tostring(src), CmdName(), id or 'license:<their license from txAdmin>', ace)
+end
+
+local function Usage(src)
+    local c = CmdName()
+    if tonumber(src) ~= 0 then
+        return Reply(src, 'info', 'admin.cmd.help_ingame', { cmd = c })
+    end
+    for _, key in ipairs({
+        'admin.cmd.usage_title',
+        'admin.cmd.usage_open',
+        'admin.cmd.usage_payout_type',
+        'admin.cmd.usage_payout_mission',
+        'admin.cmd.usage_award',
+        'admin.cmd.usage_season',
+        'admin.cmd.usage_suspend',
+        'admin.cmd.usage_reload',
+        'admin.cmd.usage_test',
+        'admin.cmd.usage_storage',
+        'admin.cmd.usage_storage_copy',
+        'admin.cmd.usage_check',
+    }) do
+        Reply(src, 'info', key, { cmd = c })
+    end
+    for _, key in ipairs(extraUsage) do Reply(src, 'info', key, { cmd = c }) end
+end
+
+local function MissingReason(src)
+    Reply(src, 'error', 'err.reason_required')
+end
+
+local SUB = {}
+
+SUB.help = function(src) Usage(src) end
+
+SUB.payout = function(src, args)
+    local what = args[1] and args[1]:lower() or ''
+    if what == 'type' then
+        local typeKey = args[2] and args[2]:lower() or ''
+        if not (Config.MissionTypes and Config.MissionTypes[typeKey]) then
+            return Reply(src, 'error', 'err.invalid_type')
+        end
+        local amount, valid = ParseAmount(args[3])
+        if not valid then
+            return Reply(src, 'error', 'admin.cmd.amount_range',
+                { min = Num(Config.Cash.minPayout, 0), max = Num(Config.Cash.maxPayout, 25000) })
+        end
+        local reason = JoinFrom(args, 4)
+        if not reason and (Config.Payouts == nil or Config.Payouts.requireReason ~= false) then
+            return MissingReason(src)
+        end
+        local okP, eP = Can(src, amount == nil and 'clearPayout' or 'setTypePayout')
+        if not okP then return Reply(src, 'error', eP) end
+        if not Has('Payouts', 'setType') then return Reply(src, 'error', 'err.module_unavailable') end
+        local ok, e = Outcome(Call('Payouts', 'setType', src, typeKey, amount, reason, 'admin'))
+        if not ok then return Reply(src, 'error', e) end
+        if amount == nil then
+            return Reply(src, 'success', 'admin.cmd.payout_type_cleared', { type = TypeLabel(typeKey) })
+        end
+        return Reply(src, 'success', 'admin.cmd.payout_type_set', { type = TypeLabel(typeKey), amount = amount })
+    elseif what == 'mission' then
+        local def = FindMission(args[2])
+        if not def then return Reply(src, 'error', 'err.unknown_mission') end
+        local amount, valid = ParseAmount(args[3])
+        if not valid then
+            return Reply(src, 'error', 'admin.cmd.amount_range',
+                { min = Num(Config.Cash.minPayout, 0), max = Num(Config.Cash.maxPayout, 25000) })
+        end
+        local reason = JoinFrom(args, 4)
+        if not reason and (Config.Payouts == nil or Config.Payouts.requireReason ~= false) then
+            return MissingReason(src)
+        end
+        local okP, eP = Can(src, amount == nil and 'clearPayout' or 'setMissionPayout')
+        if not okP then return Reply(src, 'error', eP) end
+        if not Has('Payouts', 'setMission') then return Reply(src, 'error', 'err.module_unavailable') end
+        local ok, e = Outcome(Call('Payouts', 'setMission', src, def.id, amount, reason))
+        if not ok then return Reply(src, 'error', e) end
+        if amount == nil then
+            return Reply(src, 'success', 'admin.cmd.payout_mission_cleared', { mission = def.label or def.id })
+        end
+        return Reply(src, 'success', 'admin.cmd.payout_mission_set', { mission = def.label or def.id, amount = amount })
+    end
+    return Usage(src)
+end
+
+SUB.award = function(src, args)
+    local cid = Admin.resolveCitizenId(args[1])
+    if not cid then return Reply(src, 'error', 'err.unknown_officer') end
+    local points = Int(args[2], 1, MAX_AWARD)
+    if not points then return Reply(src, 'error', 'err.invalid_points', { max = MAX_AWARD }) end
+    local reason = JoinFrom(args, 3)
+    if not reason then return MissingReason(src) end
+    local okP, eP = Can(src, 'manualAward')
+    if not okP then return Reply(src, 'error', eP) end
+    if not Has('Scoring', 'manualAward') then return Reply(src, 'error', 'err.module_unavailable') end
+    local ok, e = Outcome(Call('Scoring', 'manualAward', src, cid, points, reason))
+    if not ok then return Reply(src, 'error', e) end
+    return Reply(src, 'success', 'admin.cmd.awarded', { points = points, citizenid = cid })
+end
+
+SUB.season = function(src, args)
+    local what = args[1] and args[1]:lower() or ''
+    local okP, eP = Can(src, 'seasons')
+    if not okP then return Reply(src, 'error', eP) end
+    if what == 'start' then
+        local name = JoinFrom(args, 2)
+        if not name then return Reply(src, 'error', 'err.season_name') end
+        name = Clip(name, 64)
+        if not Has('Challenge', 'startSeason') then return Reply(src, 'error', 'err.module_unavailable') end
+        local ok, e = Outcome(Call('Challenge', 'startSeason', src, name))
+        if not ok then return Reply(src, 'error', e) end
+        return Reply(src, 'success', 'admin.cmd.season_started', { name = name })
+    elseif what == 'end' then
+        if not Has('Challenge', 'endSeason') then return Reply(src, 'error', 'err.module_unavailable') end
+        local ok, e = Outcome(Call('Challenge', 'endSeason', src))
+        if not ok then return Reply(src, 'error', e) end
+        return Reply(src, 'success', 'admin.cmd.season_ended')
+    end
+    return Usage(src)
+end
+
+-- Suspend (days > 0, or until the exact moment untilTs) or lift (0) and write the audit entry. Returns ok,
+-- data|errKey.
+local function SuspendOfficer(src, citizenid, days, reason, untilTs)
+    local okP, eP = Can(src, 'suspend')
+    if not okP then return false, eP end
+    local exact = untilTs ~= nil and Int(untilTs, 1, 2147483647) or nil
+    if untilTs ~= nil and not exact then return false, 'err.invalid_days' end
+    local d = exact and 1 or Int(days, 0, 3650)
+    if not d then return false, 'err.invalid_days' end
+    local cid = Admin.resolveCitizenId(citizenid)
+    if not cid then return false, 'err.unknown_officer' end
+    if not Has('Access', 'suspend') then return false, 'err.module_unavailable' end
+    local prev = Single('SELECT UNIX_TIMESTAMP(suspended_until) AS until_ts FROM cp_officers WHERE citizenid = ?',
+        { cid })
+    local prevTs = prev and tonumber(prev.until_ts) or nil
+    local wasSuspended = prevTs ~= nil and prevTs > os.time()
+    if d == 0 and not wasSuspended then return false, 'err.not_suspended' end
+    local ok, e = Outcome(Call('Access', 'suspend', cid, d, src, reason, exact and { untilTs = exact } or nil))
+    if not ok then return false, e end
+    if exact then d = math.max(1, math.ceil((exact - os.time()) / 86400)) end
+    Admin.audit(src, RoleOf(src), 'audit', d == 0 and 'unsuspend' or 'suspend', cid,
+        wasSuspended and os.date('%Y-%m-%d %H:%M', prevTs) or nil, d == 0 and 'lifted' or ('%d'):format(d), reason)
+    CP.Hooks.fire('admin:changed', { kind = 'suspend', citizenid = cid })
+    return true, { citizenid = cid, days = d, untilTs = exact or (d > 0 and (os.time() + d * 86400) or nil) }
+end
+
+SUB.suspend = function(src, args)
+    local reason = JoinFrom(args, 3)
+    local ok, res = SuspendOfficer(src, args[1], args[2], reason)
+    if not ok then
+        if res == 'err.invalid_days' then return Reply(src, 'error', 'err.invalid_days') end
+        return Reply(src, 'error', res)
+    end
+    if res.days == 0 then return Reply(src, 'success', 'admin.cmd.unsuspended', { citizenid = res.citizenid }) end
+    return Reply(src, 'success', 'admin.cmd.suspended', { citizenid = res.citizenid, days = res.days })
+end
+
+SUB.reload = function(src)
+    local okP, eP = Can(src, 'reloadMissions')
+    if not okP then return Reply(src, 'error', eP) end
+    if not Has('Missions', 'reload') then return Reply(src, 'error', 'err.module_unavailable') end
+    local before = Has('Missions', 'all') and U.count(CP.Missions.all() or {}) or 0
+    local ok, summary = Call('Missions', 'reload')
+    if not ok or type(summary) ~= 'table' then return Reply(src, 'error', 'err.internal') end
+    local failed = type(summary.failed) == 'table' and #summary.failed or 0
+    Admin.audit(src, RoleOf(src), 'audit', 'reloadMissions', nil, tostring(before),
+        ('%d loaded, %d rejected'):format(math.floor(Num(summary.loaded, 0)), failed), nil)
+    Reply(src, failed > 0 and 'warning' or 'success', 'admin.cmd.reloaded',
+        { loaded = math.floor(Num(summary.loaded, 0)), failed = failed })
+    if tonumber(src) == 0 and failed > 0 then
+        for _, f in ipairs(summary.failed) do
+            Reply(0, 'warning', 'admin.cmd.reload_failed_line',
+                { id = tostring(f.id or f.file or '?'), error = tostring(f.error or '') })
+        end
+    end
+end
+
+local function TierExists(name)
+    if name == 'auto' then
+        return true
+    end -- CP.Testing: the tier the number of testers reaches
+    for _, row in ipairs(Config.Scaling or {}) do
+        if row.tier == name then return true end
+    end
+    return false
+end
+
+-- A mission to test: any loaded one (CP.Missions), else what CP.Testing can start (archived custom missions
+-- are unregistered from CP.Missions; SPEC Admin test mode: "custom (published or archived)").
+local function FindTestMission(id)
+    local def = FindMission(id)
+    if def then return def end
+    if type(id) ~= 'string' or id == '' or #id > 64 or not Has('Testing', 'resolveMission') then return nil end
+    local tried = { id }
+    if id:lower() ~= id then tried[2] = id:lower() end
+    for _, candidate in ipairs(tried) do
+        local ok, d = Call('Testing', 'resolveMission', candidate)
+        if ok and type(d) == 'table' and type(d.id) == 'string' then return d end
+    end
+    return nil
+end
+
+SUB.test = function(src, args)
+    if tonumber(src) == 0 then return Reply(src, 'error', 'err.not_in_game') end
+    local okP, eP = Can(src, 'testRun')
+    if not okP then return Reply(src, 'error', eP) end
+    local def = FindTestMission(args[1])
+    if not def then return Reply(src, 'error', 'err.unknown_mission') end
+    if #args > 3 then return Reply(src, 'error', 'admin.cmd.test_bad_arg', { arg = tostring(args[4]) }) end
+    local tier, location
+    for i = 2, math.min(#args, 3) do
+        local a = tostring(args[i]):lower()
+        if TierExists(a) and not tier then
+            tier = a
+        elseif a == 'random' and not location then
+            location = 'random'
+        elseif Int(a, 1, 1000) and not location then
+            location = Int(a, 1, 1000)
+            if location > #(def.locations or {}) then return Reply(src, 'error', 'err.invalid_location') end
+        else
+            return Reply(src, 'error', 'admin.cmd.test_bad_arg', { arg = tostring(args[i]) })
+        end
+    end
+    if CP.Alerts and CP.Alerts.inArena and CP.Alerts.inArena(src) then return Reply(src, 'error', 'err.in_arena') end
+    local ok, e
+    if Has('Testing', 'command') then
+        -- CP.Testing's own parser also brings the testers who accepted this admin's invitations.
+        local words = { def.id }
+        if tier then words[#words + 1] = tier end
+        if location then words[#words + 1] = tostring(location) end
+        ok, e = Outcome(Call('Testing', 'command', src, words))
+    elseif Has('Testing', 'start') then
+        ok, e = Outcome(Call('Testing', 'start', src, {
+            missionId = def.id,
+            location = location or 'random',
+            tier = tier,
+            useStartRoute = Config.Testing and Config.Testing.useStartRoute == true or false,
+            testers = {},
+        }))
+    else
+        return Reply(src, 'error', 'err.module_unavailable')
+    end
+    if not ok then return Reply(src, 'error', e) end
+    return Reply(src, 'success', 'admin.cmd.test_started', { mission = def.label or def.id })
+end
+
+-- ============================================================================
+--                                   STORAGE
+-- ============================================================================
+-- /CrimsonPoliceAdmin storage [copy database-to-files|files-to-database [force]]
+-- The storage in use (CP.Storage.mode(): 'database' = MySQL/MariaDB through oxmysql; 'files' = database off,
+-- Config.Database.enabled = false, the saves folder engine CP.Storage.MemSQL) and a copy of every cp_ table between:
+--   the database side: the real oxmysql (the MySQL global in database mode, CP.Storage.realMySQL in files mode);
+--   the files side:    the live engine CP.Storage.db in files mode, else an engine opened on the saves folder
+--                      (Config.Database.folder) for this one command.
+-- A copy keeps every id and AUTO_INCREMENT counter, first gives the target the migrations the source has (the
+-- same sql/migrations files, statement by statement, as the migrations runner), refuses a target that already
+-- has rows unless 'force' is given (force empties it first), refuses while a run or a Cross-Department Mission is
+-- active, and on any failure empties the target again (the source is only read). cp_schema_migrations is not
+-- copied: each side keeps the record of the migrations it has run. DATETIME values travel as unix seconds
+-- (UNIX_TIMESTAMP / FROM_UNIXTIME: the same moment on both sides), DATE values as 'YYYY-MM-DD', TINYINT(1) as 0/1.
+-- Into a saves folder engine the whole copy runs with the write-through paused (db:bulk): each document is
+-- written once, at the end.
+local STORAGE_PAGE = 500          -- rows per read of a table with an integer AUTO_INCREMENT primary key
+local STORAGE_BATCH = 250         -- rows per INSERT into the database
+local MIGRATIONS_TABLE = 'cp_schema_migrations'
+local MIGRATIONS_CREATE = [[CREATE TABLE IF NOT EXISTS cp_schema_migrations (
+  version    INT PRIMARY KEY,
+  name       VARCHAR(100) NOT NULL,
+  applied_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+)]]
+-- the migrations runner's "already applied" errors (modules/migrations/server.lua)
+local MIGRATION_DONE = {
+    'Duplicate column name',
+    'Duplicate key name',
+    'ER_DUP_FIELDNAME',
+    'ER_DUP_KEYNAME',
+    'already exists',
+}
+local storageBusy = false
+
+local function StorageMode()
+    if Has('Storage', 'mode') then
+        local ok, m = Call('Storage', 'mode')
+        if ok and m == 'files' then return 'files' end
+    end
+    return 'database'
+end
+
+-- The saves folder: CP.Storage's in files mode, else Config.Database.folder resolved the same way (a folder
+-- inside the resource folder, or an absolute path).
+local function SavesFolder()
+    if Has('Storage', 'folder') then
+        local ok, dir = Call('Storage', 'folder')
+        if ok and type(dir) == 'string' and dir ~= '' then return dir end
+    end
+    local folder = type(Config.Database) == 'table' and Config.Database.folder or nil
+    folder = type(folder) == 'string' and U.trim(folder) or ''
+    if folder == '' then folder = 'saves' end
+    folder = folder:gsub('[/\\]+$', '')
+    if folder:match('^/') or folder:match('^%a:[/\\]') or folder:match('^[/\\][/\\]') then return folder end
+    local root = tostring(GetResourcePath and GetResourcePath(GetCurrentResourceName()) or '.')
+    root = root:gsub('[/\\]+$', '')
+    return root .. '/' .. folder
+end
+
+-- The message of an error (oxmysql's text ends with it after the query and its parameters), clipped.
+local function ShortError(err)
+    local s = tostring(err or '')
+    local last = nil
+    for line in s:gmatch('[^\n]+') do
+        if line:match('%S') then last = line end
+    end
+    return Clip(U.trim(last or s), 200)
+end
+
+local function SizeText(bytes)
+    if bytes >= 1048576 then return ('%.1f MB'):format(bytes / 1048576) end
+    if bytes >= 1024 then return ('%.1f KB'):format(bytes / 1024) end
+    return ('%d B'):format(bytes)
+end
+
+-- Runs and Cross-Department Missions in progress (a copy waits for none).
+local function ActiveRuns()
+    local n = 0
+    if Has('Runs', 'all') then
+        local ok, list = Call('Runs', 'all')
+        if ok and type(list) == 'table' then n = #list end
+    end
+    if Has('Operations', 'active') then
+        local ok, op = Call('Operations', 'active')
+        if ok and op ~= nil then n = n + 1 end
+    end
+    return n
+end
+
+-- ============================================================================
+--                                THE TWO SIDES
+-- ============================================================================
+-- side = { kind = 'database'|'files', live = boolean, rows(sql, params) -> list (typed like oxmysql),
+--          exec(sql, params), schema() -> { order = { name }, tables = { [name] = info } }, bulk(fn) -> pcall results,
+--          writer(table, cols, upsert) -> function(rows), raiseNext(table, n) }
+-- info = { name, cols = { column }, kinds = { [column] = 'dt'|'date'|'bool'|'val' }, lower = { [lower] = column },
+--          auto = AUTO_INCREMENT column|nil, next = next id|nil, keyset = the AUTO_INCREMENT column is the primary key }
+local function TableInfo(name) return { name = name, cols = {}, kinds = {}, lower = {} } end
+local function AddColumn(info, col, kind)
+    info.cols[#info.cols + 1] = col
+    info.kinds[col] = kind
+    info.lower[col:lower()] = col
+end
+local function QuoteName(name) return '`' .. name .. '`' end
+
+local function EngineKind(col)
+    if col.kind == 'dt' then return 'dt' end
+    if col.kind == 'date' then return 'date' end
+    if col.kind == 'int' and tostring(col.type):upper() == 'TINYINT' and col.width == 1 then return 'bool' end
+    return 'val'
+end
+
+local function DatabaseKind(dataType, columnType)
+    local dt, ct = tostring(dataType or ''):lower(), tostring(columnType or ''):lower()
+    if dt == 'datetime' or dt == 'timestamp' then return 'dt' end
+    if dt == 'date' then return 'date' end
+    if ct:match('^tinyint%(1%)') then return 'bool' end
+    return 'val'
+end
+
+-- Into the storage in use the server keeps writing during the copy (a login's cp_officers row, XP, an audit
+-- entry): a row it wrote first is replaced by the copied one instead of failing the whole copy.
+local function UpsertTail(cols, upsert)
+    if not upsert then return '' end
+    local sets = {}
+    for i, c in ipairs(cols) do
+        local q = QuoteName(c.dst)
+        sets[i] = q .. ' = VALUES(' .. q .. ')'
+    end
+    return ' ON DUPLICATE KEY UPDATE ' .. table.concat(sets, ', ')
+end
+
+-- A saves folder engine (CP.Storage.MemSQL) as a side.
+local function FilesSide(engine, live, dir)
+    local side = { kind = 'files', live = live, dir = dir, engine = engine }
+    function side.rows(sql, params)
+        local res = engine:exec(sql, params)
+        if type(res) ~= 'table' or res.kind ~= 'rows' then return {} end
+        return CP.Storage.MemSQL.luaRows(res)
+    end
+    function side.exec(sql, params) engine:exec(sql, params) end
+    function side.schema()
+        local out = { order = {}, tables = {} }
+        for _, name in ipairs(engine:tableNames()) do
+            local t = engine.tables[name]
+            if t and name:sub(1, 3) == 'cp_' then
+                local info = TableInfo(name)
+                for _, col in ipairs(t.cols) do AddColumn(info, col.name, EngineKind(col)) end
+                if t.autoCol then
+                    info.auto = t.cols[t.autoCol].name
+                    info.next = t.nextId
+                    info.keyset = type(t.pk) == 'table' and #t.pk == 1 and t.pk[1] == t.autoCol
+                end
+                out.order[#out.order + 1] = name
+                out.tables[name] = info
+            end
+        end
+        return out
+    end
+    function side.bulk(fn)
+        local res = nil
+        engine:bulk(function() res = table.pack(pcall(fn)) end)
+        return table.unpack(res, 1, res.n)
+    end
+    -- one INSERT per row: the same statement text for the whole table, so the engine parses it once
+    function side.writer(name, cols, upsert)
+        local names, values = {}, {}
+        for i, c in ipairs(cols) do
+            names[i] = QuoteName(c.dst)
+            values[i] = c.wkind == 'dt' and 'FROM_UNIXTIME(?)' or '?'
+        end
+        local sql = 'INSERT INTO ' .. QuoteName(name) .. ' (' .. table.concat(names, ', ') .. ') VALUES ('
+            .. table.concat(values, ', ') .. ')' .. UpsertTail(cols, upsert)
+        return function(rows)
+            for _, row in ipairs(rows) do
+                local params = {}
+                for i, c in ipairs(cols) do params[i] = row[c.src] end
+                engine:exec(sql, params)
+            end
+        end
+    end
+    function side.raiseNext(name, n)
+        local t = engine.tables[name]
+        if t and t.autoCol and n > t.nextId then t.nextId = n end
+    end
+    return side
+end
+
+-- MySQL/MariaDB through the real oxmysql as a side.
+local function DatabaseSide(real, live)
+    local side = { kind = 'database', live = live }
+    local function q(sql, params) return real.query.await(sql, params or {}) end
+    function side.rows(sql, params)
+        local res = q(sql, params)
+        return type(res) == 'table' and res or {}
+    end
+    function side.exec(sql, params) q(sql, params) end
+    function side.schema()
+        local out = { order = {}, tables = {} }
+        local cols = side.rows([[SELECT c.table_name AS t, c.column_name AS c, c.data_type AS d, c.column_type AS ct,
+            c.column_key AS k, c.extra AS x
+            FROM information_schema.columns c
+            INNER JOIN information_schema.tables b ON b.table_schema = c.table_schema AND b.table_name = c.table_name
+            WHERE c.table_schema = DATABASE() AND b.table_type = 'BASE TABLE'
+            ORDER BY c.table_name, c.ordinal_position]])
+        for _, r in ipairs(cols) do
+            local name = tostring(r.t)
+            if name:sub(1, 3) == 'cp_' then
+                local info = out.tables[name]
+                if not info then
+                    info = TableInfo(name)
+                    out.tables[name] = info
+                    out.order[#out.order + 1] = name
+                end
+                local col = tostring(r.c)
+                AddColumn(info, col, DatabaseKind(r.d, r.ct))
+                if r.k == 'PRI' then info.pkCount, info.pkCol = (info.pkCount or 0) + 1, col end
+                if tostring(r.x or ''):lower():find('auto_increment', 1, true) then info.auto = col end
+            end
+        end
+        local nexts = side.rows(
+            'SELECT table_name AS t, auto_increment AS n FROM information_schema.tables WHERE table_schema = DATABASE()')
+        for _, r in ipairs(nexts) do
+            local info = out.tables[tostring(r.t)]
+            if info and info.auto and r.n ~= nil then info.next = math.tointeger(tonumber(r.n)) end
+        end
+        for _, info in pairs(out.tables) do
+            info.keyset = info.auto ~= nil and info.pkCount == 1 and info.pkCol == info.auto
+        end
+        return out
+    end
+    function side.bulk(fn) return pcall(fn) end
+    -- up to STORAGE_BATCH rows per INSERT; NULL is written as NULL (no gaps in the parameter list)
+    function side.writer(name, cols, upsert)
+        local names = {}
+        for i, c in ipairs(cols) do names[i] = QuoteName(c.dst) end
+        local head = 'INSERT INTO ' .. QuoteName(name) .. ' (' .. table.concat(names, ', ') .. ') VALUES '
+        local tail = UpsertTail(cols, upsert)
+        return function(rows)
+            local i = 1
+            while i <= #rows do
+                local last = math.min(#rows, i + STORAGE_BATCH - 1)
+                local tuples, params = {}, {}
+                for r = i, last do
+                    local row, parts = rows[r], {}
+                    for k, c in ipairs(cols) do
+                        local v = row[c.src]
+                        if v == nil then
+                            parts[k] = 'NULL'
+                        else
+                            params[#params + 1] = v
+                            parts[k] = c.wkind == 'dt' and 'FROM_UNIXTIME(?)' or '?'
+                        end
+                    end
+                    tuples[#tuples + 1] = '(' .. table.concat(parts, ', ') .. ')'
+                end
+                q(head .. table.concat(tuples, ', ') .. tail, params)
+                i = last + 1
+            end
+        end
+    end
+    function side.raiseNext(name, n)
+        q(('ALTER TABLE %s AUTO_INCREMENT = %d'):format(QuoteName(name), n))
+    end
+    return side
+end
+
+-- The database side, or nil + errKey. In files mode oxmysql must be started (it only serves this copy and the
+-- read of sc-dispatch's calls there).
+local function OpenDatabase()
+    local real, live = MySQL, true
+    if StorageMode() == 'files' then
+        real, live = CP.Storage.realMySQL, false
+        if GetResourceState and GetResourceState('oxmysql') ~= 'started' then real = nil end
+    end
+    if type(real) ~= 'table' or type(real.query) ~= 'table' or type(real.query.await) ~= 'function' then
+        return nil, 'admin.cmd.storage_no_database'
+    end
+    return DatabaseSide(real, live)
+end
+
+-- A folder the server can write to (created when missing, as CP.Storage does at start-up): os.createdir on
+-- FXServer (its sandbox refuses os.execute), one folder per call so the parents first; mkdir elsewhere.
+local function WritableFolder(dir)
+    local fs = CP.Storage.MemSQL.fs
+    local probe = dir .. '/.cp-write-test'
+    local function canWrite()
+        local ok, res = pcall(fs.write, probe, 'ok')
+        if not ok or not res then return false end
+        pcall(fs.remove, probe)
+        return true
+    end
+    if canWrite() then return true end
+    if os and os.createdir then
+        local path = ''
+        for part, sep in dir:gmatch('([^/\\]*)([/\\]?)') do
+            path = path .. part
+            if part ~= '' then pcall(os.createdir, path) end
+            path = path .. sep
+        end
+    elseif os and os.execute then
+        local windows = package and package.config and package.config:sub(1, 1) == '\\'
+        local cmd
+        if windows then
+            cmd = ('mkdir "%s"'):format((dir:gsub('/', '\\')))
+        else
+            cmd = ('mkdir -p \'%s\''):format((dir:gsub('\'', '\'\\\'\'')))
+        end
+        pcall(os.execute, cmd)
+    end
+    return canWrite()
+end
+
+-- The files side, or nil + errKey + vars. In database mode the saves folder is opened for this command only:
+-- as a source it must hold Crimson-Police data, as a target it is created when missing.
+local function OpenFiles(asTarget)
+    local dir = SavesFolder()
+    if StorageMode() == 'files' then
+        local lerr = Has('Storage', 'loadError') and CP.Storage.loadError() or nil
+        if lerr or type(CP.Storage.db) ~= 'table' then
+            return nil, 'admin.cmd.storage_folder_error', { path = dir, error = tostring(lerr or '?') }
+        end
+        return FilesSide(CP.Storage.db, true, dir)
+    end
+    local M = CP.Storage.MemSQL
+    if type(M) ~= 'table' or type(M.new) ~= 'function' then return nil, 'err.module_unavailable' end
+    if not asTarget and not M.fs.exists(dir .. '/_tables.json') then
+        return nil, 'admin.cmd.storage_folder_empty', { path = dir }
+    end
+    if asTarget and not WritableFolder(dir) then
+        return nil, 'admin.cmd.storage_folder_error', { path = dir, error = 'the folder cannot be created or written' }
+    end
+    local engine = M.new({ store = M.folderStore(dir) })
+    local ok, err = pcall(engine.load, engine)
+    if not ok then return nil, 'admin.cmd.storage_folder_error', { path = dir, error = ShortError(err) } end
+    return FilesSide(engine, false, dir)
+end
+
+local function SideName(side)
+    return CP.L(side.kind == 'files' and 'admin.cmd.storage_name_files' or 'admin.cmd.storage_name_database')
+end
+
+-- Rows per table and the total without cp_schema_migrations.
+local function CountRows(side, schema)
+    local counts, total = {}, 0
+    for _, name in ipairs(schema.order) do
+        local r = side.rows('SELECT COUNT(*) AS n FROM ' .. QuoteName(name))
+        local n = r[1] and math.tointeger(tonumber(r[1].n or 0)) or 0
+        counts[name] = n
+        if name ~= MIGRATIONS_TABLE then total = total + n end
+    end
+    return counts, total
+end
+
+-- Bytes and files of a saves folder engine's documents, _tables.json included.
+local function FolderSize(engine)
+    local store = engine.store
+    if type(store) ~= 'table' or type(store.sizeOf) ~= 'function' then return nil end
+    local bytes, files = 0, 0
+    local index = CP.Storage.MemSQL.fs.read(store:path('_tables.json'))
+    if index then bytes, files = #index, 1 end
+    for _, name in ipairs(engine:tableNames()) do
+        local b, d = store:sizeOf(name)
+        bytes, files = bytes + (b or 0), files + (d or 0)
+    end
+    return bytes, files
+end
+
+-- /CrimsonPoliceAdmin storage: the mode, the saves folder, the rows of every table and the saves folder's size.
+-- The console gets every line; in game the mode, the totals and the size.
+local function StorageStatus(src)
+    Db()
+    local console = tonumber(src) == 0
+    local mode = StorageMode()
+    local dir = SavesFolder()
+    Reply(src, 'info', mode == 'files' and 'admin.cmd.storage_mode_files' or 'admin.cmd.storage_mode_database')
+    if console then
+        Reply(src, 'info', mode == 'files' and 'admin.cmd.storage_folder_used' or 'admin.cmd.storage_folder_unused',
+            { path = dir })
+    end
+    local side, e, vars
+    if mode == 'files' then side, e, vars = OpenFiles(false) else side, e, vars = OpenDatabase() end
+    if not side then return Reply(src, 'error', e, vars) end
+    local schema = side.schema()
+    local counts = CountRows(side, schema)
+    local all = 0
+    for _, name in ipairs(schema.order) do
+        all = all + counts[name]
+        if console then Reply(src, 'info', 'admin.cmd.storage_table_line', { table = name, rows = counts[name] }) end
+    end
+    Reply(src, 'info', 'admin.cmd.storage_total', { tables = #schema.order, rows = all })
+    local engine = side.kind == 'files' and side.engine or nil
+    if not engine and type(CP.Storage) == 'table' and type(CP.Storage.MemSQL) == 'table'
+        and CP.Storage.MemSQL.fs.exists(dir .. '/_tables.json') then
+        local ok, opened = pcall(function()
+            return CP.Storage.MemSQL.new({ store = CP.Storage.MemSQL.folderStore(dir) }):load()
+        end)
+        if ok then engine = opened end
+    end
+    local bytes, files = nil, 0
+    if engine then bytes, files = FolderSize(engine) end
+    if bytes and files > 0 then
+        Reply(src, 'info', 'admin.cmd.storage_size', { size = SizeText(bytes), files = files })
+    else
+        Reply(src, 'info', 'admin.cmd.storage_size_empty')
+    end
+end
+
+-- Admin UI → System → Storage: the facts of /CrimsonPoliceAdmin storage as data. The folder is the setting's
+-- relative name, never the server's full path.
+function Admin.storageStatus()
+    Db()
+    local mode = StorageMode()
+    local folder = type(Config.Database) == 'table' and Config.Database.folder or 'saves'
+    local out = {
+        mode = mode,
+        folder = type(folder) == 'string' and folder or 'saves',
+        tables = {},
+        totalRows = 0,
+        version = GetResourceMetadata and GetResourceMetadata(CP.resource, 'version', 0) or nil,
+        migrations = Has('Migrations', 'status') and select(2, Call('Migrations', 'status')) or nil,
+        loadError = Has('Storage', 'loadError') and select(2, Call('Storage', 'loadError')) or nil,
+        busy = storageBusy or nil,
+    }
+    if out.loadError ~= nil then out.loadError = ShortError(out.loadError) end
+    local side, e, vars
+    if mode == 'files' then side, e, vars = OpenFiles(false) else side, e, vars = OpenDatabase() end
+    if not side then
+        out.error = CP.L(e, vars)
+        return out
+    end
+    local schema = side.schema()
+    local counts = CountRows(side, schema)
+    for _, name in ipairs(schema.order) do
+        out.tables[#out.tables + 1] = { name = name, rows = counts[name] }
+        if name ~= MIGRATIONS_TABLE then out.totalRows = out.totalRows + counts[name] end
+    end
+    local engine = side.kind == 'files' and side.engine or nil
+    if engine then
+        local bytes, files = FolderSize(engine)
+        out.bytes, out.files = bytes, files
+    end
+    return out
+end
+
+-- A value read from the source as the target stores it.
+local function CopyValue(v, kind)
+    if v == nil then return nil end
+    if kind == 'dt' then
+        local n = tonumber(v)
+        if not n then return nil end
+        return math.tointeger(n) or math.floor(n)
+    elseif kind == 'bool' then
+        if v == true then return 1 elseif v == false then return 0 end
+        local n = tonumber(v)
+        return n and (math.tointeger(n) or n) or v
+    elseif kind == 'date' then
+        return tostring(v)
+    end
+    local t = type(v)
+    if t == 'boolean' then return v and 1 or 0 end
+    if t == 'table' then return json.encode(v) end
+    return v
+end
+
+-- The migrations runner's statement split (CP.Migrations._split), for when that module is not loaded.
+local function SplitMigration(sql)
+    local statements, current = {}, {}
+    for line in (sql .. '\n'):gmatch('(.-)\r?\n') do
+        local code = line:gsub('%-%-.*$', '')
+        if code:match('%S') then
+            current[#current + 1] = code
+            if code:match(';%s*$') then
+                statements[#statements + 1] = (table.concat(current, '\n'):gsub(';%s*$', ''))
+                current = {}
+            end
+        end
+    end
+    local rest = table.concat(current, '\n')
+    if rest:match('%S') then statements[#statements + 1] = rest end
+    return statements
+end
+
+-- The target gets every migration the source has run (files of this resource, statement by statement, as the
+-- runner does). Returns true, applied or false, errKey, vars.
+local function MigrateTarget(source, target, srcSchema, tgtSchema)
+    if not srcSchema.tables[MIGRATIONS_TABLE] then return true, 0 end
+    local applied = {}
+    if tgtSchema.tables[MIGRATIONS_TABLE] then
+        for _, r in ipairs(target.rows('SELECT version FROM cp_schema_migrations')) do
+            local v = tonumber(r.version)
+            if v then applied[v] = true end
+        end
+    end
+    local todo = {}
+    for _, r in ipairs(source.rows('SELECT version, name FROM cp_schema_migrations ORDER BY version')) do
+        local v = math.tointeger(tonumber(r.version))
+        if v and not applied[v] then
+            local name = tostring(r.name or '')
+            local sql = name:match('^[%w_%-]+%.sql$')
+                    and LoadResourceFile(GetCurrentResourceName(), 'sql/migrations/' .. name)
+                or nil
+            if not sql then return false, 'admin.cmd.storage_newer_source', { file = name } end
+            todo[#todo + 1] = { version = v, name = name, sql = sql }
+        end
+    end
+    if #todo == 0 then return true, 0 end
+    local split = Has('Migrations', '_split') and CP.Migrations._split or SplitMigration
+    target.exec(MIGRATIONS_CREATE)
+    for _, m in ipairs(todo) do
+        for _, stmt in ipairs(split(m.sql)) do
+            local ok, err = pcall(target.exec, stmt)
+            if not ok then
+                local done = false
+                for _, needle in ipairs(MIGRATION_DONE) do
+                    if tostring(err):find(needle, 1, true) then done = true; break end
+                end
+                if not done then
+                    return false, 'admin.cmd.storage_migration_failed', { file = m.name, error = ShortError(err) }
+                end
+            end
+        end
+        target.exec('INSERT IGNORE INTO cp_schema_migrations (version, name) VALUES (?, ?)', { m.version, m.name })
+    end
+    return true, #todo
+end
+
+-- Every row of one table from the source to the target (in pages of STORAGE_PAGE rows along an integer
+-- AUTO_INCREMENT key, else in one read). Returns the rows written.
+local function CopyTable(source, target, sInfo, tInfo)
+    local cols, list = {}, {}
+    for _, c in ipairs(sInfo.cols) do
+        local dst = tInfo.lower[c:lower()]
+        local kind = sInfo.kinds[c]
+        cols[#cols + 1] = { src = c, dst = dst, rkind = kind, wkind = tInfo.kinds[dst] }
+        local q = QuoteName(c)
+        if kind == 'dt' then
+            list[#list + 1] = 'UNIX_TIMESTAMP(' .. q .. ') AS ' .. q
+        elseif kind == 'date' then
+            list[#list + 1] = 'DATE_FORMAT(' .. q .. ', \'%Y-%m-%d\') AS ' .. q
+        else
+            list[#list + 1] = q
+        end
+    end
+    local from = ' FROM ' .. QuoteName(sInfo.name)
+    local select = 'SELECT ' .. table.concat(list, ', ') .. from
+    local write = target.writer(tInfo.name, cols, target.live)
+    local written = 0
+    local function put(rows)
+        for _, row in ipairs(rows) do
+            for _, c in ipairs(cols) do row[c.src] = CopyValue(row[c.src], c.rkind) end
+        end
+        write(rows)
+        written = written + #rows
+    end
+    if sInfo.keyset then
+        local key = QuoteName(sInfo.auto)
+        local function firstFrom(lo)
+            local sql = 'SELECT MIN(' .. key .. ') AS m' .. from
+            local r = lo and source.rows(sql .. ' WHERE ' .. key .. ' >= ?', { lo }) or source.rows(sql)
+            local m = r[1] and r[1].m
+            if m == nil then return nil end
+            return math.tointeger(tonumber(m))
+        end
+        -- windows of STORAGE_PAGE ids; after an empty window (a gap in the ids, or the end) jump to the next id
+        local page = select .. ' WHERE ' .. key .. ' >= ? AND ' .. key .. ' < ? ORDER BY ' .. key
+        local lo = firstFrom(nil)
+        while lo do
+            local rows = source.rows(page, { lo, lo + STORAGE_PAGE })
+            if #rows > 0 then
+                put(rows)
+                lo = lo + STORAGE_PAGE
+            else
+                lo = firstFrom(lo)
+            end
+        end
+    else
+        put(source.rows(select))
+    end
+    return written
+end
+
+-- The copy's audit entry in the target's own cp_audit too, when the target is not the storage in use (the log
+-- goes on in the storage used next).
+local function MirrorAudit(target, src, direction, old, new)
+    local entry = AuditEntry(src, RoleOf(src), 'audit', 'storageCopy', direction, old, new, nil)
+    local values, params = {}, {}
+    for i, col in ipairs(AUDIT_COLS) do
+        local v = entry[col]
+        if v == nil then
+            values[i] = 'NULL'
+        else
+            values[i] = '?'
+            params[#params + 1] = v
+        end
+    end
+    local sql = ('INSERT INTO cp_audit (%s) VALUES (%s)'):format(table.concat(AUDIT_COLS, ', '),
+        table.concat(values, ', '))
+    local ok, err = pcall(target.exec, sql, params)
+    if not ok then
+        CP.warn(TAG, 'the storage copy is not in the audit log of the %s: %s', SideName(target), ShortError(err))
+    end
+end
+
+local function StorageCopy(src, direction, force)
+    Db()
+    local console = tonumber(src) == 0
+    local toFiles = direction == 'database-to-files'
+    local dbSide, e1, v1 = OpenDatabase()
+    if not dbSide then return Reply(src, 'error', e1, v1) end
+    local filesSideOpen, e2, v2 = OpenFiles(toFiles)
+    if not filesSideOpen then return Reply(src, 'error', e2, v2) end
+    local source, target = dbSide, filesSideOpen
+    if not toFiles then source, target = filesSideOpen, dbSide end
+    local names = {
+        source = SideName(source),
+        target = SideName(target),
+        cmd = CmdName(),
+        direction = direction,
+        path = filesSideOpen.dir,
+    }
+
+    local srcSchema = source.schema()
+    local tables = {}
+    for _, name in ipairs(srcSchema.order) do
+        if name ~= MIGRATIONS_TABLE then tables[#tables + 1] = name end
+    end
+    if #tables == 0 then return Reply(src, 'error', 'admin.cmd.storage_source_empty', names) end
+
+    -- 1. a target with rows is only replaced with force
+    local tgtSchema = target.schema()
+    local before, beforeTotal = CountRows(target, tgtSchema)
+    if beforeTotal > 0 and not force then
+        local list = {}
+        for _, name in ipairs(tgtSchema.order) do
+            if name ~= MIGRATIONS_TABLE and before[name] > 0 then
+                list[#list + 1] = ('%s %d'):format(name, before[name])
+            end
+        end
+        names.rows, names.tables = beforeTotal, table.concat(list, ', ')
+        return Reply(src, 'error', 'admin.cmd.storage_target_has_rows', names)
+    end
+
+    -- 2. the target's tables: the migrations the source has, then every source table and column must be there
+    local okM, applied, mVars = MigrateTarget(source, target, srcSchema, tgtSchema)
+    if not okM then return Reply(src, 'error', applied, mVars) end
+    if applied > 0 then tgtSchema = target.schema() end
+    for _, name in ipairs(tables) do
+        local t = tgtSchema.tables[name]
+        if not t then
+            return Reply(src, 'error', 'admin.cmd.storage_missing_table',
+                { table = name, source = names.source, target = names.target })
+        end
+        for _, c in ipairs(srcSchema.tables[name].cols) do
+            if not t.lower[c:lower()] then
+                return Reply(src, 'error', 'admin.cmd.storage_missing_column',
+                    { table = name, column = c, source = names.source, target = names.target })
+            end
+        end
+    end
+
+    -- 3. the copy (a failure empties the target again)
+    Reply(src, 'info', 'admin.cmd.storage_copy_started', names)
+    if console then Reply(src, 'info', 'admin.cmd.storage_folder_used', { path = names.path }) end
+    local started = GetGameTimer and GetGameTimer() or 0
+    local copied, total, failedAt = {}, 0, nil
+    local ok, err = target.bulk(function()
+        local okIn, errIn = pcall(function()
+            if force then
+                for _, name in ipairs(tgtSchema.order) do
+                    if name ~= MIGRATIONS_TABLE and (before[name] or 0) > 0 then
+                        target.exec('DELETE FROM ' .. QuoteName(name))
+                    end
+                end
+            end
+            -- the storage in use hands out ids during the copy: above every copied one, never the same
+            if target.live then
+                for _, name in ipairs(tables) do
+                    local s, t = srcSchema.tables[name], tgtSchema.tables[name]
+                    if s.next and t and t.auto and (t.next or 0) < s.next then target.raiseNext(name, s.next) end
+                end
+            end
+            for _, name in ipairs(tables) do
+                failedAt = name
+                local n = CopyTable(source, target, srcSchema.tables[name], tgtSchema.tables[name])
+                copied[#copied + 1] = { name = name, rows = n }
+                total = total + n
+            end
+            failedAt = nil
+            -- AUTO_INCREMENT counters: never below the source's, so no id is handed out twice
+            local after = target.schema()
+            for _, name in ipairs(tables) do
+                local s, t = srcSchema.tables[name], after.tables[name]
+                if s.next and t and t.auto and (t.next or 0) < s.next then target.raiseNext(name, s.next) end
+            end
+        end)
+        if not okIn then
+            for _, name in ipairs(tgtSchema.order) do
+                if name ~= MIGRATIONS_TABLE then pcall(target.exec, 'DELETE FROM ' .. QuoteName(name)) end
+            end
+            error(errIn, 0)
+        end
+    end)
+    if not ok then
+        CP.err(TAG, 'storage copy %s failed at %s: %s', direction, tostring(failedAt or '-'), tostring(err))
+        return Reply(src, 'error', 'admin.cmd.storage_copy_failed',
+            { table = failedAt or '-', error = ShortError(err), source = names.source, target = names.target })
+    end
+
+    -- 4. check the target's rows, audit, summary
+    local counts = CountRows(target, target.schema())
+    for _, c in ipairs(copied) do
+        if console then Reply(src, 'info', 'admin.cmd.storage_copy_table', { table = c.name, rows = c.rows }) end
+        if counts[c.name] ~= c.rows then
+            Reply(src, 'warning', 'admin.cmd.storage_copy_mismatch',
+                { table = c.name, rows = c.rows, found = counts[c.name] or 0, target = names.target })
+        end
+    end
+    local old = (force and beforeTotal > 0) and ('replaced %d rows'):format(beforeTotal) or nil
+    local new = ('%d tables, %d rows'):format(#copied, total)
+    Admin.audit(src, RoleOf(src), 'audit', 'storageCopy', direction, old, new, nil)
+    if not target.live then MirrorAudit(target, src, direction, old, new) end
+    local ms = (GetGameTimer and GetGameTimer() or 0) - started
+    local done = {
+        tables = #copied,
+        rows = total,
+        source = names.source,
+        target = names.target,
+        seconds = ('%.1f'):format(ms / 1000),
+    }
+    Reply(src, 'success', 'admin.cmd.storage_copied', done)
+    if target.live then
+        Reply(src, 'warning', 'admin.cmd.storage_next_restart')
+    elseif target.kind == 'files' then
+        Reply(src, 'info', 'admin.cmd.storage_next_files')
+    else
+        Reply(src, 'info', 'admin.cmd.storage_next_database')
+    end
+    return true, 'admin.cmd.storage_copied', done
+end
+
+-- The storage copy for the command and the Admin UI: one at a time (it shares CP.AdminKit's busy lock with bulk jobs,
+-- backups and restores), never while a run is going. ok, messageKey, vars (the replies also reach src).
+function Admin.storageCopy(src, direction, force)
+    if direction ~= 'database-to-files' and direction ~= 'files-to-database' then
+        return Reply(src, 'error', 'admin.cmd.storage_usage', { cmd = CmdName() })
+    end
+    if storageBusy then return Reply(src, 'error', 'admin.cmd.storage_copy_busy') end
+    local running = ActiveRuns()
+    if running > 0 then return Reply(src, 'error', 'admin.cmd.storage_runs_active', { count = running }) end
+    local kit = CP.AdminKit
+    if kit and kit.lock then
+        local okL = kit.lock('storageCopy')
+        if not okL then return Reply(src, 'error', 'admin.cmd.storage_copy_busy') end
+    end
+    storageBusy = true
+    local res = table.pack(pcall(StorageCopy, src, direction, force == true))
+    storageBusy = false
+    if kit and kit.unlock then kit.unlock('storageCopy') end
+    if not res[1] then
+        CP.err(TAG, 'storage copy %s failed: %s', direction, tostring(res[2]))
+        return Reply(src, 'error', 'admin.cmd.storage_copy_error', { error = ShortError(res[2]) })
+    end
+    return res[2], res[3], res[4]
+end
+
+SUB.storage = function(src, args)
+    local what = args[1] and args[1]:lower() or ''
+    if what == '' then return StorageStatus(src) end
+    -- storage mode reset: the console-only way back to config.lua's Config.Database (modules/sysadmin)
+    if what == 'mode' then
+        local fn = CP.Sysadmin and CP.Sysadmin._consoleStorageMode
+        if not fn then return Reply(src, 'error', 'err.module_unavailable') end
+        local ok, key, vars = fn(src, { args[2] })
+        return Reply(src, ok == false and 'error' or 'success', key or 'err.refused',
+            type(vars) == 'table' and vars or nil)
+    end
+    if what ~= 'copy' then return Reply(src, 'error', 'admin.cmd.storage_usage', { cmd = CmdName() }) end
+    local direction = args[2] and args[2]:lower() or ''
+    local extra = args[3] and args[3]:lower() or nil
+    if (direction ~= 'database-to-files' and direction ~= 'files-to-database') or (extra ~= nil and extra ~= 'force')
+        or #args > 3 then
+        return Reply(src, 'error', 'admin.cmd.storage_usage', { cmd = CmdName() })
+    end
+    return Admin.storageCopy(src, direction, extra == 'force')
+end
+
+-- Every Config health line (the start-up run prints only the problems): all of them in the console, the counts in
+-- game (the lines are in Admin UI → Permissions → Config health).
+SUB.check = function(src)
+    local ok, list = Call('ConfigHealth', 'run')
+    if not ok or type(list) ~= 'table' then return Reply(src, 'error', 'err.module_unavailable') end
+    local n = { ok = 0, warn = 0, error = 0 }
+    for _, item in ipairs(list) do
+        if n[item.level] then n[item.level] = n[item.level] + 1 end
+    end
+    local console = tonumber(src) == 0
+    if console then
+        for _, item in ipairs(list) do
+            Reply(0, CHECK_KINDS[item.level] or 'info', 'admin.cmd.check_line',
+                { check = tostring(item.check), text = tostring(item.text) })
+        end
+    end
+    local kind = (n.error > 0 and 'error') or (n.warn > 0 and 'warning') or 'success'
+    Reply(src, kind, console and 'admin.cmd.check_done' or 'admin.cmd.check_done_ingame',
+        { ok = n.ok, warn = n.warn, error = n.error })
+end
+
+-- Another module's /CrimsonPoliceAdmin subcommand (e.g. missioncall). fn(src, args) returns ok, message key
+-- (and its vars); the reply is sent here. helpKey is a usage line shown by the console help. A built-in
+-- subcommand name can't be taken.
+function Admin.registerSubcommand(name, fn, helpKey)
+    if type(name) ~= 'string' or not name:match('^[%a][%w_]*$') or type(fn) ~= 'function' then return false end
+    name = name:lower()
+    if SUB[name] and not registeredSubs[name] then
+        CP.warn(TAG, 'subcommand %s is built in; the registration was ignored', name)
+        return false
+    end
+    registeredSubs[name] = true
+    SUB[name] = function(src, rest)
+        local ok, key, vars = fn(src, rest)
+        if type(key) == 'string' and key ~= '' then
+            Reply(src, ok == false and 'error' or 'success', key, type(vars) == 'table' and vars or nil)
+        elseif ok == false then
+            Reply(src, 'error', 'err.refused')
+        end
+    end
+    if type(helpKey) == 'string' and helpKey ~= '' and not U.contains(extraUsage, helpKey) then
+        extraUsage[#extraUsage + 1] = helpKey
+    end
+    return true
+end
+
+function Admin.command(src, args)
+    src = tonumber(src) or 0
+    args = type(args) == 'table' and args or {}
+    if src ~= 0 and not IsAdmin(src) then
+        HintNotAdmin(src)
+        return Reply(src, 'error', 'err.not_admin')
+    end
+    local sub = args[1] and tostring(args[1]):lower() or nil
+    if not sub then
+        if src == 0 then return Usage(src) end
+        local okP, eP = Can(src, 'openAdmin')
+        if not okP then return Reply(src, 'error', eP) end
+        if not Has('Tablet', 'openAdmin') then return Reply(src, 'error', 'err.module_unavailable') end
+        local ok, opened, e = Call('Tablet', 'openAdmin', src)
+        if ok and opened == false and e then Reply(src, 'error', e) end
+        return
+    end
+    local fn = SUB[sub]
+    if not fn then
+        Reply(src, 'error', 'admin.cmd.unknown', { cmd = CmdName(), sub = sub })
+        return Usage(src)
+    end
+    local rest = {}
+    for i = 2, #args do rest[#rest + 1] = tostring(args[i]) end
+    local ok, err = pcall(fn, src, rest)
+    if not ok then
+        CP.err(TAG, '/%s %s failed: %s', CmdName(), sub, tostring(err))
+        Reply(src, 'error', 'err.internal')
+    end
+end
+
+-- ============================================================================
+--                                 NET: actions
+-- ============================================================================
+
+local function ReviewAction(src, payload)
+    if type(payload) ~= 'table' then return false, 'err.invalid_payload' end
+    local decision = payload.decision
+    if decision == 'approve' then return Admin.approveFlagged(src, payload.rowId, payload.reason) end
+    if decision == 'void' then return Admin.voidFlagged(src, payload.rowId, payload.reason) end
+    return false, 'err.invalid_decision'
+end
+
+CP.Net.action('server:sup:forceRecall', function(src, payload)
+    if type(payload) ~= 'table' then return false, 'err.invalid_payload' end
+    return Admin.forceRecall(src, payload.runId, payload.src, payload.reason)
+end, { rate = 3 })
+
+CP.Net.action('server:sup:reviewFlagged', function(src, payload)
+    return ReviewAction(src, payload)
+end, { rate = 3 })
+
+CP.Net.action('server:admin:reviewFlagged', function(src, payload)
+    if not IsAdmin(src) then return false, 'err.no_permission' end
+    return ReviewAction(src, payload)
+end, { rate = 3 })
+
+CP.Net.action('server:admin:voidRun', function(src, payload)
+    if type(payload) ~= 'table' then return false, 'err.invalid_payload' end
+    if not IsAdmin(src) then return false, 'err.no_permission' end
+    local target = payload.rowId
+    if target == nil then target = payload.runUuid end
+    if target == nil then return false, 'err.invalid_payload' end
+    if type(target) == 'number' or (type(target) == 'string' and tonumber(target)) then
+        target = Int(target, 1, 2147483647)
+        if not target then return false, 'err.invalid_row' end
+    end
+    return Admin.voidRun(src, target, payload.reason,
+        { kind = payload.kind, confirm = payload.confirm, goalRowIds = payload.goalRowIds })
+end, { rate = 3 })
+
+-- Leaderboards → Flagged: approve every flagged row of one run (the held cash of all of them is released).
+CP.Net.action('server:admin:approveRun', function(src, payload)
+    if type(payload) ~= 'table' then return false, 'err.invalid_payload' end
+    if not IsAdmin(src) then return false, 'err.no_permission' end
+    local okP, eP = Can(src, 'reviewFlagged')
+    if not okP then return false, eP end
+    if not ValidUuid(payload.runUuid) then return false, 'err.invalid_run' end
+    local reason = CleanText(payload.reason)
+    if not reason then return false, 'err.reason_required' end
+    local okOwn, eOwn = OwnRunCheck(src, payload.runUuid)
+    if not okOwn then return false, eOwn end
+    local rows = Query('SELECT id FROM cp_mission_runs WHERE run_uuid = ? AND flagged = 1 AND voided = 0 ORDER BY id',
+        { payload.runUuid }) or {}
+    if #rows == 0 then return false, 'err.not_flagged' end
+    local n = 0
+    for _, r in ipairs(rows) do
+        if Admin.approveFlagged(src, r.id, reason) then n = n + 1 end
+    end
+    if n == 0 then return false, 'err.conflict' end
+    return true, { approved = n, runUuid = payload.runUuid }
+end, { rate = 2 })
+
+CP.Net.action('server:admin:awardPoints', function(src, payload)
+    if type(payload) ~= 'table' then return false, 'err.invalid_payload' end
+    local okP, eP = Can(src, 'manualAward')
+    if not okP then return false, eP end
+    local points = Int(payload.points, 1, MAX_AWARD)
+    if not points then return false, 'err.invalid_points' end
+    local reason = CleanText(payload.reason)
+    if not reason then return false, 'err.reason_required' end
+    local cid = Admin.resolveCitizenId(payload.citizenid)
+    if not cid then return false, 'err.unknown_officer' end
+    if not Has('Scoring', 'manualAward') then return false, 'err.module_unavailable' end
+    local ok, e = Outcome(Call('Scoring', 'manualAward', src, cid, points, reason))
+    if not ok then return false, e end
+    return true, { citizenid = cid, points = points }
+end, { rate = 2 })
+
+CP.Net.action('server:admin:suspend', function(src, payload)
+    if type(payload) ~= 'table' then return false, 'err.invalid_payload' end
+    local reason = CleanText(payload.reason)
+    if not reason then return false, 'err.reason_required' end
+    return SuspendOfficer(src, payload.citizenid, payload.days, reason, payload.untilTs)
+end, { rate = 2 })
+
+-- ============================================================================
+--                                NET: callbacks
+-- ============================================================================
+
+local function BaseFor(def)
+    if Has('Payouts', 'baseFor') then
+        local ok, b = Call('Payouts', 'baseFor', def)
+        if ok and tonumber(b) then return math.floor(tonumber(b) + 0.5) end
+    end
+    if def.isBoss then
+        local boss = Config.Events and Config.Events.weeklyBoss
+        return math.floor(Num(boss and boss.payout, 0))
+    end
+    local mt = Config.MissionTypes and Config.MissionTypes[def.type]
+    local stars = Config.Difficulty and Config.Difficulty.cashByStars or {}
+    return math.floor(Num(mt and mt.payout, 0) * Num(stars[def.difficulty], 1) + 0.5)
+end
+
+local function SourceFor(def)
+    if Has('Payouts', 'sourceFor') then
+        local ok, s = Call('Payouts', 'sourceFor', def)
+        if ok and (s == 'admin' or s == 'type' or s == 'event') then return s end
+    end
+    return def.isBoss and 'event' or 'type'
+end
+
+local function RunningByMission()
+    local out = {}
+    if not Has('Runs', 'all') then return out end
+    local ok, list = Call('Runs', 'all')
+    if not ok or type(list) ~= 'table' then return out end
+    for _, run in ipairs(list) do
+        local id = run.missionId or (run.mission and run.mission.id)
+        if id then
+            local entry = out[id] or {}
+            out[id] = entry
+            for _, s in ipairs(run.order or {}) do
+                local p = run.participants and run.participants[s]
+                if p and p.status == 'active' then
+                    entry[#entry + 1] = {
+                        runId = run.id,
+                        src = s,
+                        name = p.name or ('#' .. s),
+                        callsign = p.callsign,
+                        departmentShort = p.departmentShort or DeptShort(p.department),
+                        test = run.test ~= nil,
+                    }
+                end
+            end
+        end
+    end
+    return out
+end
+
+local function OperationInfo()
+    if not Has('Operations', 'active') then return nil end
+    local ok, op = Call('Operations', 'active')
+    if not ok or type(op) ~= 'table' then return nil end
+    local missionId = op.missionId or op.mission_id
+    return {
+        id = tonumber(op.id),
+        missionId = missionId,
+        status = op.status,
+        missionLabel = op.missionLabel or (missionId and Admin.missionLabel(missionId)) or '',
+    }
+end
+
+-- MissionListData (docs/notes/oversight.md). adminExtras adds what the Admin UI Missions screen lists besides
+-- (SPEC Interfaces: "version, Lua file path, 'edited in code' flag"): filePath, editedInCode, defHash, status,
+-- disabledInConfig (Config.DisabledMissions).
+local function MissionListData(src, adminExtras)
+    local running = RunningByMission()
+    local list = {}
+    for _, def in ipairs(CP.Missions.list() or {}) do
+        local enabled = Has('Missions', 'isEnabled') and CP.Missions.isEnabled(def.id) == true or false
+        local depts = {}
+        for _, d in ipairs(type(def.departments) == 'table' and def.departments or {}) do depts[#depts + 1] = d end
+        local maxO = math.floor(Num(def.maxOfficers, 1))
+        local eligible = #depts == 0 and maxO >= 2 and not def.isBoss and enabled
+        if Has('Operations', 'eligible') then
+            -- The same rule CP.Operations applies when the launch arrives.
+            local okE, e = Call('Operations', 'eligible', def)
+            if okE then eligible = e == true end
+        end
+        list[#list + 1] = {
+            id = def.id,
+            label = def.label or def.id,
+            type = def.type,
+            typeLabel = TypeLabel(def.type),
+            source = def.source == 'custom' and 'custom' or 'builtin',
+            builtin = def.source ~= 'custom',
+            version = tonumber(def.version),
+            difficulty = math.floor(Num(def.difficulty, 1)),
+            minOfficers = math.floor(Num(def.minOfficers, 1)),
+            maxOfficers = maxO,
+            basePayout = BaseFor(def),
+            payoutSource = SourceFor(def),
+            cooldown = math.floor(Num(def.cooldown, 0)),
+            timeLimit = math.floor(Num(def.timeLimit, 0)),
+            locations = #(def.locations or {}),
+            enabled = enabled,
+            isBoss = def.isBoss == true,
+            departments = depts,
+            runningNow = running[def.id] or {},
+            crossDeptEligible = eligible,
+        }
+        if adminExtras then
+            local row = list[#list]
+            row.filePath = type(def.filePath) == 'string' and def.filePath or nil
+            row.editedInCode = def.editedInCode == true
+            row.defHash = type(def.defHash) == 'string' and def.defHash or nil
+            row.status = type(def.status) == 'string' and def.status or 'published'
+            row.disabledInConfig = U.contains(Config.DisabledMissions or {}, def.id)
+            -- the on/off switches of the mission and each location (CP.Settings), with config.lua's values
+            local okS, switch = Call('Settings', 'missionView', def)
+            if okS then row.switch = switch end
+        end
+    end
+    table.sort(list, function(a, b)
+        if a.type ~= b.type then return tostring(a.type) < tostring(b.type) end
+        return tostring(a.label) < tostring(b.label)
+    end)
+    local canLaunch = Can(src, 'launchCrossDept')
+    local op = OperationInfo()
+    return {
+        missions = list,
+        canLaunch = canLaunch and (Config.CrossDept == nil or Config.CrossDept.enabled ~= false),
+        crossDeptEnabled = Config.CrossDept == nil or Config.CrossDept.enabled ~= false,
+        operation = op,
+    }
+end
+
+CP.Net.callback('getMissionList', function(src)
+    local okP, eP = Can(src, 'viewMissionList')
+    if not okP then return nil, eP end
+    if not Has('Missions', 'list') then return nil, 'err.module_unavailable' end
+    return MissionListData(src, false)
+end, { rate = 3 })
+
+-- ARCHITECTURE §8.3 admin:getMissions: the same list for the Admin UI with the file/status extras (admin only).
+CP.Net.callback('admin:getMissions', function(src)
+    local okP, eP = Can(src, 'openAdmin')
+    if not okP then return nil, eP end
+    if not Has('Missions', 'list') then return nil, 'err.module_unavailable' end
+    return MissionListData(src, true)
+end, { rate = 3 })
+
+local function ViewerDepartment(src)
+    if tonumber(src) == 0 then return nil, nil end
+    local officer = CP.Access and CP.Access.getOfficer and CP.Access.getOfficer(src) or nil
+    local citizenid = officer and officer.citizenid
+    if not citizenid then
+        local ok, info = Call('Qbx', 'getInfo', src)
+        citizenid = ok and type(info) == 'table' and info.citizenid or nil
+    end
+    return officer and officer.department or nil, citizenid
+end
+
+CP.Net.callback('sup:getLiveRuns', function(src)
+    local okP, eP = Can(src, 'viewMissionList')
+    if not okP then return nil, eP end
+    if not Has('Runs', 'all') then return nil, 'err.module_unavailable' end
+    local dept = ViewerDepartment(src)
+    local admin = IsAdmin(src)
+    if not dept and not admin then return nil, 'err.no_permission' end
+    local canRecall = Can(src, 'forceRecall')
+    local out = {}
+    for _, run in ipairs(CP.Runs.all() or {}) do
+        if run.state ~= 'ended' and ((dept and RunInvolves(run, dept)) or (not dept and admin)) then
+            local ok, s = Call('Runs', 'summary', run)
+            if ok and type(s) == 'table' then
+                for _, p in ipairs(s.participants or {}) do
+                    local rp = run.participants and run.participants[p.src]
+                    p.arrived = rp and rp.arrived == true or false
+                    p.department = rp and rp.department or nil
+                end
+                s.missionId = run.missionId
+                s.acceptedAt = run.acceptedAt
+                s.startedAt = run.startedAt
+                s.isBoss = run.isBoss == true
+                local shorts = {}
+                for _, d in ipairs(RunDeptList(run)) do shorts[#shorts + 1] = DeptShort(d) end
+                s.departments = shorts
+                out[#out + 1] = s
+            end
+        end
+    end
+    return { runs = out, serverTime = os.time(), canRecall = canRecall }
+end, { rate = 3 })
+
+-- Flag events recorded by CP.AntiCheat.flag (cp_audit 'runFlagged'): uuid -> { { citizenid|nil, reason, detail } }
+local function FlagEvents(uuids)
+    local out = {}
+    if #uuids == 0 then return out end
+    local i = 1
+    while i <= #uuids do
+        local chunk, marks = {}, {}
+        for k = i, math.min(i + 99, #uuids) do
+            chunk[#chunk + 1] = uuids[k]
+            marks[#marks + 1] = '?'
+        end
+        i = i + 100
+        local rows = Query(
+            ('SELECT target, old_value, new_value, reason FROM cp_audit WHERE category = \'flags\' AND action = \'runFlagged\' AND target IN (%s) ORDER BY id'):format(
+                table.concat(marks, ', ')
+            ), chunk) or {}
+        for _, r in ipairs(rows) do
+            local list = out[r.target] or {}
+            out[r.target] = list
+            list[#list + 1] = { citizenid = r.old_value, reason = r.new_value, detail = r.reason }
+        end
+    end
+    return out
+end
+
+local FLAGGED_SQL = [[SELECT r.id, r.run_uuid, r.citizenid, r.department, r.mission_type, r.mission_id, r.location_label,
+  r.state, r.end_reason, r.tier, r.participants, r.departments_n, r.final_points, r.cash_status, r.flag_reason,
+  r.duration_s, JSON_VALUE(r.breakdown, '$.cash.amount') AS cash_amount,
+  UNIX_TIMESTAMP(r.created_at) AS created_ts, o.display_name, o.callsign
+  FROM cp_mission_runs r
+  LEFT JOIN cp_officers o ON o.citizenid = r.citizenid
+  WHERE r.flagged = 1 AND r.voided = 0]]
+
+function Admin.flaggedRows(dept, excludeCitizenid)
+    local sql, params = FLAGGED_SQL, {}
+    if dept then
+        sql = sql .. ' AND r.run_uuid IN (SELECT d.run_uuid FROM cp_mission_runs d WHERE d.department = ?)'
+        params[#params + 1] = dept
+    end
+    if excludeCitizenid then
+        sql = sql .. ' AND r.run_uuid NOT IN (SELECT m.run_uuid FROM cp_mission_runs m WHERE m.citizenid = ?)'
+        params[#params + 1] = excludeCitizenid
+    end
+    sql = sql .. (' ORDER BY r.created_at DESC, r.id DESC LIMIT %d'):format(FLAGGED_LIMIT)
+    local rows = {}
+    for _, r in ipairs(Query(sql, params) or {}) do
+        -- A run the viewer is still on (their own row is not written yet) is their own run too.
+        if not InLiveRun(excludeCitizenid, r.run_uuid) then rows[#rows + 1] = r end
+    end
+    local uuids, seen = {}, {}
+    for _, r in ipairs(rows) do
+        if not seen[r.run_uuid] then seen[r.run_uuid] = true; uuids[#uuids + 1] = r.run_uuid end
+    end
+    local events = FlagEvents(uuids)
+    local out = {}
+    for _, r in ipairs(rows) do
+        local details, reasons = {}, {}
+        for _, e in ipairs(events[r.run_uuid] or {}) do
+            if e.citizenid == nil or e.citizenid == r.citizenid then
+                if e.detail and e.detail ~= '' then details[#details + 1] = e.detail end
+                if e.reason and e.reason ~= r.flag_reason then reasons[#reasons + 1] = e.reason end
+            end
+        end
+        out[#out + 1] = {
+            rowId = math.tointeger(tonumber(r.id)),
+            runUuid = r.run_uuid,
+            citizenid = r.citizenid,
+            name = r.display_name or r.citizenid,
+            callsign = r.callsign,
+            department = r.department,
+            departmentShort = DeptShort(r.department),
+            missionId = r.mission_id,
+            missionLabel = Admin.missionLabel(r.mission_id),
+            missionType = r.mission_type,
+            missionTypeLabel = TypeLabel(r.mission_type),
+            location = r.location_label,
+            state = r.state,
+            endReason = r.end_reason,
+            tier = r.tier,
+            participants = math.floor(Num(r.participants, 1)),
+            departments = math.floor(Num(r.departments_n, 1)),
+            points = math.floor(Num(r.final_points, 0)),
+            cash = math.floor(Num(r.cash_amount, 0)),
+            cashStatus = r.cash_status,
+            flagReason = r.flag_reason or 'flagged',
+            flagDetail = #details > 0 and table.concat(details, ' · ') or nil,
+            otherReasons = reasons,
+            durationS = math.floor(Num(r.duration_s, 0)),
+            createdAt = math.floor(Num(r.created_ts, 0)),
+        }
+    end
+    return out
+end
+
+CP.Net.callback('sup:getReviewQueue', function(src)
+    local canReview = Can(src, 'reviewFlagged')
+    local canHandle = Can(src, 'handleDisputes')
+    if not canReview and not canHandle then return nil, 'err.no_permission' end
+    local dept, citizenid = ViewerDepartment(src)
+    if not dept and not IsAdmin(src) then return nil, 'err.no_permission' end
+    local flagged = canReview and Admin.flaggedRows(dept, citizenid or '') or {}
+    local disputes = {}
+    if canHandle and Has('Disputes', 'forSupervisor') then
+        local ok, list = Call('Disputes', 'forSupervisor', src)
+        if ok and type(list) == 'table' then disputes = list end
+    end
+    return { flagged = flagged, disputes = disputes, canReview = canReview, canHandle = canHandle }
+end, { rate = 3 })
+
+local function AdminOnly(src)
+    return Can(src, 'openAdmin')
+end
+
+CP.Net.callback('admin:getFlagged', function(src)
+    local okP, eP = AdminOnly(src)
+    if not okP then return nil, eP end
+    local _, citizenid = ViewerDepartment(src)
+    return { flagged = Admin.flaggedRows(nil, citizenid or '') }
+end, { rate = 3 })
+
+-- ARCHITECTURE §8.3: payments left in 'paying' after a crash or a failed deposit (SPEC Cash payouts: "listed in
+-- Admin UI → Leaderboards for a manual check against the Renewed-Banking history"). CP.Cash owns the query.
+CP.Net.callback('admin:getStuckPayments', function(src)
+    local okP, eP = AdminOnly(src)
+    if not okP then return nil, eP end
+    if not Has('Cash', 'stuckPayments') then return nil, 'err.module_unavailable' end
+    local ok, list = Call('Cash', 'stuckPayments')
+    if not ok or type(list) ~= 'table' then return nil, 'err.internal' end
+    return { payments = list, serverTime = os.time() }
+end, { rate = 3 })
+
+local function SuspensionOf(ts)
+    ts = tonumber(ts)
+    if ts and ts > os.time() then return ts end
+    return nil
+end
+
+-- The citizenids of the online players (the Online filter).
+local function OnlineCitizenids()
+    local out = {}
+    if not (Has('Qbx', 'getOnlinePlayers') and Has('Qbx', 'getInfo')) then return out end
+    local ok, list = Call('Qbx', 'getOnlinePlayers')
+    for _, s2 in ipairs(ok and type(list) == 'table' and list or {}) do
+        local okI, info = Call('Qbx', 'getInfo', s2)
+        if okI and type(info) == 'table' and type(info.citizenid) == 'string' then out[#out + 1] = info.citizenid end
+    end
+    return out
+end
+
+local SEARCH_FILTERS = {
+    suspended = 'o.suspended_until IS NOT NULL AND o.suspended_until > NOW()',
+    retired = 'o.retired_at IS NOT NULL',
+    excluded = 'o.board_excluded = 1',
+    review = [[((o.avatar_status = 'pending' AND o.avatar_pending IS NOT NULL) OR o.bio_pending IS NOT NULL
+        OR EXISTS (SELECT 1 FROM cp_profile_reports p WHERE p.citizenid = o.citizenid AND p.status = 'open'))]],
+    dispute = [[EXISTS (SELECT 1 FROM cp_disputes d WHERE d.citizenid = o.citizenid AND d.status = 'open')]],
+    flagged = 'EXISTS (SELECT 1 FROM cp_mission_runs r WHERE r.citizenid = o.citizenid AND r.flagged = 1 AND r.voided = 0)',
+}
+
+-- Officers search (A1): name, callsign or citizenid, the filters above plus department and online, and pages of 25.
+-- An online officer who has no Crimson-Police row yet is found by their exact citizenid.
+CP.Net.callback('admin:searchOfficers', function(src, args)
+    local okP, eP = AdminOnly(src)
+    if not okP then return nil, eP end
+    args = type(args) == 'table' and args or {}
+    local q = type(args.query) == 'string' and U.trim(args.query) or ''
+    if #q > 64 then q = q:sub(1, 64) end
+    local filters = type(args.filters) == 'table' and args.filters or {}
+    local where, params = {}, {}
+    if q ~= '' then
+        local like = LikeArg(q)
+        where[#where + 1] = '(o.citizenid LIKE ? OR o.callsign LIKE ? OR o.display_name LIKE ?)'
+        params[#params + 1], params[#params + 2], params[#params + 3] = like, like, like
+    end
+    if type(filters.department) == 'string' and filters.department ~= '' then
+        where[#where + 1] = 'o.department = ?'
+        params[#params + 1] = filters.department
+    end
+    for key, clause in pairs(SEARCH_FILTERS) do
+        if filters[key] == true then where[#where + 1] = clause end
+    end
+    if filters.online == true then
+        local online = OnlineCitizenids()
+        if #online == 0 then return { officers = {}, query = q, total = 0, page = 1, pages = 1 } end
+        local marks = {}
+        for i, cid in ipairs(online) do
+            marks[i] = '?'
+            params[#params + 1] = cid
+        end
+        where[#where + 1] = ('o.citizenid IN (%s)'):format(table.concat(marks, ', '))
+    end
+    local whereSql = #where > 0 and (' WHERE ' .. table.concat(where, ' AND ')) or ''
+    local total = math.floor(Num((Single('SELECT COUNT(*) AS n FROM cp_officers o' .. whereSql, params) or {}).n, 0))
+    local pages = math.max(1, math.ceil(total / SEARCH_LIMIT))
+    local page = math.min(pages, Int(args.page, 1, 100000) or 1)
+    local rows = Query(
+        ([[SELECT o.citizenid, o.callsign, o.rank_label, o.display_name, o.department, o.xp,
+        UNIX_TIMESTAMP(o.suspended_until) AS suspended_ts, UNIX_TIMESTAMP(o.retired_at) AS retired_ts, o.board_excluded
+        FROM cp_officers o%s ORDER BY o.display_name IS NULL, o.display_name, o.citizenid LIMIT %d OFFSET %d]]):format(
+            whereSql,
+            SEARCH_LIMIT,
+            (page - 1) * SEARCH_LIMIT
+        ),
+        params
+    )
+    if not rows then return nil, 'err.internal' end
+    local out = {}
+    for _, r in ipairs(rows) do
+        out[#out + 1] = {
+            citizenid = r.citizenid,
+            name = r.display_name or r.citizenid,
+            callsign = r.callsign,
+            rank = r.rank_label,
+            department = r.department,
+            departmentShort = DeptShort(r.department),
+            xp = math.floor(Num(r.xp, 0)),
+            suspendedUntil = SuspensionOf(r.suspended_ts),
+            online = OnlineSrc(r.citizenid) ~= nil,
+            retired = r.retired_ts ~= nil,
+            excluded = U.truthy(r.board_excluded),
+            known = true,
+        }
+    end
+    -- an online character without a row yet (never finished a run): found by the exact citizenid
+    if total == 0 and q ~= '' and q:match('^[%w_%-]+$') and next(filters) == nil then
+        local s2 = OnlineSrc(q) or OnlineSrc(q:upper())
+        local okI, info = false, nil
+        if s2 then okI, info = Call('Qbx', 'getInfo', s2) end
+        if okI and type(info) == 'table' and type(info.citizenid) == 'string' then
+            out[1] = {
+                citizenid = info.citizenid,
+                name = info.name or info.citizenid,
+                callsign = info.callsign,
+                online = true,
+                known = false,
+                xp = 0,
+            }
+            total = 1
+        end
+    end
+    return { officers = out, query = q, total = total, page = page, pages = pages }
+end, { rate = 4 })
+
+local function XpLevel(xp)
+    if Has('Scoring', 'xpLevel') then
+        local ok, lvl = Call('Scoring', 'xpLevel', xp)
+        if ok and type(lvl) == 'table' then return lvl end
+    end
+    local levels = Config.XPLevels or {}
+    local cur, nextXp = nil, nil
+    for i, l in ipairs(levels) do
+        if xp >= Num(l.xp, 0) then
+            cur = l
+            nextXp = levels[i + 1] and levels[i + 1].xp or nil
+        end
+    end
+    if not cur then return nil end
+    return { label = cur.label, badge = cur.badge, xp = xp, next = nextXp }
+end
+
+local function BadgesOf(citizenid)
+    if Has('Scoring', 'badges') then
+        local ok, list = Call('Scoring', 'badges', citizenid)
+        if ok and type(list) == 'table' then return list end
+    end
+    local out = {}
+    for _, r in
+        ipairs(Query(
+            'SELECT badge_id, UNIX_TIMESTAMP(earned_at) AS earned_ts FROM cp_badges WHERE citizenid = ? ORDER BY earned_at DESC',
+            { citizenid }
+        ) or {})
+    do
+        out[#out + 1] = {
+            id = r.badge_id,
+            label = r.badge_id,
+            earnedAt = os.date('%Y-%m-%d', math.floor(Num(r.earned_ts, 0))),
+        }
+    end
+    return out
+end
+
+local function WeekStartTs()
+    if Has('Schedule', 'weekStart') then
+        local ok, ts = Call('Schedule', 'weekStart')
+        if ok and tonumber(ts) then return math.floor(tonumber(ts)) end
+    end
+    return os.time() - 7 * 86400
+end
+
+CP.Net.callback('admin:getOfficer', function(src, args)
+    local okP, eP = AdminOnly(src)
+    if not okP then return nil, eP end
+    local cid = type(args) == 'table' and Admin.resolveCitizenId(args.citizenid) or nil
+    if not cid then return nil, 'err.unknown_officer' end
+    local o = Single([[SELECT citizenid, callsign, rank_label, display_name, department, xp, streak_days,
+        UNIX_TIMESTAMP(suspended_until) AS suspended_ts, board_excluded, UNIX_TIMESTAMP(retired_at) AS retired_ts,
+        retire_batch FROM cp_officers WHERE citizenid = ?]], { cid })
+    local xp = math.floor(Num(o and o.xp, 0))
+    local stats = Single([[SELECT COUNT(*) AS runs, COALESCE(SUM(state = 'completed'), 0) AS completed,
+        COALESCE(SUM(state = 'failed'), 0) AS failed, COALESCE(SUM(state = 'abandoned'), 0) AS abandoned,
+        COALESCE(SUM(flagged = 1), 0) AS flagged, COALESCE(SUM(voided = 1), 0) AS voided,
+        COALESCE(SUM(cash_paid), 0) AS cash_total,
+        COALESCE(SUM(CASE WHEN created_at >= FROM_UNIXTIME(?) THEN cash_paid ELSE 0 END), 0) AS cash_week
+        FROM (SELECT state, flagged, voided, cash_paid, created_at FROM cp_mission_runs WHERE citizenid = ? AND mission_type NOT IN ('manual_award', 'goal')
+              UNION ALL
+              SELECT state, flagged, voided, cash_paid, created_at FROM cp_mission_runs_archive WHERE citizenid = ? AND mission_type NOT IN ('manual_award', 'goal')) t]],
+        { WeekStartTs(), cid, cid }) or {}
+    local cashWeek = math.floor(Num(stats.cash_week, 0))
+    if Has('Cash', 'earnedThisWeek') then
+        local ok, w = Call('Cash', 'earnedThisWeek', cid)
+        if ok and tonumber(w) then cashWeek = math.floor(tonumber(w)) end
+    end
+    local runs = {}
+    for _, r in
+        ipairs(
+            Query(
+                ([[SELECT id, run_uuid, mission_type, mission_id, state, end_reason, tier, participants,
+        final_points, cash_paid, cash_status, flagged, voided, flag_reason, JSON_VALUE(breakdown, '$.cash.amount') AS cash_amount,
+        UNIX_TIMESTAMP(created_at) AS created_ts FROM cp_mission_runs WHERE citizenid = ? ORDER BY created_at DESC, id DESC LIMIT %d]]):format(
+                    RECENT_RUNS
+                ),
+                { cid }
+            ) or {}
+        )
+    do
+        runs[#runs + 1] = {
+            id = math.tointeger(tonumber(r.id)),
+            runUuid = r.run_uuid,
+            missionId = r.mission_id,
+            missionLabel = Admin.missionLabel(r.mission_id),
+            missionType = r.mission_type,
+            missionTypeLabel = TypeLabel(r.mission_type),
+            state = r.state,
+            endReason = r.end_reason,
+            tier = r.tier,
+            participants = math.floor(Num(r.participants, 1)),
+            points = math.floor(Num(r.final_points, 0)),
+            cashPaid = math.floor(Num(r.cash_paid, 0)),
+            cash = math.floor(Num(r.cash_amount, Num(r.cash_paid, 0))),
+            cashStatus = r.cash_status,
+            flagged = U.truthy(r.flagged),
+            voided = U.truthy(r.voided),
+            flagReason = r.flag_reason,
+            createdAt = math.floor(Num(r.created_ts, 0)),
+            -- the Renewed-Banking transaction id of a payment (search it in the bank history)
+            txnId = (Num(r.cash_paid, 0) > 0 or r.cash_status == 'paying') and ('CP-%s-%s'):format(r.run_uuid, cid)
+                or nil,
+        }
+    end
+    local disputes = {}
+    if Has('Disputes', 'forOfficer') then
+        -- Failed-run disputes always; with Config.Permissions.supervisor.handleDisputes off, admins are the only ones
+        -- who can answer disputes about flagged or voided runs too (and are the ones told about them), so show those.
+        -- With the switch on, an open flagged/voided-run dispute is listed too while no supervisor can answer it
+        -- (every online supervisor of the run's departments took part, or none is online): the admins are the
+        -- ones told about it then (CP.Disputes tellStaff), so they must be able to answer it here.
+        local supCfg = Config.Permissions and Config.Permissions.supervisor
+        local supHandle = type(supCfg) == 'table' and supCfg.handleDisputes == true
+        local fallback = supHandle and Has('Disputes', 'supervisorCanAnswer')
+        local ok, list = Call('Disputes', 'forOfficer', cid, (supHandle and not fallback) and 'admin' or nil, src)
+        if ok and type(list) == 'table' then
+            if fallback then
+                local canSup = {}
+                for _, d in ipairs(list) do
+                    if type(d) == 'table' and d.goesTo == 'admin' then
+                        disputes[#disputes + 1] = d
+                    elseif type(d) == 'table' and d.status == 'open' and d.runUuid then
+                        if canSup[d.runUuid] == nil then
+                            local okS, res = Call('Disputes', 'supervisorCanAnswer', d.runUuid)
+                            canSup[d.runUuid] = not okS or res ~= false
+                        end
+                        if not canSup[d.runUuid] then disputes[#disputes + 1] = d end
+                    end
+                end
+            else
+                disputes = list
+            end
+        end
+    end
+    -- Suspension history: every suspend / unsuspend / automatic suspension written to cp_audit.
+    local suspensions = {}
+    for _, r in
+        ipairs(
+            Query(
+                ([[SELECT a.id, a.actor, a.role, a.action, a.new_value, a.reason, UNIX_TIMESTAMP(a.created_at) AS created_ts,
+        o.display_name FROM cp_audit a LEFT JOIN cp_officers o ON o.citizenid = a.actor
+        WHERE a.target = ? AND a.action IN ('suspend', 'unsuspend', 'autoSuspend')
+        ORDER BY a.created_at DESC, a.id DESC LIMIT %d]]):format(SUSPENSION_HISTORY),
+                { cid }
+            ) or {}
+        )
+    do
+        suspensions[#suspensions + 1] = {
+            id = math.tointeger(tonumber(r.id)),
+            action = r.action,
+            actor = r.actor,
+            actorName = r.display_name,
+            role = r.role,
+            days = r.action ~= 'unsuspend' and math.tointeger(tonumber(r.new_value)) or nil,
+            reason = r.reason,
+            createdAt = math.floor(Num(r.created_ts, 0)),
+        }
+    end
+    local _, viewerCid = ViewerDepartment(src)
+    local dept = o and o.department or nil
+    local deptInfo = dept and CP.Access and CP.Access.department and CP.Access.department(dept) or nil
+    local online = OnlineSrc(cid)
+    -- the live streak (a broken one shows 0, not the stored count), the SC-Dispatch suspension (view only)
+    local okSt, streak = Call('Scoring', 'streak', cid)
+    streak = okSt and type(streak) == 'table' and streak or { days = math.floor(Num(o and o.streak_days, 0)) }
+    local okD, dispatch = Call('Access', 'dispatchSuspension', cid)
+    local okStrikes, strikes = Call('AntiCheat', 'strikeCount', cid)
+    local okF, firstRun = Call('Scoring', 'firstRunAvailable', cid)
+    local okL, license = Call('Access', 'licenseOf', cid)
+    local badges = BadgesOf(cid)
+    local overrides = {}
+    for _, r in
+        ipairs(
+            Query('SELECT badge_id, mode, by_actor, reason FROM cp_badge_overrides WHERE citizenid = ?', { cid }) or {})
+    do
+        overrides[r.badge_id] = r
+    end
+    for _, b in ipairs(badges) do
+        local ov = overrides[b.id]
+        b.source = ov and ov.mode == 'grant' and 'granted' or 'earned'
+        if ov then b.by, b.reason = ov.by_actor, ov.reason end
+    end
+    for id, ov in pairs(overrides) do
+        if ov.mode == 'block' then
+            local label = id
+            if Has('Leaderboard', 'badgeLabel') then
+                local okB, l = Call('Leaderboard', 'badgeLabel', id)
+                if okB and type(l) == 'string' then label = l end
+            end
+            if label == id and CP.Locale.has('badge.' .. id) then label = CP.L('badge.' .. id) end
+            badges[#badges + 1] = { id = id, label = label, source = 'blocked', by = ov.by_actor, reason = ov.reason }
+        end
+    end
+    -- the reason of the suspension running now (the newest suspension history line)
+    local suspensionReason = suspensions[1] and suspensions[1].action ~= 'unsuspend' and suspensions[1].reason or nil
+    return {
+        citizenid = cid,
+        name = o and o.display_name or cid,
+        callsign = o and o.callsign or nil,
+        rank = o and o.rank_label or nil,
+        department = dept,
+        departmentShort = DeptShort(dept),
+        departmentLabel = deptInfo and deptInfo.label or nil,
+        xp = xp,
+        level = XpLevel(xp),
+        streakDays = math.floor(Num(streak.days, 0)),
+        streak = {
+            days = math.floor(Num(streak.days, 0)),
+            multiplier = tonumber(streak.multiplier) or 1,
+            graceLeft = streak.graceLeft == true,
+            stored = math.floor(Num(o and o.streak_days, 0)),
+        },
+        firstRun = okF and firstRun or nil,
+        dispatch = okD and type(dispatch) == 'table' and dispatch or { suspended = false, available = false },
+        strikes = okStrikes and tonumber(strikes) or 0,
+        retired = o and o.retired_ts ~= nil and { at = math.floor(Num(o.retired_ts, 0)), batch = o.retire_batch }
+            or nil,
+        boardExcluded = o ~= nil and U.truthy(o.board_excluded),
+        licenseKnown = okL and type(license) == 'string',
+        badges = badges,
+        cash = { total = math.floor(Num(stats.cash_total, 0)), week = cashWeek },
+        stats = {
+            runs = math.floor(Num(stats.runs, 0)),
+            completed = math.floor(Num(stats.completed, 0)),
+            failed = math.floor(Num(stats.failed, 0)),
+            abandoned = math.floor(Num(stats.abandoned, 0)),
+            flagged = math.floor(Num(stats.flagged, 0)),
+            voided = math.floor(Num(stats.voided, 0)),
+        },
+        suspension = {
+            suspended = SuspensionOf(o and o.suspended_ts) ~= nil,
+            untilTs = SuspensionOf(o and o.suspended_ts),
+            reason = SuspensionOf(o and o.suspended_ts) ~= nil and suspensionReason or nil,
+        },
+        suspensions = suspensions,
+        runs = runs,
+        disputes = disputes,
+        online = online ~= nil,
+        own = viewerCid ~= nil and viewerCid == cid,
+        known = o ~= nil,
+        maxAward = MAX_AWARD,
+    }
+end, { rate = 4 })
+
+local function OnDutyCounts()
+    local counts = {}
+    if not (Has('Qbx', 'getOnlinePlayers') and Has('Qbx', 'getInfo')) then return counts end
+    local ok, list = Call('Qbx', 'getOnlinePlayers')
+    if not ok or type(list) ~= 'table' then return counts end
+    for _, s in ipairs(list) do
+        local okI, info = Call('Qbx', 'getInfo', s)
+        if okI and type(info) == 'table' and type(info.job) == 'table' and info.job.onduty then
+            local d = CP.Access.departmentForJob(info.job.name)
+            if d then counts[d] = (counts[d] or 0) + 1 end
+        end
+    end
+    return counts
+end
+
+CP.Net.callback('admin:getDepartments', function(src)
+    local okP, eP = AdminOnly(src)
+    if not okP then return nil, eP end
+    local members = {}
+    for _, r in
+        ipairs(Query([[SELECT department, COUNT(*) AS n,
+        COALESCE(SUM(suspended_until IS NOT NULL AND suspended_until > NOW()), 0) AS suspended
+        FROM cp_officers WHERE department IS NOT NULL GROUP BY department]]) or {})
+    do
+        members[r.department] = { n = math.floor(Num(r.n, 0)), suspended = math.floor(Num(r.suspended, 0)) }
+    end
+    local society = Config.Cash and Config.Cash.source == 'society'
+    local duty = OnDutyCounts()
+    local out = {}
+    for _, d in ipairs(CP.Access.departments() or {}) do
+        local balance = nil
+        if society and Has('Banking', 'societyBalance') then
+            local ok, b = Call('Banking', 'societyBalance', d.societyAccount)
+            if ok and tonumber(b) then balance = tonumber(b) end
+        end
+        local logo = nil
+        if d.logo and d.logo.url then
+            logo = {
+                url = d.logo.url,
+                watermark = d.logo.watermark ~= false,
+                opacity = d.logo.opacity,
+                size = d.logo.size,
+                grayscale = d.logo.grayscale == true,
+            }
+        end
+        local m = members[d.key] or { n = 0, suspended = 0 }
+        out[#out + 1] = {
+            key = d.key,
+            label = d.label,
+            short = d.short,
+            jobs = d.jobs,
+            supervisorGrade = d.supervisorGrade,
+            societyAccount = d.societyAccount,
+            theme = d.theme,
+            logo = logo,
+            members = m.n,
+            suspended = m.suspended,
+            onDuty = duty[d.key] or 0,
+            societyBalance = balance,
+        }
+    end
+    return { departments = out, cashSource = society and 'society' or 'server', showSociety = society == true }
+end, { rate = 3 })
+
+CP.Net.callback('admin:getPermissions', function(src)
+    local okP, eP = AdminOnly(src)
+    if not okP then return nil, eP end
+    local sup = Config.Permissions and Config.Permissions.supervisor or {}
+    local keys = {}
+    for k in pairs(sup) do
+        if type(k) == 'string' then keys[#keys + 1] = k end
+    end
+    local order = {}
+    for i, k in ipairs(SUPERVISOR_ORDER) do order[k] = i end
+    table.sort(keys, function(a, b)
+        local ia, ib = order[a] or 1000, order[b] or 1000
+        if ia ~= ib then return ia < ib end
+        return a < b
+    end)
+    local list = {}
+    local adminOnlySet = {}
+    for _, a in ipairs(ADMIN_ONLY) do adminOnlySet[a] = true end
+    for _, k in ipairs(keys) do
+        list[#list + 1] = { action = k, enabled = sup[k] == true and not adminOnlySet[k] }
+    end
+    return { supervisor = list, adminOnly = ADMIN_ONLY, always = SUPERVISOR_ALWAYS }
+end, { rate = 3 })
+
+-- ============================================================================
+--                               AUDIT LOG READS
+-- ============================================================================
+
+local function DateArg(v, endOfDay)
+    if type(v) == 'number' and v > 0 then return math.floor(v) end
+    if type(v) ~= 'string' then return nil end
+    local y, m, d = v:match('^(%d%d%d%d)%-(%d%d)%-(%d%d)$')
+    y, m, d = tonumber(y), tonumber(m), tonumber(d)
+    if not y or m < 1 or m > 12 or d < 1 or d > 31 then return nil end
+    local ts = os.time({ year = y, month = m, day = d, hour = 0, min = 0, sec = 0 })
+    if endOfDay then ts = os.time({ year = y, month = m, day = d + 1, hour = 0, min = 0, sec = 0 }) end
+    return ts
+end
+
+-- WHERE clause and params for the audit filters (shared by the page and the export).
+function Admin._auditWhere(args)
+    args = type(args) == 'table' and args or {}
+    local conds, params = { '1 = 1' }, {}
+    if type(args.category) == 'string' and CATEGORIES[args.category] then
+        conds[#conds + 1] = 'a.category = ?'
+        params[#params + 1] = args.category
+    end
+    local action = CleanText(args.action, 40)
+    if action then
+        conds[#conds + 1] = 'a.action = ?'
+        params[#params + 1] = action
+    end
+    -- a group of actions (the Audit Log presets, e.g. Cash actions): at most 30 names
+    if action == nil and type(args.actions) == 'table' then
+        local marks = {}
+        for _, a in ipairs(args.actions) do
+            local name = CleanText(a, 40)
+            if name and #marks < 30 then
+                marks[#marks + 1] = '?'
+                params[#params + 1] = name
+            end
+        end
+        if #marks > 0 then conds[#conds + 1] = 'a.action IN (' .. table.concat(marks, ', ') .. ')' end
+    end
+    local actor = CleanText(args.actor, 64)
+    if actor then
+        local like = LikeArg(actor)
+        conds[#conds + 1] = '(a.actor LIKE ? OR o.display_name LIKE ?)'
+        params[#params + 1] = like
+        params[#params + 1] = like
+    end
+    local target = CleanText(args.target, 64)
+    if target then
+        conds[#conds + 1] = 'a.target = ?'
+        params[#params + 1] = target
+    end
+    if type(args.role) == 'string' and ROLES[args.role] then
+        conds[#conds + 1] = 'a.role = ?'
+        params[#params + 1] = args.role
+    end
+    -- every character of one player: the license the audit row stores
+    local ident = CleanText(args.actorIdent, 64)
+    if ident then
+        conds[#conds + 1] = 'a.actor_ident = ?'
+        params[#params + 1] = ident
+    end
+    local reason = CleanText(args.reason, 64)
+    if reason then
+        conds[#conds + 1] = 'a.reason LIKE ?'
+        params[#params + 1] = LikeArg(reason)
+    end
+    local from = DateArg(args.from, false)
+    if from then
+        conds[#conds + 1] = 'a.created_at >= FROM_UNIXTIME(?)'
+        params[#params + 1] = from
+    end
+    local to = DateArg(args.to, true)
+    if to then
+        conds[#conds + 1] = 'a.created_at < FROM_UNIXTIME(?)'
+        params[#params + 1] = to
+    end
+    return table.concat(conds, ' AND '), params
+end
+
+local AUDIT_SELECT = [[SELECT a.id, a.actor, a.role, a.category, a.action, a.target, a.old_value, a.new_value, a.reason,
+  a.actor_ident, UNIX_TIMESTAMP(a.created_at) AS created_ts, o.display_name
+  FROM cp_audit a LEFT JOIN cp_officers o ON o.citizenid = a.actor]]
+
+local function AuditRow(r)
+    return {
+        id = math.tointeger(tonumber(r.id)),
+        actor = r.actor,
+        actorName = r.display_name,
+        role = r.role,
+        category = r.category,
+        action = r.action,
+        target = r.target,
+        oldValue = r.old_value,
+        newValue = r.new_value,
+        reason = r.reason,
+        actorIdent = r.actor_ident,
+        createdAt = math.floor(Num(r.created_ts, 0)),
+    }
+end
+
+CP.Net.callback('admin:getAudit', function(src, args)
+    local okP, eP = AdminOnly(src)
+    if not okP then return nil, eP end
+    local where, params = Admin._auditWhere(args)
+    local total = Single(
+        ('SELECT COUNT(*) AS n FROM cp_audit a LEFT JOIN cp_officers o ON o.citizenid = a.actor WHERE %s'):format(where),
+        params)
+    local n = math.floor(Num(total and total.n, 0))
+    local pages = math.max(1, math.ceil(n / AUDIT_PAGE))
+    local page = Int(type(args) == 'table' and args.page or 1, 1, 100000) or 1
+    if page > pages then page = pages end
+    local rows = Query(('%s WHERE %s ORDER BY a.created_at DESC, a.id DESC LIMIT %d OFFSET %d'):format(
+        AUDIT_SELECT,
+        where,
+        AUDIT_PAGE,
+        (page - 1) * AUDIT_PAGE
+    ), params)
+    if not rows then return nil, 'err.internal' end
+    local out = {}
+    for _, r in ipairs(rows) do out[#out + 1] = AuditRow(r) end
+    local actions = {}
+    for _, r in ipairs(Query('SELECT DISTINCT action FROM cp_audit ORDER BY action LIMIT 200') or {}) do
+        actions[#actions + 1] = r.action
+    end
+    return { rows = out, page = page, pages = pages, total = n, pageSize = AUDIT_PAGE, actions = actions }
+end, { rate = 4 })
+
+local function CsvCell(v)
+    if v == nil then return '' end
+    local s = tostring(v)
+    if s:match('^[=+%-@\t\r]') then s = '\'' .. s end
+    if s:find('[,"\r\n]') then s = '"' .. s:gsub('"', '""') .. '"' end
+    return s
+end
+
+function Admin._csv(rows)
+    local lines = { 'id,time,actor,actor_name,role,category,action,target,old_value,new_value,reason' }
+    for _, r in ipairs(rows) do
+        lines[#lines + 1] = table.concat({
+            CsvCell(r.id),
+            CsvCell(os.date('%Y-%m-%d %H:%M:%S', r.createdAt)),
+            CsvCell(r.actor),
+            CsvCell(r.actorName),
+            CsvCell(r.role),
+            CsvCell(r.category),
+            CsvCell(r.action),
+            CsvCell(r.target),
+            CsvCell(r.oldValue),
+            CsvCell(r.newValue),
+            CsvCell(r.reason),
+        }, ',')
+    end
+    return table.concat(lines, '\n')
+end
+
+CP.Net.callback('admin:exportAudit', function(src, args)
+    local okP, eP = AdminOnly(src)
+    if not okP then return nil, eP end
+    if not CP.Net.rateOk(src, 'admin:exportAudit', 1, 3000) then return nil, 'err.rate_limited' end
+    local where, params = Admin._auditWhere(args)
+    local rows = Query(
+        ('%s WHERE %s ORDER BY a.created_at DESC, a.id DESC LIMIT %d'):format(AUDIT_SELECT, where, EXPORT_MAX + 1),
+        params)
+    if not rows then return nil, 'err.internal' end
+    local truncated = #rows > EXPORT_MAX
+    local list = {}
+    for i = 1, math.min(#rows, EXPORT_MAX) do list[i] = AuditRow(rows[i]) end
+    return { csv = Admin._csv(list), rows = #list, truncated = truncated }
+end, { rate = 2 })
+
+-- ============================================================================
+--                        COMMAND REGISTRATION (runtime)
+-- ============================================================================
+
+CreateThread(function()
+    -- a command name changed in game (Admin UI → Settings) is used from the next start: wait for the saved settings
+    if CP.Settings and CP.Settings.waitLoaded then CP.Settings.waitLoaded(COMMAND_WAIT_MS) end
+    local name = CmdName()
+    RegisterCommand(name, function(source, args)
+        local src = tonumber(source) or 0
+        CreateThread(function()
+            local ok, err = pcall(Admin.command, src, args)
+            if not ok then CP.err(TAG, '/%s failed: %s', name, tostring(err)) end
+        end)
+    end, false)
+    CP.log(TAG, '/%s registered', name)
+end)

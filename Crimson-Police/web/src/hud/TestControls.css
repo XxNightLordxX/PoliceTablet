@@ -1,0 +1,182 @@
+/* HUD test-control panel (inside the HUD column, 350 px wide). Only --cp-* variables. */
+
+.testing-hud {
+    border-radius: 12px;
+    background: rgba(var(--cp-bg-rgb), 0.9);
+    border: 1px solid rgba(var(--cp-warning-rgb), 0.35);
+    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.45);
+    overflow: hidden;
+    transition:
+        border-color var(--cp-dur) var(--cp-ease),
+        box-shadow var(--cp-dur) var(--cp-ease);
+}
+
+.testing-hud.is-focused {
+    border-color: var(--cp-warning);
+    box-shadow:
+        0 0 0 1px rgba(var(--cp-warning-rgb), 0.45),
+        0 14px 34px rgba(0, 0, 0, 0.5);
+}
+
+.testing-hud__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 9px 12px 8px 14px;
+    border-bottom: 1px solid rgba(var(--cp-text-rgb), 0.07);
+}
+
+.testing-hud__title {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: var(--cp-fs-xs);
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--cp-warning);
+}
+
+.testing-hud__hint {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: var(--cp-fs-xs);
+    color: var(--cp-muted);
+}
+
+.testing-hud__kbd {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 24px;
+    height: 20px;
+    padding: 0 5px;
+    border-radius: 5px;
+    border: 1px solid var(--cp-border-strong);
+    border-bottom-width: 2px;
+    background: var(--cp-surface-2);
+    color: var(--cp-text);
+    font-family: var(--cp-mono);
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.testing-hud__release {
+    padding: 3px 8px;
+    border-radius: var(--cp-radius-pill);
+    border: 1px solid rgba(var(--cp-warning-rgb), 0.5);
+    background: rgba(var(--cp-warning-rgb), 0.14);
+    color: var(--cp-warning);
+    font-size: var(--cp-fs-xs);
+    font-weight: 700;
+}
+
+.testing-hud__grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+    padding: 10px;
+}
+
+.testing-hud__btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-width: 0;
+    height: 34px;
+    padding: 0 8px;
+    border-radius: 8px;
+    border: 1px solid rgba(var(--cp-text-rgb), 0.1);
+    background: rgba(var(--cp-text-rgb), 0.05);
+    color: var(--cp-text);
+    font-size: var(--cp-fs-sm);
+    font-weight: 650;
+    transition:
+        background-color var(--cp-dur) var(--cp-ease),
+        border-color var(--cp-dur) var(--cp-ease),
+        opacity var(--cp-dur) var(--cp-ease);
+}
+
+.testing-hud__btn-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.testing-hud__btn:not(:disabled):hover {
+    background: rgba(var(--cp-text-rgb), 0.1);
+    border-color: rgba(var(--cp-text-rgb), 0.2);
+}
+
+.testing-hud__btn:focus-visible {
+    outline: 2px solid var(--cp-accent);
+    outline-offset: 1px;
+}
+
+.testing-hud__btn:disabled {
+    cursor: default;
+    opacity: 0.45;
+}
+
+.testing-hud.is-idle .testing-hud__btn:disabled {
+    opacity: 0.62;
+}
+
+.testing-hud__btn.is-active {
+    border-color: rgba(var(--cp-warning-rgb), 0.6);
+    background: rgba(var(--cp-warning-rgb), 0.16);
+    color: var(--cp-warning);
+}
+
+.testing-hud__btn.is-success svg {
+    color: var(--cp-success);
+}
+
+.testing-hud__btn.is-danger svg {
+    color: var(--cp-danger);
+}
+
+.testing-hud__btn.is-solid.is-danger {
+    background: var(--cp-danger);
+    border-color: var(--cp-danger);
+    color: var(--cp-text);
+}
+
+.testing-hud__btn.is-solid.is-danger svg {
+    color: var(--cp-text);
+}
+
+.testing-hud__btn.is-solid.is-success {
+    background: var(--cp-success);
+    border-color: var(--cp-success);
+    color: var(--cp-bg);
+}
+
+.testing-hud__confirm {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px;
+}
+
+.testing-hud__confirm-text {
+    font-size: var(--cp-fs-sm);
+    font-weight: 650;
+}
+
+.testing-hud__confirm.is-danger .testing-hud__confirm-text {
+    color: var(--cp-danger);
+}
+
+.testing-hud__confirm.is-success .testing-hud__confirm-text {
+    color: var(--cp-success);
+}
+
+.testing-hud__confirm-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}

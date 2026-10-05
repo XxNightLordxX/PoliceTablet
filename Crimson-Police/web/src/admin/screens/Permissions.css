@@ -1,0 +1,92 @@
+/* Admin UI · Permissions (oversight slice). Only --cp-* variables. */
+
+.oversight-perm-banner {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    border-radius: var(--cp-radius);
+    background: rgba(var(--cp-info-rgb), 0.08);
+    border: 1px solid rgba(var(--cp-info-rgb), 0.28);
+    color: var(--cp-info);
+}
+
+.oversight-perm-banner > div {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.oversight-perm-banner strong {
+    color: var(--cp-text);
+}
+
+.oversight-perm-banner span {
+    color: var(--cp-muted);
+    font-size: var(--cp-fs-sm);
+}
+
+.oversight-perm-name {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 4px 0;
+}
+
+.oversight-perm-name code {
+    font-family: var(--cp-mono);
+    font-size: var(--cp-fs-xs);
+    color: var(--cp-subtle);
+}
+
+.oversight-perm-desc {
+    color: var(--cp-muted);
+    font-size: var(--cp-fs-sm);
+    line-height: 1.4;
+}
+
+.oversight-perm-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.oversight-perm-list li {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+}
+
+.oversight-perm-list li .cp-badge {
+    flex: none;
+    min-width: 70px;
+    justify-content: center;
+}
+
+.oversight-perm-list li > div {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.oversight-perm-list li span {
+    color: var(--cp-muted);
+    font-size: var(--cp-fs-sm);
+    line-height: 1.35;
+}
+
+.oversight-perm-rule {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    border-radius: var(--cp-radius);
+    background: var(--cp-surface-2);
+    border: 1px solid var(--cp-border);
+    color: var(--cp-muted);
+    font-size: var(--cp-fs-sm);
+}
