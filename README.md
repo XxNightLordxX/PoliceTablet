@@ -587,7 +587,11 @@ Config.MissionTypes = {
   payout set in game (0 to 25,000); `dailyCap` = most cash per officer per day (0 = no cap).
 - Admins can also change payouts in game (Admin UI → **Payouts**, or `/CrimsonPoliceAdmin payout type patrol 300
   New economy`). A payout set in game wins over `config.lua`. An admin can go back to the `config.lua` value with
-  `/CrimsonPoliceAdmin payout type patrol clear Back to config`.
+  `/CrimsonPoliceAdmin payout type patrol clear Back to config`. **Unlock for supervisors** and **Adjust all** are in
+  [9.15.4](#9154-payments-item-rewards-and-department-money).
+- The other `Config.Cash` keys are the admin money tools (`allowPayAgain`, `allowUnfundedRetry`, `allowCapTopUp`,
+  `restoreForfeited`, `allowClawback`, `allowManualCash`, `allowAddFunds`, all `false`), their limits (`addFundsMax`,
+  `manualDailyLimit`) and `lowBalanceWarn`. See [9.15.4](#9154-payments-item-rewards-and-department-money).
 
 ### 5.4 Logos
 
@@ -822,6 +826,9 @@ Config.Rewards = {
 - An item that doesn't fit the inventory waits in the **Rewards locker** on the officer's Home screen.
 - Admin UI → **Leaderboards** → **Item rewards** shows what was given. The start-up check shows whether rewards are
   on and whether every item exists.
+- Admins can edit the pools in game (Admin UI → **Settings** → Item rewards, with an item picker), and resolve,
+  deliver, cancel or take back a reward: see [9.15.4](#9154-payments-item-rewards-and-department-money). A pool
+  changed in game is checked at once: a forbidden or unknown item is never given.
 
 ### 6.4 Profile pictures
 
@@ -941,7 +948,10 @@ Renewed-Banking account instead:
    and the officer, the department's online supervisors and the console are told ("unfunded").
 4. In your Qbox jobs file, give `bankAuth = true` to the grades that may see and fund the account in Renewed-Banking.
 
-Admin UI → **Departments** shows each account's balance while `source = 'society'`.
+Admin UI → **Departments** shows each account's balance and spending (the **Funds** part of each department), and
+Admin UI → **Payments** shows every unfunded payment with a **Retry unfunded** button (a switch that ships off). An
+account Renewed-Banking does not know shows as an error in the Config health list, and `Config.Cash.lowBalanceWarn`
+warns before an account runs dry. See [9.15.4](#9154-payments-item-rewards-and-department-money).
 
 ### 6.9 Handcuff and evidence items
 
@@ -1322,8 +1332,58 @@ arrive.
 
 #### 9.15.4 Payments, item rewards and department money
 
-The **Payments** screen, the item reward tools and the department accounts are described here as they arrive. Every
-tool that moves money outside the normal pay flow ships switched off ([5.7](#57-change-any-setting-in-game-the-settings-screen)).
+**Admin UI → Payments** lists every payment of every run: who, which mission, what the run earned, what was paid, and
+why the rest was not (held, pending, capped, unfunded, forfeited, or stuck half way). Filter by status, department,
+officer and dates; the tiles on top add it all up (per status and per department, how much the daily cap cut, how
+many were capped today). **Export CSV** gives the same list for a spreadsheet (cells are made safe to open). The
+sidebar shows how many payments are stuck.
+
+What you can do from a row (the buttons show only where they make sense):
+
+- **Resolve** a payment stuck half way ("paying", after a crash or a Qbox error). It shows what Renewed-Banking
+  recorded for that transaction id, and where the payment stopped (Crimson-Police now saves each step: claimed, the
+  department paid, the officer got it). Then **Mark paid** (no money moves) or **Pay again** (see below). "Not found"
+  in the bank history proves nothing, so look at the officer's balance too.
+- **Pay now** for a pending payment of an officer who is online, and **Retry all pending** for everyone online. These
+  use the normal pay flow, so nothing is ever paid twice.
+- **Forfeit now** ends the dispute window of a voided run early; **Cancel payment** stops a held or pending payment
+  while the run keeps its points. Both tell the officer.
+
+**Money tools that ship switched off.** Each one is a switch in Admin UI → **Settings** (type `ENABLE` to turn it on;
+it is logged and posted to the audit webhook). Test each one on a test server with Renewed-Banking before you use it.
+
+| Switch (`Config.Cash`) | Button | What it does |
+|---|---|---|
+| `allowPayAgain` | Payments → Resolve → **Pay again** | Pays a stuck payment again with its own transaction id (`...-r2`). If the department already paid, it is not charged again. The officer must be online, and you tick "I checked: the money did not arrive" and type the amount. |
+| `allowUnfundedRetry` | **Retry unfunded** (a row, or every unfunded row of a department) | After you put money in the department's account. The balance is checked first. |
+| `allowCapTopUp` | **Pay the rest** | Pays the part of a payment the daily cap cut, once (`...-r`). This goes over the officer's daily cap. |
+| `restoreForfeited` | **Pay it after all** | For a run that was restored after its cash was forfeited: pays it now, and its item rewards come back too. |
+| `allowClawback` | **Take back** | Takes cash back from an online officer's bank (never more than was paid, never below their balance). The department gets it back when it paid it. Each one has its own transaction id (`...-back1`, `...-back2`). |
+| `allowManualCash` | **New payment** | Pays an officer by hand, for example to fix a wrong payout. Between $1 and `maxPayout`; at most `manualDailyLimit` per admin per day. It is not counted against the daily cap, and it waits until the officer logs in if they are offline. |
+| `allowAddFunds` | Departments → **Funds** → **Add funds** | Puts new money in a department's Renewed-Banking account (at most `addFundsMax` at a time). Never a withdrawal. |
+
+Every amount is worked out by the server, every one of these asks for a reason (and the dangerous ones for the
+amount typed out), none of them works on one of your own characters, and a double click never pays twice.
+
+**Departments → Funds** (on each department card) shows the account balance, what it paid today, this week and this
+season, unfunded payments, and what admins added. `Config.Cash.lowBalanceWarn` (0 = off) warns in the Config health
+list and once a day to that department's online supervisors when the balance is lower. A turned-off department's
+unfinished pay still comes from its own account.
+
+**Payouts** has two more buttons: **Unlock for supervisors** (keep the amount, and supervisors may move it again
+within their range) and **Adjust all** (raise or lower every type payout and/or mission payout by a percentage or an
+amount, with a preview of every old and new value; type `ADJUST`). A stored payout outside the current payout range
+is marked.
+
+**Leaderboards → Item rewards** gains filters (officer, status, source, dates) and buttons: **Resolve** a reward
+stuck while being given (the officer must be online; if the item is in their inventory it was given; if not, it
+counts as given unless you type `LOCKER` to put it back in the locker), **Deliver now**, **Cancel**, and **Take back**
+(only with `Config.Rewards.allowTakeBack`, ships off: removes exactly that item from an online officer). Settings →
+Item rewards has a pool editor with an item picker (forbidden items left out) and the expected items and value per run
+at each tier; every change is checked on the server, so the raw editor can't add a weapon either.
+
+**System → Clean-up** shows the last nightly clean-up and **Run clean-up now** (admins, once per 10 minutes). The
+clean-up never archives a run whose money or item rewards are not finished, and it waits while a bulk change runs.
 
 #### 9.15.5 System, departments and settings
 
@@ -1519,7 +1579,7 @@ The last line of the start-up check is `Start-up check: all ... checks passed` o
 | Console line | What to do |
 |---|---|
 | `row <n> unfunded: society account <name> could not cover <amount>` | Put money in that Renewed-Banking account ([6.8](#68-paying-from-the-departments-bank-account)) |
-| `... stays paying for a manual check (transaction CP-...)` | A payment may have half-happened. Look it up in Admin UI → **Leaderboards** and in the officer's Renewed-Banking history (the transaction id is in the line) |
+| `... stays paying for a manual check (transaction CP-...)` | A payment may have half-happened. Open Admin UI → **Payments**, filter "Stuck (paying)" and press **Resolve**: it shows the Renewed-Banking history for that transaction id and where the payment stopped. Then **Mark paid**, or **Pay again** (a switch that ships off) |
 | `convar cp_webhook_<name> must be an https:// webhook url; that webhook is off` | Fix that `set` line in server.cfg |
 | `webhook <name> answered <code>: check its convar` | Discord refused the post. Check the link |
 | `webhook <name> dropped after <n> tries ...` | Discord kept refusing that post. Check the link |

@@ -22,13 +22,18 @@ import {
     Table,
     Tabs,
     Textarea,
+    Toggle,
 } from '../../shared/components';
 import type { TabItem, TableColumn } from '../../shared/components';
 import { cx } from '../../shared/cx';
 import { formatDateTime, formatMoney } from '../../shared/format';
 import { useAction, useRequest } from '../../shared/hooks';
 import { t } from '../../shared/i18n';
+import { request } from '../../shared/nui';
+import { toast } from '../../shared/toast';
+import type { PayoutAdjustPreview, PayoutAdjustRow } from '../../types/admin_economy';
 import type { AdminPayoutMission, AdminPayoutType, AdminPayoutsView } from '../../types/economy';
+import { PreviewTable, useAdminAction } from '../components/kit';
 import './Payouts.css';
 
 const REASON_MAX = 255;
@@ -44,6 +49,8 @@ interface Target {
     // Value an admin payout replaces (config payout for a type, type/event payout for a mission).
     fallback: number;
     hasAdminPayout: boolean;
+    // types only: the payout is set and still open to supervisors
+    unlocked?: boolean;
 }
 
 function typeTarget(r: AdminPayoutType): Target {
@@ -54,6 +61,7 @@ function typeTarget(r: AdminPayoutType): Target {
         current: r.amount,
         fallback: r.default,
         hasAdminPayout: r.adminLocked,
+        unlocked: r.stored && !r.adminLocked,
     };
 }
 
@@ -147,6 +155,7 @@ function SetDialog({
     const [amount, setAmount] = useState<number | null>(null);
     const [valid, setValid] = useState(true);
     const [reason, setReason] = useState('');
+    const [unlock, setUnlock] = useState(false);
     const { run, busy } = useAction();
     const lo = view?.limits?.min ?? 0;
     const hi = view?.limits?.max ?? 25000;
@@ -157,12 +166,13 @@ function SetDialog({
             setAmount(target.current);
             setValid(true);
             setReason('');
+            setUnlock(false);
         }
     }, [target]);
 
     if (!target) return null;
     const inRange = amount !== null && amount >= lo && amount <= hi;
-    const unchanged = amount === target.current && target.hasAdminPayout;
+    const unchanged = amount === target.current && (unlock ? !!target.unlocked : target.hasAdminPayout);
     const canSave = valid && inRange && !unchanged && (!needReason || reason.trim().length > 0) && !busy;
 
     const save = async () => {
@@ -170,7 +180,7 @@ function SetDialog({
         const name = target.kind === 'type' ? 'server:admin:setTypePayout' : 'server:admin:setMissionPayout';
         const payload =
             target.kind === 'type'
-                ? { type: target.id, amount, reason: reason.trim() }
+                ? { type: target.id, amount, reason: reason.trim(), unlock }
                 : { missionId: target.id, amount, reason: reason.trim() };
         const res = await run(name, payload, {
             success: 'admin.payouts.saved',
@@ -195,7 +205,13 @@ function SetDialog({
                     <Button variant="ghost" onClick={onClose} disabled={busy}>
                         {t('common.cancel')}
                     </Button>
-                    <Button variant="primary" icon="lock" onClick={save} loading={busy} disabled={!canSave}>
+                    <Button
+                        variant="primary"
+                        icon={unlock ? 'users' : 'lock'}
+                        onClick={save}
+                        loading={busy}
+                        disabled={!canSave}
+                    >
                         {t('admin.payouts.set_confirm')}
                     </Button>
                 </>
@@ -243,6 +259,14 @@ function SetDialog({
                         placeholder={t('admin.payouts.reason_placeholder')}
                     />
                 </Field>
+                {target.kind === 'type' ? (
+                    <Toggle
+                        checked={unlock}
+                        onChange={setUnlock}
+                        label={t('admin.payouts.unlock')}
+                        description={t('admin.payouts.unlock_desc')}
+                    />
+                ) : null}
                 <div className="economy-admin-pay-review" aria-live="polite">
                     <span className="economy-admin-pay-review__label">{target.label}</span>
                     <span className="economy-admin-pay-review__change cp-num">
@@ -250,7 +274,13 @@ function SetDialog({
                         <Icon name="chevronRight" size={14} />
                         <strong>{amount === null ? '–' : formatMoney(amount)}</strong>
                     </span>
-                    <PermanentBadge />
+                    {unlock ? (
+                        <Badge tone="neutral" size="sm" icon="users">
+                            {t('admin.payouts.open_to_supervisors')}
+                        </Badge>
+                    ) : (
+                        <PermanentBadge />
+                    )}
                 </div>
                 <div className="economy-admin-pay-note">
                     <Icon name="info" size={14} />
@@ -260,6 +290,119 @@ function SetDialog({
                 </div>
             </div>
         </Dialog>
+    );
+}
+
+// Adjust all: one percentage or amount for every type payout and/or admin mission payout, previewed old → new
+// (each value clamped to the payout range), typed ADJUST.
+function AdjustDialog({ open, onClose, onDone }: { open: boolean; onClose: () => void; onDone: () => void }) {
+    const [mode, setMode] = useState<'pct' | 'amount'>('pct');
+    const [value, setValue] = useState<number | null>(10);
+    const [scope, setScope] = useState<'types' | 'missions' | 'both'>('types');
+    const [lockTypes, setLockTypes] = useState(false);
+    const [preview, setPreview] = useState<PayoutAdjustPreview | null>(null);
+    const { run } = useAdminAction();
+
+    const load = async () => {
+        if (value === null) return;
+        const res = await request<PayoutAdjustPreview>('admin:previewPayoutAdjust', { mode, value, scope });
+        if (res.ok && res.data) setPreview(res.data);
+        else toast('error', t(res.error || 'err.internal'));
+    };
+    const apply = async (reason: string, typed: string) => {
+        if (!preview) return;
+        const res = await run<{ changed: number }>(
+            'server:admin:adjustAllPayouts',
+            { mode, value, scope, lockTypes, reason, confirm: typed, previewToken: preview.previewToken },
+            { success: 'admin.payouts.adjusted' },
+        );
+        setPreview(null);
+        if (res.ok) onDone();
+    };
+    const columns: TableColumn<PayoutAdjustRow>[] = [
+        { key: 'label', header: t('admin.payouts.col_type'), render: r => r.label },
+        { key: 'old', header: t('admin.payouts.current'), numeric: true, render: r => <Money amount={r.old} /> },
+        { key: 'new', header: t('admin.payouts.new_amount'), numeric: true, render: r => <Money amount={r.new} /> },
+    ];
+
+    return (
+        <>
+            <Dialog
+                open={open && !preview}
+                onClose={onClose}
+                title={t('admin.payouts.adjust_title')}
+                description={t('admin.payouts.adjust_desc')}
+                size="md"
+                footer={
+                    <>
+                        <Button variant="ghost" onClick={onClose}>
+                            {t('common.cancel')}
+                        </Button>
+                        <Button variant="primary" icon="eye" disabled={value === null} onClick={() => void load()}>
+                            {t('admin.payouts.adjust_preview')}
+                        </Button>
+                    </>
+                }
+            >
+                <div className="economy-admin-pay-edit">
+                    <SegmentedControl
+                        items={[
+                            { key: 'pct', label: t('admin.payouts.adjust_pct') },
+                            { key: 'amount', label: t('admin.payouts.adjust_amount') },
+                        ]}
+                        value={mode}
+                        onChange={setMode}
+                        size="sm"
+                        aria-label={t('admin.payouts.adjust_title')}
+                    />
+                    <Field
+                        label={mode === 'pct' ? t('admin.payouts.adjust_pct') : t('admin.payouts.adjust_amount')}
+                        required
+                    >
+                        <NumberInput
+                            value={value}
+                            onChange={setValue}
+                            min={mode === 'pct' ? -90 : -100000}
+                            max={mode === 'pct' ? 500 : 100000}
+                            suffix={mode === 'pct' ? '%' : undefined}
+                            prefix={mode === 'amount' ? '$' : undefined}
+                        />
+                    </Field>
+                    <SegmentedControl
+                        items={[
+                            { key: 'types', label: t('admin.payouts.tab_types') },
+                            { key: 'missions', label: t('admin.payouts.adjust_missions') },
+                            { key: 'both', label: t('admin.payouts.adjust_both') },
+                        ]}
+                        value={scope}
+                        onChange={setScope}
+                        size="sm"
+                        aria-label={t('admin.payouts.adjust_scope')}
+                    />
+                    {scope !== 'missions' ? (
+                        <Toggle
+                            checked={lockTypes}
+                            onChange={setLockTypes}
+                            label={t('admin.payouts.adjust_lock')}
+                            description={t('admin.payouts.adjust_lock_desc')}
+                        />
+                    ) : null}
+                </div>
+            </Dialog>
+            <ConfirmDialog
+                open={!!preview}
+                title={t('admin.payouts.adjust_title')}
+                message={t('admin.payouts.adjust_confirm')}
+                effect={
+                    preview ? <PreviewTable columns={columns} rows={preview.effect.rows} rowKey={r => r.key} /> : null
+                }
+                typedWord="ADJUST"
+                tone="danger"
+                reason={{ required: true, maxLength: REASON_MAX }}
+                onConfirm={apply}
+                onCancel={() => setPreview(null)}
+            />
+        </>
     );
 }
 
@@ -274,7 +417,22 @@ export default function AdminPayouts() {
     const [typeFilter, setTypeFilter] = useState<string>('all');
     const [editing, setEditing] = useState<Target | null>(null);
     const [clearing, setClearing] = useState<Target | null>(null);
+    const [adjusting, setAdjusting] = useState(false);
+    const [unlocking, setUnlocking] = useState<Target | null>(null);
     const { run } = useAction();
+
+    const unlockTarget = async (reason: string) => {
+        if (!unlocking) return;
+        const res = await run(
+            'server:admin:setTypePayout',
+            { type: unlocking.id, amount: unlocking.current, unlock: true, reason },
+            { success: 'admin.payouts.unlocked', successVars: { name: unlocking.label } },
+        );
+        if (res.ok) {
+            setUnlocking(null);
+            void refetch();
+        }
+    };
 
     const types = useMemo(() => (Array.isArray(data?.types) ? data!.types : []), [data]);
     const missions = useMemo(() => (Array.isArray(data?.missions) ? data!.missions : []), [data]);
@@ -361,7 +519,20 @@ export default function AdminPayouts() {
             numeric: true,
             render: r => <Money amount={r.default} className="economy-admin-pay-muted" />,
         },
-        { key: 'source', header: t('admin.payouts.col_source'), render: r => <TypeSource r={r} /> },
+        {
+            key: 'source',
+            header: t('admin.payouts.col_source'),
+            render: r => (
+                <span className="economy-admin-pay-source">
+                    <TypeSource r={r} />
+                    {r.outOfRange ? (
+                        <Badge tone="danger" size="sm" icon="alert">
+                            {t('admin.payouts.out_of_range')}
+                        </Badge>
+                    ) : null}
+                </span>
+            ),
+        },
         {
             key: 'changed',
             header: t('admin.payouts.col_changed'),
@@ -376,12 +547,21 @@ export default function AdminPayouts() {
             key: 'actions',
             header: '',
             align: 'right',
-            width: 110,
+            width: 150,
             render: r => (
                 <span className="economy-admin-pay-actions">
                     <Button size="sm" variant="secondary" icon="edit" onClick={() => setEditing(typeTarget(r))}>
                         {t('admin.payouts.set')}
                     </Button>
+                    {r.adminLocked ? (
+                        <IconButton
+                            size="sm"
+                            variant="ghost"
+                            icon="users"
+                            label={t('admin.payouts.unlock')}
+                            onClick={() => setUnlocking(typeTarget(r))}
+                        />
+                    ) : null}
                     <IconButton
                         size="sm"
                         variant="ghost"
@@ -447,6 +627,11 @@ export default function AdminPayouts() {
             render: r => (
                 <span className="economy-admin-pay-source">
                     <MissionSource r={r} />
+                    {r.outOfRange ? (
+                        <Badge tone="danger" size="sm" icon="alert">
+                            {t('admin.payouts.out_of_range')}
+                        </Badge>
+                    ) : null}
                     {r.payoutSource === 'admin' && !r.missing ? (
                         <span className="economy-admin-pay-muted cp-num" title={t('admin.payouts.without_admin')}>
                             {t('admin.payouts.instead_of', { amount: formatMoney(r.fallback) })}
@@ -505,12 +690,25 @@ export default function AdminPayouts() {
                         <Badge tone="accent" icon="lock">
                             {t('admin.payouts.summary_missions', { n: adminCount })}
                         </Badge>
+                        <Button size="sm" icon="sliders" onClick={() => setAdjusting(true)}>
+                            {t('admin.payouts.adjust_open')}
+                        </Button>
                     </span>
                 ) : undefined
             }
             className="economy-admin-payouts"
         >
             <Tabs items={tabs} value={tab} onChange={setTab} aria-label={t('ui.screen.admin_payouts')} />
+
+            {data && (data.outOfRange ?? 0) > 0 ? (
+                <Card highlight="warning" padding="sm">
+                    {t('admin.payouts.out_of_range_note', {
+                        n: data.outOfRange ?? 0,
+                        min: formatMoney(data.limits?.min ?? 0),
+                        max: formatMoney(data.limits?.max ?? 25000),
+                    })}
+                </Card>
+            ) : null}
 
             {!data && loading ? <LoadingBlock /> : null}
             {!data && !loading && error ? <ErrorState error={error} onRetry={() => void refetch()} /> : null}
@@ -584,6 +782,23 @@ export default function AdminPayouts() {
                     setEditing(null);
                     void refetch();
                 }}
+            />
+            <AdjustDialog
+                open={adjusting}
+                onClose={() => setAdjusting(false)}
+                onDone={() => {
+                    setAdjusting(false);
+                    void refetch();
+                }}
+            />
+            <ConfirmDialog
+                open={!!unlocking}
+                title={unlocking ? t('admin.payouts.unlock_title', { name: unlocking.label }) : ''}
+                message={unlocking ? t('admin.payouts.unlock_msg', { amount: formatMoney(unlocking.current) }) : ''}
+                confirmLabel={t('admin.payouts.unlock')}
+                reason={{ required: data?.requireReason !== false, maxLength: REASON_MAX }}
+                onConfirm={unlockTarget}
+                onCancel={() => setUnlocking(null)}
             />
             <ConfirmDialog
                 open={!!clearing}

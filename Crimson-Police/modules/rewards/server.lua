@@ -14,7 +14,9 @@ local COUNT_CACHE_S = 30                 -- lockerCount is read again at most th
 local ADMIN_PAGE = 25                    -- recent rows per admin page
 local MAX_ROLLS = 10                     -- rolls per run entry
 local MAX_COUNT = 100                    -- items per reward row
+local IDLE_WAIT_MS = 60000               -- the forfeiture job waits this long at most for an admin's bulk job
 local MEDALS = { [1] = 'gold', [2] = 'silver', [3] = 'bronze' }
+local TIERS = { 'standard', 'reinforced', 'heavy', 'major', 'critical' }
 -- docs/CRIMSON_ARENA.md rule 4 (the loader's item-name rules): Crimson-Arena takes these from players it believes
 -- owe them, weapons are never handed out, and money items would stand in for a payout.
 local ARENA_ITEMS = { 'armour', 'bandage', 'ammo-*', 'weapon_*', 'money', 'black_money', 'cash' }
@@ -144,6 +146,13 @@ local function WithLock(key, fn)
 end
 
 local function Label(item) return labels[item] or item end
+
+-- A maintenance lock holds reward delivery back (the rows wait in the locker); a store left behind never gives.
+local function DeliveryHeld()
+    if not (CP.Maintenance and CP.Maintenance.active) then return nil end
+    local ok, kind = pcall(CP.Maintenance.active)
+    return ok and kind or nil
+end
 
 -- ============================================================================
 --                                  INVENTORY
@@ -293,8 +302,11 @@ local function EnsureChecked()
     if not checked or (inventoryUp == false and InventoryStarted()) then Rewards.validate() end
 end
 
+-- Checked twice: the forbidden names right here (an item added in game before the next check is never given), and
+-- the last check's list (forbidden or unknown to ox_inventory).
 local function Usable(name)
     if type(name) ~= 'string' or name == '' then return false end
+    if Rewards.forbidden(name) then return false end
     EnsureChecked()
     return bad[name:lower()] == nil
 end
@@ -579,6 +591,7 @@ end
 -- Every pending row of an online officer: given now, or left in the locker (arena, no room, no ox_inventory).
 local function DeliverAll(citizenid)
     if not Enabled() or not ValidCitizenId(citizenid) then return 0 end
+    if DeliveryHeld() then return 0 end
     local src = SrcOf(citizenid)
     if not src then return 0 end
     if InArena(src) then
@@ -755,8 +768,7 @@ end
 -- CP.Cash fires row:forfeited only for a voided row whose cash was still held or pending. A row voided after its
 -- cash was paid (or one that carried none) is forfeited here, on the same rule: its dispute window closed and no
 -- dispute is open. Each row is claimed by its own UPDATE, which checks the rule again.
-local function ForfeitureJob()
-    Db()
+local function ForfeitRows()
     local hours = Num(Config.Disputes and Config.Disputes.windowHours, 48)
     local cutoff = Now() - math.floor(hours * 3600)
     local rows = Query([[
@@ -786,6 +798,22 @@ local function ForfeitureJob()
     for _, r in ipairs(rows or {}) do
         local rowId = ToId(r.row_id)
         if rowId and forfeitRow(rowId) then n = n + 1 end
+    end
+    return n
+end
+
+-- Waits while a maintenance lock holds rewards back, and for an admin's bulk job; holds the busy lock meanwhile.
+local function ForfeitureJob()
+    if DeliveryHeld() then return 0 end
+    Db()
+    local Kit = CP.AdminKit
+    if not (Kit and Kit.waitIdle and Kit.lock and Kit.unlock) then return ForfeitRows() end
+    if not Kit.waitIdle(IDLE_WAIT_MS) or not Kit.lock('rewardForfeiture') then return 0 end
+    local ok, n = pcall(ForfeitRows)
+    Kit.unlock('rewardForfeiture')
+    if not ok then
+        CP.err(TAG, 'reward forfeiture job failed: %s', tostring(n))
+        return 0
     end
     return n
 end
@@ -908,12 +936,56 @@ end
 
 local function AdminRows(sql, params)
     local out = {}
-    for _, r in ipairs(Query(sql, params) or {}) do out[#out + 1] = RewardRow(r) end
+    for _, r in ipairs(Query(sql, params) or {}) do
+        local row = RewardRow(r)
+        row.rowId = ToId(r.row_id)
+        out[#out + 1] = row
+    end
     return out
 end
 
-function Rewards.adminView(page)
-    page = math.max(1, math.floor(Num(page, 1)))
+local STATUS_SET = { held = true, pending = true, giving = true, given = true, forfeited = true }
+local SOURCE_SET = { run = true, medal = true, goal = true, level = true, boss = true, season = true }
+
+-- WHERE for the admin filters: sql, params | nil, errKey. args: { citizenid, status, source, from, to }.
+local function AdminWhere(args)
+    local parts, params = {}, {}
+    if type(args) ~= 'table' then return '1 = 1', params end
+    if args.citizenid ~= nil and args.citizenid ~= '' then
+        if not ValidCitizenId(args.citizenid) then return nil, 'err.invalid_filter' end
+        parts[#parts + 1] = 'r.citizenid = ?'
+        params[#params + 1] = args.citizenid
+    end
+    if args.status ~= nil and args.status ~= '' then
+        if not STATUS_SET[args.status] then return nil, 'err.invalid_filter' end
+        parts[#parts + 1] = 'r.status = ?'
+        params[#params + 1] = args.status
+    end
+    if args.source ~= nil and args.source ~= '' then
+        if not SOURCE_SET[args.source] then return nil, 'err.invalid_filter' end
+        parts[#parts + 1] = 'r.source = ?'
+        params[#params + 1] = args.source
+    end
+    local from, to = tonumber(args.from), tonumber(args.to)
+    if (args.from ~= nil and not from) or (args.to ~= nil and not to) then return nil, 'err.invalid_filter' end
+    if from then
+        parts[#parts + 1] = 'r.created_at >= FROM_UNIXTIME(?)'
+        params[#params + 1] = math.floor(from)
+    end
+    if to then
+        parts[#parts + 1] = 'r.created_at < FROM_UNIXTIME(?)'
+        params[#params + 1] = math.floor(to)
+    end
+    if #parts == 0 then return '1 = 1', params end
+    return table.concat(parts, ' AND '), params
+end
+
+-- args: a page number (old callers) or { page, citizenid, status, source, from, to }.
+function Rewards.adminView(args)
+    if type(args) ~= 'table' then args = { page = args } end
+    local page = math.max(1, math.floor(Num(args.page, 1)))
+    local where, params = AdminWhere(args)
+    if not where then return nil, params end
     EnsureChecked()
     Db()
     local pools = {}
@@ -937,9 +1009,16 @@ function Rewards.adminView(page)
         .. [[, o.display_name FROM cp_item_rewards r
         LEFT JOIN cp_officers o ON o.citizenid = r.citizenid]]
     local stuck = AdminRows(from .. ' WHERE r.status = \'giving\' ORDER BY r.id', {})
-    local recent = AdminRows(from .. ' ORDER BY r.id DESC LIMIT ? OFFSET ?', { ADMIN_PAGE, (page - 1) * ADMIN_PAGE })
+    local q = CP.U.copy(params)
+    q[#q + 1] = ADMIN_PAGE
+    q[#q + 1] = (page - 1) * ADMIN_PAGE
+    local recent = AdminRows(from .. ' WHERE ' .. where .. ' ORDER BY r.id DESC LIMIT ? OFFSET ?', q)
+    for _, list in ipairs({ stuck, recent }) do
+        for _, r in ipairs(list) do r.online = SrcOf(r.citizenid) ~= nil end
+    end
     return {
         enabled = Enabled(),
+        allowTakeBack = Cfg().allowTakeBack == true,
         page = page,
         pageSize = ADMIN_PAGE,
         pools = pools,
@@ -967,8 +1046,438 @@ CP.Net.callback('admin:getRewards', function(src, args)
     local ok, errKey = CP.Permissions.can(src, 'openAdmin')
     if not ok then return nil, errKey or 'err.no_permission' end
     if args ~= nil and type(args) ~= 'table' then return nil, 'err.invalid_payload' end
-    return Rewards.adminView(args and args.page)
+    return Rewards.adminView(args or {})
 end)
+
+-- ============================================================================
+--                  ADMIN TOOLS (LEADERBOARDS → ITEM REWARDS)
+-- ============================================================================
+-- Resolve a reward stuck in 'giving', deliver now, cancel, and take an item back (ships off). The inventory of an
+-- offline officer can't be read, so every inventory step needs the officer online. "Not found" means given (the
+-- item may have been used, dropped or moved): a reward is never given twice by a guess.
+
+local function RewardById(id)
+    id = ToId(id)
+    if not id then return nil end
+    Db()
+    local rows = Query('SELECT ' .. ROW_COLS .. ' FROM cp_item_rewards r WHERE r.id = ?', { id })
+    return rows and rows[1] or nil
+end
+
+local function RewardTarget(id) return ('reward #%d'):format(id) end
+
+-- The officer's slots holding the item tagged with this reward (metadata cpReward = id): count, slots.
+local function TaggedSlots(src, item, id)
+    if not InventoryStarted() then return nil end
+    local ok, res = pcall(function() return exports.ox_inventory:Search(src, 'slots', item, { cpReward = id }) end)
+    if not ok then
+        CP.err(TAG, 'ox_inventory Search failed for reward %d: %s', id, tostring(res))
+        return nil
+    end
+    local count, slots = 0, {}
+    for _, sl in pairs(type(res) == 'table' and res or {}) do
+        if type(sl) == 'table' and math.floor(Num(sl.count, 0)) > 0 then
+            count = count + math.floor(Num(sl.count, 0))
+            slots[#slots + 1] = sl
+        end
+    end
+    return count, slots
+end
+
+-- What the inventory says about one reward: { id, status, online, found, count, needed }.
+function Rewards.checkInventory(id)
+    local r = RewardById(id)
+    if not r then return nil, 'err.reward_not_found' end
+    id = math.floor(U.num(r.id))
+    local src = SrcOf(r.citizenid)
+    local out = {
+        id = id,
+        status = r.status,
+        item = r.item,
+        label = Label(r.item),
+        needed = math.floor(U.num(r.count, 1)),
+        online = src ~= nil,
+        found = nil,
+        count = nil,
+    }
+    if not src then return out end
+    local count = TaggedSlots(src, r.item, id)
+    if count == nil then return nil, 'err.reward_no_inventory' end
+    out.count, out.found = count, count > 0
+    return out
+end
+
+-- outcome 'given' (found, or not found: the default) or 'locker' (not found, typed LOCKER): back to pending and
+-- delivered again. audit(info) -> id|false is called once the row is claimed.
+function Rewards.resolve(id, outcome, audit)
+    local r = RewardById(id)
+    if not r then return false, 'err.reward_not_found' end
+    id = math.floor(U.num(r.id))
+    if r.status ~= 'giving' then return false, 'err.state_changed' end
+    local cid = r.citizenid
+    if locks[cid] then return false, 'err.reward_busy' end
+    local src = SrcOf(cid)
+    if not src then return false, 'err.officer_offline' end
+    local count = TaggedSlots(src, r.item, id)
+    if count == nil then return false, 'err.reward_no_inventory' end
+    if outcome == 'locker' and count > 0 then return false, 'err.reward_found' end
+    if outcome ~= 'given' and outcome ~= 'locker' then return false, 'err.invalid_payload' end
+    local n
+    if outcome == 'given' then
+        n = Update([[UPDATE cp_item_rewards SET status = 'given', given_at = FROM_UNIXTIME(?)
+            WHERE id = ? AND status = 'giving']], { Now(), id })
+    else
+        n = Update('UPDATE cp_item_rewards SET status = \'pending\' WHERE id = ? AND status = \'giving\'', { id })
+    end
+    if not n or n < 1 then return false, 'err.state_changed' end
+    if type(audit) == 'function' then pcall(audit, { found = count > 0, outcome = outcome }) end
+    if r.row_id then SyncBreakdown(r.row_id) end
+    Push(cid)
+    if outcome == 'locker' then Rewards.deliver(cid) end
+    return true, { id = id, status = outcome == 'given' and 'given' or 'pending', found = count > 0 }
+end
+
+-- Cancel: a pending or held reward is forfeited (the run keeps its points and its cash).
+function Rewards.cancel(id)
+    local r = RewardById(id)
+    if not r then return false, 'err.reward_not_found' end
+    id = math.floor(U.num(r.id))
+    local n = Update([[UPDATE cp_item_rewards SET status = 'forfeited' WHERE id = ? AND status IN ('pending', 'held')]],
+        { id })
+    if not n or n < 1 then return false, 'err.state_changed' end
+    if r.row_id then SyncBreakdown(r.row_id) end
+    Push(r.citizenid)
+    return true, { id = id, status = 'forfeited', citizenid = r.citizenid, from = r.status }
+end
+
+-- Take back: exactly the tagged item, from an online officer, under the officer's reward lock. The claim is the
+-- status change given -> forfeited; a refused removal puts it back.
+function Rewards.takeBack(id, audit)
+    local r = RewardById(id)
+    if not r then return false, 'err.reward_not_found' end
+    id = math.floor(U.num(r.id))
+    if r.status ~= 'given' then return false, 'err.state_changed' end
+    local cid = r.citizenid
+    local src = SrcOf(cid)
+    if not src then return false, 'err.officer_offline' end
+    local need = math.floor(U.num(r.count, 1))
+    local res = WithLock(cid, function()
+        local count, slots = TaggedSlots(src, r.item, id)
+        if count == nil then return { false, 'err.reward_no_inventory' } end
+        if count < need then return { false, 'err.reward_not_in_inventory' } end
+        local n = Update('UPDATE cp_item_rewards SET status = \'forfeited\' WHERE id = ? AND status = \'given\'',
+            { id })
+        if not n or n < 1 then return { false, 'err.state_changed' } end
+        if type(audit) == 'function' then
+            local okA, aid = pcall(audit, { count = need })
+            if not okA or not aid then
+                Update('UPDATE cp_item_rewards SET status = \'given\' WHERE id = ? AND status = \'forfeited\'', { id })
+                return { false, 'err.audit_failed' }
+            end
+        end
+        local left = need
+        for _, sl in ipairs(slots) do
+            if left <= 0 then break end
+            local take = math.min(left, math.floor(Num(sl.count, 0)))
+            local okR, removed = pcall(function()
+                return exports.ox_inventory:RemoveItem(src, r.item, take, { cpReward = id }, sl.slot)
+            end)
+            if okR and removed then left = left - take end
+        end
+        if left > 0 then
+            CP.warn(TAG, 'reward %d: %d of %d x %s could not be taken back', id, left, need, r.item)
+            if left == need then
+                Update('UPDATE cp_item_rewards SET status = \'given\' WHERE id = ? AND status = \'forfeited\'', { id })
+                return { false, 'err.reward_not_in_inventory' }
+            end
+        end
+        return { true, { id = id, status = 'forfeited', taken = need - left } }
+    end)
+    if not res then return false, 'err.internal' end
+    if res[1] then
+        if r.row_id then SyncBreakdown(r.row_id) end
+        Push(cid)
+        Notify(src, 'warning', 'rewards.taken_back', { count = res[2].taken, item = Label(r.item) })
+    end
+    return res[1], res[2]
+end
+
+-- row:forfeitUndone (an admin undid the forfeiture of a row: Unretire, a batch Undo, forfeited cash paid after all):
+-- the row's forfeited rewards come back once, pending (held while the row is still voided). Rewards an admin
+-- cancelled or took back stay forfeited.
+function Rewards.undoForfeit(rowId)
+    rowId = ToId(rowId)
+    if not rowId then return 0 end
+    Db()
+    local run = Query('SELECT voided FROM cp_mission_runs WHERE id = ?', { rowId })
+    if not run or not run[1] then return 0 end
+    local status = U.truthy(run[1].voided) and 'held' or 'pending'
+    local rows = Query([[SELECT id, citizenid FROM cp_item_rewards WHERE row_id = ? AND status = 'forfeited'
+        ORDER BY id]], { rowId }) or {}
+    local n, cids = 0, {}
+    for _, r in ipairs(rows) do
+        local id = math.floor(U.num(r.id))
+        local byAdmin = Query([[SELECT COUNT(*) AS n FROM cp_audit WHERE target = ?
+            AND action IN ('rewardCancel', 'rewardTakeBack')]], { RewardTarget(id) })
+        if byAdmin and math.floor(U.num(byAdmin[1] and byAdmin[1].n)) == 0 then
+            local c = Update('UPDATE cp_item_rewards SET status = ? WHERE id = ? AND status = \'forfeited\'',
+                { status, id })
+            if c and c > 0 then
+                n = n + 1
+                cids[r.citizenid] = true
+            end
+        end
+    end
+    if n > 0 then
+        SyncBreakdown(rowId)
+        for cid in pairs(cids) do
+            Push(cid)
+            if status == 'pending' then Rewards.deliver(cid) end
+        end
+    end
+    return n
+end
+
+-- ============================================================================
+--                   THE POOL CHECK (SETTINGS → ITEM REWARDS)
+-- ============================================================================
+-- Every Rewards.* change goes through this validator (the structured pool editor and the raw editor alike), and
+-- the item check runs again after the change.
+
+local function CheckSpec(spec, pooled)
+    if type(spec) ~= 'table' then return 'err.reward_pool_shape' end
+    if type(spec.item) ~= 'string' or spec.item == '' or #spec.item > 64 then return 'err.reward_pool_shape' end
+    if Rewards.forbidden(spec.item) then return 'err.reward_item_forbidden' end
+    local c = spec.count
+    if c == nil then c = 1 end
+    if type(c) == 'table' then
+        local lo, hi = tonumber(c[1]), tonumber(c[2])
+        if not lo or not hi or lo ~= math.floor(lo) or hi ~= math.floor(hi) or lo < 1 or hi < lo or hi > MAX_COUNT then
+            return 'err.reward_count'
+        end
+    elseif type(c) ~= 'number' or c ~= math.floor(c) or c < 1 or c > MAX_COUNT then
+        return 'err.reward_count'
+    end
+    if pooled and spec.weight ~= nil and (type(spec.weight) ~= 'number' or not (spec.weight > 0)) then
+        return 'err.reward_weight'
+    end
+    if spec.value ~= nil and (type(spec.value) ~= 'number' or spec.value < 0) then return 'err.reward_value' end
+    return nil
+end
+
+local function CheckSpecs(v)
+    if type(v) ~= 'table' then return 'err.reward_pool_shape' end
+    if v.item ~= nil then return CheckSpec(v, false) end
+    for _, spec in pairs(v) do
+        local err = CheckSpec(spec, false)
+        if err then return err end
+    end
+    return nil
+end
+
+local function CheckEntry(e)
+    if type(e) ~= 'table' or type(e.pool) ~= 'table' then return 'err.reward_pool_shape' end
+    if e.chance ~= nil and (type(e.chance) ~= 'number' or e.chance < 0 or e.chance > 1) then
+        return 'err.reward_chance'
+    end
+    if e.rolls ~= nil
+        and (type(e.rolls) ~= 'number' or e.rolls ~= math.floor(e.rolls) or e.rolls < 0 or e.rolls > MAX_ROLLS) then
+        return 'err.reward_rolls'
+    end
+    for _, spec in pairs(e.pool) do
+        local err = CheckSpec(spec, true)
+        if err then return err end
+    end
+    return nil
+end
+
+local function CheckMap(v, each)
+    if type(v) ~= 'table' then return 'err.reward_pool_shape' end
+    for _, e in pairs(v) do
+        local err = each(e)
+        if err then return err end
+    end
+    return nil
+end
+
+-- errKey | nil for one Rewards.* path and its new value.
+function Rewards.checkSetting(path, value)
+    local seg = {}
+    for part in tostring(path):gmatch('[^%.]+') do seg[#seg + 1] = part end
+    if seg[1] ~= 'Rewards' then return nil end
+    local key = seg[2]
+    if #seg == 2 then
+        if key == 'byType' or key == 'byMission' or key == 'examplePools' then return CheckMap(value, CheckEntry) end
+        if key == 'medals' or key == 'goals' or key == 'levels' or key == 'season' then
+            return CheckMap(value, CheckSpecs)
+        end
+        if key == 'weeklyBoss' then
+            if value == nil then return nil end
+            return CheckSpecs(value)
+        end
+        return nil
+    end
+    if key == 'byType' or key == 'byMission' or key == 'examplePools' then
+        if #seg == 3 then return CheckEntry(value) end
+        if seg[4] == 'pool' and #seg == 4 then return CheckEntry({ pool = value }) end
+        if seg[4] == 'chance' then return CheckEntry({ pool = {}, chance = value }) end
+        if seg[4] == 'rolls' then return CheckEntry({ pool = {}, rolls = value }) end
+    end
+    if (key == 'medals' or key == 'goals' or key == 'levels' or key == 'season') and #seg == 3 then
+        return CheckSpecs(value)
+    end
+    return nil
+end
+
+local function CountMean(c)
+    if type(c) == 'table' then
+        local lo = math.max(1, math.floor(Num(c[1], 1)))
+        local hi = math.max(lo, math.floor(Num(c[2], lo)))
+        return (math.min(lo, MAX_COUNT) + math.min(hi, MAX_COUNT)) / 2
+    end
+    return math.min(MAX_COUNT, math.max(1, math.floor(Num(c, 1))))
+end
+
+-- The expected items and value per run of one run entry at each scaling tier (no evidence finds), in Lua.
+function Rewards.expected(entry)
+    local out = {}
+    local pool = {}
+    for _, s in ipairs(PoolList(entry)) do
+        if Usable(s.item) and Num(s.weight, 1) > 0 then pool[#pool + 1] = s end
+    end
+    local total = 0
+    for _, s in ipairs(pool) do total = total + Num(s.weight, 1) end
+    local items, value = 0, 0
+    for _, s in ipairs(pool) do
+        local share = Num(s.weight, 1) / total
+        local mean = CountMean(s.count)
+        items = items + share * mean
+        value = value + share * mean * math.max(0, math.floor(Num(s.value, 0)))
+    end
+    local rolls = math.min(MAX_ROLLS, math.max(0, math.floor(Num(type(entry) == 'table' and entry.rolls, 1))))
+    for _, tier in ipairs(TIERS) do
+        local chance = Rewards.chanceFor(entry, tier, 0)
+        out[#out + 1] = {
+            tier = tier,
+            chance = chance,
+            items = math.floor(rolls * chance * items * 100 + 0.5) / 100,
+            value = math.floor(rolls * chance * value * 100 + 0.5) / 100,
+        }
+    end
+    return out
+end
+
+-- The item picker: every ox_inventory item a reward may be (forbidden names left out), by name.
+function Rewards.itemChoices()
+    if not InventoryStarted() then return { items = {}, inventory = false } end
+    local ok, all = pcall(function() return exports.ox_inventory:Items() end)
+    if not ok or type(all) ~= 'table' then return { items = {}, inventory = false } end
+    local out = {}
+    for name, def in pairs(all) do
+        if type(name) == 'string' and not Rewards.forbidden(name) then
+            out[#out + 1] = {
+                name = name,
+                label = type(def) == 'table' and type(def.label) == 'string' and def.label or name,
+            }
+        end
+    end
+    table.sort(out, function(a, b) return a.name < b.name end)
+    while #out > 2000 do out[#out] = nil end
+    return { items = out, inventory = true }
+end
+
+-- ============================================================================
+--                                     NET
+-- ============================================================================
+
+local function SelfOfReward(p, strict)
+    local r = RewardById(p.id)
+    if not r then return nil end
+    return { citizenid = r.citizenid, strict = strict }
+end
+
+if CP.AdminKit and CP.AdminKit.action then
+    local Kit = CP.AdminKit
+
+    Kit.callback('admin:checkRewardInventory', 'rewardsAdmin', function(ctx)
+        return Rewards.checkInventory(ctx.args.id)
+    end, { rate = 2 })
+
+    Kit.callback('admin:rewardItems', 'rewardsAdmin', function() return Rewards.itemChoices() end, { rate = 1 })
+
+    -- The pool editor's preview: the server's verdict on a value and the expected items and value per tier.
+    Kit.callback('admin:rewardPoolPreview', 'rewardsAdmin', function(ctx)
+        local path = ctx.args.path
+        if type(path) ~= 'string' or path:sub(1, 8) ~= 'Rewards.' then return nil, 'err.invalid_payload' end
+        local err = Rewards.checkSetting(path, ctx.args.value)
+        local expected = {}
+        local key = path:match('^Rewards%.(%a+)$')
+        if not err and (key == 'byType' or key == 'byMission' or key == 'examplePools')
+            and type(ctx.args.value) == 'table' then
+            for k, e in pairs(ctx.args.value) do
+                expected[#expected + 1] = { key = tostring(k), tiers = Rewards.expected(e) }
+            end
+            table.sort(expected, function(a, b) return a.key < b.key end)
+        end
+        return { error = err, expected = expected }
+    end, { rate = 4 })
+
+    Kit.action('server:admin:resolveReward', 'rewardsAdmin', function(ctx)
+        local p = ctx.payload
+        local outcome = p.outcome == 'locker' and 'locker' or 'given'
+        local ok, data = Rewards.resolve(p.id, outcome, function(info)
+            return ctx.audit('rewardResolve', RewardTarget(ToId(p.id) or 0), 'giving',
+                ('%s%s'):format(info.outcome, info.found and ':found' or ':not_found'))
+        end)
+        return ok, data
+    end, {
+        reason = true,
+        confirm = function(p) return p.outcome == 'locker' and 'LOCKER' or nil end,
+        self = function(p) return SelfOfReward(p, false) end,
+    })
+
+    Kit.action('server:admin:deliverRewards', 'rewardsAdmin', function(ctx)
+        local cid = ctx.payload.citizenid
+        if not ValidCitizenId(cid) then return false, 'err.invalid_citizenid' end
+        if not Enabled() then return false, 'err.rewards_off' end
+        if not SrcOf(cid) then return false, 'err.officer_offline' end
+        local n = Rewards.deliver(cid)
+        ctx.audit('rewardDeliver', cid, nil, tostring(n))
+        return true, { given = n }
+    end, {
+        self = function(p) return { citizenid = p.citizenid } end,
+    })
+
+    Kit.action('server:admin:cancelReward', 'rewardsAdmin', function(ctx)
+        local id = ToId(ctx.payload.id)
+        if not id then return false, 'err.invalid_payload' end
+        local ok, data = Rewards.cancel(id)
+        if not ok then return false, data end
+        ctx.audit('rewardCancel', RewardTarget(id), data.from, 'forfeited')
+        ctx.notify(data.citizenid, 'warning', 'rewards.cancelled', {})
+        return true, { id = id, status = 'forfeited' }
+    end, {
+        reason = true,
+        self = function(p) return SelfOfReward(p, false) end,
+    })
+
+    Kit.action('server:admin:takeBackReward', 'rewardsAdmin', function(ctx)
+        if Cfg().allowTakeBack ~= true then return false, 'err.money_tool_off' end
+        local id = ToId(ctx.payload.id)
+        if not id then return false, 'err.invalid_payload' end
+        return Rewards.takeBack(id, function(info)
+            return ctx.audit('rewardTakeBack', RewardTarget(id), 'given', ('-%d'):format(info.count or 0))
+        end)
+    end, {
+        requestId = true,
+        reason = true,
+        confirm = function(p)
+            local r = RewardById(p.id)
+            return r and tostring(r.item) or '-'
+        end,
+        self = function(p) return SelfOfReward(p, true) end,
+    })
+end
 
 -- ============================================================================
 --                                    HOOKS
@@ -1010,7 +1519,24 @@ if CP.Hooks and CP.Hooks.on then
     CP.Hooks.on('officer:loaded', OnLoaded)
     CP.Hooks.on('arena:exited', OnArenaExited)
     CP.Hooks.on('home:extras', HomeExtras)
+    CP.Hooks.on('row:forfeitUndone', function(rowId) Rewards.undoForfeit(rowId) end)
+    -- a Rewards.* setting changed in game: the item check runs again at once
+    CP.Hooks.on('settings:changed', function(paths)
+        for _, path in ipairs(type(paths) == 'table' and paths or {}) do
+            if tostring(path):sub(1, 8) == 'Rewards.' then
+                Rewards.validate()
+                return
+            end
+        end
+    end)
 end
+
+-- modules/settings loads after this file: the validator is registered once every file has loaded
+CreateThread(function()
+    if CP.Settings and CP.Settings.registerValidator then
+        CP.Settings.registerValidator('Rewards', function(path, clean) return Rewards.checkSetting(path, clean) end)
+    end
+end)
 
 -- The item check after the start (ox_inventory has registered its items by then), and the Config health lines.
 CreateThread(function()

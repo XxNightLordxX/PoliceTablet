@@ -433,8 +433,9 @@ registerMock('action', 'server:admin:setTypePayout', (p: AdminSetTypePayload) =>
         ty.stored = null;
     } else {
         const amount = validAmount(p.amount);
-        if (ty.stored?.adminLocked && ty.stored.amount === amount) throw new Error('err.payout_unchanged');
-        ty.stored = { amount, adminLocked: true, by: 'ADM00001', byName: 'Server Admin', at: now() };
+        if (ty.stored && ty.stored.adminLocked === !p.unlock && ty.stored.amount === amount)
+            throw new Error('err.payout_unchanged');
+        ty.stored = { amount, adminLocked: !p.unlock, by: 'ADM00001', byName: 'Server Admin', at: now() };
     }
     return adminType(ty);
 });

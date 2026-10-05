@@ -2,7 +2,14 @@
 // ?rewards=off shows the shipped default (off, no rows); ?rewards=arena a locker that cannot be claimed.
 
 import { emitDebug, registerMock } from '../shared/nui';
-import type { AdminRewardsView, RewardRow, RewardsLocker } from '../types/rewards';
+import type {
+    AdminRewardsView,
+    RewardInventoryCheck,
+    RewardItemChoices,
+    RewardPoolPreview,
+    RewardRow,
+    RewardsLocker,
+} from '../types/rewards';
 import { buildSession } from './samples';
 
 const now = () => Math.floor(Date.now() / 1000);
@@ -81,12 +88,18 @@ const history: RewardRow[] = ENABLED
     : [];
 
 registerMock('request', 'admin:getRewards', (args: unknown): AdminRewardsView => {
-    const page = Math.max(1, Number((args as { page?: number } | null)?.page) || 1);
+    const f = (args ?? {}) as { page?: number; citizenid?: string; status?: string; source?: string };
+    const page = Math.max(1, Number(f.page) || 1);
     const pageSize = 25;
-    const all = [...given.map(r => ({ ...r, citizenid: 'ABC12345', name: 'John Doe' })), ...history];
+    const all = [...given.map(r => ({ ...r, citizenid: 'ABC12345', name: 'John Doe' })), ...history]
+        .filter(r => !f.citizenid || r.citizenid === f.citizenid)
+        .filter(r => !f.status || r.status === f.status)
+        .filter(r => !f.source || r.source === f.source)
+        .map((r, i) => ({ ...r, online: i % 3 !== 2 }));
     const sum = (status: string) => all.filter(r => r.status === status).reduce((n, r) => n + r.count, 0);
     return {
         enabled: ENABLED,
+        allowTakeBack: MODE === 'takeback',
         page,
         pageSize,
         pools: [
@@ -127,6 +140,7 @@ registerMock('request', 'admin:getRewards', (args: unknown): AdminRewardsView =>
                       at: now() - 7200,
                       citizenid: 'KLM55512',
                       name: 'Maria Lopez',
+                      online: true,
                   },
               ]
             : [],
@@ -140,5 +154,91 @@ registerMock('request', 'admin:getRewards', (args: unknown): AdminRewardsView =>
                   },
               ]
             : [{ level: 'ok', text: 'Item rewards: off (example pool available)' }],
+    };
+});
+
+// ============================================================================
+//                         ADMIN ACTIONS (FULL CONTROL)
+// ============================================================================
+// ?rewards=takeback turns Take back on (it ships off).
+
+registerMock('request', 'admin:checkRewardInventory', (args: unknown): RewardInventoryCheck => {
+    const id = Number((args as { id?: number } | null)?.id);
+    return {
+        id,
+        status: 'giving',
+        item: 'burger',
+        label: 'Burger',
+        needed: 1,
+        online: true,
+        found: id % 2 === 0,
+        count: id % 2 === 0 ? 1 : 0,
+    };
+});
+
+registerMock(
+    'action',
+    'server:admin:resolveReward',
+    (p: { id?: number; outcome?: string; reason?: string; confirm?: string }) => {
+        if (!p?.reason) throw new Error('err.reason_required');
+        if (p.outcome === 'locker' && String(p.confirm ?? '').toUpperCase() !== 'LOCKER')
+            throw new Error('err.confirm_mismatch');
+        return { id: p.id, status: p.outcome === 'locker' ? 'pending' : 'given' };
+    },
+);
+
+registerMock('action', 'server:admin:deliverRewards', () => ({ given: 1 }));
+
+registerMock('action', 'server:admin:cancelReward', (p: { id?: number; reason?: string }) => {
+    if (!p?.reason) throw new Error('err.reason_required');
+    const row = history.find(r => r.id === p.id);
+    if (row) row.status = 'forfeited';
+    return { id: p.id, status: 'forfeited' };
+});
+
+registerMock('action', 'server:admin:takeBackReward', (p: { id?: number; reason?: string }) => {
+    if (MODE !== 'takeback') throw new Error('err.money_tool_off');
+    if (!p?.reason) throw new Error('err.reason_required');
+    const row = history.find(r => r.id === p.id);
+    if (row) row.status = 'forfeited';
+    return { id: p.id, status: 'forfeited', taken: 1 };
+});
+
+registerMock('request', 'admin:rewardItems', (): RewardItemChoices => ({
+    inventory: true,
+    items: ITEMS.map(i => ({ name: i.item, label: i.label })),
+}));
+
+registerMock('request', 'admin:rewardPoolPreview', (args: unknown): RewardPoolPreview => {
+    const a = (args ?? {}) as {
+        path?: string;
+        value?: Record<
+            string,
+            { chance?: number; rolls?: number; pool?: { value?: number; count?: number | number[] }[] }
+        >;
+    };
+    const bad = JSON.stringify(a.value ?? {}).match(/weapon_|ammo-|"armour"|"money"/);
+    if (bad) return { error: 'err.reward_item_forbidden', expected: [] };
+    if (a.path !== 'Rewards.byType' && a.path !== 'Rewards.byMission') return { expected: [] };
+    const tiers = ['standard', 'reinforced', 'heavy', 'major', 'critical'];
+    const add = [0, 0.05, 0.1, 0.15, 0.2];
+    return {
+        expected: Object.entries(a.value ?? {}).map(([key, e]) => {
+            const pool = e.pool ?? [];
+            const mean = pool.length ? pool.reduce((n, s) => n + Number(s.value ?? 0), 0) / pool.length : 0;
+            return {
+                key,
+                tiers: tiers.map((tier, i) => {
+                    const chance = Math.min(1, Number(e.chance ?? 0) + add[i]);
+                    const rolls = Number(e.rolls ?? 1);
+                    return {
+                        tier,
+                        chance,
+                        items: Math.round(rolls * chance * 100) / 100,
+                        value: Math.round(rolls * chance * mean * 100) / 100,
+                    };
+                }),
+            };
+        }),
     };
 });

@@ -199,6 +199,37 @@ function Q.addMoney(src, account, amount, reason)
     return res == true
 end
 
+-- The balance of one money account (bank, cash) of an online player, or nil. Qbox lets bank go below 0.
+function Q.getMoney(src, account)
+    if type(account) ~= 'string' or account == '' then return nil end
+    local player = Q.getPlayer(src)
+    if not player or type(player.PlayerData.money) ~= 'table' then return nil end
+    local n = tonumber(player.PlayerData.money[account])
+    if not n or n ~= n then return nil end
+    return math.floor(n)
+end
+
+-- Takes money from an online player (an admin's clawback). true | false (refused, nothing taken) | false, 'error'
+-- (RemoveMoney raised: the balance may already have changed).
+function Q.removeMoney(src, account, amount, reason)
+    amount = tonumber(amount)
+    if not amount or amount ~= amount or amount == math.huge or amount <= 0 then return false end
+    if type(account) ~= 'string' or account == '' then return false end
+    amount = CP.U.round(amount)
+    local player = Q.getPlayer(src)
+    if not player or type(player.Functions) ~= 'table' or type(player.Functions.RemoveMoney) ~= 'function' then
+        return false
+    end
+    local why = CP.U.clip(type(reason) == 'string' and reason ~= '' and reason or 'crimson-police', 64)
+    local ok, res = pcall(function() return player.Functions.RemoveMoney(account, amount, why) end)
+    if not ok then
+        CP.err(TAG, 'RemoveMoney(%s, %d) for %s failed: %s', account, amount, tostring(src), tostring(res))
+        return false, 'error'
+    end
+    CP.log(TAG, 'RemoveMoney %s %d from %s (%s) -> %s', account, amount, tostring(src), why, tostring(res))
+    return res == true
+end
+
 function Q.isDowned(src)
     local player = Q.getPlayer(src)
     if not player then return false end
