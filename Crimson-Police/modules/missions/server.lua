@@ -54,10 +54,12 @@ local TWEAK_KEYS = {
 }
 
 local defs = {}            -- id -> normalised definition
+local rawOf = {}           -- id -> the raw definition the live one came from (the override's for an edited built-in)
 local loadedOnce = false
 local loading = false
 local lastSummary = nil
 local clientList = {}      -- serialized definitions for clients, rebuilt on every change
+local WARN_TEXTS_MAX = 200 -- warning lines kept in the load summary (Admin UI → Missions → Load result)
 
 -- ============================================================================
 --                                SMALL HELPERS
@@ -394,7 +396,8 @@ function Missions.normalize(def, meta)
     local warnings = 0
     local function warn(msg)
         warnings = warnings + 1
-        CP.warn(TAG, 'mission %s: %s', idText, msg)
+        if type(meta.onWarn) == 'function' then pcall(meta.onWarn, idText, msg) end
+        if not meta.quiet then CP.warn(TAG, 'mission %s: %s', idText, msg) end
     end
 
     for _, k in ipairs(LOADER_FIELDS) do d[k] = nil end
@@ -696,6 +699,23 @@ local function Tweaked(id, raw, def, meta)
 end
 Missions._applyTweak = ApplyTweak
 
+-- The loader's answer for a MissionTweaks entry of a built-in, without changing anything (Settings asks it on every
+-- change made in game, so the raw editor and Missions → Quick edit give the same answer): ok | false, errKey, reason.
+function Missions.checkTweak(id, tweak)
+    if tweak == nil then return true end
+    local def = defs[id]
+    -- an id that is not a loaded built-in is ignored by the loader (Config health names it): nothing to refuse
+    if not def or def.source ~= 'builtin' then return true end
+    local raw = rawOf[id]
+    if type(raw) ~= 'table' then return true end
+    local d, why = ApplyTweak(raw, tweak)
+    if not d then return false, 'err.tweak_invalid', why end
+    local out, err = Missions.normalize(d,
+        { source = 'builtin', filePath = def.filePath, status = 'published', quiet = true })
+    if not out then return false, 'err.tweak_invalid', tostring(err) end
+    return true
+end
+
 -- A translatable mission text: the locale key mission.<id>.<field> (mission.<id>.location.<n> for a
 -- location label) wins over the file's text; custom missions keep theirs when the locale has no key.
 function Missions.label(def, field, n)
@@ -834,6 +854,7 @@ function Missions.register(def)
         return nil, 'a built-in mission already uses this id'
     end
     defs[d.id] = d
+    rawOf[d.id] = CP.U.deepcopy(def)
     CP.log(TAG, 'registered %s (%s v%s)', d.id, d.source, tostring(d.version))
     Broadcast()
     return d
@@ -847,6 +868,7 @@ function Missions.unregister(id)
         return false
     end
     defs[id] = nil
+    rawOf[id] = nil
     CP.log(TAG, 'unregistered %s', id)
     Broadcast()
     return true
@@ -881,6 +903,66 @@ local function CustomEntry(entry)
     return raw, meta
 end
 
+-- One built-in mission: its shipped file, swapped for its override (an edited built-in, missions/custom/overrides/)
+-- when there is one, then Config.MissionTweaks on top. A broken override is logged and the shipped mission plays.
+-- Returns def, raw | nil, filePath, errorText. summary gets the warnings and override failures.
+local function BuiltinDef(id, override, summary, onWarn)
+    local path = BUILTIN_DIR .. id .. '.lua'
+    local content = LoadResourceFile(CP.resource, path)
+    if not content or content == '' then return nil, path, 'file not found' end
+    local raw, err = RunMissionFile(content, path)
+    if not raw then return nil, path, err end
+    if raw.id ~= id then return nil, path, ('its id "%s" does not match the file name'):format(tostring(raw.id)) end
+    local shippedHash = CP.U.hashHex(content)
+    local meta = { source = 'builtin', filePath = path, defHash = shippedHash, status = 'published', onWarn = onWarn }
+    local def, nerr, warnings = Missions.normalize(raw, meta)
+    summary.warnings = summary.warnings + (warnings or 0)
+    if not def then return nil, path, nerr end
+    local overridden = nil
+    if type(override) == 'table' and type(override.raw) == 'table' then
+        local ometa = {
+            source = 'builtin',
+            filePath = override.filePath,
+            defHash = override.hash,
+            status = 'published',
+            editedInCode = override.editedInCode,
+            onWarn = onWarn,
+        }
+        local odef, oerr, owarn = Missions.normalize(override.raw, ometa)
+        summary.warnings = summary.warnings + (owarn or 0)
+        if odef then
+            raw, def, meta = override.raw, odef, ometa
+            overridden = override
+        else
+            summary.overrideFailed[#summary.overrideFailed + 1] = {
+                id = id,
+                file = override.filePath,
+                error = tostring(oerr),
+            }
+            CP.warn(TAG, 'the edited version of %s (%s) was not loaded, the shipped mission plays: %s', id,
+                tostring(override.filePath), tostring(oerr))
+        end
+    end
+    local out = Tweaked(id, raw, def, meta)
+    out.shippedHash = shippedHash
+    if overridden then
+        out.overridden = true
+        out.overrideVersion = overridden.version
+        out.baseHash = overridden.baseHash
+    end
+    return out, raw
+end
+
+local function Overrides()
+    if not (CP.Builder and CP.Builder.loadOverrides) then return {} end
+    local ok, list = pcall(CP.Builder.loadOverrides)
+    if not ok then
+        CP.err(TAG, 'CP.Builder.loadOverrides failed; the shipped built-in missions play: %s', tostring(list))
+        return {}
+    end
+    return type(list) == 'table' and list or {}
+end
+
 function Missions.loadAll()
     if loading then
         -- Another load is in progress: wait for it and return its result.
@@ -891,8 +973,23 @@ function Missions.loadAll()
     loading = true
     -- the settings changed in game (MissionTweaks, Config.Blocks ...) are over Config once the database is ready
     if CP.Migrations and CP.Migrations.ready then CP.Migrations.ready() end
-    local summary = { loaded = 0, builtin = 0, custom = 0, failed = {}, warnings = 0 }
-    local newDefs = {}
+    local summary = {
+        loaded = 0,
+        builtin = 0,
+        custom = 0,
+        overridden = 0,
+        failed = {},
+        overrideFailed = {},
+        warnings = 0,
+        warningTexts = {},
+        at = os.time(),
+    }
+    local newDefs, newRaws = {}, {}
+    local function onWarn(id, msg)
+        if #summary.warningTexts < WARN_TEXTS_MAX then
+            summary.warningTexts[#summary.warningTexts + 1] = { id = tostring(id), text = tostring(msg) }
+        end
+    end
 
     local function failed(id, file, err)
         summary.failed[#summary.failed + 1] = { id = id, file = file, error = err }
@@ -900,6 +997,16 @@ function Missions.loadAll()
     end
 
     local okAll, errAll = pcall(function()
+        -- custom missions (published) and the overrides of built-ins, through the Mission Builder: its file sync
+        -- (hand edits of either) runs first
+        local customOk, customList = true, nil
+        if CP.Builder and CP.Builder.loadPublished then
+            CP.Migrations.ready()
+            customOk, customList = pcall(CP.Builder.loadPublished)
+        end
+        local overrides = Overrides()
+        if CP.Builder and CP.Builder.lastSync then summary.builder = CP.Builder.lastSync() end
+
         -- built-in missions
         local ids, indexErr = ReadIndex()
         if not ids then
@@ -907,67 +1014,57 @@ function Missions.loadAll()
             ids = {}
         end
         for _, id in ipairs(ids) do
-            local path = BUILTIN_DIR .. id .. '.lua'
-            local content = LoadResourceFile(CP.resource, path)
-            if not content or content == '' then
-                failed(id, path, 'file not found')
+            local def, raw, err = BuiltinDef(id, overrides[id], summary, onWarn)
+            if not def then
+                failed(id, raw, err)
             else
-                local raw, err = RunMissionFile(content, path)
-                if not raw then
-                    failed(id, path, err)
-                elseif raw.id ~= id then
-                    failed(id, path, ('its id "%s" does not match the file name'):format(tostring(raw.id)))
-                else
-                    local meta = {
-                        source = 'builtin',
-                        filePath = path,
-                        defHash = CP.U.hashHex(content),
-                        status = 'published',
-                    }
-                    local def, nerr, warnings = Missions.normalize(raw, meta)
-                    summary.warnings = summary.warnings + (warnings or 0)
-                    if not def then
-                        failed(id, path, nerr)
-                    else
-                        newDefs[id] = Tweaked(id, raw, def, meta)
-                        summary.builtin = summary.builtin + 1
-                    end
-                end
+                newDefs[id] = def
+                newRaws[id] = raw
+                summary.builtin = summary.builtin + 1
+                if def.overridden then summary.overridden = summary.overridden + 1 end
+            end
+        end
+        for id, o in pairs(overrides) do
+            if not newDefs[id] then
+                summary.overrideFailed[#summary.overrideFailed + 1] = {
+                    id = id,
+                    file = o.filePath,
+                    error = 'the built-in mission it replaces is not loaded',
+                }
             end
         end
 
-        -- custom missions (published), through the Mission Builder
-        if CP.Builder and CP.Builder.loadPublished then
-            CP.Migrations.ready()
-            local okB, list = pcall(CP.Builder.loadPublished)
-            if not okB then
-                -- Keep the custom missions that are loaded now rather than dropping them from the pools.
-                CP.err(TAG, 'CP.Builder.loadPublished failed; the loaded custom missions stay: %s', tostring(list))
-                summary.builderError = tostring(list)
-                for id, def in pairs(defs) do
-                    if def.source == 'custom' and not newDefs[id] then
-                        newDefs[id] = def
-                        summary.custom = summary.custom + 1
-                    end
+        -- custom missions
+        if not customOk then
+            -- Keep the custom missions that are loaded now rather than dropping them from the pools.
+            CP.err(TAG, 'CP.Builder.loadPublished failed; the loaded custom missions stay: %s', tostring(customList))
+            summary.builderError = tostring(customList)
+            for id, def in pairs(defs) do
+                if def.source == 'custom' and not newDefs[id] then
+                    newDefs[id] = def
+                    newRaws[id] = rawOf[id]
+                    summary.custom = summary.custom + 1
                 end
-            elseif type(list) == 'table' then
-                for i, entry in ipairs(list) do
-                    local raw, meta, err = CustomEntry(entry)
-                    local label = (type(entry) == 'table' and (entry.id or (entry.def and entry.def.id))) or ('#' .. i)
-                    local file = meta and meta.filePath
-                    if not raw then
-                        failed(label, file, err)
+            end
+        elseif type(customList) == 'table' then
+            for i, entry in ipairs(customList) do
+                local raw, meta, err = CustomEntry(entry)
+                local label = (type(entry) == 'table' and (entry.id or (entry.def and entry.def.id))) or ('#' .. i)
+                local file = meta and meta.filePath
+                if not raw then
+                    failed(label, file, err)
+                else
+                    meta.onWarn = onWarn
+                    local def, nerr, warnings = Missions.normalize(raw, meta)
+                    summary.warnings = summary.warnings + (warnings or 0)
+                    if not def then
+                        failed(raw.id or label, file, nerr)
+                    elseif newDefs[def.id] then
+                        failed(def.id, file, 'another mission already uses this id')
                     else
-                        local def, nerr, warnings = Missions.normalize(raw, meta)
-                        summary.warnings = summary.warnings + (warnings or 0)
-                        if not def then
-                            failed(raw.id or label, file, nerr)
-                        elseif newDefs[def.id] then
-                            failed(def.id, file, 'another mission already uses this id')
-                        else
-                            newDefs[def.id] = def
-                            summary.custom = summary.custom + 1
-                        end
+                        newDefs[def.id] = def
+                        newRaws[def.id] = raw
+                        summary.custom = summary.custom + 1
                     end
                 end
             end
@@ -984,14 +1081,46 @@ function Missions.loadAll()
     end
 
     defs = newDefs
+    rawOf = newRaws
     loadedOnce = true
     loading = false
     summary.loaded = summary.builtin + summary.custom
     lastSummary = summary
-    print(('[crimson-police] missions loaded: %d built-in, %d custom, %d rejected'):format(summary.builtin,
-        summary.custom, #summary.failed))
+    print(('[crimson-police] missions loaded: %d built-in (%d edited), %d custom, %d rejected'):format(summary.builtin,
+        summary.overridden, summary.custom, #summary.failed))
     Broadcast()
     return summary
+end
+
+-- An override of one built-in went live, changed or was reset (Mission Builder): that one mission is loaded again
+-- and sent to clients. Runs already going keep the definition they started with.
+function Missions.refreshBuiltin(id)
+    if type(id) ~= 'string' then return false, 'err.invalid_payload' end
+    local summary = { warnings = 0, failed = {}, overrideFailed = {} }
+    local def, raw, err = BuiltinDef(id, Overrides()[id], summary)
+    if not def then
+        CP.warn(TAG, 'built-in mission %s could not be loaded again: %s', id, tostring(err))
+        return false, err
+    end
+    defs[id] = def
+    rawOf[id] = raw
+    if lastSummary then
+        lastSummary.overrideFailed = lastSummary.overrideFailed or {}
+        for i = #lastSummary.overrideFailed, 1, -1 do
+            if lastSummary.overrideFailed[i].id == id then table.remove(lastSummary.overrideFailed, i) end
+        end
+        for _, f in ipairs(summary.overrideFailed) do
+            lastSummary.overrideFailed[#lastSummary.overrideFailed + 1] = f
+        end
+    end
+    Broadcast()
+    return true, def
+end
+
+-- The raw definition (file fields) the live mission came from: its override's for an edited built-in.
+function Missions.rawOf(id)
+    if type(id) ~= 'string' or not rawOf[id] then return nil end
+    return CP.U.deepcopy(rawOf[id])
 end
 
 function Missions.reload()
@@ -1020,18 +1149,56 @@ CP.Net.callback('getMissionDefs', function(src)
     return clientList
 end, { rate = 2 })
 
+local function PlainList(list)
+    local out = {}
+    for i, f in ipairs(type(list) == 'table' and list or {}) do
+        out[i] = { id = tostring(f.id), file = f.file and tostring(f.file) or nil, error = tostring(f.error) }
+    end
+    return out
+end
+
+-- The Mission Builder's file sync (hand edits of custom and override files) as plain lists.
+local function PlainSync(b)
+    if type(b) ~= 'table' then return nil end
+    local edited, rejected = {}, {}
+    for i, e in ipairs(type(b.edited) == 'table' and b.edited or {}) do
+        edited[i] = { id = tostring(e.id), version = tonumber(e.version) }
+    end
+    for i, e in ipairs(type(b.rejected) == 'table' and b.rejected or {}) do
+        rejected[i] = { id = tostring(e.id), error = tostring(e.error) }
+    end
+    local function ids(list)
+        local out = {}
+        for i, v in ipairs(type(list) == 'table' and list or {}) do out[i] = tostring(v) end
+        return out
+    end
+    return {
+        checked = tonumber(b.checked) or 0,
+        edited = edited,
+        rejected = rejected,
+        conflicts = ids(b.conflicts),
+        rewritten = ids(b.rewritten),
+        error = b.error and tostring(b.error) or nil,
+    }
+end
+
 local function PlainSummary(summary)
-    local failedList = {}
-    for i, f in ipairs(summary.failed or {}) do
-        failedList[i] = { id = tostring(f.id), file = f.file and tostring(f.file) or nil, error = tostring(f.error) }
+    local warnings = {}
+    for i, w in ipairs(type(summary.warningTexts) == 'table' and summary.warningTexts or {}) do
+        warnings[i] = { id = tostring(w.id), text = tostring(w.text) }
     end
     return {
         loaded = summary.loaded or 0,
         builtin = summary.builtin or 0,
         custom = summary.custom or 0,
+        overridden = summary.overridden or 0,
         warnings = summary.warnings or 0,
-        failed = failedList,
+        warningTexts = warnings,
+        failed = PlainList(summary.failed),
+        overrideFailed = PlainList(summary.overrideFailed),
+        builder = PlainSync(summary.builder),
         error = summary.error,
+        at = summary.at,
     }
 end
 
@@ -1056,10 +1223,496 @@ CP.Net.action('server:admin:reloadMissions', function(src)
 end, { rate = 2 })
 
 -- ============================================================================
+--                   FULL ADMIN CONTROL (ARCHITECTURE §8.4.2)
+-- ============================================================================
+-- Admin-only reads and actions, each through CP.AdminKit. A spec that loads this file alone has none of them.
+
+local Kit = CP.AdminKit
+    or {
+        action = function() return false end,
+        callback = function() return false end,
+    }
+local STATS_CACHE_S = 60          -- seconds a mission stats answer is kept per filter
+local STATS_RANGE_MAX = 366 * 86400
+local statsCache = {}
+
+-- The last load (start or reload): loaded, rejected with reasons, warning texts, the Builder's file sync (C4).
+function Missions.loadSummary()
+    if not lastSummary then return nil end
+    return PlainSummary(lastSummary)
+end
+
+Kit.callback('admin:getMissionLoad', 'openAdmin', function()
+    local sum = Missions.loadSummary()
+    if not sum then return nil, 'err.not_ready' end
+    return sum
+end, { rate = 2 })
+
+-- Config health line 'missions': an error for every mission (or edited built-in) that did not load, a warning for
+-- the warnings of the last load.
+local function MissionsHealth()
+    local out = {}
+    local sum = Missions.loadSummary()
+    if not sum then return { { level = 'warn', text = CP.L('missions.health.not_loaded') } } end
+    for _, f in ipairs(sum.failed) do
+        out[#out + 1] = { level = 'error', text = CP.L('missions.health.failed', { id = f.id, error = f.error }) }
+    end
+    for _, f in ipairs(sum.overrideFailed) do
+        out[#out + 1] = {
+            level = 'error',
+            text = CP.L('missions.health.override_failed', { id = f.id, error = f.error }),
+        }
+    end
+    for _, r in ipairs(sum.builder and sum.builder.rejected or {}) do
+        out[#out + 1] = { level = 'warn', text = CP.L('missions.health.edit_rejected', { id = r.id, error = r.error }) }
+    end
+    if sum.warnings > 0 then
+        out[#out + 1] = { level = 'warn', text = CP.L('missions.health.warnings', { n = sum.warnings }) }
+    end
+    if #out == 0 then
+        out[1] = { level = 'ok', text = CP.L('missions.health.ok', { n = sum.loaded, edited = sum.overridden }) }
+    end
+    return out
+end
+Missions._health = MissionsHealth
+
+-- ============================================================================
+--                     QUICK EDIT OF A BUILT-IN (#30, #31)
+-- ============================================================================
+
+local function BuiltinOnly(id)
+    local def = defs[id]
+    if type(id) ~= 'string' or not def then return nil, 'err.unknown_mission' end
+    if def.source ~= 'builtin' then return nil, 'err.tweak_builtin_only' end
+    return def
+end
+
+-- Every name a raw definition uses (models, weapons, vehicles): the shipped file's own may stay in a tweak.
+local function NamesIn(v, out, depth)
+    depth = depth or 0
+    if depth > 12 then return out end
+    if type(v) == 'string' then
+        out[v] = true
+    elseif type(v) == 'table' then
+        for _, x in pairs(v) do NamesIn(x, out, depth + 1) end
+    end
+    return out
+end
+
+local function TweakableObjectives(raw)
+    local out = {}
+    for i, obj in ipairs(type(raw) == 'table' and type(raw.objectives) == 'table' and raw.objectives or {}) do
+        if type(obj) == 'table' then
+            out[#out + 1] = {
+                index = i,
+                block = obj.block,
+                label = obj.label,
+                peds = PED_BLOCKS[obj.block] and (obj.peds or obj.models) or nil,
+                vehicles = VEHICLE_BLOCKS[obj.block] and (type(obj.vehicles) == 'table' and obj.vehicles or obj.models)
+                    or nil,
+                weapons = obj.weapons,
+            }
+        end
+    end
+    return out
+end
+
+-- What the Quick edit drawer shows: the file's values, the live ones, the tweak, and the names it may pick.
+Kit.callback('admin:getMissionTweak', 'openAdmin', function(ctx)
+    local def, err = BuiltinOnly(ctx.args.missionId)
+    if not def then return nil, err end
+    local raw = rawOf[def.id] or {}
+    local allowed = Config.Builder and Config.Builder.allowed or {}
+    local used = NamesIn(raw, {})
+    local function pick(list)
+        local out, seen = {}, {}
+        for _, n in ipairs(type(list) == 'table' and list or {}) do
+            if not seen[n] then seen[n] = true; out[#out + 1] = n end
+        end
+        return out, seen
+    end
+    local peds, pedSeen = pick(allowed.peds)
+    local vehicles, vehSeen = pick(allowed.vehicles)
+    local weapons, wepSeen = pick(allowed.weapons)
+    for _, o in ipairs(TweakableObjectives(raw)) do
+        for _, n in ipairs(type(o.peds) == 'table' and o.peds or {}) do
+            if not pedSeen[n] then pedSeen[n] = true; peds[#peds + 1] = n end
+        end
+        for _, n in ipairs(type(o.vehicles) == 'table' and o.vehicles or {}) do
+            if not vehSeen[n] then vehSeen[n] = true; vehicles[#vehicles + 1] = n end
+        end
+        for _, n in ipairs(type(o.weapons) == 'table' and o.weapons or {}) do
+            if not wepSeen[n] then wepSeen[n] = true; weapons[#weapons + 1] = n end
+        end
+    end
+    local tweak = type(Config.MissionTweaks) == 'table' and Config.MissionTweaks[def.id] or nil
+    return {
+        missionId = def.id,
+        label = def.label,
+        overridden = def.overridden == true,
+        file = {
+            cooldown = tonumber(raw.cooldown),
+            timeLimit = tonumber(raw.timeLimit),
+            startTimeout = tonumber(raw.startTimeout),
+        },
+        live = { cooldown = def.cooldown, timeLimit = def.timeLimit, startTimeout = def.startTimeout },
+        tweak = type(tweak) == 'table' and CP.U.deepcopy(tweak) or nil,
+        tweaked = def.tweaked == true,
+        objectives = TweakableObjectives(raw),
+        allowed = { peds = peds, vehicles = vehicles, weapons = weapons },
+        ranges = { cooldown = { 0, 86400 }, timeLimit = { 60, 3600 }, startTimeout = { 60, 3600 } },
+        names = used,
+    }
+end, { rate = 3 })
+
+-- Saves one mission's MissionTweaks entry (nil = back to the file) through CP.Settings, which checks it again (the
+-- Settings template plus checkTweak) and audits it as a settings change. disabledLocations is kept as it is.
+Kit.action('server:admin:setMissionTweak', 'openAdmin', function(ctx)
+    local p = ctx.payload
+    local def, err = BuiltinOnly(p.missionId)
+    if not def then return false, err end
+    if not (CP.Settings and CP.Settings.set) then return false, 'err.module_unavailable' end
+    local current = type(Config.MissionTweaks) == 'table' and Config.MissionTweaks[def.id] or nil
+    local tweak = nil
+    if p.tweak ~= nil then
+        if type(p.tweak) ~= 'table' then return false, 'err.invalid_payload' end
+        tweak = {}
+        for _, k in ipairs({ 'cooldown', 'timeLimit', 'startTimeout' }) do
+            if p.tweak[k] ~= nil then
+                local n = math.tointeger(tonumber(p.tweak[k]))
+                if not n then return false, 'err.invalid_payload' end
+                tweak[k] = n
+            end
+        end
+        local used = NamesIn(rawOf[def.id] or {}, {})
+        local allowed = Config.Builder and Config.Builder.allowed or {}
+        for k, list in pairs({ peds = allowed.peds, vehicles = allowed.vehicles, weapons = allowed.weapons }) do
+            local v = p.tweak[k]
+            if v ~= nil then
+                if type(v) ~= 'table' or #v == 0 or #v > 20 then return false, 'err.invalid_payload' end
+                local clean = {}
+                for _, n in ipairs(v) do
+                    -- the Builder's allowed lists, or a name the mission's own file already uses
+                    if type(n) ~= 'string' or not (CP.U.contains(list or {}, n) or used[n]) then
+                        return false, 'err.tweak_name_not_allowed'
+                    end
+                    clean[#clean + 1] = n
+                end
+                tweak[k] = clean
+            end
+        end
+        if type(current) == 'table' and current.disabledLocations ~= nil then
+            tweak.disabledLocations = CP.U.deepcopy(current.disabledLocations)
+        end
+        if next(tweak) == nil then tweak = nil end
+    elseif type(current) == 'table' and current.disabledLocations ~= nil then
+        tweak = { disabledLocations = CP.U.deepcopy(current.disabledLocations) }
+    end
+    if tweak then
+        local okT, errT = Missions.checkTweak(def.id, tweak)
+        if not okT then return false, errT end
+    end
+    local map = CP.U.deepcopy(type(Config.MissionTweaks) == 'table' and Config.MissionTweaks or {})
+    map[def.id] = tweak
+    local ok, res = CP.Settings.set(ctx.src, 'MissionTweaks', map, false, { reason = ctx.reason })
+    if not ok then return false, res end
+    return true, { missionId = def.id, tweak = tweak, settings = res }
+end, { rate = 2, reason = 'optional' })
+
+-- ============================================================================
+--                      TRIAL OF LOAD-TIME SETTINGS (A14)
+-- ============================================================================
+-- Every mission run through the loader with a settings patch on Config (put back before this returns; nothing here
+-- yields): the missions that would not load. patch = { { path, value } | { path, none = true } }.
+
+function Missions.trial(patch)
+    if type(patch) ~= 'table' or #patch == 0 or #patch > 20 then return nil, 'err.invalid_payload' end
+    if not (CP.Settings and CP.Settings.check) then return nil, 'err.module_unavailable' end
+    local changes = {}
+    for _, c in ipairs(patch) do
+        if type(c) ~= 'table' or type(c.path) ~= 'string' then return nil, 'err.invalid_payload' end
+        local ok, clean = CP.Settings.check(c.path, c.value, c.none == true)
+        if not ok then return nil, clean, c.path end
+        changes[#changes + 1] = { path = c.path, value = clean, none = c.none == true }
+    end
+    local saved = {}
+    for _, c in ipairs(changes) do
+        local top = c.path:match('^([^%.]+)')
+        if saved[top] == nil then
+            saved[top] = { value = Config[top] }
+            Config[top] = CP.U.deepcopy(Config[top])
+        end
+        local rest = c.path:sub(#top + 2)
+        local value = CP.U.deepcopy(c.value)
+        if c.none then value = nil end
+        if rest == '' then Config[top] = value else CP.U.setPath(Config[top], rest, value) end
+    end
+    local ok, res = pcall(function()
+        local failed, checked = {}, 0
+        local ids = CP.U.keys(rawOf)
+        for _, id in ipairs(ids) do
+            local def = defs[id]
+            local raw = rawOf[id]
+            if def and type(raw) == 'table' then
+                checked = checked + 1
+                local meta = {
+                    source = def.source,
+                    version = def.version,
+                    filePath = def.filePath,
+                    status = def.status,
+                    quiet = true,
+                }
+                local out, err = Missions.normalize(raw, meta)
+                if out and def.source == 'builtin' then
+                    local tweak = type(Config.MissionTweaks) == 'table' and Config.MissionTweaks[id] or nil
+                    if tweak ~= nil then
+                        local d, why = ApplyTweak(raw, tweak)
+                        if not d then
+                            failed[#failed + 1] = { id = id, label = def.label, tweak = true, error = tostring(why) }
+                        else
+                            local t, terr = Missions.normalize(d, meta)
+                            if not t then
+                                failed[#failed + 1] = {
+                                    id = id,
+                                    label = def.label,
+                                    tweak = true,
+                                    error = tostring(terr),
+                                }
+                            end
+                        end
+                    end
+                elseif not out then
+                    failed[#failed + 1] = { id = id, label = def.label, error = tostring(err) }
+                end
+            end
+        end
+        return { checked = checked, failed = failed }
+    end)
+    for top, v in pairs(saved) do Config[top] = v.value end
+    if not ok then
+        CP.err(TAG, 'the settings trial failed: %s', tostring(res))
+        return nil, 'err.internal'
+    end
+    return res
+end
+
+Kit.callback('admin:trialMissions', 'openAdmin', function(ctx)
+    local res, err, path = Missions.trial(ctx.args.patch)
+    if not res then return nil, err, { path = path } end
+    return res
+end, { rate = 2 })
+
+-- ============================================================================
+--                 LOCATION SWITCHES THAT NO LONGER MATCH (O3)
+-- ============================================================================
+-- A switch is saved by the location's label (or number): after an edit renames or removes a location, the entries
+-- that match nothing are listed with Remap.
+
+local function StaleSwitches(def)
+    local map = type(Config.DisabledLocations) == 'table' and Config.DisabledLocations or {}
+    local list = type(map[def.id]) == 'table' and map[def.id] or {}
+    local out = {}
+    for _, v in ipairs(list) do
+        local hit = false
+        for i, loc in ipairs(def.locations or {}) do
+            if v == i or (type(loc) == 'table' and v == loc.label) then hit = true end
+        end
+        if not hit then out[#out + 1] = v end
+    end
+    return out
+end
+
+Kit.callback('admin:getSwitchRemap', 'openAdmin', function()
+    local out = {}
+    for _, def in ipairs(SortedDefs()) do
+        local stale = StaleSwitches(def)
+        if #stale > 0 then
+            local locations = {}
+            for i, loc in ipairs(def.locations or {}) do
+                locations[i] = { index = i, label = type(loc) == 'table' and loc.label or ('#' .. i) }
+            end
+            out[#out + 1] = { id = def.id, label = def.label, stale = stale, locations = locations }
+        end
+    end
+    return { missions = out }
+end, { rate = 2 })
+
+-- map = { { from = <stale label or number>, to = <location number> | false } }: each stale entry is dropped and, with
+-- a number, that location is switched off instead (one settings change, audited as a location switch).
+Kit.action('server:admin:remapLocationSwitches', 'openAdmin', function(ctx)
+    local p = ctx.payload
+    local def = type(p.missionId) == 'string' and defs[p.missionId] or nil
+    if not def then return false, 'err.unknown_mission' end
+    if type(p.map) ~= 'table' or #p.map == 0 or #p.map > 50 then return false, 'err.invalid_payload' end
+    if not (CP.Settings and CP.Settings.set) then return false, 'err.module_unavailable' end
+    local stale = StaleSwitches(def)
+    local map = CP.U.deepcopy(type(Config.DisabledLocations) == 'table' and Config.DisabledLocations or {})
+    local list = type(map[def.id]) == 'table' and map[def.id] or {}
+    local moved = 0
+    for _, m in ipairs(p.map) do
+        if type(m) ~= 'table' or not CP.U.contains(stale, m.from) then return false, 'err.invalid_payload' end
+        for i = #list, 1, -1 do if list[i] == m.from then table.remove(list, i) end end
+        local to = m.to ~= false and math.tointeger(tonumber(m.to)) or nil
+        if m.to ~= false and m.to ~= nil then
+            if not to or to < 1 or to > #(def.locations or {}) then return false, 'err.invalid_location' end
+            local loc = def.locations[to]
+            local key = to
+            local label = type(loc) == 'table' and loc.label or nil
+            if type(label) == 'string' and label ~= '' then
+                local unique = true
+                for i, other in ipairs(def.locations) do
+                    if i ~= to and type(other) == 'table' and other.label == label then unique = false end
+                end
+                if unique then key = label end
+            end
+            if not CP.U.contains(list, key) then list[#list + 1] = key end
+            moved = moved + 1
+        end
+    end
+    map[def.id] = #list > 0 and list or nil
+    local ok, res = CP.Settings.set(ctx.src, 'DisabledLocations', map, false, {
+        action = 'locationSwitch',
+        target = def.id,
+        old = ('%d stale'):format(#stale),
+        new = ('%d remapped'):format(moved),
+        reason = ctx.reason or 'remap',
+    })
+    if not ok then return false, res end
+    return true, { missionId = def.id, view = CP.Settings.missionView and CP.Settings.missionView(def) or nil }
+end, { rate = 2, reason = 'optional' })
+
+-- ============================================================================
+--                              MISSION STATS (C8)
+-- ============================================================================
+-- Live + archived rows (one per officer per run) counted and summed in SQL, rates and averages in Lua (files mode:
+-- no /, AVG or HAVING).
+
+local function Range(args)
+    local to = math.tointeger(tonumber(args.to)) or os.time()
+    local from = math.tointeger(tonumber(args.from)) or (to - 30 * 86400)
+    if from >= to or to - from > STATS_RANGE_MAX then return nil end
+    return from, to
+end
+
+function Missions.stats(args)
+    args = type(args) == 'table' and args or {}
+    local from, to = Range(args)
+    if not from then return nil, 'err.invalid_range' end
+    local missionId = type(args.missionId) == 'string' and args.missionId ~= '' and args.missionId or nil
+    local missionType = type(args.type) == 'string' and args.type ~= '' and args.type or nil
+    if missionId and (#missionId > 40 or not missionId:match('^[%w_]+$')) then return nil, 'err.invalid_payload' end
+    if missionType and (#missionType > 32 or not missionType:match('^[%w_]+$')) then
+        return nil, 'err.invalid_payload'
+    end
+    local key = ('%d:%d:%s:%s'):format(from, to, missionId or '', missionType or '')
+    local hit = statsCache[key]
+    if hit and os.time() - hit.at < STATS_CACHE_S then return hit.data end
+    local where = 'created_at >= FROM_UNIXTIME(?) AND created_at < FROM_UNIXTIME(?) AND mission_type NOT IN (\'manual_award\', \'goal\')'
+    local params = { from, to }
+    if missionId then where = where .. ' AND mission_id = ?'; params[#params + 1] = missionId end
+    if missionType then where = where .. ' AND mission_type = ?'; params[#params + 1] = missionType end
+    local cols = 'mission_id, mission_type, state, duration_s, final_points, cash_paid, flagged, voided'
+    local sql = ([[SELECT mission_id, mission_type, state, COUNT(*) AS n, SUM(duration_s) AS dur, SUM(final_points) AS pts,
+        SUM(cash_paid) AS cash, SUM(CASE WHEN flagged = 1 THEN 1 ELSE 0 END) AS flags,
+        SUM(CASE WHEN voided = 1 THEN 1 ELSE 0 END) AS voids
+        FROM (SELECT %s FROM cp_mission_runs WHERE %s UNION ALL SELECT %s FROM cp_mission_runs_archive WHERE %s) x
+        GROUP BY mission_id, mission_type, state]]):format(cols, where, cols, where)
+    local all = {}
+    for _, v in ipairs(params) do all[#all + 1] = v end
+    for _, v in ipairs(params) do all[#all + 1] = v end
+    if CP.Migrations and CP.Migrations.ready then CP.Migrations.ready() end
+    local ok, rows = pcall(MySQL.query.await, sql, all)
+    if not ok then
+        CP.err(TAG, 'mission stats failed: %s', tostring(rows))
+        return nil, 'err.internal'
+    end
+    local byMission, byType = {}, {}
+    local function add(t, k, r, label)
+        local e = t[k]
+        if not e then
+            e = {
+                key = k,
+                label = label,
+                runs = 0,
+                completed = 0,
+                failed = 0,
+                abandoned = 0,
+                duration = 0,
+                points = 0,
+                cash = 0,
+                flags = 0,
+                voids = 0,
+            }
+            t[k] = e
+        end
+        local n = math.floor(CP.U.num(r.n))
+        e.runs = e.runs + n
+        if r.state == 'completed' or r.state == 'failed' or r.state == 'abandoned' then e[r.state] = e[r.state] + n end
+        e.duration = e.duration + CP.U.num(r.dur)
+        e.points = e.points + CP.U.num(r.pts)
+        e.cash = e.cash + CP.U.num(r.cash)
+        e.flags = e.flags + math.floor(CP.U.num(r.flags))
+        e.voids = e.voids + math.floor(CP.U.num(r.voids))
+        return e
+    end
+    for _, r in ipairs(type(rows) == 'table' and rows or {}) do
+        local id = tostring(r.mission_id)
+        local def = defs[id]
+        local e = add(byMission, id, r, def and def.label or id)
+        e.type = tostring(r.mission_type)
+        e.timeLimit = def and def.timeLimit or nil
+        local t = Config.MissionTypes and Config.MissionTypes[r.mission_type]
+        add(byType, tostring(r.mission_type), r, t and t.label or tostring(r.mission_type))
+    end
+    local function pct(a, n) return n > 0 and CP.U.round(a * 1000 / n) / 10 or 0 end
+    local function finish(t)
+        local out = {}
+        for _, e in pairs(t) do
+            local n = e.runs
+            e.completionRate = pct(e.completed, n)
+            e.failRate = pct(e.failed, n)
+            e.abandonRate = pct(e.abandoned, n)
+            e.avgDuration = n > 0 and CP.U.round(e.duration / n) or 0
+            e.avgPoints = n > 0 and CP.U.round(e.points * 10 / n) / 10 or 0
+            e.avgCash = n > 0 and CP.U.round(e.cash / n) or 0
+            if e.timeLimit and e.timeLimit > 0 then e.durationShare = pct(e.avgDuration, e.timeLimit) end
+            e.duration = nil
+            out[#out + 1] = e
+        end
+        table.sort(out, function(a, b)
+            if a.runs ~= b.runs then return a.runs > b.runs end
+            return tostring(a.key) < tostring(b.key)
+        end)
+        return out
+    end
+    local data = { from = from, to = to, missions = finish(byMission), types = finish(byType) }
+    statsCache[key] = { at = os.time(), data = data }
+    return data
+end
+
+Kit.callback('admin:getMissionStats', 'openAdmin', function(ctx)
+    if not CP.Net.rateOk(ctx.src, 'missions:stats', 1, 2000) then return nil, 'err.rate_limited' end
+    return Missions.stats(ctx.args)
+end, { rate = 2 })
+
+-- ============================================================================
 --                                    START
 -- ============================================================================
 
 CreateThread(function()
     Wait(0)   -- every module and block file of the resource has been loaded by now
     Missions.loadAll()
+    if CP.ConfigHealth and CP.ConfigHealth.register then CP.ConfigHealth.register('missions', MissionsHealth) end
 end)
+
+-- AdminControl.editBuiltins switched in Settings: the overrides of built-ins are loaded, or put aside, at once.
+if CP.Hooks and CP.Hooks.on then
+    CP.Hooks.on('settings:changed', function(paths)
+        for _, path in ipairs(type(paths) == 'table' and paths or {}) do
+            if path == 'AdminControl' or path == 'AdminControl.editBuiltins' then
+                CreateThread(function() Missions.reload() end)
+                return
+            end
+        end
+    end)
+end

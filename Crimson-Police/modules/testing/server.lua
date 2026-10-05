@@ -793,6 +793,8 @@ end
 -- The shared start path of catalog tests and draft tests.
 local function StartWith(adminSrc, def, opts, draft)
     if Cfg().enabled == false then return false, 'err.test_disabled' end
+    -- the maintenance lock (a storage copy or switch, a restore): no new test runs until the restart
+    if CP.Maintenance and CP.Maintenance.active and CP.Maintenance.active() then return false, 'err.maintenance' end
     if ClearStale(adminSrc) then return false, 'err.test_already_running' end
     if lastStart[adminSrc] and GetGameTimer() - lastStart[adminSrc] < START_COOLDOWN_MS then
         return false, 'err.busy'
@@ -1563,10 +1565,11 @@ function Testing.list()
     Db()
     local okQ, rows = pcall(MySQL.query.await, [[
         SELECT t.id, t.mission_id, t.mission_version, t.location_index, t.tier, t.testers, t.result, t.note,
-               t.tested_by, t.def_hash, UNIX_TIMESTAMP(t.created_at) AS created_ts, last.n AS tests_n,
+               t.tested_by, t.def_hash, t.unplayed, UNIX_TIMESTAMP(t.created_at) AS created_ts, last.n AS tests_n,
                o.display_name
         FROM cp_mission_tests t
-        JOIN (SELECT MAX(id) AS id, COUNT(*) AS n FROM cp_mission_tests GROUP BY mission_id, location_index) last
+        JOIN (SELECT MAX(id) AS id, COUNT(*) AS n FROM cp_mission_tests WHERE hidden = 0
+              GROUP BY mission_id, location_index) last
           ON last.id = t.id
         LEFT JOIN cp_officers o ON o.citizenid = t.tested_by
     ]], {})
@@ -1583,7 +1586,7 @@ function Testing.list()
     local order = TypeOrder()
     local activeAt = {}
     for _, meta in pairs(tests) do activeAt[meta.missionId .. '#' .. meta.locationIndex] = true end
-    local totals = { missions = 0, locations = 0, passed = 0, failed = 0, untested = 0, changed = 0 }
+    local totals = { missions = 0, locations = 0, passed = 0, failed = 0, untested = 0, changed = 0, checked = 0 }
     local list = {}
     for id, def in pairs(AllMissions()) do
         local maxOfficers = math.floor(Num(def.maxOfficers, 1))
@@ -1604,7 +1607,9 @@ function Testing.list()
             defHash = def.defHash or false,
             editedInCode = def.editedInCode == true,
             locations = {},
-            summary = { passed = 0, failed = 0, untested = 0, changed = 0 },
+            summary = { passed = 0, failed = 0, untested = 0, changed = 0, checked = 0 },
+            -- the on/off switches (CP.Settings), so Testing rows can switch a location or the mission
+            switch = Has('Settings', 'missionView') and select(2, Call('Settings', 'missionView', def)) or nil,
         }
         for i = 1, #(def.locations or {}) do
             local r = last[id .. '#' .. i]
@@ -1632,8 +1637,10 @@ function Testing.list()
                     version = rVersion or false,
                     changed = changed,
                     tests = U.num(r.tests_n, 1),
+                    -- marked checked by an admin without playing it: its own badge, never a test pass
+                    unplayed = U.truthy(r.unplayed),
                 }
-                loc.status = changed and 'changed' or loc.last.result
+                loc.status = changed and 'changed' or (loc.last.unplayed and 'checked') or loc.last.result
             end
             m.summary[loc.status] = m.summary[loc.status] + 1
             totals[loc.status] = totals[loc.status] + 1
@@ -1849,6 +1856,113 @@ end, { rate = 2 })
 CP.Net.action('server:testRespond', function(src, payload)
     return Testing.respond(src, payload)
 end, { rate = 3 })
+
+-- ============================================================================
+--              FULL ADMIN CONTROL (C20, #45; ARCHITECTURE §8.4.2)
+-- ============================================================================
+-- Testing is optional (O2): these marks and removals are information for the admins; nothing blocks, hides or nags
+-- because a mission or location is untested. A spec that loads this file without modules/adminkit has none of them.
+
+do
+    local Kit = CP.AdminKit
+        or {
+            action = function() return false end,
+            callback = function() return false end,
+        }
+
+    -- Mark checked (not played): a location an admin looked at without playing it. Its own badge; it never counts as
+    -- a passed test of a Builder draft.
+    Kit.action('server:admin:markLocationChecked', 'testRun', function(ctx)
+        local p = ctx.payload
+        local missionId = p.missionId
+        if type(missionId) ~= 'string' or #missionId > 40 or not missionId:match(MISSION_ID) then
+            return false, 'err.invalid_payload'
+        end
+        local def = ResolveMission(missionId)
+        if not def then return false, 'err.test_unknown_mission' end
+        local index = math.tointeger(tonumber(p.locationIndex) or -1)
+        if not index or index < 1 or index > #(def.locations or {}) or index > 127 then
+            return false, 'err.invalid_location'
+        end
+        local tier = p.tier ~= nil and p.tier ~= '' and ValidTier(p.tier)
+            or TierFor(math.floor(Num(def.maxOfficers, 1)))
+        if not tier then return false, 'err.test_invalid_tier' end
+        local cid = CitizenOf(ctx.src) or 'console'
+        Db()
+        local okI, id = pcall(MySQL.insert.await, [[INSERT INTO cp_mission_tests (mission_id, mission_version,
+            location_index, tier, testers, result, note, tested_by, def_hash, unplayed)
+            VALUES (?, ?, ?, ?, 1, 'passed', ?, ?, ?, 1)]], {
+            missionId,
+            tonumber(def.version) and math.floor(tonumber(def.version)) or nil,
+            index,
+            tier,
+            ClipText(ctx.reason or '', NOTE_MAX) or nil,
+            U.clip(cid, 50),
+            def.defHash and U.clip(tostring(def.defHash), 40) or nil,
+        })
+        if not okI or not id then
+            CP.err(TAG, 'marking %s #%d checked failed: %s', missionId, index, tostring(id))
+            return false, 'err.internal'
+        end
+        ctx.audit('testMarkChecked', ('%s#%d'):format(missionId, index), nil, tier)
+        return true, { id = id, missionId = missionId, location = index, tier = tier }
+    end, { rate = 2, reason = true, category = 'builder' })
+
+    -- Remove a wrong test result (or show it again): nothing is deleted; a hidden result counts for nothing.
+    Kit.action('server:admin:hideTestResult', 'testRun', function(ctx)
+        local p = ctx.payload
+        local id = math.tointeger(tonumber(p.id) or -1)
+        if not id or id < 1 or type(p.hidden) ~= 'boolean' then return false, 'err.invalid_payload' end
+        Db()
+        local okR, row = pcall(MySQL.single.await, [[SELECT id, mission_id, location_index, result, def_hash, hidden,
+            unplayed FROM cp_mission_tests WHERE id = ?]], { id })
+        if not okR or type(row) ~= 'table' then return false, 'err.test_unknown_result' end
+        local was = U.truthy(row.hidden)
+        if was == p.hidden then return true, { id = id, hidden = was } end
+        local ok, err = CP.AdminKit.cas('UPDATE cp_mission_tests SET hidden = ? WHERE id = ? AND hidden = ?',
+            { p.hidden and 1 or 0, id, was and 1 or 0 })
+        if not ok then return false, err end
+        -- a removed pass of exactly the current Builder draft makes that draft untested again
+        if p.hidden and row.result == 'passed' and not U.truthy(row.unplayed) and type(row.def_hash) == 'string' then
+            Call('Builder', 'onTestHidden', tostring(row.mission_id), row.def_hash)
+        end
+        ctx.audit('testResultHide', ('%s#%s'):format(tostring(row.mission_id), tostring(row.location_index)),
+            was and 'hidden' or 'shown', p.hidden and 'hidden' or 'shown')
+        return true, { id = id, hidden = p.hidden }
+    end, { rate = 3, reason = true, category = 'builder' })
+
+    -- Every result of one location, hidden ones too (newest first), for Remove result and Show again.
+    Kit.callback('admin:getTestHistory', 'testRun', function(ctx)
+        local missionId = ctx.args.missionId
+        local index = math.tointeger(tonumber(ctx.args.locationIndex) or -1)
+        if type(missionId) ~= 'string' or #missionId > 40 or not missionId:match(MISSION_ID) or not index then
+            return nil, 'err.invalid_payload'
+        end
+        Db()
+        local okQ, rows = pcall(MySQL.query.await, [[SELECT t.id, t.mission_version, t.tier, t.testers, t.result,
+            t.note, t.tested_by, t.def_hash, t.hidden, t.unplayed, UNIX_TIMESTAMP(t.created_at) AS created_ts,
+            o.display_name FROM cp_mission_tests t LEFT JOIN cp_officers o ON o.citizenid = t.tested_by
+            WHERE t.mission_id = ? AND t.location_index = ? ORDER BY t.id DESC LIMIT 50]], { missionId, index })
+        if not okQ then return nil, 'err.internal' end
+        local out = {}
+        for _, r in ipairs(type(rows) == 'table' and rows or {}) do
+            out[#out + 1] = {
+                id = U.num(r.id),
+                version = tonumber(r.mission_version) or false,
+                tier = tostring(r.tier),
+                testers = U.num(r.testers, 1),
+                result = r.result == 'passed' and 'passed' or 'failed',
+                note = r.note or false,
+                testedBy = tostring(r.tested_by),
+                testedByName = TesterNameOf(tostring(r.tested_by), r.display_name),
+                testedAt = U.num(r.created_ts, 0),
+                hidden = U.truthy(r.hidden),
+                unplayed = U.truthy(r.unplayed),
+            }
+        end
+        return { missionId = missionId, location = index, results = out }
+    end, { rate = 3 })
+end
 
 -- ============================================================================
 --                                  LIFECYCLE

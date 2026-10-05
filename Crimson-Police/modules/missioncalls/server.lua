@@ -1056,6 +1056,8 @@ function MC.claim(src, callId)
     local cfg = Cfg()
     if not src then return false, 'err.not_in_game' end
     if cfg.enabled == false then return false, 'err.mc_disabled' end
+    -- the maintenance lock (a storage copy or switch, a restore): no claims until the restart
+    if CP.Maintenance and CP.Maintenance.active and CP.Maintenance.active() then return false, 'err.maintenance' end
     if not CP.Net.rateOk(src, 'missioncalls:claim', 1, math.floor(Num(cfg.claimRate, 1500))) then
         return false, 'err.rate_limited'
     end
@@ -1129,7 +1131,10 @@ local function ParseArea(area)
     return false
 end
 
-function MC.create(src, typeKey, area)
+-- opts = { skipWait = true, reason }: an admin posting during the wait between staff calls (C20; the wait still
+-- applies to supervisors). The call is drawn at random like any other.
+function MC.create(src, typeKey, area, opts)
+    opts = type(opts) == 'table' and opts or {}
     if Cfg().enabled == false then return false, 'err.mc_disabled' end
     if not Callable(typeKey) then return false, 'err.mc_type_not_callable' end
     local okA, areaKey = ParseArea(area)
@@ -1138,11 +1143,18 @@ function MC.create(src, typeKey, area)
     local issuer, issuerCid = StaffIssuer(src)
     local now = os.time()
     local last = staffLast[issuer]
-    if last and now - last < Num(Cfg().staffCooldown, 120) then return false, 'err.mc_staff_cooldown' end
+    local waiting = last and now - last < Num(Cfg().staffCooldown, 120)
+    if waiting and not opts.skipWait then return false, 'err.mc_staff_cooldown' end
     staffLast[issuer] = now
     local call = NewCall(typeKey, areaKey, { staff = true, issuer = issuer, issuerCid = issuerCid })
     Toast(call, IdleUnits())
     Audit(src, 'mcCreate', call.code, nil, ('%s %s'):format(typeKey, areaKey or 'county'), nil)
+    if waiting then
+        local role = ToSrc(src) and 'admin' or 'console'
+        Call('Admin', 'audit', ToSrc(src) or 'console', role, 'operations', 'mcCreateSkipWait', call.code,
+            ('%ds left'):format(math.max(0, math.floor(Num(Cfg().staffCooldown, 120) - (now - last)))),
+            ('%s %s'):format(typeKey, areaKey or 'county'), opts.reason)
+    end
     return true, { id = call.id, code = call.code }
 end
 
@@ -1649,6 +1661,13 @@ for _, scope in ipairs({ 'sup', 'admin' }) do
         if type(payload) ~= 'table' then return false, 'err.invalid_payload' end
         local okA, area = StaffArea(payload)
         if not okA then return false, 'err.mc_unknown_area' end
+        -- Post anyway: admins only, with a reason
+        if adminOnly and payload.skipWait == true then
+            local reason, errR
+            if CP.AdminKit and CP.AdminKit.reason then reason, errR = CP.AdminKit.reason(payload.reason) end
+            if not reason then return false, errR or 'err.reason_required' end
+            return MC.create(src, payload.type, area, { skipWait = true, reason = reason })
+        end
         return MC.create(src, payload.type, area)
     end, { rate = 2 })
 end
@@ -1679,6 +1698,109 @@ CP.Net.callback('admin:getAreaCoverage', function(src)
     end
     return { types = types, areas = areas, cells = cells }
 end, { rate = 2 })
+
+-- ============================================================================
+--                  DISPATCH HISTORY (C7; ARCHITECTURE §8.4.2)
+-- ============================================================================
+-- Past mission calls (cp_mission_calls keeps Config.Retention.missionCallDays of them): issuer, paged unit, claimed
+-- by, outcome, response time, withdraw reason. Read-only, paged; admins only.
+
+local HISTORY_PAGE = 25
+local HISTORY_STATUS = { open = true, claimed = true, lapsed = true, withdrawn = true, closed = true }
+
+function MC.history(args)
+    args = type(args) == 'table' and args or {}
+    local to = math.tointeger(tonumber(args.to)) or os.time()
+    local from = math.tointeger(tonumber(args.from)) or (to - 7 * DAY_S)
+    if from >= to or to - from > 366 * DAY_S then return nil, 'err.invalid_range' end
+    local page = math.max(1, math.tointeger(tonumber(args.page)) or 1)
+    local where = { 'c.created_at >= FROM_UNIXTIME(?)', 'c.created_at < FROM_UNIXTIME(?)' }
+    local params = { from, to }
+    local function add(cond, v) where[#where + 1] = cond; params[#params + 1] = v end
+    if type(args.type) == 'string' and args.type ~= '' then
+        if #args.type > 32 then return nil, 'err.invalid_payload' end
+        add('c.mission_type = ?', args.type)
+    end
+    if type(args.area) == 'string' and args.area ~= '' then
+        if args.area == 'county' then where[#where + 1] = 'c.area IS NULL' else add('c.area = ?', args.area) end
+    end
+    if type(args.outcome) == 'string' and args.outcome ~= '' then
+        if HISTORY_STATUS[args.outcome] then
+            add('c.status = ?', args.outcome)
+        else
+            add('c.outcome = ?', args.outcome)
+        end
+    end
+    if type(args.issuer) == 'string' and args.issuer ~= '' then
+        if args.issuer == 'server' then
+            where[#where + 1] = 'c.created_by IS NULL'
+        else
+            add('c.created_by = ?', args.issuer)
+        end
+    end
+    local w = table.concat(where, ' AND ')
+    CP.Migrations.ready()
+    local okC, total = pcall(MySQL.scalar.await, 'SELECT COUNT(*) AS n FROM cp_mission_calls c WHERE ' .. w, params)
+    if not okC then return nil, 'err.internal' end
+    total = math.floor(Num(total, 0))
+    local okR, rows = pcall(
+        MySQL.query.await,
+        ([[SELECT c.id, c.code, c.mission_type, c.area, c.priority, c.status,
+        c.outcome, c.created_by, c.paged_to, c.claimed_by, c.claimants, c.reopened, c.reason,
+        UNIX_TIMESTAMP(c.created_at) AS created_ts, UNIX_TIMESTAMP(c.claimed_at) AS claimed_ts,
+        UNIX_TIMESTAMP(c.closed_at) AS closed_ts, i.display_name AS issuer_name, k.display_name AS claimer_name,
+        p.display_name AS paged_name FROM cp_mission_calls c
+        LEFT JOIN cp_officers i ON i.citizenid = c.created_by LEFT JOIN cp_officers k ON k.citizenid = c.claimed_by
+        LEFT JOIN cp_officers p ON p.citizenid = c.paged_to WHERE %s ORDER BY c.id DESC LIMIT %d OFFSET %d]]):format(
+            w,
+            HISTORY_PAGE,
+            (page - 1) * HISTORY_PAGE
+        ),
+        params
+    )
+    if not okR then
+        CP.err(TAG, 'dispatch history failed: %s', tostring(rows))
+        return nil, 'err.internal'
+    end
+    local out = {}
+    for _, r in ipairs(type(rows) == 'table' and rows or {}) do
+        local created, claimed = Num(r.created_ts, 0), r.claimed_ts and Num(r.claimed_ts, 0) or nil
+        out[#out + 1] = {
+            id = math.floor(Num(r.id, 0)),
+            code = tostring(r.code),
+            type = tostring(r.mission_type),
+            typeLabel = TypeLabel(r.mission_type),
+            area = r.area and tostring(r.area) or nil,
+            areaLabel = r.area and AreaLabel(r.area) or nil,
+            priority = math.floor(Num(r.priority, 3)),
+            status = tostring(r.status),
+            outcome = r.outcome and tostring(r.outcome) or nil,
+            issuer = r.created_by and tostring(r.created_by) or nil,
+            issuerName = r.issuer_name and tostring(r.issuer_name) or nil,
+            pagedTo = r.paged_to and tostring(r.paged_to) or nil,
+            pagedName = r.paged_name and tostring(r.paged_name) or nil,
+            claimedBy = r.claimed_by and tostring(r.claimed_by) or nil,
+            claimedName = r.claimer_name and tostring(r.claimer_name) or nil,
+            claimants = math.floor(Num(r.claimants, 0)),
+            reopened = CP.U.truthy(r.reopened),
+            reason = r.reason and tostring(r.reason) or nil,
+            createdAt = math.floor(created),
+            claimedAt = claimed and math.floor(claimed) or nil,
+            closedAt = r.closed_ts and math.floor(Num(r.closed_ts, 0)) or nil,
+            claimSeconds = claimed and math.max(0, math.floor(claimed - created)) or nil,
+        }
+    end
+    return { rows = out, page = page, pages = math.max(1, math.ceil(total / HISTORY_PAGE)), total = total }
+end
+
+do
+    local Kit = CP.AdminKit or {
+        callback = function() return false end,
+    }
+    Kit.callback('admin:getMissionCalls', 'openAdmin', function(ctx)
+        return MC.history(ctx.args)
+    end, { rate = 2 })
+end
 
 if CP.Hooks and CP.Hooks.on then
     CP.Hooks.on('run:arrived', function(run) OnRunArrived(run) end)

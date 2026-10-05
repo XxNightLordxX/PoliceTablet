@@ -1063,6 +1063,8 @@ end
 local function CheckAccept(src, typeKey, counts)
     local leader, errKey = GetOfficer(src)
     if not leader then return false, errKey or 'err.not_police' end
+    -- the maintenance lock (a storage copy or switch, a restore): no new runs until the restart
+    if CP.Maintenance and CP.Maintenance.active and CP.Maintenance.active() then return false, 'err.maintenance' end
 
     local unit = UnitOf(src)
     if unit then

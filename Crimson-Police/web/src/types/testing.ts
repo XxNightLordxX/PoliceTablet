@@ -1,7 +1,10 @@
 // Admin test mode shapes (modules/testing/server.lua, docs/notes/testing.md). Lua sends `false` for "no value" (a Lua
 // table cannot hold nil) and may encode an empty list as {}: read every list through asList().
 
-export type TestLocationStatus = 'passed' | 'failed' | 'untested' | 'changed';
+import type { MissionSwitchView } from './settings';
+
+// 'checked': an admin marked the location checked without playing it (its own badge, never a test pass)
+export type TestLocationStatus = 'passed' | 'failed' | 'untested' | 'changed' | 'checked';
 export type TestResult = 'passed' | 'failed';
 export type TestInviteStatus = 'pending' | 'accepted' | 'declined' | 'expired' | 'withdrawn' | 'started';
 export type TestControl = 'skip' | 'restart' | 'pause' | 'resume' | 'complete' | 'fail' | 'end' | 'teleport' | 'debug';
@@ -22,6 +25,7 @@ export interface TestLastResult {
     version: number | false; // custom missions: the version tested
     changed: boolean; // def_hash (or version) differs from the mission now
     tests: number; // tests recorded for this location
+    unplayed?: boolean; // Mark checked (not played)
 }
 
 export interface TestLocationRow {
@@ -50,6 +54,8 @@ export interface TestMissionRow {
     editedInCode: boolean;
     locations: TestLocationRow[];
     summary: Record<TestLocationStatus, number>;
+    // the on/off switches of the mission and its locations (Admin UI → Settings)
+    switch?: MissionSwitchView | null;
 }
 
 export interface TestsView {

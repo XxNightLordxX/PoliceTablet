@@ -299,14 +299,22 @@ const catalog: TestMissionRow[] = MISSIONS.map(m => {
         defHash: 'a1b2c3d4',
         editedInCode: !!m.editedInCode,
         locations,
-        summary: { passed: 0, failed: 0, untested: 0, changed: 0 },
+        summary: { passed: 0, failed: 0, untested: 0, changed: 0, checked: 0 },
     };
 });
 
 function summarise(): TestsView {
-    const totals = { missions: catalog.length, locations: 0, passed: 0, failed: 0, untested: 0, changed: 0 };
+    const totals = {
+        missions: catalog.length,
+        locations: 0,
+        passed: 0,
+        failed: 0,
+        untested: 0,
+        changed: 0,
+        checked: 0,
+    };
     catalog.forEach(m => {
-        m.summary = { passed: 0, failed: 0, untested: 0, changed: 0 };
+        m.summary = { passed: 0, failed: 0, untested: 0, changed: 0, checked: 0 };
         m.locations.forEach(l => {
             m.summary[l.status] += 1;
             totals[l.status] += 1;
