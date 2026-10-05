@@ -1432,6 +1432,43 @@ txAdmin or the server console"; Crimson-Police never restarts itself). Every cha
 refuses every action not marked `maintenance` (§2), runs, claims, test runs and operation launches refuse at their own
 checks, payments, reward delivery and scheduled jobs wait, and the tablet shows the banner.
 
+### 5.38 CP.Corrections — modules/corrections (S)
+
+An admin's corrections to officers' records, all through `CP.AdminKit` (§5.37) and the admin-only keys of §5.3:
+signed point adjustments, the bulk void and restore engine, retire and unretire, reset progression, the XP check,
+restore run, void kinds, flag by hand, badge overrides, streak and first-run tools, goals, the record move and staff
+notices, and the run history an admin reads. Every action and callback is in §8.4.1.
+
+- **Rows, not edits.** A correction writes a new row (an adjustment) or voids rows; nothing is deleted and no old row
+  is edited, apart from the void/restore columns of migration 008 (`void_kind`, `void_batch`) and
+  `breakdown.cash.beforeVoid` (the cash status at void time).
+- **The bulk void engine.** `NormFilter(f)` → `Candidates(f)` (both run tables, `created_at >= FROM_UNIXTIME(?)` and
+  `< FROM_UNIXTIME(?)`, never BETWEEN) → `Pick(src, f)` leaves out every run any character of the admin took part in
+  (live and archived) → a J job (`Kit.startJob`, kinds `bulkVoid`, `retire`, `restoreBatch`) works on keys `L<id>` /
+  `A<id>` in batches of 50 (`WHERE id IN (…)`), writes one `voidRun` / `restoreRow` audit line per row (no webhook)
+  and fires `row:voided` / `row:restored` per live row. At the end of every job, and of a job a restart resumed, each
+  officer's XP is **recomputed from the rows** (`Scoring.syncXp`) and their badges re-checked. A restore puts rows
+  the forfeiture job forfeited because of the batch (`forfeited`, nothing paid, `beforeVoid` held or pending) back to
+  `pending` once and fires `row:forfeitUndone` (P4 brings back their item rewards).
+- **Kinds of void**: `correction` (a bug or a fix, never a strike) is the default of every bulk void; `strike` counts
+  toward `AntiCheat.voidsToSuspend`. `server:admin:setVoidKind` changes it later (K on the old kind).
+- **XP** is always `max(0, signed sum)` of the counted rows (completed or failed, not voided, not flagged, live and
+  archived): `Scoring.derivedXp(cid) -> xp, rows, sum`, `Scoring.syncXp(cid) -> old, new`.
+- **Retire** voids every row as a correction (batch = `cp_officers.retire_batch`), sets `retired_at`, can keep the
+  officer off the boards and suspend them; Access refuses a retired officer the tablet (`err.retired`) and their
+  picture and bio are hidden from everyone else (never cleared). Unretire restores that batch.
+- **Record move** (`recordMove`, `recordMoveUndo` jobs): run rows (both tables), the officer row, badges, overrides,
+  commendations, disputes and unfinished item rewards move to the new citizenid; rows keep their department. Refused
+  while a row is `paying`, a reward `giving`, either character is online or the target has rows of its own; the
+  licenses must match (`UNVERIFIED <cid>` when the old one is unknown).
+- **Badge overrides** (`cp_badge_overrides`): `Corr.grantBadge(src, cid, badgeId, reason, opts)` keeps a badge whatever
+  the rows say; `Corr.revokeBadge(src, cid, badgeId, reason)` takes it away and blocks it. `Scoring.CheckBadges` and
+  the weekly and season jobs respect both (a revoked Officer of the Week is never given again by the catch-up).
+- **Staff notices** (`cp_staff_notices`): plain text 1-280 characters, banned words refused, ≤ 30 days, ≤ 5 at once,
+  optional departments; `CP.Leaderboard.announcements(dept)` puts them on Home until they expire.
+- Exports for other modules: `Corr.grantBadge`, `Corr.revokeBadge`, `Corr.officerRuns(cid, args)`,
+  `Corr.runDetail(src, rowId, archived)`, `Corr.officerPoints(cid)`.
+
 ## 6. Cross-cutting conventions
 
 ### 6.1 Entities and NPCs
@@ -1478,6 +1515,12 @@ Sent only during a run by modules/runs/client.lua; the server rate-limits and ca
 Shots at surrendered NPCs are detected server-side (`weaponDamageEvent`, §5.11).
 
 ### 6.4 Scoring details (modules/scoring implements; others rely on these meanings)
+- Signed manual rows (full admin control): an adjustment is `mission_type = 'manual_award'` with `mission_id =
+  'manual_award'` (positive points) or `'manual_adjust'` (negative points); `breakdown.by` names the admin and
+  `breakdown.reason` the reason. Boards and the challenge sum the signed points; run counts, goals, streaks and the
+  draw leave both out (`mission_type NOT IN ('manual_award', 'goal')`). XP is `max(0, signed sum)` of the counted
+  rows; flag by hand and supervisor review refuse `manual_award` and `goal` rows, so a deduction is undone only by
+  voiding it.
 - `P = CP.Scoring.P(mission)`; common fast bonus (`+fastBonus × P` when `duration <= fastShare × timeLimit`)
   is skipped when `run.flags.medals` is true (EVOC Course, Pursuit Sim set it in `prepare`).
 - No-damage bonus: `p.vehicle.seen` and lowest engine and body both above `noDamageAbove`.
@@ -1729,6 +1772,52 @@ Every action of full admin control goes through `CP.AdminKit.action` (§5.37) an
 §5.3. One subsection per package; each lists its actions and callbacks with payload, permission key and guards.
 
 #### 8.4.1 Officers, points and boards
+
+| Name | Kind | Key | Payload / args | Guards and notes |
+|---|---|---|---|---|
+| `admin:getOfficerRuns` | callback | officerRecords | `{ citizenid, page, size ≤ 50, from, to, type, state, flagged, voided, kind, includeArchive }` | live + archive, the union inside a derived table for ORDER BY / LIMIT; 1/s |
+| `admin:getRun` | callback | officerRecords | `{ rowId, archived? }` | debrief, participants (both tables), dispute, goal rewards it completed, `txnId`, `own` |
+| `admin:getOfficerPoints` | callback | officerRecords | `{ citizenid }` | week/month/season/all-time points and ranks, `adjust.maxDeduction`, `confirmAbove`, `dailyLimit` |
+| `server:admin:adjustPoints` | action | pointsAdjust | `{ citizenid, points (−10,000..10,000, not 0), reason, confirm?, requestId }` | R I S(strict) L(1 per 10 s per officer); T = the citizenid at ≥ `adjustConfirmAbove`; a deduction never takes season points or XP below 0; `adjustDailyLimit` summed from today's rows; audit `manualAward` / `pointsAdjust` (flags) |
+| `admin:previewBulkVoid` | callback | bulkVoid | `{ filter = { citizenid?, department?, missionType?, missionId?, operationId?, from, to \| allTime, includeAwards? } }` | V: rows, officers (XP before/after), points, held cash, archived, left-out own runs, `confirmWord`, `previewToken` (none above `bulkMaxRows`) |
+| `server:admin:bulkVoid` | action | bulkVoid | `{ filter, kind?, reason, confirm = 'VOID <n>', previewToken, requestId }` | R I V T J; refused while the officer is on a run; audit `bulkVoid` (flags) + one `voidRun` per row |
+| `server:admin:resetProgression` | action | bulkVoid | `{ citizenid, reason, confirm = citizenid, previewToken, requestId }` | every row, all time, as a correction batch |
+| `server:admin:restoreBatch` | action | bulkVoid | `{ batchId, reason, requestId }` | J; once per batch (`err.batch_restored`); un-forfeits batch-caused forfeits once |
+| `admin:getCorrections` | callback | bulkVoid | `{ citizenid? }` | every batch (bulk void, retire, restore, record move, season reopen, re-check) with its Undo |
+| `admin:previewRetire` / `server:admin:retireOfficer` | callback / action | officerRecords | `{ citizenid, reason, confirm = citizenid, previewToken, requestId, excludeFromBoards?, suspendDays? }` | refused on a run, in a ready check or on an operation; K on `retired_at IS NULL` |
+| `server:admin:unretireOfficer` | action | officerRecords | `{ citizenid, reason, requestId }` | restores the retire batch, lifts what retire set |
+| `admin:checkXp` / `server:admin:fixXp` | callback / action | progression | `{ citizenid, reason }` | writes only what the rows give; refused during a job |
+| `server:admin:restoreRun` | action | restoreRun | `{ rowId, archived?, liftSuspension?, reason }` | S K (`voided = 1`); the approved-dispute path; forfeited cash stays forfeited |
+| `server:admin:setVoidKind` | action | restoreRun | `{ rowId, kind = 'strike'\|'correction', liftSuspension?, reason }` | K on the old kind |
+| `server:admin:flagRow` | action | restoreRun | `{ rowId, reason }` | K (`flagged = 0 AND voided = 0`); refuses `manual_award` and `goal` rows |
+| `server:admin:voidRun` | action (old) | voidAnyRun | `{ rowId \| runUuid, reason, kind?, confirm?, goalRowIds? }` | gains `kind`, `VOID <n>` for a run of 3 or more, the goal rewards it completed |
+| `server:admin:approveRun` | action | reviewFlagged | `{ runUuid, reason }` | every flagged row of one run |
+| `admin:getBadgeCatalog`, `server:admin:grantBadge`, `revokeBadge`, `clearBadgeOverride` | callback / actions | progression | `{ citizenid, badgeId, reason }` | ids from `Scoring.validBadgeId` (an achievement, a closed week, an existing season); audit category `board` |
+| `server:admin:recheckBadges` / `recheckAllBadges` | action | progression | `{ citizenid }` / `{ requestId }` | everyone: a J job |
+| `server:admin:recalcStreak`, `forgiveStreakDays` | action | progression | `{ citizenid, days?, reason }` | forgive: 1..`streakForgiveMax`, once per officer per day (from `cp_audit`) |
+| `server:admin:resetFirstRun` | action | progression | `{ citizenid, reason }` | online; once per officer per day (from `cp_audit`) |
+| `admin:getOfficerGoals` / `server:admin:completeGoal` | callback / action | progression | `{ citizenid, kind, goalId, reason }` | the officer's current goal, not yet rewarded in the period |
+| `server:admin:setBoardExcluded` | action | officerRecords | `{ citizenid, excluded, reason }` | K; self allowed (a staff test character) |
+| `server:admin:refreshOfficer` | action | officerRecords | `{ citizenid }` | online; 1 per 10 s per officer |
+| `admin:previewRecordMove` / `server:admin:moveRecord` / `undoRecordMove` | callback / actions | recordMove | `{ from, to, reason, confirm, previewToken, requestId }` / `{ jobId, reason }` | `AdminControl.recordMove`; T = the new citizenid or `UNVERIFIED <cid>` |
+| `server:admin:postNotice` / `removeNotice` | action | officerRecords | `{ text, departments?, expiresAt, reason }` / `{ id, reason }` | 1 per 60 s per admin; ≤ 5 running |
+| `admin:getOfficerLook`, `server:admin:resetLook`, `clearProfileCooldown` | callback / actions | officerRecords | `{ citizenid, reason }` | modules/profile; cooldown clear 1 per 60 s per officer |
+| `admin:getBannedWords`, `admin:testBannedWords`, `server:admin:setBannedWords` | callbacks / action | officerRecords | `{ add, remove, reason }` | ≤ 5000 words, ≤ 64 characters; old file kept as `.bak`; live reload |
+| `server:admin:unrevokeCommendation`, `editCitation` | action | officerRecords | `{ id, reason, citation? }` | K on the old value |
+| `admin:getRecognition`, `admin:previewRecount`, `server:admin:recountWeek`, `repostWeek` | callbacks / actions | boardsAdmin | `{ weekKey, post?, reason, confirm = 'RECOUNT', previewToken }` | the last 4 closed weeks; post again 1 per 10 min per week |
+| `admin:previewSeasonEnd` | callback | seasons | — | champion, trophies, top 10; `server:admin:endSeason` now needs `confirm` = the season name |
+| `server:admin:renameSeason`, `scheduleSeasonEnd`, `cancelSeasonEnd` | action | seasons | `{ id, name }` / `{ id, at, nextName?, reason }` / `{ id }` | the first daily reset on or after `planned_end` ends the season; reminders 24 h and 1 h before |
+| `admin:previewReopen`, `server:admin:reopenSeason`, `undoReopen` | callback / actions | boardsAdmin | `{ id, reason, confirm = season name, previewToken, requestId }` / `{ jobId, reason }` | latest season, ended ≤ 24 h; the gap rows join it (J), Undo clears exactly that backfill |
+| `admin:getSeason`, `admin:getDeptContributors` | callback | boardsAdmin | `{ id }` / `{ department, seasonId? }` | a past season; a department's contributors |
+| `server:admin:setNextBounty` | action | bountyOverride | `{ objective }` | next week's bounty, while it has no winner |
+| `admin:previewBountyRecount`, `server:admin:recountBountyWeek`, `admin:previewChampionRecount`, `server:admin:recountChampion` | callbacks / actions | boardsAdmin | `{ week \| seasonId, reason, confirm = 'RECOUNT', previewToken }` | old holder's unfinished reward cancelled before the new one is granted; champion ≤ 14 days after the end |
+| `admin:getBoards` | callback (old) | openAdmin (+boardsAdmin for past windows) | `{ period = 'range', from, to }` or `{ seasonId }`, `metric` | whole weeks or months, ≤ 12 months back, 1 per 2 s; `windows`, `metrics` in the reply |
+| `admin:searchOfficers` | callback (old) | openAdmin | `{ query, filters = { department, online, suspended, retired, excluded, review, dispute, flagged }, page }` | pages of 25; an online character with no row is found by its citizenid |
+
+Hooks: fires `row:voided`, `row:restored`, `row:forfeitUndone`, `admin:changed`; listens to `settings:changed`
+(`Leaderboard.*` → `LB.invalidate()`, `Profile.bannedWords*` → reload, `Challenge.*` → board webhook notice, `Goals.*`
+→ logged; a period already rewarded stays rewarded) and `admin:changed` (`LB.invalidate()`). Sidebar counts:
+`adminReview` (modules/profile) and `adminDisputes` (modules/disputes).
 
 #### 8.4.2 Missions and the Mission Builder
 

@@ -321,7 +321,7 @@ local function LoadBannedWords()
     end
     local patterns = {}
     for _, w in ipairs(list) do patterns[#patterns + 1] = '%f[%w]' .. EscapePattern(w) .. '%f[%W]' end
-    banned = { patterns = patterns, source = cfg.bannedWords, file = file }
+    banned = { patterns = patterns, words = list, source = cfg.bannedWords, file = file }
 end
 
 function Profile._reloadBannedWords() banned = nil end
@@ -790,6 +790,10 @@ local function ModerationTarget(src, role, citizenid)
     if tonumber(src) ~= 0 then
         local officer = CP.Access.getOfficer(src)
         if officer and officer.citizenid == citizenid then return nil, 'err.own_profile' end
+        -- an admin's other characters too (every character of one license)
+        if role == 'admin' and CP.AdminKit and CP.AdminKit.isSelf and CP.AdminKit.isSelf(src, citizenid) then
+            return nil, 'err.own_profile'
+        end
         if role ~= 'admin' then
             if not officer then return nil, 'err.no_permission' end
             if officer.department ~= NonEmpty(row.department) then return nil, 'err.profile_other_dept' end
@@ -934,8 +938,11 @@ local function QueueItem(kind, r, extra)
     return item
 end
 
+local REPORTER_DAYS = 30   -- the reporter's recent reports shown to admins (spots report abuse)
+
 -- The Profiles tab: pending pictures, pending bios and open reports of one department (nil = every department).
-function Profile.queue(dept)
+-- staff (an admin): each report also names who filed it and how many reports they filed lately.
+function Profile.queue(dept, staff)
     Db()
     local items = {}
     local where, params = '', {}
@@ -962,7 +969,7 @@ function Profile.queue(dept)
     for _, r in
         ipairs(
             MySQL.query.await(
-                ([[SELECT p.id, p.citizenid, p.reason, p.note, p.department,
+                ([[SELECT p.id, p.citizenid, p.reason, p.note, p.department, p.reporter,
         UNIX_TIMESTAMP(p.created_at) AS created_ts, o.display_name, o.callsign, o.bio, o.avatar_kind, o.avatar_value
         FROM cp_profile_reports p LEFT JOIN cp_officers o ON o.citizenid = p.citizenid
         WHERE p.status = 'open' %s ORDER BY p.created_at ASC, p.id ASC LIMIT ?]]):format(repWhere),
@@ -970,7 +977,20 @@ function Profile.queue(dept)
             ) or {}
         )
     do
+        local reporter = nil
+        if staff and NonEmpty(r.reporter) then
+            local who = ReadRow(tostring(r.reporter)) or {}
+            local recent = MySQL.scalar.await([[SELECT COUNT(*) AS n FROM cp_profile_reports WHERE reporter = ?
+                AND created_at >= FROM_UNIXTIME(?)]], { r.reporter, Now() - REPORTER_DAYS * DAY_S })
+            reporter = {
+                citizenid = tostring(r.reporter),
+                name = NonEmpty(who.display_name) or tostring(r.reporter),
+                callsign = NonEmpty(who.callsign),
+                recent = Int(recent),
+            }
+        end
         items[#items + 1] = QueueItem('report', r, {
+            reporter = reporter,
             id = Int(r.id),
             -- the live picture and bio as everyone sees them now (an approved link can change at its host)
             url = r.avatar_kind == 'url' and NonEmpty(r.avatar_value) or nil,
@@ -989,7 +1009,7 @@ end
 
 -- admin:getOfficerProfile: the public profile plus what only staff see (pending picture and bio, every
 -- commendation with revoked ones, open reports, the service record).
-function Profile.adminView(citizenid)
+function Profile.adminView(citizenid, seasonId)
     if not ValidCitizenId(citizenid) then return nil, 'err.invalid_citizenid' end
     local row = ReadRow(citizenid)
     if not row then return nil, 'err.unknown_officer' end
@@ -997,6 +1017,23 @@ function Profile.adminView(citizenid)
     if Has('Leaderboard', 'profile') then
         local ok, p = Call('Leaderboard', 'profile', { citizenid = '' }, citizenid, { staff = true })
         if ok and type(p) == 'table' then base = p end
+    end
+    -- the service record of any season (the season picker), and the seasons to pick from
+    local seasons = {}
+    for _, r in ipairs(MySQL.query.await('SELECT id, name FROM cp_seasons ORDER BY id DESC', {}) or {}) do
+        seasons[#seasons + 1] = { id = Int(r.id), name = tostring(r.name) }
+    end
+    local sid = math.tointeger(tonumber(seasonId))
+    if base and sid and Has('Leaderboard', 'serviceRecord') then
+        local known = false
+        for _, se in ipairs(seasons) do
+            if se.id == sid then known = true end
+        end
+        if not known then return nil, 'err.no_season' end
+        base.service = base.service or {}
+        local okS, rec = Call('Leaderboard', 'serviceRecord', citizenid, sid)
+        if okS then base.service.season = rec end
+        base.seasonId = sid
     end
     base = base or { citizenid = citizenid, name = NonEmpty(row.display_name) or citizenid }
     base.realName = NonEmpty(row.display_name) or CP.L('common.unknown')
@@ -1022,8 +1059,237 @@ function Profile.adminView(citizenid)
         }
     end
     base.reports = reports
+    base.seasons = seasons
     return base
 end
+
+-- ============================================================================
+--                         ADMIN: LOOK, COOLDOWN, WORDS
+-- ============================================================================
+-- Officers → Look (reset the look, let them edit now), Review → Banned words, commendation fixes, and the Review
+-- sidebar count. Every action goes through CP.AdminKit (admins only, reason, audit).
+
+local BANNED_MAX = 5000     -- words or phrases in the banned-words file
+local BANNED_WORD_MAX = 64  -- characters per word or phrase
+local REVIEW_CACHE_S = 30
+
+local reviewCount = { at = 0, n = 0 }
+
+-- Pending pictures, pending bios and open reports of every department (the admin Review count).
+function Profile.reviewCount()
+    if Now() - reviewCount.at < REVIEW_CACHE_S then return reviewCount.n end
+    Db()
+    local okA, a = pcall(MySQL.scalar.await, [[SELECT COUNT(*) AS n FROM cp_officers
+        WHERE (avatar_status = 'pending' AND avatar_pending IS NOT NULL) OR bio_pending IS NOT NULL]], {})
+    local okR, r = pcall(MySQL.scalar.await, 'SELECT COUNT(*) AS n FROM cp_profile_reports WHERE status = \'open\'', {})
+    reviewCount = { at = Now(), n = (okA and Int(a) or 0) + (okR and Int(r) or 0) }
+    return reviewCount.n
+end
+
+-- The officer's look and comfort choices as an admin sees them (hide name and calls muted are shown, never changed).
+function Profile.lookView(citizenid)
+    local row = ReadRow(citizenid)
+    if not row then return nil, 'err.unknown_officer' end
+    local prefs = Profile.prefsFor(citizenid)
+    return {
+        appearance = NonEmpty(row.appearance),
+        accent = U.isHexColour(row.accent) and row.accent:lower() or nil,
+        uiScale = tonumber(row.ui_scale),
+        effective = prefs,
+        hideName = U.truthy(row.hide_name),
+        callsMuted = U.truthy(row.calls_muted),
+        nextEditIn = NextEditIn(row),
+        urlsLeft = UrlsLeft(citizenid),
+    }
+end
+
+-- The path of the banned-words file (a .txt inside the resource), or nil.
+local function BannedFile()
+    local f = Cfg().bannedWordsFile
+    if type(f) ~= 'string' or f == '' or f:find('..', 1, true) or not f:match('^[%w_%-/]+%.txt$') then return nil end
+    return f
+end
+
+-- The file's lines as they are (comments and blank lines kept) and its words in order.
+local function ReadBannedFile(file)
+    local text = LoadResourceFile(GetCurrentResourceName(), file) or ''
+    local lines, words = {}, {}
+    for line in (text .. '\n'):gmatch('([^\n]*)\n') do
+        line = line:gsub('\r', '')
+        lines[#lines + 1] = line
+        local w = U.trim(line)
+        if w ~= '' and w:sub(1, 1) ~= '#' then words[#words + 1] = w end
+    end
+    while #lines > 0 and lines[#lines] == '' do lines[#lines] = nil end
+    return text, lines, words
+end
+
+local function CleanWord(v)
+    if type(v) ~= 'string' then return nil end
+    local w = U.trim(v)
+    if w == '' or w:find('[%c]') or w:sub(1, 1) == '#' then return nil end
+    local n = utf8.len(w)
+    if not n or n > BANNED_WORD_MAX then return nil end
+    return w
+end
+
+local function BannedMatches(text)
+    local cfg = Cfg()
+    if not banned or banned.source ~= cfg.bannedWords or banned.file ~= cfg.bannedWordsFile then LoadBannedWords() end
+    local lower = tostring(text or ''):lower()
+    local out = {}
+    for i, p in ipairs(banned.patterns) do
+        if lower:find(p) then out[#out + 1] = banned.words and banned.words[i] or p end
+    end
+    return out
+end
+
+if CP.AdminKit and CP.AdminKit.action then
+    local Kit = CP.AdminKit
+
+    Kit.callback('admin:getOfficerLook', 'officerRecords', function(ctx)
+        if not ValidCitizenId(ctx.args.citizenid) then return nil, 'err.invalid_citizenid' end
+        return Profile.lookView(ctx.args.citizenid)
+    end)
+
+    Kit.action('server:admin:resetLook', 'officerRecords', function(ctx)
+        local cid = ctx.payload.citizenid
+        if not ValidCitizenId(cid) then return false, 'err.invalid_citizenid' end
+        local row = ReadRow(cid)
+        if not row then return false, 'err.unknown_officer' end
+        if not WriteFields(cid, { { 'appearance', nil }, { 'accent', nil }, { 'ui_scale', nil } }) then
+            return false, 'err.internal'
+        end
+        ctx.audit('lookReset', cid, ('%s %s'):format(tostring(row.appearance or '-'), tostring(row.accent or '-')),
+            'default')
+        Notify(cid, 'info', 'profile.admin.look_reset')
+        PushProfile(cid)
+        return true, { citizenid = cid }
+    end, { reason = true })
+
+    Kit.action('server:admin:clearProfileCooldown', 'officerRecords', function(ctx)
+        local cid = ctx.payload.citizenid
+        if not ValidCitizenId(cid) then return false, 'err.invalid_citizenid' end
+        if not ReadRow(cid) then return false, 'err.unknown_officer' end
+        if not WriteFields(cid, { { 'profile_updated_at', nil } }) then return false, 'err.internal' end
+        urlSubmits[cid] = nil
+        ctx.audit('profileCooldownClear', cid, nil, 'cleared')
+        Notify(cid, 'info', 'profile.admin.edit_now')
+        return true, { citizenid = cid }
+    end, { reason = true, targetRate = { 1, 60000 } })
+
+    Kit.callback('admin:getBannedWords', 'officerRecords', function()
+        local file = BannedFile()
+        local words = {}
+        if file then _, _, words = ReadBannedFile(file) end
+        local extra = {}
+        for _, w in ipairs(type(Cfg().bannedWords) == 'table' and Cfg().bannedWords or {}) do
+            if type(w) == 'string' then extra[#extra + 1] = w end
+        end
+        return { file = file, words = words, settingsWords = extra, max = BANNED_MAX }
+    end)
+
+    Kit.callback('admin:testBannedWords', 'officerRecords', function(ctx)
+        local text = ctx.args.text
+        if type(text) ~= 'string' or #text > 1000 then return nil, 'err.invalid_payload' end
+        local matches = BannedMatches(text)
+        return { banned = #matches > 0, matches = matches }
+    end)
+
+    -- Adds and removes words in the banned-words file; the old file is kept as <file>.bak and the list is read
+    -- again at once.
+    Kit.action('server:admin:setBannedWords', 'officerRecords', function(ctx)
+        local file = BannedFile()
+        if not file then return false, 'err.banned_no_file' end
+        local add, remove = {}, {}
+        for _, v in ipairs(type(ctx.payload.add) == 'table' and ctx.payload.add or {}) do
+            local w = CleanWord(v)
+            if not w then return false, 'err.banned_word' end
+            add[#add + 1] = w
+        end
+        for _, v in ipairs(type(ctx.payload.remove) == 'table' and ctx.payload.remove or {}) do
+            local w = CleanWord(v)
+            if w then remove[w:lower()] = true end
+        end
+        if #add == 0 and next(remove) == nil then return false, 'err.banned_nothing' end
+        local old, lines, words = ReadBannedFile(file)
+        local have = {}
+        for _, w in ipairs(words) do have[w:lower()] = true end
+        local out, removed = {}, 0
+        for _, line in ipairs(lines) do
+            local w = U.trim(line)
+            if w ~= '' and w:sub(1, 1) ~= '#' and remove[w:lower()] then
+                removed = removed + 1
+                have[w:lower()] = nil
+            else
+                out[#out + 1] = line
+            end
+        end
+        local added = 0
+        for _, w in ipairs(add) do
+            if not have[w:lower()] then
+                have[w:lower()] = true
+                out[#out + 1] = w
+                added = added + 1
+            end
+        end
+        local total = 0
+        for _ in pairs(have) do total = total + 1 end
+        if total > BANNED_MAX then return false, 'err.banned_too_many' end
+        local res = GetCurrentResourceName()
+        if not SaveResourceFile(res, file .. '.bak', old, -1) then return false, 'err.banned_write' end
+        if not SaveResourceFile(res, file, table.concat(out, '\n') .. '\n', -1) then
+            return false, 'err.banned_write'
+        end
+        Profile._reloadBannedWords()
+        ctx.audit('bannedWordsEdit', file, ('%d'):format(#words), ('+%d -%d'):format(added, removed))
+        return true, { added = added, removed = removed, total = total }
+    end, { reason = true })
+
+    Kit.action('server:admin:unrevokeCommendation', 'officerRecords', function(ctx)
+        local id = math.tointeger(tonumber(ctx.payload.id))
+        if not id or id < 1 then return false, 'err.invalid_payload' end
+        local row = MySQL.single.await('SELECT id, citizenid, kind, revoked FROM cp_commendations WHERE id = ?', { id })
+        if not row then return false, 'err.commend_not_found' end
+        if not U.truthy(row.revoked) then return false, 'err.commend_active' end
+        local okK, errK = Kit.cas([[UPDATE cp_commendations SET revoked = 0, revoked_by = NULL, revoke_reason = NULL,
+            revoked_at = NULL WHERE id = ? AND revoked = 1]], { id })
+        if not okK then return false, errK end
+        local cid = tostring(row.citizenid)
+        ctx.audit('commendUnrevoke', cid, tostring(row.kind), 'active')
+        RefreshNews(cid)
+        PushProfile(cid)
+        return true, { id = id }
+    end, { reason = true })
+
+    Kit.action('server:admin:editCitation', 'officerRecords', function(ctx)
+        local id = math.tointeger(tonumber(ctx.payload.id))
+        if not id or id < 1 then return false, 'err.invalid_payload' end
+        local citation = CleanText(ctx.payload.citation, false)
+        local lim = type(CommendCfg().citation) == 'table' and CommendCfg().citation or {}
+        if not citation or CharLen(citation) < Int(lim[1] or 10) then return false, 'err.citation_short' end
+        if CharLen(citation) > math.min(255, Int(lim[2] or 255)) then return false, 'err.citation_long' end
+        local row = MySQL.single.await('SELECT id, citizenid, citation FROM cp_commendations WHERE id = ?', { id })
+        if not row then return false, 'err.commend_not_found' end
+        if row.citation == citation then return true, { id = id } end
+        local okK, errK = Kit.cas('UPDATE cp_commendations SET citation = ? WHERE id = ? AND citation = ?',
+            { citation, id, row.citation })
+        if not okK then return false, errK end
+        local cid = tostring(row.citizenid)
+        ctx.audit('citationEdit', cid, tostring(row.citation), citation)
+        RefreshNews(cid)
+        PushProfile(cid)
+        return true, { id = id }
+    end, { reason = true })
+end
+
+-- Officers → Review: the admin sidebar count, registered once every module has loaded.
+CreateThread(function()
+    Wait(0)
+    if CP.Tablet and CP.Tablet.registerNavCount then
+        CP.Tablet.registerNavCount('adminReview', function() return Profile.reviewCount() end, { adminOnly = true })
+    end
+end)
 
 -- ============================================================================
 --                                 NET HANDLERS
@@ -1085,14 +1351,14 @@ CP.Net.callback('sup:getProfileQueue', function(src, args)
         dept = (type(wanted) == 'string' and wanted ~= '') and wanted or (officer and dept or nil)
     end
     if not dept and not CP.Access.isAdmin(src) then return nil, 'err.not_police' end
-    return Profile.queue(dept)
+    return Profile.queue(dept, CP.Access.isAdmin(src))
 end)
 
 CP.Net.callback('admin:getOfficerProfile', function(src, args)
     local ok, errKey = CP.Permissions.can(src, 'openAdmin')
     if not ok then return nil, errKey or 'err.no_permission' end
     if type(args) ~= 'table' then return nil, 'err.invalid_payload' end
-    return Profile.adminView(args.citizenid)
+    return Profile.adminView(args.citizenid, args.seasonId)
 end)
 
 -- ============================================================================
@@ -1124,6 +1390,15 @@ end
 
 if CP.Hooks and CP.Hooks.on then
     CP.Hooks.on('home:extras', HomeExtras)
+    -- the banned words (the setting or its file) changed in game: read them again at once
+    CP.Hooks.on('settings:changed', function(paths)
+        for _, path in ipairs(type(paths) == 'table' and paths or {}) do
+            if type(path) == 'string' and (path == 'Profile' or path:sub(1, 19) == 'Profile.bannedWords') then
+                Profile._reloadBannedWords()
+                return
+            end
+        end
+    end)
     CP.Hooks.on('officer:loaded', function(src)
         local ok, info = Call('Qbx', 'getInfo', src)
         if ok and type(info) == 'table' and ValidCitizenId(info.citizenid) then RefreshNews(info.citizenid) end

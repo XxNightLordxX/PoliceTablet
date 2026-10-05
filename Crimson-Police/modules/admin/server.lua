@@ -751,6 +751,8 @@ function Admin.approveFlagged(src, rowId, reason, opts)
     if not row then return false, errKey end
     if row.voided then return false, 'err.already_voided' end
     if not row.flagged then return false, 'err.not_flagged' end
+    -- a manual award, an adjustment or a goal reward is never reviewed (a supervisor can't erase a deduction)
+    if NON_MISSION_TYPES[row.mission_type] then return false, 'err.not_reviewable' end
     if not opts.skipPermission then
         local ok, e = ReviewAllowed(src, 'reviewFlagged', row)
         if not ok then return false, e end
@@ -775,22 +777,28 @@ function Admin.approveFlagged(src, rowId, reason, opts)
     return true, { rowId = row.id }
 end
 
+local VOID_KINDS = { strike = true, correction = true }
+local VOID_CONFIRM_AT = 3          -- participants: voiding a whole run of this many asks for the typed VOID <n>
+
 -- Void one row (checks done by the caller). flaggedOnly: only while the row is still flagged, so an approval
--- that landed during the caller's checks stands. Returns true or false, errKey.
-local function VoidRow(src, row, reason, action, flaggedOnly)
-    local sql = 'UPDATE cp_mission_runs SET voided = 1 WHERE id = ? AND voided = 0'
+-- that landed during the caller's checks stands. kind: 'strike' (counts toward the automatic suspension, the
+-- default) or 'correction' (a bug or a fix: never a strike). Returns true or false, errKey.
+local function VoidRow(src, row, reason, action, flaggedOnly, kind)
+    kind = VOID_KINDS[kind] and kind or 'strike'
+    local sql = 'UPDATE cp_mission_runs SET voided = 1, void_kind = ? WHERE id = ? AND voided = 0'
     if flaggedOnly then sql = sql .. ' AND flagged = 1' end
-    local n = Update(sql, { row.id })
+    local n = Update(sql, { kind, row.id })
     if n == nil then return false, 'err.internal' end
     if n == 0 then return false, flaggedOnly and 'err.conflict' or 'err.already_voided' end
     Call('Scoring', 'onRowVoided', row.id)
-    Admin.audit(src, RoleOf(src), 'flags', action, RowTarget(row), row.flagged and 'flagged' or row.state, 'voided',
-        reason)
+    Admin.audit(src, RoleOf(src), 'flags', action, RowTarget(row), row.flagged and 'flagged' or row.state,
+        kind == 'correction' and 'voided:correction' or 'voided', reason)
     Notify(OnlineSrc(row.citizenid), 'warning', 'admin.notice.run_voided',
         { mission = Admin.missionLabel(row.mission_id) })
-    if not NON_MISSION_TYPES[row.mission_type] then
+    if not NON_MISSION_TYPES[row.mission_type] and kind == 'strike' then
         Call('AntiCheat', 'onVoided', row.citizenid)
     end
+    CP.Hooks.fire('admin:changed', { kind = 'void', citizenid = row.citizenid, missionId = row.mission_id })
     return true
 end
 
@@ -801,6 +809,7 @@ function Admin.voidFlagged(src, rowId, reason)
     if not row then return false, errKey end
     if row.voided then return false, 'err.already_voided' end
     if not row.flagged then return false, 'err.not_flagged' end
+    if NON_MISSION_TYPES[row.mission_type] then return false, 'err.not_reviewable' end
     local ok, e = ReviewAllowed(src, 'reviewFlagged', row)
     if not ok then return false, e end
     local okOwn, eOwn = OwnRunCheck(src, row.run_uuid)
@@ -811,11 +820,15 @@ function Admin.voidFlagged(src, rowId, reason)
     return true, { rowId = row.id, voided = 1 }
 end
 
-function Admin.voidRun(src, target, reason)
+-- opts (admins): { kind = 'strike'|'correction', confirm = typed word (VOID <n> for a run of 3 or more),
+-- goalRowIds = goal reward rows this run completed, voided with it }.
+function Admin.voidRun(src, target, reason, opts)
+    opts = type(opts) == 'table' and opts or {}
     reason = CleanText(reason)
     if not reason then return false, 'err.reason_required' end
     local okP, eP = Can(src, 'voidAnyRun')
     if not okP then return false, eP end
+    if opts.kind ~= nil and not VOID_KINDS[opts.kind] then return false, 'err.invalid_void_kind' end
     local rows = {}
     local runUuid
     if type(target) == 'string' and not tonumber(target) then
@@ -841,15 +854,33 @@ function Admin.voidRun(src, target, reason)
     end
     local okOwn, eOwn = OwnRunCheck(src, runUuid)
     if not okOwn then return false, eOwn end
+    -- any character of the admin's player (by license, live or archived rows) is "own" too
+    if CP.AdminKit and CP.AdminKit.selfRun and CP.AdminKit.selfRun(src, runUuid) then return false, 'err.own_run' end
+    if #rows >= VOID_CONFIRM_AT and CP.AdminKit and CP.AdminKit.confirmOk
+        and not CP.AdminKit.confirmOk(opts.confirm, ('VOID %d'):format(#rows)) then
+        return false, 'err.confirm_mismatch'
+    end
+    -- goal rewards this run completed (asked in the void dialog): goal rows of the same officers only
+    local goals = {}
+    if type(opts.goalRowIds) == 'table' then
+        local cids = {}
+        for _, row in ipairs(rows) do cids[row.citizenid] = true end
+        for _, gid in ipairs(opts.goalRowIds) do
+            local g = Admin.getRow(gid)
+            if not g or g.mission_type ~= 'goal' or not cids[g.citizenid] then return false, 'err.invalid_row' end
+            if not g.voided then goals[#goals + 1] = g end
+        end
+    end
     local voided = 0
     local lastErr
     for _, row in ipairs(rows) do
-        local ok, e = VoidRow(src, row, reason, 'voidRun')
+        local ok, e = VoidRow(src, row, reason, 'voidRun', false, opts.kind)
         if ok then voided = voided + 1 else lastErr = e end
     end
     if voided == 0 then return false, lastErr or 'err.conflict' end
+    for _, g in ipairs(goals) do VoidRow(src, g, reason, 'voidRun', false, 'correction') end
     Call('Leaderboard', 'invalidate')
-    return true, { voided = voided, runUuid = runUuid }
+    return true, { voided = voided, runUuid = runUuid, goals = #goals }
 end
 
 -- ============================================================================
@@ -1108,11 +1139,14 @@ SUB.season = function(src, args)
     return Usage(src)
 end
 
--- Suspend (days > 0) or lift (0) and write the audit entry. Returns ok, data|errKey.
-local function SuspendOfficer(src, citizenid, days, reason)
+-- Suspend (days > 0, or until the exact moment untilTs) or lift (0) and write the audit entry. Returns ok,
+-- data|errKey.
+local function SuspendOfficer(src, citizenid, days, reason, untilTs)
     local okP, eP = Can(src, 'suspend')
     if not okP then return false, eP end
-    local d = Int(days, 0, 3650)
+    local exact = untilTs ~= nil and Int(untilTs, 1, 2147483647) or nil
+    if untilTs ~= nil and not exact then return false, 'err.invalid_days' end
+    local d = exact and 1 or Int(days, 0, 3650)
     if not d then return false, 'err.invalid_days' end
     local cid = Admin.resolveCitizenId(citizenid)
     if not cid then return false, 'err.unknown_officer' end
@@ -1122,11 +1156,13 @@ local function SuspendOfficer(src, citizenid, days, reason)
     local prevTs = prev and tonumber(prev.until_ts) or nil
     local wasSuspended = prevTs ~= nil and prevTs > os.time()
     if d == 0 and not wasSuspended then return false, 'err.not_suspended' end
-    local ok, e = Outcome(Call('Access', 'suspend', cid, d, src, reason))
+    local ok, e = Outcome(Call('Access', 'suspend', cid, d, src, reason, exact and { untilTs = exact } or nil))
     if not ok then return false, e end
+    if exact then d = math.max(1, math.ceil((exact - os.time()) / 86400)) end
     Admin.audit(src, RoleOf(src), 'audit', d == 0 and 'unsuspend' or 'suspend', cid,
         wasSuspended and os.date('%Y-%m-%d %H:%M', prevTs) or nil, d == 0 and 'lifted' or ('%d'):format(d), reason)
-    return true, { citizenid = cid, days = d, untilTs = d > 0 and (os.time() + d * 86400) or nil }
+    CP.Hooks.fire('admin:changed', { kind = 'suspend', citizenid = cid })
+    return true, { citizenid = cid, days = d, untilTs = exact or (d > 0 and (os.time() + d * 86400) or nil) }
 end
 
 SUB.suspend = function(src, args)
@@ -2122,8 +2158,31 @@ CP.Net.action('server:admin:voidRun', function(src, payload)
         target = Int(target, 1, 2147483647)
         if not target then return false, 'err.invalid_row' end
     end
-    return Admin.voidRun(src, target, payload.reason)
+    return Admin.voidRun(src, target, payload.reason,
+        { kind = payload.kind, confirm = payload.confirm, goalRowIds = payload.goalRowIds })
 end, { rate = 3 })
+
+-- Leaderboards → Flagged: approve every flagged row of one run (the held cash of all of them is released).
+CP.Net.action('server:admin:approveRun', function(src, payload)
+    if type(payload) ~= 'table' then return false, 'err.invalid_payload' end
+    if not IsAdmin(src) then return false, 'err.no_permission' end
+    local okP, eP = Can(src, 'reviewFlagged')
+    if not okP then return false, eP end
+    if not ValidUuid(payload.runUuid) then return false, 'err.invalid_run' end
+    local reason = CleanText(payload.reason)
+    if not reason then return false, 'err.reason_required' end
+    local okOwn, eOwn = OwnRunCheck(src, payload.runUuid)
+    if not okOwn then return false, eOwn end
+    local rows = Query('SELECT id FROM cp_mission_runs WHERE run_uuid = ? AND flagged = 1 AND voided = 0 ORDER BY id',
+        { payload.runUuid }) or {}
+    if #rows == 0 then return false, 'err.not_flagged' end
+    local n = 0
+    for _, r in ipairs(rows) do
+        if Admin.approveFlagged(src, r.id, reason) then n = n + 1 end
+    end
+    if n == 0 then return false, 'err.conflict' end
+    return true, { approved = n, runUuid = payload.runUuid }
+end, { rate = 2 })
 
 CP.Net.action('server:admin:awardPoints', function(src, payload)
     if type(payload) ~= 'table' then return false, 'err.invalid_payload' end
@@ -2145,7 +2204,7 @@ CP.Net.action('server:admin:suspend', function(src, payload)
     if type(payload) ~= 'table' then return false, 'err.invalid_payload' end
     local reason = CleanText(payload.reason)
     if not reason then return false, 'err.reason_required' end
-    return SuspendOfficer(src, payload.citizenid, payload.days, reason)
+    return SuspendOfficer(src, payload.citizenid, payload.days, reason, payload.untilTs)
 end, { rate = 2 })
 
 -- ============================================================================
@@ -2475,20 +2534,74 @@ local function SuspensionOf(ts)
     return nil
 end
 
+-- The citizenids of the online players (the Online filter).
+local function OnlineCitizenids()
+    local out = {}
+    if not (Has('Qbx', 'getOnlinePlayers') and Has('Qbx', 'getInfo')) then return out end
+    local ok, list = Call('Qbx', 'getOnlinePlayers')
+    for _, s2 in ipairs(ok and type(list) == 'table' and list or {}) do
+        local okI, info = Call('Qbx', 'getInfo', s2)
+        if okI and type(info) == 'table' and type(info.citizenid) == 'string' then out[#out + 1] = info.citizenid end
+    end
+    return out
+end
+
+local SEARCH_FILTERS = {
+    suspended = 'o.suspended_until IS NOT NULL AND o.suspended_until > NOW()',
+    retired = 'o.retired_at IS NOT NULL',
+    excluded = 'o.board_excluded = 1',
+    review = [[((o.avatar_status = 'pending' AND o.avatar_pending IS NOT NULL) OR o.bio_pending IS NOT NULL
+        OR EXISTS (SELECT 1 FROM cp_profile_reports p WHERE p.citizenid = o.citizenid AND p.status = 'open'))]],
+    dispute = [[EXISTS (SELECT 1 FROM cp_disputes d WHERE d.citizenid = o.citizenid AND d.status = 'open')]],
+    flagged = 'EXISTS (SELECT 1 FROM cp_mission_runs r WHERE r.citizenid = o.citizenid AND r.flagged = 1 AND r.voided = 0)',
+}
+
+-- Officers search (A1): name, callsign or citizenid, the filters above plus department and online, and pages of 25.
+-- An online officer who has no Crimson-Police row yet is found by their exact citizenid.
 CP.Net.callback('admin:searchOfficers', function(src, args)
     local okP, eP = AdminOnly(src)
     if not okP then return nil, eP end
-    local q = type(args) == 'table' and type(args.query) == 'string' and U.trim(args.query) or ''
+    args = type(args) == 'table' and args or {}
+    local q = type(args.query) == 'string' and U.trim(args.query) or ''
     if #q > 64 then q = q:sub(1, 64) end
-    local sql = 'SELECT citizenid, callsign, rank_label, display_name, department, xp, UNIX_TIMESTAMP(suspended_until) AS suspended_ts FROM cp_officers'
-    local params = {}
+    local filters = type(args.filters) == 'table' and args.filters or {}
+    local where, params = {}, {}
     if q ~= '' then
         local like = LikeArg(q)
-        sql = sql .. ' WHERE citizenid LIKE ? OR callsign LIKE ? OR display_name LIKE ?'
-        params = { like, like, like }
+        where[#where + 1] = '(o.citizenid LIKE ? OR o.callsign LIKE ? OR o.display_name LIKE ?)'
+        params[#params + 1], params[#params + 2], params[#params + 3] = like, like, like
     end
-    sql = sql .. (' ORDER BY display_name IS NULL, display_name, citizenid LIMIT %d'):format(SEARCH_LIMIT)
-    local rows = Query(sql, params)
+    if type(filters.department) == 'string' and filters.department ~= '' then
+        where[#where + 1] = 'o.department = ?'
+        params[#params + 1] = filters.department
+    end
+    for key, clause in pairs(SEARCH_FILTERS) do
+        if filters[key] == true then where[#where + 1] = clause end
+    end
+    if filters.online == true then
+        local online = OnlineCitizenids()
+        if #online == 0 then return { officers = {}, query = q, total = 0, page = 1, pages = 1 } end
+        local marks = {}
+        for i, cid in ipairs(online) do
+            marks[i] = '?'
+            params[#params + 1] = cid
+        end
+        where[#where + 1] = ('o.citizenid IN (%s)'):format(table.concat(marks, ', '))
+    end
+    local whereSql = #where > 0 and (' WHERE ' .. table.concat(where, ' AND ')) or ''
+    local total = math.floor(Num((Single('SELECT COUNT(*) AS n FROM cp_officers o' .. whereSql, params) or {}).n, 0))
+    local pages = math.max(1, math.ceil(total / SEARCH_LIMIT))
+    local page = math.min(pages, Int(args.page, 1, 100000) or 1)
+    local rows = Query(
+        ([[SELECT o.citizenid, o.callsign, o.rank_label, o.display_name, o.department, o.xp,
+        UNIX_TIMESTAMP(o.suspended_until) AS suspended_ts, UNIX_TIMESTAMP(o.retired_at) AS retired_ts, o.board_excluded
+        FROM cp_officers o%s ORDER BY o.display_name IS NULL, o.display_name, o.citizenid LIMIT %d OFFSET %d]]):format(
+            whereSql,
+            SEARCH_LIMIT,
+            (page - 1) * SEARCH_LIMIT
+        ),
+        params
+    )
     if not rows then return nil, 'err.internal' end
     local out = {}
     for _, r in ipairs(rows) do
@@ -2502,9 +2615,29 @@ CP.Net.callback('admin:searchOfficers', function(src, args)
             xp = math.floor(Num(r.xp, 0)),
             suspendedUntil = SuspensionOf(r.suspended_ts),
             online = OnlineSrc(r.citizenid) ~= nil,
+            retired = r.retired_ts ~= nil,
+            excluded = U.truthy(r.board_excluded),
+            known = true,
         }
     end
-    return { officers = out, query = q }
+    -- an online character without a row yet (never finished a run): found by the exact citizenid
+    if total == 0 and q ~= '' and q:match('^[%w_%-]+$') and next(filters) == nil then
+        local s2 = OnlineSrc(q) or OnlineSrc(q:upper())
+        local okI, info = false, nil
+        if s2 then okI, info = Call('Qbx', 'getInfo', s2) end
+        if okI and type(info) == 'table' and type(info.citizenid) == 'string' then
+            out[1] = {
+                citizenid = info.citizenid,
+                name = info.name or info.citizenid,
+                callsign = info.callsign,
+                online = true,
+                known = false,
+                xp = 0,
+            }
+            total = 1
+        end
+    end
+    return { officers = out, query = q, total = total, page = page, pages = pages }
 end, { rate = 4 })
 
 local function XpLevel(xp)
@@ -2558,9 +2691,9 @@ CP.Net.callback('admin:getOfficer', function(src, args)
     if not okP then return nil, eP end
     local cid = type(args) == 'table' and Admin.resolveCitizenId(args.citizenid) or nil
     if not cid then return nil, 'err.unknown_officer' end
-    local o = Single(
-        'SELECT citizenid, callsign, rank_label, display_name, department, xp, streak_days, UNIX_TIMESTAMP(suspended_until) AS suspended_ts FROM cp_officers WHERE citizenid = ?',
-        { cid })
+    local o = Single([[SELECT citizenid, callsign, rank_label, display_name, department, xp, streak_days,
+        UNIX_TIMESTAMP(suspended_until) AS suspended_ts, board_excluded, UNIX_TIMESTAMP(retired_at) AS retired_ts,
+        retire_batch FROM cp_officers WHERE citizenid = ?]], { cid })
     local xp = math.floor(Num(o and o.xp, 0))
     local stats = Single([[SELECT COUNT(*) AS runs, COALESCE(SUM(state = 'completed'), 0) AS completed,
         COALESCE(SUM(state = 'failed'), 0) AS failed, COALESCE(SUM(state = 'abandoned'), 0) AS abandoned,
@@ -2608,6 +2741,9 @@ CP.Net.callback('admin:getOfficer', function(src, args)
             voided = U.truthy(r.voided),
             flagReason = r.flag_reason,
             createdAt = math.floor(Num(r.created_ts, 0)),
+            -- the Renewed-Banking transaction id of a payment (search it in the bank history)
+            txnId = (Num(r.cash_paid, 0) > 0 or r.cash_status == 'paying') and ('CP-%s-%s'):format(r.run_uuid, cid)
+                or nil,
         }
     end
     local disputes = {}
@@ -2668,6 +2804,39 @@ CP.Net.callback('admin:getOfficer', function(src, args)
     local dept = o and o.department or nil
     local deptInfo = dept and CP.Access and CP.Access.department and CP.Access.department(dept) or nil
     local online = OnlineSrc(cid)
+    -- the live streak (a broken one shows 0, not the stored count), the SC-Dispatch suspension (view only)
+    local okSt, streak = Call('Scoring', 'streak', cid)
+    streak = okSt and type(streak) == 'table' and streak or { days = math.floor(Num(o and o.streak_days, 0)) }
+    local okD, dispatch = Call('Access', 'dispatchSuspension', cid)
+    local okStrikes, strikes = Call('AntiCheat', 'strikeCount', cid)
+    local okF, firstRun = Call('Scoring', 'firstRunAvailable', cid)
+    local okL, license = Call('Access', 'licenseOf', cid)
+    local badges = BadgesOf(cid)
+    local overrides = {}
+    for _, r in
+        ipairs(
+            Query('SELECT badge_id, mode, by_actor, reason FROM cp_badge_overrides WHERE citizenid = ?', { cid }) or {})
+    do
+        overrides[r.badge_id] = r
+    end
+    for _, b in ipairs(badges) do
+        local ov = overrides[b.id]
+        b.source = ov and ov.mode == 'grant' and 'granted' or 'earned'
+        if ov then b.by, b.reason = ov.by_actor, ov.reason end
+    end
+    for id, ov in pairs(overrides) do
+        if ov.mode == 'block' then
+            local label = id
+            if Has('Leaderboard', 'badgeLabel') then
+                local okB, l = Call('Leaderboard', 'badgeLabel', id)
+                if okB and type(l) == 'string' then label = l end
+            end
+            if label == id and CP.Locale.has('badge.' .. id) then label = CP.L('badge.' .. id) end
+            badges[#badges + 1] = { id = id, label = label, source = 'blocked', by = ov.by_actor, reason = ov.reason }
+        end
+    end
+    -- the reason of the suspension running now (the newest suspension history line)
+    local suspensionReason = suspensions[1] and suspensions[1].action ~= 'unsuspend' and suspensions[1].reason or nil
     return {
         citizenid = cid,
         name = o and o.display_name or cid,
@@ -2678,8 +2847,21 @@ CP.Net.callback('admin:getOfficer', function(src, args)
         departmentLabel = deptInfo and deptInfo.label or nil,
         xp = xp,
         level = XpLevel(xp),
-        streakDays = math.floor(Num(o and o.streak_days, 0)),
-        badges = BadgesOf(cid),
+        streakDays = math.floor(Num(streak.days, 0)),
+        streak = {
+            days = math.floor(Num(streak.days, 0)),
+            multiplier = tonumber(streak.multiplier) or 1,
+            graceLeft = streak.graceLeft == true,
+            stored = math.floor(Num(o and o.streak_days, 0)),
+        },
+        firstRun = okF and firstRun or nil,
+        dispatch = okD and type(dispatch) == 'table' and dispatch or { suspended = false, available = false },
+        strikes = okStrikes and tonumber(strikes) or 0,
+        retired = o and o.retired_ts ~= nil and { at = math.floor(Num(o.retired_ts, 0)), batch = o.retire_batch }
+            or nil,
+        boardExcluded = o ~= nil and U.truthy(o.board_excluded),
+        licenseKnown = okL and type(license) == 'string',
+        badges = badges,
         cash = { total = math.floor(Num(stats.cash_total, 0)), week = cashWeek },
         stats = {
             runs = math.floor(Num(stats.runs, 0)),
@@ -2692,6 +2874,7 @@ CP.Net.callback('admin:getOfficer', function(src, args)
         suspension = {
             suspended = SuspensionOf(o and o.suspended_ts) ~= nil,
             untilTs = SuspensionOf(o and o.suspended_ts),
+            reason = SuspensionOf(o and o.suspended_ts) ~= nil and suspensionReason or nil,
         },
         suspensions = suspensions,
         runs = runs,

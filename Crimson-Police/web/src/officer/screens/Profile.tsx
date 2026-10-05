@@ -481,6 +481,20 @@ export default function Profile() {
                                         {t('profile.name_hidden')}
                                     </Badge>
                                 ) : null}
+                                {profile.boardExcluded ? (
+                                    <Badge
+                                        tone="warning"
+                                        icon="eye"
+                                        title={t('ui.admin_officers.profile.excluded_hint')}
+                                    >
+                                        {t('ui.admin_officers.profile.excluded')}
+                                    </Badge>
+                                ) : null}
+                                {profile.retired ? (
+                                    <Badge tone="danger" icon="lock">
+                                        {t('ui.admin_officers.profile.retired')}
+                                    </Badge>
+                                ) : null}
                             </Row>
                         </span>
                     </div>

@@ -37,10 +37,12 @@ local function Period(kind, ts)
     return key, start
 end
 
+-- A goal switched off (enabled = false) is never picked.
 local function ValidGoals(list)
     local out = {}
     for _, g in ipairs(type(list) == 'table' and list or {}) do
-        if type(g) == 'table' and type(g.id) == 'string' and g.id ~= '' and #g.id <= 40 and Num(g.count, 0) >= 1 then
+        if type(g) == 'table' and type(g.id) == 'string' and g.id ~= '' and #g.id <= 40 and Num(g.count, 0) >= 1
+            and g.enabled ~= false then
             out[#out + 1] = g
         end
     end
@@ -111,13 +113,15 @@ local function ProgressOf(goal, citizenid, start)
     return math.floor(CP.U.num(n))
 end
 
+-- Any goal reward of this kind in this period counts, whichever goal it was: a goal list changed in the middle of
+-- a period re-picks the officer's goal, and the new one must not pay a second time.
 local function Rewarded(kind, goal, citizenid, start)
     local ok, id = pcall(MySQL.scalar.await, [[
         SELECT id FROM cp_mission_runs
-        WHERE citizenid = ? AND mission_type = 'goal' AND mission_id = ? AND created_at >= FROM_UNIXTIME(?)
+        WHERE citizenid = ? AND mission_type = 'goal' AND created_at >= FROM_UNIXTIME(?)
           AND JSON_UNQUOTE(JSON_EXTRACT(breakdown, '$.period')) = ?
         LIMIT 1
-    ]], { citizenid, goal.id, start, kind })
+    ]], { citizenid, start, kind })
     if not ok then
         CP.err(TAG, 'goal reward lookup of %s (%s) failed: %s', citizenid, goal.id, tostring(id))
         return nil
@@ -151,12 +155,15 @@ function Goals.forOfficer(citizenid)
     return { daily = GoalView('daily', citizenid), weekly = GoalView('weekly', citizenid) }
 end
 
-local function Award(kind, citizenid)
+-- force (an admin's Mark complete, a goal a bug blocked): rewarded without the progress check.
+local function Award(kind, citizenid, force, extra)
     local goal, key, start = Pick(kind, citizenid)
     if not goal then return false end
     local count = math.floor(Num(goal.count, 1))
-    local progress = ProgressOf(goal, citizenid, start)
-    if not progress or progress < count then return false end
+    if not force then
+        local progress = ProgressOf(goal, citizenid, start)
+        if not progress or progress < count then return false end
+    end
     local already = Rewarded(kind, goal, citizenid, start)
     if already ~= false then return false end
     local points = PointsFor(kind)
@@ -165,8 +172,9 @@ local function Award(kind, citizenid)
         return false
     end
     local label = LabelOf(goal)
-    local rowId = CP.Scoring._insertBonusRow(citizenid, 'goal', goal.id, points, label,
-        { period = kind, periodKey = key, goalId = goal.id })
+    local bd = { period = kind, periodKey = key, goalId = goal.id }
+    for k, v in pairs(type(extra) == 'table' and extra or {}) do bd[k] = v end
+    local rowId = CP.Scoring._insertBonusRow(citizenid, 'goal', goal.id, points, label, bd)
     if not rowId then return false end
     CP.log(TAG, '%s completed the %s goal %s (+%d)', citizenid, kind, goal.id, points)
     -- period = '<daily|weekly>:<period key>', so the same goal met in a later period is a new completion
@@ -202,6 +210,38 @@ function Goals.onRunCompleted(citizenid)
     end)
     busy[citizenid] = nil
     if not ok then CP.err(TAG, 'goal check for %s failed: %s', citizenid, tostring(err)) end
+end
+
+-- An admin completes the officer's current goal of this kind (goalId must be that goal, not yet rewarded).
+-- ok, rowId | false, errKey. extra goes into the reward row's breakdown (who and why).
+function Goals.complete(kind, citizenid, goalId, extra)
+    if kind ~= 'daily' and kind ~= 'weekly' then return false, 'err.goal_unknown' end
+    if type(citizenid) ~= 'string' or citizenid == '' then return false, 'err.invalid_citizenid' end
+    Db()
+    local goal, _, start = Pick(kind, citizenid)
+    if not goal or goal.id ~= goalId then return false, 'err.goal_unknown' end
+    local already = Rewarded(kind, goal, citizenid, start)
+    if already == nil then return false, 'err.internal' end
+    if already then return false, 'err.goal_rewarded' end
+    if busy[citizenid] then return false, 'err.busy' end
+    busy[citizenid] = true
+    local ok, res = pcall(Award, kind, citizenid, true, extra)
+    busy[citizenid] = nil
+    if not ok or not res then return false, ok and 'err.goal_rewarded' or 'err.internal' end
+    return true
+end
+
+if CP.Hooks and CP.Hooks.on then
+    -- a goal list changed in game: the officers' goals are re-picked at once; Rewarded (per kind and period) keeps a
+    -- period from paying twice
+    CP.Hooks.on('settings:changed', function(paths)
+        for _, path in ipairs(type(paths) == 'table' and paths or {}) do
+            if type(path) == 'string' and (path == 'Goals' or path:sub(1, 6) == 'Goals.') then
+                CP.log(TAG, 'goals changed in game (%s): a period already rewarded stays rewarded', path)
+                return
+            end
+        end
+    end)
 end
 
 -- Test hooks (not part of the contract).

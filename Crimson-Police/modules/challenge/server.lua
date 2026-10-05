@@ -41,7 +41,9 @@ local function Int(v) return math.floor(Num(v) + 0.0) end
 
 local function Cfg(section, key, default)
     local s = Config[section]
-    local v = type(s) == 'table' and s[key] or nil
+    -- not `and s[key] or nil`: a switch set to false must read as false
+    local v = nil
+    if type(s) == 'table' then v = s[key] end
     if v == nil then return default end
     return v
 end
@@ -238,14 +240,16 @@ local function SeasonFrom(row)
         startsAt = Int(row.starts_ts),
         endsAt = row.ends_ts ~= nil and Int(row.ends_ts) or nil,
         active = U.truthy(row.active),
+        plannedEnd = row.planned_ts ~= nil and Int(row.planned_ts) or nil,
+        nextName = NonEmpty(row.next_name),
     }
 end
 
 local function LoadSeasons()
     Db()
-    local rows = MySQL.query.await(
-        'SELECT id, name, UNIX_TIMESTAMP(starts_at) AS starts_ts, UNIX_TIMESTAMP(ends_at) AS ends_ts, active FROM cp_seasons ORDER BY id DESC',
-        {}) or {}
+    local rows = MySQL.query.await([[SELECT id, name, UNIX_TIMESTAMP(starts_at) AS starts_ts,
+        UNIX_TIMESTAMP(ends_at) AS ends_ts, active, UNIX_TIMESTAMP(planned_end) AS planned_ts, next_name
+        FROM cp_seasons ORDER BY id DESC]], {}) or {}
     local s = { at = os.time(), loaded = true, byId = {}, list = {} }
     local actives = 0
     for _, row in ipairs(rows) do
@@ -783,6 +787,8 @@ local function SeasonView(season, nowTs)
         active = season.active,
         week = WeekIndex(season, at),
         weeksLeft = WeeksLeft(season, nowTs),
+        plannedEnd = season.plannedEnd,
+        nextName = season.nextName,
     }
 end
 
@@ -965,7 +971,7 @@ local function EndSeasonInternal(src, season, reason)
     Db()
     local endTs = os.time()
     local changed = MySQL.update.await(
-        'UPDATE cp_seasons SET active = 0, ends_at = FROM_UNIXTIME(?) WHERE id = ? AND active = 1',
+        'UPDATE cp_seasons SET active = 0, ends_at = FROM_UNIXTIME(?), planned_end = NULL WHERE id = ? AND active = 1',
         { endTs, season.id })
     LoadSeasons()
     if Num(changed) <= 0 then return false, 'err.no_season' end
@@ -1050,30 +1056,33 @@ function C.endSeason(src, reason)
     end)
 end
 
+-- Ends the running season (when there is one) and starts a new one. Runs inside Guarded.
+local function StartSeasonInternal(src, name)
+    Db()
+    local prev = C.currentSeason(true)
+    if prev then
+        local okEnd, err = EndSeasonInternal(src, prev, CP.L('challenge.audit_replaced', { name = name }))
+        if not okEnd then return false, err end
+    end
+    local now = os.time()
+    local id = MySQL.insert.await('INSERT INTO cp_seasons (name, starts_at, active) VALUES (?, FROM_UNIXTIME(?), 1)',
+        { name, now })
+    LoadSeasons()
+    local season = id and C.seasonById(id)
+    if not season then return false, 'err.internal' end
+    EnsureBounty(season, 1)
+    Audit(src, 'season_start', ('season:%d'):format(season.id), prev and prev.name or nil, name, nil)
+    InvalidateAll()
+    CP.log(TAG, 'season %d (%s) started', season.id, name)
+    return true, SeasonView(season, now)
+end
+
 function C.startSeason(src, name)
     local ok, errKey = Allowed(src, 'seasons')
     if not ok then return false, errKey or 'err.no_permission' end
     name = ValidName(name)
     if not name then return false, 'err.invalid_season_name' end
-    return Guarded(function()
-        Db()
-        local prev = C.currentSeason(true)
-        if prev then
-            local okEnd, err = EndSeasonInternal(src, prev, CP.L('challenge.audit_replaced', { name = name }))
-            if not okEnd then return false, err end
-        end
-        local now = os.time()
-        local id = MySQL.insert.await(
-            'INSERT INTO cp_seasons (name, starts_at, active) VALUES (?, FROM_UNIXTIME(?), 1)', { name, now })
-        LoadSeasons()
-        local season = id and C.seasonById(id)
-        if not season then return false, 'err.internal' end
-        EnsureBounty(season, 1)
-        Audit(src, 'season_start', ('season:%d'):format(season.id), prev and prev.name or nil, name, nil)
-        InvalidateAll()
-        CP.log(TAG, 'season %d (%s) started', season.id, name)
-        return true, SeasonView(season, now)
-    end)
+    return Guarded(function() return StartSeasonInternal(src, name) end)
 end
 
 function C.overrideBounty(src, objective)
@@ -1156,7 +1165,8 @@ local function SeasonsList()
         champs[Int(r.season_id)] = r.winner ~= nil and tostring(r.winner) or ''
     end
     local out = {}
-    for _, s in ipairs(EnsureSeasons(true).list) do
+    local list = EnsureSeasons(true).list
+    for i, s in ipairs(list) do
         local champ = NonEmpty(champs[s.id])
         out[#out + 1] = {
             id = s.id,
@@ -1166,6 +1176,10 @@ local function SeasonsList()
             active = s.active,
             champion = champ,
             championShort = champ and DeptShort(champ) or nil,
+            plannedEnd = s.plannedEnd,
+            nextName = s.nextName,
+            -- the latest season, ended within 24 h, with no season running: an admin may reopen it
+            canReopen = i == 1 and not s.active and s.endsAt ~= nil and os.time() - s.endsAt <= 86400 or false,
         }
     end
     return out
@@ -1420,6 +1434,12 @@ CP.Net.action('server:admin:endSeason', function(src, payload)
     if payload ~= nil and type(payload) ~= 'table' then return false, 'err.invalid_payload' end
     local reason = payload and payload.reason or nil
     if reason ~= nil and (type(reason) ~= 'string' or #reason > 255) then return false, 'err.invalid_payload' end
+    -- irreversible (champion, trophies, top 10): the admin types the season's name; the console needs none
+    local season = C.currentSeason(true)
+    if season and tonumber(src) ~= 0 and CP.AdminKit and CP.AdminKit.confirmOk
+        and not CP.AdminKit.confirmOk(payload and payload.confirm, season.name) then
+        return false, 'err.confirm_mismatch'
+    end
     return C.endSeason(src, reason)
 end, { rate = 2 })
 
@@ -1453,6 +1473,700 @@ CP.Net.callback('sup:getOfficerActivity', function(src, args)
 end)
 
 -- ============================================================================
+--                             ADMIN: SEASON TOOLS
+-- ============================================================================
+-- Rename, a planned end (and the next season), reopen within 24 h with Undo, a past season's view, next week's
+-- bounty, recounts of a closed bounty week and of the champion. Every action goes through CP.AdminKit.
+
+local REOPEN_WINDOW_S = 86400              -- a season may be reopened within 24 h of its end
+local CHAMPION_RECOUNT_S = 14 * 86400      -- the champion may be recounted up to 14 days after the end
+local PLAN_MAX_S = 366 * 86400             -- a planned end at most a year ahead
+local REMIND_EVERY_MS = 60000              -- how often the planned-end reminders are checked
+local REMINDERS = { { key = '24h', s = 86400 }, { key = '1h', s = 3600 } }
+local UNFINISHED = { held = true, pending = true }
+
+local reminded = {}                        -- 'seasonId:key' -> true (24 h and 1 h toasts to admins)
+
+local function BadgeHolders(badgeId)
+    local ok, list = Call('Leaderboard', 'badgeHolders', badgeId)
+    if ok and type(list) == 'table' then return list end
+    local out = {}
+    for _, r in ipairs(MySQL.query.await('SELECT citizenid FROM cp_badges WHERE badge_id = ?', { badgeId }) or {}) do
+        out[#out + 1] = { citizenid = tostring(r.citizenid), name = tostring(r.citizenid) }
+    end
+    return out
+end
+
+-- The season item rewards (Config.Rewards.season) of champion or top10 for a season, with their state.
+local function SeasonRewards(seasonId, which)
+    local keys = {}
+    if which == nil or which == 'champion' then keys[#keys + 1] = 'champion:' .. seasonId end
+    if which == nil or which == 'top10' then keys[#keys + 1] = 'top10:' .. seasonId end
+    local rows = MySQL.query.await(
+        ([[SELECT id, citizenid, source_key, item, count, status FROM cp_item_rewards
+        WHERE source = 'season' AND source_key IN (%s) ORDER BY id]]):format(Placeholders(#keys)),
+        keys
+    ) or {}
+    local out = {}
+    for _, r in ipairs(rows) do
+        out[#out + 1] = {
+            id = Int(r.id),
+            citizenid = tostring(r.citizenid),
+            key = tostring(r.source_key),
+            item = tostring(r.item),
+            count = Int(r.count),
+            status = tostring(r.status),
+            -- an unfinished reward (held or pending) is cancelled; a given one stays given and is only shown
+            fate = UNFINISHED[r.status] and 'cancel' or (r.status == 'given' and 'kept' or 'none'),
+        }
+    end
+    return out
+end
+
+-- Cancels unfinished season rewards (by id): they become forfeited (the reward never reached the officer).
+local function CancelRewards(ids)
+    if #ids == 0 then return 0 end
+    local n = MySQL.update.await(
+        ([[UPDATE cp_item_rewards SET status = 'forfeited'
+        WHERE id IN (%s) AND status IN ('held', 'pending')]]):format(Placeholders(#ids)),
+        ids
+    )
+    return Num(n)
+end
+
+local function ChampionRow(seasonId)
+    local row = MySQL.single.await('SELECT winner FROM cp_dept_bounties WHERE season_id = ? AND week = ?',
+        { seasonId, CHAMPION_WEEK })
+    if not row then return nil end
+    return row.winner ~= nil and tostring(row.winner) or ''
+end
+
+local function ActiveOfficers(data, dept)
+    local out = {}
+    for cid, o in pairs((data and dept and data.officers[dept]) or {}) do
+        if o.completed >= MinActive() then out[#out + 1] = cid end
+    end
+    table.sort(out)
+    return out
+end
+
+local function SeasonTop10(seasonId)
+    local out = {}
+    local ok, ranked = Call('Leaderboard', 'ranking',
+        { period = 'season', seasonId = seasonId, filter = 'overall', fresh = true })
+    if ok and type(ranked) == 'table' then
+        for i = 1, math.min(10, #ranked) do
+            local e = ranked[i]
+            out[i] = {
+                rank = i,
+                citizenid = e.citizenid,
+                name = PublicName(e),
+                departmentShort = DeptShort(e.department),
+                points = e.points,
+            }
+        end
+    end
+    return out
+end
+
+-- ============================================================================
+--                     SEASON END: PREVIEW AND PLANNED END
+-- ============================================================================
+
+-- What ending the running season now gives: the champion, the trophies and the top 10.
+local function EndPlan(season)
+    local data = Collect(season.id, true) or { officers = {}, weeks = {}, bounties = {} }
+    local list = StandingsFrom(data)
+    local champion = DecideChampion(list)
+    return {
+        season = SeasonView(season),
+        champion = champion ~= '' and champion or nil,
+        championShort = champion ~= '' and DeptShort(champion) or nil,
+        trophies = #ActiveOfficers(data, champion ~= '' and champion or nil),
+        standings = PublicStandings(list),
+        top10 = SeasonTop10(season.id),
+    }
+end
+
+-- The daily reset on or after a planned end ends the season (and starts the next one when it was named).
+function C._plannedEndCheck(nowTs)
+    local season = C.currentSeason(true)
+    if not season or not season.plannedEnd or season.plannedEnd > (nowTs or os.time()) then return false end
+    local nextName = season.nextName
+    local ok, res = Guarded(function()
+        local done, err = EndSeasonInternal(0, season, CP.L('challenge.planned_end_reason'))
+        if not done then return false, err end
+        if nextName then return StartSeasonInternal(0, nextName) end
+        return true
+    end)
+    if ok then
+        CP.log(TAG, 'season %d (%s) ended on its planned date%s', season.id, season.name,
+            nextName and (', ' .. nextName .. ' started') or '')
+    end
+    return ok, res
+end
+
+-- Toasts to online admins 24 h and 1 h before a planned end.
+function C._remindPlannedEnd(nowTs)
+    local season = C.currentSeason()
+    if not season or not season.plannedEnd then return 0 end
+    nowTs = nowTs or os.time()
+    local left = season.plannedEnd - nowTs
+    local sent = 0
+    for _, r in ipairs(REMINDERS) do
+        local key = ('%d:%d:%s'):format(season.id, season.plannedEnd, r.key)
+        if left > 0 and left <= r.s and not reminded[key] then
+            reminded[key] = true
+            sent = sent + 1
+            Call('Tablet', 'notifyAdmins', 'warning', 'challenge.planned_end_soon',
+                { season = season.name, when = r.key == '1h' and CP.L('challenge.in_1h') or CP.L('challenge.in_24h') })
+        end
+    end
+    return sent
+end
+
+-- ============================================================================
+--                                    REOPEN
+-- ============================================================================
+
+local function ReopenCheck(id)
+    local s = EnsureSeasons(true)
+    local season = s.byId[Int(id)]
+    if not season then return nil, 'err.no_season' end
+    if season.active or not season.endsAt then return nil, 'err.season_running' end
+    if s.current then return nil, 'err.season_running' end
+    if s.list[1] == nil or s.list[1].id ~= season.id then return nil, 'err.season_not_latest' end
+    if os.time() - season.endsAt > REOPEN_WINDOW_S then return nil, 'err.season_reopen_late' end
+    return season
+end
+
+-- Rows written between the end and now carry no season: the reopen gives them to the season again.
+local function GapIds(season)
+    local out = {}
+    for _, r in
+        ipairs(MySQL.query.await(
+            'SELECT id FROM cp_mission_runs WHERE season_id IS NULL AND created_at >= FROM_UNIXTIME(?) ORDER BY id',
+            { season.endsAt }
+        ) or {})
+    do
+        out[#out + 1] = Int(r.id)
+    end
+    return out
+end
+
+local function ReopenPlan(season)
+    local champion = ChampionRow(season.id)
+    local champBadge, topBadge = ('season_%d_champion'):format(season.id), ('season_%d_top10'):format(season.id)
+    return {
+        season = SeasonView(season),
+        champion = NonEmpty(champion),
+        championShort = NonEmpty(champion) and DeptShort(champion) or nil,
+        trophies = BadgeHolders(champBadge),
+        top10 = BadgeHolders(topBadge),
+        rewards = SeasonRewards(season.id),
+        gapRows = #GapIds(season),
+    }
+end
+
+-- ============================================================================
+--                         BOUNTY AND CHAMPION RECOUNTS
+-- ============================================================================
+
+local function BountyPlan(week)
+    local season = C.currentSeason(true)
+    if not season then return nil, 'err.no_season' end
+    local n = math.tointeger(tonumber(week))
+    if not n or n < 1 or n >= WeekIndex(season, os.time()) then return nil, 'err.bounty_open' end
+    local row = MySQL.single.await(BOUNTY_ROW_SQL, { season.id, n })
+    if not row or row.winner == nil then return nil, 'err.bounty_open' end
+    local data = Collect(season.id, true)
+    local rates = BountyRates(data, n, tostring(row.objective))
+    local new = PickWinner(rates)
+    local old = tostring(row.winner)
+    return {
+        seasonId = season.id,
+        week = n,
+        objective = tostring(row.objective),
+        label = BountyLabel(tostring(row.objective)),
+        old = old,
+        oldShort = old ~= '' and DeptShort(old) or nil,
+        new = new,
+        newShort = new ~= '' and DeptShort(new) or nil,
+        rates = PublicRates(rates),
+        changed = old ~= new,
+    }
+end
+
+local function ChampionPlan(seasonId)
+    local season = C.seasonById(seasonId)
+    if not season then return nil, 'err.no_season' end
+    if season.active or not season.endsAt then return nil, 'err.season_running' end
+    if os.time() - season.endsAt > CHAMPION_RECOUNT_S then return nil, 'err.champion_recount_late' end
+    local data = Collect(season.id, true) or { officers = {}, weeks = {}, bounties = {} }
+    local list = StandingsFrom(data)
+    local new = DecideChampion(list)
+    local old = ChampionRow(season.id) or ''
+    local badgeId = ('season_%d_champion'):format(season.id)
+    return {
+        seasonId = season.id,
+        seasonName = season.name,
+        old = old,
+        oldShort = old ~= '' and DeptShort(old) or nil,
+        new = new,
+        newShort = new ~= '' and DeptShort(new) or nil,
+        changed = old ~= new,
+        badgeId = badgeId,
+        oldHolders = BadgeHolders(badgeId),
+        newHolders = ActiveOfficers(data, new ~= '' and new or nil),
+        rewards = SeasonRewards(season.id, 'champion'),
+        standings = PublicStandings(list),
+    }
+end
+
+local function CorrectionPost(title, desc)
+    Webhook(title, desc, {})
+end
+
+-- ============================================================================
+--                              THE ADMIN ACTIONS
+-- ============================================================================
+
+if CP.AdminKit and CP.AdminKit.action then
+    local Kit = CP.AdminKit
+
+    Kit.registerJob('seasonReopen', {
+        batch = function(job, ids)
+            local params = { Int(job.detail.seasonId) }
+            for _, id in ipairs(ids) do params[#params + 1] = Int(id) end
+            MySQL.update.await(
+                ([[UPDATE cp_mission_runs SET season_id = ? WHERE id IN (%s)
+                AND season_id IS NULL]]):format(Placeholders(#ids)),
+                params
+            )
+            return true
+        end,
+        finish = function() InvalidateAll() end,
+    })
+
+    -- Undo reopen: the backfilled rows lose the season again, then the season's end is put back exactly as it was
+    -- (the same end time, champion row, trophies, top 10 badges, overrides and rewards).
+    Kit.registerJob('reopenUndo', {
+        batch = function(job, ids)
+            local params = {}
+            for _, id in ipairs(ids) do params[#params + 1] = Int(id) end
+            params[#params + 1] = Int(job.detail.seasonId)
+            MySQL.update.await(
+                ([[UPDATE cp_mission_runs SET season_id = NULL WHERE id IN (%s)
+                AND season_id = ?]]):format(Placeholders(#ids)),
+                params
+            )
+            return true
+        end,
+        finish = function(job)
+            local d = job.detail
+            local sid = Int(d.seasonId)
+            if d.champion ~= nil then
+                MySQL.update.await(
+                    [[INSERT INTO cp_dept_bounties (season_id, week, objective, winner) VALUES (?, ?, ?, ?)
+                    ON DUPLICATE KEY UPDATE winner = VALUES(winner)]],
+                    { sid, CHAMPION_WEEK, CHAMPION_OBJECTIVE, d.champion })
+            end
+            for _, b in ipairs(type(d.badges) == 'table' and d.badges or {}) do
+                MySQL.update.await(
+                    'INSERT IGNORE INTO cp_badges (citizenid, badge_id, earned_at) VALUES (?, ?, FROM_UNIXTIME(?))',
+                    { b.citizenid, b.badgeId, Int(b.earnedAt) })
+            end
+            for _, o in ipairs(type(d.overrides) == 'table' and d.overrides or {}) do
+                MySQL.update.await([[INSERT INTO cp_badge_overrides (citizenid, badge_id, mode, by_actor, reason)
+                    VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE mode = VALUES(mode)]],
+                    { o.citizenid, o.badgeId, o.mode, o.by, o.reason })
+            end
+            local rewards = type(d.rewards) == 'table' and d.rewards or {}
+            if #rewards > 0 then
+                MySQL.update.await(
+                    ([[UPDATE cp_item_rewards SET status = 'pending' WHERE id IN (%s)
+                    AND status = 'forfeited']]):format(Placeholders(#rewards)),
+                    rewards
+                )
+            end
+            LoadSeasons()
+            InvalidateAll()
+        end,
+    })
+
+    Kit.callback('admin:previewSeasonEnd', 'seasons', function()
+        local season = C.currentSeason(true)
+        if not season then return nil, 'err.no_season' end
+        return EndPlan(season)
+    end)
+
+    Kit.action('server:admin:renameSeason', 'seasons', function(ctx)
+        local p = ctx.payload
+        local season = C.seasonById(p.id)
+        if not season then return false, 'err.no_season' end
+        local name = ValidName(p.name)
+        if not name then return false, 'err.invalid_season_name' end
+        if name == season.name then return true, { id = season.id, name = name } end
+        local okK, errK = Kit.cas('UPDATE cp_seasons SET name = ? WHERE id = ? AND name = ?',
+            { name, season.id, season.name })
+        if not okK then return false, errK end
+        LoadSeasons()
+        InvalidateAll()
+        ctx.audit('seasonRename', ('season:%d'):format(season.id), season.name, name, { category = 'board' })
+        return true, { id = season.id, name = name }
+    end, { rate = 2, reason = 'optional' })
+
+    Kit.action('server:admin:scheduleSeasonEnd', 'seasons', function(ctx)
+        local p = ctx.payload
+        local season = C.currentSeason(true)
+        if not season or season.id ~= Int(p.id) then return false, 'err.no_season' end
+        local at = math.tointeger(tonumber(p.at))
+        local now = os.time()
+        if not at or at <= now or at > now + PLAN_MAX_S then return false, 'err.season_plan_date' end
+        local nextName = nil
+        if p.nextName ~= nil and p.nextName ~= '' then
+            nextName = ValidName(p.nextName)
+            if not nextName then return false, 'err.invalid_season_name' end
+        end
+        local okK, errK = Kit.cas([[UPDATE cp_seasons SET planned_end = FROM_UNIXTIME(?), next_name = ?
+            WHERE id = ? AND active = 1]], { at, nextName, season.id })
+        if not okK then return false, errK end
+        LoadSeasons()
+        ctx.audit('seasonSchedule', ('season:%d'):format(season.id), season.plannedEnd and DateKey(season.plannedEnd),
+            DateKey(at), { category = 'board' })
+        return true, { id = season.id, plannedEnd = at, nextName = nextName }
+    end, { rate = 2, reason = true })
+
+    Kit.action('server:admin:cancelSeasonEnd', 'seasons', function(ctx)
+        local season = C.currentSeason(true)
+        if not season or season.id ~= Int(ctx.payload.id) then return false, 'err.no_season' end
+        local okK, errK = Kit.cas([[UPDATE cp_seasons SET planned_end = NULL, next_name = NULL
+            WHERE id = ? AND planned_end IS NOT NULL]], { season.id })
+        if not okK then return false, errK end
+        LoadSeasons()
+        ctx.audit('seasonScheduleCancel', ('season:%d'):format(season.id), DateKey(season.plannedEnd), nil,
+            { category = 'board' })
+        return true, { id = season.id }
+    end, { rate = 2, reason = 'optional' })
+
+    Kit.callback('admin:previewReopen', 'boardsAdmin', function(ctx)
+        local season, err = ReopenCheck(ctx.args.id)
+        if not season then return nil, err end
+        local plan = ReopenPlan(season)
+        plan.previewToken = ctx.preview('seasonReopen', GapIds(season), { seasonId = season.id })
+        return plan
+    end)
+
+    Kit.action('server:admin:reopenSeason', 'boardsAdmin', function(ctx)
+        local p = ctx.payload
+        local season, err = ReopenCheck(p.id)
+        if not season then return false, err end
+        local ids = GapIds(season)
+        local okT, errT = ctx.consume(p.previewToken, 'seasonReopen', ids)
+        if not okT then return false, errT end
+        local plan = ReopenPlan(season)
+        local champBadge, topBadge = ('season_%d_champion'):format(season.id), ('season_%d_top10'):format(season.id)
+        local badges = {}
+        for _, id in ipairs({ champBadge, topBadge }) do
+            for _, r in
+                ipairs(MySQL.query.await(
+                    'SELECT citizenid, UNIX_TIMESTAMP(earned_at) AS ts FROM cp_badges WHERE badge_id = ?',
+                    { id }
+                ) or {})
+            do
+                badges[#badges + 1] = { citizenid = tostring(r.citizenid), badgeId = id, earnedAt = Int(r.ts) }
+            end
+        end
+        local overrides = {}
+        for _, r in
+            ipairs(MySQL.query.await(
+                'SELECT citizenid, badge_id, mode, by_actor, reason FROM cp_badge_overrides WHERE badge_id IN (?, ?)',
+                { champBadge, topBadge }
+            ) or {})
+        do
+            overrides[#overrides + 1] = {
+                citizenid = tostring(r.citizenid),
+                badgeId = tostring(r.badge_id),
+                mode = tostring(r.mode),
+                by = tostring(r.by_actor),
+                reason = r.reason,
+            }
+        end
+        local cancel = {}
+        for _, r in ipairs(plan.rewards) do
+            if r.fate == 'cancel' then cancel[#cancel + 1] = r.id end
+        end
+        local championRow = ChampionRow(season.id)
+        local ok, res = Guarded(function()
+            local okK, errK = Kit.cas([[UPDATE cp_seasons SET active = 1, ends_at = NULL
+                WHERE id = ? AND active = 0 AND ends_at = FROM_UNIXTIME(?)]], { season.id, season.endsAt })
+            if not okK then return false, errK end
+            MySQL.update.await('DELETE FROM cp_dept_bounties WHERE season_id = ? AND week = ?',
+                { season.id, CHAMPION_WEEK })
+            MySQL.update.await('DELETE FROM cp_badges WHERE badge_id IN (?, ?)', { champBadge, topBadge })
+            MySQL.update.await('DELETE FROM cp_badge_overrides WHERE badge_id IN (?, ?)', { champBadge, topBadge })
+            CancelRewards(cancel)
+            LoadSeasons()
+            InvalidateAll()
+            return true
+        end)
+        if not ok then return false, res end
+        local okJ, jobId = Kit.startJob({
+            kind = 'seasonReopen',
+            src = ctx.src,
+            reason = ctx.reason,
+            ids = ids,
+            filter = { seasonId = season.id },
+            detail = {
+                seasonId = season.id,
+                endsAt = season.endsAt,
+                champion = championRow,
+                badges = badges,
+                overrides = overrides,
+                rewards = cancel,
+            },
+            wait = true,
+        })
+        if not okJ then return false, jobId end
+        ctx.audit('seasonReopen', ('season:%d'):format(season.id), plan.champion or '-', 'reopened',
+            { category = 'board' })
+        return true, { id = season.id, jobId = jobId, backfilled = #ids, cancelled = #cancel }
+    end, {
+        reason = true,
+        requestId = true,
+        confirm = function(p)
+            local season = C.seasonById(p.id)
+            return season and season.name or nil
+        end,
+    })
+
+    Kit.action('server:admin:undoReopen', 'boardsAdmin', function(ctx)
+        local job = Kit.job(ctx.payload.jobId)
+        if not job or job.kind ~= 'seasonReopen' or job.state ~= 'done' then return false, 'err.reopen_unknown' end
+        local d = job.detail
+        local sid = Int(d.seasonId)
+        local s = EnsureSeasons(true)
+        if not s.current or s.current.id ~= sid or s.list[1].id ~= sid then return false, 'err.season_not_latest' end
+        local ok, res = Guarded(function()
+            local okK, errK = Kit.cas([[UPDATE cp_seasons SET active = 0, ends_at = FROM_UNIXTIME(?), planned_end = NULL
+                WHERE id = ? AND active = 1]], { Int(d.endsAt), sid })
+            if not okK then return false, errK end
+            LoadSeasons()
+            return true
+        end)
+        if not ok then return false, res end
+        local okJ, jobId = Kit.startJob({
+            kind = 'reopenUndo',
+            src = ctx.src,
+            reason = ctx.reason,
+            ids = type(d.ids) == 'table' and d.ids or {},
+            filter = { seasonId = sid, jobId = job.id },
+            detail = {
+                seasonId = sid,
+                champion = d.champion,
+                badges = d.badges,
+                overrides = d.overrides,
+                rewards = d.rewards,
+            },
+            wait = true,
+        })
+        if not okJ then return false, jobId end
+        ctx.audit('seasonReopenUndo', ('season:%d'):format(sid), 'reopened', 'ended', { category = 'board' })
+        return true, { id = sid, jobId = jobId }
+    end, { reason = true })
+
+    Kit.callback('admin:getSeason', 'boardsAdmin', function(ctx)
+        local season = C.seasonById(ctx.args.id)
+        if not season then return nil, 'err.no_season' end
+        local weeks = {}
+        for _, r in
+            ipairs(MySQL.query.await(
+                'SELECT week, objective, winner FROM cp_dept_bounties WHERE season_id = ? AND week >= 1 ORDER BY week',
+                { season.id }
+            ) or {})
+        do
+            local n = Int(r.week)
+            local from, to = WeekWindow(season, n)
+            local winner = r.winner ~= nil and tostring(r.winner) or nil
+            weeks[#weeks + 1] = {
+                week = n,
+                objective = tostring(r.objective),
+                label = BountyLabel(tostring(r.objective)),
+                winner = NonEmpty(winner),
+                winnerShort = NonEmpty(winner) and DeptShort(winner) or nil,
+                closed = winner ~= nil,
+                startDate = DateKey(from),
+                endDate = DateKey(to),
+            }
+        end
+        local champion = NonEmpty(ChampionRow(season.id))
+        return {
+            season = SeasonView(season),
+            standings = C.standings(season.id).departments,
+            weeks = weeks,
+            champion = champion,
+            championShort = champion and DeptShort(champion) or nil,
+            trophies = BadgeHolders(('season_%d_champion'):format(season.id)),
+            top10 = BadgeHolders(('season_%d_top10'):format(season.id)),
+            championRecount = not season.active and season.endsAt ~= nil
+                and os.time() - season.endsAt <= CHAMPION_RECOUNT_S,
+        }
+    end)
+
+    Kit.action('server:admin:setNextBounty', 'bountyOverride', function(ctx)
+        local objective = ctx.payload.objective
+        if not BountiesOn() then return false, 'err.bounty_disabled' end
+        if type(objective) ~= 'string' or not IsBounty(objective) then return false, 'err.invalid_bounty' end
+        local season = C.currentSeason(true)
+        if not season then return false, 'err.no_season' end
+        local n = WeekIndex(season, os.time()) + 1
+        if n > MAX_WEEK then return false, 'err.bounty_closed' end
+        local before = MySQL.single.await(BOUNTY_ROW_SQL, { season.id, n })
+        if before and before.winner ~= nil then return false, 'err.bounty_closed' end
+        MySQL.update.await('INSERT IGNORE INTO cp_dept_bounties (season_id, week, objective) VALUES (?, ?, ?)',
+            { season.id, n, objective })
+        MySQL.update.await(
+            'UPDATE cp_dept_bounties SET objective = ? WHERE season_id = ? AND week = ? AND winner IS NULL',
+            { objective, season.id, n })
+        InvalidateAll()
+        ctx.audit('bountyNext', ('season:%d:week:%d'):format(season.id, n), before and before.objective or nil,
+            objective, { category = 'board' })
+        return true, { week = n, objective = objective, label = BountyLabel(objective) }
+    end, { rate = 2 })
+
+    Kit.callback('admin:previewBountyRecount', 'boardsAdmin', function(ctx)
+        local plan, err = BountyPlan(ctx.args.week)
+        if not plan then return nil, err end
+        plan.previewToken = ctx.preview('bountyRecount',
+            { ('%d:%d'):format(plan.seasonId, plan.week), 'old:' .. plan.old, 'new:' .. plan.new }, {})
+        return plan
+    end)
+
+    Kit.action('server:admin:recountBountyWeek', 'boardsAdmin', function(ctx)
+        local plan, err = BountyPlan(ctx.payload.week)
+        if not plan then return false, err end
+        local okT, errT = ctx.consume(ctx.payload.previewToken, 'bountyRecount', {
+            ('%d:%d'):format(plan.seasonId, plan.week),
+            'old:' .. plan.old,
+            'new:' .. plan.new,
+        })
+        if not okT then return false, errT end
+        if not plan.changed then return true, plan end
+        local okK, errK = Kit.cas(
+            'UPDATE cp_dept_bounties SET winner = ? WHERE season_id = ? AND week = ? AND winner = ?',
+            { plan.new, plan.seasonId, plan.week, plan.old })
+        if not okK then return false, errK end
+        InvalidateAll()
+        ctx.audit('bountyRecount', ('season:%d:week:%d'):format(plan.seasonId, plan.week), plan.oldShort or '-',
+            plan.newShort or '-', { category = 'board' })
+        CorrectionPost(CP.L('challenge.webhook_bounty_recount', { week = plan.week }),
+            CP.L('challenge.webhook_recount_desc', { old = plan.oldShort or '-', new = plan.newShort or '-' }))
+        return true, plan
+    end, { reason = true, confirm = 'RECOUNT', rate = 2 })
+
+    Kit.callback('admin:previewChampionRecount', 'boardsAdmin', function(ctx)
+        local plan, err = ChampionPlan(ctx.args.seasonId)
+        if not plan then return nil, err end
+        plan.previewToken = ctx.preview('championRecount',
+            { 'season:' .. plan.seasonId, 'old:' .. plan.old, 'new:' .. plan.new }, {})
+        return plan
+    end)
+
+    -- Trophies move through cp_badge_overrides; the old champion's unfinished season rewards are cancelled before
+    -- the new champion's are given, so one season never pays two unfinished champion rewards.
+    Kit.action('server:admin:recountChampion', 'boardsAdmin', function(ctx)
+        local plan, err = ChampionPlan(ctx.payload.seasonId)
+        if not plan then return false, err end
+        local okT, errT = ctx.consume(ctx.payload.previewToken, 'championRecount',
+            { 'season:' .. plan.seasonId, 'old:' .. plan.old, 'new:' .. plan.new })
+        if not okT then return false, errT end
+        if not plan.changed then return true, plan end
+        local okK, errK = Kit.cas([[UPDATE cp_dept_bounties SET winner = ? WHERE season_id = ? AND week = ?
+            AND winner = ?]], { plan.new, plan.seasonId, CHAMPION_WEEK, plan.old })
+        if not okK then return false, errK end
+        local keep = {}
+        for _, cid in ipairs(plan.newHolders) do keep[cid] = true end
+        for _, h in ipairs(plan.oldHolders) do
+            if not keep[h.citizenid] then
+                Call('Corrections', 'revokeBadge', ctx.src, h.citizenid, plan.badgeId, ctx.reason)
+            end
+        end
+        local had = {}
+        for _, h in ipairs(plan.oldHolders) do had[h.citizenid] = true end
+        for _, cid in ipairs(plan.newHolders) do
+            if not had[cid] then Call('Corrections', 'grantBadge', ctx.src, cid, plan.badgeId, ctx.reason) end
+        end
+        local cancel = {}
+        for _, r in ipairs(plan.rewards) do
+            if r.fate == 'cancel' and not keep[r.citizenid] then cancel[#cancel + 1] = r.id end
+        end
+        CancelRewards(cancel)
+        if plan.new ~= '' and CP.Hooks and CP.Hooks.fire then
+            CP.Hooks.fire('season:ended', plan.seasonId, { champion = plan.new, top10 = {}, recount = true })
+        end
+        InvalidateAll()
+        ctx.audit('championRecount', ('season:%d'):format(plan.seasonId), plan.oldShort or '-', plan.newShort or '-',
+            { category = 'board' })
+        CorrectionPost(CP.L('challenge.webhook_champion_recount', { season = plan.seasonName }),
+            CP.L('challenge.webhook_recount_desc', { old = plan.oldShort or '-', new = plan.newShort or '-' }))
+        plan.cancelled = #cancel
+        return true, plan
+    end, { reason = true, confirm = 'RECOUNT', rate = 2 })
+
+    -- Seasons → Departments: every contributor of a department (any department, any season).
+    Kit.callback('admin:getDeptContributors', 'boardsAdmin', function(ctx)
+        local dept = ctx.args.department
+        if not IsDepartment(dept) then return nil, 'err.unknown_department' end
+        local season = ctx.args.seasonId and C.seasonById(ctx.args.seasonId) or C.latestSeason()
+        local data = season and Collect(season.id) or nil
+        return {
+            department = DeptInfo(dept),
+            season = season and { id = season.id, name = season.name } or nil,
+            minRunsActive = MinActive(),
+            contributors = data and Contributors(data, dept, CONTRIBUTORS_LIMIT) or {},
+        }
+    end)
+end
+
+-- ============================================================================
+--                                   SETTINGS
+-- ============================================================================
+
+-- The bounty list holds known kinds only, and at least one while the weekly bounty is on (the raw editor and the
+-- checkbox editor give the same answer).
+if CP.Settings and CP.Settings.registerValidator then
+    CP.Settings.registerValidator('Challenge.bounties', function(_, list, ctx)
+        local n = 0
+        for _, b in ipairs(type(list) == 'table' and list or {}) do
+            local id = type(b) == 'table' and b.id or b
+            if not BOUNTY_KINDS[id] then return 'err.setting_bounty_unknown' end
+            n = n + 1
+        end
+        if n == 0 and ctx.effective('Challenge.weeklyBounty') ~= false then return 'err.setting_bounty_none' end
+    end)
+    CP.Settings.registerValidator('Challenge.weeklyBounty', function(_, on, ctx)
+        local list = ctx.effective('Challenge.bounties')
+        if on ~= false and type(list) == 'table' and #list == 0 then return 'err.setting_bounty_none' end
+    end)
+end
+
+if CP.Hooks and CP.Hooks.on then
+    -- Challenge rules change the running season's standings, past weeks included: a notice goes to the board
+    -- webhook and the standings are worked out again.
+    CP.Hooks.on('settings:changed', function(paths)
+        local changed = {}
+        for _, path in ipairs(type(paths) == 'table' and paths or {}) do
+            if type(path) == 'string' and (path == 'Challenge' or path:sub(1, 10) == 'Challenge.') then
+                changed[#changed + 1] = path
+            end
+        end
+        if #changed == 0 then return end
+        InvalidateAll()
+        Webhook(CP.L('challenge.webhook_rules_changed'), table.concat(changed, ', '), {})
+    end)
+end
+
+-- ============================================================================
 --                          START AND THE WEEKLY RESET
 -- ============================================================================
 
@@ -1469,6 +2183,22 @@ end
 function C._boot()
     if booted then return end
     booted = true
+    if Has('Schedule', 'onDaily') then
+        -- a planned season end happens at the first daily reset on or after its date
+        CP.Schedule.onDaily(function()
+            CreateThread(function()
+                local ok, err = pcall(C._plannedEndCheck, os.time())
+                if not ok then CP.err(TAG, 'planned season end failed: %s', tostring(err)) end
+            end)
+        end)
+    end
+    CreateThread(function()
+        while true do
+            Wait(REMIND_EVERY_MS)
+            local ok, err = pcall(C._remindPlannedEnd, os.time())
+            if not ok then CP.err(TAG, 'planned end reminder failed: %s', tostring(err)) end
+        end
+    end)
     if Has('Schedule', 'onWeekly') then
         CP.Schedule.onWeekly(function() WeeklyReset() end)
     else

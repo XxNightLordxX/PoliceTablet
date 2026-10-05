@@ -151,6 +151,10 @@ export interface ProfileData extends Omit<Profile, 'badges' | 'level'> {
     favouritePartner?: { name: string; callsign: string | null; runs?: number } | null;
     // own profile only: arrests ÷ (arrests + suspects killed), in percent
     cleanArrestRate?: number | null;
+    // own profile and staff: an admin keeps this officer off the public boards
+    boardExcluded?: boolean | null;
+    // staff only: the officer is retired (picture and bio hidden from everyone else)
+    retired?: boolean | null;
 }
 export type ProfileRunView = ProfileRun & { createdTs?: number };
 
@@ -163,6 +167,17 @@ export interface AdminBoardRow extends BoardRow {
     realName: string;
     hidden: boolean;
     department?: string;
+    // the value of the metric the board is ranked by (Rank by), when not points
+    value?: number;
+    // an admin kept the officer off the public boards (still counted for the department challenge)
+    excluded?: boolean;
+}
+
+// A past week or month an admin may open (whole boundaries, at most about 12 months back).
+export interface PastWindow {
+    from: number;
+    to: number;
+    key: string;
 }
 
 export interface StuckPayment {
@@ -214,6 +229,9 @@ export interface AdminBoards {
     season?: { id: number; name: string; active: boolean } | null;
     citizenid?: string;
     runs?: AdminRun[];
+    // full admin control: the past windows to pick from and every metric the board can be ranked by
+    windows?: { weeks: PastWindow[]; months: PastWindow[] };
+    metrics?: string[];
 }
 
 // ============================================================================
@@ -228,6 +246,9 @@ export interface SeasonView {
     active: boolean;
     week: number;
     weeksLeft: number;
+    // a planned end (the first daily reset on or after it ends the season) and the next season's name
+    plannedEnd?: number | null;
+    nextName?: string | null;
 }
 
 export interface BountyHistoryRow {
@@ -255,6 +276,10 @@ export interface SeasonListRow {
     active: boolean;
     champion?: string | null;
     championShort?: string | null;
+    plannedEnd?: number | null;
+    nextName?: string | null;
+    // the latest season, ended within 24 h, with no season running
+    canReopen?: boolean;
 }
 
 // admin:getSeasons

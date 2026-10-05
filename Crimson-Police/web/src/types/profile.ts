@@ -47,6 +47,8 @@ export interface ProfileQueueItem {
     // reports: the reporter's note; bios: the bio everyone sees now
     note?: string | null;
     current?: string | null;
+    // reports, admins only: who filed it and how many reports they filed in the last 30 days
+    reporter?: { citizenid: string; name: string; callsign: string | null; recent: number } | null;
 }
 
 // server:profile:set payload (every field optional; only what changed is sent)

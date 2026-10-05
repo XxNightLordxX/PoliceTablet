@@ -456,3 +456,18 @@
     font-size: var(--cp-fs-sm);
     text-overflow: ellipsis;
 }
+
+/* Full admin control: search filters (department, online, suspended, retired, off the boards, review, dispute,
+   flagged) */
+.oversight-off-list__filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 12px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--cp-border);
+    font-size: 12px;
+}
+
+.oversight-off-list__filters .cp-select {
+    flex: 1 1 100%;
+}

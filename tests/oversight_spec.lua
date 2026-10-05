@@ -1808,12 +1808,19 @@ for _, name in ipairs({ 'core.json', 'ui.json' }) do
     local pf = io.open(H.root .. 'locales/parts/' .. name, 'r')
     if pf then for k, v in pairs(cjson.decode(pf:read('a'))) do sharedParts[k] = v end pf:close() end
 end
+local adminParts = {}
+for _, name in ipairs({ 'admin_kit.json', 'admin_officers.json' }) do
+    local pf = io.open(H.root .. 'locales/parts/' .. name, 'r')
+    if pf then for k, v in pairs(cjson.decode(pf:read('a'))) do adminParts[k] = v end pf:close() end
+end
 for _, file in ipairs({ 'modules/admin/server.lua', 'modules/disputes/server.lua', 'modules/anticheat/server.lua' }) do
     local src = assert(io.open(H.root .. file, 'r')):read('a')
     for key in src:gmatch('\'([%a_]+%.[%w_%.]+)\'') do
         local ns = key:match('^([%a_]+)%.')
         if (ns == 'err' or ns == 'admin' or ns == 'sup' or ns == 'flag') and not key:match('%.$') then
-            H.ok(part[key] ~= nil, ('%s: locale key %s in oversight.json'):format(file, key))
+            -- full admin control keys live in their package's part (admin_kit.json, admin_officers.json)
+            H.ok(part[key] ~= nil or adminParts[key] ~= nil,
+                ('%s: locale key %s in oversight.json or an admin part'):format(file, key))
             if sharedParts[key] ~= nil and part[key] ~= nil then
                 H.eq(part[key], sharedParts[key], 'duplicate key has the same text: ' .. key)
             end
