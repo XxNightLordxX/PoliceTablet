@@ -2,6 +2,7 @@
 // its shapes from here; never redeclare them locally. If a module owner adds a field on the Lua side, add it here
 // (optional) rather than casting.
 
+import type { AdminNavCounts, MaintenanceView } from '../types/admin_control';
 import type { DebriefPerson, DecisionEntry, RunItem, RunMissionCall, RunProgress, RunStats } from '../types/run_ui';
 
 // ============================================================================
@@ -95,6 +96,8 @@ export interface Session {
     prefs?: Prefs;
     // how the tablet was opened: command, keybind, item, export, desk or dispatch (desk = its index)
     access?: { via: string; desk: number | null };
+    // CP.Maintenance.view(): a storage copy or switch, a backup restore or a store left behind holds the lock
+    maintenance?: MaintenanceView | null;
     serverTime: number; // os.time() at session build
 }
 
@@ -354,7 +357,7 @@ export interface RunResult {
 }
 
 // Sidebar badge counts (push topic 'nav').
-export interface NavCounts {
+export interface NavCounts extends AdminNavCounts {
     invites: number;
     calls: number;
     review: number;
@@ -439,6 +442,8 @@ export interface NuiMessageMap {
     overlay: { type: 'overlay'; overlay: Overlay | null };
     // Sent at login with the officer's department theme so the HUD can use it (locale optional).
     theme: { type: 'theme'; theme: Theme | null; locale?: Record<string, string> };
+    // the whole locale again after an admin renamed something in Settings → Names (Config.Labels)
+    locale: { type: 'locale'; locale: Record<string, string> };
 }
 export type NuiMessageType = keyof NuiMessageMap;
 export type NuiMessage = NuiMessageMap[NuiMessageType];

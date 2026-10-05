@@ -604,7 +604,7 @@ for name, t in pairs(tablesBefore) do
     H.eq(a and a.n, t.n, name .. ': same number of rows after the restart')
     H.ok(a and a.text == t.text, name .. ': identical rows after the restart')
 end
-H.eq(tablesCompared, 19, 'every table compared')
+H.eq(tablesCompared, 26, 'every table compared')
 local idsAfter = NextIds()
 for name, n in pairs(idsBefore) do H.eq(idsAfter[name], n, name .. ': AUTO_INCREMENT continues where it was') end
 

@@ -35,6 +35,8 @@ server_scripts {
     -- storage first: with Config.Database.enabled = false it swaps MySQL for the saves folder engine
     'modules/storage/memsql.lua',
     'modules/storage/server.lua',
+    -- CP.AdminKit before every module, so any module may register its admin actions as it loads
+    'modules/adminkit/server.lua',
     'modules/**/server.lua',
     'blocks/**/server.lua',
 }

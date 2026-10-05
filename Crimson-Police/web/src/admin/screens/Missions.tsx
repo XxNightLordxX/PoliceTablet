@@ -38,6 +38,7 @@ import type {
     BuilderRollbackResult,
 } from '../../types/builder_server';
 import type { MissionListEntry } from '../../types/oversight';
+import { MissionsToday } from '../components/MissionsToday';
 import type { AdminMissionsData } from '../../types/builder_client';
 import type { MissionSwitchView } from '../../types/settings';
 import './Settings.css';
@@ -536,6 +537,7 @@ export default function AdminMissions() {
                     { key: 'dispatch', label: t('mc.admin.tab'), icon: 'radio' },
                 ]}
             />
+            {tab === 'catalog' ? <MissionsToday /> : null}
             {tab === 'catalog' ? (
                 error ? (
                     <ErrorState error={error} onRetry={refetchAll} />

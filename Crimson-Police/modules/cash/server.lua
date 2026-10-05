@@ -177,14 +177,15 @@ local function BackToPending(rowId, why)
     return true
 end
 
--- Paid (or capped) cash on the reset-day of ts, excluding the row being paid.
+-- Paid (or capped) cash on the reset-day of ts, excluding the row being paid. A manual cash payment (an admin's,
+-- mission_id manual_cash) is outside the daily cap: it is neither cut by it nor counted in it.
 local function PaidOnDay(citizenid, ts)
     local startTs = CP.Schedule and CP.Schedule.dayStart and CP.Schedule.dayStart(ts) or (ts - ts % 86400)
     local nextTs = CP.Schedule and CP.Schedule.dayStart and CP.Schedule.dayStart(startTs + 25 * 3600)
         or (startTs + 86400)
     local ok, total = pcall(MySQL.scalar.await, [[
         SELECT COALESCE(SUM(cash_paid), 0) AS total FROM cp_mission_runs
-        WHERE citizenid = ? AND cash_status IN ('paid', 'capped')
+        WHERE citizenid = ? AND cash_status IN ('paid', 'capped') AND mission_id <> 'manual_cash'
           AND created_at >= FROM_UNIXTIME(?) AND created_at < FROM_UNIXTIME(?)
     ]], { citizenid, startTs, nextTs })
     if not ok then
@@ -377,6 +378,13 @@ PayClaimed = function(row, rowId, cid, src, progress)
         Notify(src, 'success', 'cash.paid', { amount = FmtMoney(amount), mission = label })
     end
     return status
+end
+
+-- Cash counted against the daily cap today (manual cash payments left out). nil when the lookup failed.
+function Cash.paidToday(citizenid)
+    if type(citizenid) ~= 'string' or citizenid == '' then return 0 end
+    Db()
+    return PaidOnDay(citizenid, Now())
 end
 
 function Cash.pay(rowId)

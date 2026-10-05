@@ -1,0 +1,23 @@
+/* Maintenance banner */
+.cp-maintenance {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 14px;
+    margin: 0 0 12px;
+    border-radius: 8px;
+    border: 1px solid var(--cp-warning);
+    background: rgba(var(--cp-warning-rgb), 0.14);
+    color: var(--cp-text);
+    font-size: 13px;
+}
+
+.cp-maintenance__text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.cp-maintenance__restart {
+    font-weight: 600;
+}

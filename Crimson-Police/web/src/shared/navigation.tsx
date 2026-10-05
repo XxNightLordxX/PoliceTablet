@@ -16,7 +16,10 @@ export type AdminScreenKey =
     | 'admin_permissions'
     | 'admin_settings'
     | 'admin_audit'
-    | 'admin_testing';
+    | 'admin_testing'
+    | 'admin_live'
+    | 'admin_payments'
+    | 'admin_system';
 export type ScreenKey = OfficerScreenKey | SupervisorScreenKey | AdminScreenKey;
 
 export type ScreenParams = Record<string, unknown>;

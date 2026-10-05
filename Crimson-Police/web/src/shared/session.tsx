@@ -1,6 +1,8 @@
 // The open UI's session (ARCHITECTURE §9.2) and tablet controls.
 
-import { createContext, useContext } from 'react';
+import { createContext, useContext, useEffect, useState } from 'react';
+import type { MaintenanceView } from '../types/admin_control';
+import { usePush } from './hooks';
 import type { Session, UiKind } from './types';
 
 export interface SessionContextValue {
@@ -54,4 +56,18 @@ export function officerLine(officer: Session['officer'], noCallsign: string): st
     return [officer.departmentLabel, officer.departmentShort, officer.rank, officer.callsign || noCallsign]
         .filter(Boolean)
         .join(' · ');
+}
+
+// The maintenance lock (a storage copy or switch, a backup restore, a store left behind): the session's value, kept
+// fresh by the 'maintenance' push. null = no lock.
+export function useMaintenance(): MaintenanceView | null {
+    const { session } = useContext(SessionContext);
+    const [value, setValue] = useState<MaintenanceView | null>(session?.maintenance ?? null);
+    useEffect(() => {
+        setValue(session?.maintenance ?? null);
+    }, [session?.maintenance]);
+    usePush<MaintenanceView | false | null>('maintenance', next => {
+        setValue(next && typeof next === 'object' ? next : null);
+    });
+    return value;
 }

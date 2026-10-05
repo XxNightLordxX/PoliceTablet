@@ -17,6 +17,25 @@ local ADMIN_ONLY_LIST = {
     'reloadMissions',
     'testRun',
     'openAdmin',
+    -- full admin control (docs/ARCHITECTURE.md §5.37): admins and the console only, whatever Config.Permissions says
+    'officerRecords',     -- retire, look, profile cooldown, board exclusion, banned words, staff notices
+    'pointsAdjust',       -- signed manual adjustments
+    'bulkVoid',           -- void or restore many rows as one batch
+    'restoreRun',         -- restore a voided run outside a dispute; void kinds; flag by hand
+    'progression',        -- XP check and fix, badges, streaks, goals, first-run bonus
+    'antiFarmOverride',   -- cooldown clears, extra runs, boss attempts, free-abandon reclassify
+    'liveRuns',           -- end, recall, add time, end tests; units
+    'editBuiltins',       -- built-in mission overrides in the Mission Builder
+    'missionAdmin',       -- delete, bring back, change owner, import and export missions
+    'boardsAdmin',        -- recounts, reposts, past windows, seasons planning and reopen
+    'payments',           -- the payments ledger and its actions
+    'rewardsAdmin',       -- item rewards: resolve, deliver, cancel, take back
+    'deptFunds',          -- department account balances and add funds
+    'departmentsAdmin',   -- add, turn off and delete departments; desks; logos
+    'storageAdmin',       -- storage status, copy and switch, backups and restore
+    'playerSupport',      -- check access, give the tablet item, release a stuck screen
+    'recordMove',         -- move a re-created character's history
+    'cleanup',            -- the nightly clean-up: status and run now
 }
 local ADMIN_ONLY = {}
 for _, a in ipairs(ADMIN_ONLY_LIST) do ADMIN_ONLY[a] = true end
@@ -50,18 +69,32 @@ local function InDepartments(dept, ctx)
     return false
 end
 
+-- A row of that run for that citizenid, live or archived.
 function P.tookPart(citizenid, runUuid)
     if type(citizenid) ~= 'string' or citizenid == '' or not ValidRunUuid(runUuid) then return false end
     CP.Migrations.ready()
-    local ok, res = pcall(MySQL.scalar.await,
-        'SELECT 1 AS took_part FROM cp_mission_runs WHERE run_uuid = ? AND citizenid = ? LIMIT 1',
-        { runUuid, citizenid })
-    if not ok then
-        CP.err(TAG, 'tookPart lookup failed: %s', tostring(res))
-        -- Fail closed: a reviewer who cannot be cleared is treated as a participant.
-        return true
+    for _, tbl in ipairs({ 'cp_mission_runs', 'cp_mission_runs_archive' }) do
+        local ok, res = pcall(MySQL.scalar.await,
+            ('SELECT 1 AS took_part FROM %s WHERE run_uuid = ? AND citizenid = ? LIMIT 1'):format(tbl),
+            { runUuid, citizenid })
+        if not ok then
+            CP.err(TAG, 'tookPart lookup failed: %s', tostring(res))
+            -- Fail closed: a reviewer who cannot be cleared is treated as a participant.
+            return true
+        end
+        if res ~= nil then return true end
     end
-    return res ~= nil
+    return false
+end
+
+-- Whether an action is admin-only (supervisors never pass it).
+function P.isAdminOnly(action) return ADMIN_ONLY[action] == true end
+
+-- Every admin-only action key, in a fixed order.
+function P.adminOnlyKeys()
+    local out = {}
+    for i, a in ipairs(ADMIN_ONLY_LIST) do out[i] = a end
+    return out
 end
 
 -- The reviewer is (or was) a participant of that run while it is still live (no row of theirs yet).

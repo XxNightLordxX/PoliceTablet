@@ -541,6 +541,26 @@ RegisterNetEvent(CP.e('client:push'), function(topic, data)
     T.push(topic, data)
 end)
 
+-- Names an admin gave in Settings → Names (Config.Labels) are part of the text: when they change, the NUI gets the
+-- whole locale again so an open tablet shows them at once.
+local function LabelsSignature()
+    local labels = type(Config.Labels) == 'table' and Config.Labels or {}
+    local keys = {}
+    for k, v in pairs(labels) do
+        if type(k) == 'string' and type(v) == 'string' then keys[#keys + 1] = k .. '=' .. v end
+    end
+    table.sort(keys)
+    return table.concat(keys, '\n')
+end
+local labelsSeen = LabelsSignature()
+
+CP.Hooks.on('settings:changed', function()
+    local sig = LabelsSignature()
+    if sig == labelsSeen then return end
+    labelsSeen = sig
+    T.send({ type = 'locale', locale = CP.Locale.all() })
+end)
+
 RegisterNetEvent(CP.e('client:openAdmin'), function(session)
     if type(session) ~= 'table' or session.ui ~= 'admin' then return end
     if InForeignArena() then

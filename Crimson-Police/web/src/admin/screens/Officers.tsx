@@ -44,6 +44,8 @@ import type { AdminOfficerProfile, Commendation } from '../../types/profile';
 import { CommendationsCard } from '../../officer/components/CommendationsCard';
 import { ServiceRecordCard } from '../../officer/components/ServiceRecordCard';
 import { CommendDialog } from '../../supervisor/components/CommendDialog';
+import { OfficerRunControls } from '../components/OfficerRunControls';
+import { OfficerSupport } from '../components/OfficerSupport';
 import './Officers.css';
 
 const endLabel = (reason: string) => (hasKey(`sup.end.${reason}`) ? t(`sup.end.${reason}`) : reason);
@@ -787,6 +789,14 @@ function Detail({ citizenid }: { citizenid: string }) {
                     <EmptyState compact icon="inbox" title={t('admin.officers.no_disputes')} />
                 )}
             </Card>
+
+            <OfficerRunControls
+                citizenid={o.citizenid}
+                online={o.online}
+                officer={o}
+                onChanged={() => void refetch()}
+            />
+            <OfficerSupport citizenid={o.citizenid} online={o.online} officer={o} onChanged={() => void refetch()} />
 
             <Card
                 title={t('admin.officers.runs')}

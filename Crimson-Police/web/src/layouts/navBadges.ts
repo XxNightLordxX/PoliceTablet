@@ -38,6 +38,13 @@ export function navBadge(key: ScreenKey, c: NavCounts): { badge?: string; live?:
             return { badge: countBadge(c.commendations) };
         case 'sup_review':
             return { badge: countBadge(c.review) };
+        // Admin UI (admin-only counts: the server sends them to admin players only)
+        case 'admin_officers':
+            return { badge: countBadge((c.adminReview ?? 0) + (c.adminDisputes ?? 0)) };
+        case 'admin_payments':
+            return { badge: countBadge(c.adminPayments ?? 0) };
+        case 'admin_live':
+            return { badge: countBadge(c.adminLive ?? 0) };
         default:
             return {};
     }

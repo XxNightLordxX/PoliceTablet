@@ -13,7 +13,7 @@ import { cx } from '../cx';
 import { t } from '../i18n';
 import { useEscapeLayer } from '../hooks';
 import { Button, IconButton } from './Button';
-import { Field, Textarea } from './Form';
+import { Field, TextInput, Textarea } from './Form';
 
 // The element dialogs render into (the tablet screen or the admin panel), so they scale and theme with it.
 export const LayerRootContext = createContext<HTMLElement | null>(null);
@@ -123,8 +123,13 @@ export interface ConfirmDialogProps {
     tone?: 'primary' | 'danger';
     // Ask for a reason (supervisor/admin actions). Confirm is disabled until it is filled when required.
     reason?: boolean | { label?: string; placeholder?: string; required?: boolean; maxLength?: number };
-    // Receives the reason ('' when none was asked). May return a Promise: the button shows a spinner.
-    onConfirm: (reason: string) => void | Promise<unknown>;
+    // What the action will do (a preview table, money lines), shown above the reason.
+    effect?: ReactNode;
+    // A word the admin must type (VOID 12, ENABLE, the citizenid ...): Confirm stays off until it matches (any case).
+    // The server checks the same word again (payload.confirm).
+    typedWord?: string;
+    // Receives the reason ('' when none was asked) and the typed word. May return a Promise: the button shows a spinner.
+    onConfirm: (reason: string, typed: string) => void | Promise<unknown>;
     onCancel: () => void;
     // External busy state (otherwise tracked from the onConfirm promise).
     busy?: boolean;
@@ -138,24 +143,31 @@ export function ConfirmDialog({
     cancelLabel,
     tone = 'primary',
     reason,
+    effect,
+    typedWord,
     onConfirm,
     onCancel,
     busy,
 }: ConfirmDialogProps) {
     const [text, setText] = useState('');
+    const [typed, setTyped] = useState('');
     const [pending, setPending] = useState(false);
     useEffect(() => {
-        if (open) setText('');
+        if (open) {
+            setText('');
+            setTyped('');
+        }
     }, [open]);
 
     const reasonCfg = reason ? (reason === true ? {} : reason) : null;
     const required = reasonCfg ? reasonCfg.required !== false : false;
-    const blocked = required && !text.trim();
+    const wordOk = !typedWord || typed.trim().toUpperCase() === typedWord.trim().toUpperCase();
+    const blocked = (required && !text.trim()) || !wordOk;
     const isBusy = busy || pending;
 
     const confirm = async () => {
         if (blocked || isBusy) return;
-        const r = onConfirm(text.trim());
+        const r = onConfirm(text.trim(), typed.trim());
         if (r && typeof (r as Promise<unknown>).then === 'function') {
             setPending(true);
             try {
@@ -190,6 +202,7 @@ export function ConfirmDialog({
             }
         >
             {message ? <div className="cp-dialog__message">{message}</div> : null}
+            {effect ? <div className="cp-dialog__effect">{effect}</div> : null}
             {reasonCfg ? (
                 <Field
                     label={reasonCfg.label ?? t('common.reason')}
@@ -204,6 +217,11 @@ export function ConfirmDialog({
                         rows={3}
                         autoFocus
                     />
+                </Field>
+            ) : null}
+            {typedWord ? (
+                <Field label={t('ui.confirm.type_word', { word: typedWord })} required>
+                    <TextInput value={typed} onChange={setTyped} placeholder={typedWord} autoComplete="off" />
                 </Field>
             ) : null}
         </Dialog>

@@ -94,7 +94,7 @@ the `*ScreenKey` types of `shared/navigation.tsx` and one registry entry.
    |---|---|
    | Officer | `home` `board` `dispatch` (hidden when `Config.MissionCalls.enabled = false`) `unit` `active` `leaderboard` `challenge` `profile` |
    | Supervisor | `sup_missions` `sup_crossdept` (launchCrossDept) `sup_live` `sup_review` (reviewFlagged or handleDisputes) `sup_payouts` (setTypePayout) `sup_builder` (builderEdit) `sup_report` |
-   | Admin | `admin_payouts` `admin_missions` `admin_seasons` `admin_leaderboards` `admin_officers` `admin_departments` `admin_permissions` `admin_settings` `admin_audit` `admin_testing` |
+   | Admin | `admin_payouts` `admin_payments` `admin_missions` `admin_live` `admin_seasons` `admin_leaderboards` `admin_officers` `admin_departments` `admin_permissions` `admin_settings` `admin_system` `admin_audit` `admin_testing` |
 
    `navigate(key, params)` passes params; read them with `useNavigation().params`
    (e.g. Leaderboard → `navigate('profile', { citizenid })`). Keys of another UI are ignored.

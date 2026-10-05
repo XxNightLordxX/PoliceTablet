@@ -56,3 +56,4 @@ export type { AvatarProps } from './Avatar';
 export { ErrorBoundary } from './ErrorBoundary';
 export { QuietBoundary } from './QuietBoundary';
 export { ScreenStub } from './ScreenStub';
+export { MaintenanceBanner } from './MaintenanceBanner';

@@ -13,6 +13,7 @@ local FILES = {
     '005_mission_calls.sql',
     '006_item_rewards.sql',
     '007_settings.sql',
+    '008_admin_control.sql',
 }
 
 local WAIT_HINT_MS = 30000   -- no database after this long: say what to check (oxmysql waits without a word)
@@ -35,6 +36,28 @@ end
 
 function CP.Migrations.version()
     return version
+end
+
+-- Every migration file with whether it ran and when (Admin UI → System → Storage; a pending one is a problem):
+-- { version, files = { { version, name, applied, appliedAt } }, pending }.
+function CP.Migrations.status()
+    local done = {}
+    local ok, rows = pcall(MySQL.query.await,
+        'SELECT version, name, UNIX_TIMESTAMP(applied_at) AS at FROM cp_schema_migrations ORDER BY version')
+    if ok and type(rows) == 'table' then
+        for _, r in ipairs(rows) do
+            local v = math.tointeger(tonumber(r.version))
+            if v then done[v] = math.floor(tonumber(r.at) or 0) end
+        end
+    end
+    local out = { version = version, files = {}, pending = 0, readable = ok == true }
+    for _, file in ipairs(FILES) do
+        local num = math.tointeger(tonumber(file:match('^(%d+)_')))
+        local at = num and done[num] or nil
+        out.files[#out.files + 1] = { version = num, name = file, applied = at ~= nil, appliedAt = at }
+        if at == nil then out.pending = out.pending + 1 end
+    end
+    return out
 end
 
 -- Split a file into statements at every ';' that ends a line (after stripping '--' comments).

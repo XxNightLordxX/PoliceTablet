@@ -30,6 +30,7 @@ import { formatDateTime } from '../../shared/format';
 import { useAction, useRequest } from '../../shared/hooks';
 import { hasKey, t } from '../../shared/i18n';
 import type { ConfigHealthItem } from '../../shared/types';
+import { RewardPoolEditor, handlesRewardPool } from '../components/RewardPoolEditor';
 import type {
     SettingsData,
     SettingsHistory,
@@ -48,7 +49,7 @@ const PANELS: { key: Panel; labelKey: string; icon: 'sliders' | 'clock' }[] = [
 ];
 
 type Filter = 'all' | 'changed' | 'restart';
-type SavePayload = { value?: unknown; json?: string; none?: boolean };
+type SavePayload = { value?: unknown; json?: string; none?: boolean; confirm?: string };
 type Vec = { x: number; y: number; z?: number; w?: number };
 
 const VEC_PARTS = ['x', 'y', 'z', 'w'] as const;
@@ -494,6 +495,17 @@ function JsonEditor({ s, disabled, save }: EditorProps) {
 }
 
 function Editor(props: EditorProps) {
+    // the item reward pools have their own editor (the slot handles the paths it knows)
+    if (handlesRewardPool(props.s.path)) {
+        return (
+            <RewardPoolEditor
+                path={props.s.path}
+                value={props.s.value}
+                disabled={props.disabled}
+                onSave={value => props.save({ value })}
+            />
+        );
+    }
     switch (props.s.kind) {
         case 'boolean':
             return <BoolEditor {...props} />;
@@ -785,6 +797,8 @@ export default function AdminSettings() {
     const [filter, setFilter] = useState<Filter>('all');
     const [sectionKey, setSectionKey] = useState<string | null>(null);
     const [confirm, setConfirm] = useState<'resetAll' | null>(null);
+    // a money switch turned on waits for the typed word (the server checks it too)
+    const [money, setMoney] = useState<{ s: SettingView; p: SavePayload; done: (ok: boolean) => void } | null>(null);
 
     const sections = asArray(data?.sections);
     const all = useMemo(
@@ -824,10 +838,16 @@ export default function AdminSettings() {
         if (reply.health) health.setData(asArray(reply.health));
     };
 
-    const save = async (s: SettingView, p: SavePayload) => {
+    const send = async (s: SettingView, p: SavePayload) => {
         const res = await run<SettingsReply>('server:admin:setSetting', { path: s.path, ...p });
         if (res.ok) apply(res.data);
         return res.ok;
+    };
+    const save = (s: SettingView, p: SavePayload): Promise<boolean> => {
+        if (s.money && p.value === true && s.value !== true) {
+            return new Promise<boolean>(done => setMoney({ s, p, done }));
+        }
+        return send(s, p);
     };
     const reset = async (s: SettingView) => {
         const res = await run<SettingsReply>(
@@ -1012,6 +1032,26 @@ export default function AdminSettings() {
                 }))}
             />
             {body}
+            <ConfirmDialog
+                open={!!money}
+                tone="danger"
+                title={t('settings.money_title', { name: money?.s.label ?? '' })}
+                message={t('settings.money_text')}
+                typedWord="ENABLE"
+                confirmLabel={t('settings.money_enable')}
+                onConfirm={async (_reason, typed) => {
+                    const m = money;
+                    if (!m) return;
+                    const ok = await send(m.s, { ...m.p, confirm: typed });
+                    setMoney(null);
+                    m.done(ok);
+                }}
+                onCancel={() => {
+                    money?.done(false);
+                    setMoney(null);
+                }}
+                busy={busy}
+            />
             <ConfirmDialog
                 open={!!confirm}
                 tone="danger"

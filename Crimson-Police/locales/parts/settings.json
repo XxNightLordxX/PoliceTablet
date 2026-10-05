@@ -125,5 +125,21 @@
   "builder.pub.check_untested_optional": "Not tested yet (optional: you can publish without a test)",
   "builder.test.not_tested_optional": "Not tested (optional)",
   "admin.perms.switched_on": "Supervisors may now: {action}",
-  "admin.perms.switched_off": "Supervisors may no longer: {action}"
+  "admin.perms.switched_off": "Supervisors may no longer: {action}",
+  "settings.locked.names": "The tablet title and the two command names are fixed by the spec (another resource's command with the same name would lock you out of the Admin UI).",
+  "settings.locked.call_ids": "These match the call ids of sc-npcpolice and sc-dispatch; they are not a choice.",
+  "settings.locked.code_fact": "This describes what the code does; changing it here could not change the code.",
+  "settings.points_notice_title": "Point value changed",
+  "settings.points_notice": "{by} changed the point value {path}: {old} → {new}. It applies to runs that end after the change; runs going now may end with either value; past rows keep their points.",
+  "err.confirm_enable": "Type ENABLE to turn on a money tool.",
+  "err.setting_kind_alone": "A bonus's kind changes only together with its value: save both at once.",
+  "err.setting_check": "This value could not be checked; nothing was saved.",
+  "err.setting_outside_map": "A point is outside the map.",
+  "err.setting_arena_zone": "The two Crimson-Arena no-build zones may grow, but never move, shrink or go.",
+  "err.setting_scaling_last": "The last scaling row must cover the largest unit (Limits.maxUnitSize).",
+  "err.setting_xp_first": "The first XP level must start at 0 XP and level 1.",
+  "err.setting_label_key": "A name can only be given to an offence, a commendation kind, a badge, a bonus or a penalty.",
+  "err.setting_label_unknown": "There is no such id to name.",
+  "err.setting_label_text": "A name is 1 to 64 characters, without < or >.",
+  "err.setting_tweak": "The mission loader refuses this tweak."
 }

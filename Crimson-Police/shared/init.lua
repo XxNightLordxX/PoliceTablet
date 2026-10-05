@@ -20,17 +20,80 @@ local function Format(msg, ...)
     return table.concat(parts, ' ')
 end
 
+-- ============================================================================
+--                           PROBLEMS BUFFER (SERVER)
+-- ============================================================================
+-- The last PROBLEMS_MAX warn/err lines from the first line of this file on, for Admin UI → System → Problems.
+-- Secrets are cut out before a line is kept: webhook links, connection strings, passwords and full licences.
+local PROBLEMS_MAX = 200
+local problems = { list = {}, next = 1, total = 0 }
+CP._logSink = CP._logSink or nil   -- optional function(entry), set by the module that shows the lines live
+
+local REDACT = {
+    { 'https?://[%w%.%-]+/api/webhooks/[%w_%-/%.%%?=&]+', '<webhook link>' },
+    { 'mysql://[^%s\'"]+', 'mysql://<hidden>' },
+    { '([Pp][Aa][Ss][Ss][Ww][Oo][Rr][Dd]%s*=%s*)[^;%s\'"]+', '%1<hidden>' },
+    { '([Pp][Ww][Dd]%s*=%s*)[^;%s\'"]+', '%1<hidden>' },
+}
+
+local function Redact(text)
+    text = tostring(text or '')
+    for _, r in ipairs(REDACT) do text = text:gsub(r[1], r[2]) end
+    -- a licence keeps its last 4 characters: enough to tell two apart, never enough to use one
+    text = text:gsub('(license2?:)(%x+)', function(prefix, hex)
+        if #hex <= 8 then return prefix .. hex end
+        return prefix .. '…' .. hex:sub(-4)
+    end)
+    return text
+end
+CP._redact = Redact
+
+local function Keep(level, tag, text)
+    if not IsDuplicityVersion() then return end
+    local entry = { at = os and os.time() or 0, level = level, tag = tostring(tag), text = Redact(text) }
+    problems.list[problems.next] = entry
+    problems.next = problems.next % PROBLEMS_MAX + 1
+    problems.total = problems.total + 1
+    if type(CP._logSink) == 'function' then pcall(CP._logSink, entry) end
+end
+
+CP.Problems = CP.Problems or {}
+
+-- The kept lines, newest first. opts: { tag = 'storage', level = 'error', limit = n }.
+function CP.Problems.list(opts)
+    opts = type(opts) == 'table' and opts or {}
+    local out = {}
+    local limit = math.tointeger(tonumber(opts.limit) or PROBLEMS_MAX) or PROBLEMS_MAX
+    for i = 1, PROBLEMS_MAX do
+        local idx = (problems.next - i - 1) % PROBLEMS_MAX + 1
+        local e = problems.list[idx]
+        if not e then break end
+        if (not opts.tag or e.tag == opts.tag) and (not opts.level or e.level == opts.level) then
+            out[#out + 1] = { at = e.at, level = e.level, tag = e.tag, text = e.text }
+            if #out >= limit then break end
+        end
+    end
+    return out
+end
+
+-- Lines kept since the start (more than the buffer holds once it wrapped).
+function CP.Problems.total() return problems.total end
+
 function CP.log(tag, msg, ...)
     if not Config.Debug then return end
     print(('[crimson-police:%s] %s'):format(tag, Format(msg, ...)))
 end
 
 function CP.warn(tag, msg, ...)
-    print(('^3[crimson-police:%s]^7 %s'):format(tag, Format(msg, ...)))
+    local text = Format(msg, ...)
+    Keep('warn', tag, text)
+    print(('^3[crimson-police:%s]^7 %s'):format(tag, text))
 end
 
 function CP.err(tag, msg, ...)
-    print(('^1[crimson-police:%s]^7 %s'):format(tag, Format(msg, ...)))
+    local text = Format(msg, ...)
+    Keep('error', tag, text)
+    print(('^1[crimson-police:%s]^7 %s'):format(tag, text))
 end
 
 -- Full event / callback name: CP.e('server:acceptType') -> 'crimson-police:server:acceptType'
@@ -128,6 +191,7 @@ local CONFIG_SECTIONS = {
     'Tablet',
     'AdminTheme',
     'Permissions',
+    'AdminControl',
     'Departments',
     'MissionTypes',
     'DisabledMissions',
@@ -169,6 +233,8 @@ local CONFIG_SECTIONS = {
     'Builder',
     'Testing',
     'Retention',
+    'Backups',
+    'Labels',
     'Blocks',
 }
 local MAX_NAMED_SECTIONS = 6

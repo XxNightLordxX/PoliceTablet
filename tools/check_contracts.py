@@ -8,7 +8,8 @@ Checks:
   1. Lua: every CP.<Module>.<fn>( call on a side (server/client) has a definition on that side.
   2. Events: crimson-police:client:* triggered by the server have a client handler, and
      crimson-police:server:* triggered by clients have a server handler (and vice versa).
-  3. NUI: every request/action/clientAction name used in web/src exists in Lua.
+  3. NUI: every request/action/clientAction name used in web/src exists in Lua (CP.Net.action / callback, or
+     CP.AdminKit.action / callback).
   4. Locale: every CP.L('key') / CP.Lt('key') / t('key') / returned 'err.*' key exists in the merged locale;
      conflicting duplicate keys across parts; locales/en.json (the only file shared/locale.lua loads)
      exists and equals the merge of the parts (regenerate with --merge).
@@ -138,6 +139,8 @@ cli_net_action = collect('client', r"CP\.Net\.action\(\s*['\"](server:[\w:]+)['\
 srv_handlers = collect('server', r"RegisterNetEvent\(\s*['\"](crimson-police:server:[\w:]+)['\"]")
 for k, v in collect('server', r"RegisterNetEvent\(\s*CP\.e\(\s*['\"](server:[\w:]+)['\"]").items(): srv_handlers['crimson-police:' + k] += v
 srv_actions = collect('server', r"CP\.Net\.action\(\s*['\"](server:[\w:]+)['\"]")
+# admin actions registered through CP.AdminKit (modules/adminkit) are net actions too
+for k, v in collect('server', r"(?:CP\.AdminKit|\bKit|\bAdminKit)\.action\(\s*['\"](server:[\w:]+)['\"]").items(): srv_actions[k] += v
 for k, v in collect('server', r"CP\.Net\.action\(\s*\(\s*['\"]server:%s:([\w:]+)['\"]\s*\)\s*:\s*format").items():
     for scope in ('sup', 'admin'): srv_actions['server:%s:%s' % (scope, k)] += v
 for k, v in collect('server', r"CP\.Net\.callback\(\s*\(\s*['\"]%s:([\w:]+)['\"]\s*\)\s*:\s*format").items():
@@ -149,6 +152,7 @@ for ev, where in list(cli_trigger_server.items()) + [('crimson-police:' + a, w) 
 
 # ── 3. NUI names ─────────────────────────────────────────────────────────────
 srv_callbacks = collect('server', r"CP\.Net\.callback\(\s*['\"]([\w:]+)['\"]")
+for k, v in collect('server', r"(?:CP\.AdminKit|\bKit|\bAdminKit)\.callback\(\s*['\"]([\w:]+)['\"]").items(): srv_callbacks[k] += v
 for k, v in collect('server', r"CP\.Net\.callback\(\s*\(\s*['\"]%s:([\w:]+)['\"]\s*\)\s*:\s*format").items():
     for scope in ('sup', 'admin'): srv_callbacks['%s:%s' % (scope, k)] += v
 cli_actions = collect('client', r"registerClientAction\(\s*['\"](\w+)['\"]")

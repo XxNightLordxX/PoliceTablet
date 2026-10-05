@@ -1,13 +1,14 @@
 // Admin UI: a separate full-screen panel (not the tablet), neutral admin theme (session.theme =
-// Config.AdminTheme), no watermark, 10-screen sidebar.
+// Config.AdminTheme), no watermark, 13-screen sidebar with the admin-only badges, the maintenance banner.
 
 import { useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
-import { Icon, IconButton, LayerRootContext } from '../shared/components';
+import { Icon, IconButton, LayerRootContext, MaintenanceBanner } from '../shared/components';
 import { useViewport } from '../shared/hooks';
 import { t } from '../shared/i18n';
 import { useNavigation, type ScreenKey } from '../shared/navigation';
 import { useSession, useTablet } from '../shared/session';
 import { applyTheme } from '../shared/theme';
+import { navBadge, useNavCounts } from './navBadges';
 import { NotificationBell } from './NotificationBell';
 import { ScreenHost } from './ScreenHost';
 import { screensFor } from './screens';
@@ -18,6 +19,7 @@ export function AdminLayout() {
     const { close } = useTablet();
     const { screen, navigate } = useNavigation();
     const screens = screensFor('admin', session);
+    const counts = useNavCounts();
     const root = useRef<HTMLDivElement>(null);
     const [layer, setLayer] = useState<HTMLDivElement | null>(null);
     const { width, height } = useViewport();
@@ -60,13 +62,19 @@ export function AdminLayout() {
             <div className="cp-admin__body">
                 <Sidebar
                     heading={t('ui.nav.admin')}
-                    items={screens.map(s => ({ key: s.key, label: t(s.titleKey), icon: s.icon }))}
+                    items={screens.map(s => ({
+                        key: s.key,
+                        label: t(s.titleKey),
+                        icon: s.icon,
+                        ...navBadge(s.key, counts),
+                    }))}
                     active={screen}
                     onSelect={k => navigate(k as ScreenKey)}
                     className="cp-sidebar--admin"
                     footer={<div className="cp-sidebar__hint">{t('ui.close_hint')}</div>}
                 />
                 <main className="cp-main cp-main--admin">
+                    <MaintenanceBanner admin />
                     <LayerRootContext.Provider value={layer}>
                         <ScreenHost screens={screens} />
                     </LayerRootContext.Provider>

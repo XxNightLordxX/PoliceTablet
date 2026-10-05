@@ -943,6 +943,11 @@
     line-height: 1.55;
 }
 
+.cp-dialog__effect {
+    max-height: 280px;
+    overflow: auto;
+}
+
 .cp-dialog__footer {
     display: flex;
     justify-content: flex-end;

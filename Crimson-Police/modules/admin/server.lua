@@ -50,6 +50,25 @@ local ADMIN_ONLY = {
     'reloadMissions',
     'testRun',
     'openAdmin',
+    -- full admin control (docs/ARCHITECTURE.md §5.37): admins and the console only
+    'officerRecords',
+    'pointsAdjust',
+    'bulkVoid',
+    'restoreRun',
+    'progression',
+    'antiFarmOverride',
+    'liveRuns',
+    'editBuiltins',
+    'missionAdmin',
+    'boardsAdmin',
+    'payments',
+    'rewardsAdmin',
+    'deptFunds',
+    'departmentsAdmin',
+    'storageAdmin',
+    'playerSupport',
+    'recordMove',
+    'cleanup',
 }
 local SUPERVISOR_ALWAYS = { 'viewMissionList' }
 -- Config.Permissions.supervisor in the spec's order (the Permissions screen lists them this way).
@@ -274,6 +293,8 @@ end
 
 function Admin.missionLabel(missionId)
     if missionId == 'manual_award' then return CP.L('admin.mission.manual_award') end
+    if missionId == 'manual_adjust' then return CP.L('admin.mission.manual_adjust') end
+    if missionId == 'manual_cash' then return CP.L('admin.mission.manual_cash') end
     if missionId == 'goal' then return CP.L('admin.mission.goal') end
     local def = Has('Missions', 'get') and CP.Missions.get(missionId) or nil
     if type(def) == 'table' and def.label then return def.label end
@@ -300,6 +321,7 @@ Admin.flagLabel = FlagLabel
 local queue = {}
 local working = false
 local lastSent, blockedUntil = {}, {}
+local dropped = 0          -- ordinary posts dropped from a full queue since the last notice
 
 -- 'on' and the url, 'off' (no convar or an empty one) or 'invalid' (not an https:// link: that webhook is off).
 local function WebhookState(category)
@@ -313,6 +335,21 @@ local function WebhookState(category)
     return 'on', url
 end
 
+-- A Discord webhook link: the whole host anchored (https://discord.com/api/webhooks/... or discordapp.com), so a
+-- look-alike such as discord.com.example.net never counts.
+local DISCORD_HOOKS = {
+    '^https://discord%.com/api/webhooks/%d+/[%w_%-]+$',
+    '^https://discordapp%.com/api/webhooks/%d+/[%w_%-]+$',
+}
+local function IsDiscordHook(url)
+    if type(url) ~= 'string' then return false end
+    for _, pattern in ipairs(DISCORD_HOOKS) do
+        if url:match(pattern) then return true end
+    end
+    return false
+end
+Admin._isDiscordHook = IsDiscordHook
+
 local function WebhookUrl(category)
     local state, url = WebhookState(category)
     if state == 'invalid' then
@@ -322,11 +359,18 @@ local function WebhookUrl(category)
     return url
 end
 
--- Every webhook with its convar and state, in a fixed order (Config health lists them).
+-- Every webhook with its convar and state, in a fixed order (Config health lists them). discord = the link is a
+-- Discord webhook link (anchored host check). The link itself never leaves this module.
 function Admin.webhooks()
     local out = {}
     for _, category in ipairs(WEBHOOK_ORDER) do
-        out[#out + 1] = { category = category, convar = WEBHOOK_CONVARS[category], state = (WebhookState(category)) }
+        local state, url = WebhookState(category)
+        out[#out + 1] = {
+            category = category,
+            convar = WEBHOOK_CONVARS[category],
+            state = state,
+            discord = state == 'on' and IsDiscordHook(url) or false,
+        }
     end
     return out
 end
@@ -367,11 +411,36 @@ local function SendJob(job)
     end, 'POST', job.body, { ['Content-Type'] = 'application/json' })
 end
 
+-- Once the queue has room again: one audit post saying how many ordinary posts a full queue dropped.
+local function QueueDropNotice()
+    if dropped <= 0 or #queue >= WEBHOOK_QUEUE_MAX - 1 then return end
+    local url = WebhookUrl('audit')
+    if not url then
+        dropped = 0
+        return
+    end
+    local ok, body = pcall(json.encode, {
+        username = Config.Tablet and Config.Tablet.title or 'Crimson-Police',
+        embeds = {
+            {
+                title = ClipText(CP.L('admin.webhook.dropped_title'), 256),
+                description = ClipText(CP.L('admin.webhook.dropped', { n = dropped }), 3500),
+                color = WEBHOOK_COLOURS.audit,
+                timestamp = os.date('!%Y-%m-%dT%H:%M:%SZ'),
+            },
+        },
+    })
+    dropped = 0
+    if ok then queue[#queue + 1] = { url = url, body = body, tries = 0, category = 'audit', critical = true } end
+end
+
 function Admin._pumpWebhooks()
     if working then return end
     working = true
     CreateThread(function()
-        while #queue > 0 do
+        while #queue > 0 or dropped > 0 do
+            QueueDropNotice()
+            if #queue == 0 then break end
             local now = GetGameTimer()
             local sent = false
             for i = 1, #queue do
@@ -395,7 +464,8 @@ end
 
 function Admin._webhookQueue() return queue end
 
-function Admin.webhook(category, title, description, fields)
+-- opts: { critical = true (never dropped from a full queue) }
+function Admin.webhook(category, title, description, fields, opts)
     local url = WebhookUrl(category)
     if not url then return false end
     local embed = {
@@ -430,14 +500,31 @@ function Admin.webhook(category, title, description, fields)
         CP.err(TAG, 'webhook payload could not be encoded: %s', tostring(body))
         return false
     end
+    opts = type(opts) == 'table' and opts or {}
     if #queue >= WEBHOOK_QUEUE_MAX then
-        table.remove(queue, 1)
-        WarnOnce('queue_full', 'the webhook queue is full; the oldest posts are dropped')
+        -- a post of a typed-confirmation or money action is never dropped: the oldest ordinary one goes instead
+        local victim = nil
+        for i = 1, #queue do
+            if not queue[i].critical then
+                victim = i
+                break
+            end
+        end
+        if victim then
+            table.remove(queue, victim)
+            dropped = dropped + 1
+            WarnOnce('queue_full', 'the webhook queue is full; the oldest ordinary posts are dropped')
+        elseif not opts.critical then
+            dropped = dropped + 1
+            return false
+        end
     end
-    queue[#queue + 1] = { url = url, body = body, tries = 0, category = category }
+    queue[#queue + 1] = { url = url, body = body, tries = 0, category = category, critical = opts.critical == true }
     Admin._pumpWebhooks()
     return true
 end
+
+function Admin._webhookDropped() return dropped end
 
 -- ============================================================================
 --                                    AUDIT
@@ -471,9 +558,20 @@ local function ResolveRole(role, actorId, src)
     return 'console'
 end
 
-local AUDIT_COLS = { 'actor', 'role', 'category', 'action', 'target', 'old_value', 'new_value', 'reason' }
+local AUDIT_COLS = {
+    'actor',
+    'role',
+    'category',
+    'action',
+    'target',
+    'old_value',
+    'new_value',
+    'reason',
+    'actor_ident',
+}
 
-local function WriteAudit(entry, hookCategory, actorName)
+local function WriteAudit(entry, hookCategory, actorName, opts)
+    opts = opts or {}
     local values, params = {}, {}
     for i, col in ipairs(AUDIT_COLS) do
         local v = entry[col]
@@ -492,6 +590,7 @@ local function WriteAudit(entry, hookCategory, actorName)
         CP.err(TAG, 'audit insert failed (%s): %s', entry.action, tostring(id))
         id = nil
     end
+    if opts.noWebhook then return tonumber(id) end
     local who = actorName and actorName ~= '' and ('%s (%s)'):format(actorName, entry.actor) or entry.actor
     local fields = {
         { name = CP.L('admin.webhook.field.actor'), value = who, inline = true },
@@ -511,13 +610,17 @@ local function WriteAudit(entry, hookCategory, actorName)
         fields[#fields + 1] = { name = CP.L('admin.webhook.field.reason'), value = entry.reason, inline = false }
     end
     Admin.webhook(hookCategory, ActionLabel(entry.action),
-        CP.L('admin.webhook.audit_desc', { category = hookCategory }), fields)
+        CP.L('admin.webhook.audit_desc', { category = hookCategory }), fields, { critical = opts.critical == true })
     return tonumber(id)
 end
 
 -- The cp_audit row of one entry (values clipped to the column sizes) and the actor's display name.
-local function AuditEntry(actor, role, category, action, target, old, new, reason)
+local function AuditEntry(actor, role, category, action, target, old, new, reason, ident)
     local actorId, actorName, src = ResolveActor(actor)
+    if ident == nil and src and src > 0 and Has('Access', 'licenseOfSrc') then
+        local okI, lic = pcall(CP.Access.licenseOfSrc, src)
+        if okI and type(lic) == 'string' then ident = lic end
+    end
     return {
         actor = actorId,
         role = ResolveRole(role, actorId, src),
@@ -527,22 +630,37 @@ local function AuditEntry(actor, role, category, action, target, old, new, reaso
         old_value = Str(old, 64),
         new_value = Str(new, 64),
         reason = Str(reason, MAX_REASON),
+        actor_ident = Str(ident, 64),
     },
         actorName
 end
 
-function Admin.audit(actor, role, category, action, target, old, new, reason)
+-- opts: { noWebhook = true (a bulk row: the summary line posts), critical = true (never dropped), ident = license }
+function Admin.audit(actor, role, category, action, target, old, new, reason, opts)
     if type(action) ~= 'string' or action == '' then
         CP.warn(TAG, 'audit called without an action (ignored)')
         return nil
     end
-    local entry, actorName = AuditEntry(actor, role, category, action, target, old, new, reason)
+    opts = type(opts) == 'table' and opts or {}
+    local entry, actorName = AuditEntry(actor, role, category, action, target, old, new, reason, opts.ident)
     local hookCategory = WEBHOOK_CONVARS[category] and category or entry.category
     if not coroutine.isyieldable() then
-        CreateThread(function() WriteAudit(entry, hookCategory, actorName) end)
+        CreateThread(function() WriteAudit(entry, hookCategory, actorName, opts) end)
         return nil
     end
-    return WriteAudit(entry, hookCategory, actorName)
+    return WriteAudit(entry, hookCategory, actorName, opts)
+end
+
+-- The audit row written now, in the caller's thread: its id, or false when it could not be written (a money or
+-- typed-confirmation action then moves nothing). Its webhook post is never dropped from a full queue.
+function Admin.auditSync(actor, role, category, action, target, old, new, reason, opts)
+    if type(action) ~= 'string' or action == '' or not coroutine.isyieldable() then return false end
+    opts = type(opts) == 'table' and U.copy(opts) or {}
+    if opts.critical == nil then opts.critical = true end
+    local entry, actorName = AuditEntry(actor, role, category, action, target, old, new, reason, opts.ident)
+    local hookCategory = WEBHOOK_CONVARS[category] and category or entry.category
+    local id = WriteAudit(entry, hookCategory, actorName, opts)
+    return id or false
 end
 
 -- ============================================================================
@@ -614,6 +732,8 @@ local function OwnRunCheck(src, runUuid)
     if InLiveRun(CitizenOf(src), runUuid) then return false, 'err.own_run' end
     return true
 end
+
+Admin.ownRunCheck = OwnRunCheck
 
 local function ReleaseHeld(row)
     if row.cash_status == 'held' then Call('Cash', 'release', row.id) end
@@ -803,6 +923,7 @@ end
 --                                   COMMAND
 -- ============================================================================
 
+-- Returns whether it was good news, the key and the vars (Admin.storageCopy hands them to its caller).
 local function Reply(src, kind, key, vars)
     if tonumber(src) == 0 then
         local colour = ({ error = '^1', success = '^2', warning = '^3' })[kind] or '^5'
@@ -810,6 +931,7 @@ local function Reply(src, kind, key, vars)
     else
         Notify(src, kind, key, vars)
     end
+    return kind ~= 'error', key, vars
 end
 
 local function CmdName()
@@ -1516,6 +1638,43 @@ local function StorageStatus(src)
     end
 end
 
+-- Admin UI → System → Storage: the facts of /CrimsonPoliceAdmin storage as data. The folder is the setting's
+-- relative name, never the server's full path.
+function Admin.storageStatus()
+    Db()
+    local mode = StorageMode()
+    local folder = type(Config.Database) == 'table' and Config.Database.folder or 'saves'
+    local out = {
+        mode = mode,
+        folder = type(folder) == 'string' and folder or 'saves',
+        tables = {},
+        totalRows = 0,
+        version = GetResourceMetadata and GetResourceMetadata(CP.resource, 'version', 0) or nil,
+        migrations = Has('Migrations', 'status') and select(2, Call('Migrations', 'status')) or nil,
+        loadError = Has('Storage', 'loadError') and select(2, Call('Storage', 'loadError')) or nil,
+        busy = storageBusy or nil,
+    }
+    if out.loadError ~= nil then out.loadError = ShortError(out.loadError) end
+    local side, e, vars
+    if mode == 'files' then side, e, vars = OpenFiles(false) else side, e, vars = OpenDatabase() end
+    if not side then
+        out.error = CP.L(e, vars)
+        return out
+    end
+    local schema = side.schema()
+    local counts = CountRows(side, schema)
+    for _, name in ipairs(schema.order) do
+        out.tables[#out.tables + 1] = { name = name, rows = counts[name] }
+        if name ~= MIGRATIONS_TABLE then out.totalRows = out.totalRows + counts[name] end
+    end
+    local engine = side.kind == 'files' and side.engine or nil
+    if engine then
+        local bytes, files = FolderSize(engine)
+        out.bytes, out.files = bytes, files
+    end
+    return out
+end
+
 -- A value read from the source as the target stores it.
 local function CopyValue(v, kind)
     if v == nil then return nil end
@@ -1794,13 +1953,14 @@ local function StorageCopy(src, direction, force)
     Admin.audit(src, RoleOf(src), 'audit', 'storageCopy', direction, old, new, nil)
     if not target.live then MirrorAudit(target, src, direction, old, new) end
     local ms = (GetGameTimer and GetGameTimer() or 0) - started
-    Reply(src, 'success', 'admin.cmd.storage_copied', {
+    local done = {
         tables = #copied,
         rows = total,
         source = names.source,
         target = names.target,
         seconds = ('%.1f'):format(ms / 1000),
-    })
+    }
+    Reply(src, 'success', 'admin.cmd.storage_copied', done)
     if target.live then
         Reply(src, 'warning', 'admin.cmd.storage_next_restart')
     elseif target.kind == 'files' then
@@ -1808,6 +1968,32 @@ local function StorageCopy(src, direction, force)
     else
         Reply(src, 'info', 'admin.cmd.storage_next_database')
     end
+    return true, 'admin.cmd.storage_copied', done
+end
+
+-- The storage copy for the command and the Admin UI: one at a time (it shares CP.AdminKit's busy lock with bulk jobs,
+-- backups and restores), never while a run is going. ok, messageKey, vars (the replies also reach src).
+function Admin.storageCopy(src, direction, force)
+    if direction ~= 'database-to-files' and direction ~= 'files-to-database' then
+        return Reply(src, 'error', 'admin.cmd.storage_usage', { cmd = CmdName() })
+    end
+    if storageBusy then return Reply(src, 'error', 'admin.cmd.storage_copy_busy') end
+    local running = ActiveRuns()
+    if running > 0 then return Reply(src, 'error', 'admin.cmd.storage_runs_active', { count = running }) end
+    local kit = CP.AdminKit
+    if kit and kit.lock then
+        local okL = kit.lock('storageCopy')
+        if not okL then return Reply(src, 'error', 'admin.cmd.storage_copy_busy') end
+    end
+    storageBusy = true
+    local res = table.pack(pcall(StorageCopy, src, direction, force == true))
+    storageBusy = false
+    if kit and kit.unlock then kit.unlock('storageCopy') end
+    if not res[1] then
+        CP.err(TAG, 'storage copy %s failed: %s', direction, tostring(res[2]))
+        return Reply(src, 'error', 'admin.cmd.storage_copy_error', { error = ShortError(res[2]) })
+    end
+    return res[2], res[3], res[4]
 end
 
 SUB.storage = function(src, args)
@@ -1820,16 +2006,7 @@ SUB.storage = function(src, args)
         or #args > 3 then
         return Reply(src, 'error', 'admin.cmd.storage_usage', { cmd = CmdName() })
     end
-    if storageBusy then return Reply(src, 'error', 'admin.cmd.storage_copy_busy') end
-    local running = ActiveRuns()
-    if running > 0 then return Reply(src, 'error', 'admin.cmd.storage_runs_active', { count = running }) end
-    storageBusy = true
-    local ok, err = pcall(StorageCopy, src, direction, extra == 'force')
-    storageBusy = false
-    if not ok then
-        CP.err(TAG, 'storage copy %s failed: %s', direction, tostring(err))
-        return Reply(src, 'error', 'admin.cmd.storage_copy_error', { error = ShortError(err) })
-    end
+    return Admin.storageCopy(src, direction, extra == 'force')
 end
 
 -- Every Config health line (the start-up run prints only the problems): all of them in the console, the counts in
@@ -2649,6 +2826,26 @@ function Admin._auditWhere(args)
         params[#params + 1] = like
         params[#params + 1] = like
     end
+    local target = CleanText(args.target, 64)
+    if target then
+        conds[#conds + 1] = 'a.target = ?'
+        params[#params + 1] = target
+    end
+    if type(args.role) == 'string' and ROLES[args.role] then
+        conds[#conds + 1] = 'a.role = ?'
+        params[#params + 1] = args.role
+    end
+    -- every character of one player: the license the audit row stores
+    local ident = CleanText(args.actorIdent, 64)
+    if ident then
+        conds[#conds + 1] = 'a.actor_ident = ?'
+        params[#params + 1] = ident
+    end
+    local reason = CleanText(args.reason, 64)
+    if reason then
+        conds[#conds + 1] = 'a.reason LIKE ?'
+        params[#params + 1] = LikeArg(reason)
+    end
     local from = DateArg(args.from, false)
     if from then
         conds[#conds + 1] = 'a.created_at >= FROM_UNIXTIME(?)'
@@ -2663,7 +2860,7 @@ function Admin._auditWhere(args)
 end
 
 local AUDIT_SELECT = [[SELECT a.id, a.actor, a.role, a.category, a.action, a.target, a.old_value, a.new_value, a.reason,
-  UNIX_TIMESTAMP(a.created_at) AS created_ts, o.display_name
+  a.actor_ident, UNIX_TIMESTAMP(a.created_at) AS created_ts, o.display_name
   FROM cp_audit a LEFT JOIN cp_officers o ON o.citizenid = a.actor]]
 
 local function AuditRow(r)
@@ -2678,6 +2875,7 @@ local function AuditRow(r)
         oldValue = r.old_value,
         newValue = r.new_value,
         reason = r.reason,
+        actorIdent = r.actor_ident,
         createdAt = math.floor(Num(r.created_ts, 0)),
     }
 end

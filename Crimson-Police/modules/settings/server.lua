@@ -30,15 +30,60 @@ local ACTIONS = {
     'missionSwitch',
     'locationSwitch',
     'missionSwitchesReset',
+    'moneySwitch',
 }
 
 -- These can only change in config.lua: where the settings themselves are saved, and who is an admin (an admin
 -- changing them in game could hand admin to anyone or lock every admin out).
+-- The tablet title and the two command names are Hard rule names (a clash with another resource's command would make
+-- the Admin UI unreachable). The call-id prefixes mirror sc-npcpolice's and sc-dispatch's formats. A bonus's each,
+-- block and engineOnly describe what the code does: changing them can't change it.
 local LOCKED = {
     ['Database.enabled'] = 'settings.locked.database',
     ['Database.folder'] = 'settings.locked.database',
     ['AdminAce'] = 'settings.locked.admin',
     ['QboxAdmins'] = 'settings.locked.admin',
+    ['Tablet.title'] = 'settings.locked.names',
+    ['Tablet.command'] = 'settings.locked.names',
+    ['Tablet.adminCommand'] = 'settings.locked.names',
+    ['Calls.npcCallPrefix'] = 'settings.locked.call_ids',
+    ['Calls.ownRunCallPrefixes'] = 'settings.locked.call_ids',
+    ['Bonuses.*.each'] = 'settings.locked.code_fact',
+    ['Bonuses.*.block'] = 'settings.locked.code_fact',
+    ['Bonuses.*.engineOnly'] = 'settings.locked.code_fact',
+}
+
+-- Turning one of these on needs the typed word ENABLE (payload.confirm), checked here too; every change is audited
+-- and posts to the audit webhook. They all ship off.
+local MONEY_SWITCHES = {
+    'Cash.allowUnfundedRetry',
+    'Cash.allowCapTopUp',
+    'Cash.allowPayAgain',
+    'Cash.restoreForfeited',
+    'Cash.allowAddFunds',
+    'Cash.allowClawback',
+    'Cash.allowManualCash',
+    'Rewards.allowTakeBack',
+}
+local MONEY_WORD = 'ENABLE'
+
+-- Point values: a change applies to runs that end after it, and posts a notice to the flags webhook.
+local POINTS = {
+    'MissionTypes.*.points',
+    'Bonuses.*.value',
+    'Bonuses.*.kind',
+    'Scoring.*',
+    'Scoring.common.*',
+    'Events.todMultiplier',
+    'Events.modifierPoints',
+    'Events.weeklyBoss.points',
+    'CrossDepartmentPoints',
+    'Difficulty.pointsByStars',
+    'Scaling',
+    'Goals.dailyPoints',
+    'Goals.weeklyPoints',
+    'Challenge.bountyBonus',
+    'MissionCalls.rapidResponse.pctOfP',
 }
 
 -- Read once at start (commands, key mappings, desk zones, the locale, the day and week boundaries): a change is
@@ -80,6 +125,7 @@ local RELOAD = {
 local OPEN = {
     'MissionTweaks',
     'DisabledLocations',
+    'Labels',
     'Rewards.byType',
     'Rewards.byMission',
     'Rewards.medals',
@@ -139,7 +185,7 @@ local RANGES = {
     ['CrossDept.minParticipants'] = { 1, 32 },
     ['CrossDept.maxParticipants'] = { 1, 32 },
     ['Testing.maxTesters'] = { 1, 32 },
-    ['Downed.checkEvery'] = { 1, 60 },
+    ['Downed.checkEvery'] = { 1, 10 },
     ['Route.reportEvery'] = { 1, 30 },
     ['Route.sampleEvery'] = { 5, 500 },
     ['XPCurve.growth'] = { 1, 3 },
@@ -149,6 +195,28 @@ local RANGES = {
     ['Leaderboard.topN'] = { 1, 100 },
     ['Cash.minPayout'] = { 0, 10000000 },
     ['Cash.maxPayout'] = { 0, 10000000 },
+    -- real calls, alerts, the start route and downed participants (Hard rules 15-18): numbers only, never off
+    ['Calls.dodgeWindow'] = { 10, 300 },
+    ['Calls.respondingExpiry'] = { 60, 7200 },
+    ['Alerts.backstopRadius'] = { 50, 1000 },
+    ['Alerts.backstopDelay'] = { 0, 10 },
+    ['Downed.pickupDelay'] = { 5, 120 },
+    ['Route.abandonAfter'] = { 10, 120 },
+    ['Route.maxDeviation'] = { 30, 500 },
+    ['Route.reportTimeout'] = { 5, 60 },
+    ['Route.maxDrift'] = { 200, 5000 },
+    -- admin control limits
+    ['AdminControl.adjustConfirmAbove'] = { 1, 10000 },
+    ['AdminControl.adjustDailyLimit'] = { 0, 1000000 },
+    ['AdminControl.bulkMaxRows'] = { 1, 50000 },
+    ['AdminControl.cooldownClearsPerDay'] = { 0, 50 },
+    ['AdminControl.extraRunsMax'] = { 0, 100 },
+    ['AdminControl.streakForgiveMax'] = { 0, 30 },
+    ['AdminControl.runTimeAddMax'] = { 0, 3600 },
+    ['Cash.addFundsMax'] = { 0, 10000000 },
+    ['Cash.manualDailyLimit'] = { 0, 10000000 },
+    ['Cash.lowBalanceWarn'] = { 0, 100000000 },
+    ['Backups.keep'] = { 1, 100 },
 }
 
 -- Numbers that may go either way whatever config.lua has.
@@ -172,6 +240,7 @@ local ORDERED = {
 }
 
 local warned = {}
+local validators = {}     -- { pattern, fn } (Settings.registerValidator)
 local schema = nil        -- { list, byPath, sections } (built at the first request)
 local saved = {}          -- [path] = { value, none, by, at, invalid } : the cp_settings rows
 local applied = {}        -- [path] = { value, none } : what Config holds now
@@ -190,6 +259,8 @@ local DEFAULTS = U.deepcopy(Config or {})
 -- ============================================================================
 --                                SMALL HELPERS
 -- ============================================================================
+
+local Effective   -- the value a setting holds now (defined with the checks below)
 
 local function WarnOnce(key, fmt, ...)
     if warned[key] then return end
@@ -733,7 +804,6 @@ local KNOWN = {
         options = { 'cite', 'impound' },
         allowFalse = true,
     },
-    ['Bonuses.*.kind'] = { tpl = Enum({ 'points', 'pct' }), kind = 'enum' },
     ['Cash.account'] = { tpl = Enum({ 'bank', 'cash' }), kind = 'enum' },
     ['Cash.source'] = { tpl = Enum({ 'server', 'society' }), kind = 'enum' },
     ['Units.invitePolicy'] = { tpl = Enum({ 'anyone', 'leader' }), kind = 'enum' },
@@ -754,6 +824,344 @@ local KNOWN = {
         }, { label = true, coords = true, size = true })),
     },
 }
+
+-- ============================================================================
+--                   ROW TEMPLATES (THE SIX LISTS OF TABLES)
+-- ============================================================================
+-- Each row is checked field by field, and the list as a whole by its check, from the row editor and the raw editor
+-- alike. rows = what the screen's row editor shows (fields, or bare for a list of points).
+
+local MAP_X, MAP_Y, MAP_Z = { -6000.0, 6000.0 }, { -7000.0, 9000.0 }, { -500.0, 3000.0 }   -- metres
+local TIERS = { 'standard', 'reinforced', 'heavy', 'major', 'critical' }
+local XP_BADGES = { 'grey', 'bronze', 'silver', 'gold', 'platinum' }
+local AVATAR_IDS = { 'shield', 'star', 'badge', 'dept', 'k9', 'motor', 'heli', 'swat', 'detective' }
+local VEC3 = vector3(0.0, 0.0, 0.0)
+
+local function Inside(v)
+    if v == nil then return false end
+    return v.x >= MAP_X[1] and v.x <= MAP_X[2] and v.y >= MAP_Y[1] and v.y <= MAP_Y[2] and (v.z or 0) >= MAP_Z[1]
+        and (v.z or 0) <= MAP_Z[2]
+end
+
+local function CheckPoints(list)
+    for _, v in ipairs(list) do
+        if not Inside(v) then return 'err.setting_outside_map' end
+    end
+    return nil
+end
+
+-- The Crimson-Arena zones (docs/CRIMSON_ARENA.md item 7) may grow, never shrink, move or go.
+local function CheckNoBuildZones(list)
+    for _, z in ipairs(list) do
+        if not Inside(z.coords) then return 'err.setting_outside_map' end
+    end
+    for _, d in ipairs(DEFAULTS.Builder and DEFAULTS.Builder.noBuildZones or {}) do
+        if type(d) == 'table' and type(d.label) == 'string' and d.label:find('Crimson-Arena', 1, true) then
+            local kept = false
+            for _, z in ipairs(list) do
+                if U.dist(z.coords, d.coords) < 0.5 and z.radius >= d.radius then
+                    kept = true
+                    break
+                end
+            end
+            if not kept then return 'err.setting_arena_zone' end
+        end
+    end
+    return nil
+end
+
+local function CheckAreas(list)
+    local seen = {}
+    for _, a in ipairs(list) do
+        if seen[a.key] then return 'err.setting_duplicate' end
+        seen[a.key] = true
+        if not Inside(a.center) then return 'err.setting_outside_map' end
+    end
+    return nil
+end
+
+local function CheckScaling(rows)
+    local last = 0
+    for _, r in ipairs(rows) do
+        if r.maxParticipants <= last then return 'err.setting_order' end
+        last = r.maxParticipants
+    end
+    local unit = Effective and Effective('Limits.maxUnitSize')
+    if type(unit) == 'number' and last < unit then return 'err.setting_scaling_last' end
+    return nil
+end
+
+local function CheckXpLevels(rows)
+    if rows[1].xp ~= 0 or rows[1].level ~= 1 then return 'err.setting_xp_first' end
+    for i = 2, #rows do
+        if rows[i].xp <= rows[i - 1].xp or rows[i].level <= rows[i - 1].level then return 'err.setting_order' end
+    end
+    return nil
+end
+
+local function CheckPresets(rows)
+    local seen = {}
+    for _, r in ipairs(rows) do
+        if seen[r.id] then return 'err.setting_duplicate' end
+        seen[r.id] = true
+    end
+    return nil
+end
+
+local function F(key, kind, extra)
+    local f = { key = key, kind = kind }
+    for k, v in pairs(extra or {}) do f[k] = v end
+    return f
+end
+
+local ROWS = {
+    ['Builder.noBuildZones'] = {
+        tpl = ListOf(Record(
+            { label = Text(nil, 64), coords = VEC3, radius = Num(10, 500, false) },
+            { label = true, coords = true, radius = true }
+        ), { max = 50 }),
+        check = CheckNoBuildZones,
+        rows = {
+            max = 50,
+            fields = {
+                F('label', 'text', { max = 64 }),
+                F('coords', 'vector', { size = 3, position = true }),
+                F('radius', 'number', { min = 10, max = 500 }),
+            },
+        },
+    },
+    ['Downed.dropOffs'] = {
+        tpl = ListOf(VEC3, { min = 1, max = 10 }),
+        check = CheckPoints,
+        rows = { min = 1, max = 10, bare = F(nil, 'vector', { size = 3, position = true }) },
+    },
+    ['MissionCalls.areas'] = {
+        tpl = ListOf(Record(
+            { key = Text('^[a-z0-9_]+$', 32), label = Text(nil, 40), center = VEC3 },
+            { key = true, label = true, center = true }
+        ), { min = 1, max = 50 }),
+        check = CheckAreas,
+        rows = {
+            min = 1,
+            max = 50,
+            fields = {
+                F('key', 'text', { max = 32, pattern = '^[a-z0-9_]+$' }),
+                F('label', 'text', { max = 40 }),
+                F('center', 'vector', { size = 3, position = true }),
+            },
+        },
+    },
+    ['Scaling'] = {
+        tpl = ListOf(
+            Record({
+                maxParticipants = Num(1, 64, true),
+                tier = Enum(TIERS),
+                count = Num(0.1, 10, false),
+                accuracy = Num(0, 100, true),
+                armour = Num(0, 100, true),
+                points = Num(0.1, 10, false),
+                cash = Num(0.1, 10, false),
+            }, {
+                maxParticipants = true,
+                tier = true,
+                count = true,
+                accuracy = true,
+                armour = true,
+                points = true,
+                cash = true,
+            }),
+            { min = 1, max = 10 }
+        ),
+        check = CheckScaling,
+        rows = {
+            min = 1,
+            max = 10,
+            fields = {
+                F('maxParticipants', 'number', { min = 1, max = 64, integer = true }),
+                F('tier', 'enum', { options = TIERS }),
+                F('count', 'number', { min = 0.1, max = 10 }),
+                F('accuracy', 'number', { min = 0, max = 100, integer = true }),
+                F('armour', 'number', { min = 0, max = 100, integer = true }),
+                F('points', 'number', { min = 0.1, max = 10 }),
+                F('cash', 'number', { min = 0.1, max = 10 }),
+            },
+        },
+    },
+    ['XPLevels'] = {
+        tpl = ListOf(Record({
+            label = Text(nil, 32),
+            xp = Num(0, 1000000000, true),
+            badge = Enum(XP_BADGES),
+            level = Num(1, 1000, true),
+        }, { label = true, xp = true, badge = true, level = true }), { min = 1, max = 20 }),
+        check = CheckXpLevels,
+        rows = {
+            min = 1,
+            max = 20,
+            fields = {
+                F('label', 'text', { max = 32 }),
+                F('level', 'number', { min = 1, max = 1000, integer = true }),
+                F('xp', 'number', { min = 0, integer = true }),
+                F('badge', 'enum', { options = XP_BADGES }),
+            },
+        },
+    },
+    ['Profile.avatarPresets'] = {
+        tpl = ListOf(Record({ id = Enum(AVATAR_IDS), level = Num(1, 1000, true) }, { id = true }),
+            { min = 1, max = 50 }),
+        check = CheckPresets,
+        rows = {
+            min = 1,
+            max = 50,
+            fields = {
+                F('id', 'enum', { options = AVATAR_IDS }),
+                F('level', 'number', { min = 1, max = 1000, integer = true, optional = true }),
+            },
+        },
+    },
+}
+for path, r in pairs(ROWS) do KNOWN[path] = { tpl = r.tpl, kind = 'rows', rows = r.rows, check = r.check } end
+
+-- ============================================================================
+--                            NAMES (CONFIG.LABELS)
+-- ============================================================================
+-- English names for ids, over the locale's (CP.L reads them first). Only these kinds, only ids that exist.
+
+local function ListHas(list, v)
+    if type(list) ~= 'table' then return false end
+    for _, x in ipairs(list) do
+        if x == v then return true end
+    end
+    return false
+end
+
+local function ModFn(mod, fn)
+    local m = CP[mod]
+    if type(m) == 'table' and type(m[fn]) == 'function' then return m[fn] end
+    return nil
+end
+
+local LABEL_KINDS = {
+    {
+        prefix = 'custody.offence.',
+        known = function(id)
+            local o = Effective and Effective('Custody.offences') or nil
+            if type(o) ~= 'table' then o = DEFAULTS.Custody and DEFAULTS.Custody.offences or {} end
+            return ListHas(o.person, id) or ListHas(o.vehicle, id)
+        end,
+    },
+    {
+        prefix = 'profile.commend.kind.',
+        known = function(id)
+            local kinds = Effective and Effective('Commendations.kinds') or nil
+            return ListHas(kinds, id)
+        end,
+    },
+    {
+        prefix = 'badge.',
+        known = function(id)
+            local catalog = ModFn('Scoring', 'badgeCatalog')
+            if catalog then
+                local ok, list = pcall(catalog)
+                if ok and type(list) == 'table' then
+                    for _, b in ipairs(list) do
+                        if b == id or (type(b) == 'table' and b.id == id) then return true end
+                    end
+                end
+            end
+            return false
+        end,
+    },
+    {
+        prefix = 'bonus.',
+        known = function(id) return type(DEFAULTS.Bonuses) == 'table' and DEFAULTS.Bonuses[id] ~= nil end,
+    },
+    {
+        prefix = 'penalty.',
+        known = function(id) return type(DEFAULTS.Bonuses) == 'table' and DEFAULTS.Bonuses[id] ~= nil end,
+    },
+}
+
+local function CheckLabels(map)
+    for key, text in pairs(map) do
+        local kindOk = false
+        for _, kind in ipairs(LABEL_KINDS) do
+            if key:sub(1, #kind.prefix) == kind.prefix then
+                local id = key:sub(#kind.prefix + 1)
+                if id == '' or not id:match('^[%w_%-]+$') then return 'err.setting_label_key' end
+                -- an id the locale names exists too (built-in mission cards' own bonuses, the shipped badges)
+                local inFile = CP.Locale and CP.Locale.inFile and CP.Locale.inFile(key)
+                if not inFile and not kind.known(id) then return 'err.setting_label_unknown' end
+                kindOk = true
+                break
+            end
+        end
+        if not kindOk then return 'err.setting_label_key' end
+        if U.trim(text) == '' then return 'err.setting_label_text' end
+        if text:find('[<>]') then return 'err.setting_label_text' end
+    end
+    return nil
+end
+
+KNOWN['Labels'] = { tpl = MapOf(Text(nil, 64), '^[%w_%.%-]+$'), kind = 'labels', check = CheckLabels }
+
+-- ============================================================================
+--                             BONUS KIND AND VALUE
+-- ============================================================================
+-- A bonus's kind changes only together with its value (one save of both): points -500..500 whole numbers, pct
+-- -1..1, a bonus stays a bonus and a penalty stays a penalty.
+
+local function BonusKindNow(path, ctx)
+    local kindPath = Parent(path) .. '.kind'
+    local pending = ctx and ctx.pending
+    if pending and pending[kindPath] ~= nil then return pending[kindPath] end
+    return Effective and Effective(kindPath) or nil
+end
+
+local function CheckBonusValue(v, path, ctx)
+    local kind = BonusKindNow(path, ctx)
+    local default = U.getPath(DEFAULTS, path)
+    if type(default) == 'number' then
+        if default > 0 and v < 0 then return 'err.setting_negative' end
+        if default < 0 and v > 0 then return 'err.setting_positive' end
+    end
+    if kind == 'pct' then
+        if v < -1 or v > 1 then return 'err.setting_range' end
+        return nil, v + 0.0
+    end
+    local i = math.tointeger(v)
+    if not i then return 'err.setting_whole' end
+    if i < -500 or i > 500 then return 'err.setting_range' end
+    return nil, i
+end
+
+local function CheckBonusKind(v, path, ctx)
+    local valuePath = Parent(path) .. '.value'
+    local pending = ctx and ctx.pending
+    if not (pending and pending[valuePath] ~= nil) then return 'err.setting_kind_alone' end
+    return nil
+end
+
+KNOWN['Bonuses.*.kind'] = { tpl = Enum({ 'points', 'pct' }), kind = 'enum', check = CheckBonusKind }
+KNOWN['Bonuses.*.value'] = { tpl = Num(-500, 500), kind = 'number', check = CheckBonusValue, min = -500, max = 500 }
+
+-- ============================================================================
+--                           BUILT-IN MISSION TWEAKS
+-- ============================================================================
+-- CP.Missions checks each tweak the way the mission loader would (when it offers checkTweak), on every change made
+-- in game; at start the loader applies them with its own warnings.
+local function CheckTweaks(map, _, ctx)
+    if ctx and ctx.boot then return nil end
+    local fn = ModFn('Missions', 'checkTweak')
+    if not fn then return nil end
+    for id, tweak in pairs(map) do
+        local ok, good, err = pcall(fn, id, tweak)
+        if not ok then return 'err.setting_tweak' end
+        if good == false then return err or 'err.setting_tweak' end
+    end
+    return nil
+end
+KNOWN['MissionTweaks'].check = CheckTweaks
 
 -- ============================================================================
 --                                   CHECKING
@@ -1071,6 +1479,7 @@ local function Describe(path, default)
         e.allowFalse = known.allowFalse
         e.min, e.max = known.min, known.max
         e.check = known.check
+        e.rows = known.rows
     end
     local range = not e.tpl and RangeTemplate(path, default) or nil
     if range then
@@ -1145,9 +1554,11 @@ local function Describe(path, default)
         if e.max == nil and type(default) == 'number' and default < 0 and not InList(SIGNED, path) then e.max = 0 end
         if KIND[e.tpl] == 'alts' then e.integer = true end
     end
-    e.locked = LOCKED[path]
+    e.locked = Lookup(LOCKED, path)
     e.restart = InList(RESTART, path) or UnderAny(RESTART, path)
     e.reload = UnderAny(RELOAD, path)
+    e.points = InList(POINTS, path) or nil
+    e.money = Contains(MONEY_SWITCHES, path) or nil
     return e
 end
 
@@ -1260,7 +1671,7 @@ end
 -- ============================================================================
 
 -- The value a setting would hold now (saved values win over config.lua).
-local function Effective(path)
+Effective = function(path)
     local s = saved[path]
     if s and not s.invalid then
         if s.none then return nil end
@@ -1269,8 +1680,30 @@ local function Effective(path)
     return U.getPath(DEFAULTS, path)
 end
 
+-- A cross-field check another module adds (a department's jobs, desks, reward pools, tweaks): fn(path, clean, ctx)
+-- -> errKey|nil, run after the template on every change (the raw editor and every structured editor alike) and on
+-- every saved row at start. pattern: a path ('Rewards.byType'), '*' for any one key ('Departments.*.jobs'), or a
+-- prefix that covers everything under it ('Departments'). ctx = { boot, pending = { [path] = value }, effective(path) }.
+function Settings.registerValidator(pattern, fn)
+    if type(pattern) ~= 'string' or pattern == '' or type(fn) ~= 'function' then return false end
+    validators[#validators + 1] = { pattern = pattern, fn = fn }
+    return true
+end
+
+local function ValidatorsFor(path)
+    local out = {}
+    for _, v in ipairs(validators) do
+        if v.pattern == path or Matches(path, v.pattern) or path:sub(1, #v.pattern + 1) == v.pattern .. '.' then
+            out[#out + 1] = v
+        end
+    end
+    return out
+end
+
 -- ok, clean value (Lua: vectors, whole numbers, floats) | false, errKey. none = "not set" (nil).
-function Settings.check(path, value, none)
+-- ctx (optional) = { pending = { [path] = value } of the same save (a bonus's kind with its value), boot = true }.
+function Settings.check(path, value, none, ctx)
+    ctx = type(ctx) == 'table' and ctx or {}
     local e = Settings.entry(path)
     if not e then return false, 'err.setting_unknown' end
     if e.locked then return false, 'err.setting_locked' end
@@ -1291,8 +1724,9 @@ function Settings.check(path, value, none)
     local ok, clean = Shape(tpl, value)
     if not ok then return false, clean end
     if e.check then
-        local err = e.check(clean)
+        local err, fixed = e.check(clean, path, ctx)
         if err then return false, err end
+        if fixed ~= nil then clean = fixed end
     end
     -- settings that stay in order with another one
     for _, pair in ipairs(ORDERED) do
@@ -1312,6 +1746,27 @@ function Settings.check(path, value, none)
             for _, d in ipairs(def) do
                 if not Contains(clean, d) then return false, 'err.setting_options_default' end
             end
+        end
+    end
+    -- the validators other modules registered
+    local list = ValidatorsFor(path)
+    if #list > 0 then
+        local pending = type(ctx.pending) == 'table' and ctx.pending or {}
+        local vctx = {
+            boot = ctx.boot == true,
+            pending = pending,
+            effective = function(p)
+                if pending[p] ~= nil then return pending[p] end
+                return Effective(p)
+            end,
+        }
+        for _, v in ipairs(list) do
+            local okV, err = pcall(v.fn, path, clean, vctx)
+            if not okV then
+                CP.err(TAG, 'a validator of %s failed: %s', v.pattern, tostring(err))
+                return false, 'err.setting_check'
+            end
+            if type(err) == 'string' and err ~= '' then return false, err end
         end
     end
     return true, clean
@@ -1365,6 +1820,13 @@ local function LoadRows()
         return false
     end
     saved = {}
+    -- every saved value, so a bonus's kind is checked with its saved value (they are saved together)
+    local pending = {}
+    for _, r in ipairs(type(rows) == 'table' and rows or {}) do
+        local doc = U.jsonField(r.value_json)
+        if type(doc) == 'table' and doc.v ~= nil then pending[tostring(r.setting_key)] = doc.v end
+    end
+    local ctx = { boot = true, pending = pending }
     for _, r in ipairs(type(rows) == 'table' and rows or {}) do
         local path = tostring(r.setting_key)
         local doc = U.jsonField(r.value_json)
@@ -1373,10 +1835,10 @@ local function LoadRows()
         if type(doc) ~= 'table' then
             okC, clean = false, 'err.setting_type'
         elseif doc.none == true then
-            okC, clean = Settings.check(path, nil, true)
+            okC, clean = Settings.check(path, nil, true, ctx)
             rec.none = true
         else
-            okC, clean = Settings.check(path, doc.v)
+            okC, clean = Settings.check(path, doc.v, false, ctx)
         end
         if okC then
             rec.value = clean
@@ -1554,6 +2016,9 @@ local function View(e)
         locked = e.locked,
         by = s and s.by or nil,
         at = s and s.at or nil,
+        rows = e.rows,
+        points = e.points,
+        money = e.money,
     }
     if e.optionsFrom then
         v.options = Plain(Effective(e.optionsFrom))
@@ -1621,11 +2086,11 @@ end
 --                                   CHANGING
 -- ============================================================================
 
-local function Audit(src, action, target, old, new, reason)
+local function Audit(src, action, target, old, new, reason, opts)
     if not (CP.Admin and CP.Admin.audit) then return end
     local n = tonumber(src) or 0
     pcall(CP.Admin.audit, n > 0 and n or 'console', n > 0 and 'admin' or 'console', 'audit', action, target, old, new,
-        reason)
+        reason, opts)
 end
 
 local function Reply(paths)
@@ -1636,13 +2101,48 @@ local function Reply(paths)
     return { settings = views, health = Health(), pending = pending }
 end
 
--- Saves one setting (admins only; the server checks everything again). Setting config.lua's value is a reset.
--- opts: { action, target, old, new, reason } replace the audit line (the mission switches).
-function Settings.set(src, path, value, none, opts)
+local function Ident(src)
+    local n = tonumber(src) or 0
+    if n <= 0 or not (CP.Access and CP.Access.licenseOfSrc) then return nil end
+    local ok, lic = pcall(CP.Access.licenseOfSrc, n)
+    return ok and type(lic) == 'string' and lic or nil
+end
+
+-- One cp_settings_history row: the full old and new values (NULL = config.lua's), who (citizenid and license), why.
+local function History(src, path, action, oldJson, newJson, opts)
     opts = opts or {}
-    if not loaded then return false, 'err.settings_not_ready' end
-    local okC, clean = Settings.check(path, value, none)
-    if not okC then return false, clean end
+    local ok, err = pcall(MySQL.insert.await, [[
+        INSERT INTO cp_settings_history (setting_key, action, old_json, new_json, by_actor, by_ident, reason,
+          reverts_id, created_at)
+        VALUES (?, ?, NULLIF(?, ''), NULLIF(?, ''), ?, NULLIF(?, ''), NULLIF(?, ''), NULLIF(?, 0), NOW())
+    ]], {
+        path,
+        tostring(action):sub(1, 40),
+        oldJson or '',
+        newJson or '',
+        ActorId(src),
+        Ident(src) or '',
+        type(opts.reason) == 'string' and opts.reason:sub(1, 255) or '',
+        math.tointeger(tonumber(opts.revertsId) or 0) or 0,
+    })
+    if not ok then CP.err(TAG, 'the settings history of %s could not be written: %s', path, tostring(err)) end
+end
+
+local function SavedJson(s)
+    if not s or s.invalid then return nil end
+    return Encode(s.value, s.none)
+end
+
+-- Turning a money switch on needs the typed word (the screen asks for it; the server checks it again).
+local function MoneyGuard(path, clean, none, opts)
+    if not Contains(MONEY_SWITCHES, path) or none or clean ~= true or Effective(path) == true then return nil end
+    local word = type(opts) == 'table' and opts.confirm or nil
+    if type(word) ~= 'string' or U.trim(word):upper() ~= MONEY_WORD then return 'err.confirm_enable' end
+    return nil
+end
+
+-- Writes one checked value. 'same' when nothing changes, else the change, or nil + errKey.
+local function Commit(src, path, clean, none, opts)
     local e = Settings.entry(path)
     local before = Effective(path)
     local beforeNone = before == nil
@@ -1650,47 +2150,157 @@ function Settings.set(src, path, value, none, opts)
     local isDefault
     if none then isDefault = e.default == nil else isDefault = Same(clean, e.default) end
     if s and not s.invalid and ((none and s.none) or (not none and not s.none and Same(s.value, clean))) then
-        return true, Reply({ path })
+        return 'same'
     end
+    local oldJson = SavedJson(s)
+    local noop = isDefault and not s
     if isDefault then
-        if s and not DeleteRow(path) then return false, 'err.internal' end
+        if s and not DeleteRow(path) then return nil, 'err.internal' end
         saved[path] = nil
     else
-        if not WriteRow(path, clean, none, src) then return false, 'err.internal' end
+        if not WriteRow(path, clean, none, src) then return nil, 'err.internal' end
         saved[path] = { value = clean, none = none or nil, by = ActorId(src), at = os.time() }
     end
-    Changed({ path })
+    local action = opts.action or (isDefault and 'settingReset' or 'settingChanged')
+    if not noop then History(src, path, action, oldJson, not isDefault and Encode(clean, none) or nil, opts) end
+    return { path = path, before = before, beforeNone = beforeNone, clean = clean, none = none, isDefault = isDefault }
+end
+
+-- A point value changed: a notice to the flags webhook (the change applies to runs that end after it).
+local function PointsNotice(src, path, old, new)
+    if not (CP.Admin and CP.Admin.webhook) then return end
+    pcall(CP.Admin.webhook, 'flags', CP.L('settings.points_notice_title'), CP.L('settings.points_notice', {
+        path = path,
+        old = old,
+        new = new,
+        by = ActorId(src),
+    }))
+end
+
+-- The audit lines of one change: a money switch has its own (never dropped from the webhook queue), a point value
+-- also posts a notice to the flags webhook.
+local function AuditChange(src, c, opts)
+    local e = Settings.entry(c.path)
     if opts.action then
         if not opts.silent then Audit(src, opts.action, opts.target, opts.old, opts.new, opts.reason) end
+    elseif e and e.money then
+        local on = (not c.none and c.clean == true)
+        Audit(src, 'moneySwitch', c.path, c.before == true and 'on' or 'off', on and 'on' or 'off', opts.reason,
+            { critical = true })
     else
-        Audit(src, isDefault and 'settingReset' or 'settingChanged', path, Brief(before, beforeNone),
-            Brief(clean, none), #path > 64 and path or nil)
+        Audit(src, c.isDefault and 'settingReset' or 'settingChanged', c.path, Brief(c.before, c.beforeNone),
+            Brief(c.clean, c.none), opts.reason or (#c.path > 64 and c.path or nil))
     end
+    if e and e.points then PointsNotice(src, c.path, Brief(c.before, c.beforeNone), Brief(c.clean, c.none)) end
+end
+
+-- Saves one setting (admins only; the server checks everything again). Setting config.lua's value is a reset.
+-- opts: { action, target, old, new, reason, silent } replace the audit line (the mission switches); { confirm }
+-- carries the typed word of a money switch; { reason, revertsId } go into the settings history.
+function Settings.set(src, path, value, none, opts)
+    opts = opts or {}
+    if not loaded then return false, 'err.settings_not_ready' end
+    local okC, clean = Settings.check(path, value, none, { pending = opts.pending })
+    if not okC then return false, clean end
+    local errM = MoneyGuard(path, clean, none, opts)
+    if errM then return false, errM end
+    local c, errC = Commit(src, path, clean, none, opts)
+    if not c then return false, errC end
+    if c == 'same' then return true, Reply({ path }) end
+    Changed({ path })
+    AuditChange(src, c, opts)
     return true, Reply({ path })
+end
+
+-- Several settings saved as one change: every value is checked first (each sees the others, so a bonus's kind and
+-- its value go together), then all are written. changes = { { path, value, none } }.
+function Settings.setMany(src, changes, opts)
+    opts = opts or {}
+    if not loaded then return false, 'err.settings_not_ready' end
+    if type(changes) ~= 'table' or #changes == 0 or #changes > 50 then return false, 'err.invalid_payload' end
+    local pending = {}
+    for _, c in ipairs(changes) do
+        if type(c) ~= 'table' or type(c.path) ~= 'string' then return false, 'err.invalid_payload' end
+        if pending[c.path] ~= nil then return false, 'err.setting_duplicate' end
+        pending[c.path] = c.none and false or c.value
+        if pending[c.path] == nil then return false, 'err.setting_type' end
+    end
+    local checked = {}
+    for _, c in ipairs(changes) do
+        local okC, clean = Settings.check(c.path, c.value, c.none == true, { pending = pending })
+        if not okC then return false, clean end
+        local errM = MoneyGuard(c.path, clean, c.none == true, opts)
+        if errM then return false, errM end
+        checked[#checked + 1] = { path = c.path, clean = clean, none = c.none == true }
+    end
+    local done, paths = {}, {}
+    for _, c in ipairs(checked) do
+        local res, errC = Commit(src, c.path, c.clean, c.none, opts)
+        if not res then
+            if #paths > 0 then Changed(paths) end
+            return false, errC
+        end
+        paths[#paths + 1] = c.path
+        if res ~= 'same' then done[#done + 1] = res end
+    end
+    if #done > 0 then Changed(paths) end
+    for _, c in ipairs(done) do AuditChange(src, c, opts) end
+    return true, Reply(paths)
+end
+
+-- A bonus's kind and value are reset together (one without the other could leave a value its kind can't hold).
+local function ResetGroup(path)
+    if Matches(path, 'Bonuses.*.kind') or Matches(path, 'Bonuses.*.value') then
+        return { Parent(path) .. '.kind', Parent(path) .. '.value' }
+    end
+    return { path }
 end
 
 function Settings.reset(src, path, opts)
     opts = opts or {}
     if not loaded then return false, 'err.settings_not_ready' end
     local e = Settings.entry(path)
-    if not e then return false, 'err.setting_unknown' end
-    if e.locked then return false, 'err.setting_locked' end
-    local s = saved[path]
-    if not s then return true, Reply({ path }) end
-    local before = Effective(path)
-    if not DeleteRow(path) then return false, 'err.internal' end
-    saved[path] = nil
-    Changed({ path })
-    if opts.action then
-        Audit(src, opts.action, opts.target, opts.old, opts.new, opts.reason)
-    else
-        Audit(src, 'settingReset', path, s.invalid and Brief(s.raw) or Brief(before, s.none), Brief(e.default),
-            #path > 64 and path or nil)
+    if not e then
+        -- a saved row config.lua no longer has can still be removed
+        if not (saved[path] and saved[path].invalid) then return false, 'err.setting_unknown' end
+    elseif e.locked and not (saved[path] and saved[path].invalid) then
+        return false, 'err.setting_locked'
     end
-    return true, Reply({ path })
+    local paths = {}
+    for _, p in ipairs(ResetGroup(path)) do
+        if saved[p] then paths[#paths + 1] = p end
+    end
+    if #paths == 0 then return true, Reply({ path }) end
+    local changes = {}
+    for _, p in ipairs(paths) do
+        local s = saved[p]
+        local before = Effective(p)
+        if not DeleteRow(p) then return false, 'err.internal' end
+        saved[p] = nil
+        History(src, p, opts.action or 'settingReset', SavedJson(s), nil, opts)
+        changes[#changes + 1] = { path = p, s = s, before = before }
+    end
+    Changed(paths)
+    for _, c in ipairs(changes) do
+        local pe = Settings.entry(c.path)
+        if opts.action then
+            Audit(src, opts.action, opts.target, opts.old, opts.new, opts.reason)
+        elseif pe and pe.money then
+            Audit(src, 'moneySwitch', c.path, c.before == true and 'on' or 'off', pe.default == true and 'on' or 'off',
+                opts.reason, { critical = true })
+        else
+            Audit(src, 'settingReset', c.path, c.s.invalid and Brief(c.s.raw) or Brief(c.before, c.s.none),
+                Brief(pe and pe.default), opts.reason or (#c.path > 64 and c.path or nil))
+        end
+        if pe and pe.points and not opts.action then
+            PointsNotice(src, c.path, Brief(c.before, c.s.none), Brief(pe.default, pe.default == nil))
+        end
+    end
+    return true, Reply(paths)
 end
 
-function Settings.resetAll(src)
+function Settings.resetAll(src, opts)
+    opts = opts or {}
     if not loaded then return false, 'err.settings_not_ready' end
     local paths = {}
     for path in pairs(saved) do
@@ -1699,6 +2309,8 @@ function Settings.resetAll(src)
     end
     table.sort(paths)
     if #paths == 0 then return true, Reply({}) end
+    local old = {}
+    for _, path in ipairs(paths) do old[path] = SavedJson(saved[path]) end
     local ok, err = pcall(MySQL.update.await, 'DELETE FROM cp_settings')
     if not ok then
         CP.err(TAG, 'reset all failed: %s', tostring(err))
@@ -1713,9 +2325,80 @@ function Settings.resetAll(src)
         end
     end
     saved = keep
+    for _, path in ipairs(paths) do History(src, path, 'settingsResetAll', old[path], nil, opts) end
     Changed(paths)
     Audit(src, 'settingsResetAll', nil, tostring(#paths), '0', table.concat(paths, ', '))
     return true, Reply(paths)
+end
+
+-- The settings history (cp_settings_history), newest first: { rows, page, pages, total }. opts: { path, page }.
+function Settings.history(opts)
+    opts = type(opts) == 'table' and opts or {}
+    local where, params = '1 = 1', {}
+    if type(opts.path) == 'string' and opts.path ~= '' and #opts.path <= 191 then
+        where = 'setting_key = ?'
+        params[1] = opts.path
+    end
+    local okN, total = pcall(MySQL.scalar.await, ('SELECT COUNT(*) FROM cp_settings_history WHERE %s'):format(where),
+        params)
+    if not okN then return nil, 'err.internal' end
+    total = math.floor(U.num(total))
+    local pages = math.max(1, math.ceil(total / HISTORY_PAGE))
+    local page = math.tointeger(tonumber(opts.page) or 1) or 1
+    if page < 1 then page = 1 end
+    if page > pages then page = pages end
+    local okR, rows = pcall(
+        MySQL.query.await,
+        ([[
+        SELECT id, setting_key, action, old_json, new_json, by_actor, by_ident, reason, reverts_id,
+          UNIX_TIMESTAMP(created_at) AS created_ts
+        FROM cp_settings_history WHERE %s ORDER BY created_at DESC, id DESC LIMIT %d OFFSET %d]]):format(
+            where,
+            HISTORY_PAGE,
+            (page - 1) * HISTORY_PAGE
+        ),
+        params
+    )
+    if not okR then return nil, 'err.internal' end
+    local out = {}
+    for _, r in ipairs(type(rows) == 'table' and rows or {}) do
+        out[#out + 1] = Settings._historyRow(r)
+    end
+    return { rows = out, page = page, pages = pages, total = total }
+end
+
+function Settings._historyRow(r)
+    local function value(j)
+        local doc = U.jsonField(j)
+        if type(doc) ~= 'table' then return nil, false end
+        if doc.none then return nil, true end
+        return doc.v, true
+    end
+    local old, oldSet = value(r.old_json)
+    local new, newSet = value(r.new_json)
+    return {
+        id = math.tointeger(tonumber(r.id)),
+        path = r.setting_key,
+        action = r.action,
+        old = old,
+        oldSaved = oldSet,
+        new = new,
+        newSaved = newSet,
+        by = r.by_actor,
+        reason = r.reason,
+        revertsId = r.reverts_id ~= nil and math.tointeger(tonumber(r.reverts_id)) or nil,
+        createdAt = math.floor(U.num(r.created_ts)),
+    }
+end
+
+-- One history row (a Revert reads it).
+function Settings.historyEntry(id)
+    id = math.tointeger(tonumber(id) or 0)
+    if not id or id <= 0 then return nil end
+    local ok, r = pcall(MySQL.single.await, [[SELECT id, setting_key, action, old_json, new_json, by_actor, by_ident,
+        reason, reverts_id, UNIX_TIMESTAMP(created_at) AS created_ts FROM cp_settings_history WHERE id = ?]], { id })
+    if not ok or type(r) ~= 'table' then return nil end
+    return Settings._historyRow(r)
 end
 
 -- ============================================================================
@@ -1921,8 +2604,34 @@ CP.Net.action('server:admin:setSetting', function(src, payload)
         if not okJ or decoded == nil then return false, 'err.setting_json' end
         value = decoded
     end
-    return Settings.set(src, p.path, value, p.none == true)
+    local reason = type(p.reason) == 'string' and U.trim(p.reason):sub(1, 255) or nil
+    return Settings.set(src, p.path, value, p.none == true,
+        { confirm = p.confirm, reason = reason ~= '' and reason or nil })
 end, { rate = 6 })
+
+-- Several settings as one save (a bonus's kind with its value): { changes = { { path, value? | json?, none? } },
+-- confirm?, reason? }.
+CP.Net.action('server:admin:setSettings', function(src, payload)
+    local ok, err = AdminOnly(src)
+    if not ok then return false, err end
+    if not CP.Net.rateOk(src, 'settings:set', 20, 10000) then return false, 'err.rate_limited' end
+    local p = Payload(payload)
+    if type(p.changes) ~= 'table' then return false, 'err.invalid_payload' end
+    local changes = {}
+    for i, c in ipairs(p.changes) do
+        if i > 50 or type(c) ~= 'table' or type(c.path) ~= 'string' then return false, 'err.invalid_payload' end
+        local value = c.value
+        if type(c.json) == 'string' then
+            if #c.json > MAX_JSON then return false, 'err.setting_too_big' end
+            local okJ, decoded = pcall(json.decode, c.json)
+            if not okJ or decoded == nil then return false, 'err.setting_json' end
+            value = decoded
+        end
+        changes[#changes + 1] = { path = c.path, value = value, none = c.none == true }
+    end
+    local reason = type(p.reason) == 'string' and U.trim(p.reason):sub(1, 255) or nil
+    return Settings.setMany(src, changes, { confirm = p.confirm, reason = reason ~= '' and reason or nil })
+end, { rate = 4 })
 
 CP.Net.action('server:admin:resetSetting', function(src, payload)
     local ok, err = AdminOnly(src)

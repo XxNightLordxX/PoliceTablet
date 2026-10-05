@@ -1,7 +1,7 @@
 // Supervisor UI: its own sidebar (7 screens, hidden when their action is not in session.actions; Review Queue with
 // its open-items badge), department theme and the officer's look, watermark and the switch back to the Officer UI.
 
-import { Button, Watermark } from '../shared/components';
+import { Button, MaintenanceBanner, Watermark } from '../shared/components';
 import { setMoneyFormat } from '../shared/format';
 import { t } from '../shared/i18n';
 import { useNavigation, type ScreenKey } from '../shared/navigation';
@@ -49,6 +49,7 @@ export function SupervisorLayout() {
                 />
                 <main className="cp-main">
                     <Watermark logo={session.logo} department={session.officer?.department} tabletHeight={TABLET_H} />
+                    <MaintenanceBanner />
                     <ScreenHost screens={screens} />
                 </main>
             </div>

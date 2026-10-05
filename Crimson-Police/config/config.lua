@@ -119,6 +119,24 @@ Config.Permissions = {
 }
 
 -- ============================================================================
+--                                ADMIN CONTROL
+-- ============================================================================
+-- What admins may do beyond the normal rules, from the Admin UI. Supervisors never get these. Every action is in
+-- the audit log; limits are counted from saved rows, so a restart never resets them.
+Config.AdminControl = {
+    pointAdjust = true,          -- Officers → Adjust points: logged manual awards and deductions
+    adjustConfirmAbove = 500,    -- points: a typed confirmation at or above this
+    adjustDailyLimit = 0,        -- points one admin may adjust per day (0 = no limit)
+    editBuiltins = true,         -- Mission Builder: admins edit built-in missions (saved as an override, same id)
+    recordMove = true,           -- Officers → Move record: a re-created character's history to the new citizenid
+    bulkMaxRows = 5000,          -- rows one bulk void or restore may change
+    cooldownClearsPerDay = 3,    -- cooldown clears per officer per day
+    extraRunsMax = 10,           -- extra completions per officer per day
+    streakForgiveMax = 7,        -- streak days one forgive may cover
+    runTimeAddMax = 600,         -- seconds an admin may add to one live run
+}
+
+-- ============================================================================
 --                                 DEPARTMENTS
 -- ============================================================================
 -- Every entry is used automatically for access, the tablet name, colours and
@@ -127,6 +145,7 @@ Config.Permissions = {
 Config.Departments = {
     sast = {
         label = 'San Andreas State Troopers',        -- shown in the tablet header
+        enabled = true,                              -- false = turned off: nobody new joins, history and pay stay
         short = 'SAST',                              -- tag on boards, units and badges
         jobs = { 'sast' },                           -- Qbox job names (as in sc-police / sc-dispatch)
         supervisorGrade = 3,                         -- Qbox grade number: this grade and up are supervisors
@@ -157,6 +176,7 @@ Config.Departments = {
     },
     fib = {
         label = 'Federal Investigation Bureau',
+        enabled = true,
         short = 'FIB',
         jobs = { 'fib' },
         supervisorGrade = 3,
@@ -224,6 +244,18 @@ Config.Cash = {
     minPayout = 0,        -- limits for any base payout set in-game
     maxPayout = 25000,
     dailyCap = 0,         -- max cash per officer per day; 0 = no cap
+    -- Money tools outside the normal flow (Admin UI → Payments, Departments). All ship off: turning one on in
+    -- Settings needs the typed word ENABLE and is audited.
+    allowUnfundedRetry = false,  -- retry payments the department account could not cover
+    allowCapTopUp = false,       -- pay the part of a payment the daily cap cut
+    allowPayAgain = false,       -- pay a payment stuck in 'paying' again (after checking the bank history)
+    restoreForfeited = false,    -- a restored run pays its forfeited cash after all
+    allowAddFunds = false,       -- add money to a department's account
+    addFundsMax = 50000,         -- dollars per Add funds
+    allowClawback = false,       -- take back cash already paid
+    allowManualCash = false,     -- pay an officer by hand
+    manualDailyLimit = 10000,    -- dollars one admin may pay by hand per day
+    lowBalanceWarn = 0,          -- warn below this department balance (0 = off)
 }
 
 -- ============================================================================
@@ -749,6 +781,8 @@ Config.Leaderboard = {
     metrics = { 'points', 'missions', 'arrests', 'impounds', 'citations', 'rescues', 'calls', 'judgement' },
     minDecisions = 10,       -- Judgement: decisions needed in the window
     weeklyBadges = {},       -- extra weekly badges by metric, e.g. { 'arrests' }; Officer of the Week stays by points
+    announceWeekly = true,   -- the weekly top 3 on Home and the board webhook
+    announceMonthly = true,  -- the monthly top 3 on Home and the board webhook
 }
 
 -- ============================================================================
@@ -764,6 +798,7 @@ Config.Events = {
     armoredArmour = 50,      -- Armored Hostiles: extra armour on armed NPCs (Tactical only)
     timeCrunchCut = 0.25,    -- Time Crunch: share of the time limit removed
     weeklyBoss = { enabled = true, days = { 'friday', 'saturday', 'sunday' }, points = 500, payout = 2500 },
+    modifiers = { armored_hostiles = true, time_crunch = true, radio_silence = true },   -- false = never rolled
 }
 
 -- ============================================================================
@@ -841,6 +876,7 @@ Config.Commendations = {
 -- Items must exist in ox_inventory. Never weapons, ammo, armour, bandages or money items.
 Config.Rewards = {
     enabled = false,
+    allowTakeBack = false,           -- Admin UI: take a given item back from an online officer (needs ENABLE)
     dailyItemCap = 10,               -- items per officer per day, every source together
     dailyValueCap = 2000,            -- total value of those items per officer per day
     findBonus = 0.10,                -- each lawful evidence find adds this to the run's chance...
@@ -1000,6 +1036,24 @@ Config.Retention = {
     runArchiveMonths = 12,  -- move older runs to cp_mission_runs_archive; 0 = never
     auditDays = 180,        -- delete older audit rows; 0 = keep forever
     missionCallDays = 90,   -- delete older mission call history; 0 = keep forever
+}
+
+-- ============================================================================
+--                                   BACKUPS
+-- ============================================================================
+-- Admin UI → System → Backups: copies of every Crimson-Police table and the mission files, in saves/_backups.
+Config.Backups = {
+    keep = 7,               -- backups kept; the newest and the latest automatic one are never removed
+    daily = false,          -- true = one backup at every daily reset
+}
+
+-- ============================================================================
+--                                    NAMES
+-- ============================================================================
+-- English names an admin gives to ids (Admin UI → Settings → Names). Only these kinds: custody.offence.<id>,
+-- profile.commend.kind.<id>, badge.<id>, bonus.<id> and penalty.<id>. A name changes text only, never an id.
+Config.Labels = {
+    -- ['custody.offence.loitering'] = 'Loitering',
 }
 
 -- Discord webhooks are read from convars in server.cfg, never stored here.

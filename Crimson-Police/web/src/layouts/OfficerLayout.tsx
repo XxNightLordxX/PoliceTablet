@@ -2,7 +2,7 @@
 // badges, watermark, the pinned current-run bar, the unit ready check and the Supervisor switch (session.roles).
 
 import { ReadyCheckBanner } from '../officer/components/ReadyCheckBanner';
-import { Button, Watermark } from '../shared/components';
+import { Button, MaintenanceBanner, Watermark } from '../shared/components';
 import { setMoneyFormat } from '../shared/format';
 import { usePush } from '../shared/hooks';
 import { t } from '../shared/i18n';
@@ -57,6 +57,7 @@ export function OfficerLayout() {
                 <main className="cp-main">
                     <Watermark logo={session.logo} department={session.officer?.department} tabletHeight={TABLET_H} />
                     <RunBar />
+                    <MaintenanceBanner />
                     {screen !== 'unit' ? (
                         <div className="cp-main-ready">
                             <ReadyCheckBanner />

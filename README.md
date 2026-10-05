@@ -66,6 +66,7 @@ say the same things in short and point back here.
    - [9.12 Mission Builder](#912-mission-builder)
    - [9.13 Testing tools](#913-testing-tools)
    - [9.14 Rules to tell your officers](#914-rules-to-tell-your-officers)
+   - [9.15 Full admin control](#915-full-admin-control)
 10. [Before go-live, updating and backups](#10-before-go-live-updating-and-backups)
     - [10.1 Before go-live checklist](#101-before-go-live-checklist)
     - [10.2 Updating](#102-updating)
@@ -676,8 +677,8 @@ no restart to do by hand. Type `/CrimsonPoliceAdmin` and open **Settings**.
 - **Changes are kept.** They are saved in your database (or the saves folder with the database off) and survive
   restarts and updates. A change made in game wins over `config.lua`. You can still edit `config.lua`: a setting you
   never changed in game keeps following the file.
-- **A few settings are read only when Crimson-Police starts** (command names, default keys, mission desks, the
-  language, the hour of the daily reset and the first day of the week). They have an **After restart** badge: the
+- **A few settings are read only when Crimson-Police starts** (default keys, mission desks, the language, the hour
+  of the daily reset and the first day of the week). They have an **After restart** badge: the
   screen saves the change and shows "Running now: ... · after a restart: ...". Restart it from txAdmin or type
   `restart Crimson-Police` in the server console when no mission is running.
 
@@ -689,10 +690,24 @@ no restart to do by hand. Type `/CrimsonPoliceAdmin` and open **Settings**.
 - **What it refuses**: a value of the wrong kind (text for a number, a list for a switch), a number outside its range,
   a colour that is not `#rrggbb`, an option that does not exist, and a Mission Builder export folder outside
   `missions/custom/`. The message says why.
-- **Two kinds of setting stay in the file** and show as locked on the screen: `Config.Database` (database on or off,
-  and the saves folder), because the settings themselves are saved there; and `Config.AdminAce` and
+- **A few settings stay in the file** and show as locked on the screen: `Config.Database` (database on or off,
+  and the saves folder), because the settings themselves are saved there; `Config.AdminAce` and
   `Config.QboxAdmins`, which decide who is an admin, so no one can hand admin to every player or lock every admin out
-  from the tablet. Change them in `config.lua` and restart.
+  from the tablet; the tablet title and the two command names (another script with the same command would lock you
+  out of the Admin UI); the call-id prefixes that match sc-npcpolice and sc-dispatch; and a bonus's `each`, `block`
+  and `engineOnly`, which only describe what the code does. Change them in `config.lua` and restart.
+- **Money tools ship off.** The switches `Config.Cash.allowUnfundedRetry`, `allowCapTopUp`, `allowPayAgain`,
+  `restoreForfeited`, `allowAddFunds`, `allowClawback`, `allowManualCash` and `Config.Rewards.allowTakeBack` turn on
+  admin tools that move money outside the normal pay flow. To turn one on you type **ENABLE** in the box the screen
+  shows; the change is in the audit log and the audit Discord webhook. Turn them on only after trying them on a test
+  server with Renewed-Banking.
+- **Point values** (mission type points, bonus values, scoring rules, Type of the Day and the like) are marked. A
+  change counts for runs that end after it; past runs keep their points. Each change also posts a notice to the flags
+  webhook. A bonus's kind (points or a share of the type's points) can only change together with its value.
+- **Names**: `Config.Labels` gives your own English names to offences, commendation kinds, badges, bonuses and
+  penalties, for example `['custody.offence.loitering'] = 'Hanging around'`. Only the name changes, never what it
+  does.
+- **History**: every change also keeps the full old and new value, so a change can be looked at (and undone) later.
 - If a saved setting is no longer allowed (for example after an update changed a setting's form), Crimson-Police
   ignores it with one console line, uses the `config.lua` value, and the Settings screen marks it so you can change
   or reset it.
@@ -1102,6 +1117,7 @@ Which of these they can use is set in `Config.Permissions.supervisor` ([4.4](#44
 | Screen | What it is for |
 |---|---|
 | **Payouts** | Every type and mission payout; set or clear them |
+| **Payments** | Every payment Crimson-Police made or still owes, with totals and the payment tools ([9.15.4](#9154-payments-item-rewards-and-department-money)) |
 | **Missions** | Built-in and custom missions: Builder, publish, archive, restore, roll back, break edit locks, reload files, Cross-Department Missions and mission calls |
 | **Seasons & Challenge** | Start or end a season, override this week's bounty |
 | **Leaderboards** | Every board, cash paid, payments stuck in "paying", void runs, award points, and the **Item rewards** tab |
@@ -1109,7 +1125,9 @@ Which of these they can use is set in `Config.Permissions.supervisor` ([4.4](#44
 | **Departments** | Each department's jobs, colours, logo, desks, member count and (with society payouts) account balance |
 | **Missions** (switches) | Turn any mission, or single locations of it, on or off ([5.8](#58-turn-missions-and-locations-on-or-off)) |
 | **Permissions** | What supervisors may do (a switch for each), and **Config health**: the start-up check, with a **Check again** button |
+| **Live** | Every live run and unit, with the controls to recall, end, add time or split a unit ([9.15.3](#9153-live-runs-units-and-anti-farm)) |
 | **Settings** | Every setting of `config.lua` and `blocks.lua`, changed in game, with a change history ([5.7](#57-change-any-setting-in-game-the-settings-screen)) |
+| **System** | Storage, backups, the webhook states, recent console problems, the other resources and the nightly clean-up ([9.15.5](#9155-system-departments-and-settings)) |
 | **Audit Log** | Every supervisor and admin action, with filters and a CSV export |
 | **Testing** | Optional: every mission and location with its test result, test runs, testers, and an area coverage table ([9.13](#913-testing-tools)) |
 
@@ -1264,6 +1282,53 @@ optional: no mission, location or draft needs a test before it is used or publis
 
 A suggested discipline ladder: a verbal warning, then the run voided, then a 7-day Crimson-Police suspension, then
 removal. Three voided runs in 30 days suspend an officer for 7 days by themselves.
+
+### 9.15 Full admin control
+
+Everything an admin may want to change is a button in `/CrimsonPoliceAdmin`: no file to edit, no console command and
+no database tool. Who is an admin does not change (the `crimsonpolice.admin` ace from server.cfg, your Qbox admins
+while `Config.QboxAdmins = true`, and the server console), and supervisors get nothing new. A few rules hold for
+every admin tool:
+
+- **A reason** is asked wherever a record changes, and it goes into the audit log with your name and your player
+  licence, so every character of one player can be found.
+- **A typed word** guards the dangerous ones: for example `VOID 12` before voiding 12 runs, the citizen ID before
+  retiring an officer, or `ENABLE` before turning on a money tool.
+- **A preview** shows exactly what a bulk change will do before it runs. If the data changes in the meantime, the
+  change is refused and you look again.
+- **Never your own records**: no admin can correct, pay or adjust any of their own characters, or a run one of them
+  took part in. Another admin, or the server console, can.
+- **One click, one action**: a double click or a slow connection never pays or changes anything twice.
+- **Bulk changes** run one at a time in the background with a progress bar, and every one can be undone as a batch.
+  A restart in the middle finishes the job (or stops it cleanly) at the next start.
+- **Maintenance**: while a storage copy, a storage switch or a backup restore runs, a banner shows on every tablet
+  and no new mission, call, test or payment starts. When it is done, the Admin UI (and one console line) say:
+  "Restart Crimson-Police now from txAdmin or the server console". Crimson-Police never restarts itself.
+
+#### 9.15.1 Officers, points and boards
+
+The officer tools (points adjustments, run history, voids and restores, retire, badges, streaks and goals) and the
+board, recognition and season tools are described here as they arrive.
+
+#### 9.15.2 Missions and the Mission Builder
+
+Editing built-in missions in the Mission Builder (with **Reset to original**), mission history and stats, and moving
+missions between servers are described here as they arrive.
+
+#### 9.15.3 Live runs, units and anti-farm
+
+The **Live** screen (every run and unit) and the per-officer cooldown and limit tools are described here as they
+arrive.
+
+#### 9.15.4 Payments, item rewards and department money
+
+The **Payments** screen, the item reward tools and the department accounts are described here as they arrive. Every
+tool that moves money outside the normal pay flow ships switched off ([5.7](#57-change-any-setting-in-game-the-settings-screen)).
+
+#### 9.15.5 System, departments and settings
+
+The **System** screen (storage, backups, webhook states, problems, other resources, clean-up), adding and turning
+off departments, desks, and the Settings follow-ups are described here as they arrive.
 
 ---
 
@@ -1553,7 +1618,27 @@ however it ends.
   can never change points in game; an admin can, through the Settings screen (audited) or a manual award.
 - Testing is optional, at the owner's request: publishing a Mission Builder draft needs no test
   (`Config.Builder.requireTestToPublish = false`); with it on, supervisors need a passed test and admins never do.
+- Full admin control, at the owner's request ("admins get full control over everything in the admin tablet"):
+  `docs/SPEC.md` has a **Full admin control** section. Admins may change point values (logged, resettable) and make
+  a logged manual award **or deduction** (the Points Hard rule says so); admins may edit any built-in mission in the
+  Mission Builder, saved as an override under the same mission id with **Reset to original** (the Mission Builder
+  Hard rule says so); the money tools outside the normal pay flow are built and **ship off**, each turned on in
+  Settings with the typed word `ENABLE`. Who is an admin, restarts and Discord webhook links stay out of the tablet.
 
-**Waiting for the owner's OK** (already in `docs/SPEC.md` and the code): the Roles Hard rule now also counts a Qbox
-admin (the ace `admin`) as an admin while `Config.QboxAdmins` is `true`, which ships on. To undo it without a code
-change, set `Config.QboxAdmins = false`.
+**Waiting for the owner's OK** (already in `docs/SPEC.md` and the code):
+
+- The Roles Hard rule now also counts a Qbox admin (the ace `admin`) as an admin while `Config.QboxAdmins` is `true`,
+  which ships on. To undo it without a code change, set `Config.QboxAdmins = false`.
+- D2 Corrections as bulk voids: an officer's, an operation's or a board window's runs can be voided as one batch
+  (there is still no wipe). Undo: every batch has **Undo** in Officers → Corrections.
+- D5 Departments added, turned off and (when unused) deleted from the Admin UI; a turned-off department's unfinished
+  pay still pays from its account. Undo: turn the department on again (`Config.Departments.<key>.enabled`).
+- D6 Anti-farm overrides per officer (clear cooldowns, more completions today, another boss attempt, first-run bonus
+  again, forgive streak days, add run time, treat a free abandon as a normal one), each with a daily or weekly limit.
+  Undo: set its limit in `Config.AdminControl` to 0.
+- D10 Names for offences, commendation kinds, badges, bonuses and penalties (`Config.Labels`, English only). Undo:
+  reset `Labels` in Settings.
+- D11 Move a re-created character's history to the player's new citizenid (same licence, logged). Undo: **Undo
+  move**, or `Config.AdminControl.recordMove = false`.
+- D13 The maintenance lock during a storage copy, a storage switch or a backup restore (not a pause and not a switch:
+  it always ends with your restart). Undo: none needed; it ends with the restart.

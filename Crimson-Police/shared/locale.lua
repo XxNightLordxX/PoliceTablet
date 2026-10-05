@@ -37,20 +37,41 @@ local function Interpolate(s, vars)
     )
 end
 
+-- A name an admin gave in Settings → Names (Config.Labels, English text over the locale's), or nil.
+local function Label(key)
+    local labels = Config and Config.Labels
+    if type(labels) ~= 'table' then return nil end
+    local v = labels[key]
+    if type(v) == 'string' and v ~= '' then return v end
+    return nil
+end
+
 -- Translate a key; unknown keys are returned as-is so a missing string is visible, not blank.
 function CP.L(key, vars)
-    local s = strings[key]
+    local s = Label(key) or strings[key]
     if s == nil then return Interpolate(tostring(key), vars) end
     return Interpolate(s, vars)
 end
 
 function CP.Locale.has(key)
+    return Label(key) ~= nil or strings[key] ~= nil
+end
+
+-- Whether locales/en.json itself has the key (Config.Labels left out).
+function CP.Locale.inFile(key)
     return strings[key] ~= nil
 end
 
--- Every string, sent to the NUI with the session so the UI shares one text source.
+-- Every string, sent to the NUI with the session so the UI shares one text source (with Config.Labels over it).
 function CP.Locale.all()
-    return strings
+    local labels = Config and Config.Labels
+    if type(labels) ~= 'table' or next(labels) == nil then return strings end
+    local out = {}
+    for k, v in pairs(strings) do out[k] = v end
+    for k, v in pairs(labels) do
+        if type(k) == 'string' and type(v) == 'string' and v ~= '' then out[k] = v end
+    end
+    return out
 end
 
 -- ============================================================================
@@ -175,7 +196,7 @@ end
 
 -- The locale text of key when the locale has it, else the fallback text (both with vars filled in).
 function CP.Locale.label(key, fallback, vars)
-    if type(key) == 'string' and strings[key] ~= nil then return CP.L(key, vars) end
+    if type(key) == 'string' and (strings[key] ~= nil or Label(key)) then return CP.L(key, vars) end
     if fallback == nil then return CP.L(key, vars) end
     return Interpolate(tostring(fallback), vars)
 end

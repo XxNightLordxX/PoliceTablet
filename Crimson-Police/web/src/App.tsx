@@ -114,6 +114,11 @@ export default function App() {
         setHudTheme(m.theme ?? null);
         if (m.locale && typeof m.locale === 'object') setBootLocale(m.locale);
     });
+    useNuiEvent('locale', m => {
+        if (!m.locale || typeof m.locale !== 'object') return;
+        setBootLocale(m.locale);
+        setSession(prev => (prev ? { ...prev, locale: m.locale } : prev));
+    });
     usePush<{ debug?: unknown } | null>('test', data => {
         if (data && typeof data === 'object' && 'debug' in data) setDebug(data.debug ?? null);
     });

@@ -125,7 +125,7 @@ do
     H.eq(lvl, 'warn', 'a config cut short: a warning')
     H.ok(
         t:find(
-            'Config.Format, Config.AdminTheme, Config.Permissions, Config.Departments, Config.MissionTypes, Config.DisabledMissions and ',
+            'Config.Format, Config.AdminTheme, Config.Permissions, Config.AdminControl, Config.Departments, Config.MissionTypes and ',
             1, true)
                 ~= nil
             and t:find(' more are missing', 1, true) ~= nil,

@@ -33,6 +33,9 @@ import AdminPermissions from '../admin/screens/Permissions';
 import AdminSettings from '../admin/screens/Settings';
 import AdminAudit from '../admin/screens/Audit';
 import AdminTesting from '../admin/screens/Testing';
+import AdminLive from '../admin/screens/Live';
+import AdminPayments from '../admin/screens/Payments';
+import AdminSystem from '../admin/screens/System';
 
 export interface ScreenDef<K extends ScreenKey = ScreenKey> {
     key: K;
@@ -104,7 +107,9 @@ export const SUPERVISOR_SCREENS: ScreenDef<SupervisorScreenKey>[] = [
 
 export const ADMIN_SCREENS: ScreenDef<AdminScreenKey>[] = [
     { key: 'admin_payouts', titleKey: 'ui.screen.admin_payouts', icon: 'dollar', component: AdminPayouts },
+    { key: 'admin_payments', titleKey: 'ui.screen.admin_payments', icon: 'creditCard', component: AdminPayments },
     { key: 'admin_missions', titleKey: 'ui.screen.admin_missions', icon: 'layers', component: AdminMissions },
+    { key: 'admin_live', titleKey: 'ui.screen.admin_live', icon: 'activity', component: AdminLive },
     { key: 'admin_seasons', titleKey: 'ui.screen.admin_seasons', icon: 'calendar', component: AdminSeasons },
     {
         key: 'admin_leaderboards',
@@ -121,6 +126,7 @@ export const ADMIN_SCREENS: ScreenDef<AdminScreenKey>[] = [
     },
     { key: 'admin_permissions', titleKey: 'ui.screen.admin_permissions', icon: 'key', component: AdminPermissions },
     { key: 'admin_settings', titleKey: 'ui.screen.admin_settings', icon: 'sliders', component: AdminSettings },
+    { key: 'admin_system', titleKey: 'ui.screen.admin_system', icon: 'server', component: AdminSystem },
     { key: 'admin_audit', titleKey: 'ui.screen.admin_audit', icon: 'fileText', component: AdminAudit },
     { key: 'admin_testing', titleKey: 'ui.screen.admin_testing', icon: 'flask', component: AdminTesting },
 ];

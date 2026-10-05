@@ -230,8 +230,8 @@ do
     H.eq(v, 'police_tablet', 'the tablet item on')
     Err('Tablet.item', true, 'err.setting_type', 'true is not an item name')
     Err('Tablet.item', 'bad name!', 'err.setting_text', 'an item name with spaces')
-    Err('Tablet.command', '', 'err.setting_text', 'an empty command name')
-    Err('Tablet.command', 'Crimson Police', 'err.setting_text', 'a command name with a space')
+    Err('Tablet.command', 'CopTab', 'err.setting_locked', 'the command names are Hard rule names: config.lua only')
+    Err('Tablet.keybind', 'F 6', 'err.setting_text', 'a default key with a space')
     H.ok((Check('Tablet.keybind', '')), 'an empty default key (none)')
 
     ok, v = Check('Downed.dropOffs', { { x = 1, y = 2, z = 3 }, { x = 4.5, y = 5, z = 6 } })
@@ -394,11 +394,11 @@ do
     H.eq(S.entry('QboxAdmins').locked, 'settings.locked.admin', 'for both')
 
     -- restart settings: saved now, used after a restart
-    ok, res = S.set(1, 'Tablet.command', 'CopTab')
+    ok, res = S.set(1, 'Tablet.keybind', 'F6')
     H.ok(ok, 'a restart setting is saved')
-    H.eq(Config.Tablet.command, 'CrimsonPolice', 'but Config keeps the running value until a restart')
+    H.eq(Config.Tablet.keybind, '', 'but Config keeps the running value until a restart')
     H.ok(res.settings[1].pending == true and res.pending == 1, 'the screen shows it waits for a restart')
-    H.eq(res.settings[1].saved, 'CopTab', 'with the saved value')
+    H.eq(res.settings[1].saved, 'F6', 'with the saved value')
 
     -- the missions reload once after a burst of changes to what the loader reads
     reloads = 0
@@ -447,7 +447,7 @@ do
     H.restart()
     lines = {}
     S = Boot()
-    H.eq(Config.Tablet.command, 'CopTab', 'after a restart the saved command name is used')
+    H.eq(Config.Tablet.keybind, 'F6', 'after a restart the saved default key is used')
     H.eq(Config.Units.nearbyBands[3], 2500, 'every saved setting is over config.lua from the start')
     H.eq(Config.Blocks.escort.speed[2], 110, 'blocks.lua settings too')
     H.eq(Config.Limits.maxUnitSize, 4, 'a saved value that is not allowed is ignored')
@@ -455,7 +455,7 @@ do
     H.ok(Printed('the saved setting Old.removed was ignored'), 'a setting config.lua no longer has too')
     local v = S.view('Limits.maxUnitSize')
     H.ok(v.invalid == 'err.setting_number' and v.invalidValue == 'lots', 'the screen shows the ignored value')
-    H.ok(S.view('Tablet.command').pending == nil, 'nothing waits for a restart any more')
+    H.ok(S.view('Tablet.keybind').pending == nil, 'nothing waits for a restart any more')
     local warn = false
     for _, l in ipairs(CP.ConfigHealth.run()) do
         if l.check == 'settings' and l.level == 'warn' and l.text:find('Limits.maxUnitSize', 1, true) then
@@ -472,8 +472,8 @@ do
     H.eq(#H.sql('SELECT setting_key FROM cp_settings'), 0, 'no saved setting is left')
     H.eq(Config.Units.nearbyBands[3], 3000, 'Config is config.lua again')
     H.eq(LastAudit().action, 'settingsResetAll', 'audited once')
-    H.eq(Config.Tablet.command, 'CopTab', 'a restart setting keeps running until the next restart')
-    H.ok(S.view('Tablet.command').pending, 'and says so')
+    H.eq(Config.Tablet.keybind, 'F6', 'a restart setting keeps running until the next restart')
+    H.ok(S.view('Tablet.keybind').pending, 'and says so')
 end
 
 -- ============================================================================

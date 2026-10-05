@@ -35,7 +35,19 @@ if IsDuplicityVersion() then
         end
     end
 
-    -- opts: { rate = max calls per second (default 8) }
+    -- While CP.Maintenance holds a lock (a storage copy or switch, a backup restore, a store left behind), every
+    -- action is refused except the few that keep the admins informed or end the lock (opts.maintenance = true).
+    -- Callbacks (reads) keep working.
+    local function MaintenanceRefusal(opts)
+        if opts and opts.maintenance == true then return nil end
+        if not (CP.Maintenance and CP.Maintenance.active) then return nil end
+        local ok, kind = pcall(CP.Maintenance.active)
+        if not ok or not kind then return nil end
+        return 'err.maintenance'
+    end
+    CP.Net._maintenanceRefusal = MaintenanceRefusal
+
+    -- opts: { rate = max calls per second (default 8), maintenance = true: allowed during a maintenance lock }
     function CP.Net.action(name, handler, opts)
         local eventName = 'crimson-police:' .. name
         local max = (opts and opts.rate) or 8
@@ -45,6 +57,8 @@ if IsDuplicityVersion() then
             if not CP.Net.rateOk(src, eventName, max, 1000) then
                 return Reply(src, reqId, false, 'err.rate_limited')
             end
+            local locked = MaintenanceRefusal(opts)
+            if locked then return Reply(src, reqId, false, locked) end
             local okCall, ok, data = pcall(handler, src, payload)
             if not okCall then
                 CP.err('net', '%s failed: %s', eventName, tostring(ok))

@@ -26,11 +26,11 @@ These rules override everything else in this spec. If another section, example o
 
 - Cash payouts: every mission pays its mission type's payout × its star multiplier (the Weekly Boss pays its own event payout from config) unless an admin has set a payout for that specific mission. Supervisors MAY change a type's payout only if no admin has set it, and only within Config.Payouts.supervisorRange. Only admins MAY set a single mission's payout. Any payout an admin sets is permanent until an admin changes or clears it.
 
-- Points: leaderboard points come from Config.MissionTypes and the scoring rules. Officers and supervisors MUST NOT be able to change points in game. Only an admin MAY: by changing a point setting in the Admin UI Settings screen (every change is in the audit log) or by a logged manual award.
+- Points: leaderboard points come from Config.MissionTypes and the scoring rules. Officers and supervisors MUST NOT be able to change points in game. Only an admin MAY: by changing a point setting in the Admin UI Settings screen (every change is in the audit log) or by a logged manual award or deduction (a new signed row, never an edit of old rows; see Full admin control).
 
 - Server authority: the server decides draws, scaling, points and cash. The client MUST NOT send point or cash amounts; it only reports objective events, which the server validates.
 
-- Departments: department names, colours and logos come only from Config.Departments. Adding a department there and restarting MUST make it work everywhere with no code or SQL changes.
+- Departments: department names, colours and logos come only from Config.Departments. Adding a department there and restarting, or adding it from the Admin UI, MUST make it work everywhere with no code or SQL changes.
 
 - Custom interfaces: the Officer UI, Supervisor UI and Admin UI are separate, custom standalone NUI built for Crimson-Police, together with its Mission Builder, mission HUD and notifications. Each shows only its own screens, and the server MUST re-check permissions on every action. The only outside UI allowed is ox_target's interaction prompts, ox_inventory's own inventory screens, and ox_lib's progress bar and skill check during missions.
 
@@ -46,7 +46,7 @@ These rules override everything else in this spec. If another section, example o
 
 - Cleanup: every entity, blip, zone and mission item MUST be removed when a run ends for any reason, including disconnects and resource stops.
 
-- Mission Builder: it runs inside Crimson-Police's own UI: on the tablet in the Supervisor UI, and in the Admin UI panel for admins. Every custom mission MUST have a mission type and MUST NOT have a payout field. Recorded routes are saved as roads, not as the exact line the builder drove. Publishing MUST write a Lua file that developers can edit.
+- Mission Builder: it runs inside Crimson-Police's own UI: on the tablet in the Supervisor UI, and in the Admin UI panel for admins. Every custom mission MUST have a mission type and MUST NOT have a payout field. Recorded routes are saved as roads, not as the exact line the builder drove. Publishing MUST write a Lua file that developers can edit. An admin may edit a built-in mission there too: the edit is an override saved under the same mission id in missions/custom/overrides/, never in missions/builtin/, and Reset to original removes it (see Full admin control).
 
 - Code layout: each feature MUST live in its own folder under modules/, each objective block in its own folder under blocks/, and each mission in its own file under missions/, so every part can be edited and debugged on its own (see Architecture).
 
@@ -58,15 +58,15 @@ Everything below was considered and removed. Do not add it back, even as an opti
 
 - Missions: Traffic Control, DUI Checkpoint, Abandoned Vehicle (a plain tow job), Range Qualification, Evidence Recovery, Rooftop Shooter, Air Support, Harbor Interdiction, and anything using cones. Traffic Enforcement (pacing one moving violator at a time, stopping it and working the contact), Illegal Parking Patrol (a judgement sweep of parked cars) and Suspicious Activity (a scene contact that ends in a decision) are allowed as their mission cards describe them.
 
-- Activation: no server activity state (Quiet / Busy / Active), no priority-traffic command, no minimum officers online, no mission pause and no Expired state. Mission calls lapse when nobody claims them; a lapsed call is not a run state, and nothing pauses the Mission Board except the Cross-Department lock.
+- Activation: no server activity state (Quiet / Busy / Active), no priority-traffic command, no minimum officers online, no mission pause and no Expired state (the maintenance lock of a storage copy, a storage switch or a backup restore is not a pause and not a switch: it always ends with a restart; see Full admin control). Mission calls lapse when nobody claims them; a lapsed call is not a run state, and nothing pauses the Mission Board except the Cross-Department lock.
 
 - Mission choice: no list of individual missions on the officer Mission Board, no picking or previewing a specific mission (apart from the Weekly Boss card, Cross-Department Missions and test runs), no reroll.
 
 - Roles: no cadet, detective, FTO or supervisor-only missions, no grade-restricted mission pools, and no separate builder permission.
 
-- Payouts and points: no in-game editing of points by officers or supervisors (an admin only through the logged Settings screen or a logged manual award), no point awards from other resources, no supervisor editing of single-mission payouts, and no payout field in the Mission Builder or in exported Lua files.
+- Payouts and points: no in-game editing of points by officers or supervisors (an admin only through the logged Settings screen or a logged manual award or deduction), no point awards from other resources, no supervisor editing of single-mission payouts, and no payout field in the Mission Builder or in exported Lua files.
 
-- Leaderboards: no manual board reset; boards are time windows, and corrections are made by voiding runs.
+- Leaderboards: no manual board reset; boards are time windows, and corrections are made by voiding runs (one by one or as a bulk void of an officer, an operation or a board window, which is always restorable as a batch).
 
 - Framework: no QBCore core object, no QBCore.Functions, no qb-core dependency, and no QBCore or ESX bridges.
 
@@ -93,7 +93,7 @@ Each term below means exactly this everywhere in the spec.
 | Callsign | The officer's callsign from Qbox metadata, set with SC-Police's /callsign |
 | Mission type | Patrol, Training, Investigation or Tactical; the only thing officers pick |
 | Mission | One playable scenario, such as Gang Shootout; belongs to exactly one mission type |
-| Built-in mission | A mission shipped with the resource, one file each in missions/builtin/ |
+| Built-in mission | A mission shipped with the resource, one file each in missions/builtin/. An admin's edit of one is an override with the same id in missions/custom/overrides/ |
 | Custom mission | A mission made in the Mission Builder, exported to its own file in missions/custom/ |
 | Pool | The missions of a type that can currently be drawn for an officer or unit |
 | Draw | The server's random pick of one mission from the pool |
@@ -1581,7 +1581,7 @@ Who can change payouts
 
 How cash is paid (by the server, once per participant per run)
 
-- Claim the row before any money moves: UPDATE cp_mission_runs SET cash_status = 'paying' WHERE id = ? AND cash_status IN ('none','held','pending'). If no row changes, stop: it is already being paid or finished. paid, capped, unfunded and forfeited are final and are never paid again.
+- Claim the row before any money moves: UPDATE cp_mission_runs SET cash_status = 'paying' WHERE id = ? AND cash_status IN ('none','held','pending'). If no row changes, stop: it is already being paid or finished. paid, capped, unfunded and forfeited are final and are never paid again by this flow (only an admin money tool of Full admin control may act on them, and every one ships off).
 
 - Work out the amount with the formula above. If it would take the officer over Config.Cash.dailyCap for the day, pay only up to the cap (0 = no cap).
 
@@ -1593,7 +1593,7 @@ How cash is paid (by the server, once per participant per run)
 
 - Write cash_paid and the final status: capped if the cap cut the amount, otherwise paid. A row still in paying after a crash is never retried automatically; it is listed in Admin UI → Leaderboards for a manual check against the Renewed-Banking history (transaction id CP-<run_uuid>-<citizenid>).
 
-A flagged run's cash is held until a supervisor approves it. If the officer is offline at that moment, the payment waits (cash_status = 'pending') and is made the next time they load in. A voided run's held cash stays held until its 48-hour dispute window closes or a dispute about it is rejected, and is then forfeited (cash_status = 'forfeited'). Voiding an already-paid run does not take the money back.
+A flagged run's cash is held until a supervisor approves it. If the officer is offline at that moment, the payment waits (cash_status = 'pending') and is made the next time they load in. A voided run's held cash stays held until its 48-hour dispute window closes or a dispute about it is rejected, and is then forfeited (cash_status = 'forfeited'). Voiding an already-paid run does not take the money back (only the Take back money tool of Full admin control does, and it ships off).
 
 ## Leaderboards
 
@@ -2269,7 +2269,113 @@ CREATE TABLE IF NOT EXISTS cp_settings (
   updated_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-sql/migrations/001_initial.sql creates the first fourteen tables, and 002–007 add the columns and the five tables above (see Database upgrades). cp_settings holds only the settings an admin changed in game; a setting with no row uses config.lua. Every stat column of 003 is written on every run row, and only rows with state = 'completed' are ever summed (service record, boards, goals, bounties, badges). cp_mission_calls keeps the call history for Config.Retention.missionCallDays; cp_item_rewards stays empty while Config.Rewards.enabled is false. Every table and column works the same with the database off (the saves folder). A mission type with no row in cp_type_payouts uses the payout from Config.MissionTypes, and the Weekly Boss uses Config.Events.weeklyBoss.payout until an admin sets a mission payout. Published custom missions are loaded from their Lua files; the database keeps drafts, metadata and edit locks. callsign and rank_label in cp_officers are copies refreshed from Qbox whenever the officer loads in or opens the tablet, so boards can show officers who are offline; Crimson-Police never writes them back. Voided runs stay for audit but are left out of every board. At each daily reset the server moves runs older than Config.Retention.runArchiveMonths (12) into cp_mission_runs_archive and deletes audit rows older than Config.Retention.auditDays (180); 0 turns either off. XP and badges live in cp_officers and cp_badges, so archiving never changes them or the all-time board.
+-- sql/migrations/008_admin_control.sql · full admin control: corrections, overrides, jobs, settings history.
+-- Every column is added to cp_mission_runs AND cp_mission_runs_archive in the same order, because the
+-- retention job copies rows with INSERT ... SELECT *. One column per statement, never with a key (files mode).
+ALTER TABLE cp_officers ADD COLUMN board_excluded TINYINT(1) NOT NULL DEFAULT 0;
+ALTER TABLE cp_officers ADD COLUMN retired_at DATETIME NULL;
+ALTER TABLE cp_officers ADD COLUMN retire_batch VARCHAR(36) NULL;
+ALTER TABLE cp_officers ADD COLUMN cooldown_clears JSON NULL;
+ALTER TABLE cp_officers ADD COLUMN cap_extra JSON NULL;
+ALTER TABLE cp_officers ADD COLUMN boss_extra JSON NULL;
+ALTER TABLE cp_officers ADD COLUMN license VARCHAR(64) NULL;
+ALTER TABLE cp_officers ADD INDEX idx_license (license);
+
+ALTER TABLE cp_mission_runs ADD COLUMN void_kind VARCHAR(12) NULL;
+ALTER TABLE cp_mission_runs ADD COLUMN void_batch VARCHAR(36) NULL;
+ALTER TABLE cp_mission_runs ADD COLUMN cash_reclaimed INT NOT NULL DEFAULT 0;
+ALTER TABLE cp_mission_runs_archive ADD COLUMN void_kind VARCHAR(12) NULL;
+ALTER TABLE cp_mission_runs_archive ADD COLUMN void_batch VARCHAR(36) NULL;
+ALTER TABLE cp_mission_runs_archive ADD COLUMN cash_reclaimed INT NOT NULL DEFAULT 0;
+ALTER TABLE cp_mission_runs ADD INDEX idx_cash (cash_status, created_at);
+ALTER TABLE cp_mission_runs ADD INDEX idx_batch (void_batch);
+ALTER TABLE cp_mission_runs_archive ADD INDEX idx_batch (void_batch);
+
+ALTER TABLE cp_audit ADD COLUMN actor_ident VARCHAR(64) NULL;
+ALTER TABLE cp_seasons ADD COLUMN planned_end DATETIME NULL;
+ALTER TABLE cp_seasons ADD COLUMN next_name VARCHAR(64) NULL;
+ALTER TABLE cp_custom_missions ADD COLUMN overrides_builtin TINYINT(1) NOT NULL DEFAULT 0;
+ALTER TABLE cp_custom_missions ADD COLUMN base_hash VARCHAR(64) NULL;
+ALTER TABLE cp_mission_tests ADD COLUMN unplayed TINYINT(1) NOT NULL DEFAULT 0;
+ALTER TABLE cp_mission_tests ADD COLUMN hidden TINYINT(1) NOT NULL DEFAULT 0;
+
+CREATE TABLE IF NOT EXISTS cp_badge_overrides (
+  citizenid  VARCHAR(50) NOT NULL,
+  badge_id   VARCHAR(64) NOT NULL,
+  mode       ENUM('grant','block') NOT NULL,  -- grant: kept whatever the rows say; block: never given
+  by_actor   VARCHAR(50) NOT NULL,
+  reason     VARCHAR(255) NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (citizenid, badge_id)
+);
+
+CREATE TABLE IF NOT EXISTS cp_dept_funding (
+  id         INT AUTO_INCREMENT PRIMARY KEY,
+  department VARCHAR(32) NOT NULL,
+  amount     INT NOT NULL,
+  txn        VARCHAR(64) NULL,                -- CP-FUND-<id>, set before the deposit
+  state      VARCHAR(12) NOT NULL,            -- pending (before the deposit), done or failed
+  by_actor   VARCHAR(50) NOT NULL,
+  reason     VARCHAR(255) NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_dept (department, created_at)
+);
+
+CREATE TABLE IF NOT EXISTS cp_settings_history (
+  id          INT AUTO_INCREMENT PRIMARY KEY,
+  setting_key VARCHAR(191) NOT NULL,
+  action      VARCHAR(40) NOT NULL,           -- settingChanged, settingReset, missionSwitch ...
+  old_json    JSON NULL,                      -- the full values; NULL = config.lua's value
+  new_json    JSON NULL,
+  by_actor    VARCHAR(50) NOT NULL,           -- citizenid, or 'console'
+  by_ident    VARCHAR(64) NULL,               -- the acting player's license
+  reason      VARCHAR(255) NULL,
+  reverts_id  INT NULL,                       -- the history row a Revert undid
+  created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_key (setting_key, created_at)
+);
+
+CREATE TABLE IF NOT EXISTS cp_admin_jobs (
+  id         VARCHAR(36) PRIMARY KEY,         -- also the void_batch of the rows it changed
+  kind       VARCHAR(24) NOT NULL,            -- bulkVoid, restoreBatch, retire, recordMove, seasonReopen ...
+  state      VARCHAR(12) NOT NULL,            -- running, done, failed, rolledback
+  filter     JSON NULL,
+  detail     JSON NULL,                       -- ids done, per-kind data
+  done       INT NOT NULL DEFAULT 0,
+  total      INT NOT NULL DEFAULT 0,
+  actor      VARCHAR(50) NOT NULL,
+  reason     VARCHAR(255) NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NULL,
+  INDEX idx_state (state, created_at)
+);
+
+CREATE TABLE IF NOT EXISTS cp_admin_requests (
+  request_id VARCHAR(36) PRIMARY KEY,         -- the NUI's request id: one money or bulk action acts once
+  action     VARCHAR(40) NOT NULL,
+  actor      VARCHAR(50) NOT NULL,
+  result     JSON NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_created (created_at)
+);
+
+CREATE TABLE IF NOT EXISTS cp_staff_notices (
+  id          INT AUTO_INCREMENT PRIMARY KEY,
+  text        VARCHAR(280) NOT NULL,
+  departments JSON NULL,                      -- NULL = every department
+  expires_at  DATETIME NOT NULL,
+  by_actor    VARCHAR(50) NOT NULL,
+  created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  removed_at  DATETIME NULL
+);
+
+CREATE TABLE IF NOT EXISTS cp_storage_meta (
+  meta_key   VARCHAR(32) PRIMARY KEY,         -- generation, state (active or left_behind)
+  meta_value VARCHAR(255) NULL,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+sql/migrations/001_initial.sql creates the first fourteen tables, and 002–008 add the columns and the twelve tables above (see Database upgrades). 008 (full admin control) adds a void's kind and batch and the cash taken back to both run tables, the license, board exclusion, retirement and the anti-farm override markers to cp_officers, the acting player's license to cp_audit, and the tables of badge overrides, department funding, the settings history, bulk jobs, request ids, staff notices and the storage marker. cp_settings holds only the settings an admin changed in game; a setting with no row uses config.lua. Every stat column of 003 is written on every run row, and only rows with state = 'completed' are ever summed (service record, boards, goals, bounties, badges). cp_mission_calls keeps the call history for Config.Retention.missionCallDays; cp_item_rewards stays empty while Config.Rewards.enabled is false. Every table and column works the same with the database off (the saves folder). A mission type with no row in cp_type_payouts uses the payout from Config.MissionTypes, and the Weekly Boss uses Config.Events.weeklyBoss.payout until an admin sets a mission payout. Published custom missions are loaded from their Lua files; the database keeps drafts, metadata and edit locks. callsign and rank_label in cp_officers are copies refreshed from Qbox whenever the officer loads in or opens the tablet, so boards can show officers who are offline; Crimson-Police never writes them back. Voided runs stay for audit but are left out of every board. At each daily reset the server moves runs older than Config.Retention.runArchiveMonths (12) into cp_mission_runs_archive and deletes audit rows older than Config.Retention.auditDays (180); 0 turns either off. XP and badges live in cp_officers and cp_badges, so archiving never changes them or the all-time board.
 
 Database upgrades
 
@@ -2438,6 +2544,42 @@ An admin can change every setting of config/config.lua and config/blocks.lua in 
 - Clients: every client gets the changed settings when it starts and after every change, so client code reads the same values as the server.
 - After each change the Config health check runs again and its result is shown. Every change is in the audit log (who, when, the setting, old → new), which the screen lists as its history.
 - Mission switches: Admin UI → Missions has an on/off switch for every mission and for each location of it (Config.DisabledMissions and Config.DisabledLocations, saved the same way). Off stops new draws everywhere (Mission Board, mission calls, Cross-Department Missions, the Weekly Boss); a run that is already going finishes. A mission whose every location is off is never drawn.
+- Also locked (config.lua only): the tablet title and the two command names (Hard rule Names; another resource's command with the same name would lock the owner out of the Admin UI), the call-id prefixes Config.Calls.npcCallPrefix and ownRunCallPrefixes (they mirror sc-npcpolice's and sc-dispatch's id formats), and each bonus's each, block and engineOnly (they describe what the code does). The real-call, alert, start-route and downed numbers of Hard rules 15-18 have known ranges (for example Calls.dodgeWindow 10-300 s, Route.maxDrift 200-5000 m); the rules themselves are never a switch.
+- A bonus's kind (points or pct) changes only together with its value, in one save: points are whole numbers from -500 to 500, pct from -1 to 1, and a bonus stays a bonus and a penalty stays a penalty. A reset puts both back.
+- Point values (mission type points, bonus values, the scoring rules, Type of the Day, modifiers, the Weekly Boss points, the cross-department and scaling multipliers, goal and bounty points) are marked as such: a change applies to runs that end after it (a run going now may end with either value; past rows keep their points) and also posts a notice to the flags webhook.
+- Money switches: Config.Cash.allowUnfundedRetry, allowCapTopUp, allowPayAgain, restoreForfeited, allowAddFunds, allowClawback, allowManualCash and Config.Rewards.allowTakeBack all ship false. Turning one on needs the typed word ENABLE, which the server checks too; every change is audited and posts to the audit webhook (a full webhook queue never drops it). Turning one off needs nothing.
+- Lists of tables have row editors with the same checks as the raw editor: Builder.noBuildZones (label, centre, radius 10-500 m; the two Crimson-Arena zones may grow but never move, shrink or go), Downed.dropOffs (1-10 points), MissionCalls.areas (unique keys, centres inside the map), Scaling (1-10 rows, maxParticipants rising, the last covering Limits.maxUnitSize, known tiers), XPLevels (the first at 0 XP and level 1, both rising, the shipped badge colours) and Profile.avatarPresets (the pictures the UI ships).
+- Names (Config.Labels): an admin may give an English name to an offence, a commendation kind, a badge, a bonus or a penalty (custody.offence.<id>, profile.commend.kind.<id>, badge.<id>, bonus.<id>, penalty.<id>; 1-64 characters, no markup). A name changes text only, never an id, points or logic; it is read before locales/en.json everywhere. This is not a language: English stays the only one.
+- History: every change, reset, reset all and switch also writes a cp_settings_history row with the full old and new values (none = config.lua's), who (citizenid and license) and why, kept as long as the audit log. Other modules add their own cross-field checks (validators) that the raw editor and every structured editor share.
+
+## Full admin control
+
+At the owner's request ("admins get full control over everything in the admin tablet"), everything an admin may want to do is a button in the Admin UI; no config edit, console command or database access is needed, apart from the three console ways back in for when the Admin UI cannot open (CrimsonPoliceAdmin settings …, CrimsonPoliceAdmin storage …, set cp_settings_safe 1). Who is an admin does not change: the AdminAce ace, Qbox admins while Config.QboxAdmins is true, and the server console. Every admin is equal; supervisors get no new power. These rules apply to every admin action of this section:
+
+- Admins and the console only: every action has an admin-only permission key (officerRecords, pointsAdjust, bulkVoid, restoreRun, progression, antiFarmOverride, liveRuns, editBuiltins, missionAdmin, boardsAdmin, payments, rewardsAdmin, deptFunds, departmentsAdmin, storageAdmin, playerSupport, recordMove, cleanup) that no Config.Permissions switch can give a supervisor. The server checks it on every action and every read.
+- Reasons, typed words, previews: a reason (1-255 characters) where the action changes a record; a typed word for dangerous ones (VOID 12, ENABLE, the citizenid, the amount); a preview of the exact effect for bulk actions, valid for 120 seconds and refused when the data changed since.
+- Never your own records: an admin can't correct, pay or adjust any character of their own license (every character of one player), nor a run one of them took part in, live or archived. When a target's license can't be found, money and point actions are refused. The console is exempt.
+- One request, one action: every money and bulk action carries a request id; a double click or a resent request acts once and gets the first answer. Two admins (or an admin and an automatic job) never both act: a change names the state it expects and does nothing when someone changed it first.
+- Audit: every action writes cp_audit (with the acting player's license, so every character of one player can be found) before any money moves; a money action whose audit row can't be written moves nothing. Bulk actions write one line per row and one summary line that posts to the webhook. Rate limits and daily limits are counted from saved rows, so a restart never resets them.
+- Bulk jobs: one at a time server-wide, in batches of 50 rows, their progress shown to admins only; a job a crash interrupted is finished (or stopped) at the next start. The nightly archive and the forfeiture job wait for a running job, a storage copy, a backup or a restore.
+- Maintenance lock: from the start of a storage copy, a storage switch or a backup restore until the owner restarts Crimson-Police, no new run, mission call claim, test run or operation starts, payments and scheduled jobs wait, and every action but the status reads is refused; a banner says so on every tablet. When the work is done the Admin UI and one console line say "Restart Crimson-Police now from txAdmin or the server console": Crimson-Police never restarts itself. A store another one took over from (after a storage switch) stays locked and pays nothing until an admin uses it again.
+
+The owner decisions of this build (each with its undo in the Admin UI, listed in the root README under Waiting for the owner's OK):
+
+| # | Decision | Ships | Undo |
+|---|---|---|---|
+| D1 | Point values are settings an admin may change (logged, resettable, revertible); a logged manual award may also be a deduction (a signed row) | on | Config.AdminControl.pointAdjust = false; point settings reset to config.lua |
+| D2 | Corrections are voids: an officer's, an operation's or a board window's rows may be voided as one batch, always restorable; there is still no wipe | on | Undo the batch |
+| D4 | Built-in missions can be edited in the Mission Builder as an override with the same id (leaderboards, history, cooldowns, payouts, tests and switches keep working); Reset to original removes it, and the Admin UI says when an update changed the original | on | Config.AdminControl.editBuiltins = false; Reset to original |
+| D5 | Departments can be added, turned off and (when unused) deleted in game; a turned-off department's unfinished pay still pays from its account | on | turn it on again |
+| D6 | Anti-farm overrides per officer (clear cooldowns, more completions today, another boss attempt, first-run bonus again, forgive streak days, add run time, treat a free abandon as a normal one), each with a daily or weekly limit in Config.AdminControl counted from saved rows | on | set the limit to 0 |
+| D7 | Money outside the normal flow: retry unfunded payments, pay the part the daily cap cut, pay a stuck payment again, pay forfeited cash after all, add funds to a department account, take paid cash back, pay an officer by hand, take an item reward back. All ship off (money switches, ENABLE to turn on) | off | turn the switch off |
+| D9 | Testing is optional for every mission and every role | on | Config.Builder.requireTestToPublish = true |
+| D10 | Admins may rename offences, commendation kinds, badges, bonuses and penalties (Config.Labels, English text only) | on (empty) | reset Labels |
+| D11 | An admin may move a re-created character's history to the player's new citizenid (same license, logged, undoable; rows keep their department) | on | Undo move; Config.AdminControl.recordMove = false |
+| D13 | The maintenance lock above (not a pause and not a switch: it always ends in a restart by the owner) | on | - |
+
+Not built, by the owner's decision: an in-game admin list, root or limited admins and admin groups (who is an admin stays in server.cfg and config.lua); a restart from the tablet; Discord webhook links set in game (they stay server.cfg convars; the Admin UI shows only whether each is on and the line to paste).
 
 ## Config
 
@@ -2555,6 +2697,22 @@ Config.Permissions = {
     -- Nobody may approve, void or answer a dispute about a run they took part in.
 }
 
+-- ── Admin control ───────────────────────────────────────────────────────────
+-- What admins may do beyond the normal rules, from the Admin UI. Supervisors never get these. Every action is in
+-- the audit log; limits are counted from saved rows, so a restart never resets them.
+Config.AdminControl = {
+    pointAdjust = true,          -- Officers → Adjust points: logged manual awards and deductions
+    adjustConfirmAbove = 500,    -- points: a typed confirmation at or above this
+    adjustDailyLimit = 0,        -- points one admin may adjust per day (0 = no limit)
+    editBuiltins = true,         -- Mission Builder: admins edit built-in missions (saved as an override, same id)
+    recordMove = true,           -- Officers → Move record: a re-created character's history to the new citizenid
+    bulkMaxRows = 5000,          -- rows one bulk void or restore may change
+    cooldownClearsPerDay = 3,    -- cooldown clears per officer per day
+    extraRunsMax = 10,           -- extra completions per officer per day
+    streakForgiveMax = 7,        -- streak days one forgive may cover
+    runTimeAddMax = 600,         -- seconds an admin may add to one live run
+}
+
 -- ── Departments ─────────────────────────────────────────────────────────────
 -- Every entry is used automatically for access, the tablet name, colours and
 -- logo watermark, leaderboards, the department challenge, unit invites and the
@@ -2562,6 +2720,7 @@ Config.Permissions = {
 Config.Departments = {
     sast = {
         label = 'San Andreas State Troopers',        -- shown in the tablet header
+        enabled = true,                              -- false = turned off: nobody new joins, history and pay stay
         short = 'SAST',                              -- tag on boards, units and badges
         jobs = { 'sast' },                           -- Qbox job names (as in sc-police / sc-dispatch)
         supervisorGrade = 3,                         -- Qbox grade number: this grade and up are supervisors
@@ -2592,6 +2751,7 @@ Config.Departments = {
     },
     fib = {
         label = 'Federal Investigation Bureau',
+        enabled = true,
         short = 'FIB',
         jobs = { 'fib' },
         supervisorGrade = 3,
@@ -2653,6 +2813,18 @@ Config.Cash = {
     minPayout = 0,        -- limits for any base payout set in-game
     maxPayout = 25000,
     dailyCap = 0,         -- max cash per officer per day; 0 = no cap
+    -- Money tools outside the normal flow (Admin UI → Payments, Departments). All ship off: turning one on in
+    -- Settings needs the typed word ENABLE and is audited.
+    allowUnfundedRetry = false,  -- retry payments the department account could not cover
+    allowCapTopUp = false,       -- pay the part of a payment the daily cap cut
+    allowPayAgain = false,       -- pay a payment stuck in 'paying' again (after checking the bank history)
+    restoreForfeited = false,    -- a restored run pays its forfeited cash after all
+    allowAddFunds = false,       -- add money to a department's account
+    addFundsMax = 50000,         -- dollars per Add funds
+    allowClawback = false,       -- take back cash already paid
+    allowManualCash = false,     -- pay an officer by hand
+    manualDailyLimit = 10000,    -- dollars one admin may pay by hand per day
+    lowBalanceWarn = 0,          -- warn below this department balance (0 = off)
 }
 
 -- ── Payout editing ──────────────────────────────────────────────────────────
@@ -3140,6 +3312,8 @@ Config.Leaderboard = {
     metrics = { 'points', 'missions', 'arrests', 'impounds', 'citations', 'rescues', 'calls', 'judgement' },
     minDecisions = 10,       -- Judgement: decisions needed in the window
     weeklyBadges = {},       -- extra weekly badges by metric, e.g. { 'arrests' }; Officer of the Week stays by points
+    announceWeekly = true,   -- the weekly top 3 on Home and the board webhook
+    announceMonthly = true,  -- the monthly top 3 on Home and the board webhook
 }
 
 -- ── Special events ──────────────────────────────────────────────────────────
@@ -3153,6 +3327,7 @@ Config.Events = {
     armoredArmour = 50,      -- Armored Hostiles: extra armour on armed NPCs (Tactical only)
     timeCrunchCut = 0.25,    -- Time Crunch: share of the time limit removed
     weeklyBoss = { enabled = true, days = { 'friday', 'saturday', 'sunday' }, points = 500, payout = 2500 },
+    modifiers = { armored_hostiles = true, time_crunch = true, radio_silence = true },   -- false = never rolled
 }
 
 -- ── Department challenge ────────────────────────────────────────────────────
@@ -3224,6 +3399,7 @@ Config.Commendations = {
 -- Items must exist in ox_inventory. Never weapons, ammo, armour, bandages or money items.
 Config.Rewards = {
     enabled = false,
+    allowTakeBack = false,           -- Admin UI: take a given item back from an online officer (needs ENABLE)
     dailyItemCap = 10,               -- items per officer per day, every source together
     dailyValueCap = 2000,            -- total value of those items per officer per day
     findBonus = 0.10,                -- each lawful evidence find adds this to the run's chance...
@@ -3375,6 +3551,20 @@ Config.Retention = {
     runArchiveMonths = 12,  -- move older runs to cp_mission_runs_archive; 0 = never
     auditDays = 180,        -- delete older audit rows; 0 = keep forever
     missionCallDays = 90,   -- delete older mission call history; 0 = keep forever
+}
+
+-- ── Backups ─────────────────────────────────────────────────────────────────
+-- Admin UI → System → Backups: copies of every Crimson-Police table and the mission files, in saves/_backups.
+Config.Backups = {
+    keep = 7,               -- backups kept; the newest and the latest automatic one are never removed
+    daily = false,          -- true = one backup at every daily reset
+}
+
+-- ── Names ───────────────────────────────────────────────────────────────────
+-- English names an admin gives to ids (Admin UI → Settings → Names). Only these kinds: custody.offence.<id>,
+-- profile.commend.kind.<id>, badge.<id>, bonus.<id> and penalty.<id>. A name changes text only, never an id.
+Config.Labels = {
+    -- ['custody.offence.loitering'] = 'Loitering',
 }
 
 -- Discord webhooks are read from convars in server.cfg, never stored here.

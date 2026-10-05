@@ -14,7 +14,33 @@ export type SettingKind =
     | 'list'
     | 'numbers'
     | 'range'
+    | 'rows'
+    | 'labels'
     | 'json';
+
+// One field of a row template (Settings → the six lists of tables). key = undefined for a list of bare points.
+export interface RowField {
+    key?: string;
+    kind: 'text' | 'number' | 'enum' | 'vector';
+    min?: number;
+    max?: number;
+    integer?: boolean;
+    options?: string[];
+    pattern?: string;
+    size?: number;
+    // a map position: the row editor offers Use my position and Teleport to
+    position?: boolean;
+    optional?: boolean;
+}
+
+// SettingView.rows: the row editor of a list setting (the server checks every row and the list again).
+export interface RowsDescriptor {
+    fields?: RowField[];
+    // the rows are bare values (Downed.dropOffs: points)
+    bare?: RowField;
+    min?: number;
+    max?: number;
+}
 
 export interface SettingView {
     path: string;
@@ -57,6 +83,12 @@ export interface SettingView {
     invalidValue?: unknown;
     by?: string;
     at?: number;
+    // kind 'rows': the row template
+    rows?: RowsDescriptor;
+    // a point value: a change applies to runs that end after it and posts a notice to the flags webhook
+    points?: boolean;
+    // a money switch: turning it on needs the typed word ENABLE (payload.confirm)
+    money?: boolean;
 }
 
 export interface SettingsGroup {

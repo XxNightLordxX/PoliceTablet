@@ -28,6 +28,7 @@ import { useSession } from '../../shared/session';
 import { APPEARANCES, appearanceVars, mergeAppearance, themeVars } from '../../shared/theme';
 import type { Theme } from '../../shared/types';
 import type { DeskView, TabletAccessView } from '../../types/access';
+import { DepartmentFunds } from '../components/DepartmentFunds';
 import type { DepartmentView, DepartmentsData } from '../../types/oversight';
 import './Departments.css';
 import '../components/access-admin.css';
@@ -320,6 +321,7 @@ function DeptCard({
                     </div>
                 </div>
             ) : null}
+            <DepartmentFunds department={d.key} />
         </Card>
     );
 }

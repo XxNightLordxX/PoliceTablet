@@ -584,5 +584,9 @@
   "admin.officers.susp_none": "No suspensions on record",
   "admin.officers.susp_system": "Anti-exploit (voided runs)",
   "sup.missions.none": "No missions are loaded",
-  "sup.missions.none_text": "Check the server console: every mission file that failed to load is listed there."
+  "sup.missions.none_text": "Check the server console: every mission file that failed to load is listed there.",
+  "admin.mission.manual_adjust": "Points adjustment",
+  "admin.mission.manual_cash": "Manual cash payment",
+  "admin.webhook.dropped_title": "Webhook posts dropped",
+  "admin.webhook.dropped": "The webhook queue was full: {n} ordinary posts were dropped. Every money and typed-confirmation post was kept. The audit log has every action."
 }

@@ -116,6 +116,7 @@ function Q.getInfo(src)
     return {
         src = n,
         citizenid = pd.citizenid,
+        license = Str(pd.license),
         name = name,
         firstname = first,
         lastname = last,
@@ -220,6 +221,72 @@ function Q.plateOwned(plate)
         return nil
     end
     return found ~= nil
+end
+
+-- ============================================================================
+--                       QBOX'S PLAYERS TABLE (READ ONLY)
+-- ============================================================================
+-- Always the real oxmysql (CP.Storage.realMySQL with the database off), never a cp_ table in the same statement.
+
+local function QboxDb()
+    local db = (CP.Storage and CP.Storage.realMySQL) or MySQL
+    if type(db) ~= 'table' or type(db.single) ~= 'table' or type(db.query) ~= 'table' then return nil end
+    return db
+end
+
+local function ValidCid(citizenid)
+    return type(citizenid) == 'string' and citizenid ~= '' and #citizenid <= 50 and citizenid:match('^[%w_%-]+$') ~= nil
+end
+
+-- The license of a character: the online player's first, else Qbox's players table. nil when unknown.
+function Q.licenseOf(citizenid)
+    if not ValidCid(citizenid) then return nil end
+    local src = Q.getByCitizenId(citizenid)
+    if src then
+        local player = Q.getPlayer(src)
+        local lic = player and Str(player.PlayerData.license)
+        if lic and lic ~= '' then return lic end
+    end
+    local db = QboxDb()
+    if not db then return nil end
+    local ok, row = pcall(db.single.await, 'SELECT license FROM players WHERE citizenid = ? LIMIT 1', { citizenid })
+    if not ok then
+        LogError('licenseOf', 'players license lookup failed: %s', tostring(row))
+        return nil
+    end
+    if type(row) == 'table' and type(row.license) == 'string' and row.license ~= '' then return row.license end
+    return nil
+end
+
+-- Whether Qbox has this character (online, or in its players table). nil when the lookup failed.
+function Q.characterExists(citizenid)
+    if not ValidCid(citizenid) then return false end
+    if Q.getByCitizenId(citizenid) then return true end
+    local db = QboxDb()
+    if not db then return nil end
+    local ok, row = pcall(db.single.await, 'SELECT 1 AS found FROM players WHERE citizenid = ? LIMIT 1', { citizenid })
+    if not ok then
+        LogError('characterExists', 'players lookup failed: %s', tostring(row))
+        return nil
+    end
+    return type(row) == 'table'
+end
+
+-- Every citizenid Qbox has for one license (a player's characters).
+function Q.citizenidsOfLicense(license)
+    if type(license) ~= 'string' or license == '' or #license > 64 then return {} end
+    local db = QboxDb()
+    if not db then return {} end
+    local ok, rows = pcall(db.query.await, 'SELECT citizenid FROM players WHERE license = ? LIMIT 20', { license })
+    if not ok then
+        LogError('citizenidsOfLicense', 'players lookup by license failed: %s', tostring(rows))
+        return {}
+    end
+    local out = {}
+    for _, r in ipairs(type(rows) == 'table' and rows or {}) do
+        if type(r.citizenid) == 'string' then out[#out + 1] = r.citizenid end
+    end
+    return out
 end
 
 -- ============================================================================

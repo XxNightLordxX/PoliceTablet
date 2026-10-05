@@ -24,6 +24,8 @@ local QBOX_ADMIN_ACE = 'admin'   -- the ace qbx_core checks for its admins; stoc
 local warned = {}
 local cache = { built = false }
 local suspensionCache = {}   -- citizenid -> { untilTs = ts|nil, at = os.time() }
+local retiredCache = {}      -- citizenid -> { retired = bool, at = os.time() }
+local licenseCache = {}      -- citizenid -> { license = string|false, at = os.time() }
 local dispatchCache = {}     -- citizenid|job -> { suspended = bool, at = os.time() }
 local lastJob = {}           -- src -> last known active job name
 local lostListeners = {}
@@ -348,6 +350,98 @@ local function DispatchSuspended(citizenid, jobName)
     return suspended
 end
 
+-- An SC-Dispatch suspension as Crimson-Police sees it (view only: sc-dispatch is never changed).
+-- { suspended, available } (available = sc-dispatch is running).
+function A.dispatchSuspension(citizenid, jobName)
+    if type(citizenid) ~= 'string' or citizenid == '' then return { suspended = false, available = false } end
+    local available = CP.Dispatch ~= nil and CP.Dispatch.available ~= nil and CP.Dispatch.available() == true
+    if not available then return { suspended = false, available = false } end
+    return { suspended = DispatchSuspended(citizenid, jobName), available = true }
+end
+
+-- A retired officer (Admin UI → Officers → Retire) can't open the tablet until an admin unretires them.
+function A.isRetired(citizenid)
+    if type(citizenid) ~= 'string' or citizenid == '' then return false end
+    local now = os.time()
+    local c = retiredCache[citizenid]
+    if not c or now - c.at >= SUSPENSION_TTL then
+        CP.Migrations.ready()
+        local ok, row = pcall(MySQL.single.await,
+            'SELECT 1 AS retired FROM cp_officers WHERE citizenid = ? AND retired_at IS NOT NULL LIMIT 1',
+            { citizenid })
+        if not ok then
+            CP.err(TAG, 'retired lookup for %s failed: %s', citizenid, tostring(row))
+            return false
+        end
+        c = { retired = type(row) == 'table', at = now }
+        retiredCache[citizenid] = c
+    end
+    return c.retired
+end
+
+-- ============================================================================
+--                                   LICENSES
+-- ============================================================================
+-- One player has one license and may have several characters (citizenids). The S guard of the admin actions
+-- treats every character of the acting admin's license as the admin.
+
+-- The license of an online player (nil for the console or an unknown player).
+function A.licenseOfSrc(src)
+    local n = ToSrc(src)
+    if not n then return nil end
+    local info = CP.Qbx and CP.Qbx.getInfo and CP.Qbx.getInfo(n) or nil
+    if type(info) == 'table' and type(info.license) == 'string' and info.license ~= '' then return info.license end
+    if GetPlayerIdentifierByType then
+        local id = GetPlayerIdentifierByType(n, 'license')
+        if type(id) == 'string' and id ~= '' then return id end
+    end
+    return nil
+end
+
+-- The license of a character: cp_officers.license (written at every tablet open), else Qbox's own record.
+function A.licenseOf(citizenid)
+    if type(citizenid) ~= 'string' or citizenid == '' or #citizenid > 50 then return nil end
+    local now = os.time()
+    local c = licenseCache[citizenid]
+    if c and now - c.at < SUSPENSION_TTL then return c.license or nil end
+    CP.Migrations.ready()
+    local license = nil
+    local ok, row = pcall(MySQL.single.await,
+        'SELECT license FROM cp_officers WHERE citizenid = ? AND license IS NOT NULL LIMIT 1', { citizenid })
+    if ok and type(row) == 'table' and type(row.license) == 'string' and row.license ~= '' then
+        license = row.license
+    end
+    if not license and CP.Qbx and CP.Qbx.licenseOf then license = CP.Qbx.licenseOf(citizenid) end
+    licenseCache[citizenid] = { license = license or false, at = now }
+    return license
+end
+
+-- Every citizenid of src's license (their characters), their current one first. The console has none.
+function A.selfCitizenids(src)
+    local n = ToSrc(src)
+    if not n then return {} end
+    local out, seen = {}, {}
+    local function add(cid)
+        if type(cid) == 'string' and cid ~= '' and not seen[cid] then
+            seen[cid] = true
+            out[#out + 1] = cid
+        end
+    end
+    local info = CP.Qbx and CP.Qbx.getInfo and CP.Qbx.getInfo(n) or nil
+    if type(info) == 'table' then add(info.citizenid) end
+    local license = A.licenseOfSrc(n)
+    if not license then return out end
+    CP.Migrations.ready()
+    local ok, rows = pcall(MySQL.query.await, 'SELECT citizenid FROM cp_officers WHERE license = ?', { license })
+    if ok and type(rows) == 'table' then
+        for _, r in ipairs(rows) do add(r.citizenid) end
+    end
+    if CP.Qbx and CP.Qbx.citizenidsOfLicense then
+        for _, cid in ipairs(CP.Qbx.citizenidsOfLicense(license) or {}) do add(cid) end
+    end
+    return out
+end
+
 -- ============================================================================
 --                                   OFFICERS
 -- ============================================================================
@@ -367,6 +461,7 @@ function A.getOfficer(src)
     if not info.job.onduty then return nil, 'err.not_on_duty' end
     if A.isSuspended(info.citizenid) then return nil, 'err.suspended' end
     if DispatchSuspended(info.citizenid, info.job.name) then return nil, 'err.suspended_dispatch' end
+    if A.isRetired(info.citizenid) then return nil, 'err.retired' end
     return {
         src = n,
         citizenid = info.citizenid,
@@ -462,11 +557,20 @@ local function Evaluate(src)
     if reason then FireLost(n, reason) end
 end
 
-function A.suspend(citizenid, days, actorSrc, reason)
+-- opts: { untilTs = unix time } suspends until that exact moment (days is then ignored; it must be in the future and
+-- at most MAX_SUSPEND_DAYS away).
+function A.suspend(citizenid, days, actorSrc, reason, opts)
     if type(citizenid) ~= 'string' then return false, 'err.invalid_citizenid' end
     citizenid = CP.U.trim(citizenid)
     if citizenid == '' or #citizenid > 50 or not citizenid:match('^[%w_%-]+$') then
         return false, 'err.invalid_citizenid'
+    end
+    local exact = type(opts) == 'table' and tonumber(opts.untilTs) or nil
+    if exact then
+        exact = math.floor(exact)
+        local now0 = os.time()
+        if exact <= now0 or exact > now0 + MAX_SUSPEND_DAYS * 86400 then return false, 'err.invalid_days' end
+        days = math.max(1, math.ceil((exact - now0) / 86400))
     end
     local d = tonumber(days)
     if not d or d ~= d or d < 0 or d > MAX_SUSPEND_DAYS or d ~= math.floor(d) then return false, 'err.invalid_days' end
@@ -490,7 +594,7 @@ function A.suspend(citizenid, days, actorSrc, reason)
     else
         -- Beyond MAX_UNIX_TS MariaDB 10.11 writes NULL (or refuses, error 1292, in strict mode) and reads the
         -- date back as NULL: a longer suspension ends there instead.
-        local untilTs = math.min(now + d * 86400, MAX_UNIX_TS)
+        local untilTs = math.min(exact or (now + d * 86400), MAX_UNIX_TS)
         if untilTs <= now then
             CP.err(TAG, 'suspending %s failed: the database cannot store a date after 2038-01-19', citizenid)
             return false, 'err.internal'
@@ -528,21 +632,26 @@ function A.refreshOfficerRow(src)
     if not deptKey then return false end
     CP.Migrations.ready()
     -- '' stands for NULL so the parameter list never has holes.
+    -- the player's license too (the admin actions' self check: every character of one player)
+    local license = A.licenseOfSrc(n)
     local ok, err = pcall(MySQL.update.await,
-        [[INSERT INTO cp_officers (citizenid, callsign, rank_label, display_name, department)
-          VALUES (?, NULLIF(?, ''), NULLIF(?, ''), ?, ?)
+        [[INSERT INTO cp_officers (citizenid, callsign, rank_label, display_name, department, license)
+          VALUES (?, NULLIF(?, ''), NULLIF(?, ''), ?, ?, NULLIF(?, ''))
           ON DUPLICATE KEY UPDATE callsign = VALUES(callsign), rank_label = VALUES(rank_label),
-            display_name = VALUES(display_name), department = VALUES(department)]], {
+            display_name = VALUES(display_name), department = VALUES(department),
+            license = COALESCE(VALUES(license), license)]], {
             info.citizenid,
             ClipText(info.callsign or '', 32),
             ClipText(info.job.gradeName or '', 40),
             ClipText(info.name, 64),
             deptKey,
+            ClipText(license or '', 64),
         })
     if not ok then
         CP.err(TAG, 'refreshing cp_officers for %s failed: %s', info.citizenid, tostring(err))
         return false
     end
+    if license then licenseCache[info.citizenid] = { license = license, at = os.time() } end
     CP.log(TAG, 'officer row refreshed: %s %s %s', info.citizenid, deptKey, tostring(info.callsign))
     return true
 end
@@ -588,6 +697,13 @@ CreateThread(function()
     end)
     CP.Qbx.onPlayerUnload(function(src) lastJob[src] = nil end)
     for _, src in ipairs(CP.Qbx.getOnlinePlayers()) do Seed(src) end
+end)
+
+-- An admin action changed an officer: their suspension, retirement and license are read again at once.
+CP.Hooks.on('admin:changed', function(ev)
+    local cid = type(ev) == 'table' and ev.citizenid or nil
+    if type(cid) ~= 'string' then return end
+    suspensionCache[cid], retiredCache[cid], licenseCache[cid] = nil, nil, nil
 end)
 
 AddEventHandler('playerDropped', function()

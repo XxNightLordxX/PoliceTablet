@@ -1624,7 +1624,7 @@ H.eq(perm.forceRecall, true, 'on')
 H.eq(gp.data.supervisor[1].action, 'setTypePayout', 'listed in the spec order')
 H.eq(gp.data.supervisor[11].action, 'breakEditLock', 'last in the spec order')
 H.eq(perm.builderRollback, false, 'off')
-H.eq(#gp.data.adminOnly, 11, 'admin-only list')
+H.eq(#gp.data.adminOnly, 29, 'admin-only list (the 11 of the spec and the 18 keys of full admin control)')
 
 -- audit log
 H.sql('DELETE FROM cp_audit')

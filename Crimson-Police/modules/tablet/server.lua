@@ -39,6 +39,8 @@ local navCache = {}            -- src -> { at, counts }
 local reviewCache = {}         -- src -> { at, n }
 local navWatch = {}            -- src -> os.time() of the last getNavCounts
 local navPending = {}          -- src -> true while a 'nav' push is scheduled
+local navExtra = {}            -- key -> { fn = fn(src, officer) -> number, adminOnly } (T.registerNavCount)
+local navExtraOrder = {}
 
 local function ToSrc(src)
     local n = tonumber(src)
@@ -488,6 +490,7 @@ local function BuildSession(src, ui, args)
         config = config,
         prefs = PrefsOf(row),
         access = { via = via, desk = desk },
+        maintenance = CP.Maintenance and CP.Maintenance.view and CP.Maintenance.view() or nil,
         serverTime = os.time(),
     }
 end
@@ -587,6 +590,33 @@ function T.push(src, topic, data)
     return true
 end
 
+-- Every online admin (CP.Access.isAdmin), never anyone else: admin data stays with admins.
+local function OnlineAdmins()
+    local out = {}
+    if not (CP.Access and CP.Access.isAdmin) then return out end
+    for _, s in ipairs(GetPlayers and GetPlayers() or {}) do
+        local n = ToSrc(s)
+        if n and CP.Access.isAdmin(n) then out[#out + 1] = n end
+    end
+    return out
+end
+T.onlineAdmins = OnlineAdmins
+
+-- A push to admin players only (the adminjob progress, admin screens). Returns how many got it.
+function T.pushAdmins(topic, data)
+    if type(topic) ~= 'string' or topic == '' then return 0 end
+    local n = 0
+    for _, src in ipairs(OnlineAdmins()) do
+        if T.push(src, topic, data) then n = n + 1 end
+    end
+    return n
+end
+
+-- A toast to every online admin.
+function T.notifyAdmins(kind, key, vars)
+    return T.notifyMany(OnlineAdmins(), kind, key, vars)
+end
+
 -- ============================================================================
 --                             SIDEBAR BADGE COUNTS
 -- ============================================================================
@@ -632,6 +662,39 @@ local function ReviewCount(src, officer)
     return n
 end
 
+-- A sidebar count another module owns: fn(src, officer|nil) -> number. opts.adminOnly = the count goes to admin
+-- players only (adminReview, adminDisputes, adminPayments, adminLive), never to an officer or supervisor.
+function T.registerNavCount(key, fn, opts)
+    if type(key) ~= 'string' or not key:match('^[%a][%w_]*$') or type(fn) ~= 'function' then return false end
+    if not navExtra[key] then navExtraOrder[#navExtraOrder + 1] = key end
+    navExtra[key] = { fn = fn, adminOnly = type(opts) == 'table' and opts.adminOnly == true }
+    return true
+end
+
+local function ExtraCounts(counts, n, officer)
+    if #navExtraOrder == 0 then return end
+    local admin = nil
+    for _, key in ipairs(navExtraOrder) do
+        local e = navExtra[key]
+        if e.adminOnly then
+            if admin == nil then admin = CP.Access and CP.Access.isAdmin and CP.Access.isAdmin(n) == true end
+            if admin then
+                local ok, v = pcall(e.fn, n, officer)
+                counts[key] = Count(ok, v)
+            end
+        elseif officer then
+            local ok, v = pcall(e.fn, n, officer)
+            counts[key] = Count(ok, v)
+        end
+    end
+end
+
+-- A count of another module changed for src: the counts are pushed again.
+function T.navChanged(src)
+    local n = ToSrc(src)
+    if n then ScheduleNav(n) end
+end
+
 function T.navCounts(src)
     local counts = { invites = 0, calls = 0, review = 0, commendations = 0, rewards = 0, onRun = false }
     local n = ToSrc(src)
@@ -641,6 +704,7 @@ function T.navCounts(src)
     if c and now - c.at < NAV_CACHE_S then return c.counts end
     local okO, officer = Call('Access', 'getOfficer', n)
     officer = okO and type(officer) == 'table' and officer or nil
+    ExtraCounts(counts, n, officer)
     if officer then
         counts.invites = InviteCount(n)
         counts.calls = Count(Call('MissionCalls', 'claimableCount', n))
