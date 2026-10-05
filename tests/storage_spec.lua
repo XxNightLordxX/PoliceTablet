@@ -959,7 +959,12 @@ print('%d %.3f' % (len(paths), total * 1000))
     else
         Say('one finished run with an fsync per document: python3 is not available, not measured')
     end
-    H.ok(#written <= 8, ('one finished run writes %d documents'):format(#written))
+    -- a mission call that lapses on its own timer inside the window is not this run's write
+    local own = 0
+    for _, w in ipairs(written) do
+        if not w.path:find('mission_calls', 1, true) then own = own + 1 end
+    end
+    H.ok(own <= 8, ('one finished run writes %d documents'):format(own))
 end
 
 -- start-up: a new engine loads the whole saves folder

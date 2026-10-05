@@ -81,7 +81,7 @@
   "err.notice_too_many": "5 staff notices are running already. Remove one first.",
   "err.officer_in_ready_check": "The officer's unit is locked for a run or in a ready check. Try again when it ends.",
   "err.officer_not_retired": "That officer is not retired.",
-  "err.officer_offline": "The officer is not online.",
+  "err.officer_offline": "The officer must be online for this.",
   "err.officer_on_operation": "The officer is on a Cross-Department Mission. Recall them first (Live).",
   "err.officer_on_run": "The officer is on a run. Recall them first (Live).",
   "err.officer_retired": "That officer is already retired.",
