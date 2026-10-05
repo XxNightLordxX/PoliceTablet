@@ -444,6 +444,23 @@ function Runs.adjustTimer(run, seconds)
     SendTimer(run)
 end
 
+-- An admin's extra time: only while the timer runs (before that adjustTimer would raise run.timeLimit, which the
+-- fast_finish bonus is judged against). run.timeAdded keeps the total; run.timeLimit never changes here.
+function Runs.addTime(run, seconds, maxTotal)
+    seconds = math.floor(Num(seconds, 0))
+    if type(run) ~= 'table' or run.state == 'ended' or runs[run.id] ~= run then return false, 'err.run_not_active' end
+    if run.state ~= 'in_progress' or not run.timer or not run.timer.running then
+        return false, 'err.live_timer_not_running'
+    end
+    if seconds <= 0 then return false, 'err.invalid_payload' end
+    local total = math.floor(Num(run.timeAdded, 0))
+    if maxTotal ~= nil and total + seconds > math.floor(Num(maxTotal, 0)) then return false, 'err.live_time_max' end
+    run.timeAdded = total + seconds
+    Runs.adjustTimer(run, seconds)
+    PushRun(run)
+    return true, run.timeAdded
+end
+
 function Runs.pauseTimer(run, paused)
     if type(run) ~= 'table' or not run.timer or run.state == 'ended' then return end
     SyncTimer(run)
@@ -1588,6 +1605,19 @@ local function RebuildWindow()
     return math.max(60, math.floor(window))
 end
 
+-- The officer's saved JSON marker of one cp_officers column (cooldown_clears, cap_extra): a table, or {}.
+local function OfficerJson(citizenid, column)
+    Db()
+    local ok, row = pcall(MySQL.single.await, ('SELECT %s AS v FROM cp_officers WHERE citizenid = ?'):format(column),
+        { citizenid })
+    if not ok or type(row) ~= 'table' then return {} end
+    local v = row.v
+    if type(v) == 'table' then return v end
+    if type(v) ~= 'string' or v == '' then return {} end
+    local okJ, t = pcall(json.decode, v)
+    return okJ and type(t) == 'table' and t or {}
+end
+
 local function LoadCooldowns(citizenid)
     local c = CdEntry(citizenid)
     if c.loaded then return c end
@@ -1611,14 +1641,20 @@ local function LoadCooldowns(citizenid)
         return c
     end
     c.loaded = true
+    -- An admin's cooldown clear (cp_officers.cooldown_clears): rows from before it no longer count.
+    local clears = OfficerJson(citizenid, 'cooldown_clears')
+    local all = Num(clears.all, 0)
+    local byType = type(clears.type) == 'table' and clears.type or {}
+    local byMission = type(clears.mission) == 'table' and clears.mission or {}
     for _, row in ipairs(rows or {}) do
         local ts = U.num(row.created_ts)
         local reason = row.end_reason
-        if MISSION_COOLDOWN[reason] then
+        if MISSION_COOLDOWN[reason] and ts > all and ts > Num(byMission[row.mission_id], 0) then
             local untilTs = ts + MissionCooldownOf(row.mission_id)
             if untilTs > (c.missions[row.mission_id] or 0) then c.missions[row.mission_id] = untilTs end
         end
-        if TYPE_COOLDOWN[reason] and row.mission_id ~= BOSS_ID then
+        if TYPE_COOLDOWN[reason] and row.mission_id ~= BOSS_ID and ts > all
+            and ts > Num(byType[row.mission_type], 0) then
             local untilTs = ts + AbandonCooldown()
             if untilTs > (c.types[row.mission_type] or 0) then c.types[row.mission_type] = untilTs end
         end
@@ -1649,6 +1685,36 @@ function Runs.onCooldown(citizenid, missionType, missionId)
     if t then untilTs = t end
     if m and (not untilTs or m > untilTs) then untilTs = m end
     return untilTs ~= nil, untilTs
+end
+
+-- After an admin's clear (the cooldown_clears marker is saved first): the in-memory table is rebuilt from the rows,
+-- which now skip what the marker cleared. scope 'all' | 'type' | 'mission'; key the type or the mission id.
+function Runs.clearCooldowns(citizenid, scope, key)
+    if type(citizenid) ~= 'string' or citizenid == '' then return false end
+    local c = cooldownCache[citizenid]
+    if c and not c.loading then
+        if scope == 'type' and key then
+            c.types[key] = nil
+        elseif scope == 'mission' and key then
+            c.missions[key] = nil
+        else
+            c.types, c.missions = {}, {}
+        end
+        c.loaded = false
+    end
+    return true
+end
+
+-- Every cache of one officer's counts (cooldowns, today, last hour): read again from the rows on the next use.
+function Runs._forgetOfficer(citizenid)
+    if type(citizenid) ~= 'string' or citizenid == '' then return end
+    local c = cooldownCache[citizenid]
+    if c and not c.loading then cooldownCache[citizenid] = nil end
+    hourCache[citizenid] = nil
+    local prefix = citizenid .. '|'
+    for k in pairs(dayCache) do
+        if k:sub(1, #prefix) == prefix then dayCache[k] = nil end
+    end
 end
 
 local function ApplyCooldowns(run, p, endReason)
@@ -1695,10 +1761,34 @@ local function DayStart()
     return os.time({ year = t.year, month = t.month, day = t.day, hour = 0 })
 end
 
+function Runs._dayKey()
+    local ok, key = Call('Schedule', 'dayKey', os.time())
+    if ok and type(key) == 'string' then return key end
+    return os.date('%Y-%m-%d', DayStart())
+end
+
+-- Extra completions an admin allowed today (cp_officers.cap_extra = { day, n }): the daily cap only.
+function Runs.extraRunsToday(citizenid)
+    if type(citizenid) ~= 'string' or citizenid == '' then return 0 end
+    local key = citizenid .. '|extra'
+    local cached = dayCache[key]
+    local now = os.time()
+    if cached and now - cached.at < DAY_CACHE_S then return cached.n end
+    local extra = OfficerJson(citizenid, 'cap_extra')
+    local n = 0
+    if extra.day == Runs._dayKey() then n = math.max(0, math.floor(Num(extra.n, 0))) end
+    dayCache[key] = { n = n, at = now }
+    return n
+end
+
 -- Completed runs since the daily reset (Config.Limits.maxCompletionsDay, Config.MissionTypes dailyLimit):
 -- no manual awards, goal rows or Cross-Department Missions. Cached DAY_CACHE_S; cleared on a completion.
-function Runs.completionsToday(citizenid, missionType)
+-- raw = the completed rows themselves; otherwise the day count (no type) takes the admin's extra runs off.
+function Runs.completionsToday(citizenid, missionType, raw)
     if type(citizenid) ~= 'string' or citizenid == '' then return 0 end
+    if missionType == nil and not raw then
+        return math.max(0, Runs.completionsToday(citizenid, nil, true) - Runs.extraRunsToday(citizenid))
+    end
     local key = citizenid .. '|' .. tostring(missionType or '*')
     local cached = dayCache[key]
     local now = os.time()
@@ -2328,6 +2418,8 @@ function Runs.create(opts)
         return nil, 'err.invalid_location'
     end
     if type(opts.members) ~= 'table' or #opts.members == 0 then return nil, 'err.no_members' end
+    -- The maintenance lock (a storage copy or switch, a backup restore): no new run of any kind starts.
+    if CP.Maintenance and CP.Maintenance.active and CP.Maintenance.active() then return nil, 'err.maintenance' end
 
     local isBoss = opts.isBoss == true or mission.isBoss == true
     local missionType = opts.missionType
@@ -2504,6 +2596,7 @@ function Runs.create(opts)
         local cid = CitizenOf(src)
         if cid and cid ~= run.participants[src].citizenid then return nil, 'err.member_unavailable' end
     end
+    if CP.Maintenance and CP.Maintenance.active and CP.Maintenance.active() then return nil, 'err.maintenance' end
     if not test and not opts.operationId then
         local okLock, locked = Call('Operations', 'isLocked')
         if okLock and locked == true then return nil, 'err.operation_locked' end
@@ -3031,10 +3124,8 @@ local function RemoveDownedBeforeEnd(run)
     return true
 end
 
-function Runs.endRun(run, state, endReason)
-    if type(run) ~= 'table' or run.state == 'ended' or run.ending then return end
-    if state ~= 'completed' and state ~= 'failed' then state = 'failed' end
-    endReason = RESULT[endReason] and endReason or (state == 'completed' and 'completed' or 'mission_failed')
+-- Every participant still active leaves together with state (completed, failed or abandoned) and endReason.
+local function FinishRun(run, state, endReason)
     run.ending = true
     local okDown, open = pcall(RemoveDownedBeforeEnd, run)
     run.ending = nil
@@ -3072,6 +3163,37 @@ function Runs.endRun(run, state, endReason)
         PushNone(src)
     end
     AfterRunEnded(run, state)
+end
+
+function Runs.endRun(run, state, endReason)
+    if type(run) ~= 'table' or run.state == 'ended' or run.ending then return end
+    if state ~= 'completed' and state ~= 'failed' then state = 'failed' end
+    endReason = RESULT[endReason] and endReason or (state == 'completed' and 'completed' or 'mission_failed')
+    FinishRun(run, state, endReason)
+end
+
+-- An admin ends a whole live run (or a test): everyone still on it leaves Abandoned with endReason (default
+-- 'cancelled': no cooldown, no penalty, no pay) through the same cleanup as every other end. Participants who are
+-- down leave the way every end handles them (Hard rule 18: CP.Downed's pick-up or EMS request). A Cross-Department
+-- Mission's run is ended by cancelling the operation, so cp_operations says cancelled. true | false, errKey.
+function Runs.cancelRun(run, endReason, opts)
+    opts = type(opts) == 'table' and opts or {}
+    if type(run) ~= 'table' or run.state == 'ended' or run.ending or runs[run.id] ~= run then
+        return false, 'err.run_not_active'
+    end
+    endReason = endReason or 'cancelled'
+    if RESULT[endReason] ~= 'abandoned' then return false, 'err.invalid_payload' end
+    if run.operationId and Has('Operations', 'active') then
+        local okA, op = Call('Operations', 'active')
+        if okA and type(op) == 'table' and op.id == run.operationId and op.runId == run.id then
+            local okC, done, errKey = Call('Operations', 'cancel', opts.src or 0, opts.reason or 'admin')
+            if not okC or not done then return false, errKey or 'err.internal' end
+            if run.state ~= 'ended' then FinishRun(run, 'abandoned', endReason) end
+            return true
+        end
+    end
+    FinishRun(run, 'abandoned', endReason)
+    return true
 end
 
 -- Which stored end reasons a reclassification may replace: an un-marked real call only turns a real_call
@@ -3817,6 +3939,11 @@ AddEventHandler('playerDropped', function()
     src = ToSrc(src)
     if not src then return end
     DropFromRun(src, 'disconnected')
+end)
+
+-- An admin changed an officer's records (a cooldown clear, extra runs, a void or restore): forget their counts.
+CP.Hooks.on('admin:changed', function(data)
+    if type(data) == 'table' then Runs._forgetOfficer(data.citizenid) end
 end)
 
 local hooked = false

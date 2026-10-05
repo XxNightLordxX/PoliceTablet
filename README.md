@@ -1092,7 +1092,8 @@ their run as Abandoned. At the start the mission begins; they finish the objecti
 Finished = Completed (points and cash). A downed officer, or a timer that runs out, = Failed. Leaving, going off
 duty or not reaching the start in time = Abandoned. Going down, leaving, going off duty or not reaching the start
 also puts a 5-minute cooldown on that whole mission type (`Config.Limits.abandonCooldown`). Ending for a real
-call, or a supervisor's force recall, never does.
+call, or a supervisor's force recall, never does. An admin can clear an officer's cooldowns, allow a few more
+missions today or give another Weekly Boss attempt ([9.15.3](#9153-live-runs-units-and-anti-farm)).
 
 ### 9.2 The supervisor's screens
 
@@ -1102,7 +1103,7 @@ Supervisors play missions like officers. The **Supervisor** button in the tablet
 |---|---|
 | **Mission List** | Every mission by name. Launch a Cross-Department Mission from here |
 | **Cross-Department Mission** | The running operation: start now, relaunch after a fail, cancel, remove a joiner |
-| **Live Missions** | Runs of their department: force recall. Its Mission calls panel withdraws, pages and creates calls |
+| **Live Missions** | Runs of their department: force recall. Its Mission calls panel withdraws, pages and creates calls. Admins have their own **Live** screen for every department, with more controls ([9.15.3](#9153-live-runs-units-and-anti-farm)) |
 | **Review Queue** | Flagged runs and disputes of their department, and a **Profiles** tab for pictures, bios and reports |
 | **Payouts** | Mission type payouts, within the allowed range |
 | **Mission Builder** | Build, test and publish their own missions ([9.12](#912-mission-builder)) |
@@ -1317,8 +1318,45 @@ missions between servers are described here as they arrive.
 
 #### 9.15.3 Live runs, units and anti-farm
 
-The **Live** screen (every run and unit) and the per-officer cooldown and limit tools are described here as they
-arrive.
+**Live** (in the admin sidebar; the badge counts the runs going on now) shows every live run of every department,
+test runs and Cross-Department Missions included, refreshed every 10 seconds. Click a participant's name to open
+them in **Officers**. Each run card has:
+
+- **Recall** a participant: they leave at once with no penalty and no cooldown, the others carry on.
+- **+ minutes**: 1 to 10 minutes more on the mission timer, only while the timer runs. All additions to one run stay
+  within `Config.AdminControl.runTimeAddMax` (600 seconds). The fast-finish bonus still uses the original time
+  limit, so extra time never earns a bonus.
+- **End run** (type `END`): everyone still on it leaves as Abandoned with no points, no pay, no penalty and no
+  cooldown, and everything the run spawned is removed, exactly as at any other end. Anyone who is down is still
+  picked up or gets EMS. A Cross-Department Mission ends as cancelled. **End test** does the same for another
+  admin's test run.
+
+The **Units** tab lists every unit with its members, its ready check and whether it is on a run. **Remove** takes one
+member out and **Disband** splits the unit; both wait until the unit is no longer locked for a run, in a ready check
+or on a run, and the members are told.
+
+**Officers → an officer → Today & cooldowns** shows, counted from saved runs: their cooldowns, today's completed
+missions against the daily, hourly and per-type limits, the cash paid today, their Weekly Boss attempt, their free
+abandons (runs that ended for a real call) of the last 24 hours, and, while they are online, **Board as they see
+it** (their type cards and why each is locked; never which mission they would get). The buttons:
+
+- **Clear** one type's or one mission's cooldown, or **Clear every cooldown**: at most
+  `Config.AdminControl.cooldownClearsPerDay` (3) per officer per day, and not while they are on a run. A restart
+  keeps the clear.
+- **Allow more today**: 1 to `extraRunsMax` (10) more completed missions than the daily limit, once per officer per
+  day, until the daily reset. The hourly limit and each type's own limit stay.
+- **Another boss attempt**: once per officer per week. Voiding a bugged boss run also gives its attempt back.
+- **Treat as a normal abandon**: a free abandon becomes a normal one, so the type and mission cooldowns start now.
+
+**Missions → Today** shows today's Type of the Day, whether the Weekly Boss is on today and which run modifiers are
+switched on. **Change today's type** picks another type or none for today only; at the daily reset the normal roll
+is back, and a restart keeps the choice. Single modifiers are switched on or off in **Settings → Events →
+modifiers**.
+
+Every one of these asks for a reason, goes into the audit log (cooldown, extra-run, boss and abandon changes post to
+the flags webhook; run and unit changes to the operations webhook) and tells the officer when they are online. No
+admin can use them on a run or unit they (or another of their characters) are part of, or on one of their own
+characters. Setting a limit in `Config.AdminControl` to 0 switches that tool off.
 
 #### 9.15.4 Payments, item rewards and department money
 

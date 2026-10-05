@@ -305,8 +305,14 @@ local function Dissolve(unit, opts)
 end
 
 -- Toast to the member who left / to the others, by reason.
-local LEFT_SELF = { left = 'unit.you_left', lost = 'unit.removed_lost', kicked = 'unit.you_were_kicked' }
+local LEFT_SELF = {
+    left = 'unit.you_left',
+    lost = 'unit.removed_lost',
+    kicked = 'unit.you_were_kicked',
+    admin = 'unit.admin_removed_you',
+}
 local LEFT_OTHERS = {
+    admin = 'unit.admin_removed',
     left = 'unit.member_left',
     moved = 'unit.member_left',
     lost = 'unit.member_lost',
@@ -697,6 +703,91 @@ function Units.cancelInvite(src, target)
     Push(target, 'unit', { unitId = unitIdBySrc[target] or false })
     CP.log(TAG, 'unit %d: %d withdrew the invite to %d', unit.id, src, target)
     return true, { cancelled = target }
+end
+
+-- ============================================================================
+--                         ADMIN CONTROLS (CP.LiveCtl)
+-- ============================================================================
+-- An admin may take one member out of a unit or split it, never while it is locked for a run, in a ready check or
+-- on a run. Units stay memory-only: nothing is saved. The members get the same toasts as a leader's kick or disband.
+
+-- nil when the unit may be changed now, else the errKey.
+local function AdminBlocked(unit)
+    if unit.locked then return 'err.live_unit_locked' end
+    if readyChecks[unit.id] then return 'err.live_unit_ready_check' end
+    for _, m in ipairs(unit.members) do
+        if OnRun(m) then return 'err.live_unit_on_run' end
+    end
+    return nil
+end
+
+-- Every unit, as the Admin UI's Live → Units shows it (members with their names, the ready check, lock, run).
+function Units.adminList()
+    local now = os.time()
+    local out = {}
+    for _, unit in pairs(units) do
+        local members = {}
+        local runId = nil
+        for _, m in ipairs(unit.members) do
+            local info = unit.info[m] or {}
+            local run = RunOf(m)
+            if run and not runId then runId = run.id end
+            members[#members + 1] = {
+                src = m,
+                name = info.name or ('#' .. m),
+                callsign = info.callsign,
+                rank = info.rank or '',
+                departmentShort = info.departmentShort or '',
+                leader = m == unit.leader,
+                joinedAt = unit.joinedAt[m],
+                onRun = run ~= nil,
+            }
+        end
+        local check = readyChecks[unit.id]
+        out[#out + 1] = {
+            id = unit.id,
+            leader = unit.leader,
+            members = members,
+            invites = PendingCount(unit, now),
+            locked = unit.locked == true,
+            readyCheck = check and not check.done and { typeLabel = check.typeLabel } or nil,
+            runId = runId,
+            createdAt = unit.createdAt,
+            blocked = AdminBlocked(unit),
+        }
+    end
+    table.sort(out, function(a, b) return a.id < b.id end)
+    return out
+end
+
+function Units.adminGet(unitId)
+    return Resolve(unitId)
+end
+
+-- One member out (the admin's kick). ok, data | false, errKey.
+function Units.adminRemove(unitId, target)
+    target = ToSrc(target)
+    local unit = Resolve(unitId)
+    if not unit then return false, 'err.unit_gone' end
+    if not target or not IndexOf(unit.members, target) then return false, 'err.unit_not_member' end
+    local blocked = AdminBlocked(unit)
+    if blocked then return false, blocked end
+    RemoveMember(unit, target, 'admin', false)
+    CP.log(TAG, 'unit %d: an admin removed %d', unit.id, target)
+    return true, { removed = target }
+end
+
+-- The whole unit split up (the admin's disband). ok, data | false, errKey.
+function Units.adminDisband(unitId)
+    local unit = Resolve(unitId)
+    if not unit then return false, 'err.unit_gone' end
+    local blocked = AdminBlocked(unit)
+    if blocked then return false, blocked end
+    local members = CP.U.copy(unit.members)
+    Dissolve(unit, { silentMembers = true })
+    for _, m in ipairs(members) do Notify(m, 'info', 'unit.admin_disbanded') end
+    CP.log(TAG, 'unit %d disbanded by an admin', unit.id)
+    return true, { disbanded = true, members = members }
 end
 
 -- ============================================================================
