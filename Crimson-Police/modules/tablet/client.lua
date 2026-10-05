@@ -366,6 +366,7 @@ local function ShowUi(ui, session, opts)
         local access = type(session.access) == 'table' and session.access or {}
         state.via = opts.via or access.via
         state.desk = state.via == 'desk' and (opts.desk or access.desk) or nil
+        if state.desk and T._deskOpened then T._deskOpened(state.desk) end
     end
     local pd = CP.Qbx and CP.Qbx.getPlayerData and CP.Qbx.getPlayerData() or {}
     state.jobName = type(pd.job) == 'table' and pd.job.name or nil
@@ -889,6 +890,47 @@ end
 
 function T.deskZones()
     return state.deskZones
+end
+
+-- Desks changed in Admin UI → Departments → Desks: the zones are made again at once, and a tablet opened at a desk
+-- that moved or went away closes.
+local function DeskSignature(desk)
+    if type(desk) ~= 'table' then return '' end
+    local c, s = desk.coords or {}, desk.size or {}
+    return ('%s|%.2f,%.2f,%.2f|%.2f,%.2f,%.2f|%.1f|%s|%s'):format(tostring(desk.label), tonumber(c.x) or 0,
+        tonumber(c.y) or 0, tonumber(c.z) or 0, tonumber(s.x) or 0, tonumber(s.y) or 0, tonumber(s.z) or 0,
+        tonumber(desk.rotation) or 0, type(desk.departments) == 'table' and table.concat(desk.departments, ',') or '',
+        tostring(desk.prop))
+end
+
+local function DesksSignature()
+    local parts = {}
+    local t = Config.Tablet or {}
+    parts[1] = type(t.access) == 'table' and tostring(t.access.desk) or ''
+    for i, d in ipairs(type(t.desks) == 'table' and t.desks or {}) do parts[i + 1] = DeskSignature(d) end
+    return table.concat(parts, '\n')
+end
+local desksSeen = nil
+local deskAtOpen = nil   -- the signature of the desk the open tablet was opened at
+
+CP.Hooks.on('settings:changed', function()
+    local sig = DesksSignature()
+    if desksSeen == nil then desksSeen = sig end
+    if sig == desksSeen then return end
+    desksSeen = sig
+    if state.open and state.via == 'desk' then
+        local desks = type(Config.Tablet) == 'table' and Config.Tablet.desks or {}
+        if DeskSignature(type(desks) == 'table' and desks[state.desk] or nil) ~= deskAtOpen then T.close() end
+    end
+    if RemoveDeskZones and CreateDeskZones then
+        RemoveDeskZones()
+        CreateDeskZones()
+    end
+end)
+
+function T._deskOpened(index)
+    local desks = type(Config.Tablet) == 'table' and Config.Tablet.desks or {}
+    deskAtOpen = DeskSignature(type(desks) == 'table' and desks[index] or nil)
 end
 
 -- ============================================================================

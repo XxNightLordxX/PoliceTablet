@@ -94,6 +94,18 @@ function Diag.unstick()
     CP.log(TAG, 'Crimson-Police\'s own screen, focus and overlay released')
 end
 
+-- Admin UI → Officers → Support: an admin released this player's screen, or asked what holds it (server events;
+-- only the server sends them, and only Crimson-Police's own focus, camera and freeze are touched).
+RegisterNetEvent(CP.e('client:diagUnstick'), function()
+    Diag.unstick()
+    CP.log(TAG, 'an admin released Crimson-Police\'s screen')
+end)
+
+RegisterNetEvent(CP.e('client:diagState'), function(token)
+    if type(token) ~= 'string' or #token > 64 then return end
+    TriggerServerEvent(CP.e('server:diagState'), token, Diag.state())
+end)
+
 RegisterCommand(COMMAND, function(_, args)
     if type(args) == 'table' and args[1] == 'unstick' then Diag.unstick() end
     Print(Diag.state())

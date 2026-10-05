@@ -201,14 +201,14 @@ local function SanitizeDepartment(key, cfg)
     end
     if #jobs == 0 then
         WarnOnce(key .. '.jobs',
-            'Department %s lists no Qbox job names in jobs: nobody can use it. Put your police job name in jobs = { } of Config.Departments.%s in config/config.lua',
+            'Department %s lists no Qbox job names in jobs: nobody can use it. Add it in Admin UI → Departments (or: Put your police job name in jobs = { } of Config.Departments.%s in config/config.lua)',
             key, key)
     end
 
     local grade = tonumber(cfg.supervisorGrade)
     if not grade or grade ~= grade then
         WarnOnce(key .. '.supervisorGrade',
-            'Department %s: supervisorGrade must be a Qbox grade level; nobody in it is a supervisor. Set supervisorGrade of Config.Departments.%s in config/config.lua to a grade number, such as 3',
+            'Department %s: supervisorGrade must be a Qbox grade level; nobody in it is a supervisor. Change it in Admin UI → Departments (or: Set supervisorGrade of Config.Departments.%s in config/config.lua to a grade number, such as 3)',
             key, key)
         grade = NO_SUPERVISOR_GRADE
     end
@@ -220,6 +220,8 @@ local function SanitizeDepartment(key, cfg)
         key = key,
         label = label,
         short = short,
+        -- turned off in Admin UI → Departments: nobody opens the tablet through it, its history and pay stay
+        enabled = cfg.enabled ~= false,
         jobs = jobs,
         supervisorGrade = math.floor(grade),
         societyAccount = society,
@@ -232,7 +234,7 @@ end
 local function Build()
     local source = Config.Departments
     if cache.built and cache.source == source then return cache end
-    local list, byKey, byJob = {}, {}, {}
+    local list, byKey, byJob, offByJob = {}, {}, {}, {}
     if type(source) == 'table' then
         local keys = {}
         for k in pairs(source) do keys[#keys + 1] = k end
@@ -249,7 +251,9 @@ local function Build()
                 list[#list + 1] = d
                 byKey[k] = d
                 for _, j in ipairs(d.jobs) do
-                    if byJob[j] and byJob[j] ~= k then
+                    if not d.enabled then
+                        offByJob[j] = offByJob[j] or k
+                    elseif byJob[j] and byJob[j] ~= k then
                         WarnOnce('job.' .. j, 'Qbox job %s is listed in departments %s and %s; %s is used', j, byJob[j],
                             k, byJob[j])
                     else
@@ -261,15 +265,23 @@ local function Build()
     else
         WarnOnce('departments', 'Config.Departments is missing: nobody can use Crimson-Police')
     end
-    cache = { built = true, source = source, list = list, byKey = byKey, byJob = byJob }
+    cache = { built = true, source = source, list = list, byKey = byKey, byJob = byJob, offByJob = offByJob }
     return cache
 end
 
+-- The department a job opens the tablet through (a turned-off department is left out).
 function A.departmentForJob(jobName)
     if type(jobName) ~= 'string' then return nil end
     return Build().byJob[jobName]
 end
 
+-- The turned-off department that lists this job, or nil.
+function A.offDepartmentForJob(jobName)
+    if type(jobName) ~= 'string' then return nil end
+    return Build().offByJob[jobName]
+end
+
+-- Any department, also a turned-off one (enabled = false): its pending and held pay still pays from its account.
 function A.department(key)
     if type(key) ~= 'string' then return nil end
     local d = Build().byKey[key]
@@ -457,7 +469,7 @@ function A.getOfficer(src)
     local c = Build()
     local deptKey = c.byJob[info.job.name]
     local dept = deptKey and c.byKey[deptKey]
-    if not dept then return nil, 'err.not_police' end
+    if not dept then return nil, c.offByJob[info.job.name] and 'err.department_off' or 'err.not_police' end
     if not info.job.onduty then return nil, 'err.not_on_duty' end
     if A.isSuspended(info.citizenid) then return nil, 'err.suspended' end
     if DispatchSuspended(info.citizenid, info.job.name) then return nil, 'err.suspended_dispatch' end
@@ -477,6 +489,49 @@ function A.getOfficer(src)
         isSupervisor = info.job.gradeLevel >= dept.supervisorGrade,
         isAdmin = A.isAdmin(n),
     }
+end
+
+-- Admin UI → Officers → Support → Check access: why this online player can or can't open the Officer UI. The steps
+-- are the opening checks in order (job, department on, duty, suspensions, retired, the arena, the way and the item);
+-- the verdict is the opening code itself (A.getOfficer, then CP.Tablet.checkAccess), so the two never disagree.
+-- via: the way to check ('command' when left out).
+function A.explain(src, via)
+    local n = ToSrc(src)
+    local out = { ok = false, steps = {}, via = via or 'command' }
+    local function step(check, ok, vars) out.steps[#out.steps + 1] = { check = check, ok = ok == true, vars = vars } end
+    local info = n and CP.Qbx and CP.Qbx.getInfo and CP.Qbx.getInfo(n) or nil
+    if not info then
+        out.error = 'err.player_offline'
+        return out
+    end
+    out.src, out.citizenid, out.name, out.job = n, info.citizenid, ClipText(info.name, 64), info.job.name
+    local c = Build()
+    local deptKey = c.byJob[info.job.name] or c.offByJob[info.job.name]
+    out.department = deptKey
+    step('job', deptKey ~= nil, { job = info.job.name })
+    if deptKey then step('department_on', c.byJob[info.job.name] ~= nil, { department = deptKey }) end
+    step('duty', info.job.onduty == true)
+    step('suspended', not A.isSuspended(info.citizenid))
+    step('suspended_dispatch', not DispatchSuspended(info.citizenid, info.job.name))
+    step('retired', not A.isRetired(info.citizenid))
+    local arena = CP.Alerts and CP.Alerts.inArena and CP.Alerts.inArena(n) or false
+    step('arena', not arena)
+    local officer, err = A.getOfficer(n)
+    if not officer then
+        out.error = err or 'err.not_police'
+        return out
+    end
+    local check = CP.Tablet and CP.Tablet.checkAccess
+    if check then
+        local okW, errW = check(n, officer, out.via, nil)
+        step('way', okW == true, { via = out.via })
+        if not okW then
+            out.error = errW or 'err.refused'
+            return out
+        end
+    end
+    out.ok = true
+    return out
 end
 
 function A.isSupervisor(src)

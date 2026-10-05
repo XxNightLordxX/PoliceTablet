@@ -6,9 +6,12 @@ local S = CP.Storage
 S._installed = true
 
 local TAG = 'storage'
+local KVP_MODE = 'cp_storage_mode'       -- 'database' | 'files': the storage switched to in Admin UI → System
+local KVP_FOLDER = 'cp_storage_folder'   -- the saves folder that switch named (relative, under saves)
 local mode = 'database'
 local folderPath = nil
 local loadError = nil
+local override = nil                     -- { mode, folder } while the in-game choice is used
 
 function S.mode() return mode end
 function S.name() return mode == 'files' and 'saves folder' or 'database' end
@@ -23,6 +26,34 @@ function S.describe()
 end
 
 local function Trim(s) return (s:gsub('^%s+', ''):gsub('%s+$', '')) end
+
+-- A saves folder an admin may name in game: relative, inside the resource, under saves (no '..', no full path).
+function S.validFolder(f)
+    if type(f) ~= 'string' or #f == 0 or #f > 64 then return false end
+    if f:find('..', 1, true) or f:find('//', 1, true) or f:find('\\', 1, true) then return false end
+    return f:match('^saves[%w_%-/]*$') ~= nil and f:sub(-1) ~= '/'
+end
+
+-- The storage to use: config.lua's Config.Database, or the in-game switch when one is saved (the server's KVP is
+-- outside the storage, where the settings live). Returns { enabled, folder }, and { mode, folder } for an override.
+function S.effective(cfg, kvp)
+    cfg = type(cfg) == 'table' and cfg or {}
+    local m = type(kvp) == 'function' and kvp(KVP_MODE) or nil
+    if m ~= 'files' and m ~= 'database' then return { enabled = cfg.enabled ~= false, folder = cfg.folder }, nil end
+    local folder = kvp(KVP_FOLDER)
+    if not S.validFolder(folder) then folder = cfg.folder end
+    return { enabled = m == 'database', folder = folder }, { mode = m, folder = folder }
+end
+
+function S.override() return override end
+S.KVP_MODE, S.KVP_FOLDER = KVP_MODE, KVP_FOLDER
+
+local function ReadKvp(key)
+    if type(GetResourceKvpString) ~= 'function' then return nil end
+    local ok, v = pcall(GetResourceKvpString, key)
+    if ok and type(v) == 'string' and v ~= '' then return v end
+    return nil
+end
 
 local function IsAbsolute(p)
     return p:match('^/') ~= nil or p:match('^%a:[/\\]') ~= nil or p:match('^[/\\][/\\]') ~= nil
@@ -159,6 +190,17 @@ end
 
 local function Install()
     local cfg = type(Config) == 'table' and type(Config.Database) == 'table' and Config.Database or {}
+    local eff, ov = S.effective(cfg, ReadKvp)
+    if ov and type(Config) == 'table' then
+        override = ov
+        Config.Database = Config.Database or {}
+        Config.Database.enabled, Config.Database.folder = eff.enabled, eff.folder
+        cfg = Config.Database
+        print(
+            ('[crimson-police] storage: the storage switched to in Admin UI → System is used (%s%s), not config.lua\'s Config.Database. "CrimsonPoliceAdmin storagemode reset" in the server console goes back to config.lua\'s.'):format(
+                ov.mode == 'files' and 'saves folder ' or 'database',
+                ov.mode == 'files' and tostring(eff.folder or 'saves') or ''))
+    end
     if cfg.enabled ~= false then
         mode = 'database'
         return

@@ -2,6 +2,7 @@
 
 import {
     Badge,
+    Button,
     Card,
     EmptyState,
     ErrorState,
@@ -17,7 +18,9 @@ import {
 import { asArray } from '../../shared/data';
 import { useAction, useRequest } from '../../shared/hooks';
 import { hasKey, t } from '../../shared/i18n';
+import { useNavigate } from '../../shared/navigation';
 import type { ConfigHealthItem } from '../../shared/types';
+import { copyLine } from '../components/copyText';
 import type { PermissionsData } from '../../types/oversight';
 import './Permissions.css';
 import '../components/access-admin.css';
@@ -33,9 +36,13 @@ const desc = (a: string) => (hasKey(`admin.perm_desc.${a}`) ? t(`admin.perm_desc
 const HEALTH_TONE = { ok: 'success', warn: 'warning', error: 'danger' } as const;
 const HEALTH_ICON = { ok: 'checkCircle', warn: 'alert', error: 'xCircle' } as const;
 
+// A health line may name the setting that fixes it (opens Settings at it) or a server.cfg line to paste.
+type HealthLine = ConfigHealthItem & { fix?: string; cfgLine?: string };
+
 // Config health (modules/confighealth): every check's lines, problems first.
 function ConfigHealthCard() {
-    const { data, loading, error, refetch } = useRequest<ConfigHealthItem[]>('admin:getConfigHealth', {});
+    const { data, loading, error, refetch } = useRequest<HealthLine[]>('admin:getConfigHealth', {});
+    const navigate = useNavigate();
     const items = asArray(data);
     const problems = items.filter(i => i.level !== 'ok').length;
     return (
@@ -83,6 +90,26 @@ function ConfigHealthCard() {
                                     : i.check}
                             </span>
                             <span className="access-health__text">{i.text}</span>
+                            {i.fix ? (
+                                <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    icon="edit"
+                                    onClick={() => navigate('admin_settings', { q: i.fix })}
+                                >
+                                    {t('sysadmin.ui.fix_open')}
+                                </Button>
+                            ) : null}
+                            {i.cfgLine ? (
+                                <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    icon="fileText"
+                                    onClick={() => copyLine(i.cfgLine ?? '')}
+                                >
+                                    {t('sysadmin.ui.copy_line')}
+                                </Button>
+                            ) : null}
                         </li>
                     ))}
                 </ul>

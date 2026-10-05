@@ -28,8 +28,11 @@ local OPTIONAL_RESOURCES = {
 local checks = {}          -- { { name, fn } } in the order registered
 local results = nil        -- the last run: { ConfigHealthItem }
 
-local function Line(level, key, vars)
-    return { level = level, text = CP.L(key, vars) }
+-- extra (optional): { fix = Settings path that fixes it, cfgLine = the server.cfg line to paste }.
+local function Line(level, key, vars, extra)
+    local l = { level = level, text = CP.L(key, vars) }
+    if type(extra) == 'table' then l.fix, l.cfgLine = extra.fix, extra.cfgLine end
+    return l
 end
 
 local function CmdName()
@@ -69,7 +72,14 @@ function Health.run()
         else
             for _, l in ipairs(type(lines) == 'table' and lines or {}) do
                 if type(l) == 'table' and LEVELS[l.level] and type(l.text) == 'string' then
-                    out[#out + 1] = { check = c.name, level = l.level, text = l.text }
+                    -- fix: the Settings path that fixes it; cfgLine: the server.cfg line to paste
+                    out[#out + 1] = {
+                        check = c.name,
+                        level = l.level,
+                        text = l.text,
+                        fix = type(l.fix) == 'string' and l.fix or nil,
+                        cfgLine = type(l.cfgLine) == 'string' and l.cfgLine or nil,
+                    }
                 end
             end
         end
@@ -100,17 +110,21 @@ local function CheckItems()
     local access = type(t.access) == 'table' and t.access or {}
     local item = type(t.item) == 'string' and t.item ~= '' and t.item or nil
     if not item then
-        if access.requireItem == true then return { Line('error', 'health.item.require_no_item') } end
+        if access.requireItem == true then
+            return { Line('error', 'health.item.require_no_item', nil, { fix = 'Tablet.access.requireItem' }) }
+        end
         return { Line('ok', 'health.item.off') }
     end
     if GetResourceState('ox_inventory') ~= 'started' then
         return { Line('error', 'health.item.no_inventory', { item = item }) }
     end
     local ok, def = pcall(function() return exports.ox_inventory:Items(item) end)
-    if not ok or def == nil then return { Line('warn', 'health.item.missing', { item = item }) } end
+    if not ok or def == nil then
+        return { Line('warn', 'health.item.missing', { item = item }, { fix = 'Tablet.item' }) }
+    end
     local out = { Line('ok', 'health.item.ok', { item = item }) }
     if access.item == false and access.requireItem ~= true then
-        out[#out + 1] = Line('warn', 'health.item.way_off', { item = item })
+        out[#out + 1] = Line('warn', 'health.item.way_off', { item = item }, { fix = 'Tablet.access.item' })
     end
     -- the picture: only where ox_inventory looks for it by default (inventory:imagepath may point at a web host)
     local imagePath = GetConvar and GetConvar('inventory:imagepath', OX_IMAGE_PATH) or OX_IMAGE_PATH
@@ -134,9 +148,9 @@ local function CheckDesks()
     for i, d in ipairs(desks) do
         local label = type(d) == 'table' and tostring(d.label or i) or tostring(i)
         if type(d) ~= 'table' or not IsVec(d.coords) then
-            out[#out + 1] = Line('error', 'health.desk.coords', { n = i, label = label })
+            out[#out + 1] = Line('error', 'health.desk.coords', { n = i, label = label }, { fix = 'Tablet.desks' })
         elseif d.size ~= nil and not IsVec(d.size) then
-            out[#out + 1] = Line('warn', 'health.desk.size', { n = i, label = label })
+            out[#out + 1] = Line('warn', 'health.desk.size', { n = i, label = label }, { fix = 'Tablet.desks' })
         else
             local unknown = {}
             for _, k in ipairs(type(d.departments) == 'table' and d.departments or {}) do
@@ -144,7 +158,7 @@ local function CheckDesks()
             end
             if #unknown > 0 then
                 out[#out + 1] = Line('warn', 'health.desk.department',
-                    { n = i, label = label, departments = table.concat(unknown, ', ') })
+                    { n = i, label = label, departments = table.concat(unknown, ', ') }, { fix = 'Tablet.desks' })
             else
                 good = good + 1
             end
@@ -169,7 +183,8 @@ local function CheckColours()
         local theme = type(d) == 'table' and type(d.theme) == 'table' and d.theme or {}
         for _, k in ipairs(THEME_KEYS) do
             if not CP.U.isHexColour(theme[k]) then
-                out[#out + 1] = Line('warn', 'health.colour.theme', { dept = tostring(key), key = k })
+                out[#out + 1] = Line('warn', 'health.colour.theme', { dept = tostring(key), key = k },
+                    { fix = ('Departments.%s.theme.%s'):format(tostring(key), k) })
             end
         end
         local accents = theme.personalAccents
@@ -215,11 +230,11 @@ local function CheckTweaks()
     for _, id in ipairs(ids) do
         local def = CP.Missions and CP.Missions.get and CP.Missions.get(id) or nil
         if not def then
-            out[#out + 1] = Line('warn', 'health.tweak.unknown', { id = id })
+            out[#out + 1] = Line('warn', 'health.tweak.unknown', { id = id }, { fix = 'MissionTweaks' })
         elseif def.tweaked == true then
             applied = applied + 1
         else
-            out[#out + 1] = Line('warn', 'health.tweak.ignored', { id = id })
+            out[#out + 1] = Line('warn', 'health.tweak.ignored', { id = id }, { fix = 'MissionTweaks' })
         end
     end
     table.insert(out, 1, Line('ok', 'health.tweak.ok', { n = applied, total = #ids }))
@@ -322,8 +337,9 @@ local function GradeLine(d, job, vars, gradeSet)
             break
         end
     end
-    if not first then return Line('warn', 'health.dept.grade_high', vars) end
-    if first == grades[1] and #grades > 1 then return Line('warn', 'health.dept.grade_all', vars) end
+    local fix = { fix = ('Departments.%s.supervisorGrade'):format(d.key) }
+    if not first then return Line('warn', 'health.dept.grade_high', vars, fix) end
+    if first == grades[1] and #grades > 1 then return Line('warn', 'health.dept.grade_all', vars, fix) end
     vars.first = GradeText(first)
     return Line('ok', 'health.dept.ok', vars)
 end
@@ -349,7 +365,8 @@ local function CheckDepartments()
             if type(jobs[jobName]) == 'table' then
                 out[#out + 1] = GradeLine(d, jobs[jobName], vars, gradeSet)
             else
-                out[#out + 1] = Line('warn', known == 0 and 'health.dept.no_job' or 'health.dept.no_job_other', vars)
+                out[#out + 1] = Line('warn', known == 0 and 'health.dept.no_job' or 'health.dept.no_job_other', vars,
+                    { fix = ('Departments.%s.jobs'):format(d.key) })
             end
         end
     end
@@ -372,7 +389,10 @@ local function CheckAdmins()
     if not IsPrincipalAceAllowed then return { Line('ok', 'health.admin.unchecked', { ace = ace }) } end
     if PrincipalAllowed(QBOX_ADMIN_GROUP, ace) then return { Line('ok', 'health.admin.ace', { ace = ace }) } end
     if qbox and PrincipalAllowed(QBOX_ADMIN_GROUP, qbox) then return { Line('ok', 'health.admin.qbox') } end
-    return { Line('warn', 'health.admin.none', { ace = ace }) }
+    return {
+        Line('warn', 'health.admin.none', { ace = ace },
+            { cfgLine = ('add_ace %s %s allow'):format(QBOX_ADMIN_GROUP, ace) }),
+    }
 end
 
 -- ============================================================================
@@ -420,7 +440,8 @@ local function CheckWebhooks()
         if w.state == 'on' then
             on[#on + 1] = w.category
         elseif w.state == 'invalid' then
-            out[#out + 1] = Line('warn', 'health.webhook.invalid', { convar = w.convar })
+            out[#out + 1] = Line('warn', 'health.webhook.invalid', { convar = w.convar },
+                { cfgLine = ('set %s "https://discord.com/api/webhooks/<id>/<token>"'):format(w.convar) })
         else
             off[#off + 1] = w.category
         end

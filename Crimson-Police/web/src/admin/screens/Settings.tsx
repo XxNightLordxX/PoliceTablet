@@ -29,8 +29,13 @@ import { asArray } from '../../shared/data';
 import { formatDateTime } from '../../shared/format';
 import { useAction, useRequest } from '../../shared/hooks';
 import { hasKey, t } from '../../shared/i18n';
+import { useNavigation } from '../../shared/navigation';
+import { toast } from '../../shared/toast';
 import type { ConfigHealthItem } from '../../shared/types';
 import { RewardPoolEditor, handlesRewardPool } from '../components/RewardPoolEditor';
+import { GoalsField, LabelsField, RowsField, TransferPanel } from '../components/SettingsTools';
+import { copyLine } from '../components/copyText';
+import { useAdminAction } from '../components/kit';
 import type {
     SettingsData,
     SettingsHistory,
@@ -42,11 +47,15 @@ import type {
 import './Settings.css';
 
 // The panels of this screen, in tab order. A new admin panel about settings is one more entry here.
-type Panel = 'settings' | 'history';
-const PANELS: { key: Panel; labelKey: string; icon: 'sliders' | 'clock' }[] = [
+type Panel = 'settings' | 'history' | 'transfer';
+const PANELS: { key: Panel; labelKey: string; icon: 'sliders' | 'clock' | 'swap' }[] = [
     { key: 'settings', labelKey: 'settings.tab.settings', icon: 'sliders' },
     { key: 'history', labelKey: 'settings.tab.history', icon: 'clock' },
+    { key: 'transfer', labelKey: 'sysadmin.ui.tab.transfer', icon: 'swap' },
 ];
+
+// A Config health line may name the setting that fixes it, or a server.cfg line to paste.
+type HealthLine = ConfigHealthItem & { fix?: string; cfgLine?: string };
 
 type Filter = 'all' | 'changed' | 'restart';
 type SavePayload = { value?: unknown; json?: string; none?: boolean; confirm?: string };
@@ -237,6 +246,8 @@ function TextEditor({ s, disabled, save }: EditorProps) {
     useEffect(() => setText(base), [base]);
     const colour = s.kind === 'colour';
     const dirty = text !== base;
+    // an optional text (a logo link, a text colour) left empty is "not set"
+    const payloadOf = (v: string): SavePayload => (s.nullable && v.trim() === '' ? { none: true } : { value: v });
     return (
         <div className="settings-edit">
             <div className="settings-edit__line">
@@ -254,15 +265,16 @@ function TextEditor({ s, disabled, save }: EditorProps) {
                     value={text}
                     onChange={setText}
                     disabled={disabled}
-                    maxLength={256}
-                    onEnter={() => dirty && void save({ value: text })}
+                    maxLength={s.nullable ? 512 : 256}
+                    placeholder={s.nullable ? t('settings.value.not_set') : undefined}
+                    onEnter={() => dirty && void save(payloadOf(text))}
                     aria-label={s.label}
                 />
             </div>
             <EditActions
                 dirty={dirty}
                 disabled={disabled}
-                onSave={() => void save({ value: text })}
+                onSave={() => void save(payloadOf(text))}
                 onCancel={() => setText(base)}
             />
         </div>
@@ -524,6 +536,12 @@ function Editor(props: EditorProps) {
             return <NumbersEditor {...props} />;
         case 'list':
             return <ListEditor {...props} />;
+        case 'rows':
+            return <RowsField {...props} />;
+        case 'labels':
+            return <LabelsField {...props} />;
+        case 'goals':
+            return <GoalsField {...props} />;
         default:
             return <JsonEditor {...props} />;
     }
@@ -533,17 +551,29 @@ function Editor(props: EditorProps) {
 //                                 ONE SETTING
 // ============================================================================
 
+// Time.resetHour and Leaderboard.weekStartsOn: when the next reset happens (the new value is used after a restart).
+function resetLine(s: SettingView, resets?: SettingsData['resets']): string | null {
+    if (s.path === 'Time.resetHour' && resets?.daily)
+        return t('sysadmin.ui.next_daily', { when: formatDateTime(resets.daily) });
+    if (s.path === 'Leaderboard.weekStartsOn' && resets?.weekly)
+        return t('sysadmin.ui.next_weekly', { when: formatDateTime(resets.weekly) });
+    return null;
+}
+
 function SettingRow({
     s,
     disabled,
     save,
     reset,
+    resets,
 }: {
     s: SettingView;
     disabled: boolean;
     save: (s: SettingView, p: SavePayload) => Promise<boolean>;
     reset: (s: SettingView) => void;
+    resets?: SettingsData['resets'];
 }) {
+    const next = resetLine(s, resets);
     return (
         <div className={`settings-row${s.changed ? ' is-changed' : ''}${s.invalid ? ' is-invalid' : ''}`}>
             <div className="settings-row__info">
@@ -581,9 +611,26 @@ function SettingRow({
                             {t('settings.badge.locked')}
                         </Badge>
                     ) : null}
+                    {s.points ? (
+                        <Badge
+                            size="sm"
+                            tone="warning"
+                            variant="outline"
+                            icon="star"
+                            title={t('sysadmin.ui.points_hint')}
+                        >
+                            {t('sysadmin.ui.points_badge')}
+                        </Badge>
+                    ) : null}
+                    {s.money ? (
+                        <Badge size="sm" tone="danger" variant="outline" icon="dollar">
+                            {t('sysadmin.ui.money_badge')}
+                        </Badge>
+                    ) : null}
                 </div>
                 <code className="settings-row__path">{`Config.${s.path}`}</code>
                 {s.desc ? <p className="settings-row__desc">{s.desc}</p> : null}
+                {next ? <div className="settings-muted">{next}</div> : null}
                 {s.pending ? (
                     <div className="settings-note settings-note--warning">
                         <Icon name="refresh" size={13} />
@@ -639,10 +686,12 @@ function HealthCard({
     items,
     loading,
     onRecheck,
+    onFix,
 }: {
-    items: ConfigHealthItem[];
+    items: HealthLine[];
     loading: boolean;
     onRecheck: () => void;
+    onFix: (path: string) => void;
 }) {
     const problems = items.filter(i => i.level !== 'ok');
     return (
@@ -670,6 +719,21 @@ function HealthCard({
                                 {t(`access.health.level.${i.level}`)}
                             </Badge>
                             <span>{i.text}</span>
+                            {i.fix ? (
+                                <Button size="sm" variant="ghost" icon="edit" onClick={() => onFix(i.fix ?? '')}>
+                                    {t('sysadmin.ui.fix_open')}
+                                </Button>
+                            ) : null}
+                            {i.cfgLine ? (
+                                <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    icon="fileText"
+                                    onClick={() => copyLine(i.cfgLine ?? '')}
+                                >
+                                    {t('sysadmin.ui.copy_line')}
+                                </Button>
+                            ) : null}
                         </li>
                     ))}
                 </ul>
@@ -691,7 +755,30 @@ function HistoryPanel() {
         { page },
         { pushTopic: 'settings' },
     );
+    const { run, busy } = useAdminAction();
+    // the row a Revert is asked for; again = the setting changed since and the admin confirmed anyway
+    const [revert, setRevert] = useState<{ row: SettingsHistoryRow; again: boolean; word?: string } | null>(null);
     const rows = asArray(data?.rows);
+    const doRevert = async (reason: string, typed: string) => {
+        if (!revert) return;
+        const res = await run(
+            'server:admin:revertSetting',
+            { historyId: revert.row.id, reason, again: revert.again, confirm: typed || undefined },
+            { requestId: false, silent: true },
+        );
+        if (res.ok) {
+            toast('success', t('sysadmin.ui.reverted', { name: revert.row.label ?? revert.row.path }));
+            setRevert(null);
+            void refetch();
+        } else if (res.error === 'err.setting_changed_since') {
+            setRevert({ ...revert, again: true });
+        } else if (res.error === 'err.confirm_enable') {
+            setRevert({ ...revert, word: 'ENABLE' });
+        } else {
+            toast('error', errText(res.error || 'err.internal'));
+            setRevert(null);
+        }
+    };
     const columns: TableColumn<SettingsHistoryRow>[] = [
         {
             key: 'when',
@@ -702,11 +789,11 @@ function HistoryPanel() {
         {
             key: 'who',
             header: t('settings.history.who'),
-            width: 170,
+            width: 150,
             render: r => (
                 <div className="settings-who">
-                    <span>{r.actorName || r.actor}</span>
-                    <span className="settings-muted">{t(`admin.role.${r.role}`)}</span>
+                    <span>{r.by === 'console' ? t('admin.actor.console') : r.byName || r.by}</span>
+                    {r.byName ? <code className="settings-row__path">{r.by}</code> : null}
                 </div>
             ),
         },
@@ -716,7 +803,7 @@ function HistoryPanel() {
             render: r => (
                 <div className="settings-who">
                     <span>{hasKey(`admin.action.${r.action}`) ? t(`admin.action.${r.action}`) : r.action}</span>
-                    {r.target ? <code className="settings-row__path">{r.target}</code> : null}
+                    <code className="settings-row__path">{r.path}</code>
                     {r.reason ? <span className="settings-muted">{r.reason}</span> : null}
                 </div>
             ),
@@ -724,16 +811,30 @@ function HistoryPanel() {
         {
             key: 'change',
             header: t('settings.history.change'),
+            render: r => (
+                <span className="settings-change">
+                    <span>{r.oldSaved ? (r.oldValue ?? '—') : t('sysadmin.ui.config_value')}</span>
+                    <Icon name="chevronRight" size={12} />
+                    <strong>{r.newSaved ? (r.newValue ?? '—') : t('sysadmin.ui.config_value')}</strong>
+                </span>
+            ),
+        },
+        {
+            key: 'revert',
+            header: '',
+            width: 110,
             render: r =>
-                r.oldValue || r.newValue ? (
-                    <span className="settings-change">
-                        <span>{r.oldValue ?? '—'}</span>
-                        <Icon name="chevronRight" size={12} />
-                        <strong>{r.newValue ?? '—'}</strong>
-                    </span>
-                ) : (
-                    '—'
-                ),
+                r.canRevert ? (
+                    <Button
+                        size="sm"
+                        variant="ghost"
+                        icon="undo"
+                        disabled={busy}
+                        onClick={() => setRevert({ row: r, again: false })}
+                    >
+                        {t('sysadmin.ui.revert')}
+                    </Button>
+                ) : null,
         },
     ];
     if (loading && !data) return <LoadingBlock />;
@@ -776,6 +877,26 @@ function HistoryPanel() {
                 empty={<EmptyState compact icon="clock" title={t('settings.history.none')} />}
                 aria-label={t('settings.history.title')}
             />
+            <ConfirmDialog
+                open={!!revert}
+                tone="danger"
+                title={t('sysadmin.ui.revert_title', { name: revert?.row.label ?? revert?.row.path ?? '' })}
+                message={
+                    revert?.again
+                        ? t('sysadmin.ui.revert_again')
+                        : t('sysadmin.ui.revert_text', {
+                              value: revert?.row.oldSaved
+                                  ? (revert.row.oldValue ?? '—')
+                                  : t('sysadmin.ui.config_value'),
+                          })
+                }
+                reason
+                typedWord={revert?.word}
+                confirmLabel={t('sysadmin.ui.revert')}
+                onConfirm={doRevert}
+                onCancel={() => setRevert(null)}
+                busy={busy}
+            />
         </Card>
     );
 }
@@ -790,15 +911,19 @@ export default function AdminSettings() {
         {},
         { pushTopic: 'settings' },
     );
-    const health = useRequest<ConfigHealthItem[]>('admin:getConfigHealth', {});
+    const health = useRequest<HealthLine[]>('admin:getConfigHealth', {});
     const { run, busy } = useAction();
     const [panel, setPanel] = useState<Panel>('settings');
-    const [query, setQuery] = useState('');
+    // Permissions → Config health → Open setting comes here with the path to show
+    const { params } = useNavigation();
+    const [query, setQuery] = useState(typeof params.q === 'string' ? params.q.toLowerCase() : '');
     const [filter, setFilter] = useState<Filter>('all');
     const [sectionKey, setSectionKey] = useState<string | null>(null);
     const [confirm, setConfirm] = useState<'resetAll' | null>(null);
     // a money switch turned on waits for the typed word (the server checks it too)
     const [money, setMoney] = useState<{ s: SettingView; p: SavePayload; done: (ok: boolean) => void } | null>(null);
+    // a point value waits for its confirm: it applies to runs that end after the change
+    const [points, setPoints] = useState<{ s: SettingView; p: SavePayload; done: (ok: boolean) => void } | null>(null);
 
     const sections = asArray(data?.sections);
     const all = useMemo(
@@ -847,6 +972,7 @@ export default function AdminSettings() {
         if (s.money && p.value === true && s.value !== true) {
             return new Promise<boolean>(done => setMoney({ s, p, done }));
         }
+        if (s.points) return new Promise<boolean>(done => setPoints({ s, p, done }));
         return send(s, p);
     };
     const reset = async (s: SettingView) => {
@@ -893,7 +1019,14 @@ export default function AdminSettings() {
                             </div>
                         ) : null}
                         {g.settings.map(s => (
-                            <SettingRow key={s.path} s={s} disabled={busy} save={save} reset={reset} />
+                            <SettingRow
+                                key={s.path}
+                                s={s}
+                                disabled={busy || !!data?.safeMode}
+                                save={save}
+                                reset={reset}
+                                resets={data?.resets}
+                            />
                         ))}
                     </div>
                 ))}
@@ -910,6 +1043,7 @@ export default function AdminSettings() {
             </Card>
         );
     else if (panel === 'history') body = <HistoryPanel />;
+    else if (panel === 'transfer') body = <TransferPanel onImported={() => void refetch()} />;
     else {
         const found = searching
             ? sections.map(sec => renderSection(sec, s => matches(s, q) && passes(s, filter), true)).filter(Boolean)
@@ -923,6 +1057,15 @@ export default function AdminSettings() {
                         <span>{t('settings.intro')}</span>
                     </div>
                 </div>
+                {data?.safeMode ? (
+                    <div className="settings-banner settings-banner--danger">
+                        <Icon name="alert" size={16} />
+                        <div>
+                            <strong>{t('sysadmin.ui.safe_title')}</strong>
+                            <span>{t('sysadmin.ui.safe_text')}</span>
+                        </div>
+                    </div>
+                ) : null}
                 {counts.pending > 0 ? (
                     <div className="settings-banner settings-banner--warning">
                         <Icon name="refresh" size={16} />
@@ -945,6 +1088,10 @@ export default function AdminSettings() {
                     items={asArray(health.data)}
                     loading={health.loading}
                     onRecheck={() => void health.refetch()}
+                    onFix={path => {
+                        setFilter('all');
+                        setQuery(path.toLowerCase());
+                    }}
                 />
                 <div className="settings-toolbar">
                     <SearchInput
@@ -1049,6 +1196,24 @@ export default function AdminSettings() {
                 onCancel={() => {
                     money?.done(false);
                     setMoney(null);
+                }}
+                busy={busy}
+            />
+            <ConfirmDialog
+                open={!!points}
+                title={t('sysadmin.ui.points_title', { name: points?.s.label ?? '' })}
+                message={t('sysadmin.ui.points_text')}
+                confirmLabel={t('settings.save')}
+                onConfirm={async () => {
+                    const m = points;
+                    if (!m) return;
+                    const ok = await send(m.s, m.p);
+                    setPoints(null);
+                    m.done(ok);
+                }}
+                onCancel={() => {
+                    points?.done(false);
+                    setPoints(null);
                 }}
                 busy={busy}
             />

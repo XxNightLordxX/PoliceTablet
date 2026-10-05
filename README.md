@@ -1327,8 +1327,73 @@ tool that moves money outside the normal pay flow ships switched off ([5.7](#57-
 
 #### 9.15.5 System, departments and settings
 
-The **System** screen (storage, backups, webhook states, problems, other resources, clean-up), adding and turning
-off departments, desks, and the Settings follow-ups are described here as they arrive.
+**System** (Admin UI → System) has five tabs:
+
+- **Storage**: where Crimson-Police keeps its data (the database or the saves folder), the rows of every table, the
+  version and which migrations ran. **Copy all data** copies every table from one storage to the other (a copy that
+  would replace existing data needs the typed word `REPLACE`; payments already made there stay paid). **Switch
+  storage** picks the storage for the next start: back up, copy, switch (typed word `SWITCH`), then restart
+  Crimson-Police from txAdmin or the server console. The storage you leave is marked "left behind": if it is ever
+  started again, nothing is paid or changed there, so nobody is paid twice. The choice is kept by the server, not in
+  config.lua; `CrimsonPoliceAdmin storagemode reset` in the server console goes back to config.lua's `Config.Database`.
+- **Backups**: **Back up now** saves every Crimson-Police table, your custom and edited missions, uploaded logos and
+  the banned-words file in `saves/_backups/` (never sent to players). The last `Config.Backups.keep` (7) are kept;
+  `Config.Backups.daily = true` makes one at every daily reset. **Restore** shows what it replaces first, makes an
+  automatic backup, and needs the typed word `RESTORE`; then restart Crimson-Police. A restore never takes money back:
+  a payment made after the backup stays paid, a given item reward stays given, and the audit log, the settings
+  history, department funding and the money switches are kept as they are now. The newest backup and the latest
+  automatic one can't be deleted.
+- **Webhooks**: which Discord webhooks are on, and the exact server.cfg line to paste for each (with **Copy the
+  line**). Webhook links are only ever set in server.cfg and are never shown in game.
+- **Problems**: the last 200 warnings and errors since the start, by module. Webhook links, passwords and licences
+  are cut out.
+- **Integrations**: every resource Crimson-Police works with (running or not, its version), the checklist of
+  [7](#7-settings-to-check-in-your-other-resources), and Crimson-Arena (running, players in the arena, its two
+  no-build zones). Nothing here edits another resource.
+
+**Departments** (Admin UI → Departments):
+
+- **Add department**: key (it can't change later), name, short tag, its Qbox jobs (a job belongs to one department
+  only), supervisor grade, society account and colours copied from another department. A new department starts at 0
+  this season. Also add its job to sc-dispatch `AllowedJobs` and sc-police `PoliceJobs`.
+- **Edit**: name, tag, jobs, grade, account, colours, a logo link (https) or file, and **Upload a logo** (PNG or WebP,
+  at most 1 MB; it shows after the next restart). A job moves to another department only while no run is going.
+- **Turn off** (typed short tag): nobody opens the tablet through it any more; its history, boards, disputes and
+  unpaid pay stay, and its pay still comes from its account. Not while its officers are on a run, and one department
+  always stays on. **Delete** is only for a department added in game that has no history.
+- **Desks** tab: **Add a desk here** puts a mission desk where you stand, facing your way; edit, move, remove and
+  teleport to desks. Changes show at once on every player's game.
+
+**Settings** follow-ups:
+
+- The lists of rows (no-build zones, drop-off points, mission call areas, Scaling, XP levels, avatar presets, the
+  weekly bounty kinds) have row editors; every map position has **Use my position** and **Teleport to**.
+- **Names**: rename offences, commendation kinds, badges and bonuses (English only). **Goals**: each daily and weekly
+  goal with its own switch.
+- A points value asks first: it applies to runs that end after the change. Next to the reset hour and the week start,
+  the screen shows when the next daily and weekly reset happen.
+- **History** keeps the full old and new value of every change; **Revert** puts the old value back (it asks again
+  when the setting changed since). **Export / Import** moves your settings to another server: you see every change
+  first, locked and unknown settings are skipped, and an import never turns a money tool on.
+- Config health lines (Permissions and Settings) have **Open setting** or **Copy the line** where one fixes them. The
+  retention can't go under 30 days for the audit log or 3 months for archived runs; `requireItem` needs a tablet
+  item; the Admin UI text must stay readable on its background.
+
+**Audit Log**: filter also by target, role, reason text and one player (every character: click the people icon of a
+row), click a target to see only it, **Export in parts** of 5000 rows, and **Save to server**
+(`saves/exports/audit-<time>.csv`).
+
+**Officers → Support** (an online officer): **Check access** says why the tablet won't open and how to fix it (the same
+checks the tablet makes), **Give tablet item** (one, when they carry none), **Show state** and **Release screen**
+(only Crimson-Police's own tablet, focus and fade).
+
+**When the Admin UI can't open**, three server console controls bring it back, and nothing else needs the console:
+
+- `CrimsonPoliceAdmin settings` lists the settings changed in game; `CrimsonPoliceAdmin settings reset <path>` and
+  `CrimsonPoliceAdmin settings reset all` undo them.
+- `CrimsonPoliceAdmin storagemode reset` goes back to config.lua's storage at the next start.
+- `set cp_settings_safe 1` in server.cfg starts Crimson-Police once without the settings changed in game (nothing is
+  deleted; remove the line and restart to use them again).
 
 ---
 

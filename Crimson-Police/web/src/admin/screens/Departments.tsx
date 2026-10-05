@@ -1,5 +1,5 @@
 // Admin UI · Departments (screen key 'admin_departments'): themes, members, mission desks, personal accents and a
-// preview of each officer look.
+// preview of each officer look; add, edit, turn off and delete departments, upload logos, and edit the desks.
 
 import { useState, type CSSProperties } from 'react';
 import {
@@ -19,6 +19,7 @@ import {
     ProgressBar,
     Screen,
     SegmentedControl,
+    Tabs,
 } from '../../shared/components';
 import { asArray } from '../../shared/data';
 import { formatNumber } from '../../shared/format';
@@ -29,6 +30,8 @@ import { APPEARANCES, appearanceVars, mergeAppearance, themeVars } from '../../s
 import type { Theme } from '../../shared/types';
 import type { DeskView, TabletAccessView } from '../../types/access';
 import { DepartmentFunds } from '../components/DepartmentFunds';
+import { DepartmentDialog, DepartmentTools, DesksPanel } from '../components/DepartmentAdmin';
+import type { DepartmentSetting, DepartmentSetup } from '../../types/admin_system';
 import type { DepartmentView, DepartmentsData } from '../../types/oversight';
 import './Departments.css';
 import '../components/access-admin.css';
@@ -210,16 +213,24 @@ function DeptCard({
     showSociety,
     onPreview,
     access,
+    setting,
+    onEdit,
+    onChanged,
 }: {
     d: DepartmentView;
     showSociety: boolean;
     onPreview: () => void;
     access: TabletAccessView | null;
+    setting?: DepartmentSetting;
+    onEdit: () => void;
+    onChanged: () => void;
 }) {
+    const off = setting ? !setting.enabled : false;
     return (
         <Card
             className="oversight-dep-card"
             padding="md"
+            muted={off}
             footer={
                 <div className="oversight-dep-card__footer">
                     <span className="oversight-dep-soft">{t('admin.depts.key', { key: d.key })}</span>
@@ -229,6 +240,7 @@ function DeptCard({
                 </div>
             }
         >
+            {setting ? <DepartmentTools setting={setting} onEdit={onEdit} onChanged={onChanged} /> : null}
             <div className="oversight-dep-card__head">
                 {/* The initials show whenever the span is empty: no logo configured, or the image failed to load
             (DeptLogo then renders nothing and reports logoFailed). */}
@@ -326,13 +338,27 @@ function DeptCard({
     );
 }
 
+type Panel = 'departments' | 'desks';
+
 export default function AdminDepartments() {
     const session = useSession();
     const { data, loading, error, refetch } = useRequest<DepartmentsData>('admin:getDepartments', {});
+    const setup = useRequest<DepartmentSetup>('admin:getDepartmentSetup', {}, { pushTopic: 'settings' });
+    const [panel, setPanel] = useState<Panel>('departments');
+    const [editing, setEditing] = useState<DepartmentSetting | 'new' | null>(null);
+    const byKey = new Map(asArray(setup.data?.departments).map(x => [x.key, x]));
+    const reload = () => {
+        void refetch();
+        void setup.refetch();
+    };
     const [preview, setPreview] = useState<DepartmentView | null>(null);
     const [look, setLook] = useState<string>('department');
     const [accent, setAccent] = useState<string | null>(null);
-    const { data: access } = useRequest<TabletAccessView>('admin:getTabletAccess', {});
+    const { data: access, refetch: refetchAccess } = useRequest<TabletAccessView>(
+        'admin:getTabletAccess',
+        {},
+        { pushTopic: 'settings' },
+    );
     const appearances = asArray(access?.appearances).length ? asArray(access?.appearances) : APPEARANCES;
     const openPreview = (d: DepartmentView) => {
         setLook('department');
@@ -366,6 +392,9 @@ export default function AdminDepartments() {
                         showSociety={showSociety}
                         onPreview={() => openPreview(d)}
                         access={access}
+                        setting={byKey.get(d.key)}
+                        onEdit={() => setEditing(byKey.get(d.key) ?? null)}
+                        onChanged={reload}
                     />
                 ))}
             </Grid>
@@ -376,23 +405,54 @@ export default function AdminDepartments() {
             title={t('ui.screen.admin_departments')}
             subtitle={showSociety ? t('admin.depts.subtitle_society') : t('admin.depts.subtitle')}
             actions={
-                <IconButton
-                    icon="refresh"
-                    label={t('sup.refresh')}
-                    variant="secondary"
-                    loading={loading && !!data}
-                    onClick={() => void refetch()}
-                />
+                <>
+                    <Button variant="primary" icon="plus" disabled={!setup.data} onClick={() => setEditing('new')}>
+                        {t('sysadmin.ui.dept_add')}
+                    </Button>
+                    <IconButton
+                        icon="refresh"
+                        label={t('sup.refresh')}
+                        variant="secondary"
+                        loading={loading && !!data}
+                        onClick={reload}
+                    />
+                </>
             }
             className="oversight-screen"
         >
-            {!showSociety && data ? (
+            <Tabs<Panel>
+                value={panel}
+                onChange={setPanel}
+                items={[
+                    { key: 'departments', label: t('sysadmin.ui.tab.departments'), icon: 'building' },
+                    { key: 'desks', label: t('sysadmin.ui.tab.desks'), icon: 'mapPin' },
+                ]}
+            />
+            {panel === 'desks' ? (
+                <DesksPanel
+                    access={access}
+                    departments={asArray(setup.data?.departments)}
+                    onChanged={() => void refetchAccess()}
+                />
+            ) : null}
+            {panel === 'departments' && !showSociety && data ? (
                 <div className="oversight-dep-note">
                     <Icon name="info" size={14} />
                     {t('admin.depts.cash_source_server')}
                 </div>
             ) : null}
-            {body}
+            {panel === 'departments' ? body : null}
+            {editing && setup.data ? (
+                <DepartmentDialog
+                    setup={setup.data}
+                    setting={editing === 'new' ? null : editing}
+                    onClose={() => setEditing(null)}
+                    onSaved={() => {
+                        setEditing(null);
+                        reload();
+                    }}
+                />
+            ) : null}
             <Dialog
                 open={!!preview}
                 onClose={() => setPreview(null)}
