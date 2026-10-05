@@ -300,12 +300,20 @@ export interface AuditRow {
     oldValue: string | null;
     newValue: string | null;
     reason: string | null;
+    // the acting player's license (every character of one player shares it)
+    actorIdent?: string | null;
     createdAt: number;
 }
 export interface AuditFilters {
     category?: string;
     action?: string;
+    // a group of actions (at most 30), e.g. the Cash actions preset; ignored when action is set
+    actions?: string[];
     actor?: string;
+    target?: string;
+    role?: string;
+    actorIdent?: string;
+    reason?: string;
     from?: string;
     to?: string;
     page?: number;

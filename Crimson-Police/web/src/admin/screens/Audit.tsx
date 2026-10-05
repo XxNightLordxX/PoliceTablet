@@ -30,11 +30,36 @@ import type { AuditExport, AuditFilters, AuditPage, AuditRow } from '../../types
 import type { AuditPartView, AuditSaveReply } from '../../types/admin_system';
 import { useAdminAction } from '../components/kit';
 
-// The filters P0 added to the audit query (target, role, the acting player's license, reason text).
-type Filters = AuditFilters & { target?: string; role?: string; actorIdent?: string; reason?: string };
-type Row = AuditRow & { actorIdent?: string | null };
-const ROLES = ['admin', 'supervisor', 'console'] as const;
 import './Audit.css';
+
+type Filters = AuditFilters;
+type Row = AuditRow;
+const ROLES = ['admin', 'supervisor', 'console'] as const;
+
+// The action filter's presets: a group of actions (the server takes at most 30 names).
+const CASH_PRESET = '@cash';
+const CASH_ACTIONS = [
+    'paymentResolve',
+    'paymentPayAgain',
+    'paymentRetry',
+    'paymentUnfundedRetry',
+    'paymentCapRest',
+    'paymentForfeitRepay',
+    'paymentForfeit',
+    'paymentCancel',
+    'cashClawback',
+    'manualCash',
+    'deptFund',
+    'paymentsExport',
+    'payoutsAdjustAll',
+    'setTypePayout',
+    'setMissionPayout',
+    'rewardResolve',
+    'rewardDeliver',
+    'rewardCancel',
+    'rewardTakeBack',
+    'moneySwitch',
+];
 
 const CATEGORIES = ['audit', 'flags', 'builder', 'operations'] as const;
 const CATEGORY_TONE: Record<string, 'primary' | 'warning' | 'accent' | 'neutral'> = {
@@ -104,7 +129,8 @@ export default function AdminAudit() {
     const filters: Filters = useMemo(() => {
         const f: Filters = { page };
         if (category) f.category = category;
-        if (action) f.action = action;
+        if (action === CASH_PRESET) f.actions = CASH_ACTIONS;
+        else if (action) f.action = action;
         if (actorQ) f.actor = actorQ;
         if (from) f.from = from;
         if (to) f.to = to;
@@ -321,6 +347,7 @@ export default function AdminAudit() {
                             onChange={setAction}
                             options={[
                                 { value: '', label: t('admin.audit.all_actions') },
+                                { value: CASH_PRESET, label: t('int.ui.audit_cash_actions') },
                                 ...actions.map(a => ({ value: a, label: actionLabel(a) })),
                             ]}
                         />

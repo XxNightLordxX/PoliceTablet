@@ -120,11 +120,14 @@ PoliceTablet/                      (git repo)
     missions/builtin/<id>.lua      one RegisterMission({...}) each
     missions/custom/<id>.lua       written by the Mission Builder
     missions/custom/archived/
+    missions/custom/overrides/     edited built-in missions (<id>.lua, <id>.base.lua; archived/), §5.28
+    missions/custom/deleted/       missions deleted for good from the Admin UI (Bring back moves them back)
     modules/<feature>/server.lua   (+ client.lua where needed)
     modules/integrations/<name>/server.lua (+ client.lua)
     modules/storage/memsql.lua     CP.Storage.MemSQL: SQL engine + saves folder for database-off mode (server)
     modules/storage/server.lua     CP.Storage: picks MySQL/MariaDB or the saves folder (Config.Database)
-    saves/                         database-off data (JSON documents, _tables.json); only README.md is committed
+    saves/                         database-off data (JSON documents, _tables.json); only README.md is committed;
+                                   saves/_backups/ (System → Backups, both storage modes), saves/exports/ (audit CSV)
     blocks/<block_id>/server.lua + client.lua
     web/                           React 18 + TS + Vite; builds to web/dist (committed); README.md points to
                                    docs/WEB_UI.md
@@ -1136,8 +1139,11 @@ the officer's active commendations; `season:ended` fires after the season result
 - `storageCopy(src, direction, force) -> ok, messageKey, vars` — the copy of the `storage copy` command (one at a
   time, never during a run, sharing `CP.AdminKit`'s busy lock); its replies also reach src
 - `ownRunCheck(src, runUuid) -> ok, errKey` (public); `missionLabel` names `manual_adjust` and `manual_cash` rows;
-  `_auditWhere(args)` also filters `target`, `role`, `actorIdent` and `reason` (LIKE with `%` and `_` escaped), and
-  `admin:getAudit` rows carry `actorIdent`
+  `_auditWhere(args)` also filters `target`, `role`, `actorIdent` and `reason` (LIKE with `%` and `_` escaped) and,
+  when `action` is not given, `actions` (a list of at most 30 action names, `a.action IN (...)`; the Audit Log's
+  **Cash actions** preset), and `admin:getAudit` rows carry `actorIdent`
+- `storage mode reset` (console only): `SUB.storage` hands it to `CP.Sysadmin._consoleStorageMode`, the same as the
+  `storagemode reset` subcommand
 - `voidRun(src, rowIdOrRunUuid, reason)`, `approveFlagged(src, rowId, reason)`, `voidFlagged(src, rowId, reason)`
 - Supervisor/admin screen callbacks and actions listed in §8.3. `admin:getMissions` adds `switch`
   (`CP.Settings.missionView(def)`: the mission's and each location's on/off and config.lua's values).
@@ -1414,7 +1420,7 @@ Full admin control, System (P5): the storage switched to in Admin UI → System 
 read by `Install` before `Config.Database` (which it then reflects); a start-up line names the override and System →
 Storage and Config health (`storage`) show it. `effective(cfg, kvp) -> { enabled, folder }, override|nil` (pure, for the
 specs), `override() -> { mode, folder }|nil`, `validFolder(f)` (relative, under `saves`, no `..`, no `//`, no full path).
-`CrimsonPoliceAdmin storagemode reset` (console) clears the KVP. Each store holds `cp_storage_meta` (`generation`,
+`CrimsonPoliceAdmin storage mode reset` (or `storagemode reset`; console only) clears the KVP. Each store holds `cp_storage_meta` (`generation`,
 `state` = `active`|`left_behind`): a switch writes a new generation into both and marks the old one `left_behind`; a
 store that starts `left_behind` begins the `left_behind` maintenance lock (CP.Sysadmin, §5.41).
 
@@ -1763,7 +1769,8 @@ action goes through `CP.AdminKit` (admins only, audited).
   release screen (`client:diagUnstick` to that player only), `clientState(src)` (asks `client:diagState`, waits 3 s).
 - Audit exports: `auditPart(filters, part)` (5000 rows per part), `saveAudit(filters)` (≤ 100,000 rows to
   `saves/exports/audit-<time>.csv`), both through `CP.Admin._auditWhere` and `CP.Admin._csv`.
-- Console: `CrimsonPoliceAdmin storagemode reset`. Config health check `storage`.
+- Console: `CrimsonPoliceAdmin storagemode reset` (also reached as `storage mode reset` through `SUB.storage`).
+  Config health check `storage`.
 
 ## 6. Cross-cutting conventions
 

@@ -26,6 +26,7 @@ import {
     type TableColumn,
 } from '../../shared/components';
 import { asArray } from '../../shared/data';
+import { request } from '../../shared/nui';
 import { formatDateTime } from '../../shared/format';
 import { useAction, useRequest } from '../../shared/hooks';
 import { hasKey, t } from '../../shared/i18n';
@@ -35,7 +36,8 @@ import type { ConfigHealthItem } from '../../shared/types';
 import { RewardPoolEditor, handlesRewardPool } from '../components/RewardPoolEditor';
 import { GoalsField, LabelsField, RowsField, TransferPanel } from '../components/SettingsTools';
 import { copyLine } from '../components/copyText';
-import { useAdminAction } from '../components/kit';
+import { JobProgress, useAdminAction } from '../components/kit';
+import type { CashSourcePreview } from '../../types/admin_economy';
 import type {
     SettingsData,
     SettingsHistory,
@@ -64,6 +66,11 @@ type Vec = { x: number; y: number; z?: number; w?: number };
 const VEC_PARTS = ['x', 'y', 'z', 'w'] as const;
 const MAX_SHOWN = 90;
 const HEALTH_TONE = { ok: 'success', warn: 'warning', error: 'danger' } as const;
+
+// admin:trialMissions: the missions a load-time setting would break (modules/missions, Missions.trial)
+type TrialReply = { checked: number; failed: { id: string; label?: string; tweak?: boolean; error: string }[] };
+// a save that waits for one more look first: the missions it breaks, the pay it moves, the standings it changes
+type Preflight = { title: string; message: string; effect?: ReactNode; tone: 'primary' | 'danger' };
 
 // ============================================================================
 //                                VALUE HELPERS
@@ -905,6 +912,115 @@ function HistoryPanel() {
 //                                  THE SCREEN
 // ============================================================================
 
+// The value a save sends (raw JSON text parsed; undefined when it can't be read, the server answers then).
+function payloadValue(p: SavePayload): unknown {
+    if (p.none) return undefined;
+    if (p.json !== undefined) {
+        try {
+            return JSON.parse(p.json);
+        } catch {
+            return undefined;
+        }
+    }
+    return p.value;
+}
+
+// One more look before some saves (nothing is saved here; the server checks every value again).
+async function preflight(s: SettingView, p: SavePayload): Promise<Preflight | null> {
+    const value = payloadValue(p);
+    if (s.reload && (p.none || value !== undefined)) {
+        const res = await request<TrialReply>('admin:trialMissions', {
+            patch: [{ path: s.path, value, none: p.none === true }],
+        });
+        const failed = res.ok ? asArray(res.data?.failed) : [];
+        if (failed.length) {
+            return {
+                tone: 'danger',
+                title: t('int.ui.trial_title', { name: s.label }),
+                message: t('int.ui.trial_text', { n: failed.length, checked: res.data?.checked ?? 0 }),
+                effect: (
+                    <ul className="settings-preflight">
+                        {failed.slice(0, 20).map(f => (
+                            <li key={f.id}>
+                                <strong>{f.label || f.id}</strong> <code>{f.id}</code>
+                                <span>{errText(f.error)}</span>
+                            </li>
+                        ))}
+                    </ul>
+                ),
+            };
+        }
+    }
+    if (s.path === 'Cash.source' && value === 'society' && s.value !== 'society') {
+        const res = await request<CashSourcePreview>('admin:previewCashSource', {});
+        const depts = res.ok ? asArray(res.data?.departments) : [];
+        const short = depts.some(d => d.short);
+        return {
+            tone: short ? 'danger' : 'primary',
+            title: t('int.ui.source_title'),
+            message: t(short ? 'int.ui.source_short' : 'int.ui.source_text'),
+            effect: depts.length ? (
+                <ul className="settings-preflight">
+                    {depts.map(d => (
+                        <li key={d.department}>
+                            <strong>{d.label}</strong> <code>{d.account}</code>
+                            <span>
+                                {t('int.ui.source_line', {
+                                    balance: typeof d.balance === 'number' ? `$${d.balance}` : '?',
+                                    rows: d.rows,
+                                    owed: `$${d.owed}`,
+                                })}
+                                {d.short ? ` · ${t('int.ui.source_line_short')}` : ''}
+                            </span>
+                        </li>
+                    ))}
+                </ul>
+            ) : undefined,
+        };
+    }
+    if (s.path === 'Challenge.bounties' || s.path.startsWith('Challenge.bounties.')) {
+        return {
+            tone: 'primary',
+            title: t('int.ui.bounty_title'),
+            message: t('int.ui.bounty_text'),
+        };
+    }
+    return null;
+}
+
+// Settings → Badges: re-check every officer's badges against their rows (a job; the progress is pushed).
+function RecheckBadges({ disabled }: { disabled?: boolean }) {
+    const { run, busy } = useAdminAction();
+    const [jobId, setJobId] = useState<string | null>(null);
+    const [open, setOpen] = useState(false);
+    return (
+        <div className="settings-group__tool">
+            <Button
+                size="sm"
+                variant="secondary"
+                icon="refresh"
+                disabled={disabled || busy}
+                onClick={() => setOpen(true)}
+            >
+                {t('int.ui.recheck_all')}
+            </Button>
+            {jobId ? <JobProgress jobId={jobId} /> : null}
+            <ConfirmDialog
+                open={open}
+                title={t('int.ui.recheck_all')}
+                message={t('int.ui.recheck_all_text')}
+                onConfirm={async () => {
+                    const res = await run<{ jobId: string }>('server:admin:recheckAllBadges', {});
+                    if (res.ok && res.data?.jobId) setJobId(res.data.jobId);
+                    setOpen(false);
+                }}
+                onCancel={() => setOpen(false)}
+                busy={busy}
+            />
+        </div>
+    );
+}
+
 export default function AdminSettings() {
     const { data, loading, error, refetch, setData } = useRequest<SettingsData>(
         'admin:getSettings',
@@ -924,6 +1040,10 @@ export default function AdminSettings() {
     const [money, setMoney] = useState<{ s: SettingView; p: SavePayload; done: (ok: boolean) => void } | null>(null);
     // a point value waits for its confirm: it applies to runs that end after the change
     const [points, setPoints] = useState<{ s: SettingView; p: SavePayload; done: (ok: boolean) => void } | null>(null);
+    // one more look first (missions it breaks, the pay it moves, the standings it changes)
+    const [pre, setPre] = useState<
+        (Preflight & { s: SettingView; p: SavePayload; done: (ok: boolean) => void }) | null
+    >(null);
 
     const sections = asArray(data?.sections);
     const all = useMemo(
@@ -968,12 +1088,17 @@ export default function AdminSettings() {
         if (res.ok) apply(res.data);
         return res.ok;
     };
-    const save = (s: SettingView, p: SavePayload): Promise<boolean> => {
+    const proceed = (s: SettingView, p: SavePayload): Promise<boolean> => {
         if (s.money && p.value === true && s.value !== true) {
             return new Promise<boolean>(done => setMoney({ s, p, done }));
         }
         if (s.points) return new Promise<boolean>(done => setPoints({ s, p, done }));
         return send(s, p);
+    };
+    const save = async (s: SettingView, p: SavePayload): Promise<boolean> => {
+        const look = await preflight(s, p);
+        if (!look) return proceed(s, p);
+        return new Promise<boolean>(done => setPre({ ...look, s, p, done }));
     };
     const reset = async (s: SettingView) => {
         const res = await run<SettingsReply>(
@@ -1018,6 +1143,7 @@ export default function AdminSettings() {
                                 {g.desc ? <span>{g.desc}</span> : null}
                             </div>
                         ) : null}
+                        {g.path === 'Badges' ? <RecheckBadges disabled={busy} /> : null}
                         {g.settings.map(s => (
                             <SettingRow
                                 key={s.path}
@@ -1196,6 +1322,25 @@ export default function AdminSettings() {
                 onCancel={() => {
                     money?.done(false);
                     setMoney(null);
+                }}
+                busy={busy}
+            />
+            <ConfirmDialog
+                open={!!pre}
+                tone={pre?.tone ?? 'primary'}
+                title={pre?.title ?? ''}
+                message={pre?.message}
+                effect={pre?.effect}
+                confirmLabel={t('settings.save')}
+                onConfirm={async () => {
+                    const m = pre;
+                    if (!m) return;
+                    setPre(null);
+                    m.done(await proceed(m.s, m.p));
+                }}
+                onCancel={() => {
+                    pre?.done(false);
+                    setPre(null);
                 }}
                 busy={busy}
             />

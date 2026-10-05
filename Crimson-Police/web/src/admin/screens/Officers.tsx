@@ -45,6 +45,7 @@ import type {
     OfficerSearchRow,
 } from '../../types/oversight';
 import { useSession } from '../../shared/session';
+import { useNavigation } from '../../shared/navigation';
 import { Pager } from '../components/kit';
 import { CommendationTools, OfficerTools } from '../components/officers/OfficerTools';
 import { OfficerRuns, RunDialog } from '../components/officers/OfficerRuns';
@@ -1147,6 +1148,15 @@ export default function AdminOfficers() {
         setSelected(cid);
         setScreenTab('officers');
     };
+    // another screen (Live, Payments) links here with navigate('admin_officers', { citizenid })
+    const { params } = useNavigation();
+    const linked = typeof params.citizenid === 'string' ? params.citizenid : '';
+    useEffect(() => {
+        if (linked) {
+            setSelected(linked);
+            setScreenTab('officers');
+        }
+    }, [linked, params]);
 
     return (
         <Screen

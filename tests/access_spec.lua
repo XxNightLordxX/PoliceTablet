@@ -580,12 +580,14 @@ do
     H.ok(HasText('departments', 'players with the department\'s other jobs can still use it'),
         'which does not lock the department')
     H.ok(not HasText('departments', 'nobody can use this department'), 'so it does not say nobody can use it')
-    H.ok(HasText('departments', 'jobs = { } of Config.Departments.fib in config/config.lua'), 'with the fix')
+    H.ok(HasText('departments', 'jobs in Admin UI → Departments (or Config.Departments.fib in config/config.lua)'),
+        'with the fix')
     depts[2].jobs = { 'fbi', 'feds' }
     H.eq(Levels('departments'), 'warn,warn,ok', 'departments: none of its jobs exists')
     H.ok(HasText('departments', 'FIB: Qbox has no job named feds, so nobody can use this department'),
         'then nobody can use it')
-    H.ok(HasText('departments', 'put your own police job name in jobs = { } of Config.Departments.fib'), 'with the fix')
+    H.ok(HasText('departments', 'put your own police job name in the department\'s jobs in Admin UI → Departments'),
+        'with the fix')
     depts[2].jobs = { 'fib', 'fbi' }
     H.ok(HasText(
         'departments',

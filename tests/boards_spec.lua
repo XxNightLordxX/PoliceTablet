@@ -162,6 +162,8 @@ local function ClearAll()
         'cp_seasons',
         'cp_dept_bounties',
         'cp_badges',
+        'cp_badge_overrides',
+        'cp_staff_notices',
         'cp_disputes',
     }) do
         H.sql('DELETE FROM ' .. t)

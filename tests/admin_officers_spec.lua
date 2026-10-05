@@ -11,6 +11,9 @@ local Kit = CP.AdminKit
 H.sql('DELETE FROM cp_mission_runs')
 H.sql('DELETE FROM cp_mission_runs_archive')
 H.sql('DELETE FROM cp_audit')
+-- a season another spec left in the run database (one spec after another) would cap the deductions below
+H.sql('DELETE FROM cp_seasons')
+CP.Challenge.currentSeason(true)
 
 local DAY = 86400
 

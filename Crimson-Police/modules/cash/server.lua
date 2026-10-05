@@ -482,7 +482,12 @@ end
 function Cash.pay(rowId)
     rowId = ToId(rowId)
     if not rowId then return nil end
-    if PaymentsHeld() then
+    local held = PaymentsHeld()
+    if held == 'left_behind' then
+        -- permanent: this store was left behind by a storage switch, its rows may be paid in the store that took over
+        CP.warn(TAG, 'row %d is not paid: this store was left behind by a storage switch', rowId)
+        return nil
+    elseif held then
         CP.log(TAG, 'row %d waits: payments are held by the maintenance lock', rowId)
         return nil
     end

@@ -43,15 +43,17 @@ import type {
     StorageView,
     WebhookView,
 } from '../../types/admin_system';
+import type { CleanupView } from '../../types/admin_economy';
 import './System.css';
 
-type Panel = 'storage' | 'backups' | 'webhooks' | 'problems' | 'integrations';
-const PANELS: { key: Panel; icon: 'server' | 'download' | 'globe' | 'alert' | 'layers' }[] = [
+type Panel = 'storage' | 'backups' | 'webhooks' | 'problems' | 'integrations' | 'cleanup';
+const PANELS: { key: Panel; icon: 'server' | 'download' | 'globe' | 'alert' | 'layers' | 'trash' }[] = [
     { key: 'storage', icon: 'server' },
     { key: 'backups', icon: 'download' },
     { key: 'webhooks', icon: 'globe' },
     { key: 'problems', icon: 'alert' },
     { key: 'integrations', icon: 'layers' },
+    { key: 'cleanup', icon: 'trash' },
 ];
 
 function sizeText(bytes?: number): string {
@@ -733,6 +735,83 @@ function IntegrationsPanel() {
 //                                  THE SCREEN
 // ============================================================================
 
+// The nightly clean-up (modules/schedule): what the last one did, when the next one runs, and Run clean-up now.
+function CleanupPanel() {
+    const { data, loading, error, refetch, setData } = useRequest<CleanupView>('admin:getCleanup', {});
+    const { run, busy } = useAdminAction();
+    const [ask, setAsk] = useState(false);
+    if (loading && !data) return <LoadingBlock />;
+    if (error && !data) return <ErrorState error={error} onRetry={() => void refetch()} />;
+    const last = data?.last;
+    return (
+        <Card
+            title={t('int.ui.cleanup_title')}
+            subtitle={t('int.ui.cleanup_subtitle')}
+            icon="trash"
+            actions={
+                <Button
+                    size="sm"
+                    variant="secondary"
+                    icon="refresh"
+                    disabled={busy || !!data?.running}
+                    onClick={() => setAsk(true)}
+                >
+                    {t('int.ui.cleanup_now')}
+                </Button>
+            }
+        >
+            <Grid min={180} gap={3}>
+                <KeyValue label={t('int.ui.cleanup_next')}>
+                    {data?.nextRunAt ? formatDateTime(data.nextRunAt) : '—'}
+                </KeyValue>
+                <KeyValue label={t('int.ui.cleanup_state')}>
+                    {data?.running ? t('int.ui.cleanup_running') : t('int.ui.cleanup_idle')}
+                </KeyValue>
+                <KeyValue label={t('int.ui.cleanup_keep_runs')}>
+                    {t('int.ui.cleanup_months', { n: data?.runArchiveMonths ?? 0 })}
+                </KeyValue>
+                <KeyValue label={t('int.ui.cleanup_keep_audit')}>
+                    {t('int.ui.cleanup_days', { n: data?.auditDays ?? 0 })}
+                </KeyValue>
+            </Grid>
+            {last ? (
+                <Note tone={last.error ? 'danger' : 'info'}>
+                    {t('int.ui.cleanup_last', {
+                        at: formatDateTime(last.at),
+                        by: last.by ?? t('int.ui.cleanup_by_schedule'),
+                        archived: formatNumber(last.archived ?? 0),
+                        kept: formatNumber(last.kept ?? 0),
+                        audit: formatNumber(last.auditDeleted ?? 0),
+                        ms: formatNumber(last.durationMs ?? 0),
+                    })}
+                    {last.error ? ` ${t('int.ui.cleanup_error', { error: last.error })}` : ''}
+                    {last.skipped ? ` ${t('int.ui.cleanup_skipped')}` : ''}
+                </Note>
+            ) : (
+                <Note>{t('int.ui.cleanup_never')}</Note>
+            )}
+            <ConfirmDialog
+                open={ask}
+                title={t('int.ui.cleanup_now')}
+                message={t('int.ui.cleanup_now_text')}
+                reason
+                onConfirm={async reason => {
+                    const res = await run<CleanupView>(
+                        'server:admin:runCleanupNow',
+                        { reason },
+                        { success: 'int.ui.cleanup_done' },
+                    );
+                    if (res.ok && res.data) setData(res.data);
+                    else void refetch();
+                    setAsk(false);
+                }}
+                onCancel={() => setAsk(false)}
+                busy={busy}
+            />
+        </Card>
+    );
+}
+
 export default function AdminSystem() {
     const [panel, setPanel] = useState<Panel>('storage');
     let body: ReactNode = null;
@@ -740,6 +819,7 @@ export default function AdminSystem() {
     else if (panel === 'backups') body = <BackupsPanel />;
     else if (panel === 'webhooks') body = <WebhooksPanel />;
     else if (panel === 'problems') body = <ProblemsPanel />;
+    else if (panel === 'cleanup') body = <CleanupPanel />;
     else body = <IntegrationsPanel />;
     return (
         <Screen title={t('ui.screen.admin_system')} subtitle={t('sysadmin.ui.subtitle')} className="system-screen">

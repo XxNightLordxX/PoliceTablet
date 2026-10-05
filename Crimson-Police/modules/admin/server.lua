@@ -2035,6 +2035,14 @@ end
 SUB.storage = function(src, args)
     local what = args[1] and args[1]:lower() or ''
     if what == '' then return StorageStatus(src) end
+    -- storage mode reset: the console-only way back to config.lua's Config.Database (modules/sysadmin)
+    if what == 'mode' then
+        local fn = CP.Sysadmin and CP.Sysadmin._consoleStorageMode
+        if not fn then return Reply(src, 'error', 'err.module_unavailable') end
+        local ok, key, vars = fn(src, { args[2] })
+        return Reply(src, ok == false and 'error' or 'success', key or 'err.refused',
+            type(vars) == 'table' and vars or nil)
+    end
     if what ~= 'copy' then return Reply(src, 'error', 'admin.cmd.storage_usage', { cmd = CmdName() }) end
     local direction = args[2] and args[2]:lower() or ''
     local extra = args[3] and args[3]:lower() or nil
@@ -3001,6 +3009,18 @@ function Admin._auditWhere(args)
     if action then
         conds[#conds + 1] = 'a.action = ?'
         params[#params + 1] = action
+    end
+    -- a group of actions (the Audit Log presets, e.g. Cash actions): at most 30 names
+    if action == nil and type(args.actions) == 'table' then
+        local marks = {}
+        for _, a in ipairs(args.actions) do
+            local name = CleanText(a, 40)
+            if name and #marks < 30 then
+                marks[#marks + 1] = '?'
+                params[#params + 1] = name
+            end
+        end
+        if #marks > 0 then conds[#conds + 1] = 'a.action IN (' .. table.concat(marks, ', ') .. ')' end
     end
     local actor = CleanText(args.actor, 64)
     if actor then

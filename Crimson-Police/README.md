@@ -31,7 +31,10 @@ random NPC mission, and finished missions pay cash and earn leaderboard points.
 
 You never have to edit `config/config.lua`: an admin can change every setting in game in `/CrimsonPoliceAdmin` →
 **Settings**, and switch missions and their locations on or off in **Missions** (see
-[5.7](../README.md#57-change-any-setting-in-game-the-settings-screen)). Testing missions is optional.
+[5.7](../README.md#57-change-any-setting-in-game-the-settings-screen)). Testing missions is optional. Admins also
+edit any mission (built-in ones too), correct officers' records, handle payments, add departments and make backups
+there: the list is in [4.6](../README.md#46-things-only-admins-can-do). Who is an admin, Discord webhook links and
+restarting Crimson-Police stay in server.cfg and txAdmin.
 
 Required resources (they start before Crimson-Police by themselves): `oxmysql`, `ox_lib`, `qbx_core`, `ox_target`,
 `ox_inventory`, `sc-dispatch`, `sc-ambulance` and `Renewed-Banking`. There is no SQL to import.
@@ -52,8 +55,8 @@ Two switches at the top of `config/config.lua`, as shipped:
 |---|---|---|
 | `config/` | Every setting: `config.lua`, `blocks.lua` (Mission Builder ranges), `banned_words.txt` | **Yes** (take the new `blocks.lua` unless you changed it) |
 | `logos/` | One logo per department (see `logos/README.md`) | **Yes** |
-| `missions/custom/` | Missions made with the Mission Builder | **Yes** |
-| `saves/` | Your data while the database is off (see `saves/README.md`) | **Yes** |
+| `missions/custom/` | Missions made with the Mission Builder, and your edited built-in missions in `overrides/` | **Yes** (all of it) |
+| `saves/` | Your data while the database is off, and the in-game backups in `saves/_backups/` (see `saves/README.md`) | **Yes** |
 | `items/` | The optional tablet item to copy into ox_inventory (see `items/README.md`) | Replace |
 | `missions/builtin/` | The built-in missions | Replace |
 | `web/` | The tablet's screens, ready-built in `web/dist` (see `web/README.md`) | Replace |

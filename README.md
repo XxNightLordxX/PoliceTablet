@@ -67,6 +67,11 @@ say the same things in short and point back here.
    - [9.13 Testing tools](#913-testing-tools)
    - [9.14 Rules to tell your officers](#914-rules-to-tell-your-officers)
    - [9.15 Full admin control](#915-full-admin-control)
+     - [9.15.1 Officers, points and boards](#9151-officers-points-and-boards)
+     - [9.15.2 Missions and the Mission Builder](#9152-missions-and-the-mission-builder)
+     - [9.15.3 Live runs, units and anti-farm](#9153-live-runs-units-and-anti-farm)
+     - [9.15.4 Payments, item rewards and department money](#9154-payments-item-rewards-and-department-money)
+     - [9.15.5 System, departments and settings](#9155-system-departments-and-settings)
 10. [Before go-live, updating and backups](#10-before-go-live-updating-and-backups)
     - [10.1 Before go-live checklist](#101-before-go-live-checklist)
     - [10.2 Updating](#102-updating)
@@ -79,6 +84,7 @@ say the same things in short and point back here.
     - [11.5 Config and departments](#115-config-and-departments)
     - [11.6 Missions and the Mission Builder](#116-missions-and-the-mission-builder)
     - [11.7 Payments, webhooks and other lines](#117-payments-webhooks-and-other-lines)
+    - [11.8 The screen froze or the controls stopped](#118-the-screen-froze-or-the-controls-stopped)
 12. [For developers](#12-for-developers)
     - [Spec revisions](#spec-revisions)
 
@@ -487,6 +493,36 @@ Related settings: `Config.Payouts.supervisorRange` (`{ 0.5, 2.0 }` = 50–200%),
 
 ### 4.6 Things only admins can do
 
+**What admins can do now.** Everything below is a button in `/CrimsonPoliceAdmin`, needs a reason, and goes into the
+audit log. [9.15](#915-full-admin-control) explains each one.
+
+- **Officers**: add or take away points, check and fix XP, void or restore runs in bulk (every batch has **Undo**),
+  retire and unretire an officer, move a record to a player's new character, grant or revoke badges, fix a streak,
+  mark a goal done, reset a picture or bio, suspend until an exact time, post a staff notice on Home
+  ([9.15.1](#9151-officers-points-and-boards)).
+- **Boards and seasons**: rank by any number, look at past weeks and months, recount a week and post it again,
+  rename a season, plan its end, end it, reopen it within 24 hours, pick next week's bounty
+  ([9.15.1](#9151-officers-points-and-boards)).
+- **Missions**: edit **any built-in mission** in the Mission Builder (it stays under the same mission id, and
+  **Reset to original** brings the shipped one back), quick-edit cooldowns, timers, NPCs, cars and weapons, delete
+  and bring back, change owner, import and copy as Lua, see mission, operation and dispatch history and stats, and
+  switch any mission or location on or off ([9.15.2](#9152-missions-and-the-mission-builder),
+  [5.8](#58-turn-missions-and-locations-on-or-off)). No mission ever needs a test.
+- **Live runs**: recall, end or add time to any run, end someone else's test, remove a member from a unit or disband
+  it; per officer clear cooldowns, allow more runs today or another boss attempt; change today's Type of the Day
+  ([9.15.3](#9153-live-runs-units-and-anti-farm)).
+- **Money**: the Payments ledger with totals and a CSV export, **Pay now**, resolve a payment stuck in "paying",
+  cancel or forfeit a payment, adjust every payout at once, each department's funds. The tools that move money
+  outside the normal flow are built but **ship off**; you switch one on in Settings by typing `ENABLE`
+  ([9.15.4](#9154-payments-item-rewards-and-department-money)).
+- **System**: add, edit, turn off and delete departments, place desks, upload logos, copy and switch the storage,
+  back up and restore, see which webhooks are on, read recent problems, check the other resources, run the nightly
+  clean-up now, and revert or export your settings ([9.15.5](#9155-system-departments-and-settings)).
+
+**What stays out of the tablet, on purpose**: who is an admin (server.cfg, and `Config.AdminAce` /
+`Config.QboxAdmins` in config.lua, shown locked in Settings), Discord webhook links (server.cfg only, never shown in
+game), and restarting Crimson-Police (txAdmin or the server console; Crimson-Police never restarts itself).
+
 These are always admin only. Setting one of them to `true` in `Config.Permissions.supervisor` does nothing.
 
 - Open the Admin UI.
@@ -507,8 +543,15 @@ These are always admin only. Setting one of them to `true` in `Config.Permission
 - The server console (and txAdmin's **Live Console**) always counts as an admin.
 - Every `/CrimsonPoliceAdmin` command works there too, typed **without the slash**, for example
   `CrimsonPoliceAdmin storage`. `CrimsonPoliceAdmin help` lists them all.
-- Only `test` (and opening the Admin UI itself) needs you in game. There is no command that only works in the
-  console.
+- Only `test` (and opening the Admin UI itself) needs you in game.
+- **Three console-only controls** bring the Admin UI back when it can't open. Nothing else needs the console:
+  - `CrimsonPoliceAdmin settings` lists the settings changed in game. `CrimsonPoliceAdmin settings reset <path>`
+    puts one back to its config.lua value (for example `settings reset Cash.source`), and
+    `CrimsonPoliceAdmin settings reset all` puts every one back.
+  - `CrimsonPoliceAdmin storage mode reset` (or `storagemode reset`) forgets a storage switch made in game: the next
+    start uses `Config.Database` from config.lua again. Restart Crimson-Police afterwards.
+  - `set cp_settings_safe 1` in server.cfg starts Crimson-Police once with config.lua only: the settings changed in
+    game are ignored, not deleted. Remove the line (or set it to `0`) and restart to use them again.
 - Section [8.1](#81-commands) lists every command.
 
 ### 4.8 Common mistakes
@@ -966,6 +1009,14 @@ Use item names that exist in your ox_inventory.
 
 ### 6.10 Adding a department
 
+**In game (no restart):** Admin UI → **Departments** → **Add department**. Give it a key (it can't change later), a
+name, a short tag, its Qbox job, the supervisor grade, its society account and colours copied from another
+department; upload its logo on the same screen. Its officers can open the tablet at once. A department added in game
+can be turned off again, and deleted while it has no history ([9.15.5](#9155-system-departments-and-settings)).
+Then do step 4 below for sc-dispatch and sc-police.
+
+**In config.lua** (the old way, still works):
+
 1. In `Config.Departments`, copy the `fib` block (or remove the `--` from the `bcso` example at the end of the
    list), and give it its own key, like `bcso`.
 2. Set `label`, `short`, `jobs`, `supervisorGrade`, `societyAccount`, `theme` and `logo`.
@@ -1039,9 +1090,14 @@ In the server console, type every command **without** the slash.
 | `/CrimsonPoliceAdmin storage` | Admins, console | Shows the storage in use, the rows of every table and the saves folder size |
 | `/CrimsonPoliceAdmin storage copy database-to-files [force]` | Admins, console | Copies everything from the database to the saves folder ([6.5](#65-database-off-the-saves-folder)) |
 | `/CrimsonPoliceAdmin storage copy files-to-database [force]` | Admins, console | Copies everything from the saves folder to the database |
+| `CrimsonPoliceAdmin storage mode reset` | Console only | Forgets a storage switch made in Admin UI → **System**: the next start uses `Config.Database` from config.lua. `storagemode reset` does the same |
+| `CrimsonPoliceAdmin settings` | Console only | Lists every setting changed in game (Admin UI → **Settings**) |
+| `CrimsonPoliceAdmin settings reset <path>` | Console only | Puts one setting back to its config.lua value. Example: `settings reset Cash.source` |
+| `CrimsonPoliceAdmin settings reset all` | Console only | Puts every setting changed in game back to config.lua |
 | `/CrimsonPoliceAdmin missioncall <type> [area]` | Admins, console | Posts a mission call now. Type = `patrol`, `investigation` or `tactical`. Area = `south_ls`, `downtown`, `west_ls`, `vinewood`, `east_ls`, `port`, `senora`, `north`, `west_county` or `county` (the default). Not while a Cross-Department Mission runs; 2 minutes between calls from the same person (the console counts as one) |
 
-"Admins, console" means an admin in game **and** the server console. Mission ids (for `payout mission` and `test`)
+"Admins, console" means an admin in game **and** the server console. "Console only" commands are the three ways
+back in for when the Admin UI can't open ([4.7](#47-the-server-console)). Mission ids (for `payout mission` and `test`)
 are in [9.4](#94-the-missions).
 
 Reasons are required for payout changes (`Config.Payouts.requireReason = true`). Every admin action is written to
@@ -1434,7 +1490,8 @@ catalog shows "n location switches no longer match" with **Remap**.
 start or reload, with the reason. The same appears as the `missions` line in Permissions → Config health.
 
 **History and stats.** The **History** tab lists every Cross-Department Mission (who launched it, who took part, the
-points) and every mission call (who posted it, who claimed it, how fast and how it ended). The **Stats** tab shows,
+points; **Details** → **Void this operation's rows** opens the bulk void with that operation already chosen) and
+every mission call (who posted it, who claimed it, how fast and how it ended). The **Stats** tab shows,
 per mission and per type, the runs, completion, fail and abandon rates, the average time against the time limit,
 the average points and cash, flags and voids.
 
@@ -1492,7 +1549,8 @@ characters. Setting a limit in `Config.AdminControl` to 0 switches that tool off
 why the rest was not (held, pending, capped, unfunded, forfeited, or stuck half way). Filter by status, department,
 officer and dates; the tiles on top add it all up (per status and per department, how much the daily cap cut, how
 many were capped today). **Export CSV** gives the same list for a spreadsheet (cells are made safe to open). The
-sidebar shows how many payments are stuck.
+sidebar shows how many payments are stuck, and the stuck-payments card on **Leaderboards** has **Open in Payments**
+(the list filtered to "paying").
 
 What you can do from a row (the buttons show only where they make sense):
 
@@ -1543,7 +1601,7 @@ clean-up never archives a run whose money or item rewards are not finished, and 
 
 #### 9.15.5 System, departments and settings
 
-**System** (Admin UI → System) has five tabs:
+**System** (Admin UI → System) has six tabs:
 
 - **Storage**: where Crimson-Police keeps its data (the database or the saves folder), the rows of every table, the
   version and which migrations ran. **Copy all data** copies every table from one storage to the other (a copy that
@@ -1551,7 +1609,8 @@ clean-up never archives a run whose money or item rewards are not finished, and 
   storage** picks the storage for the next start: back up, copy, switch (typed word `SWITCH`), then restart
   Crimson-Police from txAdmin or the server console. The storage you leave is marked "left behind": if it is ever
   started again, nothing is paid or changed there, so nobody is paid twice. The choice is kept by the server, not in
-  config.lua; `CrimsonPoliceAdmin storagemode reset` in the server console goes back to config.lua's `Config.Database`.
+  config.lua; `CrimsonPoliceAdmin storage mode reset` in the server console goes back to config.lua's
+  `Config.Database`.
 - **Backups**: **Back up now** saves every Crimson-Police table, your custom and edited missions, uploaded logos and
   the banned-words file in `saves/_backups/` (never sent to players). The last `Config.Backups.keep` (7) are kept;
   `Config.Backups.daily = true` makes one at every daily reset. **Restore** shows what it replaces first, makes an
@@ -1566,6 +1625,9 @@ clean-up never archives a run whose money or item rewards are not finished, and 
 - **Integrations**: every resource Crimson-Police works with (running or not, its version), the checklist of
   [7](#7-settings-to-check-in-your-other-resources), and Crimson-Arena (running, players in the arena, its two
   no-build zones). Nothing here edits another resource.
+- **Clean-up**: when the nightly clean-up runs (at the daily reset), how long runs stay in the live table and how long
+  the audit log is kept, and what the last clean-up did. **Run clean-up now** (with a reason, at most once every 10
+  minutes) does the same at once. Unfinished payments and item rewards always stay in the live table.
 
 **Departments** (Admin UI → Departments):
 
@@ -1586,7 +1648,10 @@ clean-up never archives a run whose money or item rewards are not finished, and 
   weekly bounty kinds) have row editors; every map position has **Use my position** and **Teleport to**.
 - **Names**: rename offences, commendation kinds, badges and bonuses (English only). **Goals**: each daily and weekly
   goal with its own switch.
-- A points value asks first: it applies to runs that end after the change. Next to the reset hour and the week start,
+- Saving asks once more where a change has effects you can't see on the screen: a points value applies to runs that
+  end after the change; a setting that reloads the missions first lists the missions it would break; switching
+  `Cash.source` to the department accounts shows each account's balance and the pay it would then owe; and the
+  weekly bounty kinds change the running season. **Badges** has **Re-check everyone's badges**. Next to the reset hour and the week start,
   the screen shows when the next daily and weekly reset happen.
 - **History** keeps the full old and new value of every change; **Revert** puts the old value back (it asks again
   when the setting changed since). **Export / Import** moves your settings to another server: you see every change
@@ -1595,7 +1660,7 @@ clean-up never archives a run whose money or item rewards are not finished, and 
   retention can't go under 30 days for the audit log or 3 months for archived runs; `requireItem` needs a tablet
   item; the Admin UI text must stay readable on its background.
 
-**Audit Log**: filter also by target, role, reason text and one player (every character: click the people icon of a
+**Audit Log**: the action filter has a **Cash actions** choice (every money tool at once); filter also by target, role, reason text and one player (every character: click the people icon of a
 row), click a target to see only it, **Export in parts** of 5000 rows, and **Save to server**
 (`saves/exports/audit-<time>.csv`).
 
@@ -1607,7 +1672,8 @@ checks the tablet makes), **Give tablet item** (one, when they carry none), **Sh
 
 - `CrimsonPoliceAdmin settings` lists the settings changed in game; `CrimsonPoliceAdmin settings reset <path>` and
   `CrimsonPoliceAdmin settings reset all` undo them.
-- `CrimsonPoliceAdmin storagemode reset` goes back to config.lua's storage at the next start.
+- `CrimsonPoliceAdmin storage mode reset` (or `storagemode reset`) goes back to config.lua's storage at the next
+  start.
 - `set cp_settings_safe 1` in server.cfg starts Crimson-Police once without the settings changed in game (nothing is
   deleted; remove the line and restart to use them again).
 
@@ -1634,6 +1700,13 @@ checks the tablet makes), **Give tablet item** (one, when they carry none), **Sh
 - ☐ Share the rules in [9.14](#914-rules-to-tell-your-officers) with your officers, and the Detach tip in
   [7](#7-settings-to-check-in-your-other-resources) with your dispatchers.
 - ☐ Your anti-cheat allows Bomb Disposal's harmless explosion ([7](#7-settings-to-check-in-your-other-resources)).
+- ☐ Make one backup and try one restore on a test server: Admin UI → **System** → **Backups**
+  ([10.3](#103-backups)). A restore ends with "Restart Crimson-Police now"; do that from txAdmin.
+- ☐ The money tools that ship off (`Config.Cash.allow*`, `Cash.restoreForfeited`, `Rewards.allowTakeBack`): leave
+  them off, or try each one first on a test server with Renewed-Banking, ox_inventory and Qbox, as
+  [9.15.4](#9154-payments-item-rewards-and-department-money) says.
+- ☐ The admin limits fit your server: Admin UI → **Settings** → `AdminControl` (point adjustments, cooldown clears,
+  extra runs, added run time). Setting a limit to 0 turns that tool off.
 
 ### 10.2 Updating
 
@@ -1658,9 +1731,18 @@ The tablet's screens come ready-built. You never need to build anything (no npm)
 
 ### 10.3 Backups
 
-- **Database on**: back up your database (all the `cp_` tables) before every update, like you do for Qbox.
-- **Database off**: copy the whole `Crimson-Police/saves/` folder while the server is stopped.
-- Either way, also keep a copy of `config/`, `logos/` and `missions/custom/`.
+- **In game**: Admin UI → **System** → **Backups** → **Back up now** saves every Crimson-Police table, your custom and
+  edited missions, uploaded logos and the banned-words file in `Crimson-Police/saves/_backups/`. It works with the
+  database on and off. `Config.Backups.daily = true` makes one at every daily reset, and the last
+  `Config.Backups.keep` (7) are kept. **Restore** shows what it will replace, makes an automatic backup first and
+  needs the typed word `RESTORE`; then restart Crimson-Police from txAdmin or the server console. A restore never
+  takes money back: a payment made after the backup stays paid, and the audit log is kept as it is
+  ([9.15.5](#9155-system-departments-and-settings)).
+- **Outside the game**, before every update:
+  - **Database on**: back up your database (all the `cp_` tables), like you do for Qbox.
+  - **Database off**: copy the whole `Crimson-Police/saves/` folder (it holds `_backups/` too) while the server is
+    stopped.
+  - Either way, also keep a copy of `config/`, `logos/` and `missions/custom/`.
 
 ---
 
@@ -1686,6 +1768,10 @@ What the player sees, and what to do:
 | "You can't take a mission while you are in the arena." | They are in Crimson-Arena | Leave the arena |
 | "Only supervisors can open the Supervisor UI." | Grade below `supervisorGrade` | [4.3](#43-supervisors) |
 | The item does nothing | The item name or `export` line is wrong, or `Config.Tablet.item` is not set | Read the start-up check's `items` lines ([6.1](#61-the-tablet-item)) |
+
+**Quickest check:** Admin UI → **Officers** → the officer → **Support** → **Check access** runs the same checks
+the tablet makes and says which one fails and how to fix it. **Give tablet item** hands them one tablet when they
+carry none, and **Release screen** frees a stuck tablet screen.
 
 On the Mission Board, "Server busy: too many missions are running. Try again shortly." means 12 missions (or 4
 Tactical) are running server-wide (`Config.Limits`). "You are responding to a real call." means they are on a real
@@ -1907,21 +1993,37 @@ however it ends.
   Mission Builder, saved as an override under the same mission id with **Reset to original** (the Mission Builder
   Hard rule says so); the money tools outside the normal pay flow are built and **ship off**, each turned on in
   Settings with the typed word `ENABLE`. Who is an admin, restarts and Discord webhook links stay out of the tablet.
+- Stuck payments, at the owner's request (full admin control): the Cash payouts rule now says a payment left in
+  "paying" is resolved in Admin UI → **Payments**: **Mark paid** (no money moves), or **Pay again** with its own
+  `-r2` transaction id, behind `Config.Cash.allowPayAgain`, a switch that ships off.
 
-**Waiting for the owner's OK** (already in `docs/SPEC.md` and the code):
+**Waiting for the owner's OK** (already in `docs/SPEC.md` and the code; each one is undone without a code change):
 
-- The Roles Hard rule now also counts a Qbox admin (the ace `admin`) as an admin while `Config.QboxAdmins` is `true`,
-  which ships on. To undo it without a code change, set `Config.QboxAdmins = false`.
-- D2 Corrections as bulk voids: an officer's, an operation's or a board window's runs can be voided as one batch
+- Roles: the Roles Hard rule also counts a Qbox admin (the ace `admin`) as an admin while `Config.QboxAdmins` is
+  `true`, which ships on. Undo: `Config.QboxAdmins = false` in config.lua.
+- **D1** Point values are settings, marked "points value" (a confirm, and the flags webhook), and an admin's logged
+  manual award may be **negative** (a deduction, never below 0 XP). Undo: `AdminControl.pointAdjust = false` stops
+  adjustments; any point setting goes back to config.lua with **Reset** (or **Revert** in the history) in Settings.
+- **D2** Corrections as bulk voids: an officer's, an operation's or a board window's runs can be voided as one batch
   (there is still no wipe). Undo: every batch has **Undo** in Officers → Corrections.
-- D5 Departments added, turned off and (when unused) deleted from the Admin UI; a turned-off department's unfinished
-  pay still pays from its account. Undo: turn the department on again (`Config.Departments.<key>.enabled`).
-- D6 Anti-farm overrides per officer (clear cooldowns, more completions today, another boss attempt, first-run bonus
-  again, forgive streak days, add run time, treat a free abandon as a normal one), each with a daily or weekly limit.
-  Undo: set its limit in `Config.AdminControl` to 0.
-- D10 Names for offences, commendation kinds, badges, bonuses and penalties (`Config.Labels`, English only). Undo:
-  reset `Labels` in Settings.
-- D11 Move a re-created character's history to the player's new citizenid (same licence, logged). Undo: **Undo
+- **D4** Built-in missions edited in the Mission Builder, saved as an override under the same id in
+  `missions/custom/overrides/`; only admins edit them. Undo: **Reset to original** per mission, or
+  `AdminControl.editBuiltins = false` (every edit stops playing at once and is kept).
+- **D5** Departments added, turned off and (when unused) deleted from the Admin UI; a turned-off department's
+  unfinished pay still pays from its account. Undo: turn the department on again (Departments, or
+  `Config.Departments.<key>.enabled`).
+- **D6** Anti-farm overrides per officer (clear cooldowns, more completions today, another boss attempt, first-run
+  bonus again, forgive streak days, add run time, treat a free abandon as a normal one), each with a daily or weekly
+  limit counted from saved rows. Undo: set its limit in `Config.AdminControl` to 0.
+- **D7** Money outside the normal flow: unlock a type's payout for supervisors (on); retry unfunded, pay the capped
+  rest, pay a stuck payment again, re-pay forfeited cash, add funds, take back cash, manual cash and take back an item
+  reward (all **off**; any admin turns one on in Settings by typing `ENABLE`, audited). Undo: switch it off again
+  (`Config.Cash.allow*`, `Cash.restoreForfeited`, `Rewards.allowTakeBack`).
+- **D9** Testing is optional for every mission and every role, built-in, custom and edited built-in alike. Undo:
+  `Builder.requireTestToPublish = true` (supervisors then need a passed test; admins never do).
+- **D10** Names for offences, commendation kinds, badges, bonuses and penalties (`Config.Labels`, English only).
+  Undo: reset `Labels` in Settings.
+- **D11** Move a re-created character's history to the player's new citizenid (same licence, logged). Undo: **Undo
   move**, or `Config.AdminControl.recordMove = false`.
-- D13 The maintenance lock during a storage copy, a storage switch or a backup restore (not a pause and not a switch:
-  it always ends with your restart). Undo: none needed; it ends with the restart.
+- **D13** The maintenance lock during a storage copy, a storage switch or a backup restore (not a pause and not a
+  switch: it always ends with your restart). Undo: none needed; it ends with the restart.

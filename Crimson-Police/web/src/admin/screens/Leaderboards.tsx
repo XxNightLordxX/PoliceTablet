@@ -33,6 +33,7 @@ import { cx } from '../../shared/cx';
 import { formatDateTime, formatMoney, formatNumber } from '../../shared/format';
 import { useAction, useRequest } from '../../shared/hooks';
 import { hasKey, t } from '../../shared/i18n';
+import { useNavigate } from '../../shared/navigation';
 import { useSession } from '../../shared/session';
 import type { FlaggedRow } from '../../types/oversight';
 import {
@@ -71,6 +72,8 @@ interface AwardForm {
 }
 
 function StuckPanel({ list }: { list: StuckPayment[] }) {
+    // Resolve lives in Admin UI → Payments (Mark paid, Pay again)
+    const navigate = useNavigate();
     return (
         <Card
             title={t('admin.boards.stuck_title')}
@@ -78,11 +81,21 @@ function StuckPanel({ list }: { list: StuckPayment[] }) {
             icon="alert"
             highlight={list.length ? 'warning' : undefined}
             actions={
-                list.length ? (
-                    <Badge tone="warning" size="sm">
-                        {formatNumber(list.length)}
-                    </Badge>
-                ) : null
+                <>
+                    {list.length ? (
+                        <Badge tone="warning" size="sm">
+                            {formatNumber(list.length)}
+                        </Badge>
+                    ) : null}
+                    <Button
+                        size="sm"
+                        variant="ghost"
+                        icon="chevronRight"
+                        onClick={() => navigate('admin_payments', { status: 'paying' })}
+                    >
+                        {t('int.ui.open_payments')}
+                    </Button>
+                </>
             }
             padding="sm"
             className="boards-stuck"

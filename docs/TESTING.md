@@ -10,17 +10,17 @@ passes (docs/ARCHITECTURE.md §11). How work flows around the checks is in docs/
 
 | Step | What it runs | Time (4 cores) |
 |---|---|---:|
-| `syntax` | `luac5.4 -p` on every `.lua` file in `Crimson-Police/`, `tests/` and `tools/` | 0.3 s |
-| `contracts` | `python3 tools/check_contracts.py` (module calls, events, NUI names, locale keys, build stamp) | 0.4 s |
-| `lint-fivem` | `python3 tools/lint_fivem.py`: FiveM pitfall rules FX01-FX10 (FX10, loops that can go round with no Wait, parses the Lua with `tools/lua_flow.py`), known hits in `tools/lint_baseline.txt` | 4.5 s |
-| `style` | `python3 tools/restyle.py --check`: restyles a scratch copy of the tree and fails on any file that differs (docs/STYLE.md) | 26 s |
-| `suite-db` | `lua5.4 tests/run.lua`: 30 specs on MariaDB | 16–17 s |
-| `suite-files` | `lua5.4 tests/run.lua --storage=files`: the same specs with the database off (saves folder) | 16–18 s |
-| `suite-shadow` | `lua5.4 tests/run.lua --storage=shadow`: MariaDB, the oxmysql twin and the engine compared, 0 differences | 23 s |
-| `tsc` | `cd Crimson-Police/web && npx --no-install tsc --noEmit` | 7–8 s |
-| `build` | `npm run build` in a scratch copy of the web sources; `web/dist` must be byte-identical to its output | 10–11 s |
+| `syntax` | `luac5.4 -p` on every `.lua` file in `Crimson-Police/`, `tests/` and `tools/` | 0.5 s |
+| `contracts` | `python3 tools/check_contracts.py` (module calls, events, NUI names, locale keys, build stamp) | 0.8 s |
+| `lint-fivem` | `python3 tools/lint_fivem.py`: FiveM pitfall rules FX01-FX10 (FX10, loops that can go round with no Wait, parses the Lua with `tools/lua_flow.py`), known hits in `tools/lint_baseline.txt` | 5 s |
+| `style` | `python3 tools/restyle.py --check`: restyles a scratch copy of the tree and fails on any file that differs (docs/STYLE.md) | 45–48 s |
+| `suite-db` | `lua5.4 tests/run.lua`: 56 specs on MariaDB | 40–45 s |
+| `suite-files` | `lua5.4 tests/run.lua --storage=files`: the same specs with the database off (saves folder) | 35–38 s |
+| `suite-shadow` | `lua5.4 tests/run.lua --storage=shadow`: MariaDB, the oxmysql twin and the engine compared, 0 differences | 70–76 s |
+| `tsc` | `cd Crimson-Police/web && npx --no-install tsc --noEmit` | 10 s |
+| `build` | `npm run build` in a scratch copy of the web sources; `web/dist` must be byte-identical to its output | 14–15 s |
 
-A whole run takes about 1 min 40 s. Every `tools/lint_<name>.py` and `tools/check_<name>.py` (other than
+A whole run takes about 4 minutes (56 specs, full admin control included). Every `tools/lint_<name>.py` and `tools/check_<name>.py` (other than
 `check_contracts.py`) is a `lint-<name>` step, run right after `contracts`: a new lint joins by checking the
 repository with no arguments and exiting non-zero on a problem.
 
@@ -29,6 +29,16 @@ The suites run two specs at a time (`--jobs`, below). Measured on the same machi
 old time was a new `mysql` process for every SQL statement (about 8 ms each, 744 of them in `e2e_spec`
 alone): the harness now keeps one client open per spec. `tests/storage_spec.lua` (about 14 s of Lua work in
 the saves folder engine) is the floor of a suite, whatever `--jobs` is.
+
+Full admin control has its own specs, each run in all three storage modes: `adminkit_spec` (the guard wrapper,
+jobs, the maintenance lock), `admin_officers_spec` and `admin_boards_spec` (officers, points, boards, seasons),
+`builtin_override_spec` and `admin_missions_spec` (edited built-ins, the Mission Builder admin tools),
+`admin_live_spec` and `admin_runctl_spec` (live runs, units, anti-farm), `admin_economy_spec` and
+`admin_rewards_spec` (payments, payouts, item rewards, department funds), `admin_system_spec` and
+`admin_backup_spec` (departments, storage, backups, settings follow-ups), and `admin_control_e2e_spec`: the packages
+together on the real server side (retire and unretire with money that waits, an untested built-in override played
+under the same id and reset, a department added in game and turned off with its pay still paid, and a backup, a
+payment and a restore that pays nothing twice).
 
 ## What the checks need
 
@@ -159,16 +169,16 @@ Each step prints one line while the run goes on, and a summary at the end:
 
 ```
 SUMMARY
-  PASS  syntax            0.3s  125 Lua files
-  PASS  contracts         0.4s  0 problems
-  PASS  lint-fivem        1.6s  lint_fivem PASS: 0 new hits, 2 known (baseline), 0 stale baseline lines
-  PASS  style            26.0s  style: every file is formatted
-  PASS  suite-db         16.9s  30 specs, 31407 passed, 0 failed, 0 crashed
-  PASS  suite-files      15.9s  30 specs, 31407 passed, 0 failed, 0 crashed
-  PASS  suite-shadow     24.2s  30 specs, 31401 passed, 0 failed, 0 crashed, 0 differences
-  PASS  tsc               7.3s  tsc: no errors
-  PASS  build            10.0s  web/dist is up to date
-PASS: 9 passed, 0 failed in 1m 39s (logs: /tmp/cp_check.Xy12ab)
+  PASS  syntax            0.6s  183 Lua files
+  PASS  contracts         0.8s  0 problems
+  PASS  lint-fivem        5.2s  lint_fivem PASS: 0 new hits, 2 known (baseline), 0 stale baseline lines
+  PASS  style            48.3s  style: every file is formatted
+  PASS  suite-db         44.6s  56 specs, 39211 passed, 0 failed, 0 crashed
+  PASS  suite-files      37.8s  56 specs, 39204 passed, 0 failed, 0 crashed
+  PASS  suite-shadow     76.0s  56 specs, 39194 passed, 0 failed, 0 crashed, 0 differences
+  PASS  tsc              10.5s  tsc: no errors
+  PASS  build            14.8s  web/dist is up to date
+PASS: 9 passed, 0 failed in 3m 59s (logs: /tmp/cp_check.Xy12ab)
 ```
 
 The full output of every step is in the logs folder (`CHECK_LOGS=<dir>` picks it). Exit status: 0 all
@@ -267,7 +277,7 @@ ERROR 1054 (42S22) at line 1: Unknown column 'nope' in 'SELECT'
 - `could not build the run database:` the migrations failed; the `mysql` message is above it. Exit 2.
 - `SKIP <spec> (<mode> mode): <reason>`: a check that means something only on MariaDB; every skip is listed
   at the end. `REPORT` lines under a spec are timings and sizes (`storage`, `storage_copy`), not checks.
-- The last line: `30 specs, N assertions passed, F failed, C crashed (storage: <mode>)`. Exit 0 only with
+- The last line: `56 specs, N assertions passed, F failed, C crashed (storage: <mode>)`. Exit 0 only with
   0 failed, 0 crashed and, in shadow mode, 0 differences.
 - A check that fails only when specs run side by side (`tests/storage_spec.lua` holds every query under
   250 ms): rerun with `--jobs=1` before calling it a regression.

@@ -120,6 +120,20 @@ def collect(side, pattern):
             out[m.group(1)].append(rel(p))
     return out
 
+
+def collect_kit(kind):
+    # CP.AdminKit.<kind>('name' ...) and the same call through any local alias of CP.AdminKit in that file
+    out = defaultdict(list)
+    for p in lua_files('server'):
+        s = strip_lua_comments(read(p))
+        names = {'CP\\.AdminKit', 'Kit', 'AdminKit'}
+        names |= {re.escape(a) for a in re.findall(r"\blocal\s+(\w+)\s*=\s*CP\.AdminKit\b(?!\.)", s)}
+        alias = '|'.join(sorted(names))
+        want = r"server:[\w:]+" if kind == 'action' else r"[\w:]+"
+        for m in re.finditer(r"(?<![\w.])(?:%s)\.%s\(\s*['\"](%s)['\"]" % (alias, kind, want), s):
+            out[m.group(1)].append(rel(p))
+    return out
+
 srv_trigger_client = collect('server', r"TriggerClientEvent\(\s*['\"](crimson-police:client:[\w:]+)['\"]")
 srv_trigger_client.update({k: v for k, v in collect('server', r"CP\.e\(\s*['\"](client:[\w:]+)['\"]\s*\)").items()})
 cli_handlers = collect('client', r"RegisterNetEvent\(\s*['\"](crimson-police:client:[\w:]+)['\"]")
@@ -140,7 +154,7 @@ srv_handlers = collect('server', r"RegisterNetEvent\(\s*['\"](crimson-police:ser
 for k, v in collect('server', r"RegisterNetEvent\(\s*CP\.e\(\s*['\"](server:[\w:]+)['\"]").items(): srv_handlers['crimson-police:' + k] += v
 srv_actions = collect('server', r"CP\.Net\.action\(\s*['\"](server:[\w:]+)['\"]")
 # admin actions registered through CP.AdminKit (modules/adminkit) are net actions too
-for k, v in collect('server', r"(?:CP\.AdminKit|\bKit|\bAdminKit)\.action\(\s*['\"](server:[\w:]+)['\"]").items(): srv_actions[k] += v
+for k, v in collect_kit('action').items(): srv_actions[k] += v
 for k, v in collect('server', r"CP\.Net\.action\(\s*\(\s*['\"]server:%s:([\w:]+)['\"]\s*\)\s*:\s*format").items():
     for scope in ('sup', 'admin'): srv_actions['server:%s:%s' % (scope, k)] += v
 for k, v in collect('server', r"CP\.Net\.callback\(\s*\(\s*['\"]%s:([\w:]+)['\"]\s*\)\s*:\s*format").items():
@@ -152,7 +166,7 @@ for ev, where in list(cli_trigger_server.items()) + [('crimson-police:' + a, w) 
 
 # ── 3. NUI names ─────────────────────────────────────────────────────────────
 srv_callbacks = collect('server', r"CP\.Net\.callback\(\s*['\"]([\w:]+)['\"]")
-for k, v in collect('server', r"(?:CP\.AdminKit|\bKit|\bAdminKit)\.callback\(\s*['\"]([\w:]+)['\"]").items(): srv_callbacks[k] += v
+for k, v in collect_kit('callback').items(): srv_callbacks[k] += v
 for k, v in collect('server', r"CP\.Net\.callback\(\s*\(\s*['\"]%s:([\w:]+)['\"]\s*\)\s*:\s*format").items():
     for scope in ('sup', 'admin'): srv_callbacks['%s:%s' % (scope, k)] += v
 cli_actions = collect('client', r"registerClientAction\(\s*['\"](\w+)['\"]")

@@ -1741,13 +1741,17 @@ def load_notes():
     notes = {}
     if not os.path.exists(NOTES):
         return notes
-    cur = None
+    cur, inside = None, False
     for ln in read(NOTES).split('\n'):
         m = re.match(r'^## (\S+)$', ln)
-        if m:
+        if m and not inside:
             cur = m.group(1)
             notes[cur] = []
-        elif cur is not None and ln not in ('```', '```text'):
+        elif cur is not None and not inside and ln == '```text':
+            inside = True  # the note is only what sits between its fences
+        elif cur is not None and inside and ln == '```':
+            inside = False
+        elif cur is not None and inside:
             notes[cur].append(ln)
     for k in notes:
         while notes[k] and not notes[k][-1]:

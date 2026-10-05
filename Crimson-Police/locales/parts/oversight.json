@@ -344,7 +344,7 @@
   "admin.cmd.check_line": "{check}: {text}",
   "admin.cmd.check_done": "Check: {ok} OK, {warn} warnings, {error} errors.",
   "admin.cmd.check_done_ingame": "Check: {ok} OK, {warn} warnings, {error} errors. Admin UI → Permissions → Config health lists them.",
-  "admin.cmd.storage_usage": "Use /{cmd} storage, or /{cmd} storage copy database-to-files|files-to-database [force].",
+  "admin.cmd.storage_usage": "Use /{cmd} storage, /{cmd} storage copy database-to-files|files-to-database [force], or (console only) {cmd} storage mode reset.",
   "admin.cmd.storage_mode_database": "Storage: the database (MySQL/MariaDB through oxmysql).",
   "admin.cmd.storage_mode_files": "Storage: database off (Config.Database.enabled = false). Everything is saved in the saves folder.",
   "admin.cmd.storage_folder_used": "Saves folder: {path}",

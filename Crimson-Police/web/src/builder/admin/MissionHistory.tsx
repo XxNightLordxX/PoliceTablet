@@ -23,6 +23,7 @@ import { formatDateTime, formatDuration, formatMoney } from '../../shared/format
 import { useRequest } from '../../shared/hooks';
 import { t } from '../../shared/i18n';
 import { DateRangeField, Pager, useAdminAction, type DateRange } from '../../admin/components/kit';
+import { BulkVoidDialog } from '../../admin/components/BulkVoidDialog';
 import type {
     DeletedMission,
     DispatchHistoryRow,
@@ -190,6 +191,8 @@ export function OperationHistory() {
     const [status, setStatus] = useState('');
     const [page, setPage] = useState(1);
     const [open, setOpen] = useState<OperationHistoryRow | null>(null);
+    // Void this operation's rows: the bulk void dialog of Officers (P1) with the operation as the fixed filter
+    const [voiding, setVoiding] = useState<OperationHistoryRow | null>(null);
     const args = { ...rangeArgs(range), status: status || undefined, page };
     const data = useRequest<Paged<OperationHistoryRow>>('admin:getOperations', args);
     const columns: TableColumn<OperationHistoryRow>[] = [
@@ -266,11 +269,25 @@ export function OperationHistory() {
                 onClose={() => setOpen(null)}
                 size="md"
                 title={open ? `${open.missionLabel} · #${open.id}` : ''}
-                footer={<Button onClick={() => setOpen(null)}>{t('common.close')}</Button>}
+                footer={
+                    <>
+                        <Button
+                            variant="danger"
+                            icon="trash"
+                            disabled={!open}
+                            onClick={() => {
+                                setVoiding(open);
+                                setOpen(null);
+                            }}
+                        >
+                            {t('int.ui.void_operation')}
+                        </Button>
+                        <Button onClick={() => setOpen(null)}>{t('common.close')}</Button>
+                    </>
+                }
             >
                 {open ? (
                     <div className="admin-missions-stack">
-                        <div className="admin-missions-muted">{t('admin.missions.history.void_hint')}</div>
                         <Table
                             dense
                             rows={open.participants}
@@ -305,6 +322,13 @@ export function OperationHistory() {
                     </div>
                 ) : null}
             </Dialog>
+            <BulkVoidDialog
+                open={!!voiding}
+                onClose={() => setVoiding(null)}
+                initial={voiding ? { operationId: voiding.id, allTime: true } : undefined}
+                name={voiding ? `${voiding.missionLabel} · #${voiding.id}` : undefined}
+                onDone={() => void data.refetch()}
+            />
         </Card>
     );
 }

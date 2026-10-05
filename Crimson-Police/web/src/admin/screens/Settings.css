@@ -461,3 +461,33 @@
     font-family: var(--cp-mono);
     font-size: var(--cp-fs-xs);
 }
+
+.settings-group__tool {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 4px 16px 8px;
+}
+
+.settings-preflight {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    max-height: 240px;
+    overflow-y: auto;
+}
+
+.settings-preflight li {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: baseline;
+    font-size: var(--cp-fs-sm);
+}
+
+.settings-preflight span {
+    color: var(--cp-muted);
+}

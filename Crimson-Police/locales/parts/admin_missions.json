@@ -147,7 +147,6 @@
   "admin.missions.history.any_outcome": "Any outcome",
   "admin.missions.history.officer": "Officer",
   "admin.missions.history.department": "Dept.",
-  "admin.missions.history.void_hint": "To take the points of this operation back, void its rows from Officers or Leaderboards.",
   "admin.missions.history.code": "Call",
   "admin.missions.history.area": "Area",
   "admin.missions.history.county": "County-wide",

@@ -32,6 +32,7 @@ import { formatDateTime, formatMoney, formatNumber } from '../../shared/format';
 import { useRequest } from '../../shared/hooks';
 import { t } from '../../shared/i18n';
 import { request } from '../../shared/nui';
+import { useNavigation } from '../../shared/navigation';
 import { useSession } from '../../shared/session';
 import { toast } from '../../shared/toast';
 import type {
@@ -428,7 +429,9 @@ function ManualDialog({
 export default function AdminPayments() {
     const session = useSession();
     const departments = session.config?.departments ?? [];
-    const [status, setStatus] = useState('');
+    // Leaderboards → stuck payments links here with navigate('admin_payments', { status: 'paying' })
+    const { params } = useNavigation();
+    const [status, setStatus] = useState(typeof params.status === 'string' ? params.status : '');
     const [department, setDepartment] = useState('');
     const [citizenid, setCitizenid] = useState<string | null>(null);
     const [range, setRange] = useState<DateRange>({ from: '', to: '' });
