@@ -1198,7 +1198,11 @@ if Kit and Kit.action then
         end
         local limit = math.floor(Num(Cfg('adjustDailyLimit', 0), 0))
         if limit > 0 then
-            local used = Kit.dailySum({ missionIds = { 'manual_award', 'manual_adjust' }, actor = ctx.actor })
+            local used = Kit.dailySum({
+                missionIds = { 'manual_award', 'manual_adjust' },
+                actor = ctx.actor,
+                src = ctx.src,
+            })
             if not used then return false, 'err.internal' end
             if used + math.abs(n) > limit then return false, 'err.adjust_daily_limit' end
         end

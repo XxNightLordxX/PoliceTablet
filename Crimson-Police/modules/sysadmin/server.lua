@@ -409,42 +409,118 @@ end
 -- ============================================================================
 --                       MONEY STATE (MOVES FORWARD ONLY)
 -- ============================================================================
--- Before a restore or a forced copy replaces rows, every row that holds or held money is read by id; afterwards it
--- gets its state back (or comes back whole when the restored rows lack it). Paid stays paid, given stays given.
+-- Before a restore or a forced copy replaces rows, every row that holds or held money is read; afterwards it gets its
+-- state back (or comes back whole when the new rows lack it). A row is the same row only when its run and officer
+-- match (ids restart in a store that started empty). Paid stays paid, given stays given.
+--   restore: the snapshot is the live store, the newest truth: it always wins, and rows still owed (held, pending,
+--            unfunded) that the backup lacks are kept too.
+--   forced copy (ahead = true): the snapshot is the store being replaced, maybe the older side: its state is put
+--            back only where it moved more money than the copied row (never un-pays, never pays twice).
 
 local MONEY_RUNS = [[cash_status IN ('paying', 'paid', 'forfeited', 'capped') OR cash_paid > 0 OR cash_reclaimed > 0]]
+local OWED_RUNS = [[(cash_status IN ('held', 'pending', 'unfunded') AND voided = 0)]]
 local MONEY_ITEMS = [[status IN ('giving', 'given', 'forfeited')]]
+local OWED_ITEMS = [[status IN ('held', 'pending')]]
+local MOVED = { paying = true, paid = true, capped = true }
+local ITEM_RANK = { giving = 1, given = 2 }
 
-function Sys.moneySnapshot(db)
+-- opts.owed: also the rows still owed (a restore keeps them).
+function Sys.moneySnapshot(db, opts)
+    local owed = type(opts) == 'table' and opts.owed == true
     local schema = Sys.schema()
     local snap = { runs = {}, items = {} }
+    local runsWhere = owed and (MONEY_RUNS .. ' OR ' .. OWED_RUNS) or MONEY_RUNS
     for _, name in ipairs({ 'cp_mission_runs', 'cp_mission_runs_archive' }) do
-        local okR, rows = pcall(ReadRows, db, schema.tables[name], MONEY_RUNS)
+        local okR, rows = pcall(ReadRows, db, schema.tables[name], runsWhere)
         for _, r in ipairs(okR and rows or {}) do snap.runs[#snap.runs + 1] = { table = name, row = r } end
     end
-    local okI, items = pcall(ReadRows, db, schema.tables.cp_item_rewards, MONEY_ITEMS)
+    local itemsWhere = owed and (MONEY_ITEMS .. ' OR ' .. OWED_ITEMS) or MONEY_ITEMS
+    local okI, items = pcall(ReadRows, db, schema.tables.cp_item_rewards, itemsWhere)
     for _, r in ipairs(okI and items or {}) do snap.items[#snap.items + 1] = r end
     return snap
 end
 
-local function Exists(db, name, id)
-    local ok, n = pcall(db.scalar.await, ('SELECT COUNT(*) FROM %s WHERE id = ?'):format(QuoteName(name)), { id })
-    return ok and Int(n) > 0
+local function SameRun(a, b)
+    return tostring(a.run_uuid) == tostring(b.run_uuid) and tostring(a.citizenid) == tostring(b.citizenid)
 end
 
--- Returns { updated, inserted } of runs and items put back.
-function Sys.moneyReapply(db, snap)
+-- The row of the same run and officer: by id when it matches, else by run and officer. table, row | nil.
+local function FindRun(db, r)
     local schema = Sys.schema()
-    local done = { updated = 0, inserted = 0 }
+    local names = { 'cp_mission_runs', 'cp_mission_runs_archive' }
+    for _, name in ipairs(names) do
+        local ok, rows = pcall(ReadRows, db, schema.tables[name], 'id = ?', { r.id })
+        local cur = ok and rows[1] or nil
+        if cur and SameRun(cur, r) then return name, cur end
+    end
+    for _, name in ipairs(names) do
+        local ok, rows = pcall(ReadRows, db, schema.tables[name], 'run_uuid = ? AND citizenid = ? ORDER BY id LIMIT 1',
+            { r.run_uuid, r.citizenid })
+        if ok and rows[1] then return name, rows[1] end
+    end
+    return nil
+end
+
+local function IdTaken(db, name, id)
+    local ok, n = pcall(db.scalar.await, ('SELECT COUNT(*) FROM %s WHERE id = ?'):format(QuoteName(name)), { id })
+    return not ok or Int(n) > 0
+end
+
+local function RestPaid(bd)
+    local t = bd
+    if type(t) == 'string' then
+        local ok, v = pcall(json.decode, t)
+        t = ok and v or nil
+    end
+    local c = type(t) == 'table' and t.cash or nil
+    return type(c) == 'table' and c.restPaid == 'paid'
+end
+
+-- true when run row s moved more money than row c: more paid, more taken back, the cut rest paid, or a payment begun.
+local function RunAhead(s, c)
+    local sp, cp = Int(s.cash_paid), Int(c.cash_paid)
+    if sp ~= cp then return sp > cp end
+    local sr, cr = Int(s.cash_reclaimed), Int(c.cash_reclaimed)
+    if sr ~= cr then return sr > cr end
+    local srest, crest = RestPaid(s.breakdown), RestPaid(c.breakdown)
+    if srest ~= crest then return srest end
+    return MOVED[s.cash_status] == true and not MOVED[c.cash_status]
+end
+
+local function SameItem(a, b)
+    return tostring(a.citizenid) == tostring(b.citizenid) and tostring(a.source) == tostring(b.source)
+        and tostring(a.source_key) == tostring(b.source_key) and tostring(a.item) == tostring(b.item)
+end
+
+local function FindItem(db, r)
+    local info = Sys.schema().tables.cp_item_rewards
+    local ok, rows = pcall(ReadRows, db, info, 'id = ?', { r.id })
+    if ok and rows[1] and SameItem(rows[1], r) then return rows[1] end
+    ok, rows = pcall(ReadRows, db, info, 'citizenid = ? AND source = ? AND source_key = ? AND item = ?',
+        { r.citizenid, r.source, r.source_key, r.item })
+    return ok and rows[1] or nil
+end
+
+-- A copy of row r without its id when that id now belongs to another row (the store hands out a new one).
+local function WithFreeId(db, name, r)
+    if not IdTaken(db, name, r.id) then return r end
+    local out = {}
+    for k, v in pairs(r) do out[k] = v end
+    out.id = nil
+    return out
+end
+
+-- Returns { updated, inserted, skipped } of runs and items put back. opts.ahead: only where the snapshot is ahead.
+function Sys.moneyReapply(db, snap, opts)
+    local ahead = type(opts) == 'table' and opts.ahead == true
+    local schema = Sys.schema()
+    local done = { updated = 0, inserted = 0, skipped = 0 }
     for _, s in ipairs(snap.runs) do
         local r = s.row
-        local where = nil
-        if Exists(db, 'cp_mission_runs', r.id) then
-            where = 'cp_mission_runs'
-        elseif Exists(db, 'cp_mission_runs_archive', r.id) then
-            where = 'cp_mission_runs_archive'
-        end
-        if where then
+        local where, cur = FindRun(db, r)
+        if where and ahead and not RunAhead(r, cur) then
+            done.skipped = done.skipped + 1
+        elseif where then
             db.update.await(
                 ([[UPDATE %s SET cash_status = ?, cash_paid = ?, cash_reclaimed = ?, breakdown = ?
                 WHERE id = ?]]):format(QuoteName(where)),
@@ -453,28 +529,27 @@ function Sys.moneyReapply(db, snap)
                     Int(r.cash_paid),
                     Int(r.cash_reclaimed),
                     r.breakdown or '{}',
-                    r.id,
+                    cur.id,
                 }
             )
             done.updated = done.updated + 1
         else
-            InsertRows(db, schema.tables[s.table], { r })
+            InsertRows(db, schema.tables[s.table], { WithFreeId(db, s.table, r) })
             done.inserted = done.inserted + 1
         end
     end
     local items = schema.tables.cp_item_rewards
     for _, r in ipairs(snap.items) do
-        if Exists(db, 'cp_item_rewards', r.id) then
+        local cur = FindItem(db, r)
+        if cur and ahead and (ITEM_RANK[r.status] or 0) <= (ITEM_RANK[cur.status] or 0) then
+            done.skipped = done.skipped + 1
+        elseif cur then
             db.update.await(
                 'UPDATE cp_item_rewards SET status = ?, given_at = IF(? = 0, NULL, FROM_UNIXTIME(?)) WHERE id = ?',
-                { r.status, Int(r.given_at), Int(r.given_at), r.id })
+                { r.status, Int(r.given_at), Int(r.given_at), cur.id })
             done.updated = done.updated + 1
         else
-            local ok = pcall(InsertRows, db, items, { r })
-            if not ok then
-                db.update.await([[UPDATE cp_item_rewards SET status = ? WHERE citizenid = ? AND source = ?
-                    AND source_key = ? AND item = ?]], { r.status, r.citizenid, r.source, r.source_key, r.item })
-            end
+            InsertRows(db, items, { WithFreeId(db, 'cp_item_rewards', r) })
             done.inserted = done.inserted + 1
         end
     end
@@ -733,7 +808,7 @@ function Sys.previewRestore(name)
             kept[#kept + 1] = tname
         end
     end
-    local snap = Sys.moneySnapshot(MySQL)
+    local snap = Sys.moneySnapshot(MySQL, { owed = true })
     local files = {}
     for _, f in ipairs(m.files or {}) do files[#files + 1] = f.path end
     return {
@@ -814,7 +889,7 @@ function Sys.restore(src, name, reason)
         Kit.unlock('restore')
         return false, auto
     end
-    local snap = Sys.moneySnapshot(MySQL)
+    local snap = Sys.moneySnapshot(MySQL, { owed = true })
     local res = table.pack(pcall(PutBack, m, snap))
     Kit.unlock('restore')
     if not res[1] then
@@ -1427,7 +1502,7 @@ Kit.action('server:admin:storageCopy', 'storageAdmin', function(ctx)
     local money = nil
     if snap and (#snap.runs > 0 or #snap.items > 0) then
         local target = OpenStore(targetKind, folder)
-        if target then money = Sys.moneyReapply(target, snap) end
+        if target then money = Sys.moneyReapply(target, snap, { ahead = true }) end
     end
     ctx.audit('storageCopy', direction, force and 'force' or nil, vars and ('%s rows'):format(tostring(vars.rows)))
     -- the store in use changed under the running server: only a restart reads it again

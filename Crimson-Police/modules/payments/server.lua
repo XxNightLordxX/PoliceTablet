@@ -572,8 +572,20 @@ end
 --                           RETRY UNFUNDED (PREVIEW)
 -- ============================================================================
 
--- The unfunded rows of one row id, or of a department since a time: ids, total, per-department totals.
-local function UnfundedSet(args)
+-- true when a row belongs to src (any character of their license, or a run they took part in) or the license is
+-- unknown: the S guard for a whole department, where the row-level guard of the action never sees each row.
+local function OwnRow(src, r, seen)
+    local Kit = CP.AdminKit
+    if (tonumber(src) or 0) == 0 or not Kit then return false end
+    local cid, run = tostring(r.citizenid), tostring(r.run_uuid)
+    if seen.cid[cid] == nil then seen.cid[cid] = Kit.isSelf(src, cid, true) ~= false end
+    if seen.run[run] == nil then seen.run[run] = Kit.selfRun(src, run) == true end
+    return seen.cid[cid] or seen.run[run]
+end
+
+-- The unfunded rows of one row id, or of a department since a time: ids, total, per-department totals. Never the
+-- acting admin's own rows (src); excluded counts them.
+local function UnfundedSet(args, src)
     args = type(args) == 'table' and args or {}
     local sql = 'SELECT '
         .. ROW_COLS
@@ -600,15 +612,20 @@ local function UnfundedSet(args)
     Db()
     local rows = Query(sql .. ' ORDER BY r.id LIMIT ?', params)
     if not rows then return nil, 'err.internal' end
-    local ids, total, byDept, list = {}, 0, {}, {}
+    local ids, total, byDept, list, excluded = {}, 0, {}, {}, 0
+    local seen = { cid = {}, run = {} }
     for _, r in ipairs(rows) do
-        local v = View(r)
-        ids[#ids + 1] = v.id
-        total = total + v.owed
-        byDept[v.department] = (byDept[v.department] or 0) + v.owed
-        list[#list + 1] = v
+        if OwnRow(src, r, seen) then
+            excluded = excluded + 1
+        else
+            local v = View(r)
+            ids[#ids + 1] = v.id
+            total = total + v.owed
+            byDept[v.department] = (byDept[v.department] or 0) + v.owed
+            list[#list + 1] = v
+        end
     end
-    return { ids = ids, total = total, byDept = byDept, rows = list }
+    return { ids = ids, total = total, byDept = byDept, rows = list, excluded = excluded }
 end
 
 -- ============================================================================
@@ -663,7 +680,7 @@ Kit.callback('admin:checkBankingTxn', 'payments', function(ctx)
 end, { rate = 2 })
 
 Kit.callback('admin:previewRetryUnfunded', 'payments', function(ctx)
-    local set, err = UnfundedSet(ctx.args)
+    local set, err = UnfundedSet(ctx.args, ctx.src)
     if not set then return nil, err end
     local balances = {}
     for key, owed in pairs(set.byDept) do
@@ -677,7 +694,13 @@ Kit.callback('admin:previewRetryUnfunded', 'payments', function(ctx)
         }
     end
     table.sort(balances, function(a, b) return a.department < b.department end)
-    local effect = { count = #set.ids, total = set.total, departments = balances, rows = set.rows }
+    local effect = {
+        count = #set.ids,
+        total = set.total,
+        departments = balances,
+        rows = set.rows,
+        excluded = set.excluded,
+    }
     local token, expiresAt = ctx.preview('retryUnfunded', set.ids, effect)
     return { previewToken = token, expiresAt = expiresAt, effect = effect }
 end, { rate = 2 })
@@ -776,7 +799,9 @@ Kit.action('server:admin:payNow', 'payments', function(ctx)
     local row = RowById(ctx.payload.rowId)
     if not row then return false, 'err.row_not_found' end
     local st = row.cash_status
+    -- a manual_award row still 'none' is a manual cash payment whose audit row was never written: never paid
     local unpaid = st == 'none' and row.state == 'completed' and math.floor(U.num(row.cash_base)) > 0
+        and row.mission_type ~= 'manual_award'
     if st ~= 'pending' and not unpaid then return false, 'err.state_changed' end
     local id = math.floor(U.num(row.id))
     local status = CP.Cash.pay(id)
@@ -807,7 +832,7 @@ Kit.action('server:admin:retryUnfunded', 'payments', function(ctx)
     local off = OffSwitch('allowUnfundedRetry')
     if off then return false, off end
     local p = ctx.payload
-    local set, err = UnfundedSet(p)
+    local set, err = UnfundedSet(p, ctx.src)
     if not set then return false, err end
     if #set.ids == 0 then return false, 'err.nothing_to_pay' end
     local okT, errT = ctx.consume(p.previewToken, 'retryUnfunded', set.ids)
@@ -841,8 +866,8 @@ Kit.action('server:admin:retryUnfunded', 'payments', function(ctx)
 end, {
     requestId = true,
     reason = true,
-    confirm = function(p)
-        local set = UnfundedSet(p)
+    confirm = function(p, ctx)
+        local set = UnfundedSet(p, ctx and ctx.src)
         return set and tostring(set.total) or nil
     end,
     self = function(p)
@@ -964,7 +989,8 @@ end, {
 -- ============================================================================
 -- A manual_cash row (mission_type manual_award: out of run counts, goals, streaks and the draw by the existing
 -- filters), paid through the normal flow (source, account, pending until login) but outside the daily cap: it has
--- its own per-admin daily limit, counted from today's rows.
+-- its own per-admin daily limit, counted from today's rows (every character of the admin's license). The row is
+-- written as 'none', which no login payment and no Pay now picks up, and is paid only after its audit row exists.
 
 local function InsertManualRow(cid, dept, amount, actor, reason, runUuid)
     local bd = {
@@ -980,7 +1006,7 @@ local function InsertManualRow(cid, dept, amount, actor, reason, runUuid)
         departments = 1,
         durationS = 0,
         points = { P = 0, bonuses = {}, penalties = {}, subtotal = 0, final = 0 },
-        cash = { B = amount, mTier = 1.0, mMod = 1.0, amount = amount, status = 'pending' },
+        cash = { B = amount, mTier = 1.0, mMod = 1.0, amount = amount, status = 'none' },
         kind = MANUAL_CASH,
         by = actor,
         reason = reason,
@@ -991,7 +1017,7 @@ local function InsertManualRow(cid, dept, amount, actor, reason, runUuid)
             departments_n, tier, state, end_reason, points_base, bonus_points, penalty_points, final_points, cash_base,
             cash_multiplier, cash_paid, cash_status, duration_s, breakdown, flagged, voided, created_at)
         VALUES (?, 'manual_award', 'manual_cash', ?, ?, ?, 1, 1, 'standard', 'completed', 'completed', 0, 0, 0, 0, ?,
-            1.00, 0, 'pending', 0, ?, 0, 0, FROM_UNIXTIME(?))
+            1.00, 0, 'none', 0, ?, 0, 0, FROM_UNIXTIME(?))
     ]], { runUuid, cid, U.clip(dept, 32), SeasonId(), amount, okJ and js or '{}', Now() })
     if not ok or not tonumber(id) then
         CP.err(TAG, 'inserting the manual cash row for %s failed: %s', cid, tostring(id))
@@ -1000,8 +1026,8 @@ local function InsertManualRow(cid, dept, amount, actor, reason, runUuid)
     return math.floor(tonumber(id))
 end
 
-local function ManualUsed(actor)
-    return Kit.dailySum({ missionIds = { MANUAL_CASH }, actor = actor, column = 'cash_base' })
+local function ManualUsed(ctx)
+    return Kit.dailySum({ missionIds = { MANUAL_CASH }, actor = ctx.actor, src = ctx.src, column = 'cash_base' })
 end
 
 Kit.action('server:admin:manualCash', 'payments', function(ctx)
@@ -1018,20 +1044,20 @@ Kit.action('server:admin:manualCash', 'payments', function(ctx)
     if not officer then return false, 'err.internal' end
     if not officer[1] then return false, 'err.unknown_officer' end
     local limit = math.floor(Num(CashCfg().manualDailyLimit, 0))
-    local used = ManualUsed(ctx.actor)
+    local used = ManualUsed(ctx)
     if used == nil then return false, 'err.internal' end
     if limit > 0 and used + amount > limit then return false, 'err.manual_limit' end
     local runUuid = ctx.requestId or Kit.uuid()
     local id = InsertManualRow(p.citizenid, officer[1].department or 'unknown', amount, ctx.actor, ctx.reason, runUuid)
     if not id then return false, 'err.internal' end
     -- the limit again, now that the row is counted: two payments at the same moment never pass it together
-    local after = ManualUsed(ctx.actor)
+    local after = ManualUsed(ctx)
     if after == nil or (limit > 0 and after > limit) then
-        Update('DELETE FROM cp_mission_runs WHERE id = ? AND cash_status = \'pending\'', { id })
+        Update('DELETE FROM cp_mission_runs WHERE id = ? AND cash_status = \'none\'', { id })
         return false, 'err.manual_limit'
     end
     if not ctx.audit('manualCash', Target(id, p.citizenid), nil, tostring(amount)) then
-        Update('DELETE FROM cp_mission_runs WHERE id = ? AND cash_status = \'pending\'', { id })
+        Update('DELETE FROM cp_mission_runs WHERE id = ? AND cash_status = \'none\'', { id })
         return false, 'err.audit_failed'
     end
     local status = CP.Cash.pay(id) or 'pending'

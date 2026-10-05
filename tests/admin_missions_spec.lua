@@ -110,6 +110,25 @@ do
     H.ok(dropped:find('payout', 1, true) ~= nil, 'the payout field is dropped and listed: ' .. dropped)
     local _, eBig = X.cb('admin:previewImport', 5, { lua = string.rep('-', 262145) })
     H.eq(eBig, 'err.import_too_large', 'more than 256 KB is refused')
+    -- pasted text that would freeze or fill the server stops with an error instead
+    local hostile = {
+        { 'while true do end', 'a loop that never ends' },
+        { 'local s = string.rep("x", 2^31)', 'string.rep of 2 GB' },
+        { 'local s = ("x"):rep(2^31)', 'the same as a string method' },
+        { 'local s = "x" for i = 1, 40 do s = s .. s end', 'a string doubled until memory runs out' },
+        { 'local t = {} for i = 1, 1e9 do t[i] = i end', 'a table filled until memory runs out' },
+        { 'local n = ("a"):rep(30000):find(".-.-.-.-.-.-.-.-.-.-b")', 'pattern matching (runs inside C)' },
+    }
+    for _, h in ipairs(hostile) do
+        H.advance(11000)
+        local t0 = os.clock()
+        local pvH, eH = X.cb('admin:previewImport', 5, { lua = h[1] .. '\nRegisterMission({ id = "x" })' })
+        H.ok(pvH == nil and eH == 'err.import_parse' and os.clock() - t0 < 10,
+            ('refused, not run forever: %s (%s, %.1f s)'):format(h[2], tostring(eH), os.clock() - t0))
+    end
+    H.eq(('abc'):find('b', 1, true), 2, 'string functions work again after the import')
+    H.eq(string.rep('ab', 3), 'ababab', 'and string.rep too')
+    H.eq(debug.gethook(), nil, 'no budget hook is left behind')
     local okI, i = X.act('server:builder:importDraft', 5,
         { previewToken = pv.previewToken, reason = 'from the test server' })
     H.eq(okI, true, 'Import as a draft: ' .. tostring(i))

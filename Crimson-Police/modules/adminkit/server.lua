@@ -339,8 +339,9 @@ function Kit.dailyCount(action, opts)
 end
 
 -- The sum of a column of today's manual rows (manual_adjust, manual_cash ...) written by one actor.
--- opts: { missionIds = { 'manual_adjust' }, actor, column = 'final_points' | 'cash_base', negative, since }.
--- breakdown.by holds the actor; the absolute value of signed points is summed in Lua.
+-- opts: { missionIds = { 'manual_adjust' }, actor, src, column = 'final_points' | 'cash_base', negative, since }.
+-- breakdown.by holds the actor; with src, every character of that player's license counts as the actor (one player,
+-- one limit). The absolute value of signed points is summed in Lua.
 function Kit.dailySum(opts)
     opts = opts or {}
     Db()
@@ -353,9 +354,27 @@ function Kit.dailySum(opts)
     local params = {}
     for i, v in ipairs(ids) do params[i] = v end
     params[#params + 1] = opts.since or Kit.dayStart()
-    if opts.actor ~= nil then
-        sql = sql .. ' AND JSON_VALUE(breakdown, \'$.by\') = ?'
-        params[#params + 1] = tostring(opts.actor)
+    local actors, seen = {}, {}
+    local function add(a)
+        if a ~= nil and not seen[tostring(a)] then
+            seen[tostring(a)] = true
+            actors[#actors + 1] = tostring(a)
+        end
+    end
+    add(opts.actor)
+    local n = ToSrc(opts.src) or 0
+    if n ~= 0 then
+        add(ActorId(n))
+        local okC, cids = Call('Access', 'selfCitizenids', n)
+        for _, cid in ipairs(okC and type(cids) == 'table' and cids or {}) do add(cid) end
+    end
+    if #actors > 0 then
+        local am = {}
+        for i, a in ipairs(actors) do
+            am[i] = '?'
+            params[#params + 1] = a
+        end
+        sql = sql .. (' AND JSON_VALUE(breakdown, \'$.by\') IN (%s)'):format(table.concat(am, ', '))
     end
     local ok, rows = pcall(MySQL.query.await, sql, params)
     if not ok then

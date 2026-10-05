@@ -599,8 +599,11 @@ do
     local a = Row({ status = 'unfunded', owed = 300 })
     local b = Row({ status = 'unfunded', owed = 200 })
     Row({ status = 'unfunded', owed = 999, voided = true })
+    -- another character of admin 1's licence: never in admin 1's department retry (the S guard)
+    local mine = Row({ status = 'unfunded', owed = 700, cid = 'ALT00001' })
     local pv = Cb('admin:previewRetryUnfunded', 1, { department = 'sast' })
     H.ok(pv and pv.effect.count == 2 and pv.effect.total == 500, 'the preview: rows and total (voided rows left out)')
+    H.eq(pv and pv.effect.excluded, 1, 'the admin\'s own rows are left out of a department retry')
     local ok, e = Act('server:admin:retryUnfunded', 1, {
         department = 'sast',
         reason = 'topped up',
@@ -635,6 +638,7 @@ do
     H.ok(ok and e.claimed == 2 and e.paid == 2, 'with the switch on and the money there: paid')
     H.ok(RowOf(a).cash_status == 'paid' and RowOf(b).cash_status == 'paid' and bank.balance.sast == 4500,
         'both rows paid from the account')
+    H.eq(RowOf(mine).cash_status, 'unfunded', 'the admin\'s own unfunded row is not paid by their department retry')
     H.ok(Logged('entry', { side = 'personal' })[1].txn == ('CP-%s-OFF00007'):format(RowOf(a).run_uuid),
         'with the same transaction id (no money moved before)')
     Config.Cash.allowUnfundedRetry = false
@@ -821,6 +825,29 @@ do
     H.eq(Async(function() return Cash.paidToday('OFF00007') end), 0, 'not counted in the daily cap')
     ok, e = Act('server:admin:manualCash', 1, { citizenid = 'OFF00007', amount = 800, reason = 'x', requestId = Rid() })
     H.eq(e, 'err.manual_limit', 'the per-admin daily limit, counted from today\'s rows')
+    -- the same player on another character of their licence shares that limit
+    people[1].cid = 'ALT00001'
+    ok, e = Act('server:admin:manualCash', 1, { citizenid = 'OFF00007', amount = 800, reason = 'x', requestId = Rid() })
+    people[1].cid = 'ADM00001'
+    H.eq(e, 'err.manual_limit', 'the daily limit is per player (licence), not per character')
+    -- the row is never paid before its audit row exists: a login payment in between finds nothing to pay
+    local Kit = CP.AdminKit
+    local realAudit = Kit.auditSync
+    local before = #calls.add
+    Kit.auditSync = function(...)
+        local args = { ... }
+        if args[3] == 'manualCash' then
+            Cash.payPending(7)
+            return nil
+        end
+        return realAudit(...)
+    end
+    ok, e = Act('server:admin:manualCash', 3, { citizenid = 'OFF00007', amount = 50, reason = 'x', requestId = Rid() })
+    Kit.auditSync = realAudit
+    H.ok(ok == false and e == 'err.audit_failed', 'the audit row failed: refused')
+    H.eq(#calls.add, before, 'and no money moved, even with a login payment between the row and its audit row')
+    H.eq(Count('SELECT COUNT(*) AS n FROM cp_mission_runs WHERE mission_id = \'manual_cash\' AND cash_base = 50'), 0,
+        'the half-written row is removed')
     ok = Act('server:admin:manualCash', 3, { citizenid = 'OFF00007', amount = 800, reason = 'x', requestId = Rid() })
     H.eq(ok, true, 'another admin has a limit of their own')
     ok, e = Act('server:admin:manualCash', 1, { citizenid = 'ADM00001', amount = 10, reason = 'x', requestId = Rid() })

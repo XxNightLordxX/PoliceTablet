@@ -203,6 +203,7 @@ do
         { '{"cash":{"paid":500}}' })
     H.sql('UPDATE cp_item_rewards SET status = \'given\', given_at = NOW() WHERE id = 1')
     Run(4, 'OFF00007', 'paid', 300)
+    Run(5, 'OFF00007', 'pending', 0)
     H.sql([[INSERT INTO cp_dept_funding (department, amount, txn, state, by_actor) VALUES ('sast', 1000, 'CP-FUND-1',
         'done', 'ADM00001')]])
     H.ok(S.set(1, 'Leaderboard.topN', 30), 'the setting changed again')
@@ -241,6 +242,9 @@ do
     H.eq(One('SELECT cash_status FROM cp_mission_runs WHERE id = 2').cash_status, 'held', 'a held row is as backed up')
     local r4 = One('SELECT cash_status, cash_paid FROM cp_mission_runs WHERE id = 4')
     H.ok(r4.cash_status == 'paid' and Num(r4.cash_paid) == 300, 'a paid row the backup lacks is kept')
+    local r5 = One('SELECT cash_status, cash_base FROM cp_mission_runs WHERE id = 5')
+    H.ok(r5 and r5.cash_status == 'pending' and Num(r5.cash_base) == 500,
+        'a row still owed (pending) that the backup lacks is kept: the officer is still paid')
     H.eq(One('SELECT status FROM cp_item_rewards WHERE id = 1').status, 'given', 'a given reward stays given')
     H.eq(Num(One('SELECT COUNT(*) AS n FROM cp_dept_funding').n), 1, 'the funding row made after the backup is kept')
     H.ok(Num(One('SELECT COUNT(*) AS n FROM cp_audit').n) > audits, 'cp_audit keeps every row and gains the restore')
@@ -312,6 +316,49 @@ do
     H.eq(One('SELECT cash_status FROM cp_mission_runs WHERE id = 10').cash_status, 'paying',
         'a paying row never goes back to pending (payPending can\'t pay it again)')
     H.eq(Num(One('SELECT cash_paid FROM cp_mission_runs WHERE id = 11').cash_paid), 200, 'the paid row is back')
+end
+
+-- A forced copy over the store that is not in use: that store's snapshot may be the older side, or hold other runs
+-- under the same ids (a store that started empty hands out ids from 1 again).
+local function RunX(id, uuid, cid, status, paid, reclaimed, breakdown)
+    H.sql(
+        [[INSERT INTO cp_mission_runs (id, run_uuid, mission_type, mission_id, citizenid, department, state, end_reason,
+        points_base, cash_base, cash_paid, cash_reclaimed, cash_status, breakdown) VALUES (?, ?, 'patrol', 'beat_patrol',
+        ?, 'sast', 'completed', 'completed', 60, 500, ?, ?, ?, ?)]],
+        { id, uuid, cid, paid, reclaimed, status, breakdown or ('{"cash":{"paid":%d}}'):format(paid) })
+end
+
+do
+    H.sql('DELETE FROM cp_mission_runs')
+    H.sql('DELETE FROM cp_item_rewards')
+    -- the store being replaced (the old side)
+    RunX(20, 'x-20', 'OFF00007', 'paid', 3000, 0)
+    RunX(21, 'x-21', 'OFF00007', 'forfeited', 0, 0)
+    RunX(22, 'x-22', 'OFF00007', 'capped', 100, 0, '{"cash":{"paid":100}}')
+    RunX(23, 'x-23', 'OFF00007', 'paid', 500, 0)
+    local snap = Sys.moneySnapshot(MySQL)
+    -- the copied rows (the live side, further along)
+    H.sql('DELETE FROM cp_mission_runs')
+    RunX(20, 'y-20', 'OFF00008', 'pending', 0, 0)
+    RunX(21, 'x-21', 'OFF00007', 'paid', 500, 0)
+    RunX(22, 'x-22', 'OFF00007', 'capped', 300, 0, '{"cash":{"paid":300,"restPaid":"paid"}}')
+    RunX(23, 'x-23', 'OFF00007', 'paid', 500, 200)
+    local done = Sys.moneyReapply(MySQL, snap, { ahead = true })
+    local r20 = One('SELECT run_uuid, citizenid, cash_status, cash_paid FROM cp_mission_runs WHERE id = 20')
+    H.ok(r20.run_uuid == 'y-20' and r20.cash_status == 'pending' and Num(r20.cash_paid) == 0,
+        'another officer\'s run under the same id keeps its own state (still owed, never marked paid)')
+    local x20 = One('SELECT id, cash_status, cash_paid FROM cp_mission_runs WHERE run_uuid = \'x-20\'')
+    H.ok(x20 and Num(x20.id) ~= 20 and x20.cash_status == 'paid' and Num(x20.cash_paid) == 3000,
+        'and the paid run of the old side is kept under a new id')
+    local r21 = One('SELECT cash_status, cash_paid FROM cp_mission_runs WHERE id = 21')
+    H.ok(r21.cash_status == 'paid' and Num(r21.cash_paid) == 500,
+        'a forfeited row repaid since stays paid (Pay it after all can\'t pay it twice)')
+    local r22 = One('SELECT cash_paid, breakdown FROM cp_mission_runs WHERE id = 22')
+    H.ok(Num(r22.cash_paid) == 300 and tostring(r22.breakdown):find('restPaid', 1, true) ~= nil,
+        'a capped row whose rest was paid keeps it (Pay the rest can\'t pay again)')
+    H.eq(Num(One('SELECT cash_reclaimed FROM cp_mission_runs WHERE id = 23').cash_reclaimed), 200,
+        'money taken back stays taken back')
+    H.ok(done.skipped == 3 and done.inserted == 1, 'three rows already ahead are left alone, one comes back whole')
 end
 
 return H

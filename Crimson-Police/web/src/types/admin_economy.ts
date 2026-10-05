@@ -148,6 +148,8 @@ export interface UnfundedPreview {
         total: number;
         departments: { department: string; label: string; owed: number; balance?: number | null }[];
         rows: PaymentRow[];
+        // rows of the admin's own characters or runs, left out
+        excluded?: number;
     };
 }
 

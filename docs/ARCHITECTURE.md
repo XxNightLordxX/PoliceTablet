@@ -650,6 +650,11 @@ Server:
   `Config.DisabledMissions`), `normalize(def, meta) -> def|nil, err`, `serializeForClient(def)`
 - `register(def)` / `unregister(id)` — used by the builder for publish/archive without a reload.
 - `parse(luaSource, chunkName) -> def|nil, err` — runs one mission file's source in the loader sandbox and returns the raw definition (used by the builder for custom files and hand-edit reloads).
+- The sandbox (`CP.U.sandboxEnv`, `CP.U.runSandboxed`, shared/utils.lua) runs a file under a budget: a debug hook
+  every 4 instructions stops it after 2,000,000 checks or 64 MB of new memory; `string` has only byte, char, format,
+  len, lower, upper, reverse, sub and a `rep` bounded to 64 KB, `table` has no `move`, and while the file runs the
+  real `string.find/match/gmatch/gsub/pack/unpack/packsize/dump` raise an error and `string.rep` is bounded (string
+  methods reach the real table). Built-in files, custom files and Lua text pasted into the import all go through it.
 - callback `getMissionDefs` → every definition for clients (plain tables, vectors as {x,y,z,w}).
 Client:
 - `CP.Missions.get(id)`; receives `crimson-police:client:missions` (full list) after load/reload.
@@ -1741,14 +1746,20 @@ action goes through `CP.AdminKit` (admins only, audited).
   (never the newest or the latest `prerestore`), `Backups.daily` on `CP.Schedule.onDaily` (waits for the busy lock).
 - Restore: `previewRestore(name)` (tables replaced and kept, files, money rows); `restore(src, name, reason)`: refuses
   while runs go, takes the busy lock and the `restore` maintenance lock, makes a `prerestore` backup, reads the money
-  state (`moneySnapshot(db)`: run rows paying/paid/forfeited/capped or with cash paid or taken back, live and archive;
-  item rewards giving/given/forfeited), replaces every table except `cp_audit`, `cp_settings_history`,
+  state (`moneySnapshot(db, { owed = true })`: run rows paying/paid/forfeited/capped or with cash paid or taken back,
+  and rows still owed (held/pending/unfunded, not voided), live and archive; item rewards giving/given/forfeited and
+  held/pending), replaces every table except `cp_audit`, `cp_settings_history`,
   `cp_schema_migrations`, `cp_storage_meta`, `cp_admin_requests`, `cp_admin_jobs`, `cp_dept_funding` (and keeps the
-  cp_settings rows of the money switches, `AdminControl.*` and `Retention.auditDays`), puts the money state back by id
-  (`moneyReapply(db, snap)`: a row the backup lacks comes back whole), writes the files back, one audit line
+  cp_settings rows of the money switches, `AdminControl.*` and `Retention.auditDays`), puts the money state back
+  (`moneyReapply(db, snap, opts)`: the same row is the one with the same id, run_uuid and citizenid, else the same
+  run_uuid and citizenid; item rewards by id or citizenid + source + source_key + item; a row the backup lacks comes
+  back whole, under a new id when its id now belongs to another run), writes the files back, one audit line
   (`backupRestored`, critical), then `CP.Maintenance.askRestart`. AUTO_INCREMENT counters only move up (DELETE never
-  lowers them), so no id is handed out twice. A forced storage copy takes the same money snapshot of the store it
-  replaces and puts it back after `CP.Admin.storageCopy`.
+  lowers them), so no id is handed out twice. A forced storage copy takes the money snapshot (moved money only) of the
+  store it replaces and puts it back after `CP.Admin.storageCopy` with `{ ahead = true }`: a row's old state is
+  written only where it moved more money than the copied row (more paid, more taken back, the capped rest paid, or a
+  payment begun; for item rewards giving/given over the rest), so the copy never un-pays and never lets a row be paid
+  or taken back twice.
 - Storage: `storageView()` (`CP.Admin.storageStatus()` plus `override`, `generation`, `state`, `maintenance`,
   `runsGoing`, `busy`, `backups`), `switchStorage(src, enabled, folder, startEmpty)` (KVP, generation marker in both
   stores, `storage` lock and the restart line), `storageMeta(db?)`; at start a store marked `left_behind` begins that lock.
@@ -2089,7 +2100,7 @@ Every action of full admin control goes through `CP.AdminKit.action` (§5.37) an
 | `admin:getOfficerRuns` | callback | officerRecords | `{ citizenid, page, size ≤ 50, from, to, type, state, flagged, voided, kind, includeArchive }` | live + archive, the union inside a derived table for ORDER BY / LIMIT; 1/s |
 | `admin:getRun` | callback | officerRecords | `{ rowId, archived? }` | debrief, participants (both tables), dispute, goal rewards it completed, `txnId`, `own` |
 | `admin:getOfficerPoints` | callback | officerRecords | `{ citizenid }` | week/month/season/all-time points and ranks, `adjust.maxDeduction`, `confirmAbove`, `dailyLimit` |
-| `server:admin:adjustPoints` | action | pointsAdjust | `{ citizenid, points (−10,000..10,000, not 0), reason, confirm?, requestId }` | R I S(strict) L(1 per 10 s per officer); T = the citizenid at ≥ `adjustConfirmAbove`; a deduction never takes season points or XP below 0; `adjustDailyLimit` summed from today's rows; audit `manualAward` / `pointsAdjust` (flags) |
+| `server:admin:adjustPoints` | action | pointsAdjust | `{ citizenid, points (−10,000..10,000, not 0), reason, confirm?, requestId }` | R I S(strict) L(1 per 10 s per officer); T = the citizenid at ≥ `adjustConfirmAbove`; a deduction never takes season points or XP below 0; `adjustDailyLimit` summed from today's rows of every character of the admin's license; audit `manualAward` / `pointsAdjust` (flags) |
 | `admin:previewBulkVoid` | callback | bulkVoid | `{ filter = { citizenid?, department?, missionType?, missionId?, operationId?, from, to \| allTime, includeAwards? } }` | V: rows, officers (XP before/after), points, held cash, archived, left-out own runs, `confirmWord`, `previewToken` (none above `bulkMaxRows`) |
 | `server:admin:bulkVoid` | action | bulkVoid | `{ filter, kind?, reason, confirm = 'VOID <n>', previewToken, requestId }` | R I V T J; refused while the officer is on a run; audit `bulkVoid` (flags) + one `voidRun` per row |
 | `server:admin:resetProgression` | action | bulkVoid | `{ citizenid, reason, confirm = citizenid, previewToken, requestId }` | every row, all time, as a correction batch |
@@ -2213,13 +2224,13 @@ every action.
 | `server:admin:resolvePayment` | `{ rowId, outcome = 'paid' \| 'payAgain', checked?, reason, confirm?, requestId }` | payments | P I R S; payAgain: W `allowPayAgain`, `checked`, T the amount |
 | `server:admin:payNow` | `{ rowId, requestId }` | payments | P I |
 | `server:admin:retryPending` | `{ requestId }` | payments | P I |
-| `server:admin:retryUnfunded` | `{ rowId \| department + since?, reason, confirm, previewToken, requestId }` | payments | P I R T(total) V S W `allowUnfundedRetry`; balance ≥ total |
+| `server:admin:retryUnfunded` | `{ rowId \| department + since?, reason, confirm, previewToken, requestId }` | payments | P I R T(total) V S W `allowUnfundedRetry`; balance ≥ total; a department retry (and its preview, `excluded`) leaves out every row of the admin's own characters and runs, and rows whose officer's license is unknown |
 | `server:admin:payCapRest` | `{ rowId, reason, confirm, requestId }` | payments | P I R T(rest) S W `allowCapTopUp` |
 | `server:admin:repayForfeited` | `{ rowId, reason, confirm, requestId }` | payments | P I R T(amount) S W `restoreForfeited` |
 | `server:admin:forfeitNow` | `{ rowId, reason }` | payments | P R S |
 | `server:admin:cancelPayment` | `{ rowId, reason, confirm }` | payments | P R T(amount) S |
 | `server:admin:clawback` | `{ rowId, amount, reason, confirm, requestId }` | payments | P I R T(amount) S W `allowClawback` |
-| `server:admin:manualCash` | `{ citizenid, amount, reason, confirm?, requestId }` | payments | P I R S W `allowManualCash`; T above `maxPayout / 2`; 1..`maxPayout`; per admin per day ≤ `manualDailyLimit` (from rows) |
+| `server:admin:manualCash` | `{ citizenid, amount, reason, confirm?, requestId }` | payments | P I R S W `allowManualCash`; T above `maxPayout / 2`; 1..`maxPayout`; per admin (every character of their license) per day ≤ `manualDailyLimit` (from rows); the row is written as `none` (no login payment or Pay now picks it up) and paid only after its audit row |
 | `server:admin:addDepartmentFunds` | `{ department, amount, reason, confirm, requestId }` | deptFunds | P I R T(amount) W `allowAddFunds`; 1..`addFundsMax`; 1 per 10 s per department |
 | callback `admin:previewPayoutAdjust` | `{ mode, value, scope }` → PayoutAdjustPreview | setTypePayout | P |
 | `server:admin:adjustAllPayouts` | `{ mode, value, scope, lockTypes?, reason, confirm = 'ADJUST', previewToken, requestId }` | setTypePayout | P I R T V |

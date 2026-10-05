@@ -359,4 +359,89 @@ function U.clip(s, n)
     return s
 end
 
+-- ============================================================================
+--                           THE MISSION FILE SANDBOX
+-- ============================================================================
+-- Mission files (and Lua text pasted into the Mission Builder's import) run in a small table with a step and memory
+-- budget, so a file with a loop that never ends or a huge string stops with an error instead of freezing the server.
+-- Pattern matching, string.rep and table.move work inside C, where the budget cannot see, so they are left out or
+-- bounded while the file runs.
+
+local SANDBOX_STEPS = 2000000        -- budget checks (one every 4 Lua instructions) before a file is stopped
+local SANDBOX_MEMORY_KB = 65536      -- memory a file may add while it runs
+local SANDBOX_REP_MAX = 65536        -- longest string string.rep may make
+local SANDBOX_STRING = { 'byte', 'char', 'format', 'len', 'lower', 'upper', 'reverse', 'sub' }
+local SANDBOX_TABLE = { 'concat', 'insert', 'remove', 'sort', 'unpack' }
+local SANDBOX_BLOCKED = { 'find', 'match', 'gmatch', 'gsub', 'pack', 'unpack', 'packsize', 'dump' }
+
+local realRep = string.rep
+
+local function BoundedRep(s, n, sep)
+    local len = #tostring(s) + (sep and #tostring(sep) or 0)
+    if (tonumber(n) or 0) * len > SANDBOX_REP_MAX then error('string.rep makes a string that is too long', 2) end
+    return realRep(s, n, sep)
+end
+
+local function Blocked(name)
+    return function() error(('string.%s is not available in mission files'):format(name), 2) end
+end
+
+-- The environment a mission file runs in: register is the RegisterMission function.
+function U.sandboxEnv(register)
+    local str, tbl = { rep = BoundedRep }, {}
+    for _, k in ipairs(SANDBOX_STRING) do str[k] = string[k] end
+    for _, k in ipairs(SANDBOX_TABLE) do tbl[k] = table[k] end
+    local mth = {}
+    for k, v in pairs(math) do mth[k] = v end
+    return {
+        RegisterMission = register,
+        vec3 = vec3 or vector3,
+        vec4 = vec4 or vector4,
+        vector3 = vector3,
+        vector4 = vector4,
+        math = mth,
+        string = str,
+        table = tbl,
+        pairs = pairs,
+        ipairs = ipairs,
+        tonumber = tonumber,
+        tostring = tostring,
+        type = type,
+    }
+end
+
+-- pcall(chunk) under the budget: ok, err. Methods on strings ('x'):rep() reach the real string table, so its
+-- unsafe functions are swapped out for the run (a mission file cannot wait, so nothing else runs meanwhile).
+function U.runSandboxed(chunk)
+    local hook = debug and debug.sethook
+    if not hook then return false, 'this server cannot limit a mission file, so it was not run' end
+    local saved = {}
+    for _, k in ipairs(SANDBOX_BLOCKED) do
+        saved[k] = string[k]
+        string[k] = Blocked(k)
+    end
+    saved.rep = string.rep
+    string.rep = BoundedRep
+    local oldHook, oldMask, oldCount = debug.gethook()
+    local steps, base = 0, collectgarbage('count')
+    -- the hook stops itself before it raises, so it can never fire again in the code below
+    hook(function()
+        steps = steps + 1
+        local why = nil
+        if steps > SANDBOX_STEPS then
+            why = 'the file runs too long (a loop that never ends?)'
+        elseif collectgarbage('count') - base > SANDBOX_MEMORY_KB then
+            why = 'the file uses too much memory'
+        end
+        if why then
+            hook()
+            error(why, 0)
+        end
+    end, '', 4)
+    local ok, err = pcall(chunk)
+    if oldHook then hook(oldHook, oldMask, oldCount) else hook() end
+    for k, v in pairs(saved) do string[k] = v end
+    return ok, err
+end
+
 return U

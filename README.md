@@ -1395,7 +1395,7 @@ On an officer's record:
   away (−10,000 to +10,000, a reason each time). It is a new line in their history, never an edit of an old run; to
   undo it, void that line. A deduction can never take their season points or XP below 0, and from 500 points up you
   type their citizen ID to confirm (`AdminControl.adjustConfirmAbove`). `AdminControl.adjustDailyLimit` caps what one
-  admin may adjust per day; `AdminControl.pointAdjust = false` turns deductions off.
+  admin may adjust per day (all characters of one player together); `AdminControl.pointAdjust = false` turns deductions off.
 - **XP**: **Check XP** compares their stored XP with what their runs give; **Fix** writes the runs' value.
 - **Streak**: the live streak, its multiplier and grace day. **Recalculate** rebuilds it from their runs; **Forgive
   days** covers missed days (server downtime) once a day, up to `AdminControl.streakForgiveMax` days.
@@ -1481,6 +1481,8 @@ hands a custom mission to another officer. **Delete permanently** (archived miss
 moves its files to `missions/custom/deleted/`; the **Deleted** tab brings it back. **Copy as Lua** shows the
 published file to paste on another server, and **Import** (top of the screen) checks a pasted file and makes a new
 draft from it: payout fields are dropped, a used id gets a new one, and nothing is published until you publish it.
+A pasted file that runs too long or uses too much memory (for example a loop that never ends) is stopped and refused,
+so it can't freeze the server; mission files only need `RegisterMission({ ... })` and plain values.
 
 **Switches.** Every mission and location, built-in, custom or edited, has its on/off switch (catalog, Testing,
 Dispatch). Location switches are saved by the location's name: when an edit renames or removes a location, the
@@ -1569,11 +1571,11 @@ it is logged and posted to the audit webhook). Test each one on a test server wi
 | Switch (`Config.Cash`) | Button | What it does |
 |---|---|---|
 | `allowPayAgain` | Payments → Resolve → **Pay again** | Pays a stuck payment again with its own transaction id (`...-r2`). If the department already paid, it is not charged again. The officer must be online, and you tick "I checked: the money did not arrive" and type the amount. |
-| `allowUnfundedRetry` | **Retry unfunded** (a row, or every unfunded row of a department) | After you put money in the department's account. The balance is checked first. |
+| `allowUnfundedRetry` | **Retry unfunded** (a row, or every unfunded row of a department) | After you put money in the department's account. The balance is checked first. Your own characters' rows are always left out. |
 | `allowCapTopUp` | **Pay the rest** | Pays the part of a payment the daily cap cut, once (`...-r`). This goes over the officer's daily cap. |
 | `restoreForfeited` | **Pay it after all** | For a run that was restored after its cash was forfeited: pays it now, and its item rewards come back too. |
 | `allowClawback` | **Take back** | Takes cash back from an online officer's bank (never more than was paid, never below their balance). The department gets it back when it paid it. Each one has its own transaction id (`...-back1`, `...-back2`). |
-| `allowManualCash` | **New payment** | Pays an officer by hand, for example to fix a wrong payout. Between $1 and `maxPayout`; at most `manualDailyLimit` per admin per day. It is not counted against the daily cap, and it waits until the officer logs in if they are offline. |
+| `allowManualCash` | **New payment** | Pays an officer by hand, for example to fix a wrong payout. Between $1 and `maxPayout`; at most `manualDailyLimit` per admin per day (all characters of one player together). It is not counted against the daily cap, and it waits until the officer logs in if they are offline. |
 | `allowAddFunds` | Departments → **Funds** → **Add funds** | Puts new money in a department's Renewed-Banking account (at most `addFundsMax` at a time). Never a withdrawal. |
 
 Every amount is worked out by the server, every one of these asks for a reason (and the dangerous ones for the
@@ -1605,7 +1607,8 @@ clean-up never archives a run whose money or item rewards are not finished, and 
 
 - **Storage**: where Crimson-Police keeps its data (the database or the saves folder), the rows of every table, the
   version and which migrations ran. **Copy all data** copies every table from one storage to the other (a copy that
-  would replace existing data needs the typed word `REPLACE`; payments already made there stay paid). **Switch
+  would replace existing data needs the typed word `REPLACE`; a payment either side made stays paid, and a row is
+  never paid twice or taken back twice because of the copy). **Switch
   storage** picks the storage for the next start: back up, copy, switch (typed word `SWITCH`), then restart
   Crimson-Police from txAdmin or the server console. The storage you leave is marked "left behind": if it is ever
   started again, nothing is paid or changed there, so nobody is paid twice. The choice is kept by the server, not in
@@ -1615,7 +1618,8 @@ clean-up never archives a run whose money or item rewards are not finished, and 
   the banned-words file in `saves/_backups/` (never sent to players). The last `Config.Backups.keep` (7) are kept;
   `Config.Backups.daily = true` makes one at every daily reset. **Restore** shows what it replaces first, makes an
   automatic backup, and needs the typed word `RESTORE`; then restart Crimson-Police. A restore never takes money back:
-  a payment made after the backup stays paid, a given item reward stays given, and the audit log, the settings
+  a payment made after the backup stays paid, a given item reward stays given, pay still owed to an officer (waiting
+  for them to log in, held or unfunded) is kept even when the backup is older than it, and the audit log, the settings
   history, department funding and the money switches are kept as they are now. The newest backup and the latest
   automatic one can't be deleted.
 - **Webhooks**: which Discord webhooks are on, and the exact server.cfg line to paste for each (with **Copy the

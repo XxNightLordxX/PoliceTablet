@@ -824,35 +824,15 @@ local function RemoveFile(path)
     return true
 end
 
-local function CopyLib(lib)
-    local out = {}
-    for k, v in pairs(lib) do out[k] = v end
-    return out
-end
-
 -- The mission loader sandbox (ARCHITECTURE §5.6): CP.Missions.parse when it exists, else the same rules.
 function B.parse(content, chunkName)
     if CP.Missions and CP.Missions.parse then return CP.Missions.parse(content, chunkName) end
     if type(content) ~= 'string' or content == '' then return nil, 'the file is empty' end
     local collected = {}
-    local env = {
-        RegisterMission = function(def) collected[#collected + 1] = def end,
-        vec3 = vec3 or vector3,
-        vec4 = vec4 or vector4,
-        vector3 = vector3,
-        vector4 = vector4,
-        math = CopyLib(math),
-        string = CopyLib(string),
-        table = CopyLib(table),
-        pairs = pairs,
-        ipairs = ipairs,
-        tonumber = tonumber,
-        tostring = tostring,
-        type = type,
-    }
+    local env = CP.U.sandboxEnv(function(def) collected[#collected + 1] = def end)
     local chunk, err = load(content, '@' .. tostring(chunkName or 'mission'), 't', env)
     if not chunk then return nil, 'syntax error: ' .. tostring(err) end
-    local ok, runErr = pcall(chunk)
+    local ok, runErr = CP.U.runSandboxed(chunk)
     if not ok then return nil, 'error while running the file: ' .. tostring(runErr) end
     if #collected ~= 1 then
         return nil, ('the file must call RegisterMission exactly once (found %d)'):format(#collected)
