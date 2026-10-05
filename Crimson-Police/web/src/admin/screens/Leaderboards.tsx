@@ -53,14 +53,21 @@ import {
 } from '../../officer/screens/Leaderboard';
 import { ResultCell, missionTypeLabel } from '../../officer/screens/Profile';
 import { ItemRewardsPanel } from '../components/ItemRewardsPanel';
+import { BulkVoidDialog } from '../components/BulkVoidDialog';
+import { RecognitionPanel } from '../components/boards/RecognitionPanel';
+import { RunDialog } from '../components/officers/OfficerRuns';
+import { newRequestId } from '../components/kit';
+import type { OfficerPoints } from '../../types/admin_officers';
 import './Leaderboards.css';
 
-const AWARD_MAX = 10000; // modules/admin: 1 to 10,000 points per manual award
+const AWARD_MAX = 10000; // modules/corrections: -10,000 to +10,000 points per adjustment (not 0)
 interface AwardForm {
     citizenid: string;
     name?: string;
     points: number | null;
     reason: string;
+    // the citizenid typed again for a big adjustment (at or above AdminControl.adjustConfirmAbove)
+    typed?: string;
 }
 
 function StuckPanel({ list }: { list: StuckPayment[] }) {
@@ -120,10 +127,13 @@ export function FlaggedPanel({
     list,
     loading,
     onDecide,
+    onApproveRun,
 }: {
     list: FlaggedRow[];
     loading?: boolean;
     onDecide: (row: FlaggedRow, decision: 'approve' | 'void') => void;
+    // admins: approve every flagged row of the run at once (A10)
+    onApproveRun?: (row: FlaggedRow, rows: FlaggedRow[]) => void;
 }) {
     return (
         <Card
@@ -187,6 +197,23 @@ export function FlaggedPanel({
                                     {t('sup.review.void')}
                                 </Button>
                             </Row>
+                            {onApproveRun && list.filter(x => x.runUuid === r.runUuid).length > 1 ? (
+                                <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    icon="check"
+                                    onClick={() =>
+                                        onApproveRun(
+                                            r,
+                                            list.filter(x => x.runUuid === r.runUuid),
+                                        )
+                                    }
+                                >
+                                    {t('ui.admin_officers.flagged.approve_run', {
+                                        n: list.filter(x => x.runUuid === r.runUuid).length,
+                                    })}
+                                </Button>
+                            ) : null}
                         </li>
                     ))}
                 </ul>
@@ -203,11 +230,12 @@ export function FlaggedPanel({
 }
 
 // Boards or Item rewards (the optional item rewards, modules/rewards)
-type AdminBoardsView = 'boards' | 'rewards';
+type AdminBoardsView = 'boards' | 'recognition' | 'rewards';
 
 function ViewTabs({ value, onChange }: { value: AdminBoardsView; onChange: (v: AdminBoardsView) => void }) {
     const items: { key: AdminBoardsView; label: string }[] = [
         { key: 'boards', label: t('admin.rewards.tab_boards') },
+        { key: 'recognition', label: t('ui.admin_officers.recognition.tab') },
         { key: 'rewards', label: t('admin.rewards.tab') },
     ];
     return (
@@ -236,15 +264,27 @@ export default function AdminLeaderboards() {
     const [award, setAward] = useState<AwardForm | null>(null);
     const [review, setReview] = useState<{ row: FlaggedRow; decision: 'approve' | 'void' } | null>(null);
     const [view, setView] = useState<AdminBoardsView>('boards');
+    const [metric, setMetric] = useState('points');
+    // a past week or month: 'w:<from>:<to>' / 'm:<from>:<to>' ('' = the period tabs)
+    const [past, setPast] = useState('');
+    const [bulk, setBulk] = useState(false);
+    const [runRow, setRunRow] = useState<AdminRun | null>(null);
+    const [approveRun, setApproveRun] = useState<{ row: FlaggedRow; rows: FlaggedRow[] } | null>(null);
     const flaggedReq = useRequest<{ flagged: FlaggedRow[] }>('admin:getFlagged', {}, { pollMs: 60000 });
     const flaggedRows = asList(flaggedReq.data?.flagged);
 
     const allTime = period === 'alltime';
     const eff = allTime ? 'overall' : filter;
-    const args = useMemo(
-        () => ({ period, filter: eff, ...(eff === 'department' ? { department } : {}) }),
-        [period, eff, department],
-    );
+    const args = useMemo(() => {
+        const pastParts = past ? past.split(':') : null;
+        return {
+            period: pastParts ? 'range' : period,
+            filter: eff,
+            metric,
+            ...(pastParts ? { from: Number(pastParts[1]), to: Number(pastParts[2]) } : {}),
+            ...(eff === 'department' ? { department } : {}),
+        };
+    }, [period, eff, department, metric, past]);
     const { data, loading, error, refetch } = useRequest<AdminBoards>('admin:getBoards', args, { pollMs: 60000 });
     const runsReq = useRequest<AdminBoards>(
         'admin:getBoards',
@@ -254,7 +294,7 @@ export default function AdminLeaderboards() {
 
     const board =
         data &&
-        data.period === period &&
+        data.period === (past ? 'range' : period) &&
         data.filter === eff &&
         (eff !== 'department' || !data.department || !department || data.department === department)
             ? data
@@ -271,20 +311,32 @@ export default function AdminLeaderboards() {
     const officerRuns = runsReq.data && runsReq.data.citizenid === officer?.citizenid ? asList(runsReq.data.runs) : [];
 
     const openAward = (r?: AdminBoardRow | null) =>
-        setAward({ citizenid: r?.citizenid ?? '', name: r?.realName, points: null, reason: '' });
+        setAward({ citizenid: r?.citizenid ?? '', name: r?.realName, points: null, reason: '', typed: '' });
+    const awardCid = award && /^[A-Za-z0-9_-]{1,50}$/.test(award.citizenid.trim()) ? award.citizenid.trim() : '';
+    const awardInfo = useRequest<OfficerPoints>('admin:getOfficerPoints', { citizenid: awardCid }, { skip: !awardCid });
+    const confirmAbove = awardInfo.data?.adjust.confirmAbove ?? 500;
+    const awardWord = award && Math.abs(award.points ?? 0) >= confirmAbove ? awardCid : '';
     const awardValid =
         !!award &&
-        /^[A-Za-z0-9_-]{1,50}$/.test(award.citizenid.trim()) &&
+        !!awardCid &&
         award.points !== null &&
-        award.points >= 1 &&
+        award.points !== 0 &&
+        award.points >= -AWARD_MAX &&
         award.points <= AWARD_MAX &&
-        !!award.reason.trim();
+        !!award.reason.trim() &&
+        (!awardWord || (award.typed ?? '').trim().toUpperCase() === awardWord.toUpperCase());
 
     const submitAward = async () => {
         if (!award || !awardValid) return;
         const res = await run(
-            'server:admin:awardPoints',
-            { citizenid: award.citizenid.trim(), points: award.points, reason: award.reason.trim() },
+            'server:admin:adjustPoints',
+            {
+                citizenid: awardCid,
+                points: award.points,
+                reason: award.reason.trim(),
+                confirm: awardWord ? (award.typed ?? '').trim() : undefined,
+                requestId: newRequestId(),
+            },
             {
                 success: 'admin.boards.awarded',
                 successVars: { points: formatNumber(award.points ?? 0), who: award.name ?? award.citizenid },
@@ -328,6 +380,20 @@ export default function AdminLeaderboards() {
         }
     };
 
+    const submitApproveRun = async (reason: string) => {
+        if (!approveRun) return;
+        const res = await run(
+            'server:admin:approveRun',
+            { runUuid: approveRun.row.runUuid, reason },
+            { success: 'ui.admin_officers.done' },
+        );
+        setApproveRun(null);
+        if (res.ok) {
+            void flaggedReq.refetch();
+            void refetch();
+        }
+    };
+
     const columns: TableColumn<AdminBoardRow>[] = [
         { key: 'rank', header: t('leaderboard.col.rank'), width: 76, render: r => <RankCell rank={r.rank} /> },
         {
@@ -342,6 +408,11 @@ export default function AdminLeaderboards() {
                         {r.hidden ? (
                             <Badge size="sm" icon="eye" title={t('admin.boards.hidden_hint', { shown: r.name })}>
                                 {t('admin.boards.hidden')}
+                            </Badge>
+                        ) : null}
+                        {r.excluded ? (
+                            <Badge size="sm" tone="warning">
+                                {t('ui.admin_officers.excluded_short')}
                             </Badge>
                         ) : null}
                     </span>
@@ -370,7 +441,11 @@ export default function AdminLeaderboards() {
             header: allTime ? t('leaderboard.col.xp') : t('leaderboard.col.points'),
             numeric: true,
             width: 100,
-            render: r => <span className="boards-strong">{formatNumber(r.points)}</span>,
+            render: r => (
+                <span className="boards-strong">
+                    {formatNumber(metric !== 'points' && typeof r.value === 'number' ? r.value : r.points)}
+                </span>
+            ),
         },
         {
             key: 'cash',
@@ -452,19 +527,38 @@ export default function AdminLeaderboards() {
         {
             key: 'void',
             header: '',
-            width: 108,
+            width: 170,
             align: 'right',
-            render: r =>
-                r.voided || r.missionType === 'goal' ? null : (
-                    <Button size="sm" variant="danger" icon="xCircle" onClick={() => setVoidRun(r)}>
-                        {t('admin.boards.void')}
+            render: r => (
+                <Row gap={1}>
+                    <Button size="sm" variant="ghost" onClick={() => setRunRow(r)}>
+                        {t('ui.admin_officers.run.open')}
                     </Button>
-                ),
+                    {r.voided ? null : (
+                        <Button size="sm" variant="danger" icon="xCircle" onClick={() => setVoidRun(r)}>
+                            {t('admin.boards.void')}
+                        </Button>
+                    )}
+                </Row>
+            ),
         },
     ];
 
     const tabs = BOARD_PERIODS.map(p => ({ key: p, label: t(`leaderboard.period.${p}`) }));
     const filterOptions = boardFilters(session).map(f => ({ value: f, label: filterLabel(f, session) }));
+
+    if (view === 'recognition') {
+        return (
+            <Screen
+                title={t('ui.screen.admin_leaderboards')}
+                subtitle={t('ui.admin_officers.recognition.subtitle')}
+                className="boards-admin-boards"
+            >
+                <ViewTabs value={view} onChange={setView} />
+                <RecognitionPanel />
+            </Screen>
+        );
+    }
 
     if (view === 'rewards') {
         return (
@@ -505,7 +599,15 @@ export default function AdminLeaderboards() {
         >
             <ViewTabs value={view} onChange={setView} />
             <div className="boards-admin-toolbar">
-                <Tabs items={tabs} value={period} onChange={setPeriod} aria-label={t('leaderboard.periods')} />
+                <Tabs
+                    items={tabs}
+                    value={period}
+                    onChange={p => {
+                        setPast('');
+                        setPeriod(p);
+                    }}
+                    aria-label={t('leaderboard.periods')}
+                />
                 <Row gap={2} wrap>
                     <Select
                         value={eff}
@@ -542,6 +644,42 @@ export default function AdminLeaderboards() {
                         ]}
                         aria-label={t('admin.boards.list')}
                     />
+                    <Select
+                        value={metric}
+                        onChange={setMetric}
+                        options={asList(board?.metrics ?? data?.metrics).map(m => ({
+                            value: m,
+                            label: hasKey(`leaderboard.metric.${m}`) ? t(`leaderboard.metric.${m}`) : m,
+                        }))}
+                        aria-label={t('ui.admin_officers.boards.rank_by')}
+                        className="boards-admin-select"
+                    />
+                    <Select
+                        value={past}
+                        onChange={setPast}
+                        placeholder={t('ui.admin_officers.boards.past_none')}
+                        options={[
+                            ...asList(data?.windows?.weeks).map(w => ({
+                                value: `w:${w.from}:${w.to}`,
+                                label: t('ui.admin_officers.boards.week_of', { week: w.key }),
+                            })),
+                            ...asList(data?.windows?.months).map(w => ({
+                                value: `m:${w.from}:${w.to}`,
+                                label: t('ui.admin_officers.boards.month_of', { month: w.key }),
+                            })),
+                        ]}
+                        aria-label={t('ui.admin_officers.boards.past')}
+                        className="boards-admin-select"
+                    />
+                    <Button
+                        size="sm"
+                        variant="secondary"
+                        icon="xCircle"
+                        onClick={() => setBulk(true)}
+                        disabled={!board?.window}
+                    >
+                        {t('ui.admin_officers.boards.bulk_void')}
+                    </Button>
                     <Spacer />
                     <SearchInput
                         value={search}
@@ -627,6 +765,7 @@ export default function AdminLeaderboards() {
                             list={flaggedRows}
                             loading={flaggedReq.loading}
                             onDecide={(row, decision) => setReview({ row, decision })}
+                            onApproveRun={(row, rows) => setApproveRun({ row, rows })}
                         />
                         <StuckPanel list={stuck} />
                     </div>
@@ -671,6 +810,49 @@ export default function AdminLeaderboards() {
                     />
                 )}
             </Dialog>
+
+            <BulkVoidDialog
+                open={bulk}
+                onClose={() => {
+                    setBulk(false);
+                    void refetch();
+                }}
+                initial={
+                    board?.window
+                        ? {
+                              from: board.window.from,
+                              to: board.window.to ?? Math.floor(Date.now() / 1000) + 86400,
+                              ...(eff === 'department' && department ? { department } : {}),
+                          }
+                        : undefined
+                }
+            />
+
+            <RunDialog
+                rowId={runRow ? runRow.id : null}
+                onClose={() => setRunRow(null)}
+                onChanged={() => {
+                    void refetch();
+                    void runsReq.refetch();
+                }}
+            />
+
+            <ConfirmDialog
+                open={!!approveRun}
+                title={t('ui.admin_officers.flagged.approve_run_title')}
+                message={
+                    approveRun
+                        ? t('ui.admin_officers.flagged.approve_run_message', {
+                              n: approveRun.rows.length,
+                              cash: formatMoney(approveRun.rows.reduce((sum, x) => sum + (Number(x.cash) || 0), 0)),
+                          })
+                        : null
+                }
+                reason={{ required: true, maxLength: 255 }}
+                onConfirm={submitApproveRun}
+                onCancel={() => setApproveRun(null)}
+                busy={busy}
+            />
 
             <ConfirmDialog
                 open={!!voidRun}
@@ -759,13 +941,18 @@ export default function AdminLeaderboards() {
                             <NumberInput
                                 value={award.points}
                                 onChange={v => setAward({ ...award, points: v })}
-                                min={1}
+                                min={-AWARD_MAX}
                                 max={AWARD_MAX}
                                 integer
                                 stepper
                                 formatRange={formatNumber}
                             />
                         </Field>
+                        {awardWord ? (
+                            <Field label={t('ui.admin_officers.type_word', { word: awardWord })} required>
+                                <TextInput value={award.typed ?? ''} onChange={v => setAward({ ...award, typed: v })} />
+                            </Field>
+                        ) : null}
                         <Field label={t('common.reason')} required>
                             <Textarea
                                 value={award.reason}

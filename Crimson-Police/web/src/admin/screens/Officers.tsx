@@ -22,9 +22,12 @@ import {
     Screen,
     SearchInput,
     Spinner,
+    Select,
     Stat,
     Table,
+    Tabs,
     Textarea,
+    Checkbox,
     XpBadge,
     type TableColumn,
 } from '../../shared/components';
@@ -38,8 +41,14 @@ import type {
     OfficerDetail,
     OfficerRun,
     OfficerSearchData,
+    OfficerSearchFilters,
     OfficerSearchRow,
 } from '../../types/oversight';
+import { useSession } from '../../shared/session';
+import { Pager } from '../components/kit';
+import { CommendationTools, OfficerTools } from '../components/officers/OfficerTools';
+import { OfficerRuns, RunDialog } from '../components/officers/OfficerRuns';
+import { CorrectionsTab, DisputesTab, ReviewTab } from '../components/officers/OfficerLists';
 import type { AdminOfficerProfile, Commendation } from '../../types/profile';
 import { CommendationsCard } from '../../officer/components/CommendationsCard';
 import { ServiceRecordCard } from '../../officer/components/ServiceRecordCard';
@@ -86,6 +95,21 @@ function ResultRow({ o, active, onSelect }: { o: OfficerSearchRow; active: boole
                 {o.suspendedUntil ? (
                     <Badge size="sm" tone="danger">
                         {t('admin.officers.suspended_short')}
+                    </Badge>
+                ) : null}
+                {o.retired ? (
+                    <Badge size="sm" tone="grey">
+                        {t('ui.admin_officers.retired')}
+                    </Badge>
+                ) : null}
+                {o.excluded ? (
+                    <Badge size="sm" tone="warning">
+                        {t('ui.admin_officers.excluded_short')}
+                    </Badge>
+                ) : null}
+                {o.known === false ? (
+                    <Badge size="sm" variant="outline">
+                        {t('ui.admin_officers.no_row')}
                     </Badge>
                 ) : null}
                 {o.departmentShort ? (
@@ -248,6 +272,7 @@ function ProfileModeration({ citizenid, own }: { citizenid: string; own: boolean
                     onCommend={own ? undefined : () => setCommending(true)}
                 />
             </Grid>
+            <CommendationTools commendations={asArray(p.commendations)} onChanged={() => void refetch()} />
             <ServiceRecordCard
                 lifetime={p.service?.lifetime}
                 season={p.service?.season}
@@ -280,10 +305,16 @@ interface SuspendState {
     open: boolean;
     days: number | null;
     reason: string;
+    // suspend until an exact date and time instead of a number of days ('' = days)
+    until?: string;
 }
+
+type DetailTab = 'overview' | 'runs' | 'corrections';
 
 function Detail({ citizenid }: { citizenid: string }) {
     const { data: o, loading, error, refetch } = useRequest<OfficerDetail>('admin:getOfficer', { citizenid });
+    const [tab, setTab] = useState<DetailTab>('overview');
+    const [runOpen, setRunOpen] = useState<OfficerRun | null>(null);
     const { run, busy } = useAction();
     const [suspend, setSuspend] = useState<SuspendState>({ open: false, days: 7, reason: '' });
     const [unsuspend, setUnsuspend] = useState(false);
@@ -311,12 +342,15 @@ function Detail({ citizenid }: { citizenid: string }) {
     const level = o.level;
     const levelNext = level && level.next ? level.next : null;
 
+    const untilTs = suspend.until ? Math.floor(new Date(suspend.until).getTime() / 1000) : null;
     const doSuspend = async () => {
-        if (!suspend.days || !suspend.reason.trim()) return;
+        if ((!suspend.days && !untilTs) || !suspend.reason.trim()) return;
         const res = await run(
             'server:admin:suspend',
-            { citizenid: o.citizenid, days: suspend.days, reason: suspend.reason.trim() },
-            { success: 'admin.officers.suspended_toast', successVars: { name: o.name, days: suspend.days } },
+            untilTs
+                ? { citizenid: o.citizenid, untilTs, reason: suspend.reason.trim() }
+                : { citizenid: o.citizenid, days: suspend.days, reason: suspend.reason.trim() },
+            { success: 'admin.officers.suspended_toast', successVars: { name: o.name, days: suspend.days ?? 1 } },
         );
         if (res.ok) {
             setSuspend({ open: false, days: 7, reason: '' });
@@ -451,14 +485,20 @@ function Detail({ citizenid }: { citizenid: string }) {
         {
             key: 'actions',
             header: '',
-            width: 66,
+            width: 150,
             align: 'right',
-            render: r =>
-                !r.voided && !o.own ? (
-                    <Button size="sm" variant="ghost" className="oversight-off-void" onClick={() => setVoidRow(r)}>
-                        {t('admin.officers.void')}
+            render: r => (
+                <Row gap={1}>
+                    <Button size="sm" variant="ghost" onClick={() => setRunOpen(r)}>
+                        {t('ui.admin_officers.run.open')}
                     </Button>
-                ) : null,
+                    {!r.voided && !o.own ? (
+                        <Button size="sm" variant="ghost" className="oversight-off-void" onClick={() => setVoidRow(r)}>
+                            {t('admin.officers.void')}
+                        </Button>
+                    ) : null}
+                </Row>
+            ),
         },
     ];
 
@@ -494,6 +534,26 @@ function Detail({ citizenid }: { citizenid: string }) {
                                 {t('admin.officers.suspended_short')}
                             </Badge>
                         ) : null}
+                        {o.retired ? (
+                            <Badge tone="grey" icon="lock">
+                                {t('ui.admin_officers.retired')}
+                            </Badge>
+                        ) : null}
+                        {o.boardExcluded ? (
+                            <Badge tone="warning" icon="eye">
+                                {t('ui.admin_officers.excluded_short')}
+                            </Badge>
+                        ) : null}
+                        {o.dispatch?.suspended ? (
+                            <Badge tone="danger" title={t('ui.admin_officers.dispatch_hint')}>
+                                {t('ui.admin_officers.dispatch_suspended')}
+                            </Badge>
+                        ) : null}
+                        {o.strikes ? (
+                            <Badge tone="warning" variant="outline">
+                                {t('ui.admin_officers.strikes', { n: o.strikes })}
+                            </Badge>
+                        ) : null}
                         {o.streakDays > 0 ? (
                             <Badge tone="accent" icon="flame">
                                 {t('admin.officers.streak', { n: o.streakDays })}
@@ -516,303 +576,352 @@ function Detail({ citizenid }: { citizenid: string }) {
                 ) : null}
             </Card>
 
-            <div className="oversight-off-stats">
-                <Card padding="sm">
-                    <Stat
-                        size="sm"
-                        icon="star"
-                        tone="accent"
-                        label={t('admin.officers.stat.xp')}
-                        value={formatNumber(o.xp)}
-                        hint={
-                            levelNext
-                                ? t('admin.officers.stat.next', { xp: formatNumber(levelNext) })
-                                : level
-                                  ? level.label
-                                  : undefined
-                        }
-                    />
-                </Card>
-                <Card padding="sm">
-                    <Stat
-                        size="sm"
-                        icon="dollar"
-                        label={t('admin.officers.stat.cash_total')}
-                        value={<Money amount={cash.total} />}
-                    />
-                </Card>
-                <Card padding="sm">
-                    <Stat
-                        size="sm"
-                        icon="calendar"
-                        label={t('admin.officers.stat.cash_week')}
-                        value={<Money amount={cash.week} />}
-                    />
-                </Card>
-                <Card padding="sm">
-                    <Stat
-                        size="sm"
-                        icon="activity"
-                        label={t('admin.officers.stat.runs')}
-                        value={formatNumber(stats.runs)}
-                        hint={t('admin.officers.stat.runs_hint', {
-                            completed: stats.completed,
-                            failed: stats.failed,
-                            abandoned: stats.abandoned,
-                        })}
-                    />
-                </Card>
-            </div>
-
-            <ProfileModeration citizenid={o.citizenid} own={!!o.own} />
-
-            <Grid cols="1fr 1fr" gap={4} align="stretch">
-                <Card
-                    title={t('admin.officers.suspension')}
-                    icon="lock"
-                    highlight={suspension.suspended ? 'danger' : undefined}
-                >
-                    <div className="oversight-off-susp">
-                        {suspension.suspended ? (
-                            <>
-                                <div className="oversight-off-susp__state is-on">
-                                    {t('admin.officers.suspended_until', { date: fullDate(suspension.untilTs) })}
-                                </div>
-                                <div className="oversight-off-soft">{t('admin.officers.suspended_text')}</div>
-                                <Row gap={2}>
-                                    <Button
-                                        variant="secondary"
-                                        icon="check"
-                                        onClick={() => setUnsuspend(true)}
-                                        disabled={busy}
-                                    >
-                                        {t('admin.officers.unsuspend')}
-                                    </Button>
-                                    <Button
-                                        variant="ghost"
-                                        onClick={() => setSuspend({ open: true, days: 7, reason: '' })}
-                                        disabled={busy}
-                                    >
-                                        {t('admin.officers.extend')}
-                                    </Button>
-                                </Row>
-                            </>
-                        ) : (
-                            <>
-                                <div className="oversight-off-susp__state">{t('admin.officers.not_suspended')}</div>
-                                <div className="oversight-off-soft">
-                                    {t('admin.officers.stat.flag_hint', {
-                                        flagged: stats.flagged,
-                                        voided: stats.voided,
-                                    })}
-                                </div>
-                                <Row gap={2}>
-                                    <Button
-                                        variant="danger"
-                                        icon="lock"
-                                        onClick={() => setSuspend({ open: true, days: 7, reason: '' })}
-                                        disabled={busy}
-                                    >
-                                        {t('admin.officers.suspend')}
-                                    </Button>
-                                </Row>
-                            </>
-                        )}
-                        <div className="oversight-off-susp-hist">
-                            <span className="oversight-off-susp-hist__title">{t('admin.officers.susp_history')}</span>
-                            {suspensions.length ? (
-                                <ul>
-                                    {suspensions.map(h => (
-                                        <li key={h.id}>
-                                            <Badge
-                                                size="sm"
-                                                tone={
-                                                    h.action === 'unsuspend'
-                                                        ? 'success'
-                                                        : h.action === 'autoSuspend'
-                                                          ? 'warning'
-                                                          : 'danger'
-                                                }
-                                            >
-                                                {hasKey(`admin.officers.susp_action.${h.action}`)
-                                                    ? t(`admin.officers.susp_action.${h.action}`)
-                                                    : h.action}
-                                            </Badge>
-                                            <span className="oversight-off-susp-hist__main">
-                                                <span className="oversight-off-susp-hist__line">
-                                                    {h.days ? (
-                                                        <strong className="cp-num">
-                                                            {t('admin.officers.susp_days', { n: h.days })}
-                                                        </strong>
-                                                    ) : null}
-                                                    <span className="oversight-off-soft">
-                                                        {t('admin.officers.susp_by', {
-                                                            who:
-                                                                h.action === 'autoSuspend'
-                                                                    ? t('admin.officers.susp_system')
-                                                                    : h.actor === 'console'
-                                                                      ? t('admin.actor.console')
-                                                                      : h.actorName || h.actor,
-                                                            date: fullDate(h.createdAt),
-                                                        })}
-                                                    </span>
-                                                </span>
-                                                {h.reason ? (
-                                                    <span className="oversight-off-susp-hist__reason" title={h.reason}>
-                                                        {h.reason}
-                                                    </span>
-                                                ) : null}
-                                            </span>
-                                        </li>
-                                    ))}
-                                </ul>
-                            ) : (
-                                <span className="oversight-off-soft">{t('admin.officers.susp_none')}</span>
-                            )}
-                        </div>
+            <Tabs
+                items={[
+                    { key: 'overview', label: t('ui.admin_officers.tab.overview') },
+                    { key: 'runs', label: t('ui.admin_officers.tab.runs') },
+                    { key: 'corrections', label: t('ui.admin_officers.tab.corrections') },
+                ]}
+                value={tab}
+                onChange={setTab}
+                aria-label={t('ui.admin_officers.tabs')}
+            />
+            {tab === 'runs' ? <OfficerRuns citizenid={o.citizenid} /> : null}
+            {tab === 'corrections' ? <CorrectionsTab citizenid={o.citizenid} /> : null}
+            {tab === 'overview' ? (
+                <>
+                    <div className="oversight-off-stats">
+                        <Card padding="sm">
+                            <Stat
+                                size="sm"
+                                icon="star"
+                                tone="accent"
+                                label={t('admin.officers.stat.xp')}
+                                value={formatNumber(o.xp)}
+                                hint={
+                                    levelNext
+                                        ? t('admin.officers.stat.next', { xp: formatNumber(levelNext) })
+                                        : level
+                                          ? level.label
+                                          : undefined
+                                }
+                            />
+                        </Card>
+                        <Card padding="sm">
+                            <Stat
+                                size="sm"
+                                icon="dollar"
+                                label={t('admin.officers.stat.cash_total')}
+                                value={<Money amount={cash.total} />}
+                            />
+                        </Card>
+                        <Card padding="sm">
+                            <Stat
+                                size="sm"
+                                icon="calendar"
+                                label={t('admin.officers.stat.cash_week')}
+                                value={<Money amount={cash.week} />}
+                            />
+                        </Card>
+                        <Card padding="sm">
+                            <Stat
+                                size="sm"
+                                icon="activity"
+                                label={t('admin.officers.stat.runs')}
+                                value={formatNumber(stats.runs)}
+                                hint={t('admin.officers.stat.runs_hint', {
+                                    completed: stats.completed,
+                                    failed: stats.failed,
+                                    abandoned: stats.abandoned,
+                                })}
+                            />
+                        </Card>
                     </div>
-                </Card>
-                <Card
-                    title={t('admin.officers.badges')}
-                    icon="medal"
-                    subtitle={t('admin.officers.badges_count', { n: badges.length })}
-                >
-                    {badges.length ? (
-                        <div className="oversight-off-badges">
-                            {badges.map(b => (
-                                <span key={b.id} className="oversight-off-badge" title={String(b.earnedAt ?? '')}>
-                                    <Icon name="medal" size={14} />
-                                    <span>{b.label}</span>
-                                    <span className="oversight-off-soft">{badgeDate(b.earnedAt)}</span>
-                                </span>
-                            ))}
-                        </div>
-                    ) : (
-                        <EmptyState compact icon="medal" title={t('admin.officers.no_badges')} />
-                    )}
-                </Card>
-            </Grid>
 
-            <Card
-                title={t('admin.officers.disputes')}
-                icon="inbox"
-                subtitle={t('admin.officers.disputes_hint')}
-                padding="md"
-            >
-                {disputes.length ? (
-                    <ul className="oversight-off-disputes">
-                        {disputes.map(d => (
-                            <li key={d.id} className="oversight-off-dispute">
-                                <div className="oversight-off-dispute__main">
-                                    <div className="oversight-off-dispute__title">
-                                        <strong>{d.missionLabel}</strong>
-                                        <span className="oversight-off-soft">{formatDateTime(d.runAt)}</span>
-                                        {d.kind !== 'failed' ? (
-                                            <Badge size="sm" variant="outline">
-                                                {t(`admin.officers.dispute_kind.${d.kind}`)}
-                                            </Badge>
+                    <OfficerTools o={o} onChanged={() => void refetch()} />
+
+                    <ProfileModeration citizenid={o.citizenid} own={!!o.own} />
+
+                    <Grid cols="1fr 1fr" gap={4} align="stretch">
+                        <Card
+                            title={t('admin.officers.suspension')}
+                            icon="lock"
+                            highlight={suspension.suspended ? 'danger' : undefined}
+                        >
+                            <div className="oversight-off-susp">
+                                {suspension.suspended ? (
+                                    <>
+                                        <div className="oversight-off-susp__state is-on">
+                                            {t('admin.officers.suspended_until', {
+                                                date: fullDate(suspension.untilTs),
+                                            })}
+                                        </div>
+                                        <div className="oversight-off-soft">{t('admin.officers.suspended_text')}</div>
+                                        {suspension.reason ? (
+                                            <div className="oversight-off-soft">
+                                                {t('ui.admin_officers.suspension_reason', {
+                                                    reason: suspension.reason,
+                                                })}
+                                            </div>
                                         ) : null}
-                                        <Badge
-                                            size="sm"
-                                            tone={
-                                                d.status === 'open'
-                                                    ? 'warning'
-                                                    : d.status === 'approved'
-                                                      ? 'success'
-                                                      : 'grey'
-                                            }
-                                        >
-                                            {t(
-                                                d.kind === 'failed'
-                                                    ? `admin.officers.dispute_status.${d.status}`
-                                                    : `admin.officers.review_status.${d.status}`,
-                                            )}
-                                        </Badge>
-                                    </div>
-                                    <div className="oversight-off-dispute__reason">“{d.reason}”</div>
-                                    <div className="oversight-off-soft">
-                                        {t('admin.officers.dispute_meta', {
-                                            date: formatDateTime(d.createdAt),
-                                            points: d.points,
-                                            end: endLabel(d.endReason),
-                                        })}
-                                    </div>
-                                    {d.decisions ? <DecisionsBlock decisions={d.decisions} detail /> : null}
-                                    {d.people ? <PeopleBlock people={d.people} /> : null}
+                                        <Row gap={2}>
+                                            <Button
+                                                variant="secondary"
+                                                icon="check"
+                                                onClick={() => setUnsuspend(true)}
+                                                disabled={busy}
+                                            >
+                                                {t('admin.officers.unsuspend')}
+                                            </Button>
+                                            <Button
+                                                variant="ghost"
+                                                onClick={() => setSuspend({ open: true, days: 7, reason: '' })}
+                                                disabled={busy}
+                                            >
+                                                {t('admin.officers.extend')}
+                                            </Button>
+                                        </Row>
+                                    </>
+                                ) : (
+                                    <>
+                                        <div className="oversight-off-susp__state">
+                                            {t('admin.officers.not_suspended')}
+                                        </div>
+                                        <div className="oversight-off-soft">
+                                            {t('admin.officers.stat.flag_hint', {
+                                                flagged: stats.flagged,
+                                                voided: stats.voided,
+                                            })}
+                                        </div>
+                                        <Row gap={2}>
+                                            <Button
+                                                variant="danger"
+                                                icon="lock"
+                                                onClick={() => setSuspend({ open: true, days: 7, reason: '' })}
+                                                disabled={busy}
+                                            >
+                                                {t('admin.officers.suspend')}
+                                            </Button>
+                                        </Row>
+                                    </>
+                                )}
+                                <div className="oversight-off-susp-hist">
+                                    <span className="oversight-off-susp-hist__title">
+                                        {t('admin.officers.susp_history')}
+                                    </span>
+                                    {suspensions.length ? (
+                                        <ul>
+                                            {suspensions.map(h => (
+                                                <li key={h.id}>
+                                                    <Badge
+                                                        size="sm"
+                                                        tone={
+                                                            h.action === 'unsuspend'
+                                                                ? 'success'
+                                                                : h.action === 'autoSuspend'
+                                                                  ? 'warning'
+                                                                  : 'danger'
+                                                        }
+                                                    >
+                                                        {hasKey(`admin.officers.susp_action.${h.action}`)
+                                                            ? t(`admin.officers.susp_action.${h.action}`)
+                                                            : h.action}
+                                                    </Badge>
+                                                    <span className="oversight-off-susp-hist__main">
+                                                        <span className="oversight-off-susp-hist__line">
+                                                            {h.days ? (
+                                                                <strong className="cp-num">
+                                                                    {t('admin.officers.susp_days', { n: h.days })}
+                                                                </strong>
+                                                            ) : null}
+                                                            <span className="oversight-off-soft">
+                                                                {t('admin.officers.susp_by', {
+                                                                    who:
+                                                                        h.action === 'autoSuspend'
+                                                                            ? t('admin.officers.susp_system')
+                                                                            : h.actor === 'console'
+                                                                              ? t('admin.actor.console')
+                                                                              : h.actorName || h.actor,
+                                                                    date: fullDate(h.createdAt),
+                                                                })}
+                                                            </span>
+                                                        </span>
+                                                        {h.reason ? (
+                                                            <span
+                                                                className="oversight-off-susp-hist__reason"
+                                                                title={h.reason}
+                                                            >
+                                                                {h.reason}
+                                                            </span>
+                                                        ) : null}
+                                                    </span>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    ) : (
+                                        <span className="oversight-off-soft">{t('admin.officers.susp_none')}</span>
+                                    )}
                                 </div>
-                                {d.status === 'open' && d.kind === 'failed' ? (
-                                    <Row gap={2}>
-                                        <Button
-                                            size="sm"
-                                            variant="primary"
-                                            icon="plus"
-                                            disabled={!d.canHandle || busy}
-                                            onClick={() => setAward({ dispute: d, points: 25, reason: '' })}
+                            </div>
+                        </Card>
+                        <Card
+                            title={t('admin.officers.badges')}
+                            icon="medal"
+                            subtitle={t('admin.officers.badges_count', { n: badges.length })}
+                        >
+                            {badges.length ? (
+                                <div className="oversight-off-badges">
+                                    {badges.map(b => (
+                                        <span
+                                            key={b.id}
+                                            className="oversight-off-badge"
+                                            title={String(b.earnedAt ?? '')}
                                         >
-                                            {t('admin.officers.award')}
-                                        </Button>
-                                        <Button
-                                            size="sm"
-                                            variant="ghost"
-                                            disabled={!d.canHandle || busy}
-                                            onClick={() => setDismiss(d)}
-                                        >
-                                            {t('admin.officers.dismiss')}
-                                        </Button>
-                                    </Row>
-                                ) : d.status === 'open' ? (
-                                    <Row gap={2}>
-                                        <Button
-                                            size="sm"
-                                            variant="primary"
-                                            icon="check"
-                                            disabled={!d.canHandle || busy}
-                                            onClick={() => setReview({ dispute: d, decision: 'approve' })}
-                                        >
-                                            {t('sup.review.approve')}
-                                        </Button>
-                                        <Button
-                                            size="sm"
-                                            variant="ghost"
-                                            icon="x"
-                                            disabled={!d.canHandle || busy}
-                                            onClick={() => setReview({ dispute: d, decision: 'reject' })}
-                                        >
-                                            {t('sup.review.reject')}
-                                        </Button>
-                                    </Row>
-                                ) : null}
-                            </li>
-                        ))}
-                    </ul>
-                ) : (
-                    <EmptyState compact icon="inbox" title={t('admin.officers.no_disputes')} />
-                )}
-            </Card>
+                                            <Icon name="medal" size={14} />
+                                            <span>{b.label}</span>
+                                            <span className="oversight-off-soft">{badgeDate(b.earnedAt)}</span>
+                                        </span>
+                                    ))}
+                                </div>
+                            ) : (
+                                <EmptyState compact icon="medal" title={t('admin.officers.no_badges')} />
+                            )}
+                        </Card>
+                    </Grid>
 
-            <OfficerRunControls
-                citizenid={o.citizenid}
-                online={o.online}
-                officer={o}
+                    <Card
+                        title={t('admin.officers.disputes')}
+                        icon="inbox"
+                        subtitle={t('admin.officers.disputes_hint')}
+                        padding="md"
+                    >
+                        {disputes.length ? (
+                            <ul className="oversight-off-disputes">
+                                {disputes.map(d => (
+                                    <li key={d.id} className="oversight-off-dispute">
+                                        <div className="oversight-off-dispute__main">
+                                            <div className="oversight-off-dispute__title">
+                                                <strong>{d.missionLabel}</strong>
+                                                <span className="oversight-off-soft">{formatDateTime(d.runAt)}</span>
+                                                {d.kind !== 'failed' ? (
+                                                    <Badge size="sm" variant="outline">
+                                                        {t(`admin.officers.dispute_kind.${d.kind}`)}
+                                                    </Badge>
+                                                ) : null}
+                                                <Badge
+                                                    size="sm"
+                                                    tone={
+                                                        d.status === 'open'
+                                                            ? 'warning'
+                                                            : d.status === 'approved'
+                                                              ? 'success'
+                                                              : 'grey'
+                                                    }
+                                                >
+                                                    {t(
+                                                        d.kind === 'failed'
+                                                            ? `admin.officers.dispute_status.${d.status}`
+                                                            : `admin.officers.review_status.${d.status}`,
+                                                    )}
+                                                </Badge>
+                                            </div>
+                                            <div className="oversight-off-dispute__reason">“{d.reason}”</div>
+                                            <div className="oversight-off-soft">
+                                                {t('admin.officers.dispute_meta', {
+                                                    date: formatDateTime(d.createdAt),
+                                                    points: d.points,
+                                                    end: endLabel(d.endReason),
+                                                })}
+                                            </div>
+                                            {d.decisions ? <DecisionsBlock decisions={d.decisions} detail /> : null}
+                                            {d.people ? <PeopleBlock people={d.people} /> : null}
+                                        </div>
+                                        {d.status === 'open' && d.kind === 'failed' ? (
+                                            <Row gap={2}>
+                                                <Button
+                                                    size="sm"
+                                                    variant="primary"
+                                                    icon="plus"
+                                                    disabled={!d.canHandle || busy}
+                                                    onClick={() => setAward({ dispute: d, points: 25, reason: '' })}
+                                                >
+                                                    {t('admin.officers.award')}
+                                                </Button>
+                                                <Button
+                                                    size="sm"
+                                                    variant="ghost"
+                                                    disabled={!d.canHandle || busy}
+                                                    onClick={() => setDismiss(d)}
+                                                >
+                                                    {t('admin.officers.dismiss')}
+                                                </Button>
+                                            </Row>
+                                        ) : d.status === 'open' ? (
+                                            <Row gap={2}>
+                                                <Button
+                                                    size="sm"
+                                                    variant="primary"
+                                                    icon="check"
+                                                    disabled={!d.canHandle || busy}
+                                                    onClick={() => setReview({ dispute: d, decision: 'approve' })}
+                                                >
+                                                    {t('sup.review.approve')}
+                                                </Button>
+                                                <Button
+                                                    size="sm"
+                                                    variant="ghost"
+                                                    icon="x"
+                                                    disabled={!d.canHandle || busy}
+                                                    onClick={() => setReview({ dispute: d, decision: 'reject' })}
+                                                >
+                                                    {t('sup.review.reject')}
+                                                </Button>
+                                            </Row>
+                                        ) : null}
+                                    </li>
+                                ))}
+                            </ul>
+                        ) : (
+                            <EmptyState compact icon="inbox" title={t('admin.officers.no_disputes')} />
+                        )}
+                    </Card>
+
+                    <OfficerRunControls
+                        citizenid={o.citizenid}
+                        online={o.online}
+                        officer={o}
+                        onChanged={() => void refetch()}
+                    />
+                    <OfficerSupport
+                        citizenid={o.citizenid}
+                        online={o.online}
+                        officer={o}
+                        onChanged={() => void refetch()}
+                    />
+
+                    <Card
+                        title={t('admin.officers.runs')}
+                        icon="list"
+                        subtitle={t('admin.officers.runs_hint', { n: runs.length })}
+                        padding="none"
+                    >
+                        <Table
+                            columns={runColumns}
+                            rows={runs}
+                            rowKey={r => r.id}
+                            dense
+                            className="oversight-off-table"
+                            empty={t('admin.officers.no_runs')}
+                        />
+                    </Card>
+                </>
+            ) : null}
+
+            <RunDialog
+                rowId={runOpen ? runOpen.id : null}
+                onClose={() => setRunOpen(null)}
                 onChanged={() => void refetch()}
             />
-            <OfficerSupport citizenid={o.citizenid} online={o.online} officer={o} onChanged={() => void refetch()} />
-
-            <Card
-                title={t('admin.officers.runs')}
-                icon="list"
-                subtitle={t('admin.officers.runs_hint', { n: runs.length })}
-                padding="none"
-            >
-                <Table
-                    columns={runColumns}
-                    rows={runs}
-                    rowKey={r => r.id}
-                    dense
-                    className="oversight-off-table"
-                    empty={t('admin.officers.no_runs')}
-                />
-            </Card>
 
             <Dialog
                 open={suspend.open}
@@ -833,7 +942,7 @@ function Detail({ citizenid }: { citizenid: string }) {
                             variant="danger"
                             icon="lock"
                             loading={busy}
-                            disabled={!suspend.days || !suspend.reason.trim()}
+                            disabled={(!suspend.days && !untilTs) || !suspend.reason.trim()}
                             onClick={() => void doSuspend()}
                         >
                             {t('admin.officers.suspend')}
@@ -853,6 +962,19 @@ function Detail({ citizenid }: { citizenid: string }) {
                             stepper
                             suffix={t('admin.officers.days_suffix')}
                         />
+                    </Field>
+                    <Field
+                        label={t('ui.admin_officers.suspend_until')}
+                        hint={t('ui.admin_officers.suspend_until_hint')}
+                    >
+                        <div className="cp-input">
+                            <input
+                                type="datetime-local"
+                                value={suspend.until ?? ''}
+                                onChange={e => setSuspend(s => ({ ...s, until: e.target.value }))}
+                                aria-label={t('ui.admin_officers.suspend_until')}
+                            />
+                        </div>
                     </Field>
                     <Field label={t('common.reason')} required>
                         <Textarea
@@ -995,14 +1117,36 @@ function Detail({ citizenid }: { citizenid: string }) {
     );
 }
 
+type ScreenTab = 'officers' | 'review' | 'disputes' | 'corrections';
+const FILTER_KEYS = ['online', 'suspended', 'retired', 'excluded', 'review', 'dispute', 'flagged'] as const;
+
 export default function AdminOfficers() {
+    const session = useSession();
+    const [screenTab, setScreenTab] = useState<ScreenTab>('officers');
     const [query, setQuery] = useState('');
     const debounced = useDebounced(query.trim(), 300);
+    const [filters, setFilters] = useState<OfficerSearchFilters>({});
+    const [page, setPage] = useState(1);
     const { data, loading, error, refetch } = useRequest<OfficerSearchData>('admin:searchOfficers', {
         query: debounced,
+        filters,
+        page,
     });
     const [selected, setSelected] = useState<string | null>(null);
     const officers = asArray(data?.officers);
+    const setFilter = (key: keyof OfficerSearchFilters, value: boolean | string | undefined) => {
+        setPage(1);
+        setFilters(f => {
+            const next = { ...f } as Record<string, unknown>;
+            if (value === undefined || value === false || value === '') delete next[key];
+            else next[key] = value;
+            return next as OfficerSearchFilters;
+        });
+    };
+    const openOfficer = (cid: string) => {
+        setSelected(cid);
+        setScreenTab('officers');
+    };
 
     return (
         <Screen
@@ -1010,65 +1154,102 @@ export default function AdminOfficers() {
             subtitle={t('admin.officers.subtitle')}
             className="oversight-screen"
         >
-            <div className="oversight-off-layout">
-                <Card padding="none" className="oversight-off-list">
-                    <div className="oversight-off-list__search">
-                        <SearchInput
-                            value={query}
-                            onChange={setQuery}
-                            placeholder={t('admin.officers.search_placeholder')}
-                            aria-label={t('admin.officers.search_placeholder')}
-                            autoFocus
-                        />
-                    </div>
-                    <div className="oversight-off-list__head">
-                        <span>
-                            {debounced
-                                ? t('admin.officers.results_for', { n: officers.length })
-                                : t('admin.officers.results')}
-                        </span>
-                        {loading ? (
-                            <Spinner size={14} />
-                        ) : (
-                            <IconButton
-                                icon="refresh"
-                                size="sm"
-                                label={t('sup.refresh')}
-                                onClick={() => void refetch()}
+            <Tabs
+                items={[
+                    { key: 'officers', label: t('ui.admin_officers.tab.officers'), icon: 'users' },
+                    { key: 'review', label: t('ui.admin_officers.tab.review'), icon: 'eye' },
+                    { key: 'disputes', label: t('ui.admin_officers.tab.disputes'), icon: 'inbox' },
+                    { key: 'corrections', label: t('ui.admin_officers.tab.corrections'), icon: 'undo' },
+                ]}
+                value={screenTab}
+                onChange={setScreenTab}
+                aria-label={t('ui.admin_officers.tabs')}
+            />
+            {screenTab === 'review' ? <ReviewTab /> : null}
+            {screenTab === 'disputes' ? <DisputesTab onOpen={openOfficer} /> : null}
+            {screenTab === 'corrections' ? <CorrectionsTab /> : null}
+            {screenTab === 'officers' ? (
+                <div className="oversight-off-layout">
+                    <Card padding="none" className="oversight-off-list">
+                        <div className="oversight-off-list__search">
+                            <SearchInput
+                                value={query}
+                                onChange={setQuery}
+                                placeholder={t('admin.officers.search_placeholder')}
+                                aria-label={t('admin.officers.search_placeholder')}
+                                autoFocus
                             />
-                        )}
-                    </div>
-                    <div className="oversight-off-list__items">
-                        {error && !data ? (
-                            <ErrorState compact error={error} onRetry={() => void refetch()} />
-                        ) : !officers.length && !loading ? (
-                            <EmptyState compact icon="search" title={t('admin.officers.no_results')} />
-                        ) : (
-                            officers.map(o => (
-                                <ResultRow
-                                    key={o.citizenid}
-                                    o={o}
-                                    active={o.citizenid === selected}
-                                    onSelect={() => setSelected(o.citizenid)}
+                        </div>
+                        <div className="oversight-off-list__filters">
+                            <Select
+                                value={filters.department ?? ''}
+                                onChange={v => setFilter('department', v)}
+                                placeholder={t('ui.admin_officers.filter.any_department')}
+                                options={(session.config?.departments ?? []).map(d => ({
+                                    value: d.key,
+                                    label: d.short,
+                                }))}
+                                aria-label={t('ui.admin_officers.filter.department')}
+                            />
+                            {FILTER_KEYS.map(k => (
+                                <Checkbox
+                                    key={k}
+                                    checked={!!filters[k]}
+                                    onChange={v => setFilter(k, v)}
+                                    label={t(`ui.admin_officers.filter.${k}`)}
                                 />
-                            ))
+                            ))}
+                        </div>
+                        <div className="oversight-off-list__head">
+                            <span>
+                                {debounced
+                                    ? t('admin.officers.results_for', { n: data?.total ?? officers.length })
+                                    : t('admin.officers.results')}
+                            </span>
+                            {loading ? (
+                                <Spinner size={14} />
+                            ) : (
+                                <IconButton
+                                    icon="refresh"
+                                    size="sm"
+                                    label={t('sup.refresh')}
+                                    onClick={() => void refetch()}
+                                />
+                            )}
+                        </div>
+                        <div className="oversight-off-list__items">
+                            {error && !data ? (
+                                <ErrorState compact error={error} onRetry={() => void refetch()} />
+                            ) : !officers.length && !loading ? (
+                                <EmptyState compact icon="search" title={t('admin.officers.no_results')} />
+                            ) : (
+                                officers.map(o => (
+                                    <ResultRow
+                                        key={o.citizenid}
+                                        o={o}
+                                        active={o.citizenid === selected}
+                                        onSelect={() => setSelected(o.citizenid)}
+                                    />
+                                ))
+                            )}
+                        </div>
+                        <Pager page={data?.page ?? 1} pages={data?.pages ?? 1} onPage={setPage} />
+                    </Card>
+                    <div className="oversight-off-main">
+                        {selected ? (
+                            <Detail key={selected} citizenid={selected} />
+                        ) : (
+                            <Card padding="none">
+                                <EmptyState
+                                    icon="user"
+                                    title={t('admin.officers.select_title')}
+                                    text={t('admin.officers.select_text')}
+                                />
+                            </Card>
                         )}
                     </div>
-                </Card>
-                <div className="oversight-off-main">
-                    {selected ? (
-                        <Detail key={selected} citizenid={selected} />
-                    ) : (
-                        <Card padding="none">
-                            <EmptyState
-                                icon="user"
-                                title={t('admin.officers.select_title')}
-                                text={t('admin.officers.select_text')}
-                            />
-                        </Card>
-                    )}
                 </div>
-            </div>
+            ) : null}
         </Screen>
     );
 }

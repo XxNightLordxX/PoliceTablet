@@ -263,6 +263,65 @@ local function ApplyStreakDay(citizenid, key)
     end
 end
 
+local STREAK_DAYS_SQL = [[SELECT UNIX_TIMESTAMP(created_at) AS ts FROM %s
+    WHERE citizenid = ? AND state = 'completed' AND voided = 0 AND flagged = 0
+      AND mission_type NOT IN ('manual_award', 'goal')]]
+
+-- The streak re-derived from the officer's counted completed runs (live and archived), with the same Advance and
+-- grace rules as a run: { old = { days, multiplier }, new = { days, multiplier } } | nil, errKey.
+function Scoring.recalcStreak(citizenid)
+    if type(citizenid) ~= 'string' or citizenid == '' then return nil, 'err.invalid_citizenid' end
+    Db()
+    local row, ok = ReadOfficer(citizenid)
+    if not ok then return nil, 'err.internal' end
+    if not row then return nil, 'err.unknown_officer' end
+    local before = Scoring.streak(citizenid)
+    local keys, seen = {}, {}
+    for _, tbl in ipairs({ 'cp_mission_runs', 'cp_mission_runs_archive' }) do
+        local okQ, rows = pcall(MySQL.query.await, STREAK_DAYS_SQL:format(tbl), { citizenid })
+        if not okQ then return nil, 'err.internal' end
+        for _, r in ipairs(rows or {}) do
+            local key = DayKey(math.floor(CP.U.num(r.ts)))
+            if not seen[key] then
+                seen[key] = true
+                keys[#keys + 1] = key
+            end
+        end
+    end
+    table.sort(keys)
+    local st = { days = 0, last = nil, graceWeek = nil, graceUsed = 0 }
+    for _, key in ipairs(keys) do st = Advance(st, key) end
+    if st.last then
+        if not StoreStreak(citizenid, st) then return nil, 'err.internal' end
+    else
+        pcall(MySQL.update.await, 'UPDATE cp_officers SET streak_days = 0 WHERE citizenid = ?', { citizenid })
+    end
+    return { old = before, new = Scoring.streak(citizenid) }
+end
+
+-- Missed days forgiven (server downtime): the last completed day moves forward by up to days, never past yesterday,
+-- so a breaking streak lives on. No day is added to the streak itself. { old, new } | nil, errKey.
+function Scoring.forgiveStreakDays(citizenid, days)
+    if type(citizenid) ~= 'string' or citizenid == '' then return nil, 'err.invalid_citizenid' end
+    days = math.tointeger(tonumber(days))
+    if not days or days < 1 then return nil, 'err.invalid_days' end
+    Db()
+    local row, ok = ReadOfficer(citizenid)
+    if not ok then return nil, 'err.internal' end
+    if not row then return nil, 'err.unknown_officer' end
+    local st = StreakState(row)
+    local today = DayKey(Now())
+    local yesterday = AddDays(today, -1)
+    if not st.last or st.days <= 0 or (DaysBetween(st.last, today) or 0) <= 1 then return nil, 'err.streak_nothing' end
+    local before = Scoring.streak(citizenid)
+    local moved = AddDays(st.last, days)
+    if (DaysBetween(moved, yesterday) or 0) < 0 then moved = yesterday end
+    local stored = StoreStreak(citizenid,
+        { days = st.days, last = moved, graceWeek = st.graceWeek, graceUsed = st.graceUsed })
+    if not stored then return nil, 'err.internal' end
+    return { old = before, new = Scoring.streak(citizenid) }
+end
+
 -- ============================================================================
 --                        FIRST RUN SINCE GOING ON DUTY
 -- ============================================================================
@@ -323,6 +382,22 @@ function Scoring.isFirstRunSinceDuty(src)
         duty[cid] = st
     end
     return st.firstDone ~= true
+end
+
+-- Whether an online officer's next completed run still earns the first-run bonus (nil when not online).
+function Scoring.firstRunAvailable(citizenid)
+    if type(citizenid) ~= 'string' or citizenid == '' then return nil end
+    local src = CP.Qbx and CP.Qbx.getByCitizenId and CP.Qbx.getByCitizenId(citizenid) or nil
+    if not ToSrc(src) then return nil end
+    return Scoring.isFirstRunSinceDuty(src)
+end
+
+-- Makes the first-run bonus available again for this duty period (an admin action, once a day per officer).
+function Scoring.resetFirstRun(citizenid)
+    if type(citizenid) ~= 'string' or citizenid == '' then return false end
+    local st = duty[citizenid]
+    duty[citizenid] = { onDuty = st == nil or st.onDuty ~= false, firstDone = false, since = Now() }
+    return true
 end
 
 -- ============================================================================
@@ -768,10 +843,73 @@ local function XpOf(citizenid)
     return row and math.max(0, math.floor(CP.U.num(row.xp))) or 0
 end
 
-local function AddXp(citizenid, delta)
+-- XP is max(0, the signed sum of the counted rows): completed or failed, not voided, not flagged, live and archived.
+local DERIVED_XP_SQL = [[SELECT COALESCE(SUM(final_points), 0) AS pts, COUNT(*) AS n FROM %s
+    WHERE citizenid = ? AND voided = 0 AND flagged = 0 AND state IN ('completed', 'failed')]]
+
+-- derived XP, the number of counted rows, the signed sum | nil when the rows can't be read.
+function Scoring.derivedXp(citizenid)
+    if type(citizenid) ~= 'string' or citizenid == '' then return nil end
+    Db()
+    local sum, n = 0, 0
+    for _, tbl in ipairs({ 'cp_mission_runs', 'cp_mission_runs_archive' }) do
+        local ok, row = pcall(MySQL.single.await, DERIVED_XP_SQL:format(tbl), { citizenid })
+        if not ok then
+            CP.err(TAG, 'derived XP of %s failed: %s', citizenid, tostring(row))
+            return nil
+        end
+        sum = sum + math.floor(CP.U.num(row and row.pts))
+        n = n + math.floor(CP.U.num(row and row.n))
+    end
+    return math.max(0, sum), n, sum
+end
+
+-- Writes the derived XP: old, new | nil when it could not be read or written. No level-up toast.
+function Scoring.syncXp(citizenid)
+    local derived = Scoring.derivedXp(citizenid)
+    if not derived then return nil end
+    local old = XpOf(citizenid)
+    if old == derived then return old, derived end
+    local ok, err = pcall(MySQL.update.await, [[
+        INSERT INTO cp_officers (citizenid, xp) VALUES (?, ?) ON DUPLICATE KEY UPDATE xp = VALUES(xp)
+    ]], { citizenid, derived })
+    if not ok then
+        CP.err(TAG, 'XP sync for %s failed: %s', citizenid, tostring(err))
+        return nil
+    end
+    CP.log(TAG, 'XP %s synced %d -> %d', citizenid, old, derived)
+    return old, derived
+end
+
+-- A counted negative row (a points adjustment) of the officer, live or archived.
+local SIGNED_SQL = [[SELECT 1 AS found FROM %s WHERE citizenid = ? AND final_points < 0 AND voided = 0
+    AND flagged = 0 AND state IN ('completed', 'failed') LIMIT 1]]
+
+local function HasSignedRows(citizenid)
+    for _, tbl in ipairs({ 'cp_mission_runs', 'cp_mission_runs_archive' }) do
+        local ok, v = pcall(MySQL.scalar.await, SIGNED_SQL:format(tbl), { citizenid })
+        if not ok or v ~= nil then return true end
+    end
+    return false
+end
+
+-- signed: the row behind the change carries negative points. XP = max(0, signed sum): a step up from 0 is exact
+-- only when no deduction is counted, so then XP is read from the rows instead.
+local function AddXp(citizenid, delta, signed)
     delta = math.floor(Num(delta, 0))
     if delta == 0 then return end
     local oldXp = XpOf(citizenid)
+    if delta > 0 and oldXp == 0 and (signed or HasSignedRows(citizenid)) then
+        local _, newXp = Scoring.syncXp(citizenid)
+        local oldLevel, newLevel = Scoring.levelOf(0), Scoring.levelOf(newXp or 0)
+        if newLevel > oldLevel then
+            local info = Scoring.xpLevel(newXp)
+            Notify(citizenid, 'success', 'scoring.level_up', { level = LevelText(info), n = info.n })
+            local src = CP.Qbx and CP.Qbx.getByCitizenId and CP.Qbx.getByCitizenId(citizenid) or nil
+            if CP.Hooks and CP.Hooks.fire then CP.Hooks.fire('xp:levelUp', citizenid, src, oldLevel, newLevel) end
+        end
+        return
+    end
     local ok, err = pcall(MySQL.query.await, [[
         INSERT INTO cp_officers (citizenid, xp) VALUES (?, ?)
         ON DUPLICATE KEY UPDATE xp = GREATEST(0, xp + ?)
@@ -863,28 +1001,43 @@ local function OwnedBadges(citizenid)
     return set
 end
 
--- Award missing achievement badges and (revoke = true, after a void) remove ones whose count fell short.
+-- An admin's grants and blocks (cp_badge_overrides): badge_id -> 'grant' | 'block'.
+local function Overrides(citizenid)
+    local ok, rows = pcall(MySQL.query.await, 'SELECT badge_id, mode FROM cp_badge_overrides WHERE citizenid = ?',
+        { citizenid })
+    local out = {}
+    if not ok then return out end
+    for _, r in ipairs(rows or {}) do out[r.badge_id] = r.mode end
+    return out
+end
+
+-- Award missing achievement badges and (revoke = true, after a void) remove ones whose count fell short. A badge
+-- an admin granted is never removed and one an admin blocked is never given. Returns the ids added and removed.
 local function CheckBadges(citizenid, revoke)
+    local added, removed = {}, {}
     local counts = BadgeCounts(citizenid)
     local owned = OwnedBadges(citizenid)
-    if not counts or not owned then return end
+    if not counts or not owned then return added, removed end
+    local overrides = Overrides(citizenid)
     for _, b in ipairs(BADGES) do
         local need = math.floor(Num(Config.Badges and Config.Badges[b.cfg], 0))
         if need > 0 then
-            if counts[b.id] >= need and not owned[b.id] then
+            if counts[b.id] >= need and not owned[b.id] and overrides[b.id] ~= 'block' then
                 local ok, n = pcall(MySQL.update.await,
                     'INSERT IGNORE INTO cp_badges (citizenid, badge_id, earned_at) VALUES (?, ?, FROM_UNIXTIME(?))',
                     { citizenid, b.id, Now() })
                 if ok and (tonumber(n) or 0) > 0 then
+                    added[#added + 1] = b.id
                     CP.log(TAG, '%s earned the %s badge', citizenid, b.id)
                     Notify(citizenid, 'success', 'scoring.badge_earned', { badge = CP.L('badge.' .. b.id) })
                 elseif not ok then
                     CP.err(TAG, 'awarding %s to %s failed: %s', b.id, citizenid, tostring(n))
                 end
-            elseif revoke and owned[b.id] and counts[b.id] < need then
+            elseif revoke and owned[b.id] and counts[b.id] < need and overrides[b.id] ~= 'grant' then
                 local ok, err = pcall(MySQL.update.await, 'DELETE FROM cp_badges WHERE citizenid = ? AND badge_id = ?',
                     { citizenid, b.id })
                 if ok then
+                    removed[#removed + 1] = b.id
                     CP.log(TAG, '%s lost the %s badge after a void', citizenid, b.id)
                 else
                     CP.err(TAG, 'revoking %s from %s failed: %s', b.id, citizenid, tostring(err))
@@ -892,6 +1045,57 @@ local function CheckBadges(citizenid, revoke)
             end
         end
     end
+    return added, removed
+end
+
+-- Every achievement badge is checked against the rows again: added, removed.
+function Scoring.recheckBadges(citizenid)
+    if type(citizenid) ~= 'string' or citizenid == '' then return {}, {} end
+    Db()
+    return CheckBadges(citizenid, true)
+end
+
+-- The badges an admin may grant or revoke: the achievements (ids and labels) and the recognition id shapes.
+function Scoring.badgeCatalog()
+    local out = {
+        achievements = {},
+        recognition = { 'officer_of_week', 'top_metric', 'season_champion', 'season_top10' },
+    }
+    for _, b in ipairs(BADGES) do
+        out.achievements[#out.achievements + 1] = {
+            id = b.id,
+            label = CP.L('badge.' .. b.id),
+            need = math.floor(Num(Config.Badges and Config.Badges[b.cfg], 0)),
+        }
+    end
+    return out
+end
+
+-- Whether id is a badge an admin may grant or revoke: an achievement, or a recognition badge of a closed week or of
+-- a season that exists. Returns true, kind | false, errKey.
+function Scoring.validBadgeId(id)
+    if type(id) ~= 'string' or id == '' or #id > 40 then return false, 'err.badge_unknown' end
+    for _, b in ipairs(BADGES) do
+        if b.id == id then return true, 'achievement' end
+    end
+    local week = id:match('^officer_of_week_(%d%d%d%d%-%d%d%-%d%d)$')
+    local metric, mweek = id:match('^top_(%a+)_(%d%d%d%d%-%d%d%-%d%d)$')
+    week = week or mweek
+    if week then
+        if metric and not (CP.Leaderboard and CP.Leaderboard.isMetric and CP.Leaderboard.isMetric(metric)) then
+            return false, 'err.badge_unknown'
+        end
+        local closed = CP.Leaderboard and CP.Leaderboard.isClosedWeek and CP.Leaderboard.isClosedWeek(week)
+        if not closed then return false, 'err.badge_week_open' end
+        return true, 'week'
+    end
+    local sid = id:match('^season_(%d+)_champion$') or id:match('^season_(%d+)_top10$')
+    if sid then
+        local season = CP.Challenge and CP.Challenge.seasonById and CP.Challenge.seasonById(tonumber(sid)) or nil
+        if not season then return false, 'err.badge_season' end
+        return true, 'season'
+    end
+    return false, 'err.badge_unknown'
 end
 
 -- The five achievement badges are labelled here (badge.<id>); the leaderboard's own badge ids (Officer of the
@@ -953,11 +1157,12 @@ function Scoring.onRowCounted(citizenid, row)
     Db()
     local state = row.state
     if state ~= 'completed' and state ~= 'failed' then return end
-    local pts = math.max(0, math.floor(Num(row.final_points, 0)))
+    -- signed: a points adjustment takes XP down (never below 0)
+    local pts = math.floor(Num(row.final_points, 0))
     local rowId = tonumber(row.id)
     local counted = true
     if rowId then counted = ClaimXp(rowId) end
-    if counted and pts > 0 then AddXp(citizenid, pts) end
+    if counted and pts ~= 0 then AddXp(citizenid, pts, pts < 0) end
     if NOT_RUNS[row.mission_type] or state ~= 'completed' then return end
     MarkFirstDone(citizenid)
     ApplyStreakDay(citizenid, DayKey(Now()))
@@ -975,8 +1180,8 @@ function Scoring.onRowApproved(rowId)
         return
     end
     if row.state ~= 'completed' and row.state ~= 'failed' then return end
-    local pts = math.max(0, math.floor(CP.U.num(row.final_points)))
-    if ClaimXp(rowId) and pts > 0 then AddXp(row.citizenid, pts) end
+    local pts = math.floor(CP.U.num(row.final_points))
+    if ClaimXp(rowId) and pts ~= 0 then AddXp(row.citizenid, pts, pts < 0) end
     if CP.Hooks and CP.Hooks.fire then CP.Hooks.fire('row:approved', rowId) end
     if NOT_RUNS[row.mission_type] or row.state ~= 'completed' then return end
     ApplyStreakDay(row.citizenid, DayKey(tonumber(row.created_ts) or Now()))
@@ -990,10 +1195,21 @@ function Scoring.onRowVoided(rowId)
     Db()
     local row = ReadRun(rowId)
     if not row then return end
-    local pts = math.max(0, math.floor(CP.U.num(row.final_points)))
-    if ReleaseXp(rowId) and pts > 0 then AddXp(row.citizenid, -pts) end
+    local pts = math.floor(CP.U.num(row.final_points))
+    if ReleaseXp(rowId) and pts ~= 0 then AddXp(row.citizenid, -pts, pts < 0) end
     if not NOT_RUNS[row.mission_type] then CheckBadges(row.citizenid, true) end
     if CP.Hooks and CP.Hooks.fire then CP.Hooks.fire('row:voided', rowId) end
+end
+
+-- A row an admin flagged for review: its XP is held until it is approved (or voided).
+function Scoring.onRowFlagged(rowId)
+    rowId = tonumber(rowId)
+    if not rowId then return end
+    Db()
+    local row = ReadRun(rowId)
+    if not row then return end
+    local pts = math.floor(CP.U.num(row.final_points))
+    if ReleaseXp(rowId) and pts ~= 0 then AddXp(row.citizenid, -pts, pts < 0) end
 end
 
 -- ============================================================================
@@ -1052,6 +1268,13 @@ local function CurrentSeasonId()
         if ok and type(s) == 'table' and tonumber(s.id) then return math.floor(tonumber(s.id)) end
     end
     return 0
+end
+
+-- Who acted, as cp_audit and breakdown.by name them: the citizenid, 'console' or 'player:<src>'.
+local function ActorId(actor)
+    if not actor or actor == 0 then return 'console' end
+    local info = CP.Qbx and CP.Qbx.getInfo and CP.Qbx.getInfo(actor)
+    return info and info.citizenid or ('player:%d'):format(actor)
 end
 
 -- Inserts a manual_award or goal row (RunResult-shaped breakdown) and counts it. Returns rowId|nil.
@@ -1142,9 +1365,13 @@ function Scoring.manualAward(actorSrc, citizenid, points, reason)
     local officer, okRead = ReadOfficer(citizenid)
     if not okRead then return false, 'err.internal' end
     if not officer then return false, 'err.unknown_officer' end
+    -- never to one of the admin's own characters (by license; the console may)
+    if actor ~= 0 and CP.AdminKit and CP.AdminKit.isSelf and CP.AdminKit.isSelf(actor, citizenid) then
+        return false, 'err.self_target'
+    end
 
     local rowId = Scoring._insertBonusRow(citizenid, 'manual_award', 'manual_award', n,
-        CP.L('scoring.manual_award_label'), { reason = r })
+        CP.L('scoring.manual_award_label'), { reason = r, by = ActorId(actor) })
     if not rowId then return false, 'err.internal' end
     local role = actor == 0 and 'console' or 'admin'
     if CP.Admin and CP.Admin.audit then
@@ -1163,6 +1390,27 @@ function Scoring.manualAward(actorSrc, citizenid, points, reason)
     Notify(citizenid, 'success', 'scoring.manual_award', { points = n, reason = r })
     CP.log(TAG, 'manual award %d to %s by %s: %s', n, citizenid, tostring(actor), r)
     return true, rowId
+end
+
+-- A signed manual adjustment, checked by the caller (CP.Corrections): positive points are a manual award row,
+-- negative ones a 'manual_adjust' row. Both store who (breakdown.by) and why. Returns the row id | nil.
+function Scoring.adjust(actorSrc, citizenid, points, reason)
+    local n = math.tointeger(tonumber(points))
+    if not n or n == 0 or n < -MANUAL_MAX or n > MANUAL_MAX then return nil, 'err.invalid_points' end
+    if type(citizenid) ~= 'string' or citizenid == '' then return nil, 'err.invalid_citizenid' end
+    Db()
+    local actor = ToSrc(actorSrc) or 0
+    local missionId = n > 0 and 'manual_award' or 'manual_adjust'
+    local label = n > 0 and CP.L('scoring.manual_award_label') or CP.L('scoring.adjust_label')
+    local rowId = Scoring._insertBonusRow(citizenid, 'manual_award', missionId, n, label,
+        { reason = reason, by = ActorId(actor) })
+    if not rowId then return nil, 'err.internal' end
+    if n > 0 then
+        Notify(citizenid, 'success', 'scoring.manual_award', { points = n, reason = reason })
+    else
+        Notify(citizenid, 'warning', 'scoring.points_adjusted', { points = n, reason = reason })
+    end
+    return rowId
 end
 
 -- ============================================================================
@@ -1187,10 +1435,10 @@ local function SeasonPoints(citizenid)
     return math.floor(CP.U.num(v))
 end
 
-local function AnnouncementsList()
+local function AnnouncementsList(dept)
     local out = {}
     if CP.Leaderboard and CP.Leaderboard.announcements then
-        local ok, list = pcall(CP.Leaderboard.announcements)
+        local ok, list = pcall(CP.Leaderboard.announcements, dept)
         if ok and type(list) == 'table' then
             for _, a in ipairs(list) do
                 if type(a) == 'table' and type(a.text) == 'string' then
@@ -1263,7 +1511,7 @@ local function HomeData(officer)
         },
         goals = goals,
         typeOfTheDay = TypeOfTheDayCard(),
-        announcements = AnnouncementsList(),
+        announcements = AnnouncementsList(officer.department),
         champions = ChampionsBanner(officer.department),
     }
 end

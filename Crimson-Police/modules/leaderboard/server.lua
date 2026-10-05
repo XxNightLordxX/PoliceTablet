@@ -34,7 +34,9 @@ end
 
 local function Cfg(section, key, default)
     local s = Config[section]
-    local v = type(s) == 'table' and s[key] or nil
+    -- not `and s[key] or nil`: a switch set to false must read as false
+    local v = nil
+    if type(s) == 'table' then v = s[key] end
     if v == nil then return default end
     return v
 end
@@ -193,6 +195,7 @@ local function GoalLabel(id)
 end
 
 function LB.missionLabel(missionType, missionId, breakdown)
+    if missionType == 'manual_award' and missionId == 'manual_adjust' then return CP.L('profile.points_adjustment') end
     if missionType == 'manual_award' then return CP.L('profile.manual_award') end
     if missionType == 'goal' then return GoalLabel(missionId) or CP.L('profile.goal_reward') end
     if Has('Missions', 'get') then
@@ -247,7 +250,7 @@ local METRIC_COLS = 's.arrests, s.impounds, s.citations, s.rescues, s.calls, s.d
 local AGG_SQL = [[
 SELECT s.citizenid, s.points, s.runs, s.failed, s.reached_ts, s.cash, s.row_department, ]] .. METRIC_COLS .. [[,
   o.display_name, o.callsign, o.department AS officer_department, o.hide_name, o.xp, o.avatar_kind, o.avatar_value,
-  o.avatar_status
+  o.avatar_status, o.board_excluded
 FROM (
   SELECT r.citizenid,
     SUM(CASE WHEN r.voided = 0 AND r.flagged = 0 THEN r.final_points ELSE 0 END) AS points,
@@ -280,7 +283,7 @@ local ALLTIME_PART = [[
 
 local ALLTIME_SQL = [[
 SELECT o.citizenid, o.xp AS points, o.display_name, o.callsign, o.department AS officer_department, o.hide_name,
-  o.xp, o.avatar_kind, o.avatar_value, o.avatar_status,
+  o.xp, o.avatar_kind, o.avatar_value, o.avatar_status, o.board_excluded,
   COALESCE(s.runs, 0) AS runs, COALESCE(s.failed, 0) AS failed, s.reached_ts, COALESCE(s.cash, 0) AS cash,
   ]] .. METRIC_COLS .. [[
 
@@ -343,6 +346,8 @@ local function EntryFrom(row)
         callsign = NonEmpty(row.callsign),
         department = dept,
         hideName = U.truthy(row.hide_name),
+        -- an admin kept the officer off the public boards (still counted for the department challenge)
+        excluded = U.truthy(row.board_excluded),
         xp = Int(row.xp),
         avatarRow = {
             display_name = row.display_name,
@@ -437,7 +442,7 @@ local function RankEntries(entries, need, metric)
         all[e.citizenid] = e
         e.rank = 0
         if metric then e.value, e.decisions = MetricValue(e, metric) end
-        local ok = e.runs >= need
+        local ok = e.runs >= need and not e.excluded
         if ok and metric == 'judgement' and (e.decisions or 0) < MinDecisions() then ok = false end
         if ok then ranked[#ranked + 1] = e end
     end
@@ -658,26 +663,80 @@ local function BoardView(data, viewer)
     }
 end
 
--- Validate { period, filter, department } from the NUI. defaultDept fills department for that filter.
-local function ParseBoardArgs(args, defaultDept)
+local PAST_DAYS = 370   -- an admin looks back at most about 12 months
+
+-- A past window an admin may open: a whole week or a whole month (from, to), at most about 12 months back.
+local function WindowOk(from, to)
+    from, to = math.tointeger(tonumber(from)), math.tointeger(tonumber(to))
+    if not from or not to or to <= from then return nil end
+    local now = os.time()
+    if from < now - PAST_DAYS * 86400 or from > now then return nil end
+    if WeekStart(from) == from and to == WeekStart(from + 7 * 86400 + HALF_DAY) then return from, to, 'week' end
+    if MonthStart(from) == from and to == MonthStart(from + 32 * 86400) then return from, to, 'month' end
+    return nil
+end
+
+-- The weeks and months an admin may pick (newest first): { weeks = { { from, to, key } }, months = { ... } }.
+local function PastWindows()
+    local now = os.time()
+    local out = { weeks = {}, months = {} }
+    local w = WeekStart(now)
+    for _ = 1, 53 do
+        local nextW = WeekStart(w + 7 * 86400 + HALF_DAY)
+        out.weeks[#out.weeks + 1] = { from = w, to = nextW, key = DateKey(w) }
+        w = WeekStart(w - HALF_DAY)
+        if w < now - PAST_DAYS * 86400 then break end
+    end
+    local m = MonthStart(now)
+    for _ = 1, 13 do
+        out.months[#out.months + 1] = {
+            from = m,
+            to = MonthStart(m + 32 * 86400),
+            key = os.date('%Y-%m', m + HALF_DAY),
+        }
+        m = MonthStart(m - HALF_DAY)
+        if m < now - PAST_DAYS * 86400 then break end
+    end
+    return out
+end
+LB._windowOk = WindowOk
+
+-- Validate { period, filter, department } from the NUI. defaultDept fills department for that filter. admin: also a
+-- past window (period 'range' with whole-week or whole-month bounds), a past season (seasonId) and every metric.
+local function ParseBoardArgs(args, defaultDept, admin)
     if args ~= nil and type(args) ~= 'table' then return nil, 'err.invalid_payload' end
     args = args or {}
     local period = args.period
     if period == nil then period = 'weekly' end
-    if type(period) ~= 'string' or not PERIODS[period] then return nil, 'err.invalid_period' end
+    if type(period) ~= 'string' or not (PERIODS[period] or (admin and period == 'range')) then
+        return nil, 'err.invalid_period'
+    end
     local filter = args.filter
     if filter == nil then filter = 'overall' end
     if not ValidFilter(filter) then return nil, 'err.invalid_filter' end
     local metric = args.metric
     if metric == nil or metric == '' then metric = 'points' end
-    if type(metric) ~= 'string' or not ValidMetric(metric) then return nil, 'err.invalid_metric' end
+    if type(metric) ~= 'string' or not (ValidMetric(metric) or (admin and METRICS[metric])) then
+        return nil, 'err.invalid_metric'
+    end
     local department = nil
     if filter == 'department' then
         department = args.department
         if department == nil or department == '' then department = defaultDept end
         if not IsDepartment(department) then return nil, 'err.unknown_department' end
     end
-    return { period = period, filter = filter, department = department, metric = metric }
+    local q = { period = period, filter = filter, department = department, metric = metric }
+    if period == 'range' then
+        local from, to = WindowOk(args.from, args.to)
+        if not from then return nil, 'err.invalid_window' end
+        q.from, q.to = from, to
+    elseif period == 'season' and admin and args.seasonId ~= nil then
+        local id = math.tointeger(tonumber(args.seasonId))
+        local okS, season = Call('Challenge', 'seasonById', id)
+        if not id or not okS or type(season) ~= 'table' then return nil, 'err.no_season' end
+        q.seasonId = id
+    end
+    return q
 end
 
 -- ============================================================================
@@ -741,20 +800,64 @@ local function JoinEntries(entries)
     return table.concat(parts, ' · ')
 end
 
-function LB.announcements()
+-- The staff notices still running (cp_staff_notices), newest first: { id, text, departments|nil, expiresAt, by }.
+local function StaffNotices()
+    local ok, rows = pcall(MySQL.query.await, [[SELECT id, text, departments, UNIX_TIMESTAMP(expires_at) AS expires_ts,
+        by_actor, UNIX_TIMESTAMP(created_at) AS created_ts FROM cp_staff_notices
+        WHERE removed_at IS NULL AND expires_at > FROM_UNIXTIME(?) ORDER BY id DESC]], { os.time() })
+    local out = {}
+    if not ok then return out end
+    for _, r in ipairs(rows or {}) do
+        local depts = U.jsonField(r.departments)
+        out[#out + 1] = {
+            id = Int(r.id),
+            text = tostring(r.text),
+            departments = type(depts) == 'table' and #depts > 0 and depts or nil,
+            expiresAt = Int(r.expires_ts),
+            createdAt = Int(r.created_ts),
+            by = tostring(r.by_actor),
+        }
+    end
+    return out
+end
+LB.staffNotices = StaffNotices
+
+local function NoticeFor(n, dept)
+    if not n.departments or dept == nil then return true end
+    for _, d in ipairs(n.departments) do
+        if d == dept then return true end
+    end
+    return false
+end
+
+-- What Home shows: the weekly and monthly top 3 (each can be switched off, Config.Leaderboard.announceWeekly /
+-- announceMonthly) and the staff notices for that department (dept nil = every notice, the admin preview).
+function LB.announcements(dept)
     local now = os.time()
     local curWeek = WeekStart(now)
     local prevWeek = WeekStart(curWeek - HALF_DAY)
     local curMonth = MonthStart(now)
     local prevMonth = MonthStart(curMonth - HALF_DAY)
-    local key = ('%d|%d'):format(curWeek, curMonth)
+    local key = ('%d|%d|%s|%s'):format(curWeek, curMonth, tostring(Cfg('Leaderboard', 'announceWeekly', true)),
+        tostring(Cfg('Leaderboard', 'announceMonthly', true)))
+    local function withNotices(list)
+        local out = {}
+        for _, n in ipairs(announceCache and announceCache.notices or {}) do
+            if NoticeFor(n, dept) then out[#out + 1] = { kind = 'staff_notice', text = n.text, notice = n } end
+        end
+        for _, a in ipairs(list) do out[#out + 1] = a end
+        return U.deepcopy(out)
+    end
     if announceCache and announceCache.key == key and now - announceCache.at < CacheSeconds() then
-        return U.deepcopy(announceCache.list)
+        return withNotices(announceCache.list)
     end
     local list = {}
     local gen = generation
-    local weekRanked = LB.ranking({ period = 'range', filter = 'overall', from = prevWeek, to = curWeek })
-    local weekTop = TopEntries(weekRanked, 3)
+    local notices = StaffNotices()
+    local weekTop = {}
+    if Cfg('Leaderboard', 'announceWeekly', true) ~= false then
+        weekTop = TopEntries(LB.ranking({ period = 'range', filter = 'overall', from = prevWeek, to = curWeek }), 3)
+    end
     if #weekTop > 0 then
         list[#list + 1] = {
             kind = 'weekly_top3',
@@ -763,8 +866,10 @@ function LB.announcements()
             period = DateKey(prevWeek),
         }
     end
-    local monthRanked = LB.ranking({ period = 'range', filter = 'overall', from = prevMonth, to = curMonth })
-    local monthTop = TopEntries(monthRanked, 3)
+    local monthTop = {}
+    if Cfg('Leaderboard', 'announceMonthly', true) ~= false then
+        monthTop = TopEntries(LB.ranking({ period = 'range', filter = 'overall', from = prevMonth, to = curMonth }), 3)
+    end
     if #monthTop > 0 then
         list[#list + 1] = {
             kind = 'monthly_top3',
@@ -774,8 +879,16 @@ function LB.announcements()
             period = os.date('%Y-%m', prevMonth + HALF_DAY),
         }
     end
-    if gen == generation then announceCache = { at = now, key = key, list = list } end
-    return U.deepcopy(list)
+    if gen == generation then
+        announceCache = { at = now, key = key, list = list, notices = notices }
+        return withNotices(list)
+    end
+    local out = {}
+    for _, n in ipairs(notices) do
+        if NoticeFor(n, dept) then out[#out + 1] = { kind = 'staff_notice', text = n.text, notice = n } end
+    end
+    for _, a in ipairs(list) do out[#out + 1] = a end
+    return U.deepcopy(out)
 end
 
 local function Webhook(title, description, fields)
@@ -786,17 +899,48 @@ local function Webhook(title, description, fields)
     return Call('Admin', 'webhook', 'board', title, description, fields)
 end
 
+-- The weekly top 3 post to the board webhook (correction = an admin's recount or post again).
+local function WeekPost(weekKey, top, correction)
+    local fields = {}
+    for i, e in ipairs(top) do
+        fields[i] = {
+            name = CP.L('leaderboard.webhook_place', { rank = i }),
+            value = CP.L('leaderboard.webhook_entry', {
+                name = e.callsign and e.callsign ~= e.name and ('%s %s'):format(e.callsign, e.name) or e.name,
+                department = e.departmentShort,
+                points = FmtInt(e.points),
+            }),
+            inline = true,
+        }
+    end
+    local title = CP.L(correction and 'leaderboard.webhook_weekly_correction' or 'leaderboard.webhook_weekly_title',
+        { week = weekKey })
+    local desc = top[1]
+            and CP.L('leaderboard.webhook_weekly_desc', { name = top[1].name, points = FmtInt(top[1].points) })
+        or CP.L('common.none')
+    return Webhook(title, desc, fields)
+end
+
+-- A recognition badge is done once any badge row or admin override (a grant, or a revoke's block) exists for it: a
+-- revoked Officer of the Week is never given again by the catch-up.
+local function BadgeDone(badgeId)
+    if MySQL.scalar.await('SELECT 1 AS done FROM cp_badges WHERE badge_id = ? LIMIT 1', { badgeId }) ~= nil then
+        return true
+    end
+    return MySQL.scalar.await('SELECT 1 AS done FROM cp_badge_overrides WHERE badge_id = ? LIMIT 1', { badgeId }) ~= nil
+end
+
 -- The weekly reset job for the week [prevStart, curStart): top 3 to Discord and the Officer of the Week
 -- badge. Idempotent: nothing happens when that week's badge already exists.
 -- Optional weekly badges per metric (Config.Leaderboard.weeklyBadges, e.g. { 'arrests' }): "Top Arrests of the
 -- Week" for #1 of that metric. Each badge is given once (its id names the week); points stay Officer of the Week.
+
 local function WeeklyMetricBadges(prevStart, curStart, weekKey)
     local given = 0
     for _, metric in ipairs(Cfg('Leaderboard', 'weeklyBadges', {}) or {}) do
         if type(metric) == 'string' and METRICS[metric] and metric ~= 'points' then
             local badgeId = U.clip(('top_%s_%s'):format(metric, weekKey), 40)
-            local done = MySQL.scalar.await('SELECT 1 AS done FROM cp_badges WHERE badge_id = ? LIMIT 1', { badgeId })
-            if done == nil then
+            if not BadgeDone(badgeId) then
                 local ranked = LB.ranking({
                     period = 'range',
                     filter = 'overall',
@@ -830,8 +974,7 @@ function LB._weeklyJob(prevStart, curStart)
     local weekKey = DateKey(prevStart)
     WeeklyMetricBadges(prevStart, curStart, weekKey)
     local badgeId = U.clip('officer_of_week_' .. weekKey, 40)
-    local done = MySQL.scalar.await('SELECT 1 AS done FROM cp_badges WHERE badge_id = ? LIMIT 1', { badgeId })
-    if done ~= nil then
+    if BadgeDone(badgeId) then
         CP.log(TAG, 'weekly job for %s already done', weekKey)
         return false
     end
@@ -846,20 +989,7 @@ function LB._weeklyJob(prevStart, curStart)
         { top[1].citizenid, badgeId, os.time() })
     if Num(inserted) <= 0 then return false end
 
-    local fields = {}
-    for i, e in ipairs(top) do
-        fields[i] = {
-            name = CP.L('leaderboard.webhook_place', { rank = i }),
-            value = CP.L('leaderboard.webhook_entry', {
-                name = e.callsign and e.callsign ~= e.name and ('%s %s'):format(e.callsign, e.name) or e.name,
-                department = e.departmentShort,
-                points = FmtInt(e.points),
-            }),
-            inline = true,
-        }
-    end
-    Webhook(CP.L('leaderboard.webhook_weekly_title', { week = weekKey }),
-        CP.L('leaderboard.webhook_weekly_desc', { name = top[1].name, points = FmtInt(top[1].points) }), fields)
+    WeekPost(weekKey, top, false)
 
     local ok, src = Call('Qbx', 'getByCitizenId', top[1].citizenid)
     if ok and src and Has('Tablet', 'notify') then
@@ -867,6 +997,172 @@ function LB._weeklyJob(prevStart, curStart)
     end
     CP.log(TAG, 'officer of the week %s: %s', weekKey, top[1].citizenid)
     return true
+end
+
+-- ============================================================================
+--                           RECOGNITION: ADMIN TOOLS
+-- ============================================================================
+
+local RECOUNT_WEEKS = 4         -- the last closed weeks an admin may recount
+local REPOST_EVERY_MS = 600000  -- "Post again" at most once per 10 min per week
+
+-- A closed week by its key (the date of its first day): its start and the next week's start | nil.
+function LB.isClosedWeek(weekKey)
+    local y, m, d = tostring(weekKey or ''):match('^(%d%d%d%d)%-(%d%d)%-(%d%d)$')
+    if not y then return nil end
+    local ts = os.time({ year = Int(y), month = Int(m), day = Int(d), hour = ResetHour(), min = 30, sec = 0 })
+    local start = WeekStart(ts)
+    if DateKey(start) ~= weekKey then return nil end
+    if start >= WeekStart(os.time()) then return nil end
+    return start, WeekStart(start + 7 * 86400 + HALF_DAY)
+end
+
+function LB.isMetric(m) return type(m) == 'string' and METRICS[m] == true and m ~= 'points' end
+
+local function BadgeHolders(badgeId)
+    local out = {}
+    for _, r in
+        ipairs(MySQL.query.await(
+            [[SELECT b.citizenid, o.display_name, o.callsign, UNIX_TIMESTAMP(b.earned_at) AS ts
+        FROM cp_badges b LEFT JOIN cp_officers o ON o.citizenid = b.citizenid WHERE b.badge_id = ?
+        ORDER BY b.citizenid]],
+            { badgeId }
+        ) or {})
+    do
+        out[#out + 1] = {
+            citizenid = tostring(r.citizenid),
+            name = NonEmpty(r.display_name) or tostring(r.citizenid),
+            callsign = NonEmpty(r.callsign),
+            earnedAt = Int(r.ts),
+        }
+    end
+    return out
+end
+LB.badgeHolders = BadgeHolders
+
+-- A closed week's top 3 now (fresh) and who holds its Officer of the Week badge.
+function LB.weekRecognition(weekKey)
+    local from, to = LB.isClosedWeek(weekKey)
+    if not from then return nil, 'err.week_open' end
+    Db()
+    local top = TopEntries(LB.ranking({ period = 'range', filter = 'overall', from = from, to = to, fresh = true }), 3)
+    local badgeId = U.clip('officer_of_week_' .. weekKey, 40)
+    local holders = BadgeHolders(badgeId)
+    local leader = top[1] and top[1].citizenid or nil
+    local holds = false
+    for _, h in ipairs(holders) do
+        if h.citizenid == leader then holds = true end
+    end
+    return {
+        weekKey = weekKey,
+        from = from,
+        to = to,
+        badgeId = badgeId,
+        top = top,
+        holders = holders,
+        changed = (leader ~= nil and not holds) or (leader == nil and #holders > 0) or #holders > 1,
+    }
+end
+
+-- The last closed weeks an admin may recount, newest first.
+local function ClosedWeeks()
+    local out = {}
+    local w = WeekStart(os.time())
+    for _ = 1, RECOUNT_WEEKS do
+        w = WeekStart(w - HALF_DAY)
+        out[#out + 1] = DateKey(w)
+    end
+    return out
+end
+LB.closedWeeks = ClosedWeeks
+
+local function RecountAllowed(weekKey)
+    for _, k in ipairs(ClosedWeeks()) do
+        if k == weekKey then return true end
+    end
+    return false
+end
+
+local function RecountIds(rec)
+    local ids = { rec.weekKey, 'new:' .. tostring(rec.top[1] and rec.top[1].citizenid or '-') }
+    for _, h in ipairs(rec.holders) do ids[#ids + 1] = 'old:' .. h.citizenid end
+    return ids
+end
+
+if CP.AdminKit and CP.AdminKit.callback then
+    local Kit = CP.AdminKit
+
+    -- Leaderboards → Recognition: exactly what Home shows (every staff notice) and the last closed weeks.
+    Kit.callback('admin:getRecognition', 'boardsAdmin', function()
+        Db()
+        local weeks = {}
+        for _, key in ipairs(ClosedWeeks()) do
+            local rec = LB.weekRecognition(key)
+            if rec then weeks[#weeks + 1] = rec end
+        end
+        return {
+            home = LB.announcements(nil),
+            notices = StaffNotices(),
+            weeks = weeks,
+            announceWeekly = Cfg('Leaderboard', 'announceWeekly', true) ~= false,
+            announceMonthly = Cfg('Leaderboard', 'announceMonthly', true) ~= false,
+        }
+    end)
+
+    Kit.callback('admin:previewRecount', 'boardsAdmin', function(ctx)
+        local key = ctx.args.weekKey
+        if not RecountAllowed(key) then return nil, 'err.week_recount' end
+        local rec, err = LB.weekRecognition(key)
+        if not rec then return nil, err end
+        rec.previewToken = ctx.preview('recountWeek', RecountIds(rec), { weekKey = key })
+        -- Officer of the Week carries no item reward: nothing to cancel or give
+        rec.rewards = {}
+        return rec
+    end)
+
+    -- Moves the Officer of the Week badge to whoever is #1 now (through cp_badge_overrides) and can post a
+    -- correction to Discord.
+    Kit.action('server:admin:recountWeek', 'boardsAdmin', function(ctx)
+        local p = ctx.payload
+        if not RecountAllowed(p.weekKey) then return false, 'err.week_recount' end
+        local rec, err = LB.weekRecognition(p.weekKey)
+        if not rec then return false, err end
+        local okT, errT = ctx.consume(p.previewToken, 'recountWeek', RecountIds(rec))
+        if not okT then return false, errT end
+        local leader = rec.top[1]
+        local moved = 0
+        for _, h in ipairs(rec.holders) do
+            if not leader or h.citizenid ~= leader.citizenid then
+                Call('Corrections', 'revokeBadge', ctx.src, h.citizenid, rec.badgeId, ctx.reason)
+                moved = moved + 1
+            end
+        end
+        local held = false
+        for _, h in ipairs(rec.holders) do
+            if leader and h.citizenid == leader.citizenid then held = true end
+        end
+        if leader and not held then
+            Call('Corrections', 'grantBadge', ctx.src, leader.citizenid, rec.badgeId, ctx.reason, { earnedAt = rec.to })
+            Kit.notify(leader.citizenid, 'success', 'leaderboard.officer_of_week_notice', { week = p.weekKey })
+            moved = moved + 1
+        end
+        LB.invalidate()
+        local oldText = #rec.holders > 0 and rec.holders[1].citizenid or '-'
+        ctx.audit('recountWeek', p.weekKey, oldText, leader and leader.citizenid or '-', { category = 'board' })
+        if p.post == true and leader then WeekPost(p.weekKey, rec.top, true) end
+        return true, { weekKey = p.weekKey, changed = moved > 0, holder = leader and leader.citizenid or nil }
+    end, { reason = true, confirm = 'RECOUNT', rate = 2 })
+
+    Kit.action('server:admin:repostWeek', 'boardsAdmin', function(ctx)
+        local key = ctx.payload.weekKey
+        if not RecountAllowed(key) then return false, 'err.week_recount' end
+        local rec, err = LB.weekRecognition(key)
+        if not rec then return false, err end
+        if #rec.top == 0 then return false, 'err.week_empty' end
+        WeekPost(key, rec.top, false)
+        ctx.audit('repostWeek', key, nil, 'posted', { category = 'board' })
+        return true, { weekKey = key }
+    end, { rate = 1, targetRate = { 1, REPOST_EVERY_MS, field = 'weekKey' } })
 end
 
 -- ============================================================================
@@ -1237,7 +1533,8 @@ function LB.profile(viewer, target, opts)
     local own = target == nil or target == viewer.citizenid
     local cid = own and viewer.citizenid or target
     local orow = MySQL.single.await([[SELECT citizenid, display_name, callsign, rank_label, department, xp, hide_name,
-        bio, avatar_kind, avatar_value, avatar_status FROM cp_officers WHERE citizenid = ?]], { cid })
+        bio, avatar_kind, avatar_value, avatar_status, board_excluded, UNIX_TIMESTAMP(retired_at) AS retired_ts
+        FROM cp_officers WHERE citizenid = ?]], { cid })
     if not own and not orow then return nil, 'err.unknown_officer' end
     orow = orow or {}
     local hideName = U.truthy(orow.hide_name)
@@ -1260,6 +1557,9 @@ function LB.profile(viewer, target, opts)
         cleanRate = math.floor(lifetime.arrests * 1000 / (lifetime.arrests + lethal) + 0.5) / 10
     end
     if not orow.display_name and own then orow.display_name = viewer.name end
+    -- a retired officer's picture and bio are hidden (never cleared) until an admin unretires them
+    local retired = orow.retired_ts ~= nil and not staff
+    if retired then orow.avatar_kind, orow.avatar_value, orow.bio = 'initials', nil, nil end
     local avatar = RowAvatar({ name = e.name, callsign = e.callsign, hideName = hideName, xp = xp, avatarRow = orow },
         own or staff)
     return {
@@ -1285,6 +1585,9 @@ function LB.profile(viewer, target, opts)
         runs = runs,
         seasonPoints = LB.seasonPoints(cid),
         disputeWindowHours = Num(Cfg('Disputes', 'windowHours', 48)),
+        -- the officer's own profile (and staff) say when an admin keeps them off the boards
+        boardExcluded = (own or staff) and U.truthy(orow.board_excluded) or nil,
+        retired = staff and orow.retired_ts ~= nil or nil,
     }
 end
 
@@ -1340,6 +1643,7 @@ local function AdminRow(e, metric)
     r.realName = e.name or CP.L('common.unknown')
     r.hidden = e.hideName
     r.department = e.department
+    r.excluded = e.excluded == true
     return r
 end
 
@@ -1393,7 +1697,7 @@ end
 function LB.adminBoard(args)
     if args ~= nil and type(args) ~= 'table' then return nil, 'err.invalid_payload' end
     args = args or {}
-    local q, err = ParseBoardArgs(args, FirstDepartment())
+    local q, err = ParseBoardArgs(args, FirstDepartment(), true)
     if not q then return nil, err end
     local cid = args.citizenid
     if cid ~= nil and not ValidCitizenId(cid) then return nil, 'err.invalid_citizenid' end
@@ -1418,6 +1722,8 @@ function LB.adminBoard(args)
         updatedAt = data.updatedAt,
         window = WindowView(data.q),
         season = SeasonView(data.q),
+        windows = PastWindows(),
+        metrics = { 'points', 'missions', 'arrests', 'impounds', 'citations', 'rescues', 'calls', 'judgement' },
     }
     if cid then out.citizenid = cid; out.runs = AdminRuns(data.q, cid) end
     return out
@@ -1479,8 +1785,34 @@ end, { rate = 2 })
 CP.Net.callback('admin:getBoards', function(src, args)
     local ok, errKey = CP.Permissions.can(src, 'openAdmin')
     if not ok then return nil, errKey end
+    -- a past week, month or season is heavier: one every 2 s per admin
+    if type(args) == 'table' and (args.period == 'range' or args.seasonId ~= nil) then
+        local okB = CP.Permissions.can(src, 'boardsAdmin')
+        if not okB then return nil, 'err.no_permission' end
+        if not CP.Net.rateOk(src, 'boards:past', 1, 2000) then return nil, 'err.rate_limited' end
+    end
     return LB.adminBoard(args)
 end)
+
+-- ============================================================================
+--                              SETTINGS AND ADMIN
+-- ============================================================================
+
+local function StartsWith(path, prefix) return path == prefix or path:sub(1, #prefix + 1) == prefix .. '.' end
+
+if CP.Hooks and CP.Hooks.on then
+    -- a Leaderboard setting changed in game: the boards and Home's announcements follow at once
+    CP.Hooks.on('settings:changed', function(paths)
+        for _, path in ipairs(type(paths) == 'table' and paths or {}) do
+            if type(path) == 'string' and (StartsWith(path, 'Leaderboard') or StartsWith(path, 'Labels')) then
+                LB.invalidate()
+                return
+            end
+        end
+    end)
+    -- any admin correction (a void, restore, adjustment, exclusion ...) is on the boards at once
+    CP.Hooks.on('admin:changed', function() LB.invalidate() end)
+end
 
 -- ============================================================================
 --                                    START

@@ -1,0 +1,30 @@
+/* BulkVoidDialog */
+.admin-bulk {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.admin-bulk__filters {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px 14px;
+    align-items: end;
+}
+
+.admin-bulk__confirm {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+    gap: 10px 14px;
+}
+
+.admin-bulk__note {
+    margin-top: 4px;
+    color: var(--cp-muted);
+}
+
+.admin-bulk__warn {
+    margin-top: 4px;
+    color: var(--cp-danger);
+    font-weight: 600;
+}

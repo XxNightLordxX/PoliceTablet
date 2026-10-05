@@ -120,6 +120,16 @@ export function ProfilesReview({ scope = 'sup' }: ProfilesReviewProps) {
                             </p>
                         ) : null}
                         {item.note ? <p className="profile-review__note">“{item.note}”</p> : null}
+                        {item.kind === 'report' && item.reporter ? (
+                            <p className="profile-review__old">
+                                {t('ui.admin_officers.review.reporter', {
+                                    name: item.reporter.callsign
+                                        ? `${item.reporter.callsign} ${item.reporter.name}`
+                                        : item.reporter.name,
+                                    n: item.reporter.recent,
+                                })}
+                            </p>
+                        ) : null}
                     </div>
                     <Row gap={2} className="profile-review__actions">
                         {item.kind === 'report' ? (

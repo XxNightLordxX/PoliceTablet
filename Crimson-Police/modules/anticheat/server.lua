@@ -471,6 +471,7 @@ end
 --                             VOIDS -> suspension
 -- ============================================================================
 
+-- Only strikes count: an admin's void kind 'correction' (a bug, a retired officer) never suspends anyone.
 function AC.onVoided(citizenid)
     if type(citizenid) ~= 'string' or citizenid == '' then return false end
     local c = Cfg()
@@ -487,6 +488,7 @@ function AC.onVoided(citizenid)
     if okL and tonumber(last) and tonumber(last) > since then since = math.floor(tonumber(last)) end
     local okC, n = pcall(MySQL.scalar.await,
         [[SELECT COUNT(*) AS n FROM cp_mission_runs WHERE citizenid = ? AND voided = 1
+        AND (void_kind IS NULL OR void_kind = 'strike')
         AND mission_type NOT IN ('manual_award', 'goal') AND created_at >= FROM_UNIXTIME(?)]], { citizenid, since })
     if not okC then
         CP.err(TAG, 'void count for %s failed: %s', citizenid, tostring(n))
@@ -509,6 +511,17 @@ function AC.onVoided(citizenid)
     end
     CP.warn(TAG, '%s suspended for %d days after %d voided runs', citizenid, suspendDays, n)
     return true
+end
+
+-- The officer's strikes in the window (the Officers screen shows them).
+function AC.strikeCount(citizenid)
+    if type(citizenid) ~= 'string' or citizenid == '' then return 0 end
+    if CP.Migrations and CP.Migrations.ready then CP.Migrations.ready() end
+    local days = math.floor(Num(Cfg().voidWindowDays, 30))
+    local okC, n = pcall(MySQL.scalar.await, [[SELECT COUNT(*) AS n FROM cp_mission_runs WHERE citizenid = ?
+        AND voided = 1 AND (void_kind IS NULL OR void_kind = 'strike') AND mission_type NOT IN ('manual_award', 'goal')
+        AND created_at >= FROM_UNIXTIME(?)]], { citizenid, os.time() - days * 86400 })
+    return okC and math.floor(Num(n, 0)) or 0
 end
 
 -- ============================================================================

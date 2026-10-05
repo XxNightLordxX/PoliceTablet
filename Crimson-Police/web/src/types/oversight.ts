@@ -153,10 +153,28 @@ export interface OfficerSearchRow {
     xp: number;
     suspendedUntil: number | null;
     online: boolean;
+    // full admin control: retired, kept off the boards, false = an online character with no row yet
+    retired?: boolean;
+    excluded?: boolean;
+    known?: boolean;
+}
+// admin:searchOfficers filters (A1); every one is optional
+export interface OfficerSearchFilters {
+    department?: string;
+    online?: boolean;
+    suspended?: boolean;
+    retired?: boolean;
+    excluded?: boolean;
+    review?: boolean;
+    dispute?: boolean;
+    flagged?: boolean;
 }
 export interface OfficerSearchData {
     officers: OfficerSearchRow[];
     query: string;
+    total?: number;
+    page?: number;
+    pages?: number;
 }
 export interface OfficerRun {
     id: number;
@@ -177,6 +195,8 @@ export interface OfficerRun {
     voided: boolean;
     flagReason: string | null;
     createdAt: number;
+    // the Renewed-Banking transaction id of a payment (search it in the bank history)
+    txnId?: string | null;
 }
 export interface OfficerSuspension {
     id: number;
@@ -199,10 +219,27 @@ export interface OfficerDetail {
     xp: number;
     level: null | { label: string; badge: string; xp: number; next: number | null };
     streakDays: number;
-    badges: { id: string; label: string; earnedAt: string }[];
+    // how each badge came: earned from the rows, granted or blocked by an admin (cp_badge_overrides)
+    badges: {
+        id: string;
+        label: string;
+        earnedAt?: string | number;
+        source?: 'earned' | 'granted' | 'blocked';
+        by?: string | null;
+        reason?: string | null;
+    }[];
     cash: { total: number; week: number };
     stats: { runs: number; completed: number; failed: number; abandoned: number; flagged: number; voided: number };
-    suspension: { suspended: boolean; untilTs: number | null };
+    suspension: { suspended: boolean; untilTs: number | null; reason?: string | null };
+    // full admin control (P1): the live streak, the first-run bonus (null when offline), the SC-Dispatch suspension
+    // (view only), automatic-suspension strikes, retirement, the boards exclusion
+    streak?: { days: number; multiplier: number; graceLeft: boolean; stored: number };
+    firstRun?: boolean | null;
+    dispatch?: { suspended: boolean; available: boolean; untilTs?: number | null };
+    strikes?: number;
+    retired?: { at: number; batch: string | null } | null;
+    boardExcluded?: boolean;
+    licenseKnown?: boolean;
     // The last suspend / unsuspend / automatic suspension entries (cp_audit), newest first.
     suspensions: OfficerSuspension[];
     runs: OfficerRun[];

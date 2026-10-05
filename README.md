@@ -497,6 +497,8 @@ These are always admin only. Setting one of them to `true` in `Config.Permission
 - Void any run.
 - Start and end seasons, and override the weekly bounty.
 - Suspend and unsuspend officers.
+- Adjust points (add or take away), void and restore runs in bulk, retire officers, move a record, fix XP, grant
+  and revoke badges, and the other officer, board and season tools of [9.15.1](#9151-officers-points-and-boards).
 - Reload mission files.
 - Start test runs.
 
@@ -1307,8 +1309,72 @@ every admin tool:
 
 #### 9.15.1 Officers, points and boards
 
-The officer tools (points adjustments, run history, voids and restores, retire, badges, streaks and goals) and the
-board, recognition and season tools are described here as they arrive.
+**Officers** has four tabs: **Officers** (search and the officer's record), **Review** (every pending picture, bio
+and profile report, and the banned-words list), **Disputes** (every open dispute) and **Corrections** (every bulk
+void, retirement, record move and season reopen, each with **Undo**). Search finds officers by name, callsign or
+citizen ID and can filter by department, online, suspended, retired, off the boards, needs review, open dispute and
+flagged run. An online character who never finished a run is found by typing their citizen ID.
+
+On an officer's record:
+
+- **Points**: their week, month, season and all-time points and rank. **Adjust points** adds points or takes some
+  away (−10,000 to +10,000, a reason each time). It is a new line in their history, never an edit of an old run; to
+  undo it, void that line. A deduction can never take their season points or XP below 0, and from 500 points up you
+  type their citizen ID to confirm (`AdminControl.adjustConfirmAbove`). `AdminControl.adjustDailyLimit` caps what one
+  admin may adjust per day; `AdminControl.pointAdjust = false` turns deductions off.
+- **XP**: **Check XP** compares their stored XP with what their runs give; **Fix** writes the runs' value.
+- **Streak**: the live streak, its multiplier and grace day. **Recalculate** rebuilds it from their runs; **Forgive
+  days** covers missed days (server downtime) once a day, up to `AdminControl.streakForgiveMax` days.
+  **Make available again** gives back today's first-run bonus, once per officer per day.
+- **Goals**: today's and this week's goal; **Mark complete** pays a goal a bug blocked (never twice in one period).
+- **Look**: **Reset look** (appearance, accent and size back to the defaults) and **Let them edit now** (clears the
+  profile change cooldown). Their "hide my name" and "mute calls" choices are shown, never changed.
+- **Badges**: how each badge came (earned, granted or blocked). **Grant** keeps a badge whatever the runs say,
+  **Revoke** takes one away for good, **Back to automatic** lets the runs decide again, **Re-check** recounts them.
+- **Record**: **Refresh from Qbox** (callsign, rank and name come from Qbox and are never edited here), **Keep off
+  the leaderboards** (a staff test character; their runs still count for their department), **Void runs…**,
+  **Reset progression**, **Retire** / **Unretire** and **Move record…**.
+- **Runs** tab: their whole history, the archive included, 25 per page with filters. Open a run to see its debrief,
+  everyone on it, its dispute, the bank transaction ID of its payment and the goal rewards it completed, and to
+  **Void** it (as a correction or as a strike, for everyone on it, with its goal rewards), **Restore** it, change the
+  kind of a void, or **Flag for review**.
+- **Suspend** now also takes an exact date and time, and the record shows the reason. An SC-Dispatch suspension is
+  shown but is changed in SC-Dispatch only.
+
+Voids and restores:
+
+- **Void runs…** voids every run of an officer (or a department, a mission type, a mission or an operation) between
+  two dates as **one batch**. The preview lists exactly what goes; type `VOID <number>` to start. Runs you or another
+  of your characters took part in are always left out. A bulk void is a **correction** by default (no strike towards
+  the automatic suspension); switch on **Counts as a strike** for cheating. **Corrections → Undo** puts the whole batch
+  back, including cash that was only waiting because of it. At most `AdminControl.bulkMaxRows` rows per batch.
+- **Reset progression** is the same for all of an officer's runs; **Undo** restores them.
+- **Retire** (a deleted character, a banned player) voids all their runs as a correction, closes the tablet to them
+  and hides their picture and bio from everyone else (nothing is deleted). It is refused while they are on a run.
+  **Unretire** brings everything back.
+- **Restore run** brings a voided run back at any time: its points, XP and held cash. Cash the server already forfeited
+  stays forfeited.
+- **Move record…** moves a re-created character's whole history (runs, badges, commendations, disputes, unpaid
+  rewards) to the player's new citizen ID. Both characters must be offline, the new one must have no runs yet, and
+  it must be the same player (same license). **Undo** moves it back. `AdminControl.recordMove = false` turns it off.
+
+**Leaderboards** gains **Rank by** (any metric), **a past week or month** (up to 12 months back), **Void runs in this
+window…** (the same batch tool, instead of a board wipe), **Open** on each run, and **Approve all rows of this run**
+in the flagged panel. **Adjust points** works as on the officer's record. The **Recognition** tab shows exactly what
+officers' Home shows, the last four closed weeks with their Officer of the Week (**Recount** after a void moves the
+badge, **Post again** reposts the top 3 to Discord) and the **staff notices**: short plain-text notes on Home for
+every department or a few, for up to 30 days. The weekly and monthly top 3 on Home are the Settings switches
+`Leaderboard.announceWeekly` and `Leaderboard.announceMonthly`.
+
+**Seasons** gains **Season tools**: **Rename**, **Plan the end** (the first daily reset on or after the date ends the
+season and can start the next one by name; admins get a reminder a day and an hour before), **Reopen** the season
+that just ended (within 24 hours; type its name) with **Undo reopen**, **Next week's bounty**, and each department's
+contributors. Ending a season shows the champion, trophies and top 10 first and asks you to type the season's name.
+Click a season to see its bounty weeks (**Recount** a closed week) and its champion (**Recount champion**, up to 14
+days after the end). A season's start date and deleting a season stay out of the tablet.
+
+Every change above is admin only (supervisors never get it, whatever `Config.Permissions` says), needs a reason and
+is in the audit log.
 
 #### 9.15.2 Missions and the Mission Builder
 

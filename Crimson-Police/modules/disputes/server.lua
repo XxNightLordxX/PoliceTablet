@@ -537,7 +537,7 @@ local LOAD_SQL = [[SELECT d.id, d.run_id, d.citizenid, d.goes_to, d.status,
   r.run_uuid, r.mission_id, r.mission_type, r.state, r.flagged, r.voided, r.cash_status
   FROM cp_disputes d JOIN cp_mission_runs r ON r.id = d.run_id WHERE d.id = ?]]
 
-local RESTORE_SQL = [[UPDATE cp_mission_runs SET voided = 0, flagged = 0,
+local RESTORE_SQL = [[UPDATE cp_mission_runs SET voided = 0, flagged = 0, void_kind = NULL, void_batch = NULL,
   breakdown = IF(JSON_VALID(breakdown), JSON_SET(breakdown, '$.flagged', NULL), breakdown)
   WHERE id = ? AND voided = 1]]
 
@@ -550,7 +550,52 @@ local function RestoreVoided(d)
     Call('Scoring', 'onRowApproved', d.run_id)
     if d.cash_status == 'held' or d.cash_status == 'pending' then Call('Cash', 'release', d.run_id) end
     Call('Leaderboard', 'invalidate')
+    if CP.Hooks and CP.Hooks.fire then CP.Hooks.fire('row:restored', d.run_id) end
     return true
+end
+
+-- An admin's Restore run (outside a dispute): the same path as an approved dispute. Points and XP come back, held
+-- or pending cash is released (forfeited cash stays forfeited), and an open dispute about the row closes as
+-- approved. The UPDATE is the compare-and-set: of two restores one wins. ok, info | false, errKey.
+function D.restoreRow(src, rowId, reason)
+    local id = Int(rowId, 1, 2147483647)
+    if not id then return false, 'err.invalid_row' end
+    local row, okQ = Single(ROW_SQL, { id })
+    if not okQ then return false, 'err.internal' end
+    if not row then return false, 'err.row_not_found' end
+    if not U.truthy(row.voided) then return false, 'err.not_voided' end
+    local n = Update(RESTORE_SQL, { id })
+    if n == nil then return false, 'err.internal' end
+    if n == 0 then return false, 'err.state_changed' end
+    Call('Scoring', 'onRowApproved', id)
+    local released = row.cash_status == 'held' or row.cash_status == 'pending'
+    if released then Call('Cash', 'release', id) end
+    local handler = tonumber(src) == 0 and 'console' or (CitizenOf(src) or ('player:' .. tostring(src)))
+    -- two statements (files mode has no multi-table UPDATE): close the dispute, then nothing else
+    local closed = Update([[UPDATE cp_disputes SET status = 'approved', handled_by = ?, handled_at = NOW()
+        WHERE run_id = ? AND status = 'open']], { Clip(handler, 50), id }) or 0
+    Call('Leaderboard', 'invalidate')
+    if CP.Hooks and CP.Hooks.fire then CP.Hooks.fire('row:restored', id) end
+    Notify(OnlineSrc(row.citizenid), 'success', 'admin.notice.run_restored', { mission = MissionLabel(row.mission_id) })
+    return true,
+        {
+            rowId = id,
+            citizenid = row.citizenid,
+            missionId = row.mission_id,
+            missionType = row.mission_type,
+            cashStatus = row.cash_status,
+            released = released,
+            disputeClosed = closed > 0,
+        }
+end
+
+-- Open disputes an admin can answer (the sidebar count): cached 30 s.
+local openCache = { at = 0, n = 0 }
+function D.openCount()
+    if os.time() - openCache.at < 30 then return openCache.n end
+    local okC, n = pcall(MySQL.scalar.await, 'SELECT COUNT(*) AS n FROM cp_disputes WHERE status = \'open\'', {})
+    openCache = { at = os.time(), n = okC and math.floor(Num(n, 0)) or 0 }
+    return openCache.n
 end
 
 local function Reopen(id)
@@ -675,3 +720,11 @@ CP.Net.callback('admin:getDisputes', function(src)
     if not ok then return nil, e end
     return { disputes = D.forAdmin(CitizenOf(src)) }
 end, { rate = 3 })
+
+-- Officers → Disputes: the admin sidebar count (admins only), registered once every module has loaded.
+CreateThread(function()
+    Wait(0)
+    if CP.Tablet and CP.Tablet.registerNavCount then
+        CP.Tablet.registerNavCount('adminDisputes', function() return D.openCount() end, { adminOnly = true })
+    end
+end)

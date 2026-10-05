@@ -33,6 +33,9 @@ import {
 } from '../../types/boards';
 import { BountyCard, DeptBars, modeText } from '../../officer/screens/Challenge';
 import { formatDay } from '../../officer/screens/Leaderboard';
+import { SeasonDetailDialog, SeasonTools } from '../components/boards/SeasonTools';
+import { request } from '../../shared/nui';
+import type { SeasonEndPreview } from '../../types/admin_officers';
 import './Seasons.css';
 
 function SeasonFacts({
@@ -78,6 +81,8 @@ export default function AdminSeasons() {
     const [endOpen, setEndOpen] = useState(false);
     const [objective, setObjective] = useState('');
     const [overrideOpen, setOverrideOpen] = useState(false);
+    const [endPlan, setEndPlan] = useState<SeasonEndPreview | null>(null);
+    const [detail, setDetail] = useState<number | null>(null);
 
     const current = data?.current ?? null;
     const shown = current ?? data?.latest ?? null;
@@ -100,8 +105,18 @@ export default function AdminSeasons() {
             void refetch();
         }
     };
-    const endSeason = async () => {
-        const res = await run('server:admin:endSeason', {}, { success: 'admin.seasons.ended_toast' });
+    // ending is final (champion, trophies, top 10): a preview, a reason and the season's name typed
+    const openEnd = async () => {
+        const res = await request<SeasonEndPreview>('admin:previewSeasonEnd', {});
+        setEndPlan(res.ok ? (res.data ?? null) : null);
+        setEndOpen(true);
+    };
+    const endSeason = async (reason: string, typed: string) => {
+        const res = await run(
+            'server:admin:endSeason',
+            { reason: reason || undefined, confirm: typed },
+            { success: 'admin.seasons.ended_toast' },
+        );
         if (res.ok) {
             setEndOpen(false);
             void refetch();
@@ -248,7 +263,7 @@ export default function AdminSeasons() {
             subtitle={t('admin.seasons.subtitle')}
             actions={
                 <>
-                    <Button variant="danger" icon="flag" disabled={!current || busy} onClick={() => setEndOpen(true)}>
+                    <Button variant="danger" icon="flag" disabled={!current || busy} onClick={() => void openEnd()}>
                         {t('admin.seasons.end')}
                     </Button>
                     <Button variant="primary" icon="plus" disabled={busy} onClick={() => setStartOpen(true)}>
@@ -358,6 +373,13 @@ export default function AdminSeasons() {
                 )}
             </Grid>
 
+            <SeasonTools
+                current={current}
+                seasons={asList(data.seasons)}
+                bounties={bounties}
+                onChanged={() => void refetch()}
+            />
+
             <Card
                 title={t('admin.seasons.history')}
                 subtitle={t('admin.seasons.history_hint')}
@@ -380,6 +402,7 @@ export default function AdminSeasons() {
                     columns={seasonColumns}
                     rows={asList(data.seasons)}
                     rowKey={r => r.id}
+                    onRowClick={r => setDetail(r.id)}
                     dense
                     className="boards-flat-table boards-fixed"
                     empty={t('admin.seasons.seasons_empty')}
@@ -430,6 +453,23 @@ export default function AdminSeasons() {
                 tone="danger"
                 title={t('admin.seasons.end_title', { name: current?.name ?? '' })}
                 message={t('admin.seasons.end_message')}
+                effect={
+                    endPlan ? (
+                        <div className="boards-season-facts">
+                            <KeyValue label={t('ui.admin_officers.season.champion')}>
+                                {endPlan.championShort ?? t('common.none')}
+                            </KeyValue>
+                            <KeyValue label={t('ui.admin_officers.season.trophies_n')}>
+                                {formatNumber(endPlan.trophies)}
+                            </KeyValue>
+                            <KeyValue label={t('ui.admin_officers.season.top10_label')}>
+                                {endPlan.top10.map(r => r.name).join(', ') || t('common.none')}
+                            </KeyValue>
+                        </div>
+                    ) : null
+                }
+                typedWord={current?.name}
+                reason={{ required: false, maxLength: 255 }}
                 confirmLabel={t('admin.seasons.end')}
                 onConfirm={endSeason}
                 onCancel={() => setEndOpen(false)}
@@ -448,6 +488,7 @@ export default function AdminSeasons() {
                 onCancel={() => setOverrideOpen(false)}
                 busy={busy}
             />
+            <SeasonDetailDialog id={detail} onClose={() => setDetail(null)} />
         </Screen>
     );
 }
