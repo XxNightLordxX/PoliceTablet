@@ -1353,7 +1353,7 @@ Stop: every value we set is removed.
     CP.Builder.toFileUnits(def) -> table / CP.Builder.fromFileUnits(fileDef) -> def   unit conversion
     CP.Builder.toRuntime(fileDef) -> def                       vector tables -> vec3/vec4
     CP.Builder.exportLua(def, meta) -> text                    meta = { version, publisher, at, edited }
-    CP.Builder.parse(luaSource, chunkName) -> def|nil, err     CP.Missions.parse, or the same sandbox
+    CP.Builder.parse(luaSource, chunkName) -> def|nil, err     CP.U.parseMissionFile: read as data, never run
     CP.Builder.slug(label) -> string
   Net (docs/notes/builder_protocol.md §3/§4)
     callbacks  builder:list · builder:get { id } · builder:config
@@ -2092,9 +2092,9 @@ modules/missions/server.lua · CP.Missions: the mission registry (loader, normal
 
 Owns
   * loading missions/builtin/index.lua (a Lua file that returns a list of ids) and every
-    missions/builtin/<id>.lua with LoadResourceFile, each run in a sandbox whose only globals are
-    RegisterMission, vec3, vec4, vector3, vector4, math, string, table (copies), pairs, ipairs,
-    tonumber, tostring and type; exactly one RegisterMission({ ... }) call per file
+    missions/builtin/<id>.lua with LoadResourceFile, each read as data by the mission file reader
+    (CP.U.parseMissionFile, shared/utils.lua; never run): plain values and vec3/vec4 of numbers only;
+    exactly one RegisterMission({ ... }) call per file
   * custom missions from CP.Builder.loadPublished() (the builder owns their files and DB rows)
   * normalising every definition (defaults from the block's defaults(), minSeconds per block,
     presenceRange = Config.Blocks[block].presenceRange[3]) and validating it (generic checks + the
@@ -2114,7 +2114,7 @@ Public API (server)
   CP.Missions.byType(missionType) -> list   sorted by id, never the Weekly Boss
   CP.Missions.isEnabled(id) -> boolean      loaded, status 'published', not in Config.DisabledMissions
   CP.Missions.normalize(def, meta) -> def|nil, err   pure; meta = { source, version, filePath, defHash, editedInCode, status }
-  CP.Missions.parse(luaSource, chunkName) -> def|nil, err   one file's source in the loader sandbox (raw def)
+  CP.Missions.parse(luaSource, chunkName) -> def|nil, err   one file's source read as the loader reads it (raw def)
   CP.Missions.serializeForClient(def) -> table
   CP.Missions.register(def) -> def|nil, err  publish/restore without a reload (loader fields read from def;
                                              always source = 'custom')
@@ -4175,7 +4175,7 @@ The builder_client slice writes no SQL, so this spec runs no queries.
 tests/builder_server_spec.lua · modules/builder/server.lua (slice builder_server).
 
 Covers the guardrails, unit conversion, the Lua export (golden text of the spec's custom example and a
-round trip through the RegisterMission sandbox), versions, edit locks and every SQL statement of the
+round trip through the mission file reader), versions, edit locks and every SQL statement of the
 module on MariaDB, archive/restore/rollback files and the reload (hand edit) conflict logic.
 Mission files are written to a temporary folder missions/custom/test_builder_<n>/ that is removed at
 the end, whatever happens. The spec uses its own database (<run database>_builder_server).
@@ -4298,6 +4298,10 @@ natives of FXServer's natives_server.lua) answers 1 for yes and false for no, ni
 returns, as FXServer does (H.serverBool(v) is that conversion); booted as the client they answer as written (the
 manifest's OAL booleans). The harness owns the metatable of _G for that, so setmetatable(_G, ...) raises an error:
 H.strictGlobals(true) makes reading an undefined global an error, H.onUndefinedGlobal(fn) answers such a read.
+The debug table: the resource code under test sees FXServer's own, getinfo, getmetatable, setmetatable, getupvalue
+and traceback only (H.FX_DEBUG; FXServer's Lua is built with LUA_SANDBOX, so no sethook or gethook), also through
+require('debug'). H.debug is the full library for the specs' own tools (tests/freeze_spec.lua's spin check copies
+H.debug.sethook into a local).
 ```
 
 ## tests/int_core_spec.lua
@@ -4420,15 +4424,26 @@ Needs no database (9.1 compares with the local MariaDB when it runs); every save
 folder removed at the end.
 ```
 
+## tests/mission_reader_spec.lua
+
+```text
+The mission file reader (CP.U.parseMissionFile, shared/utils.lua): mission files are data, read and never run.
+FXServer has no debug.sethook (its Lua is built with LUA_SANDBOX), so a mission file that ran could not be stopped,
+and until S2 no mission file loaded on a real server at all. This spec boots the whole server with FXServer's debug
+table (tests/harness.lua) and checks: every built-in loads at start; every shipped file and every layout the Mission
+Builder writes reads exactly as Lua itself reads that text; text that would run code, CfxLua's extra syntax and
+oversized text are refused at once with the file and the line; the reader never touches the string metatable, the
+GC or the globals.
+```
+
 ## tests/missions_a_spec.lua
 
 ```text
 
 tests/missions_a_spec.lua · the missions_a built-in mission files and missions/builtin/index.lua.
   lua5.4 tests/run.lua missions_a
-Each file is loaded exactly as modules/missions loads it (LoadResourceFile + a sandbox whose only
-globals are RegisterMission, vec3/vec4/vector3/vector4, math, string, table, pairs, ipairs, type,
-tonumber, tostring) and checked against the spec's catalog, its mission card, ARCHITECTURE 3.3 and
+Each file is loaded exactly as modules/missions loads it (LoadResourceFile + the mission file reader,
+CP.U.readMissionCalls: data only, never run) and checked against the spec's catalog, its mission card, ARCHITECTURE 3.3 and
 the Mission Builder guardrails. When the objective blocks it uses exist, the definition also goes
 through CP.Missions.normalize (block defaults + validate) with no warnings.
 ```
@@ -4439,7 +4454,7 @@ through CP.Missions.normalize (block defaults + validate) with no warnings.
 
 tests/missions_b_spec.lua · slice missions_b: the built-in mission files warrant_service, manhunt,
 gang_shootout, hostage_rescue, bomb_disposal, armored_truck_escort, prison_break and
-weekly_boss_kingpin. Each file is run in the mission loader's sandbox and checked against the
+weekly_boss_kingpin. Each file is read by the mission loader's reader (data, never run) and checked against the
 mission catalog, its mission card, ARCHITECTURE §3.3 (objective fields, location keys) and the
 built-in guardrails (location count and spacing, map bounds, no-build zones for points and route
 segments, 30 m from the start, points of a location kept together, heights, headings facing the

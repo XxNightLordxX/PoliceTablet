@@ -72,32 +72,14 @@ end
 -- ============================================================================
 --                    LOAD ONE FILE EXACTLY LIKE THE LOADER
 -- ============================================================================
--- ARCHITECTURE §5.6 sandbox.
+-- ARCHITECTURE §5.6: the loader reads a mission file as data (CP.U.readMissionCalls), never runs it.
 
 local function LoadMission(id)
     local path = 'missions/builtin/' .. id .. '.lua'
     local content = LoadResourceFile('Crimson-Police', path)
     if not H.ok(type(content) == 'string' and #content > 0, id .. ': file exists') then return nil end
-    local calls = {}
-    local env = {
-        RegisterMission = function(def) calls[#calls + 1] = def end,
-        vec3 = vec3,
-        vec4 = vec4,
-        vector3 = vector3,
-        vector4 = vector4,
-        math = math,
-        string = string,
-        table = table,
-        pairs = pairs,
-        ipairs = ipairs,
-        type = type,
-        tonumber = tonumber,
-        tostring = tostring,
-    }
-    local chunk, err = load(content, '@' .. path, 't', env)
-    if not H.ok(chunk ~= nil, id .. ': compiles in the sandbox (' .. tostring(err) .. ')') then return nil end
-    local ok, runErr = pcall(chunk)
-    if not H.ok(ok, id .. ': runs in the sandbox (' .. tostring(runErr) .. ')') then return nil end
+    local calls, err = U.readMissionCalls(content, path)
+    if not H.ok(calls ~= nil, id .. ': is plain mission data (' .. tostring(err) .. ')') then return nil end
     H.eq(#calls, 1, id .. ': exactly one RegisterMission call')
     H.ok(content:match('^%-%-') ~= nil, id .. ': starts with a header comment')
     return calls[1], content

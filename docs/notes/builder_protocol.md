@@ -266,7 +266,7 @@ so the client can stop an active placement/recording for that mission.
 
 ## 5. Server hooks (Lua)
 - `CP.Builder.loadPublished() -> { def, ... }` (for `CP.Missions.loadAll`): every `status = 'published'`
-  row → its file (`LoadResourceFile`, parsed in the loader sandbox); definitions carry the loader fields
+  row → its file (`LoadResourceFile`, read as data by the loader's reader, never run); definitions carry the loader fields
   (`source = 'custom'`, `version`, `filePath`, `defHash` = file hash, `editedInCode`, `status`). A
   missing file is rewritten from `published_definition` with a warning. A file changed since the last
   publish goes through the hand-edit check first (below).

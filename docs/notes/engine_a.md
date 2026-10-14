@@ -11,7 +11,7 @@ Files: `modules/missions/server.lua`, `modules/missions/client.lua`, `modules/dr
   loader fields (`source`, `version`, `filePath`, `defHash`, `editedInCode`, `status`), (b)
   `{ def = <definition>, meta = { version, filePath, ... } }`, or (c) meta only
   `{ id, filePath, version, editedInCode }`, in which case the loader reads the file itself with the same
-  sandbox used for built-ins. `defHash` is the hash of the file content when the file is readable, else a
+  mission file reader used for built-ins (data only, never run). `defHash` is the hash of the file content when the file is readable, else a
   canonical (sorted keys) hash of the definition. If `loadPublished` throws, the custom missions that are
   loaded now stay loaded (they are not dropped from their pools).
 - **`reload()`** calls `CP.Builder.onReload()` first (so hand edits become their new versions), then
@@ -35,8 +35,8 @@ Files: `modules/missions/server.lua`, `modules/missions/client.lua`, `modules/dr
   (`mission.source == 'builtin'`) from the Mission Builder's allowed model/weapon lists. (Before this fix
   the real `prison_break` and `weekly_boss_kingpin` were rejected at load.) `meta.source` other than
   `'custom'` means `'builtin'`.
-- **`parse(luaSource, chunkName)`** (ARCHITECTURE §5.6) runs one file's source in the same sandbox and
-  returns the raw definition (not normalised); `chunkName` may be given with or without the leading `@`
+- **`parse(luaSource, chunkName)`** (ARCHITECTURE §5.6) reads one file's source with the same reader
+  (`CP.U.parseMissionFile`) and returns the raw definition (not normalised); `chunkName` may be given with or without the leading `@`
   (CP.Builder passes the path, CP.Testing `'@' .. path`).
 - **Soft checks (warning only; the builder enforces them as guardrails for custom missions)**: fewer
   locations than expected (built-in 5, or 3 for `armored_truck_escort`, `evoc_course`,
@@ -53,8 +53,9 @@ Files: `modules/missions/server.lua`, `modules/missions/client.lua`, `modules/dr
   `cooldown = Config.Blocks.details.cooldown[3]`, `vehiclePenalties = true`, objective `minSeconds` from
   ARCHITECTURE §3.3 (unless the block's `defaults` set it), `presenceRange = Config.Blocks[block].presenceRange[3]`
   (fallback `Config.AntiCheat.presenceRadius`), labels `run.objective_default` / `run.location_default`.
-- The sandbox exposes exactly the contract globals; `math`, `string` and `table` are copies so a file can't
-  change them for the rest of the resource. `error`, `os`, `require`, `load` are not available.
+- Mission files are never run (S2): FXServer has no `debug.sethook`, so the old step-budget sandbox refused every
+  file on a real server. The reader accepts only `RegisterMission({ ... })` with plain values and vec3/vec4 of
+  numbers; any name, operator or call is refused with the file and the line (ARCHITECTURE §5.6).
 - Validation reasons returned by `normalize` are English developer-facing text (console, builder), not
   locale keys.
 - The `crimson-police:client:missions` broadcast uses `TriggerLatentClientEvent(name, -1, 200000, list)`

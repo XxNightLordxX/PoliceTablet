@@ -360,88 +360,508 @@ function U.clip(s, n)
 end
 
 -- ============================================================================
---                           THE MISSION FILE SANDBOX
+--                           THE MISSION FILE READER
 -- ============================================================================
--- Mission files (and Lua text pasted into the Mission Builder's import) run in a small table with a step and memory
--- budget, so a file with a loop that never ends or a huge string stops with an error instead of freezing the server.
--- Pattern matching, string.rep and table.move work inside C, where the budget cannot see, so they are left out or
--- bounded while the file runs.
+-- Mission files are data and are never run. Every text that becomes a mission is read here: the built-ins and
+-- missions/builtin/index.lua, custom missions, edited built-ins, their backups and archived copies, and Lua text
+-- pasted into the Mission Builder's import. FXServer builds its Lua without debug.sethook (LUA_SANDBOX), so a file
+-- that ran could not be stopped; a file that is only read costs time and memory in proportion to its length, and
+-- both are capped below.
+--
+-- A mission file is the layout the Mission Builder writes (and the shipped files use): comments, then one
+-- RegisterMission({ ... }) call. Inside it: tables ({ a = 1, ['b c'] = 2, 3 }), strings in any Lua form ('a', "a",
+-- [[a]], every escape), numbers (12, -3.5, 0x1F, 1e3), true, false, nil, and vec3 / vector3 with 3 numbers or
+-- vec4 / vector4 with 4. Anything else (a variable, a sum, a function call, a loop, CfxLua's extra syntax) is
+-- refused with the file name, the line and the text near it.
 
-local SANDBOX_STEPS = 2000000        -- budget checks (one every 4 Lua instructions) before a file is stopped
-local SANDBOX_MEMORY_KB = 65536      -- memory a file may add while it runs
-local SANDBOX_REP_MAX = 65536        -- longest string string.rep may make
-local SANDBOX_STRING = { 'byte', 'char', 'format', 'len', 'lower', 'upper', 'reverse', 'sub' }
-local SANDBOX_TABLE = { 'concat', 'insert', 'remove', 'sort', 'unpack' }
-local SANDBOX_BLOCKED = { 'find', 'match', 'gmatch', 'gsub', 'pack', 'unpack', 'packsize', 'dump' }
+local MISSION_TEXT_MAX = 1048576   -- longest mission file read (bytes); the largest shipped file is 23 KB
+local MISSION_VALUES_MAX = 100000  -- most values in one file (the Builder stores at most 20,000)
+local MISSION_DEPTH_MAX = 32       -- deepest table nesting (the Builder stores at most 10)
+local MISSION_NEAR_MAX = 40        -- longest text quoted after 'near' in a message
+local NOT_DATA = 'a mission file holds only RegisterMission({ ... }) with plain values (no code, variables or sums)'
+U.missionFileLimits = { bytes = MISSION_TEXT_MAX, values = MISSION_VALUES_MAX, depth = MISSION_DEPTH_MAX }
 
-local realRep = string.rep
+-- the text is read with these copies: a later change to the string table does not reach the reader
+local byte, sub, find, match, char, concat =
+    string.byte, string.sub, string.find, string.match, string.char, table.concat
+local utf8char = utf8.char
 
-local function BoundedRep(s, n, sep)
-    local len = #tostring(s) + (sep and #tostring(sep) or 0)
-    if (tonumber(n) or 0) * len > SANDBOX_REP_MAX then error('string.rep makes a string that is too long', 2) end
-    return realRep(s, n, sep)
+local VEC_ARGS = { vec3 = 3, vector3 = 3, vec4 = 4, vector4 = 4 }
+-- a character that, after a value, starts a sum, a comparison, a join, a call or an index: code, not data
+local OPERATORS = {}
+for c in ('+-*/%^.<>~=&|#([{:'):gmatch('.') do OPERATORS[c] = true end
+local VEC_WHY = {}
+for name, want in pairs(VEC_ARGS) do
+    VEC_WHY[name] = ('%s takes %d numbers in ( ), like %s(%s)'):format(name, want, name,
+        want == 3 and '100.0, -200.5, 30.0' or '100.0, -200.5, 30.0, 90.0')
+end
+-- Lua's reserved words: never a key written as name = value
+local LUA_WORDS = {}
+local WORDS = 'and break do else elseif end false for function goto if in local nil not or repeat return then true until while'
+for w in WORDS:gmatch('%a+') do LUA_WORDS[w] = true end
+-- \a \b \f \n \r \t \v \\ \" \' by the byte after the backslash
+local ESCAPES = {
+    [97] = '\a',
+    [98] = '\b',
+    [102] = '\f',
+    [110] = '\n',
+    [114] = '\r',
+    [116] = '\t',
+    [118] = '\v',
+    [92] = '\\',
+    [34] = '"',
+    [39] = '\'',
+}
+
+local function IsNameStart(c) return c and ((c >= 65 and c <= 90) or (c >= 97 and c <= 122) or c == 95) end
+local function IsDigit(c) return c and c >= 48 and c <= 57 end
+local function IsHex(c) return c and ((c >= 48 and c <= 57) or (c >= 65 and c <= 70) or (c >= 97 and c <= 102)) end
+
+-- The text after 'near' in a message: short, printable ASCII only.
+local function Near(text)
+    text = tostring(text)
+    if #text > MISSION_NEAR_MAX then text = sub(text, 1, MISSION_NEAR_MAX) .. '...' end
+    return (text:gsub('[^ -~]', '?'))
 end
 
-local function Blocked(name)
-    return function() error(('string.%s is not available in mission files'):format(name), 2) end
+local function Fail(r, line, msg, near)
+    if near ~= nil then msg = ('%s near \'%s\''):format(msg, Near(near)) end
+    error({ missionText = ('%s:%d: %s'):format(r.name, line, msg) }, 0)
 end
 
--- The environment a mission file runs in: register is the RegisterMission function.
-function U.sandboxEnv(register)
-    local str, tbl = { rep = BoundedRep }, {}
-    for _, k in ipairs(SANDBOX_STRING) do str[k] = string[k] end
-    for _, k in ipairs(SANDBOX_TABLE) do tbl[k] = table[k] end
-    local mth = {}
-    for k, v in pairs(math) do mth[k] = v end
-    return {
-        RegisterMission = register,
-        vec3 = vec3 or vector3,
-        vec4 = vec4 or vector4,
-        vector3 = vector3,
-        vector4 = vector4,
-        math = mth,
-        string = str,
-        table = tbl,
-        pairs = pairs,
-        ipairs = ipairs,
-        tonumber = tonumber,
-        tostring = tostring,
-        type = type,
-    }
+-- p is at a '\r' or '\n': the position after that line break (\r\n and \n\r count as one, as in Lua).
+local function AfterBreak(s, p)
+    local c, d = byte(s, p), byte(s, p + 1)
+    if (d == 10 or d == 13) and d ~= c then return p + 2 end
+    return p + 1
 end
 
--- pcall(chunk) under the budget: ok, err. Methods on strings ('x'):rep() reach the real string table, so its
--- unsafe functions are swapped out for the run (a mission file cannot wait, so nothing else runs meanwhile).
-function U.runSandboxed(chunk)
-    local hook = debug and debug.sethook
-    if not hook then return false, 'this server cannot limit a mission file, so it was not run' end
-    local saved = {}
-    for _, k in ipairs(SANDBOX_BLOCKED) do
-        saved[k] = string[k]
-        string[k] = Blocked(k)
+-- The number of line breaks in text and, when asked, the text with every line break written as '\n'.
+local function LineBreaks(text, normalise)
+    if not find(text, '[\r\n]') then return text, 0 end
+    local parts, n, p = {}, 0, 1
+    while true do
+        local a = find(text, '[\r\n]', p)
+        if not a then break end
+        if normalise then parts[#parts + 1] = sub(text, p, a - 1) end
+        n = n + 1
+        p = AfterBreak(text, a)
     end
-    saved.rep = string.rep
-    string.rep = BoundedRep
-    local oldHook, oldMask, oldCount = debug.gethook()
-    local steps, base = 0, collectgarbage('count')
-    -- the hook stops itself before it raises, so it can never fire again in the code below
-    hook(function()
-        steps = steps + 1
-        local why = nil
-        if steps > SANDBOX_STEPS then
-            why = 'the file runs too long (a loop that never ends?)'
-        elseif collectgarbage('count') - base > SANDBOX_MEMORY_KB then
-            why = 'the file uses too much memory'
+    if not normalise then return nil, n end
+    parts[#parts + 1] = sub(text, p)
+    return concat(parts, '\n'), n
+end
+
+-- A long bracket [==[ ... ]==] whose first '[' is at p (eq = its '=' signs): its text and the position after it.
+local function LongBracket(r, p, eq, what)
+    local s, line = r.s, r.line
+    local open = p + #eq + 2
+    local close = find(s, ']' .. eq .. ']', open, true)
+    if not close then
+        Fail(r, line, ('this long %s is never closed (\']%s]\' is missing)'):format(what, eq), sub(s, p, open - 1))
+    end
+    local body = sub(s, open, close - 1)
+    local text, n = LineBreaks(body, what == 'string')
+    r.line = line + n
+    -- a line break right after the opening bracket is not part of the string, as in Lua
+    if text and (byte(body, 1) == 10 or byte(body, 1) == 13) then text = sub(text, 2) end
+    return text, close + #eq + 2
+end
+
+-- Spaces, line breaks and comments before the next token.
+local function SkipSpace(r)
+    local s, p = r.s, r.pos
+    while true do
+        local c = byte(s, p)
+        if c == 10 or c == 13 then
+            p = AfterBreak(s, p)
+            r.line = r.line + 1
+        elseif c == 32 or c == 9 or c == 11 or c == 12 then
+            p = p + 1
+        elseif c == 45 and byte(s, p + 1) == 45 then
+            local eq = match(s, '^%[(=*)%[', p + 2)
+            if eq then
+                local _, after = LongBracket(r, p + 2, eq, 'comment')
+                p = after
+            else
+                p = find(s, '[\r\n]', p + 2) or (r.n + 1)
+            end
+        else
+            r.pos = p
+            return
         end
-        if why then
-            hook()
-            error(why, 0)
+    end
+end
+
+-- A quoted string that opens at r.pos with the quote byte q: its value (every Lua 5.4 escape).
+local function ReadQuoted(r, q)
+    local s, start, out = r.s, r.pos, {}
+    local p = start + 1
+    local stop = q == 34 and '[\\\r\n"]' or '[\\\r\n\']'
+    while true do
+        local a = find(s, stop, p)
+        if not a then
+            Fail(r, r.line, 'this text in quotes is never closed', sub(s, start, start + MISSION_NEAR_MAX))
         end
-    end, '', 4)
-    local ok, err = pcall(chunk)
-    if oldHook then hook(oldHook, oldMask, oldCount) else hook() end
-    for k, v in pairs(saved) do string[k] = v end
-    return ok, err
+        if a > p then out[#out + 1] = sub(s, p, a - 1) end
+        local c = byte(s, a)
+        if c == q then
+            r.pos = a + 1
+            return concat(out)
+        end
+        if c ~= 92 then
+            Fail(r, r.line, 'this text in quotes is not closed before the end of its line',
+                sub(s, start, start + MISSION_NEAR_MAX))
+        end
+        local e = byte(s, a + 1)
+        if e and ESCAPES[e] then
+            out[#out + 1] = ESCAPES[e]
+            p = a + 2
+        elseif e == 10 or e == 13 then
+            out[#out + 1] = '\n'
+            p = AfterBreak(s, a + 1)
+            r.line = r.line + 1
+        elseif e == 120 then
+            -- \xXX
+            local hex = match(s, '^[0-9A-Fa-f][0-9A-Fa-f]', a + 2)
+            if not hex then Fail(r, r.line, '\\x must be followed by two hexadecimal digits', sub(s, a, a + 3)) end
+            out[#out + 1] = char(tonumber(hex, 16))
+            p = a + 4
+        elseif e == 122 then
+            -- \z skips the spaces and line breaks after it
+            p = a + 2
+            while true do
+                local d = byte(s, p)
+                if d == 10 or d == 13 then
+                    p = AfterBreak(s, p)
+                    r.line = r.line + 1
+                elseif d == 32 or d == 9 or d == 11 or d == 12 then
+                    p = p + 1
+                else
+                    break
+                end
+            end
+        elseif e == 117 then
+            -- \u{XXX}: a UTF-8 character up to 7FFFFFFF
+            local digits = match(s, '^{([0-9A-Fa-f]+)}', a + 2)
+            local sig = digits and match(digits, '^0*(.*)$')
+            local n = sig and #sig <= 8 and tonumber(sig ~= '' and sig or '0', 16)
+            if not n or n > 0x7FFFFFFF then
+                Fail(r, r.line, '\\u must be followed by {hexadecimal digits} up to 7FFFFFFF', sub(s, a, a + 12))
+            end
+            out[#out + 1] = utf8char(n)
+            p = a + 4 + #digits
+        elseif IsDigit(e) then
+            -- \ddd: one to three decimal digits, up to 255
+            local dec = match(s, '^[0-9][0-9]?[0-9]?', a + 1)
+            local n = tonumber(dec)
+            if n > 255 then Fail(r, r.line, 'a \\ddd escape must be 255 or less', '\\' .. dec) end
+            out[#out + 1] = char(n)
+            p = a + 1 + #dec
+        else
+            Fail(r, r.line, 'this \\ escape does not exist in Lua', sub(s, a, a + 1))
+        end
+    end
+end
+
+-- A numeral at p, cut as Lua's lexer cuts it (llex.c read_numeral) and converted by tonumber (the same
+-- luaO_str2num): integers, floats, hexadecimal, exponents.
+local function ReadNumeral(r, p, line)
+    local s = r.s
+    local q, e1, e2 = p, 69, 101
+    if byte(s, p) == 48 and (byte(s, p + 1) == 120 or byte(s, p + 1) == 88) then q, e1, e2 = p + 2, 80, 112 end
+    while true do
+        local d = byte(s, q)
+        if d == e1 or d == e2 then
+            q = q + 1
+            local sign = byte(s, q)
+            if sign == 43 or sign == 45 then q = q + 1 end
+        elseif IsHex(d) or d == 46 then
+            q = q + 1
+        else
+            break
+        end
+    end
+    if IsNameStart(byte(s, q)) then q = q + 1 end
+    local text = sub(s, p, q - 1)
+    local n = tonumber(text)
+    if not n then Fail(r, line, 'this is not a number Lua can read', text) end
+    r.pos = q
+    return n, text
+end
+
+-- The next token: kind ('name', 'number', 'string', 'eof' or the character itself), value, text for messages, line.
+local function Lex(r)
+    SkipSpace(r)
+    local s, p, line = r.s, r.pos, r.line
+    local c = byte(s, p)
+    if not c then return 'eof', nil, '<eof>', line end
+    if IsNameStart(c) then
+        local name = match(s, '^[A-Za-z_][A-Za-z0-9_]*', p)
+        r.pos = p + #name
+        return 'name', name, name, line
+    end
+    if IsDigit(c) or (c == 46 and IsDigit(byte(s, p + 1))) then
+        local n, text = ReadNumeral(r, p, line)
+        return 'number', n, text, line
+    end
+    -- a string's text for messages is its start position, cut from the file only when a message needs it
+    if c == 34 or c == 39 then return 'string', ReadQuoted(r, c), p, line end
+    if c == 91 then
+        local eq = match(s, '^%[(=*)%[', p)
+        if eq then
+            local body, after = LongBracket(r, p, eq, 'string')
+            r.pos = after
+            return 'string', body, p, line
+        end
+    end
+    r.pos = p + 1
+    local ch = char(c)
+    if c < 32 or c > 126 then return ch, nil, ('<\\%d>'):format(c), line end
+    return ch, nil, ch, line
+end
+
+-- r.tk, r.tv, r.tt, r.tl: the current token (kind, value, text, line); one more can be looked at ahead.
+local function Advance(r)
+    if r.hasAhead then
+        r.tk, r.tv, r.tt, r.tl = r.ak, r.av, r.at, r.al
+        r.hasAhead = false
+    else
+        r.tk, r.tv, r.tt, r.tl = Lex(r)
+    end
+end
+
+local function LookAhead(r)
+    if not r.hasAhead then
+        r.ak, r.av, r.at, r.al = Lex(r)
+        r.hasAhead = true
+    end
+    return r.ak
+end
+
+local function FailHere(r, msg)
+    local near = r.tt
+    if type(near) == 'number' then near = sub(r.s, near, near + MISSION_NEAR_MAX) end
+    Fail(r, r.tl, msg, near)
+end
+
+local function Expect(r, kind, msg)
+    if r.tk ~= kind then FailHere(r, msg) end
+    Advance(r)
+end
+
+local ReadValue
+
+-- A number with any '-' signs before it.
+local function ReadNumber(r)
+    local negative = false
+    while r.tk == '-' do
+        negative = not negative
+        Advance(r)
+    end
+    if r.tk ~= 'number' then FailHere(r, 'a number was expected here') end
+    local v = r.tv
+    Advance(r)
+    if negative then return -v end
+    return v
+end
+
+-- vec3(x, y, z) / vector3(...) / vec4(x, y, z, w) / vector4(...) of numbers: the server's own vector value.
+local function ReadVec(r, name)
+    local want, why, line = VEC_ARGS[name], VEC_WHY[name], r.tl
+    Advance(r)
+    Expect(r, '(', why)
+    local args = {}
+    for i = 1, want do
+        if i > 1 then Expect(r, ',', why) end
+        if r.tk ~= 'number' and r.tk ~= '-' then FailHere(r, why) end
+        args[i] = ReadNumber(r)
+    end
+    Expect(r, ')', why)
+    local make
+    if want == 3 then make = vector3 or vec3 else make = vector4 or vec4 end
+    if type(make) ~= 'function' then Fail(r, line, name .. ' is not available here') end
+    -- exactly `want` arguments: CfxLua's constructors count them
+    if want == 3 then return make(args[1], args[2], args[3]) end
+    return make(args[1], args[2], args[3], args[4])
+end
+
+local function KeyName(key)
+    if type(key) == 'string' then return ('the key \'%s\''):format(Near(key)) end
+    return ('the key [%s]'):format(tostring(key))
+end
+
+-- A table constructor at the current '{'. Keys as Lua reads them (name = v, [k] = v, then 1, 2, 3 ... in order); a
+-- key given twice is refused (Lua would keep the last one, so one of the two was a mistake).
+local function ReadTable(r, depth)
+    if depth > MISSION_DEPTH_MAX then FailHere(r, ('tables are nested more than %d deep'):format(MISSION_DEPTH_MAX)) end
+    local openLine = r.tl
+    Advance(r)
+    local t, n, nils = {}, 0, nil
+    while r.tk ~= '}' do
+        local line, key, value = r.tl, nil, nil
+        if r.tk == '[' then
+            Advance(r)
+            key = ReadValue(r, depth + 1)
+            local kt = type(key)
+            if kt ~= 'string' and kt ~= 'number' and kt ~= 'boolean' then
+                Fail(r, line, 'a key in [ ] must be a text, a number, true or false')
+            end
+            Expect(r, ']', '\']\' was expected after the key')
+            Expect(r, '=', '\'=\' was expected after [key]')
+            value = ReadValue(r, depth + 1)
+        elseif r.tk == 'name' and not LUA_WORDS[r.tv] and LookAhead(r) == '=' then
+            key = r.tv
+            Advance(r)
+            Advance(r)
+            value = ReadValue(r, depth + 1)
+        else
+            n = n + 1
+            key = n
+            value = ReadValue(r, depth + 1)
+        end
+        if t[key] ~= nil or (nils and nils[key]) then
+            Fail(r, line, ('%s is given twice in the table that opens on line %d'):format(KeyName(key), openLine))
+        end
+        if value == nil then
+            nils = nils or {}
+            nils[key] = true
+        else
+            t[key] = value
+        end
+        if r.tk == ',' or r.tk == ';' then
+            Advance(r)
+        elseif OPERATORS[r.tk] then
+            FailHere(r, NOT_DATA)
+        elseif r.tk == 'eof' then
+            FailHere(r, ('the file ends before the table that opens on line %d is closed with }'):format(openLine))
+        elseif r.tk ~= '}' then
+            FailHere(r, ('\',\' or \'}\' was expected (the table opens on line %d)'):format(openLine))
+        end
+    end
+    Advance(r)
+    return t
+end
+
+ReadValue = function(r, depth)
+    r.values = r.values + 1
+    if r.values > MISSION_VALUES_MAX then
+        FailHere(r, ('the file holds more than %d values'):format(MISSION_VALUES_MAX))
+    end
+    local k, v = r.tk, r.tv
+    if k == 'string' then
+        Advance(r)
+        return v
+    end
+    if k == 'number' or k == '-' then return ReadNumber(r) end
+    if k == '{' then return ReadTable(r, depth) end
+    if k == 'name' then
+        if v == 'nil' then
+            Advance(r)
+            return nil
+        end
+        if v == 'true' or v == 'false' then
+            Advance(r)
+            return v == 'true'
+        end
+        if VEC_ARGS[v] then return ReadVec(r, v) end
+    end
+    if k == 'eof' then FailHere(r, 'the file ends too early: a \'}\' or \')\' is missing') end
+    FailHere(r, NOT_DATA)
+end
+
+-- A reader over text, or nil, err, true when the text is too large to read.
+local function NewReader(text, chunkName)
+    local name = (tostring(chunkName or 'mission'):gsub('^@', ''))
+    if type(text) ~= 'string' then return nil, name .. ': the file is not text' end
+    if #text > MISSION_TEXT_MAX then
+        return nil, ('%s: the file is larger than %d bytes, so it is not read'):format(name, MISSION_TEXT_MAX), true
+    end
+    local r = { s = text, n = #text, pos = 1, line = 1, name = name, values = 0 }
+    -- a UTF-8 byte order mark (some Windows editors write one) is skipped
+    if sub(text, 1, 3) == '\239\187\191' then r.pos = 4 end
+    return r
+end
+
+-- fn(r) inside pcall, from the first token: its result, or nil and the reader's message (never raises).
+local function Guard(r, fn)
+    local ok, res = pcall(function()
+        Advance(r)
+        return fn(r)
+    end)
+    if ok then return res end
+    if type(res) == 'table' and res.missionText then return nil, res.missionText end
+    return nil, ('%s: the file could not be read (%s)'):format(r.name, tostring(res))
+end
+
+-- Every value passed to RegisterMission in text, in order (false for a call without a table), or nil, err,
+-- tooLarge. chunkName (with or without a leading '@') starts every message, followed by the line.
+function U.readMissionCalls(text, chunkName)
+    local r, err, tooLarge = NewReader(text, chunkName)
+    if not r then return nil, err, tooLarge end
+    return Guard(r, function()
+        local calls = {}
+        while r.tk ~= 'eof' do
+            if r.tk == ';' then
+                Advance(r)
+            elseif r.tk == 'name' and r.tv == 'RegisterMission' then
+                Advance(r)
+                local arg = false
+                if r.tk == '(' then
+                    Advance(r)
+                    if r.tk ~= ')' then
+                        arg = ReadValue(r, 1)
+                        if arg == nil then arg = false end
+                    end
+                    Expect(r, ')', '\')\' was expected: RegisterMission takes one table')
+                elseif r.tk == '{' or r.tk == 'string' then
+                    arg = ReadValue(r, 1)
+                else
+                    FailHere(r, '\'(\' was expected after RegisterMission')
+                end
+                calls[#calls + 1] = arg
+            else
+                FailHere(r, NOT_DATA)
+            end
+        end
+        return calls
+    end)
+end
+
+-- `return <value>` (missions/builtin/index.lua), read the same way: true, value | nil, err.
+function U.readMissionReturn(text, chunkName)
+    local r, err = NewReader(text, chunkName)
+    if not r then return nil, err end
+    local value, rerr = Guard(r, function()
+        if not (r.tk == 'name' and r.tv == 'return') then
+            FailHere(r, 'this file must start with return and a list, like return { \'beat_patrol\' }')
+        end
+        Advance(r)
+        local v = ReadValue(r, 1)
+        if r.tk == ';' then Advance(r) end
+        if r.tk ~= 'eof' then FailHere(r, 'nothing may follow the list') end
+        return { v }
+    end)
+    if not value then return nil, rerr end
+    return true, value[1]
+end
+
+-- One mission file: the table passed to its single RegisterMission call, or nil, err (the loader's messages; a
+-- message from the reader names the file and the line).
+function U.parseMissionFile(text, chunkName)
+    if type(text) ~= 'string' or text == '' then return nil, 'the file is empty' end
+    local calls, err, tooLarge = U.readMissionCalls(text, chunkName)
+    if not calls then
+        if tooLarge then return nil, tostring(err) end
+        return nil, 'syntax error: ' .. tostring(err)
+    end
+    if #calls == 0 then return nil, 'the file never calls RegisterMission({ ... })' end
+    if #calls > 1 then
+        return nil, ('the file calls RegisterMission %d times; exactly one call is allowed'):format(#calls)
+    end
+    -- a table the reader built has no metatable (a vector does)
+    if type(calls[1]) ~= 'table' or getmetatable(calls[1]) ~= nil then return nil, 'RegisterMission expects a table' end
+    return calls[1]
 end
 
 return U

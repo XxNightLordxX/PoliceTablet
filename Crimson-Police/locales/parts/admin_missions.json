@@ -119,6 +119,7 @@
   "admin.missions.import.valid": "Ready to publish after a look in the Builder",
   "admin.missions.import.draft_only": "The draft gets its own new id. Publish it from the Builder when it looks right.",
   "admin.missions.import.done": "{mission} was imported as a draft.",
+  "admin.missions.import.parse_reason": "The loader says: {reason}",
   "admin.missions.owner.open": "Change owner",
   "admin.missions.owner.title": "Change the owner of {mission}",
   "admin.missions.owner.text": "The new owner sees it as their own mission in the Builder. An edited built-in has no owner.",

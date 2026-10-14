@@ -559,6 +559,7 @@
   "admin.missions.import.lua": "Mission file (Lua)",
   "admin.missions.import.objectives": "Objectives",
   "admin.missions.import.open": "Import",
+  "admin.missions.import.parse_reason": "The loader says: {reason}",
   "admin.missions.import.source_id": "Id on the other server",
   "admin.missions.import.text": "Paste a mission file (from Copy as Lua). It is checked first and becomes a new draft; it is never published by the import.",
   "admin.missions.import.title": "Import a mission",

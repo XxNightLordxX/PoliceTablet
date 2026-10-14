@@ -157,32 +157,19 @@ local function DetailDefault(name, fallback)
 end
 
 -- ============================================================================
---                                   SANDBOX
+--                                MISSION FILES
 -- ============================================================================
--- Runs one mission file and returns the table passed to its single RegisterMission call.
-local function RunMissionFile(content, chunkName)
-    if type(content) ~= 'string' or content == '' then return nil, 'the file is empty' end
-    local collected = {}
-    local env = CP.U.sandboxEnv(function(def) collected[#collected + 1] = def end)
-    local chunk, err = load(content, '@' .. chunkName, 't', env)
-    if not chunk then return nil, 'syntax error: ' .. tostring(err) end
-    local ok, runErr = CP.U.runSandboxed(chunk)
-    if not ok then return nil, 'error while running the file: ' .. tostring(runErr) end
-    if #collected == 0 then return nil, 'the file never calls RegisterMission({ ... })' end
-    if #collected > 1 then
-        return nil, ('the file calls RegisterMission %d times; exactly one call is allowed'):format(#collected)
-    end
-    if type(collected[1]) ~= 'table' then return nil, 'RegisterMission expects a table' end
-    return collected[1]
+-- Reads one mission file as data (CP.U.parseMissionFile: never run) and returns the table passed to its single
+-- RegisterMission call, or nil and the reason (with the file name and line when the text is not plain data).
+local function ReadMissionFile(content, chunkName)
+    return CP.U.parseMissionFile(content, chunkName)
 end
 
--- ARCHITECTURE §5.6: run one mission file's source in the loader sandbox and return the raw definition
+-- ARCHITECTURE §5.6: read one mission file's source the way the loader reads it and return the raw definition
 -- (used by the Mission Builder for custom files and hand-edit reloads, and by CP.Testing).
 -- chunkName may be given with or without the leading '@'.
 function Missions.parse(luaSource, chunkName)
-    local name = tostring(chunkName or 'mission')
-    if name:sub(1, 1) == '@' then name = name:sub(2) end
-    return RunMissionFile(luaSource, name)
+    return ReadMissionFile(luaSource, chunkName or 'mission')
 end
 
 local function ReadIndex()
@@ -190,10 +177,8 @@ local function ReadIndex()
     if not content or content == '' then
         return nil, INDEX_FILE .. ' was not found; no built-in missions are loaded'
     end
-    local chunk, err = load(content, '@' .. INDEX_FILE, 't', {})
-    if not chunk then return nil, INDEX_FILE .. ': syntax error: ' .. tostring(err) end
-    local ok, list = pcall(chunk)
-    if not ok then return nil, INDEX_FILE .. ': ' .. tostring(list) end
+    local ok, list = CP.U.readMissionReturn(content, INDEX_FILE)
+    if not ok then return nil, 'syntax error: ' .. tostring(list) end
     if type(list) ~= 'table' then return nil, INDEX_FILE .. ' must return a list of mission ids' end
     local ids, seen = {}, {}
     for i, id in ipairs(list) do
@@ -873,7 +858,7 @@ local function CustomEntry(entry)
         if not content or content == '' then
             return nil, meta, ('file %s was not found'):format(tostring(meta.filePath))
         end
-        local fileDef, err = RunMissionFile(content, meta.filePath)
+        local fileDef, err = ReadMissionFile(content, meta.filePath)
         if not fileDef then return nil, meta, err end
         raw = fileDef
     end
@@ -890,7 +875,7 @@ local function BuiltinDef(id, override, summary, onWarn)
     local path = BUILTIN_DIR .. id .. '.lua'
     local content = LoadResourceFile(CP.resource, path)
     if not content or content == '' then return nil, path, 'file not found' end
-    local raw, err = RunMissionFile(content, path)
+    local raw, err = ReadMissionFile(content, path)
     if not raw then return nil, path, err end
     if raw.id ~= id then return nil, path, ('its id "%s" does not match the file name'):format(tostring(raw.id)) end
     local shippedHash = CP.U.hashHex(content)

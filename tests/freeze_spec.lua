@@ -237,6 +237,8 @@ local function Logged(text)
     return false
 end
 
+-- the spin check is the spec's own tool: FXServer's debug table (the one the resource sees) has no sethook
+local sethook = H.debug.sethook
 local SPIN_LIMIT = 200
 local spins = {}
 local budget = setmetatable({}, { __mode = 'k' })
@@ -253,7 +255,7 @@ end
 local realCreateThread, realWait = _G.CreateThread, _G.Wait
 _G.CreateThread = function(fn)
     realCreateThread(function(...)
-        debug.sethook(SpinHook, '', 10000)
+        sethook(SpinHook, '', 10000)
         return fn(...)
     end)
 end

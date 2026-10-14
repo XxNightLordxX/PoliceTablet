@@ -106,13 +106,14 @@ Response shapes: all in `builder_protocol.md` §3/§4 and `web/src/types/builder
 
 ## Mismatches with the real code of other modules
 - `CP.Missions.parse(luaSource, chunkName)` (ARCHITECTURE §5.6) does not exist in `modules/missions/server.lua`
-  yet. `CP.Builder.parse` calls it when present and otherwise runs the identical loader sandbox itself.
+  yet. (Since S2 `CP.Builder.parse` calls the loader's reader `CP.U.parseMissionFile` itself: data only, never
+  run.)
 - `CP.Testing` and `CP.Admin` are not written yet; every call is guarded (`err.builder_testing_unavailable`;
   audit falls back to a debug log line).
 
 ## Requests to other modules
-- **CP.Missions (engine_a)**: add `parse(luaSource, chunkName) -> def|nil, err` (the sandbox already in
-  `runMissionFile`) as the contract says. `loadPublished()` entries are definitions carrying the loader fields
+- **CP.Missions (engine_a)**: add `parse(luaSource, chunkName) -> def|nil, err` (the loader's own file reading)
+  as the contract says. `loadPublished()` entries are definitions carrying the loader fields
   (shape (a) of engine_a's notes); `onReload()` returns the summary documented in the protocol §5.
 - **CP.Testing**: `startDraft(src, def, { tier, location = index|'random', useStartRoute })` receives the
   **normalised** draft (`id` = mission id, `source = 'custom'`, `status = 'draft'`, `version` = draft version,

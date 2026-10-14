@@ -102,6 +102,8 @@ export function ImportDialog({
     const [reason, setReason] = useState('');
     const [preview, setPreview] = useState<ImportPreview | null>(null);
     const [error, setError] = useState<string | null>(null);
+    // the loader's own words when it refuses the text: the line and what it found there
+    const [errorReason, setErrorReason] = useState<string | null>(null);
     const [checking, setChecking] = useState(false);
     const { run, busy } = useAdminAction();
     const close = () => {
@@ -109,17 +111,21 @@ export function ImportDialog({
         setReason('');
         setPreview(null);
         setError(null);
+        setErrorReason(null);
         onClose();
     };
     const check = async () => {
         setChecking(true);
         setError(null);
+        setErrorReason(null);
         const res = await request<ImportPreview>('admin:previewImport', { lua });
         setChecking(false);
         if (res.ok && res.data) setPreview(res.data);
         else {
             setPreview(null);
             setError(res.error ?? 'err.internal');
+            const why = (res.data as { reason?: unknown } | undefined)?.reason;
+            setErrorReason(typeof why === 'string' && why ? why : null);
         }
     };
     const doImport = async () => {
@@ -173,16 +179,23 @@ export function ImportDialog({
         >
             <div className="admin-missions-stack">
                 {!preview ? (
-                    <Field label={t('admin.missions.import.lua')} error={error ? t(error) : undefined}>
-                        <Textarea
-                            value={lua}
-                            onChange={setLua}
-                            rows={14}
-                            maxLength={IMPORT_MAX}
-                            showCount={false}
-                            className="admin-missions-code"
-                        />
-                    </Field>
+                    <>
+                        <Field label={t('admin.missions.import.lua')} error={error ? t(error) : undefined}>
+                            <Textarea
+                                value={lua}
+                                onChange={setLua}
+                                rows={14}
+                                maxLength={IMPORT_MAX}
+                                showCount={false}
+                                className="admin-missions-code"
+                            />
+                        </Field>
+                        {error && errorReason ? (
+                            <div className="admin-missions-muted admin-missions-mono">
+                                {t('admin.missions.import.parse_reason', { reason: errorReason })}
+                            </div>
+                        ) : null}
+                    </>
                 ) : e ? (
                     <>
                         <div className="admin-missions-kv">

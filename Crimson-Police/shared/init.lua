@@ -271,8 +271,8 @@ end
 --                               RegisterMission
 -- ============================================================================
 -- Every mission file contains exactly one RegisterMission({ ... }) call. The mission
--- loader (modules/missions) runs each file in a sandbox whose RegisterMission collects
--- the definition; this global only exists so a stray call is reported, not lost.
+-- loader (modules/missions) reads each file as data (CP.U.parseMissionFile) and never runs
+-- it; this global only exists so a stray call is reported, not lost.
 function RegisterMission(def)
     CP.warn('missions', 'RegisterMission(%s) was called outside the mission loader and was ignored',
         type(def) == 'table' and tostring(def.id) or '?')

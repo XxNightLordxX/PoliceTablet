@@ -128,3 +128,8 @@ Until these gaps are closed, look for them in review.
   no), never true, so `DoesEntityExist(e) == true` is false for every entity. Read the answer as a condition or
   accept `true or 1` (ARCHITECTURE §6.1). The harness gives every server mock that answer, whatever the spec's
   function returns; a spec never sets the metatable of `_G` (`H.strictGlobals`, `H.onUndefinedGlobal`).
+- **FXServer's debug library is five functions.** getinfo, getmetatable, setmetatable, getupvalue and traceback
+  only: no `debug.sethook`, so text cannot be run under a step or memory budget. Never run text that comes from a
+  file an admin can edit or from the Admin UI; read it as data (mission files: `CP.U.parseMissionFile`). The
+  harness gives the resource the same five functions (a spec that needs more copies it from `H.debug`), and
+  `lint-fivem` rule FX11 flags any other `debug.<name>` in the resource.

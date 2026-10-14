@@ -12,15 +12,15 @@ passes (docs/ARCHITECTURE.md §11). How work flows around the checks is in docs/
 |---|---|---:|
 | `syntax` | `luac5.4 -p` on every `.lua` file in `Crimson-Police/`, `tests/` and `tools/` | 0.5 s |
 | `contracts` | `python3 tools/check_contracts.py` (module calls, events, NUI names, locale keys, build stamp) | 0.8 s |
-| `lint-fivem` | `python3 tools/lint_fivem.py`: FiveM pitfall rules FX01-FX10 (FX10, loops that can go round with no Wait, parses the Lua with `tools/lua_flow.py`), known hits in `tools/lint_baseline.txt` | 5 s |
+| `lint-fivem` | `python3 tools/lint_fivem.py`: FiveM pitfall rules FX01-FX11 (FX10, loops that can go round with no Wait, parses the Lua with `tools/lua_flow.py`; FX11, a `debug` function FXServer does not have), known hits in `tools/lint_baseline.txt` | 5 s |
 | `style` | `python3 tools/restyle.py --check`: restyles a scratch copy of the tree and fails on any file that differs (docs/STYLE.md) | 45–48 s |
-| `suite-db` | `lua5.4 tests/run.lua`: 56 specs on MariaDB | 40–45 s |
+| `suite-db` | `lua5.4 tests/run.lua`: 57 specs on MariaDB | 40–45 s |
 | `suite-files` | `lua5.4 tests/run.lua --storage=files`: the same specs with the database off (saves folder) | 35–38 s |
 | `suite-shadow` | `lua5.4 tests/run.lua --storage=shadow`: MariaDB, the oxmysql twin and the engine compared, 0 differences | 70–76 s |
 | `tsc` | `cd Crimson-Police/web && npx --no-install tsc --noEmit` | 10 s |
 | `build` | `npm run build` in a scratch copy of the web sources; `web/dist` must be byte-identical to its output | 14–15 s |
 
-A whole run takes about 4 minutes (56 specs, full admin control included). Every `tools/lint_<name>.py` and `tools/check_<name>.py` (other than
+A whole run takes about 4 minutes (57 specs, full admin control included). Every `tools/lint_<name>.py` and `tools/check_<name>.py` (other than
 `check_contracts.py`) is a `lint-<name>` step, run right after `contracts`: a new lint joins by checking the
 repository with no arguments and exiting non-zero on a problem.
 
@@ -277,7 +277,7 @@ ERROR 1054 (42S22) at line 1: Unknown column 'nope' in 'SELECT'
 - `could not build the run database:` the migrations failed; the `mysql` message is above it. Exit 2.
 - `SKIP <spec> (<mode> mode): <reason>`: a check that means something only on MariaDB; every skip is listed
   at the end. `REPORT` lines under a spec are timings and sizes (`storage`, `storage_copy`), not checks.
-- The last line: `56 specs, N assertions passed, F failed, C crashed (storage: <mode>)`. Exit 0 only with
+- The last line: `57 specs, N assertions passed, F failed, C crashed (storage: <mode>)`. Exit 0 only with
   0 failed, 0 crashed and, in shadow mode, 0 differences.
 - A check that fails only when specs run side by side (`tests/storage_spec.lua` holds every query under
   250 ms): rerun with `--jobs=1` before calling it a regression.
@@ -396,5 +396,15 @@ packages, and the runner's own clock and zone (the specs do not read either). Th
   mock of such a native FXServer's answer (tests/harness.lua, "SERVER NATIVES THAT ANSWER YES OR NO"; checked by
   section 23 of tests/foundation_spec.lua). It owns the metatable of `_G` for that: a spec that wants undefined
   globals to be errors calls `H.strictGlobals(true)` instead of `setmetatable(_G, ...)`.
+- **A debug library FXServer does not have**: the mission file sandbox stopped a running file with
+  `debug.sethook`, which plain lua5.4 has and FXServer does not (its Lua is built with `LUA_SANDBOX`: debug holds
+  only getinfo, getmetatable, setmetatable, getupvalue and traceback). Every spec passed while on a real server no
+  mission file loaded at all (0 of 19 built-ins, every Builder publish and import refused). Mission files are now
+  read as data and never run (`CP.U.parseMissionFile`), and the harness gives the resource exactly FXServer's five
+  debug functions (`H.FX_DEBUG`; `H.debug` is the full library for the specs' own tools), and `lint-fivem` rule
+  FX11 flags any other `debug.<name>` in the resource. With only that harness change the old code fails 116 checks
+  and crashes 9 specs. tests/mission_reader_spec.lua checks the reader:
+  every shipped file and both Builder layouts read exactly as Lua reads them, hostile text and CfxLua's own syntax
+  are refused at once with the line, and the caps hold.
 - **Shadow mode used the socket only**: the twin ignored `MYSQL_HOST`, so with a TCP server the CLI and the
   twin could talk to different servers. The twin now reads the same variables as the CLI.

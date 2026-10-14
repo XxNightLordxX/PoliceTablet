@@ -33,6 +33,10 @@ Rules (a hit prints `file:line: RULE message`):
                         one. The game (or the server) hangs with no error and no crash log. Also an ipairs loop
                         that appends to the table it walks. The parsing and the flow are in tools/lua_flow.py;
                         `python3 tools/lua_flow.py --all <files>` explains every loop.
+  FX11 debug-sandbox    debug.<name> other than getinfo, getmetatable, setmetatable, getupvalue or traceback:
+                        FXServer builds its Lua with LUA_SANDBOX, so every other debug function (sethook,
+                        gethook, getlocal, setupvalue, getregistry...) is nil there. Text cannot be run under a
+                        step budget: read mission files as data (CP.U.parseMissionFile).
 
 Known hits live in tools/lint_baseline.txt, each with its reason: a real bug waiting for its fix (bugs.md of
 the fix round) or a deliberate use. A baseline line that no longer matches a hit is reported as stale, so the
@@ -51,6 +55,8 @@ BASELINE = os.path.join(ROOT, 'tools', 'lint_baseline.txt')
 
 # Lua scheduler functions that share a name with a game native (SYSTEM::WAIT and friends)
 RUNTIME = {'Wait', 'CreateThread', 'SetTimeout', 'Await'}
+FX_DEBUG = {'getinfo', 'getmetatable', 'setmetatable', 'getupvalue', 'traceback'}
+DEBUG_USE = re.compile(r'(?<![\w.:])debug\s*\.\s*([A-Za-z_]\w*)')
 ARENA = re.compile(r'(?<![\w.:])(SetPlayerTeam|NetworkSetFriendlyFireOption|SetCanAttackFriendly'
                    r'|Set\w*RoutingBucket\w*|CancelEvent)\b')
 CREATES = re.compile(r'(?<![\w.:])Create(Ped|Vehicle|VehicleServerSetter|Object|ObjectNoOffset)\s*\(')
@@ -330,6 +336,11 @@ def lint():
             # FX09
             for m in ARENA.finditer(code):
                 add(path, ln, 'FX09', f'{m.group(1)} is forbidden (docs/CRIMSON_ARENA.md rules 9 to 11)')
+            # FX11
+            for m in DEBUG_USE.finditer(code):
+                if m.group(1) not in FX_DEBUG:
+                    add(path, ln, 'FX11', f'debug.{m.group(1)} does not exist on FXServer (LUA_SANDBOX: only '
+                        'getinfo, getmetatable, setmetatable, getupvalue, traceback)')
         # FX02
         if side == 'server':
             for ln, code in enumerate(blank, 1):

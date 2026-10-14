@@ -639,22 +639,39 @@ All times are server local time; the "day" starts at `Config.Time.resetHour`.
 
 ### 5.6 CP.Missions — modules/missions
 Server:
-- `loadAll()` — reads `missions/builtin/index.lua` (returns a list of ids), runs each file in a
-  sandbox (`load(chunk, '@missions/builtin/<id>.lua', 't', env)` with `RegisterMission`, `vec3`,
-  `vec4`, `vector3`, `vector4`, `math`, `string`, `table`, `pairs`, `ipairs`, `tonumber`,
-  `tostring`, `type`), then asks `CP.Builder.loadPublished()` for custom missions; normalises and
-  validates each (blocks' `validate`), keeps the valid ones, warns about the rest, then broadcasts.
+- `loadAll()` — reads `missions/builtin/index.lua` (`return { 'id', ... }`) and each
+  `missions/builtin/<id>.lua` with the mission file reader (below; read as data, never run), then asks
+  `CP.Builder.loadPublished()` for custom missions; normalises and validates each (blocks' `validate`),
+  keeps the valid ones, warns about the rest, then broadcasts.
 - `reload() -> summary` (admin `/CrimsonPoliceAdmin reload`; also calls `CP.Builder.onReload()`
   for hand edits), `get(id)`, `all() -> { [id] = def }`, `list() -> sorted list`,
   `byType(type) -> list` (excludes the boss), `isEnabled(id)` (published, not archived, not in
   `Config.DisabledMissions`), `normalize(def, meta) -> def|nil, err`, `serializeForClient(def)`
 - `register(def)` / `unregister(id)` — used by the builder for publish/archive without a reload.
-- `parse(luaSource, chunkName) -> def|nil, err` — runs one mission file's source in the loader sandbox and returns the raw definition (used by the builder for custom files and hand-edit reloads).
-- The sandbox (`CP.U.sandboxEnv`, `CP.U.runSandboxed`, shared/utils.lua) runs a file under a budget: a debug hook
-  every 4 instructions stops it after 2,000,000 checks or 64 MB of new memory; `string` has only byte, char, format,
-  len, lower, upper, reverse, sub and a `rep` bounded to 64 KB, `table` has no `move`, and while the file runs the
-  real `string.find/match/gmatch/gsub/pack/unpack/packsize/dump` raise an error and `string.rep` is bounded (string
-  methods reach the real table). Built-in files, custom files and Lua text pasted into the import all go through it.
+- `parse(luaSource, chunkName) -> def|nil, err` — reads one mission file's source as the loader does and returns the raw definition (used by the builder for custom files and hand-edit reloads, and by CP.Testing).
+- The mission file reader (shared/utils.lua): mission files are data and are never run. FXServer builds its Lua
+  with `LUA_SANDBOX`, so its `debug` table has only getinfo, getmetatable, setmetatable, getupvalue and traceback
+  (no `sethook`): text that runs could not be stopped, and mission text that reached a string method would reach
+  CfxLua's own C functions (`string.blob` allocates any size in one call). So no mission text is executed:
+  - `CP.U.parseMissionFile(text, chunkName) -> def|nil, err` — the table of the file's single
+    `RegisterMission(...)` call. `CP.U.readMissionCalls(text, chunkName) -> list|nil, err` (every call's value) and
+    `CP.U.readMissionReturn(text, chunkName) -> true, value|nil, err` (`return <value>`, for index.lua).
+  - Accepted: comments; `RegisterMission(<table>)` or `RegisterMission <table>`, `;` between statements; values
+    nil, true, false, numerals as Lua's lexer cuts them (hex, exponents, any number of unary `-`, converted by
+    `tonumber`), quoted strings with every Lua 5.4 escape and long strings `[==[...]==]` (line breaks as Lua reads
+    them), tables (`name = v`, `[k] = v` with a string, number or boolean key, positional), and `vec3`/`vector3`
+    with exactly 3 numbers or `vec4`/`vector4` with exactly 4, built by the runtime's own constructors. A UTF-8 byte
+    order mark is skipped. A key given twice in one table is refused.
+  - Refused with `<chunk>:<line>: <reason> near '<text>'` (the text clipped to 40 printable characters): any other
+    name, an operator, a call, `local`, `function`, CfxLua's extra syntax (backtick hashes, `+=`, `/* */`, `?.`,
+    `{ .a }`, `local a in t`) and every malformed token. The loader prefixes `syntax error: `; its own messages stay
+    (`the file is empty`, `never calls`, `exactly one call is allowed`, `RegisterMission expects a table`).
+  - Bounded (`CP.U.missionFileLimits`): 1,048,576 bytes of text (checked before reading), 100,000 values, tables 32
+    deep. Time and memory are linear in the text; the reader never touches the string metatable, the GC or `_G`,
+    and reads the text with its own copies of `string.byte`, `sub`, `find` and `match`.
+  - Every path that turns a file into a definition uses it: built-ins and index.lua, custom files, edited built-ins
+    (overrides), the Builder's publish read-back and draft/backup files, `ShippedOf` (Edit in Builder, baselines),
+    `admin:previewImport` (the reason goes back to the Admin UI with `err.import_parse`), CP.Testing.
 - callback `getMissionDefs` → every definition for clients (plain tables, vectors as {x,y,z,w}).
 Client:
 - `CP.Missions.get(id)`; receives `crimson-police:client:missions` (full list) after load/reload.
@@ -2600,7 +2617,8 @@ read a failure.
 - `luac5.4 -p` on every Lua file it wrote.
 - `python3 tools/lint_fivem.py`: the FiveM pitfall rules (wrong-side natives, late `source`, client `os`/`io`,
   unguarded focus release, raising callback awaits, orphan mode, `os.rename` answers, server `os.execute`,
-  CRIMSON_ARENA natives, loops that can go round with no Wait (FX10, `tools/lua_flow.py`)); deliberate uses and bugs
+  CRIMSON_ARENA natives, loops that can go round with no Wait (FX10, `tools/lua_flow.py`), debug functions FXServer
+  does not have (FX11)); deliberate uses and bugs
   awaiting their fix are listed in `tools/lint_baseline.txt`.
 - `python3 tools/restyle.py --check` lists no file: every Lua and web source is formatted to `docs/STYLE.md`
   (`python3 tools/restyle.py <files>` formats them).

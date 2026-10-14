@@ -1,6 +1,19 @@
 -- A tiny FiveM/Qbox stand-in for unit tests (not shipped with the resource).
 
 local H = {}
+-- FXServer builds its Lua with LUA_SANDBOX (code/vendor/lua.lua), so the debug table a resource sees has only these
+-- five functions: no sethook, no gethook, no getlocal (ldblib.c of citizenfx/lua luaglm-548; the real
+-- libcitizen-scripting-lua.so of FXServer 35245 agrees). The resource code under test sees exactly that table, also
+-- through require('debug'), so code that needs more fails the suite as it would fail on a real server. H.debug is the
+-- full library, for the specs' own tools only (a spec copies what it needs into a local).
+H.debug = debug
+H.FX_DEBUG = { 'getinfo', 'getmetatable', 'getupvalue', 'setmetatable', 'traceback' }
+do
+    local fx = {}
+    for _, name in ipairs(H.FX_DEBUG) do fx[name] = H.debug[name] end
+    _G.debug = fx
+    package.loaded.debug = fx
+end
 -- CP_TEST_CLOCK=<unix time> moves the "real" clock of the whole spec (os.time() before H.boot, MariaDB NOW()
 -- through SET timestamp, the files engine) to that moment, ticking from there: a run at any wall-clock time.
 local CLOCK_SHIFT = 0

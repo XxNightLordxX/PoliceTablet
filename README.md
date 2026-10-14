@@ -1318,6 +1318,14 @@ in game, with no coding:
    (with a `.bak` copy of each old version).
 
 A developer can edit that file by hand, then run `/CrimsonPoliceAdmin reload` to load the change as a new version.
+Mission files are **data files, not scripts**: the server reads them and never runs them. Keep to the layout the
+Builder writes: one `RegisterMission({ ... })` holding plain values (text in quotes, numbers, `true`, `false`,
+`nil`, `{ ... }` tables, and `vec3(x, y, z)` / `vec4(x, y, z, w)` with plain numbers), plus `--` comments. Sums
+(`10 * 60`), joined text (`'a' .. 'b'`), variables, `local`, functions, loops and a key written twice are refused.
+The console line and Admin UI → **Missions** → **Load result** name the file and the line of a refused file, for
+example `missions/custom/night_beat.lua:12: a mission file holds only RegisterMission({ ... }) with plain values
+(no code, variables or sums) near '*'`. A refused hand edit is not taken in: the mission (custom or an edited built-in) keeps
+playing its last published version until the file is fixed.
 Nothing can be placed in `Config.Builder.noBuildZones` (stations, hospitals, the prison, Crimson-Arena).
 
 Admins can also open any **built-in** mission in the Builder and edit it; the edit replaces the built-in under the
@@ -1481,8 +1489,9 @@ hands a custom mission to another officer. **Delete permanently** (archived miss
 moves its files to `missions/custom/deleted/`; the **Deleted** tab brings it back. **Copy as Lua** shows the
 published file to paste on another server, and **Import** (top of the screen) checks a pasted file and makes a new
 draft from it: payout fields are dropped, a used id gets a new one, and nothing is published until you publish it.
-A pasted file that runs too long or uses too much memory (for example a loop that never ends) is stopped and refused,
-so it can't freeze the server; mission files only need `RegisterMission({ ... })` and plain values.
+The pasted text is read as data and never run, the same way the server reads a mission file: anything that is not
+`RegisterMission({ ... })` with plain values (a loop, a variable, a sum, a function call) is refused at once, and the
+dialog shows the line and the text the loader stopped at. So a pasted file can't freeze the server.
 
 **Switches.** Every mission and location, built-in, custom or edited, has its on/off switch (catalog, Testing,
 Dispatch). Location switches are saved by the location's name: when an edit renames or removes a location, the
@@ -1881,6 +1890,7 @@ The last line of the start-up check is `Start-up check: all ... checks passed` o
 | `the edited version of <id> (<file>) was not loaded, the shipped mission plays: <reason>` | An edited built-in mission broke (often a hand edit of its file). Open it in Admin UI → **Missions** → **Edit in Builder** and publish again, or **Reset to original** |
 | `custom mission <id>: edited in code, saved as version <n>` | Normal: someone edited that mission's Lua file, and the edit is now live |
 | `mission <id> (<file>) was not loaded: <reason>` | For a custom mission, fix it in the Builder or the file. For a built-in one, copy the file again from the download |
+| `... was not loaded: syntax error: <file>:<line>: ... near '<text>'` | That line of the mission file is not plain data (often a hand edit: a sum like `10 * 60`, a variable, joined text, or a key written twice). Write the plain value, like `600`, and run `/CrimsonPoliceAdmin reload` |
 | `custom mission <id>: the edited file ... was not accepted` | A hand edit broke the mission. The old version stays live. Fix the file and run `/CrimsonPoliceAdmin reload` |
 | `custom mission <id>: field "<name>" in its Lua file is ignored` | Payouts can't be set in mission files. Use the Payouts screens |
 | `the folder <folder> is missing and could not be created` | Make the folders `missions/custom/` and `missions/custom/archived/` by hand |
@@ -1948,7 +1958,9 @@ however it ends.
 - **Text** lives in `Crimson-Police/locales/parts/<part>.json`. `python3 tools/check_contracts.py --merge` builds
   `locales/en.json` from them.
 - **Custom missions** published from the Mission Builder are `Crimson-Police/missions/custom/<id>.lua`. Edit one and
-  run `/CrimsonPoliceAdmin reload` to load the change as a new version.
+  run `/CrimsonPoliceAdmin reload` to load the change as a new version. Every mission file is read as data
+  (`CP.U.parseMissionFile` in `shared/utils.lua`) and never run, so it keeps to the Builder's layout: one
+  `RegisterMission({ ... })` of plain values and `vec3`/`vec4` of numbers.
 
 **Files in this repository:**
 

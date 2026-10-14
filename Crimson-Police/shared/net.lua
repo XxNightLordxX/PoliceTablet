@@ -73,6 +73,8 @@ if IsDuplicityVersion() then
     end
 
     -- opts: { rate = max calls per second (default 6) }
+    -- handler(src, args) -> data | nil, errKey, details: a details table goes back with the error as its data (for
+    -- example the line a pasted mission file is refused at).
     function CP.Net.callback(name, handler, opts)
         local cbName = 'crimson-police:' .. name
         local max = (opts and opts.rate) or 6
@@ -80,13 +82,13 @@ if IsDuplicityVersion() then
             if not CP.Net.rateOk(src, cbName, max, 1000) then
                 return { ok = false, error = 'err.rate_limited' }
             end
-            local okCall, data, errKey = pcall(handler, src, args)
+            local okCall, data, errKey, details = pcall(handler, src, args)
             if not okCall then
                 CP.err('net', '%s failed: %s', cbName, tostring(data))
                 return { ok = false, error = 'err.internal' }
             end
             if data == nil and errKey then
-                return { ok = false, error = errKey }
+                return { ok = false, error = errKey, data = type(details) == 'table' and details or nil }
             end
             return { ok = true, data = data }
         end)

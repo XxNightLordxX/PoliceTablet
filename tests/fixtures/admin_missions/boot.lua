@@ -283,7 +283,7 @@ return function(H, name)
         X.adv(1100)
         local res = H.callback('crimson-police:' .. cbName, src, args)
         if type(res) ~= 'table' then return nil, 'no reply' end
-        if not res.ok then return nil, res.error end
+        if not res.ok then return nil, res.error, res.data end
         return res.data
     end
 

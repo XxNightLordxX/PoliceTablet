@@ -41,18 +41,11 @@ local VMT = getmetatable(vec3(0, 0, 0))
 local function IsVec(v) return type(v) == 'table' and getmetatable(v) == VMT end
 local function D2(a, b) return math.sqrt((a.x - b.x) ^ 2 + (a.y - b.y) ^ 2) end
 
+-- the file as the loader reads it: data, never run
 local function RawDef(id)
-    local src = LoadResourceFile('Crimson-Police', 'missions/builtin/' .. id .. '.lua')
-    local def
-    local env = {
-        RegisterMission = function(d) def = d end,
-        vec3 = vec3,
-        vec4 = vec4,
-        vector3 = vector3,
-        vector4 = vector4,
-        math = math,
-    }
-    assert(load(src, '@' .. id, 't', env))()
+    local path = 'missions/builtin/' .. id .. '.lua'
+    local src = LoadResourceFile('Crimson-Police', path)
+    local def = assert(U.parseMissionFile(src, path))
     return def, src
 end
 

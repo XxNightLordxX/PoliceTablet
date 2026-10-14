@@ -597,7 +597,12 @@ do
     H.ok(failedIds.bad_syntax:find('syntax', 1, true), 'syntax error')
     H.ok(failedIds.bad_validate:find('spawns missing', 1, true), 'block validate reason')
     H.ok(failedIds.bad_type:find('Config.MissionTypes', 1, true), 'bad type')
-    H.ok(failedIds.bad_sandbox:find('os', 1, true), 'sandbox has no os')
+    H.ok(
+        failedIds.bad_sandbox:find('missions/builtin/bad_sandbox.lua:1:', 1, true)
+            and failedIds.bad_sandbox:find('near \'os\'', 1, true),
+        'code is never run: refused at its line'
+    )
+    H.ok(failedIds.bad_runtime:find('missions/builtin/bad_runtime.lua:1:', 1, true), 'a call is code too')
     H.ok(failedIds.missing_file:find('not found', 1, true), 'missing file')
     H.ok(failedIds.patrol_a:find('already uses', 1, true), 'custom id clash with a built-in')
     H.ok(summary.warnings > 0, 'warnings counted')
@@ -798,7 +803,7 @@ do
     dz.locations = { { start = { coords = vec3(470.0, -974.0, 30.0), radius = 30.0 } } }
     H.eq(M.normalize(dz, { source = 'builtin' }), nil, 'no-build zones apply to built-in missions too')
 
-    -- parse: the loader sandbox for one file's source (used by the Mission Builder and CP.Testing)
+    -- parse: the loader's reader for one file's source, data only (used by the Mission Builder and CP.Testing)
     local raw, perr = M.parse(files['missions/builtin/tac_one.lua'], 'missions/builtin/tac_one.lua')
     H.ok(raw ~= nil and raw.id == 'tac_one', 'parse returns the raw definition (' .. tostring(perr) .. ')')
     H.eq(raw.payout, 5000, 'parse does not normalise (raw fields kept)')
@@ -809,7 +814,7 @@ do
     local p2, e2 = M.parse(files['missions/builtin/bad_twice.lua'], 'missions/builtin/bad_twice.lua')
     H.ok(p2 == nil and tostring(e2):find('exactly one', 1, true), 'parse: one RegisterMission call')
     H.eq(M.parse('', 'x.lua'), nil, 'parse: empty source')
-    H.eq(M.parse('os.exit(1)', 'x.lua'), nil, 'parse: sandboxed')
+    H.eq(M.parse('os.exit(1)', 'x.lua'), nil, 'parse: code is refused, never run')
 
     -- register / unregister
     H.reset()

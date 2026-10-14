@@ -1960,6 +1960,8 @@ Lua export for developers — every publish writes missions/custom/<mission_id>.
 
 - A developer can edit the file and run /CrimsonPoliceAdmin reload. The server checks it against the same guardrails and saves it as a new version marked "edited in code".
 
+- Mission files are data files, never scripts: the server reads every mission file (built-in, custom, edited built-in, backup, pasted import) as data and never runs it (FXServer cannot stop running text: its Lua has no debug.sethook). A file keeps to the layout the Mission Builder writes: comments, then one RegisterMission({ ... }) of plain values (strings, numbers, true, false, nil, tables, and vec3/vector3 with 3 numbers or vec4/vector4 with 4). Anything else (a variable, a sum such as 10 * 60, joined text, a function, a loop, a key given twice, CfxLua's own syntax) is refused; the console line and the Admin UI load result name the file and the line. A refused hand edit is not taken in and the last published version stays live.
+
 - If the builder draft and the file both changed since the last publish, the reload keeps the file, saves the draft as <mission_id>.draft.lua.bak and records the conflict in the audit log.
 
 - Payouts never come from the file: a payout field added by hand is ignored with a console warning.
@@ -2485,7 +2487,7 @@ Module rules
 
 - With Config.Debug = true, each module prints its own tagged lines, e.g. [crimson-police:cash].
 
-- fxmanifest.lua loads, in order: config/config.lua, config/blocks.lua, shared/*.lua, modules/**/server.lua or client.lua, then blocks/**/server.lua or client.lua. Mission files are not listed as scripts: at start and on reload the server reads every built-in mission named in missions/builtin/index.lua and every published custom mission (its file_path in cp_custom_missions) with LoadResourceFile, runs it, and sends the definitions to clients, so /CrimsonPoliceAdmin reload updates both without a restart.
+- fxmanifest.lua loads, in order: config/config.lua, config/blocks.lua, shared/*.lua, modules/**/server.lua or client.lua, then blocks/**/server.lua or client.lua. Mission files are not listed as scripts: at start and on reload the server reads every built-in mission named in missions/builtin/index.lua and every published custom mission (its file_path in cp_custom_missions) with LoadResourceFile, reads it as data (it is never run), and sends the definitions to clients, so /CrimsonPoliceAdmin reload updates both without a restart.
 
 - Every module waits for CP.Migrations.ready() before its first database query, so nothing reads a table before its migration has run.
 
@@ -3765,7 +3767,7 @@ Config.Blocks.hostile_waves = {
 
 ## Example files
 
-Copy these shapes exactly. Every mission file, built-in or custom, contains one RegisterMission({ ... }) call; the coordinates below are placeholders.
+Copy these shapes exactly. Every mission file, built-in or custom, contains one RegisterMission({ ... }) call of plain values (it is read as data, never run); the coordinates below are placeholders.
 
 Built-in mission: missions/builtin/gang_shootout.lua
 

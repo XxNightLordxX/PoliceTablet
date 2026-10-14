@@ -55,7 +55,7 @@ Two switches at the top of `config/config.lua`, as shipped:
 |---|---|---|
 | `config/` | Every setting: `config.lua`, `blocks.lua` (Mission Builder ranges), `banned_words.txt` | **Yes** (take the new `blocks.lua` unless you changed it) |
 | `logos/` | One logo per department (see `logos/README.md`) | **Yes** |
-| `missions/custom/` | Missions made with the Mission Builder, and your edited built-in missions in `overrides/` | **Yes** (all of it) |
+| `missions/custom/` | Missions made with the Mission Builder, and your edited built-in missions in `overrides/`. They are data files the server reads and never runs: a hand edit keeps the Builder's layout ([9.12](../README.md#912-mission-builder)) | **Yes** (all of it) |
 | `saves/` | Your data while the database is off, and the in-game backups in `saves/_backups/` (see `saves/README.md`) | **Yes** |
 | `items/` | The optional tablet item to copy into ox_inventory (see `items/README.md`) | Replace |
 | `missions/builtin/` | The built-in missions | Replace |

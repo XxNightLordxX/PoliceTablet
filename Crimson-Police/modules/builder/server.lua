@@ -824,21 +824,11 @@ local function RemoveFile(path)
     return true
 end
 
--- The mission loader sandbox (ARCHITECTURE §5.6): CP.Missions.parse when it exists, else the same rules.
+-- A mission file's text as the loader reads it (ARCHITECTURE §5.6): read as data by CP.U.parseMissionFile, never
+-- run. Every Builder path that turns a file into a definition comes through here (the shipped original, a
+-- published file read back, overrides, backups, hand edits, the Lua import).
 function B.parse(content, chunkName)
-    if CP.Missions and CP.Missions.parse then return CP.Missions.parse(content, chunkName) end
-    if type(content) ~= 'string' or content == '' then return nil, 'the file is empty' end
-    local collected = {}
-    local env = CP.U.sandboxEnv(function(def) collected[#collected + 1] = def end)
-    local chunk, err = load(content, '@' .. tostring(chunkName or 'mission'), 't', env)
-    if not chunk then return nil, 'syntax error: ' .. tostring(err) end
-    local ok, runErr = CP.U.runSandboxed(chunk)
-    if not ok then return nil, 'error while running the file: ' .. tostring(runErr) end
-    if #collected ~= 1 then
-        return nil, ('the file must call RegisterMission exactly once (found %d)'):format(#collected)
-    end
-    if type(collected[1]) ~= 'table' then return nil, 'RegisterMission expects a table' end
-    return collected[1]
+    return CP.U.parseMissionFile(content, chunkName or 'mission')
 end
 
 -- ============================================================================
@@ -4490,8 +4480,9 @@ local function RegisterAdminActions()
         return { id = id, version = row.publishedVersion, lua = content }
     end, { rate = 2 })
 
-    -- Import (preview): the Lua text runs in the loader's sandbox and is read as a new custom draft. Payout fields are
-    -- dropped and listed; the draft gets its own new id; nothing is published.
+    -- Import (preview): the Lua text is read as data the way the loader reads a mission file (never run) and becomes a
+    -- new custom draft. Payout fields are dropped and listed; the draft gets its own new id; nothing is published.
+    -- Text that is not plain mission data is refused with the reader's reason (the line and the text near it).
     Kit.callback('admin:previewImport', 'missionAdmin', function(ctx)
         local lua = ctx.args.lua
         if type(lua) ~= 'string' or lua == '' then return nil, 'err.invalid_payload' end

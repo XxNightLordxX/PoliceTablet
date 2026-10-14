@@ -65,26 +65,9 @@ local function LoadMission(id)
     local path = 'missions/builtin/' .. id .. '.lua'
     local src = LoadResourceFile('Crimson-Police', path)
     if not H.ok(type(src) == 'string' and #src > 0, path .. ' exists') then return nil end
-    local calls = {}
-    local env = {
-        RegisterMission = function(def) calls[#calls + 1] = def end,
-        vec3 = vec3,
-        vec4 = vec4,
-        vector3 = vector3,
-        vector4 = vector4,
-        math = math,
-        string = string,
-        table = table,
-        pairs = pairs,
-        ipairs = ipairs,
-        type = type,
-        tonumber = tonumber,
-        tostring = tostring,
-    }
-    local chunk, err = load(src, '@' .. path, 't', env)
-    if not H.ok(chunk ~= nil, path .. ' compiles: ' .. tostring(err)) then return nil end
-    local ok, runErr = pcall(chunk)
-    if not H.ok(ok, path .. ' runs: ' .. tostring(runErr)) then return nil end
+    -- read as data by the loader's own reader (never run): one RegisterMission({ ... }) of plain values
+    local calls, err = CP.U.readMissionCalls(src, path)
+    if not H.ok(calls ~= nil, path .. ' is plain mission data: ' .. tostring(err)) then return nil end
     H.eq(#calls, 1, path .. ': exactly one RegisterMission call')
     H.ok(src:match('^%-%-') ~= nil, path .. ': starts with a header comment')
     return calls[1], src

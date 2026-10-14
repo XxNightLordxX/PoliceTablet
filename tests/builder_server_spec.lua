@@ -1038,7 +1038,7 @@ local function Body()
             end
         end
         local parsed = B.parse(text, 'example.lua')
-        H.ok(parsed ~= nil, 'the export loads through the RegisterMission sandbox')
+        H.ok(parsed ~= nil, 'the export reads back through the mission file reader')
         local ok, why = Deq(Plain(B.fromFileUnits(parsed)), Plain(example))
         H.ok(ok, 'the export loads back to an equal definition: ' .. tostring(why))
     end
