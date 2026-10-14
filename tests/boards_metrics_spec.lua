@@ -73,7 +73,11 @@ CP.Access = {
         if not o then return nil, 'err.not_police' end
         return CP.U.copy(o)
     end,
-    isAdmin = function(src) return tonumber(src) == 0 or IsPlayerAceAllowed(src, 'crimsonpolice.admin') == true end,
+    isAdmin = function(src)
+        if tonumber(src) == 0 then return true end
+        local allowed = IsPlayerAceAllowed(src, 'crimsonpolice.admin')   -- FXServer answers 1 or false
+        return allowed == true or allowed == 1
+    end,
     isSupervisor = function(src)
         local o = officers[tonumber(src)]
         return o ~= nil and o.isSupervisor == true

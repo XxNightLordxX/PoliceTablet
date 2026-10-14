@@ -4,7 +4,8 @@
 CP = CP or {}
 
 CP.resource = GetCurrentResourceName()
-CP.isServer = IsDuplicityVersion()
+-- a plain true or false: the server's IsDuplicityVersion answers the integer 1 (every server BOOL native does)
+CP.isServer = IsDuplicityVersion() and true or false
 CP.prefix = 'crimson-police'
 
 -- ============================================================================

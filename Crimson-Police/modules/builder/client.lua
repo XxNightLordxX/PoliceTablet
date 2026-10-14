@@ -1154,7 +1154,8 @@ local function RunRecording(tool)
         local d = (found == true or found == 1) and node and U.dist(node, pos) or math.huge
         local onRoad = d <= maxOffRoad
         if not onRoad and d <= maxOffRoad * ROAD_SURFACE_FACTOR then
-            onRoad = IsPointOnRoad(pos.x, pos.y, pos.z, veh) == true
+            local road = IsPointOnRoad(pos.x, pos.y, pos.z, veh)
+            onRoad = road == true or road == 1
         end
         if not onRoad then
             st.rejected = st.rejected + 1

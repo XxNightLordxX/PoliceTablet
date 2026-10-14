@@ -30,17 +30,15 @@ local calls = {}
 local function Record(name, ...) calls[#calls + 1] = { name = name, args = table.pack(...) } end
 local function Rec(name) return function(...) Record(name, ...) end end
 local fallback = {}
-setmetatable(_G, {
-    __index = function(t, k)
-        if type(k) == 'string' and k:match('^%u%l') then
-            fallback[k] = true
-            local f = Rec(k)
-            rawset(t, k, f)
-            return f
-        end
-        return nil
-    end,
-})
+H.onUndefinedGlobal(function(k)
+    if type(k) == 'string' and k:match('^%u%l') then
+        fallback[k] = true
+        local f = Rec(k)
+        _G[k] = f
+        return f
+    end
+    return nil
+end)
 
 local function CallsOf(name, pred)
     local out = {}

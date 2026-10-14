@@ -456,6 +456,21 @@ H.eq(Npc.isNeutralised(k1), true, 'dead is neutralised')
 Tick(3)
 H.eq(#R.died, 1, 'a death is reported exactly once')
 H.eq(#deaths, 1, 'listeners once')
+-- On a real server DoesEntityExist answers the integer 1 for a ped that is there (never true), as the harness does:
+-- a living mission ped stays alive and can still be changed.
+do
+    Reset()
+    local ka, kea = SpawnPed(run, { coords = vec3(3.2, 0.0, 0.0) })
+    H.eq(DoesEntityExist(kea), 1, 'FXServer\'s shape: DoesEntityExist answers 1 for a living ped')
+    H.eq(Npc.setState(run, ka, 'hostile'), true, 'DoesEntityExist answers 1: setState reaches the ped')
+    Tick(3)
+    H.eq(Count(R.died, function(x) return x.netId == ka end), 0,
+        'DoesEntityExist answers 1: the watcher does not declare a living ped dead')
+    H.eq(Bag(kea).state, 'hostile', 'and the ped keeps its state')
+    W.ents[kea].exists = false
+    Tick(1)
+    H.eq(Count(R.died, function(x) return x.netId == ka end), 1, 'DoesEntityExist answers false: gone, a death')
+end
 -- server-side health is sync data: a server-made ped reads 0 until a client synced it. With the health
 -- natives there, a 0 is only a death after a positive read or while the server has health data (max health).
 do

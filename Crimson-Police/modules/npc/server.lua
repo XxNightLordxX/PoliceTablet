@@ -133,8 +133,11 @@ local function ToInt(v, lo, hi)
     return n
 end
 
+-- FXServer's DoesEntityExist answers 1 for yes (false for no), never true.
 local function Exists(e)
-    return type(e) == 'number' and e ~= 0 and DoesEntityExist(e) == true
+    if type(e) ~= 'number' or e == 0 then return false end
+    local found = DoesEntityExist(e)
+    return found == true or found == 1
 end
 
 local function WriteBag(e, bag)

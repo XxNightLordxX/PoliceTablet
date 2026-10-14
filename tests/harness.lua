@@ -1503,6 +1503,152 @@ function H.resetHooks()
 end
 
 -- ============================================================================
+--           SERVER NATIVES THAT ANSWER YES OR NO (FXServer's shape)
+-- ============================================================================
+-- On FXServer a native that answers yes or no (a BOOL native) goes through `_r` in natives_server.lua
+-- (Citizen.ReturnResultAnyway). ScriptInvoker.h hands Lua false for 0 and the integer otherwise, so "yes" is the
+-- integer 1, never true: `DoesEntityExist(e) == true` is false for every entity on a real server. Read such an
+-- answer as `if DoesEntityExist(e) then` or accept both (`v == true or v == 1`). The client natives answer true or
+-- false (fxmanifest: use_experimental_fxv2_oal), so code shared by both sides must accept both too.
+--
+-- Every spec runs against that shape, whatever its own mocks return. While the spec is booted as the server
+-- (H.boot, or H.boot({ side = 'server' })), each of the globals below that a spec or the harness sets to a function
+-- answers 1 for true and false for false, nil or 0; other answers and further return values are kept. The function
+-- the spec wrote is kept as it is and wrapped when it is read. Booted as the client, the same global answers what
+-- the spec's function returns. The list is every `_r` native of natives_server.lua (FXServer build 35245).
+--
+-- The harness owns the metatable of _G for this, so a spec never calls setmetatable(_G, ...) (it raises an error):
+-- H.strictGlobals(true) makes reading an undefined global an error, H.onUndefinedGlobal(fn) answers one.
+local SERVER_BOOL = {}
+for _, name in ipairs({
+    'CanPlayerStartCommerceSession',
+    'DoesBoatSinkWhenWrecked',
+    'DoesEntityExist',
+    'DoesPlayerExist',
+    'DoesPlayerOwnSku',
+    'DoesPlayerOwnSkuExt',
+    'DoesTrainStopAtStations',
+    'GetConvarBool',
+    'GetEntityCollisionDisabled',
+    'GetEntityRemoteSyncedScenesAllowed',
+    'GetHeliDisableExplodeFromBodyDamage',
+    'GetIsHeliEngineRunning',
+    'GetIsVehicleEngineRunning',
+    'GetIsVehiclePrimaryColourCustom',
+    'GetIsVehicleSecondaryColourCustom',
+    'GetPedStealthMovement',
+    'GetPlayerInvincible',
+    'GetTrainDirection',
+    'GetVehicleHandbrake',
+    'GetVehicleLightsState',
+    'GetVehicleNeonEnabled',
+    'HasEntityBeenMarkedAsNoLongerNeeded',
+    'HasVehicleBeenDamagedByBullets',
+    'HasVehicleBeenOwnedByPlayer',
+    'IsAceAllowed',
+    'IsBoatAnchoredAndFrozen',
+    'IsBoatWrecked',
+    'IsDuplicityVersion',
+    'IsEntityPositionFrozen',
+    'IsEntityVisible',
+    'IsFlashLightOn',
+    'IsHeliTailBoomBreakable',
+    'IsHeliTailBoomBroken',
+    'IsPedAPlayer',
+    'IsPedHandcuffed',
+    'IsPedInAnyVehicle',
+    'IsPedInVehicle',
+    'IsPedOnMount',
+    'IsPedRagdoll',
+    'IsPedStrafing',
+    'IsPedUsingActionMode',
+    'IsPlayerAceAllowed',
+    'IsPlayerCommerceInfoLoaded',
+    'IsPlayerCommerceInfoLoadedExt',
+    'IsPlayerEvadingWantedLevel',
+    'IsPlayerInFreeCamMode',
+    'IsPlayerUsingSuperJump',
+    'IsPrincipalAceAllowed',
+    'IsTrainCaboose',
+    'IsVehicleEngineStarting',
+    'IsVehicleExtraTurnedOn',
+    'IsVehicleSirenOn',
+    'IsVehicleTyreBurst',
+    'IsVehicleWindowIntact',
+    'MumbleIsPlayerMuted',
+    'ProfilerIsRecording',
+    'SaveResourceFile',
+    'StartResource',
+    'StateBagHasKey',
+    'StopResource',
+    'VerifyPasswordHash',
+    'WasEventCanceled',
+}) do
+    SERVER_BOOL[name] = true
+end
+H.SERVER_BOOL_NATIVES = SERVER_BOOL
+H.side = 'server'   -- H.boot sets it
+
+-- One BOOL answer the way FXServer hands it to Lua: 1 for yes, false for no (a nil or a 0 from a mock is a no).
+function H.serverBool(v)
+    if v == true then return 1 end
+    if v == nil or v == false or v == 0 then return false end
+    return v
+end
+
+local boolNatives = {}                                   -- [name] = the value a spec or the harness set
+local wrapperOf = setmetatable({}, { __mode = 'k' })     -- [function] = its server-shaped wrapper
+local wrapped = setmetatable({}, { __mode = 'k' })       -- [wrapper] = the function it wraps
+local strictGlobals, undefinedGlobal = false, nil
+
+local function ServerShaped(fn)
+    local w = wrapperOf[fn]
+    if w then return w end
+    w = function(...)
+        local r = table.pack(fn(...))
+        r[1] = H.serverBool(r[1])
+        return table.unpack(r, 1, math.max(r.n, 1))
+    end
+    wrapperOf[fn], wrapped[w] = w, fn
+    return w
+end
+
+-- On: reading a global that is not defined raises 'undefined global <name>' (a misspelt native fails the spec).
+function H.strictGlobals(on) strictGlobals = on == true end
+
+-- fn(name) answers each read of an undefined global (nil: such a read gives nil again).
+function H.onUndefinedGlobal(fn) undefinedGlobal = fn end
+
+setmetatable(_G, {
+    __metatable = 'tests/harness.lua owns the metatable of _G: use H.strictGlobals or H.onUndefinedGlobal',
+    __index = function(_, k)
+        local v = boolNatives[k]
+        if v ~= nil then
+            if H.side == 'server' and type(v) == 'function' then return ServerShaped(v) end
+            return v
+        end
+        if undefinedGlobal then return undefinedGlobal(k) end
+        if strictGlobals then error('undefined global ' .. tostring(k), 2) end
+        return nil
+    end,
+    __newindex = function(t, k, v)
+        if SERVER_BOOL[k] then
+            -- a wrapper read earlier and set back is the spec's own function again
+            boolNatives[k] = wrapped[v] or v
+            return
+        end
+        rawset(t, k, v)
+    end,
+})
+for name in pairs(SERVER_BOOL) do
+    local v = rawget(_G, name)
+    if v ~= nil then
+        rawset(_G, name, nil)
+        boolNatives[name] = v
+    end
+end
+
+-- ============================================================================
 --                                     BOOT
 -- ============================================================================
 
@@ -1557,6 +1703,7 @@ H.players = {}   -- H.players[src] = { ped coords = vec(...), state = {}, ace = 
 function H.boot(opts)
     opts = opts or {}
     local server = (opts.side or 'server') == 'server'
+    H.side = server and 'server' or 'client'   -- the BOOL natives answer 1 or false while it is 'server'
     _G.vec3, _G.vector3 = Vec, Vec
     _G.vec4, _G.vector4 = Vec, Vec
     _G.vec2, _G.vector2 =

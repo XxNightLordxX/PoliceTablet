@@ -558,6 +558,14 @@ do
     Nui('opened', { seq = LastNui('open').seq })
     T.close()
     H.eq(cs.focus, false, 'closed')
+    -- a dead ped the Qbox metadata does not show yet: IsEntityDead answers true with the manifest's OAL and the
+    -- integer 1 without it (the server's shape); both are down
+    cs.dead = 1
+    local okDead, errDead = T.open('officer')
+    H.eq(okDead, false, 'IsEntityDead answers 1: open refused')
+    H.eq(errDead, 'err.downed', 'IsEntityDead answers 1: with err.downed')
+    H.eq(cs.focus, false, 'IsEntityDead answers 1: the focus is not taken')
+    cs.dead = false
 end
 
 -- ============================================================================
@@ -687,6 +695,16 @@ do
     text = StateText()
     H.ok(text:find('sc-ambulance still counts the player as down', 1, true) ~= nil, 'state: still down')
     Revive()
+    -- without the manifest's OAL a yes/no native answers the integer 1: the state (sent to the server and the
+    -- Admin UI) still holds true and false
+    local realFrozen, realControl = IsEntityPositionFrozen, IsPlayerControlOn
+    _G.IsEntityPositionFrozen = function() return 1 end
+    _G.IsPlayerControlOn = function() return 1 end
+    local s = CP.Diag.state()
+    H.eq(s.frozen, true, 'state: a 1 from IsEntityPositionFrozen reads as true')
+    H.eq(s.playerControl, true, 'state: a 1 from IsPlayerControlOn reads as true')
+    H.eq(s.inVehicle, false, 'state: a false stays false')
+    _G.IsEntityPositionFrozen, _G.IsPlayerControlOn = realFrozen, realControl
     -- unstick: only ours
     H.eq(T.open('officer'), true, 'unstick: tablet open')
     Nui('opened', { seq = LastNui('open').seq })

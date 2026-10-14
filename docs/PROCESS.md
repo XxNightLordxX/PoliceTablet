@@ -124,3 +124,7 @@ Until these gaps are closed, look for them in review.
 - **FXServer file behaviour.** The harness runs plain Lua, where `os.execute` works and `os.rename` answers
   the right way round; FXServer refuses the first and inverts the second on Linux. `lint-fivem` guards the
   known uses (FX07, FX08); anything else that touches files needs a test on a real server.
+- **Yes/no natives answer 1 on the server.** FXServer gives Lua the integer 1 for a BOOL native's yes (false for
+  no), never true, so `DoesEntityExist(e) == true` is false for every entity. Read the answer as a condition or
+  accept `true or 1` (ARCHITECTURE §6.1). The harness gives every server mock that answer, whatever the spec's
+  function returns; a spec never sets the metatable of `_G` (`H.strictGlobals`, `H.onUndefinedGlobal`).

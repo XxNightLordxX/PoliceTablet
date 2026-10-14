@@ -14,6 +14,14 @@ local function Try(fn, ...)
     return nil
 end
 
+-- A yes/no native as true or false (nil when unknown): true with the manifest's use_experimental_fxv2_oal, the
+-- integer 1 without it. The state goes to the server and the Admin UI as booleans.
+local function TryYes(fn, ...)
+    local v = Try(fn, ...)
+    if v == nil then return nil end
+    return v == true or v == 1
+end
+
 local function YesNo(v)
     if v == nil then return '?' end
     return v and 'yes' or 'no'
@@ -38,20 +46,20 @@ function Diag.state()
     local cam = Try(GetRenderingCam)
     return {
         screen = Screen(),
-        nuiFocus = Try(IsNuiFocused),
-        nuiKeepInput = Try(IsNuiFocusKeepingInput),
+        nuiFocus = TryYes(IsNuiFocused),
+        nuiKeepInput = TryYes(IsNuiFocusKeepingInput),
         tabletOpen = CP.Tablet and CP.Tablet.isOpen and CP.Tablet.isOpen() == true or false,
         panel = CP.Tablet and CP.Tablet.panelFocusOwner and CP.Tablet.panelFocusOwner() or nil,
         pickup = CP.Downed and CP.Downed.busy and CP.Downed.busy() == true or false,
         run = type(run) == 'table' and run.id or nil,
         scriptCam = cam ~= nil and cam ~= -1,
-        playerControl = Try(IsPlayerControlOn, PlayerId()),
-        frozen = Try(IsEntityPositionFrozen, ped),
-        dead = Try(IsEntityDead, ped),
+        playerControl = TryYes(IsPlayerControlOn, PlayerId()),
+        frozen = TryYes(IsEntityPositionFrozen, ped),
+        dead = TryYes(IsEntityDead, ped),
         lastStand = md.inlaststand == true,
         metaDead = md.isdead == true,
-        inVehicle = Try(IsPedInAnyVehicle, ped, false),
-        pauseMenu = Try(IsPauseMenuActive),
+        inVehicle = TryYes(IsPedInAnyVehicle, ped, false),
+        pauseMenu = TryYes(IsPauseMenuActive),
     }
 end
 

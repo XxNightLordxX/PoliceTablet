@@ -1966,9 +1966,7 @@ do
     end
 
     CP.Blocks._list.hostile_waves, CP.Blocks._list.protect_rescue, CP.Blocks._list.flee_arrest = nil, nil, nil
-    setmetatable(_G, {
-        __index = function(_, k) error('undefined global ' .. tostring(k), 2) end,
-    })
+    H.strictGlobals(true)
     H.load('blocks/hostile_waves/client.lua')
     H.load('blocks/protect_rescue/client.lua')
     H.load('blocks/flee_arrest/client.lua')
@@ -2199,7 +2197,7 @@ do
         CP.Runs = savedRuns
     end
 
-    setmetatable(_G, nil)
+    H.strictGlobals(false)
     for k, v in pairs(saved) do _G[k] = v end
     CP.Npc.apply, CP.Npc.task = savedNpc.apply, savedNpc.task
 end

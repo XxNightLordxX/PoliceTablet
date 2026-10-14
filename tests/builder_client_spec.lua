@@ -976,11 +976,13 @@ do
     Frames(20)
     H.eq(LastOverlay('recording').waiting, 'vehicle', 'waits for the player to drive')
     W.driver = true
-    -- north 200 m in 5 m steps; a stop at 100 m; a stretch where the node is 12 m above but the car is on a road
+    -- north 200 m in 5 m steps (a sample every 25 m); a stop at 100 m; two samples where the node is 12 m above but
+    -- the car is on a road (IsPointOnRoad answers true with the manifest's OAL, the integer 1 without it)
     for i = 0, 40 do
         local y = -3000.0 + i * 5.0
         if i == 10 then W.nodeDz, W.onRoad = 12.0, true end
-        if i == 11 then W.nodeDz, W.onRoad = 0.0, false end
+        if i == 15 then W.nodeDz, W.onRoad = 12.0, 1 end
+        if i == 11 or i == 16 then W.nodeDz, W.onRoad = 0.0, false end
         Drive(1000.0, y, i == 20 and { KEY.E } or nil)
     end
     Frames(10)

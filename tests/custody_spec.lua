@@ -347,6 +347,21 @@ do
     Runs.endRun(run, 'completed', 'completed')
 end
 
+do
+    -- On a real server DoesEntityExist answers the integer 1 for a contact that is there (never true), as the
+    -- harness does: every police action must still reach the contact.
+    local run = HoldRun({ 1 })
+    local p = Contact(run, { truth = 'warrant', state = 'contacted' })
+    local ent = NetworkGetEntityFromNetworkId(p.netId)
+    H.eq(DoesEntityExist(ent), 1, 'FXServer\'s shape: DoesEntityExist answers 1 for the contact')
+    W.near(1, run, p.netId)
+    W.act(1, run, p.netId, 'talk')
+    H.eq(Facts(p), 'id_ok,warrant', 'DoesEntityExist answers 1: Talk reaches the contact')
+    W.act(1, run, p.netId, 'detain')
+    H.eq(p.state, 'cuffed', 'DoesEntityExist answers 1: Detain cuffs the contact')
+    Runs.endRun(run, 'completed', 'completed')
+end
+
 -- ============================================================================
 --                      4. FACTS: WHAT EACH ACTION REVEALS
 -- ============================================================================

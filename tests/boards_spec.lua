@@ -75,7 +75,8 @@ CP.Access = {
     end,
     isAdmin = function(src)
         if tonumber(src) == 0 then return true end
-        return IsPlayerAceAllowed(src, 'crimsonpolice.admin') == true
+        local allowed = IsPlayerAceAllowed(src, 'crimsonpolice.admin')   -- FXServer answers 1 or false
+        return allowed == true or allowed == 1
     end,
     isSupervisor = function(src)
         local o = officers[tonumber(src)]

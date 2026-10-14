@@ -117,7 +117,12 @@ local function Num(v, d)
     return v
 end
 
-local function Exists(e) return type(e) == 'number' and e ~= 0 and DoesEntityExist(e) == true end
+-- FXServer's DoesEntityExist answers 1 for yes (false for no), never true.
+local function Exists(e)
+    if type(e) ~= 'number' or e == 0 then return false end
+    local found = DoesEntityExist(e)
+    return found == true or found == 1
+end
 
 local function Has(mod, fn) return CP[mod] ~= nil and type(CP[mod][fn]) == 'function' end
 

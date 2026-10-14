@@ -4293,6 +4293,11 @@ Storage modes (CP_TEST_STORAGE, H.storage; tests/run.lua --storage=... sets it f
 H.bit(v) reads a TINYINT(1) value in any mode. H.skipIn(mode, reason) skips a MariaDB-only check.
 Threads: CreateThread runs the function as a coroutine immediately; Wait(ms) advances the fake
 clock and yields; H.step() resumes sleeping threads. Citizen.Await works on resolved promises.
+Yes/no natives: while H.side is 'server' (H.boot's side), every global named in H.SERVER_BOOL_NATIVES (the `_r`
+natives of FXServer's natives_server.lua) answers 1 for yes and false for no, nil or 0, whatever the spec's mock
+returns, as FXServer does (H.serverBool(v) is that conversion); booted as the client they answer as written (the
+manifest's OAL booleans). The harness owns the metatable of _G for that, so setmetatable(_G, ...) raises an error:
+H.strictGlobals(true) makes reading an undefined global an error, H.onUndefinedGlobal(fn) answers such a read.
 ```
 
 ## tests/int_core_spec.lua

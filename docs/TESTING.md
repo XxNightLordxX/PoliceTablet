@@ -389,5 +389,12 @@ packages, and the runner's own clock and zone (the specs do not read either). Th
 - **A missing `mysql` client looked like wrong data**: its `not found` message was read as an empty result
   (21 failed checks and 14 crashes in database mode). The harness now fails when `mysql` exits non-zero, and
   `tests/run.lua` checks the client before the first spec.
+- **Mocks that said true where FXServer says 1**: on a real server a native that answers yes or no gives Lua the
+  integer 1 (false for no), never true. The spec mocks answered true, so `DoesEntityExist(e) == true` in
+  modules/npc and modules/custody passed every spec while, on a real server, every mission NPC was declared dead
+  a second after it spawned and every police action on a contact was refused. The harness now gives every server
+  mock of such a native FXServer's answer (tests/harness.lua, "SERVER NATIVES THAT ANSWER YES OR NO"; checked by
+  section 23 of tests/foundation_spec.lua). It owns the metatable of `_G` for that: a spec that wants undefined
+  globals to be errors calls `H.strictGlobals(true)` instead of `setmetatable(_G, ...)`.
 - **Shadow mode used the socket only**: the twin ignored `MYSQL_HOST`, so with a TCP server the CLI and the
   twin could talk to different servers. The twin now reads the same variables as the CLI.

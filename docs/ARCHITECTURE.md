@@ -1792,6 +1792,13 @@ action goes through `CP.AdminKit` (admins only, audited).
   `DoesEntityExist`, then `NetworkGetNetworkIdFromEntity`. `SetEntityOrphanMode(entity, 2)` is not used
   (the engine deletes everything itself). Weapons: `GiveWeaponToPed(ped, hash, 250, false, true)`;
   armour: `SetPedArmour(ped, n)` (server natives).
+- Yes/no natives: on the server a native that answers yes or no (`DoesEntityExist`, `IsPlayerAceAllowed`,
+  `SaveResourceFile`, `IsPedAPlayer`, `IsDuplicityVersion`...) gives Lua the integer 1 for yes and false for no,
+  never true (`_r` in FXServer's natives_server.lua). Read the answer as a condition (`if DoesEntityExist(e)`)
+  or accept both (`v == true or v == 1`), never `== true`; a value that leaves the function (a table field, an
+  event, the NUI) is turned into a real true or false first. Client natives give true or false (the manifest's
+  `use_experimental_fxv2_oal`), and client code accepts both anyway. `tests/harness.lua` gives every server mock
+  of such a native FXServer's answer, so a spec catches a `== true`.
 - Anything that only exists client-side (accuracy, health above 200, combat attributes, drop-weapons,
   relationship group, tasks) is applied by the **host** client from the `cp` state bag with
   `CP.Npc.apply` after it has control. When the host changes, the new host re-applies and re-tasks.

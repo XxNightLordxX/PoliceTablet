@@ -1970,9 +1970,7 @@ do
         removeZone = function(id) removedZones[id] = true end,
     }
     CP.Blocks._list.checkpoint_route, CP.Blocks._list.interact_points, CP.Blocks._list.skill_check = nil, nil, nil
-    setmetatable(_G, {
-        __index = function(_, k) error('undefined global ' .. tostring(k), 2) end,
-    })
+    H.strictGlobals(true)
 
     H.load('blocks/checkpoint_route/client.lua')
     H.load('blocks/interact_points/client.lua')
@@ -2303,7 +2301,7 @@ do
         H.ok(removedZones[z1 + 1] == true, 'skill_check with fresh ctx.state: stop removes the zone')
     end
 
-    setmetatable(_G, nil)
+    H.strictGlobals(false)
 end
 
 return H

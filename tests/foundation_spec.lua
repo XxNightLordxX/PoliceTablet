@@ -1781,7 +1781,7 @@ do
     H.ok(math.abs(GetEntityCoords(e.handle).x - 10.0) < 0.01, 'H.entity moves with its velocity over H.advance')
     H.eq(GetEntitySpeed(e.handle), 10.0, 'GetEntitySpeed')
     H.eq(GetPedInVehicleSeat(e.handle, -1), 4242, 'seat occupants')
-    H.eq(IsVehicleSirenOn(e.handle), true, 'siren')
+    H.eq(IsVehicleSirenOn(e.handle), 1, 'siren (1: a yes from a server BOOL native)')
     H.advance(1100)
     H.eq(GetVehicleBodyHealth(e.handle), 300.0, 'the timeline sets the health')
     H.eq(IsVehicleSirenOn(e.handle), false, 'and the siren')
@@ -1801,6 +1801,51 @@ do
     exports.ox_target:addEntity({ 5 }, { { name = 'crimson-police:seat_talk', bones = { 'door_dside_f' } } })
     H.eq(tgt.zones[zone].options[1].name, 'crimson-police:desk', 'ox_target addBoxZone')
     H.eq(tgt.entities[1].options[1].bones[1], 'door_dside_f', 'ox_target addEntity with bones')
+end
+
+-- ============================================================================
+--              23. FXSERVER'S YES/NO NATIVES (tests/harness.lua)
+-- ============================================================================
+-- FXServer hands a BOOL native's yes to Lua as the integer 1 and its no as false (natives_server.lua `_r`); the
+-- harness gives every spec that shape, whatever its mocks return, so code that tests `== true` fails here too.
+
+do
+    H.eq(CP.isServer, true, 'CP.isServer is a plain true on the server (IsDuplicityVersion answers 1)')
+    H.eq(IsDuplicityVersion(), 1, 'IsDuplicityVersion answers 1 on the server')
+    local realExists = DoesEntityExist
+    _G.DoesEntityExist = function(e) return e == 7 end
+    H.eq(DoesEntityExist(7), 1, 'a mock that returns true answers 1')
+    H.eq(math.type(DoesEntityExist(7)), 'integer', 'an integer')
+    H.eq(DoesEntityExist(8), false, 'a mock that returns false answers false')
+    _G.DoesEntityExist = function() end
+    H.eq(DoesEntityExist(7), false, 'a mock that returns nothing answers false (FXServer never gives nil)')
+    _G.DoesEntityExist = function() return 0 end
+    H.eq(DoesEntityExist(7), false, 'a 0 answers false')
+    _G.GetVehicleLightsState = function() return true, 1, 0 end
+    local okL, lights, high = GetVehicleLightsState(5)
+    H.eq(okL, 1, 'the first answer is shaped')
+    H.ok(lights == 1 and high == 0, 'the other answers are kept')
+    _G.GetVehicleLightsState = nil
+    H.eq(GetVehicleLightsState, nil, 'a native set to nil is gone (type(X) == \'function\' checks still work)')
+    local mine = function() return true end
+    _G.IsPedAPlayer = mine
+    local read = IsPedAPlayer
+    _G.IsPedAPlayer = read
+    H.eq(IsPedAPlayer(1), 1, 'a native read and set back is not wrapped twice')
+    H.side = 'client'
+    H.eq(IsPedAPlayer(1), true, 'booted as the client, a mock answers as written (OAL booleans)')
+    H.side = 'server'
+    _G.IsPedAPlayer = nil
+    local realType = GetEntityType
+    _G.GetEntityType = function() return true end
+    H.eq(GetEntityType(1), true, 'a native that is not BOOL on the server is left alone')
+    _G.GetEntityType = realType
+    H.eq(pcall(setmetatable, _G, {}), false, 'a spec cannot replace the metatable of _G')
+    H.strictGlobals(true)
+    H.eq(pcall(function() return NoSuchNative end), false, 'H.strictGlobals: an undefined global is an error')
+    H.strictGlobals(false)
+    H.eq(NoSuchNative, nil, 'and nil again once off')
+    _G.DoesEntityExist = realExists
 end
 
 return H

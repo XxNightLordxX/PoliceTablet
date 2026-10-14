@@ -81,7 +81,9 @@ local function PlayerDown()
     local pd = CP.Qbx and CP.Qbx.getPlayerData and CP.Qbx.getPlayerData() or {}
     local md = type(pd) == 'table' and pd.metadata or nil
     if type(md) == 'table' and (md.isdead == true or md.inlaststand == true) then return true end
-    return IsEntityDead(PlayerPedId()) == true
+    -- true with the manifest's use_experimental_fxv2_oal, the integer 1 without it
+    local dead = IsEntityDead(PlayerPedId())
+    return dead == true or dead == 1
 end
 
 -- ============================================================================
