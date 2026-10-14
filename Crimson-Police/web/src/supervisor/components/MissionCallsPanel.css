@@ -1,0 +1,48 @@
+/* Mission calls panel (Supervisor Live Missions, Admin Missions) and the Admin area coverage and location
+   plays views. Only --cp-* variables; every class is prefixed mc-. */
+
+.mc-panel__actions {
+    display: flex;
+    gap: 8px;
+}
+
+.mc-panel__form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.mc-panel__muted {
+    color: var(--cp-muted);
+    font-size: var(--cp-fs-xs);
+}
+
+.mc-coverage {
+    overflow-x: auto;
+}
+
+.mc-coverage table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--cp-fs-xs);
+}
+
+.mc-coverage th,
+.mc-coverage td {
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--cp-border);
+    text-align: center;
+}
+
+.mc-coverage th:first-child,
+.mc-coverage td:first-child {
+    text-align: left;
+}
+
+.mc-coverage td.is-thin {
+    color: var(--cp-warning);
+}
+
+.mc-coverage td.is-empty {
+    color: var(--cp-subtle);
+}

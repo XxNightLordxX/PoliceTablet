@@ -1,0 +1,23 @@
+/* Mission call pieces on the Mission Board. Only --cp-* variables; every class is prefixed mc-. */
+
+.mc-board-link {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: var(--cp-radius);
+    border: 1px solid rgba(var(--cp-accent-rgb), 0.35);
+    background: rgba(var(--cp-accent-rgb), 0.08);
+    color: var(--cp-text);
+    font-size: var(--cp-fs-sm);
+    cursor: pointer;
+    text-align: left;
+}
+
+.mc-board-link__text {
+    flex: 1;
+}
+
+.mc-board-link:hover {
+    background: rgba(var(--cp-accent-rgb), 0.16);
+}

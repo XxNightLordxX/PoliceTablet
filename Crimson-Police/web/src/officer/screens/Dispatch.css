@@ -1,0 +1,289 @@
+/* Officer UI · Dispatch (mission calls). Only --cp-* variables; every class is prefixed mc-. */
+
+.mc-screen .cp-screen__body {
+    gap: 12px;
+}
+
+/* SC-Dispatch real-call strip */
+.mc-real {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: var(--cp-radius);
+    border: 1px solid rgba(var(--cp-warning-rgb), 0.4);
+    background: rgba(var(--cp-warning-rgb), 0.1);
+    color: var(--cp-text);
+    font-size: var(--cp-fs-sm);
+}
+
+/* Notices */
+.mc-notice {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 12px;
+    border-radius: var(--cp-radius);
+    border: 1px solid var(--cp-border);
+    background: rgba(var(--cp-info-rgb), 0.08);
+    color: var(--cp-info);
+}
+
+.mc-notice--warning {
+    color: var(--cp-warning);
+    background: rgba(var(--cp-warning-rgb), 0.1);
+}
+
+.mc-notice--accent {
+    color: var(--cp-accent-text);
+    background: rgba(var(--cp-accent-rgb), 0.1);
+}
+
+.mc-notice--neutral {
+    color: var(--cp-muted);
+    background: var(--cp-surface-2);
+}
+
+.mc-notice__text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    color: var(--cp-text);
+}
+
+.mc-notice__title {
+    font-weight: 600;
+    font-size: var(--cp-fs-sm);
+}
+
+.mc-notice__sub {
+    font-size: var(--cp-fs-xs);
+    color: var(--cp-muted);
+}
+
+/* Toolbar */
+.mc-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.mc-toolbar__count {
+    margin-left: auto;
+    font-size: var(--cp-fs-xs);
+    color: var(--cp-subtle);
+}
+
+/* Call cards */
+.mc-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 12px;
+}
+
+.mc-card {
+    display: flex;
+    flex-direction: column;
+}
+
+.mc-card.is-muted {
+    opacity: 0.86;
+}
+
+.mc-card__head {
+    display: flex;
+    gap: 12px;
+    padding: 12px 14px 8px;
+}
+
+.mc-card__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    width: 34px;
+    height: 34px;
+    border-radius: var(--cp-radius-sm);
+    color: var(--cp-accent-text);
+    background: rgba(var(--cp-accent-rgb), 0.14);
+}
+
+.mc-card--p1 .mc-card__icon {
+    color: var(--cp-danger);
+    background: rgba(var(--cp-danger-rgb), 0.14);
+}
+
+.mc-card__titles {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    flex: 1;
+}
+
+.mc-card__line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+}
+
+.mc-card__code {
+    font-weight: 700;
+    font-size: var(--cp-fs-sm);
+    color: var(--cp-text);
+}
+
+.mc-card__title {
+    font-size: var(--cp-fs-md);
+    font-weight: 600;
+    color: var(--cp-text);
+}
+
+.mc-card__meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    font-size: var(--cp-fs-xs);
+    color: var(--cp-muted);
+}
+
+.mc-card__meta span {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.mc-card__offer {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+    flex: none;
+}
+
+.mc-card__offer-label {
+    font-size: var(--cp-fs-xs);
+    color: var(--cp-subtle);
+}
+
+.mc-card__offer-none {
+    color: var(--cp-subtle);
+}
+
+.mc-card__pay {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 14px 10px 60px;
+    font-size: var(--cp-fs-sm);
+}
+
+.mc-card__sep {
+    color: var(--cp-subtle);
+}
+
+.mc-card__rapid {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    color: var(--cp-accent-text);
+    font-size: var(--cp-fs-xs);
+}
+
+.mc-card__rapid.is-off {
+    color: var(--cp-subtle);
+}
+
+.mc-card__foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 8px 14px;
+    border-top: 1px solid var(--cp-border);
+}
+
+/* Status lines */
+.mc-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    font-size: var(--cp-fs-xs);
+    color: var(--cp-muted);
+}
+
+.mc-status--ready {
+    color: var(--cp-success);
+}
+
+.mc-status--priority {
+    color: var(--cp-info);
+}
+
+.mc-status--claiming {
+    color: var(--cp-warning);
+}
+
+.mc-status--claimed {
+    color: var(--cp-accent-text);
+}
+
+.mc-status--locked {
+    color: var(--cp-muted);
+}
+
+.mc-status--lapsed {
+    color: var(--cp-subtle);
+}
+
+/* Recent calls */
+.mc-recent__list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.mc-recent__row {
+    display: grid;
+    grid-template-columns: 80px 1fr 1fr auto;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 14px;
+    border-top: 1px solid var(--cp-border);
+    font-size: var(--cp-fs-sm);
+}
+
+.mc-recent__row:first-child {
+    border-top: none;
+}
+
+.mc-recent__code {
+    font-weight: 600;
+}
+
+.mc-recent__by {
+    color: var(--cp-muted);
+}
+
+/* Footnote and confirm */
+.mc-footnote {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0;
+    font-size: var(--cp-fs-xs);
+    color: var(--cp-subtle);
+}
+
+.mc-confirm p {
+    margin: 0 0 8px;
+}
+
+.mc-confirm__warn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--cp-warning);
+}

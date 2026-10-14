@@ -1,0 +1,110 @@
+# Every check of the repository (tools/check_all.sh) on each push and pull request. docs/TESTING.md has the
+# same steps for a local machine, and its "CI" section says what differs on a runner.
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    # pinned: the apt package names below (lua5.4, lua-cjson, mariadb-client) are the 24.04 ones
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    services:
+      mariadb:
+        # The server the suite is written against: root without a password, UTC, the default sql_mode, like a
+        # local test install. The runner picks the host port (the image's own MySQL may want 3306).
+        image: mariadb:10.11
+        env:
+          MARIADB_ALLOW_EMPTY_ROOT_PASSWORD: "1"
+        ports:
+          - 3306/tcp
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: MariaDB service address
+        # The harness runs `mysql -uroot ...`, and tests/shadow/twin.cjs reads the same variables: TCP to the
+        # service (127.0.0.1; `localhost` would mean the local socket).
+        run: |
+          echo "MYSQL_HOST=127.0.0.1" >> "$GITHUB_ENV"
+          echo "MYSQL_TCP_PORT=${{ job.services.mariadb.ports['3306'] }}" >> "$GITHUB_ENV"
+
+      - name: Lua 5.4, lua-cjson and the MariaDB client
+        run: |
+          sudo apt-get update -q
+          # mariadb-client replaces the runner's preinstalled MySQL 8.0 client (apt removes those packages): the
+          # harness parses the MariaDB client's batch output, and its charset follows the locale the same way on
+          # every machine
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends \
+            lua5.4 lua-cjson mariadb-client
+          # newer MariaDB packages ship the `mysql` name separately (mariadb-client-compat)
+          command -v mysql > /dev/null || sudo ln -s "$(command -v mariadb)" /usr/local/bin/mysql
+          mysql --version
+          mysql --version | grep -q MariaDB
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            Crimson-Police/web/package-lock.json
+            tests/shadow/package-lock.json
+
+      - name: npm ci (web UI)
+        working-directory: Crimson-Police/web
+        run: npm ci --no-audit --no-fund
+
+      - name: npm ci (shadow twin)
+        working-directory: tests/shadow
+        run: npm ci --no-audit --no-fund
+
+      - name: StyLua and Prettier (the style step)
+        # The versions docs/STYLE.md pins: another version may lay the code out differently. The release binary
+        # reads Lua 5.4 (checked below); Prettier comes through npx into the npm cache.
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/stylua.zip" \
+            https://github.com/JohnnyMorganz/StyLua/releases/download/v2.5.2/stylua-linux-x86_64.zip
+          mkdir -p "$HOME/.local/bin"
+          python3 -c 'import sys, zipfile; zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])' \
+            "$RUNNER_TEMP/stylua.zip" "$HOME/.local/bin"
+          chmod +x "$HOME/.local/bin/stylua"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/stylua" --version | grep -qx 'stylua 2.5.2'
+          printf 'local x <const> = 1\n' | "$HOME/.local/bin/stylua" --syntax Lua54 - > /dev/null
+          npx --yes prettier@3.9.9 --version
+
+      - name: Test environment
+        run: bash tools/setup_test_env.sh
+
+      - name: tools/check_all.sh
+        run: bash tools/check_all.sh
+        env:
+          CHECK_LOGS: ${{ runner.temp }}/check-logs
+
+      - name: Logs of the failed run
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: check-logs
+          path: |
+            ${{ runner.temp }}/check-logs
+            !${{ runner.temp }}/check-logs/build/Crimson-Police/web/node_modules
+            /tmp/cp_shadow_*.jsonl
+          if-no-files-found: ignore
+          retention-days: 7

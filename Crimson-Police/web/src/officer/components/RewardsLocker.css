@@ -1,0 +1,54 @@
+/* Officer UI · Home · Rewards locker. Only --cp-* variables; classes prefixed rewards-. */
+
+.rewards-locker__reason {
+    margin: 0 0 8px;
+    font-size: var(--cp-fs-sm);
+    color: var(--cp-muted);
+}
+
+.rewards-locker__list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.rewards-locker__row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 8px;
+    border-radius: var(--cp-radius-sm);
+    border: 1px solid var(--cp-border);
+    background: var(--cp-bg);
+}
+
+.rewards-locker__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    flex: none;
+    border-radius: 50%;
+    color: var(--cp-accent-text);
+    background: rgba(var(--cp-accent-rgb), 0.16);
+}
+
+.rewards-locker__text {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.rewards-locker__item {
+    font-weight: 600;
+}
+
+.rewards-locker__meta {
+    font-size: var(--cp-fs-xs);
+    color: var(--cp-subtle);
+}

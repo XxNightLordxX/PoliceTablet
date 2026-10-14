@@ -1,0 +1,121 @@
+/* Admin UI · tablet access: Config health (Permissions) and desks, personal accents and looks (Departments).
+   Only --cp-* variables. */
+
+/* Config health */
+.access-health {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.access-health__item {
+    display: grid;
+    grid-template-columns: 92px 150px 1fr;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 2px;
+    border-bottom: 1px solid var(--cp-border);
+    font-size: var(--cp-fs-sm);
+}
+
+.access-health__item:last-child {
+    border-bottom: 0;
+}
+
+.access-health__check {
+    color: var(--cp-muted);
+    font-weight: 600;
+}
+
+.access-health__text {
+    color: var(--cp-text);
+}
+
+.access-health__item--error .access-health__text {
+    color: var(--cp-danger);
+}
+
+/* Desks */
+.access-desks {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.access-desk {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: var(--cp-radius-sm);
+    border: 1px solid var(--cp-border);
+    background: var(--cp-surface-2);
+    font-size: var(--cp-fs-sm);
+}
+
+.access-desk__main {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+    min-width: 0;
+}
+
+.access-desk__coords {
+    font-family: var(--cp-mono);
+    font-size: var(--cp-fs-xs);
+    color: var(--cp-subtle);
+}
+
+.access-ways {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 12px;
+}
+
+/* Personal accents */
+.access-accents {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.access-accent {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: var(--cp-fs-xs);
+    color: var(--cp-muted);
+}
+
+.access-accent__chip {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: 2px solid var(--cp-border-strong);
+}
+
+.access-accent__chip.is-picked {
+    border-color: var(--cp-text);
+}
+
+.access-accent button {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+}
+
+.access-look-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+}

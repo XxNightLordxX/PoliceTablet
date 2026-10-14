@@ -1,0 +1,115 @@
+/* Admin UI · Payments (economy). Only --cp-* variables; classes prefixed payments-admin. */
+
+.payments-admin__actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.payments-admin__stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 8px;
+}
+
+.payments-admin__depts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 20px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.payments-admin__depts li {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.payments-admin__filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 12px;
+}
+
+.payments-admin__filters > * {
+    min-width: 180px;
+}
+
+.payments-admin__who {
+    display: inline-flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.payments-admin__soft {
+    font-size: var(--cp-fs-xs);
+    color: var(--cp-subtle);
+}
+
+.payments-admin__txn {
+    font-size: var(--cp-fs-xs);
+    word-break: break-all;
+}
+
+.payments-admin__foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 12px;
+}
+
+.payments-admin__resolve,
+.payments-admin__form {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.payments-admin__found {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--cp-success);
+}
+
+.payments-admin__note {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    font-size: var(--cp-fs-sm);
+    color: var(--cp-muted);
+}
+
+.payments-admin__warn {
+    padding: 6px 10px;
+    border-radius: var(--cp-radius-sm);
+    background: rgba(var(--cp-warning-rgb), 0.12);
+    color: var(--cp-warning);
+    font-size: var(--cp-fs-sm);
+}
+
+.payments-admin__export {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.payments-admin__export textarea {
+    width: 100%;
+    min-height: 260px;
+    font-family: ui-monospace, monospace;
+    font-size: var(--cp-fs-xs);
+    background: var(--cp-surface-2);
+    color: var(--cp-text);
+    border: 1px solid var(--cp-border);
+    border-radius: var(--cp-radius-sm);
+    padding: 8px;
+    resize: vertical;
+}

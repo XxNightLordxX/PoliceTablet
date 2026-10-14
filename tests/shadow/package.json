@@ -1,0 +1,8 @@
+{
+  "name": "cp-shadow-twin",
+  "private": true,
+  "description": "tests/shadow/twin.cjs: the MariaDB twin of CP_TEST_STORAGE=shadow (mysql2 with oxmysql's options, typeCast and parseResponse)",
+  "dependencies": {
+    "mysql2": "^3.22.4"
+  }
+}
