@@ -656,13 +656,19 @@ do
 
     local function InSector(bearing, from, width) return bearing == nil or (bearing - from) % 360 <= width end
 
+    -- The console name of candidate i: its own label ({ coords, label = 'spawns[7]' }), else '<opts.name>[i]'.
+    local function PointName(v, name, i)
+        if type(v) == 'table' and type(v.label) == 'string' and v.label ~= '' then return v.label end
+        return ('%s[%d]'):format(name, i)
+    end
+
     -- One console line per point, reason and wave (a wave that waits asks again every second).
-    local function SaySkipped(run, m, opts, name, index, kind, fmt, ...)
+    local function SaySkipped(run, m, opts, what, kind, fmt, ...)
         if SpawnCfg().log == false then return end
-        local key = ('%s|%s|%d|%s'):format(tostring(opts.wave), name, index, kind)
+        local key = ('%s|%s|%s'):format(tostring(opts.wave), what, kind)
         if m.said[key] then return end
         m.said[key] = true
-        CP.log(TAG, 'run %s: %s[%d] skipped: ' .. fmt, run.id, name, index, ...)
+        CP.log(TAG, 'run %s: %s skipped: ' .. fmt, run.id, what, ...)
     end
 
     -- Picks the points of one wave from candidates (the block's list, best first: vectors, { x, y, z } or
@@ -678,7 +684,8 @@ do
     -- sides. With too few good points it returns fewer, never a bad one. opts.wave names the wave: its clock starts
     -- at the first ask (opts.since, an os.time(), sets it instead) and stops once a call returns n points; after
     -- waveDelayMax seconds the distance drops to hardMin, never lower. opts.name names the list in the console
-    -- ('spawns[7] skipped: 30 m from <officer>'), opts.obj the objective (ctx.choosePoints fills it in).
+    -- ('spawns[7] skipped: 30 m from <officer>'; a candidate { coords, label = 'yard[3]' } is named by its label),
+    -- opts.obj the objective (ctx.choosePoints fills it in).
     -- Config.Spawning.enabled = false: the first n candidates as they are.
     function Runs.choosePoints(run, candidates, n, opts)
         opts = type(opts) == 'table' and opts or {}
@@ -716,10 +723,10 @@ do
             local x, y, z = PointXyz(v)
             if x then
                 local indoor = opts.indoor == true or (type(v) == 'table' and v.indoor == true)
-                pts[#pts + 1] = { i = i, v = v, x = x, y = y, z = z, indoor = indoor }
+                pts[#pts + 1] = { i = i, v = v, x = x, y = y, z = z, indoor = indoor, what = PointName(v, name, i) }
                 sx, sy = sx + x, sy + y
             else
-                SaySkipped(run, m, opts, name, i, 'bad', 'not a point')
+                SaySkipped(run, m, opts, ('%s[%d]'):format(name, i), 'bad', 'not a point')
             end
         end
         if #pts == 0 then return chosen, picked end
@@ -757,9 +764,9 @@ do
             end
             p.nearest, p.base = nearestD, base
             if nearest and nearestD < need then
-                SaySkipped(run, m, opts, name, p.i, 'near', '%.0f m from %s', nearestD, nearest.name)
+                SaySkipped(run, m, opts, p.what, 'near', '%.0f m from %s', nearestD, nearest.name)
             elseif behindOf then
-                SaySkipped(run, m, opts, name, p.i, 'behind', 'behind %s', behindOf.name)
+                SaySkipped(run, m, opts, p.what, 'behind', 'behind %s', behindOf.name)
             else
                 passed[#passed + 1] = p
             end
@@ -815,7 +822,7 @@ do
                 -- a point outside the sector is only worth a line when the wave is short of points for it
                 if #kept < n then
                     for _, p in ipairs(outside) do
-                        SaySkipped(run, m, opts, name, p.i, 'spread', 'outside this wave\'s %.0f degree sector', spread)
+                        SaySkipped(run, m, opts, p.what, 'spread', 'outside this wave\'s %.0f degree sector', spread)
                     end
                 end
                 passed = kept

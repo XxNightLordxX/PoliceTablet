@@ -164,6 +164,16 @@ local function MakeCtx(id, obj, location, o)
         combat = function(acc, arm) return acc + 10, arm + 25 end,
         isHost = function(src) return src == srcs[1] end,
         host = function() return srcs[1] end,
+        -- the engine's spawn director as it answers with Config.Spawning.enabled = false (the first n points, everyone
+        -- near); tests/hostile_waves_director_spec.lua runs hostile_waves with the real one
+        choosePoints = function(list, n, opts)
+            S.asks = S.asks or {}
+            S.asks[#S.asks + 1] = { n = n, opts = opts, count = #list }
+            local out = {}
+            for i = 1, math.min(n, #list) do out[i] = list[i] end
+            return out
+        end,
+        whenNear = function() return true end,
     }
     return ctx, S, impl
 end
@@ -431,7 +441,12 @@ do -- waves: start, distinct points, combat values, next wave by count and by ti
     for _ = 1, 89 do HW.tick(ctx, 1) end
     H.eq(#S.spawned, 14, 'no wave 3 before afterSeconds')
     HW.tick(ctx, 1)
-    H.eq(#S.spawned, 20, 'wave 3 after afterSeconds')
+    H.eq(#S.spawned, 17, 'wave 3 after afterSeconds, on the 3 points no living hostile stands on (never inside one)')
+    HW.onEntityDead(ctx, S.spawned[6].netId, 1)
+    HW.onEntityDead(ctx, S.spawned[7].netId, 1)
+    HW.onEntityDead(ctx, S.spawned[14].netId, 1)
+    HW.tick(ctx, 1)
+    H.eq(#S.spawned, 20, 'the rest of wave 3 once three points are free again')
     HW.tick(ctx, 1)
     H.eq(#S.spawned, 20, 'no more than the 3 waves')
 
@@ -642,6 +657,42 @@ do -- boss after the last wave: does not scale, kingpin_alive when cuffed
     H.eq(#AwardsOf(S, 'hostile_arrested'), 0, 'boss is not a hostile_arrested')
     HW.tick(ctx, 1)
     H.eq(S.completes, 1, 'complete after the boss')
+end
+
+do -- never inside a living hostile: a wave whose every point is taken waits (never left out); the boss too
+    Place(1, 1000, 1000, 30)
+    local ctx, S = MakeCtx('hostile_waves', { waves = { 12, 3 } }, HwLocation(12))
+    HW.start(ctx)
+    HW.tick(ctx, 1)
+    H.eq(#S.spawned, 12, 'wave 1 takes all 12 points')
+    for _ = 1, 90 do HW.tick(ctx, 1) end
+    H.ok(ctx.state.waves[2] ~= nil, 'wave 2 begins after afterSeconds')
+    H.eq(#S.spawned, 12, 'every point has a living hostile on it: wave 2 waits')
+    H.eq(ctx.state.waves[2].left, nil, 'nothing is left out (the points are taken, not missing)')
+    for _ = 1, 60 do HW.tick(ctx, 1) end
+    H.eq(#S.spawned, 12, 'still waiting a minute later')
+    HW.onEntityDead(ctx, S.spawned[1].netId, 1)
+    HW.onEntityDead(ctx, S.spawned[2].netId, 1)
+    HW.tick(ctx, 1)
+    H.eq(#S.spawned, 14, 'two points free again: two of wave 2 appear')
+    for _, sp in ipairs({ S.spawned[13], S.spawned[14] }) do
+        local p = sp.opts.coords
+        H.ok(U.dist(p, S.spawned[1].opts.coords) < 0.01 or U.dist(p, S.spawned[2].opts.coords) < 0.01,
+            'on the points of the two who fell')
+    end
+    -- the boss's own spot with a living hostile on it: he comes out on another point
+    local loc = HwLocation(12)
+    local bctx, BS = MakeCtx('hostile_waves',
+        { waves = { 3 }, nextWave = { aliveAtMost = 1 }, boss = { model = 'g_m_y_lost_01', spawn = 'bossSpot' } }, loc)
+    HW.start(bctx)
+    H.eq(#WithRole(BS, 'boss'), 0, 'the boss waits for the wave')
+    MoveEnt(BS, BS.spawned[1].netId, loc.bossSpot.x, loc.bossSpot.y, loc.bossSpot.z)
+    HW.onEntityDead(bctx, BS.spawned[2].netId, 1)
+    HW.onEntityDead(bctx, BS.spawned[3].netId, 1)
+    HW.tick(bctx, 1)
+    local boss = WithRole(BS, 'boss')[1]
+    H.ok(boss ~= nil, 'the boss appears')
+    H.ok(boss and U.dist(boss.opts.coords, loc.bossSpot) > 3.0, 'never on his spot while a hostile stands on it')
 end
 
 -- The boss bonus hint on a custom mission: only the block's own constant (kingpin_alive +50), never the file's

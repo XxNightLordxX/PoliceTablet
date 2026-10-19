@@ -298,6 +298,7 @@ RegisterMission({
       accuracy     = 28,                                                -- plus the tier's accuracy
       armour       = 10,                                                -- plus the tier's armour
       behaviour    = { hold = 0.3, balanced = 0.5, push = 0.2 },        -- rolled once per run
+      indoor       = true,                                              -- in and around the house: the indoor spawn distance
       surrender    = { belowHealth = 0.25, chance = 0.30 },
       peds         = { 'g_m_y_ballaeast_01', 'g_m_y_famca_01', 'g_m_y_mexgoon_01' },
       boss         = {

@@ -359,6 +359,13 @@ do
         'Metres: once a wave has waited waveDelayMax, a point this close to an officer may be used, never a closer one',
         'the closest after the wait, without the wait comment')
     H.eq(
+        E('Spawning.leaveOutAfter').desc,
+        'Seconds a wave may stay short of points (every point too close to or behind the officers) once nobody of the'
+            .. ' fight is left standing; then the people it could not place are left out, so the fight can end (0 ='
+            .. ' never: it waits until the officers move away)',
+        'the leave-out wait (S2), alone'
+    )
+    H.eq(
         E('Spawning.log').desc,
         'true = a console line for each point skipped (shown while Config.Debug is on) and a warning when a wave had'
             .. ' to use closer points',
@@ -380,8 +387,22 @@ do
     Err('Spawning.maxSpread', 20, 'err.setting_range', 'and at least 45')
     H.ok((Check('Spawning.waveDelayMax', 0)), 'a wave that never waits')
     Err('Spawning.waveDelayMax', 301, 'err.setting_range', 'a wait of at most 300 s')
+    H.ok((Check('Spawning.leaveOutAfter', 0)), 'leaveOutAfter 0 (never leave anyone out)')
+    ok, v = Check('Spawning.leaveOutAfter', 600)
+    H.ok(ok and v == 600, 'leaveOutAfter up to 600 s')
+    Err('Spawning.leaveOutAfter', 601, 'err.setting_range', 'leaveOutAfter at most 600 s')
+    Err('Spawning.leaveOutAfter', -1, 'err.setting_range', 'and never below 0')
     Err('Spawning.log', 'yes', 'err.setting_type', 'the console lines are on or off')
-    for _, k in ipairs({ 'enabled', 'activateRange', 'minDistance', 'behindAngle', 'maxSpread', 'hardMin', 'log' }) do
+    for _, k in ipairs({
+        'enabled',
+        'activateRange',
+        'minDistance',
+        'behindAngle',
+        'maxSpread',
+        'hardMin',
+        'leaveOutAfter',
+        'log',
+    }) do
         H.ok(not E('Spawning.' .. k).reload and not E('Spawning.' .. k).restart, 'read live: Spawning.' .. k)
     end
     Err('Debug', 'yes', 'err.setting_type', 'text for on/off')

@@ -358,6 +358,8 @@ local function Validate(obj, mission, location)
         return Bad('block.hostile_waves.invalid.range', { field = 'health', min = c.health[1], max = c.health[2] })
     end
     if not BehaviourOk(o.behaviour, c) then return Bad('block.hostile_waves.invalid.behaviour') end
+    -- indoor = true: the fight is inside a building, so the director keeps Config.Spawning.minDistanceIndoor
+    if o.indoor ~= nil and type(o.indoor) ~= 'boolean' then return Bad('block.hostile_waves.invalid.indoor') end
     if o.spawnSets ~= nil then
         local ss = o.spawnSets
         if type(ss) ~= 'table' or type(ss.keys) ~= 'table' or #ss.keys < 1 or #ss.keys > c.spawnSets[2]
@@ -521,10 +523,16 @@ local function WaveTarget(ctx, w)
     return math.max(0, math.floor(n + 0.5))
 end
 
+-- What wave w puts out: its scaled count less the hostiles it left out (no point it could use, see LeaveOut).
+local function WaveGoal(ctx, st, w)
+    local ws = st.waves[w]
+    return math.max(0, WaveTarget(ctx, w) - (ws and ws.left or 0))
+end
+
 -- A wave's size for display and totals: already spawned NPCs stay, so never below what spawned.
 local function WaveSize(ctx, st, w)
     local ws = st.waves[w]
-    return math.max(ws and ws.spawned or 0, WaveTarget(ctx, w))
+    return math.max(ws and ws.spawned or 0, WaveGoal(ctx, st, w))
 end
 
 local function HasBoss(ctx)
@@ -561,17 +569,50 @@ local function Totals(ctx, st)
     return done, total
 end
 
--- Distinct points first, points with no living hostile on them before occupied ones; a wave larger
--- than the list reuses points in the same order with a small ring offset.
-local function PickPoints(ctx, st, n)
-    local all = st.sets and SetPoints(ctx.obj, ctx.location, st.sets) or PointList(ctx.location, ctx.obj.spawns)
-    if #all == 0 then
-        local s = StartCoords(ctx)
-        if s then all = { s } end
-        CP.warn(BLOCK, 'no spawn points at %s for run %s; using the start point', tostring(ctx.obj.spawns),
-            tostring(ctx.run and ctx.run.id))
+-- ============================================================================
+--                WHERE THE HOSTILES APPEAR (the spawn director)
+-- ============================================================================
+-- Every point is the engine's spawn director's (ctx.choosePoints, Config.Spawning): never closer than minDistance
+-- to an officer (minDistanceIndoor for an objective with indoor = true), never behind one, one wave from one side.
+-- Wave 1 waits until an officer is within activateRange of the fight (ctx.whenNear); a wave short of points spawns
+-- what it may now and the rest on later ticks; nothing ever appears at the start point.
+
+local function SpawnCfg() return type(Config.Spawning) == 'table' and Config.Spawning or {} end
+
+-- The fight's spawn points with their console names, in file order: the rolled spawn sets, else the spawns key
+-- ({ coords = point, label = 'yard[3]' }).
+local function SpawnPoints(ctx, st)
+    local out = {}
+    for _, k in ipairs(st.sets or { ctx.obj.spawns }) do
+        local name = type(k) == 'string' and k or 'spawns'
+        for i, p in ipairs(PointList(ctx.location, k)) do
+            out[#out + 1] = { coords = p, label = ('%s[%d]'):format(name, i) }
+        end
     end
-    if #all == 0 or n <= 0 then return {} end
+    return out
+end
+
+local function ListName(ctx, st)
+    if st.sets then return table.concat(st.sets, '+') end
+    return type(ctx.obj.spawns) == 'string' and ctx.obj.spawns or 'spawns'
+end
+
+-- The middle of the fight (of its spawn points); nil when it has none.
+local function AreaCentre(list)
+    if #list == 0 then return nil end
+    local sx, sy, sz = 0.0, 0.0, 0.0
+    for _, c in ipairs(list) do
+        local x, y, z = U.xyz(c.coords)
+        sx, sy, sz = sx + x, sy + y, sz + z
+    end
+    return vector3(sx / #list, sy / #list, sz / #list)
+end
+
+-- The list offered to the director for n hostiles: first (the boss's own spot) as it is, then the fight's points in
+-- an order shuffled from the run seed; a wave larger than the whole list also gets them again on a small ring
+-- (REUSE_OFFSET more per lap, as before the director), each copy checked like any other point. A point a living
+-- hostile stands on (within OCCUPIED_RADIUS) is never offered, so two people never appear inside each other.
+local function Offer(ctx, st, list, n, first)
     local living = {}
     for _, p in pairs(st.peds) do
         if not Neutralised(p) then
@@ -579,27 +620,99 @@ local function PickPoints(ctx, st, n)
             if c then living[#living + 1] = c end
         end
     end
-    local free, used = {}, {}
-    for _, p in ipairs(RngOf(ctx):shuffle(all)) do
-        local busy = false
-        for i = 1, #living do
-            if U.dist(p, living[i]) <= OCCUPIED_RADIUS then busy = true break end
-        end
-        if busy then used[#used + 1] = p else free[#free + 1] = p end
-    end
-    for _, p in ipairs(used) do free[#free + 1] = p end
     local out = {}
-    for i = 1, n do
-        local k = ((i - 1) % #free) + 1
-        local lap = (i - 1) // #free
-        if lap == 0 then
-            out[i] = ToVec4(free[k])
-        else
+    local function add(v, label)
+        for i = 1, #living do
+            if U.dist(v, living[i]) <= OCCUPIED_RADIUS then return end
+        end
+        out[#out + 1] = { coords = v, label = label }
+    end
+    for _, c in ipairs(first or {}) do add(ToVec4(c.coords), c.label) end
+    if #list == 0 then return out end
+    local order = RngOf(ctx):shuffle(list)
+    for _, c in ipairs(order) do add(ToVec4(c.coords), c.label) end
+    for lap = 1, math.ceil(n / #order) - 1 do
+        for k, c in ipairs(order) do
             local a = lap * 2.39996 + k
-            out[i] = ToVec4(free[k], math.cos(a) * REUSE_OFFSET * lap, math.sin(a) * REUSE_OFFSET * lap)
+            add(ToVec4(c.coords, math.cos(a) * REUSE_OFFSET * lap, math.sin(a) * REUSE_OFFSET * lap),
+                ('%s +%.2f m'):format(c.label, REUSE_OFFSET * lap))
         end
     end
     return out
+end
+
+-- Up to n points (vector4) for wave w ('boss' for the boss) that the director allows now; first = points offered
+-- before the fight's own (the boss's spot). ws.waitMs is the wave's clock (GetGameTimer): set by the first call that
+-- came back short, cleared by one that got every point it asked for; the director gets it as opts.since and relaxes
+-- to hardMin after waveDelayMax on it. Returns the points, short (fewer than n: officers too close, or living
+-- hostiles on the rest) and none (the location has no point for it at all).
+local function PickPoints(ctx, st, w, ws, n, first)
+    if n <= 0 then return {}, false, false end
+    local list = SpawnPoints(ctx, st)
+    if #list == 0 and #(first or {}) == 0 then return {}, true, true end
+    local offer = Offer(ctx, st, list, n, first)
+    local now = Now()
+    local waitMs = ws.waitMs or now
+    local chosen = {}
+    if #offer > 0 then
+        chosen = ctx.choosePoints(offer, n, {
+            name = w == 'boss' and 'the boss' or ('wave %d (%s)'):format(w, ListName(ctx, st)),
+            wave = w,
+            since = os.time() - math.floor((now - waitMs) / 1000),
+            placed = ws.points,
+            centre = AreaCentre(list),
+            indoor = ctx.obj.indoor == true,
+        }) or {}
+    end
+    local out = {}
+    for i, c in ipairs(chosen) do out[i] = ToVec4(c.coords) end
+    ws.waitMs = #out < n and waitMs or nil
+    return out, #out < n, false
+end
+
+-- Wave 1 waits until an officer is within Config.Spawning.activateRange of the fight.
+local function FightNear(ctx, st)
+    local centre = AreaCentre(SpawnPoints(ctx, st))
+    if not centre then return true end
+    return ctx.whenNear(centre) == true
+end
+
+-- A wave (or the boss) the director kept short for Config.Spawning.leaveOutAfter seconds (and at least
+-- waveDelayMax, so the closer points were tried), while nobody of this fight is left standing: the officers stand on
+-- or in front of every point, so the hostiles it could not place are left out and the fight goes on instead of
+-- stalling. Never before one of the fight's hostiles has appeared: officers who stand on the points before the fight
+-- began only make it wait (a fight is never skipped that way). leaveOutAfter 0 = never (the wave waits until the
+-- officers move away).
+local function TimeToLeaveOut(st, ws)
+    local cfg = SpawnCfg()
+    local after = tonumber(cfg.leaveOutAfter) or 45
+    if after <= 0 or not ws.waitMs or next(st.peds) == nil or Remaining(st) > 0 then return false end
+    local waited = (Now() - ws.waitMs) / 1000
+    return waited >= after and waited >= (tonumber(cfg.waveDelayMax) or 20), waited
+end
+
+local function SayLeftOut(ctx, what, count, why)
+    CP.warn(BLOCK, 'run %s (%s): %s: %d hostile(s) left out: %s', tostring(ctx.run and ctx.run.id),
+        tostring(ctx.run and ctx.run.missionId), what, count, why)
+end
+
+local function LeaveOut(ctx, st, w, none)
+    local ws = st.waves[w]
+    local due, waited = TimeToLeaveOut(st, ws)
+    if not none and not due then return false end
+    local missing = WaveGoal(ctx, st, w) - ws.spawned
+    ws.left = (ws.left or 0) + missing
+    ws.waitMs = nil
+    st.dirty = true
+    if none then
+        SayLeftOut(ctx, ('wave %d'):format(w), missing,
+            ('the location has no spawn points under %s (never at the start point)'):format(ListName(ctx, st)))
+    else
+        SayLeftOut(ctx, ('wave %d'):format(w), missing,
+            ('for %.0f s every spawn point was too close to or behind the officers (Config.Spawning.leaveOutAfter)'):format(
+                waited))
+    end
+    return true
 end
 
 local function SpawnHostile(ctx, st, w, point)
@@ -636,13 +749,35 @@ local function SpawnHostile(ctx, st, w, point)
     return true
 end
 
+-- The boss after the last wave: his own spot first, else a point of the fight, through the director like a wave.
 local function SpawnBoss(ctx, st)
-    if st.boss then return true end
+    if st.boss or st.bossLeft then return true end
     if not ctx.canSpawn(1, true) then return false end
     local b = ctx.obj.boss
-    local point = PointList(ctx.location, b.spawn)[1]
-    point = point and ToVec4(point) or PickPoints(ctx, st, 1)[1]
-    if not point then return false end
+    st.bossWait = st.bossWait or { points = {} }
+    local own = {}
+    for i, p in ipairs(PointList(ctx.location, b.spawn)) do
+        own[i] = { coords = ToVec4(p), label = ('%s[%d]'):format(type(b.spawn) == 'string' and b.spawn or 'boss', i) }
+    end
+    local points, short, none = PickPoints(ctx, st, 'boss', st.bossWait, 1, own)
+    local point = points[1]
+    if not point then
+        local due, waited = TimeToLeaveOut(st, st.bossWait)
+        if none or (short and due) then
+            st.bossLeft = true
+            st.dirty = true
+            SayLeftOut(
+                ctx,
+                tostring(b.label),
+                1,
+                none and 'the location has no point for him'
+                    or ('for %.0f s every point was too close to or behind the officers (Config.Spawning.leaveOutAfter)'):format(
+                        waited)
+            )
+            return true
+        end
+        return false
+    end
     local health = math.floor((tonumber(b.health) or 300) * (tonumber(Feel().healthMult) or 1.0) + 0.5)
     local behaviour = type(b.behaviour) == 'string' and b.behaviour or Behaviour(ctx, st)
     -- the boss's accuracy takes the tier, the difficulty and the Config.NpcCombat cap like every hostile; its
@@ -670,39 +805,43 @@ end
 
 local function StartWave(ctx, st, w)
     st.wave = w
-    local ws = st.waves[w] or { spawned = 0, elapsed = 0 }
+    local ws = st.waves[w] or { spawned = 0, elapsed = 0, points = {} }
+    ws.points = ws.points or {}
     st.waves[w] = ws
-    ws.points = ws.points or PickPoints(ctx, st, WaveTarget(ctx, w))
     st.dirty = true
 end
 
--- Spawns what is still missing of wave w; returns (fully spawned, spawn budget left).
+-- Spawns what is still missing of wave w where the director allows it now. Returns (fully spawned, spawn budget left,
+-- short: the director had too few points this time).
 local function SpawnWave(ctx, st, w, budget)
     local ws = st.waves[w]
-    local target = WaveTarget(ctx, w)
-    while ws.spawned < target and budget > 0 do
-        if not ctx.canSpawn(1, true) then return false, budget end
-        local i = ws.spawned + 1
-        local point = ws.points[i]
-        if not point then
-            point = PickPoints(ctx, st, 1)[1]
-            ws.points[i] = point
-        end
-        if not point or not SpawnHostile(ctx, st, w, point) then return false, budget end
-        ws.spawned = i
+    local goal = WaveGoal(ctx, st, w)
+    if ws.spawned >= goal then return true, budget, false end
+    if budget <= 0 then return false, budget, false end
+    local points, short, none = PickPoints(ctx, st, w, ws, math.min(goal - ws.spawned, budget))
+    if none then return LeaveOut(ctx, st, w, true), budget, false end
+    for _, point in ipairs(points) do
+        if not ctx.canSpawn(1, true) then return false, budget, false end
+        if not SpawnHostile(ctx, st, w, point) then return false, budget, false end
+        ws.spawned = ws.spawned + 1
+        ws.points[#ws.points + 1] = point
         budget = budget - 1
-        if st.stopped then return false, 0 end
+        if st.stopped then return false, 0, false end
     end
-    return ws.spawned >= target, budget
+    return ws.spawned >= goal, budget, short
 end
 
 local function AdvanceLoop(ctx, st, n)
-    if st.wave == 0 then StartWave(ctx, st, 1) end
+    if st.wave == 0 then
+        if not FightNear(ctx, st) then return end
+        StartWave(ctx, st, 1)
+    end
     local budget = SPAWNS_PER_TICK
     while not st.stopped do
         local w = st.wave
-        local full
-        full, budget = SpawnWave(ctx, st, w, budget)
+        local full, short
+        full, budget, short = SpawnWave(ctx, st, w, budget)
+        if not full and short then full = LeaveOut(ctx, st, w) end
         if not full then break end
         local nw = ctx.obj.nextWave
         local ready = AliveInWave(st, w) <= (tonumber(nw.aliveAtMost) or 0)
@@ -735,9 +874,9 @@ local function AllOut(ctx, st)
     if st.wave < n then return false end
     for w = 1, n do
         local ws = st.waves[w]
-        if not ws or ws.spawned < WaveTarget(ctx, w) then return false end
+        if not ws or ws.spawned < WaveGoal(ctx, st, w) then return false end
     end
-    if HasBoss(ctx) and not st.boss then return false end
+    if HasBoss(ctx) and not st.boss and not st.bossLeft then return false end
     return true
 end
 
@@ -897,7 +1036,8 @@ local function Tick(ctx, dt)
     if st.stopped or st.failed then return end
     if not st.completed then
         local ws = st.waves[st.wave]
-        if ws then ws.elapsed = ws.elapsed + (tonumber(dt) or 1) end
+        -- nextWave.afterSeconds counts from the wave's first hostile out, not while it waits for points
+        if ws and ws.spawned > 0 then ws.elapsed = ws.elapsed + (tonumber(dt) or 1) end
         Refresh(ctx, st)
         PollHealth(ctx, st)
         Advance(ctx, st)
@@ -982,7 +1122,7 @@ local function Checklist(ctx)
             max = total,
         },
     }
-    if HasBoss(ctx) then
+    if HasBoss(ctx) and not st.bossLeft then
         local b = BossPed(st)
         local bossDone = b ~= nil and Neutralised(b)
         list[#list + 1] = {

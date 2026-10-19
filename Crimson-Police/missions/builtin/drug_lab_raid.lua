@@ -278,6 +278,7 @@ RegisterMission({
       accuracy     = 25,                                                -- plus the tier's accuracy
       armour       = 0,                                                 -- plus the tier's armour
       behaviour    = { hold = 0.5, balanced = 0.4, push = 0.1 },        -- rolled once per run
+      indoor       = true,                                              -- in and around the lab: the indoor spawn distance
       surrender    = { belowHealth = 0.25, chance = 0.30 },
       peds         = { 'g_m_y_salvagoon_01', 'g_m_y_mexgoon_01', 'g_m_y_lost_01' },
       blockTraffic = 120.0,

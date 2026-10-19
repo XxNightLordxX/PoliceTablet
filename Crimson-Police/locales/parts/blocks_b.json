@@ -22,6 +22,7 @@
   "block.hostile_waves.invalid.spawns_count": "Hostile waves: location {location} needs at least {min} spawn points (it has {have})",
   "block.hostile_waves.invalid.spawns_start": "Hostile waves: every spawn point at location {location} must be at least {min} m from the start",
   "block.hostile_waves.invalid.spawns_zone": "Hostile waves: a spawn point at location {location} is inside a no-build zone",
+  "block.hostile_waves.invalid.indoor": "Hostile waves: indoor must be true (the fight is inside a building) or false",
 
   "block.protect_rescue.cut_restraints": "Cut restraints",
   "block.protect_rescue.detail": "Hostages safe: {safe} of {total}",

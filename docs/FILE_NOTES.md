@@ -370,14 +370,26 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
     surrender roll (CP.Npc.rollSurrender with surrender.chance) when the host reports it and the
     server confirms the health; the server also polls the health of every hostile each tick, so a
     report that arrived before the damage synced (or never arrived) cannot cost the roll. Spawn
-    points are picked with the objective rng: distinct points,
-    free ones (no living hostile on them) first, reused (with a small offset) only when a wave is
-    larger than the point list. Spawning respects the run caps (ctx.canSpawn: a wave that does not fit
-    waits and is re-checked every tick, counts are never cut) and rescale (only the NPCs still missing
-    for the new ctx.obj counts are spawned). The client half blocks NPC traffic within blockTraffic
-    metres of the start while the objective runs.
-    Used by Gang Shootout (3 waves 7/7/6), Hostage Rescue (1 wave of 4 inside) and Weekly Boss:
-    Kingpin (4 waves 8/8/7/7 then the Kingpin).
+    points come from the engine's spawn director (ctx.choosePoints, Config.Spawning, PLAN S2): wave 1
+    waits until an officer is within activateRange of the middle of the fight's points (ctx.whenNear);
+    each call offers the fight's points (the rolled spawn sets, else spawns), shuffled with the
+    objective rng, never one a living hostile stands on (OCCUPIED_RADIUS), plus ring copies (REUSE_OFFSET
+    per lap) only when a wave is larger than the whole list; the director keeps minDistance
+    (minDistanceIndoor with indoor = true) from every officer, never behind one, the wave in one sector
+    (opts.placed = the wave's points so far). A wave short of points spawns what it got and asks again
+    every tick; ws.waitMs (GetGameTimer) is its clock, handed to the director as opts.since (hardMin
+    after waveDelayMax). A wave or the boss still short leaveOutAfter seconds after its first short
+    call, with nobody of the fight standing and at least one of its hostiles already out (st.peds), leaves
+    the rest out (ws.left / st.bossLeft, one CP.warn; WaveGoal = scaled count - left; the boss line drops
+    off the checklist). No point at all: left out at once, never at the start point. ws.elapsed (for
+    nextWave.afterSeconds) only counts once the wave has a hostile out. The boss is offered his own spot first, then the fight's
+    points. Every point the console names is '<location key>[<file index>]'. Spawning respects the run
+    caps (ctx.canSpawn: a wave that does not fit waits and is re-checked every tick, counts are never
+    cut for the caps) and rescale (only the NPCs still missing for the new ctx.obj counts are spawned).
+    The client half blocks NPC traffic within blockTraffic metres of the start while the objective runs.
+    Used by Gang Shootout (3 waves 7/7/6), Hostage Rescue (1 wave of 4 inside, indoor), Drug Lab Raid
+    and Gang Hideout Raid (objective 2, indoor) and Weekly Boss: Kingpin (4 waves 8/8/7/7 then the
+    Kingpin).
 
   Objective fields read (defaults: ARCHITECTURE §3.3 and Config.Blocks.hostile_waves)
     minSeconds [60] · presenceRange [presenceRange[3] = 150] · label
@@ -401,6 +413,8 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
     cuff          optional { label, duration, maxDistance } passed to CP.Npc.enableCuff (custom missions:
                   duration 1000-30000 ms, maxDistance at most CUFF_RANGE)
     blockTraffic  metres around location.start.coords (client half)     [blockTraffic[3] = 120.0]
+    indoor        true = the fight is inside a building: the director keeps Config.Spawning.minDistanceIndoor
+                  (validate: a boolean or absent)                           [absent = false]
 
   Evidence accepted (onEvent)
     { type = 'low_health', netId }   host client: a hostile looks under belowHealth. The server re-checks
@@ -2699,7 +2713,8 @@ where the officer is).
     CP.Runs.spawnPed(run, opts) / spawnVehicle(run, opts) / spawnObject(run, opts) -> entity, netId
     CP.Runs.deleteEntity(run, netId) / entitiesFor(run, filter) -> list / canSpawn(run, n, armed) -> boolean
     CP.Runs.choosePoints(run, candidates, n, opts) -> points, indexes   the spawn director (Config.Spawning)
-        opts = { wave, since, indoor, centre, from, placed, name, obj }; ctx.choosePoints fills in obj
+        opts = { wave, since, indoor, centre, from, placed, name, obj }; ctx.choosePoints fills in obj;
+        a candidate { coords, label } is named by its label in the console lines
     CP.Runs.whenNear(run, point, range) -> boolean, nearestMetres|nil   (ctx.whenNear; range = activateRange)
     CP.Runs.send(run, eventName, ...) / objectiveEvent(run, index, data) / hud(run, patch) / hudFor(run, src, patch)
     CP.Runs.view(run, src) -> ActiveMissionView (§9.4) / summary(run) -> LiveRun (§9.5)
@@ -4379,6 +4394,23 @@ The debug table: the resource code under test sees FXServer's own, getinfo, getm
 and traceback only (H.FX_DEBUG; FXServer's Lua is built with LUA_SANDBOX, so no sethook or gethook), also through
 require('debug'). H.debug is the full library for the specs' own tools (tests/freeze_spec.lua's spin check copies
 H.debug.sethook into a local).
+```
+
+## tests/hostile_waves_director_spec.lua
+
+```text
+hostile_waves through the spawn director (Config.Spawning, PLAN S2) on the real engine (tests/fixtures/custody/world.lua:
+runs, npc, scaling, scoring), the real blocks and the real loader's built-in missions, every ped the engine creates
+recorded with the nearest officer at that moment. Gang Shootout's Terminal yard: in from the far side 2 m from
+spawns[7] only the 3 points 40 m in front appear, 2 more 20 m away after waveDelayMax (one warning), spawns[14] behind
+him never; from the start marker all 20 appear over the fight, none within 40 m; a push into the yard gets wave 2 from
+in front of him, the rest once he walks back. activateRange holds wave 1 back. No spawn points: nobody, never at the
+start, the fight completes. Hostage Rescue (indoor: 15 m, all 4 at once; outdoors 40 m none) and the raids' fights at
+the breach entries (indoor). leaveOutAfter: a yard whose every point he stands within 12 m of leaves wave 2 out at 45 s,
+not while a hostile stands, never with 0; standing on the points before the fight only makes it wait (afterSeconds
+then counts from wave 1's first hostile). The Kingpin on his own spot, on another point when his is 39.7 m away, left
+out (no checklist line) when nothing is far enough after his wave fell. Ring copies of a wave larger than the list are checked like points;
+enabled = false spawns as before; indoor is validated. No SQL.
 ```
 
 ## tests/int_core_spec.lua

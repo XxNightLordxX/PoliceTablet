@@ -235,6 +235,7 @@ local RANGES = {
     ['Spawning.behindAngle'] = { 45, 180 },
     ['Spawning.maxSpread'] = { 45, 360 },
     ['Spawning.waveDelayMax'] = { 0, 300 },
+    ['Spawning.leaveOutAfter'] = { 0, 600 },
 }
 
 -- Numbers that may go either way whatever config.lua has.

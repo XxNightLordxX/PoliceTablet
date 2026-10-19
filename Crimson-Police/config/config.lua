@@ -326,6 +326,10 @@ Config.Spawning = {
     waveDelayMax = 20,               -- seconds a wave waits for points minDistance away before closer ones are allowed
     -- Metres: once a wave has waited waveDelayMax, a point this close to an officer may be used, never a closer one
     hardMin = 20.0,
+    -- Seconds a wave may stay short of points (every point too close to or behind the officers) once nobody of the
+    -- fight is left standing; then the people it could not place are left out, so the fight can end (0 = never: it
+    -- waits until the officers move away)
+    leaveOutAfter = 45,
     -- true = a console line for each point skipped (shown while Config.Debug is on) and a warning when a wave had to
     -- use closer points
     log = true,

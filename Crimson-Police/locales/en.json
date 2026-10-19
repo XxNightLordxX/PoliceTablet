@@ -1304,6 +1304,7 @@
   "block.hostile_waves.invalid.behaviour": "Hostile waves: behaviour must be Hold cover, Balanced or Push",
   "block.hostile_waves.invalid.boss": "Hostile waves: the boss needs an allowed model and weapon, health, armour and accuracy within range, and valid surrender settings",
   "block.hostile_waves.invalid.boss_bonus_custom": "Hostile waves: in a custom mission the boss bonus ({id}) must be {default} or a standard bonus from Config.Bonuses, with no points of its own",
+  "block.hostile_waves.invalid.indoor": "Hostile waves: indoor must be true (the fight is inside a building) or false",
   "block.hostile_waves.invalid.min_seconds": "Hostile waves: the minimum time must be 0 or more seconds",
   "block.hostile_waves.invalid.objective": "Hostile waves: the objective is not a table",
   "block.hostile_waves.invalid.peds": "Hostile waves: pick at least one ped model from the allowed list",

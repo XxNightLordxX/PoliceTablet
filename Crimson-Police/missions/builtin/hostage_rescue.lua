@@ -133,6 +133,7 @@ RegisterMission({
       accuracy   = 25,                                           -- plus the tier's accuracy
       armour     = 0,                                            -- plus the tier's armour
       behaviour  = 'hold',                                       -- they hold their positions inside
+      indoor     = true,                                         -- inside the bank: the indoor spawn distance (Config.Spawning)
       surrender  = { belowHealth = 0.25, chance = 0.30 },
     },
     {
