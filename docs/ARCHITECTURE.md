@@ -198,8 +198,8 @@ The packages of that build add `modules/corrections/` (§5.38), `modules/livectl
 | `CP.Lt(key, vars) -> token`, `CP.Locale.isToken(v)`, `encode`, `tokenize(payload)`, `resolve(text, code)`, `resolveAll(payload, code)` | shared/locale.lua | A `{ key, vars }` token for text meant for a player's screen: `CP.Runs.hud`, `ctx.hud` and `ctx.send` accept it and the client resolves it right before `SendNUIMessage` (`CP.Locale.resolveAll`). CP.L is never replaced. English only: every token resolves in the server language |
 | `CP.Locale.label(key, fallback, vars)` | shared/locale.lua | The locale text when the key exists, else the fallback (config or mission text): the optional label overrides of §10 |
 | `CP.Hooks.on(name, fn) -> id`, `CP.Hooks.off(id) -> bool`, `CP.Hooks.fire(name, ...) -> n` | shared/init.lua | Both sides. Listeners run in the caller's thread, in the order added, each in pcall (a failure is logged, the next still runs). The hooks and who fires them: §5.10 |
-| `CP.Net.action(name, handler, opts)` | shared/net.lua | server: registers net event `crimson-police:<name>`; handler `(src, payload) -> ok, data|errKey`; replies to `reqId`. While `CP.Maintenance.active()` (§5.37) every action is refused with `err.maintenance` before its handler runs, unless it was registered with `opts.maintenance = true` (status reads and the actions that end a lock). Callbacks are never gated |
-| `CP.Net.callback(name, handler, opts)` | shared/net.lua | server: ox_lib callback `crimson-police:<name>`; handler `(src, args) -> data` or `nil, errKey`; reply `{ok,data,error}` |
+| `CP.Net.action(name, handler, opts)` | shared/net.lua | server: registers net event `crimson-police:<name>`; handler `(src, payload) -> ok, data|errKey`; replies to `reqId`. While `CP.Maintenance.active()` (§5.37) every action is refused with `err.maintenance` before its handler runs, unless it was registered with `opts.maintenance = true` (status reads and the actions that end a lock). Callbacks are never gated by the lock. After a failed start (`CP.Migrations.failed()`) every action is refused with `err.not_started` before its handler runs, and a handler that raised it while it waited for the start answers it too |
+| `CP.Net.callback(name, handler, opts)` | shared/net.lua | server: ox_lib callback `crimson-police:<name>`; handler `(src, args) -> data` or `nil, errKey`; reply `{ok,data,error}`. After a failed start every callback answers `err.not_started` before its handler runs |
 | `CP.Net.rateOk(src, key, max, windowMs)` | shared/net.lua | server |
 | `CP.Net.action(name, payload, timeoutMs)`, `CP.Net.request(name, args, timeoutMs)` | shared/net.lua | client; both return `{ ok, data, error }` and never raise (`err.timeout` after timeoutMs, default 15000; `err.no_response` when ox_lib raises) |
 | `CP.NpcCombat.*` | shared/npccombat.lua | Config.NpcCombat read at every call (§5.42): `weapon(name)`, `ammo()`, `isAutomatic(name)`, `automatic()`, `automaticsIn(t)`, `weaponsAllowed(list, allowed)`, `capAccuracy(acc)`, `scaleAccuracy(acc)`, `shootRate()`, `firingPattern()`, `ability(a)`, `noCharge()`, `driveByAccuracy(acc)`, `driveByPattern()`, `aiDamage()`, `aiMeleeDamage()`, `officerDefense()`, `noCriticalHits()`, `cancelLethalHeadshots()`, `lethalCancelAbove()`, `enabled()` |
@@ -1357,7 +1357,10 @@ the officer's active commendations; `season:ended` fires after the season result
   when `action` is not given, `actions` (a list of at most 30 action names, `a.action IN (...)`; the Audit Log's
   **Cash actions** preset), and `admin:getAudit` rows carry `actorIdent`
 - `storage mode reset` (console only): `SUB.storage` hands it to `CP.Sysadmin._consoleStorageMode`, the same as the
-  `storagemode reset` subcommand
+  `storagemode reset` subcommand; after a failed start (`CP.Migrations.failed()`) it clears the KVP and answers at
+  once without the audit row (`sysadmin.console.storagemode_reset_not_started`)
+- After a failed start `Admin.command` refuses every subcommand and the in-game open with `admin.cmd.not_started`,
+  except the console's `check`, `storagemode` and `storage mode`
 - `voidRun(src, rowIdOrRunUuid, reason)`, `approveFlagged(src, rowId, reason)`, `voidFlagged(src, rowId, reason)`
 - Supervisor/admin screen callbacks and actions listed in §8.3. `admin:getMissions` adds `switch`
   (`CP.Settings.missionView(def)`: the mission's and each location's on/off and config.lua's values).
@@ -1507,12 +1510,25 @@ code is `CP.Storage.MemSQL` (memsql.lua creates `CP.Storage` and puts it there).
   the database cannot tell) the warning names the storage copy command; when it has none (a first install with the
   database off) one plain line says the folder is empty. A new database next to a saves folder with data is
   announced by the migrations runner, naming the storage copy command.
-- **The migrations runner** (`modules/migrations`, `CP.Migrations.ready() / isReady() / version()`): a failed statement
-  stops the resource with the file, the statement and the driver's error, then one `How to fix it:` line for the usual
-  first-start errors (no CREATE/ALTER right, a wrong password, no rights on the database, an unknown database, a server
-  or host that cannot be reached). When oxmysql has not connected 30 s after start (it waits without a word) one
-  warning names `set mysql_connection_string` and `Config.Database.enabled = false` (database mode only: the saves
-  folder never waits for oxmysql).
+- **The migrations runner** (`modules/migrations`, `CP.Migrations.ready() / isReady() / version() / started() /
+  failed()`): a failed statement (or any error in the runner, which runs under pcall) fails the
+  start with the file, the statement and the driver's error, then one `How to fix it:` line for the usual first-start
+  errors (no CREATE/ALTER right, a wrong password, no rights on the database, an unknown database, a server or host
+  that cannot be reached), for a storage switched to in game the `storagemode reset` line (with
+  `Config.Tablet.adminCommand`), and one line naming `ensure <resource>`. A failed start is a state, not a stop:
+  FXServer refuses StopResource on the calling resource (citizen-server-impl ServerResources.cpp STOP_RESOURCE), so
+  the resource stays started. `failed()` then names what failed (nil otherwise); `ready()` is a barrier that raises
+  `err.not_started` at once, and in every thread that was waiting in it; `started()` waits the same way and answers
+  true or false without raising (start-up threads and loops end quietly with it); CP.Net answers every action and
+  callback `err.not_started` before its handler runs; CP.warn and CP.err drop the lines that carry `err.not_started`;
+  the console command registers at once (Settings.waitLoaded returns early) and refuses everything but the console's
+  `check` and `storagemode reset` / `storage mode reset` (`admin.cmd.not_started`); the reset answers at once without an
+  audit row (`sysadmin.console.storagemode_reset_not_started`). Nothing reads or writes the store after the failure.
+  After `CP.Settings.boot()` and before any caller of `ready()` goes on, the runner calls `CP.Sysadmin.startLocks()`
+  (the left-behind and unfinished-restore locks), so the cash forfeiture, the pending pay, the reward jobs, the
+  clean-up and the admin job resume already see them; each of those also reads the lock after its wait for the store. When oxmysql has not connected 30 s after start (it waits without a word) one warning names
+  `set mysql_connection_string` and `Config.Database.enabled = false` (database mode only: the saves folder never
+  waits for oxmysql).
 - **CP.Storage.MemSQL** (server; it also runs under plain lua5.4 in the tests, with the global `json`):
   `new({ store }) -> db`; `db:exec(sql, params) -> { kind = 'rows', cols, types, rows, n } | { kind = 'write',
   affected, changed, insertId, info, warnings }`, synchronous and atomic (a failing statement changes nothing),
@@ -1520,8 +1536,9 @@ code is `CP.Storage.MemSQL` (memsql.lua creates `CP.Storage` and puts it there).
   crash-safe order; a save that fails part way is undone in memory and in the folder); with `db.slice` (set by
   CP.Storage on a server: `{ wait = Citizen.Wait, ms = 4 }`) a SELECT run from a thread gives the server its turn
   every 4 ms, and every other statement waits for it; `db:load()`; `db:bulk(fn)` (the write-through paused, every document saved once at
-  the end: bulk imports and the storage copy); `db:tableNames()`; `folderStore(dir)` (the saves folder: its file
-  layout and crash-safe save sequence are in the header of memsql.lua); `luaRows(res)` (engine rows typed like
+  the end: bulk imports and the storage copy); `db:tableNames()`; `folderStore(dir, { docRows, label })` (the saves folder: its file
+  layout and crash-safe save sequence are in the header of memsql.lua; `label` is the folder as the owner named it, for
+  example `saves/second`, in the messages about its files, default dir); `luaRows(res)` (engine rows typed like
   oxmysql).
 - **The shim**, `CP.Storage.MemSQL.shim(db, { realMySQL, resource }) -> MySQL`: `query`, `single`, `scalar`, `insert` and
   `update` (each callable with a callback, and with `.await`), plus `ready`. It copies oxmysql's return shapes,
@@ -2047,8 +2064,10 @@ action goes through `CP.AdminKit` (admins only, audited).
   the files back, clears `restore_open`, one audit line (`backupRestored`, critical), then
   `CP.Maintenance.askRestart`. A put-back that fails part way runs `moneyReapply` under pcall, keeps
   `restore_open`, audits `backupRestoreFailed` and marks the lock `{ failed = true, automatic = <name> }`
-  (`CP.Maintenance.mark`); `server:admin:restoreBackup` passes that lock (only that one). At start (`_boot`) a set
-  `restore_open` (a failed restore, or a server that stopped during one) begins that failed `restore` lock again
+  (`CP.Maintenance.mark`); `server:admin:restoreBackup` passes that lock (only that one). At start
+  (`startLocks()`, which the migrations runner calls before any module that waits for the store goes on; `_boot()` is
+  the same after `CP.Migrations.ready()`, for a runner that did not) a store marked `left_behind` begins that lock and a
+  set `restore_open` (a failed restore, or a server that stopped during one) begins that failed `restore` lock again
   (`Backups.holdAfterFailedRestore`, default true; false clears the mark with a console line). While the mark is set the
   money snapshot of a restore is read from that automatic backup's parts (the store may be half put back), the first
   unfinished restore's automatic backup stays named, and it is protected from keep N and Delete. AUTO_INCREMENT

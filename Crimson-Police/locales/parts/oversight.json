@@ -324,6 +324,7 @@
   "admin.cmd.usage_test": "/{cmd} test <missionId> [tier] [location|random]  (in game)",
   "admin.cmd.help_ingame": "Subcommands: payout type, payout mission, award, season start, season end, suspend, reload, test, storage, missioncall, check. Run /{cmd} help in the server console for details.",
   "admin.cmd.unknown": "Unknown subcommand \"{sub}\".",
+  "admin.cmd.not_started": "Crimson-Police did not start (the console lines above say why). Only \"{cmd} check\" and \"{cmd} storagemode reset\" work in the server console now. Fix the problem, then type \"ensure {resource}\".",
   "admin.cmd.amount_range": "Enter a whole amount from {min} to {max}, or clear.",
   "admin.cmd.payout_type_set": "{type} payout set to {amount}.",
   "admin.cmd.payout_type_cleared": "{type} payout cleared.",

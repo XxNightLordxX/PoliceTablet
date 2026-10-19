@@ -21,13 +21,37 @@ local WAIT_HINT_MS = 30000   -- no database after this long: say what to check (
 local readyPromise = promise.new()
 local isReady = false
 local failed = false
+local failure = nil        -- what failed, in a few words (CP.Migrations.failed())
 local version = 0
 
--- Blocks the current thread until migrations have finished. Returns true.
+-- The error ready() raises once the start failed: CP.Net answers it to the player as err.not_started.
+local NOT_STARTED = 'err.not_started'
+CP.Migrations.NOT_STARTED = NOT_STARTED
+
+-- Blocks the current thread until migrations have finished. Returns true. It is a barrier: once the start failed it
+-- raises err.not_started at once (and in every thread that was waiting), so nothing after it reads or writes a store
+-- that did not start. FXServer refuses StopResource on the calling resource, so the resource stays started.
 function CP.Migrations.ready()
     if isReady then return true end
+    if failed then error(NOT_STARTED, 0) end
     Citizen.Await(readyPromise)
+    if not isReady then error(NOT_STARTED, 0) end
     return true
+end
+
+-- For start-up threads and loops: waits like ready(), then true once started, or false when the start failed (no
+-- error, so the thread ends quietly: the console already has the lines that say what failed).
+function CP.Migrations.started()
+    if isReady then return true end
+    if failed then return false end
+    Citizen.Await(readyPromise)
+    return isReady
+end
+
+-- What failed (a few words) once the start failed, else nil (while it starts and after it started).
+function CP.Migrations.failed()
+    if not failed then return nil end
+    return failure or 'the start failed'
 end
 
 function CP.Migrations.isReady()
@@ -134,17 +158,31 @@ local function DatabaseHint(err)
 end
 CP.Migrations._hint = DatabaseHint
 
+local function CmdName() return (Config and Config.Tablet and Config.Tablet.adminCommand) or 'CrimsonPoliceAdmin' end
+
+-- A failed start is a state, not a stop: FXServer refuses StopResource on the calling resource (ServerResources.cpp
+-- STOP_RESOURCE), so Crimson-Police stays started and refuses every request with err.not_started (CP.Net), and
+-- ready() raises it, so nothing runs on a half-upgraded store. The threads waiting in ready() wake up and stop there.
 local function Fail(file, stmt, err)
+    if failed or isReady then return end
     failed = true
-    CP.err(TAG, 'Migration %s failed. Crimson-Police will not start until it is fixed.', file)
-    CP.err(TAG, 'Statement: %s', (stmt or ''):sub(1, 400))
+    failure = ('migration %s failed'):format(tostring(file))
+    local resource = CP.resource or GetCurrentResourceName()
+    CP.err(TAG, 'Migration %s failed. Crimson-Police did not start.', file)
+    if stmt then CP.err(TAG, 'Statement: %s', stmt:sub(1, 400)) end
     CP.err(TAG, 'Error: %s', tostring(err))
     local hint = DatabaseHint(err)
     if hint then CP.err(TAG, 'How to fix it: %s', hint) end
-    -- Stop the resource so nothing runs on a half-upgraded database.
-    SetTimeout(0, function()
-        StopResource(GetCurrentResourceName())
-    end)
+    -- a storage switched to in game that cannot start: the console command that goes back to config.lua's store
+    if CP.Storage and CP.Storage.override and CP.Storage.override() then
+        CP.err(TAG,
+            'This is the storage switched to in Admin UI → System. To go back to config.lua\'s Config.Database, type "%s storagemode reset" in the server console, then "ensure %s".',
+            CmdName(), resource)
+    end
+    CP.err(TAG,
+        'Crimson-Police stays started but refuses every request until it starts. Fix the problem above, then type "ensure %s" in the server console (or restart it in txAdmin).',
+        resource)
+    readyPromise:resolve(false)
 end
 
 local function Run()
@@ -162,7 +200,9 @@ local function Run()
     if not ok then return Fail('cp_schema_migrations', 'CREATE TABLE cp_schema_migrations', err) end
 
     local applied = {}
-    local rows = MySQL.query.await('SELECT version FROM cp_schema_migrations') or {}
+    local okRows, rows = pcall(MySQL.query.await, 'SELECT version FROM cp_schema_migrations')
+    if not okRows then return Fail('cp_schema_migrations', 'SELECT version FROM cp_schema_migrations', rows) end
+    rows = type(rows) == 'table' and rows or {}
     for _, row in ipairs(rows) do applied[tonumber(row.version)] = true end
     local fresh = next(applied) == nil
 
@@ -205,6 +245,12 @@ local function Run()
         local okS, errS = pcall(CP.Settings.boot)
         if not okS then CP.err(TAG, 'the settings changed in game could not be loaded: %s', tostring(errS)) end
     end
+    -- then the start-up locks (a store a storage switch left behind, a restore that did not finish), still before any
+    -- module that waits here goes on: the cash forfeiture, the pending pay and the job resume already see them
+    if CP.Sysadmin and type(CP.Sysadmin.startLocks) == 'function' then
+        local okL, errL = pcall(CP.Sysadmin.startLocks)
+        if not okL then CP.err(TAG, 'reading the storage marker failed: %s', tostring(errL)) end
+    end
     isReady = true
     readyPromise:resolve(true)
 end
@@ -226,5 +272,7 @@ CreateThread(function()
         MySQL.ready(function() p:resolve(true) end)
         Citizen.Await(p)
     end
-    Run()
+    -- an error outside the guarded statements fails the start too, instead of leaving every caller of ready() waiting
+    local ok, err = pcall(Run)
+    if not ok then Fail('start', nil, err) end
 end)

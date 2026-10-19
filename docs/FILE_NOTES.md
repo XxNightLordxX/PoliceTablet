@@ -2107,9 +2107,15 @@ Test hooks: CP.Leaderboard._weeklyJob(prevStartTs, curStartTs), CP.Leaderboard._
 modules/migrations/server.lua · applies sql/migrations/NNN_*.sql in order on start.
 
 Every other module calls CP.Migrations.ready() before its first query: it blocks the
-calling thread until the database is at the latest version. If a migration fails the
-resource prints the file and the error and stops itself, so it never runs on a
-half-upgraded database.
+calling thread until the database is at the latest version. If a migration fails (or
+anything else in the runner raises) the resource prints the file, the error, the fix and
+"ensure <resource>", and stays started in a failed state: FXServer refuses a resource's
+StopResource on itself. CP.Migrations.failed() then names what failed, ready() raises
+err.not_started (so nothing runs on a half-upgraded database), started() answers false
+for start-up threads, and CP.Net refuses every request with err.not_started.
+After the settings load and before any waiting caller goes on, the runner calls
+CP.Sysadmin.startLocks() (the start-up maintenance locks: a store left behind, a restore
+that did not finish).
 ```
 
 ## Crimson-Police/modules/missions/client.lua
@@ -4476,6 +4482,31 @@ Mission files are served from memory through a LoadResourceFile override, other 
 stubbed, and every SQL statement of the slice runs against MariaDB. The spec uses its own
 database (<run database>_engine_a, rebuilt from sql/migrations) so parallel runs of other specs that
 reset cp_test cannot interfere.
+```
+
+## tests/failed_start_spec.lua
+
+```text
+A start that fails (FIXPLAN S5: F43-F47, F18, F20, F21). FXServer refuses StopResource on the calling resource
+(citizen-server-impl ServerResources.cpp STOP_RESOURCE: name == the current resource -> false, Resource::Stop()
+never called; the same in build 35245's binary), so Crimson-Police stays started after a failed start. It must
+then be in an explicit failed state: every request answered err.not_started at once (nothing parks, nothing reads or
+writes the store), the console's check and storage mode reset still working and printing, the start-up threads
+ending quietly, one console line naming the fix and "ensure".
+Part 1 runs the real migrations runner in its own environment with the real scheduler's Await (a thread parks
+until the promise is resolved, and resolve() resumes the waiting threads in order: scheduler.lua:85-100 and
+deferred.lua of build 35245). Part 2 runs the whole resource (tests/fixtures/admin_missions/boot.lua) on a
+database user without the CREATE right.
+```
+
+## tests/fixtures/admin_missions/boot.lua
+
+```text
+The real server side of Crimson-Police for the Missions and Mission Builder admin specs
+(tests/builtin_override_spec.lua, tests/admin_missions_spec.lua): every module and block loaded in fxmanifest
+order, the outside resources stubbed the way tests/e2e_spec.lua stubs them. Returns a table of helpers.
+opts (optional): { beforeLoad = function(X) end } runs right before the resource's files load (e.g. a database
+that refuses the migrations, tests/failed_start_spec.lua).
 ```
 
 ## tests/fixtures/engine_b/client_spec.lua

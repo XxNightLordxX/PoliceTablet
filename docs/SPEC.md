@@ -2411,7 +2411,7 @@ With Config.Database.enabled = false (database off), the same tables, built by t
 
 - The runner reads each file with LoadResourceFile, splits it into statements at each ; that ends a line, and runs them one at a time with MySQL.query.await. Migration files never put a ; inside a comment or a string.
 
-- If a statement fails, the runner stops, prints the file and the error, and Crimson-Police does not start, so it never runs on a half-upgraded database. MySQL applies table changes at once and can't roll them back, so migrations are written to be safe to run again (CREATE TABLE IF NOT EXISTS, and IF NOT EXISTS on columns and indexes where the database supports it).
+- If a statement fails (or anything else in the runner raises), the runner stops and prints the file, the error, the fix and one line naming `ensure Crimson-Police`, and Crimson-Police does not start, so it never runs on a half-upgraded database. FXServer never lets a resource stop itself (StopResource on the calling resource is refused), so the resource stays started in a failed state: every request is refused with err.not_started at once, nothing reads or writes the store, the start-up jobs end quietly, and in the server console only `CrimsonPoliceAdmin check` and `CrimsonPoliceAdmin storagemode reset` (also `storage mode reset`, which then answers at once without an audit row) work. The owner fixes the problem, then types `ensure Crimson-Police` (or restarts it in txAdmin). MySQL applies table changes at once and can't roll them back, so migrations are written to be safe to run again (CREATE TABLE IF NOT EXISTS, and IF NOT EXISTS on columns and indexes where the database supports it).
 
 - Migrations only add: new tables, new columns with defaults, new indexes. With the database off the same files run on the saves folder, which takes these forms: CREATE TABLE [IF NOT EXISTS], ALTER TABLE t ADD [COLUMN] [IF NOT EXISTS] ... [FIRST | AFTER c], ADD [UNIQUE] INDEX/KEY [IF NOT EXISTS] [name] (cols), several ADDs in one ALTER, and CREATE [UNIQUE] INDEX [IF NOT EXISTS] name ON t (cols). A NOT NULL DATETIME or DATE column added to a table that has rows needs a DEFAULT (MariaDB would fill in zero dates, which the saves folder does not hold). They never DROP or TRUNCATE a table, and never delete rows of runs, officers, seasons, badges, payouts, disputes, audit entries, tests or custom missions. To change a column, a migration adds the new column and copies the data across; the old column stays.
 
@@ -4341,7 +4341,7 @@ Acceptance checks
 
 - ☐ A mission NPC killed by a player who isn't on the run flags the run for review with flag_reason = 'outside_help'
 
-- ☐ A fresh database is built by 001_initial.sql; a new 002_ file is applied once on the next start; a failing migration stops the resource with a clear error; no migration drops a table or deletes history
+- ☐ A fresh database is built by 001_initial.sql; a new 002_ file is applied once on the next start; a failing migration leaves the resource refusing every request (err.not_started) with one console line naming the fix and `ensure Crimson-Police`; no migration drops a table or deletes history
 
 - ☐ When a partner leaves mid-run, waves not yet spawned shrink to the team that's left; the points and cash tier stays for a real call, force recall or downed partner and drops for any other reason
 

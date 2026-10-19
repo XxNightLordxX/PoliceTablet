@@ -8274,12 +8274,15 @@ do
     local Store = {}
     Store.__index = Store
 
-    -- dir: the saves folder. opts.docRows (default 500) is the most rows one document holds.
+    -- dir: the saves folder. opts.docRows (default 500) is the most rows one document holds. opts.label: the folder
+    -- as the owner knows it (e.g. 'saves/second', relative to the resource) in the messages about its files; the
+    -- default is dir.
     function M.folderStore(dir, opts)
         opts = opts or {}
         dir = sgsub(dir, '[/\\]+$', '')
         return setmetatable({
             dir = dir,
+            label = type(opts.label) == 'string' and opts.label ~= '' and sgsub(opts.label, '[/\\]+$', '') or dir,
             docRows = opts.docRows or DOC_ROWS,
             inline = opts.inline or { cp_schema_migrations = true },
             ts = {},
@@ -8296,6 +8299,9 @@ do
     end
 
     function Store:path(name) return self.dir .. '/' .. name end
+
+    -- A file of this folder as the messages name it (the label, not the full path).
+    function Store:shown(name) return self.label .. '/' .. name end
 
     function Store:docName(ts, d)
         if d == 0 then return ts.file .. '.json' end
@@ -9097,7 +9103,7 @@ do
             text = ssub(text, 4)
         end -- a byte order mark (Windows Notepad)
         if probe and self:_owner(text) ~= t.name then return false end
-        local where = 'saves/' .. name
+        local where = self:shown(name)
         local nl = sfind(text, '\n', 1, true)
         local head = nl and Jparse(ssub(text, 1, nl - 1) .. ']}')
         if not head or head.t ~= 'o' or not JfindKey(head, 'columns') then
@@ -9383,7 +9389,7 @@ do
         end
         if ssub(text, 1, 3) == '\239\187\191' then text = ssub(text, 4) end
         local node = Jparse(text)
-        if not node or node.t ~= 'o' then Fail('saves/_tables.json is not valid JSON') end
+        if not node or node.t ~= 'o' then Fail(self:shown('_tables.json') .. ' is not valid JSON') end
         local meta = Jlua(node)
         local repair = false
         for _, entry in ipairs(meta.tables or {}) do
@@ -9403,7 +9409,7 @@ do
                         local row = {}
                         for j = 1, #(m.columns or {}) do
                             local ci = map[j]
-                            if ci then row[ci] = FromJsonValue(t.cols[ci], vals[j], 'saves/_tables.json') end
+                            if ci then row[ci] = FromJsonValue(t.cols[ci], vals[j], self:shown('_tables.json')) end
                         end
                         row.from = 0
                         found[#found + 1] = row
@@ -9417,8 +9423,8 @@ do
                     if not self:_readDoc(t, zero, 0, found) then
                         self.missing[#self.missing + 1] = zero
                         Warn(sformat(
-                            'saves/%s is missing: %s starts empty. To get its rows back, stop the server, put the file back from a backup and start again.',
-                            zero, t.name))
+                            '%s is missing: %s starts empty. To get its rows back, stop the server, put the file back from a backup and start again.',
+                            self:shown(zero), t.name))
                         if ts.range and t.autoCol then minNext = self.docRows + 1 end
                     end
                     -- numbered documents of an unfinished split are not part of this layout
@@ -9446,13 +9452,13 @@ do
                             self.missing[#self.missing + 1] = name
                             if ts.mode == 'range' then
                                 Warn(sformat(
-                                    'saves/%s is missing: the rows of %s with ids %d to %d start empty, and those ids are not used again. To get them back, stop the server, put the file back from a backup and start again.',
-                                    name, t.name, (d - 1) * self.docRows + 1, d * self.docRows))
+                                    '%s is missing: the rows of %s with ids %d to %d start empty, and those ids are not used again. To get them back, stop the server, put the file back from a backup and start again.',
+                                    self:shown(name), t.name, (d - 1) * self.docRows + 1, d * self.docRows))
                                 minNext = d * self.docRows + 1
                             else
                                 Warn(sformat(
-                                    'saves/%s is missing: the rows of %s in it start empty. To get them back, stop the server, put the file back from a backup and start again.',
-                                    name, t.name))
+                                    '%s is missing: the rows of %s in it start empty. To get them back, stop the server, put the file back from a backup and start again.',
+                                    self:shown(name), t.name))
                             end
                         end
                     end
@@ -9488,8 +9494,8 @@ do
                     local prev = byKey[key]
                     if prev then
                         if prev.from == row.from and not ts.inline then
-                            Fail(sformat('saves/%s has the key \'%s\' twice: remove one of the two rows',
-                                self:docName(ts, mmax(row.from, 0)), M.dupEntryText(t, row, t.pk)))
+                            Fail(sformat('%s has the key \'%s\' twice: remove one of the two rows',
+                                self:shown(self:docName(ts, mmax(row.from, 0))), M.dupEntryText(t, row, t.pk)))
                         end
                         local want = self:_docOf(ts, row)
                         if row.from == want and prev.from ~= want then
@@ -9511,8 +9517,9 @@ do
                     local key = UniqueKeyOf(t, u, row)
                     if key then
                         if seen[key] then
-                            Fail(sformat('saves/%s: two rows have the same %s \'%s\': remove one of them',
-                                self:docName(ts, mmax(row.from, 0)), u.name, M.dupEntryText(t, row, u.cols)))
+                            Fail(sformat('%s: two rows have the same %s \'%s\': remove one of them',
+                                self:shown(self:docName(ts, mmax(row.from, 0))), u.name,
+                                M.dupEntryText(t, row, u.cols)))
                         end
                         seen[key] = true
                     end

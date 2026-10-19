@@ -212,6 +212,11 @@ local function RunRetention(nowTs, by)
         CP.log(TAG, 'retention already running; skipped')
         return { archived = 0, auditDeleted = 0, skipped = true }
     end
+    -- the lock is read after the wait for the store (a lock the start takes holds before this goes on); a start
+    -- that failed cleans nothing up
+    if CP.Migrations and CP.Migrations.started and not CP.Migrations.started() then
+        return { archived = 0, auditDeleted = 0, skipped = 'not_started' }
+    end
     local held = JobsHeld()
     if held then
         CP.log(TAG, 'retention waits: maintenance lock (%s)', tostring(held))

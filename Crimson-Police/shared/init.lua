@@ -85,14 +85,23 @@ function CP.log(tag, msg, ...)
     print(('[crimson-police:%s] %s'):format(tag, Format(msg, ...)))
 end
 
+-- After a failed start every job that tries the store stops with err.not_started: the migrations' own lines say what
+-- failed and how to fix it, so the jobs' "... failed: err.not_started" lines are not printed or kept.
+local function NotStartedNoise(text)
+    local M = CP.Migrations
+    return M ~= nil and M.failed ~= nil and M.failed() ~= nil and tostring(text):find('err.not_started', 1, true) ~= nil
+end
+
 function CP.warn(tag, msg, ...)
     local text = Format(msg, ...)
+    if NotStartedNoise(text) then return end
     Keep('warn', tag, text)
     print(('^3[crimson-police:%s]^7 %s'):format(tag, text))
 end
 
 function CP.err(tag, msg, ...)
     local text = Format(msg, ...)
+    if NotStartedNoise(text) then return end
     Keep('error', tag, text)
     print(('^1[crimson-police:%s]^7 %s'):format(tag, text))
 end

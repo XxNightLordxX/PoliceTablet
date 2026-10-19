@@ -150,6 +150,12 @@ local function DatabaseHasData(real)
     return nil
 end
 
+-- The console command's name (Config.Tablet.adminCommand), for the lines that tell the owner what to type.
+local function CmdName()
+    return type(Config) == 'table' and type(Config.Tablet) == 'table' and Config.Tablet.adminCommand
+        or 'CrimsonPoliceAdmin'
+end
+
 -- A new saves folder: nothing comes over from the database by itself. When the database holds Crimson-Police data
 -- (the database was switched off) the copy command is named; on a first install one calm line says the folder is
 -- empty. The database is asked once oxmysql is connected.
@@ -167,8 +173,7 @@ local function AnnounceNewFolder()
                     path))
             return
         end
-        local cmd = type(Config) == 'table' and type(Config.Tablet) == 'table' and Config.Tablet.adminCommand
-            or 'CrimsonPoliceAdmin'
+        local cmd = CmdName()
         CP.warn(TAG,
             'the saves folder %s is new, so Crimson-Police starts with no data. Nothing is copied from your database by itself: to bring your data over, run "%s storage copy database-to-files" in the server console once the resource has started, then restart Crimson-Police.',
             path, tostring(cmd))
@@ -191,9 +196,9 @@ local function Install()
         Config.Database.enabled, Config.Database.folder = eff.enabled, eff.folder
         cfg = Config.Database
         print(
-            ('[crimson-police] storage: the storage switched to in Admin UI → System is used (%s%s), not config.lua\'s Config.Database. "CrimsonPoliceAdmin storagemode reset" in the server console goes back to config.lua\'s.'):format(
+            ('[crimson-police] storage: the storage switched to in Admin UI → System is used (%s%s), not config.lua\'s Config.Database. "%s storagemode reset" in the server console goes back to config.lua\'s.'):format(
                 ov.mode == 'files' and 'saves folder ' or 'database',
-                ov.mode == 'files' and tostring(eff.folder or 'saves') or ''))
+                ov.mode == 'files' and tostring(eff.folder or 'saves') or '', tostring(CmdName())))
     end
     if cfg.enabled ~= false then
         mode = 'database'
@@ -203,7 +208,11 @@ local function Install()
     S.realMySQL = type(MySQL) == 'table' and MySQL or nil
     folderPath = ResolveFolder(cfg.folder)
     if not io then UseResourceFiles(folderPath) end
-    local db = CP.Storage.MemSQL.new({ store = CP.Storage.MemSQL.folderStore(folderPath) })
+    -- the messages about its files name the folder as config.lua or the switch named it (e.g. saves/second)
+    local label = type(cfg.folder) == 'string' and Trim(cfg.folder):gsub('[/\\]+$', '') or ''
+    if label == '' then label = 'saves' end
+    if IsAbsolute(label) then label = folderPath end
+    local db = CP.Storage.MemSQL.new({ store = CP.Storage.MemSQL.folderStore(folderPath, { label = label }) })
     S.db = db
     -- a long SELECT (a board over a big season) gives the server its turn every 4 ms instead of holding the
     -- server thread for the whole query (with the database, oxmysql's await yields the same way)
@@ -231,7 +240,8 @@ local function Install()
     end
     if loadError then
         CP.err(TAG, '%s', loadError)
-        CP.err(TAG, 'Crimson-Police will not start until this is fixed; nothing in the saves folder was changed.')
+        CP.err(TAG,
+            'Crimson-Police does not start (it stays started but refuses every request) until this is fixed; nothing in the saves folder was changed.')
         db:fail(loadError)
     end
     MySQL = CP.Storage.MemSQL.shim(db, { realMySQL = S.realMySQL, resource = CP.resource or GetCurrentResourceName() })

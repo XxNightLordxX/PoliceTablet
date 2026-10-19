@@ -4511,6 +4511,7 @@ local function RegisterHooks()
             src = ToSrc(src)
             if not src then return end
             SetTimeout(5000, function()
+                if CP.Migrations and CP.Migrations.started and not CP.Migrations.started() then return end
                 local cid = CitizenOf(src)
                 if cid then
                     Runs.cooldowns(cid)

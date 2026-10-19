@@ -482,6 +482,8 @@ end
 function Cash.pay(rowId)
     rowId = ToId(rowId)
     if not rowId then return nil end
+    -- the lock is read after the wait for the store: a lock the start takes (left behind) holds before this goes on
+    Db()
     local held = PaymentsHeld()
     if held == 'left_behind' then
         -- permanent: this store was left behind by a storage switch, its rows may be paid in the store that took over
@@ -491,7 +493,6 @@ function Cash.pay(rowId)
         CP.log(TAG, 'row %d waits: payments are held by the maintenance lock', rowId)
         return nil
     end
-    Db()
     local row = ReadRow(rowId)
     if not row then return nil end
     if FINAL[row.cash_status] or row.cash_status == 'paying' then return row.cash_status end
@@ -510,8 +511,8 @@ end
 function Cash.payPending(src)
     local info = CP.Qbx and CP.Qbx.getInfo and CP.Qbx.getInfo(src)
     if not info or not info.citizenid then return 0 end
-    if PaymentsHeld() then return 0 end
     Db()
+    if PaymentsHeld() then return 0 end
     -- 'pending' rows, plus completed mission rows still 'none' although they carry cash (the engine's pay never
     -- ran or was skipped, e.g. a crash right after the row insert): no money moved on either, and pay() claims
     -- them like any other row. Manual award and goal rows never carry cash.
@@ -611,8 +612,8 @@ end
 -- Waits while a maintenance lock holds payments, and for an admin's bulk job (a void in flight is never forfeited
 -- half done); holds the busy lock while it works.
 local function ForfeitureJob()
-    if PaymentsHeld() then return 0 end
     Db()
+    if PaymentsHeld() then return 0 end
     local n = UnderBusyLock('forfeiture', ForfeitRows)
     return n or 0
 end
@@ -628,8 +629,8 @@ end
 local function Clean(rowId)
     rowId = ToId(rowId)
     if not rowId then return nil, 'err.invalid_row' end
-    if PaymentsHeld() then return nil, 'err.maintenance' end
     Db()
+    if PaymentsHeld() then return nil, 'err.maintenance' end
     local row = ReadRow(rowId)
     if not row then return nil, 'err.row_not_found' end
     return row, CP.U.jsonField(row.breakdown) or {}
@@ -1020,8 +1021,8 @@ end
 function Cash.toPending(rowId, from)
     rowId = ToId(rowId)
     if not rowId then return false, 'err.invalid_row' end
-    if PaymentsHeld() then return false, 'err.maintenance' end
     Db()
+    if PaymentsHeld() then return false, 'err.maintenance' end
     local extra = ''
     if from == 'forfeited' then
         extra = ' AND cash_paid = 0'
@@ -1218,7 +1219,8 @@ end)
 local nextForfeitAt = nil   -- os.time() of the next forfeiture check (Admin UI -> Payments shows it)
 
 CreateThread(function()
-    Db()
+    -- a start that failed: the loop never starts (quietly; the console has the lines that say what failed)
+    if CP.Migrations and CP.Migrations.started and not CP.Migrations.started() then return end
     while true do
         ForfeitureJob()
         nextForfeitAt = os.time() + FORFEIT_EVERY_MS // 1000

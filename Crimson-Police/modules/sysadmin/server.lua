@@ -1619,6 +1619,7 @@ end
 -- One part of AUDIT_PART rows (export beyond the 5000 of one part).
 function Sys.auditPart(args, part)
     if not (Has('Admin', '_auditWhere') and Has('Admin', '_csv')) then return nil, 'err.module_unavailable' end
+    Db()
     local total = AuditTotal(args)
     local parts = math.max(1, math.ceil(total / AUDIT_PART))
     part = math.max(1, math.min(parts, Int(part) > 0 and Int(part) or 1))
@@ -1629,6 +1630,7 @@ end
 -- Save to server: every matching row (up to AUDIT_SAVE_MAX) into saves/exports/audit-<time>.csv.
 function Sys.saveAudit(args)
     if not (Has('Admin', '_auditWhere') and Has('Admin', '_csv')) then return nil, 'err.module_unavailable' end
+    Db()
     if not EnsureDir(EXPORT_DIR) then return nil, 'err.export_folder' end
     local total = math.min(AuditTotal(args), AUDIT_SAVE_MAX)
     local chunks, n = {}, 0
@@ -2123,6 +2125,10 @@ local function ConsoleStorageMode(src, args)
     local S = CP.Storage
     SetKvp(S.KVP_MODE, nil)
     SetKvp(S.KVP_FOLDER, nil)
+    -- a store that did not start cannot take the audit row (it would wait for good): this console line is the record
+    if CP.Migrations and CP.Migrations.failed and CP.Migrations.failed() then
+        return true, 'sysadmin.console.storagemode_reset_not_started', { resource = CP.resource }
+    end
     Kit.auditSync(0, 'audit', 'storageModeReset', nil, nil, nil, 'console', { critical = true })
     return true, 'sysadmin.console.storagemode_reset', { resource = CP.resource }
 end
@@ -2149,8 +2155,8 @@ local function StorageHealth()
 end
 Sys._storageHealth = StorageHealth
 
-function Sys._boot()
-    Db()
+-- The start-up locks: a store a storage switch left behind, a restore that did not finish.
+local function StartLocks()
     if Sys.storageMeta().state == 'left_behind' then
         Maint.begin('left_behind', { by = 'start' })
         CP.err(TAG, '%s', CP.L('sysadmin.console.left_behind'))
@@ -2169,6 +2175,19 @@ function Sys._boot()
     end
 end
 
+function Sys._boot()
+    Db()
+    StartLocks()
+end
+
+-- The migrations runner calls this once the store is up and before any module that waits for it goes on, so the cash
+-- forfeiture, the pending pay and the job resume already see the lock. It must not wait for the store.
+local locksAtStart = false   -- the runner took them: the start-up thread below does not
+function Sys.startLocks()
+    locksAtStart = true
+    StartLocks()
+end
+
 CreateThread(function()
     if CP.ConfigHealth and CP.ConfigHealth.register then CP.ConfigHealth.register('storage', StorageHealth) end
     if CP.Admin and CP.Admin.registerSubcommand then
@@ -2182,6 +2201,9 @@ CreateThread(function()
             if not ok then CP.warn(TAG, 'the daily backup failed: %s', CP.L(tostring(res))) end
         end)
     end
+    -- a start that failed: nothing to do, quietly; the runner took the start-up locks already: nothing either
+    if CP.Migrations and CP.Migrations.started and not CP.Migrations.started() then return end
+    if locksAtStart then return end
     local ok, err = pcall(Sys._boot)
     if not ok then CP.err(TAG, 'reading the storage marker failed: %s', tostring(err)) end
 end)

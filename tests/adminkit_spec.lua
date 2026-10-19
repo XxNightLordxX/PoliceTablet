@@ -468,6 +468,12 @@ do
     -- the restart: memory is gone, the saved job is not
     Kit._reset()
     H.eq(Kit.busy(), nil, 'after the restart nothing holds the lock')
+    -- a start on a locked store (left behind by a storage switch, a restore that did not finish): nothing changes
+    -- there, so the interrupted job waits for a start without the lock (F20)
+    Maint.begin('left_behind', { by = 'start' })
+    H.eq(Async(function() return Kit._resumeJobs() end), 0, 'a maintenance lock at start: the job is not resumed')
+    H.eq((Async(function() return Kit.job(jobId) end) or {}).state, 'running', 'and stays as it was')
+    Maint.finish('left_behind')
     local resumed = Async(function() return Kit._resumeJobs() end)
     H.eq(resumed, 1, 'the interrupted job is finished at start-up')
     local twice = 0

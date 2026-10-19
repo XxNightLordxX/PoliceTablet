@@ -1079,6 +1079,28 @@ do
     H.eq(Async(function() return Cash.payPending(7) end), 0, 'a left-behind store never pays')
     H.eq(RowOf(id2).cash_status, 'pending', 'its rows stay as they are')
     Maint.finish('left_behind')
+
+    -- F20: a payment or the forfeiture that waits for the store while the start takes the left-behind lock (the
+    -- runner takes it before any waiting caller goes on) reads the lock after that wait, never before it
+    local realReady = CP.Migrations.ready
+    local function Locked(fn)
+        CP.Migrations.ready = function()
+            if not Maint.active() then Maint.begin('left_behind', { by = 'start' }) end
+            return true
+        end
+        local res = table.pack(Async(fn))
+        CP.Migrations.ready = realReady
+        return table.unpack(res, 1, res.n)
+    end
+    local id3 = Row({ status = 'pending', owed = 70 })
+    H.eq(Locked(function() return Cash.pay(id3) end), nil, 'Cash.pay reads the lock the start took while it waited')
+    H.eq(RowOf(id3).cash_status, 'pending', 'so the row is not paid')
+    H.eq(Locked(function() return Cash.payPending(7) end), 0, 'the login pay too')
+    H.eq(RowOf(id3).cash_status, 'pending', '(still not paid)')
+    local v2 = Row({ status = 'held', owed = 70, voided = true, ago = 3 * 86400 })
+    H.eq(Locked(function() return Cash._forfeitureJob() end), 0, 'and the forfeiture job')
+    H.eq(RowOf(v2).cash_status, 'held', 'which changes nothing in a store left behind')
+    Maint.finish('left_behind')
 end
 
 -- ============================================================================

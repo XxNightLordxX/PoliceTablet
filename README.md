@@ -551,7 +551,9 @@ These are always admin only. Setting one of them to `true` in `Config.Permission
     puts one back to its config.lua value (for example `settings reset Cash.source`), and
     `CrimsonPoliceAdmin settings reset all` puts every one back.
   - `CrimsonPoliceAdmin storage mode reset` (or `storagemode reset`) forgets a storage switch made in game: the next
-    start uses `Config.Database` from config.lua again. Restart Crimson-Police afterwards.
+    start uses `Config.Database` from config.lua again. Restart Crimson-Police afterwards. It also works after a
+    start that failed (then it and `CrimsonPoliceAdmin check` are the only commands that do): type
+    `ensure Crimson-Police` afterwards ([11.4](#114-database-and-saves-folder)).
   - `set cp_settings_safe 1` in server.cfg starts Crimson-Police once with config.lua only: the settings changed in
     game are ignored, not deleted. Remove the line (or set it to `0`) and restart to use them again.
 - Section [8.1](#81-commands) lists every command.
@@ -1924,15 +1926,17 @@ The last line of the start-up check is `Start-up check: all ... checks passed` o
 
 | Console line | What to do |
 |---|---|
-| `Migration <file> failed. Crimson-Police will not start until it is fixed.` followed by `Statement: ...`, `Error: ...` and, for the usual errors, `How to fix it: ...` | Crimson-Police could not make its tables. Do what the "How to fix it" line says, then restart. Usual causes: the database user may not create or change tables, a wrong password, or the database can't be reached. Or set `Config.Database.enabled = false` to save to files |
+| `Migration <file> failed. Crimson-Police did not start.` followed by `Statement: ...`, `Error: ...`, for the usual errors `How to fix it: ...`, and `Crimson-Police stays started but refuses every request until it starts ...` | Crimson-Police could not make its tables (or read its saves folder). Do what the "How to fix it" line says, then type `ensure Crimson-Police` in the server console (or restart it in txAdmin). Usual causes: the database user may not create or change tables, a wrong password, or the database can't be reached. Or set `Config.Database.enabled = false` to save to files. FXServer never lets a resource stop itself, so Crimson-Police shows as started in txAdmin meanwhile: the tablet answers "Crimson-Police did not start" at once, every request is refused, and nothing is read or written. In the server console only `CrimsonPoliceAdmin check` and `CrimsonPoliceAdmin storagemode reset` (also `storage mode reset`) still work |
+| `This is the storage switched to in Admin UI → System. To go back to config.lua's Config.Database, type "CrimsonPoliceAdmin storagemode reset" ...` | The storage switched to in game cannot start (for example a saves folder with a damaged file, or a database user without rights). Type `CrimsonPoliceAdmin storagemode reset` in the server console (it answers `The storage chosen in game is cleared ...`), then `ensure Crimson-Police`: it starts on config.lua's `Config.Database` |
+| `Crimson-Police did not start (the console lines above say why). Only "... check" and "... storagemode reset" work ...` | You typed another `CrimsonPoliceAdmin` command (or opened the Admin UI in game) after a failed start. Fix what the start-up lines say, then `ensure Crimson-Police` |
 | `still waiting for the database after 30 seconds: oxmysql has not connected` | Check the oxmysql lines above it and `set mysql_connection_string` in server.cfg (user name, password, host, database name). Or set `Config.Database.enabled = false` |
 | `first start with the database off: the saves folder ... is empty` | Normal on a new install |
 | `the saves folder ... is new, so Crimson-Police starts with no data` | You switched the database off on a server that has data in the database. Run `CrimsonPoliceAdmin storage copy database-to-files`, then restart ([6.5](#65-database-off-the-saves-folder)) |
 | `the database is new, but the saves folder holds data from running with the database off` | Run `CrimsonPoliceAdmin storage copy files-to-database`, then restart |
 | `the saves folder ... cannot be written` | Keep `folder = 'saves'` (inside the Crimson-Police folder) and make sure the server may write there |
 | `the saves folder ... is missing: create it by hand` | Make that folder by hand inside the Crimson-Police folder, then restart. The server cannot create folders on Linux (FXServer crashes when it tries), so Crimson-Police never does |
-| `the saves folder ... could not be read: ...` | A file in `saves/` is broken. The line names it. Put it back from a backup with the server stopped |
-| `saves/<file> is missing: ...` | A saves file was deleted. Put it back from a backup with the server stopped |
+| `the saves folder ... could not be read: ...` | A file in the saves folder is broken. The line names it (with the folder in use, for example `saves/second/_tables.json`). Put it back from a backup with the server stopped, then start it again. Until then Crimson-Police refuses every request, as after a failed migration |
+| `saves/<file> is missing: ...` | A saves file was deleted (the line names the folder in use). Put it back from a backup with the server stopped |
 | "Active mission runs: 2. Copy when every run has ended." | Wait until no mission runs, then copy again |
 | "The saves folder already has ... rows ..." (or "The database already has ...") | The target has data. Add `force` to replace it |
 | "That data was made by a newer Crimson-Police ..." | Update Crimson-Police first |

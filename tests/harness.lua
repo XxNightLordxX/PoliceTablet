@@ -2427,6 +2427,14 @@ function H.boot(opts)
         return true
     end
     _G.GetResourceState = function(name) return (opts.stopped and opts.stopped[name]) and 'stopped' or 'started' end
+    -- FXServer refuses StopResource on the calling resource (citizen-server-impl ServerResources.cpp STOP_RESOURCE:
+    -- name == the current resource -> false, Resource::Stop() never called; the same in build 35245's binary): the
+    -- resource keeps running. H.stopRequests lists every call.
+    H.stopRequests = {}
+    _G.StopResource = function(name)
+        H.stopRequests[#H.stopRequests + 1] = tostring(name)
+        return name ~= GetCurrentResourceName()
+    end
     _G.CreateThread = function(fn)
         local co = coroutine.create(fn)
         Resume(co)
@@ -2567,6 +2575,8 @@ function H.boot(opts)
             or {
                 ready = function() return true end,
                 isReady = function() return true end,
+                started = function() return true end,
+                failed = function() return nil end,
                 version = function() return H.migrationVersion() end,
             }
     end

@@ -2388,7 +2388,7 @@ do
     -- a damaged document stops the start instead of losing data
     WriteFile(doc, '{"table":"cp_s_t","columns":["id","v"],"rows":[\n[1,"one"],\n[2,"tw\n]}\n')
     local okBad, errBad = pcall(function() return M.new({ store = M.folderStore(dir) }):load() end)
-    H.ok(not okBad and tostring(errBad):find('saves/s_t.json', 1, true) ~= nil,
+    H.ok(not okBad and tostring(errBad):find(dir .. '/s_t.json', 1, true) ~= nil,
         'a damaged document is reported by name: ' .. tostring(errBad))
     H.eq(ReadFile(doc):sub(1, 10), '{"table":"', 'and left untouched')
     -- documents without _tables.json are never overwritten by a fresh start
@@ -2793,6 +2793,30 @@ do
     H.ok(not okQ and tostring(errQ):find('could not be read', 1, true) ~= nil,
         'and every query fails until it is fixed')
     H.eq(ReadFile(TMP .. '/runner/officers.json'), 'garbage', 'the document is left as it is')
+    -- a storage switched to in game whose saves folder cannot be read (F18, F21): the lines name the folder in use
+    -- and the console command by its configured name, and say the resource stays started but refuses requests
+    H.execute(('mkdir -p \'%s/saves/broken\''):format(rp))
+    WriteFile(rp .. '/saves/broken/_tables.json', '{ not json')
+    local kvp = { cp_storage_mode = 'files', cp_storage_folder = 'saves/broken' }
+    local savedKvp, savedCmd = _G.GetResourceKvpString, Config.Tablet.adminCommand
+    _G.GetResourceKvpString = function(k) return kvp[k] end
+    Config.Tablet.adminCommand = 'PDAdmin'
+    errs = {}
+    _G.print = function(...) errs[#errs + 1] = table.concat({ ... }, ' ') end
+    st = LoadStorage({ enabled = true, folder = 'saves' })
+    _G.print = realPrint
+    _G.GetResourceKvpString, Config.Tablet.adminCommand = savedKvp, savedCmd
+    local said = table.concat(errs, '\n')
+    H.ok(said:find('"PDAdmin storagemode reset" in the server console goes back to config.lua', 1, true) ~= nil,
+        'the start-up line names the console command by Config.Tablet.adminCommand: ' .. said)
+    H.ok(tostring(st.loadError()):find('saves/broken/_tables.json is not valid JSON', 1, true) ~= nil,
+        'the damaged file is named in the folder in use, not a fixed saves/: ' .. tostring(st.loadError()))
+    H.ok(
+        said:find('stays started but refuses every request', 1, true) ~= nil
+            and said:find('will not start', 1, true) == nil,
+        'and the resource is said to refuse requests, not to stop'
+    )
+    os.execute(('rm -rf \'%s/saves/broken\''):format(rp))
     CP.Storage, _G.MySQL, Config.Database, CP.Migrations = savedStorage, savedMySQL, savedCfg, savedMigrations
 end
 
@@ -3257,7 +3281,7 @@ do
     end
     WriteFile(doc, (good:gsub('%["AAA","101","Sergeant",50,0,', '["AAA","Sergeant",50,0,')))
     local e = LoadErr()
-    H.ok(e and e:find('saves/officers.json line 2', 1, true) and e:find('5 values for 6 columns', 1, true),
+    H.ok(e and e:find(dir .. '/officers.json line 2', 1, true) and e:find('5 values for 6 columns', 1, true),
         'a value missing: ' .. tostring(e))
     WriteFile(doc, (good:gsub('%["AAA","101","Sergeant",50,0,', '["AAA","101","Sergeant",50,0,1,')))
     e = LoadErr()
@@ -3313,10 +3337,28 @@ do
     local b = M.new({ store = M.folderStore(dir, { docRows = 5 }) }):load()
     _G.print = realPrint
     local all = table.concat(warnings, '\n')
-    H.ok(all:find('saves/officers.json is missing: cp_officers starts empty', 1, true) ~= nil,
-        'a missing document is reported: ' .. all)
-    H.ok(all:find('saves/runs_3.json is missing: the rows of cp_runs with ids 11 to 15', 1, true) ~= nil,
+    H.ok(all:find(dir .. '/officers.json is missing: cp_officers starts empty', 1, true) ~= nil,
+        'a missing document is reported, with the folder it is missing from: ' .. all)
+    H.ok(all:find(dir .. '/runs_3.json is missing: the rows of cp_runs with ids 11 to 15', 1, true) ~= nil,
         'with the ids it held')
+    -- the folder as the owner named it (CP.Storage passes Config.Database.folder or the switch's folder), never a
+    -- fixed 'saves/' while another folder is in use
+    warnings = {}
+    _G.print = function(...) warnings[#warnings + 1] = table.concat({ ... }, ' ') end
+    M.new({ store = M.folderStore(dir, { docRows = 5, label = 'saves/second' }) }):load()
+    _G.print = realPrint
+    all = table.concat(warnings, '\n')
+    H.ok(all:find('saves/second/officers.json is missing', 1, true) ~= nil, 'the label names the folder: ' .. all)
+    local bad = TMP .. '/badtables'
+    Mkdir(bad)
+    local fh = assert(io.open(bad .. '/_tables.json', 'w'))
+    fh:write('{ not json')
+    fh:close()
+    local okBad, errBad = pcall(function()
+        return M.new({ store = M.folderStore(bad, { label = 'saves/broken' }) }):load()
+    end)
+    H.ok(not okBad and tostring(errBad):find('saves/broken/_tables.json is not valid JSON', 1, true) ~= nil,
+        'a damaged _tables.json names the folder in use: ' .. tostring(errBad))
     H.eq(#b.tables.cp_officers.rows, 0, '(the table starts empty)')
     H.eq(b:exec('INSERT INTO cp_runs (who) VALUES (\'new\')').insertId, 16,
         'ids of a missing range document are not handed out again')

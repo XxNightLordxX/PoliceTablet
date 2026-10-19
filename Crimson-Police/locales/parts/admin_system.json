@@ -69,6 +69,7 @@
   "sysadmin.console.left_behind": "This storage was left behind by a storage switch: nothing is paid or changed here. Use System → Storage → Use this store again only if the other storage is gone.",
   "sysadmin.console.storagemode_help": "{cmd} storagemode reset: go back to config.lua's Config.Database at the next start",
   "sysadmin.console.storagemode_reset": "The storage chosen in game is cleared. Restart {resource} to use config.lua's Config.Database.",
+  "sysadmin.console.storagemode_reset_not_started": "The storage chosen in game is cleared (no audit row: the store did not start, this line is the record). Type \"ensure {resource}\" to start with config.lua's Config.Database.",
   "sysadmin.console.storagemode_usage": "Use: storagemode reset",
   "sysadmin.dept_off_notice": "{name} is turned off in Crimson-Police. Your history and pay are kept.",
   "sysadmin.health.left_behind": "This storage was left behind by a storage switch: nothing is paid or changed here (System → Storage).",

@@ -2218,9 +2218,11 @@ function Settings.isLoaded() return loaded end
 function Settings.safeMode() return safeMode end
 
 -- Waits (up to timeoutMs) until the saved settings are loaded: start-up code that reads a setting once calls this.
+-- A start that failed never loads them: it returns at once (false), so the console command registers right away.
 function Settings.waitLoaded(timeoutMs)
     local waited = 0
     while not loaded and waited < (timeoutMs or 0) do
+        if CP.Migrations and CP.Migrations.failed and CP.Migrations.failed() then break end
         Wait(LOAD_POLL_MS)
         waited = waited + LOAD_POLL_MS
     end
@@ -2668,6 +2670,7 @@ end
 function Settings.historyEntry(id)
     id = math.tointeger(tonumber(id) or 0)
     if not id or id <= 0 then return nil end
+    if CP.Migrations and CP.Migrations.ready then CP.Migrations.ready() end
     local ok, r = pcall(MySQL.single.await, [[SELECT id, setting_key, action, old_json, new_json, by_actor, by_ident,
         reason, reverts_id, UNIX_TIMESTAMP(created_at) AS created_ts FROM cp_settings_history WHERE id = ?]], { id })
     if not ok or type(r) ~= 'table' then return nil end
@@ -3382,7 +3385,8 @@ CreateThread(function()
         CP.Admin.registerSubcommand('settings', ConsoleSettings, 'settings.console.help')
     end
     -- the migrations runner normally loads the settings before it reports ready; this covers a runner without it
-    if CP.Migrations and CP.Migrations.ready then CP.Migrations.ready() end
+    -- (a start that failed loads nothing: the thread ends quietly)
+    if CP.Migrations and CP.Migrations.started and not CP.Migrations.started() then return end
     if not loaded then Settings.boot() end
 end)
 

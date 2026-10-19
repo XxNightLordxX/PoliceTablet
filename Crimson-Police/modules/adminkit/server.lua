@@ -598,6 +598,9 @@ function Kit._resumeJobs()
     -- a job of this run holds the lock: nothing was interrupted
     if busy then return 0 end
     Db()
+    -- a maintenance lock (a store left behind, a restore that did not finish) changes nothing: the jobs wait for
+    -- a start without it
+    if maintenance then return 0 end
     local ok, rows = pcall(MySQL.query.await,
         'SELECT id FROM cp_admin_jobs WHERE state = \'running\' ORDER BY created_at')
     if not ok or type(rows) ~= 'table' then return 0 end
@@ -882,7 +885,7 @@ end
 
 CreateThread(function()
     Wait(JOB_RESUME_DELAY_MS)
-    if CP.Migrations and CP.Migrations.ready then CP.Migrations.ready() end
+    if CP.Migrations and CP.Migrations.started and not CP.Migrations.started() then return end
     local ok, err = pcall(Kit._resumeJobs)
     if not ok then CP.err(TAG, 'resuming admin jobs failed: %s', tostring(err)) end
 end)

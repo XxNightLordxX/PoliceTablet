@@ -1249,6 +1249,7 @@ if CP.AdminKit and CP.AdminKit.action then
     Kit.action('server:admin:unrevokeCommendation', 'officerRecords', function(ctx)
         local id = math.tointeger(tonumber(ctx.payload.id))
         if not id or id < 1 then return false, 'err.invalid_payload' end
+        Db()
         local row = MySQL.single.await('SELECT id, citizenid, kind, revoked FROM cp_commendations WHERE id = ?', { id })
         if not row then return false, 'err.commend_not_found' end
         if not U.truthy(row.revoked) then return false, 'err.commend_active' end
@@ -1269,6 +1270,7 @@ if CP.AdminKit and CP.AdminKit.action then
         local lim = type(CommendCfg().citation) == 'table' and CommendCfg().citation or {}
         if not citation or CharLen(citation) < Int(lim[1] or 10) then return false, 'err.citation_short' end
         if CharLen(citation) > math.min(255, Int(lim[2] or 255)) then return false, 'err.citation_long' end
+        Db()
         local row = MySQL.single.await('SELECT id, citizenid, citation FROM cp_commendations WHERE id = ?', { id })
         if not row then return false, 'err.commend_not_found' end
         if row.citation == citation then return true, { id = id } end

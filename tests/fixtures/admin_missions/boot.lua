@@ -2,7 +2,8 @@
 -- (tests/builtin_override_spec.lua, tests/admin_missions_spec.lua): every module and block loaded in fxmanifest
 -- order, the outside resources stubbed the way tests/e2e_spec.lua stubs them. Returns a table of helpers.
 
-return function(H, name)
+return function(H, name, opts)
+    opts = opts or {}
     H.db = (os.getenv('CP_TEST_DB') or 'cp_test') .. '_' .. name
     H.resetDatabase()
     H.boot({ side = 'server' })
@@ -112,8 +113,12 @@ return function(H, name)
     _G.PerformHttpRequest = function() end
     _G.TriggerLatentClientEvent = function(n, target, _, ...) TriggerClientEvent(n, target, ...) end
     _G.AddStateBagChangeHandler = function() end
+    -- FXServer's rule (tests/harness.lua): StopResource on the calling resource is refused and does nothing
     X.stopResource = 0
-    _G.StopResource = function() X.stopResource = X.stopResource + 1 end
+    _G.StopResource = function(res)
+        X.stopResource = X.stopResource + 1
+        return res ~= GetCurrentResourceName()
+    end
     _G.GetResourcePath = function() return H.root:sub(1, -2) end
     local playerCoords = _G.GetEntityCoords
     _G.GetEntityCoords = function(e)
@@ -234,6 +239,7 @@ return function(H, name)
     end
 
     -- ---- THE RESOURCE ------------------------------------------------------
+    if opts.beforeLoad then opts.beforeLoad(X) end
     do
         local files = {}
         local p = io.popen(

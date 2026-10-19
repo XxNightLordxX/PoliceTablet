@@ -47,6 +47,18 @@ if IsDuplicityVersion() then
     end
     CP.Net._maintenanceRefusal = MaintenanceRefusal
 
+    -- A start that failed (CP.Migrations.failed(): a migration, a damaged saves folder, a store that cannot start):
+    -- every action and callback answers err.not_started at once, before its handler runs, so nothing waits for a
+    -- store that will never be ready and nothing reads or writes a half-upgraded one. FXServer keeps the resource
+    -- started (it refuses a resource's StopResource on itself).
+    local NOT_STARTED = 'err.not_started'
+    local function NotStarted()
+        local M = CP.Migrations
+        if M and M.failed and M.failed() then return NOT_STARTED end
+        return nil
+    end
+    CP.Net._notStarted = NotStarted
+
     -- opts: { rate = max calls per second (default 8), maintenance = true: allowed during a maintenance lock }
     function CP.Net.action(name, handler, opts)
         local eventName = 'crimson-police:' .. name
@@ -57,10 +69,14 @@ if IsDuplicityVersion() then
             if not CP.Net.rateOk(src, eventName, max, 1000) then
                 return Reply(src, reqId, false, 'err.rate_limited')
             end
+            local down = NotStarted()
+            if down then return Reply(src, reqId, false, down) end
             local locked = MaintenanceRefusal(opts)
             if locked then return Reply(src, reqId, false, locked) end
             local okCall, ok, data = pcall(handler, src, payload)
             if not okCall then
+                -- the start failed while this request waited for it (CP.Migrations.ready raised)
+                if ok == NOT_STARTED then return Reply(src, reqId, false, NOT_STARTED) end
                 CP.err('net', '%s failed: %s', eventName, tostring(ok))
                 return Reply(src, reqId, false, 'err.internal')
             end
@@ -82,8 +98,11 @@ if IsDuplicityVersion() then
             if not CP.Net.rateOk(src, cbName, max, 1000) then
                 return { ok = false, error = 'err.rate_limited' }
             end
+            local down = NotStarted()
+            if down then return { ok = false, error = down } end
             local okCall, data, errKey, details = pcall(handler, src, args)
             if not okCall then
+                if data == NOT_STARTED then return { ok = false, error = NOT_STARTED } end
                 CP.err('net', '%s failed: %s', cbName, tostring(data))
                 return { ok = false, error = 'err.internal' }
             end

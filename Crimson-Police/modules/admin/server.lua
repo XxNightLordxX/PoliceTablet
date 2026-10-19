@@ -2092,6 +2092,15 @@ function Admin.command(src, args)
         return Reply(src, 'error', 'err.not_admin')
     end
     local sub = args[1] and tostring(args[1]):lower() or nil
+    -- a start that failed: only the console's check and storage mode reset work (the way back from a storage
+    -- switched to in game that cannot start); everything else, the in-game open included, is refused
+    if CP.Migrations and CP.Migrations.failed and CP.Migrations.failed() then
+        local second = args[2] and tostring(args[2]):lower() or nil
+        local exempt = src == 0 and (sub == 'check' or sub == 'storagemode' or (sub == 'storage' and second == 'mode'))
+        if not exempt then
+            return Reply(src, 'error', 'admin.cmd.not_started', { cmd = CmdName(), resource = CP.resource })
+        end
+    end
     if not sub then
         if src == 0 then return Usage(src) end
         local okP, eP = Can(src, 'openAdmin')

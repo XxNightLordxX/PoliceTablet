@@ -1389,6 +1389,8 @@ end
 
 CreateThread(function()
     Wait(0)
+    -- a start that failed: no operations and no tick (the thread ends quietly)
+    if CP.Migrations and CP.Migrations.started and not CP.Migrations.started() then return end
     Ops._init()
     if CP.Qbx and CP.Qbx.onPlayerUnload then CP.Qbx.onPlayerUnload(RemoveJoiner) end
     if CP.Access and CP.Access.onLost then CP.Access.onLost(function(src) RemoveJoiner(src) end) end

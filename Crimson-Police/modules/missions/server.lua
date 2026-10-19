@@ -1727,6 +1727,8 @@ end, { rate = 2 })
 
 CreateThread(function()
     Wait(0)   -- every module and block file of the resource has been loaded by now
+    -- a start that failed loads no mission (the thread ends quietly: the console says what failed)
+    if CP.Migrations and CP.Migrations.started and not CP.Migrations.started() then return end
     Missions.loadAll()
     if CP.ConfigHealth and CP.ConfigHealth.register then CP.ConfigHealth.register('missions', MissionsHealth) end
 end)

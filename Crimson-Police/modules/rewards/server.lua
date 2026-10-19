@@ -591,6 +591,8 @@ end
 -- Every pending row of an online officer: given now, or left in the locker (arena, no room, no ox_inventory).
 local function DeliverAll(citizenid)
     if not Enabled() or not ValidCitizenId(citizenid) then return 0 end
+    -- the lock is read after the wait for the store: a lock the start takes (left behind) holds before this goes on
+    Db()
     if DeliveryHeld() then return 0 end
     local src = SrcOf(citizenid)
     if not src then return 0 end
@@ -804,8 +806,8 @@ end
 
 -- Waits while a maintenance lock holds rewards back, and for an admin's bulk job; holds the busy lock meanwhile.
 local function ForfeitureJob()
-    if DeliveryHeld() then return 0 end
     Db()
+    if DeliveryHeld() then return 0 end
     local Kit = CP.AdminKit
     if not (Kit and Kit.waitIdle and Kit.lock and Kit.unlock) then return ForfeitRows() end
     if not Kit.waitIdle(IDLE_WAIT_MS) or not Kit.lock('rewardForfeiture') then return 0 end
@@ -1551,6 +1553,8 @@ end)
 
 CreateThread(function()
     Wait(START_CHECK_MS)
+    -- a start that failed: the loop never starts (quietly)
+    if CP.Migrations and CP.Migrations.started and not CP.Migrations.started() then return end
     while true do
         ForfeitureJob()
         Wait(FORFEIT_EVERY_MS)
