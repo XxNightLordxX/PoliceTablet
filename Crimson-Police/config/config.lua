@@ -638,6 +638,10 @@ Config.Custody = {
     -- Service vehicles (transport, tow, coroner): driven by the nearest participant's client.
     serviceTimeout = 60,             -- seconds to park or load before the fallback (placed / faded out)
     serviceHandoff = 250.0,          -- metres: AI moves to another participant beyond this
+    -- Metres (10-100): a prisoner van, tow truck or coroner van never appears or is put down closer than this to any
+    -- player. After serviceTimeout with its parking point taken by an officer it comes to a road point beside the scene
+    -- instead (or waits until the officer steps away); a tow truck that never got a road point fades the car out
+    serviceClearance = 30.0,
     transport = {                    -- the prisoner van
         model = 'policet',
         driver = 's_m_y_cop_01',

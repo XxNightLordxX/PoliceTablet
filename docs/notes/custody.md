@@ -28,7 +28,7 @@ Truths, demeanours and cues live only in this module's book per run (never in ru
 | `requestTransport(run, coords, { obj, point })`, `transport(run, src) -> { status, netId, distance }` | The prisoner van; a request while it is on its way or parked moves it to the new objective; one after it left sends a new van |
 | `impound(run, netId, src)` | The tow truck (Config.Custody.tow; enabled = false fades the car out at once) and `{ type = 'impounded', netId }` to the owner |
 | `serviceVehicle(run, kind, coords, opts) -> handle` | kind transport, tow, coroner; opts = { obj, point (parking point, default coords), target (tow: the car), decider }. See Service vehicles |
-| `checkRoadPoint(run, handle, reply) -> vec4|nil` | The server check of a road point: within spawnDistance (±5 m) of the scene and 30 m from every player |
+| `checkRoadPoint(run, handle, reply, side) -> vec4|nil` | The server check of a road point: within spawnDistance (±5 m) of the scene (side = true: serviceClearance to serviceClearance + 40 m from the parking point) and Config.Custody.serviceClearance (30 m) from every player |
 | `releaseService(run, handle)`, `serviceStatus(handle) -> status, vehNetId`, `_servicesOf(run)` | process_scene's coroner van; tests |
 | `onCuffed(run, netId, src)`, `markGone(run, netId, how)`, `markDead(run, netId)` | field_contact keeps the records in step with CP.Npc's cuff, escapes, walk-offs and deaths |
 | `closeObjective(run, obj) -> n` | Undecided contacts at the end: CP.Runs.decide with Config.Decisions.undecidedAtEnd (missed_offence, −5) for the officer who last worked each one (else the host); never a fail |
@@ -69,7 +69,11 @@ driver spawn through CP.Runs (reserved plate, caps: a spawn waits for room and i
 gets `drive`. A driving client that leaves, is downed, enters the arena or is beyond serviceHandoff hands the AI to the
 next nearest participant. Arrival = within 15 m of the parking point and below 1.5 m/s. Timeouts (serviceTimeout): no
 usable road point → the van is placed at its parking point; a van not parked → placed; a tow truck not loaded → the
-car fades out and counts as impounded. The tow truck loads when the car is within 8 m of the flatbed. The transport
+car fades out and counts as impounded. A van is placed only while no player is within Config.Custody.serviceClearance
+(30 m) of its parking point (PLAN S17): a late one drives on until then; one with no road point gets a road point
+beside the scene (30-70 m from the parking point, from the driving client, checked) or waits. A placed van waits
+frozen until an officer's game has put it on the ground (CP.Spawn.again). A tow truck with no road point is never
+made: the car fades out (impounded). The tow truck loads when the car is within 8 m of the flatbed. The transport
 leaves Config.Custody.transport.leaveAfter after the objective that called it is done; a coroner van leaves when
 process_scene releases it; leaving vehicles are deleted 25 s later with their driver and cargo.
 

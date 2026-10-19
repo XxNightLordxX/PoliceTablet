@@ -23,7 +23,7 @@ local FRONT_DOT = 0.2              -- Run plate from a vehicle: the car must be 
 local CONFIRM_KEEP_MS = 60000      -- an ox_target choice waiting for its tablet confirm
 local FORCE_WINDOW_MS = 10000      -- excessive_force at most once per person in this window
 local STUN_MATCH_MS = 1000         -- a stun_hit must match a ragdoll or state change this recent
-local PLAYER_CLEAR_M = 30.0        -- a service vehicle spawn point this far from every player
+local SIDE_RING_M = 40.0           -- a road point beside the scene: serviceClearance to this much further out
 local PARK_RANGE_M = 15.0          -- a service vehicle this close to its parking point has arrived
 local PARK_SPEED = 1.5             -- m/s: and slower than this
 local LOAD_RANGE_M = 8.0           -- the towed car this close to the flatbed is loaded
@@ -1073,19 +1073,43 @@ local function Vec4Of(v, h)
     return vector4(x + 0.0, y + 0.0, z + 0.0, (tonumber(w) or 0.0) + 0.0)
 end
 
--- A road point from the driving client, checked with server coordinates: within spawnDistance of the scene
--- and PLAYER_CLEAR_M from every player. nil when refused.
-function Custody.checkRoadPoint(run, s, point)
+-- Config.Spawning.enabled = false: the vans' fallback points are used as before (no player check there).
+local function SpawnRules() return type(Config.Spawning) ~= 'table' or Config.Spawning.enabled ~= false end
+
+local function Clearance() return math.max(0.0, Num(Cfg().serviceClearance, 30.0)) end
+
+-- true when no player is within Config.Custody.serviceClearance of point.
+local function Clear(point)
+    local lim = Clearance()
+    for _, pl in ipairs(GetPlayers()) do
+        local pc = PlayerCoords(tonumber(pl))
+        if pc and U.dist(pc, point) < lim then return false end
+    end
+    return true
+end
+
+-- Where a road point may be: spawnDistance from the scene, or (side = true, the fallback once serviceTimeout has
+-- passed with the parking point taken) serviceClearance to serviceClearance + SIDE_RING_M from the parking point.
+local function RoadRing(s, side)
+    if side then
+        local p = s.dest or s.near
+        local lo = Clearance()
+        return vector3(p.x + 0.0, p.y + 0.0, p.z + 0.0), lo, lo + SIDE_RING_M
+    end
+    local sd = KindCfg(s.kind).spawnDistance or { 150.0, 250.0 }
+    return s.near, Num(sd[1], 150.0), Num(sd[2], 250.0)
+end
+
+-- A road point from the driving client, checked with server coordinates: inside its ring (RoadRing) and
+-- Config.Custody.serviceClearance from every player. nil when refused.
+function Custody.checkRoadPoint(run, s, point, side)
     if type(point) ~= 'table' then return nil end
     local c = Vec4Of(point.coords or point, tonumber(point.heading))
     if not c then return nil end
-    local sd = KindCfg(s.kind).spawnDistance or { 150.0, 250.0 }
-    local d = U.dist(c, s.near)
-    if d < Num(sd[1], 150.0) - 5.0 or d > Num(sd[2], 250.0) + 5.0 then return nil end
-    for _, pl in ipairs(GetPlayers()) do
-        local pc = PlayerCoords(tonumber(pl))
-        if pc and U.dist(pc, c) < PLAYER_CLEAR_M then return nil end
-    end
+    local near, lo, hi = RoadRing(s, side)
+    local d = U.dist(c, near)
+    if d < lo - 5.0 or d > hi + 5.0 then return nil end
+    if not Clear(c) then return nil end
     return c
 end
 
@@ -1120,12 +1144,25 @@ local function SpawnService(run, s, at)
     return true
 end
 
+-- A van not parked within serviceTimeout is put on its parking point, never while a player is within
+-- serviceClearance of it (it drives on and is checked again every second; false). There it waits frozen until an
+-- officer's game has put it on the ground (CP.Spawn.again, Config.Spawning.place), as when it was made.
 local function Placed(run, s)
     local ent = s.veh and EntityOf(run, s.veh)
-    if ent and s.dest and SetEntityCoords then
-        SetEntityCoords(ent, s.dest.x + 0.0, s.dest.y + 0.0, s.dest.z + 0.0, false, false, false, false)
-        if SetEntityHeading then SetEntityHeading(ent, (s.dest.w or 0.0) + 0.0) end
+    if not ent or not s.dest or not SetEntityCoords then return true end
+    if SpawnRules() and not Clear(s.dest) then
+        if not s.placeSaid then
+            s.placeSaid = true
+            CP.log(TAG, 'run %s: %s %d is late, but a player is within %.0f m of its parking point: it drives on',
+                run.id, s.kind, s.veh, Clearance())
+        end
+        return false
     end
+    local fx, fy = U.xyz(GetEntityCoords(ent))
+    SetEntityCoords(ent, s.dest.x + 0.0, s.dest.y + 0.0, s.dest.z + 0.0, false, false, false, false)
+    if SetEntityHeading then SetEntityHeading(ent, (s.dest.w or 0.0) + 0.0) end
+    Call('Spawn', 'again', run, s.veh, s.dest, fx and { x = fx, y = fy } or nil)
+    return true
 end
 
 local function Impounded(run, s, carNet)
@@ -1187,24 +1224,24 @@ function Custody.serviceVehicle(run, kind, coords, opts)
     return s
 end
 
-local function AskRoadPoint(run, s)
+-- side = true: the road point beside the scene (RoadRing), for the fallback.
+local function AskRoadPoint(run, s, side)
     if s.asking or (s.askedAt and Now() - s.askedAt < ROAD_RETRY_MS) then return end
     s.driverSrc = PickDriver(run, s.near)
     if not s.driverSrc then return end
     s.asking = true
     s.askedAt = Now()
-    local sd = KindCfg(s.kind).spawnDistance or { 150.0, 250.0 }
+    local near, lo, hi = RoadRing(s, side)
     CreateThread(function()
-        local ok, reply = pcall(lib.callback.await, ROAD_CALLBACK, s.driverSrc,
-            { near = s.near, min = Num(sd[1], 150.0), max = Num(sd[2], 250.0) })
+        local ok, reply = pcall(lib.callback.await, ROAD_CALLBACK, s.driverSrc, { near = near, min = lo, max = hi })
         s.asking = false
         if s.status ~= 'pending' or not IsLive(run) then return end
-        local at = ok and Custody.checkRoadPoint(run, s, reply) or nil
+        local at = ok and Custody.checkRoadPoint(run, s, reply, side) or nil
         if not at then
-            CP.log(TAG, 'run %s: road point for %s refused', run.id, s.kind)
+            CP.log(TAG, 'run %s: road point %sfor %s refused', run.id, side and 'beside the scene ' or '', s.kind)
             return
         end
-        s.roadPoint = at
+        if side then s.sidePoint = at else s.roadPoint = at end
     end)
 end
 
@@ -1226,10 +1263,47 @@ local function Arrived(run, s)
         and Num(GetEntitySpeed(ent), 0) <= PARK_SPEED
 end
 
+-- Nobody gave a usable road point within serviceTimeout. A tow truck is never put on the car it comes for (beside
+-- the officer who impounded it): the car fades out and counts as impounded. A van is placed at its parking point,
+-- but only while no player is within serviceClearance of it; else on a road point beside the scene that the driving
+-- client gives and the server checks (RoadRing), else it waits (asked again every 3 s, the parking point checked
+-- every second). It is made frozen and waits there until an officer's game has put it on the ground (S10).
+local function Fallback(run, s, t)
+    if s.kind == 'tow' then
+        if s.target then FadeCar(run, s, s.target) end
+        ServiceGone(run, s)
+        PushViews(run)
+        return
+    end
+    local at = s.dest
+    if SpawnRules() and not Clear(at) then
+        if s.sidePoint and not Clear(s.sidePoint) then s.sidePoint = nil end
+        at = s.sidePoint
+        if not at then
+            if not s.sideSaid then
+                s.sideSaid = true
+                CP.log(TAG,
+                    'run %s: a player is within %.0f m of the %s parking point: asking for a road point beside it',
+                    run.id, Clearance(), s.kind)
+            end
+            AskRoadPoint(run, s, true)
+            return
+        end
+    end
+    local okC, can = Call('Runs', 'canSpawn', run, 2, false)
+    if okC and can and SpawnService(run, s, at) then
+        s.status = 'parked'
+        s.parkedAt = t
+        s.placed = true
+    end
+end
+
 local function TickService(run, s)
     local timeout = Num(Cfg().serviceTimeout, 60) * 1000
     local t = Now()
     if s.status == 'pending' then
+        -- a player walked onto the checked road point while the vehicle waited for room: a new one is asked
+        if s.roadPoint and SpawnRules() and not Clear(s.roadPoint) then s.roadPoint = nil end
         if s.roadPoint then
             -- the caps: a service vehicle waits for room, it is never cut
             local okC, can = Call('Runs', 'canSpawn', run, 2, false)
@@ -1238,13 +1312,7 @@ local function TickService(run, s)
                 SendService(run, s, 'drive')
             end
         elseif t - s.requestedAt >= timeout then
-            -- nobody gave a usable road point in time: the vehicle is placed at its parking point
-            local okC, can = Call('Runs', 'canSpawn', run, 2, false)
-            if okC and can and SpawnService(run, s, s.dest) then
-                s.status = 'parked'
-                s.parkedAt = t
-                s.placed = true
-            end
+            Fallback(run, s, t)
         else
             AskRoadPoint(run, s)
         end
@@ -1278,8 +1346,7 @@ local function TickService(run, s)
             if s.kind == 'tow' then
                 FadeCar(run, s, s.target)
                 Leave(run, s)
-            else
-                Placed(run, s)
+            elseif Placed(run, s) then
                 s.status = 'parked'
                 s.parkedAt = t
                 s.placed = true

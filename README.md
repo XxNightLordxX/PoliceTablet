@@ -723,6 +723,7 @@ Everything else works as shipped. These are the ones owners change most:
 | `Config.Retention` | Clean-up of old data: runs archived after 12 months, audit rows deleted after 180 days, mission calls after 90 days (0 = keep) |
 | `Config.Downed.dropOffs` | Where a downed officer is taken when no EMS is on duty |
 | `Config.Custody.tow.enabled` | `false` makes impounded cars fade out instead of leaving on a tow truck |
+| `Config.Custody.serviceClearance` | `30.0` m: a prisoner van, tow truck or coroner van never appears or is put down closer than this to any player |
 
 `config/blocks.lua` holds the Mission Builder's ranges and defaults, and `config/banned_words.txt` the default list
 of words refused in bios (one per line). Read that list and change it for your community.
@@ -2277,6 +2278,17 @@ however it ends.
   circle instead (one console line). A clue appears once an officer is within 150 m of it, 40 m or more from every
   officer, or closer where the officers' games say nobody can see it (20 m in sight after 20 s). What appeared stays;
   "Check clue" is offered only on a clue that is there. `enabled = false`: all at the search start, as before.
+- Prisoner vans, tow trucks and coroner vans (same request, "make sure they dont spawn around the player"; PLAN S17;
+  the spawn audit found the 60 s fallback putting the van on its parking point or on the scene with no player check,
+  and a late van moved there by the server at the file's height): `Config.Custody.serviceClearance` (30 m, 10-100).
+  A van is put on its parking point (the transport or coroner point, else the scene of the arrest) only while no
+  player is within 30 m of it. A late van whose point an officer stands on drives on and is put there once he steps
+  away; one that got no road point at all comes to a road point beside the scene (30-70 m from its point, picked by
+  the nearest officer's game and checked by the server), or waits. A van put down waits frozen until an officer's game
+  has put it on the ground, like every new mission vehicle. A road point an officer walked onto while the van waited
+  for room is dropped and a new one asked. A tow truck that got no road point is never made inside the car next to
+  you: the car fades out and counts as impounded (it used to sit there and never load it). `Config.Spawning.enabled
+  = false`: the vans are put on their points as before.
 - Check spawn points (owner request of 2026-10-19: "Double check all coordinates etc for every ped"):
   `Config.Testing.spawnCheck` (`enabled`, `sceneTimeoutMs` 8000 ms, `moveWithin` 150 m, `routes = false`). An
   admin's own game visits every point of a mission's locations (frozen, unseen and unhurt, back where he was at the

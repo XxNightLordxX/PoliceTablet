@@ -1365,11 +1365,13 @@ Custody chain (objectives with custody = 'handover')
 
 Service vehicles (transport van, tow truck, coroner van)
 
-- The server picks the driving client: the participant nearest the scene, else the run host. It asks that client for a road point 150–250 m away (GetClosestVehicleNode, GetPointOnRoadSide) and checks the reply with server coordinates: inside spawnDistance, and not within 30 m of any player. It then spawns the vehicle (locked, plate in the reserved pattern) and hands its AI to that client, which drives, parks and, for the tow truck, loads the car (it takes control of both the flatbed and the car before attaching).
+- The server picks the driving client: the participant nearest the scene, else the run host. It asks that client for a road point 150–250 m away (GetClosestVehicleNode, GetPointOnRoadSide) and checks the reply with server coordinates: inside spawnDistance, and not within Config.Custody.serviceClearance (30 m) of any player. It then spawns the vehicle (locked, plate in the reserved pattern) and hands its AI to that client, which drives, parks and, for the tow truck, loads the car (it takes control of both the flatbed and the car before attaching).
 
 - If the driving client leaves, dies or goes more than 250 m from the vehicle, the AI moves to the next nearest participant.
 
 - If a van is not parked within Config.Custody.serviceTimeout (60 s), it is placed at the parking point out of every participant's view; if a tow truck has not loaded the car within the timeout, the car fades out and counts as impounded.
+
+- A service vehicle never appears or is put down on top of the officers (PLAN S17): a van is placed at its parking point (the transport or coroner point, else the scene) only while no player is within Config.Custody.serviceClearance (30 m) of it. A late van whose point an officer stands on drives on and is placed once he steps away; a van that got no road point at all comes to a road point beside the scene instead (serviceClearance to serviceClearance + 40 m from the parking point, from the driving client, checked by the server like every road point), or waits until a point is clear. A placed van waits frozen until an officer's game has put it on the ground (Config.Spawning.place). A tow truck that got no road point within the timeout is never made (it would stand inside the car): the car fades out and counts as impounded. Config.Spawning.enabled = false: the vans are placed at their parking point as before.
 
 Impound
 
@@ -3216,6 +3218,10 @@ Config.Custody = {
     -- Service vehicles (transport, tow, coroner): driven by the nearest participant's client.
     serviceTimeout = 60,             -- seconds to park or load before the fallback (placed / faded out)
     serviceHandoff = 250.0,          -- metres: AI moves to another participant beyond this
+    -- Metres (10-100): a prisoner van, tow truck or coroner van never appears or is put down closer than this to any
+    -- player. After serviceTimeout with its parking point taken by an officer it comes to a road point beside the scene
+    -- instead (or waits until the officer steps away); a tow truck that never got a road point fades the car out
+    serviceClearance = 30.0,
     transport = {                    -- the prisoner van
         model = 'policet',
         driver = 's_m_y_cop_01',

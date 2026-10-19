@@ -1794,13 +1794,20 @@ push). Full notes: docs/notes/custody.md.
 - `enableChain(run, netId, opts)` (searchPerson, escort, seat, handover for any block's cuffed suspect),
   `requestTransport(run, coords, { obj, point })`, `transport(run, src)`, `impound(run, netId, src)` (tow truck, or a
   fade with Config.Custody.tow.enabled = false), `serviceVehicle(run, kind, coords, opts)`, `checkRoadPoint(run,
-  handle, reply)`, `releaseService`, `serviceStatus`, `_servicesOf(run)` (tests).
+  handle, reply, side)`, `releaseService`, `serviceStatus`, `_servicesOf(run)` (tests).
 - Service vehicles: the driving client is the nearest active participant outside the arena (else the host); it is
-  asked for a road point 150–250 m away (`client:roadPoint`), the server checks it (within spawnDistance, 30 m
-  from every player) and retries every 3 s; the AI moves on leave, down, arena or beyond serviceHandoff. A vehicle
-  has arrived when below 1.5 m/s within 15 m of a placed parking point (a transport, coroner or tow point), or,
-  for the prisoner van with no transport point, anywhere within Config.Custody.transport.parkWithin of the scene;
-  after serviceTimeout a van is placed at its parking point and a tow that did not load fades the car (impounded).
+  asked for a road point 150–250 m away (`client:roadPoint`), the server checks it (within spawnDistance,
+  Config.Custody.serviceClearance, 30 m, from every player, again when it spawns there) and retries every 3 s; the AI
+  moves on leave, down, arena or beyond serviceHandoff. A vehicle has arrived when below 1.5 m/s within 15 m of a
+  placed parking point (a transport, coroner or tow point), or, for the prisoner van with no transport point,
+  anywhere within Config.Custody.transport.parkWithin of the scene; after serviceTimeout a van is placed at its
+  parking point and a tow that did not load fades the car (impounded). PLAN S17: a van is placed only while no player
+  is within serviceClearance of its parking point. A late van (`Placed`) drives on until then and is moved with
+  SetEntityCoords plus `CP.Spawn.again` (it waits frozen for an officer's game, from = where it was). A van that got
+  no road point (`Fallback`) asks the driving client for one beside the scene (`side`: `{ near = the parking point,
+  min = serviceClearance, max = serviceClearance + 40 }`, the same callback and check) and is made there, or waits. A
+  tow truck that got no road point is never made: the car fades out (impounded). Config.Spawning.enabled = false:
+  the vans are placed as before.
 - People debrief: `register` notes each person (label, demeanour) through CP.Runs.notePerson, and the behaviours
   (walked_away, ran, drew), cuffs, escapes and deaths as they happen; `grade` adds the factLog (every fact the
   decider had, as text, with when it reached them).

@@ -157,6 +157,7 @@ local RANGES = {
     ['Custody.consent.*'] = { 0, 1 },
     ['Custody.admission'] = { 0, 1 },
     ['Custody.cues.*'] = { 0, 1 },
+    ['Custody.serviceClearance'] = { 10, 100 },
     ['AntiCheat.presenceShare'] = { 0, 1 },
     ['Scoring.failedCredit'] = { 0, 1 },
     ['Scoring.common.fastShare'] = { 0, 1 },

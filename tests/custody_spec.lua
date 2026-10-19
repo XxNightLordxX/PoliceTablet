@@ -768,8 +768,10 @@ do
     W.place(2, 710.0, 500.0, 30.0)
     W.tick(4)
     H.eq(s.status, 'pending', 'a road point closer than 30 m to a player is refused')
-    -- nobody gives a usable point: after serviceTimeout the van is placed at its parking point
+    -- nobody gives a usable point: after serviceTimeout the van is placed at its parking point (no player within
+    -- Config.Custody.serviceClearance of it: tests/custody_clearance_spec.lua has the officer on it)
     W.roadPoint = nil
+    W.place(1, 540.0, 500.0, 30.0)
     W.tick(Config.Custody.serviceTimeout + 2)
     H.eq(s.status, 'parked', 'after serviceTimeout the van is placed')
     H.ok(s.placed, 'placed, not driven')
