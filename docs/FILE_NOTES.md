@@ -5166,6 +5166,21 @@ rules run again after the wait, answered or not (an officer who walked up during
 points wins; a first = true point (the boss's own spot) stays ahead. No SQL.
 ```
 
+## tests/spawn_lint_spec.lua
+
+```text
+Spawn lint for the built-in missions (PLAN S22) on the definitions the real loader makes from the shipped files, with
+the real blocks (pointKinds, defaults), CP.Scaling and CP.Builder.armedTooClose (no built-in point trusted): no two
+spawn points of one location within 1.5 m (flat); every list has a point per person, car or item the largest team
+brings (highest scaled count over minOfficers-maxOfficers, scaling max applied; spawnSets: the use smallest sets);
+armed spawns outside the start circle plus Config.Builder.spawnMargin unless the objective is a wave, a scatter or
+staged. tests/spawn_lint_baseline.txt (26 lines, BASELINE_MAX) lists the cases found when it was written: new
+cases, a listed armed key closer than listed (0.05 m slack) and stale lines fail. The lint itself on probe missions:
+pairs at 1.0 / 1.6 m, an escort route by its first point, a wave of 4 scaled to 6, short associates, spawnSets,
+a close car and close associates found while close wave points are not, spawnMargin read live, the baseline
+matcher. No SQL.
+```
+
 ## tests/spawn_place_spec.lua
 
 ```text

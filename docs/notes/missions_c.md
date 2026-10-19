@@ -96,6 +96,15 @@ drug_lab_raid must keep 250 m. No point may be inside a no-build zone. The 102 e
 `tests/zone_lint_baseline.txt`. They produce one warning line and never fail the spec. A pair that is not in
 the baseline fails. `BASELINE_MAX` stops the baseline from growing.
 
+## Spawn lint (`tests/spawn_lint_spec.lua`, PLAN S22)
+
+Every built-in mission, on the loader's definitions: no two spawn points of one location within 1.5 m (flat); a
+point for each person the largest team brings in every list (the real `CP.Scaling` counts, with each scaling
+entry's max); armed spawns outside the start circle plus `Config.Builder.spawnMargin` unless the objective is a
+wave, a scatter or staged (the spawn director places those). The 26 cases found when it was written are in
+`tests/spawn_lint_baseline.txt`; a new case, a listed armed key that comes closer, or a line that no longer
+matches fails, so the list only shrinks.
+
 ## Mission Builder
 
 - **`modules/builder/server.lua`:** minimum seconds are field_contact 30 and process_scene 5. The builder
@@ -134,7 +143,7 @@ the baseline fails. `BASELINE_MAX` stops the baseline from growing.
   - the start circles (PLAN S19): an officer at the edge is past the spawn director's distance from Suspicious
     Activity's car and people and Parking Patrol's first spot (approach + `Config.Spawning.sceneOutside`) and from
     Stolen Vehicle Takedown's car (`Config.Spawning.minDistance`).
-- `tests/zone_lint_spec.lua`.
+- `tests/zone_lint_spec.lua`, `tests/spawn_lint_spec.lua` (PLAN S22).
 - Additions to `blocks_a_spec`, `blocks_b_spec`, `blocks_c_spec`, `missions_a_spec`, `missions_b_spec` and
   `builder_server_spec`:
   - the new blocks in `builder:config`;
