@@ -178,7 +178,8 @@ end
 -- ============================================================================
 --                          S: THE ADMIN'S OWN RECORDS
 -- ============================================================================
--- "Self" is every character of the acting player's license. The console is never self.
+-- "Self" is every character of the acting player's licenses (license: and license2:, CP.Access.licensesOfSrc).
+-- The console is never self.
 
 -- true when citizenid is one of src's characters; nil + 'err.self_unknown' when strict and a license is missing.
 function Kit.isSelf(src, citizenid, strict)
@@ -186,13 +187,16 @@ function Kit.isSelf(src, citizenid, strict)
     if n == 0 then return false end
     if type(citizenid) ~= 'string' or citizenid == '' then return false end
     if CitizenOf(n) == citizenid then return true end
-    local _, mine = Call('Access', 'licenseOfSrc', n)
+    local _, mine = Call('Access', 'licensesOfSrc', n)
     local _, theirs = Call('Access', 'licenseOf', citizenid)
-    if type(mine) ~= 'string' or type(theirs) ~= 'string' then
+    if type(mine) ~= 'table' or #mine == 0 or type(theirs) ~= 'string' then
         if strict then return nil, 'err.self_unknown' end
         return false, nil, true
     end
-    return mine == theirs
+    for _, license in ipairs(mine) do
+        if license == theirs then return true end
+    end
+    return false
 end
 
 -- true when any of src's characters took part in runUuid (live or archived rows) or is on it now.

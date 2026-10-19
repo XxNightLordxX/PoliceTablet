@@ -1509,7 +1509,9 @@ Voids and restores:
   stays forfeited.
 - **Move record…** moves a re-created character's whole history (runs, badges, commendations, disputes, unpaid
   rewards) to the player's new citizen ID. Both characters must be offline, the new one must have no runs yet, and
-  it must be the same player (same license). **Undo** moves it back. `AdminControl.recordMove = false` turns it off.
+  it must be the same player (the same license, or the player's license: and license2: as Qbox's `users` table keeps
+  them: an old character made on QBCore and a new one made on Qbox). **Undo** moves it back.
+  `AdminControl.recordMove = false` turns it off.
 
 **Leaderboards** gains **Rank by** (any metric), **a past week or month** (up to 12 months back), **Void runs in this
 window…** (the same batch tool, instead of a board wipe), **Open** on each run, and **Approve all rows of this run**
@@ -1674,7 +1676,8 @@ is marked.
 **Leaderboards → Item rewards** gains filters (officer, status, source, dates) and buttons: **Resolve** a reward
 stuck while being given (the officer must be online; if the item is in their inventory it was given; if not, it
 counts as given unless you type `LOCKER` to put it back in the locker), **Deliver now**, **Cancel**, and **Take back**
-(only with `Config.Rewards.allowTakeBack`, ships off: removes exactly that item from an online officer). Settings →
+(only with `Config.Rewards.allowTakeBack`, ships off: removes exactly that item from an online officer, also food
+with a best-before time and bags, whose details ox_inventory fills in when it gives them). Settings →
 Item rewards has a pool editor with an item picker (forbidden items left out) and the expected items and value per run
 at each tier; every change is checked on the server, so the raw editor can't add a weapon either.
 

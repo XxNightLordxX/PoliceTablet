@@ -76,41 +76,22 @@ end
 --                                 ox_inventory
 -- ============================================================================
 
-local inv = { added = {}, removed = {}, searches = {}, slots = {} }
-H.exportsMock.ox_inventory = {
-    AddItem = function(src, name, count, meta)
-        inv.added[#inv.added + 1] = { src = src, name = name, count = count, meta = meta }
-        inv.slots[src] = inv.slots[src] or {}
-        inv.slots[src][#inv.slots[src] + 1] = {
-            slot = #inv.slots[src] + 1,
-            name = name,
-            count = count,
-            metadata = meta,
-        }
-        return true, 'ok'
-    end,
-    Search = function(src, kind, name, meta)
-        inv.searches[#inv.searches + 1] = { src = src, kind = kind, name = name, meta = meta }
-        if inv.hidden and inv.hidden[src] then return {} end
-        local out = {}
-        for _, s in ipairs(inv.slots[src] or {}) do
-            local ok = s.name == name and s.count > 0
-            for k, v in pairs(meta or {}) do if not s.metadata or s.metadata[k] ~= v then ok = false end end
-            if ok then out[#out + 1] = s end
-        end
-        return out
-    end,
-    RemoveItem = function(src, name, count, _, slot)
-        inv.removed[#inv.removed + 1] = { src = src, name = name, count = count, slot = slot }
-        for _, s in ipairs(inv.slots[src] or {}) do if s.slot == slot then s.count = s.count - count end end
-        return true
-    end,
-    registerHook = function(event, fn, opts)
-        inv.hooks = inv.hooks or {}
-        inv.hooks[#inv.hooks + 1] = { event = event, fn = fn, opts = opts }
-        return #inv.hooks
-    end,
-}
+-- the real ox_inventory matching (tests/harness.lua H.mockInventory: Search by metadata values, RemoveItem by the exact
+-- table); every Search recorded, a player's inventory can be hidden (inv.hidden[src]: Search finds nothing), hooks kept
+local inv = H.mockInventory({ radio = { label = 'Radio', stack = false } })
+inv.searches = {}
+local oxInventory = H.exportsMock.ox_inventory
+local RealSearch = oxInventory.Search
+oxInventory.Search = function(src, kind, name, meta)
+    inv.searches[#inv.searches + 1] = { src = src, kind = kind, name = name, meta = meta }
+    if inv.hidden and inv.hidden[src] then return {} end
+    return RealSearch(src, kind, name, meta)
+end
+oxInventory.registerHook = function(event, fn, opts)
+    inv.hooks = inv.hooks or {}
+    inv.hooks[#inv.hooks + 1] = { event = event, fn = fn, opts = opts }
+    return #inv.hooks
+end
 
 -- ============================================================================
 --                          STUBS OF THE OTHER MODULES
@@ -1077,11 +1058,21 @@ local L = Runs.create(
 inv.hidden = { [3] = true }
 Runs.removeParticipant(L, 3, 'quit')
 inv.hidden = nil
+-- the player's own radio: another script's flag { encrypted = true } (Search matches it: its value is true too)
+oxInventory.AddItem(3, 'radio', 1, { encrypted = true })
+local function OwnRadios(src)
+    local n = 0
+    for _, s in ipairs(inv.slots[src] or {}) do
+        if s.count > 0 and s.metadata and s.metadata.encrypted == true then n = n + s.count end
+    end
+    return n
+end
 local removedBefore = #inv.removed
 listeners.loaded(3)
 H.advance(5000)
 H.ok(#inv.removed > removedBefore, 'orphaned items swept when the player loads')
 H.eq(inv.searches[#inv.searches].meta.cpItem, true, 'sweep searches cpItem metadata')
+H.eq(OwnRadios(3), 1, 'the sweep takes only items whose own cpItem is true: the player\'s own radio stays')
 
 -- A leaver whose old run is still live loses its items on the sweep, and the orphan is kept until then.
 H.reset()

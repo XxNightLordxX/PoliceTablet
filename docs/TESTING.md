@@ -418,6 +418,16 @@ packages, and the runner's own clock and zone (the specs do not read either). Th
   `WasEventCanceled`, and its return value). tests/npc_combat_spec.lua, the npc client checks (the combat governor
   of every participant), tests/blocks_c_spec.lua (the drive-by) and tests/npc_spec.lua (the willKill cancel) use
   them; with the new config but the old code, more than 80 checks fail and the npccombat client checks crash.
+- **An inventory mock that matched keys**: `H.mockInventory`'s Search compared metadata keys and its RemoveItem
+  ignored metadata, while the real ox_inventory Search matches metadata VALUES and ignores the keys (ox_lib
+  `table.contains`), RemoveItem needs exactly the same table (`table.matches`), and AddItem adds `durability` and
+  `degrade` (food), `durability = 100` or `container` and `size` (bags) to what it is given. So every spec passed
+  while, on a real server, Take back refused every food item or bag reward still in the inventory, an officer's own
+  burger (`degrade = 60`) "was" reward 60, and the login sweep removed a player's own item of a mission item's name
+  whose metadata held any `true`. `H.mockInventory` now ports those functions line by line (tests/admin_rewards_spec.lua
+  section 2b, tests/engine_b_spec.lua's sweep). `GetPlayerIdentifierByType` is now in the harness too, with FXServer's
+  first-identifier-that-starts-with-the-text rule (`H.players[src].identifiers`): `'license'` alone finds a
+  `license2:` listed first (tests/identity_spec.lua, tests/oversight_spec.lua).
 - **Movement natives that took anything, and lasted forever**: the npc client checks recorded
   `TaskFollowNavMeshToCoord` without its argument types (the module passed `false` for its int flags and could pass a
   whole number as the speed), and nothing knew that a move blend ratio cap or a move rate override lasts one frame

@@ -477,6 +477,9 @@ do
         'a different license is refused: ' .. tostring(res and res.error))
     local pv = Data('admin:previewRecordMove', 1, { from = 'OLD00009', to = 'NEW00009' })
     H.ok(pv and pv.verified == true and pv.confirmWord == 'NEW00009', 'same license: verified, type the new citizenid')
+    local pv2 = Data('admin:previewRecordMove', 1, { from = 'OLD00009', to = 'NEW00011' })
+    H.ok(pv2 and pv2.verified == true,
+        'the same player\'s Qbox character under license2: (one users row has both): verified')
     H.eq(pv and pv.effect.rows, 2, 'two rows move (live and archive)')
     H.eq(pv and pv.effect.badges, 1, 'and the badge')
 

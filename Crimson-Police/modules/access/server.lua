@@ -394,20 +394,59 @@ end
 -- ============================================================================
 --                                   LICENSES
 -- ============================================================================
--- One player has one license and may have several characters (citizenids). The S guard of the admin actions
--- treats every character of the acting admin's license as the admin.
+-- One player has a license: and usually a license2: identifier, and may have several characters (citizenids). Qbox
+-- stores each character under one of the two: qbx_core logs a character in when its players.license is either one
+-- (server/player.lua Login), gives a new character license2 first, and never rewrites players.license, so a
+-- character made on QBCore or before license2 keeps license: for good. The S guard of the admin actions treats every
+-- character of either license as the admin.
 
--- The license of an online player (nil for the console or an unknown player).
+-- One identifier of an online player. GetPlayerIdentifierByType returns the first identifier that STARTS WITH the
+-- text it is given (PlayerScriptFunctions.cpp), so 'license' alone can return 'license2:...': the colon makes it exact.
+local function IdentifierOf(n, kind)
+    if not GetPlayerIdentifierByType then return nil end
+    local id = GetPlayerIdentifierByType(n, kind .. ':')
+    if type(id) == 'string' and id ~= '' then return id end
+    return nil
+end
+
+-- The license of an online player (nil for the console or an unknown player): the loaded character's (Qbox
+-- PlayerData.license), else the player's license: identifier.
 function A.licenseOfSrc(src)
     local n = ToSrc(src)
     if not n then return nil end
     local info = CP.Qbx and CP.Qbx.getInfo and CP.Qbx.getInfo(n) or nil
     if type(info) == 'table' and type(info.license) == 'string' and info.license ~= '' then return info.license end
-    if GetPlayerIdentifierByType then
-        local id = GetPlayerIdentifierByType(n, 'license')
-        if type(id) == 'string' and id ~= '' then return id end
+    return IdentifierOf(n, 'license')
+end
+
+-- Every license src's characters can be stored under: the loaded character's, the license: and the license2:
+-- identifier, without repeats. {} for the console or an unknown player.
+function A.licensesOfSrc(src)
+    local n = ToSrc(src)
+    if not n then return {} end
+    local out, seen = {}, {}
+    local function add(v)
+        if type(v) == 'string' and v ~= '' and not seen[v] then
+            seen[v] = true
+            out[#out + 1] = v
+        end
     end
-    return nil
+    add(A.licenseOfSrc(n))
+    add(IdentifierOf(n, 'license'))
+    add(IdentifierOf(n, 'license2'))
+    return out
+end
+
+-- true when two licenses belong to one player: the same text, or one row of Qbox's users table (its license and
+-- license2) has both.
+function A.sameUser(a, b)
+    if type(a) ~= 'string' or type(b) ~= 'string' or a == '' or b == '' then return false end
+    if a == b then return true end
+    if not (CP.Qbx and CP.Qbx.userLicenses) then return false end
+    for _, l in ipairs(CP.Qbx.userLicenses(a) or {}) do
+        if l == b then return true end
+    end
+    return false
 end
 
 -- The license of a character: cp_officers.license (written at every tablet open), else Qbox's own record.
@@ -428,7 +467,7 @@ function A.licenseOf(citizenid)
     return license
 end
 
--- Every citizenid of src's license (their characters), their current one first. The console has none.
+-- Every citizenid of src's licenses (their characters), their current one first. The console has none.
 function A.selfCitizenids(src)
     local n = ToSrc(src)
     if not n then return {} end
@@ -441,15 +480,17 @@ function A.selfCitizenids(src)
     end
     local info = CP.Qbx and CP.Qbx.getInfo and CP.Qbx.getInfo(n) or nil
     if type(info) == 'table' then add(info.citizenid) end
-    local license = A.licenseOfSrc(n)
-    if not license then return out end
+    local licenses = A.licensesOfSrc(n)
+    if #licenses == 0 then return out end
     CP.Migrations.ready()
-    local ok, rows = pcall(MySQL.query.await, 'SELECT citizenid FROM cp_officers WHERE license = ?', { license })
-    if ok and type(rows) == 'table' then
-        for _, r in ipairs(rows) do add(r.citizenid) end
-    end
-    if CP.Qbx and CP.Qbx.citizenidsOfLicense then
-        for _, cid in ipairs(CP.Qbx.citizenidsOfLicense(license) or {}) do add(cid) end
+    for _, license in ipairs(licenses) do
+        local ok, rows = pcall(MySQL.query.await, 'SELECT citizenid FROM cp_officers WHERE license = ?', { license })
+        if ok and type(rows) == 'table' then
+            for _, r in ipairs(rows) do add(r.citizenid) end
+        end
+        if CP.Qbx and CP.Qbx.citizenidsOfLicense then
+            for _, cid in ipairs(CP.Qbx.citizenidsOfLicense(license) or {}) do add(cid) end
+        end
     end
     return out
 end

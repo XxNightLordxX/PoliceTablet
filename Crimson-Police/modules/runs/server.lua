@@ -1946,19 +1946,30 @@ local function SlotList(result, name)
     return {}
 end
 
--- Remove every slot of `name` whose metadata matches `meta` (and passes keep()). Returns the count removed.
+-- Remove every slot of `name` whose metadata has `meta`'s keys and values (unless skip(slot)). Returns the count
+-- removed.
 local function RemoveSlots(src, name, meta, skip)
     local ok, result = pcall(function() return exports.ox_inventory:Search(src, 'slots', name, meta) end)
     if not ok then
         CP.warn(TAG, 'ox_inventory Search failed for %d: %s', src, tostring(result))
         return 0, false
     end
+    -- ox_inventory's Search matches metadata VALUES and ignores the keys (ox_lib table.contains): { cpItem = true }
+    -- also finds a player's own item with { encrypted = true }, so every key of meta must have its value in the slot
+    local function HasMeta(slot)
+        if type(slot.metadata) ~= 'table' then return false end
+        for k, v in pairs(meta) do
+            if slot.metadata[k] ~= v then return false end
+        end
+        return true
+    end
     local removed = 0
     for _, slot in ipairs(SlotList(result, name)) do
-        if type(slot) == 'table' and slot.slot and not (skip and skip(slot)) then
+        if type(slot) == 'table' and slot.slot and HasMeta(slot) and not (skip and skip(slot)) then
             local count = math.floor(Num(slot.count, 1))
+            -- the slot's own metadata: RemoveItem matches it exactly, so only that unchanged stack is taken
             local okRm, success = pcall(function()
-                return exports.ox_inventory:RemoveItem(src, name, count, nil, slot.slot)
+                return exports.ox_inventory:RemoveItem(src, name, count, slot.metadata, slot.slot)
             end)
             if okRm and success then removed = removed + count end
         end

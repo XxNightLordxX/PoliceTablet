@@ -320,6 +320,33 @@ function Q.citizenidsOfLicense(license)
     return out
 end
 
+-- Every license Qbox's users table keeps for the player who has this one (qbx_core server/storage/players.lua: one
+-- users row per player, its license and license2), this one first. Just { license } on a qbx_core without that
+-- table or when the lookup fails.
+function Q.userLicenses(license)
+    if type(license) ~= 'string' or license == '' or #license > 64 then return {} end
+    local out, seen = { license }, { [license] = true }
+    local function add(v)
+        if type(v) == 'string' and v ~= '' and not seen[v] then
+            seen[v] = true
+            out[#out + 1] = v
+        end
+    end
+    local db = QboxDb()
+    if not db then return out end
+    local ok, rows = pcall(db.query.await,
+        'SELECT license, license2 FROM users WHERE license = ? OR license2 = ? LIMIT 5', { license, license })
+    if not ok then
+        LogError('userLicenses', 'users lookup by license failed: %s', tostring(rows))
+        return out
+    end
+    for _, r in ipairs(type(rows) == 'table' and rows or {}) do
+        add(r.license)
+        add(r.license2)
+    end
+    return out
+end
+
 -- ============================================================================
 --                                  LISTENERS
 -- ============================================================================

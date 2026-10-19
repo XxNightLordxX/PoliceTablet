@@ -1069,6 +1069,8 @@ end
 local function RewardTarget(id) return ('reward #%d'):format(id) end
 
 -- The officer's slots holding the item tagged with this reward (metadata cpReward = id): count, slots.
+-- ox_inventory's Search matches metadata VALUES and ignores the keys (ox_lib table.contains): { cpReward = 60 } also
+-- finds an untagged food item's { degrade = 60 }, so only a slot whose own cpReward is this id counts.
 local function TaggedSlots(src, item, id)
     if not InventoryStarted() then return nil end
     local ok, res = pcall(function() return exports.ox_inventory:Search(src, 'slots', item, { cpReward = id }) end)
@@ -1078,7 +1080,8 @@ local function TaggedSlots(src, item, id)
     end
     local count, slots = 0, {}
     for _, sl in pairs(type(res) == 'table' and res or {}) do
-        if type(sl) == 'table' and math.floor(Num(sl.count, 0)) > 0 then
+        if type(sl) == 'table' and type(sl.metadata) == 'table' and sl.metadata.cpReward == id
+            and math.floor(Num(sl.count, 0)) > 0 then
             count = count + math.floor(Num(sl.count, 0))
             slots[#slots + 1] = sl
         end
@@ -1181,8 +1184,10 @@ function Rewards.takeBack(id, audit)
         for _, sl in ipairs(slots) do
             if left <= 0 then break end
             local take = math.min(left, math.floor(Num(sl.count, 0)))
+            -- RemoveItem matches the whole metadata table exactly (strict), and ox_inventory added durability,
+            -- degrade or a container to it when it gave the item: the slot's own metadata is that exact table
             local okR, removed = pcall(function()
-                return exports.ox_inventory:RemoveItem(src, r.item, take, { cpReward = id }, sl.slot)
+                return exports.ox_inventory:RemoveItem(src, r.item, take, sl.metadata, sl.slot)
             end)
             if okR and removed then left = left - take end
         end

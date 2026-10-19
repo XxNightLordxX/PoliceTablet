@@ -60,6 +60,7 @@ return function(H)
 
     W.LIC1 = 'license:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1'
     W.LIC9 = 'license:9999999999999999999999999999999999999999'
+    W.LIC9B = 'license2:9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b'   -- the same player's license2: identifier
     W.people = {
         [1] = { cid = 'ADM00001', name = 'Ada Min', license = W.LIC1, job = 'unemployed', grade = 0, ace = true },
         [2] = { cid = 'SUP00002', name = 'Sam Super', license = 'license:b2', job = 'sast', grade = 3 },
@@ -81,7 +82,10 @@ return function(H)
         OLD00009 = W.LIC9,     -- a deleted character...
         NEW00009 = W.LIC9,     -- ...and the player's new one
         NEW00010 = 'license:other',
+        NEW00011 = W.LIC9B,    -- ...and one made on Qbox (a new character gets license2: first)
     }
+    -- Qbox's users table: one row per player with both licenses
+    W.users = { { license = W.LIC9, license2 = W.LIC9B } }
     W.offline = {}
     for src, p in pairs(W.people) do
         H.players[src] = { ace = p.ace and { ['crimsonpolice.admin'] = true } or {}, coords = vec3(0.0, 0.0, 0.0) }
@@ -128,6 +132,14 @@ return function(H)
             for cid, l in pairs(W.qbox) do if l == lic then out[#out + 1] = cid end end
             for _, p in pairs(W.people) do if p.license == lic then out[#out + 1] = p.cid end end
             table.sort(out)
+            return out
+        end,
+        userLicenses = function(lic)
+            local out = { lic }
+            for _, u in ipairs(W.users) do
+                if u.license == lic and u.license2 then out[#out + 1] = u.license2 end
+                if u.license2 == lic and u.license then out[#out + 1] = u.license end
+            end
             return out
         end,
         characterExists = function(cid)

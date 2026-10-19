@@ -80,10 +80,13 @@ CP.Missions = {
     get = function() return nil end,
 }
 
+-- ox_inventory data/items.lua: a food item with degrade, a bag (a container, one per slot)
 local inv = H.mockInventory({
     water = { label = 'Water' },
     burger = { label = 'Burger' },
     weapon_pistol = { label = 'Pistol' },
+    testburger = { label = 'Test Burger', degrade = 60 },
+    paperbag = { label = 'Paper Bag', stack = false, container = { size = { 5, 1000 } } },
 })
 
 for _, t in ipairs({
@@ -265,6 +268,45 @@ do
     H.eq(e, 'err.officer_offline', 'the officer must be online')
     people[7].offline = nil
     Config.Rewards.allowTakeBack = false
+end
+
+-- ============================================================================
+--            2b. WHAT OX_INVENTORY ADDS TO A GIVEN ITEM'S METADATA
+-- ============================================================================
+-- AddItem adds durability and degrade to a food item and container and size to a bag (Items.Metadata), so the slot
+-- holds more than { cpReward = id }. Search matches metadata values only, RemoveItem the exact table.
+
+do
+    local function Held(src, item)
+        local n = 0
+        for _, sl in ipairs(inv.slots[src] or {}) do
+            if sl.name == item then n = n + sl.count end
+        end
+        return n
+    end
+    Config.Rewards.allowTakeBack = true
+    for _, item in ipairs({ 'testburger', 'paperbag' }) do
+        local id = Reward({ status = 'pending', item = item })
+        R.deliver('OFF00007')
+        H.eq(StatusOf(id), 'given', item .. ': delivered')
+        local ok, e = Act('server:admin:takeBackReward', 1,
+            { id = id, reason = 'x', confirm = item, requestId = Rid() })
+        H.ok(ok == true and type(e) == 'table' and e.taken == 1 and StatusOf(id) == 'forfeited',
+            item .. ': taken back although ox_inventory added to its metadata: ' .. tostring(e))
+        H.eq(Held(7, item), 0, item .. ': and gone from the inventory')
+    end
+    Config.Rewards.allowTakeBack = false
+
+    -- a stuck reward, and the officer's own untagged item whose metadata holds the reward's id as a value (degrade)
+    local id = Reward({ status = 'giving', item = 'snack' })
+    inv.items.snack = { label = 'Snack', degrade = id }
+    H.exportsMock.ox_inventory.AddItem(7, 'snack', 1)
+    local chk = Cb('admin:checkRewardInventory', 1, { id = id })
+    H.ok(chk and chk.found == false and chk.count == 0, 'an untagged item is not the reward')
+    local ok, e = Act('server:admin:resolveReward', 1,
+        { id = id, outcome = 'locker', reason = 'x', confirm = 'LOCKER' })
+    H.ok(ok == true and StatusOf(id) == 'given' and Held(7, 'snack') == 2,
+        'so LOCKER gives it again: ' .. tostring(ok and StatusOf(id) or e))
 end
 
 -- ============================================================================

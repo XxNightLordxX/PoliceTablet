@@ -4602,6 +4602,20 @@ when the fight starts, or earlier when one of them is hurt or killed, or an offi
 the breach entries. No SQL (test runs write no rows).
 ```
 
+## tests/identity_spec.lua
+
+```text
+Identity: one player's characters under license: AND license2:, as Qbox really stores them. qbx_core main (1.24.0)
+server/player.lua Login accepts a character when players.license equals EITHER the player's 'license' or 'license2'
+identifier; a NEW character gets license2 first; players.license is never rewritten (server/storage/players.lua),
+so a character made on QBCore or before license2 keeps license: for good. Qbox's users table keeps one row per
+player with both. FXServer's GetPlayerIdentifierByType returns the FIRST identifier that starts with the text given
+(the harness native does the same), so 'license' alone can return license2:.
+Real: integrations/qbx (over an exports.qbx_core stand-in that follows those rules, and real `players` and `users`
+tables from qbx_core.sql and server/storage/players.lua), permissions, access, admin, adminkit, cash, payouts,
+payments.
+```
+
 ## tests/int_core_spec.lua
 
 ```text

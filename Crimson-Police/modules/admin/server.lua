@@ -997,10 +997,11 @@ local registeredSubs = {}  -- names registered that way (a module may register i
 local notAdminHinted = {}  -- player identifier (or src) -> true: the console hint below, once per player per start
 local CHECK_KINDS = { error = 'error', warn = 'warning', ok = 'success' }
 
--- The identifier a server.cfg line can name: fivem:<id> first (the same on every PC), else license:<id>.
+-- The identifier a server.cfg line can name: fivem:<id> first (the same on every PC), else license:<id>. The native
+-- returns the first identifier that starts with the text given, so the colon keeps 'license' from finding license2:.
 local function CfgIdentifier(src)
     if not GetPlayerIdentifierByType then return nil end
-    for _, kind in ipairs({ 'fivem', 'license' }) do
+    for _, kind in ipairs({ 'fivem:', 'license:' }) do
         local id = GetPlayerIdentifierByType(src, kind)
         if type(id) == 'string' and id ~= '' then return id end
     end

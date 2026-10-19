@@ -694,8 +694,9 @@ do
         for _, l in ipairs(lines) do if l:find(needle, 1, true) then n = n + 1 end end
         return n
     end
-    local ids = { [5] = { fivem = 'fivem:5550001', license = 'license:5a5a' }, [6] = { license = 'license:6b6b' } }
-    _G.GetPlayerIdentifierByType = function(src, kind) return ids[tonumber(src)] and ids[tonumber(src)][kind] end
+    -- in FXServer's order (the harness native returns the first one that starts with the type): license2: first
+    H.players[5].identifiers = { 'license2:5c5c', 'license:5a5a', 'fivem:5550001' }
+    H.players[6].identifiers = { 'license2:6c6c', 'license:6b6b' }
     local HINT = 'typed /CrimsonPoliceAdmin but is not an admin'
     local before = Count(HINT)
     Command(5)
@@ -708,14 +709,15 @@ do
     Command(5, 'award', 'OFF00003', '10', 'x')
     H.eq(Count(HINT), before + 1, 'once per player: typing it again prints nothing new')
     Command(6, 'check')
-    H.ok(Printed('add_ace identifier.license:6b6b crimsonpolice.admin allow'), 'no fivem id: the license is used')
-    ids[4] = {}
+    H.ok(Printed('add_ace identifier.license:6b6b crimsonpolice.admin allow'),
+        'no fivem id: the license: identifier is used, never the license2: one before it')
+    H.players[4].identifiers = {}
     Command(4)
     H.ok(Printed('add_ace identifier.license:<their license from txAdmin> crimsonpolice.admin allow'),
         'no identifier at all: says where to find it')
     Command(1)
     H.eq(Count(HINT), before + 3, 'an admin gets no hint')
-    _G.GetPlayerIdentifierByType = nil
+    for src = 4, 6 do H.players[src].identifiers = nil end
 end
 
 -- /CrimsonPoliceAdmin check: every Config health line in the console, the counts in game

@@ -1469,47 +1469,215 @@ end
 -- ============================================================================
 --                        OTHER RESOURCES (opt-in mocks)
 -- ============================================================================
--- ox_inventory: H.mockInventory() installs Search, CanCarryItem, AddItem, RemoveItem and Items and returns
--- the model ({ items = { [name] = { label } }, slots = { [src] = { slot } }, full = { [src] = true }, added,
--- removed }). ox_target: H.mockTarget() installs addBoxZone, removeZone, addLocalEntity, addEntity (options
--- with bones kept) and returns the recorded zones and options.
+-- ox_inventory: H.mockInventory(items) installs Items, Search, CanCarryItem, AddItem, RemoveItem and registerHook with
+-- the matching of the real ox_inventory 2.48.0 (modules/inventory/server.lua) and ox_lib 3.40.0
+-- (imports/table/shared.lua):
+-- - Search(src, 'slots'|'count', name, metadata) keeps a slot when every VALUE of metadata is one of the slot's
+--   metadata values (table.contains): the keys are ignored, so { cpReward = 60 } also finds { degrade = 60 }.
+-- - RemoveItem(src, name, count, metadata, slot, ignoreTotal, strict): strict (the default) needs exactly the same
+--   table (table.matches); metadata nil takes any slot of the item; a slot with too few items is refused.
+-- - AddItem(src, name, count, metadata) adds what modules/items/server.lua Items.Metadata adds: a degrade item gets
+--   durability = os.time() + degrade * 60 and degrade, a durability item durability = 100, a container (container
+--   = { size }) container and size; a stack item stacks onto a slot whose metadata matches exactly, a non-stack item
+--   (stack = false) takes one slot each. An item not in `items` is 'invalid_item' (any item when `items` is empty).
+-- Every result crosses the export boundary as a copy (msgpack). CanCarryItem: false while full[src], else true for a
+-- known item. The model: { items = { [name] = { label, stack, degrade, durability, container } }, slots = { [src] =
+-- { { slot, name, count, metadata } } } (count 0 is an empty slot), full = { [src] = true }, added = { { src, name,
+-- count, meta } }, removed = { { src, name, count, slot } } }. ox_target: H.mockTarget() installs addBoxZone,
+-- removeZone, addLocalEntity, addEntity (options with bones kept) and returns the recorded zones and options.
+local function OxContains(tbl, value)
+    if type(value) ~= 'table' then
+        for _, v in pairs(tbl) do
+            if v == value then return true end
+        end
+        return false
+    end
+    local set = {}
+    for _, v in pairs(tbl) do set[v] = true end
+    for _, v in pairs(value) do
+        if not set[v] then return false end
+    end
+    return true
+end
+
+local function OxMatches(t1, t2)
+    if type(t1) ~= type(t2) then return false end
+    if type(t1) ~= 'table' then return t1 == t2 end
+    for k, v1 in pairs(t1) do
+        local v2 = t2[k]
+        if v2 == nil or not OxMatches(v1, v2) then return false end
+    end
+    for k in pairs(t2) do
+        if t1[k] == nil then return false end
+    end
+    return true
+end
+
+local function DeepCopy(v)
+    if type(v) ~= 'table' then return v end
+    local o = {}
+    for k, x in pairs(v) do o[k] = DeepCopy(x) end
+    return o
+end
+
 function H.mockInventory(items)
     local inv = { items = items or {}, slots = {}, full = {}, added = {}, removed = {} }
+    local containerSeq = 0
+    local function Def(name)
+        if type(name) ~= 'string' then return nil end
+        local key = inv.items[name] and name or name:lower()
+        local d = inv.items[key]
+        if d then return d, key end
+        if next(inv.items) == nil then return {}, key end
+        return nil
+    end
+    local function Slots(src)
+        inv.slots[src] = inv.slots[src] or {}
+        return inv.slots[src]
+    end
+    local function Used(sl) return type(sl) == 'table' and math.floor(tonumber(sl.count) or 0) > 0 end
+    local function SlotAt(src, n)
+        for _, sl in ipairs(Slots(src)) do
+            if sl.slot == n and Used(sl) then return sl end
+        end
+        return nil
+    end
+    local function FreeSlot(src)
+        local list = Slots(src)
+        for _, sl in ipairs(list) do
+            if not Used(sl) then return sl end
+        end
+        local sl = { slot = #list + 1, count = 0 }
+        list[#list + 1] = sl
+        return sl
+    end
+    -- Items.Metadata (a non-weapon item): container, then durability / degrade
+    local function Metadata(def, metadata, count)
+        if def.container then
+            count = 1
+            containerSeq = containerSeq + 1
+            metadata.container = metadata.container or ('CPT' .. containerSeq)
+            metadata.size = DeepCopy(def.container.size)
+        end
+        if not metadata.durability then
+            if def.degrade then
+                metadata.durability = os.time() + def.degrade * 60
+                metadata.degrade = def.degrade
+            elseif def.durability then
+                metadata.durability = 100
+            end
+        end
+        if count > 1 and def.stack == false then count = 1 end
+        return metadata, count
+    end
+    -- Inventory.GetItemSlots: { [slot] = count }, total
+    local function ItemSlots(src, name, metadata, strict)
+        if strict == nil then strict = true end
+        local match = strict and OxMatches or OxContains
+        local slots, total = {}, 0
+        for _, sl in ipairs(Slots(src)) do
+            if Used(sl) and sl.name == name then
+                if metadata and sl.metadata == nil then sl.metadata = {} end
+                if not metadata or match(sl.metadata, metadata) then
+                    slots[sl.slot] = sl.count
+                    total = total + sl.count
+                end
+            end
+        end
+        return slots, total
+    end
     H.exportsMock.ox_inventory = {
         Items = function(name)
-            if name then return inv.items[name] end
-            return inv.items
+            if name then return DeepCopy(inv.items[name]) end
+            return DeepCopy(inv.items)
         end,
         Search = function(src, kind, name, meta)
+            if type(meta) ~= 'nil' and type(meta) ~= 'table' then meta = { type = meta } end
             local out, count = {}, 0
-            for _, sl in ipairs(inv.slots[src] or {}) do
-                local ok = sl.name == name and sl.count > 0
-                for k, v in pairs(meta or {}) do if not sl.metadata or sl.metadata[k] ~= v then ok = false end end
-                if ok then
-                    out[#out + 1] = sl
-                    count = count + sl.count
+            for _, sl in ipairs(Slots(src)) do
+                if Used(sl) and sl.name == name then
+                    if not sl.metadata then sl.metadata = {} end
+                    if not meta or OxContains(sl.metadata, meta) then
+                        out[#out + 1] = DeepCopy(sl)
+                        count = count + sl.count
+                    end
                 end
             end
             if kind == 'count' then return count end
             return out
         end,
-        CanCarryItem = function(src, name, count)
+        CanCarryItem = function(src, name)
             if inv.full[src] then return false end
-            return inv.items[name] ~= nil or next(inv.items) == nil
+            return Def(name) ~= nil
         end,
         AddItem = function(src, name, count, meta)
+            local def, key = Def(name)
+            if not def then return false, 'invalid_item' end
+            if type(count) ~= 'number' then return false, 'invalid_count' end
+            count = math.floor(count + 0.5)
+            if count <= 0 then return false, 'negative_count' end
             if inv.full[src] then return false, 'inventory_full' end
-            inv.added[#inv.added + 1] = { src = src, name = name, count = count, meta = meta }
-            inv.slots[src] = inv.slots[src] or {}
-            local list = inv.slots[src]
-            list[#list + 1] = { slot = #list + 1, name = name, count = count, metadata = meta }
-            return true, 'ok'
-        end,
-        RemoveItem = function(src, name, count, _, slot)
-            inv.removed[#inv.removed + 1] = { src = src, name = name, count = count, slot = slot }
-            for _, sl in ipairs(inv.slots[src] or {}) do
-                if sl.name == name and (slot == nil or sl.slot == slot) then sl.count = sl.count - count end
+            if type(meta) ~= 'nil' and type(meta) ~= 'table' then meta = { type = meta } end
+            local placed = {}
+            local left = count
+            while left > 0 do
+                local md, n = Metadata(def, meta and DeepCopy(meta) or {}, left)
+                local target = nil
+                if def.stack ~= false then
+                    for _, sl in ipairs(Slots(src)) do
+                        if Used(sl) and sl.name == key and OxMatches(sl.metadata or {}, md) then
+                            target = sl
+                            break
+                        end
+                    end
+                end
+                if target then
+                    target.count = target.count + n
+                else
+                    target = FreeSlot(src)
+                    target.name, target.count, target.metadata = key, n, md
+                end
+                inv.added[#inv.added + 1] = { src = src, name = key, count = n, meta = target.metadata }
+                placed[#placed + 1] = DeepCopy(target)
+                left = left - n
             end
+            return true, #placed == 1 and placed[1] or placed
+        end,
+        RemoveItem = function(src, name, count, metadata, slot, ignoreTotal, strict)
+            local def, key = Def(name)
+            if not def then return false, 'invalid_item' end
+            if type(count) ~= 'number' then return false, 'invalid_count' end
+            count = math.floor(count + 0.5)
+            if count <= 0 then return false, 'negative_count' end
+            if slot then
+                local sl = SlotAt(src, slot)
+                if not sl then return false, 'no_item_in_slot' end
+                if count > sl.count then
+                    if not ignoreTotal then return false, 'not_enough_items_in_slot' end
+                    count = sl.count
+                end
+            end
+            if type(metadata) ~= 'nil' and type(metadata) ~= 'table' then metadata = { type = metadata } end
+            local slots, total = ItemSlots(src, key, metadata, strict)
+            if count > total then
+                if not ignoreTotal then return false, 'not_enough_items' end
+                count = total
+            end
+            local removed = 0
+            if slot and slots[slot] then
+                SlotAt(src, slot).count = SlotAt(src, slot).count - count
+                removed = count
+            else
+                for n in pairs(slots) do
+                    if removed >= count then break end
+                    local sl = SlotAt(src, n)
+                    local take = math.min(sl.count, count - removed)
+                    sl.count = sl.count - take
+                    removed = removed + take
+                end
+            end
+            if removed <= 0 then return false, 'not_enough_items' end
+            inv.removed[#inv.removed + 1] = { src = src, name = key, count = removed, slot = slot }
             return true
         end,
         registerHook = function() return 1 end,
@@ -2386,7 +2554,9 @@ function H.callback(name, src, ...)
     return result
 end
 
-H.players = {}   -- H.players[src] = { ped coords = vec(...), state = {}, ace = { ['crimsonpolice.admin'] = true } }
+-- H.players[src] = { ped coords = vec(...), state = {}, ace = { ['crimsonpolice.admin'] = true },
+--   identifiers = { 'license:...', 'license2:...', 'fivem:...' } (GetPlayerIdentifierByType) }
+H.players = {}
 
 -- ============================================================================
 --               FXSERVER'S LIMITS ON ONE PLAYER'S SERVER EVENTS
@@ -2582,6 +2752,20 @@ function H.boot(opts)
     _G.DoesEntityExist = function() return true end
     InstallEntityNatives()
     _G.GetPlayerName = function(src) return 'Player' .. tostring(src) end
+    -- FXServer's GET_PLAYER_IDENTIFIER_BY_TYPE (citizen-server-impl PlayerScriptFunctions.cpp): the FIRST identifier
+    -- of the player that starts with the given text (identifiers[i].rfind(type, 0)), nil when none, so 'license' also
+    -- finds 'license2:...' when that one comes first. H.players[src].identifiers lists them in FXServer's order.
+    _G.GetPlayerIdentifierByType = server
+            and function(src, kind)
+                local p = H.players[tonumber(src)]
+                if not p then return nil end
+                kind = tostring(kind)
+                for _, id in ipairs(p.identifiers or {}) do
+                    if id:sub(1, #kind) == kind then return id end
+                end
+                return nil
+            end
+        or nil
     _G.Player = function(src)
         local p = H.players[tonumber(src)] or {}
         H.players[tonumber(src)] = p

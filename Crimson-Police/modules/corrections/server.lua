@@ -727,7 +727,11 @@ local function MovePlan(src, from, to)
     local okB, licTo = Call('Access', 'licenseOf', to)
     licFrom = okA and type(licFrom) == 'string' and licFrom or nil
     licTo = okB and type(licTo) == 'string' and licTo or nil
-    if licFrom and licTo and licFrom ~= licTo then return nil, 'err.record_move_license' end
+    if licFrom and licTo and licFrom ~= licTo then
+        -- one player's two licenses (a QBCore-era character under license:, a Qbox one under license2:) are one player
+        local okS, same = Call('Access', 'sameUser', licFrom, licTo)
+        if not okS or same ~= true then return nil, 'err.record_move_license' end
+    end
     local plan = { from = from, to = to, verified = licFrom ~= nil and licTo ~= nil, ids = {}, moved = {} }
     local points, held, live, archived = 0, 0, 0, 0
     for _, t in ipairs({ 'L', 'A' }) do

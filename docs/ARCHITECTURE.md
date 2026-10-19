@@ -85,7 +85,8 @@ exposes that is not listed here is private to that module (keep it `local`).
       `source == 'crimson-police'`. **The full, verified rule set is `docs/CRIMSON_ARENA.md` (mandatory):**
       `CP.Alerts.inArena(src)` (foreign flag or routing bucket ≠ 0) gates accept/join/invites/tests
       (`err.in_arena`); a participant who becomes in-arena mid-run leaves as `quit`; our flag is re-asserted
-      when Crimson-Arena wipes it; downed pick-ups re-check; mission items carry `{ cpRun, cpItem }` metadata;
+      when Crimson-Arena wipes it; downed pick-ups re-check; mission items carry `{ cpRun, cpItem }` metadata
+      (removed only from a slot whose own metadata has those keys: ox_inventory's Search matches values only);
       anti-cheat/route/telemetry ignore in-arena players; never touch routing buckets, teams or friendly fire.
     - Client-side game state is global across resources: relationship groups are named
       `CRIMSONPOLICE_HOSTILE` / `CRIMSONPOLICE_NEUTRAL`, key mappings `crimsonpolice_*`, ox_target option
@@ -541,8 +542,10 @@ Parity-plus additions to the integrations:
 - **CP.Qbx** (full admin control) S `getInfo(src)` gains `license` (`PlayerData.license`); `licenseOf(citizenid) ->
   license|nil` (the online player's, else `SELECT license FROM players WHERE citizenid = ?`), `characterExists(citizenid)
   -> bool|nil`, `citizenidsOfLicense(license) -> { citizenid }` (`SELECT citizenid FROM players WHERE license = ? LIMIT
-  20`). Read only, always the real oxmysql (`CP.Storage.realMySQL` with the database off), never a cp_ table in the
-  same statement; nil or `{}` (one error line a minute) when the lookup fails.
+  20`), `userLicenses(license) -> { license, ... }` (this one first, then the `license` and `license2` of Qbox's
+  `users` row that has it: `SELECT license, license2 FROM users WHERE license = ? OR license2 = ? LIMIT 5`; just `{
+  license }` without that table). Read only, always the real oxmysql (`CP.Storage.realMySQL` with the database off),
+  never a cp_ table in the same statement; nil or `{}` (one error line a minute) when the lookup fails.
 - **CP.Dispatch** S `realCallSummary() -> { total, p1 } | nil` — the Dispatch screen's real-call strip:
   `SELECT priority, COUNT(*) AS n FROM mdt_dispatch WHERE active = 1 AND (unique_id IS NULL OR unique_id NOT LIKE ?)
   GROUP BY priority` with `Config.Calls.npcCallPrefix` LIKE-escaped plus `%`; cached
@@ -579,10 +582,16 @@ Full admin control (P0 seams; §5.37):
 - S `suspend(citizenid, days, actorSrc, reason, opts)`: `opts.untilTs` suspends until that exact moment (future, at most
   3650 days away; days is then ignored).
 - S `refreshOfficerRow(src)` also writes `cp_officers.license` (never clears a known one).
+- One player has a `license:` and usually a `license2:` identifier, and Qbox stores each character under one of them
+  (qbx_core Login accepts either; a new character gets `license2` first; `players.license` is never rewritten, so a
+  QBCore-era character keeps `license:`). `GetPlayerIdentifierByType` returns the first identifier that starts with the
+  text given, so every lookup passes the type with its colon (`'license:'`, `'license2:'`, `'fivem:'`).
 - S `licenseOfSrc(src) -> license|nil` (`CP.Qbx.getInfo(src).license`, else `GetPlayerIdentifierByType(src,
-  'license')`), `licenseOf(citizenid) -> license|nil` (`cp_officers.license`, else `CP.Qbx.licenseOf`; cached 15 s),
-  `selfCitizenids(src) -> { citizenid }` (the current character first, then every cp_officers row and Qbox character of
-  the same license; the console has none).
+  'license:')`), `licensesOfSrc(src) -> { license }` (that one, the `license:` and the `license2:` identifier, no
+  repeats; `{}` for the console), `licenseOf(citizenid) -> license|nil` (`cp_officers.license`, else
+  `CP.Qbx.licenseOf`; cached 15 s), `selfCitizenids(src) -> { citizenid }` (the current character first, then every
+  cp_officers row and Qbox character of any of `licensesOfSrc`; the console has none), `sameUser(a, b) -> bool` (the
+  same text, or one Qbox `users` row has both: `CP.Qbx.userLicenses`; the record move's license check).
 - Hook `admin:changed { citizenid }` drops that officer's suspension, retirement and license caches at once.
 
 Full admin control, System (P5):
@@ -1716,11 +1725,14 @@ nothing calls ox_inventory.
   `settings:changed` on a `Rewards.*` path runs `validate()`. Delivery (`deliver`, a grant's delivery) and the
   forfeiture job wait while `CP.Maintenance.active()`; the forfeiture job waits for and holds the busy lock
   (`rewardForfeiture`). `adminView(args)` takes `{ page, citizenid, status, source, from, to }` (rows gain `rowId`,
-  `online`; the view `allowTakeBack`). `checkInventory(id)` (ox_inventory `Search` for the item tagged `cpReward = id`;
-  online only), `resolve(id, 'given'|'locker', audit)` (`giving` → given, or → pending and delivered again;
-  `err.reward_found` when the item is there), `cancel(id)` (pending/held → forfeited), `takeBack(id, audit)` (given →
-  forfeited under the reward lock, `RemoveItem` of exactly the tagged slots; refused and undone when they are not all
-  there), `undoForfeit(rowId)` (on `row:forfeitUndone`: the row's forfeited rewards back to pending, held while the row
+  `online`; the view `allowTakeBack`). `checkInventory(id)` (ox_inventory `Search` for the item tagged `cpReward = id`,
+  then only the slots whose own `metadata.cpReward` is the id: Search matches metadata values and ignores the keys, so
+  an untagged food item's `degrade = 60` would match reward 60; online only), `resolve(id, 'given'|'locker', audit)`
+  (`giving` → given, or → pending and delivered again; `err.reward_found` when the item is there), `cancel(id)`
+  (pending/held → forfeited), `takeBack(id, audit)` (given → forfeited under the reward lock, `RemoveItem(src, item,
+  n, slot.metadata, slot.slot)` of exactly the tagged slots with each slot's own metadata, because RemoveItem matches
+  the whole table and ox_inventory added `durability`, `degrade` or `container` and `size` when it gave the item;
+  refused and undone when they are not all there), `undoForfeit(rowId)` (on `row:forfeitUndone`: the row's forfeited rewards back to pending, held while the row
   is voided, once; ones an admin cancelled or took back stay), `expected(entry)` (items and value per run at each tier,
   in Lua), `itemChoices()`. Net in §8.4.4.
 
@@ -1915,7 +1927,8 @@ V and K are helpers the action calls, because only it knows its ids and old stat
 
 Also: `Kit.run(name, src, payload)` (a registered action called directly: the console, tests), `Kit.callback(name,
 permKey, fn(ctx) -> data | nil, errKey, opts)` (admin-only reads; `ctx.preview(kind, ids, effect)`), `Kit.reason(v,
-optional)`, `Kit.confirmOk(given, word)`, `Kit.isSelf(src, citizenid, strict) -> bool | nil, err`, `Kit.selfRun(src,
+optional)`, `Kit.confirmOk(given, word)`, `Kit.isSelf(src, citizenid, strict) -> bool | nil, err` (the character's
+license is one of `CP.Access.licensesOfSrc(src)`), `Kit.selfRun(src,
 runUuid)`, `Kit.claimRequest / finishRequest / releaseRequest`, `Kit.validRequestId`, `Kit.uuid()`, `Kit.auditSync(src,
 category, action, target, old, new, reason, opts)`, `Kit.changed`, `Kit.notify`.
 
@@ -2620,7 +2633,7 @@ Every action of full admin control goes through `CP.AdminKit.action` (§5.37) an
 | `admin:getOfficerRuns` | callback | officerRecords | `{ citizenid, page, size ≤ 50, from, to, type, state, flagged, voided, kind, includeArchive }` | live + archive, the union inside a derived table for ORDER BY / LIMIT; 1/s |
 | `admin:getRun` | callback | officerRecords | `{ rowId, archived? }` | debrief, participants (both tables), dispute, goal rewards it completed, `txnId`, `own` |
 | `admin:getOfficerPoints` | callback | officerRecords | `{ citizenid }` | week/month/season/all-time points and ranks, `adjust.maxDeduction`, `confirmAbove`, `dailyLimit` |
-| `server:admin:adjustPoints` | action | pointsAdjust | `{ citizenid, points (−10,000..10,000, not 0), reason, confirm?, requestId }` | R I S(strict) L(1 per 10 s per officer); T = the citizenid at ≥ `adjustConfirmAbove`; a deduction never takes season points or XP below 0; `adjustDailyLimit` summed from today's rows of every character of the admin's license; audit `manualAward` / `pointsAdjust` (flags) |
+| `server:admin:adjustPoints` | action | pointsAdjust | `{ citizenid, points (−10,000..10,000, not 0), reason, confirm?, requestId }` | R I S(strict) L(1 per 10 s per officer); T = the citizenid at ≥ `adjustConfirmAbove`; a deduction never takes season points or XP below 0; `adjustDailyLimit` summed from today's rows of every character of the admin's licenses (license: and license2:); audit `manualAward` / `pointsAdjust` (flags) |
 | `admin:previewBulkVoid` | callback | bulkVoid | `{ filter = { citizenid?, department?, missionType?, missionId?, operationId?, from, to \| allTime, includeAwards? } }` | V: rows, officers (XP before/after), points, held cash, archived, left-out own runs, `confirmWord`, `previewToken` (none above `bulkMaxRows`) |
 | `server:admin:bulkVoid` | action | bulkVoid | `{ filter, kind?, reason, confirm = 'VOID <n>', previewToken, requestId }` | R I V T J; refused while the officer is on a run; audit `bulkVoid` (flags) + one `voidRun` per row |
 | `server:admin:resetProgression` | action | bulkVoid | `{ citizenid, reason, confirm = citizenid, previewToken, requestId }` | every row, all time, as a correction batch |
@@ -2750,7 +2763,7 @@ every action.
 | `server:admin:forfeitNow` | `{ rowId, reason }` | payments | P R S |
 | `server:admin:cancelPayment` | `{ rowId, reason, confirm }` | payments | P R T(amount) S |
 | `server:admin:clawback` | `{ rowId, amount, reason, confirm, requestId }` | payments | P I R T(amount) S W `allowClawback` |
-| `server:admin:manualCash` | `{ citizenid, amount, reason, confirm?, requestId }` | payments | P I R S W `allowManualCash`; T above `maxPayout / 2`; 1..`maxPayout`; per admin (every character of their license) per day ≤ `manualDailyLimit` (from rows); the row is written as `none` (no login payment or Pay now picks it up) and paid only after its audit row |
+| `server:admin:manualCash` | `{ citizenid, amount, reason, confirm?, requestId }` | payments | P I R S W `allowManualCash`; T above `maxPayout / 2`; 1..`maxPayout`; per admin (every character of their licenses, license: and license2:) per day ≤ `manualDailyLimit` (from rows); the row is written as `none` (no login payment or Pay now picks it up) and paid only after its audit row |
 | `server:admin:addDepartmentFunds` | `{ department, amount, reason, confirm, requestId }` | deptFunds | P I R T(amount) W `allowAddFunds`; 1..`addFundsMax`; 1 per 10 s per department |
 | callback `admin:previewPayoutAdjust` | `{ mode, value, scope }` → PayoutAdjustPreview | setTypePayout | P |
 | `server:admin:adjustAllPayouts` | `{ mode, value, scope, lockTypes?, reason, confirm = 'ADJUST', previewToken, requestId }` | setTypePayout | P I R T V |
