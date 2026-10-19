@@ -23,6 +23,14 @@ local RESEND_MS = 15000
 local CUFF_RANGE = 3.0
 local REACH_SLACK = 2.0
 local MISSING_TICKS = 2           -- ticks an entity must be missing before it counts as gone (as the engine)
+local TRUCK_CLEAR = 6.0           -- metres: the truck is never made with a vehicle or an officer this close to its spot
+local TRUCK_STEP = 10.0           -- metres between the truck's other spots along the route
+local TRUCK_SPOTS = 4             -- other spots along the route the truck may take once its own stayed taken
+local SLOT_CLEAR = 4.0            -- metres: an ambush car is never made with another vehicle this close to its slot
+local SLIDE_STEP = 15.0           -- metres between an ambush car's slots further along the route
+local SLIDE_MAX = 300.0           -- metres an ambush car's slot may slide along the route at most
+local SLIDE_AHEAD = 100.0         -- metres ahead of the truck a car slides to once the truck is on (or past) its slot
+local ROUTE_Z_NEAR = 15.0         -- metres: an ambush car this close to the route takes the route's height there
 
 local TWO_SEATERS = {
     elegy2 = true,
@@ -457,17 +465,370 @@ local function PlanWaves(ctx, st)
     if #pts == 0 then return end
     local order = RngOf(ctx):shuffle(Indices(#pts))
     local chosen = {}
-    for i = 1, n do chosen[i] = pts[order[((i - 1) % #order) + 1]] end
+    for i = 1, n do chosen[i] = order[((i - 1) % #order) + 1] end
     local list = {}
-    for i, p in ipairs(chosen) do
-        list[i] = { point = p, wp = #st.points > 0 and NearestIndex(st.points, p) or 1, lap = (i - 1) // #order }
+    for i, idx in ipairs(chosen) do
+        local p = pts[idx]
+        list[i] = {
+            point = p,
+            index = idx,
+            wp = #st.points > 0 and NearestIndex(st.points, p) or 1,
+            lap = (i - 1) // #order,
+        }
     end
     table.sort(list, function(a, b)
         if a.lap ~= b.lap then return a.lap < b.lap end
         return a.wp < b.wp
     end)
     for k, w in ipairs(list) do
-        st.waves[k] = { k = k, point = w.point, wp = w.wp, triggered = false, dropped = false, cars = {} }
+        st.waves[k] = {
+            k = k,
+            point = w.point,
+            index = w.index,
+            wp = w.wp,
+            triggered = false,
+            dropped = false,
+            cars = {},
+        }
+    end
+end
+
+-- ============================================================================
+--                  WHERE THE TRUCK AND THE AMBUSH CARS APPEAR
+-- ============================================================================
+-- Config.Spawning: road clearance, a free spot, the director.
+-- Owner request of 2026-10-19 ("make sure they dont spawn around the player", "i do not want them spawning in the
+-- ground or surronding the officers"). The truck is made on the route's first point lifted by
+-- Config.Spawning.vehicleLift (the route is at the road's own height), and only while no vehicle (an officer's car
+-- parked on the start, a parked or passing car) and no officer stands within TRUCK_CLEAR of that spot: meanwhile it
+-- waits, the officers are asked to clear the start, and after waveDelayMax it takes the first free spot further along
+-- the route instead; never a taken one. An ambush car takes the route's height where it stands (plus vehicleLift), and
+-- its slot goes through the spawn director (ctx.choosePoints: minDistance from every officer, never behind one, after
+-- waveDelayMax hardMin, never closer). With Config.Spawning.ambushAheadOnly a slot is also never one the truck is on,
+-- next to (within minDistance) or past: the wave's cars slide further along the route instead, SLIDE_STEP at a time,
+-- to SLIDE_AHEAD ahead of the truck when it is on or past them, never behind it; a slot another vehicle stands on is
+-- never used either. Config.Spawning.enabled = false: everything as before (route[1] at the road's height at once, the
+-- cars at their ambush point at its height + 0.5 m, behind the truck when it is past the point).
+
+local function SpawnCfg() return type(Config.Spawning) == 'table' and Config.Spawning or {} end
+
+local function Directed() return SpawnCfg().enabled ~= false end
+
+local function CfgNum(key, default)
+    local v = tonumber(SpawnCfg()[key])
+    if v == nil or v ~= v then return default end
+    return v
+end
+
+local function Lift() return math.max(0.0, CfgNum('vehicleLift', 0.5)) end
+
+local function AheadOnly() return Directed() and SpawnCfg().ambushAheadOnly ~= false end
+
+local function RunTag(ctx)
+    return tostring(ctx.run and ctx.run.id), tostring(ctx.mission and ctx.mission.id or ctx.run and ctx.run.missionId)
+end
+
+local function KeyName(v, default) return type(v) == 'string' and v or default end
+
+-- Metres of road (on the map) from the route's first point to each of its waypoints.
+local function Cum(st)
+    if st.cum and #st.cum == #st.points then return st.cum end
+    local cum = { 0.0 }
+    for i = 2, #st.points do cum[i] = cum[i - 1] + U.dist2d(st.points[i - 1], st.points[i]) end
+    st.cum = cum
+    return cum
+end
+
+-- Where coords lies along the route, on its segments from waypoint `from` to waypoint `to`: the metres of road from
+-- the route's first point to the nearest point of those segments, coords' distance from it (on the map) and the
+-- route's height there; nil when coords is none.
+local function RouteSpot(st, coords, from, to)
+    local pts, cum = st.points, Cum(st)
+    local cx, cy = U.xyz(coords)
+    if not cx or #pts < 2 then return nil end
+    from = math.max(1, math.floor(from or 1))
+    to = math.min(#pts, math.floor(to or #pts))
+    local best, at, z = math.huge, nil, nil
+    for k = from, to - 1 do
+        local ax, ay, az = U.xyz(pts[k])
+        local bx, by, bz = U.xyz(pts[k + 1])
+        local dx, dy = bx - ax, by - ay
+        local l2 = dx * dx + dy * dy
+        local t = l2 > 0 and math.max(0.0, math.min(1.0, ((cx - ax) * dx + (cy - ay) * dy) / l2)) or 0.0
+        local d = math.sqrt((cx - ax - dx * t) ^ 2 + (cy - ay - dy * t) ^ 2)
+        if d < best then best, at, z = d, cum[k] + (cum[k + 1] - cum[k]) * t, az + (bz - az) * t end
+    end
+    return at, best, z
+end
+
+-- The point s metres along the route (kept on it): x, y, the route's height there and the road's heading.
+local function RouteAt(st, s)
+    local pts, cum = st.points, Cum(st)
+    local n = #pts
+    s = math.max(0.0, math.min(cum[n], s))
+    for k = 1, n - 1 do
+        if s <= cum[k + 1] or k == n - 1 then
+            local len = cum[k + 1] - cum[k]
+            local t = len > 0 and (s - cum[k]) / len or 0.0
+            local ax, ay, az = U.xyz(pts[k])
+            local bx, by, bz = U.xyz(pts[k + 1])
+            return ax + (bx - ax) * t, ay + (by - ay) * t, az + (bz - az) * t, HeadingTo(pts[k], pts[k + 1])
+        end
+    end
+    return nil
+end
+
+-- What stands where a vehicle would be made: every vehicle the server knows (GetAllVehicles: an officer's car, a
+-- parked or a passing one, another mission's) and, with officers = true, every participant (on foot or in a car):
+-- { { x, y, z, what } }.
+local function Obstacles(ctx, officers)
+    local out = {}
+    if GetAllVehicles then
+        local ok, list = pcall(GetAllVehicles)
+        if ok and type(list) == 'table' then
+            for _, v in ipairs(list) do
+                local x, y, z = U.xyz(EntCoords(v))
+                if x then out[#out + 1] = { x = x, y = y, z = z or 0.0, what = 'a vehicle' } end
+            end
+        end
+    end
+    if officers then
+        for _, src in ipairs(ctx.participants() or {}) do
+            local x, y, z = U.xyz(ctx.coords(src))
+            if x then out[#out + 1] = { x = x, y = y, z = z or 0.0, what = ('player %s'):format(tostring(src)) } end
+        end
+    end
+    return out
+end
+
+-- The first of list within radius metres of x, y, z, or nil.
+local function Blocker(list, x, y, z, radius)
+    for _, o in ipairs(list) do
+        if (o.x - x) ^ 2 + (o.y - y) ^ 2 + (o.z - z) ^ 2 <= radius * radius then return o end
+    end
+    return nil
+end
+
+-- The truck's own spot (the route's first point, facing the second) and, with the director on, the TRUCK_SPOTS other
+-- spots TRUCK_STEP apart further along the route: { x, y, z, h, label }.
+local function TruckSpots(st)
+    local p1, p2 = st.points[1], st.points[2]
+    local x, y, z = U.xyz(p1)
+    local lift = Directed() and Lift() or 0.0
+    local out = { { x = x, y = y, z = z + lift, h = HeadingTo(p1, p2), label = 'route[1]' } }
+    if not Directed() then return out end
+    local len = Cum(st)[#st.points]
+    for k = 1, TRUCK_SPOTS do
+        local d = k * TRUCK_STEP
+        if d >= len then break end
+        local sx, sy, sz, h = RouteAt(st, d)
+        out[#out + 1] = { x = sx, y = sy, z = sz + lift, h = h, label = ('%.0f m along the route'):format(d) }
+    end
+    return out
+end
+
+-- The spot the truck is made at now and the other free spots (for the placer); nil while it waits. Its own spot while
+-- nothing stands within TRUCK_CLEAR of it; while something does, the truck waits (one message to the officers, one
+-- console line), and after waveDelayMax it takes the first free spot further along the route (one warning). Never a
+-- taken spot. tr.waitMs is the wait's clock (GetGameTimer).
+local function TruckSpot(ctx, st)
+    local tr = st.truck
+    local spots = TruckSpots(st)
+    if not Directed() then return spots[1], nil end
+    local list = Obstacles(ctx, true)
+    local free, first = {}, nil
+    for i, s in ipairs(spots) do
+        local b = Blocker(list, s.x, s.y, s.z, TRUCK_CLEAR)
+        if not b then
+            free[#free + 1] = s
+        elseif i == 1 then
+            first = b
+        end
+    end
+    local pick = nil
+    if not first then
+        pick = spots[1]
+    else
+        local now = Now()
+        tr.waitMs = tr.waitMs or now
+        local id, mission = RunTag(ctx)
+        if not tr.waitSaid then
+            tr.waitSaid = true
+            Message(ctx, 'block.escort.msg_clear_start', nil, 'warning')
+            CP.log(BLOCK, 'run %s: the truck waits: %s within %.0f m of its spot (route[1])', id, first.what,
+                TRUCK_CLEAR)
+        end
+        local waited = (now - tr.waitMs) / 1000
+        if waited < CfgNum('waveDelayMax', 20) or not free[1] then return nil end
+        pick = free[1]
+        CP.warn(BLOCK,
+            'run %s (%s): %s stood on the truck\'s spot (route[1]) for %.0f s; the truck was made %s (%.2f %.2f %.2f) instead (never within %.0f m of a vehicle or an officer)',
+            id, mission, first.what, waited, pick.label, pick.x, pick.y, pick.z, TRUCK_CLEAR)
+    end
+    tr.waitMs = nil
+    local alt = {}
+    for _, s in ipairs(free) do
+        if s ~= pick then alt[#alt + 1] = { coords = vector3(s.x, s.y, s.z), label = 'the truck at ' .. s.label } end
+    end
+    return pick, alt
+end
+
+-- Ambush car c of wave w on its own slot: c - 1 gaps ahead of the ambush point along its heading, CAR_SIDE left or
+-- right of it, facing the truck. Its height: with the director on, the route's where the car stands (within
+-- ROUTE_Z_NEAR of it; else the point's) plus vehicleLift, so a car 14 m further up a slope is not in the road;
+-- off, the point's + 0.5 m for every car, as before.
+local function CarPlacement(st, w, c)
+    local p = w.point
+    local h
+    if HasHeading(p) then
+        h = HeadingOf(p)
+    elseif #st.points >= 2 then
+        local i = math.min(w.wp, #st.points - 1)
+        h = HeadingTo(st.points[i], st.points[i + 1])
+    else
+        h = 0.0
+    end
+    local r = math.rad(h)
+    local fx, fy = -math.sin(r), math.cos(r)       -- forward (along the road)
+    local rx, ry = math.cos(r), math.sin(r)        -- right of the road
+    local x, y, z = U.xyz(p)
+    local ahead = (c - 1) * CAR_GAP
+    local side = (c % 2 == 1) and CAR_SIDE or -CAR_SIDE
+    local cx, cy = x + fx * ahead + rx * side, y + fy * ahead + ry * side
+    local cz = z + 0.5
+    if Directed() then
+        cz = z + Lift()
+        if #st.points >= 2 then
+            local _, d, rz = RouteSpot(st, vector3(cx, cy, z), w.wp - 2, w.wp + 2)
+            if d and d <= ROUTE_Z_NEAR then cz = rz + Lift() end
+        end
+    end
+    return vector4(cx, cy, cz, (h + 180.0) % 360.0)
+end
+
+-- The metres of road from the route's first point to the ambush point of wave w (its nearest point on the route).
+local function WaveSpot(st, w)
+    if w.s == nil then w.s = RouteSpot(st, w.point, w.wp - 1, w.wp + 1) or 0.0 end
+    return w.s
+end
+
+-- The slots ambush car c of wave w may use, best first: { coords = vector4, label, slide }. Its own slot (unless an
+-- earlier car of the wave slid: then where that one's slide puts it), and with ambushAheadOnly the slots further along
+-- the route, SLIDE_STEP apart up to SLIDE_MAX (on the road, CAR_SIDE left or right, facing the truck, at the route's
+-- height plus vehicleLift); none the truck is on, within minDistance of or past (when the truck is on or past the
+-- car's own slot the slots start at the first SLIDE_STEP mark SLIDE_AHEAD or more ahead of it, so a slot keeps its
+-- name while the truck moves), none another vehicle stands on (SLOT_CLEAR). slide = metres past the car's own slot
+-- along the route (the next car of the wave starts there), a whole number of SLIDE_STEPs.
+local function CarSlots(ctx, st, w, c)
+    local own = CarPlacement(st, w, c)
+    local label = ('wave %d car %d at %s[%d]'):format(w.k, c, KeyName(ctx.obj.ambushPoints, 'ambushPoints'),
+        w.index or w.k)
+    local slots = {}
+    if not AheadOnly() or #st.points < 2 then
+        slots[1] = { coords = own, label = label, slide = 0.0 }
+    else
+        local cum = Cum(st)
+        local len = cum[#st.points]
+        local base = WaveSpot(st, w) + (c - 1) * CAR_GAP
+        local need = math.max(0.0, CfgNum('minDistance', 40.0))
+        local tc = EntCoords(st.truck.entity)
+        local ts = tc and RouteSpot(st, tc, st.truck.wp - 2, st.truck.wp + WP_LOOKAHEAD) or nil
+        local function Ahead(s, coords)
+            if not ts then return true end
+            return s >= ts + need and U.dist2d(coords, tc) >= need
+        end
+        local slide = w.slide or 0.0
+        if slide <= 0 and Ahead(base, own) then slots[1] = { coords = own, label = label, slide = 0.0 } end
+        local from = base + math.max(slide, SLIDE_STEP)
+        if ts and from < ts + need then
+            -- on the SLIDE_STEP grid from the car's own slot: a slot keeps its name (the director's console line
+            -- for a skipped slot is said once per name) while the truck moves
+            from = math.max(from, base + math.ceil((ts + SLIDE_AHEAD - base) / SLIDE_STEP) * SLIDE_STEP)
+        end
+        local side = (c % 2 == 1) and CAR_SIDE or -CAR_SIDE
+        local last = math.min(len, from + SLIDE_MAX)
+        local s = from
+        while s <= last do
+            local x, y, z, h = RouteAt(st, s)
+            local r = math.rad(h)
+            local p = vector4(x + math.cos(r) * side, y + math.sin(r) * side, z + Lift(), (h + 180.0) % 360.0)
+            if Ahead(s, p) then
+                slots[#slots + 1] = {
+                    coords = p,
+                    label = ('wave %d car %d %.0f m further along the route'):format(w.k, c, s - base),
+                    slide = s - base,
+                }
+            end
+            s = s + SLIDE_STEP
+        end
+    end
+    if not Directed() then return slots end
+    local list = Obstacles(ctx, false)
+    local out = {}
+    for _, slot in ipairs(slots) do
+        local p = slot.coords
+        if not Blocker(list, p.x, p.y, p.z, SLOT_CLEAR) then out[#out + 1] = slot end
+    end
+    return out
+end
+
+-- A wave still short of slots once the truck has arrived (every slot too close to an officer or the truck, or past
+-- the route's end) keeps the cars it has, or is dropped when it has none, with one warning, so the objective can end.
+local function CutWave(ctx, st, w)
+    local id, mission = RunTag(ctx)
+    CP.warn(BLOCK, 'run %s (%s): ambush wave %d found no slot for %d of its %d cars and the truck has arrived; %s', id,
+        mission, w.k, (w.want or 0) - #w.cars, w.want or 0,
+        #w.cars > 0 and 'it keeps the cars it has' or 'it is left out')
+    if #w.cars == 0 then w.dropped = true else w.want = #w.cars end
+    w.noSlot, w.waitMs = nil, nil
+    st.dirty = true
+end
+
+-- The slot ambush car c of wave w is made at now (the first of its slots the director allows: no officer within
+-- minDistance, none behind; after waveDelayMax hardMin, never closer) and the other slots that pass, for the placer;
+-- nil while it waits (w.noSlot: a wave still short when the truck arrives is cut to the cars it has). Once the truck
+-- has arrived, a car with no slot cuts its wave at once (CutWave): a wave the spawn caps held back until then asks for
+-- its first slot only now, with the truck at the destination. w.waitMs is the car's clock (GetGameTimer). The
+-- director off: the car's own slot at once.
+local function ChooseSlot(ctx, st, w, c)
+    if not Directed() then return { coords = CarPlacement(st, w, c), slide = 0.0 }, nil end
+    local now = Now()
+    w.waitMs = w.waitMs or now
+    local cands = CarSlots(ctx, st, w, c)
+    local chosen, spare = {}, {}
+    if #cands > 0 then
+        if ctx.choosePoints then
+            local name = ('wave %d car %d'):format(w.k, c)
+            local got, _, rest = ctx.choosePoints(cands, 1, {
+                name = name,
+                wave = name,
+                since = os.time() - math.floor((now - w.waitMs) / 1000),
+                ordered = true,
+            })
+            chosen, spare = got, rest
+        else
+            chosen = { cands[1] }
+            for k = 2, #cands do spare[#spare + 1] = cands[k] end
+        end
+    end
+    local pick = type(chosen) == 'table' and chosen[1] or nil
+    if not pick then
+        w.noSlot = true
+        if st.truck.arrived then CutWave(ctx, st, w) end
+        return nil
+    end
+    w.noSlot, w.waitMs = nil, nil
+    w.slide = pick.slide
+    local alt = {}
+    for _, s in ipairs(spare or {}) do alt[#alt + 1] = { coords = s.coords, label = s.label } end
+    return pick, alt
+end
+
+-- At the truck's arrival: every wave already waiting for a slot is cut (CutWave). A wave the spawn caps hold back
+-- until then is cut when its first car finds no slot (ChooseSlot).
+local function CutShortWaves(ctx, st)
+    for _, w in ipairs(st.waves) do
+        if w.triggered and not w.dropped and w.noSlot and #w.cars < (w.want or 0) then CutWave(ctx, st, w) end
     end
 end
 
@@ -484,15 +845,16 @@ local function SpawnTruck(ctx, st)
         return false
     end
     if not ctx.canSpawn(2, false) then return false end
-    local p1, p2 = st.points[1], st.points[2]
-    local x, y, z = U.xyz(p1)
-    local place = vector4(x + 0.0, y + 0.0, z + 0.0, HeadingTo(p1, p2))
+    local spot, alt = TruckSpot(ctx, st)
+    if not spot then return false end
+    local place = vector4(spot.x + 0.0, spot.y + 0.0, spot.z + 0.0, spot.h)
     local ent, netId = ctx.spawnVehicle({
         model = ctx.obj.vehicle,
         coords = place,
         role = 'escort',
         tag = 'truck',
         cfg = { toughness = ctx.obj.toughness },
+        alt = alt,
     })
     if not netId then return false end
     if SetVehicleDoorsLocked and Exists(ent) then pcall(SetVehicleDoorsLocked, ent, 2) end
@@ -522,26 +884,6 @@ local function SpawnDriver(ctx, st)
     NpcSet(ctx, netId, 'driving')
     st.dirty = true
     return true
-end
-
-local function CarPlacement(st, w, c)
-    local p = w.point
-    local h
-    if HasHeading(p) then
-        h = HeadingOf(p)
-    elseif #st.points >= 2 then
-        local i = math.min(w.wp, #st.points - 1)
-        h = HeadingTo(st.points[i], st.points[i + 1])
-    else
-        h = 0.0
-    end
-    local r = math.rad(h)
-    local fx, fy = -math.sin(r), math.cos(r)       -- forward (along the road)
-    local rx, ry = math.cos(r), math.sin(r)        -- right of the road
-    local x, y, z = U.xyz(p)
-    local ahead = (c - 1) * CAR_GAP
-    local side = (c % 2 == 1) and CAR_SIDE or -CAR_SIDE
-    return vector4(x + fx * ahead + rx * side, y + fy * ahead + ry * side, z + 0.5, (h + 180.0) % 360.0)
 end
 
 local function SpawnAttacker(ctx, st, car, w)
@@ -576,7 +918,8 @@ local function SpawnAttacker(ctx, st, car, w)
     return true
 end
 
--- Spawns what a triggered wave still misses; a car and its crew spawn together once the caps allow.
+-- Spawns what a triggered wave still misses; a car and its crew spawn together once the caps allow. A car waits
+-- (false, 'slot') while the director allows none of its slots; the other waves still spawn meanwhile.
 local function SpawnWave(ctx, st, w)
     local ok = true
     for _, ck in ipairs(w.cars) do
@@ -590,7 +933,9 @@ local function SpawnWave(ctx, st, w)
     while #w.cars < w.want do
         if not (ctx.canSpawn(perCar + 1, false) and ctx.canSpawn(perCar, true)) then return false end
         local c = #w.cars + 1
-        local place = CarPlacement(st, w, c)
+        local pick, alt = ChooseSlot(ctx, st, w, c)
+        if not pick then return false, 'slot' end
+        local place = pick.coords
         local models = ctx.obj.ambush.models
         if perCar > 2 then
             local four = FourSeaters(models)
@@ -601,8 +946,13 @@ local function SpawnWave(ctx, st, w)
             coords = place,
             role = 'ambush_car',
             tag = 'wave' .. w.k,
+            alt = alt,
         })
         if not netId then return false end
+        if pick.label then
+            CP.log(BLOCK, 'run %s: %s (%.0f %.0f %.2f)', tostring(ctx.run and ctx.run.id), pick.label, place.x, place.y,
+                place.z)
+        end
         -- nothing a non-participant can take: the crew can still get out, nobody can get in
         if SetVehicleDoorsLocked and Exists(ent) then pcall(SetVehicleDoorsLocked, ent, 2) end
         local key = tostring(netId)
@@ -643,7 +993,8 @@ local function SpawnMissing(ctx, st)
     if SpawnTruck(ctx, st) and SpawnDriver(ctx, st) then
         for _, w in ipairs(st.waves) do
             if w.triggered and not w.dropped and not WaveSpawned(st, w) then
-                if not SpawnWave(ctx, st, w) then break end
+                local ok, why = SpawnWave(ctx, st, w)
+                if not ok and why ~= 'slot' then break end
             end
         end
     end
@@ -776,6 +1127,7 @@ local function WatchTruck(ctx, st, dt)
             for _, w in ipairs(st.waves) do
                 if not w.triggered then w.dropped = true end
             end
+            CutShortWaves(ctx, st)
             Message(ctx, 'block.escort.msg_arrived', { radius = math.floor(ctx.obj.clearRadius + 0.5) }, 'success')
         end
     end

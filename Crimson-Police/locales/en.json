@@ -1247,6 +1247,7 @@
   "block.escort.invalid.weapons": "Escort: pick at least one attacker weapon from the allowed list",
   "block.escort.msg_ambush": "Ambush ahead!",
   "block.escort.msg_arrived": "The vehicle has arrived: no attacker may be within {radius} m",
+  "block.escort.msg_clear_start": "Keep the start clear: the vehicle to escort appears there once no vehicle stands on it",
   "block.escort.msg_driver_down": "The driver is down: the vehicle cannot move",
   "block.escort.msg_stop": "The vehicle makes a scheduled stop ({seconds} s)",
   "block.escort.msg_wave_clear": "Ambush wave neutralised",

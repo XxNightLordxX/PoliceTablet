@@ -77,6 +77,7 @@
   "block.escort.msg_wave_clear": "Ambush wave neutralised",
   "block.escort.msg_arrived": "The vehicle has arrived: no attacker may be within {radius} m",
   "block.escort.msg_driver_down": "The driver is down: the vehicle cannot move",
+  "block.escort.msg_clear_start": "Keep the start clear: the vehicle to escort appears there once no vehicle stands on it",
   "block.escort.fail_destroyed": "The escorted vehicle was destroyed",
   "block.escort.fail_stopped": "The escorted vehicle was stopped for too long",
   "block.escort.fail_setup": "No road route for the escorted vehicle",

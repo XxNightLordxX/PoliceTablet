@@ -388,6 +388,28 @@ within `SLOT_TAKEN` 4 m of a car of the objective; labelled `vehicle <i> at <nam
 pass go to `spawnVehicle` as `alt` (the placer's other points, §5.43); none passes: no car this tick (SpawnMissing tries
 again each tick, the objective waits). `enabled = false` or no `ctx.choosePoints`: slot i at once, as before.
 
+escort through the director (PLAN S14, Config.Spawning; owner request of 2026-10-19: "make sure they dont spawn around
+the player"). `SpawnTruck` takes `TruckSpot(ctx, st)`: route[1] (heading to route[2]) and `TRUCK_SPOTS` (4) spots
+`TRUCK_STEP` (10 m) apart along the route (`RouteAt`: the route's height there), each z + `vehicleLift`. A spot is
+taken while a vehicle the server knows (`GetAllVehicles`, FXServer: a Lua list of handles) or an active participant
+(his ped) is within `TRUCK_CLEAR` (6 m, 3D) of it. route[1] free: used. Taken: the truck waits (`tr.waitMs`, one HUD
+message `block.escort.msg_clear_start`, one `CP.log`), and after `waveDelayMax` takes the first free spot (one
+`CP.warn` naming it); none free: it keeps waiting. The free spots it did not take go to `spawnVehicle` as `alt`. An
+ambush car (`ChooseSlot`) offers `CarSlots(ctx, st, w, c)` to `ctx.choosePoints(cands, 1, { name = 'wave <k> car <c>',
+wave, since = w.waitMs, ordered = true })`: its own slot (`CarPlacement`, z = the route's height at its nearest route
+point when within `ROUTE_Z_NEAR` 15 m, else the point's, + `vehicleLift`), and with `ambushAheadOnly` the slots every
+`SLIDE_STEP` (15 m) along the route from its own (`w.s`: the point's metres along the route, + (c - 1) x `CAR_GAP`,
++ `w.slide`, the slide the wave's previous car used) up to `SLIDE_MAX` (300 m) and the route's end, `CAR_SIDE` either
+side, facing the truck; a slot is dropped when it is less than `minDistance` ahead of the truck along the route
+(`RouteSpot` of the truck on the segments `wp - 2 .. wp + 4`) or within `minDistance` of it on the map (then the
+slots start on the first `SLIDE_STEP` mark `SLIDE_AHEAD`, 100 m, or more ahead of the truck, so a slot's console name
+stays the same while the truck moves), or within `SLOT_CLEAR` (4 m) of a vehicle. None passes: the car waits
+(`w.noSlot`; `SpawnWave` returns false, 'slot' and SpawnMissing goes on with the next wave). `CutWave` gives a wave
+still short of slots the cars it has (`w.want = #w.cars`) or drops it (none), one `CP.warn`: at the truck's arrival
+for every waiting wave (`CutShortWaves`), and after it for a car that finds no slot (`ChooseSlot`: a wave the spawn
+caps held back until then). `enabled = false`: route[1] at the road's height at once and the own slot at the point's height + 0.5 m at
+once, as before; `ambushAheadOnly = false`: the own slot only, through the director.
+
 Evidence field_contact accepts: `{ type = 'action', netId, action, phase = 'begin'|'finish' }` (from the plain
 event `crimson-police:server:custody`), `{ type = 'decide', netId, choice, offence }` (from the action
 `server:contactDecide`), `{ type = 'cuffed', netId }` (CP.Npc), `{ type = 'aim' | 'stunned', netId }` (client

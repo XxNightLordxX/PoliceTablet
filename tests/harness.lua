@@ -1375,9 +1375,9 @@ end
 -- One model of server-side entities for the specs that need moving cars and people: H.entity(netId, fields)
 -- makes (or returns) the entity of that net id. Its fields back GetEntityCoords, GetEntityHeading,
 -- GetEntitySpeed, GetVehiclePedIsIn, GetPedInVehicleSeat, IsVehicleSirenOn, GetVehicleBodyHealth,
--- GetVehicleEngineHealth, DoesEntityExist and the net id natives (installed by H.boot; a spec that defines
--- its own natives after H.boot replaces them). H.advance moves each entity by its velocity (m/s) and applies
--- its timeline: e:at(ms, patch) sets fields when the fake clock reaches ms.
+-- GetVehicleEngineHealth, DoesEntityExist, GetAllVehicles and the net id natives (installed by H.boot; a spec
+-- that defines its own natives after H.boot replaces them). H.advance moves each entity by its velocity (m/s) and
+-- applies its timeline: e:at(ms, patch) sets fields when the fake clock reaches ms.
 --   fields: coords, heading, speed, velocity = vec3, health, body, engine, seats = { [-1] = pedHandle },
 --           siren, exists, vehicle (the vehicle a ped sits in), model, kind ('ped' | 'vehicle' | 'object')
 local ENTITY_BASE = 800000
@@ -1497,6 +1497,18 @@ local function InstallEntityNatives()
     _G.NetworkGetNetworkIdFromEntity = function(ent)
         local e = ModelEntity(ent)
         return e and e.netId or 0
+    end
+    -- GET_ALL_VEHICLES (FXServer): a Lua list of the handle of every vehicle the server knows (a player's own car, a
+    -- parked or passing one, every mission's), here every modelled vehicle that exists, by net id
+    _G.GetAllVehicles = function()
+        local list = {}
+        for _, e in pairs(model.byNet) do
+            if e.kind == 'vehicle' and e.exists == true then list[#list + 1] = e end
+        end
+        table.sort(list, function(a, b) return a.netId < b.netId end)
+        local out = {}
+        for i, e in ipairs(list) do out[i] = e.handle end
+        return out
     end
 end
 

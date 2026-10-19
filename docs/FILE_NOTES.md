@@ -154,6 +154,18 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
     trigger when the truck is within AMBUSH_TRIGGER of the point (or has passed it). Attackers are
     hostile only to participants (CP.Npc 'hostile'). Spawns wait for the run caps (ctx.canSpawn) and are
     never cut; rescale drops planned waves not yet triggered and lowers counts still missing.
+    Where the truck and the ambush cars appear (PLAN S14, Config.Spawning): the truck on route[1] lifted
+    Config.Spawning.vehicleLift, only while no vehicle the server knows (GetAllVehicles) and no participant is
+    within TRUCK_CLEAR (6 m) of it; meanwhile it waits (block.escort.msg_clear_start once, one console line), and
+    after waveDelayMax it takes the first free one of TRUCK_SPOTS spots TRUCK_STEP apart along the route (one
+    warning), never a taken one. An ambush car's z is the route's height where it stands (within ROUTE_Z_NEAR) plus
+    vehicleLift; its slots (CarSlots: its own, then with ambushAheadOnly every SLIDE_STEP along the route up to
+    SLIDE_MAX, none within SLOT_CLEAR of a vehicle, none on, within minDistance of or past the truck, starting on
+    the first SLIDE_STEP mark SLIDE_AHEAD or more ahead of it once it is on or past them, so a slot keeps its console
+    name) go through ctx.choosePoints (ordered); none passes: the car waits (the other waves still spawn). A wave
+    still short of slots when the truck arrives (CutShortWaves), or held back by the spawn caps until then and
+    finding no slot after it (ChooseSlot), keeps the cars it has (none: dropped), with one warning (CutWave).
+    Config.Spawning.enabled = false: as before.
     Done when the truck, on the final stretch (its next waypoint is the last one), is within `arrival` metres
     (2D, like the waypoints) of the destination (the last waypoint) with no living
     attacker within clearRadius of it, every triggered wave spawned and every triggered wave neutralised
@@ -192,7 +204,8 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
   ctx.state
     block, rng, points, stops = { [waypoint] = wait }, truck = { netId, entity, driver = { netId, entity,
     dead }, wp, served, stop = { at, left } | nil, stoppedFor, moved, nearAt, arrived, arrivalHealth,
-    toughened, baseline, health, gen }, waves = { { k, point, wp, triggered, dropped, want, cars = { carKey } } },
+    toughened, baseline, health, gen, waitMs, waitSaid }, waves = { { k, point, index, wp, s, triggered, dropped,
+    want, slide, noSlot, waitMs, cars = { carKey } } }, cum (metres of road to each waypoint),
     cars = { [key] = { netId, entity, wave, want, crew = { pedKey } } } (every car doors-locked), peds = { [key] = { netId,
     entity, wave, state } }, dirty, sentAt, completed, failed, halted
 ```
@@ -4520,6 +4533,19 @@ Mission files are served from memory through a LoadResourceFile override, other 
 stubbed, and every SQL statement of the slice runs against MariaDB. The spec uses its own
 database (<run database>_engine_a, rebuilt from sql/migrations) so parallel runs of other specs that
 reset cp_test cannot interfere.
+```
+
+## tests/escort_director_spec.lua
+
+```text
+Armored Truck Escort through the spawn director (Config.Spawning, PLAN S14) on the real engine, the real block and
+the placement module: the truck is never made inside a parked car or on an officer (it waits, then takes a free
+spot further along the route), the truck and the ambush cars sit vehicleLift over the road (each car at the
+route's height where it stands), and an ambush car never appears next to an officer (a lead car included), on
+another vehicle, next to the truck or behind it (ambushAheadOnly): its slot slides further along the route, on
+15 m marks (a waiting car's skipped slots are each named once in the console while the truck drives on). A wave
+short of slots at the arrival, or held back by Config.Limits.maxArmedAlive until after it, is left out with one
+warning and the escort completes.
 ```
 
 ## tests/failed_start_spec.lua
