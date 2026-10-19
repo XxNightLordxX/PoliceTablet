@@ -1869,4 +1869,60 @@ do
     _G.DoesEntityExist = realExists
 end
 
+-- ============================================================================
+--                      24. LINT FX12 AND THE NATIVE LIST
+-- ============================================================================
+-- tools/lint_fivem.py, tools/fivem_natives.txt.
+-- tests/fixtures/lint/fx12_bool.lua: every line that compares a server yes/no answer with true says so; the lint
+-- (run on it as a server script) must flag exactly those lines. The harness's yes/no natives and the lint's list
+-- must agree, and the list spells natives as Lua does (codegen_out_lua.lua: GetGroundZFor_3dCoord).
+
+do
+    local fixture = 'tests/fixtures/lint/fx12_bool.lua'
+    local expected, n = {}, 0
+    local ln = 0
+    for line in io.lines(H.root .. '../' .. fixture) do
+        ln = ln + 1
+        if line:match('%-%- expect FX12%s*$') then
+            expected[ln] = true
+            n = n + 1
+        end
+    end
+    H.ok(n >= 7, 'fx12: the fixture has its cases')
+    local p = io.popen('cd ' .. H.root .. '.. && python3 tools/lint_fivem.py --files server ' .. fixture .. ' 2>&1')
+    local got, other = {}, {}
+    for line in p:lines() do
+        local at, rule = line:match(':(%d+): (FX%d%d) ')
+        if rule == 'FX12' then got[tonumber(at)] = true elseif line ~= '' then other[#other + 1] = line end
+    end
+    p:close()
+    for at in pairs(expected) do H.ok(got[at], ('fx12: %s:%d is flagged'):format(fixture, at)) end
+    for at in pairs(got) do H.ok(expected[at], ('fx12: %s:%d is not a hit'):format(fixture, at)) end
+    H.eq(#other, 0, 'fx12: no other output: ' .. table.concat(other, ' | '))
+    p = io.popen('cd ' .. H.root .. '.. && python3 tools/lint_fivem.py --files client ' .. fixture .. ' 2>&1')
+    local clientText = p:read('a')
+    p:close()
+    H.eq(clientText:find('FX12', 1, true), nil, 'fx12: a client script is never a hit (the manifest\'s OAL booleans)')
+    local help = io.popen('python3 ' .. H.root .. '../tools/lint_fivem.py --help 2>&1')
+    H.ok(help:read('a'):find('FX12 server-bool', 1, true) ~= nil, 'fx12: lint_fivem.py runs the rule')
+    help:close()
+
+    local list = { c = {}, s = {}, b = {} }
+    for line in io.lines(H.root .. '../tools/fivem_natives.txt') do
+        local kind, name = line:match('^([csb]) (%S+)$')
+        if kind then list[kind][name] = true end
+    end
+    local missing = {}
+    for name in pairs(H.SERVER_BOOL_NATIVES) do
+        if not list.b[name] then missing[#missing + 1] = name end
+    end
+    table.sort(missing)
+    H.eq(#missing, 0, 'natives: every yes/no native the harness shapes is a "b" line: ' .. table.concat(missing, ' '))
+    H.ok(list.b.DoesEntityExist and list.b.IsPlayerAceAllowed and not list.b.GetEntityModel,
+        'natives: the "b" lines are the yes/no answers only')
+    H.ok(list.c.GetGroundZFor_3dCoord and not list.c.GetGroundZFor3dCoord,
+        'natives: a digit after an underscore keeps it, as in Lua (GetGroundZFor_3dCoord)')
+    H.ok(list.s.GetPlayerIdentifierByType and list.c.PlayerPedId, 'natives: both sides are listed')
+end
+
 return H

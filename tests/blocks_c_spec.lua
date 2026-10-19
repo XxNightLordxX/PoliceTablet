@@ -966,6 +966,56 @@ do
         end
     end
     H.ok(traced ~= nil, 'scope: Config.Debug logs each car\'s waypoint, speed, owner and distance')
+
+    -- the request-control filter is off for every game in the bucket: a player who is not on the run and keeps a
+    -- racer's car or driver is named once after Config.Blocks.pursuit.outsiderWarn seconds (the host takes it back)
+    local drivers = SpawnsOf(ctx, 'ped')
+    for _, s in ipairs(ctx.calls.spawn) do owners[s.ent] = 1 end
+    local function Outsiders()
+        local out = {}
+        for _, w in ipairs(warns) do if w:find('who is not on the run', 1, true) then out[#out + 1] = w end end
+        return out
+    end
+    H.eq(Config.Blocks.pursuit.outsiderWarn, 10, 'outsider: config.lua names a player after 10 s')
+    owners[cars[2].ent], owners[drivers[1].ent] = 7, 7
+    TickN(PU, ctx, 9)
+    H.eq(#Outsiders(), 0, 'outsider: nothing in the first 9 s')
+    TickN(PU, ctx, 1)
+    local named = Outsiders()
+    H.eq(#named, 2, 'outsider: the car and the driver player 7 kept are named at 10 s')
+    local text = table.concat(named, ' | ')
+    H.ok(
+        text:find('vehicle ' .. cars[2].netId .. ' has been simulated by player 7', 1, true) ~= nil
+            and text:find('person ' .. drivers[1].netId .. ' has been simulated by player 7', 1, true) ~= nil
+            and text:find('the host\'s game takes it back', 1, true) ~= nil,
+        'outsider: each line names the entity and the player: ' .. text
+    )
+    TickN(PU, ctx, 20)
+    H.eq(#Outsiders(), 2, 'outsider: once per player')
+    owners[cars[2].ent], owners[drivers[1].ent] = 1, 1
+    TickN(PU, ctx, 3)
+    owners[cars[2].ent] = 8
+    TickN(PU, ctx, 9)
+    H.eq(#Outsiders(), 2, 'outsider: the clock starts again for another player')
+    TickN(PU, ctx, 1)
+    H.eq(#Outsiders(), 3, 'outsider: player 8 is named too')
+    ctx.srcs = { 1, 2 }
+    owners[cars[3].ent] = 2
+    TickN(PU, ctx, 12)
+    H.eq(#Outsiders(), 3, 'outsider: a participant\'s game may simulate a racer (no line)')
+    Config.Blocks.pursuit.outsiderWarn = 0
+    owners[cars[1].ent] = 9
+    TickN(PU, ctx, 12)
+    H.eq(#Outsiders(), 3, 'outsider: 0 = never named')
+    Config.Blocks.pursuit.outsiderWarn = 10
+    ctx.srcs = { 1 }
+
+    -- the objective ends: its cars and drivers go back to the server's request-control policy
+    PU.stop(ctx)
+    for _, s in ipairs(ctx.calls.spawn) do
+        H.eq(ignore[s.ent], false,
+            ('scope: the filter is back on for %s %d once the race ends'):format(s.kind, s.netId))
+    end
     CP.warn, CP.log, Config.Debug = realWarn, realLog, realDebug
     _G.NetworkGetEntityOwner, _G.SetEntityDistanceCullingRadius, _G.SetEntityIgnoreRequestControlFilter = nil, nil, nil
 end

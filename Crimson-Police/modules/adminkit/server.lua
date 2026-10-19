@@ -2,9 +2,13 @@
 -- typed word, preview, self, compare-and-set, audit, caches, toasts), bulk jobs, day counts and the busy lock.
 -- CP.Maintenance: the maintenance lock of a storage copy or switch, a backup restore or a store left behind.
 
+-- fxmanifest.lua lists this file twice (by name, so it loads before every module, and again in modules/**/server.lua)
+-- and FXServer runs every listed file: the second run must not swap in empty tables and a second resume thread.
+if CP.AdminKit and CP.AdminKit._installed then return end
 CP.AdminKit = CP.AdminKit or {}
 CP.Maintenance = CP.Maintenance or {}
 local Kit = CP.AdminKit
+Kit._installed = true
 local Maint = CP.Maintenance
 local U = CP.U
 local TAG = 'adminkit'

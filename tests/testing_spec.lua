@@ -1336,10 +1336,11 @@ do
     end
 end
 
-local tabletOpen = false
+local tabletOpen, playerIsDown = false, false
 local hudPatches, nuiPushes, toasts, clientActions = {}, {}, {}, {}
 CP.Tablet = {
     isOpen = function() return tabletOpen end,
+    playerDown = function() return playerIsDown end,
     hud = function(p) hudPatches[#hudPatches + 1] = p end,
     push = function(topic, data) nuiPushes[#nuiPushes + 1] = { topic = topic, data = data } end,
     notify = function(kind, text, opts) toasts[#toasts + 1] = { kind = kind, text = text, opts = opts } end,
@@ -1572,6 +1573,62 @@ do
     local pushesBefore = #nuiPushes
     H.advance(300, 50)
     H.ok(#nuiPushes > pushesBefore and LastPush().data.key == 'F6', 'the panel gets the bound key after the HUD flag')
+
+    -- down (dead or in last stand): the panel lets go of the NUI focus and the key does not take it again
+    H.commands['+crimsonpolice_testpanel'].fn()
+    H.eq(st.focused, true, 'down: the panel holds the focus')
+    playerIsDown = true
+    H.advance(300, 50)
+    H.eq(st.focused, false, 'down: the panel lets go of the focus within 250 ms')
+    H.eq(focus[#focus][1], false, 'down: SetNuiFocus(false, false)')
+    local nFocus = #focus
+    H.commands['+crimsonpolice_testpanel'].fn()
+    H.eq(#focus, nFocus, 'down: the key takes no focus')
+    H.eq(toasts[#toasts].text, CP.L('test.downed'), 'down: and says why')
+    local _, opened = clientActions.testPanel({ open = true })
+    H.ok(#focus == nFocus and opened and opened.focused == false, 'down: the HUD button takes no focus either')
+    playerIsDown = false
+
+    -- CrimsonPoliceState (CP.Diag): the test panel's focus is Crimson-Police's own, and unstick lets go of it. FiveM
+    -- keeps one NUI focus vote per resource: ours is the last SetNuiFocus of this resource, otherFocus another's.
+    local otherFocus = false
+    _G.IsNuiFocused = function() return (focus[#focus] and focus[#focus][1] == true) or otherFocus end
+    H.load('modules/diag/client.lua')
+    local function StateText(args)
+        local printed = {}
+        local realP = print
+        _G.print = function(...) printed[#printed + 1] = table.concat({ ... }, ' ') end
+        H.commands.CrimsonPoliceState.fn(0, args or {})
+        _G.print = realP
+        return table.concat(printed, '\n')
+    end
+    H.commands['+crimsonpolice_testpanel'].fn()
+    H.eq(CP.Diag.state().testFocus, 'controls', 'diag: the state names the test panel\'s focus')
+    local text = StateText()
+    H.ok(text:find('test panel focus controls', 1, true) ~= nil and not text:find('another resource', 1, true),
+        'diag: the test panel\'s focus is ours, not another resource\'s: ' .. text)
+    text = StateText({ 'unstick' })
+    H.eq(st.focused, false, 'unstick: the test panel lets go of the focus')
+    H.eq(focus[#focus][1], false, 'unstick: Crimson-Police\'s focus is released')
+    H.ok(text:find('NUI focus no', 1, true) ~= nil and not text:find('another resource', 1, true),
+        'unstick: then no NUI focus at all: ' .. text)
+    -- the invitation prompt too
+    H.fire('crimson-police:client:testInvite', 1,
+        { inviteId = 'ti9', missionLabel = 'Gang Shootout', from = 'Alex', expiresIn = 90 })
+    serverReplies.invites = { { inviteId = 'ti9', missionLabel = 'Gang Shootout', from = 'Alex', expiresIn = 90 } }
+    st.controls = false
+    H.commands['+crimsonpolice_testpanel'].fn()
+    H.step(0)
+    H.eq(CP.Diag.state().testFocus, 'invites', 'diag: the prompt\'s focus is named too')
+    StateText({ 'unstick' })
+    H.ok(st.focused == false and st.prompt == false and focus[#focus][1] == false, 'unstick: the prompt closes')
+    st.controls = true
+    -- another resource's focus stays with it
+    otherFocus = true
+    text = StateText({ 'unstick' })
+    H.ok(text:find('the NUI focus belongs to another resource', 1, true) ~= nil,
+        'unstick: another resource keeps its own')
+    otherFocus = false
 
     -- the test ends
     H.fire('crimson-police:client:test', 1, { controls = false, runId = 'run-10', debug = false })

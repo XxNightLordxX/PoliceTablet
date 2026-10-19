@@ -27,6 +27,7 @@ const STATE_KEYS: (keyof ClientStateView)[] = [
     'nuiFocus',
     'tabletOpen',
     'panel',
+    'testFocus',
     'pickup',
     'run',
     'scriptCam',

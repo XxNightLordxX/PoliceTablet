@@ -809,5 +809,51 @@ do
     H.ok(CP.L('bonus.no_weapons_fired') ~= 'Held fire', 'reset: the locale\'s name again')
 end
 
+-- ============================================================================
+--                FXSERVER RUNS THIS FILE TWICE (fxmanifest.lua)
+-- ============================================================================
+-- fxmanifest lists modules/adminkit/server.lua by name (so it loads before every module) and again through
+-- modules/**/server.lua, and FXServer runs every listed file (no de-duplication across entries): the second run
+-- must keep the actions, job kinds and the maintenance lock the first one holds.
+
+do
+    local list = H.manifestScripts('server_scripts')
+    local at = {}
+    for i, f in ipairs(list) do at[f] = at[f] or {}; at[f][#at[f] + 1] = i end
+    H.eq(#(at['modules/adminkit/server.lua'] or {}), 2, 'fxmanifest: FXServer runs modules/adminkit/server.lua twice')
+    H.ok(at['modules/admin/server.lua'] and at['modules/admin/server.lua'][1] > at['modules/adminkit/server.lua'][1],
+        'fxmanifest: the first run comes before modules/admin (the reason for the named entry)')
+    for f, runs in pairs(at) do
+        if #runs > 1 then
+            local fh = assert(io.open(H.root .. f, 'r'))
+            local first
+            for line in fh:lines() do
+                if not first and line:match('%S') and not line:match('^%s*%-%-') then first = line end
+            end
+            fh:close()
+            H.ok(first and first:match('^if CP%.(%w+) and CP%.%1%._installed then return end$') ~= nil,
+                ('fxmanifest: %s runs %d times and starts with its load guard (%s)'):format(f, #runs, tostring(first)))
+        end
+    end
+
+    Kit.action('server:admin:kitTwice', 'liveRuns', function() return true end)
+    local okM = Maint.begin('storage', { what = 'twice' })
+    H.ok(okM, 'a maintenance lock is held before the second run')
+    local action, actions, kinds = Kit.action, Kit._actions(), Kit._jobKinds()
+    local threads = 0
+    local realCreate = _G.CreateThread
+    _G.CreateThread = function(fn) threads = threads + 1 end
+    H.load('modules/adminkit/server.lua')
+    _G.CreateThread = realCreate
+    H.eq(CP.AdminKit, Kit, 'the second run keeps CP.AdminKit')
+    H.eq(CP.AdminKit.action, action, 'and its functions')
+    H.eq(CP.AdminKit._actions(), actions, 'the registered actions are still there')
+    H.ok(CP.AdminKit._actions()['server:admin:kitTwice'] ~= nil, 'an action registered before the second run is kept')
+    H.eq(CP.AdminKit._jobKinds(), kinds, 'the job kinds too')
+    H.eq(CP.Maintenance.active(), 'storage', 'the maintenance lock is still held (the gate still refuses)')
+    H.eq(threads, 0, 'no second resume thread')
+    Maint.finish('storage')
+end
+
 _G.print = realPrint
 return H

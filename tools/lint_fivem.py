@@ -39,6 +39,16 @@ Rules (a hit prints `file:line: RULE message`):
                         FXServer builds its Lua with LUA_SANDBOX, so every other debug function (sethook,
                         gethook, getlocal, setupvalue, getregistry...) is nil there. Text cannot be run under a
                         step budget: read mission files as data (CP.U.parseMissionFile).
+  FX12 server-bool      in a server or shared script, the answer of a server native that answers yes or no
+                        ("b Name" in tools/fivem_natives.txt) compared with == true or ~= true, directly or
+                        through the local it was put in: FXServer hands Lua the integer 1 for yes (natives_server.lua
+                        `_r`, ScriptInvoker.h), so `DoesEntityExist(e) == true` is false for every entity. Read it
+                        as a condition or accept both (`v == true or v == 1`). == false and ~= false read right
+                        (no is false) and are not hits.
+
+  python3 tools/lint_fivem.py --files <side> <file>...
+                                              # the per-file rules on these files as <side> (server, client or
+                                              # shared), every hit printed, no baseline (tests/fixtures/lint)
 
 Known hits live in tools/lint_baseline.txt, each with its reason: a real bug waiting for its fix (bugs.md of
 the fix round) or a deliberate use. A baseline line that no longer matches a hit is reported as stale, so the
@@ -62,7 +72,9 @@ DEBUG_USE = re.compile(r'(?<![\w.:])debug\s*\.\s*([A-Za-z_]\w*)')
 ARENA = re.compile(r'(?<![\w.:])(SetPlayerTeam|NetworkSetFriendlyFireOption|SetCanAttackFriendly'
                    r'|Set\w*RoutingBucket\w*|CancelEvent)\b')
 CREATES = re.compile(r'(?<![\w.:])Create(Ped|Vehicle|VehicleServerSetter|Object|ObjectNoOffset)\s*\(')
-CALL = re.compile(r'(?<![\w.:])([A-Z][A-Za-z0-9]+)\s*\(')
+CALL = re.compile(r'(?<![\w.:])([A-Z][A-Za-z0-9_]+)\s*\(')
+BOOL_AFTER = re.compile(r'\s*[=~]=\s*true\b')
+BOOL_BEFORE = re.compile(r'\btrue\s*[=~]=\s*$')
 DEFS = re.compile(r'\bfunction\s+([A-Z]\w*)\s*\(|\blocal\s+([A-Z]\w*)\s*=|^\s*([A-Z]\w*)\s*=', re.M)
 WORDS = re.compile(r'[A-Za-z_]\w*')
 OPENERS = {'function', 'do', 'then', 'repeat'}
@@ -212,7 +224,8 @@ def manifest_sides():
 
 
 def load_natives():
-    client_only, server_only = set(), set()
+    """(client only, server only, server yes/no) name sets from tools/fivem_natives.txt, None when it is missing."""
+    client_only, server_only, server_bool = set(), set(), set()
     if not os.path.exists(NATIVES):
         return None
     for line in read(NATIVES).splitlines():
@@ -220,50 +233,126 @@ def load_natives():
             client_only.add(line[2:].strip())
         elif line.startswith('s '):
             server_only.add(line[2:].strip())
-    return client_only, server_only
+        elif line.startswith('b '):
+            server_bool.add(line[2:].strip())
+    return client_only, server_only, server_bool
+
+
+def lua_name(name):
+    """The name a native has in Lua (codegen_out_lua.lua printFunctionName): lower case, '0x' -> 'n_0x', a letter
+    after '_' in upper case, then the first letter: GET_GROUND_Z_FOR_3D_COORD -> GetGroundZFor_3dCoord."""
+    s = name.lower().replace('0x', 'n_0x')
+    s = re.sub(r'_([a-z])', lambda m: m.group(1).upper(), s)
+    m = re.search(r'[A-Za-z]', s)
+    return s[:m.start()] + s[m.start()].upper() + s[m.start() + 1:] if m else s
 
 
 def update_natives(game_json, cfx_json):
-    def pascal(name):
-        return ''.join(w[:1].upper() + w[1:].lower() for w in name.split('_') if w)
-
-    client, server = set(), set()
+    client, server, yes_no = set(), set(), set()
     with open(game_json, encoding='utf-8') as f:
         for ns in json.load(f).values():
             for n in ns.values():
                 for name in [n.get('name') or ''] + list(n.get('aliases') or []):
                     if name:
-                        client.add(pascal(name.lstrip('_')))
+                        client.add(lua_name(name))
     with open(cfx_json, encoding='utf-8') as f:
         for ns in json.load(f).values():
             for n in ns.values():
                 if not n.get('name'):
                     continue
-                p = pascal(n['name'])
                 api = n.get('apiset', 'client')
-                if api in ('server', 'shared'):
-                    server.add(p)
-                if api in ('client', 'shared'):
-                    client.add(p)
-    keep = lambda s: sorted(x for x in s if re.match(r'^[A-Z][A-Za-z0-9]*$', x))
-    client_only, server_only = keep(client - server), keep(server - client)
+                for name in [n['name']] + list(n.get('aliases') or []):
+                    p = lua_name(name)
+                    if api in ('server', 'shared'):
+                        server.add(p)
+                        # natives_server.lua wraps every BOOL (and bool) answer with `_r`: 1 for yes, false for no
+                        if (n.get('results') or '') in ('BOOL', 'bool'):
+                            yes_no.add(p)
+                    if api in ('client', 'shared'):
+                        client.add(p)
+    keep = lambda s: sorted(x for x in s if re.match(r'^[A-Z][A-Za-z0-9_]*$', x))
+    client_only, server_only, server_bool = keep(client - server), keep(server - client), keep(yes_no)
     with open(NATIVES, 'w', encoding='utf-8') as f:
-        f.write('# FiveM natives available on one side only, for tools/lint_fivem.py rule FX01.\n')
+        f.write('# FiveM natives for tools/lint_fivem.py rules FX01 (one side only) and FX12 (server yes/no answers).\n')
         f.write('# From https://runtime.fivem.net/doc/natives.json (game natives: client) and natives_cfx.json\n')
-        f.write('# (apiset client / server / shared). Regenerate: python3 tools/lint_fivem.py --update-natives\n')
-        f.write('# natives.json natives_cfx.json. "c Name": client only, "s Name": server only.\n')
+        f.write('# (apiset client / server / shared), named as Lua names them (GetGroundZFor_3dCoord). Regenerate:\n')
+        f.write('# python3 tools/lint_fivem.py --update-natives natives.json natives_cfx.json. "c Name": client\n')
+        f.write('# only, "s Name": server only, "b Name": a server native that answers yes or no (1 or false).\n')
         for name in client_only:
             f.write('c ' + name + '\n')
         for name in server_only:
             f.write('s ' + name + '\n')
-    print(f'{rel(NATIVES)}: {len(client_only)} client-only and {len(server_only)} server-only natives')
+        for name in server_bool:
+            f.write('b ' + name + '\n')
+    print(f'{rel(NATIVES)}: {len(client_only)} client-only and {len(server_only)} server-only natives, '
+          f'{len(server_bool)} server yes/no natives')
 
 
-def lint():
-    sides = manifest_sides()
+def matching_paren(src, i):
+    """src[i] is '(': the index of its ')' (strings are blanked already), or -1."""
+    depth = 0
+    for j in range(i, len(src)):
+        c = src[j]
+        if c == '(':
+            depth += 1
+        elif c == ')':
+            depth -= 1
+            if depth == 0:
+                return j
+    return -1
+
+
+def bool_hits(blank, blocks, server_bool, defined):
+    """FX12: (line, message) for each server yes/no answer compared with == true or ~= true."""
+    src = '\n'.join(blank)
+    starts = [0]
+    for ln, code in enumerate(blank):
+        starts.append(starts[-1] + len(code) + 1)
+    line_of = lambda pos: next(k for k in range(len(starts) - 1, -1, -1) if starts[k] <= pos) + 1
+    hits = []
+    for m in CALL.finditer(src):
+        name = m.group(1)
+        if name not in server_bool or name in defined:
+            continue
+        close = matching_paren(src, m.end() - 1)
+        if close < 0:
+            continue
+        ln = line_of(m.start())
+        after = BOOL_AFTER.match(src, close + 1)
+        if after or BOOL_BEFORE.search(src[:m.start()]):
+            at = line_of(after.end() - 1) if after else ln
+            hits.append((at, f'{name}(...) compared with true: FXServer answers 1 for yes, so this is never true'))
+            continue
+        # through a local: `local found = DoesEntityExist(e)`, then `found == true` in the same function
+        head = src[starts[ln - 1]:m.start()]
+        a = re.search(r'(?:\blocal\s+)?\b([A-Za-z_]\w*)\s*=\s*$', head)
+        tail = src[close + 1:].split('\n', 1)[0]
+        if not a or re.search(r'[.:\[]\s*$', head[:a.start(1)]) \
+                or re.match(r'^\s*(and\b|or\b|==|~=|<|>|\.\.|[-+*/%^,(\[.:])', tail):
+            continue
+        var = a.group(1)
+        fn = blocks.innermost_function(ln)
+        last = fn[1] if fn else len(blank)
+        cmp = re.compile(r'\b' + re.escape(var) + r'\s*[=~]=\s*true\b|\btrue\s*[=~]=\s*' + re.escape(var) + r'\b')
+        one = re.compile(r'\b' + re.escape(var) + r'\s*[=~]=\s*1\b')
+        for k in range(line_of(close), last + 1):
+            code = blank[k - 1]
+            if k == line_of(close):
+                code = src[close + 1:starts[k]] if k < len(starts) else ''
+            if cmp.search(code) and not one.search(code):
+                hits.append((k, f'{var} holds {name}(...) and is compared with true: FXServer answers 1 for yes'))
+    return hits
+
+
+def lint(only=None):
+    """Every rule on the manifest's scripts, or with only = {path: side} the per-file rules on those files."""
+    sides = manifest_sides() if only is None else {os.path.normpath(p): side for p, side in only.items()}
     natives = load_natives()
-    files = sorted(p for p in glob.glob(os.path.join(RES, '**', '*.lua'), recursive=True)
-                   if os.path.normpath(p) in sides)
+    if only is None:
+        files = sorted(p for p in glob.glob(os.path.join(RES, '**', '*.lua'), recursive=True)
+                       if os.path.normpath(p) in sides)
+    else:
+        files = sorted(only)
     lexed = {p: lex(read(p)) for p in files}
     global_defs = set()
     for blank, _ in lexed.values():
@@ -299,7 +388,7 @@ def lint():
         for ln, code in enumerate(blank, 1):
             # FX01
             if natives and side in ('server', 'client'):
-                client_only, server_only = natives
+                client_only, server_only, _ = natives
                 for m in CALL.finditer(code):
                     name = m.group(1)
                     if name in RUNTIME or name in local_defs or name in global_defs:
@@ -345,6 +434,10 @@ def lint():
                 if m.group(1) not in FX_DEBUG:
                     add(path, ln, 'FX11', f'debug.{m.group(1)} does not exist on FXServer (LUA_SANDBOX: only '
                         'getinfo, getmetatable, setmetatable, getupvalue, traceback)')
+        # FX12
+        if natives and side in ('server', 'shared'):
+            for ln, msg in bool_hits(blank, blocks, natives[2], local_defs | global_defs):
+                add(path, ln, 'FX12', msg)
         # FX02
         if side == 'server':
             for ln, code in enumerate(blank, 1):
@@ -367,6 +460,8 @@ def lint():
             ln = next(k for k, c in enumerate(blank, 1) if CREATES.search(c))
             add(path, ln, 'FX06', 'networked entities without SetEntityOrphanMode (the default deletes them when'
                                   ' no player is near)')
+    if only is not None:
+        return hits, len(files), natives is not None
     # FX10: every file at once (a helper that always waits may live in another file)
     findings, errors = lua_flow.loop_findings({p: read(p) for p in files})
     for path, ln, verdict, kind, cond, where, note in findings:
@@ -402,6 +497,16 @@ def main(argv):
             return 2
         update_natives(argv[1], argv[2])
         return 0
+    if argv[:1] == ['--files']:
+        if len(argv) < 3 or argv[1] not in ('server', 'client', 'shared'):
+            print('usage: tools/lint_fivem.py --files server|client|shared <file>...')
+            return 2
+        hits, _, have_natives = lint({os.path.abspath(p): argv[1] for p in argv[2:]})
+        for h in sorted(hits, key=lambda h: (h[0], h[1], h[2])):
+            print(f'{h[0]}:{h[1]}: {h[2]} {h[3]}')
+        if not have_natives:
+            print(f'{rel(NATIVES)} is missing: rules FX01 and FX12 did not run')
+        return 1 if hits or not have_natives else 0
     show_all = '--all' in argv
     use_baseline = '--no-baseline' not in argv
     unknown = [a for a in argv if a not in ('--all', '--no-baseline')]

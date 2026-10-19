@@ -86,6 +86,9 @@ local function PlayerDown()
     return dead == true or dead == 1
 end
 
+-- The same rule for every other Crimson-Police screen that takes the NUI focus (the test panel and its prompt).
+function T.playerDown() return PlayerDown() end
+
 -- ============================================================================
 --                         CRIMSON-POLICE PROGRESS BARS
 -- ============================================================================

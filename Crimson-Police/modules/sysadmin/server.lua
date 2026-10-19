@@ -1538,6 +1538,7 @@ local STATE_KEYS = {
     'nuiKeepInput',
     'tabletOpen',
     'panel',
+    'testFocus',
     'pickup',
     'run',
     'scriptCam',

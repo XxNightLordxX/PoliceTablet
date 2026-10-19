@@ -55,6 +55,11 @@ local function TabletOpen()
     return CP.Tablet and CP.Tablet.isOpen and CP.Tablet.isOpen() == true
 end
 
+-- Down (dead or in last stand): CP.Tablet's rule, never hold the NUI focus while the death or last stand screen is up.
+local function Down()
+    return CP.Tablet and CP.Tablet.playerDown and CP.Tablet.playerDown() == true
+end
+
 local function ArenaForeign()
     local st = LocalPlayer and LocalPlayer.state
     local v = st and st.crimsonArena
@@ -168,6 +173,11 @@ local function WatchFocus()
                 if state.prompt then state.prompt = false; PushNui({ prompt = false }) else PushNui() end
                 return
             end
+            if Down() then
+                CP.log(TAG, 'the player went down: the test panel lets go of the focus')
+                ReleaseFocus()
+                return
+            end
             if ArenaForeign() or (state.focusKind == 'controls' and not (state.controls and state.inRun)) then
                 ReleaseFocus()
                 return
@@ -178,7 +188,7 @@ end
 
 local function TakeFocus(kind)
     if state.focused then return true end
-    if TabletOpen() or ArenaForeign() then return false end
+    if TabletOpen() or ArenaForeign() or Down() then return false end
     state.focused = true
     state.focusKind = kind
     SetNuiFocus(true, true)
@@ -738,6 +748,10 @@ local function OnPanelKey()
         Notify('error', 'err.in_arena')
         return
     end
+    if Down() then
+        Notify('error', 'test.downed')
+        return
+    end
     if controls then
         if TakeFocus('controls') then PushNui() end
         return
@@ -887,6 +901,12 @@ AddEventHandler('onResourceStop', function(resource)
     if state.focused and not TabletOpen() then SetNuiFocus(false, false) end
     state.focused = false
 end)
+
+-- CrimsonPoliceState unstick (CP.Diag): let go of the panel's or the prompt's NUI focus.
+function Testing.releaseFocus() ReleaseFocus() end
+
+-- 'controls' | 'invites' while the panel or the prompt holds the NUI focus, else nil (CP.Diag's state).
+function Testing.focusKind() return state.focused and state.focusKind or nil end
 
 -- Test hooks (tests/testing_spec.lua only).
 Testing._state = function() return state end

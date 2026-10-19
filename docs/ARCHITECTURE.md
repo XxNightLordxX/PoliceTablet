@@ -635,6 +635,8 @@ Client:
   `RegisterKeyMapping`), optional ox_inventory item (`Config.Tablet.item`), export `OpenTablet()`.
 - `open(ui)` / `close()` / `isOpen()`; the Officer/Supervisor UI plays the tablet prop
   (`Config.Tablet.prop`) and animation; closing removes the prop.
+- `playerDown() -> boolean`: dead or in last stand (qbx metadata, or a dead ped). No CP screen holds the NUI focus
+  while it is true (the tablet closes, the test panel and its prompt let go).
 - `send(msg)` → `SendNUIMessage(msg)`
 - `notify(kind, text, opts)` (already translated text) and handler for `crimson-police:client:notify`
 - `hud(patch)` → merges into the HUD state and sends `{ type = 'hud', hud = state }`; `hud(nil)` hides it
@@ -1399,7 +1401,10 @@ controls (`skip`, `restart`, `pause`, `complete`, `fail`, `end`, `teleport`), in
 `list() -> tests view`. A test run goes through `CP.Runs.create({ test = {...} })` so everything else is identical.
 `startDraft(src, def, { tier, location, useStartRoute }) -> ok, errKey` (Mission Builder test of an unpublished draft: `test.draft = true`; at the end the tester records Passed/Failed and the result goes to `CP.Builder.onDraftTested(missionId, version, tierName, passed, src, defHash)`, defHash = the tested definition's).
 Client: test-control panel focus key (RegisterKeyMapping `+crimsonpolice_testpanel`, default F7: sc-multijob binds F9;
-silent unless this player controls a test or has an invitation waiting), debug overlay drawing.
+silent unless this player controls a test or has an invitation waiting), debug overlay drawing. The panel and the
+invitation prompt let go of the NUI focus within 250 ms of the player going down (`CP.Tablet.playerDown`) and take
+none while down (toast `test.downed`). `releaseFocus()` (CP.Diag's unstick) and `focusKind() -> 'controls' |
+'invites' | nil` (CP.Diag's state).
 
 Full admin control (§8.4.2): `markLocationChecked` (an `unplayed = 1` row, status `checked`, never a draft's pass) and
 `hideTestResult` (`hidden`, K on the old value); `list()` ignores hidden rows and gives each mission its `switch`
@@ -1770,9 +1775,12 @@ A line may also carry `fix` (the Settings path that fixes it: Permissions and Se
 ### 5.35 CP.Diag — modules/diag (client; the freeze fix)
 F8 command `CrimsonPoliceState`: four `[crimson-police:diag]` lines with the screen fade, NUI focus (and keep input),
 scripted camera, pause menu, player control, frozen, dead, last stand and dead metadata, in a vehicle, then what
-Crimson-Police holds (tablet, panel focus, pick-up, run) and which of the rest is not ours.
-`CrimsonPoliceState unstick` first closes our tablet, releases our panel focus and runs `CP.Downed.restore`, never
-anything another resource holds. `state() -> table`, `unstick()`.
+Crimson-Police holds (tablet, panel focus, test panel focus, pick-up, run) and which of the rest is not ours (the
+test panel's and the test prompt's focus are ours: `state().testFocus` is `'controls'` or `'invites'`).
+`CrimsonPoliceState unstick` first closes our tablet, releases our panel focus and the test panel's
+(`CP.Testing.releaseFocus()`), runs `CP.Downed.restore`, then calls `SetNuiFocus(false, false)` whatever is open: FiveM
+keeps one focus vote per resource, so that frees a focus a broken page of ours holds and never touches another
+resource's. `state() -> table`, `unstick()`.
 Admin UI → Officers → Support (P5): `client:diagUnstick` runs `unstick()`; `client:diagState (token)` answers
 `server:diagState (token, state())` (the server keeps only the answer of the player it asked, known keys only).
 
@@ -1897,7 +1905,9 @@ Full admin control, System (P5):
 
 ### 5.37 CP.AdminKit and CP.Maintenance — modules/adminkit (S)
 
-The one wrapper every new admin action of full admin control goes through, and the maintenance lock. Hook names the
+The one wrapper every new admin action of full admin control goes through, and the maintenance lock. fxmanifest lists
+the file by name (so it loads before every module) and again through `modules/**/server.lua`; FXServer runs both, so
+the file starts with a load guard (`CP.AdminKit._installed`, as CP.Storage) and the second run changes nothing. Hook names the
 packages share: `admin:changed { kind, citizenid?, missionId? }` (each module clears the caches it owns),
 `row:voided`, `row:restored`, `row:forfeitUndone` (fired by the corrections package, §5.38), `settings:changed (paths)`,
 `maintenance:changed (view|nil)`, `adminjob:progress (AdminJobProgress)`.
@@ -3128,7 +3138,7 @@ read a failure.
 - `python3 tools/lint_fivem.py`: the FiveM pitfall rules (wrong-side natives, late `source`, client `os`/`io`,
   unguarded focus release, raising callback awaits, orphan mode, `os.rename` answers, server `os.execute`,
   CRIMSON_ARENA natives, loops that can go round with no Wait (FX10, `tools/lua_flow.py`), debug functions FXServer
-  does not have (FX11)); deliberate uses and bugs
+  does not have (FX11), a server yes/no answer compared with `true` (FX12)); deliberate uses and bugs
   awaiting their fix are listed in `tools/lint_baseline.txt`.
 - `python3 tools/restyle.py --check` lists no file: every Lua and web source is formatted to `docs/STYLE.md`
   (`python3 tools/restyle.py <files>` formats them).

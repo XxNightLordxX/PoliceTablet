@@ -254,6 +254,7 @@
   "sysadmin.ui.state.nuiFocus": "NUI focus",
   "sysadmin.ui.state.tabletOpen": "Tablet open",
   "sysadmin.ui.state.panel": "Panel focus",
+  "sysadmin.ui.state.testFocus": "Test panel focus",
   "sysadmin.ui.state.pickup": "Pick-up",
   "sysadmin.ui.state.run": "Run",
   "sysadmin.ui.state.scriptCam": "Scripted camera",

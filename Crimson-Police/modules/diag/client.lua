@@ -50,6 +50,7 @@ function Diag.state()
         nuiKeepInput = TryYes(IsNuiFocusKeepingInput),
         tabletOpen = CP.Tablet and CP.Tablet.isOpen and CP.Tablet.isOpen() == true or false,
         panel = CP.Tablet and CP.Tablet.panelFocusOwner and CP.Tablet.panelFocusOwner() or nil,
+        testFocus = CP.Testing and CP.Testing.focusKind and CP.Testing.focusKind() or nil,
         pickup = CP.Downed and CP.Downed.busy and CP.Downed.busy() == true or false,
         run = type(run) == 'table' and run.id or nil,
         scriptCam = cam ~= nil and cam ~= -1,
@@ -66,7 +67,7 @@ end
 -- What in the state is not Crimson-Police's, in plain words (the owner sends this line back).
 local function Others(s)
     local out = {}
-    if s.nuiFocus and not s.tabletOpen and not s.panel then
+    if s.nuiFocus and not s.tabletOpen and not s.panel and not s.testFocus then
         out[#out + 1] = 'the NUI focus belongs to another resource'
     end
     if s.screen ~= 'faded in' and not s.pickup then out[#out + 1] = 'the fade is not Crimson-Police\'s' end
@@ -84,8 +85,9 @@ local function Print(s)
         ('player: control %s, frozen %s, dead %s, last stand %s, metadata dead %s, in a vehicle %s'):format(
             YesNo(s.playerControl), YesNo(s.frozen), YesNo(s.dead), YesNo(s.lastStand), YesNo(s.metaDead),
             YesNo(s.inVehicle)),
-        ('Crimson-Police: tablet %s, panel focus %s, pick-up %s, run %s'):format(s.tabletOpen and 'open' or 'closed',
-            tostring(s.panel or 'none'), s.pickup and 'running' or 'idle', tostring(s.run or 'none')),
+        ('Crimson-Police: tablet %s, panel focus %s, test panel focus %s, pick-up %s, run %s'):format(
+            s.tabletOpen and 'open' or 'closed', tostring(s.panel or 'none'), tostring(s.testFocus or 'none'),
+            s.pickup and 'running' or 'idle', tostring(s.run or 'none')),
     }
     local others = Others(s)
     lines[#lines + 1] = #others > 0 and ('not ours: ' .. table.concat(others, '; ')) or 'nothing stuck'
@@ -93,12 +95,17 @@ local function Print(s)
     return lines
 end
 
--- Only what Crimson-Police holds: the tablet (and its NUI focus), a panel's focus, a pick-up fade left over.
+-- Only what Crimson-Police holds: the tablet (and its NUI focus), a panel's focus, the test panel's or the test
+-- prompt's focus, a pick-up fade left over. Last, our NUI focus whatever still holds it (a page of ours that broke):
+-- FiveM keeps one focus vote per resource (ResourceUIScripting.cpp SET_NUI_FOCUS), so SetNuiFocus(false, false)
+-- here removes only Crimson-Police's own vote and never another resource's focus (docs/CRIMSON_ARENA.md rule 8).
 function Diag.unstick()
     if CP.Tablet and CP.Tablet.isOpen and CP.Tablet.isOpen() then CP.Tablet.close() end
     local owner = CP.Tablet and CP.Tablet.panelFocusOwner and CP.Tablet.panelFocusOwner()
     if owner then CP.Tablet.panelFocus(owner, false) end
+    if CP.Testing and CP.Testing.releaseFocus then CP.Testing.releaseFocus() end
     if CP.Downed and CP.Downed.restore then CP.Downed.restore('unstick') end
+    SetNuiFocus(false, false)
     CP.log(TAG, 'Crimson-Police\'s own screen, focus and overlay released')
 end
 

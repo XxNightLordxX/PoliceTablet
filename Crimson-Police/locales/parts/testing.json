@@ -59,6 +59,7 @@
   "test.invite_declined": "{name} declined your invitation to test {mission}.",
   "test.invite_withdrawn": "The invitation to test {mission} was withdrawn.",
   "test.no_invites": "No test invitations are waiting for you.",
+  "test.downed": "You can't open the test controls while you are down.",
   "test.debug_start": "Start radius {r} m",
   "test.webhook_passed": "Test passed: {mission}",
   "test.webhook_failed": "Test failed: {mission}",

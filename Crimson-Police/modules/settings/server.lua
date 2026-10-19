@@ -248,6 +248,7 @@ local RANGES = {
     ['Spawning.interiorTimeoutMs'] = { 500, 30000 },
     ['Spawning.placeTimeoutMs'] = { 1000, 60000 },
     ['Spawning.retries'] = { 0, 5 },
+    ['Blocks.pursuit.outsiderWarn'] = { 0, 120 },
 }
 
 -- Numbers that may go either way whatever config.lua has.

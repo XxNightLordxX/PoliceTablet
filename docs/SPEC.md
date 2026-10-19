@@ -3879,6 +3879,9 @@ Config.Blocks.pursuit = {
     -- so the car drives past the officer; 0 = off. Kept within 250 m so a player is always in range
     spawnOffset = { -250, 250, 0 },
     paceTolerance = { 0, 10, 5 },       -- km/h: the median of the pace samples may be this far under the limit
+    -- Street Race Bust and other race loops: seconds a racer's car or driver may stay with the game of a player who
+    -- is not on the run before the console names that player (the host's game always takes it back); 0 = never
+    outsiderWarn = 10,
 }
 
 Config.Blocks.interact_points = {

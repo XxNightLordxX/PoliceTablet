@@ -2516,6 +2516,56 @@ function H.load(rel)
     return r
 end
 
+-- The files FXServer runs for one script list of fxmanifest.lua ('server_scripts', 'client_scripts',
+-- 'shared_scripts'), in its order: the entries as listed with no de-duplication across entries (a file named by
+-- itself and matched again by a glob runs twice), each glob's matches byte-sorted and unique within the entry, '**/'
+-- also matching no folder (ResourceMetaDataComponent.cpp GlobEntries / GlobValue, ResourceScriptingComponent.cpp
+-- LoadFile per listed file). '@resource/...' entries are left out.
+function H.manifestScripts(key)
+    local fh = assert(io.open(ROOT .. 'fxmanifest.lua', 'r'))
+    local manifest = fh:read('a'):gsub('%-%-[^\n]*', '')
+    fh:close()
+    local body = manifest:match(key .. '%s*(%b{})') or ''
+    local files = nil
+    local function All()
+        if files then return files end
+        files = {}
+        local p = io.popen('cd ' .. ROOT .. ' && find . -path ./web/node_modules -prune -o -type f -print')
+        for line in p:lines() do files[#files + 1] = line:gsub('^%./', '') end
+        p:close()
+        return files
+    end
+    local function Pattern(text) return (text:gsub('[%^%$%(%)%%%.%[%]%+%-%?]', '%%%0'):gsub('%*', '[^/]*')) end
+    local out = {}
+    for entry in body:gmatch('[\'"]([^\'"]+)[\'"]') do
+        if entry:sub(1, 1) ~= '@' then
+            if entry:find('*', 1, true) then
+                local pre, post = entry:match('^(.-)%*%*/(.*)$')
+                local matches, seen = {}, {}
+                for _, f in ipairs(All()) do
+                    local hit
+                    if pre then
+                        local rest = f:sub(1, #pre) == pre and f:sub(#pre + 1) or nil
+                        hit = rest
+                            and (rest:match('^' .. Pattern(post) .. '$') or rest:match('/' .. Pattern(post) .. '$'))
+                    else
+                        hit = f:match('^' .. Pattern(entry) .. '$')
+                    end
+                    if hit and not seen[f] then
+                        seen[f] = true
+                        matches[#matches + 1] = f
+                    end
+                end
+                table.sort(matches)
+                for _, f in ipairs(matches) do out[#out + 1] = f end
+            else
+                out[#out + 1] = entry
+            end
+        end
+    end
+    return out
+end
+
 function H.reset()
     H.events = {}
 end

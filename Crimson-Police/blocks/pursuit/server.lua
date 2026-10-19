@@ -811,12 +811,28 @@ local function ScopeRadius(ctx)
 end
 
 -- A wide race's car or person stays streamed to every player within its radius. The first game to stream it
--- may be a bystander's, so the host must always win control of it (sv_filterRequestControl could refuse).
-local function KeepInScope(ctx, ent)
+-- may be a bystander's, so the host must always win control of it (sv_filterRequestControl could refuse). The
+-- filter is off only while this objective runs (ReleaseScope), and WatchOutsiders names a player who is not on
+-- the run and keeps one: with it off, any game in the routing bucket may ask for control (ServerGameState.cpp).
+local function KeepInScope(ctx, ent, netId, kind)
     local r = ScopeRadius(ctx)
     if not r or not Exists(ent) then return end
     if SetEntityDistanceCullingRadius then SetEntityDistanceCullingRadius(ent, r + 0.0) end
     if SetEntityIgnoreRequestControlFilter then SetEntityIgnoreRequestControlFilter(ent, true) end
+    local st = ctx.state
+    st.scoped = st.scoped or {}
+    st.scoped[tostring(netId)] = { entity = ent, netId = netId, kind = kind }
+end
+
+-- The objective is over: its cars and people that are still there go back to the server's own request-control
+-- policy, so no other game can ask for them any more.
+local function ReleaseScope(st)
+    for key, e in pairs(st.scoped or {}) do
+        if SetEntityIgnoreRequestControlFilter and Exists(e.entity) then
+            SetEntityIgnoreRequestControlFilter(e.entity, false)
+        end
+        st.scoped[key] = nil
+    end
 end
 
 -- The point `offset` metres along an open route from the route point nearest ref (negative = upstream,
@@ -1234,7 +1250,7 @@ local function SpawnOccupant(ctx, st, v)
     if hidden then opts.hidden = true end
     local ent, netId = ctx.spawnPed(opts)
     if not netId then return nil end
-    KeepInScope(ctx, ent)
+    KeepInScope(ctx, ent, netId, 'person')
     if SetPedIntoVehicle and Exists(ent) and Exists(v.entity) then pcall(SetPedIntoVehicle, ent, v.entity, seat) end
     local key = tostring(netId)
     local p = {
@@ -1277,7 +1293,7 @@ local function SpawnVehicle(ctx, st, i)
         tag = 'vehicle' .. i,
     })
     if not netId then return nil end
-    KeepInScope(ctx, ent)
+    KeepInScope(ctx, ent, netId, 'vehicle')
     local radius = ScopeRadius(ctx)
     CP.log(BLOCK, 'run %s: vehicle %d (%s) at %.0f %.0f, nearest participant %.0f m, culling radius %s',
         tostring(ctx.run and ctx.run.id), netId, tostring(model), place.x, place.y,
@@ -1735,6 +1751,38 @@ local function WatchScope(ctx, st, dt, list)
     end
 end
 
+-- A race's car or person simulated by the game of a player who is not on the run: OneSync hands an entity to the
+-- nearest game that has it, and with the request-control filter off any game in the routing bucket may ask for
+-- it. The host's game asks for control on every pass and takes it back; one that stays with that player for
+-- Config.Blocks.pursuit.outsiderWarn seconds is named once on the console (0 = never).
+local function WatchOutsiders(ctx, st, dt)
+    local limit = tonumber(Config.Blocks.pursuit.outsiderWarn) or 0
+    if limit <= 0 or not st.scoped or not NetworkGetEntityOwner then return end
+    for _, e in pairs(st.scoped) do
+        local owner = Exists(e.entity) and tonumber(NetworkGetEntityOwner(e.entity)) or -1
+        if owner > 0 and not IsParticipant(ctx, owner) then
+            if e.outsider ~= owner then e.outsider, e.outsiderFor = owner, 0 end
+            e.outsiderFor = e.outsiderFor + dt
+            if e.outsiderFor >= limit and e.warned ~= owner then
+                e.warned = owner
+                CP.warn(
+                    BLOCK,
+                    'run %s: %s %d has been simulated by player %d (%s), who is not on the run, for %d s;'
+                        .. ' the host\'s game takes it back',
+                    tostring(ctx.run and ctx.run.id),
+                    e.kind,
+                    e.netId,
+                    owner,
+                    tostring(GetPlayerName and GetPlayerName(owner) or '?'),
+                    limit
+                )
+            end
+        else
+            e.outsider, e.outsiderFor = nil, 0
+        end
+    end
+end
+
 -- Escapes, exits, give-ups (close, low health) and missed cuffs.
 local function WatchPeds(ctx, st, dt, list)
     local obj = ctx.obj
@@ -2137,6 +2185,7 @@ local function Tick(ctx, dt)
     CheckTrigger(ctx, st, list)
     WatchVehicles(ctx, st, dt, list)
     WatchScope(ctx, st, dt, list)
+    WatchOutsiders(ctx, st, dt)
     WatchPeds(ctx, st, dt, list)
     if st.failed then return end
     if st.mode == 'follow' then
@@ -2297,5 +2346,6 @@ CP.Blocks.register(BLOCK, {
     stop = function(ctx)
         local st = StateOf(ctx)
         st.halted = true
+        ReleaseScope(st)
     end,
 })

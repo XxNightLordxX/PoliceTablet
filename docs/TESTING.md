@@ -12,7 +12,7 @@ passes (docs/ARCHITECTURE.md §11). How work flows around the checks is in docs/
 |---|---|---:|
 | `syntax` | `luac5.4 -p` on every `.lua` file in `Crimson-Police/`, `tests/` and `tools/` | 0.5 s |
 | `contracts` | `python3 tools/check_contracts.py` (module calls, events, NUI names, locale keys, build stamp) | 0.8 s |
-| `lint-fivem` | `python3 tools/lint_fivem.py`: FiveM pitfall rules FX01-FX11 (FX10, loops that can go round with no Wait, parses the Lua with `tools/lua_flow.py`; FX11, a `debug` function FXServer does not have), known hits in `tools/lint_baseline.txt` | 5 s |
+| `lint-fivem` | `python3 tools/lint_fivem.py`: FiveM pitfall rules FX01-FX12 (FX10, loops that can go round with no Wait, parses the Lua with `tools/lua_flow.py`; FX11, a `debug` function FXServer does not have; FX12, a server yes/no answer compared with `true`), known hits in `tools/lint_baseline.txt` | 5 s |
 | `style` | `python3 tools/restyle.py --check`: restyles a scratch copy of the tree and fails on any file that differs (docs/STYLE.md) | 45–48 s |
 | `suite-db` | `lua5.4 tests/run.lua`: 57 specs on MariaDB | 40–45 s |
 | `suite-files` | `lua5.4 tests/run.lua --storage=files`: the same specs with the database off (saves folder) | 35–38 s |
@@ -314,6 +314,10 @@ lint_fivem FAIL: 1 new hits, 7 known (baseline), 1 stale baseline lines
 - An FX10 hit names the loop and the game state its condition waits on. `python3 tools/lua_flow.py --all <file>`
   gives every loop of a file its verdict (HIT, bounded, pure, ok) and why; tests/freeze_spec.lua checks the rule
   on the planted loops of `tests/fixtures/lint/fx10_loops.lua`.
+- An FX12 hit is a server yes/no native (`b` lines of `tools/fivem_natives.txt`) whose answer is compared with
+  `== true` or `~= true`: FXServer answers 1, so read it as a condition or accept `true or 1`.
+  `python3 tools/lint_fivem.py --files server <file>` runs the per-file rules on any file (tests/foundation_spec.lua
+  does so on `tests/fixtures/lint/fx12_bool.lua`).
 - `python3 tools/lint_fivem.py --all` also prints the hits the baseline accepts. Rule FX01 reads
   `tools/fivem_natives.txt`; `--update-natives natives.json natives_cfx.json` rebuilds it from
   runtime.fivem.net's lists.

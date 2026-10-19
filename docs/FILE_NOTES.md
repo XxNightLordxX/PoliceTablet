@@ -722,7 +722,12 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
     (stop mode on a loop) whose widest span (start, spawn points, route points) plus SCOPE_MARGIN is above
     that, every car and occupant gets SetEntityDistanceCullingRadius(span + SCOPE_MARGIN, at most SCOPE_MAX) and
     SetEntityIgnoreRequestControlFilter (the first game to stream it may be a bystander's; the host
-    must still win control). Each tick NetworkGetEntityOwner is read for every live car: a car no
+    must still win control). The filter is off only while the objective runs: its stop puts it back
+    on for every car and person still there (ReleaseScope). With it off any game in the routing
+    bucket may ask for control, so each tick a car or person kept by the game of a player who is not
+    on the run counts up, and after Config.Blocks.pursuit.outsiderWarn seconds (0 = never) the
+    console names that player once per player (WatchOutsiders); the host's game asks for control on
+    every pass and takes it back. Each tick NetworkGetEntityOwner is read for every live car: a car no
     player's game has had for SCOPE_WARN_S is warned about once (always printed); Config.Debug logs
     each car's position, waypoint, speed, owner and nearest participant every TRACE_MS, and every
     spawn with its distance and culling radius. A race (stop mode on a loop) starting on arrival
@@ -3168,6 +3173,8 @@ Public API (docs/ARCHITECTURE.md §5.4)
                                           a foreign crimsonArena value, a character unload and the resource
                                           stop release it.
   CP.Tablet.panelFocusOwner() -> owner|nil  who holds the panel focus (nil also after a tablet takeover)
+  CP.Tablet.playerDown() -> boolean       dead or in last stand (qbx metadata, or a dead ped): the rule every
+                                          CP screen with the NUI focus follows (the test panel lets go of it)
   CP.Tablet.cpProgressActive() -> boolean  a progress bar started by Crimson-Police runs (lib.progressBar
                                           and lib.progressCircle of this resource's ox_lib are wrapped
                                           once, at load and at runtime wiring, to count them)
@@ -3254,7 +3261,12 @@ file, and that department's session carries no logo (no broken image in the NUI)
       and with nothing to open it does nothing (no server call, no toast).
       NUI focus is taken only while the panel/prompt is open and only when no Crimson-Police UI is open, and
       it is released on close, Escape/the key (the NUI calls the client action testPanel), when the test ends,
-      on a foreign crimsonArena value and on resource stop. It is never released unconditionally.
+      on a foreign crimsonArena value, within 250 ms of the player going down (CP.Tablet.playerDown: the key
+      and the HUD button take no focus while down, toast test.downed), on CrimsonPoliceState unstick
+      (CP.Testing.releaseFocus) and on resource stop. It is never released unconditionally here.
+    * CP.Testing.releaseFocus()  lets go of the panel's or the prompt's focus (CP.Diag.unstick)
+      CP.Testing.focusKind() -> 'controls'|'invites'|nil  while the panel or the prompt holds the focus
+      (CP.Diag.state().testFocus: CrimsonPoliceState and Admin UI -> Officers -> Support show it as ours)
     * the HUD flag testControls (CP.Tablet.hud({ testControls = true })) re-asserted for the admin's run
       (CP.Runs client sets it at client:start; this module only patches a HUD that belongs to that run)
     * the in-world debug overlay while it is on: DrawMarker for the start radius, spawn points, zones and

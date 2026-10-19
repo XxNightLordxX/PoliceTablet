@@ -684,8 +684,11 @@ do
     end
     local text = StateText()
     H.ok(text:find('screen faded in, NUI focus no', 1, true) ~= nil, 'state: the screen and the focus')
-    H.ok(text:find('Crimson-Police: tablet closed, panel focus none, pick-up idle, run none', 1, true) ~= nil,
-        'state: what Crimson-Police holds')
+    H.ok(text:find(
+        'Crimson-Police: tablet closed, panel focus none, test panel focus none, pick-up idle, run none',
+        1,
+        true
+    ) ~= nil, 'state: what Crimson-Police holds')
     H.ok(text:find('nothing stuck', 1, true) ~= nil, 'state: nothing stuck')
     -- another resource holds the NUI focus (a page that froze): named as not ours
     cs.otherFocus = true
@@ -696,7 +699,9 @@ do
     clientPD.metadata = { isdead = false, inlaststand = true }
     text = StateText()
     H.ok(text:find('sc-ambulance still counts the player as down', 1, true) ~= nil, 'state: still down')
+    H.eq(T.playerDown(), true, 'CP.Tablet.playerDown: last stand is down (the test panel lets go of its focus)')
     Revive()
+    H.eq(T.playerDown(), false, 'CP.Tablet.playerDown: revived')
     -- without the manifest's OAL a yes/no native answers the integer 1: the state (sent to the server and the
     -- Admin UI) still holds true and false
     local realFrozen, realControl = IsEntityPositionFrozen, IsPlayerControlOn
@@ -714,6 +719,14 @@ do
     H.eq(T.isOpen(), false, 'unstick: our tablet closed')
     H.eq(cs.focus, false, 'unstick: our focus released')
     H.ok(text:find('nothing stuck', 1, true) ~= nil, 'unstick: then nothing stuck')
+    -- a page of ours that broke still holds our NUI focus vote (no screen of ours says so) and another resource holds
+    -- its own: FiveM keeps one vote per resource, so unstick removes ours and never touches the other one
+    cs.focus, cs.otherFocus = true, true
+    text = StateText({ 'unstick' })
+    H.eq(cs.focus, false, 'unstick: our own focus vote goes even with no screen of ours open')
+    H.ok(text:find('the NUI focus belongs to another resource', 1, true) ~= nil,
+        'unstick: the other resource keeps its own')
+    cs.otherFocus = false
 end
 
 -- ============================================================================

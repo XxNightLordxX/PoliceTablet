@@ -225,6 +225,7 @@ export interface ClientStateView {
     nuiKeepInput?: boolean;
     tabletOpen?: boolean;
     panel?: string;
+    testFocus?: string;
     pickup?: boolean;
     run?: string;
     scriptCam?: boolean;

@@ -743,10 +743,12 @@ do
     local ask = H.findEvents('crimson-police:client:diagState')
     local token = ask[#ask] and ask[#ask].args[1]
     H.fire('crimson-police:server:diagState', 8, token, { screen = 'evil' })
-    H.fire('crimson-police:server:diagState', 7, token, { screen = 'faded in', nuiFocus = true, extra = 'x' })
+    H.fire('crimson-police:server:diagState', 7, token,
+        { screen = 'faded in', nuiFocus = true, testFocus = 'controls', extra = 'x' })
     H.advance(200, 100)
     H.ok(got and got.screen == 'faded in' and got.nuiFocus == true and got.extra == nil,
         'the answer of the target client only, known keys only')
+    H.eq(got and got.testFocus, 'controls', 'the test panel\'s focus reaches the Admin UI (Support)')
 end
 
 -- ============================================================================

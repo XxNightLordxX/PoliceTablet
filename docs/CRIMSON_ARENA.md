@@ -78,7 +78,10 @@ Definitions: a value is **foreign** when `type(v) == 'table' and v.active == tru
    foreign value: `CP.Tablet.close()` (delete prop, stop animation), `lib.cancelProgress()` if a CP progress
    bar runs, hide the CP HUD and overlays. The command, keybind, tablet item and `OpenTablet` refuse
    (toast `err.in_arena`) while the local value is foreign. Call `SetNuiFocus(false, false)` only when a CP
-   UI is open — never unconditionally. The tablet prop is non-networked (`CreateObject(..., false, false, false)`).
+   UI is open — never unconditionally. One exception: `CrimsonPoliceState unstick` (and the admin's Release
+   screen) ends with it, because FiveM keeps one NUI focus vote per resource (ResourceUIScripting.cpp
+   SET_NUI_FOCUS): it removes only Crimson-Police's own vote and never another resource's focus.
+   The tablet prop is non-networked (`CreateObject(..., false, false, false)`).
 9. **Alert backstop.** Capture src and `t = os.time()` at receipt; decide with `CP.Alerts.wanted[src]`
    (intent), not the live bag. Clear `playerdown_/playerdead_` ids for t-1, t, t+1 with `{ 'police', 'ambulance' }`
    and `shots_` ids within `backstopRadius` (server-side coords). Skip srcs whose value is foreign
