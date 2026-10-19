@@ -143,5 +143,6 @@
   "err.setting_label_unknown": "There is no such id to name.",
   "err.setting_label_text": "A name is 1 to 64 characters, without < or >.",
   "err.setting_tweak": "The mission loader refuses this tweak.",
-  "err.setting_automatic_weapon": "Mission NPCs never get an automatic weapon (an SMG, a rifle or a machine gun): pick a pistol or a shotgun."
+  "err.setting_automatic_weapon": "Mission NPCs never get an automatic weapon (an SMG, a rifle or a machine gun): pick a pistol or a shotgun.",
+  "admin.action.moneySwitch": "Money switch turned on or off"
 }

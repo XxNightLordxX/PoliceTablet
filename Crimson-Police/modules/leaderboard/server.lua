@@ -1602,6 +1602,9 @@ local function NormaliseStuck(list)
             local rowId = Int(p.rowId or p.id)
             local runUuid = p.runUuid or p.run_uuid
             local cid = p.citizenid
+            -- unix seconds, as Payments sends them: the NUI shows them in the admin's own time zone (a date-time text
+            -- is the server's local time, which the NUI would read as the admin's)
+            local createdTs = tonumber(p.createdAt) or tonumber(p.created_ts)
             out[#out + 1] = {
                 rowId = rowId,
                 runUuid = runUuid and tostring(runUuid) or '',
@@ -1611,8 +1614,7 @@ local function NormaliseStuck(list)
                 missionLabel = p.missionLabel
                     or LB.missionLabel(p.missionType or p.mission_type, p.missionId or p.mission_id, nil),
                 amount = Int(p.amount or p.cashBase or p.cash_base),
-                createdAt = (type(p.createdAt) == 'number' and SqlTs(p.createdAt))
-                    or (type(p.createdAt) == 'string' and p.createdAt) or (p.created_ts and SqlTs(p.created_ts)) or '',
+                createdAt = createdTs and Int(createdTs) or nil,
                 transId = p.transId or (runUuid and cid and ('CP-%s-%s'):format(runUuid, cid)) or '',
             }
         end

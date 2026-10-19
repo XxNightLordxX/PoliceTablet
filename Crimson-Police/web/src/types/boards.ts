@@ -188,7 +188,8 @@ export interface StuckPayment {
     callsign?: string | null;
     missionLabel: string;
     amount: number;
-    createdAt: string;
+    // unix seconds (as Payments sends them), shown in the admin's own time zone
+    createdAt?: number | null;
     transId: string;
 }
 

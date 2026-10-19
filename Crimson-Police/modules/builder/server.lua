@@ -3931,7 +3931,9 @@ local function RegisterAdminActions()
         return b
     end
 
-    -- Every leaf of a builder definition as path -> short text (vectors as x, y, z).
+    -- Every leaf of a builder definition as path -> short text (vectors as x, y, z). A number is written the same
+    -- way whether it is 80.0 or 80: an edit saved from the Builder comes back through the NUI's JSON, where every
+    -- whole float (radius = 80.0 in a shipped file) arrives as an integer, and tostring(80.0) is '80.0'.
     local function flatten(v, path, out, depth)
         depth = depth or 0
         if depth > MAX_DEPTH then return out end
@@ -3945,6 +3947,8 @@ local function RegisterAdminActions()
                     flatten(x, path == '' and tostring(k) or (path .. '.' .. tostring(k)), out, depth + 1)
                 end
             end
+        elseif IsNum(v) then
+            out[path] = tostring(Nice(Round(v, 4)))
         elseif v ~= nil then
             out[path] = ClipText(tostring(v), 60)
         end

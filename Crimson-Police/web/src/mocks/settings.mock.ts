@@ -107,6 +107,44 @@ const data: SettingsData = {
             ],
         },
         {
+            key: 'limits_and_cash',
+            title: 'Limits and cash',
+            file: 'config',
+            changed: 0,
+            count: 2,
+            groups: [
+                {
+                    path: 'Limits',
+                    label: 'Limits',
+                    desc: '',
+                    settings: [
+                        // below 4 the trial mock answers with missions it breaks (the 'breaks missions' dialog)
+                        s('Limits.maxUnitSize', 'number', 6, 'officers in one unit at most', {
+                            integer: true,
+                            min: 1,
+                            max: 12,
+                            reload: true,
+                        }),
+                    ],
+                },
+                {
+                    path: 'Cash',
+                    label: 'Cash',
+                    desc: '',
+                    settings: [
+                        // society opens the department balances dialog (admin:previewCashSource)
+                        s(
+                            'Cash.source',
+                            'enum',
+                            'server',
+                            "who pays: 'server' (money is created) or 'society' (the department's account)",
+                            { options: ['server', 'society'] },
+                        ),
+                    ],
+                },
+            ],
+        },
+        {
             key: 'blocks',
             title: 'Mission Builder ranges (blocks.lua)',
             file: 'blocks',
@@ -137,7 +175,7 @@ const data: SettingsData = {
     changed: 1,
     pending: 0,
     invalid: 0,
-    total: 10,
+    total: 12,
 };
 
 const history: SettingsHistoryRow[] = [
@@ -171,6 +209,29 @@ function reply(list: SettingView[]): SettingsReply {
 }
 
 registerMock('request', 'admin:getSettings', (): SettingsData => data);
+
+// Settings -> a setting that reloads the missions: the missions the new value would break (Missions.trial). The
+// unit size limit below a mission's minimum unit breaks it; any other value breaks none.
+const UNIT_MINIMUM = [
+    { id: 'armored_escort', label: 'Armored Truck Escort', min: 4 },
+    { id: 'bank_job', label: 'Bank Job', min: 3 },
+    { id: 'gang_shootout', label: 'Gang Shootout', min: 2 },
+];
+registerMock('request', 'admin:trialMissions', (p: unknown) => {
+    const patch = ((p ?? {}) as { patch?: { path?: string; value?: unknown; none?: boolean }[] }).patch ?? [];
+    const failed: { id: string; label: string; error: string }[] = [];
+    for (const c of patch) {
+        if (c.path !== 'Limits.maxUnitSize' || c.none || typeof c.value !== 'number') continue;
+        for (const m of UNIT_MINIMUM)
+            if (m.min > c.value)
+                failed.push({
+                    id: m.id,
+                    label: m.label,
+                    error: `minOfficers ${m.min} is above Limits.maxUnitSize ${c.value}`,
+                });
+    }
+    return { checked: 19, failed };
+});
 
 registerMock('action', 'server:admin:setSetting', (p: unknown): SettingsReply => {
     const { path, value, json, none } = (p ?? {}) as { path?: string; value?: unknown; json?: string; none?: boolean };

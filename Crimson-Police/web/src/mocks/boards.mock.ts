@@ -1012,7 +1012,7 @@ const STUCK: StuckPayment[] = [
         callsign: '1A-07',
         missionLabel: 'Armored Truck Escort',
         amount: 1170,
-        createdAt: sqlTime(now() - 5 * 3600),
+        createdAt: now() - 5 * 3600,
         transId: 'CP-7c9e6679-7425-40de-944b-e07fc1f90ae7-SAS30117',
     },
     {
@@ -1023,7 +1023,7 @@ const STUCK: StuckPayment[] = [
         callsign: 'F-190',
         missionLabel: 'Armored Truck Escort',
         amount: 1170,
-        createdAt: sqlTime(now() - 5 * 3600),
+        createdAt: now() - 5 * 3600,
         transId: 'CP-7c9e6679-7425-40de-944b-e07fc1f90ae7-FIB00190',
     },
 ];

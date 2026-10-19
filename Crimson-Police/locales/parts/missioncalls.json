@@ -170,5 +170,9 @@
   "mc.toast.next_in_line": "{code}: the other unit did not confirm. The call is yours now.",
   "mc.toast.paged": "You were paged: {code} · P{priority} {type} · {area}",
   "mc.toast.ready_check": "{code} is yours: your unit is asked to confirm.",
-  "mc.toast.won": "{code} is yours: {distance} km to the start, response target {target} s."
+  "mc.toast.won": "{code} is yours: {distance} km to the start, response target {target} s.",
+  "admin.action.mcCreate": "Mission call made",
+  "admin.action.mcCreateSkipWait": "Mission call made without the wait",
+  "admin.action.mcPage": "Unit paged for a mission call",
+  "admin.action.mcWithdraw": "Mission call withdrawn"
 }

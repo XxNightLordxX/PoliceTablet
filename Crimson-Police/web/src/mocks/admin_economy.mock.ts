@@ -4,6 +4,7 @@
 import { registerMock } from '../shared/nui';
 import type {
     BankingCheck,
+    CashSourcePreview,
     CashStatus,
     CleanupView,
     DepartmentFundsView,
@@ -301,6 +302,24 @@ registerMock('request', 'admin:getDepartmentFunds', (args: unknown): DepartmentF
         addFundsMax: 50000,
     };
 });
+
+// Settings -> Cash.source -> society: each department's society account against what its rows still owe (fib is
+// short, a third department has no account).
+registerMock('request', 'admin:previewCashSource', (): CashSourcePreview => ({
+    source: 'server',
+    departments: [
+        {
+            department: 'sast',
+            label: 'San Andreas State Troopers',
+            account: 'sast',
+            balance: funds.sast,
+            rows: 3,
+            owed: 2400,
+        },
+        { department: 'fib', label: 'FIB', account: 'fib', balance: funds.fib, rows: 4, owed: 3150, short: true },
+        { department: 'bcso', label: 'Blaine County Sheriff', account: 'bcso', balance: null, rows: 0, owed: 0 },
+    ],
+}));
 
 registerMock('action', 'server:admin:addDepartmentFunds', (p: { department?: string; amount?: number }) => {
     needSwitch();

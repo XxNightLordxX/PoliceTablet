@@ -1010,7 +1010,11 @@ function RecheckBadges({ disabled }: { disabled?: boolean }) {
                 title={t('int.ui.recheck_all')}
                 message={t('int.ui.recheck_all_text')}
                 onConfirm={async () => {
-                    const res = await run<{ jobId: string }>('server:admin:recheckAllBadges', {});
+                    const res = await run<{ jobId: string }>(
+                        'server:admin:recheckAllBadges',
+                        {},
+                        { success: 'int.ui.recheck_started' },
+                    );
                     if (res.ok && res.data?.jobId) setJobId(res.data.jobId);
                     setOpen(false);
                 }}

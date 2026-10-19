@@ -44,6 +44,9 @@ export function StepPublish({ ed, cfg, def, ro, goTo }: StepProps) {
     const tested = !!rec?.draftTested;
     const testRequired = !!cfg.requireTestToPublish;
     const hasDraft = !!rec?.hasDraft || rec?.dbStatus === 'draft';
+    // the file publishing writes (FilePathFor in modules/builder/server.lua): an edited built-in goes to overrides/
+    const exportDir = (cfg.exportPath ?? 'missions/custom/').replace(/\/?$/, '/');
+    const filePath = `${exportDir}${rec?.overridesBuiltin ? 'overrides/' : ''}${ed.id}.lua`;
     const items = [
         {
             ok: !!check && errors.length === 0,
@@ -191,7 +194,7 @@ export function StepPublish({ ed, cfg, def, ro, goTo }: StepProps) {
                             })}
                         </KeyValue>
                         <KeyValue label={t('builder.pub.file')}>
-                            <span className="builder_client-mono">{`${cfg.exportPath ?? 'missions/custom/'}${ed.id}.lua`}</span>
+                            <span className="builder_client-mono">{filePath}</span>
                         </KeyValue>
                     </div>
                     <div className="builder_client-actions-row">
@@ -289,7 +292,7 @@ export function StepPublish({ ed, cfg, def, ro, goTo }: StepProps) {
                     'builder.confirm.publish.message',
                     {
                         version: rec?.draftVersion ?? 1,
-                        file: `${cfg.exportPath ?? 'missions/custom/'}${ed.id}.lua`,
+                        file: filePath,
                     },
                 )}`}
                 confirmLabel={t('builder.confirm.publish.button')}

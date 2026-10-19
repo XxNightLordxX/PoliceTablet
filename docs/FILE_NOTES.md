@@ -4135,6 +4135,15 @@ push 'invites') are answered here too with server:testRespond. Invites close (lo
 accepts a mission type and stay closed while the unit's run is active.
 ```
 
+## Crimson-Police/web/src/shared/components/MaintenanceBanner.tsx
+
+```text
+The maintenance banner: shown on every UI while CP.Maintenance holds the lock (a storage copy or switch, a backup
+restore, a store left behind). New runs, claims, tests and payments wait until the owner restarts Crimson-Police
+(it never restarts itself); after a restore that stopped part way, until a restore works (admins see which
+automatic backup to restore).
+```
+
 ## Crimson-Police/web/src/shared/hooks.ts
 
 ```text

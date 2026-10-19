@@ -452,6 +452,139 @@ do
 end
 
 -- ============================================================================
+--             ADMIN UI: DIALOG STATE, JOB PROGRESS AND TEXTS (X8)
+-- ============================================================================
+
+-- Void runs (Officers, Leaderboards, Missions -> History): the screen behind the dialog re-renders on every push and
+-- poll and passes a new `initial` object each time; that must not clear the preview, the typed word, the reason or
+-- the progress, nor change the filter between Preview and Void.
+do
+    local dialog = Read(WEB .. 'admin/components/BulkVoidDialog.tsx') or ''
+    Has(dialog, 'initial: given, name, onDone }: BulkVoidDialogProps', 'the dialog keeps the filter it opened with')
+    Has(dialog, 'const [initial, setInitial] = useState<BulkVoidFilter | undefined>(given);',
+        'the fixed filter is a snapshot (state), not the prop')
+    local reset = dialog:match('useEffect%(%(%) => {%s*if %(!open%) return;(.-)}, %[([^%]]*)%]%);')
+    local _, deps = dialog:match('useEffect%(%(%) => {%s*if %(!open%) return;(.-)}, %[([^%]]*)%]%);')
+    H.ok(reset ~= nil and reset:find('setInitial(given);', 1, true) ~= nil, 'the snapshot is taken when it opens')
+    H.eq(deps, 'open', 'the form resets only when the dialog opens (not when the screen behind re-renders)')
+    Has(dialog, 'toast(\'success\', t(\'ui.admin_officers.bulk.started\'', 'a started void says so')
+    H.ok(keys['ui.admin_officers.bulk.started'] == true, 'locale: ui.admin_officers.bulk.started')
+end
+
+-- A small job's progress pushes can reach the NUI before the action's reply mounts JobProgress: the last push of
+-- each job is kept outside React from the start and the progress starts from it.
+do
+    local job = Read(WEB .. 'admin/components/kit/JobProgress.tsx') or ''
+    local hook = job:find('export function useAdminJob', 1, true) or 0
+    local listener = job:find('window.addEventListener(\'message\'', 1, true)
+    H.ok(listener ~= nil and listener < hook,
+        'adminjob pushes are kept by a listener of the module, not of a component')
+    Has(job, 'if (!m || typeof m !== \'object\' || m.type !== \'push\' || m.topic !== \'adminjob\') return;',
+        'it keeps the adminjob pushes')
+    Has(job, 'useSyncExternalStore(subscribe, () => (jobId ? (lastPush.get(jobId) ?? null) : null))',
+        'useAdminJob(jobId) reads the kept push (also one from before it mounted)')
+    local settings = Read(WEB .. 'admin/screens/Settings.tsx') or ''
+    Has(settings, '\'server:admin:recheckAllBadges\', {}, { success: \'int.ui.recheck_started\' }',
+        'Re-check everyone\'s badges says it started')
+    H.ok(keys['int.ui.recheck_started'] == true, 'locale: int.ui.recheck_started')
+end
+
+-- System: every tab's text key is written out (a key built from p.key is not checked and showed raw).
+do
+    local sys = Read(WEB .. 'admin/screens/System.tsx') or ''
+    local union = sys:match('type Panel = ([^;]+);') or ''
+    local n = 0
+    for key in union:gmatch('\'([%w_]+)\'') do
+        n = n + 1
+        Has(sys, ('label: () => t(\'sysadmin.ui.tab.%s\')'):format(key),
+            'System tab ' .. key .. ': its key is written out')
+        H.ok(keys['sysadmin.ui.tab.' .. key] == true, 'locale: sysadmin.ui.tab.' .. key)
+    end
+    H.eq(n, 6, 'System has six tabs')
+    H.ok(sys:find('t(`sysadmin.ui.tab.', 1, true) == nil, 'no tab text is built from the key')
+end
+
+-- Audit: the Cash actions preset lists the payout clears too, and every action the server writes has a label.
+do
+    local audit = Read(WEB .. 'admin/screens/Audit.tsx') or ''
+    local list = audit:match('const CASH_ACTIONS = %[(.-)%];') or ''
+    local cash = {}
+    for name in list:gmatch('\'([%w_]+)\'') do cash[#cash + 1] = name end
+    local has = {}
+    for _, name in ipairs(cash) do has[name] = true end
+    H.ok(has.clearTypePayout and has.clearMissionPayout, 'Cash actions lists clearTypePayout and clearMissionPayout')
+    H.ok(#cash <= 30, 'Cash actions stays within the 30 names the server takes: ' .. #cash)
+    local en = cjson.decode(Read(ROOT .. 'locales/en.json') or '{}')
+    local NOT_ACTIONS = {
+        admin = true,
+        supervisor = true,
+        console = true,
+        audit = true,
+        flags = true,
+        builder = true,
+        operations = true,
+    }
+    local found, missing, n = {}, {}, 0
+    local p = io.popen('ls ' .. ROOT .. 'modules/*/server.lua')
+    for file in p:lines() do
+        local src = Read(file) or ''
+        for _, pat in ipairs({
+            'ctx%.audit%(%s*\'([%w_]+)\'',
+            'auditSync%([^,]+,%s*\'[%w_]+\',%s*\'([%w_]+)\'',
+            'Admin%.audit%([^,]+,[^,]+,%s*\'[%w_]+\',%s*\'([%w_]+)\'',
+            '\'Admin\',%s*\'audit\',[^,]+,[^,]+,%s*\'[%w_]+\',%s*\'([%w_]+)\'',
+            '[^%w_.:]Audit%(%s*[%w_.]+%s*,%s*\'([%w_]+)\'',
+        }) do
+            for name in src:gmatch(pat) do
+                if not NOT_ACTIONS[name] and not found[name] then
+                    found[name] = true
+                    n = n + 1
+                    if type(en['admin.action.' .. name]) ~= 'string' then missing[#missing + 1] = name end
+                end
+            end
+        end
+    end
+    p:close()
+    table.sort(missing)
+    H.ok(n >= 100, 'the audit actions the server writes are found: ' .. n)
+    H.eq(#missing, 0, 'every audit action shows a label, not its raw name (' .. table.concat(missing, ', ') .. ')')
+
+    -- the maintenance lock: Crimson-Police never restarts itself (owner decision 2), so the banner never says so
+    for _, k in ipairs({ 'ui.maintenance.title.storage', 'ui.maintenance.title.restore', 'ui.maintenance.restart' }) do
+        H.ok(type(en[k]) == 'string' and not en[k]:lower():find('restarting', 1, true), k .. ': not "restarting"')
+    end
+    for _, k in ipairs({ 'ui.maintenance.admin.storage_done', 'ui.maintenance.admin.restore_done' }) do
+        H.ok(type(en[k]) == 'string' and en[k]:find('done', 1, true) ~= nil, k .. ': says the work is done')
+    end
+    local banner = Read(WEB .. 'shared/components/MaintenanceBanner.tsx') or ''
+    Has(banner, 'return done ? t(\'ui.maintenance.admin.storage_done\') : t(\'ui.maintenance.admin.storage\');',
+        'a finished storage copy or switch says it is done and waits for the restart')
+    Has(banner, 'return done ? t(\'ui.maintenance.admin.restore_done\') : t(\'ui.maintenance.admin.restore\');',
+        'a finished restore says it is done and waits for the restart')
+    Has(banner, 'const done = !!m.restart && !m.failed;', 'done = the work ended and only the restart is left')
+end
+
+-- npm run dev: the Settings confirms (a reload setting that breaks missions, Cash.source = society) have mocks.
+do
+    local sm = Read(WEB .. 'mocks/settings.mock.ts') or ''
+    local em = Read(WEB .. 'mocks/admin_economy.mock.ts') or ''
+    Has(sm, 'registerMock(\'request\', \'admin:trialMissions\'', 'dev mode answers admin:trialMissions')
+    Has(em, 'registerMock(\'request\', \'admin:previewCashSource\'', 'dev mode answers admin:previewCashSource')
+    Has(sm, 's(\'Limits.maxUnitSize\', \'number\'',
+        'the dev Settings list has a reload setting that can break missions')
+    Has(sm, '\'Cash.source\',', 'and Cash.source')
+end
+
+-- Mission Builder -> Publish: an edited built-in is written to overrides/<id>.lua (FilePathFor).
+do
+    local pub = Read(WEB .. 'builder/steps/StepPublish.tsx') or ''
+    Has(pub, 'const filePath = `${exportDir}${rec?.overridesBuiltin ? \'overrides/\' : \'\'}${ed.id}.lua`;',
+        'the Lua file line follows the record: overrides/ for an edited built-in')
+    Has(pub, '<span className="builder_client-mono">{filePath}</span>', 'the Lua file line shows it')
+    Has(pub, 'version: rec?.draftVersion ?? 1, file: filePath', 'and so does the publish confirm')
+end
+
+-- ============================================================================
 --                                SHIPPED FILES
 -- ============================================================================
 -- locales/en.json and web/dist are regenerated from their sources.

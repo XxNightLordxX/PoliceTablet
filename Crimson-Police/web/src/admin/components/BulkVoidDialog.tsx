@@ -20,6 +20,7 @@ import { formatDateTime, formatMoney, formatNumber } from '../../shared/format';
 import { request } from '../../shared/nui';
 import { t } from '../../shared/i18n';
 import { useSession } from '../../shared/session';
+import { toast } from '../../shared/toast';
 import type { BulkVoidFilter, VoidPreview, VoidPreviewRow } from '../../types/admin_officers';
 import { DateRangeField, JobProgress, PreviewTable, useAdminAction, type DateRange } from './kit';
 import './BulkVoidDialog.css';
@@ -37,9 +38,13 @@ export interface BulkVoidDialogProps {
     onDone?: (jobId: string) => void;
 }
 
-export function BulkVoidDialog({ open, onClose, initial, name, onDone }: BulkVoidDialogProps) {
+export function BulkVoidDialog({ open, onClose, initial: given, name, onDone }: BulkVoidDialogProps) {
     const session = useSession();
     const { run, busy } = useAdminAction();
+    // the fixed filter as it was when the dialog opened: the screen behind it re-renders on every push and poll and
+    // passes a new object each time (a board window without an end even moves its 'to'), which must not clear the
+    // preview, the typed word, the reason or the progress, nor change the filter between Preview and Void
+    const [initial, setInitial] = useState<BulkVoidFilter | undefined>(given);
     const [range, setRange] = useState<DateRange>({ from: daysAgo(7), to: today() });
     const [department, setDepartment] = useState('');
     const [missionType, setMissionType] = useState('');
@@ -53,8 +58,11 @@ export function BulkVoidDialog({ open, onClose, initial, name, onDone }: BulkVoi
     const [reason, setReason] = useState('');
     const [jobId, setJobId] = useState<string | null>(null);
 
+    // reset only when the dialog opens
     useEffect(() => {
         if (!open) return;
+        const initial = given;
+        setInitial(given);
         const from = typeof initial?.from === 'string' ? initial.from : daysAgo(7);
         const to = typeof initial?.to === 'string' ? initial.to : today();
         setRange({ from, to });
@@ -68,7 +76,8 @@ export function BulkVoidDialog({ open, onClose, initial, name, onDone }: BulkVoi
         setTyped('');
         setReason('');
         setJobId(null);
-    }, [open, initial]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [open]);
 
     const filter = (): BulkVoidFilter => ({
         ...(initial ?? {}),
@@ -100,6 +109,7 @@ export function BulkVoidDialog({ open, onClose, initial, name, onDone }: BulkVoi
         });
         if (res.ok && res.data) {
             setJobId(res.data.jobId);
+            toast('success', t('ui.admin_officers.bulk.started', { n: formatNumber(res.data.rows) }));
             onDone?.(res.data.jobId);
         }
     };

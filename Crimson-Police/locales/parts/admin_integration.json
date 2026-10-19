@@ -30,5 +30,6 @@
   "int.ui.source_title": "Pay from the department accounts?",
   "int.ui.trial_text": "{n} of {checked} missions would not load with this value. They stay off until the value is changed back.",
   "int.ui.trial_title": "{name} breaks missions",
-  "int.ui.void_operation": "Void this operation's rows"
+  "int.ui.void_operation": "Void this operation's rows",
+  "int.ui.recheck_started": "Re-checking every officer's badges."
 }

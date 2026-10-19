@@ -886,6 +886,11 @@ local function FromTwin(v)
     return v
 end
 
+-- A table after the NUI round trip (server -> client -> SendNUIMessage -> the NUI's JSON.parse and JSON.stringify
+-- -> RegisterNUICallback -> TriggerServerEvent): JavaScript has one number type, so JSON.stringify writes 80.0 as 80
+-- and the client's json.decode (lua-rapidjson, FACTS L8) reads it back as an integer; a nil-valued field is dropped.
+function H.viaNui(v) return FromTwin(cjson.decode(cjson.encode(v))) end
+
 local function TwinCall(req)
     local t = TwinStart()
     t.w:write(req, '\n')

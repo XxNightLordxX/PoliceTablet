@@ -47,13 +47,19 @@ import type { CleanupView } from '../../types/admin_economy';
 import './System.css';
 
 type Panel = 'storage' | 'backups' | 'webhooks' | 'problems' | 'integrations' | 'cleanup';
-const PANELS: { key: Panel; icon: 'server' | 'download' | 'globe' | 'alert' | 'layers' | 'trash' }[] = [
-    { key: 'storage', icon: 'server' },
-    { key: 'backups', icon: 'download' },
-    { key: 'webhooks', icon: 'globe' },
-    { key: 'problems', icon: 'alert' },
-    { key: 'integrations', icon: 'layers' },
-    { key: 'cleanup', icon: 'trash' },
+// Each tab's text key is written out, so tools/check_contracts.py sees a missing one (a key built from p.key it
+// can't check, and the tab then shows the raw key).
+const PANELS: {
+    key: Panel;
+    icon: 'server' | 'download' | 'globe' | 'alert' | 'layers' | 'trash';
+    label: () => string;
+}[] = [
+    { key: 'storage', icon: 'server', label: () => t('sysadmin.ui.tab.storage') },
+    { key: 'backups', icon: 'download', label: () => t('sysadmin.ui.tab.backups') },
+    { key: 'webhooks', icon: 'globe', label: () => t('sysadmin.ui.tab.webhooks') },
+    { key: 'problems', icon: 'alert', label: () => t('sysadmin.ui.tab.problems') },
+    { key: 'integrations', icon: 'layers', label: () => t('sysadmin.ui.tab.integrations') },
+    { key: 'cleanup', icon: 'trash', label: () => t('sysadmin.ui.tab.cleanup') },
 ];
 
 function sizeText(bytes?: number): string {
@@ -826,7 +832,7 @@ export default function AdminSystem() {
             <Tabs<Panel>
                 value={panel}
                 onChange={setPanel}
-                items={PANELS.map(p => ({ key: p.key, label: t(`sysadmin.ui.tab.${p.key}`), icon: p.icon }))}
+                items={PANELS.map(p => ({ key: p.key, label: p.label(), icon: p.icon }))}
             />
             {body}
         </Screen>

@@ -672,6 +672,8 @@ do
     H.eq(a.stuck[1].rowId, stuckId, 'stuck row id')
     H.eq(a.stuck[1].transId, 'CP-stuck-uuid-LB3', 'Renewed-Banking transaction id')
     H.eq(a.stuck[1].amount, 1040, 'expected amount')
+    -- unix seconds like Payments, never the server's local date-time text (the NUI reads that in the admin's zone)
+    H.eq(a.stuck[1].createdAt, Ts(2026, 9, 23, 8), 'stuck payment time: unix seconds')
     H.eq(a.window.fromDate, '2026-09-21', 'admin board window date in server time')
     local withRuns = Cb('admin:getBoards', 1, { period = 'weekly', citizenid = 'LB2' }).data
     H.eq(#withRuns.runs, 5, 'every row of that officer in the window (voided and flagged too)')
@@ -708,7 +710,8 @@ do
     }
     local viaCash = Cb('admin:getBoards', 1, {}).data
     H.eq(viaCash.stuck[1].transId, 'CP-u7-Z9', 'normalised from CP.Cash')
-    H.eq(viaCash.stuck[2].createdAt, os.date('%Y-%m-%d %H:%M:%S', NOW - 60), 'CP.Cash createdAt seconds -> text')
+    H.eq(viaCash.stuck[2].createdAt, NOW - 60, 'CP.Cash createdAt: unix seconds, as Payments shows them')
+    H.eq(viaCash.stuck[1].createdAt, nil, 'no time known: none sent')
     H.eq(viaCash.stuck[2].missionLabel, 'Beat Patrol', 'CP.Cash mission label kept')
     CP.Cash = nil
     H.sql('DELETE FROM cp_mission_runs WHERE id = ?', { stuckId })

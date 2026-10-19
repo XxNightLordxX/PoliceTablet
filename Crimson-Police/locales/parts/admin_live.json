@@ -164,5 +164,15 @@
   "err.live_extra_used": "This officer already got extra missions today.",
   "err.live_boss_granted": "This officer already got another boss attempt this week.",
   "err.live_not_free_abandon": "Only a run that ended for a real call in the last 24 hours can be treated as a normal abandon.",
-  "err.live_tod_off": "Type of the Day is off in Settings → Events."
+  "err.live_tod_off": "Type of the Day is off in Settings → Events.",
+  "admin.action.abandonReclassify": "Abandoned run changed to a cancelled call",
+  "admin.action.bossAttemptGrant": "Extra boss attempt given",
+  "admin.action.cooldownClear": "Cooldown cleared",
+  "admin.action.extraRunsAllow": "Extra runs allowed",
+  "admin.action.runEnd": "Run ended by an admin",
+  "admin.action.runTimeAdd": "Time added to a run",
+  "admin.action.testEnd": "Test run ended by an admin",
+  "admin.action.todOverride": "Type of the Day changed",
+  "admin.action.unitDisband": "Unit disbanded",
+  "admin.action.unitRemove": "Officer removed from a unit"
 }

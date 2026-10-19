@@ -262,6 +262,27 @@ do
     H.ok(CP.Missions.get(ID).overridden == true, 'the override keeps playing')
 end
 
+-- Compare lists only what someone changed: an edit saved from the Builder comes back through the NUI's JSON, where
+-- the shipped radius = 80.0 and blockTraffic = 120.0 arrive as 80 and 120.
+do
+    local function Paths(lines)
+        local out = {}
+        for _, l in ipairs(type(lines) == 'table' and lines or {}) do out[#out + 1] = l.path end
+        return table.concat(out, ', ')
+    end
+    local edit = H.viaNui(Record(5).definition)
+    H.eq(math.type(edit.objectives[1].blockTraffic), 'integer', 'through the NUI the shipped 120.0 is the integer 120')
+    edit.objectives[1].waves = { 7, 7, 6 }   -- the shipped waves again (the draft of section 5 has 6, 6, 6)
+    edit.label = 'Gang Shootout (renamed)'
+    H.eq(Save(5, edit), true, 'the renamed draft is saved from the Builder')
+    ChangeTheOriginal()
+    local diff = X.cb('admin:builtinDiff', 5, { id = ID })
+    H.eq(Paths(diff and diff.original), 'cooldown', 'Compare: the update changed only the cooldown')
+    H.eq(Paths(diff and diff.yours), 'label', 'Compare: your edit against the new original is only the name')
+    local okK = X.act('server:builder:keepOverride', 5, { id = ID, reason = 'keep the new name' })
+    H.eq(okK, true, 'Keep mine again')
+end
+
 do
     ChangeTheOriginal()
     local okN, eN = X.act('server:builder:resetBuiltin', 5, { id = ID, reason = 'take the update' })

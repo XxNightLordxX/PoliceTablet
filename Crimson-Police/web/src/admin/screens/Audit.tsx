@@ -36,7 +36,8 @@ type Filters = AuditFilters;
 type Row = AuditRow;
 const ROLES = ['admin', 'supervisor', 'console'] as const;
 
-// The action filter's presets: a group of actions (the server takes at most 30 names).
+// The action filter's presets: a group of actions (the server takes at most 30 names). Cash actions: every action
+// a money tool writes (modules/payouts writes clearTypePayout and clearMissionPayout when an override is cleared).
 const CASH_PRESET = '@cash';
 const CASH_ACTIONS = [
     'paymentResolve',
@@ -54,6 +55,8 @@ const CASH_ACTIONS = [
     'payoutsAdjustAll',
     'setTypePayout',
     'setMissionPayout',
+    'clearTypePayout',
+    'clearMissionPayout',
     'rewardResolve',
     'rewardDeliver',
     'rewardCancel',

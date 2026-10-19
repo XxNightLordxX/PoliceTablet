@@ -386,5 +386,6 @@
   "ui.admin_officers.xp.diff": "Difference",
   "ui.admin_officers.xp.fix": "Fix",
   "ui.admin_officers.xp.stored": "Stored",
-  "ui.admin_officers.xp.title": "XP"
+  "ui.admin_officers.xp.title": "XP",
+  "ui.admin_officers.bulk.started": "Voiding {n} rows. Corrections → Undo restores the whole batch."
 }

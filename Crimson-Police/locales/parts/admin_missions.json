@@ -225,5 +225,18 @@
   "test.ui.remove_text": "The result stays in the history but no longer counts for coverage or a draft's test.",
   "test.ui.show_text": "The result counts again.",
   "test.ui.result_removed": "The result is removed.",
-  "test.ui.result_shown": "The result counts again."
+  "test.ui.result_shown": "The result counts again.",
+  "admin.action.draftRecovered": "Saved draft loaded again",
+  "admin.action.missionDelete": "Mission deleted permanently",
+  "admin.action.missionExport": "Mission exported",
+  "admin.action.missionImport": "Mission imported",
+  "admin.action.missionOwner": "Mission owner changed",
+  "admin.action.missionUndelete": "Deleted mission brought back",
+  "admin.action.overrideEdit": "Built-in mission opened in the Builder",
+  "admin.action.overrideFoldTweaks": "Quick edits folded into an edited built-in",
+  "admin.action.overrideKeep": "Edited built-in kept after an update",
+  "admin.action.overrideReset": "Built-in mission reset to original",
+  "admin.action.opLaunchSkipCooldown": "Operation launched before its cooldown ended",
+  "admin.action.testMarkChecked": "Location marked as checked",
+  "admin.action.testResultHide": "Test result hidden or shown again"
 }
