@@ -682,7 +682,21 @@ do
     end)
     H.ok(eff.enabled == true and eff.folder == 'saves', 'the KVP switch to the database; a bad folder is ignored')
 
-    local ok, e = Act('server:admin:setStorageMode', 1,
+    -- FXServer cannot create folders on Linux: a folder that is not there would stop the next start, so it is refused
+    -- (os.createdir is never called: tests/harness.lua ends the spec if it is)
+    local ok, e = Act('server:admin:setStorageMode', 1, {
+        enabled = false,
+        folder = 'saves/nothing',
+        startEmpty = true,
+        reason = 'r',
+        confirm = 'SWITCH',
+        requestId = Rid(9),
+    })
+    H.ok(ok == false and e == 'err.storage_folder_missing',
+        'a folder that is not there yet is refused: ' .. tostring(e))
+    H.eq(kvp.cp_storage_mode, nil, 'and nothing is switched')
+    H.execute(('mkdir -p \'%s/saves/nothing\' \'%s/saves/other\''):format(GetResourcePath(), GetResourcePath()))
+    ok, e = Act('server:admin:setStorageMode', 1,
         { enabled = false, folder = 'saves/nothing', reason = 'r', confirm = 'SWITCH', requestId = Rid(10) })
     H.ok(ok == false and e == 'err.storage_target_empty', 'a target with no data needs Start empty: ' .. tostring(e))
     ok, e = Act('server:admin:setStorageMode', 1,
@@ -735,6 +749,12 @@ end
 do
     local part = Cb('admin:exportAuditPart', 1, { part = 1 })
     H.ok(part and part.parts >= 1 and part.csv:find('^id,time', 1) ~= nil, 'an export part with its header')
+    -- saves/exports ships with the resource; a missing one is refused (FXServer cannot create folders on Linux)
+    local dir = GetResourcePath() .. '/saves/exports'
+    H.execute(('rm -rf \'%s\''):format(dir))
+    local resM, eM = Sys.saveAudit({})
+    H.ok(resM == nil and eM == 'err.export_folder', 'a missing exports folder is refused, no crash: ' .. tostring(eM))
+    H.execute(('mkdir -p \'%s\''):format(dir)) -- the owner makes it
     local ok, res = Act('server:admin:saveAuditExport', 1, { filters = {} })
     H.ok(ok == true and res.path:match('^saves/exports/audit%-') ~= nil and res.rows >= 1,
         'Save to server writes saves/exports/audit-<time>.csv')

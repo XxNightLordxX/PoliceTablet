@@ -2,9 +2,16 @@ node_modules/
 .DS_Store
 *.log
 Crimson-Police/web/.vite/
-# database-off saves (Config.Database.enabled = false): server data, never committed
+# database-off saves (Config.Database.enabled = false): server data, never committed. The folders backups and
+# audit exports go into ship empty (a .gitkeep each): FXServer cannot create folders on Linux.
 Crimson-Police/saves/*
 !Crimson-Police/saves/README.md
+!Crimson-Police/saves/_backups/
+Crimson-Police/saves/_backups/*
+!Crimson-Police/saves/_backups/.gitkeep
+!Crimson-Police/saves/exports/
+Crimson-Police/saves/exports/*
+!Crimson-Police/saves/exports/.gitkeep
 # temporary mission folders of an interrupted test run (tests/builder_server_spec.lua, int_duplicates_spec.lua)
 Crimson-Police/missions/custom/test_*/
 # Python bytecode of tools/*.py

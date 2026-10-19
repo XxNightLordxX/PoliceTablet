@@ -2562,6 +2562,18 @@ end
 
 do
     H.ok(Exists(H.root .. 'saves/README.md'), 'the resource ships its saves folder (saves/README.md)')
+    -- FXServer cannot create folders on Linux, so every folder Crimson-Police writes ships with it, each with a file
+    -- that git keeps (.gitignore must not drop it, or a download would miss the folder)
+    for _, rel in ipairs(H.SHIPPED_DIRS) do
+        local marker = Exists(H.root .. rel .. '/.gitkeep') and (rel .. '/.gitkeep')
+            or Exists(H.root .. rel .. '/README.md') and (rel .. '/README.md') or nil
+        local ignored = false
+        if marker then
+            local _, _, code = H.execute(('git -C \'%s\' check-ignore -q \'%s\' 2>/dev/null'):format(H.root, marker))
+            ignored = code == 0
+        end
+        H.ok(marker ~= nil and not ignored, ('%s ships with the resource (%s)'):format(rel, tostring(marker)))
+    end
     local savedStorage, savedMySQL, savedCfg = CP.Storage, _G.MySQL, Config.Database
     local function LoadStorage(cfg, real)
         CP.Storage = { MemSQL = M }   -- as memsql.lua leaves it (fxmanifest loads it first)
@@ -2577,9 +2589,13 @@ do
     H.eq(LoadStorage(nil).mode(), 'database', 'no Config.Database: database mode')
     local abs = TMP .. '/absolute/saves'
     st = LoadStorage({ enabled = false, folder = abs })
+    H.ok(tostring(st.loadError()):find('the saves folder ' .. abs .. ' cannot be written', 1, true) ~= nil,
+        'a missing folder is not created (FXServer cannot create folders on Linux): ' .. tostring(st.loadError()))
+    H.execute(('mkdir -p \'%s\''):format(abs)) -- the owner makes it
+    st = LoadStorage({ enabled = false, folder = abs })
     H.eq(st.mode(), 'files', 'enabled = false: files mode')
     H.eq(st.folder(), abs, 'an absolute folder is used as is')
-    H.ok(Exists(abs .. '/_tables.json') == false and st.loadError() == nil, 'a missing folder is created')
+    H.ok(Exists(abs .. '/_tables.json') == false and st.loadError() == nil, 'an empty folder made by hand is used')
     H.ok(_G.MySQL ~= savedMySQL and _G.MySQL.query and _G.MySQL.query.await, 'MySQL is the saves folder engine')
     H.eq(st.realMySQL, savedMySQL, 'the original MySQL is kept for other resources\' tables')
     H.ok(st.describe():find(abs, 1, true) ~= nil, 'describe() names the folder')
@@ -2594,6 +2610,7 @@ do
     local usedDb = setmetatable({ scalar = {
         await = function() return 6 end,
     } }, { __index = savedMySQL })
+    H.execute(('mkdir -p \'%s/runner\''):format(TMP))
     st = LoadStorage({ enabled = false, folder = TMP .. '/runner' }, usedDb)
     H.load('modules/migrations/server.lua')
     _G.print = realPrint
@@ -2640,6 +2657,7 @@ do
             n = n + 1
             local out = {}
             local folder = ('%s/first_%d'):format(TMP, n)
+            H.execute(('mkdir -p \'%s\''):format(folder))
             _G.print = function(...) out[#out + 1] = table.concat({ ... }, ' ') end
             CP.Storage = { MemSQL = M }
             _G.MySQL = real
@@ -2660,9 +2678,10 @@ do
                 },
             }
         end
-        local CALM = '[crimson-police] first start with the database off: created the saves folder '
+        local CALM = '[crimson-police] first start with the database off: the saves folder '
         local out, folder = Announce(Real('Table \'qbox.cp_schema_migrations\' doesn\'t exist'))
-        H.ok(out:find(CALM .. folder, 1, true) ~= nil, 'no Crimson-Police tables in the database: one calm line')
+        H.ok(out:find(CALM .. folder .. ' is empty, so Crimson-Police starts with no data', 1, true) ~= nil,
+            'no Crimson-Police tables in the database: one calm line')
         H.ok(not out:find(' is new, so ', 1, true), 'and no copy hint')
         out = Announce(Real(0))
         H.ok(out:find(CALM, 1, true) ~= nil and not out:find('storage copy', 1, true),
@@ -2724,20 +2743,43 @@ do
             and le:find('add_filesystem_permission', 1, true) ~= nil,
         'a folder outside the resource that cannot be written: ' .. le
     )
-    st = LoadStorage({ enabled = false, folder = 'afile' })
-    H.eq(st.loadError(), nil, '(a folder inside the resource is created)')
     local rp = H.resourcePath()
+    _G.print = function(...) errsW[#errsW + 1] = table.concat({ ... }, ' ') end
+    st = LoadStorage({ enabled = false, folder = 'afile' })
+    _G.print = realPrint
+    le = tostring(st.loadError())
+    H.ok(
+        le:find('the saves folder ' .. rp .. '/afile is missing: create it by hand inside the Crimson-Police folder', 1,
+            true)
+                ~= nil
+            and le:find('FXServer cannot create folders on Linux', 1, true) ~= nil,
+        'a missing folder inside the resource is not created: the owner is told to make it: ' .. le
+    )
     WriteFile(rp .. '/notdir', 'x')
     _G.print = function(...) errsW[#errsW + 1] = table.concat({ ... }, ' ') end
     st = LoadStorage({ enabled = false, folder = 'notdir/saves' })
     _G.print = realPrint
+    H.ok(tostring(st.loadError()):find('is missing: create it by hand', 1, true) ~= nil,
+        'a folder under a file is missing too: ' .. tostring(st.loadError()))
+    os.remove(rp .. '/notdir')
+    -- a folder that is there but cannot be written (wrong owner): named apart from a missing one
+    H.execute(('mkdir -p \'%s/ro\''):format(rp))
+    local realFsWrite = M.fs.write
+    M.fs.write = function(path, data)
+        if path:find(rp .. '/ro/', 1, true) == 1 then return nil, 'Permission denied' end
+        return realFsWrite(path, data)
+    end
+    _G.print = function(...) errsW[#errsW + 1] = table.concat({ ... }, ' ') end
+    st = LoadStorage({ enabled = false, folder = 'ro' })
+    _G.print = realPrint
+    M.fs.write = realFsWrite
     le = tostring(st.loadError())
     H.ok(
-        le:find('cannot be written (', 1, true) ~= nil
+        le:find('cannot be written (Permission denied)', 1, true) ~= nil
             and le:find('create it inside the Crimson-Police folder', 1, true) ~= nil,
         'a folder inside the resource that cannot be written names the reason: ' .. le
     )
-    os.remove(rp .. '/notdir')
+    os.execute(('rm -rf \'%s/ro\''):format(rp))
     os.execute(('rm -rf \'%s/afile\''):format(rp))
     -- a saves folder that cannot be read stops Crimson-Police without touching it
     WriteFile(TMP .. '/runner/officers.json', 'garbage')

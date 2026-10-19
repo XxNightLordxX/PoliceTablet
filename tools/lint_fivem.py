@@ -22,8 +22,10 @@ Rules (a hit prints `file:line: RULE message`):
                         default the server deletes them when no player is near.
   FX07 rename-answer    the answer of os.rename is read: FXServer's Linux build returns it inverted (its
                         LocalDevice::RenameFile returns rename() != 0), Windows does not.
-  FX08 execute-only     os.execute in a server function with no os.createdir: FXServer refuses every
-                        os.execute ("Permission denied"), so the command never runs.
+  FX08 folder-calls     os.execute in a server or shared script: FXServer refuses every os.execute ("Permission
+                        denied"), so the command never runs. os.createdir in a function with no U.isWindows()
+                        check: on Linux it makes the folder and then crashes the whole server (signal 11, pcall
+                        cannot catch it). Ship the folder and use CP.U.ensureFolder.
   FX09 arena-natives    SetPlayerTeam, NetworkSetFriendlyFireOption, SetCanAttackFriendly, a routing bucket
                         setter or CancelEvent (docs/CRIMSON_ARENA.md rules 9 to 11).
   FX10 loop-no-yield    a while / repeat loop where one pass can go round with no Wait (no yield, no break, return
@@ -328,11 +330,13 @@ def lint():
                     and not re.match(r'^\s*(pcall\s*\(\s*)?os\.rename\s*[(,].*\)\s*;?\s*$', code):
                 add(path, ln, 'FX07', "os.rename's answer is read: FXServer on Linux returns it inverted")
             # FX08
-            if side == 'server' and re.search(r'(?<![\w.:])os\.execute\s*\(|\bpcall\s*\(\s*os\.execute\b', code):
+            if side in ('server', 'shared') and re.search(r'(?<![\w.:])os\.execute\b', code):
+                add(path, ln, 'FX08', 'os.execute: FXServer refuses every os.execute, the command never runs')
+            if side in ('server', 'shared') and re.search(r'(?<![\w.:])os\.createdir\b', code):
                 fn = blocks.innermost_function(ln)
                 span = blank[fn[0] - 1:fn[1]] if fn else blank
-                if not any(re.search(r'\bos\.createdir\b', c) for c in span):
-                    add(path, ln, 'FX08', 'os.execute with no os.createdir: FXServer refuses every os.execute')
+                if not any(re.search(r'\bU\.isWindows\s*\(', c) for c in span):
+                    add(path, ln, 'FX08', 'os.createdir with no U.isWindows() check: it crashes a Linux FXServer')
             # FX09
             for m in ARENA.finditer(code):
                 add(path, ln, 'FX09', f'{m.group(1)} is forbidden (docs/CRIMSON_ARENA.md rules 9 to 11)')

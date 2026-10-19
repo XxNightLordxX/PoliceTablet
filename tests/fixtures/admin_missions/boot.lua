@@ -227,6 +227,11 @@ return function(H, name)
     -- a scratch export folder under missions/custom/ (tests/run.lua removes old test_* folders)
     X.exportDir = ('missions/custom/test_%s_%d/'):format(name, os.clock() * 1e6 // 1 + math.random(1, 1e6))
     Config.Builder.exportPath = X.exportDir
+    -- FXServer cannot create folders on Linux: the spec makes the export folder and the four inside it by hand, as
+    -- an owner does for an export path other than the shipped missions/custom/
+    for _, sub in ipairs({ '', 'archived/', 'overrides/', 'overrides/archived/', 'deleted/' }) do
+        H.execute(('mkdir -p \'%s%s%s\''):format(H.root, X.exportDir, sub))
+    end
 
     -- ---- THE RESOURCE ------------------------------------------------------
     do

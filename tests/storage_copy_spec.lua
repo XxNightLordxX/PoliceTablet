@@ -1126,6 +1126,14 @@ do
     expected = tonumber(r[1].n)
 end
 local copies = RowCount('SELECT COUNT(*) AS n FROM cp_audit WHERE action = \'storageCopy\'')
+-- the folder is not there yet: FXServer cannot create folders on Linux, so the copy names the folder to make by
+-- hand (os.createdir would crash the whole server: tests/harness.lua ends the spec if it is called)
+m0 = Mark()
+admin('storage', 'copy', 'database-to-files')
+H.ok(PrintedSince(m0, 'the folder ' .. folder2 .. ' is missing: create it by hand') ~= nil,
+    'Linux: a missing target folder is refused with the folder to create')
+H.eq(RowCount('SELECT COUNT(*) AS n FROM cp_audit WHERE action = \'storageCopy\''), copies, 'and nothing is copied')
+H.execute(('mkdir -p \'%s\''):format(folder2)) -- the owner makes it
 m0 = Mark()
 admin('storage', 'copy', 'database-to-files')
 out = OutputSince(m0)
@@ -1199,25 +1207,28 @@ admin('storage')
 H.ok(PrintedSince(m0, 'Saves folder: ' .. H.resourcePath() .. '/saves (not used') ~= nil,
     'saves = the folder inside the resource')
 
--- FXServer refuses os.execute (EACCES, it runs nothing) and has os.createdir (one folder per call): a missing
--- saves folder, its parent missing too, is still created for database-to-files
+-- Windows: os.createdir works there (one folder per call), so a missing saves folder, its parent missing too, is
+-- made for database-to-files; FXServer refuses os.execute everywhere (tests/harness.lua)
 do
-    local realExecute, realCreatedir = os.execute, os.createdir
+    local made = {}
+    H.fxOs = 'Windows'
     os.createdir = function(path)
-        if realExecute(('mkdir \'%s\' 2>/dev/null'):format((path:gsub('\'', '\'\\\'\'')))) then return true end
+        made[#made + 1] = path
+        if H.execute(('mkdir \'%s\' 2>/dev/null'):format((path:gsub('\'', '\'\\\'\'')))) then return true end
         return nil, path .. ': Directory already exists.'
     end
-    os.execute = function() return nil, 'Permission denied', 13 end
     local folder3 = H.resourcePath() .. '/fx saves/live'
     Config.Database.folder = folder3
     m0 = Mark()
     local okCopy, errCopy = pcall(admin, 'storage', 'copy', 'database-to-files')
-    os.execute, os.createdir = realExecute, realCreatedir
+    H.fxOs, os.createdir = 'Linux', H.fatalCreatedir
     out = OutputSince(m0)
     H.ok(okCopy, 'the copy ran (' .. tostring(errCopy) .. ')')
     local copied = out:match('Copied[^\n]*') or out:sub(1, 300)
     H.ok(out:find('Copied 25 tables', 1, true) ~= nil,
-        'FXServer: the missing folder is made with os.createdir (' .. copied .. ')')
+        'Windows: the missing folder is made with os.createdir (' .. copied .. ')')
+    H.eq(table.concat(made, ' | '), H.resourcePath() .. '/fx saves | ' .. folder3,
+        'only the two missing folders, the parent first')
     H.eq(#M.new({ store = M.folderStore(folder3) }):load():tableNames(), 26, 'and holds every table')
     Config.Database.folder = 'saves'
 end

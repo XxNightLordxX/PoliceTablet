@@ -1547,40 +1547,24 @@ local function OpenDatabase()
     return DatabaseSide(real, live)
 end
 
--- A folder the server can write to (created when missing, as CP.Storage does at start-up): os.createdir on
--- FXServer (its sandbox refuses os.execute), one folder per call so the parents first; mkdir elsewhere.
+-- A folder the server can write to: true, or false and the reason. FXServer cannot create a folder on Linux
+-- (CP.U.ensureFolder: os.createdir crashes the whole server there), so a copy into a missing saves folder asks the
+-- owner to create it by hand; only a Windows server makes it.
 local function WritableFolder(dir)
     local fs = CP.Storage.MemSQL.fs
-    local probe = dir .. '/.cp-write-test'
-    local function canWrite()
-        local ok, res = pcall(fs.write, probe, 'ok')
-        if not ok or not res then return false end
+    local ok, why = U.ensureFolder(dir, function(d)
+        local probe = d .. '/.cp-write-test'
+        local okW, res = pcall(fs.write, probe, 'ok')
+        if not okW or not res then return false end
         pcall(fs.remove, probe)
         return true
-    end
-    if canWrite() then return true end
-    if os and os.createdir then
-        local path = ''
-        for part, sep in dir:gmatch('([^/\\]*)([/\\]?)') do
-            path = path .. part
-            if part ~= '' then pcall(os.createdir, path) end
-            path = path .. sep
-        end
-    elseif os and os.execute then
-        local windows = package and package.config and package.config:sub(1, 1) == '\\'
-        local cmd
-        if windows then
-            cmd = ('mkdir "%s"'):format((dir:gsub('/', '\\')))
-        else
-            cmd = ('mkdir -p \'%s\''):format((dir:gsub('\'', '\'\\\'\'')))
-        end
-        pcall(os.execute, cmd)
-    end
-    return canWrite()
+    end)
+    if ok then return true end
+    return false, U.folderAdvice(dir, why)
 end
 
 -- The files side, or nil + errKey + vars. In database mode the saves folder is opened for this command only:
--- as a source it must hold Crimson-Police data, as a target it is created when missing.
+-- as a source it must hold Crimson-Police data, as a target it must be there and writable.
 local function OpenFiles(asTarget)
     local dir = SavesFolder()
     if StorageMode() == 'files' then
@@ -1595,8 +1579,9 @@ local function OpenFiles(asTarget)
     if not asTarget and not M.fs.exists(dir .. '/_tables.json') then
         return nil, 'admin.cmd.storage_folder_empty', { path = dir }
     end
-    if asTarget and not WritableFolder(dir) then
-        return nil, 'admin.cmd.storage_folder_error', { path = dir, error = 'the folder cannot be created or written' }
+    if asTarget then
+        local okW, why = WritableFolder(dir)
+        if not okW then return nil, 'admin.cmd.storage_folder_error', { path = dir, error = why } end
     end
     local engine = M.new({ store = M.folderStore(dir) })
     local ok, err = pcall(engine.load, engine)

@@ -737,6 +737,10 @@ end
 
 local function SafeExport(s)
     if s:find('..', 1, true) or s:find('//', 1, true) then return 'err.setting_path' end
+    -- FXServer cannot create folders on Linux: the folder and the four the Builder writes into must be there already
+    if CP.Builder and CP.Builder.missingExportDirs and #CP.Builder.missingExportDirs(s) > 0 then
+        return 'err.setting_export_folder'
+    end
     return nil
 end
 

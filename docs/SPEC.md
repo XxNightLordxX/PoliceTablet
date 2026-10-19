@@ -2434,6 +2434,10 @@ Crimson-Police/
   missions/builtin/<mission_id>.lua  one file per built-in mission
   missions/custom/<mission_id>.lua   one file per custom mission, written by the Mission Builder
   missions/custom/archived/          archived custom missions
+  missions/custom/overrides/         edited built-in missions (archived/ inside it)
+  missions/custom/deleted/           custom missions deleted for good (Bring back puts them back)
+  saves/_backups/, saves/exports/    backups and audit exports (every folder the resource writes ships with a .gitkeep:
+                                     the server cannot create folders on Linux)
   modules/<feature>/server.lua       one folder per feature (see the table below)
   modules/<feature>/client.lua       only where the feature has client code
   blocks/<block_id>/server.lua       one folder per objective block

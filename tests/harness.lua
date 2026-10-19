@@ -29,6 +29,47 @@ local REAL_TIME = os.time   -- H.boot fakes os.time(); the shadow engine runs on
 local TESTS = (debug.getinfo(1, 'S').source:match('^@(.*)/harness%.lua$') or 'tests') .. '/'
 local ROOT = (debug.getinfo(1, 'S').source:match('^@(.*)/tests/harness%.lua$') or '.') .. '/Crimson-Police/'
 H.root = ROOT
+-- The folder calls as FXServer on Linux answers them (FACTS W3, W7):
+-- - os.getenv('os') is 'Linux' (H.fxOs; a spec sets 'Windows' to check that branch);
+-- - os.createdir makes the folder and then kills the whole server with signal 11, which pcall cannot catch: here it
+--   ends the spec at once with exit code 139 and a CRASH line, so any call from resource code fails the suite;
+-- - os.execute is refused for the resource (nil, 'Permission denied', 13); the specs' own calls still run.
+H.fxOs = 'Linux'
+H.getenv = os.getenv
+os.getenv = function(name)
+    if name == 'os' then return H.fxOs end
+    return H.getenv(name)
+end
+H.fatalCreatedir = function(path)
+    print(
+        ('CRASH os.createdir(%s): on a Linux FXServer this kills the whole server (signal 11)'):format(tostring(path)))
+    print(H.debug.traceback('', 2))
+    io.stdout:flush()
+    os.exit(139)
+end
+os.createdir = H.fatalCreatedir
+H.execute = os.execute
+os.execute = function(...)
+    local info = H.debug.getinfo(2, 'S')
+    if info and info.source:sub(1, #ROOT + 1) == '@' .. ROOT then return nil, 'Permission denied', 13 end
+    return H.execute(...)
+end
+-- Every folder Crimson-Police writes into, as the resource ships them (each holds a .gitkeep or a file in git).
+H.SHIPPED_DIRS = {
+    'saves',
+    'saves/_backups',
+    'saves/exports',
+    'logos',
+    'missions/custom',
+    'missions/custom/archived',
+    'missions/custom/overrides',
+    'missions/custom/overrides/archived',
+    'missions/custom/deleted',
+}
+-- The shipped folders inside a test resource folder (what a fresh install has).
+function H.shipFolders(base)
+    for _, rel in ipairs(H.SHIPPED_DIRS) do H.execute(('mkdir -p \'%s/%s\''):format(base, rel)) end
+end
 H.storage = os.getenv('CP_TEST_STORAGE') or 'database'
 if H.storage == '' then H.storage = 'database' end
 if H.storage ~= 'database' and H.storage ~= 'files' and H.storage ~= 'shadow' then
@@ -2022,7 +2063,9 @@ function H.boot(opts)
         return s
     end
     _G.SaveResourceFile = function(_, path, data)
-        local f = assert(io.open(ROOT .. path, 'w'))
+        -- as FXServer: false when the folder is missing (it makes no folder)
+        local f = io.open(ROOT .. path, 'w')
+        if not f then return false end
         f:write(data)
         f:close()
         return true
@@ -2126,6 +2169,7 @@ function H.boot(opts)
     }
     _G.MySQL = (H.storage == 'files' and H.filesMySQL) or (H.storage == 'shadow' and H.shadowMySQL) or MySQL
     _G.GetResourcePath = function() return H.resourcePath() end
+    H.shipFolders(H.resourcePath())
     _G.joaat = function(s) return require('cjson') and (#tostring(s) * 2654435761) % 4294967296 end
     _G.GetHashKey = _G.joaat
 
@@ -2211,7 +2255,7 @@ end
 -- A fresh saves folder for H.db, built by the real migrations runner on the engine (files mode).
 function H.resetSaves()
     os.execute(('rm -rf \'%s\''):format(H.resourcePath()))
-    os.execute(('mkdir -p \'%s\''):format(H.savesDir()))
+    H.shipFolders(H.resourcePath())
     preBootDb = nil
     RunMigrations(Memsql().shim(FilesEngine(), { resource = 'Crimson-Police' }))
 end
@@ -2222,7 +2266,7 @@ function H.resetShadow()
     local r = TwinCall(('{"op":"reset","db":%s}'):format(Jstr(TwinName(H.db))))
     if not r.ok then error('shadow mode: the twin database could not be created: ' .. tostring(r.e), 2) end
     os.execute(('rm -rf \'%s\''):format(H.resourcePath()))
-    os.execute(('mkdir -p \'%s\''):format(H.savesDir()))
+    H.shipFolders(H.resourcePath())
     shadowEngines[H.db] = nil
     RunMigrations(MakePairMySQL())
 end

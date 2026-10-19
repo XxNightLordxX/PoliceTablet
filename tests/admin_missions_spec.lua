@@ -65,8 +65,13 @@ do
     H.eq(okD, true, 'Delete permanently: ' .. tostring(d2))
     H.eq(X.count('SELECT COUNT(*) AS n FROM cp_custom_missions WHERE id = ?', { customId }), 0, 'the row is gone')
     local folder = type(d2) == 'table' and d2.folder or ''
-    H.ok(folder:find(X.exportDir .. 'deleted/', 1, true) == 1 and X.exists(folder .. 'row.json'),
-        'its files and row are kept in deleted/<id>-<time>/')
+    H.ok(
+        folder:find(X.exportDir .. 'deleted/' .. customId .. '-', 1, true) == 1 and X.exists(folder .. 'row.json')
+            and X.exists(folder .. customId .. '.lua'),
+        'its files and row are kept in deleted/ as <id>-<time>__<file>: ' .. folder
+    )
+    H.ok(folder:sub(-2) == '__' and not folder:sub(#X.exportDir + #'deleted/' + 1):find('/', 1, true),
+        'no folder is made per deletion (FXServer cannot create one on Linux)')
     local deleted = X.cb('builder:deleted', 5)
     H.ok(deleted and #deleted.missions == 1 and deleted.missions[1].id == customId, 'the Deleted list shows it')
     local okU, u = X.act('server:builder:undeleteMission', 5, { folder = folder, reason = 'needed after all' })

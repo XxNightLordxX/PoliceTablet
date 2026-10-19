@@ -168,7 +168,8 @@ English is the only language.
 1. Download Crimson-Police. A GitHub download is a zip with a folder like `PoliceTablet-main` inside. That folder
    holds `Crimson-Police`, plus `docs`, `tests` and `tools`, which your server does not need.
 2. Drag **only the `Crimson-Police` folder** into your server's `resources` folder. A category folder is fine,
-   for example `resources/[police]/Crimson-Police`.
+   for example `resources/[police]/Crimson-Police`. Copy it whole, with its empty folders (each holds a `.gitkeep`
+   file): the server cannot create folders on Linux, so Crimson-Police uses the ones it ships.
 3. Check it: the file `resources/Crimson-Police/fxmanifest.lua` must exist (or
    `resources/[police]/Crimson-Police/fxmanifest.lua` in a category folder). If you see
    `Crimson-Police/Crimson-Police/fxmanifest.lua`, you copied one folder too high: move the inner folder up.
@@ -255,7 +256,7 @@ result. On a good install the console shows lines like these (the order can diff
 
 ```
 [crimson-police] storage: database off, data saved as files in the saves folder .../resources/Crimson-Police/saves
-[crimson-police] first start with the database off: created the saves folder .../resources/Crimson-Police/saves
+[crimson-police] first start with the database off: the saves folder .../resources/Crimson-Police/saves is empty, so Crimson-Police starts with no data
 [crimson-police] applied migration 001_initial.sql
 [crimson-police] applied migration 002_test_def_hash.sql
 ...
@@ -1675,7 +1676,9 @@ clean-up never archives a run whose money or item rewards are not finished, and 
   would replace existing data needs the typed word `REPLACE`; a payment either side made stays paid, and a row is
   never paid twice or taken back twice because of the copy). **Switch
   storage** picks the storage for the next start: back up, copy, switch (typed word `SWITCH`), then restart
-  Crimson-Police from txAdmin or the server console. The storage you leave is marked "left behind": if it is ever
+  Crimson-Police from txAdmin or the server console. A saves folder other than `saves` must be made by hand inside
+  the Crimson-Police folder first (the server cannot create folders on Linux); the switch refuses a folder that is
+  not there yet. The storage you leave is marked "left behind": if it is ever
   started again, nothing is paid or changed there, so nobody is paid twice. The choice is kept by the server, not in
   config.lua; `CrimsonPoliceAdmin storage mode reset` in the server console goes back to config.lua's
   `Config.Database`.
@@ -1906,10 +1909,11 @@ The last line of the start-up check is `Start-up check: all ... checks passed` o
 |---|---|
 | `Migration <file> failed. Crimson-Police will not start until it is fixed.` followed by `Statement: ...`, `Error: ...` and, for the usual errors, `How to fix it: ...` | Crimson-Police could not make its tables. Do what the "How to fix it" line says, then restart. Usual causes: the database user may not create or change tables, a wrong password, or the database can't be reached. Or set `Config.Database.enabled = false` to save to files |
 | `still waiting for the database after 30 seconds: oxmysql has not connected` | Check the oxmysql lines above it and `set mysql_connection_string` in server.cfg (user name, password, host, database name). Or set `Config.Database.enabled = false` |
-| `first start with the database off: created the saves folder ...` | Normal on a new install |
+| `first start with the database off: the saves folder ... is empty` | Normal on a new install |
 | `the saves folder ... is new, so Crimson-Police starts with no data` | You switched the database off on a server that has data in the database. Run `CrimsonPoliceAdmin storage copy database-to-files`, then restart ([6.5](#65-database-off-the-saves-folder)) |
 | `the database is new, but the saves folder holds data from running with the database off` | Run `CrimsonPoliceAdmin storage copy files-to-database`, then restart |
 | `the saves folder ... cannot be written` | Keep `folder = 'saves'` (inside the Crimson-Police folder) and make sure the server may write there |
+| `the saves folder ... is missing: create it by hand` | Make that folder by hand inside the Crimson-Police folder, then restart. The server cannot create folders on Linux (FXServer crashes when it tries), so Crimson-Police never does |
 | `the saves folder ... could not be read: ...` | A file in `saves/` is broken. The line names it. Put it back from a backup with the server stopped |
 | `saves/<file> is missing: ...` | A saves file was deleted. Put it back from a backup with the server stopped |
 | "Active mission runs: 2. Copy when every run has ended." | Wait until no mission runs, then copy again |
@@ -1952,7 +1956,8 @@ The last line of the start-up check is `Start-up check: all ... checks passed` o
 | `custom mission <id>: the edited file ... was not accepted` | A hand edit broke the mission. The old version stays live. Fix the file and run `/CrimsonPoliceAdmin reload` |
 | `custom mission <id>: field "<name>" in its Lua file is ignored` | Payouts can't be set in mission files. Use the Payouts screens |
 | `mission <id>: objective <n> names WEAPON_SMG, an automatic weapon: its NPCs carry WEAPON_COMBATPISTOL instead (Config.NpcCombat)` | Harmless: an older custom mission (or a `Config.MissionTweaks` entry) still names an automatic weapon, and its NPCs get the weapon named after "carry". To make the line go away, pick a pistol or a shotgun for it in the Mission Builder ([5.9](#59-how-hard-npcs-fight-back)) |
-| `the folder <folder> is missing and could not be created` | Make the folders `missions/custom/` and `missions/custom/archived/` by hand |
+| `the folder Crimson-Police/<folder> is missing: create it by hand` | Make that folder by hand. Crimson-Police ships every folder it writes (`missions/custom/` with `archived/`, `overrides/`, `overrides/archived/` and `deleted/` inside it, `saves/_backups/`, `saves/exports/`), each with an empty `.gitkeep` file, so a missing one usually means the copy left empty folders out: copy the whole Crimson-Police folder again. The server cannot create folders on Linux (FXServer crashes when it tries), so Crimson-Police never does |
+| `the folder Crimson-Police/<folder> is there but the server cannot write to it` | Give the user the server runs as write access to that folder |
 | `built-in mission <id> cannot be unregistered; turn it off in Config.DisabledMissions` | Use `Config.DisabledMissions` |
 | `cp_type_payouts has a payout for unknown mission type <type>; it is ignored` | Harmless. A type was removed from `Config.MissionTypes` |
 

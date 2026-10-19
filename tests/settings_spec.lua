@@ -512,6 +512,16 @@ do
     Err('Builder.exportPath', 'missions/custom/../../modules/', 'err.setting_text', 'no way out of it')
     Err('Builder.exportPath', 'missions/custom//x/', 'err.setting_path', 'nor an empty folder name')
     H.ok((Check('Builder.exportPath', 'missions/custom/server/')), 'a subfolder of missions/custom')
+    -- FXServer cannot create folders on Linux: a folder the Builder cannot write yet is refused (the Builder's own
+    -- check, tests/builder_server_spec.lua, is stood in for here)
+    local savedBuilder = CP.Builder
+    CP.Builder = {
+        missingExportDirs = function(p) return p == 'missions/custom/server/' and { p } or {} end,
+    }
+    Err('Builder.exportPath', 'missions/custom/server/', 'err.setting_export_folder',
+        'a folder that is not there yet is refused')
+    H.ok((Check('Builder.exportPath', 'missions/custom/')), 'the shipped folder is fine')
+    CP.Builder = savedBuilder
     Err('Profile.bannedWordsFile', '../server.cfg', 'err.setting_text', 'the banned-words file is a .txt')
     H.ok((Check('Profile.bannedWordsFile', false)), 'no banned-words file')
 end

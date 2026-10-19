@@ -123,26 +123,18 @@ local function CanWrite(dir)
     return true
 end
 
--- The folder, created when it is missing: os.createdir on FXServer (its sandbox refuses os.execute),
--- mkdir elsewhere. Returns true, or false and the reason.
+-- The saves folder: true, or false, the reason and 'missing' / 'readonly'. FXServer cannot create a folder on Linux
+-- (CP.U.ensureFolder: os.createdir crashes the whole server there), so saves/ ships with the resource and any other
+-- folder is made by the owner; only a Windows server makes a missing one.
 local function EnsureFolder(dir)
-    local ok, err = CanWrite(dir)
+    local reason
+    local ok, why = CP.U.ensureFolder(dir, function(d)
+        local okW, err = CanWrite(d)
+        if not okW then reason = err end
+        return okW
+    end)
     if ok then return true end
-    if os and os.createdir then
-        pcall(os.createdir, dir)
-    elseif os and os.execute then
-        local windows = package and package.config and package.config:sub(1, 1) == '\\'
-        local cmd
-        if windows then
-            cmd = ('mkdir "%s"'):format((dir:gsub('/', '\\')))
-        else
-            cmd = ('mkdir -p \'%s\''):format((dir:gsub('\'', '\'\\\'\'')))
-        end
-        pcall(os.execute, cmd)
-    end
-    local ok2, err2 = CanWrite(dir)
-    if ok2 then return true end
-    return false, err2 or err
+    return false, tostring(reason or 'cannot write'), why
 end
 
 -- The real database's answer to "does it hold Crimson-Police data?": true, false, or nil when it cannot tell.
@@ -159,8 +151,8 @@ local function DatabaseHasData(real)
 end
 
 -- A new saves folder: nothing comes over from the database by itself. When the database holds Crimson-Police data
--- (the database was switched off) the copy command is named; on a first install one calm line says the folder was
--- made. The database is asked once oxmysql is connected.
+-- (the database was switched off) the copy command is named; on a first install one calm line says the folder is
+-- empty. The database is asked once oxmysql is connected.
 local function AnnounceNewFolder()
     local path, real = folderPath, S.realMySQL
     CreateThread(function()
@@ -170,7 +162,9 @@ local function AnnounceNewFolder()
             Citizen.Await(p)
         end
         if DatabaseHasData(real) == false then
-            print(('[crimson-police] first start with the database off: created the saves folder %s'):format(path))
+            print(
+                ('[crimson-police] first start with the database off: the saves folder %s is empty, so Crimson-Police starts with no data'):format(
+                    path))
             return
         end
         local cmd = type(Config) == 'table' and type(Config.Tablet) == 'table' and Config.Tablet.adminCommand
@@ -215,9 +209,12 @@ local function Install()
     -- server thread for the whole query (with the database, oxmysql's await yields the same way)
     local wait = (Citizen and Citizen.Wait) or Wait
     if type(wait) == 'function' then db.slice = { wait = wait, ms = 4 } end
-    local okDir, whyNot = EnsureFolder(folderPath)
+    local okDir, whyNot, state = EnsureFolder(folderPath)
     if not okDir then
-        if OutsideResource(folderPath) then
+        if state == 'missing' and not OutsideResource(folderPath) then
+            loadError = ('the saves folder %s is missing: create it by hand inside the Crimson-Police folder (FXServer cannot create folders on Linux), make sure the server may write to it, and restart'):format(
+                folderPath)
+        elseif OutsideResource(folderPath) then
             loadError = ('the saves folder %s cannot be written (%s). FXServer only lets a resource write inside resource folders: set Config.Database.folder to a folder inside Crimson-Police (the default is \'saves\'), or give Crimson-Police write access to another resource with add_filesystem_permission'):format(
                 folderPath, whyNot)
         else

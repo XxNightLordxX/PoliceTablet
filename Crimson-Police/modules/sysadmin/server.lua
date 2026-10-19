@@ -118,37 +118,22 @@ local function FolderPath(folder)
     return Root() .. '/' .. folder
 end
 
--- A folder inside the resource the server can write to, created when missing: os.createdir on FXServer (its
--- sandbox refuses os.execute), mkdir elsewhere. true when it can be written.
+-- A folder inside the resource the server can write to (saves/_backups, saves/exports: both ship with the resource).
+-- FXServer cannot create a folder on Linux (CP.U.ensureFolder): a missing one is reported in the console for the
+-- owner to create by hand, and only a Windows server makes it. true when it can be written.
 local function EnsureDir(rel)
     local fs = Fs()
     if not fs then return false end
     local dir = Root() .. '/' .. rel
-    local probe = dir .. '/.cp-write-test'
-    local function canWrite()
-        local ok, res = pcall(fs.write, probe, 'ok')
-        if not ok or not res then return false end
+    local ok, why = U.ensureFolder(dir, function(d)
+        local probe = d .. '/.cp-write-test'
+        local okW, res = pcall(fs.write, probe, 'ok')
+        if not okW or not res then return false end
         pcall(fs.remove, probe)
         return true
-    end
-    if canWrite() then return true end
-    if os and os.createdir then
-        local path = Root()
-        for part in rel:gmatch('[^/]+') do
-            path = path .. '/' .. part
-            pcall(os.createdir, path)
-        end
-    elseif os and os.execute then
-        local windows = package and package.config and package.config:sub(1, 1) == '\\'
-        local cmd
-        if windows then
-            cmd = ('mkdir "%s"'):format((dir:gsub('/', '\\')))
-        else
-            cmd = ('mkdir -p \'%s\''):format((dir:gsub('\'', '\'\\\'\'')))
-        end
-        pcall(os.execute, cmd)
-    end
-    return canWrite()
+    end)
+    if not ok then CP.err(TAG, '%s', U.folderAdvice(('%s/%s'):format(CP.resource, rel), why)) end
+    return ok
 end
 
 local function ReadJson(path)
@@ -1003,6 +988,8 @@ function Sys.switchStorage(src, enabled, folder, startEmpty)
         folder = type(folder) == 'string' and U.trim(folder) or 'saves'
         if folder == '' then folder = 'saves' end
         if not (S and S.validFolder and S.validFolder(folder)) then return false, 'err.storage_folder' end
+        -- FXServer cannot create folders on Linux: a folder that is not there yet would stop the next start
+        if not EnsureDir(folder) then return false, 'err.storage_folder_missing' end
     else
         folder = nil
     end

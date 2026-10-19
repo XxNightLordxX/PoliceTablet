@@ -35,6 +35,7 @@
   "err.setting_order": "That would put the minimum above the maximum (see the matching setting).",
   "err.setting_options_default": "The options must keep the current default: change the default first.",
   "err.setting_sum_100": "These chances must add up to 100.",
+  "err.setting_export_folder": "That folder is not there yet. Create it by hand inside the Crimson-Police folder with archived, overrides, overrides/archived and deleted inside it (the server cannot create folders on Linux), then set it again.",
   "err.setting_path": "That path is not allowed.",
   "err.setting_json": "That is not valid JSON.",
   "err.settings_not_ready": "The settings are still loading. Try again in a moment.",

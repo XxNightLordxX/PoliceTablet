@@ -169,6 +169,19 @@ H.sql([[INSERT INTO cp_custom_missions (id, mission_type, status, file_path, cre
 files['missions/custom/my_mission.lua'] = 'return { id = "my_mission", version = 1 }'
 H.ok(S.set(1, 'Leaderboard.topN', 15), 'a setting changed before the backup')
 
+-- saves/_backups ships with the resource. When it is missing the backup is refused and the console names the folder
+-- to make by hand: FXServer cannot create folders on Linux (os.createdir crashes the whole server; tests/harness.lua
+-- ends the spec if it is called)
+do
+    local dir = GetResourcePath() .. '/saves/_backups'
+    H.execute(('rm -rf \'%s\''):format(dir))
+    local ok, e = Sys.backup(1, 'manual')
+    H.ok(ok == false and e == 'err.backup_folder', 'a missing backups folder is refused, no crash: ' .. tostring(e))
+    H.ok(CP.L('err.backup_folder'):find('Crimson-Police/saves/_backups is missing', 1, true) ~= nil,
+        'the message names the folder to create by hand')
+    H.execute(('mkdir -p \'%s\''):format(dir)) -- the owner makes it
+end
+
 local first
 do
     local ok, res = Act('server:admin:backupNow', 1, {})

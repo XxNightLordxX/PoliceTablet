@@ -81,8 +81,8 @@ end
 -- ============================================================================
 --                           TEMPORARY EXPORT FOLDER
 -- ============================================================================
--- Not created here: the builder must create a missing export folder and its archived/ itself (a fresh
--- clone has neither, and SaveResourceFile does not create folders).
+-- Not created at first: FXServer cannot create folders on Linux, so the builder must report a missing export folder
+-- (the spec checks the console line) and work once the folders are made by hand, as the owner would.
 local TMP = ('missions/custom/test_builder_%d/'):format(os.clock() * 1e6 // 1 + math.random(1, 1e6))
 Config.Builder.exportPath = TMP
 -- The test gate is off as shipped (testing is optional); most checks below are about the gate itself, so it is on
@@ -280,35 +280,57 @@ local function Body()
             local ok, r = pcall(os.rename, H.root .. rel, H.root .. rel)
             return ok and r == true
         end
-        H.ok(isDir(TMP) and isDir(TMP .. 'archived'),
-            'the builder creates a missing export folder and archived/ at start')
-        H.ok(FileExists('missions/custom/.gitkeep') and FileExists('missions/custom/archived/.gitkeep'),
-            'missions/custom/ and archived/ ship with a .gitkeep so a clone has them')
-        -- as on a Linux FXServer: os.rename answers inverted, os.execute is refused, os.createdir makes one folder
-        local realRename, realExecute, realErr = os.rename, os.execute, CP.err
-        local alarms = 0
+        -- as on a Linux FXServer (tests/harness.lua): os.createdir would crash the whole server, os.execute is
+        -- refused, os.rename answers inverted; the spec ends at once (exit 139) if the builder calls os.createdir
+        H.ok(not isDir(TMP), 'Linux: the missing export folder was not created at start')
+        local shipped = { '', 'archived/', 'overrides/', 'overrides/archived/', 'deleted/' }
+        local allShipped = true
+        for _, sub in ipairs(shipped) do
+            if not FileExists('missions/custom/' .. sub .. '.gitkeep') then allShipped = false end
+        end
+        H.ok(allShipped, 'missions/custom/ and the four folders the Builder writes into ship with a .gitkeep')
+        local realRename, realErr = os.rename, CP.err
+        local lines = {}
         os.rename = function(a, b)
             local ok = realRename(a, b)
             if ok then return nil, 'inverted' end
             return true
         end
-        os.execute = function() return nil, 'Permission denied' end
-        os.createdir = function(p) return realExecute(('mkdir \'%s\' 2>/dev/null'):format(p)) end
         CP.err = function(tag, fmt, ...)
-            if tostring(fmt):find('could not be created', 1, true) then alarms = alarms + 1 end
+            lines[#lines + 1] = tostring(fmt):format(...)
             return realErr(tag, fmt, ...)
         end
         local okFx, errFx = pcall(function()
-            H.ok(B.ensureExportDirs(), 'FXServer: the existing export folders are found')
-            H.eq(alarms, 0, 'FXServer: no false "could not be created" error for folders that exist')
-            realExecute(('rm -rf \'%s%s\''):format(H.root, TMP))
-            H.ok(B.ensureExportDirs(), 'FXServer: the missing export folders are created')
-            local function onDisk(rel) return realRename(H.root .. rel, H.root .. rel) == true end
-            H.ok(onDisk(TMP) and onDisk(TMP .. 'archived'), 'FXServer: they are on disk (os.createdir)')
+            H.eq(B.ensureExportDirs(), false, 'Linux: a missing export folder is reported, not created')
+            H.eq(#lines, 5, 'one console line for each of the five folders')
+            H.ok(
+                tostring(lines[1]):find('the folder Crimson-Police/' .. TMP .. ' is missing: create it by hand', 1,
+                    true)
+                        ~= nil
+                    and tostring(lines[1]):find('cannot create folders on Linux', 1, true) ~= nil,
+                'the line names the folder to create by hand: ' .. tostring(lines[1])
+            )
+            H.eq(#B.missingExportDirs(TMP), 5, 'missingExportDirs lists the five')
+            H.eq(#B.missingExportDirs('missions/custom/'), 0, 'and none for the shipped export folder')
+            for _, sub in ipairs(shipped) do H.execute(('mkdir -p \'%s%s%s\''):format(H.root, TMP, sub)) end
+            lines = {}
+            H.ok(B.ensureExportDirs(), 'once the owner made them by hand they are found')
+            H.eq(#lines, 0, 'with no console line')
+            -- Windows: the missing folders only, one level per call, the parents first
+            local made = {}
+            H.fxOs = 'Windows'
+            os.createdir = function(path)
+                made[#made + 1] = path
+                return H.execute(('mkdir \'%s\' 2>/dev/null'):format(path))
+            end
+            H.execute(('rm -rf \'%s%soverrides\''):format(H.root, TMP))
+            H.ok(B.ensureExportDirs(), 'Windows: the missing folders are made')
+            H.eq(table.concat(made, ' '),
+                ('%s/%soverrides %s/%soverrides/archived'):format(H.root:sub(1, -2), TMP, H.root:sub(1, -2), TMP),
+                'only the missing ones, one level per call')
         end)
-        os.rename, os.execute, os.createdir, CP.err = realRename, realExecute, nil, realErr
-        H.ok(okFx, 'FXServer folder checks ran: ' .. tostring(errFx))
-        if not isDir(TMP .. 'archived') then os.execute(('mkdir -p \'%s%sarchived\''):format(H.root, TMP)) end
+        H.fxOs, os.createdir, os.rename, CP.err = 'Linux', H.fatalCreatedir, realRename, realErr
+        H.ok(okFx, 'folder checks ran: ' .. tostring(errFx))
     end
     H.ok(CP.Missions.get('gang_shootout') ~= nil or CP.Missions.list()[1] ~= nil,
         'built-in missions loaded next to the builder')
@@ -1521,7 +1543,11 @@ local function Body()
         local okLt, lt = act(1, 'test', { id = id })
         H.ok(okLt and B.onDraftTested(id, lt.version, lt.tier, true, 1, drafts[#drafts].def.defHash),
             'the leftover draft passed its test')
-        os.execute(('rm -rf \'%s%sarchived\''):format(H.root, TMP)) -- archived/ went missing after start
+        H.execute(('rm -rf \'%s%sarchived\''):format(H.root, TMP)) -- archived/ went missing after start
+        H.eq(select(2, act(1, 'archive', { id = id })), 'err.builder_file_write',
+            'Linux: archiving into a missing archived/ is refused, the server does not crash')
+        H.ok(FileExists(TMP .. id .. '.lua') and row(id).status == 'published', 'the mission is left as it was')
+        H.execute(('mkdir -p \'%s%sarchived\''):format(H.root, TMP)) -- the owner makes it by hand
         local okAr, ar = act(1, 'archive', { id = id })
         H.ok(okAr and ar.filePath == TMP .. 'archived/' .. id .. '.lua', 'archive moves the file')
         H.ok(FileExists(TMP .. 'archived/' .. id .. '.lua') and not FileExists(TMP .. id .. '.lua'),

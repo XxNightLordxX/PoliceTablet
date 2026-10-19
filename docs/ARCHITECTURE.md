@@ -67,6 +67,12 @@ exposes that is not listed here is private to that module (keep it `local`).
     run only while the objective is current and the player is near; use `Wait(500+)` when idle.
 13. **Cleanup:** anything you create (blips, zones, target options, threads, markers, props,
     entities, keybinds) must be removed on the matching stop/cleanup call and on resource stop.
+    **Folders:** FXServer cannot create a folder on Linux: `os.createdir` makes it and then crashes the whole server
+    (signal 11, pcall cannot catch it), `SaveResourceFile` and `io.open` make none and `os.execute` is refused. So
+    every folder Crimson-Police writes ships with it (a `.gitkeep` each, kept by `.gitignore`), a file is never put
+    in a folder made at run time, and a folder is checked with `CP.U.ensureFolder(dir, canWrite) -> true | false,
+    'missing'|'readonly'` (only a Windows server makes a missing one) and reported with `CP.U.folderAdvice(dir,
+    why)`. tests/harness.lua ends a spec at once (exit 139) when resource code calls `os.createdir`.
 
 14. **Coexistence with Crimson-Arena** (a separate resource named `Crimson-Arena` that sc-dispatch and
     sc-ambulance also integrate with). Crimson-Police must never conflict with it:
@@ -128,7 +134,8 @@ PoliceTablet/                      (git repo)
     modules/storage/memsql.lua     CP.Storage.MemSQL: SQL engine + saves folder for database-off mode (server)
     modules/storage/server.lua     CP.Storage: picks MySQL/MariaDB or the saves folder (Config.Database)
     saves/                         database-off data (JSON documents, _tables.json); only README.md is committed;
-                                   saves/_backups/ (System → Backups, both storage modes), saves/exports/ (audit CSV)
+                                   saves/_backups/ (System → Backups, both storage modes), saves/exports/ (audit CSV),
+                                   both shipped empty with a .gitkeep
     blocks/<block_id>/server.lua + client.lua
     web/                           React 18 + TS + Vite; builds to web/dist (committed); README.md points to
                                    docs/WEB_UI.md
@@ -1383,7 +1390,11 @@ number may stay at or below its shipped value). `B.loadOverrides() -> { [id] = {
 baseHash, editedInCode } }` *(hook for CP.Missions.loadAll; empty while editBuiltins is off; a missing file is written
 again from the row)*, `B.shippedOf(id) -> { path, content, raw, hash }`, `B.editBuiltinsOn()`, `B.onTestHidden(missionId,
 defHash)` (a removed pass makes that draft untested again). `Begin()` lets admins past `Builder.enabled = false`.
-Deleted custom missions go to `<exportPath>deleted/<id>-<time>/` with `row.json` and an `index.json` list.
+Deleted custom missions go flat into `<exportPath>deleted/` as `<id>-<time>__<file>` and `<id>-<time>__row.json`, with
+an `index.json` list whose `folder` is that name prefix (no folder is made per deletion). The export folder and its
+`archived/`, `overrides/`, `overrides/archived/` and `deleted/` ship with a `.gitkeep`; `B.ensureExportDirs()` reports
+a missing one, and `B.missingExportDirs(path) -> { rel, ... }` is the Settings check of `Builder.exportPath` (a path
+whose folders are not there yet is refused with `err.setting_export_folder`).
 
 ### 5.29 CP.Storage (with CP.Storage.MemSQL) — modules/storage (S)
 Where Crimson-Police keeps its data (`Config.Database`). `enabled = true` (the default): MySQL/MariaDB through
@@ -1403,13 +1414,13 @@ code is `CP.Storage.MemSQL` (memsql.lua creates `CP.Storage` and puts it there).
   in the engine (only the migrations the saves folder has not recorded yet) and prints `storage: ...`.
 - **CP.Storage** (server): `mode() -> 'database'|'files'`, `name() -> 'database'|'saves folder'`,
   `folder() -> full path|nil` (files mode), `describe() -> text` (the runner's start-up line), `loadError() ->
-  text|nil` (a saves folder that could not be created, written or read: every statement then fails with that
+  text|nil` (a saves folder that is missing, cannot be written or cannot be read: every statement then fails with that
   text and nothing in the folder is changed; for a folder outside the resource it names FXServer's sandbox),
   `hasSavedData() -> bool` (the configured folder holds saves), `realMySQL` (oxmysql's `MySQL`, files mode), `db`
   (the engine, files mode), `MemSQL` (the engine's code). A new saves folder is announced on start, once oxmysql is
   connected (`realMySQL.ready`): when the real database holds Crimson-Police data (`cp_schema_migrations` has rows, or
   the database cannot tell) the warning names the storage copy command; when it has none (a first install with the
-  database off) one plain line says the folder was created. A new database next to a saves folder with data is
+  database off) one plain line says the folder is empty. A new database next to a saves folder with data is
   announced by the migrations runner, naming the storage copy command.
 - **The migrations runner** (`modules/migrations`, `CP.Migrations.ready() / isReady() / version()`): a failed statement
   stops the resource with the file, the statement and the driver's error, then one `How to fix it:` line for the usual

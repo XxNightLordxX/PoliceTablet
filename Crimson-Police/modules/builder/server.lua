@@ -736,61 +736,61 @@ local function ReadFile(path)
     return nil
 end
 
--- SaveResourceFile does not create folders, and a fresh clone may not have missions/custom/ or its
--- archived/ folder: create a missing folder (under the resource) before the first write into it.
--- A folder is there when a probe file can be written into it, as in CP.Storage: os.rename's answer cannot be
--- read (FXServer's Linux build returns it inverted), and FXServer refuses os.execute but has os.createdir.
-local function DirWritable(abs)
-    local probe = abs .. '/.cp-write-test'
-    local f = io.open(probe, 'wb')
-    if not f then return false end
-    f:close()
-    os.remove(probe)
-    return true
+-- SaveResourceFile does not create folders, and FXServer cannot create one on Linux (os.createdir crashes the whole
+-- server there, see CP.U.ensureFolder). So the export folder and the four folders inside it ship with the resource
+-- (each with a .gitkeep); a missing one is reported for the owner to create by hand, and only a Windows server makes it.
+-- A folder is there when a probe file can be written into it: os.rename's answer cannot be read (FXServer's Linux
+-- build returns it inverted).
+local function FolderOf(rel)
+    if type(rel) ~= 'string' or rel == '' then return nil end
+    if not rel:match('^[%w_%-%./]+$') or rel:find('..', 1, true) or rel:sub(1, 1) == '/' then
+        CP.err(TAG, 'refusing the export folder %q (only letters, digits, _ - . / are allowed)', rel)
+        return nil
+    end
+    if type(GetResourcePath) ~= 'function' then return nil end
+    local okBase, base = pcall(GetResourcePath, CP.resource)
+    if not okBase or type(base) ~= 'string' or base == '' then return nil end
+    return base:gsub('[/\\]+$', '') .. '/' .. rel:gsub('/+$', '')
 end
 
-local function EnsureDir(rel)
-    if type(rel) ~= 'string' or rel == '' then return false end
-    if not rel:match('^[%w_%-%./]+$') or rel:find('..', 1, true) or rel:sub(1, 1) == '/' then
-        CP.err(TAG, 'refusing to create the export folder %q (only letters, digits, _ - . / are allowed)', rel)
-        return false
+-- true, or false and 'missing' / 'readonly'. quiet = no console line (the Settings check asks before a change).
+local function EnsureDir(rel, quiet)
+    local abs = FolderOf(rel)
+    if not abs then return false, 'missing' end
+    local ok, why = U.ensureFolder(abs)
+    if ok then return true end
+    if not quiet then
+        CP.err(TAG, '%s. Until then publishing, archiving and deleting missions fail.',
+            U.folderAdvice(('%s/%s'):format(CP.resource, rel), why))
     end
-    if type(GetResourcePath) ~= 'function' then return false end
-    local okBase, base = pcall(GetResourcePath, CP.resource)
-    if not okBase or type(base) ~= 'string' or base == '' then return false end
-    local abs = base .. '/' .. rel:gsub('/+$', '')
-    if DirWritable(abs) then return true end
-    if os.createdir then
-        -- one folder per call: the parents first
-        local path = base
-        for part in rel:gmatch('[^/]+') do
-            path = path .. '/' .. part
-            pcall(os.createdir, path)
-        end
-    else
-        local windows = package and package.config and package.config:sub(1, 1) == '\\'
-        local cmd = windows and ('mkdir "%s" >NUL 2>&1'):format((abs:gsub('/', '\\')))
-            or ('mkdir -p \'%s\' >/dev/null 2>&1'):format(abs)
-        pcall(os.execute, cmd)
-    end
-    if DirWritable(abs) then
-        CP.log(TAG, 'created the missing folder %s', rel)
-        return true
-    end
-    CP.err(TAG,
-        'the folder %s is missing and could not be created: create it by hand, or publishing and archiving fail', rel)
-    return false
+    return false, why
+end
+
+-- The export folder and the four the Builder writes into, for an export path ('missions/custom/' as shipped).
+local function ExportDirsOf(p)
+    p = tostring(p or 'missions/custom/')
+    if p:sub(-1) ~= '/' then p = p .. '/' end
+    return { p, p .. 'archived/', p .. 'overrides/', p .. 'overrides/archived/', p .. 'deleted/' }
 end
 
 local function EnsureExportDirs()
-    local a = EnsureDir(ExportDir())
-    local b = EnsureDir(ExportDir() .. 'archived/')
-    local c = EnsureDir(OverrideDir())
-    local d = EnsureDir(OverrideDir() .. 'archived/')
-    local e = EnsureDir(DeletedDir())
-    return a and b and c and d and e
+    local all = true
+    for _, rel in ipairs(ExportDirsOf(ExportDir())) do
+        if not EnsureDir(rel) then all = false end
+    end
+    return all
 end
 B.ensureExportDirs = EnsureExportDirs
+
+-- The folders of an export path the server cannot write to yet (none: {}), without a console line: the Settings
+-- check of Builder.exportPath, since FXServer cannot create them on Linux.
+function B.missingExportDirs(p)
+    local out = {}
+    for _, rel in ipairs(ExportDirsOf(p)) do
+        if not EnsureDir(rel, true) then out[#out + 1] = rel end
+    end
+    return out
+end
 
 local function SaveOnce(path, content)
     local ok, res = pcall(SaveResourceFile, CP.resource, path, content, -1)
@@ -801,7 +801,7 @@ end
 local function WriteFile(path, content)
     local ok, why = SaveOnce(path, content)
     if not ok then
-        -- most likely a missing folder: create it and try once more
+        -- most likely a missing folder: made on Windows (reported on Linux), then one more try
         local dir = type(path) == 'string' and path:match('^(.*)/[^/]*$') or nil
         if dir and EnsureDir(dir .. '/') then ok, why = SaveOnce(path, content) end
     end
@@ -4265,8 +4265,11 @@ local function RegisterAdminActions()
         return true, { id = row.id, owner = p.citizenid }
     end, { rate = 2, reason = true, category = 'builder' })
 
-    -- Delete permanently: an archived custom mission's files go to <export>/deleted/<id>-<time>/ with its row as
-    -- row.json; nothing is erased, run history keeps the id, and Bring back puts it back as archived.
+    -- Delete permanently: an archived custom mission's files go flat into <export>/deleted/ (shipped), each named
+    -- <id>-<time>__<file name>, with its row as <id>-<time>__row.json; nothing is erased, run history keeps the id,
+    -- and Bring back puts it back as archived. No folder is made per deletion: FXServer cannot create one on Linux.
+    -- The index entry's folder is that name prefix (an entry from before this change names a real folder ending
+    -- in /, and folder .. name reads both).
     Kit.action('server:builder:deleteMission', 'missionAdmin', function(ctx)
         local id = ctx.payload.id
         if not ValidId(id) then return false, 'err.invalid_payload' end
@@ -4278,7 +4281,7 @@ local function RegisterAdminActions()
         if row.status ~= 'archived' then return false, 'err.builder_not_archived' end
         local inUse = missionInUse(id)
         if inUse then return false, inUse end
-        local folder = ('%s%s-%s/'):format(DeletedDir(), id, os.date('!%Y%m%d%H%M%S', Now()))
+        local folder = ('%s%s-%s__'):format(DeletedDir(), id, os.date('!%Y%m%d%H%M%S', Now()))
         local candidates = { row.filePath or ArchivedPathFor(id), FilePathFor(id), DraftBackupPathFor(id) }
         for n = 1, row.publishedVersion or 0 do candidates[#candidates + 1] = BackupPathFor(id, n) end
         local moved, seen = {}, {}
@@ -4389,7 +4392,7 @@ local function RegisterAdminActions()
             if type(f) == 'table' then RemoveFile(folder .. tostring(f.name)) end
         end
         RemoveFile(folder .. 'row.json')
-        RemoveFile(folder:gsub('/$', ''))
+        if folder:sub(-1) == '/' then RemoveFile((folder:gsub('/$', ''))) end
         table.remove(list, at)
         saveDeletedIndex(list)
         ctx.audit('missionUndelete', id, folder, 'archived')

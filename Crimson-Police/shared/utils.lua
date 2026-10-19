@@ -360,6 +360,85 @@ function U.clip(s, n)
 end
 
 -- ============================================================================
+--                               FOLDERS (server)
+-- ============================================================================
+-- FXServer cannot make a folder on Linux: os.createdir makes it and then kills the whole server with signal 11,
+-- which pcall cannot catch (LuaOS.cpp calls FindClose on an invalid handle after the mkdir, and the Linux build
+-- closedir()s it). SaveResourceFile and io.open make no folders and os.execute is refused. So every folder
+-- Crimson-Police writes ships with it (a .gitkeep keeps it in the download), and a missing one is reported for the
+-- owner to create by hand. Only on Windows, where that FindClose just fails, is a missing folder made.
+
+-- true on a Windows server (FXServer's os.getenv('os') answers 'Windows' or 'Linux').
+function U.isWindows()
+    local okE, name = pcall(os and os.getenv, 'os')
+    if okE and type(name) == 'string' then return name:find('^Windows') ~= nil end
+    return type(package) == 'table' and type(package.config) == 'string' and package.config:sub(1, 1) == '\\'
+end
+
+-- Something is at this path (on Linux io.open opens a folder too).
+local function PathThere(path)
+    local f = io and io.open(path, 'rb')
+    if not f then return false end
+    f:close()
+    return true
+end
+
+local function ProbeWrite(dir)
+    local probe = dir .. '/.cp-write-test'
+    local f = io and io.open(probe, 'wb')
+    if not f then return false end
+    local ok = f:write('ok')
+    f:close()
+    if os and os.remove then os.remove(probe) end
+    return ok ~= nil
+end
+
+-- A folder the server writes into: true when it can be written, else false and 'missing' or 'readonly'.
+-- canWrite(dir) says whether a probe file can be written there (each caller probes through the layer it writes
+-- with); the default writes and removes <dir>/.cp-write-test. On Windows the missing folders below the resource
+-- folder (or below the drive for a folder outside it) are made one level per call; on Linux nothing is made.
+function U.ensureFolder(dir, canWrite)
+    if type(dir) ~= 'string' or dir == '' then return false, 'missing' end
+    canWrite = canWrite or ProbeWrite
+    dir = dir:gsub('[/\\]+$', '')
+    if canWrite(dir) then return true end
+    if not U.isWindows() then
+        if PathThere(dir) then return false, 'readonly' end
+        return false, 'missing'
+    end
+    local createdir = os and os.createdir
+    if not createdir then return false, 'missing' end
+    local root = ''
+    if GetResourcePath and GetCurrentResourceName then
+        local okR, r = pcall(GetResourcePath, GetCurrentResourceName())
+        root = okR and type(r) == 'string' and r:gsub('[/\\]+$', '') or ''
+    end
+    root = root:gsub('\\', '/')
+    local inside = root ~= '' and dir:gsub('\\', '/'):sub(1, #root + 1) == root .. '/'
+    local path = ''
+    for part, sep in dir:gmatch('([^/\\]*)([/\\]?)') do
+        path = path .. part
+        local below = not inside or #path > #root
+        if part ~= '' and not part:match('^%a:$') and below and not PathThere(path) then
+            pcall(createdir, path)
+        end
+        path = path .. sep
+    end
+    if canWrite(dir) then return true end
+    return false, 'missing'
+end
+
+-- The console line for a folder U.ensureFolder refused (why = 'missing' or 'readonly').
+function U.folderAdvice(dir, why)
+    if why == 'readonly' then
+        return ('the folder %s is there but the server cannot write to it: give the user FXServer runs as write access to it'):format(
+            tostring(dir))
+    end
+    return ('the folder %s is missing: create it by hand (FXServer cannot create folders on Linux; Crimson-Police ships every folder it writes, so check that the whole resource folder was copied)'):format(
+        tostring(dir))
+end
+
+-- ============================================================================
 --                           THE MISSION FILE READER
 -- ============================================================================
 -- Mission files are data and are never run. Every text that becomes a mission is read here: the built-ins and

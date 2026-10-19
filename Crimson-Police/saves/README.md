@@ -11,5 +11,6 @@ When the database is off (`Config.Database.enabled = false` in `config/config.lu
 - To move your data between the database and this folder, use `CrimsonPoliceAdmin storage copy database-to-files` or `CrimsonPoliceAdmin storage copy files-to-database` in the server console, then switch `Config.Database.enabled` and restart Crimson-Police.
 - Or do it in game: Admin UI → **System** → **Storage** (Copy all data, Switch storage).
 - `_backups/` holds the backups made in Admin UI → **System** → **Backups** (with the database on too), and
-  `exports/` the audit log files saved with **Save to server**. Neither is ever sent to players. Copy `_backups/`
+  `exports/` the audit log files saved with **Save to server**. Both ship empty (with a `.gitkeep`): keep them, the
+  server cannot create folders on Linux. Neither is ever sent to players. Copy `_backups/`
   somewhere safe from time to time: a backup on the same disk does not survive a lost disk.

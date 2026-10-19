@@ -54,6 +54,10 @@ H.load('shared/locale.lua')
 local TMP = ('missions/custom/test_dup_%d/'):format(os.clock() * 1e6 // 1 + math.random(1, 1e6))
 Config.Builder.exportPath = TMP
 _G.GetResourcePath = function() return H.root:sub(1, -2) end
+-- FXServer cannot create folders on Linux: made by hand, as an owner does for an export path other than the shipped one
+for _, sub in ipairs({ '', 'archived/', 'overrides/', 'overrides/archived/', 'deleted/' }) do
+    H.execute(('mkdir -p \'%s%s%s\''):format(H.root, TMP, sub))
+end
 
 local function FileExists(rel)
     local f = io.open(H.root .. rel, 'r')
