@@ -83,6 +83,7 @@ three modes; times from then, one `mysql` process per statement):
 | 10.11.14 (local), 10.11.19 (`mariadb:10.11`) | pass, 0 differences | 64 / 33 / 79 s | |
 | 10.6.28 (`mariadb:10.6`) | pass, 0 differences | 65 / 34 / 78 s | |
 | 11.4.13 (`mariadb:11.4`) | pass, 0 differences | 224 / 61 / 235 s | 11.4 turns TLS on by default, so each new `mysql` connection paid a handshake: 43 ms instead of 8 ms |
+| 12.3.3 (`mariadb-server` 12.3.3 deb, 2026-10-19) | database mode: pass, 72 specs | db only | Qbox's recommended server. Before X10, 10 checks failed there: `FROM_UNIXTIME(0)` is NULL from 11.8, so an "all time" correction matched no row (the harness now plays that on 10.11) |
 
 11.4 also defaults to the `utf8mb4_uca1400_ai_ci` collation; nothing in the suite depends on it today.
 `setup_test_env.sh` warns on any series other than 10.11. The harness still reconnects for every call
@@ -410,6 +411,18 @@ packages, and the runner's own clock and zone (the specs do not read either). Th
   and crashes 9 specs. tests/mission_reader_spec.lua checks the reader:
   every shipped file and both Builder layouts read exactly as Lua reads them, hostile text and CfxLua's own syntax
   are refused at once with the line, and the caps hold.
+- **A database older than the one Qbox recommends**: the suite runs on MariaDB 10.11, while Qbox recommends 12.3.
+  From 11.8 MariaDB answers `FROM_UNIXTIME(0)` with NULL (before the TIMESTAMP range), so every "all time" correction
+  (Reset progression, Retire, voiding a whole operation, the forfeiture job) matched no row on the recommended server and
+  every spec passed. The harness now sends a value below 1 in `FROM_UNIXTIME(?)` as NULL, as 11.8 and newer read it
+  (tests/harness.lua `InFromUnixtime`; MariaDB's FROM_UNIXTIME page, and runs on 11.8.2, 11.8.9 and 12.3.3): with only
+  that change the old code fails 10 checks in tests/admin_officers_spec.lua and tests/admin_control_e2e_spec.lua, the
+  same 10 the suite failed on a real 12.3.3. The suite builds its databases utf8mb4, while txAdmin's recipe deployer
+  makes a Qbox database `CHARACTER SET utf8` (utf8mb3), where an emoji in a name or reason is refused (error 1366):
+  tests/foundation_spec.lua builds one like txAdmin, through the real runner, and checks the switch to utf8mb4. The
+  runner's server check is played with the answers real servers gave (tests/failed_start_spec.lua 1.5: MySQL 8.0.20,
+  MariaDB 10.2, MySQL 8.0.46, MariaDB 12.3). Shadow mode runs the runner's server statements on MariaDB alone, listed
+  as skips: the runner never sends them to the saves folder.
 - **Combat natives that took anything**: the specs recorded `SetPedAccuracy`, `TaskDriveBy` and friends without
   their argument types and never kept what they set, and nothing emulated `CancelEvent`, so none of the NPC combat
   settings the owner asked for (no automatic weapons, lower accuracy, slower fire, less damage, no headshot

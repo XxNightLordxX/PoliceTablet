@@ -23,16 +23,18 @@ end
 --                     1. MIGRATIONS (both storage engines)
 -- ============================================================================
 -- The real runner (modules/migrations/server.lua) in its own environment, on any MySQL table. files (optional)
--- replaces its FILES list, to play a server from before this build. Returns the runner's CP and its lines.
+-- replaces its FILES list, to play a server from before this build; storage (optional) is its CP.Storage (the
+-- database-only steps run with mode() 'database'). Returns the runner's CP and its lines.
 local RUNNER_SRC = ReadFile(H.root .. 'modules/migrations/server.lua')
 
-local function Runner(mysqlImpl, files)
-    local lines, errs = {}, {}
+local function Runner(mysqlImpl, files, storage)
+    local lines, errs, warns = {}, {}, {}
     local env = setmetatable({}, { __index = _G })
     env.CP = {
         err = function(_, fmt, ...) errs[#errs + 1] = tostring(fmt):format(...) end,
         log = function() end,
-        warn = function() end,
+        warn = function(_, fmt, ...) warns[#warns + 1] = tostring(fmt):format(...) end,
+        Storage = storage,
     }
     env.MySQL = mysqlImpl
     env.print = function(...) lines[#lines + 1] = table.concat({ ... }, ' ') end
@@ -66,8 +68,12 @@ local function Runner(mysqlImpl, files)
         local name = l:match('applied migration (%S+)')
         if name then applied[#applied + 1] = name end
     end
-    return { cp = env.CP, lines = lines, errs = errs, applied = applied }
+    return { cp = env.CP, lines = lines, errs = errs, warns = warns, applied = applied }
 end
+local DB_STORAGE = {
+    mode = function() return 'database' end,
+    name = function() return 'database' end,
+}
 
 local FILES = H.migrationFiles()
 H.eq(#FILES, 8, 'FILES lists 001-008')
@@ -321,11 +327,121 @@ if not H.skipIn('files', mariaOnly) and not H.skipIn('shadow', mariaOnly) then
         Mysql(('DROP DATABASE IF EXISTS %s; CREATE DATABASE %s CHARACTER SET utf8mb4;'):format(fdb, fdb))
     end
     Fresh()
-    local r = Runner(impl)
+    local r = Runner(impl, nil, DB_STORAGE)
     H.eq(#r.errs, 0, 'MariaDB: a fresh database migrates')
+    H.eq(#r.warns, 0, 'MariaDB: the server check passes with no warning')
     H.ok(SameList(r.applied, FILES), 'MariaDB: 001-008 applied once')
-    local r2 = Runner(impl)
+    local r2 = Runner(impl, nil, DB_STORAGE)
     H.eq(#r2.applied, 0, 'MariaDB: a second start applies nothing')
+
+    -- A database made by txAdmin's recipe deployer: CREATE DATABASE ... CHARACTER SET utf8 COLLATE utf8_general_ci
+    -- (txAdmin core/deployer/recipeEngine.js). Every cp_ table took utf8mb3 and refused an emoji (error 1366, the
+    -- whole write lost), in an officer's name from Qbox's charinfo or a reason typed in the Admin UI. oxmysql talks
+    -- utf8mb4; the harness' mysql CLI would default to latin1.
+    local realPopen = io.popen
+    io.popen = function(cmd, mode)
+        if type(cmd) == 'string' and cmd:match('^mysql %-uroot ') and not cmd:find('default%-character%-set', 1) then
+            cmd = cmd:gsub('^mysql %-uroot ', 'mysql --default-character-set=utf8mb4 -uroot ', 1)
+        end
+        return realPopen(cmd, mode)
+    end
+    local okU, errU = pcall(function()
+        local function Tables(db)
+            local out = {}
+            for _, t in
+                ipairs(H.sql((
+                    'SELECT table_name AS t, table_collation AS k FROM information_schema.tables '
+                    .. 'WHERE table_schema = \'%s\''
+                ):format(db)))
+            do
+                if tostring(t.t):sub(1, 3) == 'cp_' then out[tostring(t.t)] = tostring(t.k) end
+            end
+            return out
+        end
+        local function JsonCols(db)
+            return H.sql((
+                'SELECT table_name AS t, column_name AS c, collation_name AS k, is_nullable AS n '
+                .. 'FROM information_schema.columns WHERE table_schema = \'%s\' AND data_type = \'longtext\''
+            ):format(db))
+        end
+        local function Switched(run)
+            local n = 0
+            for _, l in ipairs(run.lines) do if l:find('switching it to utf8mb4', 1, true) then n = n + 1 end end
+            return n
+        end
+        Mysql(('DROP DATABASE IF EXISTS %s; CREATE DATABASE %s CHARACTER SET utf8 COLLATE utf8_general_ci;'):format(fdb,
+            fdb))
+        local ru = Runner(impl, nil, DB_STORAGE)
+        H.eq(#ru.errs + #ru.warns, 0, 'txAdmin\'s utf8 database: migrates with no error or warning')
+        local tables, native = Tables(fdb), Tables(base)
+        local count, wrong = 0, {}
+        for name, k in pairs(tables) do
+            count = count + 1
+            if k ~= native[name] then wrong[#wrong + 1] = name .. '=' .. k end
+        end
+        H.ok(count >= 20 and count == Switched(ru),
+            ('each of the %d cp_ tables is switched once, with one line'):format(count))
+        H.eq(table.concat(wrong, ', '), '',
+            'every cp_ table has the collation a utf8mb4 database gives it (' .. tostring(native.cp_officers) .. ')')
+        local jsonWrong, jsonCount, valueJson = {}, 0, nil
+        for _, c in ipairs(JsonCols(fdb)) do
+            jsonCount = jsonCount + 1
+            if c.k ~= 'utf8mb4_bin' then jsonWrong[#jsonWrong + 1] = c.t .. '.' .. c.c .. '=' .. tostring(c.k) end
+            if c.t == 'cp_settings' and c.c == 'value_json' then valueJson = c.n end
+        end
+        H.ok(jsonCount >= 10 and #jsonWrong == 0,
+            ('the %d JSON columns stay utf8mb4_bin, as in a utf8mb4 database: %s'):format(jsonCount,
+                table.concat(jsonWrong, ', ')))
+        H.eq(valueJson, 'NO', 'cp_settings.value_json stays NOT NULL')
+        local okBad = pcall(On(function()
+            H.sql('INSERT INTO cp_settings (setting_key, value_json) VALUES (\'x.bad\', \'not json\')')
+        end))
+        H.eq(okBad, false, 'a JSON column still refuses text that is not JSON')
+        local okName, errName = pcall(On(function()
+            H.sql('INSERT INTO cp_officers (citizenid, display_name) VALUES (\'UTF8MB4A\', \'\u{1F31F} Kim Lee\')')
+            H.sql(
+                'INSERT INTO cp_audit (actor, role, action, reason) VALUES (\'console\', \'console\', \'note\', '
+                    .. '\'refund \u{1F600}\')'
+            )
+        end))
+        H.ok(okName, 'an officer name and an audit reason with emoji are saved: ' .. tostring(errName))
+        local back = On(function()
+            return H.sql('SELECT display_name AS d FROM cp_officers WHERE citizenid = \'UTF8MB4A\'')
+        end)()
+        H.eq(back[1] and back[1].d, '\u{1F31F} Kim Lee', 'and read back as written')
+        local again = Runner(impl, nil, DB_STORAGE)
+        H.eq(Switched(again) + #again.warns + #again.errs, 0, 'the next start switches nothing')
+        -- a switch that stopped between its two steps (JSON columns left with the table's collation): mended
+        On(function() H.sql('ALTER TABLE cp_settings CONVERT TO CHARACTER SET utf8mb4') end)()
+        local mended = Runner(impl, nil, DB_STORAGE)
+        local after = nil
+        for _, c in ipairs(JsonCols(fdb)) do if c.t == 'cp_settings' then after = c.k end end
+        H.ok(Switched(mended) == 0 and after == 'utf8mb4_bin',
+            'JSON columns left case-insensitive go back to utf8mb4_bin')
+        -- files mode never asks: the saves folder engine has no server or character sets
+        local asked = {}
+        local spy = {
+            query = {
+                await = function(sql, p)
+                    if sql:find('VERSION()', 1, true) or sql:find('information_schema', 1, true) then
+                        asked[#asked + 1] = sql:sub(1, 60)
+                    end
+                    return impl.query.await(sql, p)
+                end,
+            },
+            insert = impl.insert,
+            scalar = impl.scalar,
+        }
+        Runner(spy, nil, {
+            mode = function() return 'files' end,
+            name = function() return 'saves folder' end,
+        })
+        H.eq(table.concat(asked, ' | '), '', 'with the database off the runner asks the server nothing')
+        Runner(spy, nil, DB_STORAGE)
+        H.ok(#asked == 2, 'with it on: the version check and the character sets, one statement each')
+    end)
+    io.popen = realPopen
+    if not okU then error(errU, 0) end
     Fresh()
     Pipe('001_initial.sql')
     Pipe('002_test_def_hash.sql')

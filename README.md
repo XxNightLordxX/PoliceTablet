@@ -153,7 +153,14 @@ English is the only language.
   | `sc-npcpolice` | Nothing changes. With it, its NPC calls never end a mission |
   | `Crimson-Arena` | Nothing changes. With it, players in the arena can't use the tablet, and both run side by side |
 
-- **A database** (MySQL or MariaDB through oxmysql). Crimson-Police was tested on MariaDB. With the database on,
+- **A database**: the MariaDB your Qbox server already uses, through oxmysql. Qbox asks for MariaDB 10.9 or newer
+  and does not support MySQL; Crimson-Police itself needs MariaDB 10.3 or newer and is tested on 10.11 and 12.3
+  (the version Qbox recommends). To see yours, run `SELECT VERSION();` on the database named in
+  `set mysql_connection_string` (HeidiSQL, phpMyAdmin or your host's panel). On an older server Crimson-Police does
+  not start with the database on, and the console says why and what to do. On MySQL it starts with a warning. A
+  database made by txAdmin's recipe uses the older `utf8` character set, which can't hold emoji: on its first start
+  with the database on, and in a `storage copy files-to-database`, Crimson-Police switches its own tables to
+  `utf8mb4` (one console line per table), so names and reasons with emoji are kept. With the database on,
   your database user must be allowed to create and change tables (if your host asks: the CREATE, ALTER and INDEX
   rights, plus the usual SELECT, INSERT, UPDATE and DELETE). With the database off (as shipped, see
   [5.5](#55-the-two-switches-at-the-top-debug-and-storage)), Crimson-Police saves to files instead and needs
@@ -260,13 +267,15 @@ result. On a good install the console shows lines like these (the order can diff
 [crimson-police] applied migration 001_initial.sql
 [crimson-police] applied migration 002_test_def_hash.sql
 ...
-[crimson-police] Crimson-Police saves folder at version 6
+[crimson-police] Crimson-Police saves folder at version 8
 [crimson-police] missions loaded: 19 built-in, 0 custom, 0 rejected
 [crimson-police] Start-up check: all 18 checks passed. Type CrimsonPoliceAdmin check in the server console to see them
 ```
 
 - With the database on, the first line reads `storage: MySQL/MariaDB through oxmysql`, the "first start" line is
-  not there, and the version line reads `Crimson-Police database at version 6`.
+  not there, and the version line reads `Crimson-Police database at version 8`. On a database made by txAdmin's
+  recipe, the first start after this update also prints one `cp_... is utf8mb3_general_ci: switching it to utf8mb4
+  (once)` line per table.
 - The `applied migration` lines only show on the first start and after an update. A migration is Crimson-Police
   creating or upgrading its own tables.
 - The number of checks on the last line depends on your setup.
@@ -673,7 +682,9 @@ Config.Database = {
   3. Restart Crimson-Police. It makes its own tables on the first start (there is no SQL to import). The console
      then says `storage: MySQL/MariaDB through oxmysql`.
 - Both work the same for players. Switching does not move your data by itself: on a server that already has data,
-  read "Switching on a server that already has data" in [6.5](#65-database-off-the-saves-folder) first.
+  read "Switching on a server that already has data" in [6.5](#65-database-off-the-saves-folder) first. The copy to
+  the database switches its tables to `utf8mb4` too, so on a database made by txAdmin's recipe the names and reasons
+  with emoji in your saves folder come along.
 
 ### 5.6 Other settings you may want to change
 
@@ -975,7 +986,8 @@ then copy, then switch and restart:
 - From the database to the saves folder: `CrimsonPoliceAdmin storage copy database-to-files`, then set
   `Config.Database.enabled = false` and restart Crimson-Police.
 - From the saves folder to the database: `CrimsonPoliceAdmin storage copy files-to-database` (missing tables are
-  made first), then set `Config.Database.enabled = true` and restart Crimson-Police.
+  made first, and switched to `utf8mb4` on a database made by txAdmin's recipe, one console line each), then set
+  `Config.Database.enabled = true` and restart Crimson-Police.
 
 The copy:
 
@@ -1935,6 +1947,10 @@ The last line of the start-up check is `Start-up check: all ... checks passed` o
 | `Migration <file> failed. Crimson-Police did not start.` followed by `Statement: ...`, `Error: ...`, for the usual errors `How to fix it: ...`, and `Crimson-Police stays started but refuses every request until it starts ...` | Crimson-Police could not make its tables (or read its saves folder). Do what the "How to fix it" line says, then type `ensure Crimson-Police` in the server console (or restart it in txAdmin). Usual causes: the database user may not create or change tables, a wrong password, or the database can't be reached. Or set `Config.Database.enabled = false` to save to files. FXServer never lets a resource stop itself, so Crimson-Police shows as started in txAdmin meanwhile: the tablet answers "Crimson-Police did not start" at once, every request is refused, and nothing is read or written. In the server console only `CrimsonPoliceAdmin check` and `CrimsonPoliceAdmin storagemode reset` (also `storage mode reset`) still work |
 | `This is the storage switched to in Admin UI → System. To go back to config.lua's Config.Database, type "CrimsonPoliceAdmin storagemode reset" ...` | The storage switched to in game cannot start (for example a saves folder with a damaged file, or a database user without rights). Type `CrimsonPoliceAdmin storagemode reset` in the server console (it answers `The storage chosen in game is cleared ...`), then `ensure Crimson-Police`: it starts on config.lua's `Config.Database` |
 | `Crimson-Police did not start (the console lines above say why). Only "... check" and "... storagemode reset" work ...` | You typed another `CrimsonPoliceAdmin` command (or opened the Admin UI in game) after a failed start. Fix what the start-up lines say, then `ensure Crimson-Police` |
+| `The database server is <version>. Crimson-Police needs MariaDB 10.3 or newer ...` followed by `How to fix it: update the database server to MariaDB 10.9 or newer ...` | The database server is too old: it has no JSON_VALUE, or reads it differently, and every payment uses it. Nothing was touched. Update to MariaDB 10.9 or newer (Qbox's minimum; your host may offer it), or set `Config.Database.enabled = false` to save to files. Then `ensure Crimson-Police` |
+| `the database server is MySQL <version>. Qbox does not support MySQL ...` | A warning: Crimson-Police starts, but Qbox is made for MariaDB, and on MySQL, once an officer has a cooldown clear, cap raise or extra boss attempt, the next one is refused, and a storage copy to the saves folder can reuse a deleted run's id. Move to MariaDB when you can |
+| `cp_<table> is utf8mb3_general_ci: switching it to utf8mb4 (once), so names and reasons with emoji are kept` | Normal, once per table, on a database made by txAdmin's recipe (its `utf8` character set can't hold emoji): on the first start with the database on, or in a `storage copy files-to-database`. A big `cp_mission_runs` can take a while; let it finish |
+| `cp_<table> could not be switched to utf8mb4, so names and reasons with emoji cannot be saved in it: ...` | Give the database user the ALTER right (the line's "How to fix it" says which), then restart. Until then a name or reason with an emoji in that table is not saved |
 | `still waiting for the database after 30 seconds: oxmysql has not connected` | Check the oxmysql lines above it and `set mysql_connection_string` in server.cfg (user name, password, host, database name). Or set `Config.Database.enabled = false` |
 | `first start with the database off: the saves folder ... is empty` | Normal on a new install |
 | `the saves folder ... is new, so Crimson-Police starts with no data` | You switched the database off on a server that has data in the database. Run `CrimsonPoliceAdmin storage copy database-to-files`, then restart ([6.5](#65-database-off-the-saves-folder)) |

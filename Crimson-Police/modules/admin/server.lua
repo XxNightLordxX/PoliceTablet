@@ -1898,6 +1898,12 @@ local function StorageCopy(src, direction, force)
     -- 2. the target's tables: the migrations the source has, then every source table and column must be there
     local okM, applied, mVars = MigrateTarget(source, target, srcSchema, tgtSchema)
     if not okM then return Reply(src, 'error', applied, mVars) end
+    -- a database made by txAdmin's recipe is utf8 (utf8mb3): the cp_ tables the copy just made, or ones no
+    -- database-mode start has switched yet, refuse every emoji in a name or reason. They are switched to utf8mb4 as
+    -- the start does (CP.Migrations._utf8mb4Tables, one console line each), before any row is written.
+    if target.kind == 'database' and Has('Migrations', '_utf8mb4Tables') then
+        CP.Migrations._utf8mb4Tables(target.rows)
+    end
     if applied > 0 then tgtSchema = target.schema() end
     for _, name in ipairs(tables) do
         local t = tgtSchema.tables[name]

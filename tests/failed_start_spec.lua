@@ -26,12 +26,12 @@ local RUNNER_SRC = ReadFile(H.root .. 'modules/migrations/server.lua')
 -- MySQL.ready's callback) and the StopResource calls.
 local function Runner(mysqlImpl, opts)
     opts = opts or {}
-    local r = { errs = {}, stops = {} }
+    local r = { errs = {}, stops = {}, warns = {} }
     local env = setmetatable({}, { __index = _G })
     env.CP = {
         err = function(_, fmt, ...) r.errs[#r.errs + 1] = tostring(fmt):format(...) end,
         log = function() end,
-        warn = function() end,
+        warn = function(_, fmt, ...) r.warns[#r.warns + 1] = tostring(fmt):format(...) end,
         resource = 'Crimson-Police',
         Storage = opts.storage,
         Sysadmin = opts.sysadmin,
@@ -194,6 +194,92 @@ do
     H.eq(table.concat(order, ', '), 'the start-up lock, a waiting payment',
         'the start-up locks are taken before the thread that waited goes on')
     H.eq(r.M.failed(), nil, 'and failed() is nil')
+end
+
+do
+    -- 1.5 the database server (FIXPLAN S10). A server is played as the real ones answered the runner's probe
+    -- (VERSION(), JSON_VALUE of a string and of a JSON null; run on each server: MySQL 8.0.20 has no JSON_VALUE,
+    -- MariaDB 10.2 reads a JSON null as the text 'null', oxmysql hands IS NULL over as the number 1 or 0).
+    local DATABASE = {
+        mode = function() return 'database' end,
+        name = function() return 'database' end,
+    }
+    -- oxmysql's error text: "<resource> was unable to execute a query!\nQuery: ...\n[params]\n<message>"
+    local function OxError(sql, message)
+        return ('Crimson-Police was unable to execute a query!\nQuery: %s\n[]\n%s'):format(sql, message)
+    end
+    local function Server(version, probe)
+        local db, sent = Db(), {}
+        local answer = db.query.await
+        db.query.await = function(sql, ...)
+            sent[#sent + 1] = sql
+            if Contains(sql, 'JSON_VALUE(') then
+                if type(probe) == 'string' then error(OxError(sql, probe), 0) end
+                return { { v = version, a = probe.a, n = probe.n } }
+            end
+            if Contains(sql, 'SELECT VERSION()') then return { { v = version } } end
+            return answer(sql, ...)
+        end
+        local r = Runner(db, { storage = DATABASE })
+        r.connect()
+        r.sent = sent
+        return r
+    end
+    local function Touched(r)
+        for _, sql in ipairs(r.sent) do if Contains(sql, 'cp_schema_migrations') then return true end end
+        return false
+    end
+
+    -- MySQL 8.0.20: "FUNCTION <database>.JSON_VALUE does not exist", so every payment would fail half way
+    local old = Server('8.0.20', 'FUNCTION qbox.JSON_VALUE does not exist')
+    H.eq(old.M.failed(), 'the database server is too old', 'MySQL 8.0.20: the start fails, named')
+    H.ok(AnyContains(old.errs, 'The database server is MySQL 8.0.20. Crimson-Police needs MariaDB 10.3 or newer'),
+        'the console names the server and what Crimson-Police needs')
+    H.ok(
+        AnyContains(old.errs, 'How to fix it: update the database server to MariaDB 10.9 or newer')
+            and AnyContains(old.errs, 'Config.Database.enabled = false'),
+        'and how to fix it: MariaDB, or the saves folder'
+    )
+    H.ok(AnyContains(old.errs, 'type "ensure Crimson-Police" in the server console'), 'and how to come back')
+    H.eq(Touched(old), false, 'no table is touched on that server')
+    H.eq(#old.stops, 0, 'and no self-stop is asked for (FXServer refuses it)')
+    local okR, errR = pcall(old.M.ready)
+    H.ok(not okR and errR == 'err.not_started', 'every request is refused with err.not_started')
+
+    -- MariaDB 10.2: JSON_VALUE reads a JSON null as 'null' (the Payments screen and the payment steps read NULL)
+    local m102 = Server('10.2.44-MariaDB-1:10.2.44+maria~bionic', { a = 'b', n = 0 })
+    H.ok(m102.M.failed() ~= nil and AnyContains(m102.errs, 'The database server is 10.2.44-MariaDB'),
+        'MariaDB 10.2: refused too, named as it is')
+
+    -- MySQL 8.0.21 and newer has everything: it starts, with one warning (Qbox does not support MySQL)
+    local mysql = Server('8.0.46-0ubuntu0.24.04.4', { a = 'b', n = 1 })
+    H.eq(mysql.M.isReady(), true, 'MySQL 8.0.46: it starts')
+    H.ok(
+        #mysql.warns == 1 and Contains(mysql.warns[1], 'the database server is MySQL 8.0.46-0ubuntu0.24.04.4')
+            and Contains(mysql.warns[1], 'Qbox does not support MySQL'),
+        'with one warning that says Qbox wants MariaDB'
+    )
+
+    -- the MariaDB Qbox recommends: no line at all
+    local m123 = Server('12.3.3-MariaDB-ubu2404', { a = 'b', n = 1 })
+    H.ok(m123.M.isReady() and #m123.warns == 0 and #m123.errs == 0, 'MariaDB 12.3: it starts, nothing said')
+
+    -- a server that does not answer (oxmysql's text holds the probe, JSON_VALUE and all) is left to the migrations,
+    -- which name the usual errors
+    local downDb = Db({ CREATE = 'connect ECONNREFUSED 127.0.0.1:3306' })
+    local answerDown = downDb.query.await
+    downDb.query.await = function(sql, ...)
+        if Contains(sql, 'SELECT VERSION()') then error(OxError(sql, 'connect ECONNREFUSED 127.0.0.1:3306'), 0) end
+        return answerDown(sql, ...)
+    end
+    local down = Runner(downDb, { storage = DATABASE })
+    down.connect()
+    H.ok(
+        Contains(down.M.failed(), 'migration cp_schema_migrations failed')
+            and AnyContains(down.errs, 'cannot reach the database server')
+            and not AnyContains(down.errs, 'The database server is'),
+        'no answer: the migration error and its fix'
+    )
 end
 
 -- ============================================================================

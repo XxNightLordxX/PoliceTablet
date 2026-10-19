@@ -1548,6 +1548,23 @@ code is `CP.Storage.MemSQL` (memsql.lua creates `CP.Storage` and puts it there).
   clean-up and the admin job resume already see them; each of those also reads the lock after its wait for the store. When oxmysql has not connected 30 s after start (it waits without a word) one warning names
   `set mysql_connection_string` and `Config.Database.enabled = false` (database mode only: the saves folder never
   waits for oxmysql).
+- **The database server** (database mode only, `CP.Storage.mode() == 'database'`; the saves folder engine has no
+  server version or character sets): before the first table statement the runner sends one probe, `SELECT VERSION(),
+  JSON_VALUE('{"a":"b"}', '$.a'), JSON_VALUE('{"a":null}', '$.a') IS NULL`. A server without JSON_VALUE (MySQL before
+  8.0.21) or one that reads a JSON null as the text `null` (MariaDB 10.2) fails the start (`failed()` = 'the database
+  server is too old', the server named, the fix: MariaDB 10.9 or newer, Qbox's minimum, or the saves folder): every
+  payment step uses JSON_VALUE, so it would fail half way. MySQL that has it starts with one warning (Qbox does not
+  support MySQL; on MySQL, once an officer has a cooldown clear, cap raise or extra boss attempt, the next is
+  refused, as LiveCtl's marker compare-and-set never matches a JSON column, and a copy to the saves folder can reuse
+  a deleted run id, as MySQL caches information_schema's AUTO_INCREMENT). A server that does not answer is left to
+  the migrations' own errors. After the migrations, every cp_ table whose collation is not utf8mb4 (txAdmin's recipe
+  deployer makes the database `CHARACTER SET utf8`, so every table took utf8mb3 and refused emoji) gets `ALTER TABLE
+  ... CONVERT TO CHARACTER SET utf8mb4`, one console line each, and its JSON columns (LONGTEXT on MariaDB; no other
+  cp_ column is) go back to `utf8mb4_bin` as a utf8mb4 database makes them. A table that cannot be switched is a
+  warning and the start goes on. Only cp_ tables are touched. `storage copy files-to-database` runs the same switch
+  (`CP.Migrations._utf8mb4Tables(target.rows)`, oxmysql's query, as in files mode `MySQL` is the saves folder
+  engine) after it makes the target's tables and before it writes a row, so a saves folder with emoji copies into
+  txAdmin's database.
 - **CP.Storage.MemSQL** (server; it also runs under plain lua5.4 in the tests, with the global `json`):
   `new({ store }) -> db`; `db:exec(sql, params) -> { kind = 'rows', cols, types, rows, n } | { kind = 'write',
   affected, changed, insertId, info, warnings }`, synchronous and atomic (a failing statement changes nothing),

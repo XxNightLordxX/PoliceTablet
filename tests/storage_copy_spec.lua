@@ -1062,6 +1062,60 @@ H.eq(EngineCount(
     'SELECT COUNT(*) AS n FROM cp_audit WHERE action = \'storageCopy\' AND target = \'files-to-database\''
 ), 1, 'and in the storage in use')
 
+-- files-to-database into a database made by txAdmin's recipe: CREATE DATABASE ... CHARACTER SET utf8 COLLATE
+-- utf8_general_ci (txAdmin core/deployer/recipeEngine.js), so the tables the copy makes take utf8mb3, which refuses
+-- every emoji (error 1366, on 11.8.9 and 12.3.3 too: verify/db-engine-version). An owner who ran on the saves folder
+-- and follows README "Switching on a server that already has data": the copy switches the tables as a start does.
+local EMOJI_NAME, EMOJI_REASON = '\u{1F31F} Zo\u{EB} O\'Brien', 'refund \u{1F600} for the double charge'
+local nameBefore = M.luaRows(live:exec('SELECT display_name AS d FROM cp_officers WHERE citizenid = \'CPY00001\''))
+live:exec('UPDATE cp_officers SET display_name = ? WHERE citizenid = \'CPY00001\'', { EMOJI_NAME })
+live:exec('INSERT INTO cp_audit (actor, role, action, reason) VALUES (\'console\', \'console\', \'note\', ?)',
+    { EMOJI_REASON })
+engineDump = DumpEngine(live, true)
+H.db = BASE .. '_txadmin'
+os.execute(
+    ('mysql -uroot -e "DROP DATABASE IF EXISTS %s; CREATE DATABASE %s CHARACTER SET utf8 COLLATE utf8_general_ci;"'):format(
+        H.db, H.db))
+m0 = Mark()
+admin('storage', 'copy', 'files-to-database')
+out = OutputSince(m0)
+H.ok(
+    out:find('Copied 25 tables', 1, true) ~= nil,
+    'files-to-database into txAdmin\'s utf8 database with an emoji name and reason: '
+        .. (out:match('Copied[^\n]*') or out:match('The copy stopped[^\n]*') or out:sub(1, 300))
+)
+local switchedLines = select(2, out:gsub('switching it to utf8mb4', ''))
+local collations = Mq(
+    'SELECT table_name AS t, table_collation AS k FROM information_schema.tables WHERE table_schema = DATABASE()')
+local notMb4 = {}
+for _, r in ipairs(collations) do
+    if tostring(r.k):sub(1, 7) ~= 'utf8mb4' then notMb4[#notMb4 + 1] = tostring(r.t) .. '=' .. tostring(r.k) end
+end
+H.ok(#collations == 26 and switchedLines == 26 and #notMb4 == 0,
+    ('the copy switched each of the 26 tables it made to utf8mb4, one console line each (%d lines): %s'):format(
+        switchedLines, table.concat(notMb4, ', ')))
+local jsonCols = Mq(
+    'SELECT table_name AS t, column_name AS c, collation_name AS k FROM information_schema.columns '
+        .. 'WHERE table_schema = DATABASE() AND data_type = \'longtext\''
+)
+local jsonWrong = {}
+for _, c in ipairs(jsonCols) do
+    if c.k ~= 'utf8mb4_bin' then jsonWrong[#jsonWrong + 1] = tostring(c.t) .. '.' .. tostring(c.c) end
+end
+H.ok(#jsonCols >= 10 and #jsonWrong == 0, 'its JSON columns stay utf8mb4_bin: ' .. table.concat(jsonWrong, ', '))
+local backName = Mq('SELECT display_name AS d FROM cp_officers WHERE citizenid = \'CPY00001\'')
+H.eq(backName[1] and backName[1].d, EMOJI_NAME, 'the officer\'s emoji name is in the database as written')
+local reasons = 0
+for _, r in ipairs(Mq('SELECT reason AS r FROM cp_audit WHERE action = \'note\'')) do
+    if r.r == EMOJI_REASON then reasons = reasons + 1 end
+end
+H.eq(reasons, 1, 'and the audit reason with an emoji')
+H.eq(SameTables(engineDump, DumpMaria(live, true), 'files-to-database into utf8'), COPIED_TABLES,
+    'the utf8 database holds the saves folder')
+live:exec('UPDATE cp_officers SET display_name = ? WHERE citizenid = \'CPY00001\'', { nameBefore[1].d })
+live:exec('DELETE FROM cp_audit WHERE reason = ?', { EMOJI_REASON })
+os.execute(('mysql -uroot -e "DROP DATABASE IF EXISTS %s;"'):format(H.db))
+
 -- files-to-database back into the first database (it has rows): refused, then force
 H.db = BASE
 m0 = Mark()

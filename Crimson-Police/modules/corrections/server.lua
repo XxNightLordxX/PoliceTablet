@@ -293,8 +293,13 @@ local CANDIDATE_COLS = [[id, run_uuid, citizenid, mission_type, mission_id, stat
 
 -- Every row the filter picks (not voided), both tables, oldest first: { key = 'L12', ... }.
 local function Candidates(f)
-    local where, params =
-        { 'voided = 0', 'created_at >= FROM_UNIXTIME(?)', 'created_at < FROM_UNIXTIME(?)' }, { f.from, f.to }
+    -- all time (from = 0) has no lower bound: MariaDB 11.8 and newer answer FROM_UNIXTIME(0) with NULL (before the
+    -- TIMESTAMP range), and created_at >= NULL matches no row
+    local where, params = { 'voided = 0', 'created_at < FROM_UNIXTIME(?)' }, { f.to }
+    if f.from > 0 then
+        table.insert(where, 2, 'created_at >= FROM_UNIXTIME(?)')
+        table.insert(params, 1, f.from)
+    end
     for col, key in pairs({
         citizenid = 'citizenid',
         department = 'department',
@@ -918,7 +923,7 @@ end
 local function RunsWhere(cid, a)
     local where, params = { 'citizenid = ?' }, { cid }
     local from, to = DateArg(a.from, false), DateArg(a.to, type(a.to) == 'string')
-    if from then
+    if from and from > 0 then   -- 0 is no lower bound (FROM_UNIXTIME(0) is NULL on MariaDB 11.8 and newer)
         where[#where + 1] = 'created_at >= FROM_UNIXTIME(?)'
         params[#params + 1] = from
     end

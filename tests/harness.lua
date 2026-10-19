@@ -189,6 +189,16 @@ local function SqlLiteral(v)
     return '\'' .. v .. '\''
 end
 
+-- MariaDB 11.8 and newer (Qbox recommends 12.3) answer FROM_UNIXTIME(0) with NULL: the TIMESTAMP range starts one
+-- second after the epoch, so created_at >= FROM_UNIXTIME(0) matches no row. 10.11 (the local server and CI) still
+-- answers 1970-01-01, so a value below 1 placed in FROM_UNIXTIME(?) is sent as NULL, as a current server reads it.
+-- Below 0 and past 2038 10.11 already answers NULL. (mariadb.com/kb/en/from_unixtime; run on 11.8.2, 11.8.9, 12.3.3)
+local function InFromUnixtime(out)
+    local k = #out
+    while k > 0 and out[k]:match('%s') do k = k - 1 end
+    return k >= 14 and table.concat(out, '', k - 13, k):upper() == 'FROM_UNIXTIME('
+end
+
 local function Interpolate(sql, params)
     params = params or {}
     local i = 0
@@ -203,7 +213,8 @@ local function Interpolate(sql, params)
             out[#out + 1] = c
         elseif c == '?' then
             i = i + 1
-            out[#out + 1] = SqlLiteral(params[i])
+            local v = params[i]
+            out[#out + 1] = (type(v) == 'number' and v < 1 and InFromUnixtime(out)) and 'NULL' or SqlLiteral(v)
         else
             out[#out + 1] = c
         end
@@ -1154,8 +1165,26 @@ local function BadUtf8(sql, params)
     return false
 end
 
+-- The migrations runner's statements for the database server itself (its version check, the utf8mb4 tables): it only
+-- sends them with the database on, and the saves folder engine has no server version or character sets. Shadow mode
+-- runs them on MariaDB alone (a skip, listed).
+local function ServerOnly(sql)
+    local s = sql:upper()
+    return s:find('^%s*SELECT%s+VERSION%(%)') ~= nil or s:find('CONVERT%s+TO%s+CHARACTER%s+SET') ~= nil
+        or (s:find('INFORMATION_SCHEMA.', 1, true) ~= nil and s:find('COLLATION', 1, true) ~= nil)
+        or s:find('^%s*ALTER%s+TABLE%s+`CP_[%w_]+`%s+MODIFY%s+`[%w_]+`%s+JSON') ~= nil
+end
+
 -- One statement on the twin and on the engine (in that order, same pinned second); the twin's answer.
 local function PairRun(kind, sql, params, fromSpec)
+    if not fromSpec and ServerOnly(sql) then
+        Shadow.skipped = Shadow.skipped + 1
+        Shadow.skips[#Shadow.skips + 1] = {
+            reason = 'the database server only (the runner never sends it to the saves folder)',
+            sql = sql:sub(1, 160),
+        }
+        return TwinQuery(kind, sql, params, REAL_TIME())
+    end
     if BadUtf8(sql, params) then
         Shadow.skipped = Shadow.skipped + 1
         Shadow.skips[#Shadow.skips + 1] = {
