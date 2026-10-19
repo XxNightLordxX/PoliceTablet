@@ -688,7 +688,7 @@ Everything else works as shipped. These are the ones owners change most:
 | `Config.Limits` | `maxCompletionsHour = 8` and `maxCompletionsDay = 0` (0 = no cap) finished missions per officer; `maxConcurrentRuns = 12` and `maxConcurrentTactical = 4` missions at once, server-wide |
 | `Config.NpcDifficulty.preset` | `'easy'`, `'normal'`, `'hard'` or `'custom'`. Changes how NPCs fight, never the pay |
 | `Config.NpcCombat` | How hard armed NPCs fight back: no automatic weapons, an accuracy cap, single shots, half damage, no headshot one-shots. See [5.9](#59-how-hard-npcs-fight-back) |
-| `Config.Flee` | How long a suspect who runs from your officers keeps running: the server times every runner on foot (time in a car does not count), who sprints for `sprintSeconds` (10), jogs for `jogSeconds` (12), walks for `walkSeconds` (8) and is then worn out. Each suspect lasts up to `jitter` (25 %) longer or shorter, `Config.NpcDifficulty`'s `fleeMult` stretches it (`'hard'`: 20 % longer), a runner no officer comes within `recoverRange` (60 m) of for `recoverSeconds` (20 s) sprints again, and `armedTire = false` keeps armed suspects fresh. `enabled = false` turns it off. So far only the server keeps this clock: you see no change in game yet |
+| `Config.Flee` | How long a suspect who runs from your officers keeps running: the server times every runner on foot (time in a car does not count), who sprints for `sprintSeconds` (10), jogs for `jogSeconds` (12), walks for `walkSeconds` (8) and is then worn out. Each suspect lasts up to `jitter` (25 %) longer or shorter, `Config.NpcDifficulty`'s `fleeMult` stretches it (`'hard'`: 20 % longer), a runner no officer comes within `recoverRange` (60 m) of for `recoverSeconds` (20 s) sprints again, and `armedTire = false` keeps armed suspects fresh. A tired runner visibly slows down: at most a jog, then a walk, at `jogRate` (0.95) / `walkRate` (0.85) of the normal speed, and with `windedClipset` he jogs, then walks winded. `enabled = false` turns it off |
 | `Config.MissionCalls` | Tablet mission calls: `enabled`, how often (`spawnEvery`), how many open at once (`maxOpen`) |
 | `Config.CrossDept.enabled` | Cross-Department Missions on or off |
 | `Config.Units.invitePolicy` | `'anyone'` in a unit may invite, or only the `'leader'` |
@@ -2079,7 +2079,11 @@ however it ends.
   `Config.Flee`. The server times every mission NPC that runs on foot (sprint 10 s, jog 12 s, walk 8 s, then worn
   out, each suspect up to 25 % longer or shorter, `fleeMult` of `Config.NpcDifficulty` now used; time in a car does
   not count), keeps the time across a fight or a surrender, and gives a runner his breath back after 20 s with no
-  officer within 60 m. So far nothing in game reads the clock.
+  officer within 60 m. The game that owns a runner (any officer's, not only the host's) slows him down to match: a
+  jog after 10 s, a walk after 22 s, held every frame, at `jogRate` / `walkRate` of the normal speed, with a jog and
+  then a winded walk (`windedClipset`); a tired runner with no route left walks or jogs straight away from the
+  nearest officer on the navmesh instead of GTA's flee task, which cannot be slowed. He sprints again when he gets
+  his breath back, and is let go at once when he surrenders, fights or gets into a car.
 
 **Waiting for the owner's OK** (already in `docs/SPEC.md` and the code; each one is undone without a code change):
 

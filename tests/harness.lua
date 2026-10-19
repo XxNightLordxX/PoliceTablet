@@ -1556,7 +1556,41 @@ local function TypeOk(kind, v)
     if kind == 'float' then return math.type(v) == 'float' end
     if kind == 'BOOL' then return type(v) == 'boolean' end
     if kind == 'Hash' then return math.type(v) == 'integer' or type(v) == 'string' end
+    if kind == 'char*' then return type(v) == 'string' end
+    if kind == 'Any' then return v ~= nil end
     return math.type(v) == 'integer'   -- int, Ped, Player, Vehicle
+end
+
+-- Installs each native of types as a global that checks its arguments, counts a wrong call in w.typeErrors, keeps it
+-- in w.calls, runs its effect (every answer of the effect is the native's answer) and then the global the spec had
+-- set before (before[name]) or onCall(name, ...).
+local function InstallTyped(types, effects, w, onCall, before)
+    for name, sig in pairs(types) do
+        local prev = rawget(_G, name)
+        before[name] = prev
+        _G[name] = function(...)
+            local n = select('#', ...)
+            local args = table.pack(...)
+            local ok = n == #sig
+            for i, kind in ipairs(sig) do
+                if not TypeOk(kind, args[i]) then
+                    ok = false
+                    H.ok(false, ('%s argument %d: the game reads a %s, got %s %s'):format(name, i, kind,
+                        math.type(args[i]) or type(args[i]), tostring(args[i])))
+                end
+            end
+            if n ~= #sig then H.ok(false, ('%s takes %d arguments, got %d'):format(name, #sig, n)) end
+            if not ok then w.typeErrors = w.typeErrors + 1 end
+            w.calls[#w.calls + 1] = { name = name, args = args }
+            local res = table.pack(effects[name](...))
+            if prev then
+                prev(...)
+            elseif onCall then
+                onCall(name, ...)
+            end
+            return table.unpack(res, 1, res.n)
+        end
+    end
 end
 
 function H.combatNatives(onCall)
@@ -1604,32 +1638,150 @@ function H.combatNatives(onCall)
             p.weapon, p.ammo = type(hash) == 'string' and joaat(hash) or hash, ammo
         end,
     }
-    for name, sig in pairs(H.NATIVE_TYPES) do
-        local prev = rawget(_G, name)
-        before[name] = prev
-        _G[name] = function(...)
-            local n = select('#', ...)
-            local args = table.pack(...)
-            local ok = n == #sig
-            for i, kind in ipairs(sig) do
-                if not TypeOk(kind, args[i]) then
-                    ok = false
-                    H.ok(false, ('%s argument %d: the game reads a %s, got %s %s'):format(name, i, kind,
-                        math.type(args[i]) or type(args[i]), tostring(args[i])))
-                end
-            end
-            if n ~= #sig then H.ok(false, ('%s takes %d arguments, got %d'):format(name, #sig, n)) end
-            if not ok then w.typeErrors = w.typeErrors + 1 end
-            w.calls[#w.calls + 1] = { name = name, args = args }
-            local res = effects[name](...)
-            if prev then
-                prev(...)
-            elseif onCall then
-                onCall(name, ...)
-            end
-            return res
-        end
+    InstallTyped(H.NATIVE_TYPES, effects, w, onCall, before)
+    return w
+end
+
+-- ============================================================================
+--           MOVEMENT NATIVES WITH THEIR REAL ARGUMENT TYPES (opt-in)
+-- ============================================================================
+-- H.gaitNatives(onCall) installs the natives a runner's game uses to move him and to hold him to a pace
+-- (modules/npc/client.lua, Config.Flee), with natives.json's argument types checked as H.combatNatives does (Lua
+-- leaves out the Vector3* of GetSafeCoordForPed and answers it after the BOOL). The world it returns keeps what the
+-- game would:
+--   peds[ped] = { cap, capAt, rate, rateAt, clipset, task = { name = 'nav'|'smartFlee', x, y, z, mbr, flags, from,
+--     distance } }
+--   capNow(ped), rateNow(ped): the move blend ratio cap and the move rate override in force this frame (one H.step),
+--     nil when they were not set during it: SET_PED_MOVE_RATE_OVERRIDE "Needs to be looped!", and the cap is held to
+--     the same rule (natives.json has no word on it; a4-combat section 4)
+--   clipsets[name]: true once a RequestClipSet has loaded it, loadMs (200) later; a name the game does not have (not
+--     in SET_PED_MOVEMENT_CLIPSET's list in natives.json) never loads. SetPedMovementClipset with a clip set that is
+--     not loaded counts as w.unloaded (the game would ignore it)
+--   safeCoord(x, y, z, onlyOnPavement, flags) -> found, vector3: set by the spec (default: nothing found)
+--   calls, typeErrors, restore() as H.combatNatives
+H.GAIT_NATIVE_TYPES = {
+    TaskFollowNavMeshToCoord = { 'Ped', 'float', 'float', 'float', 'float', 'int', 'float', 'int', 'float' },
+    TaskSmartFleePed = { 'Ped', 'Ped', 'float', 'Any', 'BOOL', 'BOOL' },
+    SetPedMaxMoveBlendRatio = { 'Ped', 'float' },
+    SetPedMoveRateOverride = { 'Ped', 'float' },
+    SetPedMovementClipset = { 'Ped', 'char*', 'float' },
+    ResetPedMovementClipset = { 'Ped', 'float' },
+    RequestClipSet = { 'char*' },
+    HasClipSetLoaded = { 'char*' },
+    GetSafeCoordForPed = { 'float', 'float', 'float', 'BOOL', 'int' },
+}
+
+-- SET_PED_MOVEMENT_CLIPSET 0xAF8A94EDE7712BEF: the movement clip sets natives.json lists (clip set names are not
+-- case-sensitive).
+local KNOWN_CLIPSETS = {}
+for _, name in ipairs({
+    'ANIM_GROUP_MOVE_BALLISTIC',
+    'ANIM_GROUP_MOVE_LEMAR_ALLEY',
+    'clipset@move@trash_fast_turn',
+    'FEMALE_FAST_RUNNER',
+    'missfbi4prepp1_garbageman',
+    'move_characters@franklin@fire',
+    'move_characters@Jimmy@slow@',
+    'move_characters@michael@fire',
+    'move_f@flee@a',
+    'move_f@scared',
+    'move_f@sexy@a',
+    'move_heist_lester',
+    'move_injured_generic',
+    'move_lester_CaneUp',
+    'move_m@bag',
+    'MOVE_M@BAIL_BOND_NOT_TAZERED',
+    'MOVE_M@BAIL_BOND_TAZERED',
+    'move_m@brave',
+    'move_m@casual@d',
+    'move_m@drunk@moderatedrunk',
+    'MOVE_M@DRUNK@MODERATEDRUNK_HEAD_UP',
+    'MOVE_M@DRUNK@SLIGHTLYDRUNK',
+    'MOVE_M@DRUNK@VERYDRUNK',
+    'move_m@fire',
+    'move_m@gangster@var_e',
+    'move_m@gangster@var_f',
+    'move_m@gangster@var_i',
+    'move_m@JOG@',
+    'MOVE_M@PRISON_GAURD',
+    'MOVE_P_M_ONE',
+    'MOVE_P_M_ONE_BRIEFCASE',
+    'move_p_m_zero_janitor',
+    'move_p_m_zero_slow',
+    'move_ped_bucket',
+    'move_ped_crouched',
+    'move_ped_mop',
+    'MOVE_M@FEMME@',
+    'MOVE_F@FEMME@',
+    'MOVE_M@GANGSTER@NG',
+    'MOVE_F@GANGSTER@NG',
+    'MOVE_M@POSH@',
+    'MOVE_F@POSH@',
+    'MOVE_M@TOUGH_GUY@',
+    'MOVE_F@TOUGH_GUY@',
+}) do
+    KNOWN_CLIPSETS[name:lower()] = true
+end
+
+function H.gaitNatives(onCall)
+    local w = { peds = {}, clipsets = {}, requested = {}, calls = {}, typeErrors = 0, unloaded = 0, loadMs = 200 }
+    local function Ped(ped)
+        w.peds[ped] = w.peds[ped] or {}
+        return w.peds[ped]
     end
+    function w.capNow(ped)
+        local p = w.peds[ped]
+        if p and p.capAt == H.clockMs then return p.cap end
+        return nil
+    end
+    function w.rateNow(ped)
+        local p = w.peds[ped]
+        if p and p.rateAt == H.clockMs then return p.rate end
+        return nil
+    end
+    function w.safeCoord() return false, vector3(0.0, 0.0, 0.0) end
+    local function Loaded(name)
+        local key = name:lower()
+        if w.clipsets[key] then return true end
+        local at = w.requested[key]
+        if at and KNOWN_CLIPSETS[key] and H.clockMs >= at + w.loadMs then w.clipsets[key] = true end
+        return w.clipsets[key] == true
+    end
+    local before = {}
+    function w.restore()
+        for name in pairs(H.GAIT_NATIVE_TYPES) do rawset(_G, name, before[name]) end
+    end
+    local effects = {
+        TaskFollowNavMeshToCoord = function(ped, x, y, z, mbr, _, _, flags)
+            Ped(ped).task = { name = 'nav', x = x, y = y, z = z, mbr = mbr, flags = flags }
+        end,
+        TaskSmartFleePed = function(ped, from, distance)
+            Ped(ped).task = { name = 'smartFlee', from = from, distance = distance }
+        end,
+        SetPedMaxMoveBlendRatio = function(ped, v)
+            local p = Ped(ped)
+            p.cap, p.capAt = v, H.clockMs
+        end,
+        SetPedMoveRateOverride = function(ped, v)
+            local p = Ped(ped)
+            p.rate, p.rateAt = v, H.clockMs
+        end,
+        SetPedMovementClipset = function(ped, name)
+            if not Loaded(name) then
+                w.unloaded = w.unloaded + 1
+                return
+            end
+            Ped(ped).clipset = name:lower()
+        end,
+        ResetPedMovementClipset = function(ped) Ped(ped).clipset = nil end,
+        RequestClipSet = function(name)
+            local key = name:lower()
+            if not w.requested[key] then w.requested[key] = H.clockMs end
+        end,
+        HasClipSetLoaded = function(name) return Loaded(name) end,
+        GetSafeCoordForPed = function(...) return w.safeCoord(...) end,
+    }
+    InstallTyped(H.GAIT_NATIVE_TYPES, effects, w, onCall, before)
     return w
 end
 

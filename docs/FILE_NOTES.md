@@ -2164,6 +2164,15 @@ Contract interpretations (details in docs/notes/engine_a.md)
       handle and bag seq, and again after it owns the ped again. Settings only, never a task. apply sets the same
       caps (and swaps an older bag's automatic weapon, CP.NpcCombat.ammo rounds); the firing pattern goes on
       again after each TaskCombatPed.
+    - Tired runners (Config.Flee): the host gives every flee leg on foot at the move blend ratio of the bag's
+      gait (sprint 3.0, jog 2.0, walk and spent 1.0) and gives the current leg again when the gait changes; with
+      no route left a tired runner runs 40 m navmesh legs straight away from the nearest participant
+      (GetSafeCoordForPed, ENAV_NO_STOPPING) instead of TaskSmartFleePed, which has no speed. The pacer on
+      EVERY participant's client holds each tired runner of the run it owns to his gait every frame
+      (SetPedMaxMoveBlendRatio 2.0 / 1.0, SetPedMoveRateOverride jogRate / walkRate, the move_m@JOG@ or
+      move_injured_generic clip set with windedClipset) and lets go in the same frame (cap 3.0, rate 1.0,
+      ResetPedMovementClipset) once he is no longer tired, in a vehicle, dead, owned by another game, or the
+      run or the resource stops.
     - Drop protection on EVERY client (participant or not) for every ped with a Crimson-Police cp bag:
       SetPedDropsWeaponsWhenDead false and SetPedMoney 0 once per entity handle, because the client
       that owns a ped when it dies creates the pickups and ownership moves to the nearest player.
@@ -2196,8 +2205,9 @@ Contract interpretations (details in docs/notes/engine_a.md)
         'combat'       { target = ped?, behaviour? }        TaskCombatPed on the nearest active participant
                                                             (none: TaskStandStill until one is back)
         'flee'         { points = { vec3 }?, startIndex?, from = ped?, vehicle?, speed?, drivingStyle?, style?, stopRange? }
-                       on foot: TaskFollowNavMeshToCoord along points, then TaskSmartFleePed from the
-                       nearest participant; as a driver: the points as a road route, else
+                       on foot: TaskFollowNavMeshToCoord along points at the bag's gait, then
+                       TaskSmartFleePed from the nearest participant (a tired runner: 40 m navmesh legs
+                       away from him); as a driver: the points as a road route, else
                        TaskVehicleMissionPedTarget flee
         'handsUp'      { duration? }                         TaskHandsUp facing the nearest participant
         'kneel'        { instant? }                          hands up, then kneel (random@arrests,
@@ -2285,7 +2295,7 @@ Contract interpretations (details in docs/notes/engine_a.md)
       the clock back to 0. A change of gait while fleeing is written as the bag key gait (same state, so the task
       is kept: no re-task); a ped that starts fleeing again gets its clock's gait in that write. Off
       (enabled = false), or an armed ped with armedTire = false: no clock, no gait written (an old one goes back to
-      sprint). Nothing reads the gait in game yet.
+      sprint). The game that owns the runner slows him down to that gait (modules/npc/client.lua, the pacer).
 
   Public API
     CP.Npc.setState(run, netId, state, extra) -> boolean

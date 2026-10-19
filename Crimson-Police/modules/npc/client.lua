@@ -67,6 +67,20 @@ local DEBOUNCE_MS = 1500         -- an identical movement task this soon after t
 local CONTROL_MS = 1500
 local ENTITY_WAIT_MS = 1500
 local FLEE_DISTANCE = 500.0
+-- A tired runner with no route left runs navmesh legs straight away from the officers.
+local AWAY = {
+    leg = 40.0,                  -- m: the length of each leg
+    arrive = 5.0,                -- m: the next leg is taken this close to the end of the last one
+    safeFlags = 2 | 8,           -- GetSafeCoordForPed: no isolated navmesh polygon, no water
+}
+-- TaskFollowNavMeshToCoord flags (natives.json eNavScriptFlags)
+local NAV = {
+    default = 0,                 -- ENAV_DEFAULT
+    noStopping = 1,              -- ENAV_NO_STOPPING: keeps moving while the path is found, no slow-down at the end
+}
+
+-- The move blend ratio each gait of the server's flee clock asks for (Config.Flee): 1 walk, 2 run, 3 sprint.
+local GAIT_MBR = { sprint = 3.0, jog = 2.0, walk = 1.0, spent = 1.0 }
 
 local STYLES = {
     careful = 786603,    -- stops for cars, peds and red lights; keeps to its lane
@@ -208,6 +222,18 @@ local function BagOf(e)
     local ok, v = pcall(function() return Entity(e).state.cp end)
     if ok and type(v) == 'table' then return v end
     return nil
+end
+
+local function FleeCfg()
+    local c = Config and Config.Flee
+    return type(c) == 'table' and c or {}
+end
+
+-- The gait the server's flee clock wrote in a ped's cp bag: 'sprint' unless it is fleeing and Config.Flee is on (a
+-- missing or unknown gait is a sprint too).
+local function GaitOf(bag)
+    if type(bag) ~= 'table' or bag.state ~= 'fleeing' or FleeCfg().enabled == false then return 'sprint' end
+    return GAIT_MBR[bag.gait] and bag.gait or 'sprint'
 end
 
 local function Foreign(v)
@@ -586,8 +612,9 @@ local function Calm(ped)
     SetPedKeepTask(ped, true)
 end
 
-local function RunTo(ped, p)
-    TaskFollowNavMeshToCoord(ped, p.x, p.y, p.z, 3.0, -1, 1.0, false, 0.0)
+-- mbr: the move blend ratio of the runner's gait (GAIT_MBR), a sprint without one.
+local function RunTo(ped, p, mbr)
+    TaskFollowNavMeshToCoord(ped, p.x, p.y, p.z, mbr or GAIT_MBR.sprint, -1, 1.0, NAV.default, 0.0)
 end
 
 local function DriveTo(ped, veh, p, a)
@@ -642,11 +669,50 @@ local function SmartFlee(ped, a)
             TaskVehicleDriveWander(ped, veh, a.speed, a.style)
         end
     elseif from then
-        TaskSmartFleePed(ped, from, tonumber(a.args.distance) or FLEE_DISTANCE, -1, false, false)
+        TaskSmartFleePed(ped, from, (tonumber(a.args.distance) or FLEE_DISTANCE) + 0.0, -1, false, false)
     else
         TaskWanderStandard(ped, 10.0, 10)
     end
     a.issuedAt = Now()
+end
+
+-- A tired runner with no route left: GTA's flee task has no speed, so he runs navmesh legs at his gait instead, each
+-- 40 m straight away from the nearest officer (to the navmesh point GetSafeCoordForPed finds there, when it lies well
+-- ahead of him).
+local function AwayLeg(ped, a)
+    local pos = GetEntityCoords(ped)
+    local from = a.args.from
+    if not (from and DoesEntityExist(from)) then from = Npc.nearestParticipant(pos) end
+    local dx, dy = 0.0, 0.0
+    if from then
+        local f = GetEntityCoords(from)
+        dx, dy = pos.x - f.x, pos.y - f.y
+    end
+    local len = math.sqrt(dx * dx + dy * dy)
+    if len < 0.5 then
+        -- no officer, or one right on top of him: straight on
+        local h = math.rad(tonumber(GetEntityHeading(ped)) or 0.0)
+        dx, dy, len = -math.sin(h), math.cos(h), 1.0
+    end
+    dx, dy = dx / len, dy / len
+    local x, y, z = pos.x + dx * AWAY.leg, pos.y + dy * AWAY.leg, pos.z + 0.0
+    local found, safe = GetSafeCoordForPed(x, y, z, false, AWAY.safeFlags)
+    if found and safe and (safe.x - pos.x) * dx + (safe.y - pos.y) * dy >= AWAY.arrive * 2 then
+        x, y, z = safe.x + 0.0, safe.y + 0.0, safe.z + 0.0
+    end
+    a.away = vector3(x, y, z)
+    TaskFollowNavMeshToCoord(ped, x, y, z, GAIT_MBR[a.gait] or GAIT_MBR.sprint, -1, 1.0, NAV.noStopping, 0.0)
+    a.issuedAt = Now()
+end
+
+-- A flee with no route, or at its end: GTA's smart flee while the runner sprints or sits in a vehicle, else away legs.
+local function FreeFlee(ped, a)
+    if a.gait ~= 'sprint' and GetVehiclePedIsIn(ped, false) == 0 then
+        AwayLeg(ped, a)
+        return
+    end
+    a.away = nil
+    SmartFlee(ped, a)
 end
 
 -- No participant to fight: stay put without looking for targets. TaskGuardCurrentPosition would
@@ -696,10 +762,11 @@ function ACTIONS.flee(ped, a)
     SetBlockingOfNonTemporaryEvents(ped, true)
     SetPedKeepTask(ped, true)
     SetPedCombatAttributes(ped, 17, true)
+    a.gait = GaitOf(bag)
     local pts = PointsOf(a.args.points)
     a.points = #pts > 0 and pts or nil
     if not a.points then
-        SmartFlee(ped, a)
+        FreeFlee(ped, a)
         return
     end
     local veh = GetVehiclePedIsIn(ped, false)
@@ -715,7 +782,7 @@ function ACTIONS.flee(ped, a)
         DriveTo(ped, veh, pts[a.idx], a)
     else
         a.idx = StartIndex(a, pts, pos, FOOT_ARRIVE, false)
-        RunTo(ped, pts[a.idx])
+        RunTo(ped, pts[a.idx], GAIT_MBR[a.gait])
     end
     a.issuedAt = Now()
 end
@@ -774,8 +841,8 @@ function ACTIONS.follow(ped, a)
     local c = ToVec3(a.args.coords)
     if not c then error('follow needs coords') end
     a.coords = c
-    a.radius = tonumber(a.args.radius) or 1.5
-    a.speedFoot = U.clamp(tonumber(a.args.speed) or 1.0, 0.5, 3.0)
+    a.radius = (tonumber(a.args.radius) or 1.5) + 0.0
+    a.speedFoot = U.clamp(tonumber(a.args.speed) or 1.0, 0.5, 3.0) + 0.0
     local wasKneeling = a.prev == 'kneel'
     Release(ped, a, wasKneeling)
     SetPedRelationshipGroupHash(ped, NEUTRAL)
@@ -792,7 +859,7 @@ function ACTIONS.follow(ped, a)
         if a.args.anyMeans then
             TaskGoToCoordAnyMeans(ped, c.x, c.y, c.z, a.speedFoot, 0, false, STYLES.careful, -1.0)
         else
-            TaskFollowNavMeshToCoord(ped, c.x, c.y, c.z, a.speedFoot, -1, a.radius, false, 0.0)
+            TaskFollowNavMeshToCoord(ped, c.x, c.y, c.z, a.speedFoot, -1, a.radius, NAV.default, 0.0)
         end
         a.issuedAt = Now()
     end)
@@ -900,8 +967,8 @@ local function SamePoint(a, b)
 end
 
 -- Poses and combat on the same target are never restarted (no animation replay); a flee without points
--- keeps a running route; identical movement tasks are only debounced (a block re-tasking a stuck ped
--- a few seconds later is obeyed). A task whose ped changed cp state since is never "the same".
+-- keeps a running route or a tired runner's away leg; identical movement tasks are only debounced (a block
+-- re-tasking a stuck ped a few seconds later is obeyed). A task whose ped changed cp state since is never "the same".
 local function SameTask(cur, action, args, t)
     if cur.action ~= action or cur.done then return false end
     if action == 'kneel' or action == 'cuffed' or action == 'handsUp' or action == 'cower' or action == 'wander' then
@@ -912,7 +979,7 @@ local function SameTask(cur, action, args, t)
     local recent = t - cur.at < DEBOUNCE_MS
     if action == 'flee' then
         local new = PointsOf(args.points)
-        if #new == 0 then return cur.points ~= nil or recent end
+        if #new == 0 then return cur.points ~= nil or cur.away ~= nil or recent end
         local old = PointsOf(cur.args.points)
         return recent and #old == #new and SamePoint(old[1], new[1]) and SamePoint(old[#old], new[#new])
     elseif action == 'follow' or action == 'driveTo' then
@@ -1025,18 +1092,43 @@ local function StepPoints(ped, a, t)
                 a.idx, a.from = 1, cur
             elseif a.action == 'flee' then
                 a.points, a.vehicle = nil, nil
-                SmartFlee(ped, a)
+                FreeFlee(ped, a)
                 return
             else
                 a.done = true
                 return
             end
         end
-        if driving then DriveTo(ped, veh, a.points[a.idx], a) else RunTo(ped, a.points[a.idx]) end
+        if driving then DriveTo(ped, veh, a.points[a.idx], a) else RunTo(ped, a.points[a.idx], GAIT_MBR[a.gait]) end
         a.issuedAt = t
     elseif Stuck(driving and veh or ped, a, t, driving and REISSUE_VEH_MS or REISSUE_MS) then
-        if driving then DriveTo(ped, veh, a.points[a.idx], a) else RunTo(ped, a.points[a.idx]) end
+        if driving then DriveTo(ped, veh, a.points[a.idx], a) else RunTo(ped, a.points[a.idx], GAIT_MBR[a.gait]) end
         a.issuedAt = t
+    end
+end
+
+-- A tired runner's next away leg: at the end of the last one, when he is stuck, or when an officer is now nearer its
+-- end than he is (it would take him into the officer).
+local function StepAway(ped, a, t)
+    local pos = GetEntityCoords(ped)
+    local again = U.dist2d(pos, a.away) <= AWAY.arrive
+    if not again and t - (a.issuedAt or 0) >= REISSUE_MS then
+        local near = Npc.nearestParticipant(pos)
+        again = near ~= nil and U.dist2d(GetEntityCoords(near), a.away) < U.dist2d(pos, a.away)
+    end
+    if Stuck(ped, a, t, REISSUE_MS) then again = true end
+    if again then AwayLeg(ped, a) end
+end
+
+-- The server changed a runner's gait (Config.Flee): the leg he is on is given again at the new pace. A driver's pace
+-- is his car's.
+local function Regait(ped, a, t)
+    if a.vehicle or GetVehiclePedIsIn(ped, false) ~= 0 then return end
+    if a.points then
+        RunTo(ped, a.points[a.idx], GAIT_MBR[a.gait])
+        a.issuedAt = t
+    else
+        FreeFlee(ped, a)
     end
 end
 
@@ -1053,10 +1145,16 @@ local function Step(ped, a, t)
     if action == 'combat' then
         StepCombat(ped, a, t)
     elseif action == 'flee' then
-        if a.points then
+        local gait = GaitOf(BagOf(ped))
+        if gait ~= a.gait then
+            a.gait = gait
+            Regait(ped, a, t)
+        elseif a.points then
             StepPoints(ped, a, t)
+        elseif a.away then
+            StepAway(ped, a, t)
         elseif Stuck(ped, a, t, REISSUE_MS * 2) then
-            SmartFlee(ped, a)
+            FreeFlee(ped, a)
         end
     elseif action == 'driveRoute' then
         StepPoints(ped, a, t)
@@ -1074,7 +1172,8 @@ local function Step(ped, a, t)
         if U.dist(GetEntityCoords(ped), a.coords) <= a.radius + 0.5 then
             a.done = true
         elseif Stuck(ped, a, t, REISSUE_MS) then
-            TaskFollowNavMeshToCoord(ped, a.coords.x, a.coords.y, a.coords.z, a.speedFoot, -1, a.radius, false, 0.0)
+            TaskFollowNavMeshToCoord(ped, a.coords.x, a.coords.y, a.coords.z, a.speedFoot, -1, a.radius, NAV.default,
+                0.0)
             a.issuedAt = t
         end
     elseif action == 'kneel' or action == 'cuffed' then
@@ -1240,6 +1339,161 @@ local function ProtectDrops(netId, value)
 end
 
 -- ============================================================================
+--                    THE PACER (TIRED RUNNERS, Config.Flee)
+-- ============================================================================
+-- GTA's flee task picks its own speed, and the game that owns a runner (OneSync: often the officer chasing him) is
+-- not always the host that tasked him. So every participant's game holds each tired runner of its run that it owns
+-- to his gait every frame, since the move blend ratio cap and the move rate override only last one frame: at most a
+-- run while he jogs and a walk after, a little slower (jogRate, walkRate), in a jog and then a winded walk
+-- (windedClipset). It lets go the moment he is not tired any more: a surrender, a fight, a car, his breath back.
+
+local Pace, PaceBag, LetGoAll
+do
+    local PACES = {
+        jog = { mbr = GAIT_MBR.jog, rate = 'jogRate', clipset = 'move_m@JOG@' },
+        walk = { mbr = GAIT_MBR.walk, rate = 'walkRate', clipset = 'move_injured_generic' },
+        spent = { mbr = GAIT_MBR.spent, rate = 'walkRate', clipset = 'move_injured_generic' },
+    }
+    local RATE_DEFAULTS = { jogRate = 0.95, walkRate = 0.85 }
+    local RATE_RANGE = { 0.5, 1.0 }
+    local CLIPSET_BLEND = 0.25       -- how fast the jog or the winded walk blends in and out
+    local CLIPSET_WAIT_MS = 3000     -- a clip set that has not loaded by then is not used
+    local paced = {}                 -- [netId] = { entity, clipset } the tired runners this game holds to their gait
+    local tiredSeen = {}             -- [netId] = true: a bag of this ped asked for a pace (any game may have set it)
+    local clipsets = {}              -- [name] = 'loading' | 'ready' | 'failed'
+    local pacing = false
+
+    local function PaceRate(key)
+        local v = tonumber(FleeCfg()[key])
+        if not v or v ~= v then v = RATE_DEFAULTS[key] end
+        return U.clamp(v, RATE_RANGE[1], RATE_RANGE[2]) + 0.0
+    end
+
+    -- The pace a ped's bag asks of the game that owns it, or nil: none in a vehicle, dead or not tired.
+    local function PaceFor(bag, ent)
+        if GetVehiclePedIsIn(ent, false) ~= 0 or IsEntityDead(ent) then return nil end
+        return PACES[GaitOf(bag)]
+    end
+
+    local function ClipSetReady(name)
+        local s = clipsets[name]
+        if s == 'ready' then return true end
+        if s ~= nil then return false end
+        clipsets[name] = 'loading'
+        RequestClipSet(name)
+        CreateThread(function()
+            local deadline = Now() + CLIPSET_WAIT_MS
+            while not HasClipSetLoaded(name) and Now() < deadline do Wait(100) end
+            if HasClipSetLoaded(name) then
+                clipsets[name] = 'ready'
+            else
+                clipsets[name] = 'failed'
+                CP.warn(TAG, 'the movement clip set %s did not load', name)
+            end
+        end)
+        return false
+    end
+
+    -- His own pace back: no cap, the normal move rate and his own walk (only on a ped this game still owns).
+    local function Unpace(ent)
+        if not (DoesEntityExist(ent) and NetworkHasControlOfEntity(ent)) then return end
+        SetPedMaxMoveBlendRatio(ent, GAIT_MBR.sprint)
+        SetPedMoveRateOverride(ent, 1.0)
+        ResetPedMovementClipset(ent, CLIPSET_BLEND)
+    end
+
+    local function LetGo(netId, ent)
+        local p = paced[netId]
+        paced[netId], tiredSeen[netId] = nil, nil
+        ent = ent or (p and p.entity)
+        if ent then Unpace(ent) end
+    end
+
+    LetGoAll = function()
+        for netId in pairs(paced) do LetGo(netId) end
+        tiredSeen = {}
+    end
+
+    -- One frame of a tired runner: the cap and the move rate (both every frame), and the clip set once it is loaded.
+    local function HoldPace(p, pace)
+        local ent = p.entity
+        local want = FleeCfg().windedClipset ~= false and pace.clipset or nil
+        if want ~= p.clipset then
+            if want == nil then
+                ResetPedMovementClipset(ent, CLIPSET_BLEND)
+                p.clipset = nil
+            elseif ClipSetReady(want) then
+                SetPedMovementClipset(ent, want, CLIPSET_BLEND)
+                p.clipset = want
+            end
+        end
+        SetPedMaxMoveBlendRatio(ent, pace.mbr)
+        SetPedMoveRateOverride(ent, PaceRate(pace.rate))
+    end
+
+    local function PaceStep()
+        local run = CurrentRun()
+        if not run then
+            LetGoAll()
+            return
+        end
+        for netId, p in pairs(paced) do
+            local ent = p.entity
+            if not DoesEntityExist(ent) or not NetworkHasControlOfEntity(ent) then
+                -- gone, or another game owns him now: that game holds him to the same bag
+                paced[netId] = nil
+            else
+                local bag = bags[netId]
+                local pace = bag and bag.run == run.id and PaceFor(bag, ent)
+                if pace then HoldPace(p, pace) else LetGo(netId, ent) end
+            end
+        end
+    end
+
+    local function EnsurePacer()
+        if pacing then return end
+        pacing = true
+        CreateThread(function()
+            while next(paced) ~= nil do
+                local ok, err = pcall(PaceStep)
+                if not ok then
+                    CP.warn(TAG, 'holding a tired runner to his pace failed: %s', tostring(err))
+                    paced = {}
+                end
+                Wait(0)
+            end
+            -- a clip set that did not load is asked for again next time
+            for name, s in pairs(clipsets) do
+                if s == 'failed' then clipsets[name] = nil end
+            end
+            pacing = false
+        end)
+    end
+
+    -- A ped of the run that this game owns: held to its gait while it is tired; once it is not, its own pace back if a
+    -- bag of it asked for a pace before (another game may have slowed it down and handed it over).
+    Pace = function(netId, ent, bag)
+        if PaceFor(bag, ent) then
+            tiredSeen[netId] = true
+            local p = paced[netId]
+            if not p or p.entity ~= ent then
+                paced[netId] = { entity = ent }
+                EnsurePacer()
+            end
+        elseif paced[netId] or tiredSeen[netId] then
+            LetGo(netId, ent)
+        end
+    end
+
+    -- A new bag of a ped of the run: a gait change reaches the pace in the same frame.
+    PaceBag = function(netId, bag)
+        if PACES[GaitOf(bag)] then tiredSeen[netId] = true end
+        local ent = NetworkDoesNetworkIdExist(netId) and NetworkGetEntityFromNetworkId(netId) or 0
+        if ent ~= 0 and ValidPed(ent) and NetworkHasControlOfEntity(ent) then Pace(netId, ent, bag) end
+    end
+end
+
+-- ============================================================================
 --                             THE COMBAT GOVERNOR
 -- ============================================================================
 -- OneSync hands a ped to the nearest player, so a mission NPC often runs on a partner's game, where the host's apply
@@ -1270,6 +1524,8 @@ local function GovernStep(run)
                 if ArmedBag(bag) then ApplyCaps(ent, bag.cfg) end
                 governed[netId] = { entity = ent, seq = bag.seq }
             end
+            -- a tired runner OneSync gave this game is held to his gait from now on
+            Pace(netId, ent, bag)
         else
             -- not ours (now): applied again when this game owns it again
             governed[netId] = nil
@@ -1308,6 +1564,7 @@ AddStateBagChangeHandler('cp', nil, function(bagName, _, value)
     local prev = bags[netId]
     bags[netId] = value
     EnsureGovernor()
+    PaceBag(netId, value)
     if type(value.cuff) == 'table' then EnsureCuffOption(value.cuff.label) end
     if value.state == 'dead' then
         handled[netId] = nil
@@ -1352,6 +1609,7 @@ RegisterNetEvent('crimson-police:client:runEnded', function(runId)
     local run = CurrentRun()
     if run and run.id ~= runId then return end
     ForgetRun()
+    LetGoAll()
 end)
 
 -- ============================================================================
@@ -1671,7 +1929,7 @@ local function ActOn(ped, data)
         local pts = PointsOf(args.points)
         local p = pts[#pts]
         if p then
-            TaskFollowNavMeshToCoord(ped, p.x, p.y, p.z, 1.0, -1, 1.5, false, 0.0)
+            TaskFollowNavMeshToCoord(ped, p.x, p.y, p.z, 1.0, -1, 1.5, NAV.default, 0.0)
         else
             TaskWanderStandard(ped, 10.0, 10)
         end
@@ -1920,6 +2178,7 @@ AddEventHandler('onResourceStop', function(res)
         if DoesEntityExist(ped) and NetworkHasControlOfEntity(ped) then FreezeEntityPosition(ped, false) end
         ai[ped] = nil
     end
+    LetGoAll()
     if groupsReady then
         RemoveRelationshipGroup(HOSTILE)
         RemoveRelationshipGroup(NEUTRAL)

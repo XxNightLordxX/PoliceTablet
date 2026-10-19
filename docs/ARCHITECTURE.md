@@ -933,7 +933,8 @@ Client (host runs AI; all participants see targets):
 - `apply(entity, cfg)` — model config from the `cp` bag: accuracy, armour, health, weapon,
   `SetPedDropsWeaponsWhenDead(ped, false)`, 
   combat attributes by behaviour, no ragdoll/flee when hostile (relationship groups `CRIMSONPOLICE_HOSTILE`/`CRIMSONPOLICE_NEUTRAL`)
-- `task(entity, action, args)` actions: `combat` (nearest participant), `flee` (from participants, or along points), `handsUp`, `kneel`, `cuffed`, `follow` (walk to coords), `cower`, `wander`, `enterVehicle`, `driveTo`, `driveRoute` (TaskVehicleDriveToCoordLongrange waypoint by waypoint)
+- `task(entity, action, args)` actions: `combat` (nearest participant), `flee` (from participants, or along points, at
+  the bag's gait), `handsUp`, `kneel`, `cuffed`, `follow` (walk to coords), `cower`, `wander`, `enterVehicle`, `driveTo`, `driveRoute` (TaskVehicleDriveToCoordLongrange waypoint by waypoint)
 - Reacts to `cp` state bag changes (`AddStateBagChangeHandler('cp', ...)`) on the host: surrendered →
   hands up then kneel; cuffed → cuffed anim + freeze; fleeing → flee; hostile → combat.
 - `nearestParticipant(coords) -> ped, dist` using the run's participant list.
@@ -945,6 +946,23 @@ Client (host runs AI; all participants see targets):
 - The combat governor: every participant's game (not only the host) applies those caps, settings only and never a
   task, to each armed mission ped of its run it owns (`NetworkHasControlOfEntity`), once per entity handle and bag
   `seq`, and again when it owns the ped again after another game had it (1 s loop while on a run).
+- Tired runners (Config.Flee, the bag key `gait` of the server's flee clock; missing = sprint, ignored unless the
+  state is `fleeing` and Config.Flee is on): the host gives every flee leg on foot at the gait's move blend ratio
+  (TaskFollowNavMeshToCoord: sprint 3.0, jog 2.0, walk and spent 1.0) and gives the current leg again when the gait
+  changes (same state: the bag handler does not re-task). A tired runner with no route left (or at its end) runs
+  navmesh legs of 40 m straight away from the nearest participant instead of TaskSmartFleePed (no speed argument):
+  to the GetSafeCoordForPed point (flags 2 + 8: not isolated, not water) when it lies at least 10 m ahead, else the
+  straight point, with ENAV_NO_STOPPING; the next leg 5 m before the end, when stuck, or when a participant is nearer
+  its end than he is. A sprinting runner keeps TaskSmartFleePed, a driver his car.
+- The pacer: every participant's game (host or not) holds each tired runner of its run that it owns (on foot,
+  alive) to his gait every frame (`Wait(0)` while there is one): `SetPedMaxMoveBlendRatio` 2.0 (jog) or 1.0 (walk,
+  spent) and `SetPedMoveRateOverride` jogRate / walkRate (0.5-1.0), both of which last one frame; with
+  windedClipset the movement clip set `move_m@JOG@` (jog) or `move_injured_generic` (walk, spent) once
+  `RequestClipSet` has loaded it (3 s at most). A new bag reaches it in the same frame; the 1 s governor loop picks up
+  a runner OneSync hands over. It lets go in the same frame (cap 3.0, rate 1.0, `ResetPedMovementClipset`) when he
+  is no longer tired: another state, a sprint again, a vehicle, dead, Config.Flee off, another game owns him (that
+  game holds him), the run's end, the resource's stop; a game that gets back a ped a bag had marked tired, after his
+  breath came back, resets it once.
 
 Parity-plus additions (WP2; docs/notes/custody.md):
 - States `contacted`, `escorted`, `seated`, `released`, `handed_over`, `impounded`; contacted, escorted and seated are
@@ -1892,7 +1910,8 @@ call, so a Settings change applies to the next NPC; `enabled = false` makes ever
 
 ### 6.2 NPC state (the `cp` state bag, server-authoritative)
 `Entity(e).state.cp = { run, obj, role, state, armed, cfg = { weapon, accuracy, armour, health, behaviour, model } , tag }`,
-plus `gait` (`'sprint'|'jog'|'walk'|'spent'`, CP.Npc's flee clock, §5.11; missing = sprint).
+plus `gait` (`'sprint'|'jog'|'walk'|'spent'`, CP.Npc's flee clock, §5.11; missing = sprint; the game that owns a
+fleeing ped holds it to that pace, §5.11 client).
 Only the server changes `state` (via `CP.Npc.setState`), and the server never reads the bag back: its record per net
 id (`run.entities[netId].bag`, kept by CP.Npc) is the truth, so a client that rewrites the bag of an entity it owns
 changes nothing on the server. Client requests are evidence events
@@ -2699,7 +2718,9 @@ read a failure.
   `return H` at the end. `H.fire` gives each dispatch one cancelled flag (`CancelEvent()`, `WasEventCanceled()`, and
   its return value), as FXServer's TriggerEvent2 does. `H.combatNatives(onCall)` installs the NPC combat and damage
   natives with natives.json's argument types (a float where the game reads a float, and so on; a wrong one fails the
-  spec) and returns what each one set, per ped and per game (`world.forget(ped)`, `world.restore()`). Specs run in separate processes, two at a time (`--jobs=N`), each on its own copy
+  spec) and returns what each one set, per ped and per game (`world.forget(ped)`, `world.restore()`); `H.gaitNatives(onCall)`
+  does the same for the movement natives of a runner (the task, the per-frame cap and move rate, the clip set,
+  GetSafeCoordForPed). Specs run in separate processes, two at a time (`--jobs=N`), each on its own copy
   of the run database, which is rebuilt once per run. SQL `NOW()` is the spec's clock (`H.time` after
   `H.boot`) in every storage mode. Never leave a spec that fails, and never make a check depend on a random
   roll, the wall clock or the machine's time zone: the assertion counts are the same in every run and mode.

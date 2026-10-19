@@ -418,6 +418,16 @@ packages, and the runner's own clock and zone (the specs do not read either). Th
   `WasEventCanceled`, and its return value). tests/npc_combat_spec.lua, the npc client checks (the combat governor
   of every participant), tests/blocks_c_spec.lua (the drive-by) and tests/npc_spec.lua (the willKill cancel) use
   them; with the new config but the old code, more than 80 checks fail and the npccombat client checks crash.
+- **Movement natives that took anything, and lasted forever**: the npc client checks recorded
+  `TaskFollowNavMeshToCoord` without its argument types (the module passed `false` for its int flags and could pass a
+  whole number as the speed), and nothing knew that a move blend ratio cap or a move rate override lasts one frame
+  (natives.json SET_PED_MOVE_RATE_OVERRIDE: "Needs to be looped!"), so a pace set once would have passed.
+  `H.gaitNatives(onCall)` installs the movement natives a runner's game uses (TaskFollowNavMeshToCoord,
+  TaskSmartFleePed, SetPedMaxMoveBlendRatio, SetPedMoveRateOverride, the clip set natives, GetSafeCoordForPed) with
+  natives.json's argument types and keeps each ped's task, cap, move rate and clip set: `capNow(ped)` /
+  `rateNow(ped)` answer only what was set during the current frame (one `H.step`), a clip set loads `loadMs` after
+  `RequestClipSet` and only when natives.json lists it, and `safeCoord` is the spec's GetSafeCoordForPed. The npc
+  client checks (tired runners, step F2) use it; with the old module 87 checks fail (30 of them the `false` flags).
 - **Player peds without health**: tests/npc_spec.lua answered 0 for a player ped's health, and the willKill cases
   modelled willKill as a headshot only, so a cancel that dropped EVERY killing hit (the shot that finishes off a hurt
   officer too) passed. FXServer reads a ped's health from its synced health node (`GET_ENTITY_HEALTH`,

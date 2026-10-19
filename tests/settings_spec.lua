@@ -282,6 +282,19 @@ do
     Err('Flee.jitter', 0.6, 'err.setting_range', 'jitter at most 0.5')
     Err('Flee.recoverRange', 5, 'err.setting_range', 'the breather range is at least 10 m')
     H.ok(not E('Flee.enabled').reload and not E('Flee.enabled').restart, 'Flee is read live: no reload, no restart')
+    -- how much a tired runner slows down (F2): each comment reads alone, rates 0.5-1.0, live
+    H.eq(E('Flee.jogRate').desc, 'a jogging runner\'s speed: 1.0 = a normal jog, 0.9 = 10 % slower (0.5-1.0)',
+        'the jog rate')
+    H.eq(E('Flee.walkRate').desc, 'a walking or worn-out runner\'s speed: 1.0 = a normal walk (0.5-1.0)',
+        'the walk rate')
+    H.eq(E('Flee.windedClipset').desc, 'true = a tired runner looks it: he jogs, then walks winded', 'the look')
+    ok, v = Check('Flee.jogRate', 1)
+    H.ok(ok and v == 1.0 and math.type(v) == 'float', 'a jog rate of 1 is kept as 1.0 (a normal jog)')
+    H.ok((Check('Flee.walkRate', 0.5)), 'a walk at half speed')
+    Err('Flee.jogRate', 0.4, 'err.setting_range', 'a jog rate of at least 0.5')
+    Err('Flee.walkRate', 1.2, 'err.setting_range', 'a walk rate of at most 1.0 (never faster than normal)')
+    Err('Flee.windedClipset', 'yes', 'err.setting_type', 'the look is on or off')
+    H.ok(not E('Flee.jogRate').reload and not E('Flee.jogRate').restart, 'the rates are read live')
     Err('Debug', 'yes', 'err.setting_type', 'text for on/off')
     Err('AdminTheme.primary', '#zzzzzz', 'err.setting_colour', 'a colour must be #rrggbb')
     H.ok((Check('AdminTheme.primary', '#112233')), 'a valid colour')

@@ -217,13 +217,15 @@ local RANGES = {
     ['NpcCombat.aiMeleeDamage'] = { 0, 2 },
     ['NpcCombat.officerDefense'] = { 0.1, 2 },
     ['NpcCombat.lethalCancelAbove'] = { 0.25, 1 },
-    -- how long fleeing suspects keep running (Config.Flee)
+    -- how long fleeing suspects keep running and how much they slow down (Config.Flee)
     ['Flee.sprintSeconds'] = { 1, 120 },
     ['Flee.jogSeconds'] = { 1, 120 },
     ['Flee.walkSeconds'] = { 1, 120 },
     ['Flee.recoverSeconds'] = { 1, 120 },
     ['Flee.jitter'] = { 0, 0.5 },
     ['Flee.recoverRange'] = { 10, 500 },
+    ['Flee.jogRate'] = { 0.5, 1 },
+    ['Flee.walkRate'] = { 0.5, 1 },
 }
 
 -- Numbers that may go either way whatever config.lua has.

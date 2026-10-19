@@ -1437,7 +1437,7 @@ Every person in a mission gets a demeanour when it spawns, rolled by the server 
   - Damage: while their run is live, each participant's game makes NPC bullets and melee do half damage (aiDamage, aiMeleeDamage) and gives the officer no headshot multiplier (noCriticalHits), again after a respawn; officerDefense (off by default) lowers all weapon damage the officer takes. Everything goes back when the run ends. The server also drops a hit by a mission NPC that would kill a healthy officer of its run in one shot (cancelLethalHeadshots): healthy means at least lethalCancelAbove (0.75) of his health, as the server's copy of his ped says, so the shot that finishes off a hurt officer always counts and officers can still go down.
   - 60 rounds per armed NPC (ammo).
 
-- Runners tire (Config.Flee, owner request of 2026-10-19: "I want the peds to run out of stamina when they run away"). GTA's NPCs have no stamina, so the server times every mission NPC in the fleeing state while it is on foot: it sprints for sprintSeconds (10), jogs for jogSeconds (12), walks for walkSeconds (8), and is then worn out (spent). Each person's times are stretched or shortened by up to jitter (25%), rolled once from the run seed, and by the Config.NpcDifficulty preset's fleeMult ('hard' 20% longer, 'easy' 20% shorter). Only time spent fleeing on foot counts: a person who flees by car (a field contact's driver who bolts) does not tire while he sits in a vehicle, and his gait there is a sprint. The time is kept when the person stops (an armed inmate turning to fight, a surrender, a feint) or gets into a car, and runs on when he is on foot again. With no participant within recoverRange (60 m) for recoverSeconds (20 s) the person gets his breath back and sprints again. With armedTire = false a person carrying a visible weapon never tires (a contact's hidden weapon never counts). The gait is written to the person's cp bag (gait) only when it changes, never as a new task. So far only the server keeps this clock: no game and no give-up rule reads the gait yet, so nothing changes in game.
+- Runners tire (Config.Flee, owner request of 2026-10-19: "I want the peds to run out of stamina when they run away"). GTA's NPCs have no stamina, so the server times every mission NPC in the fleeing state while it is on foot: it sprints for sprintSeconds (10), jogs for jogSeconds (12), walks for walkSeconds (8), and is then worn out (spent). Each person's times are stretched or shortened by up to jitter (25%), rolled once from the run seed, and by the Config.NpcDifficulty preset's fleeMult ('hard' 20% longer, 'easy' 20% shorter). Only time spent fleeing on foot counts: a person who flees by car (a field contact's driver who bolts) does not tire while he sits in a vehicle, and his gait there is a sprint. The time is kept when the person stops (an armed inmate turning to fight, a surrender, a feint) or gets into a car, and runs on when he is on foot again. With no participant within recoverRange (60 m) for recoverSeconds (20 s) the person gets his breath back and sprints again. With armedTire = false a person carrying a visible weapon never tires (a contact's hidden weapon never counts). The gait is written to the person's cp bag (gait) only when it changes, never as a new task. The game that owns the runner slows him down to it (OneSync often gives a runner to the officer chasing him, so every participant's game does this for the runners it owns, not only the host's): at most a run while he jogs and a walk once he walks or is worn out, held every frame, played at jogRate (0.95) or walkRate (0.85) of the normal speed, and with windedClipset a jog, then a winded walk. The host gives every leg of his flee at that pace and gives his current leg again when the gait changes; a tired runner with no route left runs 40 m legs on the navmesh straight away from the nearest officer instead of GTA's flee task (which has no speed). He gets his own pace back at once when he stops fleeing (a surrender, a fight), gets his breath back, sits in a vehicle or Config.Flee is switched off. No give-up rule reads the gait yet.
 
 - The debrief (the result screen, Profile & History and the dispute reviews) lists each person's demeanour and what they did (walked away, ran, drew a weapon, surrendered, faked a surrender, cuffed, escaped, killed), once the run has ended, so a participant who leaves early learns nothing about a person still in play.
 
@@ -3211,8 +3211,8 @@ Config.NpcCombat = {
 
 -- How long a suspect who runs from your officers can keep running. GTA's NPCs never tire, so the server times every
 -- mission NPC that runs on foot (time in a car does not count): first a sprint, then a jog, then a walk, then worn
--- out. Config.NpcDifficulty's fleeMult stretches every time here ('hard' runners last 20 % longer, 'easy' ones
--- 20 % shorter).
+-- out, and he slows down to match. Config.NpcDifficulty's fleeMult stretches every time here ('hard' runners last
+-- 20 % longer, 'easy' ones 20 % shorter).
 Config.Flee = {
     enabled = true,                  -- false = suspects run as GTA makes them: they never tire
     sprintSeconds = 10,              -- seconds a runner sprints before he slows to a jog
@@ -3225,6 +3225,9 @@ Config.Flee = {
     recoverSeconds = 20,
     recoverRange = 60.0,             -- metres: an officer this close stops a runner from getting his breath back
     armedTire = true,                -- false = a suspect who carries a weapon you can see never tires
+    jogRate = 0.95,                  -- a jogging runner's speed: 1.0 = a normal jog, 0.9 = 10 % slower (0.5-1.0)
+    walkRate = 0.85,                 -- a walking or worn-out runner's speed: 1.0 = a normal walk (0.5-1.0)
+    windedClipset = true,            -- true = a tired runner looks it: he jogs, then walks winded
 }
 
 -- ── Built-in mission tweaks ─────────────────────────────────────────────────
