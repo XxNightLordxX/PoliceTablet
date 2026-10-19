@@ -1724,8 +1724,11 @@ clean-up never archives a run whose money or item rewards are not finished, and 
 - **Add department**: key (it can't change later), name, short tag, its Qbox jobs (a job belongs to one department
   only), supervisor grade, society account and colours copied from another department. A new department starts at 0
   this season. Also add its job to sc-dispatch `AllowedJobs` and sc-police `PoliceJobs`.
-- **Edit**: name, tag, jobs, grade, account, colours, a logo link (https) or file, and **Upload a logo** (PNG or WebP,
-  at most 1 MB; it shows after the next restart). A job moves to another department only while no run is going.
+- **Edit**: name, tag, jobs, grade, account, colours, a logo link (https) or file (a link is used when both are set),
+  and **Upload a logo** (PNG or WebP, at most 1 MB; it takes about 20 s: one 16 KB piece every
+  `AdminControl.logoChunkGapMs` ms, so FXServer never drops you for sending too much). The upload replaces a logo link
+  and shows after the next restart; until then the tablets keep the old logo. A job moves to another department only
+  while no run is going.
 - **Turn off** (typed short tag): nobody opens the tablet through it any more; its history, boards, disputes and
   unpaid pay stay, and its pay still comes from its account. Not while its officers are on a run, and one department
   always stays on. **Delete** is only for a department added in game that has no history.

@@ -134,6 +134,9 @@ Config.AdminControl = {
     extraRunsMax = 10,           -- extra completions per officer per day
     streakForgiveMax = 7,        -- streak days one forgive may cover
     runTimeAddMax = 600,         -- seconds an admin may add to one live run
+    -- Departments → Upload a logo: milliseconds between two 16 KB pieces of the picture. 250 keeps the upload at half
+    -- of what FXServer lets one player send per second (it drops a player who sends more); 1 MB then takes about 22 s.
+    logoChunkGapMs = 250,
 }
 
 -- ============================================================================

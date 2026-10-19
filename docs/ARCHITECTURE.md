@@ -614,8 +614,13 @@ Server:
 - `notifyMany(srcs, kind, key, vars)`
 - `push(src, topic, data)` → NUI `{ type = 'push', topic, data }` (live screen updates)
 - `openAdmin(src)` → opens the Admin UI (called by modules/admin for `/CrimsonPoliceAdmin`)
-- Logo check at start (`LoadResourceFile` of each department's logo file) and one warning per logo
-  the NUI reports as failed (`logoFailed` client action).
+- Logo check at start (`LoadResourceFile` of each department's logo file, once the saved settings are loaded) and one
+  warning per logo the NUI reports as failed (`logoFailed` client action).
+- `logoFor(dept) -> { url, watermark, opacity, size, grayscale } | nil`: the logo a department's tablets show now (the
+  session logo and the Admin UI → Departments preview). Clients load `https://cfx-nui-<res>/logos/<file>` only from the
+  files FXServer packed at the start, so a `logo.file` that was not one of the start's department files (an upload with a
+  new name, the first logo of a department added in game) keeps the department's start logo (or none) until the
+  restart, and `logoFailed` never blames such a pending file.
 Client:
 - `/CrimsonPolice` command (`Config.Tablet.command`), optional keybind (`Config.Tablet.keybind`, via
   `RegisterKeyMapping`), optional ox_inventory item (`Config.Tablet.item`), export `OpenTablet()`.
@@ -1812,7 +1817,9 @@ Full admin control additions (P0; the Settings screen follow-ups are P5's):
 - `check(path, value, none, ctx)`: `ctx = { pending = { [path] = value } (the other values of the same save), boot }`.
   A template's check is `check(clean, path, ctx) -> errKey | nil, fixed`.
 - `Bonuses.*.kind` only with its value (`err.setting_kind_alone`): `setMany(src, changes, opts)` checks every value of
-  one save first (each sees the others), then writes them all; `Bonuses.*.value` is points -500..500 (whole) or pct
+  one save first (each sees the others; a `none` change is `false` in `ctx.pending`), then writes them all;
+  `checkMany(changes, opts) -> true, checked | false, errKey` is those checks alone, for a caller that must act only
+  when the save will be accepted (the logo upload checks before it writes its file); `Bonuses.*.value` is points -500..500 (whole) or pct
   -1..1 by the kind, sign kept. `reset` of either resets both.
 - Point values (`POINTS`: `MissionTypes.*.points`, `Bonuses.*.value|kind`, `Scoring.*`, `Scoring.common.*`,
   `Events.todMultiplier|modifierPoints`, `Events.weeklyBoss.points`, `CrossDepartmentPoints`, `Difficulty.pointsByStars`,
@@ -2789,7 +2796,7 @@ Every name below is admin-only (supervisors never pass) and audited; `reason` is
 | `server:admin:saveDepartment` | `{ key, fields }` | departmentsAdmin | the same |
 | `server:admin:setDepartmentEnabled` | `{ key, enabled, reason, confirm }` | departmentsAdmin | R, T the short tag when turning off, not while its officers are on a run, never the last |
 | `server:admin:deleteDepartment` | `{ key, reason, confirm }` | departmentsAdmin | R, T the short tag, added in game only, no rows |
-| `server:admin:uploadLogo` | `{ department, uploadId, index, total, data }` → `{ received }` / `{ file, restart }` | departmentsAdmin | permission per chunk, one upload per admin, ≤ 1 MB, 60 s, PNG/WebP |
+| `server:admin:uploadLogo` | `{ department, uploadId, index, total, data }` → `{ received }` / `{ file, restart, linkRemoved? }` | departmentsAdmin | permission per chunk, one upload per admin, ≤ 1 MB, 60 s, PNG/WebP, 6 pieces a second (the client sends one every `Config.AdminControl.logoChunkGapMs`: FXServer drops a player past 128 KB/s of events); the last piece checks the settings (`logo.file`, and `logo.url` removed when set) before it writes the file |
 | `server:admin:addDeskHere` / `updateDesk` / `removeDesk` | `{ label, size, rotation?, departments?, prop? }` / `{ index, ..., moveHere? }` / `{ index }` | departmentsAdmin | server position, the desk checks |
 | `server:admin:teleportToDesk` | `{ index }` | departmentsAdmin | 1 per 5 s |
 | `admin:myPosition` | — → `{ x, y, z, heading }` | openAdmin | server coordinates |

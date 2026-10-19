@@ -17,6 +17,10 @@ local AUDIT_SAVE_MAX = 100000             -- rows one Save to server writes
 local UPLOAD_MAX = 1048576                -- bytes of one logo
 local UPLOAD_CHUNK = 16384                -- base64 characters per chunk
 local UPLOAD_TTL = 60                     -- seconds an unfinished upload is kept
+-- logo pieces one admin may send per second: 6 x 16.5 KB stays under the 128 KB a second FXServer lets one player send
+-- (more and it drops the player with 'Reliable network event size overflow'); the client sends one every
+-- Config.AdminControl.logoChunkGapMs (at least 200 ms)
+local LOGO_RATE = 6
 local STATE_WAIT_MS = 3000                -- how long Show state waits for the player's client
 local DEPT_KEY = '^[a-z0-9_]+$'
 local MIGRATIONS_TABLE = 'cp_schema_migrations'
@@ -1388,6 +1392,19 @@ local function DropStaleUploads()
     end
 end
 
+-- The settings an uploaded logos/<file> needs: logo.file points at it and a logo link goes (a link is shown before a
+-- file, so the upload would never show). An added department is one record setting. changes, true when a link goes.
+local function LogoChanges(key, file)
+    local raw = DeptRaw(key)
+    local hadLink = type(raw.logo) == 'table' and raw.logo.url ~= nil
+    if Added(key) then
+        return { { path = 'Departments.' .. key, value = Record({ logo = { file = file, url = '' } }, raw) } }, hadLink
+    end
+    local changes = { { path = ('Departments.%s.logo.file'):format(key), value = file } }
+    if hadLink then changes[2] = { path = ('Departments.%s.logo.url'):format(key), none = true } end
+    return changes, hadLink
+end
+
 -- One chunk; the last one writes logos/<key>.<png|webp> and points the department's logo.file at it.
 local function UploadChunk(ctx)
     local p = ctx.payload
@@ -1429,18 +1446,16 @@ local function UploadChunk(ctx)
     local kind = Sys._imageKind(data)
     if not kind then return false, 'err.upload_type' end
     local file = ('%s.%s'):format(key, kind)
+    local changes, linkRemoved = LogoChanges(key, file)
+    -- the settings are checked before the file is written: SaveResourceFile replaces the file at once and cannot be
+    -- undone (and os.rename cannot commit a temporary file: its answer is inverted on Linux)
+    local okC, errC = CP.Settings.checkMany(changes)
+    if not okC then return false, errC end
     if not SaveResourceFile(CP.resource, 'logos/' .. file, data, #data) then return false, 'err.upload_write' end
-    local ok, err
-    if Added(key) then
-        local rec = Record({ logo = { file = file } }, DeptRaw(key))
-        ok, err = CP.Settings.set(ctx.src, 'Departments.' .. key, rec, false, { reason = ctx.reason })
-    else
-        ok, err = CP.Settings.set(ctx.src, ('Departments.%s.logo.file'):format(key), file, false,
-            { reason = ctx.reason })
-    end
+    local ok, err = CP.Settings.setMany(ctx.src, changes, { reason = ctx.reason })
     if not ok then return false, err end
     ctx.audit('logoUploaded', key, nil, ('%s %d B'):format(file, #data))
-    return true, { file = file, bytes = #data, restart = true }
+    return true, { file = file, bytes = #data, restart = true, linkRemoved = linkRemoved or nil }
 end
 
 -- ============================================================================
@@ -1965,7 +1980,7 @@ end, {
     rate = 1,
 })
 
-Kit.action('server:admin:uploadLogo', 'departmentsAdmin', UploadChunk, { reason = 'optional', rate = 20 })
+Kit.action('server:admin:uploadLogo', 'departmentsAdmin', UploadChunk, { reason = 'optional', rate = LOGO_RATE })
 
 -- ============================================================================
 --                          DESKS AND POSITIONS (NET)

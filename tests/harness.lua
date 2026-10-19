@@ -2388,6 +2388,85 @@ end
 
 H.players = {}   -- H.players[src] = { ped coords = vec(...), state = {}, ace = { ['crimsonpolice.admin'] = true } }
 
+-- ============================================================================
+--               FXSERVER'S LIMITS ON ONE PLAYER'S SERVER EVENTS
+-- ============================================================================
+-- citizen-server-impl ServerEventPacketHandler.cpp (build 35245: the same constants in libcitizen-server-impl.so):
+-- per player, token buckets 'netEvent' 50/s burst 200 (an event over it is dropped; over 'netEventFlood' 75/s burst 300
+-- too, the player is dropped: "Reliable network event overflow.") and 'netEventSize' 128 KB/s burst 384 KB of event
+-- name + msgpack'ed arguments (over it the player is dropped: "Reliable network event size overflow: <name>").
+-- On the client side TriggerServerEvent goes through them: H.netDrop is the drop reason, and a dropped player's events
+-- (that one and every later one) never reach the server.
+
+-- The bytes msgpack gives a Lua value (FXServer packs an event's arguments as one msgpack array).
+local function PackSize(v)
+    local t = type(v)
+    if v == nil or t == 'boolean' then return 1 end
+    if t == 'number' then
+        if math.type(v) == 'float' then return 9 end
+        if v >= 0 then
+            if v < 128 then return 1 elseif v < 256 then return 2 elseif v < 65536 then return 3 end
+            return v < 4294967296 and 5 or 9
+        end
+        if v >= -32 then return 1 elseif v >= -128 then return 2 elseif v >= -32768 then return 3 end
+        return v >= -2147483648 and 5 or 9
+    end
+    if t == 'string' then
+        local n = #v
+        if n < 32 then return 1 + n elseif n < 256 then return 2 + n elseif n < 65536 then return 3 + n end
+        return 5 + n
+    end
+    if t == 'table' then
+        local count = 0
+        for _ in pairs(v) do count = count + 1 end
+        local size = count < 16 and 1 or (count < 65536 and 3 or 5)
+        if count == #v then
+            for i = 1, count do size = size + PackSize(v[i]) end
+        else
+            for k, x in pairs(v) do size = size + PackSize(k) + PackSize(x) end
+        end
+        return size
+    end
+    return 18   -- a vector (msgpack ext) or anything else
+end
+H._packSize = PackSize
+
+local function Bucket(rate, burst) return { rate = rate, burst = burst, tokens = burst, at = H.clockMs } end
+local function Consume(b, n)
+    b.tokens = math.min(b.burst, b.tokens + (H.clockMs - b.at) * b.rate / 1000)
+    b.at = H.clockMs
+    if b.tokens < n then return false end
+    b.tokens = b.tokens - n
+    return true
+end
+
+-- true when FXServer lets this client event through (and records why it dropped the player when it does not)
+local function NetEventPasses(name, ...)
+    if H.netDrop then return false end
+    local net = H.netBuckets
+    if not Consume(net.count, 1) then
+        if not Consume(net.flood, 1) then H.netDrop = 'Reliable network event overflow.' end
+        return false
+    end
+    local size = #name + (select('#', ...) < 16 and 1 or 3)
+    for i = 1, select('#', ...) do size = size + PackSize((select(i, ...))) end
+    if not Consume(net.size, size) then
+        H.netDrop = ('Reliable network event size overflow: %s'):format(name)
+        return false
+    end
+    return true
+end
+
+function H.resetNetLimits()
+    H.netDrop = nil
+    H.netBuckets = {
+        count = Bucket(50, 200),
+        flood = Bucket(75, 300),
+        size = Bucket(128 * 1024, 384 * 1024),
+    }
+end
+H.resetNetLimits()
+
 function H.boot(opts)
     opts = opts or {}
     local server = (opts.side or 'server') == 'server'
@@ -2477,7 +2556,9 @@ function H.boot(opts)
     _G.TriggerClientEvent = function(name, target, ...)
         H.events[#H.events + 1] = { kind = 'client', name = name, target = target, args = { ... } }
     end
+    H.resetNetLimits()
     _G.TriggerServerEvent = function(name, ...)
+        if not server and not NetEventPasses(name, ...) then return end
         H.events[#H.events + 1] = { kind = 'server', name = name, args = { ... } }
     end
     -- the cancelled flag of the event H.fire is dispatching (FXServer: one per TriggerEvent2 dispatch)

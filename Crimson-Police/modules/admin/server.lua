@@ -2923,15 +2923,22 @@ CP.Net.callback('admin:getDepartments', function(src)
             local ok, b = Call('Banking', 'societyBalance', d.societyAccount)
             if ok and tonumber(b) then balance = tonumber(b) end
         end
-        local logo = nil
-        if d.logo and d.logo.url then
+        -- the logo the department's tablets show now (an uploaded file waits for the restart: the start logo meanwhile)
+        local logo
+        if CP.Tablet and CP.Tablet.logoFor then
+            logo = CP.Tablet.logoFor(d)
+        elseif d.logo and d.logo.url then
             logo = {
                 url = d.logo.url,
-                watermark = d.logo.watermark ~= false,
+                watermark = d.logo.watermark,
                 opacity = d.logo.opacity,
                 size = d.logo.size,
-                grayscale = d.logo.grayscale == true,
+                grayscale = d.logo.grayscale,
             }
+        end
+        if logo then
+            logo.watermark = logo.watermark ~= false
+            logo.grayscale = logo.grayscale == true
         end
         local m = members[d.key] or { n = 0, suspended = 0 }
         out[#out + 1] = {

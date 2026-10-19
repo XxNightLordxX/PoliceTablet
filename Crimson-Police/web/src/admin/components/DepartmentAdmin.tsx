@@ -27,6 +27,9 @@ import { newRequestId, useAdminAction } from './kit';
 import '../screens/System.css';
 
 const CHUNK = 16384; // base64 characters per upload chunk (a multiple of 4)
+const UPLOAD_RETRIES = 3; // times one piece is sent again
+const UPLOAD_RETRY_MS = 1500; // pause before that (the server's rate window is 1 s)
+const RETRY_ERRORS = new Set(['err.rate_limited', 'err.timeout']);
 const THEME_KEYS: (keyof DeptTheme)[] = ['primary', 'accent', 'background', 'surface', 'text'];
 const HEX = /^#[0-9a-fA-F]{6}$/;
 
@@ -226,27 +229,32 @@ export function DepartmentDialog({
         const data = await readBase64(file);
         const id = newRequestId();
         const total = Math.max(1, Math.ceil(data.length / CHUNK));
-        for (let i = 0; i < total; i++) {
-            setUploading(t('sysadmin.ui.uploading', { n: i + 1, total }));
-            const res = await run(
+        const department = setting.key;
+        const sendPiece = (i: number) =>
+            run<{ linkRemoved?: boolean }>(
                 'server:admin:uploadLogo',
-                {
-                    department: setting.key,
-                    uploadId: id,
-                    index: i + 1,
-                    total,
-                    data: data.slice(i * CHUNK, (i + 1) * CHUNK),
-                },
+                { department, uploadId: id, index: i + 1, total, data: data.slice(i * CHUNK, (i + 1) * CHUNK) },
                 { requestId: false, silent: true },
             );
+        let linkRemoved = false;
+        // the game client sends one piece every Config.AdminControl.logoChunkGapMs; a piece the server refused as too
+        // fast, or that got no answer, is sent again after a pause (the server keeps a piece it already has only once)
+        for (let i = 0; i < total; i++) {
+            setUploading(t('sysadmin.ui.uploading', { n: i + 1, total }));
+            let res = await sendPiece(i);
+            for (let retry = 0; !res.ok && retry < UPLOAD_RETRIES && RETRY_ERRORS.has(res.error ?? ''); retry++) {
+                await new Promise(resolve => setTimeout(resolve, UPLOAD_RETRY_MS));
+                res = await sendPiece(i);
+            }
             if (!res.ok) {
                 setUploading(null);
                 toast('error', errText(res.error || 'err.internal'));
                 return;
             }
+            if (res.data?.linkRemoved) linkRemoved = true;
         }
         setUploading(null);
-        toast('success', t('sysadmin.ui.upload_done'));
+        toast('success', t(linkRemoved ? 'sysadmin.ui.upload_done_link' : 'sysadmin.ui.upload_done'));
         onSaved();
     };
 

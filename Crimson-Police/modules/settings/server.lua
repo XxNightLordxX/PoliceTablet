@@ -206,6 +206,8 @@ local RANGES = {
     ['AdminControl.extraRunsMax'] = { 0, 100 },
     ['AdminControl.streakForgiveMax'] = { 0, 30 },
     ['AdminControl.runTimeAddMax'] = { 0, 3600 },
+    -- at least 200 ms: the server refuses more than 6 logo pieces a second (modules/sysadmin LOGO_RATE)
+    ['AdminControl.logoChunkGapMs'] = { 200, 2000 },
     ['Cash.addFundsMax'] = { 0, 10000000 },
     ['Cash.manualDailyLimit'] = { 0, 10000000 },
     ['Cash.lowBalanceWarn'] = { 0, 100000000 },
@@ -2481,9 +2483,9 @@ function Settings.set(src, path, value, none, opts)
     return true, Reply({ path })
 end
 
--- Several settings saved as one change: every value is checked first (each sees the others, so a bonus's kind and
--- its value go together), then all are written. changes = { { path, value, none } }.
-function Settings.setMany(src, changes, opts)
+-- The checks of Settings.setMany without writing anything: true, the checked changes | false, errKey. A caller that
+-- must do something first, and only when the save will be accepted (the logo upload writes its file), asks this.
+function Settings.checkMany(changes, opts)
     opts = opts or {}
     if not loaded then return false, 'err.settings_not_ready' end
     if safeMode then return false, 'err.settings_safe_mode' end
@@ -2492,8 +2494,11 @@ function Settings.setMany(src, changes, opts)
     for _, c in ipairs(changes) do
         if type(c) ~= 'table' or type(c.path) ~= 'string' then return false, 'err.invalid_payload' end
         if pending[c.path] ~= nil then return false, 'err.setting_duplicate' end
-        pending[c.path] = c.none and false or c.value
-        if pending[c.path] == nil then return false, 'err.setting_type' end
+        -- a change to "not set" (none) is false here; a change with neither is refused
+        local v = c.value
+        if c.none then v = false end
+        if v == nil then return false, 'err.setting_type' end
+        pending[c.path] = v
     end
     local checked = {}
     for _, c in ipairs(changes) do
@@ -2503,6 +2508,15 @@ function Settings.setMany(src, changes, opts)
         if errM then return false, errM end
         checked[#checked + 1] = { path = c.path, clean = clean, none = c.none == true }
     end
+    return true, checked
+end
+
+-- Several settings saved as one change: every value is checked first (each sees the others, so a bonus's kind and
+-- its value go together), then all are written. changes = { { path, value, none } }.
+function Settings.setMany(src, changes, opts)
+    opts = opts or {}
+    local okC, checked = Settings.checkMany(changes, opts)
+    if not okC then return false, checked end
     local done, paths = {}, {}
     for _, c in ipairs(checked) do
         local res, errC = Commit(src, c.path, c.clean, c.none, opts)

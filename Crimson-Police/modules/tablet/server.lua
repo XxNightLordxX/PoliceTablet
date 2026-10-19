@@ -31,7 +31,11 @@ local NAV_TOPICS = { unit = true, invites = true, calls = true, profile = true, 
 -- way -> the Config.Tablet.access switch that allows it (export is always on)
 local WAY_SWITCH = { command = 'command', keybind = 'keybind', dispatch = 'keybind', item = 'item', desk = 'desk' }
 
-local missingLogo = {}         -- deptKey -> true when logos/<file> is not in the resource
+-- Clients load https://cfx-nui-<resource>/logos/<file> only from the files FXServer packed when the resource started:
+-- a file uploaded or named after that is not there for them until the next restart (a 404 in the NUI).
+local servedAtStart = {}       -- file -> true: logos/<file> was in the resource when it started
+local startLogoUrl = {}        -- deptKey -> the logo URL its tablets could load at the start (nil = none)
+local logosChecked = false     -- true once the start check below has run
 local logoFailedWarned = {}    -- deptKey -> true once the NUI failure was reported
 local themeWarned = {}
 local lastWay = {}             -- src -> { via, desk } of the last session that passed the access checks
@@ -399,12 +403,25 @@ local function SessionConfig()
     }
 end
 
-local function SessionLogo(dept)
-    if not dept or type(dept.logo) ~= 'table' or not dept.logo.url then return nil end
-    if missingLogo[dept.key] then return nil end
-    local l = dept.logo
-    return { url = l.url, watermark = l.watermark, opacity = l.opacity, size = l.size, grayscale = l.grayscale }
+-- True when the department's logo file is one its clients cannot load yet (uploaded or named after the start). Before
+-- the start check has run nothing is pending: no upload or logo setting is accepted before the settings are loaded.
+local function LogoPending(dept)
+    if not logosChecked then return false end
+    local file = type(dept) == 'table' and type(dept.logo) == 'table' and dept.logo.file or nil
+    return file ~= nil and not servedAtStart[file]
 end
+
+-- The logo a department's tablets show now (also the Admin UI → Departments preview): its logo, or while its file is
+-- pending the logo they could load at the start (none for a department that had none). Display options apply live.
+function T.logoFor(dept)
+    if type(dept) ~= 'table' or type(dept.logo) ~= 'table' then return nil end
+    local l = dept.logo
+    local url = l.url
+    if LogoPending(dept) then url = startLogoUrl[dept.key] end
+    if not url then return nil end
+    return { url = url, watermark = l.watermark, opacity = l.opacity, size = l.size, grayscale = l.grayscale }
+end
+local SessionLogo = T.logoFor
 
 local function SessionOfficer(o, row)
     local level = LevelOf(row and row.xp or 0)
@@ -789,10 +806,13 @@ CP.Net.action('server:logoFailed', function(src, payload)
     local dept = deptKey and CP.Access.department(deptKey) or nil
     if not dept and url then
         for _, d in ipairs(CP.Access.departments()) do
-            if d.logo and d.logo.url == url then dept = d break end
+            local shown = T.logoFor(d)
+            if shown and shown.url == url then dept = d break end
         end
     end
     if not dept then return false, 'err.unknown_department' end
+    -- a pending file is never sent (its tablets show the start logo): the warning would blame a file that is there
+    if LogoPending(dept) then return true end
     if not logoFailedWarned[dept.key] then
         logoFailedWarned[dept.key] = true
         CP.warn(TAG,
@@ -803,28 +823,37 @@ CP.Net.action('server:logoFailed', function(src, payload)
     return true
 end, { rate = 2 })
 
--- Check every file-based logo once at start (at runtime, when CP.Access is loaded).
+-- Check every file-based logo once at the start, when the saved settings are on Config: the files the departments use
+-- then are the ones FXServer packed for the clients (no upload or logo setting is accepted before the settings load).
 CreateThread(function()
     if not CP.Access then
         CP.err(TAG, 'modules/access is missing: the tablet cannot build sessions')
         return
     end
+    local S = CP.Settings
+    while S and S.isLoaded and not S.isLoaded() do
+        if CP.Migrations and CP.Migrations.failed and CP.Migrations.failed() then return end
+        Wait(500)
+    end
     local warnedFile = {}
     for _, dept in ipairs(CP.Access.departments()) do
         local file = dept.logo and dept.logo.file
+        local present = true
         if file then
             local data = LoadResourceFile(CP.resource, 'logos/' .. file)
-            if not data or data == '' then
-                missingLogo[dept.key] = true
-                if not warnedFile[file] then
-                    warnedFile[file] = true
-                    CP.warn(TAG,
-                        'Department %s: logos/%s is missing; its tablet shows no logo or watermark until the file is added and the resource restarted',
-                        dept.key, file)
-                end
+            present = data ~= nil and data ~= ''
+            if present then
+                servedAtStart[file] = true
+            elseif not warnedFile[file] then
+                warnedFile[file] = true
+                CP.warn(TAG,
+                    'Department %s: logos/%s is missing; its tablet shows no logo or watermark until the file is added and the resource restarted',
+                    dept.key, file)
             end
         end
+        startLogoUrl[dept.key] = present and dept.logo and dept.logo.url or nil
     end
+    logosChecked = true
 end)
 
 AddEventHandler('playerDropped', function()

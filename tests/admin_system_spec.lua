@@ -304,6 +304,11 @@ do
     ok, e = Act('server:admin:saveDepartment', 1,
         { key = 'sast', fields = { logo = { url = 'http://x.example/a.png' } } })
     H.ok(ok == false and e == 'err.dept_logo_url', 'an http logo link is refused')
+    -- the dialog sends every logo field; an emptied link field removes the link (a "not set" change in setMany)
+    ok, e = Act('server:admin:saveDepartment', 1,
+        { key = 'sast', fields = { logo = { url = '', file = 'sast.png', watermark = true } } })
+    H.ok(ok == true and Config.Departments.sast.logo.url == nil,
+        'an emptied link field removes the link: ' .. tostring(e))
     ok = Act('server:admin:saveDepartment', 1, { key = 'bcso', fields = { short = 'BCS' } })
     H.ok(ok == true and Config.Departments.bcso.short == 'BCS', 'an added department saves its record')
 end
@@ -416,6 +421,84 @@ do
     H.eq(S.check('Departments.fib.logo.url', 'https://cdn.example.com/x.png'), true, 'an https link is a valid logo')
     local okU = S.check('Departments.fib.logo.url', 'https://x.example/a b.png')
     H.eq(okU, false, 'a link with a space is not')
+
+    -- ---- A LOGO LINK IS SHOWN BEFORE A FILE: the upload removes the link (or the upload would never show) ----
+    local okL = S.set(1, 'Departments.fib.logo.url', 'https://cdn.example.com/fib.png')
+    H.eq(okL, true, 'fib gets a logo link')
+    H.eq(A.department('fib').logo.url, 'https://cdn.example.com/fib.png', 'the link is the logo')
+    ok, res = Act('server:admin:uploadLogo', 1,
+        { department = 'fib', uploadId = 'link', index = 1, total = 1, data = enc })
+    H.ok(ok == true and res.linkRemoved == true, 'the upload says the link was removed: ' .. tostring(res))
+    H.eq(Config.Departments.fib.logo.url, nil, 'the link is gone')
+    H.eq(A.department('fib').logo.url, 'https://cfx-nui-Crimson-Police/logos/fib.png', 'the uploaded file is the logo')
+    ok, res = Act('server:admin:uploadLogo', 1,
+        { department = 'fib', uploadId = 'nolink', index = 1, total = 1, data = enc })
+    H.ok(ok == true and res.linkRemoved == nil, 'no link: nothing to remove')
+
+    -- ---- THE SETTING IS CHECKED BEFORE THE FILE IS WRITTEN (SaveResourceFile cannot be undone) ----
+    local fibJob = JOBS.fib
+    JOBS.fib = nil   -- the department validator now refuses every fib change (its job is no Qbox job)
+    ok, res = Act('server:admin:uploadLogo', 1,
+        { department = 'fib', uploadId = 'refused', index = 1, total = 1, data = B64(webp) })
+    JOBS.fib = fibJob
+    H.ok(ok == false and res == 'err.dept_job_unknown', 'a refused setting refuses the upload: ' .. tostring(res))
+    H.eq(files['logos/fib.webp'], nil, 'and no file was written')
+    H.eq(Config.Departments.fib.logo.file, 'fib.png', 'the department keeps its logo')
+
+    -- ---- A NEW FILE NAME WAITS FOR THE RESTART: clients only load the logos FXServer packed at the start ----
+    local warned = {}
+    local realWarn = CP.warn
+    CP.warn = function(tag, fmt, ...)
+        warned[#warned + 1] = tostring(fmt)
+        return realWarn(tag, fmt, ...)
+    end
+    ok, res = Act('server:admin:uploadLogo', 1,
+        { department = 'fib', uploadId = 'webp', index = 1, total = 1, data = B64(webp) })
+    H.ok(ok == true and res.file == 'fib.webp' and files['logos/fib.webp'] == webp, 'a WebP is written as fib.webp')
+    H.eq(A.department('fib').logo.url, 'https://cfx-nui-Crimson-Police/logos/fib.webp', 'the setting points at it')
+    H.eq(CP.Tablet.logoFor(A.department('fib')).url, 'https://cfx-nui-Crimson-Police/logos/fib.png',
+        'fib tablets keep the start logo until the restart')
+    local gdep
+    for _, d in ipairs((Cb('admin:getDepartments', 1, {}) or {}).departments or {}) do
+        if d.key == 'fib' then gdep = d end
+    end
+    H.eq(gdep and gdep.logo and gdep.logo.url, 'https://cfx-nui-Crimson-Police/logos/fib.png',
+        'and so does the Departments preview')
+    H.eq(CP.Tablet.logoFor({
+        key = 'newdept',
+        logo = { file = 'newdept.png', url = 'https://cfx-nui-x/logos/newdept.png' },
+    }), nil, 'a department with no logo at the start shows none until the restart')
+    H.fire('crimson-police:server:logoFailed', 7, { department = 'fib' }, 'lf1')
+    CP.warn = realWarn
+    local blamed = false
+    for _, w in ipairs(warned) do
+        if w:find('could not load its logo', 1, true) then blamed = true end
+    end
+    H.eq(blamed, false, 'a pending file is never blamed for a logo the tablet could not load')
+
+    -- ---- FXServer DROPS A PLAYER WHO SENDS MORE THAN 128 KB A SECOND: at most 6 pieces of 16.5 KB a second ----
+    local function ActNow(payload, reqId)
+        H.fire('crimson-police:server:admin:uploadLogo', 1, payload, reqId)
+        for _ = 1, 20 do
+            for i = #H.events, 1, -1 do
+                local e = H.events[i]
+                if e.name == 'crimson-police:client:actionResult' and e.args[1] == reqId then
+                    return e.args[2], e.args[3]
+                end
+            end
+            H.step(1)
+        end
+        return nil, 'no reply'
+    end
+    H.clockMs = H.clockMs + 1100
+    local answers = {}
+    for i = 1, 7 do
+        local okR, r = ActNow({ department = 'fib', uploadId = 'fast', index = i, total = 8, data = big }, 'fast' .. i)
+        answers[i] = okR and 'ok' or r
+    end
+    H.eq(answers[6], 'ok', 'six pieces in one second are taken')
+    H.eq(answers[7], 'err.rate_limited', 'a seventh in the same second is refused')
+    H.time = H.time + 61   -- the unfinished upload is dropped
 end
 
 -- ============================================================================

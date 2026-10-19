@@ -116,6 +116,14 @@ else
     -- ---- CLIENT ------------------------------------------------------------
     local pending, nextId = {}, 0
 
+    -- Actions with big payloads, sent at most once every N ms (read at each send, so a setting applies at once):
+    -- FXServer drops a player whose server events pass 128 KB a second (384 KB burst).
+    local PACED = {
+        -- Departments → Upload a logo: one 16.5 KB piece per event
+        ['server:admin:uploadLogo'] = function() return Config.AdminControl and Config.AdminControl.logoChunkGapMs end,
+    }
+    local pacedAt = {}   -- name -> GetGameTimer() before which the next send waits
+
     RegisterNetEvent(RESULT_EVENT, function(reqId, ok, data)
         local p = pending[reqId]
         if not p then return end
@@ -129,6 +137,14 @@ else
 
     -- Trigger 'crimson-police:<name>' with (payload, reqId) and wait for the reply.
     function CP.Net.action(name, payload, timeoutMs)
+        local pace = PACED[name]
+        if pace then
+            local gap = math.max(0, tonumber(pace()) or 0)
+            local now = GetGameTimer()
+            local at = math.max(now, pacedAt[name] or 0)
+            pacedAt[name] = at + gap
+            if at > now then Wait(at - now) end
+        end
         nextId = nextId + 1
         local reqId = ('r%d'):format(nextId)
         local p = promise.new()
