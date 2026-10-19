@@ -733,6 +733,16 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
     each car's position, waypoint, speed, owner and nearest participant every TRACE_MS, and every
     spawn with its distance and culling radius. A race (stop mode on a loop) starting on arrival
     shows block.pursuit.msg_race_start.
+    Where the cars appear (PLAN S13, Config.Spawning): PlaceFor gives slot i (spawnOffset > spawns > spawn >
+    ahead of the start > on the route > near the start; a slot past the objective's cars is a further slot of the
+    same kind). A point of the road route itself (spawnOffset, a loop's waypoint, an open route's first point) is
+    lifted Config.Spawning.vehicleLift over the road; the file's car points are used as written. A spawnOffset < 0
+    objective that follows an earlier spawnOffset pursuit on the same route (Traffic Enforcement's second violator)
+    is placed secondViolatorUpstream metres up the road from the participant furthest up it (within ON_ROAD of the
+    road), and counts as passed (its blip) once past where he stood (st.watchFrom). No start: one warning, never a
+    player's position. Each car goes through ctx.choosePoints (ordered = true: its slot, then two further slots, never
+    one a car of the objective stands on); none passes: it waits (SpawnMissing tries again each tick); the slots that
+    passed go to the placer as alt. Config.Spawning.enabled = false: slot i at once on the road's height, as before.
     Vehicles start when the objective starts (trigger 'arrive' or { ahead }) or, with trigger
     { distance, lights }, when a participant with lights on is within distance (client evidence
     'lights_near', checked with server coords), when any participant gets within FLEE_CLOSE, or when
@@ -4861,6 +4871,15 @@ tests/oversight_spec.lua · the oversight slice: modules/admin (audit, webhooks,
 review and void, force recall, supervisor/admin callbacks), modules/disputes and modules/anticheat.
 The real CP.Access and CP.Permissions modules run on a CP.Qbx stub; every other module is a stub that
 records its calls. Every SQL statement of the three modules runs here against MariaDB cp_test.
+```
+
+## tests/pursuit_director_spec.lua
+
+```text
+pursuit cars through the spawn director (Config.Spawning, PLAN S13) on the real engine, the real block and the
+placement module: road clearance (vehicleLift), the second violator up the road from the officers
+(secondViolatorUpstream), every car's point through the director (minDistance, after waveDelayMax hardMin), the
+placer's other slots, and never a car on a player's position.
 ```
 
 ## tests/run.lua

@@ -369,6 +369,25 @@ takes / argues / drives off `ARRIVE_PAUSE_S` 3 s later) waits until he is within
 `RETURN_WALK_S` + distance / 1 m/s; the thief runs at `thief.runAt` as before. `enabled = false`: everything as before
 (scene and cars at once, the driver 14 m and the thief 30 m from the car at a random angle, at once).
 
+pursuit through the director (PLAN S13, Config.Spawning; owner request of 2026-10-19: "i do not want them spawning in
+the ground or surronding the officers"). `PlaceFor(ctx, st, i)` returns slot i's point, its console name
+(`spawnOffset -200 m, 8 m back`, `spawns[3]`, `route[12]`, `50 m ahead of the start`) and, for spawnOffset, the slot's
+base (`OffsetSpot`: `{ p, label, watch }`, kept in `st.offset` once the first car is out, so the next cars queue
+behind it). A point of the road route itself (spawnOffset's `AlongRoute`, a loop's waypoint, an open route's first
+point, and the queue copies of them) gets `Config.Spawning.vehicleLift` on z (`Lifted`); the file's `spawns` / `spawn`
+points are used as written. A spawnOffset < 0 objective on an open route that an earlier pursuit objective of the
+mission with a spawnOffset on the same route precedes (`LaterViolator`: Traffic Enforcement's objective 3) counts from
+the participant furthest up the road among those within `ON_ROAD` (100 m, 2D) of it (`RoadSpot`: his metres along the
+route on the nearest segment) and is placed `secondViolatorUpstream` metres before him (`AtRoad`, never before the
+route's first point); `st.watchFrom` = his road point is then where `WatchCruise` judges "passed" instead of the start.
+No participant on the road, `secondViolatorUpstream = 0` or the director off: from the start as before. No start: one
+`CP.warn` and the spawnOffset branch is skipped (the next ones: spawns, spawn, ahead of the start, the route), never a
+player's position. `SpawnVehicle` offers `Candidates` (slot i, then the slots `vehicles + 1` and `vehicles + 2`, none
+within `SLOT_TAKEN` 4 m of a car of the objective; labelled `vehicle <i> at <name>`) to `ctx.choosePoints(cands, 1,
+{ name, wave = 'vehicle <i>', since = st.waitMs[i], ordered = true })`: the first that passes is used, the rest that
+pass go to `spawnVehicle` as `alt` (the placer's other points, §5.43); none passes: no car this tick (SpawnMissing tries
+again each tick, the objective waits). `enabled = false` or no `ctx.choosePoints`: slot i at once, as before.
+
 Evidence field_contact accepts: `{ type = 'action', netId, action, phase = 'begin'|'finish' }` (from the plain
 event `crimson-police:server:custody`), `{ type = 'decide', netId, choice, offence }` (from the action
 `server:contactDecide`), `{ type = 'cuffed', netId }` (CP.Npc), `{ type = 'aim' | 'stunned', netId }` (client
@@ -961,7 +980,8 @@ Full admin control (P3, §5.39):
     `Config.Spawning.enabled = false`: the first `n` candidates as they are. `testRestart` clears the objective's
     clocks.
     Hidden first (`Config.Spawning.preferHidden`, PLAN S5): when more candidates pass the distance and behind rules
-    than `n` and the caller can yield (`coroutine.isyieldable()`), the director asks the games of the participants
+    than `n`, the block did not pass `opts.ordered = true` (keep its own order and ask no game: pursuit's car slots on
+    a road, PLAN S13) and the caller can yield (`coroutine.isyieldable()`), the director asks the games of the participants
     within `activateRange` of the centre (nearest first, at most 4; none that close: the nearest one) through the
     ox_lib callback `crimson-police:client:spawn:visible` (§8.1, `CP.Spawn.visible` §5.43) with the first 32 passing
     points and `ms = losTimeoutMs - 250`, each ask in its own thread, and waits at most `losTimeoutMs` (`Wait(50)`).

@@ -360,6 +360,14 @@ Config.Spawning = {
     -- Seconds a scene waits for officers standing closer than that before it appears anyway, with one warning in the
     -- console naming the mission and the place (move its start further out); 0 = it waits until they step back
     sceneWaitMax = 45,
+    -- Metres (0-1.5) a pursuit car made on a point of the mission's road itself (Traffic Enforcement's violator, a race
+    -- loop's waypoint) is lifted over the road there, so it never starts inside the road surface (0 = on the road's
+    -- own height, as before). A mission's own car points are used as written
+    vehicleLift = 0.5,
+    -- Metres (0-400): a violator that comes after another one on the same road (Traffic Enforcement's second violator)
+    -- appears this far up the road from the officer furthest up it, so it drives towards your officers wherever they
+    -- worked the first stop (0 = at the first violator's point, as before)
+    secondViolatorUpstream = 200.0,
     -- true = of the points a wave may use, the ones your officers cannot see (behind a building, a container or a
     -- vehicle, as the nearest officers' own games check it) are used first, so people appear out of sight instead of
     -- in the open in front of you; seen points are still used when there are not enough hidden ones (false = the

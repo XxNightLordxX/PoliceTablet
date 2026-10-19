@@ -790,7 +790,8 @@ do
     -- starts at the first ask (opts.since, an os.time(), sets it instead) and stops once a call returns n points; after
     -- waveDelayMax seconds the distance drops to hardMin, never lower. opts.name names the list in the console
     -- ('spawns[7] skipped: 30 m from <officer>'; a candidate { coords, label = 'yard[3]' } is named by its label),
-    -- opts.obj the objective (ctx.choosePoints fills it in).
+    -- opts.obj the objective (ctx.choosePoints fills it in). opts.ordered = true keeps the block's own order and asks no
+    -- game what it sees (a car's slots on a road: its grid slot first, then the slots behind it).
     -- Config.Spawning.enabled = false: the first n candidates as they are.
     function Runs.choosePoints(run, candidates, n, opts)
         opts = type(opts) == 'table' and opts or {}
@@ -953,7 +954,7 @@ do
         local passed, officers = Rules()
         -- hidden first: only worth an ask when more points pass than the wave takes
         local hidden = nil
-        if cfg.preferHidden ~= false and #passed > n then
+        if cfg.preferHidden ~= false and opts.ordered ~= true and #passed > n then
             local waited
             hidden, waited = AskHidden(run, m, opts, name, passed, officers, cx, cy, cfg)
             -- the ask waited for the officers' games (answered or not): the rules again, from where they stand now

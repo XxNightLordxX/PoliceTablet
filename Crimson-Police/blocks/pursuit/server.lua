@@ -21,6 +21,9 @@ local STOP_NEAR = 50.0                   -- a stop only counts with a participan
 local SPEED_WINDOW_MS = 3500             -- server speed samples kept per participant (ram plausibility)
 local SURRENDER_GRACE_MS = 3000          -- a kill this soon after an armed suspect gave up is a shot in flight
 local SPAWN_GAP = 8.0                    -- metres between vehicles placed from one point
+local SLOT_TAKEN = SPAWN_GAP / 2         -- metres: a slot a car of the objective stands on is never offered again
+local ALT_SLOTS = 2                      -- other slots offered with each car (to the director, then the placer)
+local ON_ROAD = 100.0                    -- metres: an officer this close to the road counts as on it
 local ROUTE_BACK = 2                     -- racers start this many waypoints before the intercept point
 local ROUTE_END = 30.0                   -- an open route is done this close to its last waypoint (as the host)
 local FOLLOW_SEND_MS = 2000
@@ -866,21 +869,160 @@ local function AlongRoute(route, ref, offset)
     return vector4(x + 0.0, y + 0.0, z + 0.0, h)
 end
 
--- Where the i-th vehicle is placed: spawnOffset > spawns > spawn > ahead of the start > on the route > near
--- the start.
+-- ============================================================================
+--                            WHERE THE CARS APPEAR
+-- ============================================================================
+-- Config.Spawning: road clearance, the director.
+-- Owner request of 2026-10-19 ("i do not want them spawning in the ground or surronding the officers"). A car made on
+-- a point of the road route itself (the road's own height: spawnOffset, a race loop's waypoint, an open route's first
+-- point) is lifted by Config.Spawning.vehicleLift, so it never starts inside the road surface; the mission file's own
+-- car points (spawns, spawn) already are 0.5 m over the road and are used as written. Every car's point goes through
+-- the engine's spawn director (ctx.choosePoints: minDistance from every officer, never behind one, after waveDelayMax
+-- hardMin, never closer; the car waits meanwhile) and then the placer (Config.Spawning.place), with the objective's
+-- next slots as the other points it may be moved to. A violator that follows another one up the same road (Traffic
+-- Enforcement's second violator) comes from secondViolatorUpstream metres up the road from the officers, not from
+-- where the first one came from. A car is never placed on a player.
+
+local function SpawnCfg() return type(Config.Spawning) == 'table' and Config.Spawning or {} end
+
+-- false with Config.Spawning.enabled = false: every car on its slot at once, on the road's height, as before.
+local function Directed() return SpawnCfg().enabled ~= false end
+
+local function CfgNum(key, default)
+    local v = tonumber(SpawnCfg()[key])
+    if v == nil or v ~= v then return default end
+    return v
+end
+
+-- A road route's own point lifted by Config.Spawning.vehicleLift (on the road's own height with the director off).
+local function Lifted(p)
+    local lift = Directed() and math.max(0.0, CfgNum('vehicleLift', 0.5)) or 0.0
+    local x, y, z = U.xyz(p)
+    return vector4(x + 0.0, y + 0.0, z + lift, HeadingOf(p))
+end
+
+-- Where coords lies along an open route: the metres of road from its first point to the point of the road nearest
+-- coords (on the map), and how far coords is from that point; nil when coords is none.
+local function RoadSpot(route, coords)
+    local pts = route.points
+    local cx, cy = U.xyz(coords)
+    if not cx then return nil end
+    local best, at, sum = math.huge, nil, 0.0
+    for k = 1, #pts - 1 do
+        local ax, ay = U.xyz(pts[k])
+        local bx, by = U.xyz(pts[k + 1])
+        local len = U.dist(pts[k], pts[k + 1])
+        local dx, dy = bx - ax, by - ay
+        local l2 = dx * dx + dy * dy
+        local t = l2 > 0 and math.max(0.0, math.min(1.0, ((cx - ax) * dx + (cy - ay) * dy) / l2)) or 0.0
+        local d = math.sqrt((cx - ax - dx * t) ^ 2 + (cy - ay - dy * t) ^ 2)
+        if d < best then best, at = d, sum + len * t end
+        sum = sum + len
+    end
+    return at, best
+end
+
+-- The point s metres along an open route from its first point (kept on the route), with the road's heading there.
+local function AtRoad(route, s)
+    local pts = route.points
+    local sum = 0.0
+    s = math.max(0.0, s)
+    for k = 1, #pts - 1 do
+        local len = U.dist(pts[k], pts[k + 1])
+        if s <= sum + len or k == #pts - 1 then
+            local t = len > 0 and math.max(0.0, math.min(1.0, (s - sum) / len)) or 0.0
+            local ax, ay, az = U.xyz(pts[k])
+            local bx, by, bz = U.xyz(pts[k + 1])
+            return vector4(ax + (bx - ax) * t, ay + (by - ay) * t, az + (bz - az) * t, HeadingTo(pts[k], pts[k + 1]))
+        end
+        sum = sum + len
+    end
+    return nil
+end
+
+-- true when an earlier objective of the mission already sent a car up this same road (a pursuit with a spawnOffset
+-- on the same route): this objective's car is a second violator, and the officers are wherever they worked the first.
+local function LaterViolator(ctx)
+    local list = ctx.mission and ctx.mission.objectives
+    if type(list) ~= 'table' then return false end
+    for j = 1, (tonumber(ctx.index) or 1) - 1 do
+        local o = list[j]
+        if type(o) == 'table' and o.block == BLOCK and IsNum(o.spawnOffset) and o.spawnOffset ~= 0
+            and o.route == ctx.obj.route then
+            return true
+        end
+    end
+    return false
+end
+
+-- The officer furthest up the road (against the driving direction) of those within ON_ROAD of it: his metres along
+-- the route and his server id; nil when no officer is on the road.
+local function UpstreamOfficer(ctx, route)
+    local at, who = nil, nil
+    for _, e in ipairs(Party(ctx)) do
+        local s, d = RoadSpot(route, e.coords)
+        if s and d <= ON_ROAD and (not at or s < at) then at, who = s, e.src end
+    end
+    return at, who
+end
+
+local function RunTag(ctx)
+    return tostring(ctx.run and ctx.run.id), tostring(ctx.mission and ctx.mission.id or ctx.run and ctx.run.missionId)
+end
+
+-- Where a spawnOffset car is placed: { p = the road point (vector4, the road's heading, lifted), label = its console
+-- name, watch = for a second violator the officer's place on the road, where it counts as past the officers (nil =
+-- the start, the observation point) }. Nil when there is nothing to count from: never a player's position (one
+-- warning; the car then takes the objective's other points).
+local function OffsetSpot(ctx, st, route)
+    local obj = ctx.obj
+    local up = Directed() and math.max(0.0, CfgNum('secondViolatorUpstream', 200.0)) or 0.0
+    if obj.spawnOffset < 0 and up > 0 and not route.loop and LaterViolator(ctx) then
+        local s, who = UpstreamOfficer(ctx, route)
+        if s then
+            local back = s - math.max(0.0, s - up)
+            return {
+                p = Lifted(AtRoad(route, s - back)),
+                label = ('%.0f m up the road from player %s'):format(back, tostring(who)),
+                watch = AtRoad(route, s),
+            }
+        end
+    end
+    local ref = StartPoint(ctx)
+    if not ref then
+        if not st.noStartSaid then
+            st.noStartSaid = true
+            local id, mission = RunTag(ctx)
+            CP.warn(BLOCK,
+                'run %s (%s): the location has no start for spawnOffset to count from; the car takes the objective\'s other points (never a player\'s position)',
+                id, mission)
+        end
+        return nil
+    end
+    return {
+        p = Lifted(AlongRoute(route, ref, obj.spawnOffset)),
+        label = ('spawnOffset %.0f m'):format(obj.spawnOffset),
+    }
+end
+
+local function KeyName(v, default) return type(v) == 'string' and v or default end
+
+-- " 16 m back" for a car queued d metres behind its slot.
+local function Back(d) return d > 0 and (', %.0f m back'):format(d) or '' end
+
+-- Where the i-th vehicle is placed and that point's console name: spawnOffset > spawns > spawn > ahead of the start >
+-- on the route > near the start; for spawnOffset also the slot's base (OffsetSpot, kept once the first car is out). A
+-- slot past the objective's cars (i > vehicles) is a further slot of the same kind: further back on the grid, the road
+-- or the queue (Candidates).
 local function PlaceFor(ctx, st, i)
     local obj, loc = ctx.obj, ctx.location
     if IsNum(obj.spawnOffset) and obj.spawnOffset ~= 0 then
         local route = RouteOf(loc, obj.route)
-        local ref = StartPoint(ctx)
-        if not ref then
-            local party = Party(ctx)
-            ref = party[1] and party[1].coords or nil
-        end
-        if route and ref then
-            local p = AlongRoute(route, ref, obj.spawnOffset)
+        local base = st.offset or (route and OffsetSpot(ctx, st, route)) or nil
+        if base then
+            local p = base.p
             local x, y, z = Along(p, p.w, -(i - 1) * SPAWN_GAP)
-            return vector4(x, y, z, p.w)
+            return vector4(x, y, z, p.w), base.label .. Back((i - 1) * SPAWN_GAP), base
         end
     end
     local pts = PointList(loc, obj.spawns)
@@ -891,13 +1033,14 @@ local function PlaceFor(ctx, st, i)
         local base = pts[st.spawnOrder[k]]
         local h = HeadingOf(base)
         local x, y, z = Along(base, h, -lap * SPAWN_GAP)
-        return vector4(x, y, z, h)
+        return vector4(x, y, z, h),
+            ('%s[%d]'):format(KeyName(obj.spawns, 'spawns'), st.spawnOrder[k]) .. Back(lap * SPAWN_GAP)
     end
     local one = PointList(loc, obj.spawn)[1]
     if one then
         local h = HeadingOf(one)
         local x, y, z = Along(one, h, -(i - 1) * SPAWN_GAP)
-        return vector4(x, y, z, h)
+        return vector4(x, y, z, h), KeyName(obj.spawn, 'spawn') .. Back((i - 1) * SPAWN_GAP)
     end
     local route = RouteOf(loc, obj.route)
     local kind, t = TriggerOf(obj)
@@ -909,28 +1052,77 @@ local function PlaceFor(ctx, st, i)
             local nxt = route.points[k + 1] or (route.loop and route.points[1]) or route.points[k]
             h = HeadingTo(start, nxt)
         end
-        local x, y, z = Along(start, h, t.ahead + (i - 1) * SPAWN_GAP)
-        return vector4(x, y, z, h)
+        local d = t.ahead + (i - 1) * SPAWN_GAP
+        local x, y, z = Along(start, h, d)
+        return vector4(x, y, z, h), ('%.0f m ahead of the start'):format(d)
     end
     if route then
         local n = #route.points
+        local name = KeyName(obj.route, 'route')
         if route.loop then
             local k = start and NearestIndex(route.points, start) or 1
             local idx = ((k - 1 - ROUTE_BACK - (i - 1)) % n) + 1
             local h = HeadingTo(route.points[idx], route.points[(idx % n) + 1])
             local x, y, z = U.xyz(route.points[idx])
-            return vector4(x + 0.0, y + 0.0, z + 0.0, h)
+            return Lifted(vector4(x + 0.0, y + 0.0, z + 0.0, h)), ('%s[%d]'):format(name, idx)
         end
         local h = HeadingTo(route.points[1], route.points[2])
         local x, y, z = Along(route.points[1], h, -(i - 1) * SPAWN_GAP)
-        return vector4(x, y, z, h)
+        return Lifted(vector4(x, y, z, h)), ('%s[1]'):format(name) .. Back((i - 1) * SPAWN_GAP)
     end
     if start then
         local h = HeadingOf(start)
-        local x, y, z = Along(start, h, DEFAULT_AHEAD + (i - 1) * SPAWN_GAP)
-        return vector4(x, y, z, h)
+        local d = DEFAULT_AHEAD + (i - 1) * SPAWN_GAP
+        local x, y, z = Along(start, h, d)
+        return vector4(x, y, z, h), ('%.0f m ahead of the start'):format(d)
     end
     return nil
+end
+
+-- The points vehicle i may use, best first: its own slot, then ALT_SLOTS further slots of the same kind past the
+-- objective's last car, never one a car of the objective stands on (within SLOT_TAKEN): { coords, label, base }.
+local function Candidates(ctx, st, i)
+    local out = {}
+    local function add(p, label, base)
+        if not p then return end
+        for _, key in ipairs(st.vorder) do
+            local v = st.vehicles[key]
+            local c = EntCoords(v.entity) or v.coords
+            if c and U.dist2d(c, p) < SLOT_TAKEN then return end
+        end
+        out[#out + 1] = { coords = p, label = ('vehicle %d at %s'):format(i, label), base = base }
+    end
+    add(PlaceFor(ctx, st, i))
+    local last = math.max(VehTarget(ctx), i)
+    for k = 1, ALT_SLOTS do add(PlaceFor(ctx, st, last + k)) end
+    return out
+end
+
+-- The candidate vehicle i is made at (the first of its slots the director allows now, in the slots' own order) and
+-- the other slots that pass, for the placer; nil while the director keeps it waiting (an officer too close to every
+-- slot: after waveDelayMax hardMin is enough, never closer). st.waitMs[i] is the car's clock (GetGameTimer).
+local function Choose(ctx, st, i, cands)
+    st.waitMs = st.waitMs or {}
+    local now = Now()
+    local waitMs = st.waitMs[i] or now
+    local chosen, _, spare = {}, nil, {}
+    if #cands > 0 then
+        chosen, _, spare = ctx.choosePoints(cands, 1, {
+            name = ('vehicle %d'):format(i),
+            wave = ('vehicle %d'):format(i),
+            since = os.time() - math.floor((now - waitMs) / 1000),
+            ordered = true,
+        })
+    end
+    local pick = type(chosen) == 'table' and chosen[1] or nil
+    if not pick then
+        st.waitMs[i] = waitMs
+        return nil
+    end
+    st.waitMs[i] = nil
+    local alt = {}
+    for _, c in ipairs(spare or {}) do alt[#alt + 1] = { coords = c.coords, label = c.label } end
+    return pick, alt
 end
 
 local function PickModel(ctx, seats)
@@ -1277,13 +1469,23 @@ local function SpawnOccupant(ctx, st, v)
     return p
 end
 
+-- Vehicle i: on the first of its slots the spawn director allows now (nil while it waits for the officers to move;
+-- SpawnMissing asks again next tick), waiting frozen there for an officer's game to put it on its wheels, with the
+-- other slots as the placer's other points. With the director off: its slot at once, as before.
 local function SpawnVehicle(ctx, st, i)
-    local place = PlaceFor(ctx, st, i)
+    local place, label, base = PlaceFor(ctx, st, i)
     if not place then
         CP.warn(BLOCK, 'no spawn point, route or start for the suspect vehicle in run %s',
             tostring(ctx.run and ctx.run.id))
         Fail(ctx, st, 'block.pursuit.fail_setup')
         return nil
+    end
+    local alt = nil
+    if Directed() and ctx.choosePoints then
+        local pick
+        pick, alt = Choose(ctx, st, i, Candidates(ctx, st, i))
+        if not pick then return nil end
+        place, label, base = pick.coords, pick.label, pick.base
     end
     local model = PickModel(ctx, OccTarget(ctx))
     local ent, netId = ctx.spawnVehicle({
@@ -1291,12 +1493,19 @@ local function SpawnVehicle(ctx, st, i)
         coords = place,
         role = 'suspect_vehicle',
         tag = 'vehicle' .. i,
+        alt = alt,
     })
     if not netId then return nil end
+    -- the next cars of a spawnOffset objective queue behind this one; a second violator counts as past the officers
+    -- once past where they stood
+    if base and not st.offset then
+        st.offset = base
+        st.watchFrom = base.watch
+    end
     KeepInScope(ctx, ent, netId, 'vehicle')
     local radius = ScopeRadius(ctx)
-    CP.log(BLOCK, 'run %s: vehicle %d (%s) at %.0f %.0f, nearest participant %.0f m, culling radius %s',
-        tostring(ctx.run and ctx.run.id), netId, tostring(model), place.x, place.y,
+    CP.log(BLOCK, 'run %s: vehicle %d (%s) at %.0f %.0f %.2f (%s), nearest participant %.0f m, culling radius %s',
+        tostring(ctx.run and ctx.run.id), netId, tostring(model), place.x, place.y, place.z, tostring(label),
         math.min(NearestOf(Party(ctx), place), 99999), radius and ('%.0f m'):format(radius) or 'default')
     if SetVehicleDoorsLocked and Exists(ent) then pcall(SetVehicleDoorsLocked, ent, 2) end
     local key = tostring(netId)
@@ -1626,7 +1835,8 @@ local function WatchCruise(ctx, st, v, c, list)
         ctx.hud({ message = { text = CP.L(key, { speed = v.targetKmh or 0 }), kind = 'info' } })
     end
     if not v.passed then
-        local obs = StartPoint(ctx)
+        -- the observation point; for a second violator where the officers stood on the road when it set off
+        local obs = st.watchFrom or StartPoint(ctx)
         if obs then
             local fx, fy = Forward(v.entity)
             local cx, cy = U.xyz(c)
