@@ -93,6 +93,7 @@
   "builder.error.scaling_path": "Scaled count {n} does not point at an objective setting.",
   "builder.error.scaling_value": "Scaled count {n} ({path}) is not a number or a list of numbers.",
   "builder.error.scaling_field": "Scaled count {n} ({path}) is not a count this block lets scale with the tier.",
+  "builder.error.spawn_armed": "Location {location}: enemies at {key} must be at least {min} m from the start (its {radius} m circle plus {margin} m), so they never appear around the officers.",
   "builder.error.spawn_start": "Location {location}: {key} spawn points must be at least {min} m from the start.",
   "builder.error.start_missing": "Location {location}: place the start point.",
   "builder.error.start_radius": "Location {location}: the start radius must be {min}–{max} m.",

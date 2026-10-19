@@ -1326,7 +1326,9 @@ Stop: every value we set is removed.
       returns to the tablet with the points. A spot that fails a check is drawn red and cannot be placed:
       not on the ground (GetGroundZFor_3dCoord, surfaces steeper than ~45°), in water (TestProbeAgainstWater /
       GetWaterHeight), inside a wall, object or vehicle (StartShapeTestCapsule around the ped / vehicle volume),
-      inside a Config.Builder.noBuildZones circle (2D), a spawn point closer than Config.Builder.minSpawnFromStart
+      inside a Config.Builder.noBuildZones circle (2D), an armed spawn point (payload.armed) closer than the start
+      circle (payload.startRadius) plus Config.Builder.spawnMargin (2D), a spawn point closer than
+      Config.Builder.minSpawnFromStart
       to the location's start (3D, as the server checks), a start closer than Config.Builder.minLocationGap to
       another location's start (2D), closer than payload.minGap to another point of the same key, too far away,
       or every `max` point already placed. Placed starts/areas and the start's keep-out circle are drawn as
@@ -3750,7 +3752,8 @@ Locations → Scaling → Test → Publish with error counts per step, and the s
 ```text
 
 src/builder/LocationMap.tsx · a schematic map (SVG, north up, metres) of one location: the start and its radius,
-the spawn keep-out circle (Config.Builder.minSpawnFromStart), every placed point per key, recorded routes with
+the spawn keep-out circle (Config.Builder.minSpawnFromStart, or the `keepOut` prop: the start circle plus
+Config.Builder.spawnMargin when the mission has armed spawns), every placed point per key, recorded routes with
 stop points, waypoints a test drive did not reach, waypoints with no road path and rejected "off road" samples,
 and the no-build zones nearby. No map tiles: the NUI must work offline.
 ```

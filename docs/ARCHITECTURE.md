@@ -1625,6 +1625,17 @@ number may stay at or below its shipped value). `B.loadOverrides() -> { [id] = {
 baseHash, editedInCode } }` *(hook for CP.Missions.loadAll; empty while editBuiltins is off; a missing file is written
 again from the row)*, `B.shippedOf(id) -> { path, content, raw, hash }`, `B.editBuiltinsOn()`, `B.onTestHidden(missionId,
 defHash)` (a removed pass makes that draft untested again). `Begin()` lets admins past `Builder.enabled = false`.
+Armed spawns (PLAN S18): `B.armedKeepOut(start, searchCircle) -> metres | nil` (2D: `start.radius +
+Config.Builder.spawnMargin`, never under `minSpawnFromStart`; nil at a search circle) is the distance `B.validate`
+holds every armed spawn key to (`ARMED_FIELDS`: hostile_waves spawns / boss.spawn / spawnSets.keys, escort
+ambushPoints, pursuit spawn / spawns, flee_arrest associates.spawns; error `builder.error.spawn_armed`; a point a
+built-in mission plays at the same start is trusted: the loaded built-ins, and the shipped file of each one not
+loaded, listed by `CP.Missions.builtinIds()`; at server start the file sync runs before any built-in is loaded, so a
+hand edit is checked against the shipped files). `B.armedTooClose(runtimeDef, builtins?) -> { { location, key,
+min, have } }` lists the keys still inside it: `CP.Missions.normalize` warns with it for a published custom file (it
+still loads; `meta.builtins` = the built-in definitions to trust, which `loadAll` sets to the ones it is loading).
+The client's `B.checkSpot` refuses such a point while placing (`builderPlace` payload `armed`, `startRadius`;
+`B.armedKeepOut(ctx)` on the client).
 Deleted custom missions go flat into `<exportPath>deleted/` as `<id>-<time>__<file>` and `<id>-<time>__row.json`, with
 an `index.json` list whose `folder` is that name prefix (no folder is made per deletion). The export folder and its
 `archived/`, `overrides/`, `overrides/archived/` and `deleted/` ship with a `.gitkeep`; `B.ensureExportDirs()` reports

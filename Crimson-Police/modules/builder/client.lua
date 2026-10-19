@@ -372,6 +372,13 @@ end
 --                           PLACEMENT CHECKS (pure)
 -- ============================================================================
 
+-- Metres an armed spawn point keeps from the start (ctx.armed with ctx.startRadius, the start circle): the circle plus
+-- ctx.spawnMargin, never less than ctx.minFromStart; nil for any other point.
+function B.armedKeepOut(ctx)
+    if not (type(ctx) == 'table' and ctx.armed and IsNum(ctx.startRadius)) then return nil end
+    return math.max(tonumber(ctx.minFromStart) or 0, ctx.startRadius + (tonumber(ctx.spawnMargin) or 0))
+end
+
 function B.checkSpot(spot, ctx)
     ctx = ctx or {}
     local points = ctx.points or {}
@@ -400,6 +407,12 @@ function B.checkSpot(spot, ctx)
     if kind == 'ped' or kind == 'vehicle' then
         if spot.blocked == nil then return false, 'builder.place.reason.checking' end
         if spot.blocked then return false, 'builder.place.reason.blocked' end
+    end
+    -- armed spawns (shootout, boss, ambush and pursuit cars, door associates): outside the start circle plus
+    -- Config.Builder.spawnMargin, 2D (the server's CP.Builder.armedKeepOut)
+    local armedMin = B.armedKeepOut(ctx)
+    if armedMin and ctx.start and U.dist2d(at, ctx.start) < armedMin then
+        return false, 'builder.place.reason.armed', { min = math.floor(armedMin + 0.5) }
     end
     if ctx.spawn and ctx.start and IsNum(ctx.minFromStart) and U.dist(at, ctx.start) < ctx.minFromStart then
         return false, 'builder.place.reason.start', { min = math.floor(ctx.minFromStart) }
@@ -457,13 +470,14 @@ function B.parsePlace(p)
         end
         o.model = p.model
     end
-    for _, f in ipairs({ 'heading', 'multiple', 'spawn', 'streets' }) do
+    for _, f in ipairs({ 'heading', 'multiple', 'spawn', 'armed', 'streets' }) do
         if p[f] ~= nil and type(p[f]) ~= 'boolean' then return nil, 'err.invalid_payload' end
     end
-    o.streets = p.streets == true   -- kerb spots: the result names the street at each point
+    o.streets = p.streets == true          -- kerb spots: the result names the street at each point
     o.heading = p.heading == true and o.kind ~= 'area' and o.kind ~= 'start'
     o.multiple = p.multiple == true and o.kind ~= 'start'
     o.spawn = p.spawn == true
+    o.armed = o.spawn and p.armed == true  -- armed spawns keep outside the start circle plus the margin
     local src = p.points
     if src == nil then src = p.existing end
     local points = VecList(src, MAX_POINTS)
@@ -513,6 +527,12 @@ function B.parsePlace(p)
         o.start = VecOf(p.start)
         if not o.start then return nil, 'err.invalid_payload' end
         o.start.w = nil
+    end
+    if p.startRadius ~= nil then
+        if not (IsNum(p.startRadius) and p.startRadius >= 0 and p.startRadius <= 2000) then
+            return nil, 'err.invalid_payload'
+        end
+        o.startRadius = p.startRadius
     end
     local others = VecList(p.otherStarts, MAX_LOCATIONS)
     if not others then return nil, 'err.invalid_payload' end
@@ -853,7 +873,17 @@ local function RefreshAreaZones(tool, st)
     if o.kind == 'start' or o.kind == 'area' then
         for _, p in ipairs(st.points) do AddZone(tool, p, st.radius) end
     end
-    if o.spawn and o.start then AddZone(tool, o.start, tonumber(BuilderCfg().minSpawnFromStart) or 30.0) end
+    if o.spawn and o.start then
+        local bc = BuilderCfg()
+        local floor = tonumber(bc.minSpawnFromStart) or 30.0
+        -- an armed key shows its real keep-out: the start circle plus the margin
+        AddZone(tool, o.start, B.armedKeepOut({
+            armed = o.armed,
+            startRadius = o.startRadius,
+            minFromStart = floor,
+            spawnMargin = tonumber(bc.spawnMargin) or 40.0,
+        }) or floor)
+    end
 end
 
 local function DrawPlaced(tool, st, pos)
@@ -925,6 +955,9 @@ local function RunPlacement(tool)
         spawn = o.spawn,
         start = o.start,
         minFromStart = tonumber(bc.minSpawnFromStart) or 30.0,
+        armed = o.armed,
+        startRadius = o.startRadius,
+        spawnMargin = tonumber(bc.spawnMargin) or 40.0,
         otherStarts = o.otherStarts,
         minLocationGap = tonumber(bc.minLocationGap) or 100.0,
         minGap = o.minGap,

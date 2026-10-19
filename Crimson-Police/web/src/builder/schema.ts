@@ -125,6 +125,21 @@ export function startRadiusRange(
     return sc ? [sc.radius, sc.radius, sc.radius] : marker;
 }
 
+// Mirrors CP.Builder.armedKeepOut: metres (2D) an armed spawn point keeps from a start of `startRadius`, the start
+// circle plus Config.Builder.spawnMargin, never less than minSpawnFromStart. null at a search circle (officers enter
+// it anywhere, so only minSpawnFromStart applies).
+export function armedKeepOut(
+    cfg: BuilderConfig | null | undefined,
+    def: BuilderDefinition | null | undefined,
+    startRadius: number | null | undefined,
+): number | null {
+    if (!cfg || typeof startRadius !== 'number' || !Number.isFinite(startRadius)) return null;
+    if (searchCircleOf(cfg, def)) return null;
+    const floor = Number(cfg.minSpawnFromStart) || 30;
+    const margin = typeof cfg.spawnMargin === 'number' && Number.isFinite(cfg.spawnMargin) ? cfg.spawnMargin : 40;
+    return Math.max(floor, startRadius + margin);
+}
+
 // Keeps every placed start radius in line with the mission (changes def in place): all of them equal the search
 // circle when there is one; when the search area was removed (prev had one), radii outside the start-marker
 // range go back to its default. Returns true when something changed.
@@ -501,6 +516,7 @@ export function pointSpecs(cfg: BuilderConfig, obj: BuilderObjective, index: num
                 min: Math.max(1, Math.ceil(per * largest - 1e-9)),
                 max: MAX_SPOTS,
                 spawn: true,
+                armed: true,
                 model: firstPed(obj.peds, allowedPed),
             });
             spawnSetKeys(obj).forEach(k => {
@@ -516,6 +532,7 @@ export function pointSpecs(cfg: BuilderConfig, obj: BuilderObjective, index: num
                     min: Math.max(1, Math.ceil(per * largest - 1e-9)),
                     max: MAX_SPOTS,
                     spawn: true,
+                    armed: true,
                     model: firstPed(obj.peds, allowedPed),
                 });
             });
@@ -528,6 +545,7 @@ export function pointSpecs(cfg: BuilderConfig, obj: BuilderObjective, index: num
                     min: 1,
                     max: 1,
                     spawn: true,
+                    armed: true,
                     model: strField(obj, 'boss.model') ?? allowedPed,
                 });
             }
@@ -556,6 +574,7 @@ export function pointSpecs(cfg: BuilderConfig, obj: BuilderObjective, index: num
                 min: amb.min,
                 max: amb.max,
                 spawn: true,
+                armed: true,
                 model: allowedCar,
                 minGap: numOf(cfg, b, 'ambushGap', 150),
             });
@@ -586,6 +605,7 @@ export function pointSpecs(cfg: BuilderConfig, obj: BuilderObjective, index: num
                 min: 1,
                 max: 1,
                 spawn: true,
+                armed: true,
                 model: firstPed(obj.models, allowedCar),
             });
             add('spawns', {
@@ -596,6 +616,7 @@ export function pointSpecs(cfg: BuilderConfig, obj: BuilderObjective, index: num
                 min: 1,
                 max: 10,
                 spawn: true,
+                armed: true,
                 model: firstPed(obj.models, allowedCar),
             });
             break;
@@ -734,6 +755,7 @@ export function pointSpecs(cfg: BuilderConfig, obj: BuilderObjective, index: num
                         min: assoc,
                         max: 20,
                         spawn: true,
+                        armed: true,
                         model: allowedPed,
                     });
                 }

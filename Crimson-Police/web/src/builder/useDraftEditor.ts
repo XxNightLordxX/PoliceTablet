@@ -27,7 +27,7 @@ import type {
 } from '../types/builder_client';
 import { applyResult } from './applyResult';
 import { clone, isRoute, listsOf, normalizeDefinition, pointsOf } from './defUtils';
-import { searchCircleOf, startRadiusRange, syncStartRadius } from './schema';
+import { armedKeepOut, searchCircleOf, startRadiusRange, syncStartRadius } from './schema';
 import {
     currentTool,
     forgetDraft,
@@ -521,6 +521,11 @@ export function useDraftEditor(
         } else if (spec.radius) payload.radius = spec.radius;
         if (spec.minGap) payload.minGap = spec.minGap;
         if (spec.ruled) payload.streets = true;
+        // armed spawns: the placement tool keeps them outside the start circle plus the margin (as the server does)
+        if (spec.armed && loc.start && armedKeepOut(config, d, loc.start.radius) !== null) {
+            payload.armed = true;
+            payload.startRadius = loc.start.radius;
+        }
         return run('builderPlace', payload, spec, location, 'placement');
     };
 

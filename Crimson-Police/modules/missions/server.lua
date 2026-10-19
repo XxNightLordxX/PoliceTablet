@@ -185,7 +185,8 @@ function Missions.parse(luaSource, chunkName)
     return ReadMissionFile(luaSource, chunkName or 'mission')
 end
 
-local function ReadIndex()
+-- quiet: no warning for a bad entry (the loader warns once per load)
+local function ReadIndex(quiet)
     local content = LoadResourceFile(CP.resource, INDEX_FILE)
     if not content or content == '' then
         return nil, INDEX_FILE .. ' was not found; no built-in missions are loaded'
@@ -196,15 +197,23 @@ local function ReadIndex()
     local ids, seen = {}, {}
     for i, id in ipairs(list) do
         if type(id) ~= 'string' or not id:match('^[%a][%w_]*$') then
-            CP.warn(TAG, '%s entry %d (%s) is not a valid mission id; skipped', INDEX_FILE, i, tostring(id))
+            if not quiet then
+                CP.warn(TAG, '%s entry %d (%s) is not a valid mission id; skipped', INDEX_FILE, i, tostring(id))
+            end
         elseif seen[id] then
-            CP.warn(TAG, '%s lists %s twice; loaded once', INDEX_FILE, id)
+            if not quiet then CP.warn(TAG, '%s lists %s twice; loaded once', INDEX_FILE, id) end
         else
             seen[id] = true
             ids[#ids + 1] = id
         end
     end
     return ids
+end
+
+-- The built-in mission ids missions/builtin/index.lua lists ({} when it cannot be read). The Mission Builder reads
+-- their shipped files when they are not loaded: the first loadAll runs its file sync before it loads them.
+function Missions.builtinIds()
+    return ReadIndex(true) or {}
 end
 
 -- ============================================================================
@@ -554,6 +563,18 @@ function Missions.normalize(def, meta)
         if type(impl.armedCount) == 'function' then
             local okCall, n = pcall(impl.armedCount, obj)
             if okCall and type(n) == 'number' then armed = armed + n end
+        end
+    end
+    -- a custom file published before Config.Builder.spawnMargin with armed spawn points inside the start circle plus
+    -- the margin: it still loads (the spawn director keeps the fight away from the officers at run time); a new
+    -- publish refuses them (CP.Builder.validate)
+    if source == 'custom' and d.status == 'published' and CP.Builder and CP.Builder.armedTooClose then
+        local okCall, near = pcall(CP.Builder.armedTooClose, d, meta.builtins)
+        for _, w in ipairs(okCall and type(near) == 'table' and near or {}) do
+            warn((
+                'location %d: armed spawn points %s are %.0f m from the start; a new publish needs %.0f m (the start '
+                .. 'circle plus Config.Builder.spawnMargin)'
+            ):format(w.location, tostring(w.key), w.have, w.min))
         end
     end
     -- an automatic weapon (an older custom file, a tweak): the mission still loads, and every NPC carries the weapon
@@ -1077,6 +1098,7 @@ function Missions.loadAll()
                     failed(label, file, err)
                 else
                     meta.onWarn = onWarn
+                    meta.builtins = newDefs   -- the built-ins being loaded (a duplicate keeps their points)
                     local def, nerr, warnings = Missions.normalize(raw, meta)
                     summary.warnings = summary.warnings + (warnings or 0)
                     if not def then

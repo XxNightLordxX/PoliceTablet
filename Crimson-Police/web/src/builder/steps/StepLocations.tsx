@@ -23,7 +23,15 @@ import type { PointSpec, RouteMeta } from '../../types/builder_client';
 import { CountBadge, ErrorNotes } from '../controls';
 import { dist2d, errorsAt, errorsUnder, isRoute, listsOf, pointsOf, routeLength } from '../defUtils';
 import { KEY_COLOURS, LocationMap } from '../LocationMap';
-import { KERB_RULES, missionPointSpecs, rangeOf, searchCircleOf, startRadiusRange, type SearchCircle } from '../schema';
+import {
+    KERB_RULES,
+    armedKeepOut,
+    missionPointSpecs,
+    rangeOf,
+    searchCircleOf,
+    startRadiusRange,
+    type SearchCircle,
+} from '../schema';
 import { editorMemory, routeMetaOf, setEditorMemory, setRouteMeta, shiftRouteMeta, subscribeBuilder } from '../store';
 import { startSpec } from '../useDraftEditor';
 import { StepIntro, type StepProps } from './common';
@@ -79,6 +87,8 @@ export function StepLocations({ ed, cfg, def, ro, scope }: StepProps) {
     const maxLoc = Number(cfg.maxLocations) || 20;
     const li = Math.min(sel, Math.max(1, def.locations.length));
     const loc = def.locations[li - 1];
+    // armed spawns stay outside this start's circle plus the margin: the ring the map and the legend show
+    const armedMin = loc?.start && specs.some(s => s.armed) ? armedKeepOut(cfg, def, loc.start.radius) : null;
     const busy = ed.toolBusy || ro;
     const pick = (n: number) => {
         setSel(n);
@@ -134,6 +144,7 @@ export function StepLocations({ ed, cfg, def, ro, scope }: StepProps) {
                     min: minLoc,
                     gap: cfg.minLocationGap ?? 100,
                     spawn: cfg.minSpawnFromStart ?? 30,
+                    margin: cfg.spawnMargin ?? 40,
                 })}
             </StepIntro>
             <ErrorNotes errors={topErrors} />
@@ -233,6 +244,7 @@ export function StepLocations({ ed, cfg, def, ro, scope }: StepProps) {
                                 meta={meta}
                                 focusKey={focus}
                                 height={230}
+                                keepOut={armedMin}
                             />
                             <div className="builder_client-legend">
                                 <span className="builder_client-legend__item">
@@ -259,7 +271,9 @@ export function StepLocations({ ed, cfg, def, ro, scope }: StepProps) {
                                 {loc.start ? (
                                     <span className="builder_client-legend__item">
                                         <span className="builder_client-legend__swatch is-keepout" />
-                                        {t('builder.map.keepout', { m: cfg.minSpawnFromStart ?? 30 })}
+                                        {armedMin !== null
+                                            ? t('builder.map.keepout_armed', { m: Math.round(armedMin) })
+                                            : t('builder.map.keepout', { m: cfg.minSpawnFromStart ?? 30 })}
                                     </span>
                                 ) : null}
                                 <span className="builder_client-legend__item">
@@ -299,6 +313,7 @@ export function StepLocations({ ed, cfg, def, ro, scope }: StepProps) {
                                         li={li}
                                         ed={ed}
                                         cfg={cfg}
+                                        armedMin={s.armed ? armedMin : null}
                                         meta={meta(s.key)}
                                         disabled={busy}
                                         ro={ro}
@@ -536,6 +551,7 @@ function PointRow({
     li,
     ed,
     cfg,
+    armedMin,
     meta,
     disabled,
     ro,
@@ -548,6 +564,8 @@ function PointRow({
     li: number;
     ed: StepProps['ed'];
     cfg: StepProps['cfg'];
+    // armed spawns: metres from the start (the start circle plus the margin), null when only the floor applies
+    armedMin: number | null;
     meta: RouteMeta | null;
     disabled: boolean;
     ro: boolean;
@@ -571,7 +589,8 @@ function PointRow({
     const wait = rangeOf(cfg, 'escort', 'stopWait', [10, 60, 20]);
     const tags: string[] = [];
     if (spec.heading) tags.push(t('builder.loc.tag_heading'));
-    if (spec.spawn) tags.push(t('builder.loc.tag_spawn', { m: cfg.minSpawnFromStart ?? 30 }));
+    if (armedMin !== null) tags.push(t('builder.loc.tag_armed', { m: Math.round(armedMin) }));
+    else if (spec.spawn) tags.push(t('builder.loc.tag_spawn', { m: cfg.minSpawnFromStart ?? 30 }));
     if (spec.minGap) tags.push(t('builder.loc.tag_gap', { m: spec.minGap }));
     if (spec.stops) tags.push(t('builder.loc.tag_stops'));
     if (spec.loop) tags.push(t('builder.loc.tag_loop', { m: cfg.route?.loopClose ?? 50 }));

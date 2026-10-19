@@ -156,6 +156,9 @@ export interface PointSpec {
     max: number;
     // a spawn key: >= minSpawnFromStart from the start
     spawn: boolean;
+    // armed spawns (shootout, boss, ambush and pursuit cars, door associates): outside the start circle plus
+    // Config.Builder.spawnMargin (armedKeepOut)
+    armed?: boolean;
     model?: string;
     minGap?: number;
     // marker: the circle drawn around the ghost (search area)

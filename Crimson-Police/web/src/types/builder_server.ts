@@ -266,6 +266,8 @@ export interface BuilderConfig {
     maxLocations: number;
     minLocationGap: number;
     minSpawnFromStart: number;
+    // metres outside the start circle that armed spawn points keep (Config.Builder.spawnMargin)
+    spawnMargin: number;
     // flat points cap, and the percentage cap in whole percent
     bonusCap: { points: number; pct: number };
     bonuses: BuilderBonusOption[];
@@ -456,6 +458,9 @@ export interface BuilderPlacePayload {
     start: Vec3 | null;
     // a spawn key: points must be >= minSpawnFromStart from `start`
     spawn: boolean;
+    // armed spawns: points must also be outside the start circle (`startRadius`) plus Config.Builder.spawnMargin
+    armed?: boolean;
+    startRadius?: number;
     // other locations' starts (kind 'start': >= minLocationGap from each)
     otherStarts: Vec3[];
     // kerb spots (field_contact parked mode): the result names the street at each point

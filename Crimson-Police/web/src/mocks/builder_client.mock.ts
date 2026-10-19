@@ -427,6 +427,7 @@ const FB_CONFIG: BuilderConfig = {
     maxLocations: 20,
     minLocationGap: 100,
     minSpawnFromStart: 30,
+    spawnMargin: 40,
     bonusCap: { points: 50, pct: 25 },
     bonuses: [
         {

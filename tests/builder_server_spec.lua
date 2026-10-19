@@ -379,7 +379,8 @@ local function Body()
     local function location(i)
         local x, y = -1200.0 + i * 600.0, -1500.0 - i * 50.0
         local spawns = {}
-        for s = 1, 11 do spawns[s] = { x = x + 40.0 + s, y = y + 45.0, z = 21.5, w = 90.0 } end
+        -- the fight spawns 101-111 m out: outside the 60 m start circle plus Config.Builder.spawnMargin (40 m)
+        for s = 1, 11 do spawns[s] = { x = x + 90.0 + s, y = y + 45.0, z = 21.5, w = 90.0 } end
         return {
             label = 'Dock ' .. i,
             start = { coords = { x = x, y = y, z = 21.0 }, radius = 60 },
@@ -581,10 +582,152 @@ local function Body()
         d.locations[2].start = nil
     end, 'builder.error.start_missing', 'locations.2.start')
     check('start radius', function(d) d.locations[1].start.radius = 5 end, 'builder.error.start_radius')
-    check('spawn 20 m from the start', function(d)
+    check('an armed spawn 20 m from the start', function(d)
         local s = d.locations[1].start.coords
         d.locations[1].spawns[3] = { x = s.x + 20, y = s.y, z = s.z, w = 0 }
-    end, 'builder.error.spawn_start', 'locations.1.spawns')
+    end, 'builder.error.spawn_armed', 'locations.1.spawns')
+    -- ══ armed spawns stay outside the start circle plus Config.Builder.spawnMargin (S18) ═══════════════════
+    do
+        -- probe P4 (a6-builder A1): 11 hostiles per location 31 m from a 60 m start published with 0 errors
+        local d = U.deepcopy(good)
+        for li = 1, 3 do
+            local c = d.locations[li].start.coords
+            for k = 1, 11 do
+                local a = k / 11 * 2 * math.pi
+                d.locations[li].spawns[k] = { x = c.x + 31 * math.cos(a), y = c.y + 31 * math.sin(a), z = 21.5, w = 0 }
+            end
+        end
+        local errors = B.validate(d, { publish = true })
+        local e = errorAt(errors, 'locations.1.spawns')
+        H.eq(e and e.key, 'builder.error.spawn_armed',
+            'probe P4: hostiles 31 m from a 60 m start are refused (got: ' .. keysOf(errors) .. ')')
+        H.eq(e and e.vars.min, 100, 'the start circle (60 m) plus the margin (40 m)')
+        H.ok(e and e.message:find('100 m', 1, true) and e.message:find('60 m circle plus 40 m', 1, true),
+            'the message names the distance in plain words: ' .. tostring(e and e.message))
+        local here = 0
+        for _, x in ipairs(errors) do if x.path == 'locations.1.spawns' then here = here + 1 end end
+        H.eq(here, 1, 'one message for one mistake (not the 30 m one as well)')
+        -- the margin is a setting: 0 = only the start circle
+        Config.Builder.spawnMargin = 0
+        for li = 1, 3 do
+            local c = d.locations[li].start.coords
+            for k = 1, 11 do d.locations[li].spawns[k] = { x = c.x + 65 + k, y = c.y, z = 21.5, w = 0 } end
+        end
+        H.eq(errorAt(B.validate(d), 'locations.1.spawns'), nil, 'spawnMargin 0: 66 m from a 60 m start is allowed')
+        Config.Builder.spawnMargin = 40
+        H.eq(errorAt(B.validate(d), 'locations.1.spawns').key, 'builder.error.spawn_armed',
+            'spawnMargin 40 again: refused')
+        -- a bigger start circle moves the line out with it
+        local wide = U.deepcopy(good)
+        wide.locations[2].start.radius = 120
+        H.eq(errorAt(B.validate(wide), 'locations.2.spawns').key, 'builder.error.spawn_armed',
+            'a 120 m start circle: the 101-111 m fight is inside it plus the margin')
+        H.eq(errorAt(B.validate(wide), 'locations.1.spawns'), nil, 'the other locations keep their own 60 m circle')
+        H.eq(B.armedKeepOut({ radius = 60 }), 100, 'CP.Builder.armedKeepOut: the circle plus the margin')
+        H.eq(B.armedKeepOut({ radius = 60 }, true), nil, 'a search circle: no armed keep-out (only the 30 m floor)')
+        Config.Builder.spawnMargin = 0
+        H.eq(B.armedKeepOut({ radius = 20 }), 30, 'never under minSpawnFromStart')
+        Config.Builder.spawnMargin = 40
+    end
+    do
+        -- unarmed people (hostages) keep minSpawnFromStart: 35 m from a 60 m start passes, 20 m does not
+        local d = U.deepcopy(good)
+        d.objectives[3] = {
+            block = 'protect_rescue',
+            label = 'Free the hostages',
+            minSeconds = 30,
+            presenceRange = 150,
+            npcs = 'hostages',
+            safe = 'safe',
+            count = 2,
+        }
+        for li = 1, 3 do
+            local c = d.locations[li].start.coords
+            d.locations[li].hostages = {
+                { x = c.x + 35, y = c.y, z = 21.5, w = 0 },
+                { x = c.x, y = c.y + 36, z = 21.5, w = 0 },
+            }
+            d.locations[li].safe = { x = c.x - 60, y = c.y, z = 21.2 }
+        end
+        local errors = B.validate(d)
+        H.eq(errorAt(errors, 'locations.1.hostages'), nil,
+            'an unarmed hostage 35 m from a 60 m start passes (got: ' .. keysOf(errors) .. ')')
+        H.eq(errorAt(errors, 'locations.1.spawns'), nil, 'the fight beside them still passes')
+        d.locations[1].hostages[1] = {
+            x = d.locations[1].start.coords.x + 20,
+            y = d.locations[1].start.coords.y,
+            z = 21.5,
+            w = 0,
+        }
+        H.eq(errorAt(B.validate(d), 'locations.1.hostages').key, 'builder.error.spawn_start',
+            'a hostage 20 m from the start: the 30 m floor still applies')
+    end
+    do
+        -- the other armed keys: pursuit cars, escort ambush cars, door associates
+        local d = U.deepcopy(good)
+        d.objectives[3] = {
+            block = 'pursuit',
+            label = 'Stop the van',
+            minSeconds = 30,
+            presenceRange = 300,
+            spawn = 'van',
+        }
+        for li = 1, 3 do
+            local c = d.locations[li].start.coords
+            d.locations[li].van = { x = c.x + 70, y = c.y, z = 21.5, w = 0 }
+        end
+        H.eq(errorAt(B.validate(d), 'locations.1.van').key, 'builder.error.spawn_armed',
+            'a pursuit car 70 m from a 60 m start is refused')
+        for li = 1, 3 do d.locations[li].van.x = d.locations[li].start.coords.x + 105 end
+        H.eq(errorAt(B.validate(d), 'locations.1.van'), nil, 'and 105 m out passes')
+    end
+    do
+        -- a file published before the rule still loads, with a warning; a new publish (a draft) is refused
+        local d = U.deepcopy(good)
+        for li = 1, 3 do
+            local c = d.locations[li].start.coords
+            for k = 1, 11 do d.locations[li].spawns[k] = { x = c.x + 31 + k, y = c.y, z = 21.5, w = 0 } end
+        end
+        local rt = B.toRuntime(B.toFileUnits(d))
+        rt.id = 'custom_old_points'
+        local texts = {}
+        local def, err, warnings = CP.Missions.normalize(rt, {
+            source = 'custom',
+            status = 'published',
+            version = 1,
+            quiet = true,
+            onWarn = function(_, msg) texts[#texts + 1] = msg end,
+        })
+        H.ok(def ~= nil, 'a published file with hostiles 32 m from a 60 m start still loads: ' .. tostring(err))
+        local joined = table.concat(texts, ' | ')
+        H.ok(
+            warnings >= 3 and joined:find('armed spawn points spawns are 32 m from the start', 1, true)
+                and joined:find('needs 100 m', 1, true),
+            'the loader warns, once per location: ' .. joined
+        )
+        H.eq(errorAt(B.validate(d, { publish = true }), 'locations.1.spawns').key, 'builder.error.spawn_armed',
+            'a new publish of the same points is refused')
+        Config.Builder.spawnMargin = 0
+        texts = {}
+        CP.Missions.normalize(U.deepcopy(rt), {
+            source = 'custom',
+            status = 'published',
+            version = 1,
+            quiet = true,
+            onWarn = function(_, msg) texts[#texts + 1] = msg end,
+        })
+        H.ok(table.concat(texts, ' | '):find('needs 60 m', 1, true), 'the warning follows the setting (margin 0: 60 m)')
+        Config.Builder.spawnMargin = 40
+        local okd = CP.Missions.normalize(B.toRuntime(B.toFileUnits(good)), {
+            source = 'custom',
+            status = 'published',
+            version = 1,
+            quiet = true,
+            onWarn = function(_, msg) texts[#texts + 1] = 'GOOD ' .. msg end,
+        })
+        H.ok(okd ~= nil and not table.concat(texts, ' | '):find('GOOD location', 1, true),
+            'a file whose fight is outside the circle plus the margin loads without that warning')
+    end
     check('evidence close to the start is fine (not a spawn key)', function(d)
         local s = d.locations[1].start.coords
         d.locations[1].evidence[1] = { x = s.x + 5, y = s.y, z = s.z }
@@ -611,7 +754,7 @@ local function Body()
         for li = 1, 3 do
             for s = 12, 23 do
                 local c = d.locations[li].start.coords
-                d.locations[li].spawns[s] = { x = c.x + 40 + s, y = c.y + 60, z = c.z, w = 0 }
+                d.locations[li].spawns[s] = { x = c.x + 90 + s, y = c.y + 60, z = c.z, w = 0 }
             end
         end
     end, 'builder.error.armed_budget', 'objectives')
@@ -1086,7 +1229,7 @@ local function Body()
         H.ok(text:find('chance = 0.30', 1, true) ~= nil, 'chances written with two decimals')
         H.ok(text:find('chance = 0.75', 1, true) ~= nil, 'roll chances written with two decimals')
         H.ok(text:find('duration = 2500', 1, true) ~= nil, 'follow-up duration in ms')
-        H.ok(text:find('vec4(-559.0, -1505.0, 21.5, 90.0)', 1, true) ~= nil, 'vec4 literal with heading')
+        H.ok(text:find('vec4(-509.0, -1505.0, 21.5, 90.0)', 1, true) ~= nil, 'vec4 literal with heading')
         H.ok(text:find('pctOfPoints = 0.10', 1, true) ~= nil, 'pctOfPoints two decimals')
         H.ok(text:find('{ id = \'hard_ram\', points = -10, each = true }', 1, true) ~= nil, 'penalty with each')
         H.ok(
@@ -1654,6 +1797,42 @@ local function Body()
                     local d = B.sanitize(dm.record.definition, dm.id)
                     local errors = B.validate(d, { publish = true })
                     H.eq(keysOf(errors), '', 'the duplicate of ' .. m .. ' passes every guardrail')
+                    if m == 'gang_shootout' then
+                        -- published, the copy loads without the armed-spawn warning: its points are the built-in's
+                        -- (CP.Missions.loadAll passes the built-ins it is loading as meta.builtins)
+                        local rtDup = B.toRuntime(B.toFileUnits(d))
+                        rtDup.id = 'custom_gs_copy'
+                        local wt = {}
+                        local function onW(_, msg) wt[#wt + 1] = msg end
+                        local okDup = CP.Missions.normalize(rtDup,
+                            { source = 'custom', status = 'published', version = 1, quiet = true, onWarn = onW })
+                        H.ok(okDup ~= nil and not table.concat(wt, ' | '):find('armed spawn points', 1, true),
+                            'a published duplicate of gang_shootout loads with no armed-spawn warning')
+                        wt = {}
+                        CP.Missions.normalize(U.deepcopy(rtDup), {
+                            source = 'custom',
+                            status = 'published',
+                            version = 1,
+                            quiet = true,
+                            onWarn = onW,
+                            builtins = {},
+                        })
+                        H.ok(table.concat(wt, ' | '):find('armed spawn points', 1, true) ~= nil,
+                            'with no built-in to compare with (meta.builtins = {}), the same file warns')
+                        -- the built-in's own points at its own start stay trusted; a moved or new one follows the
+                        -- armed keep-out (the start circle plus Config.Builder.spawnMargin)
+                        local c = d.locations[1].start.coords
+                        d.locations[1].spawns[1] = { x = c.x + 50, y = c.y, z = c.z + 1, w = 0 }
+                        local e = errorAt(B.validate(d, { publish = true }), 'locations.1.spawns')
+                        H.eq(e and e.key, 'builder.error.spawn_armed',
+                            'a hostile moved to 50 m from the copied 80 m start is refused')
+                        H.eq(e and e.vars.min, 120, 'the copy keeps the 80 m circle plus 40 m')
+                        local moved = U.deepcopy(d)
+                        moved.locations[1].spawns[1] = U.deepcopy(dm.record.definition.locations[1].spawns[1])
+                        moved.locations[1].start.coords = { x = c.x + 0.5, y = c.y, z = c.z }
+                        H.eq(errorAt(B.validate(moved), 'locations.1.spawns').key, 'builder.error.spawn_armed',
+                            'a start moved away from the built-in\'s: its points are no longer trusted')
+                    end
                 end
             end
         end
@@ -1918,6 +2097,40 @@ local function Body()
         local okPA = act(3, 'publish', { id = aid })
         H.ok(okPA, 'an admin publishes an untested draft with the gate on')
         Config.Builder.requireTestToPublish = false
+    end
+
+    -- ══ server start: a hand edit of an unmoved duplicate of a built-in is checked like on a reload (S18) ════════
+    do
+        -- the owner publishes a copy of Gang Shootout without moving a point, then, with the server stopped, edits
+        -- only its label in the file; at the next start CP.Missions.loadAll runs the file sync before it loads any
+        -- built-in (a fresh missions module has none yet), so the copied hostiles are trusted from the shipped file
+        Config.Builder.requireTestToPublish = false
+        local okD, dup = act(3, 'duplicate', { id = 'gang_shootout' })
+        H.ok(okD, 'an admin duplicates gang_shootout: ' .. tostring(okD or dup))
+        local gid = okD and dup.id or 'custom_gang_shootout_copy'
+        local okP, pub = act(3, 'publish', { id = gid })
+        H.ok(okP and pub.version == 1, 'the unmoved copy publishes: ' .. tostring(okP or pub))
+        local gpath = row(gid).file_path
+        local before = ReadRel(gpath) or ''
+        local label = tostring(dup and dup.record and dup.record.definition.label)
+        local start, stop = before:find(('\'%s\''):format(label), 1, true)
+        H.ok(start ~= nil, 'the published file holds the copy\'s label')
+        if start then WriteRel(gpath, before:sub(1, start - 1) .. '\'Docks Shootout\'' .. before:sub(stop + 1)) end
+        H.load('modules/missions/server.lua')
+        H.eq(#CP.Missions.list(), 0, 'at server start no built-in is loaded before the file sync')
+        local summary = CP.Missions.loadAll()
+        local sync = summary.builder or {}
+        local why = {}
+        for _, rj in ipairs(sync.rejected or {}) do
+            if rj.id == gid then why[#why + 1] = tostring(rj.error) end
+        end
+        H.eq(table.concat(why, ' | '), '', 'the label-only hand edit is accepted (no spawn_armed refusal)')
+        local edited = false
+        for _, e in ipairs(sync.edited or {}) do if e.id == gid then edited = true end end
+        H.ok(edited, 'and counted as edited in code')
+        local live = CP.Missions.get(gid)
+        H.eq(live and live.label, 'Docks Shootout', 'the edited copy is the live version')
+        H.eq(row(gid).published_version, 2, 'saved as version 2')
     end
 
     -- the builder switch

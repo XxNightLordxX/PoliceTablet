@@ -100,6 +100,7 @@ local RELOAD = {
     'Builder.minLocationGap',
     'Builder.maxBlocks',
     'Builder.maxHostiles',
+    'Builder.spawnMargin',
     'Bonuses',
     'MissionTypes',
     'Departments',
@@ -255,6 +256,8 @@ local RANGES = {
     ['Spawning.placeTimeoutMs'] = { 1000, 60000 },
     ['Spawning.retries'] = { 0, 5 },
     ['Blocks.pursuit.outsiderWarn'] = { 0, 120 },
+    -- Mission Builder: how far outside the start circle armed spawn points stay (Config.Builder.spawnMargin)
+    ['Builder.spawnMargin'] = { 0, 150 },
 }
 
 -- Numbers that may go either way whatever config.lua has.

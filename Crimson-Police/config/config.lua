@@ -1126,6 +1126,9 @@ Config.Builder = {
     minLocations = 3,
     minLocationGap = 100.0,                    -- metres between locations of one mission
     minSpawnFromStart = 30.0,                  -- metres between any spawn point and the start point
+    spawnMargin = 40.0,                        -- metres outside the start circle that armed NPCs of a new custom mission
+                                               -- keep (shootout, boss, ambush and pursuit cars, door associates);
+                                               -- files published before still load, with a warning
     bonusCap = { points = 50, share = 0.25 },  -- flat bonuses and penalties: at most 50 points; percentage ones: at most 25% of P
     requireTestToPublish = false,              -- true = supervisors may publish only a draft that passed a test
                                                -- (admins never need one); false = testing is optional for everyone

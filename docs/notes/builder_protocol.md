@@ -82,7 +82,10 @@ a list of them, a list of `{ coords, heading?, label? }`, a list of lists of vec
 **Spawn keys** (NPC/vehicle spawn points; builder config `spawnFields`, the objective field that names
 the key): `hostile_waves` `spawns`, `boss.spawn` · `protect_rescue` `npcs` · `flee_arrest` `suspect`,
 `associates.spawns`, `spawns` (scatter) · `pursuit` `spawn`, `spawns` · `escort` `ambushPoints` ·
-`search_area` `hiding`. They must be >= `Config.Builder.minSpawnFromStart` from the location's start.
+`search_area` `hiding`. They must be >= `Config.Builder.minSpawnFromStart` from the location's start. **Armed**
+spawn keys (`hostile_waves` `spawns`, `boss.spawn`, `spawnSets.keys` · `escort` `ambushPoints` · `pursuit` `spawn`,
+`spawns` · `flee_arrest` `associates.spawns`) must also be >= the start's radius + `Config.Builder.spawnMargin` (2D;
+`CP.Builder.armedKeepOut`; not at a search circle; a built-in's own point at its own start is trusted).
 
 ### 1.3 Road routes (from route recording)
 `{ points = { vec3, ... }, stops = { { at = <waypoint index>, wait = <s> } }, loop = true|nil }` — road
@@ -200,7 +203,7 @@ Built-ins: `source: 'builtin'`, `readOnly: true`, `definition` = the built-in fi
   blockList: { id, labelKey: 'builder.block.<id>', available: boolean /* registered on the server */,
                minSeconds: number /* default */, presenceRange: [min, max, default] }[],
   allowed: Config.Builder.allowed, maxHostiles, maxBlocks, minLocations, maxLocations: 20,
-  minLocationGap, minSpawnFromStart,
+  minLocationGap, minSpawnFromStart, spawnMargin,
   bonusCap: { points: 50, pct: 25 },
   bonuses: { id, kind: 'points'|'pct', value /* points, or whole percent */, each, block: string|null,
              penalty: boolean, labelKey: 'bonus.<id>' | 'penalty.<id>' }[],     // Config.Bonuses, sorted
@@ -294,7 +297,7 @@ Client actions (registered by `modules/builder/client.lua` with `CP.Tablet.regis
 
 | name | payload | immediate reply |
 |---|---|---|
-| `builderPlace` | `{ missionId, location, key, kind: 'ped'\|'vehicle'\|'marker'\|'area'\|'start', model?, heading: boolean, multiple: boolean, min?, max?, radius?, points: (Vec3\|Vec4)[], start: Vec3\|null, spawn: boolean, otherStarts: Vec3[] }` | `{ started: true }` or `err.in_arena` / `err.builder_busy` |
+| `builderPlace` | `{ missionId, location, key, kind: 'ped'\|'vehicle'\|'marker'\|'area'\|'start', model?, heading: boolean, multiple: boolean, min?, max?, radius?, points: (Vec3\|Vec4)[], start: Vec3\|null, spawn: boolean, armed?: boolean, startRadius?: number, otherStarts: Vec3[] }` (armed: an armed spawn key, kept outside the start circle `startRadius` plus `Config.Builder.spawnMargin`) | `{ started: true }` or `err.in_arena` / `err.builder_busy` |
 | `builderRecord` | `{ missionId, location, key, stops: boolean, loop: boolean }` | `{ started: true }` |
 | `builderTestDrive` | `{ missionId, location, key, route: BuilderRoute, vehicle, speed, style }` | `{ started: true }` |
 | `builderResult` | `{}` | the pending result below (or `null`), and clears it |
@@ -318,7 +321,8 @@ BuilderClientResult =
 For `kind: 'start'`, `points` holds one vec3 and `radius` the start radius. The UI writes points into
 `definition.locations[location - 1][key]` (a single vec for single-point keys, a list otherwise) and
 autosaves. Placement checks on the client (a failing spot shows red and cannot be placed): on the ground
-(not in water, inside walls or in the air), outside `noBuildZones` (2D), spawn keys >= `minSpawnFromStart`
+(not in water, inside walls or in the air), outside `noBuildZones` (2D), armed spawn keys (`armed`) >= `startRadius` +
+`spawnMargin` from `start` (2D), spawn keys >= `minSpawnFromStart`
 from `start`, a start >= `minLocationGap` from `otherStarts`. The server re-checks z sanity, no-build
 zones, the start distance and the location gap on save/publish.
 

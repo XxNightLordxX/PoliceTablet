@@ -41,6 +41,12 @@ Response shapes: all in `builder_protocol.md` §3/§4 and `web/src/types/builder
    (NPC/vehicle spawns: hostile_waves spawns/boss.spawn, protect_rescue npcs, flee_arrest suspect/associates/spawns,
    pursuit spawn/spawns, escort ambushPoints, search_area hiding). Markers (interact points, doors, checkpoints,
    safe spots) may be near the start. No-build zones apply to every point (2D), including route waypoints.
+   **Armed spawn keys** (`ARMED_FIELDS`: hostile_waves spawns/boss.spawn/spawnSets.keys, escort ambushPoints, pursuit
+   spawn/spawns, flee_arrest associates) must also be outside the start circle plus `Config.Builder.spawnMargin`
+   (`B.armedKeepOut`, 2D; error `builder.error.spawn_armed`, which replaces the 30 m one for that key; none at a search
+   circle). A point a built-in mission plays at the same start (same coordinates and radius, within 0.05 m) is
+   trusted, so a duplicate of a built-in publishes; WaiveBaseline waives it for an override like `spawn_start`.
+   `B.armedTooClose(def)` feeds the loader warning for files published before (they still load).
 5. **Road path check** between waypoints (`CalculateTravelDistanceBetweenPoints`) is client-only (the server has no
    path finding); the client reports `unreachable` waypoints with the recording.
 6. **Save stores incomplete drafts** and returns `errors` + `valid`; publish refuses with `err.builder_invalid`

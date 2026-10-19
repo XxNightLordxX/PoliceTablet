@@ -27,6 +27,8 @@ export interface LocationMapProps {
     focusKey?: string | null;
     height?: number;
     className?: string;
+    // metres armed spawns keep from the start (schema armedKeepOut): the keep-out ring when set, else minSpawnFromStart
+    keepOut?: number | null;
 }
 
 interface Box {
@@ -73,9 +75,18 @@ function useAspect(ref: RefObject<HTMLDivElement | null>): { aspect: number; wid
     return size;
 }
 
-export function LocationMap({ location, specs, cfg, meta, focusKey, height = 260, className }: LocationMapProps) {
+export function LocationMap({
+    location,
+    specs,
+    cfg,
+    meta,
+    focusKey,
+    height = 260,
+    className,
+    keepOut: armedKeepOut,
+}: LocationMapProps) {
     const start = location.start;
-    const keepOut = Number(cfg.minSpawnFromStart) || 30;
+    const keepOut = armedKeepOut ?? (Number(cfg.minSpawnFromStart) || 30);
     const boxRef = useRef<HTMLDivElement | null>(null);
     const { aspect, width } = useAspect(boxRef);
     const data = useMemo(() => {

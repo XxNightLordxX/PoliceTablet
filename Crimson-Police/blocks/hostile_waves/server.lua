@@ -286,7 +286,10 @@ local function CheckLocation(o, loc, li, strict)
     end
     local start = loc.start and loc.start.coords
     -- no-build zones for every mission (docs/CRIMSON_ARENA.md rule 7: the loader only sees location
-    -- keys, not points written into the objective); the distance from the start for custom missions
+    -- keys, not points written into the objective); the distance from the start for custom missions. This check
+    -- also runs when a published file loads, so it stays at minSpawnFromStart (a file published before still loads);
+    -- the Mission Builder keeps a new or edited fight outside the start circle plus Config.Builder.spawnMargin
+    -- (CP.Builder.armedKeepOut) and the loader warns about an older file (CP.Missions.normalize)
     local function spawnOk(list)
         for _, p in ipairs(list) do
             if InNoBuild(p) then

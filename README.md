@@ -718,7 +718,7 @@ Everything else works as shipped. These are the ones owners change most:
 | `Config.Rewards` | Item rewards, off by default (see [6.3](#63-item-rewards)) |
 | `Config.Disputes.windowHours` | How long officers have to dispute a run (48 hours) |
 | `Config.AntiCheat` | Flag limits, and the automatic suspension: 3 voided runs in 30 days = 7 days |
-| `Config.Builder` | Mission Builder on or off, what builders may pick, `noBuildZones`, and `requireTestToPublish` (`false` = testing is optional, as shipped) |
+| `Config.Builder` | Mission Builder on or off, what builders may pick, `noBuildZones`, `requireTestToPublish` (`false` = testing is optional, as shipped), and `spawnMargin` (40 m, 0-150): a custom mission's armed NPCs (a shootout and its boss, ambush and pursuit cars, warrant associates) must spawn outside the start circle plus this, e.g. 100 m from a 60 m start, so a fight never appears around your officers as they arrive (hostages and suspects keep `minSpawnFromStart`, 30 m) |
 | `Config.Testing` | Admin test mode: `enabled`, `maxTesters`, `allowTeleport`, `debugOverlay`, and `spawnCheck` (the spawn point check: `enabled`, `sceneTimeoutMs` 8000, `moveWithin` 150 m, `routes = false` checks no route points, `teleport = true` the Teleport here button next to a result) |
 | `Config.Retention` | Clean-up of old data: runs archived after 12 months, audit rows deleted after 180 days, mission calls after 90 days (0 = keep) |
 | `Config.Downed.dropOffs` | Where a downed officer is taken when no EMS is on duty |
@@ -2289,6 +2289,18 @@ however it ends.
   for room is dropped and a new one asked. A tow truck that got no road point is never made inside the car next to
   you: the car fades out and counts as impounded (it used to sit there and never load it). `Config.Spawning.enabled
   = false`: the vans are put on their points as before.
+- Mission Builder: armed spawns outside the arrival circle (same request, "surronding the officers"; PLAN S18; the
+  Builder audit published a draft with 11 hostiles 31 m from a 60 m start with no error, and drew a 30 m keep-out ring
+  inside the start circle): `Config.Builder.spawnMargin` (40 m, 0-150). In a new or edited custom mission every armed
+  spawn point (a shootout's spawns, spawn sets and boss, escort ambush points, pursuit cars, warrant associates) must
+  be outside the start circle plus the margin (2D, as officers arrive: 100 m from a 60 m start); the placement tool
+  refuses a closer one as you aim ("Enemies must be at least 100 m from the start"), publishing refuses it with one
+  message per location, and the Locations map and the in-world ring show that distance ("No enemies closer than
+  100 m"). Hostages, suspects and field-contact people keep `minSpawnFromStart` (30 m). The points a built-in mission
+  plays at its own start stay allowed in a duplicate of it (they play as in the built-in, kept away from your
+  officers by the spawn director); a moved or new point follows the rule. A mission with a search area (its start is
+  the search circle, entered anywhere) keeps the 30 m. A custom mission published before still loads, with one
+  warning per location in Admin UI -> Missions -> Load result; publishing it again needs the points moved.
 - Check spawn points (owner request of 2026-10-19: "Double check all coordinates etc for every ped"):
   `Config.Testing.spawnCheck` (`enabled`, `sceneTimeoutMs` 8000 ms, `moveWithin` 150 m, `routes = false`). An
   admin's own game visits every point of a mission's locations (frozen, unseen and unhurt, back where he was at the

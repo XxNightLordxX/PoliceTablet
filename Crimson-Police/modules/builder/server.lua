@@ -182,6 +182,16 @@ local SPAWN_FIELDS = {
     search_area = { 'hiding' },
     field_contact = { 'car', 'peopleSpots', 'spots' },
 }
+-- The spawn fields whose NPCs are armed or drive at the officers (spawnSets.keys is a list of keys): a custom
+-- mission keeps their points outside the start circle plus Config.Builder.spawnMargin (B.armedKeepOut), so a fight
+-- never appears around the officers as they arrive. Hostages, suspects and field-contact people keep
+-- minSpawnFromStart.
+local ARMED_FIELDS = {
+    hostile_waves = { 'spawns', 'boss.spawn', 'spawnSets.keys' },
+    escort = { 'ambushPoints' },
+    pursuit = { 'spawn', 'spawns' },
+    flee_arrest = { 'associates.spawns' },
+}
 
 -- Lua export: key order inside tables (unknown keys follow alphabetically), fraction and float keys.
 local ORDER_LIST = {
@@ -1297,6 +1307,128 @@ local function SearchCircle(rtObjectives)
 end
 
 -- ============================================================================
+--                  ARMED SPAWNS STAY OUTSIDE THE START CIRCLE
+-- ============================================================================
+
+-- The location keys of one objective's armed spawn points (ARMED_FIELDS), added to `into` (key -> true).
+local function ArmedKeys(blockId, eff, into)
+    for _, field in ipairs(ARMED_FIELDS[blockId] or {}) do
+        local v = U.getPath(eff, field)
+        if type(v) == 'string' then
+            into[v] = true
+        elseif type(v) == 'table' then
+            for _, k in ipairs(v) do if type(k) == 'string' then into[k] = true end end
+        end
+    end
+    return into
+end
+
+-- Metres (2D, as officers arrive) an armed spawn point keeps from a location's start: its circle plus
+-- Config.Builder.spawnMargin, never less than minSpawnFromStart. nil when the start is the search circle of a
+-- search_area mission: officers enter that circle anywhere, so only minSpawnFromStart applies and the spawn director
+-- keeps the fight away from them at run time.
+function B.armedKeepOut(start, searchCircle)
+    if searchCircle then return nil end
+    local bc = CfgB()
+    local radius = type(start) == 'table' and tonumber(start.radius) or 0
+    return math.max(tonumber(bc.minSpawnFromStart) or 30, (radius or 0) + (tonumber(bc.spawnMargin) or 40))
+end
+
+-- The built-in definitions a duplicate's points are compared with: the loaded built-ins, and the shipped file of every
+-- built-in that is not loaded. At server start none is loaded yet (CP.Missions.loadAll runs the Builder's file sync
+-- before it loads them), so a hand edit is checked against the shipped files: the same answer as on a later reload.
+local function TrustedBuiltins()
+    local out, have = {}, {}
+    for _, def in pairs(CP.Missions and CP.Missions.list and CP.Missions.list() or {}) do
+        if type(def) == 'table' and def.source == 'builtin' then
+            out[#out + 1] = def
+            have[def.id] = true
+        end
+    end
+    for _, id in ipairs(CP.Missions and CP.Missions.builtinIds and CP.Missions.builtinIds() or {}) do
+        local shipped = not have[id] and B.shippedOf and B.shippedOf(id) or nil
+        if shipped and type(shipped.raw.locations) == 'table' then
+            out[#out + 1] = { id = id, source = 'builtin', locations = shipped.raw.locations }
+        end
+    end
+    return out
+end
+
+-- Every point the built-in missions play at this start (same place, same circle): a duplicate of a built-in copies
+-- them, and they stay trusted as in the built-in itself (the spawn director keeps them away from the officers at run
+-- time). A moved or new point follows B.armedKeepOut. builtins: the built-in definitions to look in (CP.Missions.loadAll
+-- passes the ones it is loading), or a function that returns them; nil = TrustedBuiltins().
+local SAME_POINT = 0.05   -- metres: the Builder rounds coordinates to 0.01 m
+local function ShippedPointsAt(start, builtins)
+    local out = {}
+    if not (type(start) == 'table' and IsVecTable(start.coords)) then return out end
+    if type(builtins) == 'function' then builtins = builtins() end
+    if type(builtins) ~= 'table' then builtins = TrustedBuiltins() end
+    for _, def in pairs(builtins) do
+        for _, bl in ipairs(def.source == 'builtin' and type(def.locations) == 'table' and def.locations or {}) do
+            local bs = type(bl) == 'table' and bl.start or nil
+            if type(bs) == 'table' and IsVecTable(bs.coords) and U.dist(bs.coords, start.coords) < SAME_POINT
+                and math.abs((tonumber(bs.radius) or 0) - (tonumber(start.radius) or 0)) < 0.01 then
+                for k, v in pairs(bl) do
+                    if k ~= 'start' and k ~= 'label' then CollectPoints(v, out) end
+                end
+            end
+        end
+    end
+    return out
+end
+
+local function IsShipped(p, shipped)
+    for _, q in ipairs(shipped) do if U.dist(p, q) < SAME_POINT then return true end end
+    return false
+end
+
+-- The points of `pts` closer (2D) than `need` to the start, the built-in's own points left out: nearest distance or
+-- nil. shippedRef = { list } caches ShippedPointsAt for the location.
+local function ArmedNearest(pts, start, need, shippedRef, builtins)
+    local near = nil
+    for _, p in ipairs(pts) do
+        local d = U.dist2d(p, start.coords)
+        if d < need then
+            shippedRef[1] = shippedRef[1] or ShippedPointsAt(start, builtins)
+            if not IsShipped(p, shippedRef[1]) and (near == nil or d < near) then near = d end
+        end
+    end
+    return near
+end
+
+-- The armed spawn keys of a runtime definition that have a point inside B.armedKeepOut, one entry per location and
+-- key: { location, key, min, have } (have = the nearest such point, 2D; a built-in's own point at its own start is
+-- trusted; builtins as for ShippedPointsAt). The loader warns about them in a custom file published before the rule
+-- (CP.Missions.normalize); B.validate refuses them in a new publish.
+function B.armedTooClose(def, builtins)
+    local out = {}
+    if type(def) ~= 'table' or type(def.objectives) ~= 'table' or type(def.locations) ~= 'table' then return out end
+    local keys = {}
+    for _, obj in ipairs(def.objectives) do
+        if type(obj) == 'table' and type(obj.block) == 'string' and ARMED_FIELDS[obj.block] then
+            ArmedKeys(obj.block, EffectiveObjective(CP.Blocks.get(obj.block), obj), keys)
+        end
+    end
+    if next(keys) == nil then return out end
+    local search = SearchCircle(def.objectives) ~= nil
+    for li, loc in ipairs(def.locations) do
+        local start = type(loc) == 'table' and loc.start or nil
+        local need = type(start) == 'table' and IsVecTable(start.coords) and B.armedKeepOut(start, search) or nil
+        if need then
+            local shipped = {}
+            for _, key in ipairs(U.keys(keys)) do
+                local pts = {}
+                CollectPoints(loc[key], pts)
+                local near = ArmedNearest(pts, start, need, shipped, builtins)
+                if near then out[#out + 1] = { location = li, key = key, min = need, have = near } end
+            end
+        end
+    end
+    return out
+end
+
+-- ============================================================================
 --                 THE BASELINE OF AN OVERRIDE (S30, BY VALUE)
 -- ============================================================================
 -- An edited built-in is checked with the custom-mission rules, with the shipped file as a baseline: a model, weapon,
@@ -1480,9 +1612,9 @@ do
                         else
                             -- a shipped spawn list or route, measured from a shipped start
                             local same = ShippedLocationValue(base, lkey, loc[lkey])
-                            keep = not (
-                                same and (e.key ~= 'builder.error.spawn_start' or SameValue(loc.start, same.start))
-                            )
+                            local fromStart = e.key == 'builder.error.spawn_start'
+                                or e.key == 'builder.error.spawn_armed'
+                            keep = not (same and (not fromStart or SameValue(loc.start, same.start)))
                         end
                     end
                 elseif (bl == 'bonuses' or bl == 'penalties') and bi then
@@ -1593,6 +1725,7 @@ function B.validate(def, opts)
     end
     local minTotal = 0
     local spawnKeys = {}   -- location key -> true
+    local armedKeys = {}   -- location key -> true (armed spawns: outside the start circle plus the margin)
     local armed = 0
     local blockIds = {}
     for i, obj in ipairs(objectives) do
@@ -1677,6 +1810,7 @@ function B.validate(def, opts)
                     local key = U.getPath(eff, field)
                     if type(key) == 'string' then spawnKeys[key] = true end
                 end
+                ArmedKeys(blockId, eff, armedKeys)
             end
         end
     end
@@ -1699,6 +1833,12 @@ function B.validate(def, opts)
     local minFromStart = tonumber(bc.minSpawnFromStart) or 30
     local search = SearchCircle(rt.objectives)
     local starts = {}
+    -- the built-ins a duplicate's points are compared with, found once for every location (only when one is close)
+    local trusted = nil
+    local function Trusted()
+        trusted = trusted or TrustedBuiltins()
+        return trusted
+    end
     for li, loc in ipairs(locations) do
         local lp = 'locations.' .. li
         if type(loc) ~= 'table' then
@@ -1736,6 +1876,10 @@ function B.validate(def, opts)
                         { key = 'start', location = li, zone = tostring(z.label) })
                 end
             end
+            -- armed spawns: outside this start's circle plus Config.Builder.spawnMargin (a built-in's own points at
+            -- its own start excepted: a duplicate keeps them)
+            local armedMin = startCoords and B.armedKeepOut(start, search ~= nil) or nil
+            local shipped = {}
             for _, key in ipairs(U.keys(loc)) do
                 if key ~= 'label' and key ~= 'start' then
                     local v = loc[key]
@@ -1743,6 +1887,8 @@ function B.validate(def, opts)
                     local pts = {}
                     CollectPoints(v, pts)
                     local badCoords, badZone, badStart = false, nil, false
+                    local badArmed = armedKeys[key] and armedMin
+                        and ArmedNearest(pts, start, armedMin, shipped, Trusted) ~= nil
                     for _, p in ipairs(pts) do
                         if math.abs(p.x) > COORD_LIMIT or math.abs(p.y) > COORD_LIMIT or p.z < Z_MIN or p.z > Z_MAX then
                             badCoords = true
@@ -1759,7 +1905,16 @@ function B.validate(def, opts)
                         AddError(errors, kp, 'builder.error.point_zone',
                             { key = key, location = li, zone = tostring(badZone.label) })
                     end
-                    if badStart then
+                    -- an armed key's rule is the larger one (armedMin >= minFromStart): one message for one mistake
+                    if badArmed then
+                        AddError(errors, kp, 'builder.error.spawn_armed', {
+                            key = key,
+                            location = li,
+                            min = Nice(armedMin),
+                            radius = Nice(tonumber(start.radius) or 0),
+                            margin = Nice(tonumber(bc.spawnMargin) or 40),
+                        })
+                    elseif badStart then
                         AddError(errors, kp, 'builder.error.spawn_start',
                             { key = key, location = li, min = Nice(minFromStart) })
                     end
@@ -3297,6 +3452,7 @@ CP.Net.callback('builder:config', function(src)
         maxLocations = MAX_LOCATIONS,
         minLocationGap = bc.minLocationGap,
         minSpawnFromStart = bc.minSpawnFromStart,
+        spawnMargin = tonumber(bc.spawnMargin) or 40,
         bonusCap = { points = cap.points, pct = RoundInt((tonumber(cap.share) or 0.25) * 100) },
         bonuses = bonuses,
         noBuildZones = zones,

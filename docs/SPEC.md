@@ -1958,6 +1958,8 @@ Guardrails (checked while placing, and again by the server on publish)
 
 - Spawn points must be on the ground (not in water, inside walls or in the air), at least 30 m from the start point, and outside the no-build zones (Config.Builder.noBuildZones: police stations, hospitals, the prison interior and the Crimson-Arena Trailer Park and lobby by default).
 
+- Armed spawn points (PLAN S18, owner request of 2026-10-19: "surronding the officers") must also be outside the start circle plus Config.Builder.spawnMargin (40 m), measured flat (2D) as officers arrive: with a 60 m start, 100 m from the start. They are a hostile_waves objective's spawns, spawn sets and boss spot, escort ambushPoints, pursuit spawn / spawns and flee_arrest associates; hostages, suspects at a door, scattering suspects, fugitives and field-contact people keep the 30 m. The placement tool refuses a closer point as it is aimed at, publishing refuses it (one message per location and key, instead of the 30 m one), and the Locations map and the in-world ring show that distance. Points a built-in mission plays at its own start (same coordinates, same circle) stay allowed in a duplicate of it: they play as in the built-in, where the spawn director keeps them away from the officers; a moved or new point follows the rule. At server start, before the built-ins are loaded, they are compared with the shipped built-in files, so a hand edit of such a duplicate (or of an edited built-in) is judged the same at start as on a later reload. A mission with a search_area objective keeps the 30 m (its start is the search circle, entered anywhere). A custom mission file published before still loads, with one loader warning per location and key; publishing it again (or a hand edit of its file) needs the points moved. The block guardrail that runs when files load stays at the 30 m.
+
 - Locations of the same mission must be at least 100 m apart, and each mission needs at least 3.
 
 - Each location's start marker has a start radius of 20–150 m, except in a mission with a search_area objective: there the search circle is the start marker (the run starts when a participant enters it, as in Manhunt), so every location's start radius equals the starting circle of its first search_area objective (that block's startRadius, 200–1,000 m, 600 m by default).
@@ -3680,6 +3682,9 @@ Config.Builder = {
     minLocations = 3,
     minLocationGap = 100.0,                    -- metres between locations of one mission
     minSpawnFromStart = 30.0,                  -- metres between any spawn point and the start point
+    spawnMargin = 40.0,                        -- metres outside the start circle that armed NPCs of a new custom mission
+                                               -- keep (shootout, boss, ambush and pursuit cars, door associates);
+                                               -- files published before still load, with a warning
     bonusCap = { points = 50, share = 0.25 },  -- flat bonuses and penalties: at most 50 points; percentage ones: at most 25% of P
     requireTestToPublish = false,              -- true = supervisors may publish only a draft that passed a test
                                                -- (admins never need one); false = testing is optional for everyone

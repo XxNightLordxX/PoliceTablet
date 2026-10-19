@@ -50,7 +50,8 @@ overlays and of the protocol extensions are in `web/src/types/builder_client.ts`
 - **Spot checks** (`CP.Builder.checkSpot`, order): every point placed → nothing aimed at → further than 50 m →
   inside a no-build zone (2D) → water → not on the ground (aimed surface more than 0.75 m from
   `GetGroundZFor_3dCoord`, or steeper than ~45°; not for markers) → capsule probe pending / blocked (peds and
-  vehicles) → spawn key closer than `minSpawnFromStart` to the start (3D, as the server) → start closer than
+  vehicles) → armed spawn key (`ctx.armed`) closer than `ctx.startRadius + ctx.spawnMargin` to the start (2D,
+  `B.armedKeepOut(ctx)`, `builder.place.reason.armed`) → spawn key closer than `minSpawnFromStart` to the start (3D, as the server) → start closer than
   `minLocationGap` to another start (2D) → closer than `minGap` to a point of the same key. The zone and
   distance checks use the point as it is stored (`spot.stored`: rounded, a ped at ground + 1 m), which is what
   the server checks on save and publish.

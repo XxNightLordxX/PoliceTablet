@@ -441,6 +441,24 @@ do
     local k, v = Reason(Spot({ x = 1030 }))
     H.eq(k, 'builder.place.reason.start', 'spawn too close to the start')
     H.eq(v.min, 30, 'min distance in vars')
+    -- armed spawns (shootout, boss, ambush and pursuit cars, door associates): outside the start circle plus
+    -- Config.Builder.spawnMargin, 2D, as the server (CP.Builder.armedKeepOut)
+    local actx = {}
+    for key, value in pairs(ctx) do actx[key] = value end
+    actx.armed, actx.startRadius, actx.spawnMargin = true, 60, 40
+    k, v = Reason(Spot({ x = 1067.52 }), actx)
+    H.eq(k, 'builder.place.reason.armed', 'an armed spawn 50 m from a 60 m start is refused')
+    H.eq(v.min, 100, 'the start circle plus the margin in the vars')
+    H.ok(CP.L(k, v):find('100 m', 1, true) ~= nil, 'the message names the distance: ' .. CP.L(k, v))
+    H.eq(Reason(Spot({ x = 1118.52 }), actx), 'ok', 'an armed spawn 101 m out is placed')
+    H.eq(Reason(Spot({ x = 1067.52 }), ctx), 'ok', 'an unarmed spawn (a hostage) 50 m out is placed: 30 m floor')
+    actx.spawnMargin = 0
+    H.eq(Reason(Spot({ x = 1067.52 }), actx), 'builder.place.reason.armed', 'margin 0: still outside the 60 m circle')
+    H.eq(Reason(Spot({ x = 1079.52 }), actx), 'ok', 'margin 0: 62 m from a 60 m start is placed')
+    H.eq(B.armedKeepOut({ armed = true, startRadius = 10, spawnMargin = 5, minFromStart = 30 }), 30,
+        'the keep-out is never under minFromStart')
+    H.eq(B.armedKeepOut({ startRadius = 60, spawnMargin = 40, minFromStart = 30 }), nil, 'not armed: no keep-out')
+    H.eq(B.armedKeepOut({ armed = true, spawnMargin = 40 }), nil, 'no start circle (a search circle): no keep-out')
     -- markers: aimed surface counts, no ground or probe checks
     local mctx = { kind = 'marker', points = {}, multiple = true, max = 5, zones = {}, maxDistance = 50 }
     H.eq(Reason(Spot({ z = 9.0, blocked = 'NIL' }), mctx), 'ok', 'a marker on a raised surface')
@@ -528,6 +546,14 @@ do
     H.eq(o.max, 3, 'max')
     H.eq(o.heading, true, 'heading')
     H.eq(o.spawn, true, 'spawn')
+    H.eq(o.armed, false, 'not armed unless asked')
+    local ap = assert(B.parsePlace(With({ armed = true, startRadius = 60 })))
+    H.eq(ap.armed, true, 'an armed spawn key')
+    H.eq(ap.startRadius, 60, 'the start circle is passed on')
+    H.eq(assert(B.parsePlace(With({ armed = true, spawn = false }))).armed, false, 'armed only for a spawn key')
+    H.eq(select(2, B.parsePlace(With({ armed = 'yes' }))), 'err.invalid_payload', 'armed must be boolean')
+    H.eq(select(2, B.parsePlace(With({ startRadius = -1 }))), 'err.invalid_payload', 'a negative start circle')
+    H.eq(select(2, B.parsePlace(With({ startRadius = 'big' }))), 'err.invalid_payload', 'start circle must be a number')
     H.eq(o.start.w, nil, 'the start carries no heading')
     H.eq(select(2, B.parsePlace(With({ kind = 'tree' }))), 'err.invalid_payload', 'bad kind')
     H.eq(select(2, B.parsePlace(With({ missionId = 'bad id!' }))), 'err.invalid_payload', 'bad mission id')
