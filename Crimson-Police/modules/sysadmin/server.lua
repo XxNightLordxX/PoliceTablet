@@ -20,6 +20,10 @@ local UPLOAD_TTL = 60                     -- seconds an unfinished upload is kep
 local STATE_WAIT_MS = 3000                -- how long Show state waits for the player's client
 local DEPT_KEY = '^[a-z0-9_]+$'
 local MIGRATIONS_TABLE = 'cp_schema_migrations'
+-- cp_storage_meta key (in the store a restore changes; a restore never replaces that table): the automatic backup of a
+-- restore that has not finished (it failed part way, or the server stopped during it), until a restore works. While it
+-- is set the restore lock outlives a restart.
+local META_RESTORE_OPEN = 'restore_open'
 
 -- Tables a restore never replaces: the audit trail, the settings history, the storage marker, request ids, jobs and
 -- the department funding ledger (money only moves forward).
@@ -136,6 +140,26 @@ local function EnsureDir(rel)
     return ok
 end
 
+-- The automatic backup of a restore that has not finished (META_RESTORE_OPEN) | nil.
+local function OpenRestore()
+    local ok, v = pcall(MySQL.scalar.await, 'SELECT meta_value FROM cp_storage_meta WHERE meta_key = ?',
+        { META_RESTORE_OPEN })
+    if ok and type(v) == 'string' and v ~= '' then return v end
+    return nil
+end
+
+-- name: the automatic backup a restore that has not finished leaves; nil: the restore worked. ok.
+local function SetOpenRestore(name)
+    if name == nil then
+        return (pcall(MySQL.update.await, 'DELETE FROM cp_storage_meta WHERE meta_key = ?', { META_RESTORE_OPEN }))
+    end
+    return (
+        pcall(MySQL.update.await, [[INSERT INTO cp_storage_meta (meta_key, meta_value, updated_at) VALUES (?, ?, NOW())
+        ON DUPLICATE KEY UPDATE meta_value = VALUES(meta_value), updated_at = VALUES(updated_at)]],
+            { META_RESTORE_OPEN, name })
+    )
+end
+
 local function ReadJson(path)
     local fs = Fs()
     local text = fs and fs.read(path) or nil
@@ -241,7 +265,8 @@ local function Split(sql)
 end
 
 -- { order = { name }, tables = { [name] = { name, cols = { column }, kinds = { [column] = 'dt'|'date'|'bool'|'val' },
--- keyset = AUTO_INCREMENT primary key column | nil } } }
+-- keyset = AUTO_INCREMENT primary key column | nil, defaulted = { [column] = true } (NOT NULL with a default: a row
+-- that lacks it gets the default), required = { [column] = true } (NOT NULL, no default: every row needs it) } } }
 function Sys.schema()
     if schemaCache then return schemaCache end
     local M = CP.Storage and CP.Storage.MemSQL
@@ -260,8 +285,16 @@ function Sys.schema()
     for _, name in ipairs(engine:tableNames()) do
         local t = engine.tables[name]
         if t and name:sub(1, 3) == 'cp_' then
-            local info = { name = name, cols = {}, kinds = {} }
+            local info = { name = name, cols = {}, kinds = {}, defaulted = {}, required = {} }
             for _, col in ipairs(t.cols) do
+                if col.notnull and not col.autoinc then
+                    -- an ENUM without a default takes its first member, as MariaDB does
+                    if col.defaultNow or col.default ~= nil or col.kind == 'enum' then
+                        info.defaulted[col.name] = true
+                    else
+                        info.required[col.name] = true
+                    end
+                end
                 local kind = 'val'
                 if col.kind == 'dt' then
                     kind = 'dt'
@@ -357,18 +390,32 @@ local function ReadRows(db, info, where, params)
     return out
 end
 
--- Rows into a table, INSERT_BATCH per statement; a column the row has no value for is written as NULL.
+-- The columns one row is written with: a NOT NULL column with a default that the row lacks (a backup made before the
+-- migration that added it) is left out, so the store gives it its default instead of refusing NULL.
+local function RowCols(info, row)
+    local out, key = {}, {}
+    for _, c in ipairs(info.cols) do
+        if row[c] == nil and info.defaulted[c] then key[#key + 1] = c else out[#out + 1] = c end
+    end
+    return out, table.concat(key, ',')
+end
+
+-- Rows into a table, up to INSERT_BATCH per statement (rows that lack the same columns share one); a nullable column
+-- the row has no value for is written as NULL.
 local function InsertRows(db, info, rows)
-    local cols = {}
-    for _, c in ipairs(info.cols) do cols[#cols + 1] = QuoteName(c) end
-    local head = 'INSERT INTO ' .. QuoteName(info.name) .. ' (' .. table.concat(cols, ', ') .. ') VALUES '
     local i = 1
     while i <= #rows do
-        local last = math.min(#rows, i + INSERT_BATCH - 1)
+        local cols, shape = RowCols(info, rows[i])
+        local last = i
+        while last < #rows and last - i + 1 < INSERT_BATCH and select(2, RowCols(info, rows[last + 1])) == shape do
+            last = last + 1
+        end
+        local names = {}
+        for k, c in ipairs(cols) do names[k] = QuoteName(c) end
         local tuples, params = {}, {}
         for r = i, last do
             local row, parts = rows[r], {}
-            for k, c in ipairs(info.cols) do
+            for k, c in ipairs(cols) do
                 local v = row[c]
                 if v == nil then
                     parts[k] = 'NULL'
@@ -379,7 +426,11 @@ local function InsertRows(db, info, rows)
             end
             tuples[#tuples + 1] = '(' .. table.concat(parts, ', ') .. ')'
         end
-        db.query.await(head .. table.concat(tuples, ', '), params)
+        db.query.await(('INSERT INTO %s (%s) VALUES %s'):format(
+            QuoteName(info.name),
+            table.concat(names, ', '),
+            table.concat(tuples, ', ')
+        ), params)
         i = last + 1
         Wait(0)
     end
@@ -395,19 +446,39 @@ end
 --                       MONEY STATE (MOVES FORWARD ONLY)
 -- ============================================================================
 -- Before a restore or a forced copy replaces rows, every row that holds or held money is read; afterwards it gets its
--- state back (or comes back whole when the new rows lack it). A row is the same row only when its run and officer
--- match (ids restart in a store that started empty). Paid stays paid, given stays given.
---   restore: the snapshot is the live store, the newest truth: it always wins, and rows still owed (held, pending,
---            unfunded) that the backup lacks are kept too.
---   forced copy (ahead = true): the snapshot is the store being replaced, maybe the older side: its state is put
+-- state back (or comes back whole when the new rows lack it). The same row is the one with the same id and run (or
+-- reward), whoever holds it now (a record move changes only the officer), else the same run and officer (ids restart
+-- in a store that started empty). Paid stays paid, given stays given.
+--   restore: the snapshot is the live store, the newest truth: it always wins, with the officer and the void and flag
+--            state that decide whether a row is paid; rows still owed (held, pending, unfunded, voided or not) that
+--            the backup lacks are kept too.
+--   forced copy (ahead = true): the snapshot is the store being replaced, maybe the older side: its money state is put
 --            back only where it moved more money than the copied row (never un-pays, never pays twice).
 
 local MONEY_RUNS = [[cash_status IN ('paying', 'paid', 'forfeited', 'capped') OR cash_paid > 0 OR cash_reclaimed > 0]]
-local OWED_RUNS = [[(cash_status IN ('held', 'pending', 'unfunded') AND voided = 0)]]
+-- the rows a payment can still reach (payPending pays a completed 'none' row that carries cash too), voided or not:
+-- a void (or Restore run) since the backup decides whether the row is paid or forfeited
+local OWED_RUNS = [[(cash_status IN ('held', 'pending', 'unfunded') OR (cash_status = 'none' AND state = 'completed'
+    AND cash_base > 0 AND mission_type NOT IN ('manual_award', 'goal')))]]
 local MONEY_ITEMS = [[status IN ('giving', 'given', 'forfeited')]]
 local OWED_ITEMS = [[status IN ('held', 'pending')]]
 local MOVED = { paying = true, paid = true, capped = true }
 local ITEM_RANK = { giving = 1, given = 2 }
+-- The run columns a restore writes back from the live row: whose run it is, its money state and what decides
+-- whether it is paid (CP.Cash pays and forfeits only rows that are not voided or flagged).
+local RUN_LIVE = {
+    'citizenid',
+    'cash_status',
+    'cash_paid',
+    'cash_reclaimed',
+    'breakdown',
+    'voided',
+    'void_kind',
+    'void_batch',
+    'flagged',
+    'flag_reason',
+}
+local RUN_MONEY = { 'cash_status', 'cash_paid', 'cash_reclaimed', 'breakdown' }
 
 -- opts.owed: also the rows still owed (a restore keeps them).
 function Sys.moneySnapshot(db, opts)
@@ -425,18 +496,15 @@ function Sys.moneySnapshot(db, opts)
     return snap
 end
 
-local function SameRun(a, b)
-    return tostring(a.run_uuid) == tostring(b.run_uuid) and tostring(a.citizenid) == tostring(b.citizenid)
-end
-
--- The row of the same run and officer: by id when it matches, else by run and officer. table, row | nil.
+-- The row of the same run: by id and run, whoever holds it (ids are unique in one store, and a store that hands them
+-- out again has other runs under them), else by run and officer. table, row | nil.
 local function FindRun(db, r)
     local schema = Sys.schema()
     local names = { 'cp_mission_runs', 'cp_mission_runs_archive' }
     for _, name in ipairs(names) do
         local ok, rows = pcall(ReadRows, db, schema.tables[name], 'id = ?', { r.id })
         local cur = ok and rows[1] or nil
-        if cur and SameRun(cur, r) then return name, cur end
+        if cur and tostring(cur.run_uuid) == tostring(r.run_uuid) then return name, cur end
     end
     for _, name in ipairs(names) do
         local ok, rows = pcall(ReadRows, db, schema.tables[name], 'run_uuid = ? AND citizenid = ? ORDER BY id LIMIT 1',
@@ -472,11 +540,13 @@ local function RunAhead(s, c)
     return MOVED[s.cash_status] == true and not MOVED[c.cash_status]
 end
 
+-- The same reward: the same source, key and item (the officer may have changed with a record move).
 local function SameItem(a, b)
-    return tostring(a.citizenid) == tostring(b.citizenid) and tostring(a.source) == tostring(b.source)
-        and tostring(a.source_key) == tostring(b.source_key) and tostring(a.item) == tostring(b.item)
+    return tostring(a.source) == tostring(b.source) and tostring(a.source_key) == tostring(b.source_key)
+        and tostring(a.item) == tostring(b.item)
 end
 
+-- By id and reward whoever holds it, else by officer and reward (the unique key uq_reward).
 local function FindItem(db, r)
     local info = Sys.schema().tables.cp_item_rewards
     local ok, rows = pcall(ReadRows, db, info, 'id = ?', { r.id })
@@ -495,7 +565,29 @@ local function WithFreeId(db, name, r)
     return out
 end
 
--- Returns { updated, inserted, skipped } of runs and items put back. opts.ahead: only where the snapshot is ahead.
+-- UPDATE <name> SET <cols from row r> WHERE id = ?: a value the row lacks is written as NULL.
+local function SetRow(db, name, cols, r, id)
+    local sets, params = {}, {}
+    for _, c in ipairs(cols) do
+        local v = r[c]
+        if c == 'breakdown' then
+            v = v or '{}'
+        elseif c == 'cash_paid' or c == 'cash_reclaimed' then
+            v = Int(v)
+        end
+        if v == nil then
+            sets[#sets + 1] = QuoteName(c) .. ' = NULL'
+        else
+            sets[#sets + 1] = QuoteName(c) .. ' = ?'
+            params[#params + 1] = v
+        end
+    end
+    params[#params + 1] = id
+    db.update.await(('UPDATE %s SET %s WHERE id = ?'):format(QuoteName(name), table.concat(sets, ', ')), params)
+end
+
+-- Returns { updated, inserted, skipped } of runs and items put back. opts.ahead: only where the snapshot is ahead,
+-- and only its money state (a restore writes the live row's officer, money, void and flag state).
 function Sys.moneyReapply(db, snap, opts)
     local ahead = type(opts) == 'table' and opts.ahead == true
     local schema = Sys.schema()
@@ -506,17 +598,7 @@ function Sys.moneyReapply(db, snap, opts)
         if where and ahead and not RunAhead(r, cur) then
             done.skipped = done.skipped + 1
         elseif where then
-            db.update.await(
-                ([[UPDATE %s SET cash_status = ?, cash_paid = ?, cash_reclaimed = ?, breakdown = ?
-                WHERE id = ?]]):format(QuoteName(where)),
-                {
-                    r.cash_status,
-                    Int(r.cash_paid),
-                    Int(r.cash_reclaimed),
-                    r.breakdown or '{}',
-                    cur.id,
-                }
-            )
+            SetRow(db, where, ahead and RUN_MONEY or RUN_LIVE, r, cur.id)
             done.updated = done.updated + 1
         else
             InsertRows(db, schema.tables[s.table], { WithFreeId(db, s.table, r) })
@@ -528,10 +610,15 @@ function Sys.moneyReapply(db, snap, opts)
         local cur = FindItem(db, r)
         if cur and ahead and (ITEM_RANK[r.status] or 0) <= (ITEM_RANK[cur.status] or 0) then
             done.skipped = done.skipped + 1
-        elseif cur then
+        elseif cur and ahead then
             db.update.await(
                 'UPDATE cp_item_rewards SET status = ?, given_at = IF(? = 0, NULL, FROM_UNIXTIME(?)) WHERE id = ?',
                 { r.status, Int(r.given_at), Int(r.given_at), cur.id })
+            done.updated = done.updated + 1
+        elseif cur then
+            db.update.await([[UPDATE cp_item_rewards SET citizenid = ?, status = ?,
+                given_at = IF(? = 0, NULL, FROM_UNIXTIME(?)) WHERE id = ?]],
+                { r.citizenid, r.status, Int(r.given_at), Int(r.given_at), cur.id })
             done.updated = done.updated + 1
         else
             InsertRows(db, items, { WithFreeId(db, 'cp_item_rewards', r) })
@@ -637,7 +724,8 @@ local function RemoveBackup(name)
     SaveIndex(keep)
 end
 
--- The newest backup and the latest automatic one made before a restore are never removed.
+-- The newest backup and the latest automatic one made before a restore are never removed, nor the automatic backup
+-- of a restore that has not finished (until a restore works).
 local function Protected(list)
     local out = {}
     if list[#list] then out[list[#list].name] = true end
@@ -647,14 +735,18 @@ local function Protected(list)
             break
         end
     end
+    local open = OpenRestore()
+    if open then out[open] = true end
     return out
 end
 Sys._protected = Protected
 
-local function Prune()
+-- keepName: a backup that is not removed this time either (the one a restore is about to put back).
+local function Prune(keepName)
     local keep = math.max(1, Int(type(Config.Backups) == 'table' and Config.Backups.keep or 7))
     local list = Index()
     local protected = Protected(list)
+    if type(keepName) == 'string' then protected[keepName] = true end
     local removed = 0
     while #list > keep do
         local victim = nil
@@ -672,8 +764,9 @@ local function Prune()
     return removed
 end
 
--- One backup of every table and file now. kind: 'manual', 'daily' or 'prerestore'. ok, BackupView | false, errKey.
-function Sys.backup(src, kind)
+-- One backup of every table and file now. kind: 'manual', 'daily' or 'prerestore'. opts.keep: a backup keep N does not
+-- remove this time (the one a restore puts back next). ok, BackupView | false, errKey.
+function Sys.backup(src, kind, opts)
     Db()
     local fs = Fs()
     local schema = Sys.schema()
@@ -742,7 +835,7 @@ function Sys.backup(src, kind)
         files = #manifest.files,
     }
     SaveIndex(list)
-    Prune()
+    Prune(type(opts) == 'table' and opts.keep or nil)
     CP.log(TAG, 'backup %s: %d rows, %d files', name, manifest.rows, #manifest.files)
     return true, list[#list]
 end
@@ -773,11 +866,84 @@ local function KeepSetting(path)
     return false
 end
 
+local function PartPath(name, tname) return BackupPath(('%s.t.%s.json'):format(name, tname)) end
+
+-- Every part a restore of backup m reads, read before anything changes: it is there, it holds rows, and every row has
+-- each column this version needs and has no default for. yield: Wait(0) after each table (not in a callback, whose
+-- answer is the handler's return). ok | false, table name.
+local function CheckParts(m, yield)
+    local schema = Sys.schema()
+    for _, tname in ipairs(schema.order) do
+        local info = schema.tables[tname]
+        if not KEEP_TABLES[tname] and type(m.tables) == 'table' and m.tables[tname] ~= nil then
+            local rows = ReadJson(PartPath(m.name, tname))
+            if type(rows) ~= 'table' then return false, tname end
+            for _, r in ipairs(rows) do
+                if type(r) ~= 'table' then return false, tname end
+                for c in pairs(info.required) do
+                    if r[c] == nil then return false, ('%s.%s'):format(tname, c) end
+                end
+            end
+            if yield then Wait(0) end
+        end
+    end
+    return true
+end
+
+local MONEY_STATUS = { paying = true, paid = true, forfeited = true, capped = true }
+local OWED_STATUS = { held = true, pending = true, unfunded = true }
+local ITEM_KEPT = { giving = true, given = true, forfeited = true, held = true, pending = true }
+
+-- The rows MONEY_RUNS or OWED_RUNS select, for a row read from a backup part.
+local function MoneyRun(r)
+    if MONEY_STATUS[r.cash_status] or OWED_STATUS[r.cash_status] then return true end
+    if Int(r.cash_paid) > 0 or Int(r.cash_reclaimed) > 0 then return true end
+    return r.cash_status == 'none' and r.state == 'completed' and Int(r.cash_base) > 0
+        and r.mission_type ~= 'manual_award' and r.mission_type ~= 'goal'
+end
+
+-- The money snapshot (owed rows too) as backup `name` holds it: the rows MONEY_RUNS / OWED_RUNS and MONEY_ITEMS /
+-- OWED_ITEMS select. snap | nil.
+local function SnapshotOf(name)
+    local snap = { runs = {}, items = {} }
+    for _, tname in ipairs({ 'cp_mission_runs', 'cp_mission_runs_archive' }) do
+        local rows = ReadJson(PartPath(name, tname))
+        if type(rows) ~= 'table' then return nil end
+        for _, r in ipairs(rows) do
+            if type(r) == 'table' and MoneyRun(r) then snap.runs[#snap.runs + 1] = { table = tname, row = r } end
+        end
+    end
+    local items = ReadJson(PartPath(name, 'cp_item_rewards'))
+    if type(items) ~= 'table' then return nil end
+    for _, r in ipairs(items) do
+        if type(r) == 'table' and ITEM_KEPT[r.status] then snap.items[#snap.items + 1] = r end
+    end
+    return snap
+end
+
+-- The money state a restore keeps: the live store's, or, while a restore has not finished, its automatic backup's
+-- (the store may be half put back, and payments were held since). snap | nil, errKey.
+local function RestoreSnapshot()
+    local open = OpenRestore()
+    if not open then return Sys.moneySnapshot(MySQL, { owed = true }) end
+    local snap = SnapshotOf(open)
+    if not snap then
+        CP.err(TAG, '%s', CP.L('sysadmin.console.restore_open_missing', { automatic = open }))
+        return nil, 'err.restore_open_missing'
+    end
+    return snap
+end
+
 -- What a restore of this backup replaces, keeps and puts back (nothing changes).
 function Sys.previewRestore(name)
     Db()
     local m = Manifest(name)
     if not m then return nil, 'err.backup_unknown' end
+    local okC, bad = CheckParts(m)
+    if not okC then
+        CP.warn(TAG, 'backup %s cannot be put back: %s is missing or damaged', name, bad)
+        return nil, 'err.backup_damaged'
+    end
     local schema = Sys.schema()
     local replaced, kept = {}, {}
     for _, tname in ipairs(schema.order) do
@@ -793,7 +959,8 @@ function Sys.previewRestore(name)
             kept[#kept + 1] = tname
         end
     end
-    local snap = Sys.moneySnapshot(MySQL, { owed = true })
+    local snap, errS = RestoreSnapshot()
+    if not snap then return nil, errS end
     local files = {}
     for _, f in ipairs(m.files or {}) do files[#files + 1] = f.path end
     return {
@@ -821,7 +988,7 @@ local function PutBack(m, snap)
     for _, tname in ipairs(schema.order) do
         local info = schema.tables[tname]
         if not KEEP_TABLES[tname] and m.tables[tname] ~= nil then
-            local rows = ReadJson(BackupPath(('%s.t.%s.json'):format(m.name, tname)))
+            local rows = ReadJson(PartPath(m.name, tname))
             if type(rows) ~= 'table' then error(('the rows of %s are missing from the backup'):format(tname), 0) end
             if tname == 'cp_settings' then
                 local keep = {}
@@ -853,14 +1020,22 @@ local function PutBack(m, snap)
     return money, written
 end
 
--- The restore: the restore lock from the start, an automatic backup first, the money-safe put-back, one audit line,
--- then the owner restarts Crimson-Police (it never restarts itself).
+-- The restore: every part read first, the restore lock from the start, an automatic backup first, the money-safe
+-- put-back, one audit line, then the owner restarts Crimson-Police (it never restarts itself). From the automatic
+-- backup on, META_RESTORE_OPEN names it until the put-back worked: a restore that fails part way (or a server that
+-- stops during it) keeps the restore lock, also after a restart, until a restore works
+-- (Config.Backups.holdAfterFailedRestore).
 function Sys.restore(src, name, reason)
     Db()
     local m = Manifest(name)
     if not m then return false, 'err.backup_unknown' end
     local running = RunsGoing()
     if running > 0 then return false, 'err.storage_runs_active' end
+    local okC, bad = CheckParts(m, true)
+    if not okC then
+        CP.warn(TAG, 'backup %s cannot be put back: %s is missing or damaged', name, bad)
+        return false, 'err.backup_damaged'
+    end
     local okL = Kit.lock('restore', { name = name })
     if not okL then return false, 'err.admin_busy' end
     local okM, errM = Maint.begin('restore', { by = ActorOf(src), backup = name })
@@ -868,22 +1043,41 @@ function Sys.restore(src, name, reason)
         Kit.unlock('restore')
         return false, errM
     end
-    local okB, auto = Sys.backup(src, 'prerestore')
-    if not okB then
-        Maint.finish('restore')
+    local open = OpenRestore()
+    -- nothing changed: the lock ends, or goes back to the lock of the restore that has not finished
+    local function Undo(err)
         Kit.unlock('restore')
-        return false, auto
+        if open then
+            Maint.mark('restore', { failed = true, automatic = open })
+        else
+            Maint.finish('restore')
+        end
+        return false, err
     end
-    local snap = Sys.moneySnapshot(MySQL, { owed = true })
+    local snap, errS = RestoreSnapshot()
+    if not snap then return Undo(errS) end
+    -- keep N never removes the backup being restored, even the oldest of a full list
+    local okB, auto = Sys.backup(src, 'prerestore', { keep = name })
+    if not okB then return Undo(auto) end
+    -- the first unfinished restore's automatic backup stays the one that holds the data from before
+    open = open or auto.name
+    SetOpenRestore(open)
     local res = table.pack(pcall(PutBack, m, snap))
     Kit.unlock('restore')
     if not res[1] then
-        CP.err(TAG, 'restoring %s failed: %s. The automatic backup %s holds the data from just before.', name,
-            tostring(res[2]), auto.name)
-        Kit.auditSync(src, 'audit', 'backupRestoreFailed', name, nil, auto.name, reason, { critical = true })
-        Maint.askRestart('restore')
+        -- whatever table failed, the money state goes back: nothing paid since the backup is owed again
+        local okR, errR = pcall(Sys.moneyReapply, MySQL, snap)
+        if not okR then CP.err(TAG, 'putting the money state back failed too: %s', tostring(errR)) end
+        CP.err(TAG, '%s', CP.L('sysadmin.console.restore_failed', {
+            backup = name,
+            error = tostring(res[2]),
+            automatic = open,
+        }))
+        Kit.auditSync(src, 'audit', 'backupRestoreFailed', name, nil, open, reason, { critical = true })
+        Maint.mark('restore', { failed = true, automatic = open })
         return false, 'err.restore_failed'
     end
+    SetOpenRestore(nil)
     local money, files = res[2], res[3]
     Kit.auditSync(src, 'audit', 'backupRestored', name, auto.name,
         ('%d money rows kept, %d files'):format(money.updated + money.inserted, files), reason, { critical = true })
@@ -1543,7 +1737,12 @@ Kit.callback('admin:previewRestore', 'storageAdmin', function(ctx)
     return view
 end, { rate = 1 })
 
+-- Allowed during the lock of a restore that failed part way (its fix is the next restore); refused during any other.
 Kit.action('server:admin:restoreBackup', 'storageAdmin', function(ctx)
+    local kind, info = Maint.active()
+    if kind and not (kind == 'restore' and type(info) == 'table' and info.failed == true) then
+        return false, 'err.maintenance'
+    end
     local p = ctx.payload
     local okT, effect = ctx.consume(p.previewToken, 'restore', { p.name })
     if not okT then return false, effect end
@@ -1551,7 +1750,7 @@ Kit.action('server:admin:restoreBackup', 'storageAdmin', function(ctx)
     local ok, res = Sys.restore(ctx.src, p.name, ctx.reason)
     if ok then ctx.audited = true end
     return ok, res
-end, { reason = true, requestId = true, confirm = 'RESTORE', rate = 1 })
+end, { reason = true, requestId = true, confirm = 'RESTORE', rate = 1, maintenance = true })
 
 Kit.action('server:admin:deleteBackup', 'storageAdmin', function(ctx)
     local ok, err = Sys.deleteBackup(ctx.payload.name)
@@ -1955,6 +2154,18 @@ function Sys._boot()
     if Sys.storageMeta().state == 'left_behind' then
         Maint.begin('left_behind', { by = 'start' })
         CP.err(TAG, '%s', CP.L('sysadmin.console.left_behind'))
+    end
+    -- a restore that did not finish (it failed part way, or the server stopped during it): the store may be half put
+    -- back, so payments, runs and claims stay held until a restore works
+    local open = OpenRestore()
+    if not open then return end
+    if type(Config.Backups) == 'table' and Config.Backups.holdAfterFailedRestore == false then
+        SetOpenRestore(nil)
+        CP.warn(TAG, '%s', CP.L('sysadmin.console.restore_open_not_held', { automatic = open }))
+        return
+    end
+    if Maint.begin('restore', { by = 'start', failed = true, automatic = open }) then
+        CP.err(TAG, '%s', CP.L('sysadmin.console.restore_open', { automatic = open }))
     end
 end
 

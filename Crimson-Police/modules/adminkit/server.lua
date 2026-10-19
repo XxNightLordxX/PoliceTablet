@@ -818,6 +818,10 @@ local function MaintView()
         since = maintenance.since,
         restart = maintenance.info and maintenance.info.restart == true or nil,
         by = maintenance.info and maintenance.info.by or nil,
+        -- a restore that failed part way: the automatic backup to restore before payments go on
+        failed = maintenance.info and maintenance.info.failed == true or nil,
+        automatic = maintenance.info and type(maintenance.info.automatic) == 'string' and maintenance.info.automatic
+            or nil,
     }
 end
 
@@ -852,6 +856,15 @@ function Maint.active()
 end
 
 function Maint.view() return MaintView() end
+
+-- More about the lock that is held (for example a restore that failed part way): fields are merged into its info and
+-- every client gets the new view. ok.
+function Maint.mark(kind, fields)
+    if not maintenance or (kind ~= nil and maintenance.kind ~= kind) then return false end
+    for k, v in pairs(type(fields) == 'table' and fields or {}) do maintenance.info[k] = v end
+    MaintPush()
+    return true
+end
 
 -- The work is done and only a restart by the owner ends the lock: the Admin UI and one console line say so.
 -- Crimson-Police never restarts itself.

@@ -87,6 +87,7 @@ local RESTART = {
     'Locale',
     'Time.resetHour',
     'Leaderboard.weekStartsOn',
+    'Backups.holdAfterFailedRestore',
 }
 
 -- Read when the mission files load: a change reloads the missions (as Admin UI → Missions → Reload does).

@@ -4369,6 +4369,17 @@ SpawnCheckProgress, SpawnCheckTotals, SpawnCheckPush (push 'spawnCheck'), SpawnC
 TestsView.config.spawnCheck { enabled, teleport, routes }.
 ```
 
+## tests/backup_restore_spec.lua
+
+```text
+Backup restore: money and voids only move forward (a void or Restore run made since the backup stays, a record moved
+since stays with the new character), the oldest backup of a full list can be restored, a damaged backup is refused
+before anything changes, an older backup gets the defaults of columns added since, and a restore that stops part way
+puts the money state back and keeps payments held, also after a restart, until a restore works.
+Real runtime: the restore lock is a Lua variable (H.restart drops it), the store is kept (the database or the saves
+folder), MariaDB's strict mode refuses NULL in a NOT NULL column (the files engine too).
+```
+
 ## tests/boards_spec.lua
 
 ```text

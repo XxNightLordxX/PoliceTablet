@@ -34,7 +34,7 @@
   "err.not_left_behind": "This storage is in use: nothing to take back.",
   "err.player_offline": "That player is not online.",
   "err.require_item_none": "Require the item only works while a tablet item is set.",
-  "err.restore_failed": "The restore failed part way. Crimson-Police stays locked: restore the automatic backup made just before, then restart.",
+  "err.restore_failed": "The restore stopped part way. Every payment and reward kept its state, and payments, new runs and claims stay held (also after a restart) until a restore works: restore the automatic backup the banner names (System → Backups), then restart Crimson-Police.",
   "err.retention_archive": "Archive runs after 0 (never) or 3 months and more.",
   "err.retention_audit": "Keep the audit log at least 30 days (0 = forever).",
   "err.setting_changed_since": "This setting was changed again since. Revert anyway?",
@@ -385,5 +385,11 @@
   "sysadmin.ui.audit_parts": "Export in parts",
   "sysadmin.ui.audit_part_desc": "Part {part} of {parts} ({n} rows in all, 5000 per part).",
   "sysadmin.ui.audit_save": "Save to server",
-  "sysadmin.ui.audit_saved": "Saved {n} rows to {path}."
+  "sysadmin.ui.audit_saved": "Saved {n} rows to {path}.",
+  "err.backup_damaged": "This backup can't be put back: a part of it is missing or damaged, or it lacks data this version needs. Nothing was changed. Choose another backup (the console names the part).",
+  "err.restore_open_missing": "The automatic backup of the restore that stopped part way is missing or damaged, so no restore can keep its money state. The console says what to do.",
+  "sysadmin.console.restore_failed": "Restoring {backup} stopped part way: {error}. The money state was put back, and payments, new runs and claims stay held, also after a restart. Restore the automatic backup {automatic} in Admin UI → System → Backups, then restart Crimson-Police.",
+  "sysadmin.console.restore_open": "A backup restore did not finish (it stopped part way, or the server stopped during it): payments, new runs and claims stay held. Restore the automatic backup {automatic} in Admin UI → System → Backups, then restart Crimson-Police.",
+  "sysadmin.console.restore_open_not_held": "A backup restore did not finish before this start (automatic backup {automatic}), and Config.Backups.holdAfterFailedRestore is false: payments go on with the store as it is.",
+  "sysadmin.console.restore_open_missing": "The automatic backup {automatic} of the restore that did not finish is missing or damaged, so no restore can run. To go on with the store as it is, set Config.Backups.holdAfterFailedRestore = false in config.lua and restart Crimson-Police."
 }

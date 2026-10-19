@@ -1923,7 +1923,8 @@ the old JSON text. New columns come only from migration 008 (one per statement, 
 **`CP.Maintenance`**: `begin(kind, info) -> ok | false, err` (kinds `storage`, `restore`, `left_behind`; another kind
 while one is held is refused), `finish(kind)`, `active() -> kind, info | nil`, `view() -> MaintenanceView | nil`,
 `askRestart(kind)` (the work is done: `view().restart = true` and one console line "Restart Crimson-Police now from
-txAdmin or the server console"; Crimson-Police never restarts itself). Every change is pushed to every client
+txAdmin or the server console"; Crimson-Police never restarts itself), `mark(kind, fields)` (merges fields into the
+held lock's info and pushes: a restore that stopped part way sets `failed` and `automatic`, shown in the view). Every change is pushed to every client
 (`client:push` topic `maintenance`, `false` when it ended) and fires `maintenance:changed`. While held: the net gate
 refuses every action not marked `maintenance` (§2), runs, claims, test runs and operation launches refuse at their own
 checks, payments, reward delivery and scheduled jobs wait, and the tablet shows the banner.
@@ -2026,22 +2027,36 @@ action goes through `CP.AdminKit` (admins only, audited).
   unix seconds) and `<name>.f<n>.bin` (custom, archived, edited and deleted mission files named by `cp_custom_missions`,
   department logos, the banned-words file). `backup(src, kind) -> ok, BackupView`, `backups()`, keep `Backups.keep`
   (never the newest or the latest `prerestore`), `Backups.daily` on `CP.Schedule.onDaily` (waits for the busy lock).
-- Restore: `previewRestore(name)` (tables replaced and kept, files, money rows); `restore(src, name, reason)`: refuses
-  while runs go, takes the busy lock and the `restore` maintenance lock, makes a `prerestore` backup, reads the money
-  state (`moneySnapshot(db, { owed = true })`: run rows paying/paid/forfeited/capped or with cash paid or taken back,
-  and rows still owed (held/pending/unfunded, not voided), live and archive; item rewards giving/given/forfeited and
-  held/pending), replaces every table except `cp_audit`, `cp_settings_history`,
-  `cp_schema_migrations`, `cp_storage_meta`, `cp_admin_requests`, `cp_admin_jobs`, `cp_dept_funding` (and keeps the
-  cp_settings rows of the money switches, `AdminControl.*` and `Retention.auditDays`), puts the money state back
-  (`moneyReapply(db, snap, opts)`: the same row is the one with the same id, run_uuid and citizenid, else the same
-  run_uuid and citizenid; item rewards by id or citizenid + source + source_key + item; a row the backup lacks comes
-  back whole, under a new id when its id now belongs to another run), writes the files back, one audit line
-  (`backupRestored`, critical), then `CP.Maintenance.askRestart`. AUTO_INCREMENT counters only move up (DELETE never
-  lowers them), so no id is handed out twice. A forced storage copy takes the money snapshot (moved money only) of the
-  store it replaces and puts it back after `CP.Admin.storageCopy` with `{ ahead = true }`: a row's old state is
-  written only where it moved more money than the copied row (more paid, more taken back, the capped rest paid, or a
-  payment begun; for item rewards giving/given over the rest), so the copy never un-pays and never lets a row be paid
-  or taken back twice.
+- Restore: `previewRestore(name)` (tables replaced and kept, files, money rows; `err.backup_damaged` as below);
+  `restore(src, name, reason)`: refuses while runs go; reads every part it will put back first (missing, not rows, or a
+  row without a NOT NULL column that has no default -> `err.backup_damaged`, no lock); takes the busy lock and the
+  `restore` maintenance lock, reads the money state (`moneySnapshot(db, { owed = true })`: run rows
+  paying/paid/forfeited/capped or with cash paid or taken back, and rows a payment can still reach (held, pending,
+  unfunded, or a completed `none` row that carries cash; voided or not), live and archive; item rewards
+  giving/given/forfeited and held/pending), makes a `prerestore` backup (`backup(src, 'prerestore', { keep = name })`:
+  keep N never removes the backup being restored), writes its name to `cp_storage_meta` key `restore_open` (that table
+  is never replaced, so the mark stays with the store it is about), replaces every table except `cp_audit`,
+  `cp_settings_history`, `cp_schema_migrations`, `cp_storage_meta`, `cp_admin_requests`, `cp_admin_jobs`, `cp_dept_funding` (and keeps the
+  cp_settings rows of the money switches, `AdminControl.*` and `Retention.auditDays`; a NOT NULL column with a default
+  that a row lacks, from a backup made before the migration that added it, is left out of the INSERT so it gets its
+  default), puts the money state back (`moneyReapply(db, snap, opts)`: the same row is the one with the same id and
+  run_uuid whoever holds it, else the same run_uuid and citizenid; item rewards by id + source + source_key + item,
+  else citizenid + source + source_key + item; a restore writes the live row's citizenid, cash_status, cash_paid,
+  cash_reclaimed, breakdown, voided, void_kind, void_batch, flagged and flag_reason (rewards: citizenid, status,
+  given_at); a row the backup lacks comes back whole, under a new id when its id now belongs to another run), writes
+  the files back, clears `restore_open`, one audit line (`backupRestored`, critical), then
+  `CP.Maintenance.askRestart`. A put-back that fails part way runs `moneyReapply` under pcall, keeps
+  `restore_open`, audits `backupRestoreFailed` and marks the lock `{ failed = true, automatic = <name> }`
+  (`CP.Maintenance.mark`); `server:admin:restoreBackup` passes that lock (only that one). At start (`_boot`) a set
+  `restore_open` (a failed restore, or a server that stopped during one) begins that failed `restore` lock again
+  (`Backups.holdAfterFailedRestore`, default true; false clears the mark with a console line). While the mark is set the
+  money snapshot of a restore is read from that automatic backup's parts (the store may be half put back), the first
+  unfinished restore's automatic backup stays named, and it is protected from keep N and Delete. AUTO_INCREMENT
+  counters only move up (DELETE never lowers them), so no id is handed out twice. A forced storage copy takes the money
+  snapshot (moved money only) of the store it replaces and puts it back after `CP.Admin.storageCopy` with
+  `{ ahead = true }`: a row's old money state is written only where it moved more money than the copied row (more
+  paid, more taken back, the capped rest paid, or a payment begun; for item rewards giving/given over the rest), so
+  the copy never un-pays and never lets a row be paid or taken back twice.
 - Storage: `storageView()` (`CP.Admin.storageStatus()` plus `override`, `generation`, `state`, `maintenance`,
   `runsGoing`, `busy`, `backups`), `switchStorage(src, enabled, folder, startEmpty)` (KVP, generation marker in both
   stores, `storage` lock and the restart line), `storageMeta(db?)`; at start a store marked `left_behind` begins that lock.
@@ -2745,7 +2760,7 @@ Every name below is admin-only (supervisors never pass) and audited; `reason` is
 | `admin:getBackups` | — → BackupsData | storageAdmin | |
 | `server:admin:backupNow` | `{ reason? }` → BackupView | storageAdmin | busy lock, 1 per 60 s per admin |
 | `admin:previewRestore` | `{ name }` → RestorePreview (with `previewToken`) | storageAdmin | |
-| `server:admin:restoreBackup` | `{ name, previewToken, reason, confirm, requestId }` | storageAdmin | V, R, I, M, T `RESTORE`, no runs |
+| `server:admin:restoreBackup` | `{ name, previewToken, reason, confirm, requestId }` | storageAdmin | V, R, I, M (allowed only during the lock of a restore that stopped part way), T `RESTORE`, no runs |
 | `server:admin:deleteBackup` | `{ name, reason, confirm }` | storageAdmin | R, T the backup name, never the newest or latest pre-restore |
 | `admin:getWebhooks` | — → `{ webhooks: WebhookView[] }` | openAdmin | read only, no link |
 | `admin:getProblems` | `{ tag?, level? }` → ProblemsData | openAdmin | |
@@ -2942,7 +2957,8 @@ interface LiveRun { runId: string; missionType: string; missionLabel: string; ti
 Full admin control (web/src/types/admin_control.ts; each package's own shapes are in types/admin_<area>.ts):
 
 ```ts
-interface MaintenanceView { kind: 'storage' | 'restore' | 'left_behind'; since: number; restart?: boolean; by?: string }
+interface MaintenanceView { kind: 'storage' | 'restore' | 'left_behind'; since: number; restart?: boolean; by?: string;
+  failed?: boolean; automatic?: string }   // failed: a restore stopped part way; automatic: the backup to restore
 interface AdminJobProgress { id: string; kind: string; state: 'running' | 'done' | 'failed' | 'rolledback';
   done: number; total: number }
 interface AdminActionBase { requestId?: string; reason?: string; confirm?: string; previewToken?: string }

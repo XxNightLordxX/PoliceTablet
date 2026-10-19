@@ -1699,9 +1699,13 @@ clean-up never archives a run whose money or item rewards are not finished, and 
   `Config.Backups.daily = true` makes one at every daily reset. **Restore** shows what it replaces first, makes an
   automatic backup, and needs the typed word `RESTORE`; then restart Crimson-Police. A restore never takes money back:
   a payment made after the backup stays paid, a given item reward stays given, pay still owed to an officer (waiting
-  for them to log in, held or unfunded) is kept even when the backup is older than it, and the audit log, the settings
-  history, department funding and the money switches are kept as they are now. The newest backup and the latest
-  automatic one can't be deleted.
+  for them to log in, held or unfunded) is kept even when the backup is older than it, a void or Restore run made since
+  stays as it is now, a record moved since stays with the new character, and the audit log, the settings history,
+  department funding and the money switches are kept as they are now. The newest backup and the latest automatic one
+  can't be deleted, and the backup you restore is never removed by keep N while it is put back (even the oldest of a
+  full list). A damaged backup is refused before anything changes. If a restore stops part way, the money state is put
+  back and payments, new runs and claims stay held, also after a restart, until a restore works: the banner names the
+  automatic backup to restore (`Config.Backups.holdAfterFailedRestore = false` lets a restart end that lock instead).
 - **Webhooks**: which Discord webhooks are on, and the exact server.cfg line to paste for each (with **Copy the
   line**). Webhook links are only ever set in server.cfg and are never shown in game.
 - **Problems**: the last 200 warnings and errors since the start, by module. Webhook links, passwords and licences
@@ -1823,7 +1827,8 @@ The tablet's screens come ready-built. You never need to build anything (no npm)
   `Config.Backups.keep` (7) are kept. **Restore** shows what it will replace, makes an automatic backup first and
   needs the typed word `RESTORE`; then restart Crimson-Police from txAdmin or the server console. A restore never
   takes money back: a payment made after the backup stays paid, and the audit log is kept as it is
-  ([9.15.5](#9155-system-departments-and-settings)).
+  ([9.15.5](#9155-system-departments-and-settings)). If a restore stops part way, payments stay held (also after a
+  restart) until you restore the automatic backup the banner names, then restart.
 - **Outside the game**, before every update:
   - **Database on**: back up your database (all the `cp_` tables), like you do for Qbox.
   - **Database off**: copy the whole `Crimson-Police/saves/` folder (it holds `_backups/` too) while the server is
@@ -1931,6 +1936,9 @@ The last line of the start-up check is `Start-up check: all ... checks passed` o
 | "Active mission runs: 2. Copy when every run has ended." | Wait until no mission runs, then copy again |
 | "The saves folder already has ... rows ..." (or "The database already has ...") | The target has data. Add `force` to replace it |
 | "That data was made by a newer Crimson-Police ..." | Update Crimson-Police first |
+| `Restoring <backup> stopped part way: ...` or `A backup restore did not finish ...` | A restore could not put every table back (or the server stopped during it). Nobody is paid twice: payments, new runs and claims wait. In Admin UI → **System** → **Backups**, restore the automatic backup the line names, then restart Crimson-Police |
+| `backup <name> cannot be put back: <table> is missing or damaged` | That backup is broken or incomplete and nothing was changed. Restore another backup |
+| `The automatic backup <name> of the restore that did not finish is missing or damaged` | No restore can run. To go on with the data as it is, set `Config.Backups.holdAfterFailedRestore = false` in config.lua and restart Crimson-Police |
 
 ### 11.5 Config and departments
 

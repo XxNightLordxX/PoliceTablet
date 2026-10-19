@@ -1201,6 +1201,9 @@ Config.Retention = {
 Config.Backups = {
     keep = 7,               -- backups kept; the newest and the latest automatic one are never removed
     daily = false,          -- true = one backup at every daily reset
+    -- true = after a restore that stopped part way, payments and new runs stay held (also after a restart) until a
+    -- restore works; false = a restart ends that lock and the server goes on with the store as it is
+    holdAfterFailedRestore = true,
 }
 
 -- ============================================================================

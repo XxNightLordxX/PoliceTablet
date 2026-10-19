@@ -13,6 +13,10 @@ export interface MaintenanceView {
     // the work is done: only a restart of Crimson-Police (txAdmin or the console) ends the lock
     restart?: boolean;
     by?: string;
+    // a backup restore stopped part way: payments stay held (also after a restart) until a restore works, and
+    // automatic names the backup that holds the data from before it
+    failed?: boolean;
+    automatic?: string;
 }
 
 // ============================================================================

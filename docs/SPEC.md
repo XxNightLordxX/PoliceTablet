@@ -2588,7 +2588,8 @@ At the owner's request ("admins get full control over everything in the admin ta
 - One request, one action: every money and bulk action carries a request id; a double click or a resent request acts once and gets the first answer. Two admins (or an admin and an automatic job) never both act: a change names the state it expects and does nothing when someone changed it first.
 - Audit: every action writes cp_audit (with the acting player's license, so every character of one player can be found) before any money moves; a money action whose audit row can't be written moves nothing. Bulk actions write one line per row and one summary line that posts to the webhook. Rate limits and daily limits are counted from saved rows, so a restart never resets them.
 - Bulk jobs: one at a time server-wide, in batches of 50 rows, their progress shown to admins only; a job a crash interrupted is finished (or stopped) at the next start. The nightly archive and the forfeiture job wait for a running job, a storage copy, a backup or a restore.
-- Maintenance lock: from the start of a storage copy, a storage switch or a backup restore until the owner restarts Crimson-Police, no new run, mission call claim, test run or operation starts, payments and scheduled jobs wait, and every action but the status reads is refused; a banner says so on every tablet. When the work is done the Admin UI and one console line say "Restart Crimson-Police now from txAdmin or the server console": Crimson-Police never restarts itself. A store another one took over from (after a storage switch) stays locked and pays nothing until an admin uses it again.
+- Maintenance lock: from the start of a storage copy, a storage switch or a backup restore until the owner restarts Crimson-Police, no new run, mission call claim, test run or operation starts, payments and scheduled jobs wait, and every action but the status reads is refused; a banner says so on every tablet. When the work is done the Admin UI and one console line say "Restart Crimson-Police now from txAdmin or the server console": Crimson-Police never restarts itself. A store another one took over from (after a storage switch) stays locked and pays nothing until an admin uses it again. A backup restore that stops part way (or a server that stops during one) puts the money state back and keeps the lock, also after a restart (Config.Backups.holdAfterFailedRestore), until a restore works: the banner names the automatic backup to restore, and that restore is the one action the lock allows.
+- Backup restore: every part of the backup is read before anything changes (a missing or damaged part, or rows without a column this version needs and has no default for, refuse the restore and change nothing); a backup made before a migration that added a column with a default gets that default. Keep N never removes the backup being restored. Money and voids only move forward: a payment made after the backup stays paid, a given reward stays given, and the officer (after a record move), the void and the flag of every row that is or can still be paid are the live ones.
 
 The owner decisions of this build (each with its undo in the Admin UI, listed in the root README under Waiting for the owner's OK):
 
@@ -3738,6 +3739,9 @@ Config.Retention = {
 Config.Backups = {
     keep = 7,               -- backups kept; the newest and the latest automatic one are never removed
     daily = false,          -- true = one backup at every daily reset
+    -- true = after a restore that stopped part way, payments and new runs stay held (also after a restart) until a
+    -- restore works; false = a restart ends that lock and the server goes on with the store as it is
+    holdAfterFailedRestore = true,
 }
 
 -- ── Names ───────────────────────────────────────────────────────────────────
