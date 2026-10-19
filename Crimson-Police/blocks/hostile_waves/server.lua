@@ -657,30 +657,36 @@ end
 -- before the fight's own (the boss's spot). ws.waitMs is the wave's clock (GetGameTimer): set by the first call that
 -- came back short, cleared by one that got every point it asked for; the director gets it as opts.since and relaxes
 -- to hardMin after waveDelayMax on it. Returns the points, short (fewer than n: officers too close, or living
--- hostiles on the rest) and none (the location has no point for it at all). name: the console name of the ask
--- (default 'wave <w> (<list>)').
+-- hostiles on the rest), none (the location has no point for it at all) and the spare points ({ coords, label,
+-- indoor }: the director's further good points, where one of these goes instead when an officer's game finds his
+-- point bad, Config.Spawning.place). name: the console name of the ask (default 'wave <w> (<list>)').
 local function PickPoints(ctx, st, w, ws, n, first, name)
-    if n <= 0 then return {}, false, false end
+    if n <= 0 then return {}, false, false, {} end
     local list = SpawnPoints(ctx, st)
-    if #list == 0 and #(first or {}) == 0 then return {}, true, true end
+    if #list == 0 and #(first or {}) == 0 then return {}, true, true, {} end
     local offer = Offer(ctx, st, list, n, first)
     local now = Now()
     local waitMs = ws.waitMs or now
-    local chosen = {}
+    local chosen, rest = {}, nil
     if #offer > 0 then
-        chosen = ctx.choosePoints(offer, n, {
+        local _
+        chosen, _, rest = ctx.choosePoints(offer, n, {
             name = name or (w == 'boss' and 'the boss' or ('wave %d (%s)'):format(w, ListName(ctx, st))),
             wave = w,
             since = os.time() - math.floor((now - waitMs) / 1000),
             placed = ws.points,
             centre = AreaCentre(list),
             indoor = ctx.obj.indoor == true,
-        }) or {}
+        })
+        chosen = chosen or {}
     end
-    local out = {}
+    local out, spare = {}, {}
     for i, c in ipairs(chosen) do out[i] = ToVec4(c.coords) end
+    for _, c in ipairs(rest or {}) do
+        spare[#spare + 1] = { coords = ToVec4(c.coords), label = c.label, indoor = ctx.obj.indoor == true or nil }
+    end
     ws.waitMs = #out < n and waitMs or nil
-    return out, #out < n, false
+    return out, #out < n, false, spare
 end
 
 -- Wave 1 waits until an officer is within Config.Spawning.activateRange of the fight.
@@ -731,7 +737,8 @@ end
 -- One hostile of wave w at point; returns its entry in st.peds (false when it could not be placed). calm = staged
 -- ahead (stage = true): he waits unarmed and calm in CP.Npc state 'idle' (spawnPed hidden: no weapon, armour or
 -- fight settings in his bag or in his hands) until Wake gives him all of it (CP.Runs.arm) and turns him hostile.
-local function SpawnHostile(ctx, st, w, point, calm)
+-- alt: PickPoints' spare points.
+local function SpawnHostile(ctx, st, w, point, calm, alt)
     local obj = ctx.obj
     local r = RngOf(ctx)
     local c = Cfg()
@@ -751,6 +758,7 @@ local function SpawnHostile(ctx, st, w, point, calm)
         cfg = { behaviour = Behaviour(ctx, st), group = 'hostile', wave = w },
         tag = 'wave' .. w,
         hidden = calm == true or nil,
+        alt = alt,
     })
     if not netId then return false end
     local p = {
@@ -778,7 +786,7 @@ local function SpawnBoss(ctx, st)
     for i, p in ipairs(PointList(ctx.location, b.spawn)) do
         own[i] = { coords = ToVec4(p), label = ('%s[%d]'):format(type(b.spawn) == 'string' and b.spawn or 'boss', i) }
     end
-    local points, short, none = PickPoints(ctx, st, 'boss', st.bossWait, 1, own)
+    local points, short, none, spare = PickPoints(ctx, st, 'boss', st.bossWait, 1, own)
     local point = points[1]
     if not point then
         local due, waited = TimeToLeaveOut(st, st.bossWait)
@@ -813,6 +821,7 @@ local function SpawnBoss(ctx, st)
         health = health,
         cfg = { behaviour = behaviour, group = 'hostile', boss = true, label = b.label },
         tag = 'boss',
+        alt = spare,
     })
     if not netId then return false end
     st.peds[tostring(netId)] = { netId = netId, entity = ent, role = 'boss', state = 'hostile', maxHealth = health }
@@ -837,11 +846,11 @@ local function SpawnWave(ctx, st, w, budget)
     local goal = WaveGoal(ctx, st, w)
     if ws.spawned >= goal then return true, budget, false end
     if budget <= 0 then return false, budget, false end
-    local points, short, none = PickPoints(ctx, st, w, ws, math.min(goal - ws.spawned, budget))
+    local points, short, none, spare = PickPoints(ctx, st, w, ws, math.min(goal - ws.spawned, budget))
     if none then return LeaveOut(ctx, st, w, true), budget, false end
     for _, point in ipairs(points) do
         if not ctx.canSpawn(1, true) then return false, budget, false end
-        if not SpawnHostile(ctx, st, w, point) then return false, budget, false end
+        if not SpawnHostile(ctx, st, w, point, nil, spare) then return false, budget, false end
         ws.spawned = ws.spawned + 1
         ws.points[#ws.points + 1] = point
         budget = budget - 1
@@ -1004,11 +1013,11 @@ local function StageWave(ctx, st)
     if st.wave ~= 1 or not ws then return end
     local missing = WaveGoal(ctx, st, 1) - ws.spawned
     if missing <= 0 then return end
-    local points = PickPoints(ctx, st, 1, { points = ws.points }, math.min(missing, SPAWNS_PER_TICK), nil,
+    local points, _, _, spare = PickPoints(ctx, st, 1, { points = ws.points }, math.min(missing, SPAWNS_PER_TICK), nil,
         ('wave 1 (%s), staged'):format(ListName(ctx, st)))
     for _, point in ipairs(points) do
         if st.started or st.stopped or st.failed or not ctx.canSpawn(1, true) then break end
-        local p = SpawnHostile(ctx, st, 1, point, true)
+        local p = SpawnHostile(ctx, st, 1, point, true, spare)
         if not p then break end
         ws.spawned = ws.spawned + 1
         ws.points[#ws.points + 1] = point

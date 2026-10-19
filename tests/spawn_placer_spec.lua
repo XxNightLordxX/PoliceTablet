@@ -493,6 +493,54 @@ do
     H.ok(Until(function() return #Reports() == 1 end), 'told')
     H.ok(Report().reason == 'ok' and Near(e.coords.x, 0.0) and e.frozen == false, 'near its point: placed on it')
 
+    -- the server moved the ask to another point after a bad one (PLAN S10): he waits frozen at from, 30 m away; he
+    -- is moved there first (so the ground loaded and probed is the one around him there), then put on the ground
+    Game(30.0)
+    e = P.entity(PED, { netId = 79, type = 1, owner = ME, frozen = true, coords = vec3(10.0, 20.0, 25.0) })
+    Ask(79, { x = 40, y = 20, z = 31.5, h = 0, kind = 'ped', token = 't-79b', from = { x = 10, y = 20 } })
+    H.ok(Until(function() return #Reports() == 1 end), 'told')
+    r = Report()
+    H.ok(r.result == 'placed' and r.reason == 'ok' and Near(r.z, 31.0), 'placed at the new point, not "moved"')
+    H.ok(Near(e.coords.x, 40.0) and Near(e.coords.y, 20.0) and Near(e.coords.z, 31.0) and e.frozen == false,
+        'standing on the ground at the new point, let go')
+    local first, hc = nil, nil
+    for i, c in ipairs(P.calls) do
+        if c.name == 'SetEntityCoordsNoOffset' and not first then first = i end
+    end
+    for _, c in ipairs(G.calls) do if c.name == 'HasCollisionLoadedAroundEntity' and not hc then hc = c end end
+    H.ok(first and Near(P.calls[first].args[2], 40.0) and Near(P.calls[first].args[4], 31.5),
+        'first moved to the new point at its own height, frozen')
+    H.eq(hc and hc.args[1], PED, 'the ground then loads around him there')
+    -- far from both points: placed and let go before, as without from
+    Game(30.0)
+    e = P.entity(PED, { netId = 80, type = 1, owner = ME, frozen = false, coords = vec3(70.0, 20.0, 31.2) })
+    Ask(80, { x = 40, y = 20, z = 31, kind = 'ped', token = 't-80b', from = { x = 10, y = 20 } })
+    H.ok(Until(function() return #Reports() == 1 end), 'told')
+    H.ok(Report().reason == 'moved' and Near(e.coords.x, 70.0), 'far from both points: moved, left where he is')
+
+    -- seated by the server while his ground loads (a pursuit's driver: the seat comes right after the ped is made):
+    -- not moved, let go, told seated
+    Game(30.0)
+    G.collisionMs = 300
+    e = P.entity(PED, { netId = 81, type = 1, owner = ME, frozen = true, coords = vec3(0.0, 0.0, 29.0) })
+    Ask(81, { x = 0, y = 0, z = 31, kind = 'ped', token = 't-81' })
+    Settle(100)
+    e.seated = true
+    H.ok(Until(function() return #Reports() == 1 end), 'told')
+    H.ok(Report().reason == 'seated' and e.frozen == false and Near(e.coords.z, 29.0),
+        'seated during the check: not moved, let go, told seated')
+    -- set somewhere else by the server during the check: left there, let go, told moved
+    Game(30.0)
+    G.collisionMs = 300
+    e = P.entity(PED, { netId = 82, type = 1, owner = ME, frozen = true, coords = vec3(0.0, 0.0, 31.0) })
+    Ask(82, { x = 0, y = 0, z = 31, kind = 'ped', token = 't-82' })
+    Settle(100)
+    e.coords = vec3(20.0, 0.0, 31.5)
+    H.ok(Until(function() return #Reports() == 1 end), 'told')
+    r = Report()
+    H.ok(r.reason == 'moved' and Near(r.z, 31.5) and Near(e.coords.x, 20.0) and e.frozen == false,
+        'moved away during the check: not moved back, let go, told moved')
+
     -- the run ends while the ground loads: the placement stops before it tells the server
     Game(30.0)
     G.collisionMs = 2000

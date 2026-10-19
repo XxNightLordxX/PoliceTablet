@@ -349,8 +349,8 @@ Config.Spawning = {
     -- every point counts as seen (the distance rules above still apply)
     losTimeoutMs = 1500,
     -- How a point is checked against the ground under it: each range is the lowest and highest height in metres of
-    -- the point in the mission file over the ground there (used by the spawn point check in Admin UI -> Testing, and
-    -- later by the placer)
+    -- the point in the mission file over the ground there (used by the spawn point check in Admin UI -> Testing and by
+    -- place below)
     ground = {
         -- Metres, lowest and highest: a person's point fits from 0.3 m under to 1.6 m over the ground (a standing
         -- person's point is about 1 m over it)
@@ -368,10 +368,19 @@ Config.Spawning = {
     interiorTimeoutMs = 5000,
     -- true = every new person, vehicle and object of a mission waits frozen where it appears until the game of an
     -- officer near it has checked the ground there and put it on the ground (by the ranges above); a point under the
-    -- ground, floating, in water or in a wall is reported back instead. Your officers' games already do this when the
-    -- server asks; the server starts asking with the next update (until then nobody waits). false = they appear on the
-    -- file's points as before
+    -- ground, floating, in water or in a wall is reported back instead and another of the mission's points is tried.
+    -- false = they appear on the file's points as before
     place = true,
+    -- Milliseconds (1000-60000) a new person, vehicle or object waits frozen for an officer's game to put it on the
+    -- ground, counted while an officer is within activateRange of it; then onTimeout
+    placeTimeoutMs = 8000,
+    -- How many times (0-5) a point an officer's game reports bad (under the ground, floating, in water, in a wall) is
+    -- swapped for another point the mission may use there; after that, or with no other point, the last one is used
+    -- as it is (one warning in the console)
+    retries = 2,
+    -- 'unfreeze' = one no officer's game placed within placeTimeoutMs is let go where it stands, as before; 'delete' =
+    -- it is removed and the mission counts it as gone
+    onTimeout = 'unfreeze',
     -- true = a console line for each point skipped (shown while Config.Debug is on) and a warning when a wave had to
     -- use closer points
     log = true,

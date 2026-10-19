@@ -53,7 +53,8 @@ local SUSPECT_ROLES = {
     thief = true,
     fugitive = true,
 }
-local BAG_PROTECTED = { run = true, obj = true, state = true, seq = true, taskSeq = true }
+-- keys only the engine writes (place: CP.Spawn's placement ask, through Npc.setPlace)
+local BAG_PROTECTED = { run = true, obj = true, state = true, seq = true, taskSeq = true, place = true }
 
 local TICK_MS = 1000               -- death watcher / health poll / cuff reach sampling
 local GONE_TICKS = 1               -- checks without the entity before it counts as dead (before the engine's
@@ -714,6 +715,26 @@ function Npc.adopt(netId, obj)
         Mirror(rec, nb)
     end
     CP.log(TAG, 'run %s ped %s adopted by objective %d', tostring(run.id), netId, obj)
+    return true
+end
+
+-- The placement ask in a mission entity's bag (CP.Spawn, Config.Spawning.place): the ask, or nil to remove it.
+-- Written through this file's record when there is one for the entity (so its later writes keep or drop the ask
+-- with it), else into the engine's copy (run.entities[netId].bag). No seq change: nothing is re-tasked.
+function Npc.setPlace(run, netId, place)
+    netId = ToInt(tonumber(netId), 1, MAX_NETID)
+    local info = IsLive(run) and netId and type(run.entities) == 'table' and run.entities[netId] or nil
+    if type(info) ~= 'table' then return false end
+    local rec = peds[netId]
+    if rec and (rec.runId ~= run.id or (rec.entity and info.entity and rec.entity ~= info.entity)) then rec = nil end
+    local e = EntityOf(run, netId, rec)
+    if not e then return false end
+    local base = rec and rec.bag or info.bag
+    local nb = type(base) == 'table' and U.copy(base) or SeedBag(run, info)
+    nb.place = type(place) == 'table' and U.deepcopy(place) or nil
+    if rec then return Commit(run, netId, rec, e, nb) end
+    if not WriteBag(e, nb) then return false end
+    info.bag = nb
     return true
 end
 

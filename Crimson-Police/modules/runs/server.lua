@@ -773,7 +773,9 @@ do
 
     -- Picks the points of one wave from candidates (the block's list, best first: vectors, { x, y, z } or { coords }), at
     -- most n (nil = every one that passes). Returns the chosen candidates (their own values, hidden ones first, else in
-    -- list order) and their indexes in candidates. A point is skipped when it is closer than minDistance
+    -- list order), their indexes in candidates and the spare ones (the other candidates that pass the distance and
+    -- behind rules, the ones in the wave's sector first: where an entity whose point an officer's game finds bad may go
+    -- instead). A point is skipped when it is closer than minDistance
     -- (minDistanceIndoor with opts.indoor or a point { coords, indoor = true }) to any active participant, or behind a
     -- participant within activateRange of it: more than behindAngle off his own line to the scene, from where he stands
     -- towards opts.centre (default the middle of the candidates), whichever side he came in from; one within FRONT_MIN of
@@ -970,9 +972,22 @@ do
                 end
             end
         end
+        local ruled = passed
         passed = Sector(passed, officers, hidden)
 
         for r = 1, math.min(n, #passed) do chosen[r], picked[r] = passed[r].v, passed[r].i end
+        -- the other points that passed the distance and behind rules, the wave's sector first: where one of these may
+        -- go instead when an officer's game finds his point bad (CP.Spawn, server)
+        local spare, taken = {}, {}
+        for r = 1, math.min(n, #passed) do taken[passed[r]] = true end
+        for _, list in ipairs({ passed, ruled }) do
+            for _, p in ipairs(list) do
+                if not taken[p] then
+                    taken[p] = true
+                    spare[#spare + 1] = p.v
+                end
+            end
+        end
 
         -- the wave waited waveDelayMax and closer points were used: one warning per wave
         if relaxed and cfg.log ~= false then
@@ -993,7 +1008,7 @@ do
             end
         end
         if opts.wave ~= nil and #chosen >= n then m.clocks[opts.wave] = nil end
-        return chosen, picked
+        return chosen, picked, spare
     end
 
     -- true when an active participant is within range (default Config.Spawning.activateRange) of point, on the
@@ -1313,6 +1328,9 @@ local function Track(run, entity, kind, opts, extraCfg)
         cfg = cfg,
         tag = opts.tag,
     }
+    -- Config.Spawning.place: it waits frozen until an officer's game has put it on the ground (CP.Spawn, server)
+    local okPlace, place = Call('Spawn', 'ask', run, netId, entity, kind, opts)
+    if okPlace and type(place) == 'table' then bag.place = place end
     Entity(entity).state:set('cp', bag, true)
     -- bag: the server's copy of what was written (CP.Npc seeds its record from it and mirrors every later
     -- write back into it); the replicated bag is never read back on the server.

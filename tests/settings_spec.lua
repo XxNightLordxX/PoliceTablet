@@ -483,16 +483,55 @@ do
         E('Spawning.place').desc,
         'true = every new person, vehicle and object of a mission waits frozen where it appears until the game of an'
             .. ' officer near it has checked the ground there and put it on the ground (by the ranges above); a point'
-            .. ' under the ground, floating, in water or in a wall is reported back instead. Your officers\' games'
-            .. ' already do this when the server asks; the server starts asking with the next update (until then'
-            .. ' nobody waits). false = they appear on the file\'s points as before',
+            .. ' under the ground, floating, in water or in a wall is reported back instead and another of the'
+            .. ' mission\'s points is tried. false = they appear on the file\'s points as before',
         'the placer reads alone'
     )
     H.eq(E('Spawning.place').section, 'spawning', 'the placer is in the Spawning section')
     H.ok((Check('Spawning.place', false)), 'the placer can be switched off')
     Err('Spawning.place', 'yes', 'err.setting_type', 'the placer is on or off')
+    -- the server's side of it (S10): how long an entity waits, how many other points, what a timeout does
+    H.eq(
+        E('Spawning.placeTimeoutMs').desc,
+        'Milliseconds (1000-60000) a new person, vehicle or object waits frozen for an officer\'s game to put it on'
+            .. ' the ground, counted while an officer is within activateRange of it; then onTimeout',
+        'the wait reads alone'
+    )
+    H.eq(
+        E('Spawning.retries').desc,
+        'How many times (0-5) a point an officer\'s game reports bad (under the ground, floating, in water, in a'
+            .. ' wall) is swapped for another point the mission may use there; after that, or with no other point, the'
+            .. ' last one is used as it is (one warning in the console)',
+        'the retries read alone'
+    )
+    H.eq(
+        E('Spawning.onTimeout').desc,
+        '\'unfreeze\' = one no officer\'s game placed within placeTimeoutMs is let go where it stands, as before;'
+            .. ' \'delete\' = it is removed and the mission counts it as gone',
+        'the timeout choice reads alone'
+    )
+    for _, k in ipairs({ 'placeTimeoutMs', 'retries', 'onTimeout' }) do
+        H.eq(E('Spawning.' .. k).section, 'spawning', 'in the Spawning section: ' .. k)
+    end
+    H.eq(Config.Spawning.placeTimeoutMs, 8000, 'an entity waits 8 s while an officer is near')
+    H.eq(Config.Spawning.retries, 2, 'two other points after a bad one')
+    H.eq(Config.Spawning.onTimeout, 'unfreeze', 'then let go where it stands (as before)')
+    H.ok((Check('Spawning.placeTimeoutMs', 1000)), 'placeTimeoutMs 1000 ms')
+    H.ok((Check('Spawning.placeTimeoutMs', 60000)), 'placeTimeoutMs 60000 ms')
+    Err('Spawning.placeTimeoutMs', 999, 'err.setting_range', 'placeTimeoutMs at least 1000 ms')
+    Err('Spawning.placeTimeoutMs', 60001, 'err.setting_range', 'placeTimeoutMs at most 60000 ms')
+    H.ok((Check('Spawning.retries', 0)), 'retries 0 (the first point only)')
+    Err('Spawning.retries', 6, 'err.setting_range', 'retries at most 5')
+    Err('Spawning.retries', -1, 'err.setting_range', 'retries never below 0')
+    H.ok((Check('Spawning.onTimeout', 'delete')), 'onTimeout delete')
+    H.ok((Check('Spawning.onTimeout', 'unfreeze')), 'onTimeout unfreeze')
+    H.eq(E('Spawning.onTimeout').kind, 'enum', 'the timeout choice is a pick from its options')
+    Err('Spawning.onTimeout', 'keep', 'err.setting_option', 'onTimeout is unfreeze or delete')
     for _, k in ipairs({
         'place',
+        'placeTimeoutMs',
+        'retries',
+        'onTimeout',
         'ground.pedAbove',
         'ground.vehicleAbove',
         'ground.propAbove',

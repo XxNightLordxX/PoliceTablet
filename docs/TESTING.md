@@ -444,6 +444,10 @@ packages, and the runner's own clock and zone (the specs do not read either). Th
   over at `loseAt`. tests/spawn_placer_spec.lua uses it with H.groundNatives, and tests/spawn_placer_npc_spec.lua
   too, with modules/npc/client.lua loaded in the same game (its other natives recorded) so CP.Npc tasks a person while
   the placer checks his ground.
+- **The server's side of the placer** (step S10): tests/spawn_place_spec.lua runs modules/spawn/server.lua on the real
+  engine (tests/fixtures/custody/world.lua) with FXServer's routing of the server RPC `FreezeEntityPosition`: sent to
+  the game that simulates the entity (`NetworkGetEntityOwner`, a player's server id or -1), kept for the first game
+  that takes an entity nobody simulates yet (ServerRPC.cpp), so a spec sees which game an entity is frozen on.
 - **Player peds without health**: tests/npc_spec.lua answered 0 for a player ped's health, and the willKill cases
   modelled willKill as a headshot only, so a cancel that dropped EVERY killing hit (the shot that finishes off a hurt
   officer too) passed. FXServer reads a ped's health from its synced health node (`GET_ENTITY_HEALTH`,

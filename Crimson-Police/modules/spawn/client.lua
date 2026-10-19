@@ -374,11 +374,12 @@ end
 -- ============================================================================
 -- A new mission entity can wait frozen where the server made it until a game near it has put it on the ground (PLAN
 -- S9; owner request of 2026-10-19: "i do not want them spawning in the ground"). The server asks through the entity's
--- cp bag: place = { x, y, z, h, kind, token } (Config.Spawning.place; the server's side is S10, so nothing asks yet).
+-- cp bag: place = { x, y, z, h, kind, token, from? } (Config.Spawning.place; modules/spawn/server.lua writes it).
 -- The game of a participant of that run places it: the one that controls the entity, or, when no participant's game
 -- does, the participant's nearest to the point (it asks for control). It checks the server's point with Spawn.probe,
 -- puts the entity on the ground there (ok or snap: only up or down, never to another spot) and lets a person or a
 -- vehicle go (an object stays frozen), or leaves a bad point frozen, and then tells the server (server:spawnPlaced).
+-- After a bad point the server may ask again with another point and from = where it waits: it is moved there first.
 -- Until then nothing lets it go: CP.Npc asks Spawn.holds before it unfreezes a person (modules/npc/client.lua LetGo).
 
 local PLACED_EVENT = 'server:spawnPlaced'
@@ -398,8 +399,9 @@ local placers = 0
 local function IsToken(v) return type(v) == 'string' or math.type(v) == 'integer' end
 
 -- true while the entity waits for its placement: its cp bag asks for one (place) and this game has not put it on the
--- ground for that ask. CP.Npc then leaves it frozen: the game that places it lets it go, or the server when it gives
--- up (S10), so a game with no ground loaded where it stands never drops it through the map.
+-- ground for that ask. CP.Npc then leaves it frozen: the game that places it lets it go, or the server when it takes
+-- an answer or gives up (it removes the ask), so a game with no ground loaded where it stands never drops it through
+-- the map.
 function Spawn.holds(ent)
     local ok, bag = pcall(function() return Entity(ent).state.cp end)
     if not ok or type(bag) ~= 'table' or bag.state == 'dead' then return false end
@@ -475,11 +477,26 @@ local function TakeControl(ent, ms)
     end
 end
 
--- true when the entity stands more than PLACE_MOVED_M (flat) from the server's x, y: it waited frozen there, so a game
--- placed it and let it go already (and could not tell the server: its player left the run)
-local function Moved(ent, x, y)
+local function Far(ent, x, y)
     local ex, ey = XYZ(GetEntityCoords(ent))
     return ex ~= nil and (ex - x) ^ 2 + (ey - y) ^ 2 > PLACE_MOVED_M ^ 2
+end
+
+-- true when the entity stands more than PLACE_MOVED_M (flat) from the server's x, y and from place.from (where it
+-- waits after the server moved the ask to another point): it waited frozen there, so a game placed it and let it go
+-- already (and could not tell the server: its player left the run)
+local function Moved(ent, place, x, y)
+    if not Far(ent, x, y) then return false end
+    local from = type(place.from) == 'table' and place.from or nil
+    local fx, fy = from and Num(from.x), from and Num(from.y)
+    return not (fx and fy) or Far(ent, fx, fy)
+end
+
+-- 'seated' (a person in a vehicle), 'attached' (on another entity) or nil: it goes where that one goes.
+local function Carried(ent, kind)
+    if kind == 'ped' and IsYes(IsPedInAnyVehicle(ent, false)) then return 'seated' end
+    if IsYes(IsEntityAttached(ent)) then return 'attached' end
+    return nil
 end
 
 -- Takes control of one entity, checks and places it: 'placed' or 'bad', the reason (the probe's status, or 'seated' /
@@ -493,20 +510,27 @@ local function PlaceEntity(ent, place, kind, rec)
     SetEntityLoadCollisionFlag(ent, true)
     -- stays frozen once placed: an object, a person in a pose CP.Npc holds frozen
     local function Keep() return kind == 'prop' or POSED[rec.state] == true end
-    local carried = nil
-    if kind == 'ped' and IsYes(IsPedInAnyVehicle(ent, false)) then
-        carried = 'seated'
-    elseif IsYes(IsEntityAttached(ent)) then
-        carried = 'attached'
-    end
+    local carried = Carried(ent, kind)
     if carried then
         if not Keep() then FreezeEntityPosition(ent, false) end
         return 'placed', carried, nil, nil
     end
+    -- the server moved the ask to another point (the one before was bad): there first, so the ground loaded and
+    -- probed is the one around it there
+    if Far(ent, x, y) then SetEntityCoordsNoOffset(ent, x, y, z, kind == 'ped', false, true) end
     local h = Num(place.h) or Num(GetEntityHeading(ent)) or 0.0
     local model = kind == 'vehicle' and GetEntityModel(ent) or nil
     local res = Spawn.probe(kind, x, y, z, h, model, { entity = ent, ignore = ent })
     if not IsYes(DoesEntityExist(ent)) then return nil end
+    -- seated or attached meanwhile (the server put him in his car right after it made him), or moved away during the
+    -- check (the server set him somewhere else): left as he is, let go
+    carried = Carried(ent, kind)
+    if carried or Far(ent, x, y) then
+        if not Keep() then FreezeEntityPosition(ent, false) end
+        if carried then return 'placed', carried, nil, nil end
+        local _, _, ez = XYZ(GetEntityCoords(ent))
+        return 'placed', 'moved', nil, ez
+    end
     if res.status ~= 'ok' and res.status ~= 'snap' then return 'bad', res.status, res, nil end
     if not TakeControl(ent, PLACE_CONTROL_MS) then return nil end
     -- on the ground at the server's x, y: a person's point 1 m over it, a vehicle's by its model, an object's on it
@@ -546,7 +570,7 @@ local function TryPlace(netId, bag, mine)
     end
     local kind = PLACE_KINDS[place.kind] or ENTITY_TYPES[GetEntityType(ent)] or 'prop'
     local result, reason, res, onZ = nil, nil, nil, nil
-    if Moved(ent, x, y) then
+    if Moved(ent, place, x, y) then
         -- placed and let go already: left where it is, neither frozen nor moved
         local _, _, ez = XYZ(GetEntityCoords(ent))
         result, reason, onZ = 'placed', 'moved', ez

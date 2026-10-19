@@ -3502,6 +3502,37 @@ web/dist was not rebuilt after a source change (the shipped UI must be the revie
 algorithms identical: files sorted by their path relative to Crimson-Police/ (posix), hashed as path \0 bytes \0.
 ```
 
+## Crimson-Police/web/src/admin/components/SpawnCheckDialog.tsx
+
+```text
+
+Admin UI · Testing · Check spawn points (PLAN S8). Scope: all missions, one mission or one location (a location
+row opens it with that location). Start / Stop (client actions spawnCheck, spawnCheckStop: the Lua testing client
+does the check, ARCHITECTURE 5.27), the progress "Mission 7/19, location 3/6, point 12/40" with a bar over the
+planned locations, points checked / to look at / locations, and the results: mission and point id, what is there,
+x y z, ground z with the height over it, the result (each status with its hint), notes (near the start or the
+objective before, seen from the start), "Teleport here" (client action teleport { target: 'point', missionId,
+location, point }; hidden while Config.Testing.spawnCheck.teleport is off, disabled while the check runs).
+"Problems only" by default; at most 300 rows drawn. "Copy report" copies spawnCheckReport(). The locations the
+server refused are listed under "Locations not checked". Start is disabled while the admin's own test runs.
+```
+
+## Crimson-Police/web/src/admin/components/spawnCheckStore.ts
+
+```text
+
+Module memory of the admin's spawn point check (PLAN S8): a window 'message' listener at module level takes
+every push of topic 'spawnCheck' (started, location, point, done, stopped, failed; modules/testing/client.lua
+PushCheck), so the results stay while the tablet or the dialog is closed. useSpawnCheck() (useSyncExternalStore)
+-> SpawnCheckView { status idle|running|done|stopped|failed, scope, planned, progress, current, reached, rows
+(each point's result with its mission and location), skipped, totals, error, stopping }. startSpawnCheck(scope)
+and stopSpawnCheck() call the client actions (the 'started' push and the action's answer come on two channels:
+whichever is first starts the memory); a push of a check this memory missed the start of is followed from there.
+reportLine / spawnCheckReport: one line per point to look at in the server's console format (the same status
+words as modules/testing/server.lua CHECK_STATUS), the locations not checked, and how it ended. A toast when the
+check ends.
+```
+
 ## Crimson-Police/web/src/admin/screens/Audit.tsx
 
 ```text
@@ -3629,37 +3660,6 @@ Check spawn points (PLAN S8, shown while config.spawnCheck.enabled): the header 
       in each mission group open SpawnCheckDialog (admin/components); a check keeps running while the dialog or
       the tablet is closed (the header button then reads "Checking spawn points…").
 Flow: invite first, then Start — the start dialog invites testers, shows who accepted, and starts with them.
-```
-
-## Crimson-Police/web/src/admin/components/SpawnCheckDialog.tsx
-
-```text
-
-Admin UI · Testing · Check spawn points (PLAN S8). Scope: all missions, one mission or one location (a location
-row opens it with that location). Start / Stop (client actions spawnCheck, spawnCheckStop: the Lua testing client
-does the check, ARCHITECTURE 5.27), the progress "Mission 7/19, location 3/6, point 12/40" with a bar over the
-planned locations, points checked / to look at / locations, and the results: mission and point id, what is there,
-x y z, ground z with the height over it, the result (each status with its hint), notes (near the start or the
-objective before, seen from the start), "Teleport here" (client action teleport { target: 'point', missionId,
-location, point }; hidden while Config.Testing.spawnCheck.teleport is off, disabled while the check runs).
-"Problems only" by default; at most 300 rows drawn. "Copy report" copies spawnCheckReport(). The locations the
-server refused are listed under "Locations not checked". Start is disabled while the admin's own test runs.
-```
-
-## Crimson-Police/web/src/admin/components/spawnCheckStore.ts
-
-```text
-
-Module memory of the admin's spawn point check (PLAN S8): a window 'message' listener at module level takes
-every push of topic 'spawnCheck' (started, location, point, done, stopped, failed; modules/testing/client.lua
-PushCheck), so the results stay while the tablet or the dialog is closed. useSpawnCheck() (useSyncExternalStore)
--> SpawnCheckView { status idle|running|done|stopped|failed, scope, planned, progress, current, reached, rows
-(each point's result with its mission and location), skipped, totals, error, stopping }. startSpawnCheck(scope)
-and stopSpawnCheck() call the client actions (the 'started' push and the action's answer come on two channels:
-whichever is first starts the memory); a push of a check this memory missed the start of is followed from there.
-reportLine / spawnCheckReport: one line per point to look at in the server's console format (the same status
-words as modules/testing/server.lua CHECK_STATUS), the locations not checked, and how it ended. A toast when the
-check ends.
 ```
 
 ## Crimson-Police/web/src/builder/BlockPanels.tsx
@@ -4957,6 +4957,17 @@ point is used, outside a thread, with preferHidden or enabled off; a game that a
 longer, read live), raises or still owes an answer: the block's order, a console line, no second ask meanwhile; the
 rules run again after the wait, answered or not (an officer who walked up during the ask); the side with more hidden
 points wins; a first = true point (the boss's own spot) stays ahead. No SQL.
+```
+
+## tests/spawn_place_spec.lua
+
+```text
+The server's side of the placer (Config.Spawning.place, PLAN S10; modules/spawn/server.lua) on the real engine
+(tests/fixtures/custody/world.lua: runs, npc, scaling, scoring): every new mission entity is frozen, its cp bag asks
+for a placement, the answer of an officer's game is taken or refused, a bad point moves it to another point, no
+answer in time lets it go (or removes it). FREEZE_ENTITY_POSITION is the server RPC FXServer sends to the game that
+simulates the entity (ServerRPC.cpp: kept for the first game that takes an entity nobody simulates yet), and
+NETWORK_GET_ENTITY_OWNER answers that player's server id or -1. No SQL (test runs write no rows).
 ```
 
 ## tests/spawn_placer_spec.lua

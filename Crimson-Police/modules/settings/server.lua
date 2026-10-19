@@ -243,6 +243,8 @@ local RANGES = {
     ['Spawning.ground.snapWithin'] = { 0, 10 },
     ['Spawning.collisionTimeoutMs'] = { 500, 30000 },
     ['Spawning.interiorTimeoutMs'] = { 500, 30000 },
+    ['Spawning.placeTimeoutMs'] = { 1000, 60000 },
+    ['Spawning.retries'] = { 0, 5 },
 }
 
 -- Numbers that may go either way whatever config.lua has.
@@ -845,6 +847,7 @@ local KNOWN = {
     ['NpcDifficulty.preset'] = { tpl = Enum({ 'easy', 'normal', 'hard', 'custom' }), kind = 'enum' },
     ['NpcCombat.firingPattern'] = { tpl = Enum({ 'single', 'burst', 'delayed', 'default' }), kind = 'enum' },
     ['Flee.exhausted'] = { tpl = Enum({ 'surrender', 'handsUp', 'walk' }), kind = 'enum' },
+    ['Spawning.onTimeout'] = { tpl = Enum({ 'unfreeze', 'delete' }), kind = 'enum' },
     ['NpcCombat.weapons'] = { tpl = ListOf(WEAPON_NAME, { min = 1, unique = true }), kind = 'list', item = 'string' },
     ['NpcCombat.replace'] = { tpl = MapOf(WEAPON_NAME, '^[Ww][Ee][Aa][Pp][Oo][Nn]_[%w_]+$') },
     ['NpcCombat.fallback'] = { tpl = WEAPON_NAME },
