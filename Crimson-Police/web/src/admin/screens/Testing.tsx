@@ -53,6 +53,8 @@ import {
 } from '../../types/testing';
 import { AreaCoverageMatrix } from '../../supervisor/components/MissionCallsPanel';
 import { useAdminAction } from '../components/kit';
+import { SpawnCheckDialog, type SpawnCheckPreset } from '../components/SpawnCheckDialog';
+import { useSpawnCheck } from '../components/spawnCheckStore';
 import type { TestHistory } from '../../types/admin_missions';
 import './Testing.css';
 
@@ -452,11 +454,13 @@ function matchesFilter(loc: TestLocationRow, filter: StatusFilter): boolean {
 }
 
 // Admin tools on the catalog rows: Mark checked (not played), the results of a location (Remove result / Show
-// again) and the mission switch. Testing is optional: these are information, nothing waits on them.
+// again), the mission switch and Check spawn points (null while Config.Testing.spawnCheck is off). Testing is
+// optional: these are information, nothing waits on them.
 interface AdminRowTools {
     onMark: (m: TestMissionRow, loc: TestLocationRow) => void;
     onResults: (m: TestMissionRow, loc: TestLocationRow) => void;
     onSwitch: (m: TestMissionRow, on: boolean) => void;
+    onCheck: ((m: TestMissionRow, loc: TestLocationRow) => void) | null;
     busy: boolean;
 }
 
@@ -771,6 +775,15 @@ function MissionGroup({ m, locs, now, pending, canStart, collapsed, onToggle, on
                                           >
                                               <span className="testing-hide-sm">{t('test.ui.record')}</span>
                                           </Button>
+                                      ) : null}
+                                      {tools.onCheck ? (
+                                          <IconButton
+                                              icon="mapPin"
+                                              size="sm"
+                                              variant="ghost"
+                                              label={t('test.ui.spawn.check_location', { n: loc.index })}
+                                              onClick={() => tools.onCheck?.(m, loc)}
+                                          />
                                       ) : null}
                                       <IconButton
                                           icon="eye"
@@ -1386,6 +1399,9 @@ export default function AdminTesting() {
     const [startOpen, setStartOpen] = useState(false);
     const [preset, setPreset] = useState<StartPreset | null>(null);
     const [recording, setRecording] = useState<TestPendingRecord | null>(null);
+    const [checkOpen, setCheckOpen] = useState(false);
+    const [checkPreset, setCheckPreset] = useState<SpawnCheckPreset | null>(null);
+    const spawnCheck = useSpawnCheck();
     const catalog = useRequest<TestsView>('admin:getTests', {});
     const [pollMs, setPollMs] = useState(8000);
     const state = useRequest<TestState>('test:state', {}, { pollMs });
@@ -1409,7 +1425,12 @@ export default function AdminTesting() {
     const lobby = st ? st.lobby : null;
     const enabled = view ? view.config.enabled : true;
     const canStart = enabled && !active;
+    const canCheck = !!view && !!view.config.spawnCheck && view.config.spawnCheck.enabled;
     const now = useServerNow(st?.serverTime ?? view?.serverTime);
+    const openCheck = (p: SpawnCheckPreset | null) => {
+        setCheckPreset(p);
+        setCheckOpen(true);
+    };
 
     const openStart = (p: StartPreset | null) => {
         if (active) {
@@ -1436,6 +1457,15 @@ export default function AdminTesting() {
                         onClick={refreshAll}
                         loading={catalog.loading && !!catalog.data}
                     />
+                    {canCheck || spawnCheck.status === 'running' ? (
+                        <Button variant="secondary" icon="mapPin" onClick={() => openCheck(null)}>
+                            {t(
+                                spawnCheck.status === 'running'
+                                    ? 'test.ui.spawn.button_running'
+                                    : 'test.ui.spawn.button',
+                            )}
+                        </Button>
+                    ) : null}
                     <Button variant="primary" icon="play" onClick={() => openStart(null)} disabled={!view || !canStart}>
                         {t('test.ui.start_test')}
                     </Button>
@@ -1532,6 +1562,9 @@ export default function AdminTesting() {
                                 busy: adminAct.busy,
                                 onMark: (m, loc) => setMarkOf({ m, loc }),
                                 onResults: (m, loc) => setResultsOf({ m, loc }),
+                                onCheck: canCheck
+                                    ? (m, loc) => openCheck({ missionId: m.id, location: loc.index })
+                                    : null,
                                 onSwitch: (m, on) =>
                                     void adminAct
                                         .run(
@@ -1598,6 +1631,15 @@ export default function AdminTesting() {
                 onClose={() => setResultsOf(null)}
                 onChanged={() => void catalog.refetch()}
             />
+            {view ? (
+                <SpawnCheckDialog
+                    open={checkOpen}
+                    preset={checkPreset}
+                    view={view}
+                    blocked={active ? 'test.ui.spawn.blocked_test' : null}
+                    onClose={() => setCheckOpen(false)}
+                />
+            ) : null}
         </Screen>
     );
 }

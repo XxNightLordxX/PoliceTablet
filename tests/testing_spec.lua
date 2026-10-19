@@ -778,6 +778,18 @@ do
     H.eq(res.error, 'err.no_permission', 'no permission')
     res = H.callback('crimson-police:admin:getTests', 1, {})
     H.eq(res.ok, true, 'admin:getTests for an admin')
+    -- Check spawn points (PLAN S8): the screen shows its button, Teleport here and the routes note from these
+    local sc = res.data.config.spawnCheck
+    H.ok(type(sc) == 'table' and sc.enabled == true and sc.teleport == true and sc.routes == false,
+        'admin:getTests: Check spawn points on, Teleport here on, route points skipped (config.lua)')
+    local cfgSc = Config.Testing.spawnCheck
+    cfgSc.enabled, cfgSc.teleport, cfgSc.routes = false, false, true
+    sc = T.list().config.spawnCheck
+    H.ok(sc.enabled == false and sc.teleport == false and sc.routes == true, 'the settings reach the screen live')
+    cfgSc.enabled, cfgSc.teleport, cfgSc.routes = true, true, false
+    Config.Testing.enabled = false
+    H.eq(T.list().config.spawnCheck.enabled, false, 'test mode off: no Check spawn points button either')
+    Config.Testing.enabled = true
     res = H.callback('crimson-police:test:pendingInvites', 2, {})
     H.eq(res.ok, true, 'test:pendingInvites for anyone')
     res = H.callback('crimson-police:test:state', 1, {})

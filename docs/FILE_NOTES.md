@@ -3254,6 +3254,10 @@ file, and that department's session carries no logo (no broken image in the NUI)
                                                  handled locally as below)
     teleport    { target = 'start'|'objective' } -> server returns coords; re-checks crimsonArena, then
                                                  SetEntityCoords (the vehicle when driving) with ground z
+                { target = 'point', missionId, location, point } -> "Teleport here" of a spawn check result
+                                                 (PLAN S8; no test run needed, refused while a check runs, on a
+                                                 run and in the arena): server:test:spawnPoints { ..., point }
+                                                 gives the point's own coordinates, then the same move
     toggleDebug { enabled? }                  -> server:test:control { control = 'debug' }
     testPanel   { open = bool }               -> take / release the panel focus
     spawnCheck  { missionId?, location? }     -> Check spawn points (PLAN S7, Config.Testing.spawnCheck): in a
@@ -3266,6 +3270,8 @@ file, and that department's session carries no logo (no broken image in the NUI)
                                                  (server:test:spawnCheckReport), then puts him back as he was
                                                  (Crimson-Arena rule 13 re-checked before every move)
     spawnCheckStop {}                         -> ends the check after the point being probed
+  (Admin UI -> Testing -> Check spawn points calls spawnCheck, spawnCheckStop and teleport { target = 'point' };
+  web/src/admin/components/spawnCheckStore.ts keeps what the 'spawnCheck' pushes say.)
   Events handled: client:test { controls, runId, debug }, client:testInvite { inviteId, missionLabel, from,
     expiresIn }, client:inProgress / client:runEnded (HUD flag, focus), crimsonArena state bag (local player; it
     also stops a running spawn point check).
@@ -3317,15 +3323,18 @@ file, and that department's session carries no logo (no broken image in the NUI)
     CP.Testing.control(src, payload) -> ok, data|errKey     payload = { control, runId?, target?, enabled? }
         control skip | restart | pause | resume | complete | fail | end | teleport | debug
     CP.Testing.record(src, { missionId, location, tier?, result, note? }) -> ok, data|errKey
-    CP.Testing.list() -> TestsView                             (callback admin:getTests)
+    CP.Testing.list() -> TestsView                             (callback admin:getTests; config.spawnCheck =
+                                                               { enabled, teleport, routes } for the screen)
     CP.Testing.candidates(src) -> { TestCandidate, ... }
     CP.Testing.state(src) -> TestState
     CP.Testing.pendingInvites(src) -> { TestInvite, ... }
     CP.Testing.onRunEnded(run, state, endReason)               (hook from CP.Runs, test runs only)
-    CP.Testing.spawnPoints(src, { missionId?, location? }) -> data|nil, errKey
+    CP.Testing.spawnPoints(src, { missionId?, location?, point? }) -> data|nil, errKey
         Check spawn points (PLAN S7): the missions and their locations, or one location's points with what is
         there (each block's pointKinds), how far over the ground each should be and the distance notes; built
-        from GeometryOf (the debug overlay's geometry without a run). ARCHITECTURE 5.27.
+        from GeometryOf (the debug overlay's geometry without a run). ARCHITECTURE 5.27. With point (PLAN S8,
+        "Teleport here", Config.Testing.spawnCheck.teleport): only that point { missionId, location, point },
+        audited (testControl 'teleport <id>') and logged.
     CP.Testing.spawnCheckReport(src, { missionId, location, results }) -> ok, data|errKey
         what the admin's game found: one CP.warn (tag spawncheck, also in System -> Problems) per point that is
         not right, the last report of each location kept in memory
@@ -3606,7 +3615,41 @@ Actions: server:test:invite { missionId, targets } · server:test:cancelInvites 
       · server:admin:recordTest { missionId, location, tier, result, note }.
 Client actions (Lua testing client): testControl { control } · teleport { target } · toggleDebug { enabled }.
 Pushes: 'test' { state: true } and 'invites' refetch the state (debug pushes from the Lua client are ignored).
+Check spawn points (PLAN S8, shown while config.spawnCheck.enabled): the header button and a per-location item
+      in each mission group open SpawnCheckDialog (admin/components); a check keeps running while the dialog or
+      the tablet is closed (the header button then reads "Checking spawn points…").
 Flow: invite first, then Start — the start dialog invites testers, shows who accepted, and starts with them.
+```
+
+## Crimson-Police/web/src/admin/components/SpawnCheckDialog.tsx
+
+```text
+
+Admin UI · Testing · Check spawn points (PLAN S8). Scope: all missions, one mission or one location (a location
+row opens it with that location). Start / Stop (client actions spawnCheck, spawnCheckStop: the Lua testing client
+does the check, ARCHITECTURE 5.27), the progress "Mission 7/19, location 3/6, point 12/40" with a bar over the
+planned locations, points checked / to look at / locations, and the results: mission and point id, what is there,
+x y z, ground z with the height over it, the result (each status with its hint), notes (near the start or the
+objective before, seen from the start), "Teleport here" (client action teleport { target: 'point', missionId,
+location, point }; hidden while Config.Testing.spawnCheck.teleport is off, disabled while the check runs).
+"Problems only" by default; at most 300 rows drawn. "Copy report" copies spawnCheckReport(). The locations the
+server refused are listed under "Locations not checked". Start is disabled while the admin's own test runs.
+```
+
+## Crimson-Police/web/src/admin/components/spawnCheckStore.ts
+
+```text
+
+Module memory of the admin's spawn point check (PLAN S8): a window 'message' listener at module level takes
+every push of topic 'spawnCheck' (started, location, point, done, stopped, failed; modules/testing/client.lua
+PushCheck), so the results stay while the tablet or the dialog is closed. useSpawnCheck() (useSyncExternalStore)
+-> SpawnCheckView { status idle|running|done|stopped|failed, scope, planned, progress, current, reached, rows
+(each point's result with its mission and location), skipped, totals, error, stopping }. startSpawnCheck(scope)
+and stopSpawnCheck() call the client actions (the 'started' push and the action's answer come on two channels:
+whichever is first starts the memory); a push of a check this memory missed the start of is followed from there.
+reportLine / spawnCheckReport: one line per point to look at in the server's console format (the same status
+words as modules/testing/server.lua CHECK_STATUS), the locations not checked, and how it ended. A toast when the
+check ends.
 ```
 
 ## Crimson-Police/web/src/builder/BlockPanels.tsx
@@ -3969,6 +4012,8 @@ URL shortcuts (with ?ui=admin&screen=admin_testing for the screen, ?hud=test for
   testinvite=0  no invitation banner for me    testempty=1  an empty test log (everything "Not tested")
   testlong=1    edge cases: very long mission/location/player names and notes, a mission without locations
   testlua=1     Lua-shaped replies: empty lists sent as {} objects, false for missing values
+Check spawn points (PLAN S8): client actions spawnCheck / spawnCheckStop / teleport { target: 'point' } and a short
+fake run of 'spawnCheck' pushes (four missions with "All missions", a few bad points, Pursuit Sim #2 refused).
 ```
 
 ## Crimson-Police/web/src/officer/screens/ActiveMission.tsx
@@ -4309,7 +4354,9 @@ sends (or may send) on top of them. Every extra field is optional: the screens w
 
 src/types/testing.ts · Admin test mode shapes (modules/testing/server.lua, docs/notes/testing.md).
 Lua sends `false` for "no value" (a Lua table cannot hold nil) and may encode an empty list as {}:
-read every list through asList().
+read every list through asList(). Check spawn points (PLAN S7, S8): SpawnCheckPoint, SpawnCheckResult,
+SpawnCheckProgress, SpawnCheckTotals, SpawnCheckPush (push 'spawnCheck'), SpawnCheckScope, and
+TestsView.config.spawnCheck { enabled, teleport, routes }.
 ```
 
 ## tests/boards_spec.lua
@@ -4595,7 +4642,12 @@ changed or relies on:
   * Home styles both announcement kinds modules/leaderboard sends (weekly_top3, monthly_top3);
   * lists from Lua ({} for an empty table): the touched screens wrap them (asArray / asList);
   * theme: primary/accent text colours reach WCAG AA (4.5:1) on the surface, checked with a Lua port of
-    web/src/shared/theme.ts on the configured department themes (FIB's navy primary was 3.2:1).
+    web/src/shared/theme.ts on the configured department themes (FIB's navy primary was 3.2:1);
+  * Check spawn points (PLAN S8): the push topic spawnCheck and every state modules/testing/client.lua pushes
+    are handled by admin/components/spawnCheckStore.ts at module level, with the fields the Lua sends; the
+    client actions spawnCheck, spawnCheckStop and teleport { target: 'point' } are the ones the Lua registers;
+    the button, the location item and Teleport here follow admin:getTests config.spawnCheck; the report uses
+    the server's console status words; every text the dialog and store show exists.
 ```
 
 ## tests/memsql_spec.lua
@@ -4835,7 +4887,9 @@ month or day ('0000-00-00', 0, 300, '2026-00-01', and any bad date with IGNORE).
 Check spawn points (PLAN S7; modules/testing server and client, each block's pointKinds): the server lists every
 point of a mission's location with what appears there, from the REAL blocks on the REAL built-in mission files; the
 admin's own game visits the points, judges each with CP.Spawn.probe and reports back; bad points get one console
-line each (and a line in Admin UI -> System -> Problems).
+line each (and a line in Admin UI -> System -> Problems). PLAN S8: "Teleport here" (spawnPoints with a point id:
+the file's coordinates, audited, Config.Testing.spawnCheck.teleport; the client action teleport { target = 'point' }
+without a test run, its refusals and the Crimson-Arena re-check) and a skipped location's push with the mission name.
 ```
 
 ## tests/spawn_client_spec.lua

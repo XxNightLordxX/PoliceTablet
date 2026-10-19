@@ -531,7 +531,8 @@ local function CheckLocation(m, li, progress, totals)
             or errKey == 'err.spawn_check_disabled' then
             return false, errKey
         end
-        PushCheck('location', { progress = progress, missionId = m.id, location = li, error = errKey })
+        PushCheck('location',
+            { progress = progress, missionId = m.id, missionLabel = m.label, location = li, error = errKey })
         return true
     end
     local data = res.data
@@ -671,6 +672,33 @@ local function StartSpawnCheck(payload)
     return true, { started = true, missions = #plan, locations = count }
 end
 
+-- "Teleport here" next to a checked point (Admin UI -> Testing, Config.Testing.spawnCheck.teleport): payload
+-- { target = 'point', missionId, location, point = 'spawns[7]' }. The server answers with the point's own coordinates
+-- (the NUI sends none) and audits it; he is put on the ground there like the test teleport. Not while a check runs.
+local function TeleportToPoint(payload)
+    local missionId, location, point = payload.missionId, payload.location, payload.point
+    if type(missionId) ~= 'string' or #missionId > 40 or type(location) ~= 'number' or math.tointeger(location) == nil
+        or location < 1 or type(point) ~= 'string' or #point > 64 then
+        return false, 'err.invalid_payload'
+    end
+    if check.running then return false, 'err.spawn_check_running' end
+    if ArenaForeign() then return false, 'err.in_arena' end
+    if CurrentRun() then return false, 'err.spawn_check_on_run' end
+    local res = CP.Net.request('server:test:spawnPoints',
+        { missionId = missionId, location = math.tointeger(location), point = point })
+    if type(res) ~= 'table' or not res.ok then return false, type(res) == 'table' and res.error or 'err.no_response' end
+    local p = type(res.data) == 'table' and res.data.point or nil
+    if type(p) ~= 'table' then return false, 'err.test_control_failed' end
+    local x, y, z = tonumber(p.x), tonumber(p.y), tonumber(p.z)
+    if not (x and y and z) then return false, 'err.test_control_failed' end
+    -- checked again right before the move: the answer took a moment (Crimson-Arena rule 13)
+    if check.running then return false, 'err.spawn_check_running' end
+    if ArenaForeign() then return false, 'err.in_arena' end
+    local ok, errKey = TeleportTo(x + 0.0, y + 0.0, z + 0.0)
+    if not ok then return false, errKey end
+    return true, { target = 'point', point = p.id }
+end
+
 -- ============================================================================
 --                                THE PANEL KEY
 -- ============================================================================
@@ -798,6 +826,7 @@ local function RegisterActions()
         return false, res.error
     end)
     CP.Tablet.registerClientAction('teleport', function(payload)
+        if type(payload) == 'table' and payload.target == 'point' then return TeleportToPoint(payload) end
         if not state.controls then return false, 'err.test_no_active' end
         local target = type(payload) == 'table' and payload.target or nil
         return DoTeleport(target)

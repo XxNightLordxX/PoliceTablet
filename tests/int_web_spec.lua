@@ -331,6 +331,127 @@ do
 end
 
 -- ============================================================================
+--                              CHECK SPAWN POINTS
+-- ============================================================================
+-- (PLAN S8): the dialog, its store and the Lua testing client.
+
+do
+    local tclient = Read(ROOT .. 'modules/testing/client.lua')
+    local tserver = Read(ROOT .. 'modules/testing/server.lua')
+    local store = Read(WEB .. 'admin/components/spawnCheckStore.ts')
+    local dialog = Read(WEB .. 'admin/components/SpawnCheckDialog.tsx')
+    local screen = Read(WEB .. 'admin/screens/Testing.tsx')
+    local mock = Read(WEB .. 'mocks/testing.mock.ts')
+    H.ok(tclient and tserver and store and dialog and screen and mock and true,
+        'testing client and server, the spawn check store and dialog, the Testing screen and its mock exist')
+    tclient, tserver, store, dialog, screen, mock =
+        tclient or '', tserver or '', store or '', dialog or '', screen or '', mock or ''
+
+    -- the push: one topic, heard at module level (the check runs on while the tablet is closed)
+    Has(tclient, 'local SPAWN_TOPIC = \'spawnCheck\'', 'the Lua client pushes topic spawnCheck')
+    Has(tclient, 'CP.Tablet.push(SPAWN_TOPIC, data)', 'through CP.Tablet.push')
+    Has(store, 'window.addEventListener(\'message\',', 'the store listens at module level')
+    Has(store, 'd.type !== \'push\' || d.topic !== \'spawnCheck\'', 'to push messages of topic spawnCheck')
+    local states = {}
+    for st in tclient:gmatch('PushCheck%(\'(%w+)\'') do states[st] = true end
+    local ended = tclient:match('local state = errKey and \'(%w+)\' or %(stopped and \'(%w+)\' or \'(%w+)\'%)')
+    H.ok(ended ~= nil, 'the Lua client ends with failed, stopped or done')
+    for a in tclient:gmatch('local state = errKey and \'(%w+)\' or %(stopped and \'%w+\' or \'%w+\'%)') do
+        states[a] = true
+    end
+    for b, c in tclient:gmatch('or %(stopped and \'(%w+)\' or \'(%w+)\'%)') do
+        states[b], states[c] = true, true
+    end
+    local n = 0
+    for st in pairs(states) do
+        n = n + 1
+        Has(store, 'case \'' .. st .. '\':', 'the store handles the ' .. st .. ' push')
+    end
+    H.eq(n, 6, 'every state the Lua client pushes (started, location, point, done, stopped, failed)')
+    -- the fields the store reads are the ones the Lua client sends
+    for _, f in ipairs({
+        'missionId = data.missionId',
+        'missionLabel = data.missionLabel',
+        'locationLabel = data.locationLabel',
+        'points = #points',
+        'result = shown',
+        'totals = totals',
+        'error = errKey',
+    }) do
+        Has(tclient, f, 'the Lua client sends ' .. f:match('^(%w+)'))
+    end
+    for _, f in ipairs({
+        'd.missionId',
+        'd.missionLabel',
+        'd.locationLabel',
+        'd.result',
+        'd.totals',
+        'd.error',
+        'd.progress',
+        'd.missions',
+        'd.locations',
+    }) do
+        Has(store, f, 'the store reads ' .. f)
+    end
+
+    -- the client actions the dialog calls are the Lua client's
+    Has(store, 'clientAction<{ started: boolean; missions: number; locations: number }>(\'spawnCheck\', scope)',
+        'Start calls the client action spawnCheck with the scope')
+    Has(tclient, 'CP.Tablet.registerClientAction(\'spawnCheck\', StartSpawnCheck)', 'which the Lua client registers')
+    Has(store, 'clientAction<{ stopping: boolean }>(\'spawnCheckStop\')', 'Stop calls spawnCheckStop')
+    Has(tclient, 'CP.Tablet.registerClientAction(\'spawnCheckStop\',', 'which the Lua client registers')
+    Has(dialog,
+        'clientAction(\'teleport\', { target: \'point\', missionId: r.missionId, location: r.location, point: r.id })',
+        'Teleport here sends the point by its id, no coordinates')
+    Has(tclient,
+        'if type(payload) == \'table\' and payload.target == \'point\' then return TeleportToPoint(payload) end',
+        'the Lua teleport action takes a point without a test run')
+    Has(mock, 'registerMock(\'client\', \'spawnCheck\',', 'browser mock: spawnCheck')
+    Has(mock, 'registerMock(\'client\', \'spawnCheckStop\',', 'browser mock: spawnCheckStop')
+    Has(mock, 'topic: \'spawnCheck\'', 'browser mock: the pushes')
+
+    -- the button and Teleport here follow Config.Testing.spawnCheck (admin:getTests config.spawnCheck)
+    Has(tserver, 'enabled = c.enabled ~= false and sc.enabled ~= false,', 'admin:getTests: spawnCheck.enabled')
+    Has(tserver, 'teleport = sc.teleport ~= false,', 'admin:getTests: spawnCheck.teleport')
+    Has(screen, 'const canCheck = !!view && !!view.config.spawnCheck && view.config.spawnCheck.enabled;',
+        'the Testing screen hides the button while the check is off')
+    Has(screen, 'onCheck: canCheck', 'and the per-location Check item')
+    Has(dialog, '{cfg?.teleport ? (', 'the dialog hides Teleport here while it is off')
+
+    -- the report reads like the server's console line: the same status words
+    local block = tserver:match('local CHECK_STATUS = {(.-)}') or ''
+    local words = 0
+    for k, w in block:gmatch('([%w_]+) = \'([%u ]+)\'') do
+        words = words + 1
+        Has(store, k .. ': \'' .. w .. '\'', 'report status word for ' .. k .. ' = the server\'s ' .. w)
+        H.ok(keys['test.ui.spawn.status_' .. k] == true, 'locale: test.ui.spawn.status_' .. k)
+        H.ok(keys['test.ui.spawn.hint_' .. k] == true, 'locale: test.ui.spawn.hint_' .. k)
+    end
+    H.eq(words, 9, 'every status the probe gives (and skipped)')
+    Has(store,
+        '`spawn check: ${r.missionId} #${r.location} ${r.id} (${r.x.toFixed(2)}, ${r.y.toFixed(2)}, ${r.z.toFixed(2)}) `',
+        'the report line starts like the console line')
+    Has(tserver, '\'spawn check: %s #%d %s (%.2f, %.2f, %.2f) %s ground %s (%s) [%s]\'', 'the console line it copies')
+
+    -- every text the dialog and the store show exists
+    for _, text in ipairs({ dialog, store }) do
+        for key in pairs(LiteralKeys(text)) do H.ok(keys[key] == true, 'locale key exists: ' .. key) end
+    end
+    for _, kind in ipairs({ 'ped', 'vehicle', 'prop', 'marker', 'path' }) do
+        H.ok(keys['test.ui.spawn.kind_' .. kind] == true, 'locale: test.ui.spawn.kind_' .. kind)
+    end
+    for _, st in ipairs({ 'idle', 'running', 'done', 'stopped', 'failed' }) do
+        H.ok(keys['test.ui.spawn.state_' .. st] == true, 'locale: test.ui.spawn.state_' .. st)
+    end
+    for _, st in ipairs({ 'done', 'stopped', 'failed' }) do
+        H.ok(keys['test.ui.spawn.toast_' .. st] == true, 'locale: test.ui.spawn.toast_' .. st)
+    end
+    H.ok(keys['test.ui.spawn.blocked_test'] == true, 'locale: test.ui.spawn.blocked_test (the screen passes it)')
+    for key in tclient:gmatch('\'(err%.spawn_check_[%w_]+)\'') do H.ok(keys[key] == true, 'locale: ' .. key) end
+    for key in tserver:gmatch('\'(err%.spawn_check_[%w_]+)\'') do H.ok(keys[key] == true, 'locale: ' .. key) end
+end
+
+-- ============================================================================
 --                                SHIPPED FILES
 -- ============================================================================
 -- locales/en.json and web/dist are regenerated from their sources.

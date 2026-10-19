@@ -3,6 +3,9 @@
 import { emitDebug, registerMock } from '../shared/nui';
 import { MOCK_DEPARTMENTS, mockLocale } from './samples';
 import type {
+    SpawnCheckPush,
+    SpawnCheckResult,
+    SpawnProbeStatus,
     TestActive,
     TestCandidate,
     TestDebugData,
@@ -336,6 +339,7 @@ function summarise(): TestsView {
             useStartRoute: false,
             allowTeleport: true,
             debugOverlay: true,
+            spawnCheck: { enabled: true, teleport: true, routes: false },
         },
         serverTime: now(),
     };
@@ -874,7 +878,13 @@ registerMock('client', 'testControl', (p: { control: string }) => {
     return { control: c, paused: a?.paused ?? false };
 });
 
-registerMock('client', 'teleport', (p: { target?: string }) => ({ target: p?.target ?? 'start' }));
+registerMock('client', 'teleport', (p: { target?: string; point?: string }) => {
+    if (p?.target === 'point') {
+        if (spawnRun.running) throw new Error('err.spawn_check_running');
+        return { target: 'point', point: p.point };
+    }
+    return { target: p?.target ?? 'start' };
+});
 
 registerMock('client', 'toggleDebug', (p: { enabled?: boolean }) => {
     const on = typeof p?.enabled === 'boolean' ? p.enabled : !(state.active?.debug ?? false);
@@ -887,6 +897,156 @@ registerMock('client', 'testPanel', (p: { open?: boolean }) => {
     const open = !!p?.open;
     emitDebug('push', { topic: 'test', data: { controls: true, focused: open, key: 'F7', prompt: false } });
     return { focused: open };
+});
+
+// ============================================================================
+//                              CHECK SPAWN POINTS
+// ============================================================================
+// Client actions + 'spawnCheck' pushes.
+// A short fake run: a few points per location, some of them bad, about four points a second; Pursuit Sim #2 is
+// refused by the "server" (it shows under Locations not checked).
+
+const spawnRun = { running: false, stop: false, timer: 0 };
+const SPAWN_KINDS: SpawnCheckResult['kind'][] = ['ped', 'ped', 'vehicle', 'marker', 'prop', 'path'];
+const SPAWN_KEYS = ['spawns', 'associates', 'spot', 'door', 'clues', 'route'];
+// a few bad ones, the rest ok (route points skipped)
+const SPAWN_BAD: Record<string, SpawnProbeStatus> = {
+    'gang_shootout#1:spawns[2]': 'underground',
+    'gang_shootout#2:spot[1]': 'in_wall',
+    'gang_shootout#2:door[1]': 'snap',
+    'bomb_disposal#1:associates[1]': 'floating',
+    'bomb_disposal#2:clues[1]': 'interior_not_loaded',
+};
+
+function spawnPush(data: SpawnCheckPush) {
+    emitDebug('push', { topic: 'spawnCheck', data: lua(data) });
+}
+
+function spawnPlan(missionId?: string, location?: number) {
+    const list = catalog
+        .filter(m => (missionId ? m.id === missionId : true))
+        .map(m => ({ m, locs: m.locations.filter(l => location === undefined || l.index === location) }))
+        .filter(x => x.locs.length > 0);
+    // every mission would take minutes here: a few with something to show
+    const SHORT = ['beat_patrol', 'pursuit_sim', 'bomb_disposal', 'gang_shootout'];
+    return missionId ? list : list.filter(x => SHORT.includes(x.m.id));
+}
+
+registerMock('client', 'spawnCheck', (p: { missionId?: string; location?: number } | null) => {
+    if (spawnRun.running) throw new Error('err.spawn_check_running');
+    if (state.active) throw new Error('err.spawn_check_on_run');
+    const plan = spawnPlan(p?.missionId, p?.location);
+    if (!plan.length) throw new Error(p?.location ? 'err.invalid_location' : 'err.test_unknown_mission');
+    const count = plan.reduce((n, x) => n + x.locs.length, 0);
+    spawnRun.running = true;
+    spawnRun.stop = false;
+    spawnPush({ state: 'started', missions: plan.length, locations: count });
+    const steps: (() => void)[] = [];
+    const totals = { points: 0, bad: 0, locations: 0 };
+    let last = { mission: 0, missions: plan.length, location: 0, locations: 0, point: 0, points: 0 };
+    plan.forEach((x, mi) =>
+        x.locs.forEach((l, li) => {
+            const points = 4 + ((l.index + mi) % 3);
+            const progress = {
+                mission: mi + 1,
+                missions: plan.length,
+                location: li + 1,
+                locations: x.locs.length,
+                point: 0,
+                points,
+            };
+            steps.push(() => {
+                totals.locations += 1;
+                last = progress;
+                if (x.m.id === 'pursuit_sim' && l.index === 2) {
+                    spawnPush({
+                        state: 'location',
+                        progress,
+                        missionId: x.m.id,
+                        missionLabel: x.m.label,
+                        location: l.index,
+                        error: 'err.no_response',
+                    });
+                    return;
+                }
+                spawnPush({
+                    state: 'location',
+                    progress,
+                    missionId: x.m.id,
+                    missionLabel: x.m.label,
+                    location: l.index,
+                    locationLabel: l.label,
+                    points,
+                });
+            });
+            for (let k = 0; k < points; k++) {
+                steps.push(() => {
+                    if (x.m.id === 'pursuit_sim' && l.index === 2) return;
+                    const kind = SPAWN_KINDS[k % SPAWN_KINDS.length];
+                    const key = SPAWN_KEYS[k % SPAWN_KEYS.length];
+                    const id = `${key}[${1 + Math.floor(k / SPAWN_KEYS.length)}]`;
+                    const status: SpawnProbeStatus =
+                        kind === 'path' ? 'skipped' : (SPAWN_BAD[`${x.m.id}#${l.index}:${id}`] ?? 'ok');
+                    const x0 = -1200 + mi * 410.5 + l.index * 37.25 + k * 6.5;
+                    const y0 = -900 + l.index * 211.75 - k * 4.25;
+                    const z0 = 28.5 + k * 0.4;
+                    const dz =
+                        status === 'underground' ? -0.52 : status === 'floating' ? 2.4 : status === 'snap' ? 1.75 : 0.9;
+                    const near = k === 0 ? (['start'] as ('start' | 'previous')[]) : undefined;
+                    totals.points += 1;
+                    if (status !== 'ok' && status !== 'skipped') totals.bad += 1;
+                    spawnPush({
+                        state: 'point',
+                        progress: { ...progress, point: k + 1 },
+                        missionId: x.m.id,
+                        location: l.index,
+                        result: {
+                            id,
+                            key,
+                            i: 1 + Math.floor(k / SPAWN_KEYS.length),
+                            kind,
+                            as: kind === 'vehicle' || kind === 'prop' ? kind : 'ped',
+                            wall: kind === 'ped' || kind === 'vehicle',
+                            model: kind === 'vehicle' ? 'sultan' : undefined,
+                            obj: 1 + (k % 2),
+                            block: 'hostile_waves',
+                            x: x0,
+                            y: y0,
+                            z: z0,
+                            h: 90,
+                            above: [-0.3, 1.6],
+                            dStart: k === 0 ? 12.3 : 60 + k * 9,
+                            near,
+                            status,
+                            groundZ: status === 'skipped' || status === 'no_ground' ? undefined : z0 - dz,
+                            dz: status === 'skipped' || status === 'no_ground' ? undefined : dz,
+                            seen: k === 1 ? true : k === 0 ? false : undefined,
+                        },
+                    });
+                    last = { ...progress, point: k + 1 };
+                });
+            }
+        }),
+    );
+    let i = 0;
+    const tick = () => {
+        if (spawnRun.stop || i >= steps.length) {
+            spawnRun.running = false;
+            spawnPush({ state: spawnRun.stop ? 'stopped' : 'done', progress: last, totals });
+            return;
+        }
+        steps[i]();
+        i += 1;
+        spawnRun.timer = window.setTimeout(tick, 250);
+    };
+    spawnRun.timer = window.setTimeout(tick, 400);
+    return { started: true, missions: plan.length, locations: count };
+});
+
+registerMock('client', 'spawnCheckStop', () => {
+    const stopping = spawnRun.running;
+    if (stopping) spawnRun.stop = true;
+    return { stopping };
 });
 
 // ============================================================================

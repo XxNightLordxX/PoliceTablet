@@ -1686,6 +1686,7 @@ function Testing.list()
         tiers[#tiers + 1] = { name = row.tier, label = TierLabel(row.tier), maxParticipants = row.maxParticipants }
     end
     local c = Cfg()
+    local sc = type(c.spawnCheck) == 'table' and c.spawnCheck or {}
     return {
         missions = list,
         totals = totals,
@@ -1696,6 +1697,12 @@ function Testing.list()
             useStartRoute = c.useStartRoute == true,
             allowTeleport = c.allowTeleport ~= false,
             debugOverlay = c.debugOverlay ~= false,
+            -- Check spawn points (S8: the button, its scope and the "Teleport here" button of a result)
+            spawnCheck = {
+                enabled = c.enabled ~= false and sc.enabled ~= false,
+                teleport = sc.teleport ~= false,
+                routes = sc.routes == true,
+            },
         },
         serverTime = os.time(),
     }
@@ -2003,9 +2010,10 @@ local function CheckMissionView(def)
     return out
 end
 
--- args { missionId?, location? }: no mission = every mission the loader has (built-in and published custom); a
--- mission without a location = that one; both = the location's points (refused in the arena and on a run, since the
--- admin's game is about to move him there).
+-- args { missionId?, location?, point? }: no mission = every mission the loader has (built-in and published custom);
+-- a mission without a location = that one; both = the location's points (refused in the arena and on a run, since
+-- the admin's game is about to move him there); with point (an id such as 'spawns[7]') = only that point, for the
+-- "Teleport here" button of a result (Config.Testing.spawnCheck.teleport; audited).
 function Testing.spawnPoints(src, args)
     local ok, errKey = CheckAllowed(src)
     if not ok then return nil, errKey end
@@ -2037,8 +2045,19 @@ function Testing.spawnPoints(src, args)
     src = ToSrc(src)
     if InArena(src) then return nil, 'err.in_arena' end
     if OnMission(src) then return nil, 'err.spawn_check_on_run' end
+    local point = args.point
+    if point ~= nil and (type(point) ~= 'string' or #point > 64) then return nil, 'err.invalid_payload' end
+    if point ~= nil and CheckCfg().teleport == false then return nil, 'err.spawn_check_teleport_disabled' end
     local c = CheckPoints(def, index)
     if not c.start then return nil, 'err.invalid_location' end
+    if point ~= nil then
+        local p = c.byId[point]
+        if not p then return nil, 'err.invalid_payload' end
+        local where = ('%s#%d'):format(def.id, index)
+        Audit(src, 'audit', 'testControl', where, nil, 'teleport ' .. p.id)
+        CP.log(CHECK_TAG, '%s teleports to %s %s (%.2f, %.2f, %.2f)', PlayerName(src), where, p.id, p.x, p.y, p.z)
+        return { missionId = def.id, location = index, point = U.deepcopy(p) }
+    end
     return {
         missionId = def.id,
         missionLabel = def.label or def.id,

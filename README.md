@@ -706,7 +706,7 @@ Everything else works as shipped. These are the ones owners change most:
 | `Config.Disputes.windowHours` | How long officers have to dispute a run (48 hours) |
 | `Config.AntiCheat` | Flag limits, and the automatic suspension: 3 voided runs in 30 days = 7 days |
 | `Config.Builder` | Mission Builder on or off, what builders may pick, `noBuildZones`, and `requireTestToPublish` (`false` = testing is optional, as shipped) |
-| `Config.Testing` | Admin test mode: `enabled`, `maxTesters`, `allowTeleport`, `debugOverlay`, and `spawnCheck` (the spawn point check: `enabled`, `sceneTimeoutMs` 8000, `moveWithin` 150 m, `routes = false` checks no route points) |
+| `Config.Testing` | Admin test mode: `enabled`, `maxTesters`, `allowTeleport`, `debugOverlay`, and `spawnCheck` (the spawn point check: `enabled`, `sceneTimeoutMs` 8000, `moveWithin` 150 m, `routes = false` checks no route points, `teleport = true` the Teleport here button next to a result) |
 | `Config.Retention` | Clean-up of old data: runs archived after 12 months, audit rows deleted after 180 days, mission calls after 90 days (0 = keep) |
 | `Config.Downed.dropOffs` | Where a downed officer is taken when no EMS is on duty |
 | `Config.Custody.tow.enabled` | `false` makes impounded cars fade out instead of leaving on a tow truck |
@@ -1405,11 +1405,16 @@ optional: no mission, location or draft needs a test before it is used or publis
   like any other.
 - **Mark checked (not played)** notes a location you looked at without playing, and **Results** removes a wrong
   result (or shows it again). Each mission row has its on/off switch.
-- **Check spawn points** (`Config.Testing.spawnCheck`; its button in Admin UI → **Testing** comes with the next
-  update): your own game visits every point of a mission (or of every mission) and tells you which ones are under
-  the ground, floating, in water, in a wall or inside a building that never loads. You are frozen, unseen and unhurt
-  while it runs, and back where you were when it ends; nothing is spawned and nobody else moves. Every bad point is
-  a console line (and a line in **System → Problems**), for example
+- **Check spawn points** (`Config.Testing.spawnCheck`): Admin UI → **Testing** → **Check spawn points** (or the pin
+  on a location row). Pick **All missions**, one mission or one location and press **Start the check**: your own
+  game visits every point and tells you which ones are under the ground, floating, in water, in a wall or inside a
+  building that never loads. You are frozen, unseen and unhurt while it runs, and back where you were when it ends;
+  nothing is spawned and nobody else moves. **Stop** ends it after the point being checked. The results list each
+  point to look at (mission, location, point such as `spawns[7]`, what is there, x y z, the ground and the height
+  over it, notes such as "12.3 m from the start"); **Teleport here** takes you to one of them (`teleport = false`
+  hides it) and **Copy report** copies every problem, one line each, to send to whoever fixes the files. You may
+  close the tablet while it runs: the results wait in the dialog. Every bad point is also a console line (and a line
+  in **System → Problems**), for example
   `spawn check: gang_shootout #4 spawns[7] (1153.75, -3169.50, 5.88) UNDERGROUND ground 6.40 (-0.52) [ped]`.
   Route points are skipped unless `routes = true` (that takes much longer).
 
@@ -2159,7 +2164,8 @@ however it ends.
   end; nothing is spawned) and judges each by the ground probe; the server writes one console line per bad point,
   with its own coordinates. Each point is judged by what the mission puts there (a person, a vehicle by its model, an
   object, a marker or a route point), from each block's new `pointKinds` (ARCHITECTURE 7.1). New in SPEC (Admin test
-  mode).
+  mode). Its screen: Admin UI → Testing → Check spawn points (scope, Start / Stop, progress, results, Teleport here
+  with `Config.Testing.spawnCheck.teleport = true`, audited, and Copy report).
 
 **Waiting for the owner's OK** (already in `docs/SPEC.md` and the code; each one is undone without a code change):
 

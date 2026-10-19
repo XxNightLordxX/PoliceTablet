@@ -3704,6 +3704,7 @@ Config.Testing = {
         -- true = also check every point of the routes (where cars drive and suspects run), which takes much longer;
         -- false = only where people, vehicles and objects appear and the objective markers
         routes = false,
+        teleport = true,        -- the "Teleport here" button next to a checked point (puts you on the ground there)
     },
 }
 
@@ -4186,6 +4187,8 @@ Check spawn points (Config.Testing.spawnCheck, owner request of 2026-10-19: "Dou
 - Each location's answers go to the server, which keeps its own coordinates and writes one console line per point that is not right (also in Admin UI → System → Problems): spawn check: gang_shootout #4 spawns[7] (1153.75, -3169.50, 5.88) UNDERGROUND ground 6.40 (-0.52) [ped]. A point the probe could put on the ground (within snapWithin) reads HEIGHT OFF. The last report of each location stays in memory until the restart.
 
 - It spawns nothing and moves nobody else. It is refused in the arena, on a mission, in a vehicle, while down and while one already runs; Stop ends it after the point being checked. When it ends he is back where he was, facing the same way, as he was (frozen or invincible only if he was before). If Crimson-Arena takes him meanwhile, he is not moved again.
+
+- In Admin UI → Testing: a "Check spawn points" button (and a check item on every location row) opens the check: all missions, one mission or one location; Start and Stop; the progress (mission 7/19, location 3/6, point 12/40); the points checked and the ones to look at; and the results, each with its mission, location, point (spawns[7]), what is there, x y z, the ground under it and the height over it, the result with a plain hint, and notes (close to the start or to the objective before, seen from the start). Problems only by default. "Teleport here" puts the admin on the ground at one point (the server gives the position from the mission file, the screen sends none; audited; Config.Testing.spawnCheck.teleport, not while a check runs). "Copy report" copies one line per point to look at in the console's format, and the locations that could not be checked. The check and its results stay while the tablet is closed. The button is hidden while Config.Testing.enabled or spawnCheck.enabled is false.
 
 Every test start is written to the audit log. The options are in Config.Testing.
 

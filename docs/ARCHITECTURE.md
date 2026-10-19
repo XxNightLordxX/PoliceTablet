@@ -1376,7 +1376,7 @@ Check spawn points (PLAN S7, Config.Testing.spawnCheck; owner request of 2026-10
 for every ped"). The server lists the points, the admin's own game judges them with `CP.Spawn.probe` (§5.43); nothing
 is spawned and only his ped moves. Refused with `err.spawn_check_disabled` while Config.Testing.enabled or
 spawnCheck.enabled is false.
-- `spawnPoints(src, { missionId?, location? })` (ox_lib callback `server:test:spawnPoints`, testRun): no mission =
+- `spawnPoints(src, { missionId?, location?, point? })` (ox_lib callback `server:test:spawnPoints`, testRun): no mission =
   `{ missions = { { id, label, source, locations = { { index, label } } } } }` of `CP.Missions.all()` in the Testing
   order; a mission = that one (`resolveMission`: archived ones too); a mission and a location (`err.in_arena`,
   `err.spawn_check_on_run`: his game is about to move him) = `{ missionId, missionLabel, location, locationLabel,
@@ -1392,6 +1392,10 @@ spawnCheck.enabled is false.
   (`dPrevious`: where the officers stand when it starts); `near = { 'start', 'previous' }` lists those under
   Config.Spawning.minDistance. Built from `GeometryOf(mission, location, nil, { flat = true })`, the debug overlay's
   geometry without a run (every point once, headings kept, at most 1000 points and 64 routes of 1000).
+  With `point` (an id, at most 64 characters; PLAN S8 "Teleport here"): `{ missionId, location, point }` (that one
+  row), refused `err.spawn_check_teleport_disabled` while Config.Testing.spawnCheck.teleport is false and
+  `err.invalid_payload` for an id the location does not have; audited (`audit`/`testControl`, target
+  `<missionId>#<index>`, new value `teleport <id>`) and `CP.log`ged.
 - `spawnCheckReport(src, { missionId, location, results = { { id, status, groundZ?, dz?, roofZ?, seen? } } })`
   (action `server:test:spawnCheckReport`, testRun): `err.invalid_payload` for an id the location does not have,
   one id twice, more results than points or a status the probe never gives (`ok`, `snap`, `underground`,
@@ -1424,6 +1428,18 @@ spawnCheck.enabled is false.
   13): once the arena owns him (or the crimsonArena bag turns foreign: the check stops) he is never moved again and
   his freeze is the arena's; visibility and invincibility come back. Otherwise, and on resource stop, he is put back
   where he was, facing the same way, unfrozen unless he was frozen before, seen and hurt as before, the screen faded in.
+  A skipped location's push also carries `missionLabel`. "Teleport here" (PLAN S8): the client action `teleport`
+  with `{ target = 'point', missionId, location, point }` needs no test run; refused `err.invalid_payload`,
+  `err.spawn_check_running` (a check runs: it puts him back afterwards), `err.in_arena`, `err.spawn_check_on_run`;
+  then `server:test:spawnPoints { missionId, location, point }` gives the coordinates (the NUI sends none; an answer
+  without them is `err.test_control_failed`), the arena and a running check are checked again, and the test
+  teleport's move puts him (or the vehicle he drives) on the ground there.
+- Admin UI → Testing (PLAN S8): `admin:getTests` `config.spawnCheck = { enabled, teleport, routes }` (enabled is false
+  while Config.Testing.enabled is). While enabled the screen shows a "Check spawn points" button and a per-location
+  item that open the dialog (`web/src/admin/components/SpawnCheckDialog.tsx`: scope, Start / Stop, progress, the
+  results with "Teleport here" and "Copy report"). `web/src/admin/components/spawnCheckStore.ts` takes the
+  `spawnCheck` pushes at module level, so a check and its results outlive the dialog and the open tablet; the copied
+  report has one line per point to look at in the server's console format.
 
 ### 5.28 CP.Builder — modules/builder
 Server: drafts, locks, autosave, test runs of drafts (via `CP.Testing`/`CP.Runs` with `test.draft = true`),
@@ -2399,7 +2415,7 @@ Callbacks (read): `getSession`, `getMissionTypes`, `getUnit`, `getRun`, `getHome
 `admin:getDepartments`, `admin:getPermissions`, `admin:getAudit`, `admin:exportAudit`,
 `admin:getTests`, `admin:getFlagged`, `admin:getDisputes`, `builder:list`, `builder:get`,
 `builder:config`, `test:pendingInvites`, `test:state` (testRun or builderEdit), `test:candidates` (testRun),
-`server:test:spawnPoints` (testRun; the spawn point check, §5.27).
+`server:test:spawnPoints` (testRun; the spawn point check and its "Teleport here" with `point`, §5.27).
 Parity-plus: `getMissionCalls`, `getNavCounts`, `getProfileEdit`, `getRewardsLocker`, `sup:getMissionCalls`,
 `sup:getProfileQueue`, `admin:getRewards` (`{ page }`), `admin:getAreaCoverage`, `admin:getLocationStats`
 (`{ missionId }`), `admin:getOfficerProfile` (`{ citizenid }`), `admin:getConfigHealth`, `admin:getTabletAccess`,

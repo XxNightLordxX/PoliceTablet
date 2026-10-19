@@ -348,6 +348,53 @@ do
     H.eq(Config.Testing.spawnCheck.routes, false, 'config.lua: route points are not checked unless asked')
 end
 
+-- "Teleport here" next to a result (PLAN S8): one point by its id, with the server's own coordinates, audited
+do
+    logs = {}
+    local audits = {}
+    CP.Admin = {
+        audit = function(...) audits[#audits + 1] = table.pack(...) end,
+    }
+    H.eq(Config.Testing.spawnCheck.teleport, true, 'config.lua: Teleport here is on')
+    local res = Ask(1, { missionId = 'gang_shootout', location = 4, point = 'spawns[7]' })
+    H.eq(res.ok, true, 'one point of a location')
+    local p = res.ok and res.data.point or {}
+    H.ok(res.ok and res.data.missionId == 'gang_shootout' and res.data.location == 4 and res.data.points == nil,
+        'only that point, not the whole location')
+    H.ok(p.id == 'spawns[7]' and p.x == 1153.75 and p.y == -3169.5 and p.z == 5.88 and p.kind == 'ped',
+        'with the file\'s own coordinates')
+    H.eq(#audits, 1, 'the teleport is audited')
+    local a = audits[1] or {}
+    H.ok(
+        a[1] == 1 and a[3] == 'audit' and a[4] == 'testControl' and a[5] == 'gang_shootout#4'
+            and a[7] == 'teleport spawns[7]',
+        'who, where and which point: ' .. tostring(a[5]) .. ' ' .. tostring(a[7])
+    )
+    local lines = LogsWith('teleports to gang_shootout#4 spawns[7] (1153.75, -3169.50, 5.88)')
+    H.eq(#lines, 1, 'and written to the console')
+
+    res = Ask(1, { missionId = 'gang_shootout', location = 4, point = 'spawns[99]' })
+    H.eq(res.error, 'err.invalid_payload', 'a point the location does not have')
+    res = Ask(1, { missionId = 'gang_shootout', location = 4, point = 7 })
+    H.eq(res.error, 'err.invalid_payload', 'a point id that is no text')
+    res = Ask(1, { missionId = 'gang_shootout', location = 4, point = ('x'):rep(65) })
+    H.eq(res.error, 'err.invalid_payload', 'a point id too long')
+    res = Ask(2, { missionId = 'gang_shootout', location = 4, point = 'spawns[7]' })
+    H.eq(res.error, 'err.no_permission', 'an officer without testRun is refused')
+    res = Ask(3, { missionId = 'gang_shootout', location = 4, point = 'spawns[7]' })
+    H.eq(res.error, 'err.in_arena', 'an admin in the arena is refused')
+    res = Ask(4, { missionId = 'gang_shootout', location = 4, point = 'spawns[7]' })
+    H.eq(res.error, 'err.spawn_check_on_run', 'an admin on a run is refused')
+    Config.Testing.spawnCheck.teleport = false
+    res = Ask(1, { missionId = 'gang_shootout', location = 4, point = 'spawns[7]' })
+    H.eq(res.error, 'err.spawn_check_teleport_disabled', 'Config.Testing.spawnCheck.teleport = false: refused')
+    res = Ask(1, { missionId = 'gang_shootout', location = 4 })
+    H.ok(res.ok and #res.data.points > 0, 'the check itself still lists the points')
+    Config.Testing.spawnCheck.teleport = true
+    H.eq(#audits, 1, 'a refused teleport is not audited')
+    CP.Admin = nil
+end
+
 -- ============================================================================
 --                        3. THE REPORT OF ONE LOCATION
 -- ============================================================================
@@ -906,6 +953,131 @@ do
     H.eq(game.invincible, false, 'and hurt again')
     H.eq(#Pushes('stopped') + #Pushes('failed'), 1, 'the NUI hears the check ended')
     LocalPlayer.state.crimsonArena = nil
+end
+
+-- a location the server refuses for its own reason is skipped: the NUI hears which one (with the mission's name,
+-- for the dialog's "Locations not checked") and the check goes on (PLAN S8)
+do
+    Reset()
+    local realRequest = CP.Net.request
+    CP.Net.request = function(name, args)
+        if args.location == 1 then return { ok = false, error = 'err.invalid_location' } end
+        return realRequest(name, args)
+    end
+    clientActions.spawnCheck({ missionId = 'demo' })
+    RunToEnd()
+    CP.Net.request = realRequest
+    local skipped = Pushes('location')[1]
+    H.ok(
+        skipped and skipped.error == 'err.invalid_location' and skipped.missionId == 'demo'
+            and skipped.missionLabel == 'Demo' and skipped.location == 1,
+        'a skipped location: which one, by name, and why'
+    )
+    H.ok(#Pushes('location') == 2 and #Pushes('done') == 1, 'and the check goes on to the next one')
+end
+
+-- ============================================================================
+--                     5. "TELEPORT HERE" NEXT TO A RESULT
+-- ============================================================================
+-- PLAN S8, client half.
+-- client action 'teleport' { target = 'point', missionId, location, point }: no test run needed; the server gives
+-- the coordinates (the NUI sends none); he is put on the ground there like the test teleport.
+
+do
+    _G.GetVehiclePedIsIn = function() return 0 end
+    _G.GetPedInVehicleSeat = function() return 0 end
+    _G.RequestCollisionAtCoord = function(x, y, z) Float('RequestCollisionAtCoord', x, y, z) end
+    _G.GetGroundZFor_3dCoord = function(x, y, z)
+        Float('GetGroundZFor_3dCoord', x, y, z)
+        return true, 19.25
+    end
+    local realRequest = CP.Net.request
+    local pointReply = nil
+    CP.Net.request = function(name, args)
+        if name == 'server:test:spawnPoints' and type(args) == 'table' and args.point ~= nil then
+            requests[#requests + 1] = { name = name, args = CP.U.deepcopy(args) }
+            return pointReply
+        end
+        return realRequest(name, args)
+    end
+
+    Reset()
+    game.typeErrors = 0
+    pointReply = {
+        ok = true,
+        data = { missionId = 'demo', location = 1, point = CP.U.deepcopy(LOCATIONS[1].points[2]) },
+    }
+    local ok, data = clientActions.teleport({ target = 'point', missionId = 'demo', location = 1, point = 'spot[1]' })
+    H.eq(ok, true, 'Teleport here works without a test run')
+    H.ok(type(data) == 'table' and data.target == 'point' and data.point == 'spot[1]', 'and says which point')
+    H.eq(#requests, 1, 'the server is asked once')
+    local q = requests[1] and requests[1].args or {}
+    H.ok(
+        requests[1].name == 'server:test:spawnPoints' and q.missionId == 'demo' and q.location == 1
+            and q.point == 'spot[1]',
+        'for that one point by its id'
+    )
+    H.ok(q.x == nil and q.y == nil and q.z == nil, 'no coordinates from the NUI')
+    local moves = Called('SetEntityCoords')
+    H.ok(#moves == 2 and moves[1][2] == 500.0 and moves[1][3] == 200.0 and moves[1][4] == 21.0,
+        'over the server\'s point first')
+    H.ok(moves[2][2] == 500.0 and moves[2][4] == 19.25, 'then on the ground there')
+    local f = Called('FreezeEntityPosition')
+    H.ok(#f == 2 and f[1][2] == true and f[2][2] == false, 'frozen for the move, let go after')
+    H.ok(#Called('DoScreenFadeOut') == 1 and #Called('DoScreenFadeIn') == 1, 'the screen fades out and back in')
+    H.eq(game.typeErrors, 0, 'every coordinate reaches the game as a decimal')
+
+    -- the server refuses: he is not moved
+    Reset()
+    pointReply = { ok = false, error = 'err.spawn_check_teleport_disabled' }
+    ok, data = clientActions.teleport({ target = 'point', missionId = 'demo', location = 1, point = 'spot[1]' })
+    H.eq(data, 'err.spawn_check_teleport_disabled', 'refused by the server: its reason')
+    H.eq(#Called('SetEntityCoords'), 0, 'and not moved')
+    pointReply = { ok = true, data = { missionId = 'demo', location = 1, point = { id = 'spot[1]' } } }
+    ok, data = clientActions.teleport({ target = 'point', missionId = 'demo', location = 1, point = 'spot[1]' })
+    H.eq(data, 'err.test_control_failed', 'an answer without coordinates: refused, never a move to 0, 0, 0')
+    H.eq(#Called('SetEntityCoords'), 0, 'not moved')
+
+    -- what the client refuses itself
+    Reset()
+    pointReply = {
+        ok = true,
+        data = { missionId = 'demo', location = 1, point = CP.U.deepcopy(LOCATIONS[1].points[2]) },
+    }
+    ok, data = clientActions.teleport({ target = 'point', missionId = 'demo', location = 1 })
+    H.eq(data, 'err.invalid_payload', 'no point id')
+    ok, data = clientActions.teleport({ target = 'point', missionId = 'demo', location = 'one', point = 'spot[1]' })
+    H.eq(data, 'err.invalid_payload', 'a location that is no number')
+    ok, data = clientActions.teleport({ target = 'point', location = 1, point = 'spot[1]' })
+    H.eq(data, 'err.invalid_payload', 'no mission')
+    currentRun = { id = 'run-1' }
+    ok, data = clientActions.teleport({ target = 'point', missionId = 'demo', location = 1, point = 'spot[1]' })
+    H.eq(data, 'err.spawn_check_on_run', 'on a run: refused')
+    currentRun = nil
+    LocalPlayer.state.crimsonArena = { active = true, source = 'crimson-arena' }
+    ok, data = clientActions.teleport({ target = 'point', missionId = 'demo', location = 1, point = 'spot[1]' })
+    H.eq(data, 'err.in_arena', 'in the arena: refused')
+    LocalPlayer.state.crimsonArena = nil
+    H.eq(#requests, 0, 'none of these asks the server')
+    clientActions.spawnCheck({ missionId = 'demo', location = 2 })
+    ok, data = clientActions.teleport({ target = 'point', missionId = 'demo', location = 1, point = 'spot[1]' })
+    H.eq(data, 'err.spawn_check_running', 'not while a check runs (it puts him back where he was)')
+    RunToEnd()
+    -- the arena takes him while the server answers: not moved (rule 13)
+    Reset()
+    CP.Net.request = function(name, args)
+        LocalPlayer.state.crimsonArena = { active = true, source = 'crimson-arena' }
+        return pointReply
+    end
+    ok, data = clientActions.teleport({ target = 'point', missionId = 'demo', location = 1, point = 'spot[1]' })
+    H.eq(data, 'err.in_arena', 'Crimson-Arena took him meanwhile: refused')
+    H.eq(#Called('SetEntityCoords'), 0, 'and not moved')
+    LocalPlayer.state.crimsonArena = nil
+
+    -- the test run teleport is unchanged: it still needs a test run
+    ok, data = clientActions.teleport({ target = 'start' })
+    H.eq(data, 'err.test_no_active', 'Teleport to the start still needs a test run')
+    CP.Net.request = realRequest
 end
 
 return H

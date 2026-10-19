@@ -68,6 +68,9 @@ export interface TestsView {
         useStartRoute: boolean;
         allowTeleport: boolean;
         debugOverlay: boolean;
+        // Config.Testing.spawnCheck: the Check spawn points button (enabled), its "Teleport here" button (teleport)
+        // and whether route points are checked (routes)
+        spawnCheck: { enabled: boolean; teleport: boolean; routes: boolean };
     };
     serverTime: number;
 }
@@ -247,6 +250,97 @@ export interface TestPush {
     debug?: TestDebugData | false | null;
     prompt?: false | { invites: TestInvite[] };
     state?: boolean; // server push: the admin's test state changed (refetch test:state)
+}
+
+// ============================================================================
+//             CHECK SPAWN POINTS (PLAN S7, S8; ARCHITECTURE §5.27)
+// ============================================================================
+// Client action 'spawnCheck' { missionId?, location? } starts it, 'spawnCheckStop' ends it after the point being
+// checked, 'teleport' { target: 'point', missionId, location, point } puts the admin on the ground at one point.
+// The Lua testing client pushes 'spawnCheck' (SpawnCheckPush) while it runs.
+
+// What appears at a point: a person, a vehicle, an object, a marker where officers stand, a route point.
+export type SpawnPointKind = 'ped' | 'vehicle' | 'prop' | 'marker' | 'path';
+// CP.Spawn.probe's answer, or 'skipped' (a route point while Config.Testing.spawnCheck.routes is false).
+export type SpawnProbeStatus =
+    | 'ok'
+    | 'snap'
+    | 'underground'
+    | 'floating'
+    | 'no_ground'
+    | 'in_water'
+    | 'in_wall'
+    | 'interior_not_loaded'
+    | 'skipped';
+
+// One point as server:test:spawnPoints lists it.
+export interface SpawnCheckPoint {
+    id: string; // 'spawns[7]', 'routes#2[3]'
+    key: string;
+    i: number;
+    kind: SpawnPointKind;
+    as: 'ped' | 'vehicle' | 'prop';
+    wall: boolean;
+    model?: string | false;
+    obj: number | false;
+    block: string | false;
+    x: number;
+    y: number;
+    z: number;
+    h?: number | false;
+    above: number[];
+    dStart?: number | false;
+    dPrevious?: number | false;
+    near?: ('start' | 'previous')[] | Record<string, never>;
+}
+
+// The point with what the admin's game found there.
+export interface SpawnCheckResult extends SpawnCheckPoint {
+    status: SpawnProbeStatus;
+    groundZ?: number | false;
+    dz?: number | false;
+    roofZ?: number | false;
+    interior?: number | boolean;
+    seen?: boolean;
+}
+
+// location = its place in this mission's list (not the location index)
+export interface SpawnCheckProgress {
+    mission: number;
+    missions: number;
+    location: number;
+    locations: number;
+    point: number;
+    points: number;
+}
+
+export interface SpawnCheckTotals {
+    points: number;
+    bad: number;
+    locations: number;
+}
+
+export type SpawnCheckPushState = 'started' | 'location' | 'point' | 'done' | 'stopped' | 'failed';
+
+export interface SpawnCheckPush {
+    state: SpawnCheckPushState;
+    progress?: SpawnCheckProgress;
+    missions?: number; // started
+    locations?: number; // started
+    missionId?: string;
+    missionLabel?: string;
+    location?: number; // the location index
+    locationLabel?: string;
+    points?: number; // location: how many points it has
+    result?: SpawnCheckResult; // point
+    totals?: SpawnCheckTotals; // done, stopped, failed
+    error?: string | false; // location: why it was skipped; failed: why the check ended
+}
+
+// What to check: every mission, one mission, or one location of it.
+export interface SpawnCheckScope {
+    missionId?: string;
+    location?: number;
 }
 
 // Lua may encode an empty list as {}: anything that is not an array is an empty list.

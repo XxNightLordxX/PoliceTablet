@@ -163,6 +163,11 @@ Seats: `Config.Testing.maxTesters - 1` (pending + accepted) besides the admin.
   locations, point, points }, missionId?, missionLabel?, location?, locationLabel?, points?, result?:
   SpawnCheckPoint & { status, groundZ?, dz?, roofZ?, interior?, seen? }, totals?: { points, bad, locations },
   error? }`.
+- Check spawn points in Admin UI -> Testing (PLAN S8): `admin:getTests` `config.spawnCheck: { enabled, teleport,
+  routes }`; `server:test:spawnPoints { missionId, location, point }` → `{ missionId, location, point:
+  SpawnCheckPoint }` ("Teleport here"); client actions `spawnCheck { missionId?, location? }` → `{ started,
+  missions, locations }`, `spawnCheckStop` → `{ stopping }`, `teleport { target: 'point', missionId, location,
+  point }` → `{ target: 'point', point }`.
 - Lua `false` stands for "no value" in every shape (a Lua table cannot hold nil); lists may arrive as `{}`.
 
 ## Requests to other modules

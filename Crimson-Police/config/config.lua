@@ -1165,6 +1165,7 @@ Config.Testing = {
         -- true = also check every point of the routes (where cars drive and suspects run), which takes much longer;
         -- false = only where people, vehicles and objects appear and the objective markers
         routes = false,
+        teleport = true,        -- the "Teleport here" button next to a checked point (puts you on the ground there)
     },
 }
 
