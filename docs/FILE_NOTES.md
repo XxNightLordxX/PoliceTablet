@@ -2698,6 +2698,9 @@ where the officer is).
     CP.Runs.adjustTimer(run, seconds) / pauseTimer(run, paused) / remaining(run) -> seconds|nil
     CP.Runs.spawnPed(run, opts) / spawnVehicle(run, opts) / spawnObject(run, opts) -> entity, netId
     CP.Runs.deleteEntity(run, netId) / entitiesFor(run, filter) -> list / canSpawn(run, n, armed) -> boolean
+    CP.Runs.choosePoints(run, candidates, n, opts) -> points, indexes   the spawn director (Config.Spawning)
+        opts = { wave, since, indoor, centre, from, placed, name, obj }; ctx.choosePoints fills in obj
+    CP.Runs.whenNear(run, point, range) -> boolean, nearestMetres|nil   (ctx.whenNear; range = activateRange)
     CP.Runs.send(run, eventName, ...) / objectiveEvent(run, index, data) / hud(run, patch) / hudFor(run, src, patch)
     CP.Runs.view(run, src) -> ActiveMissionView (§9.4) / summary(run) -> LiveRun (§9.5)
     CP.Runs.isParticipant(run, src) / activeSrcs(run) -> { src... } / host(run) -> src
@@ -2764,6 +2767,15 @@ where the officer is).
     * The unit is kept (and unlocked at the end) only for normal runs: test and operation runs never lock
       one, so they never unlock one either.
     * CP.Runs.ctx(run, index) returns the engine's own ctx of an objective (the one every hook gets).
+    * The spawn director (Config.Spawning) measures on the map (2D) from every active participant's server-side ped: a
+      point is skipped closer than minDistance (minDistanceIndoor indoors), behind a participant within activateRange
+      (more than behindAngle off his own line to the area centre, whichever side he came in from; within 5 m of the
+      centre, off start -> centre), or outside the one maxSpread sector, seen from the participants near the area, that
+      keeps the wave's placed points and the most of the rest. It returns fewer points rather than a bad one; a named
+      wave's clock relaxes the distance to hardMin (never lower, never higher than the distance itself) after
+      waveDelayMax seconds and is dropped when a call gets every point it asked for. Its memory is
+      run.spawning[objective] (clocks, the console lines already said), so it goes with the run; testRestart clears the
+      objective's. It lives in a do-block: the file is at Lua's 200 locals.
 ```
 
 ## Crimson-Police/modules/scaling/server.lua
@@ -4693,6 +4705,22 @@ columns left out without a default, ON DUPLICATE KEY UPDATE conversions.
 FUZZ_SEED 1 runs the whole grid; other seeds a random part of it and random multi-row statements.
 Left out (the engine refuses them as unsupported): values MariaDB stores as a zero date or a date with a zero
 month or day ('0000-00-00', 0, 300, '2026-00-01', and any bad date with IGNORE).
+```
+
+## tests/spawn_director_spec.lua
+
+```text
+The spawn director (Config.Spawning, PLAN S1) on a real test run of the engine: three officers placed through the
+harness's ped coords, a recording block that keeps its ctx. ctx.choosePoints / Runs.choosePoints: the 40 m rule (30 m
+skipped, 40 and 45 m kept, height not counted, the ped moving), the indoor 15 m (opts.indoor and a point's own indoor
+flag), "behind" seen from each officer's own line to the scene (one who came round the far side keeps the point in front
+of him and skips the one at his back, a lone officer from the far side, a Terminal-shaped yard entered from the south,
+an officer in the middle faces the way in and opts.from turns it, an officer beyond activateRange never counts,
+behindAngle 180 is off, the default centre), one sector per wave (no ring: east and west never together; opts.placed
+keeps the wave in its slice; maxSpread 360 is off), 9 asked from 4 good returns 4, a named wave after waveDelayMax (25 m
+allowed, 15 m never, one warning, the clock per objective, dropped once full, opts.since, cleared by testRestart), an
+officer who left, enabled = false (the first n as they are) and log = false. ctx.whenNear / Runs.whenNear: activateRange
+read live, its own range, 2D, a vector4, no point. The console lines are checked once per point and reason. No SQL.
 ```
 
 ## tests/storage_copy_spec.lua

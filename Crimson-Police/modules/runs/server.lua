@@ -539,6 +539,13 @@ local function GetCtx(run, i)
         end
         ctx.isHost = function(src) return ToSrc(src) == run.host end
         ctx.host = function() return run.host end
+        -- the spawn director (Config.Spawning): which points to use now, and whether an officer is near enough
+        ctx.choosePoints = function(candidates, n, opts)
+            local o2 = type(opts) == 'table' and U.copy(opts) or {}
+            o2.obj = i
+            return Runs.choosePoints(run, candidates, n, o2)
+        end
+        ctx.whenNear = function(point, range) return Runs.whenNear(run, point, range) end
         cache[i] = ctx
     end
     ctx.obj = (o and o.obj) or ctx.base
@@ -569,6 +576,293 @@ function Runs.ctx(run, index)
     index = math.tointeger(tonumber(index) or -1)
     if not index or not run.objectives[index] or runs[run.id] ~= run then return nil end
     return GetCtx(run, index)
+end
+
+-- ============================================================================
+--                       SPAWN DIRECTOR (Config.Spawning)
+-- ============================================================================
+-- Which of a block's spawn points may be used now, and whether an officer is near enough for an objective's people
+-- to appear (owner request of 2026-10-19: "make sure they dont spawn around the player make it be progressive").
+-- Every distance is measured on the map (2D). Blocks reach both through ctx.choosePoints and ctx.whenNear. The
+-- director's memory of a run is run.spawning[objective] = { clocks = { [wave] = os.time() of the first ask },
+-- said = { [console line] = true } }; it goes with the run.
+
+do
+    -- metres: an officer this close to the scene's middle has no line of his own to it (he faces the way in, from
+    -- the start); a start -> middle line this short has no direction either (no behind test for him)
+    local FRONT_MIN = 5.0
+    local BEARING_MIN = 1.0  -- metres: a point this close to the officers has no bearing (it fits every sector)
+
+    local function SpawnCfg() return type(Config.Spawning) == 'table' and Config.Spawning or {} end
+
+    local function MemoryOf(run, obj)
+        run.spawning = run.spawning or {}
+        local key = obj or 0
+        local m = run.spawning[key]
+        if not m then
+            m = { clocks = {}, said = {} }
+            run.spawning[key] = m
+        end
+        return m
+    end
+
+    -- x, y, z of a point: a vector, { x, y, z }, { [1], [2], [3] } or { coords = one of those }; nil when it is none.
+    local function PointXyz(v)
+        local t = type(v)
+        if t == 'table' and v.coords ~= nil then
+            v = v.coords
+            t = type(v)
+        end
+        local x, y, z
+        if t == 'vector3' or t == 'vector4' then
+            x, y, z = v.x, v.y, v.z
+        elseif t == 'table' then
+            x, y, z = v.x or v[1], v.y or v[2], v.z or v[3]
+        end
+        x, y = tonumber(x), tonumber(y)
+        if not x or not y or x ~= x or y ~= y then return nil end
+        return x, y, tonumber(z) or 0.0
+    end
+
+    -- The active participants that have a ped, where it stands: { { src, name, x, y } }.
+    local function OfficerSpots(run)
+        local out = {}
+        for _, src in ipairs(Runs.activeSrcs(run)) do
+            local x, y = PointXyz(PedCoords(src))
+            if x then
+                local p = run.participants[src]
+                out[#out + 1] = { src = src, name = tostring(p and p.name or ('player ' .. src)), x = x, y = y }
+            end
+        end
+        return out
+    end
+
+    local function Dist2(ax, ay, bx, by) return math.sqrt((ax - bx) ^ 2 + (ay - by) ^ 2) end
+
+    -- Degrees (0-180) between two 2D directions; nil when one of them has no length.
+    local function AngleOff(ax, ay, bx, by)
+        local la, lb = math.sqrt(ax * ax + ay * ay), math.sqrt(bx * bx + by * by)
+        if la < 1e-6 or lb < 1e-6 then return nil end
+        local c = (ax * bx + ay * by) / (la * lb)
+        if c > 1 then c = 1 elseif c < -1 then c = -1 end
+        return math.deg(math.acos(c))
+    end
+
+    -- The bearing (0-360 degrees) of x, y seen from ax, ay; nil when it is closer than BEARING_MIN.
+    local function BearingOf(ax, ay, x, y)
+        if Dist2(ax, ay, x, y) < BEARING_MIN then return nil end
+        return math.deg(math.atan(y - ay, x - ax)) % 360
+    end
+
+    local function InSector(bearing, from, width) return bearing == nil or (bearing - from) % 360 <= width end
+
+    -- One console line per point, reason and wave (a wave that waits asks again every second).
+    local function SaySkipped(run, m, opts, name, index, kind, fmt, ...)
+        if SpawnCfg().log == false then return end
+        local key = ('%s|%s|%d|%s'):format(tostring(opts.wave), name, index, kind)
+        if m.said[key] then return end
+        m.said[key] = true
+        CP.log(TAG, 'run %s: %s[%d] skipped: ' .. fmt, run.id, name, index, ...)
+    end
+
+    -- Picks the points of one wave from candidates (the block's list, best first: vectors, { x, y, z } or
+    -- { coords }), at most n (nil = every one that passes). Returns the chosen candidates (their own values, in list
+    -- order) and their indexes in candidates. A point is skipped when it is closer than minDistance
+    -- (minDistanceIndoor with opts.indoor or a point { coords, indoor = true }) to any active participant, or behind
+    -- a participant within activateRange of it: more than behindAngle off his own line to the scene, from where he
+    -- stands towards opts.centre (default the middle of the candidates), whichever side he came in from; one within
+    -- FRONT_MIN of the middle faces the way in, from opts.from (default the start) towards the middle. So a point
+    -- between an officer and the scene is never behind him, and a point at his back always is. The points left are
+    -- kept to the one maxSpread sector, seen from the participants near the area, that holds every point of
+    -- opts.placed (the points this wave already used) and then the most of them, so a wave never closes in from all
+    -- sides. With too few good points it returns fewer, never a bad one. opts.wave names the wave: its clock starts
+    -- at the first ask (opts.since, an os.time(), sets it instead) and stops once a call returns n points; after
+    -- waveDelayMax seconds the distance drops to hardMin, never lower. opts.name names the list in the console
+    -- ('spawns[7] skipped: 30 m from <officer>'), opts.obj the objective (ctx.choosePoints fills it in).
+    -- Config.Spawning.enabled = false: the first n candidates as they are.
+    function Runs.choosePoints(run, candidates, n, opts)
+        opts = type(opts) == 'table' and opts or {}
+        local chosen, picked = {}, {}
+        if type(run) ~= 'table' or type(candidates) ~= 'table' then return chosen, picked end
+        local total = #candidates
+        n = tonumber(n)
+        n = math.min((n and n == n) and math.floor(n) or total, total)
+        if n <= 0 then return chosen, picked end
+        local cfg = SpawnCfg()
+        if cfg.enabled == false then
+            for i = 1, n do chosen[i], picked[i] = candidates[i], i end
+            return chosen, picked
+        end
+        local m = MemoryOf(run, opts.obj)
+        local name = type(opts.name) == 'string' and opts.name or 'points'
+        local now = os.time()
+        local since = tonumber(opts.since)
+        if not since and opts.wave ~= nil then
+            since = m.clocks[opts.wave] or now
+            m.clocks[opts.wave] = since
+        end
+        local waited = since and math.max(0, now - since) or 0
+        local relaxed = since ~= nil and waited >= Num(cfg.waveDelayMax, 20)
+        local minOut = math.max(0, Num(cfg.minDistance, 40.0))
+        local minIn = math.max(0, Num(cfg.minDistanceIndoor, 15.0))
+        local hardMin = math.max(0, Num(cfg.hardMin, 20.0))
+        local nearRange = math.max(0, Num(cfg.activateRange, 150.0))
+        local behindAngle = Num(cfg.behindAngle, 110.0)
+        local spread = Num(cfg.maxSpread, 150.0)
+
+        local pts, sx, sy = {}, 0.0, 0.0
+        for i = 1, total do
+            local v = candidates[i]
+            local x, y, z = PointXyz(v)
+            if x then
+                local indoor = opts.indoor == true or (type(v) == 'table' and v.indoor == true)
+                pts[#pts + 1] = { i = i, v = v, x = x, y = y, z = z, indoor = indoor }
+                sx, sy = sx + x, sy + y
+            else
+                SaySkipped(run, m, opts, name, i, 'bad', 'not a point')
+            end
+        end
+        if #pts == 0 then return chosen, picked end
+
+        -- the middle of the scene, and the way in: from the start towards the middle
+        local cx, cy = PointXyz(opts.centre)
+        if not cx then cx, cy = sx / #pts, sy / #pts end
+        local start = type(run.location) == 'table' and run.location.start or nil
+        local fx, fy = PointXyz(opts.from or (type(start) == 'table' and start.coords or nil))
+        local inX, inY = nil, nil
+        if fx and Dist2(cx, cy, fx, fy) >= FRONT_MIN then inX, inY = cx - fx, cy - fy end
+
+        -- each officer's front: his own line to the middle of the scene (whichever road he came in on); one standing
+        -- in the middle has none and faces the way in
+        local officers = OfficerSpots(run)
+        for _, o in ipairs(officers) do
+            if Dist2(o.x, o.y, cx, cy) >= FRONT_MIN then
+                o.frontX, o.frontY = cx - o.x, cy - o.y
+            else
+                o.frontX, o.frontY = inX, inY
+            end
+        end
+        local passed = {}
+        for _, p in ipairs(pts) do
+            local base = p.indoor and minIn or minOut
+            local need = relaxed and math.min(base, hardMin) or base
+            local nearest, nearestD, behindOf = nil, math.huge, nil
+            for _, o in ipairs(officers) do
+                local dd = Dist2(p.x, p.y, o.x, o.y)
+                if dd < nearestD then nearest, nearestD = o, dd end
+                if o.frontX and not behindOf and dd <= nearRange then
+                    local a = AngleOff(p.x - o.x, p.y - o.y, o.frontX, o.frontY)
+                    if a and a > behindAngle then behindOf = o end
+                end
+            end
+            p.nearest, p.base = nearestD, base
+            if nearest and nearestD < need then
+                SaySkipped(run, m, opts, name, p.i, 'near', '%.0f m from %s', nearestD, nearest.name)
+            elseif behindOf then
+                SaySkipped(run, m, opts, name, p.i, 'behind', 'behind %s', behindOf.name)
+            else
+                passed[#passed + 1] = p
+            end
+        end
+
+        -- one sector seen from the officers near the area (all of them when none is): a wave never comes as a ring
+        if spread < 360 and #passed > 0 and #officers > 0 then
+            local ax, ay, k = 0.0, 0.0, 0
+            for _, o in ipairs(officers) do
+                if Dist2(o.x, o.y, cx, cy) <= nearRange then ax, ay, k = ax + o.x, ay + o.y, k + 1 end
+            end
+            if k == 0 then
+                for _, o in ipairs(officers) do ax, ay, k = ax + o.x, ay + o.y, k + 1 end
+            end
+            ax, ay = ax / k, ay / k
+            local placed, starts = {}, {}
+            for _, v in ipairs(type(opts.placed) == 'table' and opts.placed or {}) do
+                local x, y = PointXyz(v)
+                local b = x and BearingOf(ax, ay, x, y)
+                if b then placed[#placed + 1] = b end
+            end
+            for _, p in ipairs(passed) do
+                p.bearing = BearingOf(ax, ay, p.x, p.y)
+                if p.bearing then starts[#starts + 1] = p.bearing end
+            end
+            for _, b in ipairs(placed) do starts[#starts + 1] = b end
+            -- the sector that keeps every placed point, then the most points (up to n), then the block's best one
+            local best = nil
+            for _, from in ipairs(starts) do
+                local take, top, placedIn = 0, math.huge, 0
+                for r, p in ipairs(passed) do
+                    if InSector(p.bearing, from, spread) then
+                        take = take + 1
+                        if r < top then top = r end
+                    end
+                end
+                for _, b in ipairs(placed) do if InSector(b, from, spread) then placedIn = placedIn + 1 end end
+                take = math.min(take, n)
+                if not best or placedIn > best.placedIn or (placedIn == best.placedIn and take > best.take)
+                    or (placedIn == best.placedIn and take == best.take and top < best.top) then
+                    best = { from = from, placedIn = placedIn, take = take, top = top }
+                end
+            end
+            if best then
+                local kept, outside = {}, {}
+                for _, p in ipairs(passed) do
+                    if InSector(p.bearing, best.from, spread) then
+                        kept[#kept + 1] = p
+                    else
+                        outside[#outside + 1] = p
+                    end
+                end
+                -- a point outside the sector is only worth a line when the wave is short of points for it
+                if #kept < n then
+                    for _, p in ipairs(outside) do
+                        SaySkipped(run, m, opts, name, p.i, 'spread', 'outside this wave\'s %.0f degree sector', spread)
+                    end
+                end
+                passed = kept
+            end
+        end
+
+        for r = 1, math.min(n, #passed) do chosen[r], picked[r] = passed[r].v, passed[r].i end
+
+        -- the wave waited waveDelayMax and closer points were used: one warning per wave
+        if relaxed and cfg.log ~= false then
+            local closer, closest, base = 0, math.huge, minOut
+            for r = 1, #chosen do
+                local p = passed[r]
+                if p.nearest < p.base then
+                    closer = closer + 1
+                    if p.nearest < closest then closest, base = p.nearest, p.base end
+                end
+            end
+            local key = ('relaxed|%s|%s'):format(tostring(opts.wave), name)
+            if closer > 0 and not m.said[key] then
+                m.said[key] = true
+                CP.warn(TAG,
+                    'run %s (%s): %s waited %.0f s for points %.0f m from the officers; used %d closer one(s), the nearest %.0f m away (never under Config.Spawning.hardMin %.0f m)',
+                    run.id, tostring(run.missionId), name, waited, base, closer, closest, hardMin)
+            end
+        end
+        if opts.wave ~= nil and #chosen >= n then m.clocks[opts.wave] = nil end
+        return chosen, picked
+    end
+
+    -- true when an active participant is within range (default Config.Spawning.activateRange) of point, on the
+    -- map; the second value is the nearest participant's distance (nil when none has a ped). Always true with
+    -- Config.Spawning.enabled = false (people appear as before) and for a point that is none (nothing to wait for).
+    function Runs.whenNear(run, point, range)
+        local cfg = SpawnCfg()
+        if cfg.enabled == false then return true end
+        if type(run) ~= 'table' then return false end
+        local x, y = PointXyz(point)
+        if not x then return true end
+        range = Num(range, Num(cfg.activateRange, 150.0))
+        local best = nil
+        for _, o in ipairs(OfficerSpots(run)) do
+            local dd = Dist2(x, y, o.x, o.y)
+            if not best or dd < best then best = dd end
+        end
+        return best ~= nil and best <= range, best
+    end
 end
 
 -- ============================================================================
@@ -3462,6 +3756,8 @@ function Runs.testRestart(run)
     local o = run.objectives[i]
     if not o or o.status ~= 'active' then return false end
     local impl = BlockOf(run, i)
+    -- the spawn director's wave clocks of this objective start again too
+    if run.spawning then run.spawning[i] = nil end
     if impl and type(impl.restart) == 'function' then
         CallBlock(run, i, 'restart')
     else

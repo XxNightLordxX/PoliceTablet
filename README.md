@@ -686,6 +686,7 @@ Everything else works as shipped. These are the ones owners change most:
 | `Config.DisabledLocations` | Single locations to turn off, by mission: `{ prison_break = { 'North gate' } }`. Also switched in Admin UI → **Missions** |
 | `Config.MissionTweaks` | Change a built-in mission's cooldown or time limits, switch off some of its locations, or change its NPC models, cars or weapons, without editing its file |
 | `Config.Limits` | `maxCompletionsHour = 8` and `maxCompletionsDay = 0` (0 = no cap) finished missions per officer; `maxConcurrentRuns = 12` and `maxConcurrentTactical = 4` missions at once, server-wide |
+| `Config.Spawning` | Where a mission's people may appear (the spawn director): never closer than `minDistance` (40 m) to any officer, `minDistanceIndoor` (15 m) inside a building; never behind your officers (more than `behindAngle`, 110 degrees, off an officer's line to the scene, whichever side he came in from, counted for officers within `activateRange`); one wave always from one side (a `maxSpread` slice of 150 degrees, so never all around them); and an objective's people only once an officer is within `activateRange` (150 m). A wave that finds too few such points waits up to `waveDelayMax` (20 s), then may use points down to `hardMin` (20 m) away, never closer. `log` prints a console line for each point it skips (with `Config.Debug`) and a warning when a wave had to come closer. `enabled = false` turns it off. So far no mission asks it: you see no change in game yet |
 | `Config.NpcDifficulty.preset` | `'easy'`, `'normal'`, `'hard'` or `'custom'`. Changes how NPCs fight, never the pay |
 | `Config.NpcCombat` | How hard armed NPCs fight back: no automatic weapons, an accuracy cap, single shots, half damage, no headshot one-shots. See [5.9](#59-how-hard-npcs-fight-back) |
 | `Config.Flee` | How long a suspect who runs from your officers keeps running: the server times every runner on foot (time in a car does not count), who sprints for `sprintSeconds` (10), jogs for `jogSeconds` (12), walks for `walkSeconds` (8) and is then worn out. Each suspect lasts up to `jitter` (25 %) longer or shorter, `Config.NpcDifficulty`'s `fleeMult` stretches it (`'hard'`: 20 % longer), a runner no officer comes within `recoverRange` (60 m) of for `recoverSeconds` (20 s) sprints again, and `armedTire = false` keeps armed suspects fresh. A tired runner visibly slows down: at most a jog, then a walk, at `jogRate` (0.95) / `walkRate` (0.85) of the normal speed, and with `windedClipset` he jogs, then walks winded. Once worn out he gives up as soon as an officer is within `giveUpRange` (30 m): `exhausted = 'surrender'` he kneels, `'handsUp'` he stands with his hands up (Cuff suspect either way), `'walk'` he walks on and never gives up on his own. `enabled = false` turns it off |
@@ -2089,6 +2090,12 @@ however it ends.
   Prison Break and the raids' runners, pursuit suspects who run from a stopped car, Manhunt fugitives and field
   contacts who run; armed runners too (before they could turn to fight) unless `armedTire = false`. The escape rules
   are unchanged.
+- Spawn director, at the owner's request of 2026-10-19 ("make sure they dont spawn around the player make it be
+  progressive", "i do not want them spawning in the ground or surronding the officers"): `Config.Spawning`. The
+  server picks a mission's spawn points away from every officer (40 m, 15 m inside a building), never behind them,
+  one wave from one side only (no ring, no pincer), and lets an objective's people appear only once an officer is
+  within 150 m; a wave short of such points waits 20 s and may then come to 20 m, never closer. So far no mission
+  uses it.
 
 **Waiting for the owner's OK** (already in `docs/SPEC.md` and the code; each one is undone without a code change):
 

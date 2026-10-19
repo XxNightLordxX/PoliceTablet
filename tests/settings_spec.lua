@@ -315,6 +315,75 @@ do
     Err('Flee.giveUpRange', 101, 'err.setting_range', 'and at most 100 m')
     H.ok(not E('Flee.exhausted').reload and not E('Flee.exhausted').restart, 'the give-up rule is read live')
     H.ok(not E('Flee.giveUpRange').reload and not E('Flee.giveUpRange').restart, 'and so is its range')
+    -- Config.Spawning (the spawn director, S1): its own section after the run limits, each comment alone, the ranges
+    H.eq(E('Spawning.enabled').section, 'spawning', 'Spawning has its own section')
+    local spawnTitle, spawnGroup = nil, nil
+    for _, sec in ipairs(S._schema().sections) do
+        if sec.key == 'spawning' then spawnTitle = sec.title end
+        for _, g in ipairs(sec.groups) do if g.path == 'Spawning' then spawnGroup = g end end
+    end
+    H.eq(spawnTitle, 'Spawning (where mission people appear)', 'the section title from its banner')
+    H.ok(
+        ((spawnGroup or {}).desc or ''):find('never pop up next to, behind or all around your officers', 1, true) ~= nil,
+        'the comment under the banner describes the group')
+    H.ok(E('Limits.reserveLocations').section ~= 'spawning', 'the run limits stay in their own section')
+    H.eq(E('Spawning.enabled').desc, 'false = people appear at the mission\'s points as before (no rule below is used)',
+        'the switch')
+    H.eq(
+        E('Spawning.activateRange').desc,
+        'Metres: an objective\'s people appear once an officer is this close to them (50-400, well inside the 424 m a'
+            .. ' player\'s game can see)',
+        'the activate range'
+    )
+    H.eq(E('Spawning.minDistance').desc, 'metres: a point closer than this to any officer is never used',
+        'the distance, without the activate range comment above it')
+    H.eq(E('Spawning.minDistanceIndoor').desc,
+        'Metres: a point inside a building (walls hide it) closer than this to any officer is never used',
+        'the indoor distance reads alone')
+    H.eq(
+        E('Spawning.behindAngle').desc,
+        'Degrees: a point further than this off an officer\'s line to the scene (from where he stands towards the'
+            .. ' mission\'s points, whichever side he came in from) is behind him and never used. Only officers within'
+            .. ' activateRange of the point count (180 = off)',
+        'behind'
+    )
+    H.eq(
+        E('Spawning.maxSpread').desc,
+        'Degrees: all points of one wave fit in a slice this wide seen from the officers, so a wave never comes from'
+            .. ' every side at once (360 = off)',
+        'the slice'
+    )
+    H.eq(E('Spawning.waveDelayMax').desc,
+        'seconds a wave waits for points minDistance away before closer ones are allowed', 'the wait')
+    H.eq(E('Spawning.hardMin').desc,
+        'Metres: once a wave has waited waveDelayMax, a point this close to an officer may be used, never a closer one',
+        'the closest after the wait, without the wait comment')
+    H.eq(
+        E('Spawning.log').desc,
+        'true = a console line for each point skipped (shown while Config.Debug is on) and a warning when a wave had'
+            .. ' to use closer points',
+        'the console lines'
+    )
+    ok, v = Check('Spawning.activateRange', 400)
+    H.ok(ok and v == 400.0, 'activateRange up to 400 m')
+    Err('Spawning.activateRange', 425, 'err.setting_range', 'never past what a player\'s game can see (424 m)')
+    Err('Spawning.activateRange', 40, 'err.setting_range', 'at least 50 m')
+    H.ok((Check('Spawning.minDistance', 0)), 'a distance of 0 m (off)')
+    Err('Spawning.minDistance', 201, 'err.setting_range', 'at most 200 m')
+    Err('Spawning.minDistanceIndoor', -1, 'err.setting_range', 'never below 0')
+    Err('Spawning.hardMin', 250, 'err.setting_range', 'hardMin at most 200 m')
+    H.ok((Check('Spawning.behindAngle', 180)), 'behindAngle 180 (off)')
+    Err('Spawning.behindAngle', 30, 'err.setting_range', 'behind is at least 45 degrees off the line to the scene')
+    Err('Spawning.behindAngle', 190, 'err.setting_range', 'and at most 180')
+    H.ok((Check('Spawning.maxSpread', 360)), 'maxSpread 360 (off)')
+    Err('Spawning.maxSpread', 361, 'err.setting_range', 'a slice of at most 360 degrees')
+    Err('Spawning.maxSpread', 20, 'err.setting_range', 'and at least 45')
+    H.ok((Check('Spawning.waveDelayMax', 0)), 'a wave that never waits')
+    Err('Spawning.waveDelayMax', 301, 'err.setting_range', 'a wait of at most 300 s')
+    Err('Spawning.log', 'yes', 'err.setting_type', 'the console lines are on or off')
+    for _, k in ipairs({ 'enabled', 'activateRange', 'minDistance', 'behindAngle', 'maxSpread', 'hardMin', 'log' }) do
+        H.ok(not E('Spawning.' .. k).reload and not E('Spawning.' .. k).restart, 'read live: Spawning.' .. k)
+    end
     Err('Debug', 'yes', 'err.setting_type', 'text for on/off')
     Err('AdminTheme.primary', '#zzzzzz', 'err.setting_colour', 'a colour must be #rrggbb')
     H.ok((Check('AdminTheme.primary', '#112233')), 'a valid colour')

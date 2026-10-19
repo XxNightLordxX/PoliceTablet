@@ -227,6 +227,14 @@ local RANGES = {
     ['Flee.jogRate'] = { 0.5, 1 },
     ['Flee.walkRate'] = { 0.5, 1 },
     ['Flee.giveUpRange'] = { 5, 100 },
+    -- where mission people may appear (Config.Spawning): activateRange stays under the 424 m a player's game can see
+    ['Spawning.activateRange'] = { 50, 400 },
+    ['Spawning.minDistance'] = { 0, 200 },
+    ['Spawning.minDistanceIndoor'] = { 0, 200 },
+    ['Spawning.hardMin'] = { 0, 200 },
+    ['Spawning.behindAngle'] = { 45, 180 },
+    ['Spawning.maxSpread'] = { 45, 360 },
+    ['Spawning.waveDelayMax'] = { 0, 300 },
 }
 
 -- Numbers that may go either way whatever config.lua has.

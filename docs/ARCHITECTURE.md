@@ -358,6 +358,8 @@ run = {
   holdBodies = nil | { roles, max }, held = { netId, ... },  -- bodies kept for Process the scene (FIFO past max)
   fastClockAt = nil | ms,         -- CP.Runs.pauseFastClock: the fast-completion clock stopped
   failReason = nil | 'reason.*',  -- why the case failed (a decision, a removed vehicle ...)
+  spawning = nil | { [objectiveIndex] = { clocks = { [wave] = os.time() of its first ask }, said = { [line] = true } } },
+                                  -- the spawn director's memory (CP.Runs.choosePoints): wave clocks, console lines said
   -- run.shared gains contacts (pursuit → field_contact hand-off), intel (hostile_waves) and evidence (finds);
   -- run.entities[netId] gains hidden, armedTruth (server only: a contact's hidden gun, counted by the caps)
 }
@@ -826,6 +828,31 @@ Full admin control (P3, §5.39):
 - `spawnPed(run, opts) -> entity, netId` · `opts = { obj = i, model, coords = vec4, role, armed = false, weapon, accuracy, armour, health, cfg = {}, tag }`
 - `spawnVehicle(run, opts) -> entity, netId` · `opts = { obj, model, coords = vec4, role, tag, plate }`
 - `spawnObject(run, opts) -> entity, netId` · `opts = { obj, model, coords = vec3|vec4, role, tag, frozen = true }`
+- Spawn director (Config.Spawning, owner request of 2026-10-19: "make sure they dont spawn around the player make it
+  be progressive"; blocks call it through `ctx.choosePoints` / `ctx.whenNear`, which fill in `opts.obj`). Every
+  distance is 2D, every participant is an active one (`activeSrcs`) at its server-side ped coords.
+  - `choosePoints(run, candidates, n, opts) -> points, indexes` — at most `n` (nil = every one that passes) of the
+    block's `candidates` (best first: vec3/vec4, `{ x, y, z }`, `{ [1], [2], [3] }` or `{ coords, indoor = true }`),
+    returned as the candidates' own values in list order, with their indexes in `candidates`. Skipped: a point closer
+    than `minDistance` to any participant (`minDistanceIndoor` with `opts.indoor` or a point's own `indoor = true`); a
+    point "behind" a participant within `activateRange` of it, i.e. more than `behindAngle` degrees between participant
+    → point and the participant's own line to the scene, participant → `opts.centre` (default the middle of the
+    candidates), whichever side he came in from: a point between an officer and the scene is never behind him, a point
+    at his back always is (a participant within 5 m of the centre has no line of his own and faces the way in,
+    `opts.from`, default `location.start.coords`, → the centre; none when those two are under 5 m apart); and a point
+    outside the wave's sector: the points left must fit in one `maxSpread`-degree sector seen from the participants
+    within `activateRange` of the centre (all of them when none is), the one that holds every point of `opts.placed`
+    (what this wave already used), then the most points up to `n`, then the block's earliest point. Too few good points:
+    fewer come back, never a bad one. `opts.wave` names the wave: its clock (in `run.spawning[obj]`) starts at the first
+    ask (`opts.since`, an `os.time()`, sets it instead) and is dropped once a call returns all `n`; after `waveDelayMax`
+    seconds the distance becomes `min(that distance, hardMin)`, never lower. `opts.name` names the list for the console.
+    Console (with `Config.Spawning.log`): one `CP.log` line per skipped point, reason and wave (`run <id>: spawns[7]
+    skipped: 30 m from <name>` / `behind <name>` / `outside this wave's 150 degree sector`, the last only when the wave
+    is short of points for it) and one `CP.warn` per wave that used closer points after the wait.
+    `Config.Spawning.enabled = false`: the first `n` candidates as they are. `testRestart` clears the objective's
+    clocks.
+  - `whenNear(run, point, range) -> boolean, nearestMetres|nil` — true when a participant is within `range` (default
+    `activateRange`) of `point`; always true while `Config.Spawning.enabled = false` and for a point that is none.
 - `deleteEntity(run, netId)`, `entitiesFor(run, filter) -> list`, `canSpawn(run, n, armed) -> boolean` (caps `Config.Limits.maxArmedAlive` / `maxEntities`, counted now; callers wait and retry, never cut counts)
 - `send(run, eventName, ...)` → `TriggerClientEvent` to every active participant
 - `objectiveEvent(run, index, data)` → `crimson-police:client:objective` (runId, index, data)
@@ -2034,6 +2061,8 @@ ctx = {
   coords = function(src) return vec3 end,              -- server-side ped coords
   combat = function(acc, armour) return acc, armour end, -- CP.Scaling.combat with this run
   isHost = function(src) end, host = function() return run.host end,
+  choosePoints = function(candidates, n, opts) end,  -- the spawn director (§5.10): -> points, indexes; opts.obj = i
+  whenNear = function(point, range) end,               -- -> true once a participant is within range (activateRange)
 }
 ```
 

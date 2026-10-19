@@ -203,6 +203,7 @@ local CONFIG_SECTIONS = {
     'Scaling',
     'Rescale',
     'Limits',
+    'Spawning',
     'Route',
     'Calls',
     'Alerts',

@@ -303,6 +303,35 @@ Config.Limits = {
 }
 
 -- ============================================================================
+--                    SPAWNING (where mission people appear)
+-- ============================================================================
+-- Where a mission's people may appear, so they never pop up next to, behind or all around your officers. A mission
+-- asks for its spawn points here: a point that breaks a rule below is skipped, and a mission that gets too few points
+-- waits for more. Distances are measured on the map (height does not count).
+Config.Spawning = {
+    enabled = true,                  -- false = people appear at the mission's points as before (no rule below is used)
+    -- Metres: an objective's people appear once an officer is this close to them (50-400, well inside the 424 m a
+    -- player's game can see)
+    activateRange = 150.0,
+    minDistance = 40.0,              -- metres: a point closer than this to any officer is never used
+    -- Metres: a point inside a building (walls hide it) closer than this to any officer is never used
+    minDistanceIndoor = 15.0,
+    -- Degrees: a point further than this off an officer's line to the scene (from where he stands towards the
+    -- mission's points, whichever side he came in from) is behind him and never used. Only officers within
+    -- activateRange of the point count (180 = off)
+    behindAngle = 110.0,
+    -- Degrees: all points of one wave fit in a slice this wide seen from the officers, so a wave never comes from every
+    -- side at once (360 = off)
+    maxSpread = 150.0,
+    waveDelayMax = 20,               -- seconds a wave waits for points minDistance away before closer ones are allowed
+    -- Metres: once a wave has waited waveDelayMax, a point this close to an officer may be used, never a closer one
+    hardMin = 20.0,
+    -- true = a console line for each point skipped (shown while Config.Debug is on) and a warning when a wave had to
+    -- use closer points
+    log = true,
+}
+
+-- ============================================================================
 --                              ROUTE TO THE START
 -- ============================================================================
 
