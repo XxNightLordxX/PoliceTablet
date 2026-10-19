@@ -869,6 +869,10 @@ do
             end
         end
     end)
+    -- Measured height (S20): Sandy Shores clue 7 sits 0.5 m above the road shoulder (it was 0.48 m under it)
+    local clue = defs.manhunt and defs.manhunt.locations[1].clues[7]
+    H.ok(clue and math.abs(clue.z - 32.68) < 0.005,
+        ('manhunt: Sandy Shores clue 7 z is 32.68, got %s'):format(clue and ('%.2f'):format(clue.z) or 'nothing'))
 end
 
 -- Gang Shootout (the spec's Example file)

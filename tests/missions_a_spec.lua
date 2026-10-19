@@ -596,6 +596,21 @@ do
                 end
             end
         end
+        -- Measured heights (S20): a racer car sits 0.5 m above the road (GTA vehicle-node heights). These
+        -- slots were 1.0-2.1 m under the road at La Mesa and 0.1-0.4 m under it at Downtown Vinewood
+        local GRID_Z = {
+            [2] = { 48.71, 49.73, 50.66, 51.28, 51.71, 51.83 },
+            [4] = { 102.67, 102.68, 102.43, 101.87, 101.07, 100.17, 99.20, 98.09 },
+        }
+        for i, want in pairs(GRID_Z) do
+            local loc = def.locations[i]
+            for j, z in ipairs(want) do
+                local s = loc and loc.spawns[j]
+                H.ok(s and math.abs(s.z - z) < 0.005,
+                    ('street_race_bust: location %d slot %d z is %.2f (road + 0.5), got %s'):format(i, j, z,
+                        s and ('%.2f'):format(s.z) or 'nothing'))
+            end
+        end
     end
 end
 

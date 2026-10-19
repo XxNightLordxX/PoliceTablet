@@ -94,12 +94,13 @@ RegisterMission({
       label  = 'La Mesa loop',
       start  = { coords = vec3(1248.75, -1312.25, 35.28), radius = 60.0 },  -- intercept: waypoint 19 of the loop
       spawns = {                              -- racer grid 246-306 m from the intercept (250-313 m up the loop), 9 m apart
-        vec4(1300.14, -1552.38, 46.16, 26.37),
-        vec4(1304.11, -1560.39, 47.16, 26.37),
-        vec4(1308.08, -1568.41, 48.16, 26.37),
-        vec4(1312.05, -1576.42, 49.16, 26.37),
-        vec4(1316.03, -1584.43, 50.16, 26.37),
-        vec4(1320.00, -1592.45, 51.16, 26.37),
+        -- z = the road height + 0.5 m (GTA vehicle-node heights), so the car settles onto the road
+        vec4(1300.14, -1552.38, 48.71, 26.37),
+        vec4(1304.11, -1560.39, 49.73, 26.37),
+        vec4(1308.08, -1568.41, 50.66, 26.37),
+        vec4(1312.05, -1576.42, 51.28, 26.37),
+        vec4(1316.03, -1584.43, 51.71, 26.37),
+        vec4(1320.00, -1592.45, 51.83, 26.37),
         vec4(1324.37, -1600.23, 51.92, 38.42),
         vec4(1329.96, -1607.28, 51.96, 38.42),
       },
@@ -211,14 +212,15 @@ RegisterMission({
       label  = 'Downtown Vinewood loop',
       start  = { coords = vec3(435.00, 291.00, 103.06), radius = 60.0 },  -- intercept: waypoint 26 of the loop
       spawns = {                              -- racer grid 154-217 m from the intercept (154-217 m up the loop), 9 m apart
-        vec4(580.35, 240.16, 101.96, 71.67),
-        vec4(588.89, 237.33, 101.85, 71.67),
-        vec4(597.43, 234.50, 101.74, 71.67),
-        vec4(605.98, 231.67, 101.63, 71.67),
-        vec4(614.50, 228.90, 100.96, 72.30),
-        vec4(623.01, 226.19, 99.88, 72.30),
-        vec4(631.53, 223.47, 98.80, 72.30),
-        vec4(640.04, 220.75, 97.72, 72.30),
+        -- z = the road height + 0.5 m (GTA vehicle-node heights), so the car settles onto the road
+        vec4(580.35, 240.16, 102.67, 71.67),
+        vec4(588.89, 237.33, 102.68, 71.67),
+        vec4(597.43, 234.50, 102.43, 71.67),
+        vec4(605.98, 231.67, 101.87, 71.67),
+        vec4(614.50, 228.90, 101.07, 72.30),
+        vec4(623.01, 226.19, 100.17, 72.30),
+        vec4(631.53, 223.47, 99.20, 72.30),
+        vec4(640.04, 220.75, 98.09, 72.30),
       },
       -- 47 road waypoints, 2712 m loop: Power St > Vinewood Blvd > Elgin Ave > Clinton Ave > Las Lagunas Blvd > Occupation Ave > Capital Blvd > Occupation Ave > Power St
       route  = {
