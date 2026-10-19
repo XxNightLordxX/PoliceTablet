@@ -231,6 +231,27 @@ local function RequiredPoints(obj)
     return {}
 end
 
+-- What appears at each location key this objective uses, for the spawn point check (Admin UI -> Testing,
+-- modules/testing; ARCHITECTURE 7.1 pointKinds): the parked or scene cars and the prisoner van's
+-- stand-by spot are vehicles, the scene's people are people, the flee route is a path.
+local function PointKinds(obj)
+    local o = Defaults(U.deepcopy(obj))
+    local out = {}
+    local car = type(o.vehicles) == 'table' and type(o.vehicles[1]) == 'string' and o.vehicles[1] or nil
+    local function add(k, kind, model)
+        if type(k) == 'string' then out[#out + 1] = { key = k, kind = kind, model = model } end
+    end
+    if o.mode == 'parked' then
+        add(o.spots, 'vehicle', car)
+    elseif o.mode == 'scene' then
+        add(o.car, 'vehicle', car)
+        add(o.peopleSpots, 'ped')
+    end
+    add(o.fleeTo, 'path')
+    add(o.transport, 'vehicle')
+    return out
+end
+
 local function CheckLocation(o, loc, li, strict)
     local c = Cfg()
     local start = loc.start and loc.start.coords
@@ -1213,6 +1234,7 @@ CP.Blocks.register(BLOCK, {
     validate = Validate,
     armedCount = ArmedCount,
     requiredPoints = RequiredPoints,
+    pointKinds = PointKinds,
     prepare = function(ctx) StateOf(ctx) end,
     start = Start,
     tick = Tick,

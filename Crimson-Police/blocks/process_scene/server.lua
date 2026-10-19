@@ -429,6 +429,14 @@ CP.Blocks.register(BLOCK, {
         local o = Defaults(U.deepcopy(obj))
         return { o.scene }
     end,
+    -- the scene is a marker, the coroner van's stand-by spot a vehicle (spawn point check, ARCHITECTURE 7.1 pointKinds)
+    pointKinds = function(obj)
+        local o = Defaults(U.deepcopy(obj))
+        local out = {}
+        if type(o.scene) == 'string' then out[#out + 1] = { key = o.scene, kind = 'marker' } end
+        if type(o.coroner) == 'string' then out[#out + 1] = { key = o.coroner, kind = 'vehicle' } end
+        return out
+    end,
     prepare = Prepare,
     start = Start,
     tick = Tick,

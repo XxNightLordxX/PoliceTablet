@@ -281,7 +281,8 @@ end
 
 -- Checks the point (x, y, z, heading h) for a 'ped', a 'vehicle' (model: its name or hash, for its size) or a 'prop'
 -- (anything else). Loads the ground there first (the collision of opts.entity, default this player's ped, within
--- Config.Spawning.collisionTimeoutMs) and the inside of a building (interiorTimeoutMs). Needs a thread. Returns
+-- Config.Spawning.collisionTimeoutMs) and the inside of a building (interiorTimeoutMs). opts.wall = false skips the
+-- wall probe (a marker an officer walks to: a door may stand in the space). Needs a thread. Returns
 -- { status, groundZ, dz, z, ... }: see docs/ARCHITECTURE.md 5.43.
 function Spawn.probe(kind, x, y, z, h, model, opts)
     kind = KINDS[kind] or 'prop'
@@ -360,7 +361,7 @@ function Spawn.probe(kind, x, y, z, h, model, opts)
         end
     end
     if status ~= 'ok' and status ~= 'snap' then return done(status) end
-    if kind ~= 'prop' then
+    if kind ~= 'prop' and opts.wall ~= false then
         res.wall = InWall(kind, x, y, gz, h, shape, ignore)
         if res.wall == true then status = 'in_wall' end
     end

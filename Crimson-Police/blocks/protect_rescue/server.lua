@@ -220,6 +220,17 @@ local function RequiredPoints(obj)
     return out
 end
 
+-- What appears at each location key this objective uses, for the spawn point check (Admin UI -> Testing,
+-- modules/testing; ARCHITECTURE 7.1 pointKinds): the hostages are people, the safe spot is a
+-- marker.
+local function PointKinds(obj)
+    local o = Defaults(U.deepcopy(obj))
+    local out = {}
+    if type(o.npcs) == 'string' then out[#out + 1] = { key = o.npcs, kind = 'ped' } end
+    if type(o.safe) == 'string' then out[#out + 1] = { key = o.safe, kind = 'marker' } end
+    return out
+end
+
 -- ============================================================================
 --                                  RUN STATE
 -- ============================================================================
@@ -652,6 +663,7 @@ CP.Blocks.register(BLOCK, {
     validate = Validate,
     armedCount = function() return 0 end,
     requiredPoints = RequiredPoints,
+    pointKinds = PointKinds,
     prepare = Prepare,
     start = Start,
     tick = Tick,

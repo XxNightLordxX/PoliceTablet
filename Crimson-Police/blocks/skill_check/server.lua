@@ -507,6 +507,14 @@ CP.Blocks.register(BLOCK, {
         return {}
     end,
 
+    -- the location's targets are markers (spawn point check, ARCHITECTURE 7.1 pointKinds)
+    pointKinds = function(obj)
+        if type(obj.targets) == 'string' and obj.targets ~= SHARED then
+            return { { key = obj.targets, kind = 'marker' } }
+        end
+        return {}
+    end,
+
     -- Location targets are known now; shared devices only exist once the search objective found them.
     prepare = function(ctx)
         Ensure(ctx)

@@ -153,6 +153,16 @@ Seats: `Config.Testing.maxTesters - 1` (pending + accepted) besides the admin.
   `client:testInvite { inviteId, missionLabel, from, expiresIn }`.
 - NUI push `test` from the Lua client: `TestPush { controls, focused, key, debugOn, runId, debug?, prompt? }`;
   server pushes `test { state = true }` and `invites { test = true }` (screen refetch triggers).
+- Check spawn points (PLAN S7; ARCHITECTURE 5.27): `server:test:spawnPoints {}` → `{ missions: { id, label, source,
+  locations: { index, label }[] }[] }`; `{ missionId }` → the same with that one; `{ missionId, location }` →
+  `SpawnCheckLocation { missionId, missionLabel, location, locationLabel, start: { x, y, z, r }, points:
+  SpawnCheckPoint[] }`, `SpawnCheckPoint { id, key, i, kind: ped|vehicle|prop|marker|path, as: ped|vehicle|prop,
+  wall, model?, obj|false, block|false, x, y, z, h?, above: [lo, hi], dStart?, dPrevious?, near?: ('start' |
+  'previous')[] }`; `server:test:spawnCheckReport` → `{ missionId, location, checked, bad }`. NUI push
+  `spawnCheck { state: started|location|point|done|stopped|failed, progress?: { mission, missions, location,
+  locations, point, points }, missionId?, missionLabel?, location?, locationLabel?, points?, result?:
+  SpawnCheckPoint & { status, groundZ?, dz?, roofZ?, interior?, seen? }, totals?: { points, bad, locations },
+  error? }`.
 - Lua `false` stands for "no value" in every shape (a Lua table cannot hold nil); lists may arrive as `{}`.
 
 ## Requests to other modules

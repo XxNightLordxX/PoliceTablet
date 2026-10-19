@@ -399,6 +399,28 @@ do
 end
 
 -- ============================================================================
+--                           NO WALL PROBE ON REQUEST
+-- ============================================================================
+-- The spawn point check's markers.
+
+do
+    -- a door marker: an officer stands there, the door itself would hit a person's capsule
+    Map(30.0)
+    W.wall = function() return true end
+    local res = Probe('ped', 0.0, 0.0, 31.0, 0.0, nil, { wall = false })
+    H.eq(res.status, 'ok', 'opts.wall = false: a person\'s point by a door is judged by the ground only')
+    H.eq(#W.capsules, 0, 'no wall probe')
+    H.eq(res.wall, nil, 'wall not known')
+    Map(30.0)
+    W.wall = function() return true end
+    res = Probe('ped', 0.0, 0.0, 31.0, 0.0, nil, { wall = true })
+    H.eq(res.status, 'in_wall', 'opts.wall = true (or left out): the wall probe runs')
+    Map(35.0)
+    res = Probe('ped', 0.0, 0.0, 31.0, 0.0, nil, { wall = false })
+    H.eq(res.status, 'underground', 'opts.wall = false still judges the ground')
+end
+
+-- ============================================================================
 --                                  BAD INPUT
 -- ============================================================================
 

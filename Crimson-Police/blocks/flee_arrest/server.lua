@@ -377,6 +377,25 @@ local function RequiredPoints(obj)
     return out
 end
 
+-- What appears at each location key this objective uses, for the spawn point check (Admin UI -> Testing,
+-- modules/testing; ARCHITECTURE 7.1 pointKinds): the suspect, his associates and the runners are
+-- people, the door is where the officers knock, the flee and escape routes are paths.
+local function PointKinds(obj)
+    local o = Defaults(U.deepcopy(obj))
+    local out = {}
+    local function add(k, kind) if type(k) == 'string' then out[#out + 1] = { key = k, kind = kind } end end
+    if o.mode == 'scatter' then
+        add(o.spawns, 'ped')
+        add(o.routes, 'path')
+    else
+        add(o.door, 'marker')
+        add(o.suspect, 'ped')
+        add(o.fleeTo, 'path')
+        add(type(o.associates) == 'table' and o.associates.spawns or nil, 'ped')
+    end
+    return out
+end
+
 local function CheckLocation(o, loc, li, strict)
     local start = loc.start and loc.start.coords
     local function spawnOk(list)
@@ -1433,6 +1452,7 @@ CP.Blocks.register(BLOCK, {
     validate = Validate,
     armedCount = ArmedCount,
     requiredPoints = RequiredPoints,
+    pointKinds = PointKinds,
     prepare = function(ctx) StateOf(ctx) end,
     start = Start,
     tick = Tick,

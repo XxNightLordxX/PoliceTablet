@@ -399,6 +399,279 @@ local function ToggleDebug(enabled)
 end
 
 -- ============================================================================
+--               CHECK SPAWN POINTS (PLAN S7; ARCHITECTURE §5.27)
+-- ============================================================================
+-- Admin UI -> Testing (Config.Testing.spawnCheck): this admin's own game visits every point of the missions asked for
+-- and judges each one with CP.Spawn.probe. Per location: the screen fades, he is frozen, unseen and unhurt at its
+-- start, the map loads around him (NewLoadSceneStartSphere), his game notes which points it sees from there, then
+-- each point is probed (he is moved over a point further than moveWithin). Progress and every result go to the NUI
+-- (push topic spawnCheck), each location's results to the server (server:test:spawnCheckReport). At the end, or on
+-- Stop (after the point being checked), he is back where he was. It spawns nothing; only his own ped moves.
+
+local SPAWN_TOPIC = 'spawnCheck'
+local SCENE_RADIUS = 200.0 -- metres of map loaded around him (and the most a point may be from him for the sight check)
+local SIGHT_BATCH = 32     -- points per CP.Spawn.visible ask
+local FADE_MS = 300
+local FADE_WAIT_MS = 1500
+local SPAWN_SEEN = { ped = true, vehicle = true, prop = true } -- the sight note is for where something appears
+
+local check = { running = false, stop = false, saved = nil, arena = false }
+
+local function CheckCfg()
+    local c = (Config.Testing or {}).spawnCheck
+    return type(c) == 'table' and c or {}
+end
+
+local function IsYes(v) return v == true or v == 1 end
+
+local function PushCheck(state, extra)
+    local data = { state = state }
+    if type(extra) == 'table' then
+        for k, v in pairs(extra) do data[k] = v end
+    end
+    if CP.Tablet and CP.Tablet.push then CP.Tablet.push(SPAWN_TOPIC, data) end
+end
+
+local function FadeOut()
+    DoScreenFadeOut(FADE_MS)
+    local deadline = GetGameTimer() + FADE_WAIT_MS
+    while not IsYes(IsScreenFadedOut()) and GetGameTimer() < deadline do Wait(0) end
+end
+
+-- Loads the map around x, y, z (at most sceneTimeoutMs): true when it loaded.
+local function LoadScene(x, y, z)
+    local timeout = math.max(1000, math.min(30000, tonumber(CheckCfg().sceneTimeoutMs) or 8000))
+    NewLoadSceneStartSphere(x + 0.0, y + 0.0, z + 0.0, SCENE_RADIUS, 0)
+    local deadline = GetGameTimer() + timeout
+    local loaded = false
+    while GetGameTimer() < deadline do
+        if IsYes(IsNewLoadSceneLoaded()) then
+            loaded = true
+            break
+        end
+        Wait(0)
+    end
+    NewLoadSceneStop()
+    return loaded
+end
+
+-- Moves him (frozen) to x, y, z. Crimson-Arena rule 13: refused once the arena owns him.
+local function MoveTo(x, y, z)
+    if ArenaForeign() then
+        check.arena = true
+        return false
+    end
+    SetEntityCoords(PlayerPedId(), x + 0.0, y + 0.0, z + 0.0, false, false, false, false)
+    return true
+end
+
+local function Restore()
+    local saved = check.saved
+    check.saved = nil
+    if not saved then return end
+    local ped = PlayerPedId()
+    -- Crimson-Arena placed him (rule 13): his place and his freeze are the arena's now
+    if not check.arena and not ArenaForeign() then
+        SetEntityCoords(ped, saved.x, saved.y, saved.z, false, false, false, false)
+        SetEntityHeading(ped, saved.h)
+        if not saved.frozen then FreezeEntityPosition(ped, false) end
+    end
+    SetEntityVisible(ped, saved.visible, false)
+    SetEntityInvincible(ped, saved.invincible)
+    DoScreenFadeIn(FADE_MS)
+end
+
+local function Hide()
+    local ped = PlayerPedId()
+    local c = GetEntityCoords(ped)
+    check.saved = {
+        x = c.x + 0.0,
+        y = c.y + 0.0,
+        z = c.z + 0.0,
+        h = (tonumber(GetEntityHeading(ped)) or 0.0) + 0.0,
+        frozen = IsYes(IsEntityPositionFrozen(ped)),
+        visible = IsYes(IsEntityVisible(ped)),
+        invincible = IsYes(GetPlayerInvincible(PlayerId())),
+    }
+    FreezeEntityPosition(ped, true)
+    SetEntityVisible(ped, false, false)
+    SetEntityInvincible(ped, true)
+end
+
+-- Which points of the location his game sees from the start (where something appears, within SCENE_RADIUS):
+-- seen[k] = true or false; nil = not asked.
+local function SeenFromStart(points, start)
+    local seen, ask, at = {}, {}, {}
+    local budget = tonumber((Config.Spawning or {}).losTimeoutMs) or 1500
+    local function flush()
+        if #ask == 0 then return end
+        local res = CP.Spawn.visible(ask, budget)
+        for j, k in ipairs(at) do seen[k] = res[j] ~= false end
+        ask, at = {}, {}
+    end
+    for k, p in ipairs(points) do
+        local dx, dy = p.x - start.x, p.y - start.y
+        if SPAWN_SEEN[p.kind] and dx * dx + dy * dy <= SCENE_RADIUS * SCENE_RADIUS then
+            ask[#ask + 1] = { x = p.x, y = p.y, z = p.z }
+            at[#at + 1] = k
+            if #ask >= SIGHT_BATCH then flush() end
+        end
+    end
+    flush()
+    return seen
+end
+
+-- One location: its points from the server, judged here, the results to the NUI and the server. Returns false and
+-- an error key when the whole check must stop (the arena, a run, the server refused).
+local function CheckLocation(m, li, progress, totals)
+    local res = CP.Net.request('server:test:spawnPoints', { missionId = m.id, location = li })
+    if type(res) ~= 'table' or not res.ok or type(res.data) ~= 'table' then
+        local errKey = type(res) == 'table' and res.error or 'err.no_response'
+        if errKey == 'err.in_arena' or errKey == 'err.spawn_check_on_run' or errKey == 'err.no_permission'
+            or errKey == 'err.spawn_check_disabled' then
+            return false, errKey
+        end
+        PushCheck('location', { progress = progress, missionId = m.id, location = li, error = errKey })
+        return true
+    end
+    local data = res.data
+    local points = type(data.points) == 'table' and data.points or {}
+    local start = data.start
+    progress.point, progress.points = 0, #points
+    PushCheck('location', {
+        progress = progress,
+        missionId = data.missionId,
+        missionLabel = data.missionLabel,
+        location = li,
+        locationLabel = data.locationLabel,
+        points = #points,
+    })
+    FadeOut()
+    if not MoveTo(start.x, start.y, start.z) then return false, 'err.in_arena' end
+    LoadScene(start.x, start.y, start.z)
+    DoScreenFadeIn(FADE_MS)
+    local at = { x = start.x, y = start.y }
+    local seen = SeenFromStart(points, start)
+    local cfg = CheckCfg()
+    local moveWithin = math.max(0.0, tonumber(cfg.moveWithin) or 150.0)
+    local results = {}
+    for k, p in ipairs(points) do
+        if check.stop then break end
+        progress.point = k
+        local row = { id = p.id, status = 'skipped', seen = seen[k] }
+        if p.kind ~= 'path' or cfg.routes == true then
+            local dx, dy = p.x - at.x, p.y - at.y
+            if dx * dx + dy * dy > moveWithin * moveWithin then
+                if not MoveTo(p.x, p.y, p.z + 1.0) then return false, 'err.in_arena' end
+                LoadScene(p.x, p.y, p.z)
+                at = { x = p.x, y = p.y }
+            end
+            local r = CP.Spawn.probe(p.as, p.x, p.y, p.z, p.h, p.model, { wall = p.wall == true })
+            r = type(r) == 'table' and r or {}
+            row.status = type(r.status) == 'string' and r.status or 'no_ground'
+            row.groundZ, row.dz, row.roofZ, row.interior = r.groundZ, r.dz, r.roofZ, r.interior
+        end
+        results[#results + 1] = row
+        totals.points = totals.points + 1
+        if row.status ~= 'ok' and row.status ~= 'skipped' then totals.bad = totals.bad + 1 end
+        local shown = {}
+        for key, v in pairs(p) do shown[key] = v end
+        for key, v in pairs(row) do shown[key] = v end
+        PushCheck('point', { progress = progress, missionId = data.missionId, location = li, result = shown })
+    end
+    if #results > 0 then
+        local sent = CP.Net.action('server:test:spawnCheckReport',
+            { missionId = data.missionId, location = li, results = results })
+        if type(sent) ~= 'table' or not sent.ok then
+            CP.warn(TAG, 'the spawn check report of %s #%d was refused: %s', tostring(data.missionId), li,
+                tostring(type(sent) == 'table' and sent.error or 'no answer'))
+        end
+    end
+    return true
+end
+
+local function RunCheck(plan)
+    local totals = { points = 0, bad = 0, locations = 0 }
+    local progress = { mission = 0, missions = #plan, location = 0, locations = 0, point = 0, points = 0 }
+    local errKey = nil
+    FadeOut()
+    Hide()
+    local ok, err = pcall(function()
+        for mi, m in ipairs(plan) do
+            if check.stop then break end
+            progress.mission, progress.locations = mi, #m.locations
+            for j, li in ipairs(m.locations) do
+                if check.stop then break end
+                progress.location = j
+                local going, why = CheckLocation(m, li, progress, totals)
+                totals.locations = totals.locations + 1
+                if not going then
+                    errKey = why
+                    return
+                end
+            end
+        end
+    end)
+    if not ok then
+        CP.err(TAG, 'the spawn check failed: %s', tostring(err))
+        errKey = 'err.internal'
+    end
+    local stopped = check.stop
+    if not check.arena then FadeOut() end
+    Restore()
+    check.running, check.stop, check.arena = false, false, false
+    local state = errKey and 'failed' or (stopped and 'stopped' or 'done')
+    PushCheck(state, { progress = progress, totals = totals, error = errKey })
+end
+
+-- payload { missionId?, location? }: every mission, one mission, or one location of it.
+local function StartSpawnCheck(payload)
+    if payload ~= nil and type(payload) ~= 'table' then return false, 'err.invalid_payload' end
+    payload = payload or {}
+    local missionId, location = payload.missionId, payload.location
+    if missionId ~= nil and (type(missionId) ~= 'string' or #missionId > 40) then
+        return false, 'err.invalid_payload'
+    end
+    if location ~= nil
+        and (missionId == nil or type(location) ~= 'number' or math.tointeger(location) == nil or location < 1) then
+        return false, 'err.invalid_payload'
+    end
+    if (Config.Testing or {}).enabled == false or CheckCfg().enabled == false then
+        return false, 'err.spawn_check_disabled'
+    end
+    if check.running then return false, 'err.spawn_check_running' end
+    if ArenaForeign() then return false, 'err.in_arena' end
+    if CurrentRun() then return false, 'err.spawn_check_on_run' end
+    local ped = PlayerPedId()
+    if IsYes(IsPedInAnyVehicle(ped, false)) then return false, 'err.spawn_check_in_vehicle' end
+    if IsYes(IsEntityDead(ped)) then return false, 'err.spawn_check_dead' end
+    if not (CP.Spawn and CP.Spawn.probe and CP.Spawn.visible) then return false, 'err.internal' end
+    local res = CP.Net.request('server:test:spawnPoints', { missionId = missionId })
+    if type(res) ~= 'table' or not res.ok or type(res.data) ~= 'table' then
+        return false, type(res) == 'table' and res.error or 'err.no_response'
+    end
+    local plan, count = {}, 0
+    for _, m in ipairs(type(res.data.missions) == 'table' and res.data.missions or {}) do
+        local list = {}
+        for _, l in ipairs(type(m.locations) == 'table' and m.locations or {}) do
+            if location == nil or l.index == location then list[#list + 1] = l.index end
+        end
+        if #list > 0 then
+            plan[#plan + 1] = { id = m.id, label = m.label, locations = list }
+            count = count + #list
+        end
+    end
+    if count == 0 then return false, location and 'err.invalid_location' or 'err.test_unknown_mission' end
+    -- checked again: the answer took a moment
+    if check.running then return false, 'err.spawn_check_running' end
+    if ArenaForeign() then return false, 'err.in_arena' end
+    check.running, check.stop, check.arena = true, false, false
+    PushCheck('started', { missions = #plan, locations = count })
+    CreateThread(function() RunCheck(plan) end)
+    return true, { started = true, missions = #plan, locations = count }
+end
+
+-- ============================================================================
 --                                THE PANEL KEY
 -- ============================================================================
 
@@ -534,6 +807,11 @@ local function RegisterActions()
         local enabled = type(payload) == 'table' and payload.enabled or nil
         return ToggleDebug(enabled)
     end)
+    CP.Tablet.registerClientAction('spawnCheck', StartSpawnCheck)
+    CP.Tablet.registerClientAction('spawnCheckStop', function()
+        if check.running then check.stop = true end
+        return true, { stopping = check.running }
+    end)
     CP.Tablet.registerClientAction('testPanel', function(payload)
         local open = type(payload) == 'table' and payload.open == true
         if not open then
@@ -563,6 +841,7 @@ CreateThread(function()
     local bag = ('player:%d'):format(GetPlayerServerId(PlayerId()))
     AddStateBagChangeHandler('crimsonArena', bag, function(_, _, value)
         if type(value) == 'table' and value.active == true and value.source ~= 'crimson-police' then
+            if check.running then check.stop, check.arena = true, true end
             SetTimeout(0, function()
                 ReleaseFocus()
                 DebugOff()
@@ -575,6 +854,7 @@ end)
 AddEventHandler('onResourceStop', function(resource)
     if resource ~= GetCurrentResourceName() then return end
     StopDrawing()
+    if check.running then Restore() end
     if state.focused and not TabletOpen() then SetNuiFocus(false, false) end
     state.focused = false
 end)
@@ -583,3 +863,4 @@ end)
 Testing._state = function() return state end
 Testing._onPanelKey = OnPanelKey
 Testing._nearest = NearestDistance
+Testing._spawnCheck = function() return check end

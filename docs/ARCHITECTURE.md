@@ -1372,6 +1372,59 @@ Full admin control (§8.4.2): `markLocationChecked` (an `unplayed = 1` row, stat
 `hideTestResult` (`hidden`, K on the old value); `list()` ignores hidden rows and gives each mission its `switch`
 (`CP.Settings.missionView`). `start` refuses `err.maintenance` while `CP.Maintenance.active()`.
 
+Check spawn points (PLAN S7, Config.Testing.spawnCheck; owner request of 2026-10-19: "Double check all coordinates etc
+for every ped"). The server lists the points, the admin's own game judges them with `CP.Spawn.probe` (§5.43); nothing
+is spawned and only his ped moves. Refused with `err.spawn_check_disabled` while Config.Testing.enabled or
+spawnCheck.enabled is false.
+- `spawnPoints(src, { missionId?, location? })` (ox_lib callback `server:test:spawnPoints`, testRun): no mission =
+  `{ missions = { { id, label, source, locations = { { index, label } } } } }` of `CP.Missions.all()` in the Testing
+  order; a mission = that one (`resolveMission`: archived ones too); a mission and a location (`err.in_arena`,
+  `err.spawn_check_on_run`: his game is about to move him) = `{ missionId, missionLabel, location, locationLabel,
+  start = { x, y, z, r }, points }`. A point: `{ id ('spawns[7]', 'routes#2[3]'), key, i, kind, as, wall, model?,
+  obj, block, x, y, z, h?, above = { lo, hi }, dStart?, dPrevious?, near? }`. `kind` (what is there) is `ped`,
+  `vehicle`, `prop`, `marker` or `path`, from the blocks' `pointKinds` (§7.1; a block without it: its
+  `requiredPoints` as markers; a key no objective uses: a marker with `obj = false`); a key two objectives use takes
+  the higher of ped > vehicle > prop > path > marker, and its first objective of that kind. `as` is what the probe
+  judges it as (a marker and a path point as a person: someone stands or walks there), `wall` is true for a person
+  and a vehicle, `model` a vehicle's model when the block names one, `h` the file's heading (a vehicle at a route's
+  first point faces the next one), `above` Config.Spawning.ground of `as`. People, vehicles and objects get the 2D
+  distance to the start (`dStart`) and to the nearest point of another key the objective before uses
+  (`dPrevious`: where the officers stand when it starts); `near = { 'start', 'previous' }` lists those under
+  Config.Spawning.minDistance. Built from `GeometryOf(mission, location, nil, { flat = true })`, the debug overlay's
+  geometry without a run (every point once, headings kept, at most 1000 points and 64 routes of 1000).
+- `spawnCheckReport(src, { missionId, location, results = { { id, status, groundZ?, dz?, roofZ?, seen? } } })`
+  (action `server:test:spawnCheckReport`, testRun): `err.invalid_payload` for an id the location does not have,
+  one id twice, more results than points or a status the probe never gives (`ok`, `snap`, `underground`,
+  `floating`, `no_ground`, `in_water`, `in_wall`, `interior_not_loaded`, and `skipped`); the server's own coordinates
+  are used; a height that is no finite number (or over 100 km) is kept as none. Every status but ok and skipped gives
+  one `CP.warn` with tag `spawncheck` (so Admin UI → System → Problems lists it too): `spawn check: gang_shootout #4
+  spawns[7] (1153.75, -3169.50, 5.88) UNDERGROUND ground 6.40 (-0.52) [ped; 12.3 m from the start; seen from the
+  start]` (`snap` reads HEIGHT OFF: a placer can put it on the ground, the file is still off); one `CP.log` per
+  location. The report replaces the location's last one in memory: `spawnReports()` -> copies `{ missionId,
+  missionLabel, location, locationLabel, at, by, checked, bad, points }` by mission then location.
+- Client: client actions `spawnCheck` (`{ missionId?, location? }` -> `{ started, missions, locations }`; refused
+  `err.invalid_payload`, `err.spawn_check_disabled`, `err.spawn_check_running`, `err.in_arena`,
+  `err.spawn_check_on_run` (`CP.Runs.current()`), `err.spawn_check_in_vehicle`, `err.spawn_check_dead`,
+  `err.invalid_location`, `err.test_unknown_mission`) and `spawnCheckStop` (-> `{ stopping }`: the check ends after
+  the point being probed). In a thread: fade out; his coords, heading, freeze, visibility and `GetPlayerInvincible`
+  are kept; `FreezeEntityPosition` true, `SetEntityVisible(ped, false, false)`, `SetEntityInvincible` true. Per
+  location the points are asked for again (a refusal `err.in_arena`, `err.spawn_check_on_run`, `err.no_permission` or
+  `err.spawn_check_disabled` ends the check, another one skips the location): fade, `SetEntityCoords` to the start,
+  `NewLoadSceneStartSphere(start, 200.0, 0)` until `IsNewLoadSceneLoaded` or sceneTimeoutMs (1000-30000), then
+  `NewLoadSceneStop`, fade in; `CP.Spawn.visible` from there of the people, vehicles and objects within 200 m (32 a
+  time, Config.Spawning.losTimeoutMs) gives `seen`; then each point: a path point is `skipped` unless
+  spawnCheck.routes is true; one further than spawnCheck.moveWithin (2D) from where he is: he is moved to 1 m over it
+  and the scene loads there; `CP.Spawn.probe(as, x, y, z, h, model, { wall })`. The location's results go to
+  `server:test:spawnCheckReport` (only `id`, `status`, `groundZ`, `dz`, `roofZ`, `interior`, `seen`). NUI push topic
+  `spawnCheck`: `{ state = 'started', missions, locations }`, `{ state = 'location', progress, missionId,
+  missionLabel, location, locationLabel, points }` (or `{ ..., error }` for a skipped location), `{ state = 'point',
+  progress, missionId, location, result }` (the server's point with the answer), and at the end `done`, `stopped` or
+  `failed` `{ progress, totals = { points, bad, locations }, error? }`; `progress = { mission, missions, location,
+  locations, point, points }` (location = its place in this mission's list). Every move re-checks Crimson-Arena (rule
+  13): once the arena owns him (or the crimsonArena bag turns foreign: the check stops) he is never moved again and
+  his freeze is the arena's; visibility and invincibility come back. Otherwise, and on resource stop, he is put back
+  where he was, facing the same way, unfrozen unless he was frozen before, seen and hurt as before, the screen faded in.
+
 ### 5.28 CP.Builder — modules/builder
 Server: drafts, locks, autosave, test runs of drafts (via `CP.Testing`/`CP.Runs` with `test.draft = true`),
 publish (Lua export with `SaveResourceFile`), archive/restore, rollback (.bak), reload of hand edits,
@@ -2019,7 +2072,7 @@ What this officer's game can see of the points the server's spawn director may u
   `visible(points, ms)` (`{}` for args that are no table, and when it raises: one `CP.warn`).
 - `probe(kind, x, y, z, h, model, opts) -> result` — whether the point is fit to put a `'ped'`, a `'vehicle'`
   (`model`: its name or hash, for its size) or a `'prop'` (`'object'` and any other kind) on, heading `h` (PLAN S6,
-  Config.Spawning.ground; nothing calls it yet: the Check spawn points tool, S7, and the placer, S9, will). Needs a
+  Config.Spawning.ground; the Check spawn points tool calls it, §5.27, and the placer, S9, will). Needs a
   thread. Coordinates are sent to the game as decimals. In order:
   1. collision: `RequestCollisionAtCoord` each frame until `HasCollisionLoadedAroundEntity(opts.entity or
      PlayerPedId())` or `Config.Spawning.collisionTimeoutMs` (kept to 500-30000 ms; `result.loaded`);
@@ -2041,7 +2094,8 @@ What this officer's game can see of the points the server's spawn director may u
      |groundZ + lift - z| <= `snapWithin` (0-10, default 3.0; lift: a person 1.0, as the Builder stores a standing
      ped; a vehicle -min.z of `GetModelDimensions`, 0.2-1.5; an object 0.0), else `underground` (dz under the range)
      or `floating` (over it);
-  6. wall (a ped or a vehicle that is ok or snap): the Builder's capsule on the ground at groundZ
+  6. wall (a ped or a vehicle that is ok or snap, unless `opts.wall == false`: a marker an officer walks to, where a
+     door may stand in the space): the Builder's capsule on the ground at groundZ
      (`StartShapeTestCapsule` flags 1 + 2 + 16, options 7: a person 0.45-1.7 m, r 0.32; a vehicle along its heading,
      sized from its model, loaded for it with `RequestModel` and let go again when it was not loaded, a car of
      unknown size `{ lift 0.5, half 2.3, r 0.8, midZ 1.0 }` otherwise; ignoring `opts.ignore`, else his car or his
@@ -2156,6 +2210,11 @@ CP.Blocks.register('hostile_waves', {
   validate = function(obj, mission, location) return true end,  -- or false, 'reason' (loader + builder guardrails)
   armedCount = function(obj) return 20 end,                -- armed NPCs before scaling (40 budget)
   requiredPoints = function(obj) return { 'spawns' } end,  -- location keys the builder must place
+  pointKinds = function(obj) return { { key = 'spawns', kind = 'ped' } } end,
+                                   -- (optional) what is at each location key it uses, for the spawn point check
+                                   -- (§5.27): kind 'ped' | 'vehicle' | 'prop' (where they appear), 'marker' (where
+                                   -- officers stand) or 'path' (where they drive or run); first = the kind of the
+                                   -- key's point 1 (the escort truck at route[1]); model = a vehicle's model
   prepare = function(ctx) end,     -- the run moved to In progress (called for EVERY objective, in order)
   start   = function(ctx) end,     -- this objective became current
   tick    = function(ctx, dt) end, -- every 1 s while current (dt seconds); check fail/complete conditions here
@@ -2339,7 +2398,8 @@ Callbacks (read): `getSession`, `getMissionTypes`, `getUnit`, `getRun`, `getHome
 `admin:getBoards`, `admin:getStuckPayments`, `admin:searchOfficers`, `admin:getOfficer`,
 `admin:getDepartments`, `admin:getPermissions`, `admin:getAudit`, `admin:exportAudit`,
 `admin:getTests`, `admin:getFlagged`, `admin:getDisputes`, `builder:list`, `builder:get`,
-`builder:config`, `test:pendingInvites`, `test:state` (testRun or builderEdit), `test:candidates` (testRun).
+`builder:config`, `test:pendingInvites`, `test:state` (testRun or builderEdit), `test:candidates` (testRun),
+`server:test:spawnPoints` (testRun; the spawn point check, §5.27).
 Parity-plus: `getMissionCalls`, `getNavCounts`, `getProfileEdit`, `getRewardsLocker`, `sup:getMissionCalls`,
 `sup:getProfileQueue`, `admin:getRewards` (`{ page }`), `admin:getAreaCoverage`, `admin:getLocationStats`
 (`{ missionId }`), `admin:getOfficerProfile` (`{ citizenid }`), `admin:getConfigHealth`, `admin:getTabletAccess`,
@@ -2371,6 +2431,7 @@ Actions (write), each checks `CP.Permissions.can`:
 | `server:test:invite` | `{ missionId, targets = { src } }` | testRun | testing |
 | `server:test:cancelInvites` | — | testRun | testing |
 | `server:test:control` | `{ control, ... }` | test starter only | testing |
+| `server:test:spawnCheckReport` | `{ missionId, location, results = { { id, status, groundZ?, dz?, roofZ?, seen? } } }` (the spawn point check, §5.27) | testRun | testing |
 | `server:builder:*` | see builder section of its own module header | builderEdit/Publish/Archive/EditAny/Rollback/breakEditLock | builder |
 | `server:sup:mcWithdraw` / `server:admin:mcWithdraw` | `{ callId, reason }` | missionCalls | missioncalls |
 | `server:sup:mcPage` / `server:admin:mcPage` | `{ type, area, leaderSrc }` | missionCalls | missioncalls |
@@ -2614,7 +2675,7 @@ Lua → NUI: `SendNUIMessage({ type = ..., ... })` (only modules/tablet/client.l
 | `notify` | `notification = { id, kind, title?, text, duration }` | Crimson-Police toast |
 | `hud` | `hud = HudState \| null` | mission HUD (full state) |
 | `result` | `result = RunResult` | result screen |
-| `push` | `topic`, `data` | live data for open screens: `run`, `unit`, `board`, `operation`, `invites`, `test`, `builder`, `payouts`, and `calls` (DispatchView), `nav` (NavCounts), `profile` (own profile changed), `rewards` (locker changed), `contactConfirm`, `settings` (admins: a setting or switch changed, `{ paths }`); `unit` gains `readyCheck`, `run` gains `contact` |
+| `push` | `topic`, `data` | live data for open screens: `run`, `unit`, `board`, `operation`, `invites`, `test`, `builder`, `payouts`, and `calls` (DispatchView), `nav` (NavCounts), `profile` (own profile changed), `rewards` (locker changed), `contactConfirm`, `settings` (admins: a setting or switch changed, `{ paths }`), `spawnCheck` (the admin's spawn point check, §5.27); `unit` gains `readyCheck`, `run` gains `contact` |
 | `overlay` | `overlay = null \| { kind: 'placement'\|'recording'\|'testdrive'\|'fade', ... }` | full-screen/HUD overlays |
 | `locale` | `locale` | the whole locale again after `Config.Labels` changed (an open tablet shows the new names; replaces `session.locale`) |
 

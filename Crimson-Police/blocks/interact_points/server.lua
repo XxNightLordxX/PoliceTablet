@@ -917,6 +917,15 @@ CP.Blocks.register(BLOCK, {
         return {}
     end,
 
+    -- the points are markers, or objects when a device prop is hidden at them (spawn point check, ARCHITECTURE 7.1
+    -- pointKinds)
+    pointKinds = function(obj)
+        if type(obj.points) ~= 'string' then return {} end
+        local o = ApplyDefaults(CP.U.deepcopy(obj))
+        local device = type(o.hidden) == 'table' and o.hidden.kind ~= 'seize'
+        return { { key = obj.points, kind = device and 'prop' or 'marker' } }
+    end,
+
     prepare = function(ctx)
         Ensure(ctx)
     end,

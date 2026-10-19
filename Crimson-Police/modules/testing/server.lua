@@ -1018,8 +1018,17 @@ local function CurrentObjective(run)
     return i, o, obj
 end
 
+-- What one geometry may hold: the debug overlay's (it is drawn every frame) and the spawn point check's.
+local OVERLAY_LIMITS = {
+    points = MAX_POINTS,
+    routes = MAX_ROUTES,
+    routePoints = MAX_ROUTE_POINTS,
+    total = MAX_ROUTE_POINTS_TOTAL,
+}
+local CHECK_LIMITS = { points = 1000, routes = 64, routePoints = 1000, total = 4000 }
+
 local function AddPoint(g, key, i, v, radius)
-    if #g.points >= MAX_POINTS then return end
+    if #g.points >= g.limits.points then return end
     local p = VecTable(v)
     if not p then return end
     p.key, p.i = key, i
@@ -1028,14 +1037,14 @@ local function AddPoint(g, key, i, v, radius)
 end
 
 local function AddRoute(g, key, list, loop)
-    if #g.routes >= MAX_ROUTES or type(list) ~= 'table' then return end
+    if #g.routes >= g.limits.routes or type(list) ~= 'table' then return end
     local pts = {}
     g.routePoints = g.routePoints or 0
     for _, v in ipairs(list) do
-        if #pts >= MAX_ROUTE_POINTS or g.routePoints >= MAX_ROUTE_POINTS_TOTAL then break end
+        if #pts >= g.limits.routePoints or g.routePoints >= g.limits.total then break end
         local p = VecTable(IsVec(v) and v or (type(v) == 'table' and v.coords) or nil)
         if p then
-            pts[#pts + 1] = { x = p.x, y = p.y, z = p.z }
+            pts[#pts + 1] = { x = p.x, y = p.y, z = p.z, h = g.headings and p.h or nil }
             g.routePoints = g.routePoints + 1
         end
     end
@@ -1067,22 +1076,28 @@ local function AddValue(g, key, v, asRoute, radius)
     end
 end
 
--- Spawn points, zones/radii and route waypoints of the run's location for the debug overlay.
-local function Geometry(run)
-    local loc = type(run.location) == 'table' and run.location or {}
+-- Spawn points, zones/radii and route waypoints of one location of a mission, no run needed. For the debug overlay
+-- obj is the current objective (its checkpoint radius and its safe, search and traffic zones). opts.flat = true is
+-- the spawn point check's: every point once (a list of points never again as a route), headings kept, the check's
+-- own limits.
+local function GeometryOf(mission, loc, obj, opts)
+    opts = type(opts) == 'table' and opts or {}
+    loc = type(loc) == 'table' and loc or {}
     local start = type(loc.start) == 'table' and loc.start or {}
-    local g = { start = false, points = {}, routes = {}, zones = {} }
+    local g = { start = false, points = {}, routes = {}, zones = {}, limits = OVERLAY_LIMITS }
+    if opts.flat then g.limits, g.headings = CHECK_LIMITS, true end
     local s = VecTable(start.coords)
     if s then g.start = { x = s.x, y = s.y, z = s.z, r = Num(start.radius, 0) + 0.0 } end
     local routeKeys = {}
-    for _, o in ipairs(run.mission.objectives or {}) do
-        if type(o) == 'table' then
-            for _, f in ipairs(ROUTE_FIELDS) do
-                if type(o[f]) == 'string' then routeKeys[o[f]] = true end
+    if not opts.flat then
+        for _, o in ipairs(type(mission) == 'table' and mission.objectives or {}) do
+            if type(o) == 'table' then
+                for _, f in ipairs(ROUTE_FIELDS) do
+                    if type(o[f]) == 'string' then routeKeys[o[f]] = true end
+                end
             end
         end
     end
-    local _, _, obj = CurrentObjective(run)
     obj = type(obj) == 'table' and obj or {}
     local radiusFor = {}
     if type(obj.checkpoints) == 'string' then radiusFor[obj.checkpoints] = Num(obj.radius, 10.0) end
@@ -1091,14 +1106,23 @@ local function Geometry(run)
             AddValue(g, key, loc[key], routeKeys[key], radiusFor[key])
         end
     end
-    if run.state == 'in_progress' then
-        local okA, anchor = Call('Runs', 'anchor', run)
-        if okA and anchor then AddZone(g, 'presence', anchor, obj.presenceRange) end
-    end
     if type(obj.safe) == 'string' then AddZone(g, 'safe', loc[obj.safe], Num(obj.safeRadius, 6.0)) end
     if type(obj.center) == 'string' then AddZone(g, 'search', loc[obj.center], obj.startRadius) end
     if type(obj.blockTraffic) == 'number' and start.coords then
         AddZone(g, 'traffic', start.coords, obj.blockTraffic)
+    end
+    g.limits, g.headings, g.routePoints = nil, nil, nil
+    return g
+end
+
+-- The run's location for the debug overlay, with the presence circle of the current objective.
+local function Geometry(run)
+    local _, _, obj = CurrentObjective(run)
+    obj = type(obj) == 'table' and obj or {}
+    local g = GeometryOf(run.mission, run.location, obj)
+    if run.state == 'in_progress' then
+        local okA, anchor = Call('Runs', 'anchor', run)
+        if okA and anchor then AddZone(g, 'presence', anchor, obj.presenceRange) end
     end
     return g
 end
@@ -1792,6 +1816,333 @@ function Testing.state(src)
 end
 
 -- ============================================================================
+--               CHECK SPAWN POINTS (PLAN S7; ARCHITECTURE §5.27)
+-- ============================================================================
+-- The owner's request of 2026-10-19: "Double check all coordinates etc for every ped". The server lists every point
+-- of one location of a mission with what appears there (each block's pointKinds) and how far over the ground it
+-- should be; the admin's own game visits the points and judges each one with CP.Spawn.probe
+-- (modules/testing/client.lua), then sends what it found: one console line per point that is not right (CP.warn, so
+-- Admin UI -> System -> Problems shows it too), and the last report of each location stays in memory. Nothing is
+-- spawned and nobody else is moved. Config.Testing.spawnCheck.
+
+local CHECK_TAG = 'spawncheck'
+-- what a point holds -> what the ground probe judges it as (an officer stands at a marker and walks a path)
+local CHECK_KINDS = { ped = 'ped', vehicle = 'vehicle', prop = 'prop', marker = 'ped', path = 'ped' }
+local CHECK_WALL = { ped = true, vehicle = true }                            -- the space they fill on the ground must be clear
+local CHECK_SPAWN = { ped = true, vehicle = true, prop = true }              -- something appears there (the distance notes)
+local CHECK_RANK = { marker = 1, path = 2, prop = 3, vehicle = 4, ped = 5 }  -- a key two objectives use: the higher
+local CHECK_STATUS = {
+    ok = 'OK',
+    snap = 'HEIGHT OFF',
+    underground = 'UNDERGROUND',
+    floating = 'FLOATING',
+    no_ground = 'NO GROUND',
+    in_water = 'IN WATER',
+    in_wall = 'IN A WALL',
+    interior_not_loaded = 'INSIDE NOT LOADED',
+    skipped = 'SKIPPED',
+}
+local CHECK_QUIET = { ok = true, skipped = true }  -- no console line
+local GROUND_KEYS = { ped = 'pedAbove', vehicle = 'vehicleAbove', prop = 'propAbove' }
+local GROUND_DEFAULTS = { ped = { -0.3, 1.6 }, vehicle = { -0.2, 1.5 }, prop = { -0.1, 0.5 } }
+local CHECK_NUMBER_MAX = 100000.0                  -- metres: a reported height further off than this is no height
+
+local spawnReports = {} -- 'missionId#index' -> the last report of that location
+
+local function CheckCfg()
+    local c = Cfg().spawnCheck
+    return type(c) == 'table' and c or {}
+end
+
+local function Round(v, places)
+    local m = 10 ^ places
+    return math.floor(v * m + 0.5) / m
+end
+
+local function Dist2D(a, b)
+    local dx, dy = a.x - b.x, a.y - b.y
+    return math.sqrt(dx * dx + dy * dy)
+end
+
+-- The lowest and highest height over the ground a point judged as this kind fits (Config.Spawning.ground).
+local function Above(as)
+    local r = ((Config.Spawning or {}).ground or {})[GROUND_KEYS[as]]
+    if type(r) == 'table' and tonumber(r[1]) and tonumber(r[2]) and r[1] <= r[2] then return { r[1], r[2] } end
+    return { GROUND_DEFAULTS[as][1], GROUND_DEFAULTS[as][2] }
+end
+
+-- What each location key of the mission holds (the block's pointKinds; a block without it: its requiredPoints as
+-- markers), and which keys each objective uses.
+local function KindsOf(def)
+    local byKey, byObj = {}, {}
+    for i, o in ipairs(type(def.objectives) == 'table' and def.objectives or {}) do
+        byObj[i] = {}
+        local impl = type(o) == 'table' and CP.Blocks and CP.Blocks.get(o.block) or nil
+        local entries = {}
+        if type(impl) == 'table' and type(impl.pointKinds) == 'function' then
+            local ok, res = pcall(impl.pointKinds, o)
+            if ok and type(res) == 'table' then
+                entries = res
+            elseif not ok then
+                WarnOnce('pointKinds:' .. tostring(o.block), 'block %s: pointKinds failed: %s', tostring(o.block),
+                    tostring(res))
+            end
+        elseif type(impl) == 'table' and type(impl.requiredPoints) == 'function' then
+            local ok, keys = pcall(impl.requiredPoints, o)
+            for _, k in ipairs(ok and type(keys) == 'table' and keys or {}) do
+                entries[#entries + 1] = { key = k, kind = 'marker' }
+            end
+        end
+        for _, e in ipairs(entries) do
+            if type(e) == 'table' and type(e.key) == 'string' and CHECK_KINDS[e.kind] then
+                byObj[i][e.key] = true
+                local cur = byKey[e.key]
+                if not cur or CHECK_RANK[e.kind] > CHECK_RANK[cur.kind] then
+                    byKey[e.key] = {
+                        kind = e.kind,
+                        first = CHECK_KINDS[e.first] and e.first or nil,
+                        model = type(e.model) == 'string' and e.model or nil,
+                        obj = i,
+                        block = o.block,
+                    }
+                end
+            end
+        end
+    end
+    return byKey, byObj
+end
+
+-- The heading from a route point to the next one (a vehicle that appears at a route's first point faces along it).
+local function HeadingTo(a, b)
+    if not b then return nil end
+    local dx, dy = b.x - a.x, b.y - a.y
+    if dx == 0 and dy == 0 then return nil end
+    return Round(math.deg(math.atan(-dx, dy)) % 360.0, 1)
+end
+
+-- Every point of one location: id ('spawns[7]', 'routes#2[3]'), what it holds, how the probe judges it, its
+-- objective and block, x y z h, the height over the ground it should have, and the distance notes for points where
+-- something appears: dStart (to the start), dPrevious (to the nearest point the objective before uses, where the
+-- officers stand when this one starts), near = { 'start', 'previous' } when closer than Config.Spawning.minDistance.
+local function CheckPoints(def, index)
+    local loc = def.locations[index]
+    local g = GeometryOf(def, loc, nil, { flat = true })
+    local byKey, byObj = KindsOf(def)
+    local rows, byId = {}, {}
+    local function add(key, base, i, p, nextPoint)
+        local k = byKey[base]
+        local kind = k and k.kind or 'marker'
+        if k and k.first and i == 1 then kind = k.first end
+        local as = CHECK_KINDS[kind]
+        local row = {
+            id = ('%s[%d]'):format(key, i),
+            key = key,
+            i = i,
+            kind = kind,
+            as = as,
+            wall = CHECK_WALL[kind] == true,
+            model = kind == 'vehicle' and k and k.model or nil,
+            obj = k and k.obj or false,
+            block = k and k.block or false,
+            x = p.x,
+            y = p.y,
+            z = p.z,
+            h = p.h or (kind == 'vehicle' and HeadingTo(p, nextPoint)) or nil,
+            above = Above(as),
+        }
+        rows[#rows + 1] = { row = row, base = base }
+        byId[row.id] = row
+    end
+    for _, p in ipairs(g.points) do add(p.key, p.key, p.i, p) end
+    for _, r in ipairs(g.routes) do
+        local base = r.key:match('^(.-)#%d+$') or r.key
+        for j, p in ipairs(r.points) do add(r.key, base, j, p, r.points[j + 1]) end
+    end
+    local minD = Num((Config.Spawning or {}).minDistance, 40.0)
+    for _, e in ipairs(rows) do
+        local row = e.row
+        if CHECK_SPAWN[row.kind] then
+            if g.start then row.dStart = Round(Dist2D(row, g.start), 1) end
+            local prev = row.obj and byObj[row.obj - 1] or nil
+            if prev then
+                local best = nil
+                for _, other in ipairs(rows) do
+                    if prev[other.base] and other.base ~= e.base then
+                        local d = Dist2D(row, other.row)
+                        if not best or d < best then best = d end
+                    end
+                end
+                if best then row.dPrevious = Round(best, 1) end
+            end
+            local near = {}
+            if row.dStart and row.dStart < minD then near[#near + 1] = 'start' end
+            if row.dPrevious and row.dPrevious < minD then near[#near + 1] = 'previous' end
+            if #near > 0 then row.near = near end
+        end
+    end
+    local list = {}
+    for i, e in ipairs(rows) do list[i] = e.row end
+    return { start = g.start, points = list, byId = byId }
+end
+
+local function CheckAllowed(src)
+    local ok, errKey = Can(src, 'testRun')
+    if not ok then return false, errKey or 'err.no_permission' end
+    if Cfg().enabled == false or CheckCfg().enabled == false then return false, 'err.spawn_check_disabled' end
+    return true
+end
+
+local function CheckMissionView(def)
+    local out = {
+        id = def.id,
+        label = def.label or def.id,
+        source = def.source == 'custom' and 'custom' or 'builtin',
+        locations = {},
+    }
+    for i = 1, #(def.locations or {}) do out.locations[i] = { index = i, label = LocationLabel(def, i) } end
+    return out
+end
+
+-- args { missionId?, location? }: no mission = every mission the loader has (built-in and published custom); a
+-- mission without a location = that one; both = the location's points (refused in the arena and on a run, since the
+-- admin's game is about to move him there).
+function Testing.spawnPoints(src, args)
+    local ok, errKey = CheckAllowed(src)
+    if not ok then return nil, errKey end
+    args = type(args) == 'table' and args or {}
+    if args.missionId == nil then
+        local okA, all = Call('Missions', 'all')
+        local order = TypeOrder()
+        local list = {}
+        for _, def in pairs(okA and type(all) == 'table' and all or {}) do
+            if type(def) == 'table' and type(def.id) == 'string' and type(def.locations) == 'table' then
+                list[#list + 1] = def
+            end
+        end
+        table.sort(list, function(a, b)
+            local oa, ob = order[a.type] or 99, order[b.type] or 99
+            if oa ~= ob then return oa < ob end
+            if (a.isBoss == true) ~= (b.isBoss == true) then return not a.isBoss end
+            if (a.label or a.id) ~= (b.label or b.id) then return (a.label or a.id) < (b.label or b.id) end
+            return a.id < b.id
+        end)
+        for i, def in ipairs(list) do list[i] = CheckMissionView(def) end
+        return { missions = list }
+    end
+    local def, err = ResolveMission(args.missionId)
+    if not def then return nil, err end
+    if args.location == nil then return { missions = { CheckMissionView(def) } } end
+    local index = math.tointeger(tonumber(args.location) or -1)
+    if not index or index < 1 or index > #(def.locations or {}) then return nil, 'err.invalid_location' end
+    src = ToSrc(src)
+    if InArena(src) then return nil, 'err.in_arena' end
+    if OnMission(src) then return nil, 'err.spawn_check_on_run' end
+    local c = CheckPoints(def, index)
+    if not c.start then return nil, 'err.invalid_location' end
+    return {
+        missionId = def.id,
+        missionLabel = def.label or def.id,
+        location = index,
+        locationLabel = LocationLabel(def, index),
+        start = c.start,
+        points = c.points,
+    }
+end
+
+local function Height(v)
+    v = Num(v, nil)
+    if v == nil or math.abs(v) > CHECK_NUMBER_MAX then return nil end
+    return Round(v, 2)
+end
+
+-- '[crimson-police:spawncheck] spawn check: gang_shootout #4 spawns[7] (1153.75, -3169.50, 5.88) UNDERGROUND
+-- ground 6.40 (-0.52) [ped]'
+local function ReportLine(def, index, e)
+    local notes = { e.kind }
+    for _, n in ipairs(e.near or {}) do
+        if n == 'start' then
+            notes[#notes + 1] = ('%.1f m from the start'):format(e.dStart)
+        else
+            notes[#notes + 1] = ('%.1f m from the objective before'):format(e.dPrevious)
+        end
+    end
+    if e.seen == true then notes[#notes + 1] = 'seen from the start' end
+    return ('spawn check: %s #%d %s (%.2f, %.2f, %.2f) %s ground %s (%s) [%s]'):format(def.id, index, e.id, e.x, e.y,
+        e.z, CHECK_STATUS[e.status], e.groundZ and ('%.2f'):format(e.groundZ) or 'none',
+        e.dz and ('%+.2f'):format(e.dz) or '-', table.concat(notes, '; '))
+end
+
+-- payload { missionId, location, results = { { id, status, groundZ?, dz?, roofZ?, seen? } } }: what the admin's game
+-- found at the points of one location (the server's own coordinates are used, never the game's).
+function Testing.spawnCheckReport(src, payload)
+    local ok, errKey = CheckAllowed(src)
+    if not ok then return false, errKey end
+    if type(payload) ~= 'table' or type(payload.results) ~= 'table' then return false, 'err.invalid_payload' end
+    local def, err = ResolveMission(payload.missionId)
+    if not def then return false, err end
+    local index = math.tointeger(tonumber(payload.location) or -1)
+    if not index or index < 1 or index > #(def.locations or {}) then return false, 'err.invalid_location' end
+    local c = CheckPoints(def, index)
+    if #payload.results > #c.points then return false, 'err.invalid_payload' end
+    local rows, bad, seen = {}, 0, {}
+    for _, r in ipairs(payload.results) do
+        if type(r) ~= 'table' or type(r.id) ~= 'string' or not CHECK_STATUS[r.status] then
+            return false, 'err.invalid_payload'
+        end
+        local p = c.byId[r.id]
+        if not p or seen[r.id] then return false, 'err.invalid_payload' end
+        seen[r.id] = true
+        local e = {
+            id = p.id,
+            kind = p.kind,
+            obj = p.obj,
+            x = p.x,
+            y = p.y,
+            z = p.z,
+            status = r.status,
+            groundZ = Height(r.groundZ),
+            dz = Height(r.dz),
+            roofZ = Height(r.roofZ),
+            seen = type(r.seen) == 'boolean' and r.seen or nil,
+            near = p.near,
+            dStart = p.dStart,
+            dPrevious = p.dPrevious,
+        }
+        rows[#rows + 1] = e
+        if not CHECK_QUIET[e.status] then
+            bad = bad + 1
+            CP.warn(CHECK_TAG, ReportLine(def, index, e))
+        end
+    end
+    local by = PlayerName(src)
+    spawnReports[def.id .. '#' .. index] = {
+        missionId = def.id,
+        missionLabel = def.label or def.id,
+        location = index,
+        locationLabel = LocationLabel(def, index),
+        at = os.time(),
+        by = by,
+        checked = #rows,
+        bad = bad,
+        points = rows,
+    }
+    CP.log(CHECK_TAG, 'spawn check: %s #%d (%s): %d points checked, %d to look at (%s)', def.id, index,
+        LocationLabel(def, index), #rows, bad, by)
+    return true, { missionId = def.id, location = index, checked = #rows, bad = bad }
+end
+
+-- The last report of every location checked since the start (copies, by mission then location).
+function Testing.spawnReports()
+    local out = {}
+    for _, key in ipairs(U.keys(spawnReports)) do out[#out + 1] = U.deepcopy(spawnReports[key]) end
+    table.sort(out, function(a, b)
+        if a.missionId ~= b.missionId then return a.missionId < b.missionId end
+        return a.location < b.location
+    end)
+    return out
+end
+
+-- ============================================================================
 --                                     NET
 -- ============================================================================
 
@@ -1856,6 +2207,15 @@ end, { rate = 2 })
 CP.Net.action('server:testRespond', function(src, payload)
     return Testing.respond(src, payload)
 end, { rate = 3 })
+
+-- Check spawn points (Admin UI -> Testing): the list of points, then one report per location.
+CP.Net.callback('server:test:spawnPoints', function(src, args)
+    return Testing.spawnPoints(src, args)
+end, { rate = 4 })
+
+CP.Net.action('server:test:spawnCheckReport', function(src, payload)
+    return Testing.spawnCheckReport(src, payload)
+end, { rate = 4 })
 
 -- ============================================================================
 --              FULL ADMIN CONTROL (C20, #45; ARCHITECTURE §8.4.2)
@@ -2044,11 +2404,14 @@ end)
 
 -- Test hooks (tests/testing_spec.lua only).
 Testing._geometry = Geometry
+Testing._geometryOf = GeometryOf
+Testing._checkPoints = CheckPoints
 Testing._counts = Counts
 Testing._validTier = ValidTier
 Testing._adminRecord = AdminRecord
 Testing._reset = function()
     invites, lobbies, tests, byAdmin, pending, lastStart, names = {}, {}, {}, {}, {}, {}, {}
+    spawnReports = {}
 end
 Testing._tests = function() return tests end
 Testing._pending = function() return pending end

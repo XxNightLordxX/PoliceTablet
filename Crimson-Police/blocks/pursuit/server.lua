@@ -443,6 +443,20 @@ local function RequiredPoints(obj)
     return out
 end
 
+-- What appears at each location key this objective uses, for the spawn point check (Admin UI -> Testing,
+-- modules/testing; ARCHITECTURE 7.1 pointKinds): the suspect vehicles at their spawn points, the
+-- route a path.
+local function PointKinds(obj)
+    local o = Defaults(U.deepcopy(obj))
+    local out = {}
+    local model = type(o.models) == 'table' and type(o.models[1]) == 'string' and o.models[1] or nil
+    if type(o.route) == 'string' then out[#out + 1] = { key = o.route, kind = 'path' } end
+    for _, field in ipairs({ 'spawn', 'spawns' }) do
+        if type(o[field]) == 'string' then out[#out + 1] = { key = o[field], kind = 'vehicle', model = model } end
+    end
+    return out
+end
+
 local function TriggerOf(obj)
     local t = obj.trigger
     if type(t) == 'table' and IsNum(t.distance) then return 'distance', t end
@@ -2259,6 +2273,7 @@ CP.Blocks.register(BLOCK, {
     validate = Validate,
     armedCount = ArmedCount,
     requiredPoints = RequiredPoints,
+    pointKinds = PointKinds,
     prepare = Prepare,
     start = Start,
     tick = Tick,

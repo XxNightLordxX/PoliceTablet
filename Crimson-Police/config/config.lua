@@ -349,8 +349,8 @@ Config.Spawning = {
     -- every point counts as seen (the distance rules above still apply)
     losTimeoutMs = 1500,
     -- How a point is checked against the ground under it: each range is the lowest and highest height in metres of
-    -- the point in the mission file over the ground there (for the spawn point check and the placer; nothing uses
-    -- these yet)
+    -- the point in the mission file over the ground there (used by the spawn point check in Admin UI -> Testing, and
+    -- later by the placer)
     ground = {
         -- Metres, lowest and highest: a person's point fits from 0.3 m under to 1.6 m over the ground (a standing
         -- person's point is about 1 m over it)
@@ -1152,6 +1152,20 @@ Config.Testing = {
     useStartRoute = false, -- default for the start-route toggle
     allowTeleport = true,  -- teleport controls in test runs
     debugOverlay = true,   -- the debug overlay control
+    -- Check spawn points (Admin UI -> Testing): your own game visits every point of a mission's locations and tells
+    -- you which ones are under the ground, floating, in water, in a wall or inside a building that never loads. It
+    -- spawns nothing and moves only you (unseen and unhurt, back where you were afterwards)
+    spawnCheck = {
+        enabled = true,         -- false = no spawn point check
+        -- Milliseconds (1000-30000) your game waits for the map around a location to load before checking its points
+        sceneTimeoutMs = 8000,
+        -- Metres (0-400): points further than this from where you are are checked from right over them (you are moved
+        -- there); closer ones from where you stand (0 = move to every point)
+        moveWithin = 150.0,
+        -- true = also check every point of the routes (where cars drive and suspects run), which takes much longer;
+        -- false = only where people, vehicles and objects appear and the objective markers
+        routes = false,
+    },
 }
 
 -- ============================================================================

@@ -253,6 +253,14 @@ local function RequiredPoints(obj)
     return out
 end
 
+-- What appears at each location key this objective uses, for the spawn point check (Admin UI -> Testing,
+-- modules/testing; ARCHITECTURE 7.1 pointKinds): the fight's people and the boss at every point.
+local function PointKinds(obj)
+    local out = {}
+    for _, k in ipairs(RequiredPoints(obj)) do out[#out + 1] = { key = k, kind = 'ped' } end
+    return out
+end
+
 local function SetPoints(o, loc, keys)
     local out = {}
     for _, k in ipairs(keys or {}) do
@@ -1330,6 +1338,7 @@ CP.Blocks.register(BLOCK, {
     validate = Validate,
     armedCount = ArmedCount,
     requiredPoints = RequiredPoints,
+    pointKinds = PointKinds,
     prepare = function(ctx) StateOf(ctx) end,
     stage = Stage,
     start = Start,

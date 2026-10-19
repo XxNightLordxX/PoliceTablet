@@ -211,6 +211,18 @@ local function RequiredPoints(obj)
     return out
 end
 
+-- What appears at each location key this objective uses, for the spawn point check (Admin UI -> Testing,
+-- modules/testing; ARCHITECTURE 7.1 pointKinds): the fugitives hide at people's points, the clues are
+-- objects, the search circle's centre is a marker.
+local function PointKinds(obj)
+    local o = Defaults(U.deepcopy(obj))
+    local out = {}
+    if type(o.center) == 'string' then out[#out + 1] = { key = o.center, kind = 'marker' } end
+    if type(o.clues) == 'string' then out[#out + 1] = { key = o.clues, kind = 'prop' } end
+    if type(o.hiding) == 'string' then out[#out + 1] = { key = o.hiding, kind = 'ped' } end
+    return out
+end
+
 local function CheckLocation(o, loc, li, strict)
     local center = CenterOf(loc, o.center)
     if not center then
@@ -919,6 +931,7 @@ CP.Blocks.register(BLOCK, {
     validate = Validate,
     armedCount = function() return 0 end,
     requiredPoints = RequiredPoints,
+    pointKinds = PointKinds,
     prepare = function(ctx) StateOf(ctx) end,
     start = Start,
     tick = Tick,

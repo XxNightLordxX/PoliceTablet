@@ -277,6 +277,22 @@ local function RequiredPoints(obj)
     return out
 end
 
+-- What appears at each location key this objective uses, for the spawn point check (Admin UI -> Testing,
+-- modules/testing; ARCHITECTURE 7.1 pointKinds): the truck at the route's first point, the route
+-- after it a path, the ambush cars at their points.
+local function PointKinds(obj)
+    local o = Defaults(U.deepcopy(obj))
+    local out = {}
+    local amb = type(o.ambush) == 'table' and type(o.ambush.models) == 'table' and o.ambush.models[1] or nil
+    if type(o.route) == 'string' then
+        out[#out + 1] = { key = o.route, kind = 'path', first = 'vehicle', model = o.vehicle }
+    end
+    if type(o.ambushPoints) == 'string' then
+        out[#out + 1] = { key = o.ambushPoints, kind = 'vehicle', model = type(amb) == 'string' and amb or nil }
+    end
+    return out
+end
+
 local function CheckLocation(o, loc, li, strict)
     local c = Cfg()
     local route = RouteOf(loc, o.route)
@@ -1059,6 +1075,7 @@ CP.Blocks.register(BLOCK, {
     validate = Validate,
     armedCount = ArmedCount,
     requiredPoints = RequiredPoints,
+    pointKinds = PointKinds,
     prepare = function(ctx) StateOf(ctx) end,
     start = Start,
     tick = Tick,

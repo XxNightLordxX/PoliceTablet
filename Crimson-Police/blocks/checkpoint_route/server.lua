@@ -521,6 +521,12 @@ CP.Blocks.register(BLOCK, {
         return {}
     end,
 
+    -- the checkpoints are markers (spawn point check, ARCHITECTURE 7.1 pointKinds)
+    pointKinds = function(obj)
+        if type(obj.checkpoints) == 'string' then return { { key = obj.checkpoints, kind = 'marker' } } end
+        return {}
+    end,
+
     prepare = function(ctx)
         local st = Ensure(ctx)
         if st.medals then

@@ -2960,7 +2960,8 @@ rendered camera to 1.0 m and 1.7 m above the point hits the map, a vehicle or an
 1 + 2 + 16, options 7, his car or ped ignored), true otherwise or when it cannot tell (a probe that did not start, an
 invalid or unfinished result within ms, an entry that is no point). At most 16 probes run at once; the ones still
 running at the end are read for 60 more frames so their handles are freed.
-CP.Spawn.probe(kind, x, y, z, h, model, opts) (PLAN S6, Config.Spawning.ground; nothing calls it yet): loads the
+CP.Spawn.probe(kind, x, y, z, h, model, opts) (PLAN S6, Config.Spawning.ground; the spawn point check of
+modules/testing/client.lua calls it, PLAN S7; opts.wall = false skips the wall probe): loads the
 collision at the point (collisionTimeoutMs) and a building's inside there (pinned until ready, interiorTimeoutMs;
 never ready = interior_not_loaded), finds the ground from 2 m and from 50 m over the point (and from just over it
 under a low roof or the floor above: the one under it when that is the smaller move), then answers ok, snap
@@ -3255,8 +3256,19 @@ file, and that department's session carries no logo (no broken image in the NUI)
                                                  SetEntityCoords (the vehicle when driving) with ground z
     toggleDebug { enabled? }                  -> server:test:control { control = 'debug' }
     testPanel   { open = bool }               -> take / release the panel focus
+    spawnCheck  { missionId?, location? }     -> Check spawn points (PLAN S7, Config.Testing.spawnCheck): in a
+                                                 thread his own ped, frozen, unseen and unhurt, visits each
+                                                 location's start (map loaded with NewLoadSceneStartSphere),
+                                                 notes what it sees from there (CP.Spawn.visible), probes every
+                                                 point (CP.Spawn.probe; moved over points further than
+                                                 moveWithin; route points only with routes = true), pushes
+                                                 'spawnCheck' progress and results, reports each location
+                                                 (server:test:spawnCheckReport), then puts him back as he was
+                                                 (Crimson-Arena rule 13 re-checked before every move)
+    spawnCheckStop {}                         -> ends the check after the point being probed
   Events handled: client:test { controls, runId, debug }, client:testInvite { inviteId, missionLabel, from,
-    expiresIn }, client:inProgress / client:runEnded (HUD flag, focus), crimsonArena state bag (local player).
+    expiresIn }, client:inProgress / client:runEnded (HUD flag, focus), crimsonArena state bag (local player; it
+    also stops a running spawn point check).
 ```
 
 ## Crimson-Police/modules/testing/server.lua
@@ -3310,15 +3322,24 @@ file, and that department's session carries no logo (no broken image in the NUI)
     CP.Testing.state(src) -> TestState
     CP.Testing.pendingInvites(src) -> { TestInvite, ... }
     CP.Testing.onRunEnded(run, state, endReason)               (hook from CP.Runs, test runs only)
+    CP.Testing.spawnPoints(src, { missionId?, location? }) -> data|nil, errKey
+        Check spawn points (PLAN S7): the missions and their locations, or one location's points with what is
+        there (each block's pointKinds), how far over the ground each should be and the distance notes; built
+        from GeometryOf (the debug overlay's geometry without a run). ARCHITECTURE 5.27.
+    CP.Testing.spawnCheckReport(src, { missionId, location, results }) -> ok, data|errKey
+        what the admin's game found: one CP.warn (tag spawncheck, also in System -> Problems) per point that is
+        not right, the last report of each location kept in memory
+    CP.Testing.spawnReports() -> { SpawnReport, ... }          (copies, by mission then location)
   Net
     callbacks admin:getTests (testRun) · test:state (testRun or builderEdit: own data only) · test:candidates (testRun) ·
-              test:pendingInvites (anyone: their own invitations)
+              test:pendingInvites (anyone: their own invitations) · server:test:spawnPoints (testRun)
     actions   server:admin:startTest { missionId, location, tier, useStartRoute, testers } (testRun)
               server:admin:recordTest { missionId, location, tier, result, note } (testRun; builderEdit for a
               draft test) and its alias server:test:record (for the Supervisor UI builder)
               server:test:control { control, ... } (only the admin who started the test)
               server:test:invite { missionId, targets } · server:test:cancelInvites {} (testRun)
               server:testRespond { inviteId, accepted } (the invitee; accept gated by CP.Alerts.inArena)
+              server:test:spawnCheckReport { missionId, location, results } (testRun)
     events sent  client:testInvite { inviteId, missionLabel, from, expiresIn } ·
                  client:test { controls, runId, debug = false|DebugData }
     pushes   'test' { state = true } (the admin's test state changed) · 'invites' { test = true }
@@ -4808,6 +4829,15 @@ Left out (the engine refuses them as unsupported): values MariaDB stores as a ze
 month or day ('0000-00-00', 0, 300, '2026-00-01', and any bad date with IGNORE).
 ```
 
+## tests/spawn_check_spec.lua
+
+```text
+Check spawn points (PLAN S7; modules/testing server and client, each block's pointKinds): the server lists every
+point of a mission's location with what appears there, from the REAL blocks on the REAL built-in mission files; the
+admin's own game visits the points, judges each with CP.Spawn.probe and reports back; bad points get one console
+line each (and a line in Admin UI -> System -> Problems).
+```
+
 ## tests/spawn_client_spec.lua
 
 ```text
@@ -4817,22 +4847,6 @@ head bone, the rendered camera and the car. A 2 m wall: in front seen, close beh
 sees over, down a slope hidden; four probes per point (two eyes, chest and head height) with the flags, options and
 ignored entity; one clear line is enough; unfinished probes after the budget are seen and drained for 60 frames; bad
 entries seen; no eyes seen; at most 32 points and 16 probes at once; the budget kept to 50-5000 ms; bad args answer {}.
-```
-
-## tests/spawn_ground_spec.lua
-
-```text
-CP.Spawn.probe (modules/spawn/client.lua, PLAN S6) on the small map of H.groundNatives, whose natives check their
-argument types: a person 1 m over the ground ok (whole-number coordinates sent as decimals, the collision asked for
-around his ped, his capsule); 0.52 m under put on it; 2 m under the ground under the ground or put on it as
-snapWithin says; 5 m under found from 50 m up; floating and put down; ranges read live (a bad range: the default); a
-bridge over the point; under a low roof inside a trailer ok on the floor (the roof reported), 1.8 m over the floor
-under a roof put down, 0.5 m under the floor above put on it; the slope; no ground after collisionTimeoutMs; water
-over the ground, a pier over the sea; walls (hit as 1 or true, on the ground of a snapped point, a slow probe, one
-that never finishes or does not start: not known), the car and opts.entity / opts.ignore; a collision that loads
-late or never (500 ms at least); an interior pinned until ready and let go, one already loaded, one never ready; a
-car sized by its model (loaded for it and let go), 1.5 m under the road put on it, under a garage deck ok on its
-level, 3 m under, an unknown model, a car in a wall; objects (snap, ok, floating, kinds); bad input.
 ```
 
 ## tests/spawn_director_spec.lua
@@ -4849,6 +4863,23 @@ keeps the wave in its slice; maxSpread 360 is off), 9 asked from 4 good returns 
 allowed, 15 m never, one warning, the clock per objective, dropped once full, opts.since, cleared by testRestart), an
 officer who left, enabled = false (the first n as they are) and log = false. ctx.whenNear / Runs.whenNear: activateRange
 read live, its own range, 2D, a vector4, no point. The console lines are checked once per point and reason. No SQL.
+```
+
+## tests/spawn_ground_spec.lua
+
+```text
+CP.Spawn.probe (modules/spawn/client.lua, PLAN S6) on the small map of H.groundNatives, whose natives check their
+argument types: a person 1 m over the ground ok (whole-number coordinates sent as decimals, the collision asked for
+around his ped, his capsule); 0.52 m under put on it; 2 m under the ground under the ground or put on it as
+snapWithin says; 5 m under found from 50 m up; floating and put down; ranges read live (a bad range: the default); a
+bridge over the point; under a low roof inside a trailer ok on the floor (the roof reported), 1.8 m over the floor
+under a roof put down, 0.5 m under the floor above put on it; the slope; no ground after collisionTimeoutMs; water
+over the ground, a pier over the sea; walls (hit as 1 or true, on the ground of a snapped point, a slow probe, one
+that never finishes or does not start: not known), the car and opts.entity / opts.ignore; a collision that loads
+late or never (500 ms at least); an interior pinned until ready and let go, one already loaded, one never ready; a
+car sized by its model (loaded for it and let go), 1.5 m under the road put on it, under a garage deck ok on its
+level, 3 m under, an unknown model, a car in a wall; objects (snap, ok, floating, kinds); opts.wall = false (no
+capsule, the ground still judged); bad input.
 ```
 
 ## tests/spawn_hidden_spec.lua

@@ -266,5 +266,10 @@
   "test.control.resume_short": "Resume",
   "err.invalid_location": "That mission location is not valid.",
   "err.maintenance": "Crimson-Police is locked for maintenance until the server owner restarts it.",
-  "err.test_unknown_result": "That test result does not exist."
+  "err.test_unknown_result": "That test result does not exist.",
+  "err.spawn_check_disabled": "The spawn point check is turned off in Config.Testing.",
+  "err.spawn_check_running": "A spawn point check is already running. Stop it first.",
+  "err.spawn_check_on_run": "Finish or leave your mission before you check spawn points.",
+  "err.spawn_check_in_vehicle": "Get out of the vehicle before you check spawn points.",
+  "err.spawn_check_dead": "You can't check spawn points while you are down."
 }
