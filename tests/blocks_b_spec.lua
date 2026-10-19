@@ -36,7 +36,17 @@ end
 --                  CP.Npc STUB (modules/npc is another slice)
 -- ============================================================================
 
-local NPC = { states = {}, extra = {}, cuffs = {}, rolls = {}, rollResult = true, damaged = {} }
+local NPC = {
+    states = {},
+    extra = {},
+    cuffs = {},
+    rolls = {},
+    rollResult = true,
+    damaged = {},
+    spent = {},
+    wornAsks = {},
+    wornTask = nil,
+}
 CP.Npc = {
     setState = function(_, netId, state, extra)
         NPC.states[netId] = state
@@ -49,6 +59,13 @@ CP.Npc = {
     end,
     enableCuff = function(_, netId, opts) NPC.cuffs[netId] = opts end,
     onDamaged = function(fn) NPC.damaged[#NPC.damaged + 1] = fn end,
+    -- CP.Npc.wornOut's answer (tests/npc_spec.lua checks the real one against the flee clock): NPC.spent[netId] = the
+    -- clock wore him out; true within the shipped giveUpRange (30 m), with the task NPC.wornTask
+    wornOut = function(netId, near)
+        NPC.wornAsks[#NPC.wornAsks + 1] = { netId = netId, near = near }
+        if NPC.spent[netId] and near <= 30.0 then return true, NPC.wornTask end
+        return false
+    end,
 }
 
 H.load('blocks/hostile_waves/server.lua')
@@ -1624,6 +1641,106 @@ do -- custody = 'handover': the objective completes only once the cuffed suspect
     H.eq(ok, true, 'fa custody: handed over')
     H.eq(S.completes, 1, 'fa custody: complete once handed over')
     CP.Custody = saved
+end
+
+do -- worn out (Config.Flee, F3): a runner the flee clock wore out gives up once a participant is within giveUpRange
+    H.clockMs = 5400000
+    local function LastAsk(netId)
+        for i = #NPC.wornAsks, 1, -1 do
+            if NPC.wornAsks[i].netId == netId then return NPC.wornAsks[i] end
+        end
+        return nil
+    end
+    -- two unarmed inmates 20 m apart (4040 and 4060, 4000)
+    local ctx, S = MakeCtx('flee_arrest', { mode = 'scatter', suspects = 2, armedShare = 0, demeanour = 'runner' },
+        scatterLoc, { seed = 90 })
+    FA.start(ctx)
+    local inm = WithRole(S, 'inmate')
+    local a, b = inm[1].netId, inm[2].netId
+    MoveEnt(S, a, 4040, 4000, 30)
+    MoveEnt(S, b, 4060, 4000, 30)
+    H.eq(NPC.states[a], 'fleeing', 'fa worn: the inmates run')
+    Place(1, 4040, 4050, 30)
+    Tick(FA, ctx, 3)
+    H.eq(NPC.states[a], 'fleeing', 'fa worn: not worn out yet: he keeps running')
+    NPC.spent[a] = true
+    Tick(FA, ctx, 3)
+    H.eq(NPC.states[a], 'fleeing', 'fa worn: worn out with the nearest participant at 50 m: he walks on')
+    H.near((LastAsk(a) or {}).near or -1, 50.0, 0.01,
+        'fa worn: the block asks with its own nearest-participant distance')
+    Place(1, 4040, 4025, 30)
+    Tick(FA, ctx, 1)
+    H.eq(NPC.states[a], 'surrendered', 'fa worn: a participant within 25 m: he gives up at once (no 3 s wait)')
+    H.eq(NPC.extra[a], nil, 'fa worn: and kneels (no task)')
+    H.ok(NPC.cuffs[a] ~= nil, 'fa worn: Cuff suspect is offered')
+    H.eq(NPC.states[b], 'fleeing', 'fa worn: the other inmate (32 m, not worn out) runs on')
+    -- Config.Flee.exhausted = 'handsUp': the task goes with the surrender
+    NPC.wornTask = { action = 'handsUp', args = {} }
+    NPC.spent[b] = true
+    Tick(FA, ctx, 1)
+    H.eq(NPC.states[b], 'fleeing', 'fa worn: worn out but 32 m away')
+    Place(1, 4060, 4020, 30)
+    Tick(FA, ctx, 1)
+    H.eq(NPC.states[b], 'surrendered', 'fa worn: within 20 m he gives up too')
+    H.eq(NPC.extra[b] and NPC.extra[b].task and NPC.extra[b].task.action, 'handsUp', 'fa worn: with his hands up')
+    NPC.wornTask = nil
+    for _, x in ipairs(inm) do NPC.states[x.netId] = 'cuffed' end
+    Tick(FA, ctx, 1)
+    H.eq(S.completes, 1, 'fa worn: complete once both worn-out inmates are cuffed')
+    H.eq(#S.fails, 0, 'fa worn: no fail')
+
+    -- an armed inmate: worn out, he gives up before he could turn to fight; while he fights he is no runner
+    local ctx2, S2 = MakeCtx('flee_arrest', { mode = 'scatter', suspects = 1, armedShare = 1.0 }, scatterLoc,
+        { seed = 91 })
+    FA.start(ctx2)
+    local g = WithRole(S2, 'inmate')[1]
+    H.eq(g.opts.armed, true, 'fa worn: an armed inmate')
+    NearTo(1, S2, g.netId, 12.0)
+    Tick(FA, ctx2, 1)
+    H.eq(NPC.states[g.netId], 'hostile', 'fa worn: fresh, within fireWithin he fires')
+    NPC.spent[g.netId] = true
+    NearTo(1, S2, g.netId, 20.0)
+    Tick(FA, ctx2, 1)
+    H.eq(NPC.states[g.netId], 'hostile', 'fa worn: a fighting inmate is no runner (20 m, inside 22.5 m)')
+    NearTo(1, S2, g.netId, 25.0)
+    Tick(FA, ctx2, 1)
+    H.eq(NPC.states[g.netId], 'fleeing', 'fa worn: beyond 22.5 m he runs again')
+    Tick(FA, ctx2, 1)
+    H.eq(NPC.states[g.netId], 'surrendered', 'fa worn: a worn-out armed runner at 25 m gives up')
+    local ctx3, S3 = MakeCtx('flee_arrest', { mode = 'scatter', suspects = 1, armedShare = 1.0 }, scatterLoc,
+        { seed = 92 })
+    FA.start(ctx3)
+    local g3 = WithRole(S3, 'inmate')[1]
+    NPC.spent[g3.netId] = true
+    NearTo(1, S3, g3.netId, 12.0)
+    Tick(FA, ctx3, 1)
+    H.eq(NPC.states[g3.netId], 'surrendered',
+        'fa worn: worn out and a participant within fireWithin: he gives up instead of turning to fight')
+
+    -- a worn-out suspect does not feint while he would give up again at once
+    local ctx4, S4 = MakeCtx('flee_arrest',
+        { mode = 'scatter', suspects = 1, armedShare = 0, feint = 0.5, demeanour = 'runner' }, scatterLoc,
+        { seed = 93 })
+    FA.start(ctx4)
+    local f = WithRole(S4, 'inmate')[1]
+    NPC.spent[f.netId] = true
+    NearTo(1, S4, f.netId, 20.0)
+    Tick(FA, ctx4, 1)
+    H.eq(NPC.states[f.netId], 'surrendered', 'fa worn feint: worn out at 20 m: he gives up')
+    local rec = ctx4.state.peds[tostring(f.netId)]
+    rec.feintRoll = true   -- this suspect is the one who feints
+    Tick(FA, ctx4, 10)
+    H.eq(NPC.states[f.netId], 'surrendered', 'fa worn feint: no feint with an officer within giveUpRange (20 m)')
+    NearTo(1, S4, f.netId, 40.0)
+    Tick(FA, ctx4, 4)
+    H.eq(NPC.states[f.netId], 'surrendered', 'fa worn feint: beyond it the 5 s feint clock starts')
+    Tick(FA, ctx4, 1)
+    H.eq(NPC.states[f.netId], 'fleeing', 'fa worn feint: then he bolts (at his walk)')
+    H.eq(rec.feinted, true, 'fa worn feint: marked as a feint')
+    NearTo(1, S4, f.netId, 25.0)
+    Tick(FA, ctx4, 1)
+    H.eq(NPC.states[f.netId], 'surrendered', 'fa worn feint: caught up within 25 m he gives up again')
+    for k in pairs(NPC.spent) do NPC.spent[k] = nil end
 end
 
 do -- hostile_waves: behaviour and spawn sets per seed, the intel line, NpcDifficulty feel only

@@ -691,13 +691,14 @@ local function Approach(ctx, st, party)
     st.dirty = true
 end
 
-local function Surrender(ctx, st, c)
+-- task: the one-off task a runner gives up with (CP.Npc.wornOut's 'handsUp'); nil = he kneels.
+local function Surrender(ctx, st, c, task)
     local run = ctx.run
     if c.state == 'fleeing' or c.state == 'hostile' then
         c.state = 'surrendered'
         if CP.Runs.notePerson then CP.Runs.notePerson(run, c.netId, { did = 'surrendered' }) end
         CP.Npc.setState(run, c.netId, 'surrendered',
-            { contact = { label = c.label, kind = c.kind, actions = U.copy(c.actions) } })
+            { contact = { label = c.label, kind = c.kind, actions = U.copy(c.actions) }, task = task })
         CP.Npc.enableCuff(run, c.netId, { label = CP.L('npc.cuff'), duration = 5000 })
     elseif c.walking then
         -- a walking person stops: consensual contact, free to leave, still there to talk to
@@ -780,6 +781,15 @@ local function Watch(ctx, st, dt)
                     end
                 else
                     t.close = 0
+                end
+                -- worn out (Config.Flee): a runner gives up once a participant is within giveUpRange (a person who
+                -- walks off a consensual contact is not running; CP.Npc's flee clock never tires one in a car)
+                if not t.escaped and c.state == 'fleeing' and not c.walking and CP.Npc.wornOut then
+                    local tired, task = CP.Npc.wornOut(netId, near)
+                    if tired then
+                        Surrender(ctx, st, c, task)
+                        t.close = 0
+                    end
                 end
             elseif not pc and not c.dead and c.state ~= 'handed_over' and c.state ~= 'released' then
                 -- vanished without a death: gone

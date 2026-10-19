@@ -295,6 +295,26 @@ do
     Err('Flee.walkRate', 1.2, 'err.setting_range', 'a walk rate of at most 1.0 (never faster than normal)')
     Err('Flee.windedClipset', 'yes', 'err.setting_type', 'the look is on or off')
     H.ok(not E('Flee.jogRate').reload and not E('Flee.jogRate').restart, 'the rates are read live')
+    -- what a worn-out runner does (F3): a pick of three, the range 5-100 m, each comment alone, live
+    local exhaustedDesc = 'What a worn-out runner does when an officer comes within giveUpRange: \'surrender\' (he gives'
+        .. ' up and kneels), \'handsUp\' (he gives up and stands with his hands up) or \'walk\' (he walks on and never'
+        .. ' gives up on his own)'
+    H.eq(E('Flee.exhausted').desc, exhaustedDesc, 'the give-up choice, without the end of the windedClipset comment')
+    H.eq(E('Flee.exhausted').kind, 'enum', 'the give-up is a pick from its options')
+    H.eq(table.concat((E('Flee.exhausted').tpl or {}).options or {}, ','), 'surrender,handsUp,walk',
+        'its three options')
+    H.ok((Check('Flee.exhausted', 'handsUp')), 'hands up')
+    H.ok((Check('Flee.exhausted', 'walk')), 'or he walks on')
+    Err('Flee.exhausted', 'run', 'err.setting_option', 'there is no option to keep sprinting')
+    Err('Flee.exhausted', 'HANDSUP', 'err.setting_option', 'the option is spelled as listed')
+    H.eq(E('Flee.giveUpRange').desc, 'metres: a worn-out runner gives up when an officer is this close (5-100)',
+        'the give-up range reads alone')
+    ok, v = Check('Flee.giveUpRange', 50)
+    H.ok(ok and v == 50.0 and math.type(v) == 'float', 'a 50 m give-up range is kept as 50.0')
+    Err('Flee.giveUpRange', 4, 'err.setting_range', 'a give-up range of at least 5 m')
+    Err('Flee.giveUpRange', 101, 'err.setting_range', 'and at most 100 m')
+    H.ok(not E('Flee.exhausted').reload and not E('Flee.exhausted').restart, 'the give-up rule is read live')
+    H.ok(not E('Flee.giveUpRange').reload and not E('Flee.giveUpRange').restart, 'and so is its range')
     Err('Debug', 'yes', 'err.setting_type', 'text for on/off')
     Err('AdminTheme.primary', '#zzzzzz', 'err.setting_colour', 'a colour must be #rrggbb')
     H.ok((Check('AdminTheme.primary', '#112233')), 'a valid colour')

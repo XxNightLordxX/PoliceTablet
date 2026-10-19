@@ -147,8 +147,8 @@ local function NearestOf(list, coords)
     return best
 end
 
-local function NpcSet(ctx, netId, state)
-    if CP.Npc and CP.Npc.setState then CP.Npc.setState(ctx.run, netId, state) end
+local function NpcSet(ctx, netId, state, extra)
+    if CP.Npc and CP.Npc.setState then CP.Npc.setState(ctx.run, netId, state, extra) end
 end
 
 local function Neutralised(f) return f.state == 'dead' or f.state == 'cuffed' end
@@ -570,10 +570,11 @@ local function SetFug(ctx, st, f, state)
     st.dirty = true
 end
 
-local function Surrender(ctx, st, f)
+-- task: the one-off task he gives up with (CP.Npc.wornOut's 'handsUp'); nil = he kneels.
+local function Surrender(ctx, st, f, task)
     f.state = 'surrendered'
     f.close, f.far = 0, 0
-    NpcSet(ctx, f.netId, 'surrendered')
+    NpcSet(ctx, f.netId, 'surrendered', task and { task = task } or nil)
     local cuff = ctx.obj.cuff
     if CP.Npc and CP.Npc.enableCuff then
         CP.Npc.enableCuff(ctx.run, f.netId, {
@@ -646,6 +647,11 @@ local function Watch(ctx, st, dt, list)
                         else
                             f.close = 0
                         end
+                    end
+                    -- worn out (Config.Flee): he gives up once a participant is within giveUpRange
+                    if f.state == 'fleeing' and CP.Npc and CP.Npc.wornOut then
+                        local tired, task = CP.Npc.wornOut(f.netId, near)
+                        if tired then Surrender(ctx, st, f, task) end
                     end
                 end
             end

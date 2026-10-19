@@ -464,6 +464,63 @@ do
 end
 
 do
+    -- worn out (Config.Flee, F3, the real flee clock of CP.Npc): a runner gives up once an officer is within 30 m
+    local F = Config.Flee
+    local shipped = U.deepcopy(F)
+    F.jitter = 0
+    local function Bag(run, netId) return W.bags[run.entities[netId].entity].cp or {} end
+    for _, how in ipairs({ 'surrender', 'handsUp', 'walk' }) do
+        F.exhausted = how
+        Demeanour('warrant', 'runner')
+        local run = W.start({ 1 }, SceneMission({ profileSet = 'test_warrant', scene = { loitering = 1 } }))
+        W.tick(1)
+        local p = Contact(run, 1, 'person')
+        W.place(1, 2000.0, 1985.0, 30.0)
+        W.tick(5)
+        H.eq(p.state, 'fleeing', how .. ': the runner runs')
+        -- an officer keeps up 50 m behind (inside recoverRange, so no breather; far outside the 3 m close rule)
+        W.near(1, run, p.netId, 50.0)
+        W.tick(20)
+        H.ok(CP.Npc.gaitOf(p.netId) == 'jog' or CP.Npc.gaitOf(p.netId) == 'walk', how .. ': tired, not worn out')
+        W.near(1, run, p.netId, 25.0)
+        W.tick(2)
+        H.eq(p.state, 'fleeing', how .. ': only tired, he does not give up with an officer at 25 m')
+        W.near(1, run, p.netId, 50.0)
+        W.tick(10)
+        H.eq(CP.Npc.gaitOf(p.netId), 'spent', how .. ': worn out after 30 s of running')
+        H.eq(p.state, 'fleeing', how .. ': with the officer 50 m away he walks on')
+        W.near(1, run, p.netId, 25.0)
+        W.tick(1)
+        if how == 'walk' then
+            W.tick(10)
+            H.eq(p.state, 'fleeing', 'walk: worn out at 25 m he still walks on (never gives up on his own)')
+            H.eq(Bag(run, p.netId).state, 'fleeing', 'walk: his bag says fleeing')
+        else
+            H.eq(p.state, 'surrendered', how .. ': an officer within 25 m: he gives up')
+            local bag = Bag(run, p.netId)
+            H.eq(bag.state, 'surrendered', how .. ': the bag says surrendered')
+            H.ok(type(bag.cuff) == 'table', how .. ': Cuff suspect is offered')
+            H.eq(type(bag.contact), 'table', how .. ': still a contact to work')
+            if how == 'handsUp' then
+                H.eq(bag.task and bag.task.action, 'handsUp', 'handsUp: he stands with his hands up (a bag task)')
+            else
+                H.eq(bag.task, nil, 'surrender: no task, he kneels like every surrender')
+            end
+            W.near(1, run, p.netId, 1.0)
+            W.tick(4)
+            H.fire('crimson-police:server:npcCuff', 1, run.id, p.netId)
+            H.eq(p.state, 'cuffed', how .. ': Cuff suspect')
+            H.eq(run.score.shared.subject_alive, 1, how .. ': the catch earns subject_alive')
+        end
+        H.eq(run.state, 'in_progress', how .. ': the run goes on')
+        RestoreDemeanour()
+        Runs.endRun(run, 'completed', 'completed')
+    end
+    for k, v in pairs(shipped) do F[k] = v end
+    W.place(1, 9000.0, 9000.0, 30.0)   -- where the runner test before this one left the officer
+end
+
+do
     -- hostile: a tell, then the draw; the weapon is given only when the tell ends
     Demeanour('armed', 'hostile')
     W.weapons = {}

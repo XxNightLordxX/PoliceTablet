@@ -293,6 +293,14 @@ metres, km/h; chances are fractions (0.30); progress durations are milliseconds.
 Each block's `server.lua` exposes `defaults(obj)` and `validate(obj, mission, location)` so the
 loader and the Mission Builder apply exactly these defaults and guardrails.
 
+Worn-out runners (Config.Flee, not a file field): next to its own close rule, each block that owns a runner calls
+`CP.Npc.wornOut(netId, near)` with its own nearest-participant distance and, on true, its own surrender (state
+`surrendered`, the bag task it returned, Cuff suspect), with no wait: `flee_arrest` for every ped in `'fleeing'`
+(armed ones too, before the fire-range rule could turn an armed inmate hostile; a surrendered suspect's feint waits
+while wornOut is true), `pursuit` for a suspect in `'fleeing'` in stop mode only (follow mode has no arrests),
+`search_area` for a fugitive in `'fleeing'`, `field_contact` for a contact in `'fleeing'` who is not walking off a
+consensual contact. The escape rules are unchanged.
+
 Evidence field_contact accepts: `{ type = 'action', netId, action, phase = 'begin'|'finish' }` (from the plain
 event `crimson-police:server:custody`), `{ type = 'decide', netId, choice, offence }` (from the action
 `server:contactDecide`), `{ type = 'cuffed', netId }` (CP.Npc), `{ type = 'aim' | 'stunned', netId }` (client
@@ -920,6 +928,13 @@ Server:
   the ped does not tire or it sits in a vehicle; nil for a net id that is not a living ped of a live run)
 - `fleeClock(netId) -> { gait, spent, sprint, jog, walk, inVehicle }|nil` — read only: the seconds run on foot so far,
   the seconds of running at which this ped's sprint, jog and walk end, and whether it sits in a vehicle now
+- `wornOut(netId, near) -> boolean, task|nil` — the give-up rule of a worn-out runner (Config.Flee.exhausted,
+  giveUpRange 5-100 m, read live): true when `gaitOf(netId)` is `'spent'` (so never while Config.Flee is off, for a ped
+  that does not tire or one in a vehicle), exhausted is not `'walk'` and `near` (the block's own metres to its nearest
+  participant) is within giveUpRange; the second value is the task the block writes with its own surrender: nil for
+  `'surrender'` (a missing or unknown value; he kneels, the host's surrendered re-task) or a fresh
+  `{ action = 'handsUp', args = {} }` for `'handsUp'`. It reads only the server's clock (never the bag) and not the
+  ped's state: the block checks that (§3.3 "Worn-out runners")
 - A second `weaponDamageEvent` listener (Config.NpcCombat.cancelLethalHeadshots): `CancelEvent()` for a hit with
   `willKill` whose `parentGlobalId` is an armed, living mission ped of a live run and whose every hit is the ped of
   an active participant of that run in routing bucket 0, not in the arena, and healthy: the server's

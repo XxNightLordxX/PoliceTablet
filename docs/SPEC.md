@@ -763,7 +763,7 @@ Locations for every new mission come from GTA V vehicle nodes and known base-gam
 
 - Spawns: 1 fugitive (scales) hidden inside the circle; 3 clue props (a dropped bag, a phone, a witness NPC)
 
-- Objectives: 1) check each clue with ox_target (4 s progress); each clue shrinks the circle 600 → 300 → 150 → 50 m, always still containing a fugitive; 2) when a participant gets within 30 m, that fugitive runs on foot; 3) catch and cuff every fugitive ("Cuff suspect", 5 s progress). Fugitives are unarmed and give up when stunned, or when a participant stays within 3 m of them for 3 seconds
+- Objectives: 1) check each clue with ox_target (4 s progress); each clue shrinks the circle 600 → 300 → 150 → 50 m, always still containing a fugitive; 2) when a participant gets within 30 m, that fugitive runs on foot; 3) catch and cuff every fugitive ("Cuff suspect", 5 s progress). Fugitives are unarmed and give up when stunned, when a participant stays within 3 m of them for 3 seconds, or once worn out by running when a participant is within 30 m (Suspect behaviour, Runners tire)
 
 - Scales: fugitives (base 1)
 
@@ -875,7 +875,7 @@ Locations for every new mission come from GTA V vehicle nodes and known base-gam
 
 - Spawns: 5 inmates (scales) in prison clothes, already outside the fence and scattering on foot along the escape routes; 2 in every 5 carry pistols and fire when a participant is within 15 m
 
-- Objectives: catch every inmate, then cuff them ("Cuff suspect", 5 s progress). An unarmed inmate gives up when a participant aims at them within 10 m, when stunned, or when a participant stays within 3 m for 3 seconds. An armed inmate gives up only when stunned or below 50% health
+- Objectives: catch every inmate, then cuff them ("Cuff suspect", 5 s progress). An unarmed inmate gives up when a participant aims at them within 10 m, when stunned, or when a participant stays within 3 m for 3 seconds. An armed inmate gives up only when stunned or below 50% health. Any inmate worn out by running gives up when a participant is within 30 m (Suspect behaviour, Runners tire)
 
 - Scales: inmates
 
@@ -969,7 +969,7 @@ Locations for every new mission come from GTA V vehicle nodes and known base-gam
 
 - Spawns: 9 hostiles (scales) in 2 waves of 5 / 4, holding cover inside (tactics rolled: hold 50%, balanced 40%, push 10%); pistols, combat pistols and pump shotguns; base accuracy 25 and armour 0 plus the tier's increase; a hostile under 25% health has a 30% chance to surrender. 1 unarmed cook (scales, max 3). 2 stashes (scales, max 4) hidden among the stash spots
 
-- Objectives: 1) breach: ox_target "Stack up and breach" (3 s progress) on both entry points, by 2 different officers within 6 seconds of each other (the count is min(2, participants still in the run): when only one is left, one officer breaches both entries with an 8 s progress each, so the run never soft-locks); 2) neutralise every hostile (killed, or surrendered and cuffed); 3) when the last hostile falls the cooks bolt along an escape route: catch and cuff them (unarmed; they give up when aimed at within 10 m, when stunned, or when a participant stays within 3 m for 3 seconds); 4) search the stash spots ("Search", 4 s progress) until every stash is found, then "Seize the product" (6 s progress); 5) "Shut down the lab" at the lab point: 3 ox_lib skill checks (medium, medium, hard); 2 misses in a row start a toxic fire (an effect only, it hurts nobody), a setback and never a fail: any participant must "Ventilate" (10 s progress) at the lab point, the officer who missed loses 15 points (lab_fire, personal), and the shutdown can be tried again 30 seconds later by anyone; 6) Process the scene
+- Objectives: 1) breach: ox_target "Stack up and breach" (3 s progress) on both entry points, by 2 different officers within 6 seconds of each other (the count is min(2, participants still in the run): when only one is left, one officer breaches both entries with an 8 s progress each, so the run never soft-locks); 2) neutralise every hostile (killed, or surrendered and cuffed); 3) when the last hostile falls the cooks bolt along an escape route: catch and cuff them (unarmed; they give up when aimed at within 10 m, when stunned, when a participant stays within 3 m for 3 seconds, or once worn out by running when a participant is within 30 m); 4) search the stash spots ("Search", 4 s progress) until every stash is found, then "Seize the product" (6 s progress); 5) "Shut down the lab" at the lab point: 3 ox_lib skill checks (medium, medium, hard); 2 misses in a row start a toxic fire (an effect only, it hurts nobody), a setback and never a fail: any participant must "Ventilate" (10 s progress) at the lab point, the officer who missed loses 15 points (lab_fire, personal), and the shutdown can be tried again 30 seconds later by anyone; 6) Process the scene
 
 - Scales: hostiles, cooks (max 3), stashes (max 4)
 
@@ -1419,13 +1419,13 @@ Every person in a mission gets a demeanour when it spawns, rolled by the server 
 | Nervous | Complies, but fidgets and looks around; 15% run when ordered out of a car or frisked (running from that order makes them Evading) |
 | Evasive | Walks away when an officer comes within the approach distance (lawful while the contact is consensual); stops when aimed at, when an officer stays within 3 m for 3 s, or when stunned |
 | Hostile | Armed people only: shows a tell, then draws and fights |
-| Runner | Runs on foot as soon as an officer comes within the approach distance (the flee_arrest give-up and escape rules apply) |
+| Runner | Runs on foot as soon as an officer comes within the approach distance (the flee_arrest give-up and escape rules apply, and he tires: Config.Flee) |
 
 - The weights come from the person's truth (Config.Custody.demeanour): guilty people run and fight more often than clean ones. Only a person rolled armed can be Hostile.
 
 - Tells: before anyone runs or draws, the server tells the run host to play a 1.5–3 second tell every participant sees (looking around, a hand to the waistband), and participants within 25 m get a HUD hint such as "Watch his hands" (Config.Npc.tellHints). Nobody draws without one, and the weapon is given only when the tell ends.
 
-- Feint: a surrendered unarmed suspect may bolt when no participant is within 6 m and none aims at them for 5 seconds (flee_arrest feint chance, 0 by default). They stay protected: killing them still fails the mission.
+- Feint: a surrendered unarmed suspect may bolt when no participant is within 6 m and none aims at them for 5 seconds (flee_arrest feint chance, 0 by default), and not while he is worn out by running with a participant within Config.Flee.giveUpRange (he would give up again at once). They stay protected: killing them still fails the mission.
 
 - At a stop, the car rolls yield, flee or fight when the lights trigger fires (pursuit responses). A yielding car pulls to the kerb, puts its hazards on and turns its engine off. A fleeing car drives recklessly, as today. In a fighting car, armed passengers may shoot at participants within 40 m (drive-by chance), and a boxed-in driver may ram the nearest participant vehicle once for 3 seconds (ram chance).
 
@@ -1437,7 +1437,7 @@ Every person in a mission gets a demeanour when it spawns, rolled by the server 
   - Damage: while their run is live, each participant's game makes NPC bullets and melee do half damage (aiDamage, aiMeleeDamage) and gives the officer no headshot multiplier (noCriticalHits), again after a respawn; officerDefense (off by default) lowers all weapon damage the officer takes. Everything goes back when the run ends. The server also drops a hit by a mission NPC that would kill a healthy officer of its run in one shot (cancelLethalHeadshots): healthy means at least lethalCancelAbove (0.75) of his health, as the server's copy of his ped says, so the shot that finishes off a hurt officer always counts and officers can still go down.
   - 60 rounds per armed NPC (ammo).
 
-- Runners tire (Config.Flee, owner request of 2026-10-19: "I want the peds to run out of stamina when they run away"). GTA's NPCs have no stamina, so the server times every mission NPC in the fleeing state while it is on foot: it sprints for sprintSeconds (10), jogs for jogSeconds (12), walks for walkSeconds (8), and is then worn out (spent). Each person's times are stretched or shortened by up to jitter (25%), rolled once from the run seed, and by the Config.NpcDifficulty preset's fleeMult ('hard' 20% longer, 'easy' 20% shorter). Only time spent fleeing on foot counts: a person who flees by car (a field contact's driver who bolts) does not tire while he sits in a vehicle, and his gait there is a sprint. The time is kept when the person stops (an armed inmate turning to fight, a surrender, a feint) or gets into a car, and runs on when he is on foot again. With no participant within recoverRange (60 m) for recoverSeconds (20 s) the person gets his breath back and sprints again. With armedTire = false a person carrying a visible weapon never tires (a contact's hidden weapon never counts). The gait is written to the person's cp bag (gait) only when it changes, never as a new task. The game that owns the runner slows him down to it (OneSync often gives a runner to the officer chasing him, so every participant's game does this for the runners it owns, not only the host's): at most a run while he jogs and a walk once he walks or is worn out, held every frame, played at jogRate (0.95) or walkRate (0.85) of the normal speed, and with windedClipset a jog, then a winded walk. The host gives every leg of his flee at that pace and gives his current leg again when the gait changes; a tired runner with no route left runs 40 m legs on the navmesh straight away from the nearest officer instead of GTA's flee task (which has no speed). He gets his own pace back at once when he stops fleeing (a surrender, a fight), gets his breath back, sits in a vehicle or Config.Flee is switched off. No give-up rule reads the gait yet.
+- Runners tire (Config.Flee, owner request of 2026-10-19: "I want the peds to run out of stamina when they run away"). GTA's NPCs have no stamina, so the server times every mission NPC in the fleeing state while it is on foot: it sprints for sprintSeconds (10), jogs for jogSeconds (12), walks for walkSeconds (8), and is then worn out (spent). Each person's times are stretched or shortened by up to jitter (25%), rolled once from the run seed, and by the Config.NpcDifficulty preset's fleeMult ('hard' 20% longer, 'easy' 20% shorter). Only time spent fleeing on foot counts: a person who flees by car (a field contact's driver who bolts) does not tire while he sits in a vehicle, and his gait there is a sprint. The time is kept when the person stops (an armed inmate turning to fight, a surrender, a feint) or gets into a car, and runs on when he is on foot again. With no participant within recoverRange (60 m) for recoverSeconds (20 s) the person gets his breath back and sprints again. With armedTire = false a person carrying a visible weapon never tires (a contact's hidden weapon never counts). The gait is written to the person's cp bag (gait) only when it changes, never as a new task. The game that owns the runner slows him down to it (OneSync often gives a runner to the officer chasing him, so every participant's game does this for the runners it owns, not only the host's): at most a run while he jogs and a walk once he walks or is worn out, held every frame, played at jogRate (0.95) or walkRate (0.85) of the normal speed, and with windedClipset a jog, then a winded walk. The host gives every leg of his flee at that pace and gives his current leg again when the gait changes; a tired runner with no route left runs 40 m legs on the navmesh straight away from the nearest officer instead of GTA's flee task (which has no speed). He gets his own pace back at once when he stops fleeing (a surrender, a fight), gets his breath back, sits in a vehicle or Config.Flee is switched off. A worn-out runner gives up (owner request of 2026-10-19: foot pursuits must end instead of dragging on): as soon as a participant is within giveUpRange (30 m) of a person the clock has worn out, the objective that owns him surrenders him its own way, with no wait (flee_arrest's suspects and inmates, a pursuit's suspects who ran from a stopped car in stop mode, search_area's fugitives, and field_contact's runners; not a person who walks off a consensual contact, and never in a pursuit's follow mode, which has no arrests). With exhausted = 'surrender' he kneels like every surrender; with 'handsUp' he stands with his hands up; either way Cuff suspect is offered as for any surrender. With 'walk' he walks on and gives up only by the other rules (aim, stun, 3 m for 3 s, low health). An armed runner who is worn out gives up too, before he could turn to fight (armedTire = false keeps him fresh, so he never does); one who is already fighting is no runner until he runs again. A worn-out suspect who surrendered does not fake a surrender and bolt while a participant is within giveUpRange. The escape rules are unchanged: a runner nobody keeps up with still escapes.
 
 - The debrief (the result screen, Profile & History and the dispute reviews) lists each person's demeanour and what they did (walked away, ran, drew a weapon, surrendered, faked a surrender, cuffed, escaped, killed), once the run has ended, so a participant who leaves early learns nothing about a person still in play.
 
@@ -1854,7 +1854,7 @@ flee_arrest
 | Surrender / flee / fight chances | percentages adding up to 100 | 50 / 30 / 20 |
 | Armed chance and weapons | 0–100%; from the allowed list | 20%; pistol |
 | Escape after | 200–800 m for 10–60 s | 400 m for 20 s |
-| Gives up when | aimed at within 5–15 m (10 m by default), stunned, or a participant stays within 3 m for 3 s | all three |
+| Gives up when | aimed at within 5–15 m (10 m by default), stunned, or a participant stays within 3 m for 3 s; and, whatever is set here, worn out by Config.Flee with a participant within its giveUpRange | all three |
 | Demeanour | rolled from Config.Custody.demeanour, or fixed | rolled |
 | Feint chance | 0–50% | 0% |
 | After an arrest | Cuff only, or hand over to transport | Cuff only |
@@ -3211,8 +3211,8 @@ Config.NpcCombat = {
 
 -- How long a suspect who runs from your officers can keep running. GTA's NPCs never tire, so the server times every
 -- mission NPC that runs on foot (time in a car does not count): first a sprint, then a jog, then a walk, then worn
--- out, and he slows down to match. Config.NpcDifficulty's fleeMult stretches every time here ('hard' runners last
--- 20 % longer, 'easy' ones 20 % shorter).
+-- out, and he slows down to match. A worn-out runner gives up when an officer gets close. Config.NpcDifficulty's
+-- fleeMult stretches every time here ('hard' runners last 20 % longer, 'easy' ones 20 % shorter).
 Config.Flee = {
     enabled = true,                  -- false = suspects run as GTA makes them: they never tire
     sprintSeconds = 10,              -- seconds a runner sprints before he slows to a jog
@@ -3228,6 +3228,10 @@ Config.Flee = {
     jogRate = 0.95,                  -- a jogging runner's speed: 1.0 = a normal jog, 0.9 = 10 % slower (0.5-1.0)
     walkRate = 0.85,                 -- a walking or worn-out runner's speed: 1.0 = a normal walk (0.5-1.0)
     windedClipset = true,            -- true = a tired runner looks it: he jogs, then walks winded
+    -- What a worn-out runner does when an officer comes within giveUpRange: 'surrender' (he gives up and kneels),
+    -- 'handsUp' (he gives up and stands with his hands up) or 'walk' (he walks on and never gives up on his own)
+    exhausted = 'surrender',
+    giveUpRange = 30.0,              -- metres: a worn-out runner gives up when an officer is this close (5-100)
 }
 
 -- ── Built-in mission tweaks ─────────────────────────────────────────────────

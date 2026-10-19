@@ -374,11 +374,16 @@ local FLEE_DEFAULTS = {
     jitter = 0.25,
     recoverSeconds = 20,
     recoverRange = 60.0,
+    giveUpRange = 30.0,
 }
 local FLEE_SECONDS_RANGE = { 1, 120 }
 local FLEE_JITTER_RANGE = { 0, 0.5 }
 local FLEE_RECOVER_RANGE = { 10, 500 }
 local FLEE_MULT_RANGE = { 0.1, 5 }
+local FLEE_GIVE_UP_RANGE = { 5, 100 }
+-- Config.Flee.exhausted = 'handsUp': the task a worn-out runner gives up with (with 'surrender' he kneels, like every
+-- other surrender)
+local HANDS_UP = { action = 'handsUp', args = {} }
 
 local function FleeCfg()
     local c = Config and Config.Flee
@@ -619,6 +624,22 @@ function Npc.fleeClock(netId)
         walk = edges[3],
         inVehicle = InVehicle(e),
     }
+end
+
+-- The give-up rule of a worn-out runner (Config.Flee.exhausted, giveUpRange), for the blocks that own a runner's
+-- state: true, and the task to write with the block's own surrender (nil = he kneels; 'handsUp' = he stands with his
+-- hands up), when the ped's flee clock says it is worn out ('spent', like gaitOf: never while Config.Flee is off, for
+-- a ped that does not tire or one in a vehicle), Config.Flee.exhausted is 'surrender' or 'handsUp' (a missing or
+-- unknown value is 'surrender') and `near`, the block's own metres to its nearest participant, is within
+-- giveUpRange. false for 'walk' (he walks on) and for anything else. The block decides which states it applies to.
+function Npc.wornOut(netId, near)
+    near = tonumber(near)
+    if not near or near ~= near then return false end
+    local how = FleeCfg().exhausted
+    if how == 'walk' then return false end
+    if near > FleeNum('giveUpRange', FLEE_GIVE_UP_RANGE) then return false end
+    if Npc.gaitOf(netId) ~= 'spent' then return false end
+    return true, how == 'handsUp' and U.deepcopy(HANDS_UP) or nil
 end
 
 function Npc.rollSurrender(run, netId, chance)

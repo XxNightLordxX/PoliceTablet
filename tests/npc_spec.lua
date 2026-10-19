@@ -1606,6 +1606,128 @@ do
 end
 
 -- ============================================================================
+--              A WORN-OUT RUNNER GIVES UP (Config.Flee, step F3)
+-- ============================================================================
+-- CP.Npc.wornOut(netId, near): the rule each block that owns a runner calls next to its own close rule.
+
+do
+    Reset()
+    local F = Config.Flee
+    H.eq(F.exhausted, 'surrender', 'a worn-out runner gives up and kneels by default')
+    H.eq(F.giveUpRange, 30.0, 'once an officer is within 30 m')
+    local shipped = U.deepcopy(F)
+    F.jitter = 0
+    local wr = NewRun('worn-a', { 41 }, { seed = 77 })
+    Place(41, 25.0, 0.0, 0.0)
+    local n, e = SpawnPed(wr, { coords = vec3(0.0, 0.0, 0.0), role = 'suspect', armed = false })
+    H.eq(Npc.wornOut(n, 25.0), false, 'a ped that never ran is not worn out')
+    Npc.setState(wr, n, 'fleeing')
+    Tick(11)
+    H.eq(Npc.gaitOf(n), 'jog', 'jogging after 10 s')
+    H.eq(Npc.wornOut(n, 25.0), false, 'a jogging runner does not give up with an officer at 25 m')
+    Tick(12)
+    H.eq(Npc.gaitOf(n), 'walk', 'walking after 22 s')
+    H.eq(Npc.wornOut(n, 25.0), false, 'nor a walking one')
+    Tick(8)
+    H.eq(Npc.gaitOf(n), 'spent', 'worn out after 30 s')
+    local tired, task = Npc.wornOut(n, 25.0)
+    H.eq(tired, true, 'worn out with an officer at 25 m: he gives up')
+    H.eq(task, nil, 'with \'surrender\' he kneels (no task)')
+    H.eq((Npc.wornOut(n, 30.0)), true, 'at exactly giveUpRange too')
+    H.eq((Npc.wornOut(n, 30.5)), false, 'not beyond it')
+    H.eq((Npc.wornOut(n, 50.0)), false, 'an officer at 50 m: he walks on')
+    H.eq((Npc.wornOut(n, nil)), false, 'no distance: no')
+    H.eq((Npc.wornOut(n, 0 / 0)), false, 'a NaN distance: no')
+    H.eq((Npc.wornOut(n, '20')), true, 'a distance given as text is read as a number')
+    -- the clock is the server's: the bag a client may have rewritten is never read
+    Entity(e).state:set('cp', { run = wr.id, state = 'fleeing', gait = 'sprint' }, true)
+    H.eq((Npc.wornOut(n, 25.0)), true, 'a client-written bag does not make him fresh')
+    -- Config.Flee.exhausted
+    F.exhausted = 'handsUp'
+    tired, task = Npc.wornOut(n, 25.0)
+    H.eq(tired, true, 'handsUp: he gives up')
+    H.eq(task and task.action, 'handsUp', 'with the hands-up task')
+    H.eq(type(task and task.args), 'table', 'and its (empty) arguments')
+    task.action = 'kneel'
+    local _, again = Npc.wornOut(n, 25.0)
+    H.eq(again and again.action, 'handsUp', 'every answer is a fresh copy of the task')
+    F.exhausted = 'walk'
+    H.eq((Npc.wornOut(n, 2.0)), false, 'walk: he never gives up on his own, even at 2 m')
+    F.exhausted = nil
+    tired, task = Npc.wornOut(n, 25.0)
+    H.ok(tired == true and task == nil, 'a missing value is \'surrender\'')
+    F.exhausted = 'nonsense'
+    tired, task = Npc.wornOut(n, 25.0)
+    H.ok(tired == true and task == nil, 'an unknown value is \'surrender\'')
+    F.exhausted = 'surrender'
+    -- Config.Flee.giveUpRange, read live and kept to 5-100 m
+    F.giveUpRange = 50.0
+    H.eq((Npc.wornOut(n, 45.0)), true, 'giveUpRange 50: an officer at 45 m is close enough')
+    F.giveUpRange = 500
+    H.eq((Npc.wornOut(n, 99.0)), true, 'giveUpRange 500 is kept to 100 m: 99 m')
+    H.eq((Npc.wornOut(n, 101.0)), false, 'and not 101 m')
+    F.giveUpRange = 1
+    H.eq((Npc.wornOut(n, 4.0)), true, 'giveUpRange 1 is at least 5 m: 4 m')
+    H.eq((Npc.wornOut(n, 6.0)), false, 'and not 6 m')
+    F.giveUpRange = 'far'
+    H.eq((Npc.wornOut(n, 29.0)), true, 'a giveUpRange that is not a number is 30 m: 29 m')
+    H.eq((Npc.wornOut(n, 31.0)), false, 'and not 31 m')
+    F.giveUpRange = 30.0
+    -- the state is the block's to check: a worn-out suspect who surrendered stays worn out (no feint at once)
+    Npc.setState(wr, n, 'surrendered')
+    Tick(3)
+    H.eq((Npc.wornOut(n, 25.0)), true, 'surrendered with an officer near: still worn out')
+    -- his breath back: no officer within 60 m for 20 s
+    Place(41, 200.0, 0.0, 0.0)
+    Tick(21)
+    H.eq(Npc.gaitOf(n), 'sprint', 'after the breather he could sprint again')
+    H.eq((Npc.wornOut(n, 25.0)), false, 'and is no longer worn out')
+    Place(41, 25.0, 0.0, 0.0)
+    -- Config.Flee off: nobody tires, so nobody gives up from it
+    local n2 = SpawnPed(wr, { coords = vec3(1.0, 0.0, 0.0), role = 'suspect', armed = false })
+    Npc.setState(wr, n2, 'fleeing')
+    Tick(31)
+    H.eq((Npc.wornOut(n2, 25.0)), true, 'a second runner is worn out after 30 s')
+    F.enabled = false
+    H.eq((Npc.wornOut(n2, 25.0)), false, 'Config.Flee off: he does not give up from it')
+    F.enabled = true
+    -- armedTire = false: a suspect with a visible weapon never tires, so he never gives up from it
+    local na = SpawnPed(wr, { coords = vec3(2.0, 0.0, 0.0), role = 'inmate', armed = true })
+    local nu = SpawnPed(wr, { coords = vec3(3.0, 0.0, 0.0), role = 'inmate', armed = false })
+    F.armedTire = false
+    Npc.setState(wr, na, 'fleeing')
+    Npc.setState(wr, nu, 'fleeing')
+    Tick(31)
+    H.eq((Npc.wornOut(na, 25.0)), false, 'armedTire false: the armed inmate is never worn out')
+    H.eq((Npc.wornOut(nu, 25.0)), true, 'the unarmed one is')
+    F.armedTire = true
+    H.eq((Npc.wornOut(na, 25.0)), false, 'armedTire switched on: his clock starts only now')
+    Tick(31)
+    H.eq((Npc.wornOut(na, 25.0)), true, 'armedTire true: 30 s later the armed inmate is worn out too')
+    -- in a vehicle: never (a field contact's driver who bolts)
+    W.nextEnt = W.nextEnt + 1
+    local car = W.nextEnt
+    W.ents[car] = { exists = true, type = 2, coords = vec3(0.0, 0.0, 0.0), health = 1000, armour = 0 }
+    W.ents[W.byNet[nu]].vehicle = car
+    H.eq((Npc.wornOut(nu, 25.0)), false, 'a worn-out runner who sits in a car does not give up from it')
+    W.ents[W.byNet[nu]].vehicle = nil
+    H.eq((Npc.wornOut(nu, 25.0)), true, 'out of the car he does')
+    -- dead, unknown, a run that ended
+    W.ents[W.byNet[n2]].health = 0
+    Tick(2)
+    H.eq((Npc.wornOut(n2, 25.0)), false, 'a dead runner does not give up')
+    H.eq((Npc.wornOut(99999, 25.0)), false, 'a net id no run has')
+    H.eq((Npc.wornOut(nil, 25.0)), false, 'no net id')
+    wr.state = 'ended'
+    H.eq((Npc.wornOut(nu, 25.0)), false, 'a run that ended')
+    R.runs['worn-a'] = nil
+    Tick(1)
+    for k, v in pairs(shipped) do F[k] = v end
+    F.exhausted, F.giveUpRange = shipped.exhausted, shipped.giveUpRange
+    Reset()
+end
+
+-- ============================================================================
 --                               REGISTRY PRUNING
 -- ============================================================================
 

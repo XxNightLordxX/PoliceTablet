@@ -226,6 +226,7 @@ local RANGES = {
     ['Flee.recoverRange'] = { 10, 500 },
     ['Flee.jogRate'] = { 0.5, 1 },
     ['Flee.walkRate'] = { 0.5, 1 },
+    ['Flee.giveUpRange'] = { 5, 100 },
 }
 
 -- Numbers that may go either way whatever config.lua has.
@@ -820,6 +821,7 @@ local KNOWN = {
     ['Units.invitePolicy'] = { tpl = Enum({ 'anyone', 'leader' }), kind = 'enum' },
     ['NpcDifficulty.preset'] = { tpl = Enum({ 'easy', 'normal', 'hard', 'custom' }), kind = 'enum' },
     ['NpcCombat.firingPattern'] = { tpl = Enum({ 'single', 'burst', 'delayed', 'default' }), kind = 'enum' },
+    ['Flee.exhausted'] = { tpl = Enum({ 'surrender', 'handsUp', 'walk' }), kind = 'enum' },
     ['NpcCombat.weapons'] = { tpl = ListOf(WEAPON_NAME, { min = 1, unique = true }), kind = 'list', item = 'string' },
     ['NpcCombat.replace'] = { tpl = MapOf(WEAPON_NAME, '^[Ww][Ee][Aa][Pp][Oo][Nn]_[%w_]+$') },
     ['NpcCombat.fallback'] = { tpl = WEAPON_NAME },

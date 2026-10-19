@@ -308,8 +308,8 @@ local function HealthRatio(p)
     return (hp - 100) / (max - 100)
 end
 
-local function NpcSet(ctx, netId, state)
-    if CP.Npc and CP.Npc.setState then CP.Npc.setState(ctx.run, netId, state) end
+local function NpcSet(ctx, netId, state, extra)
+    if CP.Npc and CP.Npc.setState then CP.Npc.setState(ctx.run, netId, state, extra) end
 end
 
 local function Neutralised(p) return p.state == 'dead' or p.state == 'cuffed' end
@@ -919,11 +919,12 @@ local function SetPed(ctx, st, p, state)
     st.dirty = true
 end
 
-local function Surrender(ctx, st, p)
+-- task: the one-off task he gives up with (CP.Npc.wornOut's 'handsUp'); nil = he kneels.
+local function Surrender(ctx, st, p, task)
     p.state = 'surrendered'
     p.close, p.far = 0, 0
     p.surrenderedAt = Now()
-    NpcSet(ctx, p.netId, 'surrendered')
+    NpcSet(ctx, p.netId, 'surrendered', task and { task = task } or nil)
     local a = ctx.obj.arrest or {}
     if CP.Npc and CP.Npc.enableCuff then
         CP.Npc.enableCuff(ctx.run, p.netId, {
@@ -1777,6 +1778,12 @@ local function WatchPeds(ctx, st, dt, list)
                     else
                         p.close = 0
                     end
+                end
+                -- worn out (Config.Flee): a suspect who ran on foot, armed or not, gives up once a participant is
+                -- within giveUpRange (CP.Npc's flee clock never tires one in a car)
+                if p.state == 'fleeing' and st.mode == 'stop' and CP.Npc and CP.Npc.wornOut then
+                    local tired, task = CP.Npc.wornOut(p.netId, near)
+                    if tired then Surrender(ctx, st, p, task) end
                 end
                 if p.armed and (p.state == 'hostile' or p.state == 'fleeing') then
                     local ratio = HealthRatio(p)

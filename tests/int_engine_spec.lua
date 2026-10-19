@@ -834,4 +834,145 @@ do
     Config.Events.modifierChance = chance
 end
 
+-- ============================================================================
+--                        8. A WORN-OUT RUNNER GIVES UP
+-- ============================================================================
+-- (Config.Flee, F3): the real CP.Npc clock.
+-- The real flee clock of CP.Npc and the real flee_arrest block, on the built-in Warrant Service and Prison Break
+-- files: a runner gives up once worn out with an officer within giveUpRange, and never from it with 'walk' or when
+-- armedTire keeps an armed inmate fresh.
+
+local function Dist2(e, x, y)
+    local c = ents[e].coords
+    return math.sqrt((c.x - x) ^ 2 + (c.y - y) ^ 2)
+end
+
+-- Warrant Service: the suspect runs at the knock (surrender, handsUp, walk)
+do
+    local chance = Config.Events.modifierChance
+    Config.Events.modifierChance = 0
+    local F = Config.Flee
+    local shipped = U.deepcopy(F)
+    F.jitter = 0
+    local ws = Missions.get('warrant_service')
+    local loc = ws.locations[1]
+    for _, how in ipairs({ 'surrender', 'handsUp', 'walk' }) do
+        F.exhausted = how
+        local m = U.deepcopy(ws)
+        m.objectives[1].responses = { surrender = 0, flee = 1, fight = 0 }
+        Place(1, loc.start.coords)
+        local run = Runs.create({
+            mission = m,
+            locationIndex = 1,
+            missionType = 'investigation',
+            members = { O[1] },
+            leaderSrc = 1,
+        })
+        Runs.markArrived(run, 1)
+        H.advance(1000)
+        local suspect
+        for _, p in pairs(run.objectives[1].state.peds or {}) do if p.role == 'suspect' then suspect = p end end
+        Place(1, loc.door)
+        ObjEvent(1, run, 1, { type = 'knock_start' })
+        H.advance(3000)
+        ObjEvent(1, run, 1, { type = 'knock' })
+        H.eq(CP.Npc.getState(suspect.netId), 'fleeing', how .. ': the suspect runs at the knock')
+        local c = ents[suspect.entity].coords
+        local function Behind(d) Place(1, vec3(c.x + d, c.y, c.z)) end
+        Behind(50.0)
+        H.advance(31000)
+        H.eq(CP.Npc.gaitOf(suspect.netId), 'spent', how .. ': worn out after 30 s of running')
+        H.eq(CP.Npc.getState(suspect.netId), 'fleeing', how .. ': an officer 50 m behind: he walks on')
+        Behind(25.0)
+        H.advance(1500)
+        local bag = bags[suspect.entity].cp
+        if how == 'walk' then
+            H.advance(10000)
+            H.eq(CP.Npc.getState(suspect.netId), 'fleeing', 'walk: worn out at 25 m he still walks on')
+            H.eq(run.state, 'in_progress', 'walk: and the run goes on')
+        else
+            H.eq(CP.Npc.getState(suspect.netId), 'surrendered', how .. ': an officer within 25 m: he gives up')
+            H.eq(bag.state, 'surrendered', how .. ': the bag says so')
+            H.ok(type(bag.cuff) == 'table', how .. ': Cuff suspect is offered')
+            if how == 'handsUp' then
+                H.eq(bag.task and bag.task.action, 'handsUp', 'handsUp: his surrender carries the hands-up task')
+            else
+                H.eq(bag.task, nil, 'surrender: no task, he kneels')
+            end
+            Behind(1.0)
+            H.advance(5000)
+            H.fire('crimson-police:server:npcCuff', 1, run.id, suspect.netId)
+            H.advance(1000)
+            H.eq(CP.Npc.getState(suspect.netId), 'cuffed', how .. ': cuffed')
+        end
+        Runs.removeParticipant(run, 1, 'cancelled')
+    end
+    for k, v in pairs(shipped) do F[k] = v end
+    Config.Events.modifierChance = chance
+end
+
+-- Prison Break: an armed inmate tires too unless armedTire = false; worn out he gives up instead of turning to fight
+do
+    local chance = Config.Events.modifierChance
+    Config.Events.modifierChance = 0
+    local F = Config.Flee
+    local shipped = U.deepcopy(F)
+    F.jitter = 0
+    local pb = Missions.get('prison_break')
+    local loc = pb.locations[1]
+    for _, armedTire in ipairs({ false, true }) do
+        F.armedTire = armedTire
+        local tag = 'armedTire ' .. tostring(armedTire)
+        local m = U.deepcopy(pb)
+        m.objectives[1].suspects, m.objectives[1].armedShare = 2, 0.5
+        Place(1, loc.start.coords)
+        local run = Runs.create({
+            mission = m,
+            locationIndex = 1,
+            missionType = 'tactical',
+            members = { O[1] },
+            leaderSrc = 1,
+        })
+        Runs.markArrived(run, 1)
+        H.advance(1000)
+        local armed, unarmed = {}, {}
+        for _, p in pairs(run.objectives[1].state.peds or {}) do
+            if p.armed then armed[#armed + 1] = p else unarmed[#unarmed + 1] = p end
+        end
+        H.ok(#armed >= 1 and #unarmed >= 1, tag .. ': armed and unarmed inmates')
+        -- every inmate 10 m apart on one line, the officer 50 m off it: inside fireWithin of nobody
+        local all = {}
+        for _, p in ipairs(armed) do all[#all + 1] = p end
+        for _, p in ipairs(unarmed) do all[#all + 1] = p end
+        local o = loc.start.coords
+        for i, p in ipairs(all) do ents[p.entity].coords = vec3(o.x + (i - 1) * 10.0, o.y, o.z) end
+        for _, p in ipairs(all) do H.eq(CP.Npc.getState(p.netId), 'fleeing', tag .. ': inmate runs') end
+        local a, u = armed[1], unarmed[1]
+        local ac = ents[a.entity].coords
+        Place(1, vec3(ac.x, ac.y + 50.0, ac.z))
+        H.advance(31000)
+        H.eq(CP.Npc.gaitOf(u.netId), 'spent', tag .. ': the unarmed inmate is worn out')
+        H.eq(CP.Npc.gaitOf(a.netId), armedTire and 'spent' or 'sprint',
+            tag .. (armedTire and ': the armed one is worn out too' or ': the armed one never tires'))
+        -- the officer within 25 m of both (outside fireWithin, 15 m)
+        local uc = ents[u.entity].coords
+        local mx = (ac.x + uc.x) / 2
+        local half = math.abs(uc.x - ac.x) / 2
+        Place(1, vec3(mx, ac.y + math.sqrt(25.0 ^ 2 - half ^ 2), ac.z))
+        H.ok(Dist2(a.entity, mx, ac.y + math.sqrt(25.0 ^ 2 - half ^ 2)) <= 25.01, tag .. ': 25 m from the armed one')
+        H.advance(1500)
+        H.eq(CP.Npc.getState(u.netId), 'surrendered', tag .. ': the worn-out unarmed inmate gives up')
+        if armedTire then
+            H.eq(CP.Npc.getState(a.netId), 'surrendered', tag .. ': the worn-out armed inmate gives up')
+        else
+            H.advance(10000)
+            H.eq(CP.Npc.getState(a.netId), 'fleeing', tag .. ': the fresh armed inmate runs on (no give-up from it)')
+        end
+        H.eq(run.state, 'in_progress', tag .. ': the run goes on')
+        Runs.removeParticipant(run, 1, 'cancelled')
+    end
+    for k, v in pairs(shipped) do F[k] = v end
+    Config.Events.modifierChance = chance
+end
+
 return H

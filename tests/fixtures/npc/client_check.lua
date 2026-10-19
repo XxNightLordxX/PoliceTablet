@@ -1099,6 +1099,41 @@ do
     H.eq(GW.capNow(R5), nil, 'Config.Flee off: never capped')
     FL.enabled = true
 
+    -- ---- WORN OUT, HE GIVES UP (F3: Config.Flee.exhausted) -----------------
+    -- 'handsUp': the server writes his surrender with a hands-up task; the host plays it instead of the kneel
+    local R8 = AddPed(5048, 848, -230, 50, 0)
+    local wv = Runner(1, { gait = 'spent' })
+    BagChange(R8, 848, wv)
+    H.eq(GW.capNow(R8), 1.0, 'worn out: held to his walk')
+    wv = U.deepcopy(wv)
+    wv.state, wv.seq, wv.taskSeq, wv.task = 'surrendered', 2, 2, { action = 'handsUp', args = {} }
+    Clear()
+    BagChange(R8, 848, wv)
+    H.advance(200)
+    H.ok(Called('TaskHandsUp', function(a) return a[1] == R8 end), 'handsUp: he stands with his hands up')
+    H.ok(not Called('TaskPlayAnim', function(a)
+        return a[1] == R8 and a[3] == 'idle_2_hands_up'
+    end), 'handsUp: no kneel')
+    H.eq(G(R8).cap, 3.0, 'handsUp: his pace is let go')
+    -- a later write of his bag (same state, same task: enableCuff keeps taskSeq) never replays the task
+    wv = U.deepcopy(wv)
+    wv.seq = 3
+    Clear()
+    BagChange(R8, 848, wv)
+    H.ok(not Called('TaskHandsUp', function(a) return a[1] == R8 end), 'handsUp: a later bag write does not replay it')
+    -- 'surrender': no task, he kneels like every surrender
+    local R9 = AddPed(5049, 849, -260, 50, 0)
+    local kv = Runner(1, { gait = 'spent' })
+    BagChange(R9, 849, kv)
+    kv = U.deepcopy(kv)
+    kv.state, kv.seq = 'surrendered', 2
+    Clear()
+    BagChange(R9, 849, kv)
+    H.ok(Called('TaskPlayAnim', function(a) return a[1] == R9 and a[3] == 'idle_2_hands_up' end),
+        'surrender: hands up, then he kneels')
+    H.ok(not Called('TaskHandsUp', function(a) return a[1] == R9 end), 'surrender: no hands-up task')
+    H.eq(G(R9).cap, 3.0, 'surrender: his pace is let go')
+
     -- ---- WHERE HE IS NOT HELD ----------------------------------------------
     -- in a vehicle (a driver who bolts): his pace is the car's
     local R6 = AddPed(5045, 845, -140, 50, 0)

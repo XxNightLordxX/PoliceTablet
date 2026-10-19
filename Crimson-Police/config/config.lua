@@ -660,8 +660,8 @@ Config.NpcCombat = {
 
 -- How long a suspect who runs from your officers can keep running. GTA's NPCs never tire, so the server times every
 -- mission NPC that runs on foot (time in a car does not count): first a sprint, then a jog, then a walk, then worn
--- out, and he slows down to match. Config.NpcDifficulty's fleeMult stretches every time here ('hard' runners last
--- 20 % longer, 'easy' ones 20 % shorter).
+-- out, and he slows down to match. A worn-out runner gives up when an officer gets close. Config.NpcDifficulty's
+-- fleeMult stretches every time here ('hard' runners last 20 % longer, 'easy' ones 20 % shorter).
 Config.Flee = {
     enabled = true,                  -- false = suspects run as GTA makes them: they never tire
     sprintSeconds = 10,              -- seconds a runner sprints before he slows to a jog
@@ -677,6 +677,10 @@ Config.Flee = {
     jogRate = 0.95,                  -- a jogging runner's speed: 1.0 = a normal jog, 0.9 = 10 % slower (0.5-1.0)
     walkRate = 0.85,                 -- a walking or worn-out runner's speed: 1.0 = a normal walk (0.5-1.0)
     windedClipset = true,            -- true = a tired runner looks it: he jogs, then walks winded
+    -- What a worn-out runner does when an officer comes within giveUpRange: 'surrender' (he gives up and kneels),
+    -- 'handsUp' (he gives up and stands with his hands up) or 'walk' (he walks on and never gives up on his own)
+    exhausted = 'surrender',
+    giveUpRange = 30.0,              -- metres: a worn-out runner gives up when an officer is this close (5-100)
 }
 
 -- ============================================================================

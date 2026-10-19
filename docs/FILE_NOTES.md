@@ -258,6 +258,10 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
     be within STUN_RANGE) or when a participant stays within givesUp.close.distance for
     givesUp.close.seconds (server-side distance sampling every tick). Armed suspects give up only
     when stunned (armedGivesUp.stun) or below armedGivesUp.belowHealth health (server polls health).
+    Worn out (Config.Flee): any ped in 'fleeing', armed or not, gives up at once when CP.Npc.wornOut
+    (its flee clock 'spent', a participant within giveUpRange by the block's own distance) says so,
+    with the task it returns ('handsUp', or none: he kneels), checked before an armed inmate's fire
+    range could turn him hostile; a surrendered suspect's feint clock does not run while wornOut is true.
     A suspect or inmate more than escape.distance from every participant for escape.seconds
     escapes: the run fails. Killing an unarmed, surrendered or cuffed suspect/inmate (a participant
     kill) fails the run for everyone.
@@ -660,7 +664,9 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
       when a participant aims at them (surrenderOnAim) or at once (surrenderOnAim = false: racers).
       Suspects give up when aimed at (AIM_STOPPED by the car, Config.Blocks.flee_arrest.aimDistance
       when running), when stunned, or when a participant stays within flee_arrest.closeDistance for
-      closeSeconds. Surrendered suspects are arrested with CP.Npc.enableCuff (arrest.label /
+      closeSeconds; a suspect in 'fleeing' whom CP.Npc.wornOut calls worn out (Config.Flee: his flee
+      clock 'spent' and a participant within giveUpRange) gives up at once, armed or not, with the task
+      it returns. Surrendered suspects are arrested with CP.Npc.enableCuff (arrest.label /
       arrest.duration: "Detain driver" 3 s on Street Race Bust). Done when every suspect is
       neutralised (cuffed, or dead without a participant kill). complete = 'all_or_timeout_any'
       (Street Race Bust) also needs at least one suspect detained before it completes early, and
@@ -799,8 +805,10 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
     the old circle when possible), so the circle always contains a fugitive.
     `fugitives` (scales) unarmed fugitives hide at random hiding spots (distinct first). A hidden
     fugitive runs when a participant gets within runDistance (server distance, every tick). Fugitives
-    give up when stunned (client 'stunned', a participant within STUN_RANGE) or when a participant stays
-    within givesUp.close.distance for givesUp.close.seconds; then "Cuff suspect" (CP.Npc.enableCuff).
+    give up when stunned (client 'stunned', a participant within STUN_RANGE), when a participant stays
+    within givesUp.close.distance for givesUp.close.seconds, or at once when CP.Npc.wornOut calls a
+    running fugitive worn out (Config.Flee: his flee clock 'spent', a participant within giveUpRange;
+    with the task it returns); then "Cuff suspect" (CP.Npc.enableCuff).
     A fugitive who ran and is more than escape.distance from every participant for escape.seconds
     escapes: the run fails. Killing a fugitive or the witness (a participant kill) fails the run.
     Done when every fugitive is neutralised (cuffed, or dead without a participant kill).
@@ -2296,6 +2304,9 @@ Contract interpretations (details in docs/notes/engine_a.md)
       is kept: no re-task); a ped that starts fleeing again gets its clock's gait in that write. Off
       (enabled = false), or an armed ped with armedTire = false: no clock, no gait written (an old one goes back to
       sprint). The game that owns the runner slows him down to that gait (modules/npc/client.lua, the pacer).
+    - A worn-out runner gives up (Config.Flee.exhausted, giveUpRange): CP.Npc.wornOut is the rule the blocks
+      that own runners (flee_arrest, pursuit, search_area, field_contact) call next to their close rule; each
+      surrenders him its own way, with the task wornOut returns (none = kneel, or the hands-up task).
 
   Public API
     CP.Npc.setState(run, netId, state, extra) -> boolean
@@ -2324,6 +2335,10 @@ Contract interpretations (details in docs/notes/engine_a.md)
     CP.Npc.fleeClock(netId) -> { gait, spent, sprint, jog, walk, inVehicle }|nil   read only: seconds run on
                                                            foot, the seconds of running at which each gait ends
                                                            for this ped, and whether it sits in a vehicle
+    CP.Npc.wornOut(netId, near) -> boolean, task|nil       true when gaitOf is 'spent', Config.Flee.exhausted is
+                                                           not 'walk' and near (metres, the block's own) is
+                                                           within giveUpRange (5-100); task = nil ('surrender':
+                                                           he kneels) or { action = 'handsUp', args = {} }
 
   Events and handlers
     RegisterNetEvent crimson-police:server:npcCuff (runId, netId)      rate limited 3 per 2 s

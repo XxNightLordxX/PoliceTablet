@@ -78,13 +78,29 @@ end
 _G.SetVehicleDoorsLocked = function(veh, state) calls.locked[#calls.locked + 1] = { veh = veh, state = state } end
 
 -- CP.Npc stub (the npc module is written by another slice)
-local npc = { states = {}, cuffs = {} }
+local npc = { states = {}, cuffs = {}, extra = {}, spent = {}, wornAsks = {}, wornTask = nil }
 CP.Npc = {
-    setState = function(run, netId, state) npc.states[netId] = state end,
+    setState = function(run, netId, state, extra)
+        npc.states[netId] = state
+        npc.extra[netId] = extra
+    end,
     getState = function(netId) return npc.states[netId] end,
     enableCuff = function(run, netId, opts) npc.cuffs[netId] = opts end,
     rollSurrender = function() return false end,
+    -- CP.Npc.wornOut's answer (tests/npc_spec.lua checks the real one against the flee clock): npc.spent[netId] = the
+    -- clock wore him out; true within the shipped giveUpRange (30 m), with the task npc.wornTask
+    wornOut = function(netId, near)
+        npc.wornAsks[#npc.wornAsks + 1] = { netId = netId, near = near }
+        if npc.spent[netId] and near <= 30.0 then return true, npc.wornTask end
+        return false
+    end,
 }
+local function LastAsk(netId)
+    for i = #npc.wornAsks, 1, -1 do
+        if npc.wornAsks[i].netId == netId then return npc.wornAsks[i] end
+    end
+    return nil
+end
 
 H.load('blocks/pursuit/server.lua')
 H.load('blocks/escort/server.lua')
@@ -954,6 +970,65 @@ do
     _G.NetworkGetEntityOwner, _G.SetEntityDistanceCullingRadius, _G.SetEntityIgnoreRequestControlFilter = nil, nil, nil
 end
 
+do -- worn out (Config.Flee, F3): a suspect who ran from the stopped car gives up once a participant is near
+    H.clockMs = 3150000
+    At(1, 1040.0, 1000.0)
+    At(2, 5000.0, 5000.0)
+    H.players[1].vehicle = nil
+    local ctx = StolenCtx({ footFlee = 1.0 })
+    PU.start(ctx)
+    local car = SpawnsOf(ctx, 'vehicle')[1]
+    local sus = SpawnsOf(ctx, 'ped')
+    local a, b = sus[1].netId, sus[2].netId
+    At(1, 1010.0, 1000.0)
+    TickN(PU, ctx, 1)
+    E(car.netId).speed = 30.0
+    TickN(PU, ctx, 1)
+    E(car.netId).speed = 0.0
+    TickN(PU, ctx, 5)
+    -- the driver is still in the car (a driver's flee clock never tires him, and the rule waits for him on foot)
+    npc.spent[a] = true
+    At(1, 1020.0, 1000.0)
+    TickN(PU, ctx, 2)
+    H.eq(npc.states[a], 'stopped', 'worn: a suspect still in the car is not a runner')
+    H.eq(LastAsk(a), nil, 'worn: nobody asks about a suspect who has not run')
+    npc.spent[a] = nil
+    for _, x in ipairs(sus) do E(x.netId).inVehicle = 0 end
+    SetPos(a, 1030.0, 1000.0)
+    SetPos(b, 1030.0, 1100.0)
+    At(1, 1030.0, 1050.0)
+    TickN(PU, ctx, 1)
+    H.eq(npc.states[a], 'fleeing', 'worn: out of the car they run (footFlee 1.0)')
+    H.eq(npc.states[b], 'fleeing', 'worn: both of them')
+    TickN(PU, ctx, 3)
+    H.eq(npc.states[a], 'fleeing', 'worn: not worn out yet: he keeps running')
+    npc.spent[a] = true
+    TickN(PU, ctx, 2)
+    H.eq(npc.states[a], 'fleeing', 'worn: worn out with the nearest participant at 50 m: he walks on')
+    H.near((LastAsk(a) or {}).near or -1, 50.0, 0.01, 'worn: the block asks with its own nearest-participant distance')
+    At(1, 1030.0, 1025.0)
+    TickN(PU, ctx, 1)
+    H.eq(npc.states[a], 'surrendered', 'worn: a participant within 25 m: he gives up at once')
+    H.eq(npc.extra[a], nil, 'worn: and kneels (no task)')
+    H.eq(npc.cuffs[a] and npc.cuffs[a].label, CP.L('block.pursuit.arrest'), 'worn: Cuff suspect is offered')
+    H.eq(npc.states[b], 'fleeing', 'worn: the other runner is not worn out')
+    -- Config.Flee.exhausted = 'handsUp': the task goes with the surrender
+    npc.wornTask = { action = 'handsUp', args = {} }
+    npc.spent[b] = true
+    TickN(PU, ctx, 1)
+    H.eq(npc.states[b], 'fleeing', 'worn: the second one is 75 m away')
+    At(1, 1030.0, 1080.0)
+    TickN(PU, ctx, 1)
+    H.eq(npc.states[b], 'surrendered', 'worn: within 20 m he gives up too')
+    H.eq(npc.extra[b] and npc.extra[b].task and npc.extra[b].task.action, 'handsUp', 'worn: with his hands up')
+    npc.wornTask = nil
+    npc.states[a], npc.states[b] = 'cuffed', 'cuffed'
+    TickN(PU, ctx, 1)
+    H.eq(ctx.calls.complete, 1, 'worn: completed once both worn-out suspects are cuffed')
+    H.eq(#ctx.calls.fail, 0, 'worn: never failed')
+    npc.spent[a], npc.spent[b] = nil, nil
+end
+
 -- Pursuit Sim: follow mode, spawn 50 m ahead, medals by average distance, lost, undriveable, any ram.
 local simLoc = { label = 'Sim', start = { coords = vec4(0.0, 0.0, 30.0, 0.0), radius = 30.0 } }
 local function SimCtx(extra)
@@ -968,6 +1043,27 @@ local function SimCtx(extra)
     }
     for k, v in pairs(extra or {}) do o[k] = v end
     return FakeCtx({ obj = PU.defaults(o), location = simLoc, mission = builtin })
+end
+
+do -- worn out (F3): follow mode has no arrests, so its runners never give up from it (like its close rule)
+    H.clockMs = 3900000
+    At(1, 0.0, 20.0)
+    H.players[1].vehicle = nil
+    local ctx = SimCtx()
+    PU.start(ctx)
+    local drv = SpawnsOf(ctx, 'ped')[1]
+    local p
+    for _, x in pairs(ctx.state.peds) do if x.netId == drv.netId then p = x end end
+    H.ok(p ~= nil, 'follow worn: the driver is tracked')
+    p.state = 'fleeing'            -- he left the car and runs (follow mode always runs on foot)
+    E(drv.netId).inVehicle = 0
+    npc.spent[drv.netId] = true
+    local c = E(drv.netId).coords
+    At(1, c.x + 10.0, c.y, c.z)
+    TickN(PU, ctx, 2)
+    H.eq(p.state, 'fleeing', 'follow worn: a worn-out runner is not made to give up in follow mode')
+    H.eq(LastAsk(drv.netId), nil, 'follow worn: the rule is not even asked')
+    npc.spent[drv.netId] = nil
 end
 
 do
@@ -1927,6 +2023,52 @@ do
     H.eq(ok, true, 'hunt: fugitive cuffed')
     H.eq(ctx.calls.complete, 1, 'hunt: complete when every fugitive is cuffed')
     H.eq(#ctx.calls.fail, 0, 'hunt: never failed')
+end
+
+do -- worn out (Config.Flee, F3): a fugitive the flee clock wore out gives up once a participant is near
+    H.clockMs = 9400000
+    At(1, 0.0, 0.0)
+    local ctx = HuntCtx()
+    SA.start(ctx)
+    local fug = FugitivesOf(ctx)[1]
+    local fpos = E(fug.netId).coords
+    At(1, fpos.x + 25.0, fpos.y, fpos.z)
+    TickN(SA, ctx, 1)
+    H.eq(npc.states[fug.netId], 'fleeing', 'hunt worn: within 30 m the fugitive runs')
+    At(1, fpos.x + 50.0, fpos.y, fpos.z)
+    TickN(SA, ctx, 3)
+    H.eq(npc.states[fug.netId], 'fleeing', 'hunt worn: not worn out yet: he keeps running')
+    npc.spent[fug.netId] = true
+    TickN(SA, ctx, 2)
+    H.eq(npc.states[fug.netId], 'fleeing', 'hunt worn: worn out with the participant at 50 m: he walks on')
+    H.near((LastAsk(fug.netId) or {}).near or -1, 50.0, 0.01, 'hunt worn: asked with the block\'s own distance')
+    At(1, fpos.x + 25.0, fpos.y, fpos.z)
+    TickN(SA, ctx, 1)
+    H.eq(npc.states[fug.netId], 'surrendered', 'hunt worn: a participant within 25 m: he gives up at once')
+    H.eq(npc.extra[fug.netId], nil, 'hunt worn: and kneels (no task)')
+    H.eq(npc.cuffs[fug.netId] and npc.cuffs[fug.netId].label, CP.L('block.search_area.cuff'),
+        'hunt worn: Cuff suspect is offered')
+    npc.states[fug.netId] = 'cuffed'
+    At(1, fpos.x + 1.0, fpos.y, fpos.z)
+    H.eq(SA.onEvent(ctx, 1, { type = 'cuffed', netId = fug.netId }), true, 'hunt worn: cuffed')
+    H.eq(ctx.calls.complete, 1, 'hunt worn: complete once the worn-out fugitive is cuffed')
+    H.eq(#ctx.calls.fail, 0, 'hunt worn: never failed')
+    npc.spent[fug.netId] = nil
+    -- Config.Flee.exhausted = 'handsUp'
+    local ctx2 = HuntCtx()
+    SA.start(ctx2)
+    local f2 = FugitivesOf(ctx2)[1]
+    local p2 = E(f2.netId).coords
+    At(1, p2.x + 20.0, p2.y, p2.z)
+    TickN(SA, ctx2, 1)
+    H.eq(npc.states[f2.netId], 'fleeing', 'hunt worn: the second fugitive runs')
+    npc.spent[f2.netId] = true
+    npc.wornTask = { action = 'handsUp', args = {} }
+    TickN(SA, ctx2, 1)
+    H.eq(npc.states[f2.netId], 'surrendered', 'hunt worn: worn out at 20 m: he gives up')
+    H.eq(npc.extra[f2.netId] and npc.extra[f2.netId].task and npc.extra[f2.netId].task.action, 'handsUp',
+        'hunt worn: with his hands up')
+    npc.wornTask, npc.spent[f2.netId] = nil, nil
 end
 
 do -- escape, kills, witness lost, stun, clue bonus lost to an early arrest

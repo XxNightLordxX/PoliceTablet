@@ -660,7 +660,8 @@ local function SetPed(ctx, st, p, state, extra)
     st.dirty = true
 end
 
-local function SurrenderPed(ctx, st, p)
+-- task: the one-off task he gives up with (CP.Npc.wornOut's 'handsUp'); nil = he kneels.
+local function SurrenderPed(ctx, st, p, task)
     p.state = 'surrendered'
     Note(ctx, st, p, 'surrendered')
     p.close, p.far = 0, 0
@@ -671,7 +672,7 @@ local function SurrenderPed(ctx, st, p)
         local f = tonumber(ctx.obj.feint) or 0
         p.feintRoll = not p.armed and f > 0 and RngOf(ctx):chance(f) or false
     end
-    CP.Npc.setState(ctx.run, p.netId, 'surrendered')
+    CP.Npc.setState(ctx.run, p.netId, 'surrendered', task and { task = task } or nil)
     local cuff = ctx.obj.cuff
     CP.Npc.enableCuff(ctx.run, p.netId, {
         label = cuff.label or CP.L('block.flee_arrest.cuff'),
@@ -1045,7 +1046,14 @@ local function Fail(ctx, st, key)
     ctx.fail(key)
 end
 
--- Every tick: escapes, the close rule, armed give-ups and fire range, vanished NPCs, missed cuffs.
+-- Config.Flee: true (and the task to give up with) when CP.Npc's flee clock says this runner is worn out and the
+-- nearest participant is within giveUpRange.
+local function WornOut(p, near)
+    if not (CP.Npc and CP.Npc.wornOut) then return false end
+    return CP.Npc.wornOut(p.netId, near)
+end
+
+-- Every tick: escapes, the close rule, armed give-ups and fire range, a worn-out runner, vanished NPCs, missed cuffs.
 local function Watch(ctx, st, dt)
     local obj = ctx.obj
     local list = Party(ctx)
@@ -1076,7 +1084,8 @@ local function Watch(ctx, st, dt)
                     local fr = tonumber(Config.Npc and Config.Npc.feintRange) or 6.0
                     local after = tonumber(Config.Npc and Config.Npc.feintAfter) or 5
                     local aimed = p.aimedAt and Now() - p.aimedAt < after * 1000
-                    if near > fr and not aimed then
+                    -- a worn-out suspect does not bolt while he would give up again at once (Config.Flee)
+                    if near > fr and not aimed and not WornOut(p, near) then
                         p.unwatched = (p.unwatched or 0) + dt
                         if p.unwatched >= after then
                             p.feinted = true
@@ -1096,7 +1105,13 @@ local function Watch(ctx, st, dt)
                         p.close = 0
                     end
                 end
-                if p.armed and moving then
+                -- worn out (Config.Flee): a runner, armed or not, gives up once a participant is within giveUpRange
+                -- (before an armed inmate could turn to fight)
+                local tired, task = false, nil
+                if p.state == 'fleeing' then tired, task = WornOut(p, near) end
+                if tired then
+                    SurrenderPed(ctx, st, p, task)
+                elseif p.armed and moving then
                     local ratio = ag.belowHealth and HealthRatio(p) or nil
                     if ratio and ratio > 0 and ratio < ag.belowHealth then
                         SurrenderPed(ctx, st, p)
