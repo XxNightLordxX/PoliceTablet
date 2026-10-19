@@ -250,6 +250,38 @@ do
     -- the Builder check takes an automatic weapon only while NpcCombat is on: switching it reloads the missions
     H.eq(E('NpcCombat.enabled').reload, true, 'NpcCombat.enabled reloads the missions')
     H.ok(not E('NpcCombat.aiDamage').reload, 'a damage value does not')
+    -- Config.Flee (how long fleeing suspects keep running): in Suspect behaviour, with its comments and ranges
+    H.eq(E('Flee.sprintSeconds').section, E('NpcCombat.enabled').section, 'Flee is listed under Suspect behaviour')
+    -- each description exactly: a comment that continues on the next line must not run into the next key's
+    H.eq(E('Flee.enabled').desc, 'false = suspects run as GTA makes them: they never tire', 'the switch')
+    H.eq(E('Flee.sprintSeconds').desc, 'seconds a runner sprints before he slows to a jog', 'the sprint time')
+    H.eq(E('Flee.jogSeconds').desc, 'seconds he then jogs before he slows to a walk', 'the jog time')
+    H.eq(E('Flee.walkSeconds').desc, 'seconds he then walks before he is worn out', 'the walk time')
+    local jitterDesc = 'Each suspect lasts up to this share longer or shorter, rolled once per suspect from the run\'s'
+        .. ' seed (0.25 = 25 %, 0 = every suspect lasts the same)'
+    H.eq(E('Flee.jitter').desc, jitterDesc, 'the jitter')
+    local breatherDesc = 'Seconds with no officer within recoverRange before a runner gets his breath back and sprints'
+        .. ' again'
+    H.eq(E('Flee.recoverSeconds').desc, breatherDesc, 'the breather, without the end of the jitter comment')
+    H.eq(E('Flee.recoverRange').desc, 'metres: an officer this close stops a runner from getting his breath back',
+        'the breather range reads alone')
+    H.eq(E('Flee.armedTire').desc, 'false = a suspect who carries a weapon you can see never tires', 'the armed switch')
+    local fleeGroup = nil
+    for _, sec in ipairs(S._schema().sections) do
+        for _, g in ipairs(sec.groups) do if g.path == 'NpcDifficulty.custom' then fleeGroup = g end end
+    end
+    H.ok(((fleeGroup or {}).desc or ''):find('fleeMult: how long runners keep running', 1, true) ~= nil,
+        'the NpcDifficulty custom group says what fleeMult does')
+    H.ok((Check('Flee.sprintSeconds', 15)), 'a 15 s sprint')
+    Err('Flee.sprintSeconds', 0, 'err.setting_range', 'a sprint of at least 1 s')
+    Err('Flee.jogSeconds', 121, 'err.setting_range', 'at most 120 s')
+    Err('Flee.walkSeconds', 0, 'err.setting_range', 'a walk of at least 1 s')
+    Err('Flee.recoverSeconds', 500, 'err.setting_range', 'a breather of at most 120 s')
+    ok, v = Check('Flee.jitter', 0)
+    H.ok(ok and v == 0.0 and math.type(v) == 'float', 'jitter 0: every suspect lasts the same')
+    Err('Flee.jitter', 0.6, 'err.setting_range', 'jitter at most 0.5')
+    Err('Flee.recoverRange', 5, 'err.setting_range', 'the breather range is at least 10 m')
+    H.ok(not E('Flee.enabled').reload and not E('Flee.enabled').restart, 'Flee is read live: no reload, no restart')
     Err('Debug', 'yes', 'err.setting_type', 'text for on/off')
     Err('AdminTheme.primary', '#zzzzzz', 'err.setting_colour', 'a colour must be #rrggbb')
     H.ok((Check('AdminTheme.primary', '#112233')), 'a valid colour')

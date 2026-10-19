@@ -618,6 +618,7 @@ Config.Npc = {
 -- How NPCs feel. It never changes points or cash.
 Config.NpcDifficulty = {
     preset = 'normal',               -- 'easy' | 'normal' | 'hard' | 'custom'
+    -- fleeMult: how long runners keep running (Config.Flee): 1.2 = 20 % longer
     custom = { accuracyAdd = 0, armourAdd = 0, healthMult = 1.0, surrenderMult = 1.0, fleeMult = 1.0 },
     presets = {
         easy = { accuracyAdd = -8, armourAdd = 0, healthMult = 0.85, surrenderMult = 1.3, fleeMult = 0.8 },
@@ -655,6 +656,24 @@ Config.NpcCombat = {
     cancelLethalHeadshots = true,    -- the server drops a one-shot kill by a mission NPC on an officer of its run...
     lethalCancelAbove = 0.75,        -- ...who still has at least this share of his health (0.25-1, 0.75 = three
                                      -- quarters). The shot that finishes off a hurt officer always counts
+}
+
+-- How long a suspect who runs from your officers can keep running. GTA's NPCs never tire, so the server times every
+-- mission NPC that runs on foot (time in a car does not count): first a sprint, then a jog, then a walk, then worn
+-- out. Config.NpcDifficulty's fleeMult stretches every time here ('hard' runners last 20 % longer, 'easy' ones
+-- 20 % shorter).
+Config.Flee = {
+    enabled = true,                  -- false = suspects run as GTA makes them: they never tire
+    sprintSeconds = 10,              -- seconds a runner sprints before he slows to a jog
+    jogSeconds = 12,                 -- seconds he then jogs before he slows to a walk
+    walkSeconds = 8,                 -- seconds he then walks before he is worn out
+    -- Each suspect lasts up to this share longer or shorter, rolled once per suspect from the run's seed (0.25 = 25 %,
+    -- 0 = every suspect lasts the same)
+    jitter = 0.25,
+    -- Seconds with no officer within recoverRange before a runner gets his breath back and sprints again
+    recoverSeconds = 20,
+    recoverRange = 60.0,             -- metres: an officer this close stops a runner from getting his breath back
+    armedTire = true,                -- false = a suspect who carries a weapon you can see never tires
 }
 
 -- ============================================================================

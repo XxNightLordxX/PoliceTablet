@@ -75,6 +75,8 @@ _G.GetEntityType = function(e)
     return x and x.type or 0
 end
 _G.GetPedInVehicleSeat = function(veh, seat) local x = W.ents[veh]; return (x and seat == -1 and x.driver) or 0 end
+-- FXServer's GetVehiclePedIsIn: the handle of the vehicle the ped sits in (W.ents[e].vehicle), 0 on foot
+_G.GetVehiclePedIsIn = function(e) local x = W.ents[e]; return (x and x.vehicle) or 0 end
 _G.GetPedSourceOfDeath = function(e) local x = W.ents[e]; return x and x.killer or 0 end
 _G.GetPedSourceOfDamage = function(e) local x = W.ents[e]; return x and x.damager or 0 end
 _G.NetworkGetEntityFromNetworkId = function(n) return W.byNet[n] or 0 end
@@ -1291,6 +1293,316 @@ do
     H.exportsMock.ox_inventory = nil
     CP.Runs.noteStat = nil
     R.runs['run-c'] = nil
+end
+
+-- ============================================================================
+--                    THE FLEE CLOCK (Config.Flee, step F1)
+-- ============================================================================
+-- GTA's NPCs never tire: the server times every runner (sprint, jog, walk, spent) and writes the gait in the bag.
+
+do
+    Reset()
+    local F = Config.Flee
+    H.ok(type(F) == 'table', 'Config.Flee ships in config.lua')
+    H.eq(F.enabled, true, 'flee stamina ships on')
+    H.eq(F.sprintSeconds, 10, 'sprint 10 s')
+    H.eq(F.jogSeconds, 12, 'jog 12 s')
+    H.eq(F.walkSeconds, 8, 'walk 8 s')
+    H.eq(F.jitter, 0.25, 'jitter 25 %')
+    H.eq(F.recoverSeconds, 20, 'breather after 20 s')
+    H.eq(F.recoverRange, 60.0, 'with no officer within 60 m')
+    H.eq(F.armedTire, true, 'armed suspects tire too')
+    local shipped = U.deepcopy(F)
+    F.jitter = 0
+
+    -- the gaits written to one entity's bag, one entry per change
+    local function GaitWrites(e)
+        local out = {}
+        for _, w in ipairs(W.writes) do
+            if w.e == e and w.k == 'cp' and type(w.v) == 'table' and w.v.gait ~= nil and out[#out] ~= w.v.gait then
+                out[#out + 1] = w.v.gait
+            end
+        end
+        return out
+    end
+    local function Spent(n) return (Npc.fleeClock(n) or {}).spent or -1 end
+
+    local fr = NewRun('flee-a', { 31, 32 }, { seed = 5150 })
+    Place(31, 20.0, 0.0, 0.0)
+    Place(32, 900.0, 900.0, 0.0)
+    local n, e = SpawnPed(fr, { coords = vec3(0.0, 0.0, 0.0), role = 'suspect', armed = false })
+    H.eq(Npc.gaitOf(n), 'sprint', 'a ped that never ran sprints')
+    Tick(3)
+    H.eq(Spent(n), 0, 'no running time while it stands')
+    Npc.setState(fr, n, 'fleeing', { task = { action = 'flee', args = {} } })
+    local taskSeq = Bag(e).taskSeq
+    H.eq(Npc.gaitOf(n), 'sprint', '0 s: sprint')
+    H.eq(Bag(e).gait, nil, 'a sprint writes no gait')
+    Tick(9)
+    H.eq(Npc.gaitOf(n), 'sprint', 'just before 10 s: still a sprint')
+    H.eq(#GaitWrites(e), 0, 'no gait write while it sprints')
+    Tick(2)
+    H.eq(Npc.gaitOf(n), 'jog', '10 s: jog')
+    H.eq(Bag(e).gait, 'jog', 'the gait is in the bag')
+    H.eq(Bag(e).state, 'fleeing', 'still fleeing')
+    H.eq(Bag(e).taskSeq, taskSeq, 'the gait is a bag key, not a new task (no re-task)')
+    H.eq(Bag(e).task and Bag(e).task.action, 'flee', 'the flee task is kept')
+    H.near(Spent(n), 11, 1.01, 'the clock counts the seconds since it started running')
+    Tick(10)
+    H.eq(Npc.gaitOf(n), 'jog', 'just before 22 s: still a jog')
+    Tick(2)
+    H.eq(Npc.gaitOf(n), 'walk', '22 s: walk')
+    Tick(6)
+    H.eq(Npc.gaitOf(n), 'walk', 'just before 30 s: still a walk')
+    Tick(2)
+    H.eq(Npc.gaitOf(n), 'spent', '30 s: spent')
+    H.eq(Bag(e).gait, 'spent', 'spent is in the bag')
+    H.eq(table.concat(GaitWrites(e), ','), 'jog,walk,spent', 'one write per change, in order')
+    local writes = #W.writes
+    Tick(5)
+    H.eq(#W.writes, writes, 'no write while the gait stays the same')
+    local c = Npc.fleeClock(n)
+    H.eq(c and c.sprint, 10, 'fleeClock: the sprint ends at 10 s')
+    H.eq(c and c.jog, 22, 'the jog at 22 s')
+    H.eq(c and c.walk, 30, 'the walk at 30 s')
+    H.eq(Npc.gaitOf(nil), nil, 'gaitOf(nil)')
+    H.eq(Npc.gaitOf(99999), nil, 'gaitOf of a net id no run has')
+    H.eq(Npc.fleeClock(99999), nil, 'fleeClock of a net id no run has')
+
+    -- the breather: no participant within 60 m for 20 s puts the clock back to 0
+    local n2, e2 = SpawnPed(fr, { coords = vec3(5.0, 0.0, 0.0), role = 'suspect', armed = false })
+    Npc.setState(fr, n2, 'fleeing')
+    Tick(11)
+    H.eq(Npc.gaitOf(n2), 'jog', 'a second runner jogs after 10 s')
+    Place(31, 70.0, 0.0, 0.0)
+    Tick(15)
+    H.eq(Npc.gaitOf(n2), 'walk', 'officers 65 m away: it keeps running and tiring')
+    Place(31, 50.0, 0.0, 0.0)
+    Tick(1)
+    Place(31, 70.0, 0.0, 0.0)
+    Tick(5)
+    H.eq(Npc.gaitOf(n2), 'spent', 'an officer within 60 m restarts the breather')
+    Tick(16)
+    H.eq(Npc.gaitOf(n2), 'sprint', '20 s unseen: back to a sprint')
+    H.eq(Bag(e2).gait, 'sprint', 'the sprint is written back')
+    H.ok(Spent(n2) < 1.01, 'the clock is back at 0')
+    -- a surrendered suspect who bolts again keeps his clock, and the bag says so at once
+    Place(31, 20.0, 0.0, 0.0)
+    Tick(12)
+    H.eq(Npc.gaitOf(n2), 'jog', 'tired again')
+    Npc.setState(fr, n2, 'surrendered')
+    Tick(4)
+    H.eq(Npc.gaitOf(n2), 'jog', 'no running while surrendered, no breather with an officer close')
+    local before = Spent(n2)
+    Npc.setState(fr, n2, 'fleeing')
+    H.eq(Bag(e2).gait, 'jog', 'he runs again at the gait of his clock')
+    H.near(Spent(n2), before, 0.01, 'the clock went on where it stopped')
+    -- after a breather the feint is a sprint again, written with the state
+    Npc.setState(fr, n2, 'surrendered')
+    Place(31, 200.0, 0.0, 0.0)
+    Tick(21)
+    Place(31, 5.0, 0.0, 0.0)
+    Npc.setState(fr, n2, 'fleeing')
+    H.eq(Bag(e2).gait, 'sprint', 'after a breather he bolts at a sprint')
+
+    -- an armed inmate's flee / hostile flips keep the clock
+    local n3, e3 = SpawnPed(fr, { coords = vec3(-5.0, 0.0, 0.0), role = 'inmate', armed = true })
+    Place(31, 10.0, 0.0, 0.0)
+    Npc.setState(fr, n3, 'fleeing')
+    Tick(6)
+    Npc.setState(fr, n3, 'hostile')
+    Tick(6)
+    H.eq(Npc.gaitOf(n3), 'sprint', '6 s of running then a fight: still a sprint')
+    Npc.setState(fr, n3, 'fleeing')
+    Tick(6)
+    H.eq(Npc.gaitOf(n3), 'jog', 'running again: the 6 s before the fight still count')
+    H.eq(Bag(e3).gait, 'jog', 'armed suspects tire too (armedTire)')
+    H.ok(Spent(n3) >= 10 and Spent(n3) < 13.01, 'the fight is not counted as running')
+    -- the time in 'fleeing' between two ticks counts exactly
+    local n4 = SpawnPed(fr, { coords = vec3(-6.0, 0.0, 0.0), role = 'suspect', armed = false })
+    Tick(1)
+    Npc.setState(fr, n4, 'fleeing')
+    Bump(400)
+    Npc.setState(fr, n4, 'hostile')
+    H.near(Spent(n4), 0.4, 0.001, 'a 0.4 s run between two ticks is 0.4 s')
+
+    -- another game takes the ped (OneSync ownership, a new run host): the server's clock goes on
+    W.owner[e3] = 31
+    fr.host = 31
+    Tick(2)
+    W.owner[e3] = 32
+    fr.host = 32
+    Tick(11)
+    H.eq(Npc.gaitOf(n3), 'walk', 'a new owner: the clock goes on (walk after 22 s)')
+    H.eq(Bag(e3).gait, 'walk', 'and the bag follows')
+
+    -- the jitter: rolled once per suspect from the run seed, so a record made again gives the same numbers
+    F.jitter = 0.5
+    local edges, spread = {}, {}
+    for i = 1, 6 do
+        local ni = SpawnPed(fr, { coords = vec3(30.0 + i, 0.0, 0.0), role = 'suspect', armed = false })
+        local ci = Npc.fleeClock(ni)
+        edges[i] = { n = ni, sprint = ci.sprint }
+        spread[('%.4f'):format(ci.sprint)] = true
+        H.ok(ci.sprint >= 5 - 1e-9 and ci.sprint <= 15 + 1e-9, 'the sprint is 10 s +/- 50 %: ' .. ci.sprint)
+        H.near(ci.jog - ci.sprint, 12 * ci.sprint / 10, 1e-9, 'the same factor stretches the jog')
+        H.near(ci.walk - ci.jog, 8 * ci.sprint / 10, 1e-9, 'and the walk')
+    end
+    local kinds = 0
+    for _ in pairs(spread) do kinds = kinds + 1 end
+    H.ok(kinds >= 4, 'suspects of one run do not all last the same')
+    F.jitter = 0.25
+    H.ok(math.abs(Npc.fleeClock(edges[1].n).sprint - 10) <= 2.5 + 1e-9, 'a smaller jitter applies at once')
+    F.jitter = 0.5
+    -- the same seed and net ids in another run: the same numbers; another seed: others
+    R.runs['flee-a'] = nil
+    Tick(1)
+    local function Rerun(id, seed)
+        local rr = NewRun(id, { 31 }, { seed = seed })
+        for _, x in ipairs(edges) do
+            W.nextEnt = W.nextEnt + 1
+            W.ents[W.nextEnt] = { exists = true, type = 1, coords = vec3(0.0, 0.0, 0.0), health = 200, armour = 0 }
+            W.byNet[x.n] = W.nextEnt
+            rr.entities[x.n] = { entity = W.nextEnt, kind = 'ped', obj = 1, role = 'suspect', armed = false }
+        end
+        local out = {}
+        for i, x in ipairs(edges) do out[i] = Npc.fleeClock(x.n).sprint end
+        R.runs[id] = nil
+        Tick(1)
+        return out
+    end
+    local again, other = Rerun('flee-b', 5150), Rerun('flee-c', 5151)
+    local same, differ = true, false
+    for i, x in ipairs(edges) do
+        if math.abs(again[i] - x.sprint) > 1e-9 then same = false end
+        if math.abs(other[i] - x.sprint) > 1e-9 then differ = true end
+    end
+    H.ok(same, 'the same seed gives every suspect the same stamina')
+    H.ok(differ, 'another seed gives other numbers')
+    F.jitter = 0
+
+    -- Config.NpcDifficulty's fleeMult (CP.Scaling.feel): 'hard' runners last 20 % longer, 'easy' ones 20 % shorter
+    local savedScaling = CP.Scaling
+    CP.Scaling = nil
+    H.load('modules/scaling/server.lua')
+    local preset = Config.NpcDifficulty.preset
+    Config.NpcDifficulty.preset = 'hard'
+    local hr = NewRun('flee-hard', { 31 }, { seed = 1 })
+    local nh = SpawnPed(hr, { coords = vec3(0.0, 0.0, 0.0), role = 'suspect', armed = false })
+    local ch = Npc.fleeClock(nh)
+    H.near(ch.sprint, 12, 1e-9, 'hard: a 12 s sprint')
+    H.near(ch.walk, 36, 1e-9, 'hard: spent after 36 s')
+    Npc.setState(hr, nh, 'fleeing')
+    Tick(11)
+    H.eq(Npc.gaitOf(nh), 'sprint', 'hard: still a sprint after 11 s')
+    Tick(2)
+    H.eq(Npc.gaitOf(nh), 'jog', 'hard: a jog after 12 s')
+    Config.NpcDifficulty.preset = 'easy'
+    H.near(Npc.fleeClock(nh).sprint, 8, 1e-9, 'easy: an 8 s sprint')
+    Config.NpcDifficulty.preset = preset
+    H.near(Npc.fleeClock(nh).sprint, 10, 1e-9, 'normal: 10 s')
+    CP.Scaling = savedScaling
+    R.runs['flee-hard'] = nil
+
+    -- armedTire = false: a suspect with a visible weapon never tires, an unarmed one does
+    F.armedTire = false
+    local ar = NewRun('flee-armed', { 31 }, { seed = 2 })
+    Place(31, 10.0, 0.0, 0.0)
+    local na, ea = SpawnPed(ar, { coords = vec3(0.0, 0.0, 0.0), role = 'inmate', armed = true })
+    local nu, eu = SpawnPed(ar, { coords = vec3(1.0, 0.0, 0.0), role = 'inmate', armed = false })
+    Npc.setState(ar, na, 'fleeing')
+    Npc.setState(ar, nu, 'fleeing')
+    Tick(40)
+    H.eq(Npc.gaitOf(na), 'sprint', 'armedTire false: the armed inmate never tires')
+    H.eq(#GaitWrites(ea), 0, 'and gets no gait')
+    H.eq(Npc.gaitOf(nu), 'spent', 'the unarmed one is worn out')
+    H.eq(Bag(eu).gait, 'spent', 'his bag says so')
+    -- a hidden contact's weapon never counts (its gait would tell officers it is armed)
+    local nh2 = SpawnPed(ar, { coords = vec3(2.0, 0.0, 0.0), role = 'subject', armed = false })
+    ar.entities[nh2].armedTruth = true
+    Npc.setState(ar, nh2, 'fleeing')
+    Tick(11)
+    H.eq(Npc.gaitOf(nh2), 'jog', 'a hidden weapon does not keep a runner fresh')
+    F.armedTire = true
+    R.runs['flee-armed'] = nil
+
+    -- enabled = false: no gait is ever written; switching it off puts a tired runner back to a sprint
+    F.enabled = false
+    local dr = NewRun('flee-off', { 31 }, { seed = 3 })
+    local nd, ed = SpawnPed(dr, { coords = vec3(0.0, 0.0, 0.0), role = 'suspect', armed = false })
+    Npc.setState(dr, nd, 'fleeing')
+    Tick(40)
+    H.eq(Npc.gaitOf(nd), 'sprint', 'Config.Flee off: a sprint after 40 s')
+    H.eq(#GaitWrites(ed), 0, 'Config.Flee off: no gait is ever written')
+    Npc.setState(dr, nd, 'hostile')
+    Npc.setState(dr, nd, 'fleeing')
+    H.eq(#GaitWrites(ed), 0, 'not even when it runs again')
+    F.enabled = true
+    local no, eo = SpawnPed(dr, { coords = vec3(1.0, 0.0, 0.0), role = 'suspect', armed = false })
+    Npc.setState(dr, no, 'fleeing')
+    Tick(11)
+    H.eq(Bag(eo).gait, 'jog', 'on: it jogs')
+    F.enabled = false
+    Tick(1)
+    H.eq(Bag(eo).gait, 'sprint', 'switched off in Settings: back to a sprint at once')
+    R.runs['flee-off'] = nil
+
+    -- a suspect who flees by car (a field contact's driver who bolts on the order out) does not tire in it
+    F.enabled = true
+    local vr = NewRun('flee-car', { 31 }, { seed = 6 })
+    Place(31, 20.0, 0.0, 0.0)
+    W.nextEnt = W.nextEnt + 1
+    local car = W.nextEnt
+    W.ents[car] = { exists = true, type = 2, coords = vec3(0.0, 0.0, 0.0), health = 1000, armour = 0 }
+    local nv, ev = SpawnPed(vr, { coords = vec3(0.0, 0.0, 0.0), role = 'subject', armed = false })
+    W.ents[ev].vehicle = car
+    Npc.setState(vr, nv, 'fleeing', { task = { action = 'flee', args = {} } })
+    H.eq(Bag(ev).gait, nil, 'a driver who bolts gets no gait')
+    Tick(31)
+    H.eq(Npc.gaitOf(nv), 'sprint', '31 s of a car chase: still a sprint')
+    H.eq(#GaitWrites(ev), 0, 'no jog, walk or spent is ever written for a driver')
+    H.eq(Spent(nv), 0, 'the drive is not running')
+    H.eq(Npc.fleeClock(nv).inVehicle, true, 'fleeClock says he sits in a vehicle')
+    -- he bails out and runs on foot: now the clock counts
+    W.ents[ev].vehicle = nil
+    Tick(11)
+    H.eq(Npc.gaitOf(nv), 'jog', 'on foot: a jog after 10 s')
+    H.eq(Bag(ev).gait, 'jog', 'and his bag says so')
+    H.eq(Npc.fleeClock(nv).inVehicle, false, 'fleeClock: on foot')
+    -- back in a car: a sprint while he drives, his clock kept for when he is on foot again
+    W.ents[ev].vehicle = car
+    Tick(1)
+    H.eq(Bag(ev).gait, 'sprint', 'in a car again: the bag says sprint')
+    H.eq(Npc.gaitOf(nv), 'sprint', 'and so does gaitOf')
+    local kept = Spent(nv)
+    Tick(15)
+    H.near(Spent(nv), kept, 0.001, 'the second drive is not counted either')
+    W.ents[ev].vehicle = nil
+    Tick(1)
+    H.eq(Bag(ev).gait, 'jog', 'out of the car: the gait of his clock again')
+    -- a state change while he sits in the car counts no running either
+    W.ents[ev].vehicle = car
+    Tick(1)
+    kept = Spent(nv)
+    Bump(800)
+    Npc.setState(vr, nv, 'surrendered')
+    H.near(Spent(nv), kept, 0.001, 'he gives up in the car: the time since the last tick is not running')
+    R.runs['flee-car'] = nil
+
+    -- a dead runner has no gait
+    F.enabled = true
+    local kr = NewRun('flee-dead', { 31 }, { seed = 4 })
+    local nk = SpawnPed(kr, { coords = vec3(0.0, 0.0, 0.0), role = 'suspect', armed = false })
+    Npc.setState(kr, nk, 'fleeing')
+    Tick(2)
+    W.ents[W.byNet[nk]].health = 0
+    Tick(2)
+    H.eq(Npc.gaitOf(nk), nil, 'a dead ped has no gait')
+    R.runs['flee-dead'] = nil
+    Tick(1)
+
+    for k, v in pairs(shipped) do F[k] = v end
+    Reset()
 end
 
 -- ============================================================================

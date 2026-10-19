@@ -217,6 +217,7 @@ local CONFIG_SECTIONS = {
     'Npc',
     'NpcDifficulty',
     'NpcCombat',
+    'Flee',
     'MissionTweaks',
     'Time',
     'Scoring',

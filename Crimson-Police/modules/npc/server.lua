@@ -256,7 +256,8 @@ end
 -- ============================================================================
 -- The server's truth; the replicated bag is only ever written.
 -- rec = { netId, runId, entity, bag, obj, role, state, cuff, since, surrenderedAt, hp, gone, dead,
---         near = { [src] = ms in reach }, wdeAt, lastDamage = { src, at }, dmgAt = { [key] = ms } }
+--         near = { [src] = ms in reach }, wdeAt, lastDamage = { src, at }, dmgAt = { [key] = ms },
+--         fleeSpent (s on foot), clockAt, aloneSince, stamina (the flee clock, Config.Flee) }
 -- rec.bag is the value last written to Entity(e).state.cp (seeded from the engine's copy, info.bag);
 -- state / cuff / obj / role mirror it.
 
@@ -352,6 +353,141 @@ local function IsPedRecord(netId, info)
 end
 
 -- ============================================================================
+--                         THE FLEE CLOCK (Config.Flee)
+-- ============================================================================
+-- GTA's NPCs never tire (the stamina natives take a Player), so the server times every mission ped that runs on
+-- foot: rec.fleeSpent is the seconds it spent in 'fleeing' out of a vehicle, kept across an armed inmate's
+-- flee/hostile flips and a feint. A suspect who flees by car (a field contact's driver who bolts) does not tire
+-- while he sits in it, and his gait is a sprint until he is on foot again.
+-- The gait follows the Config.Flee durations: sprint, jog, walk, then spent. Each ped's durations are stretched or
+-- shortened by up to Config.Flee.jitter (rolled once from the run seed and its net id, so it never changes during the
+-- run, whichever game owns the ped) and by the Config.NpcDifficulty preset's fleeMult. With no active participant
+-- within recoverRange for recoverSeconds the clock goes back to 0 (sprint). The gait is a bag key (`gait`), written
+-- only on a change and never as a task, so the game that owns the ped can slow it down.
+
+local GAITS = { 'sprint', 'jog', 'walk', 'spent' }
+local FLEE_SALT = 0x464C4545      -- 'FLEE'
+local FLEE_DEFAULTS = {
+    sprintSeconds = 10,
+    jogSeconds = 12,
+    walkSeconds = 8,
+    jitter = 0.25,
+    recoverSeconds = 20,
+    recoverRange = 60.0,
+}
+local FLEE_SECONDS_RANGE = { 1, 120 }
+local FLEE_JITTER_RANGE = { 0, 0.5 }
+local FLEE_RECOVER_RANGE = { 10, 500 }
+local FLEE_MULT_RANGE = { 0.1, 5 }
+
+local function FleeCfg()
+    local c = Config and Config.Flee
+    return type(c) == 'table' and c or {}
+end
+
+local function FleeOn() return FleeCfg().enabled ~= false end
+
+local function FleeNum(key, range)
+    local v = tonumber(FleeCfg()[key])
+    if not v or v ~= v then v = FLEE_DEFAULTS[key] end
+    return U.clamp(v, range[1], range[2])
+end
+
+-- Config.NpcDifficulty's fleeMult (CP.Scaling.feel), 1.0 without it.
+local function FleeMult()
+    local feel = nil
+    if CP.Scaling and CP.Scaling.feel then
+        local ok, f = pcall(CP.Scaling.feel)
+        if ok and type(f) == 'table' then feel = f end
+    end
+    local m = tonumber(feel and feel.fleeMult) or 1.0
+    if m ~= m then m = 1.0 end
+    return U.clamp(m, FLEE_MULT_RANGE[1], FLEE_MULT_RANGE[2])
+end
+
+-- A suspect carrying a weapon officers can see tires only with Config.Flee.armedTire (a hidden contact's weapon
+-- never counts: its gait would tell officers it is armed).
+local function Tires(rec, info)
+    if FleeCfg().armedTire ~= false then return true end
+    local armed = (type(rec.bag) == 'table' and rec.bag.armed == true) or (type(info) == 'table' and info.armed == true)
+    return not armed
+end
+
+-- The ped's own share of the jitter, 0 to 1: the same for the whole run (run seed and net id).
+local function Stamina(run, rec)
+    if rec.stamina == nil then
+        local seed = math.tointeger(math.floor(tonumber(run.seed) or 1)) or 1
+        local mix = (rec.netId * 0x9E3779B1) & 0x7FFFFFFF
+        local r = U.rng(((seed ~ FLEE_SALT) ~ mix) & 0x7FFFFFFF)
+        r:next()
+        rec.stamina = r:next()
+    end
+    return rec.stamina
+end
+
+-- The seconds of running at which the sprint, the jog and the walk of this ped end.
+local function Edges(run, rec)
+    local jitter = FleeNum('jitter', FLEE_JITTER_RANGE)
+    local m = (1 + jitter * (2 * Stamina(run, rec) - 1)) * FleeMult()
+    local edges, edge = {}, 0
+    for i, key in ipairs({ 'sprintSeconds', 'jogSeconds', 'walkSeconds' }) do
+        edge = edge + FleeNum(key, FLEE_SECONDS_RANGE) * m
+        edges[i] = edge
+    end
+    return edges
+end
+
+-- The gait after `spent` seconds of running.
+local function GaitAt(run, rec, spent)
+    local edges = Edges(run, rec)
+    for i, edge in ipairs(edges) do
+        if spent < edge then return GAITS[i] end
+    end
+    return GAITS[#GAITS]
+end
+
+-- A ped sitting in a vehicle is not running (FXServer's GetVehiclePedIsIn answers the vehicle's handle, 0 for
+-- none).
+local function InVehicle(e)
+    if not Exists(e) then return false end
+    local veh = GetVehiclePedIsIn(e, false)
+    return type(veh) == 'number' and veh ~= 0
+end
+
+-- The gait the flee clock gives a ped now: 'sprint' while Config.Flee is off, the ped does not tire or it sits in a
+-- vehicle (e, its entity).
+local function FleeGait(run, rec, info, e)
+    if not FleeOn() or not Tires(rec, info) or InVehicle(e) then return 'sprint' end
+    return GaitAt(run, rec, rec.fleeSpent or 0)
+end
+
+-- Adds the running time up to t: from the last count, or from the moment the ped started running when that came
+-- later.
+local function CountRun(rec, t)
+    local from = rec.clockAt
+    if rec.since and (not from or rec.since > from) then from = rec.since end
+    from = from or t
+    rec.fleeSpent = (rec.fleeSpent or 0) + math.max(0, t - from) / 1000
+    rec.clockAt = t
+end
+
+-- Metres from pos to the nearest active participant (math.huge with none).
+local function NearestParticipant(run, pos)
+    local best = math.huge
+    for src, p in pairs(run.participants or {}) do
+        local s = tonumber(src)
+        if s and type(p) == 'table' and p.status == 'active' then
+            local ped = GetPlayerPed(s)
+            if Exists(ped) then
+                local d = U.dist(GetEntityCoords(ped), pos)
+                if d < best then best = d end
+            end
+        end
+    end
+    return best
+end
+
+-- ============================================================================
 --                                    STATE
 -- ============================================================================
 
@@ -393,6 +529,11 @@ function Npc.setState(run, netId, state, extra)
     nb.state = state
     nb.seq = (tonumber(bag.seq) or 0) + 1
     if changed then nb.task, nb.taskSeq = nil, nil end
+    if changed and state == 'fleeing' then
+        -- a ped that runs again (a feint, an armed inmate turning back) starts at the gait its flee clock says
+        local g = FleeGait(run, rec, info, e)
+        if (nb.gait or 'sprint') ~= g then nb.gait = g end
+    end
     if type(extra) == 'table' then
         for k, v in pairs(extra) do
             if k == 'cfg' then
@@ -420,6 +561,10 @@ function Npc.setState(run, netId, state, extra)
     end
     if not Commit(run, netId, rec, e, nb) then return false end
     if changed then
+        -- it stops running: the flee clock counts the running on foot up to now
+        if bag.state == 'fleeing' and FleeOn() and Tires(rec, info) then
+            if InVehicle(e) then rec.clockAt = Now() else CountRun(rec, Now()) end
+        end
         rec.since = Now()
         if state == 'surrendered' then rec.surrenderedAt = rec.since end
         rec.near = {}
@@ -439,6 +584,41 @@ end
 
 function Npc.isNeutralised(netId)
     return NEUTRALISED[Npc.getState(netId)] == true
+end
+
+-- The record, live run, engine record and entity of a living ped of a live run, or nil.
+local function LiveRec(netId)
+    netId = ToInt(tonumber(netId), 1, MAX_NETID)
+    local rec = netId and FindRec(netId) or nil
+    if not rec or rec.dead then return nil end
+    local run = RunById(rec.runId)
+    if not IsLive(run) then return nil end
+    return rec, run, type(run.entities) == 'table' and run.entities[netId] or nil, EntityOf(run, netId, rec)
+end
+
+-- The gait of a mission ped's flee clock (Config.Flee): 'sprint', 'jog', 'walk' or 'spent'; 'sprint' while
+-- Config.Flee is off, the ped does not tire or it sits in a vehicle. nil for a net id that is not a living ped of a
+-- live run.
+function Npc.gaitOf(netId)
+    local rec, run, info, e = LiveRec(netId)
+    if not rec then return nil end
+    return FleeGait(run, rec, info, e)
+end
+
+-- The flee clock of a mission ped, read only: { gait, spent = seconds of running on foot, sprint, jog, walk = the
+-- seconds of running at which each of those ends for this ped, inVehicle }, or nil like gaitOf.
+function Npc.fleeClock(netId)
+    local rec, run, info, e = LiveRec(netId)
+    if not rec then return nil end
+    local edges = Edges(run, rec)
+    return {
+        gait = FleeGait(run, rec, info, e),
+        spent = rec.fleeSpent or 0,
+        sprint = edges[1],
+        jog = edges[2],
+        walk = edges[3],
+        inVehicle = InVehicle(e),
+    }
 end
 
 function Npc.rollSurrender(run, netId, chance)
@@ -982,6 +1162,49 @@ local function HealthSynced(e)
     return not known
 end
 
+-- The bag holds the gait of the flee clock while the ped is fleeing (a write only on a change; a missing gait is a
+-- sprint, so a ped that never tires is never written).
+local function WriteGait(run, netId, rec, g)
+    if rec.state ~= 'fleeing' then return end
+    local cur = type(rec.bag) == 'table' and rec.bag.gait or nil
+    if (cur or 'sprint') == g then return end
+    if Npc.setState(run, netId, 'fleeing', { gait = g }) then
+        CP.log(TAG, 'run %s ped %s: %s after %.1f s of running', tostring(run.id), netId, g, rec.fleeSpent or 0)
+    end
+end
+
+-- One tick of the flee clock: running time while 'fleeing' on foot, the breather when no participant is near.
+local function FleeClock(run, netId, info, rec, e)
+    local t = Now()
+    if not FleeOn() or not Tires(rec, info) then
+        rec.fleeSpent, rec.aloneSince, rec.clockAt = 0, nil, t
+        WriteGait(run, netId, rec, 'sprint')
+        return
+    end
+    local seated = InVehicle(e)
+    if rec.state == 'fleeing' and not seated then
+        CountRun(rec, t)
+    else
+        rec.clockAt = t
+    end
+    if (rec.fleeSpent or 0) > 0 then
+        if NearestParticipant(run, GetEntityCoords(e)) > FleeNum('recoverRange', FLEE_RECOVER_RANGE) then
+            rec.aloneSince = rec.aloneSince or t
+            if t - rec.aloneSince >= FleeNum('recoverSeconds', FLEE_SECONDS_RANGE) * 1000 then
+                CP.log(TAG, 'run %s ped %s got its breath back after %.1f s of running', tostring(run.id), netId,
+                    rec.fleeSpent)
+                rec.fleeSpent, rec.aloneSince = 0, nil
+            end
+        else
+            rec.aloneSince = nil
+        end
+    else
+        rec.aloneSince = nil
+    end
+    -- in a vehicle the gait is a sprint (his clock is kept for when he is on foot again)
+    WriteGait(run, netId, rec, seated and 'sprint' or GaitAt(run, rec, rec.fleeSpent or 0))
+end
+
 local function CheckPed(run, netId, info, rec)
     local e = EntityOf(run, netId, rec)
     if not e then
@@ -1011,6 +1234,7 @@ local function CheckPed(run, netId, info, rec)
         if ok and rag then rec.ragdollAt = Now() end
     end
     SampleReach(run, rec, e)
+    FleeClock(run, netId, info, rec, e)
 end
 
 local function Tick()

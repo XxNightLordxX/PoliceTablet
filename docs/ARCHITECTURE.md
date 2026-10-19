@@ -751,7 +751,7 @@ Full admin control: the accept check (`check`, `CheckAccept`) refuses `err.maint
 - `combat(baseAccuracy, baseArmour, tier, run) -> accuracy, armour` (+ tier; + `Config.Events.armoredArmour` when the run's modifier is `armored_hostiles`)
 
 Parity-plus: `combat()` adds `Config.NpcDifficulty[preset].accuracyAdd/armourAdd`; `feel() -> { healthMult,
-surrenderMult, fleeMult }` for the blocks. Presets change how NPCs feel, never points or cash. Config.NpcCombat:
+surrenderMult, fleeMult }` for the blocks (fleeMult stretches CP.Npc's flee clock, §5.11). Presets change how NPCs feel, never points or cash. Config.NpcCombat:
 the accuracy `combat()` returns is then `CP.NpcCombat.scaleAccuracy` (× accuracyScale, at most accuracyMax); a
 boss's accuracy goes through `ctx.combat` too (its armour stays the file's).
 
@@ -903,6 +903,23 @@ Server:
   a gun hit (not melee, not a vehicle) by an active participant on a mission ped, or a participant's gun kill
   (noted before `entityDied`), → `CP.Runs.noteWeaponFired(run, src)`
 - `onDamaged(fn(run, netId, attackerSrc))` for blocks that care (hostages)
+- The flee clock (Config.Flee): GTA AI has no stamina, so the 1 s watcher adds the time every ped spends in
+  `'fleeing'` on foot to `rec.fleeSpent` (kept across flee/hostile flips, a surrender and a feint; a state change away
+  from fleeing counts up to that moment). Time fleeing on foot only: while `GetVehiclePedIsIn(e, false) ~= 0` (a field
+  contact's driver who bolts drives off in the `'fleeing'` state) nothing is counted and the gait is `'sprint'`; the
+  clock is kept for when he is on foot again. The gait is `'sprint'` until sprintSeconds, `'jog'` until +
+  jogSeconds, `'walk'` until + walkSeconds, then `'spent'`, each time × (1 ± jitter: one roll per ped from `CP.U.rng`
+  of the run seed and its net id, the same whenever the record is made again) × `CP.Scaling.feel().fleeMult`. No
+  active participant within recoverRange for recoverSeconds sets the clock back to 0. With armedTire = false a ped
+  whose bag or engine record is armed (never armedTruth) does not tire; with enabled = false nothing tires and no gait
+  is written (a gait already written goes back to `'sprint'`). While the ped is fleeing, a gait change is written as
+  the bag key `gait` through `setState(run, netId, 'fleeing', { gait = g })` (same state: the task and taskSeq are
+  kept, so no re-task); a ped that turns to fleeing again gets its clock's gait in the same write. A missing gait is a
+  sprint.
+- `gaitOf(netId) -> 'sprint'|'jog'|'walk'|'spent'|nil` — the clock's gait now (`'sprint'` when Config.Flee is off,
+  the ped does not tire or it sits in a vehicle; nil for a net id that is not a living ped of a live run)
+- `fleeClock(netId) -> { gait, spent, sprint, jog, walk, inVehicle }|nil` — read only: the seconds run on foot so far,
+  the seconds of running at which this ped's sprint, jog and walk end, and whether it sits in a vehicle now
 - A second `weaponDamageEvent` listener (Config.NpcCombat.cancelLethalHeadshots): `CancelEvent()` for a hit with
   `willKill` whose `parentGlobalId` is an armed, living mission ped of a live run and whose every hit is the ped of
   an active participant of that run in routing bucket 0, not in the arena, and healthy: the server's
@@ -1874,7 +1891,8 @@ call, so a Settings change applies to the next NPC; `enabled = false` makes ever
   waits (re-checked each tick) and its counts are never reduced.
 
 ### 6.2 NPC state (the `cp` state bag, server-authoritative)
-`Entity(e).state.cp = { run, obj, role, state, armed, cfg = { weapon, accuracy, armour, health, behaviour, model } , tag }`.
+`Entity(e).state.cp = { run, obj, role, state, armed, cfg = { weapon, accuracy, armour, health, behaviour, model } , tag }`,
+plus `gait` (`'sprint'|'jog'|'walk'|'spent'`, CP.Npc's flee clock, §5.11; missing = sprint).
 Only the server changes `state` (via `CP.Npc.setState`), and the server never reads the bag back: its record per net
 id (`run.entities[netId].bag`, kept by CP.Npc) is the truth, so a client that rewrites the bag of an entity it owns
 changes nothing on the server. Client requests are evidence events

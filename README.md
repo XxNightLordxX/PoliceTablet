@@ -688,6 +688,7 @@ Everything else works as shipped. These are the ones owners change most:
 | `Config.Limits` | `maxCompletionsHour = 8` and `maxCompletionsDay = 0` (0 = no cap) finished missions per officer; `maxConcurrentRuns = 12` and `maxConcurrentTactical = 4` missions at once, server-wide |
 | `Config.NpcDifficulty.preset` | `'easy'`, `'normal'`, `'hard'` or `'custom'`. Changes how NPCs fight, never the pay |
 | `Config.NpcCombat` | How hard armed NPCs fight back: no automatic weapons, an accuracy cap, single shots, half damage, no headshot one-shots. See [5.9](#59-how-hard-npcs-fight-back) |
+| `Config.Flee` | How long a suspect who runs from your officers keeps running: the server times every runner on foot (time in a car does not count), who sprints for `sprintSeconds` (10), jogs for `jogSeconds` (12), walks for `walkSeconds` (8) and is then worn out. Each suspect lasts up to `jitter` (25 %) longer or shorter, `Config.NpcDifficulty`'s `fleeMult` stretches it (`'hard'`: 20 % longer), a runner no officer comes within `recoverRange` (60 m) of for `recoverSeconds` (20 s) sprints again, and `armedTire = false` keeps armed suspects fresh. `enabled = false` turns it off. So far only the server keeps this clock: you see no change in game yet |
 | `Config.MissionCalls` | Tablet mission calls: `enabled`, how often (`spawnEvery`), how many open at once (`maxOpen`) |
 | `Config.CrossDept.enabled` | Cross-Department Missions on or off |
 | `Config.Units.invitePolicy` | `'anyone'` in a unit may invite, or only the `'leader'` |
@@ -2074,6 +2075,11 @@ however it ends.
   damage and officers on a run take no headshot multiplier; the server drops a one-shot kill by a mission NPC on a
   healthy officer of its run (at least `lethalCancelAbove`, three quarters, of his health) (the one `CancelEvent` Crimson-Police makes, `docs/CRIMSON_ARENA.md` rule 11). `MissionTweaks`
   `weapons` now also replaces the ambush, associate and boss weapons.
+- Flee stamina, at the owner's request of 2026-10-19 ("I want the peds to run out of stamina when they run away"):
+  `Config.Flee`. The server times every mission NPC that runs on foot (sprint 10 s, jog 12 s, walk 8 s, then worn
+  out, each suspect up to 25 % longer or shorter, `fleeMult` of `Config.NpcDifficulty` now used; time in a car does
+  not count), keeps the time across a fight or a surrender, and gives a runner his breath back after 20 s with no
+  officer within 60 m. So far nothing in game reads the clock.
 
 **Waiting for the owner's OK** (already in `docs/SPEC.md` and the code; each one is undone without a code change):
 

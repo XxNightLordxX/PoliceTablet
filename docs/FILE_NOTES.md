@@ -2277,6 +2277,15 @@ Contract interpretations (details in docs/notes/engine_a.md)
       in the last 2 s is attributed with GetPedSourceOfDamage: an NPC, a vehicle's driver, or a player
       only when that player owns the ped (any other player's hit came as a weaponDamageEvent, and the
       source it left behind names nobody for later damage). Never "no source".
+    - The flee clock (Config.Flee): the same 1 s watcher adds every second a ped spends in 'fleeing' on foot to
+      rec.fleeSpent (kept across flee/hostile flips, a surrender and a feint; a ped in a vehicle, a field
+      contact's driver who bolts, is not counted and its gait is sprint) and turns it into a gait: sprint,
+      jog, walk, then spent, by the Config.Flee durations x (1 +/- jitter, one roll per ped from the run seed and
+      its net id) x CP.Scaling.feel().fleeMult. No active participant within recoverRange for recoverSeconds puts
+      the clock back to 0. A change of gait while fleeing is written as the bag key gait (same state, so the task
+      is kept: no re-task); a ped that starts fleeing again gets its clock's gait in that write. Off
+      (enabled = false), or an armed ped with armedTire = false: no clock, no gait written (an old one goes back to
+      sprint). Nothing reads the gait in game yet.
 
   Public API
     CP.Npc.setState(run, netId, state, extra) -> boolean
@@ -2299,6 +2308,12 @@ Contract interpretations (details in docs/notes/engine_a.md)
     CP.Npc.onDeath(fn(run, netId, killerSrc|nil, killerIsParticipant))
     CP.Npc.onDamaged(fn(run, netId, attackerSrc|nil))     damage to peds whose role is 'hostage'
                                                            (attackerSrc nil = an NPC)
+    CP.Npc.gaitOf(netId) -> 'sprint'|'jog'|'walk'|'spent'|nil   the flee clock's gait ('sprint' with Config.Flee
+                                                           off, a ped that does not tire or one in a vehicle;
+                                                           nil: not a living ped of a live run)
+    CP.Npc.fleeClock(netId) -> { gait, spent, sprint, jog, walk, inVehicle }|nil   read only: seconds run on
+                                                           foot, the seconds of running at which each gait ends
+                                                           for this ped, and whether it sits in a vehicle
 
   Events and handlers
     RegisterNetEvent crimson-police:server:npcCuff (runId, netId)      rate limited 3 per 2 s
