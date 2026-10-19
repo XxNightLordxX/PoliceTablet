@@ -315,6 +315,15 @@ do
     Err('Flee.giveUpRange', 101, 'err.setting_range', 'and at most 100 m')
     H.ok(not E('Flee.exhausted').reload and not E('Flee.exhausted').restart, 'the give-up rule is read live')
     H.ok(not E('Flee.giveUpRange').reload and not E('Flee.giveUpRange').restart, 'and so is its range')
+    -- which escape route a scattering suspect takes (S21): on or off, its comment alone, live
+    local routeDesc = 'true = a runner, cook or inmate who scatters (Gang Hideout Raid, Drug Lab Raid, Prison Break)'
+        .. ' flees along the escape route that starts nearest where he appears, so nobody runs back across the site'
+        .. ' past your officers (routes that start about as near, within 5 m, take turns); false = the routes take'
+        .. ' turns wherever he appears'
+    H.eq(E('Flee.nearestRoute').desc, routeDesc, 'the route rule, without the end of the give-up range comment')
+    H.eq(Config.Flee.nearestRoute, true, 'the route rule ships on')
+    Err('Flee.nearestRoute', 'yes', 'err.setting_type', 'the route rule is on or off')
+    H.ok(not E('Flee.nearestRoute').reload and not E('Flee.nearestRoute').restart, 'the route rule is read live')
     -- Config.Spawning (the spawn director, S1): its own section after the run limits, each comment alone, the ranges
     H.eq(E('Spawning.enabled').section, 'spawning', 'Spawning has its own section')
     local spawnTitle, spawnGroup = nil, nil

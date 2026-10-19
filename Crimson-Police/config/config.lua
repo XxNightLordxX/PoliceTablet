@@ -812,6 +812,10 @@ Config.Flee = {
     -- 'handsUp' (he gives up and stands with his hands up) or 'walk' (he walks on and never gives up on his own)
     exhausted = 'surrender',
     giveUpRange = 30.0,              -- metres: a worn-out runner gives up when an officer is this close (5-100)
+    -- true = a runner, cook or inmate who scatters (Gang Hideout Raid, Drug Lab Raid, Prison Break) flees along the
+    -- escape route that starts nearest where he appears, so nobody runs back across the site past your officers
+    -- (routes that start about as near, within 5 m, take turns); false = the routes take turns wherever he appears
+    nearestRoute = true,
 }
 
 -- ============================================================================

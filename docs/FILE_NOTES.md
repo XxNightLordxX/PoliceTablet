@@ -4641,7 +4641,14 @@ defined becomes a recorder), so the checks can assert on the calls the module ma
 flee_arrest through the spawn director (Config.Spawning, PLAN S11) on the real engine, the real block and the
 built-in mission files: a warrant's associates appear at the knock, away from and never behind the officer at the
 door; scatter suspects each get a point of their own, never on another person; the surrendering suspect is put
-on the ground at the door step (CP.Spawn.again).
+on the ground at the door step (CP.Spawn.again). PLAN S21: with the shipped files and the officer at the start,
+every hideout's runners, every lab's cooks and the south-west fence's inmates (as many as the list has points, at
+least the largest team's count) all come out at once, each on a point of his own and on the escape route that starts
+nearest him (Config.Flee.nearestRoute); the short-list cases run on lists cut to their pre-S21 size. Drug Lab #1 with
+the officer at the lab (8 seeds): each cook runs the route that starts by him, never the one across the lab (with
+nearestRoute = false some seed sends one across). Every hideout with the officer at the lieutenant's body (objective
+3's start): a runner appears once the director allows his point (40 m+ before waveDelayMax, 20 m+ after), the rest
+once the officer moves off.
 ```
 
 ## tests/harness.lua

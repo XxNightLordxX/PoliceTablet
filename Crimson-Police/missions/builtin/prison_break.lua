@@ -131,10 +131,11 @@ RegisterMission({
     {
       label  = 'South-west fence, Bolingbroke Penitentiary',
       start  = { coords = vec3(1454.00, 2436.29, 55.03), radius = 150.0 },   -- within 150 m of the breakout point
-      spawns = {   -- 6 inmate spawns on the track / road at the breakout point outside the fence (z = road + 1 m, facing the approach)
+      spawns = {   -- 8 inmate spawns on the track / road at the breakout point outside the fence (z = road + 1 m, facing the approach)
         vec4(1417.00, 2409.75, 59.50, 305.7), vec4(1419.25, 2414.75, 58.44, 301.8),
         vec4(1414.25, 2405.00, 60.69, 308.2), vec4(1421.75, 2419.50, 57.47, 297.5),
-        vec4(1411.50, 2400.25, 61.91, 310.3), vec4(1424.25, 2424.50, 56.69, 291.6),
+        vec4(1411.50, 2400.25, 61.91, 310.3), vec4(1423.98, 2423.96, 56.77, 292.3),
+        vec4(1409.99, 2397.37, 62.68, 311.5), vec4(1425.25, 2426.73, 56.40, 288.4),
       },
       routes = {   -- 2 escape routes along tracks and roads away from the prison (road-node waypoints at every turn, <= 110 m apart)
         { vec3(1417.00, 2409.75, 59.50), vec3(1397.50, 2359.75, 72.50), vec3(1383.00, 2352.50, 72.53),

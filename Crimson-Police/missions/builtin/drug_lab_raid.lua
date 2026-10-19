@@ -8,7 +8,8 @@
   Every point sits on the GTA V vehicle-node network or 3 m beside it (driveways, yard lanes and dirt
   tracks), at the site's ground level, so no ped spawns inside a wall: the lab point is the node nearest the
   building, the two entries 6–18 m from it facing it, the "inside" set within 32 m and the "yard" set
-  18–68 m out, the stash spots 4–48 m around, escape routes follow the tracks away from the approach road.
+  18–68 m out, the stash spots 4–48 m around, escape routes follow the tracks away from the approach road;
+  the cooks' 3 points (their hiding spot and 2 on the tracks towards the escape routes) are 3 m or more apart.
   The start is on that road 50–78 m from the lab and at least 33 m from every spawn; every point is at least
   250 m from any other mission's locations (tests/zone_lint_spec.lua). Not O'Neil Ranch (the Weekly Boss).
   Blocks: interact_points (together) → hostile_waves → flee_arrest (scatter) → interact_points (seize)
@@ -48,7 +49,10 @@ RegisterMission({
         vec4(-1539.75, 4684.50, 42.25, 113.8), vec4(-1544.87, 4709.88, 46.19, 143.0),
         vec4(-1542.44, 4715.67, 46.59, 144.6),
       },
-      cook    = { vec4(-1539.00, 4712.50, 45.72, 45.0) },   -- the cooks' hiding spot
+      cook    = {   -- the cooks' hiding spot first, then 2 points on the tracks towards the escape routes (3 m+ apart)
+        vec4(-1539.00, 4712.50, 45.72, 45.0), vec4(-1570.00, 4737.12, 50.81, 45.0),
+        vec4(-1509.00, 4697.52, 37.77, 45.0),
+      },
       escapes = {   -- escape routes away from the start
         { vec3(-1570.11, 4737.04, 50.80), vec3(-1530.89, 4739.53, 51.63), vec3(-1461.50, 4805.00, 85.75) },
         { vec3(-1508.58, 4697.58, 37.72), vec3(-1468.79, 4701.21, 38.82), vec3(-1423.00, 4722.50, 42.66) },
@@ -80,7 +84,10 @@ RegisterMission({
         vec4(1411.90, -2323.30, 65.44, 28.7), vec4(1375.62, -2318.38, 61.48, 1.2),
         vec4(1396.29, -2333.43, 62.79, 15.6),
       },
-      cook    = { vec4(1403.54, -2336.07, 63.38, 121.0) },   -- the cooks' hiding spot
+      cook    = {   -- the cooks' hiding spot first, then 2 points on the tracks towards the escape routes (3 m+ apart)
+        vec4(1403.54, -2336.07, 63.38, 121.0), vec4(1372.24, -2359.50, 61.05, 121.0),
+        vec4(1438.75, -2332.50, 66.83, 121.0),
+      },
       escapes = {   -- escape routes away from the start
         { vec3(1438.94, -2332.59, 66.83), vec3(1447.67, -2369.84, 66.71), vec3(1449.75, -2444.00, 64.16) },
         { vec3(1372.36, -2359.90, 61.03), vec3(1364.86, -2398.99, 56.38), vec3(1348.25, -2459.25, 48.66) },
@@ -112,7 +119,10 @@ RegisterMission({
         vec4(854.59, -2347.11, 30.31, 221.9), vec4(902.67, -2348.14, 30.50, 181.4),
         vec4(853.57, -2340.79, 30.31, 219.4),
       },
-      cook    = { vec4(854.07, -2328.32, 30.32, 199.8) },   -- the cooks' hiding spot
+      cook    = {   -- the cooks' hiding spot first, then 2 points on the tracks towards the escape routes (3 m+ apart)
+        vec4(854.07, -2328.32, 30.32, 199.8), vec4(850.01, -2288.00, 30.31, 199.8),
+        vec4(848.29, -2308.50, 30.31, 199.8),
+      },
       escapes = {   -- escape routes away from the start
         { vec3(850.05, -2287.55, 30.31), vec3(853.63, -2247.72, 30.36), vec3(775.00, -2212.25, 29.31) },
         { vec3(850.05, -2287.55, 30.31), vec3(853.63, -2247.72, 30.36), vec3(879.50, -2245.50, 30.59) },
@@ -144,7 +154,10 @@ RegisterMission({
         vec4(-1611.33, 2723.54, 5.64, 253.6), vec4(-1588.37, 2695.86, 4.03, 278.7),
         vec4(-1611.34, 2691.02, 1.78, 279.7),
       },
-      cook    = { vec4(-1632.31, 2709.45, 5.69, 105.7) },   -- the cooks' hiding spot
+      cook    = {   -- the cooks' hiding spot first, then 2 points on the tracks towards the escape routes (3 m+ apart)
+        vec4(-1632.31, 2709.45, 5.69, 105.7), vec4(-1665.36, 2727.33, 5.59, 105.7),
+        vec4(-1651.48, 2713.91, 5.60, 105.7),
+      },
       escapes = {   -- escape routes away from the start
         { vec3(-1665.68, 2727.64, 5.59), vec3(-1698.47, 2749.89, 5.63), vec3(-1753.00, 2719.25, 4.53) },
         { vec3(-1665.68, 2727.64, 5.59), vec3(-1698.47, 2749.89, 5.63), vec3(-1697.25, 2650.00, 0.94) },
@@ -176,7 +189,10 @@ RegisterMission({
         vec4(631.04, 2179.52, 65.60, 222.1), vec4(675.32, 2181.57, 62.10, 181.3),
         vec4(633.11, 2169.26, 66.00, 227.3),
       },
-      cook    = { vec4(623.69, 2185.50, 66.59, 91.2) },   -- the cooks' hiding spot
+      cook    = {   -- the cooks' hiding spot first, then 2 points on the tracks towards the escape routes (3 m+ apart)
+        vec4(623.69, 2185.50, 66.59, 91.2), vec4(584.25, 2182.50, 71.01, 91.2),
+        vec4(604.25, 2182.41, 68.72, 91.2),
+      },
       escapes = {   -- escape routes away from the start
         { vec3(583.76, 2182.50, 71.07), vec3(543.81, 2180.80, 76.05), vec3(540.25, 2180.50, 76.50) },
         { vec3(663.71, 2183.60, 62.96), vec3(702.39, 2190.20, 59.88), vec3(656.00, 2305.25, 51.00) },
@@ -208,7 +224,10 @@ RegisterMission({
         vec4(-283.04, 3963.64, 43.06, 63.2), vec4(-312.46, 4001.08, 43.86, 88.9),
         vec4(-318.23, 3998.42, 43.96, 85.0),
       },
-      cook    = { vec4(-297.00, 3976.38, 43.39, 217.6) },   -- the cooks' hiding spot
+      cook    = {   -- the cooks' hiding spot first, then 2 points on the tracks towards the escape routes (3 m+ apart)
+        vec4(-297.00, 3976.38, 43.39, 217.6), vec4(-273.32, 3946.98, 42.69, 217.6),
+        vec4(-285.38, 3961.75, 43.06, 217.6),
+      },
       escapes = {   -- escape routes away from the start
         { vec3(-273.19, 3946.84, 42.69), vec3(-248.28, 3915.60, 39.61), vec3(-224.75, 3939.75, 37.47) },
         { vec3(-273.19, 3946.84, 42.69), vec3(-248.28, 3915.60, 39.61), vec3(-221.50, 4005.50, 37.22) },
@@ -240,7 +259,10 @@ RegisterMission({
         vec4(-2290.86, 3373.87, 31.27, 50.8), vec4(-2329.38, 3403.20, 30.44, 48.3),
         vec4(-2285.69, 3377.53, 31.38, 54.8),
       },
-      cook    = { vec4(-2282.39, 3375.13, 31.61, 234.0) },   -- the cooks' hiding spot
+      cook    = {   -- the cooks' hiding spot first, then 2 points on the tracks towards the escape routes (3 m+ apart)
+        vec4(-2282.39, 3375.13, 31.61, 234.0), vec4(-2244.25, 3367.00, 33.44, 234.0),
+        vec4(-2264.54, 3365.82, 33.00, 234.0),
+      },
       escapes = {   -- escape routes away from the start
         { vec3(-2244.30, 3366.57, 33.42), vec3(-2262.58, 3332.05, 32.86), vec3(-2179.50, 3285.00, 32.78) },
         { vec3(-2244.30, 3366.57, 33.42), vec3(-2262.58, 3332.05, 32.86), vec3(-2290.00, 3284.00, 32.84) },

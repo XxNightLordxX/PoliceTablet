@@ -142,7 +142,9 @@ do
         end
     end
     H.eq(locations, 104, '104 built-in locations')
-    H.eq(total, 2199, 'the 2199 points of the built-in files')
+    -- 2199 before S21, which added 3 runner points at each of the 7 hideouts, 2 cook points at each of the 7 labs and
+    -- 2 inmate points at Prison Break's south-west fence
+    H.eq(total, 2236, 'the 2236 points of the built-in files')
     H.eq(#untyped, 0, 'every point is used by an objective: ' .. table.concat(untyped, ', '))
     H.ok(kinds.ped > 0 and kinds.vehicle > 0 and kinds.prop > 0 and kinds.marker > 0 and kinds.path > 0,
         'people, vehicles, objects, markers and paths')

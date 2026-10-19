@@ -6,10 +6,11 @@
   Locations (7 hideouts): Yard, Murrieta Heights, Duplex, Elysian Island, House, Vespucci Canals, House, Richman Glen, House, East Vinewood, Compound, Tataviam foothills, House, Pacific Bluffs.
   Every point sits on the GTA V vehicle-node network or 3 m beside it, at the hideout's ground level: the
   "house" set within 24 m of the building node, "front" on the approach side and "garage" behind it (6+
-  points each), the lieutenant and the runners at the back, cache spots 4–48 m around, escape routes along
-  the lanes away from the approach. The start is on the approach road 50–95 m from the house and at least
-  33 m from every spawn; every point is at least 200 m from any other mission's locations (250 m from Drug
-  Lab Raid's; tests/zone_lint_spec.lua).
+  points each), the lieutenant at the back, the 4 runner points on the lanes from there to the escape routes
+  (on the node network, 3 m or more apart and off the lieutenant's spot), cache spots 4–48 m around, escape
+  routes along the lanes away from the approach. The start is on the approach road 50–95 m from the house and
+  at least 33 m from every spawn; every point is at least 200 m from any other mission's locations (250 m from
+  Drug Lab Raid's; tests/zone_lint_spec.lua).
   Blocks: interact_points (together) → hostile_waves (boss) → flee_arrest (scatter) → interact_points
   (seize) → process_scene.
 ]]
@@ -51,7 +52,11 @@ RegisterMission({
         vec4(1531.81, -1695.31, 81.84, 191.5), vec4(1535.92, -1699.58, 81.03, 188.9),
       },
       lieutenant = vec4(1529.25, -1693.75, 81.84, 342.5),   -- the lieutenant's spot
-      runners    = { vec4(1529.25, -1693.75, 81.84, 342.5) },   -- where the runners hide until they bolt
+      runners    = {   -- where the runners hide until they bolt: 4 points on the lanes from the back of the house
+                       -- to the escape routes, 3 m+ apart and off the lieutenant
+        vec4(1533.70, -1684.70, 83.87, 342.5), vec4(1534.74, -1674.96, 86.12, 342.5),
+        vec4(1536.46, -1665.29, 87.69, 342.5), vec4(1539.82, -1656.21, 88.13, 342.5),
+      },
       escapes    = {   -- escape routes away from the start
         { vec3(1540.02, -1655.88, 88.12), vec3(1558.36, -1623.61, 88.27), vec3(1563.25, -1619.50, 88.38) },
         { vec3(1540.02, -1655.88, 88.12), vec3(1558.36, -1623.61, 88.27), vec3(1606.50, -1665.25, 88.00) },
@@ -86,7 +91,11 @@ RegisterMission({
         vec4(-191.75, -2563.75, 6.00, 333.6), vec4(-213.25, -2546.25, 6.00, 311.0),
       },
       lieutenant = vec4(-197.75, -2557.58, 6.00, 180.0),   -- the lieutenant's spot
-      runners    = { vec4(-197.75, -2557.58, 6.00, 180.0) },   -- where the runners hide until they bolt
+      runners    = {   -- where the runners hide until they bolt: 4 points on the lanes from the back of the house
+                       -- to the escape routes, 3 m+ apart and off the lieutenant
+        vec4(-194.75, -2568.25, 6.00, 180.0), vec4(-194.75, -2579.25, 6.00, 180.0),
+        vec4(-194.75, -2590.34, 6.00, 180.0), vec4(-194.75, -2601.57, 6.00, 180.0),
+      },
       escapes    = {   -- escape routes away from the start
         { vec3(-194.75, -2601.75, 6.00), vec3(-213.75, -2622.75, 6.09), vec3(-256.00, -2622.75, 6.03) },
         { vec3(-194.75, -2601.75, 6.00), vec3(-175.75, -2622.75, 6.04), vec3(-145.00, -2622.75, 6.00) },
@@ -121,7 +130,11 @@ RegisterMission({
         vec4(-1400.42, -1487.17, 3.04, 222.8), vec4(-1402.25, -1483.25, 3.02, 221.9),
       },
       lieutenant = vec4(-1397.12, -1498.84, 3.12, 37.9),   -- the lieutenant's spot
-      runners    = { vec4(-1397.12, -1498.84, 3.12, 37.9) },   -- where the runners hide until they bolt
+      runners    = {   -- where the runners hide until they bolt: 4 points on the lanes from the back of the house
+                       -- to the escape routes, 3 m+ apart and off the lieutenant
+        vec4(-1404.25, -1479.25, 3.00, 37.9), vec4(-1385.30, -1476.50, 4.24, 37.9),
+        vec4(-1407.90, -1470.46, 2.98, 37.9), vec4(-1413.65, -1462.63, 3.00, 37.9),
+      },
       escapes    = {   -- escape routes away from the start
         { vec3(-1413.98, -1462.27, 3.00), vec3(-1432.82, -1427.28, 3.00), vec3(-1472.75, -1401.25, 2.12) },
         { vec3(-1384.93, -1476.50, 4.26), vec3(-1376.32, -1456.37, 4.32), vec3(-1371.75, -1360.00, 3.75) },
@@ -156,7 +169,11 @@ RegisterMission({
         vec4(-942.30, 697.25, 153.11, 276.4), vec4(-946.33, 703.50, 153.41, 272.0),
       },
       lieutenant = vec4(-953.12, 700.50, 153.95, 90.0),   -- the lieutenant's spot
-      runners    = { vec4(-953.12, 700.50, 153.95, 90.0) },   -- where the runners hide until they bolt
+      runners    = {   -- where the runners hide until they bolt: 4 points on the lanes from the back of the house
+                       -- to the escape routes, 3 m+ apart and off the lieutenant
+        vec4(-963.49, 699.56, 155.01, 90.0), vec4(-973.91, 697.78, 156.18, 90.0),
+        vec4(-984.25, 696.66, 157.46, 90.0), vec4(-994.52, 697.12, 158.85, 90.0),
+      },
       escapes    = {   -- escape routes away from the start
         { vec3(-994.92, 697.20, 158.90), vec3(-1029.12, 716.21, 164.68), vec3(-1035.25, 726.00, 165.94) },
         { vec3(-994.92, 697.20, 158.90), vec3(-1029.12, 716.21, 164.68), vec3(-1002.25, 798.75, 171.72) },
@@ -191,7 +208,11 @@ RegisterMission({
         vec4(1119.88, 257.63, 80.84, 93.1), vec4(1125.79, 254.40, 80.84, 90.5),
       },
       lieutenant = vec4(1140.10, 235.66, 81.81, 327.8),   -- the lieutenant's spot
-      runners    = { vec4(1140.10, 235.66, 81.81, 327.8) },   -- where the runners hide until they bolt
+      runners    = {   -- where the runners hide until they bolt: 4 points on the lanes from the back of the house
+                       -- to the escape routes, 3 m+ apart and off the lieutenant
+        vec4(1146.40, 240.05, 81.81, 327.8), vec4(1150.44, 246.47, 81.81, 327.8),
+        vec4(1154.23, 252.49, 81.81, 327.8), vec4(1158.29, 258.94, 81.81, 327.8),
+      },
       escapes    = {   -- escape routes away from the start
         { vec3(1158.55, 259.36, 81.81), vec3(1188.75, 284.55, 81.81), vec3(1275.25, 208.75, 81.81) },
         { vec3(1158.55, 259.36, 81.81), vec3(1188.75, 284.55, 81.81), vec3(1219.50, 289.00, 81.81) },
@@ -226,7 +247,11 @@ RegisterMission({
         vec4(1895.59, -974.00, 79.16, 179.0), vec4(1902.63, -975.55, 79.16, 173.6),
       },
       lieutenant = vec4(1889.00, -984.50, 79.16, 313.9),   -- the lieutenant's spot
-      runners    = { vec4(1889.00, -984.50, 79.16, 313.9) },   -- where the runners hide until they bolt
+      runners    = {   -- where the runners hide until they bolt: 4 points on the lanes from the back of the house
+                       -- to the escape routes, 3 m+ apart and off the lieutenant
+        vec4(1898.39, -975.47, 79.16, 313.9), vec4(1903.50, -970.67, 79.16, 313.9),
+        vec4(1911.00, -964.00, 79.16, 313.9), vec4(1918.46, -957.76, 79.16, 313.9),
+      },
       escapes    = {   -- escape routes away from the start
         { vec3(1918.61, -957.63, 79.16), vec3(1950.16, -933.06, 79.16), vec3(1958.25, -927.25, 79.16) },
         { vec3(1918.61, -957.63, 79.16), vec3(1950.16, -933.06, 79.16), vec3(1993.50, -1002.75, 85.22) },
@@ -261,7 +286,11 @@ RegisterMission({
         vec4(-1614.20, 71.67, 61.31, 359.9), vec4(-1623.37, 73.77, 61.78, 353.1),
       },
       lieutenant = vec4(-1613.36, 67.66, 61.28, 242.4),   -- the lieutenant's spot
-      runners    = { vec4(-1613.36, 67.66, 61.28, 242.4) },   -- where the runners hide until they bolt
+      runners    = {   -- where the runners hide until they bolt: 4 points on the lanes from the back of the house
+                       -- to the escape routes, 3 m+ apart and off the lieutenant
+        vec4(-1606.08, 60.46, 60.84, 242.4), vec4(-1596.69, 56.61, 60.39, 242.4),
+        vec4(-1644.75, 72.33, 63.18, 242.4), vec4(-1577.67, 50.58, 59.33, 242.4),
+      },
       escapes    = {   -- escape routes away from the start
         { vec3(-1644.85, 72.14, 63.19), vec3(-1662.61, 36.66, 62.95), vec3(-1683.75, 15.75, 64.62) },
         { vec3(-1577.58, 50.56, 59.32), vec3(-1538.16, 44.75, 56.84), vec3(-1534.50, 44.75, 56.59) },

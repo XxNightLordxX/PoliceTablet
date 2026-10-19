@@ -331,7 +331,9 @@ clears the clock). A list shorter than the people it is for: one `CP.warn` (`<ke
 others come out once a point is free`); a point is used again once its person has left it. After `waveDelayMax` short,
 a second ask offers the last resort for what is still missing: the old ring round each point (`REUSE_OFFSET` × lap,
 laps = ceil(total / #list)) and, in scatter mode, each escape route's first point (an inmate there runs on along that
-route), each checked against the run's people like any point. `Config.Spawning.leaveOutAfter` (and at least
+route), each checked against the run's people like any point. Any other scatter inmate's route is `RouteFor`: with
+`Config.Flee.nearestRoute` (on) the route whose first point is nearest where he appears, routes within `ROUTE_TIE`
+(5 m) of as near taken in `st.routeOrder` from his turn on; off, `st.routeOrder` in turn (as before). `Config.Spawning.leaveOutAfter` (and at least
 `waveDelayMax`) short while someone of the objective has appeared and every one of them is done: the missing ones are
 left out (`st.leftOut`, one `CP.warn` `<n> inmate(s) left out: ...`; `AssocTarget` / `InmateTarget`, the checklist and
 the HUD count without them). A door location with no `suspect` point: nobody at the door (`st.noSuspect`, one

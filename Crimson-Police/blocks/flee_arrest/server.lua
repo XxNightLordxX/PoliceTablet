@@ -14,6 +14,7 @@ local DOOR_STEP = 1.0                    -- metres outside the door where a surr
 local DOOR_FLIP_DOT = 0.25               -- the door heading is turned round when the start is this clearly behind it
 local REUSE_OFFSET = 1.25                -- metres per lap of the ring round a point used again (the last resort)
 local SHARE_RADIUS = 1.5                 -- metres: nobody appears this close to another person or vehicle of the run
+local ROUTE_TIE = 5.0                    -- metres: escape routes whose first points are this close in distance tie
 local SURRENDER_GRACE_MS = 3000          -- a kill this soon after an armed suspect gave up is a shot in flight
 local DEFAULT_KNOCK_MS = 3000
 local DEFAULT_CUFF_MS = 5000
@@ -1178,6 +1179,26 @@ end
 --                                 SCATTER MODE
 -- ============================================================================
 
+-- The escape route of the i-th scatter person, who appears at point: the one dealt to him in turn (order), or, with
+-- Config.Flee.nearestRoute, the one that starts nearest him, so nobody runs back across the site to a route that
+-- starts on its other side. Routes that start within ROUTE_TIE of as near (a shared first point, a hiding spot between
+-- two) are taken in the dealt order from his turn on.
+local function RouteFor(routes, order, i, point)
+    local dealt = order[((i - 1) % #order) + 1]
+    local flee = type(Config.Flee) == 'table' and Config.Flee or {}
+    if flee.nearestRoute == false or #routes < 2 then return dealt end
+    local d, best = {}, math.huge
+    for j, r in ipairs(routes) do
+        d[j] = U.dist(point, r[1])
+        if d[j] < best then best = d[j] end
+    end
+    for k = 0, #order - 1 do
+        local j = order[((i - 1 + k) % #order) + 1]
+        if d[j] <= best + ROUTE_TIE then return j end
+    end
+    return dealt
+end
+
 local SpawnScatterLoop
 
 local function SpawnScatter(ctx, st)
@@ -1234,10 +1255,10 @@ SpawnScatterLoop = function(ctx, st, want, pts, routes)
         local armed = st.nextArmed
         if not ctx.canSpawn(1, armed) then ok = false break end
         local i = st.counts.inmate + 1
-        local routeIdx = st.routeOrder and st.routeOrder[((i - 1) % #st.routeOrder) + 1] or nil
+        local point = spot and spot.coords or Placed(pts, st.pointOrder, i)
+        local routeIdx = st.routeOrder and RouteFor(routes, st.routeOrder, i, point) or nil
         -- one who appears on an escape route (the last resort) runs on along that one
         if spot and spot.route and routes[spot.route] then routeIdx = spot.route end
-        local point = spot and spot.coords or Placed(pts, st.pointOrder, i)
         local p = SpawnOne(ctx, st, 'inmate', point, armed, {
             route = routeIdx,
             outfit = 'prison',

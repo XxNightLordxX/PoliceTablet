@@ -203,6 +203,75 @@ do
     end
 end
 
+-- PLAN S21 (owner request of 2026-10-19: "i do not want them spawning in the ground or surronding the officers"): no
+-- two people of a scatter share one point. Every location of a scatter objective (Gang Hideout Raid's runners, Drug
+-- Lab Raid's cooks, Prison Break's inmates) has a point of its own for every person the largest team it takes can
+-- bring (the real CP.Scaling counts, the scaling entry's max applied), 3 m or more apart, the runners off the
+-- lieutenant's spot, and none within 1.5 m of another spawn point of the location (where a body of the fight before
+-- may lie). Measured flat (2D).
+do
+    local APART, SHARE = 3.0, 1.5
+    local function MostPeople(def, oi, base)
+        local path, max = ('objectives.%d.suspects'):format(oi), nil
+        for _, e in ipairs(def.scaling or {}) do
+            if type(e) == 'table' and e.path == path then max = e.max end
+        end
+        local most = 0
+        for n = def.minOfficers, def.maxOfficers do
+            local c = CP.Scaling.scaleCount(base, CP.Scaling.tierFor(n))
+            most = math.max(most, max and math.min(c, max) or c)
+        end
+        return most
+    end
+    -- the location's other spawn points: every list a block of the mission spawns people or vehicles at
+    local function OtherSpawns(def, loc, own)
+        local keys = {}
+        for _, o in ipairs(def.objectives) do
+            local named = { o.spawns or false, o.coroner or false, type(o.boss) == 'table' and o.boss.spawn or false }
+            for _, k in ipairs(named) do
+                if type(k) == 'string' and k ~= own then keys[k] = true end
+            end
+            for _, k in ipairs(o.spawnSets and o.spawnSets.keys or {}) do
+                if k ~= own then keys[k] = true end
+            end
+        end
+        local out = {}
+        for k in pairs(keys) do
+            EachPoint(loc[k], function(p) out[#out + 1] = { p = p, key = k } end)
+        end
+        return out
+    end
+    local seen = 0
+    for _, id in ipairs({ 'gang_hideout_raid', 'drug_lab_raid', 'prison_break' }) do
+        local def = RawDef(id)
+        for oi, o in ipairs(def.objectives) do
+            if o.block == 'flee_arrest' and o.mode == 'scatter' then
+                local most = MostPeople(def, oi, o.suspects)
+                for li, loc in ipairs(def.locations) do
+                    seen = seen + 1
+                    local pts = loc[o.spawns]
+                    H.ok(#pts >= most,
+                        ('%s: location %d has %d %s point(s) for up to %d people'):format(id, li, #pts, o.spawns, most))
+                    for i = 1, #pts do
+                        for j = i + 1, #pts do
+                            H.ok(D2(pts[i], pts[j]) >= APART,
+                                ('%s: location %d %s[%d] and [%d] %.2f m apart (%.0f m+)'):format(id, li, o.spawns, i,
+                                    j, D2(pts[i], pts[j]), APART))
+                        end
+                        for _, q in ipairs(OtherSpawns(def, loc, o.spawns)) do
+                            local need = q.key == 'lieutenant' and APART or SHARE
+                            H.ok(D2(pts[i], q.p) >= need,
+                                ('%s: location %d %s[%d] %.2f m from a %s point (%.1f m+)'):format(id, li, o.spawns, i,
+                                    D2(pts[i], q.p), q.key, need))
+                        end
+                    end
+                end
+            end
+        end
+    end
+    H.eq(seen, 20, 'S21: every scatter location of the three missions was checked')
+end
+
 -- ============================================================================
 --                                2. RUN HELPERS
 -- ============================================================================
