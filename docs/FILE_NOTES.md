@@ -2950,6 +2950,18 @@ Net: callback 'getHome' -> HomeData (officers only; CP.Access.getOfficer error k
 compute, streak, the hooks, manualAward and badges query the database: call them from a thread.
 ```
 
+## Crimson-Police/modules/spawn/client.lua
+
+```text
+CP.Spawn (client, PLAN S5): the line-of-sight half of the spawn director's "hidden points first"
+(Config.Spawning.preferHidden). The server's ask (ox_lib callback crimson-police:client:spawn:visible, { points, ms })
+is answered with one boolean per point (at most 32): false when every line from the officer's head bone and from the
+rendered camera to 1.0 m and 1.7 m above the point hits the map, a vehicle or an object (StartShapeTestLosProbe flags
+1 + 2 + 16, options 7, his car or ped ignored), true otherwise or when it cannot tell (a probe that did not start, an
+invalid or unfinished result within ms, an entry that is no point). At most 16 probes run at once; the ones still
+running at the end are read for 60 more frames so their handles are freed. S6 adds the ground probe to this module.
+```
+
 ## Crimson-Police/modules/storage/memsql.lua
 
 ```text
@@ -4447,7 +4459,9 @@ start, the fight completes. Hostage Rescue (indoor: 15 m, all 4 at once; outdoor
 the breach entries (indoor). leaveOutAfter: a yard whose every point he stands within 12 m of leaves wave 2 out at 45 s,
 not while a hostile stands, never with 0; standing on the points before the fight only makes it wait (afterSeconds
 then counts from wave 1's first hostile). The Kingpin on his own spot, on another point when his is 39.7 m away, left
-out (no checklist line) when nothing is far enough after his wave fell. Ring copies of a wave larger than the list are checked like points;
+out (no checklist line) when nothing is far enough after his wave fell; with hidden points first (PLAN S5, a run started
+in a thread) the wave's hostile on the point the officer's game cannot see and the Kingpin still on his own spot,
+although it is seen. Ring copies of a wave larger than the list are checked like points;
 enabled = false spawns as before; indoor is validated. No SQL.
 ```
 
@@ -4787,6 +4801,17 @@ Left out (the engine refuses them as unsupported): values MariaDB stores as a ze
 month or day ('0000-00-00', 0, 300, '2026-00-01', and any bad date with IGNORE).
 ```
 
+## tests/spawn_client_spec.lua
+
+```text
+CP.Spawn.visible and its ox_lib callback (modules/spawn/client.lua, PLAN S5) against a stubbed game: an asynchronous
+shape test pool (handles polled each frame, pending, done, invalid, failed starts, the hit BOOL as 1 or true), the
+head bone, the rendered camera and the car. A 2 m wall: in front seen, close behind hidden, far behind the camera
+sees over, down a slope hidden; four probes per point (two eyes, chest and head height) with the flags, options and
+ignored entity; one clear line is enough; unfinished probes after the budget are seen and drained for 60 frames; bad
+entries seen; no eyes seen; at most 32 points and 16 probes at once; the budget kept to 50-5000 ms; bad args answer {}.
+```
+
 ## tests/spawn_director_spec.lua
 
 ```text
@@ -4801,6 +4826,19 @@ keeps the wave in its slice; maxSpread 360 is off), 9 asked from 4 good returns 
 allowed, 15 m never, one warning, the clock per objective, dropped once full, opts.since, cleared by testRestart), an
 officer who left, enabled = false (the first n as they are) and log = false. ctx.whenNear / Runs.whenNear: activateRange
 read live, its own range, 2D, a vector4, no point. The console lines are checked once per point and reason. No SQL.
+```
+
+## tests/spawn_hidden_spec.lua
+
+```text
+Hidden points first (Config.Spawning.preferHidden, losTimeoutMs; PLAN S5) on a real test run of the engine with three
+officers and a fake lib.callback.await per officer's game (an answer and a delay each). Hidden from both asked games
+first, then the block's order; who is asked (within activateRange of the scene, else the nearest; Cara 5 km away is
+not); the args (points as { x, y, z }, ms = losTimeoutMs - 250); only exactly false hides; no ask when every good
+point is used, outside a thread, with preferHidden or enabled off; a game that answers late (losTimeoutMs waited, no
+longer, read live), raises or still owes an answer: the block's order, a console line, no second ask meanwhile; the
+rules run again after the wait, answered or not (an officer who walked up during the ask); the side with more hidden
+points wins; a first = true point (the boss's own spot) stays ahead. No SQL.
 ```
 
 ## tests/stage_ahead_spec.lua

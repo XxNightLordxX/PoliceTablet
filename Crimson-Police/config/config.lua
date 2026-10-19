@@ -338,6 +338,14 @@ Config.Spawning = {
     -- them (officers nearer to the breach entries than to him do not count) or hurts one; then they all wake and
     -- fight at once (0 = only a hurt one wakes them). They always wake when the fight starts
     stageWakeRange = 12.0,
+    -- true = of the points a wave may use, the ones your officers cannot see (behind a building, a container or a
+    -- vehicle, as the nearest officers' own games check it) are used first, so people appear out of sight instead of
+    -- in the open in front of you; seen points are still used when there are not enough hidden ones (false = the
+    -- mission's own order)
+    preferHidden = true,
+    -- Milliseconds the server waits for the officers' games to say what they can see (100-5000); no answer in time =
+    -- every point counts as seen (the distance rules above still apply)
+    losTimeoutMs = 1500,
     -- true = a console line for each point skipped (shown while Config.Debug is on) and a warning when a wave had to
     -- use closer points
     log = true,

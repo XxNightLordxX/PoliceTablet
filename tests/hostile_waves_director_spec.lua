@@ -423,6 +423,30 @@ do
     H.ok(at ~= nil, 'the Kingpin appears after the last wave')
     H.ok(at and D2(at, loc.boss) < 0.01, 'on his own spot (60 m from the officer)')
     EndRun(run)
+    -- hidden points first (Config.Spawning.preferHidden): the officer's game sees his own spot and, of the rest, only
+    -- the last point sent is hidden. The wave's hostile appears on that hidden point; the Kingpin still on his own
+    -- spot (the block marks it first = true), never on a hidden fight point instead. The run starts in a thread, as
+    -- the server's arrival check starts it (a pick only asks the officers' games where it can wait for them)
+    local realAwait = lib.callback.await
+    local asks, hiddenAt = {}, nil
+    lib.callback.await = function(name, src, args)
+        asks[#asks + 1] = { name = name, src = src, n = #args.points }
+        local out, last = {}, args.points[#args.points]
+        for k, p in ipairs(args.points) do out[k] = not (k == #args.points and D2(p, loc.boss) > 0.01) end
+        hiddenAt = hiddenAt or last
+        return out
+    end
+    Place(1, 1305.0, 1135.0, 107.0)
+    CreateThread(function() run, ctx = Fight('weekly_boss_kingpin', 1, { 1 }, { obj = { waves = { 1 } } }) end)
+    Secs(2)
+    lib.callback.await = realAwait
+    local boss = CP.Runs.entitiesFor(run, { obj = 1, kind = 'ped', role = 'boss' })[1]
+    at = boss and W.ent(boss.entity).coords
+    H.ok(#asks == 2 and asks[1].name == 'crimson-police:client:spawn:visible' and asks[1].src == 1,
+        ('the officer\'s game was asked what it sees, for the wave and for the Kingpin (%d asks)'):format(#asks))
+    H.ok(hiddenAt and spawns[1] and D2(spawns[1], hiddenAt) < 0.01, 'the wave\'s hostile came out on the hidden point')
+    H.ok(at and D2(at, loc.boss) < 0.01, 'the Kingpin still on his own spot, although the officer sees it')
+    EndRun(run)
     -- from the start marker his spot is 39.7 m away: he comes out on a point of the fight 40 m or more away
     run, ctx, at = BossRun(loc.start.coords.x, loc.start.coords.y)
     H.ok(at ~= nil and D2(at, loc.boss) > 1.0, 'his spot is 39.7 m from the officer: not there')

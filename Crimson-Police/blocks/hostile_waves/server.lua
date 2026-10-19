@@ -575,7 +575,8 @@ end
 --                WHERE THE HOSTILES APPEAR (the spawn director)
 -- ============================================================================
 -- Every point is the engine's spawn director's (ctx.choosePoints, Config.Spawning): never closer than minDistance
--- to an officer (minDistanceIndoor for an objective with indoor = true), never behind one, one wave from one side.
+-- to an officer (minDistanceIndoor for an objective with indoor = true), never behind one, one wave from one side,
+-- the points the officers' games cannot see first (Config.Spawning.preferHidden).
 -- Wave 1 waits until an officer is within activateRange of the fight (ctx.whenNear); a wave short of points spawns
 -- what it may now and the rest on later ticks; nothing ever appears at the start point.
 
@@ -623,13 +624,14 @@ local function Offer(ctx, st, list, n, first)
         end
     end
     local out = {}
-    local function add(v, label)
+    local function add(v, label, own)
         for i = 1, #living do
             if U.dist(v, living[i]) <= OCCUPIED_RADIUS then return end
         end
-        out[#out + 1] = { coords = v, label = label }
+        out[#out + 1] = { coords = v, label = label, first = own }
     end
-    for _, c in ipairs(first or {}) do add(ToVec4(c.coords), c.label) end
+    -- first = true: the director keeps the boss's own spot ahead of the fight's points, even of hidden ones
+    for _, c in ipairs(first or {}) do add(ToVec4(c.coords), c.label, true) end
     if #list == 0 then return out end
     local order = RngOf(ctx):shuffle(list)
     for _, c in ipairs(order) do add(ToVec4(c.coords), c.label) end

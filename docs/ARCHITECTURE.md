@@ -162,6 +162,9 @@ boards, rewards, access).
 
 `modules/npccombat/` (client, §5.42): the run-scoped damage settings of an officer's game (Config.NpcCombat).
 
+`modules/spawn/` (client, §5.43): what an officer's game can see of the spawn director's points
+(Config.Spawning.preferHidden).
+
 `modules/settings/` (server, client, §5.36): settings changed in game (Admin UI → Settings) over config.lua and
 blocks.lua, the mission and location switches, and the same values on every client.
 
@@ -863,26 +866,43 @@ Full admin control (P3, §5.39):
   distance is 2D, every participant is an active one (`activeSrcs`) at its server-side ped coords.
   - `choosePoints(run, candidates, n, opts) -> points, indexes` — at most `n` (nil = every one that passes) of the
     block's `candidates` (best first: vec3/vec4, `{ x, y, z }`, `{ [1], [2], [3] }` or `{ coords, indoor = true }`),
-    returned as the candidates' own values in list order, with their indexes in `candidates`. Skipped: a point closer
-    than `minDistance` to any participant (`minDistanceIndoor` with `opts.indoor` or a point's own `indoor = true`); a
-    point "behind" a participant within `activateRange` of it, i.e. more than `behindAngle` degrees between participant
-    → point and the participant's own line to the scene, participant → `opts.centre` (default the middle of the
-    candidates), whichever side he came in from: a point between an officer and the scene is never behind him, a point
-    at his back always is (a participant within 5 m of the centre has no line of his own and faces the way in,
-    `opts.from`, default `location.start.coords`, → the centre; none when those two are under 5 m apart); and a point
-    outside the wave's sector: the points left must fit in one `maxSpread`-degree sector seen from the participants
-    within `activateRange` of the centre (all of them when none is), the one that holds every point of `opts.placed`
-    (what this wave already used), then the most points up to `n`, then the block's earliest point. Too few good points:
-    fewer come back, never a bad one. `opts.wave` names the wave: its clock (in `run.spawning[obj]`) starts at the first
-    ask (`opts.since`, an `os.time()`, sets it instead) and is dropped once a call returns all `n`; after `waveDelayMax`
-    seconds the distance becomes `min(that distance, hardMin)`, never lower. `opts.name` names the list for the console;
-    a candidate `{ coords, label = 'yard[3]' }` is named by its own label (hostile_waves names each point by its
-    location key and file index, a ring copy `spawns[3] +1.25 m`).
+    returned as the candidates' own values in list order (hidden ones first, below), with their indexes in `candidates`.
+    Skipped: a point closer than `minDistance` to any participant (`minDistanceIndoor` with `opts.indoor` or a point's
+    own `indoor = true`); a point "behind" a participant within `activateRange` of it, i.e. more than `behindAngle`
+    degrees between participant → point and the participant's own line to the scene, participant → `opts.centre`
+    (default the middle of the candidates), whichever side he came in from: a point between an officer and the scene is
+    never behind him, a point at his back always is (a participant within 5 m of the centre has no line of his own and
+    faces the way in, `opts.from`, default `location.start.coords`, → the centre; none when those two are under 5 m
+    apart); and a point outside the wave's sector: the points left must fit in one `maxSpread`-degree sector seen from
+    the participants within `activateRange` of the centre (all of them when none is), the one that holds every point of
+    `opts.placed` (what this wave already used), then the most points up to `n`, then the block's earliest point. Too
+    few good points: fewer come back, never a bad one. `opts.wave` names the wave: its clock (in `run.spawning[obj]`)
+    starts at the first ask (`opts.since`, an `os.time()`, sets it instead) and is dropped once a call returns all `n`;
+    after `waveDelayMax` seconds the distance becomes `min(that distance, hardMin)`, never lower. `opts.name` names the
+    list for the console; a candidate `{ coords, label = 'yard[3]' }` is named by its own label (hostile_waves names
+    each point by its location key and file index, a ring copy `spawns[3] +1.25 m`).
     Console (with `Config.Spawning.log`): one `CP.log` line per skipped point, reason and wave (`run <id>: spawns[7]
     skipped: 30 m from <name>` / `behind <name>` / `outside this wave's 150 degree sector`, the last only when the wave
     is short of points for it) and one `CP.warn` per wave that used closer points after the wait.
     `Config.Spawning.enabled = false`: the first `n` candidates as they are. `testRestart` clears the objective's
     clocks.
+    Hidden first (`Config.Spawning.preferHidden`, PLAN S5): when more candidates pass the distance and behind rules
+    than `n` and the caller can yield (`coroutine.isyieldable()`), the director asks the games of the participants
+    within `activateRange` of the centre (nearest first, at most 4; none that close: the nearest one) through the
+    ox_lib callback `crimson-police:client:spawn:visible` (§8.1, `CP.Spawn.visible` §5.43) with the first 32 passing
+    points and `ms = losTimeoutMs - 250`, each ask in its own thread, and waits at most `losTimeoutMs` (`Wait(50)`).
+    A point is hidden only when every asked game answered with a table whose entry for it is exactly `false`. No
+    usable answer from one of them (timeout, a raised callback, no table), or one of them still busy with an earlier
+    ask (a per-player flag cleared when ox_lib's await returns), means nothing is known: the block's order, one
+    `CP.log` per wave (`run <id>: <name>: no usable answer from <officer> within <ms> ms, every point counts as
+    seen`). After every wait (answered or not; a busy game or a call that cannot yield does not wait) the rules run
+    again from the participants' coords, so an officer who walked up meanwhile never gets a point inside the
+    distance. With an answer the passing points are then ordered hidden first (a candidate `{ coords, first = true }`
+    stays ahead of all others: hostile_waves marks the boss's own spot), each group in the block's order, and the
+    sector choice counts hidden points (a `first` one counts as hidden) after the wave's own points and the number of
+    points: of two sectors with as many points, the one with more hidden points wins. One `CP.log` per wave: `run <id>: <name>: <k> of <m> points out of the
+    officers' sight, used first`. `preferHidden = false`, `enabled = false`, `#passing <= n` or a caller that cannot
+    yield: nobody is asked.
   - `whenNear(run, point, range) -> boolean, nearestMetres|nil` — true when a participant is within `range` (default
     `activateRange`) of `point`; always true while `Config.Spawning.enabled = false` and for a point that is none.
   - Stage ahead (`Config.Spawning.stageAhead`, PLAN S3; §4.4 step 3, §7.1): while objective i is current, the 1 s tick
@@ -1972,6 +1992,21 @@ call, so a Settings change applies to the next NPC; `enabled = false` makes ever
   foreign `crimsonArena` value of the local player (docs/CRIMSON_ARENA.md rule 8) stops it at once, before the server
   ends the run for that player.
 
+### 5.43 CP.Spawn — modules/spawn (client)
+
+What this officer's game can see of the points the server's spawn director may use (Config.Spawning.preferHidden,
+§5.10, owner request of 2026-10-19: no one spawning in front of or around the officers).
+- `visible(points, budgetMs) -> { boolean }` — one answer per point (at most 32; `{ x, y, z }` or `{ [1], [2], [3]
+  }`): `false` when every line of sight from the officer's eyes (his head bone SKEL_Head 31086 and
+  `GetFinalRenderedCamCoord`, the camera he sees through) to 1.0 m and 1.7 m above the point hits something
+  (`StartShapeTestLosProbe` flags 1 + 2 + 16: the map, vehicles, objects; options 7; his car, else his ped,
+  ignored), else `true`: one clear line, a probe that did not start (handle 0), an invalid result (status 0), a probe
+  still running when `budgetMs` (kept to 50-5000, default 5000) ran out, or an entry that is no point. Probes run
+  asynchronously, at most 16 at once, polled each frame with `GetShapeTestResult`; the ones still running at the
+  end are read for up to 60 more frames in a thread so the game frees their handles. Needs a thread (`Wait(0)`).
+- The ox_lib callback `crimson-police:client:spawn:visible` (§8.1) answers the server's `{ points, ms }` with
+  `visible(points, ms)` (`{}` for args that are no table, and when it raises: one `CP.warn`).
+
 ## 6. Cross-cutting conventions
 
 ### 6.1 Entities and NPCs
@@ -2211,6 +2246,8 @@ Rules for blocks:
 | `client:settings` | `{ { path, value } \| { path, none = true } }`: every setting changed in game that is in use | settings |
 
 Server → client ox_lib callback: `crimson-police:client:roadPoint` `{ near, min, max }` → `{ coords, heading }` or nil (the service-vehicle driver's client; the server validates the reply; custody).
+
+Server → client ox_lib callback: `crimson-police:client:spawn:visible` `{ points = { { x, y, z } } (at most 32), ms }` → `{ boolean }`, one per point, true = this game sees it (or cannot tell), false = hidden (the spawn director's hidden-first ask, `Config.Spawning.preferHidden`, §5.10; anything but `false` counts as seen; spawn).
 
 ### 8.2 Client → server events (spec names; payload then optional reqId)
 

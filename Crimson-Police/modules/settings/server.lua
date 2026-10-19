@@ -237,6 +237,7 @@ local RANGES = {
     ['Spawning.waveDelayMax'] = { 0, 300 },
     ['Spawning.leaveOutAfter'] = { 0, 600 },
     ['Spawning.stageWakeRange'] = { 0, 50 },
+    ['Spawning.losTimeoutMs'] = { 100, 5000 },
 }
 
 -- Numbers that may go either way whatever config.lua has.

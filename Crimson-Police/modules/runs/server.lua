@@ -673,18 +673,119 @@ do
         CP.log(TAG, 'run %s: %s skipped: ' .. fmt, run.id, what, ...)
     end
 
-    -- Picks the points of one wave from candidates (the block's list, best first: vectors, { x, y, z } or
-    -- { coords }), at most n (nil = every one that passes). Returns the chosen candidates (their own values, in list
-    -- order) and their indexes in candidates. A point is skipped when it is closer than minDistance
-    -- (minDistanceIndoor with opts.indoor or a point { coords, indoor = true }) to any active participant, or behind
-    -- a participant within activateRange of it: more than behindAngle off his own line to the scene, from where he
-    -- stands towards opts.centre (default the middle of the candidates), whichever side he came in from; one within
-    -- FRONT_MIN of the middle faces the way in, from opts.from (default the start) towards the middle. So a point
-    -- between an officer and the scene is never behind him, and a point at his back always is. The points left are
-    -- kept to the one maxSpread sector, seen from the participants near the area, that holds every point of
-    -- opts.placed (the points this wave already used) and then the most of them, so a wave never closes in from all
-    -- sides. With too few good points it returns fewer, never a bad one. opts.wave names the wave: its clock starts
-    -- at the first ask (opts.since, an os.time(), sets it instead) and stops once a call returns n points; after
+    -- Hidden points first (Config.Spawning.preferHidden): the officers' own games say which points they can see
+    -- (modules/spawn/client.lua, a line-of-sight probe from the officer's head and camera to where a person would
+    -- stand). busy[src] is true while an ask to that game has not come back (ox_lib gives up after its own timeout), so
+    -- a game that does not answer is not asked again meanwhile.
+    local LOS = {
+        callback = 'crimson-police:client:spawn:visible',
+        points = 32,   -- points sent in one ask (the rest count as seen)
+        asked = 4,     -- officers asked at once, the nearest to the scene first
+        margin = 250,  -- milliseconds of losTimeoutMs kept for the answer's way back (the game probes for the rest)
+        poll = 50,     -- milliseconds between looks at the answers
+        busy = {},
+    }
+
+    -- Which of passed (the points left after the rules, best first) no asked officer's game can see: { [candidate
+    -- index] = true }, or nil when nothing is known: the ask cannot wait here (not in a thread), nobody to ask, a game
+    -- still busy with an earlier ask, or an answer missing after losTimeoutMs (then every point counts as seen). The
+    -- second value is true when the call waited for the games (answered or not), so the caller runs the rules again.
+    -- The officers asked are those within activateRange of the scene's middle (cx, cy), nearest first, at most
+    -- LOS.asked; with none that close, the nearest one. A point is hidden only when every asked game answered and none
+    -- sees it.
+    local function AskHidden(run, m, opts, name, passed, officers, cx, cy, cfg)
+        if not coroutine.isyieldable() or #officers == 0 then return nil, false end
+        local near = {}
+        for _, o in ipairs(officers) do near[#near + 1] = { o = o, d = Dist2(o.x, o.y, cx, cy) } end
+        table.sort(near, function(a, b)
+            if a.d ~= b.d then return a.d < b.d end
+            return a.o.src < b.o.src
+        end)
+        local range = math.max(0, Num(cfg.activateRange, 150.0))
+        local asked = {}
+        for _, e in ipairs(near) do
+            if #asked >= LOS.asked or (#asked > 0 and e.d > range) then break end
+            asked[#asked + 1] = e.o
+        end
+        for _, o in ipairs(asked) do
+            if LOS.busy[o.src] then return nil, false end
+        end
+        local pts = {}
+        for k = 1, math.min(#passed, LOS.points) do
+            local p = passed[k]
+            pts[k] = { x = p.x, y = p.y, z = p.z }
+        end
+        local timeout = math.max(0, Num(cfg.losTimeoutMs, 1500))
+        local budget = math.max(50, timeout - LOS.margin)
+        local answers, left = {}, #asked
+        for _, o in ipairs(asked) do
+            local src = o.src
+            LOS.busy[src] = true
+            CreateThread(function()
+                local ok, reply = pcall(lib.callback.await, LOS.callback, src, { points = pts, ms = budget })
+                LOS.busy[src] = nil
+                answers[src] = ok and type(reply) == 'table' and reply or false
+                left = left - 1
+            end)
+        end
+        local deadline = GetGameTimer() + timeout
+        while left > 0 and GetGameTimer() < deadline do Wait(LOS.poll) end
+        local silent = {}
+        for _, o in ipairs(asked) do
+            if not answers[o.src] then silent[#silent + 1] = o.name end
+        end
+        if #silent > 0 then
+            local key = ('los|%s|%s'):format(tostring(opts.wave), name)
+            if cfg.log ~= false and not m.said[key] then
+                m.said[key] = true
+                CP.log(TAG, 'run %s: %s: no usable answer from %s within %d ms, every point counts as seen', run.id,
+                    name, table.concat(silent, ', '), math.floor(timeout))
+            end
+            return nil, true
+        end
+        local hidden = {}
+        for k = 1, #pts do
+            local h = true
+            for _, o in ipairs(asked) do
+                if answers[o.src][k] ~= false then
+                    h = false
+                    break
+                end
+            end
+            if h then hidden[passed[k].i] = true end
+        end
+        return hidden, true
+    end
+
+    -- passed reordered: the candidates the block marked first = true (the boss's own spot) stay ahead of the rest,
+    -- and within each of the two groups the hidden points come first, each group in its own order.
+    local function HiddenFirst(passed, hidden)
+        local keyed = {}
+        for r, p in ipairs(passed) do
+            local own = type(p.v) == 'table' and p.v.first == true
+            keyed[r] = { p = p, k = ((own and 0 or 2) + (hidden[p.i] and 0 or 1)) * 100000 + r }
+        end
+        table.sort(keyed, function(a, b) return a.k < b.k end)
+        local out = {}
+        for r, e in ipairs(keyed) do out[r] = e.p end
+        return out
+    end
+
+    -- Picks the points of one wave from candidates (the block's list, best first: vectors, { x, y, z } or { coords }), at
+    -- most n (nil = every one that passes). Returns the chosen candidates (their own values, hidden ones first, else in
+    -- list order) and their indexes in candidates. A point is skipped when it is closer than minDistance
+    -- (minDistanceIndoor with opts.indoor or a point { coords, indoor = true }) to any active participant, or behind a
+    -- participant within activateRange of it: more than behindAngle off his own line to the scene, from where he stands
+    -- towards opts.centre (default the middle of the candidates), whichever side he came in from; one within FRONT_MIN of
+    -- the middle faces the way in, from opts.from (default the start) towards the middle. So a point between an officer
+    -- and the scene is never behind him, and a point at his back always is. The points left are kept to the one maxSpread
+    -- sector, seen from the participants near the area, that holds every point of opts.placed (the points this wave
+    -- already used) and then the most of them, so a wave never closes in from all sides. Of the points left, the ones no
+    -- officer can see come first when there are more than n (Config.Spawning.preferHidden, AskHidden: the asked officers'
+    -- games probe them, the call waits up to losTimeoutMs for the answers, then the rules run again from where the
+    -- officers stand by then, answered or not); a candidate { coords, first = true } stays ahead of the rest (the
+    -- boss's own spot). With too few good points it returns fewer, never a bad one. opts.wave names the wave: its clock
+    -- starts at the first ask (opts.since, an os.time(), sets it instead) and stops once a call returns n points; after
     -- waveDelayMax seconds the distance drops to hardMin, never lower. opts.name names the list in the console
     -- ('spawns[7] skipped: 30 m from <officer>'; a candidate { coords, label = 'yard[3]' } is named by its label),
     -- opts.obj the objective (ctx.choosePoints fills it in).
@@ -741,95 +842,135 @@ do
         local inX, inY = nil, nil
         if fx and Dist2(cx, cy, fx, fy) >= FRONT_MIN then inX, inY = cx - fx, cy - fy end
 
-        -- each officer's front: his own line to the middle of the scene (whichever road he came in on); one standing
-        -- in the middle has none and faces the way in
-        local officers = OfficerSpots(run)
-        for _, o in ipairs(officers) do
-            if Dist2(o.x, o.y, cx, cy) >= FRONT_MIN then
-                o.frontX, o.frontY = cx - o.x, cy - o.y
-            else
-                o.frontX, o.frontY = inX, inY
-            end
-        end
-        local passed = {}
-        for _, p in ipairs(pts) do
-            local base = p.indoor and minIn or minOut
-            local need = relaxed and math.min(base, hardMin) or base
-            local nearest, nearestD, behindOf = nil, math.huge, nil
+        -- The distance and "behind" rules, from where the officers stand now: the points that pass (best first) and
+        -- the officers.
+        local function Rules()
+            -- each officer's front: his own line to the middle of the scene (whichever road he came in on); one
+            -- standing in the middle has none and faces the way in
+            local officers = OfficerSpots(run)
             for _, o in ipairs(officers) do
-                local dd = Dist2(p.x, p.y, o.x, o.y)
-                if dd < nearestD then nearest, nearestD = o, dd end
-                if o.frontX and not behindOf and dd <= nearRange then
-                    local a = AngleOff(p.x - o.x, p.y - o.y, o.frontX, o.frontY)
-                    if a and a > behindAngle then behindOf = o end
+                if Dist2(o.x, o.y, cx, cy) >= FRONT_MIN then
+                    o.frontX, o.frontY = cx - o.x, cy - o.y
+                else
+                    o.frontX, o.frontY = inX, inY
                 end
             end
-            p.nearest, p.base = nearestD, base
-            if nearest and nearestD < need then
-                SaySkipped(run, m, opts, p.what, 'near', '%.0f m from %s', nearestD, nearest.name)
-            elseif behindOf then
-                SaySkipped(run, m, opts, p.what, 'behind', 'behind %s', behindOf.name)
-            else
-                passed[#passed + 1] = p
+            local passed = {}
+            for _, p in ipairs(pts) do
+                local base = p.indoor and minIn or minOut
+                local need = relaxed and math.min(base, hardMin) or base
+                local nearest, nearestD, behindOf = nil, math.huge, nil
+                for _, o in ipairs(officers) do
+                    local dd = Dist2(p.x, p.y, o.x, o.y)
+                    if dd < nearestD then nearest, nearestD = o, dd end
+                    if o.frontX and not behindOf and dd <= nearRange then
+                        local a = AngleOff(p.x - o.x, p.y - o.y, o.frontX, o.frontY)
+                        if a and a > behindAngle then behindOf = o end
+                    end
+                end
+                p.nearest, p.base = nearestD, base
+                if nearest and nearestD < need then
+                    SaySkipped(run, m, opts, p.what, 'near', '%.0f m from %s', nearestD, nearest.name)
+                elseif behindOf then
+                    SaySkipped(run, m, opts, p.what, 'behind', 'behind %s', behindOf.name)
+                else
+                    passed[#passed + 1] = p
+                end
             end
+            return passed, officers
         end
 
-        -- one sector seen from the officers near the area (all of them when none is): a wave never comes as a ring
-        if spread < 360 and #passed > 0 and #officers > 0 then
-            local ax, ay, k = 0.0, 0.0, 0
-            for _, o in ipairs(officers) do
-                if Dist2(o.x, o.y, cx, cy) <= nearRange then ax, ay, k = ax + o.x, ay + o.y, k + 1 end
-            end
-            if k == 0 then
-                for _, o in ipairs(officers) do ax, ay, k = ax + o.x, ay + o.y, k + 1 end
-            end
-            ax, ay = ax / k, ay / k
-            local placed, starts = {}, {}
-            for _, v in ipairs(type(opts.placed) == 'table' and opts.placed or {}) do
-                local x, y = PointXyz(v)
-                local b = x and BearingOf(ax, ay, x, y)
-                if b then placed[#placed + 1] = b end
-            end
-            for _, p in ipairs(passed) do
-                p.bearing = BearingOf(ax, ay, p.x, p.y)
-                if p.bearing then starts[#starts + 1] = p.bearing end
-            end
-            for _, b in ipairs(placed) do starts[#starts + 1] = b end
-            -- the sector that keeps every placed point, then the most points (up to n), then the block's best one
-            local best = nil
-            for _, from in ipairs(starts) do
-                local take, top, placedIn = 0, math.huge, 0
-                for r, p in ipairs(passed) do
-                    if InSector(p.bearing, from, spread) then
-                        take = take + 1
-                        if r < top then top = r end
-                    end
+        -- One sector seen from the officers near the area (all of them when none is): a wave never comes as a ring.
+        -- hidden (AskHidden's answer, or nil): a sector with more hidden points (a first = true one counts as hidden)
+        -- wins over one with as many points but fewer hidden ones.
+        local function Sector(passed, officers, hidden)
+            if spread < 360 and #passed > 0 and #officers > 0 then
+                local ax, ay, k = 0.0, 0.0, 0
+                for _, o in ipairs(officers) do
+                    if Dist2(o.x, o.y, cx, cy) <= nearRange then ax, ay, k = ax + o.x, ay + o.y, k + 1 end
                 end
-                for _, b in ipairs(placed) do if InSector(b, from, spread) then placedIn = placedIn + 1 end end
-                take = math.min(take, n)
-                if not best or placedIn > best.placedIn or (placedIn == best.placedIn and take > best.take)
-                    or (placedIn == best.placedIn and take == best.take and top < best.top) then
-                    best = { from = from, placedIn = placedIn, take = take, top = top }
+                if k == 0 then
+                    for _, o in ipairs(officers) do ax, ay, k = ax + o.x, ay + o.y, k + 1 end
                 end
-            end
-            if best then
-                local kept, outside = {}, {}
+                ax, ay = ax / k, ay / k
+                local placed, starts = {}, {}
+                for _, v in ipairs(type(opts.placed) == 'table' and opts.placed or {}) do
+                    local x, y = PointXyz(v)
+                    local b = x and BearingOf(ax, ay, x, y)
+                    if b then placed[#placed + 1] = b end
+                end
                 for _, p in ipairs(passed) do
-                    if InSector(p.bearing, best.from, spread) then
-                        kept[#kept + 1] = p
-                    else
-                        outside[#outside + 1] = p
+                    p.bearing = BearingOf(ax, ay, p.x, p.y)
+                    if p.bearing then starts[#starts + 1] = p.bearing end
+                end
+                for _, b in ipairs(placed) do starts[#starts + 1] = b end
+                -- the sector that keeps every placed point, then the most points (up to n), then the most hidden ones
+                -- (up to n), then the block's best one
+                local best = nil
+                for _, from in ipairs(starts) do
+                    local take, top, placedIn, hid = 0, math.huge, 0, 0
+                    for r, p in ipairs(passed) do
+                        if InSector(p.bearing, from, spread) then
+                            take = take + 1
+                            if hidden and (hidden[p.i] or (type(p.v) == 'table' and p.v.first == true)) then
+                                hid = hid + 1
+                            end
+                            if r < top then top = r end
+                        end
+                    end
+                    for _, b in ipairs(placed) do if InSector(b, from, spread) then placedIn = placedIn + 1 end end
+                    take, hid = math.min(take, n), math.min(hid, n)
+                    local same = best and placedIn == best.placedIn and take == best.take
+                    if not best or placedIn > best.placedIn or (placedIn == best.placedIn and take > best.take)
+                        or (same and hid > best.hid) or (same and hid == best.hid and top < best.top) then
+                        best = { from = from, placedIn = placedIn, take = take, top = top, hid = hid }
                     end
                 end
-                -- a point outside the sector is only worth a line when the wave is short of points for it
-                if #kept < n then
-                    for _, p in ipairs(outside) do
-                        SaySkipped(run, m, opts, p.what, 'spread', 'outside this wave\'s %.0f degree sector', spread)
+                if best then
+                    local kept, outside = {}, {}
+                    for _, p in ipairs(passed) do
+                        if InSector(p.bearing, best.from, spread) then
+                            kept[#kept + 1] = p
+                        else
+                            outside[#outside + 1] = p
+                        end
                     end
+                    -- a point outside the sector is only worth a line when the wave is short of points for it
+                    if #kept < n then
+                        for _, p in ipairs(outside) do
+                            SaySkipped(run, m, opts, p.what, 'spread', 'outside this wave\'s %.0f degree sector',
+                                spread)
+                        end
+                    end
+                    return kept
                 end
-                passed = kept
+            end
+            return passed
+        end
+
+        local passed, officers = Rules()
+        -- hidden first: only worth an ask when more points pass than the wave takes
+        local hidden = nil
+        if cfg.preferHidden ~= false and #passed > n then
+            local waited
+            hidden, waited = AskHidden(run, m, opts, name, passed, officers, cx, cy, cfg)
+            -- the ask waited for the officers' games (answered or not): the rules again, from where they stand now
+            if waited then passed, officers = Rules() end
+            if hidden then
+                passed = HiddenFirst(passed, hidden)
+                local seenNot = 0
+                for _, p in ipairs(passed) do
+                    if hidden[p.i] then seenNot = seenNot + 1 end
+                end
+                local key = ('hidden|%s|%s'):format(tostring(opts.wave), name)
+                if cfg.log ~= false and not m.said[key] then
+                    m.said[key] = true
+                    CP.log(TAG, 'run %s: %s: %d of %d points out of the officers\' sight, used first', run.id, name,
+                        seenNot, #passed)
+                end
             end
         end
+        passed = Sector(passed, officers, hidden)
 
         for r = 1, math.min(n, #passed) do chosen[r], picked[r] = passed[r].v, passed[r].i end
 
