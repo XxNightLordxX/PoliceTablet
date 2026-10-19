@@ -238,6 +238,9 @@ local RANGES = {
     ['Spawning.leaveOutAfter'] = { 0, 600 },
     ['Spawning.stageWakeRange'] = { 0, 50 },
     ['Spawning.losTimeoutMs'] = { 100, 5000 },
+    ['Spawning.ground.snapWithin'] = { 0, 10 },
+    ['Spawning.collisionTimeoutMs'] = { 500, 30000 },
+    ['Spawning.interiorTimeoutMs'] = { 500, 30000 },
 }
 
 -- Numbers that may go either way whatever config.lua has.
@@ -252,6 +255,9 @@ local RANGE_LISTS = {
     'Custody.*.spawnDistance',
     'Commendations.citation',
     'Profile.uiScale',
+    'Spawning.ground.pedAbove',
+    'Spawning.ground.vehicleAbove',
+    'Spawning.ground.propAbove',
 }
 
 -- Settings that must stay smaller than or equal to another one.

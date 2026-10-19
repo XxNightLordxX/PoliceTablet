@@ -170,7 +170,7 @@ boards, rewards, access).
 `modules/npccombat/` (client, §5.42): the run-scoped damage settings of an officer's game (Config.NpcCombat).
 
 `modules/spawn/` (client, §5.43): what an officer's game can see of the spawn director's points
-(Config.Spawning.preferHidden).
+(Config.Spawning.preferHidden), and the ground probe of one point (Config.Spawning.ground).
 
 `modules/settings/` (server, client, §5.36): settings changed in game (Admin UI → Settings) over config.lua and
 blocks.lua, the mission and location switches, and the same values on every client.
@@ -2017,6 +2017,39 @@ What this officer's game can see of the points the server's spawn director may u
   end are read for up to 60 more frames in a thread so the game frees their handles. Needs a thread (`Wait(0)`).
 - The ox_lib callback `crimson-police:client:spawn:visible` (§8.1) answers the server's `{ points, ms }` with
   `visible(points, ms)` (`{}` for args that are no table, and when it raises: one `CP.warn`).
+- `probe(kind, x, y, z, h, model, opts) -> result` — whether the point is fit to put a `'ped'`, a `'vehicle'`
+  (`model`: its name or hash, for its size) or a `'prop'` (`'object'` and any other kind) on, heading `h` (PLAN S6,
+  Config.Spawning.ground; nothing calls it yet: the Check spawn points tool, S7, and the placer, S9, will). Needs a
+  thread. Coordinates are sent to the game as decimals. In order:
+  1. collision: `RequestCollisionAtCoord` each frame until `HasCollisionLoadedAroundEntity(opts.entity or
+     PlayerPedId())` or `Config.Spawning.collisionTimeoutMs` (kept to 500-30000 ms; `result.loaded`);
+  2. interior: `GetInteriorAtCoords` ~= 0 and not `IsInteriorReady` -> `PinInteriorInMemory`, wait for it up to
+     `interiorTimeoutMs` (500-30000 ms); never ready -> `interior_not_loaded` (nothing else probed); the probe unpins
+     only an interior it pinned;
+  3. ground: `GetGroundZAndNormalFor_3dCoord` from z + 2.0 (the highest ground under the point) and from z + 50.0
+     (a roof or a bridge over it: `result.roofZ` when that is over z + 2; the ground over a point buried deeper than
+     2 m when the first finds nothing), retried each frame with `RequestCollisionAtCoord` until either finds ground
+     or the collision deadline passes; none -> `no_ground`. When the z + 2.0 look found a surface over z + 0.1 (a low
+     roof or the floor above over a person inside, a garage deck over a car, or the ground over a buried point), a
+     third look from z + 0.1 finds the ground right under the point: the point stands on the one it needs the
+     smaller move to (0 inside its range, as in 5; the one under it on a tie), and then the surface over it is
+     `result.roofZ`. A vehicle's model is sized (as in 6) before this choice;
+  4. water: the Builder's check (`TestProbeAgainstWater` z + 2.0 to z - 1.5, or `GetWaterHeight` over the ground +
+     0.1) -> `in_water`;
+  5. height: dz = z - groundZ inside the kind's range (`pedAbove` -0.3..1.6, `vehicleAbove` -0.2..1.5, `propAbove`
+     -0.1..0.5; read live, the default when a range is not two ordered numbers) -> `ok`; outside it -> `snap` when
+     |groundZ + lift - z| <= `snapWithin` (0-10, default 3.0; lift: a person 1.0, as the Builder stores a standing
+     ped; a vehicle -min.z of `GetModelDimensions`, 0.2-1.5; an object 0.0), else `underground` (dz under the range)
+     or `floating` (over it);
+  6. wall (a ped or a vehicle that is ok or snap): the Builder's capsule on the ground at groundZ
+     (`StartShapeTestCapsule` flags 1 + 2 + 16, options 7: a person 0.45-1.7 m, r 0.32; a vehicle along its heading,
+     sized from its model, loaded for it with `RequestModel` and let go again when it was not loaded, a car of
+     unknown size `{ lift 0.5, half 2.3, r 0.8, midZ 1.0 }` otherwise; ignoring `opts.ignore`, else his car or his
+     ped), polled up to 1 s; a hit -> `in_wall`; not started, lost or unfinished = not known (`result.wall` nil, an
+     unfinished one is drained like the line-of-sight probes).
+  `result = { status, kind, x, y, z, groundZ, dz, normalZ, roofZ, interior, loaded, water, wall, sized }`: `z` is
+  where to put it (the point's own z, or groundZ + lift for `snap`); `sized` (vehicles) whether the model gave its
+  size. A point whose x, y or z is no number answers `{ status = 'no_ground' }` without asking the game.
 
 ## 6. Cross-cutting conventions
 
@@ -2883,7 +2916,9 @@ read a failure.
   natives with natives.json's argument types (a float where the game reads a float, and so on; a wrong one fails the
   spec) and returns what each one set, per ped and per game (`world.forget(ped)`, `world.restore()`); `H.gaitNatives(onCall)`
   does the same for the movement natives of a runner (the task, the per-frame cap and move rate, the clip set,
-  GetSafeCoordForPed). Specs run in separate processes, two at a time (`--jobs=N`), each on its own copy
+  GetSafeCoordForPed), and `H.groundNatives(onCall)` for the natives of a ground probe on a small map the spec
+  builds (ground surfaces found only once the collision loaded, interiors that get ready after a pin or never,
+  water, asynchronous wall capsules, model sizes). Specs run in separate processes, two at a time (`--jobs=N`), each on its own copy
   of the run database, which is rebuilt once per run. SQL `NOW()` is the spec's clock (`H.time` after
   `H.boot`) in every storage mode. Never leave a spec that fails, and never make a check depend on a random
   roll, the wall clock or the machine's time zone: the assertion counts are the same in every run and mode.

@@ -1827,6 +1827,190 @@ function H.gaitNatives(onCall)
 end
 
 -- ============================================================================
+--             GROUND PROBE NATIVES WITH THEIR REAL ARGUMENT TYPES
+-- ============================================================================
+-- H.groundNatives(onCall) (opt-in) installs the client natives a ground probe uses (CP.Spawn.probe,
+-- modules/spawn/client.lua), each checking its arguments as H.combatNatives does (a float where the game reads a
+-- float: an integer coordinate from a mission file must be passed as x + 0.0). The world it returns is a small game
+-- map the spec sets up:
+--   ped, car: this player's ped and the car he sits in (0 = on foot)
+--   surfaces = { { z, at = fn(x, y) (default everywhere), nz (normal z, 1.0), interior = id } }: the ground. The
+--     highest one at or under the probe's height is found, and only once the collision is loaded (as the game:
+--     GET_GROUND_Z_* answers within the loaded area only); a surface of an interior only while it is ready
+--   collisionMs: the collision loads this long after the first RequestCollisionAtCoord (nil = never)
+--   interiors[id] = { at = fn(x, y, z), ready = bool, readyMs = ms after the pin (nil = never) }; pins[id], unpins[id]
+--   water = fn(x, y) -> the water's height there or nil
+--   wall = fn(capsule) -> bool (capsule = { x1, y1, z1, x2, y2, z2, r, flags, ignore, options }), capsules = { ... },
+--     capsuleFrames (polls until done, 1), capsuleStuck (never done), capsuleFail (handle 0), hitAs (1 or true)
+--   models[hash] = { mn, mx, loadMs, preloaded }: dimensions answered once the model is loaded (after RequestModel
+--     and loadMs, or preloaded); released[hash] = true after SetModelAsNoLongerNeeded
+--   calls = { { name, args } }, typeErrors; reset(): a new game (no collision, pins, probes, loads or calls yet);
+--   restore(): the globals as they were before H.groundNatives
+H.GROUND_NATIVE_TYPES = {
+    PlayerPedId = {},
+    GetVehiclePedIsIn = { 'Ped', 'BOOL' },
+    RequestCollisionAtCoord = { 'float', 'float', 'float' },
+    HasCollisionLoadedAroundEntity = { 'Entity' },
+    GetInteriorAtCoords = { 'float', 'float', 'float' },
+    IsInteriorReady = { 'int' },
+    PinInteriorInMemory = { 'int' },
+    UnpinInterior = { 'int' },
+    GetGroundZAndNormalFor_3dCoord = { 'float', 'float', 'float' },
+    TestProbeAgainstWater = { 'float', 'float', 'float', 'float', 'float', 'float' },
+    GetWaterHeight = { 'float', 'float', 'float' },
+    StartShapeTestCapsule = { 'float', 'float', 'float', 'float', 'float', 'float', 'float', 'int', 'Entity', 'int' },
+    GetShapeTestResult = { 'int' },
+    IsModelInCdimage = { 'Hash' },
+    HasModelLoaded = { 'Hash' },
+    RequestModel = { 'Hash' },
+    GetModelDimensions = { 'Hash' },
+    SetModelAsNoLongerNeeded = { 'Hash' },
+}
+
+function H.groundNatives(onCall)
+    local w = {
+        ped = 4242,
+        car = 0,
+        surfaces = {},
+        collisionMs = 0,
+        interiors = {},
+        pins = {},
+        unpins = {},
+        wall = function() return false end,
+        capsules = {},
+        capsuleFrames = 1,
+        hitAs = 1,
+        models = {},
+        released = {},
+        requested = {},
+        calls = {},
+        typeErrors = 0,
+    }
+    local collisionAt, nextHandle, tests = nil, 300, {}
+    local function Hash(m) return type(m) == 'string' and joaat(m) or m end
+    local function Loaded()
+        return collisionAt ~= nil and w.collisionMs ~= nil and H.clockMs >= collisionAt + w.collisionMs
+    end
+    local function Ready(id)
+        local int = w.interiors[id]
+        if not int then return false end
+        if int.ready then return true end
+        if (w.pins[id] or 0) > 0 and int.pinnedAt and int.readyMs and H.clockMs >= int.pinnedAt + int.readyMs then
+            int.ready = true
+        end
+        return int.ready == true
+    end
+    local function ModelLoaded(hash)
+        local m = w.models[hash]
+        if not m then return false end
+        if m.loaded or m.preloaded then return true end
+        if w.requested[hash] and H.clockMs >= w.requested[hash] + (m.loadMs or 0) then m.loaded = true end
+        return m.loaded == true
+    end
+    function w.reset()
+        collisionAt = nil
+        w.pins, w.unpins, w.capsules, w.released, w.requested, w.calls = {}, {}, {}, {}, {}, {}
+        for _, int in pairs(w.interiors) do int.pinnedAt = nil end
+        for _, m in pairs(w.models) do m.loaded = nil end
+    end
+    local before = {}
+    function w.restore()
+        for name in pairs(H.GROUND_NATIVE_TYPES) do rawset(_G, name, before[name]) end
+    end
+    local effects = {
+        PlayerPedId = function() return w.ped end,
+        GetVehiclePedIsIn = function() return w.car end,
+        RequestCollisionAtCoord = function() if not collisionAt then collisionAt = H.clockMs end end,
+        HasCollisionLoadedAroundEntity = function() return Loaded() end,
+        GetInteriorAtCoords = function(x, y, z)
+            for id, int in pairs(w.interiors) do
+                if int.at(x, y, z) then return id end
+            end
+            return 0
+        end,
+        IsInteriorReady = function(id) return Ready(id) end,
+        PinInteriorInMemory = function(id)
+            w.pins[id] = (w.pins[id] or 0) + 1
+            local int = w.interiors[id]
+            if int and not int.pinnedAt then int.pinnedAt = H.clockMs end
+        end,
+        UnpinInterior = function(id)
+            w.unpins[id] = (w.unpins[id] or 0) + 1
+            w.pins[id] = math.max(0, (w.pins[id] or 0) - 1)
+        end,
+        GetGroundZAndNormalFor_3dCoord = function(x, y, z)
+            if not Loaded() then return false, 0.0, Vec(0.0, 0.0, 0.0) end
+            local best = nil
+            for _, s in ipairs(w.surfaces) do
+                if s.z <= z and (not s.at or s.at(x, y)) and (not s.interior or Ready(s.interior))
+                    and (not best or s.z > best.z) then
+                    best = s
+                end
+            end
+            if not best then return false, 0.0, Vec(0.0, 0.0, 0.0) end
+            return true, best.z + 0.0, Vec(0.0, 0.0, (best.nz or 1.0) + 0.0)
+        end,
+        TestProbeAgainstWater = function(x1, y1, z1, _, _, z2)
+            local hz = w.water and w.water(x1, y1)
+            if hz and hz <= math.max(z1, z2) and hz >= math.min(z1, z2) then return true, Vec(x1, y1, hz) end
+            return false, Vec(0.0, 0.0, 0.0)
+        end,
+        GetWaterHeight = function(x, y)
+            local hz = w.water and w.water(x, y)
+            if hz then return true, hz + 0.0 end
+            return false, 0.0
+        end,
+        StartShapeTestCapsule = function(x1, y1, z1, x2, y2, z2, r, flags, ignore, options)
+            local c = {
+                x1 = x1,
+                y1 = y1,
+                z1 = z1,
+                x2 = x2,
+                y2 = y2,
+                z2 = z2,
+                r = r,
+                flags = flags,
+                ignore = ignore,
+                options = options,
+            }
+            w.capsules[#w.capsules + 1] = c
+            if w.capsuleFail then return 0 end
+            nextHandle = nextHandle + 1
+            tests[nextHandle] = { c = c, polls = 0 }
+            c.handle = nextHandle
+            return nextHandle
+        end,
+        GetShapeTestResult = function(handle)
+            local t = tests[handle]
+            if not t or t.done then return 0, false, Vec(0.0, 0.0, 0.0), Vec(0.0, 0.0, 0.0), 0 end
+            t.polls = t.polls + 1
+            t.c.polls = t.polls
+            if w.capsuleStuck or t.polls < w.capsuleFrames then
+                return 1, false, Vec(0.0, 0.0, 0.0), Vec(0.0, 0.0, 0.0), 0
+            end
+            t.done = true
+            local hit = w.wall(t.c)
+            return 2, hit and w.hitAs or (w.hitAs == 1 and 0 or false), Vec(0.0, 0.0, 0.0), Vec(0.0, 0.0, 1.0), 0
+        end,
+        IsModelInCdimage = function(m) return w.models[Hash(m)] ~= nil end,
+        HasModelLoaded = function(m) return ModelLoaded(Hash(m)) end,
+        RequestModel = function(m)
+            local hash = Hash(m)
+            if not w.requested[hash] then w.requested[hash] = H.clockMs end
+        end,
+        GetModelDimensions = function(m)
+            local hash = Hash(m)
+            local d = w.models[hash]
+            if not d or not ModelLoaded(hash) then return Vec(0.0, 0.0, 0.0), Vec(0.0, 0.0, 0.0) end
+            return d.mn, d.mx
+        end,
+        SetModelAsNoLongerNeeded = function(m) w.released[Hash(m)] = true end,
+    }
+    InstallTyped(H.GROUND_NATIVE_TYPES, effects, w, onCall, before)
+    return w
+end
+
+-- ============================================================================
 --           SERVER NATIVES THAT ANSWER YES OR NO (FXServer's shape)
 -- ============================================================================
 -- On FXServer a native that answers yes or no (a BOOL native) goes through `_r` in natives_server.lua

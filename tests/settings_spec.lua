@@ -327,8 +327,12 @@ do
         ((spawnGroup or {}).desc or ''):find('never pop up next to, behind or all around your officers', 1, true) ~= nil,
         'the comment under the banner describes the group')
     H.ok(E('Limits.reserveLocations').section ~= 'spawning', 'the run limits stay in their own section')
-    H.eq(E('Spawning.enabled').desc, 'false = people appear at the mission\'s points as before (no rule below is used)',
-        'the switch')
+    H.eq(
+        E('Spawning.enabled').desc,
+        'false = people appear at the mission\'s points as before (no rule below is used; only the spawn point check,'
+            .. ' which you start yourself, still judges points by ground)',
+        'the switch (the ground rules still judge points for the spawn point check)'
+    )
     H.eq(
         E('Spawning.activateRange').desc,
         'Metres: an objective\'s people appear once an officer is this close to them (50-400, well inside the 424 m a'
@@ -427,6 +431,60 @@ do
         'stageAhead',
         'stageWakeRange',
         'log',
+    }) do
+        H.ok(not E('Spawning.' .. k).reload and not E('Spawning.' .. k).restart, 'read live: Spawning.' .. k)
+    end
+    -- Config.Spawning.ground and the load waits (the ground probe, S6): ranges of two numbers, each comment alone
+    H.eq(E('Spawning.ground.pedAbove').kind, 'range', 'a person\'s height range edits as a lowest and a highest')
+    H.eq(E('Spawning.ground.pedAbove').size, 2, 'two numbers')
+    H.eq(E('Spawning.ground.pedAbove').section, 'spawning', 'in the Spawning section')
+    H.eq(
+        E('Spawning.ground.pedAbove').desc,
+        'Metres, lowest and highest: a person\'s point fits from 0.3 m under to 1.6 m over the ground (a standing'
+            .. ' person\'s point is about 1 m over it)',
+        'the person\'s range reads alone'
+    )
+    H.eq(E('Spawning.ground.vehicleAbove').desc, 'metres, lowest and highest: the same for a vehicle\'s point',
+        'the vehicle\'s range')
+    H.eq(E('Spawning.ground.propAbove').desc,
+        'metres, lowest and highest: the same for an object\'s point (a clue, a stash)', 'the object\'s range')
+    H.eq(
+        E('Spawning.ground.snapWithin').desc,
+        'Metres (0-10): a point outside its range is put on the ground when that moves it at most this far up or'
+            .. ' down; one further off is reported as under the ground or floating',
+        'snapWithin reads alone'
+    )
+    H.eq(E('Spawning.collisionTimeoutMs').desc,
+        'Milliseconds (500-30000) a game waits for the ground around a point to load before it checks the point',
+        'the collision wait')
+    H.eq(
+        E('Spawning.interiorTimeoutMs').desc,
+        'Milliseconds (500-30000) a game waits for the inside of a building (a bank, a store) to load; still not'
+            .. ' loaded after this = the point is reported as "inside not loaded"',
+        'the interior wait'
+    )
+    ok, v = Check('Spawning.ground.pedAbove', { -0.5, 2 })
+    H.ok(ok and v[1] == -0.5 and v[2] == 2.0 and math.type(v[2]) == 'float', 'a person\'s range of -0.5 to 2 m')
+    Err('Spawning.ground.pedAbove', { 2, 1 }, 'err.setting_min_max', 'the lowest is not over the highest')
+    Err('Spawning.ground.vehicleAbove', { 0.5 }, 'err.setting_list', 'a range keeps its two numbers')
+    Err('Spawning.ground.propAbove', { 'a', 1 }, 'err.setting_number', 'numbers only')
+    H.ok((Check('Spawning.ground.snapWithin', 0)), 'snapWithin 0 (never move a point)')
+    ok, v = Check('Spawning.ground.snapWithin', 10)
+    H.ok(ok and v == 10.0, 'snapWithin up to 10 m')
+    Err('Spawning.ground.snapWithin', 11, 'err.setting_range', 'snapWithin at most 10 m')
+    Err('Spawning.ground.snapWithin', -1, 'err.setting_range', 'and never below 0')
+    H.ok((Check('Spawning.collisionTimeoutMs', 500)), 'a collision wait of 500 ms')
+    Err('Spawning.collisionTimeoutMs', 499, 'err.setting_range', 'at least 500 ms')
+    Err('Spawning.collisionTimeoutMs', 30001, 'err.setting_range', 'at most 30 s')
+    Err('Spawning.interiorTimeoutMs', 1.5e3 + 0.5, 'err.setting_whole', 'whole milliseconds')
+    Err('Spawning.interiorTimeoutMs', 30001, 'err.setting_range', 'an interior wait of at most 30 s')
+    for _, k in ipairs({
+        'ground.pedAbove',
+        'ground.vehicleAbove',
+        'ground.propAbove',
+        'ground.snapWithin',
+        'collisionTimeoutMs',
+        'interiorTimeoutMs',
     }) do
         H.ok(not E('Spawning.' .. k).reload and not E('Spawning.' .. k).restart, 'read live: Spawning.' .. k)
     end

@@ -428,6 +428,13 @@ packages, and the runner's own clock and zone (the specs do not read either). Th
   `rateNow(ped)` answer only what was set during the current frame (one `H.step`), a clip set loads `loadMs` after
   `RequestClipSet` and only when natives.json lists it, and `safeCoord` is the spec's GetSafeCoordForPed. The npc
   client checks (tired runners, step F2) use it; with the old module 87 checks fail (30 of them the `false` flags).
+- **Ground probe natives on a small map**: `H.groundNatives(onCall)` installs the natives of the ground probe
+  (CP.Spawn.probe, step S6: RequestCollisionAtCoord, HasCollisionLoadedAroundEntity, the interior pin and ready
+  natives, GetGroundZAndNormalFor_3dCoord, the water natives, StartShapeTestCapsule with GetShapeTestResult, the model
+  natives) with natives.json's argument types, over a map the spec builds: the ground is found only once the
+  collision has loaded (`collisionMs` after the first request, or never), an interior's floor only while it is
+  ready (`readyMs` after a pin, or never), water heights, capsules that hit, take frames, never finish or do not
+  start, and model sizes known only once the model is loaded. tests/spawn_ground_spec.lua uses it.
 - **Player peds without health**: tests/npc_spec.lua answered 0 for a player ped's health, and the willKill cases
   modelled willKill as a headshot only, so a cancel that dropped EVERY killing hit (the shot that finishes off a hurt
   officer too) passed. FXServer reads a ped's health from its synced health node (`GET_ENTITY_HEALTH`,

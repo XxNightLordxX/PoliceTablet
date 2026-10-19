@@ -2959,7 +2959,14 @@ is answered with one boolean per point (at most 32): false when every line from 
 rendered camera to 1.0 m and 1.7 m above the point hits the map, a vehicle or an object (StartShapeTestLosProbe flags
 1 + 2 + 16, options 7, his car or ped ignored), true otherwise or when it cannot tell (a probe that did not start, an
 invalid or unfinished result within ms, an entry that is no point). At most 16 probes run at once; the ones still
-running at the end are read for 60 more frames so their handles are freed. S6 adds the ground probe to this module.
+running at the end are read for 60 more frames so their handles are freed.
+CP.Spawn.probe(kind, x, y, z, h, model, opts) (PLAN S6, Config.Spawning.ground; nothing calls it yet): loads the
+collision at the point (collisionTimeoutMs) and a building's inside there (pinned until ready, interiorTimeoutMs;
+never ready = interior_not_loaded), finds the ground from 2 m and from 50 m over the point (and from just over it
+under a low roof or the floor above: the one under it when that is the smaller move), then answers ok, snap
+(put on the ground: a person 1 m over it, a vehicle by its model's size, an object on it, when that moves it at most
+snapWithin), underground, floating, no_ground, in_water or in_wall (the Builder's capsule for a person or a vehicle).
+ARCHITECTURE 5.43 lists every step and field.
 ```
 
 ## Crimson-Police/modules/storage/memsql.lua
@@ -4810,6 +4817,22 @@ head bone, the rendered camera and the car. A 2 m wall: in front seen, close beh
 sees over, down a slope hidden; four probes per point (two eyes, chest and head height) with the flags, options and
 ignored entity; one clear line is enough; unfinished probes after the budget are seen and drained for 60 frames; bad
 entries seen; no eyes seen; at most 32 points and 16 probes at once; the budget kept to 50-5000 ms; bad args answer {}.
+```
+
+## tests/spawn_ground_spec.lua
+
+```text
+CP.Spawn.probe (modules/spawn/client.lua, PLAN S6) on the small map of H.groundNatives, whose natives check their
+argument types: a person 1 m over the ground ok (whole-number coordinates sent as decimals, the collision asked for
+around his ped, his capsule); 0.52 m under put on it; 2 m under the ground under the ground or put on it as
+snapWithin says; 5 m under found from 50 m up; floating and put down; ranges read live (a bad range: the default); a
+bridge over the point; under a low roof inside a trailer ok on the floor (the roof reported), 1.8 m over the floor
+under a roof put down, 0.5 m under the floor above put on it; the slope; no ground after collisionTimeoutMs; water
+over the ground, a pier over the sea; walls (hit as 1 or true, on the ground of a snapped point, a slow probe, one
+that never finishes or does not start: not known), the car and opts.entity / opts.ignore; a collision that loads
+late or never (500 ms at least); an interior pinned until ready and let go, one already loaded, one never ready; a
+car sized by its model (loaded for it and let go), 1.5 m under the road put on it, under a garage deck ok on its
+level, 3 m under, an unknown model, a car in a wall; objects (snap, ok, floating, kinds); bad input.
 ```
 
 ## tests/spawn_director_spec.lua

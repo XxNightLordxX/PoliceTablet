@@ -309,7 +309,9 @@ Config.Limits = {
 -- asks for its spawn points here: a point that breaks a rule below is skipped, and a mission that gets too few points
 -- waits for more. Distances are measured on the map (height does not count).
 Config.Spawning = {
-    enabled = true,                  -- false = people appear at the mission's points as before (no rule below is used)
+    -- false = people appear at the mission's points as before (no rule below is used; only the spawn point check,
+    -- which you start yourself, still judges points by ground)
+    enabled = true,
     -- Metres: an objective's people appear once an officer is this close to them (50-400, well inside the 424 m a
     -- player's game can see)
     activateRange = 150.0,
@@ -346,6 +348,24 @@ Config.Spawning = {
     -- Milliseconds the server waits for the officers' games to say what they can see (100-5000); no answer in time =
     -- every point counts as seen (the distance rules above still apply)
     losTimeoutMs = 1500,
+    -- How a point is checked against the ground under it: each range is the lowest and highest height in metres of
+    -- the point in the mission file over the ground there (for the spawn point check and the placer; nothing uses
+    -- these yet)
+    ground = {
+        -- Metres, lowest and highest: a person's point fits from 0.3 m under to 1.6 m over the ground (a standing
+        -- person's point is about 1 m over it)
+        pedAbove = { -0.3, 1.6 },
+        vehicleAbove = { -0.2, 1.5 },    -- metres, lowest and highest: the same for a vehicle's point
+        propAbove = { -0.1, 0.5 },       -- metres, lowest and highest: the same for an object's point (a clue, a stash)
+        -- Metres (0-10): a point outside its range is put on the ground when that moves it at most this far up or
+        -- down; one further off is reported as under the ground or floating
+        snapWithin = 3.0,
+    },
+    -- Milliseconds (500-30000) a game waits for the ground around a point to load before it checks the point
+    collisionTimeoutMs = 6000,
+    -- Milliseconds (500-30000) a game waits for the inside of a building (a bank, a store) to load; still not loaded
+    -- after this = the point is reported as "inside not loaded"
+    interiorTimeoutMs = 5000,
     -- true = a console line for each point skipped (shown while Config.Debug is on) and a warning when a wave had to
     -- use closer points
     log = true,
