@@ -301,7 +301,7 @@ metres, km/h; chances are fractions (0.30); progress durations are milliseconds.
 | `skill_check` (added) | — | `onFail` ['fail'] \| `{ setback = { label, duration = 10000, penalty = 'lab_fire' }, retryAfter = 30 }`: failAfter misses start a recovery step (a dwell at the target, report 'recover'), the officer who missed pays the penalty, a retry opens retryAfter s after the recovery; the case never fails |
 | `flee_arrest` (added) | — | `demeanour` (weights, a fixed name, or 'rolled') · `feint` [0] (percent, unarmed suspects only; bolts after Config.Npc.feintAfter with nobody within feintRange or aiming) · `custody` ['cuff'] \| 'handover' (`CP.Custody.enableChain`) |
 | `hostile_waves` (added) | — | `behaviour` (a name, or weights `{ hold = 0.5, balanced = 0.4, push = 0.1 }`, rolled per spawn from the objective seed) · `spawnSets = { keys = { 'front', 'house', 'garage' }, use = 2, intel = true }` (the intel line `block.hostile_waves.intel` in `run.shared.intel`) · `boss.aliveBonus = { id, points }` · Config.NpcDifficulty changes feel only (health, surrender) |
-| `search_area` | 60 | `center` (vec3 key) · `startRadius` [600] · `shrinkTo` [{300,150,50}] · `clues` (list key, 6+) · `clueCount` [3] · `clueProps` (`'witness'` = a witness NPC) · `clueProgress = { label, duration = 4000 }` · `hiding` (vec4 list key, 6+) · `fugitives` [1] · `runDistance` [30.0] · `givesUp = { stun = true, close = { distance = 3.0, seconds = 3 } }` · `escape = { distance = 300, seconds = 30 }` · `cuff = {...}` |
+| `search_area` | 60 | `center` (vec3 key) · `startRadius` [600] · `shrinkTo` [{300,150,50}] · `clues` (list key, 6+) · `clueCount` [3] · `clueProps` (`'witness'` = a witness NPC) · `clueProgress = { label, duration = 4000 }` · `hiding` (vec4 list key, 6+) · `fugitives` [1] · `runDistance` [30.0] · `givesUp = { stun = true, close = { distance = 3.0, seconds = 3 } }` · `escape = { distance = 300, seconds = 30 }` · `cuff = {...}` · each fugitive and clue appears once an officer is near it, through the spawn director (`Config.Spawning`; `enabled = false`: all when the search starts, as before) |
 
 Each block's `server.lua` exposes `defaults(obj)` and `validate(obj, mission, location)` so the
 loader and the Mission Builder apply exactly these defaults and guardrails.
@@ -409,6 +409,26 @@ still short of slots the cars it has (`w.want = #w.cars`) or drops it (none), on
 for every waiting wave (`CutShortWaves`), and after it for a car that finds no slot (`ChooseSlot`: a wave the spawn
 caps held back until then). `enabled = false`: route[1] at the road's height at once and the own slot at the point's height + 0.5 m at
 once, as before; `ambushAheadOnly = false`: the own slot only, through the director.
+
+search_area through the director (PLAN S16, Config.Spawning; owner request of 2026-10-19: "make it be progressive",
+"make sure they dont spawn around the player"; before, every fugitive and clue appeared when the search started,
+276-560 m from the officers, beyond the 424 m a player's game simulates). `start` and each `tick` call `SpawnMissing`,
+which plans the clues (`PlanClues`, `cl.name` = `clues[5]`) and the hiding order (`st.order`) once, then `SpawnNear`
+(in a pcall, `st.spawning` cleared always). Fugitive i has his own spot from the start (`Slot(i)`: point `order[k]`,
+the `REUSE_OFFSET` ring per lap as before, named `hiding[3]`); `FugitiveAnchor` counts a fugitive who has not appeared
+as hidden there, so the circle shrinks towards his spot. `SpawnFugitiveNear`: once `ctx.whenNear(spot)`, his spot
+(`own = true`, `centre` = his spot, so it is never behind an officer) and the `OtherSpots` (no fugitive's own spot,
+none a fugitive appeared on, inside the current circle, an officer near it) go to `ctx.choosePoints(cands, 1, { name =
+'the fugitive', centre, ordered = true })`: no `wave`, so the distance never relaxes (minDistance, 40 m, from every
+officer). His own spot passes: he appears there, the spare points as `alt` for the placer. It does not: he waits
+(`st.fugWait[i]`, counted while an officer is near); after `waveDelayMax` he takes the other spot the director chose
+instead, one `CP.log` (`fugitive 1 hides on hiding[7] instead of hiding[1]: an officer stood 30 m from it for 20 s`).
+Each clue (`ClueReady`): once `ctx.whenNear(cl.coords)`, `ctx.choosePoints({ { coords, label = cl.name } }, 1, { name =
+'clue <i>', wave = 'clue <i>', since = cl.waitMs, unseen = true })`: 40 m from every officer, or closer where no
+officer's game can see it (§5.10 `opts.unseen`); after `waveDelayMax` `hardMin` (20 m) in sight. What appeared stays
+until it is checked, lost or the run ends. `st.slots[i]` marks the fugitives made, `st.count` counts them; the client
+offers "Check clue" only on a clue that is there (`netId`). `enabled = false`: `SpawnAll`, everything at once when the
+search starts, as before.
 
 protect_rescue through the director (PLAN S15, Config.Spawning; owner request of 2026-10-19: "make it be progressive").
 With `hostagesAt = 'objective'` (shipped) `prepare` makes nothing; the hostages appear when the objective starts
@@ -1035,6 +1055,14 @@ Full admin control (P3, §5.39):
     points: of two sectors with as many points, the one with more hidden points wins. One `CP.log` per wave: `run <id>: <name>: <k> of <m> points out of the
     officers' sight, used first`. `preferHidden = false`, `enabled = false`, `#passing <= n` or a caller that cannot
     yield: nobody is asked.
+    Out of sight instead of far (`opts.unseen = true`, PLAN S16: a Manhunt clue, a harmless thing that only must not
+    pop up in front of an officer): a point that fails only the distance rule (not behind anyone) still passes when no
+    asked game can see it. When fewer than `n` points pass otherwise (one point, `ordered` or not), the games are asked
+    about those close points the same way (`AskHidden`; the rules run again after the wait) and the hidden ones are
+    added after the others; the rest are skipped with one `CP.log` per point (`<name> skipped: 25 m from <officer>
+    and not known to be out of his sight`); such a point never counts towards the "closer points after the wait"
+    warning. That ask replaces the hidden-first one in the same call. `preferHidden = false` (or a caller that cannot
+    yield, or a busy game): nobody is asked and the close points are skipped.
   - `whenNear(run, point, range) -> boolean, nearestMetres|nil` — true when a participant is within `range` (default
     `activateRange`) of `point`; always true while `Config.Spawning.enabled = false` and for a point that is none.
   - Stage ahead (`Config.Spawning.stageAhead`, PLAN S3; §4.4 step 3, §7.1): while objective i is current, the 1 s tick

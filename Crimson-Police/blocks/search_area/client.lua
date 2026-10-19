@@ -172,9 +172,11 @@ local function EnsureZone(S, cl)
                 label = ClueLabel(cl),
                 icon = cl.kind == 'witness' and 'fas fa-comments' or 'fas fa-magnifying-glass',
                 distance = CLUE_RANGE,
+                -- a clue appears once an officer is near it (Config.Spawning): nothing to check before it is there
                 canInteract = function()
                     local now = S.clues[cl.i]
                     return S.alive and S.current and not S.busy and now ~= nil and now.status == 'pending'
+                        and now.netId ~= nil
                 end,
                 onSelect = function() CreateThread(function() CheckClue(S, S.clues[cl.i] or cl) end) end,
             },

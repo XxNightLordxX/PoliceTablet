@@ -383,7 +383,7 @@ local function StateOf(ctx)
     local st = ctx.state
     if not st.block then
         st.block = BLOCK
-        st.clues, st.fugitives = {}, {}
+        st.clues, st.fugitives, st.slots = {}, {}, {}
         st.count, st.arrests, st.checked = 0, 0, 0
         local c = CenterOf(ctx.location, ctx.obj.center)
         st.circle = { center = c and ToVec3(c) or nil, radius = tonumber(ctx.obj.startRadius) or 600, n = 0 }
@@ -418,6 +418,7 @@ local function PlanClues(ctx, st)
         st.clues[i] = {
             i = i,
             coords = spots[si],
+            name = ('%s[%d]'):format(tostring(ctx.obj.clues), si),
             kind = model == 'witness' and 'witness' or 'prop',
             model = model == 'witness' and ctx.obj.witnessModel or model,
             status = 'pending',
@@ -455,22 +456,23 @@ local function SpawnClue(ctx, st, cl)
     return true
 end
 
-local function SpawnFugitive(ctx, st)
-    local spots = PointList(ctx.location, ctx.obj.hiding)
-    if #spots == 0 then
-        CP.warn(BLOCK, 'no hiding spots at %s for run %s', tostring(ctx.obj.hiding), tostring(ctx.run and ctx.run.id))
-        Fail(ctx, st, 'block.search_area.fail_setup')
-        return false
-    end
-    if not ctx.canSpawn(1, false) then return false end
-    if not st.order or #st.order ~= #spots then st.order = RngOf(ctx):shuffle(Indices(#spots)) end
-    local i = st.count + 1
+-- Fugitive i's hiding spot: point order[k] of the hiding list (k = (i - 1) % #spots + 1), a ring REUSE_OFFSET metres
+-- further out per lap when there are more fugitives than spots; its index in the list and its console name.
+local function Slot(ctx, st, spots, i)
     local k = ((i - 1) % #spots) + 1
     local lap = (i - 1) // #spots
-    local spot = spots[st.order[k]]
+    local idx = st.order[k]
+    local spot = spots[idx]
+    local name = ('%s[%d]'):format(tostring(ctx.obj.hiding), idx)
+    if lap == 0 then return ToVec4(spot), idx, name end
     local a = lap * 2.39996 + k
-    local place = lap == 0 and ToVec4(spot)
-        or ToVec4(spot, math.cos(a) * REUSE_OFFSET * lap, math.sin(a) * REUSE_OFFSET * lap)
+    return ToVec4(spot, math.cos(a) * REUSE_OFFSET * lap, math.sin(a) * REUSE_OFFSET * lap),
+        idx,
+        ('%s +%.1f m'):format(name, REUSE_OFFSET * lap)
+end
+
+-- Fugitive i on place (spot idx of the hiding list); alt = the other points the placer may move him to (CP.Spawn).
+local function SpawnFugitive(ctx, st, i, place, idx, alt)
     local ent, netId = ctx.spawnPed({
         model = RngOf(ctx):pick(ctx.obj.peds) or Config.Blocks.hostile_waves.peds[1],
         coords = place,
@@ -478,55 +480,210 @@ local function SpawnFugitive(ctx, st)
         armed = false,
         cfg = { group = 'neutral', hidden = true, block = BLOCK },
         tag = 'fugitive' .. i,
+        alt = alt,
     })
     if not netId then return false end
     st.fugitives[tostring(netId)] = {
         netId = netId,
         entity = ent,
         spot = place,
+        spotIndex = idx,
         state = 'idle',
         far = 0,
         close = 0,
         index = i,
     }
-    st.count = i
+    st.slots[i] = true
+    st.count = st.count + 1
     NpcSet(ctx, netId, 'idle')
     st.dirty = true
     return true
 end
 
-local function SpawnMissing(ctx, st)
-    if st.spawning or st.halted or st.failed then return end
-    st.spawning = true
-    PlanClues(ctx, st)
-    local ok = true
-    while ok and st.count < FugTarget(ctx) do
-        ok = SpawnFugitive(ctx, st)
+-- ============================================================================
+--                          WHEN AND WHERE THEY APPEAR
+-- ============================================================================
+-- The spawn director, Config.Spawning (PLAN S16, owner request of 2026-10-19: "make it be progressive", "make sure
+-- they dont spawn around the player"). Before, every fugitive and clue appeared when the search started, 276-560 m from
+-- the officers: beyond the 424 m a player's game simulates, and wherever an officer happened to stand later. With the
+-- director on nothing appears when the search starts. Each fugitive has his hiding spot from the start (Slot: the
+-- circle shrinks towards it) and appears there once an officer is within activateRange of it (ctx.whenNear) and every
+-- officer is minDistance or more from it (ctx.choosePoints; never closer: no hardMin for him). An officer standing
+-- closer keeps him waiting; after waveDelayMax of that he hides on another free hiding spot inside the current circle
+-- that an officer is near and that is far enough (one console line). Each clue appears once an officer is within
+-- activateRange of it while every officer is minDistance or more from it, or, closer, where no officer's game can see
+-- it (opts.unseen; hardMin after waveDelayMax). A clue or a fugitive that appeared stays. Config.Spawning.enabled =
+-- false: everything when the search starts, as before.
+
+local function SpawnCfg() return type(Config.Spawning) == 'table' and Config.Spawning or {} end
+
+local function Directed() return SpawnCfg().enabled ~= false end
+
+local function Num(v, default)
+    v = tonumber(v)
+    if not v or v ~= v then return default end
+    return v
+end
+
+-- The other free hiding spots fugitive i may hide on instead of his own: no fugitive's own spot, none a fugitive
+-- appeared on, inside the current circle and with an officer near it (ctx.whenNear), in list order.
+local function OtherSpots(ctx, st, spots, i)
+    local taken = {}
+    for j = 1, math.max(FugTarget(ctx), i) do
+        local _, idx = Slot(ctx, st, spots, j)
+        taken[idx] = true
     end
-    if ok then
-        for _, cl in ipairs(st.clues) do
-            if not SpawnClue(ctx, st, cl) then break end
+    for _, f in pairs(st.fugitives) do
+        if f.spotIndex then taken[f.spotIndex] = true end
+    end
+    local c = st.circle
+    local out = {}
+    for idx, spot in ipairs(spots) do
+        if not taken[idx] and (not c.center or U.dist2d(spot, c.center) <= c.radius) and ctx.whenNear(spot) == true then
+            out[#out + 1] = {
+                coords = ToVec4(spot),
+                label = ('%s[%d]'):format(tostring(ctx.obj.hiding), idx),
+                index = idx,
+            }
         end
     end
+    return out
+end
+
+-- Fugitive i, if he may appear now (see above); false only when there was no room (canSpawn) or the spawn failed.
+-- st.fugWait[i] is his clock (GetGameTimer), counted while an officer is near his spot and too close to it.
+local function SpawnFugitiveNear(ctx, st, spots, i)
+    local own, idx, name = Slot(ctx, st, spots, i)
+    st.fugWait = st.fugWait or {}
+    local near, best = ctx.whenNear(own)
+    if near ~= true then
+        st.fugWait[i] = nil
+        return true
+    end
+    local now = Now()
+    local since = st.fugWait[i] or now
+    local waited = (now - since) / 1000
+    local cands = { { coords = own, label = name, index = idx, own = true } }
+    for _, c in ipairs(OtherSpots(ctx, st, spots, i)) do cands[#cands + 1] = c end
+    -- the officers' line is measured to his own spot, so it is never behind one of them
+    local chosen, _, spare = ctx.choosePoints(cands, 1, { name = 'the fugitive', centre = own, ordered = true })
+    local pick = type(chosen) == 'table' and chosen[1] or nil
+    if pick and not pick.own and waited < math.max(0, Num(SpawnCfg().waveDelayMax, 20)) then pick = nil end
+    if not pick then
+        st.fugWait[i] = since
+        return true
+    end
+    if not ctx.canSpawn(1, false) then return false end
+    local alt = {}
+    for _, c in ipairs(spare or {}) do
+        if c.index ~= pick.index then alt[#alt + 1] = { coords = c.coords, label = c.label } end
+    end
+    if not SpawnFugitive(ctx, st, i, pick.coords, pick.index, alt) then return false end
+    st.fugWait[i] = nil
+    if not pick.own and SpawnCfg().log ~= false then
+        CP.log(BLOCK, 'run %s: fugitive %d hides on %s instead of %s: an officer stood %.0f m from it for %.0f s',
+            tostring(ctx.run and ctx.run.id), i, pick.label, name, tonumber(best) or -1, waited)
+    end
+    return true
+end
+
+-- Clue cl, if it may appear now (see above). cl.waitMs is its clock (GetGameTimer), counted while an officer is near.
+local function ClueReady(ctx, cl)
+    if ctx.whenNear(cl.coords) ~= true then
+        cl.waitMs = nil
+        return false
+    end
+    local now = Now()
+    cl.waitMs = cl.waitMs or now
+    local chosen = ctx.choosePoints({ { coords = cl.coords, label = cl.name } }, 1, {
+        name = 'clue ' .. cl.i,
+        wave = 'clue ' .. cl.i,
+        since = os.time() - math.floor((now - cl.waitMs) / 1000),
+        unseen = true,
+    })
+    if type(chosen) == 'table' and chosen[1] then
+        cl.waitMs = nil
+        return true
+    end
+    return false
+end
+
+-- Everything at once, when the search starts (the director off), as before.
+local function SpawnAll(ctx, st, spots)
+    for i = 1, FugTarget(ctx) do
+        if not st.slots[i] then
+            if not ctx.canSpawn(1, false) then return end
+            local place, idx = Slot(ctx, st, spots, i)
+            if not SpawnFugitive(ctx, st, i, place, idx) then return end
+        end
+    end
+    for _, cl in ipairs(st.clues) do
+        if not SpawnClue(ctx, st, cl) then return end
+    end
+end
+
+-- Each fugitive and clue once an officer is near it (the director on).
+local function SpawnNear(ctx, st, spots)
+    for i = 1, FugTarget(ctx) do
+        if not st.slots[i] then
+            if not SpawnFugitiveNear(ctx, st, spots, i) then return end
+            if st.halted or st.failed then return end
+        end
+    end
+    for _, cl in ipairs(st.clues) do
+        if cl.status == 'pending' and not cl.netId and ClueReady(ctx, cl) then
+            if not SpawnClue(ctx, st, cl) then return end
+            if st.halted or st.failed then return end
+        end
+    end
+end
+
+-- Spawns the fugitives and clues still missing. The spawning flag (re-entry while a spawn or the director yields) is
+-- always cleared, even when a spawn throws.
+local function SpawnMissing(ctx, st)
+    if st.spawning or st.halted or st.failed then return end
+    local spots = PointList(ctx.location, ctx.obj.hiding)
+    if #spots == 0 then
+        CP.warn(BLOCK, 'no hiding spots at %s for run %s', tostring(ctx.obj.hiding), tostring(ctx.run and ctx.run.id))
+        Fail(ctx, st, 'block.search_area.fail_setup')
+        return
+    end
+    PlanClues(ctx, st)
+    if not st.order or #st.order ~= #spots then st.order = RngOf(ctx):shuffle(Indices(#spots)) end
+    st.spawning = true
+    local ok, err = pcall(Directed() and SpawnNear or SpawnAll, ctx, st, spots)
     st.spawning = false
+    if not ok then
+        CP.err(BLOCK, 'spawning for run %s failed: %s', tostring(ctx.run and ctx.run.id), tostring(err))
+    end
 end
 
 -- ============================================================================
 --                                    CIRCLE
 -- ============================================================================
 
+-- Where the circle shrinks to: a hidden fugitive (one still waiting for an officer to come near his hiding spot hides
+-- there), else a running one; nil when none is left.
 local function FugitiveAnchor(ctx, st)
     local hidden, running = {}, {}
     for _, f in pairs(st.fugitives) do
         if not Neutralised(f) and f.state ~= 'surrendered' then
-            if f.state == 'idle' then hidden[#hidden + 1] = f else running[#running + 1] = f end
+            local e = { index = f.index, f = f }
+            if f.state == 'idle' then hidden[#hidden + 1] = e else running[#running + 1] = e end
+        end
+    end
+    local spots = PointList(ctx.location, ctx.obj.hiding)
+    if #spots > 0 and st.order and #st.order == #spots then
+        for i = 1, FugTarget(ctx) do
+            if not st.slots[i] then hidden[#hidden + 1] = { index = i, spot = (Slot(ctx, st, spots, i)) } end
         end
     end
     local list = #hidden > 0 and hidden or running
     if #list == 0 then return nil end
-    table.sort(list, function(a, b) return a.netId < b.netId end)
-    local f = RngOf(ctx):pick(list)
-    return EntCoords(f.entity) or f.spot
+    table.sort(list, function(a, b) return a.index < b.index end)
+    local e = RngOf(ctx):pick(list)
+    if e.f then return EntCoords(e.f.entity) or e.f.spot end
+    return e.spot
 end
 
 local function Shrink(ctx, st)

@@ -839,9 +839,10 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
     - the search circle as a radius blip with a centre blip, redrawn whenever the server shrinks it;
       blips for clues not yet checked and for fugitives on the run (none of these with Radio Silence);
     - an ox_target sphere zone on every clue not yet checked (option crimson-police:check_clue, label by
-      clue kind); selecting it reports 'clue_start', runs lib.progressBar(clueProgress) and reports
-      'clue'; a marker over each clue not yet checked (DrawMarker only within MARKER_RANGE, otherwise
-      Wait(750));
+      clue kind; offered only once the clue is there, its netId in the update: clues appear when an
+      officer is near, Config.Spawning); selecting it reports 'clue_start', runs
+      lib.progressBar(clueProgress) and reports 'clue'; a marker over each clue not yet checked (DrawMarker
+      only within MARKER_RANGE, otherwise Wait(750));
     - 'stunned' reports for fugitives seen stunned (IsPedBeingStunned); the server re-checks distances;
     - a HUD line (ctx.hudDetail): enter the area, clues checked and circle size while a clue is still
       pending (a lost one is handled), then fugitives in custody, escape countdown, and "stay close" while
@@ -874,8 +875,15 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
     the duration later). Every checked clue shrinks the circle to the next shrinkTo radius; the server
     picks the new centre with ctx.rng within 0.7 × the new radius of a fugitive still at large (nested in
     the old circle when possible), so the circle always contains a fugitive.
-    `fugitives` (scales) unarmed fugitives hide at random hiding spots (distinct first). A hidden
-    fugitive runs when a participant gets within runDistance (server distance, every tick). Fugitives
+    `fugitives` (scales) unarmed fugitives hide at random hiding spots (distinct first; Slot(i)).
+    When they appear (Config.Spawning, PLAN S16; ARCHITECTURE §3.3 "search_area through the director"):
+    nothing when the search starts; a fugitive on his spot once an officer is within activateRange of it
+    (ctx.whenNear) and every officer minDistance or more from it (ctx.choosePoints, never closer; after
+    waveDelayMax of an officer standing closer, another free hiding spot in the circle an officer is
+    near), a clue once an officer is within activateRange of it, minDistance away or closer out of every
+    officer's sight (opts.unseen; hardMin after waveDelayMax). A fugitive not there yet counts as
+    hidden on his spot for the circle. Config.Spawning.enabled = false: all at the start, as before. A
+    hidden fugitive runs when a participant gets within runDistance (server distance, every tick). Fugitives
     give up when stunned (client 'stunned', a participant within STUN_RANGE), when a participant stays
     within givesUp.close.distance for givesUp.close.seconds, or at once when CP.Npc.wornOut calls a
     running fugitive worn out (Config.Flee: his flee clock 'spent', a participant within giveUpRange;
@@ -918,10 +926,12 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
   Fail reason keys: block.search_area.fail_escaped · block.search_area.fail_setup · run.fail_killed_unarmed
 
   ctx.state
-    block, rng, circle = { center, radius, n }, clues = { { i, coords, kind = 'prop'|'witness', model,
-    netId, entity, status = 'pending'|'done'|'lost', starts = { [src] = ms } } }, fugitives = { [key] =
-    { netId, entity, spot, state = 'idle'|'fleeing'|'surrendered'|'cuffed'|'dead', ran, far, close } },
-    order, count, entered, arrests, checked, cluesFirst, escaping, dirty, completed, failed, halted
+    block, rng, circle = { center, radius, n }, clues = { { i, coords, name, kind = 'prop'|'witness',
+    model, netId, entity, status = 'pending'|'done'|'lost', starts = { [src] = ms }, waitMs } },
+    fugitives = { [key] = { netId, entity, spot, spotIndex, index, state =
+    'idle'|'fleeing'|'surrendered'|'cuffed'|'dead', ran, far, close } }, slots = { [i] = true }, fugWait =
+    { [i] = ms }, order, count, spawning, entered, arrests, checked, cluesFirst, escaping, dirty, completed,
+    failed, halted
 ```
 
 ## Crimson-Police/blocks/skill_check/client.lua
@@ -5000,6 +5010,16 @@ The state bag is simulated: every write goes through bagSet, which fires the reg
 AddStateBagChangeHandler handlers before the value changes (as FiveM does). At the end the two client
 files are loaded in their own environment (a separate CP table) with stubbed natives.
 No database is used.
+```
+
+## tests/search_area_director_spec.lua
+
+```text
+Manhunt through the spawn director (Config.Spawning, PLAN S16) on the real engine, the real search_area block and the
+built-in mission file: nothing appears when the search starts; each clue appears once an officer is within
+activateRange (150 m) of it, 40 m or more from every officer or out of every officer's sight; each fugitive appears on
+his hiding spot once an officer is within 150 m of it, never within minDistance (40 m) of one (after waveDelayMax on
+another free hiding spot instead). enabled = false keeps the old timing: everything when the search starts.
 ```
 
 ## tests/shadow/fuzz_agg.lua

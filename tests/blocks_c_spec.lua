@@ -1836,6 +1836,11 @@ end
 -- ============================================================================
 --                                 search_area
 -- ============================================================================
+-- The fugitives and clues below appear when the search starts (Config.Spawning.enabled = false: as before the spawn
+-- director); tests/search_area_director_spec.lua drives the shipped pacing on the real engine and Manhunt.
+
+local spawningWas = Config.Spawning.enabled
+Config.Spawning.enabled = false
 
 local clueSpots = {
     vec3(200.0, 0.0, 30.0),
@@ -2244,6 +2249,8 @@ do -- caps and rescale
     H.eq(SA.onTimeout(ctx), nil, 'timeout fails the search')
 end
 
+Config.Spawning.enabled = spawningWas
+
 -- ============================================================================
 --                                CLIENT HALVES
 -- ============================================================================
@@ -2606,14 +2613,26 @@ do -- search_area: a clue check still running when the objective stops is cancel
     H.step(1000)
     H.eq(#CL.zones, 2, 'search client: a new zone for the moved clue')
     H.eq(CL.zones[2].coords.x, -200.0, 'search client: at its new spot')
+    H.eq(CL.zones[2].options[1].canInteract(), true, 'search client: a clue that is there can be checked')
+    -- a clue that has not appeared yet (it appears once an officer is near it, Config.Spawning): nothing to check
+    local early = Snap(-200.0)
+    early.clues[1].netId = nil
+    SC.update(cctx, early)
+    H.step(1000)
+    H.eq(#CL.zones, 3, 'search client: the clue still has its zone before it appears')
+    H.eq(CL.zones[3].options[1].canInteract(), false, 'search client: a clue not there yet cannot be checked')
+    SC.update(cctx, Snap(-200.0))
+    H.step(1000)
+    H.eq(#CL.zones, 4, 'search client: a new zone once the clue appeared')
+    H.eq(CL.zones[4].options[1].canInteract(), true, 'search client: once it is there it can be checked')
     -- start checking, then the objective stops mid-progress
     local reports = #CL.reports
-    CL.zones[2].options[1].onSelect()
+    CL.zones[4].options[1].onSelect()
     H.eq(CL.reports[reports + 1] and CL.reports[reports + 1].type, 'clue_start', 'search client: clue_start reported')
     H.eq(CL.progress.active, true, 'search client: progress bar running')
     SC.stop(cctx)
     H.eq(CL.progress.cancels, 1, 'search client: stop cancels the running clue check')
-    H.ok(CL.removed[2] == true, 'search client: zones removed at stop')
+    H.ok(CL.removed[4] == true, 'search client: zones removed at stop')
     for _ = 1, 50 do H.step(100) end
     H.eq(#CL.reports, reports + 1, 'search client: no clue report after the objective stopped')
 end

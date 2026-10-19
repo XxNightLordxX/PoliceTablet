@@ -791,7 +791,10 @@ do
     -- waveDelayMax seconds the distance drops to hardMin, never lower. opts.name names the list in the console
     -- ('spawns[7] skipped: 30 m from <officer>'; a candidate { coords, label = 'yard[3]' } is named by its label),
     -- opts.obj the objective (ctx.choosePoints fills it in). opts.ordered = true keeps the block's own order and asks no
-    -- game what it sees (a car's slots on a road: its grid slot first, then the slots behind it).
+    -- game what it sees (a car's slots on a road: its grid slot first, then the slots behind it). opts.unseen = true (a
+    -- harmless thing that only must not pop up in front of an officer: a Manhunt clue): a point closer than the
+    -- distance allows (not behind anyone) still passes when no asked officer's game can see it; the games are asked
+    -- when fewer than n points pass otherwise (also for one point, ordered or not; not with preferHidden = false).
     -- Config.Spawning.enabled = false: the first n candidates as they are.
     function Runs.choosePoints(run, candidates, n, opts)
         opts = type(opts) == 'table' and opts or {}
@@ -858,7 +861,7 @@ do
                     o.frontX, o.frontY = inX, inY
                 end
             end
-            local passed = {}
+            local passed, close = {}, {}
             for _, p in ipairs(pts) do
                 local base = p.indoor and minIn or minOut
                 local need = relaxed and math.min(base, hardMin) or base
@@ -873,14 +876,19 @@ do
                 end
                 p.nearest, p.base = nearestD, base
                 if nearest and nearestD < need then
-                    SaySkipped(run, m, opts, p.what, 'near', '%.0f m from %s', nearestD, nearest.name)
+                    if opts.unseen == true and not behindOf then
+                        p.nearName = nearest.name
+                        close[#close + 1] = p
+                    else
+                        SaySkipped(run, m, opts, p.what, 'near', '%.0f m from %s', nearestD, nearest.name)
+                    end
                 elseif behindOf then
                     SaySkipped(run, m, opts, p.what, 'behind', 'behind %s', behindOf.name)
                 else
                     passed[#passed + 1] = p
                 end
             end
-            return passed, officers
+            return passed, officers, close
         end
 
         -- One sector seen from the officers near the area (all of them when none is): a wave never comes as a ring.
@@ -951,10 +959,33 @@ do
             return passed
         end
 
-        local passed, officers = Rules()
+        local passed, officers, close = Rules()
+        -- opts.unseen (a harmless thing that only must not pop up in front of an officer: a Manhunt clue): a point
+        -- closer than the distance rule allows still passes when no asked officer's game can see it. The games are
+        -- asked (AskHidden) only when the points that pass are fewer than n; preferHidden = false asks nothing, so
+        -- such a point waits for the officers to step back.
+        local askedUnseen = false
+        if #close > 0 then
+            local unseen = nil
+            if cfg.preferHidden ~= false and #passed < n then
+                local waited
+                askedUnseen = true
+                unseen, waited = AskHidden(run, m, opts, name, close, officers, cx, cy, cfg)
+                if waited then passed, officers, close = Rules() end
+            end
+            for _, p in ipairs(close) do
+                if unseen and unseen[p.i] then
+                    p.unseen = true
+                    passed[#passed + 1] = p
+                else
+                    SaySkipped(run, m, opts, p.what, 'near', '%.0f m from %s and not known to be out of his sight',
+                        p.nearest, p.nearName)
+                end
+            end
+        end
         -- hidden first: only worth an ask when more points pass than the wave takes
         local hidden = nil
-        if cfg.preferHidden ~= false and opts.ordered ~= true and #passed > n then
+        if cfg.preferHidden ~= false and opts.ordered ~= true and not askedUnseen and #passed > n then
             local waited
             hidden, waited = AskHidden(run, m, opts, name, passed, officers, cx, cy, cfg)
             -- the ask waited for the officers' games (answered or not): the rules again, from where they stand now
@@ -995,7 +1026,7 @@ do
             local closer, closest, base = 0, math.huge, minOut
             for r = 1, #chosen do
                 local p = passed[r]
-                if p.nearest < p.base then
+                if p.nearest < p.base and not p.unseen then
                     closer = closer + 1
                     if p.nearest < closest then closest, base = p.nearest, p.base end
                 end

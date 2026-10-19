@@ -383,8 +383,9 @@ Config.Spawning = {
     ambushAheadOnly = true,
     -- true = of the points a wave may use, the ones your officers cannot see (behind a building, a container or a
     -- vehicle, as the nearest officers' own games check it) are used first, so people appear out of sight instead of
-    -- in the open in front of you; seen points are still used when there are not enough hidden ones (false = the
-    -- mission's own order)
+    -- in the open in front of you; seen points are still used when there are not enough hidden ones. A Manhunt clue
+    -- closer than minDistance to an officer appears only where those games say no officer can see it (false = the
+    -- mission's own order, and such a clue waits until the officers step back)
     preferHidden = true,
     -- Milliseconds the server waits for the officers' games to say what they can see (100-5000); no answer in time =
     -- every point counts as seen (the distance rules above still apply). Also how long it waits for the footpath point
