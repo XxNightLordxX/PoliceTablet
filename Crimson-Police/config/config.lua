@@ -366,6 +366,12 @@ Config.Spawning = {
     -- Milliseconds (500-30000) a game waits for the inside of a building (a bank, a store) to load; still not loaded
     -- after this = the point is reported as "inside not loaded"
     interiorTimeoutMs = 5000,
+    -- true = every new person, vehicle and object of a mission waits frozen where it appears until the game of an
+    -- officer near it has checked the ground there and put it on the ground (by the ranges above); a point under the
+    -- ground, floating, in water or in a wall is reported back instead. Your officers' games already do this when the
+    -- server asks; the server starts asking with the next update (until then nobody waits). false = they appear on the
+    -- file's points as before
+    place = true,
     -- true = a console line for each point skipped (shown while Config.Debug is on) and a warning when a wave had to
     -- use closer points
     log = true,

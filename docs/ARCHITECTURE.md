@@ -170,7 +170,8 @@ boards, rewards, access).
 `modules/npccombat/` (client, §5.42): the run-scoped damage settings of an officer's game (Config.NpcCombat).
 
 `modules/spawn/` (client, §5.43): what an officer's game can see of the spawn director's points
-(Config.Spawning.preferHidden), and the ground probe of one point (Config.Spawning.ground).
+(Config.Spawning.preferHidden), the ground probe of one point (Config.Spawning.ground), and the placer that puts a
+new mission entity on the ground when the server asks (Config.Spawning.place).
 
 `modules/settings/` (server, client, §5.36): settings changed in game (Admin UI → Settings) over config.lua and
 blocks.lua, the mission and location switches, and the same values on every client.
@@ -1054,7 +1055,10 @@ Client (host runs AI; all participants see targets):
 - `task(entity, action, args)` actions: `combat` (nearest participant), `flee` (from participants, or along points, at
   the bag's gait), `handsUp`, `kneel`, `cuffed`, `follow` (walk to coords), `cower`, `wander`, `enterVehicle`, `driveTo`, `driveRoute` (TaskVehicleDriveToCoordLongrange waypoint by waypoint)
 - Reacts to `cp` state bag changes (`AddStateBagChangeHandler('cp', ...)`) on the host: surrendered →
-  hands up then kneel; cuffed → cuffed anim + freeze; fleeing → flee; hostile → combat.
+  hands up then kneel; cuffed → cuffed anim + freeze; fleeing → flee; hostile → combat. A task that undoes a pose
+  (`Release`, and `kneel`) lets the ped go (`FreezeEntityPosition(ped, false)`) only when `CP.Spawn.holds(ped)` is
+  false (§5.43: he still waits for his placement, PLAN S9); else the task runs with him frozen, and the host loop lets
+  him go once the ask is gone.
 - `nearestParticipant(coords) -> ped, dist` using the run's participant list.
 - Config.NpcCombat (§5.42) in `apply`: the weapon through `CP.NpcCombat.weapon` (an older bag's automatic is
   swapped), `CP.NpcCombat.ammo()` rounds, the accuracy at most accuracyMax, and for an armed ped not calm the caps:
@@ -2088,7 +2092,7 @@ What this officer's game can see of the points the server's spawn director may u
   `visible(points, ms)` (`{}` for args that are no table, and when it raises: one `CP.warn`).
 - `probe(kind, x, y, z, h, model, opts) -> result` — whether the point is fit to put a `'ped'`, a `'vehicle'`
   (`model`: its name or hash, for its size) or a `'prop'` (`'object'` and any other kind) on, heading `h` (PLAN S6,
-  Config.Spawning.ground; the Check spawn points tool calls it, §5.27, and the placer, S9, will). Needs a
+  Config.Spawning.ground; the Check spawn points tool calls it, §5.27, and the placer below). Needs a
   thread. Coordinates are sent to the game as decimals. In order:
   1. collision: `RequestCollisionAtCoord` each frame until `HasCollisionLoadedAroundEntity(opts.entity or
      PlayerPedId())` or `Config.Spawning.collisionTimeoutMs` (kept to 500-30000 ms; `result.loaded`);
@@ -2117,9 +2121,43 @@ What this officer's game can see of the points the server's spawn director may u
      unknown size `{ lift 0.5, half 2.3, r 0.8, midZ 1.0 }` otherwise; ignoring `opts.ignore`, else his car or his
      ped), polled up to 1 s; a hit -> `in_wall`; not started, lost or unfinished = not known (`result.wall` nil, an
      unfinished one is drained like the line-of-sight probes).
-  `result = { status, kind, x, y, z, groundZ, dz, normalZ, roofZ, interior, loaded, water, wall, sized }`: `z` is
-  where to put it (the point's own z, or groundZ + lift for `snap`); `sized` (vehicles) whether the model gave its
-  size. A point whose x, y or z is no number answers `{ status = 'no_ground' }` without asking the game.
+  `result = { status, kind, x, y, z, groundZ, dz, normalZ, roofZ, interior, loaded, water, wall, sized, lift }`: `z`
+  is where to put it (the point's own z, or groundZ + lift for `snap`); `sized` (vehicles) whether the model gave its
+  size; `lift` (once the ground is found) how far the entity's point sits over the ground (5). A point whose x, y or z
+  is no number answers `{ status = 'no_ground' }` without asking the game.
+- The placer (PLAN S9, Config.Spawning.place; the server's side, which writes the ask, is S10, so until then nothing
+  asks): an `AddStateBagChangeHandler('cp', nil, ...)` of its own. A bag of an entity (`entity:<netId>`) with `place
+  = { x, y, z, h?, kind, token }` (§6.2) of the run this player is on (`CP.Runs.current().id == bag.run`), whose token
+  (a string or an integer) this game has not taken yet, and x, y, z numbers, starts one placement (a bag with no
+  `place`, or dead, forgets the net id's token; a run's end, `client:runEnded`, forgets its asks and a placement still
+  running for it tells nothing). In a thread: the entity must exist here within 3 s (`NetworkDoesNetworkIdExist` /
+  `NetworkGetEntityFromNetworkId`; not streamed here: nothing, its bag comes again when it streams in); this player
+  must be an active participant (`status == 'active'`). Who places it: the game that controls it
+  (`NetworkHasControlOfEntity`, or `NetworkGetEntityOwner` is this player); when another participant's game controls
+  it, that one; when a bystander's or nobody's does, the participant nearest to the point of the ones whose ped this
+  game has (the lower server id on a tie). An entity more than 3 m (flat) from the ask's x, y has been placed and let
+  go already (a game that placed it could not tell the server: its player left the run): it is neither frozen nor
+  moved, `'placed'` with reason `'moved'` and z its height now. At most 4 placements run at once (the rest wait up to
+  30 s; the slot is taken before control is asked for), each with control (asked with
+  `NetworkRequestControlOfEntity` for up to 2 s; not given: nothing, a later write of the bag tries again). Then
+  `FreezeEntityPosition(ent, true)`, `SetEntityLoadCollisionFlag(ent, true)`; a person in a vehicle
+  (`IsPedInAnyVehicle`) or anything attached (`IsEntityAttached`) is not moved: `'placed'` with reason `'seated'` /
+  `'attached'`; else `probe(kind, x, y, z, h or GetEntityHeading, GetEntityModel for a vehicle, { entity = ent,
+  ignore = ent })` (`kind`: `place.kind` 'ped' / 'vehicle' / 'object', else `GetEntityType`). ok or snap: with
+  control still held (else nothing is told), `SetEntityCoordsNoOffset(ent, x, y, groundZ + lift, keepTasks = a
+  person, false, true)` at the server's x, y (it never picks another spot), `SetVehicleOnGroundProperly` for a
+  vehicle, `PlaceObjectOnGroundProperly` for an object, and the entity is let go (`FreezeEntityPosition(ent,
+  false)`) except an object and a person whose bag is now in the `cuffed` state (CP.Npc holds that pose frozen; a
+  later write of the same ask updates the state): `'placed'`. Any other status: it stays frozen, not moved: `'bad'`.
+  Told with `server:spawnPlaced` (§8.2) `runId, { netId, token, result = 'placed'|'bad', reason (the probe's status,
+  or 'seated'/'attached'/'moved'), groundZ, dz, z (where it was put; nil for bad) }`, once per token; a raise is one
+  `CP.warn` and nothing told.
+- `CP.Spawn.holds(entity) -> bool`: true while the entity waits for its placement: its cp bag
+  (`Entity(entity).state.cp`, not dead) carries a `place` with a token and this game has not put it on the ground
+  for that token ('placed'; a bad point keeps it held). CP.Npc's host game never lets such a person go
+  (modules/npc/client.lua `LetGo`, used by `Release` and `kneel`, §5.11): the game that places him does, or the
+  server when it gives up (S10), so a host whose game has no ground loaded where he stands does not drop him through
+  the map while another game checks his ground. CP.Npc lets him go itself once the ask is gone (the host loop).
 
 ## 6. Cross-cutting conventions
 
@@ -2151,7 +2189,12 @@ What this officer's game can see of the points the server's spawn director may u
 ### 6.2 NPC state (the `cp` state bag, server-authoritative)
 `Entity(e).state.cp = { run, obj, role, state, armed, cfg = { weapon, accuracy, armour, health, behaviour, model } , tag }`,
 plus `gait` (`'sprint'|'jog'|'walk'|'spent'`, CP.Npc's flee clock, §5.11; missing = sprint; the game that owns a
-fleeing ped holds it to that pace, §5.11 client).
+fleeing ped holds it to that pace, §5.11 client), and `place = { x, y, z, h?, kind = 'ped'|'vehicle'|'object', token,
+alt? }` on any mission entity (people, vehicles, objects): the server's ask that a participant's game put it on the
+ground at x, y (Config.Spawning.place; the placer, §5.43, answers `server:spawnPlaced` once per token; the server
+writes it from S10 on and keeps it in its record copy, so later writes of the bag carry it, until it takes an answer
+or gives up waiting: it removes `place` from the bag in both cases, since while the bag carries one CP.Npc never
+lets the entity go, `CP.Spawn.holds`).
 Only the server changes `state` (via `CP.Npc.setState`), and the server never reads the bag back: its record per net
 id (`run.entities[netId].bag`, kept by CP.Npc) is the truth, so a client that rewrites the bag of an entity it owns
 changes nothing on the server. Client requests are evidence events
@@ -2387,6 +2430,7 @@ Server → client ox_lib callback: `crimson-police:client:spawn:visible` `{ poin
 | `server:logoFailed` | deptKey | tablet |
 | `server:testRespond` | `{ inviteId, accepted }` | testing |
 | `server:pickupDone` | runId, ok (plain event, no reqId) | downed |
+| `server:spawnPlaced` | runId, `{ netId, token, result = 'placed'\|'bad', reason, groundZ?, dz?, z? }` (plain event, no reqId; the placer, §5.43, once per `place` token; the server's handler comes with S10, and until then nothing asks, so nothing sends it) | spawn |
 | `server:npcCuff` | runId, netId (plain event, no reqId) | npc |
 | `server:custody` | runId, netId, action, phase ('begin'\|'finish'), extra (`{ offence }`, `{ door }`) (plain event, no reqId; 4 per 2 s) | custody |
 | `server:stunHit` | netId (plain event, no reqId; 2 per s) | custody |
@@ -2993,9 +3037,11 @@ read a failure.
   natives with natives.json's argument types (a float where the game reads a float, and so on; a wrong one fails the
   spec) and returns what each one set, per ped and per game (`world.forget(ped)`, `world.restore()`); `H.gaitNatives(onCall)`
   does the same for the movement natives of a runner (the task, the per-frame cap and move rate, the clip set,
-  GetSafeCoordForPed), and `H.groundNatives(onCall)` for the natives of a ground probe on a small map the spec
+  GetSafeCoordForPed), `H.groundNatives(onCall)` for the natives of a ground probe on a small map the spec
   builds (ground surfaces found only once the collision loaded, interiors that get ready after a pin or never,
-  water, asynchronous wall capsules, model sizes). Specs run in separate processes, two at a time (`--jobs=N`), each on its own copy
+  water, asynchronous wall capsules, model sizes), and `H.placerNatives(onCall)` for the natives of the placer
+  (players, network ids, control that comes after a request or never and can be taken over, freeze and coordinates
+  kept only on an entity this game controls). Specs run in separate processes, two at a time (`--jobs=N`), each on its own copy
   of the run database, which is rebuilt once per run. SQL `NOW()` is the spec's clock (`H.time` after
   `H.boot`) in every storage mode. Never leave a spec that fails, and never make a check depend on a random
   roll, the wall clock or the machine's time zone: the assertion counts are the same in every run and mode.

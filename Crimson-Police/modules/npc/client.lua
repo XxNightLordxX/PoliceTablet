@@ -596,10 +596,27 @@ local function IsCurrent(ped, token)
     return a ~= nil and a.token == token and DoesEntityExist(ped)
 end
 
+-- A ped that waits for its placement (its cp bag asks for one: CP.Spawn.holds, PLAN S9) stays frozen, so this game,
+-- maybe with no ground loaded where he stands, never drops him through the map: the game that puts him on the ground
+-- lets him go. a.held: the host loop lets him go here once the wait is over.
+local function Held(ped)
+    local holds = CP.Spawn and CP.Spawn.holds
+    return holds ~= nil and holds(ped) == true
+end
+
+local function LetGo(ped, a)
+    if Held(ped) then
+        a.held = true
+        return
+    end
+    a.held = nil
+    FreezeEntityPosition(ped, false)
+end
+
 -- Undo a pose (kneeling, cuffed, cowering) before a moving task. keepAnim: the caller plays its own
 -- stand-up animation from the current pose.
 local function Release(ped, a, keepAnim)
-    FreezeEntityPosition(ped, false)
+    LetGo(ped, a)
     SetEnableHandcuffs(ped, false)
     if POSES[a.prev] and not keepAnim then ClearPedTasks(ped) end
 end
@@ -795,7 +812,7 @@ end
 
 function ACTIONS.kneel(ped, a)
     Calm(ped)
-    FreezeEntityPosition(ped, false)
+    LetGo(ped, a)
     local token = a.token
     local full = not a.args.instant and a.prev ~= 'kneel'
     CreateThread(function()
@@ -1208,6 +1225,10 @@ EnsureLoop = function()
                     end
                 else
                     a.lostAt = nil
+                    if a.held and not Held(ped) then
+                        a.held = nil
+                        FreezeEntityPosition(ped, false)
+                    end
                     if a.bagState ~= nil and not a.done then
                         -- the server moved the ped to another state: whoever reacts to it re-tasks
                         local b = BagOf(ped)

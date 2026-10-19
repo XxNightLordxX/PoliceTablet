@@ -478,7 +478,21 @@ do
     Err('Spawning.collisionTimeoutMs', 30001, 'err.setting_range', 'at most 30 s')
     Err('Spawning.interiorTimeoutMs', 1.5e3 + 0.5, 'err.setting_whole', 'whole milliseconds')
     Err('Spawning.interiorTimeoutMs', 30001, 'err.setting_range', 'an interior wait of at most 30 s')
+    -- Config.Spawning.place (the placer, S9): on or off, its comment alone
+    H.eq(
+        E('Spawning.place').desc,
+        'true = every new person, vehicle and object of a mission waits frozen where it appears until the game of an'
+            .. ' officer near it has checked the ground there and put it on the ground (by the ranges above); a point'
+            .. ' under the ground, floating, in water or in a wall is reported back instead. Your officers\' games'
+            .. ' already do this when the server asks; the server starts asking with the next update (until then'
+            .. ' nobody waits). false = they appear on the file\'s points as before',
+        'the placer reads alone'
+    )
+    H.eq(E('Spawning.place').section, 'spawning', 'the placer is in the Spawning section')
+    H.ok((Check('Spawning.place', false)), 'the placer can be switched off')
+    Err('Spawning.place', 'yes', 'err.setting_type', 'the placer is on or off')
     for _, k in ipairs({
+        'place',
         'ground.pedAbove',
         'ground.vehicleAbove',
         'ground.propAbove',

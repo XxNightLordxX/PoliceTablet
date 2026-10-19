@@ -85,6 +85,7 @@ local function ResetGame()
     world.invalid = function() return false end
 end
 
+_G.AddStateBagChangeHandler = function() end -- the placer's handler (tests/spawn_placer_spec.lua)
 H.load('modules/spawn/client.lua')
 local CALLBACK = 'crimson-police:client:spawn:visible'
 H.ok(type(CP.Spawn) == 'table' and type(CP.Spawn.visible) == 'function', 'CP.Spawn.visible')

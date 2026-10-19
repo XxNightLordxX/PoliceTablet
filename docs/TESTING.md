@@ -435,6 +435,15 @@ packages, and the runner's own clock and zone (the specs do not read either). Th
   collision has loaded (`collisionMs` after the first request, or never), an interior's floor only while it is
   ready (`readyMs` after a pin, or never), water heights, capsules that hit, take frames, never finish or do not
   start, and model sizes known only once the model is loaded. tests/spawn_ground_spec.lua uses it.
+- **Placer natives on a small game**: `H.placerNatives(onCall)` installs the natives of the placer (step S9: the
+  player natives, NetworkDoesNetworkIdExist / NetworkGetEntityFromNetworkId, control and its owner, IsPedInAnyVehicle,
+  IsEntityAttached, FreezeEntityPosition, SetEntityLoadCollisionFlag, SetEntityCoordsNoOffset,
+  SetVehicleOnGroundProperly, PlaceObjectOnGroundProperly) with natives.json's argument types, over the players and
+  networked entities a spec sets up. As in the game, what this game sets on an entity it does not control is not kept
+  (counted in `ignored`); control comes `grantMs` after the first request (or never) and another game can take it
+  over at `loseAt`. tests/spawn_placer_spec.lua uses it with H.groundNatives, and tests/spawn_placer_npc_spec.lua
+  too, with modules/npc/client.lua loaded in the same game (its other natives recorded) so CP.Npc tasks a person while
+  the placer checks his ground.
 - **Player peds without health**: tests/npc_spec.lua answered 0 for a player ped's health, and the willKill cases
   modelled willKill as a headshot only, so a cancel that dropped EVERY killing hit (the shot that finishes off a hurt
   officer too) passed. FXServer reads a ped's health from its synced health node (`GET_ENTITY_HEALTH`,

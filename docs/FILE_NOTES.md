@@ -2967,7 +2967,17 @@ never ready = interior_not_loaded), finds the ground from 2 m and from 50 m over
 under a low roof or the floor above: the one under it when that is the smaller move), then answers ok, snap
 (put on the ground: a person 1 m over it, a vehicle by its model's size, an object on it, when that moves it at most
 snapWithin), underground, floating, no_ground, in_water or in_wall (the Builder's capsule for a person or a vehicle).
-ARCHITECTURE 5.43 lists every step and field.
+The placer (PLAN S9, Config.Spawning.place; the server's ask is S10): its own handler of the cp bag. A bag with
+place = { x, y, z, h, kind, token } of this player's run, a token not taken yet: the game that controls the entity
+(or, when that is a bystander's or nobody's, the participant nearest to the point) takes control, freezes it, keeps
+its collision loaded, probes the server's point (ignoring the entity), and on ok or snap moves it straight up or down
+onto the ground (SetEntityCoordsNoOffset at ground + lift, SetVehicleOnGroundProperly, PlaceObjectOnGroundProperly)
+and lets people and vehicles go (objects and a cuffed person stay frozen); a bad point stays frozen; a seated person
+or an attached entity is not moved; one more than 3 m from the point was placed and let go already: left where it
+is ('moved'). Told once per token with server:spawnPlaced (runId, { netId, token, result, reason, groundZ, dz, z });
+at most 4 placements at once (counted before control is asked for); lost control or the run's end: nothing told.
+CP.Spawn.holds(entity): true while its bag asks for a placement this game has not done; CP.Npc then never lets the
+person go (modules/npc/client.lua LetGo). ARCHITECTURE 5.43 lists every step and field.
 ```
 
 ## Crimson-Police/modules/storage/memsql.lua
@@ -4947,6 +4957,25 @@ point is used, outside a thread, with preferHidden or enabled off; a game that a
 longer, read live), raises or still owes an answer: the block's order, a console line, no second ask meanwhile; the
 rules run again after the wait, answered or not (an officer who walked up during the ask); the side with more hidden
 points wins; a first = true point (the boss's own spot) stays ahead. No SQL.
+```
+
+## tests/spawn_placer_spec.lua
+
+```text
+The placer (modules/spawn/client.lua, PLAN S9) on H.placerNatives (players, network ids, control that comes after a
+request or never or is taken over, freeze and coordinates kept only on an entity this game controls) over the ground
+map of H.groundNatives, both checking argument types: a person 1 m over the ground put on it at the server's x, y
+(frozen first, moved, let go, tasks kept, collision kept loaded, the probe around him ignoring him), told once per
+token; 0.52 m under put on it; 5 m under, in water, an interior never loaded and a wall: bad, frozen, not moved; a van
+at the road's height lifted by its model and set on its wheels (its heading in this game); an object put on the
+ground and kept frozen, its kind from the entity type. Who places: not a participant, another run, no run: nothing;
+the partner's game controls it: nothing; a bystander's or nobody's and this player nearest: control asked, placed;
+the partner nearer: nothing; a participant not streamed here does not count; control never given: nothing, the next
+bag write tries again; an entity not here yet: placed when its bag comes again. Seated and attached: not moved;
+cuffed: placed, kept frozen; taken over during the check: nothing; a new token or a withdrawn ask: placed again; bad
+bags; a wave of six: four at a time, all told; a wave a bystander's game controls: control asked for four at a time,
+four placed at once; one 12 m from its point (placed and let go before): told 'moved', not frozen, not moved back;
+2 m from it: placed as usual; the run's end stops it, another run's end does not.
 ```
 
 ## tests/stage_ahead_spec.lua

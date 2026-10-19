@@ -331,6 +331,7 @@ function Spawn.probe(kind, x, y, z, h, model, opts)
     local shape = nil
     if kind == 'vehicle' then shape, res.sized = VehicleShape(model) end
     local lift = kind == 'ped' and PED_LIFT or (shape and shape.lift or 0.0)
+    res.lift = lift
     local lo, hi = RangeOf(kind)
     local snapWithin = Clamp(Num(GroundCfg().snapWithin) or 3.0, 0.0, SNAP_MAX)
     -- how far the point is from standing on the ground at g: 0 inside its range, else the move onto it
@@ -367,3 +368,259 @@ function Spawn.probe(kind, x, y, z, h, model, opts)
     end
     return done(status)
 end
+
+-- ============================================================================
+--                                    PLACER
+-- ============================================================================
+-- A new mission entity can wait frozen where the server made it until a game near it has put it on the ground (PLAN
+-- S9; owner request of 2026-10-19: "i do not want them spawning in the ground"). The server asks through the entity's
+-- cp bag: place = { x, y, z, h, kind, token } (Config.Spawning.place; the server's side is S10, so nothing asks yet).
+-- The game of a participant of that run places it: the one that controls the entity, or, when no participant's game
+-- does, the participant's nearest to the point (it asks for control). It checks the server's point with Spawn.probe,
+-- puts the entity on the ground there (ok or snap: only up or down, never to another spot) and lets a person or a
+-- vehicle go (an object stays frozen), or leaves a bad point frozen, and then tells the server (server:spawnPlaced).
+-- Until then nothing lets it go: CP.Npc asks Spawn.holds before it unfreezes a person (modules/npc/client.lua LetGo).
+
+local PLACED_EVENT = 'server:spawnPlaced'
+local PLACE_ENTITY_MS = 3000    -- the entity of a bag may take this long to exist in this game
+local PLACE_CONTROL_MS = 2000   -- this game asks this long for control of an entity it places
+local PLACERS_MAX = 4           -- entities placed at once (a wave's people and cars): the rest wait their turn
+local PLACE_QUEUE_MS = 30000    -- an entity waits this long for its turn
+local PLACE_MOVED_M = 3.0       -- an entity this far (flat) from the server's x, y was placed and let go already
+local PLACE_KINDS = { ped = 'ped', vehicle = 'vehicle', object = 'prop', prop = 'prop' }
+local ENTITY_TYPES = { [1] = 'ped', [2] = 'vehicle', [3] = 'prop' }  -- GetEntityType
+local POSED = { cuffed = true }                                      -- a person CP.Npc holds frozen in this pose stays frozen
+
+local placing = {} -- netId -> { token, run, state }: the ask this game places or answered (state: the bag's latest)
+local placed = {}  -- entity -> { token, run }: the asks this game put on the ground (CP.Npc may let these go)
+local placers = 0
+
+local function IsToken(v) return type(v) == 'string' or math.type(v) == 'integer' end
+
+-- true while the entity waits for its placement: its cp bag asks for one (place) and this game has not put it on the
+-- ground for that ask. CP.Npc then leaves it frozen: the game that places it lets it go, or the server when it gives
+-- up (S10), so a game with no ground loaded where it stands never drops it through the map.
+function Spawn.holds(ent)
+    local ok, bag = pcall(function() return Entity(ent).state.cp end)
+    if not ok or type(bag) ~= 'table' or bag.state == 'dead' then return false end
+    local place = bag.place
+    if type(place) ~= 'table' or not IsToken(place.token) then return false end
+    local done = placed[ent]
+    return not (done and done.token == place.token and done.run == bag.run)
+end
+
+local function MyServerId() return GetPlayerServerId(PlayerId()) end
+
+local function ActiveSrcs(run)
+    local out = {}
+    for _, p in ipairs(type(run.participants) == 'table' and run.participants or {}) do
+        local src = type(p) == 'table' and p.status == 'active' and math.tointeger(tonumber(p.src)) or nil
+        if src then out[#out + 1] = src end
+    end
+    return out
+end
+
+local function Has(list, v)
+    for _, x in ipairs(list) do if x == v then return true end end
+    return false
+end
+
+-- The server id of the player whose game controls the entity, or nil (nobody, or a player this game does not know).
+local function OwnerSrc(ent)
+    local idx = math.tointeger(tonumber(NetworkGetEntityOwner(ent)))
+    if not idx or idx < 0 then return nil end
+    local src = math.tointeger(tonumber(GetPlayerServerId(idx)))
+    return (src and src > 0) and src or nil
+end
+
+-- Of the active participants this game knows (their ped is streamed here), the one nearest to the point (the lower
+-- server id on a tie).
+local function NearestSrc(srcs, x, y, z)
+    local best, bestD = nil, math.huge
+    for _, src in ipairs(srcs) do
+        local pl = GetPlayerFromServerId(src)
+        if pl and pl ~= -1 and IsYes(NetworkIsPlayerActive(pl)) then
+            local ped = GetPlayerPed(pl)
+            local px, py, pz = nil, nil, nil
+            if ped and ped ~= 0 then px, py, pz = XYZ(GetEntityCoords(ped)) end
+            if px then
+                local d = (px - x) ^ 2 + (py - y) ^ 2 + (pz - z) ^ 2
+                if d < bestD or (d == bestD and src < best) then best, bestD = src, d end
+            end
+        end
+    end
+    return best
+end
+
+local function EntityOf(netId, ms)
+    local deadline = GetGameTimer() + ms
+    while true do
+        if IsYes(NetworkDoesNetworkIdExist(netId)) then
+            local ent = NetworkGetEntityFromNetworkId(netId)
+            if ent and ent ~= 0 and IsYes(DoesEntityExist(ent)) then return ent end
+        end
+        if GetGameTimer() >= deadline then return nil end
+        Wait(100)
+    end
+end
+
+-- true once this game controls the entity (asked for it until ms ran out).
+local function TakeControl(ent, ms)
+    local deadline = GetGameTimer() + ms
+    while true do
+        if IsYes(NetworkHasControlOfEntity(ent)) then return true end
+        if GetGameTimer() >= deadline or not IsYes(DoesEntityExist(ent)) then return false end
+        NetworkRequestControlOfEntity(ent)
+        Wait(0)
+    end
+end
+
+-- true when the entity stands more than PLACE_MOVED_M (flat) from the server's x, y: it waited frozen there, so a game
+-- placed it and let it go already (and could not tell the server: its player left the run)
+local function Moved(ent, x, y)
+    local ex, ey = XYZ(GetEntityCoords(ent))
+    return ex ~= nil and (ex - x) ^ 2 + (ey - y) ^ 2 > PLACE_MOVED_M ^ 2
+end
+
+-- Takes control of one entity, checks and places it: 'placed' or 'bad', the reason (the probe's status, or 'seated' /
+-- 'attached': it goes where its car or what it hangs on goes), the probe's result and the height it was put at.
+-- Nothing (nil) when control is not given, the entity is gone or this game lost control during the check: then
+-- nothing is told. rec.state is the bag's latest state (a later write of the same ask updates it).
+local function PlaceEntity(ent, place, kind, rec)
+    if not TakeControl(ent, PLACE_CONTROL_MS) then return nil end
+    local x, y, z = Num(place.x) + 0.0, Num(place.y) + 0.0, Num(place.z) + 0.0
+    FreezeEntityPosition(ent, true)
+    SetEntityLoadCollisionFlag(ent, true)
+    -- stays frozen once placed: an object, a person in a pose CP.Npc holds frozen
+    local function Keep() return kind == 'prop' or POSED[rec.state] == true end
+    local carried = nil
+    if kind == 'ped' and IsYes(IsPedInAnyVehicle(ent, false)) then
+        carried = 'seated'
+    elseif IsYes(IsEntityAttached(ent)) then
+        carried = 'attached'
+    end
+    if carried then
+        if not Keep() then FreezeEntityPosition(ent, false) end
+        return 'placed', carried, nil, nil
+    end
+    local h = Num(place.h) or Num(GetEntityHeading(ent)) or 0.0
+    local model = kind == 'vehicle' and GetEntityModel(ent) or nil
+    local res = Spawn.probe(kind, x, y, z, h, model, { entity = ent, ignore = ent })
+    if not IsYes(DoesEntityExist(ent)) then return nil end
+    if res.status ~= 'ok' and res.status ~= 'snap' then return 'bad', res.status, res, nil end
+    if not TakeControl(ent, PLACE_CONTROL_MS) then return nil end
+    -- on the ground at the server's x, y: a person's point 1 m over it, a vehicle's by its model, an object's on it
+    local onZ = res.groundZ + (Num(res.lift) or 0.0)
+    SetEntityCoordsNoOffset(ent, x, y, onZ, kind == 'ped', false, true)
+    if kind == 'vehicle' then
+        SetVehicleOnGroundProperly(ent)
+    elseif kind == 'prop' then
+        PlaceObjectOnGroundProperly(ent)
+    end
+    if not Keep() then FreezeEntityPosition(ent, false) end
+    return 'placed', res.status, res, onZ
+end
+
+local function TryPlace(netId, bag, mine)
+    local place, token = bag.place, bag.place.token
+    local function Forget()
+        if placing[netId] == mine then placing[netId] = nil end
+    end
+    local function Current()
+        local run = CP.Runs and CP.Runs.current and CP.Runs.current()
+        if type(run) ~= 'table' or run.id ~= bag.run or placing[netId] ~= mine then return nil end
+        local srcs = ActiveSrcs(run)
+        if not Has(srcs, MyServerId()) then return nil end
+        return run, srcs
+    end
+    local ent = EntityOf(netId, PLACE_ENTITY_MS)
+    local run, srcs = Current()
+    if not ent or not run then return Forget() end
+    local x, y, z = Num(place.x), Num(place.y), Num(place.z)
+    -- who places it: the game that controls it; when that is no participant's (a bystander's, or nobody's), the
+    -- nearest participant's
+    local me = MyServerId()
+    if not IsYes(NetworkHasControlOfEntity(ent)) then
+        local owner = OwnerSrc(ent)
+        if owner ~= me and ((owner and Has(srcs, owner)) or NearestSrc(srcs, x, y, z) ~= me) then return Forget() end
+    end
+    local kind = PLACE_KINDS[place.kind] or ENTITY_TYPES[GetEntityType(ent)] or 'prop'
+    local result, reason, res, onZ = nil, nil, nil, nil
+    if Moved(ent, x, y) then
+        -- placed and let go already: left where it is, neither frozen nor moved
+        local _, _, ez = XYZ(GetEntityCoords(ent))
+        result, reason, onZ = 'placed', 'moved', ez
+    else
+        local deadline = GetGameTimer() + PLACE_QUEUE_MS
+        while placers >= PLACERS_MAX do
+            if GetGameTimer() >= deadline then return Forget() end
+            Wait(50)
+        end
+        if not Current() then return Forget() end
+        -- the slot is taken before control is asked for (that waits), so no more than PLACERS_MAX run at once
+        placers = placers + 1
+        local ok
+        ok, result, reason, res, onZ = pcall(PlaceEntity, ent, place, kind, mine)
+        placers = placers - 1
+        if not ok then
+            CP.warn(TAG, 'placing %s %d failed: %s', kind, netId, tostring(result))
+            return Forget()
+        end
+        if not result then
+            CP.log(TAG, 'placing %s %d: no control of it, or it is gone; not told', kind, netId)
+            return Forget()
+        end
+    end
+    if result == 'placed' then placed[ent] = { token = token, run = bag.run } end
+    if not Current() then return end
+    res = res or {}
+    TriggerServerEvent(CP.e(PLACED_EVENT), bag.run, {
+        netId = netId,
+        token = token,
+        result = result,
+        reason = reason,
+        groundZ = res.groundZ,
+        dz = res.dz,
+        z = onZ,
+    })
+    CP.log(TAG, '%s %d %s (%s)%s', kind, netId, result, reason, onZ and (' at %.2f'):format(onZ) or '')
+end
+
+AddStateBagChangeHandler('cp', nil, function(bagName, _, value)
+    local netId = math.tointeger(tonumber(tostring(bagName):match('^entity:(%d+)$')))
+    if not netId then return end
+    local place = type(value) == 'table' and value.place or nil
+    if type(place) ~= 'table' or value.state == 'dead' then
+        placing[netId] = nil
+        return
+    end
+    local was = placing[netId]
+    if was and was.token == place.token and was.run == value.run then
+        was.state = value.state -- a later write of the same ask: the person's state now
+        return
+    end
+    if not IsToken(place.token) or type(value.run) ~= 'string' then return end
+    if not (Num(place.x) and Num(place.y) and Num(place.z)) then return end
+    local run = CP.Runs and CP.Runs.current and CP.Runs.current()
+    if type(run) ~= 'table' or run.id ~= value.run then return end
+    local rec = { token = place.token, run = value.run, state = value.state }
+    placing[netId] = rec
+    CreateThread(function()
+        Wait(0) -- change handlers run before the new value is in the bag
+        local ok, err = pcall(TryPlace, netId, value, rec)
+        if not ok then
+            CP.warn(TAG, 'placing entity %d failed: %s', netId, tostring(err))
+            if placing[netId] == rec then placing[netId] = nil end
+        end
+    end)
+end)
+
+-- The asks of a run that ended are forgotten (a placement still running for it stops before it tells the server).
+RegisterNetEvent(CP.e('client:runEnded'), function(runId)
+    for netId, rec in pairs(placing) do
+        if rec.run == runId then placing[netId] = nil end
+    end
+    for ent, rec in pairs(placed) do
+        if rec.run == runId then placed[ent] = nil end
+    end
+end)

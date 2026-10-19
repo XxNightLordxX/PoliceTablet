@@ -7,6 +7,7 @@ H.boot({ side = 'client' })
 
 local W = H.groundNatives()
 local PED, CAR = W.ped, 777
+_G.AddStateBagChangeHandler = function() end -- the placer's handler (tests/spawn_placer_spec.lua)
 H.load('modules/spawn/client.lua')
 H.ok(type(CP.Spawn) == 'table' and type(CP.Spawn.probe) == 'function', 'CP.Spawn.probe')
 

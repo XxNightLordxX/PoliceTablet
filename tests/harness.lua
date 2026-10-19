@@ -2011,6 +2011,178 @@ function H.groundNatives(onCall)
 end
 
 -- ============================================================================
+--            PLACER NATIVES WITH THEIR REAL ARGUMENT TYPES (opt-in)
+-- ============================================================================
+-- H.placerNatives(onCall) installs the client natives the placer uses (modules/spawn/client.lua, PLAN S9: players,
+-- network ids, control, freeze, coordinates, the ground natives of vehicles and objects) with natives.json's argument
+-- types, as H.groundNatives does (a spec of the placer installs both). The world it returns is a small game:
+--   me: this game's player index (PlayerId)
+--   players[idx] = { src, ped, coords, active (default true) }: the players this game knows (GetEntityCoords of a
+--     player's ped answers his coords; GetPlayerFromServerId answers -1 for a src not listed)
+--   entities[handle] = { netId, type (1 ped, 2 vehicle, 3 object), coords, heading, model, frozen, owner (a player
+--     index, -1 = nobody), grantMs (control comes this long after this game first asks; nil = never), loseAt (at this
+--     clock time the game of player loseTo, default -1, takes it over), seated, attached, exists (default true) }.
+--     As in the game, what this game sets on a networked entity it does not control is not kept: the call is
+--     counted in ignored[name] and changes nothing. What it does set is kept: frozen, coords, keepTasks,
+--     loadCollision, onGround (SetVehicleOnGroundProperly on a vehicle, PlaceObjectOnGroundProperly on an object)
+--   entity(handle, fields): adds one; calls = { { name, args } }, typeErrors; restore()
+H.PLACER_NATIVE_TYPES = {
+    PlayerId = {},
+    GetPlayerServerId = { 'Player' },
+    GetPlayerFromServerId = { 'int' },
+    NetworkIsPlayerActive = { 'Player' },
+    GetPlayerPed = { 'Player' },
+    NetworkDoesNetworkIdExist = { 'int' },
+    NetworkGetEntityFromNetworkId = { 'int' },
+    DoesEntityExist = { 'Entity' },
+    GetEntityType = { 'Entity' },
+    GetEntityModel = { 'Entity' },
+    GetEntityHeading = { 'Entity' },
+    NetworkHasControlOfEntity = { 'Entity' },
+    NetworkRequestControlOfEntity = { 'Entity' },
+    NetworkGetEntityOwner = { 'Entity' },
+    IsPedInAnyVehicle = { 'Ped', 'BOOL' },
+    IsEntityAttached = { 'Entity' },
+    FreezeEntityPosition = { 'Entity', 'BOOL' },
+    SetEntityLoadCollisionFlag = { 'Entity', 'BOOL' },
+    SetEntityCoordsNoOffset = { 'Entity', 'float', 'float', 'float', 'BOOL', 'BOOL', 'BOOL' },
+    SetVehicleOnGroundProperly = { 'Vehicle' },
+    PlaceObjectOnGroundProperly = { 'Object' },
+}
+
+function H.placerNatives(onCall)
+    local w = { me = 0, players = {}, entities = {}, ignored = {}, calls = {}, typeErrors = 0 }
+    function w.entity(handle, fields)
+        local e = { type = 1, coords = Vec(0.0, 0.0, 0.0), heading = 0.0, model = 0, frozen = false, owner = -1 }
+        for k, v in pairs(fields or {}) do e[k] = v end
+        w.entities[handle] = e
+        return e
+    end
+    -- who controls it now (a request granted, a takeover due)
+    local function Live(handle)
+        local e = w.entities[handle]
+        if not e or e.exists == false then return nil end
+        if e.loseAt and H.clockMs >= e.loseAt then
+            e.owner, e.loseAt, e.requestedAt = e.loseTo or -1, nil, nil
+        end
+        if e.requestedAt and e.grantMs and H.clockMs >= e.requestedAt + e.grantMs and e.owner ~= w.me then
+            e.owner = w.me
+        end
+        return e
+    end
+    local function Mine(name, handle)
+        local e = Live(handle)
+        if e and e.owner == w.me then return e end
+        w.ignored[name] = (w.ignored[name] or 0) + 1
+        return nil
+    end
+    local function PlayerOfPed(ped)
+        for idx, p in pairs(w.players) do if p.ped == ped then return idx, p end end
+        return nil
+    end
+    local before = {}
+    function w.restore()
+        for name in pairs(H.PLACER_NATIVE_TYPES) do rawset(_G, name, before[name]) end
+        rawset(_G, 'GetEntityCoords', before.GetEntityCoords)
+    end
+    local effects = {
+        PlayerId = function() return w.me end,
+        GetPlayerServerId = function(idx) return w.players[idx] and w.players[idx].src or 0 end,
+        GetPlayerFromServerId = function(src)
+            for idx, p in pairs(w.players) do if p.src == src then return idx end end
+            return -1
+        end,
+        NetworkIsPlayerActive = function(idx) return w.players[idx] ~= nil and w.players[idx].active ~= false end,
+        GetPlayerPed = function(idx) return w.players[idx] and w.players[idx].ped or 0 end,
+        NetworkDoesNetworkIdExist = function(netId)
+            for h in pairs(w.entities) do
+                local e = Live(h)
+                if e and e.netId == netId then return true end
+            end
+            return false
+        end,
+        NetworkGetEntityFromNetworkId = function(netId)
+            for h in pairs(w.entities) do
+                local e = Live(h)
+                if e and e.netId == netId then return h end
+            end
+            return 0
+        end,
+        DoesEntityExist = function(h) return Live(h) ~= nil or PlayerOfPed(h) ~= nil end,
+        GetEntityType = function(h)
+            local e = Live(h)
+            if e then return e.type end
+            return PlayerOfPed(h) and 1 or 0
+        end,
+        GetEntityModel = function(h)
+            local e = Live(h)
+            return e and e.model or 0
+        end,
+        GetEntityHeading = function(h)
+            local e = Live(h)
+            return e and e.heading + 0.0 or 0.0
+        end,
+        NetworkHasControlOfEntity = function(h)
+            local e = Live(h)
+            return e ~= nil and e.owner == w.me
+        end,
+        NetworkRequestControlOfEntity = function(h)
+            local e = Live(h)
+            if not e then return false end
+            if not e.requestedAt then e.requestedAt = H.clockMs end
+            e.requests = (e.requests or 0) + 1
+            return true
+        end,
+        NetworkGetEntityOwner = function(h)
+            local e = Live(h)
+            return e and e.owner or -1
+        end,
+        IsPedInAnyVehicle = function(h)
+            local e = Live(h)
+            return e ~= nil and e.seated == true
+        end,
+        IsEntityAttached = function(h)
+            local e = Live(h)
+            return e ~= nil and e.attached == true
+        end,
+        FreezeEntityPosition = function(h, on)
+            local e = Mine('FreezeEntityPosition', h)
+            if e then e.frozen = on end
+        end,
+        SetEntityLoadCollisionFlag = function(h, on)
+            local e = Mine('SetEntityLoadCollisionFlag', h)
+            if e then e.loadCollision = on end
+        end,
+        SetEntityCoordsNoOffset = function(h, x, y, z, keepTasks)
+            local e = Mine('SetEntityCoordsNoOffset', h)
+            if e then e.coords, e.keepTasks = Vec(x, y, z), keepTasks end
+        end,
+        SetVehicleOnGroundProperly = function(h)
+            local e = Mine('SetVehicleOnGroundProperly', h)
+            if not e or e.type ~= 2 then return false end
+            e.onGround = true
+            return true
+        end,
+        PlaceObjectOnGroundProperly = function(h)
+            local e = Mine('PlaceObjectOnGroundProperly', h)
+            if not e or e.type ~= 3 then return false end
+            e.onGround = true
+            return true
+        end,
+    }
+    InstallTyped(H.PLACER_NATIVE_TYPES, effects, w, onCall, before)
+    -- GetEntityCoords takes an optional second argument the code leaves out: answered, not type-checked
+    before.GetEntityCoords = rawget(_G, 'GetEntityCoords')
+    _G.GetEntityCoords = function(h)
+        local _, p = PlayerOfPed(h)
+        if p then return p.coords end
+        local e = Live(h)
+        return e and e.coords or Vec(0.0, 0.0, 0.0)
+    end
+    return w
+end
+
+-- ============================================================================
 --           SERVER NATIVES THAT ANSWER YES OR NO (FXServer's shape)
 -- ============================================================================
 -- On FXServer a native that answers yes or no (a BOOL native) goes through `_r` in natives_server.lua
