@@ -399,12 +399,22 @@ local function Breach(run, n)
 end
 
 -- Catch every flee_arrest suspect of objective n.
+-- The spawn director (Config.Spawning) lets the next suspect out once his point is free and the officers are far
+-- enough from it: each one runs 30 m off his point first (as a runner does) and is caught there; the helper keeps at
+-- it until the objective is done.
 local function CatchAll(run, n, src)
-    for _ = 1, 3 do
+    for _ = 1, 40 do
         if Obj(run, n).status == 'done' then return end
         local st = Ctx(run, n).state
         for _, p in pairs(st.peds or {}) do
-            if p.state ~= 'cuffed' and p.state ~= 'dead' then Catch(src, run, n, p.netId) end
+            if p.state ~= 'cuffed' and p.state ~= 'dead' then
+                local m = W.model(run, p.netId)
+                if m and not p.ran then
+                    p.ran = true
+                    m.coords = vec3(m.coords.x + 30.0, m.coords.y, m.coords.z)
+                end
+                Catch(src, run, n, p.netId)
+            end
         end
         Secs(2)
     end

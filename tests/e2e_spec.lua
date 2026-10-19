@@ -2041,11 +2041,21 @@ function PX.breach(run, n, srcs)
     Secs(1)
 end
 
+-- The spawn director (Config.Spawning) lets the next suspect out once his point is free and the officers are far
+-- enough from it: each one runs 30 m off his point first (as a runner does) and is caught there; the helper keeps at
+-- it until the objective is done.
 function PX.catchAll(run, n, src)
-    for _ = 1, 3 do
+    for _ = 1, 40 do
         if PX.obj(run, n).status == 'done' then return end
         for _, p in pairs(PX.st(run, n).peds or {}) do
-            if p.state ~= 'cuffed' and p.state ~= 'dead' then PX.catch(src, run, n, p.netId) end
+            if p.state ~= 'cuffed' and p.state ~= 'dead' then
+                local m = PX.ent(run, p.netId)
+                if m and not p.ran then
+                    p.ran = true
+                    m.coords = vec3(m.coords.x + 30.0, m.coords.y, m.coords.z)
+                end
+                PX.catch(src, run, n, p.netId)
+            end
         end
         Secs(2)
     end

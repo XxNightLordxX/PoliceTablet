@@ -1121,13 +1121,9 @@ do -- door: surrender at the door, knock checks, cuff, associate, completion
     local ctx, S = MakeCtx('flee_arrest', { responses = { surrender = 1, flee = 0, fight = 0 } }, doorLoc)
     FA.prepare(ctx)
     FA.start(ctx)
-    H.eq(#S.spawned, 2, 'suspect + 1 associate spawned')
-    local sus, asc = WithRole(S, 'suspect')[1], WithRole(S, 'associate')[1]
+    H.eq(#S.spawned, 1, 'only the suspect before the knock (Config.Spawning.associatesAtKnock)')
+    local sus = WithRole(S, 'suspect')[1]
     H.eq(sus.opts.armed, false, 'surrendering suspect unarmed')
-    H.eq(asc.opts.armed, true, 'associate armed')
-    H.eq(asc.opts.weapon, 'WEAPON_PISTOL', 'associate pistol')
-    H.eq(asc.opts.accuracy, 35, 'associate accuracy + tier')
-    H.eq(asc.opts.armour, 25, 'associate armour + tier')
     H.near(sus.opts.coords.x, 3045, 0.01, 'suspect inside at the suspect point')
     H.eq(LastHud(S, 'detail'), 'block.flee_arrest.detail_knock', 'HUD asks to knock')
     FA.tick(ctx, 1)
@@ -1147,7 +1143,17 @@ do -- door: surrender at the door, knock checks, cuff, associate, completion
     H.eq(NPC.states[sus.netId], 'surrendered', 'suspect surrendered at the door')
     H.near(PosOf(S, sus.netId).x, 3039, 0.01, 'suspect placed 1 m outside the door')
     H.eq(NPC.cuffs[sus.netId].duration, 5000, 'cuff enabled with cuff.duration')
+    FA.tick(ctx, 1)
+    H.eq(#S.spawned, 2, 'the associate appears at the knock')
+    local asc = WithRole(S, 'associate')[1]
+    H.eq(asc.opts.armed, true, 'associate armed')
+    H.eq(asc.opts.weapon, 'WEAPON_PISTOL', 'associate pistol')
+    H.eq(asc.opts.accuracy, 35, 'associate accuracy + tier')
+    H.eq(asc.opts.armour, 25, 'associate armour + tier')
     H.eq(NPC.states[asc.netId], 'hostile', 'associate fights')
+    local ask = S.asks[#S.asks]
+    H.ok(ask.opts.indoor == true and ask.opts.name == 'associates' and ask.opts.centre == doorLoc.door,
+        'the director placed him: the indoor distance, named by his list, round the door')
     H.eq(LastHud(S, 'message').text, 'block.flee_arrest.response_surrender', 'response message')
     H.eq(LastSend(S).knocked, true, 'clients told about the knock')
 
@@ -1342,9 +1348,13 @@ do -- door: fight response, stun, low health, death before the knock
     Place(1, 3000, 3000, 10)
     ctx, S = MakeCtx('flee_arrest', { responses = { surrender = 0, flee = 0, fight = 1 } }, doorLoc)
     FA.start(ctx)
-    FA.onEntityDead(ctx, WithRole(S, 'associate')[1].netId, 1)
+    H.eq(#WithRole(S, 'associate'), 0, 'no associate before the knock')
+    FA.onEntityDead(ctx, WithRole(S, 'suspect')[1].netId, 1)
     H.eq(ctx.state.knocked, true, 'a death before the knock reveals the response')
-    H.eq(NPC.states[WithRole(S, 'suspect')[1].netId], 'hostile', 'suspect reacts')
+    H.eq(#S.fails, 0, 'the suspect who would have fought was armed')
+    FA.tick(ctx, 1)
+    local asc = WithRole(S, 'associate')[1]
+    H.ok(asc and NPC.states[asc.netId] == 'hostile', 'the associate appears then, and fights')
 end
 
 do -- door: the fighting suspect draws the weapon Config.NpcCombat allows (an older file's SMG is swapped), 60 rounds
@@ -1409,7 +1419,11 @@ do -- door: associates wait for room and rescale
         { responses = { surrender = 1, flee = 0, fight = 0 }, associates = { count = 3 } }, doorLoc)
     S.canLimit = 2
     FA.start(ctx)
+    H.eq(KnockOpen(ctx, S), true, 'room: knock')
+    FA.tick(ctx, 1)
     H.eq(#S.spawned, 2, 'suspect + 1 associate fit')
+    FA.tick(ctx, 1)
+    H.eq(#S.spawned, 2, 'the other two wait for room')
     ctx.obj = FA.defaults({ responses = { surrender = 1, flee = 0, fight = 0 }, associates = { count = 2 } })
     FA.rescale(ctx)
     S.canLimit = nil
@@ -1529,7 +1543,14 @@ do -- scatter: caps, rescale, escape, no spawn inside the prison, killing an una
     }
     ctx, S = MakeCtx('flee_arrest', { mode = 'scatter', suspects = 4 }, mixed)
     FA.start(ctx)
-    H.eq(#S.spawned, 4, 'mixed points: all inmates spawned')
+    H.eq(#S.spawned, 2, 'mixed points: one inmate on each of the two usable points (never two on one)')
+    FA.tick(ctx, 1)
+    H.eq(#S.spawned, 2, 'the other two wait while the points are taken')
+    -- the first two run off: their points are free again
+    MoveEnt(S, S.spawned[1].netId, 4040, 4030, 30)
+    MoveEnt(S, S.spawned[2].netId, 4060, 4030, 30)
+    FA.tick(ctx, 1)
+    H.eq(#S.spawned, 4, 'mixed points: all inmates spawned, the last two once the points were free')
     local inside = 0
     for _, s in ipairs(S.spawned) do if s.opts.coords.x < 2000 then inside = inside + 1 end end
     H.eq(inside, 0, 'the point inside the prison is never used')
@@ -1944,7 +1965,7 @@ do -- a spawn that throws never freezes spawning (the re-entry flag is always cl
     FA.start(dctx)
     H.eq(#DS.spawned, 0, 'fa door: nothing from the throwing spawn')
     FA.tick(dctx, 1)
-    H.eq(#DS.spawned, 2, 'fa door: suspect and associate on the next tick')
+    H.eq(#DS.spawned, 1, 'fa door: the suspect on the next tick (his associate comes at the knock)')
 end
 
 do -- protect_rescue: no_hostage_hurt waits for minSeconds; one pending cut per participant
@@ -2013,9 +2034,12 @@ do -- flee_arrest: every NPC spawns calm (neutral) until the server makes it hos
     FA.start(ctx)
     for _, s in ipairs(S.spawned) do H.eq(s.opts.cfg.group, 'neutral', 'door NPC spawns neutral: ' .. s.opts.role) end
     H.eq(WithRole(S, 'suspect')[1].opts.armed, true, 'the fighting suspect still carries his pistol')
-    H.eq(NPC.states[WithRole(S, 'associate')[1].netId], nil, 'associate not hostile before the knock')
+    H.eq(#WithRole(S, 'associate'), 0, 'no associate before the knock')
     KnockOpen(ctx, S)
-    H.eq(NPC.states[WithRole(S, 'associate')[1].netId], 'hostile', 'associate turns hostile at the knock')
+    FA.tick(ctx, 1)
+    local asc = WithRole(S, 'associate')[1]
+    H.eq(asc.opts.cfg.group, 'neutral', 'the associate spawns neutral too (the server makes him hostile)')
+    H.eq(NPC.states[asc.netId], 'hostile', 'associate turns hostile at the knock')
     local sctx, SS = MakeCtx('flee_arrest', { mode = 'scatter' }, scatterLoc)
     FA.start(sctx)
     for _, s in ipairs(SS.spawned) do

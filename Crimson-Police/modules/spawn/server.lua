@@ -322,6 +322,54 @@ function Spawn.ask(run, netId, entity, kind, opts)
     return AskOf(a)
 end
 
+-- The server has moved a person (or a vehicle) of the run itself (SetEntityCoords: flee_arrest stands a surrendering
+-- suspect in front of the door): he waits frozen at coords until an officer's game has put him on the ground there,
+-- as when he was made. There is no other point for him: a bad one lets him go where he stands, with one warning.
+-- from = { x, y } where he stood before the move (the placer moves him to coords first when the move has not reached
+-- its game yet). An ask still open for him is replaced (a late answer for it is never taken). Returns the ask (in his
+-- bag), or nil (place off, not a live entity of the run, coords not a point).
+function Spawn.again(run, netId, coords, from)
+    netId = math.tointeger(tonumber(netId))
+    if not On() or type(run) ~= 'table' or not netId or type(run.entities) ~= 'table' then return nil end
+    local e = run.entities[netId]
+    local kind = type(e) == 'table' and KINDS[e.kind] or nil
+    if not kind or e.dead or not e.entity or not DoesEntityExist(e.entity) or run.state == 'ended' then return nil end
+    local p = PointOf(coords)
+    if not p then return nil end
+    local a = {
+        runId = run.id,
+        netId = netId,
+        entity = e.entity,
+        kind = kind,
+        model = tostring(e.model),
+        obj = e.obj,
+        x = p.x,
+        y = p.y,
+        z = p.z,
+        h = p.h,
+        alt = {},
+        tried = {},
+        tries = 0,
+        waitedMs = 0,
+        hold = kind == 'object',
+    }
+    local fx, fy = nil, nil
+    if type(from) == 'table' or type(from) == 'vector3' or type(from) == 'vector4' then
+        fx, fy = Num(from.x or from[1]), Num(from.y or from[2])
+    end
+    if fx and fy then a.from = { x = fx + 0.0, y = fy + 0.0 } end
+    a.token = NewToken(netId)
+    asks[netId] = a
+    Freeze(a, true)
+    if not WritePlace(run, a, AskOf(a)) then
+        asks[netId] = nil
+        LetGo(a)
+        return nil
+    end
+    EnsureLoop()
+    return AskOf(a)
+end
+
 -- How many entities of the run still wait for their placement.
 function Spawn.waiting(runId)
     local n = 0

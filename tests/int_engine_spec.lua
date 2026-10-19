@@ -521,17 +521,27 @@ do
         Runs.markArrived(run, 1)
         H.advance(1000)
         local st = run.objectives[1].state
-        local suspect, associate
-        for _, p in pairs(st.peds or {}) do
-            if p.role == 'suspect' then suspect = p elseif p.role == 'associate' then associate = p end
+        local function Find()
+            local suspect, associate
+            for _, p in pairs(st.peds or {}) do
+                if p.role == 'suspect' then suspect = p elseif p.role == 'associate' then associate = p end
+            end
+            return suspect, associate
         end
-        H.ok(suspect ~= nil and associate ~= nil, loc.label .. ': suspect and associate spawned')
+        local suspect, associate = Find()
+        H.ok(suspect ~= nil and associate == nil, loc.label .. ': the suspect waits; his associate comes at the knock')
         local door = loc.door
         Place(1, door)
         ObjEvent(1, run, 1, { type = 'knock_start' })
         H.advance(3000)
         ObjEvent(1, run, 1, { type = 'knock' })
         H.eq(CP.Npc.getState(suspect.netId), 'surrendered', loc.label .. ': the suspect surrendered at the knock')
+        -- he steps back to the street (where the spawn director lets the associate out at every house: Grove
+        -- Street's associate points are all on the flank of an officer at the door, tests/flee_arrest_director_spec)
+        Place(1, loc.start.coords)
+        H.advance(1000)
+        suspect, associate = Find()
+        H.ok(associate ~= nil, loc.label .. ': the associate came out after the knock')
         local c = ents[suspect.entity].coords
         local r = math.rad(door.w)
         local fx, fy = -math.sin(r), math.cos(r)
@@ -580,11 +590,11 @@ do
     Runs.markArrived(run, 1)
     Runs.markArrived(run, 2)
     H.advance(1000)
-    local suspect, associate
+    local suspect
     for _, p in pairs(run.objectives[1].state.peds or {}) do
-        if p.role == 'suspect' then suspect = p elseif p.role == 'associate' then associate = p end
+        if p.role == 'suspect' then suspect = p end
     end
-    H.ok(suspect ~= nil and associate ~= nil, 'bag trust: peds spawned')
+    H.ok(suspect ~= nil, 'bag trust: the suspect spawned (his associate comes at the knock)')
     local info = run.entities[suspect.netId]
     H.eq(info and info.bag and info.bag.run, run.id, 'the engine keeps its own copy of the ped\'s bag')
     -- a client rewrites the suspect's bag: the server (CP.Npc, the blocks' cuff checks, the armed cap) ignores it
@@ -603,7 +613,7 @@ do
     H.eq(run.entities[suspect.netId].bag.state, 'surrendered', 'the engine\'s copy follows')
     -- gunfire proven on the server: a gun hit on a mission ped by participant 1 (no client telemetry)
     H.eq(run.participants[1].firedWeapon, nil, 'no weapon fired yet')
-    H.fire('weaponDamageEvent', 1, 1, { hitGlobalIds = { associate.netId }, weaponType = joaat('WEAPON_COMBATPISTOL') })
+    H.fire('weaponDamageEvent', 1, 1, { hitGlobalIds = { suspect.netId }, weaponType = joaat('WEAPON_COMBATPISTOL') })
     H.eq(run.participants[1].firedWeapon, true, 'weaponDamageEvent: CP.Npc -> CP.Runs.noteWeaponFired')
     H.eq(run.stats.weaponsFired, 1, 'weaponsFired counted once')
     -- the real CP.Downed: participant 2 is down when the run ends -> handle removes them with keepFlag
@@ -670,12 +680,14 @@ local function KillBy(e, src)
     ents[e].health = 0
 end
 
--- Warrant Service: at the door 8 s after the arrival, a 3 s knock, then a 5 s cuff or a shot suspect.
+-- Warrant Service: at the door 8 s after the arrival, a 3 s knock, then a 5 s cuff or a shot suspect. Forum Drive:
+-- its associate points lie ahead of the officers at the door (Grove Street's are on their flank, so its associate
+-- waits until they leave the door: tests/flee_arrest_director_spec.lua).
 do
     local chance = Config.Events.modifierChance
     Config.Events.modifierChance = 0
     local ws = Missions.get('warrant_service')
-    local loc = ws.locations[1]
+    local loc = ws.locations[2]
     for _, response in ipairs({ 'surrender', 'fight' }) do
         local m = U.deepcopy(ws)
         m.objectives[1].responses = {
@@ -687,7 +699,7 @@ do
         Place(2, loc.start.coords)
         local run = Runs.create({
             mission = m,
-            locationIndex = 1,
+            locationIndex = 2,
             missionType = 'investigation',
             members = { O[1], O[2] },
             leaderSrc = 1,
@@ -696,15 +708,17 @@ do
         Runs.markArrived(run, 1)
         Runs.markArrived(run, 2)
         H.advance(8000)
-        local suspect, associate
-        for _, p in pairs(run.objectives[1].state.peds or {}) do
-            if p.role == 'suspect' then suspect = p elseif p.role == 'associate' then associate = p end
-        end
         Place(1, loc.door)
         Place(2, loc.door)
         ObjEvent(1, run, 1, { type = 'knock_start' })
         H.advance(3000)
         ObjEvent(1, run, 1, { type = 'knock' })
+        -- the associate comes out at the knock (Config.Spawning.associatesAtKnock)
+        H.advance(1000)
+        local suspect, associate
+        for _, p in pairs(run.objectives[1].state.peds or {}) do
+            if p.role == 'suspect' then suspect = p elseif p.role == 'associate' then associate = p end
+        end
         KillBy(associate.entity, 2)
         if response == 'fight' then
             KillBy(suspect.entity, 2)
@@ -714,7 +728,7 @@ do
             H.fire('crimson-police:server:npcCuff', 1, run.id, suspect.netId)
             H.advance(1000)
         end
-        H.eq(run.objectiveIndex, 2, ('warrant (%s): served 13-17 s after the arrival'):format(response))
+        H.eq(run.objectiveIndex, 2, ('warrant (%s): served 14-18 s after the arrival'):format(response))
         H.eq(CountTooFast() - flags, 0, ('warrant (%s): a fast warrant is not flagged too_fast'):format(response))
         Runs.removeParticipant(run, 2, 'cancelled')
         Runs.removeParticipant(run, 1, 'cancelled')

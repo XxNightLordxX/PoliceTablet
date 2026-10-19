@@ -237,8 +237,9 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
   What it does
     Suspects who must be taken into custody ("Cuff suspect", CP.Npc.enableCuff) after they give up.
     Two modes:
-    - door (Warrant Service): the suspect waits inside at `suspect`, armed associates at
-      `associates.spawns` (count scales). Participants use ox_target "Knock and announce" at the
+    - door (Warrant Service): the suspect waits inside at `suspect`, armed associates (count scales)
+      come out at the knock on `associates.spawns` through the spawn director (Config.Spawning
+      .associatesAtKnock; PLAN S11, ARCHITECTURE 3.3). Participants use ox_target "Knock and announce" at the
       `door` (knock.duration progress; 'knock_start' then 'knock', both checked with server-side
       distance and the elapsed time). The suspect's response is rolled with the objective rng when
       the objective starts and revealed at the knock (or when a door-mode NPC dies first):
@@ -4547,6 +4548,15 @@ tests/fixtures/npc/client_check.lua · the client half of modules/npc in its own
 (H.boot side = 'client'). Run by tests/npc_spec.lua as a child process; prints "RESULT <passed> <failed>".
 Natives the checks do not model are recorded by a fallback (every capitalised global that is not
 defined becomes a recorder), so the checks can assert on the calls the module makes.
+```
+
+## tests/flee_arrest_director_spec.lua
+
+```text
+flee_arrest through the spawn director (Config.Spawning, PLAN S11) on the real engine, the real block and the
+built-in mission files: a warrant's associates appear at the knock, away from and never behind the officer at the
+door; scatter suspects each get a point of their own, never on another person; the surrendering suspect is put
+on the ground at the door step (CP.Spawn.again).
 ```
 
 ## tests/harness.lua

@@ -343,6 +343,10 @@ Config.Spawning = {
     -- them (officers nearer to the breach entries than to him do not count) or hurts one; then they all wake and
     -- fight at once (0 = only a hurt one wakes them). They always wake when the fight starts
     stageWakeRange = 12.0,
+    -- true = a warrant's armed associates appear only when an officer knocks, on their points 15 m or more from every
+    -- officer, out of the officers' sight first and never behind the one at the door, instead of waiting beside the
+    -- door from the start (false = they wait at their points from the start, as before)
+    associatesAtKnock = true,
     -- true = of the points a wave may use, the ones your officers cannot see (behind a building, a container or a
     -- vehicle, as the nearest officers' own games check it) are used first, so people appear out of sight instead of
     -- in the open in front of you; seen points are still used when there are not enough hidden ones (false = the

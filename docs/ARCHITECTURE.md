@@ -319,6 +319,26 @@ nearer to a point of the objective before (its `points`, `targets`, `door` or `c
 entries) than to him. Awake before `start`, `stage` places nobody more (Refresh and the surrender poll only) and the
 client half runs the crew already (`update` data `awake = true`, §7.2). Until `start` no HUD entry and no completion.
 
+`flee_arrest` through the director (PLAN S11, `Config.Spawning.enabled`): every associate and inmate gets a point of
+his own (`PickSpots`): a list point no person or vehicle of the run stands within 1.5 m of (`SHARE_RADIUS`, objects do
+not count), offered in the objective's shuffled order to `ctx.choosePoints` (named by the list key, `wave` = the role,
+`since` = the objective's own clock `st.short[role]`, set by the first ask that came back short and cleared by one that
+got all). Door mode with `Config.Spawning.associatesAtKnock`: the associates appear only once `st.knocked` (the knock,
+or a door-mode death before it), at the next tick, with `indoor = true`, `centre` = the door (so an officer at the door
+faces the way in: a point more than `behindAngle` off it is behind him) and `placed` = the associates already out (one
+side); each is hostile at once. Scatter mode: only points an officer is near (`ctx.whenNear` per point; nobody near
+clears the clock). A list shorter than the people it is for: one `CP.warn` (`<key> has 1 point(s) for 3 inmate(s); the
+others come out once a point is free`); a point is used again once its person has left it. After `waveDelayMax` short,
+a second ask offers the last resort for what is still missing: the old ring round each point (`REUSE_OFFSET` × lap,
+laps = ceil(total / #list)) and, in scatter mode, each escape route's first point (an inmate there runs on along that
+route), each checked against the run's people like any point. `Config.Spawning.leaveOutAfter` (and at least
+`waveDelayMax`) short while someone of the objective has appeared and every one of them is done: the missing ones are
+left out (`st.leftOut`, one `CP.warn` `<n> inmate(s) left out: ...`; `AssocTarget` / `InmateTarget`, the checklist and
+the HUD count without them). A door location with no `suspect` point: nobody at the door (`st.noSuspect`, one
+`CP.warn`), never the start point. `enabled = false` or `associatesAtKnock = false`: as before (associates at the
+objective's start; the ring with `enabled = false`). The suspect a surrender stands at the door step (`MoveToDoor`,
+server `SetEntityCoords`) is asked to be placed again there: `CP.Spawn.again` (§5.43).
+
 Worn-out runners (Config.Flee, not a file field): next to its own close rule, each block that owns a runner calls
 `CP.Npc.wornOut(netId, near)` with its own nearest-participant distance and, on true, its own surrender (state
 `surrendered`, the bag task it returned, Cuff suspect), with no wait: `flee_arrest` for every ped in `'fleeing'`
@@ -2291,6 +2311,12 @@ What this officer's game can see of the points the server's spawn director may u
   ped <model> at x y z is underground (ground 31.40); used spawns[4] (70.00 170.00 31.00) instead`. No such point, or
   the retries spent: the ask is over and the entity is let go where it is (as before), one `CP.warn` ending `used it
   there (no other point allowed)` / `used it there (Config.Spawning.retries = 2 spent)`.
+  `CP.Spawn.again(run, netId, coords, from) -> place|nil` (PLAN S11): the server moved a live person (or vehicle) of
+  the run itself (flee_arrest's surrendering suspect, stood at the door step with `SetEntityCoords`): with place on it
+  freezes him, replaces any open ask with one at `coords` (a new token, no other points: a bad answer lets him go where
+  he stands with one warning), `from = { x, y }` where he stood before (the placer moves him to `coords` first when
+  the server's move has not reached its game), writes it to his bag and returns it; nil when place is off or he is not
+  a live entity of the run.
 
 ## 6. Cross-cutting conventions
 

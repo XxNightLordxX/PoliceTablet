@@ -12,7 +12,8 @@ local TIMED_SHARE = 0.8                  -- a timed interaction must last at lea
 local FIRE_RELEASE = 1.5                 -- an armed inmate goes back to fleeing beyond fireWithin × this
 local DOOR_STEP = 1.0                    -- metres outside the door where a surrendering suspect stands
 local DOOR_FLIP_DOT = 0.25               -- the door heading is turned round when the start is this clearly behind it
-local REUSE_OFFSET = 1.25
+local REUSE_OFFSET = 1.25                -- metres per lap of the ring round a point used again (the last resort)
+local SHARE_RADIUS = 1.5                 -- metres: nobody appears this close to another person or vehicle of the run
 local SURRENDER_GRACE_MS = 3000          -- a kill this soon after an armed suspect gave up is a shot in flight
 local DEFAULT_KNOCK_MS = 3000
 local DEFAULT_CUFF_MS = 5000
@@ -637,12 +638,20 @@ end
 
 local function Int(v) return math.max(0, math.floor((tonumber(v) or 0) + 0.5)) end
 
+-- How many of role (associate, inmate) the spawn director left out (no point for them, see LeaveOut).
+local function LeftOut(ctx, role)
+    local lo = type(ctx.state) == 'table' and ctx.state.leftOut or nil
+    return lo and lo[role] or 0
+end
+
 local function AssocTarget(ctx)
-    return ctx.obj.mode == 'door' and Int(ctx.obj.associates and ctx.obj.associates.count) or 0
+    if ctx.obj.mode ~= 'door' then return 0 end
+    return math.max(0, Int(ctx.obj.associates and ctx.obj.associates.count) - LeftOut(ctx, 'associate'))
 end
 
 local function InmateTarget(ctx)
-    return ctx.obj.mode == 'scatter' and Int(ctx.obj.suspects) or 0
+    if ctx.obj.mode ~= 'scatter' then return 0 end
+    return math.max(0, Int(ctx.obj.suspects) - LeftOut(ctx, 'inmate'))
 end
 
 local function Indices(n)
@@ -702,7 +711,9 @@ local function SurrenderPed(ctx, st, p, task)
 end
 
 -- holster: an armed ped whose weapon stays out of sight (not given) until DrawWeapon; it still counts as armed.
-local function SpawnOne(ctx, st, role, point, armed, extra, holster)
+-- alt: the spawn director's spare points (where the server moves him when an officer's game finds his point bad,
+-- Config.Spawning.place).
+local function SpawnOne(ctx, st, role, point, armed, extra, holster, alt)
     local obj = ctx.obj
     local r = RngOf(ctx)
     local opts = {
@@ -712,6 +723,7 @@ local function SpawnOne(ctx, st, role, point, armed, extra, holster)
         armed = armed == true,
         cfg = extra or {},
         tag = role .. (st.counts[role] + 1),
+        alt = alt,
     }
     if armed then
         local assoc = role == 'associate' and obj.associates or nil
@@ -743,6 +755,186 @@ local function SpawnOne(ctx, st, role, point, armed, extra, holster)
     st.counts[role] = st.counts[role] + 1
     st.dirty = true
     return p
+end
+
+-- ============================================================================
+--           WHERE THEY APPEAR (the spawn director, Config.Spawning)
+-- ============================================================================
+-- With the spawn director on, every associate and inmate gets a point of his own: one nobody of the run stands on
+-- (SHARE_RADIUS), that the engine's director allows now (ctx.choosePoints: minDistance from every officer, the indoor
+-- distance for a warrant's associates, never behind an officer, out of the officers' sight first) and, for a
+-- scatter, that an officer is near (ctx.whenNear: the inmates appear as the officers get there). A list shorter than
+-- the people it is for is said once; the others appear on a point once it is free again. Only when the objective has
+-- had no usable point for Config.Spawning.waveDelayMax are the ring round its points (REUSE_OFFSET more per lap, as
+-- before the director) and a scatter's escape routes (their first point: he has bolted already) offered as well, each
+-- checked like any other point. A warrant's associates appear at the knock (Config.Spawning.associatesAtKnock).
+
+local function SpawnCfg() return type(Config.Spawning) == 'table' and Config.Spawning or {} end
+
+-- The spawn director decides where this block's people appear (off: on the file's points as before).
+local function Directed() return SpawnCfg().enabled ~= false end
+
+-- A warrant's associates appear only at the knock.
+local function AtKnock() return Directed() and SpawnCfg().associatesAtKnock ~= false end
+
+local function RunTag(ctx)
+    return tostring(ctx.run and ctx.run.id), tostring(ctx.run and ctx.run.missionId)
+end
+
+-- true when a person or a vehicle of the run (alive or not, while it exists) stands within SHARE_RADIUS of v, or one
+-- of taken does (points given out in this pass).
+local function Occupied(ctx, v, taken)
+    local run = ctx.run
+    for _, e in pairs(type(run) == 'table' and type(run.entities) == 'table' and run.entities or {}) do
+        if type(e) == 'table' and e.kind ~= 'object' and e.entity and DoesEntityExist(e.entity) then
+            if U.dist(GetEntityCoords(e.entity), v) <= SHARE_RADIUS then return true end
+        end
+    end
+    for _, t in ipairs(taken or {}) do
+        if U.dist(t, v) <= SHARE_RADIUS then return true end
+    end
+    return false
+end
+
+-- The last resort for list (in order): the ring round each point, then opts.routes' first points. { coords, label,
+-- base (its list point), route (the escape route it starts) }.
+local function LastResort(list, order, key, laps, routes)
+    local out = {}
+    for lap = 1, laps do
+        for k, i in ipairs(order) do
+            local a = lap * 2.39996 + k
+            local d = REUSE_OFFSET * lap
+            out[#out + 1] = {
+                coords = ToVec4(list[i], math.cos(a) * d, math.sin(a) * d),
+                label = ('%s[%d] +%.2f m'):format(key, i, d),
+                base = list[i],
+            }
+        end
+    end
+    for j, r in ipairs(routes or {}) do
+        out[#out + 1] = { coords = ToVec4(r[1]), label = ('escape route %d'):format(j), base = r[1], route = j }
+    end
+    return out
+end
+
+-- Up to n points for more people of role (associate, inmate), total of them in all, from list (key: its name in the
+-- mission file) in order (indexes into list). opts.near: only points an officer is near (ctx.whenNear); opts.indoor:
+-- the indoor distance; opts.centre: the middle of the scene (default the middle of the points offered); opts.oneSide:
+-- the people that follow come from the side of those already out (NoteSpot); opts.routes: a scatter's escape routes
+-- (the last resort). Returns { { coords, route } }, the spare points ({ coords, label, indoor }: where one may go
+-- when an officer's game finds his point bad) and false when no officer was near enough to ask. st.short[role] is the
+-- objective's clock: set by the first ask that came back short (with an officer near), cleared by one that got all
+-- it asked for or found nobody near.
+local function PickSpots(ctx, st, role, list, order, key, n, total, opts)
+    if n <= 0 or #list == 0 then return {}, {}, true end
+    local near = {}
+    local anyNear = false
+    for i, p in ipairs(list) do
+        near[i] = not opts.near or ctx.whenNear(p) == true
+        anyNear = anyNear or near[i]
+    end
+    st.short = st.short or {}
+    if not anyNear then
+        -- nobody near yet: nothing waits for points (the clock starts when an officer gets there)
+        st.short[role] = nil
+        return {}, {}, false
+    end
+    local cfg = SpawnCfg()
+    local now = Now()
+    local waited = st.short[role] and (now - st.short[role]) / 1000 or 0
+    local indoor = opts.indoor == true or nil
+    local offer = {}
+    for _, i in ipairs(order) do
+        if near[i] and not Occupied(ctx, list[i]) then
+            offer[#offer + 1] = { coords = ToVec4(list[i]), label = ('%s[%d]'):format(key, i), indoor = indoor }
+        end
+    end
+    if #list < total then
+        st.saidShort = st.saidShort or {}
+        if not st.saidShort[role] then
+            st.saidShort[role] = true
+            local id, mission = RunTag(ctx)
+            CP.warn(BLOCK,
+                'run %s (%s): %s has %d point(s) for %d %s(s); the others come out once a point is free (add points)',
+                id, mission, key, #list, total, role)
+        end
+    end
+    local out, spare = {}, {}
+    local function Ask(list2, want)
+        if want <= 0 or #list2 == 0 then return end
+        local chosen, _, rest = ctx.choosePoints(list2, want, {
+            name = key,
+            wave = role,
+            since = os.time() - math.floor(waited),
+            centre = opts.centre,
+            indoor = indoor,
+            placed = opts.oneSide and st.spots and st.spots[role] or nil,
+        })
+        for _, c in ipairs(chosen or {}) do out[#out + 1] = { coords = ToVec4(c.coords), route = c.route } end
+        for _, c in ipairs(rest or {}) do
+            spare[#spare + 1] = { coords = ToVec4(c.coords), label = c.label, indoor = indoor }
+        end
+    end
+    Ask(offer, n)
+    -- the last resort, only for what the list's own points could not give after waveDelayMax
+    if #out < n and waited >= (tonumber(cfg.waveDelayMax) or 20) then
+        local more = {}
+        for _, c in ipairs(LastResort(list, order, key, math.ceil(total / #list), opts.routes)) do
+            local free = not Occupied(ctx, c.coords)
+            for _, o in ipairs(out) do
+                if free and U.dist(o.coords, c.coords) <= SHARE_RADIUS then free = false end
+            end
+            if free and (not opts.near or ctx.whenNear(c.base) == true) then
+                more[#more + 1] = { coords = c.coords, label = c.label, indoor = indoor, route = c.route }
+            end
+        end
+        Ask(more, n - #out)
+    end
+    if #out < n then
+        st.short[role] = st.short[role] or now
+    else
+        st.short[role] = nil
+    end
+    return out, spare, true
+end
+
+-- A spot given out: with opts.oneSide the people that follow come from its side (Config.Spawning.maxSpread).
+local function NoteSpot(st, role, point)
+    st.spots = st.spots or {}
+    st.spots[role] = st.spots[role] or {}
+    local list = st.spots[role]
+    list[#list + 1] = point
+end
+
+-- missing people of role are left out now (why: the console reason); the objective counts without them.
+local function LeaveOutNow(ctx, st, role, missing, why)
+    if missing <= 0 then return end
+    st.leftOut = st.leftOut or {}
+    st.leftOut[role] = (st.leftOut[role] or 0) + missing
+    if st.short then st.short[role] = nil end
+    st.dirty = true
+    local id, mission = RunTag(ctx)
+    CP.warn(BLOCK, 'run %s (%s): %d %s(s) left out: %s', id, mission, missing, role, why)
+end
+
+-- The people of role still missing are left out when the objective has been short of points for
+-- Config.Spawning.leaveOutAfter seconds (and at least waveDelayMax, so the closer points were tried) while someone
+-- of it has appeared and nobody of it is left to catch: the officers stand on or in front of every point, and the
+-- objective ends instead of stalling. Never before one of its people has appeared (leaveOutAfter 0 = never).
+local function LeaveOut(ctx, st, role, missing)
+    local cfg = SpawnCfg()
+    local after = tonumber(cfg.leaveOutAfter) or 45
+    local since = st.short and st.short[role]
+    if missing <= 0 or after <= 0 or not since or next(st.peds) == nil then return false end
+    for _, p in pairs(st.peds) do
+        if not Done(p) then return false end
+    end
+    local waited = (Now() - since) / 1000
+    if waited < after or waited < (tonumber(cfg.waveDelayMax) or 20) then return false end
+    LeaveOutNow(ctx, st, role, missing,
+        ('for %.0f s every free point was too close to or behind the officers (Config.Spawning.leaveOutAfter)'):format(
+            waited))
+    return true
 end
 
 -- ============================================================================
@@ -811,6 +1003,10 @@ local function MoveToDoor(ctx, p)
     end
     SetEntityCoords(p.entity, px + 0.0, py + 0.0, dz + 0.0, false, false, false, false)
     SetEntityHeading(p.entity, h + 0.0)
+    -- frozen there until an officer's game has put him on the ground at the door step (Config.Spawning.place)
+    if CP.Spawn and CP.Spawn.again then
+        CP.Spawn.again(ctx.run, p.netId, vector4(px + 0.0, py + 0.0, dz + 0.0, h + 0.0), { x = sx, y = sy })
+    end
 end
 
 -- The holstered pistol of the fighting door suspect, given in hand now; the bag cfg gets it too, so a
@@ -860,14 +1056,54 @@ local function Reveal(ctx, st)
     ctx.hud({ message = { text = CP.L(RESPONSE_TEXT[st.response] or RESPONSE_TEXT.fight), kind = 'warning' } })
 end
 
+-- The associates at the knock (AtKnock): each on a point of his own, through the spawn director (the indoor distance
+-- from every officer, never behind the one at the door, out of the officers' sight first, one side), hostile at once.
+local function SpawnAssociates(ctx, st, want)
+    local obj = ctx.obj
+    local key = type(obj.associates.spawns) == 'string' and obj.associates.spawns or 'associates'
+    local pts = PointList(ctx.location, obj.associates.spawns)
+    if #pts == 0 then
+        LeaveOutNow(ctx, st, 'associate', want - st.counts.associate,
+            ('the location has no %s points (never at the door or the start point)'):format(key))
+        return false
+    end
+    if not st.assocOrder or #st.assocOrder ~= #pts then st.assocOrder = RngOf(ctx):shuffle(Indices(#pts)) end
+    local spots, spare = PickSpots(ctx, st, 'associate', pts, st.assocOrder, key, want - st.counts.associate, want, {
+        indoor = true,
+        centre = PointList(ctx.location, obj.door)[1],
+        oneSide = true,
+    })
+    local taken = {}
+    for _, s in ipairs(spots) do
+        if st.counts.associate >= want then break end
+        if Occupied(ctx, s.coords, taken) or not ctx.canSpawn(1, true) then break end
+        local p = SpawnOne(ctx, st, 'associate', s.coords, true, {}, nil, spare)
+        if not p then break end
+        taken[#taken + 1] = s.coords
+        NoteSpot(st, 'associate', s.coords)
+        ApplyResponse(ctx, st, p)
+        if st.stopped then return false end
+    end
+    if st.counts.associate >= want then return true end
+    LeaveOut(ctx, st, 'associate', want - st.counts.associate)
+    return false
+end
+
 local function SpawnDoorLoop(ctx, st)
     local obj = ctx.obj
     local ok = true
-    if st.counts.suspect < 1 then
+    if st.counts.suspect < 1 and not st.noSuspect then
         local armed = st.response == 'fight'
         local point = PointList(ctx.location, obj.suspect)[1]
-            or (ctx.location and ctx.location.start and ctx.location.start.coords)
-        if point and ctx.canSpawn(1, armed) then
+        if not point then
+            -- never at the start point, where the officers arrive: the warrant goes on without him
+            st.noSuspect = true
+            st.dirty = true
+            local id, mission = RunTag(ctx)
+            CP.warn(BLOCK,
+                'run %s (%s): the location has no %s point: nobody waits at the door (never at the start point)', id,
+                mission, tostring(obj.suspect))
+        elseif ctx.canSpawn(1, armed) then
             local fleeTo = U.serialize(PointList(ctx.location, obj.fleeTo))
             -- a pistol in hand before the knock would give the secret response away
             local p = SpawnOne(ctx, st, 'suspect', ToVec4(point), armed, { fleePoints = fleeTo }, not st.knocked)
@@ -878,6 +1114,10 @@ local function SpawnDoorLoop(ctx, st)
         end
     end
     local want = AssocTarget(ctx)
+    if ok and st.counts.associate < want and AtKnock() then
+        -- they appear at the knock, away from the officers (Config.Spawning.associatesAtKnock)
+        return st.knocked and SpawnAssociates(ctx, st, want) or false
+    end
     if ok and st.counts.associate < want then
         local pts = PointList(ctx.location, obj.associates.spawns)
         if #pts == 0 then pts = PointList(ctx.location, obj.suspect) end
@@ -968,7 +1208,23 @@ end
 SpawnScatterLoop = function(ctx, st, want, pts, routes)
     local share = tonumber(ctx.obj.armedShare) or 0
     local ok = true
+    -- the spawn director (Config.Spawning): a point of his own for each, once an officer is near it
+    local spots, spare, near, k, taken = nil, nil, false, 0, {}
+    if Directed() then
+        local key = type(ctx.obj.spawns) == 'string' and ctx.obj.spawns or 'spawns'
+        spots, spare, near = PickSpots(ctx, st, 'inmate', pts, st.pointOrder, key, want - st.counts.inmate, want,
+            { near = true, routes = routes })
+    end
     while st.counts.inmate < want do
+        local spot = nil
+        if spots then
+            spot = spots[k + 1]
+            if not spot or Occupied(ctx, spot.coords, taken) then
+                ok = false
+                if near then LeaveOut(ctx, st, 'inmate', want - st.counts.inmate) end
+                break
+            end
+        end
         if st.nextArmed == nil then
             -- exactly round(want × share) armed overall: the chance is the share still to place
             local armedLeft = math.max(0, U.round(want * share) - st.counts.armedInmates)
@@ -979,12 +1235,20 @@ SpawnScatterLoop = function(ctx, st, want, pts, routes)
         if not ctx.canSpawn(1, armed) then ok = false break end
         local i = st.counts.inmate + 1
         local routeIdx = st.routeOrder and st.routeOrder[((i - 1) % #st.routeOrder) + 1] or nil
-        local p = SpawnOne(ctx, st, 'inmate', Placed(pts, st.pointOrder, i), armed, {
+        -- one who appears on an escape route (the last resort) runs on along that one
+        if spot and spot.route and routes[spot.route] then routeIdx = spot.route end
+        local point = spot and spot.coords or Placed(pts, st.pointOrder, i)
+        local p = SpawnOne(ctx, st, 'inmate', point, armed, {
             route = routeIdx,
             outfit = 'prison',
             fleePoints = routeIdx and U.serialize(routes[routeIdx]) or nil,
-        })
+        }, nil, spare)
         if not p then ok = false break end
+        if spot then
+            k = k + 1
+            taken[#taken + 1] = point
+            NoteSpot(st, 'inmate', point)
+        end
         st.nextArmed = nil
         p.route = routeIdx
         if armed then st.counts.armedInmates = st.counts.armedInmates + 1 end
@@ -1033,13 +1297,13 @@ local function Totals(ctx, st)
         total = total + 1
         if Neutralised(p) then done = done + 1 end
     end
-    local want = st.mode == 'scatter' and InmateTarget(ctx) or (1 + AssocTarget(ctx))
+    local want = st.mode == 'scatter' and InmateTarget(ctx) or ((st.noSuspect and 0 or 1) + AssocTarget(ctx))
     return done, math.max(total, want)
 end
 
 local function AllSpawned(ctx, st)
     if st.mode == 'scatter' then return st.counts.inmate >= InmateTarget(ctx) end
-    return st.counts.suspect >= 1 and st.counts.associate >= AssocTarget(ctx)
+    return (st.counts.suspect >= 1 or st.noSuspect == true) and st.counts.associate >= AssocTarget(ctx)
 end
 
 local function TryComplete(ctx, st)
@@ -1396,7 +1660,7 @@ local function Checklist(ctx)
             },
         }
     end
-    local suspectDone, assocDone = false, 0
+    local suspectDone, assocDone = st.noSuspect == true, 0
     for _, p in pairs(st.peds) do
         if p.role == 'suspect' and Neutralised(p) then suspectDone = true end
         if p.role == 'associate' and Neutralised(p) then assocDone = assocDone + 1 end
