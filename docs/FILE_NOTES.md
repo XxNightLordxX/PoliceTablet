@@ -2716,6 +2716,9 @@ where the officer is).
         opts = { wave, since, indoor, centre, from, placed, name, obj }; ctx.choosePoints fills in obj;
         a candidate { coords, label } is named by its label in the console lines
     CP.Runs.whenNear(run, point, range) -> boolean, nearestMetres|nil   (ctx.whenNear; range = activateRange)
+    block hook stage(ctx, dt) -> staged   objective i + 1's, once a tick while objective i is current
+        (Config.Spawning.stageAhead); true sets run.objectives[i + 1].staged and ctx.staged (its start too);
+        it may yield (a spawn waits): objective i + 1's start waits for it (at most 30 s)
     CP.Runs.send(run, eventName, ...) / objectiveEvent(run, index, data) / hud(run, patch) / hudFor(run, src, patch)
     CP.Runs.view(run, src) -> ActiveMissionView (§9.4) / summary(run) -> LiveRun (§9.5)
     CP.Runs.isParticipant(run, src) / activeSrcs(run) -> { src... } / host(run) -> src
@@ -2733,9 +2736,9 @@ where the officer is).
     client events sent: client:start, client:inProgress, client:objective, client:hud, client:tierChanged,
     client:hostChanged, client:participants, client:runEnded; push topic 'run' (view, or nil when it ended)
   Loops
-    1 s: timers, the current objective's block tick, time limit, start timeouts, arena re-check, entity
-    bookkeeping (vanished entities, wrecked vehicles, corpse cleanup after Config.Limits.corpseCleanup),
-    host liveness, HUD refresh. Config.AntiCheat.jobRecheck s: CP.Access.recheck. 60 s: orphan item sweeps
+    1 s: timers, the current objective's block tick, time limit, the next objective's stage hook (stage ahead),
+    start timeouts, arena re-check, entity bookkeeping (vanished entities, wrecked vehicles, corpse cleanup after
+    Config.Limits.corpseCleanup), host liveness, HUD refresh. Config.AntiCheat.jobRecheck s: CP.Access.recheck. 60 s: orphan item sweeps
     and cache pruning.
 
   Contract interpretations (details in docs/notes/engine_b.md)
@@ -2791,6 +2794,18 @@ where the officer is).
       waveDelayMax seconds and is dropped when a call gets every point it asked for. Its memory is
       run.spawning[objective] (clocks, the console lines already said), so it goes with the run; testRestart clears the
       objective's. It lives in a do-block: the file is at Lua's 200 locals.
+    * Stage ahead (Config.Spawning.stageAhead, under Config.Spawning.enabled; a missing key counts as on): TickRun,
+      after the current objective's tick and the time limit, calls stage(ctx, dt) of objective i + 1 when its block
+      has one, once a tick, only while objective i is still current and i + 1 still pending (not in the tick i
+      completes, never after i + 1 started, never i + 2). Its ctx is i + 1's own, so what it spawns is i + 1's entity
+      (deleted at the end like every run entity; its deaths and CP.Npc events reach i + 1's block while pending).
+      true -> objectives[i + 1].staged (ctx.staged, set by GetCtx, so start sees it) and one CP.log line; an error ->
+      stageOff (never called again) and one CP.warn. testRestart clears staged. Inline in TickRun (200 locals).
+      The hook may yield (every spawn waits for its entity): objectives[i + 1].staging = the tick's thread while it
+      runs, and StartObjective(i + 1) called meanwhile (objective i completed by an officer's event) waits for it
+      (Wait(0), at most TICK_STUCK_MS; not from inside the hook, not where it cannot yield), then starts it only if the
+      run is still in progress, so start sees ctx.staged and everything stage placed. The staged line says "objective
+      i done" then; a stage that returns into an objective that already started is not marked staged (one CP.warn).
 ```
 
 ## Crimson-Police/modules/scaling/server.lua
@@ -4753,6 +4768,27 @@ keeps the wave in its slice; maxSpread 360 is off), 9 asked from 4 good returns 
 allowed, 15 m never, one warning, the clock per objective, dropped once full, opts.since, cleared by testRestart), an
 officer who left, enabled = false (the first n as they are) and log = false. ctx.whenNear / Runs.whenNear: activateRange
 read live, its own range, 2D, a vector4, no point. The console lines are checked once per point and reason. No SQL.
+```
+
+## tests/stage_ahead_spec.lua
+
+```text
+Stage ahead (Config.Spawning.stageAhead, PLAN S3) on the real engine (tests/fixtures/custody/world.lua: runs, npc,
+scaling, scoring) with probe blocks that record every hook call: the shipped value; objective 2's stage hook called
+once a tick while objective 1 runs (dt, ctx.staged false then true, never objective 3), its ped owned by objective 2
+(ownerOf, entitiesFor, the caps), one console line; its start gets ctx.staged and the same ctx.state, the ped still
+there; never staged again once started, then objective 3 stages while 2 runs; the last objective stages nothing. An
+objective that completes in its own tick stages nothing more that tick. A failure during objective 1, the end and the
+last officer leaving delete the staged ped (stop reaches the prepared objectives); a stage that fails the run.
+stageAhead = false and enabled = false never call it (ctx.staged false); read live both ways (placed people stay);
+a missing key is on. A staged person's death reaches objective 2's block while pending. A stage that places nobody,
+one that places later, one that raises an error (called once, one error, one warning, the run goes on, the next
+objective still stages). A stage that waits like on a real server (its second ped appears 2.5 s after CreatePed, so
+the engine's spawn wait yields) while the officer's breach event completes objective 1: objective 2's start waits
+until the stage returned, gets ctx.staged and both staged people, places no second wave, one "objective 1 done"
+line; the last officer leaving during that wait (objective 2 never starts, nothing left); a stage that waits 40 s
+(objective 2 starts unstaged after 30 s, not marked staged, one warning). Nothing stages before the run is in
+progress; Restart objective starts a staged objective again unstaged. A block without stage is unchanged. No SQL.
 ```
 
 ## tests/storage_copy_spec.lua

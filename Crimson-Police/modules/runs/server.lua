@@ -551,6 +551,8 @@ local function GetCtx(run, i)
     ctx.obj = (o and o.obj) or ctx.base
     ctx.tier = run.tier
     ctx.state = o and o.state or {}
+    -- true once the block's stage hook placed this objective's people ahead of time (Config.Spawning.stageAhead)
+    ctx.staged = o ~= nil and o.staged == true
     return ctx
 end
 
@@ -2980,6 +2982,15 @@ end
 local function StartObjective(run, i)
     local o = run.objectives[i]
     if not o or run.state ~= 'in_progress' then return end
+    -- Stage ahead: this objective's stage hook may still be running in the run's tick (it waits while a spawn
+    -- appears) when an officer's event completes the objective before it. Its start waits for it (at most
+    -- TICK_STUCK_MS), so start gets ctx.staged and everything stage placed, and nothing is placed after start. Never
+    -- from inside that stage itself, nor where this thread cannot wait.
+    if o.staging and o.staging ~= coroutine.running() and coroutine.isyieldable() then
+        local holdUntil = GetGameTimer() + TICK_STUCK_MS
+        while o.staging and GetGameTimer() < holdUntil do Wait(0) end
+        if run.state ~= 'in_progress' or o.status ~= 'pending' then return end
+    end
     run.objectiveIndex = i
     o.status = 'active'
     o.startedAt = os.time()
@@ -2988,6 +2999,8 @@ local function StartObjective(run, i)
     -- names for its own Active Mission view (view.area; Radio Silence shows only those).
     local okA, area = pcall(Runs.anchor, run)
     Runs.send(run, 'client:objective', run.id, i, { action = 'start', area = okA and area or nil })
+    -- ctx.staged = true when this objective's stage hook placed its people while the one before ran (TickRun);
+    -- they are its own entities already, so start takes them over (ctx.state is the table stage wrote)
     CallBlock(run, i, 'start')
     if run.state ~= 'in_progress' then return end
     RefreshHud(run, true)
@@ -3763,8 +3776,9 @@ function Runs.testRestart(run)
     local o = run.objectives[i]
     if not o or o.status ~= 'active' then return false end
     local impl = BlockOf(run, i)
-    -- the spawn director's wave clocks of this objective start again too
+    -- the spawn director's wave clocks of this objective start again too, and it starts as one nobody staged
     if run.spawning then run.spawning[i] = nil end
+    o.staged = nil
     if impl and type(impl.restart) == 'function' then
         CallBlock(run, i, 'restart')
     else
@@ -4145,6 +4159,38 @@ local function TickRun(run, nowMs)
     if run.timer.running and not run.timer.paused and Runs.remaining(run) <= 0 then
         Timeout(run)
         return
+    end
+    -- Stage ahead (Config.Spawning.stageAhead): while objective i is current, the block of objective i + 1 may place
+    -- that objective's people ahead of time in its own stage(ctx, dt) hook, called once per tick until that objective
+    -- starts (never after it, never for the one after it). It spawns through its own ctx (obj = i + 1), so the run's
+    -- end, a failure or the last officer leaving deletes them like every entity of the run. A stage that returns true
+    -- marks the objective staged (ctx.staged, also in its start); one that raises an error is not called again for
+    -- that objective, which then starts as before. The hook may wait (a spawn waits for its entity): `staging` (this
+    -- thread) makes an objective i completed meanwhile hold the start of i + 1 until it returns (StartObjective).
+    -- Inline: the file is at Lua's 200 locals.
+    local spawning = type(Config.Spawning) == 'table' and Config.Spawning or {}
+    local ahead = o and o.status == 'active' and run.objectiveIndex == i and run.objectives[i + 1] or nil
+    if ahead and ahead.status == 'pending' and ahead.prepared and not ahead.stopped and not ahead.stageOff
+        and spawning.enabled ~= false and spawning.stageAhead ~= false then
+        local impl = BlockOf(run, i + 1)
+        if impl and type(impl.stage) == 'function' then
+            ahead.staging = coroutine.running()
+            local ok, staged = CallBlock(run, i + 1, 'stage', dt > 0 and dt or 1.0)
+            ahead.staging = nil
+            if run.state ~= 'in_progress' then return end
+            if ahead.status ~= 'pending' then
+                -- held longer than TICK_STUCK_MS (or started from inside the hook): it runs as one nobody staged
+                CP.warn(TAG, 'run %s: objective %d started before its stage ahead returned', run.id, i + 1)
+            elseif not ok then
+                ahead.stageOff = true
+                CP.warn(TAG, 'run %s: objective %d stopped staging ahead after an error; it starts as before', run.id,
+                    i + 1)
+            elseif staged and not ahead.staged then
+                ahead.staged = true
+                CP.log(TAG, 'run %s: objective %d staged ahead (objective %d %s)', run.id, i + 1, i,
+                    o.status == 'active' and 'running' or 'done')
+            end
+        end
     end
     RefreshHud(run)
     if run.timerSentAt and now - run.timerSentAt >= TIMER_RESYNC_S then SendTimer(run) end

@@ -366,6 +366,16 @@ do
         'the leave-out wait (S2), alone'
     )
     H.eq(
+        E('Spawning.stageAhead').desc,
+        'true = a mission may place the next objective\'s people ahead of time, while your officers are still busy'
+            .. ' with the one before it, so they are already there when it starts instead of popping up around the'
+            .. ' officers (false = they appear only when their objective starts, as before)',
+        'staging ahead (S3), alone'
+    )
+    H.eq(E('Spawning.stageAhead').section, 'spawning', 'staging ahead is in the Spawning section')
+    H.ok((Check('Spawning.stageAhead', false)), 'staging ahead can be switched off')
+    Err('Spawning.stageAhead', 'yes', 'err.setting_type', 'staging ahead is on or off')
+    H.eq(
         E('Spawning.log').desc,
         'true = a console line for each point skipped (shown while Config.Debug is on) and a warning when a wave had'
             .. ' to use closer points',
@@ -401,6 +411,7 @@ do
         'maxSpread',
         'hardMin',
         'leaveOutAfter',
+        'stageAhead',
         'log',
     }) do
         H.ok(not E('Spawning.' .. k).reload and not E('Spawning.' .. k).restart, 'read live: Spawning.' .. k)

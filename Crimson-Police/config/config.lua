@@ -330,6 +330,10 @@ Config.Spawning = {
     -- fight is left standing; then the people it could not place are left out, so the fight can end (0 = never: it
     -- waits until the officers move away)
     leaveOutAfter = 45,
+    -- true = a mission may place the next objective's people ahead of time, while your officers are still busy with
+    -- the one before it, so they are already there when it starts instead of popping up around the officers (false =
+    -- they appear only when their objective starts, as before)
+    stageAhead = true,
     -- true = a console line for each point skipped (shown while Config.Debug is on) and a warning when a wave had to
     -- use closer points
     log = true,

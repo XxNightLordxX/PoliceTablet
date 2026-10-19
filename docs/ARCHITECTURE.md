@@ -293,6 +293,10 @@ metres, km/h; chances are fractions (0.30); progress durations are milliseconds.
 Each block's `server.lua` exposes `defaults(obj)` and `validate(obj, mission, location)` so the
 loader and the Mission Builder apply exactly these defaults and guardrails.
 
+A block may also expose `stage(ctx, dt)` (§7.1, `Config.Spawning.stageAhead`): the engine calls it while the objective
+before this one runs, so the block can place this objective's people ahead of time. No common field turns it on: a
+block that stages decides from its own fields which objectives it stages (none does yet).
+
 Worn-out runners (Config.Flee, not a file field): next to its own close rule, each block that owns a runner calls
 `CP.Npc.wornOut(netId, near)` with its own nearest-participant distance and, on true, its own surrender (state
 `surrendered`, the bag task it returned, Cuff suspect), with no wait: `flee_arrest` for every ped in `'fleeing'`
@@ -342,6 +346,9 @@ run = {
   timer = { remaining = 600, paused = false, lastTick = GetGameTimer() },
   objectiveIndex = 1,
   objectives = { [i] = { status = 'pending'|'active'|'done', startedAt, doneAt, state = {} } },  -- state = the block's own table
+                                  -- + staged = true (its stage hook placed people ahead of time, ctx.staged),
+                                  --   stageOff = true (its stage hook raised an error: never called again),
+                                  --   staging = the tick's thread while its stage hook runs (holds its start)
   shared = {},                    -- cross-objective data (e.g. shared.devices)
   entities = { [netId] = { entity, kind = 'ped'|'vehicle'|'object', obj = i, role, armed, dead = false, deadAt, tag } },
   stats = { downs = 0, weaponsFired = 0 },
@@ -426,6 +433,20 @@ Cooldowns are kept in memory by `CP.Runs` and rebuilt from `cp_mission_runs` row
 3. Blocks call `ctx.complete()` / `ctx.fail(reason)`; the engine advances objectives. The last
    objective done → `CP.Runs.endRun(run, 'completed', 'completed')`. Timer out →
    `endRun(run, 'failed', 'time_limit')` unless the block's `onTimeout(ctx)` returns `'completed'`.
+   Stage ahead (`Config.Spawning.stageAhead`, under the director's `Config.Spawning.enabled`): while objective i is
+   current, each 1 s tick, after its own `tick` and the time limit, calls `stage(ctx, dt)` of objective i + 1 when its
+   block has one: once a tick, only while i + 1 is still pending (never in the tick i completes, never after i + 1
+   started, never for i + 2), only in progress (after every `prepare`). Its ctx is objective i + 1's own (spawns are
+   tracked under i + 1, `ctx.state` is the table its `start` gets), so an end, a failure or the last participant
+   leaving deletes what it placed like every run entity, and `stop` reaches it at the end like every prepared
+   objective. A `stage` that returns true marks the objective staged (`objectives[i + 1].staged`, `ctx.staged`, one
+   `CP.log` line); one that raises an error is logged, never called again for that objective (one `CP.warn`), and the
+   objective starts as before. Read live: switched off mid-run, nothing more is staged and what was placed stays.
+   `stage` may wait (each spawn waits for its entity, and every run ticks in its own thread), so objective i can
+   complete meanwhile from an officer's event: the engine then holds the start of i + 1 until `stage` returns (at
+   most `TICK_STUCK_MS`, 30 s), so its `start` gets `ctx.staged` and everything `stage` placed, and nothing is placed
+   after `start`. One that started anyway (held longer, or started from inside the hook) is not marked staged (one
+   `CP.warn`).
 4. `CP.Runs.removeParticipant(run, src, endReason)` for individual leaves; the run ends (abandoned,
    cleanup) when no active participant is left.
 5. `endRun` → per participant: `CP.Scoring.compute`, `CP.Cash.compute`, row insert, `CP.Cash.pay`,
@@ -855,6 +876,21 @@ Full admin control (P3, §5.39):
     clocks.
   - `whenNear(run, point, range) -> boolean, nearestMetres|nil` — true when a participant is within `range` (default
     `activateRange`) of `point`; always true while `Config.Spawning.enabled = false` and for a point that is none.
+  - Stage ahead (`Config.Spawning.stageAhead`, PLAN S3; §4.4 step 3, §7.1): while objective i is current, the 1 s tick
+    calls objective i + 1's block hook `stage(ctx, dt)` (when the block has one) once a tick until i + 1 starts, with
+    objective i + 1's own ctx, so what it spawns belongs to i + 1 from the start (`ownerOf`, `entitiesFor { obj }`, the
+    caps) and is deleted at the end like every run entity. `stage` returning true sets `run.objectives[i + 1].staged`
+    (`ctx.staged` in every later hook of that objective, its `start` included; console `run <id>: objective 2 staged
+    ahead (objective 1 running)`, `... (objective 1 done)` when objective 1 completed while it staged); an error sets
+    `stageOff` (never called again, `CP.warn` `run <id>: objective 2 stopped staging ahead after an error; it starts as
+    before`). `stage` may yield (a spawn waits for its entity): `run.objectives[i + 1].staging` (the tick's thread) is
+    set while it runs, and `StartObjective(i + 1)` called meanwhile (objective i completed by an officer's event)
+    waits for it with `Wait(0)`, at most `TICK_STUCK_MS` (30 s), never from inside the hook itself or where it cannot
+    yield; held longer, the objective starts unstaged and the stage's return is not marked staged (`CP.warn` `run
+    <id>: objective 2 started before its stage ahead returned`). A staged entity's events reach its own objective's
+    block before it starts (`onEntityDead`, `dispatch` from CP.Npc, `rescale`), never `onParticipantLeft` or `tick`;
+    its client half has not started. `testRestart` clears `staged` of the objective it restarts. Off (`stageAhead =
+    false` or `enabled = false`, read live): never called; a missing key counts as on (the shipped value).
 - `deleteEntity(run, netId)`, `entitiesFor(run, filter) -> list`, `canSpawn(run, n, armed) -> boolean` (caps `Config.Limits.maxArmedAlive` / `maxEntities`, counted now; callers wait and retry, never cut counts)
 - `send(run, eventName, ...)` → `TriggerClientEvent` to every active participant
 - `objectiveEvent(run, index, data)` → `crimson-police:client:objective` (runId, index, data)
@@ -2039,6 +2075,13 @@ CP.Blocks.register('hostile_waves', {
   rescale = function(ctx) end,     -- ctx.obj now holds the counts for the smaller team: spawn only what is missing later
   onTimeout = function(ctx) return nil end,               -- return 'completed' to complete instead of failing (Street Race Bust)
   presence = function(ctx, src, coords) return distance end, -- metres from this objective's reference point (0 = inside)
+  stage   = function(ctx, dt) return false end,  -- (optional) every 1 s while the objective BEFORE this one is current
+                                   -- (Config.Spawning.stageAhead): place this objective's people ahead of time with
+                                   -- ctx.spawnPed etc. (they are this objective's); return true once it placed them
+                                   -- (ctx.staged = true from then on, its start included). Never called once this
+                                   -- objective started; keep what start needs in ctx.state (the same table). It may
+                                   -- yield (ctx.spawnPed waits for its entity): the engine holds this objective's
+                                   -- start until it returns (at most 30 s)
   checklist = function(ctx) return { { label = 'Hostiles', done = false, value = 3, max = 20 } } end,
   restart = function(ctx) end,     -- test control: remove and respawn this objective's NPCs/props
   stop    = function(ctx) end,     -- objective finished or run ended (the engine deletes entities anyway)
@@ -2065,8 +2108,19 @@ ctx = {
   isHost = function(src) end, host = function() return run.host end,
   choosePoints = function(candidates, n, opts) end,  -- the spawn director (§5.10): -> points, indexes; opts.obj = i
   whenNear = function(point, range) end,               -- -> true once a participant is within range (activateRange)
+  staged = false,                      -- true once this objective's stage hook placed its people (Config.Spawning.stageAhead)
 }
 ```
+
+In `stage` the objective is not current yet: `ctx.complete` is refused (it is not `run.objectiveIndex`), the HUD and
+the checklist are the current objective's, and no participant's client half of this objective has started. Use
+`ctx.choosePoints` / `ctx.whenNear` and `ctx.canSpawn` there like in `start`; the director's wave clocks are this
+objective's own (`run.spawning[i]`). `stage` may yield: every `ctx.spawnPed` / `spawnVehicle` / `spawnObject` waits
+(`Wait(0)`) until its entity exists, and the objective before can complete meanwhile from an officer's event. The
+engine holds this objective's `start` until `stage` returns (at most `TICK_STUCK_MS`, 30 s), so `start` sees
+`ctx.staged` and everything `stage` placed in `ctx.state`, and nothing is placed after `start`. A `stage` that is
+still running after that hold returns into an objective that already started: the engine does not mark it staged
+(one `CP.warn`), so write `stage` to place a wave and return, never to wait for officers.
 
 ### 7.2 Client half — `blocks/<id>/client.lua`
 
