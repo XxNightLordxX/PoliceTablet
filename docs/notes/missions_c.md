@@ -130,7 +130,10 @@ the baseline fails. `BASELINE_MAX` stops the baseline from growing.
   - end-to-end runs at every tier each mission supports, including a decision ledger with no wrong decision;
   - one violator solo and two with two officers;
   - the toxic-fire setback;
-  - the Stolen Vehicle Takedown stop, the Warrant Service finds and the Gang Shootout bodies.
+  - the Stolen Vehicle Takedown stop, the Warrant Service finds and the Gang Shootout bodies;
+  - the start circles (PLAN S19): an officer at the edge is past the spawn director's distance from Suspicious
+    Activity's car and people and Parking Patrol's first spot (approach + `Config.Spawning.sceneOutside`) and from
+    Stolen Vehicle Takedown's car (`Config.Spawning.minDistance`).
 - `tests/zone_lint_spec.lua`.
 - Additions to `blocks_a_spec`, `blocks_b_spec`, `blocks_c_spec`, `missions_a_spec`, `missions_b_spec` and
   `builder_server_spec`:

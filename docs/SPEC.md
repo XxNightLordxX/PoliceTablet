@@ -715,7 +715,7 @@ Locations for every new mission come from GTA V vehicle nodes and known base-gam
 
 - Locations: 5+ last-seen areas, each with a flee route
 
-- Start: within 60 m of the stolen car. When a participant with lights on is that close, the car rolls its response: yield (25%), flee (65%) or fight (10%: the passenger is armed and may shoot from the car, drive-by chance 50%)
+- Start: an 85 m circle round the last-seen point, 35–42 m from the stolen car, so an officer arriving at its edge is 43 m or more from the car, past Config.Spawning.minDistance (PLAN S19; it was 60 m, 18–24 m from the car). When a participant with lights on is within 60 m of the car, it rolls its response: yield (25%), flee (65%) or fight (10%: the passenger is armed and may shoot from the car, drive-by chance 50%)
 
 - Spawns: 1 stolen car with 2 suspects (scales, max 4); after the stop, each suspect has a 20% chance to flee on foot
 
@@ -895,7 +895,7 @@ Locations for every new mission come from GTA V vehicle nodes and known base-gam
 
 - Locations: 6+ districts (for example Alta Street downtown, Vespucci Boulevard, Portola Drive in Rockford Hills, Mirror Park Boulevard, Ginger Street in Little Seoul, Prosperity Street in Del Perro, Alhambra Drive in Sandy Shores, Paleto Boulevard), each with 10+ kerb spots; every spot has its posted rule (metered, permit, no parking, hydrant, loading zone or free) and its street name; a run uses 5 random spots of one district
 
-- Start: the district's patrol entry point, 30–60 m before the first spot along the street (radius 40 m)
+- Start: the district's patrol entry point, 30–60 m before the first spot along the street (radius 85 m, so an officer arriving at its edge is 38 m or more from the first spot, past the 25 m approach plus Config.Spawning.sceneOutside: its car is there before he is on top of it; PLAN S19, it was 40 m and the first car 5–7 m past the edge)
 
 - Spawns: 5 locked, empty NPC cars, one per spot, parked along the kerb. The server rolls each car: legal (45%), a violation (50%: a ticket-level violation on metered and permit spots, a tow-level one on no-parking, hydrant and loading spots; free spots roll legal or stolen only), or stolen (5%). At most one returning driver and one thief (see objectives)
 
@@ -943,7 +943,7 @@ Locations for every new mission come from GTA V vehicle nodes and known base-gam
 
 - Locations: 6+ scenes (for example behind the Little Seoul 24/7, the roof of a Vinewood parking garage, a La Mesa industrial yard, a Mirror Park construction site, the Del Perro Pier car park, a Rancho warehouse row, the Sandy Shores airfield hangars), each with a car spot, 3+ person spots, 2+ escape paths and a transport point
 
-- Start: a marker 40–60 m from the scene and at least 30 m from every person and car spot; the Active Mission screen shows the caller's report, e.g. "A dark sedan has been parked behind the store for an hour"
+- Start: a marker 40–60 m from the scene and at least 30 m from every person and car spot, with a 100 m circle, so an officer arriving at its edge is 42 m or more from the car and every person, past the 25 m approach plus Config.Spawning.sceneOutside: the scene is there before he is on top of it and nobody reacts until he is within 25 m (PLAN S19; it was 40 m, 4–17 m from the people); the Active Mission screen shows the caller's report, e.g. "A dark sedan has been parked behind the store for an hour"
 
 - Spawns: the server rolls the scene: someone sitting in a parked car (50%), people loitering beside a parked car (30%) or someone looking into parked cars (20%); 1 person (scales, max 3). Each person's truth comes from Config.Custody.profileSets.scene (clean 35, minor 15, warrant 15, narcotics 15, burglary tools 12, armed 8); the car is stolen 15% of the time
 

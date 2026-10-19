@@ -18,7 +18,8 @@
   each one and impound the car (the tow truck collects it).
   Blocks: pursuit (mode = 'stop', handoff = 'contact', spawn = location.spawn, route = location.route)
   → field_contact (mode = 'stop').
-  Start: a 60 m circle centred on the approach road 35-50 m from the stolen car (never on top of it).
+  Start: an 85 m circle centred on the approach road 35-42 m from the stolen car (never on top of it), so an
+  officer arriving at its edge is 43 m or more from the car, past Config.Spawning.minDistance (40 m, PLAN S19).
 ]]
 
 RegisterMission({
@@ -38,7 +39,7 @@ RegisterMission({
   locations = {
     {
       label  = "Route 68, east Harmony",
-      start  = { coords = vec3(1167.25, 2683.25, 38.03), radius = 60.0 },  -- last seen here, 36 m from the car
+      start  = { coords = vec3(1167.25, 2683.25, 38.03), radius = 85.0 },  -- last seen here, 36 m from the car
       spawn  = vec4(1137.00, 2664.50, 37.50, 352.96),   -- the stolen car
       -- 16 road waypoints, 1271 m flee route: Route 68
       route  = {
@@ -65,7 +66,7 @@ RegisterMission({
     },
     {
       label  = "Rob's Liquor, Banham Canyon",
-      start  = { coords = vec3(-3003.00, 334.25, 14.56), radius = 60.0 },  -- last seen here, 41 m from the car
+      start  = { coords = vec3(-3003.00, 334.25, 14.56), radius = 85.0 },  -- last seen here, 41 m from the car
       spawn  = vec4(-2970.50, 359.75, 14.41, 33.93),   -- the stolen car
       -- 15 road waypoints, 1043 m flee route: Great Ocean Hwy
       route  = {
@@ -91,7 +92,7 @@ RegisterMission({
     },
     {
       label  = "Ron gas station, Paleto Bay",
-      start  = { coords = vec3(184.75, 6559.50, 32.00), radius = 60.0 },  -- last seen here, 41 m from the car
+      start  = { coords = vec3(184.75, 6559.50, 32.00), radius = 85.0 },  -- last seen here, 41 m from the car
       spawn  = vec4(197.50, 6598.75, 31.25, 178.34),   -- the stolen car
       -- 16 road waypoints, 1246 m flee route: Great Ocean Hwy
       route  = {
@@ -118,7 +119,7 @@ RegisterMission({
     },
     {
       label  = "LTD Gasoline, Grove Street",
-      start  = { coords = vec3(-104.25, -1764.50, 29.88), radius = 60.0 },  -- last seen here, 40 m from the car
+      start  = { coords = vec3(-104.25, -1764.50, 29.88), radius = 85.0 },  -- last seen here, 40 m from the car
       spawn  = vec4(-64.75, -1756.75, 28.75, 22.70),   -- the stolen car
       -- 24 road waypoints, 1205 m flee route: Davis Ave > Strawberry Ave > Adam's Apple Blvd
       route  = {
@@ -153,7 +154,7 @@ RegisterMission({
     },
     {
       label  = "LTD Gasoline, Little Seoul",
-      start  = { coords = vec3(-745.50, -892.00, 20.78), radius = 60.0 },  -- last seen here, 42 m from the car
+      start  = { coords = vec3(-745.50, -892.00, 20.78), radius = 85.0 },  -- last seen here, 42 m from the car
       spawn  = vec4(-720.00, -925.50, 18.50, 225.81),   -- the stolen car
       -- 22 road waypoints, 878 m flee route: Lindsay Circus > Palomino Ave > South Rockford Dr > Dutch London St
       route  = {

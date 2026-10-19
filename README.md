@@ -2301,6 +2301,15 @@ however it ends.
   officers by the spawn director); a moved or new point follows the rule. A mission with a search area (its start is
   the search circle, entered anywhere) keeps the 30 m. A custom mission published before still loads, with one
   warning per location in Admin UI -> Missions -> Load result; publishing it again needs the points moved.
+- Scene missions start further out (same request, "make sure they dont spawn around the player"; PLAN S19; the spawn
+  audit found Suspicious Activity's people 4-17 m from an officer crossing the 40 m start circle, Parking Patrol's
+  first car 5-7 m past it and Stolen Vehicle Takedown's car 18-24 m from him): the start circles of the built-in
+  files are now Suspicious Activity 100 m (the car and every person 42 m or more from an officer at the edge),
+  Illegal Parking Patrol 85 m (the first spot 38 m or more) and Stolen Vehicle Takedown 85 m (the car 43 m or more),
+  so the GPS ends further out and the scene is already there, past the distance the spawn director waits for (the
+  25 m approach plus `Config.Spawning.sceneOutside`, 35 m; for a car `Config.Spawning.minDistance`, 40 m), and
+  Suspicious Activity's people still react only once an officer is within 25 m. Mission data only (the Mission
+  Builder sets a circle of 20-150 m).
 - Check spawn points (owner request of 2026-10-19: "Double check all coordinates etc for every ped"):
   `Config.Testing.spawnCheck` (`enabled`, `sceneTimeoutMs` 8000 ms, `moveWithin` 150 m, `routes = false`). An
   admin's own game visits every point of a mission's locations (frozen, unseen and unhurt, back where he was at the

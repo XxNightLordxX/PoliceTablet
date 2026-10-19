@@ -171,6 +171,38 @@ do
     H.eq(gs.objectives[3].bodies, 4, 'gang_shootout: at most 4 bodies kept')
 end
 
+-- PLAN S19 (owner request of 2026-10-19: "make sure they dont spawn around the player"): a scene mission's start circle
+-- is wide enough that an officer arriving at its edge, from any side, is already further away than the spawn director
+-- asks for, so the scene is there before he is on top of it: Suspicious Activity's car and every person and Parking
+-- Patrol's first spot by the objective's approach plus Config.Spawning.sceneOutside, Stolen Vehicle Takedown's car by
+-- Config.Spawning.minDistance. Measured flat (2D), as officers arrive.
+do
+    local function Inside(loc, p) return loc.start.radius - D2(p, loc.start.coords) end
+    local sa = RawDef('suspicious_activity')
+    local saNeed = (sa.objectives[1].approach or 25.0) + Config.Spawning.sceneOutside
+    for li, loc in ipairs(sa.locations) do
+        EachPoint({ loc.car, loc.people }, function(p)
+            H.ok(Inside(loc, p) >= saNeed,
+                ('suspicious_activity: scene %d point %.1f m inside the %.0f m start circle (%.0f m+)'):format(li,
+                    Inside(loc, p), loc.start.radius, saNeed))
+        end)
+    end
+    local pp = RawDef('parking_patrol')
+    local ppNeed = (pp.objectives[1].approach or 25.0) + Config.Spawning.sceneOutside
+    for li, loc in ipairs(pp.locations) do
+        local p = loc.spots[1].coords
+        H.ok(Inside(loc, p) >= ppNeed,
+            ('parking_patrol: district %d first spot %.1f m inside the %.0f m start circle (%.0f m+)'):format(li,
+                Inside(loc, p), loc.start.radius, ppNeed))
+    end
+    local svt = RawDef('stolen_vehicle_takedown')
+    for li, loc in ipairs(svt.locations) do
+        H.ok(Inside(loc, loc.spawn) >= Config.Spawning.minDistance,
+            ('stolen_vehicle_takedown: location %d car %.1f m inside the %.0f m start circle (%.0f m+)'):format(li,
+                Inside(loc, loc.spawn), loc.start.radius, Config.Spawning.minDistance))
+    end
+end
+
 -- ============================================================================
 --                                2. RUN HELPERS
 -- ============================================================================

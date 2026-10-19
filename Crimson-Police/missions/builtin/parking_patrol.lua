@@ -11,7 +11,9 @@
   right of the road centre line in the driving direction, 26 m apart, facing the traffic; the posted rules
   are spread so each street mixes meters, permits, no-parking, hydrants, a loading zone and free spots. The
   entry point is on the centre line 45 m before the first spot, and every point is at least 200 m from any
-  other mission's locations (tests/zone_lint_spec.lua).
+  other mission's locations (tests/zone_lint_spec.lua). The start circle is 85 m (PLAN S19), so an officer
+  arriving at its edge is 38 m or more from the first spot, past the 25 m approach plus
+  Config.Spawning.sceneOutside (35 m): its car is there before he is on top of it.
   Blocks: field_contact (mode = 'parked').
 ]]
 
@@ -33,7 +35,7 @@ RegisterMission({
   locations = {
     {
       label = 'Alta Street, Downtown',
-      start = { coords = vec3(-100.74, -658.19, 35.89), radius = 40.0 },   -- patrol entry point, 45 m before the first spot
+      start = { coords = vec3(-100.74, -658.19, 35.89), radius = 85.0 },   -- patrol entry point, 45 m before the first spot
       spots = {   -- 10 kerb spots, 26 m apart on the right-hand kerb, each with its posted rule
         { coords = vec4(-121.17, -698.60, 34.31, 159.7), rule = 'metered'   , street = 'Alta Street' },
         { coords = vec4(-130.25, -722.94, 34.29, 159.4), rule = 'no_parking', street = 'Alta Street' },
@@ -49,7 +51,7 @@ RegisterMission({
     },
     {
       label = 'Ginger Street, Little Seoul',
-      start = { coords = vec3(-445.25, -636.00, 31.44), radius = 40.0 },   -- patrol entry point, 47 m before the first spot
+      start = { coords = vec3(-445.25, -636.00, 31.44), radius = 85.0 },   -- patrol entry point, 47 m before the first spot
       spots = {   -- 10 kerb spots, 26 m apart on the right-hand kerb, each with its posted rule
         { coords = vec4(-448.78, -589.53, 26.43, 41.2), rule = 'metered'   , street = 'Ginger Street' },
         { coords = vec4(-474.45, -576.53, 25.01, 83.9), rule = 'no_parking', street = 'Ginger Street' },
@@ -65,7 +67,7 @@ RegisterMission({
     },
     {
       label = 'Mirror Park Boulevard, Mirror Park',
-      start = { coords = vec3(917.03, -133.82, 76.31), radius = 40.0 },   -- patrol entry point, 45 m before the first spot
+      start = { coords = vec3(917.03, -133.82, 76.31), radius = 85.0 },   -- patrol entry point, 45 m before the first spot
       spots = {   -- 10 kerb spots, 26 m apart on the right-hand kerb, each with its posted rule
         { coords = vec4(881.54, -105.86, 78.94, 57.0), rule = 'metered'   , street = 'Mirror Park Boulevard' },
         { coords = vec4(859.45, -92.00, 79.15, 58.0), rule = 'no_parking', street = 'Mirror Park Boulevard' },
@@ -81,7 +83,7 @@ RegisterMission({
     },
     {
       label = 'Prosperity Street, Del Perro',
-      start = { coords = vec3(-961.03, -1197.93, 4.80), radius = 40.0 },   -- patrol entry point, 45 m before the first spot
+      start = { coords = vec3(-961.03, -1197.93, 4.80), radius = 85.0 },   -- patrol entry point, 45 m before the first spot
       spots = {   -- 10 kerb spots, 26 m apart on the right-hand kerb, each with its posted rule
         { coords = vec4(-979.50, -1156.47, 2.91, 31.8), rule = 'metered'   , street = 'Prosperity Street' },
         { coords = vec4(-992.38, -1134.06, 1.70, 30.0), rule = 'no_parking', street = 'Prosperity Street' },
@@ -97,7 +99,7 @@ RegisterMission({
     },
     {
       label = 'Magellan Avenue, Vespucci',
-      start = { coords = vec3(-1301.59, -1119.75, 6.63), radius = 40.0 },   -- patrol entry point, 46 m before the first spot
+      start = { coords = vec3(-1301.59, -1119.75, 6.63), radius = 85.0 },   -- patrol entry point, 46 m before the first spot
       spots = {   -- 10 kerb spots, 26 m apart on the right-hand kerb, each with its posted rule
         { coords = vec4(-1309.68, -1074.69, 6.49, 29.7), rule = 'metered'   , street = 'Magellan Avenue' },
         { coords = vec4(-1322.42, -1052.08, 6.90, 29.2), rule = 'no_parking', street = 'Magellan Avenue' },
@@ -113,7 +115,7 @@ RegisterMission({
     },
     {
       label = 'Eclipse Boulevard, West Vinewood',
-      start = { coords = vec3(-126.25, 247.25, 96.32), radius = 40.0 },   -- patrol entry point, 45 m before the first spot
+      start = { coords = vec3(-126.25, 247.25, 96.32), radius = 85.0 },   -- patrol entry point, 45 m before the first spot
       spots = {   -- 10 kerb spots, 26 m apart on the right-hand kerb, each with its posted rule
         { coords = vec4(-170.71, 253.87, 92.73, 84.3), rule = 'metered'   , street = 'Eclipse Boulevard' },
         { coords = vec4(-196.35, 257.14, 91.77, 82.5), rule = 'no_parking', street = 'Eclipse Boulevard' },
@@ -129,7 +131,7 @@ RegisterMission({
     },
     {
       label = 'Marina Drive, Sandy Shores',
-      start = { coords = vec3(693.82, 3583.14, 33.04), radius = 40.0 },   -- patrol entry point, 45 m before the first spot
+      start = { coords = vec3(693.82, 3583.14, 33.04), radius = 85.0 },   -- patrol entry point, 45 m before the first spot
       spots = {   -- 10 kerb spots, 26 m apart on the right-hand kerb, each with its posted rule
         { coords = vec4(648.70, 3580.95, 32.42, 98.0), rule = 'metered'   , street = 'Marina Drive' },
         { coords = vec4(623.25, 3578.34, 32.34, 93.1), rule = 'no_parking', street = 'Marina Drive' },

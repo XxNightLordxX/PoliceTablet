@@ -763,7 +763,8 @@ do
                 H.ok(d >= Config.Builder.minSpawnFromStart and d <= loc.start.radius,
                     ('stolen_vehicle_takedown: location %d car is %.0f m from the start centre (30 m+, inside the circle)'):format(
                         i, d))
-                H.eq(loc.start.radius, 60.0, ('stolen_vehicle_takedown: location %d start radius 60'):format(i))
+                -- PLAN S19: 85 m (60 m before), so an officer at the edge is past Config.Spawning.minDistance
+                H.eq(loc.start.radius, 85.0, ('stolen_vehicle_takedown: location %d start radius 85'):format(i))
                 H.ok(D2(loc.spawn, pts[1]) < 1,
                     ('stolen_vehicle_takedown: location %d car starts at the flee route'):format(i))
                 local hx, hy = -math.sin(math.rad(loc.spawn.w)), math.cos(math.rad(loc.spawn.w))

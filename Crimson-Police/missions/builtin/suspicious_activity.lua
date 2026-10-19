@@ -10,7 +10,9 @@
   sits on the lane, three person spots are 3–5 m around it, two escape paths follow the lanes away from
   the start, and the transport point is on the nearest main road. The start marker is 44–58 m from the car
   on that road and at least 30 m from every person and car spot; every point is at least 200 m from any
-  other mission's locations (tests/zone_lint_spec.lua).
+  other mission's locations (tests/zone_lint_spec.lua). The start circle is 100 m (PLAN S19), so an officer
+  arriving at its edge is 42 m or more from the car and every person, past the 25 m approach plus
+  Config.Spawning.sceneOutside (35 m): the scene is already there and nobody reacts until he is within 25 m.
   Blocks: field_contact (mode = 'scene').
 ]]
 
@@ -31,7 +33,7 @@ RegisterMission({
   locations = {
     {
       label     = 'Container yard, Elysian Island',
-      start     = { coords = vec3(666.00, -2763.50, 6.16), radius = 40.0 },   -- 57 m from the car
+      start     = { coords = vec3(666.00, -2763.50, 6.16), radius = 100.0 },   -- 57 m from the car
       car       = vec4(611.00, -2779.00, 5.53, 346.8),   -- the parked car at the scene
       people    = {   -- person spots around the car
         vec4(613.73, -2779.64, 6.03, 76.8), vec4(611.79, -2783.50, 6.03, 16.8),
@@ -45,7 +47,7 @@ RegisterMission({
     },
     {
       label     = 'Lookout, Vinewood Hills',
-      start     = { coords = vec3(-14.50, 974.75, 214.34), radius = 40.0 },   -- 49 m from the car
+      start     = { coords = vec3(-14.50, 974.75, 214.34), radius = 100.0 },   -- 49 m from the car
       car       = vec4(21.75, 942.00, 197.88, 208.1),   -- the parked car at the scene
       people    = {   -- person spots around the car
         vec4(19.28, 940.68, 198.38, 298.1), vec4(18.19, 944.86, 198.38, 238.1),
@@ -59,7 +61,7 @@ RegisterMission({
     },
     {
       label     = 'Car park, Rockford Hills',
-      start     = { coords = vec3(-1082.25, 245.75, 63.78), radius = 40.0 },   -- 49 m from the car
+      start     = { coords = vec3(-1082.25, 245.75, 63.78), radius = 100.0 },   -- 49 m from the car
       car       = vec4(-1100.12, 200.12, 63.05, 23.2),   -- the parked car at the scene
       people    = {   -- person spots around the car
         vec4(-1097.55, 201.23, 63.55, 113.2), vec4(-1096.82, 196.97, 63.55, 53.2),
@@ -73,7 +75,7 @@ RegisterMission({
     },
     {
       label     = 'Truck stop, Grand Senora',
-      start     = { coords = vec3(2068.50, 2113.50, 90.25), radius = 40.0 },   -- 52 m from the car
+      start     = { coords = vec3(2068.50, 2113.50, 90.25), radius = 100.0 },   -- 52 m from the car
       car       = vec4(2044.25, 2159.42, 95.15, 169.0),   -- the parked car at the scene
       people    = {   -- person spots around the car
         vec4(2041.50, 2159.95, 95.65, 259.0), vec4(2043.28, 2163.88, 95.65, 199.0),
@@ -87,7 +89,7 @@ RegisterMission({
     },
     {
       label     = 'Farm lot, Grapeseed',
-      start     = { coords = vec3(1401.50, 4494.00, 52.16), radius = 40.0 },   -- 49 m from the car
+      start     = { coords = vec3(1401.50, 4494.00, 52.16), radius = 100.0 },   -- 49 m from the car
       car       = vec4(1437.25, 4461.00, 49.38, 338.2),   -- the parked car at the scene
       people    = {   -- person spots around the car
         vec4(1439.85, 4459.96, 49.88, 68.2), vec4(1437.36, 4456.43, 49.88, 8.2),
@@ -101,7 +103,7 @@ RegisterMission({
     },
     {
       label     = 'Lumber yard, Paleto Forest',
-      start     = { coords = vec3(-263.75, 4739.75, 137.44), radius = 40.0 },   -- 51 m from the car
+      start     = { coords = vec3(-263.75, 4739.75, 137.44), radius = 100.0 },   -- 51 m from the car
       car       = vec4(-298.00, 4702.50, 236.28, 212.7),   -- the parked car at the scene
       people    = {   -- person spots around the car
         vec4(-300.36, 4700.99, 236.78, 302.7), vec4(-301.79, 4705.06, 236.78, 242.7),
@@ -115,7 +117,7 @@ RegisterMission({
     },
     {
       label     = 'Terminal car park, LSIA',
-      start     = { coords = vec3(-1011.00, -2591.25, 33.97), radius = 40.0 },   -- 50 m from the car
+      start     = { coords = vec3(-1011.00, -2591.25, 33.97), radius = 100.0 },   -- 50 m from the car
       car       = vec4(-961.25, -2596.50, 13.34, 103.0),   -- the parked car at the scene
       people    = {   -- person spots around the car
         vec4(-961.88, -2593.77, 13.84, 193.0), vec4(-957.56, -2593.80, 13.84, 133.0),
