@@ -334,6 +334,10 @@ Config.Spawning = {
     -- the one before it, so they are already there when it starts instead of popping up around the officers (false =
     -- they appear only when their objective starts, as before)
     stageAhead = true,
+    -- Metres: a raid's crew waiting in place before the breach stays calm until an officer comes this close to one of
+    -- them (officers nearer to the breach entries than to him do not count) or hurts one; then they all wake and
+    -- fight at once (0 = only a hurt one wakes them). They always wake when the fight starts
+    stageWakeRange = 12.0,
     -- true = a console line for each point skipped (shown while Config.Debug is on) and a warning when a wave had to
     -- use closer points
     log = true,

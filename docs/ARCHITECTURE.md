@@ -276,7 +276,7 @@ metres, km/h; chances are fractions (0.30); progress durations are milliseconds.
 | `checkpoint_route` | 20 | `checkpoints` (location key: list of vec3, or `{ points = {...} }` route) · `use` ('all'\|'random') · `count` (N for random) · `radius` [10.0] · `stopFor` [10] s · `vehicleRequired` [true] (a checkpoint counts only while the participant is driving a vehicle, any vehicle, checked on the server: in a vehicle and in its driver seat; the old name `policeVehicle` is read as an alias) · `medals` (false or `{ gold, silver, bronze }` seconds; a location may override with `location.medals`) · `contactPenalty` [2] s · `timerStart` ('first' checkpoint\|'start') · `failIfUndriveable` [true] |
 | `interact_points` | 5 | `points` (location key: vec3/vec4, list of them, or list of `{ coords, heading, label }`) · `use` ('all'\|'random') · `count` · `target = { label, icon, radius }` · `progress = { label, duration (ms), anim }` · `roll = { outcomes = { { id, chance, followUp = { label, duration } } } }` (server rolls per point) · `logResult = { choices = { 'secure', 'found_open' }, correct = { secure = 'secure', open = 'found_open' } }` · `hidden = { count, prop, label }` (N of the points hide a device; done when all found; found devices go to `run.shared.devices`) · `fastBonus = { seconds, id }` |
 | `skill_check` | 10 | `targets` ('shared:devices' or a location key) · `checks` [{'easy','medium','medium','hard'}] · `missPenalty` [30] s off the run timer · `failAfter` [2] misses in a row on one target · `target = { label, icon }` · `explosion` [true] (effect only, damage 0) |
-| `hostile_waves` | 60 | `spawns` (location key: list of vec4) · `waves` [{7,7,6}] · `nextWave = { aliveAtMost = 2, afterSeconds = 90 }` · `weapons` · `accuracy` [25] · `armour` [0] · `health` [200] · `behaviour` ('hold'\|'balanced'\|'push') · `surrender = { belowHealth = 0.25, chance = 0.30 }` · `peds` (models) · `boss = { model, label, health, armour, weapon, spawn (location key), surrender = {...} }` (does not scale) · `blockTraffic` [120.0] · `indoor` [false] (the fight is inside a building: the spawn director keeps `Config.Spawning.minDistanceIndoor`, not `minDistance`; Hostage Rescue and the raids' fights) · `scene` handled by a following interact_points |
+| `hostile_waves` | 60 | `spawns` (location key: list of vec4) · `waves` [{7,7,6}] · `nextWave = { aliveAtMost = 2, afterSeconds = 90 }` · `weapons` · `accuracy` [25] · `armour` [0] · `health` [200] · `behaviour` ('hold'\|'balanced'\|'push') · `surrender = { belowHealth = 0.25, chance = 0.30 }` · `peds` (models) · `boss = { model, label, health, armour, weapon, spawn (location key), surrender = {...} }` (does not scale) · `blockTraffic` [120.0] · `indoor` [false] (the fight is inside a building: the spawn director keeps `Config.Spawning.minDistanceIndoor`, not `minDistance`; Hostage Rescue and the raids' fights) · `stage` [false] (wave 1 is placed ahead of time while the objective before runs, calm and unarmed, and wakes when the fight starts; the raids' fights; see below) · `scene` handled by a following interact_points |
 | `protect_rescue` | 15 | `npcs` (location key: list of vec4) · `count` [3] · `peds` · `restrained` [true] · `freeTime` [6000] ms · `target = { label = 'Cut restraints' }` · `safe` (location key vec3) · `safeRadius` [6.0] · `hitPenalty` [50] · `failIfDies` [true] · spawns when the run moves to In progress (`prepare`) |
 | `flee_arrest` | 30 | `mode` ('door'\|'scatter') · door mode: `door` (vec4 key), `knock = { label, duration }`, `suspect` (vec4 key), `fleeTo` (list key), `responses = { surrender = 0.5, flee = 0.3, fight = 0.2 }`, `associates = { count, spawns, weapons, accuracy, armour }` (always fight) · scatter mode: `spawns` (list key), `routes` (list of lists of vec3), `suspects` [5], `armedShare` [0.4] · common: `models`, `weapons`, `fireWithin` [15.0], `escape = { distance, seconds }`, `givesUp = { aim = 10.0, stun = true, close = { distance = 3.0, seconds = 3 } }`, `armedGivesUp = { stun = true, belowHealth = 0.5 }`, `cuff = { label = 'Cuff suspect', duration = 5000 }`, `aliveBonus = { id, points, each }` |
 | `pursuit` | 30 | `mode` ('stop'\|'follow') · `vehicles` [1] · `models` · `suspectsPerVehicle` [1] · `spawn` (vec4 key) or `spawns` (list key) · `route` (location key of a road route `{ points, loop }`, nil = free flee) · `speed` [120] km/h · `style` ('cautious'\|'reckless') · `trigger` ('arrive' \| `{ distance = 60.0, lights = true }` \| `{ ahead = 50.0 }`) · `stopped = { speed = 5.0, seconds = 5 }` · `footFlee` [0.2] · `surrenderOnAim` [true] · `arrest = { label, duration }` · follow mode: `hold` [150], `lost = { distance = 250, seconds = 10 }`, `duration` [180], `medals = { gold = 40, silver = 80, bronze = 150 }` (average distance, m) · `escape = { distance, seconds }` · `complete` ('all_detained'\|'all_or_timeout_any') · `ramSpeed` [100] km/h (0 = any contact counts as a ram) · `ramPenaltyId` ['hard_ram'] · `neverShoots` [true] |
@@ -295,7 +295,16 @@ loader and the Mission Builder apply exactly these defaults and guardrails.
 
 A block may also expose `stage(ctx, dt)` (§7.1, `Config.Spawning.stageAhead`): the engine calls it while the objective
 before this one runs, so the block can place this objective's people ahead of time. No common field turns it on: a
-block that stages decides from its own fields which objectives it stages (none does yet).
+block that stages decides from its own fields which objectives it stages. `hostile_waves` stages an objective with
+`stage = true` (the raids' fights, PLAN S4): wave 1 through the director (`ctx.whenNear`, `ctx.choosePoints` with the
+objective's `indoor`, never relaxed), spawned `hidden` (`Runs.spawnPed` opts.hidden: no weapon, armour or fight
+settings in the ped or its bag; counted armed) in CP.Npc state `idle`. The whole staged crew wakes (`CP.Runs.arm`, then
+CP.Npc state `hostile`; one console line `run <id>: objective 2: <n> staged hostile(s) woke: <why>`) when its `start`
+runs, or earlier in `stage` / `onEntityDead` / `onEvent 'damaged'`: one of them hurt (the server's health of him lower
+than `stage` read before) or killed, or a participant within `Config.Spawning.stageWakeRange` (2D) of one who is not
+nearer to a point of the objective before (its `points`, `targets`, `door` or `checkpoints` location key: the breach
+entries) than to him. Awake before `start`, `stage` places nobody more (Refresh and the surrender poll only) and the
+client half runs the crew already (`update` data `awake = true`, §7.2). Until `start` no HUD entry and no completion.
 
 Worn-out runners (Config.Flee, not a file field): next to its own close rule, each block that owns a runner calls
 `CP.Npc.wornOut(netId, near)` with its own nearest-participant distance and, on true, its own surrender (state
@@ -891,6 +900,8 @@ Full admin control (P3, §5.39):
     block before it starts (`onEntityDead`, `dispatch` from CP.Npc, `rescale`), never `onParticipantLeft` or `tick`;
     its client half has not started. `testRestart` clears `staged` of the objective it restarts. Off (`stageAhead =
     false` or `enabled = false`, read live): never called; a missing key counts as on (the shipped value).
+    Used by `hostile_waves` objectives with `stage = true` (the raids' fights, §3.3; `Config.Spawning.stageWakeRange`
+    wakes their calm crew early).
 - `deleteEntity(run, netId)`, `entitiesFor(run, filter) -> list`, `canSpawn(run, n, armed) -> boolean` (caps `Config.Limits.maxArmedAlive` / `maxEntities`, counted now; callers wait and retry, never cut counts)
 - `send(run, eventName, ...)` → `TriggerClientEvent` to every active participant
 - `objectiveEvent(run, index, data)` → `crimson-police:client:objective` (runId, index, data)
@@ -2153,6 +2164,10 @@ Rules for blocks:
   `coords` and `time`. The server half validates distances with server-side coordinates.
 - Radio Silence (`ctx.radioSilence`): after the start, no blips for mission NPCs or objectives.
 - Every block reads its builder ranges from `Config.Blocks[<id>]` for validation.
+- A block's `update` reaches its client half while its objective is still pending too (a staged objective, §3.3): a
+  client half acts on it before `start` only when its server half says so (`hostile_waves`: `awake = true`, a staged
+  crew that woke before the breach), and never writes the HUD line or sends evidence for an objective that is not
+  current.
 
 ---
 

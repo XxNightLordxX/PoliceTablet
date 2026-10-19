@@ -1314,6 +1314,7 @@
   "block.hostile_waves.invalid.spawns_missing": "Hostile waves: location {location} has no spawn points under {key}",
   "block.hostile_waves.invalid.spawns_start": "Hostile waves: every spawn point at location {location} must be at least {min} m from the start",
   "block.hostile_waves.invalid.spawns_zone": "Hostile waves: a spawn point at location {location} is inside a no-build zone",
+  "block.hostile_waves.invalid.stage": "Hostile waves: stage must be true (the first wave waits in place, calm, while the objective before runs) or false",
   "block.hostile_waves.invalid.surrender": "Hostile waves: the surrender health share must be above 0 and at most 1, and the chance within the allowed range",
   "block.hostile_waves.invalid.weapons": "Hostile waves: pick at least one weapon from the allowed list",
   "block.hostile_waves.set.back": "in the back yard",

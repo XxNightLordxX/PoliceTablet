@@ -2396,6 +2396,42 @@ do
     H.eq(OpenBlips() - hwBase, 0, 'hw stop: the loop pass resumed after the cleanup draws no blip')
     H.eq(#tasks, hwTasks, 'hw stop: ...and tasks nobody')
 
+    -- a staged crew (stage = true, PLAN S4): left alone while its objective is pending and calm; run here as soon as
+    -- the server says it woke before the breach (the HUD line and the evidence stay the current objective's); its
+    -- start takes it over without a second task
+    local sgc = ClientCtx(U.deepcopy(HW.defaults({ waves = { 2 }, stage = true })), hloc,
+        { tag = 'hw-stage', index = 2 })
+    AddEnt(7203, 93, vec3(1030.0, 1000.0, 30.0), { state = 'idle', armed = false, cfg = { model = 'g_m_y_lost_01' } })
+    CE[93].grant = true
+    HWc.prepare(sgc)
+    local sgBase, sgTasks, sgZones, sgControl = OpenBlips(), #tasks, #roads.zones, controlCalls
+    HWc.update(sgc, { peds = { { netId = 7203, role = 'hostile', state = 'idle', wave = 1 } }, wave = 1, waves = 1 })
+    Steps(2)
+    H.eq(#tasks, sgTasks, 'hw staged: a calm staged crew is left alone while its objective is pending')
+    H.eq(OpenBlips() - sgBase, 0, 'hw staged: ...and has no blip (nobody sees where they wait)')
+    H.eq(controlCalls, sgControl, 'hw staged: ...and nobody asks for control of it')
+    CE[93].bag = { state = 'hostile', armed = true, cfg = { behaviour = 'hold', weapon = 'WEAPON_PISTOL' } }
+    CE[93].health = 110
+    HWc.update(sgc, {
+        peds = { { netId = 7203, role = 'hostile', state = 'hostile', wave = 1 } },
+        wave = 1,
+        waves = 1,
+        awake = true,
+    })
+    Steps(1)
+    H.eq(#TasksFor(93, 'combat'), 1, 'hw staged: it woke before the breach: the host runs its fight at once')
+    H.eq(OpenBlips() - sgBase, 1, 'hw staged: ...and it is on the map')
+    H.eq(#sgc.lines, 0, 'hw staged: the HUD line stays the breach\'s')
+    H.eq(#ReportsOf(sgc, 'low_health'), 0, 'hw staged: no evidence for an objective that is not current')
+    H.eq(#roads.zones, sgZones, 'hw staged: the traffic block waits for the fight to start')
+    HWc.start(sgc)
+    Steps(2)
+    H.eq(#TasksFor(93, 'combat'), 1, 'hw staged: the fight starts: no second combat task for it')
+    H.eq(#ReportsOf(sgc, 'low_health'), 1, 'hw staged: now current, its low health is reported')
+    H.eq(#roads.zones, sgZones + 1, 'hw staged: and the traffic is blocked')
+    HWc.stop(sgc)
+    H.eq(OpenBlips() - sgBase, 0, 'hw staged: stop removes its blip')
+
     -- traffic stays blocked while a later objective of the run follows (Gang Shootout "Secure the scene"),
     -- and is restored when the last objective stops, when the run is over, or on resource stop
     do

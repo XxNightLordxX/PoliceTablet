@@ -360,6 +360,8 @@ local function Validate(obj, mission, location)
     if not BehaviourOk(o.behaviour, c) then return Bad('block.hostile_waves.invalid.behaviour') end
     -- indoor = true: the fight is inside a building, so the director keeps Config.Spawning.minDistanceIndoor
     if o.indoor ~= nil and type(o.indoor) ~= 'boolean' then return Bad('block.hostile_waves.invalid.indoor') end
+    -- stage = true: wave 1 waits in place, calm, while the objective before runs (Config.Spawning.stageAhead)
+    if o.stage ~= nil and type(o.stage) ~= 'boolean' then return Bad('block.hostile_waves.invalid.stage') end
     if o.spawnSets ~= nil then
         local ss = o.spawnSets
         if type(ss) ~= 'table' or type(ss.keys) ~= 'table' or #ss.keys < 1 or #ss.keys > c.spawnSets[2]
@@ -645,8 +647,9 @@ end
 -- before the fight's own (the boss's spot). ws.waitMs is the wave's clock (GetGameTimer): set by the first call that
 -- came back short, cleared by one that got every point it asked for; the director gets it as opts.since and relaxes
 -- to hardMin after waveDelayMax on it. Returns the points, short (fewer than n: officers too close, or living
--- hostiles on the rest) and none (the location has no point for it at all).
-local function PickPoints(ctx, st, w, ws, n, first)
+-- hostiles on the rest) and none (the location has no point for it at all). name: the console name of the ask
+-- (default 'wave <w> (<list>)').
+local function PickPoints(ctx, st, w, ws, n, first, name)
     if n <= 0 then return {}, false, false end
     local list = SpawnPoints(ctx, st)
     if #list == 0 and #(first or {}) == 0 then return {}, true, true end
@@ -656,7 +659,7 @@ local function PickPoints(ctx, st, w, ws, n, first)
     local chosen = {}
     if #offer > 0 then
         chosen = ctx.choosePoints(offer, n, {
-            name = w == 'boss' and 'the boss' or ('wave %d (%s)'):format(w, ListName(ctx, st)),
+            name = name or (w == 'boss' and 'the boss' or ('wave %d (%s)'):format(w, ListName(ctx, st))),
             wave = w,
             since = os.time() - math.floor((now - waitMs) / 1000),
             placed = ws.points,
@@ -715,7 +718,10 @@ local function LeaveOut(ctx, st, w, none)
     return true
 end
 
-local function SpawnHostile(ctx, st, w, point)
+-- One hostile of wave w at point; returns its entry in st.peds (false when it could not be placed). calm = staged
+-- ahead (stage = true): he waits unarmed and calm in CP.Npc state 'idle' (spawnPed hidden: no weapon, armour or
+-- fight settings in his bag or in his hands) until Wake gives him all of it (CP.Runs.arm) and turns him hostile.
+local function SpawnHostile(ctx, st, w, point, calm)
     local obj = ctx.obj
     local r = RngOf(ctx)
     local c = Cfg()
@@ -734,19 +740,22 @@ local function SpawnHostile(ctx, st, w, point)
         health = health,
         cfg = { behaviour = Behaviour(ctx, st), group = 'hostile', wave = w },
         tag = 'wave' .. w,
+        hidden = calm == true or nil,
     })
     if not netId then return false end
-    st.peds[tostring(netId)] = {
+    local p = {
         netId = netId,
         entity = ent,
         role = 'hostile',
         wave = w,
-        state = 'hostile',
+        state = calm and 'idle' or 'hostile',
         maxHealth = health,
+        staged = calm == true or nil,
     }
-    CP.Npc.setState(ctx.run, netId, 'hostile')
+    st.peds[tostring(netId)] = p
+    if not calm then CP.Npc.setState(ctx.run, netId, 'hostile') end
     st.dirty = true
-    return true
+    return p
 end
 
 -- The boss after the last wave: his own spot first, else a point of the fight, through the director like a wave.
@@ -881,6 +890,124 @@ local function AllOut(ctx, st)
 end
 
 -- ============================================================================
+--           STAGED AHEAD (stage = true, Config.Spawning.stageAhead)
+-- ============================================================================
+-- A raid's crew is already in place before the breach: while the objective before this one runs, the engine calls
+-- stage once a tick, and wave 1 is placed through the director like any wave (minDistanceIndoor from every officer
+-- for an indoor fight), calm and unarmed (SpawnHostile calm). The whole staged crew wakes (armed, hostile) when this
+-- objective starts, or earlier when one of them is hurt or killed, or when an officer comes within
+-- Config.Spawning.stageWakeRange of one (on the map) who is not nearer to a point of the objective before (the
+-- breach entries he stacks up at) than to him. Once awake they fight before the breach too; nothing more is staged
+-- then (the rest of wave 1 comes when the fight starts, through the director as always). st.pending: staged and not
+-- started yet (no HUD line and no completion before the objective is current).
+
+local DOOR_KEYS = { 'points', 'targets', 'door', 'checkpoints' }
+
+-- The points the officers go to for the objective before this one (the breach entries), from the location.
+local function DoorPoints(ctx)
+    local i = (tonumber(ctx.index) or 0) - 1
+    if i < 1 then return {} end
+    local o = ctx.run and type(ctx.run.objectives) == 'table' and ctx.run.objectives[i] or nil
+    local obj = (o and o.obj) or (type(ctx.mission) == 'table' and (ctx.mission.objectives or {})[i]) or nil
+    local out = {}
+    if type(obj) ~= 'table' then return out end
+    for _, k in ipairs(DOOR_KEYS) do
+        if type(obj[k]) == 'string' then
+            for _, p in ipairs(PointList(ctx.location, obj[k])) do out[#out + 1] = p end
+        end
+    end
+    return out
+end
+
+local function HasStaged(st)
+    for _, p in pairs(st.peds) do if p.staged then return true end end
+    return false
+end
+
+-- A staged hostile wakes: his weapon, armour and fight settings now (CP.Runs.arm), then hostile.
+local function WakePed(ctx, st, p)
+    if not p.staged or p.state ~= 'idle' then return false end
+    if CP.Runs and CP.Runs.arm then CP.Runs.arm(ctx.run, p.netId) end
+    p.state = 'hostile'
+    CP.Npc.setState(ctx.run, p.netId, 'hostile')
+    st.dirty = true
+    return true
+end
+
+-- The whole staged crew wakes at once (one console line with the reason); false when it was awake already.
+local function Wake(ctx, st, why)
+    if st.awake then return false end
+    st.awake = true
+    st.dirty = true
+    local n = 0
+    for _, p in pairs(st.peds) do
+        if WakePed(ctx, st, p) then n = n + 1 end
+    end
+    CP.log(BLOCK, 'run %s: objective %s: %d staged hostile(s) woke: %s', tostring(ctx.run and ctx.run.id),
+        tostring(ctx.index), n, why)
+    return true
+end
+
+-- Why the calm crew wakes now (nil = it stays calm): one of them hurt (the server's health of him below what it first
+-- read), or an officer within stageWakeRange of one of them (on the map) who is not nearer to a breach entry.
+local function WakeWhy(ctx, st)
+    local range = tonumber(SpawnCfg().stageWakeRange) or 12.0
+    local doors = range > 0 and DoorPoints(ctx) or {}
+    for _, p in pairs(st.peds) do
+        local c = p.staged and p.state == 'idle' and PedCoords(p) or nil
+        if c then
+            local hp = tonumber(GetEntityHealth(p.entity)) or 0
+            if hp > 0 then
+                if hp < (p.calmHp or hp) then return 'one of them was hurt' end
+                p.calmHp = hp
+            end
+            if range > 0 then
+                for _, src in ipairs(ctx.participants() or {}) do
+                    local oc = ctx.coords(src)
+                    local d = oc and U.dist2d(oc, c) or math.huge
+                    if d <= range then
+                        local atDoor = false
+                        for _, door in ipairs(doors) do
+                            if U.dist2d(oc, door) < d then
+                                atDoor = true
+                                break
+                            end
+                        end
+                        if not atDoor then return ('officer %s came within %.0f m of one'):format(tostring(src), d) end
+                    end
+                end
+            end
+        end
+    end
+    return nil
+end
+
+-- Places what is still missing of wave 1, calm, where the director allows it now (never relaxed: the stage has its
+-- own clock, so the wave's own starts with the fight). Once the crew is awake, or the objective started, nothing more.
+local function StageWave(ctx, st)
+    if st.awake then return end
+    if st.wave == 0 then
+        if not FightNear(ctx, st) then return end
+        StartWave(ctx, st, 1)
+    end
+    local ws = st.waves[1]
+    if st.wave ~= 1 or not ws then return end
+    local missing = WaveGoal(ctx, st, 1) - ws.spawned
+    if missing <= 0 then return end
+    local points = PickPoints(ctx, st, 1, { points = ws.points }, math.min(missing, SPAWNS_PER_TICK), nil,
+        ('wave 1 (%s), staged'):format(ListName(ctx, st)))
+    for _, point in ipairs(points) do
+        if st.started or st.stopped or st.failed or not ctx.canSpawn(1, true) then break end
+        local p = SpawnHostile(ctx, st, 1, point, true)
+        if not p then break end
+        ws.spawned = ws.spawned + 1
+        ws.points[#ws.points + 1] = point
+        -- the crew woke (or the fight started) while he appeared
+        if st.awake then WakePed(ctx, st, p) end
+    end
+end
+
+-- ============================================================================
 --                            HUD AND CLIENT UPDATES
 -- ============================================================================
 
@@ -910,9 +1037,11 @@ local function Flush(ctx, st)
             list[#list + 1] = { netId = p.netId, role = p.role, state = p.state, wave = p.wave }
         end
         table.sort(list, function(a, b) return a.netId < b.netId end)
-        ctx.send({ peds = list, wave = st.wave, waves = WaveCount(ctx) })
+        -- awake: a staged crew that woke before its objective started (the client half runs it already)
+        ctx.send({ peds = list, wave = st.wave, waves = WaveCount(ctx), awake = (st.pending and st.awake) or nil })
     end
-    UpdateHud(ctx, st)
+    -- a staged objective that has not started yet shows nothing on the HUD
+    if not st.pending then UpdateHud(ctx, st) end
 end
 
 -- ============================================================================
@@ -987,7 +1116,7 @@ local function OnCuffed(ctx, st, src, p)
 end
 
 local function TryComplete(ctx, st)
-    if st.completed or st.failed or st.stopped then return end
+    if st.completed or st.failed or st.stopped or st.pending then return end
     if not AllOut(ctx, st) or Remaining(st) > 0 then return end
     local done, total = Totals(ctx, st)
     if ctx.complete({ neutralised = done, total = total, arrested = st.arrested or 0 }) ~= false then
@@ -1027,8 +1156,39 @@ end
 local function Start(ctx)
     local st = StateOf(ctx)
     st.stopped = nil
+    st.started = true
+    if st.pending then
+        -- staged ahead: the crew in place wakes now, the rest of wave 1 comes through the director as always
+        st.pending = nil
+        st.dirty = true
+        if HasStaged(st) then Wake(ctx, st, 'the fight started') end
+    end
     Advance(ctx, st)
     Flush(ctx, st)
+end
+
+-- stage = true: wave 1 placed ahead of time, calm, while the objective before runs; the wake checks of the calm crew
+-- and, once it woke, its surrender rolls and the losses. Returns true once anyone is staged.
+local function Stage(ctx)
+    if ctx.obj.stage ~= true then return false end
+    local st = StateOf(ctx)
+    if st.started or st.stopped or st.failed then return HasStaged(st) end
+    st.pending = true
+    if st.spawning then return HasStaged(st) end
+    st.spawning = true
+    local ok, err = pcall(function()
+        Refresh(ctx, st)
+        if not st.awake then
+            local why = WakeWhy(ctx, st)
+            if why then Wake(ctx, st, why) end
+        end
+        if st.awake then PollHealth(ctx, st) else StageWave(ctx, st) end
+    end)
+    st.spawning = false
+    -- an error reaches the engine, which stops staging this objective (it then starts as before)
+    if not ok then error(err, 0) end
+    Flush(ctx, st)
+    return HasStaged(st)
 end
 
 local function Tick(ctx, dt)
@@ -1062,6 +1222,8 @@ local function OnEvent(ctx, src, ev)
         ok = true
     elseif ev.type == 'damaged' then
         if not p then return false, 'unknown_entity' end
+        -- an officer hurt one of a calm staged crew: they all wake
+        if p.staged and p.state == 'idle' then Wake(ctx, st, 'one of them was hurt') end
         if p.state == 'hostile' and not p.rolled then CheckLowHealth(ctx, st, p) end
         ok = true
     else
@@ -1079,6 +1241,8 @@ local function OnEntityDead(ctx, netId, killerSrc)
     local prev = p.state
     p.state = 'dead'
     st.dirty = true
+    -- one of a calm staged crew was killed: the others wake
+    if p.staged and prev == 'idle' then Wake(ctx, st, 'one of them was killed') end
     local protected = prev == 'cuffed'
         or (prev == 'surrendered' and not (p.surrenderedAt and Now() - p.surrenderedAt < SURRENDER_GRACE_MS))
     if protected and not st.failed and IsParticipant(ctx, killerSrc) then
@@ -1142,6 +1306,7 @@ local function Restart(ctx)
     for k in pairs(st) do st[k] = nil end
     st.rng = keep
     st = StateOf(ctx)
+    st.started = true
     st.dirty = true
     Advance(ctx, st)
     Flush(ctx, st)
@@ -1164,6 +1329,7 @@ CP.Blocks.register(BLOCK, {
     armedCount = ArmedCount,
     requiredPoints = RequiredPoints,
     prepare = function(ctx) StateOf(ctx) end,
+    stage = Stage,
     start = Start,
     tick = Tick,
     onEvent = OnEvent,

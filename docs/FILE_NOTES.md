@@ -347,11 +347,18 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
       report per hostile whose health drops under surrender.belowHealth (boss: boss.surrender.belowHealth;
       the server also polls health itself, the report only makes the roll come sooner).
     The "Cuff suspect" target itself is CP.Npc's (enableCuff). No networked entity is created here.
+    A staged crew (stage = true, PLAN S4) is left alone while its objective is pending and calm (no task,
+    no blip, no control asked: CP.Npc keeps them calm and unarmed). When the server's update says
+    awake = true (the crew woke before the breach) the loop runs for it already (Live: current or awake):
+    the host's CP.Npc.apply + combat task, the blips; the HUD line and the low_health reports stay the
+    current objective's (only once this objective is current). start then takes it over (no second task),
+    and blocks the traffic as always.
 
   Objective fields read: blockTraffic, behaviour, surrender.belowHealth / .chance,
     boss.label / boss.surrender (ctx.obj, scaled copy); location.start.coords.
-  Evidence sent: { type = 'low_health', netId } (host only, once per hostile)
-  Server data (update): { peds = { { netId, role, state, wave } }, wave, waves }
+  Evidence sent: { type = 'low_health', netId } (host only, once per hostile, only while current)
+  Server data (update): { peds = { { netId, role, state, wave } }, wave, waves, awake = true|nil (a staged crew
+    that woke before its objective started) }
 ```
 
 ## Crimson-Police/blocks/hostile_waves/server.lua
@@ -387,8 +394,21 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
     caps (ctx.canSpawn: a wave that does not fit waits and is re-checked every tick, counts are never
     cut for the caps) and rescale (only the NPCs still missing for the new ctx.obj counts are spawned).
     The client half blocks NPC traffic within blockTraffic metres of the start while the objective runs.
+    Staged ahead (stage = true, PLAN S4, Config.Spawning.stageAhead): the engine calls stage(ctx) once a
+    tick while the objective before runs; wave 1 is placed then (once ctx.whenNear, through the director
+    with the objective's indoor flag, never relaxed: a probe clock { points = ws.points }, so the wave's own
+    ws.waitMs starts with the fight), calm: ctx.spawnPed hidden = true (no weapon, armour or fight settings
+    in the bag or the ped; the engine counts him armed, armedTruth), CP.Npc state 'idle', p.staged. Wake:
+    CP.Runs.arm (weapon, armour, the cfg into the bag) then CP.Npc.setState 'hostile' for every staged one
+    at once, one CP.log line 'run <id>: objective 2: <n> staged hostile(s) woke: <why>'. Why: the fight
+    started (start), one of them was hurt (the server's GetEntityHealth below what stage read before, or a
+    'damaged' event) or killed (onEntityDead), or an officer within Config.Spawning.stageWakeRange (2D) of
+    one who is not nearer to a point of the objective before (its points / targets / door / checkpoints
+    key: the breach entries) than to him. Awake before the start, stage only does Refresh and PollHealth
+    (surrender rolls) and places nobody more; the rest of wave 1 comes at start through the director.
+    st.pending (staged, not started): no HUD line, no completion; Flush sends awake = true to the clients.
     Used by Gang Shootout (3 waves 7/7/6), Hostage Rescue (1 wave of 4 inside, indoor), Drug Lab Raid
-    and Gang Hideout Raid (objective 2, indoor) and Weekly Boss: Kingpin (4 waves 8/8/7/7 then the
+    and Gang Hideout Raid (objective 2, indoor, stage) and Weekly Boss: Kingpin (4 waves 8/8/7/7 then the
     Kingpin).
 
   Objective fields read (defaults: ARCHITECTURE §3.3 and Config.Blocks.hostile_waves)
@@ -415,6 +435,8 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
     blockTraffic  metres around location.start.coords (client half)     [blockTraffic[3] = 120.0]
     indoor        true = the fight is inside a building: the director keeps Config.Spawning.minDistanceIndoor
                   (validate: a boolean or absent)                           [absent = false]
+    stage         true = wave 1 is placed ahead of time, calm, while the objective before runs, and wakes
+                  when the fight starts (validate: a boolean or absent)     [absent = false]
 
   Evidence accepted (onEvent)
     { type = 'low_health', netId }   host client: a hostile looks under belowHealth. The server re-checks
@@ -426,7 +448,8 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
     { type = 'shot', netId, src }    CP.Npc: a participant shot a surrendered/cuffed hostile
                                      (shot_surrendered is recorded by CP.Npc); accepted, nothing else.
     { type = 'damaged', netId }      CP.Npc (CP.Runs.dispatch): the same server-side health check as
-                                     low_health (still one roll per hostile); always accepted.
+                                     low_health (still one roll per hostile); always accepted. On a calm
+                                     staged hostile it wakes the whole staged crew first.
 
   Bonus / penalty ids recorded (shared)
     hostile_arrested   ctx.award, count 1 for every hostile cuffed
@@ -437,8 +460,8 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
 
   ctx.state
     block, rng, peds = { [tostring(netId)] = { netId, entity, role = 'hostile'|'boss', wave, state,
-    rolled, maxHealth, surrenderedAt } }, waves = { [w] = { spawned, elapsed, points } }, wave,
-    boss = { netId } | nil, arrested, dirty, hudText, completed, failed, stopped
+    rolled, maxHealth, surrenderedAt, staged, calmHp } }, waves = { [w] = { spawned, elapsed, points } }, wave,
+    boss = { netId } | nil, arrested, dirty, hudText, completed, failed, stopped, started, pending, awake
 ```
 
 ## Crimson-Police/blocks/interact_points/client.lua
@@ -4426,6 +4449,16 @@ not while a hostile stands, never with 0; standing on the points before the figh
 then counts from wave 1's first hostile). The Kingpin on his own spot, on another point when his is 39.7 m away, left
 out (no checklist line) when nothing is far enough after his wave fell. Ring copies of a wave larger than the list are checked like points;
 enabled = false spawns as before; indoor is validated. No SQL.
+```
+
+## tests/hostile_waves_stage_spec.lua
+
+```text
+The raids' crew staged ahead (hostile_waves stage = true, PLAN S4) on the real engine, the real blocks and the real
+built-in mission files: while the officers stack up and breach (objective 1), the crew of the fight (objective 2) is
+already in place, calm and unarmed, placed by the spawn director away from the officers; they wake (armed, hostile)
+when the fight starts, or earlier when one of them is hurt or killed, or an officer walks up to one of them away from
+the breach entries. No SQL (test runs write no rows).
 ```
 
 ## tests/int_core_spec.lua

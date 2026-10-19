@@ -133,6 +133,7 @@ local FIELDS = {
         'boss',
         'blockTraffic',
         'indoor',
+        'stage',
     },
     protect_rescue = {
         'npcs',

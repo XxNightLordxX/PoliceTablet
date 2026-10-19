@@ -686,7 +686,7 @@ Everything else works as shipped. These are the ones owners change most:
 | `Config.DisabledLocations` | Single locations to turn off, by mission: `{ prison_break = { 'North gate' } }`. Also switched in Admin UI → **Missions** |
 | `Config.MissionTweaks` | Change a built-in mission's cooldown or time limits, switch off some of its locations, or change its NPC models, cars or weapons, without editing its file |
 | `Config.Limits` | `maxCompletionsHour = 8` and `maxCompletionsDay = 0` (0 = no cap) finished missions per officer; `maxConcurrentRuns = 12` and `maxConcurrentTactical = 4` missions at once, server-wide |
-| `Config.Spawning` | Where a mission's people may appear (the spawn director): never closer than `minDistance` (40 m) to any officer, `minDistanceIndoor` (15 m) inside a building; never behind your officers (more than `behindAngle`, 110 degrees, off an officer's line to the scene, whichever side he came in from, counted for officers within `activateRange`); one wave always from one side (a `maxSpread` slice of 150 degrees, so never all around them); and an objective's people only once an officer is within `activateRange` (150 m). A wave that finds too few such points spawns what it can and the rest later (as your officers move or hostiles fall), waits up to `waveDelayMax` (20 s), then may use points down to `hardMin` (20 m) away, never closer. If a wave still cannot be placed `leaveOutAfter` (45 s) after it began waiting and nobody of the fight is left standing, the hostiles it could not place are left out so the fight can end (never before the fight's first hostile appeared; 0 = wait for ever). Used by every shootout: Gang Shootout and the Weekly Boss, and at the indoor distance Hostage Rescue and the raids' fights. `log` prints a console line for each point it skips, by its name in the mission file (`spawns[7] skipped: 2 m from <officer>`, with `Config.Debug`) and a warning when a wave had to come closer or left someone out. `stageAhead` (on) lets a mission place the next objective's people ahead of time, while your officers are still busy with the one before it, so they are already in place when it starts instead of popping up around the officers the moment it does (no built-in mission uses it yet; off = everyone appears when their objective starts). `enabled = false` turns all of it off: hostiles appear on the file's points as before |
+| `Config.Spawning` | Where a mission's people may appear (the spawn director): never closer than `minDistance` (40 m) to any officer, `minDistanceIndoor` (15 m) inside a building; never behind your officers (more than `behindAngle`, 110 degrees, off an officer's line to the scene, whichever side he came in from, counted for officers within `activateRange`); one wave always from one side (a `maxSpread` slice of 150 degrees, so never all around them); and an objective's people only once an officer is within `activateRange` (150 m). A wave that finds too few such points spawns what it can and the rest later (as your officers move or hostiles fall), waits up to `waveDelayMax` (20 s), then may use points down to `hardMin` (20 m) away, never closer. If a wave still cannot be placed `leaveOutAfter` (45 s) after it began waiting and nobody of the fight is left standing, the hostiles it could not place are left out so the fight can end (never before the fight's first hostile appeared; 0 = wait for ever). Used by every shootout: Gang Shootout and the Weekly Boss, and at the indoor distance Hostage Rescue and the raids' fights. `log` prints a console line for each point it skips, by its name in the mission file (`spawns[7] skipped: 2 m from <officer>`, with `Config.Debug`) and a warning when a wave had to come closer or left someone out. `stageAhead` (on) lets a mission place the next objective's people ahead of time, while your officers are still busy with the one before it, so they are already in place when it starts instead of popping up around the officers the moment it does (the raids use it; off = everyone appears when their objective starts). `stageWakeRange` (12 m): a raid's crew waits calm and unarmed before the breach and wakes, armed, when the fight starts, or earlier when one of them is hurt or killed or an officer comes this close to one of them (officers at the breach entries, nearer to an entry than to him, do not count; 0 = only a hurt one wakes them). `enabled = false` turns all of it off: hostiles appear on the file's points as before |
 | `Config.NpcDifficulty.preset` | `'easy'`, `'normal'`, `'hard'` or `'custom'`. Changes how NPCs fight, never the pay |
 | `Config.NpcCombat` | How hard armed NPCs fight back: no automatic weapons, an accuracy cap, single shots, half damage, no headshot one-shots. See [5.9](#59-how-hard-npcs-fight-back) |
 | `Config.Flee` | How long a suspect who runs from your officers keeps running: the server times every runner on foot (time in a car does not count), who sprints for `sprintSeconds` (10), jogs for `jogSeconds` (12), walks for `walkSeconds` (8) and is then worn out. Each suspect lasts up to `jitter` (25 %) longer or shorter, `Config.NpcDifficulty`'s `fleeMult` stretches it (`'hard'`: 20 % longer), a runner no officer comes within `recoverRange` (60 m) of for `recoverSeconds` (20 s) sprints again, and `armedTire = false` keeps armed suspects fresh. A tired runner visibly slows down: at most a jog, then a walk, at `jogRate` (0.95) / `walkRate` (0.85) of the normal speed, and with `windedClipset` he jogs, then walks winded. Once worn out he gives up as soon as an officer is within `giveUpRange` (30 m): `exhausted = 'surrender'` he kneels, `'handsUp'` he stands with his hands up (Cuff suspect either way), `'walk'` he walks on and never gives up on his own. `enabled = false` turns it off |
@@ -1319,7 +1319,10 @@ car, or nothing).
 ### 9.7 Raids
 
 **Drug Lab Raid** and **Gang Hideout Raid** are Tactical missions for 2–4 officers. Each run can roll different
-behaviour and spawns, and the Active Mission screen shows an intel line so the unit knows what to expect.
+behaviour and spawns, and the Active Mission screen shows an intel line so the unit knows what to expect. The crew
+is already in place while you drive in and stack up: placed away from you (`Config.Spawning`), calm and unarmed until
+the breach, when they all arm and fight. Shoot one, or walk up to one away from the doors (`stageWakeRange`), and they
+wake early.
 
 ### 9.8 XP and levels
 
@@ -2106,9 +2109,18 @@ however it ends.
   nobody instead of using the start point.
 - Staging ahead (same request): `Config.Spawning.stageAhead` (on) lets the engine place the next objective's people
   while the officers are still busy with the one before it, so they can already be in place (away from the officers)
-  when it starts instead of appearing around them the moment it does. Only a mission step built for it stages; no
-  built-in mission does yet. What it placed goes with the run like everything else (a failure, the end or the last
-  officer leaving removes it).
+  when it starts instead of appearing around them the moment it does. Only a mission step built for it stages (the
+  raids, next item). What it placed goes with the run like everything else (a failure, the end or the last officer
+  leaving removes it).
+- Raids: the defenders are already inside before the breach (same request; before, the crew appeared the moment the
+  breach completed, 2.6-10.5 m from the breach team): Drug Lab Raid and Gang Hideout Raid mark their fight `stage =
+  true`, so wave 1 is placed while the officers drive in and stack up, through the spawn director (15 m or more from
+  every officer at that moment, never behind them), calm and unarmed. They wake, armed and hostile, when the breach
+  completes, or earlier when one of them is hurt or killed or an officer comes within `Config.Spawning.stageWakeRange`
+  (12 m) of one of them. Officers nearer to a breach entry than to him do not wake him: the plan's 12 m alone would
+  have woken the crew at the doors at nearly every raid location (most "inside" points are 2.6-12 m from the entries),
+  so the fight would start before the breach. The rest of wave 1 (points too close when it was staged) comes when the
+  fight starts, through the director as before; the scaled count and every other rule are unchanged.
 
 **Waiting for the owner's OK** (already in `docs/SPEC.md` and the code; each one is undone without a code change):
 

@@ -376,6 +376,19 @@ do
     H.ok((Check('Spawning.stageAhead', false)), 'staging ahead can be switched off')
     Err('Spawning.stageAhead', 'yes', 'err.setting_type', 'staging ahead is on or off')
     H.eq(
+        E('Spawning.stageWakeRange').desc,
+        'Metres: a raid\'s crew waiting in place before the breach stays calm until an officer comes this close to one'
+            .. ' of them (officers nearer to the breach entries than to him do not count) or hurts one; then they all'
+            .. ' wake and fight at once (0 = only a hurt one wakes them). They always wake when the fight starts',
+        'the wake range of a staged crew (S4), alone'
+    )
+    H.eq(E('Spawning.stageWakeRange').section, 'spawning', 'the wake range is in the Spawning section')
+    H.ok((Check('Spawning.stageWakeRange', 0)), 'stageWakeRange 0 (only a hurt one wakes them)')
+    ok, v = Check('Spawning.stageWakeRange', 50)
+    H.ok(ok and v == 50.0, 'stageWakeRange up to 50 m')
+    Err('Spawning.stageWakeRange', 51, 'err.setting_range', 'stageWakeRange at most 50 m')
+    Err('Spawning.stageWakeRange', -1, 'err.setting_range', 'and never below 0')
+    H.eq(
         E('Spawning.log').desc,
         'true = a console line for each point skipped (shown while Config.Debug is on) and a warning when a wave had'
             .. ' to use closer points',
@@ -412,6 +425,7 @@ do
         'hardMin',
         'leaveOutAfter',
         'stageAhead',
+        'stageWakeRange',
         'log',
     }) do
         H.ok(not E('Spawning.' .. k).reload and not E('Spawning.' .. k).restart, 'read live: Spawning.' .. k)

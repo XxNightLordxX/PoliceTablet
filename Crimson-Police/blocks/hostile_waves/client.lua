@@ -31,6 +31,12 @@ local function IsHost(S)
     return S.ctx.isHost == true
 end
 
+-- The objective runs here: it is current, or its staged crew woke before it started (the server's awake flag), so
+-- the host already runs their fight and everyone sees them on the map.
+local function Live(S)
+    return S.alive and (S.current or S.awake) == true
+end
+
 local function PedFor(netId)
     if not netId or not NetworkDoesNetworkIdExist(netId) then return nil end
     local e = NetworkGetEntityFromNetworkId(netId)
@@ -185,9 +191,9 @@ end
 -- to whoever is closest, often another participant): request it every time it is needed.
 -- ctx.control waits for the hand-over: an objective that stopped meanwhile tasks nobody.
 local function HasControl(S, ent)
-    if not (S.alive and S.current) then return false end
+    if not Live(S) then return false end
     if NetworkHasControlOfEntity(ent) then return true end
-    return S.ctx.control(ent, CONTROL_MS) == true and S.alive and S.current
+    return S.ctx.control(ent, CONTROL_MS) == true and Live(S)
 end
 
 local FIRST_TASK = { hostile = 'combat', surrendered = 'kneel', cuffed = 'cuffed' }
@@ -207,7 +213,8 @@ local function HostAi(S, info, ent, state, bag)
         end
         S.applied[info.netId] = ent
     end
-    if state == 'hostile' and not S.reported[info.netId] then
+    -- evidence goes to the current objective only (an awake staged crew's health the server polls itself)
+    if state == 'hostile' and S.current and not S.reported[info.netId] then
         local s = ctx.obj.surrender or {}
         if info.role == 'boss' and type(ctx.obj.boss) == 'table' and type(ctx.obj.boss.surrender) == 'table' then
             s = ctx.obj.boss.surrender
@@ -227,7 +234,7 @@ local function Loop(S)
     S.looping = true
     CreateThread(function()
         while S.alive do
-            if S.current then
+            if Live(S) then
                 local ctx = S.ctx
                 local me = GetEntityCoords(PlayerPedId())
                 local hint = false
@@ -238,7 +245,7 @@ local function Loop(S)
                         local state = (bag and bag.state) or info.state
                         if IsHost(S) then HostAi(S, info, ent, state, bag) end
                         -- HostAi waits for control (ctx.control yields): a stop meanwhile has already cleaned up
-                        if not (S.alive and S.current) then break end
+                        if not Live(S) then break end
                         if state == 'hostile' or state == 'surrendered' then
                             if not ctx.radioSilence then EnsureBlip(S, info.netId, ent, info.role == 'boss') end
                             if state == 'surrendered' and U.dist(me, GetEntityCoords(ent)) <= HINT_RANGE then
@@ -251,7 +258,8 @@ local function Loop(S)
                         removeBlip(S, info.netId)
                     end
                 end
-                SetHint(S, hint and CP.L('block.hostile_waves.hint_cuff') or nil)
+                -- the HUD line belongs to the current objective: an awake staged crew leaves it alone
+                if S.current then SetHint(S, hint and CP.L('block.hostile_waves.hint_cuff') or nil) end
             end
             Wait(LOOP_MS)
         end
@@ -293,6 +301,11 @@ CP.Blocks.register(BLOCK, {
             if not keep[netId] then removeBlip(S, netId) end
         end
         S.peds = data.peds
+        -- a staged crew that woke before this objective started: run its fight now (while calm it is left alone)
+        if data.awake == true and not S.current and S.alive then
+            S.awake = true
+            Loop(S)
+        end
     end,
 
     hostChanged = function(ctx, isHost)
