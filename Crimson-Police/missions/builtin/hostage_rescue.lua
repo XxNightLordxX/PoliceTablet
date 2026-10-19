@@ -7,7 +7,7 @@
   (Burton), Boulevard Del Perro (Rockford Hills), Great Ocean Highway (Banham Canyon) and Route 68. Every
   point is placed in the bank's own frame (teller position and heading): hostiles behind the counter, in
   the back office by the vault and in the lobby; hostages kneel in the lobby; the safe marker is outside.
-  Blocks: hostile_waves → protect_rescue (the hostages spawn when the run moves to In progress).
+  Blocks: hostile_waves → protect_rescue (the hostages appear when objective 2 starts: Config.Spawning.hostagesAt).
 ]]
 
 RegisterMission({

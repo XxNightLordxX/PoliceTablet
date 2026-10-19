@@ -784,6 +784,12 @@ do -- defaults and validate
     H.eq(PR.onTimeout({}), nil, 'pr onTimeout fails')
 end
 
+-- The blocks below up to "rescale before spawning" are the hostages' run-start timing (Config.Spawning.hostagesAt =
+-- 'runStart', as before PLAN S15): they appear in prepare. The shipped 'objective' timing follows them.
+H.eq(Config.Spawning.hostagesAt, 'objective', 'pr: the hostages appear when their objective starts by default')
+H.eq(Config.Spawning.hostagesWaitMax, 10, 'pr: officers standing too close keep them waiting at most 10 s')
+Config.Spawning.hostagesAt = 'runStart'
+
 do -- spawn in prepare (waiting for room), damage while not current, free, walk to safety
     Place(1, 1990, 2000, 20)
     local ctx, S = MakeCtx('protect_rescue', {}, prLoc, { index = 2 })
@@ -961,6 +967,137 @@ do -- rescale before spawning, restrained = false, restart
     H.eq(#S.deleted, 3, 'pr restart deleted hostages')
     H.eq(#S.spawned, 6, 'pr restart respawned hostages')
     H.eq(NPC.states[S.spawned[6].netId], 'restrained', 'respawned restrained')
+end
+
+-- ============================================================================
+--                                protect_rescue
+-- ============================================================================
+-- THE HOSTAGES APPEAR WHEN THEIR OBJECTIVE STARTS.
+-- Config.Spawning.hostagesAt = 'objective' (PLAN S15, shipped): nothing in prepare; start asks the spawn director
+-- (the fake ctx's answers here; tests/protect_rescue_director_spec.lua runs the real one).
+
+local function PrWarns(fn)
+    local real, got = CP.warn, {}
+    CP.warn = function(tag, fmt, ...)
+        local ok, text = pcall(string.format, fmt, ...)
+        got[#got + 1] = { tag = tag, text = ok and text or fmt }
+    end
+    local ok, err = pcall(fn)
+    CP.warn = real
+    if not ok then error(err, 0) end
+    return got
+end
+
+do -- run start: as before, the same spots; objective: nothing before start, the same spots at start
+    Place(1, 1960, 2000, 20)
+    local rctx, RS = MakeCtx('protect_rescue', {}, prLoc, { index = 2, seed = 77 })
+    PR.prepare(rctx)
+    H.eq(#RS.spawned, 3, 'runStart: every hostage in prepare, as before')
+    H.eq(RS.asks, nil, 'runStart: the spawn director is not asked')
+    H.eq(PR.spawnsInPrepare(rctx), true, 'runStart: prepare spawns on purpose (no engine warning)')
+
+    Config.Spawning.hostagesAt = 'objective'
+    local ctx, S = MakeCtx('protect_rescue', {}, prLoc, { index = 2, seed = 77 })
+    PR.prepare(ctx)
+    H.eq(#S.spawned, 0, 'objective: no hostage in prepare (the run start)')
+    H.eq(PR.spawnsInPrepare(ctx), false, 'objective: prepare never spawns')
+    H.step(1000)
+    H.eq(#S.spawned, 0, 'objective: no retry thread spawns them before their objective')
+    PR.start(ctx)
+    H.eq(#S.spawned, 3, 'objective: every hostage when the objective starts')
+    H.eq(S.asks and #S.asks, 1, 'objective: through the spawn director')
+    local ask = S.asks[1]
+    H.eq(ask.n, 3, 'the director is asked for every missing hostage')
+    H.eq(ask.opts.indoor, true, 'at the indoor distance (minDistanceIndoor)')
+    H.eq(ask.opts.wave, 'hostages', 'on a clock of their own')
+    H.eq(ask.opts.name, 'the hostages (hostages)', 'named in the console by their list')
+    for i = 1, 3 do
+        local a, b = PosOf(RS, RS.spawned[i].netId), PosOf(S, S.spawned[i].netId)
+        H.ok(a.x == b.x and a.y == b.y, ('hostage %d on the same spot as with the run-start timing'):format(i))
+        H.eq(S.spawned[i].opts.role, 'hostage', 'still a hostage')
+        H.eq(NPC.states[S.spawned[i].netId], 'restrained', 'still restrained')
+    end
+    H.eq(LastHud(S, 'detail'), 'block.protect_rescue.detail', 'HUD line when current')
+end
+
+do -- objective: nobody near waits (no clock); the director's short answers; hostagesWaitMax
+    Place(1, 1960, 2000, 20)
+    local ctx, S = MakeCtx('protect_rescue', {}, prLoc, { index = 2 })
+    local near = false
+    ctx.whenNear = function() return near end
+    PR.prepare(ctx)
+    PR.start(ctx)
+    AdvanceMs(30000)
+    PR.tick(ctx, 1)
+    H.eq(#S.spawned, 0, 'no officer within activateRange: nobody yet')
+    H.eq(S.asks, nil, 'and the director is not asked')
+    -- an officer near, but the director allows one spot only (the others too close to him)
+    near = true
+    local allow = 1
+    ctx.choosePoints = function(list, n, opts)
+        S.asks = S.asks or {}
+        S.asks[#S.asks + 1] = { n = n, opts = opts, count = #list }
+        local out = {}
+        for i = 1, math.min(allow, n, #list) do out[i] = list[i] end
+        return out
+    end
+    local w = PrWarns(function() PR.tick(ctx, 1) end)
+    H.eq(#S.spawned, 1, 'only the spot the director allows')
+    H.eq(#w, 0, 'no warning while waiting')
+    allow = 0
+    AdvanceMs(5000)
+    PR.tick(ctx, 1)
+    H.eq(#S.spawned, 1, 'the others wait while officers stand too close')
+    H.eq(S.asks[#S.asks].n, 2, 'the director is asked for the two still missing')
+    H.eq(PR.checklist(ctx)[1].max, 3, 'the checklist still counts 3 hostages')
+    AdvanceMs(5000)
+    w = PrWarns(function() PR.tick(ctx, 1) end)
+    H.eq(#S.spawned, 3, 'after hostagesWaitMax (10 s) the rest appear on their spots anyway')
+    H.eq(#w, 1, 'with one warning')
+    H.ok(w[1] and w[1].text:find('Config.Spawning.hostagesWaitMax', 1, true) ~= nil, 'naming hostagesWaitMax')
+    H.ok(w[1] and w[1].text:find('Store', 1, true) ~= nil, 'and the place')
+    for i = 1, 3 do
+        local c, on = S.spawned[i].opts.coords, false
+        for _, h in ipairs(prLoc.hostages) do on = on or (c.x == h.x and c.y == h.y) end
+        H.ok(on, ('hostage %d on one of the location\'s hostage points'):format(i))
+    end
+
+    -- hostagesWaitMax = 0: officers who stay too close keep them waiting
+    Config.Spawning.hostagesWaitMax = 0
+    ctx, S = MakeCtx('protect_rescue', {}, prLoc, { index = 2 })
+    ctx.choosePoints = function() return {} end
+    PR.start(ctx)
+    AdvanceMs(120000)
+    w = PrWarns(function() PR.tick(ctx, 1) end)
+    H.eq(#S.spawned, 0, 'hostagesWaitMax 0: they wait until the officers step back')
+    H.eq(#w, 0, 'without a warning')
+    Config.Spawning.hostagesWaitMax = 10
+end
+
+do -- no hostage points: nobody, never on the start point, one warning
+    local noPts = { label = 'Empty', start = prLoc.start, hostages = {}, safe = prLoc.safe }
+    for _, at in ipairs({ 'objective', 'runStart' }) do
+        Config.Spawning.hostagesAt = at
+        local ctx, S = MakeCtx('protect_rescue', {}, noPts, { index = 2 })
+        local w = PrWarns(function()
+            PR.prepare(ctx)
+            PR.start(ctx)
+            PR.tick(ctx, 1)
+            PR.tick(ctx, 1)
+        end)
+        H.eq(#S.spawned, 0, at .. ': no hostage points, nobody appears (never on the start point)')
+        H.eq(#w, 1, at .. ': one warning')
+        H.ok(w[1] and w[1].text:find('no hostage points under hostages', 1, true) ~= nil, at .. ': it names the list')
+    end
+    Config.Spawning.hostagesAt = 'objective'
+end
+
+do -- the spawn director switched off: at run start, as before
+    Config.Spawning.enabled = false
+    local ctx, S = MakeCtx('protect_rescue', {}, prLoc, { index = 2 })
+    PR.prepare(ctx)
+    H.eq(#S.spawned, 3, 'enabled = false: every hostage at run start, as before')
+    Config.Spawning.enabled = true
 end
 
 -- ============================================================================
@@ -1945,10 +2082,11 @@ do -- a spawn that throws never freezes spawning (the re-entry flag is always cl
     local pctx, PS = MakeCtx('protect_rescue', {}, prLoc, { index = 2 })
     ThrowOnce(pctx)
     PR.prepare(pctx)
+    PR.start(pctx)
     H.eq(#PS.spawned, 0, 'pr: nothing from the throwing spawn')
     H.eq(pctx.state.spawning, false, 'pr: spawning flag cleared after the error')
-    H.step(1000)
-    H.eq(#PS.spawned, 3, 'pr: the prepare retry spawns every hostage')
+    PR.tick(pctx, 1)
+    H.eq(#PS.spawned, 3, 'pr: the next tick spawns every hostage')
 
     local sctx, SS = MakeCtx('flee_arrest', { mode = 'scatter' }, scatterLoc)
     ThrowOnce(sctx)

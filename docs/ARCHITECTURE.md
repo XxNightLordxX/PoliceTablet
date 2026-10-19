@@ -290,7 +290,7 @@ metres, km/h; chances are fractions (0.30); progress durations are milliseconds.
 | `interact_points` | 5 | `points` (location key: vec3/vec4, list of them, or list of `{ coords, heading, label }`) · `use` ('all'\|'random') · `count` · `target = { label, icon, radius }` · `progress = { label, duration (ms), anim }` · `roll = { outcomes = { { id, chance, followUp = { label, duration } } } }` (server rolls per point) · `logResult = { choices = { 'secure', 'found_open' }, correct = { secure = 'secure', open = 'found_open' } }` · `hidden = { count, prop, label }` (N of the points hide a device; done when all found; found devices go to `run.shared.devices`) · `fastBonus = { seconds, id }` |
 | `skill_check` | 10 | `targets` ('shared:devices' or a location key) · `checks` [{'easy','medium','medium','hard'}] · `missPenalty` [30] s off the run timer · `failAfter` [2] misses in a row on one target · `target = { label, icon }` · `explosion` [true] (effect only, damage 0) |
 | `hostile_waves` | 60 | `spawns` (location key: list of vec4) · `waves` [{7,7,6}] · `nextWave = { aliveAtMost = 2, afterSeconds = 90 }` · `weapons` · `accuracy` [25] · `armour` [0] · `health` [200] · `behaviour` ('hold'\|'balanced'\|'push') · `surrender = { belowHealth = 0.25, chance = 0.30 }` · `peds` (models) · `boss = { model, label, health, armour, weapon, spawn (location key), surrender = {...} }` (does not scale) · `blockTraffic` [120.0] · `indoor` [false] (the fight is inside a building: the spawn director keeps `Config.Spawning.minDistanceIndoor`, not `minDistance`; Hostage Rescue and the raids' fights) · `stage` [false] (wave 1 is placed ahead of time while the objective before runs, calm and unarmed, and wakes when the fight starts; the raids' fights; see below) · `scene` handled by a following interact_points |
-| `protect_rescue` | 15 | `npcs` (location key: list of vec4) · `count` [3] · `peds` · `restrained` [true] · `freeTime` [6000] ms · `target = { label = 'Cut restraints' }` · `safe` (location key vec3) · `safeRadius` [6.0] · `hitPenalty` [50] · `failIfDies` [true] · spawns when the run moves to In progress (`prepare`) |
+| `protect_rescue` | 15 | `npcs` (location key: list of vec4) · `count` [3] · `peds` · `restrained` [true] · `freeTime` [6000] ms · `target = { label = 'Cut restraints' }` · `safe` (location key vec3) · `safeRadius` [6.0] · `hitPenalty` [50] · `failIfDies` [true] · the hostages appear when this objective starts, through the spawn director (`Config.Spawning.hostagesAt` 'objective'; 'runStart' or `enabled = false`: in `prepare`, when the run moves to In progress, as before) |
 | `flee_arrest` | 30 | `mode` ('door'\|'scatter') · door mode: `door` (vec4 key), `knock = { label, duration }`, `suspect` (vec4 key), `fleeTo` (list key), `responses = { surrender = 0.5, flee = 0.3, fight = 0.2 }`, `associates = { count, spawns, weapons, accuracy, armour }` (always fight) · scatter mode: `spawns` (list key), `routes` (list of lists of vec3), `suspects` [5], `armedShare` [0.4] · common: `models`, `weapons`, `fireWithin` [15.0], `escape = { distance, seconds }`, `givesUp = { aim = 10.0, stun = true, close = { distance = 3.0, seconds = 3 } }`, `armedGivesUp = { stun = true, belowHealth = 0.5 }`, `cuff = { label = 'Cuff suspect', duration = 5000 }`, `aliveBonus = { id, points, each }` |
 | `pursuit` | 30 | `mode` ('stop'\|'follow') · `vehicles` [1] · `models` · `suspectsPerVehicle` [1] · `spawn` (vec4 key) or `spawns` (list key) · `route` (location key of a road route `{ points, loop }`, nil = free flee) · `speed` [120] km/h · `style` ('cautious'\|'reckless') · `trigger` ('arrive' \| `{ distance = 60.0, lights = true }` \| `{ ahead = 50.0 }`) · `stopped = { speed = 5.0, seconds = 5 }` · `footFlee` [0.2] · `surrenderOnAim` [true] · `arrest = { label, duration }` · follow mode: `hold` [150], `lost = { distance = 250, seconds = 10 }`, `duration` [180], `medals = { gold = 40, silver = 80, bronze = 150 }` (average distance, m) · `escape = { distance, seconds }` · `complete` ('all_detained'\|'all_or_timeout_any') · `ramSpeed` [100] km/h (0 = any contact counts as a ram) · `ramPenaltyId` ['hard_ram'] · `neverShoots` [true] |
 | `escort` | 60 | `route` (location key `{ points = {...}, stops = { { at = 12, wait = 20 } } }`) · `vehicle` ['stockade'] · `speed` [60] · `style` ['normal'] · `toughness` [1.5] · `stoppedFail` [60] · `arrival` [20.0] · `ambushPoints` (list key) · `ambush = { waves = 2, carsPerWave = 2, perCar = 2, models, peds, weapons, accuracy, armour }` · `clearRadius` [100.0] |
@@ -409,6 +409,20 @@ still short of slots the cars it has (`w.want = #w.cars`) or drops it (none), on
 for every waiting wave (`CutShortWaves`), and after it for a car that finds no slot (`ChooseSlot`: a wave the spawn
 caps held back until then). `enabled = false`: route[1] at the road's height at once and the own slot at the point's height + 0.5 m at
 once, as before; `ambushAheadOnly = false`: the own slot only, through the director.
+
+protect_rescue through the director (PLAN S15, Config.Spawning; owner request of 2026-10-19: "make it be progressive").
+With `hostagesAt = 'objective'` (shipped) `prepare` makes nothing; the hostages appear when the objective starts
+(`start`, then each `tick` for the ones still missing): once `ctx.whenNear` says an officer is within `activateRange`
+of the middle of their points, `SpawnDirected` offers every free spot (`Slot(i)`: hostage i on point `order[k]`, the
+`REUSE_OFFSET` ring per lap as before, named `hostages[3]`) to `ctx.choosePoints(offer, #offer, { name = 'the hostages
+(<key>)', wave = 'hostages', since = st.waitMs, centre, indoor = true })`: minDistanceIndoor (15 m) from every
+officer, never behind one (no line-of-sight ask: every spot is asked for). The spots it refuses wait (`st.waitMs`,
+counted while an officer is near); after `hostagesWaitMax` (10 s; 0 = never) the rest appear on their spots anyway
+with one `CP.warn` naming the mission, the place, the nearest officer's distance and the setting (they are tied up and
+unarmed, and the rescue cannot go on without them). `st.slots[i]` marks the spots used, `st.spawned` counts them. A
+location with no hostage points spawns nobody, with one `CP.warn` (never the start point, as before). `hostagesAt =
+'runStart'` or `enabled = false`: in `prepare` on every spot in order, with the retry thread, as before
+(`spawnsInPrepare` returns true then).
 
 Evidence field_contact accepts: `{ type = 'action', netId, action, phase = 'begin'|'finish' }` (from the plain
 event `crimson-police:server:custody`), `{ type = 'decide', netId, choice, offence }` (from the action
@@ -534,7 +548,9 @@ Cooldowns are kept in memory by `CP.Runs` and rebuilt from `cp_mission_runs` row
    `CP.Route.begin(run, src)` for each, start timeout armed, items given.
 2. `CP.Route` detects arrival → `CP.Runs.markArrived(run, src)` → `CP.Alerts.set(src)`; the first
    arrival moves the run to `in_progress`: tier from active participants (or `test.forcedTier`),
-   `client:inProgress`, every block's `prepare`, objective 1 `start`, timer starts.
+   `client:inProgress`, every block's `prepare` (state only: a prepare that made entities of its objective gets one
+   `CP.warn` per block until the resource restarts, `WarnOnce('prepare:<block>')`, unless the block's
+   `spawnsInPrepare(ctx)` returns true), objective 1 `start`, timer starts.
 3. Blocks call `ctx.complete()` / `ctx.fail(reason)`; the engine advances objectives. The last
    objective done → `CP.Runs.endRun(run, 'completed', 'completed')`. Timer out →
    `endRun(run, 'failed', 'time_limit')` unless the block's `onTimeout(ctx)` returns `'completed'`.
@@ -2511,6 +2527,12 @@ CP.Blocks.register('hostile_waves', {
                                    -- officers stand) or 'path' (where they drive or run); first = the kind of the
                                    -- key's point 1 (the escort truck at route[1]); model = a vehicle's model
   prepare = function(ctx) end,     -- the run moved to In progress (called for EVERY objective, in order)
+                                   -- state only: a block places its people in start or stage (PLAN S15); the
+                                   -- engine warns once per block whose prepare made entities anyway
+  spawnsInPrepare = function(ctx) return false end,
+                                   -- (optional) true = this prepare makes entities on purpose (an owner setting
+                                   -- asked for it: protect_rescue with Config.Spawning.hostagesAt = 'runStart'), so
+                                   -- the engine does not warn
   start   = function(ctx) end,     -- this objective became current
   tick    = function(ctx, dt) end, -- every 1 s while current (dt seconds); check fail/complete conditions here
   onEvent = function(ctx, src, ev) return true end,       -- client evidence for this objective; return false,'reason' to reject

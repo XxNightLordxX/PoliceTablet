@@ -360,6 +360,14 @@ Config.Spawning = {
     -- Seconds a scene waits for officers standing closer than that before it appears anyway, with one warning in the
     -- console naming the mission and the place (move its start further out); 0 = it waits until they step back
     sceneWaitMax = 45,
+    -- When Hostage Rescue's hostages appear: 'objective' = when their own objective starts (after the fight), on
+    -- their points once an officer is near and every officer is minDistanceIndoor (15 m) or more from them;
+    -- 'runStart' = when the run starts, before the fight, as before
+    hostagesAt = 'objective',
+    -- Seconds the hostages wait for officers standing closer than minDistanceIndoor before they appear on their points
+    -- anyway (they are tied up and unarmed, and the rescue cannot go on without them), with one warning in the
+    -- console; 0 = they wait until the officers step back
+    hostagesWaitMax = 10,
     -- Metres (0-1.5) a car made on a point of the mission's road itself (Traffic Enforcement's violator, a race loop's
     -- waypoint, Armored Truck Escort's truck and ambush cars) is lifted over the road there, so it never starts inside
     -- the road surface (0 = on the road's own height). A mission's own pursuit car points are used as written

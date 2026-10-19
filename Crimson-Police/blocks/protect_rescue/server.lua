@@ -10,7 +10,7 @@ local HIT_WINDOW_MS = 1000     -- one counted hit per hostage and attacker in th
 local REUSE_OFFSET = 1.0       -- metres between hostages sharing a spot
 local SAFE_RADIUS = 6.0
 local DEFAULT_ICON = 'fas fa-scissors'
-local RETRY_MS = 1000          -- prepare-time spawns waiting for room retry this often
+local RETRY_MS = 1000          -- run-start spawns waiting for room retry this often
 
 local function Cfg() return Config.Blocks[BLOCK] end
 local function Now() return GetGameTimer() end
@@ -245,6 +245,7 @@ local function StateOf(ctx)
         st.block = BLOCK
         st.peds = {}
         st.spawned = 0
+        st.slots = {}
         st.freeing = {}
         st.lastHit = {}
         st.hurt = false
@@ -303,57 +304,181 @@ local function SetPed(ctx, st, p, state)
     st.dirty = true
 end
 
-local function SpawnLoop(ctx, st, want, pts)
-    local ok = true
-    while st.spawned < want do
-        if not ctx.canSpawn(1, false) then ok = false break end
-        local i = st.spawned + 1
-        local k = ((i - 1) % #pts) + 1
-        local lap = (i - 1) // #pts
-        local base = pts[st.order[k]]
-        local point = lap == 0 and ToVec4(base)
-            or ToVec4(base, math.cos(lap + k) * REUSE_OFFSET * lap, math.sin(lap + k) * REUSE_OFFSET * lap)
-        local initial = ctx.obj.restrained ~= false and 'restrained' or 'idle'
-        local model = RngOf(ctx):pick(ctx.obj.peds) or Cfg().peds[1]
-        local ent, netId = ctx.spawnPed({
-            model = model,
-            coords = point,
-            role = 'hostage',
-            armed = false,
-            cfg = { group = 'neutral', restrained = initial == 'restrained' },
-            tag = 'hostage' .. i,
-        })
-        if not netId then ok = false break end
-        st.peds[tostring(netId)] = { netId = netId, entity = ent, index = i, state = initial, hurt = false }
-        st.spawned = i
-        CP.Npc.setState(ctx.run, netId, initial)
-        st.dirty = true
-        if st.stopped then ok = false break end
-    end
-    return ok
+-- ============================================================================
+--                          WHEN AND WHERE THEY APPEAR
+-- ============================================================================
+-- Config.Spawning.hostagesAt (PLAN S15, owner request of 2026-10-19: "make it be progressive"): 'objective' = the
+-- hostages appear when their own objective starts, through the engine's spawn director (ctx.whenNear: an officer
+-- within activateRange; ctx.choosePoints at the indoor distance, minDistanceIndoor from every officer), and after
+-- hostagesWaitMax seconds of officers standing closer they appear on their points anyway (one warning; 0 = never);
+-- 'runStart' (or the director switched off, enabled = false) = in prepare, when the run starts, as before.
+
+local function SpawnCfg() return type(Config.Spawning) == 'table' and Config.Spawning or {} end
+
+local function Num(v, default)
+    v = tonumber(v)
+    if not v or v ~= v then return default end
+    return v
 end
 
--- Spawns the hostages still missing (distinct spots first); false while waiting for room. The
--- spawning flag (re-entry while ctx.spawnPed yields) is always cleared, even when a spawn throws.
+-- true = the hostages appear when the run starts (prepare), as before; false = when their objective starts.
+local function AtRunStart()
+    local cfg = SpawnCfg()
+    return cfg.enabled == false or cfg.hostagesAt == 'runStart'
+end
+
+-- Hostage i's spot: point order[k] of the list (k = (i - 1) % #pts + 1), a ring REUSE_OFFSET metres further out per
+-- lap when there are more hostages than points (built-in missions only), and its console name.
+local function Slot(ctx, st, pts, i)
+    local k = ((i - 1) % #pts) + 1
+    local lap = (i - 1) // #pts
+    local idx = st.order[k]
+    local base = pts[idx]
+    local name = ('%s[%d]'):format(tostring(ctx.obj.npcs), idx)
+    if lap == 0 then return ToVec4(base), name end
+    local point = ToVec4(base, math.cos(lap + k) * REUSE_OFFSET * lap, math.sin(lap + k) * REUSE_OFFSET * lap)
+    return point, ('%s +%.2f m'):format(name, REUSE_OFFSET * lap)
+end
+
+-- One hostage on spot i; false when it could not be made.
+local function SpawnOne(ctx, st, i, point)
+    local initial = ctx.obj.restrained ~= false and 'restrained' or 'idle'
+    local model = RngOf(ctx):pick(ctx.obj.peds) or Cfg().peds[1]
+    local ent, netId = ctx.spawnPed({
+        model = model,
+        coords = point,
+        role = 'hostage',
+        armed = false,
+        cfg = { group = 'neutral', restrained = initial == 'restrained' },
+        tag = 'hostage' .. i,
+    })
+    if not netId then return false end
+    st.peds[tostring(netId)] = { netId = netId, entity = ent, index = i, state = initial, hurt = false }
+    st.slots[i] = true
+    st.spawned = st.spawned + 1
+    CP.Npc.setState(ctx.run, netId, initial)
+    st.dirty = true
+    return true
+end
+
+-- At run start (AtRunStart): every free spot in order, as before.
+local function SpawnLoop(ctx, st, want, pts)
+    for i = 1, want do
+        if st.spawned >= want then break end
+        if not st.slots[i] then
+            if not ctx.canSpawn(1, false) then return false end
+            if not SpawnOne(ctx, st, i, (Slot(ctx, st, pts, i))) then return false end
+            if st.stopped then return false end
+        end
+    end
+    return true
+end
+
+-- The nearest active participant's distance to point on the map (math.huge with none).
+local function NearestOfficer(ctx, point)
+    local best = math.huge
+    for _, src in ipairs(ctx.participants() or {}) do
+        local c = ctx.coords(src)
+        if c then
+            local d = U.dist2d(c, point)
+            if d < best then best = d end
+        end
+    end
+    return best
+end
+
+-- The middle of the hostages' points (where the director measures the officers' way in to).
+local function Middle(pts)
+    local x, y, z = 0.0, 0.0, 0.0
+    for _, p in ipairs(pts) do
+        local px, py, pz = U.xyz(p)
+        x, y, z = x + px, y + py, z + pz
+    end
+    return vector3(x / #pts, y / #pts, z / #pts)
+end
+
+-- When their objective is current: the free spots the spawn director allows now (indoor distance), once an officer
+-- is near; after hostagesWaitMax seconds short (counted while an officer is near) the rest on their spots anyway.
+-- st.waitMs is that clock (GetGameTimer); the director gets it as opts.since.
+local function SpawnDirected(ctx, st, want, pts)
+    if not st.current then return false end
+    local centre = Middle(pts)
+    if not ctx.whenNear(centre) then
+        st.waitMs = nil
+        return false
+    end
+    local offer = {}
+    for i = 1, want do
+        if not st.slots[i] then
+            local point, name = Slot(ctx, st, pts, i)
+            offer[#offer + 1] = { coords = point, label = name, slot = i }
+        end
+    end
+    local now = Now()
+    st.waitMs = st.waitMs or now
+    local chosen = ctx.choosePoints(offer, #offer, {
+        name = ('the hostages (%s)'):format(tostring(ctx.obj.npcs)),
+        wave = 'hostages',
+        since = os.time() - math.floor((now - st.waitMs) / 1000),
+        centre = centre,
+        indoor = true,
+    }) or {}
+    local waited = (now - st.waitMs) / 1000
+    local maxWait = math.max(0, Num(SpawnCfg().hostagesWaitMax, 10))
+    local late = #chosen < #offer and maxWait > 0 and waited >= maxWait
+    if late then chosen = offer end
+    local ok, closest = true, math.huge
+    for _, c in ipairs(chosen) do
+        if st.spawned >= want then break end
+        if not ctx.canSpawn(1, false) then
+            ok = false
+            break
+        end
+        local d = NearestOfficer(ctx, c.coords)
+        if not SpawnOne(ctx, st, c.slot, c.coords) then
+            ok = false
+            break
+        end
+        if d < closest then closest = d end
+        if st.stopped then return false end
+    end
+    if late and closest < math.huge and not st.saidLate then
+        st.saidLate = true
+        CP.warn(BLOCK,
+            'run %s (%s, %s): the hostages appeared %.0f m from an officer after %.0f s of waiting for the officers to step back to %.0f m (Config.Spawning.hostagesWaitMax)',
+            tostring(ctx.run and ctx.run.id), tostring(ctx.run and ctx.run.missionId),
+            tostring(ctx.location and ctx.location.label or '?'), closest, waited,
+            math.max(0, Num(SpawnCfg().minDistanceIndoor, 15.0)))
+    end
+    if st.spawned >= want then st.waitMs = nil end
+    return ok and st.spawned >= want
+end
+
+-- Spawns the hostages still missing (distinct spots first); false while waiting for room (or, when they appear with
+-- their objective, for an officer near them and far enough). A location with no hostage points spawns nobody (one
+-- warning; never on the start point). The spawning flag (re-entry while ctx.spawnPed yields) is always cleared, even
+-- when a spawn throws.
 local function SpawnMissing(ctx, st)
     local want = Target(ctx)
     if st.spawned >= want then return true end
     if st.spawning or st.stopped then return false end
     local pts = PointList(ctx.location, ctx.obj.npcs)
     if #pts == 0 then
-        local s = ctx.location and ctx.location.start and ctx.location.start.coords
-        if s then pts = { s } end
-        CP.warn(BLOCK, 'no hostage points at %s for run %s; using the start point', tostring(ctx.obj.npcs),
-            tostring(ctx.run and ctx.run.id))
+        if not st.saidNoPoints then
+            st.saidNoPoints = true
+            CP.warn(BLOCK,
+                'run %s (%s): the location has no hostage points under %s; no hostage appears (never at the start point)',
+                tostring(ctx.run and ctx.run.id), tostring(ctx.run and ctx.run.missionId), tostring(ctx.obj.npcs))
+        end
+        return false
     end
-    if #pts == 0 then return false end
     if not st.order or #st.order ~= #pts then
         local idx = {}
         for i = 1, #pts do idx[i] = i end
         st.order = RngOf(ctx):shuffle(idx)
     end
     st.spawning = true
-    local okCall, ok = pcall(SpawnLoop, ctx, st, want, pts)
+    local okCall, ok = pcall(AtRunStart() and SpawnLoop or SpawnDirected, ctx, st, want, pts)
     st.spawning = false
     if not okCall then
         CP.err(BLOCK, 'spawning hostages for run %s failed: %s', tostring(ctx.run and ctx.run.id), tostring(ok))
@@ -471,9 +596,15 @@ end
 --                                    HOOKS
 -- ============================================================================
 
+-- The run moved to In progress: the hostages appear now only with Config.Spawning.hostagesAt = 'runStart' (or the
+-- director off), as before; else when this objective starts.
 local function Prepare(ctx)
     local st = StateOf(ctx)
     Listen()
+    if not AtRunStart() then
+        Flush(ctx, st)
+        return
+    end
     if not SpawnMissing(ctx, st) then
         CreateThread(function()
             while not st.stopped and not st.failed and st.spawned < Target(ctx)
@@ -665,6 +796,8 @@ CP.Blocks.register(BLOCK, {
     requiredPoints = RequiredPoints,
     pointKinds = PointKinds,
     prepare = Prepare,
+    -- the engine warns about a block that makes entities in prepare, unless an owner setting asked for it
+    spawnsInPrepare = function() return AtRunStart() end,
     start = Start,
     tick = Tick,
     onEvent = OnEvent,

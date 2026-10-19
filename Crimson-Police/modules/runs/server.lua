@@ -3207,11 +3207,34 @@ local function StartRun(run)
         remaining = run.timeLimit,
     })
     CP.log(TAG, 'run %s in progress at tier %s (%d participant(s))', run.id, tostring(TierName(tier)), #active)
+    -- A block places its people when its objective starts (start) or ahead of it (stage), never in prepare, which
+    -- runs for every objective now (PLAN S15: "make it be progressive"). One warning per block (until the resource
+    -- restarts) when its prepare made entities anyway, unless its spawnsInPrepare(ctx) says an owner setting asked
+    -- for it (Hostage Rescue with Config.Spawning.hostagesAt = 'runStart').
+    local function Made(i)
+        local n = 0
+        for _, e in pairs(run.entities) do
+            if e.obj == i then n = n + 1 end
+        end
+        return n
+    end
     for i = 1, #run.mission.objectives do
         run.objectives[i].prepared = true
         Runs.send(run, 'client:objective', run.id, i, { action = 'prepare' })
+        local before = Made(i)
         CallBlock(run, i, 'prepare')
         if run.state ~= 'in_progress' then return end
+        local made = Made(i) - before
+        if made > 0 then
+            local impl = BlockOf(run, i)
+            local id = tostring(impl and impl.id or '?')
+            local ok, asked = CallBlock(run, i, 'spawnsInPrepare')
+            if not (ok and asked == true) then
+                WarnOnce('prepare:' .. id,
+                    'run %s (%s): objective %d (%s) made %d entit%s in prepare, at run start before its objective came up; a block places its people in start or stage (Config.Spawning)',
+                    run.id, tostring(run.missionId), i, id, made, made == 1 and 'y' or 'ies')
+            end
+        end
     end
     Fire('run:inProgress', run)
     if run.state ~= 'in_progress' then return end

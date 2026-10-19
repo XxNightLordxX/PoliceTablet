@@ -569,7 +569,8 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
  blocks/protect_rescue/client.lua · objective block "protect_rescue" (client half)
 
   What it does
-    From prepare (the hostages spawn then) on the run host only: CP.Npc.apply once it has control of
+    From prepare (the hostages appear later, with each update: Config.Spawning.hostagesAt) on the run
+    host only: CP.Npc.apply once it has control of
     each hostage, then the task for its cp state (restrained -> kneel, idle/safe -> cower,
     freed -> follow to the safe marker, re-issued every RETASK_MS while walking); again after
     hostChanged. Control is requested before every task (the officer next to a hostage often owns
@@ -595,17 +596,20 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
  blocks/protect_rescue/server.lua · objective block "protect_rescue" (server half)
 
   What it does
-    Spawns the NPCs to protect (hostages) when the run moves to In progress (prepare), kneeling with
-    their hands tied (state 'restrained', relationship group CRIMSONPOLICE_NEUTRAL through the cp
-    bag cfg; they are not invincible and can die). When this objective becomes current (in Hostage
-    Rescue: after the hostiles of objective 1 are neutralised) participants free each hostage with
-    ox_target "Cut restraints" (freeTime progress): the client reports 'free_start' then 'freed'
+    Spawns the NPCs to protect (hostages) when this objective starts, through the spawn director
+    (Config.Spawning.hostagesAt 'objective': an officer near, every officer minDistanceIndoor away, after
+    hostagesWaitMax on their spots anyway; 'runStart' or the director off: in prepare, when the run moves
+    to In progress, as before), kneeling with their hands tied (state 'restrained', relationship group
+    CRIMSONPOLICE_NEUTRAL through the cp bag cfg; they are not invincible and can die). When this
+    objective becomes current (in Hostage Rescue: after the hostiles of objective 1 are neutralised)
+    participants free each hostage with ox_target "Cut restraints" (freeTime progress): the client
+    reports 'free_start' then 'freed'
     and the server checks the distance (server-side coordinates) and the elapsed time. A freed
     hostage walks to the safe marker (host AI, CP.Npc task follow) and becomes 'safe' once the
     server sees it within safeRadius of it. Completed when every hostage is safe.
     With restrained = false the hostages start cowering ('idle') and walk to safety when the
-    objective starts. Hostages are watched for the whole run, also while an earlier objective is
-    current: damage by an active participant costs hitPenalty (penalty hostage_hit, shared; someone
+    objective starts. Hostages are watched for the whole run once they exist, also while an earlier
+    objective is current ('runStart'): damage by an active participant costs hitPenalty (penalty hostage_hit, shared; someone
     who left shoots as an outsider), any damage loses the no_hostage_hurt bonus, a death fails the
     run (failIfDies), and a hostage killed by a participant, also one who left, always fails it
     (run.fail_killed_unarmed).
@@ -645,6 +649,7 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
 
   ctx.state
     block, rng, peds = { [tostring(netId)] = { netId, entity, index, state, hurt } }, spawned, order,
+    slots = { [i] = true } (spots used), waitMs, saidNoPoints, saidLate,
     freeing = { [netIdKey] = { [srcKey] = ms } }, lastHit = { ['netId:src'] = ms }, hurt, hits,
     bonusGiven, current, startedAt, dirty, hudText, completed, failed, stopped
 ```
@@ -4897,6 +4902,15 @@ tests/oversight_spec.lua · the oversight slice: modules/admin (audit, webhooks,
 review and void, force recall, supervisor/admin callbacks), modules/disputes and modules/anticheat.
 The real CP.Access and CP.Permissions modules run on a CP.Qbx stub; every other module is a stub that
 records its calls. Every SQL statement of the three modules runs here against MariaDB cp_test.
+```
+
+## tests/protect_rescue_director_spec.lua
+
+```text
+Hostage Rescue's hostages through the spawn director (Config.Spawning.hostagesAt, PLAN S15) on the real engine, the
+real blocks and the built-in mission file: they appear when their own objective starts (after the fight), not at
+run start, never within minDistanceIndoor (15 m) of an officer, and after hostagesWaitMax on their spots anyway.
+'runStart' keeps the old timing. The engine warns once about a block that makes entities in prepare.
 ```
 
 ## tests/pursuit_director_spec.lua
