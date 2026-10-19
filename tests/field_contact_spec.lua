@@ -11,6 +11,15 @@ cjson.encode_sparse_array(true)
 for src = 1, 4 do W.place(src, 0.0, 0.0, 30.0) end
 local impl = CP.Blocks.get('field_contact')
 
+-- The officers of a run stand at the start of its location when it starts (they arrived there): the spawn director
+-- lets a scene or a parked car appear once an officer is near it (Config.Spawning.activateRange) and not on top of it.
+local StartRun = W.start
+W.start = function(members, mission, opts)
+    local s = mission.locations[1].start.coords
+    for _, src in ipairs(members) do W.place(src, s.x, s.y, s.z) end
+    return StartRun(members, mission, opts)
+end
+
 -- ============================================================================
 --                                  LOCATIONS
 -- ============================================================================
@@ -247,6 +256,10 @@ do
     W.decide(1, run, cars[3].netId, 'noAction')
     W.tick(2)
     H.eq(Obj(run, 1).status, 'active', 'the objective waits for the returning driver')
+    -- he walks up to his car (the host's game walks him; Config.Spawning.contactRing)
+    local carAt = W.at(run, rd.returning.car)
+    SetEntityCoords(run.entities[rd.netId].entity, carAt.x + 2.0, carAt.y, carAt.z)
+    W.tick(1)
     if rd.returning.outcome == 'argues' then
         W.tick(10)
         H.eq(Obj(run, 1).status, 'active', 'an arguing driver needs Explain the citation')

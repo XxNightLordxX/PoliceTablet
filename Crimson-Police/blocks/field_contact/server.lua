@@ -9,9 +9,20 @@ local AIM_RANGE = 10.0                   -- a fleeing person gives up when aimed
 local STUN_RANGE = 30.0                  -- a stun needs a participant this close to the person
 local CLOSE_RANGE = 3.0                  -- ...or a participant stays this close...
 local CLOSE_SECONDS = 3                  -- ...for this long
-local RETURN_OFFSET = 14.0               -- metres from the car where a returning driver appears
-local THIEF_OFFSET = 30.0                -- metres from the car where the thief waits
-local RETURN_WALK_S = 8                  -- seconds a returning driver takes to reach the car
+local RETURN_OFFSET = 14.0               -- metres from the car where a returning driver appears (director off)
+local THIEF_OFFSET = 30.0                -- metres from the car where the thief waits (director off)
+local RETURN_WALK_S = 8                  -- seconds a returning driver takes to reach the car (director off)
+local WALK_IN_CALLBACK = 'crimson-police:client:spawn:walkIn'
+local WALK_IN_POLL_MS = 50               -- milliseconds between looks at the officer's answer
+local WALK_IN_MARGIN_MS = 250            -- of losTimeoutMs, kept for the answer's way back
+local RING_SLACK = 1.0                   -- metres an answer may sit outside contactRing (the game's rounding)
+local OFFICER_SLACK = 5.0                -- metres an officer may have walked towards it while his game looked
+local WALK_IN_Z_MAX = 15.0               -- metres an answer may sit over or under the car
+local RING_TRIES = 12                    -- points round the car tried when his game gives none
+local WALK_IN_ALT = 4                    -- other points kept for the placer (Config.Spawning.place)
+local ARRIVE_M = 4.0                     -- metres from the car: a returning driver has walked up to it
+local WALK_MPS = 1.0                     -- metres a second he walks: at the latest after the walk at this pace...
+local ARRIVE_PAUSE_S = 3                 -- ...and this long at the car, he takes the ticket, argues or drives off
 local DEFAULT_MODELS = { 'a_m_y_stbla_01', 'a_m_m_eastsa_02', 'a_m_y_mexthug_01', 'a_f_y_eastsa_03', 'a_m_m_salton_02' }
 local DEFAULT_CARS = { 'asea', 'primo', 'emperor', 'tornado', 'stanier' }
 local DEFAULT_SCENE = { occupied_car = 0.5, loitering = 0.3, casing = 0.2 }
@@ -408,6 +419,7 @@ local function SpawnPerson(ctx, st, point, profile, extra)
         hidden = true,
         cfg = { group = 'neutral' },
         tag = ('contact%d'):format(#st.order + 1),
+        alt = extra.alt,
     }
     if armed then
         opts.weapon = r:pick(obj.weapons) or 'WEAPON_PISTOL'
@@ -459,6 +471,88 @@ local function SpawnCar(ctx, st, point, truth, extra)
 end
 
 -- ============================================================================
+--                             WHEN A SCENE APPEARS
+-- ============================================================================
+-- The spawn director, Config.Spawning.
+-- With the spawn director on, a scene (the scene mode's car and people, each parked car) appears once an officer is
+-- within activateRange of it while every officer is further than the objective's approach distance plus
+-- sceneOutside from it: it is there before the officers are on top of it. An officer standing closer keeps it waiting;
+-- after waveDelayMax the distance drops to hardMin (never lower), after sceneWaitMax it appears anyway with one warning
+-- (0 = it waits for ever). Nobody within activateRange: nothing waits (the clock starts when an officer gets there).
+
+local function SpawnCfg() return type(Config.Spawning) == 'table' and Config.Spawning or {} end
+
+-- The spawn director decides when and where this block's people appear (off: as before).
+local function Directed() return SpawnCfg().enabled ~= false end
+
+local function Num(v, default)
+    v = tonumber(v)
+    if not v or v ~= v then return default end
+    return v
+end
+
+local function RunTag(ctx)
+    local run = ctx.run or {}
+    local loc = ctx.location or {}
+    return tostring(run.id), tostring(run.missionId), tostring(loc.label or '?')
+end
+
+-- One console line per key (a scene that waits asks again every second).
+local function SayOnce(st, key)
+    st.said = st.said or {}
+    if st.said[key] then return false end
+    st.said[key] = true
+    return true
+end
+
+-- true when the scene name (its points) may appear now (see above); with the director off always.
+local function SceneReady(ctx, st, name, points)
+    if not Directed() then return true end
+    local cfg = SpawnCfg()
+    local near, closest = false, math.huge
+    for _, p in ipairs(points) do
+        local n, best = ctx.whenNear(p)
+        if n == true then near = true end
+        if tonumber(best) and best < closest then closest = best end
+    end
+    st.sceneWait = st.sceneWait or {}
+    if not near then
+        st.sceneWait[name] = nil
+        return false
+    end
+    local now = Now()
+    local since = st.sceneWait[name] or now
+    st.sceneWait[name] = since
+    local waited = (now - since) / 1000
+    local base = math.max(0, Num(ctx.obj.approach, 25.0) + Num(cfg.sceneOutside, 10.0))
+    local need = base
+    if waited >= Num(cfg.waveDelayMax, 20) then need = math.min(base, math.max(0, Num(cfg.hardMin, 20.0))) end
+    local id, mission, place = RunTag(ctx)
+    if closest > need then
+        st.sceneWait[name] = nil
+        if closest <= base and cfg.log ~= false and SayOnce(st, 'closer|' .. name) then
+            CP.warn(BLOCK,
+                'run %s (%s, %s): %s waited %.0f s for the officers to step back to %.0f m; it appeared %.0f m from one (never under Config.Spawning.hardMin)',
+                id, mission, place, name, waited, base, closest)
+        end
+        return true
+    end
+    local maxWait = math.max(0, Num(cfg.sceneWaitMax, 45))
+    if maxWait > 0 and waited >= maxWait then
+        st.sceneWait[name] = nil
+        CP.warn(BLOCK,
+            'run %s (%s, %s): %s appeared %.0f m from an officer after %.0f s of waiting (Config.Spawning.sceneWaitMax); move the start of this place further out',
+            id, mission, place, name, closest, waited)
+        return true
+    end
+    if cfg.log ~= false and SayOnce(st, 'wait|' .. name) then
+        CP.log(BLOCK, 'run %s: %s waits: an officer is %.0f m from it, it appears beyond %.0f m', id, name, closest,
+            need)
+    end
+    return false
+end
+
+-- ============================================================================
 --                                    PARKED
 -- ============================================================================
 
@@ -468,31 +562,42 @@ local function SpawnParked(ctx, st)
     local rules = (Config.Custody or {}).parkingRules or {}
     if not st.spots then
         local list = SpotList(ctx.location, obj.spots)
+        local key = type(obj.spots) == 'string' and obj.spots or 'spots'
         st.spots = r:sample(list, math.min(#list, math.floor(tonumber(obj.cars) or 1)))
         st.truths = {}
+        st.spotNames = {}
         for i, spot in ipairs(st.spots) do
             local truth = CP.Custody.rollTruth(r, obj.profileSet, 'vehicle')
             -- a free spot is legal, or the car is stolen
             if truth == 'violation' and not rules[spot.rule] then truth = 'legal' end
             st.truths[i] = truth
+            local at = i
+            for j, s2 in ipairs(list) do
+                if s2 == spot then at = j end
+            end
+            st.spotNames[i] = ('%s[%d]'):format(key, at)
         end
         st.spawnedCars = 0
+        st.carAt = {}
+        st.planned = #st.spots
     end
-    while st.spawnedCars < #st.spots do
-        if not ctx.canSpawn(1, false) then return false end
-        local i = st.spawnedCars + 1
-        local spot = st.spots[i]
-        local netId = SpawnCar(ctx, st, ToVec4(spot.coords), st.truths[i], {
-            role = 'parked',
-            level = rules[spot.rule] or nil,
-            spot = { rule = spot.rule, street = spot.street },
-            actions = PARKED_ACTIONS,
-        })
-        if not netId then return false end
-        st.spawnedCars = i
-        if st.stopped then return false end
+    -- each car once an officer is near it but not on top of it (the director), in any order
+    for i, spot in ipairs(st.spots) do
+        if not st.carAt[i] and SceneReady(ctx, st, st.spotNames[i], { spot.coords }) then
+            if not ctx.canSpawn(1, false) then return false end
+            local netId = SpawnCar(ctx, st, ToVec4(spot.coords), st.truths[i], {
+                role = 'parked',
+                level = rules[spot.rule] or nil,
+                spot = { rule = spot.rule, street = spot.street },
+                actions = PARKED_ACTIONS,
+            })
+            if not netId then return false end
+            st.carAt[i] = netId
+            st.spawnedCars = st.spawnedCars + 1
+            if st.stopped then return false end
+        end
     end
-    return true
+    return st.spawnedCars >= #st.spots
 end
 
 -- ============================================================================
@@ -524,6 +629,15 @@ local function SpawnScene(ctx, st)
             }
         end
         st.spawnedPeople = 0
+        st.planned = (st.plan.car and 1 or 0) + #st.plan.people
+    end
+    -- the whole scene at once, once an officer is near it but not on top of it (the director)
+    if not st.sceneGo then
+        local pts = {}
+        if st.plan.car then pts[#pts + 1] = PointList(loc, obj.car)[1] end
+        for _, pl in ipairs(st.plan.people) do pts[#pts + 1] = pl.point end
+        if not SceneReady(ctx, st, 'the scene', pts) then return false end
+        st.sceneGo = true
     end
     if st.plan.car and not st.carNet then
         if not ctx.canSpawn(1, false) then return false end
@@ -830,16 +944,216 @@ end
 --                   RETURNING DRIVER AND THE THIEF (parked)
 -- ============================================================================
 
-local function SpawnNear(ctx, st, carNet, offset, profile, extra)
-    local cc = EntCoords(ctx, carNet)
-    if not cc then return nil end
-    local r = RngOf(ctx)
-    local a = r:next() * math.pi * 2
-    local point = vector4(cc.x + math.cos(a) * offset, cc.y + math.sin(a) * offset, cc.z + 0.0, 0.0)
-    return SpawnPerson(ctx, st, point, profile, extra)
+-- With the spawn director on (Config.Spawning), the returning driver and the thief appear contactRing metres from the
+-- car, on a footpath point the game of the officer at the car picks (modules/spawn/client.lua Spawn.walkIn: in front of
+-- him, out of his sight first), and walk up to the car once an officer's game has put them on the ground (WalkTick).
+-- No usable answer within losTimeoutMs: points round the car at those distances, ring[1] or more from every officer,
+-- the ones in front of him first. The ask waits for his game, so the person appears a moment later, in a thread;
+-- st.walkIns counts the ones on the way and the objective does not end before they are there. Director off: 14 m
+-- (driver) or 30 m (thief) from the car at a random angle, at once, as before.
+
+local function Ring()
+    local r = SpawnCfg().contactRing
+    local a = type(r) == 'table' and Num(r[1], nil) or nil
+    local b = type(r) == 'table' and Num(r[2], nil) or nil
+    a, b = math.max(0, a or 25.0), math.max(0, b or 40.0)
+    if b < a then a, b = b, a end
+    return a, b
 end
 
-local function ReturningDriver(ctx, st, car, choice)
+-- The officer whose game picks the point: src when he is an active participant with a ped, else the one nearest the
+-- car (nil: nobody).
+local function AskedOfficer(ctx, src, cc)
+    local party = Party(ctx)
+    for _, p in ipairs(party) do
+        if p.src == src then return p end
+    end
+    local best, bestD = nil, math.huge
+    for _, p in ipairs(party) do
+        local d = U.dist2d(p.coords, cc)
+        if d < bestD then best, bestD = p, d end
+    end
+    return best
+end
+
+-- The officer's game's answer (a list of { x, y, z }), or nil when it gave none within losTimeoutMs.
+local function AskWalkIn(src, cc, r1, r2)
+    if type(lib) ~= 'table' or type(lib.callback) ~= 'table' or type(lib.callback.await) ~= 'function' then
+        return nil
+    end
+    local timeout = math.max(100, math.min(5000, Num(SpawnCfg().losTimeoutMs, 1500)))
+    local args = {
+        car = { x = cc.x + 0.0, y = cc.y + 0.0, z = cc.z + 0.0 },
+        ring = { r1, r2 },
+        ms = math.max(50, timeout - WALK_IN_MARGIN_MS),
+    }
+    local done, reply = false, nil
+    CreateThread(function()
+        local ok, res = pcall(lib.callback.await, WALK_IN_CALLBACK, src, args)
+        reply = ok and type(res) == 'table' and res or nil
+        done = true
+    end)
+    local deadline = Now() + timeout
+    while not done and Now() < deadline do Wait(WALK_IN_POLL_MS) end
+    return done and reply or nil
+end
+
+-- A point of the answer the server takes: ring metres from the car (RING_SLACK), not far over or under it, ring[1]
+-- (less OFFICER_SLACK) or more from every officer, outside the no-build zones.
+local function Usable(p, cc, r1, r2, party)
+    if type(p) ~= 'table' then return nil end
+    local x, y, z = Num(p.x, nil), Num(p.y, nil), Num(p.z, nil)
+    if not (x and y and z) then return nil end
+    local v = vector3(x + 0.0, y + 0.0, z + 0.0)
+    local d = U.dist2d(v, cc)
+    if d < r1 - RING_SLACK or d > r2 + RING_SLACK or math.abs(z - cc.z) > WALK_IN_Z_MAX then return nil end
+    for _, o in ipairs(party) do
+        if U.dist2d(o.coords, v) < r1 - OFFICER_SLACK then return nil end
+    end
+    if InNoBuild(v) then return nil end
+    return v
+end
+
+-- true when v lies in front of the officer o (within 90 degrees of where his ped faces); true when that is unknown.
+local function InFront(o, v)
+    if not o or not GetPlayerPed or not GetEntityHeading then return true end
+    local ok, h = pcall(function() return GetEntityHeading(GetPlayerPed(o.src)) end)
+    h = ok and Num(h, nil) or nil
+    if not h then return true end
+    local r = math.rad(h)
+    return (v.x - o.coords.x) * -math.sin(r) + (v.y - o.coords.y) * math.cos(r) >= 0
+end
+
+-- No answer: RING_TRIES points round the car from the angle a0, at ring[1], halfway and ring[2] in turn, the ones
+-- ring[1] or more from every officer (in front of the asked one first); with none that far, the one furthest from
+-- them.
+local function RingPoints(cc, r1, r2, a0, party, asked)
+    local front, back, best, bestD = {}, {}, nil, -1
+    for k = 0, RING_TRIES - 1 do
+        local a = a0 + k * 2 * math.pi / RING_TRIES
+        local d = r1 + (r2 - r1) * (k % 3) / 2
+        local v = vector3(cc.x + math.cos(a) * d, cc.y + math.sin(a) * d, cc.z + 0.0)
+        local nearest = math.huge
+        for _, o in ipairs(party) do nearest = math.min(nearest, U.dist2d(o.coords, v)) end
+        if nearest >= r1 then
+            if InFront(asked, v) then front[#front + 1] = v else back[#back + 1] = v end
+        elseif nearest > bestD then
+            best, bestD = v, nearest
+        end
+    end
+    for _, v in ipairs(back) do front[#front + 1] = v end
+    if #front == 0 and best then front[1] = best end
+    return front
+end
+
+-- The heading that faces from v to the car at cc.
+local function Facing(v, cc)
+    return (math.deg(math.atan(-(cc.x - v.x), cc.y - v.y)) % 360) + 0.0
+end
+
+-- Spawns a person (profile, extra) for the car carNet (see above); after(netId, ent, c, walksIn) once he is there
+-- (walksIn: the director placed him, WalkTick walks him up). src: the officer at the car.
+local function SpawnNear(ctx, st, carNet, offset, profile, extra, src, after)
+    local cc = EntCoords(ctx, carNet)
+    if not cc then return end
+    local r = RngOf(ctx)
+    local a = r:next() * math.pi * 2
+    if not Directed() then
+        local point = vector4(cc.x + math.cos(a) * offset, cc.y + math.sin(a) * offset, cc.z + 0.0, 0.0)
+        local netId, ent, c = SpawnPerson(ctx, st, point, profile, extra)
+        if netId then after(netId, ent, c, false) end
+        return
+    end
+    local contacts = st.contacts
+    st.walkIns = (st.walkIns or 0) + 1
+    CreateThread(function()
+        local ok, err = pcall(function()
+            local r1, r2 = Ring()
+            local party = Party(ctx)
+            local asked = AskedOfficer(ctx, src, cc)
+            local points = {}
+            local reply = asked and AskWalkIn(asked.src, cc, r1, r2) or nil
+            for _, p in ipairs(type(reply) == 'table' and reply or {}) do
+                local v = Usable(p, cc, r1, r2, Party(ctx))
+                if v then points[#points + 1] = v end
+            end
+            local from = 'his game'
+            if #points == 0 then
+                from = 'round the car'
+                party = Party(ctx)
+                points = RingPoints(cc, r1, r2, a, party, asked)
+            end
+            if st.contacts ~= contacts or st.stopped or st.failed or st.completed or ctx.run.state == 'ended' then
+                return
+            end
+            local v = points[1]
+            if not v then return end
+            local alt = {}
+            for i = 2, math.min(#points, WALK_IN_ALT + 1) do
+                alt[#alt + 1] = vector4(points[i].x, points[i].y, points[i].z, Facing(points[i], cc))
+            end
+            local opts = U.copy(extra)
+            opts.alt = alt
+            local netId, ent, c = SpawnPerson(ctx, st, vector4(v.x, v.y, v.z, Facing(v, cc)), profile, opts)
+            if not netId then return end
+            st.contacts[netId].walk = { car = carNet }
+            CP.log(BLOCK, 'run %s: %s appears %.0f m from the car (%s), %.0f m from the nearest officer',
+                tostring(ctx.run.id), tostring(extra.role), U.dist2d(v, cc), from, NearestOf(party, v))
+            after(netId, ent, c, true)
+            st.dirty = true
+        end)
+        if st.contacts == contacts then st.walkIns = math.max(0, (st.walkIns or 1) - 1) end
+        if not ok then
+            CP.err(BLOCK, 'run %s: a %s for the car failed: %s', tostring(ctx.run and ctx.run.id), tostring(extra.role),
+                tostring(err))
+        end
+    end)
+end
+
+-- true while netId still waits frozen for an officer's game to put it on the ground (Config.Spawning.place).
+local function Holding(netId)
+    local sp = CP.Spawn
+    return type(sp) == 'table' and type(sp.holding) == 'function' and sp.holding(netId) == true
+end
+
+-- A person the director placed walks up to his car once his officer's game has put him on the ground (a thief
+-- that has bolted meanwhile no longer does). His walk may take RETURN_WALK_S plus the distance at WALK_MPS.
+local function WalkTick(ctx, st)
+    for _, netId in ipairs(st.order) do
+        local t = st.contacts[netId]
+        local w = t and t.walk
+        if w and not w.started and not Holding(netId) then
+            w.started = Now()
+            local c = CP.Custody.get(ctx.run, netId)
+            local pc, cc = EntCoords(ctx, netId), EntCoords(ctx, w.car)
+            local d = (pc and cc) and U.dist2d(pc, cc) or 0
+            w.ms = math.floor((RETURN_WALK_S + d / WALK_MPS) * 1000)
+            if c and (c.state == 'idle' or c.state == 'contacted') then
+                CP.Custody.act(ctx.run, netId, 'walk_to', { veh = w.car })
+            end
+        end
+    end
+end
+
+-- true once a walking person reached his car (ARRIVE_M) or has walked as long as it takes (WalkTick).
+local function WalkedUp(ctx, t, netId, carNet)
+    local w = t.walk
+    if not w or not w.started then return false end
+    local pc, cc = EntCoords(ctx, netId), EntCoords(ctx, carNet)
+    if pc and cc and U.dist2d(pc, cc) <= ARRIVE_M then return true end
+    return Now() - w.started >= (w.ms or 0)
+end
+
+local function TellReturning(ctx, c, outcome)
+    ctx.hud({
+        message = {
+            text = CP.Lt('block.field_contact.returning_' .. outcome, { label = c.label }),
+            kind = 'info',
+        },
+    })
+end
+
+local function ReturningDriver(ctx, st, car, choice, src)
     local ret = ctx.obj.returning
     if st.mode ~= 'parked' or car.truth == 'stolen' then return end
     if st.returning >= (tonumber(ret.max) or 1) then return end
@@ -851,31 +1165,39 @@ local function ReturningDriver(ctx, st, car, choice)
     local outcome = x < 0.6 and 'takes' or (x < 0.9 and 'argues' or 'drives_off')
     if outcome == 'drives_off' and choice ~= 'cite' then outcome = 'takes' end
     local profile = { truth = 'clean', demeanour = 'compliant', cues = {} }
-    local netId, _, c = SpawnNear(ctx, st, car.netId, RETURN_OFFSET, profile,
-        { role = 'returning_driver', actions = { 'explain' }, consensual = true })
-    if not netId then return end
-    local t = st.contacts[netId]
-    t.returning = { outcome = outcome, car = car.netId, at = Now() }
-    c.state = 'contacted'
-    c.decided = { choice = 'none', by = '', bySrc = nil, verdict = 'ok' }
-    CP.Npc.setState(ctx.run, netId, 'contacted',
-        { contact = { label = c.label, kind = 'person', actions = { 'explain' } } })
-    CP.Custody.act(ctx.run, netId, 'walk_to', { veh = car.netId })
-    if outcome == 'argues' then c.arguing = true end
-    ctx.hud({
-        message = {
-            text = CP.Lt('block.field_contact.returning_' .. outcome, { label = c.label }),
-            kind = 'info',
-        },
-    })
-    st.dirty = true
+    SpawnNear(ctx, st, car.netId, RETURN_OFFSET, profile,
+        { role = 'returning_driver', actions = { 'explain' }, consensual = true }, src, function(netId, _, c, walksIn)
+            local t = st.contacts[netId]
+            t.returning = { outcome = outcome, car = car.netId, at = Now(), walksIn = walksIn }
+            c.state = 'contacted'
+            c.decided = { choice = 'none', by = '', bySrc = nil, verdict = 'ok' }
+            CP.Npc.setState(ctx.run, netId, 'contacted',
+                { contact = { label = c.label, kind = 'person', actions = { 'explain' } } })
+            if outcome == 'argues' then c.arguing = true end
+            -- walking in: he says what he does once he is at the car (ReturningTick)
+            if not walksIn then
+                CP.Custody.act(ctx.run, netId, 'walk_to', { veh = car.netId })
+                TellReturning(ctx, c, outcome)
+            end
+            st.dirty = true
+        end)
 end
 
 local function ReturningTick(ctx, st)
     for _, netId in ipairs(st.order) do
         local t = st.contacts[netId]
         local rd = t and t.returning
-        if rd and not rd.done and Now() - rd.at >= RETURN_WALK_S * 1000 then
+        local due = rd and not rd.done and Now() - rd.at >= RETURN_WALK_S * 1000
+        if rd and not rd.done and rd.walksIn then
+            due = false
+            if not rd.arrived and WalkedUp(ctx, t, netId, rd.car) then
+                rd.arrived = Now()
+                local c = CP.Custody.get(ctx.run, netId)
+                if c then TellReturning(ctx, c, rd.outcome) end
+            end
+            due = rd.arrived ~= nil and Now() - rd.arrived >= ARRIVE_PAUSE_S * 1000
+        end
+        if due then
             local c = CP.Custody.get(ctx.run, netId)
             if rd.outcome == 'takes' or (rd.outcome == 'argues' and c and not c.arguing) then
                 rd.done = true
@@ -905,20 +1227,20 @@ local function ReturningTick(ctx, st)
     end
 end
 
-local function MaybeThief(ctx, st, car)
+local function MaybeThief(ctx, st, car, src)
     if st.mode ~= 'parked' or st.thiefRolled or car.truth ~= 'stolen' then return end
     st.thiefRolled = true
     local r = RngOf(ctx)
     if not r:chance(tonumber(ctx.obj.thief.chance) or 0) then return end
     local profile = { truth = 'evading', demeanour = 'runner', cues = {} }
-    local netId, _, c = SpawnNear(ctx, st, car.netId, THIEF_OFFSET, profile, {
+    SpawnNear(ctx, st, car.netId, THIEF_OFFSET, profile, {
         role = 'thief',
         actions = { 'talk', 'searchPerson', 'release', 'cite', 'arrest' },
         evading = true,
-    })
-    if not netId then return end
-    c.vehicleOf = nil
-    st.thief = { netId = netId, ran = false }
+    }, src, function(netId, _, c)
+        c.vehicleOf = nil
+        st.thief = { netId = netId, ran = false }
+    end)
 end
 
 -- ============================================================================
@@ -988,6 +1310,8 @@ end
 
 local function TryComplete(ctx, st)
     if st.completed or st.failed or st.stopped or not st.spawned then return end
+    -- a returning driver or a thief on his way (SpawnNear)
+    if (st.walkIns or 0) > 0 then return end
     local done, total = Totals(ctx, st)
     if done < total then return end
     for _, netId in ipairs(st.order) do
@@ -1024,10 +1348,12 @@ local function Flush(ctx, st)
         end
         ctx.send({ contacts = list, mode = st.mode, escaping = st.escaping, approached = st.approached == true })
     end
+    -- the contacts the objective will have (a parked car still waiting for an officer to get near counts)
+    total = math.max(total, st.planned or 0)
     local text
     if st.escaping then
         text = CP.Lt('block.field_contact.escaping', { seconds = st.escaping })
-    elseif not st.spawned then
+    elseif not st.spawned and #st.order == 0 then
         text = CP.Lt('block.field_contact.detail_wait')
     else
         text = CP.Lt('block.field_contact.detail', { done = done, total = total })
@@ -1046,7 +1372,7 @@ end
 local function OnAction(ctx, st, src, ev)
     local c = CP.Custody.get(ctx.run, ev.netId)
     if not c then return true end
-    if ev.action == 'inspect' and c.kind == 'vehicle' then MaybeThief(ctx, st, c) end
+    if ev.action == 'inspect' and c.kind == 'vehicle' then MaybeThief(ctx, st, c, src) end
     st.dirty = true
     return true
 end
@@ -1055,7 +1381,7 @@ local function OnDecide(ctx, st, src, ev)
     local c = CP.Custody.get(ctx.run, ev.netId)
     if not c then return true end
     if c.kind == 'vehicle' and (ev.choice == 'cite' or ev.choice == 'impound') then
-        ReturningDriver(ctx, st, c, ev.choice)
+        ReturningDriver(ctx, st, c, ev.choice, src)
     end
     -- vehicle_impounded (a card bonus, e.g. Stolen Vehicle Takedown): each car lawfully impounded, shared
     local good = ev.verdict == 'best' or ev.verdict == 'ok'
@@ -1153,6 +1479,7 @@ local function Tick(ctx, dt)
         Spawn(ctx, st)
         Watch(ctx, st, tonumber(dt) or 1)
         if st.failed then return end
+        WalkTick(ctx, st)
         ReturningTick(ctx, st)
     end
     TryComplete(ctx, st)
@@ -1204,6 +1531,7 @@ end
 local function Checklist(ctx)
     local st = StateOf(ctx)
     local done, total = Totals(ctx, st)
+    total = math.max(total, st.planned or 0)
     return {
         {
             label = CP.L('block.field_contact.check_decided'),

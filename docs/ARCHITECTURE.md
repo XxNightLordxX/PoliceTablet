@@ -347,6 +347,28 @@ while wornOut is true), `pursuit` for a suspect in `'fleeing'` in stop mode only
 `search_area` for a fugitive in `'fleeing'`, `field_contact` for a contact in `'fleeing'` who is not walking off a
 consensual contact. The escape rules are unchanged.
 
+field_contact through the spawn director (PLAN S12, Config.Spawning; owner request of 2026-10-19: "make sure they dont
+spawn around the player"): a scene (scene mode: its car and every person, all at once) and each parked car (parked
+mode: per spot, in any order) appear once `ctx.whenNear` says an officer is within `activateRange` of one of its points
+while every officer is further than the objective's `approach` + `sceneOutside` from all of them; an officer standing
+closer keeps it waiting (one `CP.log` per point: `spots[1] waits: an officer is 20 m from it, it appears beyond 35 m`),
+after `waveDelayMax` the distance drops to `hardMin` (one `CP.warn` when it then appears closer), after `sceneWaitMax`
+(0 = never) it appears anyway with one `CP.warn` naming the mission, the place and the point; nobody within
+`activateRange` starts no clock. `st.planned` (the cars or the scene's people and car to come) is the HUD's and the
+checklist's total while some still wait. The returning driver (a citation or impound) and the thief (the first inspect
+of a stolen car) appear in a thread: the game of the officer who acted (else the participant nearest the car) is asked
+through the ox_lib callback `crimson-police:client:spawn:walkIn` (§8.1, `CP.Spawn.walkIn` §5.43) for footpath points
+`contactRing` from the car, waiting up to `losTimeoutMs`; the first answer point 2D within the ring (1 m slack), within
+15 m of the car's height, `contactRing[1]` - 5 m or more from every participant and outside the no-build zones is used,
+the next four are the placer's other points (`alt`); no usable answer: 12 points round the car (the angle from the
+run's seed, at ring[1], halfway and ring[2] in turn, the car's height), the ones `contactRing[1]` or more from every
+participant first, in front of the asked officer's ped first, else the one furthest from them. He faces the car;
+`st.walkIns` (the ones on their way) holds the objective open. Once `CP.Spawn.holding(netId)` is false (an officer's
+game placed him, or his placement timed out) he is told `walk_to` his car; the driver's outcome (HUD message, then
+takes / argues / drives off `ARRIVE_PAUSE_S` 3 s later) waits until he is within 4 m of the car or has walked
+`RETURN_WALK_S` + distance / 1 m/s; the thief runs at `thief.runAt` as before. `enabled = false`: everything as before
+(scene and cars at once, the driver 14 m and the thief 30 m from the car at a random angle, at once).
+
 Evidence field_contact accepts: `{ type = 'action', netId, action, phase = 'begin'|'finish' }` (from the plain
 event `crimson-police:server:custody`), `{ type = 'decide', netId, choice, offence }` (from the action
 `server:contactDecide`), `{ type = 'cuffed', netId }` (CP.Npc), `{ type = 'aim' | 'stunned', netId }` (client
@@ -2203,6 +2225,16 @@ What this officer's game can see of the points the server's spawn director may u
   end are read for up to 60 more frames in a thread so the game frees their handles. Needs a thread (`Wait(0)`).
 - The ox_lib callback `crimson-police:client:spawn:visible` (§8.1) answers the server's `{ points, ms }` with
   `visible(points, ms)` (`{}` for args that are no table, and when it raises: one `CP.warn`).
+- `walkIn(car, ring, budgetMs) -> { { x, y, z, hidden } }` (PLAN S12, Config.Spawning.contactRing): where a returning
+  driver or a thief appears for the car at `car` (`{ x, y, z }`). Round the car, in the direction this officer looks
+  (`GetFinalRenderedCamRot(2).z`, else his ped's heading) and 25, 50 and 75 degrees either side, at ring[1], halfway
+  and ring[2] (ring kept to 5-100 m), `GetSafeCoordForPed(x, y, car z + 1.0, false, 4 + 8)` (no navmesh from a
+  building's inside, none in water; found as true or 1); a navmesh point is kept when it is 2D within the ring from the
+  car, ring[1] or more from him, at most 90 degrees off his view and 2 m or more from one kept already. Its z is the
+  navmesh's + 1.0 (a standing person's point). `visible(kept, budgetMs)`: hidden ones first, then seen ones, each in
+  that order, at most 8. Empty when nothing fits. Needs a thread.
+- The ox_lib callback `crimson-police:client:spawn:walkIn` (§8.1) answers the server's `{ car, ring, ms }` with
+  `walkIn(car, ring, ms)` (`{}` for args that are no table, and when it raises: one `CP.warn`).
 - `probe(kind, x, y, z, h, model, opts) -> result` — whether the point is fit to put a `'ped'`, a `'vehicle'`
   (`model`: its name or hash, for its size) or a `'prop'` (`'object'` and any other kind) on, heading `h` (PLAN S6,
   Config.Spawning.ground; the Check spawn points tool calls it, §5.27, and the placer below). Needs a
@@ -2316,7 +2348,8 @@ What this officer's game can see of the points the server's spawn director may u
   freezes him, replaces any open ask with one at `coords` (a new token, no other points: a bad answer lets him go where
   he stands with one warning), `from = { x, y }` where he stood before (the placer moves him to `coords` first when
   the server's move has not reached its game), writes it to his bag and returns it; nil when place is off or he is not
-  a live entity of the run.
+  a live entity of the run. `CP.Spawn.holding(netId) -> boolean` (PLAN S12): true while an ask for that entity is open
+  (it waits frozen; field_contact walks a returning driver or a thief to his car only after that).
 
 ## 6. Cross-cutting conventions
 
@@ -2571,6 +2604,8 @@ Rules for blocks:
 Server → client ox_lib callback: `crimson-police:client:roadPoint` `{ near, min, max }` → `{ coords, heading }` or nil (the service-vehicle driver's client; the server validates the reply; custody).
 
 Server → client ox_lib callback: `crimson-police:client:spawn:visible` `{ points = { { x, y, z } } (at most 32), ms }` → `{ boolean }`, one per point, true = this game sees it (or cannot tell), false = hidden (the spawn director's hidden-first ask, `Config.Spawning.preferHidden`, §5.10; anything but `false` counts as seen; spawn).
+
+Server → client ox_lib callback: `crimson-police:client:spawn:walkIn` `{ car = { x, y, z }, ring = { nearest, furthest }, ms }` → `{ { x, y, z, hidden } }` (at most 8, best first; empty = none fits): footpath points for a returning driver or a thief, in front of this officer, out of his sight first (`Config.Spawning.contactRing`, field_contact §3.3; the server re-checks every point and uses the ring round the car without a usable one; spawn).
 
 ### 8.2 Client → server events (spec names; payload then optional reqId)
 

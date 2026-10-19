@@ -347,13 +347,27 @@ Config.Spawning = {
     -- officer, out of the officers' sight first and never behind the one at the door, instead of waiting beside the
     -- door from the start (false = they wait at their points from the start, as before)
     associatesAtKnock = true,
+    -- Metres, nearest and furthest: a parked car's returning driver and a stolen car's thief appear this far from the
+    -- car, on a footpath the game of the officer at the car finds in front of him, out of his sight first, and walk up
+    -- to the car once that game has put them on the ground (no answer from his game: round the car at this distance,
+    -- never closer than the nearest to any officer). With enabled = false: 14 m and 30 m round the car, as before
+    contactRing = { 25.0, 40.0 },
+    -- Metres: a scene (Suspicious Activity's people and car, each parked car of Parking Patrol) appears once an
+    -- officer is within activateRange of it while every officer is further than the mission's approach distance
+    -- (where the people react, 25 m) plus this from it, so it is already there before you are on top of it (after
+    -- waveDelayMax: hardMin, never closer)
+    sceneOutside = 10.0,
+    -- Seconds a scene waits for officers standing closer than that before it appears anyway, with one warning in the
+    -- console naming the mission and the place (move its start further out); 0 = it waits until they step back
+    sceneWaitMax = 45,
     -- true = of the points a wave may use, the ones your officers cannot see (behind a building, a container or a
     -- vehicle, as the nearest officers' own games check it) are used first, so people appear out of sight instead of
     -- in the open in front of you; seen points are still used when there are not enough hidden ones (false = the
     -- mission's own order)
     preferHidden = true,
     -- Milliseconds the server waits for the officers' games to say what they can see (100-5000); no answer in time =
-    -- every point counts as seen (the distance rules above still apply)
+    -- every point counts as seen (the distance rules above still apply). Also how long it waits for the footpath point
+    -- of a returning driver or a thief (contactRing)
     losTimeoutMs = 1500,
     -- How a point is checked against the ground under it: each range is the lowest and highest height in metres of
     -- the point in the mission file over the ground there (used by the spawn point check in Admin UI -> Testing and by

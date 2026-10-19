@@ -370,6 +370,12 @@ function Spawn.again(run, netId, coords, from)
     return AskOf(a)
 end
 
+-- true while the entity netId still waits frozen for its placement (an ask for it is open).
+function Spawn.holding(netId)
+    netId = math.tointeger(tonumber(netId))
+    return netId ~= nil and asks[netId] ~= nil
+end
+
 -- How many entities of the run still wait for their placement.
 function Spawn.waiting(runId)
     local n = 0

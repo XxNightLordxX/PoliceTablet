@@ -490,8 +490,16 @@ do
     for _, t in ipairs(Tiers(def)) do
         local run = Start(def, t.count, t.tier)
         Secs(2)
+        -- the cars near the start are there at once, never one an officer stands on top of (the spawn director);
+        -- the others appear as the officer works his way down the street
         local cars = W.cars(run, 1)
-        H.eq(#cars, 5, 'parking_patrol ' .. t.tier .. ': five parked cars')
+        H.ok(#cars >= 1 and #cars <= 5, ('parking_patrol %s: %d cars near the start'):format(t.tier, #cars))
+        local me = H.players[1].coords
+        for _, c in ipairs(cars) do
+            local at = W.at(run, c.netId)
+            H.ok(math.sqrt((at.x - me.x) ^ 2 + (at.y - me.y) ^ 2) > 35.0,
+                'parking_patrol ' .. t.tier .. ': a car appears beyond 35 m of the officers')
+        end
         WorkContacts(1, run, 1)
         H.eq(run.state, 'ended', 'parking_patrol ' .. t.tier .. ': completed end to end')
         H.eq(run.endState, 'completed', 'parking_patrol ' .. t.tier .. ': completed')

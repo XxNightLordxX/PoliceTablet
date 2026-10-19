@@ -2990,6 +2990,12 @@ is ('moved'). Told once per token with server:spawnPlaced (runId, { netId, token
 at most 4 placements at once (counted before control is asked for); lost control or the run's end: nothing told.
 CP.Spawn.holds(entity): true while its bag asks for a placement this game has not done; CP.Npc then never lets the
 person go (modules/npc/client.lua LetGo). ARCHITECTURE 5.43 lists every step and field.
+CP.Spawn.walkIn(car, ring, budgetMs) (PLAN S12, Config.Spawning.contactRing; the server's ask is the ox_lib callback
+crimson-police:client:spawn:walkIn, { car, ring, ms }, from blocks/field_contact/server.lua): where a returning driver
+or a thief appears for the car this officer deals with. Navmesh points (GetSafeCoordForPed, flags 4 + 8: not a
+building's inside, not water) round the car in the direction his camera looks and 25 / 50 / 75 degrees either side, at
+ring[1], halfway and ring[2]; kept when within the ring from the car, ring[1] or more from him, at most 90 degrees off
+his view and 2 m from the others; z = navmesh + 1.0; hidden ones first (CP.Spawn.visible), at most 8.
 ```
 
 ## Crimson-Police/modules/storage/memsql.lua
@@ -4521,6 +4527,18 @@ deferred.lua of build 35245). Part 2 runs the whole resource (tests/fixtures/adm
 database user without the CREATE right.
 ```
 
+## tests/field_contact_director_spec.lua
+
+```text
+field_contact through the spawn director (Config.Spawning, PLAN S12) on the real engine, the real block and the
+real placement module: a scene and each parked car appear once an officer is near them (activateRange) and not on
+top of them (approach + sceneOutside); the returning driver and the thief appear contactRing (25-40 m) from the car on
+the footpath point the game of the officer at the car picks, or round the car and never near an officer when that
+game gives none in time, and walk up to the car once an officer's game has put them on the ground. Before (a1 4.1
+items 5-6) the scene popped in 4-17 m from the officer crossing the start circle and the driver / thief appeared
+14 m / 30 m from the car at a random angle, behind the officer as often as not.
+```
+
 ## tests/fixtures/admin_missions/boot.lua
 
 ```text
@@ -5074,6 +5092,15 @@ cuffed: placed, kept frozen; taken over during the check: nothing; a new token o
 bags; a wave of six: four at a time, all told; a wave a bystander's game controls: control asked for four at a time,
 four placed at once; one 12 m from its point (placed and let go before): told 'moved', not frozen, not moved back;
 2 m from it: placed as usual; the run's end stops it, another run's end does not.
+```
+
+## tests/spawn_walkin_spec.lua
+
+```text
+CP.Spawn.walkIn and the ox_lib callback crimson-police:client:spawn:walkIn (modules/spawn/client.lua; PLAN S12):
+where a returning driver or a thief appears for the car this officer deals with: a footpath point the game's navmesh
+gives (GetSafeCoordForPed, never a building's inside or water) contactRing metres from the car, 25 m or more from
+him, in front of him (where his camera looks), the ones he cannot see first, at a standing person's height.
 ```
 
 ## tests/stage_ahead_spec.lua

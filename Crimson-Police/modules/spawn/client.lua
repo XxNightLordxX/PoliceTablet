@@ -1,6 +1,6 @@
--- CP.Spawn (client): what this officer's game can see of the points where a mission's people may appear, for the
--- server's spawn director (Config.Spawning.preferHidden; modules/runs/server.lua Runs.choosePoints), and whether the
--- ground at a point is fit to put a person, a vehicle or an object on (Config.Spawning.ground).
+-- CP.Spawn (client): what this officer's game can see of the points where a mission's people may appear (the spawn
+-- director's hidden points, Config.Spawning.preferHidden), where a person who walks up to a car appears (contactRing),
+-- whether the ground at a point is fit to put a person, a vehicle or an object on (Config.Spawning.ground), the placer.
 
 CP.Spawn = CP.Spawn or {}
 local Spawn = CP.Spawn
@@ -368,6 +368,95 @@ function Spawn.probe(kind, x, y, z, h, model, opts)
     end
     return done(status)
 end
+
+-- ============================================================================
+--                 WALK-IN POINT (a returning driver, a thief)
+-- ============================================================================
+-- Where a person who walks up to a car this officer is dealing with appears (Config.Spawning.contactRing; the server's
+-- field_contact block asks, blocks/field_contact/server.lua): a footpath point (the navmesh, never inside a building or
+-- in water) ring[1] to ring[2] metres from the car and ring[1] or more from this officer, in front of him (where his
+-- camera looks), the ones he cannot see first. Its z is where a standing person's point sits (PED_LIFT over the
+-- navmesh); the placer then puts him on the ground there.
+
+local WALK_IN_CALLBACK = 'crimson-police:client:spawn:walkIn'
+local WALK_IN_ANGLES = { 0, -25, 25, -50, 50, -75, 75 }  -- degrees off the officer's view, round the car
+local WALK_IN_STEPS = 3                                  -- distances tried from ring[1] to ring[2]
+local WALK_IN_FLAGS = 4 + 8                              -- GetSafeCoordForPed: no navmesh made from a building's inside, none in water
+local WALK_IN_FRONT = 90.0                               -- degrees: a point further than this off his view is behind him
+local WALK_IN_RING = { 5.0, 100.0 }                      -- metres the server may ask for
+local WALK_IN_APART = 2.0                                -- metres: two navmesh points closer than this are the same one
+local WALK_IN_MAX = 8                                    -- points answered, best first
+
+local function Dist2(ax, ay, bx, by) return math.sqrt((ax - bx) ^ 2 + (ay - by) ^ 2) end
+
+-- The direction this officer looks along the ground: his camera's, else his ped's heading.
+local function ViewDir(ped)
+    local rot = GetFinalRenderedCamRot(2)
+    local h = rot and Num(rot.z) or nil
+    if not h then h = Num(GetEntityHeading(ped)) or 0.0 end
+    return HeadingDir(h)
+end
+
+-- Up to WALK_IN_MAX points { x, y, z, hidden } for a person who walks up to the car at car ({ x, y, z }), best
+-- first: hidden ones (Spawn.visible within budgetMs) before seen ones, each group nearest the officer's view and the
+-- car first. ring = { nearest, furthest } metres from the car. Empty when no footpath point fits.
+function Spawn.walkIn(car, ring, budgetMs)
+    local out = {}
+    if type(car) ~= 'table' or type(ring) ~= 'table' then return out end
+    local cx, cy, cz = Num(car.x or car[1]), Num(car.y or car[2]), Num(car.z or car[3])
+    local r1, r2 = Num(ring[1]), Num(ring[2])
+    if not (cx and cy and cz and r1 and r2) then return out end
+    r1 = Clamp(r1, WALK_IN_RING[1], WALK_IN_RING[2])
+    r2 = Clamp(r2, r1, WALK_IN_RING[2])
+    local ped = PlayerPedId()
+    local mx, my = XYZ(GetEntityCoords(ped))
+    if not mx then return out end
+    local fx, fy = ViewDir(ped)
+    local kept = {}
+    for step = 0, WALK_IN_STEPS - 1 do
+        local d = r1 + (r2 - r1) * step / math.max(1, WALK_IN_STEPS - 1)
+        for _, off in ipairs(WALK_IN_ANGLES) do
+            local a = math.rad(off)
+            local dx = fx * math.cos(a) - fy * math.sin(a)
+            local dy = fx * math.sin(a) + fy * math.cos(a)
+            local found, safe = GetSafeCoordForPed(cx + dx * d, cy + dy * d, cz + PED_LIFT, false, WALK_IN_FLAGS)
+            local sx, sy, sz = XYZ(safe)
+            if IsYes(found) and sx then
+                local dc, dm = Dist2(sx, sy, cx, cy), Dist2(sx, sy, mx, my)
+                local vx, vy = sx - mx, sy - my
+                local front = dm > 0 and math.deg(math.acos(Clamp((vx * fx + vy * fy) / dm, -1.0, 1.0))) or 180.0
+                local fresh = true
+                for _, k in ipairs(kept) do
+                    if Dist2(k.x, k.y, sx, sy) < WALK_IN_APART then fresh = false end
+                end
+                if fresh and dc >= r1 and dc <= r2 and dm >= r1 and front <= WALK_IN_FRONT then
+                    kept[#kept + 1] = { x = sx + 0.0, y = sy + 0.0, z = sz + PED_LIFT }
+                end
+            end
+        end
+    end
+    if #kept == 0 then return out end
+    local seen = Spawn.visible(kept, budgetMs)
+    for _, hidden in ipairs({ true, false }) do
+        for k, p in ipairs(kept) do
+            if #out < WALK_IN_MAX and (seen[k] == false) == hidden then
+                out[#out + 1] = { x = p.x, y = p.y, z = p.z, hidden = hidden }
+            end
+        end
+    end
+    return out
+end
+
+-- The server's ask: { car = { x, y, z }, ring = { nearest, furthest }, ms = the time this game may probe }.
+lib.callback.register(WALK_IN_CALLBACK, function(args)
+    if type(args) ~= 'table' then return {} end
+    local ok, res = pcall(Spawn.walkIn, args.car, args.ring, args.ms)
+    if not ok then
+        CP.warn(TAG, 'walk-in point failed: %s', tostring(res))
+        return {}
+    end
+    return res
+end)
 
 -- ============================================================================
 --                                    PLACER

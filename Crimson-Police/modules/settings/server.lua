@@ -242,6 +242,8 @@ local RANGES = {
     ['Spawning.waveDelayMax'] = { 0, 300 },
     ['Spawning.leaveOutAfter'] = { 0, 600 },
     ['Spawning.stageWakeRange'] = { 0, 50 },
+    ['Spawning.sceneOutside'] = { 0, 100 },
+    ['Spawning.sceneWaitMax'] = { 0, 600 },
     ['Spawning.losTimeoutMs'] = { 100, 5000 },
     ['Spawning.ground.snapWithin'] = { 0, 10 },
     ['Spawning.collisionTimeoutMs'] = { 500, 30000 },
@@ -266,6 +268,7 @@ local RANGE_LISTS = {
     'Spawning.ground.pedAbove',
     'Spawning.ground.vehicleAbove',
     'Spawning.ground.propAbove',
+    'Spawning.contactRing',
 }
 
 -- Settings that must stay smaller than or equal to another one.

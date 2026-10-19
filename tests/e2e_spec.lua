@@ -2163,35 +2163,60 @@ do
     fc.returning = { chance = 1, max = 1 }
     fc.thief = { chance = 0, runAt = 15.0 }
     Place(src, vec3(def.locations[1].start.coords.x + 300.0, def.locations[1].start.coords.y, 30.0))
-    local run = PX.accept(src, 'patrol', 1106)
+    local run = PX.accept(src, 'patrol', 1107)
     PX.restore()
     H.eq(run and run.missionId, 'parking_patrol', 'parking sweep: Illegal Parking Patrol drawn from the Patrol pool')
     PX.arriveAll(run, { src })
     H.eq(run.state, 'in_progress', 'parking sweep: in progress at the patrol entry point')
     Secs(2)
+    -- the cars near the entry point are there at once, never one the officer stands on top of (the spawn
+    -- director: within activateRange and further than approach + sceneOutside); the rest as he walks the street
     local cars = PX.contacts(run, 1, 'vehicle')
-    H.eq(#cars, 5, 'parking sweep: five parked cars')
+    H.ok(#cars >= 1 and #cars < 5,
+        ('parking sweep: %d of the five parked cars are there at the entry point'):format(#cars))
+    local here = PX.at(run, cars[1] and cars[1].netId)
     for _, c in ipairs(cars) do
         H.eq(c.decided, nil, 'parking sweep: no car is decided before an officer works it')
+        local at, me = PX.at(run, c.netId), H.players[src].coords
+        H.ok(at and math.sqrt((at.x - me.x) ^ 2 + (at.y - me.y) ^ 2) > 35.0,
+            'parking sweep: a car appears beyond 35 m of the officer')
     end
+    H.ok(here ~= nil, 'parking sweep: a parked car')
     -- the first car with a violation gets its ticket (or the tow), so its driver comes back
     local first
     for _, c in ipairs(cars) do
         local best = PX.bestCar(c)
         if not first and c.truth ~= 'stolen' and (best == 'cite' or best == 'impound') then first = c end
     end
-    H.ok(first ~= nil, 'parking sweep: a car with a violation (seed 1106)')
+    H.ok(first ~= nil, 'parking sweep: a car with a violation (seed 1107)')
     PX.workCar(src, run, first)
+    Secs(1)
     local driver
     for _, p in ipairs(PX.contacts(run, 1, 'person')) do if p.role == 'returning_driver' then driver = p end end
     H.ok(driver ~= nil, 'parking sweep: citing or impounding a car brings its driver back')
-    H.eq(driver and driver.arguing, true, 'parking sweep: this driver argues about the ticket (seed 1106)')
-    for _, c in ipairs(cars) do PX.workCar(src, run, c) end
+    H.eq(driver and driver.arguing, true, 'parking sweep: this driver argues about the ticket (seed 1107)')
+    -- down the street: each car that appears ahead of him is worked
+    for _ = 1, 12 do
+        local left = 0
+        for _, c in ipairs(PX.contacts(run, 1, 'vehicle')) do
+            if not c.decided then
+                left = left + 1
+                PX.workCar(src, run, c)
+            end
+        end
+        if left == 0 and #PX.contacts(run, 1, 'vehicle') == 5 then break end
+        Secs(1)
+    end
+    H.eq(#PX.contacts(run, 1, 'vehicle'), 5, 'parking sweep: five parked cars in all')
     if driver then
         Secs(10)
         H.eq(PX.obj(run, 1).status, 'active', 'parking sweep: an arguing driver needs Explain the citation')
         PX.near(src, run, driver.netId)
         PX.act(src, run, driver.netId, 'explain')
+        -- he walks up to his car (the host's game walks him there)
+        local rd = PX.st(run, 1).contacts[driver.netId].returning
+        local carAt = PX.at(run, rd.car)
+        if carAt then PX.ent(run, driver.netId).coords = vec3(carAt.x + 2.0, carAt.y, carAt.z) end
     end
     Secs(12)
     -- a tow truck that no client loads: the service timeout fades the car out
