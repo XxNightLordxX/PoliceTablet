@@ -55,7 +55,19 @@ _G.GetEntityCoords = function(e)
     if IsPlayerPed(e) then return H.players[e // 100].coords or vec3(0.0, 0.0, 0.0) end
     return vec3(0.0, 0.0, 0.0)
 end
-_G.GetEntityHealth = function(e) local x = W.ents[e]; return x and x.health or 0 end
+-- FXServer reads a ped's health from its synced health node (ServerGameState_Scripting.cpp GET_ENTITY_HEALTH): a
+-- player's ped answers what his game synced, 200 for a healthy freemode ped (H.players[src].health / .maxHealth).
+local function PlayerHealth(e, key)
+    local p = IsPlayerPed(e) and H.players[e // 100]
+    if not p then return nil end
+    if p[key] ~= nil then return p[key] end
+    return 200
+end
+_G.GetEntityHealth = function(e)
+    local x = W.ents[e]
+    if x then return x.health or 0 end
+    return PlayerHealth(e, 'health') or 0
+end
 _G.GetPedArmour = function(e) local x = W.ents[e]; return x and x.armour or 0 end
 _G.GetEntityType = function(e)
     if IsPlayerPed(e) then return 1 end
@@ -66,7 +78,8 @@ _G.GetPedInVehicleSeat = function(veh, seat) local x = W.ents[veh]; return (x an
 _G.GetPedSourceOfDeath = function(e) local x = W.ents[e]; return x and x.killer or 0 end
 _G.GetPedSourceOfDamage = function(e) local x = W.ents[e]; return x and x.damager or 0 end
 _G.NetworkGetEntityFromNetworkId = function(n) return W.byNet[n] or 0 end
-_G.WasEventCanceled = function() return W.canceled end
+-- W.canceled: another resource cancelled the event first; CancelEvent() of a handler here sets the harness's flag
+_G.WasEventCanceled = function() return W.canceled or H.eventCanceled end
 W.owner = {}   -- [entity] = src of the client that owns it (default: nobody, -1)
 _G.NetworkGetEntityOwner = function(e) return W.owner[e] or -1 end
 
@@ -221,8 +234,9 @@ local function Cuff(src, runId, netId)
     H.fire('crimson-police:server:npcCuff', src, runId, netId)
 end
 
+-- true when a handler cancelled it (FXServer would not route the damage to the victim)
 local function Wde(sender, data)
-    H.fire('weaponDamageEvent', sender, sender, data)
+    return H.fire('weaponDamageEvent', sender, sender, data)
 end
 
 local PISTOL = joaat('WEAPON_PISTOL')
@@ -880,6 +894,123 @@ Wde(2, { hitGlobalIds = { h1 }, weaponType = UNARMED })
 H.eq(Count(R.dispatched, function(x) return x.ev.type == 'damaged' and x.ev.attacker == 2 end), 1,
     'melee on a hostage is damage')
 H.eq(Count(R.penal, function(x) return x.src == 2 end), 0, 'melee on a hostage is not a shot')
+
+-- ============================================================================
+--                        NO ONE-SHOT KILLS ON OFFICERS
+-- ============================================================================
+-- Config.NpcCombat.cancelLethalHeadshots.
+-- A weaponDamageEvent reaches the server only when the shooter's game does not own the victim (another game owns the
+-- NPC); willKill = the shooter's game thinks it kills at once (a critical headshot). FXServer does not route a
+-- cancelled one (ServerGameState.cpp: the TriggerEvent2 result gates routeEvent).
+
+do
+    Reset()
+    local cfg = Config.NpcCombat
+    local gunman, gunmanEnt = SpawnPed(run, { coords = vec3(20.0, 0.0, 0.0) })
+    Npc.setState(run, gunman, 'hostile')
+    local hostage = SpawnPed(run, { coords = vec3(21.0, 0.0, 0.0), role = 'hostage', armed = false })
+    W.owner[gunmanEnt] = 2
+    W.byNet[64980], W.byNet[64981], W.byNet[64982] = 100, 200, 900   -- the peds of players 1, 2 and 9
+    Place(9, 500.0, 500.0, 0.0)
+    local function Lethal(extra)
+        local d = { willKill = true, parentGlobalId = gunman, hitGlobalIds = { 64980 }, weaponType = PISTOL }
+        for k, v in pairs(extra or {}) do d[k] = v end
+        return Wde(2, d)
+    end
+    -- the real server has both max health natives; player peds answer their synced max health (200 by default)
+    local savedMax, savedPedMax = _G.GetEntityMaxHealth, _G.GetPedMaxHealth
+    local function MaxHealth(e)
+        local x = W.ents[e]
+        if x then return x.maxHealth or 0 end
+        return PlayerHealth(e, 'maxHealth') or 0
+    end
+    _G.GetEntityMaxHealth, _G.GetPedMaxHealth = MaxHealth, MaxHealth
+    H.eq(cfg.cancelLethalHeadshots, true, 'shipped: one-shot kills by mission NPCs are dropped')
+    H.eq(Lethal(), true, 'a one-shot kill by an armed mission NPC on a participant is cancelled')
+    H.eq(Lethal({ hitGlobalIds = false, hitGlobalId = 64981 }), true, 'the single hitGlobalId form too')
+    H.eq(Lethal({ willKill = false }), false, 'a hit that does not kill at once is left alone (less damage, not none)')
+    H.eq(Lethal({ parentGlobalId = 64981 }), false, 'a player\'s shot is never cancelled')
+    H.eq(Lethal({ parentGlobalId = hostage }), false, 'an unarmed mission ped is not a shooter')
+    H.eq(Lethal({ parentGlobalId = 64999 }), false, 'a parent that resolves to nothing: left alone')
+    H.eq(Lethal({ hitGlobalIds = { 64982 } }), false, 'a non-participant victim: left alone')
+    H.eq(Lethal({ hitGlobalIds = { 64980, 64982 } }), false, 'one victim outside the run: the whole hit stays')
+    H.eq(Lethal({ hitGlobalIds = { gunman } }), false, 'a hit on a mission ped is never cancelled')
+    H.eq(Lethal({ hitGlobalIds = { 'x' } }), false, 'a malformed hit list: left alone')
+    R.arena[1], R.bucket[1] = true, 4210
+    H.eq(Lethal(), false, 'an officer in an arena match is never touched (docs/CRIMSON_ARENA.md rule 11)')
+    R.arena[1], R.bucket[1] = nil, nil
+    R.bucket[1] = 7
+    H.eq(Lethal(), false, 'nor one in another routing bucket')
+    R.bucket[1] = nil
+    run.participants[1].status = 'left'
+    H.eq(Lethal(), false, 'a participant who left: left alone')
+    run.participants[1].status = 'active'
+    cfg.cancelLethalHeadshots = false
+    H.eq(Lethal(), false, 'cancelLethalHeadshots = false: nothing is cancelled')
+    cfg.cancelLethalHeadshots = true
+    cfg.enabled = false
+    H.eq(Lethal(), false, 'Config.NpcCombat.enabled = false: nothing is cancelled')
+    cfg.enabled = true
+    W.canceled = true
+    H.eq(Lethal(), false, 'already cancelled by another resource: this handler does nothing more')
+    W.canceled = false
+    local other = NewRun('run-other', { 9 })
+    local stranger = SpawnPed(other, { coords = vec3(22.0, 0.0, 0.0) })
+    H.eq(Lethal({ parentGlobalId = stranger }), false, 'an NPC of another run shooting this run\'s officer: left alone')
+    other.state = 'ended'
+    H.eq(Lethal({ parentGlobalId = stranger, hitGlobalIds = { 64982 } }), false, 'an ended run cancels nothing')
+    -- willKill is ANY hit the shooter's game expects to kill ("such as a critical headshot"): the shot that finishes
+    -- off a hurt officer too. Only a one-shot kill from healthy (Config.NpcCombat.lethalCancelAbove, 0.75 of the part
+    -- above GTA's 100-point death line) is dropped, so an officer can always go down to an NPC a partner's game owns.
+    H.eq(cfg.lethalCancelAbove, 0.75, 'shipped: three quarters of his health')
+    local P1 = H.players[1]
+    P1.health = 110
+    H.eq(Lethal(), false, 'a killing shot on an officer at 10 % health goes through (he can go down)')
+    P1.health = 174
+    H.eq(Lethal(), false, 'just under three quarters: the killing shot goes through')
+    P1.health = 175
+    H.eq(Lethal(), true, 'at three quarters: a one-shot kill is dropped')
+    P1.health = 200
+    H.eq(Lethal(), true, 'at full health: dropped')
+    H.players[2].health = 120
+    H.eq(Lethal({ hitGlobalIds = { 64980, 64981 } }), false, 'one hurt officer among the victims: the whole hit stays')
+    H.eq(Lethal({ hitGlobalIds = false, hitGlobalId = 64981 }), false, 'the hurt officer alone: the hit stays')
+    H.players[2].health = nil
+    P1.maxHealth, P1.health = 175, 175   -- a freemode female ped's own max health
+    H.eq(Lethal(), true, 'a 175 max-health ped at full: dropped')
+    P1.health = 130
+    H.eq(Lethal(), false, 'the same ped at 40 %: the hit stays')
+    P1.maxHealth = nil
+    P1.health = 0
+    H.eq(Lethal(), false, 'no synced health (0): not known to be healthy, the hit stays')
+    P1.health = 200
+    _G.GetEntityMaxHealth = nil
+    H.eq(Lethal(), true, 'GetEntityMaxHealth missing: GetPedMaxHealth answers')
+    _G.GetPedMaxHealth = nil
+    H.eq(Lethal(), false, 'no max health at all: not known to be healthy, the hit stays')
+    _G.GetEntityMaxHealth, _G.GetPedMaxHealth = MaxHealth, MaxHealth
+    P1.health = 150
+    cfg.lethalCancelAbove = 0.5
+    H.eq(Lethal(), true, 'lethalCancelAbove 0.5: an officer at half health is protected')
+    cfg.lethalCancelAbove = 0
+    P1.health = 110
+    H.eq(Lethal(), false, 'lethalCancelAbove 0 is read as 0.25: an officer at 10 % can still go down')
+    P1.health = 125
+    H.eq(Lethal(), true, '...and one at a quarter is protected')
+    cfg.lethalCancelAbove = 5
+    P1.health = 199
+    H.eq(Lethal(), false, 'lethalCancelAbove above 1 is read as 1: only an officer at full health')
+    P1.health = 200
+    H.eq(Lethal(), true, 'full health at 1')
+    cfg.lethalCancelAbove = 'x'
+    P1.health = 180
+    H.eq(Lethal(), true, 'a value that is no number: the shipped 0.75')
+    cfg.lethalCancelAbove = 0.75
+    P1.health = nil
+    _G.GetEntityMaxHealth, _G.GetPedMaxHealth = savedMax, savedPedMax
+    H.eq(#R.penal, 0, 'none of this is a penalty')
+    W.byNet[64980], W.byNet[64981], W.byNet[64982] = nil, nil, nil
+end
 
 -- ============================================================================
 --                                 HEALTH POLL

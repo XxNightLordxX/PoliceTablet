@@ -109,6 +109,7 @@ PoliceTablet/                      (git repo)
     shared/init.lua                CP namespace, logging, CP.Blocks registry, RegisterMission stub
     shared/locale.lua              CP.L / CP.Locale
     shared/net.lua                 CP.Net (actions and callbacks)
+    shared/npccombat.lua           CP.NpcCombat: the weapon a mission NPC may carry, the accuracy and firing caps (§5.42)
     shared/utils.lua               CP.U helpers (round, rng, hash, vectors, colours ...)
     config/banned_words.txt        the default banned-word list for profile bios (one word or phrase a line)
     locales/en.json                all player-facing text (merged from locales/parts/*.json; English only)
@@ -136,7 +137,7 @@ PoliceTablet/                      (git repo)
 ```
 
 fxmanifest loads: `@ox_lib/init.lua`, config/config.lua, config/blocks.lua, shared/*.lua
-(alphabetical: init, locale, net, utils), then `modules/**/server.lua` (server) /
+(alphabetical: init, locale, net, npccombat, utils), then `modules/**/server.lua` (server) /
 `modules/**/client.lua` (client), then `blocks/**/server.lua` / `blocks/**/client.lua`.
 Server also gets `@oxmysql/lib/MySQL.lua`, then `modules/storage/memsql.lua` and
 `modules/storage/server.lua` before every other server module (so the `MySQL` global is settled before
@@ -158,6 +159,8 @@ boards, rewards, access).
 
 `modules/diag/` (client, §5.35): the F8 command `CrimsonPoliceState`, added with the freeze fix
 (`docs/notes/freeze.md`).
+
+`modules/npccombat/` (client, §5.42): the run-scoped damage settings of an officer's game (Config.NpcCombat).
 
 `modules/settings/` (server, client, §5.36): settings changed in game (Admin UI → Settings) over config.lua and
 blocks.lua, the mission and location switches, and the same values on every client.
@@ -187,6 +190,7 @@ The packages of that build add `modules/corrections/` (§5.38), `modules/livectl
 | `CP.Net.callback(name, handler, opts)` | shared/net.lua | server: ox_lib callback `crimson-police:<name>`; handler `(src, args) -> data` or `nil, errKey`; reply `{ok,data,error}` |
 | `CP.Net.rateOk(src, key, max, windowMs)` | shared/net.lua | server |
 | `CP.Net.action(name, payload, timeoutMs)`, `CP.Net.request(name, args, timeoutMs)` | shared/net.lua | client; both return `{ ok, data, error }` and never raise (`err.timeout` after timeoutMs, default 15000; `err.no_response` when ox_lib raises) |
+| `CP.NpcCombat.*` | shared/npccombat.lua | Config.NpcCombat read at every call (§5.42): `weapon(name)`, `ammo()`, `isAutomatic(name)`, `automatic()`, `automaticsIn(t)`, `weaponsAllowed(list, allowed)`, `capAccuracy(acc)`, `scaleAccuracy(acc)`, `shootRate()`, `firingPattern()`, `ability(a)`, `noCharge()`, `driveByAccuracy(acc)`, `driveByPattern()`, `aiDamage()`, `aiMeleeDamage()`, `officerDefense()`, `noCriticalHits()`, `cancelLethalHeadshots()`, `lethalCancelAbove()`, `enabled()` |
 | `CP.U.*` | shared/utils.lua | `round` (halves up), `clamp`, `inRange`, `copy`, `deepcopy`, `contains`, `keys`, `count`, `map`, `filter`, `getPath`, `setPath`, `hash`, `hashHex`, `startsWith`, `trim`, `rng(seed)` (`:next() :int(a,b) :chance(p) :pick(l) :shuffle(l) :sample(l,n)`), `uuid()`, `xyz`, `dist`, `dist2d`, `distToPolyline`, `vecToTable`, `tableToVec`, `serialize`, `isHexColour`, `contrastText` |
 
 Naming of `CP.Net.action` names: officer actions are `'server:<name>'` (spec events, e.g.
@@ -747,7 +751,9 @@ Full admin control: the accept check (`check`, `CheckAccept`) refuses `err.maint
 - `combat(baseAccuracy, baseArmour, tier, run) -> accuracy, armour` (+ tier; + `Config.Events.armoredArmour` when the run's modifier is `armored_hostiles`)
 
 Parity-plus: `combat()` adds `Config.NpcDifficulty[preset].accuracyAdd/armourAdd`; `feel() -> { healthMult,
-surrenderMult, fleeMult }` for the blocks. Presets change how NPCs feel, never points or cash.
+surrenderMult, fleeMult }` for the blocks. Presets change how NPCs feel, never points or cash. Config.NpcCombat:
+the accuracy `combat()` returns is then `CP.NpcCombat.scaleAccuracy` (× accuracyScale, at most accuracyMax); a
+boss's accuracy goes through `ctx.combat` too (its armour stays the file's).
 
 ### 5.9 CP.Events — modules/events (S)
 - `typeOfTheDay(dayKey?) -> typeKey|nil` (seed = `CP.U.hash(dayKey)`; nil when `Config.Events.typeOfTheDay` is false)
@@ -897,6 +903,15 @@ Server:
   a gun hit (not melee, not a vehicle) by an active participant on a mission ped, or a participant's gun kill
   (noted before `entityDied`), → `CP.Runs.noteWeaponFired(run, src)`
 - `onDamaged(fn(run, netId, attackerSrc))` for blocks that care (hostages)
+- A second `weaponDamageEvent` listener (Config.NpcCombat.cancelLethalHeadshots): `CancelEvent()` for a hit with
+  `willKill` whose `parentGlobalId` is an armed, living mission ped of a live run and whose every hit is the ped of
+  an active participant of that run in routing bucket 0, not in the arena, and healthy: the server's
+  `GetEntityHealth` / `GetEntityMaxHealth` of that ped (the synced health node) give at least
+  `CP.NpcCombat.lethalCancelAbove()` (0.75) of the part above GTA's 100-point death line. willKill is any hit the
+  shooter's game expects to kill, so the shot that finishes off a hurt officer is never dropped; unknown health
+  (0) is not healthy. The only `CancelEvent` of the
+  resource (docs/CRIMSON_ARENA.md rule 11). It runs after the listener above and does nothing when the event was
+  already cancelled.
 Client (host runs AI; all participants see targets):
 - `apply(entity, cfg)` — model config from the `cp` bag: accuracy, armour, health, weapon,
   `SetPedDropsWeaponsWhenDead(ped, false)`, 
@@ -905,6 +920,14 @@ Client (host runs AI; all participants see targets):
 - Reacts to `cp` state bag changes (`AddStateBagChangeHandler('cp', ...)`) on the host: surrendered →
   hands up then kneel; cuffed → cuffed anim + freeze; fleeing → flee; hostile → combat.
 - `nearestParticipant(coords) -> ped, dist` using the run's participant list.
+- Config.NpcCombat (§5.42) in `apply`: the weapon through `CP.NpcCombat.weapon` (an older bag's automatic is
+  swapped), `CP.NpcCombat.ammo()` rounds, the accuracy at most accuracyMax, and for an armed ped not calm the caps:
+  `SetPedShootRate`, `SetPedFiringPattern`, the combat ability at most abilityMax, attributes 27 (perfect accuracy)
+  and 24 (proximity fire rate) off, 49 (enemy accuracy scaling) on, and with noCharge 13 and 50 off (also in every
+  behaviour). The firing pattern goes on again after each `TaskCombatPed`.
+- The combat governor: every participant's game (not only the host) applies those caps, settings only and never a
+  task, to each armed mission ped of its run it owns (`NetworkHasControlOfEntity`), once per entity handle and bag
+  `seq`, and again when it owns the ped again after another game had it (1 s loop while on a run).
 
 Parity-plus additions (WP2; docs/notes/custody.md):
 - States `contacted`, `escorted`, `seated`, `released`, `handed_over`, `impounded`; contacted, escorted and seated are
@@ -1800,6 +1823,29 @@ action goes through `CP.AdminKit` (admins only, audited).
 - Console: `CrimsonPoliceAdmin storagemode reset` (also reached as `storage mode reset` through `SUB.storage`).
   Config health check `storage`.
 
+### 5.42 CP.NpcCombat — shared/npccombat.lua and modules/npccombat (client)
+
+How hard armed mission NPCs fight back (Config.NpcCombat, the owner's request of 2026-10-19). Config is read at every
+call, so a Settings change applies to the next NPC; `enabled = false` makes every function answer the old behaviour
+(the weapon as named, 250 rounds, no caps, no damage settings).
+- Shared (§2): `weapon(name)` — the name when it is in `weapons`, else `replace[name]`, else `fallback`; never an
+  automatic weapon (`AUTOMATIC`: the Automatic flag of gta-v-data-dumps weapons.json), whatever the lists say. Every
+  `GiveWeaponToPed` of the resource goes through it: `CP.Runs.spawnPed` and `arm` (also the bag's `cfg.weapon` and the
+  capped `cfg.accuracy`, so a new host gives the same), flee_arrest's `DrawWeapon`, `CP.Npc.apply`. `weaponsAllowed`
+  is the Builder check of the blocks (while `enabled`, an automatic weapon of an older custom file passes, since it
+  is swapped at the spawn; `CP.Missions.normalize` warns once per objective with `automaticsIn`; with `enabled =
+  false` the allowed list alone decides, and the Settings entry `NpcCombat.enabled` reloads the missions). The Builder's `builder:config`, Quick edit's pick lists and
+  `setMissionTweak` never offer or take an automatic weapon; the Settings checks of `NpcCombat.weapons`, `replace` and
+  `fallback` refuse one (`err.setting_automatic_weapon`).
+- Client `start(runId)`, `stop()`, `activeRun()`: modules/runs/client.lua starts it at `client:start` and stops it in
+  every `Cleanup` (run end, a new start, resource stop). While on: `SetAiWeaponDamageModifier(aiDamage)`,
+  `SetAiMeleeWeaponDamageModifier(aiMeleeDamage)`, `SetPedSuffersCriticalHits(PlayerPedId(), false)` (the ped's own
+  flag 2 read first with `GetPedConfigFlag`, again for a new ped within 1 s), `SetPlayerWeaponDefenseModifier` when
+  officerDefense is not 1.0 (the old value read with `GetPlayerWeaponDefenseModifier`). `stop` resets the AI
+  modifiers and puts the flag and the defense modifier back. `settings:changed` applies a mid-run change at once. A
+  foreign `crimsonArena` value of the local player (docs/CRIMSON_ARENA.md rule 8) stops it at once, before the server
+  ends the run for that player.
+
 ## 6. Cross-cutting conventions
 
 ### 6.1 Entities and NPCs
@@ -1807,8 +1853,8 @@ action goes through `CP.AdminKit` (admins only, audited).
   `CreateVehicle(model, x, y, z, heading, true, true)` (or `CreateVehicleServerSetter` for correct
   vehicle type), `CreateObjectNoOffset(model, x, y, z, true, true, false)`. Wait until
   `DoesEntityExist`, then `NetworkGetNetworkIdFromEntity`. `SetEntityOrphanMode(entity, 2)` is not used
-  (the engine deletes everything itself). Weapons: `GiveWeaponToPed(ped, hash, 250, false, true)`;
-  armour: `SetPedArmour(ped, n)` (server natives).
+  (the engine deletes everything itself). Weapons: `GiveWeaponToPed(ped, hash, CP.NpcCombat.ammo(), false, true)`
+  with the weapon `CP.NpcCombat.weapon` gives (§5.42); armour: `SetPedArmour(ped, n)` (server natives).
 - Yes/no natives: on the server a native that answers yes or no (`DoesEntityExist`, `IsPlayerAceAllowed`,
   `SaveResourceFile`, `IsPedAPlayer`, `IsDuplicityVersion`...) gives Lua the integer 1 for yes and false for no,
   never true (`_r` in FXServer's natives_server.lua). Read the answer as a condition (`if DoesEntityExist(e)`)
@@ -1818,7 +1864,8 @@ action goes through `CP.AdminKit` (admins only, audited).
   of such a native FXServer's answer, so a spec catches a `== true`.
 - Anything that only exists client-side (accuracy, health above 200, combat attributes, drop-weapons,
   relationship group, tasks) is applied by the **host** client from the `cp` state bag with
-  `CP.Npc.apply` after it has control. When the host changes, the new host re-applies and re-tasks.
+  `CP.Npc.apply` after it has control. When the host changes, the new host re-applies and re-tasks. The
+  Config.NpcCombat caps are applied by whichever participant's game owns the ped (the combat governor, §5.11).
 - Relationship groups (client, host): `CRIMSONPOLICE_HOSTILE` hates `PLAYER` (5), is neutral to everything
   else; `CRIMSONPOLICE_NEUTRAL` (hostages, witnesses, racers, fugitives) is neutral to all. Only the
   relations *from* these two groups are set; `PLAYER`'s own relations are never changed (§0.14).
@@ -2631,7 +2678,10 @@ read a failure.
   `H.load('modules/x/server.lua')`, stub other modules' tables (`CP.Runs = {...}`) as needed,
   `H.eq/H.ok/H.near`, `H.sql(...)` to reset tables, `H.fire(event, src, ...)` / `H.callback(name, src, args)`,
   `H.exportsMock['sc-dispatch'] = { ... }`, `H.players[src] = { coords = vec3(...), ace = {...} }`, and
-  `return H` at the end. Specs run in separate processes, two at a time (`--jobs=N`), each on its own copy
+  `return H` at the end. `H.fire` gives each dispatch one cancelled flag (`CancelEvent()`, `WasEventCanceled()`, and
+  its return value), as FXServer's TriggerEvent2 does. `H.combatNatives(onCall)` installs the NPC combat and damage
+  natives with natives.json's argument types (a float where the game reads a float, and so on; a wrong one fails the
+  spec) and returns what each one set, per ped and per game (`world.forget(ped)`, `world.restore()`). Specs run in separate processes, two at a time (`--jobs=N`), each on its own copy
   of the run database, which is rebuilt once per run. SQL `NOW()` is the spec's clock (`H.time` after
   `H.boot`) in every storage mode. Never leave a spec that fails, and never make a check depend on a random
   roll, the wall clock or the machine's time zone: the assertion counts are the same in every run and mode.

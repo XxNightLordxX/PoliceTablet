@@ -532,6 +532,8 @@ local function CheckMission(id)
     if not def then return end
     defs[id] = def
     local cat = CATALOG[id]
+    -- the owner's rule (Config.NpcCombat): no built-in mission names an automatic weapon (SMG, rifle, machine gun)
+    H.eq(table.concat(CP.NpcCombat.automaticsIn(def.objectives), ','), '', id .. ': no automatic weapon anywhere')
 
     -- identity and catalog numbers
     H.eq(def.id, id, id .. ': id equals the file name')
@@ -873,7 +875,7 @@ do
     H.eq(table.concat(o.waves, ','), '7,7,6', 'gang: waves 7/7/6')
     H.eq(o.nextWave.aliveAtMost, 2, 'gang: next wave at 2 alive')
     H.eq(o.nextWave.afterSeconds, 90, 'gang: or after 90 s')
-    H.eq(table.concat(o.weapons, ','), 'WEAPON_PISTOL,WEAPON_MICROSMG', 'gang: pistols and SMGs')
+    H.eq(table.concat(o.weapons, ','), 'WEAPON_PISTOL,WEAPON_COMBATPISTOL', 'gang: pistols, no automatic weapon')
     H.eq(o.accuracy, 25, 'gang: accuracy 25')
     H.eq(o.armour, 0, 'gang: armour 0')
     H.near(o.surrender.chance, 0.30, 1e-9, 'gang: 30% surrender')
@@ -1113,12 +1115,12 @@ do
     H.eq(o.accuracy, 30, 'kingpin: accuracy 30')
     H.eq(o.armour, 25, 'kingpin: armour 25')
     local w = Set(o.weapons)
-    H.ok(w.WEAPON_PISTOL and (w.WEAPON_SMG or w.WEAPON_MICROSMG) and w.WEAPON_PUMPSHOTGUN,
-        'kingpin: pistols, SMGs and shotguns')
+    H.ok(w.WEAPON_PISTOL and w.WEAPON_HEAVYPISTOL and w.WEAPON_PUMPSHOTGUN, 'kingpin: pistols and shotguns')
+    H.ok(not w.WEAPON_SMG and not w.WEAPON_MICROSMG, 'kingpin: no SMG')
     H.ok(type(o.boss) == 'table' and type(o.boss.model) == 'string', 'kingpin: boss model')
     H.eq(o.boss.health, 400, 'kingpin: boss health 400')
     H.eq(o.boss.armour, 100, 'kingpin: boss armour 100')
-    H.eq(o.boss.weapon, 'WEAPON_ASSAULTRIFLE', 'kingpin: boss assault rifle')
+    H.eq(o.boss.weapon, 'WEAPON_HEAVYPISTOL', 'kingpin: boss heavy pistol (no rifle)')
     H.ok(type(o.boss.surrender) == 'table', 'kingpin: the Kingpin can be arrested alive')
     H.eq(o.boss.spawn, 'boss', 'kingpin: boss spawn key')
     H.eq(s.label, 'Secure the scene', 'kingpin: secure the scene')

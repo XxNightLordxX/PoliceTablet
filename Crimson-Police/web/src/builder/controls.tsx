@@ -172,7 +172,7 @@ export function OptionPick({
     );
 }
 
-// Model / weapon names as readable text: WEAPON_MICROSMG → Micro SMG via builder.name.<value>, else the raw name.
+// Model / weapon names as readable text: WEAPON_PISTOL → Pistol via builder.name.<value>, else the raw name.
 export function nameOf(value: string): string {
     return tOr(`builder.name.${value.toLowerCase()}`, 'builder.opt.unknown', { value });
 }

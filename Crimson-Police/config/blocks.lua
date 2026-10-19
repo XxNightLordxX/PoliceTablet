@@ -165,21 +165,21 @@ Config.Blocks.flee_arrest = {
 
 Config.Blocks.hostile_waves = {
     waves = { 1, 6, 3 },
-    perWave = { 1, 15, 7 },                            -- every armed NPC in the mission together: at most Config.Builder.maxHostiles
-    nextWaveAlive = { 0, 5, 2 },                       -- next wave when this many or fewer are alive...
-    nextWaveAfter = { 30, 300, 90 },                   -- ...or after this long
-    weapons = { 'WEAPON_PISTOL', 'WEAPON_MICROSMG' },  -- default pick from Config.Builder.allowed.weapons
-    accuracy = { 5, 60, 25 },
+    perWave = { 1, 15, 7 },                                -- every armed NPC in the mission together: at most Config.Builder.maxHostiles
+    nextWaveAlive = { 0, 5, 2 },                           -- next wave when this many or fewer are alive...
+    nextWaveAfter = { 30, 300, 90 },                       -- ...or after this long
+    weapons = { 'WEAPON_PISTOL', 'WEAPON_COMBATPISTOL' },  -- default pick from Config.Builder.allowed.weapons
+    accuracy = { 5, 60, 25 },                              -- what NPCs get is capped by Config.NpcCombat.accuracyMax
     armour = { 0, 100, 0 },
-    health = { 100, 400, 200 },                        -- also the range for the boss
+    health = { 100, 400, 200 },                            -- also the range for the boss
     behaviour = { options = { 'hold', 'balanced', 'push' }, default = 'balanced' },
-    surrender = { 0, 100, 30 },                        -- chance to surrender under 25% health
+    surrender = { 0, 100, 30 },                            -- chance to surrender under 25% health
     peds = { 'g_m_y_ballaeast_01', 'g_m_y_famca_01', 'g_m_y_mexgoon_01', 'g_m_y_lost_01' },
-    boss = { default = false },                        -- when on: model, health, armour and weapon from the ranges above
+    boss = { default = false },                            -- when on: model, health, armour and weapon from the ranges above
     blockTraffic = { 0, 200, 120 },
-    spawnPointsPerHostile = 1.5,                       -- spawn points needed per hostile in the largest wave
-    presenceRange = { 50, 800, 150 },                  -- from the nearest living hostile
-    behaviourRoll = { default = false },               -- on: behaviour weights rolled per run instead of one behaviour
-    spawnSets = { 0, 4, 0 },                           -- named spawn sets per location (0 = off)
-    spawnSetsUsed = { 1, 3, 2 },                       -- sets used per run, shown as the intel line
+    spawnPointsPerHostile = 1.5,                           -- spawn points needed per hostile in the largest wave
+    presenceRange = { 50, 800, 150 },                      -- from the nearest living hostile
+    behaviourRoll = { default = false },                   -- on: behaviour weights rolled per run instead of one behaviour
+    spawnSets = { 0, 4, 0 },                               -- named spawn sets per location (0 = off)
+    spawnSetsUsed = { 1, 3, 2 },                           -- sets used per run, shown as the intel line
 }

@@ -534,6 +534,7 @@ local function GetCtx(run, i)
         ctx.coords = function(src) return PedCoords(src) end
         ctx.combat = function(acc, armour)
             if CP.Scaling and CP.Scaling.combat then return CP.Scaling.combat(acc, armour, run.tier, run) end
+            if CP.NpcCombat and CP.NpcCombat.scaleAccuracy then acc = CP.NpcCombat.scaleAccuracy(acc) or acc end
             return acc, armour
         end
         ctx.isHost = function(src) return ToSrc(src) == run.host end
@@ -809,6 +810,29 @@ local function SplitCoords(c)
     return x + 0.0, y + 0.0, z + 0.0, h + 0.0
 end
 
+-- Config.NpcCombat for the peds the engine spawns (shared/npccombat.lua): the weapon a mission NPC really carries
+-- (never an automatic one), its rounds, and a ped's combat cfg as allowed (the swapped weapon and the accuracy cap,
+-- in place). One table: this file is at Lua's limit of 200 locals.
+local Combat = {}
+
+function Combat.weapon(name)
+    if CP.NpcCombat and CP.NpcCombat.weapon then return CP.NpcCombat.weapon(name) end
+    return name
+end
+
+function Combat.ammo()
+    if CP.NpcCombat and CP.NpcCombat.ammo then return CP.NpcCombat.ammo() end
+    return 250
+end
+
+function Combat.cfg(cfg)
+    if cfg.weapon ~= nil then cfg.weapon = Combat.weapon(cfg.weapon) end
+    if cfg.accuracy ~= nil and CP.NpcCombat and CP.NpcCombat.capAccuracy then
+        cfg.accuracy = CP.NpcCombat.capAccuracy(cfg.accuracy) or cfg.accuracy
+    end
+    return cfg
+end
+
 local function Track(run, entity, kind, opts, extraCfg)
     if not WaitExists(entity) then
         CP.warn(TAG, 'run %s: %s %s did not appear within %d ms', run.id, kind, tostring(opts.model), SPAWN_WAIT_MS)
@@ -828,6 +852,7 @@ local function Track(run, entity, kind, opts, extraCfg)
     local cfg = {}
     if type(extraCfg) == 'table' then for k, v in pairs(extraCfg) do cfg[k] = v end end
     if type(opts.cfg) == 'table' then for k, v in pairs(opts.cfg) do cfg[k] = v end end
+    if kind == 'ped' then Combat.cfg(cfg) end
     local hidden = opts.hidden == true
     local hiddenCfg = nil
     if hidden then
@@ -892,8 +917,8 @@ function Runs.spawnPed(run, opts)
     -- opts.hidden (a contact): no weapon and no armour until arm(run, netId) at the draw
     if opts.hidden ~= true then
         if opts.armed and opts.weapon then
-            local w = ModelHash(opts.weapon)
-            if w then GiveWeaponToPed(entity, w, 250, false, true) end
+            local w = ModelHash(Combat.weapon(opts.weapon))
+            if w then GiveWeaponToPed(entity, w, Combat.ammo(), false, true) end
         end
         local armour = Num(opts.armour, 0)
         if armour > 0 then SetPedArmour(entity, math.floor(armour)) end
@@ -1034,11 +1059,12 @@ function Runs.arm(run, netId)
     if e.armedGiven then return true end
     if not e.armedTruth and not e.armed then return false end
     e.armedGiven = true
-    local cfg = type(e.hiddenCfg) == 'table' and e.hiddenCfg or {}
+    -- a block may have named the hidden weapon after the spawn (field_contact): swapped here too
+    local cfg = Combat.cfg(type(e.hiddenCfg) == 'table' and e.hiddenCfg or {})
     local entity = e.entity
     if entity and DoesEntityExist(entity) then
         local w = ModelHash(cfg.weapon)
-        if w then GiveWeaponToPed(entity, w, 250, false, true) end
+        if w then GiveWeaponToPed(entity, w, Combat.ammo(), false, true) end
         local armour = Num(cfg.armour, 0)
         if armour > 0 then SetPedArmour(entity, math.floor(armour)) end
     end

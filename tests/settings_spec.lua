@@ -221,6 +221,35 @@ do
     Err('Time.resetHour', 24, 'err.setting_range', 'an hour past 23')
     Err('Scoring.common.heavyDamage', 5, 'err.setting_positive', 'a penalty stays a penalty')
     H.ok((Check('NpcDifficulty.custom.accuracyAdd', -5)), 'NPC difficulty adds may go either way')
+    -- Config.NpcCombat (how hard mission NPCs fight back): listed with its comments, ranges and options
+    local function E(p) return S.entry(p) or {} end
+    H.ok((E('NpcCombat.accuracyMax').desc or ''):find('never above this', 1, true) ~= nil,
+        'the cap is listed with its comment')
+    H.ok((E('NpcCombat.noCriticalHits').desc or ''):find('headshot', 1, true) ~= nil, 'the headshot switch too')
+    H.eq(E('NpcCombat.firingPattern').kind, 'enum', 'the firing pattern is a pick from its options')
+    H.ok((Check('NpcCombat.firingPattern', 'burst')), 'burst fire')
+    Err('NpcCombat.firingPattern', 'full_auto', 'err.setting_option', 'there is no full-auto option')
+    Err('NpcCombat.accuracyMax', 101, 'err.setting_range', 'accuracy is 0 to 100')
+    Err('NpcCombat.shootRate', 1001, 'err.setting_range', 'the shoot rate is 0 to 1000')
+    Err('NpcCombat.abilityMax', 3, 'err.setting_range', 'the combat ability is 0 to 2')
+    Err('NpcCombat.officerDefense', 0.05, 'err.setting_range', 'the defense modifier is at least 0.1')
+    ok, v = Check('NpcCombat.aiDamage', 1)
+    H.ok(ok and v == 1.0 and math.type(v) == 'float', 'AI damage 1 is saved as 1.0 (the native reads a float)')
+    Err('NpcCombat.weapons', { 'WEAPON_PISTOL', 'WEAPON_SMG' }, 'err.setting_automatic_weapon',
+        'an automatic weapon cannot be added to the NPC weapons')
+    H.ok((Check('NpcCombat.weapons', { 'WEAPON_PISTOL', 'WEAPON_REVOLVER' })), 'any other weapon may be listed')
+    Err('NpcCombat.fallback', 'WEAPON_MINIGUN', 'err.setting_automatic_weapon', 'the fallback is never automatic')
+    Err('NpcCombat.replace', { WEAPON_SMG = 'WEAPON_MICROSMG' }, 'err.setting_automatic_weapon',
+        'nor a replacement weapon')
+    H.ok((Check('NpcCombat.replace', { WEAPON_SMG = 'WEAPON_PISTOL' })), 'a replacement map')
+    H.ok((E('NpcCombat.lethalCancelAbove').desc or ''):find('share of his health', 1, true) ~= nil,
+        'the health share of the one-shot cancel is listed with its comment')
+    H.ok((Check('NpcCombat.lethalCancelAbove', 0.5)), 'half health')
+    Err('NpcCombat.lethalCancelAbove', 0.1, 'err.setting_range', 'never below a quarter (officers must go down)')
+    Err('NpcCombat.lethalCancelAbove', 1.5, 'err.setting_range', 'never above full health')
+    -- the Builder check takes an automatic weapon only while NpcCombat is on: switching it reloads the missions
+    H.eq(E('NpcCombat.enabled').reload, true, 'NpcCombat.enabled reloads the missions')
+    H.ok(not E('NpcCombat.aiDamage').reload, 'a damage value does not')
     Err('Debug', 'yes', 'err.setting_type', 'text for on/off')
     Err('AdminTheme.primary', '#zzzzzz', 'err.setting_colour', 'a colour must be #rrggbb')
     H.ok((Check('AdminTheme.primary', '#112233')), 'a valid colour')

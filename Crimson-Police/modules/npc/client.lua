@@ -420,18 +420,64 @@ local function Pristine(ped)
     return GetEntityHealth(ped) >= GetEntityMaxHealth(ped) and not HasEntityBeenDamagedByAnyPed(ped)
 end
 
+-- Config.NpcCombat (shared/npccombat.lua), or nil before it loaded.
+local function NC()
+    local c = CP.NpcCombat
+    if type(c) == 'table' and type(c.enabled) == 'function' then return c end
+    return nil
+end
+
+-- With Config.NpcCombat.noCharge an NPC never charges (13 aggressive and 50 charge stay off), and its combat ability
+-- is at most abilityMax.
 local function ApplyBehaviour(ped, name)
     local b = BEHAVIOUR[name] or BEHAVIOUR.balanced
-    for attr, on in pairs(b.attrs) do SetPedCombatAttributes(ped, attr, on) end
+    local c = NC()
+    local noCharge = c ~= nil and c.noCharge()
+    for attr, on in pairs(b.attrs) do
+        if noCharge and (attr == 13 or attr == 50) then on = false end
+        SetPedCombatAttributes(ped, attr, on)
+    end
     SetPedCombatMovement(ped, b.movement)
     SetPedCombatRange(ped, b.range)
-    SetPedCombatAbility(ped, b.ability)
+    SetPedCombatAbility(ped, c and c.ability(b.ability) or b.ability)
     if b.area then
         local c = GetEntityCoords(ped)
         SetPedSphereDefensiveArea(ped, c.x, c.y, c.z, b.area, false, false)
     else
         RemovePedDefensiveArea(ped, false)
     end
+end
+
+-- Config.NpcCombat on an armed mission ped this game owns: the accuracy cap, the shoot rate, the firing pattern, the
+-- combat ability cap, no perfect accuracy (27), no faster fire up close (24), less accuracy when many officers fight
+-- it (49) and no charging. Settings only, never a task: any participant's game may run it on the peds it owns.
+local function ApplyCaps(ped, cfg)
+    local c = NC()
+    if not c or not c.enabled() then return false end
+    cfg = type(cfg) == 'table' and cfg or {}
+    local acc = c.capAccuracy(cfg.accuracy) or c.capAccuracy(c.accuracyMax())
+    if acc then SetPedAccuracy(ped, acc) end
+    local rate = c.shootRate()
+    if rate then SetPedShootRate(ped, rate) end
+    local pattern = c.firingPattern()
+    if pattern then SetPedFiringPattern(ped, pattern) end
+    local b = BEHAVIOUR[cfg.behaviour] or BEHAVIOUR.balanced
+    SetPedCombatAbility(ped, c.ability(b.ability))
+    SetPedCombatAttributes(ped, 27, false)
+    SetPedCombatAttributes(ped, 24, false)
+    SetPedCombatAttributes(ped, 49, true)
+    if c.noCharge() then
+        SetPedCombatAttributes(ped, 13, false)
+        SetPedCombatAttributes(ped, 50, false)
+    end
+    return true
+end
+
+-- TaskCombatPed may pick its own firing pattern for the weapon: Config.NpcCombat's goes back on after each one.
+local function ReapplyPattern(ped)
+    local c = NC()
+    local pattern = c and c.firingPattern()
+    if pattern then SetPedFiringPattern(ped, pattern) end
 end
 
 local function GroupFor(bag, cfg, state)
@@ -459,16 +505,23 @@ local function ApplyWith(ped, cfg, bag)
     SetPedDiesWhenInjured(ped, true)
     SetPedCanRagdollFromPlayerImpact(ped, false)
 
-    local weapon = WeaponHash(cfg.weapon)
+    -- the weapon CP.NpcCombat allows (an older bag may still name an automatic one)
+    local c = NC()
+    local weapon = WeaponHash(c and c.weapon(cfg.weapon) or cfg.weapon)
     if armed and weapon and not CALM[state] then
-        if not HasPedGotWeapon(ped, weapon, false) then GiveWeaponToPed(ped, weapon, 250, false, true) end
+        if not HasPedGotWeapon(ped, weapon, false) then
+            GiveWeaponToPed(ped, weapon, c and c.ammo() or 250, false, true)
+        end
         SetCurrentPedWeapon(ped, weapon, true)
     elseif not armed or CALM[state] then
         Disarm(ped)
     end
 
     local acc = tonumber(cfg.accuracy)
-    if acc and acc == acc then SetPedAccuracy(ped, math.floor(U.clamp(acc, 0, 100) + 0.5)) end
+    if acc and acc == acc then
+        acc = c and c.capAccuracy(acc) or math.floor(U.clamp(acc, 0, 100) + 0.5)
+        SetPedAccuracy(ped, acc)
+    end
     local hp = tonumber(cfg.health)
     if hp and hp == hp and hp > 0 then
         hp = math.floor(U.clamp(hp, 101, 5000))
@@ -491,6 +544,7 @@ local function ApplyWith(ped, cfg, bag)
         SetPedSeeingRange(ped, 100.0)
         SetPedHearingRange(ped, 100.0)
         SetPedAlertness(ped, 3)
+        ApplyCaps(ped, cfg)
     else
         SetPedCombatAttributes(ped, 5, false)
         SetPedCombatAttributes(ped, 46, false)
@@ -615,7 +669,8 @@ function ACTIONS.combat(ped, a)
     SetPedFleeAttributes(ped, 0, false)
     SetBlockingOfNonTemporaryEvents(ped, true)
     SetPedKeepTask(ped, true)
-    local w = WeaponHash(cfg.weapon)
+    local c = NC()
+    local w = WeaponHash(c and c.weapon(cfg.weapon) or cfg.weapon)
     if w and HasPedGotWeapon(ped, w, false) then SetCurrentPedWeapon(ped, w, true) end
     local target = a.args.target
     if not (target and DoesEntityExist(target) and not IsEntityDead(target)) then
@@ -626,6 +681,7 @@ function ACTIONS.combat(ped, a)
     if target then
         a.guarding = false
         TaskCombatPed(ped, target, 0, 16)
+        ReapplyPattern(ped)
     else
         a.guarding = true
         Hold(ped)
@@ -937,6 +993,7 @@ local function StepCombat(ped, a, t)
     if swap or a.guarding or not IsPedInCombat(ped, 0) then
         a.target, a.guarding = best, false
         TaskCombatPed(ped, best, 0, 16)
+        ReapplyPattern(ped)
     end
 end
 
@@ -1182,6 +1239,63 @@ local function ProtectDrops(netId, value)
     end)
 end
 
+-- ============================================================================
+--                             THE COMBAT GOVERNOR
+-- ============================================================================
+-- OneSync hands a ped to the nearest player, so a mission NPC often runs on a partner's game, where the host's apply
+-- never ran. Every participant's game, not only the host's, applies the Config.NpcCombat caps (ApplyCaps) to each
+-- armed mission ped of its run that it owns: once per entity handle and bag write, and again when it gets the ped
+-- back from another game. Settings only, never a task, so it never fights the host's AI.
+
+local GOVERN_MS = 1000
+local governed = {}      -- [netId] = { entity, seq } of the last caps this game applied
+local governing = false
+
+local function ArmedBag(bag)
+    local cfg = type(bag.cfg) == 'table' and bag.cfg or {}
+    local armed = bag.armed
+    if armed == nil then armed = cfg.weapon ~= nil end
+    return armed == true and not CALM[bag.state]
+end
+
+local function GovernStep(run)
+    for netId, bag in pairs(bags) do
+        local ent = 0
+        if bag.run == run.id and bag.state ~= 'dead' and NetworkDoesNetworkIdExist(netId) then
+            ent = NetworkGetEntityFromNetworkId(netId) or 0
+        end
+        if ent ~= 0 and ValidPed(ent) and NetworkHasControlOfEntity(ent) then
+            local g = governed[netId]
+            if not g or g.entity ~= ent or g.seq ~= bag.seq then
+                if ArmedBag(bag) then ApplyCaps(ent, bag.cfg) end
+                governed[netId] = { entity = ent, seq = bag.seq }
+            end
+        else
+            -- not ours (now): applied again when this game owns it again
+            governed[netId] = nil
+        end
+    end
+    for netId in pairs(governed) do
+        if bags[netId] == nil then governed[netId] = nil end
+    end
+end
+
+local function EnsureGovernor()
+    if governing then return end
+    governing = true
+    CreateThread(function()
+        while true do
+            local run = CurrentRun()
+            if not run then break end
+            local ok, err = pcall(GovernStep, run)
+            if not ok then CP.warn(TAG, 'combat caps failed: %s', tostring(err)) end
+            Wait(GOVERN_MS)
+        end
+        governed = {}
+        governing = false
+    end)
+end
+
 local EnsureCuffOption
 
 AddStateBagChangeHandler('cp', nil, function(bagName, _, value)
@@ -1193,6 +1307,7 @@ AddStateBagChangeHandler('cp', nil, function(bagName, _, value)
     if not run or value.run ~= run.id then return end
     local prev = bags[netId]
     bags[netId] = value
+    EnsureGovernor()
     if type(value.cuff) == 'table' then EnsureCuffOption(value.cuff.label) end
     if value.state == 'dead' then
         handled[netId] = nil

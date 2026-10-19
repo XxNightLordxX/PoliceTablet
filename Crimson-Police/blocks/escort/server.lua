@@ -171,6 +171,13 @@ local function AllAllowed(list, allowed)
     return true
 end
 
+-- Weapons: the allowed list, or an automatic weapon an older custom file still names (it loads with a console
+-- warning, and each NPC carries the CP.NpcCombat swap instead).
+local function WeaponsAllowed(list, allowed)
+    if CP.NpcCombat and CP.NpcCombat.weaponsAllowed then return CP.NpcCombat.weaponsAllowed(list, allowed) end
+    return AllAllowed(list, allowed)
+end
+
 local function Indices(n)
     local t = {}
     for i = 1, n do t[i] = i end
@@ -367,7 +374,9 @@ local function Validate(obj, mission, location)
     if not AllAllowed(a.models, strict and allowed.vehicles or nil) then return Bad('block.escort.invalid.models') end
     if a.perCar > 2 and #FourSeaters(a.models) == 0 then return Bad('block.escort.invalid.seats') end
     if not AllAllowed(a.peds, strict and allowed.peds or nil) then return Bad('block.escort.invalid.peds') end
-    if not AllAllowed(a.weapons, strict and allowed.weapons or nil) then return Bad('block.escort.invalid.weapons') end
+    if not WeaponsAllowed(a.weapons, strict and allowed.weapons or nil) then
+        return Bad('block.escort.invalid.weapons')
+    end
     ok, why = range('ambush.accuracy', a.accuracy, hw.accuracy)
     if not ok then return false, why end
     ok, why = range('ambush.armour', a.armour, hw.armour)
@@ -526,6 +535,9 @@ local function SpawnAttacker(ctx, st, car, w)
     local seat = #car.crew - 1
     local x, y, z = U.xyz(EntCoords(car.entity) or car.coords)
     local acc, arm = ctx.combat(a.accuracy, a.armour)
+    -- the attackers' health follows Config.NpcDifficulty like every other hostile (healthMult)
+    local feel = CP.Scaling and CP.Scaling.feel and CP.Scaling.feel() or {}
+    local health = math.floor((tonumber(a.health) or 200) * (tonumber(feel.healthMult) or 1.0) + 0.5)
     local ent, netId = ctx.spawnPed({
         model = r:pick(a.peds) or Config.Blocks.hostile_waves.peds[1],
         coords = vector4(x + 0.0, y + 0.0, z + 0.0, HeadingOf(car.coords)),
@@ -534,7 +546,7 @@ local function SpawnAttacker(ctx, st, car, w)
         weapon = r:pick(a.weapons) or Config.Blocks.hostile_waves.weapons[1],
         accuracy = acc,
         armour = arm,
-        health = a.health,
+        health = health,
         cfg = { group = 'hostile', behaviour = 'push', vehicle = car.netId, seat = seat, wave = w.k, block = BLOCK },
         tag = 'wave' .. w.k,
     })

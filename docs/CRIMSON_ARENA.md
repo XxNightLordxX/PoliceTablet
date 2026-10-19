@@ -86,8 +86,14 @@ Definitions: a value is **foreign** when `type(v) == 'table' and v.active == tru
 10. **Global natives.** Never call `SetPlayerTeam`, `NetworkSetFriendlyFireOption` or `SetCanAttackFriendly`
     on any player or player ped; never set routing buckets (`SetPlayerRoutingBucket`, `SetEntityRoutingBucket`,
     `SetRoutingBucket*`).
-11. **weaponDamageEvent.** CP.Npc's handler returns early when `WasEventCanceled()` is true. Crimson-Police
-    never calls `CancelEvent` on `weaponDamageEvent`, `explosionEvent` or any sc-dispatch event.
+11. **weaponDamageEvent.** CP.Npc's handlers return early when `WasEventCanceled()` is true. Crimson-Police
+    never calls `CancelEvent` on `weaponDamageEvent`, `explosionEvent` or any sc-dispatch event, with one exception
+    the owner asked for (no one-shot kills by mission NPCs, `Config.NpcCombat.cancelLethalHeadshots`, 2026-10-19):
+    a `weaponDamageEvent` with `willKill` whose shooter (`parentGlobalId`) is an armed mission ped of a live
+    Crimson-Police run and whose every victim is an active participant of that run, in routing bucket 0, not
+    `inArena`, and with at least `Config.NpcCombat.lethalCancelAbove` of his health (a hurt officer can still go
+    down). A Crimson-Arena fighter, a player's shot, another resource's NPC and a hit on any NPC are never
+    cancelled. `tools/lint_fivem.py` FX09 lists that one call in its baseline.
 12. **Outlines.** If `SetEntityDrawOutline` is used, call `SetEntityDrawOutlineColor(r, g, b, a)` and
     `SetEntityDrawOutlineShader(0)` right before every enable; never change the render technique.
 13. **Teleports.** Test-run teleport controls, `CP.Runs.anchor` moves and every Builder move refuse with

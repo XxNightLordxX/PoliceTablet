@@ -156,6 +156,19 @@ local function DetailDefault(name, fallback)
     return fallback
 end
 
+-- An automatic weapon (CP.NpcCombat): never given to an NPC, so never offered to pick.
+local function Automatic(name)
+    return CP.NpcCombat ~= nil and CP.NpcCombat.isAutomatic ~= nil and CP.NpcCombat.isAutomatic(name)
+end
+
+local function NonAutomatic(list)
+    local out = {}
+    for _, n in ipairs(type(list) == 'table' and list or {}) do
+        if not Automatic(n) then out[#out + 1] = n end
+    end
+    return out
+end
+
 -- ============================================================================
 --                                MISSION FILES
 -- ============================================================================
@@ -543,6 +556,18 @@ function Missions.normalize(def, meta)
             if okCall and type(n) == 'number' then armed = armed + n end
         end
     end
+    -- an automatic weapon (an older custom file, a tweak): the mission still loads, and every NPC carries the weapon
+    -- CP.NpcCombat gives instead
+    if CP.NpcCombat and CP.NpcCombat.automaticsIn then
+        for i, obj in ipairs(d.objectives) do
+            for _, name in ipairs(CP.NpcCombat.automaticsIn(obj)) do
+                local swap = CP.NpcCombat.weapon(name)
+                local what = ('its NPCs carry %s instead (Config.NpcCombat)'):format(tostring(swap))
+                if swap == name then what = 'its NPCs carry it (Config.NpcCombat is off)' end
+                warn(('objective %d names %s, an automatic weapon: %s'):format(i, name, what))
+            end
+        end
+    end
     local maxArmed = tonumber(Config.Builder and Config.Builder.maxHostiles) or 0
     if maxArmed > 0 and armed > maxArmed then
         warn(('has %d armed NPCs before scaling; the budget is %d'):format(armed, maxArmed))
@@ -584,6 +609,38 @@ local function StringList(v)
     return true
 end
 
+-- Where a weapons tweak reaches in one objective: its own list, the escort ambush and the warrant associates; a boss
+-- carries the tweak's last weapon.
+local WEAPON_PARTS = { 'ambush', 'associates' }
+
+local function TweakWeapons(obj, list)
+    if obj.weapons ~= nil then obj.weapons = CP.U.copy(list) end
+    for _, k in ipairs(WEAPON_PARTS) do
+        if type(obj[k]) == 'table' and obj[k].weapons ~= nil then obj[k].weapons = CP.U.copy(list) end
+    end
+    if type(obj.boss) == 'table' then obj.boss.weapon = list[#list] end
+end
+
+-- Every weapon one objective names (its list, the ambush, the associates, the boss), in order, once each.
+local function WeaponsOf(obj)
+    local out, seen = {}, {}
+    local function add(w)
+        if type(w) == 'string' and w ~= '' and not seen[w] then
+            seen[w] = true
+            out[#out + 1] = w
+        end
+    end
+    for _, w in ipairs(type(obj.weapons) == 'table' and obj.weapons or {}) do add(w) end
+    for _, k in ipairs(WEAPON_PARTS) do
+        local part = obj[k]
+        if type(part) == 'table' and type(part.weapons) == 'table' then
+            for _, w in ipairs(part.weapons) do add(w) end
+        end
+    end
+    if type(obj.boss) == 'table' then add(obj.boss.weapon) end
+    return out
+end
+
 -- The tweaked raw definition, or nil and the reason the tweak is dropped.
 local function ApplyTweak(raw, tweak)
     if type(tweak) ~= 'table' then return nil, 'the tweak is not a table' end
@@ -622,7 +679,7 @@ local function ApplyTweak(raw, tweak)
     end
     for _, obj in ipairs(type(d.objectives) == 'table' and d.objectives or {}) do
         if type(obj) == 'table' then
-            if tweak.weapons and obj.weapons ~= nil then obj.weapons = CP.U.copy(tweak.weapons) end
+            if tweak.weapons then TweakWeapons(obj, tweak.weapons) end
             if tweak.peds and PED_BLOCKS[obj.block] then
                 if obj.peds ~= nil then
                     obj.peds = CP.U.copy(tweak.peds)
@@ -1268,6 +1325,7 @@ local function TweakableObjectives(raw)
     local out = {}
     for i, obj in ipairs(type(raw) == 'table' and type(raw.objectives) == 'table' and raw.objectives or {}) do
         if type(obj) == 'table' then
+            local weapons = WeaponsOf(obj)
             out[#out + 1] = {
                 index = i,
                 block = obj.block,
@@ -1275,7 +1333,7 @@ local function TweakableObjectives(raw)
                 peds = PED_BLOCKS[obj.block] and (obj.peds or obj.models) or nil,
                 vehicles = VEHICLE_BLOCKS[obj.block] and (type(obj.vehicles) == 'table' and obj.vehicles or obj.models)
                     or nil,
-                weapons = obj.weapons,
+                weapons = #weapons > 0 and weapons or nil,
             }
         end
     end
@@ -1298,7 +1356,7 @@ Kit.callback('admin:getMissionTweak', 'openAdmin', function(ctx)
     end
     local peds, pedSeen = pick(allowed.peds)
     local vehicles, vehSeen = pick(allowed.vehicles)
-    local weapons, wepSeen = pick(allowed.weapons)
+    local weapons, wepSeen = pick(NonAutomatic(allowed.weapons))
     for _, o in ipairs(TweakableObjectives(raw)) do
         for _, n in ipairs(type(o.peds) == 'table' and o.peds or {}) do
             if not pedSeen[n] then pedSeen[n] = true; peds[#peds + 1] = n end
@@ -1307,7 +1365,8 @@ Kit.callback('admin:getMissionTweak', 'openAdmin', function(ctx)
             if not vehSeen[n] then vehSeen[n] = true; vehicles[#vehicles + 1] = n end
         end
         for _, n in ipairs(type(o.weapons) == 'table' and o.weapons or {}) do
-            if not wepSeen[n] then wepSeen[n] = true; weapons[#weapons + 1] = n end
+            -- an automatic weapon the file still names is never offered: no NPC would carry it (CP.NpcCombat)
+            if not wepSeen[n] and not Automatic(n) then wepSeen[n] = true; weapons[#weapons + 1] = n end
         end
     end
     local tweak = type(Config.MissionTweaks) == 'table' and Config.MissionTweaks[def.id] or nil
@@ -1357,8 +1416,10 @@ Kit.action('server:admin:setMissionTweak', 'openAdmin', function(ctx)
                 if type(v) ~= 'table' or #v == 0 or #v > 20 then return false, 'err.invalid_payload' end
                 local clean = {}
                 for _, n in ipairs(v) do
-                    -- the Builder's allowed lists, or a name the mission's own file already uses
-                    if type(n) ~= 'string' or not (CP.U.contains(list or {}, n) or used[n]) then
+                    -- the Builder's allowed lists, or a name the mission's own file already uses; never an
+                    -- automatic weapon (no NPC carries one)
+                    if type(n) ~= 'string' or not (CP.U.contains(list or {}, n) or used[n])
+                        or (k == 'weapons' and Automatic(n)) then
                         return false, 'err.tweak_name_not_allowed'
                     end
                     clean[#clean + 1] = n

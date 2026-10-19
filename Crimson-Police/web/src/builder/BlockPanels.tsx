@@ -227,9 +227,10 @@ function HostileWaves({ cfg, obj, ro, set, patch }: PanelProps) {
                         patch(o => {
                             if (!on) o.boss = false;
                             else {
-                                const w = allowedWeapons.includes('WEAPON_ASSAULTRIFLE')
-                                    ? 'WEAPON_ASSAULTRIFLE'
-                                    : allowedWeapons[allowedWeapons.length - 1];
+                                // the server never offers an automatic weapon (Config.NpcCombat)
+                                const w = allowedWeapons.includes('WEAPON_HEAVYPISTOL')
+                                    ? 'WEAPON_HEAVYPISTOL'
+                                    : allowedWeapons[0];
                                 o.boss = {
                                     model: strs(o, 'peds', listOf(cfg, b, 'peds'))[0] ?? allowedPeds[0],
                                     health: healthR.max,

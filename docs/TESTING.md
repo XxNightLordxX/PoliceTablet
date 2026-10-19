@@ -406,5 +406,23 @@ packages, and the runner's own clock and zone (the specs do not read either). Th
   and crashes 9 specs. tests/mission_reader_spec.lua checks the reader:
   every shipped file and both Builder layouts read exactly as Lua reads them, hostile text and CfxLua's own syntax
   are refused at once with the line, and the caps hold.
+- **Combat natives that took anything**: the specs recorded `SetPedAccuracy`, `TaskDriveBy` and friends without
+  their argument types and never kept what they set, and nothing emulated `CancelEvent`, so none of the NPC combat
+  settings the owner asked for (no automatic weapons, lower accuracy, slower fire, less damage, no headshot
+  one-shots) could be checked. `H.combatNatives(onCall)` installs the combat and damage natives with natives.json's
+  argument types (a float where the game reads a float: the native wrappers hand the raw Lua number to the game, so
+  pass `x + 0.0`; an int, ped, player or hash as an integer; a BOOL as a boolean) and keeps what each one set: per ped
+  the accuracy, shoot rate, firing pattern, ability, attributes and weapon; per game the AI damage modifiers, the
+  config flags and the defense modifier (`world.forget(ped)` drops a ped's settings, like a ped back from another
+  game). `H.fire` gives each dispatch one cancelled flag, as FXServer's TriggerEvent2 does (`CancelEvent`,
+  `WasEventCanceled`, and its return value). tests/npc_combat_spec.lua, the npc client checks (the combat governor
+  of every participant), tests/blocks_c_spec.lua (the drive-by) and tests/npc_spec.lua (the willKill cancel) use
+  them; with the new config but the old code, more than 80 checks fail and the npccombat client checks crash.
+- **Player peds without health**: tests/npc_spec.lua answered 0 for a player ped's health, and the willKill cases
+  modelled willKill as a headshot only, so a cancel that dropped EVERY killing hit (the shot that finishes off a hurt
+  officer too) passed. FXServer reads a ped's health from its synced health node (`GET_ENTITY_HEALTH`,
+  `GET_ENTITY_MAX_HEALTH` in ServerGameState_Scripting.cpp: 200 for a healthy freemode ped); the spec's player peds
+  now answer `H.players[src].health` / `.maxHealth` (200 when not set), and the cases check that a killing hit on a
+  hurt officer goes through.
 - **Shadow mode used the socket only**: the twin ignored `MYSQL_HOST`, so with a TCP server the CLI and the
   twin could talk to different servers. The twin now reads the same variables as the CLI.

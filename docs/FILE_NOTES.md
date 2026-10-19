@@ -2158,6 +2158,12 @@ Contract interpretations (details in docs/notes/engine_a.md)
       guarding ped attacks every player, bystanders included), walks flee routes point by point,
       drives recorded routes waypoint by waypoint, recovers stuck peds and re-plays the kneel /
       cuffed poses if something interrupted them.
+    - The combat governor on EVERY participant's client (host or not, 1 s while on a run): the Config.NpcCombat
+      caps (accuracy at most accuracyMax, shoot rate, firing pattern, ability at most abilityMax, attributes 27
+      and 24 off, 49 on, no charging) on each armed mission ped of the run this client owns, once per entity
+      handle and bag seq, and again after it owns the ped again. Settings only, never a task. apply sets the same
+      caps (and swaps an older bag's automatic weapon, CP.NpcCombat.ammo rounds); the firing pattern goes on
+      again after each TaskCombatPed.
     - Drop protection on EVERY client (participant or not) for every ped with a Crimson-Police cp bag:
       SetPedDropsWeaponsWhenDead false and SetPedMoney 0 once per entity handle, because the client
       that owns a ped when it dies creates the pickups and ownership moves to the nearest player.
@@ -2300,6 +2306,16 @@ Contract interpretations (details in docs/notes/engine_a.md)
     AddEventHandler playerDropped
   Player-facing text (toasts through CP.Tablet.notify): npc.shot_surrendered, err.npc_* (npc.json).
   No database queries.
+```
+
+## Crimson-Police/modules/npccombat/client.lua
+
+```text
+CP.NpcCombat (client): this officer's own game while a run is live (Config.NpcCombat). NPC bullets and melee hit
+softer (SetAiWeaponDamageModifier and SetAiMeleeWeaponDamageModifier: every AI hit this game works out, its own
+NPCs' included), the officer takes no extra headshot damage (SetPedSuffersCriticalHits, again after a respawn), and,
+when officerDefense is not 1.0, less damage from every weapon (SetPlayerWeaponDefenseModifier). modules/runs starts
+it at client:start and stops it at every run end; everything goes back to what it was before the run.
 ```
 
 ## Crimson-Police/modules/operations/client.lua
@@ -3300,6 +3316,15 @@ rate limiting, error handling and a uniform reply shape { ok, data, error }:
 On the client, CP.Net.request(name, args, timeoutMs) and CP.Net.action(name, payload, timeoutMs) call them and
 wait for the reply; the tablet's NUI bridge (modules/tablet/client.lua) forwards the UI's
 'request' and 'action' NUI callbacks to these two functions.
+```
+
+## Crimson-Police/shared/npccombat.lua
+
+```text
+CP.NpcCombat (shared): how hard armed mission NPCs fight back (Config.NpcCombat). The weapon an NPC may carry (never
+an automatic one), the accuracy cap and the firing settings. Config is read at every call, so a change made in
+Settings applies to the next NPC. The run-scoped damage settings of each officer's game are in
+modules/npccombat/client.lua; the combat caps are applied by modules/npc/client.lua.
 ```
 
 ## Crimson-Police/web/build-stamp.mjs
@@ -4463,6 +4488,17 @@ payout field). The objectives are then run through
 the real blocks' defaults/validate (for the blocks that exist) and through CP.Missions.normalize.
 Run it on its own to see the report lines (sizes, route lengths, nearest distances):
   cd /home/user/PoliceTablet && lua5.4 tests/run.lua missions_b
+```
+
+## tests/npc_combat_spec.lua
+
+```text
+Config.NpcCombat (the owner's request of 2026-10-19: no automatic weapons, lower accuracy, slower fire, less damage to
+officers, no headshot one-shots): the weapon helper (shared/npccombat.lua), the accuracy caps of modules/scaling,
+and, in their own Lua state, the run-scoped damage settings of an officer's game (tests/fixtures/npccombat). The
+client caps, the drive-by and the server's willKill cancel are in npc_spec, blocks_c_spec and the npc client checks;
+the Builder check with Config.NpcCombat off (the allowed list alone), flee_arrest's swapped door weapon and the
+escort attackers' healthMult are in blocks_b_spec and blocks_c_spec.
 ```
 
 ## tests/npc_spec.lua

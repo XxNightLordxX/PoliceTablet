@@ -662,6 +662,95 @@ AddEventHandler('weaponDamageEvent', function(sender, data)
     if not ok then CP.err(TAG, 'weaponDamageEvent from %s failed: %s', tostring(src), tostring(err)) end
 end)
 
+-- ============================================================================
+--               NO ONE-SHOT KILLS ON OFFICERS (Config.NpcCombat)
+-- ============================================================================
+-- weaponDamageEvent reaches the server only when the shooter's game does not own the victim; willKill is set when
+-- that game thinks the hit kills ("instantly-lethal damage, such as a critical headshot", FiveM's own words): a
+-- headshot, a point-blank shotgun blast, and also the shot that finishes off an officer who is already hurt. With
+-- cancelLethalHeadshots such a hit is dropped (CancelEvent: FXServer never routes it to the victim) when the shooter
+-- is an armed mission ped of a live run and every victim is an active participant of that run in routing bucket 0
+-- who still has at least Config.NpcCombat.lethalCancelAbove of his health (the server reads it from the synced ped):
+-- a one-shot kill from healthy is dropped, the shot that downs a hurt officer is not. Nothing else is ever cancelled
+-- (docs/CRIMSON_ARENA.md rule 11): no other resource's NPC, no player's shot, no hit on a mission ped, no arena player.
+
+-- The live run whose armed mission ped is entity pe (net id parent), or nil.
+local function RunOfArmedPed(parent, pe)
+    if not (CP.Runs and CP.Runs.all) then return nil end
+    local ok, list = pcall(CP.Runs.all)
+    if not ok or type(list) ~= 'table' then return nil end
+    for _, run in ipairs(list) do
+        local info = IsLive(run) and type(run.entities) == 'table' and run.entities[parent] or nil
+        if type(info) == 'table' and info.kind == 'ped' and info.entity == pe and not info.dead
+            and (info.armed == true or info.armedGiven == true) then
+            return run
+        end
+    end
+    return nil
+end
+
+-- The officer's ped still has at least `above` (0-1) of its health: the part above GTA's 100-point death line, as the
+-- server's copy of the ped says (GetEntityHealth / GetEntityMaxHealth read the synced health; 0 when nothing synced).
+-- Unknown health is not healthy: the hit then goes through, as GTA would have it.
+local function Healthy(ped, above)
+    local hp = tonumber(GetEntityHealth and GetEntityHealth(ped))
+    if not hp or hp <= 0 then return false end
+    local max = tonumber(GetEntityMaxHealth and GetEntityMaxHealth(ped))
+    if (not max or max <= 0) and GetPedMaxHealth then max = tonumber(GetPedMaxHealth(ped)) end
+    if not max or max <= 0 then return false end
+    local share = max > 100 and (hp - 100) / (max - 100) or hp / max
+    return share >= above - 1e-9
+end
+
+-- Every hit is the ped of an active participant of run, in routing bucket 0, with at least `above` of its health.
+local function AllParticipants(run, hits, above)
+    local n = 0
+    for i = 1, math.min(#hits, MAX_HITS) do
+        local netId = ToInt(tonumber(hits[i]), 1, MAX_NETID)
+        if not netId then return false end
+        local ped = NetworkGetEntityFromNetworkId(netId)
+        local s = PlayerFromPed(ped)
+        if not s or not ActiveParticipant(run, s) or InArena(s) then return false end
+        if type(GetPlayerRoutingBucket) == 'function' and (tonumber(GetPlayerRoutingBucket(s)) or 0) ~= 0 then
+            return false
+        end
+        if not Healthy(ped, above) then return false end
+        n = n + 1
+    end
+    return n > 0
+end
+
+local function LethalOnOfficer(src, data)
+    if data.willKill ~= true then return false end
+    local parent = ToInt(tonumber(data.parentGlobalId), 1, MAX_NETID)
+    if not parent then return false end
+    local pe = NetworkGetEntityFromNetworkId(parent)
+    if not Exists(pe) or PlayerFromPed(pe) then return false end
+    local run = RunOfArmedPed(parent, pe)
+    if not run then return false end
+    local hits = data.hitGlobalIds
+    if type(hits) ~= 'table' then hits = { data.hitGlobalId } end
+    local above = CP.NpcCombat.lethalCancelAbove and CP.NpcCombat.lethalCancelAbove() or 0.75
+    if not AllParticipants(run, hits, above) then return false end
+    CP.log(TAG, 'run %s: a one-shot kill by NPC %d on a healthy officer was dropped (sent by %s)', tostring(run.id),
+        parent, tostring(src))
+    return true
+end
+
+AddEventHandler('weaponDamageEvent', function(sender, data)
+    if WasEventCanceled() or type(data) ~= 'table' or data.willKill ~= true then return end
+    if not (CP.NpcCombat and CP.NpcCombat.cancelLethalHeadshots and CP.NpcCombat.cancelLethalHeadshots()) then
+        return
+    end
+    local src = tonumber(sender) or tonumber(source)
+    local ok, res = pcall(LethalOnOfficer, src, data)
+    if not ok then
+        CP.err(TAG, 'weaponDamageEvent check from %s failed: %s', tostring(src), tostring(res))
+    elseif res then
+        CancelEvent()
+    end
+end)
+
 -- A health/armour drop the weapon events did not report (the shooter owns the ped).
 local function HealthDropped(run, netId, rec, e)
     local t = Now()

@@ -1,8 +1,8 @@
 --[[ Crimson-Police · built-in mission: Weekly Boss: Kingpin (weekly_boss_kingpin)
   Tactical event card · 1–4 officers · ★★★ · time limit 15 min · once per officer per week, Friday–Sunday
-  The Kingpin's crew holds a remote compound: 30 hostiles (scale) in 4 waves of 8 / 8 / 7 / 7 with pistols,
-  SMGs and shotguns (accuracy 30, armour 25, plus the tier), then the Kingpin himself (health 400, armour
-  100, assault rifle; does not scale), then "Secure the scene". Armed NPCs before scaling: 30 + the
+  The Kingpin's crew holds a remote compound: 30 hostiles (scale) in 4 waves of 8 / 8 / 7 / 7 with pistols
+  and shotguns (accuracy 30, armour 25, plus the tier), then the Kingpin himself (health 400, armour
+  100, heavy pistol; does not scale), then "Secure the scene". Armed NPCs before scaling: 30 + the
   Kingpin = 31 (within Config.Builder.maxHostiles = 40).
   Points and payout come from Config.Events.weeklyBoss (500 points, $2,500 base); there is no payout
   field. The weekly limit is enforced by CP.Events.bossAvailable, not by the cooldown below.
@@ -90,7 +90,7 @@ RegisterMission({
       minSeconds   = 90,
       waves        = { 8, 8, 7, 7 },                           -- 30 hostiles, scaled by tier
       nextWave     = { aliveAtMost = 2, afterSeconds = 90 },
-      weapons      = { 'WEAPON_PISTOL', 'WEAPON_MICROSMG', 'WEAPON_SMG', 'WEAPON_PUMPSHOTGUN' },
+      weapons      = { 'WEAPON_PISTOL', 'WEAPON_COMBATPISTOL', 'WEAPON_HEAVYPISTOL', 'WEAPON_PUMPSHOTGUN' },
       accuracy     = 30,                                       -- plus the tier's accuracy
       armour       = 25,                                       -- plus the tier's armour
       surrender    = { belowHealth = 0.25, chance = 0.30 },
@@ -99,7 +99,7 @@ RegisterMission({
         label     = 'The Kingpin',
         health    = 400,
         armour    = 100,
-        weapon    = 'WEAPON_ASSAULTRIFLE',
+        weapon    = 'WEAPON_HEAVYPISTOL',
         spawn     = 'boss',
         surrender = { belowHealth = 0.25, chance = 0.30 },     -- he can be taken alive
       },

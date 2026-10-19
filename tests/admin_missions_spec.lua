@@ -238,7 +238,28 @@ do
     local view = X.cb('admin:getMissionTweak', 5, { missionId = 'gang_shootout' })
     H.ok(view and view.file.cooldown == 1200 and view.live.cooldown == 1200,
         'Quick edit shows the file and live values')
-    H.ok(view and U.contains(view.allowed.weapons, 'WEAPON_MICROSMG'), 'the pickers offer the mission\'s own weapons')
+    H.ok(view and U.contains(view.allowed.weapons, 'WEAPON_COMBATPISTOL'),
+        'the pickers offer the mission\'s own weapons')
+    -- an automatic weapon is never offered or saved, even one put back in the Builder's list (no NPC carries it)
+    local savedWeapons = Config.Builder.allowed.weapons
+    Config.Builder.allowed.weapons = { 'WEAPON_PISTOL', 'WEAPON_SMG' }
+    local viewA = X.cb('admin:getMissionTweak', 5, { missionId = 'gang_shootout' })
+    H.ok(
+        viewA and U.contains(viewA.allowed.weapons, 'WEAPON_PISTOL')
+            and not U.contains(viewA.allowed.weapons, 'WEAPON_SMG'),
+        'Quick edit never offers an automatic weapon'
+    )
+    local okAuto, eAuto = X.act('server:admin:setMissionTweak', 5,
+        { missionId = 'gang_shootout', tweak = { weapons = { 'WEAPON_SMG' } } })
+    H.ok(not okAuto and eAuto == 'err.tweak_name_not_allowed', 'an automatic weapon is refused: ' .. tostring(eAuto))
+    Config.Builder.allowed.weapons = savedWeapons
+    -- a weapons tweak reaches the escort ambush (and associates, bosses): Quick edit shows those weapons too
+    local esc = X.cb('admin:getMissionTweak', 5, { missionId = 'armored_truck_escort' })
+    local ambush = false
+    for _, o in ipairs(esc and esc.objectives or {}) do
+        if o.block == 'escort' and U.contains(o.weapons or {}, 'WEAPON_COMBATPISTOL') then ambush = true end
+    end
+    H.ok(ambush, 'Quick edit lists the ambush weapons of Armored Truck Escort')
     local okW, eW = X.act('server:admin:setMissionTweak', 5,
         { missionId = 'gang_shootout', tweak = { weapons = { 'WEAPON_RAILGUN' } } })
     H.ok(not okW and eW == 'err.tweak_name_not_allowed', 'a weapon nobody allowed is refused: ' .. tostring(eW))
@@ -269,6 +290,16 @@ do
     local _, eT2 = X.cb('admin:trialMissions', 5, { patch = { { path = 'Builder.maxHostiles', value = 'lots' } } })
     H.ok(eT2 ~= nil, 'a value Settings refuses is refused by the trial too: ' .. tostring(eT2))
     H.eq(Config.Builder.maxHostiles, 40, 'the trial puts Config back')
+    -- switching Config.NpcCombat off (the Builder's allowed list is the only weapon check again) breaks no built-in
+    local trialOff = X.cb('admin:trialMissions', 5, { patch = { { path = 'NpcCombat.enabled', value = false } } })
+    local builtinBroken = {}
+    for _, f in ipairs(trialOff and trialOff.failed or {}) do
+        local d = CP.Missions.get(f.id)
+        if d and d.source == 'builtin' then builtinBroken[#builtinBroken + 1] = f.id .. ': ' .. tostring(f.error) end
+    end
+    H.ok(trialOff and trialOff.checked > 0 and #builtinBroken == 0,
+        'NpcCombat off: every built-in mission still loads ' .. table.concat(builtinBroken, '; '))
+    H.eq(Config.NpcCombat.enabled, true, 'and the trial puts NpcCombat back on')
 
     Config.DisabledLocations = U.deepcopy(Config.DisabledLocations or {})
     Config.DisabledLocations.gang_shootout = { 'A location that was renamed' }

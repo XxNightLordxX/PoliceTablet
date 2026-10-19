@@ -441,7 +441,8 @@ local function HostVehicle(S, v)
 end
 
 -- An armed passenger of a fighting car shoots from the car at the participant the server named (never a
--- bystander); nobody else is ever targeted.
+-- bystander); nobody else is ever targeted. Its accuracy is the ped's own (the bag cfg), capped by Config.NpcCombat,
+-- and it fires in bursts (FIRING_PATTERN_BURST_FIRE_DRIVEBY), never full auto.
 local function DriveBy(S, info, ped)
     if not ApplyPed(S, info.netId, ped) then return end
     local k = 'db:' .. tostring(info.driveBy)
@@ -450,7 +451,9 @@ local function DriveBy(S, info, ped)
     local target = player ~= -1 and GetPlayerPed(player) or 0
     if target == 0 or #(GetEntityCoords(target) - GetEntityCoords(ped)) > DRIVEBY_RANGE then return end
     S.tasked[info.netId] = k
-    TaskDriveBy(ped, target, 0, 0.0, 0.0, 0.0, 300.0, 60, false, 0xC6EE6B4C)
+    local cfg = (BagOf(ped) or {}).cfg
+    local accuracy = CP.NpcCombat.driveByAccuracy(type(cfg) == 'table' and cfg.accuracy or nil)
+    TaskDriveBy(ped, target, 0, 0.0, 0.0, 0.0, 300.0, accuracy, false, CP.NpcCombat.driveByPattern())
 end
 
 -- Live surrenders and cuffs are animated by CP.Npc's state bag handler; a new host re-issues them.

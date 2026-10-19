@@ -263,7 +263,7 @@ do -- defaults
     local b = HW.defaults({ boss = { model = 'g_m_y_lost_01' } }).boss
     H.eq(b.health, 400, 'boss default health')
     H.eq(b.armour, 100, 'boss default armour')
-    H.eq(b.weapon, 'WEAPON_ASSAULTRIFLE', 'boss default weapon')
+    H.eq(b.weapon, 'WEAPON_HEAVYPISTOL', 'boss default weapon (never an automatic one)')
     H.eq(b.aliveBonus.id, 'kingpin_alive', 'boss bonus id')
     H.eq(b.aliveBonus.points, 50, 'boss bonus points')
     H.near(b.surrender.chance, 0.30, 1e-9, 'boss surrender chance')
@@ -290,6 +290,29 @@ do -- validate
     H.eq(HW.validate({ weapons = { 'WEAPON_RPG' } }, builtin, loc), true, 'builtin weapon list not limited to allowed')
     ok, why = HW.validate({ weapons = { 'WEAPON_RPG' } }, custom, loc)
     H.eq(why, 'block.hostile_waves.invalid.weapons', 'custom weapon must be allowed')
+    -- Config.NpcCombat: the Builder offers no automatic weapon, but an older custom file that still names one keeps
+    -- loading (CP.Missions warns; each NPC carries the swap)
+    H.eq(HW.validate({ weapons = { 'WEAPON_HEAVYPISTOL' } }, custom, loc), true, 'custom: the heavy pistol is allowed')
+    H.eq(HW.validate({ weapons = { 'WEAPON_PISTOL', 'WEAPON_MINIGUN' } }, custom, loc), true,
+        'custom: an automatic weapon is accepted (swapped at the spawn), not refused')
+    H.eq(HW.validate({ boss = { weapon = 'WEAPON_ASSAULTRIFLE' } }, custom, loc), true,
+        'custom: a boss with an older file\'s rifle still loads')
+    H.eq(select(2, HW.validate({ boss = { weapon = 'WEAPON_RPG' } }, custom, loc)), 'block.hostile_waves.invalid.boss',
+        'custom: a boss weapon outside the list and not automatic is still refused')
+    -- Config.NpcCombat.enabled = false: nothing is swapped at the spawn, so the Builder's allowed list is the only check
+    -- again (a crafted draft naming a minigun must not reach an NPC)
+    Config.NpcCombat.enabled = false
+    H.eq(select(2, HW.validate({ weapons = { 'WEAPON_PISTOL', 'WEAPON_MINIGUN' } }, custom, loc)),
+        'block.hostile_waves.invalid.weapons', 'NpcCombat off: a custom minigun is refused (nothing would swap it)')
+    H.eq(select(2, HW.validate({ weapons = { 'WEAPON_SMG' } }, custom, loc)), 'block.hostile_waves.invalid.weapons',
+        'NpcCombat off: an SMG outside the allowed list is refused')
+    H.eq(select(2, HW.validate({ boss = { weapon = 'WEAPON_RAYMINIGUN' } }, custom, loc)),
+        'block.hostile_waves.invalid.boss', 'NpcCombat off: a custom boss minigun is refused')
+    H.eq(HW.validate({ weapons = { 'WEAPON_PISTOL', 'WEAPON_MINIGUN' } }, builtin, loc), true,
+        'NpcCombat off: a built-in file is not limited to the list (as before)')
+    Config.NpcCombat.enabled = true
+    H.eq(HW.validate({ weapons = { 'WEAPON_PISTOL', 'WEAPON_MINIGUN' } }, custom, loc), true,
+        'NpcCombat on again: the automatic weapon is accepted again (it is swapped)')
     ok, why = HW.validate({ peds = { 'a_m_y_hipster_01' } }, custom, loc)
     H.eq(why, 'block.hostile_waves.invalid.peds', 'custom ped must be allowed')
     ok, why = HW.validate({ waves = { 7 } }, custom, HwLocation(8))
@@ -577,8 +600,9 @@ do -- boss after the last wave: does not scale, kingpin_alive when cuffed
     H.eq(boss.opts.role, 'boss', 'boss role')
     H.eq(boss.opts.health, 400, 'boss health')
     H.eq(boss.opts.armour, 100, 'boss armour not scaled')
-    H.eq(boss.opts.accuracy, 25, 'boss accuracy not scaled')
-    H.eq(boss.opts.weapon, 'WEAPON_ASSAULTRIFLE', 'boss weapon')
+    -- the fake ctx.combat adds 10: the boss's accuracy goes through it (the tier, the difficulty, the NpcCombat cap)
+    H.eq(boss.opts.accuracy, 35, 'boss accuracy through ctx.combat')
+    H.eq(boss.opts.weapon, 'WEAPON_HEAVYPISTOL', 'boss weapon')
     H.near(boss.opts.coords.y, 1070, 0.01, 'boss at its own spawn point')
     local cl = HW.checklist(ctx)
     H.eq(#cl, 2, 'boss checklist line')
@@ -1253,6 +1277,62 @@ do -- door: fight response, stun, low health, death before the knock
     FA.onEntityDead(ctx, WithRole(S, 'associate')[1].netId, 1)
     H.eq(ctx.state.knocked, true, 'a death before the knock reveals the response')
     H.eq(NPC.states[WithRole(S, 'suspect')[1].netId], 'hostile', 'suspect reacts')
+end
+
+do -- door: the fighting suspect draws the weapon Config.NpcCombat allows (an older file's SMG is swapped), 60 rounds
+    Place(1, 3000, 3000, 10)
+    local function Fight(weapons)
+        return { responses = { surrender = 0, flee = 0, fight = 1 }, associates = { count = 0 }, weapons = weapons }
+    end
+    local ctx, S = MakeCtx('flee_arrest', Fight({ 'WEAPON_SMG' }), doorLoc)
+    FA.start(ctx)
+    local sus = S.spawned[1]
+    H.eq(sus.opts.weapon, nil, 'SMG suspect: nothing in sight before the knock')
+    local given = #W.weapons
+    KnockOpen(ctx, S)
+    local gw = W.weapons[#W.weapons]
+    H.eq(#W.weapons, given + 1, 'SMG suspect: one weapon given at the knock')
+    H.ok(gw and gw.e == sus.entity, 'SMG suspect: given to the suspect')
+    H.eq(gw and gw.w, joaat('WEAPON_COMBATPISTOL'), 'SMG suspect: the SMG is swapped for the combat pistol (replace)')
+    H.eq(gw and gw.ammo, 60, 'SMG suspect: Config.NpcCombat.ammo rounds, not 250')
+    local ex = NPC.extra[sus.netId]
+    H.eq(ex and ex.cfg and ex.cfg.weapon, 'WEAPON_COMBATPISTOL', 'SMG suspect: the bag cfg names the swapped weapon')
+
+    Config.NpcCombat.ammo = 12
+    ctx, S = MakeCtx('flee_arrest', Fight({ 'WEAPON_MINIGUN' }), doorLoc)
+    FA.start(ctx)
+    sus = S.spawned[1]
+    KnockOpen(ctx, S)
+    gw = W.weapons[#W.weapons]
+    H.eq(gw and gw.w, joaat('WEAPON_PISTOL'), 'minigun suspect: no replace entry, the fallback pistol')
+    H.eq(gw and gw.ammo, 12, 'the owner\'s ammo value')
+    Config.NpcCombat.ammo = 60
+
+    Config.NpcCombat.enabled = false
+    ctx, S = MakeCtx('flee_arrest', Fight({ 'WEAPON_SMG' }), doorLoc)
+    FA.start(ctx)
+    sus = S.spawned[1]
+    KnockOpen(ctx, S)
+    gw = W.weapons[#W.weapons]
+    H.eq(gw and gw.w, joaat('WEAPON_SMG'), 'NpcCombat off: the weapon as named (the old behaviour)')
+    H.eq(gw and gw.ammo, 250, 'NpcCombat off: 250 rounds as before')
+    Config.NpcCombat.enabled = true
+end
+
+do -- flee_arrest Builder check: an older custom file's automatic weapon loads (swapped), anything else stays refused
+    local function Why(obj) return select(2, FA.validate(obj, custom, doorLoc)) end
+    H.eq(FA.validate({ weapons = { 'WEAPON_SMG' } }, custom, doorLoc), true, 'fa custom: an older file\'s SMG loads')
+    H.eq(Why({ weapons = { 'WEAPON_RPG' } }), 'block.flee_arrest.invalid.weapons', 'fa custom: an RPG is still refused')
+    H.eq(FA.validate({ associates = { count = 1, weapons = { 'WEAPON_MICROSMG' } } }, custom, doorLoc), true,
+        'fa custom: an associate\'s micro SMG loads')
+    H.eq(Why({ associates = { count = 1, weapons = { 'WEAPON_RPG' } } }), 'block.flee_arrest.invalid.weapons',
+        'fa custom: an associate\'s RPG is still refused')
+    Config.NpcCombat.enabled = false
+    H.eq(Why({ weapons = { 'WEAPON_SMG' } }), 'block.flee_arrest.invalid.weapons',
+        'NpcCombat off: the SMG is outside the allowed list, refused')
+    H.eq(Why({ associates = { count = 1, weapons = { 'WEAPON_MINIGUN' } } }), 'block.flee_arrest.invalid.weapons',
+        'NpcCombat off: an associate\'s minigun is refused')
+    Config.NpcCombat.enabled = true
 end
 
 do -- door: associates wait for room and rescale

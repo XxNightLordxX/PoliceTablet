@@ -110,7 +110,7 @@ do
     draft = Plain(rec.definition)
     H.ok(rec.overridesBuiltin == true and rec.override ~= nil, 'builder:get for an admin: the override with its view')
     H.ok(rec.live ~= nil, 'and the definition that plays now (View live)')
-    H.ok(U.contains(draft.objectives[1].weapons, 'WEAPON_MICROSMG'), 'the shipped file\'s weapons')
+    H.ok(U.contains(draft.objectives[1].weapons, 'WEAPON_COMBATPISTOL'), 'the shipped file\'s weapons')
 
     local okV, v = X.act('server:builder:validate', 5, { id = ID, definition = draft })
     H.ok(okV and v and v.valid == true, 'the shipped definition passes as an override: ' .. cjson.encode(Plain(v)))

@@ -61,14 +61,14 @@ registerMock('request', 'admin:getMissionTweak', (p: { missionId: string }): Mis
             index: 1,
             block: 'hostile_waves',
             label: 'Neutralise all hostiles',
-            weapons: ['WEAPON_PISTOL', 'WEAPON_MICROSMG'],
+            weapons: ['WEAPON_PISTOL', 'WEAPON_COMBATPISTOL'],
         },
         { index: 2, block: 'interact_points', label: 'Secure the scene' },
     ],
     allowed: {
         peds: ['g_m_y_lost_01', 'g_m_y_mexgoon_01'],
         vehicles: ['police3', 'sultan'],
-        weapons: ['WEAPON_PISTOL', 'WEAPON_MICROSMG', 'WEAPON_SMG', 'WEAPON_PUMPSHOTGUN'],
+        weapons: ['WEAPON_PISTOL', 'WEAPON_COMBATPISTOL', 'WEAPON_HEAVYPISTOL', 'WEAPON_PUMPSHOTGUN'],
     },
     ranges: { cooldown: [0, 86400], timeLimit: [60, 3600], startTimeout: [60, 3600] },
 }));

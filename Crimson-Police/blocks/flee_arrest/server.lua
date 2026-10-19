@@ -116,6 +116,13 @@ local function AllAllowed(list, allowed)
     return true
 end
 
+-- Weapons: the allowed list, or an automatic weapon an older custom file still names (it loads with a console
+-- warning, and each NPC carries the CP.NpcCombat swap instead).
+local function WeaponsAllowed(list, allowed)
+    if CP.NpcCombat and CP.NpcCombat.weaponsAllowed then return CP.NpcCombat.weaponsAllowed(list, allowed) end
+    return AllAllowed(list, allowed)
+end
+
 -- Only a built-in mission file may pass its own bonus values (aliveBonus.points) as a value hint.
 local function TrustedFile(ctx)
     local m = ctx.mission or (ctx.run and ctx.run.mission)
@@ -494,7 +501,7 @@ local function Validate(obj, mission, location)
         if ok then ok, why = CustomCuffRange(o.cuff.maxDistance) end
         if not ok then return false, why end
     end
-    if not AllAllowed(o.weapons, strict and allowed.weapons or nil) then
+    if not WeaponsAllowed(o.weapons, strict and allowed.weapons or nil) then
         return Bad('block.flee_arrest.invalid.weapons')
     end
     if not AllAllowed(o.models, strict and allowed.peds or nil) then return Bad('block.flee_arrest.invalid.models') end
@@ -536,7 +543,7 @@ local function Validate(obj, mission, location)
             return Bad('block.flee_arrest.invalid.range', { field = 'associates.count', min = 0, max = c.suspects[2] })
         end
         if a.count > 0 then
-            if not AllAllowed(a.weapons, strict and allowed.weapons or nil) then
+            if not WeaponsAllowed(a.weapons, strict and allowed.weapons or nil) then
                 return Bad('block.flee_arrest.invalid.weapons')
             end
             if not InRange(a.accuracy, hw.accuracy) or not InRange(a.armour, hw.armour) then
@@ -787,13 +794,19 @@ local function MoveToDoor(ctx, p)
 end
 
 -- The holstered pistol of the fighting door suspect, given in hand now; the bag cfg gets it too, so a
--- new host's CP.Npc.apply draws it. Returns the setState extra (nil when nothing was holstered).
+-- new host's CP.Npc.apply draws it. Returns the setState extra (nil when nothing was holstered). The weapon is the one
+-- CP.NpcCombat allows (never an automatic one), with its rounds.
 local function DrawWeapon(p)
     local w = p.weapon
     if not w then return nil end
     p.weapon = nil
+    local ammo = 250
+    if CP.NpcCombat and CP.NpcCombat.weapon then
+        w = CP.NpcCombat.weapon(w) or w
+        ammo = CP.NpcCombat.ammo()
+    end
     if GiveWeaponToPed and p.entity and DoesEntityExist(p.entity) then
-        GiveWeaponToPed(p.entity, joaat(w), 250, false, true)
+        GiveWeaponToPed(p.entity, joaat(w), ammo, false, true)
     end
     return { cfg = { weapon = w } }
 end

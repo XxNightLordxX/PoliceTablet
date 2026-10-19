@@ -107,11 +107,13 @@ local RELOAD = {
     'Difficulty',
     'Decisions',
     'AntiCheat.presenceRadius',
+    'NpcCombat.enabled',   -- the Builder check takes an automatic weapon (swapped at the spawn) only while it is on
 }
 
 -- Tables whose keys are the owner's own (mission ids, item names): one setting edited as a whole.
 local OPEN = {
     'MissionTweaks',
+    'NpcCombat.replace',
     'DisabledLocations',
     'Labels',
     'Rewards.byType',
@@ -205,6 +207,16 @@ local RANGES = {
     ['Cash.manualDailyLimit'] = { 0, 10000000 },
     ['Cash.lowBalanceWarn'] = { 0, 100000000 },
     ['Backups.keep'] = { 1, 100 },
+    -- how hard mission NPCs fight back (Config.NpcCombat): lower = easier
+    ['NpcCombat.ammo'] = { 1, 9999 },
+    ['NpcCombat.accuracyScale'] = { 0, 1 },
+    ['NpcCombat.accuracyMax'] = { 0, 100 },
+    ['NpcCombat.shootRate'] = { 0, 1000 },
+    ['NpcCombat.abilityMax'] = { 0, 2 },
+    ['NpcCombat.aiDamage'] = { 0, 2 },
+    ['NpcCombat.aiMeleeDamage'] = { 0, 2 },
+    ['NpcCombat.officerDefense'] = { 0.1, 2 },
+    ['NpcCombat.lethalCancelAbove'] = { 0.25, 1 },
 }
 
 -- Numbers that may go either way whatever config.lua has.
@@ -693,6 +705,7 @@ local function Num(min, max, int) return Tpl('num', { min = min, max = max, int 
 local function SiblingOption(list) return Tpl('option', { list = list }) end
 
 local ITEM_NAME = Text('^[%w_%-]+$', 64)
+local WEAPON_NAME = Text('^[Ww][Ee][Aa][Pp][Oo][Nn]_[%w_]+$', 64)
 local ID = Text('^[%w_%-]+$', 64)
 local HEX = Text('^#%x%x%x%x%x%x$', 7)
 
@@ -797,6 +810,10 @@ local KNOWN = {
     ['Cash.source'] = { tpl = Enum({ 'server', 'society' }), kind = 'enum' },
     ['Units.invitePolicy'] = { tpl = Enum({ 'anyone', 'leader' }), kind = 'enum' },
     ['NpcDifficulty.preset'] = { tpl = Enum({ 'easy', 'normal', 'hard', 'custom' }), kind = 'enum' },
+    ['NpcCombat.firingPattern'] = { tpl = Enum({ 'single', 'burst', 'delayed', 'default' }), kind = 'enum' },
+    ['NpcCombat.weapons'] = { tpl = ListOf(WEAPON_NAME, { min = 1, unique = true }), kind = 'list', item = 'string' },
+    ['NpcCombat.replace'] = { tpl = MapOf(WEAPON_NAME, '^[Ww][Ee][Aa][Pp][Oo][Nn]_[%w_]+$') },
+    ['NpcCombat.fallback'] = { tpl = WEAPON_NAME },
     ['Challenge.scoring'] = { tpl = Enum({ 'average', 'total', 'top10' }), kind = 'enum' },
     ['Departments.*.jobs'] = { tpl = ListOf(ID, { min = 1, unique = true }), kind = 'list', item = 'string' },
     ['Departments.*.theme.personalAccents'] = {
@@ -1287,6 +1304,20 @@ local function CheckTweaks(map, _, ctx)
     return nil
 end
 KNOWN['MissionTweaks'].check = CheckTweaks
+
+-- Config.NpcCombat never gives an automatic weapon: the Settings screen says so instead of saving one that is ignored.
+local function NoAutomatic(v)
+    local list = type(v) == 'string' and { v } or v
+    local isAuto = CP.NpcCombat and CP.NpcCombat.isAutomatic
+    if not isAuto or type(list) ~= 'table' then return nil end
+    for _, w in pairs(list) do
+        if isAuto(w) then return 'err.setting_automatic_weapon' end
+    end
+    return nil
+end
+KNOWN['NpcCombat.weapons'].check = NoAutomatic
+KNOWN['NpcCombat.replace'].check = NoAutomatic
+KNOWN['NpcCombat.fallback'].check = NoAutomatic
 
 -- ============================================================================
 --                                   CHECKING

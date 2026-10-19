@@ -42,7 +42,7 @@ end
 _G.DeleteEntity = function(e) deleted[e] = true if ents[e] then ents[e].exists = false end end
 _G.NetworkGetNetworkIdFromEntity = function(e) return ents[e] and ents[e].net or 0 end
 _G.NetworkGetEntityFromNetworkId = function(n) return netToEnt[n] or 0 end
-_G.GiveWeaponToPed = function(e, w) ents[e].weapon = w end
+_G.GiveWeaponToPed = function(e, w, ammo) ents[e].weapon, ents[e].ammo = w, ammo end
 _G.SetPedArmour = function(e, a) ents[e].armour = a end
 _G.GetEntityHealth = function(e) return ents[e] and ents[e].health or 200 end
 _G.GetEntityModel = function(e) return ents[e] and ents[e].model or 0 end
@@ -531,10 +531,25 @@ local ped, pedNet = Runs.spawnPed(A, {
 H.ok(ped ~= nil and pedNet ~= nil, 'spawnPed')
 H.eq(bags[ped].cp.run, A.id, 'cp state bag run')
 H.eq(bags[ped].cp.obj, 1, 'cp state bag objective')
-H.eq(bags[ped].cp.cfg.accuracy, 30, 'cp cfg accuracy')
+H.eq(bags[ped].cp.cfg.accuracy, 18, 'cp cfg accuracy: at most Config.NpcCombat.accuracyMax')
 H.eq(ents[ped].armour, 10, 'armour set')
 H.ok(ents[ped].weapon ~= nil, 'weapon given')
 H.eq(A.entities[pedNet].armed, true, 'tracked as armed')
+H.eq(ents[ped].ammo, 60, 'Config.NpcCombat.ammo rounds (not 250)')
+-- Config.NpcCombat: an automatic weapon a mission names is never given; the bag names the weapon the ped carries
+local smgPed, smgNet = Runs.spawnPed(A, {
+    obj = 1,
+    model = 'g_m_y_ballaeast_01',
+    coords = vec4(111.0, 110.0, 30.0, 90.0),
+    role = 'hostile',
+    armed = true,
+    weapon = 'WEAPON_SMG',
+    accuracy = 55,
+})
+H.eq(ents[smgPed].weapon, joaat('WEAPON_COMBATPISTOL'), 'an SMG is swapped for its Config.NpcCombat.replace weapon')
+H.eq(bags[smgPed].cp.cfg.weapon, 'WEAPON_COMBATPISTOL', 'and the bag says so (a new host gives the same weapon)')
+H.eq(bags[smgPed].cp.cfg.accuracy, 18, 'a raw accuracy is capped in the bag too')
+Runs.deleteEntity(A, smgNet)
 Config.Limits.maxArmedAlive = 1
 H.ok(not Runs.canSpawn(A, 1, true), 'armed cap')
 H.ok(Runs.canSpawn(A, 1, false), 'unarmed still fits')
@@ -1040,7 +1055,7 @@ H.ok(ctx.isHost(3), 'ctx.isHost')
 H.eq(ctx.participants()[1], 3, 'ctx.participants')
 H.ok(ctx.coords(3) ~= nil, 'ctx.coords')
 local acc, arm = ctx.combat(25, 0)
-H.eq(acc, 25, 'ctx.combat accuracy (standard)')
+H.eq(acc, 18, 'ctx.combat accuracy (standard): 25 x 0.7 = 17.5 -> 18, at most 18')
 ctx.hud({ detail = 'Wave 1 of 3', value = 2, max = 7, message = { text = 'Hi', kind = 'info' } })
 H.eq(K.objectives[1].hud.detail, 'Wave 1 of 3', 'ctx.hud objective detail')
 H.eq(Runs.view(K, 3).objectives[1].value, 2, 'ctx.hud value wins over the checklist')

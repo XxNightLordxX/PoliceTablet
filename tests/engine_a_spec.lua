@@ -368,8 +368,15 @@ do
     H.eq(S.apply(mission, 'standard')[1].waves[2], 7, 'standard unchanged')
 
     local acc, arm = S.combat(25, 0, 'heavy', nil)
-    H.eq(acc, 35, 'combat accuracy')
+    H.eq(acc, 18, 'combat accuracy: 25 + 10 for the tier, x 0.7, at most 18 (Config.NpcCombat)')
     H.eq(arm, 25, 'combat armour')
+    Config.NpcCombat.enabled = false
+    H.eq((S.combat(25, 0, 'heavy', nil)), 35, 'combat accuracy without Config.NpcCombat: base + tier')
+    H.eq((S.combat(95, 0, 'critical')), 100, 'accuracy clamped to 100')
+    Config.NpcCombat.enabled = true
+    Config.NpcCombat.accuracyMax = 100
+    H.eq((S.combat(25, 0, 'heavy', nil)), 25, 'accuracyScale alone: 35 x 0.7 = 24.5 -> 25')
+    Config.NpcCombat.accuracyMax = 18
     acc, arm = S.combat(25, 0, 'heavy', { modifier = 'armored_hostiles', missionType = 'tactical' })
     H.eq(arm, 75, 'armored hostiles on tactical')
     acc, arm = S.combat(25, 0, 'heavy', { modifier = 'armored_hostiles', missionType = 'patrol' })
@@ -377,7 +384,7 @@ do
     acc, arm = S.combat(25, 10, 'standard', { modifier = 'armored_hostiles', mission = { type = 'tactical' } })
     H.eq(arm, 60, 'armored via run.mission.type')
     acc = S.combat(95, 0, 'critical')
-    H.eq(acc, 100, 'accuracy clamped to 100')
+    H.eq(acc, 18, 'the cap holds at the critical tier (Config.NpcCombat.accuracyMax)')
 end
 
 -- ============================================================================

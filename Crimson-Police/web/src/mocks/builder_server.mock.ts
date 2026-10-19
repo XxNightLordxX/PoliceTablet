@@ -70,7 +70,7 @@ const BLOCKS: Record<string, Record<string, unknown>> = {
         perWave: [1, 15, 7],
         nextWaveAlive: [0, 5, 2],
         nextWaveAfter: [30, 300, 90],
-        weapons: ['WEAPON_PISTOL', 'WEAPON_MICROSMG'],
+        weapons: ['WEAPON_PISTOL', 'WEAPON_COMBATPISTOL'],
         accuracy: [5, 60, 25],
         armour: [0, 100, 0],
         health: [100, 400, 200],
@@ -325,14 +325,7 @@ function buildConfig(): BuilderConfig {
                 presenceRange: (BLOCKS[id].presenceRange as [number, number, number]) ?? null,
             })),
         allowed: {
-            weapons: [
-                'WEAPON_PISTOL',
-                'WEAPON_COMBATPISTOL',
-                'WEAPON_MICROSMG',
-                'WEAPON_SMG',
-                'WEAPON_PUMPSHOTGUN',
-                'WEAPON_ASSAULTRIFLE',
-            ],
+            weapons: ['WEAPON_PISTOL', 'WEAPON_COMBATPISTOL', 'WEAPON_HEAVYPISTOL', 'WEAPON_PUMPSHOTGUN'],
             peds: [
                 'g_m_y_ballaeast_01',
                 'g_m_y_famca_01',
@@ -491,7 +484,7 @@ function docksideRaid(accuracy = 30): BuilderDefinition {
                 presenceRange: 150,
                 waves: [6, 6],
                 nextWave: { aliveAtMost: 2, afterSeconds: 90 },
-                weapons: ['WEAPON_PISTOL', 'WEAPON_SMG'],
+                weapons: ['WEAPON_PISTOL', 'WEAPON_COMBATPISTOL'],
                 accuracy,
                 armour: 10,
                 surrender: { belowHealth: 0.25, chance: 30 },

@@ -50,6 +50,13 @@ end
 local function Called(name, pred) return #CallsOf(name, pred) > 0 end
 local function LastOf(name) local l = CallsOf(name); return l[#l] end
 local function Clear() calls = {} end
+-- the position of the first call of name at or after from (calls in order)
+local function IndexOf(name, pred, from)
+    for i = from or 1, #calls do
+        if calls[i].name == name and (not pred or pred(calls[i].args)) then return i end
+    end
+    return nil
+end
 
 -- ============================================================================
 --                                  FAKE WORLD
@@ -183,6 +190,12 @@ CP.Runs = {
     control = function(e) return NetworkHasControlOfEntity(e) end,
 }
 
+-- The combat natives with natives.json's argument types (a wrong type fails the check). CW keeps what each one set on
+-- each ped, as the game does.
+local CW = H.combatNatives(Record)
+local NC = Config.NpcCombat
+local SINGLE_SHOT = 0x5D60E4E0
+
 H.load('modules/npc/client.lua')
 local Npc = CP.Npc
 local HOSTILE, NEUTRAL, PLAYER = joaat('CRIMSONPOLICE_HOSTILE'), joaat('CRIMSONPOLICE_NEUTRAL'), joaat('PLAYER')
@@ -250,16 +263,28 @@ H.eq(Npc.apply(P1, W.bags[P1].cp.cfg), true, 'apply hostile')
 H.ok(Called('SetPedDropsWeaponsWhenDead', function(a) return a[1] == P1 and a[2] == false end), 'no weapon drops')
 H.ok(Called('SetPedMoney', function(a) return a[1] == P1 and a[2] == 0 end), 'no cash drops')
 H.ok(Called('GiveWeaponToPed', function(a)
-    return a[1] == P1 and a[2] == PISTOL and a[3] == 250 and a[4] == false and a[5] == true
-end), 'weapon given when missing')
-H.ok(Called('SetPedAccuracy', function(a) return a[1] == P1 and a[2] == 100 end), 'accuracy clamped to 100')
+    return a[1] == P1 and a[2] == PISTOL and a[3] == 60 and a[4] == false and a[5] == true
+end), 'weapon given when missing, with Config.NpcCombat.ammo rounds')
+H.ok(Called('SetPedAccuracy', function(a) return a[1] == P1 and a[2] == 18 end),
+    'accuracy 140 capped at Config.NpcCombat.accuracyMax (18)')
+H.ok(not Called('SetPedAccuracy', function(a) return a[1] == P1 and a[2] > 18 end), 'never above the cap')
+H.eq(CW.peds[P1].shootRate, 60, 'shoot rate (Config.NpcCombat.shootRate)')
+H.eq(CW.peds[P1].pattern, SINGLE_SHOT, 'single-shot firing pattern')
+H.eq(CW.peds[P1].attrs[27], false, 'no perfect accuracy (27)')
+H.eq(CW.peds[P1].attrs[24], false, 'no faster fire up close (24)')
+H.eq(CW.peds[P1].attrs[49], true, 'less accurate when many officers fight it (49)')
 H.ok(Called('SetPedMaxHealth', function(a) return a[1] == P1 and a[2] == 300 end), 'max health')
 H.ok(Called('SetEntityHealth', function(a) return a[1] == P1 and a[2] == 300 end), 'health on an untouched ped')
 H.ok(Called('SetPedArmour', function(a) return a[1] == P1 and a[2] == 50 end), 'armour')
 H.ok(Called('SetPedRelationshipGroupHash', function(a) return a[1] == P1 and a[2] == HOSTILE end), 'hostile group')
 H.ok(Called('SetPedCombatMovement', function(a) return a[1] == P1 and a[2] == 2 end), 'push: advances')
 H.ok(Called('SetPedCombatRange', function(a) return a[1] == P1 and a[2] == 0 end), 'push: near range')
-H.ok(Called('SetPedCombatAbility', function(a) return a[1] == P1 and a[2] == 2 end), 'push: professional')
+H.ok(not Called('SetPedCombatAbility', function(a)
+    return a[1] == P1 and a[2] > 1
+end), 'push: combat ability at most Config.NpcCombat.abilityMax (1, average), never professional')
+H.eq(CW.peds[P1].ability, 1, 'push: average')
+H.eq(CW.peds[P1].attrs[13], false, 'push: noCharge keeps aggressive (13) off')
+H.eq(CW.peds[P1].attrs[50], false, 'push: noCharge keeps charge (50) off')
 H.ok(Called('SetPedCombatAttributes', function(a) return a[1] == P1 and a[2] == 58 and a[3] == true end),
     'no flee from combat')
 H.ok(Called('SetPedCombatAttributes', function(a) return a[1] == P1 and a[2] == 17 and a[3] == false end),
@@ -283,8 +308,22 @@ H.ok(not Called('SetPedArmour'), 're-apply: armour not restored')
 local P1b = AddPed(5011, 811, 5, 5, 0)
 Clear()
 Npc.apply(P1b, { behaviour = 'hold', weapon = 'WEAPON_SMG' })
+H.ok(Called('GiveWeaponToPed', function(a) return a[1] == P1b and a[2] == joaat('WEAPON_COMBATPISTOL') end),
+    'an older bag naming an SMG: the ped gets its Config.NpcCombat.replace weapon')
+H.ok(not Called('GiveWeaponToPed', function(a) return a[2] == joaat('WEAPON_SMG') end), 'never the SMG')
 H.ok(Called('SetPedSphereDefensiveArea', function(a) return a[1] == P1b end), 'hold: defensive area')
 H.ok(Called('SetPedCombatMovement', function(a) return a[1] == P1b and a[2] == 1 end), 'hold: defensive movement')
+-- Config.NpcCombat.enabled = false: NPCs fight as GTA makes them (the weapon as named, no caps)
+NC.enabled = false
+local P1c = AddPed(5018, 818, 6, 6, 0)
+Clear()
+Npc.apply(P1c, { behaviour = 'push', weapon = 'WEAPON_SMG', accuracy = 140 })
+H.ok(Called('SetPedAccuracy', function(a) return a[1] == P1c and a[2] == 100 end), 'off: accuracy only clamped to 100')
+H.ok(Called('SetPedCombatAbility', function(a) return a[1] == P1c and a[2] == 2 end), 'off: push is professional')
+H.ok(Called('GiveWeaponToPed', function(a) return a[1] == P1c and a[2] == joaat('WEAPON_SMG') and a[3] == 250 end),
+    'off: the weapon as named, 250 rounds')
+H.ok(not Called('SetPedShootRate', function(a) return a[1] == P1c end), 'off: no shoot rate')
+NC.enabled = true
 -- hostage: neutral, unarmed
 local P2 = AddPed(5002, 802, 3, 0, 0)
 W.bags[P2] = {
@@ -332,6 +371,10 @@ H.near(nd, 10.0, 1e-6, 'nearest participant distance')
 Clear()
 H.eq(Npc.task(P1, 'combat', { behaviour = 'balanced' }), true, 'combat task')
 H.ok(Called('TaskCombatPed', function(a) return a[1] == P1 and a[2] == 200 end), 'combat on the nearest participant')
+local iCombat = IndexOf('TaskCombatPed', function(a) return a[1] == P1 end)
+H.ok(iCombat and IndexOf('SetPedFiringPattern', function(a)
+    return a[1] == P1 and a[2] == SINGLE_SHOT
+end, iCombat + 1), 'the single-shot pattern goes back on after TaskCombatPed (the task may pick its own)')
 H.ok(Called('SetPedRelationshipGroupHash', function(a) return a[1] == P1 and a[2] == HOSTILE end),
     'combat: hostile group')
 Clear()
@@ -342,6 +385,10 @@ Move(100, 0, 2, 0)
 H.advance(3600)
 H.ok(Called('TaskCombatPed', function(a) return a[1] == P1 and a[2] == 100 end),
     'retarget to a much closer participant')
+local iRetarget = IndexOf('TaskCombatPed', function(a) return a[1] == P1 and a[2] == 100 end)
+H.ok(iRetarget and IndexOf('SetPedFiringPattern', function(a)
+    return a[1] == P1
+end, iRetarget + 1), 'and the pattern again after the re-issued TaskCombatPed')
 H.fire('crimson-police:client:participants', 1, 'run-1',
     { { src = 1, status = 'active' }, { src = 2, status = 'left' } })
 np = Npc.nearestParticipant(vec3(0.0, 10.0, 0.0))
@@ -759,6 +806,27 @@ BagChange(P12, 822, { run = 'run-1', state = 'hostile', armed = true, cfg = {}, 
 H.ok(not Called('TaskCombatPed', function(a) return a[1] == P12 end), 'not the host: no AI')
 H.ok(Called('SetPedDropsWeaponsWhenDead', function(a) return a[1] == P12 and a[2] == false end),
     'not the host: drop-safe')
+-- OneSync gave this (non-host) game the ped: its combat governor applies the caps, never a task
+H.advance(1100)
+local c12 = CW.peds[P12] or { attrs = {} }
+H.eq(c12.accuracy, 18, 'not the host, owning the ped: accuracy capped (the combat governor)')
+H.eq(c12.pattern, SINGLE_SHOT, 'not the host: single-shot pattern')
+H.eq(c12.shootRate, 60, 'not the host: shoot rate')
+H.eq(c12.ability, 1, 'not the host: ability at most average')
+H.eq(c12.attrs[50], false, 'not the host: no charging')
+H.ok(not Called('TaskCombatPed', function(a) return a[1] == P12 end), 'the governor never tasks')
+H.eq(CW.typeErrors, 0, 'every combat native got the argument types the game reads')
+-- another game takes the ped and hands it back without its settings: capped again
+W.ents[P12].control = false
+H.advance(1100)
+CW.forget(P12)
+Clear()
+H.advance(1100)
+H.ok(not Called('SetPedAccuracy', function(a) return a[1] == P12 end), 'a ped another game owns is never touched')
+W.ents[P12].control = nil
+H.advance(1100)
+H.eq(CW.peds[P12] and CW.peds[P12].accuracy, 18, 'owned again: the caps go on again')
+H.ok(not (CW.peds[P9] and CW.peds[P9].shootRate), 'an unarmed fleeing ped gets no combat caps')
 -- a non-participant (no run at all) still makes mission peds drop-safe
 local savedRun = W.run
 W.run = nil

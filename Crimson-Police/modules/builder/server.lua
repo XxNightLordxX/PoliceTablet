@@ -3277,11 +3277,20 @@ CP.Net.callback('builder:config', function(src)
         tiers[#tiers + 1] = { name = row.tier, labelKey = 'tier.' .. row.tier, maxParticipants = row.maxParticipants }
     end
     local cap = bc.bonusCap or { points = 50, share = 0.25 }
+    -- the Builder never offers an automatic weapon, even one added to the list: no NPC would carry it (CP.NpcCombat)
+    local allowed = U.copy(bc.allowed or {})
+    if type(allowed.weapons) == 'table' and CP.NpcCombat and CP.NpcCombat.isAutomatic then
+        local weapons = {}
+        for _, w in ipairs(allowed.weapons) do
+            if not CP.NpcCombat.isAutomatic(w) then weapons[#weapons + 1] = w end
+        end
+        allowed.weapons = weapons
+    end
     return {
         enabled = bc.enabled ~= false,
         blocks = Config.Blocks,
         blockList = blockList,
-        allowed = bc.allowed,
+        allowed = allowed,
         maxHostiles = bc.maxHostiles,
         maxBlocks = bc.maxBlocks,
         minLocations = bc.minLocations,

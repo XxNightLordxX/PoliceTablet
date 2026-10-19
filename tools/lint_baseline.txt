@@ -9,3 +9,4 @@ FX06 Crimson-Police/modules/runs/server.lua local ped = CreatePed(4, hash, x, y,
 
 # Deliberate
 FX07 Crimson-Police/modules/storage/memsql.lua function FS.rename(a, b) return os.rename(a, b) end -- the raw answer on purpose: Store:_probeRename works out per saves folder whether this runtime inverts it
+FX09 Crimson-Police/modules/npc/server.lua CancelEvent() -- Config.NpcCombat.cancelLethalHeadshots (owner request 2026-10-19, no one-shot kills): only a willKill hit whose shooter is an armed mission ped of a live run and whose every victim is an active participant of that run in bucket 0 with at least lethalCancelAbove of his health (docs/CRIMSON_ARENA.md rule 11)

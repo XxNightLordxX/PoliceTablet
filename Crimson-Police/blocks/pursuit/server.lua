@@ -213,6 +213,13 @@ local function AllAllowed(list, allowed)
     return true
 end
 
+-- Weapons: the allowed list, or an automatic weapon an older custom file still names (it loads with a console
+-- warning, and each NPC carries the CP.NpcCombat swap instead).
+local function WeaponsAllowed(list, allowed)
+    if CP.NpcCombat and CP.NpcCombat.weaponsAllowed then return CP.NpcCombat.weaponsAllowed(list, allowed) end
+    return AllAllowed(list, allowed)
+end
+
 local function Indices(n)
     local t = {}
     for i = 1, n do t[i] = i end
@@ -680,7 +687,7 @@ local function Validate(obj, mission, location)
                 { field = 'arrest.duration', min = CUSTOM_TIMED_MS[1], max = CUSTOM_TIMED_MS[2] })
         end
     end
-    if o.neverShoots == false and not AllAllowed(o.weapons, strict and allowed.weapons or nil) then
+    if o.neverShoots == false and not WeaponsAllowed(o.weapons, strict and allowed.weapons or nil) then
         return Bad('block.pursuit.invalid.weapons')
     end
     if o.mode == 'follow' then

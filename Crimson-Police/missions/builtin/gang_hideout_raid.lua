@@ -294,7 +294,7 @@ RegisterMission({
       spawnSets    = { keys = { 'front', 'house', 'garage' }, use = 2, intel = true },
       waves        = { 6, 5, 5 },                                       -- base counts, scaled by tier
       nextWave     = { aliveAtMost = 2, afterSeconds = 90 },
-      weapons      = { 'WEAPON_PISTOL', 'WEAPON_SMG', 'WEAPON_PUMPSHOTGUN' },
+      weapons      = { 'WEAPON_PISTOL', 'WEAPON_COMBATPISTOL', 'WEAPON_PUMPSHOTGUN' },
       accuracy     = 28,                                                -- plus the tier's accuracy
       armour       = 10,                                                -- plus the tier's armour
       behaviour    = { hold = 0.3, balanced = 0.5, push = 0.2 },        -- rolled once per run
@@ -306,7 +306,7 @@ RegisterMission({
         label      = 'the lieutenant',
         health     = 300,
         armour     = 50,
-        weapon     = 'WEAPON_ASSAULTRIFLE',
+        weapon     = 'WEAPON_HEAVYPISTOL',
         surrender  = { belowHealth = 0.25, chance = 0.50 },
         aliveBonus = { id = 'lieutenant_alive', points = 25 },
       },

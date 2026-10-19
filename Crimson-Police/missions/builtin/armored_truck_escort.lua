@@ -164,7 +164,7 @@ RegisterMission({
         carsPerWave = 2,
         perCar      = 2,                                         -- armed attackers per car (does not scale)
         models      = { 'sultan', 'buffalo', 'kuruma' },
-        weapons     = { 'WEAPON_PISTOL', 'WEAPON_MICROSMG', 'WEAPON_SMG' },
+        weapons     = { 'WEAPON_PISTOL', 'WEAPON_COMBATPISTOL' },
         accuracy    = 25,                                        -- plus the tier's accuracy
         armour      = 0,                                         -- plus the tier's armour
       },

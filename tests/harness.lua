@@ -1516,6 +1516,124 @@ function H.resetHooks()
 end
 
 -- ============================================================================
+--            COMBAT NATIVES WITH THEIR REAL ARGUMENT TYPES (opt-in)
+-- ============================================================================
+-- H.combatNatives(onCall) installs the game natives of NPC combat and of an officer's damage settings. Each one checks
+-- its arguments against its parameter types in natives.json (runtime.fivem.net): a float where the game reads a float
+-- (the native wrappers hand the raw Lua number to the game, natives_server.lua `_in(hash, ...)`, so an integer arrives
+-- as another number: pass `x + 0.0`), an integer for an int, a Ped, a Player or a Vehicle, an integer or a name for a
+-- Hash (the wrapper joaat's a name), a boolean for a BOOL, and exactly as many arguments as the native has. A call
+-- with a wrong type or count fails the spec, naming the native and the argument. A global the spec set before is
+-- still called afterwards (its own recording keeps working); onCall(name, ...) sees the calls of the others.
+-- The world it returns keeps what each native set, as the game does:
+--   aiDamage, aiMelee: the AI damage modifiers of this game (1.0 = the game's own, also after Reset*)
+--   defense[player]: SetPlayerWeaponDefenseModifier (GetPlayerWeaponDefenseModifier answers 1.0 until it is set)
+--   flags[ped][id]: ped config flags; SetPedSuffersCriticalHits(ped, false) sets flag 2 (NoCriticalHits)
+--   peds[ped] = { accuracy, shootRate, pattern, ability, attrs = { [attr] = on }, weapon, ammo }
+--   driveBys = { { ped, target, accuracy, pattern, distance } }, calls = { { name, args } }, typeErrors (a count)
+--   world.forget(ped): the ped's own settings are gone (a test of a ped that came back from another game)
+--   world.restore(): the globals as they were before H.combatNatives
+H.NATIVE_TYPES = {
+    SetAiWeaponDamageModifier = { 'float' },
+    ResetAiWeaponDamageModifier = {},
+    SetAiMeleeWeaponDamageModifier = { 'float' },
+    ResetAiMeleeWeaponDamageModifier = {},
+    SetPedSuffersCriticalHits = { 'Ped', 'BOOL' },
+    GetPedConfigFlag = { 'Ped', 'int', 'BOOL' },
+    SetPedConfigFlag = { 'Ped', 'int', 'BOOL' },
+    SetPlayerWeaponDefenseModifier = { 'Player', 'float' },
+    GetPlayerWeaponDefenseModifier = { 'Player' },
+    SetPedAccuracy = { 'Ped', 'int' },
+    SetPedShootRate = { 'Ped', 'int' },
+    SetPedFiringPattern = { 'Ped', 'Hash' },
+    SetPedCombatAbility = { 'Ped', 'int' },
+    SetPedCombatAttributes = { 'Ped', 'int', 'BOOL' },
+    TaskDriveBy = { 'Ped', 'Ped', 'Vehicle', 'float', 'float', 'float', 'float', 'int', 'BOOL', 'Hash' },
+    GiveWeaponToPed = { 'Ped', 'Hash', 'int', 'BOOL', 'BOOL' },
+}
+
+local function TypeOk(kind, v)
+    if kind == 'float' then return math.type(v) == 'float' end
+    if kind == 'BOOL' then return type(v) == 'boolean' end
+    if kind == 'Hash' then return math.type(v) == 'integer' or type(v) == 'string' end
+    return math.type(v) == 'integer'   -- int, Ped, Player, Vehicle
+end
+
+function H.combatNatives(onCall)
+    local w = { aiDamage = 1.0, aiMelee = 1.0, defense = {}, flags = {}, peds = {}, driveBys = {}, calls = {} }
+    w.typeErrors = 0
+    local function Ped(ped)
+        w.peds[ped] = w.peds[ped] or { attrs = {} }
+        return w.peds[ped]
+    end
+    local function Flags(ped)
+        w.flags[ped] = w.flags[ped] or {}
+        return w.flags[ped]
+    end
+    function w.forget(ped) w.peds[ped] = nil end
+    local before = {}
+    function w.restore()
+        for name in pairs(H.NATIVE_TYPES) do rawset(_G, name, before[name]) end
+    end
+    local effects = {
+        SetAiWeaponDamageModifier = function(v) w.aiDamage = v end,
+        ResetAiWeaponDamageModifier = function() w.aiDamage = 1.0 end,
+        SetAiMeleeWeaponDamageModifier = function(v) w.aiMelee = v end,
+        ResetAiMeleeWeaponDamageModifier = function() w.aiMelee = 1.0 end,
+        SetPedSuffersCriticalHits = function(ped, on) Flags(ped)[2] = not on end,
+        GetPedConfigFlag = function(ped, id) return Flags(ped)[id] == true end,
+        SetPedConfigFlag = function(ped, id, on) Flags(ped)[id] = on end,
+        SetPlayerWeaponDefenseModifier = function(p, v) w.defense[p] = v end,
+        GetPlayerWeaponDefenseModifier = function(p) return w.defense[p] or 1.0 end,
+        SetPedAccuracy = function(ped, v) Ped(ped).accuracy = v end,
+        SetPedShootRate = function(ped, v) Ped(ped).shootRate = v end,
+        SetPedFiringPattern = function(ped, v) Ped(ped).pattern = type(v) == 'string' and joaat(v) or v end,
+        SetPedCombatAbility = function(ped, v) Ped(ped).ability = v end,
+        SetPedCombatAttributes = function(ped, attr, on) Ped(ped).attrs[attr] = on end,
+        TaskDriveBy = function(ped, target, _, _, _, _, dist, acc, _, pattern)
+            w.driveBys[#w.driveBys + 1] = {
+                ped = ped,
+                target = target,
+                accuracy = acc,
+                pattern = pattern,
+                distance = dist,
+            }
+        end,
+        GiveWeaponToPed = function(ped, hash, ammo)
+            local p = Ped(ped)
+            p.weapon, p.ammo = type(hash) == 'string' and joaat(hash) or hash, ammo
+        end,
+    }
+    for name, sig in pairs(H.NATIVE_TYPES) do
+        local prev = rawget(_G, name)
+        before[name] = prev
+        _G[name] = function(...)
+            local n = select('#', ...)
+            local args = table.pack(...)
+            local ok = n == #sig
+            for i, kind in ipairs(sig) do
+                if not TypeOk(kind, args[i]) then
+                    ok = false
+                    H.ok(false, ('%s argument %d: the game reads a %s, got %s %s'):format(name, i, kind,
+                        math.type(args[i]) or type(args[i]), tostring(args[i])))
+                end
+            end
+            if n ~= #sig then H.ok(false, ('%s takes %d arguments, got %d'):format(name, #sig, n)) end
+            if not ok then w.typeErrors = w.typeErrors + 1 end
+            w.calls[#w.calls + 1] = { name = name, args = args }
+            local res = effects[name](...)
+            if prev then
+                prev(...)
+            elseif onCall then
+                onCall(name, ...)
+            end
+            return res
+        end
+    end
+    return w
+end
+
+-- ============================================================================
 --           SERVER NATIVES THAT ANSWER YES OR NO (FXServer's shape)
 -- ============================================================================
 -- On FXServer a native that answers yes or no (a BOOL native) goes through `_r` in natives_server.lua
@@ -1688,9 +1806,14 @@ function H.findEvents(name)
     return out
 end
 
--- Simulate an incoming net event from `src` (handlers see `source`).
+-- Simulate an incoming net event from `src` (handlers see `source`). Like FXServer's TriggerEvent2, one dispatch has
+-- one "cancelled" flag: CancelEvent() in a handler sets it, WasEventCanceled() in the handlers after it reads it, and
+-- H.fire returns it (true: the game would not route the event, e.g. a weaponDamageEvent never reaches its victim).
+H.eventCanceled = false
 function H.fire(name, src, ...)
     local list = H.handlers[name] or {}
+    local outer = H.eventCanceled
+    H.eventCanceled = false
     for _, fn in ipairs(list) do
         local co = coroutine.create(function(...)
             _ENV.source = src
@@ -1699,6 +1822,9 @@ function H.fire(name, src, ...)
         end)
         Resume(co, ...)
     end
+    local canceled = H.eventCanceled
+    H.eventCanceled = outer
+    return canceled
 end
 
 -- Call an ox_lib callback as `src`.
@@ -1795,6 +1921,9 @@ function H.boot(opts)
     _G.TriggerServerEvent = function(name, ...)
         H.events[#H.events + 1] = { kind = 'server', name = name, args = { ... } }
     end
+    -- the cancelled flag of the event H.fire is dispatching (FXServer: one per TriggerEvent2 dispatch)
+    _G.CancelEvent = function() H.eventCanceled = true end
+    _G.WasEventCanceled = function() return H.eventCanceled end
     _G.RegisterCommand = function(name, fn, restricted) H.commands[name] = { fn = fn, restricted = restricted } end
     _G.IsPlayerAceAllowed = function(src, ace)
         local p = H.players[tonumber(src)]
@@ -1859,9 +1988,11 @@ function H.boot(opts)
     end
     H.load('config/blocks.lua')
     if CP and CP.Hooks then H.resetHooks() end
+    -- shared/*.lua in fxmanifest's (alphabetical) order
     H.load('shared/init.lua')
     H.load('shared/locale.lua')
     H.load('shared/net.lua')
+    H.load('shared/npccombat.lua')
     H.load('shared/utils.lua')
     if H.storage == 'files' and server and not H.filesMySQL then
         -- a spec run on its own (no tests/run.lua) starts from an empty saves folder: build the tables

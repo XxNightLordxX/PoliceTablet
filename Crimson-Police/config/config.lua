@@ -626,15 +626,47 @@ Config.NpcDifficulty = {
     },
 }
 
+-- How hard armed mission NPCs fight back. Only mission NPCs and the officers on their run are changed, and only
+-- while the run is live. For every number here: lower = easier for your officers.
+Config.NpcCombat = {
+    enabled = true,                  -- false = NPCs fight as GTA makes them (every value below is ignored)
+    -- The only weapons a mission NPC is ever given. Automatic weapons (SMGs, rifles, machine guns) are never given,
+    -- even when one is added here.
+    weapons = { 'WEAPON_PISTOL', 'WEAPON_COMBATPISTOL', 'WEAPON_HEAVYPISTOL', 'WEAPON_PUMPSHOTGUN' },
+    -- A mission that names a weapon outside the list above gets the weapon this list gives for it...
+    replace = {
+        WEAPON_MICROSMG = 'WEAPON_PISTOL',
+        WEAPON_SMG = 'WEAPON_COMBATPISTOL',
+        WEAPON_ASSAULTRIFLE = 'WEAPON_HEAVYPISTOL',
+    },
+    fallback = 'WEAPON_PISTOL',      -- ...or this one when the list has none for it
+    ammo = 60,                       -- rounds each armed NPC gets
+    accuracyScale = 0.7,             -- NPC accuracy (after the team size and Config.NpcDifficulty) times this...
+    accuracyMax = 18,                -- ...and never above this (0-100; bosses and shots from cars too)
+    shootRate = 60,                  -- how fast NPCs pull the trigger (0-1000)
+    firingPattern = 'single',        -- 'single' (one shot at a time), 'burst' (short bursts), 'delayed' (a pause
+                                     -- before each shot) or 'default' (GTA picks)
+    abilityMax = 1,                  -- combat skill at most: 0 poor, 1 average, 2 professional
+    noCharge = true,                 -- NPCs never charge at officers
+    aiDamage = 0.5,                  -- damage of NPC bullets (1.0 = normal GTA damage, 0.5 = half)
+    aiMeleeDamage = 0.5,             -- damage of NPC punches and melee weapons (1.0 = normal)
+    officerDefense = 1.0,            -- damage officers on a run take from every weapon, players' too (1.0 = off)
+    noCriticalHits = true,           -- officers on a run take no extra headshot damage (it hurts like a body shot)
+    cancelLethalHeadshots = true,    -- the server drops a one-shot kill by a mission NPC on an officer of its run...
+    lethalCancelAbove = 0.75,        -- ...who still has at least this share of his health (0.25-1, 0.75 = three
+                                     -- quarters). The shot that finishes off a hurt officer always counts
+}
+
 -- ============================================================================
 --                           BUILT-IN MISSION TWEAKS
 -- ============================================================================
 -- Change built-in missions without editing their files, so the change survives updates. Every tweak is
 -- checked by the same rules as the file; a tweak that breaks one is ignored with a console warning.
 -- Allowed keys: cooldown, timeLimit, startTimeout, disabledLocations (labels), peds, vehicles, weapons.
+-- weapons replaces every weapon list of the mission (waves, ambushes, associates); a boss carries its last one.
 Config.MissionTweaks = {
     -- prison_break = { cooldown = 1800, timeLimit = 720, disabledLocations = { 'North gate' } },
-    -- gang_shootout = { peds = { 'g_m_y_lost_01' }, weapons = { 'WEAPON_PISTOL', 'WEAPON_SMG' } },
+    -- gang_shootout = { peds = { 'g_m_y_lost_01' }, weapons = { 'WEAPON_PISTOL', 'WEAPON_COMBATPISTOL' } },
 }
 
 -- ============================================================================
@@ -958,13 +990,12 @@ Config.Builder = {
         testDriveTimeout = 30,  -- seconds to reach each waypoint in a test drive
     },
     allowed = {                 -- the only models, weapons and animations builders can pick
+        -- no automatic weapons: an NPC never gets one (Config.NpcCombat), so the Builder never offers one
         weapons = {
             'WEAPON_PISTOL',
             'WEAPON_COMBATPISTOL',
-            'WEAPON_MICROSMG',
-            'WEAPON_SMG',
+            'WEAPON_HEAVYPISTOL',
             'WEAPON_PUMPSHOTGUN',
-            'WEAPON_ASSAULTRIFLE',
         },
         -- base-game ped models only. The list holds every ped a built-in mission or a block default uses
         -- (inmates, the Kingpin, the escort driver), so a copy of any built-in mission can be published.

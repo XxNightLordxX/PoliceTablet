@@ -783,7 +783,7 @@ Locations for every new mission come from GTA V vehicle nodes and known base-gam
 
 - Start: within 80 m of the hideout
 
-- Spawns: 20 hostiles (scales) in 3 waves of 7 / 7 / 6, each wave scaled the same way; the next wave spawns when 2 or fewer of the current wave are alive, or after 90 seconds. Pistols and SMGs; base accuracy 25 and armour 0, plus the tier's increase
+- Spawns: 20 hostiles (scales) in 3 waves of 7 / 7 / 6, each wave scaled the same way; the next wave spawns when 2 or fewer of the current wave are alive, or after 90 seconds. Pistols and combat pistols; base accuracy 25 and armour 0, plus the tier's increase
 
 - Objectives: 1) neutralise every hostile (killed, or surrendered and cuffed; a hostile under 25% health has a 30% chance to surrender); 2) ox_target "Secure the scene" at the scene marker (8 s progress); 3) Process the scene (at most 4 bodies kept)
 
@@ -967,7 +967,7 @@ Locations for every new mission come from GTA V vehicle nodes and known base-gam
 
 - Start: within 80 m of the lab
 
-- Spawns: 9 hostiles (scales) in 2 waves of 5 / 4, holding cover inside (tactics rolled: hold 50%, balanced 40%, push 10%); pistols, micro SMGs and pump shotguns; base accuracy 25 and armour 0 plus the tier's increase; a hostile under 25% health has a 30% chance to surrender. 1 unarmed cook (scales, max 3). 2 stashes (scales, max 4) hidden among the stash spots
+- Spawns: 9 hostiles (scales) in 2 waves of 5 / 4, holding cover inside (tactics rolled: hold 50%, balanced 40%, push 10%); pistols, combat pistols and pump shotguns; base accuracy 25 and armour 0 plus the tier's increase; a hostile under 25% health has a 30% chance to surrender. 1 unarmed cook (scales, max 3). 2 stashes (scales, max 4) hidden among the stash spots
 
 - Objectives: 1) breach: ox_target "Stack up and breach" (3 s progress) on both entry points, by 2 different officers within 6 seconds of each other (the count is min(2, participants still in the run): when only one is left, one officer breaches both entries with an 8 s progress each, so the run never soft-locks); 2) neutralise every hostile (killed, or surrendered and cuffed); 3) when the last hostile falls the cooks bolt along an escape route: catch and cuff them (unarmed; they give up when aimed at within 10 m, when stunned, or when a participant stays within 3 m for 3 seconds); 4) search the stash spots ("Search", 4 s progress) until every stash is found, then "Seize the product" (6 s progress); 5) "Shut down the lab" at the lab point: 3 ox_lib skill checks (medium, medium, hard); 2 misses in a row start a toxic fire (an effect only, it hurts nobody), a setback and never a fail: any participant must "Ventilate" (10 s progress) at the lab point, the officer who missed loses 15 points (lab_fire, personal), and the shutdown can be tried again 30 seconds later by anyone; 6) Process the scene
 
@@ -991,7 +991,7 @@ Locations for every new mission come from GTA V vehicle nodes and known base-gam
 
 - Start: within 100 m of the hideout
 
-- Spawns: 16 hostiles (scales) in 3 waves of 6 / 5 / 5 from 2 of the 3 spawn sets, rolled per run (the Active Mission screen shows the intel line, e.g. "Intel: expect contact in the garage and the house"); tactics rolled (hold 30%, balanced 50%, push 20%); pistols, SMGs and pump shotguns; base accuracy 28 and armour 10 plus the tier's increase; 30% surrender under 25% health. After the last wave, the lieutenant: health 300, armour 50, an assault rifle, 50% surrender under 25% health; does not scale. 2 unarmed runners (scales, max 4). 1 weapons cache (scales, max 2) hidden among the cache spots
+- Spawns: 16 hostiles (scales) in 3 waves of 6 / 5 / 5 from 2 of the 3 spawn sets, rolled per run (the Active Mission screen shows the intel line, e.g. "Intel: expect contact in the garage and the house"); tactics rolled (hold 30%, balanced 50%, push 20%); pistols, combat pistols and pump shotguns; base accuracy 28 and armour 10 plus the tier's increase; 30% surrender under 25% health. After the last wave, the lieutenant: health 300, armour 50, a heavy pistol, 50% surrender under 25% health; does not scale. 2 unarmed runners (scales, max 4). 1 weapons cache (scales, max 2) hidden among the cache spots
 
 - Objectives: 1) breach together on both entry points (as Drug Lab Raid); 2) neutralise every hostile, then the lieutenant; 3) when the lieutenant falls the runners bolt: catch and cuff them; 4) search the cache spots until every cache is found, then "Seize the weapons" (6 s progress); 5) Process the scene
 
@@ -1015,7 +1015,7 @@ Locations for every new mission come from GTA V vehicle nodes and known base-gam
 
 - Start: within 100 m of the compound
 
-- Spawns: 30 hostiles (scales) in 4 waves of 8 / 8 / 7 / 7, each scaled the same way, then the Kingpin after the last wave. Pistols, SMGs and shotguns; base accuracy 30 and armour 25, plus the tier's increase. The Kingpin has armour 100, health 400 and an assault rifle, and does not scale
+- Spawns: 30 hostiles (scales) in 4 waves of 8 / 8 / 7 / 7, each scaled the same way, then the Kingpin after the last wave. Pistols, heavy pistols and shotguns; base accuracy 30 and armour 25, plus the tier's increase. The Kingpin has armour 100, health 400 and a heavy pistol, and does not scale
 
 - Objectives: 1) neutralise every hostile; 2) neutralise the Kingpin; 3) ox_target "Secure the scene" (8 s progress)
 
@@ -1431,6 +1431,12 @@ Every person in a mission gets a demeanour when it spawns, rolled by the server 
 
 - Hostile NPCs still only target participants; bystanders are never attacked.
 
+- How hard armed NPCs fight back is Config.NpcCombat (owner request of 2026-10-19), and it never changes points or cash:
+  - No automatic weapons: a mission NPC is only ever given a weapon of Config.NpcCombat.weapons (pistol, combat pistol, heavy pistol, pump shotgun). A mission that names another one (an older custom mission, a tweak) gets its Config.NpcCombat.replace weapon, else the fallback; an automatic weapon (the Automatic flag of the game's weapon data: SMGs, rifles, machine guns, the AP pistol) is never given, even when added to the list. The built-in missions, Config.Builder.allowed.weapons and the block defaults name none; a custom file that still names one loads with a console warning. With Config.NpcCombat.enabled = false nothing is swapped and Config.Builder.allowed.weapons is the only check again (switching it reloads the missions).
+  - Accuracy: the tier and Config.NpcDifficulty adds, times accuracyScale (0.7), at most accuracyMax (18), bosses and drive-bys included. NPCs fire single shots (firingPattern), at shootRate 60, with at most average combat skill, never charge, are less accurate when several officers fight them, and fire from cars in bursts, never full auto. Whichever game OneSync gives an NPC applies these, not only the run host.
+  - Damage: while their run is live, each participant's game makes NPC bullets and melee do half damage (aiDamage, aiMeleeDamage) and gives the officer no headshot multiplier (noCriticalHits), again after a respawn; officerDefense (off by default) lowers all weapon damage the officer takes. Everything goes back when the run ends. The server also drops a hit by a mission NPC that would kill a healthy officer of its run in one shot (cancelLethalHeadshots): healthy means at least lethalCancelAbove (0.75) of his health, as the server's copy of his ped says, so the shot that finishes off a hurt officer always counts and officers can still go down.
+  - 60 rounds per armed NPC (ammo).
+
 - The debrief (the result screen, Profile & History and the dispute reviews) lists each person's demeanour and what they did (walked away, ran, drew a weapon, surrendered, faked a surrender, cuffed, escaped, killed), once the run has ended, so a participant who leaves early learns nothing about a person still in play.
 
 - Armed people rolled at run time count toward the builder's 40-armed budget at their configured maximum, and toward the run's maxArmedAlive through their server-only armedTruth.
@@ -1733,7 +1739,7 @@ hostile_waves
 | Waves | 1–6 | 3 |
 | Hostiles per wave | 1–15 (every armed NPC in the mission counts toward 40 before scaling) | 7 |
 | Next wave | when this many or fewer are alive (0–5), or after this long (30–300 s) | 2, or 90 s |
-| Weapons | from Config.Builder.allowed.weapons | Pistol, Micro SMG |
+| Weapons | from Config.Builder.allowed.weapons | Pistol, Combat Pistol |
 | Accuracy | 5–60 | 25 |
 | Armour | 0–100 | 0 |
 | Health | 100–400 | 200 |
@@ -3169,13 +3175,45 @@ Config.NpcDifficulty = {
     },
 }
 
+-- How hard armed mission NPCs fight back. Only mission NPCs and the officers on their run are changed, and only
+-- while the run is live. For every number here: lower = easier for your officers.
+Config.NpcCombat = {
+    enabled = true,                  -- false = NPCs fight as GTA makes them (every value below is ignored)
+    -- The only weapons a mission NPC is ever given. Automatic weapons (SMGs, rifles, machine guns) are never given,
+    -- even when one is added here.
+    weapons = { 'WEAPON_PISTOL', 'WEAPON_COMBATPISTOL', 'WEAPON_HEAVYPISTOL', 'WEAPON_PUMPSHOTGUN' },
+    -- A mission that names a weapon outside the list above gets the weapon this list gives for it...
+    replace = {
+        WEAPON_MICROSMG = 'WEAPON_PISTOL',
+        WEAPON_SMG = 'WEAPON_COMBATPISTOL',
+        WEAPON_ASSAULTRIFLE = 'WEAPON_HEAVYPISTOL',
+    },
+    fallback = 'WEAPON_PISTOL',      -- ...or this one when the list has none for it
+    ammo = 60,                       -- rounds each armed NPC gets
+    accuracyScale = 0.7,             -- NPC accuracy (after the team size and Config.NpcDifficulty) times this...
+    accuracyMax = 18,                -- ...and never above this (0-100; bosses and shots from cars too)
+    shootRate = 60,                  -- how fast NPCs pull the trigger (0-1000)
+    firingPattern = 'single',        -- 'single' (one shot at a time), 'burst' (short bursts), 'delayed' (a pause
+                                     -- before each shot) or 'default' (GTA picks)
+    abilityMax = 1,                  -- combat skill at most: 0 poor, 1 average, 2 professional
+    noCharge = true,                 -- NPCs never charge at officers
+    aiDamage = 0.5,                  -- damage of NPC bullets (1.0 = normal GTA damage, 0.5 = half)
+    aiMeleeDamage = 0.5,             -- damage of NPC punches and melee weapons (1.0 = normal)
+    officerDefense = 1.0,            -- damage officers on a run take from every weapon, players' too (1.0 = off)
+    noCriticalHits = true,           -- officers on a run take no extra headshot damage (it hurts like a body shot)
+    cancelLethalHeadshots = true,    -- the server drops a one-shot kill by a mission NPC on an officer of its run...
+    lethalCancelAbove = 0.75,        -- ...who still has at least this share of his health (0.25-1, 0.75 = three
+                                     -- quarters). The shot that finishes off a hurt officer always counts
+}
+
 -- ── Built-in mission tweaks ─────────────────────────────────────────────────
 -- Change built-in missions without editing their files, so the change survives updates. Every tweak is
 -- checked by the same rules as the file; a tweak that breaks one is ignored with a console warning.
 -- Allowed keys: cooldown, timeLimit, startTimeout, disabledLocations (labels), peds, vehicles, weapons.
+-- weapons replaces every weapon list of the mission (waves, ambushes, associates); a boss carries its last one.
 Config.MissionTweaks = {
     -- prison_break = { cooldown = 1800, timeLimit = 720, disabledLocations = { 'North gate' } },
-    -- gang_shootout = { peds = { 'g_m_y_lost_01' }, weapons = { 'WEAPON_PISTOL', 'WEAPON_SMG' } },
+    -- gang_shootout = { peds = { 'g_m_y_lost_01' }, weapons = { 'WEAPON_PISTOL', 'WEAPON_COMBATPISTOL' } },
 }
 
 -- ── Time ────────────────────────────────────────────────────────────────────
@@ -3479,13 +3517,12 @@ Config.Builder = {
         testDriveTimeout = 30,  -- seconds to reach each waypoint in a test drive
     },
     allowed = {                 -- the only models, weapons and animations builders can pick
+        -- no automatic weapons: an NPC never gets one (Config.NpcCombat), so the Builder never offers one
         weapons = {
             'WEAPON_PISTOL',
             'WEAPON_COMBATPISTOL',
-            'WEAPON_MICROSMG',
-            'WEAPON_SMG',
+            'WEAPON_HEAVYPISTOL',
             'WEAPON_PUMPSHOTGUN',
-            'WEAPON_ASSAULTRIFLE',
         },
         -- base-game ped models only. The list holds every ped a built-in mission or a block default uses
         -- (inmates, the Kingpin, the escort driver), so a copy of any built-in mission can be published.
@@ -3749,8 +3786,8 @@ Config.Blocks.hostile_waves = {
     perWave = { 1, 15, 7 },                            -- every armed NPC in the mission together: at most Config.Builder.maxHostiles
     nextWaveAlive = { 0, 5, 2 },                       -- next wave when this many or fewer are alive...
     nextWaveAfter = { 30, 300, 90 },                   -- ...or after this long
-    weapons = { 'WEAPON_PISTOL', 'WEAPON_MICROSMG' },  -- default pick from Config.Builder.allowed.weapons
-    accuracy = { 5, 60, 25 },
+    weapons = { 'WEAPON_PISTOL', 'WEAPON_COMBATPISTOL' },  -- default pick from Config.Builder.allowed.weapons
+    accuracy = { 5, 60, 25 },                              -- what NPCs get is capped by Config.NpcCombat.accuracyMax
     armour = { 0, 100, 0 },
     health = { 100, 400, 200 },                        -- also the range for the boss
     behaviour = { options = { 'hold', 'balanced', 'push' }, default = 'balanced' },
@@ -3802,7 +3839,7 @@ RegisterMission({
       minSeconds   = 60,                                       -- quicker than this is rejected
       waves        = { 7, 7, 6 },                              -- base counts, scaled by tier
       nextWave     = { aliveAtMost = 2, afterSeconds = 90 },
-      weapons      = { 'WEAPON_PISTOL', 'WEAPON_MICROSMG' },
+      weapons      = { 'WEAPON_PISTOL', 'WEAPON_COMBATPISTOL' },
       accuracy     = 25,                                       -- plus the tier's accuracy
       armour       = 0,                                        -- plus the tier's armour
       surrender    = { belowHealth = 0.25, chance = 0.30 },
@@ -3862,7 +3899,7 @@ RegisterMission({
 
   objectives = {
     { block = 'hostile_waves', label = 'Clear the dock', minSeconds = 45, waves = { 6, 6 },
-      weapons = { 'WEAPON_PISTOL', 'WEAPON_SMG' }, accuracy = 30, armour = 10 },
+      weapons = { 'WEAPON_PISTOL', 'WEAPON_COMBATPISTOL' }, accuracy = 30, armour = 10 },
     { block = 'interact_points', label = 'Seize the shipment', minSeconds = 6, points = 'evidence',
       progress = { label = 'Seizing crates', duration = 6000 } },
   },

@@ -3,17 +3,17 @@
 local BLOCK = 'hostile_waves'
 local U = CP.U
 
-local REACH_SLACK = 2.0                  -- metres of position lag allowed around interaction ranges
-local CUFF_RANGE = 3.0                   -- CP.Npc.enableCuff default maxDistance (ARCHITECTURE §5.11)
-local SPAWNS_PER_TICK = 8                -- big waves are spread over a few ticks (never fewer in total)
-local OCCUPIED_RADIUS = 3.0              -- a spawn point this close to a living hostile counts as in use
-local REUSE_OFFSET = 1.25                -- metres between peds that share a reused spawn point
-local SURRENDER_GRACE_MS = 3000          -- a kill this soon after a surrender is a shot already in flight
+local REACH_SLACK = 2.0                   -- metres of position lag allowed around interaction ranges
+local CUFF_RANGE = 3.0                    -- CP.Npc.enableCuff default maxDistance (ARCHITECTURE §5.11)
+local SPAWNS_PER_TICK = 8                 -- big waves are spread over a few ticks (never fewer in total)
+local OCCUPIED_RADIUS = 3.0               -- a spawn point this close to a living hostile counts as in use
+local REUSE_OFFSET = 1.25                 -- metres between peds that share a reused spawn point
+local SURRENDER_GRACE_MS = 3000           -- a kill this soon after a surrender is a shot already in flight
 local DEFAULT_WAVES = { 7, 7, 6 }
 local DEFAULT_BELOW = 0.25
-local BOSS_WEAPON = 'WEAPON_ASSAULTRIFLE'
+local BOSS_WEAPON = 'WEAPON_HEAVYPISTOL'  -- a boss without a weapon of its own (never an automatic one)
 local BOSS_BONUS = { id = 'kingpin_alive', points = 50 }
-local CUSTOM_TIMED_MS = { 1000, 30000 }  -- custom missions: the cuff progress time (ms)
+local CUSTOM_TIMED_MS = { 1000, 30000 }   -- custom missions: the cuff progress time (ms)
 
 local function Cfg() return Config.Blocks[BLOCK] end
 local function Now() return GetGameTimer() end
@@ -97,6 +97,13 @@ local function AllAllowed(list, allowed)
         if allowed and not U.contains(allowed, v) then return false end
     end
     return true
+end
+
+-- Weapons: the allowed list, or an automatic weapon an older custom file still names (it loads with a console
+-- warning, and each NPC carries the CP.NpcCombat swap instead).
+local function WeaponsAllowed(list, allowed)
+    if CP.NpcCombat and CP.NpcCombat.weaponsAllowed then return CP.NpcCombat.weaponsAllowed(list, allowed) end
+    return AllAllowed(list, allowed)
 end
 
 local function StartCoords(ctx)
@@ -336,7 +343,7 @@ local function Validate(obj, mission, location)
         return Bad('block.hostile_waves.invalid.range',
             { field = 'nextWave.afterSeconds', min = c.nextWaveAfter[1], max = c.nextWaveAfter[2] })
     end
-    if not AllAllowed(o.weapons, strict and allowed.weapons or nil) then
+    if not WeaponsAllowed(o.weapons, strict and allowed.weapons or nil) then
         return Bad('block.hostile_waves.invalid.weapons')
     end
     if not AllAllowed(o.peds, strict and allowed.peds or nil) then return Bad('block.hostile_waves.invalid.peds') end
@@ -374,7 +381,7 @@ local function Validate(obj, mission, location)
             or not InRange(b.accuracy, c.accuracy) then
             return Bad('block.hostile_waves.invalid.boss')
         end
-        if not AllAllowed({ b.weapon }, strict and allowed.weapons or nil)
+        if not WeaponsAllowed({ b.weapon }, strict and allowed.weapons or nil)
             or not AllAllowed({ b.model }, strict and allowed.peds or nil) then
             return Bad('block.hostile_waves.invalid.boss')
         end
@@ -638,13 +645,16 @@ local function SpawnBoss(ctx, st)
     if not point then return false end
     local health = math.floor((tonumber(b.health) or 300) * (tonumber(Feel().healthMult) or 1.0) + 0.5)
     local behaviour = type(b.behaviour) == 'string' and b.behaviour or Behaviour(ctx, st)
+    -- the boss's accuracy takes the tier, the difficulty and the Config.NpcCombat cap like every hostile; its
+    -- armour stays the file's (a boss does not scale)
+    local acc = ctx.combat(b.accuracy, 0)
     local ent, netId = ctx.spawnPed({
         model = b.model,
         coords = point,
         role = 'boss',
         armed = true,
         weapon = b.weapon,
-        accuracy = b.accuracy,
+        accuracy = acc,
         armour = b.armour,
         health = health,
         cfg = { behaviour = behaviour, group = 'hostile', boss = true, label = b.label },

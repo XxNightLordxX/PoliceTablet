@@ -274,7 +274,7 @@ RegisterMission({
       spawnSets    = { keys = { 'inside', 'yard' }, use = 2, intel = true },
       waves        = { 5, 4 },                                          -- base counts, scaled by tier
       nextWave     = { aliveAtMost = 2, afterSeconds = 90 },
-      weapons      = { 'WEAPON_PISTOL', 'WEAPON_MICROSMG', 'WEAPON_PUMPSHOTGUN' },
+      weapons      = { 'WEAPON_PISTOL', 'WEAPON_COMBATPISTOL', 'WEAPON_PUMPSHOTGUN' },
       accuracy     = 25,                                                -- plus the tier's accuracy
       armour       = 0,                                                 -- plus the tier's armour
       behaviour    = { hold = 0.5, balanced = 0.4, push = 0.1 },        -- rolled once per run

@@ -35,6 +35,7 @@ say the same things in short and point back here.
    - [5.6 Other settings you may want to change](#56-other-settings-you-may-want-to-change)
    - [5.7 Change any setting in game: the Settings screen](#57-change-any-setting-in-game-the-settings-screen)
    - [5.8 Turn missions and locations on or off](#58-turn-missions-and-locations-on-or-off)
+   - [5.9 How hard NPCs fight back](#59-how-hard-npcs-fight-back)
 6. [Optional extras](#6-optional-extras)
    - [6.1 The tablet item](#61-the-tablet-item)
    - [6.2 Mission desks](#62-mission-desks)
@@ -686,6 +687,7 @@ Everything else works as shipped. These are the ones owners change most:
 | `Config.MissionTweaks` | Change a built-in mission's cooldown or time limits, switch off some of its locations, or change its NPC models, cars or weapons, without editing its file |
 | `Config.Limits` | `maxCompletionsHour = 8` and `maxCompletionsDay = 0` (0 = no cap) finished missions per officer; `maxConcurrentRuns = 12` and `maxConcurrentTactical = 4` missions at once, server-wide |
 | `Config.NpcDifficulty.preset` | `'easy'`, `'normal'`, `'hard'` or `'custom'`. Changes how NPCs fight, never the pay |
+| `Config.NpcCombat` | How hard armed NPCs fight back: no automatic weapons, an accuracy cap, single shots, half damage, no headshot one-shots. See [5.9](#59-how-hard-npcs-fight-back) |
 | `Config.MissionCalls` | Tablet mission calls: `enabled`, how often (`spawnEvery`), how many open at once (`maxOpen`) |
 | `Config.CrossDept.enabled` | Cross-Department Missions on or off |
 | `Config.Units.invitePolicy` | `'anyone'` in a unit may invite, or only the `'leader'` |
@@ -775,6 +777,52 @@ Admin UI → **Missions** has a switch next to every mission, built-in and custo
 - The switches work at once, are saved like every other setting (database or saves folder), and are in the audit log.
   They are `Config.DisabledMissions` and `Config.DisabledLocations` in `config.lua`.
 - Nothing needs a test before it is used: a mission you just switched on is drawn at once.
+
+### 5.9 How hard NPCs fight back
+
+`Config.NpcCombat` decides how dangerous armed mission NPCs are. It changes only the NPCs of Crimson-Police missions
+and the officers on their run, and only while the run is live: when the run ends, everything is back to normal. It
+never changes points, cash or a mission's stars. Every value can be changed in game in Admin UI → **Settings**
+(section *Suspect behaviour*): a new NPC uses the new values, the damage values apply at once.
+
+**For every number here: lower = easier for your officers.**
+
+| Setting | Shipped | What it does |
+|---|---|---|
+| `enabled` | `true` | `false` turns all of this off: NPCs fight exactly as GTA makes them |
+| `weapons` | pistol, combat pistol, heavy pistol, pump shotgun | The only weapons a mission NPC is ever given. An automatic weapon (an SMG, a rifle, a machine gun) is never given, even when you add one here (the Settings screen refuses it) |
+| `replace` | micro SMG → pistol, SMG → combat pistol, assault rifle → heavy pistol | What an NPC gets when a mission names a weapon that is not in `weapons` (an older custom mission, a tweak) |
+| `fallback` | pistol | ...and when `replace` has nothing for that weapon |
+| `ammo` | 60 | Rounds each armed NPC gets |
+| `accuracyScale` | 0.7 | NPC accuracy (after the team size and `Config.NpcDifficulty`) is multiplied by this... |
+| `accuracyMax` | 18 | ...and never goes above this (0 to 100), bosses and NPCs shooting from cars included. Before this change NPCs reached up to 58, and up to 60 from cars |
+| `shootRate` | 60 | How fast NPCs pull the trigger (0 to 1000) |
+| `firingPattern` | `'single'` | `'single'` one shot at a time, `'burst'` short bursts, `'delayed'` a pause before each shot, `'default'` GTA picks. NPCs in a car always fire in short bursts, never full auto |
+| `abilityMax` | 1 | Combat skill at most: 0 poor, 1 average, 2 professional |
+| `noCharge` | `true` | NPCs never charge at officers |
+| `aiDamage` | 0.5 | Damage of NPC bullets: 1.0 = normal GTA damage, 0.5 = half |
+| `aiMeleeDamage` | 0.5 | The same for NPC punches and melee weapons |
+| `officerDefense` | 1.0 (off) | The damage officers on a run take from every weapon, players' shots too (0.5 = half). Leave it at 1.0 unless `aiDamage` alone is not enough |
+| `noCriticalHits` | `true` | Officers on a run take no extra headshot damage, from anyone: a headshot hurts like a body shot |
+| `cancelLethalHeadshots` | `true` | The server drops a hit from a mission NPC that would kill a healthy officer of its run in one shot (a headshot, a point-blank shotgun blast) |
+| `lethalCancelAbove` | 0.75 | How healthy "healthy" is: the officer still has at least this share of his health (0.25 to 1, 0.75 = three quarters). The shot that finishes off an officer who is already hurt always counts, so officers can still go down |
+
+Good to know:
+
+- Each officer's own game applies `aiDamage`, `aiMeleeDamage` and `noCriticalHits` while that officer is on a run,
+  and again after a respawn. `aiDamage` softens every NPC bullet his game works out during the run, so an NPC of
+  another script next to him, or a mission NPC shooting a hostage, hits softer too.
+- `cancelLethalHeadshots` can only catch the hits the server hears about (an NPC that another officer's game moves).
+  `noCriticalHits` covers the rest. Neither ever touches a player in Crimson-Arena. It never makes an officer
+  unkillable: once he is below `lethalCancelAbove`, the killing shot goes through and he goes down as usual.
+- The built-in missions now name pistols and pump shotguns only, and the Mission Builder and Quick edit never offer
+  an automatic weapon. A custom mission from an older version that still names one keeps working: one console line
+  names it ([11.6](#116-missions-and-the-mission-builder)), and its NPCs carry the `replace` weapon.
+- With `enabled = false` nothing is swapped, so the Mission Builder's list (`Config.Builder.allowed.weapons`) is the
+  only check again: a custom mission that names a weapon outside it is not loaded (one console line says why) until
+  you put the weapon back in that list. Switching `enabled` in Settings reloads the missions at once.
+- To feel the difference, run Gang Shootout alone in Admin UI → **Testing**, then change `aiDamage` or
+  `accuracyMax` in Settings and run it again.
 
 ---
 
@@ -1234,6 +1282,9 @@ Which of these they can use is set in `Config.Permissions.supervisor` ([4.4](#44
 - **Real calls first**: responding to a real sc-dispatch call, or being assigned by a dispatcher, ends the mission
   at once with no penalty. sc-npcpolice calls never end a mission.
 - **No alerts**: mission gunfire and downed officers make no sc-dispatch or sc-ambulance alerts.
+- **NPC weapons and damage**: armed NPCs carry pistols and pump shotguns only (never SMGs or rifles), aim worse, fire
+  single shots and do half damage; an officer on a run takes no extra headshot damage. All of it is
+  `Config.NpcCombat` ([5.9](#59-how-hard-npcs-fight-back)).
 - **Downed**: a downed officer has Failed. With no EMS on duty they are picked up after 15 seconds and taken to a
   drop-off point. With EMS on duty, an EMS request is sent for them.
 - Custom missions from the Mission Builder join their type's pool when they are published.
@@ -1707,6 +1758,8 @@ checks the tablet makes), **Give tablet item** (one, when they carry none), **Sh
   ([5.5](#55-the-two-switches-at-the-top-debug-and-storage)).
 - ☐ You read `config/banned_words.txt` and changed it for your community ([5.6](#56-other-settings-you-may-want-to-change)).
 - ☐ Item rewards and picture links are what you want (both ship off: [6.3](#63-item-rewards), [6.4](#64-profile-pictures)).
+- ☐ NPC difficulty fits your officers: `Config.NpcCombat` ships with no automatic weapons, accuracy at most 18 and
+  half damage ([5.9](#59-how-hard-npcs-fight-back)). Lower = easier.
 - ☐ Optional: try the missions you care about. The built-in locations were placed from map data and checked by
   tests, but not driven in game. Admin UI → **Testing** runs any mission at any location; a location that does not
   fit your map can simply be switched off ([5.8](#58-turn-missions-and-locations-on-or-off)). Nothing needs a test.
@@ -1893,6 +1946,7 @@ The last line of the start-up check is `Start-up check: all ... checks passed` o
 | `... was not loaded: syntax error: <file>:<line>: ... near '<text>'` | That line of the mission file is not plain data (often a hand edit: a sum like `10 * 60`, a variable, joined text, or a key written twice). Write the plain value, like `600`, and run `/CrimsonPoliceAdmin reload` |
 | `custom mission <id>: the edited file ... was not accepted` | A hand edit broke the mission. The old version stays live. Fix the file and run `/CrimsonPoliceAdmin reload` |
 | `custom mission <id>: field "<name>" in its Lua file is ignored` | Payouts can't be set in mission files. Use the Payouts screens |
+| `mission <id>: objective <n> names WEAPON_SMG, an automatic weapon: its NPCs carry WEAPON_COMBATPISTOL instead (Config.NpcCombat)` | Harmless: an older custom mission (or a `Config.MissionTweaks` entry) still names an automatic weapon, and its NPCs get the weapon named after "carry". To make the line go away, pick a pistol or a shotgun for it in the Mission Builder ([5.9](#59-how-hard-npcs-fight-back)) |
 | `the folder <folder> is missing and could not be created` | Make the folders `missions/custom/` and `missions/custom/archived/` by hand |
 | `built-in mission <id> cannot be unregistered; turn it off in Config.DisabledMissions` | Use `Config.DisabledMissions` |
 | `cp_type_payouts has a payout for unknown mission type <type>; it is ignored` | Harmless. A type was removed from `Config.MissionTypes` |
@@ -2012,6 +2066,14 @@ however it ends.
 - Stuck payments, at the owner's request (full admin control): the Cash payouts rule now says a payment left in
   "paying" is resolved in Admin UI → **Payments**: **Mark paid** (no money moves), or **Pay again** with its own
   `-r2` transaction id, behind `Config.Cash.allowPayAgain`, a switch that ships off.
+
+- NPC combat, at the owner's request of 2026-10-19 ("make them also not do head shots at all also reduce the damage
+  they shoot as they kill really quickly", no automatic weapons, lower accuracy): `Config.NpcCombat` ([5.9](#59-how-hard-npcs-fight-back)). Mission NPCs never carry an
+  automatic weapon (the built-in missions, the Builder's allowed list and the block defaults name pistols and pump
+  shotguns); NPC accuracy is at most 18, single shots, average skill, no charging, bursts from cars; NPC hits do half
+  damage and officers on a run take no headshot multiplier; the server drops a one-shot kill by a mission NPC on a
+  healthy officer of its run (at least `lethalCancelAbove`, three quarters, of his health) (the one `CancelEvent` Crimson-Police makes, `docs/CRIMSON_ARENA.md` rule 11). `MissionTweaks`
+  `weapons` now also replaces the ambush, associate and boss weapons.
 
 **Waiting for the owner's OK** (already in `docs/SPEC.md` and the code; each one is undone without a code change):
 

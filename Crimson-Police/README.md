@@ -36,6 +36,10 @@ edit any mission (built-in ones too), correct officers' records, handle payments
 there: the list is in [4.6](../README.md#46-things-only-admins-can-do). Who is an admin, Discord webhook links and
 restarting Crimson-Police stay in server.cfg and txAdmin.
 
+Mission NPCs carry pistols and pump shotguns only (never automatic weapons), aim worse, fire single shots and do half
+damage, and officers on a run take no headshot one-shots. Make them easier or harder with `Config.NpcCombat` (lower =
+easier): see [5.9 How hard NPCs fight back](../README.md#59-how-hard-npcs-fight-back).
+
 Required resources (they start before Crimson-Police by themselves): `oxmysql`, `ox_lib`, `qbx_core`, `ox_target`,
 `ox_inventory`, `sc-dispatch`, `sc-ambulance` and `Renewed-Banking`. There is no SQL to import.
 

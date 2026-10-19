@@ -1444,6 +1444,8 @@ end
 do
     local cfg = Config.NpcDifficulty
     local S = CP.Scaling
+    -- the presets' own adds, without the Config.NpcCombat scale and cap
+    Config.NpcCombat.enabled = false
     cfg.preset = 'normal'
     local accN, armN = S.combat(25, 0, 'standard')
     cfg.preset = 'hard'
@@ -1459,6 +1461,9 @@ do
     cfg.custom.accuracyAdd = 0
     cfg.preset = 'nonsense'
     H.eq(select(1, S.combat(25, 0, 'standard')), accN, 'an unknown preset is normal')
+    Config.NpcCombat.enabled = true
+    cfg.preset = 'hard'
+    H.eq(select(1, S.combat(25, 0, 'standard')), 18, 'with Config.NpcCombat even hard stays at accuracyMax')
     -- points and cash of a run are identical under every preset
     local results = {}
     for _, preset in ipairs({ 'easy', 'normal', 'hard' }) do
@@ -1521,7 +1526,10 @@ RegisterMission({
     { label = 'E', start = { coords = vec3(1800.0, 1000.0, 30.0), radius = 20.0 } },
     { label = 'F', start = { coords = vec3(2000.0, 1000.0, 30.0), radius = 20.0 } },
   },
-  objectives = { { block = 'fnd_block', label = 'Go', weapons = { 'WEAPON_PISTOL' } } },
+  objectives = {
+    { block = 'fnd_block', label = 'Go', weapons = { 'WEAPON_PISTOL' }, ambush = { weapons = { 'WEAPON_PISTOL' } },
+      associates = { weapons = { 'WEAPON_PISTOL' } }, boss = { weapon = 'WEAPON_PISTOL' } },
+  },
   bonuses = { { id = 'correct_disposition' }, { id = 'no_weapons_fired' } },
 })
 ]]
@@ -1554,6 +1562,14 @@ RegisterMission({
     H.eq(d and d.timeLimit, 720, 'and the time limit')
     H.eq(d and #d.locations, 5, 'a disabled location is left out')
     H.eq(d and d.objectives[1].weapons[1], 'WEAPON_SMG', 'weapons tweaked')
+    -- the weapons tweak reaches every weapon of the objective (Armored Truck Escort's ambush, Warrant Service's
+    -- associates, a boss); an automatic one loads with a console warning naming what the NPCs carry instead
+    H.eq(d and d.objectives[1].ambush.weapons[1], 'WEAPON_SMG', 'the tweak reaches the ambush weapons')
+    H.eq(d and d.objectives[1].associates.weapons[1], 'WEAPON_SMG', 'and the associates')
+    H.eq(d and d.objectives[1].boss.weapon, 'WEAPON_SMG', 'and the boss')
+    H.ok(Count(warnings, function(w)
+        return Contains(w, 'WEAPON_SMG, an automatic weapon') and Contains(w, 'WEAPON_COMBATPISTOL instead')
+    end) >= 1, 'an automatic weapon in a tweak: a console warning naming the swap')
     H.eq(d and d.quietPatrol, false, 'quietPatrol defaults to false')
     local listed = {}
     for _, e in ipairs(d and d.bonuses or {}) do listed[e.id] = true end
@@ -1562,6 +1578,11 @@ RegisterMission({
     H.ok(Count(warnings, function(w)
         return Contains(w, 'correct_disposition') and Contains(w, 'engine only')
     end) >= 1, 'with a warning')
+    Config.MissionTweaks = { fnd_tweak = { weapons = { 'WEAPON_PISTOL', 'WEAPON_PUMPSHOTGUN' } } }
+    Missions.loadAll()
+    H.eq(Missions.get('fnd_tweak').objectives[1].boss.weapon, 'WEAPON_PUMPSHOTGUN', 'a boss carries the last weapon')
+    H.eq(table.concat(Missions.get('fnd_tweak').objectives[1].ambush.weapons, ','), 'WEAPON_PISTOL,WEAPON_PUMPSHOTGUN',
+        'the ambush gets the whole list')
     warnings = {}
     Config.MissionTweaks = { fnd_tweak = { disabledLocations = { 'B', 'C' } } }
     Missions.loadAll()

@@ -129,7 +129,7 @@ RegisterMission({
       label      = 'Neutralise the hostage takers',
       minSeconds = 12,                                           -- 3 s per base hostile, as Gang Shootout (60 s for 20)
       waves      = { 4 },                                        -- one wave of 4 inside, scaled by tier
-      weapons    = { 'WEAPON_PISTOL', 'WEAPON_MICROSMG' },
+      weapons    = { 'WEAPON_PISTOL', 'WEAPON_COMBATPISTOL' },
       accuracy   = 25,                                           -- plus the tier's accuracy
       armour     = 0,                                            -- plus the tier's armour
       behaviour  = 'hold',                                       -- they hold their positions inside

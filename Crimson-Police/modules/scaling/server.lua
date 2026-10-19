@@ -171,6 +171,8 @@ function Scaling.combat(baseAccuracy, baseArmour, tier, run)
         end
     end
     accuracy = CP.U.clamp(math.floor(accuracy + 0.5), 0, 100)
+    -- Config.NpcCombat: times accuracyScale, then never above accuracyMax (the cap a mission file cannot raise)
+    if CP.NpcCombat and CP.NpcCombat.scaleAccuracy then accuracy = CP.NpcCombat.scaleAccuracy(accuracy) end
     if armour < 0 then armour = 0 end
     return accuracy, math.floor(armour + 0.5)
 end

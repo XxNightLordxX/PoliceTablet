@@ -375,7 +375,7 @@ const FB_CONFIG: BuilderConfig = {
             perWave: [1, 15, 7],
             nextWaveAlive: [0, 5, 2],
             nextWaveAfter: [30, 300, 90],
-            weapons: ['WEAPON_PISTOL', 'WEAPON_MICROSMG'],
+            weapons: ['WEAPON_PISTOL', 'WEAPON_COMBATPISTOL'],
             accuracy: [5, 60, 25],
             armour: [0, 100, 0],
             health: [100, 400, 200],
@@ -415,7 +415,7 @@ const FB_CONFIG: BuilderConfig = {
         },
     ],
     allowed: {
-        weapons: ['WEAPON_PISTOL', 'WEAPON_MICROSMG', 'WEAPON_SMG'],
+        weapons: ['WEAPON_PISTOL', 'WEAPON_COMBATPISTOL', 'WEAPON_HEAVYPISTOL'],
         peds: ['g_m_y_ballaeast_01', 'g_m_y_famca_01', 'a_m_m_business_01'],
         vehicles: ['sultan', 'buffalo'],
         escortVehicles: ['stockade'],

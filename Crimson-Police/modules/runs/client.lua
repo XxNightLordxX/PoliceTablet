@@ -235,7 +235,20 @@ local function RestoreScreen()
     end
 end
 
--- End the local run: stop every block half, the route and the telemetry loops.
+-- Config.NpcCombat's damage settings of this officer's game, on only while the run is live (modules/npccombat).
+local function CombatStart(run)
+    if not (CP.NpcCombat and CP.NpcCombat.start) then return end
+    local ok, err = pcall(CP.NpcCombat.start, run.id)
+    if not ok then CP.err(TAG, 'CP.NpcCombat.start failed: %s', tostring(err)) end
+end
+
+local function CombatStop()
+    if not (CP.NpcCombat and CP.NpcCombat.stop) then return end
+    local ok, err = pcall(CP.NpcCombat.stop)
+    if not ok then CP.err(TAG, 'CP.NpcCombat.stop failed: %s', tostring(err)) end
+end
+
+-- End the local run: stop every block half, the route, the telemetry loops and the NPC damage settings.
 local function Cleanup()
     local run = current
     if not run then return end
@@ -244,6 +257,7 @@ local function Cleanup()
     HideStartCircle(run)
     StopAllBlocks(run)
     RouteStop()
+    CombatStop()
     RestoreScreen()
     CP.log(TAG, 'run %s cleaned up', tostring(run.id))
 end
@@ -414,6 +428,7 @@ RegisterNetEvent(CP.e('client:start'), function(runId, data)
     })
     ShowStartCircle(current, data.start)
     StartTelemetry(current)
+    CombatStart(current)
     ReportArea(current, 0, type(data.start) == 'table' and data.start.coords or nil)
     local start = type(data.start) == 'table' and data.start.coords or nil
     if start then

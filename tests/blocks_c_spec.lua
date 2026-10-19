@@ -1277,6 +1277,23 @@ do -- validate
     H.ok(ok == false and ReasonIs(why, 'block.escort.invalid.driver_allowed'),
         'es custom: a driver model outside the allowed list rejected')
     H.eq(ES.validate(ES.defaults({ driver = 's_m_y_swat_01' }), builtin, escLoc), true, 'es builtin: any driver model')
+    -- Config.NpcCombat: an older custom file's automatic ambush weapon loads (swapped at the spawn); anything else
+    -- outside the Builder's list stays refused, and with NpcCombat off the list is the only check again
+    local customEs = { locations = { escLoc } }
+    local function EsWeapons(list)
+        return ES.validate(ES.defaults({ ambush = { weapons = list } }), customEs, escLoc)
+    end
+    H.eq(EsWeapons({ 'WEAPON_SMG' }), true, 'es custom: an older file\'s SMG ambush loads')
+    ok, why = EsWeapons({ 'WEAPON_RPG' })
+    H.ok(ok == false and ReasonIs(why, 'block.escort.invalid.weapons'), 'es custom: an RPG ambush is still refused')
+    Config.NpcCombat.enabled = false
+    ok, why = EsWeapons({ 'WEAPON_SMG' })
+    H.ok(ok == false and ReasonIs(why, 'block.escort.invalid.weapons'), 'es custom, NpcCombat off: the SMG is refused')
+    ok, why = EsWeapons({ 'WEAPON_MINIGUN' })
+    H.ok(ok == false and ReasonIs(why, 'block.escort.invalid.weapons'), 'es custom, NpcCombat off: a minigun refused')
+    H.eq(ES.validate(ES.defaults({ ambush = { weapons = { 'WEAPON_SMG' } } }), builtin, escLoc), true,
+        'es builtin, NpcCombat off: not limited to the list (as before)')
+    Config.NpcCombat.enabled = true
     ok, why = ES.validate(ES.defaults({ vehicle = 'rhino' }), { locations = { escLoc } }, escLoc)
     H.ok(ok == false and ReasonIs(why, 'block.escort.invalid.vehicle'), 'es custom vehicle outside the allowed list')
     ok, why = ES.validate(ES.defaults({ route = 'nope' }), builtin, escLoc)
@@ -1480,6 +1497,18 @@ do -- stopped too long outside a stop, destroyed, driver killed, unhealthy arriv
     ES.onEntityDead(ctx5, SpawnsOf(ctx5, 'ped', 'attacker')[1].netId, 1)
     H.eq(ctx5.calls.complete, 1, 'escort: completes when the last attacker nearby dies')
     H.eq(Count(ctx5.calls.award, 'truck_healthy'), 0, 'escort: arrived at 40 % health earns no bonus')
+    H.eq(SpawnsOf(ctx5, 'ped', 'attacker')[1].opts.health, 200, 'escort: the attacker\'s health on normal')
+
+    -- the attackers' health follows Config.NpcDifficulty like every other hostile (healthMult; 'hard' = 1.15)
+    CP.Scaling = CP.Scaling or {}
+    local savedFeel = CP.Scaling.feel
+    CP.Scaling.feel = function() return { healthMult = 1.15, surrenderMult = 0.7, fleeMult = 1.2 } end
+    local ctxH = EscCtx({ ambush = { waves = 1, carsPerWave = 1, perCar = 1, health = 300 } }, shortLoc)
+    ES.start(ctxH)
+    DriveTo(ctxH, SpawnsOf(ctxH, 'vehicle', 'escort')[1].netId, 500.0)
+    local attH = SpawnsOf(ctxH, 'ped', 'attacker')[1]
+    H.eq(attH and attH.opts.health, math.floor(300 * 1.15 + 0.5), 'escort: attacker health x healthMult on hard')
+    CP.Scaling.feel = savedFeel
 
     -- healthy on arrival, shot up while the area is cleared: "arrives above 50 %" still earns it
     local ctx6 = EscCtx({ ambush = { waves = 1, carsPerWave = 1, perCar = 1 } }, shortLoc)
@@ -2708,6 +2737,50 @@ do -- pursuit host: the objective stops while the loop waits for control of the 
     H.eq(LiveBlips() - base, 0, 'pursuit client: the loop pass resumed after the cleanup draws no blip')
     H.eq(hud[#hud], false, 'pursuit client: ...and writes no HUD line')
     H.eq(#CL.tasks, tasks, 'pursuit client: ...and tasks nobody')
+end
+
+do -- pursuit host: an armed passenger's drive-by takes the ped's own accuracy, capped (Config.NpcCombat), and bursts
+    H.clockMs = 24600000
+    local CW = H.combatNatives()
+    local fromServerId = rawget(_G, 'GetPlayerFromServerId')
+    _G.GetPlayerFromServerId = function(s) return H.players[tonumber(s)] and tonumber(s) or -1 end
+    local veh, vehNet = NewEnt('vehicle', loopPts[1])
+    local drv, drvNet = NewEnt('ped', loopPts[1])
+    local gun, gunNet = NewEnt('ped', loopPts[1])
+    ents[drv].inVehicle, ents[gun].inVehicle = veh, veh
+    ents[drv].bag = { state = 'driving', cfg = {} }
+    ents[gun].bag = { state = 'driving', armed = true, cfg = { weapon = 'WEAPON_PISTOL', accuracy = 45 } }
+    ents[veh].speed = 20.0
+    local x, y, z = U.xyz(loopPts[1])
+    At(1, x + 12.0, y, z)
+    local cctx = ClientCtx('run-cl-driveby', PU.defaults({ block = 'pursuit', route = 'race' }), raceLoc)
+    PC.prepare(cctx)
+    PC.start(cctx)
+    PC.update(cctx, {
+        kind = 'state',
+        mode = 'stop',
+        fled = true,
+        trigger = 'arrive',
+        vehicles = { { netId = vehNet, index = 1, state = 'fleeing', occupants = { drvNet, gunNet } } },
+        suspects = {
+            { netId = drvNet, vehicle = vehNet, seat = -1, state = 'driving' },
+            { netId = gunNet, vehicle = vehNet, seat = 0, state = 'driving', armed = true, driveBy = 1 },
+        },
+        detained = 0,
+        total = 2,
+        stopped = 0,
+        vtotal = 1,
+    })
+    H.step(1000)
+    local db = CW.driveBys[#CW.driveBys]
+    H.ok(db ~= nil and db.ped == gun and db.target == 100,
+        'pursuit client: the armed passenger shoots at the named officer')
+    H.eq(db and db.accuracy, 18, 'pursuit client: drive-by accuracy = its own 45 capped at accuracyMax (never 60)')
+    H.eq(db and db.pattern, 0xD31265F2, 'pursuit client: FIRING_PATTERN_BURST_FIRE_DRIVEBY, never full auto')
+    H.eq(CW.typeErrors, 0, 'pursuit client: TaskDriveBy got the argument types the game reads')
+    PC.stop(cctx)
+    CW.restore()
+    _G.GetPlayerFromServerId = fromServerId
 end
 
 -- ============================================================================
