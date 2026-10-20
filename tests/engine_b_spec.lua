@@ -102,15 +102,19 @@ local function Rec(k, v) log[k] = log[k] or {}; log[k][#log[k] + 1] = v end
 local function Count(k) return log[k] and #log[k] or 0 end
 local function Last(k) return log[k] and log[k][#log[k]] end
 
-local arena, recheck, modifierNext, flagNext = {}, {}, nil, nil
+-- arena[src]: a foreign crimsonArena value on the player's bag (Crimson-Arena's, or one his own client wrote);
+-- bucket[src]: his routing bucket (a real match fighter is in 4210+). inArena is the real CP.Alerts.inArena test.
+local arena, bucket, recheck, modifierNext, flagNext = {}, {}, {}, nil, nil
 local listeners = {}
 CP.Alerts = {
     set = function(src) Rec('alerts.set', src) end,
     clear = function(src) Rec('alerts.clear', src) end,
     forget = function(src) Rec('alerts.forget', src) end,
-    inArena = function(src) return arena[src] == true end,
+    inArena = function(src) return arena[src] == true or (bucket[src] or 0) ~= 0 end,
     foreignClearedAt = {},
 }
+-- FiveM server native the harness does not provide.
+GetPlayerRoutingBucket = function(src) return bucket[tonumber(src)] or 0 end
 CP.Route = {
     begin = function(run, src) Rec('route.begin', src) end,
     stop = function(run, src) Rec('route.stop', src) end,
@@ -1175,6 +1179,76 @@ H.advance(5000)
 H.eq(HeldBy(3, L2.id), 0, 'sweep removes items of a live run the player has left')
 H.ok(HeldBy(2, L2.id) > 0, 'active partner keeps the item')
 Runs.endRun(L2, 'failed', 'quit')
+
+-- CRIMSON_ARENA rule 4 against a flag the player wrote himself (SKILL_CHECK V5): a client can set its own bag with
+-- LocalPlayer.state:set('crimsonArena', { active = true }, true). He still leaves the run (rule 1), but only a player
+-- in Crimson-Arena's bucket (inventory stashed) keeps his mission items; in bucket 0 the run takes them back.
+do
+    local realLog = CP.log
+    local orphaned = {}
+    CP.log = function(tag, m, ...)
+        local line = tostring(m):format(...)
+        local cid = line:match('not found on ([^;]+); kept for a later sweep')
+        if cid then orphaned[cid] = (orphaned[cid] or 0) + 1 end
+        return realLog(tag, m, ...)
+    end
+    local function SearchedRun(src, runId, from)
+        for i = from + 1, #inv.searches do
+            local q = inv.searches[i]
+            if q.src == src and type(q.meta) == 'table' and q.meta.cpRun == runId then return true end
+        end
+        return false
+    end
+    local function SweepSearches(src, from)
+        local n = 0
+        for i = from + 1, #inv.searches do
+            local q = inv.searches[i]
+            if q.src == src and type(q.meta) == 'table' and q.meta.cpItem == true then n = n + 1 end
+        end
+        return n
+    end
+
+    -- (a) the flag in bucket 0: items taken back, no orphan
+    H.reset()
+    local VA = Runs.create(
+        { mission = mission, locationIndex = 1, missionType = 'patrol', members = { O[3] }, leaderSrc = 3 })
+    H.ok(HeldBy(3, VA.id) > 0, 'V5: the officer holds the mission item')
+    local from = #inv.searches
+    arena[3] = true
+    H.advance(1000)
+    H.eq(VA.participants[3].endReason, 'quit', 'V5 bucket 0: the flag still takes him out of the run')
+    H.ok(SearchedRun(3, VA.id, from), 'V5 bucket 0: RemoveSlots searches his inventory for the run\'s items')
+    H.eq(HeldBy(3, VA.id), 0, 'V5 bucket 0: the run takes its item back')
+    H.eq(orphaned.CIT3, nil, 'V5 bucket 0: no orphan is recorded for him')
+    arena[3] = nil
+
+    -- (b) a real match (bucket 4210): items kept, an orphan recorded
+    H.reset()
+    local VB = Runs.create(
+        { mission = mission, locationIndex = 1, missionType = 'patrol', members = { O[3] }, leaderSrc = 3 })
+    from = #inv.searches
+    arena[3], bucket[3] = true, 4210
+    H.advance(1000)
+    H.eq(VB.participants[3].endReason, 'quit', 'V5 bucket 4210: he leaves the run')
+    H.eq(SearchedRun(3, VB.id, from), false, 'V5 bucket 4210: his (stashed) inventory is not searched')
+    H.ok(HeldBy(3, VB.id) > 0, 'V5 bucket 4210: the item is kept')
+    H.eq(orphaned.CIT3, 1, 'V5 bucket 4210: an orphan is recorded for a later sweep')
+
+    -- (c) the sweep: none while he is in the match; flagged in bucket 0 it sweeps
+    from = #inv.searches
+    listeners.loaded(3)
+    H.advance(5000)
+    H.eq(SweepSearches(3, from), 0, 'V5 sweep in bucket 4210: SweepPlayer returns before any search')
+    H.ok(HeldBy(3, VB.id) > 0, 'V5 sweep in bucket 4210: the item stays')
+    bucket[3] = nil
+    from = #inv.searches
+    listeners.loaded(3)
+    H.advance(5000)
+    H.ok(SweepSearches(3, from) > 0, 'V5 sweep with the flag in bucket 0: SweepPlayer searches his cpItem slots')
+    H.eq(HeldBy(3, VB.id), 0, 'V5 sweep with the flag in bucket 0: the orphaned item is taken back')
+    arena[3] = nil
+    CP.log = realLog
+end
 
 -- ============================================================================
 --                                    REVIEW

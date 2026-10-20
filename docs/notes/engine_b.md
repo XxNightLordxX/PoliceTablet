@@ -26,8 +26,10 @@ Files: `Crimson-Police/modules/runs/server.lua`, `Crimson-Police/modules/runs/cl
 - Mission items are given at accept with metadata `{ cpRun = run.id, cpItem = true }`, never to an in-arena
   player; removal is by slot (`Search(src, 'slots', name, { cpRun })` then `RemoveItem(..., slot)`). Items not
   found (offline, arena stash, full inventory) go on an orphan list by citizenid, swept on player load (5 s
-  after), 10 s after `CP.Alerts.foreignClearedAt[src]`, and every 60 s. The load sweep and a sweep 15 s after
-  resource start also remove leftovers of any mission item name (`metadata.cpItem` whose `cpRun` is not live).
+  after), 10 s after `CP.Alerts.foreignClearedAt[src]`, and every 60 s. Removal and sweeps skip a player only
+  in a real Arena match (`InArena(src, 'match')`: the flag and a routing bucket other than 0); a flag in bucket 0
+  is client-writable and does not keep the items. The load sweep and a sweep 15 s after resource start also
+  remove leftovers of any mission item name (`metadata.cpItem` whose `cpRun` is not live).
 - `client:start` data also carries `timeLimit`; `mission` is sent without `locations` (the drawn one is
   `location`).
 - Manhunt's start is "the 600 m search circle, shown on the map when the type is accepted": the runs client shows

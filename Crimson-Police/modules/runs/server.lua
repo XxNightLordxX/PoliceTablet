@@ -1931,9 +1931,16 @@ local function InventoryUp()
     return GetResourceState('ox_inventory') == 'started'
 end
 
-local function InArena(src)
+-- CP.Alerts.inArena: a foreign crimsonArena flag or a routing bucket other than 0. InArena(src, 'match') counts only
+-- a player in a real match, for taking items back: the flag is client-writable, so a player in bucket 0 holds his own
+-- inventory whatever it says (a Crimson-Arena fighter is in its bucket 4210+ with his inventory stashed). Giving items
+-- keeps the plain test. A second argument, not another function: this file is at Lua's 200 locals.
+local function InArena(src, match)
     local ok, res = Call('Alerts', 'inArena', src)
-    return ok and res == true
+    if not (ok and res == true) then return false end
+    if match ~= 'match' then return true end
+    local okB, bucket = pcall(GetPlayerRoutingBucket, src)
+    return not okB or (tonumber(bucket) or 0) ~= 0
 end
 
 local function AddOrphan(citizenid, name)
@@ -2030,7 +2037,7 @@ local function RemoveItems(run, p)
     if not p.items or #p.items == 0 then return end
     local items = p.items
     p.items = {}
-    local online = PlayerOnline(p.src) and InventoryUp() and not InArena(p.src)
+    local online = PlayerOnline(p.src) and InventoryUp() and not InArena(p.src, 'match')
     for _, it in ipairs(items) do
         local removed = 0
         if online then removed = RemoveSlots(p.src, it.name, { cpRun = run.id }) end
@@ -2055,9 +2062,10 @@ local function MissionItemNames()
     return names
 end
 
--- Remove Crimson-Police mission items (metadata.cpItem) of every run the player is not active in.
+-- Remove Crimson-Police mission items (metadata.cpItem) of every run the player is not active in (not while he is in
+-- a real Arena match: his inventory is in Crimson-Arena's stash).
 local function SweepPlayer(src, citizenid)
-    if not PlayerOnline(src) or not InventoryUp() or InArena(src) then return false end
+    if not PlayerOnline(src) or not InventoryUp() or InArena(src, 'match') then return false end
     local names = MissionItemNames()
     local o = citizenid and orphans[citizenid]
     if o then for n in pairs(o.names) do names[n] = true end end
