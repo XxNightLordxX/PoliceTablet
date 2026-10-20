@@ -344,7 +344,8 @@ Players can also bind keys for the tablet. See [8.2](#82-keys).
 - Admins are **not** supervisors by themselves. An admin who also wants the Supervisor button needs a department
   job at or above `supervisorGrade`, on duty.
 - Every check happens on the server. A hidden button is never the only protection.
-- Nobody, admins included, may approve, void or answer a dispute about a run they took part in.
+- Nobody, admins included, may approve, void or answer a dispute about a run they took part in, or one that another
+  character of theirs (any character on the same license) took part in.
 - Officers suspended in Crimson-Police or in sc-dispatch can't open the tablet.
 
 ### 4.2 Admins

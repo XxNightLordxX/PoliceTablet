@@ -391,6 +391,8 @@ end
 --                               LOAD THE MODULES
 -- ============================================================================
 
+-- CP.AdminKit loads before every module (fxmanifest.lua), as in the real resource
+H.load('modules/adminkit/server.lua')
 H.load('modules/access/server.lua')
 H.load('modules/permissions/server.lua')
 H.load('modules/admin/server.lua')
@@ -1796,6 +1798,85 @@ H.eq(rec.suspensions[2].days, 3, 'with its length')
 H.eq(rec.suspensions[2].reason, 'Farming é', 'and its reason')
 H.eq(rec.suspensions[2].actorName, 'Ada Min', 'and who did it')
 H.eq(rec.suspension.suspended, false, 'not suspended now')
+
+-- ============================================================================
+--                     11. THE REVIEWER'S OTHER CHARACTERS
+-- ============================================================================
+-- One player with two characters on one license (Qbox gives 3 per license): sergeant SUP00002 (src 2) and officer
+-- ALT00002. Nobody approves, voids or answers a dispute about a run of any of their own characters; a sergeant on
+-- another license and the console still can.
+
+ResetDb()
+for k in pairs(notifies) do notifies[k] = nil end
+H.clockMs = H.clockMs + 120000
+local LIC_A, LIC_B = 'license:aaaa0000000000000000000000000000000002', 'license:bbbb0000000000000000000000000000000007'
+infos[2].license = LIC_A
+infos[7].license = LIC_B
+H.sql('UPDATE cp_officers SET license = ? WHERE citizenid = ?', { LIC_A, 'SUP00002' })
+H.sql('UPDATE cp_officers SET license = ? WHERE citizenid = ?', { LIC_B, 'SUP00007' })
+-- the officer character's row, written at its last tablet open
+H.sql(
+    'INSERT INTO cp_officers (citizenid, callsign, rank_label, display_name, department, license) VALUES (?, ?, ?, ?, ?, ?)',
+    { 'ALT00002', 'C-8', 'Grade 1', 'Al Alt', 'sast', LIC_A })
+
+local O1 = 'dddddddd-4444-4000-8000-000000000001'
+local altRow = AddRow(
+    { run_uuid = O1, citizenid = 'ALT00002', flagged = 1, flag_reason = 'outside_help', cash_status = 'held' })
+local O2 = 'dddddddd-4444-4000-8000-000000000002'
+local altRow2 = AddRow(
+    { run_uuid = O2, citizenid = 'ALT00002', flagged = 1, flag_reason = 'speed', cash_status = 'held' })
+
+H.eq(Co(CP.AdminKit.selfRun, 2, O1), true, 'a run of the second character on the license is the sergeant\'s own')
+H.eq(Co(CP.AdminKit.selfRun, 7, O1), false, 'it is not the other sergeant\'s')
+local okC, eC = Co(CP.Permissions.canReviewRun, 2, O1)
+H.ok(okC == false and eC == 'err.own_run', 'canReviewRun refuses it')
+H.eq(Co(CP.Permissions.canReviewRun, 7, O1), true, 'and allows the other sergeant')
+
+local released = CountCalls('cashRelease')
+ok, res = Co(CP.Admin.approveFlagged, 2, altRow, 'Backup was called')
+H.ok(ok == false and res == 'err.own_run', 'the sergeant cannot approve the flagged run of their own second character')
+local held = H.sql('SELECT flagged, voided, cash_status FROM cp_mission_runs WHERE id = ?', { altRow })[1]
+H.eq(H.bit(held.flagged), 1, 'the row stays flagged')
+H.eq(held.cash_status, 'held', 'its cash stays held')
+H.eq(CountCalls('cashRelease'), released, 'no cash released')
+ok, res = Act('server:sup:reviewFlagged', 2, { rowId = altRow, decision = 'approve', reason = 'Backup was called' })
+H.eq(res, 'err.own_run', 'nor from the Review Queue')
+ok, res = Co(CP.Admin.voidFlagged, 2, altRow, 'Farming')
+H.ok(ok == false and res == 'err.own_run', 'nor void it')
+ok, res = Act('server:sup:reviewFlagged', 2, { rowId = altRow, decision = 'void', reason = 'Farming' })
+H.eq(res, 'err.own_run', 'nor void it from the Review Queue')
+H.eq(H.bit(H.sql('SELECT voided FROM cp_mission_runs WHERE id = ?', { altRow })[1].voided), 0, 'the row is not voided')
+
+-- admins are held to the same rule
+infos[1].license = LIC_A
+ok, res = Act('server:admin:reviewFlagged', 1, { rowId = altRow, decision = 'approve', reason = 'Checked' })
+H.eq(res, 'err.own_run', 'an admin on the same license cannot approve it either')
+infos[1].license = nil
+
+-- the officer character disputes the row, then the player comes back as the sergeant
+AddPlayer(8, 'ALT00002', 'Al Alt', 'sast', 1, true, false)
+infos[8].license = LIC_A
+H.clockMs = H.clockMs + 21000
+ok, res = Act('server:dispute', 8, { rowId = altRow, reason = 'My partner called for backup' })
+H.eq(ok, true, 'the officer character disputes the flagged row')
+local altDispute = res and res.disputeId
+infos[8], H.players[8] = nil, nil
+ok, res = Act('server:sup:handleDispute', 2,
+    { disputeId = altDispute, decision = 'approve', reason = 'Backup was called' })
+H.eq(res, 'err.own_run', 'the sergeant cannot answer the dispute of their own second character')
+H.eq(H.sql('SELECT status FROM cp_disputes WHERE id = ?', { altDispute })[1].status, 'open', 'the dispute stays open')
+H.eq(CountCalls('cashRelease'), released, 'still no cash released')
+
+-- control: a sergeant on another license, and the console
+ok, res = Act('server:sup:handleDispute', 7,
+    { disputeId = altDispute, decision = 'approve', reason = 'Backup confirmed' })
+H.eq(ok, true, 'a sergeant on another license answers the dispute')
+H.eq(H.bit(H.sql('SELECT flagged FROM cp_mission_runs WHERE id = ?', { altRow })[1].flagged), 0, 'the row is approved')
+H.eq((LastCall('cashRelease') or {})[1], altRow, 'and its held cash is released')
+ok, res = Co(CP.Admin.approveFlagged, 0, altRow2, 'Checked from the console')
+H.eq(ok, true, 'the console approves a run of any character')
+H.eq((LastCall('cashRelease') or {})[1], altRow2, 'its held cash is released')
+infos[2].license, infos[7].license = nil, nil
 
 -- ============================================================================
 --         9. EVERY LOCALE KEY USED BY THE LUA FILES EXISTS IN THE PART

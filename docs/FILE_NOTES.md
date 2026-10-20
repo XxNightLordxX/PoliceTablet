@@ -1158,9 +1158,9 @@ getOfficer, isSupervisor, role, recheck, isSuspended, suspend and refreshOfficer
         flagged, else err.conflict), CP.Scoring.onRowVoided,
         cash untouched (held cash is forfeited by CP.Cash after the dispute window; a paid run is not
         clawed back), CP.AntiCheat.onVoided for mission rows, invalidate. Reason required. Reviewers who
-        took part are refused (CP.Permissions.canReviewRun, plus a participant still on the live run who
-        has no row yet: err.own_run); supervisors only for runs involving their department
-        (err.other_department). Texts are clipped by characters, never inside a UTF-8 sequence.
+        took part, or any character of their licenses, are refused (CP.Permissions.canReviewRun, plus a
+        participant still on the live run who has no row yet: err.own_run); supervisors only for runs
+        involving their department (err.other_department). Texts are clipped by characters, never inside a UTF-8 sequence.
         opts (approveFlagged, used by CP.Disputes): { skipPermission = true, noAudit = true, quiet = true (no toast) }
     CP.Admin.forceRecall(src, runId, targetSrc, reason) -> ok, data|errKey
         never on a run the caller is or was on (err.recall_own_run; test runs excepted); a target who left
@@ -2615,8 +2615,10 @@ Public API (docs/ARCHITECTURE.md §5.3)
   CP.Permissions.tookPart(citizenid, runUuid) -> boolean  any cp_mission_runs row of that run for that citizenid
   CP.Permissions.canReviewRun(src, runUuid) -> boolean, errKey   false with err.own_run when the reviewer
       took part: a cp_mission_runs row of that run (tookPart), or a participant entry (active or left) of
-      that run while it is still live in CP.Runs (a partner who is still on the run has no row yet). The
-      console and players without a character can review.
+      that run while it is still live in CP.Runs (a partner who is still on the run has no row yet). Any
+      character of the reviewer's licenses counts too (CP.AdminKit.selfRun: one cp_officers query per
+      review action). The console can review; a player without a character can review unless selfRun
+      finds one of their characters on the run.
 can, actionsFor, tookPart and canReviewRun may yield (database): call them from a handler or thread.
 ```
 

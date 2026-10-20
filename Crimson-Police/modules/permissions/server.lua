@@ -114,6 +114,8 @@ function P.canReviewRun(src, runUuid)
     local n = tonumber(src)
     if n == 0 then return true end
     if not n or n < 0 then return false, 'err.no_permission' end
+    -- any character of the reviewer's licenses (live or archived rows, or still on the run) is "own" too
+    if CP.AdminKit and CP.AdminKit.selfRun and CP.AdminKit.selfRun(n, runUuid) then return false, 'err.own_run' end
     local info = CP.Qbx and CP.Qbx.getInfo and CP.Qbx.getInfo(n)
     if not info then return true end
     if InLiveRun(info.citizenid, runUuid) or P.tookPart(info.citizenid, runUuid) then return false, 'err.own_run' end

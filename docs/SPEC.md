@@ -4205,7 +4205,7 @@ No client message can award points or cash directly. The server re-checks every 
 | Staying on a mission during a real call | Responding to, or being assigned, a real call ends the run automatically; supervisors can also force recall |
 | Payout changed mid-run | The base payout is locked at accept; the tier is set at the start and can only go down |
 | Supervisor payout abuse | Only 50–200% of the type's config payout, at most once per 30 minutes per type, with a reason; every change is audited and posted to the audit webhook; admin-set types are locked |
-| Reviewing your own runs | Your own runs never appear in your Review Queue, and the server refuses any approval, void or dispute answer by a participant of that run |
+| Reviewing your own runs | Your own runs never appear in your Review Queue, and the server refuses any approval, void or dispute answer by a participant of that run or by another character of the same player (any character of their licenses) |
 | Easy custom missions built to farm | Allowed lists, minimum objective times, bonus caps, an optional test before publishing (required for supervisors only with Config.Builder.requireTestToPublish), and neutral star multipliers by default; every publish is posted to the builder webhook, and admins can archive or roll back |
 | Double cash payments | One payment per participant per run: the row is claimed (paying) before any money moves, and a row with a final status is never paid again, and the Renewed-Banking entry carries the transaction id CP-<run_uuid>-<citizenid> |
 | Hand-editing a payout into an exported Lua file | Ignored, with a console warning; payouts only come from the Payouts screens |
@@ -4255,7 +4255,7 @@ Flagged runs are held off the leaderboards, and their cash is held, until a supe
 
 ## Supervisor & admin actions
 
-Supervisors work from the Supervisor UI and admins from the Admin UI. Admins can always do every action marked Admin below. Config.Permissions.supervisor switches the supervisor actions on or off; by default all are on except rolling back missions, breaking edit locks and editing other people's missions. Nobody can approve, void or answer a dispute about a run they took part in. Actions that list a /CrimsonPoliceAdmin subcommand can also be run from the server console.
+Supervisors work from the Supervisor UI and admins from the Admin UI. Admins can always do every action marked Admin below. Config.Permissions.supervisor switches the supervisor actions on or off; by default all are on except rolling back missions, breaking edit locks and editing other people's missions. Nobody can approve, void or answer a dispute about a run they, or another character on their license, took part in. Actions that list a /CrimsonPoliceAdmin subcommand can also be run from the server console.
 
 | Action | Who | Where | What it does |
 |---|---|---|---|
@@ -4423,7 +4423,7 @@ Acceptance checks
 
 - ☐ Supervisors can change a type's payout only when no admin has set it, only within 50–200% of its config payout, at most once per 30 minutes per type and with a reason; admin-set type and mission payouts survive restarts, season resets, re-publishes and reloads until an admin changes or clears them
 
-- ☐ Nobody can approve, void or answer a dispute about a run they took part in
+- ☐ Nobody can approve, void or answer a dispute about a run they took part in, nor a run of another of their characters (same license)
 
 - ☐ Completed runs pay each participant base payout × tier × modifier into the bank with a Renewed-Banking entry; Failed and Abandoned results pay nothing
 

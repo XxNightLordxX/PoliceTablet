@@ -741,7 +741,8 @@ Full admin control, System (P5):
   `editBuiltins`, `missionAdmin`, `boardsAdmin`, `payments`, `rewardsAdmin`, `deptFunds`, `departmentsAdmin`,
   `storageAdmin`, `playerSupport`, `recordMove`, `cleanup` (also listed in modules/admin's ADMIN_ONLY mirror for the
   Permissions screen). `isAdminOnly(action) -> bool`, `adminOnlyKeys() -> { key }` (the 29, in order).
-- `canReviewRun(src, runUuid) -> boolean, errKey` — false when the reviewer took part (`err.own_run`)
+- `canReviewRun(src, runUuid) -> boolean, errKey` — false when the reviewer, or any character of their licenses
+  (`CP.AdminKit.selfRun`), took part (`err.own_run`)
 
 ### 5.4 CP.Tablet — modules/tablet (owns the NUI)
 Server:
