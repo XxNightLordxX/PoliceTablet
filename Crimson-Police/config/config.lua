@@ -445,6 +445,60 @@ Config.Route = {
 }
 
 -- ============================================================================
+--                                 MAP MARKERS
+-- ============================================================================
+-- How the objective your officers are on shows on their map: one blip (for a fight or a search area, a circle and its
+-- centre) with one GPS line to it. While an officer still drives to the start, or has set a waypoint of his own, that
+-- is his only line. Sprite and colour ids: docs.fivem.net/docs/game-references/blips/
+Config.Markers = {
+    enabled = true,              -- false = no objective blip or line from Crimson-Police (the missions' own blips stay)
+    route = true,                -- false = the objective blip shows, but no GPS line to it
+    routeColour = 5,             -- colour of the GPS line to an objective (5 = yellow, 1 = red, 3 = blue)
+    routeOffWithin = 40.0,       -- metres: the line turns off this close to the objective (inside a circle: off)
+    trackEvery = 2,              -- seconds between the positions the server sends of moving objectives (cars, people)
+    farTargets = true,           -- true = a car or suspect too far away for your game shows where the server says
+    shortRange = false,          -- false = objective blips show at the edge of the radar however far away they are
+    flashSeconds = 5,            -- seconds a new objective blip flashes (0 = no flash)
+    category = 2,                -- the map legend: 2 = shows the distance to the blip, 1 = no distance
+    areaAlpha = 80,              -- how solid the map circles are: 0 = invisible, 255 = solid
+    startBlip = true,            -- true = the named Mission start blip stays on the map for the whole drive
+    startCircleMin = 200.0,      -- metres: a mission start at least this wide shows as a circle on the map (Manhunt)
+    -- What Radio Silence hides once the officers are at the start: 'area' = a circle or the one objective blip stays,
+    -- without a GPS line and without blips on people and cars; 'none' = every objective blip; 'full' = nothing
+    radioSilence = 'area',
+    -- seconds: with 'area', a 200 m circle shows where a moving suspect or car was, moved this often (0 = off)
+    radioSilenceLastKnown = 0,
+    hudLine = true,              -- true = the HUD shows the objective's name and how far it is
+    objectiveGps = true,         -- true = an Objective GPS button on the tablet puts a waypoint on the objective
+    serviceVehicles = true,      -- true = a prisoner van or tow truck coming to you shows on the map
+    -- How each kind of blip looks: sprite (blip id), colour id and size. Yellow = go here, red = enemy, orange =
+    -- fleeing or needs a follow-up, blue = friendly, green = safe point
+    kinds = {
+        start = { sprite = 162, colour = 5, scale = 1.0 },                      -- the mission start
+        checkpoint = { sprite = 1, colour = 5, scale = 1.0, nextScale = 0.7 },  -- a checkpoint (nextScale: the next)
+        searchArea = { sprite = 162, colour = 5, scale = 0.9 },                 -- the centre of a search area
+        clue = { sprite = 1, colour = 5, scale = 0.7 },                         -- a clue in a search area
+        fightArea = { sprite = 84, colour = 1, scale = 0.9 },                   -- the centre of a fight
+        hostile = { sprite = 1, colour = 1, scale = 0.6, bossScale = 0.9 },     -- an armed hostile (bossScale: a boss)
+        suspect = { sprite = 1, colour = 1, scale = 0.7 },                      -- a suspect: stopped, armed or gave up
+        fleeing = { sprite = 1, colour = 17, scale = 0.8 },                     -- a suspect on the run
+        vehicle = { sprite = 225, colour = 1, scale = 0.9 },                    -- a suspect's car
+        contact = { sprite = 280, colour = 5, scale = 0.7 },                    -- a person to talk to
+        contactVehicle = { sprite = 225, colour = 5, scale = 0.7 },             -- a car to check
+        escort = { sprite = 67, colour = 3, scale = 1.0 },                      -- the vehicle you escort
+        destination = { sprite = 38, colour = 5, scale = 0.9 },                 -- where the escort goes
+        hostage = { sprite = 280, colour = 3, scale = 0.8 },                    -- a hostage
+        safePoint = { sprite = 38, colour = 2, scale = 0.9 },                   -- where the hostages go
+        scene = { sprite = 162, colour = 5, scale = 0.9 },                      -- a scene to work
+        point = { sprite = 1, colour = 5, scale = 0.8, followUpColour = 17 },   -- a point to check (or follow up)
+        device = { sprite = 1, colour = 5, scale = 0.8, setbackColour = 17 },   -- a device to work (or one set back)
+        prisonerVan = { sprite = 285, colour = 3, scale = 0.8 },                -- a prisoner van coming to you
+        towTruck = { sprite = 68, colour = 3, scale = 0.8 },                    -- a tow truck coming to you
+        objective = { sprite = 162, colour = 5, scale = 0.9 },                  -- any other objective
+    },
+}
+
+-- ============================================================================
 --                                  REAL CALLS
 -- ============================================================================
 

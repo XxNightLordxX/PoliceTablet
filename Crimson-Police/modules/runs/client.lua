@@ -10,9 +10,7 @@ local VEHICLE_EVERY = 5           -- seconds between vehicle telemetry samples w
 local ACTIONS = { prepare = true, start = true, update = true, stop = true, adopt = true }
 local RUN_OVER = joaat('WEAPON_RUN_OVER_BY_CAR')
 local RAMMED = joaat('WEAPON_RAMMED_BY_CAR')
-local START_CIRCLE_MIN = 200.0    -- a start this wide is a search circle (Manhunt): shown on the map at accept
 local START_CIRCLE_COLOUR = 1
-local START_CIRCLE_ALPHA = 90
 
 local current = nil
 local token = 0
@@ -202,15 +200,24 @@ end
 -- draws its own search circle); a local radius blip, removed at every cleanup.
 local function ShowStartCircle(run, start)
     if type(start) ~= 'table' then return end
+    local markers = type(Config.Markers) == 'table' and Config.Markers or {}
     local radius = tonumber(start.radius)
-    if not radius or radius < START_CIRCLE_MIN then return end
+    if not radius or radius < (tonumber(markers.startCircleMin) or 200.0) then return end
     local x, y, z = CP.U.xyz(start.coords)
     if not x then return end
     local blip = AddBlipForRadius(x + 0.0, y + 0.0, (z or 0.0) + 0.0, radius + 0.0)
     if not blip or blip == 0 then return end
     SetBlipColour(blip, START_CIRCLE_COLOUR)
-    SetBlipAlpha(blip, START_CIRCLE_ALPHA)
+    SetBlipAlpha(blip, math.tointeger(tonumber(markers.areaAlpha) or 80) or 80)
     run.startCircle = blip
+end
+
+-- The objective pointer on the map (modules/markers): set when an objective starts, moved by client:marker, gone at
+-- its stop and at every cleanup.
+local function MarkerCall(fn, ...)
+    if not (CP.Markers and CP.Markers[fn]) then return end
+    local ok, err = pcall(CP.Markers[fn], ...)
+    if not ok then CP.err(TAG, 'CP.Markers.%s failed: %s', fn, tostring(err)) end
 end
 
 local function HideStartCircle(run)
@@ -255,6 +262,7 @@ local function Cleanup()
     current = nil
     token = token + 1
     HideStartCircle(run)
+    MarkerCall('clear') -- before the blocks remove the blips they handed over: their GPS line goes off first
     StopAllBlocks(run)
     RouteStop()
     CombatStop()
@@ -493,6 +501,7 @@ RegisterNetEvent(CP.e('client:objective'), function(runId, index, msg)
         b.started = true
         Hud({ detail = false })
         CallBlock(index, 'start')
+        MarkerCall('set', runId, index, Resolve(msg.marker), b.ctx)
         ReportArea(current, index, msg.area)
     elseif action == 'update' then
         if not b.stopped then CallBlock(index, 'update', Resolve(msg.data)) end
@@ -508,10 +517,21 @@ RegisterNetEvent(CP.e('client:objective'), function(runId, index, msg)
     elseif action == 'stop' then
         if not b.stopped then
             b.stopped = true
+            MarkerCall('clear', runId, index)
             CallBlock(index, 'stop')
             if index == current.objectiveIndex then Hud({ detail = false }) end
         end
     end
+end)
+
+-- New positions or a new shape of the current objective's pointer (the server's marker, ARCHITECTURE §5.44).
+RegisterNetEvent(CP.e('client:marker'), function(runId, index, marker)
+    if not Matches(runId) then return end
+    index = math.tointeger(tonumber(index) or -1)
+    if not index or index ~= current.objectiveIndex then return end
+    local b = current.blocks[index]
+    if not b or not b.started or b.stopped then return end
+    MarkerCall('update', runId, index, Resolve(marker), b.ctx)
 end)
 
 RegisterNetEvent(CP.e('client:hud'), function(runId, patch)

@@ -170,6 +170,9 @@ boards, rewards, access).
 
 `modules/npccombat/` (client, §5.42): the run-scoped damage settings of an officer's game (Config.NpcCombat).
 
+`modules/markers/` (client, §5.44): the current objective's pointer on the officer's map and its one GPS line
+(Config.Markers).
+
 `modules/spawn/` (client, server, §5.43): what an officer's game can see of the spawn director's points
 (Config.Spawning.preferHidden), the ground probe of one point (Config.Spawning.ground), the placer that puts a
 new mission entity on the ground when the server asks (Config.Spawning.place), and the server's side of it: the ask
@@ -2457,6 +2460,53 @@ What this officer's game can see of the points the server's spawn director may u
   a live entity of the run. `CP.Spawn.holding(netId) -> boolean` (PLAN S12): true while an ask for that entity is open
   (it waits frozen; field_contact walks a returning driver or a thief to his car only after that).
 
+### 5.44 CP.Markers — modules/markers (client)
+
+The current objective on this officer's map (Config.Markers, the owner's request of 2026-10-19: "ensure all objectives
+as they come up mark on the map"; PLAN M1, BLIPS_FINAL R1-R10). One pointer per officer: a blip, or a circle with its
+centre, and at most one GPS line. modules/runs/client.lua drives it: `client:objective` `start` → `set(runId, index,
+msg.marker, ctx)` after the block's own `start` (ctx = the block's client ctx, for Radio Silence), `client:marker` →
+`update` (only for the current, started objective of this run), `stop` → `clear(runId, index)` before the block's
+`stop`, and every `Cleanup` (run end, leaving, a new start, resource stop) → `clear()` before the blocks stop.
+- The marker (from the server, M2 on; nil = none): `{ kind = 'point'|'area'|'targets', look, label, key, number,
+  coords = { x, y, z }, radius (area), route = true|false|'block', targets = { { key, netId, x, y, z, look, label,
+  variant, number } } }`. `look` is a `Config.Markers.kinds` key (default `'objective'`, an area `'searchArea'`);
+  `variant` `'boss'|'next'|'followUp'|'setback'` picks the kind's bossScale, nextScale, followUpColour or setbackColour.
+  `route = false`: no line; `'block'`: the block keeps its own line (checkpoint_route), CP.Markers draws none. At most 32
+  targets.
+- One icon per target (R1): `adopt(key, blip)` — a block hands over the blip it draws for target `key` (a net id or a
+  point index, the marker's `key`): that blip is the pointer, CP.Markers draws no icon of its own for it and only sets
+  its line, `SetBlipPriority` and one flash. `release(key)` — the block takes it back before removing it: its line goes
+  off and CP.Markers draws the target again. An adopted blip that no longer exists falls back the same way at the next
+  check. `clear` hands every adopted blip back with its line off. CP.Markers draws its own icon only for what no block
+  draws: a fight area, a fallback anchor, a target not streamed here, and service vehicles.
+- Own icons: a point or an area's centre `AddBlipForCoord` (an area adds `AddBlipForRadius`, colour of its kind,
+  alpha `areaAlpha`); a target `AddBlipForEntity` while `NetworkDoesNetworkIdExist(netId)` and the entity exists here,
+  else (`farTargets`) `AddBlipForCoord` at the server's position, moved with `SetBlipCoords` on every update, swapped
+  for the entity blip once it streams in and back once it streams out (R7). Unchanged elements keep their blip, line
+  and flash (R8); a new look, label or number redraws the blip.
+- `style(blip, kind, label, opts)` — the look of `kinds[kind]` and what every objective blip gets (R5):
+  `SetBlipSprite/Colour/Scale`, `SetBlipAsShortRange(shortRange)`, `SetBlipCategory(category)`, `ShowNumberOnBlip`
+  for `opts.number`, the name (`BeginTextCommandSetBlipName('STRING')`). The pointer also gets `SetBlipPriority(12)` and
+  flashes once, `SetBlipFlashes` + `SetBlipFlashTimer(flashSeconds * 1000)` (none at 0).
+- The line (R2, R6): on ONE blip, the point or centre, or this officer's nearest target (moved only when another is
+  25 % closer), `SetBlipRoute` + `SetBlipRouteColour(routeColour)`; off within `routeOffWithin` of a point or target
+  and inside an area's radius. `canRoute(ctx)` — false while `enabled` or `route` is off, under Radio Silence, while
+  `CP.Route.current()` exists and has not arrived (CP.Route samples the start's line from the blip-route slot first,
+  §5.12), and while the officer has a waypoint (`IsWaypointActive`). Every blip CP.Markers removes or hands back loses
+  its line first (R10).
+- `hidden(ctx, kind) -> boolean` (R9, used by the blocks from M8): Radio Silence (`ctx.radioSilence`; nil ctx = the
+  current pointer's) by `Config.Markers.radioSilence`: `'none'` hides everything but `start`, `prisonerVan` and
+  `towTruck`; `'area'` (shipped) hides `'route'` and every kind but the circles and single points (start, checkpoint,
+  searchArea, fightArea, destination, safePoint, scene, point, device, objective and the service vehicles); `'full'`
+  hides nothing. Under `'area'` with `radioSilenceLastKnown` > 0 a hidden moving target gets a 200 m circle
+  (`markers.last_known`) where it was, moved every that many seconds.
+- `service(key, spec)` — a prisoner van or tow truck coming to this officer: `spec = { netId, coords, kind =
+  'prisonerVan'|'towTruck', label }`, nil removes it. Shown in every Radio Silence mode while `serviceVehicles` is on,
+  never routed, removed at resource stop.
+- One check loop (1 s) only while a pointer element or a service vehicle is on the map, never two (it ends by itself
+  after `clear`): streaming swaps, adopted blips that went, the nearest target and the line. No entity pool scans.
+
 ## 6. Cross-cutting conventions
 
 ### 6.1 Entities and NPCs
@@ -2682,8 +2732,9 @@ Rules for blocks:
 |---|---|---|
 | `client:start` | runId, data `{ missionId, mission, locationIndex, location, start = { coords, radius }, expectedTier, seed, host, test, modifier, participants, startRoute = bool, startTimeout, isBoss }` (seed = a client seed, the same for every participant and unrelated to `run.seed`, so no client can replay the server's rolls) | runs |
 | `client:inProgress` | runId, `{ tier, payTier, objectives = <scaled list>, timeLimit, remaining }` | runs |
-| `client:objective` | runId, index, `{ action = 'prepare'|'start'|'update'|'stop', data }` | runs |
+| `client:objective` | runId, index, `{ action = 'prepare'|'start'|'update'|'stop', data, marker }` (`marker` with `start`: the objective's pointer, §5.44) | runs |
 | `client:hud` | runId, patch | runs |
+| `client:marker` | runId, index, marker (§5.44: the current objective's pointer, new positions or a new shape; ignored unless index is the current, started objective of this run) | runs |
 | `client:tierChanged` | runId, tierName, payTierName | runs |
 | `client:hostChanged` | runId, hostSrc | runs |
 | `client:participants` | runId, list `{ src, name, callsign, departmentShort, status, arrived }` | runs |

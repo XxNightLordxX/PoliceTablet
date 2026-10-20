@@ -214,6 +214,7 @@ local CONFIG_SECTIONS = {
     'Limits',
     'Spawning',
     'Route',
+    'Markers',
     'Calls',
     'Alerts',
     'Downed',

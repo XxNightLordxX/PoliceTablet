@@ -646,6 +646,40 @@ do
     H.ok((Check('Profile.bannedWordsFile', false)), 'no banned-words file')
 end
 
+-- Config.Markers (PLAN M1, BLIPS_FINAL section 4): its own section, each comment alone, the limits, read live.
+do
+    local function E(p) return S.entry(p) or {} end
+    H.ok(E('Markers.enabled').section ~= E('Route.reportEvery').section, 'Map markers is a section of its own')
+    H.eq(E('Markers.routeColour').desc, 'colour of the GPS line to an objective (5 = yellow, 1 = red, 3 = blue)',
+        'the line colour')
+    H.ok(E('Markers.radioSilence').desc:find('\'area\' = a circle or the one objective blip stays', 1, true) ~= nil,
+        'Radio Silence says what each mode hides')
+    H.eq(E('Markers.radioSilence').kind, 'enum', 'Radio Silence is a pick of three')
+    H.ok((Check('Markers.radioSilence', 'none')), 'none: hide everything, as before')
+    Err('Markers.radioSilence', 'loud', 'err.setting_option', 'only none, area or full')
+    H.ok((Check('Markers.routeColour', 85)), 'colour 85')
+    Err('Markers.routeColour', 86, 'err.setting_range', 'blip colours stop at 85')
+    Err('Markers.trackEvery', 0, 'err.setting_range', 'positions at least every second')
+    Err('Markers.trackEvery', 11, 'err.setting_range', 'and at most every 10 s')
+    Err('Markers.routeOffWithin', 201, 'err.setting_range', 'the line turns off within 200 m at most')
+    Err('Markers.flashSeconds', 31, 'err.setting_range', 'a flash of 30 s at most')
+    Err('Markers.category', 3, 'err.setting_range', 'legend category 1 or 2')
+    Err('Markers.areaAlpha', 256, 'err.setting_range', 'alpha 0-255')
+    Err('Markers.startCircleMin', 40, 'err.setting_range', 'a start circle from 50 m')
+    Err('Markers.radioSilenceLastKnown', 61, 'err.setting_range', 'a last-known circle moved at most every 60 s')
+    H.ok((Check('Markers.kinds.fightArea.sprite', 310)), 'any sprite of the blip list')
+    Err('Markers.kinds.fightArea.sprite', 966, 'err.setting_range', 'sprites stop at 965')
+    Err('Markers.kinds.fightArea.sprite', 84.5, 'err.setting_whole', 'a sprite is a whole number')
+    Err('Markers.kinds.hostile.bossScale', 2.5, 'err.setting_range', 'a size of 2.0 at most')
+    Err('Markers.kinds.point.followUpColour', 90, 'err.setting_range', 'the follow-up colour is a blip colour')
+    local escort = nil
+    for _, sec in ipairs(S._schema().sections) do
+        for _, g in ipairs(sec.groups) do if g.path == 'Markers.kinds.escort' then escort = g end end
+    end
+    H.eq((escort or {}).desc, 'the vehicle you escort', 'each kind says what it is')
+    H.ok(not E('Markers.enabled').reload and not E('Markers.enabled').restart, 'read live: no reload, no restart')
+end
+
 -- ============================================================================
 --                    SAVING, CONFIG, CLIENTS AND THE AUDIT
 -- ============================================================================
