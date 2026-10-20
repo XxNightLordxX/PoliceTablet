@@ -543,8 +543,8 @@ function Custody.probableCause(run, vehNetId)
     if Lawful(veh, 'plain_view') then add('plain_view') end
     if Lawful(veh, 'stolen') then add('stolen') end
     for _, o in ipairs(Occupants(b, veh.netId)) do
-        for key, source in pairs(CAUSE_FACTS) do
-            if key ~= 'plain_view' and key ~= 'stolen' and Lawful(o, key) then add(source) end
+        for key, causeName in pairs(CAUSE_FACTS) do
+            if key ~= 'plain_view' and key ~= 'stolen' and Lawful(o, key) then add(causeName) end
         end
         if o.decided and o.decided.choice == 'arrest' then add('arrest') end
     end

@@ -3020,8 +3020,8 @@ function Settings.checkDepartments(path, clean, ctx, none)
             end
         end
     end
-    local source = Effective('Cash.source')
-    if source == 'society' and CP.Banking and CP.Banking.societyBalance then
+    local cashSource = Effective('Cash.source')
+    if cashSource == 'society' and CP.Banking and CP.Banking.societyBalance then
         for key, d in pairs(after) do
             local acc = type(d) == 'table' and d.societyAccount or nil
             local was = type(before[key]) == 'table' and before[key].societyAccount or nil

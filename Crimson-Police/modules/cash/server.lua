@@ -824,13 +824,13 @@ function Cash.payAgain(rowId, audit)
     local c = CashOf(bd)
     if c.again ~= nil then return false, 'err.state_changed' end
     if c.step == 'added' then return false, 'err.payment_arrived' end
-    local source = c.source
-    if source == nil then
+    local paySource = c.source
+    if paySource == nil then
         -- a payment from before the step markers: only safe when nothing was taken from a department
         if Config.Cash and Config.Cash.source == 'society' then return false, 'err.payment_step_unknown' end
-        source = 'server'
+        paySource = 'server'
     end
-    local needWithdraw = source == 'society' and c.step ~= 'withdrawn'
+    local needWithdraw = paySource == 'society' and c.step ~= 'withdrawn'
     local amount = PayAmountOf(bd) or AmountOf(row, bd)
     if amount <= 0 then return false, 'err.nothing_to_pay' end
     if not OnlineOf(row.citizenid) then return false, 'err.officer_offline' end

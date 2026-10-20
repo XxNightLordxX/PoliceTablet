@@ -6571,7 +6571,7 @@ do
         end
         local nt = #targets
         local rt = C.rt
-        local source -- function() -> list of value arrays, count, types
+        local rowSource -- function() -> list of value arrays, count, types
         if ast.values then
             -- MariaDB lets VALUES read columns of the row being built (not used by Crimson-Police): a column of the
             -- table is refused as unsupported here, any other name is MariaDB's unknown column in 'VALUES'
@@ -6603,7 +6603,7 @@ do
                 coercers[r] = {}
                 for i = 1, nt do coercers[r][i] = Coercer(t, t.cols[targets[i]], rowTypes[r][i]) end
             end
-            source = function()
+            rowSource = function()
                 local f = {}
                 local out = {}
                 for r = 1, #rowsF do
@@ -6619,7 +6619,7 @@ do
             if #plan.cols ~= nt then Fail('Column count doesn\'t match value count at row 1') end
             local co = {}
             for i = 1, nt do co[i] = Coercer(t, t.cols[targets[i]], plan.types[i]) end
-            source = function()
+            rowSource = function()
                 local rows, n = plan.run(nil, nil)
                 local cs = {}
                 for r = 1, n do cs[r] = co end
@@ -6687,7 +6687,7 @@ do
                 STORE.n = STORE.n + #noDefault
             end
             local now = rt.now
-            local rows, n, coercersByRow = source()
+            local rows, n, coercersByRow = rowSource()
             local affected, inserted, dups, records = 0, 0, 0, 0
             local copied, touched = 0, 0
             local firstId, lastAc

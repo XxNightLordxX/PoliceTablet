@@ -3604,20 +3604,20 @@ CP.Net.action('server:builder:duplicate', function(src, payload)
     if not actor then return false, perms end
     if type(payload) ~= 'table' or not ValidId(payload.id) then return false, 'err.invalid_payload' end
     if not CP.Net.rateOk(src, 'builder:create', 1, 2000) then return false, 'err.rate_limited' end
-    local source
+    local srcDef
     local row = FetchRow(payload.id)
     -- a built-in is always copied as it plays (with its override, if any)
     if row and row.overridesBuiltin then row = nil end
     if row then
         -- any custom mission the actor can see may be copied into an own draft (builderEdit, checked by begin)
         if not VisibleTo(row, actor, perms) then return false, 'err.builder_unknown_mission' end
-        source = U.deepcopy(CurrentDef(row) or {})
-        source._file = nil
+        srcDef = U.deepcopy(CurrentDef(row) or {})
+        srcDef._file = nil
     else
-        source = BuiltinDefinition(payload.id)
-        if not source then return false, 'err.builder_unknown_mission' end
+        srcDef = BuiltinDefinition(payload.id)
+        if not srcDef then return false, 'err.builder_unknown_mission' end
     end
-    local copy = B.sanitize(source, nil)
+    local copy = B.sanitize(srcDef, nil)
     if not copy then return false, 'err.builder_unknown_mission' end
     -- custom missions only use the standard bonus list
     for _, listKey in ipairs({ 'bonuses', 'penalties' }) do
@@ -3626,7 +3626,7 @@ CP.Net.action('server:builder:duplicate', function(src, payload)
         end)
     end
     B.customBonusFields(copy)
-    local label = ClipText(L('builder.copy_label', { label = tostring(source.label or payload.id) }), LIMITS.label)
+    local label = ClipText(L('builder.copy_label', { label = tostring(srcDef.label or payload.id) }), LIMITS.label)
     copy.label = label
     if not (Config.MissionTypes and Config.MissionTypes[copy.type]) then
         copy.type = U.keys(Config.MissionTypes or {})[1]

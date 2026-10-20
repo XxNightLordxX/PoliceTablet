@@ -232,15 +232,15 @@ end
 
 -- The sanitised departments, rebuilt only when Config.Departments is replaced.
 local function Build()
-    local source = Config.Departments
-    if cache.built and cache.source == source then return cache end
+    local deptSource = Config.Departments
+    if cache.built and cache.source == deptSource then return cache end
     local list, byKey, byJob, offByJob = {}, {}, {}, {}
-    if type(source) == 'table' then
+    if type(deptSource) == 'table' then
         local keys = {}
-        for k in pairs(source) do keys[#keys + 1] = k end
+        for k in pairs(deptSource) do keys[#keys + 1] = k end
         table.sort(keys, function(a, b) return tostring(a) < tostring(b) end)
         for _, k in ipairs(keys) do
-            local cfg = source[k]
+            local cfg = deptSource[k]
             if type(k) ~= 'string' or not k:match('^[%w_]+$') or #k > 32 then
                 WarnOnce('key.' .. tostring(k),
                     'Config.Departments key %s must be letters, digits or _ (at most 32); it is ignored', Describe(k))
@@ -265,7 +265,7 @@ local function Build()
     else
         WarnOnce('departments', 'Config.Departments is missing: nobody can use Crimson-Police')
     end
-    cache = { built = true, source = source, list = list, byKey = byKey, byJob = byJob, offByJob = offByJob }
+    cache = { built = true, source = deptSource, list = list, byKey = byKey, byJob = byJob, offByJob = offByJob }
     return cache
 end
 

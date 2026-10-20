@@ -1181,7 +1181,7 @@ if CP.AdminKit and CP.AdminKit.action then
     Kit.callback('admin:getBannedWords', 'officerRecords', function()
         local file = BannedFile()
         local words = {}
-        if file then _, _, words = ReadBannedFile(file) end
+        if file then words = select(3, ReadBannedFile(file)) end
         local extra = {}
         for _, w in ipairs(type(Cfg().bannedWords) == 'table' and Cfg().bannedWords or {}) do
             if type(w) == 'string' then extra[#extra + 1] = w end

@@ -824,11 +824,13 @@ end
 --                            GOALS, LEVELS, SEASONS
 -- ============================================================================
 
-local function SpecRewards(specs, source, key)
+local function SpecRewards(specs, rewardSource, key)
     local list = {}
     for _, spec in ipairs(specs) do
         local g = Guaranteed(spec)
-        if g then list[#list + 1] = { source = source, key = key, item = g.item, count = g.count, value = g.value } end
+        if g then
+            list[#list + 1] = { source = rewardSource, key = key, item = g.item, count = g.count, value = g.value }
+        end
     end
     return list
 end

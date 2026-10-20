@@ -1737,7 +1737,7 @@ end
 
 -- The target gets every migration the source has run (files of this resource, statement by statement, as the
 -- runner does). Returns true, applied or false, errKey, vars.
-local function MigrateTarget(source, target, srcSchema, tgtSchema)
+local function MigrateTarget(fromSide, target, srcSchema, tgtSchema)
     if not srcSchema.tables[MIGRATIONS_TABLE] then return true, 0 end
     local applied = {}
     if tgtSchema.tables[MIGRATIONS_TABLE] then
@@ -1747,7 +1747,7 @@ local function MigrateTarget(source, target, srcSchema, tgtSchema)
         end
     end
     local todo = {}
-    for _, r in ipairs(source.rows('SELECT version, name FROM cp_schema_migrations ORDER BY version')) do
+    for _, r in ipairs(fromSide.rows('SELECT version, name FROM cp_schema_migrations ORDER BY version')) do
         local v = math.tointeger(tonumber(r.version))
         if v and not applied[v] then
             local name = tostring(r.name or '')
@@ -1781,7 +1781,7 @@ end
 
 -- Every row of one table from the source to the target (in pages of STORAGE_PAGE rows along an integer
 -- AUTO_INCREMENT key, else in one read). Returns the rows written.
-local function CopyTable(source, target, sInfo, tInfo)
+local function CopyTable(fromSide, target, sInfo, tInfo)
     local cols, list = {}, {}
     for _, c in ipairs(sInfo.cols) do
         local dst = tInfo.lower[c:lower()]
@@ -1811,7 +1811,7 @@ local function CopyTable(source, target, sInfo, tInfo)
         local key = QuoteName(sInfo.auto)
         local function firstFrom(lo)
             local sql = 'SELECT MIN(' .. key .. ') AS m' .. from
-            local r = lo and source.rows(sql .. ' WHERE ' .. key .. ' >= ?', { lo }) or source.rows(sql)
+            local r = lo and fromSide.rows(sql .. ' WHERE ' .. key .. ' >= ?', { lo }) or fromSide.rows(sql)
             local m = r[1] and r[1].m
             if m == nil then return nil end
             return math.tointeger(tonumber(m))
@@ -1820,7 +1820,7 @@ local function CopyTable(source, target, sInfo, tInfo)
         local page = select .. ' WHERE ' .. key .. ' >= ? AND ' .. key .. ' < ? ORDER BY ' .. key
         local lo = firstFrom(nil)
         while lo do
-            local rows = source.rows(page, { lo, lo + STORAGE_PAGE })
+            local rows = fromSide.rows(page, { lo, lo + STORAGE_PAGE })
             if #rows > 0 then
                 put(rows)
                 lo = lo + STORAGE_PAGE
@@ -1829,7 +1829,7 @@ local function CopyTable(source, target, sInfo, tInfo)
             end
         end
     else
-        put(source.rows(select))
+        put(fromSide.rows(select))
     end
     return written
 end
@@ -1864,17 +1864,17 @@ local function StorageCopy(src, direction, force)
     if not dbSide then return Reply(src, 'error', e1, v1) end
     local filesSideOpen, e2, v2 = OpenFiles(toFiles)
     if not filesSideOpen then return Reply(src, 'error', e2, v2) end
-    local source, target = dbSide, filesSideOpen
-    if not toFiles then source, target = filesSideOpen, dbSide end
+    local fromSide, target = dbSide, filesSideOpen
+    if not toFiles then fromSide, target = filesSideOpen, dbSide end
     local names = {
-        source = SideName(source),
+        source = SideName(fromSide),
         target = SideName(target),
         cmd = CmdName(),
         direction = direction,
         path = filesSideOpen.dir,
     }
 
-    local srcSchema = source.schema()
+    local srcSchema = fromSide.schema()
     local tables = {}
     for _, name in ipairs(srcSchema.order) do
         if name ~= MIGRATIONS_TABLE then tables[#tables + 1] = name end
@@ -1896,7 +1896,7 @@ local function StorageCopy(src, direction, force)
     end
 
     -- 2. the target's tables: the migrations the source has, then every source table and column must be there
-    local okM, applied, mVars = MigrateTarget(source, target, srcSchema, tgtSchema)
+    local okM, applied, mVars = MigrateTarget(fromSide, target, srcSchema, tgtSchema)
     if not okM then return Reply(src, 'error', applied, mVars) end
     -- a database made by txAdmin's recipe is utf8 (utf8mb3): the cp_ tables the copy just made, or ones no
     -- database-mode start has switched yet, refuse every emoji in a name or reason. They are switched to utf8mb4 as
@@ -1942,7 +1942,7 @@ local function StorageCopy(src, direction, force)
             end
             for _, name in ipairs(tables) do
                 failedAt = name
-                local n = CopyTable(source, target, srcSchema.tables[name], tgtSchema.tables[name])
+                local n = CopyTable(fromSide, target, srcSchema.tables[name], tgtSchema.tables[name])
                 copied[#copied + 1] = { name = name, rows = n }
                 total = total + n
             end

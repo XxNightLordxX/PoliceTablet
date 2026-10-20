@@ -401,9 +401,9 @@ function Missions.normalize(def, meta)
     end
     -- Loader fields first: the blocks' validate() reads mission.source (built-in missions are exempt
     -- from the Mission Builder's allowed lists), so it must be set before the guardrails run.
-    local source = meta.source == 'custom' and 'custom' or 'builtin'
-    d.source = source
-    d.version = source == 'custom' and tonumber(meta.version) or nil
+    local kind = meta.source == 'custom' and 'custom' or 'builtin'
+    d.source = kind
+    d.version = kind == 'custom' and tonumber(meta.version) or nil
     d.filePath = meta.filePath
     d.status = meta.status or 'published'
 
@@ -496,7 +496,7 @@ function Missions.normalize(def, meta)
                     tostring(zone.label))
         end
     end
-    local minLocations = source == 'custom' and (tonumber(Config.Builder and Config.Builder.minLocations) or 3)
+    local minLocations = kind == 'custom' and (tonumber(Config.Builder and Config.Builder.minLocations) or 3)
         or (THREE_LOCATIONS_OK[d.id] and 3 or 5)
     if #d.locations < minLocations then
         warn(('has %d location(s); %d or more are expected'):format(#d.locations, minLocations))
@@ -573,7 +573,7 @@ function Missions.normalize(def, meta)
     -- a custom file published before Config.Builder.spawnMargin with armed spawn points inside the start circle plus
     -- the margin: it still loads (the spawn director keeps the fight away from the officers at run time); a new
     -- publish refuses them (CP.Builder.validate)
-    if source == 'custom' and d.status == 'published' and CP.Builder and CP.Builder.armedTooClose then
+    if kind == 'custom' and d.status == 'published' and CP.Builder and CP.Builder.armedTooClose then
         local okCall, near = pcall(CP.Builder.armedTooClose, d, meta.builtins)
         for _, w in ipairs(okCall and type(near) == 'table' and near or {}) do
             warn((
@@ -610,7 +610,7 @@ function Missions.normalize(def, meta)
     -- remaining loader fields (source, version, filePath, status and isBoss are set above)
     d.defHash = meta.defHash or StableHash(def)
     d.editedInCode = meta.editedInCode == true or CP.U.truthy(meta.editedInCode)
-    d.itemsBy = source == 'custom' and ITEMS_BY[meta.itemsBy] and meta.itemsBy or nil
+    d.itemsBy = kind == 'custom' and ITEMS_BY[meta.itemsBy] and meta.itemsBy or nil
     return d, nil, warnings
 end
 
