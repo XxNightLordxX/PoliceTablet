@@ -47,6 +47,7 @@ local LOADER_FIELDS = {
     'shippedHash',
     'overrideVersion',
     'tweaked',
+    'itemsBy',
 }
 -- Built-in overrides. TOP: the top-level fields of a mission file the Builder edits (an override carries every other
 -- one unchanged); CARRY_TOP: other top-level fields the loader understands, written back into an override file;
@@ -96,7 +97,7 @@ local PAYOUT_NAMES = {
     reward = true,
     rewards = true,
 }
-local FORBIDDEN_ITEMS = { 'armour', 'bandage', 'ammo-*', 'weapon_*', 'money', 'black_money' }
+local FORBIDDEN_ITEMS = { 'armour', 'bandage', 'ammo-*', 'weapon_*', 'money', 'black_money', 'cash' }
 
 -- ARCHITECTURE §3.3 default minimum seconds per block (used when an objective has none).
 local DEFAULT_MIN_SECONDS = {
@@ -1214,7 +1215,7 @@ local function ItemForbidden(name)
     local lower = name:lower()
     if lower == 'armour' or lower == 'bandage' then return true end
     -- cash items would stand in for a payout
-    if lower == 'money' or lower == 'black_money' then return true end
+    if lower == 'money' or lower == 'black_money' or lower == 'cash' then return true end
     if lower:sub(1, 5) == 'ammo-' then return true end
     if lower:sub(1, 7) == 'weapon_' then return true end
     return false
@@ -1229,8 +1230,17 @@ local function ItemKnown(name)
     return item ~= nil
 end
 
--- The item rules (CRIMSON_ARENA rule 4); B.validate and every test run check them.
-local function ItemErrors(items, errors)
+-- Whether this builder may put items in a custom mission: admins and the console always, supervisors only while
+-- Config.Builder.supervisorItems is true (an officer can use or sell a mission item before the run takes it back).
+-- No actor (a file, an import, a built-in view) keeps the file rules.
+local function ItemsAllowed(actor)
+    if not actor or actor.isAdmin then return true end
+    return CfgB().supervisorItems == true
+end
+
+-- The item rules (CRIMSON_ARENA rule 4); B.validate and every test run check them. actor: who saves, tests or
+-- publishes (nil = no builder: only the file rules).
+local function ItemErrors(items, errors, actor)
     if type(items) ~= 'table' or not IsList(items) then
         AddError(errors, 'items', 'builder.error.item_name', { n = 1 })
         return errors
@@ -1241,7 +1251,7 @@ local function ItemErrors(items, errors)
         local name = type(it) == 'table' and it.name or nil
         if type(name) ~= 'string' or #name == 0 or #name > 50 or not name:match('^[%w_%-%.]+$') then
             AddError(errors, p .. '.name', 'builder.error.item_name', { n = i })
-        elseif ItemForbidden(name) then
+        elseif ItemForbidden(name) or not ItemsAllowed(actor) then
             AddError(errors, p .. '.name', 'builder.error.item_forbidden', { name = name })
         elseif not ItemKnown(name) then
             AddError(errors, p .. '.name', 'builder.error.item_unknown', { name = name })
@@ -1634,6 +1644,7 @@ end
 -- Returns errors (list of { path, key, vars, message }) and info { armed, requiredTier }.
 -- opts.publish additionally runs CP.Missions.normalize (the loader's own checks); opts.raw is the
 -- unsanitised input (payout fields). opts.baseline = { def, raw } (an override of a built-in: BaselineOf).
+-- opts.actor: the builder who saves, validates or publishes (the item rule: ItemsAllowed); nil = file rules only.
 function B.validate(def, opts)
     opts = opts or {}
     local errors = {}
@@ -1979,8 +1990,8 @@ function B.validate(def, opts)
         end
     end
 
-    -- items (CRIMSON_ARENA rule 4)
-    ItemErrors(def.items, errors)
+    -- items (CRIMSON_ARENA rule 4; admins only unless Config.Builder.supervisorItems)
+    ItemErrors(def.items, errors, opts.actor)
 
     -- scaling paths
     if type(def.scaling) ~= 'table' or not IsList(def.scaling) then
@@ -2670,7 +2681,8 @@ local function RecordView(row, actor, perms)
     local fileMeta = published and published._file or nil
     if published then published._file = nil; published._carry = nil end
     local baseline = row.overridesBuiltin and BaselineOf(ShippedOf(row.id)) or nil
-    local errors, info = B.validate(clean, { baseline = baseline })
+    -- an editor sees what their own save would answer (a supervisor's item errors); a read-only view does not
+    local errors, info = B.validate(clean, { baseline = baseline, actor = e.can.edit and actor or nil })
     e.definition = clean
     e.publishedDefinition = published
     e.readOnly = not e.can.edit
@@ -2842,7 +2854,9 @@ end
 --                               PUBLISHING CORE
 -- ============================================================================
 
-local function RuntimeWithLoader(fileDefOrRuntime, row, version, filePath, hash, editedInCode)
+-- itemsBy: who put this version live ('admin', 'console', 'supervisor' or nil = not recorded): the run hands out the
+-- mission's items only for an admin or the console unless Config.Builder.supervisorItems (CP.Runs GiveItems).
+local function RuntimeWithLoader(fileDefOrRuntime, row, version, filePath, hash, editedInCode, itemsBy)
     local def = B.toRuntime(fileDefOrRuntime)
     def.id = row.id
     def.source = 'custom'
@@ -2851,7 +2865,29 @@ local function RuntimeWithLoader(fileDefOrRuntime, row, version, filePath, hash,
     def.defHash = hash
     def.editedInCode = editedInCode == true
     def.status = 'published'
+    def.itemsBy = itemsBy
     return def
+end
+
+local PUBLISHER_ROLES = { admin = true, console = true, supervisor = true }
+
+-- Who put the published version of a custom mission live: 'admin', 'console', 'supervisor' or nil. Each publish
+-- records it (published_definition._file.publisherRole); a row published before that falls back to the audit row
+-- of its publish (only when the mission has items: nothing else depends on it). Read at load and restore only.
+local function PublisherRole(row)
+    local pub = type(row) == 'table' and type(row.published) == 'table' and row.published or nil
+    if not pub then return nil end
+    local meta = type(pub._file) == 'table' and pub._file or {}
+    if PUBLISHER_ROLES[meta.publisherRole] then return meta.publisherRole end
+    if type(pub.items) ~= 'table' or #pub.items == 0 then return nil end
+    local ok, a = pcall(MySQL.single.await, [[SELECT role, new_value FROM cp_audit WHERE category = 'builder'
+        AND target = ? AND action IN ('publish', 'publishUntested', 'rollback', 'codeEdit') ORDER BY id DESC LIMIT 1]],
+        { row.id })
+    if not ok or type(a) ~= 'table' or not PUBLISHER_ROLES[a.role] then return nil end
+    -- the newest publish must be the live version ('v3', or 3 for an edit in code)
+    local v = row.publishedVersion
+    if v and a.new_value ~= 'v' .. v and a.new_value ~= tostring(v) then return nil end
+    return a.role
 end
 
 -- The carried fields of an override: from its stored draft or published definition, else from the shipped file.
@@ -2908,6 +2944,7 @@ local function PublishDefinition(row, bdef, actor, opts)
         publishedAt = at,
         publishedBy = actor.citizenid,
         publisher = publisher,
+        publisherRole = PUBLISHER_ROLES[actor.role] and actor.role or nil,
         reason = opts.reason,
     }
     local okDb, dbErr = pcall(function()
@@ -2944,7 +2981,7 @@ local function PublishDefinition(row, bdef, actor, opts)
     if ov then
         RefreshBuiltin(row.id)
     elseif CP.Missions and CP.Missions.register then
-        local def = RuntimeWithLoader(parsed, row, version, path, hash, opts.editedInCode)
+        local def = RuntimeWithLoader(parsed, row, version, path, hash, opts.editedInCode, stored._file.publisherRole)
         local okReg, res, err = pcall(CP.Missions.register, def)
         if not okReg or not res then
             CP.err(TAG, 'mission %s was published but not registered: %s', row.id, tostring(okReg and err or res))
@@ -2985,6 +3022,7 @@ local function RewriteMissing(row, summary)
         publishedAt = meta.publishedAt or Now(),
         publishedBy = meta.publishedBy,
         publisher = meta.publisher or 'console',
+        publisherRole = meta.publisherRole,
         reason = 'restore_file',
     }
     MySQL.update.await(
@@ -3098,6 +3136,7 @@ local function HandEdit(row, path, content, hash, summary)
         publishedAt = at,
         publishedBy = 'console',
         publisher = 'code edit',
+        publisherRole = 'console',
         reason = 'code_edit',
     }
     MySQL.update.await([[UPDATE cp_custom_missions SET status = 'published', mission_type = ?, published_version = ?,
@@ -3192,15 +3231,16 @@ function B.loadPublished()
             raw, perr = B.parse(content, path)
             if not raw then CP.warn(TAG, 'custom mission %s: %s does not load: %s', row.id, path, tostring(perr)) end
         end
+        local role = PublisherRole(row)
         if raw then
             StripPayoutFields(raw, row.id)
-            out[#out + 1] = RuntimeWithLoader(raw, row, row.publishedVersion, path, hash, row.editedInCode)
+            out[#out + 1] = RuntimeWithLoader(raw, row, row.publishedVersion, path, hash, row.editedInCode, role)
         elseif type(row.published) == 'table' then
             -- the file has edits that were not accepted (or does not load): the last published version stays live
             local pub = U.deepcopy(row.published)
             pub._file = nil
             out[#out + 1] = RuntimeWithLoader(B.toFileUnits(pub), row, row.publishedVersion, path,
-                meta.hash or DefHash(pub), row.editedInCode)
+                meta.hash or DefHash(pub), row.editedInCode, role)
         else
             CP.warn(TAG, 'custom mission %s has no loadable file and no published definition; skipped', row.id)
         end
@@ -3463,6 +3503,8 @@ CP.Net.callback('builder:config', function(src)
         editLockMinutes = bc.editLockMinutes,
         testAtMaxTier = bc.testAtMaxTier ~= false,
         requireTestToPublish = TestRequired(actor),
+        -- false: this builder may not put items in a mission (a supervisor while Config.Builder.supervisorItems is off)
+        itemsAllowed = ItemsAllowed(actor),
         keepBackups = bc.keepBackups ~= false,
         exportPath = ExportDir(),
         route = bc.route,
@@ -3697,7 +3739,7 @@ local function StoreDraft(src, payload, explicit)
     }
     if explicit then
         local baseline = row.overridesBuiltin and BaselineOf(ShippedOf(row.id)) or nil
-        local errors = B.validate(def, { raw = payload.definition, baseline = baseline })
+        local errors = B.validate(def, { raw = payload.definition, baseline = baseline, actor = actor })
         result.previousId = previousId
         result.errors = errors
         result.valid = #errors == 0
@@ -3740,7 +3782,8 @@ CP.Net.action('server:builder:validate', function(src, payload)
         def._carry = nil
     end
     local baseline = row.overridesBuiltin and BaselineOf(ShippedOf(row.id)) or nil
-    local errors, info = B.validate(def, { raw = payload.definition, publish = true, baseline = baseline })
+    local errors, info = B.validate(def,
+        { raw = payload.definition, publish = true, baseline = baseline, actor = actor })
     return true,
         {
             valid = #errors == 0,
@@ -3762,8 +3805,10 @@ CP.Net.action('server:builder:test', function(src, payload)
     if src > 0 and CP.Alerts and CP.Alerts.inArena and CP.Alerts.inArena(src) then return false, 'err.in_arena' end
     local draft = row.draft
     if type(draft) ~= 'table' then return false, 'err.builder_no_draft' end
-    -- the item rules hold on a test run too: its items are really given
-    if #ItemErrors(draft.items == nil and {} or draft.items, {}) > 0 then return false, 'err.builder_invalid' end
+    -- the item rules hold on a test run too: its items are really given (admins only, as on publish)
+    if #ItemErrors(draft.items == nil and {} or draft.items, {}, actor) > 0 then
+        return false, 'err.builder_invalid'
+    end
     if not (CP.Testing and CP.Testing.startDraft) then return false, 'err.builder_testing_unavailable' end
     local required = RequiredTierName(draft.maxOfficers)
     local tier = payload.tier
@@ -3787,6 +3832,7 @@ CP.Net.action('server:builder:test', function(src, payload)
             version = row.draftVersion,
             status = 'draft',
             defHash = DefHash(draft),
+            itemsBy = actor.role,
         })
         if not okCall or not res then
             CP.log(TAG, 'draft %s is not playable: %s', row.id, tostring(okCall and nerr or res))
@@ -3831,7 +3877,7 @@ CP.Net.action('server:builder:publish', function(src, payload)
         baseline = BaselineOf(ShippedOf(row.id))
         if not baseline or not IsBuiltin(row.id) then return false, 'err.builder_unknown_mission' end
     end
-    local errors = B.validate(draft, { publish = true, baseline = baseline })
+    local errors = B.validate(draft, { publish = true, baseline = baseline, actor = actor })
     if #errors > 0 then return false, 'err.builder_invalid' end
     -- testing is optional (O2): only an owner who switched Builder.requireTestToPublish on asks it of supervisors
     if TestRequired(actor) and not row.draftTested then return false, 'err.builder_not_tested' end
@@ -3913,14 +3959,15 @@ CP.Net.action('server:builder:restore', function(src, payload)
     if content and CP.Missions and CP.Missions.register then
         local raw = B.parse(content, to)
         local def
+        local role = PublisherRole(row)
         if raw and U.hashHex(content) == meta.hash then
             StripPayoutFields(raw, row.id)
-            def = RuntimeWithLoader(raw, row, row.publishedVersion, to, meta.hash, row.editedInCode)
+            def = RuntimeWithLoader(raw, row, row.publishedVersion, to, meta.hash, row.editedInCode, role)
         elseif type(pub) == 'table' then
             local copy = U.deepcopy(pub)
             copy._file = nil
             def = RuntimeWithLoader(B.toFileUnits(copy), row, row.publishedVersion, to, meta.hash or DefHash(copy),
-                row.editedInCode)
+                row.editedInCode, role)
         end
         if def then
             local okReg, res, rerr = pcall(CP.Missions.register, def)
@@ -3967,7 +4014,7 @@ CP.Net.action('server:builder:rollback', function(src, payload)
     local b = B.sanitize(B.fromFileUnits(raw), row.id)
     local baseline = ov and BaselineOf(ShippedOf(row.id)) or nil
     if ov and not baseline then return false, 'err.builder_unknown_mission' end
-    local errors = b and B.validate(b, { publish = true, baseline = baseline }) or { {} }
+    local errors = b and B.validate(b, { publish = true, baseline = baseline, actor = actor }) or { {} }
     if #errors > 0 then
         CP.warn(TAG, 'rollback of %s to v%d refused: %s', row.id, fromVersion,
             tostring(errors[1] and errors[1].message))

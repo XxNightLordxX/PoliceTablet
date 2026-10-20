@@ -280,6 +280,8 @@ export interface BuilderConfig {
     testAtMaxTier: boolean;
     // a passed test is needed to publish (Config.Builder.requireTestToPublish; never for admins)
     requireTestToPublish?: boolean;
+    // false: this builder may not put items in a mission (a supervisor while Config.Builder.supervisorItems is off)
+    itemsAllowed?: boolean;
     keepBackups: boolean;
     exportPath: string;
     route: BuilderRouteConfig;

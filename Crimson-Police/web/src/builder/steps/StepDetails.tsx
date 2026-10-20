@@ -23,9 +23,15 @@ import { messageAt } from '../defUtils';
 import { detailRange, requiredTierFor, suggestsNoVehiclePenalties, totalArmed } from '../schema';
 import { StepIntro, type StepProps } from './common';
 
-function forbiddenItem(name: string): boolean {
+// the server sends its list (cfg.forbiddenItems; a trailing * is a prefix) and checks again on every save
+const FORBIDDEN_FALLBACK = ['armour', 'bandage', 'ammo-*', 'weapon_*', 'money', 'black_money', 'cash'];
+
+function forbiddenItem(name: string, list: string[] | undefined): boolean {
     const n = name.trim().toLowerCase();
-    return n === 'armour' || n === 'bandage' || n.startsWith('ammo-') || n.startsWith('weapon_');
+    return (list?.length ? list : FORBIDDEN_FALLBACK).some(f => {
+        const p = f.toLowerCase();
+        return p.endsWith('*') ? n.startsWith(p.slice(0, -1)) : n === p;
+    });
 }
 
 export function StepDetails({ ed, cfg, def, ro }: StepProps) {
@@ -253,12 +259,24 @@ export function StepDetails({ ed, cfg, def, ro }: StepProps) {
 function Items({ ed, cfg, def, ro }: Pick<StepProps, 'ed' | 'cfg' | 'def' | 'ro'>) {
     const max = cfg.maxItems ?? 10;
     const [cmin, cmax] = cfg.itemCount ?? [1, 100];
+    // a supervisor while Config.Builder.supervisorItems is off: items can only be removed
+    const locked = cfg.itemsAllowed === false;
+    const fixed = ro || locked;
     return (
         <div className="builder_client-items">
+            {locked ? (
+                <div className="builder_client-callout builder_client-callout--warning">
+                    <Icon name="lock" size={15} />
+                    <span>
+                        {t('builder.details.items_admin_only')}
+                        {def.items.length > 0 && !ro ? ' ' + t('builder.details.items_admin_remove') : ''}
+                    </span>
+                </div>
+            ) : null}
             {def.items.map((it, i) => {
                 const err =
                     messageAt(ed.errors, `items.${i + 1}.name`, `items.${i + 1}.count`) ??
-                    (it.name && forbiddenItem(it.name)
+                    (it.name && forbiddenItem(it.name, cfg.forbiddenItems)
                         ? t('builder.details.item_forbidden', { name: it.name })
                         : undefined);
                 return (
@@ -266,7 +284,7 @@ function Items({ ed, cfg, def, ro }: Pick<StepProps, 'ed' | 'cfg' | 'def' | 'ro'
                         <Field label={i === 0 ? t('builder.details.item_name') : undefined} error={err}>
                             <TextInput
                                 value={it.name}
-                                disabled={ro}
+                                disabled={fixed}
                                 maxLength={50}
                                 placeholder={t('builder.details.item_placeholder')}
                                 onChange={v =>
@@ -281,7 +299,7 @@ function Items({ ed, cfg, def, ro }: Pick<StepProps, 'ed' | 'cfg' | 'def' | 'ro'
                                 value={it.count}
                                 min={cmin}
                                 max={cmax}
-                                disabled={ro}
+                                disabled={fixed}
                                 showRange={false}
                                 onChange={v =>
                                     v !== null &&
@@ -305,7 +323,7 @@ function Items({ ed, cfg, def, ro }: Pick<StepProps, 'ed' | 'cfg' | 'def' | 'ro'
                 );
             })}
             {!def.items.length ? <div className="builder_client-muted">{t('builder.details.items_none')}</div> : null}
-            {!ro ? (
+            {!fixed ? (
                 <Button
                     size="sm"
                     variant="secondary"

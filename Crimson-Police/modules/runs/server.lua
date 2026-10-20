@@ -1949,6 +1949,23 @@ end
 local function GiveItems(run, p)
     local items = run.mission.items
     if type(items) ~= 'table' or #items == 0 then return end
+    -- A custom mission hands out its items only when an admin or the console put that version live, unless
+    -- Config.Builder.supervisorItems lets supervisors add items too: an officer can use or sell a mission item before
+    -- the run takes it back, so a supervisor's items would be made out of nothing (built-ins and edited built-ins
+    -- only come from admins).
+    local m = run.mission
+    if m.source == 'custom' and not (Config.Builder and Config.Builder.supervisorItems == true) and m.itemsBy ~= 'admin'
+        and m.itemsBy ~= 'console' then
+        WarnOnce(
+            ('items_skipped:%s:%s'):format(tostring(m.id), tostring(m.version)),
+            'custom mission %s (version %s): items skipped: saved by a supervisor%s. Only a version an admin published '
+                .. 'hands out items: an admin can open it in the Mission Builder and publish it again',
+            tostring(m.id),
+            tostring(m.version),
+            m.itemsBy == nil and ' (or who published it is not recorded)' or ''
+        )
+        return
+    end
     if not InventoryUp() then
         WarnOnce('inv_give', 'ox_inventory is not started: mission items are not given')
         return

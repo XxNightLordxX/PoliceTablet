@@ -1190,6 +1190,9 @@ Config.Builder = {
     bonusCap = { points = 50, share = 0.25 },  -- flat bonuses and penalties: at most 50 points; percentage ones: at most 25% of P
     requireTestToPublish = false,              -- true = supervisors may publish only a draft that passed a test
                                                -- (admins never need one); false = testing is optional for everyone
+    supervisorItems = false,                   -- false = only admins may put items in a custom mission (items a run
+                                               -- hands out can be used or sold before they are taken back); true =
+                                               -- supervisors too
     testAtMaxTier = true,                      -- a test counts as passed only at the tier maxOfficers reaches
     editLockMinutes = 30,                      -- one editor at a time; renewed while they keep editing
     autosaveSeconds = 30,

@@ -770,11 +770,43 @@ do
     H.eq(seenBoss[#seenBoss], true, 'validate sees the boss flag')
 
     -- mission items Crimson-Arena takes away are never mission items (docs/CRIMSON_ARENA.md rule 4)
-    for _, name in ipairs({ 'armour', 'Bandage', 'ammo-9', 'WEAPON_PISTOL', 'weapon_stungun', 'money', 'Black_Money' }) do
+    for _, name in ipairs({
+        'armour',
+        'Bandage',
+        'ammo-9',
+        'WEAPON_PISTOL',
+        'weapon_stungun',
+        'money',
+        'Black_Money',
+        'cash',
+        'CASH',
+    }) do
         local di = U.deepcopy(base)
         di.items = { { name = 'radio', count = 1 }, { name = name, count = 1 } }
         local r, e = M.normalize(di, {})
         H.ok(r == nil and tostring(e):find('never be a mission item', 1, true), 'forbidden mission item ' .. name)
+    end
+    do
+        -- a custom mission file with a cash item is refused, and the message names cash
+        local dc = U.deepcopy(base)
+        dc.items = { { name = 'cash', count = 100 } }
+        local r, e = M.normalize(dc, { source = 'custom', status = 'published', version = 1 })
+        H.ok(r == nil and tostring(e):find('black_money and cash are not allowed', 1, true),
+            'a custom file with a cash item is refused: ' .. tostring(e))
+    end
+    do
+        -- who published a custom version (itemsBy) only comes from the loader's meta, never from the file
+        local dw = U.deepcopy(base)
+        dw.items = { { name = 'radio', count = 1 } }
+        local byAdmin = M.normalize(dw, { source = 'custom', itemsBy = 'admin' })
+        H.eq(byAdmin and byAdmin.itemsBy, 'admin', 'itemsBy from the Mission Builder is kept')
+        dw.itemsBy = 'admin'
+        local claimed = M.normalize(dw, { source = 'custom' })
+        H.ok(claimed ~= nil and claimed.itemsBy == nil, 'a file that claims itemsBy = admin is not believed')
+        local odd = M.normalize(dw, { source = 'custom', itemsBy = 'boss' })
+        H.ok(odd ~= nil and odd.itemsBy == nil, 'an unknown itemsBy is dropped')
+        local builtin = M.normalize(dw, { source = 'builtin', itemsBy = 'supervisor' })
+        H.ok(builtin ~= nil and builtin.itemsBy == nil, 'a built-in mission has no itemsBy')
     end
     local okItems = U.deepcopy(base)
     okItems.items = { { name = 'radio', count = 2 }, { name = 'armoured_vest_box' } }

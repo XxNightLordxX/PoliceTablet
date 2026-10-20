@@ -258,6 +258,9 @@ mission = {
   source = 'builtin' | 'custom', version = 3 (custom only), filePath = 'missions/builtin/gang_shootout.lua',
   defHash = '1a2b3c4d',           -- CP.U.hashHex of the file content (tests: "Changed since test")
   editedInCode = false, isBoss = false (true for weekly_boss_kingpin), status = 'published',
+  itemsBy = 'admin' | 'console' | 'supervisor' | nil, -- custom only: who put this version live (the Mission Builder's
+                                  -- publisherRole, else its publish audit row); a run hands out its items only for
+                                  -- admin or console, unless Config.Builder.supervisorItems
 }
 ```
 

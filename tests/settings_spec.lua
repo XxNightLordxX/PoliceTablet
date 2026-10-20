@@ -170,6 +170,13 @@ do
     H.eq(S.entry('Tablet'), nil, 'a table of settings is not a setting itself')
     H.ok(E('Builder.requireTestToPublish').desc:find('testing is optional for everyone', 1, true) ~= nil,
         'the new test switch is listed with its comment')
+    H.ok(
+        E('Builder.supervisorItems') ~= nil and E('Builder.supervisorItems').kind == 'boolean'
+            and E('Builder.supervisorItems').desc:find('only admins may put items in a custom mission', 1, true)
+                ~= nil,
+        'Builder.supervisorItems is a true/false setting with its comment'
+    )
+    H.eq(E('Builder.supervisorItems').restart, false, 'and changes live')
 
     -- every setting is a key of Config (or a nil key config.lua names)
     local bad = {}

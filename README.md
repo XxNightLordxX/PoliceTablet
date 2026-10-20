@@ -501,6 +501,16 @@ Related settings: `Config.Payouts.supervisorRange` (`{ 0.5, 2.0 }` = 50–200%),
 - **Testing is optional.** Anyone allowed to publish can publish a draft without testing it (the tablet asks
   "Publish without testing?" once). To make supervisors pass a test first, switch on
   `Config.Builder.requireTestToPublish` (Admin UI → **Settings**, section Mission builder). Admins never need one.
+- **Mission items are for admins only.** A supervisor can't put any item in a custom mission: saving, checking,
+  testing or publishing one with an item says "<item> can't be a mission item.", and Details → **Mission items** is
+  locked with a sentence saying why. An officer can use or sell a mission item before the run takes it back, so items
+  a supervisor wrote would be made out of nothing. To let supervisors add items too, set
+  `Config.Builder.supervisorItems = true` (Admin UI → **Settings**, section Mission builder). Money items (`cash`,
+  `money`, `black_money`), weapons, ammo, armour and bandages are never mission items, for anyone.
+- A run hands out a custom mission's items only when an admin (or the console) published that version, or it was
+  edited in code. A version a supervisor published, or an older one with no record of who published it, hands out
+  none and says so once in Admin UI → **System** → **Problems** ("items skipped: saved by a supervisor"). To give it
+  back its items, an admin opens it in the Mission Builder and publishes it again.
 
 ### 4.6 Things only admins can do
 
@@ -719,7 +729,7 @@ Everything else works as shipped. These are the ones owners change most:
 | `Config.Rewards` | Item rewards, off by default (see [6.3](#63-item-rewards)) |
 | `Config.Disputes.windowHours` | How long officers have to dispute a run (48 hours) |
 | `Config.AntiCheat` | Flag limits, and the automatic suspension: 3 voided runs in 30 days = 7 days |
-| `Config.Builder` | Mission Builder on or off, what builders may pick, `noBuildZones`, `requireTestToPublish` (`false` = testing is optional, as shipped), and `spawnMargin` (40 m, 0-150): a custom mission's armed NPCs (a shootout and its boss, ambush and pursuit cars, warrant associates) must spawn outside the start circle plus this, e.g. 100 m from a 60 m start, so a fight never appears around your officers as they arrive (hostages and suspects keep `minSpawnFromStart`, 30 m) |
+| `Config.Builder` | Mission Builder on or off, what builders may pick, `noBuildZones`, `requireTestToPublish` (`false` = testing is optional, as shipped), `supervisorItems` (`false` = only admins put items in a custom mission, as shipped; [4.5](#45-mission-builder-permissions)), and `spawnMargin` (40 m, 0-150): a custom mission's armed NPCs (a shootout and its boss, ambush and pursuit cars, warrant associates) must spawn outside the start circle plus this, e.g. 100 m from a 60 m start, so a fight never appears around your officers as they arrive (hostages and suspects keep `minSpawnFromStart`, 30 m) |
 | `Config.Testing` | Admin test mode: `enabled`, `maxTesters`, `allowTeleport`, `debugOverlay`, and `spawnCheck` (the spawn point check: `enabled`, `sceneTimeoutMs` 8000, `moveWithin` 150 m, `routes = false` checks no route points, `teleport = true` the Teleport here button next to a result) |
 | `Config.Retention` | Clean-up of old data: runs archived after 12 months, audit rows deleted after 180 days, mission calls after 90 days (0 = keep) |
 | `Config.Downed.dropOffs` | Where a downed officer is taken when no EMS is on duty |
@@ -1382,7 +1392,8 @@ in game, with no coding:
 
 1. Pick up to 6 objective blocks (fight waves, pursuit, escort, search an area, rescue, skill check and more).
 2. Fill in the details: name, type (it sets the points and pay), difficulty, officers, time limit, cooldown and
-   which departments may get it. There is no payout field.
+   which departments may get it. There is no payout field. Only admins can add mission items
+   ([4.5](#45-mission-builder-permissions)).
 3. Place spots in the world and record road routes by driving them.
 4. Test it privately if you like. **Testing is optional**: a draft can be published without a test (the tablet asks
    "Publish without testing?" once). Only when `Config.Builder.requireTestToPublish = true` must a supervisor's draft
@@ -2003,6 +2014,7 @@ The last line of the start-up check is `Start-up check: all ... checks passed` o
 | `... was not loaded: syntax error: <file>:<line>: ... near '<text>'` | That line of the mission file is not plain data (often a hand edit: a sum like `10 * 60`, a variable, joined text, or a key written twice). Write the plain value, like `600`, and run `/CrimsonPoliceAdmin reload` |
 | `custom mission <id>: the edited file ... was not accepted` | A hand edit broke the mission. The old version stays live. Fix the file and run `/CrimsonPoliceAdmin reload` |
 | `custom mission <id>: field "<name>" in its Lua file is ignored` | Payouts can't be set in mission files. Use the Payouts screens |
+| `custom mission <id> (version <n>): items skipped: saved by a supervisor ...` | That version was published by a supervisor (or before Crimson-Police recorded who published it), so its runs hand out no items ([4.5](#45-mission-builder-permissions)). An admin opens it in the Mission Builder and publishes it again to give the items back, or removes them |
 | `mission <id>: objective <n> names WEAPON_SMG, an automatic weapon: its NPCs carry WEAPON_COMBATPISTOL instead (Config.NpcCombat)` | Harmless: an older custom mission (or a `Config.MissionTweaks` entry) still names an automatic weapon, and its NPCs get the weapon named after "carry". To make the line go away, pick a pistol or a shotgun for it in the Mission Builder ([5.9](#59-how-hard-npcs-fight-back)) |
 | `the folder Crimson-Police/<folder> is missing: create it by hand` | Make that folder by hand. Crimson-Police ships every folder it writes (`missions/custom/` with `archived/`, `overrides/`, `overrides/archived/` and `deleted/` inside it, `saves/_backups/`, `saves/exports/`), each with an empty `.gitkeep` file, so a missing one usually means the copy left empty folders out: copy the whole Crimson-Police folder again. The server cannot create folders on Linux (FXServer crashes when it tries), so Crimson-Police never does |
 | `the folder Crimson-Police/<folder> is there but the server cannot write to it` | Give the user the server runs as write access to that folder |

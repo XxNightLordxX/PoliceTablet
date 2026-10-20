@@ -266,6 +266,7 @@ local function EnsureNormalized(def, status)
         status = status,
         defHash = type(def.defHash) == 'string' and def.defHash or nil,
         editedInCode = def.editedInCode,
+        itemsBy = def.itemsBy,
     }
     local ok, d, err = pcall(CP.Missions.normalize, def, meta)
     if not ok then return nil, tostring(d) end

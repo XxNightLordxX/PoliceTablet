@@ -88,6 +88,9 @@ Config.Builder.exportPath = TMP
 -- The test gate is off as shipped (testing is optional); most checks below are about the gate itself, so it is on
 -- until the "testing is optional" block switches it back off.
 Config.Builder.requireTestToPublish = true
+-- Mission items are for admins only as shipped (supervisorItems = false); most checks below have a supervisor build a
+-- mission that hands out a radio, so supervisors may add items until the "mission items: admins only" block.
+Config.Builder.supervisorItems = true
 _G.GetResourcePath = function() return H.root:sub(1, -2) end
 
 local function FileExists(rel)
@@ -826,6 +829,8 @@ local function Body()
         'weapon_knife',
         'money',
         'Black_Money',
+        'cash',
+        'CASH',
     }) do
         check('item ' .. name, function(d)
             d.items = { { name = name, count = 1 } }
@@ -2131,6 +2136,125 @@ local function Body()
         local live = CP.Missions.get(gid)
         H.eq(live and live.label, 'Docks Shootout', 'the edited copy is the live version')
         H.eq(row(gid).published_version, 2, 'saved as version 2')
+    end
+
+    -- ══ mission items: admins only (Config.Builder.supervisorItems = false, as shipped), never cash ══════════════
+    do
+        Config.Builder.requireTestToPublish = false
+        Config.Builder.supervisorItems = false
+        local okC, c = act(1, 'create', { type = 'tactical', label = 'Item Rule Check' })
+        H.ok(okC, 'a supervisor creates a mission: ' .. tostring(okC or c))
+        local kid = okC and c.id or 'custom_item_rule_check'
+        local function withItem(name)
+            local d = validDef()
+            d.label = 'Item Rule Check'
+            d.items = { { name = name, count = 1 } }
+            return d
+        end
+        local function refused(errors)
+            local e = errorAt(errors or {}, 'items.1.name')
+            return e ~= nil and e.key == 'builder.error.item_forbidden'
+        end
+        local function live() return CP.Missions.get(kid) end
+        local function publisherRole()
+            local r = row(kid)
+            local pub = r and r.published_definition and cjson.decode(r.published_definition) or {}
+            return type(pub._file) == 'table' and pub._file.publisherRole or nil
+        end
+        -- a supervisor: any item is refused on save, validate, test and publish
+        local okS, sv = act(1, 'save', { id = kid, definition = withItem('lockpick') })
+        H.ok(okS and sv.valid == false and refused(sv.errors),
+            'supervisor save: a lockpick is refused at items.1.name (' .. keysOf(okS and sv.errors or {}) .. ')')
+        local okV, v = act(1, 'validate', { id = kid })
+        H.ok(okV and v.valid == false and refused(v.errors), 'supervisor validate of the stored draft: refused')
+        local okVp, vp = act(1, 'validate', { id = kid, definition = withItem('radio') })
+        H.ok(okVp and refused(vp.errors), 'supervisor validate of a payload: a radio is refused too')
+        local before = #drafts
+        H.eq(select(2, act(1, 'test', { id = kid })), 'err.builder_invalid', 'supervisor test run refused')
+        H.eq(#drafts, before, 'no test run started, so no item was handed out')
+        H.eq(select(2, act(1, 'publish', { id = kid })), 'err.builder_invalid', 'supervisor publish refused')
+        H.eq(row(kid).status, 'draft', 'the mission stays a draft')
+        local okG, g = cb(1, 'builder:get', { id = kid })
+        H.ok(okG and refused(g.errors), 'the supervisor sees the item error when opening the draft')
+        local okCf, cf = cb(1, 'builder:config', {})
+        H.ok(okCf and cf.itemsAllowed == false, 'the supervisor\'s Builder locks the items field')
+        local okCa, ca = cb(3, 'builder:config', {})
+        H.ok(okCa and ca.itemsAllowed == true, 'an admin\'s Builder does not')
+        H.ok(okCa and U.contains(ca.forbiddenItems, 'cash'), 'the Builder is told cash is never a mission item')
+        local none = withItem('lockpick')
+        none.items = {}
+        local okN, n = act(1, 'save', { id = kid, definition = none })
+        H.ok(okN and n.valid == true,
+            'without items the supervisor\'s draft is valid (' .. keysOf(okN and n.errors or {}) .. ')')
+        act(1, 'save', { id = kid, definition = withItem('lockpick') })
+        act(1, 'unlock', { id = kid })
+        -- an admin: the same draft is valid, tests with its items and publishes
+        local okA, a = act(3, 'validate', { id = kid })
+        H.ok(okA and a.valid == true, 'admin validate: valid (' .. keysOf(okA and a.errors or {}) .. ')')
+        local okAs, as = act(3, 'save', { id = kid, definition = withItem('lockpick') })
+        H.ok(okAs and as.valid == true, 'admin save: valid (' .. keysOf(okAs and as.errors or {}) .. ')')
+        local okAt = act(3, 'test', { id = kid })
+        H.ok(okAt and #drafts == before + 1, 'admin test run starts')
+        H.eq(drafts[#drafts] and drafts[#drafts].def.itemsBy, 'admin', 'the test run hands out items (itemsBy admin)')
+        local okAp, ap = act(3, 'publish', { id = kid })
+        H.ok(okAp, 'admin publish: ' .. tostring(okAp or ap))
+        H.eq(publisherRole(), 'admin', 'the publish records the admin role')
+        H.eq(live() and live().itemsBy, 'admin', 'the live mission hands out its items')
+        -- cash is never an item, for anyone
+        for _, name in ipairs({ 'cash', 'CASH' }) do
+            local okX, x = act(3, 'validate', { id = kid, definition = withItem(name) })
+            H.ok(okX and refused(x.errors), 'admin: ' .. name .. ' is refused')
+            Config.Builder.supervisorItems = true
+            local okY, y = act(1, 'validate', { id = kid, definition = withItem(name) })
+            H.ok(okY and refused(y.errors), 'supervisor with supervisorItems on: ' .. name .. ' is refused')
+            Config.Builder.supervisorItems = false
+        end
+        -- supervisorItems = true: a supervisor may add items, and the mission records who published it
+        Config.Builder.supervisorItems = true
+        local claim = withItem('lockpick')
+        claim.itemsBy = 'admin'   -- a payload cannot say who published it
+        local okSs, ss = act(1, 'save', { id = kid, definition = claim })
+        H.ok(okSs and ss.valid == true,
+            'supervisorItems on: the supervisor\'s save is valid (' .. keysOf(okSs and ss.errors or {}) .. ')')
+        H.ok((act(1, 'validate', { id = kid })), 'and validates')
+        local okSp, sp = act(1, 'publish', { id = kid })
+        H.ok(okSp, 'supervisorItems on: the supervisor publishes: ' .. tostring(okSp or sp))
+        H.eq(publisherRole(), 'supervisor', 'the publish records the supervisor role')
+        H.eq(live() and live().itemsBy, 'supervisor', 'the live mission says a supervisor published it')
+        H.ok(
+            not tostring(ReadRel(row(kid).file_path) or ''):find('itemsBy', 1, true)
+                and cjson.decode(row(kid).published_definition).itemsBy == nil,
+            'the payload\'s itemsBy is not stored or written to the file'
+        )
+        Config.Builder.supervisorItems = false
+        CP.Missions.loadAll()
+        H.eq(live() and live().itemsBy, 'supervisor', 'after a reload too: its run hands out no item (CP.Runs)')
+        -- published before the role was recorded: the publish audit row decides; no record = no items
+        local r = row(kid)
+        local pub = cjson.decode(r.published_definition)
+        pub._file.publisherRole = nil
+        H.sql('UPDATE cp_custom_missions SET published_definition = ? WHERE id = ?', { cjson.encode(pub), kid })
+        H.sql('DELETE FROM cp_audit WHERE target = ?', { kid })
+        CP.Missions.loadAll()
+        H.eq(live() and live().itemsBy, nil, 'an old mission with no record: no itemsBy, so its items are skipped')
+        local v = 'v' .. tostring(r.published_version)
+        local function auditRow(role, action, new)
+            H.sql([[INSERT INTO cp_audit (actor, role, category, action, target, new_value)
+                VALUES (?, ?, 'builder', ?, ?, ?)]],
+                { role == 'admin' and 'ADM00001' or 'SUP00001', role, action, kid, new })
+        end
+        auditRow('admin', 'publish', v)
+        CP.Missions.loadAll()
+        H.eq(live() and live().itemsBy, 'admin',
+            'an old mission whose publish audit row is an admin\'s keeps its items')
+        auditRow('supervisor', 'publishUntested', v)
+        CP.Missions.loadAll()
+        H.eq(live() and live().itemsBy, 'supervisor', 'the newest publish row counts: a supervisor\'s')
+        auditRow('admin', 'publish', 'v99')
+        CP.Missions.loadAll()
+        H.eq(live() and live().itemsBy, nil, 'a publish row of another version is no record')
+        H.sql('DELETE FROM cp_audit WHERE target = ?', { kid })
+        Config.Builder.supervisorItems = true
     end
 
     -- the builder switch

@@ -1738,7 +1738,7 @@ Flow
 
 - New mission → pick up to 6 objective blocks, in the order officers will do them.
 
-- Details → name, description, mission type (required; it sets the points and the base payout), difficulty (1–3 stars), min and max officers (1–4), time limit (2–20 min), start timeout (5–15 min), cooldown (5–60 min), "Available to" (departments from Config.Departments; none selected = every department), vehicle-damage penalties on or off (off is suggested when the mission has a pursuit or escort block or armed NPCs), optional items, and bonuses and penalties picked from the standard list in Config.Bonuses (a flat bonus or penalty is capped at 50 points, a percentage one at 25% of P; block settings such as a hostage-hit penalty keep their own ranges). There is no payout field.
+- Details → name, description, mission type (required; it sets the points and the base payout), difficulty (1–3 stars), min and max officers (1–4), time limit (2–20 min), start timeout (5–15 min), cooldown (5–60 min), "Available to" (departments from Config.Departments; none selected = every department), vehicle-damage penalties on or off (off is suggested when the mission has a pursuit or escort block or armed NPCs), optional items (admins only: a supervisor's save, validate, test and publish refuse any item with builder.error.item_forbidden while Config.Builder.supervisorItems is false, as shipped, and the Details step locks the field with a sentence saying why; an officer can use or sell a mission item before the run takes it back. Armour, bandages, ammo-*, weapon_*, money, black_money and cash are never mission items, for anyone. A run hands out a custom mission's items only when the version was published by an admin or the console, or edited in code; a version a supervisor published, or one with no record of who published it, hands out none and says so once in System → Problems: "items skipped: saved by a supervisor"), and bonuses and penalties picked from the standard list in Config.Bonuses (a flat bonus or penalty is capped at 50 points, a percentage one at 25% of P; block settings such as a hostage-hit penalty keep their own ranges). There is no payout field.
 
 - Block settings → every block has its own settings panel (tables below). Each value has the minimum, maximum and default shown, and the tablet will not accept anything outside that range. These ranges and defaults live in config/blocks.lua, so they can be changed without touching code.
 
@@ -3746,6 +3746,9 @@ Config.Builder = {
     bonusCap = { points = 50, share = 0.25 },  -- flat bonuses and penalties: at most 50 points; percentage ones: at most 25% of P
     requireTestToPublish = false,              -- true = supervisors may publish only a draft that passed a test
                                                -- (admins never need one); false = testing is optional for everyone
+    supervisorItems = false,                   -- false = only admins may put items in a custom mission (items a run
+                                               -- hands out can be used or sold before they are taken back); true =
+                                               -- supervisors too
     testAtMaxTier = true,                      -- a test counts as passed only at the tier maxOfficers reaches
     editLockMinutes = 30,                      -- one editor at a time; renewed while they keep editing
     autosaveSeconds = 30,

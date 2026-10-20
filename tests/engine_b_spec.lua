@@ -1045,6 +1045,58 @@ listeners.lost(3, 'suspended')
 H.eq(RowsOf(G4.id)[1].end_reason, 'suspended', 'onLost -> suspended')
 
 -- ============================================================================
+--                                 SCENARIO G5
+-- ============================================================================
+-- A custom mission hands out items only when an admin published it (Config.Builder.supervisorItems).
+
+do
+    local function Custom(id, itemsBy)
+        local m = CP.U.deepcopy(mission)
+        m.id, m.source, m.version, m.itemsBy = id, 'custom', 2, itemsBy
+        return m
+    end
+    local function Given(m)
+        H.reset()
+        local before = #inv.added
+        local r = Runs.create(
+            { mission = m, locationIndex = 1, missionType = 'patrol', members = { O[3] }, leaderSrc = 3 })
+        local n = #inv.added - before
+        if r then listeners.lost(3, 'suspended') end
+        return n, r
+    end
+    local function Skipped(id)
+        local n = 0
+        for _, l in ipairs(CP.Problems.list({ tag = 'runs', limit = 200 })) do
+            if l.text:find('custom mission ' .. id .. ' ', 1, true)
+                and l.text:find('items skipped: saved by a supervisor', 1, true) then
+                n = n + 1
+            end
+        end
+        return n
+    end
+    Config.Builder = Config.Builder or {}
+    local shipped = Config.Builder.supervisorItems
+    Config.Builder.supervisorItems = false
+    H.eq((Given(Custom('custom_by_admin', 'admin'))), 1, 'a custom mission an admin published hands out its items')
+    H.eq((Given(Custom('custom_by_console', 'console'))), 1, 'one published from the console (or edited in code) too')
+    local nSup, rSup = Given(Custom('custom_by_sup', 'supervisor'))
+    H.ok(rSup ~= nil, 'the run of a supervisor\'s mission still starts')
+    H.eq(nSup, 0, 'a custom mission a supervisor published hands out no item')
+    H.eq(#rSup.participants[3].items, 0, 'and nothing is waiting to be taken back')
+    H.eq(Skipped('custom_by_sup'), 1, 'System -> Problems: "items skipped: saved by a supervisor"')
+    H.eq((Given(Custom('custom_by_sup', 'supervisor'))), 0, 'the next run of it hands out none either')
+    H.eq(Skipped('custom_by_sup'), 1, 'one line per mission, not per run')
+    H.eq((Given(Custom('custom_old', nil))), 0, 'an old mission with no record of who published it hands out none')
+    H.eq(Skipped('custom_old'), 1, 'and is reported once')
+    H.eq((Given(CP.U.deepcopy(mission))), 1, 'a built-in mission is not affected')
+    Config.Builder.supervisorItems = true
+    H.eq((Given(Custom('custom_by_sup2', 'supervisor'))), 1,
+        'supervisorItems = true: a supervisor\'s items are handed out')
+    H.eq(Skipped('custom_by_sup2'), 0, 'and nothing is reported')
+    Config.Builder.supervisorItems = shipped
+end
+
+-- ============================================================================
 --                             SCENARIO K: failRun
 -- ============================================================================
 

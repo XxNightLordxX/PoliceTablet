@@ -28,7 +28,10 @@ local DEFAULT_MIN_SECONDS = {
 -- Built-in missions ship with 5+ locations, these with 3+ (Mission catalog design rules).
 local THREE_LOCATIONS_OK = { armored_truck_escort = true, evoc_course = true, weekly_boss_kingpin = true }
 -- Fields only the loader sets; a file that sets them is overridden.
-local LOADER_FIELDS = { 'source', 'version', 'filePath', 'defHash', 'editedInCode', 'isBoss', 'status' }
+local LOADER_FIELDS = { 'source', 'version', 'filePath', 'defHash', 'editedInCode', 'isBoss', 'status', 'itemsBy' }
+-- Who put a custom mission version live (meta.itemsBy, from the Mission Builder): its items are handed out only for an
+-- admin or the console unless Config.Builder.supervisorItems (CP.Runs GiveItems).
+local ITEMS_BY = { admin = true, console = true, supervisor = true }
 -- Top-level names treated as a hand-added payout (besides anything containing "payout").
 local PAYOUT_NAMES = {
     cash = true,
@@ -287,7 +290,7 @@ end
 local function ForbiddenItem(name)
     local lower = name:lower()
     -- cash items would stand in for a payout
-    if lower == 'money' or lower == 'black_money' then return true end
+    if lower == 'money' or lower == 'black_money' or lower == 'cash' then return true end
     return lower == 'armour' or lower == 'bandage' or lower:sub(1, 5) == 'ammo-' or lower:sub(1, 7) == 'weapon_'
 end
 
@@ -304,8 +307,10 @@ local function NormalizeItems(list, warn)
             warn(('items entry %d has no name; ignored'):format(i))
         elseif ForbiddenItem(it.name) then
             return nil,
-                ('items entry %d: "%s" can never be a mission item (armour, bandage, ammo-*, weapons and money are not allowed)'):format(
-                    i, it.name)
+                (
+                    'items entry %d: "%s" can never be a mission item (armour, bandage, ammo-*, weapons, '
+                    .. 'money, black_money and cash are not allowed)'
+                ):format(i, it.name)
         elseif #out >= MAX_ITEMS then
             warn(('items entry %d: more than %d items; ignored'):format(i, MAX_ITEMS))
         else
@@ -605,6 +610,7 @@ function Missions.normalize(def, meta)
     -- remaining loader fields (source, version, filePath, status and isBoss are set above)
     d.defHash = meta.defHash or StableHash(def)
     d.editedInCode = meta.editedInCode == true or CP.U.truthy(meta.editedInCode)
+    d.itemsBy = source == 'custom' and ITEMS_BY[meta.itemsBy] and meta.itemsBy or nil
     return d, nil, warnings
 end
 
@@ -872,6 +878,7 @@ local function MetaFromDef(def, defaults)
         defHash = def.defHash or defaults.defHash,
         editedInCode = def.editedInCode or def.edited_in_code or defaults.editedInCode,
         status = def.status or defaults.status or 'published',
+        itemsBy = def.itemsBy or defaults.itemsBy,
     }
 end
 
