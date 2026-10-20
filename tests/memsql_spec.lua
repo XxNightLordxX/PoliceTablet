@@ -3421,6 +3421,48 @@ do
     d.slice = nil
 end
 
+-- 9.15 an ALTER TABLE that adds an index is undone completely when a later part of it fails or the saves folder
+-- refuses its save (the undo rebuilds the table's keys; it used to stop at a function that did not exist)
+do
+    local dir = TMP .. '/keysundo'
+    Mkdir(dir)
+    local d = M.new({ store = M.folderStore(dir) }):load()
+    local sh9 = M.shim(d, { resource = 'Crimson-Police' })
+    sh9.query.await('CREATE TABLE cp_t (id INT AUTO_INCREMENT PRIMARY KEY, a INT NULL, b INT NULL)')
+    sh9.query.await('INSERT INTO cp_t (a, b) VALUES (1, 1), (2, 1)')
+    local t = d.tables.cp_t
+    local function Keys()
+        local names = {}
+        for _, k in ipairs(t.keyDefs) do names[#names + 1] = k.kind .. ':' .. tostring(k.name) end
+        local maps = {}
+        for ci in pairs(t.idx) do maps[#maps + 1] = t.colNames[ci] end
+        table.sort(maps)
+        return table.concat(names, ',') .. ' | ' .. #t.uniques .. ' unique | index maps: ' .. table.concat(maps, ',')
+    end
+    local create, keys = M.renderCreate(t), Keys()
+    H.eq(ErrOf(sh9.query.await, 'ALTER TABLE cp_t ADD INDEX idx_a (a), ADD UNIQUE (b)'),
+        'Duplicate entry \'1\' for key \'b\'', 'the second part of an ALTER fails: MariaDB\'s error')
+    H.eq(M.renderCreate(t), create, 'and the index its first part added is gone')
+    H.eq(Keys(), keys, 'with the keys and key maps as before')
+    -- a saves folder that refuses the save of an ADD INDEX (a full disk while an upgrade runs)
+    M.fs.write = function(p, data)
+        if p:find('_tables.json', 1, true) then return nil, 'disk full' end
+        return realFs.write(p, data)
+    end
+    local e = ErrOf(sh9.query.await, 'ALTER TABLE cp_t ADD INDEX idx_a (a)')
+    RestoreFs()
+    H.ok(e and e:find('Crimson-Police could not write to the saves folder, so the change was undone', 1, true) == 1,
+        'a failed save of an ADD INDEX is reported as one: ' .. tostring(e))
+    H.eq(M.renderCreate(t), create, 'and the index is gone')
+    H.eq(Keys(), keys, 'with the keys and key maps as before')
+    H.eq(sh9.scalar.await('SELECT id FROM cp_t WHERE a = 2'), 2, 'the table still answers')
+    SameTables(d, M.new({ store = M.folderStore(dir) }):load(), 'the saves folder holds the table as it was')
+    sh9.query.await('ALTER TABLE cp_t ADD INDEX idx_a (a)')
+    local back = M.new({ store = M.folderStore(dir) }):load()
+    H.eq(M.renderCreate(back.tables.cp_t), M.renderCreate(t), 'the next ADD INDEX saves')
+    H.ok(M.renderCreate(t):find('KEY idx_a (a)', 1, true) ~= nil, 'with its index')
+end
+
 -- 9.13 one global table: the engine is CP.Storage.MemSQL
 H.eq(CP.MemSQL, nil, 'modules/storage defines no CP.MemSQL (CP.Storage is its one global table)')
 H.eq(CP.Storage.MemSQL, M, 'the engine is CP.Storage.MemSQL')

@@ -5823,6 +5823,8 @@ function DB:_compact()
     self.compactList = {}
 end
 
+local FinishTable -- forward: (t) -> nil, DB:_rollback rebuilds a table's keys with it
+
 function DB:_rollback(log)
     for i = log.n, 1, -1 do
         local e = log[i]
@@ -5856,7 +5858,7 @@ function DB:_rollback(log)
             self:_removeColumn(t, ci)
         elseif op == 'keys' then
             t.keyDefs = e.a
-            finishTable(t)
+            FinishTable(t)
             RebuildMaps(t)
         end
     end
@@ -5981,7 +5983,7 @@ end
 local Coercer             -- forward
 local STORE = { n = 0 }   -- section 7: warnings and notes of the statement being run, store helpers
 
-local function FinishTable(t)
+function FinishTable(t)
     t.colIndex, t.types, t.colNames, t.normOf = {}, {}, {}, {}
     t.jsonCis = nil
     for ci, col in ipairs(t.cols) do

@@ -4864,7 +4864,8 @@ mode (Config.Database.enabled = false) and CP.Storage (modules/storage/server.lu
   8. CP.Storage and the migrations runner in files mode
   9. details a review found: MariaDB's collation table, PAD SPACE order, integer overflow, DATE across time zones,
      exact BIGINT / DECIMAL, additive ALTER TABLE, AUTO_INCREMENT after UPDATE, FXServer's inverted os.rename,
-     a refused file operation at every point of a save, hand-edited, reformatted and missing documents
+     a refused file operation at every point of a save, hand-edited, reformatted and missing documents, an ADD INDEX
+     undone completely when a later part of its ALTER fails or its save is refused
 Needs no database (9.1 compares with the local MariaDB when it runs); every saves folder lives in a temporary
 folder removed at the end.
 ```
