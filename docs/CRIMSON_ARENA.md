@@ -59,9 +59,12 @@ Definitions: a value is **foreign** when `type(v) == 'table' and v.active == tru
    never by bare name. Keep an orphan list by citizenid for items not found; sweep orphans (items whose
    `metadata.cpItem` is true and whose `cpRun` is not an active run) on `QBCore:Server:PlayerLoaded`, 10 s
    after that player's value changes from foreign to nil, and every 60 s for listed citizenids. Never give
-   items to an in-arena src. Removal and sweeps skip a src only while he is in a real match: `inArena(src)` and
-   a routing bucket other than 0. The flag alone does not count, because a client can write its own bag; a
-   player in bucket 0 holds his own inventory, so his mission items are taken back. Never touch stashes named
+   items to an in-arena src. Removal and sweeps keep the items back only while the player is in a routing
+   bucket other than 0 (a Crimson-Arena match, or any other instance such as an apartment); the crimsonArena
+   flag on its own, in bucket 0, does not keep them, because a client can write its own bag and a player in
+   bucket 0 holds his own inventory. While the flag is set in bucket 0 (an entry or exit in progress) a sweep
+   still runs but keeps the citizenid on the orphan list, so the sweep 10 s after the flag clears still runs.
+   The sweep looks for every mission item name and for `Config.Custody.evidenceItem`. Never touch stashes named
    `crimson_arena_*`. Mission/Builder validation rejects item names `armour`, `bandage`, `ammo-*`,
    `WEAPON_*`/`weapon_*`.
 5. **Gates.** `server:acceptType` (every member), `server:joinOperation`, `server:unitRespond` (accept),

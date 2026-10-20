@@ -111,6 +111,7 @@ CP.Alerts = {
     clear = function(src) Rec('alerts.clear', src) end,
     forget = function(src) Rec('alerts.forget', src) end,
     inArena = function(src) return arena[src] == true or (bucket[src] or 0) ~= 0 end,
+    foreignFlag = function(src) return arena[src] == true end,
     foreignClearedAt = {},
 }
 -- FiveM server native the harness does not provide.
@@ -1247,7 +1248,67 @@ do
     H.ok(SweepSearches(3, from) > 0, 'V5 sweep with the flag in bucket 0: SweepPlayer searches his cpItem slots')
     H.eq(HeldBy(3, VB.id), 0, 'V5 sweep with the flag in bucket 0: the orphaned item is taken back')
     arena[3] = nil
+
+    -- (d) an Arena exit in progress (SKILL_CHECK K3b): back in bucket 0 while the flag is still set and the inventory
+    -- is still in Crimson-Arena's stash. The sweep then finds nothing but keeps the orphan record, so the sweep 10 s
+    -- after the flag clears takes the item back once the stash has returned it.
+    H.reset()
+    local VD = Runs.create(
+        { mission = mission, locationIndex = 1, missionType = 'patrol', members = { O[3] }, leaderSrc = 3 })
+    arena[3], bucket[3] = true, 4210
+    H.advance(1000)
+    H.ok(HeldBy(3, VD.id) > 0, 'K3b: the fighter keeps the item while in the match')
+    bucket[3], inv.hidden = nil, { [3] = true }
+    from = #inv.searches
+    listeners.loaded(3)
+    H.advance(5000)
+    H.ok(SweepSearches(3, from) > 0, 'K3b exit gap: the sweep runs with the flag set in bucket 0')
+    inv.hidden, arena[3] = nil, nil
+    CP.Alerts.foreignClearedAt[3] = os.time()
+    H.time = H.time + 10
+    H.advance(5000)
+    H.eq(HeldBy(3, VD.id), 0, 'K3b exit gap: the sweep 10 s after the flag cleared takes the item back')
+    CP.Alerts.foreignClearedAt[3] = nil
     CP.log = realLog
+end
+
+-- The evidence bag (Config.Custody.evidenceItem) is swept like a mission item (SKILL_CHECK K3b). The orphan list is in
+-- memory only: after a restart, a bag a player kept from a run before it (he dropped while holding it) is on no list,
+-- so the sweep must look for the evidence item by name. A bag without cpItem is his own and stays.
+do
+    Config.Custody = Config.Custody or {}
+    local shipped = Config.Custody.evidenceItem
+    inv.items.evidence_bag = { label = 'Evidence bag', stack = false }
+    local function Bags(src, tagged)
+        local n = 0
+        for _, s in ipairs(inv.slots[src] or {}) do
+            if s.count > 0 and s.name == 'evidence_bag' and ((s.metadata and s.metadata.cpItem == true) == tagged) then
+                n = n + s.count
+            end
+        end
+        return n
+    end
+    local function BagSearches(from)
+        local n = 0
+        for i = from + 1, #inv.searches do
+            if inv.searches[i].name == 'evidence_bag' then n = n + 1 end
+        end
+        return n
+    end
+    H.reset()
+    oxInventory.AddItem(3, 'evidence_bag', 1, { cpRun = 'CP-before-restart', cpItem = true })
+    oxInventory.AddItem(3, 'evidence_bag', 1, { note = 'his own' })
+    Config.Custody.evidenceItem = false
+    local from = #inv.searches
+    listeners.loaded(3)
+    H.advance(5000)
+    H.eq(BagSearches(from), 0, 'evidence item off (shipped): the sweep does not look for it')
+    Config.Custody.evidenceItem = 'evidence_bag'
+    listeners.loaded(3)
+    H.advance(5000)
+    H.eq(Bags(3, true), 0, 'evidence bag from before a restart: the load sweep takes it back')
+    H.eq(Bags(3, false), 1, 'evidence bag without cpItem: the player\'s own, it stays')
+    Config.Custody.evidenceItem = shipped
 end
 
 -- ============================================================================

@@ -2762,11 +2762,12 @@ where the officer is).
     after a restart), the server run caps, the run host and host succession, rescaling when the team
     shrinks, the mission timer, objective sequencing through the blocks (§7.1), every networked entity a
     run spawns (OneSync server natives, the `cp` state bag, caps, corpse cleanup), mission items
-    (ox_inventory, tagged { cpRun, cpItem }, orphan sweeps; kept back only while the player is in a real
-    Crimson-Arena match: flag and a bucket other than 0), the cp_mission_runs row of every participant
-    (points and cash breakdown JSON), telemetry (vehicle damage, pedestrian hits, lights and siren,
-    weapons fired), the Active Mission view and the live-run summary. Test runs write nothing and start
-    no cooldown. A resource stop deletes every entity and writes nothing.
+    (ox_inventory, tagged { cpRun, cpItem }, orphan sweeps that also look for Config.Custody.evidenceItem;
+    kept back only while the player is in a routing bucket other than 0 (a Crimson-Arena match, or any other
+    instance such as an apartment); the crimsonArena flag on its own, in bucket 0, does not keep them), the
+    cp_mission_runs row of every participant (points and cash breakdown JSON), telemetry (vehicle damage,
+    pedestrian hits, lights and siren, weapons fired), the Active Mission view and the live-run summary. Test
+    runs write nothing and start no cooldown. A resource stop deletes every entity and writes nothing.
 
   Public API (server, ARCHITECTURE §5.10)
     CP.Runs.create(opts) -> run|nil, errKey

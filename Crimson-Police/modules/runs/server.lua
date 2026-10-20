@@ -1931,10 +1931,11 @@ local function InventoryUp()
     return GetResourceState('ox_inventory') == 'started'
 end
 
--- CP.Alerts.inArena: a foreign crimsonArena flag or a routing bucket other than 0. InArena(src, 'match') counts only
--- a player in a real match, for taking items back: the flag is client-writable, so a player in bucket 0 holds his own
--- inventory whatever it says (a Crimson-Arena fighter is in its bucket 4210+ with his inventory stashed). Giving items
--- keeps the plain test. A second argument, not another function: this file is at Lua's 200 locals.
+-- CP.Alerts.inArena: a foreign crimsonArena flag or a routing bucket other than 0. InArena(src, 'match'), for taking
+-- items back, is true only in a routing bucket other than 0 (a Crimson-Arena match in its bucket 4210+ with the
+-- inventory stashed, or any other instance such as an apartment): the flag is client-writable, so a player in bucket
+-- 0 holds his own inventory whatever it says. Giving items keeps the plain test. A second argument, not another
+-- function: this file is at Lua's 200 locals.
 local function InArena(src, match)
     local ok, res = Call('Alerts', 'inArena', src)
     if not (ok and res == true) then return false end
@@ -2059,17 +2060,25 @@ local function MissionItemNames()
             end
         end
     end
+    -- the evidence bag is a mission item too (given with cpItem by CP.Custody.giveEvidence): without it here, a bag
+    -- left by a player who dropped before a restart (the orphan list is in memory only) would never be taken back
+    local evidence = Config.Custody and Config.Custody.evidenceItem
+    if type(evidence) == 'string' and evidence ~= '' then names[evidence] = true end
     return names
 end
 
 -- Remove Crimson-Police mission items (metadata.cpItem) of every run the player is not active in (not while he is in
--- a real Arena match: his inventory is in Crimson-Arena's stash).
+-- a routing bucket other than 0: in a Crimson-Arena match his inventory is in its stash).
 local function SweepPlayer(src, citizenid)
     if not PlayerOnline(src) or not InventoryUp() or InArena(src, 'match') then return false end
     local names = MissionItemNames()
     local o = citizenid and orphans[citizenid]
     if o then for n in pairs(o.names) do names[n] = true end end
-    local complete = true
+    -- The flag in bucket 0 is swept (it is client-writable), but the orphan record is kept while it is set: during a
+    -- Crimson-Arena entry or exit the bucket can already (or still) be 0 while the inventory is in its stash, and the
+    -- sweep 10 s after the flag clears goes through the orphan list.
+    local okF, flagged = Call('Alerts', 'foreignFlag', src)
+    local complete = not (okF and flagged == true)
     for name in pairs(names) do
         local _, ok = RemoveSlots(src, name, { cpItem = true }, function(slot)
             local meta = slot.metadata
