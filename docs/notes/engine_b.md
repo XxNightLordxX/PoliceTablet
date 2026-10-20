@@ -133,7 +133,10 @@ Files: `Crimson-Police/modules/runs/server.lua`, `Crimson-Police/modules/runs/cl
   progress) → `penalize(run, 'lights_siren', { src })`; `weapon_fired` once per participant →
   `run.stats.weaponsFired + 1`, `p.firedWeapon = true`. In-arena senders are ignored.
 - `server:objective`: active participant, run in progress, index an integer ≥ 1; evidence is sanitised
-  (tables ≤ 32 keys, depth ≤ 3, strings ≤ 256); `CP.AntiCheat.checkEvent` sees every well-formed event, also one
+  (tables ≤ 32 keys, depth ≤ 3, strings ≤ 256); a server-only type (`cuffed`, `decide`, `action`, `removed`,
+  `handed_over`, `impounded`, `shot`, `damaged`: CP.Npc / CP.Custody send them through `Runs.dispatch` /
+  `Runs.entityEvent`) is refused and flags the sender `unexpected_event` (K1: no real client report sends one);
+  `CP.AntiCheat.checkEvent` sees every other well-formed event, also one
   for an objective past the last (it flags `unexpected_event` for a later objective), and a check that fails
   (throws) drops the event like a refusal; then index = the current
   active objective; `CP.Access.recheck` on every objective event (removes with its reason); after that re-check

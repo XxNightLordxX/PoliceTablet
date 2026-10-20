@@ -625,6 +625,29 @@ H.fire('crimson-police:server:objective', 1, A.id, 1, 'not a table')
 H.eq(#CallsOf('onEvent', 1), before + 1, 'wrong index, non-participant, forged, deep or malformed evidence rejected')
 H.ok(Runs.dispatch(A, 1, nil, { type = 'cuffed', netId = 5 }), 'dispatch a server event')
 H.eq(CallsOf('onEvent', 1)[#CallsOf('onEvent', 1)].b.type, 'cuffed', 'dispatch reaches onEvent')
+-- K1: the same server-only event sent by a client never reaches the block and flags the sender (a scoped flag
+-- stub: later sections count ac.flag and read this run's rows)
+do
+    local acFlag, got = CP.AntiCheat.flag, {}
+    CP.AntiCheat.flag = function(run, src, reason, detail)
+        got[#got + 1] = { run = run, src = src, reason = reason, detail = detail }
+    end
+    local n = #CallsOf('onEvent', 1)
+    H.advance(1000)   -- the 12-per-second limit of server:objective
+    for _, t in ipairs({ 'cuffed', 'decide', 'action', 'removed', 'handed_over', 'impounded', 'shot', 'damaged' }) do
+        H.fire('crimson-police:server:objective', 1, A.id, 1, { type = t, netId = 5, time = n + #got })
+    end
+    CP.AntiCheat.flag = acFlag
+    H.eq(#CallsOf('onEvent', 1), n, 'k1: a client cuffed, decide, removed... never reaches onEvent')
+    H.eq(#got, 8, 'k1: each one flags')
+    H.ok(got[1] and got[1].run == A, 'k1: the run')
+    H.eq(got[1] and got[1].src, 1, 'k1: the sender')
+    H.eq(got[1] and got[1].reason, 'unexpected_event', 'k1: unexpected_event')
+    H.eq(got[1] and got[1].detail, 'client sent cuffed', 'k1: naming the type')
+    H.advance(1000)
+    H.fire('crimson-police:server:objective', 1, A.id, 1, { type = 'hit', value = 4 })
+    H.eq(#CallsOf('onEvent', 1), n + 1, 'k1: client evidence still reaches the block')
+end
 H.eq(select(2, Runs.dispatch(A, 1, 1, { type = 'reject' })), 'nope', 'dispatch returns the block reason')
 
 -- view / summary / getRun

@@ -1395,6 +1395,8 @@ end
 local function OnCuffed(ctx, st, src, ev)
     local c = CP.Custody.get(ctx.run, ev.netId)
     if not c then return false, 'unknown_entity' end
+    -- CP.Npc's cuff handler records the cuff (state, reach, handcuffs) before it sends this event
+    if not (CP.Npc and CP.Npc.getState and CP.Npc.getState(ev.netId) == 'cuffed') then return false, 'not_cuffed' end
     local ranOrDrew = c.ran or c.drew
     CP.Custody.onCuffed(ctx.run, ev.netId, src)
     -- a Cuff suspect on a person who ran or drew is their arrest (one per person) and the catch bonus

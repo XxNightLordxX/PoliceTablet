@@ -2806,6 +2806,8 @@ where the officer is).
     callback 'getRun' -> ActiveMissionView|nil for the caller's run
     action   'server:abandon' (runId) -> removeParticipant(run, src, 'quit')
     event    'crimson-police:server:objective' (runId, index, evidence) -> CP.AntiCheat.checkEvent -> block onEvent
+             (SERVER_ONLY types cuffed | decide | action | removed | handed_over | impounded | shot | damaged:
+             refused, the sender flagged unexpected_event; only Runs.dispatch / Runs.entityEvent send them)
     event    'crimson-police:server:telemetry' (runId, kind, data)  kinds vehicle | ped_hit | lights_siren | weapon_fired
              | area ({ index = 0 (start) | the current objective, text = 'street · zone' }, the sender's own view)
     client events sent: client:start, client:inProgress, client:objective, client:hud, client:tierChanged,

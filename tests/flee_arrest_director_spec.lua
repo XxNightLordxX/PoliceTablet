@@ -592,6 +592,39 @@ do
 end
 
 -- ============================================================================
+-- A CLIENT CANNOT SKIP THE VAN WALK (K1).
+-- custody = 'handover': after the real cuff, only CP.Custody's hand-over at the van sends handed_over. The same
+-- event sent by a client (server:objective) is refused, so the suspect is not handed over and the objective goes on.
+
+do
+    local def = Missions.get('drug_lab_raid')
+    local loc = def.locations[1]
+    Place(1, loc.start.coords)
+    local tight = {}
+    for k, v in pairs(loc) do tight[k] = v end
+    tight.cook = { loc.cook[1] }
+    tight.escapes = { { loc.cook[1] } }
+    local run = Run('drug_lab_raid', 1, { 1 },
+        { index = 3, obj = { suspects = 1, custody = 'handover' }, location = tight })
+    Secs(1)
+    local cook = Peds(run, 'inmate')[1]
+    H.ok(cook ~= nil, 'k1: the cook came out')
+    W.near(1, run, cook.netId, 1.0)
+    Event(1, run, { type = 'aim', netId = cook.netId })
+    Secs(6)
+    H.fire('crimson-police:server:npcCuff', 1, run.id, cook.netId)
+    Secs(1)
+    local p = run.objectives[1].state.peds[tostring(cook.netId)]
+    H.eq(p and p.state, 'cuffed', 'k1: the real cuff')
+    H.eq(p and p.chain, true, 'k1: the custody chain starts (hand over at the van)')
+    Event(1, run, { type = 'handed_over', netId = cook.netId })
+    Secs(2)
+    H.ok(p and not p.handedOver, 'k1: a client handed_over does not hand him over')
+    H.ok(run.objectives[1].status ~= 'done', 'k1: the objective is not done without the van walk')
+    EndRun(run)
+end
+
+-- ============================================================================
 --                     THE DOOR SUSPECT: NEVER AT THE START
 -- ============================================================================
 -- A location with no suspect point: before, he appeared on the start marker, where the officers arrive.

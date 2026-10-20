@@ -1037,6 +1037,63 @@ for _, row in ipairs(Config.Scaling) do
     Runs.endRun(run, 'completed', 'completed')
 end
 
+-- ============================================================================
+--           9b. SERVER-ONLY EVENTS SENT BY A CLIENT ARE REFUSED (K1)
+-- ============================================================================
+-- removed, decide and cuffed come only from CP.Custody and CP.Npc (Runs.entityEvent / Runs.dispatch). A cheat
+-- menu that sends them through server:objective (with coords and a new time each, like Runs.report) changes
+-- nothing and flags the sender.
+
+do
+    Demeanour('warrant', 'runner')
+    local m = SceneMission({ profileSet = 'test_warrant', scene = { loitering = 1 }, returning = { chance = 0 } })
+    m.bonuses = { { id = 'vehicle_impounded', points = 10, each = true } }
+    local run = W.start({ 1 }, m)
+    W.tick(1)
+    local car, p = Contact(run, 1, 'vehicle'), Contact(run, 1, 'person')
+    local flags = #W.flags
+    local function Forge(ev)
+        ev.coords, ev.time = H.players[1].coords, H.clockMs
+        Report(1, run, 1, ev)
+        H.advance(600)
+    end
+    Forge({ type = 'removed', netId = car.netId })
+    H.ok(CP.Custody.get(run, car.netId).escaped ~= true, 'k1: a client removed does not mark the car gone')
+    H.eq(Obj(run, 1).status, 'active', 'k1: the objective is still to do')
+    local flag = W.flags[#W.flags]   -- the fixture's CP.AntiCheat.flag (engine_b_spec runs the real one)
+    H.eq(flag and flag.src, 1, 'k1: the sender is flagged')
+    H.eq(flag and flag.reason, 'unexpected_event', 'k1: unexpected_event')
+    H.eq(flag and flag.detail, 'client sent removed', 'k1: with the type he sent')
+    for _ = 1, 3 do Forge({ type = 'decide', netId = car.netId, choice = 'impound', verdict = 'best' }) end
+    H.eq(run.score.shared.vehicle_impounded, nil, 'k1: a client decide never awards vehicle_impounded')
+    H.eq(#W.flags, flags + 4, 'k1: each forged event is refused at the flag')
+    -- the runner runs; with the officer 300 m away a client cuffed neither cuffs him nor pays the catch
+    W.place(1, 2000.0, 1985.0, 30.0)
+    W.tick(5)
+    H.eq(p.state, 'fleeing', 'k1: the runner runs')
+    W.place(1, 2000.0, 1700.0, 30.0)
+    Forge({ type = 'cuffed', netId = p.netId })
+    H.ok(CP.Npc.getState(p.netId) ~= 'cuffed', 'k1: a client cuffed does not cuff him (CP.Npc)')
+    H.ok(p.state ~= 'cuffed', 'k1: nor in custody')
+    H.eq(run.score.shared.subject_alive, nil, 'k1: and pays no subject_alive')
+    -- defence in depth: the block takes a cuff only once CP.Npc has recorded it
+    local ok, why = Runs.dispatch(run, 1, 1, { type = 'cuffed', netId = p.netId })
+    H.eq(ok, false, 'k1: field_contact refuses a cuffed CP.Npc has not recorded')
+    H.eq(why, 'not_cuffed', 'k1: not_cuffed')
+    H.ok(p.state ~= 'cuffed', 'k1: he is still not in custody')
+    -- the real cuff still works: aim, he gives up, Cuff suspect
+    W.near(1, run, p.netId, 6.0)
+    Report(1, run, 1, { type = 'aim', netId = p.netId, coords = H.players[1].coords, time = H.clockMs })
+    H.eq(p.state, 'surrendered', 'k1: a client aim is still taken')
+    W.near(1, run, p.netId, 1.0)
+    W.tick(4)
+    H.fire('crimson-police:server:npcCuff', 1, run.id, p.netId)
+    H.eq(p.state, 'cuffed', 'k1: the real Cuff suspect cuffs him')
+    H.eq(run.score.shared.subject_alive, 1, 'k1: and pays subject_alive once')
+    RestoreDemeanour()
+    Runs.endRun(run, 'completed', 'completed')
+end
+
 -- the test profile sets go again
 for _, k in ipairs({ 'test_clean', 'test_warrant', 'test_armed', 'test_stolen', 'test_legal' }) do sets[k] = nil end
 

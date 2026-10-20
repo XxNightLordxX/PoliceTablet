@@ -4128,63 +4128,76 @@ local function RecheckOk(run, p)
     return true
 end
 
-RegisterNetEvent(CP.e('server:objective'), function(runId, index, evidence)
-    local src = source
-    src = ToSrc(src)
-    if not src then return end
-    if not CP.Net.rateOk(src, 'runs:objective', 12, 1000) then return end
-    if type(runId) ~= 'string' or #runId > 64 then return end
-    index = math.tointeger(tonumber(index) or -1)
-    local run = runs[runId]
-    if not run then
-        CP.log(TAG, 'objective event from %d for unknown run %s', src, runId)
-        return
-    end
-    local p = run.participants[src]
-    if not p or p.status ~= 'active' then
-        CP.warn(TAG, 'objective event from %d who is not an active participant of run %s', src, runId)
-        return
-    end
-    if run.state ~= 'in_progress' or not index or index < 1 then
-        CP.log(TAG, 'run %s: objective event %s from %d ignored (state %s)', runId, tostring(index), src, run.state)
-        return
-    end
-    local ev = CleanEvidence(evidence)
-    if type(ev) ~= 'table' or type(ev.type) ~= 'string' or #ev.type > 32 then
-        CP.log(TAG, 'run %s: malformed evidence from %d', runId, src)
-        return
-    end
-    if InArena(src) then return end
-    -- CP.AntiCheat sees every well-formed event, also one for an objective past the last (an executor's
-    -- event for a later objective flags the run 'unexpected_event' there). A check that failed drops the
-    -- event: it would otherwise skip the speed and duplicate checks.
-    if Has('AntiCheat', 'checkEvent') then
-        local okCall, ok, reason = Call('AntiCheat', 'checkEvent', run, src, index, ev)
-        if not okCall or ok == false then
-            CP.log(TAG, 'run %s: evidence %s from %d rejected by anticheat (%s)', runId, ev.type, src,
-                tostring(okCall and reason or 'check failed'))
+-- Objective events only the server sends (CP.Npc and CP.Custody through Runs.dispatch / Runs.entityEvent): a block's
+-- onEvent cannot tell them from client evidence, so server:objective refuses them and flags the sender. In a block
+-- because this file is at Lua's 200 locals.
+do
+    local SERVER_ONLY = Set({ 'cuffed', 'decide', 'action', 'removed', 'handed_over', 'impounded', 'shot', 'damaged' })
+
+    RegisterNetEvent(CP.e('server:objective'), function(runId, index, evidence)
+        local src = source
+        src = ToSrc(src)
+        if not src then return end
+        if not CP.Net.rateOk(src, 'runs:objective', 12, 1000) then return end
+        if type(runId) ~= 'string' or #runId > 64 then return end
+        index = math.tointeger(tonumber(index) or -1)
+        local run = runs[runId]
+        if not run then
+            CP.log(TAG, 'objective event from %d for unknown run %s', src, runId)
             return
         end
-    end
-    local o = run.objectives[index]
-    if not o or index ~= run.objectiveIndex or o.status ~= 'active' then
-        CP.log(TAG, 'run %s: evidence for objective %d from %d is out of order (current %d)', runId, index, src,
-            run.objectiveIndex)
-        return
-    end
-    if not RecheckOk(run, p) then return end
-    -- The re-check may yield: the participant, the run or the objective may have changed meanwhile.
-    if run.state ~= 'in_progress' or p.status ~= 'active' or index ~= run.objectiveIndex or o.status ~= 'active' then
-        return
-    end
-    local okCall, ok, reason = CallBlock(run, index, 'onEvent', src, ev)
-    if okCall and ok == false then
-        CP.log(TAG, 'run %s: block rejected %s from %d (%s)', runId, ev.type, src, tostring(reason))
-    end
-    -- The event may have moved the objective on (a logged door, a new tablet log point): the HUD and
-    -- the Active Mission view follow now instead of on the next tick.
-    if run.state == 'in_progress' then RefreshHud(run) end
-end)
+        local p = run.participants[src]
+        if not p or p.status ~= 'active' then
+            CP.warn(TAG, 'objective event from %d who is not an active participant of run %s', src, runId)
+            return
+        end
+        if run.state ~= 'in_progress' or not index or index < 1 then
+            CP.log(TAG, 'run %s: objective event %s from %d ignored (state %s)', runId, tostring(index), src, run.state)
+            return
+        end
+        local ev = CleanEvidence(evidence)
+        if type(ev) ~= 'table' or type(ev.type) ~= 'string' or #ev.type > 32 then
+            CP.log(TAG, 'run %s: malformed evidence from %d', runId, src)
+            return
+        end
+        -- no real client report sends these: a client that does is forging a cuff, a decision or a removal
+        if SERVER_ONLY[ev.type] then
+            Call('AntiCheat', 'flag', run, src, 'unexpected_event', ('client sent %s'):format(ev.type))
+            return
+        end
+        if InArena(src) then return end
+        -- CP.AntiCheat sees every well-formed event, also one for an objective past the last (an executor's
+        -- event for a later objective flags the run 'unexpected_event' there). A check that failed drops the
+        -- event: it would otherwise skip the speed and duplicate checks.
+        if Has('AntiCheat', 'checkEvent') then
+            local okCall, ok, reason = Call('AntiCheat', 'checkEvent', run, src, index, ev)
+            if not okCall or ok == false then
+                CP.log(TAG, 'run %s: evidence %s from %d rejected by anticheat (%s)', runId, ev.type, src,
+                    tostring(okCall and reason or 'check failed'))
+                return
+            end
+        end
+        local o = run.objectives[index]
+        if not o or index ~= run.objectiveIndex or o.status ~= 'active' then
+            CP.log(TAG, 'run %s: evidence for objective %d from %d is out of order (current %d)', runId, index, src,
+                run.objectiveIndex)
+            return
+        end
+        if not RecheckOk(run, p) then return end
+        -- The re-check may yield: the participant, the run or the objective may have changed meanwhile.
+        if run.state ~= 'in_progress' or p.status ~= 'active' or index ~= run.objectiveIndex
+            or o.status ~= 'active' then
+            return
+        end
+        local okCall, ok, reason = CallBlock(run, index, 'onEvent', src, ev)
+        if okCall and ok == false then
+            CP.log(TAG, 'run %s: block rejected %s from %d (%s)', runId, ev.type, src, tostring(reason))
+        end
+        -- The event may have moved the objective on (a logged door, a new tablet log point): the HUD and
+        -- the Active Mission view follow now instead of on the next tick.
+        if run.state == 'in_progress' then RefreshHud(run) end
+    end)
+end
 
 -- An entity one of the runs spawned (the engine's registry, never the cp bag: a client can put a cp bag
 -- on its own vehicle or on a pedestrian it runs over to dodge the damage and pedestrian penalties).

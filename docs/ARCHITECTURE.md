@@ -1093,7 +1093,9 @@ Full admin control (P3, §5.39):
 - `hud(run, patch)` → `crimson-police:client:hud` to participants; `hudFor(run, src, patch)`
 - `view(run, src) -> ActiveMissionView` (§9.4) and `summary(run) -> LiveRun` (§9.5)
 - `isParticipant(run, src)`, `activeSrcs(run) -> list`, `host(run) -> src`
-- Handles `server:objective` (runId, index, evidence) → `CP.AntiCheat.checkEvent` → block `onEvent`;
+- Handles `server:objective` (runId, index, evidence) → `CP.AntiCheat.checkEvent` → block `onEvent`; the
+  server-only types (`cuffed`, `decide`, `action`, `removed`, `handed_over`, `impounded`, `shot`, `damaged`: sent
+  by CP.Npc / CP.Custody through `dispatch` / `entityEvent`) are refused and flag the sender `unexpected_event`;
   `server:abandon` (runId) → `removeParticipant(run, src, 'quit')`; `server:telemetry` (runId, kind, data)
   kinds: `ped_hit`, `lights_siren`, `weapon_fired`, `vehicle` (netId of the vehicle they drive).
 - Loops: 1 s timer/block tick; `Config.AntiCheat.jobRecheck` access recheck; corpse cleanup
