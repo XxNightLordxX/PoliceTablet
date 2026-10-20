@@ -322,12 +322,19 @@ local COUNTS = {
     today = function(citizenid, missionType) return CachedCount(citizenid, 'day', missionType, 'completionsToday') end,
 }
 
-local function UnitInfo(src)
+-- known: src -> officer (false = not one) already looked up in this pass; a member found there is not asked again.
+local function UnitInfo(src, known)
     local leader = LeaderOf(src)
     local srcs = UnitMembers(leader)
     local officers, cids, sig = {}, {}, {}
     for _, m in ipairs(srcs) do
-        local o = GetOfficer(m)
+        local o
+        if known and known[m] ~= nil then
+            o = known[m]
+        else
+            o = GetOfficer(m)
+            if known then known[m] = o or false end
+        end
         if o then
             officers[#officers + 1] = o
             cids[#cids + 1] = o.citizenid
@@ -387,9 +394,10 @@ local function BuildTypeState(unit, missionType)
     return st
 end
 
--- The cached state of src's unit: { at, unit, types = { [type] = state } }.
-local function UnitState(src, fresh)
-    local unit = UnitInfo(src)
+-- The cached state of src's unit: { at, unit, types = { [type] = state } }. unit: the UnitInfo of src's unit when
+-- the caller has just built it (the idle units of this check), so it is not built again.
+local function UnitState(src, fresh, unit)
+    unit = unit or UnitInfo(src)
     local now = os.time()
     local ttl = Num(Cfg().eligibilityCache, 10)
     local e = states[unit.leader]
@@ -491,7 +499,7 @@ local function ClaimCheck(src, call, now)
     local dist = UnitDistance(unit.srcs, call)
     local rule = CallRule(call, unit, dist, now)
     if rule then return false, rule end
-    local st = TypeState(UnitState(src, true), call.type)
+    local st = TypeState(UnitState(src, true, unit), call.type)
     local area = AreaForState(st, call)
     if EffectivePool(st, area) <= 0 then return false, 'err.mc_no_missions_here' end
     return true, { unit = unit, dist = dist, area = area, officer = officer }
@@ -645,7 +653,7 @@ local function Toast(call, units, skipCid)
     local payload = ToastPayload(call)
     local now = os.time()
     for _, u in ipairs(units) do
-        local st = TypeState(UnitState(u.leader), call.type)
+        local st = TypeState(UnitState(u.leader, false, u), call.type)
         local area = AreaForState(st, call)
         local rule, soft = CallRule(call, u, UnitDistance(u.srcs, call), now)
         local skip = skipCid ~= nil and Contains(u.cids, skipCid)
@@ -678,19 +686,34 @@ local function OpenCalls()
     return out
 end
 
+-- CP.Access.maybeOfficer: false only for a player whose last known Qbox job is in no department (no lookup).
+local function MaybeOfficer(src)
+    if not (CP.Access and CP.Access.maybeOfficer) then return true end
+    return CP.Access.maybeOfficer(src) ~= false
+end
+
 -- Idle units: solo officers and units whose members are all on duty, not suspended, not on a run, not
--- responding to a real call and not in Crimson-Arena. Each has leader, srcs, officers, cids.
+-- responding to a real call and not in Crimson-Arena. Each has leader, srcs, officers, cids. Players whose known
+-- job is in no department are skipped without a Qbox lookup, and each officer is looked up once per pass.
 local function IdleUnits()
-    local out, seen = {}, {}
-    local players = GetPlayers() or {}
-    table.sort(players, function(a, b) return (tonumber(a) or 0) < (tonumber(b) or 0) end)
-    for _, id in ipairs(players) do
+    local out, seen, known = {}, {}, {}
+    local list = {}
+    for _, id in ipairs(GetPlayers() or {}) do
         local src = ToSrc(id)
-        if src and GetOfficer(src) then
-            local leader = LeaderOf(src)
-            if not seen[leader] then
+        if src then list[#list + 1] = src end
+    end
+    table.sort(list)
+    for _, src in ipairs(list) do
+        local leader = MaybeOfficer(src) and LeaderOf(src)
+        if leader and not seen[leader] then
+            local o = known[src]
+            if o == nil then
+                o = GetOfficer(src) or false
+                known[src] = o
+            end
+            if o then
                 seen[leader] = true
-                local unit = UnitInfo(leader)
+                local unit = UnitInfo(leader, known)
                 local idle = #unit.officers == #unit.srcs and #unit.srcs > 0
                 local u = UnitOf(leader)
                 if u and u.locked then idle = false end
@@ -732,7 +755,7 @@ local function PostServerCall(units, now)
         if capOk ~= false then
             local claimers = {}
             for _, u in ipairs(units) do
-                local st = TypeState(UnitState(u.leader), key)
+                local st = TypeState(UnitState(u.leader, false, u), key)
                 if st.ok and st.board > 0 then claimers[#claimers + 1] = u end
             end
             if #claimers > 0 then viable[#viable + 1] = { key = key, units = claimers } end
@@ -1502,7 +1525,12 @@ function MC.supView(src)
     local own = v and v.unit.srcs or { src }
     for _, u in ipairs(IdleUnits()) do
         if not Contains(own, u.leader) then
-            local o = GetOfficer(u.leader) or {}
+            -- every member of an idle unit is an officer, already looked up by IdleUnits
+            local o
+            for _, m in ipairs(u.officers) do
+                if m.src == u.leader then o = m end
+            end
+            o = o or GetOfficer(u.leader) or {}
             units[#units + 1] = {
                 src = u.leader,
                 name = o.name or ('#' .. u.leader),

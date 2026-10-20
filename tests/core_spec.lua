@@ -1269,6 +1269,83 @@ do
     CP.Access.suspend('CPT00003', 0, 0, 'lift')
 end
 
+-- ============================================================================
+--                  CP.Qbx.knownJob AND CP.Access.maybeOfficer
+-- ============================================================================
+-- The event-kept job map.
+-- TriggerEvent hands the handlers a copy here, as FXServer's msgpack does.
+
+do
+    local Q, A = CP.Qbx, CP.Access
+    local lookups = 0
+    local realGet = H.exportsMock.qbx_core.GetPlayer
+    H.exportsMock.qbx_core.GetPlayer = function(src)
+        lookups = lookups + 1
+        return realGet(src)
+    end
+    -- seeded from qbx_core's players list (at start and when qbx_core starts), no single-player copy
+    TriggerEvent('onResourceStop', 'qbx_core')
+    H.eq(Q.knownJob(1), nil, 'qbx_core stopped: no job is known')
+    TriggerEvent('onResourceStart', 'qbx_core')
+    H.eq(Q.knownJob(6), 'ambulance', 'qbx_core started: seeded from its players list')
+    H.eq(Q.knownJob(2), qbxPlayers[2].PlayerData.job.name, 'every listed player')
+    H.eq(A.maybeOfficer(6), false, 'a known job in no department: no officer')
+    H.eq(A.maybeOfficer(1), true, 'a department job: maybe (getOfficer decides)')
+    H.eq(A.maybeOfficer(4), false, 'a department job held only as a second job: no (getOfficer reads the primary one)')
+    H.eq(A.maybeOfficer(42), true, 'nobody known: the full check')
+    H.eq(A.maybeOfficer('x'), true, 'a bad src: the full check (which refuses it)')
+    H.eq(lookups, 0, 'seeding and maybeOfficer copy no Player object')
+
+    -- SetPlayerData (qbx_core's UpdatePlayerData: its SetPlayerData export, SetJob, the group functions)
+    qbxPlayers[6].PlayerData.job = {
+        name = 'sast',
+        label = 'SAST',
+        onduty = true,
+        grade = { name = 'Trooper', level = 1 },
+    }
+    TriggerEvent('QBCore:Player:SetPlayerData', CP.U.copy(qbxPlayers[6].PlayerData))
+    H.eq(Q.knownJob(6), 'sast', 'SetPlayerData updates the map')
+    H.eq(A.maybeOfficer(6), true, 'and maybeOfficer follows it')
+    TriggerEvent('QBCore:Player:SetPlayerData', 'junk')
+    TriggerEvent('QBCore:Player:SetPlayerData', { source = 6 })
+    TriggerEvent('QBCore:Player:SetPlayerData', { source = 'x', job = { name = 'mechanic' } })
+    H.eq(Q.knownJob(6), 'sast', 'a payload without a job or a valid source changes nothing')
+    H.eq(netEvents['QBCore:Player:SetPlayerData'], nil, 'SetPlayerData is not a net event')
+
+    -- the map never feeds onLost: SetPlayerData comes before OnJobUpdate, the change is still reported
+    local lost = {}
+    A.onLost(function(src, reason) lost[#lost + 1] = { src = src, reason = reason } end)
+    qbxPlayers[2].PlayerData.job = { name = 'mechanic', label = 'Mechanic', onduty = true, grade = { level = 0 } }
+    TriggerEvent('QBCore:Player:SetPlayerData', CP.U.copy(qbxPlayers[2].PlayerData))
+    H.eq(Q.knownJob(2), 'mechanic', 'the map follows SetPlayerData')
+    TriggerEvent('QBCore:Server:OnJobUpdate', 2, CP.U.copy(qbxPlayers[2].PlayerData.job))
+    H.eq(lost[#lost] and lost[#lost].src, 2, 'the job change after SetPlayerData still fires onLost')
+    H.eq(lost[#lost] and lost[#lost].reason, 'job_change', 'job_change')
+
+    -- OnJobUpdate, unload, load, drop, a lookup
+    qbxPlayers[6].PlayerData.job = { name = 'ambulance', label = 'EMS', onduty = true, grade = { level = 2 } }
+    TriggerEvent('QBCore:Server:OnJobUpdate', 6, CP.U.copy(qbxPlayers[6].PlayerData.job))
+    H.eq(Q.knownJob(6), 'ambulance', 'OnJobUpdate updates the map')
+    TriggerEvent('QBCore:Server:OnPlayerUnload', 6)
+    H.eq(Q.knownJob(6), nil, 'OnPlayerUnload forgets it')
+    TriggerEvent('QBCore:Server:PlayerLoaded', CP.U.copy(qbxPlayers[6]))
+    H.eq(Q.knownJob(6), 'ambulance', 'PlayerLoaded sets it')
+    H.fire('playerDropped', 6)
+    H.eq(Q.knownJob(6), nil, 'playerDropped forgets it')
+    H.ok(Q.getInfo(6) ~= nil, 'a lookup')
+    H.eq(Q.knownJob(6), 'ambulance', 'fills the map')
+    qbxPlayers[6].PlayerData.job = 'broken'
+    Q.getInfo(6)
+    H.eq(Q.knownJob(6), 'unemployed', 'a job Qbox gives no table for is what getInfo reports')
+    local saved = qbxPlayers[6]
+    qbxPlayers[6] = nil
+    H.eq(Q.getInfo(6), nil, 'logged out: no info')
+    H.eq(Q.knownJob(6), nil, 'and no job')
+    qbxPlayers[6] = saved
+    saved.PlayerData.job = { name = 'ambulance', label = 'EMS', onduty = true, grade = { level = 2 } }
+    H.exportsMock.qbx_core.GetPlayer = realGet
+end
+
 print = realPrint
 
 -- ============================================================================

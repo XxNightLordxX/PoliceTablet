@@ -1070,6 +1070,10 @@ Public API (docs/ARCHITECTURE.md §5.2)
       access). errKeys, in check order: err.not_police (no character, or the active job is in no
       department), err.not_on_duty, err.suspended (Crimson-Police), err.suspended_dispatch
       (SC-Dispatch, checked for the active job). Suspension lookups are cached for 15 s.
+  CP.Access.maybeOfficer(src) -> boolean       false only when CP.Qbx.knownJob(src) is in no turned-on
+      department (getOfficer would refuse); true = maybe, an unknown job included. No Qbox lookup: loops
+      over every online player filter with it and call getOfficer only for the rest. It reads the primary
+      job like getOfficer; the job map never feeds onLost (SetPlayerData comes before OnJobUpdate).
   CP.Access.isAdmin(src) -> boolean            IsPlayerAceAllowed(src, Config.AdminAce); 0 = console = true
   CP.Access.isSupervisor(src) -> boolean       a qualifying officer whose grade >= supervisorGrade
   CP.Access.role(src) -> 'admin'|'supervisor'|'officer'|nil   (the highest)
@@ -1924,6 +1928,11 @@ Public API (docs/ARCHITECTURE.md §5.1)
       qbx_core's default 'NO CALLSIGN'; gradeName falls back to the job definition's grade name.
   CP.Qbx.getByCitizenId(citizenid) -> src|nil      online players only, exact (case-sensitive) match
   CP.Qbx.getOnlinePlayers() -> { src, ... }        loaded characters, ascending (cached for 1 s)
+  CP.Qbx.knownJob(src) -> jobName|nil             the primary job qbx_core last reported (nil = not known).
+      Kept by events and lookups only, never polled: PlayerLoaded, OnJobUpdate, QBCore:Player:SetPlayerData
+      (qbx_core's UpdatePlayerData; SetPlayerData('job', ...) fires nothing else), every getInfo, and the
+      GetQBPlayers copy of getOnlinePlayers (seeded at start and when qbx_core starts). Cleared on
+      OnPlayerUnload, playerDropped and a qbx_core stop.
   CP.Qbx.getJobs() -> table                        qbx job definitions ({} when unavailable)
   CP.Qbx.addMoney(src, account, amount, reason) -> boolean, why|nil
       player.Functions.AddMoney(account, amount, reason); amount rounded half up (CP.U.round); 0 returns

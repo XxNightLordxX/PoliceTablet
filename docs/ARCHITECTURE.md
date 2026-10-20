@@ -621,6 +621,10 @@ Implementers of modules/integrations/* must follow it; the most important points
 - S `getInfo(src) -> info|nil` where `info = { src, citizenid, name, firstname, lastname, job = { name, label, type, onduty, gradeLevel, gradeName }, callsign, metadata, isDead, inLastStand }`
 - S `getByCitizenId(citizenid) -> src|nil`
 - S `getOnlinePlayers() -> { src, ... }`
+- S `knownJob(src) -> jobName|nil` — the primary job qbx_core last reported, kept only by `QBCore:Server:PlayerLoaded`,
+  `QBCore:Server:OnJobUpdate`, `QBCore:Player:SetPlayerData` (qbx_core's UpdatePlayerData: its SetPlayerData export,
+  SetJob, the group functions), every `getInfo` and the `GetQBPlayers` copy of `getOnlinePlayers` (at start and when
+  qbx_core starts); cleared on unload, drop and a qbx_core stop. nil = not known. It never feeds `CP.Access`'s onLost.
 - S `getJobs() -> table` (qbx jobs)
 - S `addMoney(src, account, amount, reason) -> boolean, why|nil` — amount rounded with `CP.U.round`; `why = 'error'` when `AddMoney` raised (the balance may already have changed: never retry or refund; CP.Cash leaves the row `paying`); a plain refusal returns only `false`
 - S `isDowned(src) -> boolean` (`metadata.isdead == true or metadata.inlaststand == true`)
@@ -690,6 +694,9 @@ Parity-plus additions to the integrations:
 - S `department(key) -> sanitised dept` `{ key, label, short, jobs, supervisorGrade, societyAccount, theme = { primary, accent, background, surface, text }, logo = { url|nil, watermark, opacity, size, grayscale } }` (invalid colours fall back to the Crimson-Police default with one console warning; `text` auto-picked with `CP.U.contrastText`; `logo.url` = `https://cfx-nui-<CP.resource>/logos/<file>` or the configured https url)
 - S `departments() -> { dept, ... }` sorted by key
 - S `getOfficer(src) -> officer|nil, errKey` — on-duty, active job in a department, not suspended (Crimson-Police or SC-Dispatch). errKeys: `err.not_police`, `err.not_on_duty`, `err.suspended`, `err.suspended_dispatch`
+- S `maybeOfficer(src) -> boolean` — a pre-filter for loops over every online player, with no Qbox lookup: false only
+  when `CP.Qbx.knownJob(src)` is in no turned-on department (so `getOfficer` would refuse); an unknown job is true.
+  Call `getOfficer` for the full check. Loops never call `exports.qbx_core:GetPlayer` per player (loop rule 8).
 - S `isAdmin(src) -> boolean` (`IsPlayerAceAllowed(src, adminAce())`, or `IsPlayerAceAllowed(src, 'admin')` while `Config.QboxAdmins == true`: Qbox's own admin ace, which a stock Qbox server gives `group.admin`; only an explicit `true` counts, so a config.lua without the line keeps the ace alone; src 0 = console = true). Every admin check in the resource goes through it
 - S `adminAce() -> string` (`Config.AdminAce`, or `'crimsonpolice.admin'` when it is empty or not a string)
 - S `qboxAdminAce() -> 'admin'|nil` (`'admin'` while `Config.QboxAdmins == true`, else nil)

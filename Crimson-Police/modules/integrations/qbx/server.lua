@@ -10,6 +10,9 @@ local listeners = { duty = {}, loaded = {}, job = {}, unload = {}, group = {} }
 local metaListeners = {}   -- { fn, keys = { [key] = true }|nil }
 local onlineCache = { at = -1, list = {} }
 local errorLoggedAt = {}
+-- src -> the player's primary Qbox job name, kept only by qbx_core's events and by lookups (never polled), so loops
+-- over every player can skip non-police without copying their Player object (CP.Access.maybeOfficer).
+local jobOf = {}
 
 -- ============================================================================
 --                                   HELPERS
@@ -57,6 +60,13 @@ local function GradeNameFromJobs(jobName, level)
     return nil
 end
 
+-- The job name exactly as NormJob gives it (no grade lookup).
+local function JobName(job)
+    local name = type(job) == 'table' and Str(job.name) or nil
+    if not name or name == '' then return 'unemployed' end
+    return name
+end
+
 -- The job table in the shape documented above (never nil).
 local function NormJob(job)
     if type(job) ~= 'table' then
@@ -72,8 +82,7 @@ local function NormJob(job)
     end
     level = math.floor(level)
     if gradeName == '' then gradeName = nil end
-    local name = Str(job.name)
-    if not name or name == '' then name = 'unemployed' end
+    local name = JobName(job)
     if not gradeName and name ~= 'unemployed' then gradeName = GradeNameFromJobs(name, level) end
     return {
         name = name,
@@ -104,7 +113,10 @@ end
 function Q.getInfo(src)
     local n = ToSrc(src)
     local player = Q.getPlayer(n)
-    if not player then return nil end
+    if not player then
+        if n then jobOf[n] = nil end
+        return nil
+    end
     local pd = player.PlayerData
     if type(pd.citizenid) ~= 'string' or pd.citizenid == '' then return nil end
     local ci = type(pd.charinfo) == 'table' and pd.charinfo or {}
@@ -113,6 +125,8 @@ function Q.getInfo(src)
     local name = CP.U.trim(first .. ' ' .. last)
     if name == '' then name = GetPlayerName(n) or pd.citizenid end
     local md = type(pd.metadata) == 'table' and pd.metadata or {}
+    local job = NormJob(pd.job)
+    jobOf[n] = job.name
     return {
         src = n,
         citizenid = pd.citizenid,
@@ -120,7 +134,7 @@ function Q.getInfo(src)
         name = name,
         firstname = first,
         lastname = last,
-        job = NormJob(pd.job),
+        job = job,
         callsign = NormCallsign(md.callsign),
         metadata = md,
         isDead = md.isdead == true,
@@ -150,24 +164,33 @@ function Q.getOnlinePlayers()
             LogError('GetQBPlayers', 'exports.qbx_core:GetQBPlayers failed: %s', tostring(players))
             return {}
         end
-        local list, seen = {}, {}
+        local list, seen, jobs = {}, {}, {}
         if type(players) == 'table' then
             for key, p in pairs(players) do
                 local src
-                if type(p) == 'table' and type(p.PlayerData) == 'table' then src = ToSrc(p.PlayerData.source) end
+                local pd = type(p) == 'table' and type(p.PlayerData) == 'table' and p.PlayerData or nil
+                if pd then src = ToSrc(pd.source) end
                 src = src or ToSrc(key)
                 if src and not seen[src] then
                     seen[src] = true
                     list[#list + 1] = src
+                    if pd then jobs[src] = JobName(pd.job) end
                 end
             end
         end
         table.sort(list)
         onlineCache = { at = now, list = list }
+        -- The same copy seeds the job map: a player Qbox does not list has no job here (unknown = a full check).
+        jobOf = jobs
     end
     local out = {}
     for i = 1, #onlineCache.list do out[i] = onlineCache.list[i] end
     return out
+end
+
+-- The primary job name Qbox last reported for src (events and lookups only), or nil when it is not known.
+function Q.knownJob(src)
+    return jobOf[src]
 end
 
 function Q.getJobs()
@@ -417,6 +440,7 @@ AddEventHandler('QBCore:Server:PlayerLoaded', function(player)
     local src = ToSrc(player.PlayerData.source)
     if not src then return end
     onlineCache.at = -1
+    jobOf[src] = JobName(player.PlayerData.job)
     CP.log(TAG, 'PlayerLoaded %d (%s)', src, tostring(player.PlayerData.citizenid))
     Emit('loaded', src)
 end)
@@ -426,6 +450,7 @@ AddEventHandler('QBCore:Server:OnJobUpdate', function(src, job)
     if not src then return end
     local info = Q.getInfo(src)
     local current = info and info.job or NormJob(job)
+    jobOf[src] = current.name
     CP.log(TAG, 'OnJobUpdate %d -> %s (grade %d, on duty %s)', src, current.name, current.gradeLevel,
         tostring(current.onduty))
     Emit('job', src, current)
@@ -435,6 +460,7 @@ AddEventHandler('QBCore:Server:OnPlayerUnload', function(src)
     src = ToSrc(src)
     if not src then return end
     onlineCache.at = -1
+    jobOf[src] = nil
     CP.log(TAG, 'OnPlayerUnload %d', src)
     Emit('unload', src)
 end)
@@ -462,6 +488,35 @@ AddEventHandler('qbx_core:server:onSetMetaData', function(key, old, new, src)
     end
 end)
 
+-- qbx_core's UpdatePlayerData (its SetPlayerData export, Functions.SetPlayerData, SetJob, the group functions)
+-- sends the whole PlayerData here; a job set through SetPlayerData('job', ...) fires no other event.
+AddEventHandler('QBCore:Player:SetPlayerData', function(pd)
+    if type(pd) ~= 'table' or type(pd.job) ~= 'table' then return end
+    local src = ToSrc(pd.source)
+    if src then jobOf[src] = JobName(pd.job) end
+end)
+
 AddEventHandler('playerDropped', function()
     onlineCache.at = -1
+    local src = ToSrc(source)
+    if src then jobOf[src] = nil end
+end)
+
+-- qbx_core stopped: nothing is known; started again: the job map is seeded from its players list.
+AddEventHandler('onResourceStop', function(res)
+    if res ~= RESOURCE then return end
+    onlineCache.at = -1
+    jobOf = {}
+end)
+
+AddEventHandler('onResourceStart', function(res)
+    if res ~= RESOURCE then return end
+    onlineCache.at = -1
+    Q.getOnlinePlayers()
+end)
+
+-- Seed the job map once at start (a restart of Crimson-Police with players online).
+CreateThread(function()
+    onlineCache.at = -1
+    Q.getOnlinePlayers()
 end)

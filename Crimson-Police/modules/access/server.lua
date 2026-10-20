@@ -532,6 +532,17 @@ function A.getOfficer(src)
     }
 end
 
+-- A cheap pre-filter for loops over every online player: false only when the primary job Qbox last reported for src
+-- (CP.Qbx.knownJob, kept by qbx_core's events) is in no turned-on department, so getOfficer would refuse src anyway.
+-- true = maybe: call getOfficer for the full check (an unknown job always gets it). getOfficer reads only the primary
+-- job (info.job): change this together with it. The job map never feeds lastJob (qbx_core sends SetPlayerData before
+-- OnJobUpdate, so Evaluate would see no change and onLost would never fire).
+function A.maybeOfficer(src)
+    local n = ToSrc(src)
+    local j = n and CP.Qbx and CP.Qbx.knownJob and CP.Qbx.knownJob(n)
+    return j == nil or Build().byJob[j] ~= nil
+end
+
 -- Admin UI → Officers → Support → Check access: why this online player can or can't open the Officer UI. The steps
 -- are the opening checks in order (job, department on, duty, suspensions, retired, the arena, the way and the item);
 -- the verdict is the opening code itself (A.getOfficer, then CP.Tablet.checkAccess), so the two never disagree.

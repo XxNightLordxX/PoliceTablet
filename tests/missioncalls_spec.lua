@@ -1365,4 +1365,120 @@ do
     H.sql('DROP TABLE employee_incidents')
 end
 
+-- ============================================================================
+--            QBOX LOOKUPS PER CHECK (THE REAL CP.Access AND CP.Qbx)
+-- ============================================================================
+-- With the real CP.Access and CP.Qbx a check copies only the on-duty officers' Player objects out of qbx_core:
+-- civilians are skipped by the job map (kept by qbx_core's events), each officer is looked up once, and each unit
+-- is built once per check.
+
+do
+    Reset()
+    local S = CENTRE.south_ls
+    local qbx = {}
+    local function QbxPlayer(src, job, onduty)
+        qbx[src] = {
+            PlayerData = {
+                source = src,
+                citizenid = ('QB%04d'):format(src),
+                charinfo = { firstname = 'Qb', lastname = tostring(src) },
+                job = { name = job, label = job, onduty = onduty, grade = { name = 'Trooper', level = 1 } },
+                metadata = {},
+            },
+        }
+        H.players[src] = H.players[src] or { coords = vec3(S.x + src, S.y, 30.0) }
+    end
+    local lookups = 0
+    H.exportsMock.qbx_core = {
+        GetPlayer = function(src)
+            lookups = lookups + 1
+            return qbx[tonumber(src)]
+        end,
+        GetQBPlayers = function() return qbx end,
+        GetJobs = function() return {} end,
+    }
+    local Stub = CP.Access
+    CP.Access = nil
+    H.load('modules/integrations/qbx/server.lua')
+    H.load('modules/access/server.lua')
+    -- six on-duty officers (a unit of 1 and 2, four solo) and 100 civilians, all loaded the way qbx_core loads them
+    for s = 1, 6 do QbxPlayer(s, 'sast', true) end
+    for s = 101, 200 do QbxPlayer(s, 'unemployed', false) end
+    units = { { id = 1, leader = 1, members = { 1, 2 } } }
+    for s, p in pairs(qbx) do
+        TriggerEvent('QBCore:Server:PlayerLoaded', U.copy(p))
+        H.ok(CP.Qbx.knownJob(s) ~= nil, 'PlayerLoaded fills the job map: ' .. s)
+    end
+    H.advance(100)
+
+    -- (a) a check with nothing to post: one lookup per on-duty officer, none for a civilian
+    lookups = 0
+    MC._tick()
+    H.ok(lookups <= 6,
+        ('one check: at most one GetPlayer per on-duty officer (%d for 6 officers, 100 civilians)'):format(lookups))
+    lookups = 0
+    local idle = MC._idleUnits()
+    H.eq(#idle, 5, 'the unit and four solo officers are idle')
+    H.ok(lookups <= 6, 'the idle units: no lookup for a civilian, none twice for a unit member')
+    local sv = MC.supView(0)
+    H.eq(#sv.units, 5, 'the supervisor view lists the five idle units')
+    local first = Find(sv.units, function(u) return u.src == 1 end)
+    H.eq(first and first.name, 'Qb 1', 'with the leader\'s name from the idle unit')
+    H.eq(first and first.size, 2, 'and its size')
+
+    -- (b) a civilian whose job becomes a department job only through qbx_core's SetPlayerData
+    qbx[150].PlayerData.job = { name = 'sast', label = 'SAST', onduty = true, grade = { name = 'Trooper', level = 1 } }
+    H.eq(CP.Access.maybeOfficer(150), false, 'before qbx_core sends the change: a known civilian')
+    TriggerEvent('QBCore:Player:SetPlayerData', U.copy(qbx[150].PlayerData))
+    H.eq(CP.Qbx.knownJob(150), 'sast', 'SetPlayerData updates the job map')
+    MC._tick()
+    H.ok(Find(MC._idleUnits(), function(u)
+        return u.leader == 150
+    end) ~= nil, 'made police through SetPlayerData only: an idle unit on the next check')
+
+    -- (c) a player qbx_core never told us about gets the full getOfficer check
+    QbxPlayer(300, 'sast', true)
+    H.eq(CP.Qbx.knownJob(300), nil, 'no job known for 300')
+    H.eq(CP.Access.maybeOfficer(300), true, 'an unknown job: maybe an officer')
+    H.ok(Find(MC._idleUnits(), function(u) return u.leader == 300 end) ~= nil, 'the full check finds the officer')
+    H.eq(CP.Qbx.knownJob(300), 'sast', 'and the lookup fills the job map')
+    -- a job the map still has as a department job is checked in full too (getOfficer refuses it)
+    qbx[300].PlayerData.job.onduty = false
+    H.eq(Find(MC._idleUnits(), function(u) return u.leader == 300 end), nil, 'off duty: no idle unit')
+
+    -- (d) a check that posts a call builds each unit once (the accept checks of CP.Draw build their own)
+    for k in pairs(qbx) do if k >= 150 then qbx[k] = nil H.players[k] = nil end end
+    local inDraw, builds = 0, 0
+    local realMembers = CP.Units.members
+    CP.Units.members = function(src)
+        if inDraw == 0 then builds = builds + 1 end
+        return realMembers(src)
+    end
+    local realDraw = {}
+    for k, fn in pairs(CP.Draw) do
+        if type(fn) == 'function' then
+            realDraw[k] = fn
+            CP.Draw[k] = function(...)
+                inDraw = inDraw + 1
+                local r = table.pack(pcall(fn, ...))
+                inDraw = inDraw - 1
+                if not r[1] then error(r[2], 0) end
+                return table.unpack(r, 2, r.n)
+            end
+        end
+    end
+    MC._reset()
+    MC._setNextPost(0)
+    builds = 0
+    MC._tick()
+    local posted = 0
+    for _ in pairs(MC._calls()) do posted = posted + 1 end
+    H.eq(posted, 1, 'the check posted a call')
+    H.ok(Toasts() > 0, 'and toasted the idle units')
+    H.eq(builds, 5, 'five idle units: five unit builds in the whole check (posting and toasts reuse them)')
+    for k, fn in pairs(realDraw) do CP.Draw[k] = fn end
+    CP.Units.members = realMembers
+    CP.Access = Stub
+end
+
 return H
