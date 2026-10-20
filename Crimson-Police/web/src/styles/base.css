@@ -1,0 +1,262 @@
+/* Crimson-Police · base tokens and resets.
+   Theme colours (--cp-primary … --cp-text and the derived shades) are written by applyTheme()
+   (src/shared/theme.ts); the values below are the Crimson-Police defaults until then.
+   Keep to CSS that FiveM's CEF supports: no color-mix(), no nesting, no :has(). */
+
+:root {
+    --cp-primary: #a4161a;
+    --cp-accent: #e5383b;
+    --cp-bg: #0b090a;
+    --cp-surface: #161a1d;
+    --cp-text: #f5f3f4;
+    --cp-surface-2: #212426;
+    --cp-surface-3: #2a2d2f;
+    --cp-border: #37393b;
+    --cp-border-strong: #505254;
+    --cp-muted: #9a9899;
+    --cp-subtle: #6d6a6b;
+    --cp-primary-contrast: #ffffff;
+    --cp-accent-contrast: #ffffff;
+    --cp-primary-hover: #b03135;
+    --cp-primary-text: #e0484c;
+    --cp-accent-text: #e5383b;
+    --cp-primary-rgb: 164, 22, 26;
+    --cp-accent-rgb: 229, 56, 59;
+    --cp-bg-rgb: 11, 9, 10;
+    --cp-surface-rgb: 22, 26, 29;
+    --cp-text-rgb: 245, 243, 244;
+
+    /* Semantic colours (not department themed). */
+    --cp-success: #34c47c;
+    --cp-success-rgb: 52, 196, 124;
+    --cp-warning: #f5a524;
+    --cp-warning-rgb: 245, 165, 36;
+    --cp-danger: #f0464d;
+    --cp-danger-rgb: 240, 70, 77;
+    --cp-info: #4ea1ff;
+    --cp-info-rgb: 78, 161, 255;
+
+    /* XP level badges (Config.XPLevels). */
+    --cp-xp-grey: #a3a9b1;
+    --cp-xp-grey-rgb: 163, 169, 177;
+    --cp-xp-bronze: #d08c4f;
+    --cp-xp-bronze-rgb: 208, 140, 79;
+    --cp-xp-silver: #cfd6df;
+    --cp-xp-silver-rgb: 207, 214, 223;
+    --cp-xp-gold: #f0c342;
+    --cp-xp-gold-rgb: 240, 195, 66;
+    --cp-xp-platinum: #8fe0ea;
+    --cp-xp-platinum-rgb: 143, 224, 234;
+
+    /* Tiers. */
+    --cp-tier-standard: #a3a9b1;
+    --cp-tier-reinforced: #4ea1ff;
+    --cp-tier-heavy: #f5a524;
+    --cp-tier-major: #f47a3a;
+    --cp-tier-critical: #f0464d;
+
+    --cp-font:
+        system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'Liberation Sans',
+        sans-serif;
+    --cp-mono: ui-monospace, 'SF Mono', 'Cascadia Mono', Consolas, 'Liberation Mono', Menlo, monospace;
+
+    --cp-fs-xs: 11px;
+    --cp-fs-sm: 12.5px;
+    --cp-fs: 14px;
+    --cp-fs-md: 15px;
+    --cp-fs-lg: 17px;
+    --cp-fs-xl: 21px;
+    --cp-fs-2xl: 28px;
+
+    --cp-radius-xs: 4px;
+    --cp-radius-sm: 7px;
+    --cp-radius: 10px;
+    --cp-radius-lg: 14px;
+    --cp-radius-pill: 999px;
+
+    --cp-ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+    --cp-dur: 140ms;
+    --cp-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
+    --cp-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+    --cp-shadow-lg: 0 24px 60px rgba(0, 0, 0, 0.55), 0 8px 20px rgba(0, 0, 0, 0.35);
+}
+
+/* The game renders behind the page: html, body and #root stay fully transparent. */
+html,
+body,
+#root {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: transparent !important;
+}
+
+body {
+    font-family: var(--cp-font);
+    font-size: var(--cp-fs);
+    line-height: 1.45;
+    color: var(--cp-text);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+button,
+input,
+select,
+textarea {
+    font: inherit;
+    color: inherit;
+}
+
+button {
+    cursor: pointer;
+}
+
+button:disabled {
+    cursor: not-allowed;
+}
+
+input,
+textarea,
+select,
+.cp-selectable {
+    user-select: text;
+    -webkit-user-select: text;
+}
+
+h1,
+h2,
+h3,
+h4,
+p {
+    margin: 0;
+}
+
+img {
+    -webkit-user-drag: none;
+}
+
+:focus {
+    outline: none;
+}
+
+:focus-visible {
+    outline: 2px solid var(--cp-accent);
+    outline-offset: 2px;
+}
+
+/* Tabular numbers for money, points and timers. */
+.cp-num {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum' 1;
+}
+
+.cp-icon {
+    flex: none;
+    display: inline-block;
+    vertical-align: middle;
+}
+
+/* Scrollbars (Chromium). */
+::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(var(--cp-text-rgb), 0.14);
+    border-radius: 10px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(var(--cp-text-rgb), 0.26);
+    border: 2px solid transparent;
+    background-clip: padding-box;
+}
+
+::-webkit-scrollbar-corner {
+    background: transparent;
+}
+
+@keyframes cp-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes cp-fade-in {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes cp-rise {
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+@keyframes cp-slide-in-right {
+    from {
+        opacity: 0;
+        transform: translateX(24px);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+@keyframes cp-shrink {
+    from {
+        transform: scaleX(1);
+    }
+    to {
+        transform: scaleX(0);
+    }
+}
+
+@keyframes cp-pulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(var(--cp-accent-rgb), 0.55);
+    }
+    70% {
+        box-shadow: 0 0 0 8px rgba(var(--cp-accent-rgb), 0);
+    }
+    100% {
+        box-shadow: 0 0 0 0 rgba(var(--cp-accent-rgb), 0);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 1ms !important;
+        transition-duration: 1ms !important;
+    }
+}

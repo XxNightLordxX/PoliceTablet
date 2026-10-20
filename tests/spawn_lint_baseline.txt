@@ -1,0 +1,42 @@
+# Spawn points of the built-in missions that tests/spawn_lint_spec.lua finds when it was written (PLAN S22). Only
+# reported: the spec fails on any case not listed here, on a listed armed key whose nearest point comes closer to the
+# start than listed (0.05 m slack), and on a line that no longer matches a case (remove it), so this list only
+# shrinks. Measured flat (2D). Format:
+#   pair  <mission>#<location> <point> <point>  <metres> m
+#   armed <mission>#<location> <key>  <metres> m (needs <metres>: the start circle plus Config.Builder.spawnMargin)
+#
+# Hostage Rescue: hostages[3] sits 1.48-1.49 m from the hostage takers' spawns[7] at every bank. The hostages appear
+# after the fight (Config.Spawning.hostagesAt = 'objective'), where a hostage taker may lie.
+pair hostage_rescue#1 hostages[3] spawns[7]  1.48 m
+pair hostage_rescue#2 hostages[3] spawns[7]  1.49 m
+pair hostage_rescue#3 hostages[3] spawns[7]  1.49 m
+pair hostage_rescue#4 hostages[3] spawns[7]  1.48 m
+pair hostage_rescue#5 hostages[3] spawns[7]  1.49 m
+pair hostage_rescue#6 hostages[3] spawns[7]  1.49 m
+# Bomb Disposal: hiding spots 3 and 4 are 1.496-1.498 m apart at four stores (a device prop each, at most 2 devices).
+pair bomb_disposal#2 hiding[3] hiding[4]  1.50 m
+pair bomb_disposal#4 hiding[3] hiding[4]  1.50 m
+pair bomb_disposal#5 hiding[3] hiding[4]  1.50 m
+pair bomb_disposal#6 hiding[3] hiding[4]  1.50 m
+# Pursuit Sim: the getaway car waits 47 m from a 25 m start; the spawn director makes it once every officer is 40 m
+# from it (Config.Spawning.minDistance; hardMin 20 m after waveDelayMax).
+armed pursuit_sim#1 spawn  47.00 m (needs 65)
+armed pursuit_sim#2 spawn  47.13 m (needs 65)
+armed pursuit_sim#3 spawn  47.13 m (needs 65)
+armed pursuit_sim#4 spawn  46.97 m (needs 65)
+armed pursuit_sim#5 spawn  47.00 m (needs 65)
+# Stolen Vehicle Takedown: the stolen car stands inside the 85 m start circle by design, 40 m or more inside its edge
+# (PLAN S19), so an officer crossing the edge is the director's 40 m from it.
+armed stolen_vehicle_takedown#1 spawn  35.59 m (needs 125)
+armed stolen_vehicle_takedown#2 spawn  41.31 m (needs 125)
+armed stolen_vehicle_takedown#3 spawn  41.27 m (needs 125)
+armed stolen_vehicle_takedown#4 spawn  40.25 m (needs 125)
+armed stolen_vehicle_takedown#5 spawn  42.10 m (needs 125)
+# Warrant Service: the associates wait in the front and side yard; they appear at the knock
+# (Config.Spawning.associatesAtKnock), 15 m or more from every officer and out of their sight first.
+armed warrant_service#1 associates  31.69 m (needs 90)
+armed warrant_service#2 associates  36.67 m (needs 90)
+armed warrant_service#3 associates  36.67 m (needs 90)
+armed warrant_service#4 associates  45.62 m (needs 90)
+armed warrant_service#5 associates  36.67 m (needs 90)
+armed warrant_service#6 associates  36.68 m (needs 90)

@@ -1,0 +1,80 @@
+/* Review Queue → Profiles */
+.profile-review {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.profile-review__item {
+    display: grid;
+    grid-template-columns: minmax(140px, 1fr) auto minmax(0, 2fr) auto;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border: 1px solid var(--cp-border);
+    border-radius: var(--cp-radius);
+    background: var(--cp-surface);
+}
+
+.profile-review__who {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+}
+
+.profile-review__name {
+    overflow: hidden;
+    font-weight: 650;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.profile-review__sub {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--cp-muted);
+    font-size: var(--cp-fs-xs);
+}
+
+.profile-review__what {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.profile-review__content {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.profile-review__url {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    max-width: 100%;
+    overflow: hidden;
+    color: var(--cp-muted);
+    font-size: var(--cp-fs-xs);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.profile-review__text,
+.profile-review__old,
+.profile-review__note {
+    flex-basis: 100%;
+    margin: 0;
+    font-size: var(--cp-fs-sm);
+    white-space: pre-line;
+    overflow-wrap: anywhere;
+}
+
+.profile-review__old,
+.profile-review__note {
+    color: var(--cp-muted);
+}

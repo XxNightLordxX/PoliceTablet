@@ -1,0 +1,109 @@
+/* Admin UI · Leaderboards → Item rewards. Only --cp-* variables; classes prefixed rewards-admin. */
+
+.rewards-admin {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.rewards-admin__head {
+    align-items: center;
+}
+
+.rewards-admin__hint {
+    font-size: var(--cp-fs-sm);
+    color: var(--cp-muted);
+}
+
+.rewards-admin__health {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-size: var(--cp-fs-sm);
+}
+
+.rewards-admin__health-line {
+    padding: 6px 10px;
+    border-radius: var(--cp-radius-sm);
+    border-left: 3px solid var(--cp-border-strong);
+    background: var(--cp-surface-2);
+}
+
+.rewards-admin__health-line--warn {
+    border-left-color: var(--cp-warning);
+}
+
+.rewards-admin__health-line--error {
+    border-left-color: var(--cp-danger);
+}
+
+.rewards-admin__stats {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.rewards-admin__pools {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.rewards-admin__pool {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.rewards-admin__pool-key {
+    min-width: 180px;
+    font-family: var(--cp-mono);
+    font-size: var(--cp-fs-xs);
+    color: var(--cp-muted);
+}
+
+.rewards-admin__pool-items {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.rewards-admin__officer {
+    display: inline-flex;
+    flex-direction: column;
+}
+
+.rewards-admin__officer code {
+    font-size: var(--cp-fs-xs);
+    color: var(--cp-subtle);
+}
+
+.rewards-admin__pager {
+    align-items: center;
+    justify-content: flex-end;
+    margin-top: 8px;
+}
+
+.rewards-admin__filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 12px;
+}
+
+.rewards-admin__filters > * {
+    min-width: 170px;
+}
+
+.rewards-admin__actions {
+    display: inline-flex;
+    gap: 4px;
+    justify-content: flex-end;
+}

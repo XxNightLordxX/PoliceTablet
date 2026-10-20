@@ -1,0 +1,473 @@
+/* Admin UI · Officers (oversight slice). Only --cp-* variables. */
+
+.oversight-off-soft {
+    color: var(--cp-muted);
+    font-size: var(--cp-fs-sm);
+}
+
+.oversight-off-layout {
+    display: grid;
+    grid-template-columns: minmax(250px, 300px) minmax(0, 1fr);
+    gap: 18px;
+    align-items: start;
+}
+
+/* Search list */
+.oversight-off-list {
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100vh - 170px);
+    min-height: 320px;
+    overflow: hidden;
+}
+
+.oversight-off-list .cp-card__body {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    flex: 1;
+}
+
+.oversight-off-list__search {
+    padding: 14px 14px 10px;
+    border-bottom: 1px solid var(--cp-border);
+}
+
+.oversight-off-list__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 34px;
+    padding: 4px 10px 4px 16px;
+    font-size: var(--cp-fs-xs);
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--cp-subtle);
+}
+
+.oversight-off-list__items {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 0 8px 10px;
+    overflow-y: auto;
+    min-height: 0;
+    flex: 1;
+}
+
+.oversight-off-result {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 9px 10px;
+    border: 1px solid transparent;
+    border-radius: var(--cp-radius-sm);
+    background: transparent;
+    color: var(--cp-text);
+    text-align: left;
+    font: inherit;
+    cursor: pointer;
+}
+
+.oversight-off-result:hover {
+    background: var(--cp-surface-2);
+}
+
+.oversight-off-result:focus-visible {
+    outline: 2px solid var(--cp-accent);
+    outline-offset: 1px;
+}
+
+.oversight-off-result.is-active {
+    background: rgba(var(--cp-primary-rgb), 0.16);
+    border-color: rgba(var(--cp-primary-rgb), 0.45);
+}
+
+.oversight-off-result__dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: rgba(var(--cp-text-rgb), 0.2);
+    flex: none;
+}
+
+.oversight-off-result__dot.is-online {
+    background: var(--cp-success);
+}
+
+.oversight-off-result__who {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex: 1;
+}
+
+.oversight-off-result__name {
+    font-weight: 650;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.oversight-off-result__sub {
+    font-size: var(--cp-fs-xs);
+    color: var(--cp-subtle);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.oversight-off-result__tags {
+    display: inline-flex;
+    gap: 4px;
+    flex: none;
+}
+
+/* Detail */
+.oversight-off-main {
+    min-width: 0;
+}
+
+.oversight-off-detail {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.oversight-off-head__row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.oversight-off-head__avatar {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 52px;
+    height: 52px;
+    border-radius: var(--cp-radius);
+    background: rgba(var(--cp-primary-rgb), 0.18);
+    color: var(--cp-primary-text);
+    flex: none;
+}
+
+.oversight-off-head__who {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+    flex: 1;
+}
+
+.oversight-off-head__name {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    font-size: var(--cp-fs-xl);
+    font-weight: 750;
+}
+
+.oversight-off-head__line {
+    color: var(--cp-muted);
+}
+
+.oversight-off-head__cid {
+    font-family: var(--cp-mono);
+    font-size: var(--cp-fs-xs);
+    color: var(--cp-subtle);
+}
+
+.oversight-off-head__tags {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 6px;
+    max-width: 45%;
+}
+
+.oversight-off-own {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 12px;
+    padding: 8px 10px;
+    border-radius: var(--cp-radius-sm);
+    background: rgba(var(--cp-warning-rgb), 0.1);
+    border: 1px solid rgba(var(--cp-warning-rgb), 0.3);
+    color: var(--cp-warning);
+    font-size: var(--cp-fs-sm);
+}
+
+.oversight-off-susp {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.oversight-off-susp__state {
+    font-size: var(--cp-fs-lg);
+    font-weight: 700;
+    color: var(--cp-success);
+}
+
+.oversight-off-susp__state.is-on {
+    color: var(--cp-danger);
+}
+
+.oversight-off-susp-hist {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 4px;
+    padding-top: 10px;
+    border-top: 1px solid var(--cp-border);
+    min-width: 0;
+}
+
+.oversight-off-susp-hist__title {
+    font-size: var(--cp-fs-xs);
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--cp-muted);
+}
+
+.oversight-off-susp-hist ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 168px;
+    overflow-y: auto;
+}
+
+.oversight-off-susp-hist li {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    min-width: 0;
+}
+
+.oversight-off-susp-hist__main {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    flex: 1;
+}
+
+.oversight-off-susp-hist__line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px;
+    font-size: var(--cp-fs-sm);
+}
+
+.oversight-off-susp-hist__reason {
+    font-size: var(--cp-fs-sm);
+    color: var(--cp-text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.oversight-off-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.oversight-off-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 28px;
+    padding: 0 10px;
+    border-radius: var(--cp-radius-pill);
+    background: rgba(var(--cp-accent-rgb), 0.12);
+    border: 1px solid rgba(var(--cp-accent-rgb), 0.28);
+    color: var(--cp-accent-text);
+    font-size: var(--cp-fs-sm);
+    font-weight: 600;
+}
+
+.oversight-off-badge .oversight-off-soft {
+    font-size: var(--cp-fs-xs);
+}
+
+.oversight-off-disputes {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.oversight-off-dispute {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 14px;
+    border-radius: var(--cp-radius-sm);
+    background: var(--cp-surface-2);
+    border: 1px solid var(--cp-border);
+}
+
+.oversight-off-dispute__main {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    flex: 1;
+}
+
+.oversight-off-dispute__title {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.oversight-off-dispute__reason,
+.oversight-off-quote {
+    font-style: italic;
+    line-height: 1.4;
+}
+
+.oversight-off-quote {
+    padding: 10px 12px;
+    border-radius: var(--cp-radius-sm);
+    background: var(--cp-surface-2);
+    border-left: 3px solid var(--cp-accent);
+}
+
+.oversight-off-run {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.oversight-off-run__name {
+    font-weight: 600;
+    line-height: 1.25;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+
+.oversight-off-run__sub {
+    font-size: var(--cp-fs-xs);
+    color: var(--cp-subtle);
+}
+
+.oversight-off-cash {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    font-weight: 600;
+}
+
+.oversight-off-cash .oversight-off-soft {
+    font-size: var(--cp-fs-xs);
+    font-weight: 500;
+}
+
+.cp-btn.oversight-off-void {
+    color: var(--cp-danger);
+}
+
+.oversight-off-nowrap {
+    white-space: nowrap;
+}
+
+.oversight-off-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+}
+
+.oversight-off-result-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 2px 0;
+}
+
+.oversight-off-form {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.oversight-off-table table {
+    table-layout: fixed;
+}
+
+.oversight-off-table td {
+    overflow: hidden;
+}
+
+/* Profile moderation */
+.oversight-off-profile {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.oversight-off-profile__text {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+}
+
+.oversight-off-profile__bio {
+    margin: 0;
+    font-size: var(--cp-fs-sm);
+    white-space: pre-line;
+    overflow-wrap: anywhere;
+}
+
+.oversight-off-pending {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 10px;
+    padding: 8px 10px;
+    border-radius: var(--cp-radius);
+    background: var(--cp-surface-2);
+}
+
+.oversight-off-pending__text {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    font-size: var(--cp-fs-sm);
+    text-overflow: ellipsis;
+}
+
+/* Full admin control: search filters (department, online, suspended, retired, off the boards, review, dispute,
+   flagged) */
+.oversight-off-list__filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 12px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--cp-border);
+    font-size: 12px;
+}
+
+.oversight-off-list__filters .cp-select {
+    flex: 1 1 100%;
+}
