@@ -2134,6 +2134,12 @@ end
 --                                CLIENT UPDATES
 -- ============================================================================
 
+-- Observe missions: the violator's blip only once it has passed the observation point (ambient traffic is never
+-- marked); every other car from the start. The client half's blip and the objective pointer follow this one rule.
+local function ShowsBlip(ctx, v)
+    return type(ctx.obj.observe) ~= 'table' or v.passed == true or v.state ~= 'cruising'
+end
+
 local function Snapshot(ctx, st)
     local vehicles, suspects = {}, {}
     for _, key in ipairs(st.vorder) do
@@ -2147,8 +2153,7 @@ local function Snapshot(ctx, st)
             state = v.state,
             occupants = occ,
             routeDone = v.routeDone,
-            -- observe missions: the violator's blip only once it has passed the observation point
-            blip = not observe or v.passed == true or (v.state ~= 'cruising'),
+            blip = ShowsBlip(ctx, v),
             cruise = v.state == 'cruising' and { speed = v.targetKmh, weave = v.observeKind == 'follow' } or nil,
             observe = v.state == 'cruising' and v.observeKind or nil,
             watch = v.state == 'cruising' and observe and Watch(ctx.obj.observe, v.observeKind) or nil,
@@ -2211,6 +2216,89 @@ local function Flush(ctx, st)
         st.sentAt = t
         if st.mode == 'follow' then st.followSentAt = t end
         ctx.send(Snapshot(ctx, st))
+    end
+end
+
+-- ============================================================================
+--                              OBJECTIVE POINTER
+-- ============================================================================
+-- The owner (2026-10-19): "ensure all objectives as they come up mark on the map". A car that drives past OneSync's
+-- 424 m leaves the officer's game, and its blip with it: the pointer names every live car and every suspect on foot
+-- at the server's position, so each officer's game shows them at any distance (Config.Markers.farTargets) and routes
+-- him to his nearest (CP.Runs.marker, docs/ARCHITECTURE.md §5.44). In a block: this file is near Lua's 200 locals.
+
+local Marker
+do
+    local function LiveCar(v)
+        return v.state == 'fleeing' or v.state == 'waiting' or v.state == 'cruising' or v.state == 'yielding'
+    end
+
+    -- The name of a car's blip (the client half's): an observe mission's violator, a racer, else the suspect vehicle.
+    local function CarLabel(ctx)
+        if type(ctx.obj.observe) == 'table' then return 'block.pursuit.blip_violator' end
+        if IsRace(ctx) then return 'block.pursuit.blip_racer' end
+        return 'block.pursuit.blip_vehicle'
+    end
+
+    -- A suspect the client half blips: out of the car (waiting by it, running or fighting) or given up.
+    local function SuspectShown(p)
+        if p.state == 'surrendered' then return true end
+        return (p.state == 'stopped' or p.state == 'fleeing' or p.state == 'hostile') and not InVehicle(p)
+    end
+
+    -- Where to wait while nothing can be followed yet: an observe mission's observation point once its violator is
+    -- out (a second violator's: where the officers stood on the road), else the first car's point, else the start.
+    local function WaitPoint(ctx, st)
+        if type(ctx.obj.observe) == 'table' then
+            if #st.vorder == 0 then return nil end
+            return st.watchFrom or StartPoint(ctx)
+        end
+        return PointList(ctx.location, ctx.obj.spawns)[1] or PointList(ctx.location, ctx.obj.spawn)[1]
+            or StartPoint(ctx)
+    end
+
+    local function ObjectiveLabel(ctx)
+        local l = ctx.obj.label
+        if type(l) ~= 'string' or l == '' then return nil end
+        if CP.Locale.has(l) then return CP.Lt(l) end
+        return l
+    end
+
+    -- Every live car with a blip (the observe violator only once it passed) and every suspect the client half blips,
+    -- each keyed by its net id (the client half hands its own blip of it over, CP.Markers.adopt), at the server's
+    -- position. Before the flee with nothing to follow yet: a pin where to wait. After it: the list, empty while every
+    -- car is stopped and nobody is out.
+    function Marker(ctx)
+        local st = StateOf(ctx)
+        if st.skipped then return false end
+        local targets = {}
+        local label = CP.Lt(CarLabel(ctx))
+        for _, key in ipairs(st.vorder) do
+            local v = st.vehicles[key]
+            local c = LiveCar(v) and ShowsBlip(ctx, v) and EntCoords(v.entity) or nil
+            if c then
+                targets[#targets + 1] = { key = v.netId, netId = v.netId, coords = c, look = 'vehicle', label = label }
+            end
+        end
+        local out = {}
+        for _, p in pairs(st.peds) do
+            if SuspectShown(p) and Exists(p.entity) then out[#out + 1] = p end
+        end
+        -- in net id order: the pointer's shape must not change with the table's order
+        table.sort(out, function(a, b) return a.netId < b.netId end)
+        for _, p in ipairs(out) do
+            targets[#targets + 1] = {
+                key = p.netId,
+                netId = p.netId,
+                coords = GetEntityCoords(p.entity),
+                look = 'suspect',
+                label = CP.Lt('block.pursuit.blip_suspect'),
+            }
+        end
+        if #targets > 0 or st.fled then return { kind = 'targets', targets = targets } end
+        local at = WaitPoint(ctx, st)
+        if not at then return { kind = 'targets', targets = targets } end
+        return { kind = 'point', look = 'objective', coords = at, label = ObjectiveLabel(ctx) }
     end
 end
 
@@ -2554,6 +2642,7 @@ CP.Blocks.register(BLOCK, {
     onTimeout = OnTimeout,
     presence = Presence,
     checklist = Checklist,
+    marker = Marker,
     restart = Restart,
     stop = function(ctx)
         local st = StateOf(ctx)

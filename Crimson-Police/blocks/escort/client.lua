@@ -89,29 +89,32 @@ end
 --                                    BLIPS
 -- ============================================================================
 
+-- A blip handed to the objective pointer (CP.Markers) is taken back first, so its GPS line goes off before it goes
+-- (BLIPS_FINAL R10).
 local function DropBlip(S, k)
     local b = S.blips[k]
     if not b then return end
+    if b.key then CP.Markers.release(b.key, b.id) end
     if DoesBlipExist(b.id) then RemoveBlip(b.id) end
     S.blips[k] = nil
 end
 
-local function NameBlip(id, label)
-    BeginTextCommandSetBlipName('STRING')
-    AddTextComponentSubstringPlayerName(label)
-    EndTextCommandSetBlipName(id)
+-- A blip in its Config.Markers.kinds look. key: the server's pointer names this target so (the truck's net id, 'dest'
+-- for the destination): the blip is handed over and IS the pointer, one icon with the GPS line on it, and CP.Markers
+-- shows the same look from the server's position while the truck is too far away for this game (BLIPS_FINAL R1, R7).
+-- Each officer's line goes to the truck while he is farther than clearRadius from it, else to the destination.
+local function Keep(S, k, id, ent, key)
+    S.blips[k] = { id = id, ent = ent, key = key }
+    if key then CP.Markers.adopt(key, id) end
 end
 
-local function EnsureEntityBlip(S, k, ent, sprite, colour, scale, label)
+local function EnsureEntityBlip(S, k, ent, kind, labelKey, key)
     local b = S.blips[k]
     if b and b.ent == ent and DoesBlipExist(b.id) then return end
     DropBlip(S, k)
     local id = AddBlipForEntity(ent)
-    SetBlipSprite(id, sprite)
-    SetBlipColour(id, colour)
-    SetBlipScale(id, scale)
-    NameBlip(id, label)
-    S.blips[k] = { id = id, ent = ent }
+    CP.Markers.style(id, kind, CP.L(labelKey))
+    Keep(S, k, id, ent, key)
 end
 
 local function EnsureDestBlip(S)
@@ -120,12 +123,8 @@ local function EnsureDestBlip(S)
     local p = r.points[#r.points]
     if not p then return end
     local id = AddBlipForCoord(p.x, p.y, p.z)
-    SetBlipSprite(id, 38)
-    SetBlipColour(id, 5)
-    SetBlipScale(id, 0.9)
-    SetBlipRoute(id, false)
-    NameBlip(id, CP.L('block.escort.blip_destination'))
-    S.blips.dest = { id = id }
+    CP.Markers.style(id, 'destination', CP.L('block.escort.blip_destination'))
+    Keep(S, 'dest', id, nil, 'dest')
 end
 
 -- ============================================================================
@@ -333,7 +332,7 @@ local function Loop(S)
                     for k in pairs(S.blips) do DropBlip(S, k) end
                 else
                     if truck then
-                        EnsureEntityBlip(S, 'truck', truck, 67, 3, 1.0, CP.L('block.escort.blip_truck'))
+                        EnsureEntityBlip(S, 'truck', truck, 'escort', 'block.escort.blip_truck', d.truck.netId)
                     else
                         DropBlip(S, 'truck')
                     end
@@ -344,7 +343,8 @@ local function Loop(S)
                         local k = 'a' .. tostring(net)
                         keep[k] = true
                         if e and not IsPedDeadOrDying(e, true) then
-                            EnsureEntityBlip(S, k, e, 1, 1, 0.7, CP.L('block.escort.blip_attacker'))
+                            -- a detail blip, not the pointer (kinds.suspect: a red dot)
+                            EnsureEntityBlip(S, k, e, 'suspect', 'block.escort.blip_attacker')
                         else
                             DropBlip(S, k)
                         end

@@ -2223,8 +2223,8 @@ do
     hookOut = {
         kind = 'targets',
         targets = {
-            { key = 2, coords = vec3(1.0, 2.0, 3.0), look = 'point', number = 2, label = 'Door two' },
-            { netId = 4411, x = 5.0, y = 6.0, z = 7.0, look = 'fleeing' },
+            { key = 2, coords = vec3(1.0, 2.0, 3.0), look = 'point', number = 2, label = 'Door two', beyond = 100.04 },
+            { netId = 4411, x = 5.0, y = 6.0, z = 7.0, look = 'fleeing', beyond = -5 },
             { label = 'no position, no net id' },
         },
     }
@@ -2236,6 +2236,8 @@ do
     H.ok(m4 and m4.targets[1].key == '2' and m4.targets[1].x == 1.0 and m4.targets[1].number == 2,
         'hook: the point keyed by its number, at its coords')
     H.ok(m4 and m4.targets[2].key == '4411' and m4.targets[2].netId == 4411, 'hook: a net id is its own key')
+    -- beyond (PLAN M3, escort's truck): kept to the decimetre for each game's own line; none when not above 0
+    H.ok(m4 and m4.targets[1].beyond == 100.0 and m4.targets[2].beyond == nil, 'hook: beyond kept, a bad one dropped')
     H.reset()
     H.advance(3000)
     H.eq(#Markers(2), 0, 'hook: the same marker is not sent again')

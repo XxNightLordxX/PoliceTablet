@@ -31,7 +31,7 @@ local SILENT_SHOWS = {
 -- What every mode shows: the drive to the start and the service vehicles coming to the officer.
 local ALWAYS_SHOWN = { start = true, prisonerVan = true, towTruck = true }
 local SERVICE_LABELS = { prisonerVan = 'markers.prisoner_van', towTruck = 'markers.tow_truck' }
-local FIELDS = { 'adoptKey', 'look', 'variant', 'label', 'number', 'coords', 'radius', 'netId', 'moving' }
+local FIELDS = { 'adoptKey', 'look', 'variant', 'label', 'number', 'coords', 'radius', 'netId', 'moving', 'beyond' }
 
 local cur = nil         -- { runId, index, ctx, routeMode = 'on'|'off'|'block', elements = { [id] = el }, order }
 local adopted = {}      -- [key] = a block's own blip it handed over (M.adopt)
@@ -158,7 +158,7 @@ end
 --                                   ELEMENTS
 -- ============================================================================
 -- One thing the pointer shows: a point, an area's centre (with its circle) or a target.
--- el = { id, adoptKey, look, variant, label, number, coords, radius, netId, moving, service,
+-- el = { id, adoptKey, look, variant, label, number, coords, radius, netId, moving, beyond, service,
 --        own (our blip), ownEnt (its entity; nil = a coord blip), at (coords it was put at), circle, circleKey,
 --        known, knownAt (Radio Silence's last-known circle), shown (the pointer blip now), emphasised, flashed }
 
@@ -320,20 +320,31 @@ local function Where(el)
 end
 
 -- The line goes on ONE blip: the point or the area's centre, or this officer's nearest target (switching only when
--- another one is 25 % closer); off near it, inside the circle, and whenever M.canRoute says no.
+-- another one is 25 % closer); off near it, inside the circle, and whenever M.canRoute says no. A target with beyond
+-- (escort's truck) takes it before the others while this officer is farther than that from it, keeps it until he is
+-- within 75 % of that, and never has it closer: then the others share it (the destination).
 local function PickRoute()
     if not cur or cur.routeMode ~= 'on' or not M.canRoute(cur.ctx) then return RouteOff() end
     local me = MyPos()
-    local best, bestD, held, heldD = nil, nil, nil, nil
+    local best, bestD, held, heldD, lead, leadD = nil, nil, nil, nil, nil, nil
     for _, id in ipairs(cur.order) do
         local el = cur.elements[id]
         if el and Exists(el.shown) then
             local d = CP.U.dist2d(me, Where(el))
-            if el.shown == routeBlip then held, heldD = el, d end
-            if not bestD or d < bestD then best, bestD = el, d end
+            if el.beyond then
+                local reach = el.shown == routeBlip and el.beyond * SWITCH_SHARE or el.beyond
+                if d > reach and (not leadD or d < leadD) then lead, leadD = el, d end
+            else
+                if el.shown == routeBlip then held, heldD = el, d end
+                if not bestD or d < bestD then best, bestD = el, d end
+            end
         end
     end
-    if held and best ~= held and bestD >= heldD * SWITCH_SHARE then best, bestD = held, heldD end
+    if lead then
+        best, bestD = lead, leadD
+    elseif held and best ~= held and bestD >= heldD * SWITCH_SHARE then
+        best, bestD = held, heldD
+    end
     if not best or bestD == math.huge then return RouteOff() end
     local off = best.radius or math.max(0, tonumber(Cfg().routeOffWithin) or 40.0)
     if bestD <= off then return RouteOff() end
@@ -369,7 +380,7 @@ end
 --                                  THE MARKER
 -- ============================================================================
 -- m = { kind = 'point'|'area'|'targets', look, label, key, number, coords, radius, route = true|false|'block',
---       targets = { { key, netId, x, y, z, look, label, variant, number } } } (docs/ARCHITECTURE.md §5.44)
+--       targets = { { key, netId, x, y, z, look, label, variant, number, beyond } } } (docs/ARCHITECTURE.md §5.44)
 
 local function Build(m)
     local list = {}
@@ -395,6 +406,7 @@ local function Build(m)
                 if netId and netId <= 0 then netId = nil end
                 local key = Key(t.key) or (netId and tostring(netId)) or nil
                 local c = Coords(t) or Coords(t.coords)
+                local beyond = tonumber(t.beyond)
                 if netId or c then
                     list[#list + 1] = {
                         id = 't:' .. (key or tostring(i)),
@@ -406,6 +418,7 @@ local function Build(m)
                         coords = c,
                         netId = netId,
                         moving = true,
+                        beyond = beyond and beyond > 0 and beyond + 0.0 or nil,
                     }
                 end
             end

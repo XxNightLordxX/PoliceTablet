@@ -1228,6 +1228,38 @@ local function Flush(ctx, st)
     end
 end
 
+-- The objective pointer (CP.Runs.marker, docs/ARCHITECTURE.md §5.44; the owner: "ensure all objectives as they come
+-- up mark on the map"): the truck at the server's position, so an officer too far away for his game still sees it
+-- (Config.Markers.farTargets), and the destination. Each officer's own game decides his GPS line: to the truck while
+-- HE is farther than clearRadius from it (beyond), else to the destination (BLIPS_FINAL X17). Keyed by the truck's
+-- net id and 'dest', the keys the client half hands its own two blips over with.
+local function Marker(ctx)
+    local st = StateOf(ctx)
+    local targets = {}
+    local tr = st.truck
+    local c = tr.netId and EntCoords(tr.entity) or nil
+    if c then
+        targets[1] = {
+            key = tr.netId,
+            netId = tr.netId,
+            coords = c,
+            look = 'escort',
+            label = CP.Lt('block.escort.blip_truck'),
+            beyond = ctx.obj.clearRadius,
+        }
+    end
+    local dest = st.points[#st.points]
+    if dest then
+        targets[#targets + 1] = {
+            key = 'dest',
+            coords = dest,
+            look = 'destination',
+            label = CP.Lt('block.escort.blip_destination'),
+        }
+    end
+    return { kind = 'targets', targets = targets }
+end
+
 -- ============================================================================
 --                                   EVIDENCE
 -- ============================================================================
@@ -1442,6 +1474,7 @@ CP.Blocks.register(BLOCK, {
     onTimeout = function() return nil end,
     presence = Presence,
     checklist = Checklist,
+    marker = Marker,
     restart = Restart,
     stop = function(ctx)
         local st = StateOf(ctx)

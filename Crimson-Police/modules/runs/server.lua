@@ -4263,6 +4263,8 @@ do
                 local tn = type(t) == 'table' and Int(t.netId) or nil
                 if tn and tn <= 0 then tn = nil end
                 local c = type(t) == 'table' and (Coord(t.coords) or Coord(t)) or nil
+                -- beyond: this target takes the line first while the officer is farther than that (escort's truck)
+                local far = type(t) == 'table' and tonumber(t.beyond) or nil
                 if tn or c then
                     out.targets[#out.targets + 1] = {
                         key = Str(t.key) or (tn and tostring(tn)) or nil,
@@ -4275,6 +4277,7 @@ do
                         label = Str(t.label, 120),
                         variant = Str(t.variant),
                         number = Int(t.number),
+                        beyond = far and far > 0 and math.floor(far * 10 + 0.5) / 10 or nil,
                     }
                 end
             end
@@ -4318,6 +4321,7 @@ do
                 t.label or '',
                 t.variant or '',
                 tostring(t.number or ''),
+                tostring(t.beyond or ''),
             }, '\31')
             pos[#pos + 1] = P(t.x, t.y, t.z)
         end

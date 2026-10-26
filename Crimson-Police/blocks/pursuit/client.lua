@@ -135,28 +135,31 @@ end
 --                                    BLIPS
 -- ============================================================================
 
+-- The objective pointer (CP.Markers) gets the blip back first, so its GPS line goes off before it goes (BLIPS_FINAL
+-- R10).
 local function DropBlip(S, k)
     local b = S.blips[k]
     if not b then return end
+    CP.Markers.release(b.net, b.id)
     if DoesBlipExist(b.id) then RemoveBlip(b.id) end
     S.blips[k] = nil
 end
 
-local function EnsureBlip(S, k, ent, sprite, label, scale)
+-- A car's or a suspect's blip in its Config.Markers.kinds look (vehicle, suspect; scale: a smaller one for a suspect
+-- who gave up), handed to the objective pointer under the net id the server's pointer names it by: it IS the
+-- pointer (one icon, the GPS line on it), and CP.Markers shows the same look from the server's position once the
+-- entity is too far away for this game (BLIPS_FINAL R1, R7).
+local function EnsureBlip(S, k, ent, net, kind, labelKey, scale)
     -- a loop pass resumed after the cleanup (it waited in ctx.control) draws nothing
     if not S.alive then return end
     local b = S.blips[k]
     if b and b.ent == ent and DoesBlipExist(b.id) then return end
     DropBlip(S, k)
     local id = AddBlipForEntity(ent)
-    SetBlipSprite(id, sprite)
-    SetBlipColour(id, 1)
-    SetBlipScale(id, scale)
-    SetBlipAsShortRange(id, false)
-    BeginTextCommandSetBlipName('STRING')
-    AddTextComponentSubstringPlayerName(label)
-    EndTextCommandSetBlipName(id)
-    S.blips[k] = { id = id, ent = ent }
+    CP.Markers.style(id, kind, CP.L(labelKey))
+    if scale then SetBlipScale(id, scale) end
+    S.blips[k] = { id = id, ent = ent, net = net }
+    CP.Markers.adopt(net, id)
 end
 
 -- ============================================================================
@@ -616,9 +619,10 @@ local function Loop(S)
                     local live = v.state == 'fleeing' or v.state == 'waiting' or v.state == 'cruising'
                         or v.state == 'yielding'
                     if veh and showBlips and live and v.blip ~= false then
-                        local label = (v.cruise and 'block.pursuit.blip_violator')
+                        -- the server's pointer names it the same (an observe mission's car stays the violator)
+                        local label = (type(obj.observe) == 'table' and 'block.pursuit.blip_violator')
                             or (IsRace(S) and 'block.pursuit.blip_racer') or 'block.pursuit.blip_vehicle'
-                        EnsureBlip(S, k, veh, 225, CP.L(label), 0.9)
+                        EnsureBlip(S, k, veh, v.netId, 'vehicle', label)
                     else
                         DropBlip(S, k)
                     end
@@ -649,9 +653,9 @@ local function Loop(S)
                         local onFoot = (state == 'stopped' or state == 'fleeing' or state == 'hostile')
                             and not IsPedInAnyVehicle(ped, false)
                         if showBlips and onFoot then
-                            EnsureBlip(S, k, ped, 1, CP.L('block.pursuit.blip_suspect'), 0.7)
+                            EnsureBlip(S, k, ped, s.netId, 'suspect', 'block.pursuit.blip_suspect')
                         elseif showBlips and state == 'surrendered' then
-                            EnsureBlip(S, k, ped, 1, CP.L('block.pursuit.blip_suspect'), 0.6)
+                            EnsureBlip(S, k, ped, s.netId, 'suspect', 'block.pursuit.blip_suspect', 0.6)
                         else
                             DropBlip(S, k)
                         end

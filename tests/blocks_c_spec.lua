@@ -2380,6 +2380,8 @@ local function CountOf(list, e)
     return n
 end
 
+-- the objective pointer the client halves hand their blips to (it is loaded before the blocks in the game too)
+H.load('modules/markers/client.lua')
 H.load('blocks/pursuit/client.lua')
 H.load('blocks/escort/client.lua')
 H.load('blocks/search_area/client.lua')
@@ -2648,30 +2650,61 @@ do -- search_area: a clue check still running when the objective stops is cancel
     H.eq(#CL.reports, reports + 1, 'search client: no clue report after the objective stopped')
 end
 
--- Blip natives that keep every live blip, so a test sees one left on the map after a cleanup.
-local BL = { live = {}, n = 0 }
+-- Blip natives that keep every live blip, so a test sees one left on the map after a cleanup, with what each one
+-- looks like (BL.props: ent or x/y/z, sprite, colour, scale, name, route) for the objective pointer's hand-over.
+local BL = { live = {}, n = 0, props = {}, removedRouted = 0 }
 do
-    local function NewBlip()
+    local function NewBlip(fields)
         BL.n = BL.n + 1
         BL.live[BL.n] = true
+        BL.props[BL.n] = fields
         return BL.n
     end
-    _G.AddBlipForEntity, _G.AddBlipForCoord, _G.AddBlipForRadius = NewBlip, NewBlip, NewBlip
+    _G.AddBlipForEntity = function(e) return NewBlip({ ent = e }) end
+    _G.AddBlipForCoord = function(x, y, z) return NewBlip({ x = x, y = y, z = z }) end
+    _G.AddBlipForRadius = function(x, y, z, r) return NewBlip({ x = x, y = y, z = z, radius = r }) end
+    local function Prop(field)
+        return function(b, v)
+            if BL.props[b] then BL.props[b][field] = v end
+        end
+    end
+    _G.SetBlipSprite, _G.SetBlipColour, _G.SetBlipScale = Prop('sprite'), Prop('colour'), Prop('scale')
+    _G.SetBlipRoute = function(b, on)
+        if BL.props[b] then BL.props[b].route = on == true end
+    end
+    _G.SetBlipCoords = function(b, x, y, z)
+        if BL.props[b] then BL.props[b].x, BL.props[b].y, BL.props[b].z = x, y, z end
+    end
+    _G.GetBlipCoords = function(b)
+        local p = BL.props[b]
+        if not p then return vec3(0.0, 0.0, 0.0) end
+        if p.ent then return ents[p.ent] and ents[p.ent].coords or vec3(0.0, 0.0, 0.0) end
+        return vec3(p.x or 0.0, p.y or 0.0, p.z or 0.0)
+    end
+    local pendingName
+    _G.BeginTextCommandSetBlipName = function() pendingName = nil end
+    _G.AddTextComponentSubstringPlayerName = function(text) pendingName = text end
+    _G.EndTextCommandSetBlipName = function(b)
+        if BL.props[b] then BL.props[b].name = pendingName end
+    end
     for _, name in ipairs({
-        'SetBlipSprite',
-        'SetBlipColour',
-        'SetBlipScale',
-        'SetBlipRoute',
         'SetBlipAlpha',
         'SetBlipAsShortRange',
-        'BeginTextCommandSetBlipName',
-        'AddTextComponentSubstringPlayerName',
-        'EndTextCommandSetBlipName',
+        'SetBlipCategory',
+        'SetBlipPriority',
+        'SetBlipFlashes',
+        'SetBlipFlashTimer',
+        'SetBlipRouteColour',
+        'ShowNumberOnBlip',
     }) do
         _G[name] = function() end
     end
+    _G.IsWaypointActive = function() return false end
     _G.DoesBlipExist = function(b) return BL.live[b] == true end
-    _G.RemoveBlip = function(b) BL.live[b] = nil end
+    _G.RemoveBlip = function(b)
+        if BL.props[b] and BL.props[b].route then BL.removedRouted = BL.removedRouted + 1 end
+        BL.live[b] = nil
+    end
 end
 local function LiveBlips()
     local n = 0
@@ -3381,6 +3414,329 @@ do -- a removed car (sc-police /imp) is never stopped and never earns vehicle_st
     H.eq(ctx.calls.complete, 0, 'pu parity: a removed car never completes the stop')
     H.players[1].vehicle = nil
 end
+
+-- ============================================================================
+--                              OBJECTIVE POINTER
+-- ============================================================================
+-- (PLAN M3): CARS ON THE MAP AT ANY DISTANCE.
+-- The owner (2026-10-19): "ensure all objectives as they come up mark on the map". A car that drove past OneSync's
+-- 424 m left every officer's map; the pointer names the cars and the suspects at the server's position, and each
+-- officer's own game picks his GPS line (escort: the truck while he is far from it, else the destination).
+
+local function LabelKey(v) return CP.Locale.isToken(v) and v.key or v end
+
+do -- pursuit (Stolen Vehicle Takedown): a pin before the car exists, the car at any distance, then the people
+    H.clockMs = 30000000
+    At(1, 1040.0, 1000.0)
+    At(2, 1500.0, 1500.0)
+    H.players[1].vehicle, H.players[2].vehicle = nil, nil
+    -- the caps keep the car waiting: a pin where it will be, named after the objective
+    local wait = StolenCtx({ label = 'Stop the stolen car' })
+    wait.capOk = false
+    PU.start(wait)
+    local mk = PU.marker(wait)
+    H.ok(mk and mk.kind == 'point' and mk.look == 'objective', 'pu marker: nothing spawned yet: a pin')
+    H.ok(mk and mk.coords.x == 1000.0 and mk.coords.y == 1000.0, 'pu marker: at the car\'s point')
+    H.eq(mk and mk.label, 'Stop the stolen car', 'pu marker: the pin is named after the objective')
+
+    local ctx = StolenCtx()
+    PU.start(ctx)
+    local st = ctx.state
+    local car = SpawnsOf(ctx, 'vehicle')[1]
+    local sus = SpawnsOf(ctx, 'ped')
+    mk = PU.marker(ctx)
+    local t = mk and mk.targets and mk.targets[1]
+    H.ok(mk and mk.kind == 'targets' and #mk.targets == 1, 'pu marker: the waiting car is the one target')
+    H.ok(t and t.key == car.netId and t.netId == car.netId and t.look == 'vehicle',
+        'pu marker: keyed by its net id (the client half hands its blip over by it), kinds.vehicle')
+    H.eq(t and LabelKey(t.label), 'block.pursuit.blip_vehicle', 'pu marker: named like the car\'s blip')
+
+    -- it flees and drives 1.2 km off, out of every officer's game: still a target, where the server has it
+    local pcar = NewEnt('vehicle', vec3(0, 0, 0))
+    H.players[1].vehicle = pcar
+    H.eq(PU.onEvent(ctx, 1, { type = 'lights_near', netId = car.netId }), true, 'pu marker: lights, the car goes')
+    E(car.netId).speed = 25.0
+    SetPos(car.netId, 2240.0, 1000.0)
+    TickN(PU, ctx, 1)
+    mk = PU.marker(ctx)
+    t = mk.targets[1]
+    H.ok(#mk.targets == 1 and t.key == car.netId and t.coords.x == 2240.0,
+        'pu marker: the car 1.2 km away, at the server\'s position')
+
+    -- stopped with its people inside: nothing to follow; out of the car: each one, in net id order
+    At(1, 2250.0, 1000.0)
+    E(car.netId).speed = 0.0
+    TickN(PU, ctx, 5)
+    H.eq(st.vehicles[tostring(car.netId)].state, 'stopped', 'pu marker: the car stopped')
+    mk = PU.marker(ctx)
+    H.ok(mk.kind == 'targets' and #mk.targets == 0, 'pu marker: a stopped car with its people inside: no target')
+    for _, s in ipairs(sus) do E(s.netId).inVehicle = 0 end
+    TickN(PU, ctx, 1)
+    mk = PU.marker(ctx)
+    H.eq(#mk.targets, 2, 'pu marker: both suspects out of the car')
+    H.ok(mk.targets[1].netId < mk.targets[2].netId, 'pu marker: in net id order (the shape never changes by itself)')
+    for _, x in ipairs(mk.targets) do
+        H.ok(x.look == 'suspect' and LabelKey(x.label) == 'block.pursuit.blip_suspect' and x.key == x.netId,
+            'pu marker: a suspect, keyed by his net id')
+    end
+    st.peds[tostring(sus[1].netId)].state = 'surrendered'
+    st.peds[tostring(sus[2].netId)].state = 'cuffed'
+    mk = PU.marker(ctx)
+    H.ok(#mk.targets == 1 and mk.targets[1].netId == sus[1].netId,
+        'pu marker: one who gave up stays a target, a cuffed one leaves it')
+    H.players[1].vehicle = nil
+end
+
+do -- pursuit (Traffic Enforcement): the violator stays unmarked until it passed; a team pursuit not run has none
+    H.clockMs = 30500000
+    At(1, 5016.0, 5800.0)
+    H.players[1].vehicle = nil
+    local ctx = TrafficCtx()
+    ctx.capOk = false
+    PU.start(ctx)
+    local mk = PU.marker(ctx)
+    H.ok(mk and mk.kind == 'targets' and #mk.targets == 0, 'pu observe marker: nothing before the violator is out')
+    ctx.capOk = true
+    TickN(PU, ctx, 1)
+    local car = Car(ctx)
+    H.ok(car ~= nil, 'pu observe marker: the violator is out')
+    mk = PU.marker(ctx)
+    H.ok(mk and mk.kind == 'point' and mk.coords.x == 5016.0 and mk.coords.y == 5800.0,
+        'pu observe marker: the observation point while it comes (the car itself is not marked)')
+    MoveCar(car, 5850.0, 110)
+    TickN(PU, ctx, 1)
+    H.eq(ctx.state.vehicles[tostring(car.netId)].passed, true, 'pu observe marker: it passed')
+    mk = PU.marker(ctx)
+    local t = mk and mk.targets and mk.targets[1]
+    H.ok(mk.kind == 'targets' and t and t.key == car.netId and LabelKey(t.label) == 'block.pursuit.blip_violator',
+        'pu observe marker: once past, the violator is the target, named Violator')
+
+    local team = TrafficCtx({ team = 2 })
+    PU.start(team)
+    H.eq(team.state.skipped, true, 'pu marker: a two-officer pursuit with one officer is skipped')
+    H.eq(PU.marker(team), false, 'pu marker: ...and shows nothing')
+end
+
+do -- escort: the truck (keeps the line while an officer is farther than clearRadius) and the destination
+    H.clockMs = 31000000
+    At(1, 300.0, 2700.0)
+    At(2, 320.0, 2700.0)
+    local ctx = EscCtx()
+    ES.start(ctx)
+    local truck = SpawnsOf(ctx, 'vehicle', 'escort')[1]
+    local mk = ES.marker(ctx)
+    H.ok(mk and mk.kind == 'targets' and #mk.targets == 2, 'es marker: the truck and the destination')
+    local tt, dt = mk.targets[1], mk.targets[2]
+    H.ok(tt.key == truck.netId and tt.netId == truck.netId and tt.look == 'escort' and tt.beyond == 100.0,
+        'es marker: the truck by its net id, first while farther than clearRadius (100 m)')
+    H.eq(LabelKey(tt.label), 'block.escort.blip_truck', 'es marker: named like the truck\'s blip')
+    local last = routePts[#routePts]
+    H.ok(
+        dt.key == 'dest' and dt.netId == nil and dt.look == 'destination' and dt.coords.x == last.x
+            and dt.coords.y == last.y and dt.beyond == nil,
+        'es marker: the destination, the route\'s last point'
+    )
+    E(truck.netId).coords = vec3(1100.0, 2689.0, 38.0)
+    H.eq(ES.marker(ctx).targets[1].coords.x, 1100.0, 'es marker: the truck where the server has it')
+    E(truck.netId).exists = false
+    mk = ES.marker(ctx)
+    H.ok(#mk.targets == 1 and mk.targets[1].key == 'dest', 'es marker: no truck: the destination alone')
+    ES.stop(ctx)
+end
+
+-- The client halves hand their own blips to CP.Markers (loaded above): one icon per target, the line on it.
+local function BlipOf(pred)
+    for b in pairs(BL.live) do
+        if pred(BL.props[b] or {}) then return b, BL.props[b] end
+    end
+    return nil, nil
+end
+local function RoutedBlips()
+    local out = {}
+    for b in pairs(BL.live) do if BL.props[b] and BL.props[b].route then out[#out + 1] = b end end
+    return out
+end
+
+do -- escort client: its truck and destination blips are the pointer; each officer's own line (X17)
+    H.clockMs = 31500000
+    local M = CP.Markers
+    local me = PlayerPedId()
+    local exists = NetworkDoesNetworkIdExist
+    local truck, truckNet = NewEnt('vehicle', vec3(423.1, 2689.0, 41.0))
+    ents[me].coords = vec3(423.1, 2900.0, 41.0) -- 211 m from the truck, 751 m from the destination
+    local cctx = ClientCtx('run-cl-m3-esc', ES.defaults({ block = 'escort' }), escLoc)
+    cctx.isHost = false
+    cctx.radioSilence = false
+    local function Pointer(x, y)
+        return {
+            kind = 'targets',
+            targets = {
+                {
+                    key = tostring(truckNet),
+                    netId = truckNet,
+                    x = x,
+                    y = y,
+                    z = 41.0,
+                    look = 'escort',
+                    label = 'Escorted vehicle',
+                    beyond = 100.0,
+                },
+                { key = 'dest', x = 1174.34, y = 2690.21, z = 37.39, look = 'destination', label = 'Destination' },
+            },
+        }
+    end
+    local base, removedRouted = LiveBlips(), BL.removedRouted
+    EC.prepare(cctx)
+    EC.start(cctx)
+    -- the start message's pointer comes first (CP.Markers' own icons for a moment), the block's snapshot right after
+    M.set('run-cl-m3-esc', 1, Pointer(423.1, 2689.0), cctx)
+    EC.update(cctx, {
+        kind = 'state',
+        truck = { netId = truckNet, wp = 2, gen = 1, toughened = true, health = 100, stoppedFor = 0, stoppedFail = 60 },
+        waves = {},
+        attackers = {},
+        completed = false,
+    })
+    H.step(500)
+    H.eq(LiveBlips() - base, 2, 'escort client: one icon each for the truck and the destination, no second pointer')
+    local tb, tp = BlipOf(function(p) return p.ent == truck end)
+    local db, dp = BlipOf(function(p) return p.ent == nil and p.sprite == 38 end)
+    H.ok(tp and tp.sprite == 67 and tp.colour == 3 and tp.scale == 1.0 and tp.name == 'Escorted vehicle',
+        'escort client: the truck blip in kinds.escort')
+    H.ok(dp and dp.colour == 5 and dp.scale == 0.9 and dp.name == 'Destination',
+        'escort client: the destination blip in kinds.destination')
+    H.step(1000)
+    local r = RoutedBlips()
+    H.ok(#r == 1 and r[1] == tb, 'escort client: 211 m from the truck: the line goes to the truck')
+    ents[me].coords = vec3(1100.0, 2700.0, 38.0) -- 74 m from the destination, 677 m from the truck
+    H.step(1000)
+    r = RoutedBlips()
+    H.ok(#r == 1 and r[1] == tb,
+        'escort client: far from the truck: still to the truck, though the destination is nearer')
+    ents[me].coords = vec3(423.1, 2780.0, 41.0) -- 91 m: within clearRadius, but the truck keeps it until 75 m
+    H.step(1000)
+    r = RoutedBlips()
+    H.ok(#r == 1 and r[1] == tb, 'escort client: 91 m from the truck: the line stays on it (no flicker at 100 m)')
+    ents[me].coords = vec3(423.1, 2750.0, 41.0) -- 61 m
+    H.step(1000)
+    r = RoutedBlips()
+    H.ok(#r == 1 and r[1] == db, 'escort client: escorting it (61 m): the line goes to the destination')
+    ents[me].coords = vec3(423.1, 2780.0, 41.0) -- 91 m again
+    H.step(1000)
+    r = RoutedBlips()
+    H.ok(#r == 1 and r[1] == db, 'escort client: 91 m again: still the destination until past 100 m')
+
+    -- the truck leaves this game (out of range): the block's blip goes, CP.Markers draws the same look from the
+    -- server's position and the line follows it
+    ents[me].coords = vec3(300.0, 3500.0, 41.0)
+    _G.NetworkDoesNetworkIdExist = function(n) return n ~= truckNet and exists(n) end
+    H.step(500)
+    M.update('run-cl-m3-esc', 1, Pointer(900.0, 2689.0), cctx)
+    H.step(1000)
+    local cb, cp = BlipOf(function(p) return p.ent == nil and p.sprite == 67 end)
+    H.ok(BL.live[tb] == nil, 'escort client: the truck out of this game: its entity blip is gone')
+    H.ok(cp and cp.colour == 3 and cp.scale == 1.0 and cp.name == 'Escorted vehicle' and cp.x == 900.0,
+        'escort client: the truck at the server\'s position, the same look and name')
+    r = RoutedBlips()
+    H.ok(#r == 1 and r[1] == cb, 'escort client: the line follows it')
+    _G.NetworkDoesNetworkIdExist = exists
+    H.step(1000)
+    H.ok(BL.live[cb] == nil and BlipOf(function(p)
+        return p.ent == truck
+    end) ~= nil, 'escort client: back in range: the block\'s blip again, ours gone')
+
+    -- the objective stops: the pointer first, then the block removes its blips (each line off before)
+    M.clear('run-cl-m3-esc', 1)
+    EC.stop(cctx)
+    H.step(500)
+    H.eq(LiveBlips() - base, 0, 'escort client: nothing left on the map')
+    H.eq(BL.removedRouted, removedRouted, 'escort client: every line went off before its blip')
+end
+
+do -- pursuit client: the car's blip is the pointer; far away CP.Markers shows the same look; an unpassed violator
+    -- has none (v.blip false)
+    H.clockMs = 32000000
+    local M = CP.Markers
+    local me = PlayerPedId()
+    local exists = NetworkDoesNetworkIdExist
+    ents[me].coords = vec3(9000.0, 9000.0, 30.0)
+    local veh, vehNet = NewEnt('vehicle', vec3(9100.0, 9000.0, 30.0))
+    local drv, drvNet = NewEnt('ped', vec3(9100.0, 9000.0, 30.0))
+    local other, otherNet = NewEnt('vehicle', vec3(9050.0, 9000.0, 30.0))
+    ents[drv].inVehicle = veh
+    ents[drv].bag = { state = 'driving', cfg = {} }
+    local cctx = ClientCtx('run-cl-m3-pu', PU.defaults({ block = 'pursuit', spawn = 'car' }), stolenLoc)
+    cctx.isHost = false
+    cctx.radioSilence = false
+    local function Pointer(x)
+        return {
+            kind = 'targets',
+            targets = {
+                {
+                    key = tostring(vehNet),
+                    netId = vehNet,
+                    x = x,
+                    y = 9000.0,
+                    z = 30.0,
+                    look = 'vehicle',
+                    label = CP.L('block.pursuit.blip_vehicle'),
+                },
+            },
+        }
+    end
+    local base, removedRouted = LiveBlips(), BL.removedRouted
+    PC.prepare(cctx)
+    PC.start(cctx)
+    M.set('run-cl-m3-pu', 1, Pointer(9100.0), cctx)
+    PC.update(cctx, {
+        kind = 'state',
+        mode = 'stop',
+        fled = true,
+        trigger = 'distance',
+        vehicles = {
+            { netId = vehNet, index = 1, state = 'fleeing', occupants = { drvNet }, blip = true },
+            { netId = otherNet, index = 2, state = 'cruising', occupants = {}, blip = false },
+        },
+        suspects = { { netId = drvNet, vehicle = vehNet, seat = -1, state = 'driving' } },
+        detained = 0,
+        total = 1,
+        stopped = 0,
+        vtotal = 2,
+    })
+    H.step(1000)
+    H.eq(LiveBlips() - base, 1, 'pursuit client: one icon, the car\'s own blip (no second pointer)')
+    local vb, vp = BlipOf(function(p) return p.ent == veh end)
+    H.ok(
+        vp and vp.sprite == 225 and vp.colour == 1 and vp.scale == 0.9 and vp.name == CP.L('block.pursuit.blip_vehicle'),
+        'pursuit client: the car blip in kinds.vehicle')
+    H.ok(vp and vp.route == true, 'pursuit client: the GPS line on the car\'s own blip')
+    H.eq(BlipOf(function(p) return p.ent == other end), nil, 'pursuit client: a violator not yet past has no blip')
+
+    -- it drives 1.3 km off, out of this game: the same look at the server's position, with the line
+    ents[veh].coords = vec3(10300.0, 9000.0, 30.0)
+    _G.NetworkDoesNetworkIdExist = function(n) return n ~= vehNet and n ~= drvNet and exists(n) end
+    H.step(1000)
+    M.update('run-cl-m3-pu', 1, Pointer(10300.0), cctx)
+    local cb, cp = BlipOf(function(p) return p.ent == nil and p.sprite == 225 end)
+    H.ok(BL.live[vb] == nil, 'pursuit client: out of this game: the entity blip is gone')
+    H.ok(
+        cp and cp.colour == 1 and cp.scale == 0.9 and cp.x == 10300.0 and cp.name == CP.L('block.pursuit.blip_vehicle'),
+        'pursuit client: the car where the server has it, same look')
+    local r = RoutedBlips()
+    H.ok(#r == 1 and r[1] == cb, 'pursuit client: the line follows it at any distance')
+    _G.NetworkDoesNetworkIdExist = exists
+    H.step(1000)
+    H.ok(BL.live[cb] == nil and BlipOf(function(p)
+        return p.ent == veh
+    end) ~= nil, 'pursuit client: streamed again: the block\'s blip again, ours gone')
+
+    M.clear('run-cl-m3-pu', 1)
+    PC.stop(cctx)
+    H.step(1000)
+    H.eq(LiveBlips() - base, 0, 'pursuit client: nothing left on the map')
+    H.eq(BL.removedRouted, removedRouted, 'pursuit client: every line went off before its blip')
+end
+
 CP.Custody = custodyStub
 _G.GetEntityHeading = realHeading
 

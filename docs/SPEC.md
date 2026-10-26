@@ -657,6 +657,8 @@ Locations for every new mission come from GTA V vehicle nodes and known base-gam
 
 - Spawns: 3 NPC racers in sports cars (scales), racing the route until the time limit ends
 
+- Marking (Config.Markers, PLAN M3): each racer's car, and a driver out of it, has a red blip with the GPS line to the nearest; one too far away for an officer's game (OneSync streams 424 m) shows where the server has it, so it stays on every map at any distance
+
 - Objectives: 1) stop racers before the race ends; a racer is stopped when its car stays below 5 km/h for 5 seconds; 2) detain each stopped driver with ox_target "Detain driver" (3 s progress). The run is Completed when every racer is detained, or when the time limit ends with at least one detained
 
 - Scales: racers (base 3)
@@ -701,6 +703,8 @@ Locations for every new mission come from GTA V vehicle nodes and known base-gam
 
 - Spawns: 1 getaway car with 1 driver, who flees but never shoots
 
+- Marking (Config.Markers, PLAN M3): the getaway car, and the driver once out of it, has a red blip with the GPS line to it; one too far away for an officer's game (OneSync streams 424 m) shows where the server has it, so it stays on every map at any distance
+
 - Objectives: stay within 150 m of the car for a total of 3 minutes
 
 - Scales: nothing (solo)
@@ -722,6 +726,8 @@ Locations for every new mission come from GTA V vehicle nodes and known base-gam
 - Start: an 85 m circle round the last-seen point, 35–42 m from the stolen car, so an officer arriving at its edge is 43 m or more from the car, past Config.Spawning.minDistance (PLAN S19; it was 60 m, 18–24 m from the car). When a participant with lights on is within 60 m of the car, it rolls its response: yield (25%), flee (65%) or fight (10%: the passenger is armed and may shoot from the car, drive-by chance 50%)
 
 - Spawns: 1 stolen car with 2 suspects (scales, max 4); after the stop, each suspect has a 20% chance to flee on foot
+
+- Marking (Config.Markers, PLAN M3): the stolen car, and each suspect once out of it, has a red blip with the GPS line to the nearest; one too far away for an officer's game (OneSync streams 424 m) shows where the server has it, so it stays on every map at any distance
 
 - Objectives: 1) stop the car: it pulls over by itself (yield) or is stopped with a PIT or box-in (below 5 km/h for 5 seconds); 2) aim at each suspect until they surrender (hands up, then kneel); the suspects of a car that yielded stay seated until ordered out; 3) cuff each suspect ("Cuff suspect", 5 s progress), catching any who flee first; 4) Impound the stolen car (10 s progress; the tow truck collects it). Steps 2–4 are a field_contact objective in stop mode that adopts the pursuit's car and suspects (revealed = { 'stolen' }).
 
@@ -857,6 +863,8 @@ Locations for every new mission come from GTA V vehicle nodes and known base-gam
 
 - Spawns: an armored truck (stockade) with an NPC driver that follows the route's roads at its set speed (default 60 km/h), keeping to its lanes; 2 ambush waves (scales) of 2 cars each (scales), with 2 armed attackers per car, triggered at random ambush points along the route. The truck appears on the depot point 0.5 m over the road (vehicleLift) once no vehicle and no officer is within 6 m of it (Config.Spawning; after 20 s on the first free spot further along the route); the ambush cars appear 0.5 m over the road where they stand, never within 40 m of an officer and, with Config.Spawning.ambushAheadOnly, never on another vehicle, next to the truck or behind it (their slots slide further along the route)
 
+- Marking (Config.Markers, PLAN M3): the truck (a blue armoured van blip) and the destination (a yellow flag); each officer's own GPS line goes to the truck while he is more than clearRadius (100 m) from it, else to the destination. A truck too far away for an officer's game shows where the server has it; the attackers are red dots
+
 - Objectives: 1) escort the truck to the destination; 2) neutralise each ambush wave; 3) the truck reaches the destination with no attacker within 100 m
 
 - Scales: ambush waves and cars per wave
@@ -925,7 +933,7 @@ Locations for every new mission come from GTA V vehicle nodes and known base-gam
 
 - Spawns: one violator solo, two with two officers (the second appears once the first stop is closed). Each is 1 car with a driver and passengers (occupants scale: base 1, max 3) that spawns 150–250 m upstream of the observation point and drives past it; the second one spawns Config.Spawning.secondViolatorUpstream (200 m) up the road from the officer furthest up it (officers within 100 m of the road; nobody on the road: upstream of the observation point as the first) and drives towards them, never at the first one's point. Both are 0.5 m over the road (vehicleLift) and go through the spawn director (never within 40 m of an officer). The server rolls the violation (speeding 20–45 km/h over the posted speed 70%, reckless lane changes 30%), each person's truth (Config.Custody.profileSets.traffic), the car (legal 90%, stolen 10%) and the response to lights (yield 75%, flee 20%, fight 5%; fight only when someone in the car is armed)
 
-- Marking: the HUD announces the violator as it approaches ("Vehicle approaching: 128 km/h" or "Vehicle weaving between lanes"), and the violator car alone gets a blip once it passes the observation point (the second one: once it passes where the officers stood on the road when it set off). Ambient traffic is never marked
+- Marking: the HUD announces the violator as it approaches ("Vehicle approaching: 128 km/h" or "Vehicle weaving between lanes"), and the violator car alone gets a blip once it passes the observation point (the second one: once it passes where the officers stood on the road when it set off), then stays on the map at any distance (Config.Markers: where the server has it once it is too far away for an officer's game). Until then the objective blip is the observation point. Ambient traffic is never marked
 
 - Objectives: 1) observe the violation, then stop the car: pace a speeder by staying within 80 m behind it for 5 seconds (the server compares speeds every second and grades the median of the samples, with a 5 km/h tolerance; the HUD shows "Paced: 128 km/h in an 80 zone"), or follow a reckless driver within 60 m for 8 seconds; then light it up within 60 m. A yielding car pulls over with its hazards on; a fleeing car must be stopped (PIT or box-in: below 5 km/h for 5 seconds) and anyone who runs caught and cuffed; the armed occupants of a fighting car must be neutralised; 2) work the stop: Talk to the driver (licence and registration), Run plate, Order out, Frisk, Look inside, Search vehicle (with probable cause), then decide for every person (Warn, Cite, Arrest or Release) and the car (No action or Impound); arrests go to transport; 3) and 4) with two officers, the same for the second violator
 
