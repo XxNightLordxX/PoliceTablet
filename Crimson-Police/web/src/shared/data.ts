@@ -85,6 +85,7 @@ export function normalizeHud(h: HudState, prev?: HudState | null): HudState {
             : null,
         objectives: asArray(h.objectives),
         detail: h.detail ?? null,
+        target: h.target ?? null,
         message: h.message ?? null,
         testControls: !!h.testControls,
     };

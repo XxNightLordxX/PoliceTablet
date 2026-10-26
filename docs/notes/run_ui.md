@@ -19,6 +19,7 @@ UI-only slice (no Lua, no SQL). Files:
 | action | `server:abandon` | `runId` → `{ runId }` | Active Mission |
 | client action | `setGps` | `{ runId }` (payload ignored by modules/route) → `{ runId }` | Active Mission |
 | client action | `recalcRoute` | `{ runId }` (ignored) → `{ recalcsLeft }` | Active Mission |
+| client action | `setObjectiveGps` | `{ runId }` (payload ignored by modules/markers) → `{ label }` (PLAN M10; shown while In progress, without the route card, `view.objectiveGps` on and no Radio Silence 'area'/'none') | Active Mission |
 | client action | `logResult` | `{ point, choice }` → `true` | Active Mission (Business Check log) |
 
 No Lua API, no events, no callbacks are registered by this slice.
@@ -115,9 +116,11 @@ No Lua API, no events, no callbacks are registered by this slice.
 - `BoardOperation` = §9.4 operation + `missionType?`, `missionTypeLabel?`, `description?`, `min?`, `runState?`
   (what `CP.Operations.boardCard` already sends, docs/notes/teams.md).
 - `ActiveMissionData` = ActiveMissionView + `me?: number`, `isBoss?: boolean`, `operationId?: number | null`,
-  `startIn?: number | null` (seconds left to reach the start), `area?: string | null` (street · zone).
+  `startIn?: number | null` (seconds left to reach the start), `area?: string | null` (street · zone),
+  `objectiveGps?: boolean` (the Objective GPS button: `Config.Markers.objectiveGps` and `enabled`, PLAN M10).
 - Replies: `AcceptTypeResult { runId }`, `JoinOperationResult { id, joined, max }`, `AbandonResult { runId }`,
-  `RecalcRouteResult { recalcsLeft }`, `SetGpsResult { runId }`, payload `LogResultPayload { point, choice }`.
+  `RecalcRouteResult { recalcsLeft }`, `SetGpsResult { runId }`, `ObjectiveGpsResult { label }`, payload
+  `LogResultPayload { point, choice }`.
 
 ## Browser mocks (src/mocks/run_ui.mock.ts)
 - `?board=normal | unit | member | locked | busy | oncall | boss | bossused | operation | opjoined | oprunning |

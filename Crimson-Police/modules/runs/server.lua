@@ -4067,6 +4067,9 @@ function Runs.view(run, src)
         silenceMode = type(Config.Markers) == 'table' and Config.Markers.radioSilence or nil
         if silenceMode ~= 'none' and silenceMode ~= 'full' then silenceMode = 'area' end
     end
+    -- The Objective GPS button (Config.Markers.objectiveGps, PLAN M10); the officer's game decides when it can set one.
+    local markers = type(Config.Markers) == 'table' and Config.Markers or {}
+    local objectiveGps = markers.enabled ~= false and markers.objectiveGps ~= false
     return {
         -- Optional extras for the Active Mission screen (web/src/types/run_ui.ts): the viewer, the boss flag,
         -- the operation, the seconds left to reach the start and the area (street · zone).
@@ -4095,6 +4098,7 @@ function Runs.view(run, src)
         recalcsLeft = recalcs,
         radioSilence = radioSilence,
         silenceMode = silenceMode,
+        objectiveGps = objectiveGps,
         log = logView,
         intel = intel,
         missionCall = mcView,

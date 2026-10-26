@@ -10,6 +10,7 @@ import type {
     BossCard,
     JoinOperationResult,
     MissionBoardData,
+    ObjectiveGpsResult,
     RecalcRouteResult,
     RunObjective,
     RunPartner,
@@ -838,6 +839,7 @@ function view(r: MockRunState): ActiveMissionData {
         recalcsLeft: r.recalcsLeft,
         radioSilence: r.radioSilence,
         silenceMode: r.radioSilence ? 'area' : null,
+        objectiveGps: true,
         log: r.state === 'in_progress' ? r.log : null,
         me: ME_SRC,
         isBoss: r.isBoss,
@@ -1200,6 +1202,19 @@ registerMock('client', 'setGps', () => {
     if (!r || r.route.status === 'arrived') throw new Error('err.route_inactive');
     notify('info', L('route.gps_set'));
     const res: SetGpsResult = { runId: r.runId };
+    return res;
+});
+
+// Objective GPS (modules/markers): refused while driving to the start and under Radio Silence 'area' (shipped).
+registerMock('client', 'setObjectiveGps', () => {
+    const r = mockRun;
+    if (!r || r.state !== 'in_progress') throw new Error('err.objective_gps_none');
+    if (r.route.status === 'on' || r.route.status === 'off') throw new Error('err.objective_gps_start');
+    if (r.radioSilence) throw new Error('err.objective_gps_silence');
+    const current = r.objectives.find(o => o.current && !o.done);
+    const label = current ? current.label : L('markers.objective');
+    notify('info', L('markers.gps_set', { label }));
+    const res: ObjectiveGpsResult = { label };
     return res;
 });
 

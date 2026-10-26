@@ -32,6 +32,7 @@ import type {
     AbandonResult,
     ActiveMissionData,
     LogResultPayload,
+    ObjectiveGpsResult,
     RecalcRouteResult,
     RunLog,
     RunObjective,
@@ -427,7 +428,8 @@ function ObjectiveRow({ o, index, pending }: { o: RunObjective; index: number; p
     );
 }
 
-function ObjectivesCard({ view }: { view: ActiveMissionData }) {
+// footer: the Objective GPS row while the run is in progress (PLAN M10).
+function ObjectivesCard({ view, footer }: { view: ActiveMissionData; footer?: ReactNode }) {
     const objectives = asArray(view.objectives);
     const done = objectives.filter(o => o.done).length;
     const pending = view.state !== 'in_progress';
@@ -459,6 +461,7 @@ function ObjectivesCard({ view }: { view: ActiveMissionData }) {
             ) : (
                 <EmptyState compact icon="list" title={t('run.objectives.none')} />
             )}
+            {footer}
         </Card>
     );
 }
@@ -614,6 +617,7 @@ export default function ActiveMission() {
     const [confirmAbandon, setConfirmAbandon] = useState(false);
     const [confirmRecalc, setConfirmRecalc] = useState(false);
     const [gpsBusy, setGpsBusy] = useState(false);
+    const [objGpsBusy, setObjGpsBusy] = useState(false);
     const [recalcBusy, setRecalcBusy] = useState(false);
     const [logSending, setLogSending] = useState<string | null>(null);
     const [loggedPoint, setLoggedPoint] = useState<number | null>(null);
@@ -664,6 +668,15 @@ export default function ActiveMission() {
         setGpsBusy(true);
         const res = await clientAction<SetGpsResult>('setGps', { runId: view.runId });
         setGpsBusy(false);
+        if (!res.ok) errorToast(res.error);
+    };
+
+    // Objective GPS (modules/markers): a waypoint on what the objective pointer leads to; the game toasts the result.
+    const setObjectiveGps = async () => {
+        if (!view) return;
+        setObjGpsBusy(true);
+        const res = await clientAction<ObjectiveGpsResult>('setObjectiveGps', { runId: view.runId });
+        setObjGpsBusy(false);
         if (!res.ok) errorToast(res.error);
     };
 
@@ -739,6 +752,13 @@ export default function ActiveMission() {
     const mine = asArray(view.partners).find(p => isMe(p, view, session));
     const untracked = view.route?.status === 'disabled' && !!mine && mine.status === 'active' && !mine.arrived;
     const showRoute = view.state === 'accepted' || routing || untracked;
+    // Objective GPS once this officer is at the action: while he still drives to the start the route card's Set GPS
+    // is his one line, and Radio Silence ('area' or 'none') shows no GPS to the objective (Config.Markers.radioSilence).
+    const objectiveGps =
+        view.state === 'in_progress' &&
+        !showRoute &&
+        view.objectiveGps === true &&
+        !(view.radioSilence && view.silenceMode !== 'full');
 
     const abandonMessage = (
         <div className="run_ui-confirm">
@@ -818,7 +838,24 @@ export default function ActiveMission() {
                             onRecalc={() => setConfirmRecalc(true)}
                         />
                     ) : null}
-                    <ObjectivesCard view={view} />
+                    <ObjectivesCard
+                        view={view}
+                        footer={
+                            objectiveGps ? (
+                                <div className="run_ui-objectives__gps">
+                                    <Button
+                                        variant="secondary"
+                                        icon="mapPin"
+                                        loading={objGpsBusy}
+                                        onClick={() => void setObjectiveGps()}
+                                    >
+                                        {t('run.objective_gps.button')}
+                                    </Button>
+                                    <span className="run_ui-objectives__gps-hint">{t('run.objective_gps.hint')}</span>
+                                </div>
+                            ) : null
+                        }
+                    />
                 </div>
                 <div className="run_ui-active__col">
                     <PartnersCard view={view} session={session} />

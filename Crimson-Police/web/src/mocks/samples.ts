@@ -184,6 +184,7 @@ export function sampleHud(kind: SampleHudKind = 'progress'): HudState {
             route: { status: 'off', secondsLeft: 23, distance: 1480 },
             objectives: [],
             detail: null,
+            target: null,
             message: null,
             testControls: false,
         };
@@ -213,6 +214,7 @@ export function sampleHud(kind: SampleHudKind = 'progress'): HudState {
                 { label: 'Secure the scene', done: false, current: false },
             ],
             detail: 'Hold still: 6 s',
+            target: { label: 'Device 2', distance: 40 },
             message: { text: 'Timer paused by the test controls', kind: 'info' },
             testControls: true,
         };
@@ -234,6 +236,7 @@ export function sampleHud(kind: SampleHudKind = 'progress'): HudState {
             { label: 'Search the hideout', done: false, current: false },
         ],
         detail: null,
+        target: { label: 'Hostiles', distance: 1200 },
         message: null,
         testControls: false,
     };

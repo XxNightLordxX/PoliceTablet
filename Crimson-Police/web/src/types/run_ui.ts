@@ -78,6 +78,9 @@ export interface ActiveMissionData extends ActiveMissionView {
     missionCall?: null | { code: string; targetS: number; arrivedS: number | null };
     // The current objective's contacts (field_contact, through CP.Custody.view).
     contact?: ContactView | null;
+    // The Objective GPS button is on (Config.Markers.objectiveGps; the officer's game refuses it while he drives to the
+    // start or Radio Silence hides the objective's line).
+    objectiveGps?: boolean;
 }
 
 // ============================================================================
@@ -159,6 +162,10 @@ export interface RecalcRouteResult {
 // Reply of the client action setGps.
 export interface SetGpsResult {
     runId: string;
+}
+// Reply of the client action setObjectiveGps (modules/markers): the objective the waypoint was put on.
+export interface ObjectiveGpsResult {
+    label: string;
 }
 
 // Payload of the client action logResult (Business Check tablet log).

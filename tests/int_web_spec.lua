@@ -328,6 +328,13 @@ do
     Has(hudSrc, 'secondsSince(timer.remaining, timer.receivedAt)', 'the timer counts from its arrival time')
     Has(hudSrc, 'secondsSince(route.secondsLeft, route.receivedAt)',
         'the off-route countdown counts from its arrival time')
+    -- PLAN M10: the objective line under the objectives (CP.Markers' HUD patch 'target', false clears it)
+    Has(hudSrc, '{hud.phase === \'objectives\' && hud.target ? <TargetLine target={hud.target} /> : null}',
+        'the HUD shows where the objective is and how far while the objectives run')
+    Has(hudSrc, 't(\'hud.target.distance\', { distance: formatDistance(target.distance) })', 'its distance')
+    Has(data, 'target: h.target ?? null,', 'normalizeHud keeps a missing target as null')
+    local tabletCl = Read(ROOT .. 'modules/tablet/client.lua')
+    Has(tabletCl, 'detail = true, target = true }', 'the HUD patch target = false clears it (NULLABLE_HUD)')
 end
 
 -- ============================================================================

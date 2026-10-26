@@ -14,7 +14,7 @@ local DEFAULT_THEME = {
     surface = '#161a1d',
     text = '#f5f3f4',
 }
-local NULLABLE_HUD = { modifier = true, timer = true, route = true, message = true, detail = true }
+local NULLABLE_HUD = { modifier = true, timer = true, route = true, message = true, detail = true, target = true }
 local KEY_MAPPING = 'crimsonpolice_tablet'
 local DISPATCH_MAPPING = 'crimsonpolice_dispatch'
 local DESK_OPTION = 'crimson-police:desk'

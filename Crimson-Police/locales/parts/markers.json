@@ -3,5 +3,10 @@
   "markers.fight": "Hostiles",
   "markers.last_known": "Last known area",
   "markers.prisoner_van": "Prisoner transport",
-  "markers.tow_truck": "Tow truck"
+  "markers.tow_truck": "Tow truck",
+  "markers.gps_set": "GPS set to {label}.",
+  "err.objective_gps_off": "Objective GPS is switched off on this server.",
+  "err.objective_gps_none": "There is no objective on your map right now.",
+  "err.objective_gps_start": "Drive to the mission start first: your GPS shows the way there.",
+  "err.objective_gps_silence": "Radio Silence: no GPS to the objective. Find it on your map."
 }

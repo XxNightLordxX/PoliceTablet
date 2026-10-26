@@ -114,6 +114,8 @@
   "run.route.disabled_test": "Test run: the start route check is off. Drive to the start to begin.",
   "run.route.disabled_text": "No start route is tracked for this run.",
   "run.route.set_gps": "Set GPS",
+  "run.objective_gps.button": "Objective GPS",
+  "run.objective_gps.hint": "Puts a waypoint on the objective you are on. It moves with a moving objective and goes when the objective is done.",
   "run.route.recalc": "Recalculate route",
   "run.route.recalcs_left": "Recalculations left: {n}",
   "run.route.no_recalcs": "No route recalculations left.",

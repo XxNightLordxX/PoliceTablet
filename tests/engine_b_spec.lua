@@ -698,6 +698,15 @@ do
     H.eq(Runs.view(A, 1).silenceMode, 'area', 'Radio Silence: an unknown mode counts as area')
     A.modifiers, Config.Markers.radioSilence = realMods, realMode
 end
+do
+    -- PLAN M10: the Objective GPS button follows Config.Markers.objectiveGps (and enabled)
+    H.eq(v.objectiveGps, true, 'm10: Objective GPS on as shipped')
+    Config.Markers.objectiveGps = false
+    H.eq(Runs.view(A, 1).objectiveGps, false, 'm10: objectiveGps = false: no button')
+    Config.Markers.objectiveGps, Config.Markers.enabled = true, false
+    H.eq(Runs.view(A, 1).objectiveGps, false, 'm10: Config.Markers.enabled = false: no button')
+    Config.Markers.enabled = true
+end
 H.eq(v.test, false, 'not a test')
 local s = Runs.summary(A)
 H.eq(#s.participants, 2, 'summary participants')

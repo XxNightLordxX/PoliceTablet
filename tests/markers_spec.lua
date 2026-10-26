@@ -115,6 +115,14 @@ end
 CP.Route = {
     current = function() return world.route end,
 }
+-- the tablet as modules/tablet gives it: the HUD patches, the toasts and the client actions registered (PLAN M10)
+local TB = { huds = {}, notes = {}, actions = {} }
+local TABLET = {
+    hud = function(patch) TB.huds[#TB.huds + 1] = patch end,
+    notify = function(kind, text) TB.notes[#TB.notes + 1] = { kind = kind, text = text } end,
+    registerClientAction = function(name, fn) TB.actions[name] = fn end,
+}
+CP.Tablet = TABLET
 H.load('modules/markers/client.lua')
 local M = CP.Markers
 H.ok(type(M.set) == 'function' and type(M.adopt) == 'function' and type(M.release) == 'function', 'CP.Markers loaded')
@@ -1716,6 +1724,206 @@ do
 
     _G.IsWaypointActive, _G.DoesBlipExist, _G.SetBlipRoute =
         saved.IsWaypointActive, saved.DoesBlipExist, saved.SetBlipRoute
+end
+
+-- ============================================================================
+--                                     M10
+-- ============================================================================
+-- THE HUD SAYS WHERE THE OBJECTIVE IS AND HOW FAR; OBJECTIVE GPS.
+-- CP.Markers' 1 s check sends the HUD what the pointer leads to and how far (Config.Markers.hudLine), only when that
+-- changes; the tablet's Objective GPS button (client action setObjectiveGps, Config.Markers.objectiveGps) puts a map
+-- waypoint on it, which is then the officer's one line (BLIPS_FINAL R2) and goes with the objective.
+
+do
+    Reset()
+    CP.Tablet = TABLET
+    CP.Route = {
+        current = function() return world.route end,
+    }
+    local WAYPOINT_BLIP = 9100
+    local wp, waypoints = nil, 0 -- the map waypoint as the game keeps it, and how often SetNewWaypoint ran
+    local saved = { IsWaypointActive = _G.IsWaypointActive, DoesBlipExist = _G.DoesBlipExist }
+    _G.SetNewWaypoint = function(x, y)
+        wp = vec3(x, y, 0.0)
+        waypoints = waypoints + 1
+    end
+    _G.IsWaypointActive = function() return wp ~= nil end
+    _G.GetFirstBlipInfoId = function(sprite) return (sprite == 8 and wp) and WAYPOINT_BLIP or 0 end
+    _G.GetBlipInfoIdCoord = function() return wp or vec3(0.0, 0.0, 0.0) end
+    _G.SetWaypointOff = function() wp = nil end
+    _G.DoesBlipExist = function(id)
+        if id == WAYPOINT_BLIP then return wp ~= nil end
+        return saved.DoesBlipExist(id)
+    end
+    -- the HUD's objective lines sent since the last call (false = cleared)
+    local function Targets()
+        local out = {}
+        for _, p in ipairs(TB.huds) do if p.target ~= nil then out[#out + 1] = p.target end end
+        TB.huds = {}
+        return out
+    end
+    local Gps = TB.actions.setObjectiveGps
+    H.ok(type(Gps) == 'function', 'm10: client action setObjectiveGps registered by modules/markers')
+    TB.huds = {}
+
+    -- the HUD line: the label and the distance from the objective's start, sent only when it changes
+    M.set('run-m10', 1, { kind = 'point', coords = { x = 2000.0, y = 0.0, z = 30.0 }, label = 'Destination' })
+    local t = Targets()
+    H.eq(#t, 1, 'm10: one HUD line at the start of the objective')
+    H.ok(t[1] and t[1].label == 'Destination' and t[1].distance == 2000 and t[1].inside == nil,
+        'm10: the label and how far (2.0 km)')
+    Tick(10)
+    H.eq(#Targets(), 0, 'm10: 10 s standing still: no HUD send')
+    world.me = vec3(30.0, 0.0, 30.0)
+    Tick()
+    H.eq(#Targets(), 0, 'm10: 1970 m still reads 2.0 km (100 m steps from 1 km): no send')
+    world.me = vec3(300.0, 0.0, 30.0)
+    Tick()
+    t = Targets()
+    H.ok(#t == 1 and t[1].distance == 1700, 'm10: 1.7 km: sent once')
+    world.me = vec3(1503.0, 0.0, 30.0)
+    Tick()
+    t = Targets()
+    H.ok(#t == 1 and t[1].distance == 500, 'm10: under 1 km in 10 m steps (497 m reads 500 m)')
+    M.update('run-m10', 1, { kind = 'point', coords = { x = 2000.0, y = 0.0, z = 30.0 }, label = 'Destination' })
+    Tick(3)
+    H.eq(#Targets(), 0, 'm10: an unchanged update: no send')
+
+    -- an area: how far to its edge, then inside it
+    M.set('run-m10', 2, {
+        kind = 'area',
+        coords = { x = 1500.0, y = 600.0, z = 30.0 },
+        radius = 100.0,
+        look = 'fightArea',
+        label = 'Hostiles',
+    })
+    t = Targets()
+    H.ok(#t == 1 and t[1].label == 'Hostiles' and t[1].distance == 500, 'm10: an area: 500 m to its edge')
+    world.me = vec3(1500.0, 550.0, 30.0)
+    Tick()
+    t = Targets()
+    H.ok(#t == 1 and t[1].inside == true and t[1].distance == 0, 'm10: inside the circle: "You are in the area"')
+
+    -- gone with the objective, and nothing sent after it
+    M.clear('run-m10', 2)
+    t = Targets()
+    H.ok(#t == 1 and t[1] == false, 'm10: the objective stop clears the HUD line')
+    Tick(3)
+    H.eq(#Targets(), 0, 'm10: nothing sent once cleared')
+
+    -- never while the officer still drives to the start (the route line is his), back once he arrived
+    world.me = vec3(0.0, 0.0, 30.0)
+    world.route = { runId = 'run-m10', arrived = false, routeOn = true }
+    M.set('run-m10', 3, { kind = 'point', coords = { x = 800.0, y = 0.0, z = 30.0 }, label = 'Scene' })
+    Tick(2)
+    H.eq(#Targets(), 0, 'm10: driving to the start: no objective line on the HUD')
+    world.route.arrived = true
+    Tick()
+    t = Targets()
+    H.ok(#t == 1 and t[1].label == 'Scene' and t[1].distance == 800, 'm10: arrived: the objective line')
+    world.route = nil
+
+    -- Config.Markers.hudLine = false: cleared once, then nothing
+    Config.Markers.hudLine = false
+    Tick(3)
+    t = Targets()
+    H.ok(#t == 1 and t[1] == false, 'm10: hudLine = false clears the line once')
+    Config.Markers.hudLine = true
+    Tick()
+    H.eq(#Targets(), 1, 'm10: switched back on in Settings: the line again')
+
+    -- Radio Silence: only what the map shows; a suspect it hides gives no distance
+    local silent = { radioSilence = true }
+    M.set('run-m10', 4,
+        { kind = 'targets', targets = { { key = 71, netId = 71, x = 900.0, y = 0.0, z = 30.0, look = 'fleeing' } } },
+        silent)
+    Tick()
+    t = Targets()
+    H.ok(#t == 1 and t[1] == false, 'm10: Radio Silence \'area\': no HUD distance to a suspect it hides')
+    M.set('run-m10', 5, { kind = 'point', coords = { x = 0.0, y = 700.0, z = 30.0 }, label = 'Door' }, silent)
+    t = Targets()
+    H.ok(#t == 1 and t[1].label == 'Door' and t[1].distance == 700,
+        'm10: Radio Silence \'area\': the point it shows has its line')
+    M.clear()
+    Targets()
+
+    -- Objective GPS: refused with nothing to point at, while driving, when off, under Radio Silence
+    local ok, err = Gps()
+    H.ok(ok == false and err == 'err.objective_gps_none', 'm10: no objective: refused')
+    M.set('run-g', 1, { kind = 'point', coords = { x = 600.0, y = 0.0, z = 30.0 }, label = 'Front door' })
+    H.eq(#Routed(), 1, 'm10: the pointer routes before the button')
+    world.route = { runId = 'run-g', arrived = false, routeOn = true }
+    ok, err = Gps()
+    H.ok(ok == false and err == 'err.objective_gps_start', 'm10: still driving to the start: refused')
+    world.route = nil
+    Config.Markers.objectiveGps = false
+    ok, err = Gps()
+    H.ok(ok == false and err == 'err.objective_gps_off', 'm10: objectiveGps = false: refused')
+    Config.Markers.objectiveGps = true
+    M.set('run-s', 1, { kind = 'point', coords = { x = 600.0, y = 0.0, z = 30.0 } }, silent)
+    ok, err = Gps()
+    H.ok(ok == false and err == 'err.objective_gps_silence', 'm10: Radio Silence \'area\': refused')
+    H.eq(wp, nil, 'm10: no waypoint after a refusal')
+    Config.Markers.radioSilence = 'full'
+    H.eq((Gps()), true, 'm10: Radio Silence \'full\': allowed')
+    Config.Markers.radioSilence = 'area'
+    M.clear()
+    H.eq(wp, nil, 'm10: the run end removes our waypoint')
+
+    -- set: a waypoint on the pointer; the officer's one line (R2), kept while it is ours
+    M.set('run-g', 1, { kind = 'point', coords = { x = 600.0, y = 0.0, z = 30.0 }, label = 'Front door' })
+    waypoints = 0
+    TB.notes = {}
+    local data
+    ok, data = Gps()
+    H.ok(ok == true and type(data) == 'table' and data.label == 'Front door', 'm10: Objective GPS set')
+    H.ok(wp and wp.x == 600.0 and wp.y == 0.0, 'm10: the waypoint is on the objective')
+    H.eq(#Routed(), 0, 'm10: our line goes off at once: the waypoint is his one line (R2)')
+    H.ok(TB.notes[1] and TB.notes[1].kind == 'info' and TB.notes[1].text == 'markers.gps_set', 'm10: a toast says so')
+    Tick(3)
+    H.eq(#Routed(), 0, 'm10: and stays off while the waypoint is there')
+    H.eq(waypoints, 1, 'm10: a point that does not move: the waypoint is set once')
+    M.clear('run-g', 1)
+    H.eq(wp, nil, 'm10: the objective stop removes our waypoint')
+
+    -- the next objective routes again; a moving one is followed while the waypoint stays ours
+    local car = { kind = 'targets', targets = { { key = 81, x = 900.0, y = 0.0, z = 30.0, look = 'vehicle' } } }
+    M.set('run-g', 2, car)
+    H.eq(#Routed(), 1, 'm10: the next objective has its line (no waypoint left)')
+    H.eq((Gps()), true, 'm10: Objective GPS on a moving car')
+    waypoints = 0
+    car.targets[1].x = 930.0
+    M.update('run-g', 2, car)
+    Tick()
+    H.eq(waypoints, 0, 'm10: moved 30 m: the waypoint stays')
+    car.targets[1].x = 1000.0
+    M.update('run-g', 2, car)
+    Tick()
+    H.ok(waypoints == 1 and wp and wp.x == 1000.0, 'm10: moved 100 m: the waypoint follows it')
+    H.eq(#Routed(), 0, 'm10: still one line, the waypoint\'s')
+
+    -- his own waypoint is never moved or removed
+    local MINE = vec3(-500.0, -500.0, 0.0)
+    wp = MINE
+    Tick()
+    car.targets[1].x = 1200.0
+    M.update('run-g', 2, car)
+    Tick(2)
+    H.ok(wp == MINE, 'm10: a waypoint of his own is not moved')
+    M.clear('run-g', 2)
+    H.ok(wp == MINE, 'm10: nor removed at the objective stop')
+
+    -- a new objective without a stop in between (an update for another index) still drops our waypoint
+    wp = nil
+    M.set('run-g', 3, { kind = 'point', coords = { x = 600.0, y = 0.0, z = 30.0 } })
+    H.eq((Gps()), true, 'm10: set on objective 3')
+    M.update('run-g', 4, { kind = 'point', coords = { x = 0.0, y = 900.0, z = 30.0 } })
+    H.eq(wp, nil, 'm10: objective 4: the waypoint of objective 3 went')
+    H.eq(#Routed(), 1, 'm10: and objective 4 has its line')
+    M.clear()
+    H.ok(NoRemovedRoute(), 'm10: every blip lost its line first')
+
+    _G.IsWaypointActive, _G.DoesBlipExist = saved.IsWaypointActive, saved.DoesBlipExist
 end
 
 return H

@@ -96,6 +96,23 @@ function RouteLine({ route }: { route: NonNullable<HudState['route']> }) {
     }
 }
 
+// Where the objective pointer leads and how far (CP.Markers, Config.Markers.hudLine): the look of the route line.
+function TargetLine({ target }: { target: NonNullable<HudState['target']> }) {
+    return (
+        <div className="cp-hud__route is-target">
+            <Icon name="navigation" size={15} />
+            <div className="cp-hud__route-text">
+                <strong>{target.label}</strong>
+                <span className="cp-num">
+                    {target.inside
+                        ? t('hud.target.inside')
+                        : t('hud.target.distance', { distance: formatDistance(target.distance) })}
+                </span>
+            </div>
+        </div>
+    );
+}
+
 function Objective({ o }: { o: HudObjective }) {
     const hasProgress = typeof o.value === 'number' && typeof o.max === 'number' && o.max > 0;
     const pct = hasProgress ? Math.max(0, Math.min(100, ((o.value as number) / (o.max as number)) * 100)) : 0;
@@ -200,6 +217,8 @@ export function Hud({ hud }: { hud: HudState }) {
                 ) : hud.phase === 'route' ? (
                     <div className="cp-hud__pending">{t('hud.objectives_pending')}</div>
                 ) : null}
+
+                {hud.phase === 'objectives' && hud.target ? <TargetLine target={hud.target} /> : null}
 
                 {hud.detail ? (
                     <div className="cp-hud__detail">

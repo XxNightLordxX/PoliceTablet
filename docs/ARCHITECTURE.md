@@ -2645,13 +2645,29 @@ without arguments also removes the run's service vehicles, PLAN M7).
   CP.Markers draws its own circles (search_area, PLAN M5; interact_points' hidden search, PLAN M6).
 - `routeColour() -> integer` — `Config.Markers.routeColour` (0-85, default 5): the colour of every Crimson-Police GPS
   line, a block's own included (checkpoint_route, PLAN M6).
-- The line (R2, R6): on ONE blip, the point or centre, or this officer's nearest target (moved only when another is
-  25 % closer; a target with `beyond` first while he is farther than that from it), `SetBlipRoute` +
-  `SetBlipRouteColour(routeColour)`; off within `routeOffWithin` of a point or target
+- The line (R2, R6): on ONE blip, the one the pointer leads to (`cur.pointed`: of what the map shows, the point or
+  centre, or this officer's nearest target, moved only when another is 25 % closer; a target with `beyond` first while
+  he is farther than that from it; kept while the line is off, so the HUD line and Objective GPS name the same one),
+  `SetBlipRoute` + `SetBlipRouteColour(routeColour)`; off within `routeOffWithin` of a point or target
   and inside an area's radius. `canRoute(ctx)` — false while `enabled` or `route` is off, under Radio Silence, while
   `CP.Route.current()` exists and has not arrived (CP.Route samples the start's line from the blip-route slot first,
-  §5.12), and while the officer has a waypoint (`IsWaypointActive`). Every blip CP.Markers removes or hands back loses
-  its line first (R10).
+  §5.12), and while the officer has a waypoint (`IsWaypointActive`: his own, or the one Objective GPS set). Every blip
+  CP.Markers removes or hands back loses its line first (R10).
+- The HUD line (PLAN M10, `Config.Markers.hudLine`): each check sends `CP.Tablet.hud({ target = { label, distance,
+  inside? } })` for what the pointer leads to (its label, else `markers.objective`; `distance` in metres to the point,
+  the target or an area's edge, in 10 m steps under 1 km and 100 m steps above; `inside` = within an area's radius),
+  only when that changes, and `{ target = false }` once when there is none: nothing shown on the map (Radio Silence
+  included: no distance to a suspect it hides), the officer still driving to the start, `hudLine` or `enabled` off, and
+  at every `clear`. The NUI shows it under the objectives while `phase` is `'objectives'` (§9.3).
+- `objectiveGps() -> ok, { label } | errKey` — the client action `setObjectiveGps` (PLAN M10, registered with
+  `CP.Tablet.registerClientAction` once every module has loaded; payload ignored): `SetNewWaypoint` on what the pointer
+  leads to, its line off at once (the waypoint is the officer's one line, R2) and a toast `markers.gps_set`. Refused
+  with `err.objective_gps_off` (`objectiveGps` or `enabled` off), `err.objective_gps_none` (nothing on the map),
+  `err.objective_gps_start` (still driving to the start: the start keeps his line) and `err.objective_gps_silence`
+  (Radio Silence hides the line: `'area'` or `'none'`). While the waypoint stays ours (`GetFirstBlipInfoId(8)` within
+  15 m of where we put it) each check moves it to the pointer once that is more than 50 m off (a moving car or suspect,
+  the next nearest door); `clear` (the objective's stop, the run's end) and a `set` for another objective remove it
+  (`SetWaypointOff`). A waypoint the officer put in its place is never moved or removed.
 - `hidden(ctx, kind, variant?) -> boolean` (R9, PLAN M8): true when Radio Silence (`ctx.radioSilence`; nil ctx = the
   current pointer's) hides a block's own blip of `kind` (a `Config.Markers.kinds` key, or `'route'` for a GPS line) by
   `Config.Markers.radioSilence` (an unknown value counts as `'area'`). Every block client asks it before it draws a
@@ -2676,7 +2692,8 @@ without arguments also removes the run's service vehicles, PLAN M7).
   server's position; the client follows the vehicle once it streams in), off once it leaves or is gone; `run:arrived`
   sends the ones on the map to a late partner. The coroner van stays unmarked; a vehicle never made sends nothing.
 - One check loop (1 s) only while a pointer element or a service vehicle is on the map, never two (it ends by itself
-  after `clear`): streaming swaps, adopted blips that went, the nearest target and the line. No entity pool scans.
+  after `clear`): streaming swaps, adopted blips that went, the nearest target, the line, the HUD line (sent on change
+  only) and the Objective GPS waypoint. No entity pool scans.
 
 ## 6. Cross-cutting conventions
 
@@ -3356,6 +3373,7 @@ interface HudState {
   route: null | { status: 'on' | 'off' | 'arrived' | 'disabled'; secondsLeft: number | null; distance: number | null };
   objectives: { label: string; done: boolean; current: boolean; detail?: string; value?: number; max?: number }[];
   detail: string | null;                           // client-side line for the current objective
+  target: null | { label: string; distance: number; inside?: boolean }; // CP.Markers (§5.44): where the pointer leads, how far
   message: null | { text: string; kind: 'info' | 'success' | 'warning' | 'error' };
   testControls: boolean;                           // the admin who started the test
 }

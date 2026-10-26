@@ -258,6 +258,11 @@
     color: var(--cp-success);
 }
 
+/* The objective line under the objectives (PLAN M10) */
+.cp-hud__route.is-target > .cp-icon {
+    color: var(--cp-warning);
+}
+
 .cp-hud__route.is-off {
     background: rgba(var(--cp-warning-rgb), 0.14);
     border-color: rgba(var(--cp-warning-rgb), 0.6);

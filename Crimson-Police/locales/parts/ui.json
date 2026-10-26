@@ -96,6 +96,8 @@
   "hud.route.off_nolimit": "Off route: get back on the route",
   "hud.route.arrived": "Arrived at the start",
   "hud.route.disabled": "Start route off",
+  "hud.target.distance": "{distance} away",
+  "hud.target.inside": "You are in the area",
   "hud.objectives": "Objectives",
   "hud.objectives_count": "{done}/{total}",
   "hud.objective_progress": "{value}/{max}",

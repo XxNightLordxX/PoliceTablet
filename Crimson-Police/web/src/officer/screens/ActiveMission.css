@@ -315,6 +315,21 @@
     color: var(--cp-muted);
 }
 
+.run_ui-objectives__gps {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
+    margin-top: 12px;
+}
+
+.run_ui-objectives__gps-hint {
+    flex: 1 1 200px;
+    font-size: var(--cp-fs-xs);
+    color: var(--cp-subtle);
+    line-height: 1.45;
+}
+
 .run_ui-objectives__pending {
     display: flex;
     align-items: center;

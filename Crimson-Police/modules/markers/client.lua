@@ -10,6 +10,11 @@ local SWITCH_SHARE = 0.75           -- the line moves to another target only whe
 local POINTER_PRIORITY = 12         -- drawn above the missions' detail blips
 local LAST_KNOWN_RADIUS = 200.0     -- metres: Radio Silence's last-known circle round a moving target
 local MAX_TARGETS = 32
+local HUD_STEP_NEAR = 10 -- metres: the HUD's distance moves in these steps under 1 km (one send per change)
+local HUD_STEP_FAR = 100 -- metres: and in these from 1 km (the HUD shows 1.2 km)
+local WAYPOINT_SPRITE = 8 -- the map waypoint's blip (GetFirstBlipInfoId)
+local WAYPOINT_MATCH = 15.0 -- metres: the waypoint is still the one Objective GPS set when it is this close to it
+local GPS_FOLLOW = 50.0 -- metres: the Objective GPS waypoint moves with the pointer once it is this far off
 local DEFAULT_LOOK = { sprite = 162, colour = 5, scale = 0.9 } -- kinds.objective as shipped
 local KINDS = { point = true, area = true, targets = true }
 local MODES = { none = true, area = true, full = true }
@@ -39,12 +44,15 @@ local SERVICE_LABELS = { prisonerVan = 'markers.prisoner_van', towTruck = 'marke
 local FIELDS = { 'adoptKey', 'look', 'variant', 'label', 'number', 'coords', 'radius', 'netId', 'moving', 'beyond' }
 
 local cur = nil         -- { runId, index, ctx, routeMode = 'on'|'off'|'block', elements = { [id] = el }, order,
-                        --   single (Radio Silence 'area': the id of the one point shown) }
+                        --   single (Radio Silence 'area': the id of the one point shown), pointed (the id of the
+                        --   element the pointer leads to: the line, the HUD line and Objective GPS) }
 local adopted = {}      -- [key] = a block's own blip it handed over (M.adopt)
 local services = {}     -- [key] = el: a prisoner van or tow truck (M.service)
 local routeBlip = nil   -- the only blip with SetBlipRoute(true)
 local routeColour = nil -- the line colour routeBlip got
 local loopOn = false
+local hudSent = ''      -- the HUD's objective line as last sent ('' = none on the HUD)
+local gps = nil         -- the waypoint Objective GPS set: { runId, index, x, y }
 
 -- ============================================================================
 --                                   HELPERS
@@ -120,6 +128,12 @@ local function Streamed(netId)
 end
 
 local function MyPos() return GetEntityCoords(PlayerPedId()) end
+
+-- True while this officer still drives to the start (CP.Route, §5.12): the start keeps his only line (R2).
+local function Driving()
+    local r = CP.Route and CP.Route.current and CP.Route.current()
+    return r ~= nil and not r.arrived
+end
 
 local function Silent(ctx)
     if type(ctx) ~= 'table' then ctx = cur and cur.ctx end
@@ -350,12 +364,11 @@ local function Where(el)
     return el.coords
 end
 
--- The line goes on ONE blip: the point or the area's centre, or this officer's nearest target (switching only when
--- another one is 25 % closer); off near it, inside the circle, and whenever M.canRoute says no. A target with beyond
--- (escort's truck) takes it before the others while this officer is farther than that from it, keeps it until he is
--- within 75 % of that, and never has it closer: then the others share it (the destination).
-local function PickRoute()
-    if not cur or cur.routeMode ~= 'on' or not M.canRoute(cur.ctx) then return RouteOff() end
+-- What the pointer leads to, of what the map shows: the point or the area's centre, or this officer's nearest target
+-- (switching only when another one is 25 % closer). A target with beyond (escort's truck) comes before the others
+-- while this officer is farther than that from it, keeps it until he is within 75 % of that, and never has it closer:
+-- then the others share it (the destination). Returns the element and its distance (2D), nil when nothing shows.
+local function Pick()
     local me = MyPos()
     local best, bestD, held, heldD, lead, leadD = nil, nil, nil, nil, nil, nil
     for _, id in ipairs(cur.order) do
@@ -363,10 +376,10 @@ local function PickRoute()
         if el and Exists(el.shown) then
             local d = CP.U.dist2d(me, Where(el))
             if el.beyond then
-                local reach = el.shown == routeBlip and el.beyond * SWITCH_SHARE or el.beyond
+                local reach = id == cur.pointed and el.beyond * SWITCH_SHARE or el.beyond
                 if d > reach and (not leadD or d < leadD) then lead, leadD = el, d end
             else
-                if el.shown == routeBlip then held, heldD = el, d end
+                if id == cur.pointed then held, heldD = el, d end
                 if not bestD or d < bestD then best, bestD = el, d end
             end
         end
@@ -376,10 +389,73 @@ local function PickRoute()
     elseif held and best ~= held and bestD >= heldD * SWITCH_SHARE then
         best, bestD = held, heldD
     end
-    if not best or bestD == math.huge then return RouteOff() end
+    if bestD == math.huge then best, bestD = nil, nil end
+    cur.pointed = best and best.id or nil
+    return best, bestD
+end
+
+-- The line goes on the pointer's blip; off near it, inside the circle, and whenever M.canRoute says no.
+local function Line(best, bestD)
+    if not best or cur.routeMode ~= 'on' or not M.canRoute(cur.ctx) then return RouteOff() end
     local off = best.radius or math.max(0, tonumber(Cfg().routeOffWithin) or 40.0)
     if bestD <= off then return RouteOff() end
     RouteOn(best.shown)
+end
+
+-- ============================================================================
+--                        THE HUD LINE AND OBJECTIVE GPS
+-- ============================================================================
+-- The HUD names what the pointer leads to and how far it is (Config.Markers.hudLine, PLAN M10): only what the map
+-- shows (Radio Silence included), never while the officer still drives to the start, sent only when it changes.
+
+local function SendHud(target)
+    local key = target and ('%s|%d|%s'):format(target.label, target.distance, tostring(target.inside == true)) or ''
+    if key == hudSent then return end
+    hudSent = key
+    if not (CP.Tablet and CP.Tablet.hud) then return end
+    local ok, err = pcall(CP.Tablet.hud, { target = target or false })
+    if not ok then CP.err(TAG, 'HUD objective line failed: %s', tostring(err)) end
+end
+
+local function HudLine(el, d)
+    local cfg = Cfg()
+    if not el or cfg.enabled == false or cfg.hudLine == false or Driving() then return SendHud(nil) end
+    -- an area: how far to its edge, or inside it
+    local inside = el.radius ~= nil and d <= el.radius
+    local m = el.radius and d - el.radius or d
+    local step = m < 1000 and HUD_STEP_NEAR or HUD_STEP_FAR
+    local distance = inside and 0 or math.floor(m / step + 0.5) * step
+    SendHud({ label = LabelOf(el), distance = math.tointeger(distance) or 0, inside = inside or nil })
+end
+
+-- True while the map waypoint is still the one Objective GPS set (the officer may have cleared it or set his own).
+local function OurGps()
+    if not gps or not IsWaypointActive() then return false end
+    local blip = GetFirstBlipInfoId(WAYPOINT_SPRITE)
+    if not blip or blip == 0 or not DoesBlipExist(blip) then return false end
+    return CP.U.dist2d(GetBlipInfoIdCoord(blip), gps) <= WAYPOINT_MATCH
+end
+
+-- Objective GPS's waypoint goes with its objective: removed at the objective's stop and the run's end, unless the
+-- officer put his own in its place (never touched).
+local function DropGps()
+    if gps and OurGps() then SetWaypointOff() end
+    gps = nil
+end
+
+-- While it is ours, the waypoint follows the pointer: a moving car or suspect, the next nearest door.
+local function FollowGps(el)
+    if not gps then return end
+    if not OurGps() then
+        gps = nil
+        return
+    end
+    if not el or M.hidden(cur.ctx, 'route') then return end
+    local p = Where(el)
+    if p and CP.U.dist2d(p, gps) > GPS_FOLLOW then
+        SetNewWaypoint(p.x + 0.0, p.y + 0.0)
+        gps.x, gps.y = p.x, p.y
+    end
 end
 
 -- Radio Silence 'area' shows one point per objective: of the points still shown (no net id, a kind 'area' keeps), the
@@ -404,7 +480,10 @@ local function Tick()
     if cur then
         cur.single = PickSingle()
         for _, id in ipairs(cur.order) do Place(cur.elements[id]) end
-        PickRoute()
+        local el, d = Pick()
+        Line(el, d)
+        HudLine(el, d)
+        FollowGps(el)
     end
     for _, el in pairs(services) do Place(el) end
 end
@@ -526,6 +605,7 @@ function M.set(runId, index, m, ctx)
     index = math.tointeger(tonumber(index) or -1)
     if type(runId) ~= 'string' or not index or index < 1 then return false end
     DropMarker()
+    if gps and (gps.runId ~= runId or gps.index ~= index) then DropGps() end
     cur = { runId = runId, index = index, ctx = type(ctx) == 'table' and ctx or nil, elements = {}, order = {} }
     Apply(m)
     return true
@@ -540,13 +620,16 @@ function M.update(runId, index, m, ctx)
     return true
 end
 
--- Everything off the map: the pointer, its line, the blips blocks handed over (handed back with their line off).
--- With runId / index: only when the pointer is that objective's. Without them (the run's end, leaving it, resource
--- stop) the run's service vehicles go too (they outlive an objective's stop, never the run).
+-- Everything off the map: the pointer, its line, the blips blocks handed over (handed back with their line off), the
+-- HUD's objective line and the Objective GPS waypoint while it is still ours. With runId / index: only when the
+-- pointer is that objective's. Without them (the run's end, leaving it, resource stop) the run's service vehicles go
+-- too (they outlive an objective's stop, never the run).
 function M.clear(runId, index)
     if runId ~= nil and (not cur or cur.runId ~= runId) then return false end
     if index ~= nil and (not cur or cur.index ~= math.tointeger(tonumber(index) or -1)) then return false end
     DropMarker()
+    SendHud(nil)
+    DropGps()
     for k, blip in pairs(adopted) do
         if blip == routeBlip then RouteOff() end
         adopted[k] = nil
@@ -632,15 +715,35 @@ end
 function M.hidden(ctx, kind, variant) return Hides(ctx, kind, variant, true) end
 
 -- May a Crimson-Police GPS line show now? Not while the drive to the start is on (CP.Route samples the start's line
--- from the blip route first), not while the officer has a waypoint of his own, not under Radio Silence, not when
--- Config.Markers says no (BLIPS_FINAL R2: one line per officer).
+-- from the blip route first), not while the officer has a waypoint (his own, or the one Objective GPS set), not under
+-- Radio Silence, not when Config.Markers says no (BLIPS_FINAL R2: one line per officer).
 function M.canRoute(ctx)
     local cfg = Cfg()
     if cfg.enabled == false or cfg.route == false or M.hidden(ctx, 'route') then return false end
-    local r = CP.Route and CP.Route.current and CP.Route.current()
-    if r and not r.arrived then return false end
+    if Driving() then return false end
     if IsWaypointActive() then return false end
     return true
+end
+
+-- Objective GPS (the Active Mission screen's button, Config.Markers.objectiveGps, PLAN M10): a map waypoint on what
+-- the pointer leads to. The waypoint is then the officer's one line (M.canRoute), follows a moving objective while it
+-- stays ours and goes with the objective. Refused while he still drives to the start (the start keeps his line) and
+-- while Radio Silence hides the objective's line. Returns ok, { label } | errKey.
+function M.objectiveGps()
+    local cfg = Cfg()
+    if cfg.enabled == false or cfg.objectiveGps == false then return false, 'err.objective_gps_off' end
+    if not cur then return false, 'err.objective_gps_none' end
+    if Driving() then return false, 'err.objective_gps_start' end
+    if M.hidden(cur.ctx, 'route') then return false, 'err.objective_gps_silence' end
+    local el = Pick()
+    local p = el and Where(el)
+    if not p then return false, 'err.objective_gps_none' end
+    SetNewWaypoint(p.x + 0.0, p.y + 0.0)
+    gps = { runId = cur.runId, index = cur.index, x = p.x, y = p.y }
+    RouteOff() -- the waypoint is his line now, at once (BLIPS_FINAL R2)
+    local label = LabelOf(el)
+    if CP.Tablet and CP.Tablet.notify then CP.Tablet.notify('info', CP.L('markers.gps_set', { label = label })) end
+    return true, { label = label }
 end
 
 -- The colour of every Crimson-Police GPS line (Config.Markers.routeColour, 0-85), a block's own line included
@@ -684,4 +787,17 @@ AddEventHandler('onResourceStop', function(res)
     if res ~= CP.resource then return end
     M.clear()
     for key in pairs(services) do M.service(key, nil) end
+end)
+
+-- ============================================================================
+--           CLIENT ACTIONS (registered once every module has loaded)
+-- ============================================================================
+
+CreateThread(function()
+    Wait(0)
+    if not (CP.Tablet and CP.Tablet.registerClientAction) then
+        CP.err(TAG, 'modules/tablet is missing: Objective GPS is unavailable')
+        return
+    end
+    CP.Tablet.registerClientAction('setObjectiveGps', function() return M.objectiveGps() end)
 end)

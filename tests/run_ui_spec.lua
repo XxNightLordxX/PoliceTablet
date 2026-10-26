@@ -206,6 +206,12 @@ Has(active,
     'a pushed view applies at once; a nil push (arrives as undefined) refetches')
 Has(active, '\'server:abandon\', view.runId', 'abandon sends the run id')
 Has(active, 'clientAction<SetGpsResult>(\'setGps\'', 'Set GPS client action')
+-- PLAN M10: Objective GPS while in progress, once this officer is at the action, not under Radio Silence 'area'/'none'
+Has(active, 'clientAction<ObjectiveGpsResult>(\'setObjectiveGps\'', 'Objective GPS client action')
+Has(active, 'view.state === \'in_progress\' &&\n        !showRoute &&\n        view.objectiveGps === true &&',
+    'Objective GPS only in progress, without the route card, while Config.Markers.objectiveGps is on')
+Has(active, '!(view.radioSilence && view.silenceMode !== \'full\')',
+    'no Objective GPS while Radio Silence hides the line')
 Has(active, 'clientAction<RecalcRouteResult>(\'recalcRoute\'', 'Recalculate route client action')
 Has(active, 'clientAction(\'logResult\', payload)', 'Business Check log client action')
 Has(active, 'LogResultPayload = { point: view.log.point, choice }', 'logResult payload is { point, choice }')
@@ -221,6 +227,7 @@ for _, name in ipairs({
     '\'action\', \'server:joinOperation\'',
     '\'action\', \'server:abandon\'',
     '\'client\', \'setGps\'',
+    '\'client\', \'setObjectiveGps\'',
     '\'client\', \'recalcRoute\'',
     '\'client\', \'logResult\'',
 }) do
@@ -345,11 +352,11 @@ end
 -- getRun / push 'run': CP.Runs.view returns every ActiveMissionView field plus the extras the screen reads.
 local viewKeys = LuaKeys(TableAt(FnBody(runsSrv, 'function Runs.view(run, src)'), 'return {'))
 Covers(viewKeys, TsFields('ActiveMissionView'), 'CP.Runs.view')
-for _, extra in ipairs({ 'me', 'isBoss', 'operationId', 'startIn' }) do
+for _, extra in ipairs({ 'me', 'isBoss', 'operationId', 'startIn', 'objectiveGps' }) do
     H.ok(viewKeys[extra] == true, 'CP.Runs.view sends the optional extra ' .. extra)
 end
 local extrasTs = Read(FILES.types) or ''
-for _, extra in ipairs({ 'me', 'isBoss', 'operationId', 'startIn', 'area' }) do
+for _, extra in ipairs({ 'me', 'isBoss', 'operationId', 'startIn', 'area', 'objectiveGps' }) do
     H.ok(extrasTs:find('\n%s+' .. extra .. '%?:') ~= nil, 'ActiveMissionData extra is optional: ' .. extra)
 end
 local partnerKeys = LuaKeys(TableAt(FnBody(runsSrv, 'local function ParticipantsList(run)'), 'out[#out + 1] = {'))
@@ -403,6 +410,8 @@ H.ok(routeCl:find('registerClientAction(\'setGps\'', 1, true) ~= nil,
     'client action setGps registered by modules/route')
 H.ok(routeCl:find('registerClientAction(\'recalcRoute\'', 1, true) ~= nil,
     'client action recalcRoute registered by modules/route')
+H.ok(Mod('modules/markers/client.lua'):find('registerClientAction(\'setObjectiveGps\'', 1, true) ~= nil,
+    'client action setObjectiveGps registered by modules/markers (PLAN M10)')
 H.ok((FnBody(routeCl, 'function R.recalculate()') or ''):find('return true, { recalcsLeft = left }', 1, true) ~= nil,
     'recalcRoute replies { recalcsLeft }')
 H.ok(runsCl:find('registerClientAction(\'logResult\', function(payload)', 1, true) ~= nil,

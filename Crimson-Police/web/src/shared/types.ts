@@ -127,6 +127,8 @@ export interface HudState {
     };
     objectives: { label: string; done: boolean; current: boolean; detail?: string; value?: number; max?: number }[];
     detail: string | null; // client-side line for the current objective
+    // what the objective pointer leads to and how far (metres; to an area's edge), from CP.Markers (Config.Markers.hudLine)
+    target: null | { label: string; distance: number; inside?: boolean };
     message: null | { text: string; kind: 'info' | 'success' | 'warning' | 'error' };
     testControls: boolean; // the admin who started the test
 }
