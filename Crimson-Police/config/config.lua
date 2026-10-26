@@ -303,6 +303,9 @@ Config.Limits = {
     maxConcurrentRuns = 12,      -- runs active server-wide at once; Cross-Department Missions don't count
     maxConcurrentTactical = 4,   -- of those, Tactical runs
     reserveLocations = true,     -- a location in use by one run can't be drawn for another
+    -- Milliseconds a player's Qbox data (job, duty, name, callsign) is reused before Qbox is asked again; every Qbox
+    -- job, duty or data change clears it at once; 0 = ask Qbox every time (the old behaviour)
+    playerInfoCacheMs = 1000,
 }
 
 -- ============================================================================

@@ -4,11 +4,17 @@ CP.Qbx = CP.Qbx or {}
 local Q = CP.Qbx
 local TAG = 'qbx'
 local RESOURCE = 'qbx_core'
-local ONLINE_CACHE_MS = 1000
+local ONLINE_CACHE_MS = 1000      -- the old timing (Config.Limits.playerInfoCacheMs = 0): the list is read every second
+local ONLINE_REREAD_MS = 60000    -- the list kept by events is read again from Qbox this often (heals a missed event)
 
 local listeners = { duty = {}, loaded = {}, job = {}, unload = {}, group = {} }
 local metaListeners = {}   -- { fn, keys = { [key] = true }|nil }
-local onlineCache = { at = -1, list = {} }
+-- The loaded characters: read from GetQBPlayers at start, when qbx_core starts and every ONLINE_REREAD_MS, and kept
+-- by PlayerLoaded / OnPlayerUnload / playerDropped in between. list is set's keys in order (rebuilt when dirty).
+local online = { at = -1, set = {}, list = {}, dirty = false }
+-- src -> { at = GetGameTimer(), info = getInfo's table }: reused for Config.Limits.playerInfoCacheMs, and cleared by
+-- every qbx_core event that changes the player (duty, job, load, unload, groups, metadata, SetPlayerData) and by a drop.
+local infoCache = {}
 local errorLoggedAt = {}
 -- src -> the player's primary Qbox job name, kept only by qbx_core's events and by lookups (never polled), so loops
 -- over every player can skip non-police without copying their Player object (CP.Access.maybeOfficer).
@@ -94,6 +100,23 @@ local function NormJob(job)
     }
 end
 
+-- Milliseconds a getInfo answer is reused (Config.Limits.playerInfoCacheMs; 0 = ask Qbox every time).
+local function InfoCacheMs()
+    local ms = tonumber(Config.Limits and Config.Limits.playerInfoCacheMs)
+    if not ms or ms ~= ms then return 1000 end
+    return math.max(0, ms)
+end
+
+-- A copy a caller may change: the top level and the job table (metadata is read only).
+local function CopyInfo(info)
+    local out = {}
+    for k, v in pairs(info) do out[k] = v end
+    local job = {}
+    for k, v in pairs(info.job) do job[k] = v end
+    out.job = job
+    return out
+end
+
 -- ============================================================================
 --                                   LOOKUPS
 -- ============================================================================
@@ -110,8 +133,8 @@ function Q.getPlayer(src)
     return player
 end
 
-function Q.getInfo(src)
-    local n = ToSrc(src)
+-- getInfo's table read from Qbox (one GetPlayer export), or nil.
+local function ReadInfo(n)
     local player = Q.getPlayer(n)
     if not player then
         if n then jobOf[n] = nil end
@@ -142,6 +165,22 @@ function Q.getInfo(src)
     }
 end
 
+-- Reused for Config.Limits.playerInfoCacheMs: loops over every player and getOfficer's several reads of one player in
+-- one tick ask Qbox once. Every Qbox change event clears the entry at once, so a new job or duty is seen at once.
+function Q.getInfo(src)
+    local n = ToSrc(src)
+    local ms = InfoCacheMs()
+    local hit = n and ms > 0 and infoCache[n]
+    if hit and GetGameTimer() - hit.at < ms and Started() then
+        jobOf[n] = hit.info.job.name
+        return CopyInfo(hit.info)
+    end
+    local info = ReadInfo(n)
+    if n then infoCache[n] = info and ms > 0 and { at = GetGameTimer(), info = info } or nil end
+    if info and ms > 0 then return CopyInfo(info) end
+    return info
+end
+
 function Q.getByCitizenId(citizenid)
     if type(citizenid) ~= 'string' or citizenid == '' or not Started() then return nil end
     local ok, player = pcall(function() return exports.qbx_core:GetPlayerByCitizenId(citizenid) end)
@@ -153,38 +192,57 @@ function Q.getByCitizenId(citizenid)
     return ToSrc(player.PlayerData.source)
 end
 
--- GetQBPlayers returns a map keyed by server id and copies every player's data across the export
--- boundary, so the source list is cached briefly and rebuilt on load/unload/drop.
+-- The whole list from GetQBPlayers (a map keyed by server id that copies every player's data across the export
+-- boundary). false when the export failed.
+local function ReadOnline(now)
+    local ok, players = pcall(function() return exports.qbx_core:GetQBPlayers() end)
+    if not ok then
+        LogError('GetQBPlayers', 'exports.qbx_core:GetQBPlayers failed: %s', tostring(players))
+        return false
+    end
+    local list, seen, jobs = {}, {}, {}
+    if type(players) == 'table' then
+        for key, p in pairs(players) do
+            local src
+            local pd = type(p) == 'table' and type(p.PlayerData) == 'table' and p.PlayerData or nil
+            if pd then src = ToSrc(pd.source) end
+            src = src or ToSrc(key)
+            if src and not seen[src] then
+                seen[src] = true
+                list[#list + 1] = src
+                if pd then jobs[src] = JobName(pd.job) end
+            end
+        end
+    end
+    table.sort(list)
+    online = { at = now, set = seen, list = list, dirty = false }
+    -- The same copy seeds the job map: a player Qbox does not list has no job here (unknown = a full check).
+    jobOf = jobs
+    return true
+end
+
+-- A player joins or leaves the list (PlayerLoaded, OnPlayerUnload, playerDropped) without a GetQBPlayers copy.
+local function SetOnline(src, on)
+    online.set[src] = on or nil
+    online.dirty = true
+    -- Config.Limits.playerInfoCacheMs = 0: the old behaviour, the whole list is read again on the next call
+    if InfoCacheMs() <= 0 then online.at = -1 end
+end
+
 function Q.getOnlinePlayers()
     if not Started() then return {} end
     local now = GetGameTimer()
-    if onlineCache.at < 0 or now - onlineCache.at >= ONLINE_CACHE_MS then
-        local ok, players = pcall(function() return exports.qbx_core:GetQBPlayers() end)
-        if not ok then
-            LogError('GetQBPlayers', 'exports.qbx_core:GetQBPlayers failed: %s', tostring(players))
-            return {}
-        end
-        local list, seen, jobs = {}, {}, {}
-        if type(players) == 'table' then
-            for key, p in pairs(players) do
-                local src
-                local pd = type(p) == 'table' and type(p.PlayerData) == 'table' and p.PlayerData or nil
-                if pd then src = ToSrc(pd.source) end
-                src = src or ToSrc(key)
-                if src and not seen[src] then
-                    seen[src] = true
-                    list[#list + 1] = src
-                    if pd then jobs[src] = JobName(pd.job) end
-                end
-            end
-        end
+    local maxAge = InfoCacheMs() > 0 and ONLINE_REREAD_MS or ONLINE_CACHE_MS
+    if online.at < 0 or now - online.at >= maxAge then
+        if not ReadOnline(now) then return {} end
+    elseif online.dirty then
+        local list = {}
+        for src in pairs(online.set) do list[#list + 1] = src end
         table.sort(list)
-        onlineCache = { at = now, list = list }
-        -- The same copy seeds the job map: a player Qbox does not list has no job here (unknown = a full check).
-        jobOf = jobs
+        online.list, online.dirty = list, false
     end
     local out = {}
-    for i = 1, #onlineCache.list do out[i] = onlineCache.list[i] end
+    for i = 1, #online.list do out[i] = online.list[i] end
     return out
 end
 
@@ -425,6 +483,7 @@ end
 AddEventHandler('QBCore:Server:SetDuty', function(src, onDuty)
     src = ToSrc(src)
     if not src then return end
+    infoCache[src] = nil
     local duty = onDuty == true
     if duty then
         -- A true may be stale: re-read the live value (PlayerData is updated before the event).
@@ -439,7 +498,8 @@ AddEventHandler('QBCore:Server:PlayerLoaded', function(player)
     if type(player) ~= 'table' or type(player.PlayerData) ~= 'table' then return end
     local src = ToSrc(player.PlayerData.source)
     if not src then return end
-    onlineCache.at = -1
+    infoCache[src] = nil
+    SetOnline(src, true)
     jobOf[src] = JobName(player.PlayerData.job)
     CP.log(TAG, 'PlayerLoaded %d (%s)', src, tostring(player.PlayerData.citizenid))
     Emit('loaded', src)
@@ -448,6 +508,7 @@ end)
 AddEventHandler('QBCore:Server:OnJobUpdate', function(src, job)
     src = ToSrc(src)
     if not src then return end
+    infoCache[src] = nil
     local info = Q.getInfo(src)
     local current = info and info.job or NormJob(job)
     jobOf[src] = current.name
@@ -459,7 +520,8 @@ end)
 AddEventHandler('QBCore:Server:OnPlayerUnload', function(src)
     src = ToSrc(src)
     if not src then return end
-    onlineCache.at = -1
+    infoCache[src] = nil
+    SetOnline(src, false)
     jobOf[src] = nil
     CP.log(TAG, 'OnPlayerUnload %d', src)
     Emit('unload', src)
@@ -468,15 +530,17 @@ end)
 AddEventHandler('qbx_core:server:onGroupUpdate', function(src, groupName, grade)
     src = ToSrc(src)
     if not src then return end
+    infoCache[src] = nil
     CP.log(TAG, 'onGroupUpdate %d %s -> %s', src, tostring(groupName), tostring(grade))
     Emit('group', src)
 end)
 
 -- qbx_core SetMetaData: TriggerEvent('qbx_core:server:onSetMetaData', key, oldValue, value, source).
 AddEventHandler('qbx_core:server:onSetMetaData', function(key, old, new, src)
-    if #metaListeners == 0 or type(key) ~= 'string' then return end
     src = ToSrc(src)
     if not src then return end
+    infoCache[src] = nil
+    if #metaListeners == 0 or type(key) ~= 'string' then return end
     for i = 1, #metaListeners do
         local l = metaListeners[i]
         if not l.keys or l.keys[key] then
@@ -491,32 +555,38 @@ end)
 -- qbx_core's UpdatePlayerData (its SetPlayerData export, Functions.SetPlayerData, SetJob, the group functions)
 -- sends the whole PlayerData here; a job set through SetPlayerData('job', ...) fires no other event.
 AddEventHandler('QBCore:Player:SetPlayerData', function(pd)
-    if type(pd) ~= 'table' or type(pd.job) ~= 'table' then return end
+    if type(pd) ~= 'table' then return end
     local src = ToSrc(pd.source)
-    if src then jobOf[src] = JobName(pd.job) end
+    if not src then return end
+    infoCache[src] = nil
+    if type(pd.job) == 'table' then jobOf[src] = JobName(pd.job) end
 end)
 
 AddEventHandler('playerDropped', function()
-    onlineCache.at = -1
     local src = ToSrc(source)
-    if src then jobOf[src] = nil end
+    if not src then return end
+    infoCache[src] = nil
+    SetOnline(src, false)
+    jobOf[src] = nil
 end)
 
--- qbx_core stopped: nothing is known; started again: the job map is seeded from its players list.
+-- qbx_core stopped: nothing is known; started again: the list and the job map are read from its players list.
 AddEventHandler('onResourceStop', function(res)
     if res ~= RESOURCE then return end
-    onlineCache.at = -1
+    online = { at = -1, set = {}, list = {}, dirty = false }
+    infoCache = {}
     jobOf = {}
 end)
 
 AddEventHandler('onResourceStart', function(res)
     if res ~= RESOURCE then return end
-    onlineCache.at = -1
+    online.at = -1
+    infoCache = {}
     Q.getOnlinePlayers()
 end)
 
--- Seed the job map once at start (a restart of Crimson-Police with players online).
+-- Read the list and seed the job map once at start (a restart of Crimson-Police with players online).
 CreateThread(function()
-    onlineCache.at = -1
+    online.at = -1
     Q.getOnlinePlayers()
 end)

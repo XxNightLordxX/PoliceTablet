@@ -1914,8 +1914,12 @@ modules/integrations/qbx/server.lua · CP.Qbx (server): the only server code tha
 Owns every exports.qbx_core call on the server and the qbx_core server events Crimson-Police
 listens to. Those events are fired by qbx_core with TriggerEvent (server-local), so they are
 registered with AddEventHandler ONLY: a net handler would let any client spoof a duty or job
-change (docs/INTEGRATIONS.md, qbx_core-usage). The Qbox player object is never cached: every
-check calls GetPlayer again, because an export returns a snapshot.
+change (docs/INTEGRATIONS.md, qbx_core-usage). The Qbox player object itself is never kept (getPlayer
+always calls GetPlayer, so money Functions act on a fresh object). getInfo's answer is reused for
+Config.Limits.playerInfoCacheMs (1000 ms; 0 = ask Qbox every time) and every Qbox change event clears
+it at once: SetDuty, PlayerLoaded, OnJobUpdate, OnPlayerUnload, onGroupUpdate, onSetMetaData,
+QBCore:Player:SetPlayerData (qbx_core's UpdatePlayerData, sent after every change), playerDropped and
+a qbx_core stop or start. Each caller gets its own copy of the top level and the job table.
 
 Public API (docs/ARCHITECTURE.md §5.1)
   CP.Qbx.getPlayer(src) -> player|nil
@@ -1927,7 +1931,10 @@ Public API (docs/ARCHITECTURE.md §5.1)
       name = charinfo first + last name; callsign = metadata.callsign trimmed, nil when empty or
       qbx_core's default 'NO CALLSIGN'; gradeName falls back to the job definition's grade name.
   CP.Qbx.getByCitizenId(citizenid) -> src|nil      online players only, exact (case-sensitive) match
-  CP.Qbx.getOnlinePlayers() -> { src, ... }        loaded characters, ascending (cached for 1 s)
+  CP.Qbx.getOnlinePlayers() -> { src, ... }        loaded characters, ascending. Read from GetQBPlayers at
+      start, when qbx_core starts and every 60 s; PlayerLoaded adds and OnPlayerUnload / playerDropped
+      remove a player in between, with no copy (playerInfoCacheMs = 0: read every 1 s and after each
+      of those events, as before).
   CP.Qbx.knownJob(src) -> jobName|nil             the primary job qbx_core last reported (nil = not known).
       Kept by events and lookups only, never polled: PlayerLoaded, OnJobUpdate, QBCore:Player:SetPlayerData
       (qbx_core's UpdatePlayerData; SetPlayerData('job', ...) fires nothing else), every getInfo, and the
@@ -4969,6 +4976,20 @@ pursuit cars through the spawn director (Config.Spawning, PLAN S13) on the real 
 placement module: road clearance (vehicleLift), the second violator up the road from the officers
 (secondViolatorUpstream), every car's point through the director (minDistance, after waveDelayMax hardMin), the
 placer's other slots, and never a car on a player's position.
+```
+
+## tests/qbx_cache_spec.lua
+
+```text
+CP.Qbx's player info cache (Config.Limits.playerInfoCacheMs) and the online list kept by qbx_core's events, over an
+exports.qbx_core stand-in that counts GetPlayer and GetQBPlayers and copies every answer (as FXServer does).
+Proves: 10 getInfo reads of one player within a second make one GetPlayer; every change event (OnJobUpdate,
+QBCore:Player:SetPlayerData, onSetMetaData with no listener, SetDuty, onGroupUpdate, OnPlayerUnload, PlayerLoaded,
+playerDropped, a qbx_core stop/start) makes the next read fresh; the entry runs out after the setting; a caller's
+change to its copy never reaches the next answer; PlayerLoaded / OnPlayerUnload / playerDropped change
+getOnlinePlayers with no GetQBPlayers copy, which is read again only after 60 s or when qbx_core starts;
+playerInfoCacheMs = 0 gives the old behaviour (every read asks Qbox, the list is read every second).
+Real: integrations/qbx.
 ```
 
 ## tests/run.lua

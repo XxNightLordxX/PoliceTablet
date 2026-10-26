@@ -619,8 +619,13 @@ Implementers of modules/integrations/* must follow it; the most important points
 **CP.Qbx** — modules/integrations/qbx
 - S `getPlayer(src) -> player|nil` (raw qbx player object)
 - S `getInfo(src) -> info|nil` where `info = { src, citizenid, name, firstname, lastname, job = { name, label, type, onduty, gradeLevel, gradeName }, callsign, metadata, isDead, inLastStand }`
+  — reused for `Config.Limits.playerInfoCacheMs` (1000; 0 = one `GetPlayer` per call), cleared at once by every
+  qbx_core event below plus `QBCore:Player:SetPlayerData`, `playerDropped` and a qbx_core stop/start; each caller
+  gets its own copy of the top level and `job` (`metadata` is read only). `getPlayer` is never cached.
 - S `getByCitizenId(citizenid) -> src|nil`
-- S `getOnlinePlayers() -> { src, ... }`
+- S `getOnlinePlayers() -> { src, ... }` — ascending; one `GetQBPlayers` copy at start, when qbx_core starts and every
+  60 s, kept by `PlayerLoaded` / `OnPlayerUnload` / `playerDropped` in between (`playerInfoCacheMs = 0`: every 1 s and
+  after each of those events)
 - S `knownJob(src) -> jobName|nil` — the primary job qbx_core last reported, kept only by `QBCore:Server:PlayerLoaded`,
   `QBCore:Server:OnJobUpdate`, `QBCore:Player:SetPlayerData` (qbx_core's UpdatePlayerData: its SetPlayerData export,
   SetJob, the group functions), every `getInfo` and the `GetQBPlayers` copy of `getOnlinePlayers` (at start and when

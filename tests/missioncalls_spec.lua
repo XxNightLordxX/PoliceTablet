@@ -1444,6 +1444,7 @@ do
     H.eq(CP.Qbx.knownJob(300), 'sast', 'and the lookup fills the job map')
     -- a job the map still has as a department job is checked in full too (getOfficer refuses it)
     qbx[300].PlayerData.job.onduty = false
+    TriggerEvent('QBCore:Player:SetPlayerData', U.copy(qbx[300].PlayerData))   -- qbx_core's UpdatePlayerData
     H.eq(Find(MC._idleUnits(), function(u) return u.leader == 300 end), nil, 'off duty: no idle unit')
 
     -- (d) a check that posts a call builds each unit once (the accept checks of CP.Draw build their own)

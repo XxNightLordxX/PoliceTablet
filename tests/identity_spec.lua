@@ -129,6 +129,13 @@ end
 H.step(0)
 local Kit, A, Q = CP.AdminKit, CP.Access, CP.Qbx
 
+-- A character login or switch, with the events qbx_core sends (Logout: OnPlayerUnload; Login: PlayerLoaded).
+local function LoadCharacter(src, cid)
+    if loaded[src] then TriggerEvent('QBCore:Server:OnPlayerUnload', src) end
+    loaded[src] = cid
+    TriggerEvent('QBCore:Server:PlayerLoaded', PlayerOf(src))
+end
+
 local function Async(fn)
     local out, done = nil, false
     CreateThread(function()
@@ -158,7 +165,7 @@ do
     H.eq(Async(function() return A.licenseOfSrc(1) end), LIC,
         'no character loaded: the license: identifier, never the license2: one listed before it')
     H.eq(Sorted(Async(function() return A.licensesOfSrc(1) end)), Sorted({ LIC, LIC2 }), 'both licenses of the player')
-    loaded[1] = 'ADMQBX01'
+    LoadCharacter(1, 'ADMQBX01')
     H.eq(Async(function() return A.licenseOfSrc(1) end), LIC2, 'a Qbox character loaded: its own players.license')
     H.eq(Sorted(Async(function() return A.licensesOfSrc(1) end)), Sorted({ LIC, LIC2 }), 'still both, no repeats')
     H.eq(#Async(function() return A.licensesOfSrc(0) end), 0, 'the console has none')
@@ -170,9 +177,9 @@ end
 
 do
     -- the admin opened the tablet on the old character once (cp_officers.license = its PlayerData.license)
-    loaded[1] = 'ADMOLD01'
+    LoadCharacter(1, 'ADMOLD01')
     A.refreshOfficerRow(1)
-    loaded[1] = 'ADMQBX01'
+    LoadCharacter(1, 'ADMQBX01')
     A.refreshOfficerRow(1)
     A.refreshOfficerRow(7)
     local rows = H.sql('SELECT citizenid, license FROM cp_officers ORDER BY citizenid')

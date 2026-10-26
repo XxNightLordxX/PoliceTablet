@@ -163,6 +163,10 @@ H.exportsMock.qbx_core = {
     end,
 }
 
+-- qbx_core sends QBCore:Player:SetPlayerData after every change to a player's data (UpdatePlayerData), so a test that
+-- changes the mock's data sends it too: CP.Qbx then drops its cached copy at once, as it does in game.
+local function QbxChanged(src) TriggerEvent('QBCore:Player:SetPlayerData', CP.U.copy(qbxPlayers[src].PlayerData)) end
+
 -- ============================================================================
 --               SC-DISPATCH, SC-AMBULANCE, RENEWED-BANKING MOCKS
 -- ============================================================================
@@ -470,8 +474,10 @@ do
     H.eq(A.doctorCount(), 0, 'export 0 -> 0')
     doctorExport = 2
     qbxPlayers[6].PlayerData.job.onduty = false
+    QbxChanged(6)
     H.eq(A.doctorCount(), 0, 'inflated export with nobody on duty -> 0')
     qbxPlayers[6].PlayerData.job.onduty = true
+    QbxChanged(6)
     doctorExport = '1'
     H.eq(A.doctorCount(), 1, 'numeric string export')
     stopped['sc-ambulance'] = true
@@ -811,10 +817,12 @@ do
     H.eq(A.refreshOfficerRow(4), false, 'civilians get no row')
     H.eq(H.sql('SELECT COUNT(*) AS n FROM cp_officers WHERE citizenid = ?', { 'CPT00004' })[1].n, 0, 'no civilian row')
     qbxPlayers[1].PlayerData.metadata.callsign = '2L-99'
+    QbxChanged(1)
     A.refreshOfficerRow(1)
     H.eq(H.sql('SELECT callsign FROM cp_officers WHERE citizenid = ?', { 'CPT00001' })[1].callsign, '2L-99',
         'upsert updates the callsign')
     qbxPlayers[1].PlayerData.metadata.callsign = '2L-14'
+    QbxChanged(1)
 
     -- A multi-byte character at the column limit is dropped whole: oxmysql talks utf8mb4 and strict mode
     -- rejects half a character (the harness's mysql client is latin1, so these writes switch to utf8mb4;
@@ -842,6 +850,7 @@ do
     H.eq(r20 and r20.callsign, ('C'):rep(31), 'stored callsign')
     H.eq(r20 and r20.rank_label, ('R'):rep(39), 'stored rank')
     qbxPlayers[20].PlayerData.charinfo = { firstname = 'José', lastname = 'Núñez' }
+    QbxChanged(20)
     H.eq(A.getOfficer(20).name, 'José Núñez', 'short multi-byte names are kept whole')
     H.eq(A.refreshOfficerRow(20), true, 'short multi-byte name written')
     H.eq(
@@ -1073,14 +1082,17 @@ do
 
     -- opening the Officer UI refreshes the stored callsign; the silent theme fetch does not
     qbxPlayers[1].PlayerData.metadata.callsign = '2L-15'
+    QbxChanged(1)
     Session(1, { ui = 'officer' })
     H.eq(H.sql('SELECT callsign FROM cp_officers WHERE citizenid = ?', { 'CPT00001' })[1].callsign, '2L-15',
         'refreshed on open')
     qbxPlayers[1].PlayerData.metadata.callsign = '2L-16'
+    QbxChanged(1)
     Session(1, { ui = 'officer', silent = true })
     H.eq(H.sql('SELECT callsign FROM cp_officers WHERE citizenid = ?', { 'CPT00001' })[1].callsign, '2L-15',
         'silent fetch does not refresh')
     qbxPlayers[1].PlayerData.metadata.callsign = '2L-14'
+    QbxChanged(1)
 
     H.eq(Session(1).data.ui, 'officer', 'no args -> officer')
     H.eq(Session(1, { ui = 'supervisor' }).data.ui, 'supervisor', 'supervisor session')
@@ -1335,10 +1347,12 @@ do
     H.ok(Q.getInfo(6) ~= nil, 'a lookup')
     H.eq(Q.knownJob(6), 'ambulance', 'fills the map')
     qbxPlayers[6].PlayerData.job = 'broken'
+    QbxChanged(6)
     Q.getInfo(6)
     H.eq(Q.knownJob(6), 'unemployed', 'a job Qbox gives no table for is what getInfo reports')
     local saved = qbxPlayers[6]
     qbxPlayers[6] = nil
+    H.advance(1000)   -- past Config.Limits.playerInfoCacheMs: Qbox is asked again
     H.eq(Q.getInfo(6), nil, 'logged out: no info')
     H.eq(Q.knownJob(6), nil, 'and no job')
     qbxPlayers[6] = saved
