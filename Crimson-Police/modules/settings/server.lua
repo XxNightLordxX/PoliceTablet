@@ -215,6 +215,7 @@ local RANGES = {
     ['Route.lateArriveRange'] = { 0, 500 },
     ['Route.followActionSeconds'] = { 0, 1800 },
     -- real suspects (Config.RealSuspects): a watch pass is 1 s, so nothing below it
+    ['RealSuspects.downedPickupDelay'] = { 5, 3600 },
     ['RealSuspects.jobHopMinutes'] = { 0, 1440 },
     ['RealSuspects.afkSeconds'] = { 30, 3600 },
     ['RealSuspects.afkSampleEvery'] = { 1, 300 },
@@ -933,6 +934,10 @@ local KNOWN = {
     ['Markers.radioSilence'] = { tpl = Enum({ 'none', 'area', 'full' }), kind = 'enum' },
     ['AntiCheat.stunNeedsProof'] = { tpl = Enum({ 'flag', 'hold', 'strict', 'off' }), kind = 'enum' },
     ['RealSuspects.onLeave'] = { tpl = Enum({ 'void', 'caught', 'escaped' }), kind = 'enum' },
+    -- the NPC-mission rules for cases with a real suspect (V9): the rule for real players or the NPC rule
+    ['RealSuspects.officerAlerts'] = { tpl = Enum({ 'normal', 'silenced' }), kind = 'enum' },
+    ['RealSuspects.routeEnds'] = { tpl = Enum({ 'first_contact', 'start' }), kind = 'enum' },
+    ['RealSuspects.downed'] = { tpl = Enum({ 'keep_earned', 'failed' }), kind = 'enum' },
     ['Spawning.onTimeout'] = { tpl = Enum({ 'unfreeze', 'delete' }), kind = 'enum' },
     ['Spawning.hostagesAt'] = { tpl = Enum({ 'objective', 'runStart' }), kind = 'enum' },
     ['NpcCombat.weapons'] = { tpl = ListOf(WEAPON_NAME, { min = 1, unique = true }), kind = 'list', item = 'string' },

@@ -84,13 +84,22 @@ local function RouteEnabled(run)
     return not (type(run.test) == 'table' and run.test.useStartRoute == false)
 end
 
--- Whether leaving the route ends this run: run.routeRequired as CP.Runs locked it at accept (a test run: always, its
--- Start route switch decides whether there is a route at all); Config.Route.required for a run without it.
-local function RouteRequired(run)
-    if type(run.routeRequired) == 'boolean' then return run.routeRequired end
-    if type(run.test) == 'table' then return true end
+-- Whether leaving the start route ends this run (Hard rule 17), the one place that decides it: run.routeRequired once
+-- CP.Runs locked it at accept (it calls this before the lock). Before that: a test run always (its own Start route
+-- switch decides whether there is a route at all); a live crime (run.live, V14) Config.LiveCrime.requireRoute == true
+-- (shipped false: officers may leave the GPS route to chase); every other run (NPC missions and volunteer suspects)
+-- Config.Route.required. Late joiners (V15) begin with the run's locked value.
+function R.requiredFor(run)
+    if type(run) == 'table' then
+        if type(run.routeRequired) == 'boolean' then return run.routeRequired end
+        if type(run.test) == 'table' then return true end
+        if run.live ~= nil and run.live ~= false then
+            return type(Config.LiveCrime) == 'table' and Config.LiveCrime.requireRoute == true
+        end
+    end
     return not (Config.Route and Config.Route.required == false)
 end
+local RouteRequired = R.requiredFor
 
 -- Config.Route.lateArriveRange in metres (0 = only the start counts, Hard rule 17 as before the owner's M11 decision).
 local function LateRange()
@@ -355,6 +364,18 @@ local function NearAction(run, coords, range)
     return best, false
 end
 
+-- Config.RealSuspects.routeEnds (shipped 'first_contact'): in a case with a real suspect (run.realSuspect) an officer
+-- within contactRange of a suspect who is free or cuffed (CP.Opponents.nearAny: the watch's last positions, no native
+-- read) has arrived. 'start' = the NPC-mission rule (only the start counts). NPC runs: always false.
+local function FirstContact(run, coords)
+    if not run.realSuspect then return false end
+    local rs = type(Config.RealSuspects) == 'table' and Config.RealSuspects or {}
+    if rs.routeEnds == 'start' then return false end
+    if not (CP.Opponents and type(CP.Opponents.nearAny) == 'function') then return false end
+    local ok, near = pcall(CP.Opponents.nearAny, run, coords, tonumber(rs.contactRange) or 100.0)
+    return ok and near == true
+end
+
 -- ============================================================================
 --                                   1 S TICK
 -- ============================================================================
@@ -387,6 +408,11 @@ local function CheckOne(run, src, st, now)
     local follow = st.mode ~= 'action' and range > 0 and run.state == 'in_progress'
     local coords = ServerCoords(src)
     if coords then
+        if FirstContact(run, coords) then          -- the route ends at the first contact with a suspect
+            CP.log(TAG, '%d made contact with a suspect of run %s', src, tostring(run.id))
+            Arrive(run, src, st)
+            return
+        end
         local d = CP.U.dist2d(coords, start.coords)
         st.distance = d
         if d <= start.radius then

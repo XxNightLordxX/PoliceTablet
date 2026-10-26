@@ -2492,6 +2492,40 @@ Runs.removeParticipant(LV, 5, 'cancelled')
 H.eq(BagWrites(5), 0, 'and never written')
 
 -- ============================================================================
+-- V9: CP.Route.requiredFor locks the route rule; the downed reasons of cases with a real suspect
+-- ============================================================================
+
+H.reset()
+local lockedWith
+CP.Route.requiredFor = function(r)
+    lockedWith = r
+    return false
+end
+local DC = Runs.create({
+    mission = mission,
+    locationIndex = 1,
+    missionType = 'investigation',
+    members = { O[5], O[6] },
+    leaderSrc = 5,
+})
+CP.Route.requiredFor = nil
+H.ok(type(DC) == 'table' and lockedWith == DC, 'create asks CP.Route.requiredFor with the run')
+H.eq(DC.routeRequired, false, 'and locks what it answers')
+H.eq(LastEvent('crimson-police:client:start', 5).args[2].routeRequired, false, 'client:start carries it')
+local cd6 = Runs.cooldowns('CIT6').types.investigation
+H.eq(Runs.cooldowns('CIT5').types.investigation, nil, 'no investigation cooldown before')
+Runs.removeParticipant(DC, 5, 'downed_case', { keepFlag = true })
+H.eq(DC.participants[5].result, 'completed', 'downed_case: result completed (a live officer keeps his lines)')
+H.eq(DC.stats.downs, 1, 'downed_case counts as a down')
+H.eq(Runs.cooldowns('CIT5').types.investigation, nil, 'downed_case: no type cooldown')
+H.ok((Runs.cooldowns('CIT5').missions.test_mission or 0) > os.time(), 'downed_case: the mission cooldown as downed')
+H.eq(RowsOf(DC.id)[1] and RowsOf(DC.id)[1].end_reason, 'downed_case', 'the row keeps downed_case')
+Runs.removeParticipant(DC, 6, 'downed_kept', { keepFlag = true })
+H.eq(DC.participants[6].result, 'failed', 'downed_kept: result failed (today\'s failed credit)')
+H.eq(Runs.cooldowns('CIT6').types.investigation, cd6, 'downed_kept: no type cooldown')
+H.eq(DC.stats.downs, 2, 'downed_kept counts as a down')
+
+-- ============================================================================
 --               RESOURCE STOP: entities deleted, nothing written
 -- ============================================================================
 

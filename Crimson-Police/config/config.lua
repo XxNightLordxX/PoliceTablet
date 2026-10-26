@@ -696,6 +696,22 @@ Config.MissionCalls = {
 -- mission played against a volunteer (Config.Volunteers). Nothing here does anything while both are off.
 -- Crimson-Police never gives a suspect anything (no points, cash or items) and never tells officers who he is.
 Config.RealSuspects = {
+    -- The NPC-mission rules that do not fit a fight with a real player (each can be set back). 'normal' = an
+    -- officer's own shots-fired, person-down and EMS calls go out like any officer's, so backup can come; 'silenced'
+    -- = the NPC-mission rule (no alerts)
+    officerAlerts = 'normal',
+    -- 'first_contact' = an officer who gets near a suspect (contactRange) counts as arrived and his route check stops;
+    -- 'start' = the NPC-mission rule (only the mission start counts)
+    routeEnds = 'first_contact',
+    -- 'keep_earned' = a downed officer leaves with what he earned so far and no type cooldown; 'failed' = the
+    -- NPC-mission rule (his run is Failed)
+    downed = 'keep_earned',
+    -- Seconds down, with no EMS on duty, before the pick-up (keep equal to sc-ambulance's Config.DeathTime; NPC
+    -- missions use Config.Downed.pickupDelay)
+    downedPickupDelay = 400,
+    -- false = no NPC-combat headshot protection or damage cut for officers once a real suspect is in the case; true =
+    -- they keep Config.NpcCombat's officer settings
+    npcCombat = false,
     -- Who can be a suspect:
     excludeAce = 'crimsonpolice.realsuspect.exclude',  -- players with this ace (server.cfg) are never suspects
     -- true = Crimson-Police admins (Config.AdminAce / Config.QboxAdmins) are never suspects either
@@ -790,6 +806,9 @@ Config.RealSuspects = {
 -- live_* entries in Config.Bonuses). Crimson-Contracts needs ContractsConfig.LifecycleEvents = true.
 Config.LiveCrime = {
     enabled = false,                 -- true = reported crimes become LIVE calls on the Dispatch screen
+    -- false = officers on a live case may leave the GPS route to chase; true = the normal route rule
+    -- (Config.Route.required)
+    requireRoute = false,
 }
 
 -- ============================================================================

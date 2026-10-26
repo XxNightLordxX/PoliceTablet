@@ -59,6 +59,10 @@ local RESULT = {
     force_recall = 'abandoned',
     cancelled = 'abandoned',
     downed = 'failed',
+    -- a downed officer in a case with a real suspect (CP.Downed.reasonFor, Config.RealSuspects.downed = 'keep_earned'):
+    -- live crimes keep the lines earned so far, volunteer suspects today's failed credit; no type cooldown for either
+    downed_case = 'completed',
+    downed_kept = 'failed',
     disconnected = 'failed',
     completed = 'completed',
     time_limit = 'failed',
@@ -92,6 +96,8 @@ local MISSION_COOLDOWN = Set({
     'suspended',
     'real_call_cancelled',
     'downed',
+    'downed_case',
+    'downed_kept',
     'disconnected',
     'completed',
     'time_limit',
@@ -2953,7 +2959,12 @@ local function rescale(run, endReason)
     local rescaleCfg = Config.Rescale or {}
     local oldTier, oldPay = run.tier, run.payTier
     if rescaleCfg.enabled ~= false then run.tier = LowerTier(run.tier, newTier) end
+    -- the downed reasons of a case with a real suspect keep it like 'downed' (the 'downed' entry covers them)
     local keep = U.contains(rescaleCfg.keepPayTierFor or {}, endReason)
+        or (
+            (endReason == 'downed_case' or endReason == 'downed_kept')
+            and U.contains(rescaleCfg.keepPayTierFor or {}, 'downed')
+        )
     if not keep then run.payTier = LowerTier(run.payTier, newTier) end
     local tierChanged = TierName(oldTier) ~= TierName(run.tier)
     local payChanged = TierName(oldPay) ~= TierName(run.payTier)
@@ -3114,9 +3125,6 @@ function Runs.create(opts)
         flagged = nil,
         reserved = { missionId = mission.id, locationIndex = locationIndex },
         startTimeout = math.floor(Num(mission.startTimeout, Num(limits().startTimeout, 600))),
-        -- Hard rule 17's switch, locked at accept (Config.Route.required): whether leaving the start route ends the
-        -- run. A test run follows its own Start route switch (test.useStartRoute: on = with the route rules).
-        routeRequired = test ~= nil or not (Config.Route and Config.Route.required == false),
         pedHits = {},
         quietPatrol = mission.quietPatrol == true,
         decisions = {},
@@ -3125,6 +3133,16 @@ function Runs.create(opts)
         -- false (opts.npcCombat = false, V14's live runs): no participant's game starts the Config.NpcCombat settings
         npcCombat = opts.npcCombat ~= false,
     }
+    -- Hard rule 17's switch, locked at accept: whether leaving the start route ends the run. CP.Route.requiredFor
+    -- decides (a test run follows its own Start route switch, test.useStartRoute: on = with the route rules; a live
+    -- crime Config.LiveCrime.requireRoute; every other run Config.Route.required); V14 sets run.live above this line.
+    do
+        local okR, required = Call('Route', 'requiredFor', run)
+        if not (okR and type(required) == 'boolean') then
+            required = test ~= nil or not (Config.Route and Config.Route.required == false)
+        end
+        run.routeRequired = required
+    end
     -- A claimed mission call (CP.MissionCalls): { id, code, area, targetS, staff }. Rapid response needs a
     -- server-posted call (staff = paged or created, never) and a target.
     if type(opts.missionCall) == 'table' then
@@ -3757,7 +3775,9 @@ function Runs.removeParticipant(run, src, endReason, opts)
     p.endReason, p.result = endReason, result
     p.leftAt = os.time()
     if bySrc[src] == run.id then bySrc[src] = nil end
-    if endReason == 'downed' then run.stats.downs = (run.stats.downs or 0) + 1 end
+    if endReason == 'downed' or endReason == 'downed_case' or endReason == 'downed_kept' then
+        run.stats.downs = (run.stats.downs or 0) + 1
+    end
     ApplyCooldowns(run, p, endReason)
 
     local others = Runs.activeSrcs(run)
@@ -3828,7 +3848,9 @@ local function RemoveDownedBeforeEnd(run)
             Call('Downed', 'handle', run, src)
             if p.status == 'active' and run.state ~= 'ended' then
                 local okP, pending = Call('Downed', 'isPending', src)
-                Runs.removeParticipant(run, src, 'downed', { keepFlag = okP and pending == true })
+                local okR, reason = Call('Downed', 'reasonFor', run)
+                if not (okR and RESULT[reason]) then reason = 'downed' end
+                Runs.removeParticipant(run, src, reason, { keepFlag = okP and pending == true })
             end
             if run.state == 'ended' then return false end
         end

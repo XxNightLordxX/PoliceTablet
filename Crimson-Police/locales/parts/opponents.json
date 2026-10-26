@@ -53,5 +53,11 @@
   "opp.sign.no_resistance": "a suspect never armed who moved {metres} m after contact",
   "opp.sign.short_case": "a case of only {seconds} s",
   "flag.rs_linked_accounts": "An officer and a real suspect of his case share a connection or a PC (the same IP address or hardware token). Families and housemates do too, so a supervisor checks it: his points wait for review.",
-  "flag.rs_pair_repeat": "The same officer and real suspect met in several cases within a few days, with a second warning sign (a very fast catch, a suspect who never fought or ran, or a very short case). His points wait for a supervisor."
+  "flag.rs_pair_repeat": "The same officer and real suspect met in several cases within a few days, with a second warning sign (a very fast catch, a suspect who never fought or ran, or a very short case). His points wait for a supervisor.",
+  "run.ended_downed_case": "You went down: you leave the case with what you earned so far, and no cooldown",
+  "run.ended_downed_kept": "Mission failed: you went down (no cooldown)",
+  "reason.downed_case": "Went down on a live case",
+  "reason.downed_kept": "Went down (no cooldown)",
+  "sup.end.downed_case": "Downed (live case)",
+  "sup.end.downed_kept": "Downed (volunteer case)"
 }

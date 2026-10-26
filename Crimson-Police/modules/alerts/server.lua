@@ -101,13 +101,29 @@ local function RunsCall(name, ...)
     return true, a, b
 end
 
-local function ResolveRunId(src, runRef)
-    if type(runRef) == 'table' and runRef.id ~= nil then return runRef.id end
-    if type(runRef) == 'string' and runRef ~= '' then return runRef end
+-- The run a set is for (the table itself, its id, or the src's current run) and its id.
+local function ResolveRun(src, runRef)
+    if type(runRef) == 'table' then return runRef, runRef.id end
+    if type(runRef) == 'string' and runRef ~= '' then
+        local _, run = RunsCall('get', runRef)
+        return type(run) == 'table' and run or nil, runRef
+    end
     local _, run = RunsCall('getBySrc', src)
-    if type(run) == 'table' then return run.id end
-    return nil
+    if type(run) == 'table' then return run, run.id end
+    return nil, nil
 end
+
+-- A case with a real suspect (run.realSuspect, V14 / V22) while Config.RealSuspects.officerAlerts is not 'silenced'
+-- (shipped 'normal'): its officers' own shots-fired, person-down and EMS calls go out like any officer's, so no flag
+-- and no backstop clear. 'silenced' = the NPC-mission rule (Hard rule 16). NPC runs: always false.
+local function AlertsGoOut(run)
+    if type(run) ~= 'table' or not run.realSuspect then return false end
+    local rs = Config.RealSuspects
+    return not (type(rs) == 'table' and rs.officerAlerts == 'silenced')
+end
+A.alertsGoOut = AlertsGoOut
+
+local quietLogged = setmetatable({}, { __mode = 'k' })  -- runs whose refused set was logged (one line per run)
 
 local function ActiveSrcs(run)
     local out = {}
@@ -190,6 +206,23 @@ end
 function A.set(src, runRef)
     src = ToSrc(src)
     if not src then return false end
+    local run, runId = ResolveRun(src, runRef)
+    if type(run) == 'table' and run.realSuspect then
+        if AlertsGoOut(run) then
+            if not quietLogged[run] then
+                quietLogged[run] = true
+                CP.log(TAG, 'no flags on run %s: a case with a real suspect (Config.RealSuspects.officerAlerts)',
+                    tostring(run.id))
+            end
+            return false
+        end
+        -- 'silenced': only an active participant gets the flag (a suspect never does, in any mode)
+        local p = type(run.participants) == 'table' and run.participants[src] or nil
+        if type(p) ~= 'table' or p.status ~= 'active' then
+            CP.log(TAG, 'set %d refused: not a participant of run %s', src, tostring(run.id))
+            return false
+        end
+    end
     if BucketOf(src) ~= 0 then
         CP.log(TAG, 'set %d refused: routing bucket %d', src, BucketOf(src))
         return false
@@ -199,7 +232,6 @@ function A.set(src, runRef)
         CP.log(TAG, 'set %d refused: the crimsonArena value belongs to another resource', src)
         return false
     end
-    local runId = ResolveRunId(src, runRef)
     local w = wanted[src]
     if not w or w.runId ~= runId then
         w = { runId = runId, setAt = os.time(), logged = false }
@@ -233,6 +265,25 @@ function A.clear(src, opts)
         return removed
     end
     return false
+end
+
+-- A run that became a case with a real suspect after its officers arrived (a volunteer who says yes then, V22):
+-- every active participant's flag of ours goes, so his calls go out from now on. Nothing while
+-- Config.RealSuspects.officerAlerts is 'silenced' or the run has no real suspect. Returns how many were cleared.
+function A.releaseRun(run)
+    if not AlertsGoOut(run) or type(run.participants) ~= 'table' then return 0 end
+    local n = 0
+    for s, p in pairs(run.participants) do
+        local src = ToSrc(s)
+        if src and type(p) == 'table' and p.status == 'active' then
+            local w = wanted[src]
+            if (w and (w.runId == nil or w.runId == run.id)) or (not w and Classify(BagValue(src)) == 'ours') then
+                if A.clear(src) then n = n + 1 end
+            end
+        end
+    end
+    if n > 0 then CP.log(TAG, 'run %s is a case with a real suspect: %d flag(s) cleared', tostring(run.id), n) end
+    return n
 end
 
 -- ============================================================================
@@ -539,7 +590,8 @@ local function OnShotsFired(src, _, receivedAt)
         local _, r2 = RunsCall('get', wanted[src].runId)
         if type(r2) == 'table' then run = r2 end
     end
-    if not run then return end
+    -- a case with a real suspect: his call stands (Config.RealSuspects.officerAlerts)
+    if not run or AlertsGoOut(run) then return end
     local coords = ServerCoords(src)
     if not coords or not NearMission(run, coords) then return end
     Wait(DelayMs())
@@ -556,6 +608,11 @@ local function DownListener(prefix)
         if not wanted[src] then
             return
         end -- intent, not the live bag
+        if wanted[src].runId ~= nil then
+            local _, run = RunsCall('get', wanted[src].runId)
+            -- a case with a real suspect: his call stands
+            if AlertsGoOut(run) then return end
+        end
         Wait(DelayMs())
         ClearIds(fmt, src, t, { 'police', 'ambulance' })
     end

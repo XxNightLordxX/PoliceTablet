@@ -303,6 +303,49 @@ do
         end
         H.eq(group and group.desc, desc, 'Bonuses.' .. id .. ': its comment is the description in Settings')
     end
+    -- V9: the NPC-mission rules for cases with a real suspect, each a pick between the rule for real players
+    -- (shipped) and the NPC rule; LiveCrime.requireRoute an on/off gameplay rule like Route.required
+    for path, want in pairs({
+        officerAlerts = { 'normal', 'normal,silenced' },
+        routeEnds = { 'first_contact', 'first_contact,start' },
+        downed = { 'keep_earned', 'keep_earned,failed' },
+    }) do
+        local e = S.entry('RealSuspects.' .. path) or {}
+        H.eq(e.kind, 'enum', 'RealSuspects.' .. path .. ' is a pick')
+        H.eq(e.default, want[1], 'RealSuspects.' .. path .. ' ships ' .. want[1])
+        H.eq(table.concat(e.tpl and e.tpl.options or {}, ','), want[2], 'RealSuspects.' .. path .. ': ' .. want[2])
+        H.eq((S.check('RealSuspects.' .. path, 'off')), false, 'RealSuspects.' .. path .. ' refuses anything else')
+        H.ok(not e.restart and not e.money, 'RealSuspects.' .. path .. ' needs no restart and is not a money switch')
+    end
+    for path, desc in pairs({
+        officerAlerts = 'The NPC-mission rules that do not fit a fight with a real player (each can be set back). '
+            .. '\'normal\' = an officer\'s own shots-fired, person-down and EMS calls go out like any officer\'s, so '
+            .. 'backup can come; \'silenced\' = the NPC-mission rule (no alerts)',
+        routeEnds = '\'first_contact\' = an officer who gets near a suspect (contactRange) counts as arrived and his '
+            .. 'route check stops; \'start\' = the NPC-mission rule (only the mission start counts)',
+        downed = '\'keep_earned\' = a downed officer leaves with what he earned so far and no type cooldown; '
+            .. '\'failed\' = the NPC-mission rule (his run is Failed)',
+        downedPickupDelay = 'Seconds down, with no EMS on duty, before the pick-up (keep equal to sc-ambulance\'s '
+            .. 'Config.DeathTime; NPC missions use Config.Downed.pickupDelay)',
+        npcCombat = 'false = no NPC-combat headshot protection or damage cut for officers once a real suspect is in '
+            .. 'the case; true = they keep Config.NpcCombat\'s officer settings',
+    }) do
+        H.eq((S.entry('RealSuspects.' .. path) or {}).desc, desc, 'RealSuspects.' .. path .. ': its own comment')
+    end
+    H.eq((S.entry('RealSuspects.downedPickupDelay') or {}).default, 400, 'downedPickupDelay ships 400 s')
+    H.eq((S.check('RealSuspects.downedPickupDelay', 0)), false, 'a pick-up delay of 0 s is refused')
+    H.ok((S.check('RealSuspects.downedPickupDelay', 600)), 'a pick-up delay above Downed.pickupDelay\'s 120 is allowed')
+    H.eq((S.entry('RealSuspects.npcCombat') or {}).kind, 'boolean', 'npcCombat is a switch')
+    local rr = S.entry('LiveCrime.requireRoute') or {}
+    H.eq(rr.kind, 'boolean', 'LiveCrime.requireRoute is an on/off setting')
+    H.eq(rr.default, false, 'LiveCrime.requireRoute ships false')
+    H.eq(
+        rr.desc,
+        'false = officers on a live case may leave the GPS route to chase; true = the normal route rule '
+            .. '(Config.Route.required)',
+        'LiveCrime.requireRoute: its own comment'
+    )
+    H.ok(not rr.restart and not rr.money, 'LiveCrime.requireRoute needs no restart and is not a money switch')
 end
 
 -- ============================================================================

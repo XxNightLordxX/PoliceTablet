@@ -560,11 +560,14 @@ p = {
 | `real_call_cancelled` | abandoned | yes | yes | no |
 | `real_call`, `force_recall`, `cancelled` | abandoned | **no** | **no** | real_call, force_recall: yes |
 | `downed` | failed | yes | yes | yes |
+| `downed_case` (a downed officer of a live crime, `Config.RealSuspects.downed = 'keep_earned'`; the lines earned so far, scored in V13) | completed | **no** | yes | yes (with `downed` in keepPayTierFor) |
+| `downed_kept` (the same on a volunteer-suspect run; today's failed credit) | failed | **no** | yes | yes (with `downed` in keepPayTierFor) |
 | `disconnected` | failed | yes | yes | no |
 | `completed` / `time_limit` / `mission_failed` (still in at the end) | completed / failed | no | yes | — |
 | `vehicle_removed_external` (a run vehicle removed by someone outside the run, or vanished with nothing recorded) | abandoned (not counted: no points, cash or abandon penalty) | **no** | **no** | — |
 
-"Keeps pay tier" = `Config.Rescale.keepPayTierFor` (read from config, not hard-coded). When a
+"Keeps pay tier" = `Config.Rescale.keepPayTierFor` (read from config, not hard-coded; its `downed` entry also covers
+`downed_case` and `downed_kept`). When a
 participant leaves an In-progress run: NPCs not yet spawned always shrink to the team that is left
 (`Config.Rescale.enabled`), `run.tier` becomes the lower of the current tier and the tier for the
 remaining count; `run.payTier` drops the same way only when the reason is not in keepPayTierFor.
@@ -1376,6 +1379,14 @@ abandons with `off_route`. Test runs with `useStartRoute = false`: only the arri
 `run.routeRequired` (sent in `client:start` as `routeRequired`; a test run is always `true`, its Start route switch
 decides): with `false` the reports, Recalculate and the arrival check stay, but no warning, countdown, drift check or
 `off_route` end; `status` carries `required` and `CP.Runs.view` copies it to `route.required`.
+`requiredFor(run) -> boolean` (V9) is the one decision: `run.routeRequired` once locked; before the lock (CP.Runs
+calls it in `create`) a test run `true`, a live crime (`run.live`) `Config.LiveCrime.requireRoute == true` (shipped
+false: no warning, countdown, drift check, `off_route` end or type cooldown from it; the GPS line, Recalculate and the
+start timeout stay), every other run (NPC missions and volunteer suspects) `Config.Route.required`. Late joiners
+(V15) begin with the run's locked value.
+First contact (V9, `Config.RealSuspects.routeEnds`, shipped `'first_contact'`): in a case with a real suspect
+(`run.realSuspect`) the 1 s tick, before the distance-to-start test, counts a participant as arrived (`markArrived`,
+the route watch stops) when `CP.Opponents.nearAny(run, coords, contactRange)` is true; `'start'` = only the start.
 Late partners (PLAN M11, owner decision; `Config.Route.lateArriveRange`, shipped 150 m, 0 = off): once
 `run.state == 'in_progress'`, the 1 s tick switches a participant who has not arrived to mode `'action'` once: no
 warning, report, drift or `off_route` check any more (with `required` on or off), reports and Recalculate are refused,
@@ -1403,15 +1414,25 @@ radar-blip slot is read first) and afterwards only while our waypoint is gone (`
 
 ### 5.13 CP.Calls — modules/calls (Hard rule 15)
 - `isOnCall(src) -> boolean` (a live real-call responding entry, `Config.Calls.respondingExpiry`)
+- `isOnCall(src, { except = set })`: entries matching an `exemptFor`-shaped set are ignored (a claim of that case, V14)
+- `exemptFor(run) -> { exact = { [id] = true }, prefixes = { ... } }` (V9, critic C1 / C15): exact = the case's own
+  call (`run.live.dispatchId`, as sent and normalized); prefixes = `'<prefix><src>_'` for every participant and every
+  suspect (`CP.Opponents.caseOf(run)`, the watch's server ids) with each `ownRunCallPrefixes` entry plus `shots_`
 - Listens through `CP.Dispatch.onResponding` / `onCallCleared`; npccall- ids never end a run;
-  own-run call ids (`Config.Calls.ownRunCallPrefixes` + `<partnerSrc>_`) are ignored for partners;
+  own-run call ids (`Config.Calls.ownRunCallPrefixes` + `<partnerSrc>_`) are ignored for partners; on a run with
+  `run.realSuspect` every id that matches `exemptFor(run)` is ignored too;
   only `CP.Dispatch.lookupActiveCall` hits count; ends the run with `real_call` and within
   `Config.Calls.dodgeWindow` of an un-mark calls `CP.Runs.reclassify(..., 'real_call_cancelled')`.
 - An admin's **Treat as a normal abandon** (CP.LiveCtl, §5.39) uses the same `CP.Runs.reclassify` on a free abandon
   of the last 24 h, found from the saved rows (`end_reason = 'real_call'`), never from this module's memory.
 
 ### 5.14 CP.Alerts — modules/alerts (Hard rule 16; the only writer of the crimsonArena bag)
-- `set(src)` → `Player(src).state:set('crimsonArena', { active = true, source = 'crimson-police' }, true)`
+- `set(src, run)` → `Player(src).state:set('crimsonArena', { active = true, source = 'crimson-police' }, true)`;
+  refused (false, one log line per run) for a run with `run.realSuspect` while `Config.RealSuspects.officerAlerts` is
+  not `'silenced'` (`alertsGoOut(run)`, shipped `'normal'`: the officers' own calls go out); with `'silenced'` only an
+  active participant gets it (a suspect never does)
+- `releaseRun(run) -> n` (V9): clears every active participant's flag of ours once a run became a case with a real
+  suspect (a volunteer who says yes after an officer arrived); nothing while `alertsGoOut(run)` is false
 - `clear(src)` → only when the current value's `source == 'crimson-police'`; sets it to nil (replicated)
 - `has(src) -> boolean` (our flag is on)
 - `foreignFlag(src) -> boolean` — a `crimsonArena` value with `active == true` whose `source` is not `'crimson-police'` (Crimson-Arena's). `set` does nothing (returns false) while a foreign flag is present.
@@ -1421,6 +1442,7 @@ radar-blip slot is read first) and afterwards only while our waypoint is gone (`
 - Start: removes leftover Crimson-Police flags from every online player. Stop: clears all.
 - Backstop listeners (shots fired within `Config.Alerts.backstopRadius` of the run's start or the
   participant's objective area; person down/dead while flagged) → clear after `Config.Alerts.backstopDelay` s.
+  Skipped for runs where `alertsGoOut(run)` is true.
 
 Parity-plus: the 1 s reconcile fires `arena:exited (src)` once when `inArena(src)` turns false (flag cleared, or the
 bucket back to 0 with no flag change).
@@ -1436,6 +1458,10 @@ Also reacts at once to `CP.Qbx.onMetaDataChange` (`isdead` / `inlaststand` set t
 `{ keepFlag = true }` before anything yields, then starts the pick-up / EMS flow in its own thread; false (nothing
 done) when they are not active, in the arena, the run ended, or that down is already past the leave.
 `cancel(src, reason)`, `isPending(src)`.
+`reasonFor(run) -> 'downed'|'downed_case'|'downed_kept'` (V9): in a case with a real suspect and
+`Config.RealSuspects.downed ~= 'failed'` (shipped `'keep_earned'`) a live officer leaves with `downed_case` and a
+volunteer-suspect officer with `downed_kept` (§4.3; `CP.Runs.endRun` uses it too); every such case waits
+`Config.RealSuspects.downedPickupDelay` (shipped 400 s, sc-ambulance's DeathTime) instead of `Config.Downed.pickupDelay`.
 Client: `client:pickup` → fade out, overlay "Picked up by an NPC unit", wait for revive, detach, move to the drop-off, fade in; `client:requestEMS` → `CP.Ambulance.sendEMSRequest()`.
 End of the follow-up: every way an entry leaves the pending stages (done, every cancel reason, the EMS hand-over)
 sends `client:downedEnded` (runId, reason) once. The client tracks its own fade and overlay (set before the call that

@@ -78,11 +78,31 @@ local function Audit(citizenid, action, runId, detail, reason)
     end)
 end
 
--- A call about a participant of the same run (their person-down, dead, EMS or panic call).
+-- Whether an id is in an exemption set ({ exact = { [id] = true }, prefixes = { '<prefix><src>_', ... } }).
+local function Exempt(set, id)
+    if type(set) ~= 'table' or type(id) ~= 'string' or id == '' then return false end
+    if type(set.exact) == 'table' and set.exact[id] then return true end
+    if type(set.prefixes) == 'table' then
+        for i = 1, #set.prefixes do
+            local needle = set.prefixes[i]
+            if type(needle) == 'string' and needle ~= '' and id:find(needle, 1, true) == 1 then return true end
+        end
+    end
+    return false
+end
+
+-- A call about a participant of the same run (their person-down, dead, EMS or panic call); in a case with a real
+-- suspect also the case's own call and every shots / down call of its officers and suspects (C.exemptFor).
 local function AboutOwnRun(run, ...)
+    local ids = { ... }
+    if type(run) == 'table' and run.realSuspect then
+        local set = C.exemptFor(run)
+        for j = 1, #ids do
+            if Exempt(set, ids[j]) then return true end
+        end
+    end
     local prefixes = Config.Calls.ownRunCallPrefixes
     if type(prefixes) ~= 'table' or type(run) ~= 'table' or type(run.participants) ~= 'table' then return false end
-    local ids = { ... }
     for pSrc in pairs(run.participants) do
         local n = ToSrc(pSrc)
         if n then
@@ -284,14 +304,70 @@ end
 --                                  PUBLIC API
 -- ============================================================================
 
-function C.isOnCall(src)
+-- The calls that are part of a case with a real suspect and never "a real call" for its officers (critic C1, C15):
+-- { exact = { [id] = true }, prefixes = { ... } }. exact: the case's own call (run.live.dispatchId, as sent and
+-- normalized); prefixes: '<prefix><src>_' for every participant and every suspect (CP.Opponents.caseOf: the server
+-- ids the watch keeps) with each Config.Calls.ownRunCallPrefixes entry plus 'shots_' (an officer's or a suspect's
+-- gunfire), so src 1 never matches 12. OnMarked uses it for runs with run.realSuspect; claims pass it to isOnCall.
+function C.exemptFor(run)
+    local out = { exact = {}, prefixes = {} }
+    if type(run) ~= 'table' then return out end
+    local id = type(run.live) == 'table' and run.live.dispatchId or nil
+    if id ~= nil and id ~= '' then
+        out.exact[tostring(id)] = true
+        local key = Normalize(id)
+        if key ~= '' then out.exact[key] = true end
+    end
+    local list, have = { 'shots_' }, { shots_ = true }
+    for _, pre in ipairs(type(Config.Calls.ownRunCallPrefixes) == 'table' and Config.Calls.ownRunCallPrefixes or {}) do
+        if type(pre) == 'string' and pre ~= '' and not have[pre] then
+            have[pre] = true
+            list[#list + 1] = pre
+        end
+    end
+    local srcs, seenSrc = {}, {}
+    local function Add(v)
+        local n = ToSrc(v)
+        if n and not seenSrc[n] then
+            seenSrc[n] = true
+            srcs[#srcs + 1] = n
+        end
+    end
+    for pSrc in pairs(type(run.participants) == 'table' and run.participants or {}) do Add(pSrc) end
+    if CP.Opponents and type(CP.Opponents.caseOf) == 'function' then
+        local ok, case = pcall(CP.Opponents.caseOf, run)
+        if ok and type(case) == 'table' and type(case.suspects) == 'table' then
+            for _, rec in pairs(case.suspects) do
+                if type(rec) == 'table' then Add(rec.src) end
+            end
+        end
+    end
+    table.sort(srcs)
+    for _, n in ipairs(srcs) do
+        for _, pre in ipairs(list) do out.prefixes[#out.prefixes + 1] = ('%s%d_'):format(pre, n) end
+    end
+    return out
+end
+
+-- opts.except (an exemptFor-shaped set): those calls are ignored (a claim of the case they belong to, V14).
+function C.isOnCall(src, opts)
     src = ToSrc(src)
     if not src then return false end
     local bySrc = responding[src]
     if not bySrc then return false end
+    local except = type(opts) == 'table' and type(opts.except) == 'table' and opts.except or nil
     local expiry = tonumber(Config.Calls.respondingExpiry) or 1200
     local keys = {}
-    for key in pairs(bySrc) do keys[#keys + 1] = key end
+    for key in pairs(bySrc) do
+        local skip = false
+        if except then
+            skip = Exempt(except, key)
+            for raw, k in pairs(aliases[src] or {}) do
+                if not skip and k == key and Exempt(except, raw) then skip = true end
+            end
+        end
+        if not skip then keys[#keys + 1] = key end
+    end
     local live = false
     for _, key in ipairs(keys) do
         local cur = responding[src]

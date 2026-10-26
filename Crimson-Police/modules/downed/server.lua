@@ -110,6 +110,29 @@ local function NearestDropOff(src)
     return best
 end
 
+-- A case with a real suspect (run.realSuspect, V14 / V22) and Config.RealSuspects.downed ~= 'failed' (shipped
+-- 'keep_earned'): a live officer leaves with 'downed_case' (result completed, the lines he earned so far), a
+-- volunteer-suspect officer with 'downed_kept' (result failed, today's failed credit); neither starts a type
+-- cooldown. 'failed' and every NPC run: 'downed' (Hard rule 18).
+function D.reasonFor(run)
+    if type(run) ~= 'table' or not run.realSuspect then return 'downed' end
+    local rs = Config.RealSuspects
+    if type(rs) == 'table' and rs.downed == 'failed' then return 'downed' end
+    if run.realSuspect == 'live' then return 'downed_case' end
+    if run.realSuspect == 'volunteer' then return 'downed_kept' end
+    return 'downed'
+end
+
+-- Seconds down, with no EMS on duty, before the pick-up: Config.RealSuspects.downedPickupDelay in a case with a real
+-- suspect (keep it equal to sc-ambulance's Config.DeathTime), Config.Downed.pickupDelay otherwise.
+local function PickupDelay(e)
+    if e.realSuspect then
+        local n = tonumber(type(Config.RealSuspects) == 'table' and Config.RealSuspects.downedPickupDelay)
+        if n and n >= 0 then return n end
+    end
+    return tonumber(Config.Downed.pickupDelay) or 15
+end
+
 local function Current(src, e)
     return entries[src] == e and PENDING[e.stage] == true
 end
@@ -203,7 +226,7 @@ end
 
 local function PickupPath(src, e)
     e.stage = 'pickup_wait'
-    local delayS = tonumber(Config.Downed.pickupDelay) or 15
+    local delayS = PickupDelay(e)
     Notify(src, 'info', 'downed.pickup_soon', { seconds = delayS })
     Wait(math.floor(delayS * 1000))
     if not Current(src, e) then return end
@@ -256,18 +279,20 @@ local function EnsureRunEnds(run)
     end)
 end
 
--- The downed participant leaves the run with end_reason 'downed' (keepFlag: the hold keeps the flag),
--- once per entry. Nothing here yields before CP.Runs.removeParticipant has run its synchronous part.
+-- The downed participant leaves the run with end_reason 'downed' (D.reasonFor: 'downed_case' / 'downed_kept' in a
+-- case with a real suspect; keepFlag: the hold keeps the flag), once per entry. Nothing here yields before
+-- CP.Runs.removeParticipant has run its synchronous part.
 local function RemoveNow(run, src, e)
     if e.removed then return end
     e.removed = true
     run.stats = run.stats or {}
     local downsBefore = tonumber(run.stats.downs) or 0
-    RunsCall('removeParticipant', run, src, 'downed', { keepFlag = true })
+    local reason = D.reasonFor(run)
+    RunsCall('removeParticipant', run, src, reason, { keepFlag = true })
     -- run.stats.downs + 1 for this down, unless the engine already counted it inside removeParticipant
     -- (only when they really left as downed: a participant who had already left is not a down).
     local p = run.participants and run.participants[src]
-    if (tonumber(run.stats.downs) or 0) <= downsBefore and type(p) == 'table' and p.endReason == 'downed' then
+    if (tonumber(run.stats.downs) or 0) <= downsBefore and type(p) == 'table' and p.endReason == reason then
         run.stats.downs = downsBefore + 1
     end
 end
@@ -316,6 +341,7 @@ local function NewEntry(run, src)
         stage = 'down',
         flagged = alerts('has', src) == true,
         lastStand = InLastStand(src),
+        realSuspect = run.realSuspect or nil,       -- the pick-up waits Config.RealSuspects.downedPickupDelay
         seq = seq,
     }
     entries[src] = e
