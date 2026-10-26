@@ -205,6 +205,7 @@ local function RunView(run, adminSrc)
         operationId = run.operationId,
         isBoss = run.isBoss == true,
         modifier = run.modifier,
+        modifiers = CP.Twists.of(run),
         acceptedAt = run.acceptedAt,
         startedAt = run.startedAt,
         unitId = run.unit and run.unit.id or nil,
@@ -489,8 +490,10 @@ function LiveCtl.today()
         modifiers[#modifiers + 1] = {
             key = key,
             label = CP.L(m.label or ('modifier.' .. key)),
-            tacticalOnly = m.tacticalOnly == true,
+            armedOnly = m.armedOnly == true,
             enabled = m.enabled ~= false,
+            points = Num(m.points, 0),
+            cash = Num(m.cash, 1),
         }
     end
     table.sort(modifiers, function(a, b) return a.key < b.key end)

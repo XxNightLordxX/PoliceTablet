@@ -144,6 +144,7 @@ local function CheckView(check, viewer, now)
     end
     return {
         typeLabel = check.typeLabel,
+        twists = check.twists,
         expiresIn = math.max(0, check.expiresAt - (now or os.time())),
         ready = ready,
         waiting = waiting,
@@ -481,8 +482,9 @@ end
 
 -- Starts the ready check of a locked unit of 2+ (CP.Draw.accept). onReady() once everyone accepted,
 -- onCancel(reasonKey, srcs) on a decline, a timeout, or a member who left, went off duty, took a real call
--- or entered the arena. Returns false when no check is needed (the draw follows at once).
-function Units.readyCheck(ref, typeKey, onReady, onCancel)
+-- or entered the arena. extra (optional): { twists = { { key, label } } } the leader chose, shown to the members.
+-- Returns false when no check is needed (the draw follows at once).
+function Units.readyCheck(ref, typeKey, onReady, onCancel, extra)
     local unit = Resolve(ref)
     if not unit or #unit.members < 2 then return false end
     if readyChecks[unit.id] then
@@ -502,7 +504,13 @@ function Units.readyCheck(ref, typeKey, onReady, onCancel)
         onReady = onReady,
         onCancel = onCancel,
         done = false,
+        twists = {},
     }
+    for _, t in ipairs(type(extra) == 'table' and type(extra.twists) == 'table' and extra.twists or {}) do
+        if type(t) == 'table' and type(t.key) == 'string' and type(t.label) == 'string' then
+            check.twists[#check.twists + 1] = { key = t.key, label = t.label }
+        end
+    end
     readyChecks[unit.id] = check
     local leaderInfo = unit.info[unit.leader]
     for _, m in ipairs(check.members) do
@@ -512,6 +520,7 @@ function Units.readyCheck(ref, typeKey, onReady, onCancel)
                 typeLabel = check.typeLabel,
                 expiresIn = timeout,
                 leaderName = leaderInfo and leaderInfo.name or '?',
+                twists = check.twists,
             })
         end
     end

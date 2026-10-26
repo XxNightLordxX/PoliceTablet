@@ -91,7 +91,7 @@ Each term below means exactly this everywhere in the spec.
 | Admin | A player with the ace crimsonpolice.admin, or a Qbox admin (ace admin) while Config.QboxAdmins is true; does not need to be police or on duty |
 | Rank | The officer's Qbox job grade name (e.g. "Sergeant"), the same ranks SC-Police and SC-Dispatch use |
 | Callsign | The officer's callsign from Qbox metadata, set with SC-Police's /callsign |
-| Mission type | Patrol, Training, Investigation or Tactical; the only thing officers pick |
+| Mission type | Patrol, Training, Investigation or Tactical; the only mission choice officers make (the twists they may add change how the drawn mission plays, never which mission is drawn) |
 | Mission | One playable scenario, such as Gang Shootout; belongs to exactly one mission type |
 | Built-in mission | A mission shipped with the resource, one file each in missions/builtin/. An admin's edit of one is an override with the same id in missions/custom/overrides/ |
 | Custom mission | A mission made in the Mission Builder, exported to its own file in missions/custom/ |
@@ -120,12 +120,12 @@ Each term below means exactly this everywhere in the spec.
 | Base payout | The mission's admin payout if one is set; otherwise its type payout × its star multiplier (the Weekly Boss: its event payout from config) |
 | Type payout | The base cash payout for every mission of a type |
 | Mission payout | An admin-set base cash payout for one mission; overrides the type payout |
-| Cash payout | Money each participant receives for a Completed run: base payout × tier multiplier × modifier multiplier |
+| Cash payout | Money each participant receives for a Completed run: base payout × tier multiplier × twist multiplier |
 | Season | An admin-started period (8 weeks suggested) with its own leaderboard and department challenge |
 | Department challenge | The season contest between all departments |
 | Bounty | A weekly department objective worth a bonus of 10% of the challenge points the winning department earned that week |
 | Type of the Day | The mission type that earns double points today |
-| Modifier | A random twist on a run that adds points and cash |
+| Twist (modifier) | A harder way to play a run (Armored Hostiles, Time Crunch, Radio Silence) that the officers choose when they take the mission; each adds its own points and cash, and they stack |
 | Weekly Boss | The Kingpin mission, available Friday to Sunday on its own card |
 | Flagged run | A run held off the leaderboards, with its cash held, until a supervisor reviews it |
 | Voided run | A run removed from every leaderboard by a supervisor or admin |
@@ -160,7 +160,7 @@ Each term below means exactly this everywhere in the spec.
 | Mission desk | An ox_target point at a station that opens the Officer UI |
 | Item reward | An optional ox_inventory item given for a Completed run, a goal, a level or an event; admin config only |
 | Rewards locker | The Home card holding item rewards that could not be delivered yet |
-| Ready check | The prompt every unit member must accept before the draw |
+| Ready check | The prompt every unit member must accept before the draw (the type and the twists the leader chose) |
 
 ## Overview & goals
 
@@ -269,7 +269,7 @@ Officer UI — eight screens on a left sidebar, with the officer's current run p
 | Screen | Contents | Key actions |
 |---|---|---|
 | Home | Officer card (avatar, callsign, rank, department tag, level badge, streak and grace day, season points, cash earned this week), today's goal and this week's goal, Type of the Day, mission calls open, "Missions today n/max" when a daily cap is set, new commendations, the Rewards locker when item rewards are on | Open the Mission Board or Dispatch, claim a locker item |
-| Mission Board | One card per mission type (Patrol, Training, Investigation, Tactical): cash per officer, points, how many missions are in the pool, solo or unit, cooldown if locked, "Server busy" when the run cap is reached, "On a call" while the officer is responding to a real call. A Weekly Boss card appears Friday–Sunday. While a Cross-Department Mission is active, the board shows only that mission's card. Also "n mission calls open" (a link to Dispatch) and "Daily limit reached" locks | Accept a type, join a Cross-Department Mission |
+| Mission Board | One card per mission type (Patrol, Training, Investigation, Tactical): cash per officer, points, how many missions are in the pool, solo or unit, cooldown if locked, "Server busy" when the run cap is reached, "On a call" while the officer is responding to a real call. A Weekly Boss card appears Friday–Sunday. While a Cross-Department Mission is active, the board shows only that mission's card. Also "n mission calls open" (a link to Dispatch) and "Daily limit reached" locks | Accept a type (the accept step lists the type's twists with their bonus and the total of the ones picked, e.g. "+45% points, x1.50 cash"), join a Cross-Department Mission |
 | Dispatch | Open mission calls (code, radio-style title, type, priority, area, distance, offer countdown, crew, pay, status), the last 5 calls with who took them and how they ended, the read-only SC-Dispatch real-call strip, notices (on a run, on a call, Cross-Department Mission active) | Claim a call (leader or solo), filter, mute call alerts |
 | Unit | Members with avatar, level, rank and callsign; invites waiting for you; the ready check | Invite, withdraw an invite, accept or decline, leave; leader: kick, make leader, disband (before a type is accepted); answer the ready check |
 | Active Mission | Name of the drawn mission, tier (expected until the run moves to In progress), start-route status (on route, or the off-route countdown), objective checklist, timer, partners, expected cash and points; the Contact panel while a mission has contacts (see Police actions & decisions), a raid's intel line, and a claimed call's response target | Set GPS, recalculate the route (up to 2 times per run), abandon (confirm dialog) |
@@ -486,7 +486,7 @@ Units
 
 - Invite policy (Config.Units.invitePolicy): 'anyone' (every member can invite; the default) or 'leader'.
 
-- Ready check: when the leader of a unit of 2 or more accepts a type or claims a mission call, every member gets "Ready for Tactical?" (the type only, never the mission) with a 20-second countdown on the tablet, a toast and the optional key mapping crimsonpolice_ready. The draw happens only when everyone has accepted, after every check runs again. A decline or a timeout cancels the accept: the unit unlocks, the toast names who did not answer, and nobody gets a cooldown.
+- Ready check: when the leader of a unit of 2 or more accepts a type or claims a mission call, every member gets "Ready for Tactical?" (the type and the twists the leader chose, never the mission) with a 20-second countdown on the tablet, a toast and the optional key mapping crimsonpolice_ready. The draw happens only when everyone has accepted, after every check runs again. A decline or a timeout cancels the accept: the unit unlocks, the toast names who did not answer, and nobody gets a cooldown.
 
 - The invite list shows the nearest officers first (distance bands, worked out from server-side coordinates) and a "Re-invite last partners" button with the officers from the viewer's last run.
 
@@ -549,7 +549,7 @@ A supervisor or admin can launch one specific mission for every department at on
 
 - When all 8 places are taken, officers can join a waitlist; a place freed before the start goes to the first on it.
 
-- Exempt rules: Cross-Department Missions ignore type and per-mission cooldowns, the no-repeat rule, the hourly cap and the server run cap, and never roll a modifier.
+- Exempt rules: Cross-Department Missions ignore type and per-mission cooldowns, the no-repeat rule, the hourly cap and the server run cap, and never have a twist.
 
 ## Mission catalog
 
@@ -1077,7 +1077,7 @@ Locations for every new mission come from GTA V vehicle nodes and known base-gam
 
 - Fail if: every participant is downed, or the time limit runs out
 
-- Points and cash: 500 points (Config.Events.weeklyBoss.points) instead of the type points; base payout Config.Events.weeklyBoss.payout ($2,500) until an admin sets a mission payout; counts as Tactical for the leaderboards, the 4-Tactical run cap and the hourly cap, never rolls a modifier, and is accepted from its card with the key weekly_boss. Its runs are stored with mission_type = 'tactical'. Abandoning it (except for a real call, force recall or cancel) uses up that week's attempt and puts no type on cooldown
+- Points and cash: 500 points (Config.Events.weeklyBoss.points) instead of the type points; base payout Config.Events.weeklyBoss.payout ($2,500) until an admin sets a mission payout; counts as Tactical for the leaderboards, the 4-Tactical run cap and the hourly cap, never has a twist, and is accepted from its card with the key weekly_boss. Its runs are stored with mission_type = 'tactical'. Abandoning it (except for a real call, force recall or cancel) uses up that week's attempt and puts no type on cooldown
 
 - Bonuses: Kingpin arrested alive +50; no participant downed +10% of points
 
@@ -1092,7 +1092,7 @@ Three events rotate on top of the normal missions to keep the board fresh.
 | Event | How it works | Limits |
 |---|---|---|
 | Type of the Day | One mission type, picked at the daily reset (Config.Time.resetHour, server time) with a random seed made from the date, so a restart keeps the same type, earns double points (applied after the 2× points cap) | Points only; cash is not doubled |
-| Modifiers | 25% of runs roll one modifier: Armored Hostiles (Tactical only: +50 armour on armed NPCs), Time Crunch (time limit cut by 25%) or Radio Silence (after the start the map shows what Config.Markers.radioSilence keeps: 'area' (shipped) each objective's circle or its one point (of several points or devices only the officer's nearest) without a GPS line and without blips on people or cars, 'none' no blips for mission NPCs or objectives, 'full' everything; the Active Mission screen shows only street and zone names and says which of the three applies; the start route, the prisoner van and the tow truck still show) | +25% of P and × 1.25 cash; one modifier per run; never on Cross-Department Missions |
+| Twists (modifiers) | The officers choose them when they take a mission: on the accept step of the Mission Board or of a mission call claim (the unit leader decides for the unit; the members see them on the ready check and on the Active Mission screen). Armored Hostiles (+50 armour on armed NPCs; offered only for a type with a mission that spawns armed NPCs), Time Crunch (time limit cut by 25%; only with a time limit) or Radio Silence (after the start the map shows what Config.Markers.radioSilence keeps: 'area' (shipped) each objective's circle or its one point (of several points or devices only the officer's nearest) without a GPS line and without blips on people or cars, 'none' no blips for mission NPCs or objectives, 'full' everything; the Active Mission screen shows only street and zone names and says which of the three applies; the start route, the prisoner van and the tow truck still show). The mission is still drawn at random after the accept: a chosen twist the drawn mission has no use for (Armored Hostiles on a mission without armed NPCs) is dropped without its bonus, and the officers are told. Random twists are off as shipped (Config.Events.modifierChance = 0); turned on, a random one only adds to the chosen ones | Each twist adds its own bonus (Config.Events.twists: Armored Hostiles and Radio Silence +25% of P and × 1.25 cash, Time Crunch +20% of P and × 1.20 cash); several stack: the points shares add up, the cash multipliers multiply, capped at +70% of P (twistMaxPoints) and × 1.95 (twistMaxCash). Paid only for a Completed run; never on Cross-Department Missions, the Weekly Boss or test runs |
 | Weekly Boss | The Kingpin mission (see Mission cards) on its own Mission Board card, Friday–Sunday | Once per officer per week; hidden while a Cross-Department Mission is active; cannot be launched as one |
 
 ## Mission lifecycle
@@ -1272,7 +1272,7 @@ Every staff action is written to the audit log (category operations) and posted 
 
 Screens and alerts
 
-- Officer UI → Dispatch, after Mission Board: call cards sorted by priority, then age; filters All · Claimable · Near me; the real-call strip; notices for "On a run", "On a call" and "Cross-Department Mission active"; "Recent calls" with the last 5 calls, who took each one and how it ended. Claim opens a confirm dialog: "The mission is drawn at random and revealed after you claim. Abandoning puts Tactical on cooldown."
+- Officer UI → Dispatch, after Mission Board: call cards sorted by priority, then age; filters All · Claimable · Near me; the real-call strip; notices for "On a run", "On a call" and "Cross-Department Mission active"; "Recent calls" with the last 5 calls, who took each one and how it ended. Claim opens a confirm dialog: "The mission is drawn at random and revealed after you claim. Abandoning puts Tactical on cooldown.", with the type's twists to pick, as on the Mission Board (Special events).
 
 - A new call plays a short tone and shows a Crimson-Police toast to officers who could claim it (idle, not on a real call, not muted). Mute is a per-player setting on the Dispatch screen, saved on the officer's profile (cp_officers.calls_muted), so it follows them to any PC.
 
@@ -1539,14 +1539,14 @@ The server works out points from the mission type's points in config, adjusted b
 
 - Manual awards and goal rewards are stored as their own rows in cp_mission_runs (mission_type = 'manual_award' or 'goal') and count only toward the Overall and Department boards. These rows use state = 'completed', the same word as their end_reason, and the goal id or 'manual_award' as mission_id, and they never count as runs (completed-run counts, goals, streaks, badges, the hourly cap, bounties and the 3-run minimum).
 
-Common bonuses and penalties (apply to every mission unless its card says otherwise; the modifier bonus is Config.Events.modifierPoints and the other values live in Config.Scoring.common)
+Common bonuses and penalties (apply to every mission unless its card says otherwise; the twist bonuses are Config.Events.twists and the other values live in Config.Scoring.common)
 
 | Bonus or penalty | Value |
 |---|---|
 | Finished within 75% of the time limit | +20% of P (not EVOC Course or Pursuit Sim, which use medals) |
 | No damage to the officer's vehicle (engine and body above 950) | +10, personal |
 | First completed run since going on duty | +15, personal |
-| The run rolled a modifier | +25% of P |
+| Each twist of the run (one line per twist) | +25% of P for Armored Hostiles and Radio Silence, +20% for Time Crunch; together at most +70% of P (Config.Events.twistMaxPoints) |
 | Heavy damage to the officer's vehicle (body below 500; not in missions with vehiclePenalties = false) | −25, personal |
 | NPC pedestrian hit by the officer's vehicle | −30 each, personal |
 | Lights and siren used during a mission with quietPatrol (Beat Patrol, Business Check, Illegal Parking Patrol), after the first participant arrives at the start | −10, personal |
@@ -1622,7 +1622,7 @@ Every participant in a Completed run is paid cash: the mission's base payout mul
 
 - M_tier: the cash multiplier from the tier table (× 1.00 at Standard up to × 1.75 at Critical).
 
-- M_mod: × 1.25 when the run rolled a modifier, otherwise × 1.00.
+- M_mod: the run's twists: each twist's cash multiplier (× 1.25 Armored Hostiles and Radio Silence, × 1.20 Time Crunch), multiplied together and capped at × 1.95 (Config.Events.twistMaxCash); × 1.00 without a twist.
 
 - Only Completed results pay, rounded to the nearest dollar. Failed and Abandoned results pay $0. Type of the Day, streaks and bonuses change points only.
 
@@ -1659,7 +1659,7 @@ Who can change payouts
 
 - Overall base payout range: $0–$25,000 (Config.Cash.minPayout and maxPayout). There is one set of payouts for every department.
 
-- The Mission Board shows the cash per officer as a range for the unit's size, for example "$1,040–$1,300" for a unit of 4 on Tactical, covering modifiers and any admin payouts in the pool.
+- The Mission Board shows the cash per officer as a range for the unit's size, for example "$1,040–$1,300" for a unit of 4 on Tactical with random twists on (Config.Events.modifierChance above 0; the top covers the best one), covering any admin payouts in the pool. The twists the officers choose show their own bonus on the accept step.
 
 - Every change is written to the audit log (old value, new value, who, reason) and posted to the audit webhook.
 
@@ -2104,7 +2104,7 @@ CREATE TABLE cp_mission_runs (                 -- one row per participant per ru
   participants    TINYINT NOT NULL DEFAULT 1,
   departments_n   TINYINT NOT NULL DEFAULT 1,  -- distinct departments on the run
   tier            ENUM('standard','reinforced','heavy','major','critical') NOT NULL DEFAULT 'standard',  -- points and cash tier used for this row
-  modifier        VARCHAR(20) NULL,
+  modifier        VARCHAR(20) NULL,            -- the run's first twist; every twist is in breakdown.twists
   state           ENUM('completed','failed','abandoned') NOT NULL,
   end_reason      VARCHAR(24) NOT NULL,        -- how this participant's run ended (see Mission lifecycle)
   points_base     SMALLINT NOT NULL,           -- P = the type's config points x star multiplier
@@ -2587,10 +2587,10 @@ Net events (all prefixed crimson-police:; runId is always the run's run_uuid, sh
 
 | Event | Direction | Payload | Notes |
 |---|---|---|---|
-| server:acceptType | C → S | missionType (a type key, or 'weekly_boss' for the Weekly Boss card) | Leader only; the server checks role, duty, unit, cooldowns, a real call in progress, the server run caps and the Cross-Department lock, closes invites, then draws and reserves the location |
+| server:acceptType | C → S | missionType (a type key, or 'weekly_boss' for the Weekly Boss card), or { missionType, twists } | Leader only; the server checks role, duty, unit, cooldowns, a real call in progress, the server run caps, the Cross-Department lock and every chosen twist (it must be one the type offers now), closes invites, then draws and reserves the location |
 | server:unitInvite / server:unitRespond / server:unitLeave | C → S | targetSrc / accepted / — | Any department; up to 4 members; invites only before the type is accepted |
 | server:joinOperation | C → S | operationId | Joins the active Cross-Department Mission |
-| client:start | S → C | runId, drawn mission, location, start point, expected tier, seed, host, test | Sent at accept. Every participant gets the same seed; host says whose client runs the NPC AI; the client sets the start route; test is true for test runs |
+| client:start | S → C | runId, drawn mission, location, start point, expected tier, seed, host, test, the run's twists | Sent at accept. Every participant gets the same seed; host says whose client runs the NPC AI; the client sets the start route; test is true for test runs |
 | server:routeStatus | C → S | runId, metres from the start route, coords | Every 2 s until that participant reaches the start; no report for 10 s counts as off route |
 | server:recalcRoute | C → S | runId | Allowed up to 2 times per participant per run; when allowed, the client samples a new line from where it is |
 | client:routeWarning | S → C | runId, seconds left (nil clears it) | The off-route warning on the HUD and the tablet |
@@ -2604,7 +2604,7 @@ Net events (all prefixed crimson-police:; runId is always the run's run_uuid, sh
 | client:runEnded | S → C | runId, result, end_reason, points and cash breakdown | Ends that participant's run on their client (cleanup and a HUD message, e.g. "Mission ended — you're on a real call") and shows the result screen |
 | client:tierChanged | S → C | runId, new tier, points and cash tier | Sent to everyone still on the run when the team shrinks; the HUD shows the new tier |
 | client:missionCall | S → C | id, code, type label, priority, area label (paged when it is a page) | A new call's toast and tone, only to officers who could claim it and have not muted call alerts (the server skips them); the client also drops it on a run or in Crimson-Arena |
-| client:readyCheck | S → C | type, type label, seconds left, leader name (nil clears it) | The unit ready check; the type only, never the mission |
+| client:readyCheck | S → C | type, type label, seconds left, leader name, the twists the leader chose (nil clears it) | The unit ready check; the type and the twists, never the mission |
 | client:contactAct | S → run host | runId, netId, behaviour, args | The only truth-derived signal a client gets, at the moment the behaviour starts |
 | client:contactConfirm | S → C | netId, choice, factKey | Opens the case-fail confirm on the tablet (an ox_target choice never decides a knowing error) |
 | client:serviceVehicle | S → C | runId, id, op (drive, load, leave), kind, vehicle, driver, destination | The driving client of a transport van, tow truck or coroner van |
@@ -3692,13 +3692,19 @@ Config.Leaderboard = {
 Config.Events = {
     typeOfTheDay = true,
     todMultiplier = 2.0,     -- points only
-    modifierChance = 0.25,
-    modifierPoints = 0.25,   -- +25% of P
-    modifierCash = 1.25,     -- × cash
-    armoredArmour = 50,      -- Armored Hostiles: extra armour on armed NPCs (Tactical only)
+    modifierChance = 0,      -- share of runs that also get one random twist (0 = never: officers choose their own)
+    armoredArmour = 50,      -- Armored Hostiles: extra armour on armed NPCs
     timeCrunchCut = 0.25,    -- Time Crunch: share of the time limit removed
     weeklyBoss = { enabled = true, days = { 'friday', 'saturday', 'sunday' }, points = 500, payout = 2500 },
-    modifiers = { armored_hostiles = true, time_crunch = true, radio_silence = true },   -- false = never rolled
+    -- the twists officers may choose at accept: enabled = false never offered or rolled; points = share of P added;
+    -- cash = cash multiplier; several stack up to twistMaxPoints / twistMaxCash
+    twists = {
+        armored_hostiles = { enabled = true, points = 0.25, cash = 1.25 },   -- only where armed NPCs spawn
+        time_crunch = { enabled = true, points = 0.20, cash = 1.20 },
+        radio_silence = { enabled = true, points = 0.25, cash = 1.25 },
+    },
+    twistMaxPoints = 0.70,   -- the most all chosen twists add together (+70% of P)
+    twistMaxCash = 1.95,     -- the highest cash multiplier all chosen twists give together
 }
 
 -- ── Department challenge ────────────────────────────────────────────────────
@@ -4518,7 +4524,7 @@ Acceptance checks
 
 - ☐ Nobody can approve, void or answer a dispute about a run they took part in, nor a run of another of their characters (same license)
 
-- ☐ Completed runs pay each participant base payout × tier × modifier into the bank with a Renewed-Banking entry; Failed and Abandoned results pay nothing
+- ☐ Completed runs pay each participant base payout × tier × twists into the bank with a Renewed-Banking entry; Failed and Abandoned results pay nothing
 
 - ☐ No payment is ever made twice for the same participant and run; with the society source, an empty department account pays $0 and marks the run unfunded; held cash approved while the officer is offline is paid when they next load in
 
@@ -4674,7 +4680,7 @@ Phase 3 · Seasons and events
 |---|---|---|
 | 19. Monthly, season and department boards; badges; goals | modules/leaderboard/, modules/scoring/, modules/goals/ | Boards, filters, badges and goals match the spec, and daily things reset at Config.Time.resetHour |
 | 20. Department challenge | modules/challenge/ | Scores, bounties and winners match the configured mode |
-| 21. Special events | modules/events/, missions/builtin/weekly_boss_kingpin.lua | Type of the Day, modifiers and the Weekly Boss behave as specified |
+| 21. Special events | modules/events/, missions/builtin/weekly_boss_kingpin.lua | Type of the Day, twists and the Weekly Boss behave as specified |
 
 Phase 4 · Mission Builder
 

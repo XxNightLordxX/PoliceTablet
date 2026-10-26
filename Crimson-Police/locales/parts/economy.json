@@ -141,7 +141,7 @@
   "badge.partner_in_crime": "Partner in Crime",
   "badge.joint_task_force": "Joint Task Force",
   "bonus.fast_finish": "Finished within {pct}% of the time limit",
-  "bonus.modifier": "Modifier: {modifier}",
+  "bonus.modifier": "Twist: {modifier}",
   "bonus.first_run": "First completed run since going on duty",
   "bonus.no_vehicle_damage": "No damage to your vehicle",
   "bonus.no_participant_downed": "No participant downed",

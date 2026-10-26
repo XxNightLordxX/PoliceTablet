@@ -309,5 +309,7 @@
   "unit.ui.ready_waiting": "Waiting for {n} of {total} to answer.",
   "unit.ui.ready_count": "{ready}/{total} ready",
   "unit.ui.ready_yes": "Ready",
-  "unit.ui.ready_no": "Not ready"
+  "unit.ui.ready_no": "Not ready",
+  "unit.ready.toast_twists": "{leader} accepted {type} for your unit with these twists: {twists}. Answer on the Unit screen within {seconds} s.",
+  "unit.ui.ready_twists": "Twists: {twists}"
 }

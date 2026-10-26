@@ -1,6 +1,8 @@
 // Shapes of the Dispatch screen (mission calls): getMissionCalls and push topic 'calls', the supervisor panel and
 // the admin area coverage matrix.
 
+import type { TwistCaps, TwistOffer } from '../shared/types';
+
 export interface MissionCall {
     id: number;
     code: string;
@@ -19,6 +21,8 @@ export interface MissionCall {
     minUnit: number | null;
     cash: [number, number];
     points: number;
+    // the twists the leader may choose when claiming (the board's offer for the type)
+    twists?: TwistOffer[];
     rapidPoints: number;
     typeOfTheDay: boolean;
     redispatched: boolean;
@@ -50,6 +54,8 @@ export interface DispatchView {
     realCalls: null | { total: number; p1: number };
     serverTime: number;
     recent: RecentCall[];
+    // the caps of stacked twists (Config.Events.twistMaxPoints, twistMaxCash)
+    twistMax?: TwistCaps;
 }
 
 // A unit a supervisor may page (idle leaders and solo officers, never the viewer's own unit).

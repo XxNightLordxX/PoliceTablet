@@ -34,7 +34,9 @@ export interface AdminLiveRun {
     testBy?: number | null;
     operationId: number | null;
     isBoss: boolean;
+    // the first twist, and every twist of the run (CP.Twists order)
     modifier?: string | null;
+    modifiers?: string[];
     acceptedAt: number;
     startedAt?: number | null;
     unitId?: number | null;
@@ -163,8 +165,12 @@ export interface AdminOfficerRunState {
 export interface AdminTodayModifier {
     key: string;
     label: string;
-    tacticalOnly: boolean;
+    // offered and applied only where the mission spawns armed NPCs (Armored Hostiles)
+    armedOnly?: boolean;
     enabled: boolean;
+    // the reward (Config.Events.twists): a share of P added, a cash multiplier
+    points?: number;
+    cash?: number;
 }
 
 // admin:getToday

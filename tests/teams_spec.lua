@@ -1475,7 +1475,9 @@ local prompt = prompts[1].args[1]
 local keys = {}
 for k in pairs(prompt) do keys[#keys + 1] = k end
 table.sort(keys)
-H.eq(table.concat(keys, ','), 'expiresIn,leaderName,typeKey,typeLabel', 'the prompt carries the type only')
+H.eq(table.concat(keys, ','), 'expiresIn,leaderName,twists,typeKey,typeLabel',
+    'the prompt carries the type and the chosen twists, never the mission')
+H.eq(#prompt.twists, 0, 'no twist chosen: an empty list')
 H.eq(prompt.typeLabel, Config.MissionTypes.tactical.label, 'the prompt names the type')
 H.eq(prompt.expiresIn, 20, 'Config.Units.readyTimeout seconds to answer')
 H.eq(prompt.leaderName, 'John Doe', 'and the leader')
@@ -1523,6 +1525,30 @@ H.eq(data, 'err.unit_ready_none', 'nothing left to answer')
 H.eq(readyCalls, 1, 'onReady never runs twice')
 H.ok(u.locked, 'still locked: the draw follows')
 U.unlock(u)
+
+-- The twists the leader chose (PLAN M8b) reach every member: the prompt, the unit push and getUnit.
+Clear()
+U.lock(u)
+H.eq(U.readyCheck(u, 'tactical', function() end, function() U.unlock(u) end, {
+    twists = {
+        { key = 'time_crunch', label = 'Time Crunch' },
+        { key = 'radio_silence', label = 'Radio Silence' },
+        'junk',
+    },
+}), true, 'a check with the leader\'s twists')
+local twistPrompt = ClientEvents('client:readyCheck')[1].args[1]
+H.eq(#twistPrompt.twists, 2, 'the prompt names the two twists (a bad entry is dropped)')
+H.eq(twistPrompt.twists[2].label, 'Radio Silence', '...with their labels')
+local twistPush
+for _, p in ipairs(pushes) do
+    if p.src == 2 and p.topic == 'unit' and p.data.readyCheck then twistPush = p.data.readyCheck end
+end
+H.eq(twistPush and #twistPush.twists, 2, 'the unit push carries them (the ready check banner)')
+res = Cb('getUnit', 3)
+H.eq(res.data.unit.readyCheck.twists[1].key, 'time_crunch', 'and getUnit')
+ok = Act('server:unitReady', 2, { accepted = false })
+H.eq(U.readyCheckOf(u), nil, 'declined: the check is over')
+H.eq(u.locked, false, 'and the unit unlocked')
 
 -- Decline: onCancel with who did not answer, the unit unlocked, nobody gets a cooldown.
 Clear()

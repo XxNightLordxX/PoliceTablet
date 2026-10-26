@@ -666,7 +666,7 @@ do
     Err('AdminControl.bulkMaxRows', 0, 'err.setting_range', 'a bulk job changes 1 row at least')
     H.ok(
         S.entry('AdminControl.pointAdjust') ~= nil and S.entry('Cash.allowClawback') ~= nil and S.entry('Labels') ~= nil
-            and S.entry('Backups.keep') ~= nil and S.entry('Events.modifiers.time_crunch') ~= nil
+            and S.entry('Backups.keep') ~= nil and S.entry('Events.twists.time_crunch.enabled') ~= nil
             and S.entry('Departments.sast.enabled') ~= nil,
         'the new keys are settings'
     )

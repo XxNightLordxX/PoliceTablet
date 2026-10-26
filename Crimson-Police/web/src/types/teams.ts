@@ -21,6 +21,8 @@ export type UnitMemberView = BaseUnit['members'][number] & {
 // The pending ready check (the mission type only, never a mission). ready / waiting are member srcs.
 export interface ReadyCheckView {
     typeLabel: string;
+    // the twists the leader chose (PLAN M8b)
+    twists?: { key: string; label: string }[];
     // Seconds left to answer (Config.Units.readyTimeout).
     expiresIn: number;
     ready: number[];

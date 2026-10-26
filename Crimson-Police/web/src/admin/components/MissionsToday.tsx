@@ -107,6 +107,12 @@ export function MissionsToday(_props: Record<string, never>) {
                         {asArray(data.modifiers).map(m => (
                             <Badge key={m.key} size="sm" tone={m.enabled ? 'success' : 'grey'}>
                                 {m.label} · {t(m.enabled ? 'admin.today.on' : 'admin.today.off')}
+                                {typeof m.points === 'number' && typeof m.cash === 'number'
+                                    ? ` · ${t('admin.today.twist_reward', {
+                                          points: Math.round(m.points * 100),
+                                          cash: (Math.round(m.cash * 100) / 100).toFixed(2),
+                                      })}`
+                                    : null}
                             </Badge>
                         ))}
                     </Row>

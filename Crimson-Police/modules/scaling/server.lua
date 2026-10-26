@@ -164,11 +164,10 @@ function Scaling.combat(baseAccuracy, baseArmour, tier, run)
     local preset = Preset()
     local accuracy = (tonumber(baseAccuracy) or 0) + (tonumber(row.accuracy) or 0) + preset.accuracyAdd
     local armour = (tonumber(baseArmour) or 0) + (tonumber(row.armour) or 0) + preset.armourAdd
-    if type(run) == 'table' and run.modifier == 'armored_hostiles' then
-        local missionType = run.missionType or (run.mission and run.mission.type)
-        if missionType == 'tactical' then
-            armour = armour + (tonumber(Config.Events and Config.Events.armoredArmour) or 0)
-        end
+    -- Armored Hostiles (CP.Twists): on every armed NPC of a run that has it (the twist is only offered and kept where
+    -- armed NPCs spawn, CP.Events.twistFits)
+    if type(run) == 'table' and CP.Twists.has(run, 'armored_hostiles') then
+        armour = armour + (tonumber(Config.Events and Config.Events.armoredArmour) or 0)
     end
     accuracy = CP.U.clamp(math.floor(accuracy + 0.5), 0, 100)
     -- Config.NpcCombat: times accuracyScale, then never above accuracyMax (the cap a mission file cannot raise)

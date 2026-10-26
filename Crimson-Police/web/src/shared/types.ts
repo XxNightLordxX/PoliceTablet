@@ -135,6 +135,22 @@ export interface HudState {
 //                     §9.4 OFFICER SCREEN DATA (callbacks)
 // ============================================================================
 
+// A twist the leader may choose at the accept step (CP.Events.twistOffer): points = the share of P it adds, cash =
+// its cash multiplier; some = it fits only some missions of the type (dropped without its bonus when the drawn one
+// has nothing for it).
+export interface TwistOffer {
+    key: string;
+    label: string;
+    desc?: string;
+    points: number;
+    cash: number;
+    some?: boolean;
+}
+// The caps of stacked twists (Config.Events.twistMaxPoints, twistMaxCash).
+export interface TwistCaps {
+    points: number;
+    cash: number;
+}
 // getMissionTypes
 export interface BoardCard {
     key: string;
@@ -147,6 +163,7 @@ export interface BoardCard {
     busy: boolean;
     onCall: boolean;
     typeOfTheDay: boolean;
+    twists?: TwistOffer[];
 }
 export interface BoardData {
     cards: BoardCard[];
@@ -213,6 +230,8 @@ export interface ActiveMissionView {
     }[];
     expected: { cash: number; points: number };
     modifier: HudState['modifier'];
+    // every twist of the run (CP.Twists order); modifier names them all in one label
+    twists?: { key: string; label: string }[];
     test: boolean;
     recalcsLeft: number;
     radioSilence: boolean;

@@ -1,4 +1,4 @@
--- CP.Events: Type of the Day, run modifiers and the Weekly Boss.
+-- CP.Events: Type of the Day, run twists (mission modifiers) and the Weekly Boss.
 
 CP.Events = CP.Events or {}
 local Events = CP.Events
@@ -10,12 +10,13 @@ local BOSS_KEY = 'weekly_boss'
 -- End reasons that do not use up the week's attempt (Mission cards: Weekly Boss).
 local BOSS_EXEMPT_REASONS = { 'real_call', 'force_recall', 'cancelled' }
 
-local MODIFIER_ORDER = { 'armored_hostiles', 'time_crunch', 'radio_silence' }
+-- armedOnly: offered and applied only where the mission spawns armed NPCs; timedOnly: only with a time limit.
 local MODIFIERS = {
-    armored_hostiles = { label = 'modifier.armored_hostiles', tacticalOnly = true },
-    time_crunch = { label = 'modifier.time_crunch' },
+    armored_hostiles = { label = 'modifier.armored_hostiles', armedOnly = true },
+    time_crunch = { label = 'modifier.time_crunch', timedOnly = true },
     radio_silence = { label = 'modifier.radio_silence' },
 }
+local armedMemo = setmetatable({}, { __mode = 'k' })   -- armedMemo[def] = whether the mission spawns armed NPCs
 
 local usedCache = {}   -- usedCache[citizenid] = weekKey the attempt was seen used in (positive results only)
 
@@ -251,15 +252,137 @@ end
 --                                  MODIFIERS
 -- ============================================================================
 
+-- Whether a mission spawns armed NPCs: an objective whose block counts armed NPCs (its armedCount, the Mission
+-- Builder's armed budget) above 0.
+local function Armed(def)
+    if type(def) ~= 'table' then return false end
+    local memo = armedMemo[def]
+    if memo ~= nil then return memo end
+    local armed, known = false, true
+    for _, obj in ipairs(type(def.objectives) == 'table' and def.objectives or {}) do
+        local impl = type(obj) == 'table' and CP.Blocks and CP.Blocks.get and CP.Blocks.get(obj.block) or nil
+        if type(impl) == 'table' and type(impl.armedCount) == 'function' then
+            local ok, n = pcall(impl.armedCount, obj)
+            if ok and (tonumber(n) or 0) > 0 then
+                armed = true
+                break
+            end
+        elseif type(impl) ~= 'table' then
+            known = false   -- a block not registered (yet): asked again next time
+        end
+    end
+    if armed or known then armedMemo[def] = armed end
+    return armed
+end
+
+-- What a twist does, in the officers' words (the accept step and the ready check).
+local function TwistDesc(key)
+    local ev = Config.Events or {}
+    if key == 'armored_hostiles' then
+        return CP.L('twist.desc.armored_hostiles', { armour = math.floor((tonumber(ev.armoredArmour) or 0) + 0.5) })
+    elseif key == 'time_crunch' then
+        return CP.L('twist.desc.time_crunch', { pct = math.floor((tonumber(ev.timeCrunchCut) or 0) * 100 + 0.5) })
+    end
+    local mode = type(Config.Markers) == 'table' and Config.Markers.radioSilence or nil
+    if mode ~= 'none' and mode ~= 'full' then mode = 'area' end
+    return CP.L('twist.desc.radio_silence_' .. mode)
+end
+
 function Events.modifiers()
     local out = {}
-    local on = type(Config.Events and Config.Events.modifiers) == 'table' and Config.Events.modifiers or {}
     for key, m in pairs(MODIFIERS) do
-        out[key] = { label = m.label, tacticalOnly = m.tacticalOnly == true, enabled = on[key] ~= false }
+        local c = CP.Twists.cfg(key)
+        out[key] = {
+            label = m.label,
+            armedOnly = m.armedOnly == true,
+            enabled = c.enabled,
+            points = c.points,
+            cash = c.cash,
+        }
     end
     return out
 end
 
+-- Whether twist key makes sense for mission def: Armored Hostiles only where armed NPCs spawn (never without a
+-- mission to look at), Time Crunch only with a time limit, none on the Weekly Boss.
+function Events.twistFits(key, def)
+    local m = MODIFIERS[key]
+    if not m then return false end
+    if type(def) == 'table' and def.isBoss == true then return false end
+    if m.armedOnly then return Armed(def) end
+    if m.timedOnly and type(def) == 'table' and def.timeLimit ~= nil then return (tonumber(def.timeLimit) or 0) > 0 end
+    return true
+end
+
+-- The twists the officers may choose for a mission type whose pool for them is list (mission defs): every enabled
+-- twist that fits at least one mission of the pool. The mission is drawn after the accept (Hard rule: Mission
+-- choice), so a twist that fits only some of them is marked some = true: it is dropped, without its reward, when
+-- the drawn mission is not one of them. None for the Weekly Boss.
+-- { { key, label, desc, points, cash, some } } in CP.Twists.ORDER.
+function Events.twistOffer(missionType, list)
+    local out = {}
+    if missionType == BOSS_KEY or type(list) ~= 'table' or #list == 0 then return out end
+    for _, key in ipairs(CP.Twists.ORDER) do
+        local c = CP.Twists.cfg(key)
+        if c.enabled then
+            local fit = 0
+            for _, def in ipairs(list) do
+                if Events.twistFits(key, def) then fit = fit + 1 end
+            end
+            if fit > 0 then
+                out[#out + 1] = {
+                    key = key,
+                    label = CP.L(MODIFIERS[key].label),
+                    desc = TwistDesc(key),
+                    points = c.points,
+                    cash = c.cash,
+                    some = fit < #list or nil,
+                }
+            end
+        end
+    end
+    return out
+end
+
+-- The twists the tablet sent with an accept, checked: a clean list in CP.Twists.ORDER, or nil and the error key.
+-- raw: nil, or a list of twist keys; every one must be offered for this type now (Events.twistOffer).
+function Events.checkTwists(raw, missionType, list)
+    if raw == nil then return {} end
+    if type(raw) ~= 'table' then return nil, 'err.invalid_payload' end
+    local n = 0
+    for k, v in pairs(raw) do
+        n = n + 1
+        if math.type(k) ~= 'integer' or not CP.Twists.known(v) then return nil, 'err.invalid_payload' end
+    end
+    if n == 0 then return {} end
+    if n > #CP.Twists.ORDER then return nil, 'err.invalid_payload' end
+    local offered = {}
+    for _, o in ipairs(Events.twistOffer(missionType, list)) do offered[o.key] = true end
+    local out = CP.Twists.sorted(raw)
+    for _, key in ipairs(out) do
+        if not offered[key] then return nil, 'err.twist_unavailable' end
+    end
+    return out
+end
+
+-- The chosen twists that fit the drawn mission of run: kept, dropped (a twist that changes nothing on that mission
+-- gets no reward). Never any on test runs, Cross-Department Missions or the Weekly Boss.
+function Events.fitTwists(run, chosen)
+    local kept, dropped = {}, {}
+    local list = CP.Twists.sorted(chosen)
+    if type(run) ~= 'table' or run.test or run.operationId or run.isBoss then return kept, list end
+    for _, key in ipairs(list) do
+        if CP.Twists.cfg(key).enabled and Events.twistFits(key, run.mission) then
+            kept[#kept + 1] = key
+        else
+            dropped[#dropped + 1] = key
+        end
+    end
+    return kept, dropped
+end
+
+-- A random twist on top of the chosen ones (Config.Events.modifierChance; 0, as shipped, never rolls): one that
+-- is enabled, fits the run's mission and is not on the run already.
 function Events.rollModifier(run)
     if type(run) ~= 'table' then return nil end
     if run.test or run.operationId or run.isBoss or (run.mission and run.mission.isBoss) then return nil end
@@ -269,18 +392,18 @@ function Events.rollModifier(run)
     local seed = CP.U.hash(tostring(run.seed or run.id or os.time()) .. ':modifier')
     local rng = CP.U.rng(seed)
     if not rng:chance(chance) then return nil end
-    local missionType = run.missionType or (run.mission and run.mission.type)
+    local taken = {}
+    for _, key in ipairs(CP.Twists.of(run)) do taken[key] = true end
     local eligible = {}
-    -- Config.Events.modifiers.<key> = false: that modifier is never rolled.
-    local on = type(Config.Events.modifiers) == 'table' and Config.Events.modifiers or {}
-    for _, key in ipairs(MODIFIER_ORDER) do
-        if on[key] ~= false and (not MODIFIERS[key].tacticalOnly or missionType == 'tactical') then
+    -- Config.Events.twists.<key>.enabled = false: that twist is never rolled.
+    for _, key in ipairs(CP.Twists.ORDER) do
+        if not taken[key] and CP.Twists.cfg(key).enabled and Events.twistFits(key, run.mission) then
             eligible[#eligible + 1] = key
         end
     end
     if #eligible == 0 then return nil end
     local key = rng:pick(eligible)
-    CP.log(TAG, 'run %s rolled modifier %s', tostring(run.id), tostring(key))
+    CP.log(TAG, 'run %s rolled twist %s', tostring(run.id), tostring(key))
     return key
 end
 
@@ -304,7 +427,7 @@ function Events.bossAvailable(src, officer)
 end
 
 -- Cash range for the boss card: CP.Cash.range when it knows the boss key, otherwise the boss's
--- base payout (CP.Payouts.baseFor) times the tier's cash multiplier. The boss never rolls a modifier.
+-- base payout (CP.Payouts.baseFor) times the tier's cash multiplier. The boss never has a twist.
 local function BossCash(def, officers, size)
     if CP.Cash and CP.Cash.range then
         local ok, lo, hi = pcall(CP.Cash.range, BOSS_KEY, officers)
@@ -360,6 +483,7 @@ function Events.bossCard(src)
         busy = false,
         onCall = false,
         typeOfTheDay = Events.typeOfTheDay() == 'tactical',
+        twists = {},   -- the Weekly Boss never has a twist
         available = false,
     }
 

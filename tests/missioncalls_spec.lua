@@ -1482,4 +1482,48 @@ do
     CP.Access = Stub
 end
 
+-- ============================================================================
+--                TWISTS CHOSEN WHEN CLAIMING A CALL (PLAN M8b)
+-- ============================================================================
+-- The real CP.Events offer and check (this spec stubs CP.Events otherwise): the card offers the type's twists, the
+-- claim checks the leader's choice before it joins the window, and the run gets it.
+
+do
+    local stub = CP.Events
+    CP.Events = {}
+    H.load('modules/events/server.lua')
+    local real = CP.Events
+    CP.Events = stub
+    stub.twistOffer, stub.checkTwists, stub.twistFits = real.twistOffer, real.checkTwists, real.twistFits
+
+    Reset()
+    local S = CENTRE.south_ls
+    AddPlayer(1, vec3(S.x + 100, S.y, 30.0))
+    local call = NewCall('patrol', 'south_ls')
+    local card, view = CardOf(1, call.id)
+    local keys = {}
+    for i, t in ipairs(card.twists or {}) do keys[i] = t.key end
+    H.eq(table.concat(keys, ','), 'time_crunch,radio_silence',
+        'the call card offers its type\'s twists (no Armored Hostiles: no armed NPCs in the pool)')
+    H.ok(view.twistMax and view.twistMax.points == 0.70 and view.twistMax.cash == 1.95, 'and the caps')
+
+    local ok, err = Act('server:claimMissionCall', 1, { callId = call.id, twists = { 'armored_hostiles' } })
+    H.eq(ok, false, 'a twist the type does not offer is refused')
+    H.eq(err, 'err.twist_unavailable', '...as not available')
+    H.eq(call.window, nil, 'the refused claim never joined the claim window')
+    ok, err = Act('server:claimMissionCall', 1, { callId = call.id, twists = 'radio_silence' })
+    H.eq(err, 'err.invalid_payload', 'twists must be a list')
+
+    local before = #created
+    local data
+    ok, data = Act('server:claimMissionCall', 1, { callId = call.id, twists = { 'radio_silence', 'time_crunch' } })
+    H.eq(ok, true, 'the claim with two twists wins')
+    H.ok(type(data) == 'table' and data.runId ~= nil, 'a run')
+    local opts = created[before + 1]
+    H.eq(opts and table.concat(opts.twists or {}, ','), 'time_crunch,radio_silence',
+        'the run is made with the chosen twists (CP.Runs.create opts.twists)')
+    CP.Events = stub
+    stub.twistOffer, stub.checkTwists, stub.twistFits = nil, nil, nil
+end
+
 return H

@@ -851,10 +851,17 @@ local function CardCash(key, officers, list, size)
             return { math.floor(lo + 0.5), math.floor(hi + 0.5) }
         end
     end
-    -- Fallback while modules/cash is unavailable: base payout x tier (x modifier at the top).
+    -- Fallback while modules/cash is unavailable: base payout x tier (x the best random twist at the top while
+    -- Config.Events.modifierChance is above 0; the twists officers choose show their own bonus at the accept).
     local tier = CP.Scaling.tierFor(size)
     local tierCash = tonumber(tier and tier.cash) or 1.0
-    local modCash = tonumber(Config.Events and Config.Events.modifierCash) or 1.0
+    local modCash = 1.0
+    if (tonumber(Config.Events and Config.Events.modifierChance) or 0) > 0 then
+        for _, k in ipairs(CP.Twists.ORDER) do
+            local c = CP.Twists.cfg(k)
+            if c.enabled and c.cash > modCash then modCash = math.min(c.cash, CP.Twists.caps().cash) end
+        end
+    end
     local typePay = tonumber(Config.MissionTypes[key] and Config.MissionTypes[key].payout) or 0
     local lo, hi
     for _, def in ipairs(list) do
@@ -916,6 +923,18 @@ local function HourlyBlocked(officers)
     return nil
 end
 
+-- The twists the officers may choose for a type whose pool is list (CP.Events.twistOffer), {} without CP.Events.
+function Draw.twistOffer(key, list)
+    if not (CP.Events and CP.Events.twistOffer) then return {} end
+    local ok, offer = Safe(CP.Events.twistOffer, key, list)
+    return ok and type(offer) == 'table' and offer or {}
+end
+
+-- The caps of stacked twists for the accept step's bonus line: { points, cash } (Config.Events.twistMaxPoints, twistMaxCash).
+function Draw.twistCaps()
+    return CP.Twists.caps()
+end
+
 function Draw.boardCards(src)
     local viewer, errKey = GetOfficer(src)
     if not viewer then return nil, errKey or 'err.not_police' end
@@ -944,6 +963,8 @@ function Draw.boardCards(src)
         -- of the Day multiplier the card texts show.
         serverTime = os.time(),
         todMultiplier = tonumber(Config.Events and Config.Events.todMultiplier) or 2,
+        -- the twists' caps (each card lists its own twists) for the accept step's total bonus line
+        twistMax = Draw.twistCaps(),
     }
 
     -- While a Cross-Department Mission is active the board shows only its card.
@@ -977,6 +998,8 @@ function Draw.boardCards(src)
             busy = not CapsOk(key),
             onCall = onCall,
             typeOfTheDay = tod == key,
+            -- the twists the leader may choose at the accept step (CP.Events.twistOffer)
+            twists = Draw.twistOffer(key, list),
         }
         local cdUntil, cdWho = TypeCooldown(officers, key, now)
         if missing then
@@ -1133,6 +1156,17 @@ local function CheckAccept(src, typeKey, counts)
     }
 end
 
+-- The twists sent with an accept of typeKey by these officers, checked (CP.Events.checkTwists against the type's
+-- pool for them): a clean list, or nil and the error key. No twists: {} (and no pool lookup).
+function Draw.checkTwists(typeKey, officers, raw)
+    if raw == nil or (type(raw) == 'table' and next(raw) == nil) then return {} end
+    if not (CP.Events and CP.Events.checkTwists) then return nil, 'err.twist_unavailable' end
+    local list = typeKey == BOSS_KEY and {} or Draw.pool(typeKey, officers)
+    local ok, clean, errKey = Safe(CP.Events.checkTwists, raw, typeKey, list)
+    if not ok then return nil, 'err.internal' end
+    return clean, errKey
+end
+
 -- true, or false and the error key: whether src could accept typeKey right now (nothing is changed).
 function Draw.check(src, typeKey, counts)
     local ctx, errKey = CheckAccept(src, typeKey, counts)
@@ -1209,6 +1243,7 @@ local function FinishAccept(src, typeKey, ctx, opts)
         test = nil,
         isBoss = def.isBoss == true,
         missionCall = missionCall,
+        twists = ctx.twists,
     })
     Draw.release(token)
     if not okCall then
@@ -1227,11 +1262,20 @@ local function FinishAccept(src, typeKey, ctx, opts)
             locationIndex = index,
             targetS = missionCall and missionCall.targetS or nil,
             distance = missionCall and missionCall.distance or nil,
+            twists = CP.Twists.of(run),
         }
 end
 
+-- { { key, label } } of a twist list, for the ready check.
+local function TwistLabels(list)
+    local out = {}
+    for i, key in ipairs(CP.Twists.sorted(list)) do out[i] = { key = key, label = CP.L('modifier.' .. key) } end
+    return out
+end
+
 -- Accepting a type (the Mission Board, or a mission call that won its claim). opts: area, nearCoords,
--- missionCall ({ id, code, area, staff }; the response target is set here from the drawn start), onDone
+-- missionCall ({ id, code, area, staff }; the response target is set here from the drawn start), twists (the keys
+-- the leader chose; checked here), onDone
 -- (called with ok, data|errKey, srcs only when a unit's ready check made the accept wait).
 -- Returns true, { runId } or true, { pending = true } while a unit of 2+ answers the ready check.
 local function Accept(src, typeKey, opts)
@@ -1239,6 +1283,10 @@ local function Accept(src, typeKey, opts)
     local ctx, errKey = CheckAccept(src, typeKey)
     if not ctx then return false, errKey end
     local unit, srcs = ctx.unit, ctx.srcs
+    -- the twists the leader chose (PLAN M8b): each must be one the type offers these officers now
+    local twists, twistErr = Draw.checkTwists(typeKey, ctx.officers, opts.twists)
+    if not twists then return false, twistErr end
+    ctx.twists = twists
 
     -- Invites close now: the draw depends on the unit's size and every member's cooldowns.
     if unit and CP.Units and CP.Units.lock then Safe(CP.Units.lock, unit) end
@@ -1303,7 +1351,8 @@ local function Accept(src, typeKey, opts)
             UnlockUnit(unit)
             done(false, type(reasonKey) == 'string' and reasonKey or 'err.ready_declined', who)
         end
-        local okRc, res = pcall(readyCheck, unit, typeKey, onReady, onCancel)
+        -- the teammates see the twists their leader chose on the ready check
+        local okRc, res = pcall(readyCheck, unit, typeKey, onReady, onCancel, { twists = TwistLabels(ctx.twists) })
         if okRc and res ~= false then return true, { pending = true } end
         CP.warn(TAG, 'the ready check could not start (%s); the draw follows at once', tostring(res))
     end
@@ -1314,6 +1363,9 @@ Draw.accept = Accept
 CP.Net.action('server:acceptType', function(src, payload)
     local typeKey = ParseType(payload)
     if not typeKey then return false, 'err.invalid_type' end
+    -- { missionType, twists = { key, ... } } or the bare type key (no twists)
+    local twists = type(payload) == 'table' and payload.twists or nil
+    if twists ~= nil and type(twists) ~= 'table' then return false, 'err.invalid_payload' end
     if not CP.Net.rateOk(src, 'draw:acceptType', 1, 1500) then return false, 'err.rate_limited' end
 
     local srcs = UnitMembers(src)
@@ -1321,7 +1373,7 @@ CP.Net.action('server:acceptType', function(src, payload)
         if inFlight[m] then return false, 'err.busy' end
     end
     for _, m in ipairs(srcs) do inFlight[m] = true end
-    local okCall, ok, data = pcall(Accept, src, typeKey)
+    local okCall, ok, data = pcall(Accept, src, typeKey, { twists = twists })
     for _, m in ipairs(srcs) do inFlight[m] = nil end
     if not okCall then
         CP.err(TAG, 'server:acceptType failed: %s', tostring(ok))

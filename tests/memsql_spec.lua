@@ -3577,6 +3577,9 @@ do
             wait = function(ms) coroutine.yield('turn', ms) end,
         }
         local sh = M.shim(d, { resource = 'Crimson-Police' })
+        -- a full collection first: the stretches measure the engine's turns, not a GC pass that the heap left over
+        -- from loading (one more shared file is enough) happens to put inside the measured window
+        collectgarbage('collect')
         local co = coroutine.create(function()
             RunEnd(sh, function(ms)
                 p.statements = p.statements + 1

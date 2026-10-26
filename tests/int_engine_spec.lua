@@ -324,7 +324,8 @@ local function ExpectedModifier(run)
     if not r:chance(Config.Events.modifierChance) then return nil end
     local list = {}
     for _, k in ipairs({ 'armored_hostiles', 'time_crunch', 'radio_silence' }) do
-        if k ~= 'armored_hostiles' or run.missionType == 'tactical' then list[#list + 1] = k end
+        -- Armored Hostiles only where armed NPCs spawn (Bomb Disposal and Beat Patrol have none)
+        if k ~= 'armored_hostiles' or CP.Events.twistFits(k, run.mission) then list[#list + 1] = k end
     end
     return r:pick(list)
 end
@@ -362,7 +363,8 @@ do
             members = { O[1] },
             leaderSrc = 1,
         })
-        H.ok(r.modifier ~= 'armored_hostiles', 'Armored Hostiles is Tactical only (' .. tostring(r.modifier) .. ')')
+        H.ok(r.modifier ~= 'armored_hostiles',
+            'Armored Hostiles only where armed NPCs spawn (' .. tostring(r.modifier) .. ')')
         H.eq(r.modifier, ExpectedModifier(r), 'patrol modifier from the seed #' .. i)
         Runs.removeParticipant(r, 1, 'cancelled')
     end
@@ -449,6 +451,149 @@ do
         'the Patrol card is locked until the type cooldown ends')
     ok, data = Act('server:acceptType', 1, 'patrol')
     H.eq(data, 'err.type_cooldown', 'a second accept is refused while the type is on cooldown')
+    Config.Events.modifierChance = chance
+end
+
+-- ============================================================================
+--                   2c. TWISTS THE OFFICERS CHOOSE AT ACCEPT
+-- ============================================================================
+-- (PLAN M8b), through the real CP.Draw, CP.Events and CP.Runs.
+
+do
+    local reqN = 0
+    local function Act(name, src, payload)
+        reqN = reqN + 1
+        local id = 'tw' .. reqN
+        H.clockMs = H.clockMs + 2000
+        H.fire('crimson-police:' .. name, src, payload, id)
+        for i = #H.events, 1, -1 do
+            local e = H.events[i]
+            if e.name == 'crimson-police:client:actionResult' and e.args[1] == id then return e.args[2], e.args[3] end
+        end
+        return nil, 'no reply'
+    end
+    local function StartPayload(run)
+        for i = #H.events, 1, -1 do
+            local e = H.events[i]
+            if e.name == 'crimson-police:client:start' and e.args[1] == run.id then return e.args[2] end
+        end
+        return nil
+    end
+    -- Armored Hostiles fits exactly the built-in missions whose blocks spawn armed NPCs
+    local armedIds = {}
+    for _, id in ipairs({
+        'traffic_enforcement',
+        'stolen_vehicle_takedown',
+        'warrant_service',
+        'suspicious_activity',
+        'gang_shootout',
+        'hostage_rescue',
+        'armored_truck_escort',
+        'prison_break',
+        'drug_lab_raid',
+        'gang_hideout_raid',
+    }) do
+        armedIds[id] = true
+    end
+    for id, def in pairs(Missions.all()) do
+        H.eq(CP.Events.twistFits('armored_hostiles', def), armedIds[id] == true,
+            'Armored Hostiles fits ' .. id .. ' = ' .. tostring(armedIds[id] == true))
+        H.eq(CP.Events.twistFits('time_crunch', def), not def.isBoss, 'Time Crunch fits ' .. id)
+    end
+
+    -- the Mission Board offers each type its twists, and the caps for the bonus line
+    Place(2, vec3(0, 0, 0))
+    local board = Draw.boardCards(2)
+    local tac
+    for _, card in ipairs(board.cards) do if card.key == 'tactical' then tac = card end end
+    local keys = {}
+    for i, t in ipairs(tac and tac.twists or {}) do keys[i] = t.key end
+    H.eq(table.concat(keys, ','), 'armored_hostiles,time_crunch,radio_silence', 'the Tactical card offers all three')
+    H.eq(tac.twists[1].some, true, 'Armored Hostiles: not every Tactical mission has armed NPCs (Bomb Disposal)')
+    H.ok(board.twistMax.points == 0.70 and board.twistMax.cash == 1.95, 'the board sends the caps')
+
+    -- a run made with chosen twists keeps the ones the drawn mission has use for, in order
+    local chance = Config.Events.modifierChance
+    Config.Events.modifierChance = 0
+    local bd = Missions.get('bomb_disposal')
+    local notes, realNotify = {}, CP.Tablet.notify
+    CP.Tablet.notify = function(src, kind, key, vars) notes[#notes + 1] = { src = src, key = key, vars = vars } end
+    local run = Runs.create({
+        mission = bd,
+        locationIndex = 2,
+        missionType = 'tactical',
+        members = { O[2] },
+        leaderSrc = 2,
+        twists = { 'radio_silence', 'armored_hostiles', 'time_crunch' },
+    })
+    CP.Tablet.notify = realNotify
+    local told
+    for _, n in ipairs(notes) do if n.key == 'run.twist_dropped' and n.src == 2 then told = n end end
+    H.ok(told and told.vars.twists == CP.L('modifier.armored_hostiles'),
+        'the officers are told which twist was dropped')
+    H.eq(table.concat(run.modifiers, ','), 'time_crunch,radio_silence',
+        'Bomb Disposal keeps Time Crunch and Radio Silence; Armored Hostiles is dropped (no armed NPCs)')
+    H.eq(run.modifier, 'time_crunch', 'run.modifier: the first twist (the history row\'s column)')
+    H.eq(run.timeLimit, U.round(bd.timeLimit * 0.75), 'the chosen Time Crunch cuts the time limit')
+    local start = StartPayload(run)
+    H.eq(start and table.concat(start.modifiers, ','), 'time_crunch,radio_silence', 'client:start sends the list')
+    H.eq(Runs.ctx(run, 1).radioSilence, true, 'the chosen Radio Silence reaches the blocks (ctx.radioSilence)')
+    local v = Runs.view(run, 2)
+    H.eq(v.radioSilence, true, 'and the Active Mission view')
+    H.eq(v.silenceMode, 'area', 'with what it hides')
+    H.eq(#v.twists, 2, 'the view lists both twists')
+    H.eq(v.modifier.key, 'time_crunch', 'the modifier chip names the first')
+    H.eq(v.expected.cash, 1200, 'expected cash: $800 x 1.20 x 1.25 (the twists stack)')
+    Runs.removeParticipant(run, 2, 'cancelled')
+
+    -- Armored Hostiles on a mission with armed NPCs: kept, and every armed NPC gets the extra armour
+    local gs = Missions.get('gang_shootout')
+    local run2 = Runs.create({
+        mission = gs,
+        locationIndex = 1,
+        missionType = 'tactical',
+        members = { O[2] },
+        leaderSrc = 2,
+        twists = { 'armored_hostiles' },
+    })
+    H.eq(table.concat(run2.modifiers, ','), 'armored_hostiles', 'Gang Shootout keeps Armored Hostiles')
+    local _, armour = Runs.ctx(run2, 1).combat(25, 0)
+    local _, plain = CP.Scaling.combat(25, 0, run2.tier, { modifiers = {} })
+    H.eq(armour, plain + Config.Events.armoredArmour, 'every armed NPC gets Config.Events.armoredArmour extra')
+    H.eq(Runs.ctx(run2, 1).radioSilence, false, 'no Radio Silence without the twist')
+    Runs.removeParticipant(run2, 2, 'cancelled')
+
+    -- whatever is sent, no twist on a test run
+    local tr = Runs.create({
+        mission = bd,
+        locationIndex = 3,
+        missionType = 'tactical',
+        members = { O[2] },
+        leaderSrc = 2,
+        twists = { 'radio_silence' },
+        test = { adminSrc = 2, useStartRoute = false },
+    })
+    H.eq(#tr.modifiers, 0, 'no twist on a test run')
+    Runs.removeParticipant(tr, 2, 'cancelled')
+
+    -- the accept action checks the leader's choice against the type
+    local ok, data = Act('server:acceptType', 2, { missionType = 'patrol', twists = { 'bogus' } })
+    H.eq(data, 'err.invalid_payload', 'an unknown twist is refused')
+    ok, data = Act('server:acceptType', 2, { missionType = 'patrol', twists = 'radio_silence' })
+    H.eq(data, 'err.invalid_payload', 'twists must be a list')
+    Config.Events.twists.radio_silence.enabled = false
+    ok, data = Act('server:acceptType', 2, { missionType = 'patrol', twists = { 'radio_silence' } })
+    H.eq(data, 'err.twist_unavailable', 'a twist the owner switched off is refused')
+    Config.Events.twists.radio_silence.enabled = true
+    H.eq(Runs.getBySrc(2), nil, 'a refused accept starts nothing')
+    H.eq(select(2, Draw.checkTwists('weekly_boss', { O[2] }, { 'time_crunch' })), 'err.twist_unavailable',
+        'no twist for the Weekly Boss')
+    ok, data = Act('server:acceptType', 2, { missionType = 'patrol', twists = { 'radio_silence', 'time_crunch' } })
+    H.eq(ok, true, 'accept Patrol with two twists')
+    local pr = Runs.getBySrc(2)
+    H.eq(pr and table.concat(pr.modifiers, ','), 'time_crunch,radio_silence', 'the run carries both')
+    H.eq(data and table.concat(data.twists, ','), 'time_crunch,radio_silence', 'and the reply names them')
+    if pr then Runs.removeParticipant(pr, 2, 'cancelled') end
     Config.Events.modifierChance = chance
 end
 

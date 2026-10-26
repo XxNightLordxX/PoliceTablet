@@ -379,10 +379,13 @@ do
     Config.NpcCombat.accuracyMax = 18
     acc, arm = S.combat(25, 0, 'heavy', { modifier = 'armored_hostiles', missionType = 'tactical' })
     H.eq(arm, 75, 'armored hostiles on tactical')
-    acc, arm = S.combat(25, 0, 'heavy', { modifier = 'armored_hostiles', missionType = 'patrol' })
-    H.eq(arm, 25, 'armored hostiles never outside tactical')
+    -- the twist is only offered and kept where armed NPCs spawn (CP.Events.twistFits), so it applies on any type
+    acc, arm = S.combat(25, 0, 'heavy', { modifiers = { 'time_crunch', 'armored_hostiles' }, missionType = 'patrol' })
+    H.eq(arm, 75, 'armored hostiles from the run\'s twist list, on a patrol run with armed NPCs')
+    acc, arm = S.combat(25, 0, 'heavy', { modifiers = { 'time_crunch' }, missionType = 'tactical' })
+    H.eq(arm, 25, 'no extra armour without the twist')
     acc, arm = S.combat(25, 10, 'standard', { modifier = 'armored_hostiles', mission = { type = 'tactical' } })
-    H.eq(arm, 60, 'armored via run.mission.type')
+    H.eq(arm, 60, 'armored via run.modifier (a run from before the list)')
     acc = S.combat(95, 0, 'critical')
     H.eq(acc, 18, 'the cap holds at the critical tier (Config.NpcCombat.accuracyMax)')
 end
@@ -952,8 +955,9 @@ do
 
     local mods = E.modifiers()
     H.eq(mods.armored_hostiles.label, 'modifier.armored_hostiles', 'modifier label key')
-    H.eq(mods.armored_hostiles.tacticalOnly, true, 'armored is tactical only')
+    H.eq(mods.armored_hostiles.armedOnly, true, 'armored only where armed NPCs spawn')
     H.eq(U.count(mods), 3, 'three modifiers')
+    Config.Events.modifierChance = 0.25   -- random twists on (shipped 0)
 
     H.eq(E.rollModifier({ seed = 1, test = { adminSrc = 1 }, missionType = 'tactical' }), nil, 'never on tests')
     H.eq(E.rollModifier({ seed = 1, operationId = 3, missionType = 'tactical' }), nil, 'never on operations')
@@ -972,14 +976,13 @@ do
     end
     H.near(rolled.tactical / N, 0.25, 0.03, 'about 25% of tactical runs roll a modifier')
     H.near(rolled.patrol / N, 0.25, 0.03, 'about 25% of patrol runs roll a modifier')
-    H.eq(counts.patrol.armored_hostiles, nil, 'armored hostiles never outside tactical')
-    H.ok((counts.tactical.armored_hostiles or 0) > 0, 'armored hostiles on tactical')
+    H.eq(counts.patrol.armored_hostiles, nil, 'armored hostiles never without a mission that has armed NPCs')
+    H.eq(counts.tactical.armored_hostiles, nil, 'not even on tactical: the run names no mission to look at')
     H.ok((counts.patrol.time_crunch or 0) > 0 and (counts.patrol.radio_silence or 0) > 0, 'other modifiers on patrol')
     H.eq(E.rollModifier({ seed = 12345, missionType = 'tactical' }),
         E.rollModifier({ seed = 12345, missionType = 'tactical' }), 'deterministic by seed')
     Config.Events.modifierChance = 0
-    H.eq(E.rollModifier({ seed = 5, missionType = 'patrol' }), nil, 'chance 0')
-    Config.Events.modifierChance = 0.25
+    H.eq(E.rollModifier({ seed = 5, missionType = 'patrol' }), nil, 'chance 0 (shipped)')
 
     -- Weekly Boss availability (DB: once per officer per week)
     H.sql('DELETE FROM cp_mission_runs')
@@ -1302,7 +1305,7 @@ do
     H.eq(pc.pool, 4, 'pool count')
     H.eq(pc.mode, 'solo', 'solo')
     H.eq(pc.cash[1], 250, 'cash min (fallback)')
-    H.eq(pc.cash[2], 313, 'cash max with a modifier: 250 x 1.25 = 312.5 -> 313')
+    H.eq(pc.cash[2], 250, 'cash max without random twists (shipped): the base payout')
     H.eq(pc.locked, nil, 'patrol unlocked')
     H.eq(pc.busy, false, 'not busy')
     H.eq(pc.onCall, false, 'not on call')

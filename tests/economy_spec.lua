@@ -614,6 +614,7 @@ local function FakeRun(o)
         pointsBase = o.pointsBase,
         payTier = o.payTier or CP.Scaling.tierByName('standard'),
         modifier = o.modifier,
+        modifiers = o.modifiers,
         order = o.order or { 1 },
         participants = {},
         stats = { downs = o.downs or 0, weaponsFired = o.fired or 0 },
@@ -643,13 +644,24 @@ local function FakeP(o)
     }
 end
 
-local amount, cb = CP.Cash.compute(FakeRun({ payTier = heavy, modifier = 'time_crunch' }),
+local amount, cb = CP.Cash.compute(FakeRun({ payTier = heavy, modifier = 'radio_silence' }),
     FakeP({ result = 'completed' }))
-H.eq(amount, 1300, 'B 800 x heavy 1.30 x modifier 1.25')
+H.eq(amount, 1300, 'B 800 x heavy 1.30 x twist 1.25 (Radio Silence)')
 H.eq(cb.B, 800, 'breakdown B')
 H.near(cb.mTier, 1.30, 1e-9, 'breakdown mTier')
 H.near(cb.mMod, 1.25, 1e-9, 'breakdown mMod')
 H.eq(cb.status, 'none', 'status none')
+-- the twists the officers chose (PLAN M8b): their cash multipliers multiply, up to Config.Events.twistMaxCash
+local ALL_TWISTS = { 'armored_hostiles', 'time_crunch', 'radio_silence' }
+amount, cb = CP.Cash.compute(FakeRun({ modifiers = ALL_TWISTS }), FakeP({ result = 'completed' }))
+H.eq(amount, 1500, 'three twists: $800 x 1.25 x 1.20 x 1.25 = $1,500')
+H.near(cb.mMod, 1.875, 1e-9, 'breakdown mMod: the stacked multiplier')
+Config.Events.twistMaxCash = 1.5
+amount = CP.Cash.compute(FakeRun({ modifiers = ALL_TWISTS }), FakeP({ result = 'completed' }))
+H.eq(amount, 1200, 'stacked cash stops at Config.Events.twistMaxCash (x1.50)')
+Config.Events.twistMaxCash = 1.95
+amount = CP.Cash.compute(FakeRun({ modifiers = ALL_TWISTS }), FakeP({ result = 'failed' }))
+H.eq(amount, 0, 'twists pay only on a completed run')
 amount, cb = CP.Cash.compute(FakeRun({ payTier = heavy }), FakeP({ result = 'completed' }))
 H.eq(amount, 1040, 'spec example: heavy Gang Shootout pays $1,040')
 -- a true half-dollar rounds up although the float product is 402.49999999999994
@@ -898,21 +910,26 @@ H.eq(RowOf(fresh).cash_status, 'held', 'inside the dispute window stays held')
 local fa = InsertRun({ state = 'failed', amount = 0 })
 H.eq(CP.Cash.pay(fa), nil, 'failed rows are never paid')
 
--- board range
+-- board range (random twists on: Config.Events.modifierChance ships 0, and then the top is the base payout)
 local officers4 = { CP.Access.getOfficer(1), CP.Access.getOfficer(2), CP.Access.getOfficer(4), CP.Access.getOfficer(6) }
 local rlo, rhi = CP.Cash.range('tactical', officers4)
+H.eq(rhi, 1040, 'no random twists (shipped): range max = $800 x 1.30')
+local chance = Config.Events.modifierChance
+Config.Events.modifierChance = 0.25
+rlo, rhi = CP.Cash.range('tactical', officers4)
 H.eq(rlo, 1040, 'range min: $800 x 1.30')
-H.eq(rhi, 1300, 'range max covers a modifier: $800 x 1.30 x 1.25')
+H.eq(rhi, 1300, 'range max covers the best random twist: $800 x 1.30 x 1.25')
 CP.Payouts.setMission(3, 'custom_heist', 1200, 'custom pays more')
 rlo, rhi = CP.Cash.range('tactical', officers4)
 H.eq(rhi, 1950, 'range covers admin payouts in the pool')
 CP.Payouts.setMission(3, 'custom_heist', nil, 'cleanup')
 rlo, rhi = CP.Cash.range('weekly_boss', { 1, 2 })
 H.eq(rlo, 2875, 'boss range: $2,500 x reinforced 1.15')
-H.eq(rhi, 2875, 'boss never rolls a modifier')
+H.eq(rhi, 2875, 'boss never has a twist')
 rlo, rhi = CP.Cash.range('patrol', { 1 })
 H.eq(rlo, 250, 'solo patrol min')
-H.eq(rhi, 313, 'solo patrol max with modifier (312.5 rounds up)')
+H.eq(rhi, 313, 'solo patrol max with a random twist (312.5 rounds up)')
+Config.Events.modifierChance = chance
 
 -- ============================================================================
 --                                   SCORING
@@ -961,12 +978,35 @@ H.eq(b.tod, false, 'no ToD')
 H.eq(b.failedShare, nil, 'no failed share')
 H.eq(CP.Scoring.isFirstRunSinceDuty(1), false, 'first-run bonus used by the completed run')
 
+-- several twists (PLAN M8b): one bonus line each, together at most Config.Events.twistMaxPoints of P
+do
+    local function TwistLines(bd)
+        local out = {}
+        for _, l in ipairs(bd.bonuses) do if l.id == 'modifier' then out[#out + 1] = l end end
+        return out
+    end
+    local twistRun = FakeRun({ modifiers = { 'radio_silence', 'armored_hostiles', 'time_crunch' } })
+    local bd = CP.Scoring.compute(twistRun, FakeP({ result = 'completed' }), 'completed', { durationS = 300 })
+    local lines = TwistLines(bd)
+    H.eq(#lines, 3, 'one bonus line per twist')
+    H.eq(('%d,%d,%d'):format(lines[1].points, lines[2].points, lines[3].points), '50,40,50',
+        '+25%, +20% and +25% of P, in the twists\' order')
+    H.eq(lines[2].label, 'Twist: Time Crunch', 'each line names its twist')
+    Config.Events.twistMaxPoints = 0.5
+    lines = TwistLines(CP.Scoring.compute(twistRun, FakeP({ result = 'completed' }), 'completed', { durationS = 300 }))
+    H.eq(('%d,%d,%d'):format(lines[1].points, lines[2].points, lines[3].points), '50,40,10',
+        'stacked points stop at Config.Events.twistMaxPoints (+50%): the last line gets what is left')
+    Config.Events.twistMaxPoints = 0.70
+    bd = CP.Scoring.compute(twistRun, FakeP({ result = 'failed' }), 'failed', { durationS = 300 })
+    H.eq(#TwistLines(bd), 0, 'a failed run gets no twist bonus')
+end
+
 -- team, cross-department, cap and Type of the Day after the cap
-run = FakeRun({ payTier = heavy, modifier = 'time_crunch', shared = { hostile_arrested = 20 }, order = { 1, 4, 2 } })
+run = FakeRun({ payTier = heavy, modifier = 'radio_silence', shared = { hostile_arrested = 20 }, order = { 1, 4, 2 } })
 p = FakeP({ result = 'completed' })
 b = CP.Scoring.compute(run, p, 'completed', { durationS = 300, departments = 2 })
-H.eq(Find(b.bonuses, 'modifier').points, 50, 'modifier +25% of P')
-H.eq(Find(b.bonuses, 'modifier').label, 'Modifier: Time Crunch', 'modifier label')
+H.eq(Find(b.bonuses, 'modifier').points, 50, 'twist +25% of P (Radio Silence)')
+H.eq(Find(b.bonuses, 'modifier').label, 'Twist: Radio Silence', 'twist label')
 H.near(b.mTeam, 1.15, 1e-9, 'heavy team multiplier from the pay tier')
 H.near(b.mCross, 1.10, 1e-9, 'cross-department x1.10')
 H.eq(b.capped, true, 'capped at 2P')

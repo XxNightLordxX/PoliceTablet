@@ -43,10 +43,18 @@ RegisterNetEvent(CP.e('client:readyCheck'), function(data)
     local label = type(data.typeLabel) == 'string' and data.typeLabel:sub(1, LABEL_MAX) or ''
     local seconds = math.max(1, math.floor(tonumber(data.expiresIn) or 20))
     local leader = type(data.leaderName) == 'string' and data.leaderName:sub(1, LABEL_MAX) or '?'
+    -- the twists the leader chose (PLAN M8b): named in the toast
+    local names = {}
+    for _, t in ipairs(type(data.twists) == 'table' and data.twists or {}) do
+        if type(t) == 'table' and type(t.label) == 'string' and #names < 3 then
+            names[#names + 1] = t.label:sub(1, LABEL_MAX)
+        end
+    end
     pendingCheck = { typeLabel = label, expiresAt = GetGameTimer() + seconds * 1000 }
     PlaySoundFrontend(-1, SOUND_NAME, SOUND_SET, true)
     if not (CP.Tablet and CP.Tablet.notify) then return end
-    CP.Tablet.notify('info', CP.L('unit.ready.toast', { type = label, leader = leader, seconds = seconds }), {
+    local vars = { type = label, leader = leader, seconds = seconds, twists = table.concat(names, ', ') }
+    CP.Tablet.notify('info', CP.L(#names > 0 and 'unit.ready.toast_twists' or 'unit.ready.toast', vars), {
         title = CP.L('unit.ready.toast_title', { type = label }),
         duration = seconds * 1000,
     })

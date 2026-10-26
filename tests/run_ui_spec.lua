@@ -366,7 +366,9 @@ end
 local expectedBody = FnBody(runsSrv, 'local function ExpectedFor(run)') or ''
 H.ok(expectedBody:find('return { cash = cash, points = ', 1, true) ~= nil, 'view.expected = { cash, points }')
 local modBody = FnBody(runsSrv, 'local function ModifierView(run)') or ''
-H.ok(modBody:find('return { key = run.modifier, label = ', 1, true) ~= nil, 'view.modifier = { key, label }')
+H.ok(modBody:find('return { key = list[1].key, label = ', 1, true) ~= nil,
+    'view.modifier = { key, label } (the first twist; the label names every twist)')
+H.ok(modBody:find('list[i] = { key = key, label = names[i] }', 1, true) ~= nil, 'view.twists = { { key, label } }')
 H.ok(runsSrv:find('Call(\'Tablet\', \'push\', src, \'run\', nil)', 1, true) ~= nil,
     'push \'run\' carries nil when the run ended (handled as undefined)')
 H.ok(runsSrv:find('CP.Net.callback(\'getRun\'', 1, true) ~= nil, 'callback getRun is registered by modules/runs')

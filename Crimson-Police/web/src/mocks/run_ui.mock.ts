@@ -385,6 +385,36 @@ function cashRange(payout: number, size: number, modifiers = true): [number, num
     return [base, modifiers ? Math.round(base * 1.25) : base];
 }
 
+// The twists CP.Events.twistOffer would send for a type (Armored Hostiles only where armed NPCs spawn).
+function mockTwists(key: string): NonNullable<TypeCard['twists']> {
+    const list: NonNullable<TypeCard['twists']> = [];
+    if (key === 'tactical' || key === 'patrol') {
+        list.push({
+            key: 'armored_hostiles',
+            label: 'Armored Hostiles',
+            desc: 'Armed NPCs wear 50 extra armour.',
+            points: 0.25,
+            cash: 1.25,
+            some: true,
+        });
+    }
+    list.push({
+        key: 'time_crunch',
+        label: 'Time Crunch',
+        desc: 'The time limit is 25% shorter.',
+        points: 0.2,
+        cash: 1.2,
+    });
+    list.push({
+        key: 'radio_silence',
+        label: 'Radio Silence',
+        desc: "After the start the map shows only each objective's area: no GPS line and no blips on people or cars.",
+        points: 0.25,
+        cash: 1.25,
+    });
+    return list;
+}
+
 function typeCard(tp: MockType): TypeCard {
     const size = board.unitSize;
     const t = nowS();
@@ -399,6 +429,7 @@ function typeCard(tp: MockType): TypeCard {
         busy: board.busy,
         onCall: board.onCall,
         typeOfTheDay: board.tod === tp.key,
+        twists: mockTwists(tp.key),
     };
     const cd = board.typeCooldowns[tp.key];
     if (cd && cd.until > t) {
@@ -488,6 +519,7 @@ function boardData(): MissionBoardData {
         operation,
         unit: { size: board.unitSize, isLeader: board.isLeader },
         activeRunId: mockRun ? mockRun.runId : null,
+        twistMax: { points: 0.7, cash: 1.95 },
     };
 }
 

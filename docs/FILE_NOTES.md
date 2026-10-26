@@ -5425,3 +5425,12 @@ Admin); CP.Scaling is the real module. Every SQL statement of the slice runs aga
 spec uses its own database (<run database>_teams, rebuilt from sql/migrations and dropped at the end)
 so neither other specs nor a parallel run of this spec can interfere.
 ```
+
+## tests/twists_spec.lua
+
+```text
+Twists the officers choose at accept (PLAN M8b): CP.Twists (shared: the run's list, the stacked bonus and its caps)
+and CP.Events (which twists fit a mission, the offer per type, the check of a chosen list, the random roll that
+ships off). The engine, the board, the claim and the screens are covered in int_engine_spec, missioncalls_spec,
+economy_spec, teams_spec and the engine_b client fixture.
+```

@@ -31,6 +31,11 @@ export function ReadyCheckBanner({ check, onAnswered }: ReadyCheckBannerProps) {
     const ready = asList(current.ready);
     const waiting = asList(current.waiting);
     const total = ready.length + waiting.length;
+    // the twists the leader chose (PLAN M8b)
+    const twistNames = (Array.isArray(current.twists) ? current.twists : [])
+        .map(tw => tw?.label)
+        .filter(Boolean)
+        .join(', ');
 
     const answer = async (accepted: boolean) => {
         setBusy(accepted ? 'yes' : 'no');
@@ -54,6 +59,12 @@ export function ReadyCheckBanner({ check, onAnswered }: ReadyCheckBannerProps) {
                         ? t('unit.ui.ready_text')
                         : t('unit.ui.ready_waiting', { n: waiting.length, total })}
                 </div>
+                {twistNames ? (
+                    <div className="ready-check__twists">
+                        <Icon name="zap" size={12} />
+                        <span>{t('unit.ui.ready_twists', { twists: twistNames })}</span>
+                    </div>
+                ) : null}
             </div>
             <Badge size="sm" tone="neutral">
                 {t('unit.ui.ready_count', { ready: ready.length, total })}

@@ -1,6 +1,6 @@
 // Response shapes of the run_ui slice (Mission Board and Active Mission screens,
 
-import type { ActiveMissionView, BoardCard, BoardData, Goal, LevelInfo } from '../shared/types';
+import type { ActiveMissionView, BoardCard, BoardData, Goal, LevelInfo, TwistCaps } from '../shared/types';
 import type { ContactView } from './custody';
 
 // ============================================================================
@@ -33,11 +33,15 @@ export interface MissionBoardData extends Omit<BoardData, 'operation'> {
     operation: BoardOperation | null;
     serverTime?: number;
     todMultiplier?: number;
+    // the caps of stacked twists, for the accept step's bonus line (each card lists its own twists)
+    twistMax?: TwistCaps;
 }
 
-// Reply of server:acceptType.
+// Reply of server:acceptType (payload: the type key, or { missionType, twists }).
 export interface AcceptTypeResult {
     runId: string;
+    // the twists the run got (the chosen ones that fit the drawn mission)
+    twists?: string[];
 }
 
 // Reply of server:joinOperation.

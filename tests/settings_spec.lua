@@ -228,6 +228,17 @@ do
     Err('Time.resetHour', 24, 'err.setting_range', 'an hour past 23')
     Err('Scoring.common.heavyDamage', 5, 'err.setting_positive', 'a penalty stays a penalty')
     H.ok((Check('NpcDifficulty.custom.accuracyAdd', -5)), 'NPC difficulty adds may go either way')
+    -- the twists officers choose (PLAN M8b): a switch, a points share and a cash multiplier each, and the two caps
+    H.ok((Check('Events.twists.time_crunch.enabled', false)), 'a twist can be switched off')
+    H.ok((Check('Events.twists.radio_silence.points', 0.4)), 'a twist\'s points share')
+    Err('Events.twists.radio_silence.cash', 0.8, 'err.setting_range', 'a twist\'s cash multiplier never takes cash')
+    Err('Events.twists.armored_hostiles.points', 3, 'err.setting_range', 'a twist adds at most 2 x P')
+    Err('Events.twistMaxCash', 0.5, 'err.setting_range', 'the stacked cash cap is at least x1.0')
+    H.ok((S.entry('Events.twists.time_crunch.points') or {}).points == true,
+        'a twist\'s points share is a points value')
+    H.ok(((S.entry('Events.modifierChance') or {}).desc or ''):find('random twist', 1, true) ~= nil,
+        'the random roll is described as an extra on top of the chosen twists')
+    Err('Events.modifierPoints', 0.25, 'err.setting_unknown', 'the old single modifier reward is gone')
     -- Config.NpcCombat (how hard mission NPCs fight back): listed with its comments, ranges and options
     local function E(p) return S.entry(p) or {} end
     H.ok((E('NpcCombat.accuracyMax').desc or ''):find('never above this', 1, true) ~= nil,

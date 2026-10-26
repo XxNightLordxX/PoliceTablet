@@ -115,7 +115,9 @@ H.fire('crimson-police:client:start', nil, 'run-1', {
     seed = 42,
     host = 1,
     test = nil,
-    modifier = 'radio_silence',
+    -- PLAN M8b: the officers chose Time Crunch and Radio Silence; modifier is only the first of them
+    modifier = 'time_crunch',
+    modifiers = { 'time_crunch', 'radio_silence' },
     startRoute = true,
     routeRequired = false,   -- accepted with Config.Route.required off
     startTimeout = 600,
@@ -132,7 +134,10 @@ H.eq(cur.state, 'accepted', 'accepted')
 H.eq(hudLog[1], 'nil', 'HUD reset first')
 H.eq(hudState.phase, 'route', 'HUD route phase')
 H.eq(hudState.tier, 'reinforced', 'HUD expected tier')
-H.eq(hudState.modifier.key, 'radio_silence', 'HUD modifier')
+H.eq(hudState.modifier.key, 'time_crunch', 'HUD modifier: the first twist')
+H.eq(hudState.modifier.label, CP.L('modifier.time_crunch') .. ' · ' .. CP.L('modifier.radio_silence'),
+    'the HUD chip names every twist')
+H.eq(table.concat(cur.modifiers, ','), 'time_crunch,radio_silence', 'the run keeps the twist list')
 H.eq(hudState.route.status, 'on', 'HUD route on')
 H.eq(hudState.route.required, false, 'HUD: the route is not required (locked at accept)')
 H.eq(hudState.testControls, false, 'no test controls')
@@ -159,7 +164,7 @@ local ctx = CallsOf('start', 1)[1].ctx
 H.eq(ctx.obj.count, 2, 'client ctx.obj is the scaled objective')
 H.eq(ctx.base.count, 1, 'client ctx.base is the unscaled objective')
 H.eq(ctx.runId, 'run-1', 'ctx.runId')
-H.eq(ctx.radioSilence, true, 'ctx.radioSilence')
+H.eq(ctx.radioSilence, true, 'ctx.radioSilence: Radio Silence chosen next to another twist (the list, not modifier)')
 H.eq(ctx.isHost, true, 'ctx.isHost')
 H.eq(ctx.seed, 42, 'ctx.seed')
 H.eq(#ctx.participants, 2, 'ctx.participants')

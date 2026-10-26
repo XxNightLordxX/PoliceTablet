@@ -180,7 +180,13 @@ function Hero({
                             {t('hud.pay_tier', { tier: tierLabel(session, view.payTier) })}
                         </Badge>
                     ) : null}
-                    {view.modifier ? (
+                    {view.twists && view.twists.length ? (
+                        view.twists.map(tw => (
+                            <Badge key={tw.key} tone="accent" icon="zap" title={t('run.hero.modifier_hint')}>
+                                {tw.label}
+                            </Badge>
+                        ))
+                    ) : view.modifier ? (
                         <Badge tone="accent" icon="zap" title={t('run.hero.modifier_hint')}>
                             {view.modifier.label}
                         </Badge>

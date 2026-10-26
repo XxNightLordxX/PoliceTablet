@@ -46,3 +46,12 @@
     display: flex;
     gap: 8px;
 }
+
+.ready-check__twists {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 2px;
+    font-size: var(--cp-fs-sm);
+    color: var(--cp-accent-text);
+}

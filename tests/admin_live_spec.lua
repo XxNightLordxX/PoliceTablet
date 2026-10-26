@@ -273,19 +273,35 @@ for i = 1, 40 do
     local key = CP.Events.rollModifier({ id = 'm' .. i, seed = i * 7919, missionType = 'tactical' })
     rolls[key or 'none'] = true
 end
-H.ok(rolls.armored_hostiles and rolls.time_crunch, 'every modifier rolls while switched on')
-Config.Events.modifiers = { armored_hostiles = false, time_crunch = true, radio_silence = false }
+H.ok(rolls.radio_silence and rolls.time_crunch, 'every twist rolls while switched on')
+H.eq(rolls.armored_hostiles, nil, 'Armored Hostiles never rolls for a run without armed NPCs')
+local twists = Config.Events.twists
+Config.Events.twists = {
+    armored_hostiles = { enabled = false },
+    time_crunch = { enabled = true },
+    radio_silence = { enabled = false },
+}
 rolls = {}
 for i = 1, 40 do
     local key = CP.Events.rollModifier({ id = 'm' .. i, seed = i * 7919, missionType = 'tactical' })
     rolls[key or 'none'] = true
 end
-H.eq(rolls.armored_hostiles, nil, 'a switched-off modifier never rolls')
-H.eq(rolls.radio_silence, nil, 'nor the other one')
+H.eq(rolls.radio_silence, nil, 'a switched-off twist never rolls (Config.Events.twists.<key>.enabled = false)')
 H.ok(rolls.time_crunch, 'the one left on still rolls')
-Config.Events.modifiers = { armored_hostiles = false, time_crunch = false, radio_silence = false }
-H.eq(CP.Events.rollModifier({ id = 'x', seed = 5, missionType = 'patrol' }), nil, 'all off: no modifier')
-Config.Events.modifiers = { armored_hostiles = true, time_crunch = true, radio_silence = true }
+Config.Events.twists = {
+    armored_hostiles = { enabled = false },
+    time_crunch = { enabled = false },
+    radio_silence = { enabled = false },
+}
+H.eq(CP.Events.rollModifier({ id = 'x', seed = 5, missionType = 'patrol' }), nil, 'all off: no twist')
+res = W.cb('admin:getToday', 1, {})
+H.eq(res.data.modifiers[1].enabled, false, 'the Today screen shows a switched-off twist as off')
+Config.Events.twists = twists
+res = W.cb('admin:getToday', 1, {})
+local tc
+for _, m in ipairs(res.data.modifiers) do if m.key == 'time_crunch' then tc = m end end
+H.ok(tc and tc.enabled and tc.points == 0.20 and tc.cash == 1.20,
+    'and each twist with its bonus (Config.Events.twists)')
 Config.Events.modifierChance = 0
 
 -- ============================================================================

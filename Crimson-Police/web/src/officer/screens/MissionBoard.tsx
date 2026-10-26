@@ -36,6 +36,7 @@ import type {
 } from '../../types/run_ui';
 import type { BoardCallsInfo } from '../../types/missioncalls';
 import { CallsOpenLink, DailyLimitBadge, readyCheckSentText } from '../components/MissionCallsLink';
+import { TwistPicker } from '../components/TwistPicker';
 import './MissionBoard.css';
 
 const BOSS_KEY = 'weekly_boss';
@@ -641,6 +642,9 @@ export default function MissionBoard() {
     const { data, loading, error, refetch } = useRequest<MissionBoardData>('getMissionTypes', {}, { pollMs: POLL_MS });
     const { run, busy } = useAction();
     const [pending, setPending] = useState<Pending>(null);
+    // the twists the leader picked in the accept dialog (PLAN M8b); a new dialog starts with none
+    const [twists, setTwists] = useState<string[]>([]);
+    useEffect(() => setTwists([]), [pending]);
     const [joining, setJoining] = useState(false);
 
     // Live updates: push topics 'board', 'operation' and 'run' (active run and cooldowns) schedule one
@@ -699,7 +703,8 @@ export default function MissionBoard() {
     const accept = async () => {
         if (!pending) return;
         const key = pending.kind === 'boss' ? BOSS_KEY : pending.card.key;
-        const res = await run<AcceptTypeResult & { pending?: boolean }>('server:acceptType', key);
+        const payload = pending.kind === 'type' && twists.length ? { missionType: key, twists } : key;
+        const res = await run<AcceptTypeResult & { pending?: boolean }>('server:acceptType', payload);
         setPending(null);
         // a unit of 2+ answers the ready check first: the run starts when everyone accepted
         if (res.ok && res.data?.pending) toast('info', readyCheckSentText());
@@ -749,6 +754,17 @@ export default function MissionBoard() {
                     </p>
                 </>
             )}
+            {pending.kind === 'type' ? (
+                <TwistPicker
+                    offered={pending.card.twists}
+                    caps={data?.twistMax}
+                    value={twists}
+                    onChange={setTwists}
+                    typeLabel={pendingLabel}
+                    unit={size > 1}
+                    disabled={busy}
+                />
+            ) : null}
             {size > 1 ? <p className="run_ui-confirm__note">{t('board.confirm.unit', { size })}</p> : null}
             <p className="run_ui-confirm__note">
                 {routeRequired ? t('board.confirm.route') : t('board.confirm.route_guide')}

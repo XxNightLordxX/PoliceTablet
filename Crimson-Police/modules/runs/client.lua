@@ -64,9 +64,13 @@ local function ActiveSrcs(list)
     return out
 end
 
-local function ModifierHud(key)
-    if type(key) ~= 'string' then return false end
-    return { key = key, label = CP.L('modifier.' .. key) }
+-- The HUD chip of the run's twists (CP.Twists, PLAN M8b): the first key, every label; false without a twist.
+local function ModifierHud(holder)
+    local list = CP.Twists.of(holder)
+    if #list == 0 then return false end
+    local names = {}
+    for i, key in ipairs(list) do names[i] = CP.L('modifier.' .. key) end
+    return { key = list[1], label = table.concat(names, ' · ') }
 end
 
 -- ============================================================================
@@ -149,7 +153,7 @@ local function BlockEntry(i)
         location = current.location,
         isHost = current.isHost,
         test = current.test,
-        radioSilence = current.modifier == 'radio_silence',
+        radioSilence = CP.Twists.has(current, 'radio_silence'),
         state = {},
         participants = ActiveSrcs(current.participants),
         getEntity = Runs.getEntity,
@@ -408,6 +412,7 @@ RegisterNetEvent(CP.e('client:start'), function(runId, data)
         tier = data.expectedTier,
         payTier = data.expectedTier,
         modifier = data.modifier,
+        modifiers = CP.Twists.of(data),
         objectiveIndex = 1,
         participants = data.participants or {},
         objectives = {},
@@ -427,7 +432,7 @@ RegisterNetEvent(CP.e('client:start'), function(runId, data)
         phase = 'route',
         tier = data.expectedTier,
         payTier = data.expectedTier,
-        modifier = ModifierHud(data.modifier),
+        modifier = ModifierHud(data),
         timer = false,
         route = { status = current.startRoute and 'on' or 'disabled', required = current.routeRequired },
         objectives = {},

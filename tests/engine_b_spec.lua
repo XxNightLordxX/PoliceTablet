@@ -673,28 +673,30 @@ H.eq(v.modifier.key, 'time_crunch', 'modifier view')
 H.eq(v.route.status, 'arrived', 'route from CP.Route.status')
 H.eq(v.recalcsLeft, 1, 'recalcs left')
 H.eq(v.log.point, 2, 'log from the current objective state')
-H.eq(v.expected.cash, 1150, 'expected cash = B x tier x modifier')
-H.eq(v.expected.points, 302, 'expected points')
+H.eq(v.expected.cash, 1104, 'expected cash = B x tier x twist ($800 x 1.15 x 1.20 Time Crunch)')
+H.eq(v.expected.points, 290, 'expected points ((200 + 20% Time Crunch) x tier x cross-department)')
 do
     -- a true half-dollar rounds up, as CP.Cash pays: $200 x 1.15 x 1.25 = $287.50 (287.4999... in floating point)
-    local realBase = A.cashBase
-    A.cashBase = 200
+    local realBase, realMods = A.cashBase, A.modifiers
+    A.cashBase, A.modifiers = 200, { 'radio_silence' }
     H.ok(200 * 1.15 * 1.25 < 287.5, 'precondition: the float product is below the half')
     H.eq(Runs.view(A, 1).expected.cash, 288, 'expected cash: a true half-dollar rounds up ($288, not $287)')
-    A.cashBase = realBase
+    A.cashBase, A.modifiers = realBase, realMods
 end
 H.eq(v.radioSilence, false, 'radio silence flag')
 H.eq(v.silenceMode, nil, 'no Radio Silence: no silence mode')
 do
     -- PLAN M8: the Active Mission notice says what Config.Markers.radioSilence hides
-    local realMod, realMode = A.modifier, Config.Markers.radioSilence
-    A.modifier = 'radio_silence'
+    -- Radio Silence stacked on the rolled Time Crunch: the flag reads the run's twist list (PLAN M8b)
+    local realMods, realMode = A.modifiers, Config.Markers.radioSilence
+    A.modifiers = { 'time_crunch', 'radio_silence' }
+    H.eq(Runs.view(A, 1).radioSilence, true, 'Radio Silence from the twist list')
     H.eq(Runs.view(A, 1).silenceMode, 'area', 'Radio Silence: the shipped mode (area)')
     Config.Markers.radioSilence = 'full'
     H.eq(Runs.view(A, 1).silenceMode, 'full', 'Radio Silence: the owner\'s mode')
     Config.Markers.radioSilence = 'bogus'
     H.eq(Runs.view(A, 1).silenceMode, 'area', 'Radio Silence: an unknown mode counts as area')
-    A.modifier, Config.Markers.radioSilence = realMod, realMode
+    A.modifiers, Config.Markers.radioSilence = realMods, realMode
 end
 H.eq(v.test, false, 'not a test')
 local s = Runs.summary(A)

@@ -346,9 +346,16 @@ const today: AdminTodayData = {
     boss: { enabled: true, today: true, days: ['friday', 'saturday', 'sunday'] },
     modifierChance: 0.25,
     modifiers: [
-        { key: 'armored_hostiles', label: 'Armored Hostiles', tacticalOnly: true, enabled: true },
-        { key: 'radio_silence', label: 'Radio Silence', tacticalOnly: false, enabled: false },
-        { key: 'time_crunch', label: 'Time Crunch', tacticalOnly: false, enabled: true },
+        {
+            key: 'armored_hostiles',
+            label: 'Armored Hostiles',
+            armedOnly: true,
+            enabled: true,
+            points: 0.25,
+            cash: 1.25,
+        },
+        { key: 'radio_silence', label: 'Radio Silence', armedOnly: false, enabled: false, points: 0.25, cash: 1.25 },
+        { key: 'time_crunch', label: 'Time Crunch', armedOnly: false, enabled: true, points: 0.2, cash: 1.2 },
     ],
     types: [
         { key: 'investigation', label: 'Investigation' },

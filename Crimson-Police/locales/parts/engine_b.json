@@ -40,5 +40,6 @@
   "err.server_busy": "Server busy: too many missions are running. Try again shortly.",
   "err.invalid_payload": "That request was not valid.",
   "err.invalid_run": "That run could not be found.",
-  "err.not_on_run": "You are not on that mission."
+  "err.not_on_run": "You are not on that mission.",
+  "run.twist_dropped": "{twists}: not used on {mission} (it has nothing for it), so no bonus for it."
 }

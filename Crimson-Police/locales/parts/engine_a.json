@@ -61,5 +61,20 @@
   "tier.critical": "Critical",
 
   "run.objective_default": "Objective {n}",
-  "run.location_default": "Location {n}"
+  "run.location_default": "Location {n}",
+
+  "err.twist_unavailable": "That twist is not available for this mission type right now. Choose again.",
+  "twist.desc.armored_hostiles": "Armed NPCs wear {armour} extra armour.",
+  "twist.desc.time_crunch": "The time limit is {pct}% shorter.",
+  "twist.desc.radio_silence_area": "After the start the map shows only each objective's area: no GPS line and no blips on people or cars.",
+  "twist.desc.radio_silence_none": "After the start the map shows no objective blips at all.",
+  "twist.desc.radio_silence_full": "The map keeps its markers; the Active Mission screen names only streets and zones.",
+  "twist.pick.title": "Twists (optional)",
+  "twist.pick.hint": "Each twist makes the run harder and adds its own bonus. Pick as many as you like: they stack.",
+  "twist.pick.reward": "+{points}% points · x{cash} cash",
+  "twist.pick.some": "Not every {type} mission has this. If the drawn one does not, it is dropped without its bonus.",
+  "twist.pick.total": "Bonus if completed: +{points}% points, x{cash} cash",
+  "twist.pick.total_capped": "Bonus if completed: +{points}% points, x{cash} cash (the most twists can add)",
+  "twist.pick.total_none": "No twist: the normal points and cash.",
+  "twist.pick.unit": "Your unit sees the twists on the ready check."
 }

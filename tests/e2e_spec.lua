@@ -494,7 +494,8 @@ do
     H.eq(BoardRow(board0), nil, 'board: two runs are not enough to be ranked (cached now)')
 
     Place(src, vec3(200.0, -1000.0, 29.0))
-    Config.Events.modifierChance = chance
+    -- random twists on (Config.Events.modifierChance; 0 as shipped): the range's top covers the best one
+    Config.Events.modifierChance = 0.25
     local board1 = Cb('getMissionTypes', src)
     Config.Events.modifierChance = 0
     local card
@@ -504,7 +505,7 @@ do
     H.eq(card and card.pool, 1, 'Patrol card: one mission in the pool')
     H.eq(card and card.mode, 'solo', 'solo')
     H.eq(card and card.cash and (card.cash[1] .. '-' .. card.cash[2]), '250-313',
-        'cash per officer $250-$313 (a modifier pays x1.25)')
+        'cash per officer $250-$313 (a random twist pays up to x1.25)')
     H.eq(card and card.locked, nil, 'not locked')
     local mark = #H.events
     local ok, data = Act('server:acceptType', src, 'patrol')

@@ -638,11 +638,12 @@ local function ScoreLines(run, p, P, opts)
             + AddLine(bonuses, penalties, 'fast_finish', Num(common.fastBonus, 0) * P, 1, false, false,
                 { pct = math.floor(fastShare * 100 + 0.5) })
     end
-    if run.modifier then
-        local modLabel = CP.L('modifier.' .. tostring(run.modifier))
+    -- one line per twist of the run (CP.Twists): each adds its share of P, together at most
+    -- Config.Events.twistMaxPoints
+    for _, line in ipairs(CP.Twists.bonus(CP.Twists.of(run)).lines) do
         total = total
-            + AddLine(bonuses, penalties, 'modifier', Num(Config.Events and Config.Events.modifierPoints, 0) * P, 1,
-                false, false, { modifier = modLabel })
+            + AddLine(bonuses, penalties, 'modifier', line.points * P, 1, false, false,
+                { modifier = CP.L('modifier.' .. line.key) })
     end
     if p.firstRunSinceDuty == true then
         total = total + AddLine(bonuses, penalties, 'first_run', Num(common.firstRun, 0), 1, false, false)

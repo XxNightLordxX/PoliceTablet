@@ -141,10 +141,10 @@
   "admin.today.boss_off": "Off",
   "admin.today.boss_today": "Available today",
   "admin.today.boss_not_today": "Not a boss day",
-  "admin.today.modifiers": "Modifiers · {pct}% of runs",
+  "admin.today.modifiers": "Twists · officers choose them · random on {pct}% of runs",
   "admin.today.on": "on",
   "admin.today.off": "off",
-  "admin.today.modifiers_hint": "Switch single modifiers on or off in Settings → Events → modifiers.",
+  "admin.today.modifiers_hint": "Officers choose twists when they take a mission. Switch a twist off or change its bonus in Settings → Events → twists.",
   "unit.admin_removed_you": "An admin took you out of your unit.",
   "unit.admin_removed": "An admin took {name} out of the unit.",
   "unit.admin_disbanded": "An admin split up your unit.",
@@ -174,5 +174,6 @@
   "admin.action.testEnd": "Test run ended by an admin",
   "admin.action.todOverride": "Type of the Day changed",
   "admin.action.unitDisband": "Unit disbanded",
-  "admin.action.unitRemove": "Officer removed from a unit"
+  "admin.action.unitRemove": "Officer removed from a unit",
+  "admin.today.twist_reward": "+{points}% · x{cash}"
 }

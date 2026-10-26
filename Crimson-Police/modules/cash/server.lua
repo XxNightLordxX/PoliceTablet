@@ -139,8 +139,8 @@ function Cash.compute(run, p)
     end
     local B = math.max(0, math.floor(Num(run.cashBase, 0) + 0.5))
     local mTier = Num(TierRow(run).cash, 1.0)
-    local mMod = 1.0
-    if run.modifier then mMod = Num(Config.Events and Config.Events.modifierCash, 1.0) end
+    -- the run's twists (CP.Twists): their cash multipliers multiply, up to Config.Events.twistMaxCash
+    local mMod = CP.Twists.bonus(CP.Twists.of(run)).cash
     local amount = 0
     if p.result == 'completed' and not PresenceFailed(run, p) then
         amount = math.max(0, RoundMoney(B * mTier * mMod))
@@ -1115,9 +1115,14 @@ function Cash.range(missionType, members)
     local tier = CP.Scaling and CP.Scaling.tierFor and CP.Scaling.tierFor(size) or { cash = 1.0 }
     local mTier = Num(tier and tier.cash, 1.0)
     local isBossCard = missionType == BOSS_KEY
+    -- a random twist on top (Config.Events.modifierChance above 0): the top of the range covers the best one. The
+    -- twists the officers choose themselves are shown with their own bonus at the accept step.
     local modCash = 1.0
     if not isBossCard and Num(Config.Events and Config.Events.modifierChance, 0) > 0 then
-        modCash = math.max(1.0, Num(Config.Events and Config.Events.modifierCash, 1.0))
+        for _, key in ipairs(CP.Twists.ORDER) do
+            local c = CP.Twists.cfg(key)
+            if c.enabled and c.cash > modCash then modCash = math.min(c.cash, CP.Twists.caps().cash) end
+        end
     end
     local lo, hi
     for _, def in ipairs(PoolFor(missionType, members)) do

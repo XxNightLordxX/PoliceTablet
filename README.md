@@ -724,7 +724,7 @@ Everything else works as shipped. These are the ones owners change most:
 | `Config.CrossDept.enabled` | Cross-Department Missions on or off |
 | `Config.Units.invitePolicy` | `'anyone'` in a unit may invite, or only the `'leader'` |
 | `Config.Goals` | Daily and weekly goals and their points |
-| `Config.Events` | Type of the Day, mission modifiers, and the Weekly Boss (`weeklyBoss.days`, `points`, `payout`) |
+| `Config.Events` | Type of the Day, the Weekly Boss (`weeklyBoss.days`, `points`, `payout`) and the twists your officers may choose when they take a mission: `twists.<key>` (`enabled`, `points` = share of P it adds, `cash` = its cash multiplier) for Armored Hostiles (+25 %, x1.25; only where armed NPCs spawn), Time Crunch (+20 %, x1.20) and Radio Silence (+25 %, x1.25). Several stack, up to `twistMaxPoints` (+70 %) and `twistMaxCash` (x1.95), paid only for a completed run. `modifierChance` (0) adds a random twist to that share of runs on top of the chosen ones |
 | `Config.Challenge` | The department challenge: `enabled`, `scoring` (`'average'`, `'total'` or `'top10'`), weekly bounty |
 | `Config.Leaderboard.weekStartsOn` | The day the week starts (`'monday'`) |
 | `Config.Time.resetHour` | The hour (0–23, server time) of the daily reset |
@@ -1234,7 +1234,7 @@ The tablet uses the officer's department colours and logo. Eight screens on the 
 | Screen | What is on it |
 |---|---|
 | **Home** | The officer's card (picture, callsign, rank, level, streak, season points, cash this week), today's and this week's goals, Type of the Day, open mission calls, new commendations, and the Rewards locker when item rewards are on |
-| **Mission Board** | One card per mission type with its pay and points, locks (cooldown, "Server busy", "On a call", daily limit), the Weekly Boss card from Friday to Sunday, and the Cross-Department card when one is running |
+| **Mission Board** | One card per mission type with its pay and points, locks (cooldown, "Server busy", "On a call", daily limit), the Weekly Boss card from Friday to Sunday, and the Cross-Department card when one is running. **Accept** asks to confirm and lets the leader add twists (Armored Hostiles, Time Crunch, Radio Silence) for extra points and cash, with the total bonus shown ("+45% points, x1.50 cash"); a mission call claim offers the same |
 | **Dispatch** | Tablet mission calls to claim, the last 5 calls, and a read-only count of real sc-dispatch calls. Hidden when `Config.MissionCalls.enabled = false` |
 | **Unit** | Invite officers (nearest first), accept or decline, leave; the leader can kick, make leader or disband. A ready check runs before every mission |
 | **Active Mission** | The drawn mission, objectives, timer, partners, expected pay, the route to the start, and the Contact panel for police actions |
@@ -1657,10 +1657,10 @@ it** (their type cards and why each is locked; never which mission they would ge
 - **Another boss attempt**: once per officer per week. Voiding a bugged boss run also gives its attempt back.
 - **Treat as a normal abandon**: a free abandon becomes a normal one, so the type and mission cooldowns start now.
 
-**Missions → Today** shows today's Type of the Day, whether the Weekly Boss is on today and which run modifiers are
-switched on. **Change today's type** picks another type or none for today only; at the daily reset the normal roll
-is back, and a restart keeps the choice. Single modifiers are switched on or off in **Settings → Events →
-modifiers**.
+**Missions → Today** shows today's Type of the Day, whether the Weekly Boss is on today and which twists your officers
+may choose, with each one's bonus. **Change today's type** picks another type or none for today only; at the daily
+reset the normal roll is back, and a restart keeps the choice. A twist is switched off, or its bonus changed, in
+**Settings → Events → twists**.
 
 Every one of these asks for a reason, goes into the audit log (cooldown, extra-run, boss and abandon changes post to
 the flags webhook; run and unit changes to the operations webhook) and tells the officer when they are online. No
@@ -2372,6 +2372,19 @@ however it ends.
   ends a run: no off-route warning, no countdown on the HUD or the tablet, no Abandoned (`off_route`) end and no type
   cooldown from it. The start timeout stays. A run keeps the value it was accepted with, and a test run follows its
   own **Start route** switch. Undo: `Config.Route.required = true` (Admin UI → **Settings**, or config.lua).
+- Twists chosen by the officers, at the owner's request of 2026-10-19 ("Bonus points and the twists they can choose
+  them and get more bonus points or money"; PLAN M8b): the three run modifiers (now called twists) are no longer
+  rolled at random. The unit leader ticks any of Armored Hostiles, Time Crunch and Radio Silence on the accept step of
+  the Mission Board or of a mission call claim (the members see them on the ready check and the Active Mission
+  screen); each one adds its own bonus and they stack (`Config.Events.twists`: +25 % of P and x1.25 cash, Time Crunch
+  +20 % and x1.20; together at most `twistMaxPoints` +70 % and `twistMaxCash` x1.95), paid only for a Completed run.
+  Armored Hostiles is offered only for a type with a mission that spawns armed NPCs and now works on any such mission
+  (before: Tactical only). The mission is still drawn at random after the accept (the Mission choice Hard rule is
+  unchanged): a chosen twist the drawn mission has no use for is dropped without its bonus, and the officers are told.
+  No twist on the Weekly Boss, test runs or Cross-Department Missions. `Config.Events.modifierPoints`, `modifierCash`
+  and `modifiers` are gone (a value saved for them in Settings is ignored with one warning). Undo: switch a twist off
+  with `Config.Events.twists.<key>.enabled = false`; `Config.Events.modifierChance = 0.25` brings the random roll back
+  (on top of the chosen ones).
 
 **Waiting for the owner's OK** (already in `docs/SPEC.md` and the code; each one is undone without a code change):
 

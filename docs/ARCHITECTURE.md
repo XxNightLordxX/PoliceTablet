@@ -117,6 +117,7 @@ PoliceTablet/                      (git repo)
     shared/locale.lua              CP.L / CP.Locale
     shared/net.lua                 CP.Net (actions and callbacks)
     shared/npccombat.lua           CP.NpcCombat: the weapon a mission NPC may carry, the accuracy and firing caps (§5.42)
+    shared/twists.lua              CP.Twists: a run's twists (the modifiers officers choose) and their stacked bonus (§5.9)
     shared/utils.lua               CP.U helpers (round, rng, hash, vectors, colours ...)
     config/banned_words.txt        the default banned-word list for profile bios (one word or phrase a line)
     locales/en.json                all player-facing text (merged from locales/parts/*.json; English only)
@@ -207,6 +208,7 @@ The packages of that build add `modules/corrections/` (§5.38), `modules/livectl
 | `CP.Net.rateOk(src, key, max, windowMs)` | shared/net.lua | server |
 | `CP.Net.action(name, payload, timeoutMs)`, `CP.Net.request(name, args, timeoutMs)` | shared/net.lua | client; both return `{ ok, data, error }` and never raise (`err.timeout` after timeoutMs, default 15000; `err.no_response` when ox_lib raises) |
 | `CP.NpcCombat.*` | shared/npccombat.lua | Config.NpcCombat read at every call (§5.42): `weapon(name)`, `ammo()`, `isAutomatic(name)`, `automatic()`, `automaticsIn(t)`, `weaponsAllowed(list, allowed)`, `capAccuracy(acc)`, `scaleAccuracy(acc)`, `shootRate()`, `firingPattern()`, `ability(a)`, `noCharge()`, `driveByAccuracy(acc)`, `driveByPattern()`, `aiDamage()`, `aiMeleeDamage()`, `holdAiDamage()`, `officerDefense()`, `noCriticalHits()`, `cancelLethalHeadshots()`, `lethalCancelAbove()`, `enabled()` |
+| `CP.Twists.*` | shared/twists.lua | Config.Events.twists read at every call (§5.9): `ORDER`, `known(key)`, `cfg(key) -> { enabled, points, cash }`, `sorted(list)`, `of(run|payload) -> keys` (the `modifiers` list, else the one `modifier`), `has(run, key)`, `caps() -> { points, cash }`, `bonus(list) -> { points, cash, lines }` (shares add, multipliers multiply, both capped) |
 | `CP.U.*` | shared/utils.lua | `round` (halves up), `clamp`, `inRange`, `copy`, `deepcopy`, `contains`, `keys`, `count`, `map`, `filter`, `getPath`, `setPath`, `hash`, `hashHex`, `startsWith`, `trim`, `rng(seed)` (`:next() :int(a,b) :chance(p) :pick(l) :shuffle(l) :sample(l,n)`), `uuid()`, `xyz`, `dist`, `dist2d`, `distToPolyline`, `vecToTable`, `tableToVec`, `serialize`, `isHexColour`, `contrastText` |
 
 Naming of `CP.Net.action` names: officer actions are `'server:<name>'` (spec events, e.g.
@@ -576,7 +578,8 @@ Cooldowns are kept in memory by `CP.Runs` and rebuilt from `cp_mission_runs` row
 ### 4.4 Lifecycle (server-owned)
 
 1. `server:acceptType` (modules/draw) validates, draws, then `CP.Runs.create(...)` → state
-   `accepted`, location reserved, B locked, modifier rolled, `client:start` sent to each participant,
+   `accepted`, location reserved, B locked, the chosen twists that fit the drawn mission kept (`run.modifiers`, a
+   random one added while `modifierChance` > 0), `client:start` sent to each participant,
    `CP.Route.begin(run, src)` for each, start timeout armed, items given.
 2. `CP.Route` detects arrival → `CP.Runs.markArrived(run, src)` → `CP.Alerts.set(src)`; the first
    arrival moves the run to `in_progress`: tier from active participants (or `test.forcedTier`),
@@ -923,9 +926,13 @@ SQL, rates and averages in Lua, 60 s cache per filter).
 - `reserve(runId, missionId, index)`, `release(runId)`, `isReserved(missionId, index) -> boolean`
 - `recordLast(citizenid, missionType, missionId)`
 - `boardCards(src) -> BoardData` (§9.4; callback `getMissionTypes`)
-- Handles `server:acceptType` (payload = type key or `'weekly_boss'`): leader only; checks role,
+- Handles `server:acceptType` (payload = type key or `'weekly_boss'`, or `{ missionType, twists }`): leader only; checks role,
   duty, unit, cooldowns, `CP.Calls.isOnCall`, hourly cap, `CP.Runs.capsOk`, `CP.Operations.isLocked`,
-  `CP.Events.bossAvailable`, `CP.Alerts.foreignFlag` for every member (`err.in_arena`); then `CP.Units.lock(unit)`, draw, `CP.Runs.create`.
+  `CP.Events.bossAvailable`, `CP.Alerts.foreignFlag` for every member (`err.in_arena`), then the twists
+  (`Draw.checkTwists`); then `CP.Units.lock(unit)`, the ready check (with the twists), draw, `CP.Runs.create({ twists })`.
+- Twists (PLAN M8b): `twistOffer(key, defs)` (CP.Events.twistOffer; each board card's `twists`), `twistCaps()`
+  (BoardData `twistMax`), `checkTwists(typeKey, officers, raw) -> keys | nil, errKey` (against the type's pool for
+  those officers; `{}` without twists). `accept(src, typeKey, opts)` takes `opts.twists`; its reply adds `twists`.
 
 Parity-plus additions (WP4; docs/notes/missioncalls.md):
 - `pool(type, members, opts)`, `draw(type, members, opts)`, `pickLocation(def, srcs, rng, opts)`: `opts.area` (hard:
@@ -969,8 +976,16 @@ boss's accuracy goes through `ctx.combat` too (its armour stays the file's).
 
 ### 5.9 CP.Events — modules/events (S)
 - `typeOfTheDay(dayKey?) -> typeKey|nil` (seed = `CP.U.hash(dayKey)`; nil when `Config.Events.typeOfTheDay` is false)
-- `rollModifier(run) -> key|nil` — `Config.Events.modifierChance`; never for operations, the boss or tests; `armored_hostiles` only for Tactical
-- `modifiers() -> { key = { label = locale key } }`
+- `rollModifier(run) -> key|nil` — a random twist on top of the chosen ones: `Config.Events.modifierChance` (0, as
+  shipped, never rolls); never for operations, the boss or tests; only an enabled twist that fits `run.mission` and is
+  not on the run yet
+- `modifiers() -> { key = { label = locale key, armedOnly, enabled, points, cash } }` (the Today screen)
+- Twists the officers choose (PLAN M8b; `CP.Twists` holds the list and the bonus maths):
+  `twistFits(key, def) -> bool` (Armored Hostiles only where a block's `armedCount` is above 0, Time Crunch only with a
+  time limit, none on the boss); `twistOffer(missionType, defs) -> { { key, label, desc, points, cash, some? } }`
+  (every enabled twist that fits a mission of the pool; `some` = not all of them; `{}` for `weekly_boss`);
+  `checkTwists(raw, missionType, defs) -> keys | nil, errKey` (`err.invalid_payload`, `err.twist_unavailable`);
+  `fitTwists(run, chosen) -> kept, dropped` (after the draw; nothing on tests, operations or the boss)
 - `bossAvailable(src, officer) -> ok, reasonKey` — enabled, weekday in `Config.Events.weeklyBoss.days`, not used this week (any boss row this week except end_reason real_call/force_recall/cancelled)
 - `bossCard(src) -> card|nil` (§9.4)
 
@@ -981,7 +996,7 @@ Full admin control (P3, §5.39):
   its `cp_audit` row (action `todOverride`, target = the day key, new_value = the choice), which a restart reads back:
   a backup restore never replaces cp_audit, and another day's override is ignored, so it always ends at the daily
   reset. No resource KVP.
-- `rollModifier(run)` skips every modifier with `Config.Events.modifiers.<key> = false`; `modifiers()` adds `enabled`.
+- `rollModifier(run)` skips every twist with `Config.Events.twists.<key>.enabled = false`; `modifiers()` adds `enabled`.
 - The weekly attempt: a boss row counts only while `voided = 0`, and `cp_officers.boss_extra = { week, n }` adds `n`
   attempts for that week. `bossUsage(citizenid) -> { used, extra, left, week }`; `forgetBossUsage(citizenid?)`. The
   `usedCache` entry is dropped on `admin:changed { citizenid }`, and the whole cache on `row:voided` / `row:restored`.
@@ -1391,8 +1406,9 @@ locked for a run (`err.live_unit_locked`), in a ready check (`err.live_unit_read
 Parity-plus additions (WP5; docs/notes/teams.md): `kick(src, target)`, `promote(src, target)`, `disband(src)` (leader
 only; `err.unit_locked` once a type is accepted; a kicked officer can't be invited by that unit for
 `Config.Units.kickReinvite` s), `cancelInvite(src, target)` (leader or inviter), `Config.Units.invitePolicy`
-('anyone' | 'leader'), `readyCheck(unit, typeKey, onReady, onCancel) -> started` (units of 2+: every member but the
-leader gets `client:readyCheck` with the type only; all accept → onReady once; a decline, the timeout
+('anyone' | 'leader'), `readyCheck(unit, typeKey, onReady, onCancel, extra?) -> started` (units of 2+: every member
+but the leader gets `client:readyCheck` with the type and `extra.twists`, never the mission; the ReadyCheckView has
+`twists` too; all accept → onReady once; a decline, the timeout
 (`Config.Units.readyTimeout`), leaving, off duty, a real call or the arena → `onCancel(reasonKey, srcs)`; nobody gets
 a cooldown), `lastPartners(src)` (900 s), distance bands (`Config.Units.nearbyBands`, server coordinates), UnitView
 additions (canManage, readyCheck, avatars, levels, distanceBand, lastPartner, pendingSent, sizeFit counts only).
@@ -2087,7 +2103,7 @@ Full admin control additions (P0; the Settings screen follow-ups are P5's):
   when the save will be accepted (the logo upload checks before it writes its file); `Bonuses.*.value` is points -500..500 (whole) or pct
   -1..1 by the kind, sign kept. `reset` of either resets both.
 - Point values (`POINTS`: `MissionTypes.*.points`, `Bonuses.*.value|kind`, `Scoring.*`, `Scoring.common.*`,
-  `Events.todMultiplier|modifierPoints`, `Events.weeklyBoss.points`, `CrossDepartmentPoints`, `Difficulty.pointsByStars`,
+  `Events.todMultiplier`, `Events.twists.*.points`, `Events.twistMaxPoints`, `Events.weeklyBoss.points`, `CrossDepartmentPoints`, `Difficulty.pointsByStars`,
   `Scaling`, `Goals.dailyPoints|weeklyPoints`, `Challenge.bountyBonus`, `MissionCalls.rapidResponse.pctOfP`): the view
   has `points = true`; a set or reset also posts `settings.points_notice` to the flags webhook.
 - Money switches (`MONEY_SWITCHES`: `Cash.allowUnfundedRetry|allowCapTopUp|allowPayAgain|restoreForfeited|allowAddFunds|
@@ -2284,7 +2300,7 @@ pass), a reason, the admin's own runs and characters refused (S), and a synchron
   'real_call_cancelled')` (the dodge path: the type and mission cooldowns from now); its own WHERE on `real_call` is
   the compare-and-set.
 - `today() -> AdminTodayData`: today's Type of the Day (with the roll and the override), the boss day and the
-  modifiers with their `Config.Events.modifiers` switches.
+  twists with their `Config.Events.twists` switches and bonuses. The live run view adds `modifiers` (every twist).
 - The sidebar count `adminLive` (admins only) is the number of live runs.
 
 ### 5.40 CP.Payments — modules/payments (S; full admin control, economy)
@@ -2889,7 +2905,7 @@ Rules for blocks:
 
 | Event | Args | Sent by |
 |---|---|---|
-| `client:start` | runId, data `{ missionId, mission, locationIndex, location, start = { coords, radius }, expectedTier, seed, host, test, modifier, participants, startRoute = bool, startTimeout, isBoss }` (seed = a client seed, the same for every participant and unrelated to `run.seed`, so no client can replay the server's rolls) | runs |
+| `client:start` | runId, data `{ missionId, mission, locationIndex, location, start = { coords, radius }, expectedTier, seed, host, test, modifier, modifiers (every twist; modifier = the first), participants, startRoute = bool, startTimeout, isBoss }` (seed = a client seed, the same for every participant and unrelated to `run.seed`, so no client can replay the server's rolls) | runs |
 | `client:inProgress` | runId, `{ tier, payTier, objectives = <scaled list>, timeLimit, remaining }` | runs |
 | `client:objective` | runId, index, `{ action = 'prepare'|'start'|'update'|'stop', data, marker }` (`marker` with `start`: the objective's pointer, §5.44) | runs |
 | `client:hud` | runId, patch | runs |
@@ -2916,7 +2932,7 @@ Rules for blocks:
 | `client:builder` | `{ ... }` builder-specific | builder |
 | `client:objective` (new action) | runId, index, `{ action = 'adopt', op = 'adopt', netId, obj, from }`: the host moves the AI of netId to objective obj's client half | runs |
 | `client:missionCall` | `{ id, code, typeLabel, priority, areaLabel, paged? }` (toast and tone; the client drops it when muted, on a run or in the arena) | missioncalls |
-| `client:readyCheck` | `{ typeKey, typeLabel, expiresIn, leaderName }` or nil to clear | units |
+| `client:readyCheck` | `{ typeKey, typeLabel, expiresIn, leaderName, twists = { { key, label } } }` or nil to clear | units |
 | `client:contactAct` | `{ runId, netId, behaviour, args, seconds }` to the run host only, when the behaviour starts | custody |
 | `client:contactConfirm` | `{ netId, choice, factKey }`: open the tablet with the case-fail confirm | custody |
 | `client:serviceVehicle` | `{ runId, id, op = 'drive'|'load'|'leave', kind, veh, driver, dest, target, away }` to the driving client | custody |
@@ -2934,7 +2950,7 @@ Server → client ox_lib callback: `crimson-police:client:spawn:walkIn` `{ car =
 
 | Event | Payload | Owner |
 |---|---|---|
-| `server:acceptType` | missionType (`'weekly_boss'` for the boss card) | draw |
+| `server:acceptType` | missionType (`'weekly_boss'` for the boss card), or `{ missionType, twists = { key, ... } }` → `{ runId, twists }` | draw |
 | `server:unitInvite` | targetSrc | units |
 | `server:unitRespond` | `{ accepted, unitId }` (a bare boolean = latest invite) | units |
 | `server:unitLeave` | — | units |
@@ -2956,7 +2972,7 @@ Server → client ox_lib callback: `crimson-police:client:spawn:walkIn` `{ car =
 | `server:stunHit` | netId (plain event, no reqId; 2 per s) | custody |
 | `server:tabletItemGone` | — (plain event; 2 per s) | tablet |
 | `server:mcWatch` | false = the tablet closed (plain event) | missioncalls |
-| `server:claimMissionCall` | `{ callId }` → `{ runId }` or `{ pending }` | missioncalls |
+| `server:claimMissionCall` | `{ callId, twists? }` → `{ runId }` or `{ pending }` (the twists are checked before the claim joins the window) | missioncalls |
 | `server:contactDecide` | `{ runId, netId, choice, offence?, confirmed? }` → `{ ok }` or `{ confirm = { factKey } }` | custody |
 | `server:profile:set` / `server:profile:report` | see §5.32 | profile |
 | `server:rewards:claim` | `{ id }` | rewards |
@@ -3346,7 +3362,9 @@ interface HudState {
 // getMissionTypes
 interface BoardCard { key: string; label: string; points: number; cash: [number, number];
   pool: number; mode: 'solo' | 'unit'; locked: null | { reason: string; until?: number };
-  busy: boolean; onCall: boolean; typeOfTheDay: boolean }
+  busy: boolean; onCall: boolean; typeOfTheDay: boolean; twists?: TwistOffer[] }
+// the twists the leader may choose at the accept step (BoardData adds twistMax: { points; cash })
+interface TwistOffer { key: string; label: string; desc?: string; points: number; cash: number; some?: boolean }
 interface BoardData { cards: BoardCard[]; boss: null | (BoardCard & { available: boolean });
   operation: null | { id: number; missionLabel: string; launcher: string; status: string;
     joined: number; max: number; joinedByMe: boolean; canJoin: boolean; joinEndsIn: number | null };
@@ -3361,7 +3379,8 @@ interface ActiveMissionView { runId: string; missionLabel: string; description: 
   state: 'accepted' | 'in_progress'; tier: string; tierExpected: boolean; payTier: string;
   route: HudState['route']; objectives: HudState['objectives']; remaining: number | null; paused: boolean;
   partners: { src: number; name: string; callsign: string | null; departmentShort: string; status: string; arrived: boolean }[];
-  expected: { cash: number; points: number }; modifier: HudState['modifier']; test: boolean;
+  expected: { cash: number; points: number }; modifier: HudState['modifier'];
+  twists?: { key: string; label: string }[]; test: boolean;
   recalcsLeft: number; radioSilence: boolean; silenceMode?: 'none' | 'area' | 'full' | null;
   log: null | { point: number; choices: { id: string; label: string }[] } }
 // getHome
@@ -3453,7 +3472,7 @@ interface AdminOfficerRunState { citizenid; online; onRun; runId?;
     boss?: { available; locked?: { reason } }; operation: boolean; serverTime; unitSize } | null; serverTime }
 interface AdminTodayData { day; todEnabled; typeOfTheDay: string | null; typeLabel?; rolled: string | null;
   override?: { type; by?; reason?; at? }; todMultiplier; boss: { enabled; today; days };
-  modifierChance; modifiers: { key; label; tacticalOnly; enabled }[]; types: { key; label }[] }
+  modifierChance; modifiers: { key; label; armedOnly?; enabled; points?; cash? }[]; types: { key; label }[] }
 ```
 
 The admin kit (web/src/admin/components/kit): `useAdminAction()` (`run(name, payload, { requestId? })` adds a fresh

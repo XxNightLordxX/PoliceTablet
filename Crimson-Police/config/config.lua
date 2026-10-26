@@ -1071,13 +1071,35 @@ Config.Leaderboard = {
 Config.Events = {
     typeOfTheDay = true,
     todMultiplier = 2.0,     -- points only
-    modifierChance = 0.25,
-    modifierPoints = 0.25,   -- +25% of P
-    modifierCash = 1.25,     -- × cash
-    armoredArmour = 50,      -- Armored Hostiles: extra armour on armed NPCs (Tactical only)
+    -- share of runs that also get one random twist on top of the ones the officers chose (0 = never: officers
+    -- choose their own twists when they take a mission; 0.25 = one run in four)
+    modifierChance = 0,
+    armoredArmour = 50,      -- Armored Hostiles: extra armour on armed NPCs
     timeCrunchCut = 0.25,    -- Time Crunch: share of the time limit removed
     weeklyBoss = { enabled = true, days = { 'friday', 'saturday', 'sunday' }, points = 500, payout = 2500 },
-    modifiers = { armored_hostiles = true, time_crunch = true, radio_silence = true },   -- false = never rolled
+    -- Twists the officers may choose when they take a mission from the Mission Board or a mission call (the unit
+    -- leader decides for the unit). Each chosen twist adds its own reward and they stack, up to twistMaxPoints and
+    -- twistMaxCash. Rewards are paid only for a completed run. Never on the Weekly Boss, test runs or
+    -- Cross-Department Missions.
+    twists = {
+        armored_hostiles = {     -- armed NPCs get armoredArmour extra armour (offered only where armed NPCs spawn)
+            enabled = true,      -- false = officers cannot choose it and it is never rolled
+            points = 0.25,       -- share of P it adds (0.25 = +25 % points; 0 = no extra points)
+            cash = 1.25,         -- cash multiplier (1.25 = x1.25 cash; 1.0 = no extra cash)
+        },
+        time_crunch = {          -- the time limit is timeCrunchCut shorter
+            enabled = true,      -- false = officers cannot choose it and it is never rolled
+            points = 0.20,       -- share of P it adds (0.20 = +20 % points; 0 = no extra points)
+            cash = 1.20,         -- cash multiplier (1.20 = x1.20 cash; 1.0 = no extra cash)
+        },
+        radio_silence = {        -- the map hides what Config.Markers.radioSilence says
+            enabled = true,      -- false = officers cannot choose it and it is never rolled
+            points = 0.25,       -- share of P it adds (0.25 = +25 % points; 0 = no extra points)
+            cash = 1.25,         -- cash multiplier (1.25 = x1.25 cash; 1.0 = no extra cash)
+        },
+    },
+    twistMaxPoints = 0.70,   -- the most all chosen twists add together, as a share of P (0.70 = +70 % points)
+    twistMaxCash = 1.95,     -- the highest cash multiplier all chosen twists give together (the multipliers multiply)
 }
 
 -- ============================================================================

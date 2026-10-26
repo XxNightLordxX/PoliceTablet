@@ -28,6 +28,7 @@ import { useNavigate } from '../../shared/navigation';
 import { useSession } from '../../shared/session';
 import { toast } from '../../shared/toast';
 import type { ClaimCallResult, DispatchView, MissionCall, RecentCall } from '../../types/missioncalls';
+import { TwistPicker } from '../components/TwistPicker';
 import './Dispatch.css';
 
 const POLL_MS = 15000;
@@ -302,6 +303,9 @@ export default function Dispatch() {
     const { run, busy } = useAction();
     const [filter, setFilter] = useState<Filter>('all');
     const [pending, setPending] = useState<MissionCall | null>(null);
+    // the twists the leader picked in the claim dialog (PLAN M8b); a new dialog starts with none
+    const [twists, setTwists] = useState<string[]>([]);
+    useEffect(() => setTwists([]), [pending]);
     const [muted, setMuted] = useState<boolean>(!!session.prefs?.callsMuted);
     const [stamp, setStamp] = useState(0);
     useEffect(() => {
@@ -320,7 +324,10 @@ export default function Dispatch() {
     const claim = async () => {
         if (!pending) return;
         const call = pending;
-        const res = await run<ClaimCallResult>('server:claimMissionCall', { callId: call.id });
+        const res = await run<ClaimCallResult>(
+            'server:claimMissionCall',
+            twists.length ? { callId: call.id, twists } : { callId: call.id },
+        );
         setPending(null);
         if (res.ok && res.data?.runId) navigate('active');
         else if (res.ok && res.data?.pending) toast('info', t('mc.toast.ready_check', { code: call.code }));
@@ -431,6 +438,15 @@ export default function Dispatch() {
                                 <Icon name="alert" size={14} />
                                 <span>{t('mc.confirm.abandon', { type: pending.typeLabel })}</span>
                             </p>
+                            <TwistPicker
+                                offered={pending.twists}
+                                caps={data?.twistMax}
+                                value={twists}
+                                onChange={setTwists}
+                                typeLabel={pending.typeLabel}
+                                unit={(data?.unit?.size ?? 1) > 1}
+                                disabled={busy}
+                            />
                         </div>
                     ) : null
                 }

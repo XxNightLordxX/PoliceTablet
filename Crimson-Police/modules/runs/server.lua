@@ -506,8 +506,8 @@ local function GetCtx(run, i)
             location = run.location,
             base = (run.mission.objectives or {})[i],
             rng = U.rng((tonumber(run.seed) or 1) + i),
-            -- the Radio Silence modifier, as the client halves get it (their ctx.radioSilence)
-            radioSilence = run.modifier == 'radio_silence',
+            -- the Radio Silence twist (run.modifiers), as the client halves get it (their ctx.radioSilence)
+            radioSilence = CP.Twists.has(run, 'radio_silence'),
         }
         ctx.complete = function(data) return Runs.objectiveComplete(run, i, data) end
         ctx.fail = function(reasonKey) return Runs.failRun(run, reasonKey) end
@@ -2513,7 +2513,7 @@ local function ComputeCash(run, p, result)
         cb = {
             B = run.cashBase or 0,
             mTier = payTier and Num(payTier.cash, 1.0) or 1.0,
-            mMod = run.modifier and Num(Config.Events and Config.Events.modifierCash, 1.0) or 1.0,
+            mMod = CP.Twists.bonus(CP.Twists.of(run)).cash,
         }
     end
     local amt = U.round(Num(cb.amount, Num(amount, 0)))
@@ -2784,6 +2784,7 @@ local function Settle(run, p, result, endReason, others)
         people = PeopleView(run),
         stats = StatsOf(run, p),
         missionCall = MissionCallView(run, p),
+        twists = CP.Twists.of(run),
         progress = nil,
         items = {},
     }
@@ -3094,6 +3095,7 @@ function Runs.create(opts)
         tier = nil,
         payTier = nil,
         modifier = nil,
+        modifiers = {},
         cashBase = 0,
         pointsBase = 0,
         departments = {},
@@ -3178,11 +3180,22 @@ function Runs.create(opts)
     -- Economy locked at accept.
     run.cashBase = BaseCash(mission, missionType, isBoss)
     run.pointsBase = BasePoints(mission, missionType, isBoss)
+    -- Twists (CP.Twists, locked at accept): the ones the officers chose (CP.Draw checked them against the type) that
+    -- fit the drawn mission, then a random one on top while Config.Events.modifierChance is above 0. run.modifier is
+    -- the first of them (the history row's column).
+    local dropped = {}
     if not test and not opts.operationId and not isBoss then
+        local okF, kept, gone = Call('Events', 'fitTwists', run, opts.twists)
+        if okF and type(kept) == 'table' then
+            run.modifiers = U.copy(kept)
+            dropped = type(gone) == 'table' and gone or {}
+        end
         local ok, key = Call('Events', 'rollModifier', run)
-        if ok and type(key) == 'string' then run.modifier = key end
+        if ok and type(key) == 'string' then run.modifiers[#run.modifiers + 1] = key end
+        run.modifiers = CP.Twists.sorted(run.modifiers)
+        run.modifier = run.modifiers[1]
     end
-    if run.modifier == 'time_crunch' then
+    if CP.Twists.has(run, 'time_crunch') then
         local cut = Num(Config.Events and Config.Events.timeCrunchCut, 0.25)
         run.timeLimit = math.max(1, U.round(run.timeLimit * (1 - cut)))
     end
@@ -3252,6 +3265,7 @@ function Runs.create(opts)
         host = run.host,
         test = test,
         modifier = run.modifier,
+        modifiers = U.copy(run.modifiers),
         participants = ParticipantsList(run),
         startRoute = startRoute,
         routeRequired = run.routeRequired,
@@ -3259,13 +3273,24 @@ function Runs.create(opts)
         isBoss = isBoss,
         timeLimit = run.timeLimit,
     }
+    -- a chosen twist the drawn mission has no use for (no armed NPCs, no time limit) was dropped without its reward
+    local droppedText = nil
+    if #dropped > 0 then
+        local names = {}
+        for i, key in ipairs(dropped) do names[i] = Label('modifier.' .. key) end
+        droppedText = table.concat(names, ', ')
+    end
     for _, src in ipairs(run.order) do
         TriggerClientEvent(CP.e('client:start'), src, id, data)
         Call('Route', 'begin', run, src)
         Notify(src, 'info', 'run.accepted', { mission = mission.label or mission.id })
+        if droppedText then
+            Notify(src, 'info', 'run.twist_dropped', { twists = droppedText, mission = mission.label or mission.id })
+        end
     end
-    CP.log(TAG, 'run %s created: %s #%d (%s, %d participant(s), expected %s, modifier %s%s)', id, mission.id,
-        locationIndex, missionType, #run.order, run.expectedTier, tostring(run.modifier), test and ', test' or '')
+    CP.log(TAG, 'run %s created: %s #%d (%s, %d participant(s), expected %s, twists %s%s)', id, mission.id,
+        locationIndex, missionType, #run.order, run.expectedTier,
+        #run.modifiers > 0 and table.concat(run.modifiers, '+') or 'none', test and ', test' or '')
     Fire('run:created', run)
     PushRun(run)
     return run
@@ -3946,16 +3971,24 @@ end
 --                                    VIEWS
 -- ============================================================================
 
+-- The run's twists for the screens: the modifier chip (the first key; its label names every twist) and the list
+-- { { key, label } } in CP.Twists order.
 local function ModifierView(run)
-    if not run.modifier then return nil end
-    return { key = run.modifier, label = Label('modifier.' .. run.modifier) }
+    local list, names = {}, {}
+    for i, key in ipairs(CP.Twists.of(run)) do
+        names[i] = Label('modifier.' .. key)
+        list[i] = { key = key, label = names[i] }
+    end
+    if #list == 0 then return nil, list end
+    return { key = list[1].key, label = table.concat(names, ' · ') }, list
 end
 
 local function ExpectedFor(run)
     local tier = run.payTier or TierByName(run.expectedTier) or TierFor(math.max(1, #Runs.activeSrcs(run)))
     local P = Num(run.pointsBase, 0)
     local ev = Config.Events or {}
-    local modPts = run.modifier and Num(ev.modifierPoints, 0) * P or 0
+    local bonus = CP.Twists.bonus(CP.Twists.of(run))
+    local modPts = bonus.points * P
     local nDepts = ActiveDepartments(run)
     local mCross = nDepts >= 2 and Num(Config.CrossDepartmentPoints, 1.10) or 1.0
     local cap = Num(Config.Scoring and Config.Scoring.scoreCap, 2.0) * P
@@ -3964,8 +3997,7 @@ local function ExpectedFor(run)
         local ok, tod = Call('Events', 'typeOfTheDay')
         if ok and tod ~= nil and tod == run.missionType then pts = pts * Num(ev.todMultiplier, 2.0) end
     end
-    local cash = U.round(
-        Num(run.cashBase, 0) * Num(tier and tier.cash, 1.0) * (run.modifier and Num(ev.modifierCash, 1.0) or 1.0))
+    local cash = U.round(Num(run.cashBase, 0) * Num(tier and tier.cash, 1.0) * bonus.cash)
     return { cash = cash, points = math.floor(pts) }
 end
 
@@ -4029,7 +4061,9 @@ function Runs.view(run, src)
     -- What Radio Silence hides on this run's maps (Config.Markers.radioSilence; an unknown value counts as 'area', as
     -- in CP.Markers), so the Active Mission notice says it; nil without Radio Silence (PLAN M8).
     local silenceMode = nil
-    if run.modifier == 'radio_silence' then
+    local radioSilence = CP.Twists.has(run, 'radio_silence')
+    local modifierView, twistsView = ModifierView(run)
+    if radioSilence then
         silenceMode = type(Config.Markers) == 'table' and Config.Markers.radioSilence or nil
         if silenceMode ~= 'none' and silenceMode ~= 'full' then silenceMode = 'area' end
     end
@@ -4055,10 +4089,11 @@ function Runs.view(run, src)
         paused = run.timer and run.timer.paused == true or false,
         partners = partners,
         expected = ExpectedFor(run),
-        modifier = ModifierView(run),
+        modifier = modifierView,
+        twists = twistsView,
         test = run.test ~= nil,
         recalcsLeft = recalcs,
-        radioSilence = run.modifier == 'radio_silence',
+        radioSilence = radioSilence,
         silenceMode = silenceMode,
         log = logView,
         intel = intel,

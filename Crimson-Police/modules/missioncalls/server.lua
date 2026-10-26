@@ -363,6 +363,9 @@ local function BuildTypeState(unit, missionType)
     local _, pool = Call('Draw', 'pool', missionType, unit.officers)
     pool = type(pool) == 'table' and pool or {}
     st.board = #pool
+    -- the twists the leader may choose when claiming (the board's own offer for the type, CP.Draw.twistOffer)
+    local okT, twists = Call('Draw', 'twistOffer', missionType, pool)
+    st.twists = okT and type(twists) == 'table' and twists or {}
     if #pool > 1 and CP.Draw and CP.Draw.noRepeat then
         local hist = {}
         for i, cid in ipairs(unit.cids) do hist[i] = HistoryOf(cid, missionType) end
@@ -1028,6 +1031,7 @@ TryNext = function(call)
                 if c.result then Notify(c.src, 'info', 'mc.toast.next_in_line', { code = call.code }) end
                 local okA, ok, data = Call('Draw', 'accept', c.src, call.type, {
                     area = c.area,
+                    twists = c.twists,
                     missionCall = {
                         id = call.id > 0 and call.id or nil,
                         code = call.code,
@@ -1074,7 +1078,8 @@ local function Resolve(call)
 end
 MC._resolve = Resolve
 
-function MC.claim(src, callId)
+-- twists (optional): the twist keys the leader chose for the run (checked like the Mission Board's, PLAN M8b).
+function MC.claim(src, callId, twists)
     src = ToSrc(src)
     local cfg = Cfg()
     if not src then return false, 'err.not_in_game' end
@@ -1092,6 +1097,16 @@ function MC.claim(src, callId)
     if now >= call.offerEnds and not call.window then return false, 'err.mc_gone' end
     local ok, info = ClaimCheck(src, call, now)
     if not ok then return false, info end
+    -- the twists are checked before the claim joins the window: a bad list never takes a turn
+    local chosen = {}
+    if type(twists) == 'table' and next(twists) ~= nil then
+        local okT, clean, twistErr = Call('Draw', 'checkTwists', call.type, info.unit.officers, twists)
+        if not okT then return false, 'err.twist_unavailable' end
+        if not clean then return false, twistErr or 'err.twist_unavailable' end
+        chosen = clean
+    elseif twists ~= nil and type(twists) ~= 'table' then
+        return false, 'err.invalid_payload'
+    end
 
     local w = call.window
     if w and w.resolved then return false, 'err.mc_claiming' end
@@ -1110,6 +1125,7 @@ function MC.claim(src, callId)
             recent = RecentClaims(info.unit.cids, now),
             atMs = GetGameTimer(),
             seq = claimSeq,
+            twists = chosen,
         }
         if not w then
             w = { firstMs = entry.atMs, claims = {} }
@@ -1280,6 +1296,7 @@ local function Card(call, v, tod)
         minUnit = pool <= 0 and st.minUnit or nil,
         cash = st.cash,
         points = st.points,
+        twists = st.twists or {},
         rapidPoints = call.staff and 0 or math.floor(st.points * Num(rr.pctOfP, 0.10) + 0.5),
         typeOfTheDay = tod == call.type,
         redispatched = call.redispatched,
@@ -1396,6 +1413,7 @@ function MC.list(src)
         realCalls = realCalls,
         serverTime = v.now,
         recent = Recent(v.now),
+        twistMax = CP.Twists.caps(),
     }
 end
 
@@ -1641,7 +1659,8 @@ end, { rate = 4 })
 
 CP.Net.action('server:claimMissionCall', function(src, payload)
     if type(payload) ~= 'table' or not tonumber(payload.callId) then return false, 'err.invalid_payload' end
-    return MC.claim(src, payload.callId)
+    if payload.twists ~= nil and type(payload.twists) ~= 'table' then return false, 'err.invalid_payload' end
+    return MC.claim(src, payload.callId, payload.twists)
 end, { rate = 3 })
 
 RegisterNetEvent(CP.e('server:mcWatch'), function(open)
