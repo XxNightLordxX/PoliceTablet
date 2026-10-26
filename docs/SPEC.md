@@ -3436,6 +3436,8 @@ Config.NpcCombat = {
     noCharge = true,                 -- NPCs never charge at officers
     aiDamage = 0.5,                  -- damage of NPC bullets (1.0 = normal GTA damage, 0.5 = half)
     aiMeleeDamage = 0.5,             -- damage of NPC punches and melee weapons (1.0 = normal)
+    holdAiDamage = true,             -- true = both values above go on again every second of a run (another script,
+                                     -- like Crimson-Contracts' guards, may reset them); false = at the start and after a respawn
     officerDefense = 1.0,            -- damage officers on a run take from every weapon, players' too (1.0 = off)
     noCriticalHits = true,           -- officers on a run take no extra headshot damage (it hurts like a body shot)
     cancelLethalHeadshots = true,    -- the server drops a one-shot kill by a mission NPC on an officer of its run...

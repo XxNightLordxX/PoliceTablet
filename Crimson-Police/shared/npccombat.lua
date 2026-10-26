@@ -290,6 +290,9 @@ function NpcCombat.aiDamage() return Modifier('aiDamage', 0.0, 2.0) end
 
 function NpcCombat.aiMeleeDamage() return Modifier('aiMeleeDamage', 0.0, 2.0) end
 
+-- True when the run's AI damage values go on again every second of the run (holdAiDamage; missing = true).
+function NpcCombat.holdAiDamage() return On() and Cfg().holdAiDamage ~= false end
+
 -- SetPlayerWeaponDefenseModifier's value, or nil when it is 1.0 (off).
 function NpcCombat.officerDefense()
     local v = Modifier('officerDefense', 0.1, 2.0)

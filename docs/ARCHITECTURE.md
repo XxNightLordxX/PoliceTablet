@@ -206,7 +206,7 @@ The packages of that build add `modules/corrections/` (§5.38), `modules/livectl
 | `CP.Net.callback(name, handler, opts)` | shared/net.lua | server: ox_lib callback `crimson-police:<name>`; handler `(src, args) -> data` or `nil, errKey`; reply `{ok,data,error}`. After a failed start every callback answers `err.not_started` before its handler runs |
 | `CP.Net.rateOk(src, key, max, windowMs)` | shared/net.lua | server |
 | `CP.Net.action(name, payload, timeoutMs)`, `CP.Net.request(name, args, timeoutMs)` | shared/net.lua | client; both return `{ ok, data, error }` and never raise (`err.timeout` after timeoutMs, default 15000; `err.no_response` when ox_lib raises) |
-| `CP.NpcCombat.*` | shared/npccombat.lua | Config.NpcCombat read at every call (§5.42): `weapon(name)`, `ammo()`, `isAutomatic(name)`, `automatic()`, `automaticsIn(t)`, `weaponsAllowed(list, allowed)`, `capAccuracy(acc)`, `scaleAccuracy(acc)`, `shootRate()`, `firingPattern()`, `ability(a)`, `noCharge()`, `driveByAccuracy(acc)`, `driveByPattern()`, `aiDamage()`, `aiMeleeDamage()`, `officerDefense()`, `noCriticalHits()`, `cancelLethalHeadshots()`, `lethalCancelAbove()`, `enabled()` |
+| `CP.NpcCombat.*` | shared/npccombat.lua | Config.NpcCombat read at every call (§5.42): `weapon(name)`, `ammo()`, `isAutomatic(name)`, `automatic()`, `automaticsIn(t)`, `weaponsAllowed(list, allowed)`, `capAccuracy(acc)`, `scaleAccuracy(acc)`, `shootRate()`, `firingPattern()`, `ability(a)`, `noCharge()`, `driveByAccuracy(acc)`, `driveByPattern()`, `aiDamage()`, `aiMeleeDamage()`, `holdAiDamage()`, `officerDefense()`, `noCriticalHits()`, `cancelLethalHeadshots()`, `lethalCancelAbove()`, `enabled()` |
 | `CP.U.*` | shared/utils.lua | `round` (halves up), `clamp`, `inRange`, `copy`, `deepcopy`, `contains`, `keys`, `count`, `map`, `filter`, `getPath`, `setPath`, `hash`, `hashHex`, `startsWith`, `trim`, `rng(seed)` (`:next() :int(a,b) :chance(p) :pick(l) :shuffle(l) :sample(l,n)`), `uuid()`, `xyz`, `dist`, `dist2d`, `distToPolyline`, `vecToTable`, `tableToVec`, `serialize`, `isHexColour`, `contrastText` |
 
 Naming of `CP.Net.action` names: officer actions are `'server:<name>'` (spec events, e.g.
@@ -2368,7 +2368,10 @@ call, so a Settings change applies to the next NPC; `enabled = false` makes ever
   `SetAiMeleeWeaponDamageModifier(aiMeleeDamage)`, `SetPedSuffersCriticalHits(PlayerPedId(), false)` (the ped's own
   flag 2 read first with `GetPedConfigFlag`, again for a new ped within 1 s), `SetPlayerWeaponDefenseModifier` when
   officerDefense is not 1.0 (the old value read with `GetPlayerWeaponDefenseModifier`). `stop` resets the AI
-  modifiers and puts the flag and the defense modifier back. `settings:changed` applies a mid-run change at once. A
+  modifiers and puts the flag and the defense modifier back. The 1 s watcher of the run (one thread per `start`,
+  ended by `stop`) sets the two AI modifiers again every pass while `holdAiDamage()` (Config.NpcCombat.holdAiDamage,
+  true): they are one value per game, and another script (Crimson-Contracts' guard scaling) may set or reset it
+  mid-run. `settings:changed` applies a mid-run change at once. A
   foreign `crimsonArena` value of the local player (docs/CRIMSON_ARENA.md rule 8) stops it at once, before the server
   ends the run for that player.
 

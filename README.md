@@ -834,6 +834,7 @@ never changes points, cash or a mission's stars. Every value can be changed in g
 | `noCharge` | `true` | NPCs never charge at officers |
 | `aiDamage` | 0.5 | Damage of NPC bullets: 1.0 = normal GTA damage, 0.5 = half |
 | `aiMeleeDamage` | 0.5 | The same for NPC punches and melee weapons |
+| `holdAiDamage` | `true` | Both values above go on again every second of a run, so another script that changes them (Crimson-Contracts' guards reset them when its guards are gone) cannot leave your officers' NPCs at full damage. `false` = they are set at the start of the run and after a respawn only |
 | `officerDefense` | 1.0 (off) | The damage officers on a run take from every weapon, players' shots too (0.5 = half). Leave it at 1.0 unless `aiDamage` alone is not enough |
 | `noCriticalHits` | `true` | Officers on a run take no extra headshot damage, from anyone: a headshot hurts like a body shot |
 | `cancelLethalHeadshots` | `true` | The server drops a hit from a mission NPC that would kill a healthy officer of its run in one shot (a headshot, a point-blank shotgun blast) |
@@ -842,7 +843,7 @@ never changes points, cash or a mission's stars. Every value can be changed in g
 Good to know:
 
 - Each officer's own game applies `aiDamage`, `aiMeleeDamage` and `noCriticalHits` while that officer is on a run,
-  and again after a respawn. `aiDamage` softens every NPC bullet his game works out during the run, so an NPC of
+  and again after a respawn (`aiDamage` and `aiMeleeDamage` every second, with `holdAiDamage`). `aiDamage` softens every NPC bullet his game works out during the run, so an NPC of
   another script next to him, or a mission NPC shooting a hostage, hits softer too.
 - `cancelLethalHeadshots` can only catch the hits the server hears about (an NPC that another officer's game moves).
   `noCriticalHits` covers the rest. Neither ever touches a player in Crimson-Arena. It never makes an officer

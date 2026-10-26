@@ -88,10 +88,54 @@ NC.noCriticalHits = true
 CP.Hooks.fire('settings:changed')
 H.eq(W.flags[101][2], true, 'and on again')
 NC.aiDamage = 0.5
+CP.Hooks.fire('settings:changed')
+H.eq(W.aiDamage, 0.5, 'aiDamage back to 0.5')
+
+-- another script that shares the one AI damage value of the game (Crimson-Contracts' guard scaling) resets it
+-- mid-run: the run's value is on again within a second
+ResetAiWeaponDamageModifier()
+H.eq(W.aiDamage, 1.0, 'another script reset the shared AI damage value')
+H.advance(1100)
+H.eq(W.aiDamage, 0.5, 'the run\'s AI damage is on again within a second')
+ResetAiMeleeWeaponDamageModifier()
+H.advance(1100)
+H.eq(W.aiMelee, 0.5, 'and the melee value too')
+
+-- the cost: at most the two AI natives a second while the run lasts, nothing else
+local function CountCalls(fromIndex)
+    local byName, n = {}, 0
+    for i = fromIndex + 1, #W.calls do
+        local name = W.calls[i].name
+        byName[name] = (byName[name] or 0) + 1
+        n = n + 1
+    end
+    return n, byName
+end
+local before = #W.calls
+H.advance(10000)
+local n, byName = CountCalls(before)
+H.ok(n <= 20 and (byName.SetAiWeaponDamageModifier or 0) <= 10 and (byName.SetAiMeleeWeaponDamageModifier or 0) <= 10,
+    ('at most two natives a second while the run lasts (%d in 10 s)'):format(n))
+H.ok((byName.SetAiWeaponDamageModifier or 0) >= 9, 'the bullet value goes on every second')
+
+-- Config.NpcCombat.holdAiDamage = false: the old behaviour (set at the start and after a respawn only)
+NC.holdAiDamage = false
+ResetAiWeaponDamageModifier()
+before = #W.calls
+H.advance(3000)
+H.eq(W.aiDamage, 1.0, 'holdAiDamage off: another script\'s reset stays')
+H.eq(CountCalls(before), 0, 'holdAiDamage off: the watcher sets nothing while the ped stays the same')
+NC.holdAiDamage = true
+H.advance(1100)
+H.eq(W.aiDamage, 0.5, 'holdAiDamage on again: the run\'s value is back within a second')
 
 End('run-1')
 H.eq(CP.NpcCombat.activeRun(), nil, 'the run end turns them off')
 H.eq(W.aiDamage, 1.0, 'NPC bullets back to normal (ResetAiWeaponDamageModifier)')
+before = #W.calls
+H.advance(5000)
+H.eq(W.aiDamage, 1.0, 'after the run nothing sets it again')
+H.eq(CountCalls(before), 0, 'after the run: no native at all (the watcher has ended)')
 H.eq(W.aiMelee, 1.0, 'NPC melee back to normal')
 H.eq(W.flags[101][2], false, 'the officer\'s own headshot flag is back')
 H.eq(W.defense[0], 0.9, 'the defense modifier back to what it was before the run')
