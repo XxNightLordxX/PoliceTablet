@@ -24,6 +24,8 @@ local ITEM_WATCH_MS = 1000           -- how often the tablet item is looked for 
 local DOWN_WATCH_MS = 500            -- how often a downed officer is looked for while the tablet is open
 local OPEN_ACK_MS = 6000             -- the NUI confirms it shows the UI within this, or the focus is released
 local SETTINGS_WAIT_MS = 10000       -- the start waits this long at most for the settings changed in game
+local PAUSE_CONTROL = 200            -- INPUT_FRONTEND_PAUSE_ALTERNATE (Escape)
+local PAUSE_GUARD_MS = 300           -- when Config.Tablet.pauseGuardMs is missing from an older config.lua
 
 -- Tablet prop and animation (held in the hand the animation uses; offsets tuned for this clip).
 local ANIM_DICT = 'amb@code_human_in_bus_passenger_idles@female@tablet@base'
@@ -615,8 +617,28 @@ RegisterNUICallback('opened', function(body, cb)
     if seq and seq > state.ackSeq and seq <= state.openSeq then state.ackSeq = seq end
 end)
 
+-- The NUI closed the tablet (Escape, the close button): the GTA pause key does nothing for Config.Tablet.pauseGuardMs.
+-- FiveM gives a key that is still down when the NUI lets go of the focus back to the game as a new press, so the
+-- Escape that closed the tablet could also open the pause menu. One thread at a time: a second close only extends it.
+local pauseGuard = { untilMs = 0, running = false }
+
+local function GuardPause()
+    local ms = tonumber(Config.Tablet and Config.Tablet.pauseGuardMs) or PAUSE_GUARD_MS
+    if ms <= 0 then return end
+    pauseGuard.untilMs = math.max(pauseGuard.untilMs, GetGameTimer() + ms)
+    if pauseGuard.running then return end
+    pauseGuard.running = true
+    CreateThread(function()
+        while GetGameTimer() < pauseGuard.untilMs do
+            DisableControlAction(0, PAUSE_CONTROL, true)
+            Wait(0)
+        end
+        pauseGuard.running = false
+    end)
+end
+
 RegisterNUICallback('close', function(_, cb)
-    T.close()
+    if T.close() then GuardPause() end
     cb({ ok = true })
 end)
 

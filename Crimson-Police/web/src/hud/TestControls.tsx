@@ -1,10 +1,10 @@
 // HUD test controls (Admin test mode, SPEC "Test controls").
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Icon, Spinner } from '../shared/components';
 import type { IconName } from '../shared/components';
 import { cx } from '../shared/cx';
-import { usePush } from '../shared/hooks';
+import { useKeyRelease, usePush } from '../shared/hooks';
 import { t } from '../shared/i18n';
 import { clientAction } from '../shared/nui';
 import { toast } from '../shared/toast';
@@ -38,7 +38,7 @@ interface Btn {
 
 interface PanelState {
     focused: boolean;
-    key: string;
+    key: string | false; // false: the bound key has no text label (a mouse or pad button), only Escape releases
     debugOn: boolean;
     allowTeleport: boolean;
     debugOverlay: boolean;
@@ -49,7 +49,7 @@ const lastPanel: PanelState = { focused: false, key: 'F7', debugOn: false, allow
 function rememberPush(d: TestPush | null | undefined) {
     if (!d || typeof d !== 'object') return;
     if (typeof d.focused === 'boolean') lastPanel.focused = d.focused;
-    if (typeof d.key === 'string' && d.key) lastPanel.key = d.key;
+    if ((typeof d.key === 'string' && d.key) || d.key === false) lastPanel.key = d.key;
     if (typeof d.debugOn === 'boolean') lastPanel.debugOn = d.debugOn;
     if (typeof d.allowTeleport === 'boolean') lastPanel.allowTeleport = d.allowTeleport;
     if (typeof d.debugOverlay === 'boolean') lastPanel.debugOverlay = d.debugOverlay;
@@ -77,7 +77,7 @@ export default function TestControls({ hud }: TestControlsProps) {
     usePush<TestPush | null>('test', d => {
         if (!d || typeof d !== 'object') return;
         if (typeof d.focused === 'boolean') setFocused(d.focused);
-        if (typeof d.key === 'string' && d.key) setKey(d.key);
+        if ((typeof d.key === 'string' && d.key) || d.key === false) setKey(d.key);
         if (typeof d.debugOn === 'boolean') setDebugOn(d.debugOn);
         if (typeof d.allowTeleport === 'boolean') setAllowTeleport(d.allowTeleport);
         if (typeof d.debugOverlay === 'boolean') setDebugOverlay(d.debugOverlay);
@@ -91,21 +91,16 @@ export default function TestControls({ hud }: TestControlsProps) {
         void clientAction('testPanel', { open: false });
     }, []);
 
-    // While the panel has focus, its key or Escape gives the game its input back (a pending confirm closes first).
-    useEffect(() => {
-        if (!focused) return;
-        const onKey = (e: KeyboardEvent) => {
-            if (e.repeat) return;
-            const k = e.key.toUpperCase();
-            if (e.key === 'Escape' || k === key.toUpperCase()) {
-                e.preventDefault();
-                if (e.key === 'Escape' && confirm) setConfirm(null);
-                else release();
-            }
-        };
-        window.addEventListener('keydown', onKey);
-        return () => window.removeEventListener('keydown', onKey);
-    }, [focused, key, confirm, release]);
+    // While the panel has focus, its key or Escape gives the game its input back (a pending confirm closes first),
+    // on the key-up (useKeyRelease): the release of the key press that gave the panel the focus does nothing.
+    useKeyRelease(
+        focused,
+        e => e.key === 'Escape' || (key !== false && e.key.toUpperCase() === key.toUpperCase()),
+        e => {
+            if (e.key === 'Escape' && confirm) setConfirm(null);
+            else release();
+        },
+    );
 
     const call = async (id: string, name: string, payload: unknown, okKey?: string) => {
         setBusy(id);
@@ -215,8 +210,10 @@ export default function TestControls({ hud }: TestControlsProps) {
                 </span>
                 {focused ? (
                     <button type="button" className="testing-hud__release" onClick={release}>
-                        {t('test.ui.panel_release', { key })}
+                        {key === false ? t('test.ui.panel_release_nokey') : t('test.ui.panel_release', { key })}
                     </button>
+                ) : key === false ? (
+                    <span className="testing-hud__hint">{t('test.ui.panel_hint_nokey')}</span>
                 ) : (
                     <span className="testing-hud__hint">
                         <kbd className="testing-hud__kbd">{key}</kbd>

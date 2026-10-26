@@ -734,7 +734,7 @@ Everything else works as shipped. These are the ones owners change most:
 | `Config.Disputes.windowHours` | How long officers have to dispute a run (48 hours) |
 | `Config.AntiCheat` | Flag limits, and the automatic suspension: 3 voided runs in 30 days = 7 days |
 | `Config.Builder` | Mission Builder on or off, what builders may pick, `noBuildZones`, `requireTestToPublish` (`false` = testing is optional, as shipped), `supervisorItems` (`false` = only admins put items in a custom mission, as shipped; [4.5](#45-mission-builder-permissions)), and `spawnMargin` (40 m, 0-150): a custom mission's armed NPCs (a shootout and its boss, ambush and pursuit cars, warrant associates) must spawn outside the start circle plus this, e.g. 100 m from a 60 m start, so a fight never appears around your officers as they arrive (hostages and suspects keep `minSpawnFromStart`, 30 m) |
-| `Config.Testing` | Admin test mode: `enabled`, `maxTesters`, `allowTeleport`, `debugOverlay`, and `spawnCheck` (the spawn point check: `enabled`, `sceneTimeoutMs` 8000, `moveWithin` 150 m, `routes = false` checks no route points, `teleport = true` the Teleport here button next to a result) |
+| `Config.Testing` | Admin test mode: `enabled`, `maxTesters`, `allowTeleport`, `debugOverlay`, `panelKeyGuardMs` (300: the test controls key is ignored this long after the panel lets go, so the same press does not take it back; 0 = off), and `spawnCheck` (the spawn point check: `enabled`, `sceneTimeoutMs` 8000, `moveWithin` 150 m, `routes = false` checks no route points, `teleport = true` the Teleport here button next to a result) |
 | `Config.Retention` | Clean-up of old data: runs archived after 12 months, audit rows deleted after 180 days, mission calls after 90 days (0 = keep) |
 | `Config.Downed.dropOffs` | Where a downed officer is taken when no EMS is on duty |
 | `Config.Custody.tow.enabled` | `false` makes impounded cars fade out instead of leaving on a tow truck |
@@ -1203,6 +1203,10 @@ FiveM**, then look for the Crimson-Police lines.
 
 - A default key you set in `config.lua` only reaches players who never had that key before. Players who already
   joined keep their own choice.
+- Escape closes a dialog in the tablet first, then the tablet, when you let go of it. For 300 ms after the tablet
+  closes the GTA pause menu stays shut, so the same Escape does not open it (`Config.Tablet.pauseGuardMs`, 0 = off).
+  The test controls key also acts when you let go of it. Bound to a mouse or pad button, the test panel shows
+  **Esc** only (Escape frees the mouse) and the test invitation toast names no key.
 - Mission Builder keys, shown on screen while you use a builder tool: **E** (or the horn) place or set,
   **Backspace** undo, **Enter** done or finish, **P** pause or resume, **X** stop point, close or stop a test drive,
   **mouse wheel** radius or rotate, **Shift** fine steps.

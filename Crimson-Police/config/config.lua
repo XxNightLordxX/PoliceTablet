@@ -59,6 +59,9 @@ Config.Tablet = {
     },
     deskDistance = 3.0,                  -- metres: walking further than this from the desk closes the tablet
     deskScenario = 'PROP_HUMAN_ATM',     -- standing-and-typing animation at a desk (no handheld tablet)
+    -- Milliseconds (0-1000) the GTA pause key is blocked after Escape or the close button closes the tablet, so the
+    -- same Escape press does not also open the pause menu (0 = off)
+    pauseGuardMs = 300,
     -- Mission desks: ox_target boxes that open the Officer UI. The coordinates are placeholders near the
     -- base-game stations, 2 m or more from sc-police's duty points: check them on your MLO.
     -- departments = nil lets every department use a desk; prop = a laptop only that player sees, or false.
@@ -1284,6 +1287,9 @@ Config.Testing = {
     useStartRoute = false, -- default for the start-route toggle
     allowTeleport = true,  -- teleport controls in test runs
     debugOverlay = true,   -- the debug overlay control
+    -- Milliseconds (0-1000) the test controls key is ignored after the panel or the invitation prompt gives your mouse
+    -- and keyboard back, so the press that let go does not take the panel straight back (0 = off)
+    panelKeyGuardMs = 300,
     -- Check spawn points (Admin UI -> Testing): your own game visits every point of a mission's locations and tells
     -- you which ones are under the ground, floating, in water, in a wall or inside a building that never loads. It
     -- spawns nothing and moves only you (unseen and unhurt, back where you were afterwards)

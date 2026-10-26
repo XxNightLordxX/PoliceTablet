@@ -99,8 +99,13 @@ Seats: `Config.Testing.maxTesters - 1` (pending + accepted) besides the admin.
   through `client:testInvite` (or the prompt's last list) has not expired. With nothing to open the key does nothing
   at all (no server call, no toast), so a key shared with another resource stays quiet. Never while a
   Crimson-Police UI is open.
-  Released by the key/Escape in the NUI (client action `testPanel { open = false }`), when the test ends or this
-  player leaves the run, on a foreign crimsonArena value, and on resource stop — only when this module took it.
+  Released by the key/Escape in the NUI (client action `testPanel { open = false }`, on the key-up so the release
+  of the press that gave the focus does nothing), when the test ends or this player leaves the run, on a foreign
+  crimsonArena value, and on resource stop — only when this module took it. A key press within
+  `Config.Testing.panelKeyGuardMs` (300 ms) of letting go is ignored: FiveM hands a key still down when the
+  focus goes back to the game over as a new press. The pushed `key` is the bound key's text label, or `false`
+  for a mouse or pad button ('b_' label): the panel then lets go on Escape only and the invitation toast uses
+  `test.invite_toast_nokey`.
   Safety net: DebugOverlay (always mounted) also releases on Escape when the Lua client reports a focus but no
   HUD panel is on screen. After the HUD flag is set the client re-pushes the panel state (bound key, focus,
   config) so a panel that mounted after the first push still shows the right key; the HUD panel also keeps the last

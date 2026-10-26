@@ -3279,6 +3279,9 @@ only, so an open, a switch or a theme refresh never copies and encodes the 340 K
 NUI callbacks (§9.1): ready, close, request { name, args } -> CP.Net.request, action { name, payload }
 -> CP.Net.action (names must start with 'server:'), client { name, payload } -> registered client
 actions, switchUi { ui } -> getSession for that UI; replies { ok = true, data = Session } and re-opens.
+close that closed an open UI (Escape's key-up, the close button) blocks the GTA pause key (control 200,
+DisableControlAction every frame) for Config.Tablet.pauseGuardMs (300; 0 = off): FiveM hands a key still
+down when the focus goes back to the game over as a new press. One thread; a second close extends it (K5).
 The UI closes on duty loss, on a switch away from the job it was opened with (or out of every
 department) and on character unload (the Admin UI only on unload).
 Crimson-Arena (docs/CRIMSON_ARENA.md rule 8): while the local player carries a foreign crimsonArena
@@ -3359,6 +3362,8 @@ file, and that department's session carries no logo (no broken image in the NUI)
       on a foreign crimsonArena value, within 250 ms of the player going down (CP.Tablet.playerDown: the key
       and the HUD button take no focus while down, toast test.downed), on CrimsonPoliceState unstick
       (CP.Testing.releaseFocus) and on resource stop. It is never released unconditionally here.
+      A key press within Config.Testing.panelKeyGuardMs (300 ms; 0 = off) of letting go is ignored: FiveM
+      hands a key still down when the focus goes back to the game over as a new press (K5).
     * CP.Testing.releaseFocus()  lets go of the panel's or the prompt's focus (CP.Diag.unstick)
       CP.Testing.focusKind() -> 'controls'|'invites'|nil  while the panel or the prompt holds the focus
       (CP.Diag.state().testFocus: CrimsonPoliceState and Admin UI -> Officers -> Support show it as ours)
@@ -3367,7 +3372,8 @@ file, and that department's session carries no logo (no broken image in the NUI)
     * the in-world debug overlay while it is on: DrawMarker for the start radius, spawn points, zones and
       route waypoints (with lines between waypoints), drawn every frame only within DRAW_RANGE of the player
       and only while the player is near the test area; otherwise the loop sleeps 500 ms
-    * live counts pushed to the NUI: CP.Tablet.push('test', { controls, focused, key, debugOn, runId,
+    * live counts pushed to the NUI (key = the bound key's text label, false for a mouse or pad button:
+      Escape only, toast test.invite_toast_nokey): CP.Tablet.push('test', { controls, focused, key, debugOn, runId,
       allowTeleport, debugOverlay (Config.Testing), debug = DebugData|false, prompt = { invites }|false })
       (App passes `debug` to DebugOverlay; the geometry stays in Lua)
     * the invitation toast (client:testInvite)
@@ -3968,7 +3974,8 @@ client; this panel shows the numbers.
 Invitation prompt: when the Lua testing client opens it (the panel key with invitations waiting) it gives NUI focus
 and pushes 'test' { prompt: { invites } }; Accept/Decline call action server:testRespond { inviteId, accepted },
 Escape / Close release the focus (client action testPanel { open: false }). Escape also releases a focus
-the Lua client holds for the HUD panel while no panel is on screen (safety net).
+the Lua client holds for the HUD panel while no panel is on screen (safety net). Both Escapes act on the
+key-up (useKeyRelease).
 ```
 
 ## Crimson-Police/web/src/hud/Hud.tsx
@@ -4001,7 +4008,9 @@ Props: { hud: HudState } — rendered by <Hud/> under the objectives only when h
 (modules/testing/client.lua) gives focus with the +crimsonpolice_testpanel key (default F7) and tells
 this panel through push 'test' { focused, key, debugOn } (TestPush), kept at module level so a panel that
 mounts again shows the last values at once. While focused, that key or Escape
-releases the cursor (client action testPanel { open: false }).
+releases the cursor (client action testPanel { open: false }) on its key-up (useKeyRelease, shared/hooks.ts),
+so the release of the press that gave the focus does nothing. key = false (the bound key has no text label,
+a mouse or pad button): only Escape releases and the panel names no key (test.ui.*_nokey).
 The same push carries Config.Testing's allowTeleport / debugOverlay: those buttons are disabled when off.
 Buttons call client actions of the Lua testing client:
   testControl { control: 'skip' | 'restart' | 'pause' | 'resume' | 'complete' | 'fail' | 'end' }
@@ -4262,6 +4271,11 @@ src/shared/hooks.ts · data hooks for screens.
   const { run, busy } = useAction();  await run('server:acceptType', 'patrol');
   const left = useCountdown(view?.remaining ?? null, { paused: view?.paused });
   usePush('unit', () => refetch());
+  useKeyRelease(active, e => e.key === 'Escape', () => close());
+    a key that gives the game its input back acts on its key-up, and only for a key-down this page saw itself
+    (FiveM hands a key still down when the NUI focus goes back over as a new press). FiveM's CEF sets no
+    repeat flag, so a second key-down within 150 ms of the arming one marks a press made before the page
+    listened: its key-up does nothing. Used by App (Escape), TestControls and DebugOverlay (K5).
 ```
 
 ## Crimson-Police/web/src/shared/i18n.tsx

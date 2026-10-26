@@ -12,6 +12,7 @@ local ACTIVE_RANGE = 600.0      -- draw every frame only while this close to the
 local LABEL_RANGE = 25.0        -- 3D labels for points this close
 local INVITE_TOAST_MS = 12000
 local INVITE_WAIT_S = 120       -- when an invitation event names no expiry
+local KEY_GUARD_MS = 300        -- when Config.Testing.panelKeyGuardMs is missing from an older config.lua
 local CONTROLS = {
     skip = true,
     restart = true,
@@ -37,6 +38,7 @@ local state = {
     inRun = false,        -- still a participant of that run (HUD visible)
     focused = false,
     focusKind = nil,      -- 'controls' | 'invites'
+    releasedAt = nil,     -- GetGameTimer() when the panel or the prompt last let go of the focus
     prompt = false,       -- invitation prompt open
     debugOn = false,
     debug = nil,          -- last debug payload (without geometry)
@@ -70,13 +72,15 @@ local function Notify(kind, key, vars, opts)
     if CP.Tablet and CP.Tablet.notify then CP.Tablet.notify(kind, CP.L(key, vars), opts) end
 end
 
+-- The key bound to +crimsonpolice_testpanel ('t_F7' -> 'F7'), or nil when it has no text label: a mouse or pad
+-- button comes back as 'b_<number>', and naming DEFAULT_KEY then would make the panel wait for the wrong key.
 local function KeyLabel()
     local ok, label = pcall(function()
         local hash = (joaat(KEY_COMMAND) & 0xFFFFFFFF) | 0x80000000
         return GetControlInstructionalButton(0, hash, true)
     end)
     if ok and type(label) == 'string' and label:sub(1, 2) == 't_' and #label > 2 then return label:sub(3) end
-    return DEFAULT_KEY
+    return nil
 end
 
 local function PushNui(extra)
@@ -85,7 +89,7 @@ local function PushNui(extra)
     local data = {
         controls = state.controls and state.inRun,
         focused = state.focused,
-        key = KeyLabel(),
+        key = KeyLabel() or false, -- false: the panel lets go on Escape only and names no key
         debugOn = state.debugOn,
         runId = state.runId or false,
         allowTeleport = cfg.allowTeleport ~= false,
@@ -150,6 +154,7 @@ local function ReleaseFocus()
     if not state.focused then return end
     state.focused = false
     state.focusKind = nil
+    state.releasedAt = GetGameTimer()
     state.watchToken = state.watchToken + 1
     if not TabletOpen() then SetNuiFocus(false, false) end
     local extra = nil
@@ -735,7 +740,15 @@ local function OpenPrompt()
     end)
 end
 
+-- Milliseconds the panel key is ignored after the panel or the prompt let go (Config.Testing.panelKeyGuardMs).
+local function KeyGuardMs()
+    return tonumber(Config.Testing and Config.Testing.panelKeyGuardMs) or KEY_GUARD_MS
+end
+
 local function OnPanelKey()
+    -- FiveM gives a key that is still down when the NUI lets go of the focus back to the game as a new press: this
+    -- soon after letting go it is the press that let go, not a new one.
+    if not state.focused and state.releasedAt and GetGameTimer() - state.releasedAt < KeyGuardMs() then return end
     if state.focused then
         ReleaseFocus()
         return
@@ -804,7 +817,9 @@ RegisterNetEvent(CP.e('client:testInvite'), function(inv)
     local from = type(inv.from) == 'string' and inv.from or '?'
     local mission = type(inv.missionLabel) == 'string' and inv.missionLabel or '?'
     RememberInvite(inv)
-    Notify('info', 'test.invite_toast', { from = from, mission = mission, key = KeyLabel() },
+    local key = KeyLabel()
+    Notify('info', key and 'test.invite_toast' or 'test.invite_toast_nokey',
+        { from = from, mission = mission, key = key },
         { title = CP.L('test.invite_title'), duration = INVITE_TOAST_MS })
 end)
 

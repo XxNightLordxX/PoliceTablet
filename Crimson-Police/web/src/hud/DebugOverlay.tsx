@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Button, Countdown, Icon } from '../shared/components';
 import { cx } from '../shared/cx';
 import { formatDuration } from '../shared/format';
-import { useHudScale, usePush } from '../shared/hooks';
+import { useHudScale, useKeyRelease, usePush } from '../shared/hooks';
 import { t } from '../shared/i18n';
 import { action, clientAction } from '../shared/nui';
 import { toast } from '../shared/toast';
@@ -207,37 +207,24 @@ export default function DebugOverlay({ debug, hud }: DebugOverlayProps) {
     });
 
     // Safety net: the Lua client holds NUI focus for the HUD test panel but the panel is not on screen
-    // (no HUD with testControls): Escape still gives the game its input back.
+    // (no HUD with testControls): Escape still gives the game its input back (on its key-up: useKeyRelease).
     const panelShown = !!hud && hud.testControls === true;
-    useEffect(() => {
-        if (!focused || prompt || panelShown) return;
-        const onKey = (e: KeyboardEvent) => {
-            if (e.key === 'Escape' && !e.repeat) {
-                e.preventDefault();
-                setFocused(false);
-                void clientAction('testPanel', { open: false });
-            }
-        };
-        window.addEventListener('keydown', onKey);
-        return () => window.removeEventListener('keydown', onKey);
-    }, [focused, prompt, panelShown]);
+    useKeyRelease(
+        focused && !prompt && !panelShown,
+        e => e.key === 'Escape',
+        () => {
+            setFocused(false);
+            void clientAction('testPanel', { open: false });
+        },
+    );
 
     const closePrompt = useCallback(() => {
         setPrompt(null);
         void clientAction('testPanel', { open: false });
     }, []);
 
-    useEffect(() => {
-        if (!prompt) return;
-        const onKey = (e: KeyboardEvent) => {
-            if (e.key === 'Escape' && !e.repeat) {
-                e.preventDefault();
-                closePrompt();
-            }
-        };
-        window.addEventListener('keydown', onKey);
-        return () => window.removeEventListener('keydown', onKey);
-    }, [prompt, closePrompt]);
+    // Escape closes the invitation prompt (on its key-up).
+    useKeyRelease(!!prompt, e => e.key === 'Escape', closePrompt);
 
     const fallback = hud ? (hud as HudState & { debug?: unknown }).debug : undefined;
     const data = isDebug(debug) ? debug : isDebug(fallback) ? fallback : null;

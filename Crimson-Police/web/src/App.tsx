@@ -15,7 +15,7 @@ import { Hud } from './hud/Hud';
 import { HudColumn } from './hud/HudColumn';
 import { ResultScreen } from './hud/ResultScreen';
 import { QuietBoundary, Toasts } from './shared/components';
-import { closeTopLayer, useHudScale, usePush, useViewport } from './shared/hooks';
+import { closeTopLayer, useHudScale, useKeyRelease, usePush, useViewport } from './shared/hooks';
 import { LocaleProvider, t } from './shared/i18n';
 import { NavigationContext, type NavigationValue, type ScreenKey, type ScreenParams } from './shared/navigation';
 import { clientAction, fetchNui, isEnvBrowser, request, useNuiEvent } from './shared/nui';
@@ -153,17 +153,14 @@ export default function App() {
         if (res.ok && res.data) setSession(normalizeSession(res.data));
     }, [ui]);
 
-    // Escape closes the top dialog first, then the UI.
-    useEffect(() => {
-        if (!ui) return;
-        const onKey = (e: KeyboardEvent) => {
-            if (e.key !== 'Escape' || e.repeat) return;
-            e.preventDefault();
+    // Escape closes the top dialog first, then the UI (on its key-up: useKeyRelease).
+    useKeyRelease(
+        !!ui,
+        e => e.key === 'Escape',
+        () => {
             if (!closeTopLayer()) close();
-        };
-        window.addEventListener('keydown', onKey);
-        return () => window.removeEventListener('keydown', onKey);
-    }, [ui, close]);
+        },
+    );
 
     // ---- NAVIGATION --------------------------------------------------------
     const available = useMemo(() => (ui ? screensFor(ui, session).map(s => s.key) : []), [ui, session]);

@@ -1369,6 +1369,7 @@ end
 
 local CT = CP.Testing
 local st = CT._state()
+local KEY_GUARD = 300 -- Config.Testing.panelKeyGuardMs as config.lua ships it (checked in the K5 block)
 local function LastPush()
     return nuiPushes[#nuiPushes]
 end
@@ -1402,6 +1403,7 @@ do
     H.eq(LastPush().data.prompt, false, 'prompt hidden')
     -- answered on the Admin UI meanwhile: one press is told so, the next ones are silent again
     serverReplies.invites = {}
+    H.clockMs = H.clockMs + KEY_GUARD -- a new press, not the one that let go (Config.Testing.panelKeyGuardMs)
     H.commands['+crimsonpolice_testpanel'].fn()
     H.eq(toasts[#toasts].text, CP.L('test.no_invites'), 'told the invitation is gone')
     local nAsked, nToasts = #asked, #toasts
@@ -1486,6 +1488,7 @@ do
     H.ok(markers > 0, 'markers drawn near the test area')
 
     -- the arena flag closes the panel
+    H.clockMs = H.clockMs + KEY_GUARD -- a new press, not the one that let go (Config.Testing.panelKeyGuardMs)
     H.commands['+crimsonpolice_testpanel'].fn()
     H.eq(st.focused, true, 'focused again')
     bagHandlers[1].fn('player:1', 'crimsonArena', { active = true, matchId = 'm2' })
@@ -1582,6 +1585,7 @@ do
     H.eq(st.focused, false, 'down: the panel lets go of the focus within 250 ms')
     H.eq(focus[#focus][1], false, 'down: SetNuiFocus(false, false)')
     local nFocus = #focus
+    H.clockMs = H.clockMs + KEY_GUARD -- a new press, not the one that let go (Config.Testing.panelKeyGuardMs)
     H.commands['+crimsonpolice_testpanel'].fn()
     H.eq(#focus, nFocus, 'down: the key takes no focus')
     H.eq(toasts[#toasts].text, CP.L('test.downed'), 'down: and says why')
@@ -1602,6 +1606,7 @@ do
         _G.print = realP
         return table.concat(printed, '\n')
     end
+    H.clockMs = H.clockMs + KEY_GUARD
     H.commands['+crimsonpolice_testpanel'].fn()
     H.eq(CP.Diag.state().testFocus, 'controls', 'diag: the state names the test panel\'s focus')
     local text = StateText()
@@ -1617,6 +1622,7 @@ do
         { inviteId = 'ti9', missionLabel = 'Gang Shootout', from = 'Alex', expiresIn = 90 })
     serverReplies.invites = { { inviteId = 'ti9', missionLabel = 'Gang Shootout', from = 'Alex', expiresIn = 90 } }
     st.controls = false
+    H.clockMs = H.clockMs + KEY_GUARD
     H.commands['+crimsonpolice_testpanel'].fn()
     H.step(0)
     H.eq(CP.Diag.state().testFocus, 'invites', 'diag: the prompt\'s focus is named too')
@@ -1629,6 +1635,59 @@ do
     H.ok(text:find('the NUI focus belongs to another resource', 1, true) ~= nil,
         'unstick: another resource keeps its own')
     otherFocus = false
+
+    -- K5: FiveM hands a key still down when the NUI lets go back to the game as a new press. A press within
+    -- Config.Testing.panelKeyGuardMs (300) of letting go is that same press: the panel stays let go.
+    H.eq(Config.Testing.panelKeyGuardMs, KEY_GUARD, 'K5: config.lua ships panelKeyGuardMs = 300')
+    H.clockMs = H.clockMs + KEY_GUARD
+    H.commands['+crimsonpolice_testpanel'].fn()
+    H.eq(st.focused, true, 'K5: the key takes the panel')
+    clientActions.testPanel({ open = false })
+    H.eq(focus[#focus][1], false, 'K5: the NUI (the key\'s key-up) lets go')
+    local nGuard = #focus
+    H.clockMs = H.clockMs + 16
+    H.commands['+crimsonpolice_testpanel'].fn()
+    H.ok(st.focused == false and #focus == nGuard, 'K5: the still-held key one frame later does not take it back')
+    H.clockMs = H.clockMs + KEY_GUARD - 17
+    H.commands['+crimsonpolice_testpanel'].fn()
+    H.ok(st.focused == false and #focus == nGuard, 'K5: nor 299 ms after letting go')
+    H.clockMs = H.clockMs + 1
+    H.commands['+crimsonpolice_testpanel'].fn()
+    H.ok(st.focused == true and focus[#focus][1] == true, 'K5: 300 ms after letting go a press takes the panel')
+    -- the key while the panel holds the focus lets go, and the same press seen again right after does nothing
+    H.commands['+crimsonpolice_testpanel'].fn()
+    H.eq(st.focused, false, 'K5: the key lets go of a focused panel')
+    H.clockMs = H.clockMs + 16
+    H.commands['+crimsonpolice_testpanel'].fn()
+    H.eq(st.focused, false, 'K5: and the same press seen again does not take it back')
+    -- 0 turns the guard off (read at press time)
+    Config.Testing.panelKeyGuardMs = 0
+    H.commands['+crimsonpolice_testpanel'].fn()
+    H.eq(st.focused, true, 'K5: panelKeyGuardMs = 0: a press right after letting go takes the panel')
+    clientActions.testPanel({ open = false })
+    Config.Testing.panelKeyGuardMs = KEY_GUARD
+
+    -- K5: a mouse or pad button has no text label ('b_<n>'): the panel is told there is no key (Escape only), not F7
+    local realButton = GetControlInstructionalButton
+    _G.GetControlInstructionalButton = function() return 'b_123' end
+    H.clockMs = H.clockMs + KEY_GUARD
+    H.commands['+crimsonpolice_testpanel'].fn()
+    H.ok(st.focused == true and LastPush().data.key == false, 'K5: a b_ label pushes key = false')
+    clientActions.testPanel({ open = false })
+    H.eq(LastPush().data.key, false, 'K5: every push says so')
+    H.fire('crimson-police:client:testInvite', 1, { inviteId = 'ti10', missionLabel = 'Bomb Disposal', from = 'Sam' })
+    local nokey = toasts[#toasts].text
+    H.eq(nokey, CP.L('test.invite_toast_nokey', { from = 'Sam', mission = 'Bomb Disposal' }),
+        'K5: the invitation toast names no key')
+    H.ok(not nokey:find('F7', 1, true) and not nokey:find('{key}', 1, true), 'K5: not F7, not a raw {key}: ' .. nokey)
+    _G.GetControlInstructionalButton = function() return nil end
+    clientActions.testPanel({ open = true })
+    H.eq(LastPush().data.key, false, 'K5: no label at all: key = false')
+    clientActions.testPanel({ open = false })
+    _G.GetControlInstructionalButton = realButton
+    clientActions.testPanel({ open = true })
+    H.eq(LastPush().data.key, 'F6', 'K5: a t_ label still names the key')
+    clientActions.testPanel({ open = false })
 
     -- the test ends
     H.fire('crimson-police:client:test', 1, { controls = false, runId = 'run-10', debug = false })

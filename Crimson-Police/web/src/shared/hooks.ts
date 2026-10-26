@@ -226,6 +226,70 @@ export function closeTopLayer(): boolean {
 }
 
 // ============================================================================
+//                                 KEY RELEASE
+// ============================================================================
+// A key that gives the game its input back acts when it is let go, never while it is still down: FiveM hands a key
+// that is still down when the NUI focus goes back to the game over as a new press (Escape would open the pause
+// menu, the test-panel key would take the panel straight back). The key-down only arms, and the key-up acts only
+// for a key-down this page saw itself, so the release of the key that opened the page does nothing.
+
+// FiveM sends a held key's repeats as plain key-downs (CefInput.cpp sets no repeat flag): a second key-down this
+// soon after the one that armed means that one was a repeat of a press made before the page listened. A new press
+// repeats only after the keyboard delay (250 ms or more).
+const REPEAT_GAP_MS = 150;
+
+// While `active`: `onRelease(e)` on the key-up of a key `match(e)` accepted on its key-down.
+export function useKeyRelease(
+    active: boolean,
+    match: (e: KeyboardEvent) => boolean,
+    onRelease: (e: KeyboardEvent) => void,
+): void {
+    const matchRef = useRef(match);
+    matchRef.current = match;
+    const releaseRef = useRef(onRelease);
+    releaseRef.current = onRelease;
+    useEffect(() => {
+        if (!active) return;
+        let armed: string | null = null;
+        let armedAt = 0;
+        let held: string | null = null; // down before the page listened: its key-up does nothing
+        const onDown = (e: KeyboardEvent) => {
+            if (!matchRef.current(e)) return;
+            e.preventDefault();
+            if (held === e.key || armed === e.key) {
+                if (armed === e.key && !e.repeat && e.timeStamp - armedAt < REPEAT_GAP_MS) {
+                    armed = null;
+                    held = e.key;
+                }
+                return;
+            }
+            if (e.repeat) {
+                held = e.key;
+                return;
+            }
+            armed = e.key;
+            armedAt = e.timeStamp;
+        };
+        const onUp = (e: KeyboardEvent) => {
+            if (held === e.key) {
+                held = null;
+                return;
+            }
+            if (armed === null || e.key !== armed) return;
+            armed = null;
+            e.preventDefault();
+            releaseRef.current(e);
+        };
+        window.addEventListener('keydown', onDown);
+        window.addEventListener('keyup', onUp);
+        return () => {
+            window.removeEventListener('keydown', onDown);
+            window.removeEventListener('keyup', onUp);
+        };
+    }, [active]);
+}
+
+// ============================================================================
 //                                     MISC
 // ============================================================================
 

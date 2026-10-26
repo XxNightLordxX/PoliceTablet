@@ -1404,6 +1404,10 @@ _G.RegisterNUICallback = function(name, fn) nuiCb[name] = fn end
 _G.RegisterKeyMapping = function(cmd, desc, dev, key)
     keymaps[#keymaps + 1] = { cmd = cmd, desc = desc, dev = dev, key = key }
 end
+local disabled = {} -- DisableControlAction calls: { at = H.clockMs, group, control, on }
+_G.DisableControlAction = function(group, control, on)
+    disabled[#disabled + 1] = { at = H.clockMs, group = group, control = control, on = on }
+end
 _G.PlayerPedId = function() return 42 end
 _G.GetEntityCoords = function() return vec3(1.0, 2.0, 3.0) end
 _G.IsModelInCdimage = function() return true end
@@ -1625,6 +1629,7 @@ do
     H.eq(CP.Access.roles().supervisor, true, 'access roles()')
 
     local closeReply
+    local closedAt = H.clockMs
     nuiCb.close({}, function(r) closeReply = r end)
     H.eq(closeReply.ok, true, 'close reply')
     H.eq(T.isOpen(), false, 'closed')
@@ -1635,6 +1640,34 @@ do
     local focusCalls = #focus
     H.eq(T.close(), false, 'closing a closed UI')
     H.eq(#focus, focusCalls, 'closing a closed UI never touches the NUI focus')
+
+    -- K5: the NUI closed the tablet (Escape's key-up, the close button): the GTA pause key (control 200) is blocked
+    -- every frame for Config.Tablet.pauseGuardMs (300), because FiveM hands a key still down when the focus goes
+    -- back to the game over as a new press. Then the thread ends.
+    local function PauseCalls(from, to)
+        local n, frames, bad = 0, {}, 0
+        for _, c in ipairs(disabled) do
+            if c.at >= from and c.at < to then
+                n = n + 1
+                frames[c.at] = (frames[c.at] or 0) + 1
+                if c.group ~= 0 or c.control ~= 200 or c.on ~= true then bad = bad + 1 end
+            end
+        end
+        local most = 0
+        for _, k in pairs(frames) do most = math.max(most, k) end
+        return n, most, bad
+    end
+    H.eq(Config.Tablet.pauseGuardMs, 300, 'K5: config.lua ships pauseGuardMs = 300')
+    H.advance(400, 16)
+    local nPause, perFrame, badPause = PauseCalls(closedAt, closedAt + 300)
+    H.ok(nPause >= 18, 'K5: the pause key is blocked on every frame of the 300 ms after the close: ' .. nPause)
+    H.eq(perFrame, 1, 'K5: once a frame (one thread)')
+    H.eq(badPause, 0, 'K5: always DisableControlAction(0, 200, true)')
+    H.eq(PauseCalls(closedAt + 300, H.clockMs + 1), 0, 'K5: nothing after 300 ms (the thread ended)')
+    local nBefore = #disabled
+    nuiCb.close({}, function() end)
+    H.advance(100, 16)
+    H.eq(#disabled, nBefore, 'K5: a close of a closed tablet starts no guard')
     Tick(1100)
 
     -- the command toggles
@@ -1642,8 +1675,37 @@ do
     H.commands.crimsonpolice_tablet.fn()
     H.eq(T.isOpen(), true, 'key mapping opens')
     H.clockMs = H.clockMs + 1000
+    local nKeyClose = #disabled
     H.commands.crimsonpolice_tablet.fn()
     H.eq(T.isOpen(), false, 'key mapping closes again')
+    Tick(1100)
+    H.eq(#disabled, nKeyClose, 'K5: a close by the key mapping (not the NUI) blocks no pause key')
+
+    -- K5: a second NUI close while the guard runs makes it last longer, still one thread (once a frame)
+    H.clockMs = H.clockMs + 1000
+    H.commands.CrimsonPolice.fn()
+    H.advance(600, 50)
+    local firstClose = H.clockMs
+    nuiCb.close({}, function() end)
+    H.advance(160, 16)
+    H.commands.CrimsonPolice.fn()
+    H.eq(T.isOpen(), true, 'K5: opened again while the guard runs')
+    local secondClose = H.clockMs
+    nuiCb.close({}, function() end)
+    H.advance(500, 16)
+    local nAgain, perFrameAgain = PauseCalls(firstClose, secondClose + 300)
+    H.ok(nAgain >= 26, 'K5: blocked from the first close until 300 ms after the second: ' .. nAgain)
+    H.eq(perFrameAgain, 1, 'K5: still once a frame')
+    H.eq(PauseCalls(secondClose + 300, H.clockMs + 1), 0, 'K5: and then nothing')
+    -- 0 turns it off (read at close time)
+    Config.Tablet.pauseGuardMs = 0
+    H.clockMs = H.clockMs + 1000
+    H.commands.CrimsonPolice.fn()
+    local nOff = #disabled
+    nuiCb.close({}, function() end)
+    H.advance(400, 16)
+    H.eq(#disabled, nOff, 'K5: pauseGuardMs = 0: no pause guard')
+    Config.Tablet.pauseGuardMs = 300
     Tick(1100)
 
     -- refused open -> toast with the translated error
@@ -1777,12 +1839,13 @@ do
     H.clockMs = H.clockMs + 1000
     H.commands.CrimsonPolice.fn()
     H.eq(PropCount(), 1, 'open with prop')
+    local createdOpen = created
     nuiCb.switchUi({ ui = 'supervisor' }, function(r) reply = r end)
     H.eq(reply.ok, true, 'switchUi ok')
     H.eq(reply.data.ui, 'supervisor', 'switchUi returns the session')
     H.eq(LastNui('open').ui, 'supervisor', 're-opened as supervisor')
     H.eq(PropCount(), 1, 'prop kept when switching officer <-> supervisor')
-    H.eq(created, 3, 'no second prop created')
+    H.eq(created, createdOpen, 'no second prop created')
     nuiCb.switchUi({ ui = 'boss' }, function(r) reply = r end)
     H.eq(reply.error, 'err.invalid_ui', 'switchUi invalid ui')
     sessionReply.admin = { ok = false, error = 'err.not_admin' }
