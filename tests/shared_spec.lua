@@ -33,6 +33,43 @@ H.eq(#sample, 5, 'sample size')
 H.eq(U.hash('2026-09-28'), U.hash('2026-09-28'), 'hash stable')
 H.ok(U.hash('a') ~= U.hash('b'), 'hash differs')
 
+-- run ids: the unix time and a counter come first, so a restart never repeats the ids of an earlier start
+do
+    local savedCp, savedTime = CP, os.time
+    -- one server start: a fresh copy of shared/utils.lua whose generator is forced to the same state every time
+    local function Start(now)
+        CP = {}
+        H.load('shared/utils.lua')
+        local fresh = CP.U
+        local realRng = fresh.rng
+        fresh.rng = function() return realRng(12345) end
+        os.time = function(t) if t then return savedTime(t) end return now end
+        local ids = {}
+        for i = 1, 1000 do ids[i] = fresh.uuid() end
+        os.time = savedTime
+        return ids
+    end
+    local first, second = Start(1000), Start(2000)
+    CP = savedCp
+    local seen, repeats = {}, 0
+    for _, id in ipairs(first) do seen[id] = true end
+    for _, id in ipairs(second) do if seen[id] then repeats = repeats + 1 end end
+    H.eq(repeats, 0, 'two starts with the same generator state share no id')
+    local count = 0
+    for _ in pairs(seen) do count = count + 1 end
+    H.eq(count, 1000, '1000 ids in one second are all distinct')
+    local bad = 0
+    for _, list in ipairs({ first, second }) do
+        for _, id in ipairs(list) do
+            local shape = #id == 36 and id:match('^%x%x%x%x%x%x%x%x%-%x%x%x%x%-4%x%x%x%-[89ab]%x%x%x%-%x+$')
+            if not shape or #id:match('%-(%x+)$') ~= 12 then bad = bad + 1 end
+        end
+    end
+    H.eq(bad, 0, 'every id keeps the 36-character v4 shape')
+    H.eq(first[1]:sub(1, 13), '000003e8-0001', 'the time part, then the counter')
+    H.eq(second[1000]:sub(1, 13), '000007d0-03e8', 'the counter counts every id of the start')
+end
+
 -- paths
 local t = { objectives = { { waves = { 7, 7, 6 } } } }
 H.eq(U.getPath(t, 'objectives.1.waves')[3], 6, 'getPath')

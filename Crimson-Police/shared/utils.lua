@@ -196,7 +196,10 @@ end
 --                                UUID (server)
 -- ============================================================================
 
+-- A v4-shaped id (36 characters): the first 8 hex digits are the unix time and the next 4 a counter, so two
+-- restarts never hand out the same run of ids (the 32-bit generator alone walks the same cycle each time).
 local uuidRng
+local uuidCount = 0
 function U.uuid()
     if not uuidRng then
         local seed = (os and os.time and os.time() or 0) ~ U.hash(tostring({}))
@@ -209,7 +212,9 @@ function U.uuid()
         return table.concat(t)
     end
     local variant = ('%x'):format(8 + uuidRng:int(0, 3))
-    return ('%s-%s-4%s-%s%s-%s'):format(hex(8), hex(4), hex(3), variant, hex(3), hex(12))
+    uuidCount = (uuidCount + 1) & 0xFFFF
+    local now = math.floor(os and os.time and os.time() or 0) & 0xFFFFFFFF
+    return ('%08x-%04x-4%s-%s%s-%s'):format(now, uuidCount, hex(3), variant, hex(3), hex(12))
 end
 
 -- ============================================================================
