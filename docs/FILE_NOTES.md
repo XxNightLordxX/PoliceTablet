@@ -2669,7 +2669,9 @@ can, actionsFor, tookPart and canReviewRun may yield (database): call them from 
 modules/route/client.lua · CP.Route (client): the GPS route to the mission start and the reports the
 server checks (docs/ARCHITECTURE.md §5.12, SPEC "Route to the start").
 
-Owns: the start waypoint, a temporary route blip used to read GTA's GPS route, the fixed polyline sampled
+Owns: the start waypoint, the named "Mission start" pin (Config.Markers.kinds.start; kept from begin until
+arrival or stop with Config.Markers.startBlip, PLAN M9; its blip route is read to sample GTA's GPS route and is
+on afterwards only while our waypoint is gone, so the start keeps one line), the fixed polyline sampled
 from it, the reports to server:routeStatus, the route part of the HUD (HudState.route) and the client
 actions setGps and recalcRoute (NUI 'client' endpoint, registered with CP.Tablet.registerClientAction).
 

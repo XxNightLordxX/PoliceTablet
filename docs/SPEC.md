@@ -468,6 +468,8 @@ When a type is accepted, each participant's tablet sets a GPS route from where t
 
 - For a mission whose start is a circle (Manhunt), the route leads to the circle's centre until the officer is inside it.
 
+- The start is a named yellow map pin, "Mission start" (Config.Markers.kinds.start), on the map from accept until the officer arrives or the run ends (Config.Markers.startBlip, shipped true, PLAN M9; false = only the waypoint shows the start, as before). The waypoint set at accept is the start's GPS line; while that waypoint is gone (the officer cleared it or set his own, which is never touched) the pin carries the line instead (Config.Markers.routeColour), so the start always keeps a line, and Set GPS puts the waypoint back and takes the pin's line off. While the route is sampled (at accept and after Recalculate route) the pin carries the line as well, because the client reads the route from it first; that is the only time both lines show. A start at least Config.Markers.startCircleMin (200 m) wide is also drawn as a circle in the pin's colour (Config.Markers.areaAlpha). Radio Silence never hides any of it.
+
 - All numbers are in Config.Route.
 
 - Config.Route.required (true, as shipped) is the owner's switch for this rule. With false the route is still set, sampled, reported and shown, Recalculate route still works (up to maxRecalcs) and arrival still counts, but there is no off-route warning, no off-route countdown on the HUD or the tablet, no drift check and no Abandoned (off_route) end, so no type cooldown from the route; the HUD, the run bar and the Active Mission screen show the route as a guide ("GPS route to the start") instead of "On route", and the Mission Board's accept text leaves the route out. The start timeout stays. The value is locked when the type is accepted (CP.Runs stores run.routeRequired and sends it in client:start), so a change in Admin UI → Settings applies to new runs only. A test run follows its own Start route switch: on = with the route rules, off = arrival check only.
@@ -3124,11 +3126,12 @@ Config.Route = {
 
 -- ── Map markers ─────────────────────────────────────────────────────────────
 -- How the objective your officers are on shows on their map: one blip (for a fight or a search area, a circle and its
--- centre) with one GPS line to it. While an officer still drives to the start, or has set a waypoint of his own, that
--- is his only line. Under kinds, each kind of blip has a sprite (the blip's picture, by its id), a colour (a colour
--- id: 5 = yellow, go here; 1 = red, enemy; 17 = orange, fleeing or needs a follow-up; 3 = blue, friendly; 2 = green,
--- safe point) and a scale (its size, 1.0 = normal). nextScale, bossScale, followUpColour and setbackColour are the
--- same for the next checkpoint, a boss, a point to follow up and a device set back. Sprite and colour ids:
+-- centre) with one GPS line to it. While an officer still drives to the start, the line to the start is the only one he
+-- gets from us; one who has set a waypoint of his own gets no objective line. Under kinds, each kind of blip has a
+-- sprite (the blip's picture, by its id), a colour (a colour id: 5 = yellow, go here; 1 = red, enemy; 17 = orange,
+-- fleeing or needs a follow-up; 3 = blue, friendly; 2 = green, safe point) and a scale (its size, 1.0 = normal).
+-- nextScale, bossScale, followUpColour and setbackColour are the same for the next checkpoint, a boss, a point to
+-- follow up and a device set back. Sprite and colour ids:
 -- docs.fivem.net/docs/game-references/blips/
 Config.Markers = {
     enabled = true,              -- false = no objective blip or line from Crimson-Police (the missions' own blips stay)
@@ -3142,7 +3145,9 @@ Config.Markers = {
     setbackFlash = true,         -- true = a device that was set back (Drug Lab Raid: Ventilate) flashes until fixed
     category = 2,                -- the map legend: 2 = shows the distance to the blip, 1 = no distance
     areaAlpha = 80,              -- how solid the map circles are: 0 = invisible, 255 = solid
-    startBlip = true,            -- true = the named Mission start blip stays on the map for the whole drive
+    -- true = the yellow Mission start pin stays on the map for the whole drive, with a GPS line of its own while your
+    -- waypoint to the start is gone (you cleared it or set your own); false = only the waypoint shows the start
+    startBlip = true,
     startCircleMin = 200.0,      -- metres: a mission start at least this wide shows as a circle on the map (Manhunt)
     -- What Radio Silence hides once the officers are at the start: 'area' = each objective's circle or its one blip
     -- stays (of several doors or devices only your nearest), without a GPS line and without blips on people and cars;

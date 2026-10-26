@@ -602,6 +602,7 @@ do
     local circles = Live('radius')
     H.eq(#circles, 1, 'a 150 m start is a circle with startCircleMin = 100')
     H.eq(B(circles[1]).alpha, 80, 'in areaAlpha')
+    H.eq(B(circles[1]).colour, K.start.colour, 'in the colour of kinds.start (yellow, M9)')
     Fire('client:inProgress', 'run-8', { objectives = mission.objectives })
     Fire('client:objective', 'run-8', 1,
         { action = 'start', marker = { kind = 'point', coords = { x = 400.0, y = 0.0, z = 30.0 }, label = 'Go' } })
@@ -1562,5 +1563,159 @@ do
 end
 
 _G.SetBlipFlashes, _G.SetBlipFlashTimer = flashSetter, timerSetter
+
+-- ============================================================================
+--         M9: THE MISSION START STAYS A YELLOW PIN FOR THE WHOLE DRIVE
+-- ============================================================================
+-- modules/route/client.lua: the named Mission start pin (kinds.start) stays from begin until arrival or the end of
+-- the run (Config.Markers.startBlip). It carries the GPS line while the route is sampled and, after that, only while
+-- the waypoint we set is gone, so the start always keeps a line and never two of ours (BLIPS_FINAL R2).
+
+do
+    Reset()
+    local WAYPOINT_BLIP = 9000
+    local wp = nil                              -- the map waypoint, or nil
+    local gps = { found = false, len = 1000.0 } -- GTA's GPS route to the start
+    local actions = {}
+    local saved = {
+        IsWaypointActive = _G.IsWaypointActive,
+        DoesBlipExist = _G.DoesBlipExist,
+        SetBlipRoute = _G.SetBlipRoute,
+    }
+    local routeCalls = 0
+    _G.SetNewWaypoint = function(x, y) wp = vec3(x, y, 0.0) end
+    _G.IsWaypointActive = function() return wp ~= nil end
+    _G.GetFirstBlipInfoId = function() return wp and WAYPOINT_BLIP or 0 end
+    _G.GetBlipInfoIdCoord = function() return wp end
+    _G.SetWaypointOff = function() wp = nil end
+    _G.DoesBlipExist = function(id)
+        if id == WAYPOINT_BLIP then return wp ~= nil end
+        return saved.DoesBlipExist(id)
+    end
+    _G.SetBlipRoute = function(id, on)
+        routeCalls = routeCalls + 1
+        saved.SetBlipRoute(id, on)
+    end
+    _G.GetGpsBlipRouteFound = function() return gps.found end
+    _G.GetGpsBlipRouteLength = function() return gps.found and gps.len or 0 end
+    _G.GetPosAlongGpsTypeRoute = function(_, d, slot)
+        if not gps.found or slot ~= 1 then return false, nil end
+        return true, vec3(0.0, d, 30.0)
+    end
+    CP.Route = nil
+    CP.Tablet = {
+        hud = function() end,
+        notify = function() end,
+        registerClientAction = function(name, fn) actions[name] = fn end,
+    }
+    H.load('modules/route/client.lua')
+    H.step(0)
+    local CR = CP.Route
+    H.ok(type(CR.begin) == 'function' and actions.setGps and actions.recalcRoute, 'm9: CP.Route (client) loaded')
+    local START = vec3(0.0, 1000.0, 30.0)
+    local MINE = vec3(-800.0, 0.0, 0.0)
+    local function Pins()
+        local out = {}
+        for _, id in ipairs(Live('coord')) do if B(id).name == CP.L('route.blip') then out[#out + 1] = id end end
+        return out
+    end
+    local function Fire(name, ...) TriggerEvent(CP.e(name), ...) end
+
+    -- the drive: a yellow pin from the first moment, the line on it only while the route is sampled
+    H.ok(CR.begin('run-m9', START), 'm9: begin')
+    local pins = Pins()
+    H.eq(#pins, 1, 'm9: the Mission start pin is on the map from the start of the drive')
+    local pin = B(pins[1])
+    H.ok(pin.sprite == K.start.sprite and pin.colour == K.start.colour and pin.scale == K.start.scale,
+        'm9: kinds.start (the yellow map pin, not the red dot)')
+    H.ok(pin.x == START.x and pin.y == START.y, 'm9: at the start')
+    H.ok(pin.shortRange == false and pin.category == 2, 'm9: at the radar edge, its distance in the legend')
+    H.ok(pin.route == true and pin.routeColour == Config.Markers.routeColour,
+        'm9: while the route is sampled the pin carries the line (in routeColour)')
+    gps.found = true
+    H.step(100)
+    H.eq(pin.live, true, 'm9: the pin survives the sampling')
+    H.eq(pin.route, false, 'm9: after the sampling our waypoint is the only line')
+    H.ok(wp and wp.x == START.x and wp.y == START.y, 'm9: our waypoint at the start')
+    local calls = routeCalls
+    Tick(10)
+    H.eq(routeCalls, calls, 'm9: nothing is switched while the waypoint stays the same')
+
+    -- a waypoint of his own: the pin gets the line back, and his waypoint is never touched
+    wp = MINE
+    Tick(3)
+    H.eq(pin.route, true, 'm9: his own waypoint elsewhere: the start pin keeps a GPS line')
+    H.ok(wp == MINE, 'm9: his own waypoint stays')
+    H.eq(#Routed(), 1, 'm9: one line of ours')
+    H.eq(M.canRoute(), false, 'm9: CP.Markers routes nothing while the drive is on')
+    wp = nil
+    Tick(3)
+    H.eq(pin.route, true, 'm9: no waypoint at all: the pin keeps the line')
+    H.eq(actions.setGps(), true, 'm9: Set GPS')
+    H.eq(pin.route, false, 'm9: Set GPS: our waypoint is the line again, at once')
+
+    -- Recalculate route: the same pin, the line on it while resampling, off again after
+    local res
+    CreateThread(function() res = { actions.recalcRoute() } end)
+    Fire('client:routeRecalc', 'run-m9', true, 1)
+    H.step(100)
+    H.eq(res and res[1], true, 'm9: recalculated')
+    H.eq(#Pins(), 1, 'm9: still one pin')
+    H.ok(pin.live and pin.route == false, 'm9: after the resampling our waypoint is the line')
+
+    -- arrival: the pin and its line go
+    wp = MINE
+    Tick(3)
+    H.eq(pin.route, true, 'm9: routed again (his own waypoint)')
+    Fire('client:routeStatus', 'run-m9', { status = 'arrived' })
+    H.eq(#Pins(), 0, 'm9: arrival removes the pin')
+    H.ok(NoRemovedRoute(), 'm9: its line went off first')
+    H.ok(wp == MINE, 'm9: his own waypoint stays at arrival')
+    calls = routeCalls
+    Tick(5)
+    H.eq(routeCalls, calls, 'm9: nothing runs after arrival')
+    Fire('client:runEnded', 'run-m9')
+
+    -- the end of the run while still driving: the pin and its line go
+    BL.log = {}
+    wp = nil
+    H.ok(CR.begin('run-m9b', START), 'm9b: begin')
+    H.step(100)
+    H.eq(#Pins(), 1, 'm9b: the pin')
+    wp = MINE
+    Tick(3)
+    H.eq(#Routed(), 1, 'm9b: routed')
+    Fire('client:runEnded', 'run-m9b')
+    H.eq(#Pins(), 0, 'm9b: the run end removes the pin')
+    H.ok(NoRemovedRoute(), 'm9b: its line went off first')
+
+    -- Config.Markers.startBlip = false: the pin only while the route is sampled (before M9)
+    Config.Markers.startBlip = false
+    wp, gps.found = nil, false
+    H.ok(CR.begin('run-m9c', START), 'm9c: begin')
+    H.eq(#Pins(), 1, 'm9c: startBlip = false: a pin while the route is sampled')
+    gps.found = true
+    H.step(100)
+    H.eq(#Pins(), 0, 'm9c: and none after it')
+    wp = MINE
+    Tick(3)
+    H.eq(#Pins(), 0, 'm9c: none with a waypoint of his own either')
+    Config.Markers.startBlip = true
+    Tick(3)
+    H.ok(#Pins() == 1 and B(Pins()[1]).route == true, 'm9c: switched back on in Settings: the pin with its line')
+    Fire('client:runEnded', 'run-m9c')
+    H.eq(#Pins(), 0, 'm9c: gone at the end')
+
+    -- a test run without the start route (Start route off): the pin, never a line
+    wp = nil
+    H.ok(CR.begin('run-m9d', START, { startRoute = false }), 'm9d: begin without the start route')
+    Tick(5)
+    H.ok(#Pins() == 1 and #Routed() == 0, 'm9d: the pin, no line of ours')
+    Fire('client:runEnded', 'run-m9d')
+    H.eq(#Pins(), 0, 'm9d: gone at the end')
+
+    _G.IsWaypointActive, _G.DoesBlipExist, _G.SetBlipRoute =
+        saved.IsWaypointActive, saved.DoesBlipExist, saved.SetBlipRoute
+end
 
 return H

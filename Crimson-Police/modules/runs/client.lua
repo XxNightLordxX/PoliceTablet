@@ -10,7 +10,6 @@ local VEHICLE_EVERY = 5           -- seconds between vehicle telemetry samples w
 local ACTIONS = { prepare = true, start = true, update = true, stop = true, adopt = true }
 local RUN_OVER = joaat('WEAPON_RUN_OVER_BY_CAR')
 local RAMMED = joaat('WEAPON_RAMMED_BY_CAR')
-local START_CIRCLE_COLOUR = 1
 
 local current = nil
 local token = 0
@@ -201,7 +200,8 @@ end
 -- ============================================================================
 -- Manhunt: "the 600 m search circle, shown on the map when the type is accepted".
 -- Shown from client:start until this player is inside it or the first objective starts (the block then
--- draws its own search circle); a local radius blip, removed at every cleanup.
+-- draws its own search circle); a local radius blip, removed at every cleanup. A start at least
+-- Config.Markers.startCircleMin wide, in the colour of Config.Markers.kinds.start (yellow) and areaAlpha.
 local function ShowStartCircle(run, start)
     if type(start) ~= 'table' then return end
     local markers = type(Config.Markers) == 'table' and Config.Markers or {}
@@ -211,8 +211,9 @@ local function ShowStartCircle(run, start)
     if not x then return end
     local blip = AddBlipForRadius(x + 0.0, y + 0.0, (z or 0.0) + 0.0, radius + 0.0)
     if not blip or blip == 0 then return end
-    SetBlipColour(blip, START_CIRCLE_COLOUR)
-    SetBlipAlpha(blip, math.tointeger(tonumber(markers.areaAlpha) or 80) or 80)
+    if not (CP.Markers and CP.Markers.styleArea and CP.Markers.styleArea(blip, 'start')) then
+        SetBlipAlpha(blip, math.tointeger(tonumber(markers.areaAlpha) or 80) or 80)
+    end
     run.startCircle = blip
 end
 

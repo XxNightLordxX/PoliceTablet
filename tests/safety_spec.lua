@@ -1689,7 +1689,7 @@ do
         'HUD: the route is required (Config.Route.required, shipped)')
     local nBlips = 0
     for _ in pairs(cstate.blips) do nBlips = nBlips + 1 end
-    H.eq(nBlips, 0, 'the temporary route blip is removed after sampling')
+    H.eq(nBlips, 1, 'the Mission start pin stays after sampling (Config.Markers.startBlip, M9)')
 
     -- off the line: the distance to the FIXED polyline is reported (the GPS may recalculate, the line does not)
     cstate.pos = vec3(-150.0, 250.0, 0.0)

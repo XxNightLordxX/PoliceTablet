@@ -1347,6 +1347,11 @@ decides): with `false` the reports, Recalculate and the arrival check stay, but 
 Client: `begin(runId, startCoords)` (waypoint + GPS sampling every `Config.Route.sampleEvery` m with
 `GetPosAlongGpsTypeRoute`), `recalculate()`, `stop()`, reports every `Config.Route.reportEvery` s;
 client actions `setGps`, `recalcRoute` registered with `CP.Tablet.registerClientAction`.
+The named start pin (PLAN M9; `Config.Markers.startBlip`, look `Config.Markers.kinds.start` through
+`CP.Markers.style`) lives from `begin` until arrival / `stop`. Its blip route is on while the route is sampled (the
+radar-blip slot is read first) and afterwards only while our waypoint is gone (`IsWaypointActive` /
+`GetFirstBlipInfoId(8)` more than 15 m from the start), re-checked with every report and switched only on change;
+`setGps` turns it off at once. `startBlip = false`: the pin exists only while the route is sampled.
 
 ### 5.13 CP.Calls — modules/calls (Hard rule 15)
 - `isOnCall(src) -> boolean` (a live real-call responding entry, `Config.Calls.respondingExpiry`)

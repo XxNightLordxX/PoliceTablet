@@ -101,6 +101,40 @@ local function ShowRoute()
     HudRoute(r)
 end
 
+local function SetWaypoint()
+    if cur then SetNewWaypoint(cur.target.x + 0.0, cur.target.y + 0.0) end
+end
+
+-- True while the map waypoint is the one we set at the start (the player may have cleared it or set their own).
+local function OurWaypoint(target)
+    if not IsWaypointActive() then return false end
+    local blip = GetFirstBlipInfoId(WAYPOINT_SPRITE)
+    if not blip or not DoesBlipExist(blip) then return false end
+    return CP.U.dist2d(GetBlipInfoIdCoord(blip), target) <= 15.0
+end
+
+-- Only remove the waypoint when it still points at our start.
+local function ClearOurWaypoint(target)
+    if OurWaypoint(target) then SetWaypointOff() end
+end
+
+-- ============================================================================
+--                             THE START ON THE MAP
+-- ============================================================================
+-- The named "Mission start" pin (Config.Markers.kinds.start, a yellow map pin, PLAN M9). With Config.Markers.startBlip
+-- (shipped true) it stays from begin until arrival or the end of the run; false = only while the route is sampled.
+-- Its GPS line is on while the route is sampled (the blip route is read first, SLOT_TYPES) and after that only while
+-- the waypoint we set is gone, so the start always keeps a line and never two of ours (BLIPS_FINAL R2).
+
+local function KeepStartBlip()
+    return not (type(Config.Markers) == 'table' and Config.Markers.startBlip == false)
+end
+
+local function RouteColour()
+    if CP.Markers and CP.Markers.routeColour then return CP.Markers.routeColour() end
+    return 5
+end
+
 local function removeBlip()
     if cur and cur.blip then
         if DoesBlipExist(cur.blip) then
@@ -108,20 +142,43 @@ local function removeBlip()
             RemoveBlip(cur.blip)
         end
         cur.blip = nil
+        cur.blipRoute = false
     end
 end
 
-local function SetWaypoint()
-    if cur then SetNewWaypoint(cur.target.x + 0.0, cur.target.y + 0.0) end
+local function StartBlip()
+    if cur.blip and DoesBlipExist(cur.blip) then return cur.blip end
+    local t = cur.target
+    local blip = AddBlipForCoord(t.x, t.y, t.z)
+    cur.blip, cur.blipRoute = blip, false
+    local label = CP.L('route.blip')
+    -- the look of kinds.start and the settings of every objective blip (short range, legend), else just the name
+    if not (CP.Markers and CP.Markers.style and CP.Markers.style(blip, 'start', label)) then
+        BeginTextCommandSetBlipName('STRING')
+        AddTextComponentSubstringPlayerName(label)
+        EndTextCommandSetBlipName(blip)
+    end
+    return blip
 end
 
--- Only remove the waypoint when it still points at our start (the player may have set their own).
-local function ClearOurWaypoint(target)
-    if not IsWaypointActive() then return end
-    local blip = GetFirstBlipInfoId(WAYPOINT_SPRITE)
+local function StartLine(on)
+    local blip = cur and cur.blip
     if not blip or not DoesBlipExist(blip) then return end
-    local c = GetBlipInfoIdCoord(blip)
-    if CP.U.dist2d(c, target) <= 15.0 then SetWaypointOff() end
+    on = on == true
+    if cur.blipRoute == on then return end
+    if on then SetBlipRouteColour(blip, RouteColour()) end
+    SetBlipRoute(blip, on)
+    cur.blipRoute = on
+end
+
+-- After the sampling: the pin keeps a line only while our waypoint is gone (checked with every report).
+local function SyncStart()
+    if not KeepStartBlip() then
+        removeBlip()
+        return
+    end
+    StartBlip()
+    StartLine(cur.routeOn and not OurWaypoint(cur.target))
 end
 
 -- ============================================================================
@@ -152,16 +209,8 @@ local function SamplePolyline(token)
     local runId = cur.runId
     local start = PlayerPos()
     local pts
-    local blip = AddBlipForCoord(target.x, target.y, target.z)
-    cur.blip = blip
-    SetBlipSprite(blip, 1)
-    SetBlipColour(blip, 1)
-    SetBlipScale(blip, 0.8)
-    SetBlipRouteColour(blip, 1)
-    BeginTextCommandSetBlipName('STRING')
-    AddTextComponentSubstringPlayerName(CP.L('route.blip'))
-    EndTextCommandSetBlipName(blip)
-    SetBlipRoute(blip, true)
+    StartBlip()
+    StartLine(true)
     if WaitForRoute(token) and Valid(token) then
         local length = tonumber(GetGpsBlipRouteLength()) or 0
         local step = tonumber(Config.Route.sampleEvery) or 50.0
@@ -184,7 +233,7 @@ local function SamplePolyline(token)
             if #pts < 3 then pts = nil end
         end
     end
-    if Valid(token) then removeBlip() end
+    if Valid(token) then SyncStart() end
     if not pts then
         CP.warn(TAG, 'no GPS route to the start of run %s: using the straight line', runId)
         pts = { start, target }
@@ -225,7 +274,10 @@ local function RouteThread(token)
     if not Resample(token) then return end
     ShowRoute()
     while Valid(token) and not cur.arrived do
-        if cur.polyline and not cur.sampling then ReportOnce() end
+        if cur.polyline and not cur.sampling then
+            ReportOnce()
+            SyncStart()
+        end
         local every = tonumber(Config.Route.reportEvery) or 2
         if every < 1 then every = 1 end
         Wait(math.floor(every * 1000))
@@ -258,6 +310,7 @@ function R.begin(runId, startCoords, opts)
     if cur and cur.runId == runId then
         if opts.startRoute == false and cur.routeOn then
             cur.routeOn = false
+            StartLine(false)
             ShowRoute()
         end
         return true
@@ -283,8 +336,11 @@ function R.begin(runId, startCoords, opts)
         distance = nil,
         warning = nil,
         sampling = false,
+        blip = nil,
+        blipRoute = false,
     }
     SetWaypoint()
+    if KeepStartBlip() then StartBlip() end
     local token = tokenSeq
     if cur.routeOn then
         CreateThread(function()
@@ -421,6 +477,9 @@ CreateThread(function()
     CP.Tablet.registerClientAction('setGps', function()
         if not cur then return false, 'err.route_inactive' end
         SetWaypoint()
+        if not cur.sampling then
+            StartLine(false)
+        end -- our waypoint is the line again
         Toast('info', 'route.gps_set')
         return true, { runId = cur.runId }
     end)
