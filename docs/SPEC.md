@@ -727,7 +727,7 @@ Locations for every new mission come from GTA V vehicle nodes and known base-gam
 
 - Spawns: 1 stolen car with 2 suspects (scales, max 4); after the stop, each suspect has a 20% chance to flee on foot
 
-- Marking (Config.Markers, PLAN M3): the stolen car, and each suspect once out of it, has a red blip with the GPS line to the nearest; one too far away for an officer's game (OneSync streams 424 m) shows where the server has it, so it stays on every map at any distance
+- Marking (Config.Markers, PLAN M3): the stolen car, and each suspect once out of it, has a red blip with the GPS line to the nearest; one too far away for an officer's game (OneSync streams 424 m) shows where the server has it, so it stays on every map at any distance. Once it is stopped (PLAN M4) each suspect and the car not yet decided keep a blip (a suspect orange while he runs, red once he fights or gives up; the car yellow) until worked
 
 - Objectives: 1) stop the car: it pulls over by itself (yield) or is stopped with a PIT or box-in (below 5 km/h for 5 seconds); 2) aim at each suspect until they surrender (hands up, then kneel); the suspects of a car that yielded stay seated until ordered out; 3) cuff each suspect ("Cuff suspect", 5 s progress), catching any who flee first; 4) Impound the stolen car (10 s progress; the tow truck collects it). Steps 2–4 are a field_contact objective in stop mode that adopts the pursuit's car and suspects (revealed = { 'stolen' }).
 
@@ -750,6 +750,8 @@ Locations for every new mission come from GTA V vehicle nodes and known base-gam
 - Start: within 50 m of the house
 
 - Spawns: the suspect inside; 1 armed associate (scales) comes out at the knock, away from the officers (Config.Spawning.associatesAtKnock)
+
+- Marking (Config.Markers, PLAN M4): before the knock the front door's yellow blip with the GPS line to it; after it the suspect and each associate not yet cuffed, orange while he runs and red once he fights or gives up, with the line to the nearest; one who ran too far away for an officer's game (OneSync streams 424 m) shows where the server has him
 
 - Objectives: 1) ox_target "Knock and announce" on the front door; 2) the suspect's response is rolled: surrenders at the door (50%), flees out the back on foot (30%) or fights with a pistol (20%); associates always fight; 3) cuff the suspect ("Cuff suspect", 5 s progress) unless the suspect was killed while fighting; 4) neutralise every associate (killed, or surrendered and cuffed); 5) ox_target "Search the property" at the yard marker (8 s progress): the server rolls what is found (60%: narcotics, a weapon, stolen goods or documents), shown on the tablet as virtual evidence; 6) Process the scene (it completes at once when nobody died)
 
@@ -819,6 +821,8 @@ Locations for every new mission come from GTA V vehicle nodes and known base-gam
 
 - Spawns: 4 armed hostiles (scales) inside; 3 hostages kneeling with their hands tied, who appear when objective 2 starts (after the fight), 15 m or more from every officer (Config.Spawning.hostagesAt; 'runStart' = at run start, as before)
 
+- Marking (Config.Markers, PLAN M4): each hostage still tied is a blue person blip with the GPS line to the nearest; once one is freed the green safe point joins them, so the line leads there when it is nearer. Before the hostages appear the objective's pin is at their first spot
+
 - Objectives: 1) neutralise every hostile; 2) free each hostage with ox_target "Cut restraints" (6 s progress); 3) each freed hostage walks to the safe marker outside. Completed when every hostage is there
 
 - Scales: hostiles (hostages stay at 3)
@@ -887,6 +891,8 @@ Locations for every new mission come from GTA V vehicle nodes and known base-gam
 
 - Spawns: 5 inmates (scales) in prison clothes, already outside the fence and scattering on foot along the escape routes; 2 in every 5 carry pistols and fire when a participant is within 15 m
 
+- Marking (Config.Markers, PLAN M4): each inmate not yet cuffed is an orange blip while he runs and red once he fights or gives up, with the GPS line to the nearest; one too far away for an officer's game (OneSync streams 424 m) shows where the server has him, so a partner 500 m away still sees him while his escape clock runs
+
 - Objectives: catch every inmate, then cuff them ("Cuff suspect", 5 s progress). An unarmed inmate gives up when a participant aims at them within 10 m, when stunned, or when a participant stays within 3 m for 3 seconds. An armed inmate gives up only when stunned or below 50% health. Any inmate worn out by running gives up when a participant is within 30 m (Suspect behaviour, Runners tire)
 
 - Scales: inmates
@@ -911,6 +917,8 @@ Locations for every new mission come from GTA V vehicle nodes and known base-gam
 
 - Spawns: 5 locked, empty NPC cars, one per spot, parked along the kerb. The server rolls each car: legal (45%), a violation (50%: a ticket-level violation on metered and permit spots, a tow-level one on no-parking, hydrant and loading spots; free spots roll legal or stolen only), or stolen (5%). At most one returning driver and one thief (see objectives)
 
+- Marking (Config.Markers, PLAN M4): every car not yet decided is a yellow car blip with the GPS line to the nearest; a car that has not appeared yet (it appears once an officer is near its spot) shows at its kerb spot as "Parked car to check". A returning driver or a thief is a yellow person blip (orange while he runs)
+
 - Objectives: 1) for each car: Inspect (3 s) shows the posted rule, permit, meter and time parked; Run plate (3 s, beside the car, or as a HUD action from the driver seat of a vehicle within 20 m) shows valid, expired or STOLEN; decide on the tablet or with ox_target: No action (1 s), Write citation (6 s at the windscreen) or Impound (10 s; the tow truck collects it); 2) a returning driver, at most once per run: when the officer cites or impounds a car that isn't stolen there is a 25% chance its driver walks up and either takes the ticket (60%), argues until the officer uses "Explain the citation" (30%, 4 s), or gets in and drives off before the tow is hooked (10%; the citation stands, no penalty); 3) a thief: when an officer first inspects a stolen car there is a 50% chance the thief is nearby and runs on foot once an officer is within 15 m; catch and cuff them ("Cuff suspect", 5 s progress), then hand them to transport
 
 - Scales: nothing (solo)
@@ -933,7 +941,7 @@ Locations for every new mission come from GTA V vehicle nodes and known base-gam
 
 - Spawns: one violator solo, two with two officers (the second appears once the first stop is closed). Each is 1 car with a driver and passengers (occupants scale: base 1, max 3) that spawns 150–250 m upstream of the observation point and drives past it; the second one spawns Config.Spawning.secondViolatorUpstream (200 m) up the road from the officer furthest up it (officers within 100 m of the road; nobody on the road: upstream of the observation point as the first) and drives towards them, never at the first one's point. Both are 0.5 m over the road (vehicleLift) and go through the spawn director (never within 40 m of an officer). The server rolls the violation (speeding 20–45 km/h over the posted speed 70%, reckless lane changes 30%), each person's truth (Config.Custody.profileSets.traffic), the car (legal 90%, stolen 10%) and the response to lights (yield 75%, flee 20%, fight 5%; fight only when someone in the car is armed)
 
-- Marking: the HUD announces the violator as it approaches ("Vehicle approaching: 128 km/h" or "Vehicle weaving between lanes"), and the violator car alone gets a blip once it passes the observation point (the second one: once it passes where the officers stood on the road when it set off), then stays on the map at any distance (Config.Markers: where the server has it once it is too far away for an officer's game). Until then the objective blip is the observation point. Ambient traffic is never marked
+- Marking: the HUD announces the violator as it approaches ("Vehicle approaching: 128 km/h" or "Vehicle weaving between lanes"), and the violator car alone gets a blip once it passes the observation point (the second one: once it passes where the officers stood on the road when it set off), then stays on the map at any distance (Config.Markers: where the server has it once it is too far away for an officer's game). Until then the objective blip is the observation point. Ambient traffic is never marked. Once stopped (PLAN M4) each person and the car not yet decided keep a blip (a person yellow, orange while he runs, red once he draws or gives up; the car yellow) until worked
 
 - Objectives: 1) observe the violation, then stop the car: pace a speeder by staying within 80 m behind it for 5 seconds (the server compares speeds every second and grades the median of the samples, with a 5 km/h tolerance; the HUD shows "Paced: 128 km/h in an 80 zone"), or follow a reckless driver within 60 m for 8 seconds; then light it up within 60 m. A yielding car pulls over with its hazards on; a fleeing car must be stopped (PIT or box-in: below 5 km/h for 5 seconds) and anyone who runs caught and cuffed; the armed occupants of a fighting car must be neutralised; 2) work the stop: Talk to the driver (licence and registration), Run plate, Order out, Frisk, Look inside, Search vehicle (with probable cause), then decide for every person (Warn, Cite, Arrest or Release) and the car (No action or Impound); arrests go to transport; 3) and 4) with two officers, the same for the second violator
 
@@ -959,6 +967,8 @@ Locations for every new mission come from GTA V vehicle nodes and known base-gam
 
 - Spawns: the server rolls the scene: someone sitting in a parked car (50%), people loitering beside a parked car (30%) or someone looking into parked cars (20%); 1 person (scales, max 3). Each person's truth comes from Config.Custody.profileSets.scene (clean 35, minor 15, warrant 15, narcotics 15, burglary tools 12, armed 8); the car is stolen 15% of the time
 
+- Marking (Config.Markers, PLAN M4): until the scene appears a yellow pin named after the objective where it will be; then each person (a yellow person blip) and the car (a yellow car blip) not yet decided, with the GPS line to the nearest; a person who runs turns orange, one who draws or gives up red, and one too far away for an officer's game shows where the server has him
+
 - Objectives: 1) when the first participant comes within 25 m, each person reacts by demeanour: stays, walks away, runs, or (armed and hostile) shows a tell and draws; 2) make contact: Talk / Check ID, Frisk, Detain, Look inside, Run plate, Search vehicle (with probable cause); 3) decide for every person (Release, Cite or Arrest) and the car (No action or Impound); arrests go to transport
 
 - Scales: people (base 1, max 3)
@@ -980,6 +990,8 @@ Locations for every new mission come from GTA V vehicle nodes and known base-gam
 - Start: within 80 m of the lab
 
 - Spawns: 9 hostiles (scales) in 2 waves of 5 / 4, holding cover inside (tactics rolled: hold 50%, balanced 40%, push 10%); pistols, combat pistols and pump shotguns; base accuracy 25 and armour 0 plus the tier's increase; a hostile under 25% health has a 30% chance to surrender. 1 unarmed cook (scales, max 3). 2 stashes (scales, max 4) hidden among the stash spots
+
+- Marking (Config.Markers, PLAN M4): during the cook chase each cook not yet cuffed is an orange blip while he runs and red once he fights or gives up, with the GPS line to the nearest, shown where the server has him once he is too far away for an officer's game
 
 - Objectives: 1) breach: ox_target "Stack up and breach" (3 s progress) on both entry points, by 2 different officers within 6 seconds of each other (the count is min(2, participants still in the run): when only one is left, one officer breaches both entries with an 8 s progress each, so the run never soft-locks); 2) neutralise every hostile (killed, or surrendered and cuffed); 3) when the last hostile falls the cooks bolt along an escape route: catch and cuff them (unarmed; they give up when aimed at within 10 m, when stunned, when a participant stays within 3 m for 3 seconds, or once worn out by running when a participant is within 30 m); 4) search the stash spots ("Search", 4 s progress) until every stash is found, then "Seize the product" (6 s progress); 5) "Shut down the lab" at the lab point: 3 ox_lib skill checks (medium, medium, hard); 2 misses in a row start a toxic fire (an effect only, it hurts nobody), a setback and never a fail: any participant must "Ventilate" (10 s progress) at the lab point, the officer who missed loses 15 points (lab_fire, personal), and the shutdown can be tried again 30 seconds later by anyone; 6) Process the scene
 
@@ -1004,6 +1016,8 @@ Locations for every new mission come from GTA V vehicle nodes and known base-gam
 - Start: within 100 m of the hideout
 
 - Spawns: 16 hostiles (scales) in 3 waves of 6 / 5 / 5 from 2 of the 3 spawn sets, rolled per run (the Active Mission screen shows the intel line, e.g. "Intel: expect contact in the garage and the house"); tactics rolled (hold 30%, balanced 50%, push 20%); pistols, combat pistols and pump shotguns; base accuracy 28 and armour 10 plus the tier's increase; 30% surrender under 25% health. After the last wave, the lieutenant: health 300, armour 50, a heavy pistol, 50% surrender under 25% health; does not scale. 2 unarmed runners (scales, max 4). 1 weapons cache (scales, max 2) hidden among the cache spots
+
+- Marking (Config.Markers, PLAN M4): during the runners' chase each runner not yet cuffed is an orange blip while he runs and red once he fights or gives up, with the GPS line to the nearest, shown where the server has him once he is too far away for an officer's game
 
 - Objectives: 1) breach together on both entry points (as Drug Lab Raid); 2) neutralise every hostile, then the lieutenant; 3) when the lieutenant falls the runners bolt: catch and cuff them; 4) search the cache spots until every cache is found, then "Seize the weapons" (6 s progress); 5) Process the scene
 

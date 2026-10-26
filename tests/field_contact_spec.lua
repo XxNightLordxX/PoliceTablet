@@ -1166,4 +1166,126 @@ do
     H.exportsMock.ox_inventory = nil
 end
 
+-- ============================================================================
+--             OBJECTIVE POINTER (PLAN M4): THE CONTACTS ON THE MAP
+-- ============================================================================
+-- The owner (2026-10-19): "ensure all objectives as they come up mark on the map". The pointer (CP.Runs.marker) names
+-- every contact not yet decided at the server's position, keyed by the net id the client half hands its blip over
+-- with; a parked car not out yet shows at its kerb spot, a scene not out yet as a pin where it will be.
+
+local function LabelKey(v) return CP.Locale.isToken(v) and v.key or v end
+local function Spots(mk)
+    return W.count(mk.targets, function(t) return type(t.key) == 'string' and t.key:sub(1, 4) == 'spot' end)
+end
+local function TargetOf(mk, netId)
+    for _, t in ipairs(mk.targets) do if t.netId == netId then return t end end
+    return nil
+end
+
+do -- parked: a spot whose car waits for an officer at the spot, each car by its net id until decided
+    local loc = ParkedLocation(3)
+    loc.spots[3].coords = vec4(1000.0, 1400.0, 30.0, 90.0) -- 450 m from the start: its car waits for an officer
+    local m = W.mission({
+        {
+            block = 'field_contact',
+            label = 'Check the cars',
+            mode = 'parked',
+            cars = 3,
+            returning = { chance = 0 },
+            thief = { chance = 0 },
+            minSeconds = 0,
+        },
+        { block = 'stub_hold', label = 'After', minSeconds = 0 },
+    }, loc)
+    local run = W.start({ 1 }, m)
+    W.tick(1)
+    local cars = W.cars(run, 1)
+    H.eq(#cars, 2, 'fc marker: the two cars near the start are out, the far one waits')
+    local ctx = Runs.ctx(run, 1)
+    local mk = impl.marker(ctx)
+    H.ok(mk and mk.kind == 'targets' and #mk.targets == 3, 'fc marker: two cars and the spot still to come')
+    local spot = mk.targets[3]
+    H.ok(
+        spot.netId == nil and spot.key:sub(1, 4) == 'spot' and spot.coords.y == 1400.0 and spot.look == 'contactVehicle',
+        'fc marker: the waiting car at its kerb spot, in the car look')
+    H.eq(LabelKey(spot.label), 'block.field_contact.blip_spot', 'fc marker: named Parked car to check')
+    for _, c in ipairs(cars) do
+        local t = TargetOf(mk, c.netId)
+        H.ok(
+            t and t.key == c.netId and t.look == 'contactVehicle' and LabelKey(t.label) == 'block.field_contact.blip'
+                and t.label.vars.label == c.label,
+            'fc marker: a car by its net id, named like its blip (' .. c.label .. ')'
+        )
+    end
+    local em = Runs.marker(run)
+    H.ok(em and em.kind == 'targets' and #em.targets == 3 and em.targets[1].key == tostring(em.targets[1].netId),
+        'fc marker: the engine sends it, keys as text')
+    -- a car decided leaves the list
+    W.near(1, run, cars[1].netId)
+    W.act(1, run, cars[1].netId, 'inspect')
+    W.act(1, run, cars[1].netId, 'runPlate')
+    W.decide(1, run, cars[1].netId, BestFor(run, cars[1]))
+    mk = impl.marker(ctx)
+    H.ok(TargetOf(mk, cars[1].netId) == nil and TargetOf(mk, cars[2].netId) ~= nil, 'fc marker: a decided car is gone')
+    -- an officer drives up to the far spot: its car appears and takes the spot's place
+    W.place(1, 1000.0, 1340.0, 30.0)
+    W.tick(1)
+    cars = W.cars(run, 1)
+    H.eq(#cars, 3, 'fc marker: the third car is out')
+    mk = impl.marker(ctx)
+    H.ok(Spots(mk) == 0 and TargetOf(mk, cars[3].netId) ~= nil, 'fc marker: the spot became the car')
+    Runs.endRun(run, 'completed', 'completed')
+end
+
+do -- scene: a pin until the scene is out, then the people and the car; a runner orange, red once he gives up
+    -- the test set of the top of this spec is no longer in Config.Custody.profileSets by now: it goes in again
+    Config.Custody.profileSets.test_warrant = { person = { warrant = 100 }, vehicle = { legal = 100 } }
+    Demeanour('warrant', 'runner')
+    local loc = SceneLocation()
+    loc.start.coords = vec3(2000.0, 1600.0, 30.0) -- 400 m from the scene: it waits for an officer near it
+    local m = W.mission({
+        {
+            block = 'field_contact',
+            label = 'Make contact',
+            mode = 'scene',
+            people = 1,
+            cars = 1,
+            minSeconds = 0,
+            custody = 'cuff',
+            profileSet = 'test_warrant',
+            scene = { loitering = 1 },
+        },
+        { block = 'stub_hold', label = 'After', minSeconds = 0 },
+    }, loc, { type = 'investigation' })
+    local run = W.start({ 1 }, m)
+    W.tick(1)
+    H.eq(#W.people(run, 1), 0, 'fc scene marker: nobody out while the officer is 400 m away')
+    local ctx = Runs.ctx(run, 1)
+    local mk = impl.marker(ctx)
+    H.ok(mk and mk.kind == 'point' and mk.look == 'objective' and mk.coords.x == 2000.0 and mk.coords.y == 2000.0,
+        'fc scene marker: a pin where the scene will be')
+    H.eq(mk and mk.label, 'Make contact', 'fc scene marker: named after the objective')
+    W.place(1, 2000.0, 1940.0, 30.0)
+    W.tick(1)
+    local p, car = Contact(run, 1, 'person'), Contact(run, 1, 'vehicle')
+    H.ok(p and car, 'fc scene marker: the scene is out')
+    mk = impl.marker(ctx)
+    H.ok(mk.kind == 'targets' and #mk.targets == 2, 'fc scene marker: the car and the person')
+    H.eq(TargetOf(mk, car.netId).look, 'contactVehicle', 'fc scene marker: the car in kinds.contactVehicle')
+    H.eq(TargetOf(mk, p.netId).look, 'contact', 'fc scene marker: the person in kinds.contact')
+    W.place(1, 2000.0, 1985.0, 30.0)
+    W.tick(5)
+    H.eq(p.state, 'fleeing', 'fc scene marker: he runs')
+    H.eq(TargetOf(impl.marker(ctx), p.netId).look, 'fleeing', 'fc scene marker: a runner in kinds.fleeing (orange)')
+    W.model(run, p.netId).coords = vec3(2600.0, 2000.0, 30.0)
+    H.eq(TargetOf(impl.marker(ctx), p.netId).coords.x, 2600.0, 'fc scene marker: where the server has him')
+    W.near(1, run, p.netId, 8.0)
+    Report(1, run, 1, { type = 'aim', netId = p.netId })
+    H.eq(p.state, 'surrendered', 'fc scene marker: aimed at, he gives up')
+    H.eq(TargetOf(impl.marker(ctx), p.netId).look, 'suspect', 'fc scene marker: then in kinds.suspect (red)')
+    RestoreDemeanour()
+    Config.Custody.profileSets.test_warrant = nil
+    Runs.endRun(run, 'completed', 'completed')
+end
+
 return H

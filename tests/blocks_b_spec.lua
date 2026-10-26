@@ -2292,6 +2292,109 @@ do -- validation guardrails added in review
 end
 
 -- ============================================================================
+--                              OBJECTIVE POINTER
+-- ============================================================================
+-- (PLAN M4): SUSPECTS AND HOSTAGES ON THE MAP.
+-- The owner (2026-10-19): "ensure all objectives as they come up mark on the map". The pointer (CP.Runs.marker) names
+-- every suspect and every hostage still to free at the server's position, so one out of an officer's game (OneSync
+-- streams 424 m) still shows, keyed by the net id the client half hands its own blip over with.
+
+local function LabelKey(v) return CP.Locale.isToken(v) and v.key or v end
+
+do -- protect_rescue: nothing before the hostages are out, then the restrained ones, then the safe point
+    Place(1, 1990, 2000, 20)
+    local ctx, S = MakeCtx('protect_rescue', {}, prLoc)
+    S.can = false
+    PR.prepare(ctx)
+    PR.start(ctx)
+    H.eq(#S.spawned, 0, 'pr marker: the caps keep the hostages waiting')
+    H.eq(PR.marker(ctx), nil, 'pr marker: nobody out yet: nil (the engine pins the objective\'s anchor)')
+    S.can = true
+    PR.tick(ctx, 1)
+    H.eq(#S.spawned, 3, 'pr marker: three hostages out')
+    local mk = PR.marker(ctx)
+    H.ok(mk and mk.kind == 'targets' and #mk.targets == 3, 'pr marker: every restrained hostage is a target')
+    for i, t in ipairs(mk.targets) do
+        H.ok(t.key == t.netId and t.look == 'hostage' and LabelKey(t.label) == 'block.protect_rescue.blip',
+            'pr marker: a hostage, keyed by his net id, kinds.hostage, named like his blip')
+        if i > 1 then H.ok(t.netId > mk.targets[i - 1].netId, 'pr marker: in net id order') end
+    end
+    local h1, h2, h3 = mk.targets[1].netId, mk.targets[2].netId, mk.targets[3].netId
+    MoveEnt(S, h3, 2600, 2000, 20)
+    H.eq(PR.marker(ctx).targets[3].coords.x, 2600.0, 'pr marker: where the server has him')
+    -- one is freed: the safe point joins the list (the officers lead him there), the other two stay
+    NearTo(1, S, h1)
+    PR.onEvent(ctx, 1, { type = 'free_start', netId = h1 })
+    AdvanceMs(6000)
+    H.eq(PR.onEvent(ctx, 1, { type = 'freed', netId = h1 }), true, 'pr marker: one freed')
+    mk = PR.marker(ctx)
+    H.eq(#mk.targets, 3, 'pr marker: two restrained and the safe point')
+    H.ok(mk.targets[1].netId == h2 and mk.targets[2].netId == h3, 'pr marker: the freed one left the list')
+    local sp = mk.targets[3]
+    H.ok(
+        sp.key == 'safe' and sp.netId == nil and sp.look == 'safePoint' and sp.coords == prLoc.safe
+            and LabelKey(sp.label) == 'block.protect_rescue.blip_safe',
+        'pr marker: the safe point, key safe, kinds.safePoint'
+    )
+    for _, n in ipairs({ h2, h3 }) do
+        NearTo(1, S, n)
+        PR.onEvent(ctx, 1, { type = 'free_start', netId = n })
+        AdvanceMs(6000)
+        PR.onEvent(ctx, 1, { type = 'freed', netId = n })
+    end
+    mk = PR.marker(ctx)
+    H.ok(#mk.targets == 1 and mk.targets[1].key == 'safe', 'pr marker: all three freed: the safe point alone')
+end
+
+do -- flee_arrest door: the front door before the knock, then the suspect (orange while he runs) and the associate
+    Place(1, 3000, 3000, 10)
+    local ctx, S = MakeCtx('flee_arrest', { responses = { surrender = 0, flee = 1, fight = 0 } }, doorLoc)
+    FA.prepare(ctx)
+    FA.start(ctx)
+    local mk = FA.marker(ctx)
+    H.ok(mk and mk.kind == 'point' and mk.key == 'door' and mk.look == 'objective',
+        'fa marker: before the knock: a point')
+    H.ok(mk and mk.coords == doorLoc.door and LabelKey(mk.label) == 'block.flee_arrest.blip_door',
+        'fa marker: at the front door, named like the door\'s blip (key door: the client half hands it over)')
+    H.eq(KnockOpen(ctx, S), true, 'fa marker: knocked')
+    FA.tick(ctx, 1)
+    local sus, asc = WithRole(S, 'suspect')[1], WithRole(S, 'associate')[1]
+    H.ok(sus and asc, 'fa marker: the suspect and the associate are out')
+    mk = FA.marker(ctx)
+    H.ok(mk.kind == 'targets' and #mk.targets == 2, 'fa marker: after the knock: both are targets')
+    H.ok(mk.targets[1].netId < mk.targets[2].netId, 'fa marker: in net id order')
+    local function Of(netId)
+        for _, t in ipairs(FA.marker(ctx).targets) do if t.netId == netId then return t end end
+    end
+    H.ok(Of(sus.netId).look == 'fleeing' and Of(sus.netId).key == sus.netId, 'fa marker: the runner in kinds.fleeing')
+    H.eq(Of(asc.netId).look, 'suspect', 'fa marker: the armed associate in kinds.suspect (red)')
+    H.eq(LabelKey(Of(sus.netId).label), 'block.flee_arrest.blip_suspect', 'fa marker: named Suspect')
+    MoveEnt(S, sus.netId, 3600, 3000, 10)
+    H.eq(Of(sus.netId).coords.x, 3600.0, 'fa marker: the runner 560 m away, where the server has him')
+    FA.onEntityDead(ctx, asc.netId, 1)
+    ctx.state.peds[tostring(sus.netId)].state = 'surrendered'
+    mk = FA.marker(ctx)
+    H.ok(#mk.targets == 1 and mk.targets[1].look == 'suspect', 'fa marker: the dead one gone, one who gave up red')
+    ctx.state.peds[tostring(sus.netId)].state = 'cuffed'
+    mk = FA.marker(ctx)
+    H.ok(mk.kind == 'targets' and #mk.targets == 0, 'fa marker: a cuffed one leaves the list')
+end
+
+do -- flee_arrest scatter: nothing before the inmates are out, then every inmate on the run
+    Place(1, 4000, 4000, 30)
+    local ctx, S = MakeCtx('flee_arrest', { mode = 'scatter' }, scatterLoc)
+    S.can = false
+    FA.prepare(ctx)
+    FA.start(ctx)
+    H.eq(FA.marker(ctx), nil, 'fa scatter marker: nobody out yet: nil (the anchor, the first inmate point)')
+    S.can = true
+    FA.tick(ctx, 1)
+    local mk = FA.marker(ctx)
+    H.ok(mk and #mk.targets == 5, 'fa scatter marker: the five inmates')
+    H.eq(#U.filter(mk.targets, function(t) return t.look == 'fleeing' end), 5, 'fa scatter marker: all running')
+end
+
+-- ============================================================================
 --                                      ═
 -- ============================================================================
 -- client halves (stubbed natives, undefined globals are errors): host control before every task,
@@ -2315,8 +2418,21 @@ do
     local tasks, controlCalls = {}, 0
     local aiming, targetting, stunned = {}, {}, {}
     local progress = { active = false, cancel = false, cancelled = 0 }
-    local function NewBlip() nextBlip = nextBlip + 1; blips[nextBlip] = true; return nextBlip end
+    -- what each blip looks like (ent or x/y/z, sprite, colour, scale, name, route), for the objective pointer's
+    -- hand-over (PLAN M4); removedRouted counts blips removed with their GPS line still on (BLIPS_FINAL R10)
+    local props, removedRouted, pendingName = {}, 0, nil
+    local function NewBlip(fields)
+        nextBlip = nextBlip + 1
+        blips[nextBlip] = true
+        props[nextBlip] = fields or {}
+        return nextBlip
+    end
     local function OpenBlips() local n = 0 for _ in pairs(blips) do n = n + 1 end return n end
+    local function Prop(field)
+        return function(b, v)
+            if props[b] then props[b][field] = v end
+        end
+    end
     local function AddEnt(netId, handle, coords, bag)
         CE[handle] = { coords = coords, health = 200, maxHealth = 200, bag = bag, control = false, grant = false }
         byNet[netId] = handle
@@ -2344,17 +2460,38 @@ do
         SetRoadsInArea = function(...) roads.off[#roads.off + 1] = { ... } end,
         SetRoadsBackToOriginal = function(...) roads.back[#roads.back + 1] = { ... } end,
         ClearAreaOfVehicles = function() roads.cleared = roads.cleared + 1 end,
-        AddBlipForEntity = function() return NewBlip() end,
-        AddBlipForCoord = function() return NewBlip() end,
-        SetBlipSprite = function() end,
-        SetBlipColour = function() end,
-        SetBlipScale = function() end,
-        SetBlipAsShortRange = function() end,
-        BeginTextCommandSetBlipName = function() end,
-        AddTextComponentSubstringPlayerName = function() end,
-        EndTextCommandSetBlipName = function() end,
+        AddBlipForEntity = function(e) return NewBlip({ ent = e }) end,
+        AddBlipForCoord = function(x, y, z) return NewBlip({ x = x, y = y, z = z }) end,
+        AddBlipForRadius = function(x, y, z, r) return NewBlip({ x = x, y = y, z = z, radius = r }) end,
+        SetBlipSprite = Prop('sprite'),
+        SetBlipColour = Prop('colour'),
+        SetBlipScale = Prop('scale'),
+        SetBlipAsShortRange = Prop('shortRange'),
+        SetBlipRoute = function(b, on) Prop('route')(b, on == true) end,
+        SetBlipCoords = function(b, x, y, z)
+            if props[b] then props[b].x, props[b].y, props[b].z = x, y, z end
+        end,
+        GetBlipCoords = function(b)
+            local p = props[b] or {}
+            if p.ent then return CE[p.ent] and CE[p.ent].coords or vec3(0.0, 0.0, 0.0) end
+            return vec3(p.x or 0.0, p.y or 0.0, p.z or 0.0)
+        end,
+        SetBlipAlpha = function() end,
+        SetBlipCategory = function() end,
+        SetBlipPriority = function() end,
+        SetBlipFlashes = function() end,
+        SetBlipFlashTimer = function() end,
+        SetBlipRouteColour = function() end,
+        ShowNumberOnBlip = function() end,
+        IsWaypointActive = function() return false end,
+        BeginTextCommandSetBlipName = function() pendingName = nil end,
+        AddTextComponentSubstringPlayerName = function(text) pendingName = text end,
+        EndTextCommandSetBlipName = function(b) Prop('name')(b, pendingName) end,
         DoesBlipExist = function(b) return blips[b] == true end,
-        RemoveBlip = function(b) blips[b] = nil end,
+        RemoveBlip = function(b)
+            if props[b] and props[b].route then removedRouted = removedRouted + 1 end
+            blips[b] = nil
+        end,
         DrawMarker = function() end,
         IsPedBeingStunned = function(e) return stunned[e] == true end,
         IsPlayerFreeAimingAtEntity = function(_, e) return aiming[e] == true end,
@@ -2419,9 +2556,13 @@ do
 
     CP.Blocks._list.hostile_waves, CP.Blocks._list.protect_rescue, CP.Blocks._list.flee_arrest = nil, nil, nil
     H.strictGlobals(true)
+    -- the objective pointer the client halves hand their blips to (it is loaded before the blocks in the game too)
+    H.load('modules/markers/client.lua')
     H.load('blocks/hostile_waves/client.lua')
     H.load('blocks/protect_rescue/client.lua')
     H.load('blocks/flee_arrest/client.lua')
+    -- field_contact's client half (its server half lives in tests/field_contact_spec.lua's world), for its pointer
+    H.load('blocks/field_contact/client.lua')
     local HWc, PRc, FAc = CP.Blocks.get('hostile_waves'), CP.Blocks.get('protect_rescue'), CP.Blocks.get('flee_arrest')
     H.ok(HWc ~= HW and PRc ~= PR and FAc ~= FA and HWc.update and PRc.update and FAc.update, 'client halves registered')
     Place(1, 1990, 2000, 20)
@@ -2723,6 +2864,227 @@ do
         TriggerEvent('onResourceStop', 'Crimson-Police')
         H.eq(#roads.back, b0 + 3, 'hw hold: resource stop restores a held block')
         CP.Runs = savedRuns
+    end
+
+    -- ========================================================================
+    -- (PLAN M4) the objective pointer: each block's own blips ARE the pointer (one icon per target, the GPS line on
+    -- it), in the BLIPS_FINAL section 3 looks; CP.Markers draws the same look from the server's position while a
+    -- target is out of this game, and every blip loses its line before it goes
+    -- ========================================================================
+    local M = CP.Markers
+    local function BlipOf(pred)
+        for b in pairs(blips) do
+            if pred(props[b]) then return b, props[b] end
+        end
+        return nil, nil
+    end
+    local function Routed()
+        local out = {}
+        for b in pairs(blips) do if props[b].route then out[#out + 1] = b end end
+        return out
+    end
+    local function T(netId, x, y, z, look, label)
+        return { key = tostring(netId), netId = netId, x = x, y = y, z = z, look = look, label = label }
+    end
+    M.clear()
+
+    do -- protect_rescue: the hostages' and the safe point's blips are handed over
+        Place(1, 1700, 2000, 20)
+        local c = ClientCtx(U.deepcopy(PR.defaults({})), prLoc, { tag = 'pr-m4', isHost = false })
+        AddEnt(7301, 301, vec3(2000.0, 2000.0, 20.0), { state = 'restrained' })
+        AddEnt(7302, 302, vec3(2010.0, 2000.0, 20.0), { state = 'restrained' })
+        local base, routedGone = OpenBlips(), removedRouted
+        PRc.prepare(c)
+        PRc.start(c)
+        M.set(c.runId, 1, {
+            kind = 'targets',
+            targets = {
+                T(7301, 2000.0, 2000.0, 20.0, 'hostage', 'Hostage'),
+                T(7302, 2010.0, 2000.0, 20.0, 'hostage', 'Hostage'),
+            },
+        }, c)
+        PRc.update(c, {
+            peds = {
+                { netId = 7301, state = 'restrained', index = 1 },
+                { netId = 7302, state = 'restrained', index = 2 },
+            },
+        })
+        Steps(2)
+        local h1, p1 = BlipOf(function(p) return p.ent == 301 end)
+        local _, p2 = BlipOf(function(p) return p.ent == 302 end)
+        local sb, sp = BlipOf(function(p) return p.ent == nil and p.sprite == 38 end)
+        H.eq(OpenBlips() - base, 3, 'pr client: one icon each for the two hostages and the safe point, no second one')
+        H.ok(
+            p1 and p1.sprite == 280 and p1.colour == 3 and p1.scale == 0.8
+                and p1.name == CP.L('block.protect_rescue.blip') and p2 and p2.sprite == 280,
+            'pr client: a hostage in kinds.hostage (a blue person, 0.8)'
+        )
+        H.eq(p1 and p1.shortRange, false, 'pr client: shown at the radar edge (Config.Markers.shortRange)')
+        H.ok(sp and sp.colour == 2 and sp.scale == 0.9 and sp.name == CP.L('block.protect_rescue.blip_safe'),
+            'pr client: the safe point in kinds.safePoint (a green flag)')
+        local r = Routed()
+        H.ok(#r == 1 and r[1] == h1, 'pr client: 300 m away: the line on the nearest hostage\'s own blip')
+        -- both freed: the server's pointer is the safe point
+        Place(1, 2050, 2300, 20)
+        M.update(c.runId, 1, {
+            kind = 'targets',
+            targets = { { key = 'safe', x = 2050.0, y = 2000.0, z = 20.0, look = 'safePoint', label = 'Safe point' } },
+        }, c)
+        Steps(1)
+        r = Routed()
+        H.ok(#r == 1 and r[1] == sb, 'pr client: the line goes to the safe point\'s own blip')
+        M.clear(c.runId, 1)
+        PRc.stop(c)
+        H.eq(OpenBlips() - base, 0, 'pr client: nothing left on the map')
+        H.eq(removedRouted, routedGone, 'pr client: every line off before its blip went')
+    end
+
+    do -- flee_arrest: orange while he runs, red once he fights or gives up; far = the server's position
+        Place(1, 4000, 4300, 30)
+        local c = ClientCtx(U.deepcopy(FA.defaults({ mode = 'scatter' })), scatterLoc,
+            { tag = 'fa-m4', isHost = false })
+        AddEnt(7401, 401, vec3(4040.0, 4000.0, 30.0), { state = 'fleeing' })
+        local base, routedGone = OpenBlips(), removedRouted
+        FAc.prepare(c)
+        FAc.start(c)
+        local function Pointer(x, look)
+            return { kind = 'targets', targets = { T(7401, x, 4000.0, 30.0, look, 'Suspect') } }
+        end
+        M.set(c.runId, 1, Pointer(4040.0, 'fleeing'), c)
+        FAc.update(c, {
+            peds = { { netId = 7401, role = 'inmate', state = 'fleeing', armed = false, route = 1 } },
+            mode = 'scatter',
+        })
+        Steps(2)
+        local b, p = BlipOf(function(q) return q.ent == 401 end)
+        H.eq(OpenBlips() - base, 1, 'fa client: one icon for the inmate')
+        H.ok(
+            p and p.sprite == 1 and p.colour == 17 and p.scale == 0.8
+                and p.name == CP.L('block.flee_arrest.blip_suspect'),
+            'fa client: a runner in kinds.fleeing (orange, 0.8)'
+        )
+        local r = Routed()
+        H.ok(#r == 1 and r[1] == b, 'fa client: the line on his own blip')
+        CE[401].bag.state = 'hostile'
+        Steps(1)
+        H.ok(blips[b] and p.colour == 1 and p.scale == 0.7, 'fa client: he fights: the same blip, kinds.suspect (red)')
+        H.eq(Routed()[1], b, 'fa client: ...and it keeps the line')
+        CE[401].bag.state = 'surrendered'
+        Steps(1)
+        H.ok(blips[b] and p.colour == 1 and p.scale == 0.6, 'fa client: he gave up: red, a size smaller')
+        -- he runs out of this game: the block's blip goes, CP.Markers shows him where the server has him
+        CE[401].bag.state = 'fleeing'
+        byNet[7401] = nil
+        M.update(c.runId, 1, Pointer(4600.0, 'fleeing'), c)
+        Steps(1)
+        local cb, cp = BlipOf(function(q) return q.ent == nil and q.sprite == 1 end)
+        H.ok(blips[b] == nil, 'fa client: out of this game: his entity blip is gone')
+        H.ok(cp and cp.colour == 17 and cp.scale == 0.8 and cp.name == 'Suspect' and cp.x == 4600.0,
+            'fa client: shown where the server has him, in the same look')
+        r = Routed()
+        H.ok(#r == 1 and r[1] == cb, 'fa client: the line follows him')
+        M.clear(c.runId, 1)
+        FAc.stop(c)
+        byNet[7401] = 401
+        H.eq(OpenBlips() - base, 0, 'fa client: nothing left on the map')
+        H.eq(removedRouted, routedGone, 'fa client: every line off before its blip went')
+    end
+
+    do -- flee_arrest door: the door's blip is the pointer before the knock
+        Place(1, 3000, 2600, 10)
+        local c = ClientCtx(U.deepcopy(FA.defaults({})), doorLoc, { tag = 'door-m4', isHost = false })
+        local base, routedGone = OpenBlips(), removedRouted
+        FAc.prepare(c)
+        FAc.start(c)
+        M.set(c.runId, 1, {
+            kind = 'point',
+            key = 'door',
+            look = 'objective',
+            coords = { x = 3040.0, y = 3000.0, z = 10.0 },
+            label = 'Front door',
+        }, c)
+        Steps(1)
+        local db, dp = BlipOf(function(q) return q.sprite == 40 end)
+        H.eq(OpenBlips() - base, 1, 'fa door client: one icon, the door\'s own')
+        H.ok(dp and dp.route == true, 'fa door client: the line on the door\'s blip')
+        FAc.update(c, { peds = {}, mode = 'door', knocked = true, response = 'flee' })
+        H.ok(blips[db] == nil, 'fa door client: the knock removes the door blip')
+        H.eq(removedRouted, routedGone, 'fa door client: ...with its line off first')
+        M.clear(c.runId, 1)
+        FAc.stop(c)
+        H.eq(OpenBlips() - base, 0, 'fa door client: nothing left on the map')
+    end
+
+    do -- field_contact: contacts in their looks, a runner orange, a parked spot not out yet at the spot
+        local FCc = CP.Blocks.get('field_contact')
+        Place(1, 5000, 4700, 30)
+        local c = ClientCtx({ block = 'field_contact', mode = 'scene' }, {}, { tag = 'fc-m4', isHost = false })
+        AddEnt(7501, 501, vec3(5000.0, 5000.0, 30.0), { state = 'idle' })
+        AddEnt(7502, 502, vec3(5005.0, 5000.0, 30.0), nil)
+        local base, routedGone = OpenBlips(), removedRouted
+        FCc.prepare(c)
+        FCc.start(c)
+        local spot = {
+            key = 'spot2',
+            x = 5200.0,
+            y = 5000.0,
+            z = 30.0,
+            look = 'contactVehicle',
+            label = 'Parked car to check',
+        }
+        local function Pointer(withCar)
+            local list = { T(7501, 5000.0, 5000.0, 30.0, 'contact', 'Contact A') }
+            if withCar then list[#list + 1] = T(7502, 5005.0, 5000.0, 30.0, 'contactVehicle', 'Contact V1') end
+            list[#list + 1] = spot
+            return { kind = 'targets', targets = list }
+        end
+        M.set(c.runId, 1, Pointer(true), c)
+        local function Contacts(carDone)
+            FCc.update(c, {
+                contacts = {
+                    { netId = 7501, kind = 'person', label = 'A', done = false },
+                    { netId = 7502, kind = 'vehicle', label = 'V1', done = carDone },
+                },
+                mode = 'scene',
+            })
+        end
+        Contacts(false)
+        Steps(2)
+        local pb, pp = BlipOf(function(q) return q.ent == 501 end)
+        local cb, cp = BlipOf(function(q) return q.ent == 502 end)
+        local _, sp = BlipOf(function(q) return q.ent == nil and q.x == 5200.0 end)
+        H.eq(OpenBlips() - base, 3, 'fc client: one icon each: the person, the car, the spot still to come')
+        H.ok(
+            pp and pp.sprite == 280 and pp.colour == 5 and pp.scale == 0.7
+                and pp.name == CP.L('block.field_contact.blip', { label = 'A' }),
+            'fc client: a person in kinds.contact (a yellow person)'
+        )
+        H.ok(
+            cp and cp.sprite == 225 and cp.colour == 5 and cp.scale == 0.7
+                and cp.name == CP.L('block.field_contact.blip', { label = 'V1' }),
+            'fc client: a car in kinds.contactVehicle (a yellow car)'
+        )
+        H.ok(sp and sp.sprite == 225 and sp.colour == 5 and sp.name == 'Parked car to check',
+            'fc client: a parked car not out yet: CP.Markers\' blip at its spot, in the car look')
+        local r = Routed()
+        H.ok(#r == 1 and (r[1] == pb or r[1] == cb), 'fc client: one line, on a contact\'s own blip (the nearest)')
+        CE[501].bag.state = 'fleeing'
+        Steps(1)
+        H.ok(blips[pb] and pp.colour == 17 and pp.scale == 0.8, 'fc client: he runs: the same blip, kinds.fleeing')
+        CE[501].bag.state = 'hostile'
+        Steps(1)
+        H.ok(blips[pb] and pp.colour == 1 and pp.scale == 0.7, 'fc client: he draws: kinds.suspect (red)')
+        -- the car decided: its blip goes (line off first) and the server's pointer drops it
+        Contacts(true)
+        M.update(c.runId, 1, Pointer(false), c)
+        Steps(1)
+        H.ok(blips[cb] == nil and BlipOf(function(q)
+            return q.ent == 502
+        end) == nil, 'fc client: a decided car leaves the map, no icon of CP.Markers\' takes its place')
+        M.clear(c.runId, 1)
+        FCc.stop(c)
+        H.eq(OpenBlips() - base, 0, 'fc client: nothing left on the map')
+        H.eq(removedRouted, routedGone, 'fc client: every line off before its blip went')
     end
 
     H.strictGlobals(false)

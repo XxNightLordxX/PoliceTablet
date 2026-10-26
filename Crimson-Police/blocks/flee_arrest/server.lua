@@ -1734,6 +1734,46 @@ local function Stop(ctx)
     st.stopped = true
 end
 
+-- The objective pointer (CP.Runs.marker, docs/ARCHITECTURE.md §5.44; the owner: "ensure all objectives as they come
+-- up mark on the map"). Door mode before the knock: the front door (key 'door', the client half hands its door blip
+-- over with it). Then every suspect, associate or inmate not dead or cuffed, at the server's position, so one who ran
+-- out of an officer's game (OneSync streams 424 m) still shows (Config.Markers.farTargets) while his escape clock
+-- runs: kinds.fleeing (orange) while he runs, else kinds.suspect (red). Keyed by net id (the client half hands its own
+-- blip of him over), in net id order so the shape never changes by itself; each officer's game routes him to his
+-- nearest. Nobody out yet while more are to come (the spawn director waits for an officer near them): nil, the
+-- objective's anchor (the first inmate point, or the door).
+local function Marker(ctx)
+    local st = StateOf(ctx)
+    if st.mode == 'door' and not st.knocked then
+        local door = PointList(ctx.location, ctx.obj.door)[1]
+        if not door then return nil end
+        return {
+            kind = 'point',
+            key = 'door',
+            look = 'objective',
+            coords = door,
+            label = CP.Lt('block.flee_arrest.blip_door'),
+        }
+    end
+    local out = {}
+    for _, p in pairs(st.peds) do
+        if not Neutralised(p) and PedCoords(p) then out[#out + 1] = p end
+    end
+    if #out == 0 and not AllSpawned(ctx, st) then return nil end
+    table.sort(out, function(a, b) return a.netId < b.netId end)
+    local targets = {}
+    for _, p in ipairs(out) do
+        targets[#targets + 1] = {
+            key = p.netId,
+            netId = p.netId,
+            coords = PedCoords(p),
+            look = p.state == 'fleeing' and 'fleeing' or 'suspect',
+            label = CP.Lt('block.flee_arrest.blip_suspect'),
+        }
+    end
+    return { kind = 'targets', targets = targets }
+end
+
 CP.Blocks.register(BLOCK, {
     defaults = Defaults,
     validate = Validate,
@@ -1754,6 +1794,7 @@ CP.Blocks.register(BLOCK, {
     onTimeout = function() return nil end,
     presence = Presence,
     checklist = Checklist,
+    marker = Marker,
     restart = Restart,
     stop = Stop,
 })

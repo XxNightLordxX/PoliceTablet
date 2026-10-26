@@ -790,6 +790,47 @@ local function Stop(ctx)
     st.current = false
 end
 
+-- The objective pointer (CP.Runs.marker, docs/ARCHITECTURE.md §5.44; the owner: "ensure all objectives as they come
+-- up mark on the map"): every hostage still restrained, at the server's position (so an officer too far away for his
+-- game still sees them, Config.Markers.farTargets), and the safe point once a hostage is free to be led there. Each
+-- officer's own game routes him to his nearest. Keyed by the hostage's net id and 'safe', the keys the client half
+-- hands its own blips over with; hostages in net id order, so the shape never changes by itself. Before the hostages
+-- are out (Config.Spawning.hostagesAt = 'objective' waits for an officer near them): nil, the objective's anchor (the
+-- first hostage point, named after the objective).
+local function Marker(ctx)
+    local st = StateOf(ctx)
+    local tied, led = {}, false
+    for _, p in pairs(st.peds) do
+        if p.state == 'restrained' and PedCoords(p) then
+            tied[#tied + 1] = p
+        elseif p.state == 'freed' then
+            led = true
+        end
+    end
+    if #tied == 0 and not led and st.spawned < Target(ctx) then return nil end
+    table.sort(tied, function(a, b) return a.netId < b.netId end)
+    local targets = {}
+    for _, p in ipairs(tied) do
+        targets[#targets + 1] = {
+            key = p.netId,
+            netId = p.netId,
+            coords = PedCoords(p),
+            look = 'hostage',
+            label = CP.Lt('block.protect_rescue.blip'),
+        }
+    end
+    local safe = led and SafePoint(ctx) or nil
+    if safe then
+        targets[#targets + 1] = {
+            key = 'safe',
+            coords = safe,
+            look = 'safePoint',
+            label = CP.Lt('block.protect_rescue.blip_safe'),
+        }
+    end
+    return { kind = 'targets', targets = targets }
+end
+
 CP.Blocks.register(BLOCK, {
     defaults = Defaults,
     validate = Validate,
@@ -811,6 +852,7 @@ CP.Blocks.register(BLOCK, {
     onTimeout = function() return nil end,
     presence = Presence,
     checklist = Checklist,
+    marker = Marker,
     restart = Restart,
     stop = Stop,
 })

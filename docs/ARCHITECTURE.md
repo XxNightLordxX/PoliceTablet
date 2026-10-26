@@ -2579,8 +2579,13 @@ msg.marker, ctx)` after the block's own `start` (ctx = the block's client ctx, f
   interact_points (each pending or follow-up point's numbered blip, key = its point number; a hidden search's centre,
   key `'area'`), pursuit (each live car's blip in kinds.vehicle and each suspect's out of the car in kinds.suspect, key
   = its net id; the observe violator only once it passed) and escort (the truck's blip in kinds.escort, key = its net
-  id; the destination's in kinds.destination, key `'dest'`; the attackers' red dots stay detail blips). An adopted blip
-  that no longer exists falls back the same way at the next check. `clear` hands every adopted blip back with its line
+  id; the destination's in kinds.destination, key `'dest'`; the attackers' red dots stay detail blips), flee_arrest
+  (PLAN M4: the front door's blip before the knock, key `'door'`; each suspect's, associate's or inmate's in
+  kinds.fleeing while he runs, else kinds.suspect, a surrendered one at 0.6, restyled in place when his state changes,
+  key = his net id), protect_rescue (each hostage's in kinds.hostage, key = his net id; the safe point's in
+  kinds.safePoint, key `'safe'`) and field_contact (each contact's, key = its net id: a car in kinds.contactVehicle, a
+  person in kinds.contact, kinds.fleeing while he runs, kinds.suspect once he draws or gave up, restyled in place). An
+  adopted blip that no longer exists falls back the same way at the next check. `clear` hands every adopted blip back with its line
   off. CP.Markers draws its own icon only for what no block draws: a fight area, a fallback anchor, a target not
   streamed here, and service vehicles.
 - Own icons: a point or an area's centre `AddBlipForCoord` (an area adds `AddBlipForRadius`, colour of its kind,

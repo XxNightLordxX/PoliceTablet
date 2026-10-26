@@ -42,27 +42,40 @@ end
 --                                    BLIPS
 -- ============================================================================
 
+-- A person who runs is orange (kinds.fleeing), one who draws or gave up after running red (kinds.suspect), as the
+-- server's pointer names them (BLIPS_FINAL R3).
+local PERSON_LOOK = { fleeing = 'fleeing', hostile = 'suspect', surrendered = 'suspect' }
+
+-- A blip handed to the objective pointer (CP.Markers) is taken back first, so its GPS line goes off before it goes
+-- (BLIPS_FINAL R10).
 local function DropBlip(S, k)
     local b = S.blips[k]
     if not b then return end
+    CP.Markers.release(k, b.id)
     if DoesBlipExist(b.id) then RemoveBlip(b.id) end
     S.blips[k] = nil
 end
 
-local function EnsureBlip(S, info, ent)
+-- A contact's blip in its Config.Markers.kinds look (a car kinds.contactVehicle, a person kinds.contact, or as
+-- PERSON_LOOK for his state; restyled in place when that changes), handed to the objective pointer under his net id,
+-- the key the server's pointer names him by: it IS the pointer (one icon, the GPS line on it), and CP.Markers shows
+-- the same look from the server's position while he is too far away for this game (BLIPS_FINAL R1, R7).
+local function EnsureBlip(S, info, ent, state)
     if not S.alive then return end
+    local look = info.kind == 'vehicle' and 'contactVehicle' or PERSON_LOOK[state] or 'contact'
     local b = S.blips[info.netId]
-    if b and b.ent == ent and DoesBlipExist(b.id) then return end
+    if b and b.ent == ent and DoesBlipExist(b.id) then
+        if b.look ~= look then
+            CP.Markers.style(b.id, look)
+            b.look = look
+        end
+        return
+    end
     DropBlip(S, info.netId)
     local id = AddBlipForEntity(ent)
-    SetBlipSprite(id, info.kind == 'vehicle' and 225 or 1)
-    SetBlipColour(id, 5)
-    SetBlipScale(id, info.kind == 'vehicle' and 0.6 or 0.55)
-    SetBlipAsShortRange(id, true)
-    BeginTextCommandSetBlipName('STRING')
-    AddTextComponentSubstringPlayerName(CP.L('block.field_contact.blip', { label = info.label }))
-    EndTextCommandSetBlipName(id)
-    S.blips[info.netId] = { id = id, ent = ent }
+    CP.Markers.style(id, look, CP.L('block.field_contact.blip', { label = info.label }))
+    S.blips[info.netId] = { id = id, ent = ent, look = look }
+    CP.Markers.adopt(info.netId, id)
 end
 
 -- ============================================================================
@@ -89,9 +102,9 @@ local function Loop(S)
                 for _, info in ipairs(S.contacts) do
                     local ent = EntityFor(info.netId)
                     if ent and not info.done then
-                        if not S.ctx.radioSilence then EnsureBlip(S, info, ent) end
                         local bag = BagOf(ent)
                         local state = bag and bag.state
+                        if not S.ctx.radioSilence then EnsureBlip(S, info, ent, state) end
                         if info.kind == 'person' and (state == 'fleeing' or state == 'idle' or state == 'hostile') then
                             local d = U.dist(pos, GetEntityCoords(ent))
                             if d <= WATCH_RANGE then

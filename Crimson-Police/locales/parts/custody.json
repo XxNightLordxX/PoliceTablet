@@ -1,5 +1,6 @@
 {
   "block.field_contact.blip": "Contact {label}",
+  "block.field_contact.blip_spot": "Parked car to check",
   "block.field_contact.check_decided": "Contacts decided",
   "block.field_contact.detail": "Contacts decided: {done} of {total}",
   "block.field_contact.detail_wait": "Waiting for the contacts",

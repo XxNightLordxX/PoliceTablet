@@ -63,40 +63,36 @@ end
 --                                    BLIPS
 -- ============================================================================
 
+-- A blip handed to the objective pointer (CP.Markers) is taken back first, so its GPS line goes off before it goes
+-- (BLIPS_FINAL R10).
 local function DropBlip(S, k)
     local b = S.blips[k]
     if not b then return end
+    CP.Markers.release(k, b.id)
     if DoesBlipExist(b.id) then RemoveBlip(b.id) end
     S.blips[k] = nil
 end
 
-local function NameBlip(id, label)
-    BeginTextCommandSetBlipName('STRING')
-    AddTextComponentSubstringPlayerName(label)
-    EndTextCommandSetBlipName(id)
-end
-
+-- Each hostage's blip (kinds.hostage) and the safe point's (kinds.safePoint) are handed to the objective pointer under
+-- the keys the server's pointer names them by (the hostage's net id, 'safe'): the block's blip IS the pointer, one icon
+-- with the GPS line on it, and CP.Markers shows the same look from the server's position while a hostage is too far
+-- away for this game (BLIPS_FINAL R1, R7).
 local function EnsureEntityBlip(S, netId, ent)
     local b = S.blips[netId]
     if b and b.ent == ent and DoesBlipExist(b.id) then return end
     DropBlip(S, netId)
     local id = AddBlipForEntity(ent)
-    SetBlipSprite(id, 1)
-    SetBlipColour(id, 3)
-    SetBlipScale(id, 0.6)
-    SetBlipAsShortRange(id, true)
-    NameBlip(id, CP.L('block.protect_rescue.blip'))
+    CP.Markers.style(id, 'hostage', CP.L('block.protect_rescue.blip'))
     S.blips[netId] = { id = id, ent = ent }
+    CP.Markers.adopt(netId, id)
 end
 
 local function EnsureSafeBlip(S)
     if S.blips.safe or not S.safe then return end
     local id = AddBlipForCoord(S.safe.x, S.safe.y, S.safe.z)
-    SetBlipSprite(id, 1)
-    SetBlipColour(id, 2)
-    SetBlipScale(id, 0.8)
-    NameBlip(id, CP.L('block.protect_rescue.blip_safe'))
+    CP.Markers.style(id, 'safePoint', CP.L('block.protect_rescue.blip_safe'))
     S.blips.safe = { id = id }
+    CP.Markers.adopt('safe', id)
 end
 
 -- ============================================================================

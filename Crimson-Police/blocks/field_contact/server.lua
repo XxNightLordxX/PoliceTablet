@@ -1382,6 +1382,66 @@ local function Flush(ctx, st)
 end
 
 -- ============================================================================
+--                              OBJECTIVE POINTER
+-- ============================================================================
+-- The owner (2026-10-19): "ensure all objectives as they come up mark on the map" (CP.Runs.marker,
+-- docs/ARCHITECTURE.md §5.44). Every contact not yet decided, at the server's position, so one too far away for an
+-- officer's game still shows (Config.Markers.farTargets): a car in kinds.contactVehicle, a person in kinds.contact, or
+-- kinds.fleeing (orange) while he runs and kinds.suspect (red) once he draws or gave up after running. Keyed by net id
+-- (the client half hands its own blip of each over), in the order they appeared, so the shape never changes by
+-- itself; each officer's game routes him to his nearest. Parked mode: each chosen kerb spot whose car has not appeared
+-- yet (it appears once an officer is near it) at the spot itself, key 'spot<n>'. Scene mode before the scene is out:
+-- a pin where it will be, named after the objective.
+
+local PERSON_LOOK = { fleeing = 'fleeing', hostile = 'suspect', surrendered = 'suspect' }
+
+local function ObjectiveLabel(ctx)
+    local l = ctx.obj.label
+    if type(l) ~= 'string' or l == '' then return nil end
+    if CP.Locale.has(l) then return CP.Lt(l) end
+    return l
+end
+
+local function Marker(ctx)
+    local st = StateOf(ctx)
+    local targets = {}
+    for _, netId in ipairs(st.order) do
+        local t = st.contacts[netId]
+        local c = CP.Custody.get(ctx.run, netId)
+        local pc = t and not t.escaped and not Resolved(ctx, st, t, c) and EntCoords(ctx, netId) or nil
+        if pc then
+            targets[#targets + 1] = {
+                key = netId,
+                netId = netId,
+                coords = pc,
+                look = t.kind == 'vehicle' and 'contactVehicle' or PERSON_LOOK[c and c.state] or 'contact',
+                label = CP.Lt('block.field_contact.blip', { label = t.label }),
+            }
+        end
+    end
+    if st.mode == 'parked' and st.spots then
+        for i, spot in ipairs(st.spots) do
+            if not st.carAt[i] then
+                targets[#targets + 1] = {
+                    key = 'spot' .. i,
+                    coords = spot.coords,
+                    look = 'contactVehicle',
+                    label = CP.Lt('block.field_contact.blip_spot'),
+                }
+            end
+        end
+    end
+    if #targets == 0 and st.mode == 'scene' and not st.sceneGo then
+        local obj = ctx.obj
+        local at = PointList(ctx.location, obj.car)[1] or (st.plan and st.plan.people[1] and st.plan.people[1].point)
+            or PointList(ctx.location, obj.peopleSpots)[1]
+        if at then return { kind = 'point', look = 'objective', coords = at, label = ObjectiveLabel(ctx) } end
+        return nil
+    end
+    return { kind = 'targets', targets = targets }
+end
+
+-- ============================================================================
 --                                   EVIDENCE
 -- ============================================================================
 
@@ -1601,6 +1661,7 @@ CP.Blocks.register(BLOCK, {
     onTimeout = OnTimeout,
     presence = Presence,
     checklist = Checklist,
+    marker = Marker,
     restart = Restart,
     stop = function(ctx)
         local st = StateOf(ctx)
