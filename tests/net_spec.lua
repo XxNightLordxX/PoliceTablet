@@ -1,4 +1,6 @@
--- CP.Net.request on the client never raises: an ox_lib raise or a server that never answers is an error reply.
+-- CP.Net.request on the client never raises: an ox_lib raise or a server that never answers is an error reply. Logo
+-- pieces are paced under FXServer's limits. On the server CP.Net.rateOk is a token bucket, and
+-- Config.Limits.netRateResponse picks what a flood gets: block, log or kick.
 
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'client' })
@@ -117,5 +119,115 @@ do
     H.ok(other and other.ok and sentAt[#sentAt] - t0 < 20, 'another action goes at once')
     _G.TriggerServerEvent = send
 end
+
+-- ============================================================================
+--                     SERVER: RATE LIMITS (TOKEN BUCKETS)
+-- ============================================================================
+-- CP.Net.rateOk is a token bucket per player and key: `max` at once, then one back every windowMs / max. A fixed
+-- window let 2 x max through across its edge. Config.Limits.netRateResponse says what a flood past the limit gets.
+
+H.handlers, H.callbacks, H.commands, H.events = {}, {}, {}, {}
+CP, Config = nil, nil
+H.boot({ side = 'server' })
+
+local function Calls(src, key, n, max, windowMs)
+    local passed = 0
+    for _ = 1, n do
+        if CP.Net.rateOk(src, key, max, windowMs) then passed = passed + 1 end
+    end
+    return passed
+end
+
+-- (a) max calls just before a window edge and max just after: the second batch is refused
+H.eq(Calls(1, 'edge', 1, 8, 1000), 1, 'edge: the first call opens the old window')
+H.step(990)
+H.eq(Calls(1, 'edge', 7, 8, 1000), 7, 'edge: the rest of the limit just before the edge')
+H.step(10)   -- 1000 ms after the first call: a fixed window started a new one here
+local afterEdge = Calls(1, 'edge', 8, 8, 1000)
+H.ok(afterEdge <= 1, 'edge: max more just after the edge are refused (passed ' .. afterEdge .. ' of 8)')
+
+-- (b) after windowMs the full capacity is back, and no more
+H.step(1000)
+H.eq(Calls(1, 'edge', 9, 8, 1000), 8, 'a whole window later: max calls again, and the next is refused')
+
+-- one-shot limits keep their meaning: one call, then one again only once the whole window has passed
+H.eq(Calls(2, 'oneshot', 2, 1, 5000), 1, 'one-shot: the first call only')
+H.step(4999)
+H.eq(Calls(2, 'oneshot', 1, 1, 5000), 0, 'one-shot: refused 1 ms before the window ends')
+H.step(1)
+H.eq(Calls(2, 'oneshot', 1, 1, 5000), 1, 'one-shot: allowed once the window has passed')
+-- refused tries in between do not cost anything, and thirds of a window add up to exactly one call
+H.eq(Calls(2, 'thirds', 1, 1, 3000), 1, 'thirds: the first call')
+for _ = 1, 2 do
+    H.step(1000)
+    H.eq(Calls(2, 'thirds', 1, 1, 3000), 0, 'thirds: refused before the window has passed')
+end
+H.step(1000)
+H.eq(Calls(2, 'thirds', 1, 1, 3000), 1, 'thirds: allowed after three thirds')
+
+-- a player who leaves loses his buckets
+H.eq(Calls(3, 'drop', 9, 8, 1000), 8, 'drop: the limit is used up')
+H.fire('playerDropped', 3, 'Exiting')
+H.eq(Calls(3, 'drop', 8, 8, 1000), 8, 'drop: a new player in the same slot starts full')
+
+-- (c) the response to a flood: an action (8 a second) and a callback (6 a second) sent far past their limits
+CP.Net.action('server:test:flood', function() return true end)
+CP.Net.callback('testFlood', function() return {} end)
+local ACTION = 'crimson-police:server:test:flood'
+local CALLBACK = 'crimson-police:testFlood'
+local warned = {}
+local realWarn = CP.warn
+CP.warn = function(tag, fmt, ...)
+    if tag == 'net' then warned[#warned + 1] = fmt:format(...) end
+    return realWarn(tag, fmt, ...)
+end
+local function Flood(src, n)
+    H.events = {}
+    for i = 1, n do H.fire(ACTION, src, {}, 'f' .. i) end
+    local refused = 0
+    for _, e in ipairs(H.findEvents('crimson-police:client:actionResult')) do
+        if e.args[3] == 'err.rate_limited' then refused = refused + 1 end
+    end
+    return refused
+end
+
+-- 'block' (shipped): refused quietly, as before; no warning, no kick
+H.eq(Config.Limits.netRateResponse, 'block', 'shipped: block')
+H.eq(Flood(10, 108), 100, 'block: everything past 8 is refused')
+H.eq(#warned, 0, 'block: no console warning')
+H.eq(#H.dropped, 0, 'block: nobody is dropped')
+
+-- 'log': one warning once one name is refused 3 x its limit (24) in a minute, then none for a minute
+Config.Limits.netRateResponse = 'log'
+H.step(2000)
+Flood(11, 8 + 23)
+H.eq(#warned, 0, 'log: 23 refusals: no warning yet')
+Flood(11, 1)
+H.eq(#warned, 1, 'log: the 24th refusal gives one warning')
+H.ok(warned[1] and warned[1]:find('player 11 sent ' .. ACTION .. ' 24 times past its limit', 1, true) ~= nil,
+    'log: the warning names the player, the request and the count: ' .. tostring(warned[1]))
+H.step(30000)
+Flood(11, 100)
+H.eq(#warned, 1, 'log: no second warning within the minute')
+H.step(30000)
+Flood(11, 100)
+H.eq(#warned, 2, 'log: still flooding a minute later: one more warning')
+H.eq(#H.dropped, 0, 'log: nobody is dropped')
+
+-- 'kick': the warning, and the player is dropped (callbacks too)
+Config.Limits.netRateResponse = 'kick'
+warned = {}
+for _ = 1, 6 + 17 do H.callback(CALLBACK, 12) end
+H.eq(#H.dropped, 0, 'kick: 17 refused callbacks: not yet')
+local last = H.callback(CALLBACK, 12)
+H.eq(last and last.error, 'err.rate_limited', 'kick: the callback is still refused')
+H.eq(#H.dropped, 1, 'kick: the 18th refusal (3 x 6) drops the player')
+H.eq(H.dropped[1] and H.dropped[1].src, 12, 'kick: that player')
+H.eq(H.dropped[1] and H.dropped[1].reason, CP.L('err.rate_kick'), 'kick: with the err.rate_kick text')
+H.eq(#warned, 1, 'kick: and one console warning')
+for _ = 1, 20 do H.callback(CALLBACK, 12) end
+H.eq(#H.dropped, 1, 'kick: DropPlayer is called once')
+CP.warn = realWarn
+Config.Limits.netRateResponse = 'block'
 
 return H

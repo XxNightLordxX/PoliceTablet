@@ -20,6 +20,7 @@
   "err.not_supervisor": "Only supervisors can open the Supervisor UI.",
   "err.other_department": "That run does not involve your department.",
   "err.own_run": "You (or one of your characters) took part in this run, so you can't review it.",
+  "err.rate_kick": "You were removed from the server for sending too many tablet requests.",
   "err.rate_limited": "Too many requests. Wait a moment and try again.",
   "err.refused": "The server refused that request.",
   "err.suspended": "You are suspended from Crimson-Police.",

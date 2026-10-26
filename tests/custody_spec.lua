@@ -332,18 +332,25 @@ do
 end
 
 do
-    -- rate limit: 4 custody events per 2 s per player
+    -- rate limit (CP.Net.rateOk's token bucket, 4 per 2 s): 4 custody events at once per player, then one more
+    -- every 500 ms. An event with an unknown phase still counts.
     local run = HoldRun({ 1 })
     local p = Contact(run, { truth = 'clean', state = 'contacted' })
     W.near(1, run, p.netId)
-    -- Release takes 2 s: a finish 1.7 s after its begin is in time, but it is the fifth event within 2 s
-    for _ = 1, 4 do H.fire('crimson-police:server:custody', 1, run.id, p.netId, 'release', 'begin') end
+    local function Junk(n)
+        for _ = 1, n do H.fire('crimson-police:server:custody', 1, run.id, p.netId, 'release', 'none') end
+    end
+    -- Release takes 2 s: the begin and 3 more events use the 4 up, 3 more 1.7 s later take the 3.4 that came back,
+    -- so the finish, in time, is dropped
+    H.fire('crimson-police:server:custody', 1, run.id, p.netId, 'release', 'begin')
+    Junk(3)
     H.advance(1700)
+    Junk(3)
     H.fire('crimson-police:server:custody', 1, run.id, p.netId, 'release', 'finish')
-    H.eq(p.decided, nil, 'the fifth event within 2 s is dropped')
+    H.eq(p.decided, nil, 'the finish past the limit is dropped')
     H.advance(400)
     W.act(1, run, p.netId, 'detain')
-    H.eq(p.state, 'cuffed', 'Detain after the window')
+    H.eq(p.state, 'cuffed', 'Detain once the limit has refilled')
     Runs.endRun(run, 'completed', 'completed')
 end
 

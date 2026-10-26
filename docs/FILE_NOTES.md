@@ -3684,6 +3684,13 @@ rate limiting, error handling and a uniform reply shape { ok, data, error }:
 On the client, CP.Net.request(name, args, timeoutMs) and CP.Net.action(name, payload, timeoutMs) call them and
 wait for the reply; the tablet's NUI bridge (modules/tablet/client.lua) forwards the UI's
 'request' and 'action' NUI callbacks to these two functions.
+
+Rate limits: CP.Net.rateOk(src, key, max, windowMs) is a token bucket per player and key (max at once, then one
+back every windowMs / max), so a burst on both sides of a window edge no longer gets 2 x max through. Actions allow
+opts.rate a second (8), callbacks 6. Config.Limits.netRateResponse says what a flood past the limit gets: 'block'
+(shipped) the refusal only, 'log' one console warning a minute per player once one name is refused 3 x its limit in a
+minute, 'kick' that warning and DropPlayer. FXServer itself drops a player's events past 50 a second (burst 200) and
+the player past 75 (burst 300).
 ```
 
 ## Crimson-Police/shared/npccombat.lua

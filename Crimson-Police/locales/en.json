@@ -3242,6 +3242,7 @@
   "err.preview_stale": "The data changed since the preview. Open it again.",
   "err.profile_cooldown": "You changed your profile a moment ago. Try again in a few minutes.",
   "err.profile_other_dept": "That officer belongs to another department.",
+  "err.rate_kick": "You were removed from the server for sending too many tablet requests.",
   "err.rate_limited": "Too many requests. Wait a moment and try again.",
   "err.ready_declined": "Your unit did not confirm, so no mission was started.",
   "err.reason_invalid": "The reason has characters that can't be saved.",

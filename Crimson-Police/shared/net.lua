@@ -7,26 +7,68 @@ local RESULT_EVENT = 'crimson-police:client:actionResult'
 
 if IsDuplicityVersion() then
     -- ---- SERVER ------------------------------------------------------------
-    local buckets = {}   -- buckets[src][key] = { n, resetAt }
+    local buckets = {}   -- buckets[src][key] = { level, at }: one token bucket per player and key
 
-    -- At most `max` calls per `windowMs` for (src, key). Returns true when allowed.
+    -- A token bucket per (src, key): up to `max` calls at once, then one call back every windowMs / max, so a burst
+    -- just before and just after a whole window no longer gets 2 x max through. Returns true when allowed. A new key
+    -- starts full. The level is kept in token x windowMs units (one call costs windowMs, a millisecond refills max),
+    -- so it stays a whole number and a wait of exactly windowMs gives exactly `max` calls back.
     function CP.Net.rateOk(src, key, max, windowMs)
         max = max or 10
         windowMs = windowMs or 1000
         local now = GetGameTimer()
         local bySrc = buckets[src]
         if not bySrc then bySrc = {}; buckets[src] = bySrc end
+        local full = max * windowMs
         local b = bySrc[key]
-        if not b or now >= b.resetAt then
-            bySrc[key] = { n = 1, resetAt = now + windowMs }
-            return true
+        if not b then
+            b = { level = full, at = now }
+            bySrc[key] = b
+        else
+            b.level = math.min(full, b.level + (now - b.at) * max)
+            b.at = now
         end
-        b.n = b.n + 1
-        return b.n <= max
+        if b.level < windowMs then return false end
+        b.level = b.level - windowMs
+        return true
+    end
+
+    -- Config.Limits.netRateResponse 'log' or 'kick': refusals per player and name over the last minute.
+    -- refused[src] = { warnedAt = GetGameTimer() of the last warning, kicked = true, names = { [name] = { n, at } } }
+    local REFUSAL_WINDOW_MS = 60000
+    local REFUSALS_PER_MAX = 3   -- the response starts once one name is refused 3 x its limit in a minute
+    local refused = {}
+
+    local function OnRefused(src, name, max)
+        local mode = Config.Limits and Config.Limits.netRateResponse
+        if mode ~= 'log' and mode ~= 'kick' then
+            return
+        end -- 'block' (shipped): refuse quietly, nothing kept
+        local now = GetGameTimer()
+        local r = refused[src]
+        if not r then r = { names = {} }; refused[src] = r end
+        local c = r.names[name]
+        if not c or now - c.at >= REFUSAL_WINDOW_MS then
+            c = { n = 0, at = now }
+            r.names[name] = c
+        end
+        c.n = c.n + 1
+        if c.n < REFUSALS_PER_MAX * max then return end
+        local kick = mode == 'kick' and not r.kicked
+        if kick or not r.warnedAt or now - r.warnedAt >= REFUSAL_WINDOW_MS then
+            r.warnedAt = now
+            CP.warn('net', 'player %d sent %s %d times past its limit%s', src, name, c.n,
+                kick and ' (dropped: Config.Limits.netRateResponse = kick)' or '')
+        end
+        if kick then
+            r.kicked = true
+            DropPlayer(src, CP.L('err.rate_kick'))
+        end
     end
 
     AddEventHandler('playerDropped', function()
         buckets[source] = nil
+        refused[source] = nil
     end)
 
     local function Reply(src, reqId, ok, data)
@@ -67,6 +109,7 @@ if IsDuplicityVersion() then
             local src = source
             if type(reqId) ~= 'string' and type(reqId) ~= 'number' then reqId = nil end
             if not CP.Net.rateOk(src, eventName, max, 1000) then
+                OnRefused(src, eventName, max)
                 return Reply(src, reqId, false, 'err.rate_limited')
             end
             local down = NotStarted()
@@ -96,6 +139,7 @@ if IsDuplicityVersion() then
         local max = (opts and opts.rate) or 6
         lib.callback.register(cbName, function(src, args)
             if not CP.Net.rateOk(src, cbName, max, 1000) then
+                OnRefused(src, cbName, max)
                 return { ok = false, error = 'err.rate_limited' }
             end
             local down = NotStarted()

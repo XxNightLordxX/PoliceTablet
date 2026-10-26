@@ -966,6 +966,7 @@ local KNOWN = {
     ['NpcCombat.replace'] = { tpl = MapOf(WEAPON_NAME, '^[Ww][Ee][Aa][Pp][Oo][Nn]_[%w_]+$') },
     ['NpcCombat.fallback'] = { tpl = WEAPON_NAME },
     ['Challenge.scoring'] = { tpl = Enum({ 'average', 'total', 'top10' }), kind = 'enum' },
+    ['Limits.netRateResponse'] = { tpl = Enum({ 'block', 'log', 'kick' }), kind = 'enum' },
     ['Departments.*.jobs'] = { tpl = ListOf(ID, { min = 1, unique = true }), kind = 'list', item = 'string' },
     ['Departments.*.theme.personalAccents'] = {
         tpl = ListOf(Alts(HEX, Record({ colour = HEX, level = Num(1, 1000, true) }, { colour = true }))),

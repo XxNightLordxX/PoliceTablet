@@ -3002,6 +3002,11 @@ Config.Limits = {
     -- Milliseconds a player's Qbox data (job, duty, name, callsign) is reused before Qbox is asked again; every Qbox
     -- job, duty or data change clears it at once; 0 = ask Qbox every time (the old behaviour)
     playerInfoCacheMs = 1000,
+    -- What happens when a player keeps sending one tablet request past its limit (most allow 6 to 8 a second):
+    -- 'block' = the extra requests are refused quietly, as before; 'log' = also one console warning a minute per
+    -- player once one request is refused 3 times its limit in a minute; 'kick' = that warning, and the player is
+    -- dropped from the server
+    netRateResponse = 'block',
 }
 
 -- ── Spawning (where mission people appear) ──────────────────────────────────

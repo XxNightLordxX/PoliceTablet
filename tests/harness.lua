@@ -2915,6 +2915,13 @@ function H.boot(opts)
     _G.DoesEntityExist = function() return true end
     InstallEntityNatives()
     _G.GetPlayerName = function(src) return 'Player' .. tostring(src) end
+    -- DROP_PLAYER (server only): H.dropped lists { src, reason } in call order. FXServer fires playerDropped later,
+    -- once the client is gone, so this stand-in does not fire it.
+    H.dropped = {}
+    _G.DropPlayer = nil
+    if server then
+        _G.DropPlayer = function(src, reason) H.dropped[#H.dropped + 1] = { src = src, reason = reason } end
+    end
     -- FXServer's GET_PLAYER_IDENTIFIER_BY_TYPE (citizen-server-impl PlayerScriptFunctions.cpp): the FIRST identifier
     -- of the player that starts with the given text (identifiers[i].rfind(type, 0)), nil when none, so 'license' also
     -- finds 'license2:...' when that one comes first. H.players[src].identifiers lists them in FXServer's order.
