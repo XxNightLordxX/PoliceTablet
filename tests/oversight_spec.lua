@@ -1853,13 +1853,26 @@ ok, res = Act('server:admin:reviewFlagged', 1, { rowId = altRow, decision = 'app
 H.eq(res, 'err.own_run', 'an admin on the same license cannot approve it either')
 infos[1].license = nil
 
--- the officer character disputes the row, then the player comes back as the sergeant
+-- the officer character disputes the row, then the player comes back as the sergeant. While that sergeant is the
+-- only sast supervisor online, nobody there can answer it: the admin is told (and lists it), not that sergeant
 AddPlayer(8, 'ALT00002', 'Al Alt', 'sast', 1, true, false)
 infos[8].license = LIC_A
+local away7 = infos[7]
+infos[7] = nil
+local toldMark = #notifies
 H.clockMs = H.clockMs + 21000
 ok, res = Act('server:dispute', 8, { rowId = altRow, reason = 'My partner called for backup' })
 H.eq(ok, true, 'the officer character disputes the flagged row')
 local altDispute = res and res.disputeId
+local toldNow = {}
+for i = toldMark + 1, #notifies do
+    if notifies[i].key == 'admin.notice.new_dispute' then toldNow[notifies[i].src] = true end
+end
+H.eq(toldNow[2] or false, false, 'the sergeant on the same license is not told: every answer of his is refused')
+H.eq(toldNow[1], true, 'the admin is told instead')
+H.eq(Co(CP.Disputes.supervisorCanAnswer, O1), false, 'no supervisor online can answer it: it needs an admin')
+infos[7] = away7
+H.eq(Co(CP.Disputes.supervisorCanAnswer, O1), true, 'a sergeant on another license online: he can')
 infos[8], H.players[8] = nil, nil
 ok, res = Act('server:sup:handleDispute', 2,
     { disputeId = altDispute, decision = 'approve', reason = 'Backup was called' })

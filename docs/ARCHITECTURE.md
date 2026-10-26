@@ -1614,7 +1614,9 @@ spawnCheck.enabled is false.
   the point being probed). In a thread: fade out; his coords, heading, freeze, visibility and `GetPlayerInvincible`
   are kept; `FreezeEntityPosition` true, `SetEntityVisible(ped, false, false)`, `SetEntityInvincible` true. Per
   location the points are asked for again (a refusal `err.in_arena`, `err.spawn_check_on_run`, `err.no_permission` or
-  `err.spawn_check_disabled` ends the check, another one skips the location): fade, `SetEntityCoords` to the start,
+  `err.spawn_check_disabled` ends the check, another one skips the location): fade, `SetEntityCoords` to 1 m over
+  the start (a ped's root is about 1 m over his feet, so he stands on it and the sight check looks from a standing
+  officer's eyes),
   `NewLoadSceneStartSphere(start, 200.0, 0)` until `IsNewLoadSceneLoaded` or sceneTimeoutMs (1000-30000), then
   `NewLoadSceneStop`, fade in; `CP.Spawn.visible` from there of the people, vehicles and objects within 200 m (32 a
   time, Config.Spawning.losTimeoutMs) gives `seen`; then each point: a path point is `skipped` unless
@@ -1627,8 +1629,14 @@ spawnCheck.enabled is false.
   `failed` `{ progress, totals = { points, bad, locations }, error? }`; `progress = { mission, missions, location,
   locations, point, points }` (location = its place in this mission's list). Every move re-checks Crimson-Arena (rule
   13): once the arena owns him (or the crimsonArena bag turns foreign: the check stops) he is never moved again and
-  his freeze is the arena's; visibility and invincibility come back. Otherwise, and on resource stop, he is put back
-  where he was, facing the same way, unfrozen unless he was frozen before, seen and hurt as before, the screen faded in.
+  his freeze is the arena's; visibility and invincibility come back. A run of his that starts during the check (a
+  test he starts or joins: `CP.Runs.current()` before the start move and before each point, or the server's
+  `err.spawn_check_on_run`) ends it with `err.spawn_check_on_run` after reporting what was checked, and he is never
+  moved again: unfrozen unless he was frozen before, seen and hurt as before, the screen faded in, where he is.
+  Otherwise, and on resource stop, he is put back where he was, facing the same way, unfrozen unless he was frozen
+  before, seen and hurt as before, the screen faded in. The test panel's teleport (`testControl` / `teleport` to the
+  start or objective) is refused `err.spawn_check_running` while a check runs, and the Testing screen's Start test
+  buttons are disabled then.
   A skipped location's push also carries `missionLabel`. "Teleport here" (PLAN S8): the client action `teleport`
   with `{ target = 'point', missionId, location, point }` needs no test run; refused `err.invalid_payload`,
   `err.spawn_check_running` (a check runs: it puts him back afterwards), `err.in_arena`, `err.spawn_check_on_run`;
@@ -2544,8 +2552,9 @@ msg.marker, ctx)` after the block's own `start` (ctx = the block's client ctx, f
   current pointer's) by `Config.Markers.radioSilence`: `'none'` hides everything but `start`, `prisonerVan` and
   `towTruck`; `'area'` (shipped) hides `'route'` and every kind but the circles and single points (start, checkpoint,
   searchArea, fightArea, destination, safePoint, scene, point, device, objective and the service vehicles); `'full'`
-  hides nothing. Under `'area'` with `radioSilenceLastKnown` > 0 a hidden moving target gets a 200 m circle
-  (`markers.last_known`) where it was, moved every that many seconds.
+  hides nothing. Under `'area'` the pointer also hides every target that has a `netId` (a person or a car), whatever
+  its look (a target without a look gets `objective`). Under `'area'` with `radioSilenceLastKnown` > 0 a hidden moving
+  target gets a 200 m circle (`markers.last_known`) where it was, moved every that many seconds.
 - `service(key, spec)` — a prisoner van or tow truck coming to this officer: `spec = { netId, coords, kind =
   'prisonerVan'|'towTruck', label }`, nil removes it. Shown in every Radio Silence mode while `serviceVehicles` is on,
   never routed, removed at resource stop.

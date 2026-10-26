@@ -1922,7 +1922,7 @@ sc-dispatch call. "Mission calls are turned off on this server." means `Config.M
 | "Load a character before using the Mission Builder." / "Load a character first." | The Builder and test runs need a loaded character |
 | "Test mode is turned off in Config.Testing." | Set `Config.Testing.enabled = true` |
 | "The Mission Builder is turned off." | Set `Config.Builder.enabled = true` |
-| "You took part in this run, so you can't review it." | By design: another supervisor or admin must review it |
+| "You (or one of your characters) took part in this run, so you can't review it." | By design: you, or another character on your license, was on that run, so another supervisor or admin must review it |
 | "That feature is not available on this server right now." | A part of Crimson-Police failed to start. Read the red lines in the console from the last start |
 
 ### 11.3 Start-up check lines

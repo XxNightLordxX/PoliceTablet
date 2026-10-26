@@ -3208,7 +3208,7 @@
   "err.override_none": "This built-in mission has not been edited.",
   "err.override_owner": "An edited built-in mission belongs to the server, not to an officer.",
   "err.own_profile": "You can't moderate your own profile.",
-  "err.own_run": "You took part in this run, so you can't review it.",
+  "err.own_run": "You (or one of your characters) took part in this run, so you can't review it.",
   "err.payment_arrived": "The step marker says the money arrived. Mark it paid instead.",
   "err.payment_in_flight": "This officer is being paid right now. Try again in a moment.",
   "err.payment_raised": "Qbox or Renewed-Banking failed in the middle of the payment. It stays for a manual check.",

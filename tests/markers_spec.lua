@@ -468,6 +468,26 @@ do
     M.set('run-6', 2, { kind = 'targets', targets = { { key = 1, x = 500.0, y = 0.0, z = 30.0, look = 'fleeing' } } },
         silent)
     H.eq(#Live(), 0, '\'area\': a moving target shows nothing (radioSilenceLastKnown = 0)')
+    -- a target a block names by its net id but gives no look (it gets 'objective', a single point's look): still a
+    -- person or a car, so no blip on it, streamed or not
+    world.ents[6101] = vec3(520.0, 0.0, 30.0)
+    world.streamed[61] = 6101
+    M.set('run-6', 4, { kind = 'targets', targets = { { key = 61, netId = 61, x = 520.0, y = 0.0, z = 30.0 } } },
+        silent)
+    Tick()
+    H.eq(#Live(), 0, '\'area\': a target with a net id and no look gets no entity blip')
+    world.streamed[61] = nil
+    Tick()
+    H.eq(#Live(), 0, '\'area\': nor a blip at the server\'s position once it streams out')
+    Config.Markers.radioSilenceLastKnown = 10
+    Tick()
+    H.eq(#Live('radius'), 1, 'only the last-known circle, when that is on')
+    H.eq(#Live(), 1, 'and nothing else')
+    Config.Markers.radioSilenceLastKnown = 0
+    world.ents[6101] = nil
+    M.set('run-6', 2, { kind = 'targets', targets = { { key = 1, x = 500.0, y = 0.0, z = 30.0, look = 'fleeing' } } },
+        silent)
+    Tick()
 
     -- the optional last-known circle, moved only every radioSilenceLastKnown seconds
     Config.Markers.radioSilenceLastKnown = 10

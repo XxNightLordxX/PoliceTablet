@@ -48,6 +48,8 @@ local state = {
     hudToken = 0,
     invites = {},         -- inviteId -> GetGameTimer() when it expires (client:testInvite, the prompt's list)
 }
+-- the spawn point check (Admin UI -> Testing -> Check spawn points, below)
+local check = { running = false, stop = false, saved = nil, arena = false }
 
 -- ============================================================================
 --                                   HELPERS
@@ -388,6 +390,8 @@ end
 
 local function DoTeleport(target)
     if target ~= nil and target ~= 'start' and target ~= 'objective' then return false, 'err.invalid_payload' end
+    -- the spawn point check holds him (frozen, unseen): Stop it first
+    if check.running then return false, 'err.spawn_check_running' end
     if ArenaForeign() then return false, 'err.in_arena' end
     local res = CP.Net.action('server:test:control', { control = 'teleport', target = target, runId = state.runId })
     if type(res) ~= 'table' or not res.ok then return false, type(res) == 'table' and res.error or 'err.no_response' end
@@ -421,7 +425,8 @@ end
 -- start, the map loads around him (NewLoadSceneStartSphere), his game notes which points it sees from there, then
 -- each point is probed (he is moved over a point further than moveWithin). Progress and every result go to the NUI
 -- (push topic spawnCheck), each location's results to the server (server:test:spawnCheckReport). At the end, or on
--- Stop (after the point being checked), he is back where he was. It spawns nothing; only his own ped moves.
+-- Stop (after the point being checked), he is back where he was. A run of his that starts meanwhile (a test he starts
+-- or joins) ends the check at once and he stays where he is. It spawns nothing; only his own ped moves.
 
 local SPAWN_TOPIC = 'spawnCheck'
 local SCENE_RADIUS = 200.0 -- metres of map loaded around him (and the most a point may be from him for the sight check)
@@ -429,8 +434,6 @@ local SIGHT_BATCH = 32     -- points per CP.Spawn.visible ask
 local FADE_MS = 300
 local FADE_WAIT_MS = 1500
 local SPAWN_SEEN = { ped = true, vehicle = true, prop = true } -- the sight note is for where something appears
-
-local check = { running = false, stop = false, saved = nil, arena = false }
 
 local function CheckCfg()
     local c = (Config.Testing or {}).spawnCheck
@@ -480,15 +483,19 @@ local function MoveTo(x, y, z)
     return true
 end
 
-local function Restore()
+-- keepPlace: a run of his started during the check (a test he started or joined): his place is the run's now, so he
+-- is not moved back; his freeze, visibility and invincibility are still put back.
+local function Restore(keepPlace)
     local saved = check.saved
     check.saved = nil
     if not saved then return end
     local ped = PlayerPedId()
     -- Crimson-Arena placed him (rule 13): his place and his freeze are the arena's now
     if not check.arena and not ArenaForeign() then
-        SetEntityCoords(ped, saved.x, saved.y, saved.z, false, false, false, false)
-        SetEntityHeading(ped, saved.h)
+        if not keepPlace then
+            SetEntityCoords(ped, saved.x, saved.y, saved.z, false, false, false, false)
+            SetEntityHeading(ped, saved.h)
+        end
         if not saved.frozen then FreezeEntityPosition(ped, false) end
     end
     SetEntityVisible(ped, saved.visible, false)
@@ -562,8 +569,12 @@ local function CheckLocation(m, li, progress, totals)
         locationLabel = data.locationLabel,
         points = #points,
     })
+    -- a run of his started meanwhile (the server did not see it yet): the check never moves him again
+    if CurrentRun() then return false, 'err.spawn_check_on_run' end
     FadeOut()
-    if not MoveTo(start.x, start.y, start.z) then return false, 'err.in_arena' end
+    -- a ped's root is about 1 m over his feet: start points are on the ground, so he stands there like an officer
+    -- would and the sight check looks from a standing officer's eyes
+    if not MoveTo(start.x, start.y, start.z + 1.0) then return false, 'err.in_arena' end
     LoadScene(start.x, start.y, start.z)
     DoScreenFadeIn(FADE_MS)
     local at = { x = start.x, y = start.y }
@@ -571,8 +582,14 @@ local function CheckLocation(m, li, progress, totals)
     local cfg = CheckCfg()
     local moveWithin = math.max(0.0, tonumber(cfg.moveWithin) or 150.0)
     local results = {}
+    local onRun = false
     for k, p in ipairs(points) do
         if check.stop then break end
+        -- he started or joined a run during the check: what was checked is reported, then the check ends
+        if CurrentRun() then
+            onRun = true
+            break
+        end
         progress.point = k
         local row = { id = p.id, status = 'skipped', seen = seen[k] }
         if p.kind ~= 'path' or cfg.routes == true then
@@ -603,6 +620,7 @@ local function CheckLocation(m, li, progress, totals)
                 tostring(type(sent) == 'table' and sent.error or 'no answer'))
         end
     end
+    if onRun then return false, 'err.spawn_check_on_run' end
     return true
 end
 
@@ -633,8 +651,10 @@ local function RunCheck(plan)
         errKey = 'err.internal'
     end
     local stopped = check.stop
-    if not check.arena then FadeOut() end
-    Restore()
+    -- on a run now: he stays where the run found him
+    local keepPlace = errKey == 'err.spawn_check_on_run'
+    if not check.arena and not keepPlace then FadeOut() end
+    Restore(keepPlace)
     check.running, check.stop, check.arena = false, false, false
     local state = errKey and 'failed' or (stopped and 'stopped' or 'done')
     PushCheck(state, { progress = progress, totals = totals, error = errKey })

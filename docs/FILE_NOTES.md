@@ -4440,7 +4440,8 @@ write: action 'server:sup:setTypePayout' { type, amount, reason }.
 
 Supervisor UI · Review Queue (screen key 'sup_review').
 Tabs Flagged runs / Disputes: flagged runs involving the supervisor's department with the reason
-(e.g. outside help) and who, and disputes about flagged or voided runs. Their own runs never appear.
+(e.g. outside help) and who, and disputes about flagged or voided runs. Runs they took part in never appear; runs of
+their other characters may, but every action on them is refused (err.own_run).
 Approve, void or reject, always with a reason; every decision is final and audited.
 Data: callback sup:getReviewQueue · actions server:sup:reviewFlagged { rowId, decision, reason } and
 server:sup:handleDispute { disputeId, decision, reason } (modules/admin, modules/disputes).

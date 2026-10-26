@@ -249,7 +249,10 @@ local function Place(el)
     if el.service then
         hide = cfg.serviceVehicles == false
     else
+        -- Radio Silence 'area' puts no blip on a person or a car: a target followed by its net id is hidden whatever
+        -- its look (a target without one gets 'objective'), so it shows only the optional last-known circle
         hide = cfg.enabled == false or M.hidden(cur and cur.ctx, el.look)
+            or (el.netId ~= nil and not ALWAYS_SHOWN[el.look] and Silent() and Mode() == 'area')
     end
     local lastKnown = not el.service and el.moving and hide and cfg.enabled ~= false and Silent() and Mode() == 'area'
         and Seconds('radioSilenceLastKnown', 0) > 0

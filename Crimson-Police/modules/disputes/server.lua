@@ -393,9 +393,10 @@ local function SupervisorsHandle()
     return type(sup) == 'table' and sup.handleDisputes == true
 end
 
--- The online staff for a dispute about runUuid (never participants of the run): admins, the on-duty
--- supervisors of the run's departments, whether a supervisor of those departments took part in the run
--- (supTookPart) and whether another one is online off duty (supOther). nil when qbx is unavailable.
+-- The online staff for a dispute about runUuid (never participants of the run, nor a player whose other character
+-- took part: P.canReviewRun refuses them with err.own_run): admins, the on-duty supervisors of the run's departments,
+-- whether a supervisor of those departments took part in the run (supTookPart) and whether another one is online off
+-- duty (supOther). nil when qbx is unavailable.
 local function OnlineStaff(runUuid)
     if not (Has('Qbx', 'getOnlinePlayers') and Has('Qbx', 'getInfo')) then return nil end
     local ok, list = Call('Qbx', 'getOnlinePlayers')
@@ -418,16 +419,27 @@ local function OnlineStaff(runUuid)
         local dept = dk and depts[dk] and CP.Access.department(dk)
         return dept ~= nil and dept ~= false and Num(info.job.gradeLevel, -1) >= Num(dept.supervisorGrade, math.huge)
     end
+    -- any character of s's licenses on the run (CP.Access.selfCitizenids): asked only for staff, once per dispute
+    -- filed or listed
+    local function tookPart(s, info)
+        if participants[info.citizenid] then return true end
+        local okC, cids = Call('Access', 'selfCitizenids', s)
+        for _, cid in ipairs(okC and type(cids) == 'table' and cids or {}) do
+            if participants[cid] then return true end
+        end
+        return false
+    end
     local admins, supervisors = {}, {}
     local supTookPart, supOther = false, false
     for _, s in ipairs(list) do
         local okI, info = Call('Qbx', 'getInfo', s)
         if okI and type(info) == 'table' then
             local sup = supervisorOfRun(info)
-            if participants[info.citizenid] then
+            local admin = IsAdmin(s)
+            if (sup or admin) and tookPart(s, info) then
                 if sup then supTookPart = true end
             else
-                if IsAdmin(s) then admins[#admins + 1] = s end
+                if admin then admins[#admins + 1] = s end
                 if sup and info.job.onduty then
                     supervisors[#supervisors + 1] = s
                 elseif sup then

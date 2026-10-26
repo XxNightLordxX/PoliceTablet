@@ -776,7 +776,8 @@ do
     local inv = Called('SetEntityInvincible')
     H.ok(inv[1] and inv[1][2] == true, 'unhurt')
     local moves = Called('SetEntityCoords')
-    H.ok(moves[1] and moves[1][2] == 100.0 and moves[1][3] == 200.0 and moves[1][4] == 30.0, 'then at the start')
+    H.ok(moves[1] and moves[1][2] == 100.0 and moves[1][3] == 200.0, 'then at the start')
+    H.eq(moves[1][4], 31.0, 'standing on it: his root 1 m over the start\'s ground, like an officer stood there')
     local scenes = Called('NewLoadSceneStartSphere')
     H.ok(scenes[1] and scenes[1][1] == 100.0 and scenes[1][4] == 200.0, 'the map loads 200 m around the start')
     H.ok(#Called('NewLoadSceneStop') == #scenes, 'every scene load is stopped')
@@ -786,6 +787,7 @@ do
     H.eq(#asks, 1, 'one sight check')
     H.ok(asks[1] and #asks[1].points == 1 and asks[1].points[1].x == 110.0, 'of the person by the start only')
     H.ok(asks[1] and asks[1].at.x == 100.0, 'asked from the start')
+    H.ok(asks[1] and asks[1].at.z == 31.0, 'from a standing officer\'s height, not half under the ground')
 
     -- the points: the person from the start, the vehicle 400 m away from right over it, the marker from there
     -- (1 m away), the route point not at all (Config.Testing.spawnCheck.routes = false)
@@ -933,6 +935,51 @@ do
     local failed = Pushes('failed')[1]
     H.ok(failed and failed.error == 'err.spawn_check_on_run', 'refused by the server: the check ends with why')
     H.ok(#probes == 0 and game.frozen == false and game.visible == true, 'nothing probed, he is let go')
+
+    -- a run of his starts during the check (he started or joined a test): the check ends before the next point and
+    -- never moves him again (not over the next point, not back where he was); he is let go, seen and hurt again
+    Reset()
+    onProbe = function(n) if n == 1 then currentRun = { id = 'run-t' } end end
+    clientActions.spawnCheck({ missionId = 'demo' })
+    RunToEnd()
+    onProbe = nil
+    currentRun = nil
+    failed = Pushes('failed')[1]
+    H.ok(failed and failed.error == 'err.spawn_check_on_run', 'a run of his started: the check ends with why')
+    H.eq(#probes, 1, 'no point after that one is checked')
+    moves = Called('SetEntityCoords')
+    H.eq(#moves, 1, 'only the move to the start: not over the car 400 m away, not back where he was')
+    H.ok(#actions == 1 and #actions[1].payload.results == 1, 'the point checked before is still reported')
+    H.eq(#Pushes('location'), 1, 'the next location is not visited')
+    H.ok(game.frozen == false and game.visible == true and game.invincible == false, 'let go, seen, hurt again')
+
+    -- the server sees his run first (the next location is refused): he stays where the check had him
+    Reset()
+    local realRequest = CP.Net.request
+    CP.Net.request = function(name, args)
+        if args.location == 2 then return { ok = false, error = 'err.spawn_check_on_run' } end
+        return realRequest(name, args)
+    end
+    clientActions.spawnCheck({ missionId = 'demo' })
+    RunToEnd()
+    CP.Net.request = realRequest
+    moves = Called('SetEntityCoords')
+    last = moves[#moves]
+    H.ok(last and last[2] == 500.0 and last[3] == 200.0, 'not moved back: still over the last point he checked')
+    H.ok(game.frozen == false and game.visible == true, 'let go and seen')
+
+    -- the test panel's teleport waits for the check (it would let go of him in the middle of it)
+    Reset()
+    local st = CP.Testing._state()
+    st.controls, st.runId = true, 'run-t'
+    clientActions.spawnCheck({ missionId = 'demo', location = 2 })
+    ok, data = clientActions.teleport({ target = 'start' })
+    H.eq(data, 'err.spawn_check_running', 'the test teleport is refused while a check runs')
+    local asked = false
+    for _, a in ipairs(actions) do if a.name == 'server:test:control' then asked = true end end
+    H.eq(asked, false, 'and the server is not asked')
+    RunToEnd()
+    st.controls, st.runId = false, nil
 
     -- Crimson-Arena takes him during the check (rule 13): no further move, his place and freeze are the arena's
     Reset()

@@ -23,6 +23,7 @@ local function ThroughALocal(e)
     return a, frozen ~= true    -- expect FX12
 end
 
+-- Correct comparisons only: never a hit.
 local function Right(e)
     local a = DoesEntityExist(e) and 1 or 2
     local b = not DoesEntityExist(e)
@@ -31,12 +32,18 @@ local function Right(e)
     local f = DoesEntityExist(e) == 1
     local found = DoesEntityExist(e)
     local g = found == true or found == 1
-    local both = DoesEntityExist(e) and IsPedHandcuffed(e)
-    local h = both == true
     local t = {}
     t.found = DoesEntityExist(e)
     local i = GetEntityModel(e) == true
-    return a, b, c, d, f, g, h, t, i
+    return a, b, c, d, f, g, t, i
+end
+
+-- A real FX12 bug the rule does not see yet: `1 and 1` is 1 on FXServer, so `both == true` is false for a cuffed ped
+-- that exists. Not marked "expect FX12" while the rule cannot see through `and` / `or`; once it can, foundation_spec 24
+-- fails on this line until the mark goes on it.
+local function NotSeenYet(e)
+    local both = DoesEntityExist(e) and IsPedHandcuffed(e)
+    return both == true
 end
 
 local function Shadowed()
@@ -44,4 +51,4 @@ local function Shadowed()
     return DoesPlayerExist() == true
 end
 
-return Direct, Multiline, ThroughALocal, Right, Shadowed
+return Direct, Multiline, ThroughALocal, Right, NotSeenYet, Shadowed

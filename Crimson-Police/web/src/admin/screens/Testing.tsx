@@ -1424,7 +1424,8 @@ export default function AdminTesting() {
     const invites = st ? asList(st.invites) : [];
     const lobby = st ? st.lobby : null;
     const enabled = view ? view.config.enabled : true;
-    const canStart = enabled && !active;
+    // a spawn point check holds the admin (frozen, unseen, moved from place to place): no test starts until it ends
+    const canStart = enabled && !active && spawnCheck.status !== 'running';
     const canCheck = !!view && !!view.config.spawnCheck && view.config.spawnCheck.enabled;
     const now = useServerNow(st?.serverTime ?? view?.serverTime);
     const openCheck = (p: SpawnCheckPreset | null) => {
