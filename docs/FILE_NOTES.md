@@ -2692,8 +2692,14 @@ Public API
                                                 the reports; that run is never begun again on this client
                                                 (CP.Runs calls it on arrival and at the end). Never touches
                                                 the HUD (the run engine owns it).
-  CP.Route.current() -> { runId, arrived, routeOn } | nil
-Client actions: setGps (re-sets the waypoint to the start; the polyline stays the same), recalcRoute.
+  CP.Route.current() -> { runId, arrived, routeOn, action } | nil
+  CP.Route.follow(runId, dropStart) -> boolean  (PLAN M11) the run went In progress before this officer
+      arrived (CP.Runs calls it on client:routeStatus 'action'): the sampling, the reports and a waiting
+      Recalculate stop (new token), HUD route 'action', a toast. dropStart (CP.Markers.leads): the start
+      pin and our start waypoint go first, then current().action lets CP.Markers route to the objective;
+      without it the pin loses its line and our waypoint stays (put back when he has none). Once only.
+Client actions: setGps (re-sets the waypoint to the start; the polyline stays the same), recalcRoute;
+both answer err.route_action once he follows the action.
 Events handled: client:routeWarning (runId, secondsLeft|nil) -> HUD { route = { status, secondsLeft,
 distance } } and one toast when a warning first appears; client:routeRecalc (runId, ok, recalcsLeft);
 client:routeStatus (runId, RouteStatus) and client:participants (runId, list) -> 'arrived';
@@ -2722,7 +2728,7 @@ Public API
       drift check or off_route end.
   CP.Route.stop(run|runId, src?) -> nil      ends the checks for src (every participant when src is nil)
   CP.Route.status(run, src) -> RouteStatus
-      RouteStatus = { status = 'on'|'off'|'arrived'|'disabled', secondsLeft = number|nil (only while the
+      RouteStatus = { status = 'on'|'off'|'arrived'|'disabled'|'action', secondsLeft = number|nil (only while the
       off-route warning is shown), recalcsLeft = number, distance = metres (straight line to the start,
       2D, rounded)|nil, required = boolean (false: the route is a guide) }  (HudState.route plus
       recalcsLeft for the Active Mission view)
@@ -2742,6 +2748,13 @@ Every 1 s, with the SERVER-SIDE ped position:
     or goes (and after a granted recalculation) the run view is pushed to the tablet (push topic 'run').
   * drift: the straight-line distance to the start grows more than Config.Route.maxDrift past the closest
     it has been -> 'off_route', whatever the client reports.
+  * late partners (PLAN M11, Config.Route.lateArriveRange, 0 = off): once run.state == 'in_progress', a
+    participant who has not arrived switches once to mode 'action' (client:routeStatus 'action' + a 'run'
+    push): no warning, report, drift or off_route check any more (with Config.Route.required on or off),
+    reports and Recalculate are refused, status = { status = 'action', distance = metres to the action }.
+    He arrives (markArrived, as at the start) inside the start circle or within lateArriveRange of
+    CP.Runs.actionPoints(run) (the objective's anchor, its pointer's point or targets, anywhere inside its
+    circle).
   * in-arena participants (CP.Alerts.inArena) are not route-checked and cannot arrive (CP.Alerts removes
     them from the run); their reports are ignored.
 Reports: at most one per 0.9 s per player; ignored unless the runId is the sender's active run, metres is
@@ -2779,7 +2792,10 @@ where the officer is).
   Client action (NUI 'client' endpoint): logResult { point, choice } -> report(current objective,
     { type = 'log', point, choice }) (Business Check tablet log)
   Events handled: client:start, client:inProgress, client:objective, client:hud, client:tierChanged,
-    client:hostChanged, client:participants, client:runEnded (docs/ARCHITECTURE.md §8.1)
+    client:hostChanged, client:participants, client:runEnded (docs/ARCHITECTURE.md §8.1), and
+    client:routeStatus 'action' (PLAN M11, a late partner): CP.Markers.leads({ radioSilence }) decides
+    whether the start goes (the start circle here, then CP.Route.follow(runId, true)) or stays as his guide
+    (CP.Route.follow(runId, false)); CP.Markers routes once CP.Route says he follows the action.
 
   Contract interpretations (docs/notes/engine_b.md)
     * client:start begins the start route with CP.Route.begin(runId, startCoords, { startRoute, radius })

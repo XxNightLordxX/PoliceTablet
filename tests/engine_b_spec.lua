@@ -2330,6 +2330,55 @@ do
 end
 
 -- ============================================================================
+--                             WHERE THE ACTION IS
+-- ============================================================================
+-- CP.Runs.actionPoints, Config.Route.lateArriveRange, PLAN M11.
+-- What CP.Route measures a late partner against once the run is In progress: the objective's anchor and what its
+-- pointer shows (the last one sent: no block hook runs for it).
+
+do
+    local out, calls = nil, 0
+    CP.Blocks.register('action_block', {
+        start = function() end,
+        marker = function()
+            calls = calls + 1
+            return out
+        end,
+    })
+    local am = CP.U.deepcopy(mission)
+    am.id = 'action_mission'
+    am.items = {}
+    am.objectives = { { block = 'action_block', label = 'Act', minSeconds = 0 } }
+    am.scaling = {}
+    H.reset()
+    local R = Runs.create(
+        { mission = am, locationIndex = 1, missionType = 'patrol', members = { O[2] }, leaderSrc = 2 })
+    H.ok(type(R) == 'table', 'action run created')
+    H.eq(#Runs.actionPoints(R), 0, 'accepted: no action yet')
+    out = { kind = 'area', coords = vec3(600.0, 0.0, 30.0), radius = 250.0 }
+    Runs.markArrived(R, 2)
+    local pts = Runs.actionPoints(R)
+    H.eq(#pts, 2, 'in progress: the anchor and the pointer circle')
+    H.ok(pts[1] and pts[1].coords.x == 100.0 and pts[1].coords.y == 100.0 and pts[1].radius == nil,
+        'the objective anchor (here the start: nothing else yet)')
+    H.ok(pts[2] and pts[2].coords.x == 600.0 and pts[2].radius == 250.0, 'the pointer circle with its radius')
+    local n = calls
+    Runs.actionPoints(R)
+    H.eq(calls, n, 'no block hook runs for it (the pointer last sent)')
+    -- targets: one with a server position, one known only by its net id (the run's entity, where the server has it)
+    local _, net = Runs.spawnPed(R, { obj = 1, model = 'a_m_y_business_01', coords = vec4(800.0, 50.0, 30.0, 0.0) })
+    out = { kind = 'targets', targets = { { key = 7, coords = vec3(700.0, 0.0, 30.0) }, { netId = net } } }
+    H.advance(1000)
+    pts = Runs.actionPoints(R)
+    H.eq(#pts, 3, 'the anchor and both targets')
+    H.ok(pts[1] and pts[1].coords.x == 800.0, 'the anchor moved onto the objective\'s person')
+    H.ok(pts[2] and pts[2].coords.x == 700.0 and pts[2].radius == nil, 'a target at its server position')
+    H.ok(pts[3] and pts[3].coords.x == 800.0 and pts[3].coords.y == 50.0, 'a net id only: where the server has it')
+    Runs.removeParticipant(R, 2, 'cancelled')
+    H.eq(#Runs.actionPoints(R), 0, 'ended: none')
+end
+
+-- ============================================================================
 --               RESOURCE STOP: entities deleted, nothing written
 -- ============================================================================
 

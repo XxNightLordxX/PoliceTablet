@@ -44,6 +44,17 @@ function RouteStatus({ route }: { route: ActiveMissionView['route'] }) {
             </span>
         );
     }
+    if (route.status === 'action') {
+        // a late officer: the run started before he arrived, he heads for the objective (Config.Route.lateArriveRange)
+        return (
+            <span className="cp-runbar__status is-ok">
+                <Icon name="navigation" size={13} />
+                {route.distance !== null && route.distance !== undefined
+                    ? t('ui.runbar.action_distance', { distance: formatDistance(route.distance) })
+                    : t('hud.route.action')}
+            </span>
+        );
+    }
     return <span className="cp-runbar__status">{t('hud.route.disabled')}</span>;
 }
 

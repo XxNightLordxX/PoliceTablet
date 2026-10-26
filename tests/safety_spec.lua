@@ -142,6 +142,14 @@ CP.Runs = {
         r.state = 'ended'
     end,
     anchor = function(r) return r.anchor end,
+    -- where the action is (PLAN M11): the anchor, then r.actionPts (the pointer's point, circle or targets)
+    actionPoints = function(r)
+        if r.state ~= 'in_progress' then return {} end
+        local out = {}
+        if r.anchor then out[1] = { coords = r.anchor } end
+        for _, p in ipairs(r.actionPts or {}) do out[#out + 1] = p end
+        return out
+    end,
 }
 
 local function NewRun(id, o)
@@ -635,6 +643,155 @@ do
     CP.Route.stop(free, 37)
     free.state = 'ended'
     Config.Route.required = old
+end
+
+-- 15-17) late partners (PLAN M11, the owner's decision; Config.Route.lateArriveRange, shipped 150 m): once the run is
+-- In progress, a partner still on his way follows the action. With Config.Route.required on (shipped) AND off: one
+-- client:routeStatus 'action', no route checks from then on (off the line, silent, far past maxDrift, a warning
+-- already shown), arrival within lateArriveRange of the anchor or a pointer target, anywhere inside a pointer circle,
+-- or at the start as before. lateArriveRange = 0: the rule as before (route-checked, only the start counts).
+local function LateRun(id, lead, late, required, leadAt)
+    PlayerRec(lead).coords = leadAt or vec3(1000.0, 0.0, 0.0)  -- at the start, unless leadAt
+    PlayerRec(late).coords = vec3(0.0, 0.0, 0.0)               -- 1000 m away
+    local r = NewRun(id, { srcs = { lead, late }, anchor = vec3(1000.0, 3000.0, 0.0) })
+    r.routeRequired = required
+    AlignTo(2000)
+    CP.Route.begin(r, lead)
+    CP.Route.begin(r, late)
+    return r
+end
+
+local function LateCase(n, required)
+    local lead, late = 140 + n * 2, 141 + n * 2   -- (srcs no other case of this file uses)
+    local tag = required and 'required: ' or 'not required: '
+    H.eq(Config.Route.lateArriveRange, 150.0, 'shipped: late partners arrive within 150 m of the action')
+    local r = LateRun('r-late-' .. n, lead, late, required)
+    RunFor(2000, Reporter(late, r.id, 10.0))
+    H.eq(r.state, 'in_progress', tag .. 'the first partner at the start starts the run')
+    H.ok(r.participants[lead].arrived and not r.participants[late].arrived, tag .. 'the second is still on his way')
+    local rs = ClientEvents('client:routeStatus', late)
+    H.eq(#rs, 1, tag .. 'his game is told once')
+    H.eq(rs[1] and rs[1].args[2].status, 'action', tag .. '...that he follows the action')
+    local st = CP.Route.status(r, late)
+    H.eq(st.status, 'action', tag .. 'status action (the tablet and HUD show it)')
+    H.eq(st.recalcsLeft, 0, tag .. 'no Recalculate route any more')
+    H.near(st.distance, math.sqrt(1000.0 ^ 2 + 3000.0 ^ 2), 1.0, tag .. 'distance to the action, not the start')
+    -- chasing: far off the start line, past maxDrift from the start, and silent, each longer than abandonAfter
+    RunFor(40000, Reporter(late, r.id, 900.0))
+    PlayerRec(late).coords = vec3(-2500.0, 0.0, 0.0)
+    RunFor(40000)
+    H.eq(#RemovedFor(late), 0, tag .. 'never Abandoned for leaving the start route once he follows the action')
+    H.eq(#ClientEvents('client:routeWarning', late), 0, tag .. 'no off-route warning')
+    H.eq(#ClientEvents('client:routeStatus', late), 1, tag .. 'told once only')
+    H.fire(CP.e('server:recalcRoute'), late, r.id)
+    local rc = ClientEvents('client:routeRecalc', late)
+    H.eq(rc[#rc] and rc[#rc].args[2], false, tag .. 'Recalculate refused')
+    -- 200 m from the anchor: not yet; 120 m: arrived (the start is 3 km away)
+    PlayerRec(late).coords = vec3(1000.0, 2800.0, 0.0)
+    RunFor(2000)
+    H.eq(r.participants[late].arrived, false, tag .. '200 m from the action: not arrived yet')
+    H.near(CP.Route.status(r, late).distance, 200.0, 1.0, tag .. 'the distance shrinks')
+    PlayerRec(late).coords = vec3(1000.0, 2880.0, 0.0)
+    RunFor(1000)
+    H.ok(r.participants[late].arrived, tag .. 'within 150 m of the action: arrived')
+    local a = rlog.arrived[#rlog.arrived]
+    H.ok(a and a.src == late and a.run == r.id, tag .. 'markArrived for him')
+    H.ok(CP.Alerts.has(late) and OURS(Bag(late)), tag .. 'no-alert flag on from his arrival (Hard rule 16)')
+    rs = ClientEvents('client:routeStatus', late)
+    H.eq(rs[#rs] and rs[#rs].args[2].status, 'arrived', tag .. 'his game is told he arrived')
+    r.state = 'ended'
+end
+
+do
+    local old = Config.Route.required
+    Config.Route.required = true
+    LateCase(1, true)                -- 15) Config.Route.required on (shipped)
+    Config.Route.required = false
+    LateCase(2, false)               -- 16) Config.Route.required off (RT1)
+    Config.Route.required = old
+
+    -- a warning already shown when the run starts: withdrawn by the switch, never an end
+    local r = LateRun('r-late-w', 150, 151, true, vec3(0.0, 100.0, 0.0))
+    RunFor(14000, function(c)
+        if c % 2000 == 0 then
+            Report(150, r.id, 10.0)
+            Report(151, r.id, 300.0)
+        end
+    end)
+    H.ok(#ClientEvents('client:routeWarning', 151) > 0, 'warned while still bound to the start route')
+    PlayerRec(150).coords = vec3(1000.0, 0.0, 0.0)
+    RunFor(1000)
+    H.eq(r.state, 'in_progress', 'his partner arrived meanwhile')
+    RunFor(1000)
+    H.eq(CP.Route.status(r, 151).status, 'action', 'the warned partner follows the action')
+    H.eq(CP.Route.status(r, 151).secondsLeft, nil, 'no countdown any more')
+    RunFor(40000)
+    H.eq(#RemovedFor(151), 0, 'the countdown that was running never ends his run')
+    r.state = 'ended'
+
+    -- a pointer circle (a fight or search area) counts anywhere inside it; a pointer target within the range
+    r = LateRun('r-late-a', 152, 153, true)
+    r.actionPts = {
+        { coords = vec3(-2000.0, 0.0, 0.0), radius = 400.0 },
+        { coords = vec3(0.0, -1500.0, 0.0) },
+    }
+    RunFor(2000)
+    H.eq(CP.Route.status(r, 153).status, 'action', 'area case: follows the action')
+    PlayerRec(153).coords = vec3(-1650.0, 0.0, 0.0)         -- 350 m from the centre: inside the 400 m circle
+    RunFor(1000)
+    H.ok(r.participants[153].arrived, 'inside the pointer circle: arrived')
+    r.state = 'ended'
+    r = LateRun('r-late-t', 154, 155, true)
+    r.actionPts = { { coords = vec3(0.0, -1500.0, 0.0) } }
+    RunFor(2000)
+    PlayerRec(155).coords = vec3(0.0, -1380.0, 0.0)         -- 120 m from a target the pointer shows
+    RunFor(1000)
+    H.ok(r.participants[155].arrived, 'within 150 m of a pointer target: arrived')
+    r.state = 'ended'
+
+    -- the start still counts
+    r = LateRun('r-late-s', 156, 157, true)
+    RunFor(2000)
+    PlayerRec(157).coords = vec3(990.0, 0.0, 0.0)
+    RunFor(1000)
+    H.ok(r.participants[157].arrived, 'following the action: the start circle still counts')
+    r.state = 'ended'
+
+    -- before the run is In progress nobody follows the action
+    r = LateRun('r-late-b', 158, 159, true, vec3(0.0, 100.0, 0.0))
+    RunFor(3000, function(c)
+        if c % 2000 == 0 then
+            Report(158, r.id, 10.0)
+            Report(159, r.id, 10.0)
+        end
+    end)
+    H.eq(r.state, 'accepted', 'nobody at the start yet')
+    H.eq(CP.Route.status(r, 159).status, 'on', 'accepted: both follow the start route')
+    H.eq(#ClientEvents('client:routeStatus', 159), 0, 'accepted: no switch')
+    r.state = 'ended'
+
+    -- 17) lateArriveRange = 0: the rule as before (the late partner keeps the start route and its checks)
+    local oldRange = Config.Route.lateArriveRange
+    Config.Route.lateArriveRange = 0
+    r = LateRun('r-late-0', 160, 161, true)
+    RunFor(2000, Reporter(161, r.id, 10.0))
+    H.eq(r.state, 'in_progress', 'range 0: the run started')
+    H.eq(CP.Route.status(r, 161).status, 'on', 'range 0: the late partner keeps the start route')
+    H.eq(#ClientEvents('client:routeStatus', 161), 0, 'range 0: no switch')
+    PlayerRec(161).coords = vec3(1000.0, 2950.0, 0.0)        -- 50 m from the action, 2950 m from the start
+    RunFor(2000, Reporter(161, r.id, 10.0))
+    H.eq(r.participants[161].arrived, false, 'range 0: the action does not count, only the start')
+    H.eq(RemovedFor(161)[1] and RemovedFor(161)[1].reason, 'off_route', 'range 0: the drift check ends it, as before')
+    r.state = 'ended'
+    local r2 = LateRun('r-late-0f', 162, 163, false)
+    RunFor(2000, Reporter(163, r2.id, 10.0))
+    H.eq(CP.Route.status(r2, 163).status, 'on', 'range 0, not required: still the start route (a guide)')
+    PlayerRec(163).coords = vec3(1000.0, 2950.0, 0.0)
+    RunFor(2000)
+    H.eq(r2.participants[163].arrived, false, 'range 0, not required: only the start counts')
+    H.eq(#RemovedFor(163), 0, 'range 0, not required: never Abandoned for the route')
+    r2.state = 'ended'
+    Config.Route.lateArriveRange = oldRange
 end
 
 -- ============================================================================
@@ -1564,6 +1721,7 @@ do
         pos = vec3(0.0, 0.0, 0.0),
         waypoint = nil,
         blips = {},
+        blipRoutes = {},
         nextBlip = 1,
         routeFound = true,
         routeLen = 1000.0,
@@ -1624,7 +1782,7 @@ do
         SetBlipColour = function() end,
         SetBlipScale = function() end,
         SetBlipRouteColour = function() end,
-        SetBlipRoute = function() end,
+        SetBlipRoute = function(b, on) cstate.blipRoutes[b] = on == true end,
         BeginTextCommandSetBlipName = function() end,
         AddTextComponentSubstringPlayerName = function() end,
         EndTextCommandSetBlipName = function() end,
@@ -1748,6 +1906,89 @@ do
     H.eq(LastHudRoute() and LastHudRoute().required, false, 'not required: the HUD shows it as a guide')
     TriggerEvent(CP.e('client:runEnded'), 'c-run-1b')
     H.eq(CR.current(), nil, 'not required: stopped at the run end')
+
+    -- PLAN M11: the run went In progress before he arrived (client:routeStatus 'action', CP.Runs calls CR.follow),
+    -- with Config.Route.required on and off: the start's waypoint and pin go first, the sampling and the reports stop,
+    -- Recalculate and Set GPS say why, a late warning is ignored, and his arrival is at the objective
+    local function LiveBlips()
+        local n = 0
+        for _ in pairs(cstate.blips) do n = n + 1 end
+        return n
+    end
+    local function LastToast() return cstate.toasts[#cstate.toasts] or {} end
+    for _, required in ipairs({ true, false }) do
+        local id = required and 'c-run-1c' or 'c-run-1d'
+        local tag = required and 'late (required): ' or 'late (not required): '
+        cstate.pos, cstate.routeFound, cstate.waypoint = vec3(0.0, 0.0, 0.0), true, nil
+        H.ok(CR.begin(id, vec3(500.0, 500.0, 0.0), { required = required }), tag .. 'begin')
+        RunFor(2100)
+        H.ok(cstate.waypoint ~= nil and LiveBlips() == 1, tag .. 'the start waypoint and pin while driving')
+        H.eq(CR.current().action, false, tag .. 'not following the action yet')
+        H.eq(CR.follow('other-run', true), false, tag .. 'another run: ignored')
+        H.ok(CR.follow(id, true), tag .. 'follows the action')
+        H.eq(cstate.waypoint, nil, tag .. 'the start waypoint is gone')
+        H.eq(LiveBlips(), 0, tag .. 'the start pin is gone (its line off first)')
+        H.eq(CR.current().action, true, tag .. 'CP.Route.current says so (CP.Markers routes to the objective)')
+        H.eq(CR.current().arrived, false, tag .. 'not arrived yet')
+        H.eq(LastHudRoute().status, 'action', tag .. 'HUD: following the action')
+        H.eq(LastToast().text, CP.L('route.follow_action'), tag .. 'toast: the GPS leads to the objective now')
+        local n = #Sent('server:routeStatus')
+        RunFor(6000)
+        H.eq(#Sent('server:routeStatus'), n, tag .. 'no reports any more')
+        H.eq(LiveBlips(), 0, tag .. 'the pin does not come back')
+        TriggerEvent(CP.e('client:routeWarning'), id, 20)
+        H.eq(LastHudRoute().status, 'action', tag .. 'a late warning is ignored')
+        local asked = #Sent('server:recalcRoute')
+        local okR, errR = cstate.action_recalcRoute({})
+        H.ok(okR == false and errR == 'err.route_action', tag .. 'Recalculate route says why not')
+        H.eq(#Sent('server:recalcRoute'), asked, tag .. '...without asking the server')
+        local okG, errG = cstate.action_setGps({})
+        H.ok(okG == false and errG == 'err.route_action', tag .. 'Set GPS says why not')
+        H.eq(cstate.waypoint, nil, tag .. '...and does not bring the start back')
+        H.eq(CR.follow(id, true), false, tag .. 'once only')
+        TriggerEvent(CP.e('client:routeStatus'), id, { status = 'arrived' })
+        H.eq(LastHudRoute().status, 'arrived', tag .. 'arrived at the action')
+        H.eq(LastToast().text, CP.L('route.arrived_action'), tag .. 'toast: at the objective, not "the mission start"')
+        TriggerEvent(CP.e('client:runEnded'), id)
+        H.eq(CR.current(), nil, tag .. 'stopped at the run end')
+    end
+
+    -- no objective line for him (Radio Silence, Config.Markers off): the start's waypoint stays his one line
+    cstate.pos, cstate.routeFound, cstate.waypoint = vec3(0.0, 0.0, 0.0), true, nil
+    H.ok(CR.begin('c-run-1e', vec3(500.0, 500.0, 0.0)), 'late, no objective line: begin')
+    RunFor(2100)
+    cstate.waypoint = nil                               -- he cleared the waypoint: the pin carries the line
+    RunFor(2000)
+    local pin = next(cstate.blips)
+    H.eq(pin and cstate.blipRoutes[pin], true, 'the pin carries the line while the waypoint is gone (M9)')
+    local nRep2 = #Sent('server:routeStatus')
+    H.ok(CR.follow('c-run-1e', false), 'late, no objective line: follows the action')
+    H.ok(cstate.waypoint and cstate.waypoint.x == 500.0, 'the start waypoint is back as his one line')
+    H.eq(LiveBlips(), 1, 'the start pin stays')
+    H.eq(cstate.blipRoutes[pin], false, '...without a second line')
+    H.eq(LastToast().text, CP.L('route.follow_action_start'), 'toast: head for the start or the objective')
+    RunFor(6000)
+    H.eq(#Sent('server:routeStatus'), nRep2, 'no reports any more')
+    TriggerEvent(CP.e('client:runEnded'), 'c-run-1e')
+    H.eq(LiveBlips(), 0, 'the pin goes at the run end')
+
+    -- while the route is still sampled (no GPS route yet): the sampling stops too and never brings the pin back
+    cstate.pos, cstate.routeFound, cstate.waypoint = vec3(0.0, 0.0, 0.0), false, nil
+    local nToasts = #cstate.toasts
+    H.ok(CR.begin('c-run-1f', vec3(500.0, 500.0, 0.0)), 'late while sampling: begin')
+    RunFor(1000)
+    H.ok(CR.follow('c-run-1f', true), 'late while sampling: follows the action')
+    local nRep3 = #Sent('server:routeStatus')
+    RunFor(8000)
+    H.eq(LiveBlips(), 0, 'the sampling that was running put no pin back')
+    H.eq(cstate.waypoint, nil, '...and no waypoint')
+    H.eq(#Sent('server:routeStatus'), nRep3, '...and sent no report')
+    local noGps = 0
+    for i = nToasts + 1, #cstate.toasts do
+        if cstate.toasts[i].text == CP.L('route.no_gps') then noGps = noGps + 1 end
+    end
+    H.eq(noGps, 0, '...and no "no GPS route" toast')
+    TriggerEvent(CP.e('client:runEnded'), 'c-run-1f')
 
     -- pick-up: fade, overlay, wait for the revive, move, fade in, pickupDone
     cstate.dead, cstate.md = true, { isdead = true }

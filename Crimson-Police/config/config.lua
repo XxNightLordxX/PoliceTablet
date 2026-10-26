@@ -463,6 +463,10 @@ Config.Route = {
     abandonAfter = 30,     -- seconds off route in one stretch before Abandoned (back on route resets it)
     maxRecalcs = 2,        -- Recalculate route taps per participant per run
     maxDrift = 1000.0,     -- server check: metres further from the start than the closest they have been
+    -- metres: once the run is In progress, an officer still on his way follows the action instead of the start: his
+    -- GPS leads to the objective, his route is no longer checked, and he arrives this close to the objective (or at
+    -- the start). 0 = only the start counts, as before
+    lateArriveRange = 150.0,
 }
 
 -- ============================================================================

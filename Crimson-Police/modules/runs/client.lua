@@ -581,6 +581,25 @@ RegisterNetEvent(CP.e('client:hostChanged'), function(runId, hostSrc)
     CP.log(TAG, 'run %s host is now %s%s', runId, tostring(hostSrc), isHost and ' (me)' or '')
 end)
 
+-- The run went In progress before this officer reached the start (the server's client:routeStatus 'action',
+-- Config.Route.lateArriveRange, PLAN M11): he follows the action. When CP.Markers can draw his line to the objective,
+-- the start goes first (its circle here, its waypoint and pin in CP.Route.follow, which also stops the route's sampling
+-- and reports); CP.Markers routes on its next check, once CP.Route says he follows the action. Under Radio Silence
+-- (no objective line) or with Config.Markers off he keeps the start's waypoint as his guide.
+RegisterNetEvent(CP.e('client:routeStatus'), function(runId, status)
+    if not Matches(runId) or type(status) ~= 'table' or status.status ~= 'action' or current.arrived then return end
+    local lead = false
+    if CP.Markers and CP.Markers.leads then
+        local ok, v = pcall(CP.Markers.leads, { radioSilence = CP.Twists.has(current, 'radio_silence') })
+        lead = ok and v == true
+    end
+    if lead then HideStartCircle(current) end
+    if CP.Route and CP.Route.follow then
+        local ok, err = pcall(CP.Route.follow, runId, lead)
+        if not ok then CP.err(TAG, 'CP.Route.follow failed: %s', tostring(err)) end
+    end
+end)
+
 RegisterNetEvent(CP.e('client:participants'), function(runId, list)
     if not Matches(runId) or type(list) ~= 'table' then return end
     current.participants = list

@@ -155,6 +155,7 @@
   "run.empty.text": "Pick a type on the Mission Board. The mission is drawn at random and shows here once you accept.",
   "run.empty.open_board": "Open the Mission Board",
   "run.hero.at_start": "At the start",
+  "run.hero.action_hint": "The run started before you arrived: head for the objective. The route to the start no longer applies.",
   "run.hero.start_label": "Reach the start",
   "run.hero.start_hint": "Otherwise the run ends as Abandoned",
   "board.boss.ready": "Ready · your attempt for this week"

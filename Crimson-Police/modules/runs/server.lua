@@ -4421,7 +4421,7 @@ do
     function Runs.startMarker(run, i)
         local m = Runs.marker(run)
         local shape, pos = Keys(m)
-        run.markerSent = { index = i, shape = shape, pos = pos, at = GetGameTimer() }
+        run.markerSent = { index = i, shape = shape, pos = pos, at = GetGameTimer(), marker = m }
         return m
     end
 
@@ -4442,9 +4442,33 @@ do
             local every = U.clamp(tonumber(Cfg().trackEvery) or 2, 1, 10) * 1000
             if nowMs - sent.at < every then return false end
         end
-        run.markerSent = { index = i, shape = shape, pos = pos, at = nowMs }
+        run.markerSent = { index = i, shape = shape, pos = pos, at = nowMs, marker = m }
         Runs.send(run, 'client:marker', run.id, i, m)
         return true
+    end
+
+    -- Where the action is now, for an officer still on his way once the run is In progress (CP.Route, Config.Route.
+    -- lateArriveRange, PLAN M11): the current objective's anchor and what its pointer shows on the map (its point or
+    -- circle, every target), as { { coords = vector3, radius = metres for a circle } }; empty before In progress.
+    -- The pointer is the one last sent (run.markerSent), so no block hook runs for it.
+    function Runs.actionPoints(run)
+        local out = {}
+        if type(run) ~= 'table' or run.state ~= 'in_progress' then return out end
+        local okA, a = pcall(Runs.anchor, run)
+        if okA and IsVec(a) then out[1] = { coords = Vec3Of(a) } end
+        local sent = run.markerSent
+        local m = sent and sent.index == run.objectiveIndex and sent.marker or nil
+        if type(m) ~= 'table' then return out end
+        if m.coords then
+            out[#out + 1] = { coords = Vec3Of(m.coords), radius = m.kind == 'area' and m.radius or nil }
+        end
+        for _, t in ipairs(m.targets or {}) do
+            local c = t.x and Vec3Of(t) or nil
+            local e = not c and t.netId and run.entities and run.entities[t.netId] or nil
+            if e and e.entity and DoesEntityExist(e.entity) then c = GetEntityCoords(e.entity) end
+            if c then out[#out + 1] = { coords = c } end
+        end
+        return out
     end
 end
 

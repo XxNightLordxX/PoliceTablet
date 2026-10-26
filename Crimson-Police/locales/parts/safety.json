@@ -6,6 +6,9 @@
   "route.recalculated": "Route recalculated. Recalculations left: {left}.",
   "route.gps_set": "GPS set to the mission start.",
   "route.no_gps": "No GPS route was found: head straight for the mission start.",
+  "route.follow_action": "Your partners have started: the GPS now leads to the objective and the route to the start no longer applies.",
+  "route.follow_action_start": "Your partners have started: the route to the start no longer applies. Head for the start or the objective.",
+  "route.arrived_action": "You reached your partners at the objective.",
   "calls.run_ended": "Mission ended — you're on a real call.",
   "calls.reclassified": "You un-marked the call within {seconds} seconds, so your mission counts as abandoned and the type cooldown applies.",
   "run.left_for_arena": "You left your mission because you entered the arena.",
@@ -19,6 +22,7 @@
   "err.route_arrived": "You have already reached the mission start.",
   "err.route_disabled": "The start route is off for this run.",
   "err.route_no_recalcs": "You have no route recalculations left.",
+  "err.route_action": "Your partners have started: the route to the start no longer applies. Use Objective GPS.",
   "err.busy": "Please wait a moment.",
   "err.timeout": "The server did not answer in time."
 }

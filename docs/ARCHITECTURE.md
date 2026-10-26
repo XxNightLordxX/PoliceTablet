@@ -1145,7 +1145,10 @@ Full admin control (P3, §5.39):
   only when the pointer changed since it was sent: a new shape (kind, keys, net ids, looks, labels, numbers, beyond,
   radius, route, a fixed point's place) at once, new positions (targets, or a point that names a net id, to the metre)
   at most every `Config.Markers.trackEvery` seconds (1-10); nil (enabled turned off, a hook now false) is sent once,
-  which clears it.
+  which clears it. `actionPoints(run) -> { { coords, radius? } }` (PLAN M11, for CP.Route's late partners, §5.12): the
+  current objective's `anchor(run)`, then the pointer last sent (`run.markerSent.marker`, no block hook runs): its point
+  or circle (`radius` for an area), every target at its server position (a target with only a net id: the run's
+  entity where the server has it); empty before In progress.
 - `hud(run, patch)` → `crimson-police:client:hud` to participants; `hudFor(run, src, patch)`
 - `view(run, src) -> ActiveMissionView` (§9.4) and `summary(run) -> LiveRun` (§9.5)
 - `isParticipant(run, src)`, `activeSrcs(run) -> list`, `host(run) -> src`
@@ -1344,9 +1347,20 @@ abandons with `off_route`. Test runs with `useStartRoute = false`: only the arri
 `run.routeRequired` (sent in `client:start` as `routeRequired`; a test run is always `true`, its Start route switch
 decides): with `false` the reports, Recalculate and the arrival check stay, but no warning, countdown, drift check or
 `off_route` end; `status` carries `required` and `CP.Runs.view` copies it to `route.required`.
+Late partners (PLAN M11, owner decision; `Config.Route.lateArriveRange`, shipped 150 m, 0 = off): once
+`run.state == 'in_progress'`, the 1 s tick switches a participant who has not arrived to mode `'action'` once: no
+warning, report, drift or `off_route` check any more (with `required` on or off), reports and Recalculate are refused,
+`status` is `{ status = 'action', distance }` (metres to the action) and he gets `client:routeStatus` (runId, that
+status) plus a `run` push. He arrives (`markArrived`, as at the start) inside the start circle or within the range of
+`CP.Runs.actionPoints(run)` (anywhere inside a pointer circle).
 Client: `begin(runId, startCoords)` (waypoint + GPS sampling every `Config.Route.sampleEvery` m with
 `GetPosAlongGpsTypeRoute`), `recalculate()`, `stop()`, reports every `Config.Route.reportEvery` s;
-client actions `setGps`, `recalcRoute` registered with `CP.Tablet.registerClientAction`.
+client actions `setGps`, `recalcRoute` registered with `CP.Tablet.registerClientAction`. `current() -> { runId,
+arrived, routeOn, action }`. `follow(runId, dropStart) -> boolean` (CP.Runs calls it on `client:routeStatus` 'action'):
+a new token stops the sampling and the reports, a pending Recalculate resolves, the HUD route is `'action'`;
+`dropStart` (CP.Markers `leads`) removes the start pin (line off first) and our start waypoint before `action` is set,
+so CP.Markers' objective line is his one line; without it the pin loses its line and our waypoint stays (put back when
+he has none). `setGps` / `recalcRoute` then answer `err.route_action`; arrival toasts `route.arrived_action`.
 The named start pin (PLAN M9; `Config.Markers.startBlip`, look `Config.Markers.kinds.start` through
 `CP.Markers.style`) lives from `begin` until arrival / `stop`. Its blip route is on while the route is sampled (the
 radar-blip slot is read first) and afterwards only while our waypoint is gone (`IsWaypointActive` /
@@ -2097,9 +2111,9 @@ Full admin control additions (P0; the Settings screen follow-ups are P5's):
   (`settings.locked.code_fact`). A saved row of a locked path is ignored at boot and can still be reset.
 - RANGES for Hard rules 15-18: `Calls.dodgeWindow` 10-300, `respondingExpiry` 60-7200, `Alerts.backstopRadius`
   50-1000, `backstopDelay` 0-10, `Downed.pickupDelay` 5-120, `checkEvery` 1-10, `Route.abandonAfter` 10-120,
-  `maxDeviation` 30-500, `reportTimeout` 5-60, `maxDrift` 200-5000; and for the new `AdminControl.*`, `Cash.addFundsMax`,
-  `manualDailyLimit`, `lowBalanceWarn`, `Backups.keep`. Their one switch is `Route.required` (Hard rule 17, a plain
-  boolean: not locked, not a money switch).
+  `maxDeviation` 30-500, `reportTimeout` 5-60, `maxDrift` 200-5000, `lateArriveRange` 0-500 (PLAN M11); and for
+  the new `AdminControl.*`, `Cash.addFundsMax`, `manualDailyLimit`, `lowBalanceWarn`, `Backups.keep`. Their one
+  switch is `Route.required` (Hard rule 17, a plain boolean: not locked, not a money switch).
 - `check(path, value, none, ctx)`: `ctx = { pending = { [path] = value } (the other values of the same save), boot }`.
   A template's check is `check(clean, path, ctx) -> errKey | nil, fixed`.
 - `Bonuses.*.kind` only with its value (`err.setting_kind_alone`): `setMany(src, changes, opts)` checks every value of
@@ -2650,9 +2664,12 @@ without arguments also removes the run's service vehicles, PLAN M7).
   he is farther than that from it; kept while the line is off, so the HUD line and Objective GPS name the same one),
   `SetBlipRoute` + `SetBlipRouteColour(routeColour)`; off within `routeOffWithin` of a point or target
   and inside an area's radius. `canRoute(ctx)` — false while `enabled` or `route` is off, under Radio Silence, while
-  `CP.Route.current()` exists and has not arrived (CP.Route samples the start's line from the blip-route slot first,
-  §5.12), and while the officer has a waypoint (`IsWaypointActive`: his own, or the one Objective GPS set). Every blip
-  CP.Markers removes or hands back loses its line first (R10).
+  `CP.Route.current()` exists and has neither arrived nor switched to the action (CP.Route samples the start's line
+  from the blip-route slot first, §5.12; a late partner's `action`, PLAN M11, comes after CP.Route dropped the start's
+  line), and while the officer has a waypoint (`IsWaypointActive`: his own, or the one Objective GPS set). Every blip
+  CP.Markers removes or hands back loses its line first (R10). `leads(ctx) -> boolean` — whether an objective line can
+  show at all for ctx's run (`enabled` and `route` on, Radio Silence not hiding lines): CP.Runs asks it before a late
+  partner's game drops the start (`CP.Route.follow(runId, dropStart)`).
 - The HUD line (PLAN M10, `Config.Markers.hudLine`): each check sends `CP.Tablet.hud({ target = { label, distance,
   inside? } })` for what the pointer leads to (its label, else `markers.objective`; `distance` in metres to the point,
   the target or an area's edge, in 10 m steps under 1 km and 100 m steps above; `inside` = within an area's radius),
@@ -2938,7 +2955,7 @@ Rules for blocks:
 | `client:runEnded` | runId, result, endReason, breakdown (RunResult §9.6) | runs |
 | `client:routeWarning` | runId, secondsLeft or nil | route |
 | `client:routeRecalc` | runId, ok, recalcsLeft | route |
-| `client:routeStatus` | runId, status (`'arrived'`…) | route |
+| `client:routeStatus` | runId, status (`'arrived'`; `'action'` once for a late partner, PLAN M11: CP.Runs then calls `CP.Route.follow`) | route, runs |
 | `client:pickup` | runId, dropOff (vec3) | downed |
 | `client:requestEMS` | runId | downed |
 | `client:pickupCancel` | runId (the server cancelled a pick-up it had already sent; the client fades back in and never teleports) | downed |
@@ -3370,7 +3387,8 @@ interface HudState {
   tier: string; payTier: string;                   // tier names
   modifier: null | { key: string; label: string };
   timer: null | { remaining: number; paused: boolean };   // seconds; the NUI counts down locally
-  route: null | { status: 'on' | 'off' | 'arrived' | 'disabled'; secondsLeft: number | null; distance: number | null };
+  route: null | { status: 'on' | 'off' | 'arrived' | 'disabled' | 'action'; secondsLeft: number | null; distance: number | null };
+                                                   // 'action': a late partner follows the objective (PLAN M11)
   objectives: { label: string; done: boolean; current: boolean; detail?: string; value?: number; max?: number }[];
   detail: string | null;                           // client-side line for the current objective
   target: null | { label: string; distance: number; inside?: boolean }; // CP.Markers (§5.44): where the pointer leads, how far

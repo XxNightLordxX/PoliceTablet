@@ -75,6 +75,16 @@ function RouteLine({ route }: { route: NonNullable<HudState['route']> }) {
                     </div>
                 </div>
             );
+        case 'action':
+            return (
+                <div className="cp-hud__route is-on">
+                    <Icon name="navigation" size={15} />
+                    <div className="cp-hud__route-text">
+                        <strong>{t('hud.route.action')}</strong>
+                        <span>{t('hud.route.action_text')}</span>
+                    </div>
+                </div>
+            );
         case 'arrived':
             return (
                 <div className="cp-hud__route is-arrived">
@@ -146,9 +156,14 @@ const MESSAGE_ICON = { info: 'info', success: 'checkCircle', warning: 'alert', e
 export function Hud({ hud }: { hud: HudState }) {
     const objectives = hud.objectives ?? [];
     const done = objectives.filter(o => o.done).length;
-    // Route line: always while heading to the start; afterwards only while still on/off the route
-    // (a late participant), never a stale "arrived"/"disabled" line during the objectives.
-    const showRoute = !!hud.route && (hud.phase === 'route' || hud.route.status === 'on' || hud.route.status === 'off');
+    // Route line: always while heading to the start; afterwards only while still on/off the route or following
+    // the action (a late participant), never a stale "arrived"/"disabled" line during the objectives.
+    const showRoute =
+        !!hud.route &&
+        (hud.phase === 'route' ||
+            hud.route.status === 'on' ||
+            hud.route.status === 'off' ||
+            hud.route.status === 'action');
     const phaseKey =
         hud.phase === 'route' ? 'hud.phase.route' : hud.phase === 'ended' ? 'hud.phase.ended' : 'hud.phase.objectives';
     const msgKind = hud.message && MESSAGE_ICON[hud.message.kind] ? hud.message.kind : 'info';

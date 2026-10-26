@@ -92,6 +92,13 @@ local function RouteRequired(run)
     return not (Config.Route and Config.Route.required == false)
 end
 
+-- Config.Route.lateArriveRange in metres (0 = only the start counts, Hard rule 17 as before the owner's M11 decision).
+local function LateRange()
+    local n = tonumber(Config.Route.lateArriveRange) or 0
+    if n ~= n or n <= 0 then return 0 end
+    return n
+end
+
 local function Participant(run, src)
     return type(run) == 'table' and type(run.participants) == 'table' and run.participants[src] or nil
 end
@@ -231,6 +238,8 @@ function R.status(run, src)
     if st then
         local dist = st.distance and CP.U.round(st.distance) or nil
         if st.arrived then return { status = 'arrived', recalcsLeft = RecalcsLeft(st), distance = 0 } end
+        -- 'action': a late officer heading for the objective (distance to it), no route rules any more
+        if st.mode == 'action' then return { status = 'action', recalcsLeft = 0, distance = dist } end
         if st.mode ~= 'route' then return { status = 'disabled', recalcsLeft = 0, distance = dist } end
         local now = GetGameTimer()
         return {
@@ -283,6 +292,43 @@ local function Arrive(run, src, st)
 end
 
 -- ============================================================================
+--                           LATE OFFICERS (PLAN M11)
+-- ============================================================================
+-- The owner's decision (2026-10-19): once the run is In progress, an officer still on his way follows the action, not
+-- an empty start. From then on his route is not checked (no warning, no drift or report check, no off_route end,
+-- whatever Config.Route.required says) and he arrives at the start circle as before or within lateArriveRange of the
+-- action (CP.Runs.actionPoints: the objective's anchor, its pointer's point or targets, anywhere inside its circle).
+-- His game is told once (client:routeStatus 'action'): it drops the start's waypoint, pin and circle, stops sampling
+-- and reporting, and only then lets CP.Markers draw the line to the objective.
+
+local function FollowAction(run, src, st)
+    st.mode = 'action'
+    st.offSince = nil
+    st.offCause = nil
+    st.warned = false
+    st.metres = nil
+    CP.log(TAG, '%d follows the action of run %s (in progress before he arrived)', src, tostring(run.id))
+    TriggerClientEvent(CP.e('client:routeStatus'), src, run.id, R.status(run, src))
+    PushView(run.id, src)
+end
+
+-- Metres from coords to the nearest action point (to a circle's edge, 0 inside it) and whether that is close enough.
+local function NearAction(run, coords, range)
+    local _, pts = RunsCall('actionPoints', run)
+    local best = nil
+    for _, pt in ipairs(type(pts) == 'table' and pts or {}) do
+        if type(pt) == 'table' and IsPoint(pt.coords) then
+            local d = CP.U.dist2d(coords, pt.coords)
+            local r = tonumber(pt.radius) or 0
+            local edge = d <= r and 0 or d - r
+            if d <= math.max(range, r) then return edge, true end
+            if not best or edge < best then best = edge end
+        end
+    end
+    return best, false
+end
+
+-- ============================================================================
 --                                   1 S TICK
 -- ============================================================================
 
@@ -309,12 +355,25 @@ local function CheckOne(run, src, st, now)
     end
     local start = StartOf(run)
     if not start then return end
+    local range = LateRange()
+    -- the run went In progress while he was on his way: from now on he follows the action (PLAN M11)
+    local follow = st.mode ~= 'action' and range > 0 and run.state == 'in_progress'
     local coords = ServerCoords(src)
     if coords then
         local d = CP.U.dist2d(coords, start.coords)
         st.distance = d
         if d <= start.radius then
             Arrive(run, src, st)
+            return
+        end
+        if follow or st.mode == 'action' then
+            local edge, near = NearAction(run, coords, range)
+            st.distance = edge
+            if near then
+                Arrive(run, src, st)
+                return
+            end
+            if follow then FollowAction(run, src, st) end
             return
         end
         if st.mode == 'route' and st.required then
@@ -325,6 +384,10 @@ local function CheckOne(run, src, st, now)
                 return
             end
         end
+    elseif follow then
+        st.distance = nil
+        FollowAction(run, src, st)
+        return
     end
     -- Config.Route.required off for this run: no off-route stretch, so no warning, no countdown and no end
     if st.mode ~= 'route' or not st.required then return end

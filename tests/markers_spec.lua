@@ -1926,4 +1926,102 @@ do
     _G.IsWaypointActive, _G.DoesBlipExist = saved.IsWaypointActive, saved.DoesBlipExist
 end
 
+-- ============================================================================
+--                                     M11
+-- ============================================================================
+-- A LATE PARTNER FOLLOWS THE ACTION (modules/runs/client.lua hook).
+-- The server's client:routeStatus 'action' (Config.Route.lateArriveRange): the start goes first (circle here, waypoint
+-- and pin in CP.Route.follow, which also stops the sampling and reports), and only then does CP.Markers route. Under
+-- Radio Silence or with no objective line he keeps the start (follow without dropping it).
+
+do
+    Reset()
+    local follows = {}
+    -- the objective's lines only: modules/route/client.lua (loaded for M9 above) also begins on client:start
+    local function ObjRouted()
+        local out = {}
+        for _, id in ipairs(Routed()) do if B(id).name ~= CP.L('route.blip') then out[#out + 1] = id end end
+        return out
+    end
+    CP.Route = {
+        current = function() return world.route end,
+        begin = function() return true end,
+        stop = function() world.route = nil end,
+        follow = function(runId, dropStart)
+            follows[#follows + 1] = {
+                runId = runId,
+                drop = dropStart,
+                circles = #Live('radius'),
+                routed = #ObjRouted(),
+            }
+            world.route.action = true
+            return true
+        end,
+    }
+    CP.Tablet = { hud = function() end, registerClientAction = function() end, notify = function() end }
+    local function Fire(name, ...)
+        for _, fn in ipairs(H.handlers[CP.e(name)] or {}) do fn(...) end
+    end
+    local mission = { id = 'probe', label = 'Probe', objectives = { { block = 'marker_probe' } } }
+    local function Late(runId, modifiers)
+        world.route = { runId = runId, arrived = false, routeOn = true }
+        Fire('client:start', runId, {
+            missionId = 'probe',
+            mission = mission,
+            host = 8,
+            modifiers = modifiers,
+            start = { coords = { x = 10.0, y = 10.0, z = 30.0 }, radius = 300.0 },
+        })
+    end
+
+    Late('run-12')
+    H.eq(#Live('radius'), 1, 'm11: the start circle while he drives')
+    Fire('client:inProgress', 'run-12', { objectives = mission.objectives })
+    Fire('client:objective', 'run-12', 1,
+        { action = 'start', marker = { kind = 'point', coords = { x = 400.0, y = 0.0, z = 30.0 }, label = 'Go' } })
+    Tick()
+    H.eq(#ObjRouted(), 0, 'm11: still bound to the start: no objective line (the start keeps his one line)')
+    H.eq((M.objectiveGps()), false, 'm11: no Objective GPS while bound to the start')
+    Fire('client:routeStatus', 'run-x', { status = 'action' })
+    Fire('client:routeStatus', 'run-12', { status = 'arrived' })
+    H.eq(#follows, 0, 'm11: another run or another status: nothing')
+    Fire('client:routeStatus', 'run-12', { status = 'action' })
+    H.eq(#follows, 1, 'm11: CP.Route.follow once')
+    H.ok(follows[1] and follows[1].runId == 'run-12' and follows[1].drop == true,
+        'm11: the start dropped: CP.Markers can draw his line')
+    H.ok(follows[1] and follows[1].circles == 0 and follows[1].routed == 0,
+        'm11: no start circle and no objective line at that moment (the start goes first)')
+    Tick()
+    H.eq(#ObjRouted(), 1, 'm11: then CP.Markers routes to the objective')
+    H.eq(ObjRouted()[1] and B(ObjRouted()[1]).name, 'Go', 'm11: ...to its pointer')
+    Fire('client:runEnded', 'run-12', 'completed', 'completed')
+    H.eq(#Live(), 0, 'm11: everything goes at the run end')
+
+    -- Radio Silence ('area', shipped: no objective lines): he keeps the start as his guide
+    Late('run-13', { 'radio_silence' })
+    Fire('client:inProgress', 'run-13', { objectives = mission.objectives })
+    Fire('client:routeStatus', 'run-13', { status = 'action' })
+    H.ok(#follows == 2 and follows[2].drop == false, 'm11: Radio Silence: follows, the start kept')
+    Fire('client:runEnded', 'run-13', 'completed', 'completed')
+    Config.Markers.radioSilence = 'full'
+    Late('run-14', { 'radio_silence' })
+    Fire('client:inProgress', 'run-14', { objectives = mission.objectives })
+    Fire('client:routeStatus', 'run-14', { status = 'action' })
+    H.ok(#follows == 3 and follows[3].drop == true, 'm11: Radio Silence \'full\' keeps lines: the start dropped')
+    Fire('client:runEnded', 'run-14', 'completed', 'completed')
+    Config.Markers.radioSilence = 'area'
+    -- no objective line at all (Config.Markers.route or enabled off)
+    for i, key in ipairs({ 'route', 'enabled' }) do
+        Config.Markers[key] = false
+        Late('run-15' .. i)
+        Fire('client:inProgress', 'run-15' .. i, { objectives = mission.objectives })
+        Fire('client:routeStatus', 'run-15' .. i, { status = 'action' })
+        H.ok(#follows == 3 + i and follows[3 + i].drop == false,
+            'm11: Config.Markers.' .. key .. ' off: the start kept')
+        Fire('client:runEnded', 'run-15' .. i, 'completed', 'completed')
+        Config.Markers[key] = true
+    end
+    M.clear()
+end
+
 return H

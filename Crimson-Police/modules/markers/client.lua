@@ -129,10 +129,11 @@ end
 
 local function MyPos() return GetEntityCoords(PlayerPedId()) end
 
--- True while this officer still drives to the start (CP.Route, §5.12): the start keeps his only line (R2).
+-- True while this officer still drives to the start (CP.Route, §5.12): the start keeps his only line (R2). Not once he
+-- follows the action (a late partner, CP.Route.follow, PLAN M11): CP.Route has dropped the start's line by then.
 local function Driving()
     local r = CP.Route and CP.Route.current and CP.Route.current()
-    return r ~= nil and not r.arrived
+    return r ~= nil and not r.arrived and not r.action
 end
 
 local function Silent(ctx)
@@ -723,6 +724,14 @@ function M.canRoute(ctx)
     if Driving() then return false end
     if IsWaypointActive() then return false end
     return true
+end
+
+-- Can this officer get a GPS line to the objective at all for ctx's run (Config.Markers on with its line, and Radio
+-- Silence not hiding lines)? A late partner's game asks before it drops the start's line for the objective's
+-- (PLAN M11); without it he keeps the start's waypoint.
+function M.leads(ctx)
+    local cfg = Cfg()
+    return cfg.enabled ~= false and cfg.route ~= false and not M.hidden(ctx, 'route')
 end
 
 -- Objective GPS (the Active Mission screen's button, Config.Markers.objectiveGps, PLAN M10): a map waypoint on what

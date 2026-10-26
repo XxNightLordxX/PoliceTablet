@@ -384,19 +384,33 @@ H.ok(runsSrv:find('CP.Net.action(\'server:abandon\'', 1, true) ~= nil,
 local abandonBody = FnBody(runsSrv, 'CP.Net.action(\'server:abandon\', function(src, payload)') or ''
 H.ok(abandonBody:find('local runId = payload', 1, true) ~= nil, 'server:abandon takes the runId as its payload')
 
--- view.route = CP.Route.status: only the four statuses the screen knows, with secondsLeft/distance.
+-- view.route = CP.Route.status: only the statuses the screen knows (HudState.route.status in types.ts), with
+-- secondsLeft/distance. 'action' (PLAN M11): a late officer who follows the objective instead of the start.
 local statusBody = FnBody(routeSrv, 'function R.status(run, src)') or ''
 local statuses = {}
 for st in statusBody:gmatch('status = \'([%w_]+)\'') do statuses[st] = true end
 for st in statusBody:gmatch('and \'([%w_]+)\' or \'([%w_]+)\'') do statuses[st] = true end
 for a, b in statusBody:gmatch('\'([%w_]+)\' or \'([%w_]+)\'') do statuses[a] = true; statuses[b] = true end
-local known = { on = true, off = true, arrived = true, disabled = true }
+local known = {}
+for st in (typesTs:match('status: (\'on\'[^;]*);') or ''):gmatch('\'([%w_]+)\'') do known[st] = true end
+H.ok(known.on and known.off and known.arrived and known.disabled and known.action,
+    'types.ts: HudState.route.status is on | off | arrived | disabled | action')
 local nStatus = 0
 for st in pairs(statuses) do
     nStatus = nStatus + 1
     H.ok(known[st] == true, 'CP.Route.status returns a status the screen handles: ' .. st)
 end
-H.ok(nStatus >= 4, 'every route status found (' .. nStatus .. ')')
+H.ok(nStatus >= 5, 'every route status found (' .. nStatus .. ')')
+H.ok(statuses.action == true, 'CP.Route.status says when a late officer follows the action (PLAN M11)')
+do
+    local hud = Read(WEB .. 'hud/Hud.tsx') or ''
+    local bar = Read(WEB .. 'layouts/RunBar.tsx') or ''
+    local am = Read(WEB .. 'officer/screens/ActiveMission.tsx') or ''
+    H.ok(hud:find('case \'action\':', 1, true) ~= nil and hud:find('hud.route.status === \'action\'', 1, true) ~= nil,
+        'HUD: a route line for a late officer following the action, during the objectives too')
+    H.ok(bar:find('route.status === \'action\'', 1, true) ~= nil, 'run bar: the action status')
+    H.ok(am:find('view.route?.status === \'action\'', 1, true) ~= nil, 'Active Mission: the action chip')
+end
 for _, f in ipairs({ 'secondsLeft', 'recalcsLeft', 'distance', 'required' }) do
     H.ok(statusBody:find(f .. ' =', 1, true) ~= nil, 'CP.Route.status sends ' .. f)
 end

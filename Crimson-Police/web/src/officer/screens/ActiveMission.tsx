@@ -197,6 +197,11 @@ function Hero({
                             {t('run.hero.at_start')}
                         </Badge>
                     ) : null}
+                    {inProgress && !routeCard && view.route?.status === 'action' ? (
+                        <Badge tone="primary" icon="navigation" title={t('run.hero.action_hint')}>
+                            {t('hud.route.action')}
+                        </Badge>
+                    ) : null}
                     {inProgress && !routeCard && (!view.route || view.route.status === 'disabled') ? (
                         <Badge tone="neutral" icon="navigation">
                             {t('hud.route.disabled')}

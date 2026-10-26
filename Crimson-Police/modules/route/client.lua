@@ -288,9 +288,10 @@ end
 --                                  PUBLIC API
 -- ============================================================================
 
+-- action = true: the run went In progress before this officer arrived and he now follows the action (R.follow).
 function R.current()
     if not cur then return nil end
-    return { runId = cur.runId, arrived = cur.arrived, routeOn = cur.routeOn }
+    return { runId = cur.runId, arrived = cur.arrived, routeOn = cur.routeOn, action = cur.action == true }
 end
 
 function R.stop()
@@ -360,12 +361,44 @@ local function MarkArrived()
     removeBlip()
     ClearOurWaypoint(target)
     HudRoute({ status = 'arrived' })
-    Toast('success', 'route.arrived')
+    Toast('success', cur.action and 'route.arrived_action' or 'route.arrived')
+end
+
+-- The run went In progress before this officer reached the start (the server's client:routeStatus 'action',
+-- Config.Route.lateArriveRange, PLAN M11): his route is no longer checked, so the sampling, the reports and a
+-- Recalculate still waiting stop here (the token changes). dropStart (CP.Markers can draw the line to the objective):
+-- the start's waypoint and pin go first, so the objective's line is his one line (BLIPS_FINAL M11; the start circle
+-- is CP.Runs'). Without it (no objective line under Radio Silence, or Config.Markers off) the start's waypoint stays
+-- his guide: the start still counts as arrival.
+function R.follow(runId, dropStart)
+    if not cur or cur.runId ~= runId or cur.arrived or cur.action then return false end
+    tokenSeq = tokenSeq + 1
+    cur.token = tokenSeq
+    local pending = cur.recalcPending
+    cur.recalcPending = nil
+    cur.sampling = false
+    cur.warning = nil
+    if dropStart then
+        removeBlip()
+        ClearOurWaypoint(cur.target)
+    else
+        StartLine(false)
+        if not IsWaypointActive() then SetWaypoint() end
+    end
+    cur.action = true
+    if pending and not pending.done then
+        pending.done = true
+        pending.p:resolve({ ok = false, stopped = true })
+    end
+    HudRoute({ status = 'action' })
+    Toast('info', dropStart and 'route.follow_action' or 'route.follow_action_start')
+    return true
 end
 
 function R.recalculate()
     if not cur then return false, 'err.route_inactive' end
     if cur.arrived then return false, 'err.route_arrived' end
+    if cur.action then return false, 'err.route_action' end
     if not cur.routeOn then return false, 'err.route_disabled' end
     if cur.recalcPending or cur.sampling then return false, 'err.busy' end
     local token = cur.token
@@ -395,7 +428,7 @@ end
 -- ============================================================================
 
 RegisterNetEvent(CP.e('client:routeWarning'), function(runId, secondsLeft)
-    if not cur or cur.runId ~= runId or cur.arrived then return end
+    if not cur or cur.runId ~= runId or cur.arrived or cur.action then return end
     if type(secondsLeft) == 'number' then
         local first = cur.warning == nil
         cur.warning = math.max(0, math.floor(secondsLeft))
@@ -476,6 +509,8 @@ CreateThread(function()
     end
     CP.Tablet.registerClientAction('setGps', function()
         if not cur then return false, 'err.route_inactive' end
+        -- following the action: Objective GPS (CP.Markers) is his waypoint now
+        if cur.action then return false, 'err.route_action' end
         SetWaypoint()
         if not cur.sampling then
             StartLine(false)

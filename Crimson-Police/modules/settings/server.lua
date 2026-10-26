@@ -210,6 +210,7 @@ local RANGES = {
     ['Route.maxDeviation'] = { 30, 500 },
     ['Route.reportTimeout'] = { 5, 60 },
     ['Route.maxDrift'] = { 200, 5000 },
+    ['Route.lateArriveRange'] = { 0, 500 },
     -- the objective blip and its GPS line (Config.Markers); ids from the docs.fivem.net blip list (build 3258)
     ['Markers.trackEvery'] = { 1, 10 },
     ['Markers.routeOffWithin'] = { 0, 200 },
