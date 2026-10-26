@@ -1776,19 +1776,24 @@ H.ok(part['npc.shot_surrendered']:find('{points}', 1, true) ~= nil, 'shot warnin
 --                       CLIENT HALF (separate Lua state)
 -- ============================================================================
 
-local p = io.popen('lua5.4 tests/fixtures/npc/client_check.lua 2>&1')
-local out = p:read('a')
-p:close()
-local cp, cf = out:match('RESULT (%d+) (%d+)')
-cp, cf = tonumber(cp), tonumber(cf)
-if not cp then
-    print((out:gsub('RESULT (%d+) (%d+)', 'client checks: %1 passed, %2 failed')))
-    H.ok(false, 'client checks crashed')
-else
-    H.passes = H.passes + cp
-    H.failures = H.failures + cf
-    if cf > 0 then print((out:gsub('RESULT (%d+) (%d+)', 'client checks: %1 passed, %2 failed'))) end
-    H.ok(cp > 50, 'client checks ran')
+-- client_check: AI, combat, gait, cuff and contact options; target_check: the ox_target options exist only while
+-- the local player is on a run, with the same canInteract answers as when they stayed for the whole session
+for _, fixture in ipairs({ { 'client_check', 50 }, { 'target_check', 30 } }) do
+    local p = io.popen(('lua5.4 tests/fixtures/npc/%s.lua 2>&1'):format(fixture[1]))
+    local out = p:read('a')
+    p:close()
+    local label = fixture[1]:gsub('_', ' ')
+    local cp, cf = out:match('RESULT (%d+) (%d+)')
+    cp, cf = tonumber(cp), tonumber(cf)
+    if not cp then
+        print(out)
+        H.ok(false, label .. 's crashed')
+    else
+        H.passes = H.passes + cp
+        H.failures = H.failures + cf
+        if cf > 0 then print((out:gsub('RESULT (%d+) (%d+)', label .. 's: %1 passed, %2 failed'))) end
+        H.ok(cp > fixture[2], label .. 's ran')
+    end
 end
 
 return H

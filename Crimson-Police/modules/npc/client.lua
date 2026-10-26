@@ -177,6 +177,8 @@ local partCache = {}     -- [runId] = { [src] = status }
 local cuffOptions = {}   -- [label] = option name
 local optionOrder = {}   -- { label, ... } in registration order
 local targetReady = false
+local optionsOn = false  -- the run's ox_target options are added (only while the local player is on a run)
+local syncing = false    -- a removal waits for ox_target's eye menu to close
 local groupsReady = false
 local looping = false
 local tokens = 0
@@ -1574,6 +1576,7 @@ local function EnsureGovernor()
 end
 
 local EnsureCuffOption
+local SyncTargetOptions
 
 AddStateBagChangeHandler('cp', nil, function(bagName, _, value)
     if type(value) ~= 'table' then return end
@@ -1601,6 +1604,11 @@ end)
 RegisterNetEvent('crimson-police:client:start', function(runId, data)
     if type(runId) ~= 'string' or type(data) ~= 'table' then return end
     CacheParticipants(runId, data.participants)
+    -- modules/runs sets current() after this handler
+    CreateThread(function()
+        Wait(0)
+        SyncTargetOptions()
+    end)
 end)
 
 RegisterNetEvent('crimson-police:client:participants', function(runId, list)
@@ -1625,6 +1633,11 @@ end)
 RegisterNetEvent('crimson-police:client:runEnded', function(runId)
     if type(runId) ~= 'string' then return end
     partCache[runId] = nil
+    -- one frame later modules/runs has cleared current(): a stale end of an earlier run keeps the current one's options
+    CreateThread(function()
+        Wait(0)
+        SyncTargetOptions()
+    end)
     -- modules/runs clears current() after this handler: a stale end of an earlier run keeps the AI
     -- of the run this player is on now
     local run = CurrentRun()
@@ -1742,6 +1755,8 @@ local function PersonOption(action, prefix)
         label = ActionLabel(action),
         distance = ReachOf('person', action),
         canInteract = function(entity, distance)
+            local run = CurrentRun()
+            if not run or run.state ~= 'in_progress' then return false end
             if not CanAct() or IsPedInAnyVehicle(PlayerPedId(), false) then return false end
             local bag = ContactBag(entity)
             if not bag or bag.contact.kind ~= 'person' or not Offers(bag, action) then return false end
@@ -1764,6 +1779,8 @@ local function VehicleOption(action)
         label = ActionLabel(action),
         distance = ReachOf('vehicle', action),
         canInteract = function(entity, distance)
+            local run = CurrentRun()
+            if not run or run.state ~= 'in_progress' then return false end
             if not CanAct() or IsPedInAnyVehicle(PlayerPedId(), false) then return false end
             local bag = ContactBag(entity)
             if not bag or bag.contact.kind ~= 'vehicle' or not Offers(bag, action) or VEHICLE_GONE[bag.state] then
@@ -1788,6 +1805,8 @@ local function SeatOption(action, door)
         bones = { door },
         distance = ReachOf('vehicle', action),
         canInteract = function(entity, distance)
+            local run = CurrentRun()
+            if not run or run.state ~= 'in_progress' then return false end
             if not CanAct() or IsPedInAnyVehicle(PlayerPedId(), false) then return false end
             local vbag = ContactBag(entity)
             if not vbag or vbag.contact.kind ~= 'vehicle' then return false end
@@ -2138,17 +2157,10 @@ EnsureCuffOption = function(label)
     end
     optionOrder[#optionOrder + 1] = label
     cuffOptions[label] = #optionOrder == 1 and CUFF_OPTION or ('%s:%d'):format(CUFF_OPTION, #optionOrder)
-    if targetReady then RegisterOption(label) end
-end
-
-local function RegisterAll()
-    targetReady = true
-    for _, label in ipairs(optionOrder) do RegisterOption(label) end
-    RegisterContactOptions()
+    if optionsOn then RegisterOption(label) end
 end
 
 local function RemoveAll()
-    if not targetReady then return end
     local names = {}
     for _, label in ipairs(optionOrder) do names[#names + 1] = cuffOptions[label] end
     if #names > 0 then
@@ -2156,25 +2168,58 @@ local function RemoveAll()
         if not ok then CP.warn(TAG, 'could not remove the ox_target options: %s', tostring(err)) end
     end
     RemoveContactOptions()
-    targetReady = false
+    optionsOn = false
 end
 
--- The default option always exists (first, so it gets the plain name crimson-police:cuff).
+-- ox_target's eye menu is open (false when ox_target is gone or cannot say).
+local function TargetMenuOpen()
+    local ok, open = pcall(function() return exports.ox_target:isActive() end)
+    return ok and open and true or false
+end
+
+-- The cuff, contact, custody and seat options exist only while the local player is on a run: ox_target calls each
+-- canInteract every 50 ms while the eye rests on a person or a car, civilians included. They are added at run start
+-- and removed at run end, but never while the eye menu is open: ox_target selects an option by its index, and a
+-- removal shifts the indexes, so a click could run another resource's option. One wait at a time (syncing); when the
+-- menu closes it checks again, so a run that started meanwhile keeps its options.
+SyncTargetOptions = function()
+    local want = targetReady and CurrentRun() ~= nil
+    if want and not optionsOn then
+        for _, label in ipairs(optionOrder) do RegisterOption(label) end
+        RegisterContactOptions()
+        optionsOn = true
+    elseif not want and optionsOn then
+        if not TargetMenuOpen() then return RemoveAll() end
+        if syncing then return end
+        syncing = true
+        CreateThread(function()
+            while TargetMenuOpen() do Wait(500) end
+            syncing = false
+            SyncTargetOptions()
+        end)
+    end
+end
+
+-- The default label always comes first, so its option gets the plain name crimson-police:cuff.
 EnsureCuffOption(DefaultLabel())
 
 CreateThread(function()
     EnsureGroups()
     while GetResourceState('ox_target') ~= 'started' do Wait(1000) end
-    if not targetReady then RegisterAll() end
+    targetReady = true
+    SyncTargetOptions()
 end)
 
 AddEventHandler('onClientResourceStart', function(res)
-    if res == 'ox_target' then RegisterAll() end
+    if res ~= 'ox_target' then return end
+    targetReady = true
+    SyncTargetOptions()
 end)
 
 AddEventHandler('onClientResourceStop', function(res)
     if res == 'ox_target' then
         targetReady = false
+        optionsOn = false
         contactReady = false
     end
 end)
@@ -2190,7 +2235,7 @@ end)
 
 AddEventHandler('onResourceStop', function(res)
     if res ~= GetCurrentResourceName() then return end
-    RemoveAll()
+    if optionsOn then RemoveAll() end
     if cuffing then
         cuffing.cancelled = true
         CancelProgress()

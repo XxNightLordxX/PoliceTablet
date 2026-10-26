@@ -1530,7 +1530,12 @@ end
 -- known item. The model: { items = { [name] = { label, stack, degrade, durability, container } }, slots = { [src] =
 -- { { slot, name, count, metadata } } } (count 0 is an empty slot), full = { [src] = true }, added = { { src, name,
 -- count, meta } }, removed = { { src, name, count, slot } } }. ox_target: H.mockTarget() installs addBoxZone,
--- removeZone, addLocalEntity, addEntity (options with bones kept) and returns the recorded zones and options.
+-- removeZone, addLocalEntity, addEntity (options with bones kept) and returns the recorded zones and options. Its
+-- global ped and vehicle options work as ox_target 1.18.1 (client/api.lua addTarget/removeTarget): addGlobalPed /
+-- addGlobalVehicle take one option or a list, replace an option of the same name and append the rest in order;
+-- removeGlobalPed / removeGlobalVehicle take a name or a list. t.peds and t.vehicles hold the live options,
+-- t.globalCalls every call in order ({ op = 'add'|'remove', kind = 'ped'|'vehicle', names }). isActive() answers
+-- t.active (the eye menu is open) and counts t.isActiveCalls; t.restart() empties the lists as a restarted ox_target.
 local function OxContains(tbl, value)
     if type(value) ~= 'table' then
         for _, v in pairs(tbl) do
@@ -1732,8 +1737,47 @@ function H.mockInventory(items)
 end
 
 function H.mockTarget()
-    local t = { zones = {}, entities = {}, localEntities = {}, removed = {} }
+    local t = {
+        zones = {},
+        entities = {},
+        localEntities = {},
+        removed = {},
+        peds = {},
+        vehicles = {},
+        globalCalls = {},
+        active = false,
+        isActiveCalls = 0,
+    }
     local nextZone = 0
+    local function AddGlobal(list, kind, options)
+        if type(options) == 'table' and (options.name or options.label) then options = { options } end
+        local names = {}
+        for _, o in ipairs(options) do
+            names[#names + 1] = o.name
+            for i = #list, 1, -1 do
+                if o.name and list[i].name == o.name then table.remove(list, i) end
+            end
+            list[#list + 1] = o
+        end
+        t.globalCalls[#t.globalCalls + 1] = { op = 'add', kind = kind, names = names }
+    end
+    local function RemoveGlobal(list, kind, names)
+        if type(names) ~= 'table' then names = { names } end
+        local copy = {}
+        for i, n in ipairs(names) do copy[i] = n end
+        for i = #list, 1, -1 do
+            for _, n in ipairs(copy) do
+                if list[i].name == n then
+                    table.remove(list, i)
+                    break
+                end
+            end
+        end
+        t.globalCalls[#t.globalCalls + 1] = { op = 'remove', kind = kind, names = copy }
+    end
+    function t.restart()
+        t.peds, t.vehicles = {}, {}
+    end
     H.exportsMock.ox_target = {
         addBoxZone = function(opts)
             nextZone = nextZone + 1
@@ -1750,6 +1794,14 @@ function H.mockTarget()
         addEntity = function(netIds, options) t.entities[#t.entities + 1] = { netIds = netIds, options = options } end,
         removeEntity = function(netIds, names) t.removed[#t.removed + 1] = { netIds = netIds, names = names } end,
         removeLocalEntity = function(ent, names) t.removed[#t.removed + 1] = { entity = ent, names = names } end,
+        addGlobalPed = function(options) AddGlobal(t.peds, 'ped', options) end,
+        addGlobalVehicle = function(options) AddGlobal(t.vehicles, 'vehicle', options) end,
+        removeGlobalPed = function(names) RemoveGlobal(t.peds, 'ped', names) end,
+        removeGlobalVehicle = function(names) RemoveGlobal(t.vehicles, 'vehicle', names) end,
+        isActive = function()
+            t.isActiveCalls = t.isActiveCalls + 1
+            return t.active == true
+        end,
     }
     return t
 end

@@ -1259,8 +1259,9 @@ H.eq(#H.findEvents('crimson-police:server:npcCuff'), 0, 'not surrendered: nothin
 -- ============================================================================
 
 local before = #W.options
+TriggerEvent('onClientResourceStop', 'ox_target')
 TriggerEvent('onClientResourceStart', 'ox_target')
-H.eq(#W.options, before + 2, 'ox_target restart re-adds every option')
+H.eq(#W.options, before + 2, 'ox_target restart during a run re-adds every option')
 -- labels pile up over a session: past the 8 options a new label falls back to the default option
 local P14 = AddPed(5024, 824, 1, 0, 0)
 local function CuffBag(label, seq)

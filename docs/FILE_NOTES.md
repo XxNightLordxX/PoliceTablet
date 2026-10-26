@@ -2302,7 +2302,13 @@ Contract interpretations (details in docs/notes/engine_a.md)
       so non-participants never see it. onSelect runs lib.progressBar (cp.cuff.duration, mp_arresting
       anim; cancelled if the suspect stops being surrendered, moves out of reach or the local player is
       placed in Crimson-Arena) and then TriggerServerEvent('crimson-police:server:npcCuff', runId, netId).
-      The options are removed on resource stop and re-added when ox_target restarts.
+      These options, and the contact, custody and seat options, exist only while the local player is on a
+      run: added one frame after client:start (modules/runs sets current() after this handler), removed one
+      frame after client:runEnded, but only once ox_target's eye menu is closed (exports.ox_target:isActive,
+      asked twice a second by one waiting thread), because ox_target selects an option by its index and a
+      removal shifts the indexes. A player with no run has no global option, so ox_target never calls our
+      canInteract for him. Each canInteract tests the run first. Removed on resource stop; added again when
+      ox_target restarts during a run.
 
   Public API
     CP.Npc.apply(entity, cfg) -> boolean
@@ -4657,6 +4663,21 @@ Natives the checks do not model are recorded by a fallback (every capitalised gl
 defined becomes a recorder), so the checks can assert on the calls the module makes.
 ```
 
+## tests/fixtures/npc/target_check.lua
+
+```text
+The ox_target options of modules/npc in their own client Lua state (H.boot side = 'client'): they exist only while
+the local player is on a run, so a player with no run pays nothing while the eye rests on a person or a car. Run by
+tests/npc_spec.lua as a child process; prints "RESULT <passed> <failed>".
+Checks: no option with no run; the same names in the same order once per run start (a second client:start adds
+nothing); every name removed at run end, but only after ox_target's eye menu closes (one wait, twice a second; a run
+that starts meanwhile keeps its options); an ox_target restart adds them only during a run; resource stop.
+CP_TARGET_SNAPSHOT=<file> writes every canInteract answer of the snapshot (fixed people, cars and seats under five
+player conditions, four run conditions and three distances) to that file instead of comparing it.
+tests/fixtures/npc/target_answers.txt was written so while the options stayed registered for the whole session: the
+answers must stay the same now that they come and go with the run.
+```
+
 ## tests/flee_arrest_director_spec.lua
 
 ```text
@@ -4946,7 +4967,8 @@ escort attackers' healthMult are in blocks_b_spec and blocks_c_spec.
 tests/npc_spec.lua · slice npc: modules/npc/server.lua driven through a fake entity world, stubbed
 CP.Runs / CP.AntiCheat / CP.Tablet / CP.Alerts / CP.Access, the harness clock (the 1 s watcher runs
 as a harness thread) and simulated net events. The client half is checked in a separate Lua state
-(tests/fixtures/npc/client_check.lua, side = 'client'); its results are added here.
+(tests/fixtures/npc/client_check.lua and tests/fixtures/npc/target_check.lua, side = 'client'); their results are
+added here.
 The npc slice writes no SQL, so this spec runs no queries.
 ```
 

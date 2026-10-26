@@ -1,8 +1,8 @@
 # npc · notes (modules/npc: the NPC state machine, host AI helpers, "Cuff suspect")
 
 Files: `Crimson-Police/modules/npc/server.lua`, `Crimson-Police/modules/npc/client.lua`,
-`Crimson-Police/locales/parts/npc.json`, `tests/npc_spec.lua`, `tests/fixtures/npc/client_check.lua`
-(the client half, run by the spec in its own Lua state). Each Lua file's header comment is the full API
+`Crimson-Police/locales/parts/npc.json`, `tests/npc_spec.lua`, `tests/fixtures/npc/client_check.lua` and
+`tests/fixtures/npc/target_check.lua` (the client half, run by the spec in their own Lua states). Each Lua file's header comment is the full API
 reference. This slice writes no SQL.
 
 ## API (ARCHITECTURE §5.11)
@@ -140,6 +140,10 @@ CP.Runs.dispatch(run, cp.obj, src, ev): `{ type = 'cuffed', netId }`, `{ type = 
     with this label, within `cp.cuff.maxDistance`, on foot, alive, not in the arena, no cuff running. The
     progress bar is cancelled when the suspect stops being surrendered, moves out of reach + 1 m, or
     Crimson-Arena places the player; nothing is sent then.
+    The option set (with the contact, custody and seat options) exists only while the local player is on a
+    run, so ox_target never calls our canInteract for anyone else: added one frame after `client:start`,
+    removed one frame after `client:runEnded` once ox_target's eye menu is closed (it selects an option by
+    its index, and a removal shifts the indexes).
 20. **Host bookkeeping.** The `cp` handler waits one frame (change handlers run before the value is in
     the bag), applies cfg once per entity handle after `CP.Runs.control`, and re-tasks only on a state or
     task change. First sight of a ped (stream-in) or a host change uses the poses without transitions.
