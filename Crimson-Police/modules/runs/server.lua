@@ -2139,6 +2139,59 @@ local function CitizenOf(src)
     return ok and type(info) == 'table' and info.citizenid or nil
 end
 
+-- Which character each player has loaded, kept by the Qbox load and unload events and playerDropped, so the
+-- once-a-minute maintenance asks Qbox nothing per citizen: online[citizenid] = src, of[src] = citizenid, and
+-- seen[citizenid] once the events (or one export) told where that character is. Read only while trusted (the
+-- unload hook is registered). A table, not locals: this file is at Lua's 200 locals.
+local cids = { online = {}, of = {}, seen = {}, trusted = false }
+
+-- Spent values (until <= now) leave the entry; true when what is left is nothing and no load is running.
+function cids.idle(c, now)
+    for k, v in pairs(c.types) do if v <= now then c.types[k] = nil end end
+    for k, v in pairs(c.missions) do if v <= now then c.missions[k] = nil end end
+    return not c.loading and next(c.types) == nil and next(c.missions) == nil
+end
+
+-- src unloaded its character or left: the map forgets it, and a loaded cooldown entry that holds nothing goes too
+-- (Runs.cooldowns reads it again from the rows on the next use).
+function cids.forget(src)
+    src = ToSrc(src)
+    local citizenid = src and cids.of[src]
+    if not citizenid then return end
+    cids.of[src] = nil
+    if cids.online[citizenid] == src then cids.online[citizenid] = nil end
+    local c = cooldownCache[citizenid]
+    if c and c.loaded and cids.idle(c, os.time()) then cooldownCache[citizenid] = nil end
+end
+
+function cids.note(src, citizenid)
+    src = ToSrc(src)
+    if not src or type(citizenid) ~= 'string' or citizenid == '' then return end
+    if cids.of[src] and cids.of[src] ~= citizenid then cids.forget(src) end
+    local prev = cids.online[citizenid]
+    if prev and prev ~= src and cids.of[prev] == citizenid then cids.of[prev] = nil end
+    cids.of[src], cids.online[citizenid], cids.seen[citizenid] = citizenid, src, true
+end
+
+-- The src that has this character loaded now. Qbox's GetPlayerByCitizenId export (a whole Player copy) only for a
+-- character the map has never seen, such as an entry made before it knew the player: once, its answer is then kept.
+function cids.srcOf(citizenid)
+    if cids.trusted then
+        local src = cids.online[citizenid]
+        if src or cids.seen[citizenid] then return src end
+    end
+    local ok, s = Call('Qbx', 'getByCitizenId', citizenid)
+    local src = ok and ToSrc(s) or nil
+    if cids.trusted then
+        if src then cids.note(src, citizenid) else cids.seen[citizenid] = true end
+    end
+    return src
+end
+
+-- For the specs: the map, and one citizen's cooldown entry as it is kept (nil when there is none).
+Runs._cids = cids
+function Runs._cooldownEntry(citizenid) return cooldownCache[citizenid] end
+
 -- ============================================================================
 --                                  COOLDOWNS
 -- ============================================================================
@@ -3160,6 +3213,7 @@ function Runs.create(opts)
         if not PlayerOnline(src) then return nil, 'err.member_unavailable' end
         local cid = CitizenOf(src)
         if cid and cid ~= run.participants[src].citizenid then return nil, 'err.member_unavailable' end
+        cids.note(src, cid)
     end
     if CP.Maintenance and CP.Maintenance.active and CP.Maintenance.active() then return nil, 'err.maintenance' end
     if not test and not opts.operationId then
@@ -4499,7 +4553,8 @@ function Runs._jobRecheck()
     end
 end
 
-local function Maintenance()
+-- Once a minute. Who is online comes from the event-kept map (cids), not from a Qbox export per cached citizen.
+function Runs._maintenance()
     local now = os.time()
     for id, e in pairs(endedRuns) do
         if now - e.at > ENDED_KEEP_S then endedRuns[id] = nil end
@@ -4507,20 +4562,15 @@ local function Maintenance()
     for cid, h in pairs(hourCache) do
         if now - h.at > HOURLY_CACHE_S * 6 then hourCache[cid] = nil end
     end
+    -- An empty entry that was never loaded is the same as none; a loaded one stays while its character is online.
     for cid, c in pairs(cooldownCache) do
-        if c.loaded and next(c.types) == nil and next(c.missions) == nil then
-            local src = nil
-            local ok, s = Call('Qbx', 'getByCitizenId', cid)
-            if ok then src = s end
-            if not src then cooldownCache[cid] = nil end
-        end
+        if cids.idle(c, now) and (not c.loaded or not cids.srcOf(cid)) then cooldownCache[cid] = nil end
     end
     for cid, o in pairs(orphans) do
         if now - o.at > ORPHAN_KEEP_S then
             orphans[cid] = nil
         else
-            local ok, src = Call('Qbx', 'getByCitizenId', cid)
-            src = ok and ToSrc(src) or nil
+            local src = cids.srcOf(cid)
             if src and not Runs.isOnMission(src) then
                 local cleared = CP.Alerts and type(CP.Alerts.foreignClearedAt) == 'table'
                     and CP.Alerts.foreignClearedAt[src]
@@ -4530,6 +4580,10 @@ local function Maintenance()
             end
         end
     end
+    -- what the map knows of an offline character matters only while something of his is still kept
+    for cid in pairs(cids.seen) do
+        if not cids.online[cid] and not cooldownCache[cid] and not orphans[cid] then cids.seen[cid] = nil end
+    end
 end
 
 -- Faster reaction to an arena exit for players with orphaned items (10 s after the foreign flag cleared).
@@ -4537,8 +4591,7 @@ local function ArenaExitSweeps()
     if not (CP.Alerts and type(CP.Alerts.foreignClearedAt) == 'table') then return end
     local now = os.time()
     for cid, o in pairs(orphans) do
-        local ok, src = Call('Qbx', 'getByCitizenId', cid)
-        src = ok and ToSrc(src) or nil
+        local src = cids.srcOf(cid)
         local cleared = src and CP.Alerts.foreignClearedAt[src]
         if cleared and now - cleared >= 10 and (o.sweptAt or 0) < cleared + 10 and not Runs.isOnMission(src) then
             SweepPlayer(src, cid)
@@ -4567,7 +4620,7 @@ end)
 CreateThread(function()
     while true do
         Wait(60000)
-        local ok, err = pcall(Maintenance)
+        local ok, err = pcall(Runs._maintenance)
         if not ok then CP.err(TAG, 'maintenance failed: %s', tostring(err)) end
     end
 end)
@@ -4585,6 +4638,7 @@ AddEventHandler('playerDropped', function()
     local src = source
     src = ToSrc(src)
     if not src then return end
+    cids.forget(src)
     DropFromRun(src, 'disconnected')
 end)
 
@@ -4598,6 +4652,7 @@ local function RegisterHooks()
     if hooked then return true end
     if not (CP.Access and CP.Access.onLost and CP.Qbx and CP.Qbx.onPlayerUnload) then return false end
     hooked = true
+    cids.trusted = true                        -- an unload (character switch) now reaches cids.forget
     CP.Access.onLost(function(src, endReason)
         src = ToSrc(src)
         local run, p = Runs.getBySrc(src)
@@ -4617,12 +4672,15 @@ local function RegisterHooks()
         Runs.removeParticipant(run, src, endReason)
     end)
     CP.Qbx.onPlayerUnload(function(src)
-        DropFromRun(ToSrc(src), 'disconnected')
+        src = ToSrc(src)
+        cids.forget(src)
+        DropFromRun(src, 'disconnected')
     end)
     if CP.Qbx.onPlayerLoaded then
         CP.Qbx.onPlayerLoaded(function(src)
             src = ToSrc(src)
             if not src then return end
+            cids.note(src, CitizenOf(src))     -- before the migrations wait: the map fills even with no preload
             SetTimeout(5000, function()
                 if CP.Migrations and CP.Migrations.started and not CP.Migrations.started() then return end
                 local cid = CitizenOf(src)
@@ -4660,15 +4718,17 @@ CreateThread(function()
         CP.warn(TAG,
             'CP.Access.onLost / CP.Qbx.onPlayerUnload are not available: job and unload checks rely on the recheck loop')
     end
-    -- Leftover mission items from a crash: sweep the players who are online now.
+    -- Leftover mission items from a crash: sweep the players who are online now. Every one goes in the map (cids):
+    -- they loaded before this resource started, so no load event told it.
     Wait(15000)
     local ok, list = Call('Qbx', 'getOnlinePlayers')
     if ok and type(list) == 'table' then
         for _, src in ipairs(list) do
             src = ToSrc(src)
-            if src and not Runs.isOnMission(src) then
-                local cid = CitizenOf(src)
-                if cid then pcall(SweepPlayer, src, cid) end
+            local cid = src and CitizenOf(src)
+            if cid then
+                cids.note(src, cid)
+                if not Runs.isOnMission(src) then pcall(SweepPlayer, src, cid) end
             end
         end
     end

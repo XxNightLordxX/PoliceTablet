@@ -5080,6 +5080,19 @@ the slice's own files:
   * no SQL / MySQL anywhere in the slice files (nothing to run on MariaDB).
 ```
 
+## tests/runs_maintenance_spec.lua
+
+```text
+The run engine's 60 s maintenance (Runs._maintenance) over a CP.Qbx stand-in that counts getByCitizenId (the
+GetPlayerByCitizenId export) and, as qbx_core, has removed the Player before an unload or drop listener runs.
+Proves: 200 players through the onPlayerLoaded listener cost 0 exports per maintenance (one each before); 50 drops
+remove their empty entries at once and keep the other 150; a leaver's or switched character's live cooldown is
+kept until spent, then goes with no export; Runs.cooldowns answers the same tables as before, also after a relog
+or a reconnect; an unload without a drop (character switch) clears the map; the startup sweep maps players online
+before the start; a never-loaded empty entry goes; a citizen the map never saw is checked once with the export.
+Real: runs/server.lua, the cp_mission_runs rows (database, files, shadow).
+```
+
 ## tests/safety_spec.lua
 
 ```text

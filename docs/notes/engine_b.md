@@ -109,6 +109,12 @@ Files: `Crimson-Police/modules/runs/server.lua`, `Crimson-Police/modules/runs/cl
 - Cooldowns live in memory per citizenid; they are rebuilt from `cp_mission_runs` rows of the last
   `max(abandonCooldown, largest mission cooldown)` seconds on the first `cooldowns()` call for that citizenid and
   on player load. Voided rows count (the run happened). Boss rows never set a type cooldown.
+- Who is online comes from a map kept by the Qbox load and unload listeners, `playerDropped`, the accept re-check
+  and the sweep 15 s after start (`citizenid -> src` and `src -> citizenid`). An unload (character switch) or a
+  drop forgets the player and drops his loaded entry when it holds no live cooldown. The 60 s maintenance prunes
+  spent values, drops an empty entry that was never loaded, and drops an empty loaded one whose citizen is not
+  online. It calls `CP.Qbx.getByCitizenId` (a whole Player copy) only for a citizen the map has never seen, once;
+  the orphan sweeps (every 60 s and after an arena exit) read the same map.
 - `completionsLastHour`: completed rows of the last 3600 s, excluding `manual_award`/`goal`; cached 10 s and
   dropped when a completed row is written.
 - `capsOk('weekly_boss')` counts as Tactical; tests and operations never count.
