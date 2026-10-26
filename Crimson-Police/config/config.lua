@@ -760,6 +760,25 @@ Config.RealSuspects = {
     armedMemory = 15,                -- seconds a suspect counts as armed after the server saw a gun in his hands
     downGrace = 3,                   -- seconds after he goes down before a hit counts as hitting a downed person
     damageLogMax = 200,              -- weapon hits between officers and suspects kept per case
+    -- Anti-farm (admins only): nobody can take a case against one of his own characters or licenses, and the
+    -- identifiers of both players are compared live, never stored or shown
+    identityMatch = {
+        block = { 'license', 'license2', 'discord', 'fivem', 'steam', 'xbl', 'live' }, -- same account = refused
+        flag = { 'ip', 'token' }, -- same connection or PC = allowed but flagged (families share them)
+    },
+    -- One scored case of the same suspect per officer in this many hours (live crimes and volunteers together)
+    pairCooldownHours = 24,
+    maxCatchesPerSuspectDay = 2,     -- a suspect is worth points this many times a day, server-wide
+    -- After a case, the same officers score nothing on that suspect for this many minutes
+    suspectCooldownMinutes = 30,
+    -- The same officer and suspect this often, with a second warning sign (a detain within fastCatchSeconds, a
+    -- suspect never armed who moved under 30 m after contact, or a case under 3 minutes), flags that officer
+    pairFlag = {
+        count = 2,                   -- cases of the same pair (matched by license)
+        days = 7,                    -- within this many days
+    },
+    fastCatchSeconds = 60,           -- a detain this soon after the case started is a warning sign
+    pairLedgerDays = 30,             -- days the pair ledger keeps case rows (admin blocks stay until they expire)
 }
 
 -- ============================================================================

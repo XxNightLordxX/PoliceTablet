@@ -646,6 +646,7 @@ function Opp.open(run, spec)
         kind = spec.kind == 'volunteer' and 'volunteer' or 'live',
         index = math.tointeger(tonumber(spec.index) or 1) or 1,
         openedAt = os.time(),
+        openedMs = now,                -- GetGameTimer() at the open (V7's fast-catch sign reads it with detainedAt)
         scene = spec.scene,
         lostRule = LostRule(spec.lostRule),
         meet = type(spec.meet) == 'table' and spec.meet or nil,

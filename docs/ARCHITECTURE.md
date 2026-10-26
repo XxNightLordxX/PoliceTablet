@@ -142,7 +142,8 @@ PoliceTablet/                      (git repo)
     web/                           React 18 + TS + Vite; builds to web/dist (committed); README.md points to
                                    docs/WEB_UI.md
     sql/migrations/001_initial.sql, 002_test_def_hash.sql, 003_run_stats.sql, 004_profile.sql,
-                   005_mission_calls.sql, 006_item_rewards.sql, 007_settings.sql, 008_admin_control.sql
+                   005_mission_calls.sql, 006_item_rewards.sql, 007_settings.sql, 008_admin_control.sql,
+                   009_real_suspects.sql
 ```
 
 fxmanifest loads: `@ox_lib/init.lua`, config/config.lua, config/blocks.lua, shared/*.lua
@@ -2775,8 +2776,9 @@ Config.Volunteers.enabled are false (both shipped false). Rules: Config.RealSusp
 (/tmp/claude-0/-home-user-PoliceTablet/c9b2f5e1-32ec-5436-a1db-2a78c5b9aa69/scratchpad/pvp/DESIGN_FINAL.md).
 
 Core (V4, modules/opponents/server.lua). Times inside a record are GetGameTimer() milliseconds; `t` in the timeline,
-notes and trail and `case.openedAt` / `closedAt` are os.time() seconds.
-- `case = { runId, run, kind = 'live'|'volunteer', index, openedAt, scene, lostRule = { range, seconds }|nil, meet|nil,
+notes and trail and `case.openedAt` / `closedAt` are os.time() seconds (`case.openedMs` is the GetGameTimer() of
+the open).
+- `case = { runId, run, kind = 'live'|'volunteer', index, openedAt, openedMs, scene, lostRule = { range, seconds }|nil, meet|nil,
   suspects = { [cid] = rec }, order = { cid... }, timeline, ledger, trail = { [cid] = ring }, notes, crimeEndedAt }`;
   `rec = { cid, src, license, label = 'A'|'B'|... (shuffled with CP.U.rng(run.seed), C5), state, since, contactAt,
   lastContactAt, lastCoords, md = { ishandcuffed, isdead, inlaststand, injail }, down, downAt, protectUntil, cuff,
@@ -2965,6 +2967,59 @@ of his row in Review is the "Failed": nothing here ends or fails a run, and noth
   3 m away (server coords) -> the flag `rs_bad_seize` on the seizing officer when he is a participant of that case
   (his own conduct, with or without cash); an officer outside the case cannot be flagged on its run, so it is the
   staff note `rs_bad_seize` (Opp.note, naming him).
+
+Identity and pairs (V7, modules/opponents/pairs/server.lua, table `cp_pvp_pairs` from
+sql/migrations/009_real_suspects.sql; critic C27, critic 2 #21-#23, #30). The anti-farm core both features share.
+Every answer below is a memory lookup (no database statement on a claim, a view or a tick); the ledger is read once at
+start, and every write goes to the database in a thread.
+- `selfBlock(officerSrc, suspects) -> blocked, kind, flags, match`: `suspects` is a list of citizenids or a map keyed
+  by them (`{ [cid] = src }`: the server id is only a hint, checked against getInfo). In this order, per suspect: (1)
+  `own_character`: one of `CP.Access.selfCitizenids(officerSrc)` (every character of his licenses, offline ones
+  included); (2) `own_license`: his player's licenses (`CP.Access.licensesOfSrc` and Qbox's users row of each,
+  `CP.Qbx.userLicenses`) hold the suspect's license (online: `getInfo(src).license`; offline: `CP.Qbx.licenseOf(cid)`,
+  kept per citizenid), strictly: a nil or unknown license on either side refuses (`Opp.sameUserStrict(a, b)`, which
+  asks `CP.Access.sameUser` otherwise; critic 2 #22); (3) both online: every identifier (`GetNumPlayerIdentifiers` /
+  `GetPlayerIdentifier`, i = 0..n-1) and token (`GetNumPlayerTokens` / `GetPlayerToken`, kind `token`), compared as
+  whole strings grouped by the text before ':' (never `GetPlayerIdentifierByType`, which matches by prefix): a shared
+  one of a kind in `Config.RealSuspects.identityMatch.block` -> `linked_account`; of a kind in `identityMatch.flag`
+  (`ip`, `token`) -> not blocked, `flags = { 'rs_linked_accounts' }` (an officer-conduct flag: the caller raises it
+  with `CP.AntiCheat.flag(run, thatOfficerSrc, ...)`, V14 / V22b). `match = { cid, kinds }` names the suspect and the
+  kinds only: identifiers are never stored, logged, audited or sent. Characters and licenses are read once per
+  officer session (`selfCache[src]`, cleared by `CP.Qbx.onPlayerUnload`, `onPlayerLoaded` (a character switch) and
+  `playerDropped`; critic 2 #21): a cache hit with online suspects runs no database statement.
+- Duty maps from `CP.Qbx.onDutyChange` / `onJobChange` / `onPlayerLoaded` / `onPlayerUnload` and `playerDropped`
+  (getInfo once per event; Config.Departments jobs, a turned-off department too), seeded at start from
+  `getOnlinePlayers`: `Opp.dutySince(cid)` (os.time() his department duty began; the resource start for one on duty
+  then or never seen going on duty), `Opp.lastPoliceAt(cid)` (he left department duty, a department job, or logged
+  off on duty; V4's `eligible` reads it for `job_hop`), `Opp.lastSuspectAt(cid)` (a case with him as a suspect closed:
+  the `run:ended` hook and the case rows). Each time someone leaves police duty a `duty_off` row is written (officer =
+  cid, suspect ''), while Config.LiveCrime.enabled or Config.Volunteers.enabled is on, so a restart keeps the
+  job-hop history (critic 2 #30); the maps themselves are always kept.
+- The ledger `cp_pvp_pairs (id, kind, run_uuid, officer_citizenid, officer_license, suspect_citizenid,
+  suspect_license, outcome, scored, until_at, created_at)`, kind `live` | `volunteer` (one row per officer and suspect
+  of a closed case), `block` (an admin pair block), `exclude` (officer ''), `suspend` (suspect '') and `duty_off`.
+  `Opp.recordPairs(run, rows)` at a case's close (V14, V22b): `rows = { { officer, suspect, scored, outcome?, kind?,
+  officerLicense?, suspectLicense? } }` (kind defaults to the case's, the licenses to the participant's getInfo and
+  the suspect record's); kept in memory at once, the same row twice once, written as one INSERT in a thread, created_at
+  = FROM_UNIXTIME(os.time()). At start (in a thread, after the clean-up below): the case and duty_off rows of the last
+  max(pairCooldownHours, 24 h, pairFlag.days, jobHopMinutes, suspectCooldownMinutes) and every admin row whose until_at
+  is still ahead; a longer window set in game reads the older rows once (`settings:changed`).
+- Caps: `Opp.pairOk(officerCid, suspectCid) -> ok, reason, until` (`blocked` an admin block, `pair_cooldown` a scored
+  case of the pair within pairCooldownHours, `suspect_cooldown` any case of the pair within suspectCooldownMinutes;
+  rows with outcome `gone`, nobody reached the suspects, never count), `Opp.suspectDayCount(cid)` (cases since today's
+  reset, `CP.Schedule.dayStart`, in which he scored for someone: maxCatchesPerSuspectDay), `Opp.officerDayCount(cid,
+  kind?)` (his cases today, `gone` left out), `Opp.excluded(cid)`, `Opp.suspended(officerCid)` (-> bool, until), and
+  the admin writers for V17 `Opp.block(officerCid, suspectCid, days)`, `Opp.exclude(cid, days)`, `Opp.suspend(
+  officerCid, days)` (-> true, until | false, 'invalid_citizenid' | 'invalid_days'; 0 < days <= 3650).
+- Pair repeat (C27): `Opp.checkPairFlags(run)` after recordPairs, for each officer and suspect of the run: the cases of
+  that pair (matched by license, else citizenid) within pairFlag.days reach pairFlag.count AND a second sign exists (a
+  detain within fastCatchSeconds of `case.openedMs`, a suspect never armed who got less than 30 m from where contact
+  was made, `rec.movedAfterContact` kept by an `Opp.onTick` listener while he is free, or a case shorter than 180 s)
+  -> `CP.AntiCheat.flag(run, thatOfficerSrc, 'rs_pair_repeat', detail)` (personal, once per officer and run) and a
+  `pair_repeat` timeline line; returns the flagged officers' citizenids.
+- Retention (critic 2 #23, LOOP_RULES 11): once at start and on every `CP.Schedule.onDaily`, in a thread: `DELETE`
+  the `live`, `volunteer` and `duty_off` rows older than pairLedgerDays (one statement per kind) and the admin rows
+  whose until_at has passed; never in a tick.
 
 ### 5.46 CP.LiveCrime — modules/livecrime and modules/integrations/crimson_contracts (S; stub)
 

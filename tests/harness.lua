@@ -2929,6 +2929,33 @@ function H.boot(opts)
                 return nil
             end
         or nil
+    -- GET_NUM_PLAYER_IDENTIFIERS / GET_PLAYER_IDENTIFIER(src, index 0..n-1) and GET_NUM_PLAYER_TOKENS /
+    -- GET_PLAYER_TOKEN (server natives, PlayerScriptFunctions.cpp): H.players[src].identifiers and .tokens in order;
+    -- an index out of range answers nil, an unknown player 0 and nil.
+    _G.GetNumPlayerIdentifiers = server
+            and function(src)
+                local p = H.players[tonumber(src)]
+                return p and #(p.identifiers or {}) or 0
+            end
+        or nil
+    _G.GetPlayerIdentifier = server
+            and function(src, i)
+                local p = H.players[tonumber(src)]
+                return p and (p.identifiers or {})[(tonumber(i) or -1) + 1] or nil
+            end
+        or nil
+    _G.GetNumPlayerTokens = server
+            and function(src)
+                local p = H.players[tonumber(src)]
+                return p and #(p.tokens or {}) or 0
+            end
+        or nil
+    _G.GetPlayerToken = server
+            and function(src, i)
+                local p = H.players[tonumber(src)]
+                return p and (p.tokens or {})[(tonumber(i) or -1) + 1] or nil
+            end
+        or nil
     _G.Player = function(src)
         local p = H.players[tonumber(src)] or {}
         H.players[tonumber(src)] = p

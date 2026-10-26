@@ -2469,7 +2469,27 @@ CREATE TABLE IF NOT EXISTS cp_storage_meta (
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-sql/migrations/001_initial.sql creates the first fourteen tables, and 002–008 add the columns and the twelve tables above (see Database upgrades). 008 (full admin control) adds a void's kind and batch and the cash taken back to both run tables, the license, board exclusion, retirement and the anti-farm override markers to cp_officers, the acting player's license to cp_audit, and the tables of badge overrides, department funding, the settings history, bulk jobs, request ids, staff notices and the storage marker. cp_settings holds only the settings an admin changed in game; a setting with no row uses config.lua. Every stat column of 003 is written on every run row, and only rows with state = 'completed' are ever summed (service record, boards, goals, bounties, badges). cp_mission_calls keeps the call history for Config.Retention.missionCallDays; cp_item_rewards stays empty while Config.Rewards.enabled is false. Every table and column works the same with the database off (the saves folder). A mission type with no row in cp_type_payouts uses the payout from Config.MissionTypes, and the Weekly Boss uses Config.Events.weeklyBoss.payout until an admin sets a mission payout. Published custom missions are loaded from their Lua files; the database keeps drafts, metadata and edit locks. callsign and rank_label in cp_officers are copies refreshed from Qbox whenever the officer loads in or opens the tablet, so boards can show officers who are offline; Crimson-Police never writes them back. Voided runs stay for audit but are left out of every board. At each daily reset the server moves runs older than Config.Retention.runArchiveMonths (12) into cp_mission_runs_archive and deletes audit rows older than Config.Retention.auditDays (180); 0 turns either off. XP and badges live in cp_officers and cp_badges, so archiving never changes them or the all-time board.
+-- sql/migrations/009_real_suspects.sql · police vs real criminal players: the pair ledger (anti-farm, step V7).
+-- One row per officer and suspect of a closed case (live crimes and volunteer suspects share it), an admin's pair
+-- block, exclusion or suspension, and every time a character left police duty (job hops survive a restart). An
+-- exclude row keeps '' in officer_citizenid; suspend and duty_off rows keep '' in suspect_citizenid.
+CREATE TABLE IF NOT EXISTS cp_pvp_pairs (
+  id                INT AUTO_INCREMENT PRIMARY KEY,
+  kind              VARCHAR(12) NOT NULL,           -- live, volunteer, block, exclude, suspend or duty_off
+  run_uuid          VARCHAR(36) NULL,
+  officer_citizenid VARCHAR(50) NOT NULL,
+  officer_license   VARCHAR(64) NULL,
+  suspect_citizenid VARCHAR(50) NOT NULL,
+  suspect_license   VARCHAR(64) NULL,
+  outcome           VARCHAR(16) NULL,               -- detained, booked, got_away, left, void, gone ...
+  scored            TINYINT(1) NOT NULL DEFAULT 0,  -- 1 = that suspect's detain or booking scored for that officer
+  until_at          DATETIME NULL,                  -- block, exclude and suspend rows: when they run out
+  created_at        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_officer (officer_citizenid, created_at),
+  INDEX idx_suspect (suspect_citizenid, created_at)
+);
+
+sql/migrations/001_initial.sql creates the first fourteen tables, and 002–009 add the columns and the thirteen tables above (see Database upgrades). 008 (full admin control) adds a void's kind and batch and the cash taken back to both run tables, the license, board exclusion, retirement and the anti-farm override markers to cp_officers, the acting player's license to cp_audit, and the tables of badge overrides, department funding, the settings history, bulk jobs, request ids, staff notices and the storage marker. 009 (police vs real criminal players) adds the pair ledger cp_pvp_pairs: it stays empty until a live crime or volunteer case closes, an admin blocks, excludes or suspends someone there, or an officer leaves duty while one of the two features is on, and its case and duty rows are kept for Config.RealSuspects.pairLedgerDays. cp_settings holds only the settings an admin changed in game; a setting with no row uses config.lua. Every stat column of 003 is written on every run row, and only rows with state = 'completed' are ever summed (service record, boards, goals, bounties, badges). cp_mission_calls keeps the call history for Config.Retention.missionCallDays; cp_item_rewards stays empty while Config.Rewards.enabled is false. Every table and column works the same with the database off (the saves folder). A mission type with no row in cp_type_payouts uses the payout from Config.MissionTypes, and the Weekly Boss uses Config.Events.weeklyBoss.payout until an admin sets a mission payout. Published custom missions are loaded from their Lua files; the database keeps drafts, metadata and edit locks. callsign and rank_label in cp_officers are copies refreshed from Qbox whenever the officer loads in or opens the tablet, so boards can show officers who are offline; Crimson-Police never writes them back. Voided runs stay for audit but are left out of every board. At each daily reset the server moves runs older than Config.Retention.runArchiveMonths (12) into cp_mission_runs_archive and deletes audit rows older than Config.Retention.auditDays (180); 0 turns either off. XP and badges live in cp_officers and cp_badges, so archiving never changes them or the all-time board.
 
 Database upgrades
 

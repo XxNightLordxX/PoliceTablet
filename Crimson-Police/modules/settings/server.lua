@@ -128,6 +128,8 @@ local OPEN = {
 }
 
 local WEEKDAYS = { 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday' }
+-- FXServer's identifier kinds (the text before ':') and 'token' (GetPlayerToken): Config.RealSuspects.identityMatch
+local IDENTITY_KINDS = { 'license', 'license2', 'discord', 'fivem', 'steam', 'xbl', 'live', 'ip', 'token' }
 local METRICS = { 'points', 'missions', 'arrests', 'impounds', 'citations', 'rescues', 'calls', 'judgement' }
 local APPEARANCES = { 'department', 'midnight', 'high_contrast', 'colourblind' }
 local END_REASONS = {
@@ -237,6 +239,13 @@ local RANGES = {
     ['RealSuspects.armedMemory'] = { 0, 600 },
     ['RealSuspects.downGrace'] = { 0, 60 },
     ['RealSuspects.damageLogMax'] = { 10, 5000 },
+    ['RealSuspects.pairCooldownHours'] = { 0, 720 },
+    ['RealSuspects.maxCatchesPerSuspectDay'] = { 1, 100 },
+    ['RealSuspects.suspectCooldownMinutes'] = { 0, 1440 },
+    ['RealSuspects.pairFlag.count'] = { 1, 100 },
+    ['RealSuspects.pairFlag.days'] = { 1, 90 },
+    ['RealSuspects.fastCatchSeconds'] = { 0, 600 },
+    ['RealSuspects.pairLedgerDays'] = { 1, 365 },
     -- the objective blip and its GPS line (Config.Markers); ids from the docs.fivem.net blip list (build 3258)
     ['Markers.trackEvery'] = { 1, 10 },
     ['Markers.routeOffWithin'] = { 0, 200 },
@@ -928,6 +937,16 @@ local KNOWN = {
     ['Spawning.hostagesAt'] = { tpl = Enum({ 'objective', 'runStart' }), kind = 'enum' },
     ['NpcCombat.weapons'] = { tpl = ListOf(WEAPON_NAME, { min = 1, unique = true }), kind = 'list', item = 'string' },
     ['RealSuspects.lessLethal'] = { tpl = ListOf(WEAPON_NAME, { unique = true }), kind = 'list', item = 'string' },
+    ['RealSuspects.identityMatch.block'] = {
+        tpl = ListOf(Enum(IDENTITY_KINDS), { unique = true }),
+        kind = 'list',
+        options = IDENTITY_KINDS,
+    },
+    ['RealSuspects.identityMatch.flag'] = {
+        tpl = ListOf(Enum(IDENTITY_KINDS), { unique = true }),
+        kind = 'list',
+        options = IDENTITY_KINDS,
+    },
     ['NpcCombat.replace'] = { tpl = MapOf(WEAPON_NAME, '^[Ww][Ee][Aa][Pp][Oo][Nn]_[%w_]+$') },
     ['NpcCombat.fallback'] = { tpl = WEAPON_NAME },
     ['Challenge.scoring'] = { tpl = Enum({ 'average', 'total', 'top10' }), kind = 'enum' },

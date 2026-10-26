@@ -206,6 +206,17 @@ do
         armedMemory = 'seconds a suspect counts as armed after the server saw a gun in his hands',
         downGrace = 'seconds after he goes down before a hit counts as hitting a downed person',
         damageLogMax = 'weapon hits between officers and suspects kept per case',
+        -- V7: anti-farm
+        ['identityMatch.block'] = 'same account = refused',
+        ['identityMatch.flag'] = 'same connection or PC = allowed but flagged (families share them)',
+        pairCooldownHours = 'One scored case of the same suspect per officer in this many hours (live crimes and '
+            .. 'volunteers together)',
+        maxCatchesPerSuspectDay = 'a suspect is worth points this many times a day, server-wide',
+        suspectCooldownMinutes = 'After a case, the same officers score nothing on that suspect for this many minutes',
+        ['pairFlag.count'] = 'cases of the same pair (matched by license)',
+        ['pairFlag.days'] = 'within this many days',
+        fastCatchSeconds = 'a detain this soon after the case started is a warning sign',
+        pairLedgerDays = 'days the pair ledger keeps case rows (admin blocks stay until they expire)',
     }) do
         H.eq((S.entry('RealSuspects.' .. path) or {}).desc, desc, 'RealSuspects.' .. path .. ': its own comment')
     end
@@ -216,6 +227,48 @@ do
         end
     end
     H.eq(trailGroup and trailGroup.desc, 'position trail kept for review', 'the trail group: its own comment')
+    -- V7: the anti-farm groups and values
+    local groups = {}
+    for _, sec in ipairs(sc.sections) do
+        for _, g in ipairs(sec.key == 'real_suspects' and sec.groups or {}) do groups[g.path] = g end
+    end
+    H.eq(
+        (groups['RealSuspects.identityMatch'] or {}).desc,
+        'Anti-farm (admins only): nobody can take a case against one of his own characters or licenses, and the '
+            .. 'identifiers of both players are compared live, never stored or shown',
+        'the identityMatch group: its own comment'
+    )
+    H.ok(Has((groups['RealSuspects.pairFlag'] or {}).desc, 'with a second warning sign'),
+        'the pairFlag group names the second warning sign')
+    for path, value in pairs({
+        pairCooldownHours = 24,
+        maxCatchesPerSuspectDay = 2,
+        suspectCooldownMinutes = 30,
+        ['pairFlag.count'] = 2,
+        ['pairFlag.days'] = 7,
+        fastCatchSeconds = 60,
+        pairLedgerDays = 30,
+    }) do
+        H.eq((S.entry('RealSuspects.' .. path) or {}).default, value, 'RealSuspects.' .. path .. ' ships ' .. value)
+    end
+    local block = S.entry('RealSuspects.identityMatch.block') or {}
+    H.eq(block.kind, 'list', 'identityMatch.block is a list')
+    H.eq(table.concat(block.default or {}, ','), 'license,license2,discord,fivem,steam,xbl,live',
+        'identityMatch.block ships the account kinds')
+    H.eq(table.concat((S.entry('RealSuspects.identityMatch.flag') or {}).default or {}, ','), 'ip,token',
+        'identityMatch.flag ships ip and token')
+    H.ok((S.check('RealSuspects.identityMatch.block', { 'license', 'ip' })), 'any identifier kind may block')
+    H.ok((S.check('RealSuspects.identityMatch.flag', {})), 'an empty flag list is allowed (nothing flags)')
+    H.eq((S.check('RealSuspects.identityMatch.block', { 'email' })), false, 'an unknown kind is refused')
+    H.eq((S.check('RealSuspects.identityMatch.flag', { 'ip', 'ip' })), false, 'a kind twice is refused')
+    H.eq((S.check('RealSuspects.pairFlag.days', 0)), false, 'pairFlag.days 0 is refused')
+    H.eq((S.check('RealSuspects.pairLedgerDays', 400)), false, 'pairLedgerDays above a year is refused')
+    H.eq((S.check('RealSuspects.maxCatchesPerSuspectDay', 0)), false, 'maxCatchesPerSuspectDay 0 is refused')
+    H.ok((S.check('RealSuspects.pairCooldownHours', 0)), 'pairCooldownHours 0 (no pair cooldown) is allowed')
+    for _, path in ipairs({ 'pairCooldownHours', 'pairFlag.days', 'pairLedgerDays', 'identityMatch.block' }) do
+        local e = S.entry('RealSuspects.' .. path) or {}
+        H.ok(not e.restart and not e.money, 'RealSuspects.' .. path .. ' needs no restart and is not a money switch')
+    end
     H.eq(Config.RealSuspects.trail.every, 5, 'a trail point every 5 s')
     H.eq(Config.RealSuspects.trail.max, 360, 'at most 360 points')
     local okZero = S.check('RealSuspects.trail.every', 0)

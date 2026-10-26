@@ -2596,6 +2596,15 @@ ran-over penalties, and the cash-seizure audit. Every flag here is an officer-co
 drove or seized (critic 2 #12): only his points are held, never his partner's.
 ```
 
+## Crimson-Police/modules/opponents/pairs/server.lua
+
+```text
+CP.Opponents identity and pairs (server, step V7; critic C27, critic 2 #21-#23, #30): the self rule (nobody takes a
+case against one of his own characters or accounts), the duty maps (job hops), and the pair ledger cp_pvp_pairs
+with its caps and the pair-repeat flag. Every cap is a memory lookup: the ledger is read at start and kept in
+memory, and writes go to the database in a thread. Identifiers are compared live and never stored, logged or sent.
+```
+
 ## Crimson-Police/modules/opponents/proof/server.lua
 
 ```text
@@ -5086,6 +5095,15 @@ suspects, excessive force on a suspect in CP's proven custody who is still restr
 a flag on the officer who fired, never an automatic fail; a suspect free of his cuffs again holds nobody), the
 unarmed-shot and ran-over penalties, and the cash-seizure audit (only an on-duty 'leo' is a seizure). Every flag here
 holds only the officer who fired, drove or seized.
+```
+
+## tests/opponents_pairs_spec.lua
+
+```text
+CP.Opponents identity and pairs (step V7): the self rule (characters, licenses, linked accounts), the duty maps,
+the pair ledger cp_pvp_pairs (caps, restart, retention) and the pair-repeat flag, against the real qbx, access,
+schedule, anticheat and opponents modules (qbx_core's exports and events mocked, Qbox's players and users tables as
+qbx_core 1.24.0 stores them).
 ```
 
 ## tests/opponents_proof_spec.lua
