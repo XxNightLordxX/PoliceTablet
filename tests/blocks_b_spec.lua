@@ -2394,6 +2394,48 @@ do -- flee_arrest scatter: nothing before the inmates are out, then every inmate
     H.eq(#U.filter(mk.targets, function(t) return t.look == 'fleeing' end), 5, 'fa scatter marker: all running')
 end
 
+-- (PLAN M5): THE FIGHT ON THE MAP.
+-- hostile_waves: the fight is a red circle with a skull at its centre (kinds.fightArea, drawn by CP.Markers) named
+-- Hostiles: the middle of the spawn points, 15 m past the farthest of them or of the boss's spot.
+
+do -- hostile_waves: an area round the fight's spawn points
+    local loc = HwLocation(8, 7000.0, 7000.0) -- 8 points on a 60 m ring round (7000, 7000), the boss's spot 70 m out
+    local ctx = MakeCtx('hostile_waves', { waves = { 2 } }, loc)
+    HW.prepare(ctx)
+    local mk = HW.marker(ctx)
+    H.ok(mk and mk.kind == 'area' and mk.look == 'fightArea',
+        'hw marker: an area in kinds.fightArea (CP.Markers draws it)')
+    H.ok(mk and math.abs(mk.coords.x - 7000.0) < 0.01 and math.abs(mk.coords.y - 7000.0) < 0.01,
+        'hw marker: at the middle of the spawn points')
+    H.near(mk and mk.radius or 0, 75.0, 0.01, 'hw marker: 15 m past the farthest spawn point (60 m)')
+    H.eq(mk and LabelKey(mk.label), 'markers.fight', 'hw marker: named Hostiles')
+    H.eq(mk and mk.key, nil, 'hw marker: no key: no block blip takes it over')
+    HW.start(ctx)
+    H.near(HW.marker(ctx).radius, 75.0, 0.01, 'hw marker: the same circle while the fight runs')
+    -- a boss whose spot lies outside the ring: the circle reaches it too
+    local bctx = MakeCtx('hostile_waves', { waves = { 2 }, boss = { model = 'g_m_y_lost_01', spawn = 'bossSpot' } },
+        loc)
+    H.near(HW.marker(bctx).radius, 85.0, 0.01, 'hw marker: 15 m past the boss\'s spot (70 m)')
+    -- spawn sets: only the rolled ones (the points the director uses)
+    local setsLoc = HwLocation(4, 8000.0, 8000.0)
+    setsLoc.north, setsLoc.south = {}, {}
+    for i = 1, 4 do
+        setsLoc.north[i] = vec4(8000.0 + i * 10.0, 8200.0, 30.0, 0.0)
+        setsLoc.south[i] = vec4(8000.0 + i * 10.0, 7800.0, 30.0, 0.0)
+    end
+    local sctx = MakeCtx('hostile_waves', { waves = { 2 }, spawnSets = { keys = { 'north', 'south' }, use = 1 } },
+        setsLoc)
+    HW.prepare(sctx)
+    local set = sctx.state.sets[1]
+    mk = HW.marker(sctx)
+    H.near(mk.coords.y, set == 'north' and 8200.0 or 7800.0, 0.01, 'hw marker: round the rolled set (' .. set .. ')')
+    H.near(mk.radius, 30.0, 0.01, 'hw marker: 15 m past its farthest point (15 m from its middle)')
+    -- no spawn point at all: nil, the objective's anchor
+    local empty = HwLocation(0, 9000.0, 9000.0)
+    H.eq(HW.marker(MakeCtx('hostile_waves', { waves = { 2 } }, empty)), nil,
+        'hw marker: no spawn point: nil (the anchor)')
+end
+
 -- ============================================================================
 --                                      ═
 -- ============================================================================

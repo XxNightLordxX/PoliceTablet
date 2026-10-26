@@ -14,6 +14,7 @@ local DEFAULT_BELOW = 0.25
 local BOSS_WEAPON = 'WEAPON_HEAVYPISTOL'  -- a boss without a weapon of its own (never an automatic one)
 local BOSS_BONUS = { id = 'kingpin_alive', points = 50 }
 local CUSTOM_TIMED_MS = { 1000, 30000 }   -- custom missions: the cuff progress time (ms)
+local AREA_MARGIN = 15.0                  -- metres the fight's map circle reaches past its farthest spawn point
 
 local function Cfg() return Config.Blocks[BLOCK] end
 local function Now() return GetGameTimer() end
@@ -1350,6 +1351,31 @@ local function Stop(ctx)
     st.stopped = true
 end
 
+-- The objective pointer (CP.Runs.marker, docs/ARCHITECTURE.md §5.44; the owner: "ensure all objectives as they come
+-- up mark on the map"): the fight as a circle with its centre (Config.Markers.kinds.fightArea: a red skull, drawn by
+-- CP.Markers), named Hostiles. The centre is the middle of the fight's spawn points (the rolled spawn sets, as the spawn
+-- director uses them), the circle reaches AREA_MARGIN past the farthest of them or of the boss's spot. Each officer's
+-- GPS line goes to the centre until he is inside the circle; the hostiles keep their own red blips. nil (the
+-- objective's anchor) when the fight has no spawn point.
+local function Marker(ctx)
+    local st = StateOf(ctx)
+    local list = SpawnPoints(ctx, st)
+    local centre = AreaCentre(list)
+    if not centre then return nil end
+    local far = 0.0
+    for _, c in ipairs(list) do far = math.max(far, U.dist2d(centre, c.coords)) end
+    if HasBoss(ctx) then
+        for _, p in ipairs(PointList(ctx.location, ctx.obj.boss.spawn)) do far = math.max(far, U.dist2d(centre, p)) end
+    end
+    return {
+        kind = 'area',
+        look = 'fightArea',
+        coords = centre,
+        radius = far + AREA_MARGIN,
+        label = CP.Lt('markers.fight'),
+    }
+end
+
 CP.Blocks.register(BLOCK, {
     defaults = Defaults,
     validate = Validate,
@@ -1367,6 +1393,7 @@ CP.Blocks.register(BLOCK, {
     onTimeout = function() return nil end,
     presence = Presence,
     checklist = Checklist,
+    marker = Marker,
     restart = Restart,
     stop = Stop,
 })

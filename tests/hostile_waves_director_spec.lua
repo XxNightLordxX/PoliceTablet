@@ -577,5 +577,44 @@ do
         'a number is refused in a custom mission too')
 end
 
+-- ============================================================================
+--                THE FIGHT ON THE MAP (PLAN M5, Config.Markers)
+-- ============================================================================
+-- The owner (2026-10-19): "ensure all objectives as they come up mark on the map". The fight's start message carries
+-- its pointer: a red circle with a skull (kinds.fightArea) named Hostiles round the middle of the spawn points, 15 m
+-- past the farthest; it does not change while the fight runs, so it is not sent again.
+
+do
+    local def = Missions.get('gang_shootout')
+    local loc = def.locations[1]
+    local sx, sy, n = 0.0, 0.0, #loc.spawns
+    for _, p in ipairs(loc.spawns) do sx, sy = sx + p.x, sy + p.y end
+    local cx, cy = sx / n, sy / n
+    local far = 0.0
+    for _, p in ipairs(loc.spawns) do far = math.max(far, math.sqrt((p.x - cx) ^ 2 + (p.y - cy) ^ 2)) end
+    Place(1, loc.start.coords.x, loc.start.coords.y, loc.start.coords.z)
+    H.reset()
+    local run = Fight('gang_shootout', 1, { 1 })
+    H.eq(run.state, 'in_progress', 'fight marker: Gang Shootout (' .. loc.label .. ') started')
+    local mk
+    for _, e in ipairs(H.findEvents('crimson-police:client:objective')) do
+        local msg = e.args[3]
+        if e.target == 1 and type(msg) == 'table' and msg.action == 'start' and e.args[2] == 1 then mk = msg.marker end
+    end
+    H.ok(mk and mk.kind == 'area' and mk.look == 'fightArea', 'fight marker: the start message carries the fight area')
+    H.ok(mk and math.abs(mk.coords.x - cx) < 0.01 and math.abs(mk.coords.y - cy) < 0.01,
+        'fight marker: at the middle of the 14 spawn points')
+    H.near(mk and mk.radius or 0, far + 15.0, 0.06,
+        ('fight marker: %.0f m, 15 m past the farthest point'):format(far + 15))
+    H.eq(mk and mk.label, CP.Locale.encode(CP.Lt('markers.fight')),
+        'fight marker: named Hostiles (resolved in each game)')
+    H.eq(CP.L('markers.fight'), 'Hostiles', 'fight marker: "Hostiles"')
+    H.eq(mk and mk.key, nil, 'fight marker: no key: CP.Markers draws it')
+    Secs(10)
+    H.eq(#H.findEvents('crimson-police:client:marker'), 0,
+        'fight marker: unchanged while the waves come: not sent again')
+    EndRun(run)
+end
+
 _G.print = realPrint
 return H

@@ -606,6 +606,16 @@ function M.style(blip, kind, label, opts)
     return true
 end
 
+-- The look of a block's own circle (an AddBlipForRadius blip) of kind: that kind's colour (Config.Markers.kinds) and
+-- Config.Markers.areaAlpha, as CP.Markers draws its own circles.
+function M.styleArea(blip, kind)
+    if not Exists(blip) then return false end
+    local _, colour = Look(kind)
+    SetBlipColour(blip, colour)
+    SetBlipAlpha(blip, AreaAlpha())
+    return true
+end
+
 -- ============================================================================
 --                                RESOURCE STOP
 -- ============================================================================

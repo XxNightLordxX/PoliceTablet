@@ -406,6 +406,77 @@ do
 end
 
 -- ============================================================================
+--               THE SEARCH ON THE MAP (PLAN M5, Config.Markers)
+-- ============================================================================
+-- The owner (2026-10-19): "ensure all objectives as they come up mark on the map". The search's start message carries
+-- the 600 m circle (key center: the client hands its centre blip over); once an officer is in it the pointer is every
+-- clue still to check, sent at the next tick; a checked clue leaves it at once; every clue checked with nobody
+-- running: the shrunk circle again, sent at once.
+
+do
+    local function Last(name)
+        local list = {}
+        for _, e in ipairs(H.findEvents(name)) do if e.target == 1 then list[#list + 1] = e end end
+        return list[#list], #list
+    end
+    H.reset()
+    local run = Hunt({ 1 })
+    local st = St(run)
+    local start
+    for _, e in ipairs(H.findEvents('crimson-police:client:objective')) do
+        local msg = e.args[3]
+        if e.target == 1 and type(msg) == 'table' and msg.action == 'start' then start = msg.marker end
+    end
+    H.ok(
+        start and start.kind == 'area' and start.key == 'center' and start.look == 'searchArea' and start.radius == 600,
+        'search marker: the start message carries the 600 m circle, key center')
+    H.ok(start and start.coords.x == C.x and start.coords.y == C.y, 'search marker: at the search\'s centre')
+    H.eq(start and start.label, CP.Locale.encode(CP.Lt('block.search_area.blip_area', { radius = 600 })),
+        'search marker: "Search area (600 m)"')
+    Secs(run, 1)
+    H.eq(st.entered, true, 'search marker: the officer at the edge is in the circle')
+    local last, n = Last('crimson-police:client:marker')
+    local mk = last and last.args[3]
+    H.ok(n == 1 and mk and mk.kind == 'targets' and #mk.targets == 3, 'search marker: the next tick: the three clues')
+    for i, t in ipairs(mk and mk.targets or {}) do
+        local cl = st.clues[i]
+        H.ok(
+            t.key == 'c' .. i and t.number == i and t.look == 'clue' and math.abs(t.x - cl.coords.x) < 0.01
+                and math.abs(t.y - cl.coords.y) < 0.01,
+            'search marker: clue ' .. i .. ' at its spot, key c' .. i
+        )
+    end
+    for i, cl in ipairs(st.clues) do
+        local p = Around(cl.coords, 100.0, Others(run, cl), 101.0)
+        H.ok(p ~= nil, 'search marker: a spot 100 m from clue ' .. i .. ', farther from the rest')
+        Place(1, p or cl.coords)
+        Secs(run, 1)
+        H.ok(cl.netId ~= nil, 'search marker: clue ' .. i .. ' is there')
+        W.place(1, cl.coords.x + 1.0, cl.coords.y, cl.coords.z)
+        H.fire('crimson-police:server:objective', 1, run.id, 1, { type = 'clue_start', clue = i })
+        W.tick(5)
+        H.fire('crimson-police:server:objective', 1, run.id, 1, { type = 'clue', clue = i })
+        H.reset()
+        Secs(run, 1)
+        H.eq(cl.status, 'done', 'search marker: clue ' .. i .. ' checked')
+        last = Last('crimson-police:client:marker')
+        mk = last and last.args[3]
+        if i < 3 then
+            H.ok(mk and mk.kind == 'targets' and #mk.targets == 3 - i,
+                'search marker: the checked clue left, sent at once')
+        end
+    end
+    local running = 0
+    for _, f in pairs(st.fugitives) do if f.state ~= 'idle' then running = running + 1 end end
+    H.eq(running, 0, 'search marker: nobody runs (the fugitive still hides)')
+    H.ok(mk and mk.kind == 'area' and mk.radius == st.circle.radius and mk.radius == 50,
+        'search marker: every clue checked: the shrunk 50 m circle, sent at once')
+    H.ok(mk and math.abs(mk.coords.x - st.circle.center.x) < 0.01 and math.abs(mk.coords.y - st.circle.center.y) < 0.01,
+        'search marker: at its new centre')
+    EndRun(run)
+end
+
+-- ============================================================================
 --                   ENABLED = FALSE: AS BEFORE, AT THE START
 -- ============================================================================
 

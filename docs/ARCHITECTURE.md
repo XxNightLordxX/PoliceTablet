@@ -2584,9 +2584,13 @@ msg.marker, ctx)` after the block's own `start` (ctx = the block's client ctx, f
   kinds.fleeing while he runs, else kinds.suspect, a surrendered one at 0.6, restyled in place when his state changes,
   key = his net id), protect_rescue (each hostage's in kinds.hostage, key = his net id; the safe point's in
   kinds.safePoint, key `'safe'`) and field_contact (each contact's, key = its net id: a car in kinds.contactVehicle, a
-  person in kinds.contact, kinds.fleeing while he runs, kinds.suspect once he draws or gave up, restyled in place). An
-  adopted blip that no longer exists falls back the same way at the next check. `clear` hands every adopted blip back with its line
-  off. CP.Markers draws its own icon only for what no block draws: a fight area, a fallback anchor, a target not
+  person in kinds.contact, kinds.fleeing while he runs, kinds.suspect once he draws or gave up, restyled in place) and
+  search_area (PLAN M5: the circle's centre in kinds.searchArea, key `'center'`, its circle in `styleArea`, a shrunk
+  circle's new centre handed over before the old one goes; each clue's numbered blip in kinds.clue, key `'c<n>'`; each
+  fugitive's in kinds.fleeing while he runs, kinds.suspect at 0.6 once he gave up, restyled in place, key = his net
+  id). An adopted blip that no longer exists falls back the same way at the next check. `clear` hands every adopted
+  blip back with its line off. CP.Markers draws its own icon only for what no block draws: a fight area (hostile_waves,
+  PLAN M5: kinds.fightArea, a red skull and circle named `markers.fight` "Hostiles"), a fallback anchor, a target not
   streamed here, and service vehicles.
 - Own icons: a point or an area's centre `AddBlipForCoord` (an area adds `AddBlipForRadius`, colour of its kind,
   alpha `areaAlpha`); a target `AddBlipForEntity` while `NetworkDoesNetworkIdExist(netId)` and the entity exists here,
@@ -2597,6 +2601,8 @@ msg.marker, ctx)` after the block's own `start` (ctx = the block's client ctx, f
   `SetBlipSprite/Colour/Scale`, `SetBlipAsShortRange(shortRange)`, `SetBlipCategory(category)`, `ShowNumberOnBlip`
   for `opts.number`, the name (`BeginTextCommandSetBlipName('STRING')`). The pointer also gets `SetBlipPriority(12)` and
   flashes once, `SetBlipFlashes` + `SetBlipFlashTimer(flashSeconds * 1000)` (none at 0).
+- `styleArea(blip, kind)` — a block's own circle (`AddBlipForRadius`) in the colour of `kinds[kind]` at `areaAlpha`, as
+  CP.Markers draws its own circles (search_area, PLAN M5).
 - The line (R2, R6): on ONE blip, the point or centre, or this officer's nearest target (moved only when another is
   25 % closer; a target with `beyond` first while he is farther than that from it), `SetBlipRoute` +
   `SetBlipRouteColour(routeColour)`; off within `routeOffWithin` of a point or target

@@ -775,6 +775,8 @@ Locations for every new mission come from GTA V vehicle nodes and known base-gam
 
 - Spawns: 1 fugitive (scales) hidden inside the circle; 3 clue props (a dropped bag, a phone, a witness NPC). Each appears only once an officer is within 150 m of it (Config.Spawning.activateRange): a fugitive on his hiding spot 40 m (minDistance) or more from every officer, a clue 40 m or more away or closer where no officer can see it; the circle shrinks towards a fugitive's hiding spot also before he has appeared (Config.Spawning.enabled = false: all when the search starts, as before)
 
+- Marking (Config.Markers, PLAN M5): until an officer is inside it, the search circle (yellow; its centre a yellow pin "Search area (600 m)") with the GPS line to its centre, redrawn smaller with each clue. Inside, each clue still to check is a numbered yellow dot and the line goes to the nearest; a fugitive who runs is an orange blip (red once he gives up) with the line on him, shown where the server has him once he is too far away for an officer's game (OneSync streams 424 m); with every clue checked and nobody running, the line goes to the shrunk circle again. Under Radio Silence the circle alone shows, without a line
+
 - Objectives: 1) check each clue with ox_target (4 s progress); each clue shrinks the circle 600 → 300 → 150 → 50 m, always still containing a fugitive; 2) when a participant gets within 30 m, that fugitive runs on foot; 3) catch and cuff every fugitive ("Cuff suspect", 5 s progress). Fugitives are unarmed and give up when stunned, when a participant stays within 3 m of them for 3 seconds, or once worn out by running when a participant is within 30 m (Suspect behaviour, Runners tire)
 
 - Scales: fugitives (base 1)
@@ -796,6 +798,8 @@ Locations for every new mission come from GTA V vehicle nodes and known base-gam
 - Start: within 80 m of the hideout
 
 - Spawns: 20 hostiles (scales) in 3 waves of 7 / 7 / 6, each wave scaled the same way; the next wave spawns when 2 or fewer of the current wave are alive, or after 90 seconds. Pistols and combat pistols; base accuracy 25 and armour 0, plus the tier's increase
+
+- Marking (Config.Markers, PLAN M5): during the fight a red circle with a skull at its centre, "Hostiles", round the hostile spawn points (15 m past the farthest), with the GPS line to its centre until you are inside it; each hostile is a red dot
 
 - Objectives: 1) neutralise every hostile (killed, or surrendered and cuffed; a hostile under 25% health has a 30% chance to surrender); 2) ox_target "Secure the scene" at the scene marker (8 s progress); 3) Process the scene (at most 4 bodies kept)
 
@@ -821,7 +825,7 @@ Locations for every new mission come from GTA V vehicle nodes and known base-gam
 
 - Spawns: 4 armed hostiles (scales) inside; 3 hostages kneeling with their hands tied, who appear when objective 2 starts (after the fight), 15 m or more from every officer (Config.Spawning.hostagesAt; 'runStart' = at run start, as before)
 
-- Marking (Config.Markers, PLAN M4): each hostage still tied is a blue person blip with the GPS line to the nearest; once one is freed the green safe point joins them, so the line leads there when it is nearer. Before the hostages appear the objective's pin is at their first spot
+- Marking (Config.Markers, PLAN M4): each hostage still tied is a blue person blip with the GPS line to the nearest; once one is freed the green safe point joins them, so the line leads there when it is nearer. Before the hostages appear the objective's pin is at their first spot. During the fight (objective 1, PLAN M5) a red circle with a skull at its centre, "Hostiles", round the hostile spots inside (15 m past the farthest), with the GPS line to its centre until you are inside it
 
 - Objectives: 1) neutralise every hostile; 2) free each hostage with ox_target "Cut restraints" (6 s progress); 3) each freed hostage walks to the safe marker outside. Completed when every hostage is there
 
@@ -991,6 +995,8 @@ Locations for every new mission come from GTA V vehicle nodes and known base-gam
 
 - Spawns: 9 hostiles (scales) in 2 waves of 5 / 4, holding cover inside (tactics rolled: hold 50%, balanced 40%, push 10%); pistols, combat pistols and pump shotguns; base accuracy 25 and armour 0 plus the tier's increase; a hostile under 25% health has a 30% chance to surrender. 1 unarmed cook (scales, max 3). 2 stashes (scales, max 4) hidden among the stash spots
 
+- Marking (Config.Markers, PLAN M5): during the fight (objective 2) a red circle with a skull at its centre, "Hostiles", round the hostile spawn points of both spawn sets (15 m past the farthest), with the GPS line to its centre until you are inside it; each hostile is a red dot
+
 - Marking (Config.Markers, PLAN M4): during the cook chase each cook not yet cuffed is an orange blip while he runs and red once he fights or gives up, with the GPS line to the nearest, shown where the server has him once he is too far away for an officer's game
 
 - Objectives: 1) breach: ox_target "Stack up and breach" (3 s progress) on both entry points, by 2 different officers within 6 seconds of each other (the count is min(2, participants still in the run): when only one is left, one officer breaches both entries with an 8 s progress each, so the run never soft-locks); 2) neutralise every hostile (killed, or surrendered and cuffed); 3) when the last hostile falls the cooks bolt along an escape route: catch and cuff them (unarmed; they give up when aimed at within 10 m, when stunned, when a participant stays within 3 m for 3 seconds, or once worn out by running when a participant is within 30 m); 4) search the stash spots ("Search", 4 s progress) until every stash is found, then "Seize the product" (6 s progress); 5) "Shut down the lab" at the lab point: 3 ox_lib skill checks (medium, medium, hard); 2 misses in a row start a toxic fire (an effect only, it hurts nobody), a setback and never a fail: any participant must "Ventilate" (10 s progress) at the lab point, the officer who missed loses 15 points (lab_fire, personal), and the shutdown can be tried again 30 seconds later by anyone; 6) Process the scene
@@ -1017,6 +1023,8 @@ Locations for every new mission come from GTA V vehicle nodes and known base-gam
 
 - Spawns: 16 hostiles (scales) in 3 waves of 6 / 5 / 5 from 2 of the 3 spawn sets, rolled per run (the Active Mission screen shows the intel line, e.g. "Intel: expect contact in the garage and the house"); tactics rolled (hold 30%, balanced 50%, push 20%); pistols, combat pistols and pump shotguns; base accuracy 28 and armour 10 plus the tier's increase; 30% surrender under 25% health. After the last wave, the lieutenant: health 300, armour 50, a heavy pistol, 50% surrender under 25% health; does not scale. 2 unarmed runners (scales, max 4). 1 weapons cache (scales, max 2) hidden among the cache spots
 
+- Marking (Config.Markers, PLAN M5): during the fight (objective 2) a red circle with a skull at its centre, "Hostiles", round the hostile spawn points of the two rolled spawn sets (15 m past the farthest of them and the lieutenant's spot), with the GPS line to its centre until you are inside it; each hostile is a red dot
+
 - Marking (Config.Markers, PLAN M4): during the runners' chase each runner not yet cuffed is an orange blip while he runs and red once he fights or gives up, with the GPS line to the nearest, shown where the server has him once he is too far away for an officer's game
 
 - Objectives: 1) breach together on both entry points (as Drug Lab Raid); 2) neutralise every hostile, then the lieutenant; 3) when the lieutenant falls the runners bolt: catch and cuff them; 4) search the cache spots until every cache is found, then "Seize the weapons" (6 s progress); 5) Process the scene
@@ -1042,6 +1050,8 @@ Locations for every new mission come from GTA V vehicle nodes and known base-gam
 - Start: within 100 m of the compound
 
 - Spawns: 30 hostiles (scales) in 4 waves of 8 / 8 / 7 / 7, each scaled the same way, then the Kingpin after the last wave. Pistols, heavy pistols and shotguns; base accuracy 30 and armour 25, plus the tier's increase. The Kingpin has armour 100, health 400 and a heavy pistol, and does not scale
+
+- Marking (Config.Markers, PLAN M5): during the fight a red circle with a skull at its centre, "Hostiles", round the hostile spawn points (15 m past the farthest of them and the Kingpin's spot), with the GPS line to its centre until you are inside it; each hostile is a red dot
 
 - Objectives: 1) neutralise every hostile; 2) neutralise the Kingpin; 3) ox_target "Secure the scene" (8 s progress)
 

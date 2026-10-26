@@ -1,5 +1,6 @@
 {
   "markers.objective": "Objective",
+  "markers.fight": "Hostiles",
   "markers.last_known": "Last known area",
   "markers.prisoner_van": "Prisoner transport",
   "markers.tow_truck": "Tow truck"

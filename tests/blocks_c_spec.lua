@@ -2260,6 +2260,99 @@ do -- caps and rescale
     H.eq(SA.onTimeout(ctx), nil, 'timeout fails the search')
 end
 
+-- (PLAN M5) the objective pointer: the circle until an officer is in it, then whoever runs or gave up, else every clue
+-- still to check, else the (shrunk) circle again. Radio Silence keeps the circle.
+do
+    local function TokenKey(v) return CP.Locale.isToken(v) and v.key or v end
+    local function Clues(mk)
+        local out = {}
+        for _, t in ipairs(mk.targets or {}) do if t.look == 'clue' then out[#out + 1] = t end end
+        return out
+    end
+    H.clockMs = 9900000
+    At(1, 2000.0, 0.0)
+    local ctx = HuntCtx()
+    SA.start(ctx)
+    local st = ctx.state
+    local mk = SA.marker(ctx)
+    H.ok(mk and mk.kind == 'area' and mk.key == 'center' and mk.look == 'searchArea',
+        'sa marker: nobody in yet: the circle, key center (the centre blip the client hands over), kinds.searchArea')
+    H.ok(mk and mk.radius == 600 and mk.coords.x == 0.0 and mk.coords.y == 0.0, 'sa marker: the 600 m start circle')
+    H.ok(mk and TokenKey(mk.label) == 'block.search_area.blip_area' and mk.label.vars.radius == 600,
+        'sa marker: named like the centre blip, "Search area (600 m)"')
+    -- a witness lost before anyone is in: the circle shrinks, and the pointer with it (a new shape: sent at once)
+    SA.onEntityDead(ctx, SpawnsOf(ctx, 'ped', 'witness')[1].netId, nil)
+    mk = SA.marker(ctx)
+    H.ok(mk.kind == 'area' and mk.radius == 300 and mk.label.vars.radius == 300, 'sa marker: the shrunk 300 m circle')
+    H.ok(mk.coords.x == st.circle.center.x and mk.coords.y == st.circle.center.y, 'sa marker: at its new centre')
+    -- an officer is in: every clue still to check, numbered, keyed like its blip
+    At(1, 500.0, 0.0)
+    TickN(SA, ctx, 1)
+    H.eq(st.entered, true, 'sa marker: an officer entered the search')
+    mk = SA.marker(ctx)
+    local pending = U.filter(st.clues, function(cl) return cl.status == 'pending' end)
+    H.ok(mk.kind == 'targets' and #mk.targets == 2 and #pending == 2, 'sa marker: inside: the two clues left to check')
+    for i, t in ipairs(mk.targets) do
+        local cl = pending[i]
+        H.ok(
+            t.key == 'c' .. cl.i and t.number == cl.i and t.netId == nil and t.look == 'clue' and t.coords == cl.coords,
+            'sa marker: clue ' .. cl.i .. ': key c' .. cl.i .. ', numbered, at its spot, kinds.clue')
+        H.eq(TokenKey(t.label), 'block.search_area.blip_clue', 'sa marker: named Clue')
+    end
+    H.eq(CheckClue(ctx, 1, pending[1].i), true, 'sa marker: one clue checked')
+    mk = SA.marker(ctx)
+    H.ok(#Clues(mk) == 1 and mk.targets[1].key == 'c' .. pending[2].i, 'sa marker: the checked clue leaves the list')
+    -- the fugitive runs: he is the one target, where the server has him
+    local fug = FugitivesOf(ctx)[1]
+    local fpos = E(fug.netId).coords
+    At(1, fpos.x + 25.0, fpos.y, fpos.z)
+    TickN(SA, ctx, 1)
+    H.eq(npc.states[fug.netId], 'fleeing', 'sa marker: the fugitive runs')
+    mk = SA.marker(ctx)
+    local t = mk.targets[1]
+    H.ok(mk.kind == 'targets' and #mk.targets == 1 and t.netId == fug.netId and t.key == fug.netId,
+        'sa marker: the runner alone, keyed by his net id (no clue while he runs)')
+    H.ok(t.look == 'fleeing' and TokenKey(t.label) == 'block.search_area.blip_fugitive',
+        'sa marker: kinds.fleeing, named Fugitive')
+    E(fug.netId).coords = vec3(fpos.x + 380.0, fpos.y, fpos.z)
+    H.eq(SA.marker(ctx).targets[1].coords.x, fpos.x + 380.0, 'sa marker: where the server has him')
+    E(fug.netId).coords = fpos
+    At(1, fpos.x + 2.0, fpos.y, fpos.z)
+    TickN(SA, ctx, 3)
+    H.eq(npc.states[fug.netId], 'surrendered', 'sa marker: he gave up')
+    H.eq(SA.marker(ctx).targets[1].look, 'suspect', 'sa marker: one who gave up in kinds.suspect (red)')
+    -- cuffed: nobody to chase, the clue still to check again
+    npc.states[fug.netId] = 'cuffed'
+    TickN(SA, ctx, 1)
+    mk = SA.marker(ctx)
+    H.ok(mk.kind == 'targets' and #Clues(mk) == 1, 'sa marker: cuffed: the clue left to check again')
+
+    local ctx2 = HuntCtx({ fugitives = 2 })
+    SA.start(ctx2)
+    At(1, 500.0, 0.0)
+    TickN(SA, ctx2, 1)
+    for i = 1, 3 do CheckClue(ctx2, 1, i) end
+    mk = SA.marker(ctx2)
+    H.ok(mk.kind == 'area' and mk.radius == 50 and mk.label.vars.radius == 50,
+        'sa marker: every clue checked, nobody running: the shrunk 50 m circle, where the fugitives hide')
+    H.ok(mk.coords.x == ctx2.state.circle.center.x and mk.coords.y == ctx2.state.circle.center.y,
+        'sa marker: at its centre')
+
+    -- Radio Silence: the circle stays the pointer once an officer is in ('area' shows it without a line, hides people
+    -- and clues); Config.Markers.radioSilence = 'full' shows the clues as without it
+    local ctx3 = HuntCtx()
+    ctx3.radioSilence = true
+    SA.start(ctx3)
+    At(1, 500.0, 0.0)
+    TickN(SA, ctx3, 1)
+    H.eq(ctx3.state.entered, true, 'sa marker rs: an officer entered')
+    H.eq(SA.marker(ctx3).kind, 'area', 'sa marker rs: Radio Silence (\'area\'): still the circle')
+    local mode = Config.Markers.radioSilence
+    Config.Markers.radioSilence = 'full'
+    H.eq(#Clues(SA.marker(ctx3)), 3, 'sa marker rs: \'full\': the clues as without it')
+    Config.Markers.radioSilence = mode
+end
+
 Config.Spawning.enabled = spawningWas
 
 -- ============================================================================
@@ -2669,6 +2762,7 @@ do
         end
     end
     _G.SetBlipSprite, _G.SetBlipColour, _G.SetBlipScale = Prop('sprite'), Prop('colour'), Prop('scale')
+    _G.SetBlipAlpha, _G.ShowNumberOnBlip = Prop('alpha'), Prop('number')
     _G.SetBlipRoute = function(b, on)
         if BL.props[b] then BL.props[b].route = on == true end
     end
@@ -2688,14 +2782,12 @@ do
         if BL.props[b] then BL.props[b].name = pendingName end
     end
     for _, name in ipairs({
-        'SetBlipAlpha',
         'SetBlipAsShortRange',
         'SetBlipCategory',
         'SetBlipPriority',
         'SetBlipFlashes',
         'SetBlipFlashTimer',
         'SetBlipRouteColour',
-        'ShowNumberOnBlip',
     }) do
         _G[name] = function() end
     end
@@ -3735,6 +3827,138 @@ do -- pursuit client: the car's blip is the pointer; far away CP.Markers shows t
     H.step(1000)
     H.eq(LiveBlips() - base, 0, 'pursuit client: nothing left on the map')
     H.eq(BL.removedRouted, removedRouted, 'pursuit client: every line went off before its blip')
+end
+
+-- (PLAN M5) search_area client: the centre blip (key center) is the pointer until the officer is inside the circle, a
+-- shrunk circle's new centre takes the line over; inside, the line goes to the nearest clue's own numbered blip; a
+-- fugitive's own blip is orange while he runs and red once he gave up.
+do
+    H.clockMs = 32500000
+    local M = CP.Markers
+    local me = PlayerPedId()
+    local runId = 'run-cl-m5-sa'
+    ents[me].coords = vec3(0.0, -900.0, 30.0) -- 900 m south of the centre: outside the 600 m circle
+    local cctx = ClientCtx(runId, SA.defaults({ block = 'search_area' }), huntLoc)
+    cctx.isHost = false
+    cctx.radioSilence = false
+    local function Clue(i, x, y)
+        return { i = i, x = x, y = y, z = 30.0, kind = 'prop', model = 'prop_cs_heist_bag_02', status = 'pending' }
+    end
+    local clues = { Clue(1, 200.0, 0.0), Clue(2, -200.0, 50.0) }
+    local function Snap(cx, r, n, entered, fugitives)
+        return {
+            kind = 'state',
+            circle = { x = cx, y = 0.0, z = 30.0, r = r, n = n },
+            clues = clues,
+            fugitives = fugitives or {},
+            checked = 0,
+            clueTotal = 2,
+            arrests = 0,
+            neutralised = 0,
+            total = 1,
+            entered = entered == true,
+        }
+    end
+    local function Area(cx, r)
+        return {
+            kind = 'area',
+            key = 'center',
+            look = 'searchArea',
+            coords = { x = cx, y = 0.0, z = 30.0 },
+            radius = r,
+            label = CP.L('block.search_area.blip_area', { radius = r }),
+        }
+    end
+    local function ClueT(i, x, y)
+        return { key = 'c' .. i, x = x, y = y, z = 30.0, look = 'clue', number = i, label = 'Clue' }
+    end
+    local base, removedRouted = LiveBlips(), BL.removedRouted
+    SC.prepare(cctx)
+    SC.start(cctx)
+    -- the start message's pointer comes first (CP.Markers' own circle for a moment), the block's snapshot right after
+    M.set(runId, 1, Area(0.0, 600), cctx)
+    SC.update(cctx, Snap(0.0, 600, 0))
+    H.step(1000)
+    local cb, cp = BlipOf(function(p) return p.radius == nil and p.sprite == 162 end)
+    local _, rp = BlipOf(function(p) return p.radius ~= nil end)
+    local c1, p1 = BlipOf(function(p) return p.number == 1 end)
+    local _, p2 = BlipOf(function(p) return p.number == 2 end)
+    H.eq(LiveBlips() - base, 4,
+        'search client: the circle, its centre and the two clues: one icon each, none of CP.Markers\'')
+    H.ok(cp and cp.colour == 5 and cp.scale == 0.9 and cp.name == CP.L('block.search_area.blip_area', { radius = 600 }),
+        'search client: the centre in kinds.searchArea (a yellow pin, 0.9), "Search area (600 m)"')
+    H.ok(rp and rp.radius == 600 and rp.colour == 5 and rp.alpha == 80,
+        'search client: the circle yellow at Config.Markers.areaAlpha 80 (was red, 90)')
+    H.ok(
+        p1 and p1.sprite == 1 and p1.colour == 5 and p1.scale == 0.7 and p1.name == CP.L('block.search_area.blip_clue')
+            and p2 and p2.sprite == 1,
+        'search client: each clue a numbered yellow dot in kinds.clue (0.7)'
+    )
+    local r = RoutedBlips()
+    H.ok(#r == 1 and r[1] == cb, 'search client: outside: the line on the centre\'s own blip')
+    ents[me].coords = vec3(0.0, -500.0, 30.0)
+    H.step(1000)
+    H.eq(#RoutedBlips(), 0, 'search client: inside the circle: no line to its centre')
+    ents[me].coords = vec3(0.0, -900.0, 30.0)
+    H.step(1000)
+    H.eq(RoutedBlips()[1], cb, 'search client: out again: the line is back')
+    -- the circle shrinks (a clue lost): the new centre takes the line over, the old one goes with its line off
+    M.update(runId, 1, Area(50.0, 300), cctx)
+    SC.update(cctx, Snap(50.0, 300, 1))
+    H.step(1000)
+    local nb, np = BlipOf(function(p) return p.radius == nil and p.sprite == 162 end)
+    local _, nr = BlipOf(function(p) return p.radius ~= nil end)
+    H.ok(BL.live[cb] == nil and nb ~= cb and np.x == 50.0,
+        'search client: the shrunk circle\'s new centre, the old one gone')
+    H.ok(nr and nr.radius == 300 and nr.colour == 5 and nr.alpha == 80, 'search client: the 300 m circle, same look')
+    H.ok(np.name == CP.L('block.search_area.blip_area', { radius = 300 }), 'search client: "Search area (300 m)"')
+    r = RoutedBlips()
+    H.ok(#r == 1 and r[1] == nb, 'search client: the line on the new centre')
+    H.eq(LiveBlips() - base, 4, 'search client: still one icon each')
+    -- inside: the pointer is the clues; the line goes to this officer's nearest clue's own blip
+    ents[me].coords = vec3(150.0, -100.0, 30.0)
+    M.update(runId, 1, { kind = 'targets', targets = { ClueT(1, 200.0, 0.0), ClueT(2, -200.0, 50.0) } }, cctx)
+    SC.update(cctx, Snap(50.0, 300, 1, true))
+    H.step(1000)
+    r = RoutedBlips()
+    H.ok(#r == 1 and r[1] == c1, 'search client: inside: the line on the nearest clue\'s own numbered blip')
+    H.eq(LiveBlips() - base, 4, 'search client: no second icon for a clue')
+    -- the fugitive runs: his own blip orange, the line on it; he gives up: the same blip red and a size smaller
+    local fug, fugNet = NewEnt('ped', vec3(120.0, -160.0, 30.0))
+    ents[fug].bag = { state = 'fleeing', cfg = {} }
+    M.update(runId, 1, {
+        kind = 'targets',
+        targets = {
+            {
+                key = tostring(fugNet),
+                netId = fugNet,
+                x = 120.0,
+                y = -160.0,
+                z = 30.0,
+                look = 'fleeing',
+                label = 'Fugitive',
+            },
+        },
+    }, cctx)
+    SC.update(cctx, Snap(50.0, 300, 1, true, { { netId = fugNet, state = 'fleeing' } }))
+    H.step(1000)
+    local fb, fp = BlipOf(function(p) return p.ent == fug end)
+    H.ok(
+        fp and fp.sprite == 1 and fp.colour == 17 and fp.scale == 0.8
+            and fp.name == CP.L('block.search_area.blip_fugitive'),
+        'search client: a runner in kinds.fleeing (orange, 0.8; was red)'
+    )
+    r = RoutedBlips()
+    H.ok(#r == 1 and r[1] == fb, 'search client: the line on his own blip')
+    ents[fug].bag.state = 'surrendered'
+    H.step(1000)
+    H.ok(BL.live[fb] and fp.colour == 1 and fp.scale == 0.6, 'search client: he gave up: the same blip, red, 0.6')
+    H.eq(RoutedBlips()[1], fb, 'search client: ...and it keeps the line')
+    M.clear(runId, 1)
+    SC.stop(cctx)
+    H.step(1000)
+    H.eq(LiveBlips() - base, 0, 'search client: nothing left on the map')
+    H.eq(BL.removedRouted, removedRouted, 'search client: every line went off before its blip')
 end
 
 CP.Custody = custodyStub

@@ -1093,6 +1093,68 @@ local function Rescale(ctx)
     Flush(ctx, st)
 end
 
+-- ============================================================================
+--                              OBJECTIVE POINTER
+-- ============================================================================
+-- CP.Runs.marker (docs/ARCHITECTURE.md §5.44; the owner: "ensure all objectives as they come up mark on the map").
+-- Until an officer has entered the search: the current circle (it shrinks with every clue) in
+-- Config.Markers.kinds.searchArea, key 'center' (the client half hands its centre blip over with it), so each officer's
+-- GPS line goes to the middle until he is inside. Then whoever runs or gave up, at the server's position and keyed by
+-- net id (a runner out of an officer's game still shows); else every clue still to check, keyed 'c<n>' and numbered
+-- like its blip, so each officer's line goes to his nearest; with nobody running and no clue left, the circle again
+-- (the fugitives hide inside it). Under Radio Silence the circle stays the pointer (Config.Markers.radioSilence
+-- 'area' shows it without a line and hides people and clues; 'full' shows everything as without it).
+
+local function Runners(st)
+    local out = {}
+    for _, f in pairs(st.fugitives) do
+        if (f.state == 'fleeing' or f.state == 'surrendered') and EntCoords(f.entity) then out[#out + 1] = f end
+    end
+    table.sort(out, function(a, b) return a.netId < b.netId end)
+    return out
+end
+
+local function Marker(ctx)
+    local st = StateOf(ctx)
+    local c = st.circle
+    if not c.center then return nil end
+    local area = {
+        kind = 'area',
+        key = 'center',
+        look = 'searchArea',
+        coords = c.center,
+        radius = c.radius,
+        label = CP.Lt('block.search_area.blip_area', { radius = math.floor(c.radius + 0.5) }),
+    }
+    local mode = type(Config.Markers) == 'table' and Config.Markers.radioSilence or nil
+    if not st.entered or (ctx.radioSilence and mode ~= 'full') then return area end
+    local targets = {}
+    for _, f in ipairs(Runners(st)) do
+        targets[#targets + 1] = {
+            key = f.netId,
+            netId = f.netId,
+            coords = EntCoords(f.entity),
+            look = f.state == 'fleeing' and 'fleeing' or 'suspect',
+            label = CP.Lt('block.search_area.blip_fugitive'),
+        }
+    end
+    if #targets == 0 then
+        for _, cl in ipairs(st.clues) do
+            if cl.status == 'pending' then
+                targets[#targets + 1] = {
+                    key = 'c' .. cl.i,
+                    coords = cl.coords,
+                    look = 'clue',
+                    number = cl.i,
+                    label = CP.Lt('block.search_area.blip_clue'),
+                }
+            end
+        end
+    end
+    if #targets == 0 then return area end
+    return { kind = 'targets', targets = targets }
+end
+
 CP.Blocks.register(BLOCK, {
     defaults = Defaults,
     validate = Validate,
@@ -1114,6 +1176,7 @@ CP.Blocks.register(BLOCK, {
     onTimeout = function() return nil end,
     presence = Presence,
     checklist = Checklist,
+    marker = Marker,
     restart = Restart,
     stop = function(ctx)
         local st = StateOf(ctx)

@@ -11,6 +11,7 @@ local REPORT_MS = 1500
 local CONTROL_MS = 250
 local MARKER_RANGE = 150.0
 local CLUE_RANGE = 2.5
+local GAVE_UP_SCALE = 0.6       -- a fugitive who gave up: kinds.suspect a size smaller
 local SEARCH_ANIM = { dict = 'amb@prop_human_bum_bin@idle_b', clip = 'idle_d' }
 local TALK_ANIM = { dict = 'missfbi3_party_d', clip = 'stand_talk_loop_a_male1' }
 local WITNESS_SCENARIO = 'WORLD_HUMAN_STAND_MOBILE'
@@ -73,59 +74,75 @@ end
 --                                    BLIPS
 -- ============================================================================
 
+-- A blip handed to the objective pointer (CP.Markers) is taken back first, so its GPS line goes off before it goes
+-- (BLIPS_FINAL R10).
+local function Gone(b)
+    if b.key then CP.Markers.release(b.key, b.id) end
+    if DoesBlipExist(b.id) then RemoveBlip(b.id) end
+end
+
 local function DropBlip(S, k)
     local b = S.blips[k]
     if not b then return end
-    if DoesBlipExist(b.id) then RemoveBlip(b.id) end
     S.blips[k] = nil
+    Gone(b)
 end
 
-local function NameBlip(id, label)
-    BeginTextCommandSetBlipName('STRING')
-    AddTextComponentSubstringPlayerName(label)
-    EndTextCommandSetBlipName(id)
-end
-
+-- The circle in Config.Markers.kinds.searchArea (yellow, Config.Markers.areaAlpha) and its centre blip, handed to the
+-- objective pointer under key 'center', the key the server's pointer names the circle by: it IS the pointer (the GPS
+-- line on it until the officer is inside). A shrunk circle's new centre is handed over before the old one goes, so the
+-- line moves straight to it.
 local function DrawCircle(S)
     local c = S.data.circle
-    DropBlip(S, 'circle')
-    DropBlip(S, 'center')
-    S.circleKey = nil
-    if not c or S.ctx.radioSilence then return end
-    local area = AddBlipForRadius(c.x + 0.0, c.y + 0.0, c.z + 0.0, c.r + 0.0)
-    SetBlipColour(area, 1)
-    SetBlipAlpha(area, 90)
-    S.blips.circle = { id = area }
-    local mid = AddBlipForCoord(c.x + 0.0, c.y + 0.0, c.z + 0.0)
-    SetBlipSprite(mid, 1)
-    SetBlipColour(mid, 1)
-    SetBlipScale(mid, 0.6)
-    NameBlip(mid, CP.L('block.search_area.blip_area', { radius = math.floor(c.r + 0.5) }))
-    S.blips.center = { id = mid }
-    S.circleKey = ('%d:%d'):format(c.n or 0, math.floor(c.r))
+    local was = { S.blips.circle, S.blips.center }
+    S.blips.circle, S.blips.center, S.circleKey = nil, nil, nil
+    if c and not S.ctx.radioSilence then
+        local area = AddBlipForRadius(c.x + 0.0, c.y + 0.0, c.z + 0.0, c.r + 0.0)
+        CP.Markers.styleArea(area, 'searchArea')
+        S.blips.circle = { id = area }
+        local mid = AddBlipForCoord(c.x + 0.0, c.y + 0.0, c.z + 0.0)
+        CP.Markers.style(mid, 'searchArea', CP.L('block.search_area.blip_area', { radius = math.floor(c.r + 0.5) }))
+        S.blips.center = { id = mid, key = 'center' }
+        CP.Markers.adopt('center', mid)
+        S.circleKey = ('%d:%d'):format(c.n or 0, math.floor(c.r))
+    end
+    for _, b in pairs(was) do Gone(b) end
 end
 
-local function EnsureCoordBlip(S, k, v, label)
+-- A clue's numbered blip (Config.Markers.kinds.clue), handed to the objective pointer under key 'c<n>' (the server's
+-- pointer names each clue still to check by it, so the officer's line goes to his nearest once inside the circle).
+local function EnsureClueBlip(S, cl)
+    local k = 'c' .. cl.i
     if S.blips[k] then return end
+    local v = ClueVec(cl)
     local id = AddBlipForCoord(v.x, v.y, v.z)
-    SetBlipSprite(id, 1)
-    SetBlipColour(id, 5)
-    SetBlipScale(id, 0.6)
-    SetBlipAsShortRange(id, true)
-    NameBlip(id, label)
-    S.blips[k] = { id = id }
+    CP.Markers.style(id, 'clue', CP.L('block.search_area.blip_clue'), { number = cl.i })
+    S.blips[k] = { id = id, key = k }
+    CP.Markers.adopt(k, id)
 end
 
-local function EnsureEntityBlip(S, k, ent, label)
+-- A fugitive's blip in its Config.Markers.kinds look: kinds.fleeing (orange) while he runs, kinds.suspect a size
+-- smaller (0.6, as flee_arrest) once he gave up, restyled in place when that changes. Handed to the objective pointer
+-- under his net id: it IS the pointer, and CP.Markers shows the same look from the server's position once he is too
+-- far away for this game (BLIPS_FINAL R1, R3, R7).
+local function EnsureFugitiveBlip(S, netId, ent, state)
+    local k = 'f' .. tostring(netId)
+    local look = state == 'fleeing' and 'fleeing' or 'suspect'
     local b = S.blips[k]
-    if b and b.ent == ent and DoesBlipExist(b.id) then return end
+    if b and b.ent == ent and DoesBlipExist(b.id) then
+        if b.look ~= look then
+            CP.Markers.style(b.id, look)
+            if look == 'suspect' then SetBlipScale(b.id, GAVE_UP_SCALE) end
+            b.look = look
+        end
+        return
+    end
     DropBlip(S, k)
     local id = AddBlipForEntity(ent)
-    SetBlipSprite(id, 1)
-    SetBlipColour(id, 1)
-    SetBlipScale(id, 0.7)
-    NameBlip(id, label)
-    S.blips[k] = { id = id, ent = ent }
+    CP.Markers.style(id, look, CP.L('block.search_area.blip_fugitive'))
+    if look == 'suspect' then SetBlipScale(id, GAVE_UP_SCALE) end
+    S.blips[k] = { id = id, ent = ent, look = look, key = netId }
+    CP.Markers.adopt(netId, id)
 end
 
 -- ============================================================================
@@ -188,9 +205,7 @@ local function SyncClues(S)
     for i, cl in pairs(S.clues) do
         if cl.status == 'pending' and S.current then
             EnsureZone(S, cl)
-            if not S.ctx.radioSilence then
-                EnsureCoordBlip(S, 'c' .. i, ClueVec(cl), CP.L('block.search_area.blip_clue'))
-            end
+            if not S.ctx.radioSilence then EnsureClueBlip(S, cl) end
         else
             DropZone(S, i)
             DropBlip(S, 'c' .. i)
@@ -351,7 +366,7 @@ local function Loop(S)
                             end
                         end
                         if not ctx.radioSilence and (state == 'fleeing' or state == 'surrendered') then
-                            EnsureEntityBlip(S, k, ent, CP.L('block.search_area.blip_fugitive'))
+                            EnsureFugitiveBlip(S, f.netId, ent, state)
                         else
                             DropBlip(S, k)
                         end
