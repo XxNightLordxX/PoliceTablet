@@ -372,6 +372,38 @@ do
 end
 
 do
+    -- he would argue, but an officer meets him on his walk and explains the citation: at the car he takes the ticket
+    Reset()
+    asks, huds = {}, {}
+    Place(1, 1000.0, 950.0)
+    local run = W.start({ 1 }, Parked(1, { returning = { chance = 1, max = 1 } }, 1))
+    Secs(1)
+    local car, carAt = CarAt(run, 1060.0)
+    Answer = function() return { { x = 1090.0, y = 1000.0, z = 31.0, hidden = true } }, 200 end
+    W.near(1, run, car.netId, 1.5)
+    W.decide(1, run, car.netId, 'cite')
+    Secs(1)
+    local drv = Person(run, 'returning_driver')
+    H.ok(drv ~= nil, 'calmed: the driver appears')
+    local rd = drv and St(run).contacts[drv.netId].returning
+    if rd then rd.outcome = 'argues' end
+    if drv then drv.arguing = true end
+    Placed(1, run, drv.netId)
+    Secs(1)
+    H.eq(#Acts('walk_to', drv.netId), 1, 'calmed: he walks up to the car')
+    W.near(1, run, drv.netId, 1.5)
+    W.act(1, run, drv.netId, 'explain')
+    H.eq(drv.arguing, false, 'calmed: Explain the citation on his walk')
+    SetEntityCoords(run.entities[drv.netId].entity, carAt.x + 2.0, carAt.y, carAt.z)
+    Secs(1)
+    H.eq(HudsWith('returning_argues'), 0, 'calmed: at the car he is not announced as arguing')
+    H.eq(HudsWith('returning_takes'), 1, 'calmed: he says he takes the ticket')
+    Secs(3)
+    H.eq(rd and rd.done, true, 'calmed: and takes it')
+    EndRun(run)
+end
+
+do
     -- his game gives no answer in time (losTimeoutMs 1500): round the car, 25-40 m from it, never near an officer
     Reset()
     warns, lines, asks = {}, {}, {}
@@ -462,6 +494,38 @@ do
     SetEntityCoords(run.entities[th.netId].entity, carAt.x, carAt.y + 12.0, carAt.z)
     Secs(1)
     H.eq(#Acts('flee_on_approach', th.netId), 1, 'within 15 m of the officer he runs')
+    EndRun(run)
+end
+
+do
+    -- the thief is out while two parked cars still wait for an officer: the HUD and the checklist count them all
+    Reset()
+    asks = {}
+    Place(1, 1060.0, 930.0)
+    local run = W.start({ 1 }, Parked(4, {
+        profileSet = 'test_stolen',
+        thief = { chance = 1 },
+        escapeFails = false,
+        custody = 'cuff',
+    }, 4))
+    Secs(1)
+    H.eq(#W.cars(run, 1), 2, 'count: the two cars near the officer are there, the far two not yet')
+    local car = CarAt(run, 1060.0)
+    Answer = function() return { { x = 1060.0, y = 1035.0, z = 31.0, hidden = true } }, 200 end
+    W.near(1, run, car.netId, 1.5)
+    W.act(1, run, car.netId, 'inspect')
+    Secs(1)
+    H.ok(Person(run, 'thief') ~= nil, 'count: the thief is out')
+    H.eq(#W.cars(run, 1), 2, 'count: still two cars')
+    local function Max() return run.objectives[1].hud and run.objectives[1].hud.max end
+    H.eq(impl.checklist(CP.Runs.ctx(run, 1))[1].max, 5, 'count: the checklist counts 4 cars and the thief')
+    H.eq(Max(), 5, 'count: the HUD counts 4 cars and the thief')
+    -- the officer drives on: the last two cars appear, and the count does not jump
+    Place(1, 1400.0, 900.0)
+    Secs(1)
+    H.eq(#W.cars(run, 1), 4, 'count: the last two cars appear')
+    H.eq(Max(), 5, 'count: the HUD still counts 5')
+    H.eq(impl.checklist(CP.Runs.ctx(run, 1))[1].max, 5, 'count: the checklist still counts 5')
     EndRun(run)
 end
 

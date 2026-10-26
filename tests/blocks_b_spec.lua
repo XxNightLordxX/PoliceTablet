@@ -559,6 +559,35 @@ do -- killing a surrendered hostile (after the grace) fails; inside the grace it
     H.eq(S.completes, 0, 'failed objective never completes')
 end
 
+do -- the next wave never appears inside a cuffed suspect still on his point (a body does not keep its point)
+    local loc = HwLocation(2)
+    Place(1, 1000, 1000, 30)
+    local ctx, S = MakeCtx('hostile_waves', { waves = { 2, 2 }, nextWave = { aliveAtMost = 0 } }, loc)
+    HW.start(ctx)
+    H.eq(#S.spawned, 2, 'occupied: wave 1 on both points')
+    local cuffed, dead = S.spawned[1].netId, S.spawned[2].netId
+    local cuffAt, bodyAt = PosOf(S, cuffed), PosOf(S, dead)
+    NPC.rollResult = true
+    SetHealth(S, cuffed, 110)
+    HW.onEvent(ctx, 1, { type = 'low_health', netId = cuffed })
+    NPC.states[cuffed] = 'cuffed'
+    HW.onEntityDead(ctx, dead, 1)
+    -- the officer walks off into another room: nobody of wave 1 is left standing
+    Place(1, 1100, 1100, 30)
+    HW.tick(ctx, 1)
+    local wave2 = { table.unpack(S.spawned, 3) }
+    H.eq(#wave2, 1, 'occupied: wave 2 gets only the point the cuffed suspect does not stand on')
+    for _, s in ipairs(wave2) do
+        H.ok(U.dist(s.opts.coords, cuffAt) > 3.0, 'occupied: nobody appears within 3 m of the cuffed suspect')
+    end
+    H.ok(wave2[1] and U.dist(wave2[1].opts.coords, bodyAt) < 0.01, 'occupied: the body does not keep its point')
+    -- he is taken away from the point: it is free again
+    MoveEnt(S, cuffed, 1200, 1200, 30)
+    HW.tick(ctx, 1)
+    H.eq(#S.spawned, 4, 'occupied: the rest of wave 2 once the cuffed suspect has left his point')
+    H.ok(S.spawned[4] and U.dist(S.spawned[4].opts.coords, cuffAt) < 0.01, 'occupied: on the point he stood on')
+end
+
 do -- server-dispatched 'damaged' events trigger the same health check (one roll per hostile)
     Place(1, 1000, 1000, 30)
     local ctx, S = MakeCtx('hostile_waves', { waves = { 3 } }, HwLocation(12))
@@ -825,8 +854,8 @@ do -- spawn in prepare (waiting for room), damage while not current, free, walk 
     H.eq(#S.penalties, 2, 'a later hit counts again')
     NPC.damaged[1](ctx.run, h1, 55)
     H.eq(#S.penalties, 2, 'non-participant hit costs nothing')
-    -- 'shot' / 'damaged' can also arrive as client evidence (same shape through server:objective):
-    -- while CP.Npc.onDamaged is listened to they are acknowledged and change nothing
+    -- server:objective refuses a client's 'shot' / 'damaged' (K1); as defence in depth, while CP.Npc.onDamaged is
+    -- listened to these events are acknowledged and change nothing
     AdvanceMs(1500)
     H.eq(PR.onEvent(ctx, 1, { type = 'damaged', netId = h1, attacker = 1 }), true, 'damaged event acknowledged')
     H.eq(PR.onEvent(ctx, 1, { type = 'shot', netId = h1, src = 1 }), true, 'shot event acknowledged')

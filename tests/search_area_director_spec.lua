@@ -113,12 +113,14 @@ local function Secs(run, n)
     end
 end
 
--- The officers wait at the west edge of the 600 m circle when the search starts.
-local function Hunt(srcs, location, tier)
+-- The officers wait at the west edge of the 600 m circle when the search starts. after = an objective that follows
+-- the search (Manhunt has none).
+local function Hunt(srcs, location, tier, after)
     for _, src in ipairs(srcs) do W.place(src, C.x - 590.0, C.y, C.z) end
     local m = {}
     for k, v in pairs(def) do m[k] = v end
     m.locations = { location or loc }
+    if after then m.objectives = { def.objectives[1], after } end
     local run = W.start(srcs, m, { test = { adminSrc = srcs[1], forcedTier = tier or 'standard' } })
     Record(run)
     return run
@@ -294,6 +296,28 @@ do
     H.ok(cl.netId ~= nil, 'he steps back to 60 m: it appears')
     sees = nil
     Reset()
+    EndRun(run)
+
+    -- the search ends while the director waits for his game's answer: the clue is never made for the next objective
+    run = Hunt({ 1 }, nil, nil, { block = 'stub_hold', label = 'After', minSeconds = 0 })
+    st = St(run)
+    cl = st.clues[1]
+    Place(1, Around(cl.coords, 25.0, {}, 0))
+    local skipped = false
+    sees = function(src, args)
+        if not skipped then
+            skipped = true
+            CP.Runs.testSkip(run)
+        end
+        return Hidden(src, args)
+    end
+    Secs(run, 3)
+    sees = nil
+    H.ok(skipped, 'late clue: his game was asked whether it sees the clue')
+    H.ok(st.halted == true and run.state == 'in_progress' and run.objectiveIndex == 2,
+        'late clue: the search ended while his game answered, the run goes on')
+    H.eq(cl.netId, nil, 'late clue: no clue is made for the search that is over')
+    H.eq(Clues(run), 0, 'late clue: none in the world during the next objective')
     EndRun(run)
 end
 

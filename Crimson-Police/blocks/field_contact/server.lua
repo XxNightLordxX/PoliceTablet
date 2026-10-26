@@ -1193,7 +1193,10 @@ local function ReturningTick(ctx, st)
             if not rd.arrived and WalkedUp(ctx, t, netId, rd.car) then
                 rd.arrived = Now()
                 local c = CP.Custody.get(ctx.run, netId)
-                if c then TellReturning(ctx, c, rd.outcome) end
+                -- an officer who met him on his walk and explained the citation calmed him: he takes the ticket
+                local said = rd.outcome
+                if said == 'argues' and c and not c.arguing then said = 'takes' end
+                if c then TellReturning(ctx, c, said) end
             end
             due = rd.arrived ~= nil and Now() - rd.arrived >= ARRIVE_PAUSE_S * 1000
         end
@@ -1270,6 +1273,19 @@ local function Totals(ctx, st)
         end
     end
     return done, total
+end
+
+-- The planned contacts that have not appeared yet (a parked car still waiting for an officer to get near, a scene
+-- not out yet). The HUD and the checklist add them to Totals, so a thief who appears before the last parked car
+-- does not hide one of the cars from the count.
+local function StillToCome(st)
+    local have = 0
+    if st.mode == 'parked' then
+        have = st.spawnedCars or 0
+    elseif st.mode == 'scene' then
+        have = (st.carNet and 1 or 0) + (st.spawnedPeople or 0)
+    end
+    return math.max(0, (st.planned or 0) - have)
 end
 
 -- procedure_complete: once per officer, every person they arrested was ID-checked and searched before transport.
@@ -1349,7 +1365,7 @@ local function Flush(ctx, st)
         ctx.send({ contacts = list, mode = st.mode, escaping = st.escaping, approached = st.approached == true })
     end
     -- the contacts the objective will have (a parked car still waiting for an officer to get near counts)
-    total = math.max(total, st.planned or 0)
+    total = total + StillToCome(st)
     local text
     if st.escaping then
         text = CP.Lt('block.field_contact.escaping', { seconds = st.escaping })
@@ -1533,7 +1549,7 @@ end
 local function Checklist(ctx)
     local st = StateOf(ctx)
     local done, total = Totals(ctx, st)
-    total = math.max(total, st.planned or 0)
+    total = total + StillToCome(st)
     return {
         {
             label = CP.L('block.field_contact.check_decided'),

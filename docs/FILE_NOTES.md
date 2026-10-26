@@ -394,13 +394,13 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
     points come from the engine's spawn director (ctx.choosePoints, Config.Spawning, PLAN S2): wave 1
     waits until an officer is within activateRange of the middle of the fight's points (ctx.whenNear);
     each call offers the fight's points (the rolled spawn sets, else spawns), shuffled with the
-    objective rng, never one a living hostile stands on (OCCUPIED_RADIUS), plus ring copies (REUSE_OFFSET
-    per lap) only when a wave is larger than the whole list; the director keeps minDistance
-    (minDistanceIndoor with indoor = true) from every officer, never behind one, the wave in one sector
-    (opts.placed = the wave's points so far). A wave short of points spawns what it got and asks again
-    every tick; ws.waitMs (GetGameTimer) is its clock, handed to the director as opts.since (hardMin
-    after waveDelayMax). A wave or the boss still short leaveOutAfter seconds after its first short
-    call, with nobody of the fight standing and at least one of its hostiles already out (st.peds), leaves
+    objective rng, never one a living hostile (cuffed included, not a body) stands on (OCCUPIED_RADIUS),
+    plus ring copies (REUSE_OFFSET per lap) only when a wave is larger than the whole list; the director
+    keeps minDistance (minDistanceIndoor with indoor = true) from every officer, never behind one, the
+    wave in one sector (opts.placed = the wave's points so far). A wave short of points spawns what it
+    got and asks again every tick; ws.waitMs (GetGameTimer) is its clock, handed to the director as
+    opts.since (hardMin after waveDelayMax). A wave or the boss still short leaveOutAfter seconds after
+    its first short call, with nobody of the fight standing and at least one of its hostiles already out (st.peds), leaves
     the rest out (ws.left / st.bossLeft, one CP.warn; WaveGoal = scaled count - left; the boss line drops
     off the checklist). No point at all: left out at once, never at the start point. ws.elapsed (for
     nextWave.afterSeconds) only counts once the wave has a hostile out. The boss is offered his own spot first, then the fight's
@@ -636,8 +636,8 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
     { type = 'damaged', netId, attacker }  CP.Npc (CP.Runs.dispatch): a hostage took damage
     CP.Npc.onDamaged(run, netId, attackerSrc) is the damage channel: it is server-only and fires for
     every hit on a hostage. While it is listened to, 'shot' / 'damaged' are acknowledged without
-    effect, because onEvent cannot tell a dispatch from the same shape sent as client evidence
-    (a client could otherwise cost the team hostage_hit). Without onDamaged they count instead.
+    effect. server:objective refuses both from a client and flags the sender (K1); this stays as
+    defence in depth, so a client can never cost the team hostage_hit. Without onDamaged they count.
     One hit per hostage and attacker is counted per HIT_WINDOW_MS (one bullet, one penalty).
     no_hostage_hurt is recorded only once minSeconds has passed since the start (a completion
     refused as too fast must not keep a bonus a later hit would have cost).

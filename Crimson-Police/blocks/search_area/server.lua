@@ -550,6 +550,9 @@ local function OtherSpots(ctx, st, spots, i)
     return out
 end
 
+-- true once the search is over (completed, failed or stopped): nothing more may appear for it.
+local function Over(st) return st.halted or st.failed or st.completed end
+
 -- Fugitive i, if he may appear now (see above); false only when there was no room (canSpawn) or the spawn failed.
 -- st.fugWait[i] is his clock (GetGameTimer), counted while an officer is near his spot and too close to it.
 local function SpawnFugitiveNear(ctx, st, spots, i)
@@ -567,6 +570,8 @@ local function SpawnFugitiveNear(ctx, st, spots, i)
     for _, c in ipairs(OtherSpots(ctx, st, spots, i)) do cands[#cands + 1] = c end
     -- the officers' line is measured to his own spot, so it is never behind one of them
     local chosen, _, spare = ctx.choosePoints(cands, 1, { name = 'the fugitive', centre = own, ordered = true })
+    -- the search may have ended while the director waited (Over)
+    if Over(st) then return true end
     local pick = type(chosen) == 'table' and chosen[1] or nil
     if pick and not pick.own and waited < math.max(0, Num(SpawnCfg().waveDelayMax, 20)) then pick = nil end
     if not pick then
@@ -627,13 +632,16 @@ local function SpawnNear(ctx, st, spots)
     for i = 1, FugTarget(ctx) do
         if not st.slots[i] then
             if not SpawnFugitiveNear(ctx, st, spots, i) then return end
-            if st.halted or st.failed then return end
+            if Over(st) then return end
         end
     end
     for _, cl in ipairs(st.clues) do
         if cl.status == 'pending' and not cl.netId and ClueReady(ctx, cl) then
+            -- ClueReady may have waited up to losTimeoutMs for an officer's game (opts.unseen): the last fugitive can
+            -- be cuffed or the objective stopped meanwhile, and then no clue is made for a search that is over
+            if Over(st) then return end
             if not SpawnClue(ctx, st, cl) then return end
-            if st.halted or st.failed then return end
+            if Over(st) then return end
         end
     end
 end

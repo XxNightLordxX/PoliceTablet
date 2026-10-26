@@ -695,11 +695,12 @@ local function OnEvent(ctx, src, ev)
         end
     elseif t == 'shot' or t == 'damaged' then
         if not p then return false, 'unknown_entity' end
-        -- onEvent cannot tell a CP.Npc dispatch from client evidence (server:objective delivers the
-        -- same shape), and a client must never be able to cost the team hostage_hit or the
-        -- no_hostage_hurt bonus. CP.Npc.onDamaged, which is server-only, reports every hit on a
-        -- hostage (both events are always sent together with it), so while it is listened to these
-        -- events are acknowledged and change nothing. Without it they are the only damage channel.
+        -- server:objective refuses a client's shot / damaged and flags the sender (K1), so these come only
+        -- from CP.Npc's dispatch. This branch stays as defence in depth: a client must never be able to
+        -- cost the team hostage_hit or the no_hostage_hurt bonus. CP.Npc.onDamaged, which is server-only,
+        -- reports every hit on a hostage (both events are always sent together with it), so while it is
+        -- listened to these events are acknowledged and change nothing. Without it they are the only
+        -- damage channel.
         if listening then
             Flush(ctx, st)
             return true

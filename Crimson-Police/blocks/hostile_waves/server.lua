@@ -6,7 +6,7 @@ local U = CP.U
 local REACH_SLACK = 2.0                   -- metres of position lag allowed around interaction ranges
 local CUFF_RANGE = 3.0                    -- CP.Npc.enableCuff default maxDistance (ARCHITECTURE §5.11)
 local SPAWNS_PER_TICK = 8                 -- big waves are spread over a few ticks (never fewer in total)
-local OCCUPIED_RADIUS = 3.0               -- a spawn point this close to a living hostile counts as in use
+local OCCUPIED_RADIUS = 3.0               -- a spawn point this close to a living hostile (cuffed too) is in use
 local REUSE_OFFSET = 1.25                 -- metres between peds that share a reused spawn point
 local SURRENDER_GRACE_MS = 3000           -- a kill this soon after a surrender is a shot already in flight
 local DEFAULT_WAVES = { 7, 7, 6 }
@@ -625,11 +625,13 @@ end
 -- The list offered to the director for n hostiles: first (the boss's own spot) as it is, then the fight's points in
 -- an order shuffled from the run seed; a wave larger than the whole list also gets them again on a small ring
 -- (REUSE_OFFSET more per lap, as before the director), each copy checked like any other point. A point a living
--- hostile stands on (within OCCUPIED_RADIUS) is never offered, so two people never appear inside each other.
+-- hostile stands on (within OCCUPIED_RADIUS) is never offered, so two people never appear inside each other. A cuffed
+-- suspect still stands on his point until he is taken away, so he counts as well; a body does not keep its point
+-- (it is removed after Config.Limits.corpseCleanup, and the next wave must not wait for that).
 local function Offer(ctx, st, list, n, first)
     local living = {}
     for _, p in pairs(st.peds) do
-        if not Neutralised(p) then
+        if p.state ~= 'dead' then
             local c = PedCoords(p)
             if c then living[#living + 1] = c end
         end
