@@ -1991,14 +1991,24 @@ local function GiveItems(run, p)
         local name = type(it) == 'table' and it.name or nil
         local count = math.max(1, math.floor(Num(type(it) == 'table' and it.count, 1)))
         if type(name) == 'string' and name ~= '' then
-            local ok, success, response = pcall(function()
-                return exports.ox_inventory:AddItem(p.src, name, count, { cpRun = run.id, cpItem = true })
-            end)
-            if ok and success then
-                p.items[#p.items + 1] = { name = name, count = count }
+            -- ox_inventory's AddItem checks free slots only, never weight: CanCarryItem is the only weight check, so
+            -- without it an officer near his limit would be over it for the whole run (nothing can move into his
+            -- inventory). nil (an unknown item or no free slot) counts as no room.
+            local meta = { cpRun = run.id, cpItem = true }
+            local okC, can = pcall(function() return exports.ox_inventory:CanCarryItem(p.src, name, count, meta) end)
+            if not (okC and can == true) then
+                CP.warn(TAG, 'cannot give %dx %s to %d for run %s: no room', count, name, p.src, run.id)
+                Notify(p.src, 'warning', 'run.item_no_room', { item = name })
             else
-                CP.warn(TAG, 'could not give %dx %s to %d for run %s: %s', count, name, p.src, run.id,
-                    tostring(ok and response or success))
+                local ok, success, response = pcall(function()
+                    return exports.ox_inventory:AddItem(p.src, name, count, meta)
+                end)
+                if ok and success then
+                    p.items[#p.items + 1] = { name = name, count = count }
+                else
+                    CP.warn(TAG, 'could not give %dx %s to %d for run %s: %s', count, name, p.src, run.id,
+                        tostring(ok and response or success))
+                end
             end
         end
     end

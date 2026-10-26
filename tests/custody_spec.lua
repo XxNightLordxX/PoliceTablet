@@ -1198,6 +1198,33 @@ do
 end
 
 do
+    -- Config.Custody.evidenceItem: the bag is given only when CanCarryItem says yes (ox_inventory's AddItem checks free
+    -- slots only, never weight), so an officer at his weight limit is told and gets no bag
+    local inv = H.mockInventory({ evidence_bag = { label = 'Evidence bag' } })
+    local can, asked = false, nil
+    H.exportsMock.ox_inventory.CanCarryItem = function(src, name, count, meta)
+        asked = { src = src, name = name, count = count, meta = meta }
+        return can
+    end
+    Config.Custody.evidenceItem = 'evidence_bag'
+    local run = W.start({ 1 }, W.mission({
+        { block = 'stub_hold', label = 'Hold', minSeconds = 0 },
+        { block = 'process_scene', label = 'Scene', minSeconds = 0 },
+    }))
+    H.eq(#inv.added, 0, 'CanCarryItem false: no evidence bag is added')
+    H.ok(not run.participants[1].evidenceGiven, 'and evidenceGiven stays false')
+    H.eq(W.lastNote(1) and W.lastNote(1).key, 'run.item_no_room', 'he gets the no-room toast')
+    H.ok(asked and asked.name == 'evidence_bag' and asked.count == 1 and asked.meta.cpRun == run.id,
+        'CanCarryItem is asked with the bag, one, and the run tag')
+    can = true
+    H.eq(Custody.giveEvidence(run), 1, 'CanCarryItem true: the bag is given')
+    H.eq(run.participants[1].evidenceGiven, true, 'evidenceGiven')
+    Config.Custody.evidenceItem = false
+    H.exportsMock.ox_inventory = nil
+    Runs.endRun(run, 'completed', 'completed')
+end
+
+do
     -- a nervous person who bolts from a frisk is Evading: caught, their Arrest is Best
     local run = HoldRun({ 1 })
     local p = Contact(run, { truth = 'clean', demeanour = 'nervous', cues = { bolts = true }, state = 'contacted' })

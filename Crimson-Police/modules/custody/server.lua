@@ -2254,16 +2254,22 @@ function Custody.giveEvidence(run)
     for _, src in ipairs(ActiveSrcs(run)) do
         local p = run.participants[src]
         if p and not p.evidenceGiven and not InArena(src) then
-            local ok, res = pcall(function()
-                return exports.ox_inventory:AddItem(src, item, 1, { cpRun = run.id, cpItem = true })
-            end)
-            if ok and res then
-                p.evidenceGiven = true
-                p.items = p.items or {}
-                p.items[#p.items + 1] = { name = item, count = 1 }
-                n = n + 1
+            -- CanCarryItem first: ox_inventory's AddItem checks free slots only, never weight (nil = no room)
+            local meta = { cpRun = run.id, cpItem = true }
+            local okC, can = pcall(function() return exports.ox_inventory:CanCarryItem(src, item, 1, meta) end)
+            if not (okC and can == true) then
+                CP.warn(TAG, 'cannot give %s to %s for run %s: no room', item, tostring(src), run.id)
+                Notify(src, 'warning', 'run.item_no_room', { item = item })
             else
-                CP.warn(TAG, 'could not give %s to %s for run %s', item, tostring(src), run.id)
+                local ok, res = pcall(function() return exports.ox_inventory:AddItem(src, item, 1, meta) end)
+                if ok and res then
+                    p.evidenceGiven = true
+                    p.items = p.items or {}
+                    p.items[#p.items + 1] = { name = item, count = 1 }
+                    n = n + 1
+                else
+                    CP.warn(TAG, 'could not give %s to %s for run %s', item, tostring(src), run.id)
+                end
             end
         end
     end

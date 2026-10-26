@@ -210,7 +210,7 @@ CP.Testing = {
     onRunEnded = function(run, state, reason) Rec('testing.ended', { state, reason }) end,
 }
 CP.Tablet = {
-    notify = function(src, kind, key, vars) Rec('notify', { src = src, kind = kind, key = key }) end,
+    notify = function(src, kind, key, vars) Rec('notify', { src = src, kind = kind, key = key, vars = vars }) end,
     push = function(src, topic, data) Rec('push', { src = src, topic = topic, data = data }) end,
 }
 CP.Access = {
@@ -1173,6 +1173,71 @@ do
         'supervisorItems = true: a supervisor\'s items are handed out')
     H.eq(Skipped('custom_by_sup2'), 0, 'and nothing is reported')
     Config.Builder.supervisorItems = shipped
+end
+
+-- ============================================================================
+--                   SCENARIO G6: NO ROOM FOR A MISSION ITEM
+-- ============================================================================
+-- ox_inventory 2.48.0's AddItem checks free slots only, never weight: CanCarryItem is the only weight check. The run
+-- asks it first (nil, an unknown item or no free slot, counts as no room): an officer with no room is told, gets
+-- nothing and has nothing waiting to be taken back, and the run still starts for everyone.
+
+do
+    local RealCan = oxInventory.CanCarryItem
+    local asked, reply = {}, nil
+    oxInventory.CanCarryItem = function(src, name, count, meta)
+        asked[#asked + 1] = { src = src, name = name, count = count, meta = meta }
+        if src == 3 and reply ~= 'real' then return reply end
+        return RealCan(src, name, count, meta)
+    end
+    local function Start(answer)
+        H.reset()
+        asked, reply = {}, answer
+        local before, notes = #inv.added, Count('notify')
+        local r = Runs.create({
+            mission = mission,
+            locationIndex = 1,
+            missionType = 'patrol',
+            members = { O[1], O[3] },
+            leaderSrc = 1,
+        })
+        local to = { [1] = 0, [3] = 0 }
+        for i = before + 1, #inv.added do
+            local a = inv.added[i]
+            to[a.src] = (to[a.src] or 0) + a.count
+        end
+        local noRoom = nil
+        for i = notes + 1, Count('notify') do
+            local n = log.notify[i]
+            if n.key == 'run.item_no_room' then noRoom = n end
+        end
+        return r, to, noRoom
+    end
+    local function Stop(r)
+        if not r then return end
+        listeners.lost(1, 'suspended')
+        listeners.lost(3, 'suspended')
+    end
+    for _, case in ipairs({ { false, 'false' }, { nil, 'nil (unknown item or no free slot)' } }) do
+        local r, to, noRoom = Start(case[1])
+        H.ok(r ~= nil, 'CanCarryItem ' .. case[2] .. ' for one officer: the run still starts')
+        H.eq(to[3], 0, 'CanCarryItem ' .. case[2] .. ': AddItem is not called for him')
+        H.eq(r and #r.participants[3].items, 0, 'CanCarryItem ' .. case[2] .. ': nothing waits to be taken back')
+        H.eq(to[1], 1, 'CanCarryItem ' .. case[2] .. ': the officer with room still gets his item')
+        H.eq(noRoom and noRoom.src, 3, 'CanCarryItem ' .. case[2] .. ': he gets the run.item_no_room toast')
+        H.eq(noRoom and noRoom.kind, 'warning', 'as a warning')
+        H.eq(noRoom and noRoom.vars and noRoom.vars.item, 'radio', 'naming the item')
+        Stop(r)
+    end
+    local r, to, noRoom = Start(true)
+    H.eq(to[3], 1, 'CanCarryItem true: he gets the item as before')
+    H.eq(r and #r.participants[3].items, 1, 'and it waits to be taken back')
+    H.eq(noRoom, nil, 'no toast')
+    local q = asked[#asked]
+    H.ok(q and q.name == 'radio' and q.count == 1 and q.meta and q.meta.cpRun == r.id and q.meta.cpItem == true,
+        'CanCarryItem is asked with the item, the count and the run tag AddItem gets')
+    Stop(r)
+    oxInventory.CanCarryItem = RealCan
 end
 
 -- ============================================================================

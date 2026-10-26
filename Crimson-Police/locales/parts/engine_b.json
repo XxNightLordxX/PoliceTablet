@@ -6,6 +6,7 @@
   "run.partner_left": "{name} left the mission.",
   "run.tier_changed": "Your team got smaller: the tier is now {tier}.",
   "run.left_for_arena": "You left your mission because you entered the arena.",
+  "run.item_no_room": "You have no room for {item}; the mission starts without it.",
   "run.ended_quit": "Mission ended — you abandoned it",
   "run.ended_off_route": "Mission ended — you left the route to the start",
   "run.ended_start_timeout": "Mission ended — you did not reach the start in time",
