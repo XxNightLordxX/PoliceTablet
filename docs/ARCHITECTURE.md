@@ -2780,8 +2780,9 @@ notes and trail and `case.openedAt` / `closedAt` are os.time() seconds.
   suspects = { [cid] = rec }, order = { cid... }, timeline, ledger, trail = { [cid] = ring }, notes, crimeEndedAt }`;
   `rec = { cid, src, license, label = 'A'|'B'|... (shuffled with CP.U.rng(run.seed), C5), state, since, contactAt,
   lastContactAt, lastCoords, md = { ishandcuffed, isdead, inlaststand, injail }, down, downAt, protectUntil, cuff,
-  outsideCuff, cuffedAt, detainedAt, bookedAt, injailAt, jail, share, caughtBy, armedUntil, everArmed, afk (true =
-  AFK by his samples), near, dropAt, leftAt, byLeave, notes, outcome }`.
+  outsideCuff, cuffedAt, detainedAt, bookedAt, injailAt, jail, share, caughtBy, armedUntil, everArmed, firstHitAt,
+  lastHitAt, conduct, penalized (V6), afk (true = AFK by his samples), near, dropAt, leftAt, byLeave, notes,
+  outcome }`.
 - `open(run, spec) -> case|nil`: `spec = { kind, index, members, scene, lostRule, meet }`; `members` is a list of
   citizenids or a map keyed by them (`{ [cid] = true }`, or Crimson-Contracts' `{ [cid] = src }`: the server ids in
   it are never read, C9). Each src comes from `CP.Qbx.getByCitizenId` and one `getInfo` (license, the metadata mirror)
@@ -2916,6 +2917,54 @@ suspect's own acts are `Opp.note`s.
   `rec.protectUntil = now + spawnProtectSeconds` (line `spawn_protect`), unless a participant was within contactRange
   at the down and is again at the respawn (C26: no protection, `rec.hospitalCatch`, and his next cuff scores at
   `neutralisedShare`; line `respawn_in_contact`).
+
+Conduct (V6, modules/opponents/conduct/server.lua; critic C6, C7, critic 2 #12). How officers treat a real suspect,
+from server facts only. Every flag here is an officer-conduct flag: `CP.AntiCheat.flag(run, officerSrc, reason,
+detail)` with the server id of the officer who fired, drove or seized, so only his points are held for review (never
+his partner's, never `run.flagged`; AC.flag refuses anyone who is not a participant of the run). A supervisor's void
+of his row in Review is the "Failed": nothing here ends or fails a run, and nothing cancels a game event.
+- Armed (C6): `rec.armedUntil` / `rec.everArmed`. The watch pass (`Opp.onTick`) reads `GetSelectedPedWeapon(
+  GetPlayerPed(src))` of every tracked suspect (not lost, left or void, not in an instance; natives only): a weapon
+  that is not WEAPON_UNARMED and not in `Config.RealSuspects.lessLethal` (each name hashed once with joaat, again when
+  the list or any setting changes) sets `armedUntil = now + armedMemory` and `everArmed`. The officer's hit reads his
+  hand once more (he may have drawn between two passes). A suspect's hit on an active participant of his case sets
+  `everArmed`, and so does `Opp.noteArmed(cid)` (Crimson-Contracts' crew shot, V10). The first time is the timeline
+  line `armed` (why weapon, damage). `Opp.armedState(cid) -> armedNow, everArmed`.
+- The ledger. A third read-only `weaponDamageEvent` listener (CP.Npc has two): it returns at once while
+  `Opp.active()` is false (no native read), and while a case is open it reads nothing for a sender who is neither a
+  suspect of a case nor an active participant of a run with a case. A hit is blamed only on its sender (a forged
+  packet never costs a third party); damage from an NPC the sender simulates (a ped, or a car an NPC drives:
+  `parentGlobalId`, as CP.Npc's ShooterOf reads it) is nobody's. Victims: each `hitGlobalId(s)` (at most 32)
+  through `NetworkGetEntityFromNetworkId`, a player's ped when `IsPedAPlayer` is truthy (a server BOOL native), the
+  victim's server id = `NetworkGetEntityOwner`; both in routing bucket 0. Only a participant -> his case's suspect
+  (dir 'officer') and a suspect -> a participant of his case (dir 'suspect') go in `case.ledger`: `{ t, at, lastAt,
+  dir, from, to, cid, label, weapon (unsigned hash), willKill, state, down, n, rules }`; the same sender, victim and
+  weapon within 2 s adds to the last line (`n`), and at most `damageLogMax` lines are kept (the oldest go first).
+- A participant's hit on his case's suspect, in this order: (1) the suspect is in custody: still restrained (CP's
+  own proven `cuffed` or `detained` state AND the event-kept cuffs mirror `rec.md.ishandcuffed`; C7 forbids raw
+  metadata on its own, and a `cuffed` rec whose cuffs came off, `rec.freedAt`, is not), or `detained` and down for
+  more than `downGrace` s (sc-ambulance disables every control while he is down); or down (`rec.down`, kept by the
+  proof step) for more than `downGrace` s with an earlier hit by the case's officers (`rec.firstHitAt` before
+  `downAt`) -> flag `rs_excessive_force`, any weapon. `detained` never goes back to free: a suspect who freed himself
+  (a self-uncuff), was revived after an escort while down, or was bobby-pinned after the hold is not in custody, so
+  what he does then never holds an officer's points (critic 2 #12); (2) a shot (a weapon that is not less-lethal, not WEAPON_UNARMED, not a vehicle and not a fall) on a
+  suspect who was never armed (`not everArmed and armedUntil < now`) -> the personal penalty `rs_unarmed_shot`
+  (`CP.Runs.penalize(run, id, { src = officerSrc })`) and the flag `rs_unarmed_shot`; (3) WEAPON_RUN_OVER_BY_CAR or
+  WEAPON_RAMMED_BY_CAR on a suspect on foot (`GetVehiclePedIsIn(ped, false) == 0`) -> the penalty `rs_ran_over` and
+  the flag `rs_vdm` (ramming the car he flees in is never penalised). Each penalty and each flag once per officer
+  per suspect; a timeline line names the officer (`by`). Config.Bonuses `rs_unarmed_shot` and `rs_ran_over` are
+  engine-only pct penalties (-0.25 each, `each`): -25% of P per suspect on that officer's row.
+- Cash seizures: the `CP.ScPolice.on('seizeCash')` fact (V3, only while a case is open). sc-police acts only for an
+  on-duty job of type `leo`, so anyone else's event is ignored (`CP.Qbx.getInfo` job type and duty); it takes
+  nothing from a target with no cash, and whether CP's handler runs before or after its own is not known, so every
+  record says Seize Cash was used (an attempt). An attempt by an active participant of a run with a case, or any
+  attempt on a suspect, is audited (`CP.Admin.audit(officerSrc, nil, 'flags', 'seizeCash', runId,
+  'own_suspect'|'other_case'|'not_suspect', CP's state of the target, "target, server distance, CP-cuffed")`, in its
+  own thread: a listener never yields; CP-cuffed is the restrained test above). One on a suspect who is not under
+  arrest (`cuffed`, `detained`, or `booked`: CP's proven states, on purpose not the cuffs mirror) or from more than
+  3 m away (server coords) -> the flag `rs_bad_seize` on the seizing officer when he is a participant of that case
+  (his own conduct, with or without cash); an officer outside the case cannot be flagged on its run, so it is the
+  staff note `rs_bad_seize` (Opp.note, naming him).
 
 ### 5.46 CP.LiveCrime — modules/livecrime and modules/integrations/crimson_contracts (S; stub)
 
@@ -3266,7 +3315,9 @@ cancels or answers them (§5.1): `police:server:Impound` (CP.ScPolice.onImpound)
 `police:server:UncuffPlayer`, `police:server:CuffBreakAlert`, `police:server:EscortPlayer`, `police:server:JailPlayer`,
 `police:server:BobbyPinResult` and `police:server:SeizeCash` (CP.ScPolice.on listeners, real suspects V3);
 `hospital:server:RespawnAtHospital` (CP.Ambulance.on listeners, V3). The V3 handlers do nothing while no case with a
-real suspect is open; their one consumer is the proof step (§5.45, V5), which adds no event of its own.
+real suspect is open; their consumers are the proof step (§5.45, V5) and the conduct step (§5.45, V6: 'seizeCash'),
+which add no event of their own. The conduct step also adds a third read-only `weaponDamageEvent` game-event listener
+(CP.Npc has two): it never cancels the event and returns at once while no case is open.
 
 ### 8.3 Supervisor, admin, builder and test actions (`CP.Net.action`) and callbacks (`CP.Net.callback`)
 

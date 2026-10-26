@@ -2586,6 +2586,16 @@ extra = { id, relaunched }) to every on-duty officer. Pushes: 'operation' and 'b
 to every department member online (and 'operation' to online admins).
 ```
 
+## Crimson-Police/modules/opponents/conduct/server.lua
+
+```text
+CP.Opponents conduct (server, step V6): how officers treat a real suspect, from server facts only. The armed
+definition (C6), the damage ledger between a case's officers and its suspects, excessive force on a suspect in
+custody or down (C7: a flag that holds the officer's points, never an automatic fail), the unarmed-shot and
+ran-over penalties, and the cash-seizure audit. Every flag here is an officer-conduct flag on the officer who fired,
+drove or seized (critic 2 #12): only his points are held, never his partner's.
+```
+
 ## Crimson-Police/modules/opponents/proof/server.lua
 
 ```text
@@ -5066,6 +5076,16 @@ as a harness thread) and simulated net events. The client half is checked in a s
 (tests/fixtures/npc/client_check.lua and tests/fixtures/npc/target_check.lua, side = 'client'); their results are
 added here.
 The npc slice writes no SQL, so this spec runs no queries.
+```
+
+## tests/opponents_conduct_spec.lua
+
+```text
+CP.Opponents conduct (step V6): the armed definition (C6), the damage ledger between a case's officers and its
+suspects, excessive force on a suspect in CP's proven custody who is still restrained, or down after downGrace (C7:
+a flag on the officer who fired, never an automatic fail; a suspect free of his cuffs again holds nobody), the
+unarmed-shot and ran-over penalties, and the cash-seizure audit (only an on-duty 'leo' is a seizure). Every flag here
+holds only the officer who fired, drove or seized.
 ```
 
 ## tests/opponents_proof_spec.lua

@@ -754,6 +754,12 @@ Config.RealSuspects = {
     spawnProtectSeconds = 600,
     -- Keep equal to sc-ambulance's Config.DeathTime: a respawn sooner voids him and staff get a note
     earlyRespawnSeconds = 400,
+    -- Officer conduct: these weapons are never a "shot" (a hit with one on a suspect who was never armed costs
+    -- nothing)
+    lessLethal = { 'WEAPON_STUNGUN', 'WEAPON_STUNGUN_MP', 'WEAPON_NIGHTSTICK', 'WEAPON_FLASHLIGHT' },
+    armedMemory = 15,                -- seconds a suspect counts as armed after the server saw a gun in his hands
+    downGrace = 3,                   -- seconds after he goes down before a hit counts as hitting a downed person
+    damageLogMax = 200,              -- weapon hits between officers and suspects kept per case
 }
 
 -- ============================================================================
@@ -1096,11 +1102,13 @@ Config.Bonuses = {
     excessive_force = { kind = 'points', value = -10, each = true, engineOnly = true },
     all_taken_alive = { kind = 'points', value = 15, block = 'process_scene', engineOnly = true },
     stop_without_cause = { kind = 'points', value = -15, block = 'pursuit', engineOnly = true },
-    lab_fire = { kind = 'points', value = -15, block = 'skill_check' },  -- penalty: setback
+    lab_fire = { kind = 'points', value = -15, block = 'skill_check' },                 -- penalty: setback
     cook_arrested = { kind = 'points', value = 10, each = true, block = 'flee_arrest' },
     stash_found_fast = { kind = 'points', value = 10, block = 'interact_points' },
     lieutenant_alive = { kind = 'points', value = 25, block = 'hostile_waves' },
-    rapid_response = { kind = 'pct', value = 0.10, engineOnly = true },  -- claimed server-posted mission calls
+    rapid_response = { kind = 'pct', value = 0.10, engineOnly = true },                 -- claimed server-posted mission calls
+    rs_unarmed_shot = { kind = 'pct', value = -0.25, each = true, engineOnly = true },  -- penalty: shot a real suspect who was never armed
+    rs_ran_over = { kind = 'pct', value = -0.25, each = true, engineOnly = true },      -- penalty: ran a real suspect over on foot
 }
 
 -- Cosmetic badges only; never the Qbox rank. Each name is a band of numbered levels starting at level;

@@ -234,6 +234,9 @@ local RANGES = {
     ['RealSuspects.jailTimeMax'] = { 1, 10000 },
     ['RealSuspects.spawnProtectSeconds'] = { 0, 7200 },
     ['RealSuspects.earlyRespawnSeconds'] = { 0, 3600 },
+    ['RealSuspects.armedMemory'] = { 0, 600 },
+    ['RealSuspects.downGrace'] = { 0, 60 },
+    ['RealSuspects.damageLogMax'] = { 10, 5000 },
     -- the objective blip and its GPS line (Config.Markers); ids from the docs.fivem.net blip list (build 3258)
     ['Markers.trackEvery'] = { 1, 10 },
     ['Markers.routeOffWithin'] = { 0, 200 },
@@ -924,6 +927,7 @@ local KNOWN = {
     ['Spawning.onTimeout'] = { tpl = Enum({ 'unfreeze', 'delete' }), kind = 'enum' },
     ['Spawning.hostagesAt'] = { tpl = Enum({ 'objective', 'runStart' }), kind = 'enum' },
     ['NpcCombat.weapons'] = { tpl = ListOf(WEAPON_NAME, { min = 1, unique = true }), kind = 'list', item = 'string' },
+    ['RealSuspects.lessLethal'] = { tpl = ListOf(WEAPON_NAME, { unique = true }), kind = 'list', item = 'string' },
     ['NpcCombat.replace'] = { tpl = MapOf(WEAPON_NAME, '^[Ww][Ee][Aa][Pp][Oo][Nn]_[%w_]+$') },
     ['NpcCombat.fallback'] = { tpl = WEAPON_NAME },
     ['Challenge.scoring'] = { tpl = Enum({ 'average', 'total', 'top10' }), kind = 'enum' },

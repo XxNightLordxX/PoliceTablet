@@ -200,6 +200,12 @@ do
             .. 'were with him when he went down)',
         earlyRespawnSeconds = 'Keep equal to sc-ambulance\'s Config.DeathTime: a respawn sooner voids him and staff '
             .. 'get a note',
+        -- V6: officer conduct
+        lessLethal = 'Officer conduct: these weapons are never a "shot" (a hit with one on a suspect who was never '
+            .. 'armed costs nothing)',
+        armedMemory = 'seconds a suspect counts as armed after the server saw a gun in his hands',
+        downGrace = 'seconds after he goes down before a hit counts as hitting a downed person',
+        damageLogMax = 'weapon hits between officers and suspects kept per case',
     }) do
         H.eq((S.entry('RealSuspects.' .. path) or {}).desc, desc, 'RealSuspects.' .. path .. ': its own comment')
     end
@@ -221,6 +227,29 @@ do
     H.eq((S.check('RealSuspects.neutralisedShare', 1.5)), false, 'neutralisedShare above 1 is refused')
     H.ok((S.check('RealSuspects.neutralisedShare', 0.25)), 'neutralisedShare 0.25 is allowed')
     H.eq((S.check('RealSuspects.custodyHoldSeconds', 0)), false, 'a custody hold of 0 s is refused')
+    -- V6: the less-lethal weapons are a list of weapon names, the numbers have ranges
+    local less = S.entry('RealSuspects.lessLethal') or {}
+    H.eq(less.kind, 'list', 'lessLethal is a list')
+    H.ok((S.check('RealSuspects.lessLethal', { 'WEAPON_STUNGUN', 'WEAPON_BATON_X' })), 'weapon names are allowed')
+    H.ok((S.check('RealSuspects.lessLethal', {})), 'an empty list is allowed (every weapon is a shot)')
+    H.eq((S.check('RealSuspects.lessLethal', { 'stungun' })), false, 'a name that is not WEAPON_* is refused')
+    H.eq((S.check('RealSuspects.damageLogMax', 0)), false, 'damageLogMax 0 is refused')
+    H.eq((S.check('RealSuspects.downGrace', 120)), false, 'downGrace above a minute is refused')
+    H.ok((S.check('RealSuspects.armedMemory', 30)), 'armedMemory 30 s is allowed')
+    for id, desc in pairs({
+        rs_unarmed_shot = 'penalty: shot a real suspect who was never armed',
+        rs_ran_over = 'penalty: ran a real suspect over on foot',
+    }) do
+        local e = S.entry('Bonuses.' .. id .. '.value') or {}
+        H.eq(e.default, -0.25, 'Bonuses.' .. id .. ' ships -0.25')
+        H.ok((S.check('Bonuses.' .. id .. '.value', -0.5)), 'Bonuses.' .. id .. ': another penalty share is allowed')
+        H.eq((S.check('Bonuses.' .. id .. '.value', 0.25)), false, 'Bonuses.' .. id .. ': a bonus is refused')
+        local group = nil
+        for _, sec in ipairs(sc.sections) do
+            for _, g in ipairs(sec.groups) do if g.path == 'Bonuses.' .. id then group = g end end
+        end
+        H.eq(group and group.desc, desc, 'Bonuses.' .. id .. ': its comment is the description in Settings')
+    end
 end
 
 -- ============================================================================
