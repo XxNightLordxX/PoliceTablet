@@ -2586,6 +2586,17 @@ extra = { id, relaunched }) to every on-duty officer. Pushes: 'operation' and 'b
 to every department member online (and 'operation' to online admins).
 ```
 
+## Crimson-Police/modules/opponents/proof/server.lua
+
+```text
+CP.Opponents proof (server, step V5): the server facts that decide every detain and booking of a real suspect. The
+sc-police cuff pair and the custody hold, getting free during the hold (an officer's uncuff, a friend's bobby pin,
+sc-police's cuff-break game, or a self-uncuff), downs, bookings matched in either order, and the hospital rules.
+The facts come from the CP.ScPolice / CP.Ambulance listeners (V3) and the metadata mirror (V4's Opp.onMeta), so
+nothing here runs while no case is open. A suspect's own acts are staff notes (Opp.note): nothing here sets
+run.flagged or p.flagged.
+```
+
 ## Crimson-Police/modules/payouts/server.lua
 
 ```text
@@ -5055,6 +5066,16 @@ as a harness thread) and simulated net events. The client half is checked in a s
 (tests/fixtures/npc/client_check.lua and tests/fixtures/npc/target_check.lua, side = 'client'); their results are
 added here.
 The npc slice writes no SQL, so this spec runs no queries.
+```
+
+## tests/opponents_proof_spec.lua
+
+```text
+CP.Opponents proof (step V5): the sc-police cuff pair and custody hold, getting free during the hold (release,
+bobby-pin rescue, cuff-break, self-uncuff), downs and the neutralised share, an AFK catch scoring 0, bookings in
+either order with booking zones, and the hospital rules. Real: modules/integrations/qbx, access, anticheat,
+integrations/sc_police and sc_ambulance (the V3 handlers, fired as net events), opponents and opponents/proof;
+qbx_core's exports and its onSetMetaData event are mocked like FXServer sends them.
 ```
 
 ## tests/oversight_spec.lua

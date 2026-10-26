@@ -180,6 +180,26 @@ do
         ['trail.every'] = 'seconds between points',
         ['trail.max'] = 'points kept per suspect',
         timelineMax = 'timeline entries kept per case',
+        -- V5: the proof
+        cuffPairWindow = 'Proof the server checks before anything scores: seconds between the officer\'s sc-police '
+            .. 'cuff and the suspect\'s cuffed state',
+        cuffRange = 'metres between them at the cuff (sc-police allows 2.5; the rest is lag)',
+        custodyHoldSeconds = 'the cuffs must hold this long before a detain counts',
+        breakFreeSeconds = 'Free this soon after the cuff = he won sc-police\'s cuff-break game (fair, once per case '
+            .. 'and not in the first 2 s); later, with no officer uncuff and no bobby pin, it is a self-uncuff: it '
+            .. 'counts as detained and staff get a note',
+        rescueRange = 'Metres: a friend\'s successful bobby pin frees him with no note when that friend stood this '
+            .. 'close for 2 s or more (once per case)',
+        neutralisedShare = 'a suspect cuffed while down (whoever downed him) counts this share of a detain',
+        jailRange = 'metres between officer and suspect at the jail (sc-police allows 5)',
+        minJailTime = 'a booking needs at least this sentence (sc-police counts months)',
+        jailTimeMax = 'longer sentences are recorded as this',
+        bookingZones = 'A booking counts only inside one of these ({} = anywhere): sc-police\'s station duty points '
+            .. 'and the prison; check them on your MLOs',
+        spawnProtectSeconds = 'After a hospital respawn he can\'t be detained for points this long (unless officers '
+            .. 'were with him when he went down)',
+        earlyRespawnSeconds = 'Keep equal to sc-ambulance\'s Config.DeathTime: a respawn sooner voids him and staff '
+            .. 'get a note',
     }) do
         H.eq((S.entry('RealSuspects.' .. path) or {}).desc, desc, 'RealSuspects.' .. path .. ': its own comment')
     end
@@ -194,6 +214,13 @@ do
     H.eq(Config.RealSuspects.trail.max, 360, 'at most 360 points')
     local okZero = S.check('RealSuspects.trail.every', 0)
     H.eq(okZero, false, 'a trail point every 0 s is refused')
+    -- V5: the booking zones are zone rows ({} allowed: anywhere), the share is 0..1
+    local booking = S.entry('RealSuspects.bookingZones') or {}
+    H.eq(booking.kind, 'rows', 'bookingZones is a list of zones (label, coords, radius)')
+    H.ok((S.check('RealSuspects.bookingZones', {})), 'bookingZones {} (anywhere) is allowed')
+    H.eq((S.check('RealSuspects.neutralisedShare', 1.5)), false, 'neutralisedShare above 1 is refused')
+    H.ok((S.check('RealSuspects.neutralisedShare', 0.25)), 'neutralisedShare 0.25 is allowed')
+    H.eq((S.check('RealSuspects.custodyHoldSeconds', 0)), false, 'a custody hold of 0 s is refused')
 end
 
 -- ============================================================================

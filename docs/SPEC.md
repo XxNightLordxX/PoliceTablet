@@ -2553,7 +2553,7 @@ Feature folders
 | modules/disputes/ | server | Officer disputes and where they go |
 | modules/admin/ | server | Supervisor and admin actions, /CrimsonPoliceAdmin, audit log, webhooks |
 | modules/anticheat/ | server | Objective validation, presence and idle checks, flagged runs |
-| modules/opponents/ | server | Real-player suspects of live crimes and volunteer cases (off by default): cases keyed by citizenid, the watch, leaving and instances, staff notes |
+| modules/opponents/ | server | Real-player suspects of live crimes and volunteer cases (off by default): cases keyed by citizenid, the watch, leaving and instances, staff notes; proof/: the cuff pair and custody hold, release, rescue, cuff-break and self-uncuff, downs, bookings and the hospital rules |
 | modules/integrations/qbx/ | server, client | Every qbx_core call |
 | modules/integrations/sc_dispatch/ | server | Responding listener, mdt_dispatch lookup, shots-fired and person-down listeners, ClearNotification, suspension check |
 | modules/integrations/sc_ambulance/ | server, client | EMS on duty, the revive event, the EMS request, and the listen-only hospital-respawn fact for real suspects (CP.Ambulance.on) |

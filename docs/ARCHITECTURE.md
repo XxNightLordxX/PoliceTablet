@@ -2798,9 +2798,11 @@ notes and trail and `case.openedAt` / `closedAt` are os.time() seconds.
   `byCid(cid) -> case, rec`, `view(run)` (a copy for blocks with no server ids: label, state, online, contact, down,
   afk, share, byLeave, everArmed, outcome, md), `nearAny(run, coords, range) -> true, cid, metres` (a free or cuffed
   suspect at the last watch pass; no native read), `crimeEnded(run)`, `noteArmed(cid)`, `trailOf(run, cid)` (oldest
-  first), `setState(run, cid, state, { event, why, by })` (for the proof step), `onTick(fn)` (fn(case, now) once per
-  case on every watch pass, after the suspects), `onMeta` (a field V5 sets: `fn(rec, key, old, new, case)` after the
-  mirror changed).
+  first), `setState(run, cid, state, { event, why, by })` (for the proof step), `send(run, cid, kind, extra)` (a
+  server-only event that is not a state change: opp_down, opp_up, opp_cuff_attempt), `timeline(run, entry)` (a staff
+  timeline line), `onTick(fn)` (fn(case, now) once per case on every watch pass, after the suspects), and two fields
+  the proof step sets: `onMeta` (`fn(rec, key, old, new, case)` after the mirror changed) and `onClose`
+  (`fn(case)` at the close, before the outcomes are read).
 - `eligible(src, opts) -> ok, reason` (events and claims only, never per tick), refused in this order: `not_loaded`
   (no getInfo), `in_case`, `instance` (bucket other than 0), `arena_flag` (CP.Alerts.foreignFlag), `on_duty` (on duty
   in a Config.Departments job), `job_hop` (`Opp.lastPoliceAt(cid)` from V7, os.time(), within jobHopMinutes; nil
@@ -2833,8 +2835,9 @@ notes and trail and `case.openedAt` / `closedAt` are os.time() seconds.
   only: a free suspect, after contact or `crimeEnded`, with no participant within `range` for `seconds`. A trail point
   every `trail.every` s, at most `trail.max` per suspect (a ring). AFK: a sample every `afkSampleEvery` s (coords and
   camera; still = moved under 1 m and turned under 2 degrees since the stillness began, AFK after `afkSeconds`), for
-  free suspects and sampled crews only: the samples stop while a suspect is cuffed, detained or booked (C17) and
-  `rec.afk` keeps its value from the cuff. Offline suspects only wait for their grace.
+  free suspects who are not down and sampled crews only: the samples stop while a suspect is cuffed, detained or
+  booked (C17) or down (`rec.down`, kept by the proof step: lying still waiting for EMS or the respawn timer is not
+  AFK), and `rec.afk` keeps its value from the cuff or the down. Offline suspects only wait for their grace.
 - Leaving: `playerDropped` and `CP.Qbx.onPlayerUnload`. A cuffed suspect is detained at the drop (C18); a character
   switch or logout is final at once; any other drop waits `disconnectGrace` s for a rejoin. When the leave is final:
   cuffed -> detained, free -> `Config.RealSuspects.onLeave` ('void' -> left, 'caught' -> detained with `byLeave` and
@@ -2848,6 +2851,71 @@ notes and trail and `case.openedAt` / `closedAt` are os.time() seconds.
   the block reads `view` at its start). The opp_* types are server-only (§8.2: `server:objective` refuses them from a
   client and flags `unexpected_event`).
 - Opponents are never in `run.entities`, CP.Npc's registry or a `cp` bag. Resource stop clears everything.
+
+Proof (V5, modules/opponents/proof/server.lua; critic C10, C18, C19, C26, C28, critic 2 #5, #6, #15, #30). The server
+facts that decide every detain and booking. Inputs: the `CP.ScPolice.on` facts ('cuff', 'uncuff', 'cuffBreak',
+'bobbyPin', 'escort', 'jail') and `CP.Ambulance.on('respawn')` (§5.1, V3: they pass only while a case is open), the
+metadata mirror through `Opp.onMeta` (ignored while the suspect is in a bucket other than 0, where Crimson-Arena
+rewrites cuffs and downs) and `Opp.onTick`. Times are GetGameTimer() ms. Nothing here calls CP.AntiCheat.flag: a
+suspect's own acts are `Opp.note`s.
+- Cuff pair. A 'cuff' by an active participant of a run with `run.live` calls `CP.LiveCrime.cuffHint(run, src)` (when
+  it exists) for every target, suspect or not (C5), after the attempt below is kept. On a free suspect the attempt is
+  kept only when the officer is on duty in a turned-on department job (`CP.Qbx.getInfo` job and
+  `CP.Access.departmentForJob`, never `getOfficer`: a listener must not yield, and getOfficer's suspension and retired
+  lookups await the database on a cache miss, so the suspect's cuffed state could arrive first; a participant passed
+  getOfficer when he joined, and a suspension ends his part in the run; sc-police checks neither job nor duty), both
+  are in bucket 0, the officer is not `CP.Alerts.inArena`, and the server distance is within `cuffRange`: a
+  participant's as `rec.cuff = {
+  officerSrc, at }` (timeline `cuff_attempt`, `opp_cuff_attempt`), an on-duty officer outside the case's as
+  `rec.outsideCuff = { src, at }`; a refused participant attempt is the timeline line `cuff_refused` (why
+  not_on_duty, instance, arena, distance). `ishandcuffed` false -> true (old == new ignored: sc-police registers
+  SetHandcuffStatus twice) within `cuffPairWindow` of `rec.cuff` -> `cuffed` (`cuffedAt`, `caughtBy = { officer }`)
+  with `share` 0 and the note `rs_afk_catch` when `rec.afk` (critic 2 #15), `neutralisedShare` when `rec.down`
+  (whoever downed him, C28) or after a C26 respawn, else 1; within the window of `rec.outsideCuff` ->
+  `rec.outsideCuffed = true` and the line `cuffed_by_outsider` (V15 decides assist or stopped); no pair -> the line
+  `cuffed_unproven` only.
+- Hold. On the watch pass a `cuffed` suspect whose mirror still says cuffed after `custodyHoldSeconds` -> `detained`
+  (`custody_hold`, by the cuffing officer), once per suspect per case (detained and booked never go back). Every
+  detain is refused while `rec.protectUntil` lasts: the line `spawn_protected` and back to free. An 'escort' by an
+  on-duty participant (same plausibility, `cuffRange`) of a downed suspect who is free -> `detained` (`escort_down`)
+  at `neutralisedShare` (0 and `rs_afk_catch` when AFK).
+- Getting free during the hold (`ishandcuffed` true -> false while `cuffed`): explained by, in this order, a
+  participant's 'uncuff' within 5 s (`released`), a 'bobbyPin' success within 5 s (`rescued`, no note) from a sender
+  who is not the suspect, not cuffed or down (`CP.Qbx.getInfo(sender).metadata` at the event), in bucket 0, counted
+  near him on at least 2 watch passes before the result, with no earlier rescue of this suspect in the case (the
+  nearest such cuffed suspect is the one he picked; critic 2 #6), or the suspect's own 'cuffBreak' within 5 s when the
+  cuffs came off between 2 s and `breakFreeSeconds` after `cuffedAt` and it is his first break-free in the case
+  (`broke_free`; critic 2 #30). Each of these goes back to free (`opp_released` with that why). sc-police sends its
+  cuff-break alert just after the uncuffed state, so an unexplained release waits 2 s (and is decided at the close);
+  anything else is a self-uncuff (sc-police /fixcuffs or an admin /resetcuffs: both a server SetMetaData with no
+  event) -> `detained` (`self_uncuff`) and the note `rs_self_uncuff` ("self-uncuff or admin reset"). An 'uncuff' by
+  someone outside the case (sc-police asks only for the handcuffs item) explains nothing either, but it is kept
+  (bucket 0, within `cuffRange`; the line `uncuffed_by_outsider`, else `uncuff_refused`): when it came within 5 s of
+  the cuffs coming off the detain is `outside_uncuff` and the note is `rs_outside_uncuff`, which names him instead of
+  saying that no officer uncuffed the suspect. The suspect's uncuff of himself stays a self-uncuff.
+- Rescue candidates. Only while a suspect is `cuffed` and not yet released, the pass reads the online players once
+  (`CP.Qbx.getOnlinePlayers()`, the event-kept list) and their server coords, and keeps `rec.near[src]` = consecutive
+  passes within `rescueRange` for players who are neither the suspect nor a participant (reset when out of range).
+  With no suspect cuffed the pass reads nothing; a hold lasts at most `custodyHoldSeconds`.
+- Down. `isdead` or `inlaststand` true -> `rec.down`, `downAt`, `downNear` (a participant within contactRange then),
+  `opp_down`; both false -> up, `upAt`, `opp_up`.
+- Booking, matched in either order (critic 2 #5: sc-police writes injail inside its own JailPlayer handler and qbx
+  fires onSetMetaData at once): `rec.injailAt` = the last injail 0 -> above 0 change; a 'jail' by an on-duty
+  participant within `jailRange` of a `detained` suspect -> `rec.jail = { officerSrc, t = math.floor(tonumber(jailTime)
+  or 0) (C19), at, inZone }` (inZone: the officer inside one of `bookingZones`, {} = anywhere). Whichever arrives
+  second pairs them within 10 s (each is used once) -> `booked` (`rec.jailTime = min(t, jailTimeMax)`) when `t >=
+  minJailTime` and inZone; else the line `booking_too_short` or `booked_outside_station`, no booking. A
+  participant's jail that cannot be a booking is the line `jail_refused` (why not_detained, for a jail during the
+  hold, not_on_duty, instance, arena or distance; with the months): sc-police jails him all the same, and that injail
+  rise can never pair later. A jail by
+  someone outside the case of a free or cuffed suspect, paired the same way with the injail change -> outcome
+  `stopped` (state `void`, counts for nobody) and the note `rs_outside_jail`. sc-police's prison exports are never
+  called (not loaded).
+- Hospital. A 'respawn' of a suspect who is not down (or got up more than 5 s before), or was down for less than
+  `earlyRespawnSeconds` -> `void` (free or cuffed only) and the note `rs_early_respawn`. Otherwise
+  `rec.protectUntil = now + spawnProtectSeconds` (line `spawn_protect`), unless a participant was within contactRange
+  at the down and is again at the respawn (C26: no protection, `rec.hospitalCatch`, and his next cuff scores at
+  `neutralisedShare`; line `respawn_in_contact`).
 
 ### 5.46 CP.LiveCrime — modules/livecrime and modules/integrations/crimson_contracts (S; stub)
 
@@ -3198,7 +3266,7 @@ cancels or answers them (§5.1): `police:server:Impound` (CP.ScPolice.onImpound)
 `police:server:UncuffPlayer`, `police:server:CuffBreakAlert`, `police:server:EscortPlayer`, `police:server:JailPlayer`,
 `police:server:BobbyPinResult` and `police:server:SeizeCash` (CP.ScPolice.on listeners, real suspects V3);
 `hospital:server:RespawnAtHospital` (CP.Ambulance.on listeners, V3). The V3 handlers do nothing while no case with a
-real suspect is open.
+real suspect is open; their one consumer is the proof step (§5.45, V5), which adds no event of its own.
 
 ### 8.3 Supervisor, admin, builder and test actions (`CP.Net.action`) and callbacks (`CP.Net.callback`)
 

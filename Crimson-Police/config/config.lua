@@ -726,6 +726,34 @@ Config.RealSuspects = {
         max = 360,                   -- points kept per suspect
     },
     timelineMax = 300,               -- timeline entries kept per case
+    -- Proof the server checks before anything scores:
+    cuffPairWindow = 10,             -- seconds between the officer's sc-police cuff and the suspect's cuffed state
+    cuffRange = 3.5,                 -- metres between them at the cuff (sc-police allows 2.5; the rest is lag)
+    custodyHoldSeconds = 30,         -- the cuffs must hold this long before a detain counts
+    -- Free this soon after the cuff = he won sc-police's cuff-break game (fair, once per case and not in the first
+    -- 2 s); later, with no officer uncuff and no bobby pin, it is a self-uncuff: it counts as detained and staff get a
+    -- note
+    breakFreeSeconds = 20,
+    -- Metres: a friend's successful bobby pin frees him with no note when that friend stood this close for 2 s or
+    -- more (once per case)
+    rescueRange = 4.0,
+    neutralisedShare = 0.5,          -- a suspect cuffed while down (whoever downed him) counts this share of a detain
+    jailRange = 6.0,                 -- metres between officer and suspect at the jail (sc-police allows 5)
+    minJailTime = 5,                 -- a booking needs at least this sentence (sc-police counts months)
+    jailTimeMax = 120,               -- longer sentences are recorded as this
+    -- A booking counts only inside one of these ({} = anywhere): sc-police's station duty points and the prison;
+    -- check them on your MLOs
+    bookingZones = {
+        { label = 'Mission Row PD', coords = vec3(470.63, -974.11, 30.18), radius = 120.0 },
+        { label = 'Sandy Shores (BCSO)', coords = vec3(1833.06, 3679.32, 33.19), radius = 80.0 },
+        { label = 'SASP', coords = vec3(1560.38, 815.76, 76.21), radius = 80.0 },
+        { label = 'Bolingbroke Penitentiary', coords = vec3(1768.73, 2570.43, 44.73), radius = 180.0 },
+    },
+    -- After a hospital respawn he can't be detained for points this long (unless officers were with him when he
+    -- went down)
+    spawnProtectSeconds = 600,
+    -- Keep equal to sc-ambulance's Config.DeathTime: a respawn sooner voids him and staff get a note
+    earlyRespawnSeconds = 400,
 }
 
 -- ============================================================================

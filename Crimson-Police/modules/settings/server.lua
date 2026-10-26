@@ -223,6 +223,17 @@ local RANGES = {
     ['RealSuspects.trail.every'] = { 1, 60 },
     ['RealSuspects.trail.max'] = { 1, 5000 },
     ['RealSuspects.timelineMax'] = { 10, 5000 },
+    ['RealSuspects.cuffPairWindow'] = { 1, 60 },
+    ['RealSuspects.cuffRange'] = { 1, 20 },
+    ['RealSuspects.custodyHoldSeconds'] = { 5, 600 },
+    ['RealSuspects.breakFreeSeconds'] = { 0, 120 },
+    ['RealSuspects.rescueRange'] = { 1, 20 },
+    ['RealSuspects.neutralisedShare'] = { 0, 1 },
+    ['RealSuspects.jailRange'] = { 1, 30 },
+    ['RealSuspects.minJailTime'] = { 0, 1000 },
+    ['RealSuspects.jailTimeMax'] = { 1, 10000 },
+    ['RealSuspects.spawnProtectSeconds'] = { 0, 7200 },
+    ['RealSuspects.earlyRespawnSeconds'] = { 0, 3600 },
     -- the objective blip and its GPS line (Config.Markers); ids from the docs.fivem.net blip list (build 3258)
     ['Markers.trackEvery'] = { 1, 10 },
     ['Markers.routeOffWithin'] = { 0, 200 },
@@ -1021,6 +1032,14 @@ local function F(key, kind, extra)
     return f
 end
 
+-- Real-suspect zones (no-start, booking): every centre on the map.
+local function CheckZonesInside(list)
+    for _, z in ipairs(list) do
+        if not Inside(z.coords) then return 'err.setting_outside_map' end
+    end
+    return nil
+end
+
 local ROWS = {
     ['Builder.noBuildZones'] = {
         tpl = ListOf(Record(
@@ -1042,12 +1061,23 @@ local ROWS = {
             { label = Text(nil, 64), coords = VEC3, radius = Num(10, 500, false) },
             { label = true, coords = true, radius = true }
         ), { max = 50 }),
-        check = function(list)
-            for _, z in ipairs(list) do
-                if not Inside(z.coords) then return 'err.setting_outside_map' end
-            end
-            return nil
-        end,
+        check = CheckZonesInside,
+        rows = {
+            max = 50,
+            fields = {
+                F('label', 'text', { max = 64 }),
+                F('coords', 'vector', { size = 3, position = true }),
+                F('radius', 'number', { min = 10, max = 500 }),
+            },
+        },
+    },
+    -- {} = a booking counts anywhere
+    ['RealSuspects.bookingZones'] = {
+        tpl = ListOf(Record(
+            { label = Text(nil, 64), coords = VEC3, radius = Num(10, 500, false) },
+            { label = true, coords = true, radius = true }
+        ), { max = 50 }),
+        check = CheckZonesInside,
         rows = {
             max = 50,
             fields = {

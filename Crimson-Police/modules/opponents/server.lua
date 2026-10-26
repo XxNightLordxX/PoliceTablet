@@ -495,13 +495,14 @@ local function TickSuspect(case, rec, parts, now, cfg)
         rec.trailAt = now + math.max(1, Num(trail.every, 5)) * 1000
         Trail(case, rec, coords)
     end
-    if rec.state == 'free' then
+    if rec.state == 'free' and not rec.down then
         if rec.afkPaused then
             rec.afkPaused, afkOf[rec.cid] = nil, nil
         end
         rec.afk = Sample(rec.cid, src, coords, now)
     else
-        -- cuffed, detained or booked: sitting still in a cruiser is not AFK (C17); rec.afk keeps its value
+        -- cuffed, detained or booked: sitting still in a cruiser is not AFK (C17); nor is lying down (rec.down, kept
+        -- by the proof step) waiting for EMS or the respawn timer. rec.afk keeps its value
         rec.afkPaused = true
     end
 end
@@ -718,6 +719,11 @@ function Opp.close(run)
     -- cuffed -> detained) and the rs_combat_log note come before the outcome, so a suspect who logged off just before
     -- the case ended never reads as 'got_away' by the leave. No event goes out while closing.
     case.closing = true
+    -- Opp.onClose (V5's proof): a cuff release still waiting for its explanation is decided first
+    if type(Opp.onClose) == 'function' then
+        local ok, err = pcall(Opp.onClose, case)
+        if not ok then LogError('onClose', 'CP.Opponents.onClose failed: %s', tostring(err)) end
+    end
     for _, cid in ipairs(case.order) do
         local rec = case.suspects[cid]
         if rec.src == nil and rec.dropAt and not DONE[rec.state] then
@@ -841,6 +847,24 @@ function Opp.setState(run, cid, state, opts)
     if not rec then return false end
     opts = type(opts) == 'table' and opts or {}
     return SetState(case, rec, state, opts.why, opts)
+end
+
+-- A server-only objective event about a suspect that is not a state change (opp_down, opp_up, opp_cuff_attempt):
+-- sent only while the run is In progress, like every state event.
+function Opp.send(run, cid, kind, extra)
+    local case = Opp.caseOf(run)
+    local rec = case and type(cid) == 'string' and case.suspects[cid] or nil
+    if not rec or type(kind) ~= 'string' then return false end
+    Send(case, rec, kind, type(extra) == 'table' and extra or nil)
+    return true
+end
+
+-- A line in the case timeline (staff only): entry = { what, label, src, ... }; `t` is set here.
+function Opp.timeline(run, entry)
+    local case = Opp.caseOf(run)
+    if not case or type(entry) ~= 'table' or type(entry.what) ~= 'string' then return false end
+    Timeline(case, entry)
+    return true
 end
 
 -- fn(case, now) once per open case on every watch pass, after the suspects (proof and conduct steps).
