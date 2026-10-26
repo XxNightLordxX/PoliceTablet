@@ -218,6 +218,10 @@ do
     H.eq(#Audits('runNoted', 'run-note'), 3, 'three notes in all')
     H.ok(run.flagged == nil and run.participants[3].flagged == nil and run.participants[6].flagged == nil,
         'still nobody flagged')
+    -- about (step V4): a case note about one suspect, once per suspect (a crew's second combat log is audited too)
+    H.eq(AC.note(run, nil, 'rs_combat_log', 'Suspect B: no contact', 'CREWB002'), true, 'the same reason about B')
+    H.eq(AC.note(run, nil, 'rs_combat_log', 'again', 'CREWB002'), false, 'once per suspect')
+    H.eq(#Audits('runNoted', 'run-note'), 4, 'four notes in all')
 
     -- the same input checks as a flag
     H.eq(AC.note(run, 99, 'stun_unproven'), false, 'not a participant: refused')
@@ -323,9 +327,15 @@ do
     end
     H.ok(row ~= nil, 'the held row is in the Review Queue')
     local notes = row and row.notes or {}
-    H.eq(#notes, 3, 'its detail lists officer 3\'s notes and the case note (not his partner\'s)')
-    local byReason = {}
-    for _, n in ipairs(notes) do byReason[n.reason] = n end
+    H.eq(#notes, 4, 'its detail lists officer 3\'s notes and both case notes (not his partner\'s)')
+    local byReason, caseNotes = {}, {}
+    for _, n in ipairs(notes) do
+        byReason[n.reason] = n
+        if n.reason == 'rs_combat_log' then caseNotes[#caseNotes + 1] = n.detail end
+    end
+    table.sort(caseNotes)
+    H.eq(table.concat(caseNotes, ' | '), 'Suspect B: no contact | the suspect logged off',
+        'both suspects\' combat logs reach the Review run detail')
     H.eq(byReason.stun_unproven and byReason.stun_unproven.note, true, 'the stun note comes with note = true')
     H.eq(byReason.stun_unproven and byReason.stun_unproven.detail, 'Objective 1, person 5003', 'with its detail')
     H.eq(byReason.rs_combat_log and byReason.rs_combat_log.note, true, 'the case note too')

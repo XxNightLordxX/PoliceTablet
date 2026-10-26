@@ -212,6 +212,17 @@ local RANGES = {
     ['Route.maxDrift'] = { 200, 5000 },
     ['Route.lateArriveRange'] = { 0, 500 },
     ['Route.followActionSeconds'] = { 0, 1800 },
+    -- real suspects (Config.RealSuspects): a watch pass is 1 s, so nothing below it
+    ['RealSuspects.jobHopMinutes'] = { 0, 1440 },
+    ['RealSuspects.afkSeconds'] = { 30, 3600 },
+    ['RealSuspects.afkSampleEvery'] = { 1, 300 },
+    ['RealSuspects.contactRange'] = { 10, 1000 },
+    ['RealSuspects.disconnectGrace'] = { 0, 3600 },
+    ['RealSuspects.reconnectNoticeMinutes'] = { 0, 1440 },
+    ['RealSuspects.evadeWindow'] = { 0, 3600 },
+    ['RealSuspects.trail.every'] = { 1, 60 },
+    ['RealSuspects.trail.max'] = { 1, 5000 },
+    ['RealSuspects.timelineMax'] = { 10, 5000 },
     -- the objective blip and its GPS line (Config.Markers); ids from the docs.fivem.net blip list (build 3258)
     ['Markers.trackEvery'] = { 1, 10 },
     ['Markers.routeOffWithin'] = { 0, 200 },
@@ -898,6 +909,7 @@ local KNOWN = {
     ['Flee.exhausted'] = { tpl = Enum({ 'surrender', 'handsUp', 'walk' }), kind = 'enum' },
     ['Markers.radioSilence'] = { tpl = Enum({ 'none', 'area', 'full' }), kind = 'enum' },
     ['AntiCheat.stunNeedsProof'] = { tpl = Enum({ 'flag', 'hold', 'strict', 'off' }), kind = 'enum' },
+    ['RealSuspects.onLeave'] = { tpl = Enum({ 'void', 'caught', 'escaped' }), kind = 'enum' },
     ['Spawning.onTimeout'] = { tpl = Enum({ 'unfreeze', 'delete' }), kind = 'enum' },
     ['Spawning.hostagesAt'] = { tpl = Enum({ 'objective', 'runStart' }), kind = 'enum' },
     ['NpcCombat.weapons'] = { tpl = ListOf(WEAPON_NAME, { min = 1, unique = true }), kind = 'list', item = 'string' },
@@ -1016,6 +1028,26 @@ local ROWS = {
             { label = true, coords = true, radius = true }
         ), { max = 50 }),
         check = CheckNoBuildZones,
+        rows = {
+            max = 50,
+            fields = {
+                F('label', 'text', { max = 64 }),
+                F('coords', 'vector', { size = 3, position = true }),
+                F('radius', 'number', { min = 10, max = 500 }),
+            },
+        },
+    },
+    ['RealSuspects.noStartZones'] = {
+        tpl = ListOf(Record(
+            { label = Text(nil, 64), coords = VEC3, radius = Num(10, 500, false) },
+            { label = true, coords = true, radius = true }
+        ), { max = 50 }),
+        check = function(list)
+            for _, z in ipairs(list) do
+                if not Inside(z.coords) then return 'err.setting_outside_map' end
+            end
+            return nil
+        end,
         rows = {
             max = 50,
             fields = {

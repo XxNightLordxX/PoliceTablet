@@ -690,6 +690,45 @@ Config.MissionCalls = {
 }
 
 -- ============================================================================
+--                    REAL SUSPECTS (rules for real players)
+-- ============================================================================
+-- Rules for every case where the suspect is a real player instead of an NPC: a LIVE crime (Config.LiveCrime) or a
+-- mission played against a volunteer (Config.Volunteers). Nothing here does anything while both are off.
+-- Crimson-Police never gives a suspect anything (no points, cash or items) and never tells officers who he is.
+Config.RealSuspects = {
+    -- Who can be a suspect:
+    excludeAce = 'crimsonpolice.realsuspect.exclude',  -- players with this ace (server.cfg) are never suspects
+    -- true = Crimson-Police admins (Config.AdminAce / Config.QboxAdmins) are never suspects either
+    excludeAdmins = true,
+    -- A character can't be a suspect within this many minutes of police duty, and can't take a case within this many
+    -- minutes of being a suspect
+    jobHopMinutes = 30,
+    -- No movement and no camera turn this long = AFK: never a suspect, and a suspect cuffed while AFK scores nothing
+    afkSeconds = 300,
+    afkSampleEvery = 15,             -- seconds between AFK samples (only suspects, volunteers and reported crews)
+    noStartZones = {                 -- a player standing here can't become a suspect
+        { label = 'Pillbox Hill Medical', coords = vec3(308.19, -595.35, 43.29), radius = 100.0 },
+        { label = 'Paleto Bay Medical', coords = vec3(-254.54, 6331.78, 32.43), radius = 80.0 },
+        { label = 'Crimson-Arena lobby', coords = vec3(-282.01, -2030.46, 30.15), radius = 60.0 },
+        { label = 'Crimson-Arena Trailer Park', coords = vec3(2344.43, 2565.06, 46.67), radius = 160.0 },
+    },
+    contactRange = 100.0,            -- metres: an officer this close to a suspect has made contact
+    -- When a suspect leaves (logs off, switches character, enters Crimson-Arena or another instance): 'void' = he
+    -- counts for nobody; 'caught' = it counts as a detain for the officers; 'escaped' = it counts as getting away.
+    -- Staff always get a note, and it never holds the officers' points
+    onLeave = 'void',
+    disconnectGrace = 120,           -- seconds a suspect who lost connection may come back and stay in the case
+    reconnectNoticeMinutes = 30,     -- tell the officers when a suspect who left in cuffs comes back within this time
+    -- The staff note says "left soon after contact" when he left within this many seconds of it
+    evadeWindow = 120,
+    trail = {                        -- position trail kept for review
+        every = 5,                   -- seconds between points
+        max = 360,                   -- points kept per suspect
+    },
+    timelineMax = 300,               -- timeline entries kept per case
+}
+
+-- ============================================================================
 --                            LIVE CRIMES (option A)
 -- ============================================================================
 -- A live crime is a real crime that Crimson-Contracts reports once its police alert goes out; the crew that started

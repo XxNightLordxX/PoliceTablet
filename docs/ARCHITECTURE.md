@@ -1173,7 +1173,10 @@ Full admin control (P3, §5.39):
 - `isParticipant(run, src)`, `activeSrcs(run) -> list`, `host(run) -> src`
 - Handles `server:objective` (runId, index, evidence) → `CP.AntiCheat.checkEvent` → block `onEvent`; the
   server-only types (`cuffed`, `decide`, `action`, `removed`, `handed_over`, `impounded`, `shot`, `damaged`: sent
-  by CP.Npc / CP.Custody through `dispatch` / `entityEvent`) are refused and flag the sender `unexpected_event`;
+  by CP.Npc / CP.Custody through `dispatch` / `entityEvent`; `opp_contact`, `opp_cuffed`, `opp_released`,
+  `opp_detained`, `opp_booked`, `opp_down`, `opp_up`, `opp_lost`, `opp_left`, `opp_void`, `opp_in_place`,
+  `opp_left_spot`, `opp_out_of_bounds`, `opp_cuff_attempt`: sent by CP.Opponents, §5.45) are refused and flag the
+  sender `unexpected_event`;
   `server:abandon` (runId) → `removeParticipant(run, src, 'quit')`; `server:telemetry` (runId, kind, data)
   kinds: `ped_hit`, `lights_siren`, `weapon_fired`, `vehicle` (netId of the vehicle they drive).
 - Loops: 1 s timer/block tick; `Config.AntiCheat.jobRecheck` access recheck; corpse cleanup
@@ -1647,16 +1650,17 @@ cp_ table, the four new ones included.
 - `checkEvent(run, src, index, evidence) -> ok, reason` — valid participant, index is the current
   objective, rate limit, speed (`Config.AntiCheat.maxSpeed` between events), duplicate
 - `flag(run, src|nil, reason, detail)` — whole run (src nil) or one participant
-- `note(run, src|nil, reason, detail)` — a staff note about one participant or the case (src nil)
+- `note(run, src|nil, reason, detail, about?)` — a staff note about one participant or the case (src nil); `about`
+  (a suspect's citizenid, CP.Opponents) keeps one case note per reason and suspect instead of one per reason
 - Two classes (critic 2 #12): only an **officer's own conduct** is a flag. A flag sets `p.flagged` / `run.flagged`;
   `CP.Cash.compute` then makes the row `held` and CP.Rewards holds its items until a supervisor approves. Everything
   a suspect does himself, and a fact staff should check without holding anyone's points (`stun_unproven` with
   `stunNeedsProof = 'flag'`), is a **note**: the same input checks and clips, cp_audit category `flags` action
   `runNoted` with the arguments `runFlagged` uses (target = run id, old_value = citizenid or nil, new_value =
-  reason, reason = detail), its own once-per-(reason, citizenid or `*`) list per run, a test run only logs it, and
-  it never sets `p.flagged` or `run.flagged`. The Review run detail (`sup:getReviewQueue` / `admin:getFlagged`
-  rows, `notes = { { reason, detail, note = true } }`) shows the notes of a held run as "Note: <flag line>"; the
-  queue still lists only held rows.
+  reason, reason = detail), its own once-per-(reason, citizenid or `*`, `about`) list per run, a test run only logs
+  it, and it never sets `p.flagged` or `run.flagged`. The Review run detail (`sup:getReviewQueue` /
+  `admin:getFlagged` rows, `notes = { { reason, detail, note = true } }`) shows the notes of a held run as
+  "Note: <flag line>"; the queue still lists only held rows.
 - `stunMode() -> 'flag'|'hold'|'strict'|'off'` — Config.AntiCheat.stunNeedsProof read now (a true from before it was
   a choice reads as `'strict'`, false as `'off'`, missing or unknown as `'flag'`); `stunReport(run, src, seen,
   netId) -> ok` — a block's `stunned` report: seen or `'off'` = true; unseen: `'flag'` = true plus
@@ -2759,17 +2763,91 @@ without arguments also removes the run's service vehicles, PLAN M7).
   after `clear`): streaming swaps, adopted blips that went, the nearest target, the line, the HUD line (sent on change
   only) and the Objective GPS waypoint. No entity pool scans.
 
-### 5.45 CP.Opponents — modules/opponents (S; stub)
+### 5.45 CP.Opponents — modules/opponents (S)
 
 The real suspects of a case, shared by live crimes (§5.46) and volunteer suspects (§5.47); the owner's decision of
 2026-10-26, "Build all 3 but options in the config.lua". A case belongs to one run and one objective; each suspect is
 keyed by citizenid and carries his state (free, cuffed, detained, booked, lost, left or void), the proof the server
-checks before anything scores (the sc-police cuff pair and custody hold, bookings, downs), the officers' conduct
-ledger, the identity and pair rules (no officer scores against his own characters or a repeated partner), a position
-trail and a timeline for review, and staff notes that never hold points. It reads sc-police and sc-ambulance facts it
-only listens to, and its one watch runs only while a case is open. Nothing runs while Config.LiveCrime.enabled and
-Config.Volunteers.enabled are false (both shipped false). Built in steps V4-V26
+checks before anything scores (the sc-police cuff pair and custody hold, bookings, downs: V5), the officers' conduct
+ledger (V6), the identity and pair rules (V7), a position trail and a timeline for review, and staff notes that never
+hold points. Nothing opens a case yet (V14 and V22 do), so nothing runs while Config.LiveCrime.enabled and
+Config.Volunteers.enabled are false (both shipped false). Rules: Config.RealSuspects. Built in steps V4-V26
 (/tmp/claude-0/-home-user-PoliceTablet/c9b2f5e1-32ec-5436-a1db-2a78c5b9aa69/scratchpad/pvp/DESIGN_FINAL.md).
+
+Core (V4, modules/opponents/server.lua). Times inside a record are GetGameTimer() milliseconds; `t` in the timeline,
+notes and trail and `case.openedAt` / `closedAt` are os.time() seconds.
+- `case = { runId, run, kind = 'live'|'volunteer', index, openedAt, scene, lostRule = { range, seconds }|nil, meet|nil,
+  suspects = { [cid] = rec }, order = { cid... }, timeline, ledger, trail = { [cid] = ring }, notes, crimeEndedAt }`;
+  `rec = { cid, src, license, label = 'A'|'B'|... (shuffled with CP.U.rng(run.seed), C5), state, since, contactAt,
+  lastContactAt, lastCoords, md = { ishandcuffed, isdead, inlaststand, injail }, down, downAt, protectUntil, cuff,
+  outsideCuff, cuffedAt, detainedAt, bookedAt, injailAt, jail, share, caughtBy, armedUntil, everArmed, afk (true =
+  AFK by his samples), near, dropAt, leftAt, byLeave, notes, outcome }`.
+- `open(run, spec) -> case|nil`: `spec = { kind, index, members, scene, lostRule, meet }`; `members` is a list of
+  citizenids or a map keyed by them (`{ [cid] = true }`, or Crimson-Contracts' `{ [cid] = src }`: the server ids in
+  it are never read, C9). Each src comes from `CP.Qbx.getByCitizenId` and one `getInfo` (license, the metadata mirror)
+  at open. A suspect who is offline starts in the disconnect-grace path (src nil, dropAt now, the license read in a
+  thread with `CP.Qbx.licenseOf`; critic 2 #19). A citizenid that is a suspect of another case is left out. A second
+  open of the run returns its case.
+- `close(run) -> { [cid] = outcome }, case`: 'detained', 'booked', 'got_away' (free, cuffed with no detain, lost),
+  'left', 'void', or the outcome a later step set. A leave still waiting for its grace (a drop, or offline since the
+  open) is made final first, as below (the onLeave rule or cuffed -> detained, and the `rs_combat_log` note), with no
+  objective event, so a suspect who logs off just before End case, the time limit or the last officer leaving is
+  never 'got_away' by the leave. The `run:ended` hook closes the case; a second call for the same run (another
+  `run:ended` listener) answers the same outcomes (the last 16 closed cases are kept).
+- `active()` (true while a case is open; the V3 facts only pass then), `caseOf(run)`, `bySrc(src) -> case, rec`,
+  `byCid(cid) -> case, rec`, `view(run)` (a copy for blocks with no server ids: label, state, online, contact, down,
+  afk, share, byLeave, everArmed, outcome, md), `nearAny(run, coords, range) -> true, cid, metres` (a free or cuffed
+  suspect at the last watch pass; no native read), `crimeEnded(run)`, `noteArmed(cid)`, `trailOf(run, cid)` (oldest
+  first), `setState(run, cid, state, { event, why, by })` (for the proof step), `onTick(fn)` (fn(case, now) once per
+  case on every watch pass, after the suspects), `onMeta` (a field V5 sets: `fn(rec, key, old, new, case)` after the
+  mirror changed).
+- `eligible(src, opts) -> ok, reason` (events and claims only, never per tick), refused in this order: `not_loaded`
+  (no getInfo), `in_case`, `instance` (bucket other than 0), `arena_flag` (CP.Alerts.foreignFlag), `on_duty` (on duty
+  in a Config.Departments job), `job_hop` (`Opp.lastPoliceAt(cid)` from V7, os.time(), within jobHopMinutes; nil
+  until V7), `afk`; with `opts.intake` also `no_position`, `no_start_zone`, `down`, `cuffed`, `jailed` (metadata);
+  then `excluded` (`IsPlayerAceAllowed(src, excludeAce)`, a server BOOL native: truthiness) and `admin`
+  (`CP.Access.isAdmin` while `excludeAdmins` is not false; critic 2 #29).
+- `note(run, reason, detail, cid)`: `{ t, what = reason, label, detail }` in the case's notes, the suspect's notes and
+  the timeline, and `CP.AntiCheat.note(run, nil, reason, detail, cid)` (§5.26: audited as runNoted once per reason and
+  suspect, so every suspect of a crew who logs off is in the audit, shown in the Review run detail, never
+  `run.flagged` or `p.flagged`). Everything a suspect does himself is a note: `rs_combat_log`,
+  `rs_evade_instance`, `rs_fake_arena_flag`, `rs_teleport`, `rs_went_on_duty` here (critic 2 #12).
+- `sampleCrew(key, cids)` / `unsampleCrew(key, cids?)`: AFK samples for citizenids with no case yet (a crew whose
+  contract started, a volunteer; C17); the same key again adds to its list, `unsampleCrew` without cids drops the key.
+- Event-kept maps (critic 2 #20, LOOP_RULES 8): `srcOf[cid]` / `cidOf[src]` for tracked citizenids only, set at open,
+  `sampleCrew` and `CP.Qbx.onPlayerLoaded` (getInfo once: an event path), cleared by `CP.Qbx.onPlayerUnload` and
+  `playerDropped`, so a server id another player gets after a drop never matches a record (C9). `rec.md` is seeded by
+  getInfo at open and at a rejoin and then kept by `CP.Qbx.onMetaDataChange(fn, { 'ishandcuffed', 'isdead',
+  'inlaststand', 'injail' })` (old == new ignored). `CP.Qbx.onDutyChange` / `onJobChange` putting a suspect on duty
+  in a Config.Departments job: free or cuffed -> void, and the note `rs_went_on_duty` (critic 2 #19). Another script's
+  crimsonArena flag is seen by a state bag change handler (and checked at open, at a rejoin and on the way out of an
+  instance): in bucket 0 it is the note `rs_fake_arena_flag` once, and he stays tracked (C8).
+- The watch: one thread, `Wait(1000)`, started by the first `open` or `sampleCrew`, ended when no case and no crew is
+  left (an exit token: never two copies). A pass reads each case's active participants' server coords once, and per
+  suspect with a src only `GetPlayerRoutingBucket`, `GetPlayerPed` and `GetEntityCoords` (and
+  `GetPlayerCameraRotation` on an AFK sample): never a Qbox export. A bucket other than 0 is leaving (critic 2 #14):
+  cuffed -> detained, free -> the onLeave rule at once, detained and booked stay (C25), always the note
+  `rs_evade_instance` ("contact N s ago" / "no contact"). A move faster than Config.AntiCheat.maxSpeed since the last
+  pass is the note `rs_teleport` (not on the first pass after a rejoin or an instance). Contact: an active participant
+  within contactRange (`contactAt` once with `opp_contact`, `lastContactAt` every pass). Lost, with `case.lostRule`
+  only: a free suspect, after contact or `crimeEnded`, with no participant within `range` for `seconds`. A trail point
+  every `trail.every` s, at most `trail.max` per suspect (a ring). AFK: a sample every `afkSampleEvery` s (coords and
+  camera; still = moved under 1 m and turned under 2 degrees since the stillness began, AFK after `afkSeconds`), for
+  free suspects and sampled crews only: the samples stop while a suspect is cuffed, detained or booked (C17) and
+  `rec.afk` keeps its value from the cuff. Offline suspects only wait for their grace.
+- Leaving: `playerDropped` and `CP.Qbx.onPlayerUnload`. A cuffed suspect is detained at the drop (C18); a character
+  switch or logout is final at once; any other drop waits `disconnectGrace` s for a rejoin. When the leave is final:
+  cuffed -> detained, free -> `Config.RealSuspects.onLeave` ('void' -> left, 'caught' -> detained with `byLeave` and
+  share 1, or 0 when he was AFK, 'escaped' -> lost), detained and booked keep their state, and always the note
+  `rs_combat_log` ("left within N s of contact" inside evadeWindow, "contact N s ago", "no contact", or "offline when
+  the case opened"). Rejoin within the grace: the same record with the new src, the mirror read again; a suspect who
+  left cuffed or detained and comes back within reconnectNoticeMinutes: the toast `opp.back_in_city` to the case's
+  active participants (no name).
+- Every state change: the timeline, and while the run is In progress `CP.Runs.dispatch(run, case.index, nil, { type =
+  'opp_<state>' ('opp_released' for free), cid, label, prev, by, share, why })` (before that the state is only kept;
+  the block reads `view` at its start). The opp_* types are server-only (§8.2: `server:objective` refuses them from a
+  client and flags `unexpected_event`).
+- Opponents are never in `run.entities`, CP.Npc's registry or a `cp` bag. Resource stop clears everything.
 
 ### 5.46 CP.LiveCrime — modules/livecrime and modules/integrations/crimson_contracts (S; stub)
 
@@ -3087,7 +3165,7 @@ Server → client ox_lib callback: `crimson-police:client:spawn:walkIn` `{ car =
 | `server:joinOperation` | operationId | operations |
 | `server:routeStatus` | runId, metres, coords (three args, no reqId) | route |
 | `server:recalcRoute` | runId | route |
-| `server:objective` | runId, index, evidence (three args, no reqId) | runs |
+| `server:objective` | runId, index, evidence (three args, no reqId; the server-only types of §5.10, CP.Opponents' opp_* types among them, are refused and flag the sender) | runs |
 | `server:telemetry` | runId, kind, data (three args, no reqId) | runs |
 | `server:abandon` | runId | runs |
 | `server:dispute` | `{ rowId, reason }` | disputes |

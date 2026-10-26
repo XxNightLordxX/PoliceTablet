@@ -223,6 +223,7 @@ local CONFIG_SECTIONS = {
     'Draw',
     'Units',
     'MissionCalls',
+    'RealSuspects',
     'LiveCrime',
     'Volunteers',
     'Custody',

@@ -213,13 +213,15 @@ end
 -- A staff note: something a suspect did himself, or a fact staff should check, about one participant (src) or the
 -- case (src nil). Audited (runNoted) and shown in the Review run detail, but it never sets p.flagged or
 -- run.flagged, so nobody's points or items are held for it. Once per reason and participant per run (its own
--- list, apart from the flags); a test run only logs it.
-function AC.note(run, src, reason, detail)
+-- list, apart from the flags), and per `about` when one is given (a case note about one suspect: his citizenid);
+-- a test run only logs it.
+function AC.note(run, src, reason, detail, about)
     local p
     run, p, reason, detail = Mark(run, src, reason, detail, 'noted')
     if not run then return false end
     local st = StateOf(run)
     local key = reason .. '|' .. (p and tostring(p.citizenid) or '*')
+    if type(about) == 'string' and about ~= '' then key = key .. '|' .. Clip(about, 64) end
     if st.noted[key] then return false end
     st.noted[key] = true
     CP.log(TAG, 'run %s (%s) note %s%s: %s', tostring(run.id), tostring(run.missionId), reason,

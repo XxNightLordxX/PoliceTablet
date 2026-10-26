@@ -644,13 +644,41 @@ do
     for _, t in ipairs({ 'cuffed', 'decide', 'action', 'removed', 'handed_over', 'impounded', 'shot', 'damaged' }) do
         H.fire('crimson-police:server:objective', 1, A.id, 1, { type = t, netId = 5, time = n + #got })
     end
+    local k1Flags = #got
+    -- V4: CP.Opponents' facts about real suspects are server-only too (12 a second: two batches)
+    local OPP = {
+        'opp_contact',
+        'opp_cuffed',
+        'opp_released',
+        'opp_detained',
+        'opp_booked',
+        'opp_down',
+        'opp_up',
+        'opp_lost',
+        'opp_left',
+        'opp_void',
+        'opp_in_place',
+        'opp_left_spot',
+        'opp_out_of_bounds',
+        'opp_cuff_attempt',
+    }
+    for i, t in ipairs(OPP) do
+        if i == 1 or i == 8 then H.advance(1000) end
+        H.fire('crimson-police:server:objective', 1, A.id, 1, { type = t, cid = 'X1', share = 1, time = n + #got })
+    end
     CP.AntiCheat.flag = acFlag
     H.eq(#CallsOf('onEvent', 1), n, 'k1: a client cuffed, decide, removed... never reaches onEvent')
-    H.eq(#got, 8, 'k1: each one flags')
+    H.eq(k1Flags, 8, 'k1: each one flags')
     H.ok(got[1] and got[1].run == A, 'k1: the run')
     H.eq(got[1] and got[1].src, 1, 'k1: the sender')
     H.eq(got[1] and got[1].reason, 'unexpected_event', 'k1: unexpected_event')
     H.eq(got[1] and got[1].detail, 'client sent cuffed', 'k1: naming the type')
+    H.eq(#CallsOf('onEvent', 1), n, 'v4: a client opp_detained, opp_booked... never reaches onEvent')
+    H.eq(#got, 8 + #OPP, 'v4: each one flags')
+    local detained = nil
+    for _, g in ipairs(got) do if g.detail == 'client sent opp_detained' then detained = g end end
+    H.ok(detained ~= nil and detained.reason == 'unexpected_event' and detained.src == 1,
+        'v4: opp_detained from a client: unexpected_event on the sender')
     H.advance(1000)
     H.fire('crimson-police:server:objective', 1, A.id, 1, { type = 'hit', value = 4 })
     H.eq(#CallsOf('onEvent', 1), n + 1, 'k1: client evidence still reaches the block')

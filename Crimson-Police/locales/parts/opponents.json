@@ -1,0 +1,15 @@
+{
+  "opp.back_in_city": "A suspect you detained is back in the city.",
+  "opp.detail.contact": "Suspect {label}: contact {seconds} s ago",
+  "opp.detail.no_contact": "Suspect {label}: no contact",
+  "opp.detail.evade": "Suspect {label}: left within {window} s of contact (contact {seconds} s ago)",
+  "opp.detail.offline_at_open": "Suspect {label}: offline when the case opened and not back in time",
+  "opp.detail.teleport": "Suspect {label}: {metres} m in {seconds} s",
+  "opp.detail.on_duty": "Suspect {label}: went on duty as {job}",
+  "opp.detail.fake_arena": "Suspect {label}: another script's arena flag outside any instance",
+  "flag.rs_fake_arena_flag": "A suspect carried another script's arena flag in the open world. He stayed in the case.",
+  "flag.rs_teleport": "A suspect moved faster than a player can (teleport or noclip).",
+  "flag.rs_combat_log": "A suspect logged off or switched character during the case.",
+  "flag.rs_evade_instance": "A suspect went into an instance (an apartment, Crimson-Arena or another world) during the case.",
+  "flag.rs_went_on_duty": "A suspect went on police duty during the case and no longer counts."
+}

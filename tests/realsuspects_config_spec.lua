@@ -113,6 +113,90 @@ do
 end
 
 -- ============================================================================
+--                       CONFIG.REALSUSPECTS IN SETTINGS
+-- ============================================================================
+-- Step V4, its first keys.
+
+do
+    local sc = S._schema()
+    local order = {}
+    for i, sec in ipairs(sc.sections) do order[sec.key] = i end
+    H.ok(
+        order.real_suspects ~= nil and (order.dispatch or 0) < order.real_suspects
+            and order.real_suspects < (order.live_crimes or 0),
+        'Real suspects is a section between Dispatch and Live crimes'
+    )
+    local leave = S.entry('RealSuspects.onLeave') or {}
+    H.eq(leave.kind, 'enum', 'onLeave is a pick')
+    H.eq(leave.default, 'void', 'onLeave ships void')
+    H.eq(table.concat(leave.tpl and leave.tpl.options or {}, ','), 'void,caught,escaped',
+        'onLeave: void, caught or escaped')
+    H.ok(Has(leave.desc, 'When a suspect leaves') and Has(leave.desc, 'never holds the officers\' points'),
+        'onLeave: the group line and its comment are the description')
+    for _, v in ipairs({ 'void', 'caught', 'escaped' }) do
+        H.ok((S.check('RealSuspects.onLeave', v)), 'onLeave ' .. v)
+    end
+    local okBad, errBad = S.check('RealSuspects.onLeave', 'jail')
+    H.ok(okBad == false and errBad == 'err.setting_option', 'onLeave refuses anything else')
+    local zones = S.entry('RealSuspects.noStartZones') or {}
+    H.eq(zones.kind, 'rows', 'noStartZones is a list of zones (label, coords, radius)')
+    H.eq(#(Config.RealSuspects.noStartZones or {}), 4, 'Pillbox, Paleto medical and the two Crimson-Arena areas')
+    H.eq((S.entry('RealSuspects.excludeAdmins') or {}).kind, 'boolean', 'excludeAdmins is a switch')
+    H.eq((S.entry('RealSuspects.excludeAdmins') or {}).money, nil, 'and not a money switch')
+    for path, value in pairs({
+        excludeAce = 'crimsonpolice.realsuspect.exclude',
+        excludeAdmins = true,
+        jobHopMinutes = 30,
+        afkSeconds = 300,
+        afkSampleEvery = 15,
+        contactRange = 100.0,
+        disconnectGrace = 120,
+        reconnectNoticeMinutes = 30,
+        evadeWindow = 120,
+        timelineMax = 300,
+    }) do
+        local e = S.entry('RealSuspects.' .. path) or {}
+        H.eq(e.default, value, 'RealSuspects.' .. path .. ' ships ' .. tostring(value))
+        H.ok(type(e.desc) == 'string' and #e.desc > 10, 'RealSuspects.' .. path .. ' has a description')
+    end
+    -- Each description is its own key's comment, word for word: a comment that runs on to a second line never sits
+    -- directly above the next key, where Settings would read it as that key's description too.
+    for path, desc in pairs({
+        excludeAce = 'Who can be a suspect: players with this ace (server.cfg) are never suspects',
+        excludeAdmins = 'true = Crimson-Police admins (Config.AdminAce / Config.QboxAdmins) are never suspects either',
+        jobHopMinutes = 'A character can\'t be a suspect within this many minutes of police duty, and can\'t take a '
+            .. 'case within this many minutes of being a suspect',
+        afkSeconds = 'No movement and no camera turn this long = AFK: never a suspect, and a suspect cuffed while AFK '
+            .. 'scores nothing',
+        afkSampleEvery = 'seconds between AFK samples (only suspects, volunteers and reported crews)',
+        noStartZones = 'a player standing here can\'t become a suspect',
+        contactRange = 'metres: an officer this close to a suspect has made contact',
+        onLeave = 'When a suspect leaves (logs off, switches character, enters Crimson-Arena or another instance): '
+            .. '\'void\' = he counts for nobody; \'caught\' = it counts as a detain for the officers; \'escaped\' = '
+            .. 'it counts as getting away. Staff always get a note, and it never holds the officers\' points',
+        disconnectGrace = 'seconds a suspect who lost connection may come back and stay in the case',
+        reconnectNoticeMinutes = 'tell the officers when a suspect who left in cuffs comes back within this time',
+        evadeWindow = 'The staff note says "left soon after contact" when he left within this many seconds of it',
+        ['trail.every'] = 'seconds between points',
+        ['trail.max'] = 'points kept per suspect',
+        timelineMax = 'timeline entries kept per case',
+    }) do
+        H.eq((S.entry('RealSuspects.' .. path) or {}).desc, desc, 'RealSuspects.' .. path .. ': its own comment')
+    end
+    local trailGroup = nil
+    for _, sec in ipairs(sc.sections) do
+        for _, g in ipairs(sec.key == 'real_suspects' and sec.groups or {}) do
+            if g.path == 'RealSuspects.trail' then trailGroup = g end
+        end
+    end
+    H.eq(trailGroup and trailGroup.desc, 'position trail kept for review', 'the trail group: its own comment')
+    H.eq(Config.RealSuspects.trail.every, 5, 'a trail point every 5 s')
+    H.eq(Config.RealSuspects.trail.max, 360, 'at most 360 points')
+    local okZero = S.check('RealSuspects.trail.every', 0)
+    H.eq(okZero, false, 'a trail point every 0 s is refused')
+end
+
+-- ============================================================================
 --                         THE DOCS RECORD THE DECISION
 -- ============================================================================
 

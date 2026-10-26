@@ -4539,11 +4539,34 @@ local function RecheckOk(run, p)
     return true
 end
 
--- Objective events only the server sends (CP.Npc and CP.Custody through Runs.dispatch / Runs.entityEvent): a block's
--- onEvent cannot tell them from client evidence, so server:objective refuses them and flags the sender. In a block
--- because this file is at Lua's 200 locals.
+-- Objective events only the server sends (CP.Npc and CP.Custody through Runs.dispatch / Runs.entityEvent, CP.Opponents'
+-- opp_* facts about real suspects): a block's onEvent cannot tell them from client evidence, so server:objective
+-- refuses them and flags the sender. In a block because this file is at Lua's 200 locals.
 do
-    local SERVER_ONLY = Set({ 'cuffed', 'decide', 'action', 'removed', 'handed_over', 'impounded', 'shot', 'damaged' })
+    local SERVER_ONLY = Set({
+        'cuffed',
+        'decide',
+        'action',
+        'removed',
+        'handed_over',
+        'impounded',
+        'shot',
+        'damaged',
+        'opp_contact',
+        'opp_cuffed',
+        'opp_released',
+        'opp_detained',
+        'opp_booked',
+        'opp_down',
+        'opp_up',
+        'opp_lost',
+        'opp_left',
+        'opp_void',
+        'opp_in_place',
+        'opp_left_spot',
+        'opp_out_of_bounds',
+        'opp_cuff_attempt',
+    })
 
     RegisterNetEvent(CP.e('server:objective'), function(runId, index, evidence)
         local src = source
