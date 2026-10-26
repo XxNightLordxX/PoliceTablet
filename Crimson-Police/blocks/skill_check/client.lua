@@ -181,9 +181,10 @@ end
 --                                   DEFUSING
 -- ============================================================================
 
+-- A dictionary that fails to load (ox_lib raises on a streaming timeout) skips the kneel: the defuse goes on.
 local function PlayAnim(st)
     local ped = PlayerPedId()
-    if lib.requestAnimDict then lib.requestAnimDict(ANIM_DICT) end
+    if lib.requestAnimDict and not pcall(lib.requestAnimDict, ANIM_DICT, 3000) then return end
     TaskPlayAnim(ped, ANIM_DICT, ANIM_CLIP, 8.0, -8.0, -1, 1, 0.0, false, false, false)
     st.animating = true
 end
@@ -241,6 +242,7 @@ local function Recover(ctx, st, i)
     if st.busy or not st.alive then return end
     local sb = st.data and st.data.setback or {}
     st.busy = true
+    st.recovering = true   -- Cleanup cancels this bar when the objective or run ends
     local ok = lib.progressBar({
         duration = tonumber(sb.duration) or 10000,
         label = sb.label or CP.L('block.skill_check.recover_default'),
@@ -249,6 +251,7 @@ local function Recover(ctx, st, i)
         disable = { move = true, car = true, combat = true },
         anim = { scenario = 'WORLD_HUMAN_CLIPBOARD' },
     })
+    st.recovering = false
     st.busy = false
     if ok and st.alive then
         st.seq = (st.seq or 0) + 1
@@ -418,6 +421,9 @@ local function Cleanup(ctx, st)
     st.cancelled = true
     st.token = (st.token or 0) + 1
     if st.busy and lib.skillCheckActive and lib.skillCheckActive() then lib.cancelSkillCheck() end
+    -- the setback's recovery bar (e.g. Ventilate) stops with the objective, like every other block's bar
+    if st.recovering and lib.progressActive and lib.progressActive() then pcall(lib.cancelProgress) end
+    st.recovering = false
     StopAnim(st)
     st.busy, st.working, st.round = false, nil, nil
     ClearZones(st)

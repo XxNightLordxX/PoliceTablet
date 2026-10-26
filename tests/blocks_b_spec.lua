@@ -2713,6 +2713,21 @@ do
     H.eq(OpenBlips(), 0, 'pr: stop removes the blips')
     Steps(8)
     H.eq(#ReportsOf(pc, 'freed'), 0, 'pr: no freed report after the cancelled cut')
+    -- K13: a cut whose animation fails to load (ox_lib raises) leaves the hostage usable
+    local plainBar = lib.progressBar
+    local function Raising() error('streaming timeout', 0) end
+    local kc = ClientCtx(U.deepcopy(PR.defaults({})), prLoc, { tag = 'pr-k13', index = 2 })
+    PRc.prepare(kc)
+    PRc.update(kc, { peds = { { netId = 7001, state = 'restrained', index = 1 } } })
+    PRc.start(kc)
+    Steps(1)
+    local kopt = targets[71] and targets[71][1]
+    lib.progressBar = Raising
+    local okCut = kopt and pcall(kopt.onSelect)
+    lib.progressBar = plainBar
+    H.ok(okCut and kopt.canInteract(71) == true, 'k13 pr: a failed cut bar leaves the hostage usable')
+    H.eq(#ReportsOf(kc, 'freed'), 0, 'k13 pr: the failed cut reports nothing')
+    PRc.stop(kc)
 
     -- flee_arrest: fleeing inmate re-tasked once control arrives; lock-on aim counts as aiming
     Place(1, 4000, 4000, 30)
@@ -2763,6 +2778,17 @@ do
     H.eq(#ReportsOf(rc, 'knock'), 1, 'fa restart: the knock is reported again')
     FAc.stop(rc)
     H.eq(removedZones[#zones], true, 'fa restart: stop removes the new zone')
+    -- K13: a knock whose animation fails to load (ox_lib raises) leaves the door usable
+    local kd = ClientCtx(U.deepcopy(FA.defaults({})), doorLoc, { tag = 'door-k13' })
+    FAc.prepare(kd)
+    FAc.start(kd)
+    local kz = zones[#zones]
+    lib.progressBar = Raising
+    local okKnock = pcall(kz.options[1].onSelect)
+    lib.progressBar = plainBar
+    H.ok(okKnock and kz.options[1].canInteract() == true, 'k13 fa: a failed knock bar leaves the door usable')
+    H.eq(#ReportsOf(kd, 'knock'), 0, 'k13 fa: the failed knock reports nothing')
+    FAc.stop(kd)
     -- the objective stops while the host loop waits for control of an inmate: nothing after the cleanup
     Place(1, 4000, 4000, 30)
     local sc = ClientCtx(U.deepcopy(FA.defaults({ mode = 'scatter' })), scatterLoc, { tag = 'fa-stop' })

@@ -55,14 +55,18 @@ local function Step(S, kind, netId)
     local ctx = S.ctx
     local step = ctx.obj[kind] or {}
     ctx.report({ type = kind .. '_begin', netId = netId })
-    local ok = lib.progressBar({
+    -- ox_lib raises when the animation fails to load (release): the step counts as cancelled and busy is still
+    -- cleared
+    local okBar, done = pcall(lib.progressBar, {
         duration = tonumber(step.duration) or 5000,
         label = step.label or CP.L('block.process_scene.' .. kind),
         useWhileDead = false,
         canCancel = true,
         disable = { move = true, car = true, combat = true },
         anim = ANIMS[kind],
-    }) == true
+    })
+    if not okBar then CP.warn('blocks', 'process_scene %s bar failed: %s', kind, tostring(done)) end
+    local ok = okBar and done == true
     if ok and S.alive and S.current then ctx.report({ type = kind, netId = netId }) end
     S.busy = false
 end

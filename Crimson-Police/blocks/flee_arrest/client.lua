@@ -141,7 +141,8 @@ local function Knock(S)
     local ctx = S.ctx
     local k = ctx.obj.knock or {}
     ctx.report({ type = 'knock_start' })
-    local done = lib.progressBar({
+    -- ox_lib raises when the animation fails to load: the knock counts as cancelled and busy is still cleared
+    local okBar, done = pcall(lib.progressBar, {
         duration = tonumber(k.duration) or 3000,
         label = k.label or CP.L('block.flee_arrest.knock'),
         useWhileDead = false,
@@ -149,6 +150,10 @@ local function Knock(S)
         disable = { move = true, car = true, combat = true },
         anim = KNOCK_ANIM,
     })
+    if not okBar then
+        CP.warn('blocks', 'flee_arrest knock bar failed: %s', tostring(done))
+        done = false
+    end
     if done and S.alive and S.current and not S.knocked then
         ctx.report({ type = 'knock' })
     end

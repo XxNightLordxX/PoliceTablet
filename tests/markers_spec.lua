@@ -1067,6 +1067,22 @@ do
         'ps Radio Silence: the scene pin, no line')
     M.clear()
     PSc.stop(rctx)
+
+    -- K13: a Release bar whose animation fails to load (ox_lib raises) leaves Release usable
+    local zone = nil
+    H.exportsMock.ox_target.addSphereZone = function(o) zone = o; return 2 end
+    local kctx = { runId = 'run-ps13', index = 3, obj = {}, state = {}, report = function() end, radioSilence = true }
+    PSc.prepare(kctx)
+    PSc.start(kctx)
+    PSc.update(kctx, { bodies = { { netId = 0, tagged = true, bagged = true } }, scene = scene, coroner = false })
+    local opt = zone and zone.options[1]
+    H.ok(opt and opt.canInteract() == true, 'k13 ps: Release at the scene once every body is bagged')
+    local savedBar = lib.progressBar
+    lib.progressBar = function() error('streaming timeout', 0) end
+    local okSel = opt and pcall(opt.onSelect)
+    lib.progressBar = savedBar
+    H.ok(okSel and opt.canInteract() == true, 'k13 ps: a Release whose animation fails to load can be tried again')
+    PSc.stop(kctx)
 end
 
 -- checkpoint_route (Beat Patrol, EVOC): numbered yellow checkpoints, its own line in routeColour, never two lines
@@ -1567,6 +1583,27 @@ do
     Send({ runId = 'run-sv7', id = 5, kind = 'prisonerVan', show = true, netId = 904, coords = van.coords })
     H.eq(#Live(), 1, 'sv7: nothing new once the run is over')
     M.clear()
+
+    -- K13: ox_lib raises when a bar's animation dictionary fails to load; the officer is not left busy (that would
+    -- hide every contact and custody option until reconnect)
+    local saved = {}
+    for _, k in ipairs({ 'PlayerPedId', 'IsEntityDead', 'IsPedInAnyVehicle', 'TriggerServerEvent' }) do
+        saved[k] = rawget(_G, k)
+    end
+    local sent = {}
+    _G.PlayerPedId = function() return 1 end
+    _G.IsEntityDead = function() return false end
+    _G.IsPedInAnyVehicle = function() return false end
+    _G.TriggerServerEvent = function(_, _, _, _, phase) sent[#sent + 1] = phase end
+    local savedBar = lib.progressBar
+    lib.progressBar = function() error('streaming timeout', 0) end
+    run.state = 'in_progress'
+    local okPerform, done, why = pcall(CP.Custody.perform, 900, 'frisk')
+    lib.progressBar = savedBar
+    H.ok(okPerform and done == false and why == 'err.cancelled', 'k13 custody: a failed frisk bar counts as cancelled')
+    H.eq(CP.Custody.busy(), false, 'k13 custody: not left busy after the failed bar')
+    H.eq(table.concat(sent, ','), 'begin', 'k13 custody: no finish sent for the failed bar')
+    for k, v in pairs(saved) do _G[k] = v end
     CP.Runs.current = savedCurrent
 end
 

@@ -112,7 +112,8 @@ local function Free(S, netId)
     local ctx = S.ctx
     local obj = ctx.obj
     ctx.report({ type = 'free_start', netId = netId })
-    local done = lib.progressBar({
+    -- ox_lib raises when the animation fails to load: the cut counts as cancelled and busy is still cleared
+    local okBar, done = pcall(lib.progressBar, {
         duration = tonumber(obj.freeTime) or 6000,
         label = (obj.target and obj.target.label) or CP.L('block.protect_rescue.cut_restraints'),
         useWhileDead = false,
@@ -120,6 +121,10 @@ local function Free(S, netId)
         disable = { move = true, car = true, combat = true },
         anim = FREE_ANIM,
     })
+    if not okBar then
+        CP.warn('blocks', 'protect_rescue free bar failed: %s', tostring(done))
+        done = false
+    end
     if done and S.alive and S.current then
         ctx.report({ type = 'freed', netId = netId })
     end

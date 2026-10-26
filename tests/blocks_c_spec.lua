@@ -2869,6 +2869,15 @@ do -- search_area: a clue check still running when the objective stops is cancel
     H.step(1000)
     H.eq(#CL.zones, 4, 'search client: a new zone once the clue appeared')
     H.eq(CL.zones[4].options[1].canInteract(), true, 'search client: once it is there it can be checked')
+    -- K13: a clue check whose animation fails to load (ox_lib raises) leaves the clue checkable
+    local plainBar = lib.progressBar
+    lib.progressBar = function() error('streaming timeout', 0) end
+    local before = #CL.reports
+    local okClue = pcall(CL.zones[4].options[1].onSelect)
+    lib.progressBar = plainBar
+    H.ok(okClue and CL.zones[4].options[1].canInteract() == true, 'k13 search client: the clue can be checked again')
+    H.ok(#CL.reports == before + 1 and CL.reports[before + 1].type == 'clue_start',
+        'k13 search client: the failed check reports no clue')
     -- start checking, then the objective stops mid-progress
     local reports = #CL.reports
     CL.zones[4].options[1].onSelect()

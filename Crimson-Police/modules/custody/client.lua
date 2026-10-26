@@ -99,14 +99,18 @@ function Custody.perform(netId, action, extra)
     local seconds = TimeOf(action)
     local ok = true
     if seconds > 0 and lib and lib.progressBar then
-        ok = lib.progressBar({
+        -- ox_lib raises when the bar's animation dictionary fails to load: the bar counts as cancelled and busy
+        -- is still cleared below, so the officer's contact and custody options come back.
+        local okBar, res = pcall(lib.progressBar, {
             duration = math.floor(seconds * 1000),
             label = CP.L('custody.action.' .. action),
             useWhileDead = false,
             canCancel = true,
             disable = { move = not IN_CAR[action], car = not IN_CAR[action], combat = true },
             anim = ANIMS[action],
-        }) == true
+        })
+        if not okBar then CP.warn(TAG, '%s bar failed: %s', action, tostring(res)) end
+        ok = okBar and res == true
     end
     busy = nil
     if not ok or InForeignArena() then return false, 'err.cancelled' end

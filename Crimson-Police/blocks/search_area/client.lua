@@ -153,7 +153,8 @@ local function CheckClue(S, cl)
     local ctx = S.ctx
     local p = ctx.obj.clueProgress or {}
     ctx.report({ type = 'clue_start', clue = cl.i })
-    local done = lib.progressBar({
+    -- ox_lib raises when the animation fails to load: the search counts as cancelled and busy is still cleared
+    local okBar, done = pcall(lib.progressBar, {
         duration = tonumber(p.duration) or 4000,
         label = p.label or CP.L('block.search_area.clue_progress'),
         useWhileDead = false,
@@ -161,6 +162,10 @@ local function CheckClue(S, cl)
         disable = { move = true, car = true, combat = true },
         anim = cl.kind == 'witness' and TALK_ANIM or SEARCH_ANIM,
     })
+    if not okBar then
+        CP.warn('blocks', 'search_area clue bar failed: %s', tostring(done))
+        done = false
+    end
     if done and S.alive and S.current and S.clues[cl.i] and S.clues[cl.i].status == 'pending' then
         ctx.report({ type = 'clue', clue = cl.i })
     end

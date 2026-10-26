@@ -2255,6 +2255,13 @@ do
     H.eq(lib._lastProgress.canCancel, true, 'progress can be cancelled')
     H.eq(lib._lastProgress.disable.move, true, 'movement disabled')
     H.eq(lib._lastProgress.anim.scenario, 'WORLD_HUMAN_CLIPBOARD', 'clipboard animation')
+    -- K13: a bar whose animation fails to load (ox_lib raises) leaves the doors usable
+    local plainBar = lib.progressBar
+    lib.progressBar = function() error('streaming timeout', 0) end
+    local okDoor = pcall(zones[2].options[1].onSelect)
+    lib.progressBar = plainBar
+    H.ok(okDoor and zones[2].options[1].canInteract() == true and #ic.reports == 1,
+        'k13 ip: a failed bar reports nothing and leaves the doors usable')
     local snap = CP.U.deepcopy(LastSend(ictx))
     snap.points[1].status = 'followup'
     snap.points[1].outcomeLabel = 'The door was found open'
@@ -2354,6 +2361,62 @@ do
     SCc.hostChanged(kc, false)
     SCc.stop(kc)
     H.ok(removedZones[zbase + 1] and removedZones[zbase + 2], 'stop removes the defuse zones')
+
+    -- K13: ox_lib's lib.requestAnimDict raises on a streaming timeout. The defuse goes on without the kneel and the
+    -- device can be worked again; a setback's Ventilate bar stops when the objective ends.
+    do
+        local z0 = #zones
+        local dobj = CP.U.deepcopy(kobj)
+        dobj.checks = { 'easy', 'easy' }
+        local dc = ClientCtx(dobj, { index = 3 })
+        dc.runId = 'run-k13'
+        SCc.prepare(dc)
+        SCc.start(dc)
+        local function Device(status)
+            return {
+                kind = 'state',
+                checks = 2,
+                setback = { label = 'Ventilate', duration = 10000 },
+                targets = { { coords = { x = 10.0, y = 0.0, z = 0.0 }, netId = 811, status = status, next = 1 } },
+            }
+        end
+        SCc.update(dc, Device('armed'))
+        local savedDict, savedBar, savedActive = lib.requestAnimDict, lib.progressBar, lib.progressActive
+        lib.requestAnimDict = function() error('streaming timeout', 0) end
+        local skills, dicts = lib._skill or 0, #removedDicts
+        skillResults = {}
+        local okSel = pcall(zones[z0 + 1].options[1].onSelect)
+        Steps(5)
+        lib.requestAnimDict = savedDict
+        H.ok(okSel and (lib._skill or 0) - skills == 2 and #dc.reports == 2,
+            'k13: a kneel dictionary that fails to load still runs the skill checks')
+        H.ok(zones[z0 + 1].options[1].canInteract() == true, 'k13: the device is not left busy after the failed load')
+        H.eq(#removedDicts, dicts, 'k13: no RemoveAnimDict for a dictionary that never loaded')
+
+        -- the Ventilate bar waits until it is cancelled; the objective's stop cancels it once
+        local barOn, cancels = false, 0
+        lib.progressBar = function()
+            barOn = true
+            while barOn do Wait(100) end
+            return false
+        end
+        lib.progressActive = function() return barOn end
+        lib.cancelProgress = function() cancels = cancels + 1; barOn = false end
+        local savedFlash = rawget(_G, 'SetBlipFlashes')
+        _G.SetBlipFlashes = function() end   -- the set-back device blip flashes (CP.Markers.style)
+        SCc.update(dc, Device('setback'))
+        local rz = #zones
+        H.eq(zones[rz].options[1].label, 'Ventilate', 'k13: the recovery zone replaces the defuse zone')
+        zones[rz].options[1].onSelect()
+        Steps(2)
+        H.ok(barOn, 'k13: the Ventilate bar is running')
+        SCc.stop(dc)
+        H.eq(cancels, 1, 'k13: the objective\'s stop cancels the Ventilate bar once')
+        Steps(2)
+        H.ok(not barOn and #dc.reports == 2, 'k13: the cancelled Ventilate reports nothing')
+        lib.progressBar, lib.progressActive, lib.cancelProgress = savedBar, savedActive, function() end
+        _G.SetBlipFlashes = savedFlash
+    end
 
     -- The engine may hand every hook a fresh ctx (and ctx.state): each block keeps one state per run/objective.
     local function Fresh(base)

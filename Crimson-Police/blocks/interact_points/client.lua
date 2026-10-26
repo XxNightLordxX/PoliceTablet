@@ -235,7 +235,9 @@ local function Interact(ctx, st, n, kind, duration, label)
     if st.busy or not st.alive then return end
     if lib.progressActive and lib.progressActive() then return end
     st.busy = true
-    local ok = lib.progressBar({
+    -- ox_lib raises when the mission's animation dictionary fails to load: the step counts as cancelled and busy
+    -- is still cleared
+    local okBar, ok = pcall(lib.progressBar, {
         duration = duration,
         label = label,
         useWhileDead = false,
@@ -243,6 +245,10 @@ local function Interact(ctx, st, n, kind, duration, label)
         disable = { move = true, car = true, combat = true },
         anim = AnimFor(ctx.obj.progress and ctx.obj.progress.anim),
     })
+    if not okBar then
+        CP.warn('blocks', 'interact_points bar failed: %s', tostring(ok))
+        ok = false
+    end
     st.busy = false
     if ok and st.alive then
         st.seq = (st.seq or 0) + 1
