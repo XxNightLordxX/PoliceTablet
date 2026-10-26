@@ -78,6 +78,7 @@ local MAX_NETID = 0xFFFFFF
 local MAX_RUNID = 64
 local RNG_SALT = 0x4E504331       -- 'NPC1'
 local FORCE_WINDOW_MS = 10000     -- excessive_force at most once per person in this window (without CP.Custody)
+local STUN_PROOF_MS = 1000        -- a block's 'stunned' report needs a ragdoll the server saw this recently
 local STUNGUN = 'WEAPON_STUNGUN'
 
 -- Weapons that do not count as "shooting" a surrendered NPC (melee, vehicles, falls).
@@ -1152,16 +1153,9 @@ local function SampleWatches(live)
     end
 end
 
--- A stun_hit report (client telemetry) is real only when the server saw that ped ragdoll or change state
--- within windowMs.
-function Npc.stunMatches(netId, windowMs)
-    netId = ToInt(tonumber(netId), 1, MAX_NETID)
-    local rec = netId and FindRec(netId) or nil
-    if not rec or rec.dead then return false end
-    local t = Now()
-    windowMs = tonumber(windowMs) or 1000
-    if rec.since and t - rec.since <= windowMs then return true end
-    if rec.ragdollAt and t - rec.ragdollAt <= windowMs then return true end
+-- The server saw that ped ragdoll within windowMs: the 1 s watcher's sample, or the ped now.
+local function RagdollSeen(netId, rec, windowMs)
+    if rec.ragdollAt and Now() - rec.ragdollAt <= windowMs then return true end
     local run = RunById(rec.runId)
     local e = run and EntityOf(run, netId, rec)
     if e and type(IsPedRagdoll) == 'function' then
@@ -1169,6 +1163,30 @@ function Npc.stunMatches(netId, windowMs)
         if ok and rag then return true end
     end
     return false
+end
+
+-- A stun_hit report (client telemetry) is real only when the server saw that ped ragdoll or change state
+-- within windowMs.
+function Npc.stunMatches(netId, windowMs)
+    netId = ToInt(tonumber(netId), 1, MAX_NETID)
+    local rec = netId and FindRec(netId) or nil
+    if not rec or rec.dead then return false end
+    windowMs = tonumber(windowMs) or 1000
+    if rec.since and Now() - rec.since <= windowMs then return true end
+    return RagdollSeen(netId, rec, windowMs)
+end
+
+-- A block's 'stunned' report (a participant's game saw that person stunned) counts only when the server saw him
+-- ragdoll within the last second. A state change is no proof here: a cheat menu could send the report the moment a
+-- runner starts to run. The game sends the report again every 1.5 s while he is down, so one that arrives before the
+-- server's copy of the ped catches up is not lost. Config.AntiCheat.stunNeedsProof = false takes every report in
+-- range, as before.
+function Npc.stunProof(netId)
+    if Config.AntiCheat and Config.AntiCheat.stunNeedsProof == false then return true end
+    netId = ToInt(tonumber(netId), 1, MAX_NETID)
+    local rec = netId and FindRec(netId) or nil
+    if not rec or rec.dead then return false end
+    return RagdollSeen(netId, rec, STUN_PROOF_MS)
 end
 
 -- The live run a mission ped belongs to, or nil.

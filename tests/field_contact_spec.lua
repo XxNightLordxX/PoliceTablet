@@ -1094,6 +1094,37 @@ do
     Runs.endRun(run, 'completed', 'completed')
 end
 
+-- ============================================================================
+--           9c. A STUN REPORT COUNTS ONLY WITH A STUN THE SERVER SAW
+-- ============================================================================
+-- A cheat menu could send { type = 'stunned' } for a runner within 30 m and he gave up at once (PF1). The report
+-- now needs CP.Npc.stunProof (Config.AntiCheat.stunNeedsProof): the server saw him ragdoll within 1 s.
+
+do
+    Demeanour('warrant', 'runner')
+    local m = SceneMission({ profileSet = 'test_warrant', scene = { loitering = 1 }, returning = { chance = 0 } })
+    local run = W.start({ 1 }, m)
+    W.tick(1)
+    local p = Contact(run, 1, 'person')
+    W.place(1, 2000.0, 1985.0, 30.0)
+    W.tick(5)
+    H.eq(p.state, 'fleeing', 'pf1: the runner runs')
+    local function Stunned()
+        W.near(1, run, p.netId, 6.0)
+        Report(1, run, 1, { type = 'stunned', netId = p.netId, coords = H.players[1].coords, time = H.clockMs })
+    end
+    Stunned()
+    H.eq(p.state, 'fleeing', 'pf1: a stunned report the server saw no ragdoll for: he keeps running')
+    -- a real taser hit: his ped ragdolls on the server too, and the game sends the report again 1.5 s later
+    W.model(run, p.netId).ragdoll = true
+    H.advance(1500)
+    Stunned()
+    H.eq(p.state, 'surrendered', 'pf1: a real stun: he gives up as before')
+    W.model(run, p.netId).ragdoll = nil
+    RestoreDemeanour()
+    Runs.endRun(run, 'completed', 'completed')
+end
+
 -- the test profile sets go again
 for _, k in ipairs({ 'test_clean', 'test_warrant', 'test_armed', 'test_stolen', 'test_legal' }) do sets[k] = nil end
 

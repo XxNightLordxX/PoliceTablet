@@ -1260,6 +1260,30 @@ do
     _G.IsPedRagdoll = function(e) return e == e1 end
     H.ok(Npc.stunMatches(c1, 1000), 'a ragdoll now matches')
     _G.IsPedRagdoll = nil
+    -- a block's 'stunned' report needs a ragdoll the server saw (Config.AntiCheat.stunNeedsProof)
+    Config.AntiCheat = Config.AntiCheat or {}
+    local savedProof = Config.AntiCheat.stunNeedsProof
+    Config.AntiCheat.stunNeedsProof = true
+    H.eq(Npc.stunProof(c1), false, 'stunProof: no ragdoll within 1 s: no proof')
+    _G.IsPedRagdoll = function(e) return e == e1 end
+    H.ok(Npc.stunProof(c1), 'stunProof: a ragdoll now is proof')
+    Tick(1)
+    _G.IsPedRagdoll = nil
+    H.ok(Npc.stunProof(c1), 'stunProof: the 1 s watcher saw him ragdoll just now')
+    Bump(1500)
+    H.eq(Npc.stunProof(c1), false, 'stunProof: that sample is 1.5 s old: no proof')
+    -- a state change is no proof: a cheat menu could send the report the moment a runner starts to run
+    local rn = SpawnPed(run, { coords = vec3(5.0, 0.0, 0.0), role = 'subject', armed = false })
+    Tick(1)
+    Bump(1500)
+    H.ok(Npc.setState(run, rn, 'fleeing'), 'a runner starts to run')
+    H.ok(Npc.stunMatches(rn, 1000), 'stun_hit still takes the state change just now')
+    H.eq(Npc.stunProof(rn), false, 'stunProof: the state change just now is no proof')
+    H.eq(Npc.stunProof(999999), false, 'stunProof: a ped of no run: no proof')
+    Config.AntiCheat.stunNeedsProof = false
+    H.ok(Npc.stunProof(c1), 'stunNeedsProof = false: every report in range counts, as before')
+    H.ok(Npc.stunProof(rn), 'stunNeedsProof = false: also right after a state change')
+    Config.AntiCheat.stunNeedsProof = savedProof
     H.eq(Npc.runOf(c1), run, 'runOf')
     -- the lethal stat: a participant kills a person the mission is about
     local k = SpawnPed(run, { coords = vec3(4.0, 0.0, 0.0), role = 'subject' })

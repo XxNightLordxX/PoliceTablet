@@ -89,6 +89,8 @@ process_scene releases it; leaving vehicles are deleted 25 s later with their dr
 - `watch(run, netId, src, range)`, `inReachSince(run, netId, src) -> ms|nil`, `unwatch(netId, src)`: the dwell sampler
   of police actions (peds and vehicles), sampled every tick; a sample out of range restarts it.
 - `stunMatches(netId, windowMs)`, `runOf(netId)`: for the stun_hit check (IsPedRagdoll is sampled every tick).
+  `stunProof(netId)`: a block's 'stunned' report counts only with a ragdoll the server saw within 1 s (a state
+  change is no proof there); `Config.AntiCheat.stunNeedsProof = false` takes every report in range.
 - The lethal stat (CP.Runs.noteStat) when a participant kills a ped of a suspect role (not hostages).
 - Config.Custody.handcuffsItem: Cuff suspect needs the item (ox_inventory Search, never used or taken;
   err.npc_no_handcuffs).

@@ -458,8 +458,9 @@ location with no hostage points spawns nobody, with one `CP.warn` (never the sta
 Evidence field_contact accepts: `{ type = 'action', netId, action, phase = 'begin'|'finish' }` (from the plain
 event `crimson-police:server:custody`), `{ type = 'decide', netId, choice, offence }` (from the action
 `server:contactDecide`), `{ type = 'cuffed', netId }` (CP.Npc), `{ type = 'aim' | 'stunned', netId }` (client
-reports), and the engine's entity events `{ type = 'handed_over' | 'impounded' | 'removed', netId }`
-(`CP.Runs.entityEvent`). The block keeps the Contact panel in `ctx.state.contact`; `CP.Runs.view` returns it
+reports; `stunned` needs `CP.Npc.stunProof`), and the engine's entity events
+`{ type = 'handed_over' | 'impounded' | 'removed', netId }` (`CP.Runs.entityEvent`). The block keeps the Contact
+panel in `ctx.state.contact`; `CP.Runs.view` returns it
 as `ActiveMissionView.contact` (web/src/types/custody.ts). process_scene takes `tag_begin`/`tag`,
 `bag_begin`/`bag` (a body within 2.5 m) and `release_begin`/`release` (the parked van within 6 m, or the scene
 marker), each finish after its duration (−0.5 s) with the officer in reach the whole time minus 2 s.
@@ -1285,6 +1286,11 @@ Parity-plus additions (WP2; docs/notes/custody.md):
   (weaponDamageEvent), the health-drop fallback, and validated `stun_hit` telemetry; at most once per person per 10 s.
 - `watch(run, netId, src, range)`, `inReachSince(run, netId, src) -> ms|nil`, `unwatch(netId, src)` (the dwell sampler
   of police actions, peds and vehicles); `stunMatches(netId, windowMs)`, `runOf(netId)`.
+- `stunProof(netId)`: a block's `stunned` report (flee_arrest, pursuit, search_area, field_contact) makes a person
+  give up only when the server saw him ragdoll within 1 s (the watcher's sample or `IsPedRagdoll` now). A state
+  change is no proof here (a cheat menu could send the report the moment a runner starts to run); the game repeats
+  the report every 1.5 s while he is down. Otherwise the block refuses it with `no_stun`.
+  `Config.AntiCheat.stunNeedsProof = false`: always true (the distances alone decide, as before).
 - The `lethal` stat when a participant kills a ped of a suspect role; `Config.Custody.handcuffsItem` makes Cuff
   suspect need that item (`err.npc_no_handcuffs`; never used or taken).
 - Client: ox_target options `crimson-police:contact_<action>` on peds and vehicles, `crimson-police:custody_escort`,

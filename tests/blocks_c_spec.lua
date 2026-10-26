@@ -78,7 +78,7 @@ end
 _G.SetVehicleDoorsLocked = function(veh, state) calls.locked[#calls.locked + 1] = { veh = veh, state = state } end
 
 -- CP.Npc stub (the npc module is written by another slice)
-local npc = { states = {}, cuffs = {}, extra = {}, spent = {}, wornAsks = {}, wornTask = nil }
+local npc = { states = {}, cuffs = {}, extra = {}, spent = {}, wornAsks = {}, wornTask = nil, noStun = {} }
 CP.Npc = {
     setState = function(run, netId, state, extra)
         npc.states[netId] = state
@@ -94,6 +94,8 @@ CP.Npc = {
         if npc.spent[netId] and near <= 30.0 then return true, npc.wornTask end
         return false
     end,
+    -- CP.Npc.stunProof's answer (tests/npc_spec.lua checks the real one): npc.noStun[netId] = the server saw no stun
+    stunProof = function(netId) return not npc.noStun[netId] end,
 }
 local function LastAsk(netId)
     for i = #npc.wornAsks, 1, -1 do
@@ -783,6 +785,11 @@ do -- kills and stuns: only ACTIVE participants count; the stun reporter must be
     local ok, why = PU.onEvent(ctx2, 2, { type = 'stunned', netId = s2[1].netId })
     H.eq(why, 'too_far', 'stun: a report from 490 m away is rejected even with a partner next to the suspect')
     At(2, 1050.0, 1000.0)
+    npc.noStun[s2[1].netId] = true
+    ok, why = PU.onEvent(ctx2, 2, { type = 'stunned', netId = s2[1].netId })
+    H.eq(why, 'no_stun', 'stun: a stun the server did not see is refused (Config.AntiCheat.stunNeedsProof)')
+    H.eq(npc.states[s2[1].netId], 'fleeing', 'stun: no seen stun, the suspect keeps running')
+    npc.noStun[s2[1].netId] = nil
     ok = PU.onEvent(ctx2, 2, { type = 'stunned', netId = s2[1].netId })
     H.eq(ok, true, 'stun: a report from 40 m (partner within 30 m) is accepted')
     H.eq(npc.states[s2[1].netId], 'surrendered', 'stun: the suspect gives up')
@@ -2182,6 +2189,10 @@ do -- escape, kills, witness lost, stun, clue bonus lost to an early arrest
     local ok, why = SA.onEvent(ctx4, 1, { type = 'stunned', netId = f4[1].netId })
     H.eq(why, 'too_far', 'stun with nobody within 30 m rejected')
     At(1, p4.x + 10.0, p4.y, p4.z)
+    npc.noStun[f4[1].netId] = true
+    ok, why = SA.onEvent(ctx4, 1, { type = 'stunned', netId = f4[1].netId })
+    H.eq(why, 'no_stun', 'a stun the server did not see is refused (Config.AntiCheat.stunNeedsProof)')
+    npc.noStun[f4[1].netId] = nil
     ok = SA.onEvent(ctx4, 1, { type = 'stunned', netId = f4[1].netId })
     H.eq(ok, true, 'stun near accepted')
     H.eq(npc.states[f4[1].netId], 'surrendered', 'stunned fugitive gives up')

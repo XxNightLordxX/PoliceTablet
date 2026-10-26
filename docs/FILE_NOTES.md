@@ -317,7 +317,8 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
                                      'knock' at least TIMED_SHARE × knock.duration after 'knock_start'
     { type = 'aim', netId }          an unarmed fleeing suspect aimed at within givesUp.aim (+ slack)
     { type = 'stunned', netId }      IsPedBeingStunned seen by a client; the reporter within
-                                     STUN_REPORT_RANGE and a participant within STUN_RANGE
+                                     STUN_REPORT_RANGE and a participant within STUN_RANGE, and
+                                     CP.Npc.stunProof (Config.AntiCheat.stunNeedsProof)
     { type = 'low_health', netId }   an armed suspect: re-checked with server-side health
     { type = 'cuffed', netId }       CP.Npc (CP.Runs.dispatch) after a validated cuff (cp bag says cuffed)
     { type = 'shot', netId, src }    CP.Npc: a surrendered/cuffed suspect was shot (penalty recorded there)
@@ -801,7 +802,7 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
     { type = 'lights_near', netId }     lights/siren on within trigger.distance of a waiting car
     { type = 'aim', netId }             an unarmed suspect on foot aimed at (server distance + weapon check)
     { type = 'stunned', netId }         a suspect seen stunned; a participant within STUN_RANGE and the
-                                        reporter within STUN_REPORT (server coords)
+                                        reporter within STUN_REPORT (server coords), and CP.Npc.stunProof
     { type = 'low_health', netId }      an armed suspect (neverShoots = false) re-checked below 50 % health
     { type = 'undriveable', netId }     follow mode: the reporter's vehicle, confirmed by server engine/tank health
     { type = 'cuffed', netId }          CP.Npc after a validated cuff (the cp bag says cuffed)
@@ -917,7 +918,7 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
     { type = 'clue_start', clue }   a participant started checking clue n (1-based, the list the server sends)
     { type = 'clue', clue }         ...and finished it
     { type = 'stunned', netId }     a fugitive seen stunned; a participant within STUN_RANGE and the
-                                    reporter within STUN_REPORT (server coords)
+                                    reporter within STUN_REPORT (server coords), and CP.Npc.stunProof
     { type = 'cuffed', netId }      CP.Npc after a validated cuff (the cp bag says cuffed)
     { type = 'shot', netId, src }   CP.Npc: a surrendered/cuffed fugitive was shot (penalty recorded there)
 

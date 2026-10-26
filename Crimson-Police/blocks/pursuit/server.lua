@@ -2333,6 +2333,8 @@ local function OnEvent(ctx, src, ev)
                 local pc, sc = EntCoords(p.entity), ctx.coords(src)
                 if not pc or not sc or U.dist(pc, sc) > STUN_REPORT + REACH_SLACK then return false, 'too_far' end
                 if NearestOf(Party(ctx), pc) > STUN_RANGE then return false, 'too_far' end
+                -- the server must have seen the stun too (Config.AntiCheat.stunNeedsProof)
+                if CP.Npc and CP.Npc.stunProof and not CP.Npc.stunProof(p.netId) then return false, 'no_stun' end
             else
                 if not p.armed then return false, 'unarmed' end
                 local ratio = HealthRatio(p)

@@ -46,6 +46,7 @@ local NPC = {
     spent = {},
     wornAsks = {},
     wornTask = nil,
+    noStun = {},
 }
 CP.Npc = {
     setState = function(_, netId, state, extra)
@@ -66,6 +67,8 @@ CP.Npc = {
         if NPC.spent[netId] and near <= 30.0 then return true, NPC.wornTask end
         return false
     end,
+    -- CP.Npc.stunProof's answer (tests/npc_spec.lua checks the real one): NPC.noStun[netId] = the server saw no stun
+    stunProof = function(netId) return not NPC.noStun[netId] end,
 }
 
 H.load('blocks/hostile_waves/server.lua')
@@ -2226,6 +2229,11 @@ do -- flee_arrest: a stun report must come from a participant near the suspect
     local _, why = FA.onEvent(ctx, 1, { type = 'stunned', netId = a })
     H.eq(why, 'too_far', 'a far-away participant cannot report a stun for someone else')
     H.eq(NPC.states[a], 'fleeing', 'the armed inmate did not give up')
+    NPC.noStun[a] = true
+    _, why = FA.onEvent(ctx, 2, { type = 'stunned', netId = a })
+    H.eq(why, 'no_stun', 'a stun the server did not see is refused (Config.AntiCheat.stunNeedsProof)')
+    H.eq(NPC.states[a], 'fleeing', 'no seen stun: the armed inmate keeps running')
+    NPC.noStun[a] = nil
     H.eq(FA.onEvent(ctx, 2, { type = 'stunned', netId = a }), true, 'the participant next to him can')
     H.eq(NPC.states[a], 'surrendered', 'armed inmate gave up after the stun')
 end

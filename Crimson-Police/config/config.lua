@@ -563,6 +563,8 @@ Config.AntiCheat = {
     idleCheck = 180,        -- seconds after the run moves to In progress to remove participants who haven't reached the start
     jobRecheck = 10,        -- seconds between active-job and duty re-checks during a run
     outsideKillsToFlag = 1, -- kills of mission NPCs by players who aren't on the run that flag it for review
+    stunNeedsProof = true,  -- true = a suspect gives up to a stun only when the server saw him fall (a cheat menu
+                            -- can't fake one); false = an officer's game saying "stunned" within 30 m is enough
     voidsToSuspend = 3,     -- this many voided runs...
     voidWindowDays = 30,    -- ...within this many days...
     suspendDays = 7,        -- ...suspends the officer for this many days
