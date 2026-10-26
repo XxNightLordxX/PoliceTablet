@@ -23,7 +23,8 @@ export function normalizeSession(s: Session): Session {
         officer: s.officer ?? null,
         logo: s.logo ?? null,
         actions: asArray(s.actions),
-        locale: s.locale && typeof s.locale === 'object' ? s.locale : {},
+        // Lua sends no locale with the session: undefined lets App use the one from 'ready' ({} would show raw keys)
+        locale: s.locale && typeof s.locale === 'object' ? s.locale : undefined,
         config: {
             // the parity-plus values (dispatch, profile, format, ...) pass through as they came
             ...cfg,

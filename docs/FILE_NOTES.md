@@ -3264,6 +3264,11 @@ Events handled: crimson-police:client:notify ({ kind, key, vars, title, duration
 CP.L), client:push (topic, data), client:openAdmin (session). This file registers NO handler for
 client:hud or client:runEnded: the run engine's client (modules/runs/client.lua) is the one path that
 forwards them, to CP.Tablet.hud (patches, the ended HUD, hud(nil) when it hides) and CP.Tablet.result.
+Text: the NUI's one copy of the locale comes from the reply to ready ({ type = 'theme', theme, locale =
+CP.Locale.all() }, the client's own locales/<Config.Locale>.json with Config.Labels from client:settings
+over it) and from { type = 'locale' } when a settings:changed hook sees Config.Labels change. Sessions
+carry no locale, and the theme message of login, duty, job and unload (RefreshTheme) carries the theme
+only, so an open, a switch or a theme refresh never copies and encodes the 340 KB locale (Q6).
 NUI callbacks (§9.1): ready, close, request { name, args } -> CP.Net.request, action { name, payload }
 -> CP.Net.action (names must start with 'server:'), client { name, payload } -> registered client
 actions, switchUi { ui } -> getSession for that UI; replies { ok = true, data = Session } and re-opens.
@@ -3313,7 +3318,8 @@ Public API (docs/ARCHITECTURE.md §5.4)
       the Admin UI, a department without a logo, or a logo file missing from logos/.
       config = { missionTypes (key,label,points; by points), departments (key,label,short,primary),
                  tiers (name, label = CP.Scaling.label(name), else CP.L('tier.<name>')), maxRecalcs, disputeWindowHours,
-                 periods, filters }, locale = CP.Locale.all(), serverTime = os.time().
+                 periods, filters }, serverTime = os.time(). No locale: the client sends the NUI its own
+      copy once, with 'ready' (modules/tablet/client.lua), so a reply is a few KB instead of about 345 KB.
       Opening the Officer/Supervisor UI refreshes the stored rank/callsign (CP.Access.refreshOfficerRow);
       silent = true (the theme fetch at login) skips that. nil fields arrive in the NUI as missing keys.
   CP.Tablet.notify(src, kind, key, vars, opts) -> boolean
@@ -4257,7 +4263,10 @@ src/shared/hooks.ts · data hooks for screens.
 
 src/shared/i18n.tsx · UI text (docs/ARCHITECTURE.md §10).
 
-Text comes from session.locale (CP.Locale.all(), i.e. locales/en.json). Keys are flat and dotted;
+Text comes from the locale Lua sends with the reply to 'ready' (the 'theme' message) and again as a
+'locale' message after a Settings → Names rename (CP.Locale.all(), i.e. locales/en.json with
+Config.Labels over it); App keeps it as bootLocale. A session carries no locale (normalizeSession leaves
+it undefined, so App falls back to bootLocale; {} would show raw keys). Keys are flat and dotted;
 placeholders use {var}:   t('hud.objective_progress', { value: 12, max: 20 })
 An unknown key renders the key itself, so a missing string is visible instead of blank.
 

@@ -68,7 +68,8 @@ export interface Session {
     theme: Theme; // department theme, or Config.AdminTheme for admin
     logo: Logo | null; // null for admin
     actions: string[]; // CP.Permissions.actionsFor
-    locale: Record<string, string>; // CP.Locale.all()
+    // not sent by Lua: the text is the locale of the 'ready' theme message and of 'locale' messages (App's bootLocale)
+    locale?: Record<string, string>;
     config: {
         missionTypes: { key: string; label: string; points: number }[];
         departments: { key: string; label: string; short: string; primary: string }[];
@@ -440,7 +441,8 @@ export interface NuiMessageMap {
     result: { type: 'result'; result: RunResult | null };
     push: { type: 'push'; topic: PushTopic | string; data: unknown };
     overlay: { type: 'overlay'; overlay: Overlay | null };
-    // Sent at login with the officer's department theme so the HUD can use it (locale optional).
+    // The officer's department theme for the HUD (login, duty, job, unload); only the reply to 'ready' carries the
+    // whole locale (CP.Locale.all()), the NUI's one copy of the text.
     theme: { type: 'theme'; theme: Theme | null; locale?: Record<string, string> };
     // the whole locale again after an admin renamed something in Settings → Names (Config.Labels)
     locale: { type: 'locale'; locale: Record<string, string> };

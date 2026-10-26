@@ -145,7 +145,7 @@ the `*ScreenKey` types of `shared/navigation.tsx` and one registry entry.
 | `result` | `result = RunResult \| null` | result card for 25 s (null hides) |
 | `push` | `topic`, `data` | live updates: `run` `unit` `board` `operation` `invites` `test` `builder` `payouts` `calls` `nav` `profile` `rewards` `settings` |
 | `overlay` | `overlay = null \| { kind, … }` | `fade { text }`, or builder kinds `placement` `recording` `testdrive` |
-| `theme` | `theme`, `locale?` | the officer's department theme at login (HUD/toasts); optional locale for text before the first session |
+| `theme` | `theme`, `locale?` | the officer's department theme (HUD/toasts) at login, duty, job and unload; only the reply to `ready` carries the locale, the NUI's one copy of the text (a session has none) |
 
 **NUI → Lua**: `POST https://<GetParentResourceName() or 'Crimson-Police'>/<endpoint>` with JSON.
 

@@ -497,8 +497,10 @@ end
 --                                THEME AT LOGIN
 -- ============================================================================
 
-local function SendTheme()
-    T.send({ type = 'theme', theme = state.theme or DEFAULT_THEME, locale = CP.Locale.all() })
+-- withLocale (only the NUI's 'ready'): the whole locale goes with it, the NUI's one copy of the text until a
+-- Config.Labels change sends it again ('locale'). Login, duty, job and unload send the theme alone.
+local function SendTheme(withLocale)
+    T.send({ type = 'theme', theme = state.theme or DEFAULT_THEME, locale = withLocale and CP.Locale.all() or nil })
 end
 
 local function RefreshTheme()
@@ -592,7 +594,7 @@ end
 RegisterNUICallback('ready', function(body, cb)
     cb({ ok = true })
     state.nuiAcks = type(body) == 'table' and body.acks == true
-    SendTheme()
+    SendTheme(true)
     if (state.hud or state.overlay) and InForeignArena() then
         state.arenaHidden = true
     else

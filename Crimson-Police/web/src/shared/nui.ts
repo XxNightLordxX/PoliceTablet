@@ -66,6 +66,12 @@ export function registerMock(kind: MockKind, name: string, fn: MockFn, opts: { f
     table.set(name, { fn, fallback });
 }
 
+// Browser mode: what Lua sends after the 'ready' reply (core.mock.ts: the theme message with the locale).
+let mockReady: (() => void) | null = null;
+export function onMockReady(fn: () => void): void {
+    mockReady = fn;
+}
+
 // Names of every registered mock (for the dev panel).
 export function listMocks(): Record<MockKind, string[]> {
     return {
@@ -110,6 +116,10 @@ async function mockEndpoint<T>(endpoint: string, body: any): Promise<ApiResult<T
         case 'switchUi':
             // Browser mode: switching UI = building the session for that UI.
             return runMock<T>('request', 'getSession', { ui: body?.ui });
+        case 'ready':
+            // Lua answers 'ready' with the theme message that carries the locale (onMockReady)
+            if (mockReady) setTimeout(mockReady, MOCK_LATENCY_MS);
+            return { ok: true } as ApiResult<T>;
         default:
             return { ok: true } as ApiResult<T>; // ready, close, anything else
     }

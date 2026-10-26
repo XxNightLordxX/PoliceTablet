@@ -62,7 +62,8 @@ function CP.Locale.inFile(key)
     return strings[key] ~= nil
 end
 
--- Every string, sent to the NUI with the session so the UI shares one text source (with Config.Labels over it).
+-- Every string (with Config.Labels over it): the client sends it to the NUI with the reply to 'ready' and after a
+-- Config.Labels change, so the UI shares one text source. Sessions do not carry it.
 function CP.Locale.all()
     local labels = Config and Config.Labels
     if type(labels) ~= 'table' or next(labels) == nil then return strings end

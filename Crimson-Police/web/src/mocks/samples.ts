@@ -138,7 +138,6 @@ export function buildSession(ui: UiKind = 'officer'): Session {
     const d = MOCK_DEPARTMENTS[devState.department] ?? MOCK_DEPARTMENTS.sast;
     const base = {
         title: 'Crimson-Police',
-        locale: mockLocale,
         config: CONFIG,
         serverTime: Math.floor(Date.now() / 1000),
     };

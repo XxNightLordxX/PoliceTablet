@@ -503,7 +503,8 @@ local function BuildSession(src, ui, args)
         theme = theme,
         logo = logo,
         actions = actions,
-        locale = CP.Locale.all(),
+        -- no locale: the NUI keeps the one the client sends with 'ready' (shared/locale.lua plus Config.Labels from
+        -- client:settings), so a session stays a few KB instead of about 340 KB on every open
         config = config,
         prefs = PrefsOf(row),
         access = { via = via, desk = desk },

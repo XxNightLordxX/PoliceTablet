@@ -1034,12 +1034,24 @@ end
 --                              CP.Tablet (server)
 -- ============================================================================
 
+-- locales/en.json as shared/locale.lua loads it in game (this spec boots without it: CP.Locale.all() is {} here)
+local function RealLocale()
+    local f = assert(io.open(H.root .. 'locales/en.json', 'r'))
+    local s = f:read('a')
+    f:close()
+    return json.decode(s)
+end
+
 do
     local function Session(src, args)
         H.clockMs = H.clockMs + 300
         return H.callback('crimson-police:getSession', src, args)
     end
+    -- with the real locale: a session that carried it would pack to about 345 KB
+    local realAll, fullLocale = CP.Locale.all, RealLocale()
+    CP.Locale.all = function() return fullLocale end
     local res = Session(1, { ui = 'officer' })
+    CP.Locale.all = realAll
     H.eq(res.ok, true, 'officer session')
     local s = res.data
     H.eq(s.ui, 'officer', 'ui')
@@ -1060,7 +1072,10 @@ do
     H.eq(s.logo.opacity, 0.08, 'logo opacity')
     H.eq(s.logo.file, nil, 'logo has the §9.2 fields only')
     H.ok(type(s.actions) == 'table' and #s.actions > 0, 'actions')
-    H.eq(type(s.locale), 'table', 'locale')
+    -- the NUI has the text from 'ready' (Q6): a session is a few KB, not the 340 KB locale on every open
+    H.eq(s.locale, nil, 'no locale in the session')
+    local packed = H._packSize(s)
+    H.ok(packed < 16384, ('session packs to %d bytes (under 16 KB)'):format(packed))
     H.eq(s.serverTime, H.time, 'server time')
     local c = s.config
     H.eq(#c.missionTypes, 4, 'mission types')
@@ -1482,7 +1497,6 @@ local function OfficerSession(ui)
                 grayscale = false,
             },
             actions = {},
-            locale = {},
             config = {},
             serverTime = 1,
         },
@@ -1579,7 +1593,7 @@ do
     local themeMsg = LastNui('theme')
     H.ok(themeMsg ~= nil, 'theme sent after load')
     H.eq(themeMsg and themeMsg.theme.primary, '#1f4e8c', 'department theme')
-    H.eq(type(themeMsg and themeMsg.locale), 'table', 'locale sent with the theme')
+    H.ok(themeMsg ~= nil and themeMsg.locale == nil, 'the login theme carries no locale (only ready does)')
     local silentCall
     for _, c in ipairs(callbackCalls) do if c.args and c.args.silent then silentCall = c end end
     H.ok(silentCall ~= nil and silentCall.args.ui == 'officer', 'theme fetch is a silent officer session')
@@ -1693,6 +1707,21 @@ do
     H.eq(readyReply.ok, true, 'ready reply')
     H.eq(nui[#nui].type, 'hud', 'ready resends the hud')
     H.eq(nui[#nui - 1].type, 'theme', 'ready resends the theme')
+    -- ready is the one message with the whole locale (CP.Locale.all(), Config.Labels over the file)
+    local realAll, all = CP.Locale.all, RealLocale()
+    CP.Locale.all = function() return all end
+    nuiCb.ready({}, function() end)
+    CP.Locale.all = realAll
+    local readyLocale = nui[#nui - 1].type == 'theme' and nui[#nui - 1].locale or nil
+    local want, got, same = 0, 0, true
+    for k, v in pairs(all) do
+        want = want + 1
+        if type(readyLocale) ~= 'table' or readyLocale[k] ~= v then same = false end
+    end
+    for _ in pairs(type(readyLocale) == 'table' and readyLocale or {}) do got = got + 1 end
+    H.ok(want > 1000, ('the client has the whole locale (%d texts)'):format(want))
+    H.eq(got, want, 'ready sends every text')
+    H.ok(same, 'ready sends CP.Locale.all()')
     T.hud(nil)
 
     -- NUI client actions
@@ -1820,6 +1849,7 @@ do
     H.eq(T.isOpen(), false, 'unload closes every UI')
     H.eq(LastNui('hud').hud, nil, 'unload clears the HUD')
     H.eq(LastNui('theme').theme.primary, '#a4161a', 'default theme after unload')
+    H.eq(LastNui('theme').locale, nil, 'the unload theme carries no locale')
     H.eq(CP.Access.current(), nil, 'access cleared on unload')
     Tick(2000)
     -- a character unload with no Crimson-Police UI open leaves the NUI focus alone (another resource's

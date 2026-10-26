@@ -1,12 +1,12 @@
-// Core browser mocks: sessions for the three UIs (with the officer's look, level and picture), the pinned run
-// (fallback), logo reports, the sidebar badge counts, Config health and the tablet access view.
+// Core browser mocks: sessions for the three UIs (with the officer's look, level and picture), the locale after
+// 'ready', the pinned run (fallback), logo reports, the sidebar badge counts, Config health and the tablet access view.
 
-import { registerMock, request } from '../shared/nui';
+import { emitDebug, onMockReady, registerMock, request } from '../shared/nui';
 import type { ConfigHealthItem, NavCounts, Prefs, Session, UiKind } from '../shared/types';
 import type { TabletAccessView } from '../types/access';
 import type { ProfileEdit } from '../types/profile';
 import { devState } from './devState';
-import { buildSession, sampleRun } from './samples';
+import { buildSession, mockLocale, sampleRun } from './samples';
 
 // ?uiScale=0.85 or ?uiScale=1.25 opens the tablet at that size, ?look=midnight (high_contrast, colourblind) with that
 // appearance and ?accent=%234cc9f0 with that accent.
@@ -60,6 +60,9 @@ async function sessionFor(ui: UiKind): Promise<Session> {
 }
 
 registerMock('request', 'getSession', (args: { ui?: UiKind } | null) => sessionFor(args?.ui ?? 'officer'));
+
+// Like Lua: the session carries no locale, the reply to 'ready' sends it once with the theme (no department theme yet).
+onMockReady(() => emitDebug('theme', { theme: null, locale: mockLocale }));
 
 // Fallback: the Active Mission feature may register a richer 'getRun' in its own mock file.
 registerMock('request', 'getRun', () => (devState.runActive ? sampleRun() : null), { fallback: true });

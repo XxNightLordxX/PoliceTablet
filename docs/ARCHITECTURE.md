@@ -3114,7 +3114,8 @@ Lua → NUI: `SendNUIMessage({ type = ..., ... })` (only modules/tablet/client.l
 | `result` | `result = RunResult` | result screen |
 | `push` | `topic`, `data` | live data for open screens: `run`, `unit`, `board`, `operation`, `invites`, `test`, `builder`, `payouts`, and `calls` (DispatchView), `nav` (NavCounts), `profile` (own profile changed), `rewards` (locker changed), `contactConfirm`, `settings` (admins: a setting or switch changed, `{ paths }`), `spawnCheck` (the admin's spawn point check, §5.27); `unit` gains `readyCheck`, `run` gains `contact` |
 | `overlay` | `overlay = null \| { kind: 'placement'\|'recording'\|'testdrive'\|'fade', ... }` | full-screen/HUD overlays |
-| `locale` | `locale` | the whole locale again after `Config.Labels` changed (an open tablet shows the new names; replaces `session.locale`) |
+| `theme` | `theme`, `locale?` | the department theme for the HUD (login, duty, job, unload); only the reply to `ready` carries `locale` (`CP.Locale.all()`), the NUI's one copy of the text |
+| `locale` | `locale` | the whole locale again after `Config.Labels` changed (an open tablet shows the new names at once) |
 
 Full admin control push topics: `maintenance` (MaintenanceView, `false` when the lock ended; every client) and
 `adminjob` (AdminJobProgress; admin players only).
@@ -3148,7 +3149,7 @@ interface Session {
   theme: Theme;                                    // department theme, or Config.AdminTheme for admin
   logo: Logo | null;                               // null for admin
   actions: string[];                               // CP.Permissions.actionsFor
-  locale: Record<string, string>;                  // CP.Locale.all()
+  locale?: Record<string, string>;                 // not sent: the NUI has the text from 'ready' (§9.1 theme)
   config: {
     missionTypes: { key: string; label: string; points: number }[];
     departments: { key: string; label: string; short: string; primary: string }[];
@@ -3386,7 +3387,8 @@ interface RunResult { runId: string; missionLabel: string; missionType: string;
   config or the mission file, so custom missions keep the builder's text.
 - English only in this build: `locales/en.json` is the only language file. Text for a player's screen that is
   built on the server may be sent as a `CP.Lt(key, vars)` token (§2); it resolves in the server language.
-- The UI reads the same strings from `session.locale` via `t(key, vars)`.
+- The UI reads the same strings via `t(key, vars)`: the client sends them once with the reply to `ready` (the
+  `theme` message) and again as `locale` after a `Config.Labels` change. Sessions carry no locale.
 
 ## 11. Verification (every slice must pass before it is done)
 
