@@ -1966,7 +1966,8 @@ end
 --     the same rule (natives.json has no word on it; a4-combat section 4)
 --   clipsets[name]: true once a RequestClipSet has loaded it, loadMs (200) later; a name the game does not have (not
 --     in SET_PED_MOVEMENT_CLIPSET's list in natives.json) never loads. SetPedMovementClipset with a clip set that is
---     not loaded counts as w.unloaded (the game would ignore it)
+--     not loaded counts as w.unloaded (the game would ignore it). RemoveClipSet lets it go (the game may unload it,
+--     so HasClipSetLoaded answers false until it is asked for again); w.released[name] counts those calls
 --   safeCoord(x, y, z, onlyOnPavement, flags) -> found, vector3: set by the spec (default: nothing found)
 --   calls, typeErrors, restore() as H.combatNatives
 H.GAIT_NATIVE_TYPES = {
@@ -1978,6 +1979,7 @@ H.GAIT_NATIVE_TYPES = {
     ResetPedMovementClipset = { 'Ped', 'float' },
     RequestClipSet = { 'char*' },
     HasClipSetLoaded = { 'char*' },
+    RemoveClipSet = { 'char*' },
     GetSafeCoordForPed = { 'float', 'float', 'float', 'BOOL', 'int' },
 }
 
@@ -2034,7 +2036,16 @@ for _, name in ipairs({
 end
 
 function H.gaitNatives(onCall)
-    local w = { peds = {}, clipsets = {}, requested = {}, calls = {}, typeErrors = 0, unloaded = 0, loadMs = 200 }
+    local w = {
+        peds = {},
+        clipsets = {},
+        requested = {},
+        released = {},
+        calls = {},
+        typeErrors = 0,
+        unloaded = 0,
+        loadMs = 200,
+    }
     local function Ped(ped)
         w.peds[ped] = w.peds[ped] or {}
         return w.peds[ped]
@@ -2089,6 +2100,11 @@ function H.gaitNatives(onCall)
             if not w.requested[key] then w.requested[key] = H.clockMs end
         end,
         HasClipSetLoaded = function(name) return Loaded(name) end,
+        RemoveClipSet = function(name)
+            local key = name:lower()
+            w.clipsets[key], w.requested[key] = nil, nil
+            w.released[key] = (w.released[key] or 0) + 1
+        end,
         GetSafeCoordForPed = function(...) return w.safeCoord(...) end,
     }
     InstallTyped(H.GAIT_NATIVE_TYPES, effects, w, onCall, before)

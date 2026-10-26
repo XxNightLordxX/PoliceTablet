@@ -465,8 +465,9 @@ packages, and the runner's own clock and zone (the specs do not read either). Th
   TaskSmartFleePed, SetPedMaxMoveBlendRatio, SetPedMoveRateOverride, the clip set natives, GetSafeCoordForPed) with
   natives.json's argument types and keeps each ped's task, cap, move rate and clip set: `capNow(ped)` /
   `rateNow(ped)` answer only what was set during the current frame (one `H.step`), a clip set loads `loadMs` after
-  `RequestClipSet` and only when natives.json lists it, and `safeCoord` is the spec's GetSafeCoordForPed. The npc
-  client checks (tired runners, step F2) use it; with the old module 87 checks fail (30 of them the `false` flags).
+  `RequestClipSet` and only when natives.json lists it (`RemoveClipSet` unloads it and counts in `released`), and
+  `safeCoord` is the spec's GetSafeCoordForPed. The npc client checks (tired runners, step F2) use it; with the old
+  module 87 checks fail (30 of them the `false` flags).
 - **Ground probe natives on a small map**: `H.groundNatives(onCall)` installs the natives of the ground probe
   (CP.Spawn.probe, step S6: RequestCollisionAtCoord, HasCollisionLoadedAroundEntity, the interior pin and ready
   natives, GetGroundZAndNormalFor_3dCoord, the water natives, StartShapeTestCapsule with GetShapeTestResult, the model

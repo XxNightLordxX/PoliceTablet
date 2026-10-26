@@ -275,16 +275,23 @@ local function Aggressive(args, default)
     return name == 'reckless' or name == 'fast'
 end
 
+-- [dict] = true: the animation dictionaries the poses and tells of this run loaded. ReleaseAssets lets them go when
+-- the run ends, and the next run loads them again when it needs them.
+local loadedDicts = {}
+
 local function LoadDict(dict)
-    if HasAnimDictLoaded(dict) then return true end
-    if lib and lib.requestAnimDict then
-        pcall(lib.requestAnimDict, dict, 3000)
-        return HasAnimDictLoaded(dict)
+    if not HasAnimDictLoaded(dict) then
+        if lib and lib.requestAnimDict then
+            pcall(lib.requestAnimDict, dict, 3000)
+        else
+            RequestAnimDict(dict)
+            local deadline = Now() + 3000
+            while not HasAnimDictLoaded(dict) and Now() < deadline do Wait(25) end
+        end
+        if not HasAnimDictLoaded(dict) then return false end
     end
-    RequestAnimDict(dict)
-    local deadline = Now() + 3000
-    while not HasAnimDictLoaded(dict) and Now() < deadline do Wait(25) end
-    return HasAnimDictLoaded(dict)
+    loadedDicts[dict] = true
+    return true
 end
 
 local function PlayAnim(ped, dict, clip, flag)
@@ -1409,7 +1416,7 @@ end
 -- run while he jogs and a walk after, a little slower (jogRate, walkRate), in a jog and then a winded walk
 -- (windedClipset). It lets go the moment he is not tired any more: a surrender, a fight, a car, his breath back.
 
-local Pace, PaceBag, LetGoAll, Tired
+local Pace, PaceBag, LetGoAll, ReleaseAssets, Tired
 do
     local PACES = {
         jog = { mbr = GAIT_MBR.jog, rate = 'jogRate', clipset = 'move_m@JOG@' },
@@ -1443,9 +1450,12 @@ do
         if s ~= nil then return false end
         clipsets[name] = 'loading'
         RequestClipSet(name)
+        local mine = clipsets
         CreateThread(function()
             local deadline = Now() + CLIPSET_WAIT_MS
             while not HasClipSetLoaded(name) and Now() < deadline do Wait(100) end
+            -- the run ended meanwhile: ReleaseAssets let this one go
+            if clipsets ~= mine then return end
             if HasClipSetLoaded(name) then
                 clipsets[name] = 'ready'
             else
@@ -1474,6 +1484,15 @@ do
     LetGoAll = function()
         for netId in pairs(paced) do LetGo(netId) end
         tiredSeen = {}
+    end
+
+    -- The end of the run: the game may unload the pose and tell dictionaries and the jog and winded walk clip sets
+    -- (RemoveAnimDict, RemoveClipSet). The next run loads them again when it needs them.
+    ReleaseAssets = function()
+        for dict in pairs(loadedDicts) do RemoveAnimDict(dict) end
+        loadedDicts = {}
+        for name in pairs(clipsets) do RemoveClipSet(name) end
+        clipsets = {}
     end
 
     -- One frame of a tired runner: the cap and the move rate (both every frame), and the clip set once it is loaded.
@@ -1526,7 +1545,10 @@ do
             end
             -- a clip set that did not load is asked for again next time
             for name, s in pairs(clipsets) do
-                if s == 'failed' then clipsets[name] = nil end
+                if s == 'failed' then
+                    RemoveClipSet(name)
+                    clipsets[name] = nil
+                end
             end
             pacing = false
         end)
@@ -1734,6 +1756,7 @@ RegisterNetEvent('crimson-police:client:runEnded', function(runId)
     if run and run.id ~= runId then return end
     ForgetRun()
     LetGoAll()
+    ReleaseAssets()
 end)
 
 -- ============================================================================
@@ -2335,6 +2358,7 @@ AddEventHandler('onResourceStop', function(res)
         ai[ped] = nil
     end
     LetGoAll()
+    ReleaseAssets()
     if groupsReady then
         RemoveRelationshipGroup(HOSTILE)
         RemoveRelationshipGroup(NEUTRAL)

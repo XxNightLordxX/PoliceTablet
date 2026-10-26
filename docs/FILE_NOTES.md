@@ -2311,6 +2311,10 @@ Contract interpretations (details in docs/notes/engine_a.md)
       move_injured_generic clip set with windedClipset) and lets go in the same frame (cap 3.0, rate 1.0,
       ResetPedMovementClipset) once he is no longer tired, in a vehicle, dead, owned by another game, or the
       run or the resource stops.
+    - Animation sets: LoadDict records each pose and tell dictionary it loaded; ReleaseAssets (after LetGoAll
+      on client:runEnded of the current run and on onResourceStop) calls RemoveAnimDict for each of them and
+      RemoveClipSet for every clip set the pacer asked for, then starts both lists again. A clip set that did
+      not load is let go too before it is asked for again.
     - Drop protection on EVERY client (participant or not) for every ped with a Crimson-Police cp bag:
       SetPedDropsWeaponsWhenDead false and SetPedMoney 0 once per entity handle, because the client
       that owns a ped when it dies creates the pickups and ownership moves to the nearest player.

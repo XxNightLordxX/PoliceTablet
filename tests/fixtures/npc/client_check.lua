@@ -1534,6 +1534,96 @@ do
     CP.Custody = nil
 end
 
+-- ============================================================================
+--                ANIMATION SETS: LET GO WHEN THE RUN ENDS (K16)
+-- ============================================================================
+-- The game keeps an animation dictionary or a movement clip set loaded until the script that asked for it lets it
+-- go. The poses (the cuffed stance), the tells and a tired runner's jog and winded walk go at the end of the run, and
+-- the next run loads them again.
+
+local CUFFED, TELL = 'mp_arresting', 'reaction@intimidation@1h'
+local JOG, WINDED = 'move_m@jog@', 'move_injured_generic'
+do
+    -- the game's dictionaries: loaded 100 ms after RequestAnimDict, until RemoveAnimDict lets them go
+    local requested, loaded = {}, {}
+    _G.RequestAnimDict = function(d)
+        Record('RequestAnimDict', d)
+        requested[d] = requested[d] or H.clockMs
+    end
+    _G.HasAnimDictLoaded = function(d)
+        if not loaded[d] and requested[d] and H.clockMs >= requested[d] + 100 then loaded[d] = true end
+        return loaded[d] == true
+    end
+    _G.RemoveAnimDict = function(d)
+        Record('RemoveAnimDict', d)
+        requested[d], loaded[d] = nil, nil
+    end
+    local function Is(name) return function(a) return a[1] == name end end
+    local function Released(name) return GW.released[name] or 0 end
+    -- what the runs before this one loaded goes first
+    H.fire('crimson-police:client:runEnded', 1, 'run-1')
+    local CS = AddPed(5070, 870, -260, 50, 0)   -- a suspect who is cuffed, then plays a tell
+    local TR = AddPed(5071, 871, -270, 50, 0)   -- a tired runner
+    local function Runner(seq, gait)
+        return {
+            run = 'run-1',
+            obj = 1,
+            role = 'suspect',
+            state = 'fleeing',
+            armed = false,
+            cfg = {},
+            seq = seq,
+            gait = gait,
+        }
+    end
+    local function ARun(seq)
+        Npc.task(CS, 'cuffed', { instant = true, force = true })
+        H.fire('crimson-police:client:contactAct', 1, { runId = 'run-1', netId = 870, behaviour = 'tell_then_draw' })
+        BagChange(TR, 871, Runner(seq, 'jog'))
+        H.advance(600)
+        BagChange(TR, 871, Runner(seq + 1, 'walk'))
+        H.advance(600)
+    end
+
+    Clear()
+    ARun(1)
+    H.ok(Called('TaskPlayAnim', function(a) return a[1] == CS and a[2] == CUFFED end), 'run 1: the cuffed pose plays')
+    H.ok(Called('TaskPlayAnim', function(a) return a[1] == CS and a[2] == TELL end), 'run 1: the tell plays')
+    H.ok(Called('RequestClipSet', Is('move_m@JOG@')) and Called('RequestClipSet', Is(WINDED)),
+        'run 1: the jog and the winded walk are asked for')
+    H.eq((GW.peds[TR] or {}).clipset, WINDED, 'run 1: the runner walks winded')
+    local jog, winded = Released(JOG), Released(WINDED)
+
+    -- a stale end of an earlier run lets nothing go
+    Clear()
+    H.fire('crimson-police:client:runEnded', 1, 'run-old')
+    H.ok(not Called('RemoveAnimDict') and not Called('RemoveClipSet'), 'stale run end: nothing let go')
+
+    Clear()
+    H.fire('crimson-police:client:runEnded', 1, 'run-1')
+    H.eq(#CallsOf('RemoveAnimDict', Is(CUFFED)), 1, 'run end: the cuffed pose dictionary is let go (RemoveAnimDict)')
+    H.eq(#CallsOf('RemoveAnimDict', Is(TELL)), 1, 'run end: the tell dictionary is let go')
+    H.eq(Released(JOG) - jog, 1, 'run end: the jog clip set is let go (RemoveClipSet)')
+    H.eq(Released(WINDED) - winded, 1, 'run end: the winded walk clip set is let go')
+    H.ok(not HasAnimDictLoaded(CUFFED) and not HasClipSetLoaded(WINDED), 'run end: the game may unload them')
+    Clear()
+    H.fire('crimson-police:client:runEnded', 1, 'run-1')
+    H.ok(not Called('RemoveAnimDict') and not Called('RemoveClipSet'), 'a second run end: nothing left to let go')
+
+    -- the next run loads them again, and the poses and walks still play
+    Clear()
+    ARun(10)
+    H.ok(Called('RequestAnimDict', Is(CUFFED)) and Called('RequestAnimDict', Is(TELL)),
+        'run 2: the dictionaries are loaded again')
+    H.ok(Called('TaskPlayAnim', function(a) return a[1] == CS and a[2] == CUFFED end), 'run 2: the cuffed pose plays')
+    H.ok(Called('TaskPlayAnim', function(a) return a[1] == CS and a[2] == TELL end), 'run 2: the tell plays')
+    H.ok(Called('RequestClipSet', Is('move_m@JOG@')) and Called('RequestClipSet', Is(WINDED)),
+        'run 2: the clip sets are asked for again')
+    H.eq((GW.peds[TR] or {}).clipset, WINDED, 'run 2: the runner walks winded again')
+    H.eq(GW.unloaded, 0, 'never a clip set that has not loaded')
+    -- run 2 is still on at the resource stop below
+end
+
 local RS = AddPed(5048, 848, -230, 50, 0)
 BagChange(RS, 848, { run = 'run-1', obj = 1, state = 'fleeing', armed = false, cfg = {}, seq = 1, gait = 'jog' })
 H.eq(GW.capNow(RS), 2.0, 'a jogging runner before the stop')
@@ -1554,6 +1644,9 @@ H.ok(Called('RemoveRelationshipGroup', function(a) return a[1] == HOSTILE end), 
 H.ok(Called('RemoveRelationshipGroup', function(a) return a[1] == NEUTRAL end), 'neutral group removed')
 H.ok(Called('FreezeEntityPosition', function(a) return a[1] == P6 and a[2] == false end),
     'managed peds unfrozen on stop')
+local function LetGo(native, name) return Called(native, function(a) return a[1]:lower() == name end) end
+H.ok(LetGo('RemoveAnimDict', CUFFED) and LetGo('RemoveAnimDict', TELL), 'resource stop: the dictionaries are let go')
+H.ok(LetGo('RemoveClipSet', JOG) and LetGo('RemoveClipSet', WINDED), 'resource stop: and the clip sets')
 
 local names = {}
 for k in pairs(fallback) do names[#names + 1] = k end

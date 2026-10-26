@@ -1354,6 +1354,10 @@ Client (host runs AI; all participants see targets):
   is no longer tired: another state, a sprint again, a vehicle, dead, Config.Flee off, another game owns him (that
   game holds him), the run's end, the resource's stop; a game that gets back a ped a bag had marked tired, after his
   breath came back, resets it once.
+- Animation sets (K16): the run's end on this player's game (client:runEnded of the current run) and the resource's
+  stop let go of every animation dictionary the poses and tells loaded (`RemoveAnimDict`) and of the jog and winded
+  walk clip sets (`RemoveClipSet`, loaded or not), so they do not stay resident all session. The next run loads them
+  again when it needs them (3 s at most each).
 
 Parity-plus additions (WP2; docs/notes/custody.md):
 - States `contacted`, `escorted`, `seated`, `released`, `handed_over`, `impounded`; contacted, escorted and seated are
