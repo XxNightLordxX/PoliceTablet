@@ -1907,7 +1907,8 @@ push). Full notes: docs/notes/custody.md.
   failsCase only from facts that reached this viewer), `giveEvidence(run)` (Config.Custody.evidenceItem, off).
 - Net: plain `server:custody` (runId, netId, action, phase, extra; 4 per 2 s), action `server:contactDecide`
   (`{ runId, netId, choice, offence?, confirmed? }` → `{ ok }` or `{ confirm = { factKey } }`; within 25 m), plain
-  `server:stunHit` (netId; 2 per s), `client:contactAct`, `client:contactConfirm`, `client:serviceVehicle`, the
+  `server:stunHit` (netId; 2 per s), `client:contactAct`, `client:contactConfirm`, `client:serviceVehicle`,
+  `client:serviceBlip` (PLAN M7, §5.44 `service`), the
   ox_lib callback `client:roadPoint`, client action `contactAction` (`{ netId, action }`), push `contactConfirm`,
   HUD patch `contact` (`{ label, fact, hint, confirm, suppressed }`).
 - Blocks: `blocks/field_contact` (modes parked, scene, stop; returning driver, thief, escapes, all_correct,
@@ -2560,7 +2561,8 @@ as they come up mark on the map"; PLAN M1, BLIPS_FINAL R1-R10). One pointer per 
 centre, and at most one GPS line. modules/runs/client.lua drives it: `client:objective` `start` → `set(runId, index,
 msg.marker, ctx)` after the block's own `start` (ctx = the block's client ctx, for Radio Silence), `client:marker` →
 `update` (only for the current, started objective of this run), `stop` → `clear(runId, index)` before the block's
-`stop`, and every `Cleanup` (run end, leaving, a new start, resource stop) → `clear()` before the blocks stop.
+`stop`, and every `Cleanup` (run end, leaving, a new start, resource stop) → `clear()` before the blocks stop (`clear()`
+without arguments also removes the run's service vehicles, PLAN M7).
 - The marker (from the server, §5.10 `marker`; nil = none): `{ kind = 'point'|'area'|'targets', look, label, key,
   number, coords = { x, y, z }, radius (area), route = true|false|'block', targets = { { key, netId, x, y, z, look,
   label, variant, number, beyond } } }`. `look` is a `Config.Markers.kinds` key (default `'objective'`, an area
@@ -2580,13 +2582,18 @@ msg.marker, ctx)` after the block's own `start` (ctx = the block's client ctx, f
   key = its point number; a hidden search's centre in kinds.searchArea, key `'area'`, its circle in `styleArea`; PLAN
   M6: a snapshot keeps every blip that still shows the same point, a changed status is restyled in place, R8),
   skill_check (PLAN M6: each device still to work, armed, set back or waiting to be tried again, numbered in
-  kinds.device, setback while set back, restyled in place, key `'d<n>'`; kept across snapshots, R8), process_scene
+  kinds.device, setback while set back, restyled in place, key `'d<n>'`; kept across snapshots, R8; PLAN M7: named
+  after the mission's target (`obj.target.label`, Drug Lab Raid "Shut down the lab"), else `block.skill_check.blip`
+  "Device {n}", set back `block.skill_check.blip_setback` "{action} {n}" ("Ventilate 1"), the server's marker naming
+  each the same; a set-back blip flashes until it is fixed, `SetBlipFlashes(false)` when it is restyled out of
+  setback), process_scene
   (PLAN M6: the scene's blip in kinds.scene, key `'scene'`), checkpoint_route (PLAN M6: the current checkpoint's
   numbered blip in kinds.checkpoint, key `'cp<n>'`, the next one at nextScale; the marker says `route = 'block'`, so
   the block keeps its own line on that blip, in `routeColour()`, on only while `canRoute(ctx)` allows one: checked
   when the checkpoint changes and once a second in its loop, the route natives only when the answer changes; this ends
   the second line a late partner had while still driving to the start), pursuit (each live car's blip in kinds.vehicle and each suspect's out of the car in kinds.suspect, key
-  = its net id; the observe violator only once it passed) and escort (the truck's blip in kinds.escort, key = its net
+  = its net id; the observe violator only once it passed; PLAN M7: a suspect running on foot in kinds.fleeing,
+  restyled in place when he stops, fights or gives up, and the server's marker gives him the same look) and escort (the truck's blip in kinds.escort, key = its net
   id; the destination's in kinds.destination, key `'dest'`; the attackers' red dots stay detail blips), flee_arrest
   (PLAN M4: the front door's blip before the knock, key `'door'`; each suspect's, associate's or inmate's in
   kinds.fleeing while he runs, else kinds.suspect, a surrendered one at 0.6, restyled in place when his state changes,
@@ -2599,7 +2606,9 @@ msg.marker, ctx)` after the block's own `start` (ctx = the block's client ctx, f
   id). An adopted blip that no longer exists falls back the same way at the next check. `clear` hands every adopted
   blip back with its line off. CP.Markers draws its own icon only for what no block draws: a fight area (hostile_waves,
   PLAN M5: kinds.fightArea, a red skull and circle named `markers.fight` "Hostiles"), a fallback anchor, a target not
-  streamed here, and service vehicles.
+  streamed here, and service vehicles. Detail blips that are never handed over are still styled with `style`, so
+  they follow `shortRange` too: hostile_waves' hostiles (PLAN M7: kinds.hostile, a boss at bossScale named after
+  `obj.boss.label` with its first letter upper-cased, else `block.hostile_waves.boss_label`).
 - Own icons: a point or an area's centre `AddBlipForCoord` (an area adds `AddBlipForRadius`, colour of its kind,
   alpha `areaAlpha`); a target `AddBlipForEntity` while `NetworkDoesNetworkIdExist(netId)` and the entity exists here,
   else (`farTargets`) `AddBlipForCoord` at the server's position, moved with `SetBlipCoords` on every update, swapped
@@ -2607,8 +2616,10 @@ msg.marker, ctx)` after the block's own `start` (ctx = the block's client ctx, f
   and flash (R8); a new look, label or number redraws the blip.
 - `style(blip, kind, label, opts)` — the look of `kinds[kind]` and what every objective blip gets (R5):
   `SetBlipSprite/Colour/Scale`, `SetBlipAsShortRange(shortRange)`, `SetBlipCategory(category)`, `ShowNumberOnBlip`
-  for `opts.number`, the name (`BeginTextCommandSetBlipName('STRING')`). The pointer also gets `SetBlipPriority(12)` and
-  flashes once, `SetBlipFlashes` + `SetBlipFlashTimer(flashSeconds * 1000)` (none at 0).
+  for `opts.number`, the name (`BeginTextCommandSetBlipName('STRING')`); `opts.variant = 'setback'` also starts
+  `SetBlipFlashes(true)` with no timer while `setbackFlash` is on (PLAN M7: a set-back device flashes until it is
+  fixed; the block stops it). The pointer also gets `SetBlipPriority(12)` and flashes once, `SetBlipFlashes` +
+  `SetBlipFlashTimer(flashSeconds * 1000)` (none at 0; none on a set-back target, which already flashes).
 - `styleArea(blip, kind)` — a block's own circle (`AddBlipForRadius`) in the colour of `kinds[kind]` at `areaAlpha`, as
   CP.Markers draws its own circles (search_area, PLAN M5; interact_points' hidden search, PLAN M6).
 - `routeColour() -> integer` — `Config.Markers.routeColour` (0-85, default 5): the colour of every Crimson-Police GPS
@@ -2629,7 +2640,12 @@ msg.marker, ctx)` after the block's own `start` (ctx = the block's client ctx, f
   target gets a 200 m circle (`markers.last_known`) where it was, moved every that many seconds.
 - `service(key, spec)` — a prisoner van or tow truck coming to this officer: `spec = { netId, coords, kind =
   'prisonerVan'|'towTruck', label }`, nil removes it. Shown in every Radio Silence mode while `serviceVehicles` is on,
-  never routed, removed at resource stop.
+  never routed, removed by `clear()` (the run's end) and at resource stop. modules/custody/client.lua calls it (PLAN
+  M7) from `client:serviceBlip` (key `service:<id>`, only for the officer's current in-progress run and the two
+  kinds); the server (modules/custody/server.lua `SyncBlip`, in its 1 s tick) sends that to every active
+  participant when a transport van's or tow truck's status changes: shown while coming, parked or loading (at the
+  server's position; the client follows the vehicle once it streams in), off once it leaves or is gone; `run:arrived`
+  sends the ones on the map to a late partner. The coroner van stays unmarked; a vehicle never made sends nothing.
 - One check loop (1 s) only while a pointer element or a service vehicle is on the map, never two (it ends by itself
   after `clear`): streaming swaps, adopted blips that went, the nearest target and the line. No entity pool scans.
 
@@ -2894,6 +2910,7 @@ Rules for blocks:
 | `client:contactAct` | `{ runId, netId, behaviour, args, seconds }` to the run host only, when the behaviour starts | custody |
 | `client:contactConfirm` | `{ netId, choice, factKey }`: open the tablet with the case-fail confirm | custody |
 | `client:serviceVehicle` | `{ runId, id, op = 'drive'|'load'|'leave', kind, veh, driver, dest, target, away }` to the driving client | custody |
+| `client:serviceBlip` | `{ runId, id, kind = 'prisonerVan'|'towTruck', show, netId, coords }` to every active participant when a transport van's or tow truck's status changes (show while coming, parked or loading), and to a late partner at `run:arrived` (§5.44 `service`, Config.Markers.serviceVehicles) | custody |
 | `client:closeTablet` | errKey (requireItem: the item left the inventory) | tablet |
 | `client:settings` | `{ { path, value } \| { path, none = true } }`: every setting changed in game that is in use | settings |
 

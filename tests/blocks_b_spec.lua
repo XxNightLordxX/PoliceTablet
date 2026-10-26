@@ -3129,6 +3129,47 @@ do
         H.eq(removedRouted, routedGone, 'fc client: every line off before its blip went')
     end
 
+    do -- (PLAN M7) hostile_waves: the hostiles' red dots follow Config.Markers.shortRange (they were short range), the
+        -- boss's name has its first letter upper-cased (Gang Hideout Raid's "the lieutenant")
+        Place(1, 1000, 1000, 30)
+        local base = OpenBlips()
+        local obj = U.deepcopy(HW.defaults({ waves = { 2 } }))
+        obj.boss = { label = 'the lieutenant' }
+        local c = ClientCtx(obj, HwLocation(12), { tag = 'hw-m7', isHost = false })
+        AddEnt(7301, 931, vec3(1300.0, 1000.0, 30.0), { state = 'hostile', cfg = { behaviour = 'balanced' } })
+        AddEnt(7302, 932, vec3(1320.0, 1000.0, 30.0), { state = 'hostile', cfg = { behaviour = 'balanced' } })
+        HWc.prepare(c)
+        HWc.start(c)
+        HWc.update(c, {
+            peds = {
+                { netId = 7301, role = 'hostile', state = 'hostile', wave = 1 },
+                { netId = 7302, role = 'boss', state = 'hostile', wave = 1 },
+            },
+        })
+        Steps(1)
+        local _, hp = BlipOf(function(q) return q.ent == 931 end)
+        local _, bp = BlipOf(function(q) return q.ent == 932 end)
+        H.eq(OpenBlips() - base, 2, 'hw client: a dot each for the hostile and the boss')
+        H.ok(hp and hp.sprite == 1 and hp.colour == 1 and hp.scale == 0.6 and hp.shortRange == false,
+            'hw client: kinds.hostile, shown at the radar edge (Config.Markers.shortRange = false)')
+        H.eq(hp and hp.name, CP.L('block.hostile_waves.blip_hostile'), 'hw client: named Hostile')
+        H.ok(bp and bp.colour == 1 and bp.scale == 0.9 and bp.shortRange == false, 'hw client: the boss at bossScale')
+        H.eq(bp and bp.name, 'The lieutenant', 'hw client: the boss\'s name with its first letter upper-cased')
+        H.eq(#Routed(), 0, 'hw client: detail blips, no GPS line (the fight\'s circle is the pointer)')
+        HWc.stop(c)
+        Config.Markers.shortRange = true
+        local c2 = ClientCtx(obj, HwLocation(12), { tag = 'hw-m7b', isHost = false })
+        HWc.prepare(c2)
+        HWc.start(c2)
+        HWc.update(c2, { peds = { { netId = 7301, role = 'hostile', state = 'hostile', wave = 1 } } })
+        Steps(1)
+        _, hp = BlipOf(function(q) return q.ent == 931 end)
+        H.eq(hp and hp.shortRange, true, 'hw client: shortRange = true: short range again')
+        Config.Markers.shortRange = false
+        HWc.stop(c2)
+        H.eq(OpenBlips() - base, 0, 'hw client: nothing left on the map')
+    end
+
     H.strictGlobals(false)
     for k, v in pairs(saved) do _G[k] = v end
     CP.Npc.apply, CP.Npc.task = savedNpc.apply, savedNpc.task

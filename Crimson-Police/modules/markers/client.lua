@@ -125,6 +125,9 @@ local function Mode()
     return MODES[m] and m or 'area'
 end
 
+-- True when a blip of this variant flashes for as long as it has it: a device set back (Config.Markers.setbackFlash).
+local function SetbackFlash(variant) return variant == 'setback' and Cfg().setbackFlash ~= false end
+
 -- ============================================================================
 --                                   THE LINE
 -- ============================================================================
@@ -197,6 +200,12 @@ local function Emphasise(el, blip, carry)
     if el.service or el.emphasised == blip then return end
     el.emphasised = blip
     SetBlipPriority(blip, POINTER_PRIORITY)
+    -- a device set back already flashes for as long as it is set back (M.style, Config.Markers.setbackFlash): a timed
+    -- flash on top would stop it after flashSeconds
+    if SetbackFlash(el.variant) then
+        el.flashed = true
+        return
+    end
     local ms
     if not el.flashed then
         el.flashed = true
@@ -491,7 +500,8 @@ function M.update(runId, index, m, ctx)
 end
 
 -- Everything off the map: the pointer, its line, the blips blocks handed over (handed back with their line off).
--- With runId / index: only when the pointer is that objective's.
+-- With runId / index: only when the pointer is that objective's. Without them (the run's end, leaving it, resource
+-- stop) the run's service vehicles go too (they outlive an objective's stop, never the run).
 function M.clear(runId, index)
     if runId ~= nil and (not cur or cur.runId ~= runId) then return false end
     if index ~= nil and (not cur or cur.index ~= math.tointeger(tonumber(index) or -1)) then return false end
@@ -502,6 +512,12 @@ function M.clear(runId, index)
     end
     RouteOff()
     cur = nil
+    if runId == nil and index == nil then
+        for key, el in pairs(services) do
+            Drop(el)
+            services[key] = nil
+        end
+    end
     return true
 end
 
@@ -594,7 +610,8 @@ end
 function M.routeColour() return CP.U.clamp(Int(Cfg().routeColour) or 5, 0, 85) end
 
 -- The look of kind (Config.Markers.kinds) and the settings every objective blip gets: short range, legend category,
--- a name, a number. opts = { variant = 'boss'|'next'|'followUp'|'setback', number = n }.
+-- a name, a number. opts = { variant = 'boss'|'next'|'followUp'|'setback', number = n }. A 'setback' blip flashes from
+-- now on (Config.Markers.setbackFlash); a block that restyles it to another variant stops that (SetBlipFlashes false).
 function M.style(blip, kind, label, opts)
     if not Exists(blip) then return false end
     opts = type(opts) == 'table' and opts or {}
@@ -607,6 +624,7 @@ function M.style(blip, kind, label, opts)
     local n = Int(opts.number)
     if n and n >= 0 then ShowNumberOnBlip(blip, n) end
     if Text(label) then NameBlip(blip, label) end
+    if SetbackFlash(opts.variant) then SetBlipFlashes(blip, true) end
     return true
 end
 

@@ -149,6 +149,18 @@ local function removeBlip(S, netId)
     S.blips[netId] = nil
 end
 
+-- The boss's blip name: the mission's name for him with its first letter upper-cased (Gang Hideout Raid's "the
+-- lieutenant" reads "The lieutenant"), else "Boss".
+local function BossLabel(S)
+    local l = type(S.ctx.obj.boss) == 'table' and S.ctx.obj.boss.label or nil
+    if type(l) ~= 'string' or l == '' then return CP.L('block.hostile_waves.boss_label') end
+    if CP.Locale.has(l) then l = CP.L(l) end
+    return (l:gsub('^%l', string.upper))
+end
+
+-- A hostile's red dot (Config.Markers.kinds.hostile, a boss at bossScale), drawn by CP.Markers.style so it follows
+-- Config.Markers.shortRange (shipped false: it shows at the radar edge). A detail blip: the fight's circle is the
+-- objective pointer (CP.Markers, PLAN M5), so it is never handed over and carries no GPS line.
 local function EnsureBlip(S, netId, ent, boss)
     -- a loop pass resumed after the cleanup (it waited in ctx.control) draws nothing
     if not S.alive then return end
@@ -156,15 +168,8 @@ local function EnsureBlip(S, netId, ent, boss)
     if b and b.ent == ent and DoesBlipExist(b.id) then return end
     removeBlip(S, netId)
     local id = AddBlipForEntity(ent)
-    SetBlipSprite(id, 1)
-    SetBlipColour(id, 1)
-    SetBlipScale(id, boss and 0.9 or 0.6)
-    SetBlipAsShortRange(id, true)
-    BeginTextCommandSetBlipName('STRING')
-    local label = CP.L('block.hostile_waves.blip_hostile')
-    if boss then label = (S.ctx.obj.boss and S.ctx.obj.boss.label) or CP.L('block.hostile_waves.boss_label') end
-    AddTextComponentSubstringPlayerName(label)
-    EndTextCommandSetBlipName(id)
+    local label = boss and BossLabel(S) or CP.L('block.hostile_waves.blip_hostile')
+    CP.Markers.style(id, 'hostile', label, { variant = boss and 'boss' or nil })
     S.blips[netId] = { id = id, ent = ent }
 end
 

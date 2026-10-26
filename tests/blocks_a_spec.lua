@@ -1881,6 +1881,21 @@ do -- skill_check onFail = setback: recovery, personal penalty, retry; never a f
     mk = SC.marker(ctx)
     H.ok(#mk.targets == 1 and mk.targets[1].key == 'd1' and mk.targets[1].variant == 'setback',
         'sc marker: a set-back device stays the pointer, in its setback colour')
+    local sl = mk.targets[1].label
+    H.ok(
+        type(sl) == 'table' and sl.key == 'block.skill_check.blip_setback' and sl.vars.action == 'Ventilate'
+            and sl.vars.n == 1,
+        'sc marker: set back, named after the recovery step (Ventilate 1, PLAN M7)'
+    )
+    -- a mission that names its target (Drug Lab Raid "Shut down the lab"): every device blip carries that name
+    ctx.obj.target = { label = 'Shut down the lab' }
+    ctx.state.targets[1].status = 'armed'
+    H.eq(SC.marker(ctx).targets[1].label, 'Shut down the lab', 'sc marker: named after the mission\'s target')
+    ctx.obj.target = { label = 'block.skill_check.target_default' }
+    sl = SC.marker(ctx).targets[1].label
+    H.ok(type(sl) == 'table' and sl.key == 'block.skill_check.target_default', 'sc marker: a locale key as a token')
+    ctx.obj.target = nil
+    ctx.state.targets[1].status = 'setback'
     ctx.radioSilence = true
     H.eq(SC.marker(ctx), false, 'sc marker: none under Radio Silence (the client half draws no blips then)')
     ctx.radioSilence = nil

@@ -2264,9 +2264,9 @@ do
         return l
     end
 
-    -- Every live car with a blip (the observe violator only once it passed) and every suspect the client half blips,
-    -- each keyed by its net id (the client half hands its own blip of it over, CP.Markers.adopt), at the server's
-    -- position. Before the flee with nothing to follow yet: a pin where to wait. After it: the list, empty while every
+    -- Every live car with a blip (the observe violator only once it passed) and every suspect the client half blips
+    -- (in kinds.fleeing while he runs on foot, else kinds.suspect, as the client half draws him: PLAN M7), each keyed
+    -- by its net id (the client half hands its own blip of it over, CP.Markers.adopt), at the server's position. Before the flee with nothing to follow yet: a pin where to wait. After it: the list, empty while every
     -- car is stopped and nobody is out.
     function Marker(ctx)
         local st = StateOf(ctx)
@@ -2291,7 +2291,7 @@ do
                 key = p.netId,
                 netId = p.netId,
                 coords = GetEntityCoords(p.entity),
-                look = 'suspect',
+                look = p.state == 'fleeing' and 'fleeing' or 'suspect',
                 label = CP.Lt('block.pursuit.blip_suspect'),
             }
         end

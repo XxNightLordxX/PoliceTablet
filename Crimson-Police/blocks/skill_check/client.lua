@@ -129,8 +129,21 @@ local function ClearBlips(st)
     st.blips, st.handed = {}, {}
 end
 
--- Config.Markers.kinds.device (yellow, setbackColour while set back), numbered, never short range. Nothing under
--- Radio Silence.
+-- The name of device i's blip: the mission's own name for its target (Drug Lab Raid "Shut down the lab"), else
+-- "Device <n>"; while it is set back, the recovery step and the number ("Ventilate 1"). Built only when the blip is
+-- drawn or restyled.
+local function BlipLabel(ctx, st, i, variant)
+    if variant == 'setback' then
+        local sb = st.data and st.data.setback
+        local action = sb and Txt(sb.label) or CP.L('block.skill_check.recover_default')
+        return CP.L('block.skill_check.blip_setback', { action = action, n = i })
+    end
+    local target = type(ctx.obj.target) == 'table' and ctx.obj.target or {}
+    return Txt(target.label) or CP.L('block.skill_check.blip', { n = i })
+end
+
+-- Config.Markers.kinds.device (yellow; setbackColour while set back, flashing until it is fixed with
+-- Config.Markers.setbackFlash), numbered, never short range. Nothing under Radio Silence.
 local function RefreshBlips(ctx, st)
     st.blips, st.handed = st.blips or {}, st.handed or {}
     local want = {}
@@ -154,8 +167,9 @@ local function RefreshBlips(ctx, st)
         local e = st.blips[i]
         if not e or e.variant ~= w.variant then
             local b = e and e.id or AddBlipForCoord(w.c.x, w.c.y, w.c.z)
-            CP.Markers.style(b, 'device', CP.L('block.skill_check.blip', { n = i }),
-                { number = i, variant = w.variant or nil })
+            CP.Markers.style(b, 'device', BlipLabel(ctx, st, i, w.variant), { number = i, variant = w.variant or nil })
+            -- fixed after a setback: its flash stops (CP.Markers.style started it)
+            if e and e.variant == 'setback' then SetBlipFlashes(b, false) end
             st.blips[i] = { id = b, at = w.at, variant = w.variant }
             if not e and CP.Markers.adopt('d' .. i, b) then st.handed[i] = b end
         end

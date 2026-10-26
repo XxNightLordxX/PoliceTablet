@@ -11,6 +11,7 @@ local STUN_EVENT = 'crimson-police:server:stunHit'
 local ACT_EVENT = 'crimson-police:client:contactAct'
 local CONFIRM_EVENT = 'crimson-police:client:contactConfirm'
 local SERVICE_EVENT = 'crimson-police:client:serviceVehicle'
+local SERVICE_BLIP_EVENT = 'crimson-police:client:serviceBlip'
 local ROAD_CALLBACK = 'crimson-police:client:roadPoint'
 
 local TICK_MS = 1000
@@ -2132,6 +2133,46 @@ function Custody.view(run, obj, src)
 end
 
 -- ============================================================================
+--                         THE SERVICE VEHICLES' BLIPS
+-- ============================================================================
+-- A prisoner van or tow truck shows on the map of every officer on the run (CP.Markers.service, PLAN M7,
+-- Config.Markers.serviceVehicles) from its spawn until it drives off. The coroner van stays unmarked (it serves a
+-- scene the officers are already at). Sent when its status changes, never on a timer: the client follows the vehicle
+-- itself once it streams in, and shows it at the position sent until then.
+
+local BLIP_LOOK = { transport = 'prisonerVan', tow = 'towTruck' }
+local BLIP_SHOWN = { coming = true, parked = true, loading = true }
+
+local function BlipOf(run, s)
+    local show = BLIP_SHOWN[s.status] == true and s.veh ~= nil
+    local x, y, z = U.xyz(show and (CoordsOf(run, s.veh) or s.spawnAt) or nil)
+    return {
+        runId = run.id,
+        id = s.id,
+        kind = BLIP_LOOK[s.kind],
+        show = show,
+        netId = show and s.veh or nil,
+        coords = x and { x = x + 0.0, y = y + 0.0, z = z + 0.0 } or nil,
+    }
+end
+
+-- to: one officer who joined after the blip went out (run:arrived); nil: every active participant, when the status
+-- changed since the last send (a vehicle never shown sends nothing when it goes).
+local function SyncBlip(run, s, to)
+    if not BLIP_LOOK[s.kind] then return end
+    if to then
+        if s.blipOn then TriggerClientEvent(SERVICE_BLIP_EVENT, to, BlipOf(run, s)) end
+        return
+    end
+    if s.blipSent == s.status then return end
+    s.blipSent = s.status
+    local data = BlipOf(run, s)
+    if not data.show and not s.blipOn then return end
+    s.blipOn = data.show or nil
+    for _, src in ipairs(ActiveSrcs(run)) do TriggerClientEvent(SERVICE_BLIP_EVENT, src, data) end
+end
+
+-- ============================================================================
 --                                   THE TICK
 -- ============================================================================
 
@@ -2139,6 +2180,7 @@ local function TickBook(run, b)
     for _, s in ipairs(U.copy(b.services)) do
         local ok, err = pcall(TickService, run, s)
         if not ok then CP.err(TAG, 'service %s of run %s failed: %s', tostring(s.kind), run.id, tostring(err)) end
+        SyncBlip(run, s)
     end
     local keep = {}
     for _, s in ipairs(b.services) do if s.status ~= 'gone' then keep[#keep + 1] = s end end
@@ -2230,6 +2272,12 @@ end
 
 if CP.Hooks and CP.Hooks.on then
     CP.Hooks.on('run:inProgress', function(run) Custody.giveEvidence(run) end)
+    -- an officer who joined the run late gets the van or tow truck already on the others' maps
+    CP.Hooks.on('run:arrived', function(run, src)
+        local b = type(run) == 'table' and books[run.id]
+        if not b or not src then return end
+        for _, s in ipairs(b.services) do SyncBlip(run, s, src) end
+    end)
 end
 
 AddEventHandler('playerDropped', function()

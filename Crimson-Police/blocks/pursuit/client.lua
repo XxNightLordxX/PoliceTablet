@@ -145,20 +145,28 @@ local function DropBlip(S, k)
     S.blips[k] = nil
 end
 
--- A car's or a suspect's blip in its Config.Markers.kinds look (vehicle, suspect; scale: a smaller one for a suspect
--- who gave up), handed to the objective pointer under the net id the server's pointer names it by: it IS the
--- pointer (one icon, the GPS line on it), and CP.Markers shows the same look from the server's position once the
--- entity is too far away for this game (BLIPS_FINAL R1, R7).
+-- A car's or a suspect's blip in its Config.Markers.kinds look (vehicle; a suspect on foot fleeing while he runs,
+-- else suspect; scale: a smaller one for a suspect who gave up), restyled in place when that changes, handed to the
+-- objective pointer under the net id the server's pointer names it by: it IS the pointer (one icon, the GPS line on
+-- it), and CP.Markers shows the same look from the server's position once the entity is too far away for this game
+-- (BLIPS_FINAL R1, R3, R7).
 local function EnsureBlip(S, k, ent, net, kind, labelKey, scale)
     -- a loop pass resumed after the cleanup (it waited in ctx.control) draws nothing
     if not S.alive then return end
     local b = S.blips[k]
-    if b and b.ent == ent and DoesBlipExist(b.id) then return end
+    if b and b.ent == ent and DoesBlipExist(b.id) then
+        if b.kind ~= kind or b.scale ~= scale then
+            CP.Markers.style(b.id, kind)
+            if scale then SetBlipScale(b.id, scale) end
+            b.kind, b.scale = kind, scale
+        end
+        return
+    end
     DropBlip(S, k)
     local id = AddBlipForEntity(ent)
     CP.Markers.style(id, kind, CP.L(labelKey))
     if scale then SetBlipScale(id, scale) end
-    S.blips[k] = { id = id, ent = ent, net = net }
+    S.blips[k] = { id = id, ent = ent, net = net, kind = kind, scale = scale }
     CP.Markers.adopt(net, id)
 end
 
@@ -653,7 +661,8 @@ local function Loop(S)
                         local onFoot = (state == 'stopped' or state == 'fleeing' or state == 'hostile')
                             and not IsPedInAnyVehicle(ped, false)
                         if showBlips and onFoot then
-                            EnsureBlip(S, k, ped, s.netId, 'suspect', 'block.pursuit.blip_suspect')
+                            local look = state == 'fleeing' and 'fleeing' or 'suspect'
+                            EnsureBlip(S, k, ped, s.netId, look, 'block.pursuit.blip_suspect')
                         elseif showBlips and state == 'surrendered' then
                             EnsureBlip(S, k, ped, s.netId, 'suspect', 'block.pursuit.blip_suspect', 0.6)
                         else

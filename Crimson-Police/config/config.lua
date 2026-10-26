@@ -484,6 +484,7 @@ Config.Markers = {
     farTargets = true,           -- true = a car or suspect too far away for your game shows where the server says
     shortRange = false,          -- false = objective blips show at the edge of the radar however far away they are
     flashSeconds = 5,            -- seconds a new objective blip flashes (0 = no flash)
+    setbackFlash = true,         -- true = a device that was set back (Drug Lab Raid: Ventilate) flashes until fixed
     category = 2,                -- the map legend: 2 = shows the distance to the blip, 1 = no distance
     areaAlpha = 80,              -- how solid the map circles are: 0 = invisible, 255 = solid
     startBlip = true,            -- true = the named Mission start blip stays on the map for the whole drive

@@ -313,4 +313,106 @@ do
     Runs.endRun(run, 'completed', 'completed')
 end
 
+-- ============================================================================
+--                        THE VAN ON EVERY OFFICER'S MAP
+-- ============================================================================
+-- PLAN M7, client:serviceBlip.
+-- From its spawn until it drives off, sent when its status changes (never on a timer); a late partner gets it when
+-- he arrives; a tow truck that was never made and the coroner van send none.
+
+do
+    local EV = 'crimson-police:client:serviceBlip'
+    local function Sent(from)
+        local out = {}
+        for i = from + 1, #H.events do
+            local e = H.events[i]
+            if e.kind == 'client' and e.name == EV then out[#out + 1] = { to = e.target, data = e.args[1] } end
+        end
+        return out
+    end
+    local function To(list)
+        local out = {}
+        for _, x in ipairs(list) do out[#out + 1] = tostring(x.to) end
+        table.sort(out)
+        return table.concat(out, ',')
+    end
+    local run = HoldRun({ 1, 2 })
+    W.place(1, 3100.0, 3000.0, 30.0)
+    W.place(2, 3200.0, 3000.0, 30.0)
+    W.roadPoint = function(_, args)
+        return { coords = { x = args.near.x + 200.0, y = args.near.y, z = args.near.z }, heading = 90.0 }
+    end
+    local mark = #H.events
+    local van = Custody.requestTransport(run, vec3(500.0, 500.0, 30.0), { obj = 1 })
+    W.tick(3)
+    H.eq(van.status, 'coming', 'blip: the van spawned and drives in')
+    local s = Sent(mark)
+    H.eq(To(s), '1,2', 'blip: sent to both officers once it spawned')
+    local d = s[1] and s[1].data or {}
+    H.ok(d.runId == run.id and d.id == van.id and d.kind == 'prisonerVan' and d.show == true and d.netId == van.veh,
+        'blip: the run, the van\'s id and net id, kinds.prisonerVan')
+    H.ok(d.coords and D(d.coords, vec3(700.0, 500.0, 30.0)) < 1.0, 'blip: where the server has it')
+    mark = #H.events
+    W.tick(20)
+    H.eq(#Sent(mark), 0, 'blip: nothing more while it drives (no timer)')
+
+    -- a partner who arrives late gets it (run:arrived)
+    CP.Hooks.fire('run:arrived', run, 3, false)
+    s = Sent(mark)
+    H.ok(#s == 1 and s[1].to == 3 and s[1].data.show == true and s[1].data.netId == van.veh,
+        'blip: a late partner gets the van already on the others\' maps')
+
+    -- late: put on its parking point (one update each, at its new spot)
+    mark = #H.events
+    W.tick(TIMEOUT)
+    H.eq(van.status, 'parked', 'blip: late, it is put on its parking point')
+    s = Sent(mark)
+    H.ok(To(s) == '1,2' and s[1].data.show == true and D(s[1].data.coords, vec3(500.0, 500.0, 30.0)) < 1.0,
+        'blip: moved to the parking point for everyone')
+
+    -- the arrest objective done: it drives off after leaveAfter, its blip goes, and nothing once it is gone
+    run.objectives[1].status = 'done'
+    mark = #H.events
+    W.tick(Config.Custody.transport.leaveAfter + 2)
+    H.eq(van.status, 'leaving', 'blip: it drives off')
+    s = Sent(mark)
+    H.ok(To(s) == '1,2' and s[1].data.show == false and s[1].data.netId == nil, 'blip: off every map as it leaves')
+    mark = #H.events
+    W.tick(30)
+    H.eq(van.status, 'gone', 'blip: then it is gone')
+    H.eq(#Sent(mark), 0, 'blip: nothing more once gone')
+    CP.Hooks.fire('run:arrived', run, 4, false)
+    H.eq(#Sent(mark), 0, 'blip: a partner arriving now gets none')
+    W.roadPoint = nil
+    Runs.endRun(run, 'completed', 'completed')
+
+    -- a tow truck that was never made (no road point) and a coroner van: no blip at all
+    run = HoldRun({ 1 })
+    local _, carNet = Runs.spawnVehicle(run,
+        { obj = 1, model = 'asea', coords = vec4(600.0, 600.0, 30.0, 0.0), role = 'parked' })
+    Custody.register(run, 1, carNet, {
+        kind = 'vehicle',
+        role = 'parked',
+        truth = 'stolen',
+        demeanour = 'compliant',
+        cues = {},
+        actions = { 'runPlate', 'impound' },
+    })
+    W.place(1, 602.0, 600.0, 30.0)
+    mark = #H.events
+    H.eq(Custody.impound(run, carNet, 1), true, 'blip: impound calls the tow truck')
+    W.tick(TIMEOUT + 2)
+    H.eq(#Sent(mark), 0, 'blip: a tow truck never made sends no blip')
+    W.place(1, 3100.0, 3000.0, 30.0)
+    W.roadPoint = function(_, args)
+        return { coords = { x = args.near.x + 200.0, y = args.near.y, z = args.near.z }, heading = 90.0 }
+    end
+    local coroner = Custody.serviceVehicle(run, 'coroner', vec3(500.0, 500.0, 30.0), { obj = 1 })
+    W.tick(3)
+    H.eq(coroner.status, 'coming', 'blip: the coroner van drives in')
+    H.eq(#Sent(mark), 0, 'blip: the coroner van stays unmarked')
+    W.roadPoint = nil
+    Runs.endRun(run, 'completed', 'completed')
+end
+
 return H

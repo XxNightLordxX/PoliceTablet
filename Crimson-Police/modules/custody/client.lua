@@ -1,5 +1,5 @@
 -- CP.Custody (client): the police action flow (begin, progress bar, finish), the case-fail confirm, the service
--- vehicles this client drives for the server, and the road point the server asks for.
+-- vehicles this client drives for the server and their blips, and the road point the server asks for.
 
 CP.Custody = CP.Custody or {}
 local Custody = CP.Custody
@@ -248,6 +248,24 @@ RegisterNetEvent('crimson-police:client:serviceVehicle', function(data)
             DriveTo(driver, veh, data.away)
         end
     end)
+end)
+
+-- ============================================================================
+--                    SERVICE VEHICLE BLIPS (every officer)
+-- ============================================================================
+-- A prisoner van or tow truck of this officer's run on his map (CP.Markers.service, Config.Markers.serviceVehicles,
+-- PLAN M7): from its spawn until it drives off. The run's end (CP.Markers.clear) takes it off with the rest.
+
+local SERVICE_LOOKS = { prisonerVan = true, towTruck = true }
+
+RegisterNetEvent('crimson-police:client:serviceBlip', function(data)
+    if type(data) ~= 'table' or type(data.id) ~= 'number' or not SERVICE_LOOKS[data.kind] then return end
+    if not (CP.Markers and CP.Markers.service) then return end
+    local run = CurrentRun()
+    if not run or run.id ~= data.runId then return end
+    local key = 'service:' .. tostring(math.tointeger(data.id) or data.id)
+    if data.show ~= true then return CP.Markers.service(key, nil) end
+    CP.Markers.service(key, { netId = data.netId, coords = data.coords, kind = data.kind })
 end)
 
 AddEventHandler('onResourceStop', function(res)

@@ -661,7 +661,7 @@ Locations for every new mission come from GTA V vehicle nodes and known base-gam
 
 - Spawns: 3 NPC racers in sports cars (scales), racing the route until the time limit ends
 
-- Marking (Config.Markers, PLAN M3): each racer's car, and a driver out of it, has a red blip with the GPS line to the nearest; one too far away for an officer's game (OneSync streams 424 m) shows where the server has it, so it stays on every map at any distance
+- Marking (Config.Markers, PLAN M3): each racer's car, and a driver out of it, has a red blip with the GPS line to the nearest; one too far away for an officer's game (OneSync streams 424 m) shows where the server has it, so it stays on every map at any distance. A driver who runs on foot is orange until he stops, fights or gives up (PLAN M7)
 
 - Objectives: 1) stop racers before the race ends; a racer is stopped when its car stays below 5 km/h for 5 seconds; 2) detain each stopped driver with ox_target "Detain driver" (3 s progress). The run is Completed when every racer is detained, or when the time limit ends with at least one detained
 
@@ -709,7 +709,7 @@ Locations for every new mission come from GTA V vehicle nodes and known base-gam
 
 - Spawns: 1 getaway car with 1 driver, who flees but never shoots
 
-- Marking (Config.Markers, PLAN M3): the getaway car, and the driver once out of it, has a red blip with the GPS line to it; one too far away for an officer's game (OneSync streams 424 m) shows where the server has it, so it stays on every map at any distance
+- Marking (Config.Markers, PLAN M3): the getaway car, and the driver once out of it, has a red blip with the GPS line to it; one too far away for an officer's game (OneSync streams 424 m) shows where the server has it, so it stays on every map at any distance. A driver who runs on foot is orange until he stops, fights or gives up (PLAN M7)
 
 - Objectives: stay within 150 m of the car for a total of 3 minutes
 
@@ -733,7 +733,7 @@ Locations for every new mission come from GTA V vehicle nodes and known base-gam
 
 - Spawns: 1 stolen car with 2 suspects (scales, max 4); after the stop, each suspect has a 20% chance to flee on foot
 
-- Marking (Config.Markers, PLAN M3): the stolen car, and each suspect once out of it, has a red blip with the GPS line to the nearest; one too far away for an officer's game (OneSync streams 424 m) shows where the server has it, so it stays on every map at any distance. Once it is stopped (PLAN M4) each suspect and the car not yet decided keep a blip (a suspect orange while he runs, red once he fights or gives up; the car yellow) until worked
+- Marking (Config.Markers, PLAN M3): the stolen car, and each suspect once out of it, has a red blip with the GPS line to the nearest (orange while he runs on foot, PLAN M7); one too far away for an officer's game (OneSync streams 424 m) shows where the server has it, so it stays on every map at any distance. Once it is stopped (PLAN M4) each suspect and the car not yet decided keep a blip (a suspect orange while he runs, red once he fights or gives up; the car yellow) until worked
 
 - Objectives: 1) stop the car: it pulls over by itself (yield) or is stopped with a PIT or box-in (below 5 km/h for 5 seconds); 2) aim at each suspect until they surrender (hands up, then kneel); the suspects of a car that yielded stay seated until ordered out; 3) cuff each suspect ("Cuff suspect", 5 s progress), catching any who flee first; 4) Impound the stolen car (10 s progress; the tow truck collects it). Steps 2–4 are a field_contact objective in stop mode that adopts the pursuit's car and suspects (revealed = { 'stolen' }).
 
@@ -857,7 +857,7 @@ Locations for every new mission come from GTA V vehicle nodes and known base-gam
 
 - Start: within 50 m of the building; the time limit, which is the device timer, starts now
 
-- Marking (Config.Markers, PLAN M6): while searching, a yellow circle round the hiding spots with a yellow pin "Search area" at its centre and the GPS line to it (never to a hiding spot); then each device still to defuse is a numbered yellow blip with the line to the nearest
+- Marking (Config.Markers, PLAN M6): while searching, a yellow circle round the hiding spots with a yellow pin "Search area" at its centre and the GPS line to it (never to a hiding spot); then each device still to defuse is a numbered yellow blip named after the mission's target ("Defuse device", PLAN M7) with the line to the nearest
 
 - Spawns: 1 device prop (scales), each at a different random hiding spot
 
@@ -1011,7 +1011,7 @@ Locations for every new mission come from GTA V vehicle nodes and known base-gam
 
 - Marking (Config.Markers, PLAN M4): during the cook chase each cook not yet cuffed is an orange blip while he runs and red once he fights or gives up, with the GPS line to the nearest, shown where the server has him once he is too far away for an officer's game
 
-- Marking (Config.Markers, PLAN M6): the two entry points to breach are numbered yellow blips with the GPS line to the nearest; the stash search a yellow circle with a yellow pin at its centre and the line to it (never to a stash); the lab to shut down a numbered yellow blip with the line, orange while it is set back (Ventilate); the scene a yellow map pin "Scene" with the line
+- Marking (Config.Markers, PLAN M6): the two entry points to breach are numbered yellow blips with the GPS line to the nearest; the stash search a yellow circle with a yellow pin at its centre and the line to it (never to a stash); the lab to shut down a numbered yellow blip "Shut down the lab" with the line, orange, flashing and named "Ventilate 1" while it is set back until it is ventilated (PLAN M7, Config.Markers.setbackFlash); the scene a yellow map pin "Scene" with the line
 
 - Objectives: 1) breach: ox_target "Stack up and breach" (3 s progress) on both entry points, by 2 different officers within 6 seconds of each other (the count is min(2, participants still in the run): when only one is left, one officer breaches both entries with an 8 s progress each, so the run never soft-locks); 2) neutralise every hostile (killed, or surrendered and cuffed); 3) when the last hostile falls the cooks bolt along an escape route: catch and cuff them (unarmed; they give up when aimed at within 10 m, when stunned, when a participant stays within 3 m for 3 seconds, or once worn out by running when a participant is within 30 m); 4) search the stash spots ("Search", 4 s progress) until every stash is found, then "Seize the product" (6 s progress); 5) "Shut down the lab" at the lab point: 3 ox_lib skill checks (medium, medium, hard); 2 misses in a row start a toxic fire (an effect only, it hurts nobody), a setback and never a fail: any participant must "Ventilate" (10 s progress) at the lab point, the officer who missed loses 15 points (lab_fire, personal), and the shutdown can be tried again 30 seconds later by anyone; 6) Process the scene
 
@@ -1037,7 +1037,7 @@ Locations for every new mission come from GTA V vehicle nodes and known base-gam
 
 - Spawns: 16 hostiles (scales) in 3 waves of 6 / 5 / 5 from 2 of the 3 spawn sets, rolled per run (the Active Mission screen shows the intel line, e.g. "Intel: expect contact in the garage and the house"); tactics rolled (hold 30%, balanced 50%, push 20%); pistols, combat pistols and pump shotguns; base accuracy 28 and armour 10 plus the tier's increase; 30% surrender under 25% health. After the last wave, the lieutenant: health 300, armour 50, a heavy pistol, 50% surrender under 25% health; does not scale. 2 unarmed runners (scales, max 4). 1 weapons cache (scales, max 2) hidden among the cache spots
 
-- Marking (Config.Markers, PLAN M5): during the fight (objective 2) a red circle with a skull at its centre, "Hostiles", round the hostile spawn points of the two rolled spawn sets (15 m past the farthest of them and the lieutenant's spot), with the GPS line to its centre until you are inside it; each hostile is a red dot
+- Marking (Config.Markers, PLAN M5): during the fight (objective 2) a red circle with a skull at its centre, "Hostiles", round the hostile spawn points of the two rolled spawn sets (15 m past the farthest of them and the lieutenant's spot), with the GPS line to its centre until you are inside it; each hostile is a red dot, the lieutenant a bigger one named "The lieutenant" (PLAN M7)
 
 - Marking (Config.Markers, PLAN M4): during the runners' chase each runner not yet cuffed is an orange blip while he runs and red once he fights or gives up, with the GPS line to the nearest, shown where the server has him once he is too far away for an officer's game
 
@@ -1426,6 +1426,8 @@ Service vehicles (transport van, tow truck, coroner van)
 - If a van is not parked within Config.Custody.serviceTimeout (60 s), it is placed at the parking point out of every participant's view; if a tow truck has not loaded the car within the timeout, the car fades out and counts as impounded.
 
 - A service vehicle never appears or is put down on top of the officers (PLAN S17): a van is placed at its parking point (the transport or coroner point, else the scene) only while no player is within Config.Custody.serviceClearance (30 m) of it. A late van whose point an officer stands on drives on and is placed once he steps away; a van that got no road point at all comes to a road point beside the scene instead (serviceClearance to serviceClearance + 40 m from the parking point, from the driving client, checked by the server like every road point), or waits until a point is clear. A placed van waits frozen until an officer's game has put it on the ground (Config.Spawning.place). A tow truck that got no road point within the timeout is never made (it would stand inside the car): the car fades out and counts as impounded. Config.Spawning.enabled = false: the vans are placed at their parking point as before.
+
+- The transport van and the tow truck show on the map of every officer on the run (PLAN M7, Config.Markers.serviceVehicles, kinds.prisonerVan "Prisoner transport" and kinds.towTruck "Tow truck", both blue): from the moment the vehicle appears until it drives off, in every Radio Silence mode, never with a GPS line. The server sends it when the vehicle's status changes (appeared, parked, loading, leaving), never on a timer; an officer's game follows the vehicle once it is near enough to see it, and shows it where the server last placed it until then. A partner who arrives late gets the vehicles already on the map. The coroner van stays unmarked (it serves a scene the officers are already at).
 
 Impound
 
@@ -2606,6 +2608,7 @@ Net events (all prefixed crimson-police:; runId is always the run's run_uuid, sh
 | client:contactAct | S → run host | runId, netId, behaviour, args | The only truth-derived signal a client gets, at the moment the behaviour starts |
 | client:contactConfirm | S → C | netId, choice, factKey | Opens the case-fail confirm on the tablet (an ox_target choice never decides a knowing error) |
 | client:serviceVehicle | S → C | runId, id, op (drive, load, leave), kind, vehicle, driver, destination | The driving client of a transport van, tow truck or coroner van |
+| client:serviceBlip | S → C | runId, id, kind (prisonerVan, towTruck), show, net id, coords | Every officer on the run: the transport van's or tow truck's map blip on or off (when its status changes) |
 | server:custody | C → S | runId, netId, action, phase (begin, finish), extra | Every police action; the server checks reach, time and state at both ends |
 | server:stunHit | C → S | netId | Excessive-force telemetry, accepted only when it matches what the server saw within 1 s |
 | server:tabletItemGone | C → S | — | requireItem: the item left the inventory; the server re-checks and closes the tablet |
@@ -3136,6 +3139,7 @@ Config.Markers = {
     farTargets = true,           -- true = a car or suspect too far away for your game shows where the server says
     shortRange = false,          -- false = objective blips show at the edge of the radar however far away they are
     flashSeconds = 5,            -- seconds a new objective blip flashes (0 = no flash)
+    setbackFlash = true,         -- true = a device that was set back (Drug Lab Raid: Ventilate) flashes until fixed
     category = 2,                -- the map legend: 2 = shows the distance to the blip, 1 = no distance
     areaAlpha = 80,              -- how solid the map circles are: 0 = invisible, 255 = solid
     startBlip = true,            -- true = the named Mission start blip stays on the map for the whole drive

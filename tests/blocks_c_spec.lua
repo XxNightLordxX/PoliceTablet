@@ -3571,6 +3571,11 @@ do -- pursuit (Stolen Vehicle Takedown): a pin before the car exists, the car at
         H.ok(x.look == 'suspect' and LabelKey(x.label) == 'block.pursuit.blip_suspect' and x.key == x.netId,
             'pu marker: a suspect, keyed by his net id')
     end
+    -- (PLAN M7) one who runs on foot is in kinds.fleeing, as the client half draws him
+    st.peds[tostring(sus[1].netId)].state = 'fleeing'
+    mk = PU.marker(ctx)
+    H.ok(mk.targets[1].look == 'fleeing' and mk.targets[2].look == 'suspect',
+        'pu marker: a suspect running on foot in kinds.fleeing (orange), the other still kinds.suspect')
     st.peds[tostring(sus[1].netId)].state = 'surrendered'
     st.peds[tostring(sus[2].netId)].state = 'cuffed'
     mk = PU.marker(ctx)
@@ -3827,6 +3832,57 @@ do -- pursuit client: the car's blip is the pointer; far away CP.Markers shows t
     H.step(1000)
     H.eq(LiveBlips() - base, 0, 'pursuit client: nothing left on the map')
     H.eq(BL.removedRouted, removedRouted, 'pursuit client: every line went off before its blip')
+end
+
+do -- (PLAN M7) pursuit client: a suspect who runs on foot is orange (kinds.fleeing; he was red), restyled in place
+    -- when he stops, fights or gives up
+    H.clockMs = 32200000
+    local me = PlayerPedId()
+    ents[me].coords = vec3(9000.0, 9000.0, 30.0)
+    local ped, pedNet = NewEnt('ped', vec3(9150.0, 9000.0, 30.0))
+    ents[ped].bag = { state = 'fleeing', cfg = {} }
+    local cctx = ClientCtx('run-cl-m7-pu', PU.defaults({ block = 'pursuit', spawn = 'car' }), stolenLoc)
+    cctx.isHost = false
+    cctx.radioSilence = false
+    local base = LiveBlips()
+    PC.prepare(cctx)
+    PC.start(cctx)
+    local function Snap(state)
+        return {
+            kind = 'state',
+            mode = 'stop',
+            fled = true,
+            trigger = 'distance',
+            vehicles = {},
+            suspects = { { netId = pedNet, state = state } },
+            detained = 0,
+            total = 1,
+            stopped = 0,
+            vtotal = 0,
+        }
+    end
+    PC.update(cctx, Snap('fleeing'))
+    H.step(1000)
+    local sb, sp = BlipOf(function(p) return p.ent == ped end)
+    H.eq(LiveBlips() - base, 1, 'pursuit client m7: one blip on the runner')
+    H.ok(
+        sp and sp.sprite == 1 and sp.colour == 17 and sp.scale == 0.8 and sp.name == CP.L('block.pursuit.blip_suspect'),
+        'pursuit client m7: on foot and running: kinds.fleeing (orange 0.8)')
+    ents[ped].bag.state = 'stopped'
+    H.step(1000)
+    H.ok(BL.live[sb] and sp.colour == 1 and sp.scale == 0.7,
+        'pursuit client m7: he stops: the same blip, kinds.suspect')
+    ents[ped].bag.state = 'surrendered'
+    PC.update(cctx, Snap('surrendered'))
+    H.step(1000)
+    H.ok(BL.live[sb] and sp.colour == 1 and sp.scale == 0.6, 'pursuit client m7: he gives up: red, a size smaller')
+    ents[ped].bag.state = 'fleeing'
+    PC.update(cctx, Snap('fleeing'))
+    H.step(1000)
+    H.ok(BL.live[sb] and sp.colour == 17 and sp.scale == 0.8, 'pursuit client m7: he runs again: orange again')
+    PC.stop(cctx)
+    H.step(1000)
+    H.eq(LiveBlips() - base, 0, 'pursuit client m7: nothing left on the map')
 end
 
 -- (PLAN M5) search_area client: the centre blip (key center) is the pointer until the officer is inside the circle, a

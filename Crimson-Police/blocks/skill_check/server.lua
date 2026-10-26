@@ -607,14 +607,25 @@ CP.Blocks.register(BLOCK, {
 
     -- The objective pointer (CP.Runs.marker, docs/ARCHITECTURE.md §5.44): every device still to work (armed, set
     -- back, or waiting to be tried again), numbered, each keyed 'd<n>' so the client hands its own blip over (one icon
-    -- per device) and every officer's GPS line goes to his nearest; a set-back one in its setback colour. Nothing
-    -- under Radio Silence: the client half draws no blips then.
+    -- per device) and every officer's GPS line goes to his nearest; a set-back one in its setback colour. Each is named
+    -- as the client half names its blip (PLAN M7): the mission's target name, else "Device <n>"; set back, the
+    -- recovery step and the number. Nothing under Radio Silence: the client half draws no blips then.
     marker = function(ctx)
         local st = Ensure(ctx)
         if ctx.radioSilence or st.completed or st.failed then return false end
         local targets = {}
+        local tl = type(ctx.obj.target) == 'table' and ctx.obj.target.label or nil
+        if type(tl) ~= 'string' or tl == '' then
+            tl = nil
+        elseif CP.Locale.has(tl) then
+            tl = CP.Lt(tl)
+        end
         for i, t in ipairs(st.targets) do
             if t.status == 'armed' or t.status == 'setback' or t.status == 'cooldown' then
+                local label = tl or CP.Lt('block.skill_check.blip', { n = i })
+                if t.status == 'setback' then
+                    label = CP.Lt('block.skill_check.blip_setback', { action = SetbackLabel(ctx), n = i })
+                end
                 targets[#targets + 1] = {
                     key = 'd' .. i,
                     index = i,
@@ -622,7 +633,7 @@ CP.Blocks.register(BLOCK, {
                     coords = TargetCoords(t),
                     look = 'device',
                     variant = t.status == 'setback' and 'setback' or nil,
-                    label = CP.Lt('block.skill_check.blip', { n = i }),
+                    label = label,
                 }
             end
         end

@@ -77,6 +77,7 @@
 
   "block.skill_check.label": "Defuse the devices",
   "block.skill_check.blip": "Device {n}",
+  "block.skill_check.blip_setback": "{action} {n}",
   "block.skill_check.checklist": "Devices defused",
   "block.skill_check.target_default": "Defuse device",
   "block.skill_check.fail_exploded": "A device went off",

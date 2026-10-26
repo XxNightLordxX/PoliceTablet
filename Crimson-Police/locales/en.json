@@ -1548,6 +1548,7 @@
   "block.search_area.target_phone": "Check the phone",
   "block.search_area.target_witness": "Question the witness",
   "block.skill_check.blip": "Device {n}",
+  "block.skill_check.blip_setback": "{action} {n}",
   "block.skill_check.checklist": "Devices defused",
   "block.skill_check.fail_exploded": "A device went off",
   "block.skill_check.hud.defused": "Device defused",

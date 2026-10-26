@@ -1189,4 +1189,188 @@ do
     _G.IsWaypointActive = waypointActive
 end
 
+-- ============================================================================
+-- M7: DETAIL BLIPS (a set-back device keeps a flashing blip; service vehicles on every officer's map)
+-- ============================================================================
+-- The game's flash: SET_BLIP_FLASH_TIMER ends a flash after ms; SetBlipFlashes starts or stops one (a flash started
+-- after the timer ran out goes on until it is stopped).
+
+local flashSetter, timerSetter = _G.SetBlipFlashes, _G.SetBlipFlashTimer
+_G.SetBlipFlashes = function(id, on)
+    local b = BL.all[id]
+    if b then b.flashes, b.flashUntil = on == true, nil end
+end
+_G.SetBlipFlashTimer = function(id, ms)
+    local b = BL.all[id]
+    if b then b.flashMs, b.flashUntil = ms, GetGameTimer() + ms end
+end
+local function Flashing(id)
+    local b = B(id)
+    return b ~= nil and b.flashes == true and (b.flashUntil == nil or GetGameTimer() < b.flashUntil)
+end
+
+-- skill_check (Drug Lab Raid objective 5 "Shut down the lab", onFail setback Ventilate): named after the mission's
+-- target; set back, the same blip orange, named after the recovery step and flashing until it is fixed
+do
+    Reset()
+    Config.Labels = { ['block.skill_check.blip_setback'] = '{action} {n}' }
+    local SCc = CP.Blocks.get('skill_check')
+    local lab = { x = 0.0, y = 300.0, z = 30.0 }
+    local function Ctx(runId)
+        return {
+            runId = runId,
+            index = 5,
+            obj = { checks = { 'easy' }, target = { label = 'Shut down the lab' } },
+            state = {},
+            report = function() end,
+            hudDetail = function() end,
+        }
+    end
+    local function Snap(status)
+        return {
+            kind = 'state',
+            checks = 1,
+            targets = { { coords = lab, status = status, next = 1, streak = 0 } },
+            setback = { label = 'Ventilate', duration = 10000 },
+        }
+    end
+    local function Pointer(status)
+        local setback = status == 'setback'
+        return {
+            kind = 'targets',
+            targets = {
+                {
+                    key = 'd1',
+                    x = lab.x,
+                    y = lab.y,
+                    z = lab.z,
+                    look = 'device',
+                    number = 1,
+                    variant = setback and 'setback' or nil,
+                    label = setback and 'Ventilate 1' or 'Shut down the lab',
+                },
+            },
+        }
+    end
+    local ctx = Ctx('run-sc7')
+    SCc.prepare(ctx)
+    SCc.start(ctx)
+    M.set('run-sc7', 5, Pointer('armed'), ctx)
+    SCc.update(ctx, Snap('armed'))
+    local live = Live()
+    H.eq(#live, 1, 'sc7: one icon, the lab\'s own blip')
+    local id = live[1]
+    H.eq(B(id).name, 'Shut down the lab', 'sc7: named after the mission\'s target (it was "Device 1")')
+    H.ok(Flashing(id) and B(id).route, 'sc7: the pointer\'s first flash and the line')
+    Tick(6)
+    H.eq(Flashing(id), false, 'sc7: the first flash is over after flashSeconds')
+
+    -- two misses: set back (Ventilate)
+    SCc.update(ctx, Snap('setback'))
+    M.update('run-sc7', 5, Pointer('setback'), ctx)
+    Tick()
+    H.ok(B(id).live and B(id).colour == K.device.setbackColour and B(id).number == 1,
+        'sc7: set back: the same numbered blip, orange')
+    H.eq(B(id).name, 'Ventilate 1', 'sc7: named after the recovery step (block.skill_check.blip_setback)')
+    H.eq(Flashing(id), true, 'sc7: flashing while set back (Config.Markers.setbackFlash)')
+    Tick(20)
+    H.ok(Flashing(id) and B(id).route, 'sc7: still flashing 20 s later, with the line')
+
+    -- ventilated, waiting to be tried again: yellow, named after the target, the flash stops
+    SCc.update(ctx, Snap('cooldown'))
+    M.update('run-sc7', 5, Pointer('cooldown'), ctx)
+    Tick()
+    H.ok(B(id).live and B(id).colour == K.device.colour and B(id).name == 'Shut down the lab',
+        'sc7: fixed: the same blip, yellow, the target\'s name again')
+    H.eq(Flashing(id), false, 'sc7: the flash stops once it is fixed')
+    M.clear('run-sc7', 5)
+    SCc.stop(ctx)
+    H.eq(#Live(), 0, 'sc7: stop leaves nothing')
+
+    -- a partner whose game first sees the lab while it is set back: it flashes without a timer that would end it
+    Reset()
+    Config.Labels = { ['block.skill_check.blip_setback'] = '{action} {n}' }
+    local pctx = Ctx('run-sc7p')
+    SCc.prepare(pctx)
+    SCc.start(pctx)
+    M.set('run-sc7p', 5, Pointer('setback'), pctx)
+    SCc.update(pctx, Snap('setback'))
+    live = Live()
+    H.eq(#live, 1, 'sc7 partner: one icon')
+    H.ok(B(live[1]).flashMs == nil and Flashing(live[1]), 'sc7 partner: flashing, no flash timer on it')
+    Tick(10)
+    H.eq(Flashing(live[1]), true, 'sc7 partner: still flashing after flashSeconds')
+    M.clear('run-sc7p', 5)
+    SCc.stop(pctx)
+
+    -- setbackFlash = false: orange while set back, no flash after the first one
+    Reset()
+    Config.Markers.setbackFlash = false
+    local nctx = Ctx('run-sc7n')
+    SCc.prepare(nctx)
+    SCc.start(nctx)
+    M.set('run-sc7n', 5, Pointer('armed'), nctx)
+    SCc.update(nctx, Snap('armed'))
+    id = Live()[1]
+    Tick(6)
+    SCc.update(nctx, Snap('setback'))
+    M.update('run-sc7n', 5, Pointer('setback'), nctx)
+    Tick()
+    H.ok(B(id).colour == K.device.setbackColour and not Flashing(id), 'sc7 setbackFlash = false: orange, not flashing')
+    M.clear('run-sc7n', 5)
+    SCc.stop(nctx)
+    Config.Labels = {}
+end
+
+-- the prisoner van and the tow truck (modules/custody/client.lua): on every officer's map from the server's
+-- client:serviceBlip until it drives off or the run ends; never another run's
+do
+    Reset()
+    H.load('modules/custody/client.lua')
+    local savedCurrent = CP.Runs.current
+    local run = { id = 'run-sv7', state = 'in_progress' }
+    CP.Runs.current = function() return run end
+    local function Send(data)
+        for _, fn in ipairs(H.handlers['crimson-police:client:serviceBlip'] or {}) do fn(data) end
+    end
+    local van = { runId = 'run-sv7', id = 1, kind = 'prisonerVan', show = true, netId = 900 }
+    van.coords = { x = 150.0, y = 0.0, z = 30.0 }
+    Send(van)
+    local live = Live()
+    H.eq(#live, 1, 'sv7: the van on the map')
+    local vb = B(live[1])
+    H.ok(vb.sprite == K.prisonerVan.sprite and vb.colour == K.prisonerVan.colour and vb.scale == K.prisonerVan.scale,
+        'sv7: kinds.prisonerVan (blue cell bars)')
+    H.ok(vb.kind == 'coord' and vb.x == 150.0 and vb.name == 'markers.prisoner_van',
+        'sv7: at the server\'s position until it streams in, named Prisoner transport')
+    H.eq(#Routed(), 0, 'sv7: never routed')
+    world.ents[7101] = vec3(140.0, 0.0, 30.0)
+    world.streamed[900] = 7101
+    Tick()
+    H.ok(#Live() == 1 and B(Live()[1]).kind == 'entity', 'sv7: on the van itself once it streams in')
+    Send({ runId = 'run-sv7', id = 2, kind = 'towTruck', show = true, netId = 901, coords = { x = 0.0, y = 200.0 } })
+    local tow = nil
+    for _, b in ipairs(Live()) do if B(b).sprite == K.towTruck.sprite then tow = b end end
+    H.ok(tow and B(tow).colour == K.towTruck.colour and B(tow).name == 'markers.tow_truck', 'sv7: the tow truck too')
+    Send({ runId = 'run-other', id = 3, kind = 'prisonerVan', show = true, netId = 902, coords = van.coords })
+    Send({ runId = 'run-sv7', id = 4, kind = 'start', show = true, netId = 903, coords = van.coords })
+    H.eq(#Live(), 2, 'sv7: another run\'s van and an unknown kind are ignored')
+    Send({ runId = 'run-sv7', id = 2, kind = 'towTruck', show = false })
+    H.ok(#Live() == 1 and B(tow).live == false, 'sv7: the tow truck drove off: its blip goes')
+    -- an objective's stop keeps it; the run's end (CP.Markers.clear() in the run cleanup) takes it off
+    M.set('run-sv7', 1, { kind = 'point', coords = { x = 0.0, y = 500.0, z = 30.0 } })
+    M.clear('run-sv7', 1)
+    H.eq(#Live(), 1, 'sv7: an objective\'s stop keeps the van')
+    M.clear()
+    H.eq(#Live(), 0, 'sv7: the run\'s end removes it')
+    Send(van)
+    run.state = 'ended'
+    Send({ runId = 'run-sv7', id = 5, kind = 'prisonerVan', show = true, netId = 904, coords = van.coords })
+    H.eq(#Live(), 1, 'sv7: nothing new once the run is over')
+    M.clear()
+    CP.Runs.current = savedCurrent
+end
+
+_G.SetBlipFlashes, _G.SetBlipFlashTimer = flashSetter, timerSetter
+
 return H
