@@ -381,10 +381,11 @@ do
     H.eq(
         E('Spawning.leaveOutAfter').desc,
         'Seconds a wave of hostiles, a warrant\'s associates or a scatter\'s suspects (Prison Break\'s inmates, the'
-            .. ' raids\' cooks and runners) may stay short of points (every point too close to or behind the officers),'
-            .. ' counted from when they first had to wait. Once that time has passed, someone of the fight or objective'
-            .. ' has appeared and nobody of it is left to fight or catch, the ones that could not be placed are left'
-            .. ' out, so it can end (0 = never: they wait until the officers move away)',
+            .. ' raids\' cooks and runners) may stay short of points (every point too close to or behind the officers,'
+            .. ' or a cuffed suspect still stands on it), counted from when they first had to wait. Once that time has'
+            .. ' passed, someone of the fight or objective has appeared and nobody of it is left to fight or catch, the'
+            .. ' ones that could not be placed are left out, so it can end (0 = never: they wait until the officers move'
+            .. ' away)',
         'the leave-out wait (S2), alone: its clock starts at the first wait, and it covers warrants and scatters (S11)'
     )
     local hidden = E('Spawning.preferHidden').desc
@@ -536,9 +537,9 @@ do
         E('Spawning.onTimeout').desc,
         '\'unfreeze\' = a person, vehicle or object that no officer\'s game has put on the ground within'
             .. ' placeTimeoutMs is let go where it stands, as before; \'delete\' = it is removed and the mission treats'
-            .. ' it as killed (a hostage or an escort\'s truck removed this way fails that objective). A person the'
-            .. ' mission only moved, such as a warrant\'s suspect who gives up at the door, is always let go where he'
-            .. ' stands',
+            .. ' it as killed (a hostage or an escort\'s truck removed this way fails that objective). A person or'
+            .. ' vehicle the mission only moved, such as a warrant\'s suspect who gives up at the door or the prisoner'
+            .. ' transport put on its parking point, is always let go where it stands',
         'the timeout choice reads alone: delete counts as killed and can fail the objective (S10 check)'
     )
     for _, k in ipairs({ 'placeTimeoutMs', 'retries', 'onTimeout' }) do

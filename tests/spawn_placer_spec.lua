@@ -309,6 +309,11 @@ do
     Ask(68, { x = 0, y = 0, z = 31, kind = 'ped', token = 't-68' })
     Settle(4000)
     H.eq(#Reports(), 0, 'no control: nothing told')
+    local stopped = 0
+    for _, w in ipairs(H.findEvents('crimson-police:server:spawnChecking')) do
+        if w.args[2].done == true and w.args[2].token == 't-68' then stopped = stopped + 1 end
+    end
+    H.eq(stopped, 1, 'but the server hears once that this game stopped checking it')
     H.ok(Near(e.coords.z, 29.0) and (P.ignored.SetEntityCoordsNoOffset or 0) == 0, 'and nothing moved')
     local asked = Called('NetworkRequestControlOfEntity', PED)
     H.ok(asked >= 1, 'control was asked for')
@@ -373,6 +378,16 @@ do
     Settle(6000)
     H.eq(#Reports(), 0, 'taken over during the check: not told')
     H.ok(Near(e.coords.z, 33.0), 'not moved')
+    -- but the server hears this game stopped checking it, so its placeTimeoutMs runs on now (not after 45 s)
+    local words = H.findEvents('crimson-police:server:spawnChecking')
+    H.eq(#words, 2, 'the server was told this game checks it, then that it stopped')
+    local first, second = words[1] and words[1].args or {}, words[2] and words[2].args or {}
+    local stop = type(second[2]) == 'table' and second[2] or {}
+    H.ok(
+        type(first[2]) == 'table' and first[2].done == nil and second[1] == 'run-1' and stop.netId == 74
+            and stop.token == 't-74' and stop.done == true,
+        'the second word: done, with its run, net id and token'
+    )
 
     -- a new ask (a new token) for the same net id is placed again
     Game(30.0)

@@ -420,6 +420,32 @@ do
     H.eq(Ask(run, made.ped), nil, 'no answer by 45 s + 8 s: let go where it stands')
     EndRun(run)
 
+    -- the checking game gives up with no answer (no control: OneSync moved the person to another officer's game) and
+    -- says so: placeTimeoutMs runs on at once, not after the whole check time. Only that game's word for the ask's
+    -- token counts, and a word after it does not hold the time again.
+    run = Scene({ { name = 'ped', kind = 'ped', coords = vec4(100.0, 160.0, 31.0, 0.0) } })
+    timedOut = #Warns('was not placed by an officer\'s game within 8000 ms')
+    local function GaveUp(src, token)
+        H.fire('crimson-police:server:spawnChecking', src, run.id,
+            { netId = made.ped, token = token or (Ask(run, made.ped) or {}).token, done = true })
+    end
+    Own(Handle(run, made.ped), 1)
+    Checking(1, made.ped)
+    W.tick(5)
+    GaveUp(2)
+    GaveUp(1, 'not-the-token')
+    W.tick(9)
+    H.ok(Ask(run, made.ped) ~= nil, 'another officer\'s word or a wrong token does not end the check')
+    GaveUp(1)
+    Checking(1, made.ped)
+    Checking(2, made.ped)
+    W.tick(7)
+    H.ok(Ask(run, made.ped) ~= nil, 'the checking game gave up: 7 s on, still within placeTimeoutMs')
+    W.tick(2)
+    H.eq(Ask(run, made.ped), nil, 'let go after placeTimeoutMs (8 s), not after the 45 s check time')
+    H.eq(#Warns('was not placed by an officer\'s game within 8000 ms') - timedOut, 1, 'one warning saying so')
+    EndRun(run)
+
     -- what does not hold the time: a bystander's word, a wrong token, a second word for the same ask, an officer who
     -- left the run
     run = Scene({ { name = 'ped', kind = 'ped', coords = vec4(100.0, 160.0, 31.0, 0.0) } })

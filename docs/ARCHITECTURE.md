@@ -1248,8 +1248,8 @@ Client (host runs AI; all participants see targets):
   `SetPedShootRate`, `SetPedFiringPattern`, the combat ability at most abilityMax, attributes 27 (perfect accuracy)
   and 24 (proximity fire rate) off, 49 (enemy accuracy scaling) on, and with noCharge 13 and 50 off (also in every
   behaviour). The firing pattern goes on again after each `TaskCombatPed`.
-- The combat governor: every participant's game (not only the host) applies those caps, settings only and never a
-  task, to each armed mission ped of its run it owns (`NetworkHasControlOfEntity`), once per entity handle and bag
+- The combat governor: every participant's game (not only the host) applies those caps (settings only, never a
+  task; its only task is the flee of a tired runner below), to each armed mission ped of its run it owns (`NetworkHasControlOfEntity`), once per entity handle and bag
   `seq`, and again when it owns the ped again after another game had it (1 s loop while on a run). On the same
   terms it holds a calm person waiting `idle` with no `contact` in the bag (a raid's staged crew before the breach)
   to the host's calm settings: `SetBlockingOfNonTemporaryEvents(true)` and `SetPedFleeAttributes(0, false)`, so an
@@ -2453,9 +2453,12 @@ What this officer's game can see of the points the server's spawn director may u
   when the ask has one, has been placed and let go already (a game that placed it could not tell the server: its
   player left the run): it is neither frozen nor moved, `'placed'` with reason `'moved'` and z its height now. Else it
   tells the server it checks the entity (`server:spawnChecking`, §8.2, once per token), so the ask's time waits for
-  it. At most 4 placements run at once (the rest wait up to
+  it; when it then gives up with no answer (its turn never came, this player left the run, control not given or lost,
+  the entity gone, or a raise) it sends one more `server:spawnChecking` with `done = true`, so the ask's time runs on
+  at once instead of after the whole check time. At most 4 placements run at once (the rest wait up to
   30 s; the slot is taken before control is asked for), each with control (asked with
-  `NetworkRequestControlOfEntity` for up to 2 s; not given: nothing, a later write of the bag tries again). Then
+  `NetworkRequestControlOfEntity` for up to 2 s; not given: no answer, only the `done` word above; a later write
+  of the bag tries again). Then
   `FreezeEntityPosition(ent, true)`, `SetEntityLoadCollisionFlag(ent, true)`; a person in a vehicle
   (`IsPedInAnyVehicle`) or anything attached (`IsEntityAttached`) is not moved: `'placed'` with reason `'seated'` /
   `'attached'`; else, when it stands more than 3 m from x, y (an ask the server moved to another point: it waits at
@@ -2465,14 +2468,14 @@ What this officer's game can see of the points the server's spawn director may u
   pursuit's, an escort's or a transport's people right after it makes them), or more than 3 m from x, y (the server
   set it somewhere else during the check): not moved, let go (but an object or a cuffed person), `'placed'` with
   reason `'seated'` / `'attached'` / `'moved'` (z its height) (`kind`: `place.kind` 'ped' / 'vehicle' / 'object', else `GetEntityType`). ok or snap: with
-  control still held (else nothing is told), `SetEntityCoordsNoOffset(ent, x, y, groundZ + lift, keepTasks = a
-  person, false, true)` at the server's x, y (it never picks another spot), `SetVehicleOnGroundProperly` for a
+  control still held (else no answer, only the `done` word), `SetEntityCoordsNoOffset(ent, x, y, groundZ + lift,
+  keepTasks = a person, false, true)` at the server's x, y (it never picks another spot), `SetVehicleOnGroundProperly` for a
   vehicle, `PlaceObjectOnGroundProperly` for an object, and the entity is let go (`FreezeEntityPosition(ent,
   false)`) except an object and a person whose bag is now in the `cuffed` state (CP.Npc holds that pose frozen; a
   later write of the same ask updates the state): `'placed'`. Any other status: it stays frozen, not moved: `'bad'`.
   Told with `server:spawnPlaced` (§8.2) `runId, { netId, token, result = 'placed'|'bad', reason (the probe's status,
   or 'seated'/'attached'/'moved'), groundZ, dz, z (where it was put; nil for bad) }`, once per token; a raise is one
-  `CP.warn` and nothing told.
+  `CP.warn`, no answer, only the `done` word.
 - `CP.Spawn.holds(entity) -> bool`: true while the entity waits for its placement: its cp bag
   (`Entity(entity).state.cp`, not dead) carries a `place` with a token and this game has not put it on the ground
   for that token ('placed'; a bad point keeps it held). CP.Npc's host game never lets such a person go
@@ -2497,9 +2500,11 @@ What this officer's game can see of the points the server's spawn director may u
   game has said it checks the entity (`server:spawnChecking` for the ask's current token, taken once per token: the
   placer's turn in a big wave, its control asks and the probe's loads, at most 34 s + `collisionTimeoutMs` +
   `interiorTimeoutMs`, each kept to 500-30000 ms, and only while that participant stays on the run; a new token
-  after a bad point clears it); past it `onTimeout`: `'unfreeze'`
-  (default) lets it go where it stands, `'delete'` (never for an ask of `CP.Spawn.again` below: a person the
-  server only moved is always let go where he stands) counts it as gone (`Runs.entityDied`, the objective's
+  after a bad point clears it, and so does that game's `done = true` word when it gives up with no answer, while a
+  later checking word for the same token is still not taken); past it `onTimeout`: `'unfreeze'`
+  (default) lets it go where it stands, `'delete'` (never for an ask of `CP.Spawn.again` below: a person or
+  vehicle the server only moved, a warrant's suspect who gives up at the door or the prisoner transport put on its
+  parking point, is always let go where it stands) counts it as gone (`Runs.entityDied`, the objective's
   `onEntityDead`) and deletes it, with one `CP.warn` (`run <id>: ped <model> at x y z was not placed by an officer's
   game within 8000 ms; let go where it stands (Config.Spawning.onTimeout)`).
   The answer, `server:spawnPlaced` (§8.2, at most 30 a second per player): taken only from an active participant of
@@ -2858,7 +2863,7 @@ Server → client ox_lib callback: `crimson-police:client:spawn:walkIn` `{ car =
 | `server:testRespond` | `{ inviteId, accepted }` | testing |
 | `server:pickupDone` | runId, ok (plain event, no reqId) | downed |
 | `server:spawnPlaced` | runId, `{ netId, token, result = 'placed'\|'bad', reason, groundZ?, dz?, z? }` (plain event, no reqId; the placer, §5.43, once per `place` token; modules/spawn/server.lua takes it from an active participant of that run for the ask's current token, at most 30 a second per player) | spawn |
-| `server:spawnChecking` | runId, `{ netId, token }` (plain event, no reqId; the placer, §5.43, once per `place` token before it waits for its turn; modules/spawn/server.lua takes the first one from an active participant of that run for the ask's current token: the ask's time waits for that game's answer, at most 34 s + collisionTimeoutMs + interiorTimeoutMs; at most 30 a second per player) | spawn |
+| `server:spawnChecking` | runId, `{ netId, token, done? }` (plain event, no reqId; the placer, §5.43, once per `place` token before it waits for its turn, and once more with `done = true` when it gives up with no answer; modules/spawn/server.lua takes the first one from an active participant of that run for the ask's current token: the ask's time waits for that game's answer, at most 34 s + collisionTimeoutMs + interiorTimeoutMs, and runs on again at that game's `done = true`; at most 30 a second per player) | spawn |
 | `server:npcCuff` | runId, netId (plain event, no reqId) | npc |
 | `server:custody` | runId, netId, action, phase ('begin'\|'finish'), extra (`{ offence }`, `{ door }`) (plain event, no reqId; 4 per 2 s) | custody |
 | `server:stunHit` | netId (plain event, no reqId; 2 per s) | custody |

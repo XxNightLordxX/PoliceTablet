@@ -703,10 +703,10 @@ end
 
 -- A wave (or the boss) the director kept short for Config.Spawning.leaveOutAfter seconds (and at least
 -- waveDelayMax, so the closer points were tried), while nobody of this fight is left standing: the officers stand on
--- or in front of every point, so the hostiles it could not place are left out and the fight goes on instead of
--- stalling. Never before one of the fight's hostiles has appeared: officers who stand on the points before the fight
--- began only make it wait (a fight is never skipped that way). leaveOutAfter 0 = never (the wave waits until the
--- officers move away).
+-- or in front of every point, or a cuffed suspect still stands on it (OCCUPIED_RADIUS), so the hostiles it could not
+-- place are left out and the fight goes on instead of stalling. Never before one of the fight's hostiles has
+-- appeared: officers who stand on the points before the fight began only make it wait (a fight is never skipped that
+-- way). leaveOutAfter 0 = never (the wave waits until the officers move away).
 local function TimeToLeaveOut(st, ws)
     local cfg = SpawnCfg()
     local after = tonumber(cfg.leaveOutAfter) or 45
@@ -732,9 +732,10 @@ local function LeaveOut(ctx, st, w, none)
         SayLeftOut(ctx, ('wave %d'):format(w), missing,
             ('the location has no spawn points under %s (never at the start point)'):format(ListName(ctx, st)))
     else
-        SayLeftOut(ctx, ('wave %d'):format(w), missing,
-            ('for %.0f s every spawn point was too close to or behind the officers (Config.Spawning.leaveOutAfter)'):format(
-                waited))
+        SayLeftOut(ctx, ('wave %d'):format(w), missing, (
+            'for %.0f s every spawn point was too close to or behind the officers, or a cuffed suspect still stood on'
+            .. ' it (Config.Spawning.leaveOutAfter)'
+        ):format(waited))
     end
     return true
 end
@@ -803,8 +804,10 @@ local function SpawnBoss(ctx, st)
                 tostring(b.label),
                 1,
                 none and 'the location has no point for him'
-                    or ('for %.0f s every point was too close to or behind the officers (Config.Spawning.leaveOutAfter)'):format(
-                        waited)
+                    or (
+                        'for %.0f s every point was too close to or behind the officers, or a cuffed suspect still'
+                        .. ' stood on it (Config.Spawning.leaveOutAfter)'
+                    ):format(waited)
             )
             return true
         end

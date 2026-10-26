@@ -362,8 +362,9 @@ do
     Secs(5)
     local w = WarnsWith(': wave 2: 3 hostile(s) left out: for 4')
     H.eq(#w, 1, 'at 45 s with nobody left to fight the wave is left out, with one warning')
-    H.ok(w[1] and w[1].text:find('too close to or behind the officers (Config.Spawning.leaveOutAfter)', 1, true) ~= nil,
-        'the warning says why and which setting')
+    local why = 'too close to or behind the officers, or a cuffed suspect still stood on it'
+        .. ' (Config.Spawning.leaveOutAfter)'
+    H.ok(w[1] and w[1].text:find(why, 1, true) ~= nil, 'the warning says why (a cuffed suspect too) and which setting')
     H.ok(w[1] and w[1].text:find('(gang_shootout)', 1, true) ~= nil, 'and names the mission')
     H.eq(ctx.state.waves[2].left, 3, 'wave 2 counts 3 left out')
     H.eq(HW.checklist(ctx)[1].max, 3, 'the fight now counts the 3 that appeared')

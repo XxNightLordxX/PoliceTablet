@@ -341,10 +341,10 @@ Config.Spawning = {
     -- Metres: once a wave has waited waveDelayMax, a point this close to an officer may be used, never a closer one
     hardMin = 20.0,
     -- Seconds a wave of hostiles, a warrant's associates or a scatter's suspects (Prison Break's inmates, the raids'
-    -- cooks and runners) may stay short of points (every point too close to or behind the officers), counted from when
-    -- they first had to wait. Once that time has passed, someone of the fight or objective has appeared and nobody of
-    -- it is left to fight or catch, the ones that could not be placed are left out, so it can end (0 = never: they
-    -- wait until the officers move away)
+    -- cooks and runners) may stay short of points (every point too close to or behind the officers, or a cuffed
+    -- suspect still stands on it), counted from when they first had to wait. Once that time has passed, someone of the
+    -- fight or objective has appeared and nobody of it is left to fight or catch, the ones that could not be placed
+    -- are left out, so it can end (0 = never: they wait until the officers move away)
     leaveOutAfter = 45,
     -- true = a mission may place the next objective's people ahead of time, while your officers are still busy with
     -- the one before it, so they are already there when it starts instead of popping up around the officers (false =
@@ -437,8 +437,9 @@ Config.Spawning = {
     retries = 2,
     -- 'unfreeze' = a person, vehicle or object that no officer's game has put on the ground within placeTimeoutMs is
     -- let go where it stands, as before; 'delete' = it is removed and the mission treats it as killed (a hostage or an
-    -- escort's truck removed this way fails that objective). A person the mission only moved, such as a warrant's
-    -- suspect who gives up at the door, is always let go where he stands
+    -- escort's truck removed this way fails that objective). A person or vehicle the mission only moved, such as a
+    -- warrant's suspect who gives up at the door or the prisoner transport put on its parking point, is always let go
+    -- where it stands
     onTimeout = 'unfreeze',
     -- true = a console line for each point skipped (shown while Config.Debug is on) and a warning when a wave had to
     -- use closer points

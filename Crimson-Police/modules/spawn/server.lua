@@ -244,8 +244,8 @@ end
 
 local function TimedOut(run, a, ms)
     local mode = ON_TIMEOUT[Cfg().onTimeout] and Cfg().onTimeout or 'unfreeze'
-    -- one the server only moved (Spawn.again: a warrant's suspect who gives up at the door) stood on the ground in the
-    -- world before: let go where he stands, never removed
+    -- one the server only moved (Spawn.again: a warrant's suspect who gives up at the door, the prisoner transport put
+    -- on its parking point) stood on the ground in the world before: let go where it stands, never removed
     if a.again then mode = 'unfreeze' end
     CP.warn(TAG, 'run %s: %s was not placed by an officer\'s game within %d ms; %s (Config.Spawning.onTimeout)', run.id,
         Where(a), ms, mode == 'delete' and 'removed' or 'let go where it stands')
@@ -346,8 +346,9 @@ function Spawn.ask(run, netId, entity, kind, opts)
 end
 
 -- The server has moved a person (or a vehicle) of the run itself (SetEntityCoords: flee_arrest stands a surrendering
--- suspect in front of the door): he waits frozen at coords until an officer's game has put him on the ground there,
--- as when he was made. There is no other point for him: a bad one lets him go where he stands, with one warning.
+-- suspect in front of the door, custody puts a late prisoner transport on its parking point): he waits frozen at
+-- coords until an officer's game has put him on the ground there, as when he was made. There is no other point for
+-- him: a bad one lets him go where he stands, with one warning.
 -- from = { x, y } where he stood before the move (the placer moves him to coords first when the move has not reached
 -- its game yet). An ask still open for him is replaced (a late answer for it is never taken). Returns the ask (in his
 -- bag), or nil (place off, not a live entity of the run, coords not a point).
@@ -458,12 +459,18 @@ local function OnPlaced(src, runId, data)
 end
 
 -- An officer's game of the run checks the entity of the ask now (once per ask): its time waits for the answer, at
--- most CheckMs, while that officer stays on the run.
+-- most CheckMs, while that officer stays on the run. done = true from that game: it gave up with no answer (no
+-- control, the entity left it, its turn never came), so the time runs on now; a later word for the ask is not taken.
 local function OnChecking(src, runId, data)
     if type(data) ~= 'table' then return end
     local netId = math.tointeger(tonumber(data.netId))
     local a = netId and asks[netId] or nil
-    if not a or a.runId ~= runId or data.token ~= a.token or a.checkedBy ~= nil then return end
+    if not a or a.runId ~= runId or data.token ~= a.token then return end
+    if data.done == true then
+        if a.checkedBy == src then a.checkUntil = nil end
+        return
+    end
+    if a.checkedBy ~= nil then return end
     local run = RunOf(runId)
     if not run or not Has(ActiveSrcs(run), src) then return end
     a.checkedBy, a.checkUntil = src, GetGameTimer() + CheckMs()

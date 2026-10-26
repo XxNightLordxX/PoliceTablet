@@ -402,7 +402,8 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
     got and asks again every tick; ws.waitMs (GetGameTimer) is its clock, handed to the director as
     opts.since (hardMin after waveDelayMax). A wave or the boss still short leaveOutAfter seconds after
     its first short call, with nobody of the fight standing and at least one of its hostiles already out (st.peds), leaves
-    the rest out (ws.left / st.bossLeft, one CP.warn; WaveGoal = scaled count - left; the boss line drops
+    the rest out (the officers stand on or in front of every point, or a cuffed suspect still stands on it; the warning
+    says both) (ws.left / st.bossLeft, one CP.warn; WaveGoal = scaled count - left; the boss line drops
     off the checklist). No point at all: left out at once, never at the start point. ws.elapsed (for
     nextWave.afterSeconds) only counts once the wave has a hostile out. The boss is offered his own spot first, then the fight's
     points. Every point the console names is '<location key>[<file index>]'. Spawning respects the run
@@ -2282,7 +2283,8 @@ Contract interpretations (details in docs/notes/engine_a.md)
     - The combat governor on EVERY participant's client (host or not, 1 s while on a run): the Config.NpcCombat
       caps (accuracy at most accuracyMax, shoot rate, firing pattern, ability at most abilityMax, attributes 27
       and 24 off, 49 on, no charging) on each armed mission ped of the run this client owns, once per entity
-      handle and bag seq, and again after it owns the ped again. Settings only, never a task. apply sets the same
+      handle and bag seq, and again after it owns the ped again. The caps are settings only, never a task (its
+      only task is the flee of a stuck tired runner no AI loop of that game runs, below). apply sets the same
       caps (and swaps an older bag's automatic weapon, CP.NpcCombat.ammo rounds); the firing pattern goes on
       again after each TaskCombatPed.
     - Tired runners (Config.Flee): the host gives every flee leg on foot at the move blend ratio of the bag's

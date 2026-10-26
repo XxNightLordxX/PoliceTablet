@@ -591,8 +591,8 @@ end
 
 -- Takes control of one entity, checks and places it: 'placed' or 'bad', the reason (the probe's status, or 'seated' /
 -- 'attached': it goes where its car or what it hangs on goes), the probe's result and the height it was put at.
--- Nothing (nil) when control is not given, the entity is gone or this game lost control during the check: then
--- nothing is told. rec.state is the bag's latest state (a later write of the same ask updates it).
+-- Nothing (nil) when control is not given, the entity is gone or this game lost control during the check: then no
+-- answer is told (TryPlace only tells the server this game stopped checking). rec.state is the bag's latest state (a later write of the same ask updates it).
 local function PlaceEntity(ent, place, kind, rec)
     if not TakeControl(ent, PLACE_CONTROL_MS) then return nil end
     local x, y, z = Num(place.x) + 0.0, Num(place.y) + 0.0, Num(place.z) + 0.0
@@ -667,12 +667,18 @@ local function TryPlace(netId, bag, mine)
     else
         -- this game checks it (maybe after a wave's others: PLACERS_MAX at a time): the server's placeTimeoutMs waits
         TriggerServerEvent(CP.e(CHECKING_EVENT), bag.run, { netId = netId, token = token })
+        -- given up with no answer (its turn never came, this player left the run, no control, the entity is gone):
+        -- the server hears that once, so its placeTimeoutMs runs on now instead of after the whole check time
+        local function GiveUp()
+            TriggerServerEvent(CP.e(CHECKING_EVENT), bag.run, { netId = netId, token = token, done = true })
+            return Forget()
+        end
         local deadline = GetGameTimer() + PLACE_QUEUE_MS
         while placers >= PLACERS_MAX do
-            if GetGameTimer() >= deadline then return Forget() end
+            if GetGameTimer() >= deadline then return GiveUp() end
             Wait(50)
         end
-        if not Current() then return Forget() end
+        if not Current() then return GiveUp() end
         -- the slot is taken before control is asked for (that waits), so no more than PLACERS_MAX run at once
         placers = placers + 1
         local ok
@@ -680,11 +686,12 @@ local function TryPlace(netId, bag, mine)
         placers = placers - 1
         if not ok then
             CP.warn(TAG, 'placing %s %d failed: %s', kind, netId, tostring(result))
-            return Forget()
+            return GiveUp()
         end
         if not result then
-            CP.log(TAG, 'placing %s %d: no control of it, or it is gone; not told', kind, netId)
-            return Forget()
+            CP.log(TAG, 'placing %s %d: no control of it, or it is gone; the server is told this game stopped', kind,
+                netId)
+            return GiveUp()
         end
     end
     if result == 'placed' then placed[ent] = { token = token, run = bag.run } end

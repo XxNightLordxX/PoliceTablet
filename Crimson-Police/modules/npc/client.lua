@@ -1564,7 +1564,9 @@ end
 -- OneSync hands a ped to the nearest player, so a mission NPC often runs on a partner's game, where the host's apply
 -- never ran. Every participant's game, not only the host's, applies the Config.NpcCombat caps (ApplyCaps) to each
 -- armed mission ped of its run that it owns: once per entity handle and bag write, and again when it gets the ped
--- back from another game. Settings only, never a task, so it never fights the host's AI.
+-- back from another game. The caps are settings only, never a task, so they never fight the host's AI. On the same
+-- terms it holds a calm staged crew member calm (CalmBag), and it gives one flee task to a tired runner with no route
+-- whom this game's AI loop does not run and who stands still (KeepRunning); never to a ped the host's AI loop runs.
 
 local GOVERN_MS = 1000
 local governed = {}      -- [netId] = { entity, seq } of the last caps this game applied
