@@ -162,6 +162,9 @@ function H.step(ms)
     end
 end
 
+-- A resource stop: FXServer ends every thread of the stopped resource, so none of them resumes again.
+function H.killThreads() sleeping = {} end
+
 -- Run pending threads until nothing wakes within `ms` of fake time.
 function H.advance(ms, stepMs)
     stepMs = stepMs or 100

@@ -1785,8 +1785,13 @@ spawnCheck.enabled is false.
   test he starts or joins: `CP.Runs.current()` before the start move and before each point, or the server's
   `err.spawn_check_on_run`) ends it with `err.spawn_check_on_run` after reporting what was checked, and he is never
   moved again: unfrozen unless he was frozen before, seen and hurt as before, the screen faded in, where he is.
+  A logout (`CP.Qbx.onUnload`) ends it like the arena: his ped is never moved again and not let go (qbx's character
+  screen freezes and places it), seen and hurt as before, the screen faded in; a scene load stops early then.
   Otherwise, and on resource stop, he is put back where he was, facing the same way, unfrozen unless he was frozen
-  before, seen and hurt as before, the screen faded in. The test panel's teleport (`testControl` / `teleport` to the
+  before, seen and hurt as before, the screen faded in. A stop in the first fade (before he is hidden) only fades the
+  screen in, and a stop ends our own load scene (`NewLoadSceneStop`, never another resource's). A test teleport
+  caught by a stop in its fade or ground wait fades the screen in and undoes its own freeze (not of a ped
+  Crimson-Arena owns). The test panel's teleport (`testControl` / `teleport` to the
   start or objective) is refused `err.spawn_check_running` while a check runs, and the Testing screen's Start test
   buttons are disabled then.
   A skipped location's push also carries `missionLabel`. "Teleport here" (PLAN S8): the client action `teleport`

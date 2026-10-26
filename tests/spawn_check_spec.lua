@@ -695,6 +695,8 @@ CP.Net.action = function(name, payload)
     return { ok = true, data = {} }
 end
 
+-- modules/integrations/qbx loads first, as the fxmanifest's modules/**/client.lua glob does (its logout listener)
+H.load('modules/integrations/qbx/client.lua')
 H.load('modules/testing/client.lua')
 H.step(0) -- the action registration thread
 
@@ -1127,6 +1129,155 @@ do
     ok, data = clientActions.teleport({ target = 'start' })
     H.eq(data, 'err.test_no_active', 'Teleport to the start still needs a test run')
     CP.Net.request = realRequest
+end
+
+-- ============================================================================
+--            6. A RESTART OR A LOGOUT DURING A TELEPORT OR A CHECK
+-- ============================================================================
+-- A Crimson-Police restart in a teleport's fade or ground wait, or in the check's first fade, puts the screen back and
+-- undoes our own freeze (never one of Crimson-Arena's); our own load scene ends. A logout during the check ends it
+-- and the ped is never moved again: qbx's character screen freezes and places it.
+
+-- FXServer stopping Crimson-Police: its onResourceStop handlers run, then its threads end (none resumes again)
+local function StopPolice()
+    H.fire('onResourceStop', nil, 'Crimson-Police')
+    H.killThreads()
+end
+-- and starting it again: the file runs fresh
+local function StartPolice()
+    H.handlers.onResourceStop = nil
+    H.load('modules/testing/client.lua')
+    H.step(0)
+end
+
+do
+    local faded, ground, car = false, false, 0
+    _G.IsScreenFadedOut = function() return faded end
+    _G.RequestCollisionAtCoord = function() end
+    _G.GetGroundZFor_3dCoord = function() return ground, 19.25 end
+    _G.GetVehiclePedIsIn = function() return car end
+    _G.GetPedInVehicleSeat = function(veh, seat) return (veh ~= 0 and veh == car and seat == -1) and PED or 0 end
+    local realRequest = CP.Net.request
+    CP.Net.request = function(name, args)
+        if name == 'server:test:spawnPoints' and type(args) == 'table' and args.point ~= nil then
+            return {
+                ok = true,
+                data = { missionId = 'demo', location = 1, point = CP.U.deepcopy(LOCATIONS[1].points[2]) },
+            }
+        end
+        return realRequest(name, args)
+    end
+    local function Teleport()
+        CreateThread(function()
+            clientActions.teleport({ target = 'point', missionId = 'demo', location = 1, point = 'spot[1]' })
+        end)
+    end
+    local function FadedInAtOnce()
+        local f = Called('DoScreenFadeIn')
+        return #f == 1 and f[1][1] == 0
+    end
+
+    -- in the fade: nothing is frozen yet
+    Reset()
+    Teleport()
+    H.eq(#Called('DoScreenFadeOut'), 1, 'the teleport waits in its fade')
+    StopPolice()
+    H.ok(FadedInAtOnce(), 'a restart in the teleport\'s fade: the screen comes back at once')
+    H.eq(#Called('FreezeEntityPosition'), 0, 'nothing was frozen yet, nothing to undo')
+    H.eq(#Called('NewLoadSceneStop'), 0, 'no load scene of ours: another resource\'s is left alone')
+    StartPolice()
+
+    -- in the ground wait: frozen over the point
+    Reset()
+    faded = true
+    Teleport()
+    local f = Called('FreezeEntityPosition')
+    H.ok(#f == 1 and f[1][1] == PED and f[1][2] == true, 'the teleport waits for the ground, frozen over the point')
+    StopPolice()
+    f = Called('FreezeEntityPosition')
+    H.ok(#f == 2 and f[2][1] == PED and f[2][2] == false, 'a restart then: he is let go')
+    H.ok(FadedInAtOnce(), 'and the screen comes back at once')
+    StartPolice()
+
+    -- Crimson-Arena took him in the ground wait: its freeze is left alone, the screen still comes back
+    Reset()
+    Teleport()
+    LocalPlayer.state.crimsonArena = { active = true, source = 'crimson-arena' }
+    StopPolice()
+    LocalPlayer.state.crimsonArena = nil
+    H.eq(#Called('FreezeEntityPosition'), 1, 'the arena owns him: not let go')
+    H.ok(FadedInAtOnce(), 'the screen comes back')
+    StartPolice()
+
+    -- driving: the car he drives was frozen, and is let go
+    Reset()
+    car = 300
+    Teleport()
+    StopPolice()
+    f = Called('FreezeEntityPosition')
+    H.ok(#f == 2 and f[1][1] == 300 and f[2][1] == 300 and f[2][2] == false, 'his car is let go')
+    StartPolice()
+    car = 0
+
+    -- a teleport that ended is forgotten: a restart later touches nothing
+    ground = true
+    Teleport()
+    Reset()
+    StopPolice()
+    H.eq(#calls, 0, 'a restart after the teleport ended: no fade, no freeze')
+    StartPolice()
+
+    -- a restart in the check's first fade (before he is hidden and his state saved)
+    Reset()
+    faded = false
+    clientActions.spawnCheck({ missionId = 'demo', location = 1 })
+    H.eq(#Called('SetEntityVisible'), 0, 'the check waits in its first fade, he is not hidden yet')
+    StopPolice()
+    H.ok(FadedInAtOnce(), 'a restart then: the screen comes back at once')
+    H.eq(#Called('FreezeEntityPosition') + #Called('SetEntityCoords'), 0, 'he was never frozen or moved')
+    StartPolice()
+    faded = true
+
+    -- a restart while the map loads around the start: he is put back and our load scene ends
+    Reset()
+    game.sceneLoadedAfter = 100000
+    clientActions.spawnCheck({ missionId = 'demo', location = 1 })
+    H.eq(#Called('NewLoadSceneStartSphere'), 1, 'the map loads around the start')
+    StopPolice()
+    H.eq(#Called('NewLoadSceneStop'), 1, 'a restart then: our load scene is stopped')
+    local moves = Called('SetEntityCoords')
+    H.ok(moves[#moves][2] == -50.0 and not game.frozen and game.visible, 'and he is back, let go and seen')
+    StartPolice()
+    game.sceneLoadedAfter = 2
+
+    -- a logout while the server answers for the first location: his ped is never moved and not let go (the
+    -- character screen freezes and places it), but he is seen and hurt again and the screen comes back
+    Reset()
+    CP.Net.request = function(name, args)
+        if args.location ~= nil then H.fire('QBCore:Client:OnPlayerUnload', nil) end
+        return realRequest(name, args)
+    end
+    clientActions.spawnCheck({ missionId = 'demo' })
+    H.ok(RunToEnd(), 'a logout ends the check')
+    CP.Net.request = realRequest
+    H.eq(#Called('SetEntityCoords'), 0, 'his ped is never moved: not to the start, not back')
+    H.eq(#Called('NewLoadSceneStartSphere'), 0, 'no map is loaded for him')
+    f = Called('FreezeEntityPosition')
+    H.ok(#f == 1 and f[1][2] == true, 'not let go: the character screen holds the ped')
+    H.ok(game.visible and not game.invincible, 'seen and hurt again')
+    H.ok(#Called('DoScreenFadeIn') == 1, 'the screen comes back')
+    H.eq(#Pushes('location'), 1, 'the next location is not visited')
+
+    -- a logout during a point: no move over the next point, none back where the old character stood
+    Reset()
+    onProbe = function(n) if n == 1 then H.fire('QBCore:Client:OnPlayerUnload', nil) end end
+    clientActions.spawnCheck({ missionId = 'demo', location = 1 })
+    RunToEnd()
+    onProbe = nil
+    H.eq(#Called('SetEntityCoords'), 1, 'a logout during a point: only the move to the start before it')
+    H.eq(#probes, 1, 'no point after it is checked')
+    H.eq(game.frozen, true, 'not let go')
+    H.ok(game.visible and not game.invincible, 'seen and hurt again')
 end
 
 return H

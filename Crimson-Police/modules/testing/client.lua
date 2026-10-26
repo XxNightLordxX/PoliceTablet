@@ -357,20 +357,25 @@ local function GroundZ(x, y, z)
     return z
 end
 
+-- The teleport under way ({ ent, ped, frozen }): a resource stop in its fade or its ground wait puts the screen back
+-- and undoes its freeze (the onResourceStop handler below).
+local tp = nil
+
 local function TeleportTo(x, y, z)
     local ped = PlayerPedId()
     local veh = GetVehiclePedIsIn(ped, false)
     local ent = ped
     if veh ~= 0 and GetPedInVehicleSeat(veh, -1) == ped then ent = veh end
+    local mine = { ent = ent, ped = ped, frozen = false }
+    tp = mine
     DoScreenFadeOut(300)
     local deadline = GetGameTimer() + 1500
     while not IsScreenFadedOut() and GetGameTimer() < deadline do Wait(0) end
-    local frozen = false
     local ok, err = pcall(function()
         -- Crimson-Arena rule 13: re-check right before every move (the fade took time).
         if ArenaForeign() then error('in_arena', 0) end
         FreezeEntityPosition(ent, true)
-        frozen = true
+        mine.frozen = true
         SetEntityCoords(ent, x, y, z + 1.0, false, false, false, false)
         local gz = GroundZ(x, y, z)
         if ArenaForeign() then error('in_arena', 0) end
@@ -378,8 +383,9 @@ local function TeleportTo(x, y, z)
     end)
     -- Undo only our own freeze, and leave the ped to Crimson-Arena once it owns it (it freezes the placed
     -- ped for its countdown and lets it go itself).
-    if frozen and not (err == 'in_arena' and ent == ped) then FreezeEntityPosition(ent, false) end
+    if mine.frozen and not (err == 'in_arena' and ent == ped) then FreezeEntityPosition(ent, false) end
     DoScreenFadeIn(300)
+    if tp == mine then tp = nil end
     if not ok then
         if err == 'in_arena' then return false, 'err.in_arena' end
         CP.err(TAG, 'teleport failed: %s', tostring(err))
@@ -426,7 +432,8 @@ end
 -- each point is probed (he is moved over a point further than moveWithin). Progress and every result go to the NUI
 -- (push topic spawnCheck), each location's results to the server (server:test:spawnCheckReport). At the end, or on
 -- Stop (after the point being checked), he is back where he was. A run of his that starts meanwhile (a test he starts
--- or joins) ends the check at once and he stays where he is. It spawns nothing; only his own ped moves.
+-- or joins) ends the check at once and he stays where he is. A logout ends it too, and the character screen places
+-- his ped. It spawns nothing; only his own ped moves.
 
 local SPAWN_TOPIC = 'spawnCheck'
 local SCENE_RADIUS = 200.0 -- metres of map loaded around him (and the most a point may be from him for the sight check)
@@ -434,6 +441,9 @@ local SIGHT_BATCH = 32     -- points per CP.Spawn.visible ask
 local FADE_MS = 300
 local FADE_WAIT_MS = 1500
 local SPAWN_SEEN = { ped = true, vehicle = true, prop = true } -- the sight note is for where something appears
+
+-- our own NewLoadSceneStartSphere runs: a resource stop ends it (another resource's is left alone)
+local sceneOn = false
 
 local function CheckCfg()
     local c = (Config.Testing or {}).spawnCheck
@@ -456,13 +466,15 @@ local function FadeOut()
     while not IsYes(IsScreenFadedOut()) and GetGameTimer() < deadline do Wait(0) end
 end
 
--- Loads the map around x, y, z (at most sceneTimeoutMs): true when it loaded.
+-- Loads the map around x, y, z (at most sceneTimeoutMs): true when it loaded. It stops early once Crimson-Arena took
+-- him or he logged out (check.arena): the map there is not needed any more.
 local function LoadScene(x, y, z)
     local timeout = math.max(1000, math.min(30000, tonumber(CheckCfg().sceneTimeoutMs) or 8000))
+    sceneOn = true
     NewLoadSceneStartSphere(x + 0.0, y + 0.0, z + 0.0, SCENE_RADIUS, 0)
     local deadline = GetGameTimer() + timeout
     local loaded = false
-    while GetGameTimer() < deadline do
+    while GetGameTimer() < deadline and not check.arena do
         if IsYes(IsNewLoadSceneLoaded()) then
             loaded = true
             break
@@ -470,12 +482,14 @@ local function LoadScene(x, y, z)
         Wait(0)
     end
     NewLoadSceneStop()
+    sceneOn = false
     return loaded
 end
 
--- Moves him (frozen) to x, y, z. Crimson-Arena rule 13: refused once the arena owns him.
+-- Moves him (frozen) to x, y, z. Refused once Crimson-Arena owns him (rule 13) or he logged out (check.arena, set
+-- by the logout listener below): his ped is the character screen's then.
 local function MoveTo(x, y, z)
-    if ArenaForeign() then
+    if check.arena or ArenaForeign() then
         check.arena = true
         return false
     end
@@ -929,10 +943,29 @@ CreateThread(function()
     end)
 end)
 
+-- A logout (qbx character select) ends a running spawn check like Crimson-Arena does: the character screen moves and
+-- freezes the ped now, so the check never moves it again and does not let it go (Restore skips both).
+CreateThread(function()
+    if CP.Qbx and CP.Qbx.onUnload then
+        CP.Qbx.onUnload(function()
+            if check.running then check.stop, check.arena = true, true end
+        end)
+    end
+end)
+
 AddEventHandler('onResourceStop', function(resource)
     if resource ~= GetCurrentResourceName() then return end
     StopDrawing()
-    if check.running then Restore() end
+    -- a teleport in its fade or ground wait: the screen back, our own freeze undone (not a ped Crimson-Arena owns)
+    if tp then
+        if tp.frozen and not (tp.ent == tp.ped and ArenaForeign()) then FreezeEntityPosition(tp.ent, false) end
+        DoScreenFadeIn(0)
+    end
+    -- a check stopped in its first fade (before Hide saved him) has nothing to put back but the screen
+    if check.running then
+        if check.saved then Restore() else DoScreenFadeIn(0) end
+    end
+    if sceneOn then NewLoadSceneStop() end
     if state.focused and not TabletOpen() then SetNuiFocus(false, false) end
     state.focused = false
 end)
