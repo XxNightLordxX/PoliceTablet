@@ -413,6 +413,7 @@ RegisterNetEvent(CP.e('client:start'), function(runId, data)
         objectives = {},
         blocks = {},
         startRoute = data.startRoute ~= false,
+        routeRequired = data.routeRequired ~= false,   -- Config.Route.required as the server locked it at accept
         startTimeout = data.startTimeout,
         isBoss = data.isBoss == true,
         timeLimit = data.timeLimit,
@@ -428,7 +429,7 @@ RegisterNetEvent(CP.e('client:start'), function(runId, data)
         payTier = data.expectedTier,
         modifier = ModifierHud(data.modifier),
         timer = false,
-        route = { status = current.startRoute and 'on' or 'disabled' },
+        route = { status = current.startRoute and 'on' or 'disabled', required = current.routeRequired },
         objectives = {},
         detail = false,
         message = false,
@@ -443,7 +444,7 @@ RegisterNetEvent(CP.e('client:start'), function(runId, data)
         if CP.Route and CP.Route.begin then
             -- CP.Route handles both cases: the checked start route, or (test run, route off) a waypoint only.
             local ok, err = pcall(CP.Route.begin, runId, start,
-                { startRoute = current.startRoute, radius = data.start.radius })
+                { startRoute = current.startRoute, required = current.routeRequired, radius = data.start.radius })
             if not ok then CP.err(TAG, 'CP.Route.begin failed: %s', tostring(err)) end
         else
             local x, y = CP.U.xyz(start)

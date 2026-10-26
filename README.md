@@ -719,6 +719,7 @@ Everything else works as shipped. These are the ones owners change most:
 | `Config.NpcCombat` | How hard armed NPCs fight back: no automatic weapons, an accuracy cap, single shots, half damage, no headshot one-shots. See [5.9](#59-how-hard-npcs-fight-back) |
 | `Config.Flee` | How long a suspect who runs from your officers keeps running: the server times every runner on foot (time in a car does not count), who sprints for `sprintSeconds` (10), jogs for `jogSeconds` (12), walks for `walkSeconds` (8) and is then worn out. Each suspect lasts up to `jitter` (25 %) longer or shorter, `Config.NpcDifficulty`'s `fleeMult` stretches it (`'hard'`: 20 % longer), a runner no officer comes within `recoverRange` (60 m) of for `recoverSeconds` (20 s) sprints again, and `armedTire = false` keeps armed suspects fresh. A tired runner visibly slows down: at most a jog, then a walk, at `jogRate` (0.95) / `walkRate` (0.85) of the normal speed, and with `windedClipset` he jogs, then walks winded. Once worn out he gives up as soon as an officer is within `giveUpRange` (30 m): `exhausted = 'surrender'` he kneels, `'handsUp'` he stands with his hands up (Cuff suspect either way), `'walk'` he walks on and never gives up on his own. `enabled = false` turns it off. `nearestRoute` (on): a runner, cook or inmate who scatters flees along the escape route that starts nearest where he appears, so nobody runs back across the site past your officers (`false`: the routes take turns) |
 | `Config.Markers` | The objective on your officers' map: one blip for the objective they are on (for a fight or a search area, a circle and its centre) and one GPS line to it (`route`, in `routeColour`: 5 = yellow), off within `routeOffWithin` (40 m) of it and inside a circle. An officer still driving to the start, or with a waypoint of his own, keeps that as his only line. A suspect or car too far away for his game still shows where the server says (`farTargets`); objective blips show at the radar edge (`shortRange = false`), flash for `flashSeconds` (5 s) when new and show their distance in the map legend (`category = 2`); `areaAlpha` (80) is how solid the circles are, and a start at least `startCircleMin` (200 m) wide shows as a circle. `radioSilence` (`'area'`) is what Radio Silence hides: `'area'` keeps a circle or the one objective blip without a GPS line and without blips on people and cars, `'none'` hides every objective blip, `'full'` nothing. `kinds` sets each kind of blip's sprite, colour and size (yellow = go here, red = enemy, orange = fleeing, blue = friendly, green = safe point). `enabled = false` turns it off |
+| `Config.Route` | The GPS route to the mission start. `required` (`true`): officers must follow it; `abandonAfter` (30 s) off the route in one stretch ends their run as Abandoned with the type cooldown, after a warning at `warnAfter` (10 s). `false`: the route is still set and shown and **Recalculate route** still works, but leaving it never ends a run (no warning, no countdown, no cooldown); the start timeout stays. A run keeps the value it was accepted with, so a change in **Settings** applies to new runs; a test run follows its own **Start route** switch. Also `maxDeviation` (120 m off the line counts as off route), `maxRecalcs` (2) and `maxDrift` (1000 m) |
 | `Config.MissionCalls` | Tablet mission calls: `enabled`, how often (`spawnEvery`), how many open at once (`maxOpen`) |
 | `Config.CrossDept.enabled` | Cross-Department Missions on or off |
 | `Config.Units.invitePolicy` | `'anyone'` in a unit may invite, or only the `'leader'` |
@@ -1246,7 +1247,8 @@ result card after each mission.
 
 **How a mission goes.** The officer (or unit leader) picks a type. The server draws a random mission of that type
 (no list, no reroll). Everyone gets a GPS route to the start and must follow it: 30 seconds off the route ends
-their run as Abandoned. At the start the mission begins; they finish the objectives before the timer runs out.
+their run as Abandoned (with `Config.Route.required = false` the route is only a guide and leaving it ends
+nothing). At the start the mission begins; they finish the objectives before the timer runs out.
 Finished = Completed (points and cash). A downed officer, or a timer that runs out, = Failed. Leaving, going off
 duty or not reaching the start in time = Abandoned. Going down, leaving, going off duty or not reaching the start
 also puts a 5-minute cooldown on that whole mission type (`Config.Limits.abandonCooldown`). Ending for a real
@@ -1462,7 +1464,7 @@ optional: no mission, location or draft needs a test before it is used or publis
 
 - Real RP first. When a real call comes, take it: responding ends the mission with no penalty.
 - Don't mark responding just to escape a bad mission: un-marking within 60 seconds counts as a normal abandon.
-- Follow the GPS route to the start. Leaving it ends your run.
+- Follow the GPS route to the start. Leaving it ends your run (unless you set `Config.Route.required = false`).
 - Drive and act in character: normal pursuit and code 3 rules apply on missions too.
 - No farming and no exploits. Report bugs to command.
 - Only team up with officers who really play the mission with you. Joining only for the pay voids the run.
@@ -2363,6 +2365,13 @@ however it ends.
   the entity as killed (a hostage or an escort's truck removed that way fails its objective); `Builder.exportPath` and
   the Markers kinds fields say what they need and mean. Activation: the maintenance lock ends with a restart, or after
   a restore that stopped part way with a restore that works.
+- Start route switch, at the owner's request of 2026-10-26 ("Also option in the config where they have to stay on the
+  route"): Hard rule 17 is now the one switchable Hard rule (15, 16 and 18 stay unswitchable).
+  `Config.Route.required` (`true`, as before) makes officers follow the GPS route to the start; with `false` the route
+  is still set and shown, **Recalculate route** still works and arrival still counts, but leaving the route never
+  ends a run: no off-route warning, no countdown on the HUD or the tablet, no Abandoned (`off_route`) end and no type
+  cooldown from it. The start timeout stays. A run keeps the value it was accepted with, and a test run follows its
+  own **Start route** switch. Undo: `Config.Route.required = true` (Admin UI → **Settings**, or config.lua).
 
 **Waiting for the owner's OK** (already in `docs/SPEC.md` and the code; each one is undone without a code change):
 

@@ -40,7 +40,7 @@ These rules override everything else in this spec. If another section, example o
 
 - No mission alerts: from the moment a participant reaches the mission start until their run ends, their mission combat MUST NOT create SC-Dispatch or SC-Ambulance alerts (shots fired, person down), and any such call that still appears in SC-Dispatch MUST be cleared automatically. A downed participant can still get EMS help.
 
-- Route to the start: participants MUST follow the route shown to the mission start; staying off it ends their run as Abandoned.
+- Route to the start: participants MUST follow the route shown to the mission start; staying off it ends their run as Abandoned. The owner may switch this rule off (Config.Route.required = false, at the owner's request of 2026-10-26): the route is still shown and checked for arrival, but leaving it never ends a run. A run keeps the value it was accepted with, and a test run follows its own Start route switch.
 
 - Downed participants: a participant who goes down has Failed their run. If no EMS is on duty, they MUST be picked up automatically (revived and moved to a drop-off point).
 
@@ -76,7 +76,7 @@ Everything below was considered and removed. Do not add it back, even as an opti
 
 - UI: one custom UI stack only (React + TypeScript + Vite); no ox_lib menus, context menus, input dialogs or notifications for Crimson-Police screens; no third-party tablet; no Crimson-Police tab inside the SC-Dispatch MDT.
 
-- Rule switches: no config flag that turns off Hard rules 15–18 (real calls, alert suppression, the start route, downed participants). Their numbers are configurable; the rules are not.
+- Rule switches: no config flag that turns off Hard rules 15, 16 or 18 (real calls, alert suppression, downed participants). Their numbers are configurable; the rules are not. Hard rule 17 (the start route) is the one exception: the owner made it switchable with Config.Route.required (see that rule).
 
 ## Glossary
 
@@ -448,7 +448,7 @@ Random draw rules
 
 - Adding locations to a built-in mission: not through separate location files (that would break one file per mission). Use a Builder duplicate of the built-in mission, and Config.MissionTweaks.disabledLocations to switch a built-in spot off; both survive updates.
 
-- The mission is revealed only after the type is accepted. There is no reroll: abandoning, leaving the start route, or not reaching the start within the mission's start timeout (10 minutes by default) ends the run as Abandoned and puts the whole type on cooldown.
+- The mission is revealed only after the type is accepted. There is no reroll: abandoning, leaving the start route (while Config.Route.required is on, as shipped), or not reaching the start within the mission's start timeout (10 minutes by default) ends the run as Abandoned and puts the whole type on cooldown.
 
 Route to the start
 
@@ -469,6 +469,8 @@ When a type is accepted, each participant's tablet sets a GPS route from where t
 - For a mission whose start is a circle (Manhunt), the route leads to the circle's centre until the officer is inside it.
 
 - All numbers are in Config.Route.
+
+- Config.Route.required (true, as shipped) is the owner's switch for this rule. With false the route is still set, sampled, reported and shown, Recalculate route still works (up to maxRecalcs) and arrival still counts, but there is no off-route warning, no off-route countdown on the HUD or the tablet, no drift check and no Abandoned (off_route) end, so no type cooldown from the route; the HUD, the run bar and the Active Mission screen show the route as a guide ("GPS route to the start") instead of "On route", and the Mission Board's accept text leaves the route out. The start timeout stays. The value is locked when the type is accepted (CP.Runs stores run.routeRequired and sends it in client:start), so a change in Admin UI → Settings applies to new runs only. A test run follows its own Start route switch: on = with the route rules, off = arrival check only.
 
 Units
 
@@ -2584,7 +2586,7 @@ An admin can change every setting of config/config.lua and config/blocks.lua in 
 - Clients: every client gets the changed settings when it starts and after every change, so client code reads the same values as the server.
 - After each change the Config health check runs again and its result is shown. Every change is in the audit log (who, when, the setting, old → new), which the screen lists as its history.
 - Mission switches: Admin UI → Missions has an on/off switch for every mission and for each location of it (Config.DisabledMissions and Config.DisabledLocations, saved the same way). Off stops new draws everywhere (Mission Board, mission calls, Cross-Department Missions, the Weekly Boss); a run that is already going finishes. A mission whose every location is off is never drawn.
-- Also locked (config.lua only): the tablet title and the two command names (Hard rule Names; another resource's command with the same name would lock the owner out of the Admin UI), the call-id prefixes Config.Calls.npcCallPrefix and ownRunCallPrefixes (they mirror sc-npcpolice's and sc-dispatch's id formats), and each bonus's each, block and engineOnly (they describe what the code does). The real-call, alert, start-route and downed numbers of Hard rules 15-18 have known ranges (for example Calls.dodgeWindow 10-300 s, Route.maxDrift 200-5000 m); the rules themselves are never a switch.
+- Also locked (config.lua only): the tablet title and the two command names (Hard rule Names; another resource's command with the same name would lock the owner out of the Admin UI), the call-id prefixes Config.Calls.npcCallPrefix and ownRunCallPrefixes (they mirror sc-npcpolice's and sc-dispatch's id formats), and each bonus's each, block and engineOnly (they describe what the code does). The real-call, alert, start-route and downed numbers of Hard rules 15-18 have known ranges (for example Calls.dodgeWindow 10-300 s, Route.maxDrift 200-5000 m); the rules themselves are never a switch, apart from Route.required (Hard rule 17, the owner's switch: an on/off gameplay rule, not a money switch).
 - A bonus's kind (points or pct) changes only together with its value, in one save: points are whole numbers from -500 to 500, pct from -1 to 1, and a bonus stays a bonus and a penalty stays a penalty. A reset puts both back.
 - Point values (mission type points, bonus values, the scoring rules, Type of the Day, modifiers, the Weekly Boss points, the cross-department and scaling multipliers, goal and bounty points) are marked as such: a change applies to runs that end after it (a run going now may end with either value; past rows keep their points) and also posts a notice to the flags webhook.
 - Money switches: Config.Cash.allowUnfundedRetry, allowCapTopUp, allowPayAgain, restoreForfeited, allowAddFunds, allowClawback, allowManualCash and Config.Rewards.allowTakeBack all ship false. Turning one on needs the typed word ENABLE, which the server checks too; every change is audited and posts to the audit webhook (a full webhook queue never drops it). Turning one off needs nothing.
@@ -3052,6 +3054,10 @@ Config.Spawning = {
 -- ── Route to the start ──────────────────────────────────────────────────────
 
 Config.Route = {
+    -- true = officers must follow the GPS route to the mission start; leaving it for abandonAfter seconds ends their
+    -- run as Abandoned. false = the route is still shown, but leaving it never ends a run. A run keeps the value it was
+    -- accepted with; a test run follows its own Start route switch
+    required = true,
     sampleEvery = 50.0,    -- metres between points taken from the GPS route
     reportEvery = 2,       -- seconds between client reports
     reportTimeout = 10,    -- no report for this long counts as off route
@@ -4586,7 +4592,7 @@ Phase 1 · Core
 | 3. Access, roles and permissions | modules/access/, modules/permissions/ | The server identifies an on-duty SAST officer, an FIB supervisor and an admin correctly, refuses off-duty, suspended and second-job players, and refuses a supervisor action switched off in Config.Permissions |
 | 4. Officer UI and theming | modules/tablet/, web/src/officer/, web/src/hud/, web/src/shared/, logos/ | /CrimsonPolice opens a tablet titled Crimson-Police with the officer's department name, rank, callsign, colours and watermark; an FIB officer sees FIB's |
 | 5. Draw and run lifecycle | modules/draw/, modules/runs/, modules/schedule/ | Accepting a type draws a random eligible mission and reserves its location; start timeout, abandon, type cooldown, the server run caps and end reasons behave as specified; the server creates and deletes the mission's entities |
-| 6. Route to the start | modules/route/ | Leaving the route warns at 10 seconds and abandons at 30 with the type cooldown; Recalculate works twice; missing reports and the drift check behave as specified |
+| 6. Route to the start | modules/route/ | Leaving the route warns at 10 seconds and abandons at 30 with the type cooldown; Recalculate works twice; missing reports and the drift check behave as specified; with Config.Route.required off nobody is warned or abandoned for the route, and a run keeps the value it was accepted with |
 | 7. Real calls and alert suppression | modules/calls/, modules/alerts/ | A real call ends the run with no cooldown, an NPC call does not, and the 60-second rule applies; test gunfire during a run creates no shots-fired call, and one forced through is cleared |
 | 8. Downed participants | modules/downed/ | Going down is Failed with the type cooldown; with no EMS on duty the officer is picked up after 15 seconds; with EMS on duty the EMS request is sent |
 | 9. First blocks and missions | modules/testing/, blocks/checkpoint_route/, blocks/interact_points/, missions/builtin/beat_patrol.lua, business_check.lua, evoc_course.lua | Beat Patrol, Business Check and EVOC Course complete end-to-end, and /CrimsonPoliceAdmin test starts each of them at any tier and location with working test controls |

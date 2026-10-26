@@ -32,6 +32,7 @@ export function normalizeSession(s: Session): Session {
             departments: asArray(cfg.departments),
             tiers: asArray(cfg.tiers),
             maxRecalcs: Number(cfg.maxRecalcs ?? 0),
+            routeRequired: cfg.routeRequired !== false,
             disputeWindowHours: Number(cfg.disputeWindowHours ?? 0),
             periods: asArray(cfg.periods),
             filters: asArray(cfg.filters),

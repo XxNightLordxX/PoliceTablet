@@ -3110,6 +3110,9 @@ function Runs.create(opts)
         flagged = nil,
         reserved = { missionId = mission.id, locationIndex = locationIndex },
         startTimeout = math.floor(Num(mission.startTimeout, Num(limits().startTimeout, 600))),
+        -- Hard rule 17's switch, locked at accept (Config.Route.required): whether leaving the start route ends the
+        -- run. A test run follows its own Start route switch (test.useStartRoute: on = with the route rules).
+        routeRequired = test ~= nil or not (Config.Route and Config.Route.required == false),
         pedHits = {},
         quietPatrol = mission.quietPatrol == true,
         decisions = {},
@@ -3249,6 +3252,7 @@ function Runs.create(opts)
         modifier = run.modifier,
         participants = ParticipantsList(run),
         startRoute = startRoute,
+        routeRequired = run.routeRequired,
         startTimeout = run.startTimeout,
         isBoss = isBoss,
         timeLimit = run.timeLimit,
@@ -3973,6 +3977,7 @@ local function RouteFor(run, src, p)
         route.status = 'on'
     end
     if p and p.arrived and route.status ~= 'off' then route.status = 'arrived' end
+    route.required = run.routeRequired ~= false   -- false: the screen shows the route as a guide, never a countdown
     return route, recalcs
 end
 

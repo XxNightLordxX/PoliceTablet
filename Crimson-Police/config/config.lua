@@ -450,6 +450,10 @@ Config.Spawning = {
 -- ============================================================================
 
 Config.Route = {
+    -- true = officers must follow the GPS route to the mission start; leaving it for abandonAfter seconds ends their
+    -- run as Abandoned. false = the route is still shown, but leaving it never ends a run. A run keeps the value it was
+    -- accepted with; a test run follows its own Start route switch
+    required = true,
     sampleEvery = 50.0,    -- metres between points taken from the GPS route
     reportEvery = 2,       -- seconds between client reports
     reportTimeout = 10,    -- no report for this long counts as off route

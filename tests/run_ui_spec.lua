@@ -383,11 +383,11 @@ for st in pairs(statuses) do
     H.ok(known[st] == true, 'CP.Route.status returns a status the screen handles: ' .. st)
 end
 H.ok(nStatus >= 4, 'every route status found (' .. nStatus .. ')')
-for _, f in ipairs({ 'secondsLeft', 'recalcsLeft', 'distance' }) do
+for _, f in ipairs({ 'secondsLeft', 'recalcsLeft', 'distance', 'required' }) do
     H.ok(statusBody:find(f .. ' =', 1, true) ~= nil, 'CP.Route.status sends ' .. f)
 end
 local routeForBody = FnBody(runsSrv, 'local function RouteFor(run, src, p)') or ''
-for _, f in ipairs({ 'route.secondsLeft', 'route.distance', 'st.recalcsLeft' }) do
+for _, f in ipairs({ 'route.secondsLeft', 'route.distance', 'st.recalcsLeft', 'route.required' }) do
     H.ok(routeForBody:find(f, 1, true) ~= nil, 'CP.Runs.view copies ' .. f)
 end
 

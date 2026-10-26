@@ -66,7 +66,7 @@ function RouteLine({ route }: { route: NonNullable<HudState['route']> }) {
                 <div className="cp-hud__route is-on">
                     <Icon name="navigation" size={15} />
                     <div className="cp-hud__route-text">
-                        <strong>{t('hud.route.on')}</strong>
+                        <strong>{route.required === false ? t('hud.route.guide') : t('hud.route.on')}</strong>
                         {route.distance !== null && route.distance !== undefined ? (
                             <span className="cp-num">
                                 {t('hud.route.distance', { distance: formatDistance(route.distance) })}

@@ -2707,11 +2707,15 @@ Public API
       Starts the checks for one participant (CP.Runs calls it for each participant at create; the 1 s
       tick also begins any active, not yet arrived participant it finds without a state, unless stop was
       called for them). Idempotent. Test runs with test.useStartRoute == false get the arrival check only.
+      Config.Route.required (the owner's switch, locked at accept as run.routeRequired; a test run: true)
+      false: the route is still reported and recalculated and arrival counts, but no warning, countdown,
+      drift check or off_route end.
   CP.Route.stop(run|runId, src?) -> nil      ends the checks for src (every participant when src is nil)
   CP.Route.status(run, src) -> RouteStatus
       RouteStatus = { status = 'on'|'off'|'arrived'|'disabled', secondsLeft = number|nil (only while the
       off-route warning is shown), recalcsLeft = number, distance = metres (straight line to the start,
-      2D, rounded)|nil }  (HudState.route plus recalcsLeft for the Active Mission view)
+      2D, rounded)|nil, required = boolean (false: the route is a guide) }  (HudState.route plus
+      recalcsLeft for the Active Mission view)
 
 Per participant: { lastReport, offSince, warned, recalcs, closest, distance, arrived, mode }.
 Every 1 s, with the SERVER-SIDE ped position:

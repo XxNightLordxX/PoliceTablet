@@ -1,5 +1,6 @@
 -- CP.Route (server): Hard rule 17, the route to the mission start (docs/ARCHITECTURE.md §5.12, SPEC "Route to the
--- start", CRIMSON_ARENA rules 5 and 6).
+-- start", CRIMSON_ARENA rules 5 and 6). Config.Route.required (the owner's switch, locked at accept) decides whether
+-- leaving the route ends a run; without it the route is still shown, reported and recalculated, and arrival counts.
 
 CP.Route = CP.Route or {}
 local R = CP.Route
@@ -81,6 +82,14 @@ end
 
 local function RouteEnabled(run)
     return not (type(run.test) == 'table' and run.test.useStartRoute == false)
+end
+
+-- Whether leaving the route ends this run: run.routeRequired as CP.Runs locked it at accept (a test run: always, its
+-- Start route switch decides whether there is a route at all); Config.Route.required for a run without it.
+local function RouteRequired(run)
+    if type(run.routeRequired) == 'boolean' then return run.routeRequired end
+    if type(run.test) == 'table' then return true end
+    return not (Config.Route and Config.Route.required == false)
 end
 
 local function Participant(run, src)
@@ -175,6 +184,7 @@ function R.begin(run, src)
         runId = run.id,
         src = src,
         mode = RouteEnabled(run) and 'route' or 'arrival',
+        required = RouteRequired(run),
         begunAt = now,
         lastReport = now,
         lastReportAt = nil,
@@ -188,7 +198,8 @@ function R.begin(run, src)
         distance = d,
         arrived = false,
     }
-    CP.log(TAG, 'begin %d on run %s (%s, %.0f m to go)', src, tostring(run.id), byRun[src].mode, d or -1)
+    CP.log(TAG, 'begin %d on run %s (%s%s, %.0f m to go)', src, tostring(run.id), byRun[src].mode,
+        byRun[src].required and '' or ', not required', d or -1)
     return true
 end
 
@@ -229,12 +240,13 @@ function R.status(run, src)
             secondsLeft = st.warned and SecondsLeftOf(st, now) or nil,
             recalcsLeft = RecalcsLeft(st),
             distance = dist,
+            required = st.required,
         }
     end
     local p = (type(run) == 'table' and src) and Participant(run, src) or nil
     if type(p) == 'table' and p.arrived then return { status = 'arrived', recalcsLeft = 0, distance = 0 } end
     if type(run) == 'table' and not RouteEnabled(run) then return { status = 'disabled', recalcsLeft = 0 } end
-    return { status = 'on', recalcsLeft = maxR }
+    return { status = 'on', recalcsLeft = maxR, required = type(run) ~= 'table' or RouteRequired(run) }
 end
 
 -- ============================================================================
@@ -305,7 +317,7 @@ local function CheckOne(run, src, st, now)
             Arrive(run, src, st)
             return
         end
-        if st.mode == 'route' then
+        if st.mode == 'route' and st.required then
             if st.closest == nil or d < st.closest then
                 st.closest = d
             elseif d - st.closest > (tonumber(c.maxDrift) or 1000.0) then
@@ -314,7 +326,8 @@ local function CheckOne(run, src, st, now)
             end
         end
     end
-    if st.mode ~= 'route' then return end
+    -- Config.Route.required off for this run: no off-route stretch, so no warning, no countdown and no end
+    if st.mode ~= 'route' or not st.required then return end
     local timeoutMs = SecondsMs(c.reportTimeout, 10)
     if not st.offSince and now - st.lastReport > timeoutMs then
         st.offSince = st.lastReport + timeoutMs
@@ -427,6 +440,7 @@ RegisterNetEvent(CP.e('server:routeStatus'), function(runId, metres, coords)
     st.lastReport = now
     st.reports = st.reports + 1
     st.metres = metres
+    if not st.required then return end
     if metres > (tonumber(Config.Route.maxDeviation) or 120.0) then
         if not st.offSince then
             st.offSince = now

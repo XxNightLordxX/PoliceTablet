@@ -654,6 +654,13 @@ do
     Err('Calls.dodgeWindow', 5, 'err.setting_range', 'dodgeWindow below 10 s')
     H.ok((Check('Calls.dodgeWindow', 90)), 'dodgeWindow 90 s')
     Err('Route.maxDrift', 100, 'err.setting_range', 'maxDrift below 200 m')
+    -- Hard rule 17's switch (Config.Route.required): an on/off gameplay rule an admin may change, not a money switch
+    local req = S.entry('Route.required')
+    H.eq(req and req.kind, 'boolean', 'Route.required is an on/off setting')
+    H.eq(req and req.money, nil, '...not a money switch (no typed ENABLE)')
+    H.eq(req and req.locked, nil, '...and not locked')
+    H.ok((Check('Route.required', false)), 'Route.required may be turned off')
+    Err('Route.required', 'no', 'err.setting_type', 'Route.required takes true or false only')
     Err('Downed.checkEvery', 11, 'err.setting_range', 'checkEvery above 10 s')
     Err('Alerts.backstopRadius', 2000, 'err.setting_range', 'backstopRadius above 1000 m')
     Err('AdminControl.bulkMaxRows', 0, 'err.setting_range', 'a bulk job changes 1 row at least')

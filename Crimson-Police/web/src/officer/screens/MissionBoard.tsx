@@ -722,6 +722,8 @@ export default function MissionBoard() {
     };
 
     const pendingLabel = pending ? pending.card.label : '';
+    // Config.Route.required off: leaving the start route is no reason for a cooldown, and the route is a guide
+    const routeRequired = session.config?.routeRequired !== false;
     const confirmMessage = pending ? (
         <div className="run_ui-confirm">
             {pending.kind === 'boss' ? (
@@ -729,7 +731,9 @@ export default function MissionBoard() {
                     <p>{t('board.confirm.boss_random', { mission: pendingLabel })}</p>
                     <p className="run_ui-confirm__warn">
                         <Icon name="alert" size={14} />
-                        <span>{t('board.confirm.boss_abandon')}</span>
+                        <span>
+                            {routeRequired ? t('board.confirm.boss_abandon') : t('board.confirm.boss_abandon_guide')}
+                        </span>
                     </p>
                 </>
             ) : (
@@ -737,12 +741,18 @@ export default function MissionBoard() {
                     <p>{t('board.confirm.random', { type: pendingLabel })}</p>
                     <p className="run_ui-confirm__warn">
                         <Icon name="alert" size={14} />
-                        <span>{t('board.confirm.abandon', { type: pendingLabel })}</span>
+                        <span>
+                            {routeRequired
+                                ? t('board.confirm.abandon', { type: pendingLabel })
+                                : t('board.confirm.abandon_guide', { type: pendingLabel })}
+                        </span>
                     </p>
                 </>
             )}
             {size > 1 ? <p className="run_ui-confirm__note">{t('board.confirm.unit', { size })}</p> : null}
-            <p className="run_ui-confirm__note">{t('board.confirm.route')}</p>
+            <p className="run_ui-confirm__note">
+                {routeRequired ? t('board.confirm.route') : t('board.confirm.route_guide')}
+            </p>
         </div>
     ) : null;
 

@@ -397,6 +397,8 @@ local function SessionConfig()
         departments = depts,
         tiers = tiers,
         maxRecalcs = tonumber(Config.Route and Config.Route.maxRecalcs) or 0,
+        -- the Mission Board's accept text: false = leaving the start route is no reason for a cooldown
+        routeRequired = not (Config.Route and Config.Route.required == false),
         disputeWindowHours = tonumber(Config.Disputes and Config.Disputes.windowHours) or 0,
         periods = periods,
         filters = filters,

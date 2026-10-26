@@ -128,6 +128,7 @@ const CONFIG: Session['config'] = {
         label: mockLocale[`tier.${name}`] ?? name,
     })),
     maxRecalcs: 2,
+    routeRequired: true,
     disputeWindowHours: 48,
     periods: ['weekly', 'monthly', 'season', 'alltime'],
     filters: ['overall', 'patrol', 'training', 'investigation', 'tactical', 'unit', 'cross', 'department'],

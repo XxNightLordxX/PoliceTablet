@@ -117,6 +117,7 @@ H.fire('crimson-police:client:start', nil, 'run-1', {
     test = nil,
     modifier = 'radio_silence',
     startRoute = true,
+    routeRequired = false,   -- accepted with Config.Route.required off
     startTimeout = 600,
     isBoss = false,
     participants = {
@@ -133,9 +134,11 @@ H.eq(hudState.phase, 'route', 'HUD route phase')
 H.eq(hudState.tier, 'reinforced', 'HUD expected tier')
 H.eq(hudState.modifier.key, 'radio_silence', 'HUD modifier')
 H.eq(hudState.route.status, 'on', 'HUD route on')
+H.eq(hudState.route.required, false, 'HUD: the route is not required (locked at accept)')
 H.eq(hudState.testControls, false, 'no test controls')
 H.eq(routeLog[1][1], 'begin', 'CP.Route.begin on start')
 H.eq(routeLog[1][3].x, 10.0, 'route to the start coords')
+H.eq(routeLog[1][4].required, false, 'CP.Route.begin told the route is not required')
 
 -- client:inProgress + objective actions
 H.fire('crimson-police:client:inProgress', nil, 'run-1', {
@@ -279,6 +282,7 @@ H.eq(hudState.testControls, true, 'test controls for the admin who started it')
 H.eq(hudState.route.status, 'disabled', 'route off in the HUD')
 H.eq(routeLog[#routeLog][1], 'begin', 'CP.Route.begin also for a test with the route off')
 H.eq(routeLog[#routeLog][4].startRoute, false, 'route begun without the checks')
+H.eq(routeLog[#routeLog][4].required, true, 'no routeRequired sent: required, as before')
 H.eq(waypoint, nil, 'CP.Route sets the waypoint itself')
 H.fire('crimson-police:client:runEnded', nil, 'run-2', 'failed', 'mission_failed',
     { failReason = 'run.fail_killed_unarmed' })

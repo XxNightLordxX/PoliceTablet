@@ -570,6 +570,73 @@ do
     r2.state = 'ended'
 end
 
+-- 13) Config.Route.required = false (the owner's switch for Hard rule 17): far off the line, past maxDrift and silent,
+-- each for longer than abandonAfter, the officer stays in the run with no warning and no countdown; the route itself
+-- (status, Recalculate, arrival) still works
+do
+    local old = Config.Route.required
+    Config.Route.required = false
+    PlayerRec(36).coords = vec3(0.0, 0.0, 0.0)
+    local r = NewRun('r-route-36', { srcs = { 36 } })
+    H.ok(CP.Route.begin(r, 36), 'route begin (route not required)')
+    local st = CP.Route.status(r, 36)
+    H.eq(st.status, 'on', 'not required: the route is still shown')
+    H.eq(st.required, false, 'not required: the status says so')
+    H.eq(st.recalcsLeft, 2, 'not required: Recalculate is still offered')
+    RunFor(40000, Reporter(36, 'r-route-36', 500.0))   -- 500 m off the line for 40 s
+    PlayerRec(36).coords = vec3(-1500.0, 0.0, 0.0)     -- 2500 m from the start: 1500 past the closest
+    RunFor(40000)                                      -- and no reports at all
+    H.eq(#RemovedFor(36), 0, 'not required: never Abandoned for leaving the route')
+    H.eq(r.participants[36].status, 'active', 'not required: still in the run')
+    H.eq(#ClientEvents('client:routeWarning', 36), 0, 'not required: no off-route warning')
+    st = CP.Route.status(r, 36)
+    H.eq(st.status, 'on', 'not required: never off')
+    H.eq(st.secondsLeft, nil, 'not required: no countdown')
+    H.fire(CP.e('server:recalcRoute'), 36, 'r-route-36')
+    local rc = ClientEvents('client:routeRecalc', 36)
+    H.eq(rc[#rc] and rc[#rc].args[2], true, 'not required: Recalculate still works')
+    PlayerRec(36).coords = vec3(1000.0, 10.0, 0.0)
+    RunFor(1000)
+    H.ok(r.participants[36].arrived, 'not required: arrival still counts')
+    Config.Route.required = old
+end
+
+-- 14) a run keeps the rule it was accepted with (run.routeRequired, locked by CP.Runs at accept), whatever
+-- Config.Route.required says now; a test run with its Start route on keeps the route rules
+do
+    local old = Config.Route.required
+    Config.Route.required = true
+    local free = NewRun('r-route-37', { srcs = { 37 } })
+    free.routeRequired = false                          -- accepted while the switch was off
+    Config.Route.required = false
+    local strict = NewRun('r-route-38', { srcs = { 38 } })
+    strict.routeRequired = true                         -- accepted while it was on
+    local test = NewRun('r-route-39', { srcs = { 39 }, test = { adminSrc = 1, useStartRoute = true } })
+    for _, s in ipairs({ 37, 38, 39 }) do PlayerRec(s).coords = vec3(0.0, 0.0, 0.0) end
+    AlignTo(2000)
+    CP.Route.begin(free, 37)
+    CP.Route.begin(strict, 38)
+    CP.Route.begin(test, 39)
+    H.eq(CP.Route.status(free, 37).required, false, 'accepted with the switch off: not required')
+    H.eq(CP.Route.status(strict, 38).required, true, 'accepted with the switch on: required')
+    H.eq(CP.Route.status(test, 39).required, true, 'a test run with the start route on: required')
+    local offAt = H.clockMs + 2000
+    RunFor(40000, function(c)
+        if c % 2000 ~= 0 then return end
+        for _, p in ipairs({ { 37, free }, { 38, strict }, { 39, test } }) do
+            if p[2].participants[p[1]].status == 'active' then Report(p[1], p[2].id, 500.0) end
+        end
+    end)
+    H.eq(#RemovedFor(37), 0, 'switched on mid-run: the run accepted without the rule continues')
+    H.eq(#ClientEvents('client:routeWarning', 37), 0, '...with no warning')
+    H.eq(RemovedFor(38)[1] and RemovedFor(38)[1].reason, 'off_route', 'switched off mid-run: still off_route')
+    H.eq(RemovedFor(38)[1] and RemovedFor(38)[1].at - offAt, 30000, '...after abandonAfter, as today')
+    H.eq(RemovedFor(39)[1] and RemovedFor(39)[1].reason, 'off_route', 'the test run\'s own choice wins')
+    CP.Route.stop(free, 37)
+    free.state = 'ended'
+    Config.Route.required = old
+end
+
 -- ============================================================================
 --                                    CALLS
 -- ============================================================================
@@ -1618,6 +1685,8 @@ do
     H.near(rep[1] and rep[1].args[2], 0.0, 1e-6, 'on the polyline: 0 m')
     H.eq(LastHudRoute() and LastHudRoute().status, 'on', 'HUD route on')
     H.eq(LastHudRoute() and LastHudRoute().distance, 1000, 'HUD distance along the fixed line')
+    H.eq(LastHudRoute() and LastHudRoute().required, true,
+        'HUD: the route is required (Config.Route.required, shipped)')
     local nBlips = 0
     for _ in pairs(cstate.blips) do nBlips = nBlips + 1 end
     H.eq(nBlips, 0, 'the temporary route blip is removed after sampling')
@@ -1669,6 +1738,16 @@ do
     TriggerEvent(CP.e('client:runEnded'), 'c-run-1')
     H.eq(CR.current(), nil, 'stopped at the run end')
     H.eq(CR.begin('c-run-1', vec3(1.0, 1.0, 0.0)), false, 'an ended run cannot begin again')
+
+    -- a run accepted with Config.Route.required off: the same route, reports and HUD line, marked not required
+    local nSent = #Sent('server:routeStatus')
+    H.ok(CR.begin('c-run-1b', vec3(500.0, 500.0, 0.0), { required = false }), 'client begin (route not required)')
+    RunFor(7500)   -- no GPS route here: the straight line after ROUTE_WAIT_MS, then a report
+    H.ok(#Sent('server:routeStatus') > nSent, 'not required: the route is still sampled and reported')
+    H.eq(LastHudRoute() and LastHudRoute().status, 'on', 'not required: HUD route line')
+    H.eq(LastHudRoute() and LastHudRoute().required, false, 'not required: the HUD shows it as a guide')
+    TriggerEvent(CP.e('client:runEnded'), 'c-run-1b')
+    H.eq(CR.current(), nil, 'not required: stopped at the run end')
 
     -- pick-up: fade, overlay, wait for the revive, move, fade in, pickupDone
     cstate.dead, cstate.md = true, { isdead = true }

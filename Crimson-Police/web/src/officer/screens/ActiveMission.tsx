@@ -291,12 +291,13 @@ function RouteStatus({ route, test, stamp }: { route: RunRoute | null; test: boo
         );
     }
     const distance = route.distance;
+    const guide = route.required === false; // Config.Route.required off: leaving the route never ends the run
     return (
         <div className="run_ui-route__status is-on">
             <Icon name="navigation" size={18} />
             <div className="run_ui-route__grow">
-                <div className="run_ui-route__line">{t('hud.route.on')}</div>
-                <div className="run_ui-route__sub">{t('run.route.on_text')}</div>
+                <div className="run_ui-route__line">{guide ? t('hud.route.guide') : t('hud.route.on')}</div>
+                <div className="run_ui-route__sub">{guide ? t('run.route.guide_text') : t('run.route.on_text')}</div>
             </div>
             {distance !== null && distance !== undefined ? (
                 <span className="run_ui-route__distance cp-num">
@@ -360,7 +361,11 @@ function RouteCard({
                     </Button>
                 </div>
             ) : null}
-            {routeOn ? <p className="run_ui-route__hint">{t('run.route.rules')}</p> : null}
+            {routeOn ? (
+                <p className="run_ui-route__hint">
+                    {route?.required === false ? t('run.route.rules_guide') : t('run.route.rules')}
+                </p>
+            ) : null}
         </Card>
     );
 }

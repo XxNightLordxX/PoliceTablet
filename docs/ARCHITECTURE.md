@@ -1304,6 +1304,10 @@ handles `server:routeStatus` (runId, metres, coords) and `server:recalcRoute` (r
 (ped within `location.start.radius` of `location.start.coords`) every 1 s → `CP.Runs.markArrived`;
 off-route timing per `Config.Route`; drift check; `client:routeWarning` (runId, secondsLeft|nil);
 abandons with `off_route`. Test runs with `useStartRoute = false`: only the arrival check.
+`Config.Route.required` (the owner's switch for Hard rule 17, shipped `true`) is locked at accept as
+`run.routeRequired` (sent in `client:start` as `routeRequired`; a test run is always `true`, its Start route switch
+decides): with `false` the reports, Recalculate and the arrival check stay, but no warning, countdown, drift check or
+`off_route` end; `status` carries `required` and `CP.Runs.view` copies it to `route.required`.
 Client: `begin(runId, startCoords)` (waypoint + GPS sampling every `Config.Route.sampleEvery` m with
 `GetPosAlongGpsTypeRoute`), `recalculate()`, `stop()`, reports every `Config.Route.reportEvery` s;
 client actions `setGps`, `recalcRoute` registered with `CP.Tablet.registerClientAction`.
@@ -2051,7 +2055,8 @@ Full admin control additions (P0; the Settings screen follow-ups are P5's):
 - RANGES for Hard rules 15-18: `Calls.dodgeWindow` 10-300, `respondingExpiry` 60-7200, `Alerts.backstopRadius`
   50-1000, `backstopDelay` 0-10, `Downed.pickupDelay` 5-120, `checkEvery` 1-10, `Route.abandonAfter` 10-120,
   `maxDeviation` 30-500, `reportTimeout` 5-60, `maxDrift` 200-5000; and for the new `AdminControl.*`, `Cash.addFundsMax`,
-  `manualDailyLimit`, `lowBalanceWarn`, `Backups.keep`.
+  `manualDailyLimit`, `lowBalanceWarn`, `Backups.keep`. Their one switch is `Route.required` (Hard rule 17, a plain
+  boolean: not locked, not a money switch).
 - `check(path, value, none, ctx)`: `ctx = { pending = { [path] = value } (the other values of the same save), boot }`.
   A template's check is `check(clean, path, ctx) -> errKey | nil, fixed`.
 - `Bonuses.*.kind` only with its value (`err.setting_kind_alone`): `setMany(src, changes, opts)` checks every value of

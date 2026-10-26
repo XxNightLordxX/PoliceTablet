@@ -75,6 +75,7 @@ export interface Session {
         departments: { key: string; label: string; short: string; primary: string }[];
         tiers: { name: string; label: string }[];
         maxRecalcs: number;
+        routeRequired: boolean; // Config.Route.required: false = leaving the start route never ends a run
         disputeWindowHours: number;
         periods: string[];
         filters: string[];
@@ -120,6 +121,8 @@ export interface HudState {
         status: 'on' | 'off' | 'arrived' | 'disabled';
         secondsLeft: number | null;
         distance: number | null;
+        // false (Config.Route.required, locked at accept): the route is a guide; leaving it never ends the run
+        required?: boolean;
         receivedAt?: number;
     };
     objectives: { label: string; done: boolean; current: boolean; detail?: string; value?: number; max?: number }[];

@@ -1625,6 +1625,36 @@ do
     H.eq(r8.end_reason, 'off_route', 'end_reason off_route')
     H.eq(r8.state, 'abandoned', 'Abandoned')
     H.ok((Runs.cooldowns(CID[8]).types.patrol or 0) > os.time(), 'off_route: type cooldown')
+
+    -- Config.Route.required = false (the owner's switch, locked at accept): far off the route for longer than
+    -- abandonAfter the officer stays in the run, with no warning and no type cooldown; switching it back on mid-run
+    -- does not touch the run already accepted
+    local oldRequired = Config.Route.required
+    Config.Route.required = false
+    Place(14, vec3(150.0, -1200.0, 29.0))
+    mark = #H.events
+    ok, data = Act('server:acceptType', 14, 'patrol')
+    H.eq(ok, true, 'accept with the start route not required: ' .. tostring(data))
+    local run14 = Runs.getBySrc(14)
+    H.eq(run14 and run14.routeRequired, false, 'not required: the rule is locked at accept')
+    local starts = ClientEvents('crimson-police:client:start', 14, mark)
+    H.eq(starts[1] and starts[1].args[2].routeRequired, false, 'client:start says the route is not required')
+    H.eq(starts[1] and starts[1].args[2].startRoute, true, '...and the GPS route is still set')
+    Config.Route.required = true                       -- the owner switches it back on mid-run
+    t0 = os.time()
+    while run14 and Runs.getBySrc(14) and os.time() - t0 < 45 do
+        H.fire('crimson-police:server:routeStatus', 14, run14.id, 500.0, H.players[14].coords)
+        Secs(2)
+    end
+    H.ok(run14 ~= nil and Runs.getBySrc(14) == run14, 'not required: 45 s off the route and still in the run')
+    H.eq(#ClientEvents('crimson-police:client:routeWarning', 14, mark), 0, 'not required: no off-route warning')
+    local v14 = run14 and Runs.view(run14, 14) or {}
+    H.eq(v14.route and v14.route.status, 'on', 'not required: the Active Mission screen never shows off route')
+    H.eq(v14.route and v14.route.required, false, '...it shows the route as not required')
+    H.eq(v14.route and v14.route.secondsLeft, nil, '...with no countdown')
+    H.ok((Runs.cooldowns(CID[14]).types.patrol or 0) <= os.time(), 'not required: no type cooldown from the route')
+    if run14 then Act('server:abandon', 14, run14.id) end
+    Config.Route.required = oldRequired
     Config.Events.modifierChance = chance
     Config.DisabledMissions = {}
 end

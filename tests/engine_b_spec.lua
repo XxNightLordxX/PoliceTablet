@@ -418,6 +418,8 @@ H.eq(A.participants[1].firstRunSinceDuty, true, 'first run since duty captured')
 H.eq(#EventsTo('crimson-police:client:start'), 2, 'client:start to each participant')
 local startData = LastEvent('crimson-police:client:start', 3).args[2]
 H.eq(startData.startRoute, true, 'start route on')
+H.eq(A.routeRequired, true, 'the start route rule locked at accept (Config.Route.required, shipped on)')
+H.eq(startData.routeRequired, true, 'client:start says the route is required')
 H.eq(startData.expectedTier, 'reinforced', 'client:start expected tier')
 H.eq(startData.mission.locations, nil, 'mission sent without the location list')
 H.eq(#startData.participants, 2, 'participants list')
@@ -932,6 +934,8 @@ H.eq(Last('ops.ended')[2], 'failed', 'operation told the run failed')
 
 H.reset()
 local rollsBefore = Count('events.roll')
+local requiredBefore = Config.Route.required
+Config.Route.required = false   -- a test run follows its own Start route switch, never Config.Route.required
 local E = Runs.create({
     mission = mission,
     locationIndex = 1,
@@ -943,6 +947,8 @@ local E = Runs.create({
 H.eq(E.expectedTier, 'heavy', 'forced tier expected')
 H.eq(Count('events.roll'), rollsBefore, 'no modifier roll on tests')
 H.eq(LastEvent('crimson-police:client:start', 4).args[2].startRoute, false, 'start route off')
+H.eq(E.routeRequired, true, 'a test run keeps the route rules whatever Config.Route.required says')
+Config.Route.required = requiredBefore
 Runs.markArrived(E, 4)
 H.eq(E.tier.tier, 'heavy', 'forced tier used')
 H.eq(E.objectives[1].obj.count, 6, 'scaled at the forced tier')

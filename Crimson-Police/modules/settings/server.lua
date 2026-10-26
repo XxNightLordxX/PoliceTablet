@@ -194,7 +194,8 @@ local RANGES = {
     ['Leaderboard.topN'] = { 1, 100 },
     ['Cash.minPayout'] = { 0, 10000000 },
     ['Cash.maxPayout'] = { 0, 10000000 },
-    -- real calls, alerts, the start route and downed participants (Hard rules 15-18): numbers only, never off
+    -- real calls, alerts, the start route and downed participants (Hard rules 15-18): numbers only, never off. The one
+    -- switch is Route.required (the owner made Hard rule 17 switchable): an on/off gameplay rule, not a money switch
     ['Calls.dodgeWindow'] = { 10, 300 },
     ['Calls.respondingExpiry'] = { 60, 7200 },
     ['Alerts.backstopRadius'] = { 50, 1000 },

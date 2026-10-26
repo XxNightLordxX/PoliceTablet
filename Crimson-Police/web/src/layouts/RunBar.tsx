@@ -22,12 +22,17 @@ function RouteStatus({ route }: { route: ActiveMissionView['route'] }) {
         );
     }
     if (route.status === 'on') {
+        const guide = route.required === false; // Config.Route.required off: the route is a guide
         return (
             <span className="cp-runbar__status is-ok">
                 <Icon name="navigation" size={13} />
                 {route.distance !== null && route.distance !== undefined
-                    ? t('ui.runbar.on_route_distance', { distance: formatDistance(route.distance) })
-                    : t('hud.route.on')}
+                    ? guide
+                        ? t('ui.runbar.to_start_distance', { distance: formatDistance(route.distance) })
+                        : t('ui.runbar.on_route_distance', { distance: formatDistance(route.distance) })
+                    : guide
+                      ? t('hud.route.guide')
+                      : t('hud.route.on')}
             </span>
         );
     }

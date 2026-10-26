@@ -88,7 +88,8 @@ local function ShowRoute()
         HudRoute({ status = 'disabled' })
         return
     end
-    local r = { distance = cur.distance }
+    -- required = false (Config.Route.required, locked at accept): the line is a guide, the HUD never says "on route"
+    local r = { distance = cur.distance, required = cur.required }
     -- 'off' only while the server's warning is shown: SPEC warns after Config.Route.warnAfter s off the line
     -- (the server decides when; a short excursion past maxDeviation shows no warning).
     if cur.warning ~= nil then
@@ -274,6 +275,7 @@ function R.begin(runId, startCoords, opts)
         radius = tonumber(opts.radius),
         token = tokenSeq,
         routeOn = opts.startRoute ~= false,
+        required = opts.required ~= false,
         arrived = false,
         polyline = nil,
         cum = nil,
@@ -383,7 +385,12 @@ RegisterNetEvent(CP.e('client:start'), function(runId, data)
     local start = type(data.start) == 'table' and data.start or nil
     if not start then return end
     latestStart = runId
-    local coords, opts = start.coords, { startRoute = data.startRoute ~= false, radius = start.radius }
+    local coords = start.coords
+    local opts = {
+        startRoute = data.startRoute ~= false,
+        required = data.routeRequired ~= false,
+        radius = start.radius,
+    }
     SetTimeout(1000, function()
         if latestStart ~= runId or endedRuns[runId] then return end
         R.begin(runId, coords, opts)
