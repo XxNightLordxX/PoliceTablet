@@ -7,7 +7,7 @@ local TAG = 'npccombat'
 local WATCH_MS = 1000
 local NO_CRITICAL_HITS = 2       -- CPED_CONFIG_FLAG_NoCriticalHits: the flag SetPedSuffersCriticalHits(ped, false) sets
 
-local active = nil   -- { runId, ped, pedFlag, crit, ai, melee, defense, defenseSaved } while a run is live
+local active = nil   -- { runId, ped, pedFlag, crit, ai, melee, defense, defenseSaved, dropped } while a run is live
 
 local function IsYes(v) return v == true or v == 1 end
 
@@ -49,6 +49,8 @@ local function ApplyCritical(a)
         a.crit = false
         a.defense = nil   -- applied again to the new ped's player
     end
+    -- protection dropped for the rest of this run (CP.NpcCombat.drop): the new ped keeps its own flag
+    if a.dropped then return end
     local want = NpcCombat.noCriticalHits()
     if want and not a.crit then
         SetPedSuffersCriticalHits(ped, false)
@@ -60,6 +62,7 @@ local function ApplyCritical(a)
 end
 
 local function ApplyDefense(a)
+    if a.dropped then return end
     local want = NpcCombat.officerDefense()
     if want then
         if a.defenseSaved == nil then a.defenseSaved = ReadDefense() end
@@ -77,6 +80,14 @@ local function Refresh(a)
     ApplyAi(a)
     ApplyCritical(a)
     ApplyDefense(a)
+end
+
+-- The headshot flag and the defense modifier back to what they were before the run (the run end and a drop).
+local function UndoProtection(a)
+    if a.crit and a.ped and DoesEntityExist(a.ped) then SetPedSuffersCriticalHits(a.ped, not a.pedFlag) end
+    a.crit = false
+    if a.defense ~= nil then SetPlayerWeaponDefenseModifier(PlayerId(), a.defenseSaved or 1.0) end
+    a.defense = nil
 end
 
 -- Start the run's damage settings (a run already started is stopped first). True when it started.
@@ -116,14 +127,32 @@ function NpcCombat.stop()
     active = nil
     if a.ai then ResetAiWeaponDamageModifier() end
     if a.melee then ResetAiMeleeWeaponDamageModifier() end
-    if a.crit and a.ped and DoesEntityExist(a.ped) then SetPedSuffersCriticalHits(a.ped, not a.pedFlag) end
-    if a.defense ~= nil then SetPlayerWeaponDefenseModifier(PlayerId(), a.defenseSaved or 1.0) end
+    UndoProtection(a)
+    a.dropped = nil   -- the next run's start builds its own state: protection on again
     CP.log(TAG, 'run %s: NPC damage settings off', tostring(a.runId))
     return true
 end
 
 -- The run whose settings are on, or nil.
 function NpcCombat.activeRun() return active and active.runId or nil end
+
+-- A real player fights this officer (the server's CP.NpcCombat.dropFor): for the rest of run runId he takes headshots
+-- and every weapon's damage as GTA has them (noCriticalHits and officerDefense off). The AI damage values stay: they
+-- soften the NPCs' hits only. True when it dropped them now; false for another run or when already dropped.
+function NpcCombat.drop(runId)
+    local a = active
+    if not a or a.runId ~= runId or a.dropped then return false end
+    a.dropped = true
+    local ok, err = pcall(UndoProtection, a)
+    if not ok then CP.warn(TAG, 'dropping the protection of run %s failed: %s', tostring(runId), tostring(err)) end
+    CP.log(TAG, 'run %s: headshot and defense protection off for the rest of the run', tostring(runId))
+    return true
+end
+
+RegisterNetEvent(CP.e('client:npcCombatDrop'), function(runId)
+    if type(runId) ~= 'string' then return end
+    NpcCombat.drop(runId)
+end)
 
 -- A setting changed in game mid-run: the new values at once.
 CP.Hooks.on('settings:changed', function()

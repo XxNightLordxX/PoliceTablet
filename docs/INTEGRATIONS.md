@@ -2836,3 +2836,27 @@ end
 - RB provides 'qb-management' and 'esx_society' (fxmanifest.lua:36-37), and on qbx it registers qb-management compatibility exports (GetAccount, AddMoney, RemoveMoney, GetGangAccount, AddGangMoney, RemoveGangMoney; framework.lua:26-31). Crimson-Police must not use those names; use only exports['Renewed-Banking'].
 - RB's fxmanifest declares dependency 'ox_inventory' and requires '@ox_lib/init.lua' and '@oxmysql/lib/MySQL.lua'. These are all already in Crimson-Police's allowed stack, so there is no conflict.
 - No ban, anti-cheat or kick triggers exist in Renewed-Banking's server code. Its only net events (issueDebitCard, createNewAccount, getPlayerAccounts, member management, deleteAccount, changeAccountName) and lib callbacks (deposit, withdraw, transfer, initalizeBanking, hasValidDebitCard) are player-UI flows. Crimson-Police must never trigger them: they are client-originated and not part of the integration.
+
+## Crimson-Contracts
+
+Checked against Crimson-Contracts' own repository (branch john.allday/awesome-noether-p5qdq2, commit e20316f, steps
+VC1 to VC3). Crimson-Police never requires it, never calls it and never edits it.
+
+### crimsonPoliceRun player bag: Crimson-Contracts' guard damage scaling stands back (V8)
+
+- **Spec claim:** Crimson-Contracts sets the one AI weapon damage value a game has (SetAiWeaponDamageModifier) while
+  one of its guards is near; Crimson-Police sets the same value for the whole run (Config.NpcCombat.aiDamage, again
+  every second with reassertAiDamage). The two must never set it against each other.
+- **Evidence:** crimson-contracts/client.lua:656-679 (e20316f, "Guard damage scaling"): `onCrimsonPoliceRun()` is
+  true when `LocalPlayer.state.crimsonPoliceRun == true` (exactly true) or `LocalPlayer.state.crimsonArena` is a table
+  with `source == 'crimson-police'`; while it is true, `setDamageScaled` neither sets nor resets the value (with
+  `ContractsConfig.Enemies.reassertDamage ~= false`) and keeps `damageApplied`, so it sets or resets the value again
+  once the flag is gone.
+- **Implication:** Crimson-Police (modules/npccombat/server.lua) sets `Player(src).state:set('crimsonPoliceRun', true,
+  true)` (replicated: the check is client-side) for every participant whose `client:start` starts CP.NpcCombat, from
+  that moment (before arrival, when there is no `crimsonArena` flag yet, and on a volunteer run after
+  `CP.Alerts.releaseRun`), and sets it to nil when he leaves the run (any reason, a disconnect included), when the run
+  ends and when Crimson-Police stops. It is written only on a change. The value is a plain boolean: it is not the
+  `crimsonArena` table that sc-dispatch indexes, so no other script reads it. A run whose start data says
+  `npcCombat = false` (V14's live runs) never sets it, so Crimson-Contracts scales its guards for those officers as
+  for anyone else.

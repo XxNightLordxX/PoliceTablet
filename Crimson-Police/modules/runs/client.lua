@@ -443,7 +443,8 @@ RegisterNetEvent(CP.e('client:start'), function(runId, data)
     })
     ShowStartCircle(current, data.start)
     StartTelemetry(current)
-    CombatStart(current)
+    -- npcCombat = false (a live run, V14): no Config.NpcCombat damage settings at all; missing = on, as before
+    if data.npcCombat ~= false then CombatStart(current) end
     ReportArea(current, 0, type(data.start) == 'table' and data.start.coords or nil)
     local start = type(data.start) == 'table' and data.start.coords or nil
     if start then

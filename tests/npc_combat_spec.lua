@@ -184,6 +184,109 @@ H.eq((S.combat(30, 0, 'critical')), 40, 'an owner who raises the cap gets up to 
 cfg.accuracyMax, cfg.accuracyScale = 18, 0.7
 
 -- ============================================================================
+--                   A REAL PLAYER'S HIT DROPS THE PROTECTION
+-- ============================================================================
+-- playerHitDropsProtection, V8.
+-- modules/npccombat/server.lua: a weaponDamageEvent from a player who is not on the run, on an active participant of
+-- an NPC run, sends that officer one crimson-police:client:npcCombatDrop for the rest of the run.
+
+H.eq(cfg.playerHitDropsProtection, false, 'playerHitDropsProtection ships false (today\'s behaviour)')
+H.load('modules/npccombat/server.lua')
+H.ok(type(NC.dropFor) == 'function' and type(NC.runStarted) == 'function', 'the server API is there')
+
+-- Player peds are src * 100 with the net id 7000 + src; NPC 50001 (net id 9001) is simulated by player 5's game.
+local NPC, NPC_NET = 50001, 9001
+local function NET(src) return 7000 + src end
+_G.NetworkGetEntityFromNetworkId = function(n)
+    n = math.tointeger(tonumber(n) or -1)
+    if n == NPC_NET then return NPC end
+    if n and n > 7000 and n < 7100 then return (n - 7000) * 100 end
+    return 0
+end
+_G.DoesEntityExist = function(e) return e == NPC or (math.tointeger(e) or 1) % 100 == 0 end
+_G.IsPedAPlayer = function(e)
+    return e ~= NPC
+end -- a server BOOL native: the harness hands it on as 1 / false
+_G.NetworkGetEntityOwner = function(e) return e == NPC and 5 or e // 100 end
+_G.GetEntityType = function() return 1 end
+_G.GetPedInVehicleSeat = function() return 0 end
+
+local R = {
+    id = 'run-npc',
+    state = 'in_progress',
+    npcCombat = true,
+    participants = { [1] = { status = 'active' }, [2] = { status = 'active' } },
+}
+local runOf = { [1] = R, [2] = R }
+CP.Runs = {
+    getBySrc = function(src) return runOf[src] end,
+    isParticipant = function(run, src)
+        local pp = run.participants[src]
+        return pp ~= nil and pp.status == 'active'
+    end,
+}
+local function Hit(sender, victimNet, fields)
+    local data = { hitGlobalIds = { victimNet }, weaponType = 453432689, willKill = false }
+    for k, v in pairs(fields or {}) do data[k] = v end
+    H.fire('weaponDamageEvent', sender, sender, data)
+end
+local function Drops(target)
+    local n = 0
+    for _, e in ipairs(H.findEvents(CP.e('client:npcCombatDrop'))) do
+        if e.target == target then n = n + 1 end
+    end
+    return n
+end
+
+H.reset()
+Hit(3, NET(1))
+H.eq(Drops(1), 0, 'switch off (shipped): a stranger\'s hit on an officer sends nothing')
+cfg.playerHitDropsProtection = true   -- read on every event: no restart
+Hit(2, NET(1))
+H.eq(Drops(1), 0, 'a partner on the same run: nothing')
+Hit(5, NET(1), { parentGlobalId = NPC_NET })
+H.eq(Drops(1), 0, 'an NPC the sender\'s game moves: nothing')
+Hit(3, NPC_NET)
+H.eq(#H.findEvents(CP.e('client:npcCombatDrop')), 0, 'a hit on an NPC: nothing')
+Hit(3, NET(1))
+H.eq(Drops(1), 1, 'a player who is not on the run shoots an officer: one npcCombatDrop to him')
+local ev = H.findEvents(CP.e('client:npcCombatDrop'))[1]
+H.eq(ev and ev.args[1], 'run-npc', 'it names his run')
+Hit(3, NET(1))
+Hit(4, NET(1))
+H.eq(Drops(1), 1, 'a second hit sends nothing (once per run and officer)')
+H.eq(Drops(2), 0, 'his partner keeps the protection')
+Hit(3, NET(2))
+H.eq(Drops(2), 1, 'until he is shot too')
+H.eq(NC.dropFor(R, 3), false, 'never to someone who is not on the run')
+
+-- test runs and runs with a real suspect (V14, V22) never drop on a hit
+H.reset()
+local T = { id = 'run-test', state = 'in_progress', test = {}, participants = { [6] = { status = 'active' } } }
+local V = {
+    id = 'run-vol',
+    state = 'in_progress',
+    realSuspect = 'volunteer',
+    participants = { [7] = { status = 'active' } },
+}
+runOf[6], runOf[7] = T, V
+Hit(3, NET(6))
+Hit(3, NET(7))
+H.eq(#H.findEvents(CP.e('client:npcCombatDrop')), 0, 'a test run and a real-suspect run: nothing on a hit')
+H.eq(NC.dropFor(V, 7, 'volunteer'), true, 'V22 still drops it for a volunteer run itself')
+
+-- the run ended: the next run of the same officer can drop again
+CP.Hooks.fire('run:ended', R, 'completed', 'completed')
+H.reset()
+Hit(3, NET(1))
+H.eq(Drops(1), 1, 'a new run: a stranger\'s hit drops it again')
+cfg.playerHitDropsProtection = false
+H.reset()
+Hit(3, NET(2))
+H.eq(#H.findEvents(CP.e('client:npcCombatDrop')), 0, 'switched off in Settings: nothing at once')
+CP.Runs = nil
+
+-- ============================================================================
 --           THE OFFICER'S GAME (separate Lua state, a child process)
 -- ============================================================================
 

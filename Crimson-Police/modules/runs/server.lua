@@ -3122,6 +3122,8 @@ function Runs.create(opts)
         decisions = {},
         arrested = {},
         missionCall = nil,
+        -- false (opts.npcCombat = false, V14's live runs): no participant's game starts the Config.NpcCombat settings
+        npcCombat = opts.npcCombat ~= false,
     }
     -- A claimed mission call (CP.MissionCalls): { id, code, area, targetS, staff }. Rapid response needs a
     -- server-posted call (staff = paged or created, never) and a target.
@@ -3273,6 +3275,7 @@ function Runs.create(opts)
         isBoss = isBoss,
         timeLimit = run.timeLimit,
     }
+    if not run.npcCombat then data.npcCombat = false end
     -- a chosen twist the drawn mission has no use for (no armed NPCs, no time limit) was dropped without its reward
     local droppedText = nil
     if #dropped > 0 then
@@ -3282,6 +3285,7 @@ function Runs.create(opts)
     end
     for _, src in ipairs(run.order) do
         TriggerClientEvent(CP.e('client:start'), src, id, data)
+        Call('NpcCombat', 'runStarted', run, src, data.npcCombat ~= false)   -- the crimsonPoliceRun bag
         Call('Route', 'begin', run, src)
         Notify(src, 'info', 'run.accepted', { mission = mission.label or mission.id })
         if droppedText then

@@ -3568,6 +3568,8 @@ Config.NpcCombat = {
     cancelLethalHeadshots = true,    -- the server drops a one-shot kill by a mission NPC on an officer of its run...
     lethalCancelAbove = 0.75,        -- ...who still has at least this share of his health (0.25-1, 0.75 = three
                                      -- quarters). The shot that finishes off a hurt officer always counts
+    playerHitDropsProtection = false, -- true = an officer on an NPC mission loses noCriticalHits and officerDefense for
+                                      -- the rest of that run once a real player who is not on the run shoots him
 }
 
 -- How long a suspect who runs from your officers can keep running. GTA's NPCs never tire, so the server times every

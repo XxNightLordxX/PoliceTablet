@@ -170,7 +170,8 @@ boards, rewards, access).
 `modules/diag/` (client, §5.35): the F8 command `CrimsonPoliceState`, added with the freeze fix
 (`docs/notes/freeze.md`).
 
-`modules/npccombat/` (client, §5.42): the run-scoped damage settings of an officer's game (Config.NpcCombat).
+`modules/npccombat/` (client, server, §5.42): the run-scoped damage settings of an officer's game (Config.NpcCombat), the
+protection drop and the `crimsonPoliceRun` player bag.
 
 `modules/markers/` (client, §5.44): the current objective's pointer on the officer's map and its one GPS line
 (Config.Markers).
@@ -515,6 +516,7 @@ run = {
   decisions = { <DecisionEntry> },   -- the ledger (CP.Runs.decide): contact, choice, verdict, facts, knownAt ...
   arrested = { [netId] = src },   -- one arrest per person (CP.Runs.noteArrest)
   missionCall = nil | { id, code, area, targetS, staff },   -- a claimed mission call (rapid response unless staff)
+  npcCombat = true,               -- false (create opts.npcCombat = false): client:start says npcCombat = false (§5.42)
   removedVehicles = { [netId] = { src, via } },            -- vehicles removed from outside (sc-police /imp)
   holdBodies = nil | { roles, max }, held = { netId, ... },  -- bodies kept for Process the scene (FIFO past max)
   fastClockAt = nil | ms,         -- CP.Runs.pauseFastClock: the fast-completion clock stopped
@@ -2460,7 +2462,7 @@ action goes through `CP.AdminKit` (admins only, audited).
 - Console: `CrimsonPoliceAdmin storagemode reset` (also reached as `storage mode reset` through `SUB.storage`).
   Config health check `storage`.
 
-### 5.42 CP.NpcCombat — shared/npccombat.lua and modules/npccombat (client)
+### 5.42 CP.NpcCombat — shared/npccombat.lua and modules/npccombat (client, server)
 
 How hard armed mission NPCs fight back (Config.NpcCombat, the owner's request of 2026-10-19). Config is read at every
 call, so a Settings change applies to the next NPC; `enabled = false` makes every function answer the old behaviour
@@ -2485,7 +2487,27 @@ call, so a Settings change applies to the next NPC; `enabled = false` makes ever
   its name before V2, counts while the new key is missing; false = set at the start and after a respawn only): they
   are one value per game, and another script (Crimson-Contracts' guard scaling) may set or reset it mid-run. `settings:changed` applies a mid-run change at once. A
   foreign `crimsonArena` value of the local player (docs/CRIMSON_ARENA.md rule 8) stops it at once, before the server
-  ends the run for that player.
+  ends the run for that player. Start data with `npcCombat = false` (`CP.Runs.create` opts.npcCombat = false, for V14's
+  live runs; `run.npcCombat` is then false) starts nothing; with the field missing it starts as before.
+- Client `drop(runId)` and the event `client:npcCombatDrop` (runId): for the active run only, `noCriticalHits` and
+  `officerDefense` go back exactly as `stop` puts them back (the ped's own flag 2, the defense modifier read before the
+  run) and `a.dropped` keeps them off for the rest of that run (`settings:changed`, a respawn); `aiDamage` and
+  `aiMeleeDamage` stay (they act on NPCs only). Idempotent; the next `start` builds a fresh state (protection on again).
+- Server (modules/npccombat/server.lua, V8): `dropFor(run, src, why)` sends `client:npcCombatDrop` once per run and
+  active participant (logged; false for a run with `npcCombat == false`, an ended run or a non-participant); the memory
+  goes at `participant:left` and `run:ended`. V22 calls it for every participant when a volunteer's case is engaged
+  (unless `Config.RealSuspects.npcCombat`). A `weaponDamageEvent` handler, always registered and read-only (never
+  cancels), returns at once unless `Config.NpcCombat.playerHitDropsProtection == true` (shipped false, read on every
+  event): the damage of a player (not an NPC the sender's game moves, as CP.Npc's `ShooterOf`) who is not an active
+  participant of the victim's run, on a player ped (`IsPedAPlayer`, owner = `NetworkGetEntityOwner`) who is an active
+  participant of an NPC run (not a test, no `run.realSuspect`, `npcCombat ~= false`) -> `dropFor(run, victim)`.
+- The `crimsonPoliceRun` player bag (replicated, exactly `true`): `CP.Runs.create` calls `runStarted(run, src, on)`
+  right after each `client:start`, and `on` (start data without `npcCombat = false`) sets it; it is cleared (`nil`) at
+  `participant:left` (any reason, a disconnect included), `run:ended` and resource stop. Written only on a change
+  (`flagRun(src)` names the run it was set for). Crimson-Contracts (its VC1/VC1b `onCrimsonPoliceRun`) leaves the
+  shared AI damage value alone while it is true (or while our `crimsonArena` flag is on), so the two scripts never set
+  it against each other once a second on a run that has no `crimsonArena` flag (before arrival, after
+  `CP.Alerts.releaseRun`). docs/INTEGRATIONS.md, Crimson-Contracts.
 
 ### 5.43 CP.Spawn — modules/spawn (client, server)
 
@@ -3285,7 +3307,7 @@ V4-V26 (/tmp/claude-0/-home-user-PoliceTablet/c9b2f5e1-32ec-5436-a1db-2a78c5b9aa
 
 | Event | Args | Sent by |
 |---|---|---|
-| `client:start` | runId, data `{ missionId, mission, locationIndex, location, start = { coords, radius }, expectedTier, seed, host, test, modifier, modifiers (every twist; modifier = the first), participants, startRoute = bool, startTimeout, isBoss }` (seed = a client seed, the same for every participant and unrelated to `run.seed`, so no client can replay the server's rolls) | runs |
+| `client:start` | runId, data `{ missionId, mission, locationIndex, location, start = { coords, radius }, expectedTier, seed, host, test, modifier, modifiers (every twist; modifier = the first), participants, startRoute = bool, startTimeout, isBoss, npcCombat = false only when the participants' games start no CP.NpcCombat (§5.42) }` (seed = a client seed, the same for every participant and unrelated to `run.seed`, so no client can replay the server's rolls) | runs |
 | `client:inProgress` | runId, `{ tier, payTier, objectives = <scaled list>, timeLimit, remaining }` | runs |
 | `client:objective` | runId, index, `{ action = 'prepare'|'start'|'update'|'stop', data, marker }` (`marker` with `start`: the objective's pointer, §5.44) | runs |
 | `client:hud` | runId, patch | runs |
@@ -3294,6 +3316,7 @@ V4-V26 (/tmp/claude-0/-home-user-PoliceTablet/c9b2f5e1-32ec-5436-a1db-2a78c5b9aa
 | `client:hostChanged` | runId, hostSrc | runs |
 | `client:participants` | runId, list `{ src, name, callsign, departmentShort, status, arrived }` | runs |
 | `client:runEnded` | runId, result, endReason, breakdown (RunResult §9.6) | runs |
+| `client:npcCombatDrop` | runId (headshot and defense protection off for the rest of that run, §5.42; ignored for any other run) | npccombat |
 | `client:routeWarning` | runId, secondsLeft or nil | route |
 | `client:routeRecalc` | runId, ok, recalcsLeft | route |
 | `client:routeStatus` | runId, status (`'arrived'`; `'action'` once for a late partner, PLAN M11: CP.Runs then calls `CP.Route.follow`) | route, runs |

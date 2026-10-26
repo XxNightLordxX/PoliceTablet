@@ -2424,6 +2424,74 @@ do
 end
 
 -- ============================================================================
+--             THE crimsonPoliceRun BAG FOR CRIMSON-CONTRACTS (V8)
+-- ============================================================================
+-- modules/npccombat/server.lua: exactly true (replicated) from client:start of a run whose games run the NPC damage
+-- settings until he leaves or the run ends; written only on a change; never for start data with npcCombat = false.
+
+H.load('modules/npccombat/server.lua')
+local bagWrites = {}
+do
+    local basePlayer = _G.Player
+    _G.Player = function(src)
+        local real = basePlayer(src).state
+        return {
+            state = setmetatable({
+                set = function(_, k, v, replicated)
+                    if k == 'crimsonPoliceRun' then
+                        bagWrites[#bagWrites + 1] = { src = src, value = v, replicated = replicated }
+                    end
+                    real:set(k, v, replicated)
+                end,
+            }, { __index = real }),
+        }
+    end
+end
+local function Bag(src) return Player(src).state.crimsonPoliceRun end
+local function BagWrites(src)
+    local n = 0
+    for _, w in ipairs(bagWrites) do if w.src == src then n = n + 1 end end
+    return n
+end
+
+H.reset()
+local NB = Runs.create({
+    mission = mission,
+    locationIndex = 1,
+    missionType = 'patrol',
+    members = { O[1], O[3] },
+    leaderSrc = 1,
+})
+H.ok(type(NB) == 'table', 'an NPC run for the bag')
+H.eq(LastEvent('crimson-police:client:start', 1).args[2].npcCombat, nil,
+    'an NPC run: the start data has no npcCombat field (the settings start, as before)')
+H.eq(Bag(1), true, 'client:start of an NPC run: crimsonPoliceRun is exactly true')
+H.eq(Bag(3), true, 'on every participant')
+H.ok(bagWrites[1] and bagWrites[1].replicated == true, 'replicated (Crimson-Contracts reads LocalPlayer.state)')
+Runs.removeParticipant(NB, 3, 'quit')
+H.eq(Bag(3), nil, 'he left the run: cleared')
+H.eq(Bag(1), true, 'his partner keeps it')
+Runs.endRun(NB, 'completed', 'completed')
+H.eq(Bag(1), nil, 'the run ended: cleared')
+H.eq(BagWrites(1), 2, 'written only on a change: set once, cleared once')
+H.eq(BagWrites(3), 2, 'the same for the one who left')
+
+H.reset()
+local LV = Runs.create({
+    mission = mission,
+    locationIndex = 1,
+    missionType = 'patrol',
+    members = { O[5] },
+    leaderSrc = 5,
+    npcCombat = false,
+})
+H.ok(type(LV) == 'table', 'a run with opts.npcCombat = false (V14\'s live runs)')
+H.eq(LastEvent('crimson-police:client:start', 5).args[2].npcCombat, false, 'its start data says npcCombat = false')
+H.eq(Bag(5), nil, 'npcCombat = false: the bag is never set')
+Runs.removeParticipant(LV, 5, 'cancelled')
+H.eq(BagWrites(5), 0, 'and never written')
+
+-- ============================================================================
 --               RESOURCE STOP: entities deleted, nothing written
 -- ============================================================================
 
@@ -2432,7 +2500,9 @@ local M = Runs.create(
     { mission = mission, locationIndex = 1, missionType = 'patrol', members = { O[3] }, leaderSrc = 3 })
 Runs.markArrived(M, 3)
 local mp = Runs.spawnPed(M, { obj = 1, model = 'x', coords = vec4(0, 0, 0, 0) })
+H.eq(Bag(3), true, 'on a run before the resource stops')
 TriggerEvent('onResourceStop', 'Crimson-Police')
+H.eq(Bag(3), nil, 'resource stop: the crimsonPoliceRun bag is cleared')
 H.ok(deleted[mp], 'entities deleted on resource stop')
 H.eq(#RowsOf(M.id), 0, 'no rows on resource stop')
 H.eq(Runs.get(M.id), nil, 'runs dropped')

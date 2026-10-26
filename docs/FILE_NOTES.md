@@ -2491,7 +2491,20 @@ NPCs' included), the officer takes no extra headshot damage (SetPedSuffersCritic
 when officerDefense is not 1.0, less damage from every weapon (SetPlayerWeaponDefenseModifier). modules/runs starts
 it at client:start and stops it at every run end; everything goes back to what it was before the run. While the run
 lasts, its 1 s watcher sets the AI damage values again every second (reassertAiDamage, read on every pass): another
-script, such as Crimson-Contracts' guard scaling, may reset the one value the whole game shares.
+script, such as Crimson-Contracts' guard scaling, may reset the one value the whole game shares. Start data with
+npcCombat = false (V14's live runs) starts nothing. client:npcCombatDrop (the server's dropFor) turns the headshot
+flag and the defense modifier back to their pre-run values for the rest of that run; the AI damage values stay.
+```
+
+## Crimson-Police/modules/npccombat/server.lua
+
+```text
+CP.NpcCombat (server, V8): the crimsonPoliceRun player bag (replicated, exactly true) of every officer whose
+client:start starts the run's NPC damage settings, cleared when he leaves, when the run ends and at resource stop,
+written only on a change; Crimson-Contracts' guard damage scaling leaves the shared AI damage value alone while it is
+true. dropFor(run, src) sends client:npcCombatDrop once per run and officer. A read-only weaponDamageEvent handler,
+returning at once unless Config.NpcCombat.playerHitDropsProtection (shipped false), drops the protection of an officer
+of an NPC run whom a player who is not on that run hits. No loop, no database.
 ```
 
 ## Crimson-Police/modules/operations/client.lua

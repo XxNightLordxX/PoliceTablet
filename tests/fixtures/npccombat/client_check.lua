@@ -211,4 +211,74 @@ End('run-6')
 NC.enabled = true
 H.eq(W.typeErrors, 0, 'no native got a wrong argument type')
 
+-- ============================================================================
+--                           A REAL PLAYER FIGHTS HIM
+-- ============================================================================
+-- PROTECTION OFF FOR THE REST OF THE RUN (V8).
+-- crimson-police:client:npcCombatDrop (the server's CP.NpcCombat.dropFor): the headshot flag and the defense modifier
+-- go back to their values from before the run; the AI damage values stay (they act on NPCs only).
+
+local function Drop(runId) H.fire(CP.e('client:npcCombatDrop'), nil, runId) end
+NC.officerDefense = 0.6
+W.defense[0] = 0.9
+W.flags[101][2] = false
+Start('run-d')
+H.eq(W.flags[101][2], true, 'protection on at the start: no headshot multiplier')
+H.eq(W.defense[0], 0.6, 'and the run\'s defense modifier')
+Drop('run-other')
+H.eq(W.flags[101][2], true, 'a drop for another run changes nothing')
+Drop('run-d')
+H.eq(W.flags[101][2], false, 'dropped: the officer\'s own headshot flag is back (pre-run value)')
+H.eq(W.defense[0], 0.9, 'dropped: the defense modifier is back to its pre-run value')
+H.eq(W.aiDamage, 0.5, 'the NPC bullet damage stays 0.5')
+H.eq(W.aiMelee, 0.5, 'and NPC melee too')
+H.eq(CP.NpcCombat.activeRun(), 'run-d', 'the run\'s settings are still on')
+CP.Hooks.fire('settings:changed')
+H.eq(W.flags[101][2], false, 'a Settings change does not put the headshot protection back')
+H.eq(W.defense[0], 0.9, 'nor the defense modifier')
+if W.flags[102] then
+    W.flags[102][2] = false
+end -- run-5 above left its flag on (that ped was gone at the end)
+ME.ped = 102
+H.advance(1100)
+H.ok(W.flags[102] == nil or W.flags[102][2] ~= true, 'a respawn mid-run: the new ped gets no protection either')
+ResetAiWeaponDamageModifier()
+H.advance(1100)
+H.eq(W.aiDamage, 0.5, 'the AI damage value is still set again every second')
+local nCalls = #W.calls
+Drop('run-d')
+H.eq(#W.calls, nCalls, 'a second drop does nothing (idempotent)')
+End('run-d')
+H.eq(W.defense[0], 0.9, 'the run end leaves the pre-run defense modifier')
+H.eq(W.aiDamage, 1.0, 'the run end resets the AI damage value')
+ME.ped = 101
+Start('run-e')
+H.eq(W.flags[101][2], true, 'the next run starts with the headshot protection again')
+H.eq(W.defense[0], 0.6, 'and the defense modifier')
+End('run-e')
+H.eq(W.defense[0], 0.9, 'back after that run')
+NC.officerDefense = 1.0
+
+-- start data npcCombat = false (a live run, V14): CP.NpcCombat.start is never called; missing = started, as before
+local realStart, starts = CP.NpcCombat.start, 0
+CP.NpcCombat.start = function(...)
+    starts = starts + 1
+    return realStart(...)
+end
+H.fire(CP.e('client:start'), nil, 'run-live', {
+    missionId = 'live_crime',
+    mission = { id = 'live_crime', label = 'Live crime', objectives = {} },
+    host = 1,
+    participants = { { src = 1, status = 'active' } },
+    npcCombat = false,
+})
+H.eq(starts, 0, 'npcCombat = false: CP.NpcCombat.start is never called')
+H.eq(CP.NpcCombat.activeRun(), nil, 'npcCombat = false: no settings on')
+H.eq(W.aiDamage, 1.0, 'npcCombat = false: NPC bullets as GTA makes them')
+End('run-live')
+Start('run-f')
+H.eq(starts, 1, 'the field missing: started as before')
+End('run-f')
+CP.NpcCombat.start = realStart
+
 print(('RESULT %d %d'):format(H.passes, H.failures))

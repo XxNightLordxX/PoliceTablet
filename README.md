@@ -840,6 +840,7 @@ never changes points, cash or a mission's stars. Every value can be changed in g
 | `noCriticalHits` | `true` | Officers on a run take no extra headshot damage, from anyone: a headshot hurts like a body shot |
 | `cancelLethalHeadshots` | `true` | The server drops a hit from a mission NPC that would kill a healthy officer of its run in one shot (a headshot, a point-blank shotgun blast) |
 | `lethalCancelAbove` | 0.75 | How healthy "healthy" is: the officer still has at least this share of his health (0.25 to 1, 0.75 = three quarters). The shot that finishes off an officer who is already hurt always counts, so officers can still go down |
+| `playerHitDropsProtection` | `false` | `true` = once a real player who is not on the run shoots an officer on an NPC mission, that officer loses `noCriticalHits` and `officerDefense` for the rest of that run (headshots and damage as GTA has them; NPC bullets stay softer). `false` = he keeps them whoever shoots him, as before |
 
 Good to know:
 
