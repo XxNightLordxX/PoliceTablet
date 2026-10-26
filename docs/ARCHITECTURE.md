@@ -661,6 +661,12 @@ Implementers of modules/integrations/* must follow it; the most important points
 - S `doctorCount() -> integer` (pcall; 0 when sc-ambulance is not started, with one error log)
 - S `revive(src)` → `TriggerClientEvent('hospital:client:Revive', src)` (numeric src only, never -1)
 - C `sendEMSRequest()` → `TriggerServerEvent('hospital:server:EMSDownAlert', streetName)` from the downed player's own client
+- S `on(kind, fn) -> bool` (real suspects, V3) — listen-only `hospital:server:RespawnAtHospital(hospitalIndex)`: a
+  second, read-only handler that calls each `'respawn'` listener with `(src, hospitalIndex)` (a whole number 1..255;
+  anything else is dropped). It returns at once while no listener exists or `CP.Opponents.active()` is not true (no
+  native read), rate-limits `'scp:respawn'` 6 a second per sender (dropped silently), calls each listener inside
+  pcall (one error line a minute) and never yields; it never triggers, cancels or answers a hospital:* event and
+  never touches `hospital:server:RevivePlayer`. Unknown kind or no function → false.
 
 **CP.Banking** — modules/integrations/renewed_banking (S only)
 - `recordDeposit(citizenid, amount, message, issuer, receiver, transId)`
@@ -700,6 +706,19 @@ Parity-plus additions to the integrations:
   when its netId (the 7th argument) is a vehicle of a live run it calls `CP.Runs.noteExternalRemoval(netId, src,
   'sc_impound', dist)` with the sender's server-side distance. It never triggers, cancels or answers a police:*
   event. `onImpound(src, netId) -> bool`.
+- **CP.ScPolice** S `on(kind, fn) -> bool` (real suspects, V3) — listen-only facts from a second, read-only handler for
+  each of sc-police's `police:server:CuffPlayer(playerId, isSoftcuff)` → `'cuff'` (officerSrc, targetSrc,
+  isSoftcuff == true), `UncuffPlayer(playerId)` → `'uncuff'` (officerSrc, targetSrc), `CuffBreakAlert(officerId)` →
+  `'cuffBreak'` (suspectSrc, officerSrc), `EscortPlayer(playerId)` → `'escort'` (officerSrc, targetSrc),
+  `JailPlayer(targetId, jailTime)` → `'jail'` (officerSrc, targetSrc, jailTime raw: the listener clamps it),
+  `BobbyPinResult(success)` → `'bobbyPin'` (pickerSrc, success == true; sc-police ignores a result with no pending
+  attempt, this handler does not) and `SeizeCash(playerId)` → `'seizeCash'` (officerSrc, targetSrc). Every handler:
+  `local src = source` first; returns at once while no listener of its kind exists or `CP.Opponents.active()` is not
+  true (CP.Opponents arrives in V4: until then nothing runs), so with no case open it reads no native; then
+  `CP.Net.rateOk(src, 'scp:' .. kind, 6, 1000)` (dropped silently); then the sender and ids must be whole numbers
+  1..65535 (else dropped); each listener runs inside pcall (one `CP.err` a minute per kind), inside the event, and must
+  not yield. `police:server:SetHandcuffStatus` is never registered (cuffs come from the qbx `ishandcuffed` metadata
+  only). Unknown kind or no function → false; the same function twice is kept once.
 
 ### 5.2 CP.Access — modules/access
 - S `departmentForJob(jobName) -> deptKey|nil`
@@ -3095,6 +3114,13 @@ Server → client ox_lib callback: `crimson-police:client:spawn:walkIn` `{ car =
 
 Events with "three args, no reqId" are plain `RegisterNetEvent` handlers (client Lua → server);
 all others use `CP.Net.action` (UI → server, with reply).
+
+Other resources' net events Crimson-Police also handles, each with a second, read-only handler that never triggers,
+cancels or answers them (§5.1): `police:server:Impound` (CP.ScPolice.onImpound); `police:server:CuffPlayer`,
+`police:server:UncuffPlayer`, `police:server:CuffBreakAlert`, `police:server:EscortPlayer`, `police:server:JailPlayer`,
+`police:server:BobbyPinResult` and `police:server:SeizeCash` (CP.ScPolice.on listeners, real suspects V3);
+`hospital:server:RespawnAtHospital` (CP.Ambulance.on listeners, V3). The V3 handlers do nothing while no case with a
+real suspect is open.
 
 ### 8.3 Supervisor, admin, builder and test actions (`CP.Net.action`) and callbacks (`CP.Net.callback`)
 

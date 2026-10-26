@@ -2555,7 +2555,7 @@ Feature folders
 | modules/anticheat/ | server | Objective validation, presence and idle checks, flagged runs |
 | modules/integrations/qbx/ | server, client | Every qbx_core call |
 | modules/integrations/sc_dispatch/ | server | Responding listener, mdt_dispatch lookup, shots-fired and person-down listeners, ClearNotification, suspension check |
-| modules/integrations/sc_ambulance/ | server, client | EMS on duty, the revive event, the EMS request |
+| modules/integrations/sc_ambulance/ | server, client | EMS on duty, the revive event, the EMS request, and the listen-only hospital-respawn fact for real suspects (CP.Ambulance.on) |
 | modules/integrations/renewed_banking/ | server | Bank transaction entries and society accounts |
 | modules/migrations/ | server | Applies new files in sql/migrations/ on start and records them in cp_schema_migrations |
 | modules/testing/ | server, client | Admin test mode: test runs, test controls, the debug overlay and the test log |
@@ -2565,7 +2565,7 @@ Feature folders
 | modules/rewards/ | server | Item rewards: rolls, delivery, locker, held and forfeited rewards |
 | modules/confighealth/ | server | The start-up config check and Admin UI → Permissions → Config health |
 | modules/settings/ | server, client | Settings changed in game (Admin UI → Settings) over config.lua and blocks.lua, the mission and location switches, and the same values on every client |
-| modules/integrations/sc_police/ | server | The read-only police:server:Impound listener |
+| modules/integrations/sc_police/ | server | The read-only police:server:Impound listener, and the listen-only cuff, escort, jail, bobby-pin and cash-seizure facts for real suspects (CP.ScPolice.on) |
 | blocks/field_contact/ | server, client | The contact objective (parked, scene and stop modes) |
 | blocks/process_scene/ | server, client | The coroner objective |
 

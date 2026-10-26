@@ -2062,6 +2062,12 @@ Config.Billing = {
 Config.BillCost = Config.Billing.CheckInCost
 ```
 
+### hospital:server:RespawnAtHospital: a listen-only fact (real suspects, V3)
+
+- **Spec claim:** Crimson-Police learns that a player chose sc-ambulance's hospital respawn without triggering, cancelling or answering it
+- **Evidence:** server/main.lua:204 (`RegisterNetEvent('hospital:server:RespawnAtHospital', function(hospitalIndex)`: the bill, a bed, or a jail bed while `injail > 0`); client/main.lua:694-718 (the index of the nearest hospital in `Config.Locations.hospital`, 1 by default, sent by the dead player's own client)
+- **Implication:** modules/integrations/sc_ambulance registers a second handler that only reads. It returns at once while no `CP.Ambulance.on('respawn', fn)` listener exists or `CP.Opponents.active()` is not true (no native read), rate-limits 6 a second per sender (`'scp:respawn'`, dropped without a log line), drops an index that is not a whole number 1..255, and calls each listener with (src, hospitalIndex) inside pcall (one error line a minute). Crimson-Police still never triggers this event or `hospital:server:RevivePlayer`, and registers no handler for RevivePlayer.
+
 ### qbx_medical compatibility exports are NOT loaded
 
 - **Spec claim:** Spec uses only GetDoctorCount + hospital:client:Revive
@@ -2506,6 +2512,22 @@ RegisterNetEvent('police:server:Impound', function(plate, fullImpound, price, bo
         TriggerClientEvent('police:client:DeleteVehicle', -1, netId)
     end
 end)
+```
+
+### Listen-only facts: cuffs, escorts, jails, bobby pins and cash seizures (real suspects, V3)
+
+- **Spec claim:** Crimson-Police learns what is done with sc-police's player cuffs, escorts, jail, bobby pins and cash seizures without editing, cancelling or answering any of it (police vs real criminal players, owner decision 2026-10-26: "Build all 3 but options in the config.lua")
+- **Evidence:** server/interactions.lua:24 (`police:server:CuffBreakAlert(officerId)`, sent by the suspect who broke free; client/interactions.lua:1070-1071 sends it only when it knows who cuffed him), :56 (`police:server:CuffPlayer(playerId, isSoftcuff)`, the client always sends `true`), :95 (`police:server:UncuffPlayer(playerId)`), :227-233 (`police:server:BobbyPinResult(success)` from the picker; sc-police ignores a result with no pending attempt), :277 (`police:server:EscortPlayer(playerId)`), :476 (`police:server:SeizeCash(playerId)`); server/commands.lua:248-264 (`police:server:JailPlayer(targetId, jailTime)`, which writes `injail` inside its own handler; client/interactions.lua:439 sends `tonumber(input[1])`). server/prison.lua:284 registers another `JailPlayer` handler, but prison.lua is not in sc-police's fxmanifest.
+- **Implication:** net events call every registered handler, so modules/integrations/sc_police registers a second handler for each of these seven events (like the Impound one above). Each one only reads: `local src = source` first; it returns at once while no `CP.ScPolice.on` listener of its kind exists or `CP.Opponents.active()` is not true (CP.Opponents is built in V4; until then the handlers do nothing), so with no case open it reads no native at all; then a rate limit of 6 a second per sender and kind (`CP.Net.rateOk(src, 'scp:' .. kind, 6, 1000)`, dropped without a log line); then the ids must be whole numbers 1..65535 (a bad one drops the event). The listeners get `'cuff'` (officerSrc, targetSrc, isSoftcuff == true), `'uncuff'` (officerSrc, targetSrc), `'cuffBreak'` (suspectSrc, officerSrc), `'escort'` (officerSrc, targetSrc), `'jail'` (officerSrc, targetSrc, jailTime as sent: the listener clamps it), `'bobbyPin'` (pickerSrc, success == true) and `'seizeCash'` (officerSrc, targetSrc), each inside pcall (at most one error line a minute per kind), inside the event and without yielding. A raw `BobbyPinResult(true)` with no pending attempt still reaches this handler, so a listener must not trust it on its own (design critic 2 #6). Crimson-Police never registers `police:server:SetHandcuffStatus` (it reads cuffs from the qbx `ishandcuffed` metadata only) and still never triggers any police:* event. Nothing consumes these facts until CP.Opponents (V4-V7).
+
+```lua
+RegisterNetEvent('police:server:CuffBreakAlert', function(officerId) ... end)          -- source = the suspect
+RegisterNetEvent('police:server:CuffPlayer', function(playerId, isSoftcuff) ... end)   -- source = the officer
+RegisterNetEvent('police:server:UncuffPlayer', function(playerId) ... end)
+RegisterNetEvent('police:server:BobbyPinResult', function(success) ... end)            -- source = the picker
+RegisterNetEvent('police:server:EscortPlayer', function(playerId) ... end)
+RegisterNetEvent('police:server:SeizeCash', function(playerId) ... end)
+RegisterNetEvent('police:server:JailPlayer', function(targetId, jailTime) ... end)    -- server/commands.lua
 ```
 
 ## Renewed-Banking v2.1.4
