@@ -380,10 +380,20 @@ do
         'the closest after the wait, without the wait comment')
     H.eq(
         E('Spawning.leaveOutAfter').desc,
-        'Seconds a wave may stay short of points (every point too close to or behind the officers) once nobody of the'
-            .. ' fight is left standing; then the people it could not place are left out, so the fight can end (0 ='
-            .. ' never: it waits until the officers move away)',
-        'the leave-out wait (S2), alone'
+        'Seconds a wave of hostiles, a warrant\'s associates or a scatter\'s suspects (Prison Break\'s inmates, the'
+            .. ' raids\' cooks and runners) may stay short of points (every point too close to or behind the officers),'
+            .. ' counted from when they first had to wait. Once that time has passed, someone of the fight or objective'
+            .. ' has appeared and nobody of it is left to fight or catch, the ones that could not be placed are left'
+            .. ' out, so it can end (0 = never: they wait until the officers move away)',
+        'the leave-out wait (S2), alone: its clock starts at the first wait, and it covers warrants and scatters (S11)'
+    )
+    local hidden = E('Spawning.preferHidden').desc
+    H.ok(hidden:find('or in sight at hardMin or further once it has waited waveDelayMax', 1, true) ~= nil,
+        'a Manhunt clue may appear in sight at hardMin after waveDelayMax (S16 check)')
+    H.ok(
+        hidden:find('such a clue waits until the officers are minDistance away, or hardMin after waveDelayMax', 1, true)
+            ~= nil,
+        'and with preferHidden off too'
     )
     H.eq(
         E('Spawning.stageAhead').desc,
@@ -524,10 +534,12 @@ do
     )
     H.eq(
         E('Spawning.onTimeout').desc,
-        '\'unfreeze\' = one no officer\'s game placed within placeTimeoutMs is let go where it stands, as before;'
-            .. ' \'delete\' = it is removed and the mission counts it as gone (a person the mission only moved, such'
-            .. ' as a warrant\'s suspect who gives up at the door, is always let go where he stands)',
-        'the timeout choice reads alone'
+        '\'unfreeze\' = a person, vehicle or object that no officer\'s game has put on the ground within'
+            .. ' placeTimeoutMs is let go where it stands, as before; \'delete\' = it is removed and the mission treats'
+            .. ' it as killed (a hostage or an escort\'s truck removed this way fails that objective). A person the'
+            .. ' mission only moved, such as a warrant\'s suspect who gives up at the door, is always let go where he'
+            .. ' stands',
+        'the timeout choice reads alone: delete counts as killed and can fail the objective (S10 check)'
     )
     for _, k in ipairs({ 'placeTimeoutMs', 'retries', 'onTimeout' }) do
         H.eq(E('Spawning.' .. k).section, 'spawning', 'in the Spawning section: ' .. k)
@@ -651,6 +663,13 @@ do
     Err('Builder.exportPath', 'missions/custom/server/', 'err.setting_export_folder',
         'a folder that is not there yet is refused')
     H.ok((Check('Builder.exportPath', 'missions/custom/')), 'the shipped folder is fine')
+    H.eq(
+        S.entry('Builder.exportPath').desc,
+        'folder (inside missions/custom/) for missions made in the Builder. Another folder must be created by hand'
+            .. ' first, with archived, overrides, overrides/archived and deleted inside it (the server cannot create'
+            .. ' folders on Linux)',
+        'the export folder says a new one must be made by hand first (X3)'
+    )
     CP.Builder = savedBuilder
     Err('Profile.bannedWordsFile', '../server.cfg', 'err.setting_text', 'the banned-words file is a .txt')
     H.ok((Check('Profile.bannedWordsFile', false)), 'no banned-words file')
@@ -687,6 +706,20 @@ do
         for _, g in ipairs(sec.groups) do if g.path == 'Markers.kinds.escort' then escort = g end end
     end
     H.eq((escort or {}).desc, 'the vehicle you escort', 'each kind says what it is')
+    -- the kinds fields (sprite, colour, scale, ...) have no comment of their own: the Markers group says what they are
+    local markers = nil
+    for _, sec in ipairs(S._schema().sections) do
+        for _, g in ipairs(sec.groups) do if g.path == 'Markers' then markers = g end end
+    end
+    local legend = (markers or {}).desc or ''
+    H.ok(legend:find(
+        'each kind of blip has a sprite (the blip\'s picture, by its id), a colour (a colour id: 5 ='
+            .. ' yellow, go here; 1 = red, enemy; 17 = orange',
+        1,
+        true
+    ) ~= nil, 'the Markers group explains sprite and colour')
+    H.ok(legend:find('and a scale (its size, 1.0 = normal)', 1, true) ~= nil, 'and scale')
+    H.ok(legend:find('nextScale, bossScale, followUpColour and setbackColour', 1, true) ~= nil, 'and the extra fields')
     H.ok(not E('Markers.enabled').reload and not E('Markers.enabled').restart, 'read live: no reload, no restart')
 end
 

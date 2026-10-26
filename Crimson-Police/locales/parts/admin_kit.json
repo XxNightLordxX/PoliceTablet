@@ -53,10 +53,11 @@
   "err.admin_busy": "Another long job is running (a bulk change, a copy, a backup or a restore). Try again when it ends.",
   "err.job_kind": "This kind of bulk change is not available.",
   "err.job_failed": "The bulk change stopped. Rows done so far are listed in Corrections.",
-  "err.maintenance": "Crimson-Police is locked for maintenance until the server owner restarts it.",
+  "err.maintenance": "Crimson-Police is locked for maintenance. The banner at the top of the tablet says what ends it.",
   "err.confirm_mismatch": "The typed word does not match.",
   "err.retired": "Your Crimson-Police record is retired. Ask an admin.",
   "ui.maintenance.title.restore_failed": "A backup restore stopped part way",
+  "ui.maintenance.officer_restore_failed": "New missions, mission calls and payments wait until an admin finishes restoring a backup. Your runs and pay are safe.",
   "ui.maintenance.admin.restore_failed": "Payments, new runs and claims stay held, also after a restart. Restore the automatic backup {automatic} in System → Backups, then restart Crimson-Police.",
   "ui.maintenance.admin.storage_done": "The storage copy or switch is done. New runs, claims, tests, operations and payments wait until Crimson-Police restarts. Screens still show data.",
   "ui.maintenance.admin.restore_done": "The backup restore is done. New runs, claims, tests, operations and payments wait until Crimson-Police restarts. Screens still show data."

@@ -2298,7 +2298,9 @@ action goes through `CP.AdminKit` (admins only, audited).
   the files back, clears `restore_open`, one audit line (`backupRestored`, critical), then
   `CP.Maintenance.askRestart`. A put-back that fails part way runs `moneyReapply` under pcall, keeps
   `restore_open`, audits `backupRestoreFailed` and marks the lock `{ failed = true, automatic = <name> }`
-  (`CP.Maintenance.mark`); `server:admin:restoreBackup` passes that lock (only that one). At start
+  (`CP.Maintenance.mark`), and answers `err.restore_failed` (console `sysadmin.console.restore_failed`), or
+  `err.restore_failed_money` (console `sysadmin.console.restore_failed_money`) when that `moneyReapply` failed too, as
+  the store may hold the backup's money state then; `server:admin:restoreBackup` passes that lock (only that one). At start
   (`startLocks()`, which the migrations runner calls before any module that waits for the store goes on; `_boot()` is
   the same after `CP.Migrations.ready()`, for a runner that did not) a store marked `left_behind` begins that lock and a
   set `restore_open` (a failed restore, or a server that stopped during one) begins that failed `restore` lock again

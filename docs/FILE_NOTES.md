@@ -4258,7 +4258,8 @@ accepts a mission type and stay closed while the unit's run is active.
 The maintenance banner: shown on every UI while CP.Maintenance holds the lock (a storage copy or switch, a backup
 restore, a store left behind). New runs, claims, tests and payments wait until the owner restarts Crimson-Police
 (it never restarts itself); after a restore that stopped part way, until a restore works (admins see which
-automatic backup to restore).
+automatic backup to restore; officers and supervisors read ui.maintenance.officer_restore_failed, never "until the
+server owner restarts").
 ```
 
 ## Crimson-Police/web/src/shared/hooks.ts
@@ -4515,7 +4516,8 @@ TestsView.config.spawnCheck { enabled, teleport, routes }.
 Backup restore: money and voids only move forward (a void or Restore run made since the backup stays, a record moved
 since stays with the new character), the oldest backup of a full list can be restored, a damaged backup is refused
 before anything changes, an older backup gets the defaults of columns added since, and a restore that stops part way
-puts the money state back and keeps payments held, also after a restart, until a restore works.
+puts the money state back and keeps payments held, also after a restart, until a restore works; when putting the
+money state back fails too, the admin gets err.restore_failed_money (never "every payment kept its state").
 Real runtime: the restore lock is a Lua variable (H.restart drops it), the store is kept (the database or the saves
 folder), MariaDB's strict mode refuses NULL in a NOT NULL column (the files engine too).
 ```

@@ -1072,14 +1072,16 @@ function Sys.restore(src, name, reason)
         -- whatever table failed, the money state goes back: nothing paid since the backup is owed again
         local okR, errR = pcall(Sys.moneyReapply, MySQL, snap)
         if not okR then CP.err(TAG, 'putting the money state back failed too: %s', tostring(errR)) end
-        CP.err(TAG, '%s', CP.L('sysadmin.console.restore_failed', {
+        -- that failed too: the store may hold the backup's money state, so the admin is not told it was kept (payments
+        -- stay held, and the fix restore takes its money state from the automatic backup: nobody is paid twice)
+        CP.err(TAG, '%s', CP.L(okR and 'sysadmin.console.restore_failed' or 'sysadmin.console.restore_failed_money', {
             backup = name,
             error = tostring(res[2]),
             automatic = open,
         }))
         Kit.auditSync(src, 'audit', 'backupRestoreFailed', name, nil, open, reason, { critical = true })
         Maint.mark('restore', { failed = true, automatic = open })
-        return false, 'err.restore_failed'
+        return false, okR and 'err.restore_failed' or 'err.restore_failed_money'
     end
     SetOpenRestore(nil)
     local money, files = res[2], res[3]

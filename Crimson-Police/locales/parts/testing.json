@@ -345,7 +345,7 @@
   "test.ui.spawn.report_stopped": "(stopped before the end)",
   "test.ui.spawn.report_failed": "(ended early: {reason})",
   "err.invalid_location": "That mission location is not valid.",
-  "err.maintenance": "Crimson-Police is locked for maintenance until the server owner restarts it.",
+  "err.maintenance": "Crimson-Police is locked for maintenance. The banner at the top of the tablet says what ends it.",
   "err.test_unknown_result": "That test result does not exist.",
   "err.spawn_check_disabled": "The spawn point check is turned off in Config.Testing.",
   "err.spawn_check_running": "A spawn point check is already running. Stop it first.",

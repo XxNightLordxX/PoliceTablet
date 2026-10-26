@@ -540,9 +540,17 @@ do
     local undo = Breaking(function(sql)
         return sql == 'DELETE FROM `cp_seasons`' or sql:find('^UPDATE `cp_mission_runs` SET') ~= nil
     end)
-    local ok = Restore(b)
+    local ok, e = Restore(b)
     undo()
     H.ok(ok == false, 'the restore stopped part way and so did putting the money back')
+    -- the admin and the console are never told that every payment kept its state
+    H.eq(e, 'err.restore_failed_money', 'the admin is told the money state could not be put back')
+    H.ok(
+        not CP.L('err.restore_failed_money'):find('kept its state', 1, true)
+            and CP.L('err.restore_failed_money'):find('also after a restart', 1, true) ~= nil,
+        'and the order, without "kept its state"'
+    )
+    H.ok(Printed('Putting the money state back failed too'), 'the console says so too')
     H.eq(One('SELECT cash_status FROM cp_mission_runs WHERE id = 185').cash_status, 'pending',
         'the store holds the backup\'s state now (as after a server that stopped mid-way)')
     local open = OpenMark()

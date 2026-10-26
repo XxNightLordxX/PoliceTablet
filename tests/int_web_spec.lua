@@ -562,6 +562,19 @@ do
     Has(banner, 'return done ? t(\'ui.maintenance.admin.restore_done\') : t(\'ui.maintenance.admin.restore\');',
         'a finished restore says it is done and waits for the restart')
     Has(banner, 'const done = !!m.restart && !m.failed;', 'done = the work ended and only the restart is left')
+    -- a restore that stopped part way is ended by an admin's restore, not by a restart (the lock comes back)
+    Has(banner,
+        'return kind === \'restore_failed\' ? t(\'ui.maintenance.officer_restore_failed\') : t(\'ui.maintenance.officer\');',
+        'officers read their own line for a restore that stopped part way')
+    Has(banner, ': officerText(kind)}', 'and the banner uses it')
+    H.ok(
+        type(en['ui.maintenance.officer_restore_failed']) == 'string'
+            and en['ui.maintenance.officer_restore_failed']:find('an admin finishes restoring a backup', 1, true) ~= nil
+            and not en['ui.maintenance.officer_restore_failed']:lower():find('restart', 1, true),
+        'that line says an admin\'s restore ends it, not a restart'
+    )
+    H.ok(type(en['err.maintenance']) == 'string' and not en['err.maintenance']:lower():find('restart', 1, true),
+        'err.maintenance does not promise that a restart ends the lock')
 end
 
 -- npm run dev: the Settings confirms (a reload setting that breaks missions, Cash.source = society) have mocks.

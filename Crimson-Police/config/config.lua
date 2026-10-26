@@ -340,9 +340,11 @@ Config.Spawning = {
     waveDelayMax = 20,               -- seconds a wave waits for points minDistance away before closer ones are allowed
     -- Metres: once a wave has waited waveDelayMax, a point this close to an officer may be used, never a closer one
     hardMin = 20.0,
-    -- Seconds a wave may stay short of points (every point too close to or behind the officers) once nobody of the
-    -- fight is left standing; then the people it could not place are left out, so the fight can end (0 = never: it
-    -- waits until the officers move away)
+    -- Seconds a wave of hostiles, a warrant's associates or a scatter's suspects (Prison Break's inmates, the raids'
+    -- cooks and runners) may stay short of points (every point too close to or behind the officers), counted from when
+    -- they first had to wait. Once that time has passed, someone of the fight or objective has appeared and nobody of
+    -- it is left to fight or catch, the ones that could not be placed are left out, so it can end (0 = never: they
+    -- wait until the officers move away)
     leaveOutAfter = 45,
     -- true = a mission may place the next objective's people ahead of time, while your officers are still busy with
     -- the one before it, so they are already there when it starts instead of popping up around the officers (false =
@@ -393,8 +395,9 @@ Config.Spawning = {
     -- true = of the points a wave may use, the ones your officers cannot see (behind a building, a container or a
     -- vehicle, as the nearest officers' own games check it) are used first, so people appear out of sight instead of
     -- in the open in front of you; seen points are still used when there are not enough hidden ones. A Manhunt clue
-    -- closer than minDistance to an officer appears only where those games say no officer can see it (false = the
-    -- mission's own order, and such a clue waits until the officers step back)
+    -- closer than minDistance to an officer appears only where those games say no officer can see it, or in sight at
+    -- hardMin or further once it has waited waveDelayMax (false = the mission's own order and nobody is asked: such a
+    -- clue waits until the officers are minDistance away, or hardMin after waveDelayMax)
     preferHidden = true,
     -- Milliseconds the server waits for the officers' games to say what they can see (100-5000); no answer in time =
     -- every point counts as seen (the distance rules above still apply). Also how long it waits for the footpath point
@@ -432,9 +435,10 @@ Config.Spawning = {
     -- swapped for another point the mission may use there; after that, or with no other point, the last one is used
     -- as it is (one warning in the console)
     retries = 2,
-    -- 'unfreeze' = one no officer's game placed within placeTimeoutMs is let go where it stands, as before; 'delete' =
-    -- it is removed and the mission counts it as gone (a person the mission only moved, such as a warrant's suspect
-    -- who gives up at the door, is always let go where he stands)
+    -- 'unfreeze' = a person, vehicle or object that no officer's game has put on the ground within placeTimeoutMs is
+    -- let go where it stands, as before; 'delete' = it is removed and the mission treats it as killed (a hostage or an
+    -- escort's truck removed this way fails that objective). A person the mission only moved, such as a warrant's
+    -- suspect who gives up at the door, is always let go where he stands
     onTimeout = 'unfreeze',
     -- true = a console line for each point skipped (shown while Config.Debug is on) and a warning when a wave had to
     -- use closer points
@@ -461,7 +465,11 @@ Config.Route = {
 -- ============================================================================
 -- How the objective your officers are on shows on their map: one blip (for a fight or a search area, a circle and its
 -- centre) with one GPS line to it. While an officer still drives to the start, or has set a waypoint of his own, that
--- is his only line. Sprite and colour ids: docs.fivem.net/docs/game-references/blips/
+-- is his only line. Under kinds, each kind of blip has a sprite (the blip's picture, by its id), a colour (a colour
+-- id: 5 = yellow, go here; 1 = red, enemy; 17 = orange, fleeing or needs a follow-up; 3 = blue, friendly; 2 = green,
+-- safe point) and a scale (its size, 1.0 = normal). nextScale, bossScale, followUpColour and setbackColour are the
+-- same for the next checkpoint, a boss, a point to follow up and a device set back. Sprite and colour ids:
+-- docs.fivem.net/docs/game-references/blips/
 Config.Markers = {
     enabled = true,              -- false = no objective blip or line from Crimson-Police (the missions' own blips stay)
     route = true,                -- false = the objective blip shows, but no GPS line to it
@@ -1208,7 +1216,10 @@ Config.Builder = {
     testAtMaxTier = true,                      -- a test counts as passed only at the tier maxOfficers reaches
     editLockMinutes = 30,                      -- one editor at a time; renewed while they keep editing
     autosaveSeconds = 30,
-    exportPath = 'missions/custom/',
+    exportPath = 'missions/custom/',           -- folder (inside missions/custom/) for missions made in the Builder.
+                                               -- Another folder must be created by hand first, with archived,
+                                               -- overrides, overrides/archived and deleted inside it (the server
+                                               -- cannot create folders on Linux)
     keepBackups = true,                        -- keep <mission_id>.v<version>.lua.bak on every publish
     route = {                                  -- route recording (see Mission Builder, Route recording)
         snapEvery = 25.0,       -- metres between samples while recording

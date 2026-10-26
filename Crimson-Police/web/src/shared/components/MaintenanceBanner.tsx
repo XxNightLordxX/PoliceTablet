@@ -23,6 +23,11 @@ function adminText(kind: Kind, done: boolean, automatic: string): string {
     return t('ui.maintenance.admin.left_behind');
 }
 
+// What officers and supervisors read: a restore that stopped part way ends with an admin's restore, not a restart.
+function officerText(kind: Kind): string {
+    return kind === 'restore_failed' ? t('ui.maintenance.officer_restore_failed') : t('ui.maintenance.officer');
+}
+
 export function MaintenanceBanner({ admin = false }: { admin?: boolean }) {
     const m = useMaintenance();
     if (!m) return null;
@@ -40,7 +45,7 @@ export function MaintenanceBanner({ admin = false }: { admin?: boolean }) {
             <Icon name="alert" size={16} />
             <div className="cp-maintenance__text">
                 <strong>{TITLE[kind]()}</strong>
-                <span>{admin ? adminText(kind, done, m.automatic ?? '') : t('ui.maintenance.officer')}</span>
+                <span>{admin ? adminText(kind, done, m.automatic ?? '') : officerText(kind)}</span>
                 {admin && done ? <span className="cp-maintenance__restart">{t('ui.maintenance.restart')}</span> : null}
             </div>
         </div>
