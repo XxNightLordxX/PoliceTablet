@@ -346,6 +346,27 @@ do
         'LiveCrime.requireRoute: its own comment'
     )
     H.ok(not rr.restart and not rr.money, 'LiveCrime.requireRoute needs no restart and is not a money switch')
+
+    -- V10: the intake's keys; types is one setting (an open table) whose values are mission types or false
+    for path, desc in pairs({
+        sources = 'the only scripts allowed to report a crime',
+        types = 'which crimes become LIVE calls, and the mission type whose points they use',
+        suspectRadius = 'crew members further than this from the crime at the alert are not suspects',
+    }) do
+        local e = S.entry('LiveCrime.' .. path) or {}
+        H.eq(e.desc, desc, 'LiveCrime.' .. path .. ': its own comment')
+        H.ok(not e.restart and not e.money, 'LiveCrime.' .. path .. ' needs no restart and is not a money switch')
+    end
+    H.eq(S.entry('LiveCrime.types.warehouse_burglary'), nil, 'LiveCrime.types is edited as a whole')
+    H.ok((S.check('LiveCrime.types', { warehouse_burglary = 'tactical', atm_robbery = false, my_heist = 'patrol' })),
+        'LiveCrime.types takes mission types and false, for any contract key')
+    local okT, errT = S.check('LiveCrime.types', { warehouse_burglary = 'heist' })
+    H.ok(okT == false and errT == 'err.setting_live_type', 'LiveCrime.types refuses a value that is not a mission type')
+    H.eq((S.check('LiveCrime.types', { warehouse_burglary = true })), false, 'LiveCrime.types refuses true')
+    H.eq((S.entry('LiveCrime.sources') or {}).kind, 'list', 'LiveCrime.sources is a list')
+    H.ok((S.check('LiveCrime.sources', { 'crimson-contracts', 'my_heists' })), 'LiveCrime.sources takes resource names')
+    H.eq((S.check('LiveCrime.sources', { 'bad name!' })), false, 'LiveCrime.sources refuses other text')
+    H.eq((S.check('LiveCrime.suspectRadius', 5000.0)), false, 'suspectRadius stays within 10-2000 m')
 end
 
 -- ============================================================================

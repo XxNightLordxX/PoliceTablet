@@ -125,6 +125,7 @@ local OPEN = {
     'Rewards.goals',
     'Rewards.levels',
     'Rewards.season',
+    'LiveCrime.types',   -- the crime keys are Crimson-Contracts' contract keys
 }
 
 local WEEKDAYS = { 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday' }
@@ -247,6 +248,8 @@ local RANGES = {
     ['RealSuspects.pairFlag.days'] = { 1, 90 },
     ['RealSuspects.fastCatchSeconds'] = { 0, 600 },
     ['RealSuspects.pairLedgerDays'] = { 1, 365 },
+    -- live crimes (Config.LiveCrime)
+    ['LiveCrime.suspectRadius'] = { 10, 2000 },
     -- the objective blip and its GPS line (Config.Markers); ids from the docs.fivem.net blip list (build 3258)
     ['Markers.trackEvery'] = { 1, 10 },
     ['Markers.routeOffWithin'] = { 0, 200 },
@@ -938,6 +941,13 @@ local KNOWN = {
     ['RealSuspects.officerAlerts'] = { tpl = Enum({ 'normal', 'silenced' }), kind = 'enum' },
     ['RealSuspects.routeEnds'] = { tpl = Enum({ 'first_contact', 'start' }), kind = 'enum' },
     ['RealSuspects.downed'] = { tpl = Enum({ 'keep_earned', 'failed' }), kind = 'enum' },
+    -- live crimes (V10): the scripts that may report a crime (resource names), and each crime's mission type or false
+    ['LiveCrime.sources'] = {
+        tpl = ListOf(Text('^[%w_%-%.]+$', 64), { unique = true }),
+        kind = 'list',
+        item = 'string',
+    },
+    ['LiveCrime.types'] = { tpl = MapOf(Alts(FALSE, ID), '^[%w_%-]+$') },
     ['Spawning.onTimeout'] = { tpl = Enum({ 'unfreeze', 'delete' }), kind = 'enum' },
     ['Spawning.hostagesAt'] = { tpl = Enum({ 'objective', 'runStart' }), kind = 'enum' },
     ['NpcCombat.weapons'] = { tpl = ListOf(WEAPON_NAME, { min = 1, unique = true }), kind = 'list', item = 'string' },
@@ -1497,6 +1507,16 @@ end
 KNOWN['NpcCombat.weapons'].check = NoAutomatic
 KNOWN['NpcCombat.replace'].check = NoAutomatic
 KNOWN['NpcCombat.fallback'].check = NoAutomatic
+
+-- Config.LiveCrime.types: a crime's value names a mission type of Config.MissionTypes, or is false (never a LIVE call).
+local function LiveTypes(map)
+    local types = type(Config.MissionTypes) == 'table' and Config.MissionTypes or {}
+    for _, v in pairs(map) do
+        if v ~= false and type(types[v]) ~= 'table' then return 'err.setting_live_type' end
+    end
+    return nil
+end
+KNOWN['LiveCrime.types'].check = LiveTypes
 
 -- ============================================================================
 --                                   CHECKING

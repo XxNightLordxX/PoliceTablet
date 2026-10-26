@@ -3069,7 +3069,7 @@ start, and every write goes to the database in a thread.
   the `live`, `volunteer` and `duty_off` rows older than pairLedgerDays (one statement per kind) and the admin rows
   whose until_at has passed; never in a tick.
 
-### 5.46 CP.LiveCrime — modules/livecrime and modules/integrations/crimson_contracts (S; stub)
+### 5.46 CP.LiveCrime — modules/livecrime and modules/integrations/crimson_contracts (S)
 
 Option A, live crimes (Config.LiveCrime, `enabled` shipped false). The adapter in modules/integrations/crimson_contracts
 listens to Crimson-Contracts' server-only lifecycle events (crimson-contracts:server:*, AddEventHandler only, from the
@@ -3079,6 +3079,61 @@ it (no draw: the engine-only `live_crime` mission with the `live_response` block
 scores it with the live_* lines (points only unless the owner turns on its money switches), and reports the result to
 other scripts with the read-only export GetAvailablePolice and a server-only end event. Built in steps V4-V26
 (/tmp/claude-0/-home-user-PoliceTablet/c9b2f5e1-32ec-5436-a1db-2a78c5b9aa69/scratchpad/pvp/DESIGN_FINAL.md).
+
+**Intake (V10).** Crimson-Contracts sends its events only with `ContractsConfig.LifecycleEvents = true` (shipped false);
+names and payloads as built in its step VC3 (commit e20316f, its README "Integration"):
+
+| Event | Payload (Crimson-Contracts) | CP.LiveCrime |
+|---|---|---|
+| `crimson-contracts:server:contractStarted` | `{ id, uid = '<id>_<start time>', key, label, locationLabel, coords = { x, y, z }, members = { [citizenid] = server id }, leaderCitizenId, startedAt, test }` | `onStarted` |
+| `crimson-contracts:server:dispatchSent` | `{ id, uid, dispatchId = 'crimson_contract_<id>_<time>', title, street, coords }` (never for ATM alerts) | `onAlert` |
+| `crimson-contracts:server:contractEnded` | `{ id, uid, outcome = 'completed'\|'failed'\|'cancelled', reason }` (also for a contract that never started) | `onEnded` |
+| `crimson-contracts:server:memberRejoined` | `{ id, uid, citizenid, src }` | `onRejoined` |
+| `crimson-contracts:server:crewShot` | `{ id, uid, citizenid, suppressed, trigger = 'shot'\|'gun_kill' }` | `onCrewShot` |
+
+- **Adapter (CP.CrimsonContracts, `CC.EVENTS`).** The five handlers are registered always (C29: turning `enabled` on
+  in Admin UI → Settings needs no restart) and return at once while `Config.LiveCrime.enabled ~= true`. Then:
+  `GetInvokingResource()` must be in `Config.LiveCrime.sources` (read on each event; any other script, or none, is
+  dropped with one CP.warn per minute per script that names the setting); the payload must be a table of the shapes
+  above: `id` a whole number, `uid` a name (letters, digits, `_`, `-`) of at most 32, `key` and `outcome` / `trigger`
+  names of at most 64 / 16, `citizenid` / member keys names of at most 50 and at most 16 members (at least one),
+  `coords` a table of three finite numbers, `test` / `suppressed` booleans or nil, `dispatchId` a name of at most 64
+  or nil; `label`, `locationLabel`, `title`, `street`, `reason` must be strings and are trimmed, freed of control
+  characters and cut to 64 / 64 / 50 / 100 / 128 bytes. Anything else drops the event (one warning per minute per
+  script and event). **Every server id in a payload is ignored (C9):** `members` keeps only its keys and
+  memberRejoined's `src` is never read. The clean copy goes to `CP.LiveCrime.<fn>(resource, data)` inside pcall.
+- **Records.** `crimes['<resource>:<uid>'] = { crimeKey, res, uid, id, key, label, locationLabel, coords, members = {
+  [cid] = true }, leader, startedAt, receivedAt, test, sampled, alertedAt, dispatchId, title, street, missionType,
+  suspects = { [cid] = true }, armed = { [cid] = os.time() }, ignored, ended, endedAt, outcome, endReason, runId }`, in
+  memory only: at most 200 at once, pruned on the next event 1 h after the end (or 2 h after the start when no end
+  ever came); a reporting resource that stops ends its open crimes (`outcome = 'stopped'`). No timer or thread.
+- `onStarted`: a known uid is ignored; `test == true` (an admin's `/testcriminalcontract`, C16) is kept as a test
+  record, audited `liveCrimeIgnored` (new value `test`) and never sampled or reported. Otherwise, while its key maps to
+  a mission type, `CP.Opponents.sampleCrew(crimeKey, cids)` starts the crew's AFK samples at the contract start (C17).
+- `onAlert` (once per crime): an unknown, test or ended crime, or an id that does not match, is ignored. The key maps
+  through `Config.LiveCrime.types` (a Config.MissionTypes key; false, missing or an unknown type = off: audit
+  `liveCrimeIgnored`, `type_off`). Each member is found with `CP.Qbx.getByCitizenId(cid)` (an event path) and his
+  `getInfo` citizenid must match; he is a suspect when `CP.Opponents.eligible(src, { intake = true })` passes and his
+  server coords are within `Config.LiveCrime.suspectRadius` (300 m, C24) of the crime. None -> audit
+  `liveCrimeIgnored` (`no_suspect`, the reasons counted) and the samples stop. Else `suspects`, `alertedAt`,
+  `dispatchId`, `title`, `street`, `missionType` are stored, the members who are not suspects stop being sampled, the
+  audit `liveCrimeReported` (new value `<suspects>/<crew>`, the reasons for the others) is written and
+  `CP.LiveCrime.post(crime)` is called (V10: it only logs "would post"; V11 posts the LIVE call). Audit lines are
+  category `audit`, actor console, target the crime key, written in their own thread; they carry no citizenid.
+- `onEnded`: `ended`, `endedAt`, `outcome`, `endReason`; the open run of `crime.runId` (V14 sets it; its
+  `run.live.crimeKey` must match) gets `CP.Opponents.crimeEnded(run)`; the samples stop.
+- `onRejoined`: a member of a crime whose case runs gets a `crew_rejoined` timeline line (CP.Opponents re-resolves him
+  on the qbx load event itself, V4).
+- `onCrewShot` (C6): `crime.armed[cid] = os.time()` for a member, and `CP.Opponents.noteArmed(cid)` when he is a
+  suspect of the crime's running case. V14 copies `crime.armed` into the case when it opens. Crimson-Contracts sends
+  at most one `'shot'` per contract (the report that made its police roll; later reports are not checked there) and
+  one `'gun_kill'` per guard shot dead by a crew member, so a crew member who only fired after that roll is not
+  reported: CP.Opponents' own weapon sample and damage ledger (V6) decide whether he is armed in the case.
+- API: `LC.get(crimeKey)`, `LC.crimeOf(run)` (`run.live.crimeKey`), `LC.inCrew(cid) -> bool, crime` (a member of a
+  crime that has not ended; always false while `enabled` is off and for test crimes; V22 uses it), `LC.post(crime)`.
+- Config.LiveCrime keys of V10: `sources = { 'crimson-contracts' }` (a list of resource names), `types` (an OPEN table
+  in Settings: Crimson-Contracts' contract keys -> a Config.MissionTypes key or false, checked by Settings),
+  `suspectRadius = 300.0` (10-2000 m).
 
 ### 5.47 CP.Volunteers — modules/volunteers (server, client; stub)
 
@@ -3422,6 +3477,12 @@ cancels or answers them (§5.1): `police:server:Impound` (CP.ScPolice.onImpound)
 real suspect is open; their consumers are the proof step (§5.45, V5) and the conduct step (§5.45, V6: 'seizeCash'),
 which add no event of their own. The conduct step also adds a third read-only `weaponDamageEvent` game-event listener
 (CP.Npc has two): it never cancels the event and returns at once while no case is open.
+
+Other resources' server-only events Crimson-Police listens to with `AddEventHandler` (never `RegisterNetEvent`, so no
+client can send them), checked against `GetInvokingResource()`: Crimson-Contracts' `crimson-contracts:server:contractStarted`,
+`:dispatchSent`, `:contractEnded`, `:memberRejoined` and `:crewShot` (modules/integrations/crimson_contracts, live
+crimes V10, §5.46). Registered always; they do nothing while `Config.LiveCrime.enabled` is not true or the sender is
+not in `Config.LiveCrime.sources`.
 
 ### 8.3 Supervisor, admin, builder and test actions (`CP.Net.action`) and callbacks (`CP.Net.callback`)
 

@@ -2860,3 +2860,34 @@ VC1 to VC3). Crimson-Police never requires it, never calls it and never edits it
   `crimsonArena` table that sc-dispatch indexes, so no other script reads it. A run whose start data says
   `npcCombat = false` (V14's live runs) never sets it, so Crimson-Contracts scales its guards for those officers as
   for anyone else.
+
+### Lifecycle events: the live-crime intake (V10)
+
+- **Spec claim:** with `ContractsConfig.LifecycleEvents = true` Crimson-Contracts tells other server scripts when a
+  contract starts, when its police alert goes out, when it ends, when a crew member rejoins and when a crew member was
+  armed; players cannot send or fake these events, and the payloads name crew members by citizenid.
+- **Evidence:** crimson-contracts/server.lua (e20316f): `lifecycle(name, payload)` returns unless
+  `ContractsConfig.LifecycleEvents == true` and sends `pcall(TriggerEvent, 'crimson-contracts:server:' .. name,
+  payload)` (a server TriggerEvent never leaves the server, so `GetInvokingResource()` in a listener is
+  `'crimson-contracts'`, its folder name). `startContract`: `mission.uid = ('%d_%d'):format(id, os.time())`, then
+  `contractStarted { id, uid, key, label, locationLabel, coords = { x, y, z } (the objective), members = { [citizenid]
+  = server id }, leaderCitizenId, startedAt = os.time(), test = options.bypass == true }` after the crew got its start
+  payloads. `sendDispatch`: `dispatchSent { id, uid, dispatchId, title = cfg.title, street = mission.location.label,
+  coords }` only after `AddNotification` raised no error and only for a mission with a uid (never the ATM alert);
+  `dispatchId = 'crimson_contract_<id>_<os.time()>'` (60 characters at most, VC1). `cleanupMission`: `contractEnded {
+  id, uid, outcome, reason }` with `outcome` 'completed', 'failed' or 'cancelled' (also for a contract that could not be
+  set up, with no contractStarted before it). `rejoin`: `memberRejoined { id, uid, citizenid, src }` only when the
+  server id changed. `combatShot`: `crewShot { id, uid, citizenid, suppressed, trigger = 'shot' }` after the report
+  that made the contract's one police roll (later reports are answered without that check, so at most one 'shot' per
+  contract). `guardDown`: `crewShot { ..., trigger = 'gun_kill' }` once per guard, only when `GetPedSourceOfDeath` (on
+  the server) names a player in the crew and the guard died by gun; an unknown killer sends nothing. Contract numbers
+  (`id`) start again at 1 after a restart of Crimson-Contracts; `uid` stays unique. The ATM robbery
+  (`ContractsConfig.ATM.activityKey = 'atm_robbery'`) sends none of these.
+- **Implication:** modules/integrations/crimson_contracts/server.lua registers the five handlers with
+  `AddEventHandler` at start, always, and each returns at once unless `Config.LiveCrime.enabled == true`; then
+  `GetInvokingResource()` must be in `Config.LiveCrime.sources` (shipped `{ 'crimson-contracts' }`, the folder name:
+  a renamed folder must be renamed there too). Crime records are keyed `'<resource>:<uid>'`, never by `id`. The server
+  ids in `members` and memberRejoined's `src` are hints that may be stale and are never read: members are found with
+  `exports.qbx_core:GetPlayerByCitizenId` when the alert arrives (C9). A crew member who fires after the roll and kills
+  no guard is not reported, so Crimson-Police's own weapon checks (§5.45 conduct) decide whether he was armed in a case.
+  Nothing here calls Crimson-Contracts or needs it to be running.

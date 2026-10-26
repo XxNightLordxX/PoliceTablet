@@ -809,6 +809,17 @@ Config.LiveCrime = {
     -- false = officers on a live case may leave the GPS route to chase; true = the normal route rule
     -- (Config.Route.required)
     requireRoute = false,
+    sources = { 'crimson-contracts' },  -- the only scripts allowed to report a crime
+    types = {                           -- which crimes become LIVE calls, and the mission type whose points they use
+        warehouse_burglary = 'investigation',
+        container_heist = 'investigation',
+        hostile_drug_pickup = 'tactical',
+        drug_lab_raid = 'tactical',
+        weapon_shipment = 'tactical',
+        prisoner_ambush = 'tactical',
+        atm_robbery = false,         -- false = never a LIVE call (a solo ATM hack has no crew to track)
+    },
+    suspectRadius = 300.0,           -- crew members further than this from the crime at the alert are not suspects
 }
 
 -- ============================================================================
