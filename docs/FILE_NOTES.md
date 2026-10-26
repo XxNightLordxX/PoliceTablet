@@ -1261,7 +1261,14 @@ Backstop (CP.Dispatch listeners, receivedAt = os.time() captured at receipt by t
                 with { 'police', 'ambulance' }
   Srcs with a foreign value are skipped (Crimson-Arena handles them).
 
-Start: every leftover value whose source is 'crimson-police' is removed from every online player.
+arena:exited (CP.Hooks): the 1 s reconcile fires it once when a player's inArena turns false (foreign
+value cleared, or the routing bucket back to 0). It reads no state bag: the foreign part comes from the
+kind the change handler keeps (WriteOurs, RemoveOurs and the start-up seed keep it too), the rest from
+GetPlayerRoutingBucket. Only without a change handler does it read every player's bag.
+Bag reads call GetStateBagValue('player:<src>', 'crimsonArena') directly (what Player(src).state ends in).
+
+Start: every leftover value whose source is 'crimson-police' is removed from every online player; every
+other value found is remembered as that player's kind (a player already in a Crimson-Arena match).
 Stop: every value we set is removed.
 ```
 

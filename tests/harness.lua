@@ -2925,6 +2925,15 @@ function H.boot(opts)
             }, { __index = st }),
         }
     end
+    -- GET_STATE_BAG_VALUE, the native that Player(src).state[key] ends in (scheduler.lua NewStateBag __index): the
+    -- value of a 'player:<id>' bag from H.players[id].state, nil for a bag or player it does not know
+    _G.GetStateBagValue = function(bagName, key)
+        local id = tonumber(tostring(bagName):match('^player:(%d+)$'))
+        local p = id and H.players[id]
+        local st = p and p.state
+        if type(st) ~= 'table' then return nil end
+        return st[key]
+    end
     _G.exports = setmetatable({}, {
         __index = function(_, res)
             return setmetatable({}, {

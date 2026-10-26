@@ -1872,6 +1872,7 @@ end
 --                               21. arena:exited
 -- ============================================================================
 
+-- Without a change handler (it only logs an error): the 1 s check reads the bag itself.
 do
     CP.Alerts = nil
     CP.Dispatch = nil
@@ -1903,6 +1904,110 @@ do
     CP.Alerts._arenaExits()
     H.eq(#exits, 2, 'once when the flag clears with bucket 0')
     H.eq(exits[2], 1, 'for that player')
+end
+
+-- With the change handler (FXServer always has it): the 1 s check reads no state bag. 200 online players; 199 has a
+-- leftover Crimson-Police flag and 200 is already in a Crimson-Arena match when the resource starts.
+do
+    local realPlayers, realPlayer, realGet = H.players, _G.Player, _G.GetStateBagValue
+    H.players = {}
+    for src = 1, 200 do H.players[src] = { state = {} } end
+    H.players[199].state.crimsonArena = { active = true, source = 'crimson-police' }
+    H.players[200].state.crimsonArena = { active = true, matchId = 'm200' }
+    local bagHandlers = {}
+    _G.AddStateBagChangeHandler = function(key, _, fn) bagHandlers[#bagHandlers + 1] = { key = key, fn = fn } end
+    _G.GetPlayerFromStateBagName = function(name) return tonumber(tostring(name):match('^player:(%d+)$')) or 0 end
+    -- any resource writing the replicated bag: the change handlers first (FiveM calls them before the value is set),
+    -- then the value, then one SetTimeout(0) for the work the handler queued
+    local function BagSet(src, value)
+        for _, h in ipairs(bagHandlers) do
+            if h.key == nil or h.key == 'crimsonArena' then
+                h.fn(('player:%d'):format(src), 'crimsonArena', value, 0, true)
+            end
+        end
+        H.players[src].state.crimsonArena = value
+        H.step(0)
+    end
+    CP.Alerts = nil
+    CP.Dispatch = nil
+    H.load('modules/alerts/server.lua')
+    H.step(0)
+    H.eq(#bagHandlers, 1, 'alerts watches the crimsonArena key')
+    H.eq(H.players[199].state.crimsonArena, nil, 'start: the leftover Crimson-Police flag is removed')
+    local exits = {}
+    CP.Hooks.on('arena:exited', function(src) exits[#exits + 1] = src end)
+    local reads = 0
+    _G.Player = function(src) reads = reads + 1; return realPlayer(src) end
+    _G.GetStateBagValue = function(...) reads = reads + 1; return realGet(...) end
+    local most = 0
+    local function Pass()
+        local before = reads
+        CP.Alerts._arenaExits()
+        if reads - before > most then most = reads - before end
+    end
+    local function Count(src)
+        local n = 0
+        for _, s in ipairs(exits) do if s == src then n = n + 1 end end
+        return n
+    end
+
+    Pass()
+    Pass()
+    H.eq(most, 0, 'nothing changed: 0 state bag reads per pass for 200 players')
+    H.eq(#exits, 0, 'and no exit')
+
+    H.players[10].bucket = 5
+    Pass()
+    Pass()
+    H.eq(Count(10), 0, 'never while the routing bucket is not 0')
+    H.players[10].bucket = 0
+    Pass()
+    H.eq(Count(10), 1, 'bucket 5 -> 0: arena:exited once')
+    Pass()
+    H.eq(Count(10), 1, 'only once')
+
+    BagSet(20, { active = true, matchId = 'm20' })
+    Pass()
+    Pass()
+    H.eq(Count(20), 0, 'never while the foreign flag holds')
+    BagSet(20, nil)
+    Pass()
+    H.eq(Count(20), 1, 'foreign -> none through the change handler: arena:exited once')
+    Pass()
+    H.eq(Count(20), 1, 'only once')
+
+    BagSet(30, { active = true, matchId = 'm30' })
+    H.players[30].bucket = 3
+    Pass()
+    BagSet(30, nil)
+    Pass()
+    H.eq(Count(30), 0, 'flag gone but the bucket still holds: no exit')
+    H.players[30].bucket = 0
+    Pass()
+    H.eq(Count(30), 1, 'then bucket 0: once')
+    H.players[31].bucket = 4
+    BagSet(31, { active = true, matchId = 'm31' })
+    Pass()
+    H.players[31].bucket = 0
+    Pass()
+    H.eq(Count(31), 0, 'bucket 0 but the flag still holds: no exit')
+    BagSet(31, nil)
+    Pass()
+    H.eq(Count(31), 1, 'then the flag clears: once')
+
+    Pass()
+    H.eq(Count(200), 0, 'a flag already set at start counts as in the arena')
+    BagSet(200, nil)
+    Pass()
+    H.eq(Count(200), 1, 'and its foreign -> none fires arena:exited once')
+    Pass()
+    H.eq(Count(200), 1, 'only once')
+    H.eq(#exits, 5, 'no other exit')
+    H.eq(most, 0, 'still 0 state bag reads in any pass')
+
+    _G.Player, _G.GetStateBagValue = realPlayer, realGet
+    _G.AddStateBagChangeHandler = nil
+    H.players = realPlayers
 end
 
 -- ============================================================================

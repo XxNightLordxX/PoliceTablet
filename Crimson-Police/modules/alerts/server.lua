@@ -21,6 +21,7 @@ local arenaHandled = {}           -- arenaHandled[src] = runId already handled
 local arenaListeners = {}
 local recentClears = {}           -- recentClears[uniqueId] = os.time()
 local stale = {}                  -- stale[src] = true: our value outlived a forgotten intent (SweepStale)
+local bagWatched = false          -- true once the change handler below keeps lastKind up to date
 
 A.wanted = wanted
 A.foreignClearedAt = foreignCleared
@@ -42,8 +43,9 @@ local function Connected(src)
     return ok and type(name) == 'string' and name ~= ''
 end
 
+-- The native Player(src).state[key] ends in, without its proxy, state bag table and closures.
 local function BagValue(src)
-    local ok, v = pcall(function() return Player(src).state[BAG_KEY] end)
+    local ok, v = pcall(GetStateBagValue, ('player:%d'):format(src), BAG_KEY)
     if ok then return v end
     return nil
 end
@@ -346,6 +348,7 @@ local function OnBagChange(src, kind, prevKind)
 end
 
 if type(AddStateBagChangeHandler) == 'function' then
+    bagWatched = true
     AddStateBagChangeHandler(BAG_KEY, nil, function(bagName, _, value)
         local ok, src = pcall(GetPlayerFromStateBagName, bagName)
         src = ok and ToSrc(src) or nil
@@ -400,8 +403,20 @@ local function SweepStale()
 end
 
 -- arena:exited (CP.Hooks): once when a player's A.inArena turns from true to false, whether the foreign flag
--- cleared or the routing bucket went back to 0, and never while either still holds.
+-- cleared or the routing bucket went back to 0, and never while either still holds. A.inArena's rule without
+-- reading every player's bag each second: lastKind follows every change of the value (the change handler,
+-- WriteOurs, RemoveOurs and the start-up seed in RemoveLeftovers). Only without a change handler is the bag read.
 local wasInArena = {}
+
+local function InArenaNow(src)
+    local foreign
+    if bagWatched then
+        foreign = lastKind[src] == 'foreign'
+    else
+        foreign = Classify(BagValue(src)) == 'foreign'
+    end
+    return foreign or BucketOf(src) ~= 0
+end
 
 local function ArenaExits()
     local seen = {}
@@ -409,7 +424,7 @@ local function ArenaExits()
         local src = ToSrc(s)
         if src then
             seen[src] = true
-            local now = A.inArena(src)
+            local now = InArenaNow(src)
             if wasInArena[src] and not now then
                 CP.log(TAG, '%d left the arena', src)
                 if CP.Hooks and CP.Hooks.fire then CP.Hooks.fire('arena:exited', src) end
@@ -550,14 +565,21 @@ end
 --                                  LIFECYCLE
 -- ============================================================================
 
+-- Also seeds lastKind with every other value already there (a player who was in a Crimson-Arena match when this
+-- resource started): the change handler keeps it from then on.
 local function RemoveLeftovers()
     local ok, players = pcall(GetPlayers)
     if not ok or type(players) ~= 'table' then return 0 end
     local n = 0
     for _, s in ipairs(players) do
         local src = ToSrc(s)
-        if src and Classify(BagValue(src)) == 'ours' and not wanted[src] then
-            if RemoveOurs(src) then n = n + 1 end
+        if src then
+            local kind = Classify(BagValue(src))
+            if kind == 'ours' and not wanted[src] then
+                if RemoveOurs(src) then n = n + 1 end
+            elseif kind ~= 'none' then
+                lastKind[src] = kind
+            end
         end
     end
     return n
