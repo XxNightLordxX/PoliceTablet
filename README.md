@@ -678,6 +678,9 @@ Config.Debug = true              -- true = each module prints tagged debug lines
 Config.Database = {
     enabled = false,
     folder = 'saves',
+    -- Files mode: after this many milliseconds of saving, Crimson-Police lets the server run its other work for a
+    -- moment before the next save (what oxmysql does in database mode); 0 = never pause (the old timing)
+    saveTurnMs = 4,
 }
 ```
 
@@ -990,6 +993,10 @@ works the same: runs, points, XP, payouts, boards, seasons, disputes, suspension
 - **oxmysql must still run**: it is a required resource, and Crimson-Police reads sc-dispatch's calls through it.
 - `folder` may name another folder **inside** the Crimson-Police folder. FXServer only lets a resource write inside
   resource folders.
+- `saveTurnMs` (4): every change is written to the folder before Crimson-Police goes on, and after 4 ms of writing it
+  lets the server run its other work for a moment before the next write, as oxmysql does with the database. So when
+  several officers finish a mission together, the server does not stall while their results are saved. The data
+  saved is the same. 0 = write everything in one go, as before.
 - `/CrimsonPoliceAdmin storage` shows which storage is in use, the rows of every table and the size of the folder.
 
 **Switching on a server that already has data.** Changing `enabled` moves nothing by itself: Crimson-Police starts

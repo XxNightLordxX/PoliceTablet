@@ -3090,6 +3090,11 @@ What it is
     1690), one NOW() per statement. db:exec(sql, params) runs one statement atomically: a failing statement
     leaves nothing changed. With db.slice (CP.Storage sets it on a server) a SELECT run from a thread gives
     the server its turn every few milliseconds; every other statement waits for it.
+  * Through the shim, a thread that has spent db.slice.saveMs milliseconds saving (Config.Database.saveTurnMs,
+    4; 0 = never) gives the server its turn (wait(0)) right after the statement that used them up, as
+    oxmysql's await yields: never inside a statement (the change is on disk first), never while a sliced
+    SELECT holds the engine, never in a thread that cannot yield. A run end of 6 officers (42 statements, each
+    a document rewrite and an fsync) no longer holds the server thread in one stretch.
   * CP.Storage.MemSQL.shim(db, opts) -> a table shaped like oxmysql's MySQL global (query, single, scalar,
     insert, update: callable with a callback and with .await; ready). Results are typed like oxmysql:
     TINYINT(1) columns as booleans, DECIMAL and SUM() as strings, DATETIME/DATE as milliseconds, text
@@ -3202,7 +3207,9 @@ Public API (server)
   CP.Storage.hasSavedData() -> true when Config.Database.folder holds saves (a _tables.json), in either mode
   CP.Storage.realMySQL   oxmysql's MySQL table (files mode): the one read-only lookup of another
                          resource's table (sc-dispatch's mdt_dispatch, Hard rule 15) still goes there
-  CP.Storage.db          the CP.Storage.MemSQL engine (files mode)
+  CP.Storage.db          the CP.Storage.MemSQL engine (files mode); its db.slice = { wait = Citizen.Wait, ms = 4,
+                         saveMs = CP.Storage.saveTurnMs } on a server
+  CP.Storage.saveTurnMs() -> Config.Database.saveTurnMs read now (4 when unset; 0 = saves never pause)
   CP.Storage.MemSQL      the engine's code (modules/storage/memsql.lua); this module's one global table holds both
 
 fxmanifest loads memsql.lua and this file right after @oxmysql/lib/MySQL.lua and before every other server
@@ -4919,7 +4926,10 @@ mode (Config.Database.enabled = false) and CP.Storage (modules/storage/server.lu
   9. details a review found: MariaDB's collation table, PAD SPACE order, integer overflow, DATE across time zones,
      exact BIGINT / DECIMAL, additive ALTER TABLE, AUTO_INCREMENT after UPDATE, FXServer's inverted os.rename,
      a refused file operation at every point of a save, hand-edited, reformatted and missing documents, an ADD INDEX
-     undone completely when a later part of its ALTER fails or its save is refused
+     undone completely when a later part of its ALTER fails or its save is refused; a 6-officer run end on a slow
+     disk (5 ms a file) gives the server its turn after saveTurnMs of saving, with each change on disk first and
+     the tables and saves folder byte for byte as with saveTurnMs = 0 (no turn), never in the main chunk, never
+     for a SELECT, counted again after the thread was away, a callback answered on the next tick
 Needs no database (9.1 compares with the local MariaDB when it runs); every saves folder lives in a temporary
 folder removed at the end.
 ```

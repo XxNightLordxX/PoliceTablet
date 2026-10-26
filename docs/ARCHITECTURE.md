@@ -1732,8 +1732,8 @@ code is `CP.Storage.MemSQL` (memsql.lua creates `CP.Storage` and puts it there).
   affected, changed, insertId, info, warnings }`, synchronous and atomic (a failing statement changes nothing),
   and saved before it returns (every changed document written as `.tmp` first, then renamed into place in a
   crash-safe order; a save that fails part way is undone in memory and in the folder); with `db.slice` (set by
-  CP.Storage on a server: `{ wait = Citizen.Wait, ms = 4 }`) a SELECT run from a thread gives the server its turn
-  every 4 ms, and every other statement waits for it; `db:load()`; `db:bulk(fn)` (the write-through paused, every document saved once at
+  CP.Storage on a server: `{ wait = Citizen.Wait, ms = 4, saveMs = CP.Storage.saveTurnMs }`) a SELECT run from a
+  thread gives the server its turn every 4 ms, and every other statement waits for it; `db:load()`; `db:bulk(fn)` (the write-through paused, every document saved once at
   the end: bulk imports and the storage copy); `db:tableNames()`; `folderStore(dir, { docRows, label })` (the saves folder: its file
   layout and crash-safe save sequence are in the header of memsql.lua; `label` is the folder as the owner named it, for
   example `saves/second`, in the messages about its files, default dir); `luaRows(res)` (engine rows typed like
@@ -1742,7 +1742,13 @@ code is `CP.Storage.MemSQL` (memsql.lua creates `CP.Storage` and puts it there).
   `update` (each callable with a callback, and with `.await`), plus `ready`. It copies oxmysql's return shapes,
   typing (TINYINT(1) as booleans, DECIMAL and SUM as strings, DATETIME/DATE as milliseconds, text always as
   strings, UPDATE counting matched rows), error text and parameter checks. Any other key (`prepare`,
-  `transaction`, ...) raises. It routes by the tables a statement names: only `cp_` tables go to the engine; only
+  `transaction`, ...) raises. With `db.slice.saveMs` (`Config.Database.saveTurnMs`, 4; read at every save, 0 = never)
+  a thread that has spent that many milliseconds saving gives the server its turn (`wait(0)`) after the statement
+  that used them up, as oxmysql's await yields after every query: never inside a statement (each change is on disk
+  before its statement returns), never while a sliced SELECT holds the engine, and not in a thread that cannot yield
+  (the main chunk, the migrations at load). The time is counted per thread (a weak-keyed table) and starts again when
+  the thread was away longer than the budget since its last save. A callback (`MySQL.update(sql, p, cb)`) whose save
+  used up the budget gets its answer a tick later, as with oxmysql. It routes by the tables a statement names: only `cp_` tables go to the engine; only
   other resources' tables (today sc-dispatch's `mdt_dispatch`, Hard rule 15) go read-only to `realMySQL` (nil,
   and one warning, when oxmysql is not started); a statement mixing both, or writing another resource's table,
   is an error.

@@ -176,6 +176,7 @@ local RANGES = {
     ['Limits.maxConcurrentRuns'] = { 1, 128 },
     ['Limits.maxConcurrentTactical'] = { 0, 128 },
     ['Limits.playerInfoCacheMs'] = { 0, 10000 },
+    ['Database.saveTurnMs'] = { 0, 100 },
     ['CrossDept.minParticipants'] = { 1, 32 },
     ['CrossDept.maxParticipants'] = { 1, 32 },
     ['Testing.maxTesters'] = { 1, 32 },

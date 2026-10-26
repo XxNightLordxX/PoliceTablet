@@ -3463,6 +3463,274 @@ do
     H.ok(M.renderCreate(t):find('KEY idx_a (a)', 1, true) ~= nil, 'with its index')
 end
 
+-- 9.16 files mode on a server: a thread that has spent db.slice.saveMs milliseconds saving (CP.Storage passes
+-- Config.Database.saveTurnMs) gives the server its turn after the statement that used them up, as oxmysql's await
+-- yields after every query, instead of holding the server thread for a whole run end (6 officers: 42 statements,
+-- each a document rewrite and an fsync). Each change is on disk before the turn comes, and the tables and the saves
+-- folder end byte for byte as with saveTurnMs = 0 (no turn: the old timing).
+do
+    local clock = (os.microtime and function()
+        return os.microtime() / 1e6
+    end) or os.clock -- the engine's clock
+    local function Ms(t) return (clock() - t) * 1000 end
+    -- a slow disk: every file write takes 5 ms
+    local function SlowWrite(path, data)
+        local t = clock()
+        while Ms(t) < 5 do end
+        return realFs.write(path, data)
+    end
+    local COLS = [[run_uuid, mission_type, mission_id, location_label, citizenid, department, season_id,
+        participants, departments_n, tier, state, end_reason, points_base, bonus_points, penalty_points, final_points,
+        cash_base, cash_multiplier, cash_paid, cash_status, duration_s, breakdown, location_index, arrests, citations]]
+    local INS = 'INSERT INTO cp_mission_runs (' .. COLS
+        .. ') VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
+    local function Breakdown(i)
+        return ('{"points":{"base":100,"bonuses":[{"id":"clean","points":10},{"id":"fast","points":15}],"final":125,"tier":"standard","stars":3},"cash":{"base":1500,"multiplier":1.25,"amount":1875,"status":"pending"},"xpCounted":true,"items":[],"endReason":"completed","stats":{"arrests":2,"citations":1,"evidence":3},"seq":%d}'):format(
+            i)
+    end
+    local function RunRow(i, cid, team, cashPaid, status)
+        return {
+            'uuid-' .. i,
+            'patrol',
+            'beat_patrol',
+            'Mirror Park',
+            cid,
+            'lspd',
+            1,
+            team,
+            1,
+            'standard',
+            'completed',
+            'completed',
+            100,
+            30,
+            5,
+            125,
+            1500,
+            1.25,
+            cashPaid,
+            status,
+            600,
+            Breakdown(i),
+            1,
+            2,
+            1,
+        }
+    end
+    -- a saves folder with 40 officers and 600 runs (two run documents), built by the migrations
+    local base = TMP .. '/saveturn'
+    Mkdir(base)
+    local b = M.new({ store = M.folderStore(base) }):load()
+    for _, f in ipairs(H.migrationFiles()) do
+        for _, stmt in ipairs(H.splitStatements(ReadFile(H.root .. 'sql/migrations/' .. f))) do
+            local ok, err = pcall(b.exec, b, stmt)
+            if not ok and not tostring(err):find('Duplicate column name', 1, true) then error(err, 0) end
+        end
+    end
+    b:bulk(function(d)
+        for i = 1, 40 do
+            d:exec([[INSERT INTO cp_officers (citizenid, callsign, rank_label, display_name, department, xp, license)
+                VALUES (?, ?, 'Officer', ?, 'lspd', ?, ?)]],
+                { ('CID%05d'):format(i), tostring(100 + i), 'Officer ' .. i, i * 37, ('license:%040d'):format(i) })
+        end
+        for i = 1, 600 do d:exec(INS, RunRow(i, ('CID%05d'):format(1 + i % 40), 3, 1875, 'paid')) end
+    end)
+    -- the end of a 6-officer run: the statements Settle() and its listeners send for each participant
+    local function RunEnd(sh, onStatement)
+        local function S(kind, sql, params)
+            local t = clock()
+            local r = sh[kind].await(sql, params)
+            if onStatement then onStatement(Ms(t)) end
+            return r
+        end
+        for k = 1, 6 do
+            local i, cid = 1000 + k, ('CID%05d'):format(k)
+            local id = S('insert', INS, RunRow(i, cid, 6, 0, 'pending'))
+            S('update', [[UPDATE cp_mission_runs SET cash_status = 'paying',
+                breakdown = IF(breakdown IS NULL, NULL, JSON_SET(breakdown, '$.cash.status', 'paying'))
+                WHERE id = ? AND cash_status = 'pending']], { id })
+            S('update', [[UPDATE cp_mission_runs SET cash_status = 'paid', cash_paid = ?,
+                breakdown = IF(breakdown IS NULL, NULL, JSON_SET(breakdown, '$.cash.status', 'paid'))
+                WHERE id = ? AND cash_status = 'paying']], { 1875, id })
+            S('update', 'INSERT INTO cp_officers (citizenid, xp) VALUES (?, ?) ON DUPLICATE KEY UPDATE xp = VALUES(xp)',
+                { cid, 5000 + k })
+            S('update', [[INSERT INTO cp_officers (citizenid, streak_days, last_complete, grace_week, grace_used)
+                VALUES (?, ?, FROM_UNIXTIME(?), NULL, 0) ON DUPLICATE KEY UPDATE streak_days = VALUES(streak_days),
+                last_complete = VALUES(last_complete)]], { cid, 1 + k, os.time() - k * 86400 })
+            S('update', [[INSERT IGNORE INTO cp_item_rewards (row_id, source, source_key, citizenid, item, count, value,
+                status) VALUES (?, 'run', ?, ?, 'evidence_bag', 1, 50, 'pending')]], { id, 'uuid-' .. i, cid })
+            S('update', [[UPDATE cp_mission_runs SET breakdown = JSON_SET(breakdown, '$.items', JSON_EXTRACT(?, '$'))
+                WHERE id = ? AND JSON_VALID(breakdown)]],
+                { '[{"name":"evidence_bag","label":"Evidence bag","count":1,"status":"pending"}]', id })
+        end
+    end
+    -- runs RunEnd in a thread on a copy of the folder, as the server does: wait(0) yields, the next resume is the
+    -- server's next tick. onTurn(d, dir) runs while the thread waits for its turn.
+    local function Play(name, saveMs, onTurn)
+        local dir = TMP .. '/' .. name
+        os.execute(('rm -rf \'%s\' && cp -a \'%s\' \'%s\''):format(dir, base, dir))
+        local d = M.new({ store = M.folderStore(dir) }):load()
+        local p = { d = d, dir = dir, turns = 0, waits = {}, resumes = {}, longest = 0, statements = 0 }
+        d.slice = {
+            ms = 4,
+            saveMs = saveMs,
+            wait = function(ms) coroutine.yield('turn', ms) end,
+        }
+        local sh = M.shim(d, { resource = 'Crimson-Police' })
+        local co = coroutine.create(function()
+            RunEnd(sh, function(ms)
+                p.statements = p.statements + 1
+                if ms > p.longest then p.longest = ms end
+            end)
+        end)
+        M.fs.write = SlowWrite
+        while coroutine.status(co) == 'suspended' do
+            local t = clock()
+            local ok, what, ms = coroutine.resume(co)
+            p.resumes[#p.resumes + 1] = Ms(t)
+            if not ok then
+                RestoreFs()
+                error(what, 0)
+            end
+            if what == 'turn' then
+                p.turns = p.turns + 1
+                p.waits[#p.waits + 1] = ms
+                if onTurn then
+                    RestoreFs()
+                    onTurn(d, dir)
+                    M.fs.write = SlowWrite
+                end
+            end
+        end
+        RestoreFs()
+        return p
+    end
+    local function Max(list)
+        local m = 0
+        for _, v in ipairs(list) do if v > m then m = v end end
+        return m
+    end
+
+    local old = Play('saveturn_0', 0)
+    H.eq(old.statements, 42, 'a 6-officer run end sends 42 statements')
+    H.eq(old.turns, 0, 'saveTurnMs = 0: the thread never gives the server its turn (the old timing)')
+    H.ok(#old.resumes == 1 and old.resumes[1] >= 42 * 5,
+        ('and holds the server thread for the whole run end (%.0f ms in one go)'):format(old.resumes[1]))
+    local BUDGET = 12
+    -- at the first turn a copy of the saves folder (loaded where it cannot change the folder) holds every change
+    local checked = false
+    local new = Play('saveturn_12', BUDGET, function(d, dir)
+        if checked then return end
+        checked = true
+        local snap = dir .. '_turn'
+        os.execute(('rm -rf \'%s\' && cp -a \'%s\' \'%s\''):format(snap, dir, snap))
+        SameTables(M.new({ store = M.folderStore(snap) }):load(), d,
+            'when the turn comes, every change made so far is already in the saves folder')
+        collectgarbage()
+    end)
+    H.ok(new.turns >= 1,
+        ('saveTurnMs = %d: the run end gives the server its turn (%d times)'):format(BUDGET, new.turns))
+    H.ok(new.turns < new.statements, 'not after every statement: a turn comes once the budget is used up')
+    H.ok(#new.waits > 0 and Max(new.waits) == 0, 'each turn is wait(0): the next server tick')
+    H.ok(checked, '(the saves folder was checked at the first turn)')
+    local bound = BUDGET + old.longest + 5
+    H.ok(Max(new.resumes) <= bound,
+        ('no stretch on the server thread runs longer than saveTurnMs plus one statement\'s save (%.1f ms; at most %.1f)'):format(
+            Max(new.resumes), bound))
+    SameTables(new.d, old.d, 'the tables end exactly as with saveTurnMs = 0')
+    H.ok(os.execute(('diff -r \'%s\' \'%s\' >/dev/null'):format(new.dir, old.dir)) == true,
+        'and so does every file of the saves folder (diff -r)')
+    -- the default (4 ms): every statement here saves for more than 4 ms, so each is followed by a turn
+    local def = Play('saveturn_4', 4)
+    H.eq(def.turns, 42, 'saveTurnMs = 4 with a 5 ms disk: a turn after every saving statement')
+    SameTables(def.d, old.d, 'with the same tables')
+
+    -- a thread that cannot yield (the main chunk) runs straight on
+    local d = M.new({ store = M.folderStore(TMP .. '/saveturn_4') }):load()
+    local turns = 0
+    d.slice = {
+        ms = 0,
+        saveMs = 0.001,
+        wait = function() turns = turns + 1; coroutine.yield('turn') end,
+    }
+    local sh = M.shim(d, { resource = 'Crimson-Police' })
+    M.fs.write = SlowWrite
+    H.eq(coroutine.isyieldable(), false, '(the spec\'s main chunk cannot yield)')
+    H.eq(sh.update.await('UPDATE cp_officers SET xp = xp + 1 WHERE citizenid = ?', { 'CID00001' }), 1,
+        'a write from the main chunk still works')
+    H.eq(turns, 0, 'with no turn')
+    -- a SELECT saves nothing: it never counts
+    local co = coroutine.create(function()
+        for _ = 1, 5 do
+            sh.query.await('SELECT COUNT(*) AS n FROM cp_mission_runs WHERE citizenid = ?', { 'CID00001' })
+        end
+        return 'done'
+    end)
+    local okS, resS = coroutine.resume(co)
+    H.ok(okS and resS == 'done' and turns == 0, 'SELECTs in a thread never give a turn for saving: ' .. tostring(resS))
+    -- a thread that was away (suspended) since its last save starts counting again
+    local w = 0
+    co = coroutine.create(function()
+        local t = clock()
+        sh.update.await('UPDATE cp_officers SET xp = xp + 1 WHERE citizenid = ?', { 'CID00002' })
+        w = Ms(t)
+    end)
+    d.slice.saveMs = 1e9
+    coroutine.resume(co)
+    d.slice.saveMs = w * 1.5
+    co = coroutine.create(function()
+        sh.update.await('UPDATE cp_officers SET xp = xp + 1 WHERE citizenid = ?', { 'CID00002' })
+        coroutine.yield('away')
+        sh.update.await('UPDATE cp_officers SET xp = xp + 1 WHERE citizenid = ?', { 'CID00002' })
+        return 'done'
+    end)
+    local _, first = coroutine.resume(co)
+    local t = clock()
+    while Ms(t) < w * 2 do end
+    local okA, resA = coroutine.resume(co)
+    H.ok(first == 'away' and okA and resA == 'done' and turns == 0,
+        ('two saves (%.1f ms each) of a thread that was away in between do not add up to the %.1f ms budget'):format(w,
+            w * 1.5))
+    co = coroutine.create(function()
+        sh.update.await('UPDATE cp_officers SET xp = xp + 1 WHERE citizenid = ?', { 'CID00002' })
+        sh.update.await('UPDATE cp_officers SET xp = xp + 1 WHERE citizenid = ?', { 'CID00002' })
+        return 'done'
+    end)
+    local _, r1 = coroutine.resume(co)
+    H.ok(r1 == 'turn' and turns == 1, 'back to back they do: ' .. tostring(r1))
+    coroutine.resume(co)
+    -- the callback form (MySQL.update(sql, params, cb)) gets its answer on the next tick, as with oxmysql
+    d.slice = { ms = 0, saveMs = 0.001, wait = Wait }
+    local got
+    sh.update('UPDATE cp_officers SET xp = xp + 1 WHERE citizenid = ?', { 'CID00003' }, function(n) got = n end)
+    H.eq(got, nil, 'a callback after a save that used up the budget waits for the next tick')
+    H.step(0)
+    H.eq(got, 1, 'and gets the answer then')
+    RestoreFs()
+
+    -- CP.Storage passes Config.Database.saveTurnMs, read at every save (a change in Admin UI → Settings counts at
+    -- once); unset = 4
+    local savedStorage, savedMySQL, savedCfg = CP.Storage, _G.MySQL, Config.Database
+    local dir = TMP .. '/saveturn_cfg'
+    os.execute(('rm -rf \'%s\' && cp -a \'%s\' \'%s\''):format(dir, base, dir))
+    CP.Storage = { MemSQL = M }
+    Config.Database = { enabled = false, folder = dir }
+    dofile(H.root .. 'modules/storage/server.lua')
+    local st = CP.Storage
+    local sl = st.db and st.db.slice
+    H.ok(sl and sl.wait == Wait and sl.ms == 4 and sl.saveMs == st.saveTurnMs,
+        'on a server the engine gets Citizen.Wait, the 4 ms SELECT slice and the save budget')
+    H.eq(st.saveTurnMs(), 4, 'no saveTurnMs in config.lua: 4 ms')
+    Config.Database = { enabled = false, folder = dir, saveTurnMs = 0 }
+    H.eq(st.saveTurnMs(), 0, 'saveTurnMs = 0: never')
+    Config.Database.saveTurnMs = 9
+    H.eq(st.saveTurnMs(), 9, 'a changed value counts at the next save')
+    local env = setmetatable({}, { __index = _G })
+    assert(loadfile(H.root .. 'config/config.lua', 't', env))()
+    H.eq(env.Config.Database.saveTurnMs, 4, 'config.lua ships saveTurnMs = 4')
+    CP.Storage, _G.MySQL, Config.Database = savedStorage, savedMySQL, savedCfg
+end
+
 -- 9.13 one global table: the engine is CP.Storage.MemSQL
 H.eq(CP.MemSQL, nil, 'modules/storage defines no CP.MemSQL (CP.Storage is its one global table)')
 H.eq(CP.Storage.MemSQL, M, 'the engine is CP.Storage.MemSQL')

@@ -180,6 +180,15 @@ local function AnnounceNewFolder()
     end)
 end
 
+-- Config.Database.saveTurnMs, read at every save so a change in Admin UI → Settings counts at once: the milliseconds
+-- of saving after which a thread gives the server its turn (files mode); 0 = never; unset = 4.
+function S.saveTurnMs()
+    local cfg = type(Config) == 'table' and type(Config.Database) == 'table' and Config.Database or {}
+    local ms = tonumber(cfg.saveTurnMs)
+    if ms == nil then return 4 end
+    return ms
+end
+
 function S.hasSavedData()
     local M = CP.Storage.MemSQL
     if not M then return false end
@@ -215,9 +224,10 @@ local function Install()
     local db = CP.Storage.MemSQL.new({ store = CP.Storage.MemSQL.folderStore(folderPath, { label = label }) })
     S.db = db
     -- a long SELECT (a board over a big season) gives the server its turn every 4 ms instead of holding the
-    -- server thread for the whole query (with the database, oxmysql's await yields the same way)
+    -- server thread for the whole query, and a thread that has saved for Config.Database.saveTurnMs milliseconds
+    -- gives it its turn after that statement (with the database, oxmysql's await yields the same way)
     local wait = (Citizen and Citizen.Wait) or Wait
-    if type(wait) == 'function' then db.slice = { wait = wait, ms = 4 } end
+    if type(wait) == 'function' then db.slice = { wait = wait, ms = 4, saveMs = S.saveTurnMs } end
     local okDir, whyNot, state = EnsureFolder(folderPath)
     if not okDir then
         if state == 'missing' and not OutsideResource(folderPath) then

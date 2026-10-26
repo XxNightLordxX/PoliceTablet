@@ -2647,6 +2647,9 @@ Config.Locale = 'en'
 Config.Database = {
     enabled = false,
     folder = 'saves',
+    -- Files mode: after this many milliseconds of saving, Crimson-Police lets the server run its other work for a
+    -- moment before the next save (what oxmysql does in database mode); 0 = never pause (the old timing)
+    saveTurnMs = 4,
 }
 
 -- ── Formats ─────────────────────────────────────────────────────────────────

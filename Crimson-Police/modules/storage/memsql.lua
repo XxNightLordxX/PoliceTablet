@@ -7947,6 +7947,33 @@ do
             return real
         end
 
+        -- db.slice.saveMs (Config.Database.saveTurnMs, set by CP.Storage on a server; a number or a function that
+        -- returns it): a thread that has spent that many milliseconds saving gives the server its turn (wait(0))
+        -- right after the statement that used them up, as oxmysql's await yields after every query. Each change is
+        -- on disk before its statement returns: the turn comes after the statement and its result, never inside
+        -- one, and never while a sliced SELECT holds the engine. A thread that cannot yield (the main chunk, a C
+        -- boundary) runs straight on. Counted per thread (weak keys: a finished thread leaves nothing), and started
+        -- again when the thread was away longer than the budget since its last save (it was suspended meanwhile).
+        local saving = setmetatable({}, { __mode = 'k' })
+        local function SaveTurn(t0, t1)
+            local slice = db.slice
+            if not (slice and slice.wait) then return end
+            local budget = slice.saveMs
+            if type(budget) == 'function' then budget = budget() end
+            budget = tonumber(budget)
+            if not budget or budget <= 0 or not coroutine.isyieldable() then return end
+            local co = coroutine.running()
+            local rec = saving[co]
+            if not rec or (t0 - rec.at) * 1000 > budget then
+                rec = { ms = 0, at = t0 }
+                saving[co] = rec
+            end
+            rec.ms, rec.at = rec.ms + (t1 - t0) * 1000, t1
+            if rec.ms < budget or db.busy or M.slicing.on then return end
+            saving[co] = nil
+            slice.wait(0)
+        end
+
         local function run(kind, sql, params)
             if type(sql) ~= 'string' then
                 error(sformat('First argument expected string, received \'%s\'', tostring(sql)), 3)
@@ -7990,9 +8017,14 @@ do
                     #params
                 ), 0)
             end
+            local stats = db.store and db.store.stats
+            local writes = stats and stats.writes
+            local t0 = writes and nowClock()
             local ok, res = pcall(db.exec, db, sql, params)
             if not ok then error(M.errorText(resource, sql, params, res, ast.np), 0) end
-            return M.result(kind, res)
+            local out = M.result(kind, res)
+            if writes and stats.writes ~= writes then SaveTurn(t0, nowClock()) end
+            return out
         end
         shim._run = run
 
