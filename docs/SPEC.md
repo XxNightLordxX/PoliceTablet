@@ -3267,6 +3267,12 @@ Config.AntiCheat = {
                               -- note for staff (nobody's points are held); 'hold' = the same, but that officer's
                               -- points wait for review; 'strict' = a fleeing person only gives up to a stun the
                               -- server saw; 'off' = no check (the old way)
+
+    -- A player who is not an admin sends a request only admins may send (the money, void and other Admin UI tools;
+    -- no officer or supervisor screen sends one, so it is almost always a cheat menu). It is refused as always, and
+    -- a console line, kept in Admin UI → System → Problems, names the player and the request: once a minute per
+    -- player and request, at most this many lines a minute per player. 0 = refused without a line.
+    adminProbeLines = 5,
 }
 
 -- ── Cross-Department Missions ───────────────────────────────────────────────

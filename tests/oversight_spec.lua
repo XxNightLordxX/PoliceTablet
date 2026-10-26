@@ -783,6 +783,18 @@ local rowOwn = AddRow(
 Co(CP.Admin.audit, 'console', 'console', 'flags', 'runFlagged', R1, nil, 'outside_help',
     'Killed by: Otto Outsider [OUT00005]')
 
+-- K9: one player's 'security' lines in System → Problems (CP.Permissions.probe); the supervisor's review flow below
+-- never asks an admin-only key, so it leaves none
+local function SecurityLines(src)
+    local n = 0
+    for _, l in ipairs(CP.Problems.list({ tag = 'security' })) do
+        if l.text:find(('player %d ('):format(src), 1, true) then n = n + 1 end
+    end
+    return n
+end
+H.clockMs = H.clockMs + 60000
+local supLines = SecurityLines(2)
+
 local ok, res = Act('server:sup:reviewFlagged', 2, { rowId = rowA, decision = 'approve', reason = '' })
 H.eq(ok, false, 'reason required')
 H.eq(res, 'err.reason_required', 'reason error key')
@@ -828,6 +840,24 @@ H.eq(rb.cash_status, 'held', 'cash stays held until the window closes')
 H.eq(LastCall('onRowVoided')[1], rowB, 'scoring void hook')
 ok, res = Act('server:sup:reviewFlagged', 2, { rowId = rowB, decision = 'void', reason = 'again' })
 H.eq(res, 'err.already_voided', 'cannot void twice')
+H.eq(Cb('sup:getReviewQueue', 2).ok, true, 'the supervisor\'s review queue')
+H.eq(SecurityLines(2), supLines, 'a supervisor\'s review flow (queue, approve, void, refusals) leaves no security line')
+
+-- an admin-only key asked by a player who is not an admin: the same refusal, and one line a minute
+do
+    local okA, eA = CP.Permissions.can(2, 'recordMove')
+    H.ok(okA == false and eA == 'err.no_permission', 'a supervisor asking an admin-only key is refused as before')
+    H.eq(SecurityLines(2), supLines + 1, 'and leaves one security line')
+    local line = CP.Problems.list({ tag = 'security', limit = 1 })[1]
+    H.eq(line and line.text, 'player 2 (Player2) sent admin-only recordMove while not an admin',
+        'naming him and the key')
+    CP.Permissions.can(2, 'recordMove')
+    H.eq(SecurityLines(2), supLines + 1, 'a second ask within the minute leaves none')
+    local adminLines = SecurityLines(1)
+    H.eq(CP.Permissions.can(1, 'recordMove'), true, 'an admin passes')
+    H.eq(CP.Permissions.can(0, 'recordMove'), true, 'the console passes')
+    H.eq(SecurityLines(1), adminLines, 'without a line')
+end
 
 -- an approval that lands while a void waits on its permission checks stands: the stale void is refused
 do

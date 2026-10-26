@@ -169,6 +169,7 @@ local RANGES = {
     ['Custody.cues.*'] = { 0, 1 },
     ['Custody.serviceClearance'] = { 10, 100 },
     ['AntiCheat.presenceShare'] = { 0, 1 },
+    ['AntiCheat.adminProbeLines'] = { 0, 60 },
     ['Scoring.failedCredit'] = { 0, 1 },
     ['Scoring.common.fastShare'] = { 0, 1 },
     ['Scoring.scoreCap'] = { 0, 10 },

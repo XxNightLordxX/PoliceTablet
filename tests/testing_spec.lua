@@ -156,6 +156,14 @@ CP.Permissions = {
         return false, 'err.no_permission'
     end,
 }
+-- K9: whether src was asked the admin-only testRun after canCalls[from] (a supervisor or officer never is on a builder
+-- path: it would log him as probing the admin tools)
+local function AskedTestRun(src, from)
+    for i = from + 1, #canCalls do
+        if canCalls[i].src == src and canCalls[i].action == 'testRun' then return true end
+    end
+    return false
+end
 CP.Alerts = {
     inArena = function(src) return arena[src] == true or (buckets[src] or 0) ~= 0 end,
 }
@@ -853,8 +861,10 @@ do
     H.clockMs = H.clockMs + 5000
     local raw = Mission('custom_draft', { label = 'Draft Raid', version = 4 })
     raw.source, raw.defHash, raw.status, raw.isBoss = nil, nil, nil, nil
+    local asked = #canCalls
     local ok, err = T.startDraft(2, raw, { tier = 'heavy' })
     H.eq(err, 'err.no_permission', 'an officer without builderEdit cannot test drafts')
+    H.eq(AskedTestRun(2, asked), false, 'and is not asked the admin-only testRun')
     ok, err = T.startDraft(6, { id = 'custom_bad', broken = true, locations = {} }, {})
     H.eq(err, 'err.test_invalid_draft', 'a draft that does not normalise')
     -- Hard rule 7: a Cross-Department Mission blocks a supervisor's draft test; only admin tests bypass it
@@ -1254,8 +1264,10 @@ do
     _G.LoadResourceFile = realLoad
 
     -- test:state is the caller's own data: admins and Mission Builder users (draft tests)
+    local askedState = #canCalls
     local res = H.callback('crimson-police:test:state', 6, {})
     H.eq(res.ok, true, 'test:state for a supervisor with builderEdit (their draft tests)')
+    H.eq(AskedTestRun(6, askedState), false, 'without asking him the admin-only testRun')
     res = H.callback('crimson-police:test:state', 2, {})
     H.eq(res.error, 'err.no_permission', 'test:state refused for an officer')
     CP.Runs = R

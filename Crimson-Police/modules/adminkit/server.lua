@@ -676,8 +676,13 @@ local function Guard(entry, src, payload)
     local ctx = { src = n, payload = p, name = name, actor = ActorId(n), role = n == 0 and 'console' or 'admin' }
     -- M
     if not opts.maintenance and Maint.active() then return false, 'err.maintenance' end
-    -- P: an admin key (supervisors never pass) and the admin rule itself
-    if not (CP.Access and CP.Access.isAdmin and CP.Access.isAdmin(n)) then return false, 'err.no_permission' end
+    -- P: an admin key (supervisors never pass) and the admin rule itself; a player who is not an admin is logged
+    -- (CP.Permissions.probe: no officer or supervisor screen sends an AdminKit action)
+    if not (CP.Access and CP.Access.isAdmin) then return false, 'err.no_permission' end
+    if not CP.Access.isAdmin(n) then
+        if CP.Permissions and CP.Permissions.probe then CP.Permissions.probe(n, name) end
+        return false, 'err.no_permission'
+    end
     if not (CP.Permissions and CP.Permissions.can) then return false, 'err.no_permission' end
     local okP, errP = CP.Permissions.can(n, permKey)
     if not okP then return false, errP or 'err.no_permission' end
@@ -802,7 +807,9 @@ function Kit.callback(name, permKey, fn, opts)
     opts = type(opts) == 'table' and opts or {}
     CP.Net.callback(name, function(src, args)
         local n = ToSrc(src)
-        if not n or not (CP.Access and CP.Access.isAdmin and CP.Access.isAdmin(n)) then
+        if not n or not (CP.Access and CP.Access.isAdmin) then return nil, 'err.no_permission' end
+        if not CP.Access.isAdmin(n) then
+            if CP.Permissions and CP.Permissions.probe then CP.Permissions.probe(n, name) end
             return nil, 'err.no_permission'
         end
         local okP, errP = CP.Permissions.can(n, permKey)

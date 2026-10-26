@@ -358,6 +358,59 @@ do
 end
 
 -- ============================================================================
+--              4b. A NON-ADMIN'S ADMIN-ONLY REQUEST LEAVES A LINE
+-- ============================================================================
+-- CP.Permissions.probe: one 'security' line in System → Problems per player and request a minute, at most
+-- Config.AntiCheat.adminProbeLines a minute per player; the reply is the same refusal as before.
+
+Kit.action('server:admin:kitProbe', 'payments', function() return true end, { rate = 20 })
+Kit.callback('admin:kitProbeRead', 'payments', function() return { fine = true } end, { rate = 20 })
+
+do
+    local function Probes(needle)
+        local n = 0
+        for _, l in ipairs(CP.Problems.list({ tag = 'security' })) do
+            if l.text:find(needle, 1, true) then n = n + 1 end
+        end
+        return n
+    end
+    H.clockMs = H.clockMs + 60000   -- a fresh minute: the refusals above already left lines
+    local ok, data = Act('server:admin:kitProbe', 7, {})
+    H.ok(ok == false and data == 'err.no_permission', 'an officer sending an AdminKit action is refused as before')
+    H.eq(Probes('player 7 (Player7) sent admin-only server:admin:kitProbe while not an admin'), 1,
+        'and one security line names him and the action')
+    ok, data = Act('server:admin:kitProbe', 7, {})
+    H.ok(ok == false and data == 'err.no_permission', 'a second try within the minute is refused the same way')
+    H.eq(Probes('server:admin:kitProbe'), 1, 'with no second line')
+    H.eq(Act('server:admin:kitProbe', 1, {}), true, 'an admin acts')
+    local okC = Async(function() return Kit.run('server:admin:kitProbe', 0, {}) end)
+    H.eq(okC, true, 'the console acts')
+    H.eq(Probes('server:admin:kitProbe'), 1, 'neither leaves a line')
+
+    local res = Cb('admin:kitProbeRead', 2)
+    H.eq(res.error, 'err.no_permission', 'a supervisor reading an AdminKit callback is refused as before')
+    H.eq(Probes('player 2 (Player2) sent admin-only admin:kitProbeRead'), 1, 'and leaves one line')
+    H.eq(Cb('admin:kitProbeRead', 1).ok, true, 'an admin reads it')
+    H.eq(Probes('admin:kitProbeRead'), 1, 'without a line')
+
+    H.clockMs = H.clockMs + 60000
+    Act('server:admin:kitProbe', 7, {})
+    H.eq(Probes('server:admin:kitProbe'), 2, 'a minute later the same request leaves one more line')
+
+    -- at most adminProbeLines lines a minute per player, 0 = none
+    local realLines = Config.AntiCheat.adminProbeLines
+    Config.AntiCheat.adminProbeLines = 2
+    for _, name in ipairs({ 'probeA', 'probeB', 'probeC' }) do CP.Permissions.probe(9, name) end
+    H.eq(Probes('player 9 '), 2, 'three different requests in a minute leave adminProbeLines (2) lines')
+    H.clockMs = H.clockMs + 60000
+    Config.AntiCheat.adminProbeLines = 0
+    CP.Permissions.probe(9, 'probeD')
+    H.eq(Probes('player 9 '), 2, 'adminProbeLines = 0: no line')
+    Config.AntiCheat.adminProbeLines = realLines
+    H.eq(realLines, 5, 'config.lua ships 5')
+end
+
+-- ============================================================================
 --                        5. V, K, A AND THE DAY COUNTS
 -- ============================================================================
 

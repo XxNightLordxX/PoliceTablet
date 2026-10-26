@@ -122,6 +122,33 @@ function P.canReviewRun(src, runUuid)
     return true
 end
 
+-- A player who is not an admin asked for an admin-only action (below, AdminKit's guard and its read callbacks). No
+-- officer or supervisor screen sends one, so it is almost always a cheat menu probing the money and void tools. The
+-- reply stays the same; one console line (kept in Admin UI → System → Problems) names the player and the request:
+-- once a minute per player and request, at most Config.AntiCheat.adminProbeLines lines a minute per player (0 = no
+-- line). The console and server code (src 0) never count.
+local PROBE_WINDOW_MS = 60000
+local PROBE_LINES_DEFAULT = 5
+
+local function ProbeLines()
+    local ac = Config.AntiCheat
+    local v = type(ac) == 'table' and tonumber(ac.adminProbeLines) or nil
+    if v == nil then return PROBE_LINES_DEFAULT end
+    return math.max(0, math.floor(v))
+end
+
+function P.probe(src, name)
+    local n = math.tointeger(tonumber(src))
+    if not n or n <= 0 then return end
+    local cap = ProbeLines()
+    if cap <= 0 or not (CP.Net and CP.Net.rateOk) then return end
+    name = tostring(name)
+    if not CP.Net.rateOk(n, 'perm:probe:' .. name, 1, PROBE_WINDOW_MS) then return end
+    if not CP.Net.rateOk(n, 'perm:probe', cap, PROBE_WINDOW_MS) then return end
+    CP.warn('security', 'player %d (%s) sent admin-only %s while not an admin', n, tostring(GetPlayerName(n) or '?'),
+        name)
+end
+
 function P.can(src, action, ctx)
     if type(action) ~= 'string' or action == '' then return false, 'err.no_permission' end
     local n = tonumber(src)
@@ -129,7 +156,10 @@ function P.can(src, action, ctx)
     if type(ctx) ~= 'table' then ctx = nil end
 
     if not CP.Access.isAdmin(n) then
-        if ADMIN_ONLY[action] then return false, 'err.no_permission' end
+        if ADMIN_ONLY[action] then
+            P.probe(n, action)
+            return false, 'err.no_permission'
+        end
         if not SUPERVISOR_ALWAYS[action] and SupervisorConfig()[action] ~= true then
             return false, 'err.no_permission'
         end

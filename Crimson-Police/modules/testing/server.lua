@@ -937,11 +937,10 @@ function Testing.startDraft(src, def, opts)
     src = ToSrc(src)
     if not src then return false, 'err.not_in_game' end
     opts = type(opts) == 'table' and opts or {}
-    local okB = Can(src, 'builderEdit')
-    if not okB then
-        local okT, errT = Can(src, 'testRun')
-        if not okT then return false, errT or 'err.no_permission' end
-    end
+    -- builderEdit alone: every admin passes it (as testRun), and testRun is admin-only, so asking it of a supervisor
+    -- whose builder key was just switched off would log him as probing the admin tools (CP.Permissions.probe)
+    local okB, errB = Can(src, 'builderEdit')
+    if not okB then return false, errB or 'err.no_permission' end
     -- Hard rule 7: only Admin test runs bypass the Cross-Department lock; a supervisor's draft test does not.
     local okA, isAdm = Call('Access', 'isAdmin', src)
     if not (okA and isAdm == true) then
@@ -1441,8 +1440,8 @@ function Testing.record(src, payload)
     if not entry then return false, 'err.test_not_run' end
     local okP, errP
     if entry.draft then
+        -- builderEdit alone (every admin passes it; see startDraft)
         okP, errP = Can(src, 'builderEdit')
-        if not okP then okP, errP = Can(src, 'testRun') end
     else
         okP, errP = Can(src, 'testRun')
     end
@@ -2180,8 +2179,10 @@ end, { rate = 3 })
 
 -- Only the caller's own lobby, test and results: admins, and Mission Builder users (their draft tests).
 CP.Net.callback('test:state', function(src)
-    local ok, errKey = Allowed(src, 'testRun')
-    if not ok and not Can(src, 'builderEdit') then return nil, errKey end
+    -- builderEdit alone: every admin passes it (as testRun), and asking the admin-only testRun of a Mission Builder
+    -- supervisor would log him as probing the admin tools (CP.Permissions.probe)
+    local ok, errKey = Allowed(src, 'builderEdit')
+    if not ok then return nil, errKey end
     return Testing.state(src)
 end, { rate = 4 })
 

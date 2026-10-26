@@ -785,6 +785,13 @@ Full admin control, System (P5):
   `editBuiltins`, `missionAdmin`, `boardsAdmin`, `payments`, `rewardsAdmin`, `deptFunds`, `departmentsAdmin`,
   `storageAdmin`, `playerSupport`, `recordMove`, `cleanup` (also listed in modules/admin's ADMIN_ONLY mirror for the
   Permissions screen). `isAdminOnly(action) -> bool`, `adminOnlyKeys() -> { key }` (the 29, in order).
+- `probe(src, name)` — a player who is not an admin asked for an admin-only action: `can` (an admin-only key),
+  AdminKit's guard and `Kit.callback` (the action or callback name) call it before their unchanged refusal. One
+  `CP.warn('security', 'player <src> (<name>) sent admin-only <name> while not an admin')` (kept in CP.Problems) per
+  player and name a minute (`CP.Net.rateOk`), at most `Config.AntiCheat.adminProbeLines` (5) lines a minute per player;
+  0 = none; src 0 or not a player never counts. No officer or supervisor path asks an admin-only key of a non-admin:
+  CP.Testing asks `builderEdit` alone for draft tests and `test:state` (every admin passes it), builder overrides check
+  `actor.isAdmin` first.
 - `canReviewRun(src, runUuid) -> boolean, errKey` — false when the reviewer, or any character of their licenses
   (`CP.AdminKit.selfRun`), took part (`err.own_run`)
 
