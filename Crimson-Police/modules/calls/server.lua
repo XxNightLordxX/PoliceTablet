@@ -212,6 +212,10 @@ local function OnMarked(src, callId, raw, now)
         for i = #list, 1, -1 do if list[i] == mark then table.remove(list, i) end end
         if #list == 0 then pendingMarks[src] = nil end
     end
+    if mark.unloaded then
+        CP.log(TAG, 'responding %d -> %s ignored: the character logged out during the lookup', src, raw)
+        return
+    end -- their run ends through the runs module's own unload handling
     if not uid then
         CP.log(TAG, 'responding %d -> %s ignored: not an active mdt_dispatch call', src, raw)
         return
@@ -434,8 +438,22 @@ AddEventHandler('playerDropped', function()
     pendingMarks[src] = nil
 end)
 
+-- A character logout keeps the server id, so the next character must not inherit the old one's real-call mark.
+-- seen and freeAbandons stay: they expire on their own and feed the dodge rule (OnUnmarked's 'known' check).
+local function OnUnload(src)
+    src = ToSrc(src)
+    if not src then return end
+    responding[src] = nil
+    aliases[src] = nil
+    for _, mark in ipairs(pendingMarks[src] or {}) do mark.unloaded = true end
+    pendingMarks[src] = nil
+end
+
 CreateThread(function()
     Wait(0)
+    if CP.Qbx and CP.Qbx.onPlayerUnload then
+        CP.Qbx.onPlayerUnload(OnUnload)
+    end -- integrations/qbx loads later
     if not CP.Dispatch then
         CP.err(TAG, 'modules/integrations/sc_dispatch is missing: real calls cannot end runs')
         return

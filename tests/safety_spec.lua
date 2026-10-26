@@ -310,7 +310,7 @@ H.eq(Bag(22) and Bag(22).matchId, 'm0', 'start: foreign value kept')
 H.eq(#dl.responding, 1, 'calls listens to responding')
 H.eq(#dl.shots, 1, 'alerts listens to shots fired')
 H.eq(#dl.down + #dl.dead, 2, 'alerts listens to person down / dead')
-H.eq(#unloadListeners, 1, 'downed listens to character unload')
+H.eq(#unloadListeners, 2, 'calls and downed listen to character unload')
 H.eq(#metaListeners, 1, 'downed listens to qbx metadata changes')
 do
     local keys = {}
@@ -932,6 +932,21 @@ do
     H.eq(CP.Calls.isOnCall(16), true, 'on call')
     H.fire('playerDropped', 16, 'quit')
     H.eq(CP.Calls.isOnCall(16), false, 'playerDropped wipes the player')
+
+    -- a character switch keeps the server id: the next character is not on the old one's call
+    Respond(1, '456', true)
+    H.eq(CP.Calls.isOnCall(1), true, 'on call before the logout')
+    for _, fn in ipairs(unloadListeners) do CreateThread(function() fn(1) end) end
+    H.eq(CP.Calls.isOnCall(1), false, 'a character unload clears the responding mark')
+
+    -- a logout while the mark is still being looked up records nothing for the next character
+    local realLookup = CP.Dispatch.lookupActiveCall
+    CP.Dispatch.lookupActiveCall = function(id) Wait(100); return realLookup(id) end
+    Respond(2, '456', true)
+    for _, fn in ipairs(unloadListeners) do CreateThread(function() fn(2) end) end
+    RunFor(300)
+    CP.Dispatch.lookupActiveCall = realLookup
+    H.eq(CP.Calls.isOnCall(2), false, 'a mark still in its lookup at the unload is dropped')
 end
 
 -- ============================================================================

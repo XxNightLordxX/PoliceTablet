@@ -1525,8 +1525,10 @@ Classification of a ToggleResponding (src, callId, isResponding), in this order:
   calls.reclassified). Listeners run in their own threads and the mark yields twice (the mdt_dispatch
   lookup, then the row write in removeParticipant): an un-mark that arrives during either wait is kept and
   applied once the free abandon is written, so a quick on/off toggle cannot keep it free.
-callClearedByOfficer removes that call for everyone; playerDropped removes the player's entries; an
-sc-dispatch restart wipes every entry (sc-dispatch deactivates every call when it starts or stops).
+callClearedByOfficer removes that call for everyone; playerDropped removes the player's entries; a character
+unload (CP.Qbx.onPlayerUnload: a character switch keeps the server id) removes the responding entries and
+drops a mark still being looked up, but keeps the dodge-rule data (seen, free abandons), which expires on its
+own; an sc-dispatch restart wipes every entry (sc-dispatch deactivates every call when it starts or stops).
 ```
 
 ## Crimson-Police/modules/cash/server.lua
