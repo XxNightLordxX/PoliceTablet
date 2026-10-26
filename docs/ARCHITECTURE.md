@@ -2720,6 +2720,39 @@ without arguments also removes the run's service vehicles, PLAN M7).
   after `clear`): streaming swaps, adopted blips that went, the nearest target, the line, the HUD line (sent on change
   only) and the Objective GPS waypoint. No entity pool scans.
 
+### 5.45 CP.Opponents — modules/opponents (S; stub)
+
+The real suspects of a case, shared by live crimes (§5.46) and volunteer suspects (§5.47); the owner's decision of
+2026-10-26, "Build all 3 but options in the config.lua". A case belongs to one run and one objective; each suspect is
+keyed by citizenid and carries his state (free, cuffed, detained, booked, lost, left or void), the proof the server
+checks before anything scores (the sc-police cuff pair and custody hold, bookings, downs), the officers' conduct
+ledger, the identity and pair rules (no officer scores against his own characters or a repeated partner), a position
+trail and a timeline for review, and staff notes that never hold points. It reads sc-police and sc-ambulance facts it
+only listens to, and its one watch runs only while a case is open. Nothing runs while Config.LiveCrime.enabled and
+Config.Volunteers.enabled are false (both shipped false). Built in steps V4-V26
+(/tmp/claude-0/-home-user-PoliceTablet/c9b2f5e1-32ec-5436-a1db-2a78c5b9aa69/scratchpad/pvp/DESIGN_FINAL.md).
+
+### 5.46 CP.LiveCrime — modules/livecrime and modules/integrations/crimson_contracts (S; stub)
+
+Option A, live crimes (Config.LiveCrime, `enabled` shipped false). The adapter in modules/integrations/crimson_contracts
+listens to Crimson-Contracts' server-only lifecycle events (crimson-contracts:server:*, AddEventHandler only, from the
+scripts in Config.LiveCrime.sources) and never requires that resource; CP.LiveCrime turns a contract whose police
+alert went out into a red LIVE call on the Dispatch screen, opens a CP.Opponents case for the crew when a unit claims
+it (no draw: the engine-only `live_crime` mission with the `live_response` block, §7.3), lets backup join the case,
+scores it with the live_* lines (points only unless the owner turns on its money switches), and reports the result to
+other scripts with the read-only export GetAvailablePolice and a server-only end event. Built in steps V4-V26
+(/tmp/claude-0/-home-user-PoliceTablet/c9b2f5e1-32ec-5436-a1db-2a78c5b9aa69/scratchpad/pvp/DESIGN_FINAL.md).
+
+### 5.47 CP.Volunteers — modules/volunteers (server, client; stub)
+
+Options B and C, volunteer suspects (Config.Volunteers, `enabled` shipped false). A player who is not on police duty
+volunteers with the command in Config.Volunteers.command for an hour and only ever sees ox_lib notifications, dialogs
+and a context menu (no tablet). A mode per mission type or mission ('npc', 'players_when_available', 'players_only')
+decides whether a mission whose block offers a volunteer slot (§7.3) is played against a volunteer who said yes to the
+pop-up instead of the NPC; 'players_only' is offered only while a volunteer who fits is online. Every mode ships
+'npc', so nothing changes even with `enabled = true`. Built in steps V4-V26
+(/tmp/claude-0/-home-user-PoliceTablet/c9b2f5e1-32ec-5436-a1db-2a78c5b9aa69/scratchpad/pvp/DESIGN_FINAL.md).
+
 ## 6. Cross-cutting conventions
 
 ### 6.1 Entities and NPCs
@@ -2943,6 +2976,17 @@ Rules for blocks:
   client half acts on it before `start` only when its server half says so (`hostile_waves`: `awake = true`, a staged
   crew that woke before the breach), and never writes the HUD line or sends evidence for an objective that is not
   current.
+
+### 7.3 The `live_response` block and the `volunteerSlot` hook (stub)
+
+`blocks/live_response` is engine-only: the mission loader and the Mission Builder refuse it in a mission file or a
+draft, and only CP.LiveCrime's engine mission `live_crime` (§5.46) uses it. It has three phases (Respond, Secure the
+scene, Detain and book the suspects), never changes its HUD or checklist because of one suspect's state, scores from
+CP.Opponents' server-only facts, and shows "last reported" points instead of live positions. `volunteerSlot(obj,
+mission, location) -> { role, meet = vec3, ... } | nil` is an optional server-half function a block may add to
+`CP.Blocks.register`: flee_arrest (the runner at the door), pursuit (the getaway or race driver) and search_area (the
+fugitive) offer one, and CP.Volunteers (§5.47) uses it to find the objective a volunteer can play. Built in steps
+V4-V26 (/tmp/claude-0/-home-user-PoliceTablet/c9b2f5e1-32ec-5436-a1db-2a78c5b9aa69/scratchpad/pvp/DESIGN_FINAL.md).
 
 ---
 

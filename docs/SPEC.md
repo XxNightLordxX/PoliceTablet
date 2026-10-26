@@ -8,17 +8,17 @@ Crimson-Police is a Qbox police tablet (/CrimsonPolice) with its own custom UI. 
 
 These rules override everything else in this spec. If another section, example or number disagrees with a rule here, the rule wins.
 
-- Stack: Crimson-Police MUST run on Qbox (qbx_core) and MUST use only these resources: sc-police, sc-dispatch, sc-ambulance, sc-multijob, Renewed-Banking, oxmysql, ox_lib, ox_inventory and ox_target. It MUST recognise calls made by sc-npcpolice without calling it. It MUST NOT require, bridge to or edit any other resource.
+- Stack: Crimson-Police MUST run on Qbox (qbx_core) and MUST use only these resources: sc-police, sc-dispatch, sc-ambulance, sc-multijob, Renewed-Banking, oxmysql, ox_lib, ox_inventory and ox_target. It MUST recognise calls made by sc-npcpolice without calling it. It MUST NOT require, bridge to or edit any other resource. When Config.LiveCrime is on it MAY listen to Crimson-Contracts' server-only lifecycle events (crimson-contracts:server:*) and it offers the read-only export GetAvailablePolice; it never requires Crimson-Contracts.
 
 - Qbox only: all framework access MUST go through exports.qbx_core, the Qbox player object it returns (for example player.Functions.AddMoney, which is Qbox's own API) and the events qbx_core fires. Crimson-Police MUST NOT use the QBCore core object (exports['qb-core']:GetCoreObject(), QBCore.Functions) or list qb-core as a dependency, even though Qbox ships a QBCore compatibility layer.
 
-- Names: the resource folder MUST be Crimson-Police (events, callbacks and tags keep the lowercase prefix crimson-police) and the tablet MUST be titled "Crimson-Police". The officer command MUST be /CrimsonPolice and the admin command MUST be /CrimsonPoliceAdmin.
+- Names: the resource folder MUST be Crimson-Police (events, callbacks and tags keep the lowercase prefix crimson-police) and the tablet MUST be titled "Crimson-Police". The officer command MUST be /CrimsonPolice and the admin command MUST be /CrimsonPoliceAdmin. Volunteer suspects use the command in Config.Volunteers.command (default /crimsonheat).
 
-- Access: only on-duty players whose active Qbox job belongs to a department in Config.Departments MAY use the Officer UI. There are no activation requirements: no activity check, no minimum officers online and no quiet timer.
+- Access: only on-duty players whose active Qbox job belongs to a department in Config.Departments MAY use the Officer UI. There are no activation requirements: no activity check, no minimum officers online and no quiet timer. Exception (owner decision 2026-10-26): a mission type or mission set to 'players_only' in Config.Volunteers is offered only while a volunteer suspect who fits is online.
 
 - Roles: there are exactly three roles: Officer, Supervisor (job grade at or above the department's supervisorGrade) and Admin (ace crimsonpolice.admin, or a Qbox admin, the ace admin that stock Qbox gives group.admin, while Config.QboxAdmins is true). There are no cadet, detective or other roles. Supervisors get the same missions as officers. Ranks and callsigns are read from Qbox, as SC-Police sets them, and are never edited by Crimson-Police.
 
-- Mission choice: officers and supervisors MUST only pick a mission type on the Mission Board or claim a mission call on the Dispatch screen, and the server MUST draw the mission at random. A mission call names a mission type, a priority and an area, never a mission, and the server draws the mission from that type's missions that start in the area only after the claim. A call names an area to a viewer only when that viewer's eligible pool in the area (after unit size, no-repeat, cooldowns and daily limits) holds at least 2 missions; otherwise it shows "County-wide" and draws from the same pool as the Mission Board, so a call is never narrower than the board. A call a supervisor or admin posts or pages is drawn at random like any other and can never be claimed by the issuer's own unit, so it is not an exception. The Officer UI MUST NOT list, preview or let anyone pick a specific mission, and there is no reroll. Only three exceptions exist: the Weekly Boss event card, a supervisor or admin picking one specific mission to launch as a Cross-Department Mission, and test runs (Admin test mode, and the Mission Builder's test run of a draft), which are never saved or paid.
+- Mission choice: officers and supervisors MUST only pick a mission type on the Mission Board or claim a mission call on the Dispatch screen, and the server MUST draw the mission at random. A mission call names a mission type, a priority and an area, never a mission, and the server draws the mission from that type's missions that start in the area only after the claim. A call names an area to a viewer only when that viewer's eligible pool in the area (after unit size, no-repeat, cooldowns and daily limits) holds at least 2 missions; otherwise it shows "County-wide" and draws from the same pool as the Mission Board, so a call is never narrower than the board. A call a supervisor or admin posts or pages is drawn at random like any other and can never be claimed by the issuer's own unit, so it is not an exception. The Officer UI MUST NOT list, preview or let anyone pick a specific mission, and there is no reroll. Only four exceptions exist: the Weekly Boss event card, a supervisor or admin picking one specific mission to launch as a Cross-Department Mission, test runs (Admin test mode, and the Mission Builder's test run of a draft), which are never saved or paid, and a LIVE call on the Dispatch screen (a real crime reported by Crimson-Contracts: no draw). A 'players_only' type (Config.Volunteers) draws only from missions that can take a volunteer, still at random.
 
 - Cross-Department Missions: while one is active, every department's Mission Board MUST show only that mission, and the server MUST refuse every other new mission until it is completed or cancelled. Admin test runs are the only exception.
 
@@ -32,17 +32,17 @@ These rules override everything else in this spec. If another section, example o
 
 - Departments: department names, colours and logos come only from Config.Departments. Adding a department there and restarting, or adding it from the Admin UI, MUST make it work everywhere with no code or SQL changes.
 
-- Custom interfaces: the Officer UI, Supervisor UI and Admin UI are separate, custom standalone NUI built for Crimson-Police, together with its Mission Builder, mission HUD and notifications. Each shows only its own screens, and the server MUST re-check permissions on every action. The only outside UI allowed is ox_target's interaction prompts, ox_inventory's own inventory screens, and ox_lib's progress bar and skill check during missions.
+- Custom interfaces: the Officer UI, Supervisor UI and Admin UI are separate, custom standalone NUI built for Crimson-Police, together with its Mission Builder, mission HUD and notifications. Each shows only its own screens, and the server MUST re-check permissions on every action. The only outside UI allowed is ox_target's interaction prompts, ox_inventory's own inventory screens, and ox_lib's progress bar and skill check during missions. Volunteer suspects are not police and have no tablet: they get ox_lib notifications, alert and input dialogs and a context menu from the volunteer command only.
 
-- NPCs only: missions MUST involve only NPCs. They MUST NOT create SC-Dispatch calls (the one exception is the EMS request sent for a downed participant while EMS is on duty), target real players or spawn anything a non-participant can take.
+- NPCs only: missions MUST involve only NPCs, except live crimes (Config.LiveCrime) and volunteer suspects (Config.Volunteers), both off by default, whose suspects are real players who chose it (a crew whose contract alerted police, or a player who volunteered and said yes). They MUST NOT create SC-Dispatch calls (the one exception is the EMS request sent for a downed participant while EMS is on duty), target real players or spawn anything a non-participant can take.
 
-- Real calls first: when a participant is assigned to, or marks themselves responding to, a real SC-Dispatch call (any call not created by SC-NPCPolice), their run MUST end at once with no penalty and no cooldown. SC-NPCPolice calls MUST NOT end a run. There are exactly two exceptions: un-marking responding within 60 seconds turns the free abandon into a normal one (type cooldown), and a call raised about a participant of the same run (their person-down, dead, EMS or panic call) does not end their partners' runs.
+- Real calls first: when a participant is assigned to, or marks themselves responding to, a real SC-Dispatch call (any call not created by SC-NPCPolice), their run MUST end at once with no penalty and no cooldown. SC-NPCPolice calls MUST NOT end a run. There are exactly three exceptions: un-marking responding within 60 seconds turns the free abandon into a normal one (type cooldown), a call raised about a participant of the same run (their person-down, dead, EMS or panic call) does not end their partners' runs, and in a case with a real suspect, the case's own linked SC-Dispatch call and calls raised by or about its suspects and participants (shots fired, person down, dead, EMS, panic) do not end it.
 
-- No mission alerts: from the moment a participant reaches the mission start until their run ends, their mission combat MUST NOT create SC-Dispatch or SC-Ambulance alerts (shots fired, person down), and any such call that still appears in SC-Dispatch MUST be cleared automatically. A downed participant can still get EMS help.
+- No mission alerts: from the moment a participant reaches the mission start until their run ends, their mission combat MUST NOT create SC-Dispatch or SC-Ambulance alerts (shots fired, person down), and any such call that still appears in SC-Dispatch MUST be cleared automatically. A downed participant can still get EMS help. In a case with a real suspect, Config.RealSuspects.officerAlerts decides; shipped: alerts go out like any officer's.
 
-- Route to the start: participants MUST follow the route shown to the mission start; staying off it ends their run as Abandoned. The owner may switch this rule off (Config.Route.required = false, at the owner's request of 2026-10-26): the route is still shown and checked for arrival, but leaving it never ends a run. A run keeps the value it was accepted with, and a test run follows its own Start route switch. Late partners (the owner's decision of 2026-10-19): once the run is In progress, a participant still on his way follows the action instead of an empty start: his route is no longer checked, his GPS leads to the current objective, and he arrives within Config.Route.lateArriveRange (150 m) of it or at the start (0 = only the start counts). From then on he has Config.Route.followActionSeconds (300 s) to arrive, never less time than he had (0 = the start deadline from his accept).
+- Route to the start: participants MUST follow the route shown to the mission start; staying off it ends their run as Abandoned. The owner may switch this rule off (Config.Route.required = false, at the owner's request of 2026-10-26): the route is still shown and checked for arrival, but leaving it never ends a run. A run keeps the value it was accepted with, and a test run follows its own Start route switch. Late partners (the owner's decision of 2026-10-19): once the run is In progress, a participant still on his way follows the action instead of an empty start: his route is no longer checked, his GPS leads to the current objective, and he arrives within Config.Route.lateArriveRange (150 m) of it or at the start (0 = only the start counts). From then on he has Config.Route.followActionSeconds (300 s) to arrive, never less time than he had (0 = the start deadline from his accept). In a case with a real suspect, Config.RealSuspects.routeEnds decides; shipped: the route ends at the first contact with a suspect. On a live crime Config.LiveCrime.requireRoute (shipped false) replaces Config.Route.required: officers on a live case may leave the GPS route to chase. Volunteer-suspect missions follow Config.Route.required.
 
-- Downed participants: a participant who goes down has Failed their run. If no EMS is on duty, they MUST be picked up automatically (revived and moved to a drop-off point).
+- Downed participants: a participant who goes down has Failed their run. If no EMS is on duty, they MUST be picked up automatically (revived and moved to a drop-off point). In a case with a real suspect, Config.RealSuspects.downed and downedPickupDelay decide; shipped: a downed officer keeps what he earned, no type cooldown, pick-up after 400 s.
 
 - Cleanup: every entity, blip, zone and mission item MUST be removed when a run ends for any reason, including disconnects and resource stops.
 
@@ -58,13 +58,13 @@ Everything below was considered and removed. Do not add it back, even as an opti
 
 - Missions: Traffic Control, DUI Checkpoint, Abandoned Vehicle (a plain tow job), Range Qualification, Evidence Recovery, Rooftop Shooter, Air Support, Harbor Interdiction, and anything using cones. Traffic Enforcement (pacing one moving violator at a time, stopping it and working the contact), Illegal Parking Patrol (a judgement sweep of parked cars) and Suspicious Activity (a scene contact that ends in a decision) are allowed as their mission cards describe them.
 
-- Activation: no server activity state (Quiet / Busy / Active), no priority-traffic command, no minimum officers online, no mission pause and no Expired state (the maintenance lock of a storage copy, a storage switch or a backup restore is not a pause and not a switch: it ends with a restart, or after a restore that stopped part way with a restore that works; see Full admin control). Mission calls lapse when nobody claims them; a lapsed call is not a run state, and nothing pauses the Mission Board except the Cross-Department lock.
+- Activation: no server activity state (Quiet / Busy / Active), no priority-traffic command, no minimum officers online (a 'players_only' type needing a volunteer is the owner's choice, see Access), no mission pause and no Expired state (the maintenance lock of a storage copy, a storage switch or a backup restore is not a pause and not a switch: it ends with a restart, or after a restore that stopped part way with a restore that works; see Full admin control). Mission calls lapse when nobody claims them; a lapsed call is not a run state, and nothing pauses the Mission Board except the Cross-Department lock.
 
 - Mission choice: no list of individual missions on the officer Mission Board, no picking or previewing a specific mission (apart from the Weekly Boss card, Cross-Department Missions and test runs), no reroll.
 
 - Roles: no cadet, detective, FTO or supervisor-only missions, no grade-restricted mission pools, and no separate builder permission.
 
-- Payouts and points: no in-game editing of points by officers or supervisors (an admin only through the logged Settings screen or a logged manual award or deduction), no point awards from other resources, no supervisor editing of single-mission payouts, and no payout field in the Mission Builder or in exported Lua files.
+- Payouts and points: no in-game editing of points by officers or supervisors (an admin only through the logged Settings screen or a logged manual award or deduction), no point awards from other resources (another resource may report a crime; every point is still computed by Crimson-Police's scoring), no supervisor editing of single-mission payouts, and no payout field in the Mission Builder or in exported Lua files.
 
 - Leaderboards: no manual board reset; boards are time windows, and corrections are made by voiding runs (one by one or as a bulk void of an officer, an operation or a board window, which is always restorable as a batch).
 
@@ -74,9 +74,9 @@ Everything below was considered and removed. Do not add it back, even as an opti
 
 - Integrations: no other dispatch, inventory, target, banking, medical or tablet resources; no edits to sc-police, sc-dispatch, sc-ambulance, sc-multijob, sc-npcpolice or Renewed-Banking; missions never create SC-Dispatch calls (apart from the EMS request for a downed participant); never trigger SC-Ambulance's hospital:server:RevivePlayer (it bans any sender who is not EMS).
 
-- UI: one custom UI stack only (React + TypeScript + Vite); no ox_lib menus, context menus, input dialogs or notifications for Crimson-Police screens; no third-party tablet; no Crimson-Police tab inside the SC-Dispatch MDT.
+- UI: one custom UI stack only (React + TypeScript + Vite); no ox_lib menus, context menus, input dialogs or notifications for Crimson-Police screens, except the volunteer command's ox_lib dialogs (Custom interfaces); no third-party tablet; no Crimson-Police tab inside the SC-Dispatch MDT.
 
-- Rule switches: no config flag that turns off Hard rules 15, 16 or 18 (real calls, alert suppression, downed participants). Their numbers are configurable; the rules are not. Hard rule 17 (the start route) is the one exception: the owner made it switchable with Config.Route.required (see that rule).
+- Rule switches: no config flag that turns off Hard rules 15, 16 or 18 (real calls, alert suppression, downed participants). Their numbers are configurable; the rules are not. Hard rule 17 (the start route) is the one exception: the owner made it switchable with Config.Route.required (see that rule). In cases with a real suspect, Config.RealSuspects.officerAlerts, routeEnds, downed and downedPickupDelay choose between the rule for real players (shipped) and the NPC rule, and Config.LiveCrime.requireRoute sets the start-route rule for live crimes (shipped false). For NPC missions rules 15, 16 and 18 stay on.
 
 ## Glossary
 
@@ -188,7 +188,7 @@ Success criteria
 | Server resource time (resmon) with 30 officers on | Under 0.10 ms client, 0.25 ms server |
 |  |  |
 
-Out of scope: civilian-facing missions, missions for EMS or fire, and anything that uses real players as mission targets.
+Out of scope: civilian-facing missions, missions for EMS or fire, and anything that uses real players as mission targets, except live crimes and volunteer suspects (off by default).
 
 ## Dependencies & decisions
 
@@ -236,7 +236,7 @@ Assumptions
 
 - All draws, scaling, points and cash are decided server-side; the client only reports events.
 
-- Missions are local to their participants and never spawn anything other players must interact with.
+- Missions are local to their participants and never spawn anything other players must interact with (a volunteer suspect is the one non-participant a mission may involve).
 
 ## Availability
 
@@ -587,7 +587,7 @@ Mission definition fields: id, label, description (shown on the Active Mission s
 
 Design rules
 
-- NPCs only; nothing a non-participant can take or interact with. NPCs never drop weapons or loot when they die (SetPedDropsWeaponsWhenDead(ped, false)), and ox_target options only appear for participants.
+- NPCs only; nothing a non-participant can take or interact with. NPCs never drop weapons or loot when they die (SetPedDropsWeaponsWhenDead(ped, false)), and ox_target options only appear for participants. Live crimes and volunteer suspects: ARCHITECTURE sections 5.45-5.47.
 
 - Mission NPCs and vehicles are networked entities created by the server (OneSync), so every participant sees the same ones. The run host's client runs their AI, and the server deletes everything when the run ends for any reason, even if no participant is left.
 
@@ -1255,7 +1255,7 @@ Real calls, SC-Dispatch and dispatcher mode
 
 - The Dispatch screen shows a read-only strip: "SC-Dispatch: 3 active real calls (1 Priority 1) — real calls come first". It is counted from mdt_dispatch (NPC calls excluded), refreshed every 15 seconds, lists no calls and gates nothing. If the lookup fails, the strip is hidden.
 
-- SC-Dispatch's dispatcher mode (AssignedOnlyAlerts) has no effect on mission calls, and human dispatchers never see them: missions never involve real players. A dispatcher assigning an officer on a mission to a real call ends that officer's run as today.
+- SC-Dispatch's dispatcher mode (AssignedOnlyAlerts) has no effect on mission calls, and human dispatchers never see them: mission calls never involve real players; a LIVE call mirrors a real SC-Dispatch call that dispatchers already see. A dispatcher assigning an officer on a mission to a real call ends that officer's run as today.
 
 Supervisor and admin controls (Config.Permissions.supervisor.missionCalls)
 
@@ -3331,6 +3331,26 @@ Config.MissionCalls = {
     },
 }
 
+-- ── Live crimes (option A) ──────────────────────────────────────────────────
+-- A live crime is a real crime that Crimson-Contracts reports once its police alert goes out; the crew that started
+-- the contract are the suspects. It shows as a red LIVE call on the Dispatch screen; officers who claim it respond
+-- to the real crew and earn points for securing the scene, detaining and booking the suspects (the shares are the
+-- live_* entries in Config.Bonuses). Crimson-Contracts needs ContractsConfig.LifecycleEvents = true.
+Config.LiveCrime = {
+    enabled = false,                 -- true = reported crimes become LIVE calls on the Dispatch screen
+}
+
+-- ── Volunteer suspects (options B and C) ────────────────────────────────────
+-- A player who is not on police duty can volunteer, with the command below, to be the suspect of a police tablet
+-- mission for an hour. When officers take a mission whose suspect a real player can play (Warrant Service's wanted
+-- person, Street Race Bust's driver, Manhunt's fugitive) and a volunteer fits, he gets a yes/no pop-up; if he says
+-- yes he plays that suspect instead of the NPC. Volunteers only see pop-ups, notifications and a menu (they have no
+-- tablet), and Crimson-Police gives them nothing. Set a mode per mission type below: while every mode is 'npc',
+-- nothing changes even with enabled = true.
+Config.Volunteers = {
+    enabled = false,                 -- true = players can volunteer with the command below
+}
+
 -- ── Police actions and custody ──────────────────────────────────────────────
 
 Config.Custody = {
@@ -4458,7 +4478,7 @@ Every test start is written to the audit log. The options are in Config.Testing.
 
 ## SOP: rules of use for officers
 
-Crimson-Police is a downtime activity. Real calls and real players always come first, and misuse is handled like any other SOP violation.
+Crimson-Police is a downtime activity. Real calls and real players always come first, and misuse is handled like any other SOP violation. Live crimes and volunteer cases are real RP with real players: the server rules on force, combat logging and staging apply.
 
 - Real RP first. When dispatch or a supervisor calls for units, respond at once. Marking yourself responding in SC-Dispatch, or being assigned by a dispatcher, ends your mission automatically with no penalty. Staying on a mission during a priority call is a violation.
 

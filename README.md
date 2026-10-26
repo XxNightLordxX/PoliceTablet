@@ -2368,6 +2368,34 @@ however it ends.
   the entity as killed (a hostage or an escort's truck removed that way fails its objective); `Builder.exportPath` and
   the Markers kinds fields say what they need and mean. Activation: the maintenance lock ends with a restart, or after
   a restore that stopped part way with a restore that works.
+- Police vs real criminal players, the owner's decision of 2026-10-26 ("Build all 3 but options in the config.lua";
+  built in steps V1-V27): live crimes (a crime Crimson-Contracts reports becomes a LIVE call), volunteer suspects (a
+  player who volunteers plays a mission's suspect) and a mode per mission type, every choice a config.lua option. The
+  Hard rules now read, for cases with a real suspect only:
+  - Stack: may listen to Crimson-Contracts' server-only lifecycle events and offers the read-only export
+    `GetAvailablePolice`; it never requires Crimson-Contracts.
+  - Names: volunteers use the command in `Config.Volunteers.command` (default `/crimsonheat`).
+  - Access: a mission type or mission set to `'players_only'` is offered only while a volunteer who fits is online.
+  - Mission choice: a fourth exception, a LIVE call (a real crime: no draw); a `'players_only'` type draws only from
+    missions that can take a volunteer, still at random.
+  - Custom interfaces: volunteers have no tablet; they get ox_lib notifications, dialogs and a menu from their command.
+  - NPCs only: except live crimes and volunteer suspects, whose suspects are real players who chose it.
+  - Real calls first: a third exception, the case's own SC-Dispatch call and calls by or about its suspects and
+    participants do not end it.
+  - No mission alerts: `Config.RealSuspects.officerAlerts` decides (shipped: alerts go out like any officer's).
+  - Route to the start: `Config.RealSuspects.routeEnds` decides (shipped: the route ends at the first contact), and
+    on a live crime `Config.LiveCrime.requireRoute` (shipped `false`, free to chase) replaces `Config.Route.required`;
+    volunteer missions follow `Config.Route.required`. The start route switch entry below is unchanged.
+  - Downed participants: `Config.RealSuspects.downed` and `downedPickupDelay` decide (shipped: a downed officer keeps
+    what he earned, no type cooldown, pick-up after 400 s).
+  - Do not build: Activation (a `'players_only'` type is the owner's choice), Payouts and points (another resource
+    may report a crime; every point is still computed by Crimson-Police), UI (the volunteer command's ox_lib
+    dialogs) and Rule switches (the `Config.RealSuspects` keys and `Config.LiveCrime.requireRoute`; rules 15, 16 and
+    18 stay on for NPC missions).
+  - Out of scope, Assumptions, the NPC design rule, the Dispatch wording and the SOP name the two features.
+
+  All three features ship off (`Config.LiveCrime.enabled = false`, `Config.Volunteers.enabled = false`, every mode
+  `'npc'`), so nothing changes until you switch one on. Undo: leave both switches off.
 - Start route switch, at the owner's request of 2026-10-26 ("Also option in the config where they have to stay on the
   route"): Hard rule 17 is now the one switchable Hard rule (15, 16 and 18 stay unswitchable).
   `Config.Route.required` (`true`, as before) makes officers follow the GPS route to the start; with `false` the route

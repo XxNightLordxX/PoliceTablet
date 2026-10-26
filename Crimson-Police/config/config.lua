@@ -687,6 +687,30 @@ Config.MissionCalls = {
 }
 
 -- ============================================================================
+--                            LIVE CRIMES (option A)
+-- ============================================================================
+-- A live crime is a real crime that Crimson-Contracts reports once its police alert goes out; the crew that started
+-- the contract are the suspects. It shows as a red LIVE call on the Dispatch screen; officers who claim it respond
+-- to the real crew and earn points for securing the scene, detaining and booking the suspects (the shares are the
+-- live_* entries in Config.Bonuses). Crimson-Contracts needs ContractsConfig.LifecycleEvents = true.
+Config.LiveCrime = {
+    enabled = false,                 -- true = reported crimes become LIVE calls on the Dispatch screen
+}
+
+-- ============================================================================
+--                     VOLUNTEER SUSPECTS (options B and C)
+-- ============================================================================
+-- A player who is not on police duty can volunteer, with the command below, to be the suspect of a police tablet
+-- mission for an hour. When officers take a mission whose suspect a real player can play (Warrant Service's wanted
+-- person, Street Race Bust's driver, Manhunt's fugitive) and a volunteer fits, he gets a yes/no pop-up; if he says
+-- yes he plays that suspect instead of the NPC. Volunteers only see pop-ups, notifications and a menu (they have no
+-- tablet), and Crimson-Police gives them nothing. Set a mode per mission type below: while every mode is 'npc',
+-- nothing changes even with enabled = true.
+Config.Volunteers = {
+    enabled = false,                 -- true = players can volunteer with the command below
+}
+
+-- ============================================================================
 --                          POLICE ACTIONS AND CUSTODY
 -- ============================================================================
 
