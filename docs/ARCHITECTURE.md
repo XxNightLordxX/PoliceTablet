@@ -324,6 +324,9 @@ than `stage` read before) or killed, or a participant within `Config.Spawning.st
 nearer to a point of the objective before (its `points`, `targets`, `door` or `checkpoints` location key: the breach
 entries) than to him. Awake before `start`, `stage` places nobody more (Refresh and the surrender poll only) and the
 client half runs the crew already (`update` data `awake = true`, §7.2). Until `start` no HUD entry and no completion.
+The host's client half sets a ped up (`CP.Npc.apply`, first task) only once his bag has caught up: not while it still
+says `idle` but the server's list says otherwise, nor while a staged one's bag still says `armed = false` (the
+objective's `start` event can arrive before the wake's bag writes); the next 500 ms pass applies the armed cfg.
 
 `flee_arrest` through the director (PLAN S11, `Config.Spawning.enabled`): every associate and inmate gets a point of
 his own (`PickSpots`): a list point no person or vehicle of the run stands within 1.5 m of (`SHARE_RADIUS`, objects do
@@ -1246,15 +1249,24 @@ Client (host runs AI; all participants see targets):
   behaviour). The firing pattern goes on again after each `TaskCombatPed`.
 - The combat governor: every participant's game (not only the host) applies those caps, settings only and never a
   task, to each armed mission ped of its run it owns (`NetworkHasControlOfEntity`), once per entity handle and bag
-  `seq`, and again when it owns the ped again after another game had it (1 s loop while on a run).
+  `seq`, and again when it owns the ped again after another game had it (1 s loop while on a run). On the same
+  terms it holds a calm person waiting `idle` with no `contact` in the bag (a raid's staged crew before the breach)
+  to the host's calm settings: `SetBlockingOfNonTemporaryEvents(true)` and `SetPedFleeAttributes(0, false)`, so an
+  officer aiming at him or a shot nearby never makes him run on the game OneSync gave him to.
 - Tired runners (Config.Flee, the bag key `gait` of the server's flee clock; missing = sprint, ignored unless the
   state is `fleeing` and Config.Flee is on): the host gives every flee leg on foot at the gait's move blend ratio
   (TaskFollowNavMeshToCoord: sprint 3.0, jog 2.0, walk and spent 1.0) and gives the current leg again when the gait
   changes (same state: the bag handler does not re-task). A tired runner with no route left (or at its end) runs
   navmesh legs of 40 m straight away from the nearest participant instead of TaskSmartFleePed (no speed argument):
-  to the GetSafeCoordForPed point (flags 2 + 8: not isolated, not water) when it lies at least 10 m ahead, else the
-  straight point, with ENAV_NO_STOPPING; the next leg 5 m before the end, when stuck, or when a participant is nearer
-  its end than he is. A sprinting runner keeps TaskSmartFleePed, a driver his car.
+  to the GetSafeCoordForPed point (flags 2 + 8: not isolated, not water) when it lies at least 10 m ahead along that
+  line and no nearer to that participant than he is; none that way (a shore, a pier's end, a dead end): the same
+  40 m at 60, -60, 90 and -90 degrees off it, in turn; none at all: TaskSmartFleePed (the pacer holds it to his
+  gait). ENAV_NO_STOPPING; the next leg 5 m before the end, when stuck, or when a participant is nearer its end than
+  he is; stuck on 2 legs in a row (no navmesh path: the task stands him still): TaskSmartFleePed. A sprinting runner
+  keeps TaskSmartFleePed, a driver his car. A tired runner with no route (no `fleePoints`) whom the AI loop of the
+  game that owns him does not run (a partner's game, or the host's after it lost him for 10 s) and who stands still
+  (under 0.3 m/s) for 3 governor passes gets a flee task again from that game: the host's full flee (away legs, its
+  AI loop), or TaskSmartFleePed on any other game (it never ends; that game's pacer holds his gait).
 - The pacer: every participant's game (host or not) holds each tired runner of its run that it owns (on foot,
   alive) to his gait every frame (`Wait(0)` while there is one): `SetPedMaxMoveBlendRatio` 2.0 (jog) or 1.0 (walk,
   spent) and `SetPedMoveRateOverride` jogRate / walkRate (0.5-1.0), both of which last one frame; with
@@ -2415,7 +2427,9 @@ What this officer's game can see of the points the server's spawn director may u
   it, that one; when a bystander's or nobody's does, the participant nearest to the point of the ones whose ped this
   game has (the lower server id on a tie). An entity more than 3 m (flat) from the ask's x, y, and from `place.from`
   when the ask has one, has been placed and let go already (a game that placed it could not tell the server: its
-  player left the run): it is neither frozen nor moved, `'placed'` with reason `'moved'` and z its height now. At most 4 placements run at once (the rest wait up to
+  player left the run): it is neither frozen nor moved, `'placed'` with reason `'moved'` and z its height now. Else it
+  tells the server it checks the entity (`server:spawnChecking`, §8.2, once per token), so the ask's time waits for
+  it. At most 4 placements run at once (the rest wait up to
   30 s; the slot is taken before control is asked for), each with control (asked with
   `NetworkRequestControlOfEntity` for up to 2 s; not given: nothing, a later write of the bag tries again). Then
   `FreezeEntityPosition(ent, true)`, `SetEntityLoadCollisionFlag(ent, true)`; a person in a vehicle
@@ -2455,8 +2469,13 @@ What this officer's game can see of the points the server's spawn director may u
   -1 = nobody) changed to one that is not an active participant's within `activateRange` (2D) of the point: frozen
   again (the freeze reaches that game; the entity is marked so a later answer also lets it go from here); the time
   (`placeTimeoutMs`) only runs while an active participant is within `activateRange` of the point, so an entity
-  nobody is near (staged ahead, a van coming in) waits frozen without a limit; past it `onTimeout`: `'unfreeze'`
-  (default) lets it go where it stands, `'delete'` counts it as gone (`Runs.entityDied`, the objective's
+  nobody is near (staged ahead, a van coming in) waits frozen without a limit, and not while an active participant's
+  game has said it checks the entity (`server:spawnChecking` for the ask's current token, taken once per token: the
+  placer's turn in a big wave, its control asks and the probe's loads, at most 34 s + `collisionTimeoutMs` +
+  `interiorTimeoutMs`, each kept to 500-30000 ms, and only while that participant stays on the run; a new token
+  after a bad point clears it); past it `onTimeout`: `'unfreeze'`
+  (default) lets it go where it stands, `'delete'` (never for an ask of `CP.Spawn.again` below: a person the
+  server only moved is always let go where he stands) counts it as gone (`Runs.entityDied`, the objective's
   `onEntityDead`) and deletes it, with one `CP.warn` (`run <id>: ped <model> at x y z was not placed by an officer's
   game within 8000 ms; let go where it stands (Config.Spawning.onTimeout)`).
   The answer, `server:spawnPlaced` (§8.2, at most 30 a second per player): taken only from an active participant of
@@ -2814,6 +2833,7 @@ Server → client ox_lib callback: `crimson-police:client:spawn:walkIn` `{ car =
 | `server:testRespond` | `{ inviteId, accepted }` | testing |
 | `server:pickupDone` | runId, ok (plain event, no reqId) | downed |
 | `server:spawnPlaced` | runId, `{ netId, token, result = 'placed'\|'bad', reason, groundZ?, dz?, z? }` (plain event, no reqId; the placer, §5.43, once per `place` token; modules/spawn/server.lua takes it from an active participant of that run for the ask's current token, at most 30 a second per player) | spawn |
+| `server:spawnChecking` | runId, `{ netId, token }` (plain event, no reqId; the placer, §5.43, once per `place` token before it waits for its turn; modules/spawn/server.lua takes the first one from an active participant of that run for the ask's current token: the ask's time waits for that game's answer, at most 34 s + collisionTimeoutMs + interiorTimeoutMs; at most 30 a second per player) | spawn |
 | `server:npcCuff` | runId, netId (plain event, no reqId) | npc |
 | `server:custody` | runId, netId, action, phase ('begin'\|'finish'), extra (`{ offence }`, `{ door }`) (plain event, no reqId; 4 per 2 s) | custody |
 | `server:stunHit` | netId (plain event, no reqId; 2 per s) | custody |

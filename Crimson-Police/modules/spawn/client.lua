@@ -472,6 +472,7 @@ end)
 -- Until then nothing lets it go: CP.Npc asks Spawn.holds before it unfreezes a person (modules/npc/client.lua LetGo).
 
 local PLACED_EVENT = 'server:spawnPlaced'
+local CHECKING_EVENT = 'server:spawnChecking'
 local PLACE_ENTITY_MS = 3000    -- the entity of a bag may take this long to exist in this game
 local PLACE_CONTROL_MS = 2000   -- this game asks this long for control of an entity it places
 local PLACERS_MAX = 4           -- entities placed at once (a wave's people and cars): the rest wait their turn
@@ -664,6 +665,8 @@ local function TryPlace(netId, bag, mine)
         local _, _, ez = XYZ(GetEntityCoords(ent))
         result, reason, onZ = 'placed', 'moved', ez
     else
+        -- this game checks it (maybe after a wave's others: PLACERS_MAX at a time): the server's placeTimeoutMs waits
+        TriggerServerEvent(CP.e(CHECKING_EVENT), bag.run, { netId = netId, token = token })
         local deadline = GetGameTimer() + PLACE_QUEUE_MS
         while placers >= PLACERS_MAX do
             if GetGameTimer() >= deadline then return Forget() end

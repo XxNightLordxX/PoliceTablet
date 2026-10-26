@@ -510,7 +510,9 @@ do
     H.eq(
         E('Spawning.placeTimeoutMs').desc,
         'Milliseconds (1000-60000) a new person, vehicle or object waits frozen for an officer\'s game to put it on'
-            .. ' the ground, counted while an officer is within activateRange of it; then onTimeout',
+            .. ' the ground, counted while an officer is within activateRange of it and no officer\'s game is checking'
+            .. ' it (a big wave\'s later ones wait their turn there, at most 34 s plus collisionTimeoutMs and'
+            .. ' interiorTimeoutMs); then onTimeout',
         'the wait reads alone'
     )
     H.eq(
@@ -523,7 +525,8 @@ do
     H.eq(
         E('Spawning.onTimeout').desc,
         '\'unfreeze\' = one no officer\'s game placed within placeTimeoutMs is let go where it stands, as before;'
-            .. ' \'delete\' = it is removed and the mission counts it as gone',
+            .. ' \'delete\' = it is removed and the mission counts it as gone (a person the mission only moved, such'
+            .. ' as a warrant\'s suspect who gives up at the door, is always let go where he stands)',
         'the timeout choice reads alone'
     )
     for _, k in ipairs({ 'placeTimeoutMs', 'retries', 'onTimeout' }) do

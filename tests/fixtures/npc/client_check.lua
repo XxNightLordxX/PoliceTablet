@@ -829,6 +829,43 @@ W.ents[P12].control = nil
 H.advance(1100)
 H.eq(CW.peds[P12] and CW.peds[P12].accuracy, 18, 'owned again: the caps go on again')
 H.ok(not (CW.peds[P9] and CW.peds[P9].shootRate), 'an unarmed fleeing ped gets no combat caps')
+-- a raid's staged crew member waiting calm before the breach (idle, unarmed): the game OneSync gave him to holds him
+-- calm as the host's apply does, so an officer aiming at him through a window never makes him run
+local P15 = AddPed(5025, 825, 0, 430, 0)
+local P16 = AddPed(5026, 826, 0, 440, 0)
+Clear()
+BagChange(P15, 825, { run = 'run-1', state = 'idle', armed = false, cfg = { model = 'g_m_y_lost_01' }, seq = 1 })
+BagChange(P16, 826, {
+    run = 'run-1',
+    state = 'idle',
+    armed = false,
+    cfg = {},
+    seq = 1,
+    contact = { kind = 'person', actions = { 'talk' } },
+})
+H.advance(1100)
+local function CalmCalls(e)
+    return #CallsOf('SetBlockingOfNonTemporaryEvents', function(a)
+        return a[1] == e and a[2] == true
+    end),
+        #CallsOf('SetPedFleeAttributes', function(a) return a[1] == e and a[2] == 0 and a[3] == false end)
+end
+local blk, flee = CalmCalls(P15)
+H.ok(blk == 1 and flee == 1, 'not the host, owning a calm crew member: he ignores the events around him (once)')
+H.ok(not Called('TaskCombatPed', function(a) return a[1] == P15 end) and not Called('TaskSmartFleePed', function(a)
+    return a[1] == P15
+end), 'settings only, never a task')
+blk, flee = CalmCalls(P16)
+H.ok(blk == 0 and flee == 0, 'a field contact is left to his own reactions')
+H.advance(2200)
+blk = CalmCalls(P15)
+H.eq(blk, 1, 'not again every second')
+W.ents[P15].control = false
+H.advance(1100)
+W.ents[P15].control = nil
+H.advance(1100)
+blk = CalmCalls(P15)
+H.eq(blk, 2, 'owned again after another game had him: held calm again')
 -- a non-participant (no run at all) still makes mission peds drop-safe
 local savedRun = W.run
 W.run = nil
@@ -938,6 +975,9 @@ do
     H.advance(600)
     H.ok(Near(TaskOf(R1).y, 800.0) and TaskOf(R1).mbr == 1.0, 'the next point of his route, at his walk')
     -- ...and at its end a worn-out runner gets no smart flee (it has no speed): a leg straight away from the officers
+    GW.safeCoord = function(x, y, z)
+        return true, vector3(x, y, z)
+    end -- navmesh right where the leg ends
     Move(R1, 0, 800, 0)
     Clear()
     H.advance(600)
@@ -998,13 +1038,12 @@ do
     H.ok(Near(t.x, 88.0) and Near(t.y, 51.0),
         'to the navmesh point GetSafeCoordForPed found near 40 m straight away from the nearest officer (at 0, 50)')
     H.eq(GW.capNow(R2), 2.0, 'and capped at a run')
-    -- at the end of the leg: the next one; a navmesh point behind him is not taken
-    GW.safeCoord = function() return true, vector3(60.0, 50.0, 0.0) end
+    -- at the end of the leg: the next one
+    GW.safeCoord = function(x, y, z) return true, vector3(x, y, z) end
     Move(R2, 87, 51, 0)
     H.advance(600)
     t = TaskOf(R2)
-    H.ok(X(t) > 120.0 and math.abs((t.y or 0.0) - 51.0) < 2.0,
-        'the next leg goes on straight away (no point behind him)')
+    H.ok(X(t) > 120.0 and math.abs((t.y or 0.0) - 51.0) < 2.0, 'the next leg goes on straight away')
     -- an officer gets ahead of him: a new leg away from that officer
     local leg = X(t)
     W.ents[200].coords = vec3(140.0, 51.0, 0.0)
@@ -1013,17 +1052,51 @@ do
     H.ok(t.x ~= nil and X(t) < 87.0, 'an officer cut him off: the next leg turns away from that officer')
     W.ents[200].coords = vec3(0.0, 10.0, 0.0)
     H.ok(leg > X(t), 'a new leg was given')
-    -- stuck on a leg: given again
+    -- stuck on a leg: given again; stuck on that one too (the navmesh task found no path): GTA's smart flee
     Move(R2, 70, 51, 0)
     W.ents[R2].speed = 0.0
     Clear()
     H.advance(3600)
     H.ok(Called('TaskFollowNavMeshToCoord', function(a) return a[1] == R2 end), 'stuck on a leg: a new one')
+    H.eq(TaskOf(R2).name, 'nav', 'stuck once: still a navmesh leg')
+    H.advance(3600)
+    H.eq(TaskOf(R2).name, 'smartFlee', 'stuck on two legs in a row: GTA\'s smart flee finds its own way')
+    H.eq(GW.capNow(R2), 2.0, 'and the pacer holds it to his run')
     W.ents[R2].speed = 3.0
-    -- breath back: the smart flee again
+
+    -- the shore (the Alamo Sea, a pier's end): water from x = 105 on, the officer inland behind him. Straight away the
+    -- navmesh ends 5 m ahead; the next leg runs along the shore instead, on land
+    Move(R2, 100, 51, 0)
+    GW.safeCoord = function(x, y, z) return true, vector3(math.min(x, 105.0), y, z) end
+    v2 = U.deepcopy(v2)
+    v2.gait, v2.seq = 'walk', 3
+    BagChange(R2, 841, v2)
+    H.advance(600)
+    t = TaskOf(R2)
+    H.eq(t.name, 'nav', 'at the shore: a navmesh leg')
+    H.ok(type(t.x) == 'number' and t.x <= 105.0 and math.abs((t.y or 51.0) - 51.0) > 20.0,
+        'along the shore, on land (never the water point straight ahead)')
+    H.ok(U.dist2d(vector3(t.x or 0.0, t.y or 0.0, 0.0), W.ents[100].coords) >= 100.0,
+        'and no nearer to the officer than he is')
+    H.eq(t.mbr, 1.0, 'at his walk')
+    -- water or a dead end all round (no navmesh point ahead of him anywhere, only one behind him): GTA's smart flee
+    GW.safeCoord = function() return true, vector3(60.0, 50.0, 0.0) end
+    v2 = U.deepcopy(v2)
+    v2.gait, v2.seq = 'jog', 4
+    BagChange(R2, 841, v2)
+    H.advance(600)
+    H.eq(TaskOf(R2).name, 'smartFlee', 'no navmesh ahead anywhere: GTA\'s smart flee (never a point behind him)')
+    H.eq(GW.capNow(R2), 2.0, 'held to his run')
+    -- no navmesh near him at all
     GW.safeCoord = function() return false, vector3(0.0, 0.0, 0.0) end
     v2 = U.deepcopy(v2)
-    v2.gait, v2.seq = 'sprint', 3
+    v2.gait, v2.seq = 'walk', 5
+    BagChange(R2, 841, v2)
+    H.advance(600)
+    H.eq(TaskOf(R2).name, 'smartFlee', 'no navmesh found: GTA\'s smart flee, never a straight point into nowhere')
+    -- breath back: the smart flee again
+    v2 = U.deepcopy(v2)
+    v2.gait, v2.seq = 'sprint', 6
     BagChange(R2, 841, v2)
     H.advance(600)
     H.eq(TaskOf(R2).name, 'smartFlee', 'breath back: GTA\'s smart flee again')
@@ -1064,7 +1137,56 @@ do
     frames = Count('ResetPedMovementClipset', R3)
     H.advance(2200)
     H.eq(Count('ResetPedMovementClipset', R3) - frames, 0, 'reset once, not every second')
+    -- the host's away leg ends on a partner's game (OneSync gave him to the officer chasing him), where the host's AI
+    -- loop does not run him: standing still 3 s, he gets GTA's smart flee from that game, held to his walk there
+    local R10 = AddPed(5050, 850, -50, 120, 0)
+    W.ents[R10].speed = 1.2
+    Clear()
+    BagChange(R10, 850, Runner(1, { gait = 'walk' }))
+    H.advance(4000)
+    H.ok(not Called('TaskSmartFleePed', function(a)
+        return a[1] == R10
+    end) and not Called('TaskFollowNavMeshToCoord', function(a)
+        return a[1] == R10
+    end), 'not the host: a runner still on his leg is never tasked')
+    W.ents[R10].speed = 0.0   -- the leg is over
+    H.advance(1500)
+    H.ok(not Called('TaskSmartFleePed', function(a) return a[1] == R10 end), 'standing a moment: not yet')
+    H.advance(2100)
+    H.eq(TaskOf(R10).name, 'smartFlee', 'standing 3 s: GTA\'s smart flee from the game that owns him (it never ends)')
+    H.eq(TaskOf(R10).distance, 500.0, 'from the nearest officer, 500 m')
+    H.eq(GW.capNow(R10), 1.0, 'held to his walk by that game\'s pacer')
+    W.ents[R10].speed = 1.2
+    local flees = Count('TaskSmartFleePed', R10)
+    H.advance(5000)
+    H.eq(Count('TaskSmartFleePed', R10), flees, 'once he moves: not tasked again')
+    -- a runner on a route (the host's legs to his points) is left to the host
+    local R11 = AddPed(5051, 851, -50, 160, 0)
+    BagChange(R11, 851, Runner(1, { gait = 'walk', cfg = { fleePoints = { { x = -50.0, y = 300.0, z = 0.0 } } } }))
+    H.advance(5000)
+    H.ok(not Called('TaskSmartFleePed', function(a)
+        return a[1] == R11
+    end) and not Called('TaskFollowNavMeshToCoord', function(a)
+        return a[1] == R11
+    end), 'a runner with a route: never tasked by a game that is not the host')
     W.run.isHost = true
+    -- the host loses him for good (another game owned him for over 10 s, so its AI loop let him go), then gets him
+    -- back standing still: his away legs again, run by the host's loop
+    GW.safeCoord = function(x, y, z) return true, vector3(x, y, z) end
+    local R12 = AddPed(5052, 852, -50, 200, 0)
+    W.ents[R12].speed = 1.2
+    BagChange(R12, 852, Runner(1, { gait = 'walk' }))
+    H.eq(TaskOf(R12).name, 'nav', 'the host: an away leg')
+    W.ents[R12].control = false
+    H.advance(11000)
+    W.ents[R12].control = nil
+    W.ents[R12].speed = 0.0
+    Clear()
+    H.advance(3600)
+    H.ok(Called('TaskFollowNavMeshToCoord', function(a) return a[1] == R12 end),
+        'back on the host\'s game, standing still: the host gives his away legs again')
+    H.eq(TaskOf(R12).mbr, 1.0, 'at his walk')
+    W.ents[R12].speed = 1.2
 
     -- ---- SETTINGS ----------------------------------------------------------
     -- whole numbers typed in Settings reach the game as floats; a rate below 0.5 is 0.5

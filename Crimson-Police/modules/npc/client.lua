@@ -72,7 +72,15 @@ local AWAY = {
     leg = 40.0,                  -- m: the length of each leg
     arrive = 5.0,                -- m: the next leg is taken this close to the end of the last one
     safeFlags = 2 | 8,           -- GetSafeCoordForPed: no isolated navmesh polygon, no water
+    -- degrees off straight away tried in turn when there is no navmesh ahead that way (a shore, a pier's end, a cliff,
+    -- a dead end): along it, never back towards the officers
+    turns = { 60.0, -60.0, 90.0, -90.0 },
+    stuckLegs = 2,               -- legs in a row he stood still on (no navmesh path): then GTA's smart flee
 }
+-- A tired runner with no route whom this game's AI loop does not run (OneSync gave him to a partner's game, or the host
+-- lost him for LOST_CONTROL_MS) and who stands still this many combat governor passes (GOVERN_MS each) gets a flee task
+-- again from the game that owns him.
+local KEEP_STILL = 3
 -- TaskFollowNavMeshToCoord flags (natives.json eNavScriptFlags)
 local NAV = {
     default = 0,                 -- ENAV_DEFAULT
@@ -695,32 +703,51 @@ local function SmartFlee(ped, a)
     a.issuedAt = Now()
 end
 
+-- The navmesh point GetSafeCoordForPed finds near the end of a leg from pos along (dx, dy), or nil: none, one less than
+-- two arrive radii ahead along that line, or one nearer to the officer at f than he is now.
+local function AwayPoint(pos, dx, dy, f)
+    local found, safe = GetSafeCoordForPed(pos.x + dx * AWAY.leg, pos.y + dy * AWAY.leg, pos.z + 0.0, false,
+        AWAY.safeFlags)
+    if not (found and safe) then return nil end
+    if (safe.x - pos.x) * dx + (safe.y - pos.y) * dy < AWAY.arrive * 2 then return nil end
+    if f and U.dist2d(safe, f) < U.dist2d(pos, f) then return nil end
+    return vector3(safe.x + 0.0, safe.y + 0.0, safe.z + 0.0)
+end
+
 -- A tired runner with no route left: GTA's flee task has no speed, so he runs navmesh legs at his gait instead, each
 -- 40 m straight away from the nearest officer (to the navmesh point GetSafeCoordForPed finds there, when it lies well
--- ahead of him).
+-- ahead of him), or along what stops him that way (AWAY.turns). With no such point (water or a dead end all round, no
+-- navmesh loaded) he gets GTA's smart flee, which finds its own way; the pacer holds it to his gait.
 local function AwayLeg(ped, a)
     local pos = GetEntityCoords(ped)
     local from = a.args.from
     if not (from and DoesEntityExist(from)) then from = Npc.nearestParticipant(pos) end
-    local dx, dy = 0.0, 0.0
+    local dx, dy, f = 0.0, 0.0, nil
     if from then
-        local f = GetEntityCoords(from)
+        f = GetEntityCoords(from)
         dx, dy = pos.x - f.x, pos.y - f.y
     end
     local len = math.sqrt(dx * dx + dy * dy)
     if len < 0.5 then
         -- no officer, or one right on top of him: straight on
         local h = math.rad(tonumber(GetEntityHeading(ped)) or 0.0)
-        dx, dy, len = -math.sin(h), math.cos(h), 1.0
+        dx, dy, len, f = -math.sin(h), math.cos(h), 1.0, nil
     end
     dx, dy = dx / len, dy / len
-    local x, y, z = pos.x + dx * AWAY.leg, pos.y + dy * AWAY.leg, pos.z + 0.0
-    local found, safe = GetSafeCoordForPed(x, y, z, false, AWAY.safeFlags)
-    if found and safe and (safe.x - pos.x) * dx + (safe.y - pos.y) * dy >= AWAY.arrive * 2 then
-        x, y, z = safe.x + 0.0, safe.y + 0.0, safe.z + 0.0
+    local p = AwayPoint(pos, dx, dy, f)
+    for _, deg in ipairs(AWAY.turns) do
+        if p then break end
+        local r = math.rad(deg)
+        local c, s = math.cos(r), math.sin(r)
+        p = AwayPoint(pos, dx * c - dy * s, dx * s + dy * c, f)
     end
-    a.away = vector3(x, y, z)
-    TaskFollowNavMeshToCoord(ped, x, y, z, GAIT_MBR[a.gait] or GAIT_MBR.sprint, -1, 1.0, NAV.noStopping, 0.0)
+    if not p then
+        a.away, a.stuckLegs = nil, nil
+        SmartFlee(ped, a)
+        return
+    end
+    a.away = p
+    TaskFollowNavMeshToCoord(ped, p.x, p.y, p.z, GAIT_MBR[a.gait] or GAIT_MBR.sprint, -1, 1.0, NAV.noStopping, 0.0)
     a.issuedAt = Now()
 end
 
@@ -1127,7 +1154,8 @@ local function StepPoints(ped, a, t)
 end
 
 -- A tired runner's next away leg: at the end of the last one, when he is stuck, or when an officer is now nearer its
--- end than he is (it would take him into the officer).
+-- end than he is (it would take him into the officer). Stuck on AWAY.stuckLegs legs in a row (the navmesh task found no
+-- path and stands him still): GTA's smart flee instead.
 local function StepAway(ped, a, t)
     local pos = GetEntityCoords(ped)
     local again = U.dist2d(pos, a.away) <= AWAY.arrive
@@ -1135,8 +1163,19 @@ local function StepAway(ped, a, t)
         local near = Npc.nearestParticipant(pos)
         again = near ~= nil and U.dist2d(GetEntityCoords(near), a.away) < U.dist2d(pos, a.away)
     end
-    if Stuck(ped, a, t, REISSUE_MS) then again = true end
-    if again then AwayLeg(ped, a) end
+    if Stuck(ped, a, t, REISSUE_MS) then
+        a.stuckLegs = (a.stuckLegs or 0) + 1
+        again = true
+    elseif again then
+        a.stuckLegs = nil
+    end
+    if not again then return end
+    if (a.stuckLegs or 0) >= AWAY.stuckLegs then
+        a.away, a.stuckLegs = nil, nil
+        SmartFlee(ped, a)
+        return
+    end
+    AwayLeg(ped, a)
 end
 
 -- The server changed a runner's gait (Config.Flee): the leg he is on is given again at the new pace. A driver's pace
@@ -1370,7 +1409,7 @@ end
 -- run while he jogs and a walk after, a little slower (jogRate, walkRate), in a jog and then a winded walk
 -- (windedClipset). It lets go the moment he is not tired any more: a surrender, a fight, a car, his breath back.
 
-local Pace, PaceBag, LetGoAll
+local Pace, PaceBag, LetGoAll, Tired
 do
     local PACES = {
         jog = { mbr = GAIT_MBR.jog, rate = 'jogRate', clipset = 'move_m@JOG@' },
@@ -1508,6 +1547,9 @@ do
         end
     end
 
+    -- true while the ped's bag asks the game that owns him for a tired runner's pace
+    Tired = function(bag, ent) return PaceFor(bag, ent) ~= nil end
+
     -- A new bag of a ped of the run: a gait change reaches the pace in the same frame.
     PaceBag = function(netId, bag)
         if PACES[GaitOf(bag)] then tiredSeen[netId] = true end
@@ -1526,6 +1568,7 @@ end
 
 local GOVERN_MS = 1000
 local governed = {}      -- [netId] = { entity, seq } of the last caps this game applied
+local stood = {}         -- [netId] = { entity, n }: governor passes a tired runner this game owns has stood still
 local governing = false
 
 local function ArmedBag(bag)
@@ -1533,6 +1576,43 @@ local function ArmedBag(bag)
     local armed = bag.armed
     if armed == nil then armed = cfg.weapon ~= nil end
     return armed == true and not CALM[bag.state]
+end
+
+-- A calm person of the run waiting idle with no contact (a raid's staged crew before the breach): every game that owns
+-- him ignores what goes on around him as the host's ApplyWith does, so an officer aiming at him through a window or a
+-- shot nearby never makes him run or cower on the game OneSync gave him to.
+local function CalmBag(bag)
+    return bag.state == 'idle' and type(bag.contact) ~= 'table'
+end
+
+-- A tired runner with no route keeps moving on whichever game owns him (OneSync hands him to the officer chasing him):
+-- the host's away leg ends after 40 m and only the host's AI loop gives the next one. Standing still for KEEP_STILL
+-- passes on a game whose AI loop does not run him, he gets the host's full flee (his away legs) there, or GTA's smart
+-- flee (it never ends, and the pacer holds it to his gait) on a partner's game.
+local function KeepRunning(run, netId, ent, bag)
+    local a = ai[ent]
+    local route = bag.fleePoints or (type(bag.cfg) == 'table' and bag.cfg.fleePoints or nil)
+    if bag.state ~= 'fleeing' or not Tired(bag, ent) or #PointsOf(route) > 0 or (a and not a.done) or Held(ent) then
+        stood[netId] = nil
+        return
+    end
+    local s = stood[netId]
+    if not s or s.entity ~= ent then
+        s = { entity = ent, n = 0 }
+        stood[netId] = s
+    end
+    if GetEntitySpeed(ent) >= STUCK_SPEED then
+        s.n = 0
+        return
+    end
+    s.n = s.n + 1
+    if s.n < KEEP_STILL then return end
+    s.n = 0
+    if run.isHost == true then
+        Npc.task(ent, 'flee', {})
+    else
+        SmartFlee(ent, { args = {} })
+    end
 end
 
 local function GovernStep(run)
@@ -1545,17 +1625,25 @@ local function GovernStep(run)
             local g = governed[netId]
             if not g or g.entity ~= ent or g.seq ~= bag.seq then
                 if ArmedBag(bag) then ApplyCaps(ent, bag.cfg) end
+                if CalmBag(bag) then
+                    SetBlockingOfNonTemporaryEvents(ent, true)
+                    SetPedFleeAttributes(ent, 0, false)
+                end
                 governed[netId] = { entity = ent, seq = bag.seq }
             end
-            -- a tired runner OneSync gave this game is held to his gait from now on
+            -- a tired runner OneSync gave this game is held to his gait from now on, and kept moving
             Pace(netId, ent, bag)
+            KeepRunning(run, netId, ent, bag)
         else
             -- not ours (now): applied again when this game owns it again
-            governed[netId] = nil
+            governed[netId], stood[netId] = nil, nil
         end
     end
     for netId in pairs(governed) do
         if bags[netId] == nil then governed[netId] = nil end
+    end
+    for netId in pairs(stood) do
+        if bags[netId] == nil then stood[netId] = nil end
     end
 end
 
@@ -1570,7 +1658,7 @@ local function EnsureGovernor()
             if not ok then CP.warn(TAG, 'combat caps failed: %s', tostring(err)) end
             Wait(GOVERN_MS)
         end
-        governed = {}
+        governed, stood = {}, {}
         governing = false
     end)
 end

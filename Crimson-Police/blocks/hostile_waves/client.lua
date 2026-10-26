@@ -198,9 +198,20 @@ end
 
 local FIRST_TASK = { hostile = 'combat', surrendered = 'kneel', cuffed = 'cuffed' }
 
+-- true while the ped's bag has not caught up with the server yet: it still says 'idle' (a staged crew member waiting
+-- calm, or a fresh hostile) while the server's list already says otherwise, or a staged crew member's bag still has
+-- no weapon (CP.Runs.arm writes it, then the hostile state). The objective's start event can arrive before those bag
+-- writes, and an apply now would set him up calm (no health, weapon or senses of the fight) for good; the next pass
+-- applies the real ones.
+local function BagBehind(info, bag)
+    if type(bag) ~= 'table' or bag.state ~= 'idle' then return false end
+    return bag.armed == false or (info.state ~= nil and info.state ~= 'idle')
+end
+
 local function HostAi(S, info, ent, state, bag)
     local ctx = S.ctx
     if S.applied[info.netId] ~= ent then
+        if BagBehind(info, bag) then return end
         if not HasControl(S, ent) then return end
         local cfg = (bag and bag.cfg) or {}
         if CP.Npc.apply(ent, cfg) == false then return end

@@ -351,6 +351,91 @@ do
     H.eq(dead[1], netId, 'the objective learnt he is gone')
     H.eq(#Warns('within 8000 ms; removed'), 1, 'one warning')
     EndRun(run)
+
+    -- onTimeout = 'delete' never removes a person the server only moved (CP.Spawn.again: Warrant Service's suspect
+    -- who gives up at the door): he was in the world and on the ground already; let go where he stands
+    run = Scene({ { name = 'ped', kind = 'ped', coords = vec4(100.0, 160.0, 31.0, 0.0) } })
+    cfg.onTimeout = 'delete'
+    netId = made.ped
+    h = Handle(run, netId)
+    Own(h, 1)
+    Answer(1, run, netId, { result = 'placed', reason = 'ok', z = 31.0 })
+    H.eq(Ask(run, netId), nil, 'placed where he appeared')
+    local deadBefore, warnsBefore = #dead, #Warns('within 8000 ms; let go where it stands')
+    local again = Spawn.again(run, netId, vec3(102.0, 158.0, 31.0), { x = 100.0, y = 160.0 })
+    H.ok(again ~= nil and Ask(run, netId) ~= nil, 'moved by the server: he waits for his placement again')
+    W.tick(9)
+    H.eq(Ask(run, netId), nil, 'no answer within 8 s: the ask is over')
+    H.ok(run.entities[netId] ~= nil and W.ent(h).exists ~= false, 'onTimeout = delete: still there, not removed')
+    H.eq(#dead, deadBefore, 'and the objective does not count him as gone')
+    H.ok(#Rpcs(h, false) >= 1 and not FrozenHere(h), 'let go where he stands')
+    H.eq(#Warns('within 8000 ms; let go where it stands') - warnsBefore, 1, 'one warning saying so')
+    EndRun(run)
+end
+
+-- ============================================================================
+--                         A BIG WAVE WITH SLOW PROBES
+-- ============================================================================
+-- THE TIME WAITS WHILE AN OFFICER'S GAME CHECKS.
+-- The placer checks 4 at a time (modules/spawn/client.lua PLACERS_MAX); each one can take collisionTimeoutMs +
+-- interiorTimeoutMs and two control asks. It tells the server it checks an entity (server:spawnChecking) before it
+-- waits for its turn, so the later ones of a wave are never let go unchecked when placeTimeoutMs runs out.
+
+do
+    local make = {}
+    for i = 1, 6 do make[i] = { name = 'p' .. i, kind = 'ped', coords = vec4(90.0 + i * 3.0, 160.0, 31.0, 0.0) } end
+    local run = Scene(make)
+    local timedOut = #Warns('was not placed by an officer\'s game')
+    local function Checking(src, netId, token)
+        H.fire('crimson-police:server:spawnChecking', src, run.id,
+            { netId = netId, token = token or (Ask(run, netId) or {}).token })
+    end
+    for i = 1, 6 do
+        Own(Handle(run, made['p' .. i]), 1)
+        Checking(1, made['p' .. i])
+    end
+    H.eq(Spawn.waiting(run.id), 6, 'six wait, officer 1\'s game checks them')
+    -- its first four probes are slow (the inside of a building loads late): 11 s
+    W.tick(11)
+    H.eq(Spawn.waiting(run.id), 6, 'after 11 s (more than placeTimeoutMs): none let go unchecked')
+    for i = 1, 4 do H.eq(#Rpcs(Handle(run, made['p' .. i]), false), 0, 'p' .. i .. ' still frozen') end
+    for i = 1, 4 do Answer(1, run, made['p' .. i], { result = 'placed', reason = 'ok', z = 31.0 }) end
+    H.eq(Spawn.waiting(run.id), 2, 'the first four placed')
+    -- the last two waited their turn on that game and are checked now: 11 s more
+    W.tick(11)
+    H.eq(Spawn.waiting(run.id), 2, 'the two that waited their turn are still waiting for that game, 22 s on')
+    for i = 5, 6 do Answer(1, run, made['p' .. i], { result = 'placed', reason = 'ok', z = 31.0 }) end
+    H.eq(Spawn.waiting(run.id), 0, 'all six placed by the officer\'s game')
+    H.eq(#Warns('was not placed by an officer\'s game') - timedOut, 0, 'none timed out')
+    EndRun(run)
+
+    -- the checking game never answers (it crashed): the wait is over after 34 s + collisionTimeoutMs +
+    -- interiorTimeoutMs (45 s), then placeTimeoutMs runs again
+    run = Scene({ { name = 'ped', kind = 'ped', coords = vec4(100.0, 160.0, 31.0, 0.0) } })
+    Own(Handle(run, made.ped), 1)
+    Checking(1, made.ped)
+    W.tick(44)
+    H.ok(Ask(run, made.ped) ~= nil, 'a game that checks: still waiting after 44 s')
+    W.tick(9)
+    H.eq(Ask(run, made.ped), nil, 'no answer by 45 s + 8 s: let go where it stands')
+    EndRun(run)
+
+    -- what does not hold the time: a bystander's word, a wrong token, a second word for the same ask, an officer who
+    -- left the run
+    run = Scene({ { name = 'ped', kind = 'ped', coords = vec4(100.0, 160.0, 31.0, 0.0) } })
+    Checking(3, made.ped)
+    Checking(1, made.ped, 'not-the-token')
+    W.tick(9)
+    H.eq(Ask(run, made.ped), nil, 'a bystander\'s word or a wrong token: let go after 8 s as before')
+    EndRun(run)
+    run = Scene({ { name = 'ped', kind = 'ped', coords = vec4(100.0, 160.0, 31.0, 0.0) } })
+    Checking(2, made.ped)
+    W.tick(5)
+    H.ok(Ask(run, made.ped) ~= nil, 'officer 2\'s game checks it: waiting after 5 s')
+    run.participants[2].status = 'left'
+    W.tick(9)
+    H.eq(Ask(run, made.ped), nil, 'the officer whose game checked it left the run: the time ran on')
+    EndRun(run)
 end
 
 -- ============================================================================

@@ -415,6 +415,20 @@ do
         P.entity(9100 + i, { netId = 80 + i, type = 1, owner = ME, frozen = true, coords = vec3(i + 0.0, 0.0, 31.0) })
         Ask(80 + i, { x = i, y = 0, z = 31, kind = 'ped', token = 'w' .. i })
     end
+    -- before any waits for its turn, the server hears this game checks each (its placeTimeoutMs then waits for it)
+    Settle(50)
+    local checking = H.findEvents('crimson-police:server:spawnChecking')
+    H.eq(#checking, 6, 'the server is told this game checks every one of the wave, at once')
+    local each = true
+    for i = 1, 6 do
+        local hit = 0
+        for _, c in ipairs(checking) do
+            if c.args[1] == 'run-1' and c.args[2].netId == 80 + i and c.args[2].token == 'w' .. i then hit = hit + 1 end
+        end
+        if hit ~= 1 then each = false end
+    end
+    H.ok(each, 'once each, with its run, net id and token')
+    H.eq(#Reports(), 0, 'none placed yet')
     local most = 0
     Until(function()
         local busy = 0
@@ -432,6 +446,7 @@ do
     end)
     H.eq(#Reports(), 6, 'every one of the wave is told')
     H.eq(most, 4, 'at most four are placed at once')
+    H.eq(#H.findEvents('crimson-police:server:spawnChecking'), 6, 'and the server was told once per entity, no more')
     for i = 1, 6 do
         H.eq(P.entities[9100 + i].frozen, false, 'wave person ' .. i .. ' let go')
     end

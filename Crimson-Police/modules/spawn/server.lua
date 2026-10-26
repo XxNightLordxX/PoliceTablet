@@ -8,6 +8,7 @@ local U = CP.U
 local TAG = 'spawn'
 
 local PLACED_EVENT = 'server:spawnPlaced'
+local CHECKING_EVENT = 'server:spawnChecking'
 local TICK_MS = 500         -- the open asks are checked this often (who simulates it, officers near, the time)
 local Z_SLACK = 2.0         -- metres an ok point may sit off where it is put (a vehicle up to 1.7 m), over snapWithin
 local OCCUPIED_M = 1.0      -- metres (on the map): another point is never one an entity of the run stands on
@@ -15,6 +16,12 @@ local ALT_MAX = 8           -- other points kept per entity
 local REASON_MAX = 32       -- characters of a game's reason kept
 local KINDS = { ped = 'ped', vehicle = 'vehicle', object = 'object' }
 local ON_TIMEOUT = { unfreeze = true, delete = true }
+-- How long an officer's game that said it checks an entity (server:spawnChecking) may take before its placeTimeoutMs
+-- runs again: the placer's wait for its turn in a big wave (PLACE_QUEUE_MS 30 s) and its two asks for control
+-- (PLACE_CONTROL_MS 2 s each, modules/spawn/client.lua), plus the probe's loads (collisionTimeoutMs and
+-- interiorTimeoutMs, kept to LOAD_MS as the probe keeps them).
+local CHECK_BASE_MS = 34000
+local LOAD_MS = { 500, 30000 }
 
 local asks = {}             -- [netId] = ask: see Spawn.ask
 local seq = 0
@@ -134,6 +141,12 @@ end
 
 local function Where(a) return ('%s %s at %.2f %.2f %.2f'):format(a.kind, a.model, a.x, a.y, a.z) end
 
+local function CheckMs()
+    local c = Cfg()
+    local function Load(key, default) return U.clamp(Num(c[key], default), LOAD_MS[1], LOAD_MS[2]) end
+    return CHECK_BASE_MS + Load('collisionTimeoutMs', 6000) + Load('interiorTimeoutMs', 5000)
+end
+
 local function PedXY(src)
     local ped = GetPlayerPed(src)
     if not ped or ped == 0 then return nil end
@@ -225,11 +238,15 @@ local function Retry(run, a, reason, groundZ)
     a.tries = a.tries + 1
     a.token = NewToken(a.netId)
     a.waitedMs = 0
+    a.checkedBy, a.checkUntil = nil, nil
     if not WritePlace(run, a, AskOf(a)) then Done(run, a, true) end
 end
 
 local function TimedOut(run, a, ms)
     local mode = ON_TIMEOUT[Cfg().onTimeout] and Cfg().onTimeout or 'unfreeze'
+    -- one the server only moved (Spawn.again: a warrant's suspect who gives up at the door) stood on the ground in the
+    -- world before: let go where he stands, never removed
+    if a.again then mode = 'unfreeze' end
     CP.warn(TAG, 'run %s: %s was not placed by an officer\'s game within %d ms; %s (Config.Spawning.onTimeout)', run.id,
         Where(a), ms, mode == 'delete' and 'removed' or 'let go where it stands')
     if mode ~= 'delete' then return Done(run, a, true) end
@@ -249,10 +266,16 @@ local function Check(a, on, timeoutMs, dt)
     -- switched off in Settings: nobody waits any more
     if not on then return Done(run, a, true) end
     if a.busy then return end
-    local near = NearSrcs(ActiveSrcs(run), a)
+    local srcs = ActiveSrcs(run)
+    local near = NearSrcs(srcs, a)
     WatchOwner(a, near)
     -- the time only runs while an officer is near enough for his game to place it
     if next(near) == nil then return end
+    -- and not while an officer's game checks it (a wave's later ones wait their turn there), up to CheckMs
+    if a.checkUntil then
+        if GetGameTimer() < a.checkUntil and Has(srcs, a.checkedBy) then return end
+        a.checkUntil = nil
+    end
     a.waitedMs = a.waitedMs + dt
     if a.waitedMs >= timeoutMs then TimedOut(run, a, timeoutMs) end
 end
@@ -352,6 +375,7 @@ function Spawn.again(run, netId, coords, from)
         tries = 0,
         waitedMs = 0,
         hold = kind == 'object',
+        again = true,
     }
     local fx, fy = nil, nil
     if type(from) == 'table' or type(from) == 'vector3' or type(from) == 'vector4' then
@@ -432,6 +456,25 @@ local function OnPlaced(src, runId, data)
         end
     end)
 end
+
+-- An officer's game of the run checks the entity of the ask now (once per ask): its time waits for the answer, at
+-- most CheckMs, while that officer stays on the run.
+local function OnChecking(src, runId, data)
+    if type(data) ~= 'table' then return end
+    local netId = math.tointeger(tonumber(data.netId))
+    local a = netId and asks[netId] or nil
+    if not a or a.runId ~= runId or data.token ~= a.token or a.checkedBy ~= nil then return end
+    local run = RunOf(runId)
+    if not run or not Has(ActiveSrcs(run), src) then return end
+    a.checkedBy, a.checkUntil = src, GetGameTimer() + CheckMs()
+end
+
+RegisterNetEvent(CP.e(CHECKING_EVENT), function(runId, data)
+    local src = source
+    if not CP.Net.rateOk(src, CHECKING_EVENT, 30, 1000) then return end
+    local ok, err = pcall(OnChecking, src, runId, data)
+    if not ok then CP.err(TAG, 'spawnChecking from %s failed: %s', tostring(src), tostring(err)) end
+end)
 
 RegisterNetEvent(CP.e(PLACED_EVENT), function(runId, data)
     local src = source

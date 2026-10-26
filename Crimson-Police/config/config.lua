@@ -424,14 +424,17 @@ Config.Spawning = {
     -- false = they appear on the file's points as before
     place = true,
     -- Milliseconds (1000-60000) a new person, vehicle or object waits frozen for an officer's game to put it on the
-    -- ground, counted while an officer is within activateRange of it; then onTimeout
+    -- ground, counted while an officer is within activateRange of it and no officer's game is checking it (a big
+    -- wave's later ones wait their turn there, at most 34 s plus collisionTimeoutMs and interiorTimeoutMs); then
+    -- onTimeout
     placeTimeoutMs = 8000,
     -- How many times (0-5) a point an officer's game reports bad (under the ground, floating, in water, in a wall) is
     -- swapped for another point the mission may use there; after that, or with no other point, the last one is used
     -- as it is (one warning in the console)
     retries = 2,
     -- 'unfreeze' = one no officer's game placed within placeTimeoutMs is let go where it stands, as before; 'delete' =
-    -- it is removed and the mission counts it as gone
+    -- it is removed and the mission counts it as gone (a person the mission only moved, such as a warrant's suspect
+    -- who gives up at the door, is always let go where he stands)
     onTimeout = 'unfreeze',
     -- true = a console line for each point skipped (shown while Config.Debug is on) and a warning when a wave had to
     -- use closer points

@@ -2338,7 +2338,12 @@ do
         addSphereZone = function(o) zones[#zones + 1] = o; return #zones end,
         removeZone = function(id) removedZones[id] = true end,
     }
-    CP.Npc.apply = function(e) return CE[e] ~= nil and CE[e].control == true end
+    local applies = {}   -- { e, cfg, bag = his bag at the time }
+    CP.Npc.apply = function(e, cfg)
+        applies[#applies + 1] = { e = e, cfg = cfg, bag = CE[e] and CE[e].bag }
+        return CE[e] ~= nil and CE[e].control == true
+    end
+    local function AppliesFor(e) return U.filter(applies, function(a) return a.e == e end) end
     CP.Npc.task = function(e, action, args)
         if not (CE[e] and CE[e].control) then return false end
         tasks[#tasks + 1] = { e = e, action = action, args = args }
@@ -2593,6 +2598,46 @@ do
     H.eq(#roads.zones, sgZones + 1, 'hw staged: and the traffic is blocked')
     HWc.stop(sgc)
     H.eq(OpenBlips() - sgBase, 0, 'hw staged: stop removes its blip')
+
+    -- the breach completes: the objective's start reaches the host before the wake's bag writes (CP.Runs.arm, then
+    -- the hostile state). While his bag lags behind he is not set up (calm, unarmed, for good); once it has caught up
+    -- he gets the armed cfg and one combat task
+    local bc = ClientCtx(U.deepcopy(HW.defaults({ waves = { 2 }, stage = true })), hloc,
+        { tag = 'hw-breach', index = 2 })
+    AddEnt(7204, 94, vec3(1025.0, 1000.0, 30.0), { state = 'idle', armed = false, cfg = { model = 'g_m_y_lost_01' } })
+    CE[94].grant = true
+    HWc.prepare(bc)
+    HWc.update(bc, { peds = { { netId = 7204, role = 'hostile', state = 'idle', wave = 1 } }, wave = 1, waves = 1 })
+    HWc.start(bc)
+    Steps(1)
+    H.eq(#AppliesFor(94), 0, 'hw breach: his bag still calm and unarmed: not set up yet')
+    HWc.update(bc, { peds = { { netId = 7204, role = 'hostile', state = 'hostile', wave = 1 } }, wave = 1, waves = 1 })
+    Steps(1)
+    H.eq(#AppliesFor(94), 0, 'hw breach: the server says hostile while his bag is still calm: still not')
+    CE[94].bag = {
+        state = 'idle',
+        armed = true,
+        cfg = { model = 'g_m_y_lost_01', weapon = 'WEAPON_PISTOL', health = 230, behaviour = 'hold' },
+    }
+    Steps(1)
+    H.eq(#AppliesFor(94), 0, 'hw breach: armed, but his state not there yet: still not')
+    CE[94].bag = {
+        state = 'hostile',
+        armed = true,
+        cfg = { model = 'g_m_y_lost_01', weapon = 'WEAPON_PISTOL', health = 230, behaviour = 'hold' },
+    }
+    Steps(1)
+    local ap = AppliesFor(94)
+    H.eq(#ap, 1, 'hw breach: his bag caught up: set up once')
+    H.ok(
+        ap[1] and ap[1].bag.armed == true and ap[1].bag.state == 'hostile' and ap[1].cfg.health == 230
+            and ap[1].cfg.weapon == 'WEAPON_PISTOL',
+        'hw breach: with the armed cfg (health, weapon)'
+    )
+    H.eq(#TasksFor(94, 'combat'), 1, 'hw breach: one combat task')
+    Steps(3)
+    H.ok(#AppliesFor(94) == 1 and #TasksFor(94, 'combat') == 1, 'hw breach: and no second set-up or task')
+    HWc.stop(bc)
 
     -- traffic stays blocked while a later objective of the run follows (Gang Shootout "Secure the scene"),
     -- and is restored when the last objective stops, when the run is over, or on resource stop
