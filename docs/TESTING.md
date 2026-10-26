@@ -346,7 +346,9 @@ package names are that release's):
    healthy before the job starts, on a host port the runner picks (the runner image carries its own MySQL,
    which could want 3306);
 2. `MYSQL_HOST=127.0.0.1` and `MYSQL_TCP_PORT=<that port>` go to `$GITHUB_ENV`, so every later step's `mysql`
-   CLI and the twin use the service over TCP (`localhost` would mean a socket, and there is none);
+   CLI and the twin use the service over TCP (`localhost` would mean a socket, and there is none); then
+   `sysctl net.ipv4.tcp_tw_reuse=1` and a wider `ip_local_port_range` (see "Things that bit" below: the suites
+   open about 29,000 connections a run);
 3. apt: `lua5.4 lua-cjson mariadb-client`. This replaces the runner's MySQL 8.0 client (apt removes those
    packages); the step links `mysql` to `mariadb` where a newer package leaves the old name out, and fails
    unless `mysql --version` says MariaDB;
@@ -364,6 +366,16 @@ packages, and the runner's own clock and zone (the specs do not read either). Th
 (no socket, `LANG=C.UTF-8`) before the speed-up: every step passed.
 
 ## Things that bit while setting this up
+
+- **The runner ran out of TCP ports**: every harness call reconnects (`connect <db>`, a fresh session per
+  call), so one `suite-db` run opens about 29,000 connections (`SHOW GLOBAL STATUS LIKE 'Connections'` before
+  and after). On a socket that costs nothing; over TCP each closed connection holds a port for 60 s, and Linux
+  keeps 28,232 of them. Once the suite passed about 87 specs, CI's `suite-db` (under a minute there) used them
+  all up: the last specs crashed with `Lost connection to server at 'handshake: reading initial communication
+  packet', system error: 11`, then `suite-files` and `suite-shadow` could not reach MariaDB at all, while the
+  server's own log showed nothing wrong. The workflow now sets `tcp_tw_reuse=1` and the range 16384-65535. A
+  local run over TCP (`MYSQL_HOST=127.0.0.1`, for example the container above) can hit the same wall: run the
+  same `sysctl` there, or use the socket.
 
 - **The `mysql` client's charset follows the locale**: latin1 under `C`/POSIX, utf8mb3 under `C.UTF-8`
   (the GitHub runner's default). The specs that need real UTF-8 force `--default-character-set=utf8mb4`;

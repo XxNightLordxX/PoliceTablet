@@ -45,6 +45,14 @@ jobs:
           echo "MYSQL_HOST=127.0.0.1" >> "$GITHUB_ENV"
           echo "MYSQL_TCP_PORT=${{ job.services.mariadb.ports['3306'] }}" >> "$GITHUB_ENV"
 
+      - name: TCP ports for the suites
+        # Every harness call opens a new connection (tests/harness.lua `connect <db>`, a fresh session per call):
+        # one suite-db run opens about 29,000 in under a minute. Over TCP through the service's port mapping each
+        # closed one holds a port for 60 s, and Linux keeps 28,232 (32768-60999), so the runner ran out near the
+        # end of suite-db ("Lost connection ... handshake ... system error: 11") and the next suites could not
+        # connect at all. Reuse closed ports for new connections and widen the range.
+        run: sudo sysctl -w net.ipv4.tcp_tw_reuse=1 net.ipv4.ip_local_port_range="16384 65535"
+
       - name: Lua 5.4, lua-cjson and the MariaDB client
         run: |
           sudo apt-get update -q
