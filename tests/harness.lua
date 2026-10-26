@@ -2609,6 +2609,21 @@ function H.load(rel)
     return r
 end
 
+-- The real CP.AntiCheat (modules/anticheat/server.lua) as a table of its own, without its 1 s loop, for a spec that
+-- stubs CP.AntiCheat: it takes the stun rule (stunMode, stunReport) and the staff notes from it. CP.AntiCheat stays
+-- what it was. The real functions call each other through the returned table (wrap its note or flag to watch them).
+function H.realAntiCheat()
+    local saved, thread = CP.AntiCheat, _G.CreateThread
+    CP.AntiCheat = nil
+    _G.CreateThread = function() end
+    local ok, err = pcall(H.load, 'modules/anticheat/server.lua')
+    _G.CreateThread = thread
+    local real = CP.AntiCheat
+    CP.AntiCheat = saved
+    if not ok then error(err, 2) end
+    return real
+end
+
 -- The files FXServer runs for one script list of fxmanifest.lua ('server_scripts', 'client_scripts',
 -- 'shared_scripts'), in its order: the entries as listed with no de-duplication across entries (a file named by
 -- itself and matched again by a glob runs twice), each glob's matches byte-sorted and unique within the entry, '**/'

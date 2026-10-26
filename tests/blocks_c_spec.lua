@@ -94,9 +94,39 @@ CP.Npc = {
         if npc.spent[netId] and near <= 30.0 then return true, npc.wornTask end
         return false
     end,
-    -- CP.Npc.stunProof's answer (tests/npc_spec.lua checks the real one): npc.noStun[netId] = the server saw no stun
-    stunProof = function(netId) return not npc.noStun[netId] end,
+    -- CP.Npc.stunCheck (tests/npc_spec.lua checks the real one): npc.noStun[netId] = the server saw no stun; the
+    -- mode, the note and the flag come from the real CP.AntiCheat.stunReport below
+    stunCheck = function(run, src, netId)
+        npc.stunChecks[#npc.stunChecks + 1] = { run = run, src = src, netId = netId }
+        return CP.AntiCheat.stunReport(run, src, not npc.noStun[netId], netId)
+    end,
 }
+npc.stunChecks = {}
+-- the real stun rule of CP.AntiCheat (modules/anticheat), its staff notes and flags watched
+CP.AntiCheat = H.realAntiCheat()
+local AC_NOTES, AC_FLAGS = {}, {}
+do
+    local note, flag = CP.AntiCheat.note, CP.AntiCheat.flag
+    CP.AntiCheat.note = function(run, src, reason, detail)
+        local done = note(run, src, reason, detail)
+        if done then AC_NOTES[#AC_NOTES + 1] = { run = run, src = src, reason = reason, detail = detail } end
+        return done
+    end
+    CP.AntiCheat.flag = function(run, src, reason, detail)
+        local done = flag(run, src, reason, detail)
+        if done then AC_FLAGS[#AC_FLAGS + 1] = { run = run, src = src, reason = reason, detail = detail } end
+        return done
+    end
+end
+-- One 'stunned' report the server did not see, in a stunNeedsProof mode: what came of it.
+local function UnseenStun(mode, report)
+    local saved = Config.AntiCheat.stunNeedsProof
+    Config.AntiCheat.stunNeedsProof = mode
+    local n0, f0 = #AC_NOTES, #AC_FLAGS
+    local ok, why = report()
+    Config.AntiCheat.stunNeedsProof = saved
+    return { ok = ok, why = why, notes = #AC_NOTES - n0, flags = #AC_FLAGS - f0 }
+end
 local function LastAsk(netId)
     for i = #npc.wornAsks, 1, -1 do
         if npc.wornAsks[i].netId == netId then return npc.wornAsks[i] end
@@ -786,13 +816,70 @@ do -- kills and stuns: only ACTIVE participants count; the stun reporter must be
     H.eq(why, 'too_far', 'stun: a report from 490 m away is rejected even with a partner next to the suspect')
     At(2, 1050.0, 1000.0)
     npc.noStun[s2[1].netId] = true
-    ok, why = PU.onEvent(ctx2, 2, { type = 'stunned', netId = s2[1].netId })
-    H.eq(why, 'no_stun', 'stun: a stun the server did not see is refused (Config.AntiCheat.stunNeedsProof)')
-    H.eq(npc.states[s2[1].netId], 'fleeing', 'stun: no seen stun, the suspect keeps running')
+    local r = UnseenStun('strict', function() return PU.onEvent(ctx2, 2, { type = 'stunned', netId = s2[1].netId }) end)
+    H.eq(r.why, 'no_stun', 'stun strict: a stun the server did not see is refused (PF1)')
+    H.eq(npc.states[s2[1].netId], 'fleeing', 'stun strict: no seen stun, the suspect keeps running')
+    H.ok(r.notes == 0 and r.flags == 0, 'stun strict: no note, no flag')
     npc.noStun[s2[1].netId] = nil
     ok = PU.onEvent(ctx2, 2, { type = 'stunned', netId = s2[1].netId })
     H.eq(ok, true, 'stun: a report from 40 m (partner within 30 m) is accepted')
     H.eq(npc.states[s2[1].netId], 'surrendered', 'stun: the suspect gives up')
+    local last = npc.stunChecks[#npc.stunChecks]
+    H.ok(last and last.run == ctx2.run and last.src == 2 and last.netId == s2[1].netId,
+        'stun: pursuit asks CP.Npc.stunCheck with its run, the reporter and the person')
+end
+
+do -- pursuit: a stun the server did not see, in every Config.AntiCheat.stunNeedsProof mode
+    H.eq(Config.AntiCheat.stunNeedsProof, 'flag', 'stunNeedsProof ships \'flag\'')
+    -- a suspect who ran from the stopped car; participant 2 reports a stun the server did not see
+    local function Case(mode)
+        local c = StolenCtx({ footFlee = 1.0 })
+        c.run.id = 'run-c-pursuit-' .. mode   -- every FakeCtx run is 'run-c': CP.AntiCheat keeps one list per run
+        PU.start(c)
+        local car = SpawnsOf(c, 'vehicle')[1]
+        local peds = SpawnsOf(c, 'ped')
+        At(1, 1010.0, 1000.0)
+        At(2, 1500.0, 1000.0)
+        TickN(PU, c, 1)
+        E(car.netId).speed = 30.0
+        TickN(PU, c, 1)
+        E(car.netId).speed = 0.0
+        TickN(PU, c, 5)
+        for _, sp in ipairs(peds) do E(sp.netId).inVehicle = 0 end
+        TickN(PU, c, 1)
+        local n = peds[1].netId
+        H.eq(npc.states[n], 'fleeing', mode .. ': the suspect runs')
+        SetPos(n, 1010.0, 1000.0)
+        At(2, 1050.0, 1000.0)
+        npc.noStun[n] = true
+        local r = UnseenStun(mode, function() return PU.onEvent(c, 2, { type = 'stunned', netId = n }) end)
+        npc.noStun[n] = nil
+        r.ctx, r.netId = c, n
+        r.notHeld = c.run.flagged == nil and c.run.participants[2].flagged == nil
+        return r
+    end
+    local r = Case('flag')
+    H.eq(r.ok, true, 'pursuit flag: the report counts, as before PF1')
+    H.eq(npc.states[r.netId], 'surrendered', 'pursuit flag: the suspect gives up')
+    H.eq(r.notes, 1, 'pursuit flag: one staff note')
+    H.ok(AC_NOTES[#AC_NOTES].reason == 'stun_unproven' and AC_NOTES[#AC_NOTES].src == 2,
+        'pursuit flag: stun_unproven about the officer who reported it')
+    H.ok(r.flags == 0 and r.notHeld, 'pursuit flag: no flag, the row is not held')
+    r = Case('hold')
+    H.eq(r.ok, true, 'pursuit hold: the report counts')
+    H.eq(npc.states[r.netId], 'surrendered', 'pursuit hold: the suspect gives up')
+    H.eq(r.flags, 1, 'pursuit hold: one flag')
+    H.eq(r.ctx.run.participants[2].flagged and r.ctx.run.participants[2].flagged.reason, 'stun_unproven',
+        'pursuit hold: that officer\'s row is held for review')
+    H.ok(r.ctx.run.participants[1].flagged == nil and r.ctx.run.flagged == nil, 'pursuit hold: nobody else\'s')
+    r = Case('strict')
+    H.eq(r.why, 'no_stun', 'pursuit strict: refused with no_stun')
+    H.eq(npc.states[r.netId], 'fleeing', 'pursuit strict: he keeps running')
+    H.ok(r.notes == 0 and r.flags == 0 and r.notHeld, 'pursuit strict: no note, no flag')
+    r = Case('off')
+    H.eq(r.ok, true, 'pursuit off: the report counts')
+    H.eq(npc.states[r.netId], 'surrendered', 'pursuit off: the suspect gives up')
+    H.ok(r.notes == 0 and r.flags == 0 and r.notHeld, 'pursuit off: no note, no flag')
 end
 
 do -- Street Race Bust: racers that all die in crashes with none detained never complete; the time limit fails
@@ -2190,8 +2277,11 @@ do -- escape, kills, witness lost, stun, clue bonus lost to an early arrest
     H.eq(why, 'too_far', 'stun with nobody within 30 m rejected')
     At(1, p4.x + 10.0, p4.y, p4.z)
     npc.noStun[f4[1].netId] = true
-    ok, why = SA.onEvent(ctx4, 1, { type = 'stunned', netId = f4[1].netId })
-    H.eq(why, 'no_stun', 'a stun the server did not see is refused (Config.AntiCheat.stunNeedsProof)')
+    local rs = UnseenStun('strict', function()
+        return SA.onEvent(ctx4, 1, { type = 'stunned', netId = f4[1].netId })
+    end)
+    H.eq(rs.why, 'no_stun', 'strict: a stun the server did not see is refused (PF1)')
+    H.ok(rs.notes == 0 and rs.flags == 0, 'strict: no note, no flag')
     npc.noStun[f4[1].netId] = nil
     ok = SA.onEvent(ctx4, 1, { type = 'stunned', netId = f4[1].netId })
     H.eq(ok, true, 'stun near accepted')
@@ -2209,6 +2299,49 @@ do -- escape, kills, witness lost, stun, clue bonus lost to an early arrest
     At(1, 5000.0, 0.0)
     H.eq(SA.presence(ctx4, 1), U.dist2d(vec3(5000.0, 0.0, 30.0), ctx4.state.circle.center) - 50,
         'presence outside: metres from the edge')
+end
+
+do -- search_area: a stun the server did not see, in every Config.AntiCheat.stunNeedsProof mode
+    local function Case(mode)
+        local c = HuntCtx({ fugitives = 2 }, { 1, 2 })
+        c.run.id = 'run-c-search-' .. mode   -- every FakeCtx run is 'run-c': CP.AntiCheat keeps one list per run
+        SA.start(c)
+        local f = FugitivesOf(c)[1]
+        local fp = E(f.netId).coords
+        At(1, fp.x + 10.0, fp.y, fp.z)
+        At(2, fp.x + 10.0, fp.y, fp.z)
+        npc.noStun[f.netId] = true
+        local r = UnseenStun(mode, function() return SA.onEvent(c, 1, { type = 'stunned', netId = f.netId }) end)
+        npc.noStun[f.netId] = nil
+        r.ctx, r.netId = c, f.netId
+        r.notHeld = c.run.flagged == nil and c.run.participants[1].flagged == nil
+        return r
+    end
+    local r = Case('flag')
+    H.eq(r.ok, true, 'search flag: the report counts, as before PF1')
+    H.eq(npc.states[r.netId], 'surrendered', 'search flag: the fugitive gives up')
+    H.eq(r.notes, 1, 'search flag: one staff note')
+    H.ok(AC_NOTES[#AC_NOTES].reason == 'stun_unproven' and AC_NOTES[#AC_NOTES].src == 1,
+        'search flag: stun_unproven about the officer who reported it')
+    H.ok(r.flags == 0 and r.notHeld, 'search flag: no flag, the row is not held')
+    r = Case('hold')
+    H.eq(r.ok, true, 'search hold: the report counts')
+    H.eq(npc.states[r.netId], 'surrendered', 'search hold: the fugitive gives up')
+    H.eq(r.flags, 1, 'search hold: one flag')
+    H.eq(r.ctx.run.participants[1].flagged and r.ctx.run.participants[1].flagged.reason, 'stun_unproven',
+        'search hold: that officer\'s row is held for review')
+    H.ok(r.ctx.run.participants[2].flagged == nil and r.ctx.run.flagged == nil, 'search hold: nobody else\'s')
+    r = Case('strict')
+    H.eq(r.why, 'no_stun', 'search strict: refused with no_stun')
+    H.ok(npc.states[r.netId] ~= 'surrendered', 'search strict: he does not give up')
+    H.ok(r.notes == 0 and r.flags == 0 and r.notHeld, 'search strict: no note, no flag')
+    r = Case('off')
+    H.eq(r.ok, true, 'search off: the report counts')
+    H.eq(npc.states[r.netId], 'surrendered', 'search off: the fugitive gives up')
+    H.ok(r.notes == 0 and r.flags == 0 and r.notHeld, 'search off: no note, no flag')
+    local last = npc.stunChecks[#npc.stunChecks]
+    H.ok(last and last.run == r.ctx.run and last.src == 1 and last.netId == r.netId,
+        'search_area asks CP.Npc.stunCheck with its run, the reporter and the person')
 end
 
 do -- kills by former participants, stun reports from far away

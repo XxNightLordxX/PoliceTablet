@@ -1098,9 +1098,11 @@ end
 --           9c. A STUN REPORT COUNTS ONLY WITH A STUN THE SERVER SAW
 -- ============================================================================
 -- A cheat menu could send { type = 'stunned' } for a runner within 30 m and he gave up at once (PF1). The report
--- now needs CP.Npc.stunProof (Config.AntiCheat.stunNeedsProof): the server saw him ragdoll within 1 s.
+-- goes through CP.Npc.stunCheck (Config.AntiCheat.stunNeedsProof): 'strict' needs the server to have seen him ragdoll
+-- within 1 s; 'flag' (shipped) takes it as before and notes an unseen stun for staff; 'hold' flags that officer.
 
-do
+-- A runner of a new run reported stunned by officer 1 while the server saw no ragdoll, in one mode.
+local function UnseenStun(mode)
     Demeanour('warrant', 'runner')
     local m = SceneMission({ profileSet = 'test_warrant', scene = { loitering = 1 }, returning = { chance = 0 } })
     local run = W.start({ 1 }, m)
@@ -1108,21 +1110,69 @@ do
     local p = Contact(run, 1, 'person')
     W.place(1, 2000.0, 1985.0, 30.0)
     W.tick(5)
-    H.eq(p.state, 'fleeing', 'pf1: the runner runs')
-    local function Stunned()
-        W.near(1, run, p.netId, 6.0)
-        Report(1, run, 1, { type = 'stunned', netId = p.netId, coords = H.players[1].coords, time = H.clockMs })
-    end
-    Stunned()
-    H.eq(p.state, 'fleeing', 'pf1: a stunned report the server saw no ragdoll for: he keeps running')
+    H.eq(p.state, 'fleeing', mode .. ': the runner runs')
+    local saved = Config.AntiCheat.stunNeedsProof
+    Config.AntiCheat.stunNeedsProof = mode
+    local n0, f0 = #W.acNotes, #W.flags
+    W.near(1, run, p.netId, 6.0)
+    Report(1, run, 1, { type = 'stunned', netId = p.netId, coords = H.players[1].coords, time = H.clockMs })
+    Config.AntiCheat.stunNeedsProof = saved
+    return { run = run, p = p, notes = #W.acNotes - n0, flags = #W.flags - f0, saved = saved }
+end
+local function Finish(r)
+    RestoreDemeanour()
+    Runs.endRun(r.run, 'completed', 'completed')
+end
+
+do
+    local r = UnseenStun('strict')
+    local run, p = r.run, r.p
+    H.eq(r.saved, 'flag', 'stunNeedsProof ships \'flag\'')
+    H.eq(p.state, 'fleeing', 'pf1 strict: a stunned report the server saw no ragdoll for: he keeps running')
+    H.ok(r.notes == 0 and r.flags == 0, 'strict: no note, no flag')
     -- a real taser hit: his ped ragdolls on the server too, and the game sends the report again 1.5 s later
     W.model(run, p.netId).ragdoll = true
     H.advance(1500)
-    Stunned()
-    H.eq(p.state, 'surrendered', 'pf1: a real stun: he gives up as before')
+    Config.AntiCheat.stunNeedsProof = 'strict'
+    W.near(1, run, p.netId, 6.0)
+    Report(1, run, 1, { type = 'stunned', netId = p.netId, coords = H.players[1].coords, time = H.clockMs })
+    Config.AntiCheat.stunNeedsProof = r.saved
+    H.eq(p.state, 'surrendered', 'pf1 strict: a real stun: he gives up as before')
     W.model(run, p.netId).ragdoll = nil
-    RestoreDemeanour()
-    Runs.endRun(run, 'completed', 'completed')
+    Finish(r)
+end
+
+do
+    local r = UnseenStun('flag')
+    H.eq(r.p.state, 'surrendered', 'flag: an unseen stun still makes him give up (as before PF1)')
+    H.eq(r.notes, 1, 'flag: one staff note')
+    local n = W.acNotes[#W.acNotes]
+    H.ok(n and n.reason == 'stun_unproven' and n.src == 1 and n.run == r.run.id, 'flag: stun_unproven about officer 1')
+    H.ok(n and type(n.detail) == 'string' and n.detail:find(tostring(r.p.netId), 1, true) ~= nil,
+        'flag: the note names the person (' .. tostring(n and n.detail) .. ')')
+    H.eq(r.flags, 0, 'flag: no flag')
+    H.ok(r.run.flagged == nil and r.run.participants[1].flagged == nil, 'flag: the row is not held')
+    Finish(r)
+end
+
+do
+    local r = UnseenStun('hold')
+    H.eq(r.p.state, 'surrendered', 'hold: an unseen stun makes him give up')
+    H.eq(r.flags, 1, 'hold: one flag')
+    H.eq(W.flags[#W.flags].reason, 'stun_unproven', 'hold: stun_unproven')
+    H.eq(r.run.participants[1].flagged and r.run.participants[1].flagged.reason, 'stun_unproven',
+        'hold: that officer\'s row is held for review')
+    H.eq(r.run.flagged, nil, 'hold: the officer\'s own flag, not the whole run\'s')
+    H.eq(r.notes, 0, 'hold: no note')
+    Finish(r)
+end
+
+do
+    local r = UnseenStun('off')
+    H.eq(r.p.state, 'surrendered', 'off: every report in range counts')
+    H.ok(r.notes == 0 and r.flags == 0, 'off: no note, no flag')
+    H.ok(r.run.flagged == nil and r.run.participants[1].flagged == nil, 'off: the row is not held')
+    Finish(r)
 end
 
 -- the test profile sets go again

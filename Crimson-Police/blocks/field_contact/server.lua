@@ -1503,8 +1503,8 @@ local function OnGiveUp(ctx, st, src, ev)
         if not HoldsWeapon(src) then return false, 'no_weapon' end
     else
         if U.dist(pc, sc) > STUN_RANGE + REACH_SLACK then return false, 'too_far' end
-        -- the server must have seen the stun too (Config.AntiCheat.stunNeedsProof)
-        if CP.Npc and CP.Npc.stunProof and not CP.Npc.stunProof(t.netId) then return false, 'no_stun' end
+        -- Config.AntiCheat.stunNeedsProof: a stun the server did not see adds a note or a flag, or is refused
+        if CP.Npc and CP.Npc.stunCheck and not CP.Npc.stunCheck(ctx.run, src, t.netId) then return false, 'no_stun' end
     end
     Surrender(ctx, st, c)
     return true

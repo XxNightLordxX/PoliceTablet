@@ -962,8 +962,10 @@ local function OnEvent(ctx, src, ev)
             local fc, sc = EntCoords(f.entity), ctx.coords(src)
             if not fc or not sc or U.dist(fc, sc) > STUN_REPORT + REACH_SLACK then return false, 'too_far' end
             if NearestOf(Party(ctx), fc) > STUN_RANGE then return false, 'too_far' end
-            -- the server must have seen the stun too (Config.AntiCheat.stunNeedsProof)
-            if CP.Npc and CP.Npc.stunProof and not CP.Npc.stunProof(f.netId) then return false, 'no_stun' end
+            -- Config.AntiCheat.stunNeedsProof: a stun the server did not see adds a note or a flag, or is refused
+            if CP.Npc and CP.Npc.stunCheck and not CP.Npc.stunCheck(ctx.run, src, f.netId) then
+                return false, 'no_stun'
+            end
             f.ran = true
             Surrender(ctx, st, f)
             ok = true

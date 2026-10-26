@@ -290,8 +290,14 @@ function NpcCombat.aiDamage() return Modifier('aiDamage', 0.0, 2.0) end
 
 function NpcCombat.aiMeleeDamage() return Modifier('aiMeleeDamage', 0.0, 2.0) end
 
--- True when the run's AI damage values go on again every second of the run (holdAiDamage; missing = true).
-function NpcCombat.holdAiDamage() return On() and Cfg().holdAiDamage ~= false end
+-- True when the run's AI damage values go on again every second of the run (reassertAiDamage; missing = true). A
+-- config.lua from before it had that name may still say holdAiDamage = false: that counts while the new key is missing.
+function NpcCombat.reassertAiDamage()
+    if not On() then return false end
+    local v = Cfg().reassertAiDamage
+    if v == nil then v = Cfg().holdAiDamage end
+    return v ~= false
+end
 
 -- SetPlayerWeaponDefenseModifier's value, or nil when it is 1.0 (off).
 function NpcCombat.officerDefense()

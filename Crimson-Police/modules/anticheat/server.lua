@@ -12,7 +12,8 @@ local MIN_SPEED_DT = 1.0         -- seconds: the speed check never divides by le
 local PRESENCE_EVERY_MS = 5000
 local SIGNATURE_MAX = 512
 
-local state = {}                 -- runId -> { idleDone, kills, killers = { [src] = { name, n } }, recorded = { [key] = true }, recent = { [src] = { [sig] = ms } } }
+local state = {}                 -- runId -> { idleDone, kills, killers = { [src] = { name, n } }, recorded = { [key] = true }, noted = { [key] = true }, recent = { [src] = { [sig] = ms } } }
+local STUN_MODES = { flag = true, hold = true, strict = true, off = true }
 local lastPresenceMs = nil
 
 -- ============================================================================
@@ -71,7 +72,7 @@ end
 local function StateOf(run)
     local st = state[run.id]
     if not st then
-        st = { idleDone = false, kills = 0, killers = {}, recorded = {}, recent = {} }
+        st = { idleDone = false, kills = 0, killers = {}, recorded = {}, noted = {}, recent = {} }
         state[run.id] = st
     end
     return st
@@ -162,28 +163,38 @@ end
 --                                    FLAGS
 -- ============================================================================
 
-local function RecordFlag(run, p, reason, detail)
+-- Two classes (docs/ARCHITECTURE.md 5.26): a flag (runFlagged) is about an officer's own conduct and holds his
+-- points (or every participant's with src nil) until a supervisor approves; a note (runNoted) is for staff only.
+local function RecordFlag(run, p, reason, detail, action)
     if not Has('Admin', 'audit') then return end
     local citizenid = p and p.citizenid or nil
     CreateThread(function()
-        Call('Admin', 'audit', 'console', 'console', 'flags', 'runFlagged', run.id, citizenid, reason, detail)
+        Call('Admin', 'audit', 'console', 'console', 'flags', action or 'runFlagged', run.id, citizenid, reason, detail)
     end)
 end
 
-function AC.flag(run, src, reason, detail)
-    if type(run) ~= 'table' or type(reason) ~= 'string' or reason == '' then return false end
+-- The checks flag and note share: nil when the call is refused, else run, participant (or nil), reason, detail.
+local function Mark(run, src, reason, detail, verb)
+    if type(run) ~= 'table' or type(reason) ~= 'string' or reason == '' then return nil end
     reason = Clip(reason, 64)
     if detail ~= nil then detail = Clip(tostring(detail), 255) end
     if run.test then
-        CP.log(TAG, 'test run %s would be flagged %s (%s)', tostring(run.id), reason, tostring(detail))
-        return false
+        CP.log(TAG, 'test run %s would be %s %s (%s)', tostring(run.id), verb, reason, tostring(detail))
+        return nil
     end
     local p = nil
     if src ~= nil then
         local n = ToSrc(src)
         p = n and run.participants and run.participants[n] or nil
-        if not p then return false end
+        if not p then return nil end
     end
+    return run, p, reason, detail
+end
+
+function AC.flag(run, src, reason, detail)
+    local p
+    run, p, reason, detail = Mark(run, src, reason, detail, 'flagged')
+    if not run then return false end
     local st = StateOf(run)
     local key = reason .. '|' .. (p and tostring(p.citizenid) or '*')
     if st.recorded[key] then return false end
@@ -196,6 +207,58 @@ function AC.flag(run, src, reason, detail)
     CP.warn(TAG, 'run %s (%s) flagged %s%s: %s', tostring(run.id), tostring(run.missionId), reason,
         p and (' for ' .. tostring(p.citizenid)) or '', tostring(detail or ''))
     RecordFlag(run, p, reason, detail)
+    return true
+end
+
+-- A staff note: something a suspect did himself, or a fact staff should check, about one participant (src) or the
+-- case (src nil). Audited (runNoted) and shown in the Review run detail, but it never sets p.flagged or
+-- run.flagged, so nobody's points or items are held for it. Once per reason and participant per run (its own
+-- list, apart from the flags); a test run only logs it.
+function AC.note(run, src, reason, detail)
+    local p
+    run, p, reason, detail = Mark(run, src, reason, detail, 'noted')
+    if not run then return false end
+    local st = StateOf(run)
+    local key = reason .. '|' .. (p and tostring(p.citizenid) or '*')
+    if st.noted[key] then return false end
+    st.noted[key] = true
+    CP.log(TAG, 'run %s (%s) note %s%s: %s', tostring(run.id), tostring(run.missionId), reason,
+        p and (' for ' .. tostring(p.citizenid)) or '', tostring(detail or ''))
+    RecordFlag(run, p, reason, detail, 'runNoted')
+    return true
+end
+
+-- ============================================================================
+--                        STUN REPORTS (stunNeedsProof)
+-- ============================================================================
+
+-- Config.AntiCheat.stunNeedsProof read now: 'flag', 'hold', 'strict' or 'off'. A true from before it was a choice
+-- reads as 'strict', a false as 'off'; a missing or unknown value as 'flag' (the shipped one).
+function AC.stunMode()
+    local v = Cfg().stunNeedsProof
+    if v == true then return 'strict' end
+    if v == false then return 'off' end
+    if type(v) == 'string' and STUN_MODES[v] then return v end
+    return 'flag'
+end
+
+-- A participant's 'stunned' report (flee_arrest, pursuit, search_area, field_contact) about the person netId, given
+-- whether the server saw him fall (CP.Npc.stunCheck): true when it counts. One the server did not see counts in
+-- 'flag' (with a staff note) and 'hold' (with a flag on that officer: his points wait for review), never in
+-- 'strict'; 'off' takes every report with no note.
+function AC.stunReport(run, src, seen, netId)
+    local mode = AC.stunMode()
+    if mode == 'off' or seen then return true end
+    if mode == 'strict' then return false end
+    local detail = CP.L('admin.anticheat.stun_detail', {
+        objective = type(run) == 'table' and math.tointeger(tonumber(run.objectiveIndex)) or 0,
+        netId = math.tointeger(tonumber(netId)) or '?',
+    })
+    if mode == 'hold' then
+        AC.flag(run, src, 'stun_unproven', detail)
+    else
+        AC.note(run, src, 'stun_unproven', detail)
+    end
     return true
 end
 

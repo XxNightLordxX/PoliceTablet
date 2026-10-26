@@ -138,6 +138,14 @@
     line-height: 1.45;
 }
 
+.oversight-rq-detail__box--note {
+    border-left-color: var(--cp-warning);
+}
+
+.oversight-rq-note {
+    overflow-wrap: anywhere;
+}
+
 .oversight-rq-detail__label {
     font-size: var(--cp-fs-xs);
     font-weight: 700;

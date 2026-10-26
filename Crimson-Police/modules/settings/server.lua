@@ -292,6 +292,12 @@ local RANGES = {
 -- Numbers that may go either way whatever config.lua has.
 local SIGNED = { 'NpcDifficulty.custom.*', 'NpcDifficulty.presets.*.*' }
 
+-- A value saved before the setting became a choice reads as its choice now (a saved true for the stun proof was
+-- PF1's refusal, a false no check at all).
+local LEGACY = {
+    ['AntiCheat.stunNeedsProof'] = { [true] = 'strict', [false] = 'off' },
+}
+
 -- Lists of two or three numbers that are { min, max } or { min, max, default }.
 local RANGE_LISTS = {
     'Blocks.*.*',
@@ -891,6 +897,7 @@ local KNOWN = {
     ['NpcCombat.firingPattern'] = { tpl = Enum({ 'single', 'burst', 'delayed', 'default' }), kind = 'enum' },
     ['Flee.exhausted'] = { tpl = Enum({ 'surrender', 'handsUp', 'walk' }), kind = 'enum' },
     ['Markers.radioSilence'] = { tpl = Enum({ 'none', 'area', 'full' }), kind = 'enum' },
+    ['AntiCheat.stunNeedsProof'] = { tpl = Enum({ 'flag', 'hold', 'strict', 'off' }), kind = 'enum' },
     ['Spawning.onTimeout'] = { tpl = Enum({ 'unfreeze', 'delete' }), kind = 'enum' },
     ['Spawning.hostagesAt'] = { tpl = Enum({ 'objective', 'runStart' }), kind = 'enum' },
     ['NpcCombat.weapons'] = { tpl = ListOf(WEAPON_NAME, { min = 1, unique = true }), kind = 'list', item = 'string' },
@@ -1999,6 +2006,8 @@ function Settings.check(path, value, none, ctx)
         return true, nil
     end
     if value == nil then return false, 'err.setting_type' end
+    local legacy = LEGACY[path]
+    if legacy and legacy[value] ~= nil then value = legacy[value] end
     local tpl = e.tpl
     if e.optionsFrom then
         local opts = Effective(e.optionsFrom)

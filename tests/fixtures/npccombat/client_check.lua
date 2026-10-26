@@ -118,16 +118,31 @@ H.ok(n <= 20 and (byName.SetAiWeaponDamageModifier or 0) <= 10 and (byName.SetAi
     ('at most two natives a second while the run lasts (%d in 10 s)'):format(n))
 H.ok((byName.SetAiWeaponDamageModifier or 0) >= 9, 'the bullet value goes on every second')
 
--- Config.NpcCombat.holdAiDamage = false: the old behaviour (set at the start and after a respawn only)
-NC.holdAiDamage = false
+-- Config.NpcCombat.reassertAiDamage = false: the old behaviour (set at the start and after a respawn only), read on
+-- every pass of the watcher
+H.eq(NC.reassertAiDamage, true, 'reassertAiDamage ships true (config.lua)')
+NC.reassertAiDamage = false
 ResetAiWeaponDamageModifier()
 before = #W.calls
-H.advance(3000)
-H.eq(W.aiDamage, 1.0, 'holdAiDamage off: another script\'s reset stays')
-H.eq(CountCalls(before), 0, 'holdAiDamage off: the watcher sets nothing while the ped stays the same')
-NC.holdAiDamage = true
 H.advance(1100)
-H.eq(W.aiDamage, 0.5, 'holdAiDamage on again: the run\'s value is back within a second')
+H.eq(W.aiDamage, 1.0, 'reassertAiDamage off: another script\'s reset is still there after 1.1 s')
+H.advance(1900)
+H.eq(W.aiDamage, 1.0, 'reassertAiDamage off: and after 3 s')
+H.eq(CountCalls(before), 0, 'reassertAiDamage off: the watcher sets nothing while the ped stays the same')
+NC.reassertAiDamage = true
+H.advance(1100)
+H.eq(W.aiDamage, 0.5, 'reassertAiDamage on again: the run\'s value is back within a second')
+-- a config.lua from before the key had its name (PF2 called it holdAiDamage): its false still counts while
+-- reassertAiDamage is missing
+NC.reassertAiDamage = nil
+NC.holdAiDamage = false
+ResetAiWeaponDamageModifier()
+H.advance(1100)
+H.eq(W.aiDamage, 1.0, 'the old name holdAiDamage = false (new key missing): the reset stays')
+NC.holdAiDamage = nil
+H.advance(1100)
+H.eq(W.aiDamage, 0.5, 'neither key: on (missing = true)')
+NC.reassertAiDamage = true
 
 End('run-1')
 H.eq(CP.NpcCombat.activeRun(), nil, 'the run end turns them off')

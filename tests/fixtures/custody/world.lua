@@ -4,7 +4,7 @@
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'server', realLocale = true })
 
-local W = { H = H, bagWrites = {}, weapons = {}, pushes = {}, notes = {}, audits = {}, flags = {} }
+local W = { H = H, bagWrites = {}, weapons = {}, pushes = {}, notes = {}, audits = {}, flags = {}, acNotes = {} }
 
 -- ============================================================================
 --                                   NATIVES
@@ -159,6 +159,23 @@ CP.AntiCheat = {
     presenceShare = function() return 1.0 end,
     onNpcKilled = function() end,
 }
+-- The real stun rule of CP.AntiCheat (Config.AntiCheat.stunNeedsProof, CP.Npc.stunCheck) with its real staff notes
+-- (W.acNotes) and officer flags (also in W.flags; the real flag marks only that participant)
+do
+    local real = H.realAntiCheat()
+    local note, flag = real.note, real.flag
+    real.note = function(run, src, reason, detail)
+        local done = note(run, src, reason, detail)
+        if done then W.acNotes[#W.acNotes + 1] = { run = run.id, src = src, reason = reason, detail = detail } end
+        return done
+    end
+    real.flag = function(run, src, reason, detail)
+        local done = flag(run, src, reason, detail)
+        if done then W.flags[#W.flags + 1] = { src = src, reason = reason, detail = detail } end
+        return done
+    end
+    CP.AntiCheat.stunMode, CP.AntiCheat.stunReport, CP.AntiCheat.note = real.stunMode, real.stunReport, real.note
+end
 CP.Units = {
     unitOf = function() return nil end,
     unlock = function() end,

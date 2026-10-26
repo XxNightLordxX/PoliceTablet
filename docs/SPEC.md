@@ -3236,11 +3236,14 @@ Config.AntiCheat = {
     idleCheck = 180,        -- seconds after the run moves to In progress to remove participants who haven't reached the start
     jobRecheck = 10,        -- seconds between active-job and duty re-checks during a run
     outsideKillsToFlag = 1, -- kills of mission NPCs by players who aren't on the run that flag it for review
-    stunNeedsProof = true,  -- true = a suspect gives up to a stun only when the server saw him fall (a cheat menu
-                            -- can't fake one); false = an officer's game saying "stunned" within 30 m is enough
     voidsToSuspend = 3,     -- this many voided runs...
     voidWindowDays = 30,    -- ...within this many days...
     suspendDays = 7,        -- ...suspends the officer for this many days
+
+    stunNeedsProof = 'flag',  -- 'flag' = a stun counts as before, and one the server did not see (no fall) adds a
+                              -- note for staff (nobody's points are held); 'hold' = the same, but that officer's
+                              -- points wait for review; 'strict' = a fleeing person only gives up to a stun the
+                              -- server saw; 'off' = no check (the old way)
 }
 
 -- ── Cross-Department Missions ───────────────────────────────────────────────
@@ -3537,8 +3540,8 @@ Config.NpcCombat = {
     noCharge = true,                 -- NPCs never charge at officers
     aiDamage = 0.5,                  -- damage of NPC bullets (1.0 = normal GTA damage, 0.5 = half)
     aiMeleeDamage = 0.5,             -- damage of NPC punches and melee weapons (1.0 = normal)
-    holdAiDamage = true,             -- true = both values above go on again every second of a run (another script,
-                                     -- like Crimson-Contracts' guards, may reset them); false = at the start and after a respawn
+    reassertAiDamage = true,         -- true = the run's NPC damage value is set again every second (other scripts
+                                     -- such as Crimson-Contracts share it); false = set once at the start (the old way)
     officerDefense = 1.0,            -- damage officers on a run take from every weapon, players' too (1.0 = off)
     noCriticalHits = true,           -- officers on a run take no extra headshot damage (it hurts like a body shot)
     cancelLethalHeadshots = true,    -- the server drops a one-shot kill by a mission NPC on an officer of its run...
@@ -4351,7 +4354,7 @@ No client message can award points or cash directly. The server re-checks every 
 | Using test runs to farm | Only admins can start them, and nothing in a test run is saved or paid |
 | Farming mission calls | A claim runs every accept check; only leaders claim; one claim per 1.5 s per player; caps and cooldowns apply; a re-dispatched call excludes the old claim's members; staff-created calls are rate-limited and audited |
 | Winning claims by connection speed | The 1.5-second claim window ranks by distance to the area, then fewer recent claims |
-| Faking police actions or facts | Every action is a server-checked begin and finish (participant, arrived, on duty, not in the arena, reach at both ends measured with server coordinates, elapsed time, state order; actions of 3 s or more also sampled every second, people and cars alike); truths never leave the server; facts go only to participants; a `stunned` report makes a suspect give up only when the server saw him ragdoll within 1 s (Config.AntiCheat.stunNeedsProof) |
+| Faking police actions or facts | Every action is a server-checked begin and finish (participant, arrived, on duty, not in the arena, reach at both ends measured with server coordinates, elapsed time, state order; actions of 3 s or more also sampled every second, people and cars alike); truths never leave the server; facts go only to participants; a `stunned` report the server did not see (no ragdoll within 1 s) adds a staff note (Config.AntiCheat.stunNeedsProof = 'flag', shipped: nobody's points are held), flags that officer for review ('hold') or is refused ('strict') |
 | Guessing the truth instead of doing the work | Contacts spawn unarmed with no demeanour or combat data on the client; weapons appear at the draw, behaviour cues only when they start, hints only for tells already seen. Decisions are graded against the truth, with Best only when the deciding fact was revealed lawfully; an arrest with no lawful supporting fact is Acceptable at best; knowing errors fail the case, missed procedure costs points |
 | Reading the truth from the client (mod menu, state bags) | Nothing truth-derived is on the client before its behaviour starts: the leak spec (tests/field_contact_spec.lua) checks every Entity().state:set, GiveWeaponToPed, TriggerClientEvent and push during a full field_contact run |
 | Farming arrests and stats | One arrest per person; wrongful arrests never count; stats, goals, bounties and badges count completed rows only; one scoring event per act |

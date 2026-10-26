@@ -207,7 +207,7 @@ The packages of that build add `modules/corrections/` (§5.38), `modules/livectl
 | `CP.Net.callback(name, handler, opts)` | shared/net.lua | server: ox_lib callback `crimson-police:<name>`; handler `(src, args) -> data` or `nil, errKey`; reply `{ok,data,error}`. After a failed start every callback answers `err.not_started` before its handler runs |
 | `CP.Net.rateOk(src, key, max, windowMs)` | shared/net.lua | server |
 | `CP.Net.action(name, payload, timeoutMs)`, `CP.Net.request(name, args, timeoutMs)` | shared/net.lua | client; both return `{ ok, data, error }` and never raise (`err.timeout` after timeoutMs, default 15000; `err.no_response` when ox_lib raises) |
-| `CP.NpcCombat.*` | shared/npccombat.lua | Config.NpcCombat read at every call (§5.42): `weapon(name)`, `ammo()`, `isAutomatic(name)`, `automatic()`, `automaticsIn(t)`, `weaponsAllowed(list, allowed)`, `capAccuracy(acc)`, `scaleAccuracy(acc)`, `shootRate()`, `firingPattern()`, `ability(a)`, `noCharge()`, `driveByAccuracy(acc)`, `driveByPattern()`, `aiDamage()`, `aiMeleeDamage()`, `holdAiDamage()`, `officerDefense()`, `noCriticalHits()`, `cancelLethalHeadshots()`, `lethalCancelAbove()`, `enabled()` |
+| `CP.NpcCombat.*` | shared/npccombat.lua | Config.NpcCombat read at every call (§5.42): `weapon(name)`, `ammo()`, `isAutomatic(name)`, `automatic()`, `automaticsIn(t)`, `weaponsAllowed(list, allowed)`, `capAccuracy(acc)`, `scaleAccuracy(acc)`, `shootRate()`, `firingPattern()`, `ability(a)`, `noCharge()`, `driveByAccuracy(acc)`, `driveByPattern()`, `aiDamage()`, `aiMeleeDamage()`, `reassertAiDamage()`, `officerDefense()`, `noCriticalHits()`, `cancelLethalHeadshots()`, `lethalCancelAbove()`, `enabled()` |
 | `CP.Twists.*` | shared/twists.lua | Config.Events.twists read at every call (§5.9): `ORDER`, `known(key)`, `cfg(key) -> { enabled, points, cash }`, `sorted(list)`, `of(run|payload) -> keys` (the `modifiers` list, else the one `modifier`), `has(run, key)`, `caps() -> { points, cash }`, `bonus(list) -> { points, cash, lines }` (shares add, multipliers multiply, both capped) |
 | `CP.U.*` | shared/utils.lua | `round` (halves up), `clamp`, `inRange`, `copy`, `deepcopy`, `contains`, `keys`, `count`, `map`, `filter`, `getPath`, `setPath`, `hash`, `hashHex`, `startsWith`, `trim`, `rng(seed)` (`:next() :int(a,b) :chance(p) :pick(l) :shuffle(l) :sample(l,n)`), `uuid()`, `xyz`, `dist`, `dist2d`, `distToPolyline`, `vecToTable`, `tableToVec`, `serialize`, `isHexColour`, `contrastText` |
 
@@ -460,7 +460,7 @@ location with no hostage points spawns nobody, with one `CP.warn` (never the sta
 Evidence field_contact accepts: `{ type = 'action', netId, action, phase = 'begin'|'finish' }` (from the plain
 event `crimson-police:server:custody`), `{ type = 'decide', netId, choice, offence }` (from the action
 `server:contactDecide`), `{ type = 'cuffed', netId }` (CP.Npc), `{ type = 'aim' | 'stunned', netId }` (client
-reports; `stunned` needs `CP.Npc.stunProof`), and the engine's entity events
+reports; `stunned` goes through `CP.Npc.stunCheck`), and the engine's entity events
 `{ type = 'handed_over' | 'impounded' | 'removed', netId }` (`CP.Runs.entityEvent`). The block keeps the Contact
 panel in `ctx.state.contact`; `CP.Runs.view` returns it
 as `ActiveMissionView.contact` (web/src/types/custody.ts). process_scene takes `tag_begin`/`tag`,
@@ -1325,11 +1325,15 @@ Parity-plus additions (WP2; docs/notes/custody.md):
   (weaponDamageEvent), the health-drop fallback, and validated `stun_hit` telemetry; at most once per person per 10 s.
 - `watch(run, netId, src, range)`, `inReachSince(run, netId, src) -> ms|nil`, `unwatch(netId, src)` (the dwell sampler
   of police actions, peds and vehicles); `stunMatches(netId, windowMs)`, `runOf(netId)`.
-- `stunProof(netId)`: a block's `stunned` report (flee_arrest, pursuit, search_area, field_contact) makes a person
-  give up only when the server saw him ragdoll within 1 s (the watcher's sample or `IsPedRagdoll` now). A state
-  change is no proof here (a cheat menu could send the report the moment a runner starts to run); the game repeats
-  the report every 1.5 s while he is down. Otherwise the block refuses it with `no_stun`.
-  `Config.AntiCheat.stunNeedsProof = false`: always true (the distances alone decide, as before).
+- `stunProof(netId)`: the server saw that person ragdoll within 1 s (the watcher's sample or `IsPedRagdoll` now). A
+  state change is no proof here (a cheat menu could send the report the moment a runner starts to run); the game
+  repeats the report every 1.5 s while he is down. Always true with `Config.AntiCheat.stunNeedsProof = 'off'`.
+- `stunCheck(run, src, netId) -> ok`: a block's `stunned` report (flee_arrest, pursuit, search_area, field_contact)
+  under `Config.AntiCheat.stunNeedsProof` (through `CP.AntiCheat.stunReport`, §5.26): `'flag'` (shipped) takes it as
+  before PF1 and, when the server saw no fall, adds one `stun_unproven` staff note per officer and run (nobody's
+  points are held); `'hold'` the same with a `stun_unproven` flag on that officer (his row is held for review);
+  `'strict'` refuses an unseen stun (the block answers `no_stun` and the person keeps running); `'off'` takes every
+  report in range with no check (the distances alone decide).
 - The `lethal` stat when a participant kills a ped of a suspect role; `Config.Custody.handcuffsItem` makes Cuff
   suspect need that item (`err.npc_no_handcuffs`; never used or taken).
 - Client: ox_target options `crimson-police:contact_<action>` on peds and vehicles, `crimson-police:custody_escort`,
@@ -1624,6 +1628,21 @@ cp_ table, the four new ones included.
 - `checkEvent(run, src, index, evidence) -> ok, reason` — valid participant, index is the current
   objective, rate limit, speed (`Config.AntiCheat.maxSpeed` between events), duplicate
 - `flag(run, src|nil, reason, detail)` — whole run (src nil) or one participant
+- `note(run, src|nil, reason, detail)` — a staff note about one participant or the case (src nil)
+- Two classes (critic 2 #12): only an **officer's own conduct** is a flag. A flag sets `p.flagged` / `run.flagged`;
+  `CP.Cash.compute` then makes the row `held` and CP.Rewards holds its items until a supervisor approves. Everything
+  a suspect does himself, and a fact staff should check without holding anyone's points (`stun_unproven` with
+  `stunNeedsProof = 'flag'`), is a **note**: the same input checks and clips, cp_audit category `flags` action
+  `runNoted` with the arguments `runFlagged` uses (target = run id, old_value = citizenid or nil, new_value =
+  reason, reason = detail), its own once-per-(reason, citizenid or `*`) list per run, a test run only logs it, and
+  it never sets `p.flagged` or `run.flagged`. The Review run detail (`sup:getReviewQueue` / `admin:getFlagged`
+  rows, `notes = { { reason, detail, note = true } }`) shows the notes of a held run as "Note: <flag line>"; the
+  queue still lists only held rows.
+- `stunMode() -> 'flag'|'hold'|'strict'|'off'` — Config.AntiCheat.stunNeedsProof read now (a true from before it was
+  a choice reads as `'strict'`, false as `'off'`, missing or unknown as `'flag'`); `stunReport(run, src, seen,
+  netId) -> ok` — a block's `stunned` report: seen or `'off'` = true; unseen: `'flag'` = true plus
+  `note(... 'stun_unproven')`, `'hold'` = true plus `flag(... 'stun_unproven')`, `'strict'` = false (the detail
+  names the objective and the person's net id, `admin.anticheat.stun_detail`)
 - `onNpcKilled(run, killerSrc)` — outside kills ≥ `Config.AntiCheat.outsideKillsToFlag` → flag `outside_help`
 - presence sampling (runs with 2+ participants) using block `presence`; idle check
   (`Config.AntiCheat.idleCheck`); `presenceOk(run, p) -> boolean` *(used by scoring/cash at the end)*
@@ -2437,9 +2456,10 @@ call, so a Settings change applies to the next NPC; `enabled = false` makes ever
   flag 2 read first with `GetPedConfigFlag`, again for a new ped within 1 s), `SetPlayerWeaponDefenseModifier` when
   officerDefense is not 1.0 (the old value read with `GetPlayerWeaponDefenseModifier`). `stop` resets the AI
   modifiers and puts the flag and the defense modifier back. The 1 s watcher of the run (one thread per `start`,
-  ended by `stop`) sets the two AI modifiers again every pass while `holdAiDamage()` (Config.NpcCombat.holdAiDamage,
-  true): they are one value per game, and another script (Crimson-Contracts' guard scaling) may set or reset it
-  mid-run. `settings:changed` applies a mid-run change at once. A
+  ended by `stop`) sets the two AI modifiers again every pass while `reassertAiDamage()`
+  (Config.NpcCombat.reassertAiDamage, true, read on every pass; a config.lua that still says `holdAiDamage = false`,
+  its name before V2, counts while the new key is missing; false = set at the start and after a respawn only): they
+  are one value per game, and another script (Crimson-Contracts' guard scaling) may set or reset it mid-run. `settings:changed` applies a mid-run change at once. A
   foreign `crimsonArena` value of the local player (docs/CRIMSON_ARENA.md rule 8) stops it at once, before the server
   ends the run for that player.
 

@@ -94,11 +94,12 @@ function NpcCombat.start(runId)
             if PlayerPedId() ~= a.ped then
                 local okW, errW = pcall(Refresh, a)
                 if not okW then CP.warn(TAG, 'combat settings failed: %s', tostring(errW)) end
-            elseif NpcCombat.holdAiDamage() then
+            elseif NpcCombat.reassertAiDamage() then
                 -- The AI damage modifiers are one value per game, shared with every script: another one (Crimson
                 -- Contracts' guard scaling resets it to GTA's 1.0 when its guards are gone) may have changed it, so
-                -- the run's values go on again once a second while the run is live (Config.NpcCombat.holdAiDamage).
-                -- At most two natives a second, nothing per frame and nothing once the run is over.
+                -- the run's values go on again once a second while the run is live (Config.NpcCombat.reassertAiDamage,
+                -- read on every pass; false = set at the start and after a respawn only, the old way). At most two
+                -- natives a second, nothing per frame and nothing once the run is over.
                 local okA, errA = pcall(ApplyAi, a)
                 if not okA then CP.warn(TAG, 'AI damage settings failed: %s', tostring(errA)) end
             end

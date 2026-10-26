@@ -320,7 +320,7 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
     { type = 'aim', netId }          an unarmed fleeing suspect aimed at within givesUp.aim (+ slack)
     { type = 'stunned', netId }      IsPedBeingStunned seen by a client; the reporter within
                                      STUN_REPORT_RANGE and a participant within STUN_RANGE, and
-                                     CP.Npc.stunProof (Config.AntiCheat.stunNeedsProof)
+                                     CP.Npc.stunCheck (Config.AntiCheat.stunNeedsProof)
     { type = 'low_health', netId }   an armed suspect: re-checked with server-side health
     { type = 'cuffed', netId }       CP.Npc (CP.Runs.dispatch) after a validated cuff (cp bag says cuffed)
     { type = 'shot', netId, src }    CP.Npc: a surrendered/cuffed suspect was shot (penalty recorded there)
@@ -807,7 +807,7 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
     { type = 'lights_near', netId }     lights/siren on within trigger.distance of a waiting car
     { type = 'aim', netId }             an unarmed suspect on foot aimed at (server distance + weapon check)
     { type = 'stunned', netId }         a suspect seen stunned; a participant within STUN_RANGE and the
-                                        reporter within STUN_REPORT (server coords), and CP.Npc.stunProof
+                                        reporter within STUN_REPORT (server coords), and CP.Npc.stunCheck
     { type = 'low_health', netId }      an armed suspect (neverShoots = false) re-checked below 50 % health
     { type = 'undriveable', netId }     follow mode: the reporter's vehicle, confirmed by server engine/tank health
     { type = 'cuffed', netId }          CP.Npc after a validated cuff (the cp bag says cuffed)
@@ -924,7 +924,7 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
     { type = 'clue_start', clue }   a participant started checking clue n (1-based, the list the server sends)
     { type = 'clue', clue }         ...and finished it
     { type = 'stunned', netId }     a fugitive seen stunned; a participant within STUN_RANGE and the
-                                    reporter within STUN_REPORT (server coords), and CP.Npc.stunProof
+                                    reporter within STUN_REPORT (server coords), and CP.Npc.stunCheck
     { type = 'cuffed', netId }      CP.Npc after a validated cuff (the cp bag says cuffed)
     { type = 'shot', netId, src }   CP.Npc: a surrendered/cuffed fugitive was shot (penalty recorded there)
 
@@ -1302,7 +1302,14 @@ Stop: every value we set is removed.
       distinct (reason, participant) is recorded once in cp_audit (category flags, action runFlagged,
       target = run id, old_value = citizenid for a participant flag, new_value = reason,
       reason = detail) and posted to the flags webhook. The Review Queue reads the detail (e.g. who
-      helped) from there. Test runs are never flagged.
+      helped) from there. Test runs are never flagged. Only an officer's own conduct is flagged.
+    * notes (AC.note): a staff note about a participant or the case (something a suspect did himself,
+      or a fact to check, such as stun_unproven) is recorded the same way with action runNoted, once
+      per (reason, participant) in its own list; it never sets p.flagged or run.flagged, so no row is
+      held for it. The Review run detail lists the notes of a held run. Test runs only log them.
+    * stunMode / stunReport: Config.AntiCheat.stunNeedsProof ('flag' shipped, 'hold', 'strict', 'off';
+      an old true reads as 'strict', false as 'off') applied to a 'stunned' report the server did not
+      see: a note, a flag on that officer, a refusal, or nothing.
     * onNpcKilled: kills of mission NPCs by players who are not active participants; at
       Config.AntiCheat.outsideKillsToFlag the run is flagged 'outside_help' naming the killer(s).
     * presence sampling every 5 s for in-progress runs that have had 2+ participants: each active
@@ -2483,8 +2490,8 @@ softer (SetAiWeaponDamageModifier and SetAiMeleeWeaponDamageModifier: every AI h
 NPCs' included), the officer takes no extra headshot damage (SetPedSuffersCriticalHits, again after a respawn), and,
 when officerDefense is not 1.0, less damage from every weapon (SetPlayerWeaponDefenseModifier). modules/runs starts
 it at client:start and stops it at every run end; everything goes back to what it was before the run. While the run
-lasts, its 1 s watcher sets the AI damage values again every second (holdAiDamage): another script, such as
-Crimson-Contracts' guard scaling, may reset the one value the whole game shares.
+lasts, its 1 s watcher sets the AI damage values again every second (reassertAiDamage, read on every pass): another
+script, such as Crimson-Contracts' guard scaling, may reset the one value the whole game shares.
 ```
 
 ## Crimson-Police/modules/operations/client.lua

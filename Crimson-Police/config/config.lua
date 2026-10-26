@@ -583,11 +583,14 @@ Config.AntiCheat = {
     idleCheck = 180,        -- seconds after the run moves to In progress to remove participants who haven't reached the start
     jobRecheck = 10,        -- seconds between active-job and duty re-checks during a run
     outsideKillsToFlag = 1, -- kills of mission NPCs by players who aren't on the run that flag it for review
-    stunNeedsProof = true,  -- true = a suspect gives up to a stun only when the server saw him fall (a cheat menu
-                            -- can't fake one); false = an officer's game saying "stunned" within 30 m is enough
     voidsToSuspend = 3,     -- this many voided runs...
     voidWindowDays = 30,    -- ...within this many days...
     suspendDays = 7,        -- ...suspends the officer for this many days
+
+    stunNeedsProof = 'flag',  -- 'flag' = a stun counts as before, and one the server did not see (no fall) adds a
+                              -- note for staff (nobody's points are held); 'hold' = the same, but that officer's
+                              -- points wait for review; 'strict' = a fleeing person only gives up to a stun the
+                              -- server saw; 'off' = no check (the old way)
 }
 
 -- ============================================================================
@@ -902,8 +905,8 @@ Config.NpcCombat = {
     noCharge = true,                 -- NPCs never charge at officers
     aiDamage = 0.5,                  -- damage of NPC bullets (1.0 = normal GTA damage, 0.5 = half)
     aiMeleeDamage = 0.5,             -- damage of NPC punches and melee weapons (1.0 = normal)
-    holdAiDamage = true,             -- true = both values above go on again every second of a run (another script,
-                                     -- like Crimson-Contracts' guards, may reset them); false = at the start and after a respawn
+    reassertAiDamage = true,         -- true = the run's NPC damage value is set again every second (other scripts
+                                     -- such as Crimson-Contracts share it); false = set once at the start (the old way)
     officerDefense = 1.0,            -- damage officers on a run take from every weapon, players' too (1.0 = off)
     noCriticalHits = true,           -- officers on a run take no extra headshot damage (it hurts like a body shot)
     cancelLethalHeadshots = true,    -- the server drops a one-shot kill by a mission NPC on an officer of its run...

@@ -2406,7 +2406,8 @@ CP.Net.callback('sup:getLiveRuns', function(src)
     return { runs = out, serverTime = os.time(), canRecall = canRecall }
 end, { rate = 3 })
 
--- Flag events recorded by CP.AntiCheat.flag (cp_audit 'runFlagged'): uuid -> { { citizenid|nil, reason, detail } }
+-- Flag events recorded by CP.AntiCheat.flag (cp_audit 'runFlagged') and staff notes by CP.AntiCheat.note
+-- ('runNoted', note = true): uuid -> { { citizenid|nil, reason, detail, note } }
 local function FlagEvents(uuids)
     local out = {}
     if #uuids == 0 then return out end
@@ -2419,13 +2420,18 @@ local function FlagEvents(uuids)
         end
         i = i + 100
         local rows = Query(
-            ('SELECT target, old_value, new_value, reason FROM cp_audit WHERE category = \'flags\' AND action = \'runFlagged\' AND target IN (%s) ORDER BY id'):format(
+            ('SELECT action, target, old_value, new_value, reason FROM cp_audit WHERE category = \'flags\' AND action IN (\'runFlagged\', \'runNoted\') AND target IN (%s) ORDER BY id'):format(
                 table.concat(marks, ', ')
             ), chunk) or {}
         for _, r in ipairs(rows) do
             local list = out[r.target] or {}
             out[r.target] = list
-            list[#list + 1] = { citizenid = r.old_value, reason = r.new_value, detail = r.reason }
+            list[#list + 1] = {
+                citizenid = r.old_value,
+                reason = r.new_value,
+                detail = r.reason,
+                note = r.action == 'runNoted' or nil,
+            }
         end
     end
     return out
@@ -2462,11 +2468,16 @@ function Admin.flaggedRows(dept, excludeCitizenid)
     local events = FlagEvents(uuids)
     local out = {}
     for _, r in ipairs(rows) do
-        local details, reasons = {}, {}
+        local details, reasons, notes = {}, {}, {}
         for _, e in ipairs(events[r.run_uuid] or {}) do
             if e.citizenid == nil or e.citizenid == r.citizenid then
-                if e.detail and e.detail ~= '' then details[#details + 1] = e.detail end
-                if e.reason and e.reason ~= r.flag_reason then reasons[#reasons + 1] = e.reason end
+                if e.note then
+                    -- a staff note is shown in the run detail; it never made the row held
+                    notes[#notes + 1] = { reason = e.reason, detail = e.detail, note = true }
+                else
+                    if e.detail and e.detail ~= '' then details[#details + 1] = e.detail end
+                    if e.reason and e.reason ~= r.flag_reason then reasons[#reasons + 1] = e.reason end
+                end
             end
         end
         out[#out + 1] = {
@@ -2493,6 +2504,7 @@ function Admin.flaggedRows(dept, excludeCitizenid)
             flagReason = r.flag_reason or 'flagged',
             flagDetail = #details > 0 and table.concat(details, ' · ') or nil,
             otherReasons = reasons,
+            notes = notes,
             durationS = math.floor(Num(r.duration_s, 0)),
             createdAt = math.floor(Num(r.created_ts, 0)),
         }

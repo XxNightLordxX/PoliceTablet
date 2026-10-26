@@ -1176,17 +1176,39 @@ function Npc.stunMatches(netId, windowMs)
     return RagdollSeen(netId, rec, windowMs)
 end
 
--- A block's 'stunned' report (a participant's game saw that person stunned) counts only when the server saw him
--- ragdoll within the last second. A state change is no proof here: a cheat menu could send the report the moment a
--- runner starts to run. The game sends the report again every 1.5 s while he is down, so one that arrives before the
--- server's copy of the ped catches up is not lost. Config.AntiCheat.stunNeedsProof = false takes every report in
--- range, as before.
-function Npc.stunProof(netId)
-    if Config.AntiCheat and Config.AntiCheat.stunNeedsProof == false then return true end
+-- The server saw the person a block's 'stunned' report is about ragdoll within the last second. A state change is
+-- no proof here: a cheat menu could send the report the moment a runner starts to run. The game sends the report
+-- again every 1.5 s while he is down, so one that arrives before the server's copy of the ped catches up is not lost.
+local function StunSeen(netId)
     netId = ToInt(tonumber(netId), 1, MAX_NETID)
     local rec = netId and FindRec(netId) or nil
     if not rec or rec.dead then return false end
     return RagdollSeen(netId, rec, STUN_PROOF_MS)
+end
+
+local function StunMode()
+    local AC = CP.AntiCheat
+    if AC and type(AC.stunMode) == 'function' then return AC.stunMode() end
+    return 'flag'
+end
+
+-- The proof alone: true when the server saw the stun, or when Config.AntiCheat.stunNeedsProof is 'off'.
+function Npc.stunProof(netId)
+    if StunMode() == 'off' then return true end
+    return StunSeen(netId)
+end
+
+-- A participant's 'stunned' report under Config.AntiCheat.stunNeedsProof (the four blocks call it at their stunned
+-- branch): true when the person may give up. 'flag' (shipped) takes it as before PF1 and adds one staff note per
+-- officer and run when the server saw no fall; 'hold' does the same with a flag on that officer (his points wait
+-- for review); 'strict' refuses it (the block answers no_stun); 'off' takes every report with no check.
+function Npc.stunCheck(run, src, netId)
+    local mode = StunMode()
+    if mode == 'off' then return true end
+    local seen = StunSeen(netId)
+    local AC = CP.AntiCheat
+    if not (AC and type(AC.stunReport) == 'function') then return seen or mode ~= 'strict' end
+    return AC.stunReport(run, src, seen, netId) == true
 end
 
 -- The live run a mission ped belongs to, or nil.

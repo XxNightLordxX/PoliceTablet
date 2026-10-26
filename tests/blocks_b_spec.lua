@@ -67,9 +67,30 @@ CP.Npc = {
         if NPC.spent[netId] and near <= 30.0 then return true, NPC.wornTask end
         return false
     end,
-    -- CP.Npc.stunProof's answer (tests/npc_spec.lua checks the real one): NPC.noStun[netId] = the server saw no stun
-    stunProof = function(netId) return not NPC.noStun[netId] end,
+    -- CP.Npc.stunCheck (tests/npc_spec.lua checks the real one): NPC.noStun[netId] = the server saw no stun; the
+    -- mode, the note and the flag come from the real CP.AntiCheat.stunReport below
+    stunCheck = function(run, src, netId)
+        NPC.stunChecks[#NPC.stunChecks + 1] = { run = run, src = src, netId = netId }
+        return CP.AntiCheat.stunReport(run, src, not NPC.noStun[netId], netId)
+    end,
 }
+NPC.stunChecks = {}
+-- the real stun rule of CP.AntiCheat (modules/anticheat), its staff notes and flags watched
+CP.AntiCheat = H.realAntiCheat()
+local AC_NOTES, AC_FLAGS = {}, {}
+do
+    local note, flag = CP.AntiCheat.note, CP.AntiCheat.flag
+    CP.AntiCheat.note = function(run, src, reason, detail)
+        local done = note(run, src, reason, detail)
+        if done then AC_NOTES[#AC_NOTES + 1] = { run = run, src = src, reason = reason, detail = detail } end
+        return done
+    end
+    CP.AntiCheat.flag = function(run, src, reason, detail)
+        local done = flag(run, src, reason, detail)
+        if done then AC_FLAGS[#AC_FLAGS + 1] = { run = run, src = src, reason = reason, detail = detail } end
+        return done
+    end
+end
 
 H.load('blocks/hostile_waves/server.lua')
 H.load('blocks/protect_rescue/server.lua')
@@ -2229,13 +2250,56 @@ do -- flee_arrest: a stun report must come from a participant near the suspect
     local _, why = FA.onEvent(ctx, 1, { type = 'stunned', netId = a })
     H.eq(why, 'too_far', 'a far-away participant cannot report a stun for someone else')
     H.eq(NPC.states[a], 'fleeing', 'the armed inmate did not give up')
-    NPC.noStun[a] = true
-    _, why = FA.onEvent(ctx, 2, { type = 'stunned', netId = a })
-    H.eq(why, 'no_stun', 'a stun the server did not see is refused (Config.AntiCheat.stunNeedsProof)')
-    H.eq(NPC.states[a], 'fleeing', 'no seen stun: the armed inmate keeps running')
-    NPC.noStun[a] = nil
     H.eq(FA.onEvent(ctx, 2, { type = 'stunned', netId = a }), true, 'the participant next to him can')
     H.eq(NPC.states[a], 'surrendered', 'armed inmate gave up after the stun')
+    local last = NPC.stunChecks[#NPC.stunChecks]
+    H.ok(last and last.run == ctx.run and last.src == 2 and last.netId == a,
+        'the block asks CP.Npc.stunCheck with its run, the reporter and the person')
+end
+
+do -- flee_arrest: a stun the server did not see, in every Config.AntiCheat.stunNeedsProof mode
+    H.eq(Config.AntiCheat.stunNeedsProof, 'flag', 'stunNeedsProof ships \'flag\'')
+    local saved = Config.AntiCheat.stunNeedsProof
+    local function Unseen(mode)
+        Place(1, 4000, 4000, 30)
+        Place(2, 4000, 4000, 30)
+        local ctx, S = MakeCtx('flee_arrest', { mode = 'scatter' }, scatterLoc, { srcs = { 1, 2 } })
+        FA.start(ctx)
+        local a = U.filter(S.spawned, function(s) return s.opts.armed end)[1].netId
+        NearTo(2, S, a, 5.0)
+        NPC.noStun[a] = true
+        Config.AntiCheat.stunNeedsProof = mode
+        local n0, f0 = #AC_NOTES, #AC_FLAGS
+        local ok, why = FA.onEvent(ctx, 2, { type = 'stunned', netId = a })
+        NPC.noStun[a] = nil
+        return { ctx = ctx, a = a, ok = ok, why = why, notes = #AC_NOTES - n0, flags = #AC_FLAGS - f0 }
+    end
+    local function NotHeld(r) return r.ctx.run.flagged == nil and r.ctx.run.participants[2].flagged == nil end
+    local r = Unseen('flag')
+    H.eq(r.ok, true, 'flag: the report counts, as before PF1')
+    H.eq(NPC.states[r.a], 'surrendered', 'flag: the suspect gives up')
+    H.eq(r.notes, 1, 'flag: one staff note')
+    H.eq(AC_NOTES[#AC_NOTES].reason, 'stun_unproven', 'flag: stun_unproven')
+    H.eq(AC_NOTES[#AC_NOTES].src, 2, 'flag: about the officer who reported it')
+    H.eq(r.flags, 0, 'flag: no flag')
+    H.ok(NotHeld(r), 'flag: the row is not held (no p.flagged or run.flagged for Cash.compute)')
+    r = Unseen('hold')
+    H.eq(r.ok, true, 'hold: the report counts')
+    H.eq(NPC.states[r.a], 'surrendered', 'hold: the suspect gives up')
+    H.eq(r.flags, 1, 'hold: one flag')
+    H.eq(r.ctx.run.participants[2].flagged and r.ctx.run.participants[2].flagged.reason, 'stun_unproven',
+        'hold: that officer\'s row is held for review')
+    H.eq(r.ctx.run.participants[1].flagged, nil, 'hold: the other officer\'s is not')
+    H.eq(r.notes, 0, 'hold: no note')
+    r = Unseen('strict')
+    H.eq(r.why, 'no_stun', 'strict: refused with no_stun (PF1)')
+    H.eq(NPC.states[r.a], 'fleeing', 'strict: he keeps running')
+    H.ok(r.notes == 0 and r.flags == 0 and NotHeld(r), 'strict: no note, no flag')
+    r = Unseen('off')
+    H.eq(r.ok, true, 'off: the report counts')
+    H.eq(NPC.states[r.a], 'surrendered', 'off: the suspect gives up')
+    H.ok(r.notes == 0 and r.flags == 0 and NotHeld(r), 'off: no note, no flag')
+    Config.AntiCheat.stunNeedsProof = saved
 end
 
 do -- validation guardrails added in review

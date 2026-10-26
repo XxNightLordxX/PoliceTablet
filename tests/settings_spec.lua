@@ -701,6 +701,30 @@ do
     H.eq(E('Markers.radioSilence').kind, 'enum', 'Radio Silence is a pick of three')
     H.ok((Check('Markers.radioSilence', 'none')), 'none: hide everything, as before')
     Err('Markers.radioSilence', 'loud', 'err.setting_option', 'only none, area or full')
+    -- V2: the stun proof is a pick of four, shipped 'flag'; the AI damage re-apply is an on/off switch
+    local stun = E('AntiCheat.stunNeedsProof')
+    H.eq(stun.kind, 'enum', 'stunNeedsProof is a pick')
+    H.eq(stun.default, 'flag', 'stunNeedsProof ships flag')
+    H.ok(
+        stun.desc and stun.desc:find('nobody\'s points are held', 1, true) ~= nil
+            and stun.desc:find('\'strict\' = a fleeing person only gives up to a stun the', 1, true) ~= nil
+            and stun.desc:find('\'off\' = no check (the old way)', 1, true) ~= nil,
+        'stunNeedsProof says what each choice does: ' .. tostring(stun.desc)
+    )
+    for _, v in ipairs({ 'flag', 'hold', 'strict', 'off' }) do
+        H.ok((Check('AntiCheat.stunNeedsProof', v)), 'stun ' .. v)
+    end
+    Err('AntiCheat.stunNeedsProof', 'loud', 'err.setting_option', 'only flag, hold, strict or off')
+    local okT, cleanT = Check('AntiCheat.stunNeedsProof', true)
+    H.ok(okT and cleanT == 'strict', 'a true from before it was a choice reads as strict')
+    local okF, cleanF = Check('AntiCheat.stunNeedsProof', false)
+    H.ok(okF and cleanF == 'off', 'a false reads as off')
+    local re = E('NpcCombat.reassertAiDamage')
+    H.eq(re.kind, 'boolean', 'reassertAiDamage is an on/off switch')
+    H.eq(re.default, true, 'reassertAiDamage ships true')
+    H.ok(re.desc and re.desc:find('false = set once at the start (the old way)', 1, true) ~= nil,
+        'reassertAiDamage says what off does: ' .. tostring(re.desc))
+    H.eq(S.entry('NpcCombat.holdAiDamage'), nil, 'its old name is no setting any more')
     H.ok((Check('Markers.routeColour', 85)), 'colour 85')
     Err('Markers.routeColour', 86, 'err.setting_range', 'blip colours stop at 85')
     Err('Markers.trackEvery', 0, 'err.setting_range', 'positions at least every second')
@@ -890,10 +914,25 @@ end
 
 do
     H.sql([[INSERT INTO cp_settings (setting_key, value_json, updated_by) VALUES
-        ('Limits.maxUnitSize', '{"v": "lots"}', 'SET00001'), ('Old.removed', '{"v": 1}', 'SET00001')]])
+        ('Limits.maxUnitSize', '{"v": "lots"}', 'SET00001'), ('Old.removed', '{"v": 1}', 'SET00001'),
+        ('AntiCheat.stunNeedsProof', '{"v": true}', 'SET00001')]])
     H.restart()
     lines = {}
     S = Boot()
+    -- a stunNeedsProof saved as true (PF1, before it was a choice) is the strict proof now, not an ignored value
+    H.eq(Config.AntiCheat.stunNeedsProof, 'strict', 'a saved true reads as strict after a restart')
+    H.eq(S.view('AntiCheat.stunNeedsProof').invalid, nil, 'and is not shown as ignored')
+    H.ok(not Printed('the saved setting AntiCheat.stunNeedsProof was ignored'), 'no ignored-setting line for it')
+    H.sql('UPDATE cp_settings SET value_json = \'{"v": false}\' WHERE setting_key = \'AntiCheat.stunNeedsProof\'')
+    H.restart()
+    lines = {}
+    S = Boot()
+    H.eq(Config.AntiCheat.stunNeedsProof, 'off', 'a saved false reads as off')
+    H.sql('DELETE FROM cp_settings WHERE setting_key = \'AntiCheat.stunNeedsProof\'')
+    H.restart()
+    lines = {}
+    S = Boot()
+    H.eq(Config.AntiCheat.stunNeedsProof, 'flag', 'nothing saved: config.lua\'s flag')
     H.eq(Config.Tablet.keybind, 'F6', 'after a restart the saved default key is used')
     H.eq(Config.Units.nearbyBands[3], 2500, 'every saved setting is over config.lua from the start')
     H.eq(Config.Blocks.escort.speed[2], 110, 'blocks.lua settings too')

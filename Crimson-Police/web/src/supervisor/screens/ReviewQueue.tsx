@@ -40,6 +40,7 @@ type Detail = { kind: 'flag'; row: FlaggedRow } | { kind: 'dispute'; row: Disput
 
 const flagLabel = (reason: string | null | undefined) =>
     reason && hasKey(`flag.${reason}`) ? t(`flag.${reason}`) : t('flag.flagged');
+const noteLabel = (reason: string) => (hasKey(`flag.${reason}`) ? t(`flag.${reason}`) : reason);
 const endLabel = (reason: string) => (hasKey(`sup.end.${reason}`) ? t(`sup.end.${reason}`) : reason);
 const stateTone = (s: string) => (s === 'completed' ? 'success' : s === 'failed' ? 'danger' : 'grey');
 const resultText = (state: string, endReason: string) =>
@@ -131,6 +132,17 @@ function FlagDetail({ row }: { row: FlaggedRow }) {
                 <span className="oversight-rq-detail__label">{t('sup.review.detail.detail')}</span>
                 <span>{row.flagDetail || t('sup.review.no_detail')}</span>
             </div>
+            {asArray(row.notes).length ? (
+                <div className="oversight-rq-detail__box oversight-rq-detail__box--note">
+                    <span className="oversight-rq-detail__label">{t('sup.review.detail.notes')}</span>
+                    {asArray(row.notes).map((n, i) => (
+                        <span key={`${n.reason}-${i}`} className="oversight-rq-note">
+                            {t('sup.review.note', { line: noteLabel(n.reason) })}
+                            {n.detail ? <span className="oversight-rq-soft"> · {n.detail}</span> : null}
+                        </span>
+                    ))}
+                </div>
+            ) : null}
             <Grid cols={3} gap={3}>
                 <KeyValue label={t('sup.review.detail.officer')}>{row.name}</KeyValue>
                 <KeyValue label={t('sup.review.detail.mission')}>{row.missionLabel}</KeyValue>

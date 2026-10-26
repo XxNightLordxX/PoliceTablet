@@ -83,7 +83,10 @@ Each Lua file's header comment documents its public API, net names and rules.
 - **Flags:** the first reason stays on `run.flagged` / `p.flagged`; every distinct (reason, participant) is also
   written to cp_audit (`runFlagged`, target = run id, old_value = citizenid for a personal flag, new_value =
   reason, reason = detail) — that is where the Review Queue reads "who" (e.g. the outside killer) and extra reasons.
-  Test runs are never flagged.
+  Test runs are never flagged. Only an officer's own conduct is a flag.
+- **Notes:** `CP.AntiCheat.note(run, src|nil, reason, detail)` writes the same cp_audit row with `runNoted` (its own
+  once-per-(reason, participant) list) and never touches `run.flagged` / `p.flagged`: nobody's points or items are
+  held. The Review run detail shows the notes of a held run as "Note: <line>"; the queue still lists only held rows.
 - **presenceOk** also records the failing participant's `presence` flag with its share as detail (once); CP.Runs'
   own presence fallback then sees `p.flagged` already set.
 - **Presence sampling** every 5 s for in-progress runs with `#run.order >= 2`, only for the current active
@@ -145,7 +148,8 @@ Each Lua file's header comment documents its public API, net names and rules.
   `admin:getFlagged` → `{ flagged }`; `admin:getDisputes` → `{ disputes }`
 - `FlaggedRow = { rowId, runUuid, citizenid, name, callsign, department, departmentShort, missionId, missionLabel,
   missionType, missionTypeLabel, location, state, endReason, tier, participants, departments, points, cash (held
-  amount from the breakdown), cashStatus, flagReason, flagDetail, otherReasons, durationS, createdAt }`
+  amount from the breakdown), cashStatus, flagReason, flagDetail, otherReasons, notes (the staff notes of this
+  officer or the case, `{ reason, detail, note = true }`, V2), durationS, createdAt }`
 - `DisputeView` — see the header of modules/disputes/server.lua.
 - `admin:searchOfficers { query }` → `{ officers = { { citizenid, name, callsign, rank, department, departmentShort,
   xp, suspendedUntil, online } }, query }` (25 max; empty query lists officers by name)

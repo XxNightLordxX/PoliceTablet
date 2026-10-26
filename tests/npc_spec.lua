@@ -1260,9 +1260,25 @@ do
     _G.IsPedRagdoll = function(e) return e == e1 end
     H.ok(Npc.stunMatches(c1, 1000), 'a ragdoll now matches')
     _G.IsPedRagdoll = nil
-    -- a block's 'stunned' report needs a ragdoll the server saw (Config.AntiCheat.stunNeedsProof)
+    -- a block's 'stunned' report needs a ragdoll the server saw (Config.AntiCheat.stunNeedsProof): the real stun rule
+    -- of CP.AntiCheat (its staff notes and flags watched here), the stub keeps the rest
+    local stubAC, realAC = CP.AntiCheat, H.realAntiCheat()
+    stubAC.stunMode, stubAC.stunReport = realAC.stunMode, realAC.stunReport
+    local acNotes, acFlags = {}, {}
+    local realNote, realFlag = realAC.note, realAC.flag
+    realAC.note = function(r, s, reason, detail)
+        local done = realNote(r, s, reason, detail)
+        if done then acNotes[#acNotes + 1] = { run = r.id, src = s, reason = reason, detail = detail } end
+        return done
+    end
+    realAC.flag = function(r, s, reason, detail)
+        local done = realFlag(r, s, reason, detail)
+        if done then acFlags[#acFlags + 1] = { run = r.id, src = s, reason = reason, detail = detail } end
+        return done
+    end
     Config.AntiCheat = Config.AntiCheat or {}
     local savedProof = Config.AntiCheat.stunNeedsProof
+    H.eq(savedProof, 'flag', 'stunNeedsProof ships \'flag\' (config.lua)')
     Config.AntiCheat.stunNeedsProof = true
     H.eq(Npc.stunProof(c1), false, 'stunProof: no ragdoll within 1 s: no proof')
     _G.IsPedRagdoll = function(e) return e == e1 end
@@ -1283,7 +1299,62 @@ do
     Config.AntiCheat.stunNeedsProof = false
     H.ok(Npc.stunProof(c1), 'stunNeedsProof = false: every report in range counts, as before')
     H.ok(Npc.stunProof(rn), 'stunNeedsProof = false: also right after a state change')
+
+    -- stunCheck(run, src, netId): the mode applied to a report (V2). c1 has not ragdolled for 1.5 s: unseen.
+    run.participants[1].citizenid, run.participants[2].citizenid = 'NPC00001', 'NPC00002'
+    local function Unflagged(msg)
+        H.ok(run.flagged == nil and run.participants[1].flagged == nil and run.participants[2].flagged == nil, msg)
+    end
+    Config.AntiCheat.stunNeedsProof = 'flag'
+    H.eq(realAC.stunMode(), 'flag', 'stunMode: flag')
+    H.eq(Npc.stunCheck(run, 1, c1), true, 'flag: an unseen stun still counts (as before PF1)')
+    H.eq(#acNotes, 1, 'flag: one staff note')
+    H.eq(acNotes[1] and acNotes[1].reason, 'stun_unproven', 'flag: the note is stun_unproven')
+    H.eq(acNotes[1] and acNotes[1].src, 1, 'flag: about the officer who reported it')
+    H.ok(acNotes[1] and acNotes[1].detail ~= nil, 'flag: with a detail (tests/anticheat_note_spec.lua reads it)')
+    H.eq(#acFlags, 0, 'flag: no flag')
+    Unflagged('flag: nobody\'s points are held (no p.flagged, no run.flagged)')
+    H.eq(Npc.stunCheck(run, 1, c1), true, 'flag: the game sends the report again')
+    H.eq(#acNotes, 1, 'flag: still one note per officer and run')
+    _G.IsPedRagdoll = function(e) return e == e1 end
+    H.eq(Npc.stunCheck(run, 2, c1), true, 'flag: a stun the server saw counts')
+    H.eq(#acNotes, 1, 'flag: and writes no note')
+    _G.IsPedRagdoll = nil
+    Bump(1500)
+    Config.AntiCheat.stunNeedsProof = 'hold'
+    H.eq(Npc.stunCheck(run, 2, c1), true, 'hold: an unseen stun still counts')
+    H.eq(#acFlags, 1, 'hold: one flag')
+    H.eq(run.participants[2].flagged and run.participants[2].flagged.reason, 'stun_unproven',
+        'hold: that officer is flagged (his points wait for review)')
+    H.eq(run.participants[1].flagged, nil, 'hold: the other officer is not')
+    H.eq(run.flagged, nil, 'hold: nor the whole run')
+    H.eq(#acNotes, 1, 'hold: no note')
+    run.participants[2].flagged = nil
+    Config.AntiCheat.stunNeedsProof = 'strict'
+    H.eq(Npc.stunCheck(run, 1, c1), false, 'strict: an unseen stun is refused (PF1)')
+    _G.IsPedRagdoll = function(e) return e == e1 end
+    H.eq(Npc.stunCheck(run, 1, c1), true, 'strict: a stun the server saw counts')
+    _G.IsPedRagdoll = nil
+    Bump(1500)
+    Config.AntiCheat.stunNeedsProof = 'off'
+    H.eq(Npc.stunCheck(run, 1, c1), true, 'off: every report counts')
+    H.eq(Npc.stunCheck(run, 1, rn), true, 'off: also right after a state change')
+    H.ok(#acNotes == 1 and #acFlags == 1, 'strict and off: no note, no flag')
+    -- a value from before it was a choice: true = 'strict', false = 'off'; an unknown one = 'flag'
+    Config.AntiCheat.stunNeedsProof = true
+    H.eq(realAC.stunMode(), 'strict', 'legacy true reads as strict')
+    H.eq(Npc.stunCheck(run, 1, c1), false, 'legacy true: an unseen stun is refused')
+    Config.AntiCheat.stunNeedsProof = false
+    H.eq(realAC.stunMode(), 'off', 'legacy false reads as off')
+    H.eq(Npc.stunCheck(run, 1, c1), true, 'legacy false: taken with no check')
+    Config.AntiCheat.stunNeedsProof = 'loud'
+    H.eq(realAC.stunMode(), 'flag', 'an unknown value reads as the shipped flag')
+    Config.AntiCheat.stunNeedsProof = nil
+    H.eq(realAC.stunMode(), 'flag', 'a missing key reads as flag')
+    H.ok(#acNotes == 1 and #acFlags == 1, 'the legacy values wrote no note or flag')
+    Unflagged('nothing is held after all modes')
     Config.AntiCheat.stunNeedsProof = savedProof
+    stubAC.stunMode, stubAC.stunReport = nil, nil
     H.eq(Npc.runOf(c1), run, 'runOf')
     -- the lethal stat: a participant kills a person the mission is about
     local k = SpawnPed(run, { coords = vec3(4.0, 0.0, 0.0), role = 'subject' })

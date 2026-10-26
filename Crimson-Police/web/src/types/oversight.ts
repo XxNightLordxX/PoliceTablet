@@ -92,8 +92,15 @@ export interface FlaggedRow {
     flagReason: string;
     flagDetail: string | null;
     otherReasons: string[];
+    // Staff notes (CP.AntiCheat.note, audit runNoted) about this officer or the whole case: they hold no points.
+    notes: FlagNote[];
     durationS: number;
     createdAt: number;
+}
+export interface FlagNote {
+    reason: string;
+    detail: string | null;
+    note: true;
 }
 export type DisputeKind = 'flagged' | 'voided' | 'failed';
 export interface DisputeView {

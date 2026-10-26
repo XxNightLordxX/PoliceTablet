@@ -733,7 +733,7 @@ Everything else works as shipped. These are the ones owners change most:
 | `Config.Commendations` | Commendation kinds and limits; `announce = true` posts them to the board webhook |
 | `Config.Rewards` | Item rewards, off by default (see [6.3](#63-item-rewards)) |
 | `Config.Disputes.windowHours` | How long officers have to dispute a run (48 hours) |
-| `Config.AntiCheat` | Flag limits, and the automatic suspension: 3 voided runs in 30 days = 7 days. `stunNeedsProof` (on): a suspect gives up to a stun only when the server saw him fall, so a cheat menu cannot fake one (off = an officer's game saying "stunned" within 30 m is enough, as before) |
+| `Config.AntiCheat` | Flag limits, and the automatic suspension: 3 voided runs in 30 days = 7 days. `stunNeedsProof` (`'flag'`): a stun counts as before, and one the server did not see (the suspect did not fall) adds a note for staff in the Review run detail, so nobody's points are held. `'hold'` = the same, but that officer's points wait for review; `'strict'` = a fleeing person only gives up to a stun the server saw (a cheat menu cannot fake one); `'off'` = no check (the old way). A saved `true` from an earlier version reads as `'strict'`, `false` as `'off'` |
 | `Config.Builder` | Mission Builder on or off, what builders may pick, `noBuildZones`, `requireTestToPublish` (`false` = testing is optional, as shipped), `supervisorItems` (`false` = only admins put items in a custom mission, as shipped; [4.5](#45-mission-builder-permissions)), and `spawnMargin` (40 m, 0-150): a custom mission's armed NPCs (a shootout and its boss, ambush and pursuit cars, warrant associates) must spawn outside the start circle plus this, e.g. 100 m from a 60 m start, so a fight never appears around your officers as they arrive (hostages and suspects keep `minSpawnFromStart`, 30 m) |
 | `Config.Testing` | Admin test mode: `enabled`, `maxTesters`, `allowTeleport`, `debugOverlay`, `panelKeyGuardMs` (300: the test controls key is ignored this long after the panel lets go, so the same press does not take it back; 0 = off), and `spawnCheck` (the spawn point check: `enabled`, `sceneTimeoutMs` 8000, `moveWithin` 150 m, `routes = false` checks no route points, `teleport = true` the Teleport here button next to a result) |
 | `Config.Retention` | Clean-up of old data: runs archived after 12 months, audit rows deleted after 180 days, mission calls after 90 days (0 = keep) |
@@ -835,7 +835,7 @@ never changes points, cash or a mission's stars. Every value can be changed in g
 | `noCharge` | `true` | NPCs never charge at officers |
 | `aiDamage` | 0.5 | Damage of NPC bullets: 1.0 = normal GTA damage, 0.5 = half |
 | `aiMeleeDamage` | 0.5 | The same for NPC punches and melee weapons |
-| `holdAiDamage` | `true` | Both values above go on again every second of a run, so another script that changes them (Crimson-Contracts' guards reset them when its guards are gone) cannot leave your officers' NPCs at full damage. `false` = they are set at the start of the run and after a respawn only |
+| `reassertAiDamage` | `true` | Both values above go on again every second of a run, so another script that changes them (Crimson-Contracts' guards reset them when its guards are gone) cannot leave your officers' NPCs at full damage. `false` = they are set at the start of the run and after a respawn only (the old way). Its earlier name `holdAiDamage = false` still counts while this key is missing |
 | `officerDefense` | 1.0 (off) | The damage officers on a run take from every weapon, players' shots too (0.5 = half). Leave it at 1.0 unless `aiDamage` alone is not enough |
 | `noCriticalHits` | `true` | Officers on a run take no extra headshot damage, from anyone: a headshot hurts like a body shot |
 | `cancelLethalHeadshots` | `true` | The server drops a hit from a mission NPC that would kill a healthy officer of its run in one shot (a headshot, a point-blank shotgun blast) |
@@ -844,7 +844,7 @@ never changes points, cash or a mission's stars. Every value can be changed in g
 Good to know:
 
 - Each officer's own game applies `aiDamage`, `aiMeleeDamage` and `noCriticalHits` while that officer is on a run,
-  and again after a respawn (`aiDamage` and `aiMeleeDamage` every second, with `holdAiDamage`). `aiDamage` softens every NPC bullet his game works out during the run, so an NPC of
+  and again after a respawn (`aiDamage` and `aiMeleeDamage` every second, with `reassertAiDamage`). `aiDamage` softens every NPC bullet his game works out during the run, so an NPC of
   another script next to him, or a mission NPC shooting a hostage, hits softer too.
 - `cancelLethalHeadshots` can only catch the hits the server hears about (an NPC that another officer's game moves).
   `noCriticalHits` covers the rest. Neither ever touches a player in Crimson-Arena. It never makes an officer
