@@ -506,6 +506,8 @@ local function GetCtx(run, i)
             location = run.location,
             base = (run.mission.objectives or {})[i],
             rng = U.rng((tonumber(run.seed) or 1) + i),
+            -- the Radio Silence modifier, as the client halves get it (their ctx.radioSilence)
+            radioSilence = run.modifier == 'radio_silence',
         }
         ctx.complete = function(data) return Runs.objectiveComplete(run, i, data) end
         ctx.fail = function(reasonKey) return Runs.failRun(run, reasonKey) end
@@ -3292,11 +3294,16 @@ local function StartObjective(run, i)
     -- area = the objective's reference point: each participant's client turns it into street and zone
     -- names for its own Active Mission view (view.area; Radio Silence shows only those).
     local okA, area = pcall(Runs.anchor, run)
-    Runs.send(run, 'client:objective', run.id, i, { action = 'start', area = okA and area or nil })
+    -- marker = the objective's pointer on the map (Config.Markers, §5.44): sent again once the block's start placed
+    -- what it shows, and by the tick whenever it changes
+    local okM, marker = pcall(Runs.startMarker, run, i)
+    Runs.send(run, 'client:objective', run.id, i,
+        { action = 'start', area = okA and area or nil, marker = okM and marker or nil })
     -- ctx.staged = true when this objective's stage hook placed its people while the one before ran (TickRun);
     -- they are its own entities already, so start takes them over (ctx.state is the table stage wrote)
     CallBlock(run, i, 'start')
     if run.state ~= 'in_progress' then return end
+    pcall(Runs.syncMarker, run)
     RefreshHud(run, true)
 end
 
@@ -4110,7 +4117,8 @@ function Runs.testRestart(run)
         Runs.send(run, 'client:objective', run.id, i, { action = 'prepare' })
         CallBlock(run, i, 'prepare')
         if run.state ~= 'in_progress' then return true end
-        Runs.send(run, 'client:objective', run.id, i, { action = 'start' })
+        local okM, marker = pcall(Runs.startMarker, run, i)
+        Runs.send(run, 'client:objective', run.id, i, { action = 'start', marker = okM and marker or nil })
         CallBlock(run, i, 'start')
     end
     o.startedAtMs = GetGameTimer()
@@ -4151,26 +4159,242 @@ local function FirstPoint(location, v, depth)
     return nil
 end
 
-function Runs.anchor(run)
-    if type(run) ~= 'table' then return nil end
-    local start = Vec3Of(run.location.start.coords)
-    if run.state ~= 'in_progress' then return start end
-    local i = run.objectiveIndex
-    local o = run.objectives[i]
-    local obj = o and o.obj or {}
-    if run.shared and type(run.shared.devices) == 'table' and obj.targets == 'shared:devices' then
-        for _, d in ipairs(run.shared.devices) do
-            if d.coords and IsVec(d.coords) then return Vec3Of(d.coords) end
+do
+    -- Never an anchor: custody's prisoner van and its driver (CP.Custody registers them with the objective that
+    -- asked for them, and they drive in from far away).
+    local NOT_ANCHOR = { service = true, service_driver = true }
+
+    local function Anchorable(e)
+        return e and not e.dead and not NOT_ANCHOR[e.role] and e.entity and DoesEntityExist(e.entity)
+    end
+
+    function Runs.anchor(run)
+        if type(run) ~= 'table' then return nil end
+        local start = Vec3Of(run.location.start.coords)
+        if run.state ~= 'in_progress' then return start end
+        local i = run.objectiveIndex
+        local o = run.objectives[i]
+        local obj = o and o.obj or {}
+        if run.shared and type(run.shared.devices) == 'table' and obj.targets == 'shared:devices' then
+            for _, d in ipairs(run.shared.devices) do
+                if d.coords and IsVec(d.coords) then return Vec3Of(d.coords) end
+            end
         end
+        for _, key in ipairs(ANCHOR_KEYS) do
+            local pt = FirstPoint(run.location, obj[key])
+            if pt then return pt end
+        end
+        -- a live entity of the objective: its net id comes second (the objective pointer names it, CP.Runs.marker).
+        -- The one it sat on while that one lives (FiveM reuses net ids, so a later one can have a lower id), else the
+        -- lowest net id, remembered in run.objectives[i].anchorNetId.
+        if not o then return start end
+        local kept = o.anchorNetId and run.entities and run.entities[o.anchorNetId]
+        if kept and kept.obj == i and Anchorable(kept) then return GetEntityCoords(kept.entity), o.anchorNetId end
+        o.anchorNetId = nil
+        for _, e in ipairs(Runs.entitiesFor(run, { obj = i, alive = true })) do
+            if Anchorable(e) then
+                o.anchorNetId = e.netId
+                return GetEntityCoords(e.entity), e.netId
+            end
+        end
+        return start
     end
-    for _, key in ipairs(ANCHOR_KEYS) do
-        local pt = FirstPoint(run.location, obj[key])
-        if pt then return pt end
+end
+
+-- ============================================================================
+--                 OBJECTIVE POINTER (Config.Markers, PLAN M2)
+-- ============================================================================
+-- The current objective on every participant's map (modules/markers, docs/ARCHITECTURE.md §5.44; the owner: "ensure
+-- all objectives as they come up mark on the map"). The block's marker(ctx) hook gives it when the block has one
+-- (false = the block shows this objective itself); otherwise, or when the hook fails, a pin at the objective's anchor
+-- (Runs.anchor), so every objective, a Mission Builder one included, shows where it is. The objective's start
+-- message carries it; the run's 1 s tick sends it again only when it changed: a new shape at once, new positions of
+-- something that moves at most every Config.Markers.trackEvery seconds. In a block: this file is at Lua's 200
+-- locals.
+do
+    local MAX_TARGETS = 32  -- as many targets as CP.Markers draws
+    local KINDS = { point = true, area = true, targets = true }
+
+    local function Cfg() return type(Config.Markers) == 'table' and Config.Markers or {} end
+
+    -- A key (a net id or a point index), a look or a variant: a short string; a label: a CP.Lt text as its token
+    -- string (each client resolves it), any other text cut to 120 characters.
+    local function Str(v, max)
+        if CP.Locale and CP.Locale.isToken and CP.Locale.isToken(v) then return CP.Locale.encode(v) end
+        if type(v) == 'number' then
+            local n = math.tointeger(v)
+            return n and tostring(n) or nil
+        end
+        if type(v) ~= 'string' or v == '' then return nil end
+        return v:sub(1, max or 64)
     end
-    for _, e in ipairs(Runs.entitiesFor(run, { obj = i, alive = true })) do
-        if e.entity and DoesEntityExist(e.entity) then return GetEntityCoords(e.entity) end
+
+    local function Int(v)
+        local n = tonumber(v)
+        return n and math.tointeger(math.floor(n)) or nil
     end
-    return start
+
+    local function Coord(v)
+        if not IsVec(v) then return nil end
+        local x, y, z = U.xyz(v)
+        local function R(n) return math.floor(n * 100 + 0.5) / 100 end
+        return { x = R(x), y = R(y), z = R(z) }
+    end
+
+    -- The marker of §5.44 from what a block returned, or nil when it is not one.
+    local function Norm(m)
+        if type(m) ~= 'table' or not KINDS[m.kind] then return nil end
+        local netId = Int(m.netId)
+        if netId and netId <= 0 then netId = nil end
+        local out = {
+            kind = m.kind,
+            look = Str(m.look),
+            label = Str(m.label, 120),
+            key = Str(m.key) or (netId and tostring(netId)) or nil,
+            netId = netId,
+            number = Int(m.number),
+            route = (m.route == false or m.route == 'block') and m.route or nil,
+        }
+        if m.kind == 'targets' then
+            -- an empty list is a marker too: nothing of this objective to show right now
+            out.targets = {}
+            for _, t in ipairs(type(m.targets) == 'table' and m.targets or {}) do
+                if #out.targets >= MAX_TARGETS then break end
+                local tn = type(t) == 'table' and Int(t.netId) or nil
+                if tn and tn <= 0 then tn = nil end
+                local c = type(t) == 'table' and (Coord(t.coords) or Coord(t)) or nil
+                if tn or c then
+                    out.targets[#out.targets + 1] = {
+                        key = Str(t.key) or (tn and tostring(tn)) or nil,
+                        netId = tn,
+                        index = Int(t.index),
+                        x = c and c.x,
+                        y = c and c.y,
+                        z = c and c.z,
+                        look = Str(t.look),
+                        label = Str(t.label, 120),
+                        variant = Str(t.variant),
+                        number = Int(t.number),
+                    }
+                end
+            end
+            return out
+        end
+        out.coords = Coord(m.coords)
+        if not out.coords then return nil end
+        if m.kind == 'area' then
+            local r = tonumber(m.radius)
+            if not r or r <= 0 then return nil end
+            out.radius = math.floor(r * 10 + 0.5) / 10
+        end
+        return out
+    end
+
+    -- shape: everything but positions (sent at once when it changes); pos: where the things that move are, to the
+    -- metre (a point or an area moves only when it names a net id, which a block hook may do).
+    local function Keys(m)
+        if not m then return 'none', '' end
+        local function P(x, y, z) return x and ('%.0f,%.0f,%.0f'):format(x, y, z) or '-' end
+        local shape = {
+            m.kind,
+            m.look or '',
+            m.label or '',
+            m.key or '',
+            tostring(m.number or ''),
+            tostring(m.radius or ''),
+            tostring(m.route == nil and '' or m.route),
+        }
+        local pos = {}
+        if m.coords then
+            local p = P(m.coords.x, m.coords.y, m.coords.z)
+            if m.netId then pos[1] = p else shape[#shape + 1] = p end
+        end
+        for _, t in ipairs(m.targets or {}) do
+            shape[#shape + 1] = table.concat({
+                t.key or '',
+                tostring(t.netId or ''),
+                tostring(t.index or ''),
+                t.look or '',
+                t.label or '',
+                t.variant or '',
+                tostring(t.number or ''),
+            }, '\31')
+            pos[#pos + 1] = P(t.x, t.y, t.z)
+        end
+        return table.concat(shape, '\30'), table.concat(pos, ';')
+    end
+
+    -- The pointer of the current objective (§5.44), or nil for none: Config.Markers.enabled = false, no active
+    -- objective, or a block hook that said false.
+    function Runs.marker(run)
+        if type(run) ~= 'table' or run.state ~= 'in_progress' or runs[run.id] ~= run then return nil end
+        if Cfg().enabled == false then return nil end
+        local i = run.objectiveIndex
+        local o = run.objectives[i]
+        if not o or o.status ~= 'active' then return nil end
+        local impl = BlockOf(run, i)
+        if impl and type(impl.marker) == 'function' and not o.markerOff then
+            local ok, m = CallBlock(run, i, 'marker')
+            if ok and m == false then return nil end
+            local n = ok and Norm(m) or nil
+            if n then return n end
+            if not ok then
+                -- one error line (CallBlock wrote it), then the anchor for the rest of this objective
+                o.markerOff = true
+            elseif m ~= nil then
+                WarnOnce('marker:' .. tostring(impl.id),
+                    'run %s: block %s gave an objective marker that is not one (kind %s); the objective anchor is used',
+                    run.id, tostring(impl.id), tostring(type(m) == 'table' and m.kind or type(m)))
+            end
+        end
+        local obj = o.obj or {}
+        local okA, c, netId = pcall(Runs.anchor, run)
+        if not okA then return nil end
+        -- the objective's own name, else "Objective" (BLIPS_FINAL section 3)
+        local label = (type(obj.label) == 'string' and obj.label ~= '') and ObjectiveLabel(run, i)
+            or CP.Lt('markers.objective')
+        if netId then
+            -- the anchor is a live entity of the objective: that entity is the one target, so each game follows it
+            -- (its own blip while streamed, the server's position when far) and Radio Silence 'area' hides it like
+            -- every person or car
+            return Norm({
+                kind = 'targets',
+                label = label,
+                targets = { { key = netId, netId = netId, coords = c, look = 'objective', label = label } },
+            })
+        end
+        return Norm({ kind = 'point', look = 'objective', coords = c, label = label })
+    end
+
+    -- The pointer for objective i's start message; the tick sends it again only when it changes.
+    function Runs.startMarker(run, i)
+        local m = Runs.marker(run)
+        local shape, pos = Keys(m)
+        run.markerSent = { index = i, shape = shape, pos = pos, at = GetGameTimer() }
+        return m
+    end
+
+    -- client:marker when the current objective's pointer changed since it was last sent: a new shape at once, new
+    -- positions at most every Config.Markers.trackEvery seconds (the run's 1 s tick, and right after a start).
+    function Runs.syncMarker(run, nowMs)
+        local sent = run.markerSent
+        local i = run.objectiveIndex
+        local o = run.objectives[i]
+        if not sent or sent.index ~= i or run.state ~= 'in_progress' or not o or o.status ~= 'active' then
+            return false
+        end
+        local m = Runs.marker(run)
+        local shape, pos = Keys(m)
+        if shape == sent.shape and pos == sent.pos then return false end
+        nowMs = nowMs or GetGameTimer()
+        if shape == sent.shape then
+            local every = U.clamp(tonumber(Cfg().trackEvery) or 2, 1, 10) * 1000
+            if nowMs - sent.at < every then return false end
+        end
+        run.markerSent = { index = i, shape = shape, pos = pos, at = nowMs }
+        Runs.send(run, 'client:marker', run.id, i, m)
+        return true
+    end
 end
 
 -- ============================================================================
@@ -4525,6 +4749,8 @@ local function TickRun(run, nowMs)
     end
     RefreshHud(run)
     if run.timerSentAt and now - run.timerSentAt >= TIMER_RESYNC_S then SendTimer(run) end
+    -- the objective's pointer, again when it changed (Config.Markers.trackEvery for moving things)
+    if run.state == 'in_progress' then Runs.syncMarker(run, nowMs) end
 end
 
 -- Every run ticks in its own thread: a block tick that waits (a wave spawning, a row being written) never

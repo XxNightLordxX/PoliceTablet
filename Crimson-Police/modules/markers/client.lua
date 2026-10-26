@@ -190,17 +190,26 @@ local function LabelOf(el)
         or CP.L('markers.objective')
 end
 
--- A new pointer blip: above the detail blips, flashing once (SET_BLIP_FLASH_TIMER, BLIPS_FINAL R5).
-local function Emphasise(el, blip)
+-- A new pointer blip: above the detail blips, flashing once (SET_BLIP_FLASH_TIMER, BLIPS_FINAL R5). carry: a block
+-- just handed over its own blip for a target ours showed, so the block's blip flashes for the rest of that one flash
+-- (a block draws its blips from its first snapshot, right after the pointer came up).
+local function Emphasise(el, blip, carry)
     if el.service or el.emphasised == blip then return end
     el.emphasised = blip
     SetBlipPriority(blip, POINTER_PRIORITY)
-    if el.flashed then return end
-    el.flashed = true
-    local s = Seconds('flashSeconds', 5)
-    if s > 0 then
+    local ms
+    if not el.flashed then
+        el.flashed = true
+        local s = Seconds('flashSeconds', 5)
+        if s <= 0 then return end
+        ms = math.floor(s * 1000)
+        el.flashUntil = GetGameTimer() + ms
+    elseif carry and el.flashUntil then
+        ms = el.flashUntil - GetGameTimer()
+    end
+    if ms and ms > 0 then
         SetBlipFlashes(blip, true)
-        SetBlipFlashTimer(blip, math.floor(s * 1000))
+        SetBlipFlashTimer(blip, ms)
     end
 end
 
@@ -271,10 +280,11 @@ local function Place(el)
     end
     if a then
         -- the block draws this target (and an area's circle) itself
+        local carry = Exists(el.own)
         DropOwn(el)
         DropCircle(el)
         el.shown = a
-        return Emphasise(el, a)
+        return Emphasise(el, a, carry)
     end
     local ent = el.netId and Streamed(el.netId)
     if ent then
@@ -494,10 +504,12 @@ function M.adopt(key, blip)
     return true
 end
 
--- The block takes it back (before it removes it): its line goes off, and CP.Markers draws the target again.
-function M.release(key)
+-- The block takes it back (before it removes it): its line goes off, and CP.Markers draws the target again. With
+-- blip: only when that is the blip handed over for key (another block's hand-over of the same key stays).
+function M.release(key, blip)
     key = Key(key)
     if not key or not adopted[key] then return false end
+    if blip ~= nil and adopted[key] ~= blip then return false end
     if adopted[key] == routeBlip then RouteOff() end
     adopted[key] = nil
     if cur then Tick() end

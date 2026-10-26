@@ -328,6 +328,8 @@ do
     local snap = LastSend(ctx)
     H.eq(snap.kind, 'state', 'start sends a snapshot')
     H.eq(snap.total, 5, 'snapshot total')
+    -- the objective pointer (PLAN M2): none of CP.Markers' own, the block keeps its checkpoints and its own line
+    H.eq(CR.marker(ctx), false, 'cr marker: false (no second pointer, no second GPS line)')
     H.eq(snap.current, 1, 'snapshot current')
 
     At(1, vec3(0.0, 900.0, 30.0))
@@ -944,6 +946,15 @@ do
     local snap = LastSend(ctx)
     H.eq(snap.kind, 'state', 'ip start sends a snapshot')
     H.eq(#snap.points, 4, 'ip snapshot has 4 points')
+    -- the objective pointer (PLAN M2): every door still to check, keyed and numbered by its point number (the
+    -- client hands over its blip of that number), at the door, named like the door's blip
+    local mk = IP.marker(ctx)
+    H.ok(type(mk) == 'table' and mk.kind == 'targets' and #mk.targets == 4, 'ip marker: the four doors')
+    for n, t in ipairs(mk.targets) do
+        H.ok(t.key == n and t.number == n and t.look == 'point' and t.variant == nil, 'ip marker: door ' .. n)
+        H.eq(t.coords, st.points[n].coords, 'ip marker: door ' .. n .. ' at its point')
+        H.eq(t.label, st.points[n].label, 'ip marker: door ' .. n .. ' named like its blip')
+    end
     H.eq(snap.points[1].outcome, nil, 'outcomes stay hidden until the door is checked')
     local secureN, openN
     for n, p in ipairs(st.points) do
@@ -964,6 +975,9 @@ do
     H.eq(IP.onEvent(ctx, 1, { type = 'interact', point = secureN }), true,
         'ip door checked after 4 s (5 s - tolerance)')
     H.eq(sp.status, 'log', 'secure door waits for the log')
+    mk = IP.marker(ctx)
+    H.eq(#mk.targets, 3, 'ip marker: a checked door leaves the pointer')
+    for _, t in ipairs(mk.targets) do H.ok(t.key ~= secureN, 'ip marker: not the checked door') end
     H.eq(st.log.point, secureN, 'state.log points at the door')
     H.eq(#st.log.choices, 2, 'two log choices')
     H.eq(st.log.choices[1].id, 'secure', 'choice 1 id')
@@ -989,6 +1003,12 @@ do
     IP.tick(ctx, 1)
     H.eq(IP.onEvent(ctx, 1, { type = 'interact', point = openN }), true, 'open door checked')
     H.eq(op.status, 'followup', 'open door needs securing')
+    local fu
+    for _, t in ipairs(IP.marker(ctx).targets) do if t.key == openN then fu = t end end
+    H.ok(fu ~= nil and fu.variant == 'followUp', 'ip marker: an open door waiting to be secured is a follow-up')
+    ctx.radioSilence = true
+    H.eq(IP.marker(ctx), false, 'ip marker: none under Radio Silence (the client half draws no blips then)')
+    ctx.radioSilence = nil
     H.eq(LastSend(ctx).points[openN].followUp.label, 'Secure door', 'follow-up label sent')
     H.eq(LastSend(ctx).points[openN].outcomeLabel, 'The door was found open', 'open result shown')
     okE, why = IP.onEvent(ctx, 1, { type = 'followup', point = openN })
@@ -1132,6 +1152,18 @@ do
     end
     H.eq(#devices, 2, 'two spots hide a device')
     H.eq(#st.points, 6, 'every hiding spot is searchable')
+    -- the objective pointer of a hidden search: its circle (the one the client half draws), never a spot
+    local mk = IP.marker(ctx)
+    local cx, cy = 0.0, 0.0
+    for _, p in ipairs(st.points) do cx, cy = cx + p.coords.x, cy + p.coords.y end
+    cx, cy = cx / #st.points, cy / #st.points
+    local far = 0.0
+    for _, p in ipairs(st.points) do far = math.max(far, CP.U.dist2d(p.coords, vec3(cx, cy, 0.0))) end
+    H.ok(type(mk) == 'table' and mk.kind == 'area' and mk.key == 'area' and mk.look == 'searchArea',
+        'ip hidden marker: the search area, keyed area (the client hands over its centre)')
+    H.ok(mk and math.abs(mk.coords.x - cx) < 1e-6 and math.abs(mk.coords.y - cy) < 1e-6, 'ip hidden marker: centred')
+    H.near(mk and mk.radius or 0, far + 10.0, 1e-6, 'ip hidden marker: 10 m past the farthest spot')
+    H.eq(mk and mk.targets, nil, 'ip hidden marker: no spot named')
     for _, pt in ipairs(LastSend(ctx).points) do H.eq(pt.device, nil, 'which spots hide devices is never sent') end
     H.eq(Search(ctx, empty[1]), true, 'empty spot searched')
     H.eq(#ctx.calls.spawn, 0, 'nothing spawned for an empty spot')
@@ -1161,6 +1193,7 @@ do
     H.eq(#ctx.run.shared.devices, 2, 'both devices shared')
     H.ok(Contains(ctx.calls.award, 'devices_found_fast'), 'every device found within 2 minutes')
     H.eq(ctx.calls.complete, 1, 'search completes when every device is found')
+    H.eq(IP.marker(ctx), false, 'ip hidden marker: none once every device is found')
     H.eq(#empty - 1, 3, 'three spots were never searched')
     -- restart removes the props this objective spawned
     IP.restart(ctx)
@@ -1913,6 +1946,7 @@ local serverImpl = { checkpoint_route = CR, interact_points = IP, skill_check = 
 do
     local speeds, blips, zones, removedZones, explosions, sounds = {}, {}, {}, {}, {}, 0
     local removedDicts = {}
+    local blipNumbers = {}
     local nextBlip = 0
     local function NewBlip() nextBlip = nextBlip + 1; blips[nextBlip] = true; return nextBlip end
     local stub = {
@@ -1931,6 +1965,8 @@ do
         SetBlipColour = function() end,
         SetBlipScale = function() end,
         SetBlipAsShortRange = function() end,
+        SetBlipCategory = function() end,
+        ShowNumberOnBlip = function(b, n) blipNumbers[b] = n end,
         SetBlipRoute = function() end,
         SetBlipRouteColour = function() end,
         SetBlipAlpha = function() end,
@@ -1972,6 +2008,8 @@ do
     CP.Blocks._list.checkpoint_route, CP.Blocks._list.interact_points, CP.Blocks._list.skill_check = nil, nil, nil
     H.strictGlobals(true)
 
+    -- the objective pointer the client halves hand their blips to (no pointer is set here: they keep them)
+    H.load('modules/markers/client.lua')
     H.load('blocks/checkpoint_route/client.lua')
     H.load('blocks/interact_points/client.lua')
     H.load('blocks/skill_check/client.lua')
@@ -2137,6 +2175,10 @@ do
         'zone and option names prefixed')
     H.eq(zones[1].options[1].label, 'Check door', 'target label from the mission')
     H.eq(OpenBlips(), 4, 'a blip per open door')
+    local numbered = {}
+    for b, n in pairs(blipNumbers) do if blips[b] then numbered[#numbered + 1] = n end end
+    table.sort(numbered)
+    H.eq(table.concat(numbered, ','), '1,2,3,4', 'each door blip shows its point number (BLIPS_FINAL R4)')
     H.eq(zones[1].options[1].canInteract(), true, 'option available')
     zones[1].options[1].onSelect()
     H.eq(ic.reports[1] and ic.reports[1].type, 'interact', 'progress bar finished -> interact reported')

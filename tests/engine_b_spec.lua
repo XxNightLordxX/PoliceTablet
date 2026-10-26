@@ -2079,6 +2079,232 @@ do
 end
 
 -- ============================================================================
+--            THE OBJECTIVE POINTER (Config.Markers, PLAN M2, §5.44)
+-- ============================================================================
+-- Every objective's start carries its pointer: the block's marker(ctx) hook, else a pin at the objective's anchor;
+-- the 1 s tick sends client:marker only when it changed (positions of something moving: every trackEvery s).
+
+do
+    local hookCalls, hookOut, hookErr = 0, nil, false
+    CP.Blocks.register('marker_block', {
+        start = function(ctx) end,
+        marker = function(ctx)
+            hookCalls = hookCalls + 1
+            if hookErr then error('broken hook') end
+            return hookOut
+        end,
+    })
+    local mm = CP.U.deepcopy(mission)
+    mm.id = 'marker_mission'
+    mm.items = {}
+    mm.locations[1].doors = { vec4(140.0, 150.0, 31.0, 0.0), vec4(160.0, 150.0, 31.0, 0.0) }
+    mm.objectives = {
+        { block = 'test_block', label = 'Walk the block', minSeconds = 0, count = 1 },
+        { block = 'test_block', minSeconds = 0, count = 1, points = 'doors' },
+        { block = 'marker_block', label = 'Hooked', minSeconds = 0 },
+    }
+    mm.scaling = {}
+    local function Starts(src)
+        local out = {}
+        for _, e in ipairs(EventsTo('crimson-police:client:objective', src)) do
+            if e.args[3] and e.args[3].action == 'start' then out[#out + 1] = e.args end
+        end
+        return out
+    end
+    local function Markers(src) return EventsTo('crimson-police:client:marker', src) end
+
+    H.ok(not Runs.isOnMission(2), 'marker run: officer 2 is free')
+    H.reset()
+    local R = Runs.create(
+        { mission = mm, locationIndex = 1, missionType = 'patrol', members = { O[2] }, leaderSrc = 2 })
+    H.ok(type(R) == 'table', 'marker run created')
+    Runs.markArrived(R, 2)
+    local st = Starts(2)
+    H.eq(#st, 1, 'objective 1 started')
+    local m1 = st[1][3].marker
+    -- fallback: no hook, no anchor key, no entity yet -> a pin at the start, the objective's own name
+    H.ok(type(m1) == 'table' and m1.kind == 'point' and m1.look == 'objective', 'fallback: a pin of kind objective')
+    H.ok(m1 and m1.coords.x == 100.0 and m1.coords.y == 100.0, 'fallback: at the anchor (the start, nothing else yet)')
+    H.eq(m1 and m1.label, 'Walk the block', 'fallback: named after the objective')
+    H.eq(m1 and m1.key, nil, 'fallback at a fixed point: no net id to name')
+
+    -- unchanged: nothing sent again, however many ticks
+    H.reset()
+    H.advance(5000)
+    H.eq(#Markers(2), 0, 'an unchanged pointer is not sent again')
+
+    -- the objective's own entity appears: the anchor moves onto it and names it (a new shape: sent at once)
+    local ped, pedNet = Runs.spawnPed(R,
+        { obj = 1, model = 'a_m_y_business_01', coords = vec4(300.0, 300.0, 30.0, 0.0) })
+    H.ok(ped ~= nil, 'an entity of objective 1')
+    H.advance(1000)
+    local sent = Markers(2)
+    H.eq(#sent, 1, 'the new anchor is sent at the next tick')
+    local m2 = sent[1] and sent[1].args[3]
+    local t2 = m2 and m2.kind == 'targets' and m2.targets[1]
+    H.ok(t2 and #m2.targets == 1 and t2.netId == pedNet and t2.key == tostring(pedNet) and t2.x == 300.0,
+        'the pointer names the live entity it sits on (one target: followed in each game, hidden by Radio Silence)')
+    H.ok(t2 and t2.look == 'objective' and t2.label == 'Walk the block', 'the entity target: kind objective, named')
+    H.eq(sent[1] and sent[1].args[2], 1, 'client:marker carries the objective index')
+
+    -- it moves: new positions at most every trackEvery seconds (2)
+    H.reset()
+    ents[ped].coords = vec3(340.0, 300.0, 30.0)
+    H.advance(1000)
+    H.eq(#Markers(2), 0, 'a move inside trackEvery waits')
+    H.advance(1000)
+    sent = Markers(2)
+    H.eq(#sent, 1, 'the move is sent once trackEvery passed')
+    H.eq(sent[1] and sent[1].args[3].targets[1].x, 340.0, 'at the new server position')
+    H.reset()
+    for _ = 1, 6 do
+        ents[ped].coords = vec3(ents[ped].coords.x + 10.0, 300.0, 30.0)
+        H.advance(1000)
+    end
+    H.ok(#Markers(2) <= 3, ('a target moving every second is sent at most every 2 s (%d in 6 s)'):format(#Markers(2)))
+    Config.Markers.trackEvery = 5
+    H.reset()
+    for _ = 1, 10 do
+        ents[ped].coords = vec3(ents[ped].coords.x + 10.0, 300.0, 30.0)
+        H.advance(1000)
+    end
+    H.ok(#Markers(2) <= 2, ('trackEvery = 5: at most every 5 s (%d in 10 s)'):format(#Markers(2)))
+    Config.Markers.trackEvery = 2
+
+    -- more of objective 1 appears, with lower net ids (FiveM reuses them): custody's prisoner van and its driver
+    -- (registered with the objective, roles service / service_driver) and another person of the objective. The
+    -- pointer stays on the entity it is on, and never names the van or its driver. (A function of its own: this
+    -- file's main chunk is at Lua's 200 locals.)
+    local function ExtraEntities()
+        H.reset()
+        local keepNet = nextNet
+        nextNet = 100
+        local _, vanNet = Runs.spawnVehicle(R,
+            { obj = 1, model = 'policet', coords = vec4(900.0, 900.0, 30.0, 0.0), role = 'service', tag = 'transport' })
+        local _, copNet = Runs.spawnPed(R, {
+            obj = 1,
+            model = 's_m_y_cop_01',
+            coords = vec4(900.0, 900.0, 30.0, 0.0),
+            role = 'service_driver',
+            tag = 'transport',
+        })
+        nextNet = 200
+        local _, otherNet = Runs.spawnPed(R,
+            { obj = 1, model = 'a_m_y_business_01', coords = vec4(500.0, 500.0, 30.0, 0.0), role = 'returning_driver' })
+        nextNet = keepNet
+        H.ok(vanNet and copNet and otherNet and vanNet < pedNet and otherNet < pedNet,
+            'later entities with lower net ids')
+        H.advance(3000)
+        H.eq(#Markers(2), 0, 'new entities of the objective do not move the pointer (nothing sent)')
+        local mk = Runs.marker(R)
+        H.eq(mk and mk.targets and mk.targets[1].netId, pedNet, 'the pointer keeps the entity it is on')
+        -- that entity goes: the objective's next one by net id, never the van or its driver
+        ents[ped].exists = false
+        H.advance(1000)
+        sent = Markers(2)
+        local tk = sent[1] and sent[1].args[3].targets and sent[1].args[3].targets[1]
+        H.eq(#sent, 1, 'the pointer moves when its entity goes')
+        H.eq(tk and tk.netId, otherNet,
+            'onto the objective\'s own person (lowest net id), not custody\'s van or driver')
+        H.ok(tk and tk.x == 500.0, 'at that person')
+    end
+    ExtraEntities()
+
+    -- objective 2: the first point of its anchor list, unnamed objective -> "Objective"
+    H.reset()
+    H.ok(Runs.objectiveComplete(R, 1, {}), 'objective 1 done')
+    st = Starts(2)
+    local m3 = st[1] and st[1][3].marker
+    H.ok(m3 and m3.coords.x == 140.0 and m3.coords.y == 150.0, 'objective 2: the first door (its anchor)')
+    H.ok(m3 and type(m3.label) == 'string' and m3.label:find('markers.objective', 1, true) ~= nil,
+        'an objective without a name: the markers.objective text (a token each client resolves)')
+
+    -- objective 3: the block's hook gives the pointer, normalised (keys as strings, coords as tables, at most 32)
+    hookOut = {
+        kind = 'targets',
+        targets = {
+            { key = 2, coords = vec3(1.0, 2.0, 3.0), look = 'point', number = 2, label = 'Door two' },
+            { netId = 4411, x = 5.0, y = 6.0, z = 7.0, look = 'fleeing' },
+            { label = 'no position, no net id' },
+        },
+    }
+    H.reset()
+    H.ok(Runs.objectiveComplete(R, 2, {}), 'objective 2 done')
+    st = Starts(2)
+    local m4 = st[1] and st[1][3].marker
+    H.ok(m4 and m4.kind == 'targets' and #m4.targets == 2, 'hook: its targets (one without a place dropped)')
+    H.ok(m4 and m4.targets[1].key == '2' and m4.targets[1].x == 1.0 and m4.targets[1].number == 2,
+        'hook: the point keyed by its number, at its coords')
+    H.ok(m4 and m4.targets[2].key == '4411' and m4.targets[2].netId == 4411, 'hook: a net id is its own key')
+    H.reset()
+    H.advance(3000)
+    H.eq(#Markers(2), 0, 'hook: the same marker is not sent again')
+    -- a new shape (a target gone) at once
+    hookOut = { kind = 'targets', targets = { hookOut.targets[2] } }
+    H.advance(1000)
+    sent = Markers(2)
+    H.ok(#sent == 1 and #sent[1].args[3].targets == 1, 'hook: a target gone is sent at the next tick')
+    -- false: the block shows it itself -> nil sent once
+    hookOut = false
+    H.reset()
+    H.advance(1000)
+    sent = Markers(2)
+    H.ok(#sent == 1 and sent[1].args[3] == nil, 'hook false: the pointer goes (nil sent once)')
+    H.advance(2000)
+    H.eq(#Markers(2), 1, 'hook false: nothing more')
+    -- not a marker: the anchor, one warning
+    local warns = {}
+    local realWarn = CP.warn
+    CP.warn = function(tag, fmt, ...) warns[#warns + 1] = (fmt or ''):format(...) end
+    hookOut = { kind = 'blob' }
+    H.reset()
+    H.advance(2000)
+    CP.warn = realWarn
+    sent = Markers(2)
+    H.ok(#sent == 1 and sent[1].args[3].kind == 'point' and sent[1].args[3].look == 'objective',
+        'hook gave no marker: the anchor pin instead')
+    local warned = 0
+    for _, w in ipairs(warns) do if w:find('marker_block', 1, true) then warned = warned + 1 end end
+    H.eq(warned, 1, 'one warning for a hook that gave no marker')
+    -- an error: the anchor for the rest of the objective, the hook is not called again
+    hookErr = true
+    H.advance(1000)
+    local n = hookCalls
+    H.advance(3000)
+    H.eq(hookCalls, n, 'a hook that failed is not called again for this objective')
+    H.ok(R.objectives[3].markerOff == true, 'the anchor from then on')
+    hookErr = false
+
+    -- Config.Markers.enabled = false: nil in the start message and nothing from the tick
+    Config.Markers.enabled = false
+    hookOut = { kind = 'point', coords = vec3(9.0, 9.0, 9.0) }
+    H.reset()
+    H.ok(Runs.testRestart ~= nil, 'restart helper')
+    H.eq(Runs.marker(R), nil, 'enabled = false: no pointer')
+    H.advance(1000)
+    sent = Markers(2)
+    H.ok(#sent <= 1 and (sent[1] == nil or sent[1].args[3] == nil), 'enabled = false: at most one nil (clear)')
+    H.reset()
+    H.advance(3000)
+    H.eq(#Markers(2), 0, 'enabled = false: nothing sent')
+    Config.Markers.enabled = true
+    Runs.removeParticipant(R, 2, 'cancelled')
+
+    -- a new run with the pointer off from the start: the start message carries none
+    Config.Markers.enabled = false
+    H.reset()
+    local Q = Runs.create(
+        { mission = mm, locationIndex = 1, missionType = 'patrol', members = { O[2] }, leaderSrc = 2 })
+    Runs.markArrived(Q, 2)
+    st = Starts(2)
+    H.ok(#st == 1 and st[1][3].marker == nil, 'enabled = false: no marker in the start message')
+    H.advance(3000)
+    H.eq(#Markers(2), 0, 'enabled = false: no client:marker')
+    Config.Markers.enabled = true
+    Runs.removeParticipant(Q, 2, 'cancelled')
+end
+
+-- ============================================================================
 --               RESOURCE STOP: entities deleted, nothing written
 -- ============================================================================
 

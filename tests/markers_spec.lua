@@ -647,4 +647,101 @@ do
     H.ok(NoRemovedRoute(), 'line off first')
 end
 
+-- ============================================================================
+--    M2: A BLOCK HANDS ITS OWN BLIPS OVER (interact_points, Business Check)
+-- ============================================================================
+-- The server's pointer names every door still to check by its number; the block's numbered door blips are the
+-- pointer, so there is no separate "Objective" blip and the line goes to the officer's nearest door.
+
+do
+    Reset()
+    _G.DrawMarker = _G.DrawMarker or function() end
+    _G.PlaySoundFrontend = _G.PlaySoundFrontend or function() end
+    H.exportsMock.ox_target = {
+        addSphereZone = function() return 1 end,
+        removeZone = function() end,
+    }
+    H.load('blocks/interact_points/client.lua')
+    local IPc = CP.Blocks.get('interact_points')
+    local ctx = {
+        runId = 'run-ip',
+        index = 1,
+        obj = { label = 'Check the doors', target = { label = 'Check door' }, progress = { duration = 5000 } },
+        state = {},
+        report = function() end,
+        hudDetail = function() end,
+    }
+    local doors = { { 0.0, 500.0 }, { 0.0, 200.0 }, { 0.0, 900.0 } }
+    local function Snapshot(statuses)
+        local pts = {}
+        for n, d in ipairs(doors) do
+            pts[n] = { coords = { x = d[1], y = d[2], z = 30.0 }, label = 'Shop ' .. n, status = statuses[n] }
+        end
+        return { kind = 'state', points = pts, total = #pts, done = 0 }
+    end
+    local function Pointer(statuses)
+        local targets = {}
+        for n, d in ipairs(doors) do
+            if statuses[n] == 'pending' then
+                targets[#targets + 1] = {
+                    key = n,
+                    x = d[1],
+                    y = d[2],
+                    z = 30.0,
+                    look = 'point',
+                    number = n,
+                    label = 'Shop ' .. n,
+                }
+            end
+        end
+        return { kind = 'targets', targets = targets }
+    end
+    local all = { 'pending', 'pending', 'pending' }
+    IPc.start(ctx)
+    -- the start message's pointer comes first (CP.Markers' own pins for a moment), the block's snapshot right after
+    M.set('run-ip', 1, Pointer(all), ctx)
+    local ownPins = Live('coord')
+    H.eq(#ownPins, 3, 'before the block draws: CP.Markers shows the doors itself')
+    IPc.update(ctx, Snapshot(all))
+    local live = Live()
+    H.eq(#live, 3, 'one icon per door: the block\'s blips, no separate Objective blip')
+    for _, id in ipairs(ownPins) do H.eq(B(id).live, false, 'CP.Markers\' own pin ' .. id .. ' gave way') end
+    local numbers = {}
+    for _, id in ipairs(live) do
+        local b = B(id)
+        numbers[#numbers + 1] = b.number
+        H.ok(b.sprite == K.point.sprite and b.colour == K.point.colour and b.shortRange == false,
+            'a door blip in kinds.point, never short range')
+    end
+    table.sort(numbers)
+    H.eq(table.concat(numbers, ','), '1,2,3', 'numbered doors')
+    local routed = Routed()
+    H.ok(#routed == 1 and B(routed[1]).number == 2, 'the GPS line goes to the nearest door\'s own blip (door 2)')
+    H.ok(B(routed[1]).flashes == true and (B(routed[1]).flashMs or 0) > 0, 'the door blip carries the pointer\'s flash')
+    H.eq(B(routed[1]).priority, 12, 'raised above the detail blips')
+
+    -- door 2 checked: the block's next snapshot, then the server's next pointer (the tick)
+    local after = { 'pending', 'log', 'pending' }
+    IPc.update(ctx, Snapshot(after))
+    M.update('run-ip', 1, Pointer(after), ctx)
+    Tick()
+    live = Live()
+    H.eq(#live, 2, 'two doors left, two icons')
+    routed = Routed()
+    H.ok(#routed == 1 and B(routed[1]).number == 1, 'the line moves to the next nearest door (door 1)')
+    H.ok(NoRemovedRoute(), 'every door blip lost its line before the block removed it')
+
+    -- release with a blip only gives back that blip
+    local other = AddBlipForCoord(0.0, 0.0, 30.0)
+    H.eq(M.release(1, other), false, 'release(key, blip): not the blip handed over for that key')
+    H.ok(B(routed[1]).route, 'the handed-over blip keeps its line')
+    RemoveBlip(other)
+
+    -- the objective stops: pointer cleared first, then the block removes its blips
+    M.clear('run-ip', 1)
+    IPc.stop(ctx)
+    H.eq(#Live(), 0, 'stop: nothing left on the map')
+    H.ok(NoRemovedRoute(), 'line off first')
+end
+
 return H

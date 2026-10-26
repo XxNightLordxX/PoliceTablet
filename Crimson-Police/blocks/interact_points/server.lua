@@ -1074,6 +1074,52 @@ CP.Blocks.register(BLOCK, {
         return best or 0.0
     end,
 
+    -- The objective pointer (CP.Runs.marker, docs/ARCHITECTURE.md §5.44): every point still to do, numbered, each
+    -- keyed by its number so the client hands its own blip over (one icon per point) and every officer's GPS line
+    -- goes to his nearest; a hidden search is its circle round the spots (the client hands over the centre, key
+    -- 'area'). Nothing under Radio Silence: the client half draws no blips then.
+    marker = function(ctx)
+        local st = Ensure(ctx)
+        if ctx.radioSilence or #st.points == 0 then return false end
+        if st.hidden then
+            if st.found >= st.total then return false end
+            -- the circle the client half draws: the middle of the spots, 10 m past the farthest
+            local cx, cy, cz = 0.0, 0.0, 0.0
+            for _, p in ipairs(st.points) do
+                local x, y, z = CP.U.xyz(p.coords)
+                cx, cy, cz = cx + x, cy + y, cz + z
+            end
+            cx, cy, cz = cx / #st.points, cy / #st.points, cz / #st.points
+            local r = 10.0
+            for _, p in ipairs(st.points) do
+                r = math.max(r, CP.U.dist2d(p.coords, { x = cx, y = cy }) + 10.0)
+            end
+            return {
+                kind = 'area',
+                key = 'area',
+                look = 'searchArea',
+                coords = { x = cx, y = cy, z = cz },
+                radius = r,
+                label = CP.Lt('block.interact_points.blip_search'),
+            }
+        end
+        local targets = {}
+        for n, p in ipairs(st.points) do
+            if p.status == 'pending' or p.status == 'followup' then
+                targets[#targets + 1] = {
+                    key = n,
+                    index = n,
+                    number = n,
+                    coords = p.coords,
+                    look = 'point',
+                    variant = p.status == 'followup' and 'followUp' or nil,
+                    label = Txt(p.label) or Txt(ctx.obj.label) or CP.Lt('block.interact_points.blip', { n = n }),
+                }
+            end
+        end
+        return { kind = 'targets', targets = targets }
+    end,
+
     checklist = function(ctx)
         local st = Ensure(ctx)
         if st.hidden then

@@ -645,6 +645,10 @@ CP.Blocks.register(BLOCK, {
         return best
     end,
 
+    -- The objective pointer (CP.Runs.marker): none of CP.Markers' own. This block draws its checkpoints and keeps its
+    -- own GPS line to the current one, and two lines would fight over the officer's map (BLIPS_FINAL R2).
+    marker = function(ctx) return false end,
+
     checklist = function(ctx)
         local st = Ensure(ctx)
         return {

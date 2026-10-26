@@ -112,11 +112,21 @@ end
 --                                    BLIPS
 -- ============================================================================
 
+-- The blips handed to the objective pointer (CP.Markers.adopt) are taken back first, so their GPS line goes off
+-- before they go (BLIPS_FINAL R10).
 local function ClearBlips(st)
+    for key, blip in pairs(st.handed or {}) do CP.Markers.release(key, blip) end
+    st.handed = {}
     for _, b in ipairs(st.blips or {}) do
         if DoesBlipExist(b) then RemoveBlip(b) end
     end
     st.blips = {}
+end
+
+-- This block's blip of the pointer's target key (a point's number, or 'area' for a hidden search's centre) is the
+-- pointer: CP.Markers puts the GPS line on it and draws no second icon (BLIPS_FINAL R1).
+local function HandOver(st, key, blip)
+    if CP.Markers.adopt(key, blip) then st.handed[key] = blip end
 end
 
 local function NameBlip(b, text)
@@ -150,17 +160,18 @@ local function RefreshBlips(ctx, st)
         SetBlipScale(centre, 0.7)
         NameBlip(centre, CP.L('block.interact_points.blip_search'))
         st.blips[#st.blips + 1] = centre
+        HandOver(st, 'area', centre)
         return
     end
+    -- numbered (Config.Markers.kinds.point: yellow, orange when it needs a follow-up), never short range
     for n, p in ipairs(pts) do
         if p.status == 'pending' or p.status == 'followup' then
             local b = AddBlipForCoord(p.coords.x, p.coords.y, p.coords.z)
-            SetBlipSprite(b, 1)
-            SetBlipColour(b, p.status == 'followup' and 17 or 5)
-            SetBlipScale(b, 0.75)
-            SetBlipAsShortRange(b, false)
-            NameBlip(b, Txt(p.label) or Txt(ctx.obj.label) or CP.L('block.interact_points.blip', { n = n }))
+            CP.Markers.style(b, 'point',
+                Txt(p.label) or Txt(ctx.obj.label) or CP.L('block.interact_points.blip', { n = n }),
+                { number = n, variant = p.status == 'followup' and 'followUp' or nil })
             st.blips[#st.blips + 1] = b
+            HandOver(st, n, b)
         end
     end
 end

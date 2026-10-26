@@ -1021,7 +1021,10 @@ Full admin control (P3, §5.39):
 - `noteWeaponFired(run, src)` — server-side proof for `no_weapons_fired` (CP.Npc: a participant's gun hit or gun kill on a mission ped; the `weapon_fired` telemetry also goes through it)
 - `objectiveComplete(run, index, data) -> boolean` (false when minSeconds is not reached yet; flags `too_fast`)
 - `dispatch(run, index, src, ev) -> ok, reason` — deliver a SERVER-originated event (e.g. from CP.Npc: `{ type = 'cuffed', netId }`, `{ type = 'shot', netId, src }`, `{ type = 'damaged', netId, attacker }`) to the block's `onEvent` of objective `index` (the objective that owns the entity, `cp.obj`), bypassing the client anti-cheat checks
-- Test hooks (used by CP.Testing; only valid on test runs): `testSkip(run)` (mark the current objective done regardless of minSeconds and start the next), `testRestart(run)` (block `restart` for the current objective, or stop+delete its entities and `start` again), `anchor(run) -> vec3` (teleport target: the current objective's reference point, or the start before In progress)
+- Test hooks (used by CP.Testing; only valid on test runs): `testSkip(run)` (mark the current objective done regardless of minSeconds and start the next), `testRestart(run)` (block `restart` for the current objective, or stop+delete its entities and `start` again), `anchor(run) -> vec3` (teleport target: the current objective's reference point, or the start before In progress; a second value, the
+  net id, when that point is a live entity of the objective: the one it was on while that one lives, else the lowest
+  net id, kept in `run.objectives[i].anchorNetId`; never custody's van or its driver, roles `service` /
+  `service_driver`)
 - Row fields owned by the engine at insert: `season_id = CP.Challenge.currentSeason() and .id`, `department` = the participant's department at the end, `departments_n`, `participants` (active at the end, plus themselves), `tier` = pay tier name, `modifier`, `mission_version`, `location_label`, `duration_s`, `breakdown` = RunResult JSON (9.6)
 - `entityDied(run, netId, killerSrc)` — the single death path: marks the entity dead (for corpse cleanup and caps), updates stats, calls the owning block's `onEntityDead`. CP.Npc calls it for peds (with killer attribution); CP.Runs itself detects wrecked vehicles (`GetVehicleEngineHealth <= -3999` / not driveable / `GetEntityHealth <= 0`) and calls it with killerSrc nil
 - `failRun(run, reasonKey)` → `endRun(run, 'failed', 'mission_failed')`
@@ -1110,6 +1113,23 @@ Full admin control (P3, §5.39):
 - `deleteEntity(run, netId)`, `entitiesFor(run, filter) -> list`, `canSpawn(run, n, armed) -> boolean` (caps `Config.Limits.maxArmedAlive` / `maxEntities`, counted now; callers wait and retry, never cut counts)
 - `send(run, eventName, ...)` → `TriggerClientEvent` to every active participant
 - `objectiveEvent(run, index, data)` → `crimson-police:client:objective` (runId, index, data)
+- The objective pointer (Config.Markers, PLAN M2; drawn by §5.44): `marker(run) -> marker|nil` — the current
+  objective's pointer in the §5.44 shape: its block's `marker(ctx)` hook (§7.1) when the block has one, normalised
+  (keys as strings, a net id is its own key, coords `{ x, y, z }` to the centimetre, labels as text or a CP.Lt token
+  string, at most 32 targets, a target with neither coords nor a net id dropped); `false` from the hook = none (the
+  block shows the objective itself); no hook, a hook that returns nil or no marker (one `CP.warn` per block), or one
+  that raised an error (then not called again for that objective, `run.objectives[i].markerOff`) = the fallback,
+  named after the objective (else `markers.objective`), so every objective, a Mission Builder one included, has one:
+  a pin `{ kind = 'point', look = 'objective', coords = anchor(run), label }`, or, when the anchor is a live entity of
+  the objective, that entity as the one target `{ kind = 'targets', label, targets = { { key = netId, netId, x, y, z,
+  look = 'objective', label } } }` (each game follows it, Radio Silence 'area' hides it like any person or car). nil while
+  `Config.Markers.enabled = false` or no objective is active. `startMarker(run, i)` — the pointer for objective i's
+  `client:objective` `{ action = 'start', marker }` (StartObjective, `testRestart`), remembered in `run.markerSent`.
+  `syncMarker(run, nowMs) -> sent` — called right after the block's `start` and at the end of every 1 s tick: sends
+  `client:marker` (runId, index, marker) to the participants only when the pointer changed since it was sent: a new
+  shape (kind, keys, net ids, looks, labels, numbers, radius, route, a fixed point's place) at once, new positions
+  (targets, or a point that names a net id, to the metre) at most every `Config.Markers.trackEvery` seconds (1-10);
+  nil (enabled turned off, a hook now false) is sent once, which clears it.
 - `hud(run, patch)` → `crimson-police:client:hud` to participants; `hudFor(run, src, patch)`
 - `view(run, src) -> ActiveMissionView` (§9.4) and `summary(run) -> LiveRun` (§9.5)
 - `isParticipant(run, src)`, `activeSrcs(run) -> list`, `host(run) -> src`
@@ -2540,7 +2560,7 @@ centre, and at most one GPS line. modules/runs/client.lua drives it: `client:obj
 msg.marker, ctx)` after the block's own `start` (ctx = the block's client ctx, for Radio Silence), `client:marker` →
 `update` (only for the current, started objective of this run), `stop` → `clear(runId, index)` before the block's
 `stop`, and every `Cleanup` (run end, leaving, a new start, resource stop) → `clear()` before the blocks stop.
-- The marker (from the server, M2 on; nil = none): `{ kind = 'point'|'area'|'targets', look, label, key, number,
+- The marker (from the server, §5.10 `marker`; nil = none): `{ kind = 'point'|'area'|'targets', look, label, key, number,
   coords = { x, y, z }, radius (area), route = true|false|'block', targets = { { key, netId, x, y, z, look, label,
   variant, number } } }`. `look` is a `Config.Markers.kinds` key (default `'objective'`, an area `'searchArea'`);
   `variant` `'boss'|'next'|'followUp'|'setback'` picks the kind's bossScale, nextScale, followUpColour or setbackColour.
@@ -2548,8 +2568,12 @@ msg.marker, ctx)` after the block's own `start` (ctx = the block's client ctx, f
   targets.
 - One icon per target (R1): `adopt(key, blip)` — a block hands over the blip it draws for target `key` (a net id or a
   point index, the marker's `key`): that blip is the pointer, CP.Markers draws no icon of its own for it and only sets
-  its line, `SetBlipPriority` and one flash. `release(key)` — the block takes it back before removing it: its line goes
-  off and CP.Markers draws the target again. An adopted blip that no longer exists falls back the same way at the next
+  its line, `SetBlipPriority` and one flash; a blip handed over while CP.Markers' own icon of that target is still
+  flashing flashes for the rest of that one flash (a block draws its blips from its first snapshot, just after the
+  start message's pointer). `release(key, blip?)` — the block takes it back before removing it: its line goes off
+  and CP.Markers draws the target again; with `blip`, only when that is the blip handed over for `key`. Used by
+  interact_points (each pending or follow-up point's numbered blip, key = its point number; a hidden search's centre,
+  key `'area'`). An adopted blip that no longer exists falls back the same way at the next
   check. `clear` hands every adopted blip back with its line off. CP.Markers draws its own icon only for what no block
   draws: a fight area, a fallback anchor, a target not streamed here, and service vehicles.
 - Own icons: a point or an area's centre `AddBlipForCoord` (an area adds `AddBlipForRadius`, colour of its kind,
@@ -2720,6 +2744,11 @@ CP.Blocks.register('hostile_waves', {
                                    -- yield (ctx.spawnPed waits for its entity): the engine holds this objective's
                                    -- start until it returns (at most 30 s)
   checklist = function(ctx) return { { label = 'Hostiles', done = false, value = 3, max = 20 } } end,
+  marker  = function(ctx) return nil end,  -- (optional) this objective's pointer on the officers' map (§5.44 shape,
+                                   -- CP.Runs.marker §5.10): asked at its start and every 1 s tick, so keep it cheap
+                                   -- (server positions, no waits); name each target by the key the client half
+                                   -- hands its own blip over with (CP.Markers.adopt). false = none (the block shows
+                                   -- the objective itself: checkpoint_route); nil = the engine's pin at the anchor
   restart = function(ctx) end,     -- test control: remove and respawn this objective's NPCs/props
   stop    = function(ctx) end,     -- objective finished or run ended (the engine deletes entities anyway)
 })
@@ -2732,6 +2761,7 @@ ctx = {
   run = run, index = i, obj = <scaled objective copy>, base = <unscaled objective>,
   mission = run.mission, location = run.location, tier = run.tier, state = run.objectives[i].state,
   rng = CP.U.rng(run.seed + i),        -- deterministic per objective
+  radioSilence = <bool>,               -- the run has the Radio Silence modifier (as the client half's ctx.radioSilence)
   complete = function(data) end,       -- -> CP.Runs.objectiveComplete (false if minSeconds not reached: call again next tick)
   fail = function(reasonKey) end,      -- the whole run fails ('mission_failed')
   award = function(id, opts) end, penalize = function(id, opts) end,
