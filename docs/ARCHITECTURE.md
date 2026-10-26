@@ -830,6 +830,9 @@ Parity-plus additions (WP1, WP8; docs/notes/access.md):
   `dispatch`, `leaderboardMetrics`, `profile`, `commendationKinds`, `rewards`, `format` (English only: no language
   list and no per-player language).
 - S `desk(i)`, `deskAllows(desk, dept)`, `inDeskBox(desk, coords, margin)`, `hasTabletItem(src)`, `checkAccess(...)`.
+- S `itemOk(src)`: requireItem again for `server:acceptType` and `server:claimMissionCall` (`err.no_tablet_item`):
+  true when requireItem is off, when the last passed way was a desk and the ped is still in that desk box grown by
+  `Config.Tablet.deskDistance` + 2 m, or when the item is in the inventory now.
 - S `navCounts(src) -> NavCounts` and callback `getNavCounts`: invites, calls (CP.MissionCalls.claimableCount),
   review (supervisors: flagged rows, disputes and profile queue; 30 s cache), commendations, rewards, onRun, each
   through a guarded call (a missing module gives 0); the whole set is cached 5 s per src. Every push of unit,

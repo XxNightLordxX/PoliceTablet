@@ -333,7 +333,7 @@ UI build: a custom standalone UI in React 18 + TypeScript, built with Vite into 
 
 - Every way ends in the same server check (department, duty, active job, suspensions, Crimson-Arena), and a way that is switched off is refused.
 
-- requireItem = true: every way except a mission desk needs the tablet item in the inventory, checked on the server with ox_inventory; the tablet closes when the item leaves the inventory.
+- requireItem = true: every way except a mission desk needs the tablet item in the inventory, checked on the server with ox_inventory; the tablet closes when the item leaves the inventory. Accepting a mission and claiming a mission call check the item again (not needed while the officer is still at the desk the tablet was opened at).
 
 - Mission desks are ox_target zones ("Open Crimson-Police") created on the officer's client from config (coords, size, rotation, departments, an optional laptop prop that only that client sees). At a desk the officer plays a standing-at-a-computer animation instead of holding the tablet, and the tablet closes when they walk more than 3 m away. Desks never show for players in Crimson-Arena and are removed when the resource stops.
 
@@ -2759,7 +2759,9 @@ Config.Tablet = {
         keybind = true,                  -- the crimsonpolice_tablet key mapping
         item = true,                     -- using Config.Tablet.item (only when item is set)
         desk = true,                     -- the mission desks below
-        requireItem = false,             -- true = every way except a desk needs the item in the inventory
+        -- true = every way except a desk needs the item in the inventory; accepting a mission and claiming a mission
+        -- call check it again (away from the desk the tablet was opened at, the item is needed then too)
+        requireItem = false,
     },
     deskDistance = 3.0,                  -- metres: walking further than this from the desk closes the tablet
     deskScenario = 'PROP_HUMAN_ATM',     -- standing-and-typing animation at a desk (no handheld tablet)

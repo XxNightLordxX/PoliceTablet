@@ -1367,6 +1367,8 @@ CP.Net.action('server:acceptType', function(src, payload)
     local twists = type(payload) == 'table' and payload.twists or nil
     if twists ~= nil and type(twists) ~= 'table' then return false, 'err.invalid_payload' end
     if not CP.Net.rateOk(src, 'draw:acceptType', 1, 1500) then return false, 'err.rate_limited' end
+    -- Config.Tablet.access.requireItem: checked again here, not only when the tablet opened
+    if CP.Tablet and CP.Tablet.itemOk and not CP.Tablet.itemOk(src) then return false, 'err.no_tablet_item' end
 
     local srcs = UnitMembers(src)
     for _, m in ipairs(srcs) do

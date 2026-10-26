@@ -879,7 +879,9 @@ Crimson-Police never edits ox_inventory: you copy two things in yourself.
    item = 'crimson_police_tablet',   -- inside Config.Tablet
    ```
 4. Optional: set `requireItem = true` in `Config.Tablet.access`. Then every way except a mission desk needs the
-   item in the inventory, and the tablet closes when the item leaves the inventory.
+   item in the inventory, and the tablet closes when the item leaves the inventory. Accepting a mission and
+   claiming a mission call check the item again (not needed while the officer is still at the desk the tablet was
+   opened at).
 5. Restart the server (or restart ox_inventory, then Crimson-Police). The start-up check says whether the item and
    its picture were found.
 

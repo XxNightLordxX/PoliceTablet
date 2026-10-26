@@ -1660,6 +1660,8 @@ end, { rate = 4 })
 CP.Net.action('server:claimMissionCall', function(src, payload)
     if type(payload) ~= 'table' or not tonumber(payload.callId) then return false, 'err.invalid_payload' end
     if payload.twists ~= nil and type(payload.twists) ~= 'table' then return false, 'err.invalid_payload' end
+    -- Config.Tablet.access.requireItem: checked again here, not only when the tablet opened
+    if CP.Tablet and CP.Tablet.itemOk and not CP.Tablet.itemOk(src) then return false, 'err.no_tablet_item' end
     return MC.claim(src, payload.callId, payload.twists)
 end, { rate = 3 })
 

@@ -55,7 +55,9 @@ Config.Tablet = {
         keybind = true,                  -- the crimsonpolice_tablet key mapping
         item = true,                     -- using Config.Tablet.item (only when item is set)
         desk = true,                     -- the mission desks below
-        requireItem = false,             -- true = every way except a desk needs the item in the inventory
+        -- true = every way except a desk needs the item in the inventory; accepting a mission and claiming a mission
+        -- call check it again (away from the desk the tablet was opened at, the item is needed then too)
+        requireItem = false,
     },
     deskDistance = 3.0,                  -- metres: walking further than this from the desk closes the tablet
     deskScenario = 'PROP_HUMAN_ATM',     -- standing-and-typing animation at a desk (no handheld tablet)

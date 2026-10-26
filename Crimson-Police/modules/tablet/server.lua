@@ -161,6 +161,20 @@ function T.checkAccess(src, officer, via, deskIndex)
     return true
 end
 
+-- requireItem for a request of an open tablet (accepting a mission, claiming a mission call): true when the item is
+-- not required, when the last session was opened at a desk and the player is still at it (its box plus
+-- Config.Tablet.deskDistance and the server margin), or when the item is in the inventory now.
+function T.itemOk(src)
+    if AccessCfg().requireItem ~= true then return true end
+    local way = lastWay[src]
+    if way and way.via == 'desk' then
+        local desk, ped = T.desk(way.desk), GetPlayerPed(src)
+        local reach = (tonumber(Config.Tablet and Config.Tablet.deskDistance) or 3.0) + DESK_MARGIN
+        if desk and ped and ped ~= 0 and T.inDeskBox(desk, GetEntityCoords(ped), reach) then return true end
+    end
+    return T.hasTabletItem(src)
+end
+
 -- ============================================================================
 --                                SESSION PARTS
 -- ============================================================================

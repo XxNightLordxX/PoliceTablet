@@ -780,7 +780,67 @@ do
 end
 
 -- ============================================================================
---                                7. THE CLIENT
+--                  7. requireItem ON MISSION ACCEPT AND CLAIM
+-- ============================================================================
+-- Accepting a mission and claiming a mission call check the item again, not only the session that opened the tablet.
+
+do
+    H.load('modules/draw/server.lua')
+    H.load('modules/missioncalls/server.lua')
+    local reqN = 0
+    local function Act(name, src, payload)
+        reqN = reqN + 1
+        local id = 'k8-' .. reqN
+        H.clockMs = H.clockMs + 2000
+        H.fire('crimson-police:' .. name, src, payload, id)
+        for i = #H.events, 1, -1 do
+            local e = H.events[i]
+            if e.name == 'crimson-police:client:actionResult' and e.args[1] == id then return e.args[2], e.args[3] end
+        end
+        return nil, 'no reply'
+    end
+    local function Accept(src) return select(2, Act('server:acceptType', src, 'patrol')) end
+    local function Claim(src) return select(2, Act('server:claimMissionCall', src, { callId = 1 })) end
+
+    local inv = H.mockInventory({ crimson_police_tablet = { label = 'Police Tablet' } })
+    local searches = 0
+    local realSearch = H.exportsMock.ox_inventory.Search
+    H.exportsMock.ox_inventory.Search = function(...)
+        searches = searches + 1
+        return realSearch(...)
+    end
+    Config.Tablet.item = 'crimson_police_tablet'
+    Config.Tablet.access.requireItem = true
+    At(1, 0.0, 0.0)
+    inv.slots[1] = { { slot = 1, name = 'crimson_police_tablet', count = 1 } }
+    H.ok(Open(1, { via = 'item' }).ok, 'opened with the item')
+    H.ok(Accept(1) ~= 'err.no_tablet_item', 'with the item a mission can be accepted')
+    inv.slots[1][1].count = 0
+    H.eq(Accept(1), 'err.no_tablet_item', 'the item gone: accepting a mission is refused')
+    H.eq(Claim(1), 'err.no_tablet_item', 'and claiming a mission call')
+    officers[4], H.players[4] = { dept = 'sast', supervisor = false, cid = 'ACC4' }, { coords = vec3(0.0, 0.0, 0.0) }
+    H.eq(Accept(4), 'err.no_tablet_item', 'no session at all: the item is needed too')
+
+    At(1, 100.0, 100.0)
+    H.ok(Open(1, { via = 'desk', desk = 1 }).ok, 'opened at a desk without the item')
+    H.ok(Accept(1) ~= 'err.no_tablet_item', 'at the desk a mission can be accepted without the item')
+    H.ok(Claim(1) ~= 'err.no_tablet_item', 'and a mission call claimed')
+    At(1, 105.0, 100.0)
+    H.ok(Accept(1) ~= 'err.no_tablet_item', 'within deskDistance of the box it still counts as the desk')
+    At(1, 120.0, 100.0)
+    H.eq(Accept(1), 'err.no_tablet_item', 'walked away from the desk: the item is needed again')
+
+    Config.Tablet.access.requireItem = false
+    local before = searches
+    H.ok(Accept(1) ~= 'err.no_tablet_item', 'requireItem off: accepting is unchanged')
+    H.ok(Claim(1) ~= 'err.no_tablet_item', 'and claiming')
+    H.eq(searches, before, 'and the inventory is never asked')
+    Config.Tablet.item = false
+    H.exportsMock.ox_inventory, officers[4], H.players[4] = nil, nil, nil
+end
+
+-- ============================================================================
+--                                8. THE CLIENT
 -- ============================================================================
 -- Desk zones, the desk pose and distance watcher, the item watcher, the ways the client names and the arena.
 
