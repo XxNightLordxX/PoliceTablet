@@ -263,7 +263,11 @@ local function Loop(S)
                         -- HostAi waits for control (ctx.control yields): a stop meanwhile has already cleaned up
                         if not Live(S) then break end
                         if state == 'hostile' or state == 'surrendered' then
-                            if not ctx.radioSilence then EnsureBlip(S, info.netId, ent, info.role == 'boss') end
+                            if CP.Markers.hidden(ctx, 'hostile') then
+                                removeBlip(S, info.netId)
+                            else
+                                EnsureBlip(S, info.netId, ent, info.role == 'boss')
+                            end
                             if state == 'surrendered' and U.dist(me, GetEntityCoords(ent)) <= HINT_RANGE then
                                 hint = true
                             end

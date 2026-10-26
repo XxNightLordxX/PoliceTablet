@@ -805,6 +805,7 @@ function view(r: MockRunState): ActiveMissionData {
         test: r.test,
         recalcsLeft: r.recalcsLeft,
         radioSilence: r.radioSilence,
+        silenceMode: r.radioSilence ? 'area' : null,
         log: r.state === 'in_progress' ? r.log : null,
         me: ME_SRC,
         isBoss: r.isBoss,

@@ -174,11 +174,12 @@ local function AddBlip(st, n, variant)
 end
 
 -- The current checkpoint's blip is the objective pointer (key 'cp<n>', the server's marker): CP.Markers draws no
--- second icon for it (BLIPS_FINAL R1). The next one is smaller (kinds.checkpoint.nextScale).
+-- second icon for it (BLIPS_FINAL R1). The next one is smaller (kinds.checkpoint.nextScale). Under Radio Silence
+-- Config.Markers.radioSilence decides: 'area' keeps the current one without its line, 'none' neither.
 local function RefreshBlips(ctx, st)
     ClearBlips(st)
     local d = st.data
-    if ctx.radioSilence or not d or d.finished or not d.current then return end
+    if CP.Markers.hidden(ctx, 'checkpoint') or not d or d.finished or not d.current then return end
     local n = d.current
     local b = AddBlip(st, n)
     if b then
@@ -187,7 +188,7 @@ local function RefreshBlips(ctx, st)
         st.routeBlip = b
         SyncLine(ctx, st)
     end
-    AddBlip(st, n + 1, 'next')
+    if not CP.Markers.hidden(ctx, 'checkpoint', 'next') then AddBlip(st, n + 1, 'next') end
 end
 
 -- ============================================================================

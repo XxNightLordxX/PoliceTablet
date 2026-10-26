@@ -4026,6 +4026,13 @@ function Runs.view(run, src)
     if type(intel) ~= 'string' or intel == '' then intel = nil end
     local objectives = HudObjectives(run, true)
     if CP.Locale and CP.Locale.resolveAll then objectives = CP.Locale.resolveAll(objectives) end
+    -- What Radio Silence hides on this run's maps (Config.Markers.radioSilence; an unknown value counts as 'area', as
+    -- in CP.Markers), so the Active Mission notice says it; nil without Radio Silence (PLAN M8).
+    local silenceMode = nil
+    if run.modifier == 'radio_silence' then
+        silenceMode = type(Config.Markers) == 'table' and Config.Markers.radioSilence or nil
+        if silenceMode ~= 'none' and silenceMode ~= 'full' then silenceMode = 'area' end
+    end
     return {
         -- Optional extras for the Active Mission screen (web/src/types/run_ui.ts): the viewer, the boss flag,
         -- the operation, the seconds left to reach the start and the area (street · zone).
@@ -4052,6 +4059,7 @@ function Runs.view(run, src)
         test = run.test ~= nil,
         recalcsLeft = recalcs,
         radioSilence = run.modifier == 'radio_silence',
+        silenceMode = silenceMode,
         log = logView,
         intel = intel,
         missionCall = mcView,

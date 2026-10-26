@@ -143,11 +143,12 @@ local function BlipLabel(ctx, st, i, variant)
 end
 
 -- Config.Markers.kinds.device (yellow; setbackColour while set back, flashing until it is fixed with
--- Config.Markers.setbackFlash), numbered, never short range. Nothing under Radio Silence.
+-- Config.Markers.setbackFlash), numbered, never short range. Under Radio Silence none of the block's own
+-- (Config.Markers.radioSilence 'area': CP.Markers shows the officer's nearest device itself; 'full': all of them).
 local function RefreshBlips(ctx, st)
     st.blips, st.handed = st.blips or {}, st.handed or {}
     local want = {}
-    if not ctx.radioSilence and st.data then
+    if st.data and not CP.Markers.hidden(ctx, 'device') then
         for i, t in ipairs(st.data.targets or {}) do
             if SHOWN[t.status] then
                 local c = t.coords

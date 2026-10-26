@@ -617,7 +617,7 @@ local function Loop(S)
                 local me = PlayerPedId()
                 local myPos = GetEntityCoords(me)
                 local host = IsHost(S)
-                local showBlips = not ctx.radioSilence
+                local showCars = not CP.Markers.hidden(ctx, 'vehicle')
                 local aimRun = Config.Blocks.flee_arrest.aimDistance[3]
                 local myVeh = GetVehiclePedIsIn(me, false)
                 for _, v in ipairs(S.vehicles) do
@@ -626,7 +626,7 @@ local function Loop(S)
                     local k = 'v' .. tostring(v.netId)
                     local live = v.state == 'fleeing' or v.state == 'waiting' or v.state == 'cruising'
                         or v.state == 'yielding'
-                    if veh and showBlips and live and v.blip ~= false then
+                    if veh and showCars and live and v.blip ~= false then
                         -- the server's pointer names it the same (an observe mission's car stays the violator)
                         local label = (type(obj.observe) == 'table' and 'block.pursuit.blip_violator')
                             or (IsRace(S) and 'block.pursuit.blip_racer') or 'block.pursuit.blip_vehicle'
@@ -660,10 +660,11 @@ local function Loop(S)
                         end
                         local onFoot = (state == 'stopped' or state == 'fleeing' or state == 'hostile')
                             and not IsPedInAnyVehicle(ped, false)
-                        if showBlips and onFoot then
-                            local look = state == 'fleeing' and 'fleeing' or 'suspect'
+                        local look = state == 'fleeing' and 'fleeing' or 'suspect'
+                        local shown = not CP.Markers.hidden(ctx, look)
+                        if shown and onFoot then
                             EnsureBlip(S, k, ped, s.netId, look, 'block.pursuit.blip_suspect')
-                        elseif showBlips and state == 'surrendered' then
+                        elseif shown and state == 'surrendered' then
                             EnsureBlip(S, k, ped, s.netId, 'suspect', 'block.pursuit.blip_suspect', 0.6)
                         else
                             DropBlip(S, k)

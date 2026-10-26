@@ -2631,13 +2631,21 @@ without arguments also removes the run's service vehicles, PLAN M7).
   `CP.Route.current()` exists and has not arrived (CP.Route samples the start's line from the blip-route slot first,
   §5.12), and while the officer has a waypoint (`IsWaypointActive`). Every blip CP.Markers removes or hands back loses
   its line first (R10).
-- `hidden(ctx, kind) -> boolean` (R9, used by the blocks from M8): Radio Silence (`ctx.radioSilence`; nil ctx = the
-  current pointer's) by `Config.Markers.radioSilence`: `'none'` hides everything but `start`, `prisonerVan` and
-  `towTruck`; `'area'` (shipped) hides `'route'` and every kind but the circles and single points (start, checkpoint,
-  searchArea, fightArea, destination, safePoint, scene, point, device, objective and the service vehicles); `'full'`
-  hides nothing. Under `'area'` the pointer also hides every target that has a `netId` (a person or a car), whatever
-  its look (a target without a look gets `objective`). Under `'area'` with `radioSilenceLastKnown` > 0 a hidden moving
-  target gets a 200 m circle (`markers.last_known`) where it was, moved every that many seconds.
+- `hidden(ctx, kind, variant?) -> boolean` (R9, PLAN M8): true when Radio Silence (`ctx.radioSilence`; nil ctx = the
+  current pointer's) hides a block's own blip of `kind` (a `Config.Markers.kinds` key, or `'route'` for a GPS line) by
+  `Config.Markers.radioSilence` (an unknown value counts as `'area'`). Every block client asks it before it draws a
+  blip or a line (checkpoint_route, search_area, pursuit, flee_arrest, escort, hostile_waves, protect_rescue,
+  interact_points, skill_check, process_scene, field_contact) and drops a blip it now hides: `'none'` hides everything
+  but `start`, `prisonerVan` and `towTruck`; `'area'` (shipped) hides `'route'`, the `'next'` variant (a second
+  checkpoint), `point` and `device` (CP.Markers shows the nearest itself, below) and every kind but the objective's
+  circle or one point (start, checkpoint, searchArea, fightArea, destination, safePoint, scene, objective and the
+  service vehicles); `'full'` hides nothing. The block server markers send the same pointer with or without Radio
+  Silence (interact_points and skill_check sent none before M8); search_area keeps its circle as the pointer once
+  inside unless the mode is `'full'`. CP.Markers' own pointer under `'area'`: it hides every target that has a `netId`
+  (a person or a car), whatever its look (a target without a look gets `objective`); of several points it still shows
+  (Business Check's doors, Bomb Disposal's devices) it shows only this officer's nearest (`cur.single`, moved only when
+  another one is 25 % closer); with `radioSilenceLastKnown` > 0 a hidden moving target gets a 200 m circle
+  (`markers.last_known`) where it was, moved every that many seconds.
 - `service(key, spec)` — a prisoner van or tow truck coming to this officer: `spec = { netId, coords, kind =
   'prisonerVan'|'towTruck', label }`, nil removes it. Shown in every Radio Silence mode while `serviceVehicles` is on,
   never routed, removed by `clear()` (the run's end) and at resource stop. modules/custody/client.lua calls it (PLAN
@@ -2864,7 +2872,9 @@ Rules for blocks:
   Skill checks: `lib.skillCheck({ 'easy', 'medium' }, { 'w', 'a', 's', 'd' })`.
 - Evidence sent with `ctx.report({ type = 'checkpoint', index = 3, netId = n, ... })`; the engine adds
   `coords` and `time`. The server half validates distances with server-side coordinates.
-- Radio Silence (`ctx.radioSilence`): after the start, no blips for mission NPCs or objectives.
+- Radio Silence (`ctx.radioSilence`): after the start a client half draws a blip or a line only when
+  `CP.Markers.hidden(ctx, kind)` says it may (`Config.Markers.radioSilence`, §5.44); the HUD and server halves are
+  unchanged.
 - Every block reads its builder ranges from `Config.Blocks[<id>]` for validation.
 - A block's `update` reaches its client half while its objective is still pending too (a staged objective, §3.3): a
   client half acts on it before `start` only when its server half says so (`hostile_waves`: `awake = true`, a staged
@@ -3352,7 +3362,8 @@ interface ActiveMissionView { runId: string; missionLabel: string; description: 
   route: HudState['route']; objectives: HudState['objectives']; remaining: number | null; paused: boolean;
   partners: { src: number; name: string; callsign: string | null; departmentShort: string; status: string; arrived: boolean }[];
   expected: { cash: number; points: number }; modifier: HudState['modifier']; test: boolean;
-  recalcsLeft: number; radioSilence: boolean; log: null | { point: number; choices: { id: string; label: string }[] } }
+  recalcsLeft: number; radioSilence: boolean; silenceMode?: 'none' | 'area' | 'full' | null;
+  log: null | { point: number; choices: { id: string; label: string }[] } }
 // getHome
 interface HomeData { card: { callsign: string | null; rank: string; departmentShort: string; name: string;
   xp: number; level: { label: string; badge: string; xp: number; next: number | null };

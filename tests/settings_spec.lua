@@ -682,8 +682,11 @@ do
     H.ok(E('Markers.enabled').section ~= E('Route.reportEvery').section, 'Map markers is a section of its own')
     H.eq(E('Markers.routeColour').desc, 'colour of the GPS line to an objective (5 = yellow, 1 = red, 3 = blue)',
         'the line colour')
-    H.ok(E('Markers.radioSilence').desc:find('\'area\' = a circle or the one objective blip stays', 1, true) ~= nil,
-        'Radio Silence says what each mode hides')
+    H.ok(
+        E('Markers.radioSilence').desc:find('\'area\' = each objective\'s circle or its one blip stays', 1, true) ~= nil
+            and E('Markers.radioSilence').desc:find('always show', 1, true) ~= nil,
+        'Radio Silence says what each mode hides (and what always shows)'
+    )
     H.eq(E('Markers.radioSilence').kind, 'enum', 'Radio Silence is a pick of three')
     H.ok((Check('Markers.radioSilence', 'none')), 'none: hide everything, as before')
     Err('Markers.radioSilence', 'loud', 'err.setting_option', 'only none, area or full')

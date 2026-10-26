@@ -684,6 +684,18 @@ do
     A.cashBase = realBase
 end
 H.eq(v.radioSilence, false, 'radio silence flag')
+H.eq(v.silenceMode, nil, 'no Radio Silence: no silence mode')
+do
+    -- PLAN M8: the Active Mission notice says what Config.Markers.radioSilence hides
+    local realMod, realMode = A.modifier, Config.Markers.radioSilence
+    A.modifier = 'radio_silence'
+    H.eq(Runs.view(A, 1).silenceMode, 'area', 'Radio Silence: the shipped mode (area)')
+    Config.Markers.radioSilence = 'full'
+    H.eq(Runs.view(A, 1).silenceMode, 'full', 'Radio Silence: the owner\'s mode')
+    Config.Markers.radioSilence = 'bogus'
+    H.eq(Runs.view(A, 1).silenceMode, 'area', 'Radio Silence: an unknown mode counts as area')
+    A.modifier, Config.Markers.radioSilence = realMod, realMode
+end
 H.eq(v.test, false, 'not a test')
 local s = Runs.summary(A)
 H.eq(#s.participants, 2, 'summary participants')

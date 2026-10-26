@@ -145,12 +145,14 @@ end
 local function At(x, y, z, r) return ('%.2f:%.2f:%.2f:%.2f'):format(x, y, z, r or 0.0) end
 
 -- What the snapshot shows: a hidden search's circle and centre (Config.Markers.kinds.searchArea), else every point
--- still to do. Nothing under Radio Silence.
+-- still to do. Under Radio Silence Config.Markers.radioSilence decides: 'area' keeps the circle but draws no points
+-- (CP.Markers shows the officer's nearest one itself), 'none' neither.
 local function Wanted(ctx, st)
     local want, d = {}, st.data
-    if ctx.radioSilence or not d then return want end
+    if not d then return want end
     local pts = d.points or {}
     if d.hidden then
+        if CP.Markers.hidden(ctx, 'searchArea') then return want end
         if (d.found or 0) >= (d.total or 0) or #pts == 0 then return want end
         local cx, cy, cz = 0.0, 0.0, 0.0
         for _, p in ipairs(pts) do cx, cy, cz = cx + p.coords.x, cy + p.coords.y, cz + p.coords.z end
@@ -165,6 +167,7 @@ local function Wanted(ctx, st)
         want.area = { at = at, x = cx, y = cy, z = cz }
         return want
     end
+    if CP.Markers.hidden(ctx, 'point') then return want end
     for n, p in ipairs(pts) do
         if p.status == 'pending' or p.status == 'followup' then
             local c = p.coords

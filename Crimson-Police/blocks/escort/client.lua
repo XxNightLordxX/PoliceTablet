@@ -328,30 +328,32 @@ local function Loop(S)
                 local ctx = S.ctx
                 local d = S.data
                 local truck = d.truck and EntityFor(d.truck.netId) or nil
-                if ctx.radioSilence then
-                    for k in pairs(S.blips) do DropBlip(S, k) end
+                -- Radio Silence: Config.Markers.radioSilence decides per kind ('area' keeps the destination alone)
+                if truck and not CP.Markers.hidden(ctx, 'escort') then
+                    EnsureEntityBlip(S, 'truck', truck, 'escort', 'block.escort.blip_truck', d.truck.netId)
                 else
-                    if truck then
-                        EnsureEntityBlip(S, 'truck', truck, 'escort', 'block.escort.blip_truck', d.truck.netId)
-                    else
-                        DropBlip(S, 'truck')
-                    end
+                    DropBlip(S, 'truck')
+                end
+                if CP.Markers.hidden(ctx, 'destination') then
+                    DropBlip(S, 'dest')
+                else
                     EnsureDestBlip(S)
-                    local keep = {}
-                    for _, net in ipairs(d.attackers or {}) do
-                        local e = EntityFor(net)
-                        local k = 'a' .. tostring(net)
-                        keep[k] = true
-                        if e and not IsPedDeadOrDying(e, true) then
-                            -- a detail blip, not the pointer (kinds.suspect: a red dot)
-                            EnsureEntityBlip(S, k, e, 'suspect', 'block.escort.blip_attacker')
-                        else
-                            DropBlip(S, k)
-                        end
+                end
+                local keep = {}
+                local attackers = not CP.Markers.hidden(ctx, 'suspect')
+                for _, net in ipairs(d.attackers or {}) do
+                    local e = EntityFor(net)
+                    local k = 'a' .. tostring(net)
+                    keep[k] = true
+                    if attackers and e and not IsPedDeadOrDying(e, true) then
+                        -- a detail blip, not the pointer (kinds.suspect: a red dot)
+                        EnsureEntityBlip(S, k, e, 'suspect', 'block.escort.blip_attacker')
+                    else
+                        DropBlip(S, k)
                     end
-                    for k in pairs(S.blips) do
-                        if k:sub(1, 1) == 'a' and not keep[k] then DropBlip(S, k) end
-                    end
+                end
+                for k in pairs(S.blips) do
+                    if k:sub(1, 1) == 'a' and not keep[k] then DropBlip(S, k) end
                 end
                 SetHint(S, HudText(S, truck))
             end

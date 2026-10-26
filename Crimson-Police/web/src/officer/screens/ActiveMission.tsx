@@ -50,6 +50,13 @@ const POLL_MS = 15000;
 //                                   HELPERS
 // ============================================================================
 
+// The Radio Silence notice for what it hides on the map (Config.Markers.radioSilence; missing = 'area', shipped).
+function silenceText(mode: ActiveMissionData['silenceMode']): string {
+    if (mode === 'none') return t('run.silence.text_none');
+    if (mode === 'full') return t('run.silence.text_full');
+    return t('run.silence.text_area');
+}
+
 function typeLabel(session: Session, key: string): string {
     const found = asArray(session.config?.missionTypes).find(m => m.key === key);
     return found?.label ?? key;
@@ -772,7 +779,7 @@ export default function ActiveMission() {
                     </span>
                     <span className="run_ui-notice__text">
                         <span className="run_ui-notice__title">{t('run.silence.title')}</span>
-                        <span className="run_ui-notice__sub">{t('run.silence.text')}</span>
+                        <span className="run_ui-notice__sub">{silenceText(view.silenceMode)}</span>
                     </span>
                 </div>
             ) : null}

@@ -63,6 +63,8 @@ end
 local function EnsureBlip(S, info, ent, state)
     if not S.alive then return end
     local look = info.kind == 'vehicle' and 'contactVehicle' or PERSON_LOOK[state] or 'contact'
+    -- Radio Silence: Config.Markers.radioSilence decides ('area' and 'none': no blip on a person or a car)
+    if CP.Markers.hidden(S.ctx, look) then return DropBlip(S, info.netId) end
     local b = S.blips[info.netId]
     if b and b.ent == ent and DoesBlipExist(b.id) then
         if b.look ~= look then
@@ -104,7 +106,7 @@ local function Loop(S)
                     if ent and not info.done then
                         local bag = BagOf(ent)
                         local state = bag and bag.state
-                        if not S.ctx.radioSilence then EnsureBlip(S, info, ent, state) end
+                        EnsureBlip(S, info, ent, state)
                         if info.kind == 'person' and (state == 'fleeing' or state == 'idle' or state == 'hostile') then
                             local d = U.dist(pos, GetEntityCoords(ent))
                             if d <= WATCH_RANGE then

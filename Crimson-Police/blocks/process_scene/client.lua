@@ -200,7 +200,7 @@ CP.Blocks.register(BLOCK, {
         S.van = data.van
         S.coroner = data.coroner == true
         S.scene = ToVec3(data.scene)
-        if S.scene and not S.blip and not ctx.radioSilence then
+        if S.scene and not S.blip and not CP.Markers.hidden(ctx, 'scene') then
             -- Config.Markers.kinds.scene (a yellow map pin, never 310: the skull and crossbones), never short range;
             -- handed to the objective pointer as 'scene' (the server's marker): CP.Markers puts the GPS line on it
             -- and draws no second icon (BLIPS_FINAL R1)

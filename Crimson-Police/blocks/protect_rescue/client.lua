@@ -225,7 +225,7 @@ local function Loop(S)
                     else
                         DropTarget(S, info.netId)
                     end
-                    if S.current and not ctx.radioSilence and state ~= 'dead' then
+                    if S.current and state ~= 'dead' and not CP.Markers.hidden(ctx, 'hostage') then
                         EnsureEntityBlip(S, info.netId, ent)
                     else
                         DropBlip(S, info.netId)
@@ -274,7 +274,7 @@ CP.Blocks.register(BLOCK, {
         local S = S_of(ctx)
         S.alive = true
         S.current = true
-        if not ctx.radioSilence then EnsureSafeBlip(S) end
+        if not CP.Markers.hidden(ctx, 'safePoint') then EnsureSafeBlip(S) end
         Loop(S)
         MarkerLoop(S)
     end,

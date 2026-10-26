@@ -1077,10 +1077,11 @@ CP.Blocks.register(BLOCK, {
     -- The objective pointer (CP.Runs.marker, docs/ARCHITECTURE.md §5.44): every point still to do, numbered, each
     -- keyed by its number so the client hands its own blip over (one icon per point) and every officer's GPS line
     -- goes to his nearest; a hidden search is its circle round the spots (the client hands over the centre, key
-    -- 'area'). Nothing under Radio Silence: the client half draws no blips then.
+    -- 'area'). The same under Radio Silence: each officer's CP.Markers hides by Config.Markers.radioSilence ('area':
+    -- the circle, or only his nearest point, without a line; 'none': nothing).
     marker = function(ctx)
         local st = Ensure(ctx)
-        if ctx.radioSilence or #st.points == 0 then return false end
+        if #st.points == 0 then return false end
         if st.hidden then
             if st.found >= st.total then return false end
             -- the circle the client half draws: the middle of the spots, 10 m past the farthest

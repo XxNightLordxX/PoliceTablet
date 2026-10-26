@@ -216,6 +216,8 @@ export interface ActiveMissionView {
     test: boolean;
     recalcsLeft: number;
     radioSilence: boolean;
+    // what Radio Silence hides on the map (Config.Markers.radioSilence); null without Radio Silence
+    silenceMode?: 'none' | 'area' | 'full' | null;
     log: null | { point: number; choices: { id: string; label: string }[] };
 }
 // getHome

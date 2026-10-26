@@ -1190,6 +1190,196 @@ do
 end
 
 -- ============================================================================
+--       M8: RADIO SILENCE IN THE BLOCKS, BY Config.Markers.radioSilence
+-- ============================================================================
+-- Every block asks CP.Markers.hidden(ctx, kind) before it draws a blip or a line: 'area' (shipped) keeps the
+-- objective's circle or its one point without a line (CP.Markers shows only the officer's nearest of several points
+-- or devices itself), 'full' everything as without Radio Silence, 'none' nothing (before M8 every block drew nothing).
+
+do
+    Reset()
+    local silent = { radioSilence = true }
+    -- a block's own blips under 'area' (shipped)
+    for _, kind in ipairs({ 'checkpoint', 'searchArea', 'fightArea', 'destination', 'safePoint', 'scene', 'objective' }) do
+        H.eq(M.hidden(silent, kind), false, '\'area\': the block draws its ' .. kind)
+    end
+    for _, kind in ipairs({
+        'point',
+        'device',
+        'clue',
+        'hostile',
+        'suspect',
+        'fleeing',
+        'vehicle',
+        'contact',
+        'contactVehicle',
+        'escort',
+        'hostage',
+        'route',
+    }) do
+        H.eq(M.hidden(silent, kind), true, '\'area\': the block draws no ' .. kind)
+    end
+    H.eq(M.hidden(silent, 'checkpoint', 'next'), true, '\'area\': no second checkpoint')
+    H.eq(M.hidden({ radioSilence = false }, 'point'), false, 'no Radio Silence: the block draws its points')
+    Config.Markers.radioSilence = 'full'
+    for _, kind in ipairs({ 'point', 'device', 'clue', 'hostile', 'fleeing', 'vehicle', 'escort', 'hostage', 'route' }) do
+        H.eq(M.hidden(silent, kind), false, '\'full\': the block draws its ' .. kind)
+    end
+    H.eq(M.hidden(silent, 'checkpoint', 'next'), false, '\'full\': the next checkpoint too')
+    Config.Markers.radioSilence = 'none'
+    for _, kind in ipairs({ 'checkpoint', 'searchArea', 'safePoint', 'scene', 'objective', 'point' }) do
+        H.eq(M.hidden(silent, kind), true, '\'none\': no ' .. kind)
+    end
+    Config.Markers.radioSilence = 'bogus'
+    H.eq(M.hidden(silent, 'point'), true, 'an unknown mode counts as \'area\'')
+    H.eq(M.hidden(silent, 'scene'), false, 'an unknown mode counts as \'area\' (the scene shows)')
+    Config.Markers.radioSilence = 'area'
+
+    -- CP.Markers itself under 'area': of several points only this officer's nearest, switching at 25 % closer
+    local doors = { { 0.0, 500.0 }, { 0.0, 200.0 }, { 0.0, 900.0 } }
+    local targets = {}
+    for n, d in ipairs(doors) do
+        targets[n] = { key = n, x = d[1], y = d[2], z = 30.0, look = 'point', number = n, label = 'Shop ' .. n }
+    end
+    M.set('run-m8', 1, { kind = 'targets', targets = targets }, silent)
+    H.ok(#Live() == 1 and B(Live()[1]).number == 2 and #Routed() == 0, '\'area\': only the nearest door (2), no line')
+    world.me = vec3(0.0, 360.0, 30.0) -- door 1 at 140 m, door 2 at 160 m: not 25 % closer
+    Tick()
+    H.ok(#Live() == 1 and B(Live()[1]).number == 2, '\'area\': no flicker between two doors about as near')
+    world.me = vec3(0.0, 850.0, 30.0) -- door 3 at 50 m
+    Tick()
+    H.ok(#Live() == 1 and B(Live()[1]).number == 3, '\'area\': the nearest door again once it is clearly nearer')
+    H.ok(NoRemovedRoute(), '\'area\': never a line')
+    Config.Markers.radioSilence = 'full'
+    Tick()
+    H.ok(#Live() == 3 and #Routed() == 1, '\'full\': every door, the line on the nearest')
+    M.clear()
+end
+
+-- the blocks per mode: interact_points (Business Check), skill_check (Bomb Disposal), checkpoint_route (Beat Patrol)
+do
+    local IPc, SCc, CRc =
+        CP.Blocks.get('interact_points'), CP.Blocks.get('skill_check'), CP.Blocks.get('checkpoint_route')
+    local function Ctx(runId)
+        return {
+            runId = runId,
+            index = 1,
+            obj = { label = 'Check the doors', checks = { 'easy' }, radius = 10.0, progress = { duration = 5000 } },
+            state = {},
+            report = function() end,
+            hudDetail = function() end,
+            radioSilence = true,
+        }
+    end
+    local ys = { 500.0, 200.0, 900.0 }
+    local function DoorSnap()
+        local pts = {}
+        for n, y in ipairs(ys) do
+            pts[n] = { coords = { x = 0.0, y = y, z = 30.0 }, label = 'Shop ' .. n, status = 'pending' }
+        end
+        return { kind = 'state', points = pts, total = #pts, done = 0 }
+    end
+    local function DevSnap()
+        local t = {}
+        for i, y in ipairs(ys) do
+            t[i] = { coords = { x = 0.0, y = y, z = 30.0 }, netId = 900 + i, status = 'armed', next = 1, streak = 0 }
+        end
+        return { kind = 'state', checks = 1, targets = t }
+    end
+    local function Pointer(prefix, look)
+        local t = {}
+        for n, y in ipairs(ys) do
+            t[n] = { key = prefix .. n, x = 0.0, y = y, z = 30.0, look = look, number = n, label = look .. ' ' .. n }
+        end
+        return { kind = 'targets', targets = t }
+    end
+    local function CrSnap()
+        local pts = {}
+        for i, y in ipairs(ys) do pts[i] = { x = 0.0, y = y, z = 30.0 } end
+        return { kind = 'state', points = pts, current = 1, total = #pts, finished = false, track = {}, course = {} }
+    end
+    local crPointer = {
+        kind = 'point',
+        key = 'cp1',
+        number = 1,
+        look = 'checkpoint',
+        coords = { x = 0.0, y = 500.0, z = 30.0 },
+        label = 'Checkpoint 1',
+        route = 'block',
+    }
+
+    for _, mode in ipairs({ 'area', 'full', 'none' }) do
+        -- doors: the block's own blips first (no pointer yet), then the server's pointer
+        Reset()
+        Config.Markers.radioSilence = mode
+        local ctx = Ctx('run-m8ip-' .. mode)
+        IPc.start(ctx)
+        M.set(ctx.runId, 1, nil, ctx)
+        IPc.update(ctx, DoorSnap())
+        local own = #Live()
+        M.update(ctx.runId, 1, Pointer('', 'point'), ctx)
+        Tick()
+        if mode == 'area' then
+            H.ok(own == 0 and #Live() == 1 and B(Live()[1]).number == 2 and #Routed() == 0,
+                'ip \'area\': no door blips of the block, CP.Markers\' nearest door alone, no line')
+        elseif mode == 'full' then
+            H.ok(own == 3 and #Live() == 3 and #Routed() == 1,
+                'ip \'full\': the block\'s three door blips (none before M8), the line on the nearest')
+        else
+            H.ok(own == 0 and #Live() == 0, 'ip \'none\': nothing')
+        end
+        M.clear()
+        IPc.stop(ctx)
+
+        -- devices
+        Reset()
+        Config.Markers.radioSilence = mode
+        ctx = Ctx('run-m8sc-' .. mode)
+        SCc.prepare(ctx)
+        SCc.start(ctx)
+        M.set(ctx.runId, 1, nil, ctx)
+        SCc.update(ctx, DevSnap())
+        own = #Live()
+        M.update(ctx.runId, 1, Pointer('d', 'device'), ctx)
+        Tick()
+        if mode == 'area' then
+            H.ok(own == 0 and #Live() == 1 and B(Live()[1]).number == 2 and #Routed() == 0,
+                'sc \'area\': no device blips of the block, the nearest device alone, no line')
+        elseif mode == 'full' then
+            H.ok(own == 3 and #Live() == 3 and #Routed() == 1,
+                'sc \'full\': the block\'s three device blips (none before M8), the line on the nearest')
+        else
+            H.ok(own == 0 and #Live() == 0, 'sc \'none\': nothing')
+        end
+        M.clear()
+        SCc.stop(ctx)
+
+        -- checkpoints: the current one (and the next) are the block's, with its own line
+        Reset()
+        Config.Markers.radioSilence = mode
+        ctx = Ctx('run-m8cr-' .. mode)
+        CRc.prepare(ctx)
+        CRc.start(ctx)
+        M.set(ctx.runId, 1, crPointer, ctx)
+        CRc.update(ctx, CrSnap())
+        Tick(2)
+        if mode == 'area' then
+            H.ok(#Live() == 1 and B(Live()[1]).number == 1 and #Routed() == 0,
+                'cr \'area\': the current checkpoint alone, no line')
+        elseif mode == 'full' then
+            H.ok(#Live() == 2 and ByNumber(1) and ByNumber(2) and #Routed() == 1 and B(ByNumber(1)).route,
+                'cr \'full\': the current and the next checkpoint, the block\'s line on the current')
+        else
+            H.eq(#Live(), 0, 'cr \'none\': nothing')
+        end
+        M.clear()
+        CRc.stop(ctx)
+        H.ok(NoRemovedRoute(), mode .. ': every line off before its blip went')
+    end
+    Reset()
+end
+
+-- ============================================================================
 -- M7: DETAIL BLIPS (a set-back device keeps a flashing blip; service vehicles on every officer's map)
 -- ============================================================================
 -- The game's flash: SET_BLIP_FLASH_TIMER ends a flash after ms; SetBlipFlashes starts or stops one (a flash started

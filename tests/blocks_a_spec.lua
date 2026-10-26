@@ -1017,8 +1017,16 @@ do
     local fu
     for _, t in ipairs(IP.marker(ctx).targets) do if t.key == openN then fu = t end end
     H.ok(fu ~= nil and fu.variant == 'followUp', 'ip marker: an open door waiting to be secured is a follow-up')
+    -- PLAN M8: the same pointer under Radio Silence; each officer's CP.Markers hides by Config.Markers.radioSilence
+    -- (it was false: Radio Silence 'area' then showed the anchor, not the officer's nearest door)
+    local loud = IP.marker(ctx)
     ctx.radioSilence = true
-    H.eq(IP.marker(ctx), false, 'ip marker: none under Radio Silence (the client half draws no blips then)')
+    local hushed = IP.marker(ctx)
+    H.ok(
+        type(hushed) == 'table' and hushed.kind == loud.kind and #hushed.targets == #loud.targets
+            and hushed.targets[1].key == loud.targets[1].key,
+        'ip marker: the same under Radio Silence (M8)'
+    )
     ctx.radioSilence = nil
     H.eq(LastSend(ctx).points[openN].followUp.label, 'Secure door', 'follow-up label sent')
     H.eq(LastSend(ctx).points[openN].outcomeLabel, 'The door was found open', 'open result shown')
@@ -1896,8 +1904,12 @@ do -- skill_check onFail = setback: recovery, personal penalty, retry; never a f
     H.ok(type(sl) == 'table' and sl.key == 'block.skill_check.target_default', 'sc marker: a locale key as a token')
     ctx.obj.target = nil
     ctx.state.targets[1].status = 'setback'
+    local loudSc = SC.marker(ctx)
     ctx.radioSilence = true
-    H.eq(SC.marker(ctx), false, 'sc marker: none under Radio Silence (the client half draws no blips then)')
+    local hushedSc = SC.marker(ctx)
+    H.ok(
+        type(hushedSc) == 'table' and #hushedSc.targets == #loudSc.targets and hushedSc.targets[1].variant == 'setback',
+        'sc marker: the same under Radio Silence (M8)')
     ctx.radioSilence = nil
     H.eq(#ctx.calls.fail, 0, 'sc setback: never a fail')
     H.eq(ctx.penalties[1] and ctx.penalties[1].id, 'lab_fire', 'sc setback: the penalty id')
@@ -2149,15 +2161,23 @@ do
     local before = #cctx.reports
     Steps(20)
     H.eq(#cctx.reports, before, 'the loop ended with stop')
-    -- radio silence: no blips, the street name instead
+    -- radio silence ('area', shipped): the current checkpoint alone, no line, the street name in the HUD; 'none'
+    -- (PLAN M8, Config.Markers.radioSilence): no blips
     local rctx = ClientCtx(CP.U.deepcopy(sobj), { radioSilence = true })
     CRc.update(rctx, LastSend(sctx))
     CRc.start(rctx)
-    H.eq(OpenBlips(), 0, 'radio silence: no blips')
+    H.eq(OpenBlips(), 1, 'radio silence \'area\': the current checkpoint alone')
+    Config.Markers.radioSilence = 'none'
+    CRc.stop(rctx)
+    rctx = ClientCtx(CP.U.deepcopy(sobj), { radioSilence = true })
+    CRc.update(rctx, LastSend(sctx))
+    CRc.start(rctx)
+    H.eq(OpenBlips(), 0, 'radio silence \'none\': no blips')
     H.players[1].coords = vec3(2000.0, 0.0, 30.0)
     Steps(12)
     H.ok(tostring(LastLine(rctx)):find('Vespucci', 1, true) ~= nil,
         'radio silence shows the street: ' .. tostring(LastLine(rctx)))
+    Config.Markers.radioSilence = 'area'
     TriggerEvent('onResourceStop', 'Crimson-Police')
     H.eq(rctx.lines[#rctx.lines], false, 'resource stop cleans up')
 

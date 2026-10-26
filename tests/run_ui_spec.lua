@@ -194,6 +194,11 @@ Hasnt(board, 'getMissionDefs', 'board never loads mission definitions')
 Hasnt(board, 'getMissionList', 'board never lists missions')
 
 Has(active, 'useRequest<ActiveMissionData | null>(\'getRun\'', 'active requests getRun')
+-- PLAN M8: the Radio Silence notice names what Config.Markers.radioSilence hides
+Has(active, '{silenceText(view.silenceMode)}', 'the Radio Silence notice follows the mode')
+Has(active, 'if (mode === \'none\') return t(\'run.silence.text_none\');', 'notice text for \'none\'')
+Has(active, 'if (mode === \'full\') return t(\'run.silence.text_full\');', 'notice text for \'full\'')
+Has(active, 'return t(\'run.silence.text_area\');', 'notice text for \'area\' (and a missing mode)')
 Hasnt(active, 'pushTopic: \'run\'', 'active applies pushed views (no extra getRun per push)')
 Has(active, 'usePush<ActiveMissionData | null | undefined>(\'run\'', 'active listens to push run')
 Has(active,

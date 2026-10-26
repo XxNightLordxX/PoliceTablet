@@ -14,6 +14,7 @@ local DEFAULT_LOOK = { sprite = 162, colour = 5, scale = 0.9 } -- kinds.objectiv
 local KINDS = { point = true, area = true, targets = true }
 local MODES = { none = true, area = true, full = true }
 -- What Radio Silence 'area' still shows: circles and single points, never a GPS line or a person's or car's blip.
+-- point and device are shown only by CP.Markers, one per objective (NEAREST_ONLY); a block draws neither then.
 local SILENT_SHOWS = {
     start = true,
     checkpoint = true,
@@ -28,12 +29,17 @@ local SILENT_SHOWS = {
     prisonerVan = true,
     towTruck = true,
 }
+-- Kinds an objective has several of (Business Check's doors, Bomb Disposal's devices): under Radio Silence 'area' the
+-- block draws none of its own, and CP.Markers shows only this officer's nearest from the server's pointer (BLIPS_FINAL
+-- section 3: "only the nearest pending point").
+local NEAREST_ONLY = { point = true, device = true }
 -- What every mode shows: the drive to the start and the service vehicles coming to the officer.
 local ALWAYS_SHOWN = { start = true, prisonerVan = true, towTruck = true }
 local SERVICE_LABELS = { prisonerVan = 'markers.prisoner_van', towTruck = 'markers.tow_truck' }
 local FIELDS = { 'adoptKey', 'look', 'variant', 'label', 'number', 'coords', 'radius', 'netId', 'moving', 'beyond' }
 
-local cur = nil         -- { runId, index, ctx, routeMode = 'on'|'off'|'block', elements = { [id] = el }, order }
+local cur = nil         -- { runId, index, ctx, routeMode = 'on'|'off'|'block', elements = { [id] = el }, order,
+                        --   single (Radio Silence 'area': the id of the one point shown) }
 local adopted = {}      -- [key] = a block's own blip it handed over (M.adopt)
 local services = {}     -- [key] = el: a prisoner van or tow truck (M.service)
 local routeBlip = nil   -- the only blip with SetBlipRoute(true)
@@ -124,6 +130,20 @@ local function Mode()
     local m = Cfg().radioSilence
     return MODES[m] and m or 'area'
 end
+
+-- Radio Silence hides kind for ctx's run (BLIPS_FINAL R9). block: asked for a block's own blip, which under 'area'
+-- also hides a NEAREST_ONLY kind (CP.Markers shows the nearest itself) and the 'next' variant (a second checkpoint).
+local function Hides(ctx, kind, variant, block)
+    if not Silent(ctx) or ALWAYS_SHOWN[kind] then return false end
+    local mode = Mode()
+    if mode == 'full' then return false end
+    if mode == 'none' then return true end
+    if kind == 'route' or variant == 'next' then return true end
+    if block and NEAREST_ONLY[kind] then return true end
+    return not SILENT_SHOWS[kind]
+end
+
+local function SilentArea() return Silent() and Mode() == 'area' end
 
 -- True when a blip of this variant flashes for as long as it has it: a device set back (Config.Markers.setbackFlash).
 local function SetbackFlash(variant) return variant == 'setback' and Cfg().setbackFlash ~= false end
@@ -269,12 +289,14 @@ local function Place(el)
     else
         -- Radio Silence 'area' puts no blip on a person or a car: a target followed by its net id is hidden whatever
         -- its look (a target without one gets 'objective'), so it shows only the optional last-known circle
-        hide = cfg.enabled == false or M.hidden(cur and cur.ctx, el.look)
-            or (el.netId ~= nil and not ALWAYS_SHOWN[el.look] and Silent() and Mode() == 'area')
+        hide = cfg.enabled == false or Hides(cur and cur.ctx, el.look, el.variant, false)
+            or (el.netId ~= nil and not ALWAYS_SHOWN[el.look] and SilentArea())
     end
-    local lastKnown = not el.service and el.moving and hide and cfg.enabled ~= false and Silent() and Mode() == 'area'
+    local lastKnown = not el.service and el.moving and hide and cfg.enabled ~= false and SilentArea()
         and Seconds('radioSilenceLastKnown', 0) > 0
     LastKnown(el, lastKnown)
+    -- Radio Silence 'area': an objective with several points shows only the nearest (PickSingle)
+    if not hide and not el.service and cur and cur.single and cur.single ~= el.id then hide = true end
     if hide then
         DropOwn(el)
         DropCircle(el)
@@ -360,8 +382,27 @@ local function PickRoute()
     RouteOn(best.shown)
 end
 
+-- Radio Silence 'area' shows one point per objective: of the points still shown (no net id, a kind 'area' keeps), the
+-- id of this officer's nearest, which changes only when another one is 25 % closer; nil when there is one or none.
+local function PickSingle()
+    if not SilentArea() or #cur.order < 2 then return nil end
+    local me = MyPos()
+    local best, bestD, heldD = nil, nil, nil
+    for _, id in ipairs(cur.order) do
+        local el = cur.elements[id]
+        if el and el.coords and el.netId == nil and not Hides(cur.ctx, el.look, el.variant, false) then
+            local d = CP.U.dist2d(me, el.coords)
+            if id == cur.single then heldD = d end
+            if not bestD or d < bestD then best, bestD = id, d end
+        end
+    end
+    if heldD and best ~= cur.single and bestD >= heldD * SWITCH_SHARE then return cur.single end
+    return best
+end
+
 local function Tick()
     if cur then
+        cur.single = PickSingle()
         for _, id in ipairs(cur.order) do Place(cur.elements[id]) end
         PickRoute()
     end
@@ -582,16 +623,13 @@ function M.service(key, spec)
     return true
 end
 
--- True when Radio Silence hides kind (a Config.Markers.kinds key, or 'route' for a GPS line) for ctx's run (the
--- current pointer's when ctx is nil): 'none' hides everything but the start and service vehicles, 'area' keeps
--- circles and single points without a line, 'full' hides nothing (Config.Markers.radioSilence, BLIPS_FINAL R9).
-function M.hidden(ctx, kind)
-    if not Silent(ctx) or ALWAYS_SHOWN[kind] then return false end
-    local mode = Mode()
-    if mode == 'full' then return false end
-    if mode == 'area' then return kind == 'route' or not SILENT_SHOWS[kind] end
-    return true
-end
+-- True when Radio Silence hides a block's own blip of kind (a Config.Markers.kinds key, or 'route' for a GPS line)
+-- for ctx's run (the current pointer's when ctx is nil); every block asks this before it draws a blip or a line.
+-- 'none' hides everything but the start and service vehicles; 'area' keeps the objective's circle or its one point
+-- without a line: no blips on people or cars, no second checkpoint (variant 'next'), and no points or devices of the
+-- block's own (CP.Markers shows the nearest one itself); 'full' hides nothing (Config.Markers.radioSilence, BLIPS_FINAL
+-- R9).
+function M.hidden(ctx, kind, variant) return Hides(ctx, kind, variant, true) end
 
 -- May a Crimson-Police GPS line show now? Not while the drive to the start is on (CP.Route samples the start's line
 -- from the blip route first), not while the officer has a waypoint of his own, not under Radio Silence, not when

@@ -2475,6 +2475,10 @@ end
 
 -- the objective pointer the client halves hand their blips to (it is loaded before the blocks in the game too)
 H.load('modules/markers/client.lua')
+-- ClientCtx's Radio Silence stands for "no blips" in the AI checks below (most run before the blip natives exist):
+-- Config.Markers.radioSilence 'none', which hides every objective blip; the M8 modes have their own checks
+local shippedSilence = Config.Markers.radioSilence
+Config.Markers.radioSilence = 'none'
 H.load('blocks/pursuit/client.lua')
 H.load('blocks/escort/client.lua')
 H.load('blocks/search_area/client.lua')
@@ -3748,6 +3752,70 @@ do -- escort client: its truck and destination blips are the pointer; each offic
     H.step(500)
     H.eq(LiveBlips() - base, 0, 'escort client: nothing left on the map')
     H.eq(BL.removedRouted, removedRouted, 'escort client: every line went off before its blip')
+end
+
+do -- escort client under Radio Silence (PLAN M8, Config.Markers.radioSilence): 'area' (shipped) keeps the destination
+    -- alone without a line (no blip on the truck or an attacker), 'full' shows everything with the line, 'none' nothing
+    H.clockMs = 31800000
+    local M = CP.Markers
+    local me = PlayerPedId()
+    local truck, truckNet = NewEnt('vehicle', vec3(423.1, 2689.0, 41.0))
+    local attacker, attackerNet = NewEnt('ped', vec3(430.0, 2700.0, 41.0))
+    ents[me].coords = vec3(423.1, 2900.0, 41.0)
+    local pointer = {
+        kind = 'targets',
+        targets = {
+            {
+                key = tostring(truckNet),
+                netId = truckNet,
+                x = 423.1,
+                y = 2689.0,
+                z = 41.0,
+                look = 'escort',
+                beyond = 100.0,
+            },
+            { key = 'dest', x = 1174.34, y = 2690.21, z = 37.39, look = 'destination' },
+        },
+    }
+    local snap = {
+        kind = 'state',
+        truck = { netId = truckNet, wp = 2, gen = 1, toughened = true, health = 100, stoppedFor = 0, stoppedFail = 60 },
+        waves = {},
+        attackers = { attackerNet },
+        completed = false,
+    }
+    local function Run(mode, tag)
+        Config.Markers.radioSilence = mode
+        local base = LiveBlips()
+        local cctx = ClientCtx('run-cl-m8-esc-' .. tag, ES.defaults({ block = 'escort' }), escLoc)
+        cctx.isHost = false
+        EC.prepare(cctx)
+        EC.start(cctx)
+        M.set(cctx.runId, 1, pointer, cctx)
+        EC.update(cctx, snap)
+        H.step(1500)
+        local out = {
+            n = LiveBlips() - base,
+            truck = BlipOf(function(p) return p.ent == truck end) ~= nil,
+            attacker = BlipOf(function(p) return p.ent == attacker end) ~= nil,
+            dest = BlipOf(function(p) return p.ent == nil and p.sprite == 38 end) ~= nil,
+            routed = #RoutedBlips(),
+        }
+        M.clear(cctx.runId, 1)
+        EC.stop(cctx)
+        H.step(500)
+        H.eq(LiveBlips() - base, 0, 'escort Radio Silence ' .. mode .. ': nothing left after the stop')
+        return out
+    end
+    local area = Run(shippedSilence, 'area')
+    H.ok(area.n == 1 and area.dest and not area.truck and not area.attacker and area.routed == 0,
+        'escort Radio Silence \'area\': the destination alone, no line')
+    local full = Run('full', 'full')
+    H.ok(full.n == 3 and full.dest and full.truck and full.attacker and full.routed == 1,
+        'escort Radio Silence \'full\': truck, attacker and destination, with the line')
+    local none = Run('none', 'none')
+    H.eq(none.n, 0, 'escort Radio Silence \'none\': nothing')
+    Config.Markers.radioSilence = 'none'
 end
 
 do -- pursuit client: the car's blip is the pointer; far away CP.Markers shows the same look; an unpassed violator

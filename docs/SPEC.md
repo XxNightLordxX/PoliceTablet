@@ -1092,7 +1092,7 @@ Three events rotate on top of the normal missions to keep the board fresh.
 | Event | How it works | Limits |
 |---|---|---|
 | Type of the Day | One mission type, picked at the daily reset (Config.Time.resetHour, server time) with a random seed made from the date, so a restart keeps the same type, earns double points (applied after the 2× points cap) | Points only; cash is not doubled |
-| Modifiers | 25% of runs roll one modifier: Armored Hostiles (Tactical only: +50 armour on armed NPCs), Time Crunch (time limit cut by 25%) or Radio Silence (after the start, no blips for mission NPCs or objectives, and the Active Mission screen shows only street and zone names; the start route still shows) | +25% of P and × 1.25 cash; one modifier per run; never on Cross-Department Missions |
+| Modifiers | 25% of runs roll one modifier: Armored Hostiles (Tactical only: +50 armour on armed NPCs), Time Crunch (time limit cut by 25%) or Radio Silence (after the start the map shows what Config.Markers.radioSilence keeps: 'area' (shipped) each objective's circle or its one point (of several points or devices only the officer's nearest) without a GPS line and without blips on people or cars, 'none' no blips for mission NPCs or objectives, 'full' everything; the Active Mission screen shows only street and zone names and says which of the three applies; the start route, the prisoner van and the tow truck still show) | +25% of P and × 1.25 cash; one modifier per run; never on Cross-Department Missions |
 | Weekly Boss | The Kingpin mission (see Mission cards) on its own Mission Board card, Friday–Sunday | Once per officer per week; hidden while a Cross-Department Mission is active; cannot be launched as one |
 
 ## Mission lifecycle
@@ -3144,8 +3144,10 @@ Config.Markers = {
     areaAlpha = 80,              -- how solid the map circles are: 0 = invisible, 255 = solid
     startBlip = true,            -- true = the named Mission start blip stays on the map for the whole drive
     startCircleMin = 200.0,      -- metres: a mission start at least this wide shows as a circle on the map (Manhunt)
-    -- What Radio Silence hides once the officers are at the start: 'area' = a circle or the one objective blip stays,
-    -- without a GPS line and without blips on people and cars; 'none' = every objective blip; 'full' = nothing
+    -- What Radio Silence hides once the officers are at the start: 'area' = each objective's circle or its one blip
+    -- stays (of several doors or devices only your nearest), without a GPS line and without blips on people and cars;
+    -- 'none' = every objective blip; 'full' = nothing. The drive to the start, the prisoner van and the tow truck
+    -- always show
     radioSilence = 'area',
     -- seconds: with 'area', a 200 m circle shows where a moving suspect or car was, moved this often (0 = off)
     radioSilenceLastKnown = 0,

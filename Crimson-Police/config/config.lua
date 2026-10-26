@@ -489,8 +489,10 @@ Config.Markers = {
     areaAlpha = 80,              -- how solid the map circles are: 0 = invisible, 255 = solid
     startBlip = true,            -- true = the named Mission start blip stays on the map for the whole drive
     startCircleMin = 200.0,      -- metres: a mission start at least this wide shows as a circle on the map (Manhunt)
-    -- What Radio Silence hides once the officers are at the start: 'area' = a circle or the one objective blip stays,
-    -- without a GPS line and without blips on people and cars; 'none' = every objective blip; 'full' = nothing
+    -- What Radio Silence hides once the officers are at the start: 'area' = each objective's circle or its one blip
+    -- stays (of several doors or devices only your nearest), without a GPS line and without blips on people and cars;
+    -- 'none' = every objective blip; 'full' = nothing. The drive to the start, the prisoner van and the tow truck
+    -- always show
     radioSilence = 'area',
     -- seconds: with 'area', a 200 m circle shows where a moving suspect or car was, moved this often (0 = off)
     radioSilenceLastKnown = 0,

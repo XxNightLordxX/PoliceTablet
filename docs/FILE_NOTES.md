@@ -17,7 +17,8 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
     Everything the server decides arrives as a full snapshot through update(); the HUD line is
     composed here with ctx.hudDetail (the running course clock in whole seconds, so the line changes
     at most once a second; "the timer starts at checkpoint 1" while the server holds the run timer).
-    Radio Silence: no blips, the HUD names the next street instead.
+    Radio Silence: blips by Config.Markers.radioSilence ('area': the current checkpoint alone, no line),
+    and the HUD names the next street.
     No networked entities are created here; this block has no NPCs (hostChanged only records the flag).
     The block's client state is kept per run and objective in this file (stateOf), so it also works
     when the engine hands every hook a fresh ctx.state table.
@@ -109,7 +110,8 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
  blocks/escort/client.lua · objective block "escort" (client half)
 
   What it does (while the objective is current on this participant's client)
-    - blips for the escorted truck, the destination and living attackers (none with Radio Silence);
+    - blips for the escorted truck, the destination and living attackers (Radio Silence 'area': the
+      destination alone);
       the arrival marker at the destination (DrawMarker only within MARKER_RANGE, otherwise Wait(750));
     - a HUD line (ctx.hudDetail): truck health, stop wait, stopped countdown, attackers alive, and at the
       destination how many attackers are still within clearRadius (or, with none that close, how many are
@@ -220,13 +222,13 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
     - door mode: ox_target sphere zone "Knock and announce" on the door (option crimson-police:knock),
       selecting it reports 'knock_start', runs lib.progressBar(knock.duration) and reports 'knock';
       a marker over the door (DrawMarker only within MARKER_RANGE, otherwise Wait(750)) and a door
-      blip until the knock (no blip with Radio Silence); all three come back when a test restart
+      blip until the knock (Radio Silence 'none': no blip); all three come back when a test restart
       sends knocked = false again (restart sends no stop or start);
     - every participant checks the suspects near them: 'aim' when IsPlayerFreeAimingAtEntity (or
       lock-on IsPlayerTargettingEntity) on an unarmed fleeing suspect within givesUp.aim, 'stunned'
       when IsPedBeingStunned (throttled per
       suspect); the server re-checks both with server-side distances;
-    - suspect blips (after the knock in door mode; none with Radio Silence);
+    - suspect blips (after the knock in door mode; none with Radio Silence 'area' or 'none');
     - HUD lines (ctx.hudDetail): the escape countdown from the server, or "stay close" while this
       player is within givesUp.close.distance of an unarmed fleeing suspect;
     - on the run host only: CP.Npc.apply once it has control of each suspect, then the task for its
@@ -355,7 +357,7 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
       scene", "NPC traffic is blocked within 120 m while the run is active") and restored as soon as
       CP.Runs.current() is no longer that run (run end, silent removal) or on resource stop. A later
       hostile_waves objective with the same area takes the held block over instead of adding a second;
-    - red entity blips on hostiles that are not neutralised (none with Radio Silence);
+    - red entity blips on hostiles that are not neutralised (none with Radio Silence 'area' or 'none');
     - a HUD line (ctx.hudDetail) when a surrendered hostile is close enough to cuff;
     - on the run host only: CP.Npc.apply + the task for the current cp state once the host has control
       of each hostile (again after hostChanged; retried until CP.Npc took both), and one 'low_health'
@@ -493,7 +495,8 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
     reports the result. Shows the rolled outcome ("Door is secure" / "Door found open") and the
     follow-up hint, the tablet-log hint, and hidden-device search results on the HUD line
     (ctx.hudDetail). Small markers within 40 m; blips per point (hidden search: one area blip);
-    no blips under Radio Silence. Only participants' clients register targets. No networked entities
+    under Radio Silence 'area' only the hidden search's area blip (CP.Markers shows the nearest point),
+    none under 'none'. Only participants' clients register targets. No networked entities
     are created here and there are no NPCs (hostChanged only records the flag).
     The block's client state is kept per run and objective in this file (stateOf), so it also works
     when the engine hands every hook a fresh ctx.state table.
@@ -582,7 +585,7 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
       on every restrained hostage, re-attached when the entity handle changes, removed in stop;
       selecting it reports 'free_start', runs lib.progressBar(freeTime) and reports 'freed';
     - the safe marker (DrawMarker only within MARKER_RANGE, otherwise Wait(750)) and blips for the
-      hostages and the safe point (none with Radio Silence);
+      hostages and the safe point (Radio Silence 'area': the safe point alone);
     - a HUD line (ctx.hudDetail) while freed hostages are walking to the safe point.
 
   Objective fields read: freeTime, target.label / icon / distance, safe, safeRadius (ctx.obj);
@@ -670,7 +673,8 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
       suspect on foot for AIM_HOLD_MS (AIM_STOPPED by the car, flee_arrest.aimDistance when running);
       'stunned' when IsPedBeingStunned; follow mode: 'undriveable' when the car they drive is no
       longer driveable. The server re-checks every report with its own coordinates.
-    - blips for suspect vehicles ("Racer" on a race loop) and suspects on foot (none with Radio Silence)
+    - blips for suspect vehicles ("Racer" on a race loop) and suspects on foot (none with Radio Silence
+      'area' or 'none')
       and a HUD line (ctx.hudDetail): follow progress / lost countdown, escape countdown, lights hint,
       stop progress with the distance to the nearest live car this client streams, detain progress
       (also before every car is stopped, while a surrendered suspect is within WATCH_RANGE), aim hint.
@@ -839,7 +843,8 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
 
   What it does (while the objective is current on this participant's client)
     - the search circle as a radius blip with a centre blip, redrawn whenever the server shrinks it;
-      blips for clues not yet checked and for fugitives on the run (none of these with Radio Silence);
+      blips for clues not yet checked and for fugitives on the run (Radio Silence 'area': the circle
+      alone);
     - an ox_target sphere zone on every clue not yet checked (option crimson-police:check_clue, label by
       clue kind; offered only once the clue is there, its netId in the update: clues appear when an
       officer is near, Config.Spawning); selecting it reports 'clue_start', runs
@@ -949,7 +954,8 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
     a miss stops the sequence (select the target again to retry the same round). When the server
     says a target went off, the client of the participant it names plays the explosion effect
     (AddExplosion with damage scale 0: effect only, hurts nobody). Blips per armed target (none under
-    Radio Silence), a small marker within 30 m, and the HUD line via ctx.hudDetail. No networked
+    Radio Silence 'area' or 'none': CP.Markers shows the nearest under 'area'), a small marker within 30 m,
+    and the HUD line via ctx.hudDetail. No networked
     entities are created here and there are no NPCs (hostChanged only records the flag).
     The block's client state is kept per run and objective in this file (stateOf), so it also works
     when the engine hands every hook a fresh ctx.state table.

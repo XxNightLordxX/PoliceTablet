@@ -609,10 +609,11 @@ CP.Blocks.register(BLOCK, {
     -- back, or waiting to be tried again), numbered, each keyed 'd<n>' so the client hands its own blip over (one icon
     -- per device) and every officer's GPS line goes to his nearest; a set-back one in its setback colour. Each is named
     -- as the client half names its blip (PLAN M7): the mission's target name, else "Device <n>"; set back, the
-    -- recovery step and the number. Nothing under Radio Silence: the client half draws no blips then.
+    -- recovery step and the number. The same under Radio Silence: each officer's CP.Markers hides by
+    -- Config.Markers.radioSilence ('area': only his nearest device, without a line; 'none': nothing).
     marker = function(ctx)
         local st = Ensure(ctx)
-        if ctx.radioSilence or st.completed or st.failed then return false end
+        if st.completed or st.failed then return false end
         local targets = {}
         local tl = type(ctx.obj.target) == 'table' and ctx.obj.target.label or nil
         if type(tl) ~= 'string' or tl == '' then

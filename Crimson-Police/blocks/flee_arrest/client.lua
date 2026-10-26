@@ -189,7 +189,7 @@ local function AddDoor(S)
             },
         },
     })
-    if not ctx.radioSilence then
+    if not CP.Markers.hidden(ctx, 'objective') then
         local id = AddBlipForCoord(door.x, door.y, door.z)
         SetBlipSprite(id, 40)
         SetBlipColour(id, 5)
@@ -290,7 +290,7 @@ local function Loop(S)
                 local gu = obj.givesUp or {}
                 local me = PlayerPedId()
                 local myPos = GetEntityCoords(me)
-                local showBlips = not ctx.radioSilence and (obj.mode ~= 'door' or S.knocked)
+                local showBlips = obj.mode ~= 'door' or S.knocked
                 local close = false
                 for _, info in ipairs(S.peds) do
                     local ent = PedFor(info.netId)
@@ -333,7 +333,8 @@ local function Loop(S)
                         then
                             ReportOnce(S, 'aim', info.netId)
                         end
-                        if showBlips and state ~= 'dead' and state ~= 'cuffed' then
+                        if showBlips and state ~= 'dead' and state ~= 'cuffed'
+                            and not CP.Markers.hidden(ctx, state == 'fleeing' and 'fleeing' or 'suspect') then
                             EnsureBlip(S, info.netId, ent, state)
                         else
                             DropBlip(S, info.netId)

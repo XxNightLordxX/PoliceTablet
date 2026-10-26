@@ -96,7 +96,7 @@ local function DrawCircle(S)
     local c = S.data.circle
     local was = { S.blips.circle, S.blips.center }
     S.blips.circle, S.blips.center, S.circleKey = nil, nil, nil
-    if c and not S.ctx.radioSilence then
+    if c and not CP.Markers.hidden(S.ctx, 'searchArea') then
         local area = AddBlipForRadius(c.x + 0.0, c.y + 0.0, c.z + 0.0, c.r + 0.0)
         CP.Markers.styleArea(area, 'searchArea')
         S.blips.circle = { id = area }
@@ -205,7 +205,11 @@ local function SyncClues(S)
     for i, cl in pairs(S.clues) do
         if cl.status == 'pending' and S.current then
             EnsureZone(S, cl)
-            if not S.ctx.radioSilence then EnsureClueBlip(S, cl) end
+            if CP.Markers.hidden(S.ctx, 'clue') then
+                DropBlip(S, 'c' .. i)
+            else
+                EnsureClueBlip(S, cl)
+            end
         else
             DropZone(S, i)
             DropBlip(S, 'c' .. i)
@@ -336,7 +340,9 @@ local function Loop(S)
                 local close = false
                 local c = S.data.circle
                 local key = c and ('%d:%d'):format(c.n or 0, math.floor(c.r)) or nil
-                if key ~= S.circleKey and not ctx.radioSilence then DrawCircle(S) end
+                -- a new circle, or one Radio Silence now hides (Config.Markers.radioSilence changed in Settings)
+                local hideArea = CP.Markers.hidden(ctx, 'searchArea')
+                if (key ~= S.circleKey and not hideArea) or (hideArea and S.circleKey) then DrawCircle(S) end
                 SyncClues(S)
                 if host then
                     for _, cl in pairs(S.clues) do
@@ -365,7 +371,8 @@ local function Loop(S)
                                 close = true
                             end
                         end
-                        if not ctx.radioSilence and (state == 'fleeing' or state == 'surrendered') then
+                        if (state == 'fleeing' or state == 'surrendered')
+                            and not CP.Markers.hidden(ctx, state == 'fleeing' and 'fleeing' or 'suspect') then
                             EnsureFugitiveBlip(S, f.netId, ent, state)
                         else
                             DropBlip(S, k)
