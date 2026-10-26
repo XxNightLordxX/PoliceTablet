@@ -3007,6 +3007,10 @@ Config.Limits = {
     -- player once one request is refused 3 times its limit in a minute; 'kick' = that warning, and the player is
     -- dropped from the server
     netRateResponse = 'block',
+    -- Bytes a second for the big Admin UI downloads (Audit and Payments → Export, up to 5000 rows): they come in the
+    -- background, so the rest of the tablet keeps answering while one loads (below 100000 counts as 100000; 0 = send
+    -- each one in one go, as before)
+    exportBps = 200000,
 }
 
 -- ── Spawning (where mission people appear) ──────────────────────────────────

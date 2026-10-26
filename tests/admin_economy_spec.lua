@@ -413,7 +413,12 @@ do
     end
     H.ok(sast and sast.paid == 800 and sast.share == 100 and fib and fib.unfunded == 1, 'totals per department')
 
-    local x = Cb('admin:exportPayments', 1, { department = 'fib' })
+    -- the tablet sends a reply id: the export comes as a latent actionResult (shared/net.lua)
+    H.clockMs = H.clockMs + 1100
+    local reply, sent = H.callbackLatent('crimson-police:admin:exportPayments', 1, { department = 'fib' }, 'r1')
+    H.ok(reply and reply.ok and reply.latent == 'r1' and reply.data == nil and #sent == 1 and sent[1].args[1] == 'r1',
+        'the export comes as a latent reply')
+    local x = sent[1] and sent[1].args[3]
     H.ok(x and x.rows == 4 and not x.truncated, 'CSV export')
     H.ok(x.csv:find('\'=HYPERLINK(""x"")', 1, true) ~= nil, 'a cell starting with = is neutralised and quoted')
     H.ok(LastAudit('paymentsExport') ~= nil, 'the export is audited')

@@ -3687,9 +3687,17 @@ rate limiting, error handling and a uniform reply shape { ok, data, error }:
          ok (boolean) and data (on success) or an error locale key (on failure).
          When the client passed a reqId it receives 'crimson-police:client:actionResult'.
 
-On the client, CP.Net.request(name, args, timeoutMs) and CP.Net.action(name, payload, timeoutMs) call them and
+On the client, CP.Net.request(name, args, opts) and CP.Net.action(name, payload, timeoutMs) call them and
 wait for the reply; the tablet's NUI bridge (modules/tablet/client.lua) forwards the UI's
 'request' and 'action' NUI callbacks to these two functions.
+
+Latent replies (the big Admin UI exports: admin:exportAudit, admin:exportAuditPart, admin:exportPayments, up to 5000
+CSV rows): ox_lib answers a callback with one reliable event, which holds back the admin's other events until it is
+through. A callback registered with opts.latent = true, called with a reply id (CP.Net.request opts.latent, which the
+tablet's NUI bridge always sets), sends its data with TriggerLatentClientEvent(actionResult, src,
+Config.Limits.exportBps, id, true, data) and answers { ok = true, latent = id }; the client then waits up to 60 s more
+for that actionResult. exportBps = 0, or a call with no reply id, gives one plain answer as before. The NUI waits 90 s
+for these three (EXPORT_TIMEOUT_MS) instead of 20 s.
 
 Rate limits: CP.Net.rateOk(src, key, max, windowMs) is a token bucket per player and key (max at once, then one
 back every windowMs / max), so a burst on both sides of a window edge no longer gets 2 x max through. Actions allow

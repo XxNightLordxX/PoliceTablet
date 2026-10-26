@@ -12,6 +12,13 @@ declare global {
 
 const FALLBACK_RESOURCE = 'Crimson-Police';
 const TIMEOUT_MS = 20000;
+// An Admin UI export (up to 5000 rows) comes in the background: the Lua side waits up to 15 s for the server, then
+// up to 60 s for the data (shared/net.lua).
+export const EXPORT_TIMEOUT_MS = 90000;
+
+export interface NuiOptions {
+    timeoutMs?: number; // how long this call waits before err.timeout (TIMEOUT_MS by default)
+}
 const MOCK_LATENCY_MS = 120;
 
 // True in a normal browser (dev mode), false inside FiveM's CEF.
@@ -139,11 +146,15 @@ function normalise<T>(json: unknown): ApiResult<T> {
 }
 
 // POST to https://<resource>/<endpoint>. Never rejects.
-export async function fetchNui<T = unknown>(endpoint: NuiEndpoint | string, body: unknown = {}): Promise<ApiResult<T>> {
+export async function fetchNui<T = unknown>(
+    endpoint: NuiEndpoint | string,
+    body: unknown = {},
+    opts: NuiOptions = {},
+): Promise<ApiResult<T>> {
     if (isEnvBrowser()) return mockEndpoint<T>(endpoint, body);
 
     const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-    const timer = setTimeout(() => controller?.abort(), TIMEOUT_MS);
+    const timer = setTimeout(() => controller?.abort(), opts.timeoutMs ?? TIMEOUT_MS);
     try {
         const res = await fetch(`https://${resourceName()}/${endpoint}`, {
             method: 'POST',
@@ -169,8 +180,8 @@ export async function fetchNui<T = unknown>(endpoint: NuiEndpoint | string, body
 }
 
 // Read data: ox_lib callback `crimson-police:<name>` (e.g. 'getBoard', 'sup:getLiveRuns').
-export function request<T = unknown>(name: string, args: unknown = {}): Promise<ApiResult<T>> {
-    return fetchNui<T>('request', { name, args: args ?? {} });
+export function request<T = unknown>(name: string, args: unknown = {}, opts: NuiOptions = {}): Promise<ApiResult<T>> {
+    return fetchNui<T>('request', { name, args: args ?? {} }, opts);
 }
 
 // Write action: net event `crimson-police:<name>` (name like 'server:acceptType', 'server:sup:setTypePayout').

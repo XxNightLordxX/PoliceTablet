@@ -2736,6 +2736,21 @@ function H.callback(name, src, ...)
     return result
 end
 
+-- Call an ox_lib callback as `src` with a reply id, as the tablet does (CP.Net.request opts.latent). A latent reply
+-- (shared/net.lua, CP.Net.callback opts.latent) answers { ok = true, latent = id } and sends the data with
+-- FXServer's TriggerLatentClientEvent(name, target, bytesPerSecond, ...). Returns the reply and the latent sends.
+function H.callbackLatent(name, src, args, replyId)
+    local sent = {}
+    local real = _G.TriggerLatentClientEvent
+    _G.TriggerLatentClientEvent = function(event, target, bps, ...)
+        sent[#sent + 1] = { name = event, target = target, bps = bps, args = { ... } }
+    end
+    local ok, res = pcall(H.callback, name, src, args, replyId)
+    _G.TriggerLatentClientEvent = real
+    if not ok then error(res, 2) end
+    return res, sent
+end
+
 -- H.players[src] = { ped coords = vec(...), state = {}, ace = { ['crimsonpolice.admin'] = true },
 --   identifiers = { 'license:...', 'license2:...', 'fivem:...' } (GetPlayerIdentifierByType) }
 H.players = {}

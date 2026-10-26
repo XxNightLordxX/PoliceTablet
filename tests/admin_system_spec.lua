@@ -832,7 +832,12 @@ end
 -- ============================================================================
 
 do
-    local part = Cb('admin:exportAuditPart', 1, { part = 1 })
+    -- the tablet sends a reply id: the part comes as a latent actionResult (shared/net.lua)
+    H.clockMs = H.clockMs + 6000
+    local reply, sent = H.callbackLatent('crimson-police:admin:exportAuditPart', 1, { part = 1 }, 'r1')
+    H.ok(reply and reply.ok and reply.latent == 'r1' and reply.data == nil and #sent == 1 and sent[1].args[1] == 'r1',
+        'an export part comes as a latent reply')
+    local part = sent[1] and sent[1].args[3]
     H.ok(part and part.parts >= 1 and part.csv:find('^id,time', 1) ~= nil, 'an export part with its header')
     -- saves/exports ships with the resource; a missing one is refused (FXServer cannot create folders on Linux)
     local dir = GetResourcePath() .. '/saves/exports'

@@ -1692,7 +1692,12 @@ H.ok(Cb('admin:getAudit', 1, { from = os.date('%Y-%m-%d', H.time - 86400) }).dat
     'from filter (date string)')
 H.eq(#ga.data.actions, 2, 'distinct actions for the filter')
 H.eq(Cb('admin:getAudit', 2, {}).error, 'err.no_permission', 'audit is admin only')
-local ex = Cb('admin:exportAudit', 1, { category = 'audit' })
+-- the tablet sends a reply id: the export comes as a latent actionResult (shared/net.lua)
+H.clockMs = H.clockMs + 1100
+local exReply, exSent = H.callbackLatent('crimson-police:admin:exportAudit', 1, { category = 'audit' }, 'r1')
+H.ok(exReply.ok and exReply.latent == 'r1' and exReply.data == nil and #exSent == 1 and exSent[1].args[1] == 'r1',
+    'the export comes as a latent reply')
+local ex = { ok = exSent[1] and exSent[1].args[2], data = exSent[1] and exSent[1].args[3] }
 H.eq(ex.ok, true, 'export')
 H.eq(ex.data.rows, 40, 'filtered rows exported')
 H.ok(ex.data.csv:sub(1, 3) == 'id,', 'csv header')

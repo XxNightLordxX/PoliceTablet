@@ -802,7 +802,7 @@ function Kit.run(name, src, payload)
 end
 
 -- A read callback for admins only (permKey checked like an action; reads keep working during maintenance).
--- fn(ctx) -> data | nil, errKey.
+-- fn(ctx) -> data | nil, errKey. opts: { rate (default 3), latent = true: a big reply (CP.Net.callback) }
 function Kit.callback(name, permKey, fn, opts)
     opts = type(opts) == 'table' and opts or {}
     CP.Net.callback(name, function(src, args)
@@ -817,7 +817,7 @@ function Kit.callback(name, permKey, fn, opts)
         local ctx = { src = n, args = type(args) == 'table' and args or {}, name = name, actor = ActorId(n) }
         ctx.preview = function(kind, ids, effect) return Kit.preview(n, kind, ids, effect) end
         return fn(ctx)
-    end, { rate = opts.rate or 3 })
+    end, { rate = opts.rate or 3, latent = opts.latent == true })
 end
 
 function Kit._actions() return actions end

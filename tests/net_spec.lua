@@ -31,6 +31,52 @@ H.eq(good.data.period, 'weekly', 'the answer data')
 lib.callback.await = function() return nil end
 H.eq(CP.Net.request('getBoard').error, 'err.no_response', 'no table: err.no_response')
 
+-- ============================================================================
+--                    LATENT REPLIES (THE BIG ADMIN EXPORTS)
+-- ============================================================================
+-- opts.latent sends a reply id with the callback; an answer { latent = id } means the data comes as a latent
+-- actionResult (the server's TriggerLatentClientEvent), waited for up to 60 s past the 15 s request timeout.
+do
+    local RESULT = 'crimson-police:client:actionResult'
+    local function Deliver(id, data)
+        for _, fn in ipairs(H.handlers[RESULT] or {}) do fn(id, true, data) end
+    end
+    local sentId
+    lib.callback.await = function(_, _, _, id)
+        sentId = id
+        return { ok = true, latent = id }
+    end
+    local big = { csv = string.rep('1,2026-10-26 12:00:00,admin,x\n', 5000), rows = 5000 }
+    local got
+    CreateThread(function() got = CP.Net.request('admin:exportPayments', { department = 'fib' }, { latent = true }) end)
+    H.advance(100)
+    H.ok(type(sentId) == 'string', 'latent: the request sends a reply id: ' .. tostring(sentId))
+    H.advance(20000)
+    H.eq(got, nil, 'latent: still waiting for the data past the 15 s request timeout')
+    Deliver(sentId, big)
+    H.advance(100)
+    H.eq(got and got.ok, true, 'latent: the request resolves')
+    H.eq(got and got.data, big, 'latent: with the full data of the latent event')
+
+    -- the data never comes: err.timeout 60 s after the answer, and a late one is ignored
+    got = nil
+    CreateThread(function() got = CP.Net.request('admin:exportAudit', {}, { latent = true }) end)
+    H.advance(59000)
+    H.eq(got, nil, 'latent: no data yet after 59 s')
+    H.advance(2000)
+    H.eq(got and got.error, 'err.timeout', 'latent: no latent event: err.timeout')
+    Deliver(sentId, big)
+
+    -- a plain answer to a latent request is returned as it is; without opts.latent no reply id is sent
+    lib.callback.await = function(_, _, _, id)
+        sentId = id
+        return { ok = true, data = { n = 1 } }
+    end
+    H.eq(CP.Net.request('getBoard', {}, { latent = true }).data.n, 1, 'latent: a plain answer is returned')
+    CP.Net.request('getBoard', {})
+    H.eq(sentId, nil, 'no opts.latent: no reply id')
+end
+
 lib.callback.await = realAwait
 
 -- ============================================================================
@@ -229,5 +275,43 @@ for _ = 1, 20 do H.callback(CALLBACK, 12) end
 H.eq(#H.dropped, 1, 'kick: DropPlayer is called once')
 CP.warn = realWarn
 Config.Limits.netRateResponse = 'block'
+
+-- ============================================================================
+--                     SERVER: LATENT REPLIES (BIG EXPORTS)
+-- ============================================================================
+-- ox_lib answers a callback with one reliable event, which holds back the admin's other events until it is through.
+-- A callback with opts.latent sends its data with TriggerLatentClientEvent when the client sent a reply id.
+
+do
+    local big = { csv = string.rep('1,2026-10-26 12:00:00,admin,x\n', 5000), rows = 5000 }
+    CP.Net.callback('testExport', function() return big end, { latent = true, rate = 100 })
+    local reply, sent = H.callbackLatent('crimson-police:testExport', 5, {}, 'r7')
+    H.ok(reply and reply.ok == true and reply.latent == 'r7' and reply.data == nil,
+        'latent: the callback answers { ok = true, latent = id } only')
+    local e = sent[1]
+    H.ok(#sent == 1 and e.name == 'crimson-police:client:actionResult' and e.target == 5,
+        'latent: one latent actionResult to that player')
+    H.eq(e and e.bps, 200000, 'latent: at Config.Limits.exportBps')
+    H.ok(e and e.args[1] == 'r7' and e.args[2] == true and e.args[3] == big, 'latent: reply id, ok, the full data')
+
+    reply, sent = H.callbackLatent('crimson-police:testExport', 5, {}, nil)
+    H.ok(reply.data == big and #sent == 0 and reply.latent == nil, 'no reply id: one plain answer, as before')
+    reply, sent = H.callbackLatent('crimson-police:testExport', 5, {}, { 'r8' })
+    H.ok(reply.data == big and #sent == 0, 'a reply id that is not a string or number: a plain answer')
+    Config.Limits.exportBps = 50000
+    reply, sent = H.callbackLatent('crimson-police:testExport', 5, {}, 'r9')
+    H.eq(sent[1] and sent[1].bps, 100000, 'exportBps below 100000 counts as 100000')
+    Config.Limits.exportBps = 0
+    reply, sent = H.callbackLatent('crimson-police:testExport', 5, {}, 'r10')
+    H.ok(reply.data == big and #sent == 0, 'exportBps = 0: one plain answer, as before')
+    Config.Limits.exportBps = 200000
+
+    CP.Net.callback('testSmall', function() return { n = 1 } end, { rate = 100 })
+    reply, sent = H.callbackLatent('crimson-police:testSmall', 5, {}, 'r11')
+    H.ok(reply.data.n == 1 and #sent == 0, 'a callback without opts.latent ignores a reply id')
+    CP.Net.callback('testRefused', function() return nil, 'err.no_permission' end, { latent = true, rate = 100 })
+    reply, sent = H.callbackLatent('crimson-police:testRefused', 5, {}, 'r12')
+    H.ok(reply.ok == false and reply.error == 'err.no_permission' and #sent == 0, 'a refusal is a plain answer')
+end
 
 return H

@@ -131,13 +131,25 @@ if IsDuplicityVersion() then
         end)
     end
 
-    -- opts: { rate = max calls per second (default 6) }
+    -- Config.Limits.exportBps: bytes a second for a latent reply, or nil to answer in one reliable message.
+    local LATENT_MIN_BPS = 100000
+    local function LatentBps()
+        local bps = tonumber(Config.Limits and Config.Limits.exportBps) or 0
+        if bps <= 0 then return nil end
+        return math.max(LATENT_MIN_BPS, math.floor(bps))
+    end
+
+    -- opts: { rate = max calls per second (default 6), latent = true: a big reply (an export of up to 5000 rows) }
     -- handler(src, args) -> data | nil, errKey, details: a details table goes back with the error as its data (for
     -- example the line a pasted mission file is refused at).
+    -- latent: ox_lib answers a callback with one reliable event, which holds back the player's other events until
+    -- it is through. When the client sent a reply id (CP.Net.request opts.latent), the data goes as a latent
+    -- RESULT_EVENT (reqId, true, data) at Config.Limits.exportBps, and the callback answers { ok = true, latent = id }.
     function CP.Net.callback(name, handler, opts)
         local cbName = 'crimson-police:' .. name
         local max = (opts and opts.rate) or 6
-        lib.callback.register(cbName, function(src, args)
+        local latent = opts and opts.latent == true
+        lib.callback.register(cbName, function(src, args, replyId)
             if not CP.Net.rateOk(src, cbName, max, 1000) then
                 OnRefused(src, cbName, max)
                 return { ok = false, error = 'err.rate_limited' }
@@ -152,6 +164,13 @@ if IsDuplicityVersion() then
             end
             if data == nil and errKey then
                 return { ok = false, error = errKey, data = type(details) == 'table' and details or nil }
+            end
+            if latent and (type(replyId) == 'string' or type(replyId) == 'number') and src and src > 0 then
+                local bps = LatentBps()
+                if bps then
+                    TriggerLatentClientEvent(RESULT_EVENT, src, bps, replyId, true, data)
+                    return { ok = true, latent = replyId }
+                end
             end
             return { ok = true, data = data }
         end)
@@ -203,10 +222,25 @@ else
         return Citizen.Await(p)
     end
 
+    -- A latent reply (CP.Net.callback opts.latent) comes after the callback's answer: 3 MB at 200 KB a second
+    -- takes about 15 s.
+    local LATENT_WAIT_MS = 60000
+
     -- Call the ox_lib callback 'crimson-police:<name>' and wait for { ok, data, error }. Never raises: ox_lib
     -- raises on an unknown callback and after its own 300 s timeout, so the call runs in a thread of its own
     -- and a request with no answer in time gives err.timeout.
-    function CP.Net.request(name, args, timeoutMs)
+    -- opts: the timeout in ms (15 s by default), or { timeoutMs = n, latent = true }. latent: the call sends a reply
+    -- id, and when the server answers { latent = id } the data comes as a latent RESULT_EVENT, waited for up to
+    -- LATENT_WAIT_MS more.
+    function CP.Net.request(name, args, opts)
+        if type(opts) ~= 'table' then opts = { timeoutMs = opts } end
+        local replyId, latentP
+        if opts.latent then
+            nextId = nextId + 1
+            replyId = ('r%d'):format(nextId)
+            latentP = promise.new()
+            pending[replyId] = latentP
+        end
         local p, done = promise.new(), false
         local function finish(res)
             if done then return end
@@ -214,7 +248,7 @@ else
             p:resolve(res)
         end
         CreateThread(function()
-            local ok, res = pcall(lib.callback.await, 'crimson-police:' .. name, false, args)
+            local ok, res = pcall(lib.callback.await, 'crimson-police:' .. name, false, args, replyId)
             if not ok then
                 CP.warn('net', '%s failed: %s', name, tostring(res))
                 res = nil
@@ -222,7 +256,20 @@ else
             if type(res) ~= 'table' then res = { ok = false, error = 'err.no_response' } end
             finish(res)
         end)
-        SetTimeout(timeoutMs or 15000, function() finish({ ok = false, error = 'err.timeout' }) end)
-        return Citizen.Await(p)
+        SetTimeout(tonumber(opts.timeoutMs) or 15000, function() finish({ ok = false, error = 'err.timeout' }) end)
+        local res = Citizen.Await(p)
+        if not replyId then return res end
+        if not (res.ok and res.latent == replyId) then
+            pending[replyId] = nil
+            return res
+        end
+        -- the data may already be here (pending[replyId] is then gone and latentP resolved)
+        SetTimeout(LATENT_WAIT_MS, function()
+            if pending[replyId] == latentP then
+                pending[replyId] = nil
+                latentP:resolve({ ok = false, error = 'err.timeout' })
+            end
+        end)
+        return Citizen.Await(latentP)
     end
 end

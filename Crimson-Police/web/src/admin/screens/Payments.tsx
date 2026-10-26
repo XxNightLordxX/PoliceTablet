@@ -31,7 +31,7 @@ import {
 import { formatDateTime, formatMoney, formatNumber } from '../../shared/format';
 import { useRequest } from '../../shared/hooks';
 import { t } from '../../shared/i18n';
-import { request } from '../../shared/nui';
+import { EXPORT_TIMEOUT_MS, request } from '../../shared/nui';
 import { useNavigation } from '../../shared/navigation';
 import { useSession } from '../../shared/session';
 import { toast } from '../../shared/toast';
@@ -480,7 +480,7 @@ export default function AdminPayments() {
         const args: Record<string, unknown> = { ...where };
         if (status) args.status = status;
         if (citizenid) args.citizenid = citizenid;
-        const res = await request<PaymentsExport>('admin:exportPayments', args);
+        const res = await request<PaymentsExport>('admin:exportPayments', args, { timeoutMs: EXPORT_TIMEOUT_MS });
         if (res.ok && res.data) setExported(res.data);
         else toast('error', t(res.error || 'err.internal'));
     };

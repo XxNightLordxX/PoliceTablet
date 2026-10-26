@@ -1508,8 +1508,8 @@ local function OfficerSession(ui)
 end
 local sessionReply = { officer = OfficerSession('officer'), supervisor = OfficerSession('supervisor') }
 local callbackCalls = {}
-lib.callback.await = function(name, _, args)
-    callbackCalls[#callbackCalls + 1] = { name = name, args = args }
+lib.callback.await = function(name, _, args, replyId)
+    callbackCalls[#callbackCalls + 1] = { name = name, args = args, replyId = replyId }
     if name == 'crimson-police:getSession' then return sessionReply[(args and args.ui) or 'officer'] end
     return { ok = true, data = { echo = args } }
 end
@@ -1820,6 +1820,8 @@ do
     nuiCb.request({ name = 'getBoard', args = { period = 'weekly' } }, function(r) reply = r end)
     H.eq(callbackCalls[#callbackCalls].name, 'crimson-police:getBoard', 'request -> ox_lib callback')
     H.eq(reply.data.echo.period, 'weekly', 'request reply')
+    H.ok(type(callbackCalls[#callbackCalls].replyId) == 'string',
+        'a tablet request sends a reply id: a big export may answer in the background (CP.Net.request opts.latent)')
     nuiCb.request({ name = 'getProfile', args = 'CPT00002' }, function(r) reply = r end)
     H.eq(callbackCalls[#callbackCalls].args, 'CPT00002', 'non-table args passed through')
     nuiCb.request({ name = nil }, function(r) reply = r end)

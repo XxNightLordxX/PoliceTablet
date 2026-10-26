@@ -647,7 +647,7 @@ Kit.callback('admin:exportPayments', 'payments', function(ctx)
             tostring(data.rows), nil)
     end
     return data
-end, { rate = 2 })
+end, { rate = 2, latent = true })
 
 -- What Renewed-Banking's history says about a stuck payment: only the entries with its transaction id.
 Kit.callback('admin:checkBankingTxn', 'payments', function(ctx)

@@ -3171,7 +3171,7 @@ CP.Net.callback('admin:exportAudit', function(src, args)
     local list = {}
     for i = 1, math.min(#rows, EXPORT_MAX) do list[i] = AuditRow(rows[i]) end
     return { csv = Admin._csv(list), rows = #list, truncated = truncated }
-end, { rate = 2 })
+end, { rate = 2, latent = true })
 
 -- ============================================================================
 --                        COMMAND REGISTRATION (runtime)

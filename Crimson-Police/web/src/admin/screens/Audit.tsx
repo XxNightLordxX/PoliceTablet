@@ -24,7 +24,7 @@ import { asArray } from '../../shared/data';
 import { formatDateTime, formatNumber } from '../../shared/format';
 import { useRequest } from '../../shared/hooks';
 import { hasKey, t } from '../../shared/i18n';
-import { request } from '../../shared/nui';
+import { EXPORT_TIMEOUT_MS, request } from '../../shared/nui';
 import { toast } from '../../shared/toast';
 import type { AuditExport, AuditFilters, AuditPage, AuditRow } from '../../types/oversight';
 import type { AuditPartView, AuditSaveReply } from '../../types/admin_system';
@@ -167,7 +167,11 @@ export default function AdminAudit() {
     const { page: _p, ...exportFilters } = filters;
     void _p;
     const loadPart = async (n: number) => {
-        const res = await request<AuditPartView>('admin:exportAuditPart', { ...exportFilters, part: n });
+        const res = await request<AuditPartView>(
+            'admin:exportAuditPart',
+            { ...exportFilters, part: n },
+            { timeoutMs: EXPORT_TIMEOUT_MS },
+        );
         if (res.ok && res.data) setPart(res.data);
         else toast('error', t(res.error || 'err.internal'));
     };
@@ -185,7 +189,7 @@ export default function AdminAudit() {
         setExporting(true);
         const { page: _unused, ...rest } = filters;
         void _unused;
-        const res = await request<AuditExport>('admin:exportAudit', rest);
+        const res = await request<AuditExport>('admin:exportAudit', rest, { timeoutMs: EXPORT_TIMEOUT_MS });
         setExporting(false);
         if (res.ok && res.data) setExported(res.data);
         else toast('error', t(res.error || 'err.internal'));

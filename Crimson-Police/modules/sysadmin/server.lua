@@ -2121,7 +2121,7 @@ end, { rate = 1 })
 Kit.callback('admin:exportAuditPart', 'openAdmin', function(ctx)
     if not CP.Net.rateOk(ctx.src, 'sys:auditPart', 1, 3000) then return nil, 'err.rate_limited' end
     return Sys.auditPart(ctx.args, ctx.args.part)
-end, { rate = 1 })
+end, { rate = 1, latent = true })
 
 Kit.action('server:admin:saveAuditExport', 'openAdmin', function(ctx)
     if not CP.Net.rateOk(ctx.src, 'sys:auditSave', 1, 30000) then return false, 'err.rate_limited' end

@@ -647,7 +647,8 @@ RegisterNUICallback('request', function(body, cb)
         return cb({ ok = false, error = 'err.invalid_payload' })
     end
     CreateThread(function()
-        local ok, res = pcall(CP.Net.request, body.name, body.args)
+        -- latent: a big reply (an Admin UI export) may come in the background (CP.Net.callback opts.latent)
+        local ok, res = pcall(CP.Net.request, body.name, body.args, { latent = true })
         if not ok then
             CP.err(TAG, 'request %s failed: %s', body.name, tostring(res))
             res = { ok = false, error = 'err.internal' }
