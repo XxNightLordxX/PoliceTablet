@@ -3424,6 +3424,25 @@ function Runs.markArrived(run, src)
     if not first then PushRun(run) end
 end
 
+-- A late officer who follows the action (CP.Route, PLAN M11) gets seconds from now to reach it
+-- (Config.Route.followActionSeconds), never less time than the start deadline he already had. Returns his deadline
+-- (os.time), nil when he is not an active participant still on his way.
+function Runs.extendStart(run, src, seconds)
+    src = ToSrc(src)
+    if type(run) ~= 'table' or not src or run.state == 'ended' then return nil end
+    local p = run.participants[src]
+    if not p or p.status ~= 'active' or p.arrived or not tonumber(p.deadline) then return nil end
+    local n = tonumber(seconds)
+    if n and n == n and n > 0 then
+        local due = os.time() + math.floor(n)
+        if due > p.deadline then
+            CP.log(TAG, 'run %s: %d has until %d to reach the action (%d s more)', run.id, src, due, due - p.deadline)
+            p.deadline = due
+        end
+    end
+    return p.deadline
+end
+
 -- ============================================================================
 --                                  OBJECTIVES
 -- ============================================================================

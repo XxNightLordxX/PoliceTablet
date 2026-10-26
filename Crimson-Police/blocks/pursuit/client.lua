@@ -146,27 +146,25 @@ local function DropBlip(S, k)
 end
 
 -- A car's or a suspect's blip in its Config.Markers.kinds look (vehicle; a suspect on foot fleeing while he runs,
--- else suspect; scale: a smaller one for a suspect who gave up), restyled in place when that changes, handed to the
+-- else suspect; variant 'surrendered': kinds.suspect.surrenderedScale for one who gave up), restyled in place when that changes, handed to the
 -- objective pointer under the net id the server's pointer names it by: it IS the pointer (one icon, the GPS line on
 -- it), and CP.Markers shows the same look from the server's position once the entity is too far away for this game
 -- (BLIPS_FINAL R1, R3, R7).
-local function EnsureBlip(S, k, ent, net, kind, labelKey, scale)
+local function EnsureBlip(S, k, ent, net, kind, labelKey, variant)
     -- a loop pass resumed after the cleanup (it waited in ctx.control) draws nothing
     if not S.alive then return end
     local b = S.blips[k]
     if b and b.ent == ent and DoesBlipExist(b.id) then
-        if b.kind ~= kind or b.scale ~= scale then
-            CP.Markers.style(b.id, kind)
-            if scale then SetBlipScale(b.id, scale) end
-            b.kind, b.scale = kind, scale
+        if b.kind ~= kind or b.variant ~= variant then
+            CP.Markers.style(b.id, kind, nil, { variant = variant })
+            b.kind, b.variant = kind, variant
         end
         return
     end
     DropBlip(S, k)
     local id = AddBlipForEntity(ent)
-    CP.Markers.style(id, kind, CP.L(labelKey))
-    if scale then SetBlipScale(id, scale) end
-    S.blips[k] = { id = id, ent = ent, net = net, kind = kind, scale = scale }
+    CP.Markers.style(id, kind, CP.L(labelKey), { variant = variant })
+    S.blips[k] = { id = id, ent = ent, net = net, kind = kind, variant = variant }
     CP.Markers.adopt(net, id)
 end
 
@@ -665,7 +663,7 @@ local function Loop(S)
                         if shown and onFoot then
                             EnsureBlip(S, k, ped, s.netId, look, 'block.pursuit.blip_suspect')
                         elseif shown and state == 'surrendered' then
-                            EnsureBlip(S, k, ped, s.netId, 'suspect', 'block.pursuit.blip_suspect', 0.6)
+                            EnsureBlip(S, k, ped, s.netId, 'suspect', 'block.pursuit.blip_suspect', 'surrendered')
                         else
                             DropBlip(S, k)
                         end

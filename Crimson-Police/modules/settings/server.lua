@@ -211,6 +211,7 @@ local RANGES = {
     ['Route.reportTimeout'] = { 5, 60 },
     ['Route.maxDrift'] = { 200, 5000 },
     ['Route.lateArriveRange'] = { 0, 500 },
+    ['Route.followActionSeconds'] = { 0, 1800 },
     -- the objective blip and its GPS line (Config.Markers); ids from the docs.fivem.net blip list (build 3258)
     ['Markers.trackEvery'] = { 1, 10 },
     ['Markers.routeOffWithin'] = { 0, 200 },
@@ -227,6 +228,7 @@ local RANGES = {
     ['Markers.kinds.*.scale'] = { 0.3, 2 },
     ['Markers.kinds.*.bossScale'] = { 0.3, 2 },
     ['Markers.kinds.*.nextScale'] = { 0.3, 2 },
+    ['Markers.kinds.*.surrenderedScale'] = { 0.3, 2 },
     -- admin control limits
     ['AdminControl.adjustConfirmAbove'] = { 1, 10000 },
     ['AdminControl.adjustDailyLimit'] = { 0, 1000000 },

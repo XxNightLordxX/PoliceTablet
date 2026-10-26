@@ -107,7 +107,7 @@ local function NameBlip(id, label)
 end
 
 -- A suspect's blip in its Config.Markers.kinds look for his state: kinds.fleeing (orange) while he runs, else
--- kinds.suspect (red; one who gave up a size smaller, 0.6), restyled in place when that changes. Handed to the
+-- kinds.suspect (red; one who gave up at its surrenderedScale), restyled in place when that changes. Handed to the
 -- objective pointer under his net id, the key the server's pointer names him by: it IS the pointer (one icon, the GPS
 -- line on it), and CP.Markers shows the same look from the server's position once he is too far away for this game
 -- (BLIPS_FINAL R1, R3, R7).
@@ -115,21 +115,19 @@ local function EnsureBlip(S, netId, ent, state)
     -- a loop pass resumed after the cleanup (it waited in ctx.control) draws nothing
     if not S.alive then return end
     local look = state == 'fleeing' and 'fleeing' or 'suspect'
-    local small = state == 'surrendered'
+    local variant = state == 'surrendered' and 'surrendered' or nil
     local b = S.blips[netId]
     if b and b.ent == ent and DoesBlipExist(b.id) then
-        if b.look ~= look or b.small ~= small then
-            CP.Markers.style(b.id, look)
-            if small then SetBlipScale(b.id, 0.6) end
-            b.look, b.small = look, small
+        if b.look ~= look or b.variant ~= variant then
+            CP.Markers.style(b.id, look, nil, { variant = variant })
+            b.look, b.variant = look, variant
         end
         return
     end
     DropBlip(S, netId)
     local id = AddBlipForEntity(ent)
-    CP.Markers.style(id, look, CP.L('block.flee_arrest.blip_suspect'))
-    if small then SetBlipScale(id, 0.6) end
-    S.blips[netId] = { id = id, ent = ent, look = look, small = small }
+    CP.Markers.style(id, look, CP.L('block.flee_arrest.blip_suspect'), { variant = variant })
+    S.blips[netId] = { id = id, ent = ent, look = look, variant = variant }
     CP.Markers.adopt(netId, id)
 end
 

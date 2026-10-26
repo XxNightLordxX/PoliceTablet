@@ -715,12 +715,25 @@ do
     Err('Markers.kinds.fightArea.sprite', 966, 'err.setting_range', 'sprites stop at 965')
     Err('Markers.kinds.fightArea.sprite', 84.5, 'err.setting_whole', 'a sprite is a whole number')
     Err('Markers.kinds.hostile.bossScale', 2.5, 'err.setting_range', 'a size of 2.0 at most')
+    H.ok((Check('Markers.kinds.suspect.surrenderedScale', 0.5)), 'the size of a suspect who gave up (R6)')
+    -- (R6) the time a late partner gets to reach the action
+    H.ok((Check('Route.followActionSeconds', 0)), 'followActionSeconds 0: the start deadline he had, as before')
+    Err('Route.followActionSeconds', 1801, 'err.setting_range', 'at most 30 minutes to reach the action')
+    H.ok(E('Route.followActionSeconds').desc:find('0 = he keeps the start deadline, as before', 1, true) ~= nil,
+        'followActionSeconds: its config.lua comment is its description')
+    Err('Markers.kinds.suspect.surrenderedScale', 0.2, 'err.setting_range', 'a surrendered size of 0.3 at least')
     Err('Markers.kinds.point.followUpColour', 90, 'err.setting_range', 'the follow-up colour is a blip colour')
     local escort = nil
     for _, sec in ipairs(S._schema().sections) do
         for _, g in ipairs(sec.groups) do if g.path == 'Markers.kinds.escort' then escort = g end end
     end
     H.eq((escort or {}).desc, 'the vehicle you escort', 'each kind says what it is')
+    local suspect = nil
+    for _, sec in ipairs(S._schema().sections) do
+        for _, g in ipairs(sec.groups) do if g.path == 'Markers.kinds.suspect' then suspect = g end end
+    end
+    H.eq((suspect or {}).desc, 'a suspect: stopped or armed (surrenderedScale: one who gave up)',
+        'the suspect kind names its surrenderedScale')
     -- the kinds fields (sprite, colour, scale, ...) have no comment of their own: the Markers group says what they are
     local markers = nil
     for _, sec in ipairs(S._schema().sections) do
@@ -734,7 +747,10 @@ do
         true
     ) ~= nil, 'the Markers group explains sprite and colour')
     H.ok(legend:find('and a scale (its size, 1.0 = normal)', 1, true) ~= nil, 'and scale')
-    H.ok(legend:find('nextScale, bossScale, followUpColour and setbackColour', 1, true) ~= nil, 'and the extra fields')
+    H.ok(legend:find('nextScale, bossScale, surrenderedScale, followUpColour and setbackColour', 1, true) ~= nil,
+        'and the extra fields')
+    H.ok(legend:find('a suspect who gave up (the same size near you and far away)', 1, true) ~= nil,
+        'surrenderedScale: one size near and far (R6)')
     H.ok(not E('Markers.enabled').reload and not E('Markers.enabled').restart, 'read live: no reload, no restart')
 end
 

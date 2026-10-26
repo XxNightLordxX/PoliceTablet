@@ -11,7 +11,6 @@ local REPORT_MS = 1500
 local CONTROL_MS = 250
 local MARKER_RANGE = 150.0
 local CLUE_RANGE = 2.5
-local GAVE_UP_SCALE = 0.6       -- a fugitive who gave up: kinds.suspect a size smaller
 local SEARCH_ANIM = { dict = 'amb@prop_human_bum_bin@idle_b', clip = 'idle_d' }
 local TALK_ANIM = { dict = 'missfbi3_party_d', clip = 'stand_talk_loop_a_male1' }
 local WITNESS_SCENARIO = 'WORLD_HUMAN_STAND_MOBILE'
@@ -121,27 +120,26 @@ local function EnsureClueBlip(S, cl)
     CP.Markers.adopt(k, id)
 end
 
--- A fugitive's blip in its Config.Markers.kinds look: kinds.fleeing (orange) while he runs, kinds.suspect a size
--- smaller (0.6, as flee_arrest) once he gave up, restyled in place when that changes. Handed to the objective pointer
+-- A fugitive's blip in its Config.Markers.kinds look: kinds.fleeing (orange) while he runs, kinds.suspect at its
+-- surrenderedScale (as flee_arrest) once he gave up, restyled in place when that changes. Handed to the objective pointer
 -- under his net id: it IS the pointer, and CP.Markers shows the same look from the server's position once he is too
 -- far away for this game (BLIPS_FINAL R1, R3, R7).
 local function EnsureFugitiveBlip(S, netId, ent, state)
     local k = 'f' .. tostring(netId)
     local look = state == 'fleeing' and 'fleeing' or 'suspect'
+    local variant = state == 'surrendered' and 'surrendered' or nil
     local b = S.blips[k]
     if b and b.ent == ent and DoesBlipExist(b.id) then
-        if b.look ~= look then
-            CP.Markers.style(b.id, look)
-            if look == 'suspect' then SetBlipScale(b.id, GAVE_UP_SCALE) end
-            b.look = look
+        if b.look ~= look or b.variant ~= variant then
+            CP.Markers.style(b.id, look, nil, { variant = variant })
+            b.look, b.variant = look, variant
         end
         return
     end
     DropBlip(S, k)
     local id = AddBlipForEntity(ent)
-    CP.Markers.style(id, look, CP.L('block.search_area.blip_fugitive'))
-    if look == 'suspect' then SetBlipScale(id, GAVE_UP_SCALE) end
-    S.blips[k] = { id = id, ent = ent, look = look, key = netId }
+    CP.Markers.style(id, look, CP.L('block.search_area.blip_fugitive'), { variant = variant })
+    S.blips[k] = { id = id, ent = ent, look = look, variant = variant, key = netId }
     CP.Markers.adopt(netId, id)
 end
 

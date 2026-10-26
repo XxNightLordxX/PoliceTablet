@@ -103,6 +103,25 @@ local function Participant(run, src)
     return type(run) == 'table' and type(run.participants) == 'table' and run.participants[src] or nil
 end
 
+-- Config.Route.followActionSeconds: the time a late officer gets to reach the action once he follows it (PLAN M11,
+-- R6). 0 = he keeps the start deadline he had (Config.Limits.startTimeout from his accept); 300 when the key is
+-- missing from an older config.lua.
+local function FollowSeconds()
+    local n = tonumber(Config.Route.followActionSeconds)
+    if n == nil then return 300 end
+    if n ~= n or n <= 0 then return 0 end
+    return math.floor(n)
+end
+
+-- Whole seconds until a participant still on his way runs out of time to arrive (CP.Runs removes him then with
+-- 'start_timeout'), or nil without a deadline.
+local function DeadlineLeft(run, src)
+    local p = Participant(run, src)
+    local at = type(p) == 'table' and not p.arrived and tonumber(p.deadline) or nil
+    if not at then return nil end
+    return math.max(0, math.floor(at - os.time()))
+end
+
 local function IsActive(run, src)
     local p = Participant(run, src)
     return type(run) == 'table' and run.state ~= 'ended' and type(p) == 'table' and p.status == 'active'
@@ -238,8 +257,11 @@ function R.status(run, src)
     if st then
         local dist = st.distance and CP.U.round(st.distance) or nil
         if st.arrived then return { status = 'arrived', recalcsLeft = RecalcsLeft(st), distance = 0 } end
-        -- 'action': a late officer heading for the objective (distance to it), no route rules any more
-        if st.mode == 'action' then return { status = 'action', recalcsLeft = 0, distance = dist } end
+        -- 'action': a late officer heading for the objective (distance to it), no route rules any more; secondsLeft:
+        -- the time he still has to reach it (the HUD and the run bar show it in the last 2 minutes)
+        if st.mode == 'action' then
+            return { status = 'action', recalcsLeft = 0, distance = dist, secondsLeft = DeadlineLeft(run, src) }
+        end
         if st.mode ~= 'route' then return { status = 'disabled', recalcsLeft = 0, distance = dist } end
         local now = GetGameTimer()
         return {
@@ -299,7 +321,9 @@ end
 -- whatever Config.Route.required says) and he arrives at the start circle as before or within lateArriveRange of the
 -- action (CP.Runs.actionPoints: the objective's anchor, its pointer's point or targets, anywhere inside its circle).
 -- His game is told once (client:routeStatus 'action'): it drops the start's waypoint, pin and circle, stops sampling
--- and reporting, and only then lets CP.Markers draw the line to the objective.
+-- and reporting, and only then lets CP.Markers draw the line to the objective. From then on he has
+-- Config.Route.followActionSeconds to arrive (R6: CP.Runs.extendStart; never less than the start deadline he had), so
+-- a partner who left late is not removed by the start timeout while he chases the action.
 
 local function FollowAction(run, src, st)
     st.mode = 'action'
@@ -307,7 +331,10 @@ local function FollowAction(run, src, st)
     st.offCause = nil
     st.warned = false
     st.metres = nil
-    CP.log(TAG, '%d follows the action of run %s (in progress before he arrived)', src, tostring(run.id))
+    local extra = FollowSeconds()
+    if extra > 0 then RunsCall('extendStart', run, src, extra) end
+    CP.log(TAG, '%d follows the action of run %s (in progress before he arrived; %s s left to arrive)', src,
+        tostring(run.id), tostring(DeadlineLeft(run, src)))
     TriggerClientEvent(CP.e('client:routeStatus'), src, run.id, R.status(run, src))
     PushView(run.id, src)
 end

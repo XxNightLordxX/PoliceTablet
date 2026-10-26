@@ -46,6 +46,10 @@ function arrivedAt(same: boolean, prev: number | undefined): number {
     return same && prev !== undefined ? prev : Date.now();
 }
 
+// Seconds: a late officer following the action (route status 'action') sees the time he has left to reach it from
+// here on, on the HUD and the run bar (Config.Route.followActionSeconds gives him that time).
+export const ACTION_LEFT_SHOWN = 120;
+
 // What is left of a countdown of `seconds` that arrived at receivedAt.
 export function secondsSince(seconds: number, receivedAt?: number): number {
     if (receivedAt === undefined) return seconds;

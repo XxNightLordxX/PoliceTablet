@@ -1947,10 +1947,11 @@ do
         current = function() return world.route end,
         begin = function() return true end,
         stop = function() world.route = nil end,
-        follow = function(runId, dropStart)
+        follow = function(runId, dropStart, secondsLeft)
             follows[#follows + 1] = {
                 runId = runId,
                 drop = dropStart,
+                left = secondsLeft,
                 circles = #Live('radius'),
                 routed = #ObjRouted(),
             }
@@ -1985,8 +1986,9 @@ do
     Fire('client:routeStatus', 'run-x', { status = 'action' })
     Fire('client:routeStatus', 'run-12', { status = 'arrived' })
     H.eq(#follows, 0, 'm11: another run or another status: nothing')
-    Fire('client:routeStatus', 'run-12', { status = 'action' })
+    Fire('client:routeStatus', 'run-12', { status = 'action', secondsLeft = 287 })
     H.eq(#follows, 1, 'm11: CP.Route.follow once')
+    H.eq(follows[1] and follows[1].left, 287, 'm11: with the time he has to reach the action (R6)')
     H.ok(follows[1] and follows[1].runId == 'run-12' and follows[1].drop == true,
         'm11: the start dropped: CP.Markers can draw his line')
     H.ok(follows[1] and follows[1].circles == 0 and follows[1].routed == 0,

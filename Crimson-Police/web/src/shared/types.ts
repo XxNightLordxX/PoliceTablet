@@ -121,6 +121,7 @@ export interface HudState {
         // 'action': the run went In progress before this officer arrived; he follows the objective instead of the
         // start (Config.Route.lateArriveRange) and his route is no longer checked
         status: 'on' | 'off' | 'arrived' | 'disabled' | 'action';
+        // 'off': the off-route countdown; 'action': the time left to reach the action (Config.Route.followActionSeconds)
         secondsLeft: number | null;
         distance: number | null;
         // false (Config.Route.required, locked at accept): the route is a guide; leaving it never ends the run

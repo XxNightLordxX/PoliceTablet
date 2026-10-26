@@ -80,7 +80,7 @@ local OURS = function(v) return type(v) == 'table' and v.active == true and v.so
 -- ============================================================================
 
 local runs = {}
-local rlog = { arrived = {}, removed = {}, reclassify = {}, endRun = {} }
+local rlog = { arrived = {}, removed = {}, reclassify = {}, endRun = {}, extend = {} }
 local runsCfg = { setFlagOnArrive = true, autoEnd = true, countDowns = true }
 
 local function ActiveOf(r)
@@ -142,6 +142,13 @@ CP.Runs = {
         r.state = 'ended'
     end,
     anchor = function(r) return r.anchor end,
+    -- the time a late officer gets to reach the action (R6; the real one moves p.deadline, never earlier)
+    extendStart = function(r, src, seconds)
+        rlog.extend[#rlog.extend + 1] = { run = r.id, src = src, seconds = seconds }
+        local p = r.participants[src]
+        if p and p.deadline then p.deadline = math.max(p.deadline, os.time() + seconds) end
+        return p and p.deadline
+    end,
     -- where the action is (PLAN M11): the anchor, then r.actionPts (the pointer's point, circle or targets)
     actionPoints = function(r)
         if r.state ~= 'in_progress' then return {} end
@@ -655,6 +662,8 @@ local function LateRun(id, lead, late, required, leadAt)
     PlayerRec(late).coords = vec3(0.0, 0.0, 0.0)               -- 1000 m away
     local r = NewRun(id, { srcs = { lead, late }, anchor = vec3(1000.0, 3000.0, 0.0) })
     r.routeRequired = required
+    -- the start deadline CP.Runs gave each at the accept: a minute of it left
+    for _, s in ipairs({ lead, late }) do r.participants[s].deadline = os.time() + 60 end
     AlignTo(2000)
     CP.Route.begin(r, lead)
     CP.Route.begin(r, late)
@@ -672,6 +681,11 @@ local function LateCase(n, required)
     local rs = ClientEvents('client:routeStatus', late)
     H.eq(#rs, 1, tag .. 'his game is told once')
     H.eq(rs[1] and rs[1].args[2].status, 'action', tag .. '...that he follows the action')
+    -- (R6) from then on he has Config.Route.followActionSeconds (shipped 300) to reach it
+    H.eq(Config.Route.followActionSeconds, 300, 'shipped: a late partner gets 300 s to reach the action')
+    local ex = rlog.extend[#rlog.extend]
+    H.ok(ex and ex.run == r.id and ex.src == late and ex.seconds == 300, tag .. 'CP.Runs.extendStart: 300 s for him')
+    H.near(rs[1] and rs[1].args[2].secondsLeft or -1, 300, 1, tag .. 'his game is told how long he has')
     local st = CP.Route.status(r, late)
     H.eq(st.status, 'action', tag .. 'status action (the tablet and HUD show it)')
     H.eq(st.recalcsLeft, 0, tag .. 'no Recalculate route any more')
@@ -724,7 +738,8 @@ do
     H.eq(r.state, 'in_progress', 'his partner arrived meanwhile')
     RunFor(1000)
     H.eq(CP.Route.status(r, 151).status, 'action', 'the warned partner follows the action')
-    H.eq(CP.Route.status(r, 151).secondsLeft, nil, 'no countdown any more')
+    H.near(CP.Route.status(r, 151).secondsLeft or -1, 300, 1,
+        'no off-route countdown any more: the seconds left are his time to reach the action (R6)')
     RunFor(40000)
     H.eq(#RemovedFor(151), 0, 'the countdown that was running never ends his run')
     r.state = 'ended'
@@ -773,11 +788,13 @@ do
     -- 17) lateArriveRange = 0: the rule as before (the late partner keeps the start route and its checks)
     local oldRange = Config.Route.lateArriveRange
     Config.Route.lateArriveRange = 0
+    local nExtend = #rlog.extend
     r = LateRun('r-late-0', 160, 161, true)
     RunFor(2000, Reporter(161, r.id, 10.0))
     H.eq(r.state, 'in_progress', 'range 0: the run started')
     H.eq(CP.Route.status(r, 161).status, 'on', 'range 0: the late partner keeps the start route')
     H.eq(#ClientEvents('client:routeStatus', 161), 0, 'range 0: no switch')
+    H.eq(#rlog.extend, nExtend, 'range 0: no extra time either')
     PlayerRec(161).coords = vec3(1000.0, 2950.0, 0.0)        -- 50 m from the action, 2950 m from the start
     RunFor(2000, Reporter(161, r.id, 10.0))
     H.eq(r.participants[161].arrived, false, 'range 0: the action does not count, only the start')
@@ -1925,12 +1942,14 @@ do
         H.ok(cstate.waypoint ~= nil and LiveBlips() == 1, tag .. 'the start waypoint and pin while driving')
         H.eq(CR.current().action, false, tag .. 'not following the action yet')
         H.eq(CR.follow('other-run', true), false, tag .. 'another run: ignored')
-        H.ok(CR.follow(id, true), tag .. 'follows the action')
+        H.ok(CR.follow(id, true, required and 287.6 or nil), tag .. 'follows the action')
         H.eq(cstate.waypoint, nil, tag .. 'the start waypoint is gone')
         H.eq(LiveBlips(), 0, tag .. 'the start pin is gone (its line off first)')
         H.eq(CR.current().action, true, tag .. 'CP.Route.current says so (CP.Markers routes to the objective)')
         H.eq(CR.current().arrived, false, tag .. 'not arrived yet')
         H.eq(LastHudRoute().status, 'action', tag .. 'HUD: following the action')
+        -- (R6) with the time he has to arrive (the server's deadline, Config.Route.followActionSeconds)
+        H.eq(LastHudRoute().secondsLeft, required and 287 or nil, tag .. 'HUD: the time he has left, in whole seconds')
         H.eq(LastToast().text, CP.L('route.follow_action'), tag .. 'toast: the GPS leads to the objective now')
         local n = #Sent('server:routeStatus')
         RunFor(6000)

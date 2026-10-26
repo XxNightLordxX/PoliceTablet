@@ -1135,6 +1135,8 @@ local function Marker(ctx)
             netId = f.netId,
             coords = EntCoords(f.entity),
             look = f.state == 'fleeing' and 'fleeing' or 'suspect',
+            -- one who gave up: kinds.suspect.surrenderedScale, as the client half draws him near
+            variant = f.state == 'surrendered' and 'surrendered' or nil,
             label = CP.Lt('block.search_area.blip_fugitive'),
         }
     end

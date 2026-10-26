@@ -16,6 +16,7 @@ local WAYPOINT_SPRITE = 8 -- the map waypoint's blip (GetFirstBlipInfoId)
 local WAYPOINT_MATCH = 15.0 -- metres: the waypoint is still the one Objective GPS set when it is this close to it
 local GPS_FOLLOW = 50.0 -- metres: the Objective GPS waypoint moves with the pointer once it is this far off
 local DEFAULT_LOOK = { sprite = 162, colour = 5, scale = 0.9 } -- kinds.objective as shipped
+local SURRENDERED_SCALE = 0.6 -- kinds.suspect.surrenderedScale as shipped (an older config.lua without the key)
 local KINDS = { point = true, area = true, targets = true }
 local MODES = { none = true, area = true, full = true }
 -- What Radio Silence 'area' still shows: circles and single points, never a GPS line or a person's or car's blip.
@@ -103,7 +104,7 @@ local function NameBlip(blip, label)
 end
 
 -- sprite, colour and scale of a Config.Markers.kinds entry; variant picks bossScale, nextScale, followUpColour or
--- setbackColour when the kind has one.
+-- setbackColour when the kind has one, and 'surrendered' its surrenderedScale (0.6 when it has none).
 local function Look(kind, variant)
     local kinds = type(Cfg().kinds) == 'table' and Cfg().kinds or {}
     local k = kinds[kind]
@@ -113,6 +114,7 @@ local function Look(kind, variant)
     local scale = tonumber(k.scale) or DEFAULT_LOOK.scale
     if variant == 'boss' and tonumber(k.bossScale) then scale = tonumber(k.bossScale) end
     if variant == 'next' and tonumber(k.nextScale) then scale = tonumber(k.nextScale) end
+    if variant == 'surrendered' then scale = tonumber(k.surrenderedScale) or SURRENDERED_SCALE end
     if variant == 'followUp' and Int(k.followUpColour) then colour = Int(k.followUpColour) end
     if variant == 'setback' and Int(k.setbackColour) then colour = Int(k.setbackColour) end
     return sprite, colour, scale + 0.0
@@ -760,7 +762,7 @@ end
 function M.routeColour() return CP.U.clamp(Int(Cfg().routeColour) or 5, 0, 85) end
 
 -- The look of kind (Config.Markers.kinds) and the settings every objective blip gets: short range, legend category,
--- a name, a number. opts = { variant = 'boss'|'next'|'followUp'|'setback', number = n }. A 'setback' blip flashes from
+-- a name, a number. opts = { variant = 'boss'|'next'|'followUp'|'setback'|'surrendered', number = n }. A 'setback' blip flashes from
 -- now on (Config.Markers.setbackFlash); a block that restyles it to another variant stops that (SetBlipFlashes false).
 function M.style(blip, kind, label, opts)
     if not Exists(blip) then return false end

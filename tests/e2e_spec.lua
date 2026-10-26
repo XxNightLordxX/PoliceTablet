@@ -2694,6 +2694,82 @@ do
 end
 
 -- ============================================================================
+--                    18. A LATE PARTNER FOLLOWS THE ACTION
+-- ============================================================================
+-- HIS OWN TIME TO REACH IT (R6).
+-- Config.Route.followActionSeconds (shipped 300): a partner still on his way when the run starts gets that long from
+-- then on to reach the action (never less than he had), with Config.Route.required on and off, and his game, the HUD
+-- and the tablet are told how long; 0 = the start deadline he had (Config.Limits.startTimeout from the accept) still
+-- removes him, as before. (60 s here instead of 300, to keep the scenario short.)
+
+do
+    local chance = Config.Events.modifierChance
+    Config.Events.modifierChance = 0
+    local oldRequired, oldFollow = Config.Route.required, Config.Route.followActionSeconds
+    H.eq(oldFollow, 300, 'late partner: Config.Route.followActionSeconds ships 300')
+    for i, name in ipairs({ 'Ari', 'Bea', 'Cal', 'Dee', 'Eve', 'Fox' }) do
+        local src = 40 + i
+        AddPlayer(src, ('E2ELT%03d'):format(src), name, 'Officer', i % 2 == 1 and 'sast' or 'fib', 1)
+        CID[src] = PD[src].citizenid
+    end
+    PX.only('traffic_enforcement')
+    -- the unit accepts; the partner, 7 km away, was slow to leave: 20 s of his time to reach the start are left when
+    -- the leader gets there and the run starts
+    local function LateStart(leader, member, required, follow)
+        Config.Route.required = required
+        Config.Route.followActionSeconds = follow
+        FormUnit(leader, member)
+        Place(leader, vec3(150.0, -1200.0, 29.0))
+        Place(member, vec3(3000.0, 6000.0, 30.0))
+        local run = PX.accept(leader, 'patrol', 1801)
+        H.ok(run ~= nil and Runs.getBySrc(member) == run, 'late partner: both on the run')
+        if not run then return nil end
+        local mark = #H.events
+        run.participants[member].deadline = os.time() + 20
+        Arrive(run, leader)
+        H.eq(run.state, 'in_progress', 'late partner: the leader at the start starts the run')
+        H.eq(CP.Route.status(run, member).status, 'action', 'late partner: he follows the action')
+        local rs = ClientEvents('crimson-police:client:routeStatus', member, mark)
+        return run, rs[#rs] and rs[#rs].args[2] or {}
+    end
+    local function Row(run, src) return Rows('run_uuid = ? AND citizenid = ?', { run.id, CID[src] })[1] or {} end
+
+    for _, case in ipairs({ { 41, 42, true, 'required' }, { 43, 44, false, 'not required' } }) do
+        local leader, member, tag = case[1], case[2], case[4] .. ': '
+        local run, told = LateStart(leader, member, case[3], 60)
+        if run then
+            H.ok(told.status == 'action' and told.secondsLeft and told.secondsLeft >= 57 and told.secondsLeft <= 60,
+                tag .. 'his game is told he has 60 s to reach the action (' .. tostring(told.secondsLeft) .. ')')
+            Secs(30)
+            H.eq(Runs.getBySrc(member), run, tag .. '30 s later, past the start deadline he had: still on the run')
+            local v = Runs.view(run, member) or {}
+            local left = v.route and v.route.secondsLeft or -1
+            H.ok(v.route and v.route.status == 'action' and left >= 25 and left <= 30,
+                tag .. 'the tablet shows the time he has left (' .. tostring(left) .. ' s)')
+            Secs(35)
+            H.eq(Runs.getBySrc(member), nil, tag .. 'his 60 s used up: removed')
+            H.eq(Row(run, member).end_reason, 'start_timeout', tag .. '...with start_timeout, as any late officer')
+            H.eq(Runs.getBySrc(leader), run, tag .. 'the leader goes on')
+            Act('server:abandon', leader, run.id)
+        end
+    end
+
+    -- 0: the start deadline he had still removes him
+    local run, told = LateStart(45, 46, true, 0)
+    if run then
+        H.ok(told.status == 'action' and told.secondsLeft and told.secondsLeft <= 20,
+            '0: he keeps the start deadline he had (' .. tostring(told.secondsLeft) .. ' s left)')
+        Secs(25)
+        H.eq(Runs.getBySrc(46), nil, '0: removed at the start deadline he had, as before')
+        H.eq(Row(run, 46).end_reason, 'start_timeout', '0: with start_timeout')
+        Act('server:abandon', 45, run.id)
+    end
+    PX.restore()
+    Config.Route.required, Config.Route.followActionSeconds = oldRequired, oldFollow
+    Config.Events.modifierChance = chance
+end
+
+-- ============================================================================
 --                           9. RESOURCE STOP MID-RUN
 -- ============================================================================
 -- Everything deleted, nothing written.

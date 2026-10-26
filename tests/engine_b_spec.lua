@@ -1055,6 +1055,23 @@ H.advance(1000)
 H.eq(RowsOf(G.id)[1].end_reason, 'start_timeout', 'start timeout')
 H.ok((Runs.cooldowns('CIT1').types.tactical or 0) > os.time(), 'start timeout: type cooldown')
 
+-- R6: a late partner who follows the action (CP.Route) gets Config.Route.followActionSeconds from then on, never less
+-- time than he had; the start timeout removes him only at that deadline
+H.reset()
+local G1 = Runs.create(
+    { mission = mission, locationIndex = 1, missionType = 'patrol', members = { O[1] }, leaderSrc = 1 })
+G1.participants[1].deadline = os.time() + 500
+H.eq(Runs.extendStart(G1, 1, 300), os.time() + 500, 'extendStart: never less time than he had')
+G1.participants[1].deadline = os.time() + 2
+H.eq(Runs.extendStart(G1, 1, 300), os.time() + 300, 'extendStart: 300 s from now')
+H.eq(Runs.extendStart(G1, 1, 0), os.time() + 300, 'extendStart: 0 s changes nothing')
+H.advance(5000)
+H.eq(G1.participants[1].status, 'active', 'extendStart: past the deadline he had, still on the run')
+G1.participants[1].deadline = os.time() - 1
+H.advance(1000)
+H.eq(RowsOf(G1.id)[1] and RowsOf(G1.id)[1].end_reason, 'start_timeout', 'extendStart: removed at his new deadline')
+H.eq(Runs.extendStart(G1, 1, 300), nil, 'extendStart: nothing for a run that ended')
+
 H.reset()
 local G2 = Runs.create(
     { mission = mission, locationIndex = 1, missionType = 'patrol', members = { O[3] }, leaderSrc = 3 })

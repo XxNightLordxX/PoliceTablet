@@ -585,7 +585,8 @@ end)
 -- Config.Route.lateArriveRange, PLAN M11): he follows the action. When CP.Markers can draw his line to the objective,
 -- the start goes first (its circle here, its waypoint and pin in CP.Route.follow, which also stops the route's sampling
 -- and reports); CP.Markers routes on its next check, once CP.Route says he follows the action. Under Radio Silence
--- (no objective line) or with Config.Markers off he keeps the start's waypoint as his guide.
+-- (no objective line) or with Config.Markers off he keeps the start's waypoint as his guide. status.secondsLeft: the
+-- time he has to arrive (Config.Route.followActionSeconds), counted down on his HUD.
 RegisterNetEvent(CP.e('client:routeStatus'), function(runId, status)
     if not Matches(runId) or type(status) ~= 'table' or status.status ~= 'action' or current.arrived then return end
     local lead = false
@@ -595,7 +596,7 @@ RegisterNetEvent(CP.e('client:routeStatus'), function(runId, status)
     end
     if lead then HideStartCircle(current) end
     if CP.Route and CP.Route.follow then
-        local ok, err = pcall(CP.Route.follow, runId, lead)
+        local ok, err = pcall(CP.Route.follow, runId, lead, status.secondsLeft)
         if not ok then CP.err(TAG, 'CP.Route.follow failed: %s', tostring(err)) end
     end
 end)

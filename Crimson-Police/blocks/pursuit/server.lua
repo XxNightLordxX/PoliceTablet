@@ -2292,6 +2292,8 @@ do
                 netId = p.netId,
                 coords = GetEntityCoords(p.entity),
                 look = p.state == 'fleeing' and 'fleeing' or 'suspect',
+                -- one who gave up: kinds.suspect.surrenderedScale, as the client half draws him near
+                variant = p.state == 'surrendered' and 'surrendered' or nil,
                 label = CP.Lt('block.pursuit.blip_suspect'),
             }
         end

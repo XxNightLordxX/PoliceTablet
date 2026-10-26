@@ -2751,10 +2751,12 @@ Every 1 s, with the SERVER-SIDE ped position:
   * late partners (PLAN M11, Config.Route.lateArriveRange, 0 = off): once run.state == 'in_progress', a
     participant who has not arrived switches once to mode 'action' (client:routeStatus 'action' + a 'run'
     push): no warning, report, drift or off_route check any more (with Config.Route.required on or off),
-    reports and Recalculate are refused, status = { status = 'action', distance = metres to the action }.
+    reports and Recalculate are refused, status = { status = 'action', distance = metres to the action,
+    secondsLeft = seconds until his start deadline }.
     He arrives (markArrived, as at the start) inside the start circle or within lateArriveRange of
     CP.Runs.actionPoints(run) (the objective's anchor, its pointer's point or targets, anywhere inside its
-    circle).
+    circle). On the switch (R6) CP.Runs.extendStart gives him Config.Route.followActionSeconds (300; 0 = none)
+    from then on to arrive, never less than the start deadline he had.
   * in-arena participants (CP.Alerts.inArena) are not route-checked and cannot arrive (CP.Alerts removes
     them from the run); their reports are ignored.
 Reports: at most one per 0.9 s per player; ignored unless the runId is the sender's active run, metres is

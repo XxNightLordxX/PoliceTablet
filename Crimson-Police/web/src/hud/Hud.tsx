@@ -3,7 +3,7 @@
 import { useMemo } from 'react';
 import { Badge, Icon, TierBadge } from '../shared/components';
 import { cx } from '../shared/cx';
-import { secondsSince } from '../shared/data';
+import { ACTION_LEFT_SHOWN, secondsSince } from '../shared/data';
 import { formatDistance, formatDuration } from '../shared/format';
 import { useCountdown } from '../shared/hooks';
 import { t } from '../shared/i18n';
@@ -35,7 +35,7 @@ function Timer({ timer }: { timer: NonNullable<HudState['timer']> }) {
 function RouteLine({ route }: { route: NonNullable<HudState['route']> }) {
     const start = useMemo(
         () =>
-            route.status === 'off' && route.secondsLeft !== null
+            (route.status === 'off' || route.status === 'action') && route.secondsLeft !== null
                 ? secondsSince(route.secondsLeft, route.receivedAt)
                 : null,
         [route.status, route.secondsLeft, route.receivedAt],
@@ -81,7 +81,11 @@ function RouteLine({ route }: { route: NonNullable<HudState['route']> }) {
                     <Icon name="navigation" size={15} />
                     <div className="cp-hud__route-text">
                         <strong>{t('hud.route.action')}</strong>
-                        <span>{t('hud.route.action_text')}</span>
+                        {left !== null && left <= ACTION_LEFT_SHOWN ? (
+                            <span className="cp-num">{t('hud.route.action_left', { seconds: left })}</span>
+                        ) : (
+                            <span>{t('hud.route.action_text')}</span>
+                        )}
                     </div>
                 </div>
             );

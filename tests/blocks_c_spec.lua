@@ -2321,6 +2321,7 @@ do
     TickN(SA, ctx, 3)
     H.eq(npc.states[fug.netId], 'surrendered', 'sa marker: he gave up')
     H.eq(SA.marker(ctx).targets[1].look, 'suspect', 'sa marker: one who gave up in kinds.suspect (red)')
+    H.eq(SA.marker(ctx).targets[1].variant, 'surrendered', 'sa marker: ...at its surrenderedScale (R6)')
     -- cuffed: nobody to chase, the clue still to check again
     npc.states[fug.netId] = 'cuffed'
     TickN(SA, ctx, 1)
@@ -3580,11 +3581,13 @@ do -- pursuit (Stolen Vehicle Takedown): a pin before the car exists, the car at
     mk = PU.marker(ctx)
     H.ok(mk.targets[1].look == 'fleeing' and mk.targets[2].look == 'suspect',
         'pu marker: a suspect running on foot in kinds.fleeing (orange), the other still kinds.suspect')
+    H.ok(mk.targets[1].variant == nil and mk.targets[2].variant == nil, 'pu marker: both at their normal size')
     st.peds[tostring(sus[1].netId)].state = 'surrendered'
     st.peds[tostring(sus[2].netId)].state = 'cuffed'
     mk = PU.marker(ctx)
     H.ok(#mk.targets == 1 and mk.targets[1].netId == sus[1].netId,
         'pu marker: one who gave up stays a target, a cuffed one leaves it')
+    H.eq(mk.targets[1].variant, 'surrendered', 'pu marker: ...at kinds.suspect.surrenderedScale (R6)')
     H.players[1].vehicle = nil
 end
 
@@ -3944,6 +3947,15 @@ do -- (PLAN M7) pursuit client: a suspect who runs on foot is orange (kinds.flee
     PC.update(cctx, Snap('surrendered'))
     H.step(1000)
     H.ok(BL.live[sb] and sp.colour == 1 and sp.scale == 0.6, 'pursuit client m7: he gives up: red, a size smaller')
+    -- (R6) at kinds.suspect.surrenderedScale, the size CP.Markers gives him far away
+    Config.Markers.kinds.suspect.surrenderedScale = 0.5
+    ents[ped].bag.state = 'stopped'
+    H.step(1000)
+    H.ok(BL.live[sb] and sp.scale == 0.7, 'pursuit client m7: he stops again: kinds.suspect.scale')
+    ents[ped].bag.state = 'surrendered'
+    H.step(1000)
+    H.ok(BL.live[sb] and sp.scale == 0.5, 'pursuit client m7: he gives up: at kinds.suspect.surrenderedScale')
+    Config.Markers.kinds.suspect.surrenderedScale = 0.6
     ents[ped].bag.state = 'fleeing'
     PC.update(cctx, Snap('fleeing'))
     H.step(1000)
@@ -4077,6 +4089,14 @@ do
     ents[fug].bag.state = 'surrendered'
     H.step(1000)
     H.ok(BL.live[fb] and fp.colour == 1 and fp.scale == 0.6, 'search client: he gave up: the same blip, red, 0.6')
+    -- (R6) at kinds.suspect.surrenderedScale, the size CP.Markers gives him far away
+    Config.Markers.kinds.suspect.surrenderedScale = 0.5
+    ents[fug].bag.state = 'fleeing'
+    H.step(1000)
+    ents[fug].bag.state = 'surrendered'
+    H.step(1000)
+    H.ok(BL.live[fb] and fp.colour == 1 and fp.scale == 0.5, 'search client: he gave up: at its surrenderedScale')
+    Config.Markers.kinds.suspect.surrenderedScale = 0.6
     H.eq(RoutedBlips()[1], fb, 'search client: ...and it keeps the line')
     M.clear(runId, 1)
     SC.stop(cctx)

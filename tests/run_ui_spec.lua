@@ -410,6 +410,24 @@ do
         'HUD: a route line for a late officer following the action, during the objectives too')
     H.ok(bar:find('route.status === \'action\'', 1, true) ~= nil, 'run bar: the action status')
     H.ok(am:find('view.route?.status === \'action\'', 1, true) ~= nil, 'Active Mission: the action chip')
+    -- R6: the time he has left to reach the action (Config.Route.followActionSeconds), in its last 2 minutes
+    local data = Read(WEB .. 'shared/data.ts') or ''
+    H.ok(data:find('export const ACTION_LEFT_SHOWN = 120;', 1, true) ~= nil, 'the time left shows from 120 s')
+    H.ok(
+        hud:find('(route.status === \'off\' || route.status === \'action\') && route.secondsLeft !== null', 1, true)
+            ~= nil,
+        'HUD: the action line counts its seconds down from their arrival'
+    )
+    H.ok(
+        hud:find('left !== null && left <= ACTION_LEFT_SHOWN', 1, true) ~= nil
+            and hud:find('t(\'hud.route.action_left\', { seconds: left })', 1, true) ~= nil,
+        'HUD: "Joining your partners" shows the time left in the last 2 minutes'
+    )
+    H.ok(
+        bar:find('route?.status === \'off\' || route?.status === \'action\' ? route.secondsLeft : null', 1, true) ~= nil
+            and bar:find('t(\'ui.runbar.action_left\', { seconds: left })', 1, true) ~= nil,
+        'run bar: the time left in the last 2 minutes'
+    )
 end
 for _, f in ipairs({ 'secondsLeft', 'recalcsLeft', 'distance', 'required' }) do
     H.ok(statusBody:find(f .. ' =', 1, true) ~= nil, 'CP.Route.status sends ' .. f)

@@ -3,7 +3,7 @@
 
 import { Badge, Countdown, Icon, TierBadge } from '../shared/components';
 import { cx } from '../shared/cx';
-import { asArray } from '../shared/data';
+import { ACTION_LEFT_SHOWN, asArray } from '../shared/data';
 import { formatDistance } from '../shared/format';
 import { useCountdown, usePush, useRequest } from '../shared/hooks';
 import { t } from '../shared/i18n';
@@ -11,7 +11,7 @@ import { useNavigation } from '../shared/navigation';
 import type { ActiveMissionView } from '../shared/types';
 
 function RouteStatus({ route }: { route: ActiveMissionView['route'] }) {
-    const left = useCountdown(route?.status === 'off' ? route.secondsLeft : null);
+    const left = useCountdown(route?.status === 'off' || route?.status === 'action' ? route.secondsLeft : null);
     if (!route) return null;
     if (route.status === 'off') {
         return (
@@ -45,7 +45,16 @@ function RouteStatus({ route }: { route: ActiveMissionView['route'] }) {
         );
     }
     if (route.status === 'action') {
-        // a late officer: the run started before he arrived, he heads for the objective (Config.Route.lateArriveRange)
+        // a late officer: the run started before he arrived, he heads for the objective (Config.Route.lateArriveRange);
+        // in the last 2 minutes of the time he has to reach it (Config.Route.followActionSeconds) the run bar says so
+        if (left !== null && left <= ACTION_LEFT_SHOWN) {
+            return (
+                <span className="cp-runbar__status is-warning">
+                    <Icon name="navigation" size={13} />
+                    {t('ui.runbar.action_left', { seconds: left })}
+                </span>
+            );
+        }
         return (
             <span className="cp-runbar__status is-ok">
                 <Icon name="navigation" size={13} />

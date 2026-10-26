@@ -369,8 +369,9 @@ end
 -- Recalculate still waiting stop here (the token changes). dropStart (CP.Markers can draw the line to the objective):
 -- the start's waypoint and pin go first, so the objective's line is his one line (BLIPS_FINAL M11; the start circle
 -- is CP.Runs'). Without it (no objective line under Radio Silence, or Config.Markers off) the start's waypoint stays
--- his guide: the start still counts as arrival.
-function R.follow(runId, dropStart)
+-- his guide: the start still counts as arrival. secondsLeft: the time he has to arrive (the server's deadline,
+-- Config.Route.followActionSeconds); the HUD counts it down and shows it in the last 2 minutes.
+function R.follow(runId, dropStart, secondsLeft)
     if not cur or cur.runId ~= runId or cur.arrived or cur.action then return false end
     tokenSeq = tokenSeq + 1
     cur.token = tokenSeq
@@ -390,7 +391,8 @@ function R.follow(runId, dropStart)
         pending.done = true
         pending.p:resolve({ ok = false, stopped = true })
     end
-    HudRoute({ status = 'action' })
+    local left = tonumber(secondsLeft)
+    HudRoute({ status = 'action', secondsLeft = left and math.max(0, math.floor(left)) or nil })
     Toast('info', dropStart and 'route.follow_action' or 'route.follow_action_start')
     return true
 end

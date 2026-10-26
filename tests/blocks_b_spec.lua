@@ -2368,6 +2368,7 @@ do -- flee_arrest door: the front door before the knock, then the suspect (orang
     end
     H.ok(Of(sus.netId).look == 'fleeing' and Of(sus.netId).key == sus.netId, 'fa marker: the runner in kinds.fleeing')
     H.eq(Of(asc.netId).look, 'suspect', 'fa marker: the armed associate in kinds.suspect (red)')
+    H.ok(Of(asc.netId).variant == nil and Of(sus.netId).variant == nil, 'fa marker: at their normal size')
     H.eq(LabelKey(Of(sus.netId).label), 'block.flee_arrest.blip_suspect', 'fa marker: named Suspect')
     MoveEnt(S, sus.netId, 3600, 3000, 10)
     H.eq(Of(sus.netId).coords.x, 3600.0, 'fa marker: the runner 560 m away, where the server has him')
@@ -2375,6 +2376,7 @@ do -- flee_arrest door: the front door before the knock, then the suspect (orang
     ctx.state.peds[tostring(sus.netId)].state = 'surrendered'
     mk = FA.marker(ctx)
     H.ok(#mk.targets == 1 and mk.targets[1].look == 'suspect', 'fa marker: the dead one gone, one who gave up red')
+    H.eq(mk.targets[1].variant, 'surrendered', 'fa marker: ...at kinds.suspect.surrenderedScale (R6)')
     ctx.state.peds[tostring(sus.netId)].state = 'cuffed'
     mk = FA.marker(ctx)
     H.ok(mk.kind == 'targets' and #mk.targets == 0, 'fa marker: a cuffed one leaves the list')
@@ -2989,8 +2991,10 @@ do
         local base, routedGone = OpenBlips(), removedRouted
         FAc.prepare(c)
         FAc.start(c)
-        local function Pointer(x, look)
-            return { kind = 'targets', targets = { T(7401, x, 4000.0, 30.0, look, 'Suspect') } }
+        local function Pointer(x, look, variant)
+            local t = T(7401, x, 4000.0, 30.0, look, 'Suspect')
+            t.variant = variant
+            return { kind = 'targets', targets = { t } }
         end
         M.set(c.runId, 1, Pointer(4040.0, 'fleeing'), c)
         FAc.update(c, {
@@ -3014,6 +3018,31 @@ do
         CE[401].bag.state = 'surrendered'
         Steps(1)
         H.ok(blips[b] and p.colour == 1 and p.scale == 0.6, 'fa client: he gave up: red, a size smaller')
+        -- (R6) the size of one who gave up is kinds.suspect.surrenderedScale, near and far alike
+        local suspectKind = Config.Markers.kinds.suspect
+        suspectKind.surrenderedScale = 0.5
+        CE[401].bag.state = 'hostile'
+        Steps(1)
+        CE[401].bag.state = 'surrendered'
+        Steps(1)
+        H.ok(blips[b] and p.colour == 1 and p.scale == 0.5, 'fa client: he gave up: at kinds.suspect.surrenderedScale')
+        byNet[7401] = nil
+        M.update(c.runId, 1, Pointer(4600.0, 'suspect', 'surrendered'), c)
+        Steps(1)
+        local gb, gp = BlipOf(function(q) return q.ent == nil and q.sprite == 1 end)
+        H.ok(blips[b] == nil and gp and gp.colour == 1 and gp.scale == 0.5 and gp.x == 4600.0,
+            'fa client: out of this game, CP.Markers shows him at the same surrenderedScale')
+        suspectKind.surrenderedScale = nil
+        M.update(c.runId, 1, Pointer(4610.0, 'suspect'), c)
+        Steps(1)
+        gb, gp = BlipOf(function(q) return q.ent == nil and q.sprite == 1 end)
+        H.ok(gp and gp.scale == 0.7, 'fa client: a suspect who has not given up: kinds.suspect.scale')
+        M.update(c.runId, 1, Pointer(4620.0, 'suspect', 'surrendered'), c)
+        Steps(1)
+        gb, gp = BlipOf(function(q) return q.ent == nil and q.sprite == 1 end)
+        H.ok(gp and gp.scale == 0.6, 'fa client: an older config.lua without surrenderedScale: 0.6, the size it had')
+        suspectKind.surrenderedScale = 0.6
+        byNet[7401] = 401
         -- he runs out of this game: the block's blip goes, CP.Markers shows him where the server has him
         CE[401].bag.state = 'fleeing'
         byNet[7401] = nil

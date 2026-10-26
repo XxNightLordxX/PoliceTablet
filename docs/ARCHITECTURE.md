@@ -1350,14 +1350,19 @@ decides): with `false` the reports, Recalculate and the arrival check stay, but 
 Late partners (PLAN M11, owner decision; `Config.Route.lateArriveRange`, shipped 150 m, 0 = off): once
 `run.state == 'in_progress'`, the 1 s tick switches a participant who has not arrived to mode `'action'` once: no
 warning, report, drift or `off_route` check any more (with `required` on or off), reports and Recalculate are refused,
-`status` is `{ status = 'action', distance }` (metres to the action) and he gets `client:routeStatus` (runId, that
-status) plus a `run` push. He arrives (`markArrived`, as at the start) inside the start circle or within the range of
-`CP.Runs.actionPoints(run)` (anywhere inside a pointer circle).
+`status` is `{ status = 'action', distance, secondsLeft }` (metres to the action; the seconds until his start
+deadline) and he gets `client:routeStatus` (runId, that status) plus a `run` push. He arrives (`markArrived`, as at the
+start) inside the start circle or within the range of `CP.Runs.actionPoints(run)` (anywhere inside a pointer circle).
+Step R6: on that switch `CP.Runs.extendStart(run, src, Config.Route.followActionSeconds)` (shipped 300; 300 when the
+key is missing, 0 = not called) moves his start deadline (`p.deadline`, os.time, the one TickRun removes him at with
+`start_timeout`) to now + that, never earlier than it was; only an active participant who has not arrived.
 Client: `begin(runId, startCoords)` (waypoint + GPS sampling every `Config.Route.sampleEvery` m with
 `GetPosAlongGpsTypeRoute`), `recalculate()`, `stop()`, reports every `Config.Route.reportEvery` s;
 client actions `setGps`, `recalcRoute` registered with `CP.Tablet.registerClientAction`. `current() -> { runId,
-arrived, routeOn, action }`. `follow(runId, dropStart) -> boolean` (CP.Runs calls it on `client:routeStatus` 'action'):
-a new token stops the sampling and the reports, a pending Recalculate resolves, the HUD route is `'action'`;
+arrived, routeOn, action }`. `follow(runId, dropStart, secondsLeft) -> boolean` (CP.Runs calls it on
+`client:routeStatus` 'action' with that status' secondsLeft): a new token stops the sampling and the reports, a pending
+Recalculate resolves, the HUD route is `{ status = 'action', secondsLeft }` (the HUD counts it down and, like the run
+bar, shows it from 120 s, `ACTION_LEFT_SHOWN`);
 `dropStart` (CP.Markers `leads`) removes the start pin (line off first) and our start waypoint before `action` is set,
 so CP.Markers' objective line is his one line; without it the pin loses its line and our waypoint stays (put back when
 he has none). `setGps` / `recalcRoute` then answer `err.route_action`; arrival toasts `route.arrived_action`.
@@ -2111,7 +2116,8 @@ Full admin control additions (P0; the Settings screen follow-ups are P5's):
   (`settings.locked.code_fact`). A saved row of a locked path is ignored at boot and can still be reset.
 - RANGES for Hard rules 15-18: `Calls.dodgeWindow` 10-300, `respondingExpiry` 60-7200, `Alerts.backstopRadius`
   50-1000, `backstopDelay` 0-10, `Downed.pickupDelay` 5-120, `checkEvery` 1-10, `Route.abandonAfter` 10-120,
-  `maxDeviation` 30-500, `reportTimeout` 5-60, `maxDrift` 200-5000, `lateArriveRange` 0-500 (PLAN M11); and for
+  `maxDeviation` 30-500, `reportTimeout` 5-60, `maxDrift` 200-5000, `lateArriveRange` 0-500 (PLAN M11),
+  `followActionSeconds` 0-1800 (R6); and for
   the new `AdminControl.*`, `Cash.addFundsMax`, `manualDailyLimit`, `lowBalanceWarn`, `Backups.keep`. Their one
   switch is `Route.required` (Hard rule 17, a plain boolean: not locked, not a money switch).
 - `check(path, value, none, ctx)`: `ctx = { pending = { [path] = value } (the other values of the same save), boot }`.
@@ -2601,8 +2607,10 @@ without arguments also removes the run's service vehicles, PLAN M7).
 - The marker (from the server, §5.10 `marker`; nil = none): `{ kind = 'point'|'area'|'targets', look, label, key,
   number, coords = { x, y, z }, radius (area), route = true|false|'block', targets = { { key, netId, x, y, z, look,
   label, variant, number, beyond } } }`. `look` is a `Config.Markers.kinds` key (default `'objective'`, an area
-  `'searchArea'`); `variant` `'boss'|'next'|'followUp'|'setback'` picks the kind's bossScale, nextScale, followUpColour
-  or setbackColour. `beyond` (metres, PLAN M3): this target takes the line before the others while this officer is
+  `'searchArea'`); `variant` `'boss'|'next'|'followUp'|'setback'|'surrendered'` picks the kind's bossScale, nextScale,
+  followUpColour, setbackColour or surrenderedScale (R6: 0.6 when the kind has none; the server's flee_arrest,
+  search_area and pursuit markers send `'surrendered'` for one who gave up, and their blocks style their own blip with
+  it, so he is one size near and far). `beyond` (metres, PLAN M3): this target takes the line before the others while this officer is
   farther than that from it (kept until he is within 75 % of it), and never closer: then the others share it (escort:
   the truck while HE is farther than clearRadius from it, else the destination; BLIPS_FINAL X17, decided in each
   officer's game). `route = false`: no line; `'block'`: the block keeps its own line (checkpoint_route), CP.Markers
@@ -2628,16 +2636,16 @@ without arguments also removes the run's service vehicles, PLAN M7).
   when the checkpoint changes and once a second in its loop, the route natives only when the answer changes; this ends
   the second line a late partner had while still driving to the start), pursuit (each live car's blip in kinds.vehicle and each suspect's out of the car in kinds.suspect, key
   = its net id; the observe violator only once it passed; PLAN M7: a suspect running on foot in kinds.fleeing,
-  restyled in place when he stops, fights or gives up, and the server's marker gives him the same look) and escort (the truck's blip in kinds.escort, key = its net
+  restyled in place when he stops, fights or gives up (surrenderedScale), and the server's marker gives him the same look) and escort (the truck's blip in kinds.escort, key = its net
   id; the destination's in kinds.destination, key `'dest'`; the attackers' red dots stay detail blips), flee_arrest
   (PLAN M4: the front door's blip before the knock, key `'door'`; each suspect's, associate's or inmate's in
-  kinds.fleeing while he runs, else kinds.suspect, a surrendered one at 0.6, restyled in place when his state changes,
+  kinds.fleeing while he runs, else kinds.suspect, a surrendered one at surrenderedScale, restyled in place when his state changes,
   key = his net id), protect_rescue (each hostage's in kinds.hostage, key = his net id; the safe point's in
   kinds.safePoint, key `'safe'`) and field_contact (each contact's, key = its net id: a car in kinds.contactVehicle, a
   person in kinds.contact, kinds.fleeing while he runs, kinds.suspect once he draws or gave up, restyled in place) and
   search_area (PLAN M5: the circle's centre in kinds.searchArea, key `'center'`, its circle in `styleArea`, a shrunk
   circle's new centre handed over before the old one goes; each clue's numbered blip in kinds.clue, key `'c<n>'`; each
-  fugitive's in kinds.fleeing while he runs, kinds.suspect at 0.6 once he gave up, restyled in place, key = his net
+  fugitive's in kinds.fleeing while he runs, kinds.suspect at surrenderedScale once he gave up, restyled in place, key = his net
   id). An adopted blip that no longer exists falls back the same way at the next check. `clear` hands every adopted
   blip back with its line off. CP.Markers draws its own icon only for what no block draws: a fight area (hostile_waves,
   PLAN M5: kinds.fightArea, a red skull and circle named `markers.fight` "Hostiles"), a fallback anchor, a target not

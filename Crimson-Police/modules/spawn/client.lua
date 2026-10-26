@@ -592,7 +592,8 @@ end
 -- Takes control of one entity, checks and places it: 'placed' or 'bad', the reason (the probe's status, or 'seated' /
 -- 'attached': it goes where its car or what it hangs on goes), the probe's result and the height it was put at.
 -- Nothing (nil) when control is not given, the entity is gone or this game lost control during the check: then no
--- answer is told (TryPlace only tells the server this game stopped checking). rec.state is the bag's latest state (a later write of the same ask updates it).
+-- answer is told (TryPlace only tells the server this game stopped checking). rec.state is the bag's latest state (a
+-- later write of the same ask updates it).
 local function PlaceEntity(ent, place, kind, rec)
     if not TakeControl(ent, PLACE_CONTROL_MS) then return nil end
     local x, y, z = Num(place.x) + 0.0, Num(place.y) + 0.0, Num(place.z) + 0.0

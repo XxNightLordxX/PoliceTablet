@@ -40,7 +40,7 @@ These rules override everything else in this spec. If another section, example o
 
 - No mission alerts: from the moment a participant reaches the mission start until their run ends, their mission combat MUST NOT create SC-Dispatch or SC-Ambulance alerts (shots fired, person down), and any such call that still appears in SC-Dispatch MUST be cleared automatically. A downed participant can still get EMS help.
 
-- Route to the start: participants MUST follow the route shown to the mission start; staying off it ends their run as Abandoned. The owner may switch this rule off (Config.Route.required = false, at the owner's request of 2026-10-26): the route is still shown and checked for arrival, but leaving it never ends a run. A run keeps the value it was accepted with, and a test run follows its own Start route switch. Late partners (the owner's decision of 2026-10-19): once the run is In progress, a participant still on his way follows the action instead of an empty start: his route is no longer checked, his GPS leads to the current objective, and he arrives within Config.Route.lateArriveRange (150 m) of it or at the start (0 = only the start counts).
+- Route to the start: participants MUST follow the route shown to the mission start; staying off it ends their run as Abandoned. The owner may switch this rule off (Config.Route.required = false, at the owner's request of 2026-10-26): the route is still shown and checked for arrival, but leaving it never ends a run. A run keeps the value it was accepted with, and a test run follows its own Start route switch. Late partners (the owner's decision of 2026-10-19): once the run is In progress, a participant still on his way follows the action instead of an empty start: his route is no longer checked, his GPS leads to the current objective, and he arrives within Config.Route.lateArriveRange (150 m) of it or at the start (0 = only the start counts). From then on he has Config.Route.followActionSeconds (300 s) to arrive, never less time than he had (0 = the start deadline from his accept).
 
 - Downed participants: a participant who goes down has Failed their run. If no EMS is on duty, they MUST be picked up automatically (revived and moved to a drop-off point).
 
@@ -466,7 +466,7 @@ When a type is accepted, each participant's tablet sets a GPS route from where t
 
 - The check stops when that participant reaches the start. A run moves to In progress when its first participant reaches the start. A real call ends the run anyway, with no penalty.
 
-- Late partners (PLAN M11, the owner's decision of 2026-10-19, Config.Route.lateArriveRange = 150 m): from the moment the run is In progress, anyone still driving follows the action, with Config.Route.required on or off. Within a second the server stops his route check (no off-route warning or countdown, no drift or missing-report check, no Abandoned (off_route) end; a countdown already running stops) and his game drops the start's waypoint, pin and circle and stops sampling and reporting, and only then gets the GPS line to the current objective (the objective's pointer, Config.Markers). He arrives, exactly as at the start (the run's alert suppression, Hard rule 16, starts then), inside the start circle or within lateArriveRange of the action: the current objective's anchor or anything its map pointer shows (its point, a target such as a fleeing car, anywhere inside its circle). The HUD, the run bar and the Active Mission screen say "Joining your partners", Set GPS and Recalculate route are gone (Objective GPS works), and a toast tells him. When no objective line can show for him (Radio Silence 'area' or 'none', Config.Markers.enabled or route off) the start's waypoint stays his guide and its pin stays without a second line; the start still counts. The start timeout still applies. lateArriveRange = 0 keeps the rule as before: anyone still driving keeps their route check and only the start counts.
+- Late partners (PLAN M11, the owner's decision of 2026-10-19, Config.Route.lateArriveRange = 150 m): from the moment the run is In progress, anyone still driving follows the action, with Config.Route.required on or off. Within a second the server stops his route check (no off-route warning or countdown, no drift or missing-report check, no Abandoned (off_route) end; a countdown already running stops) and his game drops the start's waypoint, pin and circle and stops sampling and reporting, and only then gets the GPS line to the current objective (the objective's pointer, Config.Markers). He arrives, exactly as at the start (the run's alert suppression, Hard rule 16, starts then), inside the start circle or within lateArriveRange of the action: the current objective's anchor or anything its map pointer shows (its point, a target such as a fleeing car, anywhere inside its circle). The HUD, the run bar and the Active Mission screen say "Joining your partners", Set GPS and Recalculate route are gone (Objective GPS works), and a toast tells him. When no objective line can show for him (Radio Silence 'area' or 'none', Config.Markers.enabled or route off) the start's waypoint stays his guide and its pin stays without a second line; the start still counts. The start timeout still applies, with a deadline of its own (step R6): when he starts to follow the action he gets Config.Route.followActionSeconds (300 s) from then on to arrive, never less time than the start deadline he had (Config.Limits.startTimeout from his accept), so a partner who left late is not removed (start_timeout) while he chases; the "Joining your partners" line on the HUD and the run bar show the seconds left in the last 2 minutes; 0 = he keeps the start deadline from his accept, as before. lateArriveRange = 0 keeps the rule as before: anyone still driving keeps their route check and only the start counts.
 
 - For a mission whose start is a circle (Manhunt), the route leads to the circle's centre until the officer is inside it.
 
@@ -3130,6 +3130,10 @@ Config.Route = {
     -- GPS leads to the objective, his route is no longer checked, and he arrives this close to the objective (or at
     -- the start). 0 = only the start counts, as before
     lateArriveRange = 150.0,
+    -- seconds: an officer who follows the action gets this long from then on to reach it, so a partner who left late
+    -- is not dropped by the start timeout (Config.Limits.startTimeout) while he chases. Never less time than he had.
+    -- The HUD and the tablet show the time left in the last 2 minutes. 0 = he keeps the start deadline, as before
+    followActionSeconds = 300,
 }
 
 -- ── Map markers ─────────────────────────────────────────────────────────────
@@ -3138,9 +3142,9 @@ Config.Route = {
 -- gets from us; one who has set a waypoint of his own gets no objective line. Under kinds, each kind of blip has a
 -- sprite (the blip's picture, by its id), a colour (a colour id: 5 = yellow, go here; 1 = red, enemy; 17 = orange,
 -- fleeing or needs a follow-up; 3 = blue, friendly; 2 = green, safe point) and a scale (its size, 1.0 = normal).
--- nextScale, bossScale, followUpColour and setbackColour are the same for the next checkpoint, a boss, a point to
--- follow up and a device set back. Sprite and colour ids:
--- docs.fivem.net/docs/game-references/blips/
+-- nextScale, bossScale, surrenderedScale, followUpColour and setbackColour are the same for the next checkpoint, a
+-- boss, a suspect who gave up (the same size near you and far away), a point to follow up and a device set back.
+-- Sprite and colour ids: docs.fivem.net/docs/game-references/blips/
 Config.Markers = {
     enabled = true,              -- false = no objective blip or line from Crimson-Police (the missions' own blips stay)
     route = true,                -- false = the objective blip shows, but no GPS line to it
@@ -3176,7 +3180,8 @@ Config.Markers = {
         clue = { sprite = 1, colour = 5, scale = 0.7 },                         -- a clue in a search area
         fightArea = { sprite = 84, colour = 1, scale = 0.9 },                   -- the centre of a fight
         hostile = { sprite = 1, colour = 1, scale = 0.6, bossScale = 0.9 },     -- an armed hostile (bossScale: a boss)
-        suspect = { sprite = 1, colour = 1, scale = 0.7 },                      -- a suspect: stopped, armed or gave up
+        -- a suspect: stopped or armed (surrenderedScale: one who gave up)
+        suspect = { sprite = 1, colour = 1, scale = 0.7, surrenderedScale = 0.6 },
         fleeing = { sprite = 1, colour = 17, scale = 0.8 },                     -- a suspect on the run
         vehicle = { sprite = 225, colour = 1, scale = 0.9 },                    -- a suspect's car
         contact = { sprite = 280, colour = 5, scale = 0.7 },                    -- a person to talk to
