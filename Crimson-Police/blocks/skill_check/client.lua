@@ -105,27 +105,59 @@ end
 --                                    BLIPS
 -- ============================================================================
 
-local function ClearBlips(st)
-    for _, b in ipairs(st.blips or {}) do
-        if DoesBlipExist(b) then RemoveBlip(b) end
+-- st.blips[i] = { id = blip, at = where it is, variant = its look }: one per device still to work (armed, set back,
+-- or waiting to be tried again), handed to the objective pointer as 'd<i>' (the server's marker): CP.Markers puts the
+-- GPS line on it and draws no second icon (BLIPS_FINAL R1). A snapshot keeps every blip that still shows the same
+-- device, so the line and the flash on it survive (R8); a device set back is restyled in place.
+local SHOWN = { armed = true, setback = true, cooldown = true }
+
+-- A blip handed over is taken back first, so its GPS line goes off before it goes (BLIPS_FINAL R10).
+local function DropBlip(st, i)
+    local e = st.blips[i]
+    if not e then return end
+    st.blips[i] = nil
+    if st.handed[i] then
+        CP.Markers.release('d' .. i, st.handed[i])
+        st.handed[i] = nil
     end
-    st.blips = {}
+    if DoesBlipExist(e.id) then RemoveBlip(e.id) end
 end
 
+local function ClearBlips(st)
+    st.blips, st.handed = st.blips or {}, st.handed or {}
+    for i in pairs(st.blips) do DropBlip(st, i) end
+    st.blips, st.handed = {}, {}
+end
+
+-- Config.Markers.kinds.device (yellow, setbackColour while set back), numbered, never short range. Nothing under
+-- Radio Silence.
 local function RefreshBlips(ctx, st)
-    ClearBlips(st)
-    if ctx.radioSilence or not st.data then return end
-    for i, t in ipairs(st.data.targets or {}) do
-        if t.status == 'armed' then
-            local b = AddBlipForCoord(t.coords.x, t.coords.y, t.coords.z)
-            SetBlipSprite(b, 1)
-            SetBlipColour(b, 1)
-            SetBlipScale(b, 0.8)
-            SetBlipAsShortRange(b, false)
-            BeginTextCommandSetBlipName('STRING')
-            AddTextComponentSubstringPlayerName(CP.L('block.skill_check.blip', { n = i }))
-            EndTextCommandSetBlipName(b)
-            st.blips[#st.blips + 1] = b
+    st.blips, st.handed = st.blips or {}, st.handed or {}
+    local want = {}
+    if not ctx.radioSilence and st.data then
+        for i, t in ipairs(st.data.targets or {}) do
+            if SHOWN[t.status] then
+                local c = t.coords
+                want[i] = {
+                    at = ('%.2f:%.2f:%.2f'):format(c.x, c.y, c.z),
+                    c = c,
+                    variant = t.status == 'setback' and 'setback' or false,
+                }
+            end
+        end
+    end
+    for i, e in pairs(st.blips) do
+        local w = want[i]
+        if not w or w.at ~= e.at then DropBlip(st, i) end
+    end
+    for i, w in pairs(want) do
+        local e = st.blips[i]
+        if not e or e.variant ~= w.variant then
+            local b = e and e.id or AddBlipForCoord(w.c.x, w.c.y, w.c.z)
+            CP.Markers.style(b, 'device', CP.L('block.skill_check.blip', { n = i }),
+                { number = i, variant = w.variant or nil })
+            st.blips[i] = { id = b, at = w.at, variant = w.variant }
+            if not e and CP.Markers.adopt('d' .. i, b) then st.handed[i] = b end
         end
     end
 end

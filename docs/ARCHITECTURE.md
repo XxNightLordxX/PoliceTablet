@@ -2576,8 +2576,16 @@ msg.marker, ctx)` after the block's own `start` (ctx = the block's client ctx, f
   flashing flashes for the rest of that one flash (a block draws its blips from its first snapshot, just after the start
   message's pointer). `release(key, blip?)` — the block takes it back before removing it: its line goes off and
   CP.Markers draws the target again; with `blip`, only when that is the blip handed over for `key`. Used by
-  interact_points (each pending or follow-up point's numbered blip, key = its point number; a hidden search's centre,
-  key `'area'`), pursuit (each live car's blip in kinds.vehicle and each suspect's out of the car in kinds.suspect, key
+  interact_points (each pending or follow-up point's numbered blip in kinds.point, followUp while it needs a follow-up,
+  key = its point number; a hidden search's centre in kinds.searchArea, key `'area'`, its circle in `styleArea`; PLAN
+  M6: a snapshot keeps every blip that still shows the same point, a changed status is restyled in place, R8),
+  skill_check (PLAN M6: each device still to work, armed, set back or waiting to be tried again, numbered in
+  kinds.device, setback while set back, restyled in place, key `'d<n>'`; kept across snapshots, R8), process_scene
+  (PLAN M6: the scene's blip in kinds.scene, key `'scene'`), checkpoint_route (PLAN M6: the current checkpoint's
+  numbered blip in kinds.checkpoint, key `'cp<n>'`, the next one at nextScale; the marker says `route = 'block'`, so
+  the block keeps its own line on that blip, in `routeColour()`, on only while `canRoute(ctx)` allows one: checked
+  when the checkpoint changes and once a second in its loop, the route natives only when the answer changes; this ends
+  the second line a late partner had while still driving to the start), pursuit (each live car's blip in kinds.vehicle and each suspect's out of the car in kinds.suspect, key
   = its net id; the observe violator only once it passed) and escort (the truck's blip in kinds.escort, key = its net
   id; the destination's in kinds.destination, key `'dest'`; the attackers' red dots stay detail blips), flee_arrest
   (PLAN M4: the front door's blip before the knock, key `'door'`; each suspect's, associate's or inmate's in
@@ -2602,7 +2610,9 @@ msg.marker, ctx)` after the block's own `start` (ctx = the block's client ctx, f
   for `opts.number`, the name (`BeginTextCommandSetBlipName('STRING')`). The pointer also gets `SetBlipPriority(12)` and
   flashes once, `SetBlipFlashes` + `SetBlipFlashTimer(flashSeconds * 1000)` (none at 0).
 - `styleArea(blip, kind)` — a block's own circle (`AddBlipForRadius`) in the colour of `kinds[kind]` at `areaAlpha`, as
-  CP.Markers draws its own circles (search_area, PLAN M5).
+  CP.Markers draws its own circles (search_area, PLAN M5; interact_points' hidden search, PLAN M6).
+- `routeColour() -> integer` — `Config.Markers.routeColour` (0-85, default 5): the colour of every Crimson-Police GPS
+  line, a block's own included (checkpoint_route, PLAN M6).
 - The line (R2, R6): on ONE blip, the point or centre, or this officer's nearest target (moved only when another is
   25 % closer; a target with `beyond` first while he is farther than that from it), `SetBlipRoute` +
   `SetBlipRouteColour(routeColour)`; off within `routeOffWithin` of a point or target
@@ -2766,8 +2776,9 @@ CP.Blocks.register('hostile_waves', {
   marker  = function(ctx) return nil end,  -- (optional) this objective's pointer on the officers' map (§5.44 shape,
                                    -- CP.Runs.marker §5.10): asked at its start and every 1 s tick, so keep it cheap
                                    -- (server positions, no waits); name each target by the key the client half
-                                   -- hands its own blip over with (CP.Markers.adopt). false = none (the block shows
-                                   -- the objective itself: checkpoint_route); nil = the engine's pin at the anchor
+                                   -- hands its own blip over with (CP.Markers.adopt). false = none right now (e.g.
+                                   -- nothing left to do); route = 'block' = the block keeps its own GPS line
+                                   -- (checkpoint_route); nil = the engine's pin at the anchor
   restart = function(ctx) end,     -- test control: remove and respawn this objective's NPCs/props
   stop    = function(ctx) end,     -- objective finished or run ended (the engine deletes entities anyway)
 })

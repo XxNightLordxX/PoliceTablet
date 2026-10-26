@@ -615,6 +615,8 @@ Locations for every new mission come from GTA V vehicle nodes and known base-gam
 
 - Spawns: none; markers and blips only
 
+- Marking (Config.Markers, PLAN M6): the current checkpoint is a numbered yellow blip with the block's own GPS line (Config.Markers.routeColour) until it is cleared, the next one a smaller numbered yellow blip. An officer still driving to the start, or with a waypoint of his own, gets no checkpoint line: the start's line stays his only one. Under Radio Silence (Config.Markers.radioSilence 'area') the current checkpoint alone shows, without a line, and the HUD names its street
+
 - Objectives: 1) drive to each checkpoint in order; 2) stop inside its 10 m marker for 10 seconds; a checkpoint counts only while the officer is driving a vehicle (any vehicle, in its driver seat, checked by the server)
 
 - Scales: nothing (solo)
@@ -634,6 +636,8 @@ Locations for every new mission come from GTA V vehicle nodes and known base-gam
 - Start: the first business
 
 - Spawns: none; ox_target zones on the front doors
+
+- Marking (Config.Markers, PLAN M2, M6): each door still to check is a numbered yellow blip, orange while it needs securing, with the GPS line to the nearest. A door's blip stays as it is until that door is done (an update redraws nothing), so the line and its first flash are kept
 
 - Objectives: 1) at each business, ox_target "Check door" on the front door (5 s progress); 2) the server has rolled each door as secure (75%) or open (25%) and shows the result; an open door adds "Secure door" (5 s progress); 3) log the result on the tablet: "Secure" or "Found open – secured"
 
@@ -680,6 +684,8 @@ Locations for every new mission come from GTA V vehicle nodes and known base-gam
 - Start: the course start marker; the timer starts at the first checkpoint
 
 - Spawns: checkpoint markers only (no cones or props)
+
+- Marking (Config.Markers, PLAN M6): the current checkpoint is a numbered yellow blip with the block's own GPS line (Config.Markers.routeColour) until it is cleared, the next one a smaller numbered yellow blip. An officer still driving to the start, or with a waypoint of his own, gets no checkpoint line: the start's line stays his only one. Under Radio Silence (Config.Markers.radioSilence 'area') the current checkpoint alone shows, without a line, and the HUD names its street
 
 - Objectives: drive through every checkpoint in order; a checkpoint counts only while the officer is driving a vehicle (any vehicle, in its driver seat, checked by the server); a missed checkpoint must be driven through before the next one counts; each wall or vehicle contact adds 2 seconds
 
@@ -753,6 +759,8 @@ Locations for every new mission come from GTA V vehicle nodes and known base-gam
 
 - Marking (Config.Markers, PLAN M4): before the knock the front door's yellow blip with the GPS line to it; after it the suspect and each associate not yet cuffed, orange while he runs and red once he fights or gives up, with the line to the nearest; one who ran too far away for an officer's game (OneSync streams 424 m) shows where the server has him
 
+- Marking (Config.Markers, PLAN M6): objective 5 the yard to search, a numbered yellow blip with the GPS line; objective 6 the scene, a yellow map pin "Scene" with the line, until it is processed
+
 - Objectives: 1) ox_target "Knock and announce" on the front door; 2) the suspect's response is rolled: surrenders at the door (50%), flees out the back on foot (30%) or fights with a pistol (20%); associates always fight; 3) cuff the suspect ("Cuff suspect", 5 s progress) unless the suspect was killed while fighting; 4) neutralise every associate (killed, or surrendered and cuffed); 5) ox_target "Search the property" at the yard marker (8 s progress): the server rolls what is found (60%: narcotics, a weapon, stolen goods or documents), shown on the tablet as virtual evidence; 6) Process the scene (it completes at once when nobody died)
 
 - Scales: armed associates (base 1)
@@ -801,6 +809,8 @@ Locations for every new mission come from GTA V vehicle nodes and known base-gam
 
 - Marking (Config.Markers, PLAN M5): during the fight a red circle with a skull at its centre, "Hostiles", round the hostile spawn points (15 m past the farthest), with the GPS line to its centre until you are inside it; each hostile is a red dot
 
+- Marking (Config.Markers, PLAN M6): "Secure the scene" a numbered yellow blip with the GPS line; then the scene a yellow map pin "Scene" with the line, until it is processed
+
 - Objectives: 1) neutralise every hostile (killed, or surrendered and cuffed; a hostile under 25% health has a 30% chance to surrender); 2) ox_target "Secure the scene" at the scene marker (8 s progress); 3) Process the scene (at most 4 bodies kept)
 
 - Scales: hostiles
@@ -846,6 +856,8 @@ Locations for every new mission come from GTA V vehicle nodes and known base-gam
 - Locations: 5+ buildings, each with 6+ hiding spots
 
 - Start: within 50 m of the building; the time limit, which is the device timer, starts now
+
+- Marking (Config.Markers, PLAN M6): while searching, a yellow circle round the hiding spots with a yellow pin "Search area" at its centre and the GPS line to it (never to a hiding spot); then each device still to defuse is a numbered yellow blip with the line to the nearest
 
 - Spawns: 1 device prop (scales), each at a different random hiding spot
 
@@ -999,6 +1011,8 @@ Locations for every new mission come from GTA V vehicle nodes and known base-gam
 
 - Marking (Config.Markers, PLAN M4): during the cook chase each cook not yet cuffed is an orange blip while he runs and red once he fights or gives up, with the GPS line to the nearest, shown where the server has him once he is too far away for an officer's game
 
+- Marking (Config.Markers, PLAN M6): the two entry points to breach are numbered yellow blips with the GPS line to the nearest; the stash search a yellow circle with a yellow pin at its centre and the line to it (never to a stash); the lab to shut down a numbered yellow blip with the line, orange while it is set back (Ventilate); the scene a yellow map pin "Scene" with the line
+
 - Objectives: 1) breach: ox_target "Stack up and breach" (3 s progress) on both entry points, by 2 different officers within 6 seconds of each other (the count is min(2, participants still in the run): when only one is left, one officer breaches both entries with an 8 s progress each, so the run never soft-locks); 2) neutralise every hostile (killed, or surrendered and cuffed); 3) when the last hostile falls the cooks bolt along an escape route: catch and cuff them (unarmed; they give up when aimed at within 10 m, when stunned, when a participant stays within 3 m for 3 seconds, or once worn out by running when a participant is within 30 m); 4) search the stash spots ("Search", 4 s progress) until every stash is found, then "Seize the product" (6 s progress); 5) "Shut down the lab" at the lab point: 3 ox_lib skill checks (medium, medium, hard); 2 misses in a row start a toxic fire (an effect only, it hurts nobody), a setback and never a fail: any participant must "Ventilate" (10 s progress) at the lab point, the officer who missed loses 15 points (lab_fire, personal), and the shutdown can be tried again 30 seconds later by anyone; 6) Process the scene
 
 - Scales: hostiles, cooks (max 3), stashes (max 4)
@@ -1027,6 +1041,8 @@ Locations for every new mission come from GTA V vehicle nodes and known base-gam
 
 - Marking (Config.Markers, PLAN M4): during the runners' chase each runner not yet cuffed is an orange blip while he runs and red once he fights or gives up, with the GPS line to the nearest, shown where the server has him once he is too far away for an officer's game
 
+- Marking (Config.Markers, PLAN M6): the two entry points to breach are numbered yellow blips with the GPS line to the nearest; the cache search a yellow circle with a yellow pin at its centre and the line to it (never to a cache); the scene a yellow map pin "Scene" with the line
+
 - Objectives: 1) breach together on both entry points (as Drug Lab Raid); 2) neutralise every hostile, then the lieutenant; 3) when the lieutenant falls the runners bolt: catch and cuff them; 4) search the cache spots until every cache is found, then "Seize the weapons" (6 s progress); 5) Process the scene
 
 - Scales: hostiles, runners (max 4), caches (max 2)
@@ -1052,6 +1068,8 @@ Locations for every new mission come from GTA V vehicle nodes and known base-gam
 - Spawns: 30 hostiles (scales) in 4 waves of 8 / 8 / 7 / 7, each scaled the same way, then the Kingpin after the last wave. Pistols, heavy pistols and shotguns; base accuracy 30 and armour 25, plus the tier's increase. The Kingpin has armour 100, health 400 and a heavy pistol, and does not scale
 
 - Marking (Config.Markers, PLAN M5): during the fight a red circle with a skull at its centre, "Hostiles", round the hostile spawn points (15 m past the farthest of them and the Kingpin's spot), with the GPS line to its centre until you are inside it; each hostile is a red dot
+
+- Marking (Config.Markers, PLAN M6): "Secure the scene" a numbered yellow blip with the GPS line
 
 - Objectives: 1) neutralise every hostile; 2) neutralise the Kingpin; 3) ox_target "Secure the scene" (8 s progress)
 

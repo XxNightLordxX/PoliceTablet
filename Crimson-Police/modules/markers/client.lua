@@ -135,7 +135,7 @@ local function RouteOff()
 end
 
 local function RouteOn(blip)
-    local colour = CP.U.clamp(Int(Cfg().routeColour) or 5, 0, 85)
+    local colour = M.routeColour()
     if routeBlip ~= blip then
         RouteOff()
         SetBlipRoute(blip, true)
@@ -588,6 +588,10 @@ function M.canRoute(ctx)
     if IsWaypointActive() then return false end
     return true
 end
+
+-- The colour of every Crimson-Police GPS line (Config.Markers.routeColour, 0-85), a block's own line included
+-- (checkpoint_route).
+function M.routeColour() return CP.U.clamp(Int(Cfg().routeColour) or 5, 0, 85) end
 
 -- The look of kind (Config.Markers.kinds) and the settings every objective blip gets: short range, legend category,
 -- a name, a number. opts = { variant = 'boss'|'next'|'followUp'|'setback', number = n }.

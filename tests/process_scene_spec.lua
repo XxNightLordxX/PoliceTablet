@@ -182,6 +182,17 @@ do
     Runs.objectiveComplete(run, 1)
     local st = State(run)
     H.eq(#CP.Custody._servicesOf(run), 0, 'coroner off: no van')
+    -- the objective pointer (PLAN M6): the scene, keyed for the client's hand-over, in kinds.scene (not the anchor's
+    -- pin on a body)
+    local mk = Runs.marker(run)
+    H.ok(mk and mk.kind == 'point' and mk.key == 'scene' and mk.look == 'scene', 'marker: the scene, keyed scene')
+    H.ok(mk and mk.coords.x == SCENE.x and mk.coords.y == SCENE.y and mk.netId == nil, 'marker: at the scene marker')
+    H.ok(mk and tostring(mk.label):find('block.process_scene.blip', 1, true) ~= nil,
+        'marker: named like its blip (Scene)')
+    run.modifier = 'radio_silence'
+    H.eq(Runs.marker(run) and Runs.marker(run).key, 'scene',
+        'marker: under Radio Silence too (CP.Markers shows a single point by Config.Markers.radioSilence)')
+    run.modifier = nil
     local body = st.order[1]
     local bc = W.at(run, body)
     W.place(1, bc.x + 1.0, bc.y, bc.z)

@@ -744,4 +744,449 @@ do
     H.ok(NoRemovedRoute(), 'line off first')
 end
 
+-- ============================================================================
+-- M6: POINT OBJECTIVES (interact_points, skill_check, process_scene, checkpoint_route)
+-- ============================================================================
+-- The blocks' own blips are the pointer (R1); a snapshot keeps every blip that still shows the same thing, so the
+-- GPS line and the flash on it survive (R8); checkpoint_route keeps its own line, in routeColour, never while this
+-- officer still drives to the start or has a waypoint of his own (R2).
+
+-- the blip operations logged since index from
+local function Ops(from)
+    local n = { add = 0, remove = 0, route = 0 }
+    for i = from + 1, #BL.log do
+        local e = BL.log[i]
+        n[e.op] = (n[e.op] or 0) + 1
+    end
+    return n
+end
+local function ByNumber(n)
+    for _, id in ipairs(Live()) do if B(id).number == n then return id end end
+    return nil
+end
+local function Quiet(ops) return ops.add == 0 and ops.remove == 0 and ops.route == 0 end
+local function OpsText(ops) return ('%d added, %d removed, %d line changes'):format(ops.add, ops.remove, ops.route) end
+_G.DrawMarker = _G.DrawMarker or function() end
+_G.PlaySoundFrontend = _G.PlaySoundFrontend or function() end
+_G.GetVehiclePedIsIn = _G.GetVehiclePedIsIn or function() return 0 end
+
+-- interact_points (Business Check): an unchanged snapshot redraws nothing; a follow-up is restyled in place
+do
+    Reset()
+    H.exportsMock.ox_target = {
+        addSphereZone = function() return 1 end,
+        removeZone = function() end,
+    }
+    local IPc = CP.Blocks.get('interact_points')
+    local ctx = {
+        runId = 'run-ip6',
+        index = 1,
+        obj = { label = 'Check the doors', target = { label = 'Check door' }, progress = { duration = 5000 } },
+        state = {},
+        report = function() end,
+        hudDetail = function() end,
+    }
+    local doors = { { 0.0, 500.0 }, { 0.0, 200.0 }, { 0.0, 900.0 } }
+    local function Snapshot(statuses, extra)
+        local pts = {}
+        for n, d in ipairs(doors) do
+            pts[n] = { coords = { x = d[1], y = d[2], z = 30.0 }, label = 'Shop ' .. n, status = statuses[n] }
+        end
+        local snap = { kind = 'state', points = pts, total = #pts, done = 0 }
+        for k, v in pairs(extra or {}) do snap[k] = v end
+        return snap
+    end
+    local function Pointer(statuses)
+        local targets = {}
+        for n, d in ipairs(doors) do
+            if statuses[n] == 'pending' or statuses[n] == 'followup' then
+                targets[#targets + 1] = {
+                    key = n,
+                    x = d[1],
+                    y = d[2],
+                    z = 30.0,
+                    look = 'point',
+                    number = n,
+                    label = 'Shop ' .. n,
+                    variant = statuses[n] == 'followup' and 'followUp' or nil,
+                }
+            end
+        end
+        return { kind = 'targets', targets = targets }
+    end
+    local all = { 'pending', 'pending', 'pending' }
+    IPc.start(ctx)
+    M.set('run-ip6', 1, Pointer(all), ctx)
+    IPc.update(ctx, Snapshot(all))
+    local d1, d2, d3 = ByNumber(1), ByNumber(2), ByNumber(3)
+    H.ok(#Live() == 3 and d1 and d2 and d3, 'ip: three numbered door blips, no second icon')
+    H.ok(B(d2).route and #Routed() == 1, 'ip: the line on the nearest door (door 2)')
+    H.ok(B(d2).flashes == true, 'ip: with the pointer\'s flash')
+
+    -- the same doors again (only the counts changed): nothing redrawn, the line and the flash stay
+    local mark = #BL.log
+    IPc.update(ctx, Snapshot(all, { together = { count = 2, window = 6 } }))
+    M.update('run-ip6', 1, Pointer(all), ctx)
+    Tick()
+    local ops = Ops(mark)
+    H.ok(Quiet(ops), 'ip: an unchanged snapshot keeps every blip (' .. OpsText(ops) .. ')')
+    H.ok(B(d1).live and B(d2).live and B(d3).live, 'ip: the same three blips')
+    H.ok(B(d2).route and B(d2).flashes == true, 'ip: door 2 keeps the line and the flash')
+
+    -- door 2 was found open: it needs securing, restyled in place (orange), the line stays on it
+    local fu = { 'pending', 'followup', 'pending' }
+    mark = #BL.log
+    IPc.update(ctx, Snapshot(fu))
+    M.update('run-ip6', 1, Pointer(fu), ctx)
+    Tick()
+    ops = Ops(mark)
+    H.ok(Quiet(ops), 'ip: a follow-up restyles the door\'s own blip (' .. OpsText(ops) .. ')')
+    H.eq(B(d2).colour, K.point.followUpColour, 'ip: door 2 orange (kinds.point.followUpColour)')
+    H.ok(B(d2).live and B(d2).route, 'ip: and keeps the line')
+
+    -- door 2 secured: only its blip goes, its line off first, and the line moves on to door 1
+    local done = { 'pending', 'done', 'pending' }
+    M.update('run-ip6', 1, Pointer(done), ctx)
+    IPc.update(ctx, Snapshot(done))
+    Tick()
+    H.eq(B(d2).live, false, 'ip: the secured door\'s blip went')
+    H.ok(B(d1).live and B(d3).live and #Live() == 2, 'ip: doors 1 and 3 keep their blips')
+    H.ok(B(d1).route and #Routed() == 1, 'ip: the line moves on to door 1')
+    H.ok(NoRemovedRoute(), 'ip: every removed blip lost its line first')
+    M.clear('run-ip6', 1)
+    IPc.stop(ctx)
+    H.eq(#Live(), 0, 'ip: stop leaves nothing')
+end
+
+-- interact_points hidden search (Bomb Disposal, the raids' stashes): a yellow circle and pin, kept while searching
+do
+    Reset()
+    local IPc = CP.Blocks.get('interact_points')
+    local ctx = {
+        runId = 'run-ip6h',
+        index = 1,
+        obj = { hidden = { count = 2 }, target = { label = 'Search' } },
+        state = {},
+        report = function() end,
+        hudDetail = function() end,
+    }
+    local spots = { { 0.0, 600.0 }, { 40.0, 600.0 }, { 0.0, 640.0 } }
+    local function Snapshot(found)
+        local pts = {}
+        for n, d in ipairs(spots) do
+            pts[n] = { coords = { x = d[1], y = d[2], z = 30.0 }, status = n <= found and 'done' or 'pending' }
+        end
+        return { kind = 'state', hidden = true, points = pts, found = found, total = 2 }
+    end
+    IPc.start(ctx)
+    M.set('run-ip6h', 1, {
+        kind = 'area',
+        key = 'area',
+        look = 'searchArea',
+        coords = { x = 40.0 / 3, y = 1840.0 / 3, z = 30.0 },
+        radius = 40.0,
+        label = 'Search area',
+    }, ctx)
+    IPc.update(ctx, Snapshot(0))
+    local circles, pins = Live('radius'), Live('coord')
+    H.ok(#circles == 1 and #pins == 1, 'ip hidden: one circle and one centre, the block\'s (no second icon or circle)')
+    local circle, centre = circles[1], pins[1]
+    H.ok(B(circle).colour == K.searchArea.colour and B(circle).alpha == Config.Markers.areaAlpha,
+        'ip hidden: the circle yellow at areaAlpha (it was red at 90)')
+    H.ok(
+        B(centre).sprite == K.searchArea.sprite and B(centre).colour == K.searchArea.colour
+            and B(centre).scale == K.searchArea.scale and B(centre).shortRange == false,
+        'ip hidden: the centre a yellow pin, kinds.searchArea (it was a red dot)'
+    )
+    H.ok(B(centre).route and #Routed() == 1, 'ip hidden: the line on the centre')
+    local mark = #BL.log
+    IPc.update(ctx, Snapshot(1))
+    Tick()
+    local ops = Ops(mark)
+    H.ok(Quiet(ops), 'ip hidden: one device found, the search goes on: nothing redrawn (' .. OpsText(ops) .. ')')
+    H.ok(B(centre).route and B(circle).live, 'ip hidden: the same circle and centre, the line stays')
+    M.update('run-ip6h', 1, nil, ctx)
+    IPc.update(ctx, Snapshot(2))
+    H.eq(#Live(), 0, 'ip hidden: every device found: circle and centre go')
+    H.ok(NoRemovedRoute(), 'ip hidden: the line off first')
+    IPc.stop(ctx)
+end
+
+-- skill_check (Bomb Disposal, Drug Lab Raid "Shut down the lab"): numbered yellow devices, the set-back one orange
+do
+    Reset()
+    H.load('blocks/skill_check/client.lua')
+    local SCc = CP.Blocks.get('skill_check')
+    local ctx = {
+        runId = 'run-sc6',
+        index = 2,
+        obj = { checks = { 'easy' } },
+        state = {},
+        report = function() end,
+        hudDetail = function() end,
+    }
+    local spots = { 300.0, 700.0 }
+    local function Snap(s1, s2, worker)
+        local targets = {}
+        for i, s in ipairs({ s1, s2 }) do
+            targets[i] = {
+                coords = { x = 0.0, y = spots[i], z = 30.0 },
+                netId = 800 + i,
+                status = s,
+                next = 1,
+                streak = 0,
+            }
+        end
+        targets[1].worker = worker
+        return { kind = 'state', checks = 1, targets = targets }
+    end
+    local function Pointer(s1, s2)
+        local targets = {}
+        for i, s in ipairs({ s1, s2 }) do
+            if s == 'armed' or s == 'setback' or s == 'cooldown' then
+                targets[#targets + 1] = {
+                    key = 'd' .. i,
+                    x = 0.0,
+                    y = spots[i],
+                    z = 30.0,
+                    look = 'device',
+                    number = i,
+                    variant = s == 'setback' and 'setback' or nil,
+                    label = 'Device ' .. i,
+                }
+            end
+        end
+        return { kind = 'targets', targets = targets }
+    end
+    SCc.prepare(ctx)
+    SCc.start(ctx)
+    M.set('run-sc6', 2, Pointer('armed', 'armed'), ctx)
+    SCc.update(ctx, Snap('armed', 'armed'))
+    local d1, d2 = ByNumber(1), ByNumber(2)
+    H.ok(#Live() == 2 and d1 and d2, 'sc: one numbered blip per device, the block\'s (no CP.Markers pin)')
+    H.ok(
+        B(d1).sprite == K.device.sprite and B(d1).colour == K.device.colour and B(d1).scale == K.device.scale
+            and B(d1).shortRange == false and B(d1).category == 2,
+        'sc: kinds.device (yellow; it was red), never short range'
+    )
+    H.ok(B(d1).route and #Routed() == 1, 'sc: the line on the nearest device\'s own blip')
+    H.ok(B(d1).flashes == true, 'sc: with the pointer\'s flash')
+
+    -- a partner works device 1 (its worker changed, nothing else): nothing redrawn
+    local mark = #BL.log
+    SCc.update(ctx, Snap('armed', 'armed', 9))
+    M.update('run-sc6', 2, Pointer('armed', 'armed'), ctx)
+    Tick()
+    local ops = Ops(mark)
+    H.ok(Quiet(ops), 'sc: an unchanged snapshot keeps every blip (' .. OpsText(ops) .. ')')
+    H.ok(B(d1).route and B(d1).flashes == true, 'sc: device 1 keeps the line and the flash')
+
+    -- set back (Ventilate): the same blip, orange, the line stays; then waiting to be tried again: yellow again
+    mark = #BL.log
+    SCc.update(ctx, Snap('setback', 'armed'))
+    M.update('run-sc6', 2, Pointer('setback', 'armed'), ctx)
+    Tick()
+    ops = Ops(mark)
+    H.ok(Quiet(ops), 'sc: a setback restyles the device\'s own blip (' .. OpsText(ops) .. ')')
+    H.ok(B(d1).live and B(d1).colour == K.device.setbackColour and B(d1).route,
+        'sc: set back = orange (kinds.device.setbackColour; it had no blip), keeps the line')
+    SCc.update(ctx, Snap('cooldown', 'armed'))
+    M.update('run-sc6', 2, Pointer('cooldown', 'armed'), ctx)
+    Tick()
+    H.ok(B(d1).live and B(d1).colour == K.device.colour and B(d1).route,
+        'sc: waiting to be tried again: the same blip, yellow, keeps the line')
+
+    -- device 1 shut down: its blip goes, its line off first, the line moves to device 2
+    M.update('run-sc6', 2, Pointer('defused', 'armed'), ctx)
+    SCc.update(ctx, Snap('defused', 'armed'))
+    Tick()
+    H.eq(B(d1).live, false, 'sc: a defused device\'s blip goes')
+    H.ok(B(d2).live and B(d2).route and #Live() == 1, 'sc: the line moves to device 2')
+    H.ok(NoRemovedRoute(), 'sc: every removed blip lost its line first')
+    M.clear('run-sc6', 2)
+    SCc.stop(ctx)
+    H.eq(#Live(), 0, 'sc: stop leaves nothing')
+end
+
+-- process_scene (Warrant Service, the raids, Gang Shootout): the scene is a yellow map pin with the line
+do
+    Reset()
+    H.exportsMock.ox_target = {
+        addSphereZone = function() return 1 end,
+        removeZone = function() end,
+        addLocalEntity = function() end,
+        removeLocalEntity = function() end,
+    }
+    H.load('blocks/process_scene/client.lua')
+    local PSc = CP.Blocks.get('process_scene')
+    local scene = { x = 0.0, y = 400.0, z = 30.0 }
+    local pointer = { kind = 'point', key = 'scene', look = 'scene', coords = scene, label = 'Scene' }
+    local function Snap() return { bodies = {}, released = false, scene = scene, coroner = false } end
+    local ctx = { runId = 'run-ps6', index = 3, obj = {}, state = {}, report = function() end }
+    PSc.prepare(ctx)
+    PSc.start(ctx)
+    M.set('run-ps6', 3, pointer, ctx)
+    H.eq(#Live(), 1, 'ps: CP.Markers\' pin until the block draws its own')
+    PSc.update(ctx, Snap())
+    local live = Live()
+    H.eq(#live, 1, 'ps: one icon, the block\'s scene blip')
+    local b = B(live[1])
+    H.ok(
+        b.sprite == K.scene.sprite and b.colour == K.scene.colour and b.scale == K.scene.scale and b.shortRange == false
+            and b.category == 2,
+        'ps: a yellow map pin (kinds.scene), not 310 white (the skull and crossbones)'
+    )
+    H.ok(b.route and b.flashes == true, 'ps: the line and the flash on it')
+    local mark = #BL.log
+    PSc.update(ctx, Snap())
+    Tick()
+    local ops = Ops(mark)
+    H.ok(Quiet(ops), 'ps: the next snapshot redraws nothing (' .. OpsText(ops) .. ')')
+    M.clear('run-ps6', 3)
+    PSc.stop(ctx)
+    H.eq(#Live(), 0, 'ps: stop leaves nothing')
+    H.ok(NoRemovedRoute(), 'ps: the line off first')
+
+    -- Radio Silence ('area', shipped): the block draws none, CP.Markers shows the scene alone, without a line
+    local rctx = { runId = 'run-ps6r', index = 3, obj = {}, state = {}, report = function() end, radioSilence = true }
+    PSc.prepare(rctx)
+    PSc.start(rctx)
+    M.set('run-ps6r', 3, pointer, rctx)
+    PSc.update(rctx, Snap())
+    Tick()
+    H.ok(#Live() == 1 and B(Live()[1]).sprite == K.scene.sprite and #Routed() == 0,
+        'ps Radio Silence: the scene pin, no line')
+    M.clear()
+    PSc.stop(rctx)
+end
+
+-- checkpoint_route (Beat Patrol, EVOC): numbered yellow checkpoints, its own line in routeColour, never two lines
+do
+    Reset()
+    _G.GetStreetNameFromHashKey = _G.GetStreetNameFromHashKey or function() return 'Vespucci Blvd' end
+    _G.GetLabelText = _G.GetLabelText or function() return 'Downtown' end
+    _G.GetStreetNameAtCoord = _G.GetStreetNameAtCoord or function() return 0 end
+    _G.GetNameOfZone = _G.GetNameOfZone or function() return '' end
+    local asks = 0
+    local waypointActive = _G.IsWaypointActive
+    _G.IsWaypointActive = function()
+        asks = asks + 1
+        return world.waypoint
+    end
+    H.load('blocks/checkpoint_route/client.lua')
+    local CRc = CP.Blocks.get('checkpoint_route')
+    local ys = { 600.0, 1200.0, 1800.0 }
+    local function Snap(current, finished)
+        local pts = {}
+        for i, y in ipairs(ys) do pts[i] = { x = 0.0, y = y, z = 30.0 } end
+        return {
+            kind = 'state',
+            points = pts,
+            current = current,
+            total = #pts,
+            finished = finished == true,
+            track = {},
+            course = {},
+        }
+    end
+    local function Pointer(n)
+        return {
+            kind = 'point',
+            key = 'cp' .. n,
+            number = n,
+            look = 'checkpoint',
+            coords = { x = 0.0, y = ys[n], z = 30.0 },
+            label = 'Checkpoint ' .. n,
+            route = 'block',
+        }
+    end
+    local ctx = {
+        runId = 'run-cr6',
+        index = 1,
+        obj = { radius = 10.0 },
+        state = {},
+        report = function() end,
+        hudDetail = function() end,
+    }
+
+    -- a late partner: still driving to the start (CP.Route on, not arrived), the action already at checkpoint 1
+    world.route = { runId = 'run-cr6', arrived = false, routeOn = true }
+    CRc.prepare(ctx)
+    CRc.start(ctx)
+    M.set('run-cr6', 1, Pointer(1), ctx)
+    CRc.update(ctx, Snap(1))
+    local c1, c2 = ByNumber(1), ByNumber(2)
+    H.ok(#Live() == 2 and c1 and c2, 'cr: the current and the next checkpoint, numbered: one icon each')
+    H.ok(
+        B(c1).sprite == K.checkpoint.sprite and B(c1).colour == K.checkpoint.colour
+            and B(c1).scale == K.checkpoint.scale and B(c1).shortRange == false,
+        'cr: checkpoint 1 in kinds.checkpoint (yellow; it was red 0.9)'
+    )
+    H.ok(B(c2).colour == K.checkpoint.colour and B(c2).scale == K.checkpoint.nextScale, 'cr: the next one smaller')
+    H.eq(#Routed(), 0,
+        'cr late partner: no checkpoint line while he drives to the start (the start keeps the only one)')
+    Tick(3)
+    H.eq(#Routed(), 0, 'cr late partner: still none')
+
+    -- he arrives at the start: the line comes on, on checkpoint 1's own blip, in routeColour
+    world.route.arrived = true
+    Tick(2)
+    local r = Routed()
+    H.ok(#r == 1 and r[1] == c1, 'cr: arrived: the line on checkpoint 1\'s own blip')
+    H.eq(B(c1).routeColour, Config.Markers.routeColour, 'cr: in Config.Markers.routeColour (yellow; it was red)')
+    world.waypoint = true
+    Tick(2)
+    H.eq(#Routed(), 0, 'cr: his own waypoint: the checkpoint line goes off')
+    world.waypoint = false
+    Tick(2)
+    H.ok(B(c1).route, 'cr: waypoint gone: back on')
+
+    -- at frame rate near the checkpoint: the rule is asked once a second, the line natives only on a change
+    world.me = vec3(0.0, 520.0, 30.0)
+    local mark = #BL.log
+    asks = 0
+    for _ = 1, 125 do H.step(16) end
+    H.eq(Ops(mark).route, 0, 'cr: no SetBlipRoute while nothing changes')
+    H.ok(asks >= 1 and asks <= 3, ('cr: the line rule asked %d times in 2 s of frames (once a second)'):format(asks))
+    Config.Markers.routeColour = 3
+    Tick(2)
+    H.eq(B(c1).routeColour, 3, 'cr: a new routeColour reaches the checkpoint line')
+
+    -- checkpoint 1 cleared: checkpoint 2 takes the line, full size; nothing removed with its line on
+    world.me = vec3(0.0, 0.0, 30.0)
+    M.update('run-cr6', 1, Pointer(2), ctx)
+    CRc.update(ctx, Snap(2))
+    local n2 = ByNumber(2)
+    H.ok(B(c1).live == false and B(c2).live == false and #Live() == 2, 'cr: checkpoints 2 and 3 now')
+    H.ok(B(n2).route and B(n2).scale == K.checkpoint.scale and #Routed() == 1, 'cr: the line on checkpoint 2')
+    M.update('run-cr6', 1, nil, ctx)
+    CRc.update(ctx, Snap(nil, true))
+    H.eq(#Live(), 0, 'cr: finished: nothing left')
+    H.ok(NoRemovedRoute(), 'cr: every removed blip lost its line first')
+    CRc.stop(ctx)
+
+    -- Radio Silence ('area', shipped): the block draws none, CP.Markers shows the current checkpoint without a line
+    world.route = nil
+    local rctx = {
+        runId = 'run-cr6r',
+        index = 1,
+        obj = { radius = 10.0 },
+        state = {},
+        report = function() end,
+        hudDetail = function() end,
+        radioSilence = true,
+    }
+    CRc.prepare(rctx)
+    CRc.start(rctx)
+    M.set('run-cr6r', 1, Pointer(1), rctx)
+    CRc.update(rctx, Snap(1))
+    Tick(2)
+    local only = Live()
+    H.ok(#only == 1 and B(only[1]).number == 1 and B(only[1]).colour == K.checkpoint.colour and #Routed() == 0,
+        'cr Radio Silence: checkpoint 1 alone, numbered, no line')
+    M.clear()
+    CRc.stop(rctx)
+    _G.IsWaypointActive = waypointActive
+end
+
 return H

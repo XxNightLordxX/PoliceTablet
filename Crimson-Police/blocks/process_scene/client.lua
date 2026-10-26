@@ -10,6 +10,7 @@ local CORONER_OPTION = 'crimson-police:coroner'
 local REACH = 2.5
 local VAN_REACH = 6.0
 local MARKER_RANGE = 120.0
+local SCENE_KEY = 'scene'        -- the scene blip's key in the objective pointer (the server's marker)
 local ANIMS = {
     tag = { scenario = 'WORLD_HUMAN_PAPARAZZI' },
     bag = { scenario = 'CODE_HUMAN_MEDIC_TEND_TO_DEAD' },
@@ -172,6 +173,11 @@ local function Cleanup(S)
     S.current = false
     if S.busy and lib.progressActive and lib.progressActive() then lib.cancelProgress() end
     DropTargets(S)
+    -- the objective pointer takes the scene blip back first, so its GPS line goes off before it goes (BLIPS_FINAL R10)
+    if S.handed then
+        CP.Markers.release(SCENE_KEY, S.handed)
+        S.handed = nil
+    end
     if S.blip and DoesBlipExist(S.blip) then RemoveBlip(S.blip) end
     active[S.key] = nil
 end
@@ -195,12 +201,12 @@ CP.Blocks.register(BLOCK, {
         S.coroner = data.coroner == true
         S.scene = ToVec3(data.scene)
         if S.scene and not S.blip and not ctx.radioSilence then
+            -- Config.Markers.kinds.scene (a yellow map pin, never 310: the skull and crossbones), never short range;
+            -- handed to the objective pointer as 'scene' (the server's marker): CP.Markers puts the GPS line on it
+            -- and draws no second icon (BLIPS_FINAL R1)
             S.blip = AddBlipForCoord(S.scene.x, S.scene.y, S.scene.z)
-            SetBlipSprite(S.blip, 310)
-            SetBlipColour(S.blip, 0)
-            BeginTextCommandSetBlipName('STRING')
-            AddTextComponentSubstringPlayerName(CP.L('block.process_scene.blip'))
-            EndTextCommandSetBlipName(S.blip)
+            CP.Markers.style(S.blip, 'scene', CP.L('block.process_scene.blip'))
+            if CP.Markers.adopt(SCENE_KEY, S.blip) then S.handed = S.blip end
         end
         if not S.current then return end
         for _, b in ipairs(S.bodies) do

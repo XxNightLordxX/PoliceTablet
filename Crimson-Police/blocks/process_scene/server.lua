@@ -447,6 +447,16 @@ CP.Blocks.register(BLOCK, {
     end,
     onTimeout = function() return nil end,
     presence = Presence,
+    -- The objective pointer (CP.Runs.marker, docs/ARCHITECTURE.md §5.44): the scene, keyed 'scene' so the client
+    -- hands its own blip over (one icon). Under Radio Silence too: CP.Markers shows a single point by
+    -- Config.Markers.radioSilence ('area': without a GPS line).
+    marker = function(ctx)
+        local st = StateOf(ctx)
+        if st.released or st.stopped then return false end
+        local p = ScenePoint(ctx)
+        if not p then return nil end
+        return { kind = 'point', key = 'scene', look = 'scene', coords = p, label = CP.Lt('block.process_scene.blip') }
+    end,
     checklist = Checklist,
     restart = function(ctx)
         local st = StateOf(ctx)

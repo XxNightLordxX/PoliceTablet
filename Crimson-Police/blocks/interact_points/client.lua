@@ -112,15 +112,28 @@ end
 --                                    BLIPS
 -- ============================================================================
 
--- The blips handed to the objective pointer (CP.Markers.adopt) are taken back first, so their GPS line goes off
--- before they go (BLIPS_FINAL R10).
-local function ClearBlips(st)
-    for key, blip in pairs(st.handed or {}) do CP.Markers.release(key, blip) end
-    st.handed = {}
-    for _, b in ipairs(st.blips or {}) do
-        if DoesBlipExist(b) then RemoveBlip(b) end
+-- st.blips[key] = { id = blip, at = where it is, look = what it shows }: key = a point's number, 'area' (a hidden
+-- search's centre) or 'circle' (its circle). A snapshot keeps every blip that still shows the same thing, so the GPS
+-- line and the flash the objective pointer put on it survive (BLIPS_FINAL R8); a point whose status changed is
+-- restyled in place.
+
+-- A blip handed to the objective pointer (CP.Markers.adopt) is taken back first, so its GPS line goes off before it
+-- goes (BLIPS_FINAL R10).
+local function DropBlip(st, key)
+    local e = st.blips[key]
+    if not e then return end
+    st.blips[key] = nil
+    if st.handed[key] then
+        CP.Markers.release(key, st.handed[key])
+        st.handed[key] = nil
     end
-    st.blips = {}
+    if DoesBlipExist(e.id) then RemoveBlip(e.id) end
+end
+
+local function ClearBlips(st)
+    st.blips, st.handed = st.blips or {}, st.handed or {}
+    for key in pairs(st.blips) do DropBlip(st, key) end
+    st.blips, st.handed = {}, {}
 end
 
 -- This block's blip of the pointer's target key (a point's number, or 'area' for a hidden search's centre) is the
@@ -129,19 +142,16 @@ local function HandOver(st, key, blip)
     if CP.Markers.adopt(key, blip) then st.handed[key] = blip end
 end
 
-local function NameBlip(b, text)
-    BeginTextCommandSetBlipName('STRING')
-    AddTextComponentSubstringPlayerName(text)
-    EndTextCommandSetBlipName(b)
-end
+local function At(x, y, z, r) return ('%.2f:%.2f:%.2f:%.2f'):format(x, y, z, r or 0.0) end
 
-local function RefreshBlips(ctx, st)
-    ClearBlips(st)
-    local d = st.data
-    if ctx.radioSilence or not d then return end
+-- What the snapshot shows: a hidden search's circle and centre (Config.Markers.kinds.searchArea), else every point
+-- still to do. Nothing under Radio Silence.
+local function Wanted(ctx, st)
+    local want, d = {}, st.data
+    if ctx.radioSilence or not d then return want end
     local pts = d.points or {}
     if d.hidden then
-        if (d.found or 0) >= (d.total or 0) or #pts == 0 then return end
+        if (d.found or 0) >= (d.total or 0) or #pts == 0 then return want end
         local cx, cy, cz = 0.0, 0.0, 0.0
         for _, p in ipairs(pts) do cx, cy, cz = cx + p.coords.x, cy + p.coords.y, cz + p.coords.z end
         cx, cy, cz = cx / #pts, cy / #pts, cz / #pts
@@ -150,28 +160,53 @@ local function RefreshBlips(ctx, st)
             local dx, dy = p.coords.x - cx, p.coords.y - cy
             r = math.max(r, math.sqrt(dx * dx + dy * dy) + 10.0)
         end
-        local area = AddBlipForRadius(cx, cy, cz, r)
-        SetBlipColour(area, 1)
-        SetBlipAlpha(area, 90)
-        st.blips[#st.blips + 1] = area
-        local centre = AddBlipForCoord(cx, cy, cz)
-        SetBlipSprite(centre, 1)
-        SetBlipColour(centre, 1)
-        SetBlipScale(centre, 0.7)
-        NameBlip(centre, CP.L('block.interact_points.blip_search'))
-        st.blips[#st.blips + 1] = centre
-        HandOver(st, 'area', centre)
-        return
+        local at = At(cx, cy, cz, r)
+        want.circle = { at = at, x = cx, y = cy, z = cz, r = r }
+        want.area = { at = at, x = cx, y = cy, z = cz }
+        return want
     end
-    -- numbered (Config.Markers.kinds.point: yellow, orange when it needs a follow-up), never short range
     for n, p in ipairs(pts) do
         if p.status == 'pending' or p.status == 'followup' then
-            local b = AddBlipForCoord(p.coords.x, p.coords.y, p.coords.z)
+            local c = p.coords
+            want[n] = { at = At(c.x, c.y, c.z), x = c.x, y = c.y, z = c.z, look = p.status .. '|' .. tostring(p.label) }
+        end
+    end
+    return want
+end
+
+-- Numbered points in Config.Markers.kinds.point (yellow, orange when it needs a follow-up), never short range; a
+-- hidden search's circle and centre in kinds.searchArea (yellow, Config.Markers.areaAlpha).
+local function RefreshBlips(ctx, st)
+    st.blips, st.handed = st.blips or {}, st.handed or {}
+    local want = Wanted(ctx, st)
+    for key, e in pairs(st.blips) do
+        local w = want[key]
+        if not w or w.at ~= e.at then DropBlip(st, key) end
+    end
+    local pts = st.data and st.data.points or {}
+    for key, w in pairs(want) do
+        local e = st.blips[key]
+        if key == 'circle' then
+            if not e then
+                local b = AddBlipForRadius(w.x, w.y, w.z, w.r)
+                CP.Markers.styleArea(b, 'searchArea')
+                st.blips.circle = { id = b, at = w.at }
+            end
+        elseif key == 'area' then
+            if not e then
+                local b = AddBlipForCoord(w.x, w.y, w.z)
+                CP.Markers.style(b, 'searchArea', CP.L('block.interact_points.blip_search'))
+                st.blips.area = { id = b, at = w.at }
+                HandOver(st, 'area', b)
+            end
+        elseif not e or e.look ~= w.look then
+            local p = pts[key]
+            local b = e and e.id or AddBlipForCoord(w.x, w.y, w.z)
             CP.Markers.style(b, 'point',
-                Txt(p.label) or Txt(ctx.obj.label) or CP.L('block.interact_points.blip', { n = n }),
-                { number = n, variant = p.status == 'followup' and 'followUp' or nil })
-            st.blips[#st.blips + 1] = b
-            HandOver(st, n, b)
+                Txt(p.label) or Txt(ctx.obj.label) or CP.L('block.interact_points.blip', { n = key }),
+                { number = key, variant = p.status == 'followup' and 'followUp' or nil })
+            st.blips[key] = { id = b, at = w.at, look = w.look }
+            if not e then HandOver(st, key, b) end
         end
     end
 end

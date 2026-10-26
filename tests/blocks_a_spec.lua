@@ -328,8 +328,16 @@ do
     local snap = LastSend(ctx)
     H.eq(snap.kind, 'state', 'start sends a snapshot')
     H.eq(snap.total, 5, 'snapshot total')
-    -- the objective pointer (PLAN M2): none of CP.Markers' own, the block keeps its checkpoints and its own line
-    H.eq(CR.marker(ctx), false, 'cr marker: false (no second pointer, no second GPS line)')
+    -- the objective pointer (PLAN M6): the current checkpoint, numbered and keyed for the client's hand-over; the
+    -- block keeps its own GPS line (route = 'block': CP.Markers draws no second one)
+    local mk = CR.marker(ctx)
+    H.ok(type(mk) == 'table' and mk.kind == 'point' and mk.key == 'cp1' and mk.number == 1,
+        'cr marker: checkpoint 1, numbered, keyed cp1')
+    H.ok(mk and mk.look == 'checkpoint' and mk.route == 'block',
+        'cr marker: kinds.checkpoint, the block keeps its line')
+    H.eq(mk and mk.coords, st.points[1], 'cr marker: at checkpoint 1')
+    H.ok(mk and type(mk.label) == 'table' and mk.label.key == 'block.checkpoint_route.blip' and mk.label.vars.n == 1,
+        'cr marker: named like its blip (Checkpoint 1)')
     H.eq(snap.current, 1, 'snapshot current')
 
     At(1, vec3(0.0, 900.0, 30.0))
@@ -367,6 +375,8 @@ do
     H.eq(CR.onEvent(ctx, 1, { type = 'checkpoint', index = 1, try = 2 }), true,
         'held 9 s of 10 (tolerance) driving a civilian car: accepted')
     H.eq(st.current, 2, 'next checkpoint is current')
+    mk = CR.marker(ctx)
+    H.ok(mk.key == 'cp2' and mk.number == 2 and mk.coords == st.points[2], 'cr marker: moves on to checkpoint 2')
     H.eq(st.vehicles[1], 50, 'the driven car is the course vehicle')
     okE, why = CR.onEvent(ctx, 1, { type = 'checkpoint', index = 1 })
     H.ok(okE == false and why == 'already_done', 'duplicate checkpoint rejected')
@@ -414,6 +424,7 @@ do
     ctx.completeResult = false
     H.eq(CR.onEvent(ctx, 1, { type = 'checkpoint', index = 4 }), true, 'last checkpoint accepted')
     H.eq(st.finished, true, 'route finished')
+    H.eq(CR.marker(ctx), false, 'cr marker: none once the route is finished')
     H.eq(ctx.calls.complete, 1, 'complete tried at once')
     CR.tick(ctx, 1)
     H.eq(ctx.calls.complete, 2, 'complete retried next tick (minSeconds)')
@@ -1854,9 +1865,25 @@ do -- skill_check onFail = setback: recovery, personal penalty, retry; never a f
     ctx.penalties = {}
     ctx.penalize = function(id, opts) ctx.penalties[#ctx.penalties + 1] = { id = id, src = opts and opts.src } end
     At(1, vec3(10.0, 4001.0, 5.0))
+    -- the objective pointer (PLAN M6): every device still to work, numbered, keyed d<n> for the client's hand-over
+    local mk = SC.marker(ctx)
+    H.ok(type(mk) == 'table' and mk.kind == 'targets' and #mk.targets == 1, 'sc marker: the one device')
+    local t1 = mk.targets[1]
+    H.ok(t1.key == 'd1' and t1.index == 1 and t1.number == 1 and t1.look == 'device' and t1.variant == nil,
+        'sc marker: armed device 1, keyed d1, numbered, kinds.device')
+    H.ok(t1.coords.x == 10.0 and t1.coords.y == 4000.0 and t1.netId == nil,
+        'sc marker: at the device (the server\'s position), a point, not a moving target')
+    H.ok(type(t1.label) == 'table' and t1.label.key == 'block.skill_check.blip' and t1.label.vars.n == 1,
+        'sc marker: named like its blip (Device 1)')
     Round(ctx, 1, 1, 1, false)
     Round(ctx, 1, 1, 1, false)
     H.eq(st.targets[1].status, 'setback', 'sc setback: two misses start the recovery step')
+    mk = SC.marker(ctx)
+    H.ok(#mk.targets == 1 and mk.targets[1].key == 'd1' and mk.targets[1].variant == 'setback',
+        'sc marker: a set-back device stays the pointer, in its setback colour')
+    ctx.radioSilence = true
+    H.eq(SC.marker(ctx), false, 'sc marker: none under Radio Silence (the client half draws no blips then)')
+    ctx.radioSilence = nil
     H.eq(#ctx.calls.fail, 0, 'sc setback: never a fail')
     H.eq(ctx.penalties[1] and ctx.penalties[1].id, 'lab_fire', 'sc setback: the penalty id')
     H.eq(ctx.penalties[1] and ctx.penalties[1].src, 1, 'sc setback: personal to the officer who missed')
@@ -1868,6 +1895,9 @@ do -- skill_check onFail = setback: recovery, personal penalty, retry; never a f
     for _ = 1, 10 do Advance(1000); SC.tick(ctx, 1) end
     H.eq(SC.onEvent(ctx, 2, { type = 'recover', target = 1 }), true, 'sc setback: any participant can ventilate')
     H.eq(st.targets[1].status, 'cooldown', 'sc setback: then a wait')
+    mk = SC.marker(ctx)
+    H.ok(#mk.targets == 1 and mk.targets[1].key == 'd1' and mk.targets[1].variant == nil,
+        'sc marker: waiting to be tried again, still the pointer (yellow again)')
     for _ = 1, 29 do Advance(1000); SC.tick(ctx, 1) end
     H.eq(st.targets[1].status, 'cooldown', 'sc setback: not before retryAfter')
     Advance(2000)
@@ -1875,6 +1905,7 @@ do -- skill_check onFail = setback: recovery, personal penalty, retry; never a f
     H.eq(st.targets[1].status, 'armed', 'sc setback: the checks can be tried again after 30 s')
     for k = 1, 3 do Round(ctx, 2, 1, k, true) end
     H.eq(st.targets[1].status, 'defused', 'sc setback: shut down on the retry')
+    H.eq(SC.marker(ctx), false, 'sc marker: none once every device is done')
     H.eq(ctx.calls.complete, 1, 'sc setback: the objective completes')
     local bad = SC.validate(
         SC.defaults({ targets = 'lab', onFail = { setback = { duration = 60000 }, retryAfter = 30 } }),
@@ -1983,6 +2014,7 @@ do
         TaskPlayAnim = function() end,
         StopAnimTask = function() end,
         RemoveAnimDict = function(dict) removedDicts[#removedDicts + 1] = dict end,
+        IsWaypointActive = function() return false end,
         AddExplosion = function(x, y, z, kind, damage, audible, invisible, shake)
             explosions[#explosions + 1] = { x = x, y = y, z = z, kind = kind, damage = damage }
         end,

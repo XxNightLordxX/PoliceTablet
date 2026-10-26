@@ -645,9 +645,25 @@ CP.Blocks.register(BLOCK, {
         return best
     end,
 
-    -- The objective pointer (CP.Runs.marker): none of CP.Markers' own. This block draws its checkpoints and keeps its
-    -- own GPS line to the current one, and two lines would fight over the officer's map (BLIPS_FINAL R2).
-    marker = function(ctx) return false end,
+    -- The objective pointer (CP.Runs.marker, docs/ARCHITECTURE.md §5.44): the current checkpoint, numbered, keyed
+    -- 'cp<n>' so the client hands its own blip over (one icon). route = 'block': this block keeps its own GPS line to
+    -- it (on until the checkpoint is cleared, not only to routeOffWithin), so CP.Markers draws no second line
+    -- (BLIPS_FINAL R2). Under Radio Silence CP.Markers shows the point by Config.Markers.radioSilence.
+    marker = function(ctx)
+        local st = Ensure(ctx)
+        local n = st.current
+        local p = n and not st.finished and st.points[n] or nil
+        if not p then return false end
+        return {
+            kind = 'point',
+            key = 'cp' .. n,
+            number = n,
+            look = 'checkpoint',
+            coords = p,
+            label = CP.Lt('block.checkpoint_route.blip', { n = n }),
+            route = 'block',
+        }
+    end,
 
     checklist = function(ctx)
         local st = Ensure(ctx)

@@ -605,6 +605,31 @@ CP.Blocks.register(BLOCK, {
         return nil
     end,
 
+    -- The objective pointer (CP.Runs.marker, docs/ARCHITECTURE.md §5.44): every device still to work (armed, set
+    -- back, or waiting to be tried again), numbered, each keyed 'd<n>' so the client hands its own blip over (one icon
+    -- per device) and every officer's GPS line goes to his nearest; a set-back one in its setback colour. Nothing
+    -- under Radio Silence: the client half draws no blips then.
+    marker = function(ctx)
+        local st = Ensure(ctx)
+        if ctx.radioSilence or st.completed or st.failed then return false end
+        local targets = {}
+        for i, t in ipairs(st.targets) do
+            if t.status == 'armed' or t.status == 'setback' or t.status == 'cooldown' then
+                targets[#targets + 1] = {
+                    key = 'd' .. i,
+                    index = i,
+                    number = i,
+                    coords = TargetCoords(t),
+                    look = 'device',
+                    variant = t.status == 'setback' and 'setback' or nil,
+                    label = CP.Lt('block.skill_check.blip', { n = i }),
+                }
+            end
+        end
+        if #targets == 0 then return false end
+        return { kind = 'targets', targets = targets }
+    end,
+
     -- The target this participant works on, otherwise the nearest armed one.
     presence = function(ctx, src, coords)
         local st = Ensure(ctx)

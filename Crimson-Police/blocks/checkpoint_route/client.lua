@@ -14,6 +14,7 @@ local UNDRIVE_RETRY_MS = 3000
 local UNDRIVE_TRIES = 3          -- reports per course vehicle (the server verifies each one)
 local STATUS_MS = 700            -- lifetime of status lines refreshed every frame
 local EVENT_MS = 4000            -- lifetime of one-off lines
+local ROUTE_CHECK_MS = 1000      -- how often the GPS line's rule is checked (arrived at the start, own waypoint)
 
 local live = {}     -- [state] = ctx, for resource-stop cleanup
 local states = {}   -- ['<runId>:<index>'] = state, one per objective across every hook call
@@ -125,40 +126,68 @@ end
 --                                    BLIPS
 -- ============================================================================
 
+-- The GPS line to the current checkpoint is this block's own (its marker says route = 'block': on until the checkpoint
+-- is cleared), in Config.Markers.routeColour, and on only while CP.Markers.canRoute allows a Crimson line: not while
+-- this officer still drives to the start (a late partner keeps the start's line as his only one, and CP.Route samples
+-- that line), not while he has a waypoint of his own, not under Radio Silence (BLIPS_FINAL R2). Checked when the
+-- checkpoint changes and once a second in the block's loop; the natives run only when the answer changes.
+local function LineOff(st)
+    if st.routed and st.routeBlip and DoesBlipExist(st.routeBlip) then SetBlipRoute(st.routeBlip, false) end
+    st.routed, st.routedColour = false, nil
+end
+
+local function SyncLine(ctx, st)
+    local b = st.routeBlip
+    if not (b and DoesBlipExist(b) and CP.Markers.canRoute(ctx)) then return LineOff(st) end
+    if not st.routed then
+        SetBlipRoute(b, true)
+        st.routed = true
+    end
+    local colour = CP.Markers.routeColour()
+    if st.routedColour ~= colour then
+        SetBlipRouteColour(b, colour)
+        st.routedColour = colour
+    end
+end
+
+-- The blip handed to the objective pointer (CP.Markers.adopt) is taken back first and every line goes off before a
+-- blip goes (BLIPS_FINAL R10).
 local function ClearBlips(st)
+    for key, blip in pairs(st.handed or {}) do CP.Markers.release(key, blip) end
+    st.handed = {}
+    LineOff(st)
+    st.routeBlip = nil
     for _, b in ipairs(st.blips or {}) do
-        if DoesBlipExist(b) then
-            SetBlipRoute(b, false)
-            RemoveBlip(b)
-        end
+        if DoesBlipExist(b) then RemoveBlip(b) end
     end
     st.blips = {}
 end
 
-local function AddBlip(st, p, text, colour, scale, route)
+-- Config.Markers.kinds.checkpoint (yellow), numbered (ShowNumberOnBlip), never short range.
+local function AddBlip(st, n, variant)
+    local p = st.points[n]
+    if not p then return nil end
     local b = AddBlipForCoord(p.x, p.y, p.z)
-    SetBlipSprite(b, 1)
-    SetBlipColour(b, colour)
-    SetBlipScale(b, scale)
-    SetBlipAsShortRange(b, false)
-    if route then
-        SetBlipRoute(b, true)
-        SetBlipRouteColour(b, colour)
-    end
-    BeginTextCommandSetBlipName('STRING')
-    AddTextComponentSubstringPlayerName(text)
-    EndTextCommandSetBlipName(b)
+    CP.Markers.style(b, 'checkpoint', CP.L('block.checkpoint_route.blip', { n = n }), { number = n, variant = variant })
     st.blips[#st.blips + 1] = b
+    return b
 end
 
+-- The current checkpoint's blip is the objective pointer (key 'cp<n>', the server's marker): CP.Markers draws no
+-- second icon for it (BLIPS_FINAL R1). The next one is smaller (kinds.checkpoint.nextScale).
 local function RefreshBlips(ctx, st)
     ClearBlips(st)
     local d = st.data
     if ctx.radioSilence or not d or d.finished or not d.current then return end
-    local cur = st.points[d.current]
-    if cur then AddBlip(st, cur, CP.L('block.checkpoint_route.blip', { n = d.current }), 1, 0.9, true) end
-    local nxt = st.points[d.current + 1]
-    if nxt then AddBlip(st, nxt, CP.L('block.checkpoint_route.blip', { n = d.current + 1 }), 5, 0.6, false) end
+    local n = d.current
+    local b = AddBlip(st, n)
+    if b then
+        local key = 'cp' .. n
+        if CP.Markers.adopt(key, b) then st.handed[key] = b end
+        st.routeBlip = b
+        SyncLine(ctx, st)
+    end
+    AddBlip(st, n + 1, 'next')
 end
 
 -- ============================================================================
@@ -295,6 +324,10 @@ local function Loop(ctx, st)
                     if st.track.contacts then CheckContact(ctx, st, veh, t) end
                     if st.track.undriveable then CheckUndriveable(ctx, st, t) end
                 end
+            end
+            if t >= (st.lineCheckAt or 0) then
+                st.lineCheckAt = t + ROUTE_CHECK_MS
+                SyncLine(ctx, st)
             end
             RefreshLine(ctx, st, t)
             Wait(sleep)
