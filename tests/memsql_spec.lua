@@ -3868,6 +3868,133 @@ do
     JM.cap = 100000
 end
 
+-- 9.18 a DELETE of more than 64 rows from one table (the nightly run archive) takes them out of each index bucket
+-- in one pass instead of one table.remove per row and index (each shifts the whole bucket: about 5 s for a 10k-row
+-- catch-up of cp_mission_runs), and an UPDATE that leaves an index key alone swaps the row in its bucket. The
+-- buckets, a failed DELETE's undo and the saves folder end exactly as with one removal per row (engine b).
+do
+    -- the function that holds upvalue name (searched through the upvalues that are functions)
+    local function Upvalue(fn, name, seen)
+        seen = seen or {}
+        if seen[fn] then return nil end
+        seen[fn] = true
+        for i = 1, 255 do
+            local n, v = H.debug.getupvalue(fn, i)
+            if not n then return nil end
+            if n == name then return fn, i, v end
+            if type(v) == 'function' then
+                local f, j, w = Upvalue(v, name, seen)
+                if f then return f, j, w end
+            end
+        end
+    end
+    local DBM = H.debug.getmetatable(M.new())
+    local limFn, limI, lim = Upvalue(DBM._deleteRows, 'BULK_DELETE_ROWS')
+    local remFn, remI, realRemove = Upvalue(DBM._rowDelete, 'SortedRemove')
+    local removals = 0
+    H.debug.setupvalue(remFn, remI, function(arr, row)
+        removals = removals + 1
+        return realRemove(arr, row)
+    end)
+    local dirA, dirB = TMP .. '/bulkA', TMP .. '/bulkB'
+    Mkdir(dirA)
+    Mkdir(dirB)
+    local a = M.new({ store = M.folderStore(dirA, { docRows = 50 }) }):load()
+    local b = M.new({ store = M.folderStore(dirB, { docRows = 50 }) }):load()
+    -- a on the engine as it is; b with no bulk DELETE (one bucket removal per row and index, the old engine).
+    -- Returns a's result and the bucket removals it made.
+    local function Both(sql, params)
+        removals = 0
+        local res = a:exec(sql, params)
+        local made = removals
+        H.debug.setupvalue(limFn, limI, math.huge)
+        local ok, err = pcall(b.exec, b, sql, params)
+        H.debug.setupvalue(limFn, limI, lim)
+        if not ok then error(err, 0) end
+        return res, made
+    end
+    -- every index bucket as its ordered row ids, and the bucket entries that are not a live row of the table
+    local function Buckets(d)
+        local t = d.tables.cp_bulk
+        local live, ids = {}, {}
+        for _, r in ipairs(t.rows) do
+            if not r.dead then live[r] = true; ids[#ids + 1] = r[1] end
+        end
+        local out, stale = { 'rows ' .. table.concat(ids, ',') }, 0
+        for _, name in ipairs({ 'season', 'dept', 'cash' }) do
+            for key, bucket in pairs(t.idx[t.colIndex[name]].map) do
+                local list = {}
+                for i, r in ipairs(bucket) do
+                    list[i] = r[1]
+                    if not live[r] then stale = stale + 1 end
+                end
+                out[#out + 1] = name .. ' ' .. tostring(key) .. ': ' .. table.concat(list, ',')
+            end
+        end
+        table.sort(out)
+        return table.concat(out, '\n'), stale
+    end
+    local function Same(label)
+        local ba, stale = Buckets(a)
+        H.ok(ba == Buckets(b) and stale == 0, label .. ' (' .. stale .. ' stale bucket entries)')
+    end
+
+    Both(
+        'CREATE TABLE cp_bulk (id INT AUTO_INCREMENT PRIMARY KEY, season INT NOT NULL, dept VARCHAR(8) NOT NULL, '
+            .. 'cash VARCHAR(8) NOT NULL, note VARCHAR(8) NULL, INDEX idx_season (season), INDEX idx_dept (dept), '
+            .. 'INDEX idx_cash (cash))'
+    )
+    local tuples, params = {}, {}
+    for i = 1, 300 do
+        tuples[i] = '(?, ?, ?)'
+        params[#params + 1] = 1
+        params[#params + 1] = ({ 'LSPD', 'bcso', 'sast' })[i % 3 + 1]
+        params[#params + 1] = 'c' .. (i % 25)
+    end
+    Both('INSERT INTO cp_bulk (season, dept, cash) VALUES ' .. table.concat(tuples, ', '), params)
+
+    local _, made = Both('UPDATE cp_bulk SET note = ? WHERE id <= 100', { 'seen' })
+    H.eq(made, 0, 'an UPDATE of 100 rows that keeps every index key removes nothing from a bucket (300 before)')
+    Same('and each bucket holds the updated rows')
+    _, made = Both('UPDATE cp_bulk SET cash = ? WHERE id > 280', { 'moved' })
+    H.eq(made, 20, 'an UPDATE of an indexed column moves only that index\'s buckets (20 removals, 60 before)')
+    Same('the moved rows are in their new bucket')
+
+    local res
+    res, made = Both('DELETE FROM cp_bulk WHERE id <= 150')
+    H.eq(res.affected, 150, 'the oldest 150 rows are deleted')
+    H.eq(made, 0, 'a DELETE of 150 rows makes no bucket removal per row (450 before)')
+    Same('every bucket equals the per-row engine\'s, in order')
+    res, made = Both('DELETE FROM cp_bulk WHERE id <= 214')
+    H.ok(res.affected == 64 and made == 64 * 3, 'a DELETE of 64 rows still removes per row: ' .. made)
+    Same('and leaves the same buckets')
+
+    -- a DELETE (the archive's multi-table form) that fails part way puts every row and bucket back
+    local before = Buckets(a)
+    local calls = 0
+    a._rowDelete = function(self, t, r, m)
+        calls = calls + 1
+        if calls == 30 then error('test: the delete stops here', 0) end
+        return DBM._rowDelete(self, t, r, m)
+    end
+    local e = ErrOf(a.exec, a, 'DELETE r FROM cp_bulk r WHERE r.id <= 290')
+    a._rowDelete = nil
+    H.eq(e, 'test: the delete stops here', 'the failed DELETE reports its error')
+    H.eq(Buckets(a), before, 'and the rows and buckets are as before it')
+
+    res, made = Both('DELETE r FROM cp_bulk r WHERE r.id <= 290')
+    H.ok(res.affected == 76 and made == 0, 'the multi-table DELETE of 76 rows sweeps the buckets once: ' .. made)
+    Same('with the per-row engine\'s buckets')
+    H.eq(a:exec('SELECT COUNT(*) FROM cp_bulk WHERE dept = ?', { 'lspd' }).rows[1][1], 4,
+        'the index still answers (a case-insensitive key)')
+    H.debug.setupvalue(remFn, remI, realRemove)
+
+    local loaded = M.new({ store = M.folderStore(dirA, { docRows = 50 }) }):load()
+    H.eq(Buckets(loaded), Buckets(a), 'the buckets equal those rebuilt from the saves folder')
+    H.ok(os.execute(('diff -r \'%s\' \'%s\' >/dev/null'):format(dirA, dirB)) == true,
+        'the saves folder is byte for byte the per-row engine\'s')
+end
+
 -- 9.13 one global table: the engine is CP.Storage.MemSQL
 H.eq(CP.MemSQL, nil, 'modules/storage defines no CP.MemSQL (CP.Storage is its one global table)')
 H.eq(CP.Storage.MemSQL, M, 'the engine is CP.Storage.MemSQL')

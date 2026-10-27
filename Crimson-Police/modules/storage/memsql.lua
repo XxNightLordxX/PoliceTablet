@@ -5776,16 +5776,17 @@ local function IdxRemove(t, row)
     end
 end
 
-local function MapsAdd(t, row)
+-- keysOnly: the primary key and unique key maps only (a bulk DELETE and an UPDATE see to the index buckets)
+local function MapsAdd(t, row, keysOnly)
     if t.pk then t.pkMap[PkKeyOf(t, row)] = row end
     for _, u in ipairs(t.uniques) do
         local key = UniqueKeyOf(t, u, row)
         if key then u.map[key] = row end
     end
-    IdxAdd(t, row)
+    if not keysOnly then IdxAdd(t, row) end
 end
 
-local function MapsRemove(t, row)
+local function MapsRemove(t, row, keysOnly)
     if t.pk then
         local key = PkKeyOf(t, row)
         if t.pkMap[key] == row then t.pkMap[key] = nil end
@@ -5794,7 +5795,7 @@ local function MapsRemove(t, row)
         local key = UniqueKeyOf(t, u, row)
         if key and u.map[key] == row then u.map[key] = nil end
     end
-    IdxRemove(t, row)
+    if not keysOnly then IdxRemove(t, row) end
 end
 
 local function RebuildMaps(t)
@@ -5824,22 +5825,110 @@ function DB:_rowInsert(t, row)
     self:_log('ins', t, nil, row)
 end
 
--- movedTo: the row that takes this one's place under another key (an UPDATE of the primary key)
-function DB:_rowDelete(t, row, movedTo)
-    row.dead = true
-    MapsRemove(t, row)
-    t.needCompact = true
-    self.compactList[t] = true
-    self:_log('del', t, row, movedTo)
-end
+-- Deleting and replacing rows (with their key maps and index buckets).
+do
+    -- A row replaced under the same primary key (UPDATE, ON DUPLICATE KEY UPDATE): new takes old's place in each
+    -- index bucket whose key stayed the same (a remove and an insert would shift the whole bucket twice) and moves to
+    -- its new bucket where the key changed.
+    local function IdxSwap(t, old, new)
+        for ci, ix in pairs(t.idx) do
+            local a, b = old[ci], new[ci]
+            local ka, kb
+            if a ~= nil then ka = ix.norm and ix.norm(a) or a end
+            if b ~= nil then kb = ix.norm and ix.norm(b) or b end
+            local map = ix.map
+            local bucket = ka ~= nil and map[ka]
+            if not (bucket and ka == kb and SortedReplace(bucket, old, new)) then
+                if bucket then
+                    SortedRemove(bucket, old)
+                    if #bucket == 0 then map[ka] = nil end
+                end
+                if kb ~= nil then
+                    local nb = map[kb]
+                    if not nb then nb = {}; map[kb] = nb end
+                    SortedInsert(nb, new)
+                end
+            end
+        end
+    end
 
--- Same primary key: swap the row object in place.
-function DB:_rowReplace(t, old, new)
-    new.k = old.k
-    SortedReplace(t.rows, old, new)
-    MapsRemove(t, old)
-    MapsAdd(t, new)
-    self:_log('rep', t, old, new)
+    -- A DELETE that takes more rows than this from one table leaves them in that table's index buckets while it runs
+    -- and then drops them in one pass over each bucket they were in (BulkSweep): one table.remove per row and index
+    -- shifts the whole bucket, and the run archive deletes thousands of rows from buckets that hold nearly every row.
+    local BULK_DELETE_ROWS = 64
+
+    -- A bulk DELETE: marks[ix][key] = true for every index bucket the row is in.
+    local function IdxMark(t, row, marks)
+        for ci, ix in pairs(t.idx) do
+            local v = row[ci]
+            if v ~= nil then
+                local key = ix.norm and ix.norm(v) or v
+                local keys = marks[ix]
+                if not keys then keys = {}; marks[ix] = keys end
+                keys[key] = true
+            end
+        end
+    end
+
+    -- The marked buckets drop their dead rows, the others keep their order (as one SortedRemove per row leaves them).
+    local function BulkSweep(marks)
+        for ix, keys in pairs(marks) do
+            local map = ix.map
+            for key in pairs(keys) do
+                local b = map[key]
+                if b then
+                    local n, m = #b, 0
+                    for i = 1, n do
+                        local r = b[i]
+                        if not r.dead then m = m + 1; b[m] = r end
+                    end
+                    for i = n, m + 1, -1 do b[i] = nil end
+                    if m == 0 then map[key] = nil end
+                end
+            end
+        end
+    end
+
+    -- movedTo: the row that takes this one's place under another key (an UPDATE of the primary key)
+    function DB:_rowDelete(t, row, movedTo)
+        row.dead = true
+        local marks = self.bulkDel and self.bulkDel[t]
+        MapsRemove(t, row, marks ~= nil)
+        if marks then IdxMark(t, row, marks) end
+        t.needCompact = true
+        self.compactList[t] = true
+        self:_log('del', t, row, movedTo)
+    end
+
+    -- The delete loop of one DELETE (del) with counts[t] = the rows it deletes from table t. Where that is more
+    -- than BULK_DELETE_ROWS, the rows leave t's index buckets in one sweep at the end, also when del raises part way
+    -- (the undo then puts every row back with MapsAdd).
+    function DB:_deleteRows(counts, del)
+        local bulk
+        for t, n in pairs(counts) do
+            if n > BULK_DELETE_ROWS then
+                bulk = bulk or {}
+                bulk[t] = {}
+            end
+        end
+        if not bulk then return del() end
+        self.bulkDel = bulk
+        local ok, res = pcall(del)
+        self.bulkDel = nil
+        for _, marks in pairs(bulk) do BulkSweep(marks) end
+        if not ok then error(res, 0) end
+        return res
+    end
+
+    -- Same primary key: swap the row object in place.
+    function DB:_rowReplace(t, old, new)
+        new.k = old.k
+        SortedReplace(t.rows, old, new)
+        MapsRemove(t, old, true)
+        MapsAdd(t, new, true)
+        IdxSwap(t, old, new)
+        self:_log('rep', t, old, new)
+    end
 end
 
 function DB:_compact()
@@ -7297,10 +7386,12 @@ do
                 for i = 1, #consts do if not consts[i](f) then return WriteResult(0, 0, 0, '') end end
                 scan(f, function(fr) n = n + 1; list[n] = fr[1]; return false end)
                 local count = 0
-                for i = 1, n do
-                    local r = list[i]
-                    if not r.dead then db:_rowDelete(t, r); count = count + 1 end
-                end
+                db:_deleteRows({ [t] = n }, function()
+                    for i = 1, n do
+                        local r = list[i]
+                        if not r.dead then db:_rowDelete(t, r); count = count + 1 end
+                    end
+                end)
                 return WriteResult(count, 0, 0, '')
             end
         end
@@ -7330,13 +7421,19 @@ do
                 end
                 return false
             end)
-            local count = 0
+            local count, counts = 0, {}
             for _, si in ipairs(targets) do
                 local t = sc.srcs[si].t
-                for _, r in ipairs(lists[si]) do
-                    if not r.dead then db:_rowDelete(t, r); count = count + 1 end
-                end
+                counts[t] = (counts[t] or 0) + #lists[si]
             end
+            db:_deleteRows(counts, function()
+                for _, si in ipairs(targets) do
+                    local t = sc.srcs[si].t
+                    for _, r in ipairs(lists[si]) do
+                        if not r.dead then db:_rowDelete(t, r); count = count + 1 end
+                    end
+                end
+            end)
             return WriteResult(count, 0, 0, '')
         end
     end

@@ -5075,7 +5075,10 @@ mode (Config.Database.enabled = false) and CP.Storage (modules/storage/server.lu
      undone completely when a later part of its ALTER fails or its save is refused; a 6-officer run end on a slow
      disk (5 ms a file) gives the server its turn after saveTurnMs of saving, with each change on disk first and
      the tables and saves folder byte for byte as with saveTurnMs = 0 (no turn), never in the main chunk, never
-     for a SELECT, counted again after the thread was away, a callback answered on the next tick
+     for a SELECT, counted again after the thread was away, a callback answered on the next tick; a DELETE of
+     more than 64 rows sweeps each index bucket once (no removal per row), an UPDATE that keeps an index key
+     swaps the row in its bucket, with the buckets, a failed DELETE's undo and the saves folder as with one
+     removal per row
 Needs no database (9.1 compares with the local MariaDB when it runs); every saves folder lives in a temporary
 folder removed at the end.
 ```

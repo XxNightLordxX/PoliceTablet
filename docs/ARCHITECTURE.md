@@ -1917,7 +1917,11 @@ code is `CP.Storage.MemSQL` (memsql.lua creates `CP.Storage` and puts it there).
   thread gives the server its turn every 4 ms (the clock is read every 32 rows), and every other statement waits for
   it; the answers of JSON_EXTRACT, JSON_VALUE and JSON_CONTAINS are kept per (path, text) in `CP.Storage.MemSQL.jmemo`
   (two generations of half of `jmemo.cap` each, `Config.Database.jsonCacheEntries`, 100000; a hit in the older one
-  moves back; the texts an UPDATE replaced are forgotten after the statement, a DELETE keeps them); `db:load()`; `db:bulk(fn)` (the write-through paused, every document saved once at
+  moves back; the texts an UPDATE replaced are forgotten after the statement, a DELETE keeps them); a DELETE of
+  more than 64 rows from one table (`BULK_DELETE_ROWS`: the nightly run archive) leaves them in the table's index
+  buckets until its loop ends and then drops them in one pass over each bucket they were in, also when the loop fails
+  (the undo then adds every row back), instead of one `table.remove` per row and index, which shifts the whole bucket;
+  an UPDATE puts the new row in the old one's place in each bucket whose key it keeps; `db:load()`; `db:bulk(fn)` (the write-through paused, every document saved once at
   the end: bulk imports and the storage copy); `db:tableNames()`; `folderStore(dir, { docRows, label })` (the saves folder: its file
   layout and crash-safe save sequence are in the header of memsql.lua; `label` is the folder as the owner named it, for
   example `saves/second`, in the messages about its files, default dir); `luaRows(res)` (engine rows typed like
@@ -1986,7 +1990,7 @@ code is `CP.Storage.MemSQL` (memsql.lua creates `CP.Storage` and puts it there).
   folder's size.
 - Tests: `tests/memsql_spec.lua` (the engine: MariaDB's answers, the collation table checked against the local
   MariaDB, a crash and a refused file operation at every point of a save, FXServer's inverted `os.rename`, hand-edited
-  and missing documents, the SELECT slicing), `tests/storage_spec.lua` (files mode end to end, a restart, and
+  and missing documents, the SELECT slicing, the one-pass index sweep of a bulk DELETE), `tests/storage_spec.lua` (files mode end to end, a restart, and
   50,000 runs with their timings, an fsync per document written, how long a board holds the server thread, and
   sizes), `tests/storage_copy_spec.lua` (the storage command and both copy
   directions in both modes, MariaDB and a temporary saves folder together). `lua5.4 tests/run.lua --storage=files`
