@@ -189,6 +189,15 @@ function S.saveTurnMs()
     return ms
 end
 
+-- Config.Database.jsonCacheEntries, read when the engine keeps a new answer (a change in Admin UI → Settings counts
+-- at once): how many answers of the JSON functions files mode keeps; unset = 100000, 0 = none.
+function S.jsonCacheEntries()
+    local cfg = type(Config) == 'table' and type(Config.Database) == 'table' and Config.Database or {}
+    local n = tonumber(cfg.jsonCacheEntries)
+    if n == nil then return 100000 end
+    return n
+end
+
 function S.hasSavedData()
     local M = CP.Storage.MemSQL
     if not M then return false end
@@ -228,6 +237,7 @@ local function Install()
     -- gives it its turn after that statement (with the database, oxmysql's await yields the same way)
     local wait = (Citizen and Citizen.Wait) or Wait
     if type(wait) == 'function' then db.slice = { wait = wait, ms = 4, saveMs = S.saveTurnMs } end
+    CP.Storage.MemSQL.jmemo.cap = S.jsonCacheEntries
     local okDir, whyNot, state = EnsureFolder(folderPath)
     if not okDir then
         if state == 'missing' and not OutsideResource(folderPath) then

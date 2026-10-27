@@ -3308,6 +3308,8 @@ Public API (server)
   CP.Storage.db          the CP.Storage.MemSQL engine (files mode); its db.slice = { wait = Citizen.Wait, ms = 4,
                          saveMs = CP.Storage.saveTurnMs } on a server
   CP.Storage.saveTurnMs() -> Config.Database.saveTurnMs read now (4 when unset; 0 = saves never pause)
+  CP.Storage.jsonCacheEntries() -> Config.Database.jsonCacheEntries read now (100000 when unset; 0 = keep none);
+                         CP.Storage.MemSQL.jmemo.cap on a server (files mode)
   CP.Storage.MemSQL      the engine's code (modules/storage/memsql.lua); this module's one global table holds both
 
 fxmanifest loads memsql.lua and this file right after @oxmysql/lib/MySQL.lua and before every other server

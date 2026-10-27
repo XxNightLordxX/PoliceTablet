@@ -189,6 +189,7 @@ local RANGES = {
     ['Limits.playerInfoCacheMs'] = { 0, 10000 },
     ['Limits.exportBps'] = { 0, 10000000 },
     ['Database.saveTurnMs'] = { 0, 100 },
+    ['Database.jsonCacheEntries'] = { 0, 1000000 },
     ['CrossDept.minParticipants'] = { 1, 32 },
     ['CrossDept.maxParticipants'] = { 1, 32 },
     ['Testing.maxTesters'] = { 1, 32 },

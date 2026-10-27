@@ -3731,7 +3731,141 @@ do
     local env = setmetatable({}, { __index = _G })
     assert(loadfile(H.root .. 'config/config.lua', 't', env))()
     H.eq(env.Config.Database.saveTurnMs, 4, 'config.lua ships saveTurnMs = 4')
+    -- and Config.Database.jsonCacheEntries as the JSON memo's size, read when an answer is kept; unset = 100000
+    H.ok(M.jmemo.cap == st.jsonCacheEntries, 'on a server the JSON memo\'s size is Config.Database.jsonCacheEntries')
+    H.eq(st.jsonCacheEntries(), 100000, 'no jsonCacheEntries in config.lua: 100000')
+    Config.Database.jsonCacheEntries = 20000
+    H.eq(st.jsonCacheEntries(), 20000, 'a changed value counts at once')
+    H.eq(env.Config.Database.jsonCacheEntries, 100000, 'config.lua ships jsonCacheEntries = 100000')
+    M.jmemo.cap = 100000
     CP.Storage, _G.MySQL, Config.Database = savedStorage, savedMySQL, savedCfg
+end
+
+-- 9.17 files mode keeps the answers of JSON_EXTRACT, JSON_VALUE and JSON_CONTAINS in two generations: a full one
+-- becomes the older one instead of the whole memo being wiped at 20000 answers, so a badge check over a long history
+-- parses nothing the second time. The texts an UPDATE replaced leave the memo, and a sliced SELECT reads the clock
+-- every 32 rows (it was 256: on cold JSON rows a 4 ms turn lasted 17-31 ms)
+do
+    local JM = M.jmemo
+    local d = M.new():load()
+    local function Parses(fn)
+        local before = JM.parses
+        local res = fn()
+        return JM.parses - before, res
+    end
+    local function X(text) return d:exec('SELECT JSON_EXTRACT(?, \'$.a\') AS r', { text }).rows[1][1] end
+    -- an answer read again moves into the current generation and outlives the next swap; one not read again goes
+    JM.clear()
+    JM.cap = 4
+    X('{"a":1}')
+    X('{"a":2}')
+    X('{"a":3}')
+    local p1 = Parses(function() return X('{"a":1}') end)
+    X('{"a":4}')
+    local p2, r2 = Parses(function() return X('{"a":1}') end)
+    local p3, r3 = Parses(function() return X('{"a":2}') end)
+    H.ok(JM.swaps >= 2 and p1 == 0 and p2 == 0 and r2 == '1',
+        ('an answer found in the older generation is moved back and outlives the next swap (%d, %d parses)'):format(p1,
+            p2))
+    H.ok(p3 == 1 and r3 == '2', 'one not read again is dropped with its generation (memory stays bounded)')
+
+    d:exec(
+        'CREATE TABLE cp_j (id INT AUTO_INCREMENT PRIMARY KEY, citizenid VARCHAR(16) NOT NULL, breakdown JSON NULL, INDEX idx_cid (citizenid))')
+    local function Text(i)
+        local id = ({ 'no_vehicle_damage', 'rapid_response', 'no_participant_downed' })[i % 3 + 1]
+        return ('{"points":{"bonuses":[{"id":"%s"}],"total":%d},"cash":{"amount":%d}}'):format(id, i, i % 7)
+    end
+    local i = 0
+    for _ = 1, 240 do
+        local vals, params = {}, {}
+        for k = 1, 100 do
+            i = i + 1
+            vals[k] = '(?, ?)'
+            params[#params + 1] = 'C' .. (i % 12 + 1)
+            params[#params + 1] = Text(i)
+        end
+        d:exec('INSERT INTO cp_j (citizenid, breakdown) VALUES ' .. table.concat(vals, ', '), params)
+    end
+
+    -- (a) the same answers across generation swaps and after an UPDATE of a kept text
+    local Q = 'SELECT id, JSON_EXTRACT(breakdown, \'$.points.total\') AS x, JSON_VALUE(breakdown, \'$.cash.amount\') AS v, JSON_CONTAINS(breakdown, \'{"cash":{"amount":3}}\') AS c FROM cp_j WHERE citizenid = ? ORDER BY id LIMIT 40'
+    JM.cap = 0
+    local fresh = Show(d:exec(Q, { 'C1' }).rows)
+    JM.clear()
+    JM.cap = 16
+    local swaps = JM.swaps
+    local first, second = Show(d:exec(Q, { 'C1' }).rows), Show(d:exec(Q, { 'C1' }).rows)
+    H.ok(JM.swaps > swaps + 4, 'the memo swaps generations while it answers (' .. (JM.swaps - swaps) .. ' swaps)')
+    H.ok(first == fresh and second == fresh,
+        'JSON_EXTRACT, JSON_VALUE and JSON_CONTAINS answer as when nothing is kept')
+    local firstId = d:exec(Q, { 'C1' }).rows[1][1]
+    d:exec('UPDATE cp_j SET breakdown = JSON_SET(breakdown, \'$.points.total\', 99, \'$.cash.amount\', 3) WHERE id = ?',
+        { firstId })
+    local row = d:exec(Q, { 'C1' }).rows[1]
+    H.ok(row[2] == '99' and row[3] == '3' and row[4] == 1, 'after an UPDATE the new values are answered: ' .. Show(row))
+
+    -- (b) a badge count over 12 officers x 2000 rows, twice: the second pass parses nothing
+    local B = 'SELECT COALESCE(SUM(COALESCE(JSON_CONTAINS(JSON_EXTRACT(breakdown, \'$.points.bonuses[*].id\'), \'"no_vehicle_damage"\'), 0) > 0), 0) AS n FROM cp_j WHERE citizenid = ?'
+    JM.clear()
+    JM.cap = 100000
+    local function Pass()
+        local out = {}
+        for o = 1, 12 do out[o] = d:exec(B, { 'C' .. o }).rows[1][1] end
+        return Show(out)
+    end
+    local c1, a1 = Parses(Pass)
+    local c2, a2 = Parses(Pass)
+    H.ok(c1 >= 24000 and c2 == 0,
+        ('a badge check over 24000 rows parses nothing the second time (%d, then %d parses; the memo was wiped at 20000)'):format(
+            c1, c2))
+    H.eq(a2, a1, 'with the same counts')
+
+    -- (c) the texts an UPDATE replaced leave the memo; a DELETE keeps its text (an archive move shares it)
+    local t = d.tables.cp_j
+    local bci, cci = t.colIndex.breakdown, t.colIndex.citizenid
+    local old, kept = {}, 0
+    for _, r in ipairs(t.rows) do
+        if r[cci] == 'C2' then
+            old[#old + 1] = r[bci]
+            if JM.has(r[bci]) then kept = kept + 1 end
+        end
+    end
+    d:exec('UPDATE cp_j SET breakdown = JSON_SET(breakdown, \'$.xpCounted\', 1) WHERE citizenid = ?', { 'C2' })
+    local left = 0
+    for _, text in ipairs(old) do if JM.has(text) then left = left + 1 end end
+    H.ok(#old == 2000 and kept == 2000 and left == 0,
+        ('after an UPDATE replaced %d kept texts, %d are still memo keys (%d were)'):format(#old, left, kept))
+    local gone = d:exec('SELECT id, breakdown FROM cp_j WHERE citizenid = ? LIMIT 1', { 'C3' }).rows[1]
+    d:exec('DELETE FROM cp_j WHERE id = ?', { gone[1] })
+    H.ok(JM.has(gone[2]), 'a deleted row\'s text keeps its answers')
+
+    -- (d) a sliced SELECT over cold JSON rows: a budget that is always used up ends every turn within 32 rows
+    JM.clear()
+    local runs, last = {}, JM.parses
+    d.slice = {
+        ms = 0.000001,
+        wait = function()
+            runs[#runs + 1] = JM.parses - last
+            coroutine.yield('turn')
+            last = JM.parses
+        end,
+    }
+    local co = coroutine.create(function()
+        return d:exec(
+            'SELECT COUNT(*) FROM cp_j WHERE citizenid = ? AND JSON_EXTRACT(breakdown, \'$.points.total\') IS NOT NULL',
+            { 'C4' })
+    end)
+    local ok, res = coroutine.resume(co)
+    while ok and coroutine.status(co) == 'suspended' do ok, res = coroutine.resume(co) end
+    runs[#runs + 1] = JM.parses - last
+    local most = 0
+    for _, n in ipairs(runs) do if n > most then most = n end end
+    H.ok(ok and res.rows[1][1] == 2000, 'the sliced SELECT answers: ' .. tostring(ok and res.rows[1][1] or res))
+    H.ok(#runs >= 60 and most <= 32,
+        ('every turn reads at most 32 cold JSON rows (%d turns, at most %d rows)'):format(#runs, most))
+    d.slice = nil
+    JM.clear()
+    JM.cap = 100000
 end
 
 -- 9.13 one global table: the engine is CP.Storage.MemSQL

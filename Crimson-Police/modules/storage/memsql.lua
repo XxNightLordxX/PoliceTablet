@@ -690,6 +690,11 @@ end
 
 local JTRUE, JFALSE, JNULL, Jskip, JstrEnd, Jvalue, Jparse, Jvalid, JvalidStrict, Jtext, JstrDecode, JstrEncode, JfindKey, Jlua, Jpath, Jwalk, Jcollect, Jcontains, JmemoGet, JmemoPut
 do
+    -- M.jmemo: cap = how many answers of the JSON functions are kept (a number, or a function that returns it;
+    -- CP.Storage passes Config.Database.jsonCacheEntries); forget(text) (DB:exec, after an UPDATE); parses counts
+    -- the documents Jparse read and swaps the memo's generation swaps, and has(text) / clear() are for the tests.
+    local JM = { cap = 100000, parses = 0, swaps = 0 }
+    M.jmemo = JM
     local JERR = setmetatable({}, {
         __tostring = function() return 'invalid JSON' end,
     })
@@ -812,6 +817,7 @@ do
     -- Whole text -> node, or nil when it is not valid JSON.
     Jparse = function(s)
         if type(s) ~= 'string' then return nil end
+        JM.parses = JM.parses + 1
         local ok, node, i = pcall(Jvalue, s, 1)
         if not ok then
             if node == JERR then return nil end
@@ -1169,25 +1175,52 @@ do
     end
 
     -- Results of the read-only JSON functions for a (path, document) pair: the same breakdown text is read
-    -- again and again (badges, goals), so its answers are kept (bounded; the text itself is the key).
-    local JMEMO, jmemoN = {}, 0
-    JmemoGet = function(fnKey, path, text)
-        local byPath = JMEMO[fnKey .. path]
-        if not byPath then return nil end
-        return byPath[text]
+    -- again and again (badges, goals), so its answers are kept (the text itself is the key). Two generations of
+    -- half of JM.cap each: when the current one is full it becomes the previous one (the older previous one is
+    -- dropped), and an answer found in the previous one moves back into the current one. So the answers read on
+    -- every badge check stay kept, and memory stays bounded. DB:exec forgets the texts an UPDATE replaced.
+    local JCUR, JPREV, jmemoN = {}, {}, 0
+    local function Half()
+        local cap = JM.cap
+        if type(cap) == 'function' then cap = cap() end
+        cap = tonumber(cap) or 100000
+        return math.floor(cap / 2)
     end
     JmemoPut = function(fnKey, path, text, value)
-        local key = fnKey .. path
-        local byPath = JMEMO[key]
-        if not byPath then byPath = {}; JMEMO[key] = byPath end
-        jmemoN = jmemoN + 1
-        if jmemoN > 20000 then
-            JMEMO, jmemoN = {}, 1
-            byPath = {}
-            JMEMO[key] = byPath
+        local half = Half()
+        if half < 1 then return end
+        if jmemoN >= half then
+            JPREV, JCUR, jmemoN = JCUR, {}, 0
+            JM.swaps = JM.swaps + 1
         end
+        local key = fnKey .. path
+        local byPath = JCUR[key]
+        if not byPath then byPath = {}; JCUR[key] = byPath end
+        if byPath[text] == nil then jmemoN = jmemoN + 1 end
         byPath[text] = value
     end
+    JmemoGet = function(fnKey, path, text)
+        local key = fnKey .. path
+        local byPath = JCUR[key]
+        local v = byPath and byPath[text]
+        if v ~= nil then return v end
+        byPath = JPREV[key]
+        v = byPath and byPath[text]
+        if v ~= nil then JmemoPut(fnKey, path, text, v) end
+        return v
+    end
+    -- A text an UPDATE replaced: no row holds it any more, so its answers go (not on a DELETE: a row moved to the
+    -- archive keeps the same text).
+    JM.forget = function(text)
+        for _, byPath in pairs(JCUR) do byPath[text] = nil end
+        for _, byPath in pairs(JPREV) do byPath[text] = nil end
+    end
+    JM.has = function(text)
+        for _, byPath in pairs(JCUR) do if byPath[text] ~= nil then return true end end
+        for _, byPath in pairs(JPREV) do if byPath[text] ~= nil then return true end end
+        return false
+    end
+    JM.clear = function() JCUR, JPREV, jmemoN = {}, {}, 0 end
 end
 
 -- ============================================================================
@@ -4512,7 +4545,8 @@ local function ChooseLookup(si, S, conjs, sc)
 end
 
 -- A long SELECT gives the server its turn every few milliseconds (DB:exec, slicing): SL.on while such a
--- SELECT runs; every row a scan reads counts, and every 256 rows SL.step() looks at the clock.
+-- SELECT runs; every row a scan reads counts, and every 32 rows SL.step() looks at the clock (cold JSON rows
+-- take up to 0.1 ms each, so a turn ends close to its budget).
 M.slicing = { on = false, n = 0 }
 local function BuildScan(levels, nsrc)
     local SL = M.slicing
@@ -4531,7 +4565,7 @@ local function BuildScan(levels, nsrc)
                 runners[si] = function(f, emit)
                     local arr, cnt = cands(f)
                     for i = 1, cnt do
-                        if SL.on then local n = SL.n + 1; SL.n = n if n >= 256 then SL.step() end end
+                        if SL.on then local n = SL.n + 1; SL.n = n if n >= 32 then SL.step() end end
                         local row = arr[i]
                         if not row.dead then
                             f[si] = row
@@ -4544,7 +4578,7 @@ local function BuildScan(levels, nsrc)
                 runners[si] = function(f, emit)
                     local arr, cnt = cands(f)
                     for i = 1, cnt do
-                        if SL.on then local n = SL.n + 1; SL.n = n if n >= 256 then SL.step() end end
+                        if SL.on then local n = SL.n + 1; SL.n = n if n >= 32 then SL.step() end end
                         local row = arr[i]
                         if not row.dead then
                             f[si] = row
@@ -4559,7 +4593,7 @@ local function BuildScan(levels, nsrc)
                 local arr, cnt = cands(f)
                 local matched = false
                 for i = 1, cnt do
-                    if SL.on then local n = SL.n + 1; SL.n = n if n >= 256 then SL.step() end end
+                    if SL.on then local n = SL.n + 1; SL.n = n if n >= 32 then SL.step() end end
                     local row = arr[i]
                     if not row.dead then
                         f[si] = row
@@ -5983,6 +6017,17 @@ end
 local Coercer             -- forward
 local STORE = { n = 0 }   -- section 7: warnings and notes of the statement being run, store helpers
 
+-- The table's JSON columns (cached until FinishTable runs again).
+STORE.jsonCis = function(t)
+    local jc = t.jsonCis
+    if not jc then
+        jc = {}
+        for ci, col in ipairs(t.cols) do if col.kind == 'json' then jc[#jc + 1] = ci end end
+        t.jsonCis = jc
+    end
+    return jc
+end
+
 function FinishTable(t)
     t.colIndex, t.types, t.colNames, t.normOf = {}, {}, {}, {}
     t.jsonCis = nil
@@ -6471,12 +6516,7 @@ do
     -- The row's CHECK constraints: every JSON column holds valid JSON (MariaDB: CHECK (JSON_VALID(col))). Returns nil
     -- when the row passes, else the error text.
     STORE.checkRow = function(t, row, only)
-        local jc = t.jsonCis
-        if not jc then
-            jc = {}
-            for ci, col in ipairs(t.cols) do if col.kind == 'json' then jc[#jc + 1] = ci end end
-            t.jsonCis = jc
-        end
+        local jc = STORE.jsonCis(t)
         for k = 1, #jc do
             local ci = jc[k]
             local v = row[ci]
@@ -7630,6 +7670,22 @@ function DB:_selectSliced(plan, slice)
     return rows, n
 end
 
+-- After a statement that worked: the JSON texts its UPDATEs replaced leave the JSON memo (a DELETE keeps them: an
+-- archive move puts the same text in the archive row).
+function DB:_forgetReplaced(log)
+    local forget = M.jmemo.forget
+    for i = 1, log.n do
+        local e = log[i]
+        if e.op == 'rep' then
+            local jc, old, new = STORE.jsonCis(e.t), e.a, e.b
+            for k = 1, #jc do
+                local v = old[jc[k]]
+                if v ~= nil and v ~= new[jc[k]] then forget(v) end
+            end
+        end
+    end
+end
+
 function DB:exec(sql, params)
     if self.broken then Fail(self.broken) end
     if type(sql) ~= 'string' then Fail('the query must be a string') end
@@ -7702,6 +7758,7 @@ function DB:exec(sql, params)
             )
         end
     end
+    if log.n > 0 then self:_forgetReplaced(log) end
     return res
 end
 

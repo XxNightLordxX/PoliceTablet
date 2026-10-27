@@ -1914,7 +1914,10 @@ code is `CP.Storage.MemSQL` (memsql.lua creates `CP.Storage` and puts it there).
   and saved before it returns (every changed document written as `.tmp` first, then renamed into place in a
   crash-safe order; a save that fails part way is undone in memory and in the folder); with `db.slice` (set by
   CP.Storage on a server: `{ wait = Citizen.Wait, ms = 4, saveMs = CP.Storage.saveTurnMs }`) a SELECT run from a
-  thread gives the server its turn every 4 ms, and every other statement waits for it; `db:load()`; `db:bulk(fn)` (the write-through paused, every document saved once at
+  thread gives the server its turn every 4 ms (the clock is read every 32 rows), and every other statement waits for
+  it; the answers of JSON_EXTRACT, JSON_VALUE and JSON_CONTAINS are kept per (path, text) in `CP.Storage.MemSQL.jmemo`
+  (two generations of half of `jmemo.cap` each, `Config.Database.jsonCacheEntries`, 100000; a hit in the older one
+  moves back; the texts an UPDATE replaced are forgotten after the statement, a DELETE keeps them); `db:load()`; `db:bulk(fn)` (the write-through paused, every document saved once at
   the end: bulk imports and the storage copy); `db:tableNames()`; `folderStore(dir, { docRows, label })` (the saves folder: its file
   layout and crash-safe save sequence are in the header of memsql.lua; `label` is the folder as the owner named it, for
   example `saves/second`, in the messages about its files, default dir); `luaRows(res)` (engine rows typed like

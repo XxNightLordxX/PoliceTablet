@@ -681,6 +681,9 @@ Config.Database = {
     -- Files mode: after this many milliseconds of saving, Crimson-Police lets the server run its other work for a
     -- moment before the next save (what oxmysql does in database mode); 0 = never pause (the old timing)
     saveTurnMs = 4,
+    -- Files mode: how many answers of JSON lookups (badge counts read every run of an officer) are kept; about 50 bytes
+    -- each, 100000 = about 5 MB; 20000 = the old size; 0 = keep none
+    jsonCacheEntries = 100000,
 }
 ```
 
@@ -1002,6 +1005,10 @@ works the same: runs, points, XP, payouts, boards, seasons, disputes, suspension
   lets the server run its other work for a moment before the next write, as oxmysql does with the database. So when
   several officers finish a mission together, the server does not stall while their results are saved. The data
   saved is the same. 0 = write everything in one go, as before.
+- `jsonCacheEntries` (100000): files mode keeps the answers of the JSON lookups it reads again and again (every
+  badge check reads an officer's whole history), so a server with a long history checks badges in a few
+  milliseconds. About 50 bytes each, so 100000 is about 5 MB. The answers are the same with any value; 20000 was the
+  old size, 0 keeps none.
 - `/CrimsonPoliceAdmin storage` shows which storage is in use, the rows of every table and the size of the folder.
 
 **Switching on a server that already has data.** Changing `enabled` moves nothing by itself: Crimson-Police starts

@@ -24,6 +24,9 @@ Config.Database = {
     -- Files mode: after this many milliseconds of saving, Crimson-Police lets the server run its other work for a
     -- moment before the next save (what oxmysql does in database mode); 0 = never pause (the old timing)
     saveTurnMs = 4,
+    -- Files mode: how many answers of JSON lookups (badge counts read every run of an officer) are kept; about 50 bytes
+    -- each, 100000 = about 5 MB; 20000 = the old size; 0 = keep none
+    jsonCacheEntries = 100000,
 }
 
 -- ============================================================================
