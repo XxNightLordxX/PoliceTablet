@@ -2357,7 +2357,11 @@ Contract interpretations (details in docs/notes/engine_a.md)
       asked twice a second by one waiting thread), because ox_target selects an option by its index and a
       removal shifts the indexes. A player with no run has no global option, so ox_target never calls our
       canInteract for him. Each canInteract tests the run first. Removed on resource stop; added again when
-      ox_target restarts during a run.
+      ox_target restarts during a run. ox_target asks every option of one pass in one frame, so the options read
+      each entity's cp bag and the CanAct answer once per frame (perFrame, keyed by GetFrameCount()); the contact
+      key, the cuff flow, the stun handler, the host AI and the governor read the bag themselves.
+    - The contact key hands over to the run's transport van within 8 m: only networked vehicles of the pool in
+      reach have their bag read, with one CurrentRun() per press.
 
   Public API
     CP.Npc.apply(entity, cfg) -> boolean
@@ -4850,7 +4854,10 @@ Checks: no option with no run; the same names in the same order once per run sta
 nothing); every name removed at run end, but only after ox_target's eye menu closes (one wait, twice a second; a run
 that starts meanwhile keeps its options); an ox_target restart adds them only during a run; resource stop.
 CP_TARGET_SNAPSHOT=<file> writes every canInteract answer of the snapshot (fixed people, cars and seats under five
-player conditions, four run conditions and three distances) to that file instead of comparing it.
+player conditions, four run conditions and three distances; one frame per condition) to that file instead of
+comparing it. One pass over every ped option reads the cp bag and crimsonArena once each, with the same answers as
+one option per frame, and the next frame reads them again. The contact key among 200 vehicles reads only the bags
+within 8 m, asks for the run once for the van and hands over to the run's van at 6 m, not at 8.5 m.
 tests/fixtures/npc/target_answers.txt was written so while the options stayed registered for the whole session: the
 answers must stay the same now that they come and go with the run.
 ```
@@ -4905,6 +4912,8 @@ Storage modes (CP_TEST_STORAGE, H.storage; tests/run.lua --storage=... sets it f
 H.bit(v) reads a TINYINT(1) value in any mode. H.skipIn(mode, reason) skips a MariaDB-only check.
 Threads: CreateThread runs the function as a coroutine immediately; Wait(ms) advances the fake
 clock and yields; H.step() resumes sleeping threads. Citizen.Await works on resolved promises.
+Frames: booted as the client, GetFrameCount() answers H.frame, one more per H.step() and per H.nextFrame() (a new
+frame that runs no thread); FXServer has no such native.
 Yes/no natives: while H.side is 'server' (H.boot's side), every global named in H.SERVER_BOOL_NATIVES (the `_r`
 natives of FXServer's natives_server.lua) answers 1 for yes and false for no, nil or 0, whatever the spec's mock
 returns, as FXServer does (H.serverBool(v) is that conversion); booted as the client they answer as written (the

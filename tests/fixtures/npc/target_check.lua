@@ -264,7 +264,10 @@ local function Hex(bits)
     return table.concat(out)
 end
 
+-- one page is one condition: a new frame, so the options' per-frame reads start again (ox_target asks every option of
+-- a pass in one frame; a condition changes between passes)
 local function Page()
+    H.nextFrame()
     local bits = {}
     local function Ask(list, ents)
         for _, o in ipairs(list) do
@@ -320,6 +323,144 @@ H.ok(trues['ok.progress'] > 40, 'the snapshot shows options (on foot, alive, run
 for _, rc in ipairs({ 'none', 'other' }) do
     H.eq(trues['ok.' .. rc], 0, 'no option shows without this run: ' .. rc)
 end
+
+-- ============================================================================
+--       (f) ONE BAG READ PER FRAME, ONE VAN LOOKUP PER CONTACT KEY PRESS
+-- ============================================================================
+-- Every read below is a decode in the game (GetStateBagValue): each one answers a fresh copy, as the game does.
+
+local reads = { cp = 0, arena = 0 }
+local plainEntity, plainLocal = _G.Entity, _G.LocalPlayer
+_G.Entity = function(e)
+    return {
+        state = setmetatable({}, {
+            __index = function(_, k)
+                if k == 'cp' then reads.cp = reads.cp + 1 end
+                return CP.U.deepcopy((W.bags[e] or {})[k])
+            end,
+        }),
+    }
+end
+local arenaValue = nil
+_G.LocalPlayer = {
+    state = setmetatable({}, {
+        __index = function(_, k)
+            if k == 'crimsonArena' then reads.arena = reads.arena + 1 end
+            return k == 'crimsonArena' and CP.U.deepcopy(arenaValue) or nil
+        end,
+    }),
+}
+
+local function Ask(opts, e, d, newFrame)
+    local out, bits = {}, {}
+    for _, o in ipairs(opts) do
+        if newFrame then H.nextFrame() end
+        out[o.name] = o.canInteract(e, d) == true
+        bits[#bits + 1] = out[o.name] and '1' or '0'
+    end
+    out.bits = table.concat(bits)
+    return out
+end
+
+R.current = { id = 'run-1', state = 'in_progress' }
+local TALKER = AddEnt(6101, Person('contacted'))
+local alone = Ask(T.peds, TALKER, 1.0, true)
+H.nextFrame()
+reads.cp, reads.arena = 0, 0
+local shared = Ask(T.peds, TALKER, 1.0)
+H.eq(reads.cp, 1, ('every ped option of one pass: one cp bag read (%d)'):format(reads.cp))
+H.eq(reads.arena, 1, ('every ped option of one pass: one crimsonArena read (%d)'):format(reads.arena))
+H.eq(shared.bits, alone.bits, 'the same answers as one option per frame')
+H.ok(shared['crimson-police:contact_detain'] and not shared['crimson-police:contact_arrest'],
+    'a contacted person: Detain shows, Arrest does not')
+-- the bag changes between passes: the next pass reads it again
+W.bags[TALKER].cp.state = 'cuffed'
+local sameFrame = Ask(T.peds, TALKER, 1.0)
+H.ok(sameFrame['crimson-police:contact_detain'], 'within the same pass the answers stay as they were read')
+H.nextFrame()
+local cuffed = Ask(T.peds, TALKER, 1.0)
+H.ok(not cuffed['crimson-police:contact_detain'], 'next frame, cuffed: Detain is gone')
+H.ok(cuffed['crimson-police:contact_arrest'], 'next frame, cuffed: Arrest shows')
+H.eq(reads.cp, 2, 'one more read for the next frame')
+-- the arena flag changes between passes too
+arenaValue = { active = true, source = 'crimson-arena' }
+H.nextFrame()
+local arena = Ask(T.peds, TALKER, 1.0)
+H.ok(not arena['crimson-police:contact_arrest'], 'next frame, in Crimson-Arena: nothing shows')
+arenaValue = nil
+
+-- the contact key with the run's transport van among 200 vehicles: only the networked ones within 8 m are read
+local plain = {}
+for _, k in ipairs({
+    'GetEntityCoords',
+    'GetGamePool',
+    'GetVehiclePedIsIn',
+    'NetworkDoesNetworkIdExist',
+    'NetworkGetEntityFromNetworkId',
+}) do
+    plain[k] = rawget(_G, k)
+end
+local performed, runAsks, pool = {}, 0, {}
+local plainCurrent, plainPerform = CP.Runs.current, CP.Custody.perform
+CP.Runs.current = function()
+    runAsks = runAsks + 1
+    return R.current
+end
+CP.Custody.perform = function(netId, action) performed[#performed + 1] = { netId = netId, action = action } end
+W.ents[ME_PED].coords = vec3(100.0, 100.0, 30.0)
+_G.GetEntityCoords = function(e) return W.ents[e] and W.ents[e].coords or vec3(0.0, 0.0, 0.0) end
+_G.GetGamePool = function(kind) return kind == 'CVehicle' and pool or {} end
+_G.GetVehiclePedIsIn = function() return 0 end
+_G.NetworkDoesNetworkIdExist = function(netId)
+    for _, x in pairs(W.ents) do if x.netId == netId then return true end end
+    return false
+end
+_G.NetworkGetEntityFromNetworkId = function(netId)
+    for e, x in pairs(W.ents) do if x.netId == netId then return e end end
+    return 0
+end
+local function Vehicle(e, metres, bag, networked)
+    AddEnt(e, bag, networked)
+    W.ents[e].coords = vec3(100.0 + metres, 100.0, 30.0)
+    pool[#pool + 1] = e
+    return e
+end
+local VAN = Vehicle(9001, 6.0, { run = 'run-1', role = 'service', tag = 'transport' })
+Vehicle(9002, 5.0, { run = 'run-x', role = 'service', tag = 'transport' })
+Vehicle(9003, 7.0, Car('stopped'))
+Vehicle(9004, 4.0, nil)
+Vehicle(9005, 3.0, { run = 'run-1', role = 'service', tag = 'transport' }, false)
+for i = 1, 195 do Vehicle(9100 + i, 9.0 + i, i % 5 == 0 and Car('stopped') or nil) end
+local NEAR = 5
+H.eq(#pool, 200, '200 vehicles in the pool')
+local ESCORTED = AddEnt(6102, Person('escorted', { escortBy = 1 }))
+W.ents[ESCORTED].coords = vec3(101.0, 100.0, 30.0)
+for _, h in ipairs(bagHandlers) do
+    if h.key == 'cp' then h.fn(('entity:%d'):format(W.ents[ESCORTED].netId), 'cp', W.bags[ESCORTED].cp) end
+end
+
+local function Press()
+    performed, runAsks, reads.cp = {}, 0, 0
+    H.commands.crimsonpolice_contact.fn()
+    return performed[1]
+end
+local done = Press()
+H.ok(reads.cp <= NEAR, ('the key press reads at most the %d bags within 8 m (%d)'):format(NEAR, reads.cp))
+-- the key's own run check, one per list of escorted and seated people, one for the van lookup
+H.eq(runAsks, 4, ('one run lookup for the van (%d in all)'):format(runAsks))
+H.eq(done and done.action, 'handover', 'an escorted person and the run\'s van at 6 m: hand over')
+H.eq(done and done.netId, W.ents[VAN].netId, 'to the run\'s van, not the other run\'s or a local one')
+W.ents[VAN].coords = vec3(108.5, 100.0, 30.0)
+done = Press()
+H.ok(done ~= nil and done.action ~= 'handover',
+    'the van at 8.5 m: no hand over (' .. tostring(done and done.action) .. ')')
+
+for k, v in pairs(plain) do _G[k] = v end
+CP.Runs.current, CP.Custody.perform = plainCurrent, plainPerform
+_G.Entity, _G.LocalPlayer = plainEntity, plainLocal
+for _, e in ipairs(pool) do W.ents[e], W.bags[e] = nil, nil end
+W.ents[TALKER], W.bags[TALKER], W.ents[ESCORTED], W.bags[ESCORTED] = nil, nil, nil, nil
+R.current = savedRun
 
 -- ============================================================================
 --                                 (c) RUN END

@@ -81,6 +81,7 @@ H.callbacks = {}                                                 -- lib.callback
 H.commands = {}
 H.exportsMock = {}                                               -- H.exportsMock['sc-dispatch'] = { ClearNotification = function(...) end }
 H.clockMs = 0
+H.frame = 0                                                      -- the client's GetFrameCount(): one per H.step or H.nextFrame()
 H.time = tonumber(os.getenv('CP_TEST_NOW') or '') or 1790000000  -- fake os.time() (CP_TEST_NOW moves it)
 H.db = os.getenv('CP_TEST_DB') or 'cp_test'                      -- tests/run.lua gives every run its own database
 H.failures = 0
@@ -150,6 +151,7 @@ end
 
 function H.step(ms)
     H.clockMs = H.clockMs + (ms or 0)
+    H.frame = H.frame + 1
     if H._entityTick then H._entityTick(ms or 0) end
     local list = sleeping
     sleeping = {}
@@ -161,6 +163,9 @@ function H.step(ms)
         end
     end
 end
+
+-- The next game frame without running any thread (another ox_target pass, for example).
+function H.nextFrame() H.frame = H.frame + 1 end
 
 -- A resource stop: FXServer ends every thread of the stopped resource, so none of them resumes again.
 function H.killThreads() sleeping = {} end
@@ -2851,6 +2856,8 @@ function H.boot(opts)
     _G.IsDuplicityVersion = function() return server end
     _G.GetCurrentResourceName = function() return 'Crimson-Police' end
     _G.GetGameTimer = function() return H.clockMs end
+    -- GET_FRAME_COUNT is a client native (FXServer has none): the game's frame counter, H.frame here.
+    _G.GetFrameCount = (not server) and function() return H.frame end or nil
     local realTime = os.time
     os.time = function(t) if t then return realTime(t) end return H.time end
     _G.LoadResourceFile = function(_, path)
