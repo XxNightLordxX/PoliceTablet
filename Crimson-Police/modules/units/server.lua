@@ -1102,13 +1102,12 @@ local function OnlinePlayers()
     return out
 end
 
--- Cheap pre-check without waiting on the database: an on-duty player whose active job is in a department.
+-- The pre-filter for the invite list: false only for a player whose job (kept by qbx_core's events, no Qbox lookup)
+-- is in no turned-on department. true = maybe: GetOfficer does the full check.
 local function MaybeOfficer(src)
-    if not (CP.Qbx and CP.Qbx.getInfo and CP.Access and CP.Access.departmentForJob) then return true end
-    local ok, info = Call('Qbx', 'getInfo', src)
-    if not ok or type(info) ~= 'table' or type(info.job) ~= 'table' or not info.job.onduty then return false end
-    local okD, dept = Call('Access', 'departmentForJob', info.job.name)
-    return okD and dept ~= nil
+    if not (CP.Access and CP.Access.maybeOfficer) then return true end
+    local ok, maybe = Call('Access', 'maybeOfficer', src)
+    return not ok or maybe ~= false
 end
 
 function Units.view(src)

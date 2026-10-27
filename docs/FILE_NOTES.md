@@ -3647,6 +3647,8 @@ UnitView extras (this slice, see docs/notes/teams.md):
   unit.size, unit.pending = { { src, name, callsign, departmentShort, expiresIn } },
   members[].available (false when that member is no longer an on-duty officer),
   invites[].size (members in that unit), invitable[].inUnit (already in another, non-full unit).
+The invite list walks CP.Qbx.getOnlinePlayers() and calls getOfficer only for players CP.Access.maybeOfficer
+keeps (no Qbox lookup for a civilian); the operation pushes and supervisor toasts filter the same way.
 
 Safety net: a unit locked for more than LOCK_GRACE seconds while none of its members is on a normal
 run is unlocked by the 2 s sweep (covers an engine that never called unlock).

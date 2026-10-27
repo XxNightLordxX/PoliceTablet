@@ -1866,5 +1866,186 @@ O.cancel(0, 'End of the waitlist-off check')
 Config.CrossDept.waitlist = true
 Config.CrossDept.maxParticipants = 8
 
+-- ============================================================================
+--           QBOX LOOKUPS PER REQUEST (THE REAL CP.Access AND CP.Qbx)
+-- ============================================================================
+-- The Unit screen polls getUnit every 20 s and the operation pushes go out on every join, leave and state change.
+-- With the real CP.Access and CP.Qbx only players whose job is in a department are looked up in qbx_core:
+-- civilians are skipped by the job map (kept by qbx_core's events), and the lists and pushes stay the same.
+
+do
+    H.time = H.time + 1800
+    U._reset()
+    Clear()
+    local qbx = {}
+    local function QbxPlayer(src, job, onduty, name, sup, callsign, coords)
+        local first, last = name:match('^(%S+)%s+(.+)$')
+        qbx[src] = {
+            PlayerData = {
+                source = src,
+                citizenid = 'CID' .. src,
+                charinfo = { firstname = first or name, lastname = last or '' },
+                job = { name = job, label = job, onduty = onduty, grade = { name = 'Trooper', level = sup and 3 or 1 } },
+                metadata = { callsign = callsign },
+            },
+        }
+        H.players[src] = H.players[src] or {}
+        H.players[src].coords = coords or vec3(0.0, 0.0, 0.0)
+    end
+    -- The players above (1-6 and 9 on duty, 7 a mechanic, 8 off duty, 10 the admin), four more officers and 100
+    -- civilians, all online when the real modules start.
+    for s, p in pairs(players) do
+        QbxPlayer(s, p.job or 'unemployed', p.onduty, p.name, p.sup, p.callsign)
+        qbx[s].PlayerData.job.grade.name = p.rank or 'Trooper'
+    end
+    QbxPlayer(11, 'sast', true, 'Ben Ortiz')
+    QbxPlayer(12, 'sast', true, 'Amy Cole', false, nil, vec3(600.0, 0.0, 0.0))
+    QbxPlayer(13, 'fib', true, 'Zed Ash', false, 'F-20', vec3(600.0, 0.0, 0.0))
+    QbxPlayer(14, 'sast', true, 'Amy Cole', false, nil, vec3(0.0, 600.0, 0.0))
+    for s = 101, 200 do
+        QbxPlayer(s, s % 2 == 0 and 'unemployed' or 'mechanic', s % 2 == 1, 'Civ ' .. s, false, nil,
+            vec3(50.0, 0.0, 0.0))
+    end
+    H.players[4].coords = vec3(100.0, 0.0, 0.0)
+    H.players[9].coords = vec3(5000.0, 0.0, 0.0)
+    local deptPlayers = 0
+    for _, p in pairs(qbx) do
+        if p.PlayerData.job.name == 'sast' or p.PlayerData.job.name == 'fib' then deptPlayers = deptPlayers + 1 end
+    end
+    H.eq(deptPlayers, 12, 'twelve players with a department job (one off duty) among 113')
+
+    local lookups, lists = 0, 0
+    local stubExports, stubQbx, stubAccess = H.exportsMock.qbx_core, CP.Qbx, CP.Access
+    H.exportsMock.qbx_core = {
+        GetPlayer = function(src)
+            lookups = lookups + 1
+            return qbx[tonumber(src)]
+        end,
+        GetQBPlayers = function()
+            lists = lists + 1
+            return qbx
+        end,
+        GetJobs = function() return {} end,
+    }
+    CP.Qbx, CP.Access = nil, nil
+    H.load('modules/integrations/qbx/server.lua')
+    H.load('modules/access/server.lua')
+    H.eq(lists, 1, 'the real CP.Qbx reads the online list once at start')
+    H.eq(CP.Qbx.knownJob(150), 'unemployed', 'and seeds the job map from it')
+
+    -- A unit (1, 2), a kicked member (3), a pending invite (11), an officer on a run (5), one in the arena (6) and a
+    -- unit of two elsewhere (12, 13).
+    Act('server:unitInvite', 1, 2)
+    Act('server:unitRespond', 2, true)
+    Act('server:unitInvite', 1, 3)
+    Act('server:unitRespond', 3, true)
+    ok = Act('server:unitKick', 1, { targetSrc = 3 })
+    H.eq(ok, true, 'the leader kicks 3')
+    ok = Act('server:unitInvite', 1, 11)
+    H.eq(ok, true, 'a pending invite to 11')
+    Act('server:unitInvite', 12, 13)
+    Act('server:unitRespond', 13, true)
+    H.eq(#U.unitOf(12).members, 2, 'a unit of two elsewhere')
+    runBySrc[5] = { id = 'r5', order = { 5 }, participants = { [5] = { status = 'active' } } }
+    arena[6] = true
+
+    -- (a) one getUnit poll: one lookup per player with a department job at most, none for a civilian
+    lookups, lists = 0, 0
+    res = Cb('getUnit', 1)
+    H.ok(res.ok, 'getUnit answers')
+    H.ok(lookups <= deptPlayers,
+        ('one poll: at most one GetPlayer per player with a department job (%d for %d, 100 civilians)'):format(lookups,
+            deptPlayers))
+    H.eq(lists, 0, 'and no GetQBPlayers copy')
+
+    -- (b) the same invite list as the full check of every online player: order, bands, exclusions
+    local function Line(o)
+        return table.concat({
+            o.src,
+            o.name,
+            tostring(o.callsign),
+            o.rank,
+            o.departmentShort,
+            tostring(o.inUnit),
+            o.distanceBand,
+            tostring(o.lastPartner),
+        }, '|')
+    end
+    local fast = {}
+    for i, o in ipairs(res.data.invitable) do fast[i] = Line(o) end
+    local order = {}
+    for i, o in ipairs(res.data.invitable) do order[i] = o.src end
+    H.eq(
+        table.concat(order, ','),
+        '4,13,12,14,9',
+        'band 0, then band 1 by department, name and src, then band 3; the unit, the kicked member, the pending '
+            .. 'invite, the officer on a run, the one in the arena, off duty, civilians and the admin left out'
+    )
+    local inUnit = {}
+    for _, o in ipairs(res.data.invitable) do inUnit[o.src] = o.inUnit end
+    H.eq(inUnit[12] and inUnit[13] and not inUnit[4], true, 'officers in another unit are flagged')
+    local pre = CP.Access.maybeOfficer
+    CP.Access.maybeOfficer = nil
+    lookups = 0
+    res = Cb('getUnit', 1)
+    CP.Access.maybeOfficer = pre
+    H.ok(lookups >= 100, 'without the job map every online player is looked up')
+    local full = {}
+    for i, o in ipairs(res.data.invitable) do full[i] = Line(o) end
+    H.eq(table.concat(fast, '\n'), table.concat(full, '\n'), 'and the invite list is identical')
+
+    -- (c) an operation join (Broadcast): one lookup per player with a department job at most
+    runBySrc[5], arena[6] = nil, nil
+    U._reset()
+    Clear()
+    ok, data = Act('server:sup:opLaunch', 1, { missionId = 'gang_shootout' })
+    H.eq(ok, true, 'an operation for the push checks')
+    local launched = {}
+    for _, e in ipairs(H.findEvents('crimson-police:client:operation')) do launched[e.target] = true end
+    local sent = {}
+    for s in pairs(launched) do sent[#sent + 1] = s end
+    table.sort(sent)
+    H.eq(table.concat(sent, ','), '1,2,3,4,5,6,9,11,12,13,14', 'client:operation to every on-duty officer only')
+    Clear()
+    lookups = 0
+    ok = Act('server:joinOperation', 2, data.id)
+    H.eq(ok, true, '2 joins')
+    H.ok(lookups <= deptPlayers,
+        ('one join: at most one GetPlayer per player with a department job (%d for %d, 100 civilians)'):format(lookups,
+            deptPlayers))
+
+    -- (d) the same people get the pushes: department members 'operation' and 'board', the admin 'operation'
+    for _, s in ipairs({ 1, 2, 4, 8, 9, 13 }) do
+        H.ok(PushedTo(s, 'operation') and PushedTo(s, 'board'), 'operation + board to department member ' .. s)
+    end
+    H.ok(PushedTo(10, 'operation'), 'operation to the admin')
+    H.ok(not PushedTo(10, 'board'), 'no board for the admin (not police)')
+    local civ = false
+    for _, p in ipairs(pushes) do if p.src == 7 or p.src > 100 then civ = true end end
+    H.eq(civ, false, 'no push to a civilian')
+
+    -- NotifySupervisors: the permission is asked for the admin and players with a department job only
+    local realCan, asked = CP.Permissions.can, 0
+    CP.Permissions.can = function(src, action)
+        asked = asked + 1
+        return realCan(src, action)
+    end
+    Clear()
+    H.time = H.time + 301
+    O._tick()
+    CP.Permissions.can = realCan
+    H.eq(O.active().waitingReason, 'not_enough', 'the window closed with one participant')
+    H.ok(asked <= deptPlayers + 1,
+        ('the permission asked %d times for %d department players and one admin'):format(asked, deptPlayers))
+    for _, s in ipairs({ 1, 9, 10 }) do
+        H.ok(LastNote(s, 'sup.crossdept.notify_waiting_not_enough') ~= nil, 'supervisor or admin ' .. s .. ' told')
+    end
+    O.cancel(0, 'End of the Qbox lookup checks')
+
+    U._reset()
+    for s = 11, 200 do H.players[s] = nil end
+    CP.Qbx, CP.Access, H.exportsMock.qbx_core = stubQbx, stubAccess, stubExports
+end
+
 os.execute(('mysql -uroot -e "DROP DATABASE IF EXISTS %s;"'):format(H.db))
 return H

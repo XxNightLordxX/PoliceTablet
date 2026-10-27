@@ -63,6 +63,14 @@ local function IsAdmin(src)
     return ok and v == true
 end
 
+-- The pre-filter for loops over every online player: false only for a player whose job (kept by qbx_core's events,
+-- no Qbox lookup) is in no turned-on department. true = maybe: the full check follows.
+local function MaybeOfficer(src)
+    if not (CP.Access and CP.Access.maybeOfficer) then return true end
+    local ok, maybe = Call('Access', 'maybeOfficer', src)
+    return not ok or maybe ~= false
+end
+
 local function OnRun(src)
     local ok, run = Call('Runs', 'getBySrc', src)
     if ok and type(run) == 'table' then return true end
@@ -252,13 +260,16 @@ local function PushData()
 end
 
 -- Pushes 'operation' + 'board' to every department member online ('operation' to admins too) and, with a
--- state, client:operation to every on-duty officer. Runs in its own thread (getOfficer may wait).
+-- state, client:operation to every on-duty officer. Runs in its own thread (getOfficer may wait). A player whose job
+-- is in no department is asked only the admin ace (no Qbox lookup).
 local function Broadcast(state, label, extra)
     local data = PushData()
     CreateThread(function()
         for _, p in ipairs(OnlinePlayers()) do
             p = ToSrc(p)
-            if p then
+            if p and not MaybeOfficer(p) then
+                if IsAdmin(p) then Push(p, 'operation', data) end
+            elseif p then
                 local okI, info = Call('Qbx', 'getInfo', p)
                 local job = okI and type(info) == 'table' and type(info.job) == 'table' and info.job or nil
                 local okD, dept = false, nil
@@ -277,13 +288,14 @@ local function Broadcast(state, label, extra)
     end)
 end
 
--- A toast for every online player who may launch / relaunch / cancel (supervisors with the permission, admins).
+-- A toast for every online player who may launch / relaunch / cancel (supervisors with the permission, admins). The
+-- permission is asked only for an admin or a player whose job may be in a department.
 local function NotifySupervisors(kind, key, vars)
     CreateThread(function()
         local targets = {}
         for _, p in ipairs(OnlinePlayers()) do
             p = ToSrc(p)
-            if p then
+            if p and (IsAdmin(p) or MaybeOfficer(p)) then
                 local ok, allowed = Call('Permissions', 'can', p, 'launchCrossDept')
                 if ok and allowed then targets[#targets + 1] = p end
             end
