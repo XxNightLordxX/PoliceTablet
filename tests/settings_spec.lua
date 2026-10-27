@@ -596,6 +596,11 @@ do
     Err('Tablet.command', 'CopTab', 'err.setting_locked', 'the command names are Hard rule names: config.lua only')
     Err('Tablet.keybind', 'F 6', 'err.setting_text', 'a default key with a space')
     H.ok((Check('Tablet.keybind', '')), 'an empty default key (none)')
+    -- K22: the test panel key is a key setting like Tablet.keybind (read once at start)
+    H.eq((S.entry('Testing.panelKey') or {}).restart, true, 'K22: Testing.panelKey is a restart setting')
+    Err('Testing.panelKey', 'F7 ;', 'err.setting_text', 'K22: a test panel key with a space and a ;')
+    ok, v = Check('Testing.panelKey', 'F6')
+    H.ok(ok and v == 'F6', 'K22: a test panel key')
 
     ok, v = Check('Downed.dropOffs', { { x = 1, y = 2, z = 3 }, { x = 4.5, y = 5, z = 6 } })
     H.ok(ok and getmetatable(v[1]) == VMT and v[2].x == 4.5 and math.type(v[1].x) == 'float',

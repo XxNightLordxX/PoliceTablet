@@ -735,7 +735,7 @@ Everything else works as shipped. These are the ones owners change most:
 | `Config.Disputes.windowHours` | How long officers have to dispute a run (48 hours) |
 | `Config.AntiCheat` | Flag limits, and the automatic suspension: 3 voided runs in 30 days = 7 days. `stunNeedsProof` (`'flag'`): a stun counts as before, and one the server did not see (the suspect did not fall) adds a note for staff in the Review run detail, so nobody's points are held. `'hold'` = the same, but that officer's points wait for review; `'strict'` = a fleeing person only gives up to a stun the server saw (a cheat menu cannot fake one); `'off'` = no check (the old way). A saved `true` from an earlier version reads as `'strict'`, `false` as `'off'`. `adminProbeLines` (5): a player who is not an admin and sends a request only admins may send (the money, void and other Admin UI tools; no officer or supervisor screen sends one, so it is almost always a cheat menu) is refused as always, and a console line, kept in **System → Problems**, names him and the request (`player 7 (Name) sent admin-only server:admin:adjustPoints while not an admin`): once a minute per player and request, at most this many lines a minute per player (0 = no line) |
 | `Config.Builder` | Mission Builder on or off, what builders may pick, `noBuildZones`, `requireTestToPublish` (`false` = testing is optional, as shipped), `supervisorItems` (`false` = only admins put items in a custom mission, as shipped; [4.5](#45-mission-builder-permissions)), and `spawnMargin` (40 m, 0-150): a custom mission's armed NPCs (a shootout and its boss, ambush and pursuit cars, warrant associates) must spawn outside the start circle plus this, e.g. 100 m from a 60 m start, so a fight never appears around your officers as they arrive (hostages and suspects keep `minSpawnFromStart`, 30 m) |
-| `Config.Testing` | Admin test mode: `enabled`, `maxTesters`, `allowTeleport`, `debugOverlay`, `panelKeyGuardMs` (300: the test controls key is ignored this long after the panel lets go, so the same press does not take it back; 0 = off), and `spawnCheck` (the spawn point check: `enabled`, `sceneTimeoutMs` 8000, `moveWithin` 150 m, `routes = false` checks no route points, `teleport = true` the Teleport here button next to a result) |
+| `Config.Testing` | Admin test mode: `enabled`, `maxTesters`, `allowTeleport`, `debugOverlay`, `panelKey` (`'F7'`: the default test controls key, see [8.2](#82-keys)), `panelKeyGuardMs` (300: the test controls key is ignored this long after the panel lets go, so the same press does not take it back; 0 = off), and `spawnCheck` (the spawn point check: `enabled`, `sceneTimeoutMs` 8000, `moveWithin` 150 m, `routes = false` checks no route points, `teleport = true` the Teleport here button next to a result) |
 | `Config.Retention` | Clean-up of old data: runs archived after 12 months, audit rows deleted after 180 days, mission calls after 90 days (0 = keep) |
 | `Config.Downed.dropOffs` | Where a downed officer is taken when no EMS is on duty |
 | `Config.Custody.tow.enabled` | `false` makes impounded cars fade out instead of leaving on a tow truck |
@@ -1195,7 +1195,7 @@ the audit log (Admin UI → **Audit Log**).
 
 ### 8.2 Keys
 
-Only the test panel has a default key. Players bind the others themselves: **ESC → Settings → Key Bindings →
+Only the test panel has a default key (F7, `Config.Testing.panelKey`). Players bind the others themselves: **ESC → Settings → Key Bindings →
 FiveM**, then look for the Crimson-Police lines.
 
 | Name in the key list | What it does | Default |
@@ -1204,7 +1204,7 @@ FiveM**, then look for the Crimson-Police lines.
 | Crimson-Police: open Dispatch | Opens the tablet on the Dispatch screen | none (`Config.Tablet.dispatchKey`) |
 | Crimson-Police: ready for the unit's mission | Answers a unit ready check with Ready | none (`Config.Tablet.readyKey`) |
 | Crimson-Police: contact action (plate, place in vehicle, hand over, escort) | The police action shown on screen during a mission | none (`Config.Tablet.contactKey`) |
-| Crimson-Police: test controls and invitations | Test run controls for admins, or the test invitation for testers. Press again to free the mouse | **F7** |
+| Crimson-Police: test controls and invitations | Test run controls for admins, or the test invitation for testers. Press again to free the mouse | **F7** (`Config.Testing.panelKey`) |
 
 - A default key you set in `config.lua` only reaches players who never had that key before. Players who already
   joined keep their own choice.

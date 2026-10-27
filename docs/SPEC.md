@@ -4009,6 +4009,10 @@ Config.Testing = {
     useStartRoute = false, -- default for the start-route toggle
     allowTeleport = true,  -- teleport controls in test runs
     debugOverlay = true,   -- the debug overlay control
+    -- Default key of the admin test panel and the test invitation (each admin or tester can rebind it in GTA Settings ->
+    -- Key Bindings -> FiveM; this default only reaches players who never bound it; '' = no default key). Not F9:
+    -- sc-multijob uses F9
+    panelKey = 'F7',
     -- Milliseconds (0-1000) the test controls key is ignored after the panel or the invitation prompt gives your mouse
     -- and keyboard back, so the press that let go does not take the panel straight back (0 = off)
     panelKeyGuardMs = 300,

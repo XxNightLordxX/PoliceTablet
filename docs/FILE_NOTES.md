@@ -3444,7 +3444,8 @@ file, and that department's session carries no logo (no broken image in the NUI)
   and the test invitation prompt.
 
   Owns
-    * the key mapping +crimsonpolice_testpanel (default F7, rebindable in GTA settings; F9 is sc-multijob's).
+    * the key mapping +crimsonpolice_testpanel (default Config.Testing.panelKey = F7, registered after
+      CP.Settings.ready so a saved in-game value counts; rebindable in GTA settings; F9 is sc-multijob's).
       For the admin who started the active test it gives NUI focus to the HUD test-control panel
       (hud/TestControls.tsx); with no controls it opens the test invitation prompt (hud/DebugOverlay.tsx) when invitations are waiting,
       and with nothing to open it does nothing (no server call, no toast).

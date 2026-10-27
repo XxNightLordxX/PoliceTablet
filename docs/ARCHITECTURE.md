@@ -2179,7 +2179,7 @@ Server:
   a runner did not): every row is checked again; a bad one is ignored with one warning and listed as invalid.
 - Applying: every top-level Config table a setting touches (now or before) is rebuilt from the config.lua copy, then the
   applied settings are set on it. Restart settings (`Tablet.command|adminCommand|keybind|dispatchKey|readyKey|contactKey`,
-  `Locale`, `Time.resetHour`, `Leaderboard.weekStartsOn`) apply only at boot; a later change is saved and
+  `Testing.panelKey`, `Locale`, `Time.resetHour`, `Leaderboard.weekStartsOn`) apply only at boot; a later change is saved and
   reported as pending. A change under what the mission loader reads queues one `CP.Missions.reload()` (1 s debounce).
 - `set(src, path, value, none, opts) -> ok, SettingsReply | errKey` (a value equal to config.lua's is a reset; audit
   `settingChanged` / `settingReset`, old → new), `reset(src, path)`, `resetAll(src)` (`settingsResetAll`), `entry(path)`,
@@ -3564,8 +3564,9 @@ Actions (write), each checks `CP.Permissions.can`:
 
 
 Key mappings: `crimsonpolice_dispatch` (Config.Tablet.dispatchKey), `crimsonpolice_ready` (readyKey),
-`crimsonpolice_contact` (contactKey). ox_target option names (all `crimson-police:*`): `desk`,
-`contact_<action>`, `seat_<action>_<door>`, `custody_escort`, `body_tag`, `body_bag`, `coroner`.
+`crimsonpolice_contact` (contactKey), `+crimsonpolice_testpanel` (Config.Testing.panelKey, F7). ox_target option
+names (all `crimson-police:*`): `desk`, `contact_<action>`, `seat_<action>_<door>`, `custody_escort`, `body_tag`,
+`body_bag`, `coroner`.
 
 ### 8.4 Admin control actions
 

@@ -94,8 +94,8 @@ Seats: `Config.Testing.maxTesters - 1` (pending + accepted) besides the admin.
 - **HUD flag.** The run client already sets `testControls` at `client:start`; this client re-asserts it with
   `CP.Tablet.hud({ testControls = true })` only while `CP.Runs.current().id` is the admin's run (it never
   creates a HUD of its own), and again at `client:inProgress`.
-- **Panel focus.** `+crimsonpolice_testpanel` (default F7; F9 is sc-multijob's menu key): with controls →
-  `SetNuiFocus(true, true)` for the HUD panel; without → the invitation prompt, only while an invitation seen
+- **Panel focus.** `+crimsonpolice_testpanel` (default `Config.Testing.panelKey` = F7, a restart setting; F9 is
+  sc-multijob's menu key): with controls → `SetNuiFocus(true, true)` for the HUD panel; without → the invitation prompt, only while an invitation seen
   through `client:testInvite` (or the prompt's last list) has not expired. With nothing to open the key does nothing
   at all (no server call, no toast), so a key shared with another resource stays quiet. Never while a
   Crimson-Police UI is open.

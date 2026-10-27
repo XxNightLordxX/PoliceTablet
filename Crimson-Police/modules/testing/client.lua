@@ -6,7 +6,8 @@ local TAG = 'testing'
 
 local KEY_COMMAND = '+crimsonpolice_testpanel'
 local KEY_RELEASE = '-crimsonpolice_testpanel'
-local DEFAULT_KEY = 'F7'        -- not F9: sc-multijob opens its menu with F9
+local DEFAULT_KEY = 'F7'        -- when Config.Testing.panelKey is missing from an older config.lua
+local SETTINGS_WAIT_MS = 10000  -- the key waits this long at most for the settings changed in game
 local DRAW_RANGE = 250.0        -- markers further than this are not drawn
 local ACTIVE_RANGE = 600.0      -- draw every frame only while this close to the test area
 local LABEL_RANGE = 25.0        -- 3D labels for points this close
@@ -920,12 +921,19 @@ end
 CreateThread(function()
     RegisterCommand(KEY_COMMAND, function() OnPanelKey() end, false)
     RegisterCommand(KEY_RELEASE, function() end, false)
-    RegisterKeyMapping(KEY_COMMAND, CP.L('test.keybind_label'), 'keyboard', DEFAULT_KEY)
     for _ = 1, 60 do
         if RegisterActions() then return end
         Wait(500)
     end
     CP.warn(TAG, 'CP.Tablet.registerClientAction is not available: the test controls are not registered')
+end)
+
+-- The default key (Config.Testing.panelKey, a restart setting) after the settings changed in game are in.
+CreateThread(function()
+    if CP.Settings and CP.Settings.ready then CP.Settings.ready(SETTINGS_WAIT_MS) end
+    local key = Config.Testing and Config.Testing.panelKey
+    if type(key) ~= 'string' then key = DEFAULT_KEY end
+    RegisterKeyMapping(KEY_COMMAND, CP.L('test.keybind_label'), 'keyboard', key)
 end)
 
 -- Crimson-Arena rule 8: a foreign crimsonArena value closes our panel and stops the overlay.

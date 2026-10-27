@@ -1708,4 +1708,38 @@ do
     H.eq(errN, 'err.test_no_active', 'no controls after the end')
 end
 
+-- K22: the default key comes from Config.Testing.panelKey, read after the settings changed in game are in (a
+-- restart setting, as Tablet.keybind and the other keys).
+do
+    local realSettings, realTesting = CP.Settings, Config.Testing
+    local function Boot(settings, testing)
+        CP.Settings, Config.Testing = settings, testing
+        for i = #keymaps, 1, -1 do keymaps[i] = nil end
+        H.load('modules/testing/client.lua')
+    end
+    local settingsIn = false
+    local waits = {}
+    Boot({
+        ready = function(ms)
+            waits[#waits + 1] = ms
+            while not settingsIn do Wait(500) end
+            return true
+        end,
+    }, { panelKey = 'F7' })
+    H.eq(#keymaps, 0, 'K22: no key mapping before the settings changed in game are in')
+    H.eq(waits[1], 10000, 'K22: it waits 10 s at most, as the other key mappings do')
+    Config.Testing.panelKey = 'F6' -- the saved Testing.panelKey, applied by the settings list
+    settingsIn = true
+    H.advance(500)
+    H.eq(#keymaps, 1, 'K22: one key mapping')
+    H.eq(keymaps[1].key, 'F6', 'K22: Config.Testing.panelKey = \'F6\' is the default key')
+    H.eq(keymaps[1].cmd, '+crimsonpolice_testpanel', 'K22: on the test panel command')
+    Boot(nil, {})
+    H.eq(keymaps[1].key, 'F7', 'K22: no panelKey in an older config.lua: F7')
+    Boot(nil, { panelKey = '' })
+    H.eq(keymaps[1].key, '', 'K22: \'\' = no default key')
+    CP.Settings, Config.Testing = realSettings, realTesting
+    H.eq(Config.Testing.panelKey, 'F7', 'K22: config.lua ships F7')
+end
+
 return H
