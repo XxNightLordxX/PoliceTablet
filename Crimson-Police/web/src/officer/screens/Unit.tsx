@@ -737,6 +737,8 @@ export default function Unit() {
     const { run } = useAction();
     const [busyKey, setBusyKey] = useState<string | null>(null);
     const [confirmLeave, setConfirmLeave] = useState(false);
+    // Leaving a Cross-Department Mission gives the place to the first on the waitlist, so it asks first.
+    const [confirmOpLeave, setConfirmOpLeave] = useState(false);
     const [manage, setManage] = useState<ManageDialog>(null);
     usePush('operation', () => void refetch());
 
@@ -794,6 +796,7 @@ export default function Unit() {
     const max = data?.maxSize ?? DEFAULT_MAX;
     const unit = data?.unit ?? null;
     const onUnitRun = !!(unit?.locked && data?.onRun);
+    const opWaiting = (data?.operation?.waitlistPosition ?? null) !== null;
     const rowActions: RowActions = {
         canManage: !!unit?.canManage,
         sent: new Set((data?.pendingSent ?? []).map(x => x.src)),
@@ -855,7 +858,7 @@ export default function Unit() {
                                     op={data.operation}
                                     stamp={data}
                                     busyKey={busyKey}
-                                    onLeave={() => void leaveOperation()}
+                                    onLeave={() => setConfirmOpLeave(true)}
                                 />
                             ) : null}
                             <TestInvitesCard />
@@ -878,6 +881,18 @@ export default function Unit() {
                 confirmLabel={onUnitRun ? t('unit.ui.leave_and_abandon') : t('unit.ui.leave')}
                 onConfirm={() => leave()}
                 onCancel={() => setConfirmLeave(false)}
+            />
+            <ConfirmDialog
+                open={confirmOpLeave}
+                tone="danger"
+                title={t('unit.ui.op_title')}
+                message={opWaiting ? t('unit.ui.op_leave_waitlist_confirm') : t('unit.ui.op_leave_confirm')}
+                confirmLabel={opWaiting ? t('unit.ui.op_leave_waitlist') : t('unit.ui.op_leave')}
+                onConfirm={async () => {
+                    await leaveOperation();
+                    setConfirmOpLeave(false);
+                }}
+                onCancel={() => setConfirmOpLeave(false)}
             />
             <ConfirmDialog
                 open={manage !== null}
