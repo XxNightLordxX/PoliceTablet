@@ -326,6 +326,7 @@ function A.isAdmin(src)
     local qbox = A.qboxAdminAce()
     return qbox ~= nil and AceAllowed(n, qbox)
 end
+CP.Net.rateExempt = A.isAdmin -- netRateResponse never warns about or drops an admin (shared/net.lua)
 
 -- ============================================================================
 --                                 SUSPENSIONS

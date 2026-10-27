@@ -263,16 +263,26 @@ H.eq(#H.dropped, 0, 'log: nobody is dropped')
 -- 'kick': the warning, and the player is dropped (callbacks too)
 Config.Limits.netRateResponse = 'kick'
 warned = {}
-for _ = 1, 6 + 17 do H.callback(CALLBACK, 12) end
-H.eq(#H.dropped, 0, 'kick: 17 refused callbacks: not yet')
+for _ = 1, 6 + 19 do H.callback(CALLBACK, 12) end
+H.eq(#H.dropped, 0, 'kick: 19 refused callbacks: not yet (3 x 6 = 18, but never below 20)')
 local last = H.callback(CALLBACK, 12)
 H.eq(last and last.error, 'err.rate_limited', 'kick: the callback is still refused')
-H.eq(#H.dropped, 1, 'kick: the 18th refusal (3 x 6) drops the player')
+H.eq(#H.dropped, 1, 'kick: the 20th refusal drops the player')
 H.eq(H.dropped[1] and H.dropped[1].src, 12, 'kick: that player')
 H.eq(H.dropped[1] and H.dropped[1].reason, CP.L('err.rate_kick'), 'kick: with the err.rate_kick text')
 H.eq(#warned, 1, 'kick: and one console warning')
 for _ = 1, 20 do H.callback(CALLBACK, 12) end
 H.eq(#H.dropped, 1, 'kick: DropPlayer is called once')
+-- an admin is never warned about or dropped for it
+do
+    local realExempt = CP.Net.rateExempt
+    CP.Net.rateExempt = function(src) return src == 13 end
+    warned = {}
+    for _ = 1, 6 + 40 do H.callback(CALLBACK, 13) end
+    H.eq(#H.dropped, 1, 'kick: an admin is not dropped')
+    H.eq(#warned, 0, 'kick: and not warned about')
+    CP.Net.rateExempt = realExempt
+end
 CP.warn = realWarn
 Config.Limits.netRateResponse = 'block'
 

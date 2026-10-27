@@ -2,6 +2,8 @@
 
 CP = CP or {}
 CP.Net = CP.Net or {}
+-- Who netRateResponse never warns about or drops; modules/access/server.lua sets it to CP.Access.isAdmin
+function CP.Net.rateExempt(_) return false end
 
 local RESULT_EVENT = 'crimson-police:client:actionResult'
 
@@ -37,6 +39,7 @@ if IsDuplicityVersion() then
     -- refused[src] = { warnedAt = GetGameTimer() of the last warning, kicked = true, names = { [name] = { n, at } } }
     local REFUSAL_WINDOW_MS = 60000
     local REFUSALS_PER_MAX = 3   -- the response starts once one name is refused 3 x its limit in a minute
+    local REFUSALS_MIN = 20      -- and never below 20, so a few quick clicks on a rate-1 request are not a flood
     local refused = {}
 
     local function OnRefused(src, name, max)
@@ -44,6 +47,8 @@ if IsDuplicityVersion() then
         if mode ~= 'log' and mode ~= 'kick' then
             return
         end -- 'block' (shipped): refuse quietly, nothing kept
+        -- admins are never logged or kicked for it (a slow Admin UI download clicked a few times is not a flood)
+        if CP.Net.rateExempt(src) then return end
         local now = GetGameTimer()
         local r = refused[src]
         if not r then r = { names = {} }; refused[src] = r end
@@ -53,7 +58,7 @@ if IsDuplicityVersion() then
             r.names[name] = c
         end
         c.n = c.n + 1
-        if c.n < REFUSALS_PER_MAX * max then return end
+        if c.n < math.max(REFUSALS_PER_MAX * max, REFUSALS_MIN) then return end
         local kick = mode == 'kick' and not r.kicked
         if kick or not r.warnedAt or now - r.warnedAt >= REFUSAL_WINDOW_MS then
             r.warnedAt = now
