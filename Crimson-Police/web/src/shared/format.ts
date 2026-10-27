@@ -73,7 +73,7 @@ export function formatDateTime(value: number | string | null | undefined): strin
     if (value === null || value === undefined || value === '') return '';
     const d = typeof value === 'number' ? new Date(value * 1000) : new Date(String(value).replace(' ', 'T'));
     if (isNaN(d.getTime())) return String(value);
-    return d.toLocaleString(dateLocale(), { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+    return dtf('dt', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(d);
 }
 
 // ============================================================================
@@ -86,6 +86,19 @@ function dateLocale(): string {
     return v !== '' ? v : 'en-GB';
 }
 
+// One formatter per (format, locale): toLocaleString(locale, options) builds a new Intl.DateTimeFormat on every call.
+const dtfCache = new Map<string, Intl.DateTimeFormat>();
+function dtf(kind: 'dt' | 'date' | 'dtYear', opts: Intl.DateTimeFormatOptions): Intl.DateTimeFormat {
+    const loc = dateLocale();
+    const k = kind + '|' + loc;
+    let f = dtfCache.get(k);
+    if (!f) {
+        f = new Intl.DateTimeFormat(loc, opts);
+        dtfCache.set(k, f);
+    }
+    return f;
+}
+
 function toDate(value: number | string | null | undefined): Date | null {
     if (value === null || value === undefined || value === '') return null;
     const d = typeof value === 'number' ? new Date(value * 1000) : new Date(String(value).replace(' ', 'T'));
@@ -96,18 +109,18 @@ function toDate(value: number | string | null | undefined): Date | null {
 export function fmtDate(value: number | string | null | undefined): string {
     const d = toDate(value);
     if (!d) return value === null || value === undefined ? '' : String(value);
-    return d.toLocaleDateString(dateLocale(), { day: 'numeric', month: 'short', year: 'numeric' });
+    return dtf('date', { day: 'numeric', month: 'short', year: 'numeric' }).format(d);
 }
 
 // os.time() seconds or an ISO/SQL date string -> "28 Sep 2026, 14:05".
 export function fmtDateTime(value: number | string | null | undefined): string {
     const d = toDate(value);
     if (!d) return value === null || value === undefined ? '' : String(value);
-    return d.toLocaleString(dateLocale(), {
+    return dtf('dtYear', {
         day: 'numeric',
         month: 'short',
         year: 'numeric',
         hour: '2-digit',
         minute: '2-digit',
-    });
+    }).format(d);
 }

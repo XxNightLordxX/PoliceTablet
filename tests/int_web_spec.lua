@@ -116,6 +116,38 @@ Has(active, 'usePush<ActiveMissionData | null | undefined>(\'run\'', 'Active Mis
 Has(board, 'usePush<{ runId?: unknown } | null | undefined>(\'run\'', 'Mission Board accepts an undefined run push')
 
 -- ============================================================================
+--            NUI WORK PER MESSAGE (loop audit Q17: nui-1 .. nui-4)
+-- ============================================================================
+-- A 'run' push carries the same CP.Runs.view as getRun, so the run bar applies it without a round trip; a hud,
+-- debug, overlay or toast message does not re-render the open tablet; an identical builder overlay (every 150 ms)
+-- keeps its state; dates reuse one Intl.DateTimeFormat per format and locale.
+
+do
+    H.ok(runbar:find('pushTopic', 1, true) == nil, 'RunBar: no getRun refetch on every run push')
+    Has(runbar, 'const { data, setData, loading, refetch } = useRequest<ActiveMissionView | null>(\'getRun\', {});',
+        'RunBar: getRun once on mount')
+    Has(runbar, 'if (loading || view === null || view === undefined) void refetch();',
+        'RunBar: refetches only on the run-ended push or while the mount fetch is out')
+    local app = Read(WEB .. 'App.tsx')
+    Has(
+        app,
+        'const layout = useMemo(() => (ui === \'admin\' ? <AdminLayout /> : ui === \'supervisor\' ? <SupervisorLayout />'
+            .. ' : <OfficerLayout />), [ui]);',
+        'App: the layout element is memoized on the UI kind'
+    )
+    Has(app, 'onError={close}>{layout}</QuietBoundary>', 'App: the layout boundary renders the memoized element')
+    Has(app, 'setOverlay(prev => (prev && next && JSON.stringify(prev) === JSON.stringify(next) ? prev : next));',
+        'App: an identical overlay keeps the current state')
+    local fmt = Read(WEB .. 'shared/format.ts') or ''
+    H.ok(fmt:find('d.toLocale', 1, true) == nil, 'format.ts: no d.toLocale*String (a new formatter per call)')
+    Has(fmt, 'const dtfCache = new Map<string, Intl.DateTimeFormat>();', 'format.ts: one formatter cache')
+    Has(fmt, 'const k = kind + \'|\' + loc;', 'format.ts: keyed by format and date locale')
+    for _, kind in ipairs({ 'dt', 'date', 'dtYear' }) do
+        Has(fmt, 'return dtf(\'' .. kind .. '\', {', 'format.ts: the ' .. kind .. ' format uses the cache')
+    end
+end
+
+-- ============================================================================
 --                              HOME ANNOUNCEMENTS
 -- ============================================================================
 

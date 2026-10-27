@@ -631,9 +631,9 @@ export default function ActiveMission() {
     const [recalcsOverride, setRecalcsOverride] = useState<number | null>(null);
 
     // Push topic 'run' carries this officer's full view (CP.Runs.view), applied as it is: no extra getRun
-    // per push (the RunBar already refetches on every push and getRun allows 6 calls per second). When
-    // the run ended the push carries nil, which reaches the NUI as a missing field (undefined, not null):
-    // ask the server then, so the empty state (or a new run) shows at once.
+    // per push (the RunBar applies the same push, and getRun allows 6 calls per second). When the run
+    // ended the push carries nil, which reaches the NUI as a missing field (undefined, not null): ask the
+    // server then, so the empty state (or a new run) shows at once.
     usePush<ActiveMissionData | null | undefined>('run', view => {
         if (view && typeof view === 'object' && typeof view.runId === 'string') setData(view);
         else void refetch();

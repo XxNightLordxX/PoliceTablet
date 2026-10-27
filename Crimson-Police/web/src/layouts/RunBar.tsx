@@ -1,5 +1,6 @@
 // The officer's current run, pinned above every Officer UI screen while a run is active.
-// Data: request 'getRun' (ActiveMissionView or null), refetched on push topic 'run'. Click → Active Mission.
+// Data: request 'getRun' (ActiveMissionView or null) on mount, then the view each push topic 'run' carries (the same
+// CP.Runs.view getRun returns). Click → Active Mission.
 
 import { Badge, Countdown, Icon, TierBadge } from '../shared/components';
 import { cx } from '../shared/cx';
@@ -68,13 +69,16 @@ function RouteStatus({ route }: { route: ActiveMissionView['route'] }) {
 }
 
 export function RunBar() {
-    const { data, setData } = useRequest<ActiveMissionView | null>('getRun', {}, { pushTopic: 'run' });
+    const { data, setData, loading, refetch } = useRequest<ActiveMissionView | null>('getRun', {});
     const { navigate, screen } = useNavigation();
-    // A 'run' push carrying the view applies at once; the refetch confirms it. The end of the run is
+    // A 'run' push carrying the view applies as it is, with no getRun per push. The end of the run is
     // CP.Tablet.push(src, 'run', nil): Lua drops the nil field, so `data` arrives missing (undefined), not null.
     usePush<ActiveMissionView | null | undefined>('run', view => {
         if (view === null || view === undefined) setData(null);
         else if (typeof view === 'object' && typeof view.runId === 'string') setData(view);
+        // Only the run's end (nil) asks again (a new run shows at once), and a push that lands while the first
+        // fetch is still out (its older reply must not overwrite this view).
+        if (loading || view === null || view === undefined) void refetch();
     });
     // A failed refetch keeps the view it already holds.
     if (!data || !data.runId) return null;

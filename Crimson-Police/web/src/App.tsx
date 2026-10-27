@@ -109,7 +109,11 @@ export default function App() {
         setResult(m.result ? normalizeResult(m.result) : null);
         setResultSeq(n => n + 1);
     });
-    useNuiEvent('overlay', m => setOverlay(m.overlay ?? null));
+    // Lua repeats the builder overlay every 150 ms while a tool is open: an identical one keeps the current state.
+    useNuiEvent('overlay', m => {
+        const next = m.overlay ?? null;
+        setOverlay(prev => (prev && next && JSON.stringify(prev) === JSON.stringify(next) ? prev : next));
+    });
     useNuiEvent('theme', m => {
         setHudTheme(m.theme ?? null);
         if (m.locale && typeof m.locale === 'object') setBootLocale(m.locale);
@@ -244,6 +248,14 @@ export default function App() {
         };
     }, [viewport, uiOpen, ui, hudScale]);
 
+    // The layout element only changes with the UI kind: App-level state that the tablet does not read (hud, debug,
+    // toasts, result, overlay) no longer re-renders the open tablet. Session, navigation and locale still reach it
+    // through their contexts (every layout reads useSession / useNavigation).
+    const layout = useMemo(
+        () => (ui === 'admin' ? <AdminLayout /> : ui === 'supervisor' ? <SupervisorLayout /> : <OfficerLayout />),
+        [ui],
+    );
+
     return (
         <LocaleProvider locale={locale}>
             <SessionContext.Provider value={sessionValue}>
@@ -287,13 +299,7 @@ export default function App() {
                         // A crashed layout shell (outside ScreenHost's per-screen boundary) closes the tablet, so Lua
                         // releases the NUI focus instead of holding it on an empty page.
                         <QuietBoundary name={`${ui} layout`} resetKey={`${ui}:${openSeq}`} onError={close}>
-                            {ui === 'admin' ? (
-                                <AdminLayout />
-                            ) : ui === 'supervisor' ? (
-                                <SupervisorLayout />
-                            ) : (
-                                <OfficerLayout />
-                            )}
+                            {layout}
                         </QuietBoundary>
                     ) : null}
 

@@ -106,8 +106,8 @@ No Lua API, no events, no callbacks are registered by this slice.
   log) the buttons come back.
 - **TEST RUN** banner (`hud.test_run` + note) for test runs; expected cash says "Test run: not paid".
 - Empty state "No active mission" with "Open the Mission Board"; loading only on the first fetch; error state
-  with retry. Push `run`: a pushed view is applied as it is (no extra getRun per push: the RunBar already
-  refetches on every push and getRun allows 6 calls per second); nil (`CP.Tablet.push(src, 'run', nil)`, which
+  with retry. Push `run`: a pushed view is applied as it is (no extra getRun per push: the RunBar applies the
+  same push, and getRun allows 6 calls per second); nil (`CP.Tablet.push(src, 'run', nil)`, which
   reaches the NUI with no `data` field, i.e. undefined) triggers a getRun, which shows the empty state. Every
   15 s as a safety net. In progress without a timer (never sent today) the timer says "No run timer".
 
