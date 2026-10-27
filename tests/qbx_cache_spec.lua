@@ -1,5 +1,6 @@
 -- CP.Qbx's player info cache (Config.Limits.playerInfoCacheMs) and the online list kept by qbx_core's events: how many
--- times Qbox's exports are called, and that every change event makes the next answer fresh.
+-- times Qbox's exports are called, and that every change event makes the next answer fresh. Also the downed poll's
+-- CP.Qbx.isDowned, which reads two metadata keys (GetMetadata) instead of a copy of the whole Player.
 
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'server' })
@@ -34,8 +35,18 @@ AddPlayer(7, 'CQC00007', 'police', false)   -- in character selection: Qbox has 
 local loaded7 = players[7]
 players[7] = nil
 
-local calls = { GetPlayer = 0, GetQBPlayers = 0 }
+local calls = { GetPlayer = 0, GetQBPlayers = 0, GetMetadata = 0 }
+local metadataIds = {}   -- type of the identifier -> GetMetadata calls with it
 H.exportsMock.qbx_core = {
+    -- qbx_core server/player.lua GetMetadata: a number is an online source; a string is a citizenid, which qbx_core
+    -- looks up in its players table when that character is offline (GetOfflinePlayer)
+    GetMetadata = function(id, key)
+        calls.GetMetadata = calls.GetMetadata + 1
+        metadataIds[type(id)] = (metadataIds[type(id)] or 0) + 1
+        if type(key) ~= 'string' then return nil end
+        local p = type(id) == 'number' and players[id] or nil
+        return p and Copy(p.PlayerData.metadata[key])
+    end,
     GetPlayer = function(src)
         calls.GetPlayer = calls.GetPlayer + 1
         return Copy(players[tonumber(src)])
@@ -311,6 +322,87 @@ do
     for _ = 1, 3 do Q.getInfo(5) end
     H.eq(calls.GetPlayer, 1, 'no setting: one second')
     Config.Limits.playerInfoCacheMs = 1000
+end
+
+-- ============================================================================
+--           (h) THE DOWNED POLL: TWO METADATA READS, NO PLAYER COPY
+-- ============================================================================
+-- modules/downed/server.lua asks CP.Qbx.isDowned about every active participant every Config.Downed.checkEvery s.
+
+do
+    local run = { id = 'r-downed', state = 'active', participants = {} }
+    for src = 101, 140 do
+        AddPlayer(src, ('CQC%05d'):format(src), 'police', true)
+        run.participants[src] = { status = 'active', citizenid = players[src].PlayerData.citizenid }
+    end
+    local removed = {}
+    CP.Runs = {
+        all = function() return { run } end,
+        getBySrc = function(src) return run.participants[src] and run or nil end,
+        removeParticipant = function(r, src, reason)
+            local p = r.participants[src]
+            p.status, p.endReason = 'left', reason
+            removed[#removed + 1] = { src = src, reason = reason }
+        end,
+    }
+    H.load('modules/downed/server.lua')
+    H.step(0)   -- its thread registers its listeners, then waits for the first poll
+    local every = Config.Downed.checkEvery * 1000
+    H.eq(every, 2000, 'shipped: a poll every 2 s')
+
+    -- (a) nobody down: 10 polls over 40 participants copy no Player (it was 400 GetPlayer)
+    calls.GetPlayer, calls.GetMetadata = 0, 0
+    for _ = 1, 10 do H.step(every) end
+    H.eq(calls.GetPlayer, 0, '10 polls x 40 participants: 0 GetPlayer (it was 400)')
+    H.eq(calls.GetMetadata, 800, 'each poll reads isdead and inlaststand of each participant')
+    H.eq(#removed, 0, 'nobody is down')
+
+    -- (b) last stand, then dead: the next poll removes them as downed, as before
+    players[105].PlayerData.metadata.inlaststand = true
+    H.step(every - 1)
+    H.eq(#removed, 0, 'last stand: nothing before the poll')
+    H.step(1)
+    H.eq(removed[1] and removed[1].src, 105, 'last stand: removed by the next poll')
+    H.eq(removed[1] and removed[1].reason, 'downed', 'last stand: as downed')
+    players[106].PlayerData.metadata.isdead = true
+    H.step(every)
+    H.eq(removed[2] and removed[2].src, 106, 'dead: removed by the next poll')
+    H.eq(removed[2] and removed[2].reason, 'downed', 'dead: as downed')
+    H.eq(#removed, 2, 'only the downed participants')
+
+    -- (c) a Qbox without GetMetadata: the first call raises, then the whole Player is read, with the same answers
+    local getMetadata = H.exportsMock.qbx_core.GetMetadata
+    H.exportsMock.qbx_core.GetMetadata = nil
+    calls.GetPlayer = 0
+    H.eq(Q.isDowned(101), false, 'no export: not downed')
+    H.eq(calls.GetPlayer, 1, 'no export: read from the Player')
+    H.eq(Q.isDowned(105), true, 'no export: last stand is downed')
+    H.eq(Q.isDowned(106), true, 'no export: dead is downed')
+    players[107].PlayerData.metadata.isdead = 1
+    H.eq(Q.isDowned(107), false, 'no export: only a real true counts')
+    players[107].PlayerData.metadata.isdead = false
+    players[108].PlayerData.metadata.inlaststand = true
+    H.step(every)
+    H.eq(removed[3] and removed[3].src, 108, 'no export: the next poll removes them')
+    H.eq(removed[3] and removed[3].reason, 'downed', 'no export: as downed')
+    H.exportsMock.qbx_core.GetMetadata = getMetadata
+    calls.GetPlayer, calls.GetMetadata = 0, 0
+    H.eq(Q.isDowned(105), true, 'remembered: last stand')
+    H.eq(calls.GetMetadata, 0, 'remembered: GetMetadata is not tried again')
+    H.eq(calls.GetPlayer, 1, 'remembered: the Player is read')
+    TriggerEvent('onResourceStart', 'qbx_core')
+    calls.GetPlayer = 0
+    H.eq(Q.isDowned(105), true, 'qbx_core started again: last stand')
+    H.eq(calls.GetMetadata, 2, 'qbx_core started again: GetMetadata is used again')
+    H.eq(calls.GetPlayer, 0, 'qbx_core started again: no Player copy')
+
+    -- (d) only a number reaches GetMetadata: qbx_core would look a citizenid string up in its players table
+    calls.GetMetadata = 0
+    H.eq(Q.isDowned('CQC00105'), false, 'a citizenid is not a source')
+    H.eq(calls.GetMetadata, 0, 'a citizenid never reaches GetMetadata')
+    H.eq(Q.isDowned('105'), true, 'a numeric string is source 105')
+    H.eq(metadataIds.string, nil, 'GetMetadata was only ever given a number')
+    H.ok((metadataIds.number or 0) > 800, 'GetMetadata was given numbers')
 end
 
 return H

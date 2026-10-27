@@ -395,6 +395,27 @@ if target then
 -- impl: if player and player.PlayerData.citizenid == citizenid then return player end  (exact == match)
 ```
 
+### exports.qbx_core:GetMetadata(src, key) (server)
+
+- **Spec claim:** The downed check (CP.Qbx.isDowned): metadata.isdead, then metadata.inlaststand
+- **Evidence:** ref/qbx_core/server/player.lua:28-30 (resolvePlayer), 1233-1257 (GetMetadata, exported); qbx_core 1.24.0
+- **Implication:** It returns only the one value, so the downed poll (every Config.Downed.checkEvery s per active participant) never copies the whole Player across the export boundary. Pass a NUMBER: a string is read as a citizenid, and for an offline citizenid qbx_core loads the character from its players table (GetOfflinePlayer). A key with a dot reads one nested level. On a Qbox without this export the call raises: CP.Qbx.isDowned then reads exports.qbx_core:GetPlayer(src) instead until qbx_core starts again.
+
+```lua
+local function resolvePlayer(identifier)
+    return type(identifier) == 'string' and (GetPlayerByCitizenId(identifier) or GetOfflinePlayer(identifier)) or GetPlayer(identifier)
+end
+...
+function GetMetadata(identifier, metadata)
+    if type(metadata) ~= 'string' then return end
+    local player = resolvePlayer(identifier)
+    if not player then return end
+    ...
+    return player.PlayerData.metadata[metadata]
+end
+exports('GetMetadata', GetMetadata)
+```
+
 ### exports.qbx_core:GetQBPlayers()
 
 - **Spec claim:** Every online player, e.g. to notify on-duty officers of a Cross-Department launch (a Qbox export, despite its name)

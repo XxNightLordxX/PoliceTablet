@@ -1989,6 +1989,8 @@ Public API (docs/ARCHITECTURE.md §5.1)
       why = 'error' when AddMoney raised: the balance may already have changed, so the caller must not
       retry or refund (CP.Cash leaves the row 'paying'). A plain false (refused, offline) has no why.
   CP.Qbx.isDowned(src) -> boolean                  metadata.isdead == true or metadata.inlaststand == true
+      Two GetMetadata exports (src as a number; a citizenid string returns false), no Player copy. If
+      GetMetadata raises (a Qbox without it), GetPlayer is read from then on, until qbx_core starts again.
   Listeners (any number; each runs in its own thread, errors are caught and logged):
   CP.Qbx.onDutyChange(fn(src, onDuty))    QBCore:Server:SetDuty. false is passed on as is; a true is
                                           re-read from PlayerData (SetDuty can arrive stale or out of

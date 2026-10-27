@@ -4857,6 +4857,7 @@ qbx_core (Qbox APIs only, as used by the installed SC resources and Renewed-Bank
 |---|---|---|
 | exports.qbx_core:GetPlayer(src) | Server | The Qbox player object: PlayerData.citizenid, charinfo.firstname and lastname, job.name, job.label, job.grade.level (supervisor check), job.grade.name (rank), job.onduty, job.type, metadata.callsign, metadata.isdead, metadata.inlaststand |
 | exports.qbx_core:GetPlayerByCitizenId(citizenid) | Server | Find online officers for invites and payouts |
+| exports.qbx_core:GetMetadata(src, key) | Server | The downed check: metadata.isdead and metadata.inlaststand of an online player (src is always a number); on a Qbox without this export the check reads GetPlayer(src) instead |
 | exports.qbx_core:GetQBPlayers() | Server | Every online player, e.g. to notify on-duty officers of a Cross-Department launch (a Qbox export, despite its name) |
 | exports.qbx_core:GetJobs() | Server and client | Job labels and grade names for the UIs |
 | player.Functions.AddMoney(moneyType, amount, reason) | Server | Cash payouts (moneyType = Config.Cash.account). player is the object returned by exports.qbx_core:GetPlayer(src); this is allowed, the QBCore core object is not |

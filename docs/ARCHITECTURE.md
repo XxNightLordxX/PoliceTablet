@@ -645,7 +645,7 @@ Implementers of modules/integrations/* must follow it; the most important points
   qbx_core starts); cleared on unload, drop and a qbx_core stop. nil = not known. It never feeds `CP.Access`'s onLost.
 - S `getJobs() -> table` (qbx jobs)
 - S `addMoney(src, account, amount, reason) -> boolean, why|nil` — amount rounded with `CP.U.round`; `why = 'error'` when `AddMoney` raised (the balance may already have changed: never retry or refund; CP.Cash leaves the row `paying`); a plain refusal returns only `false`
-- S `isDowned(src) -> boolean` (`metadata.isdead == true or metadata.inlaststand == true`)
+- S `isDowned(src) -> boolean` (`metadata.isdead == true or metadata.inlaststand == true`) — read with `exports.qbx_core:GetMetadata` (a numeric src only), not a copy of the whole Player; a Qbox without that export falls back to `GetPlayer` until qbx_core starts again
 - S `onDutyChange(fn(src, onDuty))`, `onPlayerLoaded(fn(src))`, `onJobChange(fn(src, job))`, `onPlayerUnload(fn(src))`, `onGroupUpdate(fn(src))` — register listeners (any number).
 - S `onMetaDataChange(fn(src, key, old, new), keys?)` — `qbx_core:server:onSetMetaData (key, oldValue, value, source)`, fired after the value is set; `keys` filters before any thread starts (CP.Downed uses `isdead` / `inlaststand`).
   Sources: `QBCore:Server:SetDuty (src, onDuty)`, `QBCore:Server:PlayerLoaded (player)`,

@@ -19,6 +19,8 @@ local errorLoggedAt = {}
 -- src -> the player's primary Qbox job name, kept only by qbx_core's events and by lookups (never polled), so loops
 -- over every player can skip non-police without copying their Player object (CP.Access.maybeOfficer).
 local jobOf = {}
+-- false once exports.qbx_core:GetMetadata raised (a Qbox without that export): isDowned then reads the whole Player.
+local metadataExport = true
 
 -- ============================================================================
 --                                   HELPERS
@@ -311,7 +313,26 @@ function Q.removeMoney(src, account, amount, reason)
     return res == true
 end
 
+-- One metadata value through qbx_core's GetMetadata export: a lookup inside qbx_core, no copy of the whole Player.
+-- src must be a number: qbx_core reads its players table for a citizenid string (GetOfflinePlayer).
+local function ReadMetadata(src, key)
+    return pcall(function() return exports.qbx_core:GetMetadata(src, key) end)
+end
+
+-- Metadata isdead or inlaststand is true. Read with GetMetadata; on a Qbox without that export (the call raised) the
+-- whole Player is read instead, from then on until qbx_core starts again.
 function Q.isDowned(src)
+    src = ToSrc(src)
+    if not src or not Started() then return false end
+    if metadataExport then
+        local ok, v = ReadMetadata(src, 'isdead')
+        if ok and v == true then return true end
+        if ok then ok, v = ReadMetadata(src, 'inlaststand') end
+        if ok then return v == true end
+        metadataExport = false
+        CP.log(TAG, 'exports.qbx_core:GetMetadata failed (%s): the downed check reads the whole player from now on',
+            tostring(v))
+    end
     local player = Q.getPlayer(src)
     if not player then return false end
     local md = player.PlayerData.metadata
@@ -582,6 +603,7 @@ AddEventHandler('onResourceStart', function(res)
     if res ~= RESOURCE then return end
     online.at = -1
     infoCache = {}
+    metadataExport = true   -- an updated qbx_core may have GetMetadata now
     Q.getOnlinePlayers()
 end)
 

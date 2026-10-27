@@ -161,6 +161,12 @@ H.exportsMock.qbx_core = {
     GetJobs = function()
         return { bcso = { label = 'BCSO', grades = { [0] = { name = 'Cadet' }, [2] = { name = 'Deputy' } } } }
     end,
+    -- qbx_core server/player.lua GetMetadata: a number is an online source, a string a citizenid
+    GetMetadata = function(id, key)
+        if type(key) ~= 'string' then return nil end
+        local p = type(id) == 'string' and H.exportsMock.qbx_core.GetPlayerByCitizenId(id) or qbxPlayers[id]
+        return p and p.PlayerData.metadata[key]
+    end,
 }
 
 -- qbx_core sends QBCore:Player:SetPlayerData after every change to a player's data (UpdatePlayerData), so a test that
