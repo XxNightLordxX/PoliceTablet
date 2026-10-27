@@ -26,7 +26,8 @@ local NAV_CACHE_S = 5             -- a src's badge counts are built again at mos
 local REVIEW_CACHE_S = 30         -- the Review Queue count reads the database: at most this often per src
 local NAV_PUSH_DELAY_MS = 1000    -- pushes of one burst (a claim window, a unit change) become one 'nav' push
 local NAV_WATCH_S = 600           -- 'nav' pushes go to a src that asked for its counts within this time
--- pushes that can change a badge; each one schedules a 'nav' push to that src
+-- pushes that can change a badge; each one schedules a 'nav' push to that src ('run' only on a start or end, or once
+-- per Config.MissionCalls.eligibilityCache seconds: see T.push)
 local NAV_TOPICS = { unit = true, invites = true, calls = true, profile = true, rewards = true, run = true }
 -- way -> the Config.Tablet.access switch that allows it (export is always on)
 local WAY_SWITCH = { command = 'command', keybind = 'keybind', dispatch = 'keybind', item = 'item', desk = 'desk' }
@@ -41,8 +42,10 @@ local themeWarned = {}
 local lastWay = {}             -- src -> { via, desk } of the last session that passed the access checks
 local navCache = {}            -- src -> { at, counts }
 local reviewCache = {}         -- src -> { at, n }
-local navWatch = {}            -- src -> os.time() of the last getNavCounts
+local navWatch = {}            -- src -> os.time() of the last getNavCounts (nil once the tablet closed)
 local navPending = {}          -- src -> true while a 'nav' push is scheduled
+local runShown = {}            -- src -> true when the last 'run' push that scheduled a 'nav' push carried a run
+local runNavAt = {}            -- src -> os.time() of that 'run' push
 local navExtra = {}            -- key -> { fn = fn(src, officer) -> number, adminOnly } (T.registerNavCount)
 local navExtraOrder = {}
 
@@ -616,11 +619,23 @@ end
 
 local ScheduleNav
 
+-- A 'run' push changes the onRun badge only when the run starts or ends. The progress pushes in between rebuild the
+-- badges once per Config.MissionCalls.eligibilityCache seconds, so the claimable calls count still corrects itself
+-- when MissionCalls' eligibility cache runs out, as it did when every 'run' push rebuilt them.
+local function RunNavDue(n, data)
+    local shown = data ~= nil
+    local every = NumOr(Config.MissionCalls and Config.MissionCalls.eligibilityCache, 10)
+    local now = os.time()
+    if shown == (runShown[n] == true) and runNavAt[n] and now - runNavAt[n] < every then return false end
+    runShown[n], runNavAt[n] = shown, now
+    return true
+end
+
 function T.push(src, topic, data)
     local n = ToSrc(src)
     if not n or type(topic) ~= 'string' or topic == '' then return false end
     TriggerClientEvent(CP.e('client:push'), n, topic, CP.U.serialize(data))
-    if NAV_TOPICS[topic] then ScheduleNav(n) end
+    if NAV_TOPICS[topic] and (topic ~= 'run' or RunNavDue(n, data)) then ScheduleNav(n) end
     return true
 end
 
@@ -783,6 +798,16 @@ RegisterNetEvent(CP.e('server:tabletItemGone'), function()
     TriggerClientEvent(CP.e('client:closeTablet'), src, 'err.no_tablet_item')
 end)
 
+-- The client closed its tablet (once per close): no more 'nav' pushes until it opens or asks for its counts again,
+-- and the 'tablet:closed' hook tells MissionCalls to stop its Dispatch pushes. A scheduled 'nav' push is dropped.
+RegisterNetEvent(CP.e('server:tabletClosed'), function()
+    local src = source
+    if not ToSrc(src) then return end
+    if not CP.Net.rateOk(src, 'tablet:closed', 4, 1000) then return end
+    navWatch[src] = nil
+    CP.Hooks.fire('tablet:closed', src)
+end)
+
 local function OpenAdminNow(src)
     local session, errKey = BuildSession(src, 'admin')
     if not session then
@@ -876,4 +901,5 @@ end)
 AddEventHandler('playerDropped', function()
     local src = source
     lastWay[src], navCache[src], reviewCache[src], navWatch[src], navPending[src] = nil, nil, nil, nil, nil
+    runShown[src], runNavAt[src] = nil, nil
 end)

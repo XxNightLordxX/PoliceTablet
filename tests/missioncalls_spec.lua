@@ -1110,10 +1110,15 @@ do
     H.ok(Find(pushes, function(p) return p.src == 1 and p.topic == 'calls' end) ~= nil, 'the open tablet gets the push')
     H.eq(Find(pushes, function(p) return p.src == 2 end), nil, 'a closed tablet gets nothing')
     H.fire('crimson-police:server:mcWatch', 1, false)
+    -- the tablet's own close (server:tabletClosed in modules/tablet fires 'tablet:closed') ends a watch the same way
+    Cb('getMissionCalls', 2)
+    CP.Hooks.fire('tablet:closed', 2)
     pushes = {}
     NewCall('investigation', 'vinewood')
     MC._pushAll()
-    H.eq(#pushes, 0, 'the tablet closed: no more pushes')
+    H.eq(Find(pushes, function(p) return p.src == 1 end), nil, 'mcWatch false (older clients): no more pushes')
+    H.eq(Find(pushes, function(p) return p.src == 2 end), nil, 'tablet:closed: no more pushes')
+    H.eq(#pushes, 0, 'the tablets closed: nothing is pushed')
 
     -- 30 on-duty officers: 10 units of 2 and 10 solo, 4 open calls, every tablet open, a claim race
     Reset()

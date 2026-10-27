@@ -843,7 +843,10 @@ Parity-plus additions (WP1, WP8; docs/notes/access.md):
 - S `navCounts(src) -> NavCounts` and callback `getNavCounts`: invites, calls (CP.MissionCalls.claimableCount),
   review (supervisors: flagged rows, disputes and profile queue; 30 s cache), commendations, rewards, onRun, each
   through a guarded call (a missing module gives 0); the whole set is cached 5 s per src. Every push of unit,
-  invites, calls, profile, rewards or run schedules one `nav` push 1 s later for a src that asked in the last 10 min.
+  invites, calls, profile or rewards schedules one `nav` push 1 s later for a src that asked in the last 10 min; a
+  `run` push only when the run starts or ends, or once per Config.MissionCalls.eligibilityCache seconds.
+- Plain event `server:tabletClosed` (4 a second; sent by the client once per close): ends the src's `nav` watch and
+  fires the `tablet:closed (src)` hook (MissionCalls ends its Dispatch watch).
 - Plain event `server:tabletItemGone` (2 a second): with requireItem on, not at a desk and the item really gone, the
   server sends `client:closeTablet` (errKey). Callback `admin:getTabletAccess` → TabletAccessView
   (web/src/types/access.ts).
@@ -1256,7 +1259,8 @@ Parity-plus additions (WP1; docs/notes/foundation.md):
   `row:voided (rowId)` (CP.Scoring), `row:forfeited (rowId)` (CP.Cash), `arena:exited (src)` (CP.Alerts' 1 s
   reconcile when inArena turns false), `xp:levelUp (citizenid, src|nil, oldLevel, newLevel)` (CP.Scoring),
   `goal:completed (citizenid, goalId, period)` (CP.Goals), `season:ended (seasonId, { champion, top10 })`
-  (CP.Challenge), `home:extras (citizenid, src, extras)` (CP.Scoring homeData), `officer:loaded (src)` (CP.Cash).
+  (CP.Challenge), `home:extras (citizenid, src, extras)` (CP.Scoring homeData), `officer:loaded (src)` (CP.Cash),
+  `tablet:closed (src)` (CP.Tablet's `server:tabletClosed`).
 
 ### 5.11 CP.Npc — modules/npc (shared NPC behaviour for blocks)
 Server:
@@ -2076,7 +2080,8 @@ Full notes: docs/notes/missioncalls.md.
   is quit, off_route, start_timeout, idle, real_call or force_recall), row:settled and participant:left (cache),
   home:extras (callsOpen). `CP.Schedule.onDaily` deletes history older than Config.Retention.missionCallDays.
 - Net: callbacks `getMissionCalls`, `sup:getMissionCalls`, `admin:getAreaCoverage`; actions
-  `server:claimMissionCall`, `server:sup:mcWithdraw|mcPage|mcCreate` and `server:admin:*`; plain `server:mcWatch`;
+  `server:claimMissionCall`, `server:sup:mcWithdraw|mcPage|mcCreate` and `server:admin:*`; plain `server:mcWatch`
+  (deprecated, kept for older clients; the `tablet:closed` hook ends the watch);
   `client:missionCall` (toast and tone, only to idle units that could claim and have not muted calls); push `calls`.
   Nothing is ever sent to SC-Dispatch.
 
@@ -3487,7 +3492,8 @@ Server → client ox_lib callback: `crimson-police:client:spawn:walkIn` `{ car =
 | `server:custody` | runId, netId, action, phase ('begin'\|'finish'), extra (`{ offence }`, `{ door }`) (plain event, no reqId; 4 per 2 s) | custody |
 | `server:stunHit` | netId (plain event, no reqId; 2 per s) | custody |
 | `server:tabletItemGone` | — (plain event; 2 per s) | tablet |
-| `server:mcWatch` | false = the tablet closed (plain event) | missioncalls |
+| `server:tabletClosed` | — (plain event, once per close; 4 per s): ends the `nav` watch, fires `tablet:closed` | tablet |
+| `server:mcWatch` | false = the tablet closed (plain event; deprecated, no longer sent: `server:tabletClosed` replaces it) | missioncalls |
 | `server:claimMissionCall` | `{ callId, twists? }` → `{ runId }` or `{ pending }` (the twists are checked before the claim joins the window) | missioncalls |
 | `server:contactDecide` | `{ runId, netId, choice, offence?, confirmed? }` → `{ ok }` or `{ confirm = { factKey } }` | custody |
 | `server:profile:set` / `server:profile:report` | see §5.32 | profile |

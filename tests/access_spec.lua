@@ -373,6 +373,50 @@ do
     T.push(1, 'calls', {})
     H.advance(1500)
     H.eq(#H.findEvents('crimson-police:client:push'), 1, 'a dropped player gets no more nav pushes')
+
+    -- 'run' pushes (progress every 2-3 s per participant) rebuild the badges only when the run starts or ends, or
+    -- once per Config.MissionCalls.eligibilityCache seconds (the claimable calls count follows its cache)
+    local function NavPushes()
+        local c = 0
+        for _, e in ipairs(H.findEvents('crimson-police:client:push')) do
+            if e.args[1] == 'nav' then c = c + 1 end
+        end
+        return c
+    end
+    local function RunPushes(count, data)
+        for _ = 1, count do
+            T.push(1, 'run', data)
+            H.advance(1100)
+            H.time = H.time + 2
+        end
+    end
+    H.eq(Config.MissionCalls.eligibilityCache, 10, 'shipped default: 10 s')
+    H.ok(Open(1, { via = 'command' }).ok, 'the tablet opens')
+    H.reset()
+    RunPushes(30, { id = 'r1' })
+    H.eq(NavPushes(), 6, '30 run pushes in 60 s: one nav push at the start, then one per 10 s (was 30)')
+    local closedSrc
+    local hookId = CP.Hooks.on('tablet:closed', function(src) closedSrc = src end)
+    T.push(1, 'calls', {})
+    H.fire('crimson-police:server:tabletClosed', 1)
+    H.eq(closedSrc, 1, 'server:tabletClosed fires the tablet:closed hook (MissionCalls ends its watch)')
+    CP.Hooks.off(hookId)
+    H.reset()
+    H.advance(1500)
+    RunPushes(30, { id = 'r1' })
+    H.eq(NavPushes(), 0, 'the tablet closed: the scheduled nav push is dropped and no run push sends one')
+    H.ok(Open(1, { via = 'command' }).ok, 'the tablet opens again')
+    CP.Runs.getBySrc = function() return nil end
+    H.reset()
+    T.push(1, 'run', nil)
+    H.advance(1500)
+    local navs2 = {}
+    for _, e in ipairs(H.findEvents('crimson-police:client:push')) do
+        if e.args[1] == 'nav' then navs2[#navs2 + 1] = e end
+    end
+    H.eq(#navs2, 1, 'the run ended: the badges are rebuilt at once')
+    H.eq(navs2[1] and navs2[1].args[2].onRun, false, 'with onRun false')
+    H.fire('playerDropped', 1)
     CP.Units, CP.MissionCalls, CP.Profile, CP.Rewards, CP.Runs, CP.Admin, CP.Disputes =
         nil, nil, nil, nil, nil, nil, nil
 end
@@ -1063,6 +1107,31 @@ do
     CT.open('officer')
     H.eq(sessionCalls[#sessionCalls].via, 'export', 'another module opening it is the export way')
     Close()
+
+    -- a close tells the server once (server:tabletClosed); closing a closed tablet (unload, arena) sends nothing
+    CT.open('officer')
+    H.reset()
+    CT.close()
+    CT.close()
+    H.eq(#H.findEvents('crimson-police:server:tabletClosed'), 1, 'two closes: one server:tabletClosed')
+    H.clockMs = H.clockMs + 1000
+    -- modules/missioncalls/client.lua no longer polls CP.Tablet.isOpen every second to send server:mcWatch
+    local threads = 0
+    local realCreateThread = _G.CreateThread
+    _G.CreateThread = function(fn)
+        threads = threads + 1
+        return realCreateThread(fn)
+    end
+    H.load('modules/missioncalls/client.lua')
+    _G.CreateThread = realCreateThread
+    H.eq(threads, 0, 'the missioncalls client starts no thread')
+    CT.open('officer')
+    H.advance(1500, 100)
+    H.reset()
+    Close()
+    H.advance(3000, 100)
+    H.eq(#H.findEvents('crimson-police:server:mcWatch'), 0, 'and sends no server:mcWatch after a close')
+    H.eq(#H.findEvents('crimson-police:server:tabletClosed'), 1, 'only the tablet\'s own close')
 
     -- requireItem: the item leaves the inventory while the tablet is open
     Config.Tablet.access.requireItem = true

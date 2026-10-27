@@ -1665,6 +1665,8 @@ CP.Net.action('server:claimMissionCall', function(src, payload)
     return MC.claim(src, payload.callId, payload.twists)
 end, { rate = 3 })
 
+-- Deprecated: the client now sends server:tabletClosed (modules/tablet) and the 'tablet:closed' hook below ends the
+-- watch. Kept so an older client build still stops the pushes.
 RegisterNetEvent(CP.e('server:mcWatch'), function(open)
     local src = source
     if not CP.Net.rateOk(src, 'missioncalls:watch', 4, 1000) then return end
@@ -1861,6 +1863,8 @@ if CP.Hooks and CP.Hooks.on then
     CP.Hooks.on('home:extras', function(_, src, extras)
         if type(extras) == 'table' and ToSrc(src) then extras.callsOpen = MC.claimableCount(src) end
     end)
+    -- the tablet closed (server:tabletClosed): no more Dispatch pushes until getMissionCalls asks again
+    CP.Hooks.on('tablet:closed', function(src) watchers[src] = nil end)
 end
 
 -- /CrimsonPoliceAdmin missioncall <type> [area], the daily history clean-up and the duty listener (runtime:

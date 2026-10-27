@@ -41,6 +41,7 @@ listener runs in the caller's thread, in the order added, each in pcall (a failu
 | season:ended | seasonId, { champion, top10 = { citizenid } } | CP.Challenge, after the season results | yes |
 | home:extras | citizenid, src, extras | CP.Scoring homeData (Home: `extras` in HomeData) | no |
 | officer:loaded | src | CP.Cash's player-loaded path, right after the pending payments | yes |
+| tablet:closed | src | CP.Tablet's server:tabletClosed (the client closed its tablet; rate limited) | no |
 
 ## CP.Runs additions
 

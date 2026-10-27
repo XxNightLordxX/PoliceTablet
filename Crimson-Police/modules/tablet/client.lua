@@ -444,7 +444,11 @@ function T.close()
     if wasOpen then SetNuiFocus(false, false) end
     StopProp()
     T.send({ type = 'close' })
-    if wasOpen then CP.log(TAG, 'UI closed') end
+    if wasOpen then
+        CP.log(TAG, 'UI closed')
+        -- once per real close: the server stops the badge ('nav') and Dispatch ('calls') pushes to this tablet
+        TriggerServerEvent(CP.e('server:tabletClosed'))
+    end
     return wasOpen
 end
 

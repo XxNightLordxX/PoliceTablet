@@ -2639,6 +2639,7 @@ Net events (all prefixed crimson-police:; runId is always the run's run_uuid, sh
 | server:custody | C → S | runId, netId, action, phase (begin, finish), extra | Every police action; the server checks reach, time and state at both ends |
 | server:stunHit | C → S | netId | Excessive-force telemetry, accepted only when it matches what the server saw within 1 s |
 | server:tabletItemGone | C → S | — | requireItem: the item left the inventory; the server re-checks and closes the tablet |
+| server:tabletClosed | C → S | — | The tablet closed (once per close): the server stops the badge and Dispatch pushes to it |
 
 Supervisor and admin actions use their own events (crimson-police:server:sup:* and crimson-police:server:admin:*), and each re-checks the sender's role and Config.Permissions on the server.
 

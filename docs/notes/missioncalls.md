@@ -39,7 +39,8 @@ Rules worth knowing:
 
 Net: callback `getMissionCalls`, `sup:getMissionCalls`, `admin:getAreaCoverage`; actions `server:claimMissionCall`,
 `server:sup:mcWithdraw|mcPage|mcCreate` and `server:admin:*` (admins only); plain `server:mcWatch` (false = the
-tablet closed, sent by modules/missioncalls/client.lua); push topic `calls` (DispatchView).
+tablet closed; deprecated, kept for older clients); push topic `calls` (DispatchView). The watch also ends on the
+`tablet:closed` hook (modules/tablet's `server:tabletClosed`, sent once per close), so the client runs no poll.
 
 ## CP.Draw additions (modules/draw/server.lua)
 

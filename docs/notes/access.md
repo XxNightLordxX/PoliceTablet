@@ -39,9 +39,13 @@ reviewFlagged, CP.Disputes.forSupervisor with handleDisputes, CP.Profile.queue(d
 src), commendations (CP.Profile.newCommendations), rewards (CP.Rewards.lockerCount), onRun (CP.Runs.getBySrc). The
 whole set is cached 5 s per src.
 
-Push 'nav': every CP.Tablet.push of unit, invites, calls, profile, rewards or run clears that src's cache and, when
-the src asked getNavCounts or opened the tablet in the last 10 minutes, schedules one 'nav' push 1 s later (a burst is
-one push). An open tablet asks getNavCounts again every 5 minutes (navBadges.ts). Cleared on playerDropped.
+Push 'nav': every CP.Tablet.push of unit, invites, calls, profile or rewards clears that src's cache and, when the
+src asked getNavCounts or opened the tablet in the last 10 minutes, schedules one 'nav' push 1 s later (a burst is one
+push). A 'run' push does so only when the run starts or ends (the push carries a view, or nil), or when the last
+run-triggered one is Config.MissionCalls.eligibilityCache seconds old, so the progress pushes of a run no longer rebuild
+every badge. An open tablet asks getNavCounts again every 5 minutes (navBadges.ts). The client sends the plain event
+server:tabletClosed once per close (4 a second per src): it ends the watch (a scheduled 'nav' push is dropped) and fires
+the 'tablet:closed (src)' hook (MissionCalls stops its Dispatch pushes). Cleared on playerDropped.
 server:tabletItemGone is rate limited (2 a second per src).
 
 ## Client (modules/tablet/client.lua)

@@ -1,5 +1,5 @@
--- CP.MissionCalls (client): the new-call toast and tone, and telling the server when the tablet closes (the
--- Dispatch screen data is only built for open tablets).
+-- CP.MissionCalls (client): the new-call toast and tone. The tablet's own close (server:tabletClosed, modules/tablet)
+-- tells the server to stop the Dispatch screen data.
 
 CP.MissionCalls = CP.MissionCalls or {}
 local MC = CP.MissionCalls
@@ -7,10 +7,8 @@ local MC = CP.MissionCalls
 local SOUND_NAME = 'Event_Message_Purple'
 local SOUND_SET = 'GTAO_FM_Events_Soundset'
 local CUE_MIN_GAP_MS = 4000          -- at most one tone per 4 s (several calls at once)
-local WATCH_POLL_MS = 1000
 
 local lastCueAt = nil
-local wasOpen = false
 
 local function Foreign(v)
     return type(v) == 'table' and v.active == true and v.source ~= 'crimson-police'
@@ -49,13 +47,4 @@ RegisterNetEvent(CP.e('client:missionCall'), function(call)
     if lastCueAt and now - lastCueAt < CUE_MIN_GAP_MS then return end
     lastCueAt = now
     PlaySoundFrontend(-1, SOUND_NAME, SOUND_SET, true)
-end)
-
-CreateThread(function()
-    while true do
-        Wait(WATCH_POLL_MS)
-        local open = CP.Tablet ~= nil and CP.Tablet.isOpen ~= nil and CP.Tablet.isOpen() == true
-        if wasOpen and not open then TriggerServerEvent(CP.e('server:mcWatch'), false) end
-        wasOpen = open
-    end
 end)
