@@ -133,6 +133,7 @@ CP.Schedule = {
     dayStart = function(ts) return ts - ts % 86400 end,
     weekStart = function(ts) return ts - ts % 604800 end,
     onDaily = function() end,
+    onDailyJob = function() end,
 }
 local inventory = { [7] = {}, [8] = {} }
 H.exportsMock.ox_inventory = {

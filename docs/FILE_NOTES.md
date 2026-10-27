@@ -3085,13 +3085,17 @@ Public API (server)
   CP.Schedule.onDaily(fn(dayKey))
   CP.Schedule.onWeekly(fn(weekKey, prevWeekStartTs))
   CP.Schedule.onMonthly(fn(monthStartTs))
+  CP.Schedule.onDailyJob(fn(dayKey))               a long daily job (the daily backup), on the retention thread
 
 Test hooks (internal): CP.Schedule._check(ts?) runs one boundary check (the 30 s loop calls it);
 CP.Schedule._runRetention(ts?) -> { archived = n, auditDeleted = n } runs the retention job now.
 
 Contract interpretations: the retention job also runs once 120 s after start (idempotent catch-up);
 at the daily reset it runs in its own thread after the daily listeners, so a slow archive never
-delays them; a clock that moves back to an earlier day fires nothing.
+delays them; the daily jobs (onDailyJob) run first in that thread, one after another, so the daily
+backup never races the retention job for the busy lock and the weekly and monthly listeners never
+wait for it; a reset that comes while that thread still runs starts no second one; a clock that
+moves back to an earlier day fires nothing.
 ```
 
 ## Crimson-Police/modules/scoring/server.lua
@@ -4648,6 +4652,8 @@ since stays with the new character), the oldest backup of a full list can be res
 before anything changes, an older backup gets the defaults of columns added since, and a restore that stops part way
 puts the money state back and keeps payments held, also after a restart, until a restore works; when putting the
 money state back fails too, the admin gets err.restore_failed_money (never "every payment kept its state").
+With Config.Backups.daily = true the daily backup runs on the daily job thread (CP.Schedule.onDailyJob): the weekly
+reset does not wait for a slow backup, and the clean-up starts only once it has returned.
 Real runtime: the restore lock is a Lua variable (H.restart drops it), the store is kept (the database or the saves
 folder), MariaDB's strict mode refuses NULL in a NOT NULL column (the files engine too).
 ```

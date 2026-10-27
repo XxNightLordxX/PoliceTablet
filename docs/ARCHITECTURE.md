@@ -880,6 +880,10 @@ All times are server local time; the "day" starts at `Config.Time.resetHour`.
 - `weekday(ts?) -> 'monday'..'sunday'` of the reset-adjusted day
 - `sqlTime(ts) -> 'YYYY-MM-DD HH:MM:SS'`
 - `onDaily(fn(dayKey))`, `onWeekly(fn(weekKey, prevWeekStartTs))`, `onMonthly(fn(monthStartTs))` — fired once when the boundary passes (checked every 30 s; never fired just because the resource started)
+- `onDailyJob(fn(dayKey))` — a long job for each daily reset (the daily backup): after the daily listeners, the jobs run
+  one after another in one thread and the retention job runs when the last one has returned, so the reset listeners,
+  the weekly and monthly ones and the next boundary check never wait for them (a reset that comes while the previous
+  reset's jobs still run is skipped with a warning)
 - Retention job at each daily reset: move `cp_mission_runs` rows older than `Config.Retention.runArchiveMonths` months into `cp_mission_runs_archive` (INSERT … SELECT then DELETE, only when > 0); delete `cp_audit` rows older than `Config.Retention.auditDays` (0 = off).
 - Full admin control (economy): the archive never moves a row whose money or item rewards are unfinished
   (`cash_status` held, pending or paying; a `cp_item_rewards` row held, pending or giving), and deletes a live row only
@@ -2456,7 +2460,9 @@ action goes through `CP.AdminKit` (admins only, audited).
   by, version, migration, storage mode, rows per table, files), `<name>.t.<table>.json` (rows as objects; DATETIME as
   unix seconds) and `<name>.f<n>.bin` (custom, archived, edited and deleted mission files named by `cp_custom_missions`,
   department logos, the banned-words file). `backup(src, kind) -> ok, BackupView`, `backups()`, keep `Backups.keep`
-  (never the newest or the latest `prerestore`), `Backups.daily` on `CP.Schedule.onDaily` (waits for the busy lock).
+  (never the newest or the latest `prerestore`), `Backups.daily` on `CP.Schedule.onDailyJob` (waits for the busy lock,
+  then the retention job runs). A part is encoded 1000 rows at a time with a `Wait(0)` between the pieces (LOOP_RULES
+  11); the text is the same as one `json.encode` of every row (`[]` for none).
 - Restore: `previewRestore(name)` (tables replaced and kept, files, money rows; `err.backup_damaged` as below);
   `restore(src, name, reason)`: refuses while runs go; reads every part it will put back first (missing, not rows, or a
   row without a NOT NULL column that has no default -> `err.backup_damaged`, no lock); takes the busy lock and the

@@ -14,6 +14,8 @@ local CLEANUP_NOW_EVERY_MS = 10 * 60 * 1000  -- Run clean-up now: once per 10 mi
 local WEEKDAYS = { 'sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday' }  -- os.date wday order
 
 local listeners = { daily = {}, weekly = {}, monthly = {} }
+local dailyJobs = {}      -- long daily jobs (the daily backup): one thread runs them, then the retention job
+local dailyJobsBusy = false
 local last = nil          -- { day, week, weekStart, month } seen by the previous check
 local retentionBusy = false
 local lastCleanup = nil   -- the last clean-up's result (Admin UI -> System -> Clean-up)
@@ -116,6 +118,18 @@ end
 function Schedule.onDaily(fn) return AddListener('daily', fn) end
 function Schedule.onWeekly(fn) return AddListener('weekly', fn) end
 function Schedule.onMonthly(fn) return AddListener('monthly', fn) end
+
+-- A long job for each daily reset (fn(dayKey)). The jobs run one after another in one thread after the daily listeners,
+-- and the retention job runs when the last one has returned, so a slow job never holds up the reset listeners, the
+-- weekly and monthly ones or the next boundary check, and never races the retention job for the busy lock.
+function Schedule.onDailyJob(fn)
+    if type(fn) ~= 'function' then
+        CP.warn(TAG, 'onDailyJob expects a function, got %s', type(fn))
+        return false
+    end
+    dailyJobs[#dailyJobs + 1] = fn
+    return true
+end
 
 local function Fire(kind, ...)
     for i, fn in ipairs(listeners[kind]) do
@@ -320,9 +334,23 @@ function Schedule._check(ts)
         fired.daily = true
         CP.log(TAG, 'daily reset: %s -> %s', prev.day, cur.day)
         Fire('daily', cur.day)
-        -- The retention job runs in its own thread so a slow archive never delays the reset listeners
-        -- (Type of the Day, goals, streaks, the daily cash cap) or the next boundary check.
-        CreateThread(function() RunRetention(ts) end)
+        -- The daily jobs and then the retention job run in their own thread so a slow backup or archive never delays
+        -- the reset listeners (Type of the Day, goals, streaks, the daily cash cap) or the next boundary check.
+        if dailyJobsBusy then
+            CP.warn(TAG, 'the daily jobs of the previous reset are still running; skipped for %s', cur.day)
+        else
+            dailyJobsBusy = true
+            local day = cur.day
+            CreateThread(function()
+                for i, job in ipairs(dailyJobs) do
+                    local ok, err = pcall(job, day)
+                    if not ok then CP.err(TAG, 'daily job #%d failed: %s', i, tostring(err)) end
+                end
+                local ok, err = pcall(RunRetention, ts)
+                if not ok then CP.err(TAG, 'retention job failed: %s', tostring(err)) end
+                dailyJobsBusy = false
+            end)
+        end
     end
     if cur.week ~= prev.week then
         fired.weekly = true

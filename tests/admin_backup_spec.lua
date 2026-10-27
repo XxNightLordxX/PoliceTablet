@@ -374,4 +374,64 @@ do
     H.ok(done.skipped == 3 and done.inserted == 1, 'three rows already ahead are left alone, one comes back whole')
 end
 
+-- ============================================================================
+--                     5. A BIG TABLE IS ENCODED IN PIECES
+-- ============================================================================
+-- 2500 rows (2.5 x BACKUP_PAGE) are encoded 1000 at a time with a Wait(0) between the pieces, and the part is the same
+-- text as one json.encode of every row. A table with no rows is '[]', as FXServer's json.encode writes it (FACTS L8).
+
+do
+    local cols = { 'n', 'note', 'x' }
+    local function Info(name)
+        return {
+            name = name,
+            cols = cols,
+            kinds = { n = 'val', note = 'val', x = 'val' },
+            defaulted = {},
+            required = {},
+        }
+    end
+    local rows, want = {}, {}
+    for i = 1, 2500 do
+        rows[i] = { n = i, note = ('row %d'):format(i), x = i + 0.5 }
+        local o = {} -- as Clean builds it: the columns in order
+        for _, c in ipairs(cols) do o[c] = rows[i][c] end
+        want[i] = o
+    end
+    local realSchema, realQuery, realWait = Sys.schema, MySQL.query.await, _G.Wait
+    Sys.schema = function()
+        return {
+            order = { 'cp_bulk_test', 'cp_empty_test' },
+            tables = { cp_bulk_test = Info('cp_bulk_test'), cp_empty_test = Info('cp_empty_test') },
+        }
+    end
+    MySQL.query.await = function(sql, params)
+        if sql:find('`cp_bulk_test`', 1, true) then return rows end
+        if sql:find('`cp_empty_test`', 1, true) then return {} end
+        return realQuery(sql, params)
+    end
+    local waits = 0
+    _G.Wait = function(ms)
+        if ms == 0 then waits = waits + 1 end
+        return realWait(ms)
+    end
+    H.time = H.time + 2
+    local ok, res = Sys.backup(1, 'manual')
+    _G.Wait, MySQL.query.await, Sys.schema = realWait, realQuery, realSchema
+    H.ok(ok == true and res.rows == 2500, 'the backup of a big table is made: ' .. tostring(res and res.rows or res))
+    H.ok(waits >= 2, ('the encode gives the server its turn between the pieces (%d Wait(0))'):format(waits))
+    local function Part(tname)
+        local fh = io.open(GetResourcePath() .. '/saves/_backups/' .. res.name .. '.t.' .. tname .. '.json', 'rb')
+        local text = fh and fh:read('a') or nil
+        if fh then fh:close() end
+        return text
+    end
+    local text = Part('cp_bulk_test')
+    H.ok(text == json.encode(want), 'the part is byte for byte one json.encode of every row')
+    local back = text and json.decode(text) or {}
+    H.ok(#back == 2500 and back[1].n == 1 and back[2500].note == 'row 2500' and back[1001].x == 1001.5,
+        'and reads back as the same rows')
+    H.eq(Part('cp_empty_test'), '[]', 'a table with no rows is []')
+end
+
 return H

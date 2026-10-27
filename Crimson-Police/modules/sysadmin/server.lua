@@ -182,6 +182,31 @@ local function WriteJson(path, v)
     return okW and res == true, #text
 end
 
+-- The rows of one table as JSON text, encoded BACKUP_PAGE rows at a time with a Wait(0) between the pieces, so a big
+-- table never holds the server thread for one long encode. The text is the same as json.encode(rows): the encoder
+-- writes an array with no spaces, and '[]' when there are no rows.
+local function EncodeRows(rows)
+    local parts, n = {}, #rows
+    for first = 1, n, BACKUP_PAGE do
+        if first > 1 then Wait(0) end
+        local page = {}
+        for i = first, math.min(n, first + BACKUP_PAGE - 1) do page[#page + 1] = rows[i] end
+        local s = json.encode(page)
+        if #s > 2 then parts[#parts + 1] = s:sub(2, -2) end
+    end
+    return '[' .. table.concat(parts, ',') .. ']'
+end
+
+-- One backup part: the rows of one table.
+local function WriteRows(path, rows)
+    local fs = Fs()
+    if not fs then return false end
+    local ok, text = pcall(EncodeRows, rows)
+    if not ok then return false end
+    local okW, res = pcall(fs.write, path, text)
+    return okW and res == true, #text
+end
+
 local function SrcOf(citizenid)
     if type(citizenid) ~= 'string' or citizenid == '' then return nil end
     local ok, s = Call('Qbx', 'getByCitizenId', citizenid)
@@ -801,7 +826,7 @@ function Sys.backup(src, kind, opts)
             end
             if rows then
                 local part = ('%s.t.%s.json'):format(name, tname)
-                local okW, bytes = WriteJson(BackupPath(part), rows)
+                local okW, bytes = WriteRows(BackupPath(part), rows)
                 if not okW then
                     RemoveBackup(name)
                     return false, 'err.backup_write'
@@ -2211,8 +2236,9 @@ CreateThread(function()
     if CP.Admin and CP.Admin.registerSubcommand then
         CP.Admin.registerSubcommand('storagemode', ConsoleStorageMode, 'sysadmin.console.storagemode_help')
     end
-    if CP.Schedule and CP.Schedule.onDaily then
-        CP.Schedule.onDaily(function()
+    -- on the daily job thread: before the retention job, and the reset listeners never wait for it
+    if CP.Schedule and CP.Schedule.onDailyJob then
+        CP.Schedule.onDailyJob(function()
             if not (type(Config.Backups) == 'table' and Config.Backups.daily == true) then return end
             if not Kit.waitIdle(60000) then return end
             local ok, res = Kit.withLock('backup', function() return Sys.backup(0, 'daily') end)

@@ -576,4 +576,53 @@ do
     H.eq(OpenMark(), nil, 'and forgets it')
 end
 
+-- ============================================================================
+--               8. THE DAILY BACKUP RUNS ON THE DAILY JOB THREAD
+-- ============================================================================
+-- Config.Backups.daily = true: the reset listeners and the weekly reset do not wait for a slow backup, the clean-up
+-- starts only once the backup has returned, and the backup is still written whole.
+
+do
+    Restart(function() H.load('modules/schedule/server.lua') end)
+    Config.Backups.daily = true
+    Config.Retention = { runArchiveMonths = 0, auditDays = 0 }
+    local Sched, Kit, Sys = CP.Schedule, CP.AdminKit, CP.Sysadmin
+    local order = {}
+    local function Seen(what)
+        for _, w in ipairs(order) do if w == what then return true end end
+        return false
+    end
+    local realBackup, realLock = Sys.backup, Kit.lock
+    Sys.backup = function(...)
+        order[#order + 1] = 'backup'
+        Wait(5000) -- a big store takes a while
+        local r = table.pack(realBackup(...))
+        order[#order + 1] = 'backup done'
+        return table.unpack(r, 1, r.n)
+    end
+    Kit.lock = function(kind, ...)
+        if kind == 'cleanup' then order[#order + 1] = 'clean-up' end
+        return realLock(kind, ...)
+    end
+    Sched.onDaily(function() order[#order + 1] = 'daily' end)
+    Sched.onWeekly(function() order[#order + 1] = 'weekly' end)
+    H.time = H.time + 7 * 86400
+    local fired = Sched._check(H.time)
+    H.ok(fired.daily and fired.weekly, 'a day and a week went by')
+    H.eq(table.concat(order, ','), 'daily,backup,weekly', 'the weekly reset ran while the backup is still going')
+    H.ok(not Seen('backup done') and not Seen('clean-up'), 'the boundary check returned before the backup finished')
+    H.advance(30000)
+    Sys.backup, Kit.lock = realBackup, realLock
+    H.eq(table.concat(order, ','), 'daily,backup,weekly,backup done,clean-up',
+        'the clean-up started once the backup had returned')
+    local list = Sys._index()
+    local last = list[#list] or {}
+    H.eq(last.kind, 'daily', 'the daily backup is listed')
+    local fh = last.name and io.open(GetResourcePath() .. '/saves/_backups/' .. last.name .. '.manifest.json', 'rb')
+    H.ok(fh ~= nil, 'with its manifest')
+    if fh then fh:close() end
+    local done = Sched.cleanupView().last
+    H.ok(done ~= nil and done.skipped == nil and done.error == nil, 'and the clean-up ran')
+end
+
 return H
