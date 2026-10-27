@@ -160,7 +160,7 @@ local function MarkerLoop(S)
     CreateThread(function()
         while S.alive and S.current and not S.released do
             local p = S.scene
-            if p and U.dist(GetEntityCoords(PlayerPedId()), p) <= MARKER_RANGE then
+            if p and U.dist(GetEntityCoords(cache.ped), p) <= MARKER_RANGE then
                 DrawMarker(1, p.x, p.y, p.z - 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 2.0, 2.0, 0.6, 200, 200, 200, 90,
                     false, false, 2, false, nil, nil, false)
                 Wait(0)

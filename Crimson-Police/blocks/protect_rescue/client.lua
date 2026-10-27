@@ -201,7 +201,7 @@ local function MarkerLoop(S)
         local d = (tonumber(S.ctx.obj.safeRadius) or 6.0) * 2.0
         while S.alive and S.current do
             local safe = S.safe
-            if U.dist(GetEntityCoords(PlayerPedId()), safe) <= MARKER_RANGE then
+            if U.dist(GetEntityCoords(cache.ped), safe) <= MARKER_RANGE then
                 DrawMarker(1, safe.x, safe.y, safe.z - 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, d, d, 1.0, 60, 200, 90, 110,
                     false, false, 2, false, nil, nil, false)
                 Wait(0)

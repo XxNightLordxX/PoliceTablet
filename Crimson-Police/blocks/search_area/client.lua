@@ -225,7 +225,7 @@ local function MarkerLoop(S)
     S.drawing = true
     CreateThread(function()
         while S.alive and S.current do
-            local pos = GetEntityCoords(PlayerPedId())
+            local pos = GetEntityCoords(cache.ped)
             local drew = false
             for _, cl in pairs(S.clues) do
                 if cl.status == 'pending' then

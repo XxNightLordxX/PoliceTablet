@@ -349,7 +349,7 @@ local function Loop(ctx, st)
     CreateThread(function()
         while st.alive and st.token == token do
             local sleep = 500
-            local pos = GetEntityCoords(PlayerPedId())
+            local pos = GetEntityCoords(cache.ped)
             for _, t in ipairs((st.data and st.data.targets) or {}) do
                 if t.status == 'armed' or t.status == 'setback' then
                     local c = t.coords

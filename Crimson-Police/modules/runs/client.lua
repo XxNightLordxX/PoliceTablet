@@ -304,7 +304,7 @@ local function StartTelemetry(run)
     end)
     CreateThread(function()
         while current == run and token == myToken and not run.sentWeapon do
-            local ped = PlayerPedId()
+            local ped = cache.ped
             if IsPedArmed(ped, 6) then
                 Wait(0)
                 if IsPedShooting(ped) then

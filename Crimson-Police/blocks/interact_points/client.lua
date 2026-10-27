@@ -330,7 +330,7 @@ local function Loop(ctx, st)
         while st.alive and st.token == token do
             local sleep = 500
             local pts = (st.data and st.data.points) or {}
-            local pos = GetEntityCoords(PlayerPedId())
+            local pos = GetEntityCoords(cache.ped)
             for _, p in ipairs(pts) do
                 if p.status == 'pending' or p.status == 'followup' then
                     local c = p.coords

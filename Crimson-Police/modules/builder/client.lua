@@ -979,7 +979,7 @@ local function RunPlacement(tool)
             if Interrupted() then return finish(true) end
         end
         DisableControls(PLACE_DISABLE)
-        local ped = PlayerPedId()
+        local ped = cache.ped
         local pos = GetEntityCoords(ped)
         local veh = GetVehiclePedIsIn(ped, false)
         local hit, hx, hy, hz, nz = Aim(veh ~= 0 and veh or ped)
@@ -1283,7 +1283,7 @@ local function RunRecording(tool)
             if Interrupted() then return finish(true) end
         end
         DisableControls(RECORD_DISABLE)
-        local ped = PlayerPedId()
+        local ped = cache.ped
         local veh = GetVehiclePedIsIn(ped, false)
         local driving = veh ~= 0 and GetPedInVehicleSeat(veh, -1) == ped
         st.waiting, st.distance = false, false
@@ -1379,7 +1379,7 @@ local function RunRecording(tool)
             if not st.paused then
                 -- on foot too: the next driving frame must not sample away from the end
                 local e = rec:endPoint()
-                local pedNow = PlayerPedId()
+                local pedNow = cache.ped
                 local vehNow = GetVehiclePedIsIn(pedNow, false)
                 local here = GetEntityCoords(vehNow ~= 0 and vehNow or pedNow)
                 if e and U.dist2d(here, e) > snapEvery * 2.0 then st.resumeAt = e end
@@ -1478,7 +1478,7 @@ local function RunTestDrive(tool)
         while true do
             local now = GetGameTimer()
             if guard(now) then return finish(false, true) end
-            local d = U.dist2d(GetEntityCoords(PlayerPedId()), pts[1])
+            local d = U.dist2d(GetEntityCoords(cache.ped), pts[1])
             if d <= APPROACH_RADIUS then break end
             st.waiting, st.distance = 'approach', math.floor(d + 0.5)
             show(now)
@@ -1488,7 +1488,7 @@ local function RunTestDrive(tool)
         tool.waypointSet = false
     end
     -- 2. keep the spawn point clear
-    while U.dist(GetEntityCoords(PlayerPedId()), pts[1]) < CLEAR_RADIUS do
+    while U.dist(GetEntityCoords(cache.ped), pts[1]) < CLEAR_RADIUS do
         local now = GetGameTimer()
         if guard(now) then return finish(false, true) end
         st.waiting, st.distance = 'clear', false
@@ -1594,7 +1594,7 @@ local function RunTestDrive(tool)
                 slowSince = nil
             end
             st.timeLeft = math.max(0, math.ceil((deadline - now) / 1000))
-            drawRoute(GetEntityCoords(PlayerPedId()), i)
+            drawRoute(GetEntityCoords(cache.ped), i)
             show(now)
             Wait(0)
         end
@@ -1607,7 +1607,7 @@ local function RunTestDrive(tool)
                 if guard(now) then return finish(false, true) end
                 st.stopLeft = math.max(0, math.ceil((untilMs - now) / 1000))
                 st.timeLeft = false
-                drawRoute(GetEntityCoords(PlayerPedId()), i + 1)
+                drawRoute(GetEntityCoords(cache.ped), i + 1)
                 show(now)
                 Wait(0)
             end

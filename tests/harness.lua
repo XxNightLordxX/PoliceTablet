@@ -3036,6 +3036,21 @@ function H.boot(opts)
             await = function() return nil end,
         },
     }
+    -- ox_lib's cache ('@ox_lib/init.lua', first in shared_scripts): cache.ped is this player's ped and cache.vehicle
+    -- the vehicle he is in, false on foot (ox_lib cache/client.lua sets false, never 0); a key it does not keep reads
+    -- false. The game refreshes them every 100 ms; here each read answers from the spec's own PlayerPedId and
+    -- GetVehiclePedIsIn (false while the spec has none, as on the server).
+    _G.cache = setmetatable({ resource = 'Crimson-Police', game = 'fivem' }, {
+        __index = function(_, key)
+            local pedId = rawget(_G, 'PlayerPedId')
+            local ped = pedId and pedId() or false
+            if key == 'ped' then return ped end
+            if key ~= 'vehicle' then return false end
+            local inVehicle = rawget(_G, 'GetVehiclePedIsIn')
+            local veh = ped and inVehicle and inVehicle(ped, false)
+            return type(veh) == 'number' and veh > 0 and veh or false
+        end,
+    })
     _G.MySQL = (H.storage == 'files' and H.filesMySQL) or (H.storage == 'shadow' and H.shadowMySQL) or MySQL
     _G.GetResourcePath = function() return H.resourcePath() end
     H.shipFolders(H.resourcePath())

@@ -312,8 +312,9 @@ local function Loop(ctx, st)
             local t = GetGameTimer()
             local d = st.data
             if d and not d.finished and d.current and st.points[d.current] then
-                local ped = PlayerPedId()
+                local ped = cache.ped
                 local pos = GetEntityCoords(ped)
+                -- not cache.vehicle: it is false on foot, and the checks below compare veh with 0
                 local veh = GetVehiclePedIsIn(ped, false)
                 if #(pos - st.points[d.current]) < VIEW_DISTANCE then
                     sleep = 0
