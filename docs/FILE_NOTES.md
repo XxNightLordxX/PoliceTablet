@@ -269,6 +269,9 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
       (already outside the fence; spawn points inside a Config.Builder.noBuildZones zone are never
       used) and flee along the `routes`; round(suspects × armedShare) of them carry a pistol and turn
       to fight while a participant is within fireWithin. Done when every inmate is neutralised.
+    Both modes check the run caps (ctx.canSpawn; for an inmate with st.nextArmed, decided first) before the
+    director: while the run is full nobody is asked where to stand, no officer's game is asked what it sees, and
+    the objective's short clock (st.short) starts again once there is room.
     Unarmed suspects give up when a participant aims at them within givesUp.aim metres (client
     'aim' report, server distance check), when stunned (client 'stunned' report, a participant must
     be within STUN_RANGE) or when a participant stays within givesUp.close.distance for
@@ -409,8 +412,9 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
     off the checklist). No point at all: left out at once, never at the start point. ws.elapsed (for
     nextWave.afterSeconds) only counts once the wave has a hostile out. The boss is offered his own spot first, then the fight's
     points. Every point the console names is '<location key>[<file index>]'. Spawning respects the run
-    caps (ctx.canSpawn: a wave that does not fit waits and is re-checked every tick, counts are never
-    cut for the caps) and rescale (only the NPCs still missing for the new ctx.obj counts are spawned).
+    caps (ctx.canSpawn, checked before the director: a wave that does not fit waits and is re-checked every
+    tick without asking the director or the officers' games, its ws.waitMs clock starting again once there is
+    room; counts are never cut for the caps) and rescale (only the NPCs still missing for the new ctx.obj counts are spawned).
     The client half blocks NPC traffic within blockTraffic metres of the start while the objective runs.
     Staged ahead (stage = true, PLAN S4, Config.Spawning.stageAhead): the engine calls stage(ctx) once a
     tick while the objective before runs; wave 1 is placed then (once ctx.whenNear, through the director

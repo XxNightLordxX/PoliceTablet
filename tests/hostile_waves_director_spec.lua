@@ -547,6 +547,79 @@ do
 end
 
 -- ============================================================================
+--                 THE SPAWN CAP IS CHECKED BEFORE THE DIRECTOR
+-- ============================================================================
+-- Q11 (loop audit server-runs-2): while the run is at Config.Limits.maxArmedAlive, a waiting wave asks neither the
+-- director nor the officers' games what they see (before, every 1 s tick did both and threw the answer away). Once
+-- there is room, the wave goes on through the director as before.
+
+do
+    local def = Missions.get('gang_shootout')
+    local base = def.locations[4]
+    local loc = {}
+    for k, v in pairs(base) do loc[k] = v end
+    local s0 = base.start.coords
+    -- 40 points 4 m apart, 60-76 m in front of the start (south, towards the yard)
+    loc.spawns = {}
+    for row = 0, 4 do
+        for col = 0, 7 do
+            loc.spawns[#loc.spawns + 1] = vec4(s0.x - 14.0 + col * 4.0, s0.y - 60.0 - row * 4.0, s0.z, 0.0)
+        end
+    end
+    local keep = Config.Limits.maxArmedAlive
+    Config.Limits.maxArmedAlive = 25
+    local picks, asks = 0, 0
+    local realChoose, realAwait = CP.Runs.choosePoints, lib.callback.await
+    CP.Runs.choosePoints = function(run, candidates, n, opts)
+        if type(opts) == 'table' and opts.obj == 1 then picks = picks + 1 end
+        return realChoose(run, candidates, n, opts)
+    end
+    -- the officer's game answers that it sees every point
+    lib.callback.await = function(name, src, args)
+        if name ~= 'crimson-police:client:spawn:visible' then return realAwait(name, src, args) end
+        asks = asks + 1
+        local out = {}
+        for k = 1, #args.points do out[k] = true end
+        return out
+    end
+    Place(1, s0.x, s0.y, s0.z)
+    local run, ctx = Fight('gang_shootout', 4, { 1 },
+        { location = loc, obj = { waves = { 20, 20 }, nextWave = { aliveAtMost = 0, afterSeconds = 1 } } })
+    Secs(5)
+    H.eq(ctx.state.waves[1].spawned, 20, 'cap first: wave 1 (20) is out')
+    H.eq(ctx.state.waves[2] and ctx.state.waves[2].spawned, 5, 'cap first: wave 2 stops at 5, the armed cap (25)')
+    H.eq(Alive(run), 25, 'cap first: 25 armed alive')
+    H.ok(picks > 0 and asks > 0, ('cap first: they came through the director (%d picks, %d asks)'):format(picks, asks))
+    picks, asks = 0, 0
+    Secs(30)
+    H.eq(picks, 0, 'cap first: 30 ticks at the cap ask the director nothing')
+    H.eq(asks, 0, 'cap first: and no officer\'s game is asked what it sees')
+    H.eq(#spawns, 25, 'cap first: nobody else appeared')
+    -- two of them fall: the next tick fills the two places, through the director, far from the officer
+    local n = 0
+    for _, e in ipairs(CP.Runs.entitiesFor(run, { obj = 1, kind = 'ped', alive = true })) do
+        local m = W.ent(e.entity)
+        if n < 2 and m and m.exists then
+            m.killer, m.health, n = 100, 0, n + 1
+        end
+    end
+    Secs(2)
+    local later = SpawnedSince(25)
+    H.eq(#later, 2, 'cap first: two fell, two more of wave 2 appear')
+    H.ok(picks > 0, ('cap first: the director chose their points (%d picks)'):format(picks))
+    H.ok(Nearest(later) >= 40.0, ('cap first: 40 m or more from the officer (nearest %.1f m)'):format(Nearest(later)))
+    for _, sp in ipairs(later) do
+        local own = false
+        for _, p in ipairs(loc.spawns) do if D2(sp, p) < 0.01 then own = true end end
+        H.ok(own, 'cap first: each on one of the fight\'s points')
+    end
+    H.eq(ctx.state.waves[2].spawned, 7, 'cap first: wave 2 has 7 out')
+    CP.Runs.choosePoints, lib.callback.await = realChoose, realAwait
+    Config.Limits.maxArmedAlive = keep
+    EndRun(run)
+end
+
+-- ============================================================================
 --              SWITCHED OFF: PEOPLE APPEAR AS BEFORE THE DIRECTOR
 -- ============================================================================
 

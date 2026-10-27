@@ -659,5 +659,90 @@ do
         'one warning names the missing point')
     H.eq(FA.checklist(ctx)[2].done, true, 'the warrant goes on without him (nothing to arrest)')
 end
+
+-- ============================================================================
+--                 THE SPAWN CAP IS CHECKED BEFORE THE DIRECTOR
+-- ============================================================================
+-- Q11 (loop audit server-runs-2): while the run is at Config.Limits.maxEntities or maxArmedAlive, a Prison Break
+-- scatter and a warrant's associates at the knock ask neither the director nor the officers' games what they see
+-- (before, every 1 s tick did both and threw the answer away). Once there is room they come out through the director.
+
+do
+    local limits = Config.Limits
+    local keepTotal, keepArmed = limits.maxEntities, limits.maxArmedAlive
+    local picks, asks = 0, 0
+    local realChoose, realAwait = CP.Runs.choosePoints, lib.callback.await
+    CP.Runs.choosePoints = function(run, candidates, n, opts)
+        if type(opts) == 'table' and opts.obj == 1 then picks = picks + 1 end
+        return realChoose(run, candidates, n, opts)
+    end
+    -- the officers' games answer that they see every point
+    lib.callback.await = function(name, src, args)
+        if name ~= 'crimson-police:client:spawn:visible' then return realAwait(name, src, args) end
+        asks = asks + 1
+        local out = {}
+        for k = 1, #args.points do out[k] = true end
+        return out
+    end
+
+    -- Prison Break, the south-west fence: two inmates (both armed for the armed cap), the officer 100 m out
+    local def = Missions.get('prison_break')
+    local loc = def.locations[6]
+    local p1, s = loc.spawns[1], loc.start.coords
+    local d = D2(s, p1)
+    local at = vec3(p1.x + (s.x - p1.x) / d * 100.0, p1.y + (s.y - p1.y) / d * 100.0, s.z)
+    for _, c in ipairs({
+        { tag = 'scatter at maxEntities', key = 'maxEntities', share = 0.0 },
+        { tag = 'scatter at maxArmedAlive', key = 'maxArmedAlive', share = 1.0 },
+    }) do
+        limits[c.key] = 0
+        Place(1, at)
+        local run = Run('prison_break', 6, { 1 }, { obj = { suspects = 2, armedShare = c.share } })
+        local want = CP.Runs.ctx(run, 1).obj.suspects
+        picks, asks = 0, 0
+        Secs(30)
+        H.eq(picks, 0, c.tag .. ': 30 ticks at the cap ask the director nothing')
+        H.eq(asks, 0, c.tag .. ': and no officer\'s game is asked what it sees')
+        H.eq(#Peds(run, 'inmate'), 0, c.tag .. ': nobody appeared')
+        limits.maxEntities, limits.maxArmedAlive = keepTotal, keepArmed
+        Secs(2)
+        local out = Peds(run, 'inmate')
+        H.eq(#out, want, ('%s: room again: all %d come out'):format(c.tag, want))
+        H.ok(picks > 0, ('%s: through the director (%d picks)'):format(c.tag, picks))
+        H.ok(Nearest(spawns) >= cfg.minDistance,
+            ('%s: %.0f m or more from the officer (%.1f m)'):format(c.tag, cfg.minDistance, Nearest(spawns)))
+        H.eq(W.count(out, function(e) return e.armed == true end), c.share > 0 and want or 0,
+            c.tag .. ': armed as the share says')
+        EndRun(run)
+    end
+
+    -- Warrant Service, Forum Drive: the associate at the knock waits for room, then comes out as before
+    loc = Missions.get('warrant_service').locations[2]
+    for _, c in ipairs({
+        { tag = 'associates at maxArmedAlive', key = 'maxArmedAlive', cap = 0 },
+        { tag = 'associates at maxEntities', key = 'maxEntities', cap = 1 },
+    }) do
+        Place(1, loc.start.coords)
+        Place(2, loc.start.coords)
+        local run = Run('warrant_service', 2, { 1, 2 }, { obj = SURRENDER })
+        Secs(5)
+        H.eq(#spawns, 1, c.tag .. ': only the suspect waits at the door')
+        limits[c.key] = c.cap
+        Knock(run, 1, loc.door)
+        picks, asks = 0, 0
+        Secs(30)
+        H.eq(picks, 0, c.tag .. ': 30 ticks at the cap ask the director nothing')
+        H.eq(asks, 0, c.tag .. ': and no officer\'s game is asked what it sees')
+        H.eq(#Peds(run, 'associate'), 0, c.tag .. ': no associate yet')
+        limits.maxEntities, limits.maxArmedAlive = keepTotal, keepArmed
+        Secs(1)
+        H.eq(#Peds(run, 'associate'), 1, c.tag .. ': room again: the associate comes out')
+        H.ok(picks > 0, ('%s: through the director (%d picks)'):format(c.tag, picks))
+        H.ok(Nearest(SpawnedSince(1)) >= 15.0,
+            ('%s: 15 m or more from every officer (%.1f m)'):format(c.tag, Nearest(SpawnedSince(1))))
+        EndRun(run)
+    end
+    CP.Runs.choosePoints, lib.callback.await = realChoose, realAwait
+end
 _G.print = realPrint
 return H

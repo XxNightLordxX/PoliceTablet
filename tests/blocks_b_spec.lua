@@ -169,14 +169,13 @@ local function MakeCtx(id, obj, location, o)
             }
             S.spawned[#S.spawned + 1] = { entity = e, netId = n, opts = opts }
             run.entities[n] = { entity = e, obj = index, role = opts.role, armed = opts.armed }
+            -- a spawn takes one of the places left under the cap
+            if S.canLimit then S.canLimit = S.canLimit - 1 end
             return e, n
         end,
+        -- like Runs.canSpawn: only a check (S.canLimit = places left under the cap), asking takes no place
         canSpawn = function()
-            if S.canLimit then
-                if S.canLimit <= 0 then return false end
-                S.canLimit = S.canLimit - 1
-                return true
-            end
+            if S.canLimit then return S.canLimit > 0 end
             return S.can
         end,
         delete = function(netId)

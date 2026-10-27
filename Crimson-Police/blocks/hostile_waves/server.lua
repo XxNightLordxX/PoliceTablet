@@ -855,6 +855,14 @@ local function SpawnWave(ctx, st, w, budget)
     local goal = WaveGoal(ctx, st, w)
     if ws.spawned >= goal then return true, budget, false end
     if budget <= 0 then return false, budget, false end
+    -- the run is at its spawn cap (Config.Limits): nobody could appear this tick, so neither the director nor the
+    -- officers' games are asked; a location with no point at all still leaves the wave out at once. The wave's clock
+    -- starts again once there is room, so nobody appears closer to the officers because of the wait.
+    if not ctx.canSpawn(1, true) then
+        if #SpawnPoints(ctx, st) == 0 then return LeaveOut(ctx, st, w, true), budget, false end
+        ws.waitMs = nil
+        return false, budget, false
+    end
     local points, short, none, spare = PickPoints(ctx, st, w, ws, math.min(goal - ws.spawned, budget))
     if none then return LeaveOut(ctx, st, w, true), budget, false end
     for _, point in ipairs(points) do
@@ -1022,6 +1030,8 @@ local function StageWave(ctx, st)
     if st.wave ~= 1 or not ws then return end
     local missing = WaveGoal(ctx, st, 1) - ws.spawned
     if missing <= 0 then return end
+    -- the run is at its spawn cap (Config.Limits): nothing is asked of the director or the officers' games this tick
+    if not ctx.canSpawn(1, true) then return end
     local points, _, _, spare = PickPoints(ctx, st, 1, { points = ws.points }, math.min(missing, SPAWNS_PER_TICK), nil,
         ('wave 1 (%s), staged'):format(ListName(ctx, st)))
     for _, point in ipairs(points) do

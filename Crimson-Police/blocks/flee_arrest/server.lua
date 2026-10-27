@@ -938,6 +938,14 @@ local function LeaveOut(ctx, st, role, missing)
     return true
 end
 
+-- The run is at its spawn cap (Config.Limits): nobody of role could appear this tick, so neither the director nor the
+-- officers' games are asked. The objective's clock (st.short) starts again once there is room, so nobody appears
+-- closer to the officers because of the wait. Returns false (not all out).
+local function Capped(st, role)
+    if st.short then st.short[role] = nil end
+    return false
+end
+
 -- ============================================================================
 --                                  DOOR MODE
 -- ============================================================================
@@ -1069,6 +1077,7 @@ local function SpawnAssociates(ctx, st, want)
         return false
     end
     if not st.assocOrder or #st.assocOrder ~= #pts then st.assocOrder = RngOf(ctx):shuffle(Indices(#pts)) end
+    if not ctx.canSpawn(1, true) then return Capped(st, 'associate') end
     local spots, spare = PickSpots(ctx, st, 'associate', pts, st.assocOrder, key, want - st.counts.associate, want, {
         indoor = true,
         centre = PointList(ctx.location, obj.door)[1],
@@ -1226,9 +1235,21 @@ local function SpawnScatter(ctx, st)
     end)
 end
 
+-- Whether the next scatter person (st.nextArmed) is armed: exactly round(want × share) armed overall, the chance is
+-- the share still to place. Decided once per person and kept until he has appeared.
+local function NextArmed(ctx, st, want, share)
+    if st.nextArmed ~= nil then return st.nextArmed end
+    local armedLeft = math.max(0, U.round(want * share) - st.counts.armedInmates)
+    local slotsLeft = want - st.counts.inmate
+    st.nextArmed = armedLeft > 0 and (armedLeft >= slotsLeft or RngOf(ctx):next() < armedLeft / slotsLeft)
+    return st.nextArmed
+end
+
 SpawnScatterLoop = function(ctx, st, want, pts, routes)
     local share = tonumber(ctx.obj.armedShare) or 0
     local ok = true
+    -- decided before the director is asked (no other draw comes in between), so a full armed cap is seen here too
+    if not ctx.canSpawn(1, NextArmed(ctx, st, want, share)) then return Capped(st, 'inmate') end
     -- the spawn director (Config.Spawning): a point of his own for each, once an officer is near it
     local spots, spare, near, k, taken = nil, nil, false, 0, {}
     if Directed() then
@@ -1246,13 +1267,7 @@ SpawnScatterLoop = function(ctx, st, want, pts, routes)
                 break
             end
         end
-        if st.nextArmed == nil then
-            -- exactly round(want × share) armed overall: the chance is the share still to place
-            local armedLeft = math.max(0, U.round(want * share) - st.counts.armedInmates)
-            local slotsLeft = want - st.counts.inmate
-            st.nextArmed = armedLeft > 0 and (armedLeft >= slotsLeft or RngOf(ctx):next() < armedLeft / slotsLeft)
-        end
-        local armed = st.nextArmed
+        local armed = NextArmed(ctx, st, want, share)
         if not ctx.canSpawn(1, armed) then ok = false break end
         local i = st.counts.inmate + 1
         local point = spot and spot.coords or Placed(pts, st.pointOrder, i)
