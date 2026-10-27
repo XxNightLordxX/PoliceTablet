@@ -656,19 +656,26 @@ local ROW_COLUMNS = [[id, mission_type, status, published_version, published_def
     TIMESTAMPDIFF(SECOND, NOW(), locked_until) AS lock_left, created_by, updated_by,
     UNIX_TIMESTAMP(updated_at) AS updated_at_ts]]
 
-local function RowOf(r)
+-- `defs` = { pub, draft } already read (the list's summaries); without it both definitions are decoded in full.
+local function RowOf(r, defs)
     if type(r) ~= 'table' or r.id == nil then return nil end
     local lockLeft = tonumber(r.lock_left)
     local lockedBy = r.locked_by
     if lockedBy == '' then lockedBy = nil end
+    local published, draft
+    if defs then
+        published, draft = defs.pub, defs.draft
+    else
+        published, draft = U.jsonField(r.published_definition), U.jsonField(r.draft_definition)
+    end
     return {
         id = tostring(r.id),
         missionType = r.mission_type,
         status = r.status or 'draft',
         publishedVersion = tonumber(r.published_version),
-        published = U.jsonField(r.published_definition),
+        published = published,
         draftVersion = tonumber(r.draft_version),
-        draft = U.jsonField(r.draft_definition),
+        draft = draft,
         draftTested = U.truthy(r.draft_tested),
         filePath = (r.file_path ~= nil and r.file_path ~= '') and tostring(r.file_path) or nil,
         editedInCode = U.truthy(r.edited_in_code),
@@ -689,18 +696,61 @@ local function FetchRow(id)
     return RowOf(r)
 end
 
-local function FetchRows(where, params)
-    CP.Migrations.ready()
-    local sql = 'SELECT ' .. ROW_COLUMNS .. ' FROM cp_custom_missions'
-    if where then sql = sql .. ' WHERE ' .. where end
-    sql = sql .. ' ORDER BY updated_at DESC, id ASC'
-    local rows = MySQL.query.await(sql, params or {}) or {}
-    local out = {}
-    for _, r in ipairs(rows) do
-        local row = RowOf(r)
-        if row then out[#out + 1] = row end
+-- The Builder list reads only the label, type and maxOfficers of a definition and whether there is a draft, so it
+-- keeps that summary per mission next to the column text it came from. A column is decoded again only when its text
+-- changed (published_definition is rewritten without a version change).
+local FetchRows
+do
+    local listDefCache = {}   -- id -> { pubText, draftText, pub, draft }
+
+    local function SummaryOf(v)
+        if type(v) == 'table' then return { label = v.label, type = v.type, maxOfficers = v.maxOfficers } end
+        return v
     end
-    return out
+
+    local function ListDef(entry, textKey, valueKey, text)
+        -- oxmysql decoded it already: nothing to keep
+        if type(text) == 'table' then return SummaryOf(text) end
+        if entry[textKey] ~= text then
+            entry[textKey] = text
+            entry[valueKey] = SummaryOf(U.jsonField(text))
+        end
+        return entry[valueKey]
+    end
+
+    -- opts.summary (builder:list only, no `where`): each definition as its summary (SummaryOf).
+    function FetchRows(where, params, opts)
+        CP.Migrations.ready()
+        local sql = 'SELECT ' .. ROW_COLUMNS .. ' FROM cp_custom_missions'
+        if where then sql = sql .. ' WHERE ' .. where end
+        sql = sql .. ' ORDER BY updated_at DESC, id ASC'
+        local rows = MySQL.query.await(sql, params or {}) or {}
+        local summary = type(opts) == 'table' and opts.summary == true
+        local seen = {}
+        local out = {}
+        for _, r in ipairs(rows) do
+            local row
+            if summary and type(r) == 'table' and r.id ~= nil then
+                local id = tostring(r.id)
+                local entry = listDefCache[id] or {}
+                listDefCache[id] = entry
+                seen[id] = true
+                row = RowOf(r, {
+                    pub = ListDef(entry, 'pubText', 'pub', r.published_definition),
+                    draft = ListDef(entry, 'draftText', 'draft', r.draft_definition),
+                })
+            else
+                row = RowOf(r)
+            end
+            if row then out[#out + 1] = row end
+        end
+        if summary then
+            for id in pairs(listDefCache) do
+                if not seen[id] then listDefCache[id] = nil end
+            end
+        end
+        return out
+    end
 end
 
 local function Encode(t)
@@ -2529,17 +2579,49 @@ end
 --                       BUILT-IN MISSIONS AND OVERRIDES
 -- ============================================================================
 
--- The shipped file of a built-in mission: { path, content, raw, hash } (hash = the loader's defHash of the file).
-local function ShippedOf(id)
-    if type(id) ~= 'string' or #id == 0 or #id > 40 or not id:match('^[%w_]+$') then return nil end
-    local path = OVR.BUILTIN_DIR .. id .. '.lua'
-    local content = ReadFile(path)
-    if not content then return nil end
-    local raw = B.parse(content, path)
-    if type(raw) ~= 'table' or raw.id ~= id then return nil end
-    return { path = path, content = content, raw = raw, hash = U.hashHex(content) }
+local ShippedOf, ShippedHash
+do
+    local function ShippedPath(id)
+        if type(id) ~= 'string' or #id == 0 or #id > 40 or not id:match('^[%w_]+$') then return nil end
+        return OVR.BUILTIN_DIR .. id .. '.lua'
+    end
+
+    -- The shipped file of a built-in mission read from `content`: { path, content, raw, hash } (hash = the loader's
+    -- defHash of the file), nil when it is not a mission with that id.
+    local function ShippedFrom(id, path, content)
+        local raw = B.parse(content, path)
+        if type(raw) ~= 'table' or raw.id ~= id then return nil end
+        return { path = path, content = content, raw = raw, hash = U.hashHex(content) }
+    end
+
+    -- The shipped file of a built-in mission as it is on disk now (every action reads it fresh).
+    function ShippedOf(id)
+        local path = ShippedPath(id)
+        local content = path and ReadFile(path) or nil
+        if not content then return nil end
+        return ShippedFrom(id, path, content)
+    end
+
+    -- Only the shipped file's hash, for the Builder list (asked again every 30 s per open list): the file is read
+    -- each time, so an edited file shows at once, but parsed and hashed only when its text changed.
+    local shippedHashCache = {}   -- id -> { content, hash } (hash = false: that text is not a mission with that id)
+    function ShippedHash(id)
+        local path = ShippedPath(id)
+        if not path then return nil end
+        local content = ReadFile(path)
+        if not content then
+            shippedHashCache[id] = nil
+            return nil
+        end
+        local hit = shippedHashCache[id]
+        if hit and hit.content == content then return hit.hash or nil end
+        local shipped = ShippedFrom(id, path, content)
+        shippedHashCache[id] = { content = content, hash = shipped and shipped.hash or false }
+        return shipped and shipped.hash or nil
+    end
 end
 B.shippedOf = ShippedOf
+B.shippedHash = ShippedHash
 
 -- A built-in id the loader knows (loaded from missions/builtin/, with or without an override).
 local function IsBuiltin(id)
@@ -2573,20 +2655,20 @@ local function BaselineOf(shipped)
     return { def = b, raw = shipped.raw, hash = shipped.hash }
 end
 
-local function OverrideView(row, id)
+-- `sum` = CP.Missions.loadSummary() when the caller already has it (the list asks once for every built-in).
+local function OverrideView(row, id, sum)
     local def = CP.Missions and CP.Missions.get and CP.Missions.get(id) or nil
-    local shipped = ShippedOf(id)
     local tweaks = type(Config.MissionTweaks) == 'table' and Config.MissionTweaks[id] or nil
     local view = {
         overridden = def ~= nil and def.overridden == true,
-        shippedHash = shipped and shipped.hash or nil,
+        shippedHash = ShippedHash(id),
         baseHash = row and row.baseHash or nil,
         version = row and row.publishedVersion or nil,
         hasDraft = row ~= nil and row.draft ~= nil,
         status = row and row.status or nil,
         tweaks = type(tweaks) == 'table' and U.deepcopy(tweaks) or nil,
     }
-    local sum = CP.Missions and CP.Missions.loadSummary and CP.Missions.loadSummary() or nil
+    if sum == nil then sum = CP.Missions and CP.Missions.loadSummary and CP.Missions.loadSummary() or nil end
     for _, f in ipairs(sum and sum.overrideFailed or {}) do
         if f.id == id then view.loadError = f.error end
     end
@@ -2618,7 +2700,7 @@ local function LockView(row, actor, names)
     }
 end
 
-local function EntryView(row, actor, perms, names)
+local function EntryView(row, actor, perms, names, sum)
     local def = CurrentDef(row) or {}
     local lockedByOther = row.lockActive and row.lockedBy ~= actor.citizenid
     local canEdit = Allows(perms, row, actor, 'edit')
@@ -2643,7 +2725,7 @@ local function EntryView(row, actor, perms, names)
         lock = LockView(row, actor, names),
         requiredTier = def.maxOfficers and RequiredTierName(def.maxOfficers) or nil,
         overridesBuiltin = row.overridesBuiltin or nil,
-        override = row.overridesBuiltin and OverrideView(row, row.id) or nil,
+        override = row.overridesBuiltin and OverrideView(row, row.id, sum) or nil,
         can = {
             edit = canEdit and not lockedByOther and row.status ~= 'archived',
             publish = Allows(perms, row, actor, 'publish') and row.draft ~= nil and not lockedByOther
@@ -3360,7 +3442,7 @@ CP.Net.callback('builder:list', function(src)
     if not actor then return nil, perms end
     TouchViewer(src)
     local rows = {}
-    for _, r in ipairs(FetchRows()) do
+    for _, r in ipairs(FetchRows(nil, nil, { summary = true })) do
         if VisibleTo(r, actor, perms) then rows[#rows + 1] = r end
     end
     local ids = {}
@@ -3370,10 +3452,12 @@ CP.Net.callback('builder:list', function(src)
         ids[#ids + 1] = r.lockedBy
     end
     local names = DisplayNames(ids)
-    local missions = {}
-    for _, r in ipairs(rows) do missions[#missions + 1] = EntryView(r, actor, perms, names) end
-    local builtins = {}
     local editable = OverrideOk(actor)
+    -- the last load's summary, read once for every override view below (only admins who may edit see one)
+    local sum = editable and CP.Missions and CP.Missions.loadSummary and CP.Missions.loadSummary() or nil
+    local missions = {}
+    for _, r in ipairs(rows) do missions[#missions + 1] = EntryView(r, actor, perms, names, sum) end
+    local builtins = {}
     local overrideRows = {}
     if editable then
         for _, r in ipairs(rows) do if r.overridesBuiltin then overrideRows[r.id] = r end end
@@ -3388,7 +3472,7 @@ CP.Net.callback('builder:list', function(src)
                     source = 'builtin',
                     readOnly = true,
                     canEdit = editable or nil,
-                    override = editable and OverrideView(overrideRows[def.id], def.id) or nil,
+                    override = editable and OverrideView(overrideRows[def.id], def.id, sum) or nil,
                 }
             end
         end

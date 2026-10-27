@@ -2257,6 +2257,86 @@ local function Body()
         Config.Builder.supervisorItems = true
     end
 
+    -- ══ builder:list keeps a summary of each definition, decoded again only when its text changed (Q9) ═════════
+    do
+        local function list()
+            local okL, l = cb(3, 'builder:list', {})
+            H.ok(okL, 'the admin\'s list answers')
+            return okL and l or { missions = {} }
+        end
+        local function entryOf(l, mid)
+            for _, m in ipairs(l.missions) do if m.id == mid then return m end end
+            return nil
+        end
+        -- an archived mission in the list too
+        local archived = false
+        for _, m in ipairs(list().missions) do if m.dbStatus == 'archived' then archived = true end end
+        if not archived then
+            local target
+            for _, m in ipairs(list().missions) do
+                if m.dbStatus == 'published' and m.id ~= id and m.can.archive then target = m.id end
+            end
+            H.ok(target and (act(3, 'archive', { id = target })), 'a published mission is archived for the list')
+        end
+        -- the column texts as stored: json.decode is counted only for these
+        local texts, columns = {}, 0
+        local function readTexts()
+            texts, columns = {}, 0
+            for _, r in ipairs(H.sql('SELECT published_definition, draft_definition FROM cp_custom_missions')) do
+                for _, t in pairs({ r.published_definition or false, r.draft_definition or false }) do
+                    if type(t) == 'string' and t ~= '' then
+                        texts[t] = true
+                        columns = columns + 1
+                    end
+                end
+            end
+        end
+        local realDecode = json.decode
+        local decoded = 0
+        json.decode = function(v, ...)
+            if texts[v] then decoded = decoded + 1 end
+            return realDecode(v, ...)
+        end
+        local okSpy, errSpy = pcall(function()
+            readTexts()
+            H.ok(columns > 2, 'stored definitions to count: ' .. columns)
+            decoded = 0
+            list()
+            H.ok(decoded <= columns, 'a list decodes each stored definition at most once: ' .. decoded)
+            decoded = 0
+            local warm = list()
+            H.eq(decoded, 0, 'the next list decodes none: no text changed')
+            -- one draft saved with a new name: only that column is decoded, and the new name shows
+            local d = validDef()
+            d.label = 'Dockside Raid Renamed'
+            H.ok((act(1, 'save', { id = id, definition = d })), 'a new draft is saved')
+            readTexts()
+            decoded = 0
+            local after = list()
+            H.eq(decoded, 1, 'the list decodes only the changed draft')
+            H.eq(entryOf(after, id) and entryOf(after, id).label, 'Dockside Raid Renamed', 'and shows its new name')
+            H.ok(entryOf(warm, id) and entryOf(warm, id).label ~= 'Dockside Raid Renamed', 'a name it did not have')
+            -- every entry is what the full definition gives (builder:get decodes it in full)
+            local kinds = {}
+            for _, m in ipairs(after.missions) do
+                kinds[m.dbStatus] = true
+                if m.hasDraft then kinds.withDraft = true end
+                local okG, rec = cb(3, 'builder:get', { id = m.id })
+                local full = {}
+                for k in pairs(m) do if okG then full[k] = rec[k] end end
+                if m.lock and full.lock then
+                    full.lock.secondsLeft = m.lock.secondsLeft
+                end -- the clock moves
+                local same, why = Deq(m, full)
+                H.ok(same, 'the list entry of ' .. m.id .. ' is what the full definition gives: ' .. tostring(why))
+            end
+            H.ok(kinds.draft and kinds.published and kinds.archived and kinds.withDraft,
+                'the list had drafts, published and archived missions')
+        end)
+        json.decode = realDecode
+        H.ok(okSpy, 'json.decode counted: ' .. tostring(errSpy))
+    end
+
     -- the builder switch
     Config.Builder.enabled = false
     H.eq(select(2, act(1, 'save', { id = id, definition = validDef() })), 'err.builder_disabled',

@@ -1471,6 +1471,9 @@ Stop: every value we set is removed.
     CP.Builder.toRuntime(fileDef) -> def                       vector tables -> vec3/vec4
     CP.Builder.exportLua(def, meta) -> text                    meta = { version, publisher, at, edited }
     CP.Builder.parse(luaSource, chunkName) -> def|nil, err     CP.U.parseMissionFile: read as data, never run
+    CP.Builder.shippedOf(id) -> { path, content, raw, hash }|nil   a built-in's shipped file, read fresh (actions)
+    CP.Builder.shippedHash(id) -> hash|nil                     the same file's hash for the list views: the file
+                                                               is read each call, parsed only when its text changed
     CP.Builder.slug(label) -> string
   Net (docs/notes/builder_protocol.md §3/§4)
     callbacks  builder:list · builder:get { id } · builder:config
@@ -1480,6 +1483,10 @@ Stop: every value we set is removed.
                restore { id } · rollback { id } · breakLock { id } · discardDraft { id }
     events     crimson-police:client:builder { event, id } to an editor who lost the lock or the draft;
                NUI push topic 'builder' { event, id, by } to everyone who opened the builder recently
+
+  builder:list (polled every 30 s per open list) keeps, per mission, only the label, type and maxOfficers of each
+  definition next to the column text it came from, and decodes a column again only when its text changed; every
+  other read (builder:get, actions, file sync) decodes the full row.
 
   Permissions (CP.Permissions.can; admins always): builderEdit (own), builderEditAny (someone else's),
   builderPublish, builderArchive (archive + restore), builderRollback, breakEditLock.

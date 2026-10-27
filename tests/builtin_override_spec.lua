@@ -191,6 +191,82 @@ do
 end
 
 -- ============================================================================
+--  4b. THE LIST READS EACH SHIPPED FILE, PARSES IT ONLY WHEN IT CHANGED (Q9)
+-- ============================================================================
+
+do
+    local realParse, realLoad = U.parseMissionFile, LoadResourceFile
+    local parsed = 0
+    U.parseMissionFile = function(...)
+        parsed = parsed + 1
+        return realParse(...)
+    end
+    local swap = {}   -- built-in id -> the text its file has now (false: the file is gone)
+    LoadResourceFile = function(res, path)
+        local id = type(path) == 'string' and path:match('^missions/builtin/([%w_]+)%.lua$') or nil
+        if id and swap[id] ~= nil then return swap[id] or nil end
+        return realLoad(res, path)
+    end
+    local builtins = {}
+    for _, def in ipairs(CP.Missions.list()) do
+        if def.source == 'builtin' then builtins[#builtins + 1] = def.id end
+    end
+    local function List()
+        parsed = 0
+        local list = X.cb('builder:list', 5)
+        local entry, row
+        for _, b in ipairs(list and list.builtins or {}) do if b.id == ID then entry = b end end
+        for _, m in ipairs(list and list.missions or {}) do if m.id == ID then row = m end end
+        return entry, parsed, row
+    end
+    local ok, err = pcall(function()
+        -- every shipped file edited (a resource update): each is parsed once, the override's file only once too
+        for _, id in ipairs(builtins) do swap[id] = '-- updated\n' .. X.read('missions/builtin/' .. id .. '.lua') end
+        local e1, n1 = List()
+        H.eq(n1, #builtins, 'an admin\'s list parses each shipped file once')
+        H.ok(e1 and e1.override.shippedHash == U.hashHex(swap[ID]) and e1.override.changed == true,
+            'the edited file\'s hash: the original changed')
+        local e2, n2, r2 = List()
+        H.eq(n2, 0, 'the next list parses none: no file changed')
+        H.ok(e2 and e2.override.shippedHash == U.hashHex(swap[ID]), 'and gives the same hash')
+        -- the list's override view is the one builder:get builds from the full row
+        local rec = Record(5)
+        local okR, why = true, nil
+        for k, v in pairs(rec and rec.override or { missing = true }) do
+            if cjson.encode(Plain(v)) ~= cjson.encode(Plain(e2.override[k])) then okR, why = false, k end
+            if cjson.encode(Plain(v)) ~= cjson.encode(Plain(r2 and r2.override and r2.override[k])) then
+                okR, why = false, 'row ' .. k
+            end
+        end
+        H.ok(okR and r2 ~= nil, 'the list shows the override as builder:get does: ' .. tostring(why))
+        -- one file edited again: only that one is parsed, and its new hash shows at once
+        swap[ID] = '-- updated twice\n' .. shippedText
+        local e3, n3 = List()
+        H.eq(n3, 1, 'only the edited file is parsed')
+        H.ok(e3 and e3.override.shippedHash == U.hashHex(swap[ID]) and e3.override.changed == true, 'with its new hash')
+        swap[ID] = nil
+        local e4, n4 = List()
+        H.eq(n4, 1, 'the file as shipped again: parsed once')
+        H.ok(e4 and e4.override.shippedHash == shippedHash and e4.override.changed == false, 'not changed again')
+        -- missing, broken or another mission: no hash, as before, and still none from the memory
+        swap[ID] = false
+        H.eq(CP.Builder.shippedHash(ID), nil, 'a missing shipped file has no hash')
+        swap[ID] = 'return { id = '
+        H.eq(CP.Builder.shippedHash(ID), nil, 'a broken file has no hash')
+        parsed = 0
+        H.eq(CP.Builder.shippedHash(ID), nil, 'nor the second time')
+        H.eq(parsed, 0, 'which is not parsed again')
+        swap[ID] = (shippedText:gsub('\'gang_shootout\'', '\'gang_shootout_two\'', 1))
+        H.eq(CP.Builder.shippedHash(ID), nil, 'a file of another mission has no hash')
+        H.eq(CP.Builder.shippedHash('../gang_shootout'), nil, 'nor a path')
+        swap[ID] = nil
+        H.eq(CP.Builder.shippedHash(ID), shippedHash, 'the shipped file\'s hash again')
+    end)
+    U.parseMissionFile, LoadResourceFile = realParse, realLoad
+    H.ok(ok, 'shipped files counted: ' .. tostring(err))
+end
+
+-- ============================================================================
 --            5. SWITCHES AND QUICK EDIT APPLY TO THE OVERRIDE (O3)
 -- ============================================================================
 
