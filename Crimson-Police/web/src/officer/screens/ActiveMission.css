@@ -78,7 +78,8 @@
 .run_ui-hero__pulse.is-live {
     background: var(--cp-success);
     box-shadow: 0 0 0 3px rgba(var(--cp-success-rgb), 0.22);
-    animation: run_ui-pulse 1.6s ease-in-out infinite;
+    /* Pulses 3 times, then keeps the static ring (an endless pulse redraws every frame) */
+    animation: run_ui-pulse 1.6s ease-in-out 3;
 }
 
 @keyframes run_ui-pulse {

@@ -266,7 +266,8 @@
 .cp-hud__route.is-off {
     background: rgba(var(--cp-warning-rgb), 0.14);
     border-color: rgba(var(--cp-warning-rgb), 0.6);
-    animation: cp-route-warn 1.4s ease-in-out infinite;
+    /* Pulses 3 times, then keeps the warning background and border (an endless pulse redraws every frame) */
+    animation: cp-route-warn 1.4s ease-in-out 3;
 }
 
 .cp-hud__route.is-off > .cp-icon,

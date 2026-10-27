@@ -341,7 +341,8 @@
 
 .cp-runbar__pulse.is-live {
     background: var(--cp-accent);
-    animation: cp-pulse 1.8s infinite;
+    /* Pulses 3 times, then stays lit (an endless pulse redraws every frame) */
+    animation: cp-pulse 1.8s 3;
 }
 
 .cp-runbar__main {

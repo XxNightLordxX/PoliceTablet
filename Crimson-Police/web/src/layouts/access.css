@@ -169,7 +169,8 @@
     border-radius: 50%;
     background: var(--cp-success);
     box-shadow: 0 0 0 0 rgba(var(--cp-success-rgb), 0.6);
-    animation: nav-live-pulse 1.6s var(--cp-ease) infinite;
+    /* Pulses 3 times, then stays lit (an endless pulse redraws every frame) */
+    animation: nav-live-pulse 1.6s var(--cp-ease) 3;
 }
 
 @keyframes nav-live-pulse {
