@@ -152,7 +152,9 @@ the first `ctx.complete()` call, so they exist when the engine scores the run in
     because local config and tasks may not survive an ownership change. A new escorted truck (test restart) is
     toughened again; clue zones are rebuilt when a clue number gets a new spot; a clue check still in its progress
     bar is cancelled when the objective stops. `ctx.control` waits frames, so the objective can stop meanwhile:
-    after the host AI the loop draws no blip and writes no HUD line once the objective was cleaned up.
+    after the host AI the loop draws no blip and writes no HUD line once the objective was cleaned up. The pursuit
+    host never waits: it calls `ctx.control(ent, 0)` (one request, no wait) for an entity another client owns, skips
+    it for that pass and runs the next pass after 250 ms, where the hand-over is picked up as a regain.
 
 ## Requests to other modules
 

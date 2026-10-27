@@ -685,7 +685,9 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
       Blips and the host AI only reach cars this client's game streams (OneSync: within the culling
       radius the server half sets, 424 m by default).
     - on the run host only: control of every suspect and car before anything is done to them (re-apply
-      and re-task when control comes back from another client), CP.Npc.apply once per entity handle,
+      and re-task when control comes back from another client; one ctx.control(ent, 0) request and no
+      wait for an entity another client owns, which is skipped that pass, and the next pass comes after
+      FAST_MS), CP.Npc.apply once per entity handle,
       seats them, locks the car, then drives: CP.Npc.task(driver, 'driveRoute', { vehicle, points,
       loop, speed (m/s), style, stopRange, force }) from the next waypoint of the route (a loop is
       re-tasked lap by lap, an open route ends in a free flee that stays a free flee after a regain or a

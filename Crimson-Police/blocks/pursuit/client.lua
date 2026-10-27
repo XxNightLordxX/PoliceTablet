@@ -13,7 +13,6 @@ local REPORT_MS = 1500
 local AIM_HOLD_MS = 800
 local AIM_STOPPED = 25.0
 local WATCH_RANGE = 60.0
-local CONTROL_MS = 250
 local RETASK_MS = 10000
 local STUCK_MPS = 2.0
 local ROUTE_END = 30.0
@@ -151,7 +150,7 @@ end
 -- it), and CP.Markers shows the same look from the server's position once the entity is too far away for this game
 -- (BLIPS_FINAL R1, R3, R7).
 local function EnsureBlip(S, k, ent, net, kind, labelKey, variant)
-    -- a loop pass resumed after the cleanup (it waited in ctx.control) draws nothing
+    -- never a blip drawn after the cleanup
     if not S.alive then return end
     local b = S.blips[k]
     if b and b.ent == ent and DoesBlipExist(b.id) then
@@ -193,9 +192,10 @@ end
 -- ============================================================================
 --                                   HOST AI
 -- ============================================================================
--- Control of a run entity before anything is done to it (ctx.control returns at once when this client
--- already owns it). regained = another client owned it since the last check: its config and tasks may
--- not have migrated, so the caller re-applies and re-tasks.
+-- Control of a run entity before anything is done to it. An entity another client owns is asked for once and
+-- skipped: the pass never waits for the hand-over (it would hold the blips, the aim hold and the HUD for up to
+-- 250 ms per entity), and the next pass comes after FAST_MS. regained = another client owned it since the last
+-- check: its config and tasks may not have migrated, so the caller re-applies and re-tasks.
 local function Own(S, key, ent)
     if not (S.alive and S.current) then return false, false end
     if NetworkHasControlOfEntity(ent) then
@@ -203,14 +203,11 @@ local function Own(S, key, ent)
         S.lost[key] = nil
         return true, regained
     end
-    if not S.ctx.control(ent, CONTROL_MS) then
-        S.lost[key] = true
-        return false, false
-    end
-    S.lost[key] = nil
-    -- ctx.control waits for the hand-over: the objective may have stopped meanwhile
-    if not (S.alive and S.current) then return false, false end
-    return true, true
+    S.lost[key] = true
+    S.pending = true
+    -- 0 ms: one request, no wait (FiveM drops a repeat while one is pending)
+    S.ctx.control(ent, 0)
+    return false, false
 end
 
 local function DriverSetup(ped, reckless)
@@ -608,6 +605,7 @@ local function Loop(S)
     CreateThread(function()
         while S.alive do
             local fast = false
+            S.pending = false
             if S.current then
                 local ctx = S.ctx
                 local obj = ctx.obj
@@ -695,7 +693,8 @@ local function Loop(S)
                 end
                 SetHint(S, HudText(S, myPos))
             end
-            Wait(fast and FAST_MS or SLOW_MS)
+            -- an entity asked for this pass is checked again soon
+            Wait((fast or S.pending) and FAST_MS or SLOW_MS)
         end
         S.looping = false
     end)

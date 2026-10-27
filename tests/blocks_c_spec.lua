@@ -2546,7 +2546,13 @@ do
     _G.NetworkGetEntityIsNetworked = function() return true end
     _G.NetworkGetNetworkIdFromEntity = function(e) return ents[e] and ents[e].netId or 0 end
     _G.NetworkDoesNetworkIdExist = function(n) return byNet[n] ~= nil end
-    _G.NetworkHasControlOfEntity = function(e) return ents[e] ~= nil and ents[e].owned == true end
+    -- a request made with ctx.control(e, 0) is granted with a later frame, never inside the pass that asked
+    _G.NetworkHasControlOfEntity = function(e)
+        local x = ents[e]
+        if not x then return false end
+        if x.askedAt and H.clockMs > x.askedAt then x.owned, x.askedAt = true, nil end
+        return x.owned == true
+    end
     _G.IsPedInVehicle = function(ped, veh) return ents[ped] ~= nil and ents[ped].inVehicle == veh end
     _G.IsPedInAnyVehicle = function(ped) return ents[ped] ~= nil and (ents[ped].inVehicle or 0) ~= 0 end
     _G.TaskLeaveVehicle = function(ped, veh, flag) CL.leaves[#CL.leaves + 1] = { ped = ped, veh = veh, flag = flag } end
@@ -2583,8 +2589,13 @@ local function ClientCtx(runId, obj, loc)
         seed = 1,
         report = function(ev) CL.reports[#CL.reports + 1] = ev end,
         hudDetail = function() end,
-        control = function(e)
-            if ents[e] and ents[e].controllable ~= false then ents[e].owned = true; return true end
+        -- as CP.Runs.control: with a timeout it waits for the hand-over (here it comes at once); with 0 ms it asks
+        -- once and returns false at once
+        control = function(e, timeoutMs)
+            local x = ents[e]
+            if not x or x.controllable == false then return false end
+            if (tonumber(timeoutMs) or 1000) > 0 then x.owned = true; return true end
+            x.askedAt = x.askedAt or H.clockMs
             return false
         end,
     }
@@ -2626,6 +2637,7 @@ do -- pursuit host: a loop route is tasked once, not re-tasked every pass while 
     ents[drv].inVehicle = veh
     ents[drv].bag = { state = 'driving', cfg = {} }
     ents[veh].speed = 20.0
+    ents[veh].owned, ents[drv].owned = true, true -- a solo host: this game owns the car and its driver
     local obj = PU.defaults({ block = 'pursuit', route = 'race', speed = 108, style = 'reckless' })
     local cctx = ClientCtx('run-cl-1', obj, raceLoc)
     PC.prepare(cctx)
@@ -2660,6 +2672,7 @@ do -- pursuit host: a loop route is tasked once, not re-tasked every pass while 
     -- control lost to another client and regained: config re-applied and the drive re-tasked
     ents[drv].owned = false
     H.step(1000)
+    H.step(250) -- asked for in that pass, picked up by the next one 250 ms later
     H.eq(CountOf(CL.applied, drv), 2, 'pursuit client: re-applied after control came back')
     H.eq(CountTasks(drv, 'driveRoute'), 3, 'pursuit client: re-tasked after control came back')
     ents[veh].owned, ents[veh].controllable = false, false
@@ -2667,6 +2680,7 @@ do -- pursuit host: a loop route is tasked once, not re-tasked every pass while 
     H.step(1000)
     H.eq(#CL.tasks, before, 'pursuit client: nothing is tasked without control of the car')
     ents[veh].controllable = nil
+    H.step(250) -- asked for again: the car comes back with the next pass
 
     -- stopped: the driver is told to get out, again and again, then warped out
     PC.update(cctx, {
@@ -2702,6 +2716,7 @@ do -- pursuit host: an open route that is done stays done when control comes bac
     ents[drv].inVehicle = veh
     ents[drv].bag = { state = 'driving', cfg = {} }
     ents[veh].speed = 20.0
+    ents[veh].owned, ents[drv].owned = true, true
     local obj = PU.defaults({ block = 'pursuit', route = 'flee', speed = 108 })
     local cctx = ClientCtx('run-cl-pursuit-open', obj, openLoc)
     local function Snap(done)
@@ -2729,6 +2744,7 @@ do -- pursuit host: an open route that is done stays done when control comes bac
     -- another client owned the car and its driver for a while
     ents[veh].owned, ents[drv].owned = false, false
     H.step(1000)
+    H.step(250) -- asked for in that pass, regained with the next one
     H.eq(CountTasks(drv, 'driveRoute'), 1, 'open route client: control regained: not sent back to the route')
     H.eq(CountTasks(drv, 'flee'), 2, 'open route client: control regained: the free flee again')
     -- a new host that never saw the route end: the server snapshot says it is done
@@ -2741,7 +2757,7 @@ do -- pursuit host: an open route that is done stays done when control comes bac
     -- a new car under the same net id (test restart) follows its route again
     local veh2 = NewEnt('vehicle', openPts[1])
     byNet[vehNet] = veh2
-    ents[veh2].speed = 20.0
+    ents[veh2].speed, ents[veh2].owned = 20.0, true
     ents[drv].inVehicle = veh2
     PC.update(cctx, Snap(nil))
     H.step(1000)
@@ -2990,6 +3006,7 @@ do -- OneSync scope on the host: only what its game streams can be driven and bl
     PC.start(cctx)
     PC.update(cctx, LastSend(ctx))
     H.step(1000)
+    H.step(250) -- the host asked for the spawned cars and drivers in that pass and has them with the next one
     for i, d in ipairs(drivers) do
         H.eq(CountTasks(d.ent, 'driveRoute'), 1, ('scope: racer %d, 550+ m from the host, is driven'):format(i))
     end
@@ -3019,9 +3036,12 @@ do -- OneSync scope on the host: only what its game streams can be driven and bl
     _G.SetEntityDistanceCullingRadius, _G.SetEntityIgnoreRequestControlFilter = nil, nil
 end
 
--- A control that waits a frame (as CP.Runs.control does) once gate.slow is set.
+-- A control that waits a frame (as CP.Runs.control does with a timeout) once gate.slow is set; with 0 ms it only
+-- asks, as ClientCtx's does.
 local function SlowControl(cctx, gate)
-    cctx.control = function(e)
+    local ask = cctx.control
+    cctx.control = function(e, timeoutMs)
+        if (tonumber(timeoutMs) or 1000) <= 0 then return ask(e, timeoutMs) end
         if gate.slow then Wait(0) end
         ents[e].owned = true
         return true
@@ -3192,13 +3212,14 @@ do -- search host: the objective stops while the loop waits for control of a fug
     H.eq(hud[#hud], false, 'search client: ...and writes no HUD line')
 end
 
-do -- pursuit host: the objective stops while the loop waits for control of the car; nothing after the cleanup
+do -- pursuit host: the objective stops while another client holds the car; nothing after the cleanup
     H.clockMs = 24500000
     local veh, vehNet = NewEnt('vehicle', loopPts[1])
     local drv, drvNet = NewEnt('ped', loopPts[1])
     ents[drv].inVehicle = veh
     ents[drv].bag = { state = 'driving', cfg = {} }
     ents[veh].speed = 20.0
+    ents[veh].owned, ents[drv].owned = true, true
     local cctx = ClientCtx('run-cl-pursuit-stop', PU.defaults({ block = 'pursuit', route = 'race' }), raceLoc)
     cctx.radioSilence = false
     local hud, gate = {}, { slow = false }
@@ -3223,9 +3244,9 @@ do -- pursuit host: the objective stops while the loop waits for control of the 
     H.eq(LiveBlips() - base, 1, 'pursuit client: a blip on the suspect car')
     H.eq(type(hud[#hud]), 'string', 'pursuit client: a HUD line')
     local tasks = #CL.tasks
-    ents[veh].owned, gate.slow = false, true -- another client took the car: the next pass waits for control
+    ents[veh].owned, gate.slow = false, true -- another client took the car: the next pass asks for it (no wait)
     H.step(1000)
-    PC.stop(cctx)                            -- ...and the objective stops meanwhile
+    PC.stop(cctx)                            -- ...and the objective stops before the hand-over
     H.eq(LiveBlips() - base, 0, 'pursuit client: stop removes the blips')
     for _ = 1, 4 do H.step(1000) end
     H.eq(LiveBlips() - base, 0, 'pursuit client: the loop pass resumed after the cleanup draws no blip')
@@ -3245,6 +3266,7 @@ do -- pursuit host: an armed passenger's drive-by takes the ped's own accuracy, 
     ents[drv].bag = { state = 'driving', cfg = {} }
     ents[gun].bag = { state = 'driving', armed = true, cfg = { weapon = 'WEAPON_PISTOL', accuracy = 45 } }
     ents[veh].speed = 20.0
+    ents[veh].owned, ents[drv].owned, ents[gun].owned = true, true, true
     local x, y, z = U.xyz(loopPts[1])
     At(1, x + 12.0, y, z)
     local cctx = ClientCtx('run-cl-driveby', PU.defaults({ block = 'pursuit', route = 'race' }), raceLoc)
@@ -3275,6 +3297,156 @@ do -- pursuit host: an armed passenger's drive-by takes the ped's own accuracy, 
     PC.stop(cctx)
     CW.restore()
     _G.GetPlayerFromServerId = fromServerId
+end
+
+do -- pursuit host (Q12): cars and suspects another officer's game owns are asked for once, never waited for
+    H.clockMs = 24700000
+    local FAST, SLOW = 250, 1000
+    local me = PlayerPedId()
+    local myPos = ents[me].coords
+    ents[me].coords = vec3(9000.0, 9000.0, 30.0) -- far from both cars: a pass with nothing pending sleeps SLOW
+    local cars, peds, drivers, vehicles, suspects = {}, {}, {}, {}, {}
+    for i, at in ipairs({ loopPts[1], loopPts[4] }) do
+        local veh, vehNet = NewEnt('vehicle', at)
+        local drv, drvNet = NewEnt('ped', at)
+        local pas, pasNet = NewEnt('ped', at)
+        ents[veh].speed = 20.0
+        ents[drv].inVehicle, ents[pas].inVehicle = veh, veh
+        ents[drv].bag, ents[pas].bag = { state = 'driving', cfg = {} }, { state = 'driving', cfg = {} }
+        cars[#cars + 1], drivers[#drivers + 1] = veh, drv
+        peds[#peds + 1] = drv
+        peds[#peds + 1] = pas
+        vehicles[i] = { netId = vehNet, index = i, state = 'fleeing', occupants = { drvNet, pasNet } }
+        suspects[#suspects + 1] = { netId = drvNet, vehicle = vehNet, seat = -1, state = 'driving' }
+        suspects[#suspects + 1] = { netId = pasNet, vehicle = vehNet, seat = 0, state = 'driving' }
+    end
+    local all = { cars[1], cars[2], peds[1], peds[2], peds[3], peds[4] }
+    local function SetOwned(on) for _, e in ipairs(all) do ents[e].owned, ents[e].askedAt = on, nil end end
+    SetOwned(true) -- a solo host: this game owns everything
+    local cctx = ClientCtx('run-cl-q12', PU.defaults({ block = 'pursuit', route = 'race' }), raceLoc)
+    -- CP.Runs.control as modules/runs/client.lua has it, on the run host: ask, then wait frame by frame for the
+    -- hand-over until the deadline. Another officer's game keeps the entities here, so the hand-over never comes.
+    local asks, setups, waits = {}, {}, {}
+    local saved = {
+        request = rawget(_G, 'NetworkRequestControlOfEntity'),
+        ability = SetDriverAbility,
+        wait = Wait,
+        thread = CreateThread,
+    }
+    _G.NetworkRequestControlOfEntity = function(e) asks[e] = (asks[e] or 0) + 1 end
+    _G.SetDriverAbility = function(ped) setups[ped] = (setups[ped] or 0) + 1 end
+    cctx.control = function(e, timeoutMs)
+        if not e or e == 0 or not DoesEntityExist(e) then return false end
+        if NetworkHasControlOfEntity(e) then return true end
+        local deadline = GetGameTimer() + (tonumber(timeoutMs) or 1000)
+        NetworkRequestControlOfEntity(e)
+        while not NetworkHasControlOfEntity(e) do
+            if GetGameTimer() >= deadline or not DoesEntityExist(e) then return false end
+            Wait(0)
+            NetworkRequestControlOfEntity(e)
+        end
+        return true
+    end
+    -- every Wait of the block's loop thread (the first thread its start creates), in order
+    local loopCo
+    _G.CreateThread = function(fn)
+        saved.thread(function()
+            loopCo = loopCo or coroutine.running()
+            return fn()
+        end)
+    end
+    _G.Wait = function(ms)
+        if loopCo and coroutine.running() == loopCo then waits[#waits + 1] = ms end
+        return saved.wait(ms)
+    end
+    PC.prepare(cctx)
+    PC.start(cctx)
+    _G.CreateThread = saved.thread
+    PC.update(cctx, {
+        kind = 'state',
+        mode = 'stop',
+        fled = true,
+        trigger = 'arrive',
+        vehicles = vehicles,
+        suspects = suspects,
+        detained = 0,
+        total = 4,
+        stopped = 0,
+        vtotal = 2,
+    })
+    -- one loop pass in 16 ms frames: the Waits inside it, and the Wait that ends it (FAST or more)
+    local function Pass()
+        waits = {}
+        for _ = 1, 600 do
+            local last = waits[#waits]
+            if last and last >= FAST then break end
+            H.step(16)
+        end
+        local inner = #waits - 1
+        return inner, waits[#waits]
+    end
+    local function Counts(list, of)
+        local out = {}
+        for i, e in ipairs(of) do out[i] = CountOf(list, e) end
+        return table.concat(out, ',')
+    end
+    local function Tasks(of)
+        local out = {}
+        for i, e in ipairs(of) do out[i] = CountTasks(e, 'driveRoute') end
+        return table.concat(out, ',')
+    end
+    local function Asked()
+        local out = {}
+        for i, e in ipairs(all) do out[i] = asks[e] or 0 end
+        return table.concat(out, ',')
+    end
+    local function Setups()
+        local out = {}
+        for i, e in ipairs(peds) do out[i] = setups[e] or 0 end
+        return table.concat(out, ',')
+    end
+
+    -- (c) the solo host, as before: everything set up and driven in one pass, nothing asked for, SLOW after it
+    local inner, ends = Pass()
+    H.eq(inner, 0, 'q12 solo host: no Wait inside the pass')
+    H.eq(ends, SLOW, 'q12 solo host: the next pass after SLOW_MS, as before')
+    H.eq(Asked(), '0,0,0,0,0,0', 'q12 solo host: nothing asked for')
+    H.eq(Counts(CL.applied, peds), '1,1,1,1', 'q12 solo host: CP.Npc.apply once per suspect')
+    H.eq(Setups(), '1,1,1,1', 'q12 solo host: DriverSetup once per suspect')
+    H.eq(Tasks(drivers), '1,1', 'q12 solo host: each driver gets its route')
+    H.eq(Tasks({ peds[2], peds[4] }), '0,0', 'q12 solo host: the passengers are not given a drive')
+
+    -- (a) the other officer's game takes both cars and all four suspects
+    SetOwned(false)
+    local tasks, locked = #CL.tasks, #calls.locked
+    inner, ends = Pass()
+    H.eq(inner, 0, 'q12 lost: no Wait inside the pass (it never waits for a hand-over)')
+    H.eq(Asked(), '1,1,1,1,1,1', 'q12 lost: each car and suspect asked for once in the pass')
+    H.eq(ends, FAST, 'q12 lost: the next pass after FAST_MS, to pick up the hand-over')
+    H.eq(#CL.tasks, tasks, 'q12 lost: nothing tasked without control')
+    H.eq(Counts(CL.applied, peds), '1,1,1,1', 'q12 lost: nothing re-applied without control')
+    H.eq(#calls.locked, locked, 'q12 lost: no car set up without control')
+
+    -- (b) the hand-over arrives: the next pass re-applies and re-tasks each regained entity exactly once
+    SetOwned(true)
+    asks = {}
+    inner, ends = Pass()
+    H.eq(inner, 0, 'q12 regained: no Wait inside the pass')
+    H.eq(ends, SLOW, 'q12 regained: nothing pending, far away: SLOW_MS again')
+    H.eq(Asked(), '0,0,0,0,0,0', 'q12 regained: nothing asked for')
+    H.eq(Counts(CL.applied, peds), '2,2,2,2', 'q12 regained: CP.Npc.apply once more per suspect')
+    H.eq(Setups(), '2,2,2,2', 'q12 regained: DriverSetup once more per suspect')
+    H.eq(Tasks(drivers), '2,2', 'q12 regained: each driver re-tasked once')
+    H.eq(#calls.locked, locked + 2, 'q12 regained: each car set up again once')
+    for _ = 1, 3 do H.step(1000) end
+    H.eq(Counts(CL.applied, peds), '2,2,2,2', 'q12 regained: ...and not again on later passes')
+    H.eq(Setups(), '2,2,2,2', 'q12 regained: DriverSetup not again')
+    H.eq(Tasks(drivers), '2,2', 'q12 regained: no further re-task')
+
+    PC.stop(cctx)
+    H.step(1000)
+    _G.NetworkRequestControlOfEntity, _G.SetDriverAbility, _G.Wait = saved.request, saved.ability, saved.wait
+    ents[me].coords = myPos
 end
 
 -- ============================================================================
