@@ -48,6 +48,11 @@ All are shared (no `src`). They are always recorded; scoring decides the value. 
 3. **HUD.** The server never calls `ctx.hud`. It sends full snapshots with `ctx.send` on every change,
    plus once more on the first tick after `start`, in case an update arrives before the client's `start`.
    The client writes the only HUD line with `ctx.hudDetail`. Progress counts also come from `checklist`.
+   The markers draw every frame in range, but the line is built only when what it shows can change (Q18):
+   checkpoint_route on a snapshot, the course clock's whole second or a rename in Settings -> Names (a new
+   `Config.Labels` table); interact_points on a snapshot or a rename; skill_check checks it every 250 ms near a
+   device and on the next frame after a snapshot, a message, its end or a round change. It is sent only when its
+   text changes.
 4. **validate** first applies the block defaults to a copy. It returns `false, <translated text>`
    (`CP.L` of a `block.<id>.invalid.*` key), which reads fine in the console and in `t()`. It checks the
    Config.Blocks ranges, the Config.Builder.allowed animations and `Config.Builder.noBuildZones` for every

@@ -3325,6 +3325,31 @@ do
         H.eq(removedRouted, routedGone, 'fc client: every line off before its blip went')
     end
 
+    do -- Q18 (loop audit): the "getting away" countdown goes to the HUD only when its text changes
+        local FCc = CP.Blocks.get('field_contact')
+        local c = ClientCtx({ block = 'field_contact', mode = 'scene' }, {}, { tag = 'fc-q18', isHost = false })
+        local realL = CP.L
+        CP.L = function(key, vars) return key .. ((vars and vars.seconds) and (' ' .. vars.seconds) or '') end
+        FCc.prepare(c)
+        FCc.start(c)
+        FCc.update(c, { contacts = {}, mode = 'scene', escaping = 20 })
+        Steps(10)
+        FCc.update(c, { contacts = {}, mode = 'scene', escaping = 19 })
+        Steps(1)
+        local function Away(s) return CP.L('block.field_contact.escaping', { seconds = s }) end
+        H.eq(table.concat(c.lines, '|'), Away(20) .. '|' .. Away(19), 'fc q18: 11 passes send 2 HUD lines, not 11')
+        FCc.update(c, { contacts = {}, mode = 'scene' })
+        Steps(2)
+        H.ok(#c.lines == 3 and c.lines[3] == false, 'fc q18: the line goes once when the countdown ends')
+        FCc.update(c, { contacts = {}, mode = 'scene', escaping = 9 })
+        Steps(1)
+        FCc.stop(c)
+        Steps(2)
+        H.ok(#c.lines == 5 and c.lines[4] == Away(9) and c.lines[5] == false,
+            'fc q18: stop takes a shown line off once, and nothing is sent after it')
+        CP.L = realL
+    end
+
     do -- (PLAN M7) hostile_waves: the hostiles' red dots follow Config.Markers.shortRange (they were short range), the
         -- boss's name has its first letter upper-cased (Gang Hideout Raid's "the lieutenant")
         Place(1, 1000, 1000, 30)

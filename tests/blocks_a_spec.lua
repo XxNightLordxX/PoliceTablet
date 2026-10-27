@@ -2473,6 +2473,161 @@ do
         H.ok(removedZones[z1 + 1] == true, 'skill_check with fresh ctx.state: stop removes the zone')
     end
 
+    -- Q18 (loop audit): near a checkpoint, a point or a device the markers draw every frame, but the HUD line is built
+    -- only when what it shows can change. CP.L counts the builds of each line.
+    do
+        local realL, savedLabels = CP.L, Config.Labels
+        local built = {}
+        CP.L = function(key, vars)
+            built[key] = (built[key] or 0) + 1
+            return realL(key, vars)
+        end
+        local function Frames(n) for _ = 1, n do H.step(16) end end
+
+        -- checkpoint_route: the course clock runs 50 m from checkpoint 1 for 120 frames (about 2 s)
+        local qc = ClientCtx(CP.U.deepcopy(eobj))
+        qc.runId = 'run-q18'
+        H.players[1] = { coords = vec3(50.0, 0.0, 30.0) }
+        local function Course(current)
+            return {
+                kind = 'state',
+                points = {
+                    { x = 0.0, y = 0.0, z = 30.0 },
+                    { x = 600.0, y = 0.0, z = 30.0 },
+                    { x = 1200.0, y = 0.0, z = 30.0 },
+                },
+                current = current,
+                done = current - 1,
+                total = 3,
+                finished = false,
+                medals = { gold = 60, silver = 80, bronze = 100 },
+                track = {},
+                course = { running = true, elapsedMs = 400, penalty = 0, held = false },
+            }
+        end
+        local function CourseLine(n, sec)
+            return realL('block.checkpoint_route.hud.progress', { n = n, total = 3 }) .. ' · '
+                .. realL('block.checkpoint_route.hud.course_time', { time = sec, penalty = 0 })
+        end
+        CRc.prepare(qc)
+        CRc.update(qc, Course(1))
+        built = {}
+        CRc.start(qc)
+        Frames(120)
+        local crBuilds = built['block.checkpoint_route.hud.progress'] or 0
+        H.ok(crBuilds <= 3, ('cr q18: 120 frames build the line once per whole second (%d builds)'):format(crBuilds))
+        H.eq(table.concat(qc.lines, '|'), table.concat({ CourseLine(1, 0), CourseLine(1, 1), CourseLine(1, 2) }, '|'),
+            'cr q18: the HUD shows the same lines at the same seconds')
+        Config.Labels = { ['block.checkpoint_route.hud.progress'] = 'Gate {n}/{total}' }
+        Frames(1)
+        H.ok(tostring(LastLine(qc)):find('^Gate 1/3') ~= nil,
+            'cr q18: a rename in Settings -> Names shows on the next frame: ' .. tostring(LastLine(qc)))
+        Config.Labels = savedLabels
+        CRc.update(qc, Course(2))
+        Frames(1)
+        H.ok(
+            tostring(LastLine(qc)):find(realL('block.checkpoint_route.hud.progress', { n = 2, total = 3 }), 1, true)
+                ~= nil,
+            'cr q18: a new snapshot shows on the next frame: ' .. tostring(LastLine(qc))
+        )
+        CRc.stop(qc)
+
+        -- interact_points: 120 frames next to an open point build the line once, with the snapshot
+        local pc = ClientCtx(CP.U.deepcopy(iobj))
+        pc.runId = 'run-q18'
+        H.players[1] = { coords = vec3(3001.0, 0.0, 30.0) }
+        built = {}
+        IPc.prepare(pc)
+        IPc.start(pc)
+        IPc.update(pc, {
+            kind = 'state',
+            done = 0,
+            total = 2,
+            points = {
+                { coords = { x = 3000.0, y = 0.0, z = 30.0 }, status = 'pending', label = 'Door' },
+                { coords = { x = 3010.0, y = 0.0, z = 30.0 }, status = 'pending', label = 'Door' },
+            },
+        })
+        Frames(120)
+        H.eq(built['block.interact_points.hud.points'], 1,
+            'ip q18: 120 frames near a point: one build (the snapshot\'s)')
+        H.eq(table.concat(pc.lines, '|'), realL('block.interact_points.hud.points', { done = 0, total = 2 }),
+            'ip q18: the same HUD line, sent once')
+        IPc.stop(pc)
+
+        -- skill_check: 120 frames next to a device check the line about every 250 ms; a snapshot, a message, its end
+        -- and a round change show on the next frame
+        local kq = ClientCtx(CP.U.deepcopy(kobj), { index = 4 })
+        kq.runId = 'run-q18'
+        H.players[1] = { coords = vec3(4001.0, 0.0, 30.0) }
+        local function Devices(second, retryIn)
+            return {
+                kind = 'state',
+                checks = 4,
+                targets = {
+                    { coords = { x = 4000.0, y = 0.0, z = 30.0 }, netId = 821, status = 'armed', next = 1, streak = 0 },
+                    {
+                        coords = { x = 4010.0, y = 0.0, z = 30.0 },
+                        netId = 822,
+                        status = second,
+                        next = 1,
+                        streak = 0,
+                        retryIn = retryIn,
+                    },
+                },
+            }
+        end
+        local function Base()
+            return (built['block.skill_check.hud.progress'] or 0) + (built['block.skill_check.hud.retry'] or 0)
+                + (built['block.skill_check.hud.round'] or 0)
+        end
+        -- a few frames until the line was just checked, so the next frame is inside its LINE_MS
+        local function AfterCheck()
+            local n0 = Base()
+            for _ = 1, 20 do
+                H.step(16)
+                if Base() > n0 then return end
+            end
+        end
+        local z0 = #zones
+        SCc.prepare(kq)
+        SCc.start(kq)
+        SCc.update(kq, Devices('armed'))
+        Frames(40)
+        built = {}
+        Frames(120)
+        local scChecks = Base()
+        H.ok(scChecks >= 6 and scChecks <= 9,
+            ('sc q18: 120 frames near a device: the line checked about every 250 ms (%d)'):format(scChecks))
+        AfterCheck()
+        SCc.update(kq, Devices('cooldown', 5))
+        Frames(1)
+        H.eq(LastLine(kq), realL('block.skill_check.hud.retry', { seconds = 5 }), 'sc q18: a snapshot: the next frame')
+        AfterCheck()
+        SCc.update(kq, { kind = 'explode', target = 2, coords = { x = 4010.0, y = 0.0, z = 30.0 }, by = 7 })
+        Frames(1)
+        H.eq(LastLine(kq), realL('block.skill_check.hud.exploded'), 'sc q18: a message: the next frame')
+        local untilAt = kq.state.transientUntil
+        while H.clockMs < untilAt do H.step(16) end
+        H.eq(LastLine(kq), realL('block.skill_check.hud.retry', { seconds = 5 }),
+            'sc q18: the message ends on the frame its time is up')
+        local savedSkill, hold = lib.skillCheck, true
+        lib.skillCheck = function()
+            while hold do Wait(0) end
+            return true
+        end
+        AfterCheck()
+        zones[z0 + 1].options[1].onSelect()
+        Frames(1)
+        H.eq(LastLine(kq), realL('block.skill_check.hud.round', { n = 1, total = 4 }),
+            'sc q18: a round: the next frame')
+        SCc.stop(kq)
+        hold = false
+        Frames(2)
+        lib.skillCheck = savedSkill
+        CP.L = realL
+    end
+
     H.strictGlobals(false)
 end
 

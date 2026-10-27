@@ -94,13 +94,19 @@ local function BaseLine(ctx, st)
     return text
 end
 
+-- The base line is built with each snapshot (Apply) and again only after a rename in Settings -> Names (that replaces
+-- the Config.Labels table), not every frame the markers are drawn.
 local function RefreshLine(ctx, st)
     local text
     if st.transient and GetGameTimer() < (st.transientUntil or 0) then
         text = st.transient
     else
         st.transient = nil
-        text = BaseLine(ctx, st)
+        if st.baseLabels ~= Config.Labels then
+            st.baseLine = BaseLine(ctx, st)
+            st.baseLabels = Config.Labels
+        end
+        text = st.baseLine
     end
     if text ~= st.line then
         st.line = text
@@ -401,6 +407,8 @@ local function Apply(ctx, st, data)
     local prev = st.data
     st.data = data
     st.hidden = data.hidden == true
+    st.baseLine = BaseLine(ctx, st)
+    st.baseLabels = Config.Labels
     Announce(ctx, st, prev, data)
     SyncZones(ctx, st)
     RefreshBlips(ctx, st)

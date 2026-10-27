@@ -108,13 +108,22 @@ local function BaseLine(ctx, st, t)
     return text
 end
 
+-- The base line is rebuilt only when what it shows can change: a new snapshot (st.applySeq), the course clock's whole
+-- second, or a rename in Settings -> Names (that replaces the Config.Labels table). The markers still draw every frame.
 local function RefreshLine(ctx, st, t)
     local text
     if st.transient and t < (st.transientUntil or 0) then
         text = st.transient
     else
         st.transient = nil
-        text = BaseLine(ctx, st, t)
+        local sec = (st.courseRunning and st.data and st.data.medals)
+                and math.floor((t - (st.courseStartLocal or t)) / 1000)
+            or -1
+        if st.baseSeq ~= st.applySeq or st.baseSec ~= sec or st.baseLabels ~= Config.Labels then
+            st.baseSeq, st.baseSec, st.baseLabels = st.applySeq, sec, Config.Labels
+            st.baseText = BaseLine(ctx, st, t)
+        end
+        text = st.baseText
     end
     if text ~= st.line then
         st.line = text
@@ -342,6 +351,7 @@ end
 -- ============================================================================
 
 local function Apply(ctx, st, data)
+    st.applySeq = (st.applySeq or 0) + 1   -- the HUD line is rebuilt from this snapshot
     st.data = data
     st.points = {}
     for i, p in ipairs(data.points or {}) do st.points[i] = V3(p) end

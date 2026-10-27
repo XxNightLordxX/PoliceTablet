@@ -92,6 +92,15 @@ local function ReportOnce(S, kind, netId)
     S.ctx.report({ type = kind, netId = netId })
 end
 
+-- The HUD's detail line goes out only when its text changes: a pass that would send the same text sends nothing (the
+-- line is a full HUD message to the NUI).
+local function SetHint(S, text)
+    -- never a line written after the cleanup
+    if not S.alive or S.hint == text then return end
+    S.hint = text
+    S.ctx.hudDetail(text)
+end
+
 local function Loop(S)
     if S.looping then return end
     S.looping = true
@@ -129,11 +138,9 @@ local function Loop(S)
                     end
                 end
                 if S.escaping then
-                    S.ctx.hudDetail(CP.L('block.field_contact.escaping', { seconds = S.escaping }))
-                    S.hinted = true
-                elseif S.hinted then
-                    S.hinted = false
-                    S.ctx.hudDetail(nil)
+                    SetHint(S, CP.L('block.field_contact.escaping', { seconds = S.escaping }))
+                elseif S.hint then
+                    SetHint(S, nil)
                 end
             end
             Wait(fast and FAST_MS or SLOW_MS)
@@ -146,7 +153,10 @@ local function Cleanup(S)
     S.alive = false
     S.current = false
     for k in pairs(S.blips) do DropBlip(S, k) end
-    if S.hinted then S.ctx.hudDetail(nil) end
+    if S.hint then
+        S.hint = nil
+        S.ctx.hudDetail(nil)
+    end
     active[S.key] = nil
 end
 
@@ -157,6 +167,7 @@ CP.Blocks.register(BLOCK, {
         local S = S_of(ctx)
         S.alive = true
         S.current = true
+        S.hint = nil   -- the run cleared the detail line just before this start
         Loop(S)
     end,
 

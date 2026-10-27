@@ -6,6 +6,7 @@ local MARKER_DISTANCE = 30.0
 local TARGET_RADIUS = 1.0
 local TARGET_DISTANCE = 2.5
 local EVENT_MS = 4000
+local LINE_MS = 250            -- the HUD line is checked this often while the markers draw every frame
 local KEYS = { 'w', 'a', 's', 'd' }
 local EXPLOSION_TYPE = 2       -- sticky bomb
 local ANIM_DICT = 'amb@medic@standing@kneel@base'
@@ -54,6 +55,7 @@ end
 local function Say(st, text, ms)
     st.transient = text
     st.transientUntil = GetGameTimer() + (ms or EVENT_MS)
+    st.lineAt = 0   -- shown on the next frame
 end
 
 local function TargetOf(st, i)
@@ -208,6 +210,7 @@ local function Defuse(ctx, st, i)
     local k = t.next or 1
     while st.alive and not st.cancelled and k <= #rounds do
         st.round = k
+        st.lineAt = 0
         local ok = lib.skillCheck(rounds[k], KEYS)
         if not st.alive or st.cancelled then break end
         st.seq = (st.seq or 0) + 1
@@ -220,6 +223,7 @@ local function Defuse(ctx, st, i)
         Wait(150)
     end
     st.round = nil
+    st.lineAt = 0
     StopAnim(st)
     st.busy, st.working = false, nil
 end
@@ -361,7 +365,13 @@ local function Loop(ctx, st)
                     end
                 end
             end
-            RefreshLine(ctx, st)
+            -- near a device (a frame loop) the line is checked every LINE_MS, and on the next frame after a snapshot,
+            -- a message, a round change or the end of a message; far away, every pass as before
+            local now = GetGameTimer()
+            if sleep ~= 0 or now >= (st.lineAt or 0) or (st.transient ~= nil and now >= (st.transientUntil or 0)) then
+                st.lineAt = now + LINE_MS
+                RefreshLine(ctx, st)
+            end
             Wait(sleep)
         end
     end)
@@ -414,6 +424,7 @@ local function Apply(ctx, st, data)
     end
     SyncZones(ctx, st)
     RefreshBlips(ctx, st)
+    st.lineAt = 0
 end
 
 local function Cleanup(ctx, st)
