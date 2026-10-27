@@ -6,7 +6,7 @@ local U = CP.U
 local OPTION = 'crimson-police:cut_restraints'
 local LOOP_MS = 500
 local RETASK_MS = 8000          -- re-issue "follow" to a walking hostage this often
-local CONTROL_MS = 250
+local CONTROL_MS = 250          -- the next pass after a hostage was asked for (the old wait for control)
 local MARKER_RANGE = 150.0
 local FREE_ANIM = { dict = 'mp_arresting', clip = 'a_uncuff' }
 
@@ -158,15 +158,19 @@ end
 -- The host must own the hostage before CP.Npc.apply / CP.Npc.task do anything. OneSync hands
 -- ownership to the closest player, which is usually the officer who just cut the restraints, so
 -- control is requested for every task, and a task only counts as done when CP.Npc.task took it.
-local function HasControl(ctx, ent)
+-- A hostage another client owns is asked for once and skipped: the pass never waits for the hand-over,
+-- and the next pass comes after CONTROL_MS.
+local function HasControl(S, ent)
     if NetworkHasControlOfEntity(ent) then return true end
-    return ctx.control(ent, CONTROL_MS) == true
+    -- 0 ms: one request, no wait (FiveM drops a repeat while one is pending)
+    S.ctx.control(ent, 0)
+    S.pending = true
+    return false
 end
 
 local function HostAi(S, info, ent, state)
-    local ctx = S.ctx
     if S.applied[info.netId] ~= ent then
-        if not HasControl(ctx, ent) then return end
+        if not HasControl(S, ent) then return end
         local bag = BagOf(ent)
         if CP.Npc.apply(ent, (bag and bag.cfg) or {}) == false then return end
         S.applied[info.netId] = ent
@@ -184,7 +188,7 @@ local function HostAi(S, info, ent, state)
         action, args = 'cower', {}
     end
     if action then
-        if not HasControl(ctx, ent) then return end
+        if not HasControl(S, ent) then return end
         if CP.Npc.task(ent, action, args) == false then return end
     end
     S.tasked[info.netId] = { state = state, at = at }
@@ -220,6 +224,7 @@ local function Loop(S)
         while S.alive do
             local ctx = S.ctx
             local walking = false
+            S.pending = false
             for _, info in ipairs(S.peds) do
                 local ent = PedFor(info.netId)
                 if ent then
@@ -248,7 +253,8 @@ local function Loop(S)
                     ctx.hudDetail(text)
                 end
             end
-            Wait(LOOP_MS)
+            -- a hostage asked for this pass is checked again soon
+            Wait(S.pending and CONTROL_MS or LOOP_MS)
         end
         S.looping = false
     end)

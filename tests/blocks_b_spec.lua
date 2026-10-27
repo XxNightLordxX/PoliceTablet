@@ -2684,14 +2684,16 @@ do
     H.ok(controlCalls > 0, 'pr: control requested')
     CE[71].grant = true
     Steps(1)
+    Steps(1)                                     -- asked for in that pass, picked up by the next one
     H.eq(#TasksFor(71, 'kneel'), 1, 'pr: restrained hostage kneels once control arrives')
-    CE[71].control, CE[71].grant = false, false          -- the officer who cuts the restraints owns it now
+    CE[71].control, CE[71].grant = false, false  -- the officer who cuts the restraints owns it now
     CE[71].bag = { state = 'freed', cfg = { group = 'neutral' } }
     PRc.update(pc, { peds = { { netId = 7001, state = 'freed', index = 1 } } })
     Steps(3)
     H.eq(#TasksFor(71, 'follow'), 0, 'pr: follow cannot be issued without control')
     CE[71].grant = true
     Steps(1)
+    Steps(1)                                     -- asked for in that pass, picked up by the next one
     local follow = TasksFor(71, 'follow')
     H.eq(#follow, 1, 'pr: follow issued as soon as control is back (not lost for good)')
     H.near(follow[1] and follow[1].args.coords.x or 0, 2050, 0.01, 'pr: follow to the safe marker')
@@ -2727,6 +2729,82 @@ do
     H.ok(okCut and kopt.canInteract(71) == true, 'k13 pr: a failed cut bar leaves the hostage usable')
     H.eq(#ReportsOf(kc, 'freed'), 0, 'k13 pr: the failed cut reports nothing')
     PRc.stop(kc)
+
+    do -- protect_rescue host (Q13): hostages another officer's game owns are asked for once, never waited for
+        local CONTROL, LOOP = 250, 500
+        local qc = ClientCtx(U.deepcopy(PR.defaults({})), prLoc, { tag = 'pr-q13', index = 2 })
+        AddEnt(7051, 75, vec3(2000.0, 2000.0, 20.0), { state = 'restrained', cfg = { group = 'neutral' } })
+        AddEnt(7052, 76, vec3(2010.0, 2000.0, 20.0), { state = 'restrained', cfg = { group = 'neutral' } })
+        -- CP.Runs.control as modules/runs/client.lua has it, on the run host: ask, then wait frame by frame for the
+        -- hand-over until the deadline. Another officer's game keeps the hostages, so the hand-over never comes.
+        local asks, waits, loopCo = {}, {}, nil
+        local saved = { request = rawget(_G, 'NetworkRequestControlOfEntity'), wait = Wait, thread = CreateThread }
+        _G.NetworkRequestControlOfEntity = function(e) asks[e] = (asks[e] or 0) + 1 end
+        qc.control = function(e, timeoutMs)
+            if not e or e == 0 or not DoesEntityExist(e) then return false end
+            if NetworkHasControlOfEntity(e) then return true end
+            local deadline = GetGameTimer() + (tonumber(timeoutMs) or 1000)
+            NetworkRequestControlOfEntity(e)
+            while not NetworkHasControlOfEntity(e) do
+                if GetGameTimer() >= deadline or not DoesEntityExist(e) then return false end
+                Wait(0)
+                NetworkRequestControlOfEntity(e)
+            end
+            return true
+        end
+        -- every Wait of the block's loop thread (the one its prepare creates), in order
+        _G.CreateThread = function(fn)
+            saved.thread(function()
+                loopCo = loopCo or coroutine.running()
+                return fn()
+            end)
+        end
+        _G.Wait = function(ms)
+            if loopCo and coroutine.running() == loopCo then waits[#waits + 1] = ms end
+            return saved.wait(ms)
+        end
+        PRc.prepare(qc)
+        _G.CreateThread = saved.thread
+        PRc.update(qc, {
+            peds = {
+                { netId = 7051, state = 'restrained', index = 1 },
+                { netId = 7052, state = 'restrained', index = 2 },
+            },
+        })
+        -- one loop pass in 16 ms frames: the Waits inside it, and the Wait that ends it (CONTROL_MS or more)
+        local function Pass()
+            waits, asks = {}, {}
+            for _ = 1, 600 do
+                local last = waits[#waits]
+                if last and last >= CONTROL then break end
+                H.step(16)
+            end
+            return #waits - 1, waits[#waits]
+        end
+        local function Asked() return ('%d,%d'):format(asks[75] or 0, asks[76] or 0) end
+        local function Count(action) return ('%d,%d'):format(#TasksFor(75, action), #TasksFor(76, action)) end
+        for i = 1, 3 do
+            local inner, ends = Pass()
+            H.eq(inner, 0, ('q13 pr never owned, pass %d: no Wait inside the pass'):format(i))
+            H.eq(Asked(), '1,1', ('q13 pr never owned, pass %d: each hostage asked for once'):format(i))
+            H.eq(ends, CONTROL, ('q13 pr never owned, pass %d: the next pass after CONTROL_MS'):format(i))
+        end
+        H.eq(Count('kneel'), '0,0', 'q13 pr never owned: nothing tasked without control')
+        -- the hand-over arrives: kneel, then follow once freed, as before
+        CE[75].control, CE[76].control = true, true
+        local inner, ends = Pass()
+        H.eq(inner, 0, 'q13 pr owned: no Wait inside the pass')
+        H.eq(Asked(), '0,0', 'q13 pr owned: nothing asked for')
+        H.eq(ends, LOOP, 'q13 pr owned: nothing pending: LOOP_MS again')
+        H.eq(Count('kneel'), '1,1', 'q13 pr owned: each hostage kneels')
+        CE[75].bag, CE[76].bag = { state = 'freed', cfg = {} }, { state = 'freed', cfg = {} }
+        Pass()
+        H.eq(Count('follow'), '1,1', 'q13 pr owned: each freed hostage follows to the safe point')
+        H.eq(Count('kneel'), '1,1', 'q13 pr owned: and is not told to kneel again')
+        PRc.stop(qc)
+        Steps(1)
+        _G.NetworkRequestControlOfEntity, _G.Wait = saved.request, saved.wait
+    end
 
     -- flee_arrest: fleeing inmate re-tasked once control arrives; lock-on aim counts as aiming
     Place(1, 4000, 4000, 30)

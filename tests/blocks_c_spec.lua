@@ -2494,7 +2494,16 @@ Config.Spawning.enabled = spawningWas
 -- ============================================================================
 -- (run host AI) with mocked client natives, driven by the harness thread scheduler.
 
-local CL = { tasks = {}, applied = {}, leaves = {}, reports = {}, maxHealth = {}, zones = {}, removed = {} }
+local CL = {
+    tasks = {},
+    applied = {},
+    leaves = {},
+    reports = {},
+    maxHealth = {},
+    zones = {},
+    removed = {},
+    scenarios = {},
+}
 do
     CP.Npc = {
         apply = function(e) CL.applied[#CL.applied + 1] = e; return true end,
@@ -2522,7 +2531,6 @@ do
         'SetVehicleExplodesOnHighExplosionDamage',
         'TaskVehicleTempAction',
         'DrawMarker',
-        'TaskStartScenarioInPlace',
         'SetEntityLoadCollisionFlag',
     }) do
         _G[name] = noop
@@ -2557,6 +2565,12 @@ do
     _G.IsPedInAnyVehicle = function(ped) return ents[ped] ~= nil and (ents[ped].inVehicle or 0) ~= 0 end
     _G.TaskLeaveVehicle = function(ped, veh, flag) CL.leaves[#CL.leaves + 1] = { ped = ped, veh = veh, flag = flag } end
     _G.SetEntityMaxHealth = function(e, hp) CL.maxHealth[#CL.maxHealth + 1] = { e = e, hp = hp } end
+    -- a ped keeps the scenario it was started in (here: until a test takes it away)
+    _G.TaskStartScenarioInPlace = function(e, name)
+        CL.scenarios[#CL.scenarios + 1] = e
+        if ents[e] then ents[e].scenario = name end
+    end
+    _G.IsPedUsingScenario = function(e, name) return ents[e] ~= nil and ents[e].scenario == name end
     _G.Entity = function(e) return { state = { cp = ents[e] and ents[e].bag or nil } } end
     H.exportsMock.ox_target = {
         addSphereZone = function(o) CL.zones[#CL.zones + 1] = o; return #CL.zones end,
@@ -2832,6 +2846,7 @@ do -- search_area: a clue check still running when the objective stops is cancel
     local cctx = ClientCtx('run-cl-3', obj, huntLoc)
     local fug, fugNet = NewEnt('ped', vec3(400.0, 0.0, 30.0))
     ents[fug].bag = { state = 'idle', cfg = {} }
+    ents[fug].owned = true -- a solo host: this game owns the fugitive
     local function Snap(x)
         return {
             kind = 'state',
@@ -2866,6 +2881,7 @@ do -- search_area: a clue check still running when the objective stops is cancel
     H.eq(CountTasks(fug, 'cower'), 1, 'search client: the hidden fugitive cowers')
     ents[fug].owned = false
     H.step(1000)
+    H.step(250) -- asked for in that pass, picked up by the next one 250 ms later
     H.eq(CountTasks(fug, 'cower'), 2, 'search client: re-tasked after control of the fugitive came back')
     -- a restart moved clue 1: the old zone goes, a new one is made at the new spot
     SC.update(cctx, Snap(-200.0))
@@ -3177,10 +3193,11 @@ do -- search HUD: a lost clue is not left to check, so the HUD moves on to the f
     H.step(1000)
 end
 
-do -- search host: the objective stops while the loop waits for control of a fugitive; no blip after the cleanup
+do -- search host: the objective stops while another client holds a fugitive; no blip after the cleanup
     H.clockMs = 24000000
     local fug, fugNet = NewEnt('ped', vec3(100.0, 0.0, 30.0))
     ents[fug].bag = { state = 'fleeing', cfg = {} }
+    ents[fug].owned = true
     local cctx = ClientCtx('run-cl-7', SA.defaults({ block = 'search_area' }), huntLoc)
     cctx.radioSilence = false
     local hud, gate = {}, { slow = false }
@@ -3203,9 +3220,9 @@ do -- search host: the objective stops while the loop waits for control of a fug
     })
     H.step(1000)
     H.eq(LiveBlips() - base, 3, 'search client: circle, centre and fugitive blips')
-    ents[fug].owned, gate.slow = false, true -- another client took the fugitive: the next pass waits for control
+    ents[fug].owned, gate.slow = false, true -- another client took the fugitive: the next pass asks for it (no wait)
     H.step(1000)
-    SC.stop(cctx)                            -- ...and the objective stops meanwhile
+    SC.stop(cctx)                            -- ...and the objective stops before the hand-over
     H.eq(LiveBlips() - base, 0, 'search client: stop removes the blips')
     for _ = 1, 4 do H.step(1000) end
     H.eq(LiveBlips() - base, 0, 'search client: the loop pass resumed after the cleanup draws no blip')
@@ -3446,6 +3463,146 @@ do -- pursuit host (Q12): cars and suspects another officer's game owns are aske
     PC.stop(cctx)
     H.step(1000)
     _G.NetworkRequestControlOfEntity, _G.SetDriverAbility, _G.Wait = saved.request, saved.ability, saved.wait
+    ents[me].coords = myPos
+end
+
+do -- search host (Q13): a witness on its phone is left with the officer whose game owns it; nothing is waited for
+    H.clockMs = 24900000
+    local FAST, SLOW = 250, 1000
+    local SCENARIO = 'WORLD_HUMAN_STAND_MOBILE'
+    local me = PlayerPedId()
+    local myPos = ents[me].coords
+    ents[me].coords = vec3(9000.0, 9000.0, 30.0) -- far from everyone: a pass with nothing pending sleeps SLOW
+    local wit, clues = {}, {}
+    for i = 1, 3 do
+        local e, net = NewEnt('ped', vec3(100.0 * i, 0.0, 30.0))
+        ents[e].bag, ents[e].owned = { state = 'idle', cfg = {} }, true
+        wit[i] = e
+        clues[i] = { i = i, x = 100.0 * i, y = 0.0, z = 30.0, kind = 'witness', netId = net, status = 'pending' }
+    end
+    local fug, fugNet = NewEnt('ped', vec3(500.0, 0.0, 30.0))
+    ents[fug].bag, ents[fug].owned = { state = 'idle', cfg = {} }, true -- a solo host to begin with
+    local all = { wit[1], wit[2], wit[3], fug }
+    local cctx = ClientCtx('run-cl-q13', SA.defaults({ block = 'search_area' }), huntLoc)
+    -- CP.Runs.control as modules/runs/client.lua has it, on the run host: ask, then wait frame by frame for the
+    -- hand-over until the deadline. Another officer's game keeps the peds here, so the hand-over never comes.
+    local asks, waits, loopCo = {}, {}, nil
+    local saved = { request = rawget(_G, 'NetworkRequestControlOfEntity'), wait = Wait, thread = CreateThread }
+    _G.NetworkRequestControlOfEntity = function(e) asks[e] = (asks[e] or 0) + 1 end
+    cctx.control = function(e, timeoutMs)
+        if not e or e == 0 or not DoesEntityExist(e) then return false end
+        if NetworkHasControlOfEntity(e) then return true end
+        local deadline = GetGameTimer() + (tonumber(timeoutMs) or 1000)
+        NetworkRequestControlOfEntity(e)
+        while not NetworkHasControlOfEntity(e) do
+            if GetGameTimer() >= deadline or not DoesEntityExist(e) then return false end
+            Wait(0)
+            NetworkRequestControlOfEntity(e)
+        end
+        return true
+    end
+    -- every Wait of the block's loop thread (the first thread its start creates), in order
+    _G.CreateThread = function(fn)
+        saved.thread(function()
+            loopCo = loopCo or coroutine.running()
+            return fn()
+        end)
+    end
+    _G.Wait = function(ms)
+        if loopCo and coroutine.running() == loopCo then waits[#waits + 1] = ms end
+        return saved.wait(ms)
+    end
+    SC.prepare(cctx)
+    SC.start(cctx)
+    _G.CreateThread = saved.thread
+    SC.update(cctx, {
+        kind = 'state',
+        circle = { x = 0.0, y = 0.0, z = 30.0, r = 600, n = 0 },
+        clues = clues,
+        fugitives = { { netId = fugNet, state = 'idle' } },
+        checked = 0,
+        clueTotal = 3,
+        arrests = 0,
+        neutralised = 0,
+        total = 1,
+        entered = true,
+    })
+    -- one loop pass in 16 ms frames: the Waits inside it, and the Wait that ends it (FAST or more)
+    local function Pass()
+        waits, asks = {}, {}
+        for _ = 1, 600 do
+            local last = waits[#waits]
+            if last and last >= FAST then break end
+            H.step(16)
+        end
+        return #waits - 1, waits[#waits]
+    end
+    local function Per(fn, of)
+        local out = {}
+        for i, e in ipairs(of or all) do out[i] = fn(e) end
+        return table.concat(out, ',')
+    end
+    local function Asked() return Per(function(e) return asks[e] or 0 end) end
+    local function Started() return Per(function(e) return CountOf(CL.scenarios, e) end, wit) end
+    local function Applied() return Per(function(e) return CountOf(CL.applied, e) end) end
+
+    -- a solo host: every witness set up and on its phone, the fugitive hiding, all in one pass
+    local inner, ends = Pass()
+    H.eq(inner, 0, 'q13 solo host: no Wait inside the pass')
+    H.eq(ends, SLOW, 'q13 solo host: the next pass after SLOW_MS, as before')
+    H.eq(Asked(), '0,0,0,0', 'q13 solo host: nothing asked for')
+    H.eq(Started(), '1,1,1', 'q13 solo host: each witness starts its phone scenario once')
+    H.eq(Applied(), '1,1,1,1', 'q13 solo host: CP.Npc.apply once per ped')
+    H.eq(CountTasks(fug, 'cower'), 1, 'q13 solo host: the fugitive hides')
+
+    -- (a) officer B's game takes two witnesses he stands by; they stay on their phones
+    ents[wit[2]].owned, ents[wit[3]].owned = false, false
+    for i = 1, 3 do
+        inner, ends = Pass()
+        H.eq(inner, 0,
+            ('q13 witnesses with B, pass %d: no Wait inside the pass (it pulled them back before)'):format(i))
+        H.eq(Asked(), '0,0,0,0', ('q13 witnesses with B, pass %d: neither is asked for'):format(i))
+        H.eq(ends, SLOW, ('q13 witnesses with B, pass %d: nothing pending: SLOW_MS'):format(i))
+    end
+    H.eq(Started(), '1,1,1', 'q13 witnesses with B: no phone scenario restarted')
+
+    -- (b) control comes back (B walked off): set up again, the scenario that is still running is not restarted
+    ents[wit[2]].owned, ents[wit[3]].owned = true, true
+    inner, ends = Pass()
+    H.eq(inner, 0, 'q13 witnesses back: no Wait inside the pass')
+    H.eq(Applied(), '1,2,2,1', 'q13 witnesses back: CP.Npc.apply once more for each of the two')
+    H.eq(Started(), '1,1,1', 'q13 witnesses back: the running phone scenario is not started again')
+    for _ = 1, 2 do Pass() end
+    H.eq(Applied(), '1,2,2,1', 'q13 witnesses back: ...and nothing again on later passes')
+
+    -- a witness B's game holds that is off its phone is still asked for, and started again once it is back
+    ents[wit[3]].owned, ents[wit[3]].scenario = false, nil
+    inner, ends = Pass()
+    H.eq(inner, 0, 'q13 witness off its phone: no Wait inside the pass')
+    H.eq(Asked(), '0,0,1,0', 'q13 witness off its phone: asked for once')
+    H.eq(ends, FAST, 'q13 witness off its phone: the next pass after FAST_MS')
+    ents[wit[3]].owned = true
+    Pass()
+    H.eq(Started(), '1,1,2', 'q13 witness off its phone: back with this game: on its phone again')
+
+    -- (c) B's game takes the fugitive: asked for once, the next pass soon, re-tasked once when he comes back
+    ents[fug].owned = false
+    inner, ends = Pass()
+    H.eq(inner, 0, 'q13 fugitive with B: no Wait inside the pass')
+    H.eq(Asked(), '0,0,0,1', 'q13 fugitive with B: asked for once')
+    H.eq(ends, FAST, 'q13 fugitive with B: the next pass after FAST_MS, to pick up the hand-over')
+    H.eq(CountTasks(fug, 'cower'), 1, 'q13 fugitive with B: not tasked without control')
+    ents[fug].owned = true
+    inner, ends = Pass()
+    H.eq(ends, SLOW, 'q13 fugitive back: nothing pending: SLOW_MS again')
+    H.eq(Asked(), '0,0,0,0', 'q13 fugitive back: nothing asked for')
+    H.eq(CountTasks(fug, 'cower'), 2, 'q13 fugitive back: re-tasked once')
+    for _ = 1, 2 do Pass() end
+    H.eq(CountTasks(fug, 'cower'), 2, 'q13 fugitive back: ...and not again on later passes')
+
+    SC.stop(cctx)
+    H.step(1000)
+    _G.NetworkRequestControlOfEntity, _G.Wait = saved.request, saved.wait
     ents[me].coords = myPos
 end
 

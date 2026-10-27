@@ -8,7 +8,6 @@ local FAST_MS = 250
 local SLOW_MS = 1000
 local WATCH_RANGE = 40.0
 local REPORT_MS = 1500
-local CONTROL_MS = 250
 local MARKER_RANGE = 150.0
 local CLUE_RANGE = 2.5
 local SEARCH_ANIM = { dict = 'amb@prop_human_bum_bin@idle_b', clip = 'idle_d' }
@@ -246,8 +245,10 @@ end
 -- ============================================================================
 --                             HOST AI AND REPORTS
 -- ============================================================================
--- Control of a run ped before anything is done to it (ctx.control returns at once when this client
--- already owns it). regained = another client owned it since the last check: re-apply and re-task.
+-- Control of a run ped before anything is done to it. A ped another client owns is asked for once and skipped:
+-- the pass never waits for the hand-over (it would hold the blips, the stun reports and the HUD for up to 250 ms per
+-- ped), and the next pass comes after FAST_MS. regained = another client owned it since the last check: re-apply and
+-- re-task.
 local function Own(S, net, ent)
     if not (S.alive and S.current) then return false, false end
     if NetworkHasControlOfEntity(ent) then
@@ -255,14 +256,11 @@ local function Own(S, net, ent)
         S.lost[net] = nil
         return true, regained
     end
-    if not S.ctx.control(ent, CONTROL_MS) then
-        S.lost[net] = true
-        return false, false
-    end
-    S.lost[net] = nil
-    -- ctx.control waits for the hand-over: the objective may have stopped meanwhile
-    if not (S.alive and S.current) then return false, false end
-    return true, true
+    S.lost[net] = true
+    S.pending = true
+    -- 0 ms: one request, no wait (FiveM drops a repeat while one is pending)
+    S.ctx.control(ent, 0)
+    return false, false
 end
 
 local function HostPed(S, net, ent, state, witness)
@@ -279,7 +277,11 @@ local function HostPed(S, net, ent, state, witness)
     if witness then
         if fresh then
             SetBlockingOfNonTemporaryEvents(ent, true)
-            TaskStartScenarioInPlace(ent, WITNESS_SCENARIO, 0, true)
+            -- a witness still on its phone (control came back from another client) keeps the call going: starting
+            -- the scenario again would replay its enter animation in front of the officer talking to it
+            if not IsPedUsingScenario(ent, WITNESS_SCENARIO) then
+                TaskStartScenarioInPlace(ent, WITNESS_SCENARIO, 0, true)
+            end
         end
         return
     end
@@ -335,6 +337,7 @@ local function Loop(S)
     CreateThread(function()
         while S.alive do
             local fast = false
+            S.pending = false
             if S.current then
                 local ctx = S.ctx
                 local gu = ctx.obj.givesUp or {}
@@ -351,7 +354,17 @@ local function Loop(S)
                     for _, cl in pairs(S.clues) do
                         if cl.kind == 'witness' and cl.netId then
                             local e = EntityFor(cl.netId)
-                            if e and not IsPedDeadOrDying(e, true) then HostPed(S, cl.netId, e, 'idle', true) end
+                            if e and not IsPedDeadOrDying(e, true) then
+                                -- set up already and on its phone, and another client owns it (usually the officer
+                                -- talking to it): left with him, not pulled back; set up again, with no restart,
+                                -- once control comes back
+                                if S.applied[cl.netId] == e and not NetworkHasControlOfEntity(e)
+                                    and IsPedUsingScenario(e, WITNESS_SCENARIO) then
+                                    S.lost[cl.netId] = true
+                                else
+                                    HostPed(S, cl.netId, e, 'idle', true)
+                                end
+                            end
                         end
                     end
                 end
@@ -361,7 +374,7 @@ local function Loop(S)
                     if ent then
                         local state = (BagOf(ent) or {}).state or f.state
                         if host and state ~= 'dead' then HostPed(S, f.netId, ent, state, false) end
-                        -- HostPed waits for control (ctx.control yields): a stop meanwhile has already cleaned up
+                        -- CP.Npc can wait for an animation to load: a stop meanwhile has already cleaned up
                         if not (S.alive and S.current) then break end
                         local d = #(GetEntityCoords(ent) - myPos)
                         if state == 'fleeing' or state == 'idle' then
@@ -386,7 +399,8 @@ local function Loop(S)
                 end
                 if S.alive and S.current then SetHint(S, HudText(S, close)) end
             end
-            Wait(fast and FAST_MS or SLOW_MS)
+            -- a ped asked for this pass is checked again soon
+            Wait((fast or S.pending) and FAST_MS or SLOW_MS)
         end
         S.looping = false
     end)

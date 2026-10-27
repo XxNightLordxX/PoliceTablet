@@ -583,7 +583,8 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
     each hostage, then the task for its cp state (restrained -> kneel, idle/safe -> cower,
     freed -> follow to the safe marker, re-issued every RETASK_MS while walking); again after
     hostChanged. Control is requested before every task (the officer next to a hostage often owns
-    it) and a task that CP.Npc.task refused is retried on the next loop.
+    it; one ctx.control(ent, 0) request and no wait, the next pass after CONTROL_MS) and a task that
+    CP.Npc.task refused is retried on the next loop.
     While the objective is current on this participant's client:
     - ox_target "Cut restraints" (exports.ox_target:addLocalEntity, option crimson-police:cut_restraints)
       on every restrained hostage, re-attached when the entity handle changes, removed in stop;
@@ -861,10 +862,14 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
       pending (a lost one is handled), then fugitives in custody, escape countdown, and "stay close" while
       this player is within givesUp.close.distance of a fugitive on the run;
     - on the run host only: control of each fugitive and the witness before anything is done to it
-      (re-applied and re-tasked when control comes back from another client), CP.Npc.apply, then
+      (re-applied and re-tasked when control comes back from another client; one ctx.control(ent, 0)
+      request and no wait for a ped another client owns, which is skipped that pass, and the next pass
+      comes after FAST_MS), CP.Npc.apply, then
       the task for its cp state: idle (hiding) -> 'cower', fleeing -> 'flee', and on first sight (new
       host) surrendered -> 'kneel', cuffed -> 'cuffed'; the witness stands at its spot
-      (TaskStartScenarioInPlace). The "Cuff suspect" target is CP.Npc's (enableCuff).
+      (TaskStartScenarioInPlace, only when it is not already on its phone: IsPedUsingScenario). A
+      witness set up and on its phone that another client owns is left with it, not asked for. The
+      "Cuff suspect" target is CP.Npc's (enableCuff).
 
   Objective fields read: clueProgress.label / duration, givesUp.close, runDistance (ctx.obj).
   Evidence sent: { type = 'clue_start', clue }, { type = 'clue', clue }, { type = 'stunned', netId }

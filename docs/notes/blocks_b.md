@@ -74,7 +74,9 @@ Each file's header lists the fields it reads (with defaults), the evidence it ac
 - **Host AI** (all three clients): control is requested before every task (OneSync gives ownership to the
   closest player, usually the officer next to the ped), and a ped only counts as applied/tasked when
   `CP.Npc.apply`/`CP.Npc.task` did not return false; otherwise the next loop (500 ms) retries. Without this a
-  freed hostage owned by the officer who cut its restraints never got its `follow` task.
+  freed hostage owned by the officer who cut its restraints never got its `follow` task. The protect_rescue host
+  never waits for the hand-over: it calls `ctx.control(ent, 0)` (one request, no wait) for a hostage another client
+  owns, skips it for that pass and runs the next pass after 250 ms (CONTROL_MS).
 - **Progress bars** ("Cut restraints", "Knock and announce") still running when the objective or run stops are
   cancelled (`lib.cancelProgress`) in the client cleanup. Lock-on aim (`IsPlayerTargettingEntity`) counts as
   aiming for `givesUp.aim` like free aim.

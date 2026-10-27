@@ -154,7 +154,11 @@ the first `ctx.complete()` call, so they exist when the engine scores the run in
     bar is cancelled when the objective stops. `ctx.control` waits frames, so the objective can stop meanwhile:
     after the host AI the loop draws no blip and writes no HUD line once the objective was cleaned up. The pursuit
     host never waits: it calls `ctx.control(ent, 0)` (one request, no wait) for an entity another client owns, skips
-    it for that pass and runs the next pass after 250 ms, where the hand-over is picked up as a regain.
+    it for that pass and runs the next pass after 250 ms, where the hand-over is picked up as a regain. The
+    search_area host does the same, and leaves a witness it has set up that is on its phone
+    (`IsPedUsingScenario`) with the client that owns it (usually the officer talking to it) instead of pulling it
+    back; when control comes back the witness is set up again without restarting the scenario, so the phone
+    animation never replays in front of that officer.
 
 ## Requests to other modules
 
