@@ -297,6 +297,7 @@
   "admin.action.test": "Draft sent to test",
   "admin.action.breakLock": "Edit lock broken",
   "admin.action.discardDraft": "Draft discarded",
+  "admin.action.builderTeleport": "Teleported to a mission point (Mission Builder)",
   "admin.notice.run_approved": "A supervisor approved your {mission} run: it counts again.",
   "admin.notice.run_voided": "Your {mission} run was voided.",
   "admin.notice.force_recalled": "A supervisor recalled you from your mission. No penalty and no cooldown.",

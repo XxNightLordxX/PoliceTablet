@@ -939,5 +939,11 @@
   "builder.loc.point_from_start": "{m} from the start",
   "builder.loc.point_delete": "Delete this point",
   "builder.loc.point_deleted": "{label} {n} deleted",
-  "builder.loc.point_set_here_hint": "Moves this point to the spot where you stand, or your vehicle is. The tablet stays open."
+  "builder.loc.point_set_here_hint": "Moves this point to the spot where you stand, or your vehicle is. The tablet stays open.",
+  "builder.loc.teleport": "Teleport",
+  "builder.loc.teleport_hint": "Puts you on the ground at this point (the server reads the saved point; logged).",
+  "builder.loc.teleported": "Teleported to {label}",
+  "err.builder_teleport_failed": "The teleport did not finish. Try again.",
+  "err.builder_teleport_off": "Teleporting to mission points is turned off.",
+  "err.no_response": "No response from the server."
 }

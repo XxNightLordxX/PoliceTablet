@@ -3469,6 +3469,7 @@ V4-V26 (/tmp/claude-0/-home-user-PoliceTablet/c9b2f5e1-32ec-5436-a1db-2a78c5b9aa
 | `client:testInvite` | `{ inviteId, missionLabel, from }` | testing |
 | `client:test` | `{ controls = bool, debug = data }` | testing |
 | `client:builder` | `{ ... }` builder-specific | builder |
+| `client:builder:teleport` | `{ missionId, location, key, index, coords }`: the answer to the caller's own `server:builder:teleport` (the stored point's coordinates; the client ignores one it did not ask for) | builder |
 | `client:objective` (new action) | runId, index, `{ action = 'adopt', op = 'adopt', netId, obj, from }`: the host moves the AI of netId to objective obj's client half | runs |
 | `client:missionCall` | `{ id, code, typeLabel, priority, areaLabel, paged? }` (toast and tone; the client drops it when muted, on a run or in the arena) | missioncalls |
 | `client:readyCheck` | `{ typeKey, typeLabel, expiresIn, leaderName, twists = { { key, label } } }` or nil to clear | units |
@@ -3584,6 +3585,7 @@ Actions (write), each checks `CP.Permissions.can`:
 | `server:test:control` | `{ control, ... }` | test starter only | testing |
 | `server:test:spawnCheckReport` | `{ missionId, location, results = { { id, status, groundZ?, dz?, roofZ?, seen? } } }` (the spawn point check, §5.27) | testRun | testing |
 | `server:builder:*` | see builder section of its own module header | builderEdit/Publish/Archive/EditAny/Rollback/breakEditLock | builder |
+| `server:builder:teleport` | `{ missionId, location, key, index }` → `{ missionId, location, key, index }` + `client:builder:teleport` with the stored point (no coordinates are accepted from the client) | builderEdit + `Config.Builder.teleport` + admin or a `Config.Permissions.builderTeleport` grant (department, grade) | builder; refused in the arena, on a run, while down; audit `builderTeleport` |
 | `server:sup:mcWithdraw` / `server:admin:mcWithdraw` | `{ callId, reason }` | missionCalls | missioncalls |
 | `server:sup:mcPage` / `server:admin:mcPage` | `{ type, area, leaderSrc }` | missionCalls | missioncalls |
 | `server:sup:mcCreate` / `server:admin:mcCreate` | `{ type, area }` | missionCalls | missioncalls |

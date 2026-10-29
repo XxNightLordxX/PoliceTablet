@@ -217,7 +217,8 @@ local OPEN = {
     'Rewards.goals',
     'Rewards.levels',
     'Rewards.season',
-    'LiveCrime.types',   -- the crime keys are Crimson-Contracts' contract keys
+    'LiveCrime.types',              -- the crime keys are Crimson-Contracts' contract keys
+    'Permissions.builderTeleport',  -- department keys
 }
 
 local WEEKDAYS = { 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday' }

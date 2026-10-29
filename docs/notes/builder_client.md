@@ -76,7 +76,7 @@ overlays and of the protocol extensions are in `web/src/types/builder_client.ts`
   of the segments it removes. After X the rest (the last segment) is checked, four per frame, and the indexes are
   returned in `unreachable` (the map draws them dashed red).
 - **Test drive:** more than 200 m from the route start a GPS waypoint leads there first (`waiting = 'approach'`;
-  the builder never teleports anyone); the spawn point must be clear of the player (6 m); the local vehicle and a
+  the test drive never teleports anyone); the spawn point must be clear of the player (6 m); the local vehicle and a
   local driver (`s_m_m_armoured_01`, fallback `a_m_m_business_01`) drive waypoint by waypoint with
   `TaskVehicleDriveToCoordLongrange`; arrival radius max(12 m, 1.2 s at speed), 10 m for the last one; a waypoint
   not reached within `testDriveTimeout` is added to `failed` and the drive continues; escort stops are waited out
@@ -128,6 +128,7 @@ overlays and of the protocol extensions are in `web/src/types/builder_client.ts`
 | `builderResult` | the pending `BuilderClientResult & { seq, droppedStops? }` or `nil`; clears it |
 | `builderCancel` | `{ cancelled = boolean }` (false when nothing runs) |
 | `builderWaypoint` | `{ ok = true }` |
+| `builderTeleport` | `{ missionId, location, key, index }` after the move (fade, freeze, collision, ground, unfreeze; only the server's `client:builder:teleport` coordinates for this request are used) |
 | `builderHere` | `{ ok, reason = text or false, point, result? }` (no tool starts; see builder_protocol.md) |
 
 Errors come back as the `err.*` keys listed above (`{ ok = false, error }` through the NUI `client` endpoint).

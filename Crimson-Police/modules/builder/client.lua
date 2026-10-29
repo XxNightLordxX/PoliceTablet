@@ -1842,6 +1842,109 @@ function B.cancel(reason)
 end
 
 -- ============================================================================
+--                           TELEPORT TO A POINT (B8)
+-- ============================================================================
+-- "Teleport" on the Locations step: the screen names the point ({ missionId, location, key, index }), the server
+-- checks who may (Config.Builder.teleport, admins or a Config.Permissions.builderTeleport grant), audits it and sends
+-- the stored coordinates back (client:builder:teleport); only an answer to the request under way is used. He is
+-- put on the ground there as the test teleport does (fade, freeze, collision, ground find, unfreeze).
+do
+    local pending = nil   -- { missionId, location, key, index, coords? } while a request waits for its answer
+    local moving = nil    -- { ent, frozen } during the move: a resource stop undoes the freeze and the fade
+
+    local function GroundZ(x, y, z)
+        for _, probe in ipairs({ 2.0, 25.0, 100.0 }) do
+            for _ = 1, 10 do
+                RequestCollisionAtCoord(x, y, z)
+                local found, gz = GetGroundZFor_3dCoord(x, y, z + probe, false)
+                if found and type(gz) == 'number' then return gz end
+                Wait(50)
+            end
+        end
+        return z
+    end
+
+    local function MoveTo(c)
+        local ped = PlayerPedId()
+        local veh = GetVehiclePedIsIn(ped, false)
+        local ent = ped
+        if veh ~= 0 and GetPedInVehicleSeat(veh, -1) == ped then ent = veh end
+        local mine = { ent = ent, frozen = false }
+        moving = mine
+        DoScreenFadeOut(300)
+        local deadline = GetGameTimer() + 1500
+        while not IsScreenFadedOut() and GetGameTimer() < deadline do Wait(0) end
+        local ok, err = pcall(function()
+            -- Crimson-Arena rule 13: checked again right before every move (the fade took time)
+            if InForeignArena() then error('in_arena', 0) end
+            FreezeEntityPosition(ent, true)
+            mine.frozen = true
+            SetEntityCoords(ent, c.x, c.y, c.z + 1.0, false, false, false, false)
+            local gz = GroundZ(c.x, c.y, c.z)
+            if InForeignArena() then error('in_arena', 0) end
+            SetEntityCoords(ent, c.x, c.y, gz, false, false, false, false)
+        end)
+        -- the arena owns a ped it took meanwhile: leave its freeze to Crimson-Arena
+        if mine.frozen and not (err == 'in_arena' and ent == ped) then FreezeEntityPosition(ent, false) end
+        DoScreenFadeIn(300)
+        if moving == mine then moving = nil end
+        if ok then return true end
+        if err == 'in_arena' then return false, 'err.in_arena' end
+        CP.err(TAG, 'teleport failed: %s', tostring(err))
+        return false, 'err.builder_teleport_failed'
+    end
+
+    -- The client action builderTeleport. Returns ok, data | errKey.
+    function B.teleport(payload)
+        if BuilderCfg().teleport == false then return false, 'err.builder_teleport_off' end
+        local p = type(payload) == 'table' and payload or {}
+        local li, index = math.tointeger(p.location), math.tointeger(p.index)
+        if type(p.missionId) ~= 'string' or #p.missionId > 64 or not li or not index or type(p.key) ~= 'string'
+            or #p.key > 40 then
+            return false, 'err.invalid_payload'
+        end
+        local why = Refusal()
+        if why then return false, why end
+        if pending or moving then return false, 'err.builder_busy' end
+        local mine = { missionId = p.missionId, location = li, key = p.key, index = index }
+        pending = mine
+        local res = CP.Net.action('server:builder:teleport',
+            { missionId = mine.missionId, location = li, key = mine.key, index = index })
+        -- the coordinates come in their own event, sent just before the answer
+        local deadline = GetGameTimer() + 1000
+        while type(res) == 'table' and res.ok and not mine.coords and GetGameTimer() < deadline do Wait(0) end
+        if pending == mine then pending = nil end
+        if type(res) ~= 'table' then return false, 'err.no_response' end
+        if not res.ok then return false, res.error end
+        if not mine.coords then return false, 'err.builder_teleport_failed' end
+        why = Refusal()
+        if why then return false, why end
+        local ok, err = MoveTo(mine.coords)
+        if not ok then return false, err end
+        return true, { missionId = mine.missionId, location = li, key = mine.key, index = index }
+    end
+
+    -- Only the answer to the request under way is used; anything else is dropped.
+    RegisterNetEvent(CP.e('client:builder:teleport'), function(data)
+        local mine = pending
+        if not mine or type(data) ~= 'table' or type(data.coords) ~= 'table' then return end
+        if data.missionId ~= mine.missionId or data.location ~= mine.location or data.key ~= mine.key
+            or data.index ~= mine.index then
+            return
+        end
+        local x, y, z = tonumber(data.coords.x), tonumber(data.coords.y), tonumber(data.coords.z)
+        if not (x and y and z) then return end
+        mine.coords = { x = x + 0.0, y = y + 0.0, z = z + 0.0 }
+    end)
+
+    AddEventHandler('onResourceStop', function(res)
+        if res ~= CP.resource or not moving then return end
+        if moving.frozen then FreezeEntityPosition(moving.ent, false) end
+        DoScreenFadeIn(0)
+    end)
+end
+
+-- ============================================================================
 --              CLIENT ACTIONS AND EVENTS (registered at runtime)
 -- ============================================================================
 
@@ -1884,6 +1987,7 @@ local function RegisterActions()
     T.registerClientAction('builderCancel', function()
         return true, { cancelled = B.cancel('ui') }
     end)
+    T.registerClientAction('builderTeleport', B.teleport)
     T.registerClientAction('builderWaypoint', function(payload)
         local c = type(payload) == 'table' and VecOf(payload.coords) or nil
         if not c then return false, 'err.invalid_payload' end

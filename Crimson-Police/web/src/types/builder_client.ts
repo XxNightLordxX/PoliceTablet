@@ -132,6 +132,14 @@ export interface BuilderHereReply {
     point: Vec;
     result?: BuilderClientResultEx;
 }
+// builderTeleport: which stored point (key 'start' with index 1 for the start), never where: the server checks the
+// caller, reads the saved point, logs the jump and sends the player there.
+export interface BuilderTeleportRequest {
+    missionId: string;
+    location: number;
+    key: string;
+    index: number;
+}
 export interface BuilderRecordRequest extends BuilderRecordPayload {
     label?: string;
     ui?: BuilderUi;

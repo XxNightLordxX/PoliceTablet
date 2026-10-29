@@ -141,6 +141,10 @@ Config.Permissions = {
         issueCommendation = true, -- commend officers of their own department
         reviewProfiles = true,    -- approve or reject pictures and clear bios of their department
     },
+    -- Who besides admins may use the Mission Builder Teleport button (admins always may), by department key: minGrade
+    -- (that grade or higher) or grades (only those grades). For example sast = { minGrade = 4 } or
+    -- the list form bcso = { grades = { 3, 5 } }. Empty = admins only.
+    builderTeleport = {},
     -- Always admin-only, whatever is set above: single-mission payouts, clearing
     -- admin payouts, manual awards, disputes about failed runs, voiding any run,
     -- seasons, the bounty override, suspensions, reloading mission files and test runs.
@@ -1464,6 +1468,10 @@ Config.Builder = {
     useMyPosition = true,                      -- true = the Locations step has "Set start here" and "Add here":
                                                -- the point goes where you stand (or your vehicle is) and the tablet
                                                -- stays open; false = points are only placed with the aim tool
+
+    -- On: a Teleport button next to each point on the Locations step puts you on the ground there (the server reads
+    -- the saved point and logs it). Admins always; others only with Permissions.builderTeleport. Off: no button.
+    teleport = true,
     testAtMaxTier = true, -- a test counts as passed only at the tier maxOfficers reaches
     editLockMinutes = 30, -- one editor at a time; renewed while they keep editing
     defaultTeam = { patrol = 2, training = 2, investigation = 2, tactical = 4 }, -- most officers a new mission

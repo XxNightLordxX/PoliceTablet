@@ -18,6 +18,7 @@ import type {
     BuilderPlaceRequest,
     BuilderRecordRequest,
     BuilderStepKey,
+    BuilderTeleportRequest,
     BuilderTestDriveRequest,
     BuilderToolOverlay,
 } from '../types/builder_client';
@@ -332,6 +333,13 @@ registerMock('client', 'builderHere', (p: BuilderPlaceRequest): BuilderHereReply
         ...(p.kind === 'start' ? { radius: typeof p.radius === 'number' ? p.radius : 60 } : {}),
     } as BuilderClientResult;
     return { ok: true, reason: false, point, result };
+});
+
+// The browser preview has no world: the teleport only answers what it was asked
+registerMock('client', 'builderTeleport', (p: BuilderTeleportRequest) => {
+    if (!p || typeof p.missionId !== 'string' || typeof p.key !== 'string') throw new Error('err.invalid_payload');
+    if (running) throw new Error('err.builder_busy');
+    return { missionId: p.missionId, location: p.location, key: p.key, index: p.index };
 });
 
 registerMock('client', 'builderWaypoint', (p: { coords?: Vec3 }) => {

@@ -303,6 +303,9 @@ export interface BuilderConfig {
     useStartRoute: boolean;
     // "Set start here" / "Add here" on the Locations step (Config.Builder.useMyPosition); missing = on
     useMyPosition?: boolean;
+    // "Teleport" next to each point: Config.Builder.teleport is on and this caller may (admins, or a
+    // Config.Permissions.builderTeleport grant for his department and grade); missing = no
+    teleport?: boolean;
     // the caller's builder permissions (admins: all true)
     permissions: Record<
         'builderEdit' | 'builderEditAny' | 'builderPublish' | 'builderArchive' | 'builderRollback' | 'breakEditLock',

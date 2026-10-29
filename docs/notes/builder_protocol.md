@@ -252,6 +252,7 @@ for a malformed payload, `err.builder_unknown_mission`, `err.no_permission`, `er
 | `server:builder:rollback` | `{ id }` | `{ id, version, fromVersion }` | `err.builder_not_published`, `err.builder_no_backup`, `err.builder_invalid` |
 | `server:builder:breakLock` | `{ id }` | `{ id, previous: { citizenid, name } \| null }` | |
 | `server:builder:discardDraft` | `{ id }` | `{ id, deleted }` — a never-published mission is deleted, otherwise only its draft | `err.builder_no_draft`, `err.builder_locked` |
+| `server:builder:teleport` | `{ missionId, location, key, index }` | `{ missionId, location, key, index }`; the stored point goes to the caller in `client:builder:teleport` (Config.Builder.teleport; admins, or a Config.Permissions.builderTeleport grant; audited) | `err.builder_teleport_off`, `err.no_permission`, `err.in_arena`, `err.builder_on_run`, `err.builder_dead`, `err.builder_no_point` |
 
 Publish writes `missions/custom/<id>.lua` (SaveResourceFile) in exactly the shape of the spec's custom
 example, keeps the previous file as `<id>.v<previous version>.lua.bak` (`Config.Builder.keepBackups`),
@@ -305,7 +306,8 @@ Client actions (registered by `modules/builder/client.lua` with `CP.Tablet.regis
 | `builderTestDrive` | `{ missionId, location, key, route: BuilderRoute, vehicle, speed, style }` | `{ started: true }` |
 | `builderResult` | `{}` | the pending result below (or `null`), and clears it |
 | `builderCancel` | `{}` | `{ cancelled: boolean }` |
-| `builderWaypoint` | `{ coords: Vec3 }` | `{ ok: true }` (GPS waypoint to a spot; the builder never teleports players) |
+| `builderWaypoint` | `{ coords: Vec3 }` | `{ ok: true }` (GPS waypoint to a spot) |
+| `builderTeleport` | `{ missionId, location, key, index }` (`key = 'start'`, `index = 1` for the start) | `{ missionId, location, key, index }` once the player is on the ground at the stored point; the server (`server:builder:teleport`) decides who may and where, and audits it |
 
 The tablet closes while the tool runs and reopens on the builder screen when it ends. The result is
 kept on the client until read and also pushed to the NUI (topic `builder`, `event = 'clientResult'`):

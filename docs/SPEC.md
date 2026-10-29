@@ -2024,6 +2024,8 @@ Placement tool: a ghost preview of the ped, vehicle or marker follows your aim; 
 
 Point list (Locations step, under the map): one row per stored point (the start, then each point of each key; not flee paths or recorded road routes) with its number, kind, distance from the start and stored street, and GPS, Set here (that point moves to where the builder stands; the other points are sent for the spacing checks) and Delete (that point only, autosaved). The row under the pointer is ringed on the map.
 
+Teleport (B8, owner decision; replaces "the builder never teleports"): the start row and each point-list row have Teleport while Config.Builder.teleport is on and the builder may: admins always, anyone else only with a grant for his department and grade in Config.Permissions.builderTeleport (minGrade or grades; shipped empty = admins only). The screen names the point (mission, location, key, number), never a position: the server checks the grant, refuses in the arena, on a run or while down, reads the saved point (built-in missions too), writes the audit row builderTeleport (mission, #location, key#number) and sends the player its own coordinates; the client fades out, freezes, loads the collision, finds the ground, puts him there and unfreezes. Unsaved changes are saved first. The test drive and the other tools still only set GPS waypoints.
+
 Guardrails (checked while placing, and again by the server on publish)
 
 - There is no payout field: a custom mission pays its type's payout (× its star multiplier) until an admin sets a mission payout.
@@ -2858,6 +2860,10 @@ Config.Permissions = {
         issueCommendation = true, -- commend officers of their own department
         reviewProfiles = true,    -- approve or reject pictures and clear bios of their department
     },
+    -- Who besides admins may use the Mission Builder Teleport button (admins always may), by department key: minGrade
+    -- (that grade or higher) or grades (only those grades). For example sast = { minGrade = 4 } or
+    -- the list form bcso = { grades = { 3, 5 } }. Empty = admins only.
+    builderTeleport = {},
     -- Always admin-only, whatever is set above: single-mission payouts, clearing
     -- admin payouts, manual awards, disputes about failed runs, voiding any run,
     -- seasons, the bounty override, suspensions, reloading mission files and test runs.
@@ -3973,6 +3979,10 @@ Config.Builder = {
     useMyPosition = true,                      -- true = the Locations step has "Set start here" and "Add here":
                                                -- the point goes where you stand (or your vehicle is) and the tablet
                                                -- stays open; false = points are only placed with the aim tool
+
+    -- On: a Teleport button next to each point on the Locations step puts you on the ground there (the server reads
+    -- the saved point and logs it). Admins always; others only with Permissions.builderTeleport. Off: no button.
+    teleport = true,
     testAtMaxTier = true,                      -- a test counts as passed only at the tier maxOfficers reaches
     editLockMinutes = 30,                      -- one editor at a time; renewed while they keep editing
     defaultTeam = { patrol = 2, training = 2, investigation = 2, tactical = 4 }, -- most officers a new mission

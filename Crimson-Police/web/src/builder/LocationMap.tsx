@@ -375,6 +375,9 @@ export interface PointListProps {
     onGps: (c: Vec3) => void;
     // "Set here" (Config.Builder.useMyPosition), null when off
     onHere: ((row: PointListRow) => void) | null;
+    // Teleport to this point (Config.Builder.teleport and allowed for this builder), null when not
+    onTeleport: ((row: PointListRow) => void) | null;
+    teleporting: boolean;
     onDelete: (row: PointListRow) => void;
     disabled: boolean;
     ro: boolean;
@@ -382,7 +385,19 @@ export interface PointListProps {
 
 // One row per point under the map: number, kind, distance from the start and the stored street, with GPS,
 // "Set here" and Delete for that one point.
-export function PointList({ rows, specs, lit, onLit, onGps, onHere, onDelete, disabled, ro }: PointListProps) {
+export function PointList({
+    rows,
+    specs,
+    lit,
+    onLit,
+    onGps,
+    onHere,
+    onTeleport,
+    teleporting,
+    onDelete,
+    disabled,
+    ro,
+}: PointListProps) {
     if (!rows.length) return null;
     return (
         <ul className="builder_client-plist" aria-label={t('builder.loc.point_list')}>
@@ -427,6 +442,18 @@ export function PointList({ rows, specs, lit, onLit, onGps, onHere, onDelete, di
                                 size="sm"
                                 onClick={() => onGps({ x: p.x, y: p.y, z: p.z })}
                             />
+                            {onTeleport ? (
+                                <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    icon="zap"
+                                    disabled={teleporting}
+                                    title={t('builder.loc.teleport_hint')}
+                                    onClick={() => onTeleport(row)}
+                                >
+                                    {t('builder.loc.teleport')}
+                                </Button>
+                            ) : null}
                             {!ro && onHere ? (
                                 <Button
                                     size="sm"

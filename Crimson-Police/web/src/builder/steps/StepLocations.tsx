@@ -19,7 +19,7 @@ import { t } from '../../shared/i18n';
 import { clientAction } from '../../shared/nui';
 import { toast } from '../../shared/toast';
 import type { BuilderKerbSpot, BuilderLocation, BuilderRoute, Vec3 } from '../../types/builder_server';
-import type { PointSpec, RouteMeta } from '../../types/builder_client';
+import type { BuilderTeleportRequest, PointSpec, RouteMeta } from '../../types/builder_client';
 import { CountBadge, ErrorNotes } from '../controls';
 import { dist2d, errorsAt, errorsUnder, isRoute, listsOf, pointsOf, routeLength } from '../defUtils';
 import { KEY_COLOURS, LocationMap, PointList } from '../LocationMap';
@@ -150,6 +150,36 @@ export function StepLocations({ ed, cfg, def, ro, scope }: StepProps) {
         const res = await clientAction('builderWaypoint', { coords: c });
         toast(res.ok ? 'success' : 'error', t(res.ok ? 'builder.loc.gps_set' : (res.error ?? 'err.internal')));
     };
+    // Teleport (Config.Builder.teleport, shown only when the server says this builder may): the server reads the
+    // saved point, so unsaved changes are stored first
+    const [jumping, setJumping] = useState(false);
+    const teleport = async (key: string, index: number, label: string) => {
+        if (jumping) return;
+        setJumping(true);
+        try {
+            const missionId = !ro && ed.dirty ? await ed.flush() : ed.id;
+            if (!missionId) return;
+            const req: BuilderTeleportRequest = { missionId, location: li, key, index };
+            const res = await clientAction('builderTeleport', req);
+            toast(
+                res.ok ? 'success' : 'error',
+                res.ok ? t('builder.loc.teleported', { label }) : t(res.error ?? 'err.internal'),
+            );
+        } finally {
+            setJumping(false);
+        }
+    };
+    const teleportRow =
+        cfg.teleport === true
+            ? (row: PointListRow) =>
+                  void teleport(
+                      row.key,
+                      row.index,
+                      row.specIndex >= 0
+                          ? t('builder.loc.point_n', { label: t(specs[row.specIndex].labelKey), n: row.index })
+                          : t('builder.points.start'),
+                  )
+            : null;
 
     const topErrors = errorsAt(ed.errors, 'locations');
     return (
@@ -284,6 +314,8 @@ export function StepLocations({ ed, cfg, def, ro, scope }: StepProps) {
                                 onLit={setLit}
                                 onGps={c => void gps(c)}
                                 onHere={cfg.useMyPosition !== false ? hereAt : null}
+                                onTeleport={teleportRow}
+                                teleporting={jumping || ed.toolBusy}
                                 onDelete={deleteAt}
                                 disabled={busy}
                                 ro={ro}
@@ -331,6 +363,12 @@ export function StepLocations({ ed, cfg, def, ro, scope }: StepProps) {
                                     onPlace={() => void ed.place(startSpec(), li)}
                                     onHere={cfg.useMyPosition !== false ? () => void ed.here(startSpec(), li) : null}
                                     onGps={gps}
+                                    onTeleport={
+                                        cfg.teleport === true
+                                            ? () => void teleport('start', 1, t('builder.points.start'))
+                                            : null
+                                    }
+                                    teleporting={jumping || ed.toolBusy}
                                     onClear={() => setConfirm({ kind: 'clear', spec: startSpec() })}
                                     errors={[
                                         ...errorsAt(ed.errors, `locations.${li}.start`),
@@ -408,6 +446,8 @@ function StartRow({
     onPlace,
     onHere,
     onGps,
+    onTeleport,
+    teleporting,
     onClear,
     errors,
     radiusRange,
@@ -422,6 +462,9 @@ function StartRow({
     // "Set start here" (Config.Builder.useMyPosition), null when off
     onHere: (() => void) | null;
     onGps: (c: Vec3) => void;
+    // Teleport to the start (Config.Builder.teleport and allowed for this builder), null when not
+    onTeleport: (() => void) | null;
+    teleporting: boolean;
     onClear: () => void;
     errors: ReturnType<typeof errorsAt>;
     radiusRange: [number, number, number];
@@ -500,6 +543,18 @@ function StartRow({
                         size="sm"
                         onClick={() => onGps(s.coords)}
                     />
+                ) : null}
+                {s && onTeleport ? (
+                    <Button
+                        size="sm"
+                        variant="ghost"
+                        icon="zap"
+                        onClick={onTeleport}
+                        disabled={teleporting}
+                        title={t('builder.loc.teleport_hint')}
+                    >
+                        {t('builder.loc.teleport')}
+                    </Button>
                 ) : null}
                 {s && !ro ? (
                     <IconButton

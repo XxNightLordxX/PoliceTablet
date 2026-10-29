@@ -3541,6 +3541,91 @@ function B.onDraftTested(missionId, version, tierName, passed, src, defHash)
 end
 
 -- ============================================================================
+--                           TELEPORT TO A POINT (B8)
+-- ============================================================================
+-- "Teleport" next to a location's start and each point of the point list. The screen sends which point
+-- ({ missionId, location, key, index }), never where: the server reads the stored point, audits the jump and sends
+-- the player its own coordinates (client:builder:teleport). Config.Builder.teleport switches it off; admins may,
+-- anyone else only with a grant for their department and grade in Config.Permissions.builderTeleport.
+do
+    local MAX_POINT_INDEX = 200
+
+    -- True when src may teleport in the builder (admins always, others by grant; false while switched off).
+    function B.canTeleport(src)
+        if CfgB().teleport == false or src == 0 then return false end
+        if CP.Access and CP.Access.isAdmin and CP.Access.isAdmin(src) == true then return true end
+        local grants = Config.Permissions and Config.Permissions.builderTeleport
+        local officer = CP.Access and CP.Access.getOfficer and CP.Access.getOfficer(src)
+        if type(grants) ~= 'table' or type(officer) ~= 'table' then return false end
+        local g = grants[officer.department]
+        local grade = tonumber(officer.gradeLevel)
+        if type(g) ~= 'table' or not grade then return false end
+        if tonumber(g.minGrade) and grade >= tonumber(g.minGrade) then return true end
+        for _, v in ipairs(type(g.grades) == 'table' and g.grades or {}) do
+            if tonumber(v) == grade then return true end
+        end
+        return false
+    end
+
+    -- The definition this actor sees for id: his draft or the published one, or the built-in as it plays.
+    local function SeenDefinition(id, actor, perms)
+        local row = FetchRow(id)
+        if row and VisibleTo(row, actor, perms) then return CurrentDef(row) end
+        if row and not row.overridesBuiltin then return nil end
+        return (BuiltinDefinition(id))
+    end
+
+    local function Coords(v)
+        if type(v) == 'table' and not IsVecTable(v) and v.coords ~= nil then v = v.coords end
+        local ty = type(v)
+        if ty ~= 'table' and ty ~= 'vector3' and ty ~= 'vector4' then return nil end
+        local x, y, z = tonumber(v.x), tonumber(v.y), tonumber(v.z)
+        if not (IsNum(x) and IsNum(y) and IsNum(z)) then return nil end
+        return { x = x + 0.0, y = y + 0.0, z = z + 0.0 }
+    end
+
+    -- The stored point: key 'start' (index 1) or a location key, index = its 1-based place in the key.
+    local function StoredPoint(loc, key, index)
+        if type(loc) ~= 'table' then return nil end
+        if key == 'start' then return index == 1 and type(loc.start) == 'table' and Coords(loc.start.coords) or nil end
+        local value = loc[key]
+        if value == nil or IsRoute(value) then return nil end
+        if IsVecTable(value) then return index == 1 and Coords(value) or nil end
+        if type(value) ~= 'table' or not IsList(value) then return nil end
+        return Coords(value[index])
+    end
+
+    CP.Net.action('server:builder:teleport', function(src, payload)
+        local actor, perms = Begin(src)
+        if not actor then return false, perms end
+        if CfgB().teleport == false then return false, 'err.builder_teleport_off' end
+        if not B.canTeleport(src) then return false, 'err.no_permission' end
+        local p = type(payload) == 'table' and payload or {}
+        local li, index, key = math.tointeger(p.location), math.tointeger(p.index), p.key
+        if not ValidId(p.missionId) or not li or li < 1 or li > MAX_LOCATIONS or not index or index < 1
+            or index > MAX_POINT_INDEX or type(key) ~= 'string' or #key > 40 or not key:match('^%a[%w_]*$') then
+            return false, 'err.invalid_payload'
+        end
+        if CP.Alerts and CP.Alerts.inArena and CP.Alerts.inArena(src) then return false, 'err.in_arena' end
+        if CP.Runs and CP.Runs.isOnMission and CP.Runs.isOnMission(src) then return false, 'err.builder_on_run' end
+        if CP.Qbx and CP.Qbx.isDowned and CP.Qbx.isDowned(src) then return false, 'err.builder_dead' end
+        local def = SeenDefinition(p.missionId, actor, perms)
+        if type(def) ~= 'table' then return false, 'err.builder_unknown_mission' end
+        local locs = type(def.locations) == 'table' and def.locations or {}
+        if not locs[li] then return false, 'err.invalid_location' end
+        local c = StoredPoint(locs[li], key, index)
+        if not c then return false, 'err.builder_no_point' end
+        local where = ('%s#%d'):format(key, index)
+        Audit(actor, 'builderTeleport', p.missionId, '#' .. li, where, nil)
+        CP.log(TAG, '%s teleports to %s location %d %s (%.2f, %.2f, %.2f)', actor.name or actor.citizenid, p.missionId,
+            li, where, c.x, c.y, c.z)
+        TriggerClientEvent(CP.e('client:builder:teleport'), src,
+            { missionId = p.missionId, location = li, key = key, index = index, coords = c })
+        return true, { missionId = p.missionId, location = li, key = key, index = index }
+    end, { rate = 2 })
+end
+
+-- ============================================================================
 --                                  CALLBACKS
 -- ============================================================================
 
@@ -3712,6 +3797,8 @@ CP.Net.callback('builder:config', function(src)
         useStartRoute = Config.Testing and Config.Testing.useStartRoute == true or false,
         -- "Set start here" / "Add here" on the Locations step (Config.Builder.useMyPosition)
         useMyPosition = bc.useMyPosition ~= false,
+        -- "Teleport" next to each point (Config.Builder.teleport; admins, or a Config.Permissions.builderTeleport grant)
+        teleport = B.canTeleport(src),
         permissions = perms,
     }
 end, { rate = 2 })

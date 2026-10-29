@@ -421,6 +421,8 @@ function buildConfig(): BuilderConfig {
         },
         forbiddenItems: ['armour', 'bandage', 'ammo-*', 'weapon_*'],
         useStartRoute: false,
+        // as shipped: admins only (Config.Permissions.builderTeleport is empty)
+        teleport: admin,
         permissions: {
             builderEdit: true,
             builderEditAny: admin,

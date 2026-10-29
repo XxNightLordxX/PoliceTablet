@@ -212,6 +212,18 @@ do
             and E('Builder.useMyPosition').desc:find('the point goes where you stand', 1, true) ~= nil,
         'Builder.useMyPosition is a true/false setting, shipped on, with its comment'
     )
+    H.ok(
+        E('Builder.teleport') ~= nil and E('Builder.teleport').kind == 'boolean'
+            and E('Builder.teleport').default == true
+            and E('Builder.teleport').desc:find('the server reads the saved point', 1, true) ~= nil,
+        'Builder.teleport is a true/false setting, shipped on, with its comment'
+    )
+    local grants = E('Permissions.builderTeleport')
+    H.ok(
+        grants ~= nil and grants.kind == 'json' and next(grants.default or { 1 }) == nil
+            and grants.desc:find('Empty = admins only', 1, true) ~= nil,
+        'Permissions.builderTeleport is one setting by department, shipped empty (admins only), with its comment'
+    )
 
     -- every setting is a key of Config (or a nil key config.lua names)
     local bad = {}

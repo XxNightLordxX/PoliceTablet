@@ -273,6 +273,7 @@ for _, name in ipairs({
     'builderCancel',
     'builderWaypoint',
     'builderHere',
+    'builderTeleport',
 }) do
     H.ok(type(T.actions[name]) == 'function', 'client action registered: ' .. name)
 end
@@ -1976,6 +1977,84 @@ do
     H.eq(B.active(), nil, 'still no tool')
     W.pos = { x = 1017.5, y = -3108.4, z = 5.9 }
     W.heading = 90.0
+end
+
+-- ============================================================================
+--        B8: builderTeleport (the server says where, the screen never)
+-- ============================================================================
+
+do
+    while B.active() do
+        B.cancel('ui')
+        H.step(100)
+    end
+    local moves, sentPayload = {}, nil
+    local keep = {
+        set = _G.SetEntityCoords,
+        net = CP.Net.action,
+        fadeOut = _G.DoScreenFadeOut,
+        fadeIn = _G.DoScreenFadeIn,
+        faded = _G.IsScreenFadedOut,
+        collision = _G.RequestCollisionAtCoord,
+    }
+    _G.RequestCollisionAtCoord = function() end
+    _G.SetEntityCoords = function(_, x, y, z) moves[#moves + 1] = { x = x, y = y, z = z } end
+    _G.DoScreenFadeOut, _G.DoScreenFadeIn = function() end, function() end
+    _G.IsScreenFadedOut = function() return true end
+    local answer = { ok = true, data = {} }
+    CP.Net.action = function(name, p)
+        sentPayload = { name = name, p = p }
+        if answer.ok then
+            H.fire(CP.e('client:builder:teleport'), nil, {
+                missionId = p.missionId,
+                location = p.location,
+                key = p.key,
+                index = p.index,
+                coords = { x = 10.0, y = 20.0, z = 30.0 },
+            })
+        end
+        return answer
+    end
+    local function Run(payload)
+        local res = nil
+        CreateThread(function() res = { Act('builderTeleport', payload) } end)
+        for _ = 1, 40 do
+            if res then break end
+            H.step(50)
+        end
+        return res or {}
+    end
+    H.ok(H.handlers[CP.e('client:builder:teleport')] ~= nil, 'crimson-police:client:builder:teleport is handled')
+    H.fire(CP.e('client:builder:teleport'), nil,
+        { missionId = 'm', location = 1, key = 'start', index = 1, coords = { x = 1.0, y = 1.0, z = 1.0 } })
+    H.eq(#moves, 0, 'an answer to no request moves nobody')
+    W.groundZ = 28.5
+    local r = Run(
+        { missionId = 'custom_yard', location = 2, key = 'spawns', index = 3, coords = { x = 99, y = 99, z = 99 } })
+    H.eq(r[1], true, 'builderTeleport: ' .. tostring(r[2]))
+    H.ok(
+        sentPayload and sentPayload.name == 'server:builder:teleport' and sentPayload.p.coords == nil
+            and sentPayload.p.key == 'spawns' and sentPayload.p.index == 3,
+        'the server is asked which point, with no coordinates'
+    )
+    H.ok(#moves >= 1 and moves[#moves].x == 10.0 and moves[#moves].y == 20.0 and moves[#moves].z == 28.5,
+        'he lands on the ground at the server\'s point')
+    moves = {}
+    answer = { ok = false, error = 'err.no_permission' }
+    r = Run({ missionId = 'custom_yard', location = 2, key = 'spawns', index = 3 })
+    H.eq(r[2], 'err.no_permission', 'a server refusal is passed on')
+    H.eq(#moves, 0, 'and nobody moves')
+    W.dead = true
+    H.eq(Run({ missionId = 'custom_yard', location = 1, key = 'start', index = 1 })[2], 'err.builder_dead',
+        'refused while down')
+    W.dead = false
+    Config.Builder.teleport = false
+    H.eq(Run({ missionId = 'custom_yard', location = 1, key = 'start', index = 1 })[2], 'err.builder_teleport_off',
+        'Config.Builder.teleport = false')
+    Config.Builder.teleport = true
+    _G.SetEntityCoords, CP.Net.action = keep.set, keep.net
+    _G.DoScreenFadeOut, _G.DoScreenFadeIn, _G.IsScreenFadedOut = keep.fadeOut, keep.fadeIn, keep.faded
+    _G.RequestCollisionAtCoord = keep.collision
 end
 
 -- ============================================================================

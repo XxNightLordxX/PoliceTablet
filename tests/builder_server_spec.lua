@@ -2503,6 +2503,87 @@ local function Body()
         H.eq(row('custom_grove_street_beat').locked_by, nil, 'publishing released the edit lock')
     end
 
+    -- B8: Teleport to a stored point. Admins always; others only with a Config.Permissions.builderTeleport grant for
+    -- their department and grade; the server's coordinates, never the payload's; audited; not in the arena
+    do
+        local okC, made = act(1, 'create', { type = 'tactical', label = 'Teleport Yard' })
+        local tdef = validDef()
+        tdef.label = 'Teleport Yard'
+        local okSv, saved = act(1, 'save', { id = okC and made.id or 'custom_teleport_yard', definition = tdef })
+        H.ok(okSv, 'a draft with three locations is saved: ' .. tostring(saved))
+        local tid = okSv and saved.id or 'custom_teleport_yard'
+        local stored = validDef().locations[2].spawns[3]
+        local function sent(src)
+            for i = #H.events, 1, -1 do
+                local e = H.events[i]
+                if e.name == 'crimson-police:client:builder:teleport' then
+                    return e.target == src and e.args[1] or nil
+                end
+            end
+            return nil
+        end
+        local function tp(src, extra)
+            H.events = {}
+            local payload = { missionId = tid, location = 2, key = 'spawns', index = 3 }
+            for k, v in pairs(extra or {}) do payload[k] = v end
+            return act(src, 'teleport', payload)
+        end
+        local keepGrants = Config.Permissions.builderTeleport
+        Config.Permissions.builderTeleport = {}
+        local okCfgA, confA = cb(3, 'builder:config', {})
+        H.eq(okCfgA and confA.teleport, true, 'an admin\'s builder offers Teleport')
+        local okCfgS, confS = cb(1, 'builder:config', {})
+        H.eq(okCfgS and confS.teleport, false, 'a supervisor without a grant gets no Teleport')
+        H.eq(select(2, tp(1)), 'err.no_permission', 'and the server refuses him')
+        H.eq(sent(1), nil, 'nothing is sent to him')
+
+        local before = #audits
+        local okA, resA = tp(3, { x = 1.0, y = 2.0, z = 3.0, coords = { x = 1.0, y = 2.0, z = 3.0 } })
+        H.ok(okA and resA.key == 'spawns' and resA.index == 3, 'an admin teleports: ' .. tostring(resA))
+        local ev = sent(3)
+        H.ok(ev and ev.coords and ev.coords.x == stored.x and ev.coords.y == stored.y and ev.coords.z == stored.z,
+            'the client gets the stored point, the payload\'s coordinates are ignored')
+        H.ok(
+            #audits == before + 1 and lastAudit().action == 'builderTeleport' and lastAudit().target == tid
+                and lastAudit().old == '#2' and lastAudit().new == 'spawns#3',
+            'the teleport is audited with mission, location and point'
+        )
+        local okS = tp(3, { key = 'start', index = 1 })
+        local evS = sent(3)
+        H.ok(okS and evS and evS.coords.x == validDef().locations[2].start.coords.x, 'the start of a location too')
+        H.eq(select(2, tp(3, { index = 40 })), 'err.builder_no_point', 'a point that is not stored is refused')
+        local gs = CP.Missions.get('gang_shootout')
+        local okB = tp(3, { missionId = 'gang_shootout', location = 3, key = 'start', index = 1 })
+        local evB = sent(3)
+        H.ok(gs ~= nil and (okB and evB and math.abs(evB.coords.x - gs.locations[3].start.coords.x) < 0.01),
+            'a built-in mission\'s point (Gang Shootout #3 start)')
+
+        Config.Permissions.builderTeleport = { sast = { minGrade = 3 } }
+        H.ok((tp(1)), 'a granted grade (SAST grade 3, minGrade 3) may')
+        H.eq(select(2, cb(1, 'builder:config', {})).teleport, true, 'and his builder offers it')
+        Config.Permissions.builderTeleport = { sast = { minGrade = 4 } }
+        H.eq(select(2, tp(1)), 'err.no_permission', 'a lower grade is refused')
+        Config.Permissions.builderTeleport = { sast = { grades = { 2, 3 } } }
+        H.ok((tp(1)), 'a grade in the grades list may')
+        H.eq(select(2, tp(2)), 'err.no_permission', 'another department\'s grant does not count (FIB)')
+
+        inArena[3] = true
+        H.eq(select(2, tp(3)), 'err.in_arena', 'refused in the arena')
+        H.eq(sent(3), nil, 'and nothing is sent')
+        inArena[3] = nil
+        local keepRuns = CP.Runs
+        CP.Runs = {
+            isOnMission = function(src) return src == 3 end,
+        }
+        H.eq(select(2, tp(3)), 'err.builder_on_run', 'refused on a run')
+        CP.Runs = keepRuns
+        Config.Builder.teleport = false
+        H.eq(select(2, tp(3)), 'err.builder_teleport_off', 'Config.Builder.teleport = false switches it off')
+        H.eq(select(2, cb(3, 'builder:config', {})).teleport, false, 'and the button goes')
+        Config.Builder.teleport = true
+        Config.Permissions.builderTeleport = keepGrants
+    end
+
     -- the builder switch
     Config.Builder.enabled = false
     H.eq(select(2, act(1, 'save', { id = id, definition = validDef() })), 'err.builder_disabled',

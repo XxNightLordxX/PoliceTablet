@@ -123,5 +123,10 @@
   "err.override_owner": "An edited built-in mission belongs to the server, not to an officer.",
   "err.preview_missing": "Open the preview first.",
   "err.setting_tweak": "The mission loader refuses this tweak.",
-  "err.state_changed": "Someone (or an automatic job) changed this first. Nothing was done: look again."
+  "err.state_changed": "Someone (or an automatic job) changed this first. Nothing was done: look again.",
+  "err.builder_dead": "You can't use the Mission Builder tools while you are down.",
+  "err.builder_on_run": "Finish or leave your current mission before using the Mission Builder tools.",
+  "err.invalid_location": "That mission location is not valid.",
+  "err.builder_teleport_off": "Teleporting to mission points is turned off.",
+  "err.builder_no_point": "That point is not saved in the mission yet. Wait for the save, then try again."
 }
