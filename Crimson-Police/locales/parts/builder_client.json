@@ -945,5 +945,18 @@
   "builder.loc.teleported": "Teleported to {label}",
   "err.builder_teleport_failed": "The teleport did not finish. Try again.",
   "err.builder_teleport_off": "Teleporting to mission points is turned off.",
-  "err.no_response": "No response from the server."
+  "err.no_response": "No response from the server.",
+  "builder.auto.too_far": "Stand near the location first (within {m} m of its start): the game only knows the ground close to you.",
+  "builder.auto.none": "No safe spot was found around the start. Move the start, or place the points by hand.",
+  "builder.auto.short": "Found {n} of {want} safe spots. Keep them and place the rest by hand, or try again.",
+  "builder.auto.fill": "Fill {n} for me",
+  "builder.auto.hint": "Proposes the points around the start, outside its keep-out, on safe ground. Stand near the location.",
+  "builder.auto.proposed": "{n} of {want} points proposed (dashed rings on the map)",
+  "builder.auto.keep": "Keep",
+  "builder.auto.again": "Try again",
+  "builder.auto.by_hand": "Place by hand",
+  "builder.auto.kept": "{n} points added",
+  "builder.map.proposed": "Proposed",
+  "err.builder_auto_off": "Filling points for you is turned off. Use the placement tool.",
+  "err.builder_auto_start": "Place the start first: the points are proposed around it."
 }

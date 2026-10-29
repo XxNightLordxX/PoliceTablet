@@ -1237,6 +1237,179 @@ local function Here(o)
 end
 
 -- ============================================================================
+--                  FILL THE POINTS FOR ME (builderAutoPoints)
+-- ============================================================================
+-- Config.Builder.autoFill: the client proposes a key's spawn points on a ring around the start, beyond its keep-out.
+local AUTO_TRIES_PER_POINT = 12             -- spots tried for each point asked for
+local AUTO_MAX_TRIES = 240                  -- and never more than this in one fill
+local AUTO_MIN_GAP = 3.0                    -- metres between two proposed points of a key with no spacing rule
+local AUTO_NEAR = 250.0                     -- metres: the player stands this close to the anchor (the game only has
+                                            -- the ground and the paths near him)
+local AUTO_MS = 20000                       -- a fill stops looking after this long
+local AUTO_PED_FLAGS = 4 + 8                -- GetSafeCoordForPed: no navmesh inside a building, none in water
+local AUTO_RING = { 15.0, 80.0 }            -- Config.Builder.autoFillRing when it is missing or broken
+
+-- Inner and outer metres from the anchor that a fill tries spots at: the key's keep-out (the start circle plus the
+-- margin for armed spawns, minSpawnFromStart for other spawns, the start circle for any other key) plus
+-- Config.Builder.autoFillRing.
+function B.autoRing(o, ring)
+    ring = type(ring) == 'table' and ring or AUTO_RING
+    local near, far = tonumber(ring[1]) or AUTO_RING[1], tonumber(ring[2]) or AUTO_RING[2]
+    near = math.max(0.0, near)
+    if far < near then far = near end
+    local keepOut = KeepOutOf(o) or tonumber(o.startRadius) or 0.0
+    return keepOut + near, keepOut + far
+end
+
+-- The pure fill: up to count new points for the placement options o (B.parsePlace, with o.start), each one a spot
+-- on the ring (B.autoRing) that deps.snap puts on safe ground, that deps.probe (CP.Spawn.probe's answer) finds ok or
+-- snaps onto the ground, and that passes B.checkSpot with the points already there and the ones proposed before it
+-- (no-build zones, the keep-out, the spacing: the key's minGap, else AUTO_MIN_GAP). deps = { snap(kind, x, y, z) ->
+-- { x, y, z (the ground), h? } or nil, probe(kind, x, y, z, h) -> { status, z, groundZ, normalZ, wall }, lift (the
+-- stored height over the ground), random() -> [0, 1), ring, timeUp() -> true to stop }. Returns { added (the new
+-- points, in order), points (the old ones and the new), tries, dropped }.
+function B.autoFill(o, count, deps)
+    deps = deps or {}
+    local anchor = o.anchor or o.start
+    local points = {}
+    for i, p in ipairs(o.points or {}) do points[i] = p end
+    local out = { added = {}, points = points, tries = 0, dropped = 0 }
+    if not anchor then return out end
+    local want = math.min(math.max(0, math.floor(tonumber(count) or 0)), (o.max or MAX_POINTS) - #points)
+    local inner, outer = B.autoRing(o, deps.ring)
+    local ctx = PlaceCtx(o, points)
+    ctx.multiple = true
+    ctx.maxDistance = nil
+    if not (IsNum(ctx.minGap) and ctx.minGap > 0) then ctx.minGap = AUTO_MIN_GAP end
+    local random = deps.random or math.random
+    local lift = tonumber(deps.lift) or 0.0
+    local face = o.start or anchor
+    local maxTries = math.min(AUTO_MAX_TRIES, want * AUTO_TRIES_PER_POINT)
+    local turn = random() * 360.0
+    while #out.added < want and out.tries < maxTries do
+        out.tries = out.tries + 1
+        -- the golden angle spreads the tries round the ring; the distance is even over the ring's area
+        local a = math.rad(turn + out.tries * 137.508 + random() * 20.0)
+        local d = math.sqrt(inner * inner + (outer * outer - inner * inner) * random())
+        local spot = nil
+        local s = deps.snap and deps.snap(o.kind, anchor.x - math.sin(a) * d, anchor.y + math.cos(a) * d, anchor.z)
+        if s and IsNum(s.x) and IsNum(s.y) and IsNum(s.z) then
+            local h = (o.kind == 'vehicle' and IsNum(s.h)) and s.h or headingOf(s, face)
+            local storeZ = s.z + lift
+            local pr = deps.probe and deps.probe(o.kind, s.x, s.y, storeZ, h) or nil
+            if pr and (pr.status == 'ok' or pr.status == 'snap') then
+                if pr.status == 'snap' and IsNum(pr.z) then storeZ = pr.z end
+                local gz = IsNum(pr.groundZ) and pr.groundZ or s.z
+                spot = {
+                    hit = true,
+                    x = s.x,
+                    y = s.y,
+                    z = gz,
+                    groundZ = gz,
+                    normalZ = pr.normalZ,
+                    distance = 0.0,
+                    water = pr.water == true,
+                    blocked = pr.wall == true,
+                    stored = RoundVec({ x = s.x, y = s.y, z = storeZ }),
+                    h = h,
+                }
+            end
+        end
+        if spot and B.checkSpot(spot, ctx) then
+            local p = RoundVec(spot.stored, o.heading, spot.h)
+            points[#points + 1] = p
+            out.added[#out.added + 1] = p
+        else
+            out.dropped = out.dropped + 1
+        end
+        if deps.timeUp and deps.timeUp() then break end
+    end
+    return out
+end
+
+-- The game's side of a fill: a ped spot on the navmesh near it (GetSafeCoordForPed), a vehicle spot at the side of
+-- the nearest road (its node's heading), each on the ground there.
+local function AutoSnap(kind, x, y, z)
+    local found, gz = GetGroundZFor_3dCoord(x + 0.0, y + 0.0, z + 50.0, false)
+    local baseZ = (found == true or found == 1) and gz or z
+    local sx, sy, sz, h
+    if kind == 'vehicle' then
+        local ok, node, nodeH = GetClosestVehicleNodeWithHeading(x + 0.0, y + 0.0, baseZ + 0.0, 1, 3.0, 0)
+        if not (ok == true or ok == 1) or not node then return nil end
+        sx, sy, sz, h = node.x, node.y, node.z, nodeH
+        local side, at = GetPointOnRoadSide(node.x, node.y, node.z, -1)
+        if (side == true or side == 1) and at then sx, sy, sz = at.x, at.y, at.z end
+    else
+        local ok, at = GetSafeCoordForPed(x + 0.0, y + 0.0, baseZ + 1.0, true, AUTO_PED_FLAGS)
+        if not (ok == true or ok == 1) or not at then return nil end
+        sx, sy, sz = at.x, at.y, at.z
+    end
+    local onGround, groundZ = GetGroundZFor_3dCoord(sx + 0.0, sy + 0.0, sz + 2.0, false)
+    return { x = sx, y = sy, z = (onGround == true or onGround == 1) and groundZ or sz, h = h }
+end
+
+local autoBusy = false
+
+-- builderAutoPoints: { ok, reason, wanted, proposed, result }. proposed: the new points; result: a placement result
+-- with the points already there and the proposed ones, the screen applies it only when the builder keeps them.
+local function AutoPoints(o, count)
+    local reply = { ok = false, reason = false, wanted = count, proposed = {} }
+    local anchor = o.anchor or o.start
+    local pos = GetEntityCoords(PlayerPedId())
+    if U.dist2d(pos, anchor) > AUTO_NEAR then
+        reply.reason = CP.L('builder.auto.too_far', { m = math.floor(AUTO_NEAR) })
+        return reply
+    end
+    local bc = BuilderCfg()
+    local model = o.model or DefaultModel(o.kind)
+    local lift = o.kind == 'vehicle' and VehicleDims(model).lift or PED_HEIGHT
+    local Spawn = CP.Spawn
+    local deadline = GetGameTimer() + AUTO_MS
+    local filled = B.autoFill(o, count, {
+        ring = bc.autoFillRing,
+        lift = lift,
+        snap = AutoSnap,
+        probe = function(kind, x, y, z, h)
+            if not (Spawn and Spawn.probe) then return { status = 'ok' } end
+            return Spawn.probe(kind, x, y, z, h, model)
+        end,
+        timeUp = function() return GetGameTimer() >= deadline end,
+    })
+    CP.log(TAG, 'fill of %s location %d key %s: %d of %d points, %d spots tried, %d dropped', o.missionId, o.location,
+        o.key, #filled.added, count, filled.tries, filled.dropped)
+    reply.proposed = filled.added
+    if #filled.added == 0 then
+        reply.reason = CP.L('builder.auto.none')
+        return reply
+    end
+    reply.ok = true
+    if #filled.added < count then
+        reply.reason = CP.L('builder.auto.short', { n = #filled.added, want = count })
+    end
+    local r = NewResult({ kind = 'placement', opts = o }, false)
+    r.points = filled.points
+    if o.streets then r.streets = StreetsOf(filled.points) end
+    reply.result = r
+    return reply
+end
+
+-- The builderAutoPoints payload: the builderPlace one (a ped or vehicle key with many points and a start), with
+-- count (points to add) and an optional anchor (the ring's centre, the start when missing).
+function B.parseAutoPoints(p)
+    local o, err = B.parsePlace(p)
+    if not o then return nil, err end
+    if (o.kind ~= 'ped' and o.kind ~= 'vehicle') or not o.multiple then return nil, 'err.invalid_payload' end
+    if not (IsInt(p.count) and p.count >= 1 and p.count <= MAX_POINTS) then return nil, 'err.invalid_payload' end
+    if p.anchor ~= nil then
+        o.anchor = VecOf(p.anchor)
+        if not o.anchor then return nil, 'err.invalid_payload' end
+        o.anchor.w = nil
+    end
+    if not o.start then return nil, 'err.builder_auto_start' end
+    return o, p.count
+end
+
+-- ============================================================================
 --                               ROUTE RECORDING
 -- ============================================================================
 
@@ -1966,6 +2139,22 @@ local function RegisterActions()
         local why = Refusal()
         if why then return false, why end
         return true, Here(o)
+    end)
+    T.registerClientAction('builderAutoPoints', function(payload)
+        if BuilderCfg().autoFill == false then return false, 'err.builder_auto_off' end
+        local o, count = B.parseAutoPoints(payload)
+        if not o then return false, count end
+        local why = Refusal()
+        if why then return false, why end
+        if autoBusy then return false, 'err.builder_busy' end
+        autoBusy = true
+        local ok, reply = pcall(AutoPoints, o, count)
+        autoBusy = false
+        if not ok then
+            CP.err(TAG, 'fill failed: %s', tostring(reply))
+            return false, 'err.internal'
+        end
+        return true, reply
     end)
     T.registerClientAction('builderRecord', function(payload)
         local o, err = B.parseRecord(payload)

@@ -450,6 +450,7 @@ local RANGE_LISTS = {
     'Spawning.ground.vehicleAbove',
     'Spawning.ground.propAbove',
     'Spawning.contactRing',
+    'Builder.autoFillRing',
 }
 
 -- Settings that must stay smaller than or equal to another one.

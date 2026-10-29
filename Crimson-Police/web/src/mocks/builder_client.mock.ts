@@ -14,6 +14,8 @@ import type {
 } from '../types/builder_server';
 import type {
     AdminMissionsData,
+    BuilderAutoPointsReply,
+    BuilderAutoPointsRequest,
     BuilderHereReply,
     BuilderPlaceRequest,
     BuilderRecordRequest,
@@ -340,6 +342,43 @@ registerMock('client', 'builderTeleport', (p: BuilderTeleportRequest) => {
     if (!p || typeof p.missionId !== 'string' || typeof p.key !== 'string') throw new Error('err.invalid_payload');
     if (running) throw new Error('err.builder_busy');
     return { missionId: p.missionId, location: p.location, key: p.key, index: p.index };
+});
+
+// "Fill N for me": the browser preview proposes count points on a ring 115-180 m round the start, facing it
+let fillTurn = 0;
+registerMock('client', 'builderAutoPoints', (p: BuilderAutoPointsRequest): BuilderAutoPointsReply => {
+    if (!p || typeof p.missionId !== 'string' || typeof p.key !== 'string' || typeof p.count !== 'number')
+        throw new Error('err.invalid_payload');
+    if (!p.start) throw new Error('err.builder_auto_start');
+    if (running) throw new Error('err.builder_busy');
+    fillTurn += 1;
+    const c = p.start;
+    const existing = Array.isArray(p.points) ? p.points : [];
+    const n = Math.max(0, Math.min(p.count, (p.max ?? 200) - existing.length));
+    const proposed: Vec[] = [];
+    for (let i = 0; i < n; i++) {
+        const a = ((fillTurn * 47 + i * 137.508) % 360) * (Math.PI / 180);
+        const d = 115 + ((i * 29 + fillTurn * 13) % 65);
+        const x = c.x - Math.sin(a) * d;
+        const y = c.y + Math.cos(a) * d;
+        const face = ((Math.atan2(-(c.x - x), c.y - y) * 180) / Math.PI + 360) % 360;
+        proposed.push(p.heading ? v4(x, y, c.z + 1, face) : v3(x, y, c.z + 1));
+    }
+    const result = {
+        kind: 'placement',
+        missionId: p.missionId,
+        location: p.location,
+        key: p.key,
+        cancelled: false,
+        points: [...existing, ...proposed],
+    } as BuilderClientResult;
+    return {
+        ok: n > 0,
+        reason: n > 0 ? false : 'No safe spot was found around the start.',
+        wanted: p.count,
+        proposed,
+        result,
+    };
 });
 
 registerMock('client', 'builderWaypoint', (p: { coords?: Vec3 }) => {

@@ -33,6 +33,8 @@ export interface LocationMapProps {
     keepOut?: number | null;
     // the point the point list points at: a ring around it on the map
     highlight?: { key: string; index: number } | null;
+    // "Fill N for me": the proposed points, drawn as dashed rings until they are kept
+    proposed?: Vec[] | null;
 }
 
 interface Box {
@@ -89,6 +91,7 @@ export function LocationMap({
     className,
     keepOut: armedKeepOut,
     highlight,
+    proposed,
 }: LocationMapProps) {
     const start = location.start;
     const keepOut = armedKeepOut ?? (Number(cfg.minSpawnFromStart) || 30);
@@ -108,6 +111,7 @@ export function LocationMap({
             (m?.rejectedSamples ?? []).forEach(p => grow(box, p.x, p.y, 4));
             return { spec: s, colour, pts, route: isRoute(v) ? v : null, lists: s.lists ? listsOf(v) : null, meta: m };
         });
+        (proposed ?? []).forEach(p => grow(box, p.x, p.y, 4));
         if (!isFinite(box.minX)) {
             box.minX = -100;
             box.maxX = 100;
@@ -129,7 +133,7 @@ export function LocationMap({
                 z.coords.y - z.radius < cy0 + h / 2,
         );
         return { layers, view, zones, step: niceStep(Math.min(w, h * 3)) };
-    }, [location, specs, start, keepOut, meta, cfg.noBuildZones, aspect]);
+    }, [location, specs, start, keepOut, meta, cfg.noBuildZones, aspect, proposed]);
 
     const { view, step } = data;
     const px = view.w / Math.max(200, width); // metres per screen pixel
@@ -348,6 +352,19 @@ export function LocationMap({
                         </g>
                     );
                 })}
+                {(proposed ?? []).map((p, i) => (
+                    <circle
+                        key={`p${i}`}
+                        cx={sx(p)}
+                        cy={sy(p)}
+                        r={dot * 1.3}
+                        className="builder_client-map__proposed"
+                        strokeWidth={1.4 * px}
+                        strokeDasharray={`${2 * px} ${1.5 * px}`}
+                    >
+                        <title>{t('builder.map.proposed')}</title>
+                    </circle>
+                ))}
                 {lit ? (
                     <circle
                         cx={sx(lit)}

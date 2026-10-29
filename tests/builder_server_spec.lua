@@ -2208,6 +2208,7 @@ local function Body()
         local okCfg, conf = cb(1, 'builder:config', {})
         H.ok(okCfg and conf.requireTestToPublish == false, 'the builder is told testing is optional')
         H.eq(okCfg and conf.useMyPosition, true, '"Use my position" is offered (Config.Builder.useMyPosition)')
+        H.eq(okCfg and conf.autoFill, true, '"Fill N for me" is offered (Config.Builder.autoFill)')
         local okL, list = cb(1, 'builder:list', {})
         local entry = nil
         for _, e in ipairs(okL and list.missions or {}) do if e.id == hid then entry = e end end

@@ -3979,6 +3979,11 @@ Config.Builder = {
     useMyPosition = true,                      -- true = the Locations step has "Set start here" and "Add here":
                                                -- the point goes where you stand (or your vehicle is) and the tablet
                                                -- stays open; false = points are only placed with the aim tool
+    autoFill = true,                           -- true = a spawn point row has "Fill N for me": the game proposes
+                                               -- the points around the start, outside its keep-out, on safe ground
+                                               -- (you keep them, try again or place them by hand); false = no button
+    autoFillRing = { 15.0, 80.0 },             -- metres beyond the keep-out that "Fill N for me" puts points at
+                                               -- (nearest, furthest)
 
     -- On: a Teleport button next to each point on the Locations step puts you on the ground there (the server reads
     -- the saved point and logs it). Admins always; others only with Permissions.builderTeleport. Off: no button.

@@ -140,6 +140,24 @@ export interface BuilderTeleportRequest {
     key: string;
     index: number;
 }
+// builderAutoPoints (Config.Builder.autoFill): the builderPlace payload of a ped or vehicle key with many points and a
+// start, plus count (points to add) and anchor (the ring's centre, the start when missing). The answer comes once the
+// game has tried its spots (a few seconds); the tablet stays open.
+export interface BuilderAutoPointsRequest extends BuilderPlaceRequest {
+    count: number;
+    anchor?: Vec3;
+}
+export interface BuilderAutoPointsReply {
+    // at least one point was proposed
+    ok: boolean;
+    // why none, or why fewer than wanted, in words (false when all were found)
+    reason: string | false;
+    wanted: number;
+    // the new points only
+    proposed: Vec[];
+    // a placement result with the points already there and the proposed ones (only when ok)
+    result?: BuilderClientResultEx;
+}
 export interface BuilderRecordRequest extends BuilderRecordPayload {
     label?: string;
     ui?: BuilderUi;

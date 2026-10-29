@@ -213,6 +213,17 @@ do
         'Builder.useMyPosition is a true/false setting, shipped on, with its comment'
     )
     H.ok(
+        E('Builder.autoFill') ~= nil and E('Builder.autoFill').kind == 'boolean'
+            and E('Builder.autoFill').default == true
+            and E('Builder.autoFill').desc:find('Fill N for me', 1, true) ~= nil,
+        'Builder.autoFill is a true/false setting, shipped on, with its comment'
+    )
+    H.ok(
+        E('Builder.autoFillRing').kind == 'range' and E('Builder.autoFillRing').size == 2
+            and (E('Builder.autoFillRing').desc or ''):find('beyond the keep-out', 1, true) ~= nil,
+        'Builder.autoFillRing edits as a nearest and a furthest distance, with its comment'
+    )
+    H.ok(
         E('Builder.teleport') ~= nil and E('Builder.teleport').kind == 'boolean'
             and E('Builder.teleport').default == true
             and E('Builder.teleport').desc:find('the server reads the saved point', 1, true) ~= nil,

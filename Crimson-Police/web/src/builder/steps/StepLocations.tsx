@@ -19,7 +19,7 @@ import { t } from '../../shared/i18n';
 import { clientAction } from '../../shared/nui';
 import { toast } from '../../shared/toast';
 import type { BuilderKerbSpot, BuilderLocation, BuilderRoute, Vec3 } from '../../types/builder_server';
-import type { BuilderTeleportRequest, PointSpec, RouteMeta } from '../../types/builder_client';
+import type { BuilderAutoPointsReply, BuilderTeleportRequest, PointSpec, RouteMeta } from '../../types/builder_client';
 import { CountBadge, ErrorNotes } from '../controls';
 import { dist2d, errorsAt, errorsUnder, isRoute, listsOf, pointsOf, routeLength } from '../defUtils';
 import { KEY_COLOURS, LocationMap, PointList } from '../LocationMap';
@@ -77,6 +77,11 @@ function locationProgress(loc: BuilderLocation, specs: PointSpec[]): { done: num
 // a hint, never an error: this many locations or more make a mission repeat less
 const VARIETY_LOCATIONS = 3;
 
+// "Fill N for me" fills keys of people or vehicles with many points that appear around a start (Config.Builder.autoFill)
+function canAutoFill(spec: PointSpec): boolean {
+    return spec.multiple && !spec.lists && !!spec.spawn && (spec.kind === 'ped' || spec.kind === 'vehicle');
+}
+
 export function StepLocations({ ed, cfg, def, ro, scope }: StepProps) {
     useStoreVersion();
     const [sel, setSel] = useState(() =>
@@ -87,6 +92,8 @@ export function StepLocations({ ed, cfg, def, ro, scope }: StepProps) {
     );
     const [focus, setFocus] = useState<string | null>(null);
     const [lit, setLit] = useState<{ key: string; index: number } | null>(null);
+    // "Fill N for me": the proposal waiting for Keep / Try again / Place by hand (Config.Builder.autoFill)
+    const [fill, setFill] = useState<{ key: string; li: number; reply: BuilderAutoPointsReply } | null>(null);
     const specs = useMemo(() => missionPointSpecs(cfg, def), [cfg, def]);
     const minLoc = minLocationsFor(cfg, ed.record?.overridesBuiltin);
     const maxLoc = Number(cfg.maxLocations) || 20;
@@ -98,6 +105,7 @@ export function StepLocations({ ed, cfg, def, ro, scope }: StepProps) {
     const pick = (n: number) => {
         setSel(n);
         setLit(null);
+        setFill(null);
         setEditorMemory(scope, { location: n });
     };
     const meta = (key: string) => routeMetaOf(ed.id, li, key);
@@ -180,6 +188,20 @@ export function StepLocations({ ed, cfg, def, ro, scope }: StepProps) {
                           : t('builder.points.start'),
                   )
             : null;
+
+    const fillHere = fill && fill.li === li ? fill : null;
+    const runFill = async (spec: PointSpec, count: number) => {
+        setFill(null);
+        const reply = await ed.autoFill(spec, li, count);
+        if (reply) setFill({ key: spec.key, li, reply });
+    };
+    const keepFill = async (spec: PointSpec) => {
+        const f = fillHere;
+        if (!f || f.key !== spec.key || !f.reply.result) return;
+        setFill(null);
+        if (await ed.keepFill(spec, f.reply.result))
+            toast('success', t('builder.auto.kept', { n: f.reply.proposed.length }));
+    };
 
     const topErrors = errorsAt(ed.errors, 'locations');
     return (
@@ -306,6 +328,7 @@ export function StepLocations({ ed, cfg, def, ro, scope }: StepProps) {
                                 height={230}
                                 keepOut={armedMin}
                                 highlight={lit}
+                                proposed={fillHere ? fillHere.reply.proposed : null}
                             />
                             <PointList
                                 rows={rows}
@@ -400,6 +423,12 @@ export function StepLocations({ ed, cfg, def, ro, scope }: StepProps) {
                                         ro={ro}
                                         onClear={() => setConfirm({ kind: 'clear', spec: s })}
                                         onFocus={setFocus}
+                                        onFill={
+                                            cfg.autoFill !== false && canAutoFill(s) ? n => void runFill(s, n) : null
+                                        }
+                                        proposal={fillHere && fillHere.key === s.key ? fillHere.reply : null}
+                                        onKeep={() => void keepFill(s)}
+                                        onDiscard={() => setFill(null)}
                                     />
                                 ))}
                                 {!specs.length ? (
@@ -670,6 +699,10 @@ function PointRow({
     ro,
     onClear,
     onFocus,
+    onFill,
+    proposal,
+    onKeep,
+    onDiscard,
 }: {
     spec: PointSpec;
     colour: string;
@@ -684,6 +717,12 @@ function PointRow({
     ro: boolean;
     onClear: () => void;
     onFocus: (k: string | null) => void;
+    // "Fill N for me" (Config.Builder.autoFill), null when this key cannot be filled
+    onFill: ((count: number) => void) | null;
+    // the proposal waiting for this key, null when none
+    proposal: BuilderAutoPointsReply | null;
+    onKeep: () => void;
+    onDiscard: () => void;
 }) {
     const v = loc[spec.key];
     const route = isRoute(v) ? v : null;
@@ -699,6 +738,8 @@ function PointRow({
     const need = spec.lists ? 1 : spec.kind === 'route' ? 2 : spec.min;
     const errs = errorsUnder(ed.errors, `locations.${li}.${spec.key}`);
     const needStart = spec.spawn && !loc.start;
+    // "Fill N for me": the points still missing up to the key's least (never past its most)
+    const fillCount = Math.max(0, Math.min(spec.min, spec.max) - have);
     const wait = rangeOf(cfg, 'escort', 'stopWait', [10, 60, 20]);
     const tags: string[] = [];
     if (spec.heading) tags.push(t('builder.loc.tag_heading'));
@@ -880,6 +921,38 @@ function PointRow({
                         ))}
                     </div>
                 ) : null}
+                {proposal ? (
+                    <div className="builder_client-fill">
+                        <span className="builder_client-fill__text cp-num">
+                            <Icon name="mapPin" size={13} />
+                            {t('builder.auto.proposed', { n: proposal.proposed.length, want: proposal.wanted })}
+                        </span>
+                        <Button size="sm" variant="primary" icon="check" disabled={disabled} onClick={onKeep}>
+                            {t('builder.auto.keep')}
+                        </Button>
+                        <Button
+                            size="sm"
+                            variant="secondary"
+                            icon="refresh"
+                            disabled={disabled || !onFill}
+                            onClick={() => onFill?.(proposal.wanted)}
+                        >
+                            {t('builder.auto.again')}
+                        </Button>
+                        <Button
+                            size="sm"
+                            variant="ghost"
+                            icon="mapPin"
+                            disabled={disabled}
+                            onClick={() => {
+                                onDiscard();
+                                void ed.place(spec, li);
+                            }}
+                        >
+                            {t('builder.auto.by_hand')}
+                        </Button>
+                    </div>
+                ) : null}
                 <ErrorNotes errors={errs} compact />
             </div>
             {!ro ? (
@@ -929,6 +1002,18 @@ function PointRow({
                         </>
                     ) : (
                         <>
+                            {onFill && !proposal && fillCount > 0 ? (
+                                <Button
+                                    size="sm"
+                                    variant="secondary"
+                                    icon="zap"
+                                    disabled={disabled || needStart}
+                                    title={t('builder.auto.hint')}
+                                    onClick={() => onFill(fillCount)}
+                                >
+                                    {t('builder.auto.fill', { n: fillCount })}
+                                </Button>
+                            ) : null}
                             {cfg.useMyPosition !== false && !spec.lists ? (
                                 <Button
                                     size="sm"

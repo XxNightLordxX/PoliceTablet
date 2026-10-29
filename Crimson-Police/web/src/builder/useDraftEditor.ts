@@ -18,6 +18,8 @@ import type {
     BuilderValidateResult,
 } from '../types/builder_server';
 import type {
+    BuilderAutoPointsReply,
+    BuilderAutoPointsRequest,
     BuilderClientResultEx,
     BuilderHereReply,
     BuilderPlaceRequest,
@@ -84,6 +86,10 @@ export interface DraftEditor {
     here: (spec: PointSpec, location: number, index?: number) => Promise<boolean>;
     // the point list's Delete: point index (1-based) of a key goes, stored at once (autosave)
     removePoint: (key: string, location: number, index: number) => Promise<boolean>;
+    // "Fill N for me" (Config.Builder.autoFill): the game proposes count new points around the start; the draft does
+    // not change until keepFill applies the reply's result (null: refused, the toast says why)
+    autoFill: (spec: PointSpec, location: number, count: number) => Promise<BuilderAutoPointsReply | null>;
+    keepFill: (spec: PointSpec, result: BuilderClientResultEx) => Promise<boolean>;
     recordRoute: (spec: PointSpec, location: number) => Promise<boolean>;
     testDrive: (spec: PointSpec, location: number) => Promise<boolean>;
 }
@@ -623,6 +629,37 @@ export function useDraftEditor(
         return true;
     };
 
+    const autoFill = async (spec: PointSpec, location: number, count: number) => {
+        if (readOnly) return null;
+        const base = placePayload(spec, location);
+        if (!base) return null;
+        const payload: BuilderAutoPointsRequest = { ...base, count };
+        setToolBusy(true);
+        const res = await clientAction<BuilderAutoPointsReply>('builderAutoPoints', payload);
+        if (!mounted.current) return null;
+        setToolBusy(false);
+        if (!res.ok || !res.data) {
+            toast('error', t(res.error ?? 'err.internal'));
+            return null;
+        }
+        if (!res.data.ok || !res.data.result) {
+            toast('warning', res.data.reason || t('err.internal'));
+            return null;
+        }
+        if (res.data.reason) toast('info', res.data.reason);
+        return res.data;
+    };
+
+    const keepFill = async (spec: PointSpec, result: BuilderClientResultEx) => {
+        const before = defRef.current;
+        if (readOnly || !before) return false;
+        const applied = applyResult(before, result, spec, config);
+        toast(applied.tone, t(applied.messageKey, applied.vars));
+        if (!applied.def) return false;
+        await commitNow(applied.def, before);
+        return true;
+    };
+
     const removePoint = async (key: string, location: number, index: number) => {
         const before = defRef.current;
         if (readOnly || !before || !before.locations[location - 1]) return false;
@@ -697,6 +734,8 @@ export function useDraftEditor(
         place,
         here,
         removePoint,
+        autoFill,
+        keepFill,
         recordRoute,
         testDrive,
     };

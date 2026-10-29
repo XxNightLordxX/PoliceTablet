@@ -273,6 +273,7 @@ for _, name in ipairs({
     'builderCancel',
     'builderWaypoint',
     'builderHere',
+    'builderAutoPoints',
     'builderTeleport',
 }) do
     H.ok(type(T.actions[name]) == 'function', 'client action registered: ' .. name)
@@ -2055,6 +2056,177 @@ do
     _G.SetEntityCoords, CP.Net.action = keep.set, keep.net
     _G.DoScreenFadeOut, _G.DoScreenFadeIn, _G.IsScreenFadedOut = keep.fadeOut, keep.fadeIn, keep.faded
     _G.RequestCollisionAtCoord = keep.collision
+end
+
+-- ============================================================================
+--                                     B10
+-- ============================================================================
+-- FILL THE POINTS FOR ME (B.autoFill, builderAutoPoints).
+
+do
+    local U = CP.U
+    -- a repeatable random(): the same spots every run
+    local seed = 12345
+    local function Random()
+        seed = (seed * 1103515245 + 12345) % 2147483648
+        return seed / 2147483648
+    end
+    local start = { x = 1000.0, y = -3000.0, z = 5.0 }
+    local o = assert(B.parsePlace({
+        missionId = 'custom_shootout',
+        location = 1,
+        key = 'hostiles',
+        kind = 'ped',
+        heading = true,
+        multiple = true,
+        min = 11,
+        max = 20,
+        points = {},
+        start = start,
+        spawn = true,
+        armed = true,
+        startRadius = 60,
+        minGap = 4,
+        otherStarts = {},
+    }))
+    local keepOut = B.armedKeepOut({ armed = true, startRadius = 60, spawnMargin = 40, minFromStart = 30 })
+    H.eq(keepOut, 100, 'the armed keep-out of a 60 m start: 100 m')
+    local inner, outer = B.autoRing(o, { 15.0, 80.0 })
+    H.eq(inner .. '/' .. outer, '115.0/180.0', 'the ring is Config.Builder.autoFillRing beyond the keep-out')
+    local walls = 0
+    local snapped = 0
+    local deps = {
+        ring = { 15.0, 80.0 },
+        lift = 1.0,
+        random = Random,
+        snap = function(_, x, y)
+            snapped = snapped + 1
+            if snapped % 5 == 0 then
+                return nil
+            end -- no navmesh there
+            -- the snap may pull a spot inwards: some land inside the keep-out and must be dropped
+            local dx, dy = x - start.x, y - start.y
+            local k = snapped % 4 == 0 and 0.5 or 1.0
+            return { x = start.x + dx * k, y = start.y + dy * k, z = 5.0 }
+        end,
+        probe = function(_, _, _, z)
+            walls = walls + 1
+            if walls % 3 == 0 then return { status = 'in_wall', wall = true } end
+            if walls % 7 == 0 then return { status = 'snap', z = 6.2, groundZ = 5.2 } end
+            return { status = 'ok', z = z, groundZ = 5.0, normalZ = 1.0, wall = false }
+        end,
+    }
+    local r = B.autoFill(o, 11, deps)
+    H.eq(#r.added, 11, 'a fill proposes the 11 points asked for')
+    H.eq(#r.points, 11, 'with none there before')
+    H.ok(r.dropped > 0, 'spots with no ground, in a wall or inside the keep-out are dropped: ' .. r.dropped)
+    H.eq(r.tries, #r.added + r.dropped, 'every try is a point or a drop')
+    local inside, close, noHeading, bad = 0, 0, 0, 0
+    for i, p in ipairs(r.added) do
+        if U.dist2d(p, start) < keepOut then inside = inside + 1 end
+        for j = i + 1, #r.added do
+            if U.dist(p, r.added[j]) < 4 then close = close + 1 end
+        end
+        if type(p.w) ~= 'number' then noHeading = noHeading + 1 end
+        if p.z ~= 6.0 and p.z ~= 6.2 then bad = bad + 1 end
+    end
+    H.eq(inside, 0, 'no proposed point is inside the keep-out (the arrival circle plus the margin)')
+    H.eq(close, 0, 'every two proposed points are minGap (4 m) apart')
+    H.eq(noHeading, 0, 'a heading key gets headings (facing the start)')
+    H.eq(bad, 0, 'stored 1 m above the ground, or where the probe snapped it')
+    local p1 = r.added[1]
+    H.ok(math.abs(((p1.w - B.headingOf(p1, start)) + 180) % 360 - 180) < 0.02, 'the first point faces the start')
+
+    -- the points already there are kept and counted for the spacing; the key's max caps the fill
+    local o2 = assert(B.parsePlace({
+        missionId = 'custom_shootout',
+        location = 1,
+        key = 'hostiles',
+        kind = 'ped',
+        multiple = true,
+        max = 3,
+        points = { { x = 1120.0, y = -3000.0, z = 6.0 } },
+        start = start,
+        spawn = true,
+        armed = true,
+        startRadius = 60,
+        otherStarts = {},
+    }))
+    r = B.autoFill(o2, 11, deps)
+    H.eq(#r.added, 2, 'a fill never goes past the key\'s max')
+    H.eq(r.points[1].x, 1120.0, 'the point already placed is kept first')
+    for _, p in ipairs(r.added) do
+        H.ok(U.dist(p, r.points[1]) >= 3.0, 'a proposed point keeps 3 m from a placed one')
+    end
+
+    -- nothing safe: the fill stops after its tries, with nothing proposed
+    r = B.autoFill(o, 11, {
+        random = Random,
+        snap = function(_, x, y) return { x = x, y = y, z = 5.0 } end,
+        probe = function() return { status = 'in_water', water = true } end,
+    })
+    H.eq(#r.added, 0, 'no point when every spot fails')
+    H.eq(r.tries, 132, 'and it stops after 12 tries per point')
+
+    -- the client action
+    while B.active() do
+        B.cancel('ui')
+        H.step(100)
+    end
+    local keep = { safe = _G.GetSafeCoordForPed, side = _G.GetPointOnRoadSide, spawn = CP.Spawn }
+    _G.GetSafeCoordForPed = function(x, y, z) return true, vector3(x, y, z) end
+    _G.GetPointOnRoadSide = function(x, y, z) return true, vector3(x + 2.0, y, z) end
+    CP.Spawn = {
+        probe = function(_, _, _, z) return { status = 'ok', z = z, groundZ = 5.0, normalZ = 1.0 } end,
+    }
+    W.groundZ = 5.0
+    W.pos = { x = 1010.0, y = -3000.0, z = 6.0 }
+    local payload = {
+        missionId = 'custom_shootout',
+        location = 1,
+        key = 'hostiles',
+        kind = 'ped',
+        heading = true,
+        multiple = true,
+        min = 11,
+        max = 20,
+        points = {},
+        start = start,
+        spawn = true,
+        armed = true,
+        startRadius = 60,
+        otherStarts = {},
+        count = 11,
+    }
+    local ok, reply = Act('builderAutoPoints', payload)
+    H.eq(ok, true, 'builderAutoPoints answers: ' .. tostring(reply))
+    H.eq(reply.ok, true, 'the points are proposed')
+    H.eq(#reply.proposed, 11, '11 proposed points')
+    H.eq(reply.result and reply.result.kind, 'placement', 'with a placement result to keep')
+    H.eq(#reply.result.points, 11, 'holding them')
+    H.eq(B.active(), nil, 'no tool was started')
+    local veh = {}
+    for k, v in pairs(payload) do veh[k] = v end
+    veh.kind, veh.key, veh.count, veh.model = 'vehicle', 'cars', 2, 'sultan'
+    ok, reply = Act('builderAutoPoints', veh)
+    H.eq(ok and reply.ok and #reply.proposed, 2, 'vehicle points are proposed at the side of the road')
+    W.pos = { x = 1500.0, y = -3000.0, z = 6.0 }
+    ok, reply = Act('builderAutoPoints', payload)
+    H.eq(ok and reply.ok, false, 'refused while the player is far from the location')
+    H.ok(tostring(reply.reason):find('Stand near the location', 1, true) ~= nil, 'and he is told to stand near it')
+    W.pos = { x = 1010.0, y = -3000.0, z = 6.0 }
+    payload.start = nil
+    H.eq(select(2, Act('builderAutoPoints', payload)), 'err.builder_auto_start', 'a fill needs the start')
+    payload.start = start
+    payload.count = nil
+    H.eq(select(2, Act('builderAutoPoints', payload)), 'err.invalid_payload', 'a fill needs a count')
+    payload.count = 11
+    H.eq(select(2, Act('builderAutoPoints', placePayload)), 'err.invalid_payload', 'a payload with no count')
+    Config.Builder.autoFill = false
+    H.eq(select(2, Act('builderAutoPoints', payload)), 'err.builder_auto_off', 'Config.Builder.autoFill = false')
+    Config.Builder.autoFill = true
+    _G.GetSafeCoordForPed, _G.GetPointOnRoadSide, CP.Spawn = keep.safe, keep.side, keep.spawn
+    W.pos = { x = 1017.5, y = -3108.4, z = 5.9 }
 end
 
 -- ============================================================================

@@ -1168,6 +1168,12 @@
     stroke: var(--cp-text);
 }
 
+/* "Fill N for me": proposed points, not kept yet */
+.builder_client-map__proposed {
+    fill: none;
+    stroke: var(--cp-accent);
+}
+
 /* the point list under the location map: one row per point */
 .builder_client-plist {
     list-style: none;
@@ -1316,6 +1322,24 @@
     color: var(--cp-muted);
     font-size: var(--cp-fs-xs);
     line-height: 1.45;
+}
+
+/* "Fill N for me": the proposal and its Keep / Try again / Place by hand */
+.builder_client-fill {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-top: 6px;
+}
+
+.builder_client-fill__text {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-right: auto;
+    color: var(--cp-accent);
+    font-size: var(--cp-fs-xs);
 }
 
 .builder_client-point__warn {

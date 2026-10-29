@@ -303,6 +303,8 @@ export interface BuilderConfig {
     useStartRoute: boolean;
     // "Set start here" / "Add here" on the Locations step (Config.Builder.useMyPosition); missing = on
     useMyPosition?: boolean;
+    // "Fill N for me" on a spawn point row (Config.Builder.autoFill); missing = on
+    autoFill?: boolean;
     // "Teleport" next to each point: Config.Builder.teleport is on and this caller may (admins, or a
     // Config.Permissions.builderTeleport grant for his department and grade); missing = no
     teleport?: boolean;
