@@ -298,7 +298,7 @@ local function CheckLocation(o, loc, li, strict)
             end
             if strict and start and U.dist(p, start) < Config.Builder.minSpawnFromStart then
                 return Bad('block.hostile_waves.invalid.spawns_start',
-                    { location = li, min = Config.Builder.minSpawnFromStart })
+                    { location = li, min = math.ceil(Config.Builder.minSpawnFromStart) })
             end
         end
         return true

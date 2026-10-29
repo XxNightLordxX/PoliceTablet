@@ -19,6 +19,8 @@ const ORDER = [
     'flee_arrest',
     'search_area',
     'pursuit',
+    'field_contact',
+    'process_scene',
     'escort',
     'checkpoint_route',
 ];

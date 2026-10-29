@@ -1371,6 +1371,81 @@ end
 -- ============================================================================
 
 -- The location keys of one objective's armed spawn points (ARMED_FIELDS), added to `into` (key -> true).
+-- The name officers see in the Builder for the location key each objective field names (builder.points.*, the same
+-- labels as web/src/builder/schema.ts): error texts say "Hostile spawn points", not "spawns".
+local Points = {}   -- error-text names for location keys (labels, name, startReason)
+do
+    local POINT_LABELS = {
+        hostile_waves = { spawns = 'spawns', ['boss.spawn'] = 'boss', ['spawnSets.keys'] = 'spawn_set' },
+        escort = { route = 'route', ambushPoints = 'ambush' },
+        pursuit = { route = 'flee_route', spawn = 'suspect_vehicle', spawns = 'suspect_vehicles' },
+        checkpoint_route = { checkpoints = 'checkpoints' },
+        interact_points = { points = 'interact' },
+        skill_check = { targets = 'devices' },
+        protect_rescue = { npcs = 'hostages', safe = 'safe' },
+        flee_arrest = {
+            door = 'door',
+            suspect = 'suspect',
+            fleeTo = 'flee_to',
+            ['associates.spawns'] = 'associates',
+            spawns = 'inmates',
+            routes = 'flee_paths',
+        },
+        search_area = { center = 'center', clues = 'clues', hiding = 'hiding' },
+        field_contact = {
+            spots = 'kerb_spots',
+            car = 'contact_car',
+            peopleSpots = 'person_spots',
+            fleeTo = 'flee_paths',
+            transport = 'transport',
+        },
+        process_scene = { scene = 'scene_marker', coroner = 'coroner' },
+    }
+
+    -- Adds location key -> builder.points.* label key for one objective (the first objective naming a key wins).
+    function Points.labels(blockId, eff, into)
+        for field, label in pairs(POINT_LABELS[blockId] or {}) do
+            local v = U.getPath(eff, field)
+            local list = type(v) == 'table' and v or { v }
+            for _, k in ipairs(list) do
+                if type(k) == 'string' and into[k] == nil then into[k] = 'builder.points.' .. label end
+            end
+        end
+        return into
+    end
+
+    -- The plain name of a location key: its Builder label, else the shared label of that name, else the key itself.
+    function Points.name(labels, key, value)
+        local lk = labels[key] or ('builder.points.' .. tostring(key))
+        if lk == 'builder.points.flee_route' and type(value) == 'table' and value.loop == true then
+            lk = 'builder.points.race_loop'
+        end
+        local text = L(lk)
+        if type(text) ~= 'string' or text == lk then return tostring(key) end
+        return text
+    end
+
+    -- The block reasons that say "every point must be at least {min} m from the start" (each block's own check, the
+    -- same rule as builder.error.spawn_start): B.validate keeps one message for that mistake.
+    local START_REASONS = {
+        'block.hostile_waves.invalid.spawns_start',
+        'block.protect_rescue.invalid.points_start',
+        'block.flee_arrest.invalid.points_start',
+        'block.pursuit.invalid.points_start',
+        'block.search_area.invalid.points_start',
+        'block.field_contact.invalid.points_start',
+    }
+
+    function Points.startReason(msg, li, minFromStart)
+        for _, k in ipairs(START_REASONS) do
+            for _, min in ipairs({ math.ceil(minFromStart), minFromStart }) do
+                if msg == L(k, { location = li, min = min }) then return true end
+            end
+        end
+        return false
+    end
+end
+
 local function ArmedKeys(blockId, eff, into)
     for _, field in ipairs(ARMED_FIELDS[blockId] or {}) do
         local v = U.getPath(eff, field)
@@ -1787,6 +1862,9 @@ function B.validate(def, opts)
     local minTotal = 0
     local spawnKeys = {}   -- location key -> true
     local armedKeys = {}   -- location key -> true (armed spawns: outside the start circle plus the margin)
+    local pointLabels = {} -- location key -> builder.points.* (the name error texts use)
+    local startReason = {} -- location index -> the block error that already says "too close to the start"
+    local minFromStart = tonumber(bc.minSpawnFromStart) or 30
     local armed = 0
     local blockIds = {}
     for i, obj in ipairs(objectives) do
@@ -1818,6 +1896,7 @@ function B.validate(def, opts)
                 end
                 local rtObj = type(rt.objectives) == 'table' and rt.objectives[i] or B.toRuntime(obj)
                 local eff = EffectiveObjective(impl, rtObj)
+                Points.labels(blockId, eff, pointLabels)
                 -- an override: an objective left as the shipped file has it is checked as the built-in is;
                 -- a changed one with the custom rules, the shipped names allowed and unraised bonuses kept
                 local trusted, probe = false, rtObj
@@ -1841,6 +1920,14 @@ function B.validate(def, opts)
                             if not seen[msg] then
                                 seen[msg] = true
                                 AddError(errors, path, nil, { n = i, location = li }, msg)
+                                if not startReason[li] and Points.startReason(msg, li, minFromStart) then
+                                    local own = ArmedKeys(blockId, eff, {})
+                                    for _, field in ipairs(SPAWN_FIELDS[blockId] or {}) do
+                                        local k = U.getPath(eff, field)
+                                        if type(k) == 'string' then own[k] = true end
+                                    end
+                                    startReason[li] = { err = errors[#errors], keys = own }
+                                end
                             end
                         end
                     end
@@ -1856,7 +1943,7 @@ function B.validate(def, opts)
                                 CollectPoints(v, pts)
                                 if #pts == 0 then
                                     AddError(errors, ('locations.%d.%s'):format(li, key), 'builder.error.point_missing',
-                                        { key = key, location = li, n = i })
+                                        { key = Points.name(pointLabels, key, v), location = li, n = i })
                                 end
                             end
                         end
@@ -1891,7 +1978,6 @@ function B.validate(def, opts)
     elseif #locations > MAX_LOCATIONS then
         AddError(errors, 'locations', 'builder.error.max_locations', { max = MAX_LOCATIONS })
     end
-    local minFromStart = tonumber(bc.minSpawnFromStart) or 30
     local search = SearchCircle(rt.objectives)
     local starts = {}
     -- the built-ins a duplicate's points are compared with, found once for every location (only when one is close)
@@ -1934,7 +2020,7 @@ function B.validate(def, opts)
                 local z = ZoneOf(startCoords)
                 if z then
                     AddError(errors, lp .. '.start', 'builder.error.point_zone',
-                        { key = 'start', location = li, zone = tostring(z.label) })
+                        { key = Points.name(pointLabels, 'start'), location = li, zone = tostring(z.label) })
                 end
             end
             -- armed spawns: outside this start's circle plus Config.Builder.spawnMargin (a built-in's own points at
@@ -1945,6 +2031,7 @@ function B.validate(def, opts)
                 if key ~= 'label' and key ~= 'start' then
                     local v = loc[key]
                     local kp = lp .. '.' .. key
+                    local name = Points.name(pointLabels, key, v)
                     local pts = {}
                     CollectPoints(v, pts)
                     local badCoords, badZone, badStart = false, nil, false
@@ -1960,26 +2047,35 @@ function B.validate(def, opts)
                         end
                     end
                     if badCoords then
-                        AddError(errors, kp, 'builder.error.point_coords', { key = key, location = li })
+                        AddError(errors, kp, 'builder.error.point_coords', { key = name, location = li })
                     end
                     if badZone then
                         AddError(errors, kp, 'builder.error.point_zone',
-                            { key = key, location = li, zone = tostring(badZone.label) })
+                            { key = name, location = li, zone = tostring(badZone.label) })
                     end
-                    -- an armed key's rule is the larger one (armedMin >= minFromStart): one message for one mistake
+                    -- an armed key's rule is the larger one (armedMin >= minFromStart): one message for one mistake,
+                    -- so it replaces the block's own "too close" reason; the 30 m floor the block already said is
+                    -- not said twice
                     if badArmed then
+                        local said = startReason[li]
+                        if said and said.keys[key] then
+                            for x = #errors, 1, -1 do
+                                if errors[x] == said.err then table.remove(errors, x) end
+                            end
+                            startReason[li] = nil
+                        end
                         AddError(errors, kp, 'builder.error.spawn_armed', {
-                            key = key,
+                            key = name,
                             location = li,
                             min = Nice(armedMin),
                             radius = Nice(tonumber(start.radius) or 0),
                             margin = Nice(tonumber(bc.spawnMargin) or 40),
                         })
-                    elseif badStart then
+                    elseif badStart and not (startReason[li] and startReason[li].keys[key]) then
                         AddError(errors, kp, 'builder.error.spawn_start',
-                            { key = key, location = li, min = Nice(minFromStart) })
+                            { key = name, location = li, min = Nice(minFromStart) })
                     end
-                    if IsRoute(v) then CheckRoute(errors, v, kp, li, key) end
+                    if IsRoute(v) then CheckRoute(errors, v, kp, li, name) end
                 end
             end
         end

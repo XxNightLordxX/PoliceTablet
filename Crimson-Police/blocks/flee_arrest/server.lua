@@ -405,7 +405,7 @@ local function CheckLocation(o, loc, li, strict)
             if InNoBuild(p) then return Bad('block.flee_arrest.invalid.points_zone', { location = li }) end
             if strict and start and U.dist(p, start) < Config.Builder.minSpawnFromStart then
                 return Bad('block.flee_arrest.invalid.points_start',
-                    { location = li, min = Config.Builder.minSpawnFromStart })
+                    { location = li, min = math.ceil(Config.Builder.minSpawnFromStart) })
             end
         end
         return true

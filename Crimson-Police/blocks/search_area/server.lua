@@ -253,7 +253,7 @@ local function CheckLocation(o, loc, li, strict)
         for _, p in ipairs(hiding) do
             if start and U.dist(p, start) < Config.Builder.minSpawnFromStart then
                 return Bad('block.search_area.invalid.points_start',
-                    { location = li, min = Config.Builder.minSpawnFromStart })
+                    { location = li, min = math.ceil(Config.Builder.minSpawnFromStart) })
             end
         end
     end

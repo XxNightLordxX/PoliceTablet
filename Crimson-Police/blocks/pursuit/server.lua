@@ -503,7 +503,7 @@ local function CheckLocation(o, loc, li, strict)
             if InNoBuild(p) then return Bad('block.pursuit.invalid.points_zone', { location = li }) end
             if start and U.dist(p, start) < Config.Builder.minSpawnFromStart then
                 return Bad('block.pursuit.invalid.points_start',
-                    { location = li, min = Config.Builder.minSpawnFromStart })
+                    { location = li, min = math.ceil(Config.Builder.minSpawnFromStart) })
             end
         end
         if route then

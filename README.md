@@ -1472,6 +1472,11 @@ in game, with no coding:
 5. Publish. The mission joins its type's pool, and a Lua file is written to `Crimson-Police/missions/custom/<id>.lua`
    (with a `.bak` copy of each old version).
 
+Every block on the "New mission" step has a name and a short description (Field contact and Process the scene
+included). When a check fails, the Builder says it once, in plain words, naming the spots as the Builder names them:
+for example `Location 1, Hostile spawn points: enemies must be at least 100 m from the start (its 60 m circle plus
+40 m), so they never appear around the officers.`
+
 A developer can edit that file by hand, then run `/CrimsonPoliceAdmin reload` to load the change as a new version.
 Mission files are **data files, not scripts**: the server reads them and never runs them. Keep to the layout the
 Builder writes: one `RegisterMission({ ... })` holding plain values (text in quotes, numbers, `true`, `false`,

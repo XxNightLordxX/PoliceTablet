@@ -46,19 +46,19 @@ do
     for key in src:gmatch('\'(builder%.[%w_%.]+)\'') do
         if not key:match('%.$') and not part[key] then missing[#missing + 1] = key end
     end
-    for _, b in ipairs({
-        'hostile_waves',
-        'escort',
-        'pursuit',
-        'checkpoint_route',
-        'interact_points',
-        'skill_check',
-        'protect_rescue',
-        'flee_arrest',
-        'search_area',
-    }) do
-        if not part['builder.block.' .. b] then missing[#missing + 1] = 'builder.block.' .. b end
+    -- every block in Config.Blocks has a name here, and a card description and default objective name for the
+    -- Builder (no raw keys on the "New mission" cards)
+    local nBlocks = 0
+    for b in pairs(Config.Blocks) do
+        if b ~= 'details' then
+            nBlocks = nBlocks + 1
+            if not part['builder.block.' .. b] then missing[#missing + 1] = 'builder.block.' .. b end
+            for _, k in ipairs({ 'builder.blockdesc.' .. b, 'builder.objective_default.' .. b }) do
+                if not merged[k] then missing[#missing + 1] = k end
+            end
+        end
     end
+    H.ok(nBlocks >= 11, 'every Config.Blocks block is checked (' .. nBlocks .. ')')
     H.eq(table.concat(missing, ', '), '',
         'every locale key used by modules/builder/server.lua is in builder_server.json')
     -- keys shared with other parts carry the same text
@@ -603,6 +603,52 @@ local function Body()
         local s = d.locations[1].start.coords
         d.locations[1].spawns[3] = { x = s.x + 20, y = s.y, z = s.z, w = 0 }
     end, 'builder.error.spawn_armed', 'locations.1.spawns')
+    do
+        -- probe P4b (a6): spawns 10 m from the start gave the block's "30.0 m" and the builder's own message for one
+        -- mistake, with the raw key "spawns": one plain message now
+        local d = U.deepcopy(good)
+        local s = d.locations[1].start.coords
+        for k = 1, #d.locations[1].spawns do
+            d.locations[1].spawns[k] = { x = s.x + 10 + k, y = s.y, z = s.z, w = 0 }
+        end
+        local errors = B.validate(d, { publish = true })
+        local here = {}
+        for _, e in ipairs(errors) do
+            if e.message:find('Location 1', 1, true) or (e.vars and e.vars.location == 1) then
+                here[#here + 1] = e.message
+            end
+        end
+        H.eq(#here, 1, 'spawns too close: one error for location 1 (got: ' .. table.concat(here, ' | ') .. ')')
+        H.ok(here[1] and here[1]:find('Hostile spawn points', 1, true) and not here[1]:find(' spawns ', 1, true),
+            'the points are named as the Builder names them: ' .. tostring(here[1]))
+        H.ok(here[1] and not here[1]:find('%d%.0 m'), 'whole numbers print without ".0": ' .. tostring(here[1]))
+        -- a hostage 20 m out (the 30 m floor only): the block says it, the builder does not say it again
+        local h = U.deepcopy(good)
+        h.objectives[3] = {
+            block = 'protect_rescue',
+            label = 'Free the hostages',
+            minSeconds = 30,
+            presenceRange = 150,
+            npcs = 'hostages',
+            safe = 'safe',
+            count = 2,
+        }
+        for li = 1, 3 do
+            local c = h.locations[li].start.coords
+            h.locations[li].hostages = {
+                { x = c.x + 35, y = c.y, z = 21.5, w = 0 },
+                { x = c.x, y = c.y + 36, z = 21.5, w = 0 },
+            }
+            h.locations[li].safe = { x = c.x - 60, y = c.y, z = 21.2 }
+        end
+        h.locations[1].hostages[1].x = h.locations[1].start.coords.x + 20
+        local hm = {}
+        for _, e in ipairs(B.validate(h, { publish = true })) do
+            if e.message:find('ocation 1', 1, true) then hm[#hm + 1] = e.message end
+        end
+        H.eq(#hm, 1, 'a hostage too close: one error (got: ' .. table.concat(hm, ' | ') .. ')')
+        H.ok(hm[1] and hm[1]:find('at least 30 m', 1, true), 'in plain words: ' .. tostring(hm[1]))
+    end
     -- ══ armed spawns stay outside the start circle plus Config.Builder.spawnMargin (S18) ═══════════════════
     do
         -- probe P4 (a6-builder A1): 11 hostiles per location 31 m from a 60 m start published with 0 errors
@@ -676,8 +722,10 @@ local function Body()
             z = 21.5,
             w = 0,
         }
-        H.eq(errorAt(B.validate(d), 'locations.1.hostages').key, 'builder.error.spawn_start',
-            'a hostage 20 m from the start: the 30 m floor still applies')
+        local near = B.validate(d)
+        H.ok(errorAt(near, 'objectives.3') and errorAt(near, 'objectives.3').message:find('at least 30 m', 1, true),
+            'a hostage 20 m from the start: the 30 m floor still applies (the block says it)')
+        H.eq(errorAt(near, 'locations.1.hostages'), nil, 'and the builder does not say it a second time')
     end
     do
         -- the other armed keys: pursuit cars, escort ambush cars, door associates
