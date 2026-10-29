@@ -125,6 +125,16 @@ do
     local titles = {}
     for _, sec in ipairs(sc.sections) do titles[sec.key] = sec.title end
     H.eq(titles.scoring_xp_levels_and_goals, 'Scoring, XP levels and goals', 'banner titles in sentence case')
+    H.eq(titles.scaling_by_participants, 'Scaling by participants', 'short words such as BY go to lower case')
+    H.eq(titles.route_to_the_start, 'Route to the start', 'TO goes to lower case')
+    H.eq(titles.built_in_mission_tweaks, 'Built-in mission tweaks', 'IN goes to lower case')
+    H.eq(titles.volunteer_suspects, 'Volunteer suspects (options B and C)', 'single option letters stay capitals')
+    -- keys that read alike get their own names from settings.label.<path>
+    H.eq(S.entry('Tablet.keybind').label, 'Default tablet key', 'the tablet key has its own label')
+    H.eq(S.entry('Tablet.access.keybind').label, 'Players may open the tablet with a key', 'the key switch too')
+    H.eq(S.entry('Builder.minLocations').label, 'Locations each new mission needs', 'the builder minimum')
+    H.eq(S.entry('MissionCalls.minLocationsPerArea').label, 'Locations a call area needs', 'the call area minimum')
+    H.eq(S.entry('Tablet.command').label, 'Command', 'a key without a locale label keeps its own name')
 
     local function E(p) return S.entry(p) or {} end
     H.eq(E('Debug').desc, 'true = each module prints tagged debug lines', 'a trailing comment is the description')

@@ -1,7 +1,7 @@
 // Admin UI · Settings (screen key 'admin_settings'): every setting of config/config.lua and config/blocks.lua,
 // changed in game. The server checks every value again; this screen only helps to enter a valid one.
 
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
     Badge,
     Button,
@@ -1065,6 +1065,17 @@ export default function AdminSettings() {
     const q = query.trim().toLowerCase();
     const searching = q !== '' || filter !== 'all';
     const current = sections.find(s => s.key === sectionKey) ?? sections[0];
+    // Picking a section in the list brings that section's top into view (the page may be scrolled far down).
+    const mainRef = useRef<HTMLDivElement>(null);
+    const [jump, setJump] = useState(0);
+    useLayoutEffect(() => {
+        if (!jump) return;
+        const main = mainRef.current;
+        const scroller = main?.closest<HTMLElement>('.cp-main__scroll');
+        if (!main || !scroller) return;
+        const top = main.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+        if (top < 0 || top > scroller.clientHeight / 2) scroller.scrollTop = Math.max(0, scroller.scrollTop + top - 8);
+    }, [jump]);
 
     // A reply carries the settings it changed: show them at once (the 'settings' push refetches the rest).
     const apply = (reply: SettingsReply | undefined) => {
@@ -1265,7 +1276,10 @@ export default function AdminSettings() {
                                     key={sec.key}
                                     type="button"
                                     className={`settings-nav__item${current?.key === sec.key ? ' is-active' : ''}`}
-                                    onClick={() => setSectionKey(sec.key)}
+                                    onClick={() => {
+                                        setSectionKey(sec.key);
+                                        setJump(n => n + 1);
+                                    }}
                                 >
                                     <span>{sec.title}</span>
                                     {changedIn(sec) > 0 ? (
@@ -1276,7 +1290,9 @@ export default function AdminSettings() {
                                 </button>
                             ))}
                         </nav>
-                        <div className="settings-main">{current ? renderSection(current, () => true, true) : null}</div>
+                        <div ref={mainRef} className="settings-main">
+                            {current ? renderSection(current, () => true, true) : null}
+                        </div>
                     </div>
                 )}
             </>

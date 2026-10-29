@@ -533,10 +533,26 @@ local function Label(key)
     return (s:gsub('^%l', string.upper))
 end
 
--- 'SCORING, XP LEVELS AND GOALS' -> 'Scoring, XP levels and goals' (two-letter words such as XP stay capitals).
+-- Short names that stay in capitals in a section title; every other word goes to lower case.
+local CAPITALS = {
+    XP = true,
+    UI = true,
+    ID = true,
+    NPC = true,
+    FIB = true,
+    SAST = true,
+    BCSO = true,
+    GPS = true,
+    EMS = true,
+}
+
+-- 'SCORING, XP LEVELS AND GOALS' -> 'Scoring, XP levels and goals', 'ROUTE TO THE START' -> 'Route to the start'.
+-- A single capital letter (options B and C) stays as it is.
 local function SentenceCase(title)
-    local s = tostring(title):gsub('%a+', function(w)
-        if #w <= 2 and w == w:upper() then return w end
+    title = tostring(title)
+    local s = title:gsub('()(%a+)', function(at, w)
+        local single = #w == 1 and w == w:upper() and title:sub(at - 1, at - 1) ~= '\''
+        if CAPITALS[w] or single then return w end
         return w:lower()
     end)
     return (s:gsub('^%l', string.upper))
@@ -1947,8 +1963,10 @@ local function BuildSchema()
         local m = meta[path]
         local parts = Segments(path)
         e.key = parts[#parts]
-        e.label = Label(e.key)
-        e.desc = m and m.desc or ''
+        -- a locale key settings.label.<path> / settings.desc.<path> names a setting whose key reads like another's
+        local lk, dk = 'settings.label.' .. path, 'settings.desc.' .. path
+        e.label = CP.Locale.has(lk) and CP.L(lk) or Label(e.key)
+        e.desc = CP.Locale.has(dk) and CP.L(dk) or (m and m.desc or '')
         e.order = m and m.order or (1e6 + #list)
         local top = Top(path)
         local tm = meta[top]

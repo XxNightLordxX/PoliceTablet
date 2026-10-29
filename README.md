@@ -757,6 +757,9 @@ no restart to do by hand. Type `/CrimsonPoliceAdmin` and open **Settings**.
   the Mission Builder ranges of `blocks.lua`), with the note from `config.lua` as its description. Use the search box
   (a name, a path like `Tablet.deskDistance`, or a word of the note), or the **Changed** and **After restart**
   filters.
+- **Clicking a section in the list** shows that section from its top, even when the page was scrolled far down. A
+  few settings whose names would read alike have their own plain names (for example **Default tablet key** and
+  **Players may open the tablet with a key**); they come from `settings.label.<path>` in `locales/parts/settings.json`.
 - **Each setting has the right control**: a switch for on/off, a number box with its allowed range, a text box, a
   colour picker, a list editor, and a text box for tables (written as JSON, for example the scaling rows).
 - **Save** checks the value on the server and uses it at once. The value next to it, `config.lua: ...`, is the

@@ -489,7 +489,7 @@
   "admin.depts.preview.progress": "Daily goal",
   "admin.depts.preview.primary": "Accept type",
   "admin.depts.preview.secondary": "Details",
-  "admin.perms.subtitle": "A read-only view of Config.Permissions. Admins can always do every action.",
+  "admin.perms.subtitle": "Choose what supervisors may do. Admins can always do everything.",
   "admin.perms.readonly": "Switch them here",
   "admin.perms.edit_hint": "Each switch saves at once over config.lua (Admin UI → Settings has every other setting). Admin-only actions always stay admin-only.",
   "admin.perms.supervisor": "Supervisor actions",
