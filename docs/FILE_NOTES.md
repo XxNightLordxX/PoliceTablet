@@ -1212,7 +1212,7 @@ getOfficer, isSupervisor, role, recheck, isSuspended, suspend and refreshOfficer
       admin:searchOfficers       { query } -> { officers }
       admin:getOfficer           { citizenid } -> OfficerDetail (incl. suspensions = the last 10 suspend/unsuspend/autoSuspend entries)
       admin:getDepartments       -> { departments, cashSource, showSociety }
-      admin:getPermissions       -> { supervisor = { { action, enabled } }, adminOnly, always }
+      admin:getPermissions       -> { supervisor = { { action, enabled } }, adminOnly, always, teleport }
       admin:getAudit             { category, action, actor, from, to, page } -> AuditPage
       admin:exportAudit          same filters -> { csv, rows, truncated }
       admin:getStuckPayments     admin -> { payments = CP.Cash.stuckPayments() (StuckPayment list, docs/notes/economy.md),
@@ -3915,8 +3915,9 @@ writes: 'server:admin:setTypePayout' { type, amount|null, reason, clear } and
 ```text
 
 Admin UI · Permissions (screen key 'admin_permissions').
-A read-only view of Config.Permissions: which supervisor actions are switched on, the actions supervisors
-always have, and the actions that are always admin-only. Changes are made in config/config.lua.
+Config.Permissions: which supervisor actions are switched on, the actions supervisors always have, the actions that
+are always admin-only, and the Builder teleport card (per department Off / From grade / These grades, saved as
+Permissions.builderTeleport through server:admin:setSetting, audited).
 Data: callback admin:getPermissions (modules/admin).
 ```
 

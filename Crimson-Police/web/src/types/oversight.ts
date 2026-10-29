@@ -285,10 +285,23 @@ export interface DepartmentsData {
 //                             admin:getPermissions
 // ============================================================================
 
+// Config.Permissions.builderTeleport for one department: from a grade up, or only the listed grades (absent = off).
+export type TeleportGrant = { minGrade: number; grades?: undefined } | { grades: number[]; minGrade?: undefined };
+export interface TeleportDepartment {
+    key: string;
+    label: string;
+    short: string;
+    supervisorGrade?: number;
+    // the Qbox grades of the jobs the department lists (0-10 when Qbox names none), lowest first
+    grades: { level: number; name?: string }[];
+    grant?: TeleportGrant;
+}
 export interface PermissionsData {
     supervisor: { action: string; enabled: boolean }[];
     adminOnly: string[];
     always: string[];
+    // Admin UI -> Permissions -> Builder teleport (enabled = Config.Builder.teleport and the builder are on)
+    teleport?: { enabled: boolean; departments: TeleportDepartment[] };
 }
 
 // ============================================================================

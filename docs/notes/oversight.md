@@ -161,7 +161,7 @@ Each Lua file's header comment documents its public API, net names and rules.
   online, own, known, maxAward }`
 - `admin:getDepartments` → `{ departments = { { key, label, short, jobs, supervisorGrade, societyAccount, theme,
   logo|nil, members, suspended, onDuty, societyBalance|nil } }, cashSource, showSociety }`
-- `admin:getPermissions` → `{ supervisor = { { action, enabled } } (spec order), adminOnly = { ... }, always = { 'viewMissionList' } }`
+- `admin:getPermissions` → `{ supervisor = { { action, enabled } } (spec order), adminOnly = { ... }, always = { 'viewMissionList' }, teleport = { enabled, departments = { { key, label, short, supervisorGrade, grades = { { level, name } }, grant = { minGrade } | { grades } | nil } } } }` (Builder teleport card; it saves `Permissions.builderTeleport` through `server:admin:setSetting`)
 - `admin:getAudit { category, action, actor, from, to, page }` → `{ rows = { { id, actor, actorName, role, category,
   action, target, oldValue, newValue, reason, createdAt } }, page, pages, total, pageSize = 50, actions }`
 - `admin:exportAudit { same filters }` → `{ csv, rows, truncated }` (5,000 rows max; formula-leading cells prefixed

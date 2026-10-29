@@ -2978,6 +2978,60 @@ CP.Net.callback('admin:getDepartments', function(src)
     return { departments = out, cashSource = society and 'society' or 'server', showSociety = society == true }
 end, { rate = 3 })
 
+-- Admin UI -> Permissions -> Builder teleport: each department with its Qbox grades (from the jobs it lists; 0-10
+-- when Qbox names none) and its grant in Config.Permissions.builderTeleport ({ minGrade } or { grades }, nil = off).
+local TELEPORT_FALLBACK_TOP = 10
+
+local function DepartmentGrades(d, jobs)
+    local byLevel = {}
+    for _, name in ipairs(type(d.jobs) == 'table' and d.jobs or {}) do
+        local job = type(jobs) == 'table' and jobs[name] or nil
+        for k, g in pairs(type(job) == 'table' and type(job.grades) == 'table' and job.grades or {}) do
+            local level = math.tointeger(tonumber(k))
+            if level and level >= 0 and level <= 100 and byLevel[level] == nil then
+                byLevel[level] = type(g) == 'table' and type(g.name) == 'string' and g.name ~= '' and g.name or false
+            end
+        end
+    end
+    local out = {}
+    for level, name in pairs(byLevel) do out[#out + 1] = { level = level, name = name or nil } end
+    if #out == 0 then
+        for level = 0, TELEPORT_FALLBACK_TOP do out[#out + 1] = { level = level } end
+    end
+    table.sort(out, function(a, b) return a.level < b.level end)
+    return out
+end
+
+local function TeleportGrants()
+    local okJ, jobs = pcall(function() return CP.Qbx and CP.Qbx.getJobs and CP.Qbx.getJobs() or nil end)
+    if not okJ then jobs = nil end
+    local grants = Config.Permissions and Config.Permissions.builderTeleport
+    grants = type(grants) == 'table' and grants or {}
+    local deps = {}
+    for key, d in pairs(type(Config.Departments) == 'table' and Config.Departments or {}) do
+        if type(key) == 'string' and type(d) == 'table' then
+            local g = grants[key]
+            local grant = nil
+            if type(g) == 'table' and math.tointeger(tonumber(g.minGrade)) then
+                grant = { minGrade = math.tointeger(tonumber(g.minGrade)) }
+            elseif type(g) == 'table' and type(g.grades) == 'table' and #g.grades > 0 then
+                grant = { grades = U.deepcopy(g.grades) }
+            end
+            deps[#deps + 1] = {
+                key = key,
+                label = d.label or key,
+                short = d.short or key,
+                supervisorGrade = tonumber(d.supervisorGrade),
+                grades = DepartmentGrades(d, jobs),
+                grant = grant,
+            }
+        end
+    end
+    table.sort(deps, function(a, b) return a.key < b.key end)
+    local builder = Config.Builder or {}
+    return { enabled = builder.enabled ~= false and builder.teleport ~= false, departments = deps }
+end
+
 CP.Net.callback('admin:getPermissions', function(src)
     local okP, eP = AdminOnly(src)
     if not okP then return nil, eP end
@@ -2999,7 +3053,7 @@ CP.Net.callback('admin:getPermissions', function(src)
     for _, k in ipairs(keys) do
         list[#list + 1] = { action = k, enabled = sup[k] == true and not adminOnlySet[k] }
     end
-    return { supervisor = list, adminOnly = ADMIN_ONLY, always = SUPERVISOR_ALWAYS }
+    return { supervisor = list, adminOnly = ADMIN_ONLY, always = SUPERVISOR_ALWAYS, teleport = TeleportGrants() }
 end, { rate = 3 })
 
 -- ============================================================================

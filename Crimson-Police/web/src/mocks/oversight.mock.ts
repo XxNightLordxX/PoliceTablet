@@ -1207,6 +1207,28 @@ registerMock('request', 'admin:getPermissions', (): PermissionsData =>
                   'openAdmin',
               ],
               always: ['viewMissionList'],
+              teleport: {
+                  enabled: true,
+                  departments: [
+                      {
+                          key: 'fib',
+                          label: 'Federal Investigation Bureau',
+                          short: 'FIB',
+                          supervisorGrade: 3,
+                          grades: [0, 1, 2, 3, 4].map(level => ({ level, name: `Agent ${level}` })),
+                          grant: { grades: [3, 4] },
+                      },
+                      {
+                          key: 'sast',
+                          label: 'San Andreas State Troopers',
+                          short: 'SAST',
+                          supervisorGrade: 3,
+                          grades: ['Cadet', 'Trooper', 'Corporal', 'Sergeant', 'Lieutenant', 'Captain'].map(
+                              (name, level) => ({ level, name }),
+                          ),
+                      },
+                  ],
+              },
           },
 );
 

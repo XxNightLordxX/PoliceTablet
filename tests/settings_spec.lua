@@ -355,6 +355,18 @@ do
     Err('NpcCombat.replace', { WEAPON_SMG = 'WEAPON_MICROSMG' }, 'err.setting_automatic_weapon',
         'nor a replacement weapon')
     H.ok((Check('NpcCombat.replace', { WEAPON_SMG = 'WEAPON_PISTOL' })), 'a replacement map')
+    -- B9: Admin UI -> Permissions -> Builder teleport writes Permissions.builderTeleport as one map
+    ok, v = Check('Permissions.builderTeleport', { sast = { minGrade = 4 }, fib = { grades = { 2, 3 } } })
+    H.ok(ok and v.sast.minGrade == 4 and v.fib.grades[2] == 3, 'a teleport grant from a grade or for listed grades')
+    H.ok((Check('Permissions.builderTeleport', {})), 'no grant at all: admins only')
+    Err('Permissions.builderTeleport', { nope = { minGrade = 1 } }, 'err.setting_teleport_department',
+        'a teleport grant names a department of Config.Departments')
+    Err('Permissions.builderTeleport', { sast = { minGrade = 1, grades = { 2 } } }, 'err.setting_teleport_grant',
+        'a teleport grant is from a grade or a list, not both')
+    Err('Permissions.builderTeleport', { sast = {} }, 'err.setting_teleport_grant', 'nor neither')
+    Err('Permissions.builderTeleport', { sast = { grades = {} } }, 'err.setting_too_few', 'a list names a grade')
+    Err('Permissions.builderTeleport', { sast = { minGrade = 'four' } }, 'err.setting_number', 'a grade is a number')
+    Err('Permissions.builderTeleport', { sast = { level = 4 } }, 'err.setting_key', 'only minGrade or grades')
     H.ok((E('NpcCombat.lethalCancelAbove').desc or ''):find('share of his health', 1, true) ~= nil,
         'the health share of the one-shot cancel is listed with its comment')
     H.ok((Check('NpcCombat.lethalCancelAbove', 0.5)), 'half health')

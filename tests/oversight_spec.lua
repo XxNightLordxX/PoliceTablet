@@ -1658,6 +1658,27 @@ H.eq(perm.forceRecall, true, 'on')
 H.eq(gp.data.supervisor[1].action, 'setTypePayout', 'listed in the spec order')
 H.eq(gp.data.supervisor[11].action, 'breakEditLock', 'last in the spec order')
 H.eq(perm.builderRollback, false, 'off')
+-- B9: Builder teleport by department: the Qbox grades of its jobs (0-10 when Qbox names none) and the grant
+H.ok(
+    gp.data.teleport.enabled == true and #gp.data.teleport.departments == 2
+        and gp.data.teleport.departments[2].key == 'sast' and gp.data.teleport.departments[2].grant == nil
+        and #gp.data.teleport.departments[2].grades == 11,
+    'teleport: each department, shipped off (admins only)'
+)
+do
+    local keepGrants, keepJobs = Config.Permissions.builderTeleport, CP.Qbx.getJobs
+    Config.Permissions.builderTeleport = { sast = { minGrade = 4 }, fib = { grades = { 2, 3 } } }
+    CP.Qbx.getJobs = function()
+        return { sast = { grades = { ['0'] = { name = 'Cadet' }, ['4'] = { name = 'Lieutenant' } } } }
+    end
+    local tp = Cb('admin:getPermissions', 1).data.teleport.departments
+    H.ok(
+        tp[2].grant.minGrade == 4 and #tp[2].grades == 2 and tp[2].grades[2].level == 4
+            and tp[2].grades[2].name == 'Lieutenant' and tp[1].grant.grades[2] == 3,
+        'teleport: the grant and the job grades by name'
+    )
+    Config.Permissions.builderTeleport, CP.Qbx.getJobs = keepGrants, keepJobs
+end
 H.eq(#gp.data.adminOnly, 29, 'admin-only list (the 11 of the spec and the 18 keys of full admin control)')
 
 -- audit log

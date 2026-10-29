@@ -516,6 +516,9 @@ Related settings: `Config.Payouts.supervisorRange` (`{ 0.5, 2.0 }` = 50–200%),
   it puts you on the ground at that saved point (built-in missions too), so you can look at a spot without driving
   there. Admins always have it. Nobody else does until you grant it in `Config.Permissions.builderTeleport`, by
   department and grade: `sast = { minGrade = 4 }` (grade 4 and up) or `bcso = { grades = { 3, 5 } }` (only those).
+  In game, Admin UI → **Permissions** → **Builder teleport** sets the same thing: per department pick **Off
+  (admins only)**, **From grade** (a grade of that department's Qbox jobs) or **These grades** (tick them), then
+  **Save**. It saves over config.lua like any setting and is in the audit log.
   The tablet sends only which point; the server checks the grant, reads the saved position, refuses in the arena,
   on a run or while down, and writes `builderTeleport` in the audit log. `Config.Builder.teleport = false` removes
   the button for everyone.
