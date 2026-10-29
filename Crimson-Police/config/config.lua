@@ -108,6 +108,9 @@ Config.AdminUi = {
     -- off, pay, points, quick settings, what is wrong) and the live runs; 'payouts' or 'missions' = open straight
     -- on that screen, with no Home screen
     landing = 'home',
+    -- The view Admin UI -> Settings opens in: 'simple' = only the everyday settings in plain groups, with plain
+    -- labels and help texts ('All settings' is one click away); 'all' = every setting by config.lua section
+    settingsView = 'simple',
 }
 
 -- ============================================================================

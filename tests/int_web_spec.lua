@@ -710,6 +710,40 @@ do
     Has(sm, '\'Cash.source\',', 'and Cash.source')
 end
 
+-- Settings: the Simple view (Config.AdminUi.settingsView) shows the everyday settings in plain groups, with no Config
+-- paths; All settings is one click away; per-mission settings point to Missions instead of a raw JSON box.
+do
+    local st = Read(WEB .. 'admin/screens/Settings.tsx') or ''
+    local types = Read(WEB .. 'types/settings.ts') or ''
+    local sm = Read(WEB .. 'mocks/settings.mock.ts') or ''
+    Has(st, 'const view: SettingsViewMode = picked ?? (data?.view === \'all\' ? \'all\' : \'simple\');',
+        'the screen opens in the view the server names (Simple unless it says all)')
+    Has(st, '{ key: \'simple\', label: t(\'settings.view.simple\') },', 'a Simple switch next to the filter chips')
+    Has(st, '{ key: \'all\', label: t(\'settings.view.all\') }', 'and All settings')
+    Has(st, 'onClick={() => setPicked(\'all\')}', 'the line under the Simple list opens All settings')
+    Has(st, 'simpleGroups(sections, asArray(data?.groups), asArray(data?.common))',
+        'Simple lists the everyday settings under their plain groups')
+    Has(st, '{simple ? null : <code className="settings-row__path">{`Config.${s.path}`}</code>}',
+        'Simple hides the Config path')
+    Has(st, 'subtitle={heading && !simple ? t(`settings.file.${sec.file}`) : undefined}', 'and the file name')
+    Has(st, 'const PER_MISSION = [\'MissionTweaks\', \'DisabledLocations\'];',
+        'MissionTweaks and DisabledLocations are changed per mission')
+    Has(st, '{simple && perMission(s) ? (\n                    <PerMissionNote />',
+        'Simple shows the Missions note there')
+    Has(st, 'navigate(\'admin_missions\', { tab: \'catalog\' })', 'which opens the mission list')
+    Has(types, 'view?: SettingsViewMode;', 'SettingsData carries the view')
+    Has(sm, 'common: [\'Debug\', \'Locale\', \'Tablet.deskDistance\'],', 'the dev Settings list has a Simple set')
+    for _, k in ipairs({
+        'settings.view.simple',
+        'settings.view.all',
+        'settings.simple_more',
+        'settings.per_mission',
+        'settings.per_mission_open',
+    }) do
+        H.ok(keys[k] == true, 'locale: ' .. k)
+    end
+end
+
 -- Mission Builder -> Publish: an edited built-in is written to overrides/<id>.lua (FilePathFor).
 do
     local pub = Read(WEB .. 'builder/steps/StepPublish.tsx') or ''

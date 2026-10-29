@@ -30,7 +30,7 @@ import { request } from '../../shared/nui';
 import { formatDateTime } from '../../shared/format';
 import { useAction, useRequest } from '../../shared/hooks';
 import { hasKey, t } from '../../shared/i18n';
-import { useNavigation } from '../../shared/navigation';
+import { useNavigate, useNavigation } from '../../shared/navigation';
 import { toast } from '../../shared/toast';
 import type { ConfigHealthItem } from '../../shared/types';
 import { RewardPoolEditor, handlesRewardPool } from '../components/RewardPoolEditor';
@@ -42,8 +42,10 @@ import type {
     SettingsData,
     SettingsHistory,
     SettingsHistoryRow,
+    SettingsPlainGroup,
     SettingsReply,
     SettingsSection,
+    SettingsViewMode,
     SettingView,
 } from '../../types/settings';
 import './Settings.css';
@@ -64,6 +66,8 @@ type SavePayload = { value?: unknown; json?: string; none?: boolean; confirm?: s
 type Vec = { x: number; y: number; z?: number; w?: number };
 
 const VEC_PARTS = ['x', 'y', 'z', 'w'] as const;
+// Settings the Simple view sends to Missions instead of a raw JSON box: they are kept per mission there.
+const PER_MISSION = ['MissionTweaks', 'DisabledLocations'];
 const MAX_SHOWN = 90;
 const HEALTH_TONE = { ok: 'success', warn: 'warning', error: 'danger' } as const;
 
@@ -130,6 +134,32 @@ function matches(s: SettingView, q: string): boolean {
 
 function changedIn(sec: SettingsSection): number {
     return asArray(sec.groups).reduce((n, g) => n + asArray(g.settings).filter(s => s.changed).length, 0);
+}
+
+function perMission(s: SettingView): boolean {
+    return PER_MISSION.some(p => s.path === p || s.path.startsWith(`${p}.`));
+}
+
+// The Simple view: the everyday settings (in the server's order) under the plain group of their section.
+function simpleGroups(
+    sections: SettingsSection[],
+    groups: SettingsPlainGroup[],
+    common: string[],
+): { group: SettingsPlainGroup; settings: SettingView[] }[] {
+    const byPath = new Map<string, { s: SettingView; group: string }>();
+    for (const sec of sections)
+        for (const g of asArray(sec.groups))
+            for (const x of asArray(g.settings)) byPath.set(x.path, { s: x, group: sec.group ?? '' });
+    const paths = common.length ? common : [...byPath.values()].filter(v => v.s.common).map(v => v.s.path);
+    return groups
+        .map(group => ({
+            group,
+            settings: paths.flatMap(p => {
+                const hit = byPath.get(p);
+                return hit && hit.group === group.key ? [hit.s] : [];
+            }),
+        }))
+        .filter(g => g.settings.length);
 }
 
 function passes(s: SettingView, filter: Filter): boolean {
@@ -567,20 +597,42 @@ function resetLine(s: SettingView, resets?: SettingsData['resets']): string | nu
     return null;
 }
 
+// Simple view: MissionTweaks and DisabledLocations are changed per mission on the Missions screen.
+function PerMissionNote() {
+    const navigate = useNavigate();
+    return (
+        <div className="settings-locked">
+            <span className="settings-muted">{t('settings.per_mission')}</span>
+            <Button
+                size="sm"
+                variant="secondary"
+                iconRight="chevronRight"
+                onClick={() => navigate('admin_missions', { tab: 'catalog' })}
+            >
+                {t('settings.per_mission_open')}
+            </Button>
+        </div>
+    );
+}
+
 function SettingRow({
     s,
     disabled,
     save,
     reset,
     resets,
+    simple = false,
 }: {
     s: SettingView;
     disabled: boolean;
     save: (s: SettingView, p: SavePayload) => Promise<boolean>;
     reset: (s: SettingView) => void;
     resets?: SettingsData['resets'];
+    // the Simple view: no Config path, the plain help text, per-mission settings point to Missions
+    simple?: boolean;
 }) {
     const next = resetLine(s, resets);
+    const desc = simple ? s.help || s.desc : s.desc;
     return (
         <div className={`settings-row${s.changed ? ' is-changed' : ''}${s.invalid ? ' is-invalid' : ''}`}>
             <div className="settings-row__info">
@@ -635,8 +687,8 @@ function SettingRow({
                         </Badge>
                     ) : null}
                 </div>
-                <code className="settings-row__path">{`Config.${s.path}`}</code>
-                {s.desc ? <p className="settings-row__desc">{s.desc}</p> : null}
+                {simple ? null : <code className="settings-row__path">{`Config.${s.path}`}</code>}
+                {desc ? <p className="settings-row__desc">{desc}</p> : null}
                 {next ? <div className="settings-muted">{next}</div> : null}
                 {s.pending ? (
                     <div className="settings-note settings-note--warning">
@@ -662,7 +714,9 @@ function SettingRow({
                 ) : null}
             </div>
             <div className="settings-row__edit">
-                {s.locked ? (
+                {simple && perMission(s) ? (
+                    <PerMissionNote />
+                ) : s.locked ? (
                     <div className="settings-locked">
                         <span className="settings-row__value">{showValue(s.value, s.isSet)}</span>
                         <span className="settings-muted">{errText(s.locked)}</span>
@@ -674,7 +728,7 @@ function SettingRow({
                     <span className="settings-muted">
                         {t('settings.default', { value: showValue(s.default, s.defaultSet) })}
                     </span>
-                    {(s.changed || s.invalid) && !s.locked ? (
+                    {(s.changed || s.invalid) && !s.locked && !(simple && perMission(s)) ? (
                         <Button size="sm" variant="ghost" icon="refresh" disabled={disabled} onClick={() => reset(s)}>
                             {t('settings.reset')}
                         </Button>
@@ -1038,6 +1092,10 @@ export default function AdminSettings() {
     const { params } = useNavigation();
     const [query, setQuery] = useState(typeof params.q === 'string' ? params.q.toLowerCase() : '');
     const [filter, setFilter] = useState<Filter>('all');
+    // Simple or All settings: opens in Config.AdminUi.settingsView until the admin picks one
+    const [picked, setPicked] = useState<SettingsViewMode | null>(null);
+    const view: SettingsViewMode = picked ?? (data?.view === 'all' ? 'all' : 'simple');
+    const simple = view === 'simple';
     const [sectionKey, setSectionKey] = useState<string | null>(null);
     const [confirm, setConfirm] = useState<'resetAll' | null>(null);
     // a money switch turned on waits for the typed word (the server checks it too)
@@ -1136,6 +1194,17 @@ export default function AdminSettings() {
         setConfirm(null);
     };
 
+    const row = (s: SettingView) => (
+        <SettingRow
+            key={s.path}
+            s={s}
+            disabled={busy || !!data?.safeMode}
+            save={save}
+            reset={reset}
+            resets={data?.resets}
+            simple={simple}
+        />
+    );
     const renderSection = (sec: SettingsSection, list: (s: SettingView) => boolean, heading: boolean) => {
         const groups = asArray(sec.groups)
             .map(g => ({ ...g, settings: asArray(g.settings).filter(list) }))
@@ -1146,7 +1215,7 @@ export default function AdminSettings() {
                 key={sec.key}
                 title={heading ? sec.title : undefined}
                 icon={heading ? 'sliders' : undefined}
-                subtitle={heading ? t(`settings.file.${sec.file}`) : undefined}
+                subtitle={heading && !simple ? t(`settings.file.${sec.file}`) : undefined}
                 padding="none"
                 className="settings-section"
             >
@@ -1159,16 +1228,7 @@ export default function AdminSettings() {
                             </div>
                         ) : null}
                         {g.path === 'Badges' ? <RecheckBadges disabled={busy} /> : null}
-                        {g.settings.map(s => (
-                            <SettingRow
-                                key={s.path}
-                                s={s}
-                                disabled={busy || !!data?.safeMode}
-                                save={save}
-                                reset={reset}
-                                resets={data?.resets}
-                            />
-                        ))}
+                        {g.settings.map(row)}
                     </div>
                 ))}
             </Card>
@@ -1189,6 +1249,8 @@ export default function AdminSettings() {
         const found = searching
             ? sections.map(sec => renderSection(sec, s => matches(s, q) && passes(s, filter), true)).filter(Boolean)
             : [];
+        const plain = simple ? simpleGroups(sections, asArray(data?.groups), asArray(data?.common)) : [];
+        const shown = plain.reduce((n, g) => n + g.settings.length, 0);
         body = (
             <>
                 <div className="settings-intro">
@@ -1241,6 +1303,15 @@ export default function AdminSettings() {
                         placeholder={t('settings.search')}
                         className="settings-search"
                     />
+                    <SegmentedControl<SettingsViewMode>
+                        size="sm"
+                        value={view}
+                        onChange={setPicked}
+                        items={[
+                            { key: 'simple', label: t('settings.view.simple') },
+                            { key: 'all', label: t('settings.view.all') },
+                        ]}
+                    />
                     <SegmentedControl<Filter>
                         size="sm"
                         value={filter}
@@ -1268,6 +1339,33 @@ export default function AdminSettings() {
                     ) : (
                         <EmptyState icon="search" title={t('settings.no_match')} />
                     )
+                ) : simple ? (
+                    <div className="settings-results">
+                        {plain.map(({ group, settings }) => (
+                            <Card
+                                key={group.key}
+                                title={group.title}
+                                subtitle={group.help}
+                                icon="sliders"
+                                padding="none"
+                                className="settings-section"
+                            >
+                                <div className="settings-group">{settings.map(row)}</div>
+                            </Card>
+                        ))}
+                        <div className="settings-more">
+                            <Icon name="info" size={16} />
+                            <p>{t('settings.simple_more', { n: shown, total: data?.total ?? all.length })}</p>
+                            <Button
+                                size="sm"
+                                variant="secondary"
+                                iconRight="chevronRight"
+                                onClick={() => setPicked('all')}
+                            >
+                                {t('settings.view.all')}
+                            </Button>
+                        </div>
+                    </div>
                 ) : (
                     <div className="settings-layout">
                         <nav className="settings-nav" aria-label={t('settings.sections')}>

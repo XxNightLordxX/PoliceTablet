@@ -35,6 +35,7 @@ const data: SettingsData = {
             key: 'general',
             title: 'General',
             file: 'config',
+            group: 'server',
             changed: 0,
             count: 2,
             groups: [
@@ -43,8 +44,14 @@ const data: SettingsData = {
                     label: '',
                     desc: '',
                     settings: [
-                        s('Debug', 'boolean', false, 'true = each module prints tagged debug lines'),
-                        s('Locale', 'enum', 'en', '', { options: ['en'], restart: true }),
+                        s('Debug', 'boolean', false, 'true = each module prints tagged debug lines', {
+                            common: true,
+                            label: 'Debug lines in the server console',
+                            help: 'Prints what each part of Crimson-Police does, for finding a problem.',
+                        }),
+                        s('Locale', 'enum', 'en', '', { options: ['en'], restart: true, common: true }),
+                        // the Simple view sends this one to Missions (it is kept per mission there)
+                        s('DisabledLocations', 'json', {}, 'locations switched off, per mission id'),
                     ],
                 },
             ],
@@ -53,6 +60,7 @@ const data: SettingsData = {
             key: 'tablet_and_commands',
             title: 'Tablet and commands',
             file: 'config',
+            group: 'tablet',
             changed: 1,
             count: 6,
             groups: [
@@ -76,6 +84,9 @@ const data: SettingsData = {
                             'metres: walking further than this from the desk closes the tablet',
                             {
                                 changed: true,
+                                common: true,
+                                label: 'Distance from the desk before the tablet closes',
+                                help: 'Metres an officer may walk from a police desk before the tablet closes.',
                                 default: 3.0,
                                 integer: false,
                                 min: 0,
@@ -110,6 +121,7 @@ const data: SettingsData = {
             key: 'limits_and_cash',
             title: 'Limits and cash',
             file: 'config',
+            group: 'pay',
             changed: 0,
             count: 2,
             groups: [
@@ -148,6 +160,7 @@ const data: SettingsData = {
             key: 'blocks',
             title: 'Mission Builder ranges (blocks.lua)',
             file: 'blocks',
+            group: 'missions',
             changed: 0,
             count: 2,
             groups: [
@@ -176,6 +189,15 @@ const data: SettingsData = {
     pending: 0,
     invalid: 0,
     total: 12,
+    // the Simple view (Config.AdminUi.settingsView = 'simple'; ?settingsView=all opens on All settings)
+    groups: [
+        { key: 'tablet', title: 'Tablet', help: 'How officers open the tablet.', sections: ['tablet_and_commands'] },
+        { key: 'missions', title: 'Missions and Builder', help: 'Mission ranges.', sections: ['blocks'] },
+        { key: 'pay', title: 'Pay and cash', help: 'What officers are paid.', sections: ['limits_and_cash'] },
+        { key: 'server', title: 'Server', help: 'Logs and language.', sections: ['general'] },
+    ],
+    common: ['Debug', 'Locale', 'Tablet.deskDistance'],
+    view: typeof window !== 'undefined' && /[?&]settingsView=all\b/.test(window.location.search) ? 'all' : 'simple',
 };
 
 const history: SettingsHistoryRow[] = [

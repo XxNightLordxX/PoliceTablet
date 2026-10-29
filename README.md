@@ -753,7 +753,15 @@ of words refused in bios (one per line). Read that list and change it for your c
 Admins can change **every** setting of `config/config.lua` and `config/blocks.lua` in game, with no file to edit and
 no restart to do by hand. Type `/CrimsonPoliceAdmin` and open **Settings**.
 
-- **Every setting is listed**, grouped like the file (Tablet and commands, Departments, Mission types, Cash, ... and
+- **It opens in Simple**: only the about 25 everyday settings (Debug, language, the tablet key, desk distance, pay
+  account and daily cap, NPC distances, accuracy and damage, the runner times, the GPS line, Radio Silence, mission
+  calls, the Builder minimums, the test overlay, the daily and weekly reset), under 8 plain groups (Tablet, Missions
+  and Builder, NPCs, Pay and cash, Points and rewards, Police actions, Dispatch, Server), each with a plain name and a
+  short help text and no `Config.` path. **All settings** (the switch next to the filters, or the button under the
+  list) shows every setting as below. The search and the **Changed** and **After restart** filters always look through
+  every setting. In Simple, the mission tweaks and disabled locations say "Change this per mission in Missions" with
+  a button, instead of a JSON box. To open on every setting, set `Config.AdminUi.settingsView = 'all'`.
+- **All settings lists every setting**, grouped like the file (Tablet and commands, Departments, Mission types, Cash, ... and
   the Mission Builder ranges of `blocks.lua`), with the note from `config.lua` as its description. Use the search box
   (a name, a path like `Tablet.deskDistance`, or a word of the note), or the **Changed** and **After restart**
   filters.

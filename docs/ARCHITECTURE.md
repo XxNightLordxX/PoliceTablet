@@ -2214,6 +2214,12 @@ Server:
   `settings.group_help.<key>`; a section no group names goes under server). The entry and `SettingView` carry
   `common` and `help`, a schema section and `SettingsView.sections[]` carry `group`, and `SettingsView` carries
   `groups` (`plainGroups()`: key, title, help, section keys) and `common` (`commonPaths()`).
+- Simple view (A8): `SettingsView.view` is `Config.AdminUi.settingsView` ('simple' or 'all'; anything else =
+  'simple'), the view `admin/screens/Settings.tsx` opens in until the admin picks one with the Simple / All settings
+  switch. Simple (`simpleGroups()`) renders the `common` paths in order under their section's plain group, with
+  `help` over `desc`, no `Config.<path>` line and no file name; a search or a filter still looks through every
+  setting. In Simple, `MissionTweaks` and `DisabledLocations` (`PER_MISSION`) show a note and a button to
+  `admin_missions` (tab catalog) instead of the JSON editor.
 - Net: callbacks `admin:getSettings`, `admin:getSettingsHistory` (`{ page, path? }`: the audit rows of the actions above);
   actions `server:admin:setSetting` (`{ path, value? | json?, none? }`), `server:admin:resetSetting` (`{ path }`),
   `server:admin:resetAllSettings`, `server:admin:setMissionEnabled` (`{ missionId, enabled }`),

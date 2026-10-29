@@ -385,6 +385,8 @@ Personal accent and appearance
 
 - The Admin UI opens on Config.AdminUi.landing (default 'home'). 'home' shows the Home screen (admin_home) first in the sidebar: a Live now strip (admin:getLiveRuns) and six tiles that open admin_missions (tab builder), admin_missions (tab catalog), admin_payouts, admin_officers (citizenid, when typed), admin_settings (q, when typed) and Something wrong? (admin:getMissionLoad loaded/refused, admin:getConfigHealth warnings, admin:getProblems total, the adminPayments count, admin:getRefusals today (Refused starts today, opens admin_live tab refused); each line opens its screen). 'payouts' or 'missions' hide Home and open on that screen; an unknown value counts as 'home'.
 
+- Admin UI → Settings opens in Config.AdminUi.settingsView (default 'simple'; anything else counts as 'simple'). Simple shows only the everyday settings (SettingsView.common, in order) under the 8 plain groups (SettingsView.groups), with plain labels and help texts and no Config path or file name; a Simple / All settings switch next to the filter chips and a button under the list open All settings, which lists every setting by config.lua section as before. A search or a filter always looks through every setting. In Simple, MissionTweaks and DisabledLocations show "Change this per mission in Missions" with a button to admin_missions instead of the JSON box. 'all' opens on All settings.
+
 Logo and watermark
 
 - Put the logo in the resource's logos/ folder (PNG, WebP or SVG; a square transparent PNG of at least 1024 × 1024 works best) and set logo.file, or set logo.url to a direct https:// image link. No UI rebuild is needed; restart the resource.
@@ -2819,6 +2821,9 @@ Config.AdminUi = {
     -- off, pay, points, quick settings, what is wrong) and the live runs; 'payouts' or 'missions' = open straight
     -- on that screen, with no Home screen
     landing = 'home',
+    -- The view Admin UI -> Settings opens in: 'simple' = only the everyday settings in plain groups, with plain
+    -- labels and help texts ('All settings' is one click away); 'all' = every setting by config.lua section
+    settingsView = 'simple',
 }
 
 -- ── Permissions ─────────────────────────────────────────────────────────────

@@ -491,3 +491,22 @@
 .settings-preflight span {
     color: var(--cp-muted);
 }
+
+/* Simple view: the line under the everyday settings that opens All settings */
+.settings-more {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    border-radius: var(--cp-radius);
+    border: 1px dashed var(--cp-border);
+    color: var(--cp-muted);
+}
+
+.settings-more p {
+    flex: 1 1 auto;
+    margin: 0;
+    min-width: 0;
+    font-size: var(--cp-fs-sm);
+    line-height: 1.4;
+}

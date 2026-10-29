@@ -1046,6 +1046,7 @@ local KNOWN = {
     ['Cash.account'] = { tpl = Enum({ 'bank', 'cash' }), kind = 'enum' },
     ['Cash.source'] = { tpl = Enum({ 'server', 'society' }), kind = 'enum' },
     ['AdminUi.landing'] = { tpl = Enum({ 'home', 'payouts', 'missions' }), kind = 'enum' },
+    ['AdminUi.settingsView'] = { tpl = Enum({ 'simple', 'all' }), kind = 'enum' },
     ['Units.invitePolicy'] = { tpl = Enum({ 'anyone', 'leader' }), kind = 'enum' },
     ['NpcDifficulty.preset'] = { tpl = Enum({ 'easy', 'normal', 'hard', 'custom' }), kind = 'enum' },
     ['NpcCombat.firingPattern'] = { tpl = Enum({ 'single', 'burst', 'delayed', 'default' }), kind = 'enum' },
@@ -2683,6 +2684,9 @@ function Settings.all()
     end
     out.groups = Settings.plainGroups()
     out.common = Settings.commonPaths()
+    -- Config.AdminUi.settingsView: the view the screen opens in (anything unknown = 'simple')
+    local aui = type(Config.AdminUi) == 'table' and Config.AdminUi or {}
+    out.view = aui.settingsView == 'all' and 'all' or 'simple'
     out.safeMode = safeMode or nil
     out.added = Settings.addedDepartments()
     return out

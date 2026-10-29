@@ -90,6 +90,9 @@ export interface SettingView {
     points?: boolean;
     // a money switch: turning it on needs the typed word ENABLE (payload.confirm)
     money?: boolean;
+    // one of the everyday settings the Simple view shows; help = its short plain help text
+    common?: boolean;
+    help?: string;
 }
 
 export interface SettingsGroup {
@@ -103,10 +106,23 @@ export interface SettingsSection {
     key: string;
     title: string;
     file: 'config' | 'blocks';
+    // the plain group (SettingsData.groups) this section folds into
+    group?: string;
     groups: SettingsGroup[];
     changed: number;
     count: number;
 }
+
+// A plain group of the Simple view: the config.lua sections it folds together.
+export interface SettingsPlainGroup {
+    key: string;
+    title: string;
+    help: string;
+    sections: string[];
+}
+
+// Config.AdminUi.settingsView: 'simple' = the everyday settings in plain groups; 'all' = every setting by section.
+export type SettingsViewMode = 'simple' | 'all';
 
 export interface SettingsData {
     sections: SettingsSection[];
@@ -120,6 +136,11 @@ export interface SettingsData {
     safeMode?: boolean;
     // departments added in game (Departments.<key> record settings)
     added?: string[];
+    // the plain groups and the everyday settings (paths, in order) of the Simple view
+    groups?: SettingsPlainGroup[];
+    common?: string[];
+    // the view the screen opens in (Config.AdminUi.settingsView)
+    view?: SettingsViewMode;
 }
 
 // The reply of every change: the changed settings, the Config health run right after it.

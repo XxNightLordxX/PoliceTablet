@@ -265,6 +265,17 @@ do
     H.eq(view.groups[1].title, 'Tablet', 'group titles come from the locale')
     H.eq(S.view('Flee.sprintSeconds').common, true, 'a setting view says it is common')
     H.eq(S.view('Flee.sprintSeconds').label, 'Seconds a runner sprints', 'with its plain label')
+    -- Config.AdminUi.settingsView: the view the screen opens in
+    H.eq(S.entry('AdminUi.settingsView').default, 'simple', 'Settings ships opening in Simple')
+    H.eq(S.entry('AdminUi.settingsView').kind, 'enum', 'settingsView is a choice')
+    H.ok(S.entry('AdminUi.settingsView').desc:find('only the everyday settings in plain groups', 1, true) ~= nil,
+        'settingsView: its config.lua comment is its description')
+    H.eq(view.view, 'simple', 'the view asks the screen to open in Simple')
+    Config.AdminUi.settingsView = 'all'
+    H.eq(S.all().view, 'all', 'settingsView = all: the screen opens on every setting')
+    Config.AdminUi.settingsView = 'bogus'
+    H.eq(S.all().view, 'simple', 'an unknown view falls back to Simple')
+    Config.AdminUi.settingsView = 'simple'
 end
 
 -- ============================================================================
