@@ -18,6 +18,7 @@ import { formatDuration } from '../../shared/format';
 import { useRequest } from '../../shared/hooks';
 import { t } from '../../shared/i18n';
 import { useAdminAction } from '../../admin/components/kit';
+import { ReasonChips } from '../../admin/components/ReasonChips';
 import { nameOf } from '../controls';
 import type { MissionTweak, MissionTweakView } from '../../types/admin_missions';
 
@@ -186,6 +187,7 @@ export function QuickEditPanel({
                     })}
                     <Field label={t('admin.missions.quick.reason')}>
                         <TextInput value={reason} onChange={setReason} maxLength={255} />
+                        <ReasonChips value={reason} onChange={setReason} />
                     </Field>
                     <div className="admin-missions-muted">{t('admin.missions.quick.runs_keep')}</div>
                     <div className="admin-missions-buttons">

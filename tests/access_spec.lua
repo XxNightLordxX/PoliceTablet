@@ -139,6 +139,16 @@ do
     adm = Cb('getSession', 9, { ui = 'admin', via = 'command' })
     H.eq(adm.data.config.adminUi.homeForms, false, 'homeForms = false: the Home tiles only open their screen')
     Config.AdminUi.homeForms = true
+    H.eq(table.concat(adm.data.config.adminUi.reasonChips, '|'), 'Balance change|Event|Correction',
+        'Config.AdminUi.reasonChips ships three ready-made reasons')
+    Config.AdminUi.reasonChips = { '  Event  ', 'Event', '', 42, string.rep('x', 61), 'Prize' }
+    adm = Cb('getSession', 9, { ui = 'admin', via = 'command' })
+    H.eq(table.concat(adm.data.config.adminUi.reasonChips, '|'), 'Event|Prize',
+        'reasonChips: trimmed texts only, no repeats, nothing empty or over 60 characters')
+    Config.AdminUi.reasonChips = nil
+    adm = Cb('getSession', 9, { ui = 'admin', via = 'command' })
+    H.eq(#adm.data.config.adminUi.reasonChips, 0, 'reasonChips unset: no buttons')
+    Config.AdminUi.reasonChips = { 'Balance change', 'Event', 'Correction' }
     Config.Tablet.access = { command = true, keybind = true, item = true, desk = true, requireItem = false }
     Config.Tablet.item = false
 end

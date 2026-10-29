@@ -34,6 +34,7 @@ import { toast } from '../../shared/toast';
 import type { PayoutAdjustPreview, PayoutAdjustRow } from '../../types/admin_economy';
 import type { AdminPayoutMission, AdminPayoutType, AdminPayoutsView } from '../../types/economy';
 import { PreviewTable, useAdminAction } from '../components/kit';
+import { ReasonChips } from '../components/ReasonChips';
 import './Payouts.css';
 
 const REASON_MAX = 255;
@@ -258,6 +259,7 @@ function SetDialog({
                         rows={3}
                         placeholder={t('admin.payouts.reason_placeholder')}
                     />
+                    <ReasonChips value={reason} onChange={setReason} />
                 </Field>
                 {target.kind === 'type' ? (
                     <Toggle

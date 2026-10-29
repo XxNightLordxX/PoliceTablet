@@ -288,6 +288,19 @@ local function AdminLanding(v)
     return LANDINGS[v] and v or 'home'
 end
 
+-- Config.AdminUi.reasonChips: the ready-made reasons (texts only, trimmed, at most 8 of up to 60 characters; nil = {})
+local function ReasonChips(list)
+    local out, seen = {}, {}
+    for _, v in ipairs(type(list) == 'table' and list or {}) do
+        local s = type(v) == 'string' and v:match('^%s*(.-)%s*$') or ''
+        if s ~= '' and #s <= 60 and not seen[s] and #out < 8 then
+            seen[s] = true
+            out[#out + 1] = s
+        end
+    end
+    return out
+end
+
 -- The parity-plus parts of Session.config (web/src/shared/types.ts). English is the only language shipped.
 local function ExtraConfig(deptKey)
     local mc = Config.MissionCalls or {}
@@ -325,6 +338,7 @@ local function ExtraConfig(deptKey)
             groupSidebar = aui.groupSidebar ~= false,
             landing = AdminLanding(aui.landing),
             homeForms = aui.homeForms ~= false,
+            reasonChips = ReasonChips(aui.reasonChips),
         },
     }
 end

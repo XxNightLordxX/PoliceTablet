@@ -97,7 +97,13 @@ export interface Session {
         // Config.AdminUi: groupSidebar false = the Admin UI sidebar is one flat list
         // landing = the screen the Admin UI opens on ('home' shows the Home screen; the others hide it)
         // homeForms = the Home tiles hold the quick forms (false: they only open the screen)
-        adminUi?: { groupSidebar: boolean; landing?: 'home' | 'payouts' | 'missions'; homeForms?: boolean };
+        // reasonChips = the ready-made reasons under a reason box (ReasonChips; [] = none)
+        adminUi?: {
+            groupSidebar: boolean;
+            landing?: 'home' | 'payouts' | 'missions';
+            homeForms?: boolean;
+            reasonChips?: string[];
+        };
     };
     prefs?: Prefs;
     // how the tablet was opened: command, keybind, item, export, desk or dispatch (desk = its index)

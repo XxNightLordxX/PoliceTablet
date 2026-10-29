@@ -58,6 +58,7 @@ import { BulkVoidDialog } from '../components/BulkVoidDialog';
 import { RecognitionPanel } from '../components/boards/RecognitionPanel';
 import { RunDialog } from '../components/officers/OfficerRuns';
 import { newRequestId } from '../components/kit';
+import { ReasonChips } from '../components/ReasonChips';
 import type { OfficerPoints } from '../../types/admin_officers';
 import './Leaderboards.css';
 
@@ -974,6 +975,7 @@ export default function AdminLeaderboards() {
                                 rows={3}
                                 placeholder={t('admin.boards.reason_placeholder')}
                             />
+                            <ReasonChips value={award.reason} onChange={v => setAward({ ...award, reason: v })} />
                         </Field>
                     </div>
                 ) : null}

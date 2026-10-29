@@ -844,6 +844,50 @@ do
     H.ok(keys['admin.missions.drawer.open'] == true, 'locale: admin.missions.drawer.open')
 end
 
+-- Config.AdminUi.reasonChips: ready-made reasons under the reason box of Set payout, Give or take points and Quick
+-- edit; a click fills the box. Quick edit times are typed in minutes and saved as the seconds the server stores.
+do
+    local chips = Read(WEB .. 'admin/components/ReasonChips.tsx') or ''
+    Has(chips, 'asArray(useSession().config?.adminUi?.reasonChips)', 'the buttons come from the session config')
+    Has(chips, 'onClick={() => onChange(chip)}', 'a click fills the reason box')
+    Has(chips, 'if (!chips.length) return null;', 'reasonChips = {}: no buttons')
+    H.ok(keys['admin.reason_chips.label'] == true, 'locale: admin.reason_chips.label')
+    for file, use in pairs({
+        ['admin/screens/Payouts.tsx'] = '<ReasonChips value={reason} onChange={setReason} />',
+        ['admin/components/MissionDrawer.tsx'] = '<ReasonChips value={reason} onChange={setReason} />',
+        ['builder/admin/QuickEditPanel.tsx'] = '<ReasonChips value={reason} onChange={setReason} />',
+        ['admin/screens/Leaderboards.tsx'] = '<ReasonChips value={award.reason}',
+        ['admin/components/officers/OfficerTools.tsx'] = '<ReasonChips value={adjust.reason}',
+    }) do
+        Has(Read(WEB .. file) or '', use, file .. ' has the reason buttons')
+    end
+    local forms = Read(WEB .. 'admin/components/HomeForms.tsx') or ''
+    local _, n = forms:gsub('<ReasonChips value={reason} onChange={setReason} />', '')
+    H.eq(n, 2, 'the Home pay and points forms have the reason buttons')
+    Has(Read(WEB .. 'mocks/samples.ts') or '', 'reasonChips:', 'the browser mock has the reason buttons')
+
+    -- Quick edit round trip: the panel's own conversions, run on "20" minutes, through the browser mock
+    local qe = Read(WEB .. 'builder/admin/QuickEditPanel.tsx') or ''
+    local function Conv(name, arg)
+        local body = qe:match('const ' .. name .. ' = %(' .. arg .. '[^)]*%) =>%s*(%b())')
+        H.ok(body ~= nil, name .. ' is a one-line arrow in QuickEditPanel')
+        local lua = (body or '(0)'):gsub('Math%.round', 'R'):gsub('typeof (%w+) === \'number\'', 'type(%1) == "number"')
+        lua = lua:gsub('===', '=='):gsub('%s*%?%s*', ' and '):gsub('%s+:%s+', ' or ')
+        local fn = load(
+            'local ' .. arg .. ' = ...; local R = function(x) return math.floor(x + 0.5) end; return ' .. lua)
+        H.ok(fn ~= nil, name .. ' reads as plain arithmetic: ' .. lua)
+        return fn or function() end
+    end
+    local toSeconds, toMinutes = Conv('toSeconds', 'm'), Conv('toMinutes', 's')
+    H.eq(toSeconds(20), 1200, 'Quick edit: 20 minutes are sent as 1200 seconds')
+    H.eq(toSeconds(1.5), 90, '1.5 minutes are 90 seconds')
+    H.eq(toMinutes(1200), 20, 'and 1200 seconds show as 20 minutes again')
+    local mock = Read(WEB .. 'mocks/admin_missions.mock.ts') or ''
+    Has(mock, 'if (p.tweak) tweaks[p.missionId] = p.tweak;', 'the mock keeps the seconds it was sent')
+    Has(mock, 'live: { cooldown: 1200, timeLimit: 600, startTimeout: 600, ...tweaks[p.missionId] },',
+        'and shows them as the live value (1200 s = 20:00)')
+end
+
 -- Mission Builder -> Publish: an edited built-in is written to overrides/<id>.lua (FilePathFor).
 do
     local pub = Read(WEB .. 'builder/steps/StepPublish.tsx') or ''

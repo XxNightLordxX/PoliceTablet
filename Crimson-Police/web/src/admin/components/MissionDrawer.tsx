@@ -23,6 +23,7 @@ import { t } from '../../shared/i18n';
 import { useNavigate } from '../../shared/navigation';
 import { useCan } from '../../shared/session';
 import { QuickEditPanel } from '../../builder/admin';
+import { ReasonChips } from './ReasonChips';
 import type { AdminPayoutsView } from '../../types/economy';
 import type { MissionSwitchView } from '../../types/settings';
 import type { TestLocationStatus, TestsView } from '../../types/testing';
@@ -317,6 +318,7 @@ function PayoutSection({ mission }: { mission: DrawerMission }) {
                             hint={needReason ? undefined : t('common.optional')}
                         >
                             <TextInput value={reason} onChange={setReason} maxLength={255} />
+                            <ReasonChips value={reason} onChange={setReason} />
                         </Field>
                     </div>
                     <div className="admin-missions-buttons">

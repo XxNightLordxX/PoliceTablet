@@ -1047,6 +1047,11 @@ local KNOWN = {
     ['Cash.source'] = { tpl = Enum({ 'server', 'society' }), kind = 'enum' },
     ['AdminUi.landing'] = { tpl = Enum({ 'home', 'payouts', 'missions' }), kind = 'enum' },
     ['AdminUi.settingsView'] = { tpl = Enum({ 'simple', 'all' }), kind = 'enum' },
+    ['AdminUi.reasonChips'] = {
+        tpl = ListOf(Text('%S', 60), { max = 8, unique = true }),
+        kind = 'list',
+        item = 'string',
+    },
     ['Units.invitePolicy'] = { tpl = Enum({ 'anyone', 'leader' }), kind = 'enum' },
     ['NpcDifficulty.preset'] = { tpl = Enum({ 'easy', 'normal', 'hard', 'custom' }), kind = 'enum' },
     ['NpcCombat.firingPattern'] = { tpl = Enum({ 'single', 'burst', 'delayed', 'default' }), kind = 'enum' },

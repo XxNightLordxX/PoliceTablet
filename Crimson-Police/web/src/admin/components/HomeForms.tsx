@@ -7,6 +7,7 @@ import { formatMoney, formatNumber } from '../../shared/format';
 import { useAction, useRequest } from '../../shared/hooks';
 import { t } from '../../shared/i18n';
 import { OfficerPicker, newRequestId } from './kit';
+import { ReasonChips } from './ReasonChips';
 import { SettingRow, mergeSettingsReply, useSettingSave } from '../screens/Settings';
 import type { AdminMissionEntry, AdminMissionsData } from '../../types/builder_client';
 import type { AdminPayoutsView } from '../../types/economy';
@@ -263,6 +264,7 @@ export function PayForm() {
                     maxLength={REASON_MAX}
                     placeholder={t('admin.payouts.reason_placeholder')}
                 />
+                <ReasonChips value={reason} onChange={setReason} />
             </Field>
             <div className="admin-home-form__actions">
                 <Button variant="primary" size="sm" icon="check" disabled={!canSave} loading={busy} onClick={save}>
@@ -350,6 +352,7 @@ export function PointsForm() {
                             maxLength={REASON_MAX}
                             placeholder={t('admin.boards.reason_placeholder')}
                         />
+                        <ReasonChips value={reason} onChange={setReason} />
                     </Field>
                     {word ? (
                         <Field label={t('ui.admin_officers.type_word', { word })} required>

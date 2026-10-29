@@ -60,5 +60,6 @@
   "ui.maintenance.officer_restore_failed": "New missions, mission calls and payments wait until an admin finishes restoring a backup. Your runs and pay are safe.",
   "ui.maintenance.admin.restore_failed": "Payments, new runs and claims stay held, also after a restart. Restore the automatic backup {automatic} in System → Backups, then restart Crimson-Police.",
   "ui.maintenance.admin.storage_done": "The storage copy or switch is done. New runs, claims, tests, operations and payments wait until Crimson-Police restarts. Screens still show data.",
-  "ui.maintenance.admin.restore_done": "The backup restore is done. New runs, claims, tests, operations and payments wait until Crimson-Police restarts. Screens still show data."
+  "ui.maintenance.admin.restore_done": "The backup restore is done. New runs, claims, tests, operations and payments wait until Crimson-Police restarts. Screens still show data.",
+  "admin.reason_chips.label": "Ready-made reasons"
 }

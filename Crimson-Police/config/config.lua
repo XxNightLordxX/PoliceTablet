@@ -114,6 +114,9 @@ Config.AdminUi = {
     -- true = the Home tiles hold the quick forms (switch missions and locations on or off, change pay, give or take
     -- points, the everyday settings), each done right there; false = the tiles only open the full screen
     homeForms = true,
+    -- Ready-made reasons shown as buttons under the reason box when setting pay, giving or taking points and in a
+    -- mission's Quick edit: a click fills the box, which can still be typed in; {} = no buttons, only typing
+    reasonChips = { 'Balance change', 'Event', 'Correction' },
 }
 
 -- ============================================================================

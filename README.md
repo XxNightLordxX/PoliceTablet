@@ -1333,6 +1333,11 @@ refused), Config health warnings, System problems, stuck payments and **Refused 
 panel straight on Payouts or Missions instead (with no Home), set `Config.AdminUi.landing = 'payouts'` or
 `'missions'` (Admin UI → **Settings**).
 
+Under the reason box of every **Set payout** (Payouts, Home, a mission's drawer), **Give or take points** (Home,
+Leaderboards, Officers) and **Quick edit** sit ready-made reasons: **Balance change**, **Event** and **Correction**.
+A click fills the box; you can still type your own. Change the list in `Config.AdminUi.reasonChips` (Admin UI →
+**Settings**, up to 8 reasons of up to 60 characters); `{}` shows no buttons.
+
 The sidebar shows the everyday screens (**Home**, **Payouts**, **Missions**, **Live**, **Officers**, **Settings**) and a
 **More** button with the other eight. While More is folded its badge adds up theirs, so nothing waiting is hidden; a
 link or notification that opens one of them unfolds it, and the panel remembers whether you left it open. To get one
@@ -1656,7 +1661,7 @@ type sets the pay. You can publish without testing (testing is optional for ever
 - **Reset to original** puts your edit away (it is moved to `missions/custom/overrides/archived/`, not erased) and
   the shipped mission plays again. You type the mission id to confirm.
 - **Quick edit** (in the mission's drawer) changes a built-in's cooldown, time limit and time to reach the start
-  (typed in minutes), and its NPC models, cars and weapons (by their plain names), without the Builder. The values apply on top of an edited version too; **Fold
+  (typed in minutes: 20 is saved as 20:00), and its NPC models, cars and weapons (by their plain names), without the Builder. The values apply on top of an edited version too; **Fold
   Quick edit values into the edit** makes them part of it.
 - `Config.AdminControl.editBuiltins = false` (Settings) switches editing off: the edits are kept but not played, and
   the shipped missions play until you switch it back on.

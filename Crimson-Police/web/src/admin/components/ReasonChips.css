@@ -1,0 +1,33 @@
+/* Admin UI · ReasonChips: ready-made reasons under a reason box. Only --cp-* variables (admin theme). */
+
+.admin-reason-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 6px;
+}
+
+.admin-reason-chip {
+    padding: 3px 10px;
+    border-radius: var(--cp-radius-pill);
+    border: 1px solid var(--cp-border);
+    background: var(--cp-surface-2);
+    color: var(--cp-text);
+    font-size: var(--cp-fs-sm);
+    cursor: pointer;
+}
+
+.admin-reason-chip:hover:not(:disabled) {
+    border-color: var(--cp-accent);
+}
+
+.admin-reason-chip[aria-pressed='true'] {
+    border-color: var(--cp-accent);
+    background: var(--cp-accent);
+    color: var(--cp-accent-contrast);
+}
+
+.admin-reason-chip:disabled {
+    opacity: 0.5;
+    cursor: default;
+}

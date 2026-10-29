@@ -175,6 +175,11 @@ do
     H.eq(E('AdminUi.homeForms').kind, 'boolean', 'homeForms is a switch')
     H.ok(E('AdminUi.homeForms').desc:find('the Home tiles hold the quick forms', 1, true) ~= nil,
         'homeForms: its config.lua comment is its description')
+    H.eq(cjson.encode(E('AdminUi.reasonChips').default), '["Balance change","Event","Correction"]',
+        'the reason buttons ship with three ready-made reasons')
+    H.eq(E('AdminUi.reasonChips').kind, 'list', 'reasonChips is a list of texts')
+    H.ok((E('AdminUi.reasonChips').desc or ''):find('a click fills the box', 1, true) ~= nil,
+        'reasonChips: its config.lua comment is its description')
     H.eq(E('MissionTypes.patrol.dailyLimit').nullable, true, 'dailyLimit = nil is a setting that may stay unset')
     H.eq(E('MissionTypes.patrol.dailyLimit').default, nil, 'with no value in config.lua')
     H.eq(E('Blocks.escort.speed').kind, 'range', 'blocks.lua { min, max, default } edit as ranges')

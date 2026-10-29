@@ -144,6 +144,11 @@ const CONFIG: Session['config'] = {
                   ? 'missions'
                   : 'home',
         homeForms: !(typeof window !== 'undefined' && /[?&]homeLinks\b/.test(window.location.search)),
+        // ?noReasonChips: no ready-made reason buttons (Config.AdminUi.reasonChips = {})
+        reasonChips:
+            typeof window !== 'undefined' && /[?&]noReasonChips\b/.test(window.location.search)
+                ? []
+                : ['Balance change', 'Event', 'Correction'],
     },
 };
 

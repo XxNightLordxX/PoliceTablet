@@ -35,6 +35,7 @@ import type { OfficerDetail } from '../../../types/oversight';
 import type { Commendation } from '../../../types/profile';
 import { BulkVoidDialog } from '../BulkVoidDialog';
 import { JobProgress, useAdminAction } from '../kit';
+import { ReasonChips } from '../ReasonChips';
 import './OfficerTools.css';
 
 type Simple =
@@ -665,6 +666,7 @@ export function OfficerTools({ o, onChanged }: { o: OfficerDetail; onChanged: ()
                                 maxLength={255}
                                 rows={2}
                             />
+                            <ReasonChips value={adjust.reason} onChange={v => setAdjust({ ...adjust, reason: v })} />
                         </Field>
                     </div>
                 ) : null}

@@ -1049,6 +1049,7 @@
   "admin.perms.supervisor_count": "{on} of {total} switched on",
   "admin.perms.switched_off": "Supervisors may no longer: {action}",
   "admin.perms.switched_on": "Supervisors may now: {action}",
+  "admin.reason_chips.label": "Ready-made reasons",
   "admin.rewards.action.cancel": "Cancel reward",
   "admin.rewards.action.deliver": "Deliver now",
   "admin.rewards.action.resolve": "Resolve",
