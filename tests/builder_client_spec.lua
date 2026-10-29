@@ -83,6 +83,7 @@ _G.GetShapeTestResult = function(handle)
 end
 _G.GetGroundZFor_3dCoord = function() return true, W.groundZ end
 _G.TestProbeAgainstWater = function() return W.water end
+_G.IsEntityInWater = function() return W.swimming == true end
 _G.GetWaterHeight = function() return false, 0.0 end
 _G.IsModelInCdimage = function() return true end
 _G.IsModelAPed = function() return true end
@@ -271,6 +272,7 @@ for _, name in ipairs({
     'builderResult',
     'builderCancel',
     'builderWaypoint',
+    'builderHere',
 }) do
     H.ok(type(T.actions[name]) == 'function', 'client action registered: ' .. name)
 end
@@ -1859,6 +1861,121 @@ console.log(JSON.stringify(out));
         H.eq(json.encode(got.beat), '[100,400,525]', 'a 0.44 km beat: checkpoints about 300 m apart and its end')
         H.eq(got.long, 20, 'a recorded patrol keeps at most checkpoint_route.checkpoints[2] checkpoints')
     end
+end
+
+-- ============================================================================
+--                               USE MY POSITION
+-- ============================================================================
+-- (builderHere): the spot where the player stands.
+
+do
+    -- the tool an earlier case left running ends first (builderHere refuses while one runs, as the tools do)
+    if B.active() then
+        H.eq(select(2, Act('builderHere', { missionId = 'x' })), 'err.invalid_payload', 'the payload is checked first')
+        B.cancel('ui')
+        Frames(40)
+    end
+    H.eq(B.active(), nil, 'no tool runs before builderHere')
+    local closes, opens = T.closes, #T.opens
+    W.pos = { x = 1300.0, y = -3000.0, z = 6.0 }
+    W.groundZ = 5.0
+    W.heading = 120.0
+    W.veh, W.water, W.swimming, W.blocked = 0, false, false, false
+    local startPayload = {
+        missionId = 'custom_dockside_raid',
+        location = 1,
+        key = 'start',
+        kind = 'start',
+        radius = 60,
+        points = {},
+        otherStarts = {},
+        ui = 'admin',
+    }
+    local ok, r = Act('builderHere', startPayload)
+    H.eq(ok, true, 'builderHere answers at once')
+    H.eq(r.ok, true, 'the start is set where the player stands')
+    H.eq(r.reason, false, 'no reason when it is ok')
+    H.eq(json.encode({ r.point.x, r.point.y, r.point.z }), '[1300,-3000,5]',
+        'a start is stored on the ground under the player (as the placement tool stores it)')
+    H.eq(r.point.w, nil, 'a start keeps no heading')
+    H.eq(r.result.kind, 'placement', 'the answer carries a placement result')
+    H.eq(r.result.cancelled, false, 'not cancelled')
+    H.eq(r.result.key, 'start', 'for the start')
+    H.eq(#r.result.points, 1, 'one start')
+    H.eq(r.result.radius, 60, 'the start keeps its radius')
+    H.eq(B.active(), nil, 'no tool was started')
+    H.eq(T.closes, closes, 'the tablet stayed open')
+    H.eq(#T.opens, opens, 'and was not reopened')
+
+    -- on foot, a hostile spawn point: added to the ones there, 1 m above the ground, facing the player's way
+    local spawnPayload = {}
+    for k, v in pairs(placePayload) do spawnPayload[k] = v end
+    spawnPayload.points = { { x = 1250.0, y = -3000.0, z = 6.0, w = 0.0 } }
+    spawnPayload.start = { x = 1200.0, y = -3000.0, z = 5.0 }
+    ok, r = Act('builderHere', spawnPayload)
+    H.eq(ok and r.ok, true, 'a spawn point is added where the player stands')
+    H.eq(json.encode({ r.point.x, r.point.y, r.point.z, r.point.w }), '[1300,-3000,6,120]',
+        'a ped point: 1 m above the ground, with the player\'s heading')
+    H.eq(#r.result.points, 2, 'added after the point already placed')
+    H.eq(r.result.points[1].x, 1250.0, 'the placed point is kept')
+
+    -- in a vehicle: the vehicle's position and heading, a vehicle point lifted by the model's height
+    local car = NewEnt('vehicle', 1310.0, -3005.0, 5.8, true)
+    W.veh = car
+    W.heading = 271.0
+    ok, r = Act('builderHere', {
+        missionId = 'custom_dockside_raid',
+        location = 1,
+        key = 'cars',
+        kind = 'vehicle',
+        model = 'sultan',
+        heading = true,
+        multiple = true,
+        max = 4,
+        points = {},
+        otherStarts = {},
+    })
+    H.eq(ok and r.ok, true, 'a vehicle point is set where the player\'s vehicle is')
+    H.eq(json.encode({ r.point.x, r.point.y, r.point.z, r.point.w }), '[1310,-3005,5.6,271]',
+        'a vehicle point: the vehicle\'s spot, the ground plus the model\'s lift, the vehicle\'s heading')
+    W.veh = 0
+    W.ents[car] = nil
+
+    -- refused: in water, in a no-build zone, too close to the start, in a wall; nothing is set
+    W.swimming = true
+    ok, r = Act('builderHere', startPayload)
+    H.eq(ok, true, 'a refusal is an answer too')
+    H.eq(r.ok, false, 'refused in water')
+    H.eq(r.reason, 'In water', 'the reason in words')
+    H.eq(r.result, nil, 'no result to apply')
+    W.swimming = false
+    local zones = Config.Builder.noBuildZones
+    Config.Builder.noBuildZones = { { label = 'Pier', coords = { x = 1305.0, y = -3000.0, z = 5.0 }, radius = 50.0 } }
+    ok, r = Act('builderHere', startPayload)
+    H.eq(r.ok, false, 'refused inside a no-build zone')
+    H.eq(r.reason, 'Inside the no-build zone Pier', 'the zone is named')
+    Config.Builder.noBuildZones = zones
+    spawnPayload.start = { x = 1290.0, y = -3000.0, z = 5.0 }
+    ok, r = Act('builderHere', spawnPayload)
+    H.eq(r.ok, false, 'a spawn point too close to the start is refused')
+    W.blocked = true
+    spawnPayload.start = { x = 1200.0, y = -3000.0, z = 5.0 }
+    ok, r = Act('builderHere', spawnPayload)
+    H.eq(r.reason, 'Inside a wall, object or vehicle', 'a spot with no room for the ped is refused')
+    W.blocked = false
+
+    -- the same refusals as the tools, and the switch
+    W.dead = true
+    H.eq(select(2, Act('builderHere', startPayload)), 'err.builder_dead', 'refused while dead')
+    W.dead = false
+    H.eq(select(2, Act('builderHere', { missionId = 'x' })), 'err.invalid_payload', 'a bad payload')
+    Config.Builder.useMyPosition = false
+    H.eq(select(2, Act('builderHere', startPayload)), 'err.builder_here_off',
+        'Config.Builder.useMyPosition = false turns it off')
+    Config.Builder.useMyPosition = true
+    H.eq(B.active(), nil, 'still no tool')
+    W.pos = { x = 1017.5, y = -3108.4, z = 5.9 }
+    W.heading = 90.0
 end
 
 -- ============================================================================

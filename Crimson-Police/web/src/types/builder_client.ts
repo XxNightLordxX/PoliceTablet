@@ -122,6 +122,16 @@ export interface BuilderPlaceRequest extends BuilderPlacePayload {
     radiusMin?: number;
     radiusMax?: number;
 }
+// builderHere (Config.Builder.useMyPosition): the builderPlace payload; the spot where the player stands is checked
+// like an aimed one and the answer comes at once (the tablet stays open). result: a placement result with the point
+// added (or set), only when ok.
+export interface BuilderHereReply {
+    ok: boolean;
+    // the refusal, in words (false when ok)
+    reason: string | false;
+    point: Vec;
+    result?: BuilderClientResultEx;
+}
 export interface BuilderRecordRequest extends BuilderRecordPayload {
     label?: string;
     ui?: BuilderUi;

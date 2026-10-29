@@ -206,6 +206,12 @@ do
         'Builder.supervisorItems is a true/false setting with its comment'
     )
     H.eq(E('Builder.supervisorItems').restart, false, 'and changes live')
+    H.ok(
+        E('Builder.useMyPosition') ~= nil and E('Builder.useMyPosition').kind == 'boolean'
+            and E('Builder.useMyPosition').default == true
+            and E('Builder.useMyPosition').desc:find('the point goes where you stand', 1, true) ~= nil,
+        'Builder.useMyPosition is a true/false setting, shipped on, with its comment'
+    )
 
     -- every setting is a key of Config (or a nil key config.lua names)
     local bad = {}

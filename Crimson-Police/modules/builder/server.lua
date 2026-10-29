@@ -3710,6 +3710,8 @@ CP.Net.callback('builder:config', function(src)
         spawnFields = SPAWN_FIELDS,
         forbiddenItems = FORBIDDEN_ITEMS,
         useStartRoute = Config.Testing and Config.Testing.useStartRoute == true or false,
+        -- "Set start here" / "Add here" on the Locations step (Config.Builder.useMyPosition)
+        useMyPosition = bc.useMyPosition ~= false,
         permissions = perms,
     }
 end, { rate = 2 })

@@ -300,6 +300,7 @@ Client actions (registered by `modules/builder/client.lua` with `CP.Tablet.regis
 | name | payload | immediate reply |
 |---|---|---|
 | `builderPlace` | `{ missionId, location, key, kind: 'ped'\|'vehicle'\|'marker'\|'area'\|'start', model?, heading: boolean, multiple: boolean, min?, max?, radius?, points: (Vec3\|Vec4)[], start: Vec3\|null, spawn: boolean, armed?: boolean, startRadius?: number, otherStarts: Vec3[] }` (armed: an armed spawn key, kept outside the start circle `startRadius` plus `Config.Builder.spawnMargin`) | `{ started: true }` or `err.in_arena` / `err.builder_busy` |
+| `builderHere` | the `builderPlace` payload | `{ ok, reason: string\|false, point, result? }` at once, the tablet stays open: the spot where the player stands (or his vehicle is), checked as an aimed spot; `result` is a placement result with the point added (multiple) or set, only when `ok`. `err.builder_here_off` while `Config.Builder.useMyPosition` is false |
 | `builderRecord` | `{ missionId, location, key, stops: boolean, loop: boolean }` | `{ started: true }` |
 | `builderTestDrive` | `{ missionId, location, key, route: BuilderRoute, vehicle, speed, style }` | `{ started: true }` |
 | `builderResult` | `{}` | the pending result below (or `null`), and clears it |

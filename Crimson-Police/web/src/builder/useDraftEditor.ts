@@ -19,6 +19,7 @@ import type {
 } from '../types/builder_server';
 import type {
     BuilderClientResultEx,
+    BuilderHereReply,
     BuilderPlaceRequest,
     BuilderRecordRequest,
     BuilderTestDriveRequest,
@@ -77,6 +78,8 @@ export interface DraftEditor {
     takeLock: () => Promise<boolean>;
     releaseLock: () => Promise<void>;
     place: (spec: PointSpec, location: number) => Promise<boolean>;
+    // the point where the player stands (Config.Builder.useMyPosition): set or added at once, the tablet stays open
+    here: (spec: PointSpec, location: number) => Promise<boolean>;
     recordRoute: (spec: PointSpec, location: number) => Promise<boolean>;
     testDrive: (spec: PointSpec, location: number) => Promise<boolean>;
 }
@@ -524,11 +527,12 @@ export function useDraftEditor(
         return true;
     };
 
-    const place = async (spec: PointSpec, location: number) => {
+    // the builderPlace / builderHere payload of a key, null when the location is gone
+    const placePayload = (spec: PointSpec, location: number): BuilderPlaceRequest | null => {
         const d = defRef.current;
-        if (!d || !config) return false;
+        if (!d || !config) return null;
         const loc = d.locations[location - 1];
-        if (!loc) return false;
+        if (!loc) return null;
         const isStart = spec.key === 'start';
         const existing = isStart ? (loc.start ? [loc.start.coords] : []) : spec.lists ? [] : pointsOf(loc[spec.key]);
         const otherStarts = d.locations.filter((l, i) => i !== location - 1 && l.start).map(l => l.start!.coords);
@@ -566,7 +570,46 @@ export function useDraftEditor(
             payload.armed = true;
             payload.startRadius = loc.start.radius;
         }
+        return payload;
+    };
+
+    const place = async (spec: PointSpec, location: number) => {
+        const payload = placePayload(spec, location);
+        if (!payload) return false;
         return run('builderPlace', payload, spec, location, 'placement');
+    };
+
+    const here = async (spec: PointSpec, location: number) => {
+        if (readOnly) return false;
+        const payload = placePayload(spec, location);
+        if (!payload) return false;
+        setToolBusy(true);
+        const res = await clientAction<BuilderHereReply>('builderHere', payload);
+        if (!mounted.current) return false;
+        setToolBusy(false);
+        if (!res.ok || !res.data) {
+            toast('error', t(res.error ?? 'err.internal'));
+            return false;
+        }
+        const reply = res.data;
+        const before = defRef.current;
+        if (!reply.ok || !reply.result || !before) {
+            toast('warning', t('builder.loc.here_refused', { reason: reply.reason || t('err.internal') }));
+            return false;
+        }
+        const applied = applyResult(before, reply.result, spec, config);
+        toast(applied.tone, t(applied.messageKey, applied.vars));
+        if (!applied.def) return false;
+        const next = applied.def;
+        syncStartRadius(next, config, before);
+        rev.current += 1;
+        defRef.current = next;
+        dirtyRef.current = true;
+        setDef(next);
+        setDirty(true);
+        rememberDraft(idRef.current, next, true);
+        await autosaveNow();
+        return true;
     };
 
     const recordRoute = async (spec: PointSpec, location: number) => {
@@ -630,6 +673,7 @@ export function useDraftEditor(
         takeLock,
         releaseLock,
         place,
+        here,
         recordRoute,
         testDrive,
     };

@@ -2207,6 +2207,7 @@ local function Body()
         act(1, 'save', { id = hid, definition = labelled('Harbour Sweep') })
         local okCfg, conf = cb(1, 'builder:config', {})
         H.ok(okCfg and conf.requireTestToPublish == false, 'the builder is told testing is optional')
+        H.eq(okCfg and conf.useMyPosition, true, '"Use my position" is offered (Config.Builder.useMyPosition)')
         local okL, list = cb(1, 'builder:list', {})
         local entry = nil
         for _, e in ipairs(okL and list.missions or {}) do if e.id == hid then entry = e end end

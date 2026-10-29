@@ -14,6 +14,7 @@ import type {
 } from '../types/builder_server';
 import type {
     AdminMissionsData,
+    BuilderHereReply,
     BuilderPlaceRequest,
     BuilderRecordRequest,
     BuilderStepKey,
@@ -306,6 +307,31 @@ registerMock('client', 'builderCancel', () => {
     if (!running) return { cancelled: false };
     running.cancel = true;
     return { cancelled: true };
+});
+
+// "Use my position": the browser preview stands a few metres from the start (or at the docks), facing north-east
+let hereSteps = 0;
+registerMock('client', 'builderHere', (p: BuilderPlaceRequest): BuilderHereReply => {
+    if (!p || typeof p.missionId !== 'string' || typeof p.key !== 'string') throw new Error('err.invalid_payload');
+    if (running) throw new Error('err.builder_busy');
+    hereSteps += 1;
+    const base = p.kind === 'start' ? DOCKS : (p.start ?? DOCKS);
+    const off = p.kind === 'start' ? 0 : 35 + hereSteps * 6;
+    const point: Vec = p.heading
+        ? v4(base.x + off, base.y + off / 2, base.z + 1, 45)
+        : v3(base.x + off, base.y, base.z);
+    const existing = Array.isArray(p.points) ? p.points : [];
+    const points = p.multiple ? [...existing, point] : [point];
+    const result: BuilderClientResult = {
+        kind: 'placement',
+        missionId: p.missionId,
+        location: p.location,
+        key: p.key,
+        cancelled: false,
+        points,
+        ...(p.kind === 'start' ? { radius: typeof p.radius === 'number' ? p.radius : 60 } : {}),
+    } as BuilderClientResult;
+    return { ok: true, reason: false, point, result };
 });
 
 registerMock('client', 'builderWaypoint', (p: { coords?: Vec3 }) => {

@@ -927,5 +927,11 @@
   "builder.points.scene_marker": "Scene marker",
   "builder.points.coroner": "Coroner van parking",
   "builder.scale.people": "People",
-  "builder.loc.kerb_n": "Spot {n} · {street}"
+  "builder.loc.kerb_n": "Spot {n} · {street}",
+  "builder.loc.start_here": "Set start here",
+  "builder.loc.add_here": "Add here",
+  "builder.loc.set_here": "Set here",
+  "builder.loc.here_hint": "Uses the spot where you stand, or your vehicle is. The tablet stays open.",
+  "builder.loc.here_refused": "Can't use your position: {reason}",
+  "err.builder_here_off": "Placing points where you stand is turned off. Use the placement tool."
 }

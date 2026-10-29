@@ -3968,6 +3968,9 @@ Config.Builder = {
     supervisorItems = false,                   -- false = only admins may put items in a custom mission (items a run
                                                -- hands out can be used or sold before they are taken back); true =
                                                -- supervisors too
+    useMyPosition = true,                      -- true = the Locations step has "Set start here" and "Add here":
+                                               -- the point goes where you stand (or your vehicle is) and the tablet
+                                               -- stays open; false = points are only placed with the aim tool
     testAtMaxTier = true,                      -- a test counts as passed only at the tier maxOfficers reaches
     editLockMinutes = 30,                      -- one editor at a time; renewed while they keep editing
     defaultTeam = { patrol = 2, training = 2, investigation = 2, tactical = 4 }, -- most officers a new mission

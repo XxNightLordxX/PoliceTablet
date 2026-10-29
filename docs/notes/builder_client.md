@@ -128,6 +128,7 @@ overlays and of the protocol extensions are in `web/src/types/builder_client.ts`
 | `builderResult` | the pending `BuilderClientResult & { seq, droppedStops? }` or `nil`; clears it |
 | `builderCancel` | `{ cancelled = boolean }` (false when nothing runs) |
 | `builderWaypoint` | `{ ok = true }` |
+| `builderHere` | `{ ok, reason = text or false, point, result? }` (no tool starts; see builder_protocol.md) |
 
 Errors come back as the `err.*` keys listed above (`{ ok = false, error }` through the NUI `client` endpoint).
 

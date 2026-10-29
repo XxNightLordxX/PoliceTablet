@@ -295,6 +295,7 @@ export function StepLocations({ ed, cfg, def, ro, scope }: StepProps) {
                                     li={li}
                                     disabled={busy}
                                     onPlace={() => void ed.place(startSpec(), li)}
+                                    onHere={cfg.useMyPosition !== false ? () => void ed.here(startSpec(), li) : null}
                                     onGps={gps}
                                     onClear={() => setConfirm({ kind: 'clear', spec: startSpec() })}
                                     errors={[
@@ -371,6 +372,7 @@ function StartRow({
     disabled,
     ro,
     onPlace,
+    onHere,
     onGps,
     onClear,
     errors,
@@ -383,6 +385,8 @@ function StartRow({
     disabled: boolean;
     ro: boolean;
     onPlace: () => void;
+    // "Set start here" (Config.Builder.useMyPosition), null when off
+    onHere: (() => void) | null;
     onGps: (c: Vec3) => void;
     onClear: () => void;
     errors: ReturnType<typeof errorsAt>;
@@ -472,6 +476,18 @@ function StartRow({
                         onClick={onClear}
                         disabled={disabled}
                     />
+                ) : null}
+                {!ro && onHere ? (
+                    <Button
+                        size="sm"
+                        variant="secondary"
+                        icon="user"
+                        onClick={onHere}
+                        disabled={disabled}
+                        title={t('builder.loc.here_hint')}
+                    >
+                        {t('builder.loc.start_here')}
+                    </Button>
                 ) : null}
                 {!ro ? (
                     <Button size="sm" icon="mapPin" onClick={onPlace} disabled={disabled}>
@@ -823,18 +839,32 @@ function PointRow({
                             </Button>
                         </>
                     ) : (
-                        <Button
-                            size="sm"
-                            icon="mapPin"
-                            disabled={disabled || needStart}
-                            onClick={() => void ed.place(spec, li)}
-                        >
-                            {spec.lists
-                                ? t('builder.loc.add_path')
-                                : have
-                                  ? t('builder.loc.edit_points')
-                                  : t('builder.loc.place')}
-                        </Button>
+                        <>
+                            {cfg.useMyPosition !== false && !spec.lists ? (
+                                <Button
+                                    size="sm"
+                                    variant="secondary"
+                                    icon="user"
+                                    disabled={disabled || needStart || (spec.multiple && have >= spec.max)}
+                                    title={t('builder.loc.here_hint')}
+                                    onClick={() => void ed.here(spec, li)}
+                                >
+                                    {spec.multiple ? t('builder.loc.add_here') : t('builder.loc.set_here')}
+                                </Button>
+                            ) : null}
+                            <Button
+                                size="sm"
+                                icon="mapPin"
+                                disabled={disabled || needStart}
+                                onClick={() => void ed.place(spec, li)}
+                            >
+                                {spec.lists
+                                    ? t('builder.loc.add_path')
+                                    : have
+                                      ? t('builder.loc.edit_points')
+                                      : t('builder.loc.place')}
+                            </Button>
+                        </>
                     )}
                 </div>
             ) : null}

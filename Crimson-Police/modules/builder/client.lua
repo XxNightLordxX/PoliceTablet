@@ -951,9 +951,30 @@ local function StreetsOf(points)
     return out
 end
 
+-- The B.checkSpot rules of a placement (parsePlace options), with the points placed so far.
+local function PlaceCtx(o, points)
+    local bc = BuilderCfg()
+    return {
+        kind = o.kind,
+        points = points,
+        multiple = o.multiple,
+        max = o.max,
+        zones = bc.noBuildZones or {},
+        spawn = o.spawn,
+        start = o.start,
+        minFromStart = tonumber(bc.minSpawnFromStart) or 30.0,
+        armed = o.armed,
+        startRadius = o.startRadius,
+        spawnMargin = tonumber(bc.spawnMargin) or 40.0,
+        otherStarts = o.otherStarts,
+        minLocationGap = tonumber(bc.minLocationGap) or 100.0,
+        minGap = o.minGap,
+        maxDistance = MAX_PLACE_DISTANCE,
+    }
+end
+
 local function RunPlacement(tool)
     local o = tool.opts
-    local bc = BuilderCfg()
     local st = {
         points = {},
         heading = NormHeading(GetEntityHeading(PlayerPedId())),
@@ -975,23 +996,7 @@ local function RunPlacement(tool)
         end
     end
     RefreshAreaZones(tool, st)
-    local ctx = {
-        kind = o.kind,
-        points = st.points,
-        multiple = o.multiple,
-        max = o.max,
-        zones = bc.noBuildZones or {},
-        spawn = o.spawn,
-        start = o.start,
-        minFromStart = tonumber(bc.minSpawnFromStart) or 30.0,
-        armed = o.armed,
-        startRadius = o.startRadius,
-        spawnMargin = tonumber(bc.spawnMargin) or 40.0,
-        otherStarts = o.otherStarts,
-        minLocationGap = tonumber(bc.minLocationGap) or 100.0,
-        minGap = o.minGap,
-        maxDistance = MAX_PLACE_DISTANCE,
-    }
+    local ctx = PlaceCtx(o, st.points)
     local function finish(cancelled)
         local r = NewResult(tool, cancelled)
         -- a cancelled tool (X, the tablet, an interruption) hands back the points it was given, unchanged
@@ -1154,6 +1159,81 @@ local function RunPlacement(tool)
         end
         Wait(0)
     end
+end
+
+-- ============================================================================
+--                        USE MY POSITION (builderHere)
+-- ============================================================================
+-- Ms a capsule probe of the spot may take before builderHere answers.
+local HERE_PROBE_MS = 500
+
+-- Lift and capsule size of a vehicle model (as the ghost measures it); the defaults when the model is unknown.
+local function VehicleDims(name)
+    local hash = joaat(name)
+    if IsModelInCdimage(hash) and IsModelAVehicle(hash) then
+        local mn, mx = GetModelDimensions(hash)
+        if mn and mx then
+            local height = mx.z - mn.z
+            local midZ = math.max(0.6, height / 2.0 + 0.15)
+            return {
+                lift = Clamp(-mn.z, 0.2, 1.5),
+                half = math.max(0.5, (mx.y - mn.y) / 2.0),
+                midZ = midZ,
+                r = Clamp(math.min((mx.x - mn.x) / 2.0 * 0.8, 1.0), 0.3, midZ - 0.2),
+            }
+        end
+    end
+    return { lift = 0.5, half = 2.3, r = 0.8, midZ = 1.0 }
+end
+
+-- Config.Builder.useMyPosition: the spot where the player stands, or his vehicle is, checked like an aimed spot
+-- (B.checkSpot) and stored at the height the placement tool stores. Answers { ok, reason, point, result } at once:
+-- result is a placement result with the point added (multiple) or set; the tablet stays open.
+local function Here(o)
+    local ped = PlayerPedId()
+    local veh = GetVehiclePedIsIn(ped, false)
+    local ent = veh ~= 0 and veh or ped
+    local pos = GetEntityCoords(ent)
+    local heading = NormHeading(GetEntityHeading(ent))
+    local found, gz = GetGroundZFor_3dCoord(pos.x, pos.y, pos.z + 1.0, false)
+    local groundZ = (found == true or found == 1) and gz or nil
+    local baseZ = groundZ or pos.z
+    local spot = { hit = true, x = pos.x, y = pos.y, z = baseZ, groundZ = groundZ, distance = 0.0 }
+    local swimming = IsEntityInWater(ent)
+    spot.water = swimming == true or swimming == 1 or InWater(pos.x, pos.y, baseZ, groundZ)
+    local dims = o.kind == 'vehicle' and VehicleDims(o.model or DefaultModel('vehicle')) or nil
+    local storeZ = baseZ
+    if o.kind == 'ped' then storeZ = baseZ + PED_HEIGHT elseif o.kind == 'vehicle' then storeZ = baseZ + dims.lift end
+    spot.stored = RoundVec({ x = pos.x, y = pos.y, z = storeZ })
+    if o.kind == 'ped' or o.kind == 'vehicle' then
+        -- the player's own vehicle is not in the way of the point it stands on
+        local probe = StartProbe(o.kind, pos.x, pos.y, baseZ, heading, dims, ent)
+        local deadline = GetGameTimer() + HERE_PROBE_MS
+        while probe do
+            local status, blockedHit = GetShapeTestResult(probe)
+            if status == 2 then
+                spot.blocked = blockedHit == 1 or blockedHit == true
+                break
+            end
+            if status == 0 or GetGameTimer() >= deadline then break end
+            Wait(0)
+        end
+    end
+    local ok, reasonKey, vars = B.checkSpot(spot, PlaceCtx(o, o.points))
+    local point = RoundVec({ x = pos.x, y = pos.y, z = storeZ }, o.heading, heading)
+    local reply = { ok = ok == true, reason = (not ok and reasonKey) and CP.L(reasonKey, vars) or false, point = point }
+    if not ok then return reply end
+    local pts = {}
+    if o.multiple then
+        for i, p in ipairs(o.points) do pts[i] = p end
+    end
+    pts[#pts + 1] = point
+    local r = NewResult({ kind = 'placement', opts = o }, false)
+    r.points = pts
+    if o.kind == 'start' or o.kind == 'area' then r.radius = Round2(o.radius or 0.0) end
+    if o.streets then r.streets = StreetsOf(pts) end
+    reply.result = r
+    return reply
 end
 
 -- ============================================================================
@@ -1775,6 +1855,14 @@ local function RegisterActions()
         local o, err = B.parsePlace(payload)
         if not o then return false, err end
         return StartTool('placement', o, RunPlacement)
+    end)
+    T.registerClientAction('builderHere', function(payload)
+        if BuilderCfg().useMyPosition == false then return false, 'err.builder_here_off' end
+        local o, err = B.parsePlace(payload)
+        if not o then return false, err end
+        local why = Refusal()
+        if why then return false, why end
+        return true, Here(o)
     end)
     T.registerClientAction('builderRecord', function(payload)
         local o, err = B.parseRecord(payload)

@@ -301,6 +301,8 @@ export interface BuilderConfig {
     spawnFields: Record<string, string[]>;
     forbiddenItems: string[];
     useStartRoute: boolean;
+    // "Set start here" / "Add here" on the Locations step (Config.Builder.useMyPosition); missing = on
+    useMyPosition?: boolean;
     // the caller's builder permissions (admins: all true)
     permissions: Record<
         'builderEdit' | 'builderEditAny' | 'builderPublish' | 'builderArchive' | 'builderRollback' | 'breakEditLock',
