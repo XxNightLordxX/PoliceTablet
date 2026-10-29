@@ -576,7 +576,21 @@ local function Body()
     check('label', function(d) d.label = '   ' end, 'builder.error.label')
     check('label too long', function(d) d.label = ('x'):rep(65) end, 'builder.error.label')
     check('vehicle penalties', function(d) d.vehiclePenalties = 'yes' end, 'builder.error.vehicle_penalties')
-    check('two locations', function(d) d.locations[3] = nil end, 'builder.error.min_locations', 'locations')
+    do
+        -- one location is enough for a custom mission (Config.Builder.minLocations = 1, owner decision)
+        local one = U.deepcopy(good)
+        one.locations = { one.locations[1] }
+        H.eq(keysOf(B.validate(one, { publish = true })), '', 'a custom mission with one location publishes')
+    end
+    check('no locations', function(d) d.locations = {} end, 'builder.error.min_locations', 'locations')
+    do
+        local saved = Config.Builder.minLocations
+        Config.Builder.minLocations = 3
+        check('two locations under minLocations 3', function(d)
+            d.locations[3] = nil
+        end, 'builder.error.min_locations', 'locations')
+        Config.Builder.minLocations = saved
+    end
     check('locations 50 m apart', function(d)
         d.locations[2] = U.deepcopy(d.locations[1])
         d.locations[2].start.coords.x = d.locations[1].start.coords.x + 50

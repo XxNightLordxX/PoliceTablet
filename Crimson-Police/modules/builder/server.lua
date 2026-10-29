@@ -1884,8 +1884,8 @@ function B.validate(def, opts)
         AddError(errors, 'objectives', 'builder.error.min_seconds_total', { total = minTotal, limit = def.timeLimit })
     end
 
-    -- locations
-    local minLoc = tonumber(bc.minLocations) or 3
+    -- locations: a custom mission needs Config.Builder.minLocations, an edited built-in minLocationsOverride
+    local minLoc = opts.baseline and (tonumber(bc.minLocationsOverride) or 3) or (tonumber(bc.minLocations) or 1)
     if not (type(def.locations) == 'table' and IsList(def.locations)) or #locations < minLoc then
         AddError(errors, 'locations', 'builder.error.min_locations', { min = minLoc, have = #locations })
     elseif #locations > MAX_LOCATIONS then
@@ -3579,6 +3579,7 @@ CP.Net.callback('builder:config', function(src)
         maxHostiles = bc.maxHostiles,
         maxBlocks = bc.maxBlocks,
         minLocations = bc.minLocations,
+        minLocationsOverride = bc.minLocationsOverride,
         maxLocations = MAX_LOCATIONS,
         minLocationGap = bc.minLocationGap,
         minSpawnFromStart = bc.minSpawnFromStart,

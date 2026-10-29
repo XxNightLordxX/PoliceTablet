@@ -129,6 +129,16 @@ do
     other.type = 'patrol'
     local okT, t = X.act('server:builder:validate', 5, { id = ID, definition = other })
     H.ok(okT and t and t.valid == false, 'the type of a built-in stays its type')
+
+    -- a built-in keeps its own locations: Config.Builder.minLocationsOverride (3), not the custom minimum (1)
+    local cut = Plain(draft)
+    cut.locations = { cut.locations[1], cut.locations[2] }
+    local okL, l = X.act('server:builder:validate', 5, { id = ID, definition = cut })
+    local refused = false
+    for _, e in ipairs(okL and l and l.errors or {}) do
+        if e.key == 'builder.error.min_locations' then refused = true end
+    end
+    H.ok(okL and l and l.valid == false and refused, 'an override cut to 2 locations is refused')
 end
 
 -- ============================================================================

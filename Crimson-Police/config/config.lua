@@ -1446,7 +1446,10 @@ Config.Builder = {
     enabled = true,
     maxHostiles = 40,                          -- armed NPCs per mission across all blocks, before scaling
     maxBlocks = 6,
-    minLocations = 3,
+    minLocations = 1,                          -- locations a new custom mission needs before it can be published
+                                               -- (more locations = it repeats less; 3 or more is a good habit)
+    minLocationsOverride = 3,                  -- locations an edited built-in mission must keep before it can be
+                                               -- published
     minLocationGap = 100.0,                    -- metres between locations of one mission
     minSpawnFromStart = 30.0,                  -- metres between any spawn point and the start point
     spawnMargin = 40.0,                        -- metres outside the start circle that armed NPCs of a new custom mission

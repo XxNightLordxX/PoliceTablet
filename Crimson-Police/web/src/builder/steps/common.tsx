@@ -17,6 +17,13 @@ export interface StepProps {
     goTo: (step: BuilderStepKey, opts?: { objective?: number; location?: number }) => void;
 }
 
+// Locations a draft needs before it can be published: Config.Builder.minLocations for a custom mission,
+// minLocationsOverride for an edited built-in (the server's B.validate rule).
+export function minLocationsFor(cfg: BuilderConfig, overridesBuiltin?: boolean): number {
+    if (overridesBuiltin) return Number(cfg.minLocationsOverride) || 3;
+    return Number(cfg.minLocations) || 1;
+}
+
 // Step intro line with an icon.
 export function StepIntro({
     icon,

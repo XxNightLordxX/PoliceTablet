@@ -40,7 +40,7 @@ Files: `modules/missions/server.lua`, `modules/missions/client.lua`, `modules/dr
   (CP.Builder passes the path, CP.Testing `'@' .. path`).
 - **Soft checks (warning only; the builder enforces them as guardrails for custom missions)**: fewer
   locations than expected (built-in 5, or 3 for `armored_truck_escort`, `evoc_course`,
-  `weekly_boss_kingpin`; custom `Config.Builder.minLocations`), locations closer than
+  `weekly_boss_kingpin`; custom `Config.Builder.minLocations`, 1), locations closer than
   `Config.Builder.minLocationGap`, more armed NPCs than `Config.Builder.maxHostiles` (block `armedCount`),
   more objectives than `Config.Builder.maxBlocks`, unknown department keys, a scaling base above its `max`.
 - **Dropped with a warning**: scaling entries that do not resolve to a number or a list of numbers after the

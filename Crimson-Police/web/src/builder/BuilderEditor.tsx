@@ -30,7 +30,7 @@ import { StepPublish } from './steps/StepPublish';
 import { StepScaling } from './steps/StepScaling';
 import { StepSettings } from './steps/StepSettings';
 import { StepTest } from './steps/StepTest';
-import type { StepProps } from './steps/common';
+import { minLocationsFor, type StepProps } from './steps/common';
 import type { IconName } from '../shared/components';
 
 export const STEPS: { key: BuilderStepKey; icon: IconName }[] = [
@@ -262,7 +262,7 @@ export function BuilderEditor({ id, scope, config, onClose, onRenamed, onOpen }:
         blocks: def.objectives.length > 0,
         details: !!def.type && !!def.label.trim() && !counts.details,
         settings: def.objectives.length > 0 && !counts.settings,
-        locations: def.locations.length >= (Number(config.minLocations) || 3) && !counts.locations,
+        locations: def.locations.length >= minLocationsFor(config, rec.overridesBuiltin) && !counts.locations,
         scaling: def.scaling.length > 0,
         test: !!rec.draftTested,
         publish: rec.dbStatus === 'published' && !rec.hasDraft,

@@ -214,7 +214,7 @@
   "settings.help.Markers.radioSilence": "Once officers reach the start of a Radio Silence mission: 'area' keeps each objective's circle, 'none' keeps every blip, 'full' hides everything.",
   "settings.help.MissionCalls.maxOpen": "The most mission calls waiting on Dispatch for a unit at the same time.",
   "settings.help.MissionCalls.offerTime": "How long a mission call waits on Dispatch for a unit before it lapses.",
-  "settings.help.Builder.minLocations": "How many locations a new mission needs before it can be published. More locations = it repeats less.",
+  "settings.help.Builder.minLocations": "How many locations a new custom mission needs before it can be published (1 = one is enough). More locations = it repeats less.",
   "settings.help.Builder.spawnMargin": "Metres outside the start circle that the armed NPCs of a new custom mission must keep.",
   "settings.help.Builder.requireTestToPublish": "On: a supervisor can publish only a draft that passed a test run. Admins never need one.",
   "settings.help.Testing.debugOverlay": "On: admins can turn on an overlay with the run's details during a test run.",

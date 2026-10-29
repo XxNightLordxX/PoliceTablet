@@ -603,7 +603,7 @@ Design rules
 
 - From the moment a participant reaches the mission start they carry the alert-suppression flag, so their mission combat creates no SC-Dispatch or SC-Ambulance alerts (see Real calls, alerts & downed officers).
 
-- Built-in missions ship with at least 5 locations (3 for Armored Truck Escort routes, EVOC layouts and Kingpin compounds). Custom missions need at least 3 (Config.Builder.minLocations).
+- Built-in missions ship with at least 5 locations (3 for Armored Truck Escort routes, EVOC layouts and Kingpin compounds). Custom missions need at least 1 (Config.Builder.minLocations; owner decision: one location is enough, and the Locations step shows "3 or more locations feel less repetitive" as a hint, not an error). An edited built-in keeps at least 3 (Config.Builder.minLocationsOverride): built-in missions keep their own locations.
 
 - NPC arrests use Crimson-Police's own ox_target actions (Cuff suspect, Detain, and the custody chain). They never call sc-police's player cuffing, escort, search, impound or jail.
 
@@ -3951,7 +3951,10 @@ Config.Builder = {
     enabled = true,
     maxHostiles = 40,                          -- armed NPCs per mission across all blocks, before scaling
     maxBlocks = 6,
-    minLocations = 3,
+    minLocations = 1,                          -- locations a new custom mission needs before it can be published
+                                               -- (more locations = it repeats less; 3 or more is a good habit)
+    minLocationsOverride = 3,                  -- locations an edited built-in mission must keep before it can be
+                                               -- published
     minLocationGap = 100.0,                    -- metres between locations of one mission
     minSpawnFromStart = 30.0,                  -- metres between any spawn point and the start point
     spawnMargin = 40.0,                        -- metres outside the start circle that armed NPCs of a new custom mission

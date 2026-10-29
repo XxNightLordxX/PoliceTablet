@@ -29,7 +29,7 @@ published file, plus the reserved `_file` key, §1.6). The Lua file is only prod
   "startTimeout": 600,                // SECONDS, Config.Blocks.details.startTimeout (300–900)
   "cooldown": 1200,                   // SECONDS, Config.Blocks.details.cooldown (300–3600)
   "vehiclePenalties": false,          // default Config.Blocks.details.vehiclePenalties.default
-  "locations": [                      // >= Config.Builder.minLocations, at most 20
+  "locations": [                      // >= Config.Builder.minLocations (custom, 1) or minLocationsOverride (edited built-in, 3), at most 20
     {
       "label": "Dock 1",                                               // 1–64 characters
       "start": { "coords": { "x": 1.0, "y": 2.0, "z": 3.0 }, "radius": 60 }, // radius 20–150 m; with a search_area: its startRadius
@@ -204,7 +204,7 @@ Built-ins: `source: 'builtin'`, `readOnly: true`, `definition` = the built-in fi
 { enabled, blocks: Config.Blocks (verbatim, incl. details),
   blockList: { id, labelKey: 'builder.block.<id>', available: boolean /* registered on the server */,
                minSeconds: number /* default */, presenceRange: [min, max, default] }[],
-  allowed: Config.Builder.allowed, maxHostiles, maxBlocks, minLocations, maxLocations: 20,
+  allowed: Config.Builder.allowed, maxHostiles, maxBlocks, minLocations, minLocationsOverride, maxLocations: 20,
   minLocationGap, minSpawnFromStart, spawnMargin,
   bonusCap: { points: 50, pct: 25 },
   bonuses: { id, kind: 'points'|'pct', value /* points, or whole percent */, each, block: string|null,

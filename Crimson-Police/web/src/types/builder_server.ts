@@ -263,6 +263,7 @@ export interface BuilderConfig {
     maxHostiles: number;
     maxBlocks: number;
     minLocations: number;
+    minLocationsOverride?: number;
     maxLocations: number;
     minLocationGap: number;
     minSpawnFromStart: number;

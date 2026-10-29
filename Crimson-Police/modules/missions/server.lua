@@ -496,7 +496,7 @@ function Missions.normalize(def, meta)
                     tostring(zone.label))
         end
     end
-    local minLocations = kind == 'custom' and (tonumber(Config.Builder and Config.Builder.minLocations) or 3)
+    local minLocations = kind == 'custom' and (tonumber(Config.Builder and Config.Builder.minLocations) or 1)
         or (THREE_LOCATIONS_OK[d.id] and 3 or 5)
     if #d.locations < minLocations then
         warn(('has %d location(s); %d or more are expected'):format(#d.locations, minLocations))

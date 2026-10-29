@@ -34,7 +34,7 @@ import {
 } from '../schema';
 import { editorMemory, routeMetaOf, setEditorMemory, setRouteMeta, shiftRouteMeta, subscribeBuilder } from '../store';
 import { startSpec } from '../useDraftEditor';
-import { StepIntro, type StepProps } from './common';
+import { minLocationsFor, StepIntro, type StepProps } from './common';
 
 const KIND_ICON: Record<string, IconName> = {
     ped: 'user',
@@ -73,6 +73,9 @@ function locationProgress(loc: BuilderLocation, specs: PointSpec[]): { done: num
     return { done, total: specs.length + 1 };
 }
 
+// a hint, never an error: this many locations or more make a mission repeat less
+const VARIETY_LOCATIONS = 3;
+
 export function StepLocations({ ed, cfg, def, ro, scope }: StepProps) {
     useStoreVersion();
     const [sel, setSel] = useState(() =>
@@ -83,7 +86,7 @@ export function StepLocations({ ed, cfg, def, ro, scope }: StepProps) {
     );
     const [focus, setFocus] = useState<string | null>(null);
     const specs = useMemo(() => missionPointSpecs(cfg, def), [cfg, def]);
-    const minLoc = Number(cfg.minLocations) || 3;
+    const minLoc = minLocationsFor(cfg, ed.record?.overridesBuiltin);
     const maxLoc = Number(cfg.maxLocations) || 20;
     const li = Math.min(sel, Math.max(1, def.locations.length));
     const loc = def.locations[li - 1];
@@ -148,6 +151,11 @@ export function StepLocations({ ed, cfg, def, ro, scope }: StepProps) {
                 })}
             </StepIntro>
             <ErrorNotes errors={topErrors} />
+            {def.locations.length >= minLoc && def.locations.length < VARIETY_LOCATIONS ? (
+                <div className="builder_client-inline-note">
+                    {t('builder.loc.variety_hint', { n: VARIETY_LOCATIONS })}
+                </div>
+            ) : null}
             <div className="builder_client-split">
                 <nav className="builder_client-side" aria-label={t('builder.loc.list')}>
                     {def.locations.map((l, k) => {
