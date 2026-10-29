@@ -1307,7 +1307,7 @@ Which of these they can use is set in `Config.Permissions.supervisor` ([4.4](#44
 | **Departments** | Each department's jobs, colours, logo, desks, member count and (with society payouts) account balance |
 | **Missions** (switches) | Turn any mission, or single locations of it, on or off ([5.8](#58-turn-missions-and-locations-on-or-off)) |
 | **Permissions** | What supervisors may do (a switch for each), and **Config health**: the start-up check, with a **Check again** button |
-| **Live** | Every live run and unit, with the controls to recall, end, add time or split a unit ([9.15.3](#9153-live-runs-units-and-anti-farm)) |
+| **Live** | Every live run and unit, with the controls to recall, end, add time or split a unit, and the **Refused** tab: mission starts the server refused and why ([9.15.3](#9153-live-runs-units-and-anti-farm)) |
 | **Settings** | Every setting of `config.lua` and `blocks.lua`, changed in game, with a change history ([5.7](#57-change-any-setting-in-game-the-settings-screen)) |
 | **System** | Storage, backups, the webhook states, recent console problems, the other resources and the nightly clean-up ([9.15.5](#9155-system-departments-and-settings)) |
 | **Audit Log** | Every supervisor and admin action, with filters and a CSV export |
@@ -1315,7 +1315,8 @@ Which of these they can use is set in `Config.Permissions.supervisor` ([4.4](#44
 
 **Home** opens the right screen for each tile: Quick settings searches Settings for what you type, Give or take
 points opens that officer when you type a citizen ID. **Something wrong?** lists the last mission load (loaded and
-refused), Config health warnings, System problems and stuck payments; click a line to open its screen. To open the
+refused), Config health warnings, System problems, stuck payments and **Refused starts today** (opens Live →
+**Refused**); click a line to open its screen. To open the
 panel straight on Payouts or Missions instead (with no Home), set `Config.AdminUi.landing = 'payouts'` or
 `'missions'` (Admin UI → **Settings**).
 
@@ -1583,7 +1584,8 @@ Voids and restores:
   end always show at once.
 - **Refused mission starts**: the server remembers the last `AdminControl.refusalsKept` (200) mission starts it
   refused (who tried, the type or mission, and why, such as on a run, in the arena or the maintenance lock) for
-  admins (`admin:getRefusals`). Memory only: a restart empties the list.
+  admins: Admin UI → **Live** → **Refused** lists them (time, officer, mission or type, and the message the officer
+  saw), and Home → **Something wrong?** counts today's. Memory only: a restart empties the list.
 - **Reset progression** is the same for all of an officer's runs; **Undo** restores them.
 - **Retire** (a deleted character, a banned player) voids all their runs as a correction, closes the tablet to them
   and hides their picture and bio from everyone else (nothing is deleted). It is refused while they are on a run.

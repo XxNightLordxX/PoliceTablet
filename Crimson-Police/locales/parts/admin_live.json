@@ -175,5 +175,10 @@
   "admin.action.todOverride": "Type of the Day changed",
   "admin.action.unitDisband": "Unit disbanded",
   "admin.action.unitRemove": "Officer removed from a unit",
-  "admin.today.twist_reward": "+{points}% · x{cash}"
+  "admin.today.twist_reward": "+{points}% · x{cash}",
+  "admin.live.tab.refused": "Refused",
+  "admin.live.refused_title": "Refused mission starts",
+  "admin.live.refused_count": "{today} today · {total} since the last restart",
+  "admin.live.refused_empty_title": "No refused starts",
+  "admin.live.refused_empty_text": "Every mission start since the last restart went through. A refused one shows here with the reason the officer saw."
 }

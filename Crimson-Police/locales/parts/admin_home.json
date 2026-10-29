@@ -29,5 +29,6 @@
   "admin.home.live_open": "Open Live",
   "admin.home.live_people": "On it: {n}",
   "admin.home.live_test": "Test",
-  "admin.home.live_more": "and {n} more"
+  "admin.home.live_more": "and {n} more",
+  "admin.home.check_refused": "Refused starts today"
 }

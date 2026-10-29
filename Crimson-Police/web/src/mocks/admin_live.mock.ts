@@ -5,6 +5,8 @@ import type {
     AdminLiveRun,
     AdminLiveRunsData,
     AdminOfficerRunState,
+    AdminRefusal,
+    AdminRefusalsData,
     AdminTodayData,
     AdminUnit,
     AdminUnitsData,
@@ -377,4 +379,23 @@ registerMock('action', 'server:admin:setTypeOfDay', (p: { type: string; reason?:
         today.typeOfTheDay = p.type === 'none' ? null : p.type;
     }
     return { typeOfTheDay: today.typeOfTheDay };
+});
+
+// admin:getRefusals: the refused mission starts, newest first (two of them today).
+const refusals: AdminRefusal[] = [
+    {
+        at: nowS() - 240,
+        citizenid: 'SAST0031',
+        name: 'Tom Reed',
+        missionId: 'gang_shootout',
+        missionLabel: 'Gang Shootout',
+        type: 'tactical',
+        reason: 'err.member_on_run',
+    },
+    { at: nowS() - 1800, citizenid: 'ABC12345', name: 'Maria Lopez', type: 'patrol', reason: 'err.type_cooldown' },
+    { at: nowS() - 90000, citizenid: 'FIB00021', name: 'Dana Whitfield', type: 'tactical', reason: 'err.in_arena' },
+];
+
+registerMock('request', 'admin:getRefusals', (): AdminRefusalsData => {
+    return { refusals, total: refusals.length, today: 2 };
 });

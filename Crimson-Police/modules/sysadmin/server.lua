@@ -1847,10 +1847,22 @@ Kit.callback('admin:getProblems', 'openAdmin', function(ctx)
     return { lines = lines, total = CP.Problems and CP.Problems.total() or 0, tags = tags }
 end, { rate = 2 })
 
--- The refused mission starts kept since the start (CP.Refusals, newest first; Config.AdminControl.refusalsKept).
+-- The refused mission starts kept since the start (CP.Refusals, newest first; Config.AdminControl.refusalsKept), each
+-- with the mission's label, and today: how many of them fall on the server's day (CP.Schedule, the daily reset).
 Kit.callback('admin:getRefusals', 'openAdmin', function()
     local list = CP.Refusals and CP.Refusals.list() or {}
-    return { refusals = list, total = CP.Refusals and CP.Refusals.total() or 0 }
+    local okNow, now = Call('Schedule', 'now')
+    local okDay, dayStart = Call('Schedule', 'dayStart', okNow and now or os.time())
+    if not okDay or type(dayStart) ~= 'number' then dayStart = nil end
+    local today = 0
+    for _, r in ipairs(list) do
+        if r.missionId then
+            local ok, def = Call('Missions', 'get', r.missionId)
+            if ok and type(def) == 'table' and type(def.label) == 'string' then r.missionLabel = def.label end
+        end
+        if dayStart and (tonumber(r.at) or 0) >= dayStart then today = today + 1 end
+    end
+    return { refusals = list, total = CP.Refusals and CP.Refusals.total() or 0, today = today }
 end, { rate = 2 })
 
 local function ResourceRow(name, required)

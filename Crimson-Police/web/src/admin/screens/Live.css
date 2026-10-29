@@ -226,3 +226,41 @@
 .admin-runctl-actions {
     flex-wrap: wrap;
 }
+
+/* Refused tab: one row per refused mission start (time, officer, mission, why). */
+.admin-live-refusals {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.admin-live-refusal {
+    display: grid;
+    grid-template-columns: 140px minmax(140px, 1fr) minmax(140px, 1fr) minmax(200px, 2fr);
+    align-items: center;
+    gap: 10px;
+    min-height: 44px;
+    padding: 6px 10px;
+    border-radius: var(--cp-radius-sm);
+    border: 1px solid rgba(var(--cp-text-rgb), 0.06);
+    background: rgba(var(--cp-text-rgb), 0.025);
+}
+
+.admin-live-refusal__at,
+.admin-live-refusal__mission {
+    color: var(--cp-subtle);
+}
+
+.admin-live-refusal__reason {
+    color: var(--cp-warning);
+}
+
+@media (max-width: 720px) {
+    .admin-live-refusal {
+        grid-template-columns: 1fr;
+        gap: 2px;
+    }
+}

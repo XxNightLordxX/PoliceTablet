@@ -3773,7 +3773,7 @@ Every name below is admin-only (supervisors never pass) and audited; `reason` is
 | `server:admin:deleteBackup` | `{ name, reason, confirm }` | storageAdmin | R, T the backup name, never the newest or latest pre-restore |
 | `admin:getWebhooks` | — → `{ webhooks: WebhookView[] }` | openAdmin | read only, no link |
 | `admin:getProblems` | `{ tag?, level? }` → ProblemsData | openAdmin | |
-| `admin:getRefusals` | — → `{ refusals: { at, citizenid?, name?, missionId?, type?, reason }[], total }` | openAdmin | memory only (CP.Refusals, shared/init.lua): the last `AdminControl.refusalsKept` refused mission starts, newest first; kept by the Mission Board accept (CP.Draw.accept) and by CP.Runs.create for Operations and Testing |
+| `admin:getRefusals` | — → `{ refusals: { at, citizenid?, name?, missionId?, missionLabel?, type?, reason }[], total, today }` | openAdmin | `today`: the kept ones on the server's day (CP.Schedule.dayStart); shown on Live → Refused and Home → Something wrong?; memory only (CP.Refusals, shared/init.lua): the last `AdminControl.refusalsKept` refused mission starts, newest first; kept by the Mission Board accept (CP.Draw.accept) and by CP.Runs.create for Operations and Testing |
 | `admin:getIntegrations` | — → IntegrationsData | openAdmin | |
 | `admin:getDepartmentSetup` | — → DepartmentSetup | departmentsAdmin | |
 | `server:admin:addDepartment` | `{ key, label, short, jobs, supervisorGrade, societyAccount?, themeFrom?, logo? }` | departmentsAdmin | the department validator (§5.36) |

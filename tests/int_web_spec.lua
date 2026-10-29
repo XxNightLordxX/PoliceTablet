@@ -378,7 +378,13 @@ do
     Has(home, 'screen="admin_missions" params={{ tab: \'catalog\' }}', 'Turn missions on/off opens the list')
     Has(home, 'screen="admin_officers" param="citizenid"', 'Give or take points opens Officers at the citizen')
     Has(home, 'screen="admin_settings" param="q"', 'Quick settings opens Settings with the search')
-    for _, req in ipairs({ 'admin:getMissionLoad', 'admin:getConfigHealth', 'admin:getProblems', 'admin:getLiveRuns' }) do
+    for _, req in ipairs({
+        'admin:getMissionLoad',
+        'admin:getConfigHealth',
+        'admin:getProblems',
+        'admin:getLiveRuns',
+        'admin:getRefusals',
+    }) do
         H.ok(home:find('\'' .. req .. '\'', 1, true) ~= nil, 'Home reuses ' .. req)
         local mocked = false
         for _, f in ipairs({ 'core', 'admin_missions', 'admin_system', 'admin_live' }) do
@@ -391,6 +397,12 @@ do
     local missions = Read(WEB .. 'admin/screens/Missions.tsx')
     Has(missions, 'if (params.tab === \'builder\' || params.tab === \'catalog\') setTab(params.tab);',
         'Missions opens the tab Home asks for')
+    Has(home, 'screen: \'admin_live\', params: { tab: \'refused\' }', 'Refused starts today opens Live -> Refused')
+    local live = Read(WEB .. 'admin/screens/Live.tsx') or ''
+    Has(live, 'if (params.tab === \'refused\'', 'Live opens the tab Home asks for')
+    Has(live, '{t(r.reason)}', 'a refused start shows the reason in the officer\'s words')
+    for k in live:gmatch('t%(\'(admin%.live%.refused[%w_]*)\'') do H.ok(keys[k], 'locale key ' .. k) end
+    H.ok(keys['admin.live.tab.refused'], 'the Refused tab has a label')
     for k in home:gmatch('t%(\'(admin%.home%.[%w_]+)\'') do H.ok(keys[k], 'locale key ' .. k) end
     H.ok(keys['ui.screen.admin_home'], 'Home has a title key')
 end

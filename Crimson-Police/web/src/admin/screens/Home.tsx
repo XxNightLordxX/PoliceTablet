@@ -11,7 +11,7 @@ import { t } from '../../shared/i18n';
 import { useNavigate, type AdminScreenKey, type ScreenParams } from '../../shared/navigation';
 import type { ConfigHealthItem } from '../../shared/types';
 import { useNavCounts } from '../../layouts/navBadges';
-import type { AdminLiveRunsData } from '../../types/admin_live';
+import type { AdminLiveRunsData, AdminRefusalsData } from '../../types/admin_live';
 import type { MissionLoadSummary } from '../../types/admin_missions';
 import type { ProblemsData } from '../../types/admin_system';
 import './Home.css';
@@ -89,19 +89,23 @@ interface CheckLine {
     value: string;
     bad: boolean;
     screen: AdminScreenKey;
+    params?: ScreenParams;
 }
 
-// Something wrong?: the last mission load, Config health, System problems and stuck payments, each a link.
+// Something wrong?: the last mission load, Config health, System problems, stuck payments and the refused mission
+// starts of today (Live -> Refused), each a link.
 function SomethingWrong() {
     const navigate = useNavigate();
     const load = useRequest<MissionLoadSummary>('admin:getMissionLoad', {}, { pushTopic: 'builder', pollMs: 60000 });
     const health = useRequest<ConfigHealthItem[]>('admin:getConfigHealth', {});
     const problems = useRequest<ProblemsData>('admin:getProblems', {});
+    const refusals = useRequest<AdminRefusalsData>('admin:getRefusals', {}, { pollMs: 60000 });
     const counts = useNavCounts();
     const refused = load.data ? asArray(load.data.failed).length + asArray(load.data.overrideFailed).length : 0;
     const unhealthy = asArray(health.data).filter(i => i.level !== 'ok').length;
     const total = problems.data?.total ?? 0;
     const stuck = counts.adminPayments ?? 0;
+    const refusedToday = refusals.data?.today ?? 0;
     const dash = t('admin.home.unknown');
     const lines: CheckLine[] = [
         {
@@ -134,6 +138,14 @@ function SomethingWrong() {
             bad: stuck > 0,
             screen: 'admin_payments',
         },
+        {
+            key: 'refused',
+            label: t('admin.home.check_refused'),
+            value: refusals.data ? formatNumber(refusedToday) : dash,
+            bad: refusedToday > 0,
+            screen: 'admin_live',
+            params: { tab: 'refused' },
+        },
     ];
     const anyBad = lines.some(l => l.bad);
     return (
@@ -152,7 +164,7 @@ function SomethingWrong() {
             <ul className="admin-home-checks">
                 {lines.map(l => (
                     <li key={l.key}>
-                        <button type="button" className="admin-home-check" onClick={() => navigate(l.screen)}>
+                        <button type="button" className="admin-home-check" onClick={() => navigate(l.screen, l.params)}>
                             <span className="admin-home-check__label">{l.label}</span>
                             <Badge size="sm" tone={l.bad ? 'warning' : 'success'}>
                                 {l.value}

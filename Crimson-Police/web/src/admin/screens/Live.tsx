@@ -24,19 +24,21 @@ import { asArray } from '../../shared/data';
 import { formatDateTime, formatDuration } from '../../shared/format';
 import { useRequest } from '../../shared/hooks';
 import { t } from '../../shared/i18n';
-import { useNavigate } from '../../shared/navigation';
+import { useNavigate, useNavigation } from '../../shared/navigation';
 import { useSession } from '../../shared/session';
 import type {
     AdminLiveParticipant,
     AdminLiveRun,
     AdminLiveRunsData,
+    AdminRefusal,
+    AdminRefusalsData,
     AdminUnit,
     AdminUnitsData,
 } from '../../types/admin_live';
 import { useAdminAction } from '../components/kit';
 import './Live.css';
 
-type Tab = 'runs' | 'units';
+type Tab = 'runs' | 'units' | 'refused';
 
 type RunDialog =
     | { kind: 'recall'; run: AdminLiveRun; p: AdminLiveParticipant }
@@ -321,6 +323,40 @@ function UnitCard({ unit, onDialog }: { unit: AdminUnit; onDialog: (d: UnitDialo
 }
 
 // ============================================================================
+//                                 REFUSED TAB
+// ============================================================================
+
+// One refused mission start: when, who (opens Officers), the mission or its type, and why in the officer's words.
+function RefusalRow({ r }: { r: AdminRefusal }) {
+    const session = useSession();
+    const navigate = useNavigate();
+    const mission = r.missionLabel || r.missionId || null;
+    const kind = r.type ? typeLabel(session, r.type) : null;
+    return (
+        <li className="admin-live-refusal">
+            <span className="admin-live-refusal__at cp-num">{formatDateTime(r.at)}</span>
+            {r.citizenid ? (
+                <button
+                    type="button"
+                    className="admin-live-person__who"
+                    title={t('admin.live.open_officer')}
+                    onClick={() => navigate('admin_officers', { citizenid: r.citizenid as string })}
+                >
+                    <span className="admin-live-person__name">{r.name || r.citizenid}</span>
+                    <span className="admin-live-person__sub">{r.citizenid}</span>
+                </button>
+            ) : (
+                <span className="admin-live-person__who admin-live-person__who--static">
+                    <span className="admin-live-person__name">{r.name || '—'}</span>
+                </span>
+            )}
+            <span className="admin-live-refusal__mission">{[mission, kind].filter(Boolean).join(' · ') || '—'}</span>
+            <span className="admin-live-refusal__reason">{t(r.reason)}</span>
+        </li>
+    );
+}
+
+// ============================================================================
 //                                   DIALOGS
 // ============================================================================
 
@@ -361,8 +397,18 @@ function runDialogTexts(d: RunDialog | null, left: number): { title: string; mes
 
 export default function AdminLive() {
     const [tab, setTab] = useState<Tab>('runs');
+    // Home's "Refused starts today" links here with navigate('admin_live', { tab: 'refused' })
+    const { params } = useNavigation();
+    useEffect(() => {
+        if (params.tab === 'refused' || params.tab === 'runs' || params.tab === 'units') setTab(params.tab);
+    }, [params]);
     const runsReq = useRequest<AdminLiveRunsData>('admin:getLiveRuns', {}, { pollMs: 10000, pushTopic: 'operation' });
     const unitsReq = useRequest<AdminUnitsData>('admin:getUnits', {}, { pollMs: 10000, skip: tab !== 'units' });
+    const refusedReq = useRequest<AdminRefusalsData>(
+        'admin:getRefusals',
+        {},
+        { pollMs: 15000, skip: tab !== 'refused' },
+    );
     const { run, busy } = useAdminAction();
     const [runDialog, setRunDialog] = useState<RunDialog | null>(null);
     const [unitDialog, setUnitDialog] = useState<UnitDialog | null>(null);
@@ -371,6 +417,7 @@ export default function AdminLive() {
 
     const runs = asArray(runsReq.data?.runs);
     const units = asArray(unitsReq.data?.units);
+    const refusals = asArray(refusedReq.data?.refusals);
     const maxTotal = runsReq.data?.runTimeAddMax ?? 600;
     const clickMax = runsReq.data?.addMinutesMax ?? 10;
 
@@ -438,7 +485,7 @@ export default function AdminLive() {
         if (res.ok) void unitsReq.refetch();
     };
 
-    const current = tab === 'runs' ? runsReq : unitsReq;
+    const current = tab === 'runs' ? runsReq : tab === 'units' ? unitsReq : refusedReq;
     let body;
     if (current.loading && !current.data) body = <LoadingBlock />;
     else if (current.error && !current.data)
@@ -457,6 +504,30 @@ export default function AdminLive() {
         ) : (
             <Card padding="none">
                 <EmptyState icon="activity" title={t('admin.live.empty_title')} text={t('admin.live.empty_text')} />
+            </Card>
+        );
+    else if (tab === 'refused')
+        body = refusals.length ? (
+            <Card
+                title={t('admin.live.refused_title')}
+                subtitle={t('admin.live.refused_count', {
+                    today: refusedReq.data?.today ?? 0,
+                    total: refusedReq.data?.total ?? refusals.length,
+                })}
+            >
+                <ul className="admin-live-refusals">
+                    {refusals.map((r, i) => (
+                        <RefusalRow key={`${r.at}-${r.citizenid ?? ''}-${i}`} r={r} />
+                    ))}
+                </ul>
+            </Card>
+        ) : (
+            <Card padding="none">
+                <EmptyState
+                    icon="checkCircle"
+                    title={t('admin.live.refused_empty_title')}
+                    text={t('admin.live.refused_empty_text')}
+                />
             </Card>
         );
     else
@@ -507,6 +578,7 @@ export default function AdminLive() {
                 items={[
                     { key: 'runs', label: t('admin.live.tab.runs'), icon: 'activity', badge: runs.length || undefined },
                     { key: 'units', label: t('admin.live.tab.units'), icon: 'users' },
+                    { key: 'refused', label: t('admin.live.tab.refused'), icon: 'alert' },
                 ]}
                 value={tab}
                 onChange={setTab}

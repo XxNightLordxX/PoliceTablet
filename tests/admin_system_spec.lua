@@ -583,6 +583,13 @@ do
     local refusals = Cb('admin:getRefusals', 1, {})
     H.ok(refusals and refusals.refusals[1].reason == 'err.in_arena' and refusals.total >= 1,
         'admins read the refused starts')
+    -- A5: the Live -> Refused tab and Home's "Refused starts today" read the label and the day's count
+    local getMission = CP.Missions.get
+    CP.Missions.get = function(id) return id == 'patrol_a' and { label = 'Patrol A' } or nil end
+    local labelled = Cb('admin:getRefusals', 1, {})
+    CP.Missions.get = getMission
+    H.eq(labelled.refusals[1].missionLabel, 'Patrol A', 'a refused start carries the mission label')
+    H.ok(labelled.today >= 1 and labelled.today <= #labelled.refusals, 'the refused starts of today are counted')
     local none, noneErr = Cb('admin:getRefusals', 7, {})
     H.ok(none == nil and noneErr == 'err.no_permission', 'officers cannot read the refused starts')
 

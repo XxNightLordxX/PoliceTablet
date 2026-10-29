@@ -188,3 +188,25 @@ export interface AdminTodayData {
     modifiers: AdminTodayModifier[];
     types: { key: string; label: string }[];
 }
+
+// ============================================================================
+//                                REFUSED STARTS
+// ============================================================================
+
+// One refused mission start (CP.Refusals): who tried, the mission or type, and the error key (err.*).
+export interface AdminRefusal {
+    at: number;
+    citizenid?: string | null;
+    name?: string | null;
+    missionId?: string | null;
+    missionLabel?: string | null;
+    type?: string | null;
+    reason: string;
+}
+
+// admin:getRefusals: newest first; total since the start; today on the server's day
+export interface AdminRefusalsData {
+    refusals: AdminRefusal[];
+    total: number;
+    today: number;
+}
