@@ -307,7 +307,7 @@ end
 do
     local def = Missions.get('drug_lab_raid')
     local loc = Cut(def.locations[1], 'cook', { def.locations[1].cook[1] })
-    H.eq(#loc.cook, 1, 'Cabin, Raton Canyon cut to one cook point')
+    H.eq(#loc.cook, 1, 'Cabin, Chiliad Mountain State Wilderness cut to one cook point')
     -- an officer 300 m away: nobody appears yet (ctx.whenNear: activateRange 150 m)
     local far = vec3(loc.cook[1].x + 300.0, loc.cook[1].y, loc.cook[1].z)
     W.place(1, far.x, far.y, far.z)
@@ -347,7 +347,7 @@ do
     local def = Missions.get('gang_hideout_raid')
     local loc = Cut(def.locations[1], 'runners', { def.locations[1].lieutenant })
     H.ok(D2(loc.runners[1], loc.lieutenant) < 0.01,
-        'Yard, Murrieta Heights cut to the runners hiding on the lieutenant\'s spot')
+        'Yard, El Burro Heights cut to the runners hiding on the lieutenant\'s spot')
     Place(1, loc.start.coords)
     local run = Run('gang_hideout_raid', 1, { 1 }, {
         index = 3,
@@ -461,8 +461,8 @@ do
 end
 
 -- S21 REVIEW: A COOK RUNS THE ROUTE THAT STARTS AT HIS OWN POINT, NEVER ACROSS THE LAB.
--- Drug Lab Raid #1 (Cabin, Raton Canyon): its two escape routes start 73 m apart on either side of the lab, cook[2] on
--- the first one's first point and cook[3] on the second one's. Objective 3 starts where the fight ended: the officer
+-- Drug Lab Raid #1 (Cabin, Chiliad Mountain State Wilderness): its two escape routes start 73 m apart on either
+-- side of the lab, cook[2] on the first one's first point and cook[3] on the second one's. Objective 3 starts where the fight ended: the officer
 -- stands at the lab, on the hiding spot. The two cooks appear by cook[2] and cook[3] once waveDelayMax has passed (at
 -- least hardMin from him; the second on the ring round his point, as the two lie on either side of the officer, wider
 -- than maxSpread), and each runs the route that starts by him, never the one on the other side (through the lab and
@@ -474,7 +474,7 @@ do
     H.ok(
         D2(loc.cook[2], loc.escapes[1][1]) < 1.0 and D2(loc.cook[3], loc.escapes[2][1]) < 1.0
             and D2(loc.escapes[1][1], loc.escapes[2][1]) > 70.0,
-        'Raton Canyon: cook[2] and cook[3] stand on the two routes\' first points, 70 m+ apart'
+        'Chiliad cabin: cook[2] and cook[3] stand on the two routes\' first points, 70 m+ apart'
     )
     -- one run with the officer at the lab: the cooks out, those on their own route's start, those sent 70 m+ across
     local function Cooks(seed)
@@ -508,7 +508,7 @@ end
 
 -- S21 REVIEW: GANG HIDEOUT RAID WITH THE OFFICER AT THE LIEUTENANT'S BODY.
 -- Objective 3 (Catch the runners) starts right after the lieutenant fight at the back of the house, the officers at his
--- body, and most runner points lie within minDistance (40 m) of it (East Vinewood: all 4, 7.7-29.5 m). So not all
+-- body, and most runner points lie within minDistance (40 m) of it (Vinewood Racetrack: all 4, 7.7-29.5 m). So not all
 -- come out at once there: a runner appears once the director allows his point, at least minDistance from the officer,
 -- or once waveDelayMax has passed at least hardMin (20 m); none on the lieutenant or on another runner, each on the
 -- escape route that starts nearest him. The ones still waiting come out once the officer moves off (to the start).

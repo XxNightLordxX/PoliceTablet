@@ -812,6 +812,8 @@ Admin UI → **Missions** has a switch next to every mission, built-in and custo
 - **Reset to default** in that window puts the mission's switches back to `config.lua`'s.
 - The switches work at once, are saved like every other setting (database or saves folder), and are in the audit log.
   They are `Config.DisabledMissions` and `Config.DisabledLocations` in `config.lua`.
+- A built-in location that was renamed keeps its old label in the mission file (`aliases`), so a switch saved by the
+  old label still turns it off; Admin UI → **Missions** shows the new label.
 - Nothing needs a test before it is used: a mission you just switched on is drawn at once.
 
 ### 5.9 How hard NPCs fight back
@@ -1330,6 +1332,11 @@ Which of these they can use is set in `Config.Permissions.supervisor` ([4.4](#44
 | Tactical | Gang Hideout Raid (`gang_hideout_raid`) | 2–4 |
 | Tactical (Weekly Boss) | Weekly Boss: Kingpin (`weekly_boss_kingpin`) | 1–4, Friday to Sunday only |
 
+- **Location names** say where the place really is (for example Traffic Enforcement's Bay City Incline, Pacific
+  Bluffs and Capital Boulevard, Rancho, the raids' hideouts and labs). Traffic Enforcement's two city corridors
+  (Bay City Incline and Capital Boulevard) are posted at 60 km/h, so the violator does 80-105 km/h there; its
+  highways stay at 90-110. Warrant Service #2 (Forum Drive, Strawberry) is Franklin's aunt's house and #5 (Sandy
+  Shores) is Trevor's trailer from the story.
 - **Team size** sets the tier: Standard (1), Reinforced (2), Heavy (3–4), Major (5–6) and Critical (7–8). More
   officers = more NPCs, better armed, and more points and cash. Major and Critical only happen in Cross-Department
   Missions.

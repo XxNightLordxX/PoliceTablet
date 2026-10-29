@@ -1,13 +1,15 @@
 --[[ Crimson-Police · built-in mission: Traffic Enforcement (traffic_enforcement)
   Patrol · 1–2 officers · ★★ · time limit 12 min · cooldown 15 min
-  From an observation point beside a highway, watch for the violator: it spawns 200 m upstream and drives
+  From an observation point beside the road, watch for the violator: it spawns 200 m upstream and drives
   past (speeding 20–45 km/h over the posted speed 70%, reckless lane changes 30%; only the violator gets a
   HUD cue and, once past the point, a blip). Pace it (within 80 m behind for 5 s, graded on the median of the
   server's samples with a 5 km/h tolerance) or follow the reckless driver (within 60 m for 8 s), then light
   it up within 60 m: it yields 75%, flees 20% or fights 5% (only with someone armed inside). Work the stop:
   talk, run the plate, order out, frisk, look inside, search with probable cause and decide for every person
   and the car. With two officers a second violator comes once the first stop is closed.
-  Locations (7 corridors): Great Ocean Highway, north of Chumash, Senora Freeway, Grand Senora Desert, Del Perro Freeway, Pillbox Hill, Olympic Freeway, Strawberry, Palomino Freeway, Tataviam Mountains, Route 68, Lago Zancudo, Great Ocean Highway, Banham Canyon.
+  Locations (7 corridors): Great Ocean Highway, north of Chumash, Senora Freeway, San Chianski Mountain Range, Bay City Incline, Pacific Bluffs, Capital Boulevard, Rancho, Palomino Freeway, Palomino Highlands, Route 68, Lago Zancudo, Great Ocean Highway, Tongva Hills.
+  The two city corridors (Bay City Incline, Capital Boulevard) are posted at 60 km/h, so their violator does
+  80-105 km/h; the highways are posted at 90-110. A renamed location keeps its old label in aliases.
   Each corridor is a recorded road route of 2–6 km built from the GTA V vehicle nodes (a waypoint at every
   turn and at least every 100 m, in the driving direction); the observation point is 16 m right of the road
   on a straight stretch, 9 m or more from any road node. Only the observation point and the corridor's two
@@ -67,7 +69,8 @@ RegisterMission({
       },
     },
     {
-      label = 'Senora Freeway, Grand Senora Desert',
+      label = 'Senora Freeway, San Chianski Mountain Range',
+      aliases = { 'Senora Freeway, Grand Senora Desert' },   -- the old label: a switch saved by it still matches
       start = { coords = vec3(2957.96, 3854.17, 52.44), radius = 40.0 },   -- the observation point beside the road
       speed = 110,   -- km/h: the posted speed on this corridor
       route = {   -- 76 road waypoints, 5582 m of corridor in the driving direction
@@ -153,9 +156,10 @@ RegisterMission({
       },
     },
     {
-      label = 'Del Perro Freeway, Pillbox Hill',
+      label = 'Bay City Incline, Pacific Bluffs',
+      aliases = { 'Del Perro Freeway, Pillbox Hill' },   -- the old label: a switch saved by it still matches
       start = { coords = vec3(-1898.44, -478.52, 23.66), radius = 40.0 },   -- the observation point beside the road
-      speed = 100,   -- km/h: the posted speed on this corridor
+      speed = 60,   -- km/h: the posted speed on this corridor (a city road)
       route = {   -- 59 road waypoints, 3420 m of corridor in the driving direction
         points = {
           vec3(-2058.00, -542.00, 5.66),
@@ -222,9 +226,10 @@ RegisterMission({
       },
     },
     {
-      label = 'Olympic Freeway, Strawberry',
+      label = 'Capital Boulevard, Rancho',
+      aliases = { 'Olympic Freeway, Strawberry' },   -- the old label: a switch saved by it still matches
       start = { coords = vec3(463.06, -1460.43, 29.34), radius = 40.0 },   -- the observation point beside the road
-      speed = 100,   -- km/h: the posted speed on this corridor
+      speed = 60,   -- km/h: the posted speed on this corridor (a city road)
       route = {   -- 41 road waypoints, 2236 m of corridor in the driving direction
         points = {
           vec3(-401.00, -1221.00, 53.00),
@@ -273,7 +278,8 @@ RegisterMission({
       },
     },
     {
-      label = 'Palomino Freeway, Tataviam Mountains',
+      label = 'Palomino Freeway, Palomino Highlands',
+      aliases = { 'Palomino Freeway, Tataviam Mountains' },   -- the old label: a switch saved by it still matches
       start = { coords = vec3(1998.53, -713.42, 91.62), radius = 40.0 },   -- the observation point beside the road
       speed = 110,   -- km/h: the posted speed on this corridor
       route = {   -- 38 road waypoints, 2832 m of corridor in the driving direction
@@ -356,7 +362,8 @@ RegisterMission({
       },
     },
     {
-      label = 'Great Ocean Highway, Banham Canyon',
+      label = 'Great Ocean Highway, Tongva Hills',
+      aliases = { 'Great Ocean Highway, Banham Canyon' },   -- the old label: a switch saved by it still matches
       start = { coords = vec3(-3012.17, 1687.36, 35.28), radius = 40.0 },   -- the observation point beside the road
       speed = 90,   -- km/h: the posted speed on this corridor
       route = {   -- 44 road waypoints, 2570 m of corridor in the driving direction

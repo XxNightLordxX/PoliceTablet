@@ -2878,9 +2878,8 @@ end
 local function LocationOff(list, def, index)
     if type(list) ~= 'table' then return false end
     local loc = type(def.locations) == 'table' and def.locations[index] or nil
-    local label = type(loc) == 'table' and loc.label or nil
     for _, v in ipairs(list) do
-        if v == index or (label ~= nil and v == label) then return true end
+        if v == index or U.isLocationName(loc, v) then return true end
     end
     return false
 end
@@ -2959,7 +2958,7 @@ function Settings.setLocationEnabled(src, id, index, enabled)
     local label = type(loc) == 'table' and loc.label or nil
     if enabled then
         for i = #list, 1, -1 do
-            if list[i] == index or (label ~= nil and list[i] == label) then table.remove(list, i) end
+            if list[i] == index or U.isLocationName(loc, list[i]) then table.remove(list, i) end
         end
     else
         list[#list + 1] = LocationKey(def, index)

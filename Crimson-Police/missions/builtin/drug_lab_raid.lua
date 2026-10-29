@@ -4,7 +4,7 @@
   hold 50 / balanced 40 / push 10), catch the cooks when they bolt, find the stashes and seize the product,
   shut the lab down with three skill checks (two misses in a row start a toxic fire: a setback, never a
   fail) and process the scene.
-  Locations (7 labs): Cabin, Raton Canyon, Oil-field shed, El Burro Heights, Warehouse, Cypress Flats, Shack, Lago Zancudo, Farmstead, south of Harmony, Trailer, north of Stab City, Cabin, Zancudo River.
+  Locations (7 labs): Cabin, Chiliad Mountain State Wilderness, Oil-field shed, El Burro Heights, Warehouse, Cypress Flats, Shack, Fort Zancudo Approach Road, Farmstead, south of Harmony, Trailer, north of Stab City, Cabin, Zancudo River.
   Every point sits on the GTA V vehicle-node network or 3 m beside it (driveways, yard lanes and dirt
   tracks), at the site's ground level, so no ped spawns inside a wall: the lab point is the node nearest the
   building, the two entries 6–18 m from it facing it, the "inside" set within 32 m and the "yard" set
@@ -32,7 +32,8 @@ RegisterMission({
 
   locations = {
     {
-      label   = 'Cabin, Raton Canyon',
+      label   = 'Cabin, Chiliad Mountain State Wilderness',
+      aliases = { 'Cabin, Raton Canyon' },   -- the old label: a switch saved by it still matches
       start   = { coords = vec3(-1576.00, 4668.50, 45.69), radius = 50.0 },   -- on the approach road, 62 m from the lab
       entries = {   -- the two entry points: "Stack up and breach"
         vec4(-1535.87, 4692.37, 42.00, 299.5), vec4(-1527.54, 4695.90, 42.45, 308.4),
@@ -137,7 +138,8 @@ RegisterMission({
       coroner = vec4(906.25, -2378.50, 30.00, 40.8),   -- where the coroner van parks
     },
     {
-      label   = 'Shack, Lago Zancudo',
+      label   = 'Shack, Fort Zancudo Approach Road',
+      aliases = { 'Shack, Lago Zancudo' },   -- the old label: a switch saved by it still matches
       start   = { coords = vec3(-1541.50, 2703.00, 4.09), radius = 50.0 },   -- on the approach road, 61 m from the lab
       entries = {   -- the two entry points: "Stack up and breach"
         vec4(-1586.62, 2706.22, 4.31, 85.8), vec4(-1595.18, 2710.45, 4.22, 111.9),
@@ -160,7 +162,7 @@ RegisterMission({
       },
       escapes = {   -- escape routes away from the start
         { vec3(-1665.68, 2727.64, 5.59), vec3(-1698.47, 2749.89, 5.63), vec3(-1753.00, 2719.25, 4.53) },
-        { vec3(-1665.68, 2727.64, 5.59), vec3(-1698.47, 2749.89, 5.63), vec3(-1697.25, 2650.00, 0.94) },
+        { vec3(-1665.68, 2727.64, 5.59), vec3(-1698.47, 2749.89, 5.63), vec3(-1690.50, 2680.00, 2.88) },
       },
       stashes = {   -- stash spots (the hidden ones are rolled)
         vec4(-1606.50, 2709.00, 5.03, 125.2), vec4(-1597.81, 2709.45, 4.33, 290.9),

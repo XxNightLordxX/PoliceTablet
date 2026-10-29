@@ -3,7 +3,7 @@
   Breach an urban gang hideout together, fight 16 hostiles in waves of 6 / 5 / 5 (scaled) from two of the
   three spawn sets rolled per run (the intel line names them; tactics hold 30 / balanced 50 / push 20), then
   the lieutenant, catch the runners, find and seize the weapons cache and process the scene.
-  Locations (7 hideouts): Yard, Murrieta Heights, Duplex, Elysian Island, House, Vespucci Canals, House, Richman Glen, House, East Vinewood, Compound, Tataviam foothills, House, Pacific Bluffs.
+  Locations (7 hideouts): Yard, El Burro Heights, Dock warehouse, Elysian Island, Beach house, Vespucci Beach, House, Richman Glen, House, Vinewood Racetrack, Compound, El Burro Heights, House, Pacific Bluffs.
   Every point sits on the GTA V vehicle-node network or 3 m beside it, at the hideout's ground level: the
   "house" set within 24 m of the building node, "front" on the approach side and "garage" behind it (6+
   points each), the lieutenant at the back, the 4 runner points on the lanes from there to the escape routes
@@ -31,7 +31,8 @@ RegisterMission({
 
   locations = {
     {
-      label      = 'Yard, Murrieta Heights',
+      label      = 'Yard, El Burro Heights',
+      aliases    = { 'Yard, Murrieta Heights' },   -- the old label: a switch saved by it still matches
       start      = { coords = vec3(1546.75, -1768.50, 78.53), radius = 50.0 },   -- on the approach road, 65 m from the house
       entries    = {   -- the two entry points: "Stack up and breach"
         vec4(1524.03, -1717.63, 79.41, 20.7), vec4(1520.15, -1726.28, 78.81, 357.4),
@@ -70,7 +71,8 @@ RegisterMission({
       coroner    = vec4(1547.25, -1751.00, 77.88, 32.3),   -- where the coroner van parks
     },
     {
-      label      = 'Duplex, Elysian Island',
+      label      = 'Dock warehouse, Elysian Island',
+      aliases    = { 'Duplex, Elysian Island' },   -- the old label: a switch saved by it still matches
       start      = { coords = vec3(-160.25, -2500.25, 6.00), radius = 50.0 },   -- on the approach road, 62 m from the house
       entries    = {   -- the two entry points: "Stack up and breach"
         vec4(-191.75, -2541.25, 6.00, 143.1), vec4(-193.13, -2532.29, 6.00, 164.8),
@@ -109,7 +111,8 @@ RegisterMission({
       coroner    = vec4(-190.75, -2506.25, 5.53, 170.8),   -- where the coroner van parks
     },
     {
-      label      = 'House, Vespucci Canals',
+      label      = 'Beach house, Vespucci Beach',
+      aliases    = { 'House, Vespucci Canals' },   -- the old label: a switch saved by it still matches
       start      = { coords = vec3(-1345.25, -1546.75, 4.41), radius = 50.0 },   -- on the approach road, 63 m from the house
       entries    = {   -- the two entry points: "Stack up and breach"
         vec4(-1379.25, -1516.79, 3.84, 48.8), vec4(-1386.12, -1510.25, 3.69, 51.5),
@@ -187,7 +190,8 @@ RegisterMission({
       coroner    = vec4(-881.75, 708.00, 149.44, 97.2),   -- where the coroner van parks
     },
     {
-      label      = 'House, East Vinewood',
+      label      = 'House, Vinewood Racetrack',
+      aliases    = { 'House, East Vinewood' },   -- the old label: a switch saved by it still matches
       start      = { coords = vec3(1049.00, 253.75, 84.31), radius = 50.0 },   -- on the approach road, 63 m from the house
       entries    = {   -- the two entry points: "Stack up and breach"
         vec4(1105.34, 245.34, 80.84, 237.5), vec4(1099.50, 252.75, 80.84, 226.3),
@@ -226,7 +230,8 @@ RegisterMission({
       coroner    = vec4(1061.25, 243.75, 80.34, 267.6),   -- where the coroner van parks
     },
     {
-      label      = 'Compound, Tataviam foothills',
+      label      = 'Compound, El Burro Heights',
+      aliases    = { 'Compound, Tataviam foothills' },   -- the old label: a switch saved by it still matches
       start      = { coords = vec3(1894.25, -1050.25, 79.31), radius = 50.0 },   -- on the approach road, 61 m from the house
       entries    = {   -- the two entry points: "Stack up and breach"
         vec4(1876.56, -1002.27, 79.16, 317.2), vec4(1882.93, -995.31, 79.16, 316.7),

@@ -54,6 +54,14 @@ function U.contains(list, value)
     return false
 end
 
+-- Does v name this mission location: its label or one of its aliases (the old labels of a renamed location, so a
+-- Config.DisabledLocations or MissionTweaks entry written before the rename keeps working)?
+function U.isLocationName(loc, v)
+    if type(loc) ~= 'table' or type(v) ~= 'string' then return false end
+    if loc.label ~= nil and v == loc.label then return true end
+    return U.contains(type(loc.aliases) == 'table' and loc.aliases or nil, v)
+end
+
 function U.keys(t)
     local out = {}
     for k in pairs(t) do out[#out + 1] = k end

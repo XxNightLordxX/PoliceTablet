@@ -6,9 +6,9 @@
   on metered and permit spots, tow-level on no-parking, hydrant and loading spots; free spots are legal or
   stolen), stolen 5%. A returning driver (25% per citation or impound, once) and a thief (50% on the first
   inspect of a stolen car, runs once an officer is within 15 m) may turn up.
-  Locations (7 districts): Alta Street, Downtown; Ginger Street, Little Seoul; Mirror Park Boulevard, Mirror
-  Park; Prosperity Street, Del Perro; Magellan Avenue, Vespucci; Eclipse Boulevard, West Vinewood; Bay City
-  Avenue, La Puerta.
+  Locations (7 districts): Alta Street, Downtown; Ginger Street, Little Seoul; Mirror Park Boulevard and
+  Vinewood Boulevard; Prosperity Street, Vespucci Canals; Magellan Avenue, Vespucci; Eclipse Boulevard, West
+  Vinewood; Bay City Avenue, La Puerta. A renamed location keeps its old label in aliases.
   Each district is one street with 10 kerb spots taken from the GTA V vehicle nodes: on districts 1-6 every
   spot sits 4.8 m right of the road centre line in the driving direction, 26 m apart, facing the traffic.
   Bay City Avenue (7) follows the street's 20 parking-meter props instead: 10 spots 13.6 m apart, 4.5 m right
@@ -70,7 +70,8 @@ RegisterMission({
       },
     },
     {
-      label = 'Mirror Park Boulevard, Mirror Park',
+      label = 'Mirror Park Boulevard and Vinewood Boulevard',
+      aliases = { 'Mirror Park Boulevard, Mirror Park' },   -- the old label: a switch saved by it still matches
       start = { coords = vec3(917.03, -133.82, 76.31), radius = 85.0 },   -- patrol entry point, 45 m before the first spot
       spots = {   -- 10 kerb spots, 26 m apart on the right-hand kerb, each with its posted rule
         { coords = vec4(881.54, -105.86, 78.94, 57.0), rule = 'metered'   , street = 'Mirror Park Boulevard' },
@@ -86,7 +87,8 @@ RegisterMission({
       },
     },
     {
-      label = 'Prosperity Street, Del Perro',
+      label = 'Prosperity Street, Vespucci Canals',
+      aliases = { 'Prosperity Street, Del Perro' },   -- the old label: a switch saved by it still matches
       start = { coords = vec3(-961.03, -1197.93, 4.80), radius = 85.0 },   -- patrol entry point, 45 m before the first spot
       spots = {   -- 10 kerb spots, 26 m apart on the right-hand kerb, each with its posted rule
         { coords = vec4(-979.50, -1156.47, 2.91, 31.8), rule = 'metered'   , street = 'Prosperity Street' },

@@ -7,7 +7,7 @@
   Points and payout come from Config.Events.weeklyBoss (500 points, $2,500 base); there is no payout
   field. The weekly limit is enforced by CP.Events.bossAvailable, not by the cooldown below.
   Locations (3 compounds, large remote properties outside every no-build zone): La Fuente Blanca ranch
-  (the Madrazo ranch, Tataviam foothills east of Vinewood Hills), O'Neil Ranch (Grapeseed) and Marlowe
+  (the Madrazo ranch, Vinewood Hills), O'Neil Ranch (Grapeseed) and Marlowe
   Vineyards (Tongva Hills). Each has 18 hostile spawn points, the Kingpin's spawn and a scene marker, all
   ON the compound's own roads (the courtyard loop, yard lanes and driveways of the GTA V vehicle-node
   network, z = road height + 1 m), so nothing spawns inside a house, barn or shed; the start is on the
@@ -31,7 +31,8 @@ RegisterMission({
 
   locations = {
     {
-      label  = 'La Fuente Blanca ranch, Tataviam foothills',
+      label  = 'La Fuente Blanca ranch, Vinewood Hills',
+      aliases = { 'La Fuente Blanca ranch, Tataviam foothills' },   -- the old label: a switch saved by it still matches
       start  = { coords = vec3(1330.75, 1121.00, 107.06), radius = 100.0 },   -- the approach, within 100 m of the compound
       spawns = {   -- 18 hostile spawn points on the compound's roads and yard lanes (open ground), facing the approach
         vec4(1368.50, 1135.00, 113.75, 110.3), vec4(1368.75, 1145.38, 113.75, 122.7),

@@ -942,7 +942,8 @@ engineOnly bonus ids and reward-like keys; `label(def, field, n)` (§10); the ne
 process_scene are known to the loader.
 
 Settings additions (§5.36): `isLocationEnabled(id, index, map?) -> bool` (`Config.DisabledLocations[id]` lists the
-locations turned off, by label or number; `map` replaces that table), `enabledLocations(def) -> { index }`;
+locations turned off, by label, an old label in the location's `aliases` (`U.isLocationName`) or number; `map`
+replaces that table), `enabledLocations(def) -> { index }`;
 `isEnabled(id)` is also false when every location of the mission is off. `loadAll` waits for `CP.Migrations.ready()`
 first, so built-in missions are normalised with the settings changed in game.
 

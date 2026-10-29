@@ -957,7 +957,7 @@ Locations for every new mission come from GTA V vehicle nodes and known base-gam
 
 - Basics: Patrol · 1–2 officers · ★★ · time limit 12 min · cooldown 15 min
 
-- Locations: 6+ patrol corridors recorded as road routes of 2–6 km (for example the Great Ocean Highway north of Chumash, Route 68 through Harmony, the Senora Freeway, the Del Perro Freeway, the Olympic Freeway, the Palomino Freeway, Route 1 at Paleto Bay), each with its posted speed and an observation point beside the road. Only the observation point and the corridor's two ends are held to the zone lint (routes of other missions may cross a corridor; the draw's runtime zone clearance keeps two live runs apart)
+- Locations: 6+ patrol corridors recorded as road routes of 2–6 km (for example the Great Ocean Highway north of Chumash, Route 68 through Harmony, the Senora Freeway, the Palomino Freeway, Route 1 at Paleto Bay, and city corridors such as the Bay City Incline and Capital Boulevard posted at 60 km/h), each with its posted speed and an observation point beside the road. A renamed location keeps its old label in `aliases`, so a location switch saved by the old label still matches. Only the observation point and the corridor's two ends are held to the zone lint (routes of other missions may cross a corridor; the draw's runtime zone clearance keeps two live runs apart)
 
 - Start: the observation point (radius 40 m), at least 30 m from the road spawn point
 

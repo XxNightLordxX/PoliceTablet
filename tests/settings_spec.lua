@@ -1054,6 +1054,12 @@ do
     S.resetMission(1, 'beat_patrol')
     M.get = realGet
 
+    -- a renamed location keeps its old label in aliases: a switch saved by it still matches (step L4)
+    local renamed = U.deepcopy(def)
+    renamed.locations[2].aliases = { 'An old label' }
+    H.ok(S._locationOff({ 'An old label' }, renamed, 2), 'a switch saved by the old label turns it off')
+    H.ok(not S._locationOff({ 'An old label' }, renamed, 1), 'and no other location')
+
     -- the Admin UI Missions list carries the switches
     H.ok(S.missionView(def).locations[1].label == def.locations[1].label, 'the Missions screen gets every location')
     S.setLocationEnabled(1, 'beat_patrol', 2, false)

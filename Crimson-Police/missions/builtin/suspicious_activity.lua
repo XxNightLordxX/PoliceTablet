@@ -5,7 +5,7 @@
   (Config.Custody.profileSets.scene) and whether the car is stolen (15%). When the first officer is within
   25 m each person reacts by demeanour: stays, walks away, runs, or shows a tell and draws. Talk / Check ID,
   frisk, detain, look inside, run the plate and search the car (with probable cause), then decide.
-  Locations (7 scenes): Container yard, Elysian Island, Lookout, Vinewood Hills, Car park, Rockford Hills, Truck stop, Grand Senora, Farm lot, Grapeseed, Logging track, Mount Chiliad, Terminal car park, LSIA.
+  Locations (7 scenes): Container yard, Elysian Island, Lookout, Vinewood Hills, Golf club lane, Rockford Hills, Lay-by, Ron Alternates Wind Farm, Farm lot, Mount Chiliad, Logging track, Mount Chiliad, Terminal car park, LSIA.
   Each scene is a car park or yard lane from the GTA V vehicle nodes (a back-road or non-GPS node): the car
   sits on the lane, three person spots are 3–5 m around it, two escape paths follow the lanes away from
   the start, and the transport point is on the nearest main road. The start marker is 44–58 m from the car
@@ -60,7 +60,8 @@ RegisterMission({
       transport = vec4(17.25, 902.50, 203.34, 173.7),   -- where the prisoner van parks, on the road 40 m away
     },
     {
-      label     = 'Car park, Rockford Hills',
+      label     = 'Golf club lane, Rockford Hills',
+      aliases   = { 'Car park, Rockford Hills' },   -- the old label: a switch saved by it still matches
       start     = { coords = vec3(-1082.25, 245.75, 63.78), radius = 100.0 },   -- 49 m from the car
       car       = vec4(-1100.12, 200.12, 63.05, 23.2),   -- the parked car at the scene
       people    = {   -- person spots around the car
@@ -74,7 +75,8 @@ RegisterMission({
       transport = vec4(-1070.00, 177.75, 59.28, 207.3),   -- where the prisoner van parks, on the road 38 m away
     },
     {
-      label     = 'Truck stop, Grand Senora',
+      label     = 'Lay-by, Ron Alternates Wind Farm',
+      aliases   = { 'Truck stop, Grand Senora' },   -- the old label: a switch saved by it still matches
       start     = { coords = vec3(2068.50, 2113.50, 90.25), radius = 100.0 },   -- 52 m from the car
       car       = vec4(2044.25, 2159.42, 95.15, 169.0),   -- the parked car at the scene
       people    = {   -- person spots around the car
@@ -88,7 +90,8 @@ RegisterMission({
       transport = vec4(2043.50, 2200.25, 99.22, 196.7),   -- where the prisoner van parks, on the road 41 m away
     },
     {
-      label     = 'Farm lot, Grapeseed',
+      label     = 'Farm lot, Mount Chiliad',
+      aliases   = { 'Farm lot, Grapeseed' },   -- the old label: a switch saved by it still matches
       start     = { coords = vec3(1401.50, 4494.00, 52.16), radius = 100.0 },   -- 49 m from the car
       car       = vec4(1437.25, 4461.00, 49.38, 338.2),   -- the parked car at the scene
       people    = {   -- person spots around the car

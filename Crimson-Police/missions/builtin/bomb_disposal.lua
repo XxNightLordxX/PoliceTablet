@@ -5,7 +5,7 @@
   All devices share the one timer: a miss takes 30 s off it, 2 misses in a row on one device set it off
   (an explosion effect only, damage 0) and the mission fails.
   Locations (6 base-game 24/7 stores): Innocence Boulevard, Clinton Avenue, Palomino Freeway, Senora
-  Freeway, Great Ocean Highway (Mount Chiliad) and Barbareno Road (Chumash). The seven hiding spots of a
+  Freeway, Senora Freeway (Mount Chiliad) and Barbareno Road (Chumash). The seven hiding spots of a
   store are placed in the store's own frame (clerk position and heading, back-room safe): behind and in
   front of the counter, two in the back room, one on the shop floor and two outside by the entrance.
   Device prop: prop_c4_final_green (a base-game C4 charge model).
@@ -68,7 +68,8 @@ RegisterMission({
       },
     },
     {
-      label  = '24/7 Supermarket, Great Ocean Highway (Mount Chiliad)',
+      label  = '24/7 Supermarket, Senora Freeway (Mount Chiliad)',
+      aliases = { '24/7 Supermarket, Great Ocean Highway (Mount Chiliad)' },   -- the old label: a switch saved by it still matches
       start  = { coords = vec3(1718.21, 6379.24, 34.44), radius = 50.0 },   -- outside; the device timer starts on arrival
       hiding = {   -- 7 hiding spots (floor level): counter, back room, shop floor, outside
         vec3(1727.83, 6415.01, 34.14), vec3(1730.43, 6416.30, 34.14),

@@ -688,9 +688,14 @@ local function ApplyTweak(raw, tweak)
         local kept = {}
         local seen = {}
         for _, loc in ipairs(d.locations or {}) do
-            local label = type(loc) == 'table' and loc.label or nil
-            if not (label and off[label]) then kept[#kept + 1] = loc end
-            if label then seen[label] = true end
+            local hit = false
+            for l in pairs(off) do
+                if CP.U.isLocationName(loc, l) then
+                    hit = true
+                    seen[l] = true
+                end
+            end
+            if not hit then kept[#kept + 1] = loc end
         end
         local unknown = nil
         for l in pairs(off) do if not seen[l] then unknown = l end end
@@ -839,9 +844,8 @@ function Missions.isLocationEnabled(id, index, map)
     if type(off) ~= 'table' then return true end
     local def = Missions.get(id)
     local loc = def and type(def.locations) == 'table' and def.locations[index] or nil
-    local label = type(loc) == 'table' and loc.label or nil
     for _, v in ipairs(off) do
-        if v == index or (label ~= nil and v == label) then return false end
+        if v == index or CP.U.isLocationName(loc, v) then return false end
     end
     return true
 end
@@ -1570,7 +1574,7 @@ local function StaleSwitches(def)
     for _, v in ipairs(list) do
         local hit = false
         for i, loc in ipairs(def.locations or {}) do
-            if v == i or (type(loc) == 'table' and v == loc.label) then hit = true end
+            if v == i or CP.U.isLocationName(loc, v) then hit = true end
         end
         if not hit then out[#out + 1] = v end
     end

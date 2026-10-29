@@ -11,7 +11,7 @@
   Rockford Hills & Morningwood (Boulevard Del Perro, Rockford Dr, Dorset Dr, Marathon Ave),
   Hawick & Alta (Hawick Ave, Meteor St, Spanish Ave, San Vitus Blvd), Banham Canyon & Chumash
   (Great Ocean Hwy, Barbareno Rd, Ineseno Road; the highway between the two side roads is driven
-  both ways) and Strawberry & Chamberlain Hills (Innocence Blvd, Alta St, Davis Ave, Strawberry Ave).
+  both ways) and La Puerta & Chamberlain Hills (Innocence Blvd, Alta St, Davis Ave, Strawberry Ave).
   Blocks: pursuit (mode = 'follow', spawn = location.spawn, route = location.route).
   Start: the loop's last waypoint (radius 25 m), 44-50 m behind the car; location.spawn is the
   loop's first waypoint, facing the second.
@@ -214,7 +214,8 @@ RegisterMission({
       },
     },
     {
-      label  = 'Strawberry & Chamberlain Hills',
+      label  = 'La Puerta & Chamberlain Hills',
+      aliases = { 'Strawberry & Chamberlain Hills' },   -- the old label: a switch saved by it still matches
       start  = { coords = vec3(-309.65, -1570.50, 23.89), radius = 25.0 },  -- the loop's last waypoint
       spawn  = vec4(-333.50, -1611.00, 19.84, 147.14),   -- getaway car on waypoint 1, 47 m ahead of the start
       -- 30 road waypoints, 1641 m flee loop: Alta St > Davis Ave > Strawberry Ave > Innocence Blvd > Alta St
