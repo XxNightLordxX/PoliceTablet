@@ -2022,6 +2022,8 @@ style = 'normal',       -- the block's own style setting; vehicles always keep t
 
 Placement tool: a ghost preview of the ped, vehicle or marker follows your aim; scroll rotates, E places, Backspace undoes, Delete (or Backspace) aimed at a placed point removes it, X cancels and keeps the points as they were, Enter returns to the tablet. Areas are drawn as ox_lib zones. A spot that fails a check below shows red and cannot be placed.
 
+Point list (Locations step, under the map): one row per stored point (the start, then each point of each key; not flee paths or recorded road routes) with its number, kind, distance from the start and stored street, and GPS, Set here (that point moves to where the builder stands; the other points are sent for the spacing checks) and Delete (that point only, autosaved). The row under the pointer is ringed on the map.
+
 Guardrails (checked while placing, and again by the server on publish)
 
 - There is no payout field: a custom mission pays its type's payout (× its star multiplier) until an admin sets a mission payout.

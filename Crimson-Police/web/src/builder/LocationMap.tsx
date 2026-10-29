@@ -1,12 +1,14 @@
 // A schematic map (SVG, north up, metres) of one location: the start and its radius,
 
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
+import { Button, IconButton } from '../shared/components';
 import { cx } from '../shared/cx';
 import { formatDistance } from '../shared/format';
 import { t } from '../shared/i18n';
 import type { BuilderConfig, BuilderLocation, Vec, Vec3 } from '../types/builder_server';
 import type { PointSpec, RouteMeta } from '../types/builder_client';
 import { isRoute, listsOf, pointsOf } from './defUtils';
+import type { PointListRow } from './pointList';
 
 export const KEY_COLOURS = [
     'var(--cp-info)',
@@ -29,6 +31,8 @@ export interface LocationMapProps {
     className?: string;
     // metres armed spawns keep from the start (schema armedKeepOut): the keep-out ring when set, else minSpawnFromStart
     keepOut?: number | null;
+    // the point the point list points at: a ring around it on the map
+    highlight?: { key: string; index: number } | null;
 }
 
 interface Box {
@@ -84,6 +88,7 @@ export function LocationMap({
     height = 260,
     className,
     keepOut: armedKeepOut,
+    highlight,
 }: LocationMapProps) {
     const start = location.start;
     const keepOut = armedKeepOut ?? (Number(cfg.minSpawnFromStart) || 30);
@@ -137,6 +142,11 @@ export function LocationMap({
     const dot = 5 * px;
 
     const polyline = (pts: Vec3[]) => pts.map(p => `${sx(p)},${sy(p)}`).join(' ');
+    const lit = !highlight
+        ? null
+        : highlight.key === 'start'
+          ? (start?.coords ?? null)
+          : (pointsOf(location[highlight.key])[highlight.index - 1] ?? null);
 
     return (
         <div ref={boxRef} className={cx('builder_client-map', className)} style={{ height }}>
@@ -338,11 +348,111 @@ export function LocationMap({
                         </g>
                     );
                 })}
+                {lit ? (
+                    <circle
+                        cx={sx(lit)}
+                        cy={sy(lit)}
+                        r={dot * 2.6}
+                        className="builder_client-map__lit"
+                        strokeWidth={2 * px}
+                    />
+                ) : null}
             </svg>
             <div className="builder_client-map__scale cp-num">{t('builder.map.grid', { m: formatDistance(step) })}</div>
             {!start && !data.layers.some(l => l.pts.length) ? (
                 <div className="builder_client-map__empty">{t('builder.map.empty')}</div>
             ) : null}
         </div>
+    );
+}
+
+export interface PointListProps {
+    rows: PointListRow[];
+    specs: PointSpec[];
+    // the row under the pointer or keyboard focus (its dot is ringed on the map)
+    lit: { key: string; index: number } | null;
+    onLit: (row: { key: string; index: number } | null) => void;
+    onGps: (c: Vec3) => void;
+    // "Set here" (Config.Builder.useMyPosition), null when off
+    onHere: ((row: PointListRow) => void) | null;
+    onDelete: (row: PointListRow) => void;
+    disabled: boolean;
+    ro: boolean;
+}
+
+// One row per point under the map: number, kind, distance from the start and the stored street, with GPS,
+// "Set here" and Delete for that one point.
+export function PointList({ rows, specs, lit, onLit, onGps, onHere, onDelete, disabled, ro }: PointListProps) {
+    if (!rows.length) return null;
+    return (
+        <ul className="builder_client-plist" aria-label={t('builder.loc.point_list')}>
+            {rows.map(row => {
+                const spec = row.specIndex >= 0 ? specs[row.specIndex] : null;
+                const label = spec ? t(spec.labelKey) : t('builder.points.start');
+                const colour = spec ? KEY_COLOURS[row.specIndex % KEY_COLOURS.length] : undefined;
+                const on = !!lit && lit.key === row.key && lit.index === row.index;
+                const enter = () => onLit({ key: row.key, index: row.index });
+                const p = row.point;
+                return (
+                    <li
+                        key={`${row.key}:${row.index}`}
+                        className={cx('builder_client-plist__row', on && 'is-lit')}
+                        onMouseEnter={enter}
+                        onMouseLeave={() => onLit(null)}
+                        onFocus={enter}
+                        onBlur={() => onLit(null)}
+                    >
+                        <span
+                            className={cx('builder_client-plist__dot', !spec && 'is-start')}
+                            style={colour ? { background: colour } : undefined}
+                        />
+                        <span className="builder_client-plist__name">
+                            {spec ? t('builder.loc.point_n', { label, n: row.index }) : label}
+                        </span>
+                        <span className="builder_client-plist__meta cp-num">
+                            {[
+                                row.fromStart !== null
+                                    ? t('builder.loc.point_from_start', { m: formatDistance(row.fromStart) })
+                                    : `${p.x.toFixed(1)}, ${p.y.toFixed(1)}`,
+                                row.street ?? '',
+                            ]
+                                .filter(Boolean)
+                                .join(' · ')}
+                        </span>
+                        <span className="builder_client-plist__actions">
+                            <IconButton
+                                icon="navigation"
+                                label={t('builder.loc.gps')}
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => onGps({ x: p.x, y: p.y, z: p.z })}
+                            />
+                            {!ro && onHere ? (
+                                <Button
+                                    size="sm"
+                                    variant="secondary"
+                                    icon="user"
+                                    disabled={disabled}
+                                    title={t('builder.loc.point_set_here_hint')}
+                                    onClick={() => onHere(row)}
+                                >
+                                    {t('builder.loc.set_here')}
+                                </Button>
+                            ) : null}
+                            {!ro ? (
+                                <IconButton
+                                    icon="trash"
+                                    label={t('builder.loc.point_delete')}
+                                    variant="ghost"
+                                    size="sm"
+                                    disabled={disabled}
+                                    onClick={() => onDelete(row)}
+                                />
+                            ) : null}
+                        </span>
+                    </li>
+                );
+            })}
+        </ul>
     );
 }

@@ -22,7 +22,8 @@ import type { BuilderKerbSpot, BuilderLocation, BuilderRoute, Vec3 } from '../..
 import type { PointSpec, RouteMeta } from '../../types/builder_client';
 import { CountBadge, ErrorNotes } from '../controls';
 import { dist2d, errorsAt, errorsUnder, isRoute, listsOf, pointsOf, routeLength } from '../defUtils';
-import { KEY_COLOURS, LocationMap } from '../LocationMap';
+import { KEY_COLOURS, LocationMap, PointList } from '../LocationMap';
+import { pointListRows, type PointListRow } from '../pointList';
 import {
     KERB_RULES,
     armedKeepOut,
@@ -85,6 +86,7 @@ export function StepLocations({ ed, cfg, def, ro, scope }: StepProps) {
         null,
     );
     const [focus, setFocus] = useState<string | null>(null);
+    const [lit, setLit] = useState<{ key: string; index: number } | null>(null);
     const specs = useMemo(() => missionPointSpecs(cfg, def), [cfg, def]);
     const minLoc = minLocationsFor(cfg, ed.record?.overridesBuiltin);
     const maxLoc = Number(cfg.maxLocations) || 20;
@@ -95,6 +97,7 @@ export function StepLocations({ ed, cfg, def, ro, scope }: StepProps) {
     const busy = ed.toolBusy || ro;
     const pick = (n: number) => {
         setSel(n);
+        setLit(null);
         setEditorMemory(scope, { location: n });
     };
     const meta = (key: string) => routeMetaOf(ed.id, li, key);
@@ -123,6 +126,25 @@ export function StepLocations({ ed, cfg, def, ro, scope }: StepProps) {
         });
         setRouteMeta(ed.id, li, spec.key, null);
         setConfirm(null);
+    };
+    const rows = useMemo(() => (loc ? pointListRows(loc, specs) : []), [loc, specs]);
+    const specOf = (row: PointListRow) => (row.specIndex >= 0 ? specs[row.specIndex] : startSpec());
+    const hereAt = (row: PointListRow) => {
+        const spec = specOf(row);
+        // a recorded checkpoint route's points are placed as plain markers (as "Place points" does)
+        const s = spec.kind === 'route' ? { ...spec, kind: 'marker' as const, heading: false } : spec;
+        void ed.here(s, li, row.index);
+    };
+    const deleteAt = (row: PointListRow) => {
+        if (row.key === 'start') {
+            setConfirm({ kind: 'clear', spec: startSpec() });
+            return;
+        }
+        setLit(null);
+        void ed.removePoint(row.key, li, row.index).then(done => {
+            if (done)
+                toast('success', t('builder.loc.point_deleted', { label: t(specOf(row).labelKey), n: row.index }));
+        });
     };
     const gps = async (c: Vec3) => {
         const res = await clientAction('builderWaypoint', { coords: c });
@@ -253,6 +275,18 @@ export function StepLocations({ ed, cfg, def, ro, scope }: StepProps) {
                                 focusKey={focus}
                                 height={230}
                                 keepOut={armedMin}
+                                highlight={lit}
+                            />
+                            <PointList
+                                rows={rows}
+                                specs={specs}
+                                lit={lit}
+                                onLit={setLit}
+                                onGps={c => void gps(c)}
+                                onHere={cfg.useMyPosition !== false ? hereAt : null}
+                                onDelete={deleteAt}
+                                disabled={busy}
+                                ro={ro}
                             />
                             <div className="builder_client-legend">
                                 <span className="builder_client-legend__item">

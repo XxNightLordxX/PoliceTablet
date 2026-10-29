@@ -1163,6 +1163,61 @@
     font-size: var(--cp-fs-sm);
 }
 
+.builder_client-map__lit {
+    fill: none;
+    stroke: var(--cp-text);
+}
+
+/* the point list under the location map: one row per point */
+.builder_client-plist {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-height: 220px;
+    overflow-y: auto;
+    border: 1px solid var(--cp-border);
+    border-radius: var(--cp-radius);
+}
+
+.builder_client-plist__row {
+    display: grid;
+    grid-template-columns: 10px minmax(120px, 1fr) minmax(0, 2fr) auto;
+    align-items: center;
+    gap: 8px;
+    padding: 2px 8px;
+    font-size: var(--cp-fs-xs);
+}
+
+.builder_client-plist__row.is-lit {
+    background: rgba(var(--cp-surface-rgb), 0.9);
+}
+
+.builder_client-plist__dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+}
+
+.builder_client-plist__dot.is-start {
+    background: var(--cp-warning);
+}
+
+.builder_client-plist__meta {
+    color: rgba(var(--cp-text-rgb), 0.65);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.builder_client-plist__actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
 .builder_client-legend {
     display: flex;
     flex-wrap: wrap;

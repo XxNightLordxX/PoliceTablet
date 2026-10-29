@@ -1473,6 +1473,9 @@ in game, with no coding:
    **Set here**) on the Locations step put the point where you stand, or where your vehicle is, with your heading:
    the tablet stays open and the spot is checked like an aimed one (no-build zone, water, ground, room for the ped
    or vehicle, distance from the start). `Config.Builder.useMyPosition = false` hides these buttons.
+   Under the map, the point list has one row per point (its number, kind, distance from the start and, for kerb
+   spots, the street) with **GPS** (a waypoint to it), **Set here** (moves only that point to where you stand) and
+   **Delete** (removes only that point, saved at once). Pointing at a row rings its dot on the map.
 4. Test it privately if you like. **Testing is optional**: a draft can be published without a test (the tablet asks
    "Publish without testing?" once). Only when `Config.Builder.requireTestToPublish = true` must a supervisor's draft
    pass a test first; an admin never needs one. The step bar marks **Scaling** and **Test** "(optional)" and ticks

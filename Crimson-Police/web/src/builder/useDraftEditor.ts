@@ -28,6 +28,7 @@ import type {
 } from '../types/builder_client';
 import { applyResult } from './applyResult';
 import { clone, isRoute, labelSlug, listsOf, normalizeDefinition, pointsOf } from './defUtils';
+import { pointsWithout, removePointAt, resultReplacing } from './pointList';
 import { armedKeepOut, searchCircleOf, startRadiusRange, syncStartRadius } from './schema';
 import {
     currentTool,
@@ -78,8 +79,11 @@ export interface DraftEditor {
     takeLock: () => Promise<boolean>;
     releaseLock: () => Promise<void>;
     place: (spec: PointSpec, location: number) => Promise<boolean>;
-    // the point where the player stands (Config.Builder.useMyPosition): set or added at once, the tablet stays open
-    here: (spec: PointSpec, location: number) => Promise<boolean>;
+    // the point where the player stands (Config.Builder.useMyPosition): set or added at once, the tablet stays open.
+    // With index (1-based, a multiple key): that point is moved there (the point list's "Set here")
+    here: (spec: PointSpec, location: number, index?: number) => Promise<boolean>;
+    // the point list's Delete: point index (1-based) of a key goes, stored at once (autosave)
+    removePoint: (key: string, location: number, index: number) => Promise<boolean>;
     recordRoute: (spec: PointSpec, location: number) => Promise<boolean>;
     testDrive: (spec: PointSpec, location: number) => Promise<boolean>;
 }
@@ -579,10 +583,24 @@ export function useDraftEditor(
         return run('builderPlace', payload, spec, location, 'placement');
     };
 
-    const here = async (spec: PointSpec, location: number) => {
+    // a changed definition from a tool answer or the point list: kept, remembered and stored at once
+    const commitNow = async (next: BuilderDefinition, before: BuilderDefinition) => {
+        syncStartRadius(next, config, before);
+        rev.current += 1;
+        defRef.current = next;
+        dirtyRef.current = true;
+        setDef(next);
+        setDirty(true);
+        rememberDraft(idRef.current, next, true);
+        await autosaveNow();
+    };
+
+    const here = async (spec: PointSpec, location: number, index?: number) => {
         if (readOnly) return false;
         const payload = placePayload(spec, location);
         if (!payload) return false;
+        const replacing = spec.multiple && index !== undefined && index >= 1 && index <= payload.points.length;
+        if (replacing) payload.points = pointsWithout(payload.points, index);
         setToolBusy(true);
         const res = await clientAction<BuilderHereReply>('builderHere', payload);
         if (!mounted.current) return false;
@@ -597,18 +615,22 @@ export function useDraftEditor(
             toast('warning', t('builder.loc.here_refused', { reason: reply.reason || t('err.internal') }));
             return false;
         }
-        const applied = applyResult(before, reply.result, spec, config);
+        const result = replacing ? resultReplacing(reply.result, index) : reply.result;
+        const applied = applyResult(before, result, spec, config);
         toast(applied.tone, t(applied.messageKey, applied.vars));
         if (!applied.def) return false;
-        const next = applied.def;
-        syncStartRadius(next, config, before);
-        rev.current += 1;
-        defRef.current = next;
-        dirtyRef.current = true;
-        setDef(next);
-        setDirty(true);
-        rememberDraft(idRef.current, next, true);
-        await autosaveNow();
+        await commitNow(applied.def, before);
+        return true;
+    };
+
+    const removePoint = async (key: string, location: number, index: number) => {
+        const before = defRef.current;
+        if (readOnly || !before || !before.locations[location - 1]) return false;
+        const next = clone(before);
+        if (!removePointAt(next.locations[location - 1], key, index)) return false;
+        // a test drive's findings no longer match the points
+        if (routeMetaOf(idRef.current, location, key)) setRouteMeta(idRef.current, location, key, null);
+        await commitNow(next, before);
         return true;
     };
 
@@ -674,6 +696,7 @@ export function useDraftEditor(
         releaseLock,
         place,
         here,
+        removePoint,
         recordRoute,
         testDrive,
     };

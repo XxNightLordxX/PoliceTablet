@@ -933,5 +933,11 @@
   "builder.loc.set_here": "Set here",
   "builder.loc.here_hint": "Uses the spot where you stand, or your vehicle is. The tablet stays open.",
   "builder.loc.here_refused": "Can't use your position: {reason}",
-  "err.builder_here_off": "Placing points where you stand is turned off. Use the placement tool."
+  "err.builder_here_off": "Placing points where you stand is turned off. Use the placement tool.",
+  "builder.loc.point_list": "Every point of this location",
+  "builder.loc.point_n": "{label} {n}",
+  "builder.loc.point_from_start": "{m} from the start",
+  "builder.loc.point_delete": "Delete this point",
+  "builder.loc.point_deleted": "{label} {n} deleted",
+  "builder.loc.point_set_here_hint": "Moves this point to the spot where you stand, or your vehicle is. The tablet stays open."
 }
