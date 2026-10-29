@@ -150,3 +150,25 @@
     border: 1px solid var(--cp-border);
     border-radius: var(--cp-radius-sm);
 }
+
+/* The mission drawer (a catalog row click): everything about one mission */
+.admin-mission-drawer {
+    max-width: 640px;
+}
+
+.admin-missions-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+.admin-missions-grid2 {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.builder_client-catalog tbody tr {
+    cursor: pointer;
+}

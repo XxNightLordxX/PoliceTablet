@@ -276,5 +276,17 @@
   "admin.missions.problem.title": "{mission}: why it did not load",
   "admin.missions.problem.file": "File",
   "admin.missions.problem.detail": "What the loader said",
-  "admin.missions.problem.fix": "Fix the file (or remove it), then press Reload mission files."
+  "admin.missions.problem.fix": "Fix the file (or remove it), then press Reload mission files.",
+  "admin.missions.drawer.open": "Open",
+  "admin.missions.drawer.switches": "On or off, and its locations",
+  "admin.missions.drawer.not_in_pool": "This mission is not offered to officers yet (a draft, archived, or its file did not load), so it has no on/off switches.",
+  "admin.missions.drawer.payout": "Payout",
+  "admin.missions.drawer.payout_none": "This mission has no payout row yet: it gets one once it is offered to officers.",
+  "admin.missions.drawer.payout_without": "Without an admin payout: {amount}",
+  "admin.missions.drawer.payout_clear": "Back to the type payout",
+  "admin.missions.drawer.tests": "Tests",
+  "admin.missions.drawer.tests_open": "Open Testing",
+  "admin.missions.drawer.tests_none": "No test locations are listed for this mission.",
+  "admin.missions.drawer.expert": "Expert actions",
+  "admin.missions.drawer.expert_text": "Versions, compare with the shipped file, copy as Lua, owner and reset. Each one asks before it changes anything."
 }

@@ -3760,6 +3760,15 @@ web/dist was not rebuilt after a source change (the shipped UI must be the revie
 algorithms identical: files sorted by their path relative to Crimson-Police/ (posix), hashed as path \0 bytes \0.
 ```
 
+## Crimson-Police/web/src/admin/components/MissionDrawer.tsx
+
+```text
+Admin UI · Missions: one drawer per mission (opened by clicking a catalog row). Everything about the mission in one
+place: on/off and its locations, its payout, Quick edit, its tests, and every action as a labelled button. The
+drawer only calls the server actions the rest of the Admin UI already uses (setMissionEnabled, setLocationEnabled,
+resetMissionSwitches, setMissionPayout, setMissionTweak); the actions it lists are passed in by the Missions screen.
+```
+
 ## Crimson-Police/web/src/admin/components/SpawnCheckDialog.tsx
 
 ```text
@@ -3960,6 +3969,15 @@ custom missions (builder:list) with status, version, owner and edit lock, plus t
 Actions (server:builder:*): create, duplicate, archive, restore, rollback, breakLock, discardDraft — each gated
 by session.actions (builderEdit / builderArchive / builderRollback / breakEditLock) AND the entry's `can` flags
 from the server; destructive ones ask for confirmation.
+```
+
+## Crimson-Police/web/src/builder/admin/QuickEditPanel.tsx
+
+```text
+Quick edit of a built-in mission (MissionTweaks), shown in the mission's drawer (Admin UI -> Missions): cooldown,
+time limit and start timeout in minutes, and the NPC models, cars and weapons by their plain names, without JSON.
+Saved through Settings (checked again there, audited as a settings change). Runs already going keep their
+definition.
 ```
 
 ## Crimson-Police/web/src/builder/applyResult.ts

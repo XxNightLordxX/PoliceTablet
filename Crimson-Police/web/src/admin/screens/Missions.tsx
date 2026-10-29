@@ -1,6 +1,6 @@
 // Admin UI · Missions (screen key 'admin_missions', title key 'ui.screen.admin_missions').
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type SyntheticEvent } from 'react';
 import {
     Badge,
     Button,
@@ -44,11 +44,11 @@ import {
     MissionStats,
     OperationHistory,
     OverrideBadges,
-    QuickEditDialog,
     SwitchRemapCard,
     VersionsDialog,
 } from '../../builder/admin';
 import { useAdminAction } from '../components/kit';
+import { MissionDrawer, type DrawerAction } from '../components/MissionDrawer';
 import type { LoadFailure, MissionLoadSummary, OverrideView } from '../../types/admin_missions';
 import type {
     BuilderCreateResult,
@@ -63,6 +63,12 @@ import type { AdminMissionsData } from '../../types/builder_client';
 import type { MissionSwitchView } from '../../types/settings';
 import './Settings.css';
 import './Missions.css';
+
+// Controls inside a catalog row keep their clicks and keys (a click elsewhere on the row opens the mission's drawer).
+const stopRow = {
+    onClick: (e: SyntheticEvent) => e.stopPropagation(),
+    onKeyDown: (e: SyntheticEvent) => e.stopPropagation(),
+};
 
 type Tab = 'catalog' | 'builder' | 'operation' | 'dispatch' | 'history' | 'stats' | 'deleted';
 type SourceFilter = 'all' | 'builtin' | 'custom';
@@ -97,7 +103,7 @@ type ReloadSummary = MissionLoadSummary;
 // The admin-only confirmations (reason, and the mission id typed where the server asks for it).
 type AdminConfirm = { kind: 'reset' | 'delete' | 'fold' | 'launchAnyway'; row: CatalogRow } | null;
 
-type Open = { kind: 'quick' | 'compare' | 'versions' | 'copy' | 'owner'; row: CatalogRow } | null;
+type Open = { kind: 'compare' | 'versions' | 'copy' | 'owner'; row: CatalogRow } | null;
 
 type Confirm =
     | { kind: 'publish' | 'archive' | 'restore' | 'rollback' | 'breakLock'; row: CatalogRow }
@@ -134,7 +140,8 @@ export default function AdminMissions() {
     const [source, setSource] = useState<SourceFilter>('all');
     const [confirm, setConfirm] = useState<Confirm>(null);
     const [summary, setSummary] = useState<ReloadSummary | null>(null);
-    const [locationsOf, setLocationsOf] = useState<string | null>(null);
+    // the mission whose drawer is open (a catalog row click): everything about it in one place
+    const [drawerOf, setDrawerOf] = useState<string | null>(null);
     const [adminConfirm, setAdminConfirm] = useState<AdminConfirm>(null);
     const [openDialog, setOpenDialog] = useState<Open>(null);
     const [importOpen, setImportOpen] = useState(false);
@@ -226,7 +233,7 @@ export default function AdminMissions() {
         return out;
     }, [missions.data, builder.data, load.data]);
 
-    const switchRow = rows.find(r => r.id === locationsOf) ?? null;
+    const drawerRow = rows.find(r => r.id === drawerOf) ?? null;
 
     const filtered = useMemo(() => {
         const q = query.trim().toLowerCase();
@@ -374,6 +381,180 @@ export default function AdminMissions() {
         }
     };
 
+    // The drawer's buttons, each with its name: the everyday ones first, the expert ones (Compare, Versions, Copy as
+    // Lua, Fold, Reset ...) in their own card. Same server actions as before.
+    const drawerActions = (r: CatalogRow): { actions: DrawerAction[]; expert: DrawerAction[] } => {
+        const actions: DrawerAction[] = [];
+        const expert: DrawerAction[] = [];
+        const builder = (id: string) => {
+            setDrawerOf(null);
+            openInBuilder(id);
+        };
+        if (r.loadError)
+            actions.push({
+                key: 'problem',
+                label: t('admin.missions.problem.open'),
+                icon: 'alert',
+                onClick: () => setProblem(r),
+            });
+        const e = r.entry;
+        // a file that never loaded and has no Builder entry: only its problem can be opened
+        if (r.loadError && !e) return { actions, expert };
+        if (r.source === 'builtin') {
+            if (r.canEditBuiltin)
+                actions.push({
+                    key: 'edit',
+                    label: t('admin.missions.ovr.edit'),
+                    icon: 'edit',
+                    variant: 'primary',
+                    disabled: admin.busy,
+                    onClick: () => {
+                        setDrawerOf(null);
+                        void editBuiltin(r);
+                    },
+                });
+            else
+                actions.push({
+                    key: 'view',
+                    label: t('admin.missions.view'),
+                    icon: 'eye',
+                    onClick: () => builder(r.id),
+                });
+            actions.push({
+                key: 'duplicate',
+                label: t('admin.missions.duplicate'),
+                icon: 'swap',
+                disabled: busy,
+                onClick: () => {
+                    setDrawerOf(null);
+                    void duplicate(r);
+                },
+            });
+        } else if (e) {
+            actions.push({
+                key: 'build',
+                label: e.can.edit ? t('admin.missions.build') : t('admin.missions.view'),
+                icon: e.can.edit ? 'edit' : 'eye',
+                variant: 'primary',
+                onClick: () => builder(r.id),
+            });
+            if (e.can.publish && !e.needsTest)
+                actions.push({
+                    key: 'publish',
+                    label: t('admin.missions.publish'),
+                    icon: 'globe',
+                    onClick: () => setConfirm({ kind: 'publish', row: r }),
+                });
+        }
+        if (r.eligible && canLaunch)
+            actions.push({
+                key: 'launch',
+                label: t('admin.missions.launch'),
+                icon: 'globe',
+                onClick: () => setConfirm({ kind: 'launch', row: r }),
+            });
+        const dialog = (kind: NonNullable<Open>['kind']) => () => setOpenDialog({ kind, row: r });
+        const ov = r.override;
+        if (r.source === 'builtin') {
+            if (ov?.changed)
+                expert.push({
+                    key: 'compare',
+                    label: t('admin.missions.ovr.compare'),
+                    icon: 'alert',
+                    onClick: dialog('compare'),
+                });
+            if (ov?.overridden || ov?.hasDraft)
+                expert.push({
+                    key: 'versions',
+                    label: t('admin.missions.versions.open'),
+                    icon: 'layers',
+                    onClick: dialog('versions'),
+                });
+            if (ov?.overridden)
+                expert.push({
+                    key: 'copy',
+                    label: t('admin.missions.copy.open'),
+                    icon: 'fileText',
+                    onClick: dialog('copy'),
+                });
+            if (ov?.overridden && ov.tweaks)
+                expert.push({
+                    key: 'fold',
+                    label: t('admin.missions.ovr.fold'),
+                    icon: 'download',
+                    onClick: () => setAdminConfirm({ kind: 'fold', row: r }),
+                });
+            if (ov?.overridden || ov?.hasDraft)
+                expert.push({
+                    key: 'reset',
+                    label: t('admin.missions.ovr.reset'),
+                    icon: 'undo',
+                    variant: 'danger',
+                    onClick: () => setAdminConfirm({ kind: 'reset', row: r }),
+                });
+        } else if (e) {
+            if (e.can.rollback)
+                expert.push({
+                    key: 'rollback',
+                    label: t('builder.list.rollback'),
+                    icon: 'chevronLeft',
+                    onClick: () => setConfirm({ kind: 'rollback', row: r }),
+                });
+            if (canMissionAdmin) {
+                expert.push({
+                    key: 'versions',
+                    label: t('admin.missions.versions.open'),
+                    icon: 'layers',
+                    onClick: dialog('versions'),
+                });
+                if (e.version)
+                    expert.push({
+                        key: 'copy',
+                        label: t('admin.missions.copy.open'),
+                        icon: 'fileText',
+                        onClick: dialog('copy'),
+                    });
+                expert.push({
+                    key: 'owner',
+                    label: t('admin.missions.owner.open'),
+                    icon: 'user',
+                    onClick: dialog('owner'),
+                });
+            }
+            if (e.can.breakLock)
+                expert.push({
+                    key: 'breakLock',
+                    label: t('builder.list.break_lock'),
+                    icon: 'key',
+                    onClick: () => setConfirm({ kind: 'breakLock', row: r }),
+                });
+            if (e.can.archive)
+                expert.push({
+                    key: 'archive',
+                    label: t('builder.list.archive'),
+                    icon: 'inbox',
+                    onClick: () => setConfirm({ kind: 'archive', row: r }),
+                });
+            if (e.can.restore)
+                expert.push({
+                    key: 'restore',
+                    label: t('builder.list.restore'),
+                    icon: 'refresh',
+                    onClick: () => setConfirm({ kind: 'restore', row: r }),
+                });
+            if (canMissionAdmin && e.dbStatus === 'archived')
+                expert.push({
+                    key: 'delete',
+                    label: t('admin.missions.delete.open'),
+                    icon: 'trash',
+                    variant: 'danger',
+                    onClick: () => setAdminConfirm({ kind: 'delete', row: r }),
+                });
+        }
+        return { actions, expert };
+    };
+    const drawer = drawerRow ? drawerActions(drawerRow) : { actions: [], expert: [] };
+
     const doAdminConfirm = async (reason: string, typed: string) => {
         const c = adminConfirm;
         if (!c) return;
@@ -489,7 +670,7 @@ export default function AdminMissions() {
                     );
                 }
                 const sw = r.switch ? (
-                    <MissionSwitch row={r} busy={busy} onToggle={setMission} onLocations={setLocationsOf} />
+                    <MissionSwitch row={r} busy={busy} onToggle={setMission} onLocations={setDrawerOf} />
                 ) : null;
                 if (r.source === 'builtin') {
                     if (sw) return sw;
@@ -534,209 +715,21 @@ export default function AdminMissions() {
         {
             key: 'actions',
             header: '',
-            width: 220,
+            width: 200,
             align: 'right',
-            render: r => {
-                const e = r.entry;
-                const showProblem = r.loadError ? (
-                    <Button size="sm" variant="secondary" icon="alert" onClick={() => setProblem(r)}>
-                        {t('admin.missions.problem.open')}
+            // every action is in the mission's drawer (a click on the row, or Open), each with its name
+            render: r => (
+                <div className="builder_client-row-actions" {...stopRow}>
+                    {r.loadError ? (
+                        <Button size="sm" variant="secondary" icon="alert" onClick={() => setProblem(r)}>
+                            {t('admin.missions.problem.open')}
+                        </Button>
+                    ) : null}
+                    <Button size="sm" icon="chevronRight" onClick={() => setDrawerOf(r.id)}>
+                        {t('admin.missions.drawer.open')}
                     </Button>
-                ) : null;
-                // a file that never loaded and has no Builder entry: only its problem can be opened
-                if (r.loadError && !e) return <div className="builder_client-row-actions">{showProblem}</div>;
-                return (
-                    <div className="builder_client-row-actions">
-                        {showProblem}
-                        {r.eligible && canLaunch ? (
-                            <IconButton
-                                icon="globe"
-                                size="sm"
-                                variant="ghost"
-                                label={t('admin.missions.launch')}
-                                onClick={() => setConfirm({ kind: 'launch', row: r })}
-                            />
-                        ) : null}
-                        {r.source === 'builtin' ? (
-                            <>
-                                {r.override?.changed ? (
-                                    <IconButton
-                                        icon="alert"
-                                        size="sm"
-                                        variant="ghost"
-                                        label={t('admin.missions.ovr.compare')}
-                                        onClick={() => setOpenDialog({ kind: 'compare', row: r })}
-                                    />
-                                ) : null}
-                                {r.override?.overridden || r.override?.hasDraft ? (
-                                    <>
-                                        <IconButton
-                                            icon="layers"
-                                            size="sm"
-                                            variant="ghost"
-                                            label={t('admin.missions.versions.open')}
-                                            onClick={() => setOpenDialog({ kind: 'versions', row: r })}
-                                        />
-                                        {r.override?.overridden ? (
-                                            <IconButton
-                                                icon="fileText"
-                                                size="sm"
-                                                variant="ghost"
-                                                label={t('admin.missions.copy.open')}
-                                                onClick={() => setOpenDialog({ kind: 'copy', row: r })}
-                                            />
-                                        ) : null}
-                                        {r.override?.overridden && r.override.tweaks ? (
-                                            <IconButton
-                                                icon="download"
-                                                size="sm"
-                                                variant="ghost"
-                                                label={t('admin.missions.ovr.fold')}
-                                                onClick={() => setAdminConfirm({ kind: 'fold', row: r })}
-                                            />
-                                        ) : null}
-                                        <IconButton
-                                            icon="undo"
-                                            size="sm"
-                                            variant="ghost"
-                                            label={t('admin.missions.ovr.reset')}
-                                            onClick={() => setAdminConfirm({ kind: 'reset', row: r })}
-                                        />
-                                    </>
-                                ) : null}
-                                {r.switch ? (
-                                    <IconButton
-                                        icon="sliders"
-                                        size="sm"
-                                        variant="ghost"
-                                        label={t('admin.missions.quick.open')}
-                                        onClick={() => setOpenDialog({ kind: 'quick', row: r })}
-                                    />
-                                ) : null}
-                                {r.canEditBuiltin ? (
-                                    <Button
-                                        size="sm"
-                                        icon="edit"
-                                        disabled={admin.busy}
-                                        onClick={() => void editBuiltin(r)}
-                                    >
-                                        {t('admin.missions.ovr.edit')}
-                                    </Button>
-                                ) : (
-                                    <IconButton
-                                        icon="eye"
-                                        size="sm"
-                                        variant="ghost"
-                                        label={t('admin.missions.view')}
-                                        onClick={() => openInBuilder(r.id)}
-                                    />
-                                )}
-                                <Button
-                                    size="sm"
-                                    variant="secondary"
-                                    icon="swap"
-                                    onClick={() => void duplicate(r)}
-                                    disabled={busy}
-                                >
-                                    {t('admin.missions.duplicate')}
-                                </Button>
-                            </>
-                        ) : e ? (
-                            <>
-                                {e.can.rollback ? (
-                                    <IconButton
-                                        icon="chevronLeft"
-                                        size="sm"
-                                        variant="ghost"
-                                        label={t('builder.list.rollback')}
-                                        onClick={() => setConfirm({ kind: 'rollback', row: r })}
-                                    />
-                                ) : null}
-                                {canMissionAdmin ? (
-                                    <>
-                                        <IconButton
-                                            icon="layers"
-                                            size="sm"
-                                            variant="ghost"
-                                            label={t('admin.missions.versions.open')}
-                                            onClick={() => setOpenDialog({ kind: 'versions', row: r })}
-                                        />
-                                        {e.version ? (
-                                            <IconButton
-                                                icon="fileText"
-                                                size="sm"
-                                                variant="ghost"
-                                                label={t('admin.missions.copy.open')}
-                                                onClick={() => setOpenDialog({ kind: 'copy', row: r })}
-                                            />
-                                        ) : null}
-                                        <IconButton
-                                            icon="user"
-                                            size="sm"
-                                            variant="ghost"
-                                            label={t('admin.missions.owner.open')}
-                                            onClick={() => setOpenDialog({ kind: 'owner', row: r })}
-                                        />
-                                        {e.dbStatus === 'archived' ? (
-                                            <IconButton
-                                                icon="trash"
-                                                size="sm"
-                                                variant="ghost"
-                                                label={t('admin.missions.delete.open')}
-                                                onClick={() => setAdminConfirm({ kind: 'delete', row: r })}
-                                            />
-                                        ) : null}
-                                    </>
-                                ) : null}
-                                {e.can.breakLock ? (
-                                    <IconButton
-                                        icon="key"
-                                        size="sm"
-                                        variant="ghost"
-                                        label={t('builder.list.break_lock')}
-                                        onClick={() => setConfirm({ kind: 'breakLock', row: r })}
-                                    />
-                                ) : null}
-                                {e.can.archive ? (
-                                    <IconButton
-                                        icon="inbox"
-                                        size="sm"
-                                        variant="ghost"
-                                        label={t('builder.list.archive')}
-                                        onClick={() => setConfirm({ kind: 'archive', row: r })}
-                                    />
-                                ) : null}
-                                {e.can.restore ? (
-                                    <IconButton
-                                        icon="refresh"
-                                        size="sm"
-                                        variant="ghost"
-                                        label={t('builder.list.restore')}
-                                        onClick={() => setConfirm({ kind: 'restore', row: r })}
-                                    />
-                                ) : null}
-                                {e.can.publish && !e.needsTest ? (
-                                    <Button
-                                        size="sm"
-                                        variant="secondary"
-                                        icon="globe"
-                                        onClick={() => setConfirm({ kind: 'publish', row: r })}
-                                    >
-                                        {t('admin.missions.publish')}
-                                    </Button>
-                                ) : null}
-                                <Button
-                                    size="sm"
-                                    icon={e.can.edit ? 'edit' : 'eye'}
-                                    onClick={() => openInBuilder(r.id)}
-                                >
-                                    {e.can.edit ? t('admin.missions.build') : t('admin.missions.view')}
-                                </Button>
-                            </>
-                        ) : null}
-                    </div>
-                );
-            },
+                </div>
+            ),
         },
     ];
 
@@ -878,6 +871,7 @@ export default function AdminMissions() {
                             rows={filtered}
                             rowKey={r => r.id}
                             rowClassName={r => (r.loadError ? 'is-muted' : undefined)}
+                            onRowClick={r => setDrawerOf(r.id)}
                             empty={t('admin.missions.none')}
                             aria-label={t('ui.screen.admin_missions')}
                         />
@@ -954,6 +948,16 @@ export default function AdminMissions() {
                     </Card>
                 </div>
             ) : null}
+            <MissionDrawer
+                mission={tab === 'catalog' ? drawerRow : null}
+                actions={drawer.actions}
+                expert={drawer.expert}
+                quickEdit={!!drawerRow && drawerRow.source === 'builtin' && !!drawerRow.switch}
+                busy={busy}
+                onToggle={on => drawerRow && void setMission(drawerRow, on)}
+                onChanged={refetchAll}
+                onClose={() => setDrawerOf(null)}
+            />
             <ConfirmDialog
                 open={!!confirm}
                 title={confirmCopy.title}
@@ -1006,12 +1010,6 @@ export default function AdminMissions() {
                 label={problem?.label ?? ''}
                 onClose={() => setProblem(null)}
             />
-            <QuickEditDialog
-                missionId={openDialog?.kind === 'quick' ? openDialog.row.id : null}
-                label={openDialog?.row.label ?? ''}
-                onClose={() => setOpenDialog(null)}
-                onSaved={refetchAll}
-            />
             <CompareDialog
                 id={openDialog?.kind === 'compare' ? openDialog.row.id : null}
                 label={openDialog?.row.label ?? ''}
@@ -1043,12 +1041,6 @@ export default function AdminMissions() {
                     openInBuilder(id);
                 }}
             />
-            <LocationsDialog
-                row={switchRow}
-                busy={busy}
-                onClose={() => setLocationsOf(null)}
-                onChanged={() => void missions.refetch()}
-            />
         </Screen>
     );
 }
@@ -1073,7 +1065,7 @@ function MissionSwitch({
     const total = sw.locations.length;
     const on = total - sw.locationsOff;
     return (
-        <div className="settings-switch">
+        <div className="settings-switch" {...stopRow}>
             <Toggle
                 checked={sw.on}
                 disabled={busy}
@@ -1100,84 +1092,6 @@ function MissionSwitch({
                 </Badge>
             ) : null}
         </div>
-    );
-}
-
-function LocationsDialog({
-    row,
-    busy,
-    onClose,
-    onChanged,
-}: {
-    row: CatalogRow | null;
-    busy: boolean;
-    onClose: () => void;
-    onChanged: () => void;
-}) {
-    const { run, busy: saving } = useAction();
-    const sw = row?.switch ?? null;
-    const setLocation = async (index: number, enabled: boolean) => {
-        if (!row) return;
-        const res = await run<MissionSwitchView>('server:admin:setLocationEnabled', {
-            missionId: row.id,
-            index,
-            enabled,
-        });
-        if (res.ok) onChanged();
-    };
-    const reset = async () => {
-        if (!row) return;
-        const res = await run<MissionSwitchView>(
-            'server:admin:resetMissionSwitches',
-            { missionId: row.id },
-            { success: 'settings.mission.reset_done', successVars: { mission: row.label } },
-        );
-        if (res.ok) onChanged();
-    };
-    return (
-        <Dialog
-            open={!!row && !!sw}
-            onClose={onClose}
-            title={row ? t('settings.mission.locations_title', { mission: row.label }) : ''}
-            size="md"
-            footer={
-                <>
-                    <Button
-                        variant="ghost"
-                        icon="refresh"
-                        disabled={busy || saving || !sw?.changed}
-                        onClick={() => void reset()}
-                    >
-                        {t('settings.mission.reset')}
-                    </Button>
-                    <span className="cp-spacer" />
-                    <Button onClick={onClose}>{t('common.close')}</Button>
-                </>
-            }
-        >
-            {sw ? (
-                <div className="settings-locations">
-                    <div className="settings-muted">{t('settings.mission.locations_text')}</div>
-                    {sw.locations.map(l => (
-                        <div key={l.index} className="settings-locations__row">
-                            <span className="cp-num settings-muted">{`#${l.index}`}</span>
-                            <span className="settings-locations__label">{l.label}</span>
-                            {l.on !== l.defaultOn ? (
-                                <Badge size="sm" tone="accent">
-                                    {t('settings.badge.changed')}
-                                </Badge>
-                            ) : null}
-                            <Toggle
-                                checked={l.on}
-                                disabled={busy || saving}
-                                label={l.on ? t('settings.mission.on') : t('settings.mission.off')}
-                                onChange={v => void setLocation(l.index, v)}
-                            />
-                        </div>
-                    ))}
-                </div>
-            ) : null}
-        </Dialog>
     );
 }
 

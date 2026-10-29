@@ -1,7 +1,7 @@
 // Admin-only pieces of the Mission Builder and Admin UI → Missions (full admin control, ARCHITECTURE §8.4.2).
 
 export { CompareDialog, DiffList, DiffSummaryLine, OverrideBadges } from './OverrideTools';
-export { QuickEditDialog } from './QuickEditDialog';
+export { QuickEditPanel } from './QuickEditPanel';
 export { VersionsDialog } from './VersionsDialog';
 export { ChangeOwnerDialog, CopyLuaDialog, ImportDialog } from './MissionTransfer';
 export {

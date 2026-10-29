@@ -744,6 +744,43 @@ do
     end
 end
 
+-- Missions: a click on a catalog row opens the mission's drawer: on/off and locations, payout, Quick edit (times in
+-- minutes, plain names), its tests and every action as a labelled button (no icon-only row buttons).
+do
+    local ms = Read(WEB .. 'admin/screens/Missions.tsx') or ''
+    local dr = Read(WEB .. 'admin/components/MissionDrawer.tsx') or ''
+    local qe = Read(WEB .. 'builder/admin/QuickEditPanel.tsx') or ''
+    local dlg = Read(WEB .. 'shared/components/Dialog.tsx') or ''
+    Has(ms, 'onRowClick={r => setDrawerOf(r.id)}', 'a catalog row click opens the mission drawer')
+    Has(ms, '<MissionDrawer', 'the Missions screen renders the drawer')
+    local _, icons = ms:gsub('<IconButton', '')
+    H.eq(icons, 1, 'the catalog rows have no icon-only buttons (only the header refresh is one)')
+    for _, k in ipairs({ 'compare', 'versions', 'copy', 'fold', 'reset', 'edit', 'duplicate', 'launch', 'owner' }) do
+        Has(ms, 'key: \'' .. k .. '\'', 'the drawer has a labelled ' .. k .. ' button')
+    end
+    Has(ms, '<div className="settings-switch" {...stopRow}>',
+        'the row switch keeps its click (does not open the drawer)')
+    Has(dr, 'placement="right"', 'the drawer sits along the right edge')
+    Has(dlg, 'placement === \'right\' && \'cp-dialog--drawer\'', 'Dialog has the right-edge placement')
+    for _, name in ipairs({
+        'server:admin:setLocationEnabled',
+        'server:admin:resetMissionSwitches',
+        'server:admin:setMissionPayout',
+        'admin:getPayouts',
+        'admin:getTests',
+    }) do
+        Has(dr, '\'' .. name .. '\'', 'the drawer uses the existing ' .. name)
+    end
+    Has(dr, '<QuickEditPanel missionId={m.id}', 'Quick edit sits in the drawer')
+    Has(qe, 'onChange={n => setNums(s => ({ ...s, [k]: toSeconds(n) }))}', 'Quick edit times are typed in minutes')
+    Has(qe, 'suffix={t(\'builder.unit.min\')}', 'with a min suffix')
+    Has(qe, 'label={nameOf(name)}', 'weapons, cars and NPC models show their plain names')
+    for _, src in ipairs({ ms, dr }) do
+        for k in src:gmatch('t%(\'(admin%.missions%.drawer%.[%w_]+)\'') do H.ok(keys[k] == true, 'locale: ' .. k) end
+    end
+    H.ok(keys['admin.missions.drawer.open'] == true, 'locale: admin.missions.drawer.open')
+end
+
 -- Mission Builder -> Publish: an edited built-in is written to overrides/<id>.lua (FilePathFor).
 do
     local pub = Read(WEB .. 'builder/steps/StepPublish.tsx') or ''

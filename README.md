@@ -1628,6 +1628,14 @@ is in the audit log.
 
 Everything below is in Admin UI → **Missions**. Supervisors keep the Builder as it was and get none of these tools.
 
+**One page per mission.** Click a mission in the catalog (or its **Open** button) and a drawer opens on the right with
+everything about it: the mission's on/off switch and each location's switch (with **Reset to default**), its payout
+(the same as Payouts → Missions: set an admin payout with a reason, or **Back to the type payout**), **Quick edit**
+for a built-in, its test status per location (**Open Testing** for the full screen), and every action as a button with
+its name: **Edit in Builder**, **Duplicate**, **Launch**, **Publish**, and under **Expert actions** **Compare**,
+**Versions**, **Copy as Lua**, **Fold**, **Reset to original**, **Change owner**, **Archive** and the rest. The
+catalog rows no longer have icon-only buttons. No new setting: the drawer uses the same server actions as before.
+
 **Edit any built-in mission.** Every built-in mission has **Edit in Builder**. It opens the mission in the Mission
 Builder with everything in it: objectives, locations, spawns, routes, NPCs, cars, weapons, timings, bonuses and
 text. When you publish, your edit replaces the built-in under the **same id**, so the boards, run history,
@@ -1642,8 +1650,8 @@ type sets the pay. You can publish without testing (testing is optional for ever
   then choose **Keep mine** or **Take the new original**.
 - **Reset to original** puts your edit away (it is moved to `missions/custom/overrides/archived/`, not erased) and
   the shipped mission plays again. You type the mission id to confirm.
-- **Quick edit** (the sliders button) changes a built-in's cooldown, time limit, time to reach the start, and its
-  NPC models, cars and weapons, without the Builder. The values apply on top of an edited version too; **Fold
+- **Quick edit** (in the mission's drawer) changes a built-in's cooldown, time limit and time to reach the start
+  (typed in minutes), and its NPC models, cars and weapons (by their plain names), without the Builder. The values apply on top of an edited version too; **Fold
   Quick edit values into the edit** makes them part of it.
 - `Config.AdminControl.editBuiltins = false` (Settings) switches editing off: the edits are kept but not played, and
   the shipped missions play until you switch it back on.

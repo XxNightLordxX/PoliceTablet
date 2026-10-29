@@ -27,6 +27,8 @@ export interface DialogProps {
     // Buttons row (right aligned).
     footer?: ReactNode;
     size?: 'sm' | 'md' | 'lg';
+    // 'right': a drawer along the right edge, full height (one item's details); default: centred.
+    placement?: 'center' | 'right';
     // Clicking the backdrop closes (default true). Escape always closes.
     dismissible?: boolean;
     className?: string;
@@ -44,6 +46,7 @@ export function Dialog({
     children,
     footer,
     size = 'md',
+    placement = 'center',
     dismissible = true,
     className,
 }: DialogProps) {
@@ -80,14 +83,23 @@ export function Dialog({
 
     const node = (
         <div
-            className={cx('cp-dialog-backdrop', root ? 'cp-dialog-backdrop--layer' : 'cp-dialog-backdrop--fixed')}
+            className={cx(
+                'cp-dialog-backdrop',
+                root ? 'cp-dialog-backdrop--layer' : 'cp-dialog-backdrop--fixed',
+                placement === 'right' && 'cp-dialog-backdrop--right',
+            )}
             onMouseDown={e => {
                 if (dismissible && e.target === e.currentTarget) onClose();
             }}
         >
             <div
                 ref={panel}
-                className={cx('cp-dialog', `cp-dialog--${size}`, className)}
+                className={cx(
+                    'cp-dialog',
+                    `cp-dialog--${size}`,
+                    placement === 'right' && 'cp-dialog--drawer',
+                    className,
+                )}
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby={title ? titleId : undefined}

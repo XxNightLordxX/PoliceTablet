@@ -910,6 +910,23 @@
     max-width: 820px;
 }
 
+.cp-dialog-backdrop--right {
+    justify-content: flex-end;
+    align-items: stretch;
+    padding: 0;
+}
+
+.cp-dialog--drawer {
+    height: 100%;
+    border-radius: var(--cp-radius-lg) 0 0 var(--cp-radius-lg);
+    border-right: none;
+    animation: cp-fade-in 160ms var(--cp-ease);
+}
+
+.cp-dialog--drawer .cp-dialog__body {
+    flex: 1;
+}
+
 .cp-dialog__header {
     display: flex;
     align-items: flex-start;
