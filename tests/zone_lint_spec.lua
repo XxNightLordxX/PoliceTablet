@@ -170,6 +170,82 @@ for _, s in ipairs(sites) do
 end
 H.eq(#inZone, 0, 'no location point inside a no-build zone: ' .. table.concat(inZone, ', '))
 
+-- Enabled built-in locations, their paths included: route.points, routes[n], escapes[n] and fleeTo are sampled every
+-- 50 m, so a route that crosses a zone between two waypoints fails too (built-ins skip the Builder's zone check).
+local STEP = 50.0
+local function Sampled(loc)
+    local out = {}
+    local function path(list)
+        for i = 1, #list do
+            local a, b = list[i], list[i + 1]
+            if IsVec(a) then
+                out[#out + 1] = a
+                if IsVec(b) then
+                    local d = math.sqrt((b.x - a.x) ^ 2 + (b.y - a.y) ^ 2)
+                    for k = 1, math.floor(d / STEP) do
+                        local t = k * STEP / d
+                        out[#out + 1] = vec3(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, 0)
+                    end
+                end
+            end
+        end
+    end
+    if type(loc.route) == 'table' and type(loc.route.points) == 'table' then path(loc.route.points) end
+    for _, key in ipairs({ 'routes', 'escapes' }) do
+        for _, r in ipairs(type(loc[key]) == 'table' and loc[key] or {}) do
+            if type(r) == 'table' then path(type(r.points) == 'table' and r.points or r) end
+        end
+    end
+    if type(loc.fleeTo) == 'table' then path(loc.fleeTo) end
+    return out
+end
+
+local function LocationOff(id, li, label)
+    for _, m in ipairs(Config.DisabledMissions or {}) do if m == id then return true end end
+    for _, v in ipairs((Config.DisabledLocations or {})[id] or {}) do
+        if v == li or v == label then return true end
+    end
+    return false
+end
+
+local function PointsInZones(pts, zones)
+    local hits = {}
+    for _, p in ipairs(pts) do
+        for _, z in ipairs(zones) do
+            if math.sqrt((p.x - z.coords.x) ^ 2 + (p.y - z.coords.y) ^ 2) <= (z.radius or 0) then
+                hits[z.label] = true
+            end
+        end
+    end
+    return hits
+end
+
+local pathHits = {}
+for _, id in ipairs(ids) do
+    local def = LoadDef(id)
+    for li, loc in ipairs(def and def.locations or {}) do
+        if not LocationOff(id, li, loc.label) then
+            local pts = Sampled(loc)
+            for _, p in ipairs(Footprint(loc)) do pts[#pts + 1] = p end
+            for label in pairs(PointsInZones(pts, Config.Builder.noBuildZones or {})) do
+                pathHits[#pathHits + 1] = ('%s#%d in %s'):format(id, li, label)
+            end
+        end
+    end
+end
+table.sort(pathHits)
+H.eq(#pathHits, 0,
+    'no enabled built-in point (paths sampled every 50 m) inside a no-build zone: ' .. table.concat(pathHits, ', '))
+
+-- the rule itself: a route whose waypoints sit 400 m either side of a 100 m zone is caught between them
+do
+    local loc = { route = { points = { vec3(-400, 0, 0), vec3(400, 0, 0) } } }
+    local zone = { { label = 'test', coords = vec3(0, 0, 0), radius = 100.0 } }
+    H.ok(next(PointsInZones(Footprint(loc), zone)) == nil, 'the route ends alone miss the zone')
+    H.ok(PointsInZones(Sampled(loc), zone).test, 'the 50 m samples catch the route crossing the zone')
+    H.ok(LocationOff('x', 2, 'B') == false, 'a location is on unless Config turns it off')
+end
+
 -- the lint itself: a pair under the clearance is found, and a route counts by its ends only
 do
     local a = { id = 'x', li = 1, pts = { vec3(0, 0, 0) } }

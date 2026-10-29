@@ -1080,7 +1080,7 @@ do
     H.eq(o.aliveBonus.points, 10, 'prison: +10 per inmate alive')
     H.eq(o.aliveBonus.each, true, 'prison: each')
     local zone
-    for _, z in ipairs(ZONES) do if z.label == 'Bolingbroke interior' then zone = z end end
+    for _, z in ipairs(ZONES) do if z.label == 'Bolingbroke Penitentiary' then zone = z end end
     H.ok(zone ~= nil, 'prison: the Bolingbroke zone is configured')
     Each('prison_break', function(li, loc)
         H.ok(#loc.spawns >= 5, ('prison: location %d has 5+ inmate spawns'):format(li))
@@ -1088,7 +1088,8 @@ do
         local nearestMid = math.huge
         EachVec(loc, 'loc', function(p)
             nearestMid = math.min(nearestMid, D2(p, PRISON_MIDDLE))
-            H.ok(D2(p, zone.coords) > zone.radius, ('prison: location %d point outside the 180 m circle'):format(li))
+            H.ok(D2(p, zone.coords) > zone.radius,
+                ('prison: location %d point outside the prison no-build circle'):format(li))
             H.ok(D2(p, PRISON_MIDDLE) >= 230,
                 ('prison: location %d point outside the walls (%.0f m from the middle)'):format(li,
                     D2(p, PRISON_MIDDLE)))

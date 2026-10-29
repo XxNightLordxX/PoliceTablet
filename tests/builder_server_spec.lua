@@ -747,6 +747,9 @@ local function Body()
     check('Crimson-Arena lobby is a no-build zone', function(d)
         d.locations[3].evidence[1] = { x = -282.01, y = -2030.46, z = 30.15 }
     end, 'builder.error.point_zone', 'locations.3.evidence')
+    check('west prison yard is inside the Bolingbroke zone', function(d)
+        d.locations[2].spawns[1] = { x = 1570.0, y = 2560.0, z = 45.0, w = 0 }   -- outside the old 180 m circle
+    end, 'builder.error.point_zone', 'locations.2.spawns')
     check('start inside a zone', function(d)
         d.locations[1].start.coords = { x = 2344.43, y = 2565.06, z = 46.67 }
     end, 'builder.error.point_zone', 'locations.1.start')

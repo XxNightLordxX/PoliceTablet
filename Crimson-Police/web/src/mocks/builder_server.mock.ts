@@ -359,7 +359,7 @@ function buildConfig(): BuilderConfig {
                   { label: 'SASP HQ', coords: { x: 1560.38, y: 815.76, z: 76.21 }, radius: 80 },
                   { label: 'Pillbox Hill Medical', coords: { x: 308.19, y: -595.35, z: 43.29 }, radius: 100 },
                   { label: 'Paleto Bay Medical', coords: { x: -254.54, y: 6331.78, z: 32.43 }, radius: 80 },
-                  { label: 'Bolingbroke interior', coords: { x: 1768.73, y: 2570.43, z: 44.73 }, radius: 180 },
+                  { label: 'Bolingbroke Penitentiary', coords: { x: 1691.5, y: 2578.5, z: 44.7 }, radius: 215 },
                   { label: 'Crimson-Arena Trailer Park', coords: { x: 2344.43, y: 2565.06, z: 46.67 }, radius: 160 },
                   { label: 'Crimson-Arena lobby', coords: { x: -282.01, y: -2030.46, z: 30.15 }, radius: 60 },
               ],

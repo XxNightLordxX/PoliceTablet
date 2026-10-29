@@ -6,7 +6,7 @@
   for 3 s; an armed one only when stunned or below 50% health. Escape: 600 m from everyone for 30 s.
   Locations (6 breakout points on the outer perimeter of Bolingbroke Penitentiary: north, north-east, east
   beyond the visitor lot, west, north-west and south-west). Nothing is placed inside the walls: every
-  point is outside the 180 m Bolingbroke no-build circle around 1768.73, 2570.43 and at least 240 m from
+  point is outside the 215 m Bolingbroke no-build circle around 1691.5, 2578.5 and at least 240 m from
   the prison's middle (1693.33, 2569.51). Breakout points, inmate spawns and escape routes are on the GTA V
   vehicle-node network (dirt tracks and roads round the prison, never a freeway or its ramps), so every
   height is the real ground height (+1 m for peds and waypoints) instead of one estimated z per location,
