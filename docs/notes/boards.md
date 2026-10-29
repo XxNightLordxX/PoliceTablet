@@ -113,7 +113,7 @@ interfaces for the same shapes are in `web/src/types/boards.ts`.
   `endDate`, the report's `week.key`) and `formatDay` formats them in UTC, so a player in another time zone sees the
   server's week and month (reading the epochs in the browser put them on the day before for anyone west of the server).
   The weekly subtitle takes its weekday from that date, so it follows `Config.Leaderboard.weekStartsOn`.
-- Award points: 1–10,000 points (modules/admin's `MAX_AWARD`), reason required. Void run: reason required.
+- Give points: 1–10,000 points (modules/admin's `MAX_AWARD`), reason required. Void run: reason required.
 - Every run/officer table uses `table-layout: fixed` (class `boards-fixed`, Leaderboard.css): the officer / mission
   column takes what the fixed-width columns leave and long names, callsigns and mission labels are cut with an
   ellipsis (full text as tooltip), so a 64-character name never pushes points, cash or the Void/Dispute buttons

@@ -72,7 +72,7 @@
   "admin.payouts.adjust_preview": "Preview",
   "admin.payouts.adjust_confirm": "These payouts change for every run accepted from now on. Each value is logged.",
   "admin.payouts.adjusted": "Payouts adjusted",
-  "admin.payouts.unlock": "Unlock for supervisors",
+  "admin.payouts.unlock": "Let supervisors change it again",
   "admin.payouts.unlock_desc": "Keeps this amount, and supervisors may move it again within their range around the Config payout.",
   "admin.payouts.unlock_title": "Unlock {name} for supervisors?",
   "admin.payouts.unlock_msg": "The payout stays {amount}. Supervisors may change it again within their range.",

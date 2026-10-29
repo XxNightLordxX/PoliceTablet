@@ -555,7 +555,7 @@ These are always admin only. Setting one of them to `true` in `Config.Permission
 - Void any run.
 - Start and end seasons, and override the weekly bounty.
 - Suspend and unsuspend officers.
-- Adjust points (add or take away), void and restore runs in bulk, retire officers, move a record, fix XP, grant
+- Give or take points (add or take away), void and restore runs in bulk, retire officers, move a record, fix XP, grant
   and revoke badges, and the other officer, board and season tools of [9.15.1](#9151-officers-points-and-boards).
 - Reload mission files.
 - Start test runs.
@@ -656,7 +656,7 @@ Config.MissionTypes = {
   payout set in game (0 to 25,000); `dailyCap` = most cash per officer per day (0 = no cap).
 - Admins can also change payouts in game (Admin UI → **Payouts**, or `/CrimsonPoliceAdmin payout type patrol 300
   New economy`). A payout set in game wins over `config.lua`. An admin can go back to the `config.lua` value with
-  `/CrimsonPoliceAdmin payout type patrol clear Back to config`. **Unlock for supervisors** and **Adjust all** are in
+  `/CrimsonPoliceAdmin payout type patrol clear Back to config`. **Let supervisors change it again** and **Adjust all** are in
   [9.15.4](#9154-payments-item-rewards-and-department-money).
 - The other `Config.Cash` keys are the admin money tools (`allowPayAgain`, `allowUnfundedRetry`, `allowCapTopUp`,
   `restoreForfeited`, `allowClawback`, `allowManualCash`, `allowAddFunds`, all `false`), their limits (`addFundsMax`,
@@ -758,12 +758,12 @@ no restart to do by hand. Type `/CrimsonPoliceAdmin` and open **Settings**.
   calls, the Builder minimums, the test overlay, the daily and weekly reset), under 8 plain groups (Tablet, Missions
   and Builder, NPCs, Pay and cash, Points and rewards, Police actions, Dispatch, Server), each with a plain name and a
   short help text and no `Config.` path. **All settings** (the switch next to the filters, or the button under the
-  list) shows every setting as below. The search and the **Changed** and **After restart** filters always look through
+  list) shows every setting as below. The search and the **Changed** and **Needs a server restart** filters always look through
   every setting. In Simple, the mission tweaks and disabled locations say "Change this per mission in Missions" with
   a button, instead of a JSON box. To open on every setting, set `Config.AdminUi.settingsView = 'all'`.
 - **All settings lists every setting**, grouped like the file (Tablet and commands, Departments, Mission types, Cash, ... and
   the Mission Builder ranges of `blocks.lua`), with the note from `config.lua` as its description. Use the search box
-  (a name, a path like `Tablet.deskDistance`, or a word of the note), or the **Changed** and **After restart**
+  (a name, a path like `Tablet.deskDistance`, or a word of the note), or the **Changed** and **Needs a server restart**
   filters.
 - **Clicking a section in the list** shows that section from its top, even when the page was scrolled far down. A
   few settings whose names would read alike have their own plain names (for example **Default tablet key** and
@@ -777,7 +777,7 @@ no restart to do by hand. Type `/CrimsonPoliceAdmin` and open **Settings**.
   restarts and updates. A change made in game wins over `config.lua`. You can still edit `config.lua`: a setting you
   never changed in game keeps following the file.
 - **A few settings are read only when Crimson-Police starts** (default keys, mission desks, the language, the hour
-  of the daily reset and the first day of the week). They have an **After restart** badge: the
+  of the daily reset and the first day of the week). They have an **Needs a server restart** badge: the
   screen saves the change and shows "Running now: ... · after a restart: ...". Restart it from txAdmin or type
   `restart Crimson-Police` in the server console when no mission is running.
 
@@ -1557,7 +1557,7 @@ flagged run. An online character who never finished a run is found by typing the
 
 On an officer's record:
 
-- **Points**: their week, month, season and all-time points and rank. **Adjust points** adds points or takes some
+- **Points**: their week, month, season and all-time points and rank. **Give or take points** adds points or takes some
   away (−10,000 to +10,000, a reason each time). It is a new line in their history, never an edit of an old run; to
   undo it, void that line. A deduction can never take their season points or XP below 0, and from 500 points up you
   type their citizen ID to confirm (`AdminControl.adjustConfirmAbove`). `AdminControl.adjustDailyLimit` caps what one
@@ -1608,7 +1608,7 @@ Voids and restores:
 
 **Leaderboards** gains **Rank by** (any metric), **a past week or month** (up to 12 months back), **Void runs in this
 window…** (the same batch tool, instead of a board wipe), **Open** on each run, and **Approve all rows of this run**
-in the flagged panel. **Adjust points** works as on the officer's record. The **Recognition** tab shows exactly what
+in the flagged panel. **Give or take points** works as on the officer's record. The **Recognition** tab shows exactly what
 officers' Home shows, the last four closed weeks with their Officer of the Week (**Recount** after a void moves the
 badge, **Post again** reposts the top 3 to Discord) and the **staff notices**: short plain-text notes on Home for
 every department or a few, for up to 30 days. The weekly and monthly top 3 on Home are the Settings switches
@@ -1764,7 +1764,7 @@ season, unfunded payments, and what admins added. `Config.Cash.lowBalanceWarn` (
 list and once a day to that department's online supervisors when the balance is lower. A turned-off department's
 unfinished pay still comes from its own account.
 
-**Payouts** has two more buttons: **Unlock for supervisors** (keep the amount, and supervisors may move it again
+**Payouts** has two more buttons: **Let supervisors change it again** (keep the amount, and supervisors may move it again
 within their range) and **Adjust all** (raise or lower every type payout and/or mission payout by a percentage or an
 amount, with a preview of every old and new value; type `ADJUST`). A stored payout outside the current payout range
 is marked.

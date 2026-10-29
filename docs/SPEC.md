@@ -295,7 +295,7 @@ Admin UI — a separate full-screen panel for server admins, covering every depa
 
 | Screen | Contents | Key actions |
 |---|---|---|
-| Payouts | Every mission type and every mission with its base payout; admin payouts marked "Admin · permanent" | Set or clear a type or mission payout |
+| Payouts | Every mission type and every mission with its base payout; admin payouts marked "Set by an admin" | Set or clear a type or mission payout |
 | Missions | All built-in and custom missions, version, Lua file path, "edited in code" flag, edit locks; an on/off switch for every mission and for each of its locations (saved over Config.DisabledMissions and Config.DisabledLocations; runs already going finish) | Build, publish drafts (testing is optional), archive, restore or roll back custom missions; break an edit lock; reload mission files; turn missions and locations on or off, or back to config.lua's switches; launch, start now, relaunch or cancel a Cross-Department Mission |
 | Seasons & Challenge | Current season, department standings, bounty history | Start or end a season, override this week's bounty |
 | Leaderboards | Every board and period, cash paid per officer, and any payment left in paying after a crash | Void runs, award points |
@@ -2856,7 +2856,7 @@ Config.Permissions = {
 -- What admins may do beyond the normal rules, from the Admin UI. Supervisors never get these. Every action is in
 -- the audit log; limits are counted from saved rows, so a restart never resets them.
 Config.AdminControl = {
-    pointAdjust = true,          -- Officers → Adjust points: logged manual awards and deductions
+    pointAdjust = true,          -- Officers → Give or take points: logged manual awards and deductions
     adjustConfirmAbove = 500,    -- points: a typed confirmation at or above this
     adjustDailyLimit = 0,        -- points one admin may adjust per day (0 = no limit)
     editBuiltins = true,         -- Mission Builder: admins edit built-in missions (saved as an override, same id)

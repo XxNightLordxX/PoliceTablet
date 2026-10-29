@@ -147,7 +147,7 @@ Config.Permissions = {
 -- What admins may do beyond the normal rules, from the Admin UI. Supervisors never get these. Every action is in
 -- the audit log; limits are counted from saved rows, so a restart never resets them.
 Config.AdminControl = {
-    pointAdjust = true,          -- Officers → Adjust points: logged manual awards and deductions
+    pointAdjust = true,          -- Officers → Give or take points: logged manual awards and deductions
     adjustConfirmAbove = 500,    -- points: a typed confirmation at or above this
     adjustDailyLimit = 0,        -- points one admin may adjust per day (0 = no limit)
     editBuiltins = true,         -- Mission Builder: admins edit built-in missions (saved as an override, same id)

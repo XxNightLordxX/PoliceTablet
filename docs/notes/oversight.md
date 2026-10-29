@@ -121,7 +121,7 @@ Each Lua file's header comment documents its public API, net names and rules.
 - `getMissionList.crossDeptEligible` uses `CP.Operations.eligible(def)` when present (the rule the launch applies).
 - A dispute approval of a flagged row calls `approveFlagged(..., { quiet = true })`: one toast for the officer.
 - New-dispute toasts respect `Config.Permissions.supervisor.handleDisputes` (off → admins are told instead).
-- Admin UI → Officers: a failed-run dispute is answered with Award points / Dismiss; a flagged or voided-run
+- Admin UI → Officers: a failed-run dispute is answered with Approve and give points / Dismiss; a flagged or voided-run
   dispute (listed while `handleDisputes` is off, or while it is open and `supervisorCanAnswer` is false, i.e. the
   admins are the ones told about it) with Approve / Reject, which calls `server:admin:handleDispute`
   `{ disputeId, decision, reason }` without `awardPoints` (approve restores the run and releases held cash). Those

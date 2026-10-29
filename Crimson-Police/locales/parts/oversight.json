@@ -433,7 +433,7 @@
   "admin.officers.dispute_kind.flagged": "Flagged run",
   "admin.officers.dispute_kind.voided": "Voided run",
   "admin.officers.dispute_meta": "Filed {date} · {points} pts earned · {end}",
-  "admin.officers.award": "Award points",
+  "admin.officers.award": "Approve and give points",
   "admin.officers.award_title": "Answer with a manual award",
   "admin.officers.award_message": "{name} disputed a failed {mission} run. The award is stored as a manual_award row and audited.",
   "admin.officers.award_points": "Points",

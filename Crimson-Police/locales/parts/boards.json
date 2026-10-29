@@ -320,9 +320,9 @@
   "admin.seasons.col.champion": "Champion",
 
   "admin.boards.subtitle": "Every board and period, cash paid per officer and payments that need a manual check",
-  "admin.boards.award": "Award points",
-  "admin.boards.award_for": "Award points to {name}",
-  "admin.boards.award_title": "Award points",
+  "admin.boards.award": "Give points",
+  "admin.boards.award_for": "Give points to {name}",
+  "admin.boards.award_title": "Give points",
   "admin.boards.award_desc": "A logged manual award, stored as its own row. It counts on the Overall and Department boards only and never as a run.",
   "admin.boards.awarded": "{points} points awarded to {who}.",
   "admin.boards.citizenid": "Citizen ID",

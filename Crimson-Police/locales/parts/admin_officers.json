@@ -231,7 +231,7 @@
   "ui.admin_officers.look.title": "Look",
   "ui.admin_officers.no_row": "No record yet",
   "ui.admin_officers.offline": "Offline",
-  "ui.admin_officers.points.adjust": "Adjust points",
+  "ui.admin_officers.points.adjust": "Give or take points",
   "ui.admin_officers.points.adjust_desc": "Add points, or take some away (at most {max} now). It is a new logged row; Undo = void that row.",
   "ui.admin_officers.points.adjust_title": "Adjust points of {name}",
   "ui.admin_officers.points.after": "After: week {week}, season {season}, XP {xp}.",

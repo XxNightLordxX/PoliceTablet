@@ -24,9 +24,9 @@
 
   "builder.block.checkpoint_route": "Checkpoint route",
   "builder.block.escort": "Escort",
-  "builder.block.flee_arrest": "Flee & arrest",
-  "builder.block.hostile_waves": "Hostile waves",
-  "builder.block.interact_points": "Interact points",
+  "builder.block.flee_arrest": "Suspect who runs or hides",
+  "builder.block.hostile_waves": "Shootout (enemies in waves)",
+  "builder.block.interact_points": "Search spots",
   "builder.block.protect_rescue": "Protect & rescue",
   "builder.block.pursuit": "Pursuit",
   "builder.block.search_area": "Search area",
