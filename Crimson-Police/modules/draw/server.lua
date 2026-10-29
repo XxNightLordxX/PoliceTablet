@@ -718,7 +718,8 @@ end
 -- Locations turned off are never picked. opts: exclude (hard), area (hard: only locations in that area), avoid
 -- (soft: indices to skip), nearCoords (county-wide weighting towards a unit: 1 / (1 + km / countyWeightKm) from the
 -- nearest point). Soft rules apply only while another location is left; zone clearance falls back to the
--- reservation rule alone.
+-- reservation rule alone, but never to a location within Config.Draw.hardClearance of another held location
+-- (nothing left: nil, and Draw.draw tries the type's next mission).
 function Draw.pickLocation(def, participantSrcs, rngObj, opts)
     opts = opts or {}
     if type(def) ~= 'table' or type(def.locations) ~= 'table' or #def.locations == 0 then return nil end
@@ -739,11 +740,18 @@ function Draw.pickLocation(def, participantSrcs, rngObj, opts)
     if #free == 0 then return nil end
 
     local zone = tonumber(cfg.zoneClearance) or 0
-    if zone > 0 and #free > 0 then
+    local hard = tonumber(cfg.hardClearance) or 0
+    if zone > 0 or hard > 0 then
         local held = HeldFootprints()
         if #held > 0 then
-            local clear = Filter(free, function(i) return not ZoneBlocked(def, i, held, zone) end)
-            if #clear > 0 then free = clear end
+            if hard > 0 then
+                free = Filter(free, function(i) return not ZoneBlocked(def, i, held, hard) end)
+                if #free == 0 then return nil end
+            end
+            if zone > 0 then
+                local clear = Filter(free, function(i) return not ZoneBlocked(def, i, held, zone) end)
+                if #clear > 0 then free = clear end
+            end
         end
     end
     if type(opts.avoid) == 'table' and #free > 1 then

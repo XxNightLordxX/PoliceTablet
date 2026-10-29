@@ -214,6 +214,38 @@ do
 end
 
 -- ============================================================================
+--                  HARD CLEARANCE (Config.Draw.hardClearance)
+-- ============================================================================
+
+do
+    H.eq(Config.Draw.hardClearance, 100.0, 'shipped: 100 m')
+    -- a live run of another mission holds (3000, 3000); each mission below has one location, so its pool is exhausted
+    local live = Def('hard_live', 'training', { Loc(3000, 3000) })
+    D.reserve('run-hard', 'hard_live', 1)
+    runs['run-hard'] = { id = 'run-hard', mission = live, locationIndex = 1, state = 'in_progress' }
+    local near = Def('hard_near', 'investigation', { Loc(3060, 3000) })
+    local mid = Def('hard_mid', 'investigation', { Loc(3150, 3000) })
+    H.eq(D.pickLocation(near, { 1 }, U.rng(1)), nil, 'nothing else free: a location 60 m from a live run is not drawn')
+    H.eq(D.pickLocation(mid, { 1 }, U.rng(1)), 1, '150 m from it is (zone clearance stays soft)')
+    for s = 1, 20 do
+        local def, i = D.draw('investigation', { 1 }, { rng = U.rng(U.hash('hard' .. s)) })
+        H.eq(def and def.id, 'hard_mid', 'the draw tries the type\'s next mission')
+        H.eq(i, 1, 'at its free location')
+    end
+    mid.off = true
+    local none, err = D.draw('investigation', { 1 }, { rng = U.rng(2) })
+    H.eq(none, nil, 'no mission of the type has a location clear of the live run')
+    H.eq(err, 'err.no_location', 'the start is refused with "no location free"')
+    Config.Draw.hardClearance = 0
+    H.eq(D.pickLocation(near, { 1 }, U.rng(1)), 1, 'hardClearance 0: the old soft fallback draws it')
+    Config.Draw.hardClearance = 100.0
+    near.off = true
+    live.off = true
+    D.release('run-hard')
+    runs['run-hard'] = nil
+end
+
+-- ============================================================================
 --                    LOCATION MEMORY, FRESHNESS, WEIGHTING
 -- ============================================================================
 

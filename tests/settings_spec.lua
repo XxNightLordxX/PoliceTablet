@@ -138,6 +138,9 @@ do
     ) ~= nil, 'a comment continued on the next line is part of it')
     H.ok(E('Draw.zoneClearance').desc:find('(any mission), while another is free', 1, true) ~= nil,
         'a continuation that starts with a bracket too')
+    H.eq(E('Draw.hardClearance').max, 500, 'hard clearance: 0 to 500 m')
+    H.ok(E('Draw.hardClearance').desc:find('even when nothing else is free (0 = off', 1, true) ~= nil,
+        'hard clearance: its comment is the description')
     H.ok(E('QboxAdmins').desc:find('are Crimson-Police admins too', 1, true) ~= nil, 'top-level scalars too')
     local accents = E('Departments.sast.theme.personalAccents').desc
     H.ok(accents:find('accents an officer may pick', 1, true) == 1 and accents:find('#ffffff', 1, true) == nil,

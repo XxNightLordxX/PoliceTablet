@@ -982,7 +982,8 @@ Parity-plus additions (WP4; docs/notes/missioncalls.md):
   only missions and locations in that area), `opts.avoid` (soft), `opts.nearCoords` (county-wide weighting
   `1 / (1 + km / Config.MissionCalls.countyWeightKm)`), `opts.exclude` (hard). Rules in pickLocation's order:
   reservations, exclude and area (hard); zone clearance (`Config.Draw.zoneClearance` from every point of every held
-  location of any mission; soft, falls back to the reservation rule); avoid = each participant's last
+  location of any mission; soft, falls back to the reservation rule, but never to a location within
+  `Config.Draw.hardClearance` of one: then nil and `draw` tries the type's next mission); avoid = each participant's last
   `Config.Draw.avoidLastLocations` locations of that mission (soft); player clearance; then a weighted pick (half
   weight for a spot taken within `Config.Draw.locationFreshness`, and the county-wide weighting).
 - `footprint(def, index) -> { vec3 }` (start and every point; routes sampled every 50 m).

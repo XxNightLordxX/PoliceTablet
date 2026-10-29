@@ -430,6 +430,8 @@ Random draw rules
 
 - A location is also skipped, while another is free, when any of its points is within 200 m of any point of another active run's location, of any mission (Config.Draw.zoneClearance), so two runs never share a street.
 
+- A location within 100 m of any point of another active run's location is never drawn, even when nothing else is free (Config.Draw.hardClearance, 0 = off). The draw then tries the type's next mission; when no mission has such a location left, the start is refused with "no location free".
+
 - The draw skips the last 2 locations any participant played in that mission, while another is free (Config.Draw.avoidLastLocations), and gives half the weight to locations used server-wide in the last hour (Config.Draw.locationFreshness).
 
 - A mission call's draw only uses locations in the call's area when the call named one to the claimant; a county-wide call draws the mission exactly as the board does, then weights its locations towards the unit (weight 1 ÷ (1 + distance ÷ 2 km) from the nearest member), inside every other draw rule.
@@ -3312,6 +3314,8 @@ Config.Draw = {
     playerClearance = 75.0,     -- skip locations with a non-participant within this many metres
     zoneClearance = 200.0,      -- skip a location within this many metres of another active run's location
                                 -- (any mission), while another is free
+    hardClearance = 100.0,      -- never draw a location within this many metres of another active run's
+                                -- location, even when nothing else is free (0 = off: zone clearance only)
     avoidLastLocations = 2,     -- skip the last N locations any participant played in this mission, while
                                 -- another is free
     locationFreshness = 3600,   -- seconds: a location used server-wide this recently gets half the weight

@@ -743,6 +743,7 @@ Everything else works as shipped. These are the ones owners change most:
 | `Config.Downed.dropOffs` | Where a downed officer is taken when no EMS is on duty |
 | `Config.Custody.tow.enabled` | `false` makes impounded cars fade out instead of leaving on a tow truck |
 | `Config.Custody.serviceClearance` | `30.0` m: a prisoner van, tow truck or coroner van never appears or is put down closer than this to any player |
+| `Config.Draw.hardClearance` | `100.0` m: a mission location this close to another live run's location is never drawn, even when every other location is taken; the draw then tries another mission of that type, or the start is refused with "no location free" (0 = off; `zoneClearance`, 200 m, still keeps runs apart while another location is free) |
 
 `config/blocks.lua` holds the Mission Builder's ranges and defaults, and `config/banned_words.txt` the default list
 of words refused in bios (one per line). Read that list and change it for your community.

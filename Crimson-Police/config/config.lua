@@ -641,6 +641,8 @@ Config.Draw = {
     playerClearance = 75.0,     -- skip locations with a non-participant within this many metres
     zoneClearance = 200.0,      -- skip a location within this many metres of another active run's location
                                 -- (any mission), while another is free
+    hardClearance = 100.0,      -- never draw a location within this many metres of another active run's
+                                -- location, even when nothing else is free (0 = off: zone clearance only)
     avoidLastLocations = 2,     -- skip the last N locations any participant played in this mission, while
                                 -- another is free
     locationFreshness = 3600,   -- seconds: a location used server-wide this recently gets half the weight
