@@ -263,6 +263,7 @@ function B.newRecorder(opts)
         cum = {},       -- cumulative distance along the samples
         wps = {},       -- sample indexes kept as waypoints (ascending)
         stops = {},     -- { at = waypoint index, wait }
+        ver = 0,        -- grows on every change to what waypoints() returns or to the stops (the draw cache key)
     }, Recorder)
 end
 
@@ -278,6 +279,7 @@ function Recorder:add(p)
     local k = n + 1
     self.samples[k] = s
     self.cum[k] = n > 0 and (self.cum[n] + U.dist(self.samples[n], s)) or 0.0
+    self.ver = self.ver + 1
     if k == 1 then
         Keep(self, 1)
         return true
@@ -327,6 +329,7 @@ function Recorder:undo(metres)
         self.cum[k] = nil
     end
     local count = #self.samples
+    if count < n then self.ver = self.ver + 1 end
     while #self.wps > 0 and self.wps[#self.wps] > count do self.wps[#self.wps] = nil end
     local wpCount = #self.wps
     for i = #self.stops, 1, -1 do
@@ -345,6 +348,7 @@ function Recorder:addStop(wait, max)
         if s.at == at then return false, 'builder.rec.stop_here' end
     end
     self.stops[#self.stops + 1] = { at = at, wait = wait }
+    self.ver = self.ver + 1
     return true
 end
 
@@ -352,6 +356,7 @@ end
 function Recorder:finish()
     local n = #self.samples
     if n > 0 then Keep(self, n) end
+    self.ver = self.ver + 1
     local pts = {}
     for i, idx in ipairs(self.wps) do
         local s = self.samples[idx]
@@ -695,10 +700,6 @@ end
 local function Marker(kind, x, y, z, sx, sy, sz, c, alpha)
     DrawMarker(kind, x, y, z, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, sx, sy, sz, c[1], c[2], c[3], alpha, false, false, 2, false,
         nil, nil, false)
-end
-
-local function Line(a, b, c, alpha)
-    DrawLine(a.x, a.y, a.z, b.x, b.y, b.z, c[1], c[2], c[3], alpha)
 end
 
 local function Text3d(x, y, z, s)
@@ -1204,8 +1205,14 @@ local function RunRecording(tool)
         end
         rec:add({ x = node.x, y = node.y, z = node.z })
     end
+    -- rec:waypoints() builds a new list: it is rebuilt only when the recording changed (rec.ver), not every frame
+    local wpsCache, wpsVer = {}, -1
+    local function waypoints()
+        if rec.ver ~= wpsVer then wpsCache, wpsVer = rec:waypoints(), rec.ver end
+        return wpsCache
+    end
     local function buildOverlay(now)
-        local wps = rec:waypoints()
+        local wps = waypoints()
         local first = wps[1]
         local last = wps[#wps]
         local zone = last and InZone(last) or nil
@@ -1311,25 +1318,33 @@ local function RunRecording(tool)
                 if not st.lastPos or U.dist(pos, st.lastPos) >= snapEvery then sample(pos, veh) end
             end
             -- the recording so far, near the player
-            local wps = rec:waypoints()
+            local wps = waypoints()
+            local px, py, pz = pos.x, pos.y, pos.z
+            local r2 = POINT_DRAW_RANGE * POINT_DRAW_RANGE
+            local rc = COLOURS.route
             for i = 1, #wps do
                 local p = wps[i]
-                if U.dist(pos, p) < POINT_DRAW_RANGE then
-                    Marker(28, p.x, p.y, p.z + 0.5, 0.6, 0.6, 0.6, COLOURS.route, 170)
+                local dx, dy, dz = p.x - px, p.y - py, p.z - pz
+                if dx * dx + dy * dy + dz * dz < r2 then
+                    Marker(28, p.x, p.y, p.z + 0.5, 0.6, 0.6, 0.6, rc, 170)
                     if i > 1 then
-                        Line({ x = wps[i - 1].x, y = wps[i - 1].y, z = wps[i - 1].z + 0.5 },
-                            { x = p.x, y = p.y, z = p.z + 0.5 }, COLOURS.route, 200)
+                        local q = wps[i - 1]
+                        DrawLine(q.x, q.y, q.z + 0.5, p.x, p.y, p.z + 0.5, rc[1], rc[2], rc[3], 200)
                     end
                 end
             end
             for _, s in ipairs(rec.stops) do
                 local p = wps[s.at]
-                if p and U.dist(pos, p) < POINT_DRAW_RANGE then
-                    Marker(1, p.x, p.y, p.z - 0.5, 4.0, 4.0, 1.5, COLOURS.start, 110)
+                if p then
+                    local dx, dy, dz = p.x - px, p.y - py, p.z - pz
+                    if dx * dx + dy * dy + dz * dz < r2 then
+                        Marker(1, p.x, p.y, p.z - 0.5, 4.0, 4.0, 1.5, COLOURS.start, 110)
+                    end
                 end
             end
             for _, p in ipairs(st.rejectedSamples) do
-                if U.dist(pos, p) < POINT_DRAW_RANGE then
+                local dx, dy, dz = p.x - px, p.y - py, p.z - pz
+                if dx * dx + dy * dy + dz * dz < r2 then
                     Marker(28, p.x, p.y, p.z + 0.5, 0.5, 0.5, 0.5, COLOURS.rejected, 170)
                 end
             end
@@ -1407,6 +1422,7 @@ local function RunTestDrive(tool)
     local pts = o.points
     local n = #pts
     local failed = {}
+    local failedSet = {}    -- [i] = true for every waypoint in failed (drawRoute reads it every frame)
     local timeoutMs = math.max(5, tonumber(RouteCfg().testDriveTimeout) or 30) * 1000
     local st = {
         overlayAt = 0,
@@ -1454,17 +1470,19 @@ local function RunTestDrive(tool)
         end
         return false
     end
+    -- Runs every frame: squared distances and plain numbers, no new tables (up to MAX_ROUTE_POINTS points).
+    local r2 = (POINT_DRAW_RANGE * 2) * (POINT_DRAW_RANGE * 2)
     local function drawRoute(pos, current)
+        local px, py, pz = pos.x, pos.y, pos.z
         for i = 1, n do
             local p = pts[i]
-            if U.dist(pos, p) < POINT_DRAW_RANGE * 2 then
-                local bad = false
-                for _, f in ipairs(failed) do if f == i then bad = true end end
-                local c = bad and COLOURS.failed or (i < current and COLOURS.done or COLOURS.route)
+            local dx, dy, dz = p.x - px, p.y - py, p.z - pz
+            if dx * dx + dy * dy + dz * dz < r2 then
+                local c = failedSet[i] and COLOURS.failed or (i < current and COLOURS.done or COLOURS.route)
                 Marker(28, p.x, p.y, p.z + 0.5, 0.7, 0.7, 0.7, c, 180)
                 if i > 1 then
-                    Line({ x = pts[i - 1].x, y = pts[i - 1].y, z = pts[i - 1].z + 0.5 },
-                        { x = p.x, y = p.y, z = p.z + 0.5 }, c, 200)
+                    local q = pts[i - 1]
+                    DrawLine(q.x, q.y, q.z + 0.5, p.x, p.y, p.z + 0.5, c[1], c[2], c[3], 200)
                 end
             end
         end
@@ -1568,7 +1586,10 @@ local function RunTestDrive(tool)
             if guard(now) then return finish(false, true) end
             if not DoesEntityExist(veh) or not DoesEntityExist(driver) or IsEntityDead(driver)
                 or not IsVehicleDriveable(veh, false) then
-                for j = i, n do failed[#failed + 1] = j end
+                for j = i, n do
+                    failed[#failed + 1] = j
+                    failedSet[j] = true
+                end
                 Notify('warning', 'builder.drive.wrecked')
                 st.timeLeft = false
                 show(now, true, true)
@@ -1581,6 +1602,7 @@ local function RunTestDrive(tool)
             end
             if now >= deadline then
                 failed[#failed + 1] = i
+                failedSet[i] = true
                 break
             end
             if GetEntitySpeed(veh) < 0.5 then

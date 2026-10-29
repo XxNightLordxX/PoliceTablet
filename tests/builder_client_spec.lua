@@ -1307,6 +1307,214 @@ do
 end
 
 -- ============================================================================
+--                                 DRAW PACING
+-- ============================================================================
+-- The recorder's version, the test drive's per-frame route.
+
+-- Recorder.ver grows on every change to the waypoints or stops (the recording's draw cache is keyed on it)
+do
+    local rec = B.newRecorder({ turnAngle = 30, maxGap = 150 })
+    H.eq(rec.ver, 0, 'a new recorder is version 0')
+    local v = rec.ver
+    for i = 0, 8 do
+        rec:add({ x = 0, y = i * 25.0, z = 10 })
+        H.ok(rec.ver > v, 'a kept sample changes the version (' .. i .. ')')
+        v = rec.ver
+    end
+    rec:add({ x = 0.2, y = 200.2, z = 10 })
+    H.eq(rec.ver, v, 'a duplicate sample leaves the version alone')
+    H.ok(rec:addStop(5, 5), 'a stop is added')
+    H.ok(rec.ver > v, 'a stop changes the version')
+    v = rec.ver
+    H.eq(rec:addStop(5, 5), false, 'a second stop on the same waypoint is refused')
+    H.eq(rec.ver, v, 'a refused stop leaves the version alone')
+    rec:undo(60)
+    H.ok(rec.ver > v, 'an undo that removes samples changes the version')
+    v = rec.ver
+    rec:undo(0)
+    H.eq(rec.ver, v, 'an undo that removes nothing leaves the version alone')
+    rec:finish()
+    H.ok(rec.ver > v, 'finish changes the version')
+end
+
+-- the markers and lines drawn this frame, as plain lists
+local drawn = nil
+local realMarker, realLine = _G.DrawMarker, _G.DrawLine
+local function RecordDraws()
+    _G.DrawMarker = function(kind, x, y, z, _, _, _, _, _, _, sx, sy, sz, r, g, b, a)
+        if drawn then drawn[#drawn + 1] = { 'M', kind, x, y, z, sx, sy, sz, r, g, b, a } end
+    end
+    _G.DrawLine = function(...)
+        if drawn then drawn[#drawn + 1] = { 'L', ... } end
+    end
+end
+local function StopDraws()
+    _G.DrawMarker, _G.DrawLine = realMarker, realLine
+    drawn = nil
+end
+local function Flat(list)
+    local out = {}
+    for _, c in ipairs(list) do
+        local parts = {}
+        for k, v in ipairs(c) do parts[k] = type(v) == 'number' and ('%.3f'):format(v) or tostring(v) end
+        out[#out + 1] = table.concat(parts, ',')
+    end
+    return table.concat(out, ';')
+end
+
+-- A recording draws exactly rec:waypoints() in the frame of every change (a new sample, an undo, the last frame)
+do
+    H.eq(B.active(), nil, 'no tool before the recording draw check')
+    T.isOpen = true
+    W.veh = NewEnt('player_vehicle', 3000.0, 500.0, 5.0, true)
+    W.driver = true
+    W.nodeDx, W.nodeDz, W.onRoad = 0.0, 0.0, false
+    local vehEnt = W.ents[W.veh]
+    RecordDraws()
+    local function RouteDots()
+        local out = {}
+        for _, c in ipairs(drawn) do
+            if c[1] == 'M' and c[2] == 28 and c[6] == 0.6 then out[#out + 1] = { x = c[3], y = c[4] } end
+        end
+        return out
+    end
+    local function DriveTo(y, keys)
+        vehEnt.coords = { x = 3000.0, y = y, z = 5.0 }
+        drawn = {}
+        Frame(keys)
+        return RouteDots()
+    end
+    H.eq(Act('builderRecord', recordPayload), true, 'the recording for the draw check starts')
+    Frames(3)
+    local mismatch = 0
+    local before = {}
+    for i = 0, 24 do
+        local y = 500.0 + i * 5.0
+        local dots = DriveTo(y)
+        -- a sample is taken every 25 m: in that frame the last dot is it
+        if i % 5 == 0 and (#dots == 0 or dots[#dots].y ~= y) then mismatch = mismatch + 1 end
+        before = dots
+    end
+    H.eq(mismatch, 0, 'every new sample is drawn in the frame it is taken')
+    DriveTo(620.0, { KEY.BACK })
+    local dots = DriveTo(620.0)
+    H.ok(#dots < #before, 'the frame after the undo draws the shorter recording')
+    local prefix = true
+    for k, d in ipairs(dots) do
+        if d.x ~= before[k].x or d.y ~= before[k].y then prefix = false end
+    end
+    H.ok(prefix, 'what is left after the undo is the start of what was drawn')
+    for i = 1, 8 do before = DriveTo(500.0 + (#dots - 1) * 25.0 + i * 5.0) end
+    Frame({ KEY.X })
+    StopDraws()
+    for _ = 1, 20 do Frame() end
+    local pts = LastPush().data.result.route.points
+    local same = #pts == #before
+    for k, q in ipairs(pts) do
+        if not before[k] or before[k].x ~= q.x or before[k].y ~= q.y then same = false end
+    end
+    H.ok(same, 'the last frame drew exactly the recorded route')
+    H.advance(400)
+    Act('builderResult', {})
+    W.veh, W.driver = 0, false
+end
+
+-- A test drive of a 500-point route: the same markers and lines as the drawing before this pacing, frame by frame,
+-- and no U.dist call in a frame (it was one per route point)
+do
+    H.eq(B.active(), nil, 'no tool before the 500-point test drive')
+    T.isOpen = true
+    W.veh, W.driver = 0, false
+    W.tasks, W.tempActions = {}, {}
+    local N = 500
+    local route = {}
+    for i = 1, N do route[i] = { x = 2000 + (i - 1) * 30, y = 0, z = 5 + (i % 7) } end
+    local stuck = { [100] = true, [300] = true }
+    W.stuckTargets = {}
+    for i in pairs(stuck) do W.stuckTargets[route[i].x] = true end
+    local stops = {}
+    for _, at in ipairs({ 50, 150, 250, 350, 450 }) do stops[#stops + 1] = { at = at, wait = 1 } end
+    local payload = {}
+    for k, v in pairs(drivePayload) do payload[k] = v end
+    payload.route = { points = route, stops = stops }
+    -- what drives the drawing: the latest task's waypoint, and whether the car waits at a stop since
+    local phase = { target = nil, stop = false, done = false }
+    local realTask, realTemp = _G.TaskVehicleDriveToCoordLongrange, _G.TaskVehicleTempAction
+    _G.TaskVehicleDriveToCoordLongrange = function(driver, veh, x, ...)
+        phase.target, phase.stop = math.floor((x - 2000) / 30 + 0.5) + 1, false
+        return realTask(driver, veh, x, ...)
+    end
+    _G.TaskVehicleTempAction = function(driver, veh, action, ms)
+        if ms == 3000 then phase.done = true else phase.stop = true end
+        return realTemp(driver, veh, action, ms)
+    end
+    local dists = 0
+    local realDist = CP.U.dist
+    CP.U.dist = function(a, b)
+        dists = dists + 1
+        return realDist(a, b)
+    end
+    local FAILED, DONE, ROUTE = { 240, 70, 77 }, { 52, 196, 124 }, { 78, 161, 255 }
+    -- the drawing as it was before this pacing (U.dist, a scan of the failed list, two tables per line)
+    local function OldDraw(pos, current)
+        local out = {}
+        for i = 1, N do
+            local p = route[i]
+            if realDist(pos, p) < 160.0 * 2 then
+                local bad = stuck[i] and i < phase.target
+                local c = bad and FAILED or (i < current and DONE or ROUTE)
+                out[#out + 1] = { 'M', 28, p.x, p.y, p.z + 0.5, 0.7, 0.7, 0.7, c[1], c[2], c[3], 180 }
+                if i > 1 then
+                    local q = route[i - 1]
+                    out[#out + 1] = { 'L', q.x, q.y, q.z + 0.5, p.x, p.y, p.z + 0.5, c[1], c[2], c[3], 200 }
+                end
+            end
+        end
+        return out
+    end
+    RecordDraws()
+    W.pos = { x = 2003.3, y = 20.7, z = 5.0 }
+    H.eq(Act('builderTestDrive', payload), true, 'the 500-point test drive starts')
+    local frames, same, maxDists, drawnFrames = 0, 0, 0, 0
+    local startPushes = #T.pushes
+    -- 30 m apart: farther than the arrive radius, so a stuck car does not reach the next waypoint by accident
+    for _ = 1, 20000 do
+        local started = phase.target ~= nil
+        -- the player follows the car, a little aside
+        local veh
+        for _, c in ipairs(W.created) do if c.kind == 'vehicle' then veh = c.e end end
+        if veh and W.ents[veh] then
+            local cp = W.ents[veh].coords
+            W.pos = { x = cp.x + 3.3, y = cp.y + 20.7, z = 5.0 }
+        end
+        drawn, dists = {}, 0
+        local pos = { x = W.pos.x, y = W.pos.y, z = W.pos.z }
+        Frame()
+        -- (the frame the car spawns also runs the last check that the spawn point is clear)
+        if started and not phase.done then
+            frames = frames + 1
+            if #drawn > 0 then drawnFrames = drawnFrames + 1 end
+            local want = OldDraw(pos, phase.stop and phase.target + 1 or phase.target)
+            if Flat(drawn) == Flat(want) then same = same + 1 end
+            if dists > maxDists then maxDists = dists end
+        end
+        if #T.pushes > startPushes and LastPush().data.result.kind == 'testdrive' then break end
+    end
+    StopDraws()
+    CP.U.dist = realDist
+    _G.TaskVehicleDriveToCoordLongrange, _G.TaskVehicleTempAction = realTask, realTemp
+    W.stuckTargets = {}
+    local res = LastPush().data.result
+    H.eq(res.kind, 'testdrive', 'the 500-point test drive ends')
+    H.eq(table.concat(res.failed, ','), '100,300', 'the two unreachable waypoints failed')
+    H.ok(drawnFrames > 1000, 'the route was drawn in many frames (' .. drawnFrames .. ')')
+    H.eq(same, frames, 'every frame draws the same markers and lines, in the same colours, as before')
+    H.eq(maxDists, 0, 'no U.dist call in a drive frame')
+    H.advance(400)
+    Act('builderResult', {})
+end
+
+-- ============================================================================
 --                                CRIMSON-ARENA
 -- ============================================================================
 -- A running tool stops without reopening the tablet.

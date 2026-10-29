@@ -14,6 +14,7 @@ local LABEL_RANGE = 25.0        -- 3D labels for points this close
 local INVITE_TOAST_MS = 12000
 local INVITE_WAIT_S = 120       -- when an invitation event names no expiry
 local KEY_GUARD_MS = 300        -- when Config.Testing.panelKeyGuardMs is missing from an older config.lua
+local POINTS_PER_YIELD = 8      -- the spawn check yields a frame after this many points (no hitch on long routes)
 local CONTROLS = {
     skip = true,
     restart = true,
@@ -598,6 +599,7 @@ local function CheckLocation(m, li, progress, totals)
     local moveWithin = math.max(0.0, tonumber(cfg.moveWithin) or 150.0)
     local results = {}
     local onRun = false
+    local sinceYield = 0
     for k, p in ipairs(points) do
         if check.stop then break end
         -- he started or joined a run during the check: what was checked is reported, then the check ends
@@ -626,6 +628,11 @@ local function CheckLocation(m, li, progress, totals)
         for key, v in pairs(p) do shown[key] = v end
         for key, v in pairs(row) do shown[key] = v end
         PushCheck('point', { progress = progress, missionId = data.missionId, location = li, result = shown })
+        sinceYield = sinceYield + 1
+        if sinceYield >= POINTS_PER_YIELD then
+            sinceYield = 0
+            Wait(0)
+        end
     end
     if #results > 0 then
         local sent = CP.Net.action('server:test:spawnCheckReport',

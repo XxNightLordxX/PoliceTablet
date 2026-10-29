@@ -674,6 +674,8 @@ CP.Net.request = function(name, args)
     requests[#requests + 1] = { name = name, args = CP.U.deepcopy(args) }
     if name ~= 'server:test:spawnPoints' then return { ok = false, error = 'err.unknown' } end
     if args.location == nil then
+        local locs = { { index = 1, label = 'Docks' }, { index = 2, label = 'Yard' } }
+        if LOCATIONS[3] then locs[3] = { index = 3, label = LOCATIONS[3].locationLabel } end
         return {
             ok = true,
             data = {
@@ -681,7 +683,7 @@ CP.Net.request = function(name, args)
                     {
                         id = 'demo',
                         label = 'Demo',
-                        locations = { { index = 1, label = 'Docks' }, { index = 2, label = 'Yard' } },
+                        locations = locs,
                     },
                 },
             },
@@ -851,6 +853,57 @@ do
     H.ok(probes[4].kind == 'ped' and probes[4].opts.wall == false and probes[4].at.x == 900.0,
         'as where someone walks, from right over it')
     cfg.routes = false
+
+    -- a long route (routes = false: nothing probed) yields a frame every few points instead of pushing all at once
+    Reset()
+    local long = {
+        missionId = 'demo',
+        missionLabel = 'Demo',
+        location = 3,
+        locationLabel = 'Long route',
+        start = { x = 100.0, y = 200.0, z = 30.0, r = 50.0 },
+        points = {},
+    }
+    for k = 1, 100 do
+        long.points[k] = {
+            id = 'route[' .. k .. ']',
+            key = 'route',
+            i = k,
+            kind = 'path',
+            as = 'ped',
+            wall = false,
+            x = 100.0 + k,
+            y = 200.0,
+            z = 30.0,
+            obj = 1,
+            above = { -0.3, 1.6 },
+        }
+    end
+    LOCATIONS[3] = long
+    local waits, realWait, realPush = 0, _G.Wait, CP.Tablet.push
+    _G.Wait = function(ms)
+        waits = waits + 1
+        return realWait(ms)
+    end
+    local at = {}
+    CP.Tablet.push = function(topic, data)
+        if topic == 'spawnCheck' and data.state == 'point' then at[#at + 1] = waits end
+        return realPush(topic, data)
+    end
+    clientActions.spawnCheck({ missionId = 'demo', location = 3 })
+    H.ok(RunToEnd(), 'the long route check ends')
+    _G.Wait, CP.Tablet.push = realWait, realPush
+    LOCATIONS[3] = nil
+    local longPts = Pushes('point')
+    H.eq(#longPts, 100, 'every route point goes to the NUI')
+    local inOrder = true
+    for k, p in ipairs(longPts) do
+        if p.result.id ~= 'route[' .. k .. ']' or p.result.status ~= 'skipped' then inOrder = false end
+    end
+    H.ok(inOrder, 'in order, each one skipped')
+    H.eq(#probes, 0, 'nothing probed')
+    H.ok(#at == 100 and at[100] - at[1] >= 12,
+        'at least 12 frames between the first and the last point (' .. tostring(#at == 100 and at[100] - at[1]) .. ')')
 
     -- moveWithin 0: moved over every point
     Reset()
