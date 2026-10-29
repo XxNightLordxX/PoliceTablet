@@ -205,7 +205,7 @@ Built-ins: `source: 'builtin'`, `readOnly: true`, `definition` = the built-in fi
   blockList: { id, labelKey: 'builder.block.<id>', available: boolean /* registered on the server */,
                minSeconds: number /* default */, presenceRange: [min, max, default] }[],
   allowed: Config.Builder.allowed, maxHostiles, maxBlocks, minLocations, minLocationsOverride, maxLocations: 20,
-  minLocationGap, minSpawnFromStart, spawnMargin,
+  minLocationGap, minSpawnFromStart, spawnMargin, maxPointFromStart /* m outside the start circle */,
   bonusCap: { points: 50, pct: 25 },
   bonuses: { id, kind: 'points'|'pct', value /* points, or whole percent */, each, block: string|null,
              penalty: boolean, labelKey: 'bonus.<id>' | 'penalty.<id>' }[],     // Config.Bonuses, sorted
@@ -330,7 +330,11 @@ autosaves. Placement checks on the client (a failing spot shows red and cannot b
 (not in water, inside walls or in the air), outside `noBuildZones` (2D), armed spawn keys (`armed`) >= `startRadius` +
 `spawnMargin` from `start` (2D), spawn keys >= `minSpawnFromStart`
 from `start`, a start >= `minLocationGap` from `otherStarts`. The server re-checks z sanity, no-build
-zones, the start distance and the location gap on save/publish.
+zones, the start distance and the location gap on save/publish, and `builder.error.points_far` (vars `key`, `n`,
+`total`, `dist`, `max`, `radius`, `limit`): a key's points further than the start radius plus `maxPointFromStart` from
+`start` (2D); escort route / ambushPoints, pursuit route, checkpoint_route checkpoints, flee_arrest routes,
+field_contact fleeTo, any road route and an interact_points `use = 'random'` key with a point inside the start circle
+are exempt. The Locations step shows those errors after a moved start with Move them too / Place again / Keep.
 
 Overlays (`CP.Tablet.overlay`): `{ kind: 'placement', key, placed, min, max, valid, reason? }`,
 `{ kind: 'recording', key, length, points, stops, paused, offRoad, rejected }`,

@@ -271,6 +271,9 @@ export interface BuilderConfig {
     minSpawnFromStart: number;
     // metres outside the start circle that armed spawn points keep (Config.Builder.spawnMargin)
     spawnMargin: number;
+    // metres a location's points may be outside its start circle (Config.Builder.maxPointFromStart); routes,
+    // patrol checkpoints, escort ambush points and flee paths are exempt
+    maxPointFromStart?: number;
     // flat points cap, and the percentage cap in whole percent
     bonusCap: { points: number; pct: number };
     bonuses: BuilderBonusOption[];

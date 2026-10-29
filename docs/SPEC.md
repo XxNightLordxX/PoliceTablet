@@ -3970,6 +3970,10 @@ Config.Builder = {
     spawnMargin = 40.0,                        -- metres outside the start circle that armed NPCs of a new custom mission
                                                -- keep (shootout, boss, ambush and pursuit cars, door associates);
                                                -- files published before still load, with a warning
+    maxPointFromStart = 300.0,                 -- metres a location's points may be outside its start circle: a
+                                               -- point further away (left behind by a moved start) blocks
+                                               -- publishing; routes, patrol checkpoints, escort ambush points and
+                                               -- flee paths are exempt (50-2000)
     bonusCap = { points = 50, share = 0.25 },  -- flat bonuses and penalties: at most 50 points; percentage ones: at most 25% of P
     requireTestToPublish = false,              -- true = supervisors may publish only a draft that passed a test
                                                -- (admins never need one); false = testing is optional for everyone

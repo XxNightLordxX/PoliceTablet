@@ -217,6 +217,25 @@ export function setAt(obj: Record<string, unknown>, path: string, value: unknown
 //                                    ERRORS
 // ============================================================================
 
+// Moves every vector of a location value (vec, list, labelled points, list of lists, route) by d, in place: the
+// "Move them too" of a moved start (headings kept).
+export function shiftPoints(v: unknown, d: Vec3): void {
+    if (isVec(v)) {
+        v.x += d.x;
+        v.y += d.y;
+        v.z += d.z;
+        return;
+    }
+    if (!v || typeof v !== 'object') return;
+    if (Array.isArray(v)) {
+        v.forEach(item => shiftPoints(item, d));
+        return;
+    }
+    const o = v as { coords?: unknown; points?: unknown };
+    if (o.coords !== undefined) shiftPoints(o.coords, d);
+    if (o.points !== undefined) shiftPoints(o.points, d);
+}
+
 export function errorsAt(errors: BuilderError[], path: string): BuilderError[] {
     return errors.filter(e => e.path === path);
 }

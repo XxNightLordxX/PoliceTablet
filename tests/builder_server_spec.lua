@@ -692,6 +692,61 @@ local function Body()
         H.eq(B.armedKeepOut({ radius = 20 }), 30, 'never under minSpawnFromStart')
         Config.Builder.spawnMargin = 40
     end
+    -- ══ a location's points stay with its start: Config.Builder.maxPointFromStart (B11) ═══════════════════
+    do
+        -- a5 job 2: "Move start" moved the start 1.1 km and left the 11 hostile spawns behind; Publish was allowed
+        local d = U.deepcopy(good)
+        local c = d.locations[1].start.coords
+        for k = 1, 11 do
+            local a = k / 11 * 2 * math.pi
+            d.locations[1].spawns[k] = { x = c.x + 150 * math.cos(a), y = c.y + 150 * math.sin(a), z = 21.5, w = 0 }
+        end
+        H.eq(errorAt(B.validate(d, { publish = true }), 'locations.1.spawns'), nil,
+            'spawns 150 m from the start are fine')
+        d.locations[1].start.coords = { x = c.x + 1100, y = c.y, z = c.z }
+        local e = errorAt(B.validate(d, { publish = true }), 'locations.1.spawns')
+        H.eq(e and e.key, 'builder.error.points_far', 'a5 J2: spawns left 1.1 km behind a moved start are refused')
+        H.eq(e and e.vars.n, 11, 'all 11 are counted')
+        H.ok(
+            e and e.message:find('11 of 11', 1, true) and e.message:find('1.2 km', 1, true)
+                and e.message:find('360 m', 1, true),
+            'in plain words: ' .. tostring(e and e.message)
+        )
+        local ev = errorAt(B.validate(d), 'locations.1.evidence')
+        H.eq(ev and ev.key, 'builder.error.points_far', 'interaction points left behind too')
+        -- the distance is a setting, measured from the start circle's edge
+        Config.Builder.maxPointFromStart = 2000
+        H.eq(errorAt(B.validate(d), 'locations.1.spawns'), nil, 'maxPointFromStart 2000: allowed')
+        Config.Builder.maxPointFromStart = 300
+        -- keys the mission travels along are exempt: a road route and an escort's ambush points
+        local r = U.deepcopy(good)
+        r.objectives[2] = {
+            block = 'escort',
+            label = 'Escort the truck',
+            minSeconds = 60,
+            presenceRange = 150,
+            route = 'route',
+            ambushPoints = 'ambush',
+        }
+        local sc = r.locations[1].start.coords
+        local pts = {}
+        for i = 0, 15 do pts[#pts + 1] = { x = sc.x + i * 100.0, y = sc.y, z = 21.0 } end
+        r.locations[1].route = { points = pts }
+        r.locations[1].ambush = { { x = sc.x + 900, y = sc.y, z = 21.0, w = 90 } }
+        local re = B.validate(r)
+        H.eq(errorAt(re, 'locations.1.route'), nil, 'a 1.5 km route is not a far point')
+        H.eq(errorAt(re, 'locations.1.ambush'), nil, 'an ambush point 900 m along the route is not a far point')
+        -- a round of stops that begins at the start (interact_points use = random, a stop inside the circle)
+        local t = U.deepcopy(good)
+        t.objectives[2].use = 'random'
+        t.objectives[2].count = 2
+        local tc = t.locations[1].start.coords
+        t.locations[1].evidence = { { x = tc.x + 5, y = tc.y, z = 21.2 }, { x = tc.x + 700, y = tc.y, z = 21.2 } }
+        H.eq(errorAt(B.validate(t), 'locations.1.evidence'), nil, 'a round from the start may go 700 m out')
+        t.locations[1].start.coords = { x = tc.x - 1100, y = tc.y, z = tc.z }
+        H.eq((errorAt(B.validate(t), 'locations.1.evidence') or {}).key, 'builder.error.points_far',
+            'the same round left behind a moved start is refused')
+    end
     do
         -- unarmed people (hostages) keep minSpawnFromStart: 35 m from a 60 m start passes, 20 m does not
         local d = U.deepcopy(good)
@@ -1920,6 +1975,21 @@ local function Body()
             end
             H.ok(type(copy.objectives[1].surrender) ~= 'table' or copy.objectives[1].surrender.chance >= 1,
                 'copy in builder units (percent)')
+            -- B11 (a6 probe P6): a duplicate of every built-in keeps every point with its start
+            for _, bm in ipairs(CP.Missions.list()) do
+                if bm.source == 'builtin' then
+                    local okB, db = act(2, 'duplicate', { id = bm.id })
+                    if okB then
+                        local far = {}
+                        for _, e in ipairs(B.validate(B.sanitize(db.record.definition, db.id), { publish = true })) do
+                            if e.key == 'builder.error.points_far' then far[#far + 1] = e.message end
+                        end
+                        H.eq(table.concat(far, ' | '), '', 'the duplicate of ' .. bm.id .. ' has no far points')
+                    else
+                        H.ok(false, 'duplicate ' .. bm.id .. ': ' .. tostring(db))
+                    end
+                end
+            end
             -- a Builder duplicate of every parity-plus mission (and the retrofits) passes every guardrail
             for _, m in ipairs({
                 'parking_patrol',

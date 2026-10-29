@@ -424,6 +424,8 @@ local RANGES = {
     ['Blocks.pursuit.outsiderWarn'] = { 0, 120 },
     -- Mission Builder: how far outside the start circle armed spawn points stay (Config.Builder.spawnMargin)
     ['Builder.spawnMargin'] = { 0, 150 },
+    -- Mission Builder: how far outside the start circle a location's points may be (Config.Builder.maxPointFromStart)
+    ['Builder.maxPointFromStart'] = { 50, 2000 },
     -- Mission Builder: metres between the checkpoints a driven patrol is saved as (Config.Builder.route.patrolSpacing)
     ['Builder.route.patrolSpacing'] = { 50, 1000 },
 }

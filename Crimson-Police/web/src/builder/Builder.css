@@ -1342,6 +1342,26 @@
     font-size: var(--cp-fs-xs);
 }
 
+/* a moved start left points behind: Move them too / Place again / Keep */
+.builder_client-far {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 10px;
+    border: 1px solid var(--cp-warning);
+    border-radius: var(--cp-radius-sm);
+}
+
+.builder_client-far__text {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-right: auto;
+    color: var(--cp-warning);
+    font-size: var(--cp-fs-xs);
+}
+
 .builder_client-point__warn {
     display: flex;
     align-items: center;

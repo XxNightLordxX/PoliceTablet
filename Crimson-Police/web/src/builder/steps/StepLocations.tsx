@@ -1,6 +1,6 @@
 // "Locations": at least Config.Builder.minLocations locations, each with
 
-import { useMemo, useState, useSyncExternalStore } from 'react';
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import {
     Badge,
     Button,
@@ -21,7 +21,7 @@ import { toast } from '../../shared/toast';
 import type { BuilderKerbSpot, BuilderLocation, BuilderRoute, Vec3 } from '../../types/builder_server';
 import type { BuilderAutoPointsReply, BuilderTeleportRequest, PointSpec, RouteMeta } from '../../types/builder_client';
 import { CountBadge, ErrorNotes } from '../controls';
-import { dist2d, errorsAt, errorsUnder, isRoute, listsOf, pointsOf, routeLength } from '../defUtils';
+import { dist2d, errorsAt, errorsUnder, isRoute, listsOf, pointsOf, routeLength, shiftPoints } from '../defUtils';
 import { KEY_COLOURS, LocationMap, PointList } from '../LocationMap';
 import { pointListRows, type PointListRow } from '../pointList';
 import {
@@ -110,6 +110,40 @@ export function StepLocations({ ed, cfg, def, ro, scope }: StepProps) {
     };
     const meta = (key: string) => routeMetaOf(ed.id, li, key);
 
+    // a moved start (Move start, Set start here): the points it left behind (the server's builder.error.points_far,
+    // Config.Builder.maxPointFromStart) are offered Move them too / Place again / Keep; Keep leaves Publish blocked
+    const seenStarts = useRef<Record<number, Vec3>>({});
+    const [moved, setMoved] = useState<{ li: number; by: Vec3; kept: string[] } | null>(null);
+    const sc = loc?.start?.coords;
+    useEffect(() => {
+        if (!sc) return;
+        const prev = seenStarts.current[li];
+        seenStarts.current[li] = { x: sc.x, y: sc.y, z: sc.z };
+        if (prev && (prev.x !== sc.x || prev.y !== sc.y || prev.z !== sc.z))
+            setMoved({ li, by: { x: sc.x - prev.x, y: sc.y - prev.y, z: sc.z - prev.z }, kept: [] });
+    }, [li, sc]);
+    const movedHere = moved && moved.li === li ? moved : null;
+    const farLeft = movedHere
+        ? ed.errors.filter(
+              e =>
+                  e.key === 'builder.error.points_far' &&
+                  e.path.startsWith(`locations.${li}.`) &&
+                  !movedHere.kept.includes(e.path.slice(`locations.${li}.`.length)),
+          )
+        : [];
+    const keepFar = (key: string) => setMoved(m => (m ? { ...m, kept: [...m.kept, key] } : m));
+    const moveFar = (key: string, label: string) => {
+        if (!movedHere) return;
+        const by = movedHere.by;
+        ed.update(d => {
+            const l = d.locations[li - 1];
+            if (l && l[key] !== undefined) shiftPoints(l[key], by);
+        });
+        setRouteMeta(ed.id, li, key, null);
+        keepFar(key);
+        toast('success', t('builder.loc.far_moved', { label }));
+    };
+
     const addLocation = () => {
         const n = def.locations.length + 1;
         ed.update(d => {
@@ -123,6 +157,8 @@ export function StepLocations({ ed, cfg, def, ro, scope }: StepProps) {
             d.locations.splice(n - 1, 1);
         });
         shiftRouteMeta(ed.id, n);
+        seenStarts.current = {};
+        setMoved(null);
         pick(Math.max(1, n - 1));
         setConfirm(null);
     };
@@ -408,6 +444,62 @@ export function StepLocations({ ed, cfg, def, ro, scope }: StepProps) {
                                         })
                                     }
                                 />
+                                {farLeft.map(e => {
+                                    const key = e.path.slice(`locations.${li}.`.length);
+                                    const spec = specs.find(x => x.key === key);
+                                    const label = String(e.vars?.key ?? key);
+                                    return (
+                                        <div key={e.path} className="builder_client-far" role="alert">
+                                            <span className="builder_client-far__text cp-num">
+                                                <Icon name="alert" size={13} />
+                                                {t('builder.loc.far_points', {
+                                                    label,
+                                                    n: e.vars?.n ?? 0,
+                                                    total: e.vars?.total ?? 0,
+                                                    dist: e.vars?.dist ?? '',
+                                                })}
+                                            </span>
+                                            {!ro ? (
+                                                <>
+                                                    <Button
+                                                        size="sm"
+                                                        variant="primary"
+                                                        icon="mapPin"
+                                                        disabled={busy}
+                                                        onClick={() => moveFar(key, label)}
+                                                    >
+                                                        {t('builder.loc.far_move')}
+                                                    </Button>
+                                                    {spec ? (
+                                                        <Button
+                                                            size="sm"
+                                                            variant="secondary"
+                                                            icon="refresh"
+                                                            disabled={busy}
+                                                            onClick={() => {
+                                                                keepFar(key);
+                                                                void ed.place(spec, li);
+                                                            }}
+                                                        >
+                                                            {t('builder.loc.far_place')}
+                                                        </Button>
+                                                    ) : null}
+                                                    <Button
+                                                        size="sm"
+                                                        variant="ghost"
+                                                        disabled={busy}
+                                                        title={t('builder.loc.far_keep_hint', {
+                                                            max: e.vars?.max ?? '',
+                                                        })}
+                                                        onClick={() => keepFar(key)}
+                                                    >
+                                                        {t('builder.loc.far_keep')}
+                                                    </Button>
+                                                </>
+                                            ) : null}
+                                        </div>
+                                    );
+                                })}
                                 {specs.map((s, i) => (
                                     <PointRow
                                         key={s.key}

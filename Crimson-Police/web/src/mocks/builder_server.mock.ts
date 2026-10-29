@@ -350,6 +350,7 @@ function buildConfig(): BuilderConfig {
         minLocationGap: 100,
         minSpawnFromStart: 30,
         spawnMargin: 40,
+        maxPointFromStart: 300,
         bonusCap: { points: 50, pct: 25 },
         bonuses: BONUSES,
         noBuildZones: EDGE

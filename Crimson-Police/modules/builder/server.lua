@@ -1373,7 +1373,7 @@ end
 -- The location keys of one objective's armed spawn points (ARMED_FIELDS), added to `into` (key -> true).
 -- The name officers see in the Builder for the location key each objective field names (builder.points.*, the same
 -- labels as web/src/builder/schema.ts): error texts say "Hostile spawn points", not "spawns".
-local Points = {}   -- error-text names for location keys (labels, name, startReason)
+local Points = {}   -- error-text names for location keys (labels, name, startReason) and the far-point rule
 do
     local POINT_LABELS = {
         hostile_waves = { spawns = 'spawns', ['boss.spawn'] = 'boss', ['spawnSets.keys'] = 'spawn_set' },
@@ -1401,6 +1401,56 @@ do
         },
         process_scene = { scene = 'scene_marker', coroner = 'coroner' },
     }
+
+    -- The location keys a mission travels along, not points kept near the start (Config.Builder.maxPointFromStart does
+    -- not apply to them): road routes, a patrol's checkpoints, an escort's ambush points on its route and flee paths.
+    Points.TRAVEL = {
+        escort = { 'route', 'ambushPoints' },
+        pursuit = { 'route' },
+        checkpoint_route = { 'checkpoints' },
+        flee_arrest = { 'routes' },
+        field_contact = { 'fleeTo' },
+    }
+
+    -- "1.1 km" / "420 m": a distance in plain words.
+    local function Distance(m)
+        if m >= 1000 then return ('%.1f km'):format(m / 1000) end
+        return ('%d m'):format(math.floor(m + 0.5))
+    end
+
+    -- A location's points stay with its start: every point of a key within the start circle plus
+    -- Config.Builder.maxPointFromStart (a moved start that left its points behind is refused). Keys the mission travels
+    -- along are exempt, and so is a round of stops that begins at the start (a point of it inside the start circle).
+    function Points.far(errors, path, li, name, pts, start, travel, round)
+        if travel or #pts == 0 then return end
+        local radius = tonumber(start.radius) or 0
+        if round then
+            for _, p in ipairs(pts) do
+                if U.dist(p, start.coords) <= radius then return end
+            end
+        end
+        local limit = tonumber(CfgB().maxPointFromStart) or 300
+        local max = radius + limit
+        local n, far = 0, 0
+        for _, p in ipairs(pts) do
+            local d = U.dist2d(p, start.coords)
+            if d > max then
+                n = n + 1
+                if d > far then far = d end
+            end
+        end
+        if n == 0 then return end
+        AddError(errors, path, 'builder.error.points_far', {
+            key = name,
+            location = li,
+            n = n,
+            total = #pts,
+            dist = Distance(far),
+            max = Nice(max),
+            radius = Nice(radius),
+            limit = Nice(limit),
+        })
+    end
 
     -- Adds location key -> builder.points.* label key for one objective (the first objective naming a key wins).
     function Points.labels(blockId, eff, into)
@@ -1865,6 +1915,8 @@ function B.validate(def, opts)
     local patrolKeys = {}  -- location key -> true (a checkpoint_route's checkpoints: not judged as a road route)
     local pointLabels = {} -- location key -> builder.points.* (the name error texts use)
     local startReason = {} -- location index -> the block error that already says "too close to the start"
+    local travelKeys = {}  -- location key -> true (Points.TRAVEL: no maxPointFromStart)
+    local roundKeys = {}   -- location key -> true (interact_points use = 'random': a round of stops from the start)
     local minFromStart = tonumber(bc.minSpawnFromStart) or 30
     local armed = 0
     local blockIds = {}
@@ -1958,6 +2010,13 @@ function B.validate(def, opts)
                 for _, field in ipairs(SPAWN_FIELDS[blockId] or {}) do
                     local key = U.getPath(eff, field)
                     if type(key) == 'string' then spawnKeys[key] = true end
+                end
+                for _, field in ipairs(Points.TRAVEL[blockId] or {}) do
+                    local key = U.getPath(eff, field)
+                    if type(key) == 'string' then travelKeys[key] = true end
+                end
+                if blockId == 'interact_points' and eff.use == 'random' and type(eff.points) == 'string' then
+                    roundKeys[eff.points] = true
                 end
                 if blockId == 'checkpoint_route' and type(eff.checkpoints) == 'string' then
                     patrolKeys[eff.checkpoints] = true
@@ -2078,6 +2137,9 @@ function B.validate(def, opts)
                     elseif badStart and not (startReason[li] and startReason[li].keys[key]) then
                         AddError(errors, kp, 'builder.error.spawn_start',
                             { key = name, location = li, min = Nice(minFromStart) })
+                    end
+                    if startCoords then
+                        Points.far(errors, kp, li, name, pts, start, IsRoute(v) or travelKeys[key], roundKeys[key])
                     end
                     -- a patrol's checkpoints are only points to drive through: a short beat is not a race loop
                     if IsRoute(v) and not patrolKeys[key] then CheckRoute(errors, v, kp, li, name) end
@@ -3770,6 +3832,7 @@ CP.Net.callback('builder:config', function(src)
         minLocationGap = bc.minLocationGap,
         minSpawnFromStart = bc.minSpawnFromStart,
         spawnMargin = tonumber(bc.spawnMargin) or 40,
+        maxPointFromStart = tonumber(bc.maxPointFromStart) or 300,
         bonusCap = { points = cap.points, pct = RoundInt((tonumber(cap.share) or 0.25) * 100) },
         bonuses = bonuses,
         noBuildZones = zones,
