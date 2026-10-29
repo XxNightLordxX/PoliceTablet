@@ -552,6 +552,48 @@ do
     H.eq(Kit.busy(), nil, 'and it is released')
 end
 
+-- Q21: a running job pushes its progress at most every AdminControl.jobProgressEveryMs; the start and the end always
+do
+    local saved = Config.AdminControl.jobProgressEveryMs
+    Kit.registerJob('kitThrottle', {
+        batch = function() return true end,
+    })
+    local function Run(gapMs)
+        Config.AdminControl.jobProgressEveryMs = gapMs
+        H.reset()
+        local ids = {}
+        for i = 1, 1000 do ids[i] = i end
+        local result
+        CreateThread(function()
+            result = table.pack(Kit.startJob({ kind = 'kitThrottle', src = 1, reason = 't', ids = ids, wait = true }))
+        end)
+        local guard = 0
+        while not result and guard < 100 do
+            H.step(20)
+            guard = guard + 1
+        end
+        local jobId = result and result[2]
+        local pushes, states = 0, {}
+        for _, e in ipairs(H.findEvents('crimson-police:client:push')) do
+            if e.args[1] == 'adminjob' and e.target == 1 then
+                pushes = pushes + 1
+                states[#states + 1] = e.args[2] and e.args[2].state
+            end
+        end
+        return jobId, pushes, states
+    end
+    local jobId, pushes, states = Run(500)
+    H.ok(type(jobId) == 'string', 'the throttled job finishes')
+    H.ok(pushes >= 2 and pushes <= 3 and states[1] == 'running' and states[#states] == 'done',
+        ('500 ms: the start, at most one running update and the end (%d pushes)'):format(pushes))
+    H.eq((Async(function() return Kit.job(jobId) end) or {}).done, 1000, 'every batch still saved its row count')
+    local saved1000 = Count(('SELECT COUNT(*) AS n FROM cp_admin_jobs WHERE id = \'%s\' AND done = 1000'):format(jobId))
+    H.eq(saved1000, 1, 'the saved job reached the last row')
+    local _, pushes0 = Run(0)
+    H.eq(pushes0, 22, '0 ms: a push after every batch (the old behaviour)')
+    Config.AdminControl.jobProgressEveryMs = saved
+end
+
 -- ============================================================================
 --                        7. AUDIT AND THE WEBHOOK QUEUE
 -- ============================================================================

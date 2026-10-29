@@ -498,7 +498,18 @@ function Kit.jobs(opts)
     return out
 end
 
-local function Progress(job, state)
+-- Milliseconds between two progress pushes of a running job (0 = after every batch).
+local function ProgressGapMs()
+    local ac = type(Config.AdminControl) == 'table' and Config.AdminControl or {}
+    return math.max(0, tonumber(ac.jobProgressEveryMs) or 0)
+end
+
+-- throttle = true for the per-batch push from RunJob: skipped when the last push was too recent. The first push
+-- (startJob) and every end state are always sent.
+local function Progress(job, state, throttle)
+    local now = GetGameTimer()
+    if throttle and now - (job.pushedAt or -math.huge) < ProgressGapMs() then return end
+    job.pushedAt = now
     local data = {
         id = job.id,
         kind = job.kind,
@@ -534,7 +545,7 @@ local function RunJob(job, handlers)
         job.done = i + #slice - 1
         pcall(MySQL.update.await, 'UPDATE cp_admin_jobs SET done = ?, updated_at = NOW() WHERE id = ?',
             { job.done, job.id })
-        Progress(job, 'running')
+        Progress(job, 'running', true)
         i = job.done + 1
         if i <= #ids then Wait(0) end
     end

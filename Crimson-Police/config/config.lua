@@ -148,6 +148,9 @@ Config.AdminControl = {
     -- Departments → Upload a logo: milliseconds between two 16 KB pieces of the picture. 250 keeps the upload at half
     -- of what FXServer lets one player send per second (it drops a player who sends more); 1 MB then takes about 22 s.
     logoChunkGapMs = 250,
+    -- Milliseconds between progress updates of a running bulk job on admins' screens (the start and the end of a job
+    -- are always shown at once); 0 = after every batch (the old behaviour).
+    jobProgressEveryMs = 500,
 }
 
 -- ============================================================================

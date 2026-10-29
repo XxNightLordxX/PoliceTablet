@@ -2,7 +2,7 @@
 // Disputes (every open dispute) and Corrections (every bulk void, retirement, record move and season reopen, with
 // Undo). Each row can open the officer.
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
     Badge,
     Button,
@@ -19,7 +19,7 @@ import {
     type TableColumn,
 } from '../../../shared/components';
 import { fmtDateTime, formatNumber } from '../../../shared/format';
-import { useRequest } from '../../../shared/hooks';
+import { usePush, useRequest } from '../../../shared/hooks';
 import { request } from '../../../shared/nui';
 import { t } from '../../../shared/i18n';
 import type { BannedTest, BannedWords, CorrectionBatch } from '../../../types/admin_officers';
@@ -195,12 +195,45 @@ const UNDO_ACTION: Record<string, string> = {
     undoReopen: 'server:admin:undoReopen',
 };
 
+const CORRECTIONS_REFETCH_MS = 1000;
+
 export function CorrectionsTab({ citizenid }: { citizenid?: string }) {
     const { data, loading, error, refetch } = useRequest<{ batches: CorrectionBatch[] }>(
         'admin:getCorrections',
         citizenid ? { citizenid } : {},
-        { pushTopic: 'adminjob' },
     );
+    // A running job's progress refetches at most once a second (admin:getCorrections allows 3 a second); its start
+    // and its end refetch at once, and an end that hits the rate limit tries once more a second later.
+    const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const lastAt = useRef(0);
+    const clearTimer = () => {
+        if (timer.current) clearTimeout(timer.current);
+        timer.current = null;
+    };
+    useEffect(() => clearTimer, []);
+    const refetchNow = () => {
+        lastAt.current = Date.now();
+        return refetch();
+    };
+    usePush<{ state?: string } | null>('adminjob', j => {
+        if (!j || j.state !== 'running') {
+            clearTimer();
+            void refetchNow().then(res => {
+                if (res.ok || res.error !== 'err.rate_limited') return;
+                timer.current = setTimeout(() => {
+                    timer.current = null;
+                    void refetchNow();
+                }, CORRECTIONS_REFETCH_MS);
+            });
+            return;
+        }
+        if (timer.current) return;
+        const wait = Math.max(0, lastAt.current + CORRECTIONS_REFETCH_MS - Date.now());
+        timer.current = setTimeout(() => {
+            timer.current = null;
+            void refetchNow();
+        }, wait);
+    });
     const { run, busy } = useAdminAction();
     const [undo, setUndo] = useState<CorrectionBatch | null>(null);
     const [jobId, setJobId] = useState<string | null>(null);

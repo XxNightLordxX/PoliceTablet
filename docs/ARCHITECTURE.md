@@ -2343,7 +2343,9 @@ rows by `breakdown.by`, absolute values summed in Lua).
 `Kit.startJob({ kind, src, reason, ids, filter, detail, id?, wait? }) -> ok, jobId | false, err.admin_busy|job_kind`:
 one job server-wide (it takes the busy lock), `cp_admin_jobs` row first (`detail.ids` = the fixed id list), batches
 of 50 ids with `Wait(0)` between, `done` saved after every batch and `adminjob` pushed to admin players only
-(`CP.Tablet.pushAdmins`). `Kit.job(id)`, `Kit.jobs({ kind, limit })`. At start (5 s after load, once the
+(`CP.Tablet.pushAdmins`): the start and every end state at once, a running update at most every
+`Config.AdminControl.jobProgressEveryMs` (500; 0 = after every batch; the `adminjob:progress` hook follows the same
+rule). The Corrections tab refetches on a running update at most once a second. `Kit.job(id)`, `Kit.jobs({ kind, limit })`. At start (5 s after load, once the
 migrations are ready) a job left `running` is finished from `done` when its kind is registered, else rolled back
 (`rollback`) or marked `failed`; admins get a toast. Per-officer effects are recomputed from rows in `finish`, never
 applied as deltas.

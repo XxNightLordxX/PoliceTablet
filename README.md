@@ -1554,6 +1554,8 @@ Voids and restores:
   of your characters took part in are always left out. A bulk void is a **correction** by default (no strike towards
   the automatic suspension); switch on **Counts as a strike** for cheating. **Corrections → Undo** puts the whole batch
   back, including cash that was only waiting because of it. At most `AdminControl.bulkMaxRows` rows per batch.
+  While a bulk job runs, its progress bar moves every `AdminControl.jobProgressEveryMs` (500 ms); the start and the
+  end always show at once.
 - **Reset progression** is the same for all of an officer's runs; **Undo** restores them.
 - **Retire** (a deleted character, a banned player) voids all their runs as a correction, closes the tablet to them
   and hides their picture and bio from everyone else (nothing is deleted). It is refused while they are on a run.
