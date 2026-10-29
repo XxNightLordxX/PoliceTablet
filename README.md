@@ -1581,6 +1581,9 @@ Voids and restores:
   back, including cash that was only waiting because of it. At most `AdminControl.bulkMaxRows` rows per batch.
   While a bulk job runs, its progress bar moves every `AdminControl.jobProgressEveryMs` (500 ms); the start and the
   end always show at once.
+- **Refused mission starts**: the server remembers the last `AdminControl.refusalsKept` (200) mission starts it
+  refused (who tried, the type or mission, and why, such as on a run, in the arena or the maintenance lock) for
+  admins (`admin:getRefusals`). Memory only: a restart empties the list.
 - **Reset progression** is the same for all of an officer's runs; **Undo** restores them.
 - **Retire** (a deleted character, a banned player) voids all their runs as a correction, closes the tablet to them
   and hides their picture and bio from everyone else (nothing is deleted). It is refused while they are on a run.

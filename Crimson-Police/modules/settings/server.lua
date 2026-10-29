@@ -283,6 +283,7 @@ local RANGES = {
     -- at least 200 ms: the server refuses more than 6 logo pieces a second (modules/sysadmin LOGO_RATE)
     ['AdminControl.logoChunkGapMs'] = { 200, 2000 },
     ['AdminControl.jobProgressEveryMs'] = { 0, 5000 },
+    ['AdminControl.refusalsKept'] = { 10, 2000 },
     ['Cash.addFundsMax'] = { 0, 10000000 },
     ['Cash.manualDailyLimit'] = { 0, 10000000 },
     ['Cash.lowBalanceWarn'] = { 0, 100000000 },

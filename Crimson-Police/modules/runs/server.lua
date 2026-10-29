@@ -3048,7 +3048,7 @@ local function BasePoints(mission, missionType, isBoss)
     return Num(t and t.points, 0) * stars
 end
 
-function Runs.create(opts)
+function Runs._create(opts)   -- the start itself; Runs.create keeps a refusal
     if type(opts) ~= 'table' or type(opts.mission) ~= 'table' then return nil, 'err.invalid_mission' end
     local mission = opts.mission
     if type(mission.id) ~= 'string' or type(mission.objectives) ~= 'table' or #mission.objectives == 0 then
@@ -3326,6 +3326,25 @@ function Runs.create(opts)
     Fire('run:created', run)
     PushRun(run)
     return run
+end
+
+-- Runs.create, and a refused start is kept for admins (CP.Refusals, admin:getRefusals) with the leader and the key.
+-- opts.noteRefusal = false: the caller keeps it itself (the Mission Board accept, which also sees its own refusals).
+function Runs.create(opts)
+    local run, errKey = Runs._create(opts)
+    if run == nil and type(opts) == 'table' and opts.noteRefusal ~= false and CP.Refusals then
+        local mission = type(opts.mission) == 'table' and opts.mission or {}
+        local first = type(opts.members) == 'table' and opts.members[1] or nil
+        local who = MemberOfficer(opts.leaderSrc) or (first ~= nil and MemberOfficer(first)) or {}
+        CP.Refusals.note({
+            citizenid = who.citizenid,
+            name = who.name,
+            missionId = type(mission.id) == 'string' and mission.id or nil,
+            type = opts.missionType or mission.type,
+            reason = errKey,
+        })
+    end
+    return run, errKey
 end
 
 -- ============================================================================

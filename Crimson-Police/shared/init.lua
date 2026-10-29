@@ -80,6 +80,66 @@ end
 -- Lines kept since the start (more than the buffer holds once it wrapped).
 function CP.Problems.total() return problems.total end
 
+-- ============================================================================
+--                       REFUSED MISSION STARTS (SERVER)
+-- ============================================================================
+-- The last Config.AdminControl.refusalsKept mission starts the server refused, for admins (admin:getRefusals): who
+-- tried, which mission or type, and the error key. Memory only, so a restart empties it.
+local refusals = { list = {}, total = 0 }
+
+CP.Refusals = CP.Refusals or {}
+
+local function RefusalsKept()
+    local ac = Config and Config.AdminControl or {}
+    local n = math.tointeger(tonumber(ac.refusalsKept) or 200) or 200
+    return math.max(1, n)
+end
+
+local function Text(v, max)
+    if v == nil then return nil end
+    return tostring(v):sub(1, max)
+end
+
+-- Keeps one refused start. entry: { citizenid, name, missionId, type, reason } (reason: the error key).
+function CP.Refusals.note(entry)
+    if not IsDuplicityVersion() or type(entry) ~= 'table' then return end
+    local row = {
+        at = os and os.time() or 0,
+        citizenid = Text(entry.citizenid, 64),
+        name = Text(entry.name, 64),
+        missionId = Text(entry.missionId, 64),
+        type = Text(entry.type, 32),
+        reason = Text(entry.reason or 'err.internal', 64),
+    }
+    local list = refusals.list
+    list[#list + 1] = row
+    refusals.total = refusals.total + 1
+    local kept = RefusalsKept()
+    while #list > kept do table.remove(list, 1) end
+end
+
+-- The kept refusals, newest first (copies). limit: at most this many.
+function CP.Refusals.list(limit)
+    local out, list = {}, refusals.list
+    limit = math.tointeger(tonumber(limit) or #list) or #list
+    for i = #list, 1, -1 do
+        if #out >= limit then break end
+        local r = list[i]
+        out[#out + 1] = {
+            at = r.at,
+            citizenid = r.citizenid,
+            name = r.name,
+            missionId = r.missionId,
+            type = r.type,
+            reason = r.reason,
+        }
+    end
+    return out
+end
+
+-- Refusals kept since the start (more than the list holds once it was trimmed).
+function CP.Refusals.total() return refusals.total end
+
 function CP.log(tag, msg, ...)
     if not Config.Debug then return end
     print(('[crimson-police:%s] %s'):format(tag, Format(msg, ...)))

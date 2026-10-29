@@ -1847,6 +1847,12 @@ Kit.callback('admin:getProblems', 'openAdmin', function(ctx)
     return { lines = lines, total = CP.Problems and CP.Problems.total() or 0, tags = tags }
 end, { rate = 2 })
 
+-- The refused mission starts kept since the start (CP.Refusals, newest first; Config.AdminControl.refusalsKept).
+Kit.callback('admin:getRefusals', 'openAdmin', function()
+    local list = CP.Refusals and CP.Refusals.list() or {}
+    return { refusals = list, total = CP.Refusals and CP.Refusals.total() or 0 }
+end, { rate = 2 })
+
 local function ResourceRow(name, required)
     local state = GetResourceState and GetResourceState(name) or 'missing'
     local version = nil

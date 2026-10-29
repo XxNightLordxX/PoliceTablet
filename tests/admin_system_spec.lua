@@ -572,6 +572,20 @@ do
     local p = Cb('admin:getProblems', 1, { tag = 'webhooktest' })
     H.ok(p and #p.lines == 1 and not p.lines[1].text:find('SECRET', 1, true), 'a Problems line shows the link redacted')
 
+    -- A4: the refused mission starts, admins only
+    CP.Refusals.note({
+        citizenid = 'CIDREF',
+        name = 'Ref Used',
+        missionId = 'patrol_a',
+        type = 'patrol',
+        reason = 'err.in_arena',
+    })
+    local refusals = Cb('admin:getRefusals', 1, {})
+    H.ok(refusals and refusals.refusals[1].reason == 'err.in_arena' and refusals.total >= 1,
+        'admins read the refused starts')
+    local none, noneErr = Cb('admin:getRefusals', 7, {})
+    H.ok(none == nil and noneErr == 'err.no_permission', 'officers cannot read the refused starts')
+
     local ints = Cb('admin:getIntegrations', 1, {})
     local names = {}
     for _, r in ipairs(ints.resources) do names[r.name] = r end

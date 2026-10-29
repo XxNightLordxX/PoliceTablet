@@ -246,5 +246,32 @@ chars[777] = nil
 H.fire('playerDropped', 777)
 H.eq(Entry('LAZY0777'), nil, 'the drop then removes the entry')
 
+-- A4: a start the engine refuses (here the maintenance lock) is kept for admins, unless the caller keeps it itself
+do
+    local savedM = CP.Maintenance
+    CP.Maintenance = {
+        active = function() return true end,
+    }
+    local def = {
+        id = 'cq_mission',
+        type = 'tactical',
+        objectives = { { block = 'checkpoint_route' } },
+        locations = { { start = { coords = vec3(1.0, 2.0, 3.0) } } },
+    }
+    local member = { src = 5, citizenid = 'CQ0005', name = 'Quinn Q' }
+    local before = CP.Refusals.total()
+    local run, errKey = CP.Runs.create({ mission = def, locationIndex = 1, members = { member }, leaderSrc = 5 })
+    H.ok(run == nil and errKey == 'err.maintenance', 'maintenance refuses the start')
+    local kept = CP.Refusals.list(1)[1]
+    H.ok(
+        kept.reason == 'err.maintenance' and kept.citizenid == 'CQ0005' and kept.missionId == 'cq_mission'
+            and kept.type == 'tactical',
+        'the refused start is kept with who, which mission and why'
+    )
+    CP.Runs.create({ mission = def, locationIndex = 1, members = { member }, leaderSrc = 5, noteRefusal = false })
+    H.eq(CP.Refusals.total(), before + 1, 'noteRefusal = false: the caller keeps it')
+    CP.Maintenance = savedM
+end
+
 H.sql('DELETE FROM cp_mission_runs')
 return H

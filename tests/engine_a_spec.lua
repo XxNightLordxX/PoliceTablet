@@ -228,6 +228,7 @@ CP.Runs = {
     end,
     create = function(opts)
         if rs.mode == 'fail' then return nil, 'err.create_refused' end
+        if rs.mode == 'maintenance' then return nil, 'err.maintenance' end
         if rs.mode == 'error' then error('create exploded') end
         local run = { id = 'run-' .. (#rs.created + 1), mission = opts.mission, locationIndex = opts.locationIndex }
         rs.created[#rs.created + 1] = opts
@@ -1434,6 +1435,12 @@ do
     ok, data = Act('server:acceptType', 1, 'patrol')
     H.eq(data, 'err.member_on_run', 'member already on a run')
     rs.onMission[2] = nil
+    -- A4: every refused start is kept for admins, newest first, with who tried and the error key
+    local kept = CP.Refusals.list(4)
+    H.eq(kept[1].reason, 'err.member_on_run', 'refusal kept: member on a run')
+    H.ok(kept[1].citizenid == 'CIDA' and kept[1].name == 'Alice A' and kept[1].type == 'patrol',
+        'refusal kept with the leader and the type')
+    H.eq(kept[2].reason, 'err.in_arena', 'refusal kept: a member in the arena')
     onCall[2] = true
     ok, data = Act('server:acceptType', 1, 'patrol')
     H.eq(data, 'err.member_on_call', 'member on a real call')
@@ -1520,6 +1527,21 @@ do
     ok, data = Act('server:acceptType', 1, 'patrol')
     H.eq(data, 'err.create_refused', 'create error passed through')
     H.eq(unit.locked, false, 'unit unlocked after a failed create')
+    rs.mode = 'maintenance'
+    local totalBefore = CP.Refusals.total()
+    ok, data = Act('server:acceptType', 1, 'patrol')
+    H.eq(data, 'err.maintenance', 'the engine refused: maintenance')
+    local refused = CP.Refusals.list(1)[1]
+    H.ok(refused.reason == 'err.maintenance' and type(refused.missionId) == 'string' and refused.missionId ~= '',
+        'refusal kept: maintenance, with the drawn mission')
+    H.eq(CP.Refusals.total(), totalBefore + 1, 'one refusal kept for one refused start')
+    local savedKept = Config.AdminControl.refusalsKept
+    Config.AdminControl.refusalsKept = 10
+    for i = 1, 12 do CP.Refusals.note({ citizenid = 'CIDR' .. i, reason = 'err.busy' }) end
+    local ring = CP.Refusals.list()
+    H.eq(#ring, 10, 'the list keeps refusalsKept refusals')
+    H.ok(ring[1].citizenid == 'CIDR12' and ring[10].citizenid == 'CIDR3', 'the newest are kept, newest first')
+    Config.AdminControl.refusalsKept = savedKept
     rs.mode = 'error'
     ok, data = Act('server:acceptType', 1, 'patrol')
     H.eq(data, 'err.run_create_failed', 'create exception')

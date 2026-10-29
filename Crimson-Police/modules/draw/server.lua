@@ -1224,6 +1224,7 @@ local function FinishAccept(src, typeKey, ctx, opts)
         if not def then return fail(second or 'err.pool_empty') end
         index = second
     end
+    if ctx.note then ctx.note.missionId = def.id end
 
     if not (CP.Runs and CP.Runs.create) then return fail('err.run_create_failed') end
     -- The draw may yield (history lookups): a member who disconnected meanwhile had no run for playerDropped
@@ -1252,6 +1253,7 @@ local function FinishAccept(src, typeKey, ctx, opts)
         isBoss = def.isBoss == true,
         missionCall = missionCall,
         twists = ctx.twists,
+        noteRefusal = false,   -- Accept keeps the refusal, with the type the leader picked
     })
     Draw.release(token)
     if not okCall then
@@ -1286,10 +1288,10 @@ end
 -- the leader chose; checked here), onDone
 -- (called with ok, data|errKey, srcs only when a unit's ready check made the accept wait).
 -- Returns true, { runId } or true, { pending = true } while a unit of 2+ answers the ready check.
-local function Accept(src, typeKey, opts)
-    opts = type(opts) == 'table' and opts or {}
+local function AcceptStart(src, typeKey, opts, note)
     local ctx, errKey = CheckAccept(src, typeKey)
     if not ctx then return false, errKey end
+    ctx.note = note
     local unit, srcs = ctx.unit, ctx.srcs
     -- the twists the leader chose (PLAN M8b): each must be one the type offers these officers now
     local twists, twistErr = Draw.checkTwists(typeKey, ctx.officers, opts.twists)
@@ -1365,6 +1367,42 @@ local function Accept(src, typeKey, opts)
         CP.warn(TAG, 'the ready check could not start (%s); the draw follows at once', tostring(res))
     end
     return FinishAccept(src, typeKey, ctx, opts)
+end
+
+-- AcceptStart, and a refused start is kept for admins (CP.Refusals, admin:getRefusals): the leader, the type, the
+-- drawn mission when the draw got that far, and the error key. A refusal after the ready check is kept as well.
+local function Accept(src, typeKey, opts)
+    opts = type(opts) == 'table' and opts or {}
+    local note = {}
+    local function Keep(errKey)
+        if not CP.Refusals then return end
+        local o = GetOfficer(src)
+        if not o and CP.Qbx and CP.Qbx.getInfo then
+            local okI, info = pcall(CP.Qbx.getInfo, src)
+            o = okI and type(info) == 'table' and info or nil
+        end
+        o = o or {}
+        CP.Refusals.note({
+            citizenid = o.citizenid,
+            name = o.name,
+            missionId = note.missionId,
+            type = typeKey,
+            reason = type(errKey) == 'string' and errKey or 'err.internal',
+        })
+    end
+    local onDone, own = opts.onDone, {}
+    for k, v in pairs(opts) do own[k] = v end
+    own.onDone = function(ok, data, who)
+        if ok == false then Keep(data) end
+        if type(onDone) == 'function' then return onDone(ok, data, who) end
+    end
+    local okCall, ok, data = pcall(AcceptStart, src, typeKey, own, note)
+    if not okCall then
+        Keep('err.internal')
+        error(ok, 0)
+    end
+    if ok == false then Keep(data) end
+    return ok, data
 end
 Draw.accept = Accept
 

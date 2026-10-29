@@ -160,6 +160,9 @@ Config.AdminControl = {
     -- Milliseconds between progress updates of a running bulk job on admins' screens (the start and the end of a job
     -- are always shown at once); 0 = after every batch (the old behaviour).
     jobProgressEveryMs = 500,
+    -- Refused mission starts the server remembers for admins (who tried, which mission, why), newest kept. Memory
+    -- only: a restart empties the list.
+    refusalsKept = 200,
 }
 
 -- ============================================================================
