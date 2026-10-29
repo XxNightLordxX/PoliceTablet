@@ -23,6 +23,7 @@ import SupPayouts from '../supervisor/screens/Payouts';
 import SupBuilder from '../supervisor/screens/Builder';
 import SupDeptReport from '../supervisor/screens/DeptReport';
 
+import AdminHome from '../admin/screens/Home';
 import AdminPayouts from '../admin/screens/Payouts';
 import AdminMissions from '../admin/screens/Missions';
 import AdminSeasons from '../admin/screens/Seasons';
@@ -107,7 +108,18 @@ export const SUPERVISOR_SCREENS: ScreenDef<SupervisorScreenKey>[] = [
     { key: 'sup_report', titleKey: 'ui.screen.sup_report', icon: 'barChart', component: SupDeptReport },
 ];
 
+// Config.AdminUi.landing: 'home' (or a session without it) shows Home; 'payouts' or 'missions' hide it.
+const adminLanding = (s: Session) => s.config?.adminUi?.landing ?? 'home';
+
 export const ADMIN_SCREENS: ScreenDef<AdminScreenKey>[] = [
+    {
+        key: 'admin_home',
+        titleKey: 'ui.screen.admin_home',
+        icon: 'home',
+        component: AdminHome,
+        visible: s => adminLanding(s) === 'home',
+        group: 'main',
+    },
     {
         key: 'admin_payouts',
         titleKey: 'ui.screen.admin_payouts',
@@ -198,4 +210,14 @@ export function screensFor(ui: UiKind, session: Session | null): ScreenDef[] {
 
 export function defaultScreen(ui: UiKind): ScreenKey {
     return (ALL[ui]?.[0]?.key ?? 'home') as ScreenKey;
+}
+
+// The screen a UI opens on while its remembered screen is not one it shows: the first one, except the Admin UI
+// opens on Config.AdminUi.landing (Home, Payouts or Missions).
+export function landingScreen(ui: UiKind, session: Session | null, available: ScreenKey[]): ScreenKey {
+    if (ui === 'admin' && session) {
+        const want = `admin_${adminLanding(session)}` as ScreenKey;
+        if (available.includes(want)) return want;
+    }
+    return available[0] ?? 'home';
 }

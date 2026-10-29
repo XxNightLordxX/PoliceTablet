@@ -7,6 +7,7 @@ export type OfficerScreenKey =
 export type SupervisorScreenKey =
     'sup_missions' | 'sup_crossdept' | 'sup_live' | 'sup_review' | 'sup_payouts' | 'sup_builder' | 'sup_report';
 export type AdminScreenKey =
+    | 'admin_home'
     | 'admin_payouts'
     | 'admin_missions'
     | 'admin_seasons'

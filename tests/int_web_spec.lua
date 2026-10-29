@@ -337,7 +337,8 @@ do
         local key, group = entry:match('key: \'([%w_]+)\''), entry:match('group: \'(%w+)\'')
         if key and groups[group or ''] then groups[group][#groups[group] + 1] = key end
     end
-    H.eq(table.concat(groups.main, ','), 'admin_payouts,admin_missions,admin_live,admin_officers,admin_settings',
+    H.eq(table.concat(groups.main, ','),
+        'admin_home,admin_payouts,admin_missions,admin_live,admin_officers,admin_settings',
         'the everyday admin screens stay in the sidebar')
     H.eq(#groups.more, 8, 'the other eight fold under More (' .. table.concat(groups.more, ',') .. ')')
     local bar = Read(WEB .. 'layouts/Sidebar.tsx')
@@ -350,6 +351,48 @@ do
     Has(layout, 'const grouped = session.config?.adminUi?.groupSidebar !== false;', 'the layout follows the config')
     Has(layout, 'more={grouped ? t(\'ui.nav.more\') : undefined}', 'grouped: the More label is passed')
     H.ok(keys['ui.nav.more'], 'the More label has a locale key')
+end
+
+-- ============================================================================
+--             ADMIN HOME: THE LANDING SCREEN WITH THE COMMON JOBS
+-- ============================================================================
+-- Config.AdminUi.landing = 'home' shows Home first; 'payouts' or 'missions' hide it and open on that screen.
+
+do
+    local nav = Read(WEB .. 'shared/navigation.tsx') or ''
+    H.ok(nav:find('| \'admin_home\'', 1, true) ~= nil, 'admin_home is an admin screen key')
+    local reg = Read(WEB .. 'layouts/screens.ts') or ''
+    local admin = reg:match('ADMIN_SCREENS.-\n%];') or ''
+    H.eq(admin:match('key: \'([%w_]+)\''), 'admin_home', 'Home is the first admin screen')
+    Has(admin, 'visible: s => adminLanding(s) === \'home\'', 'Home shows only while landing is home')
+    Has(reg, 'const want = `admin_${adminLanding(session)}` as ScreenKey;', 'the Admin UI opens on the landing screen')
+    local app = Read(WEB .. 'App.tsx')
+    Has(app, ': ui ? landingScreen(ui, session, available) :', 'a screen not shown falls back to the landing screen')
+    local home = Read(WEB .. 'admin/screens/Home.tsx') or ''
+    local tiles = 0
+    for _ in home:gmatch('<Tile%s') do tiles = tiles + 1 end
+    for _ in home:gmatch('<InputTile%s') do tiles = tiles + 1 end
+    for _ in home:gmatch('<SomethingWrong%s') do tiles = tiles + 1 end
+    H.eq(tiles, 6, 'Home has six tiles')
+    Has(home, 'screen="admin_missions" params={{ tab: \'builder\' }}', 'Make a new mission opens the builder tab')
+    Has(home, 'screen="admin_missions" params={{ tab: \'catalog\' }}', 'Turn missions on/off opens the list')
+    Has(home, 'screen="admin_officers" param="citizenid"', 'Give or take points opens Officers at the citizen')
+    Has(home, 'screen="admin_settings" param="q"', 'Quick settings opens Settings with the search')
+    for _, req in ipairs({ 'admin:getMissionLoad', 'admin:getConfigHealth', 'admin:getProblems', 'admin:getLiveRuns' }) do
+        H.ok(home:find('\'' .. req .. '\'', 1, true) ~= nil, 'Home reuses ' .. req)
+        local mocked = false
+        for _, f in ipairs({ 'core', 'admin_missions', 'admin_system', 'admin_live' }) do
+            local m = Read(WEB .. 'mocks/' .. f .. '.mock.ts') or ''
+            if m:find('registerMock(\'request\', \'' .. req .. '\'', 1, true) then mocked = true end
+        end
+        H.ok(mocked, req .. ' has a browser mock')
+    end
+    Has(home, 'const stuck = counts.adminPayments ?? 0;', 'stuck payments come from the sidebar counts')
+    local missions = Read(WEB .. 'admin/screens/Missions.tsx')
+    Has(missions, 'if (params.tab === \'builder\' || params.tab === \'catalog\') setTab(params.tab);',
+        'Missions opens the tab Home asks for')
+    for k in home:gmatch('t%(\'(admin%.home%.[%w_]+)\'') do H.ok(keys[k], 'locale key ' .. k) end
+    H.ok(keys['ui.screen.admin_home'], 'Home has a title key')
 end
 
 -- ============================================================================

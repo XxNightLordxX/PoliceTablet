@@ -1297,6 +1297,7 @@ Which of these they can use is set in `Config.Permissions.supervisor` ([4.4](#44
 
 | Screen | What it is for |
 |---|---|
+| **Home** | Where the panel opens: six tiles for the common jobs (make a new mission, turn missions on or off, change pay, give or take points, quick settings, **Something wrong?**) and a **Live now** strip of the live runs |
 | **Payouts** | Every type and mission payout; set or clear them |
 | **Payments** | Every payment Crimson-Police made or still owes, with totals and the payment tools ([9.15.4](#9154-payments-item-rewards-and-department-money)) |
 | **Missions** | Built-in and custom missions: Builder, publish, archive, restore, roll back, break edit locks, reload files, Cross-Department Missions and mission calls |
@@ -1312,7 +1313,13 @@ Which of these they can use is set in `Config.Permissions.supervisor` ([4.4](#44
 | **Audit Log** | Every supervisor and admin action, with filters and a CSV export |
 | **Testing** | Optional: every mission and location with its test result, test runs, testers, and an area coverage table ([9.13](#913-testing-tools)) |
 
-The sidebar shows the everyday screens (**Payouts**, **Missions**, **Live**, **Officers**, **Settings**) and a
+**Home** opens the right screen for each tile: Quick settings searches Settings for what you type, Give or take
+points opens that officer when you type a citizen ID. **Something wrong?** lists the last mission load (loaded and
+refused), Config health warnings, System problems and stuck payments; click a line to open its screen. To open the
+panel straight on Payouts or Missions instead (with no Home), set `Config.AdminUi.landing = 'payouts'` or
+`'missions'` (Admin UI → **Settings**).
+
+The sidebar shows the everyday screens (**Home**, **Payouts**, **Missions**, **Live**, **Officers**, **Settings**) and a
 **More** button with the other eight. While More is folded its badge adds up theirs, so nothing waiting is hidden; a
 link or notification that opens one of them unfolds it, and the panel remembers whether you left it open. To get one
 flat list again, set `Config.AdminUi.groupSidebar = false` (Admin UI → **Settings**).

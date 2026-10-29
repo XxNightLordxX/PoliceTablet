@@ -282,6 +282,12 @@ local function ProfileConfig(deptKey)
     }
 end
 
+-- Config.AdminUi.landing: the screen the Admin UI opens on (anything unknown = 'home')
+local LANDINGS = { home = true, payouts = true, missions = true }
+local function AdminLanding(v)
+    return LANDINGS[v] and v or 'home'
+end
+
 -- The parity-plus parts of Session.config (web/src/shared/types.ts). English is the only language shipped.
 local function ExtraConfig(deptKey)
     local mc = Config.MissionCalls or {}
@@ -315,7 +321,7 @@ local function ExtraConfig(deptKey)
             currency = type(fmt.currency) == 'string' and fmt.currency or '$',
             currencyAfter = fmt.currencyAfter == true,
         },
-        adminUi = { groupSidebar = aui.groupSidebar ~= false },
+        adminUi = { groupSidebar = aui.groupSidebar ~= false, landing = AdminLanding(aui.landing) },
     }
 end
 

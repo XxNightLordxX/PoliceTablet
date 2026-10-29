@@ -126,6 +126,14 @@ do
     adm = Cb('getSession', 9, { ui = 'admin', via = 'command' })
     H.eq(adm.data.config.adminUi.groupSidebar, false, 'groupSidebar = false: the session asks for the flat list')
     Config.AdminUi.groupSidebar = true
+    H.eq(adm.data.config.adminUi.landing, 'home', 'Config.AdminUi.landing ships home: the Admin UI opens on Home')
+    Config.AdminUi.landing = 'missions'
+    adm = Cb('getSession', 9, { ui = 'admin', via = 'command' })
+    H.eq(adm.data.config.adminUi.landing, 'missions', 'landing = missions: the session opens on Missions')
+    Config.AdminUi.landing = 'bogus'
+    adm = Cb('getSession', 9, { ui = 'admin', via = 'command' })
+    H.eq(adm.data.config.adminUi.landing, 'home', 'an unknown landing falls back to Home')
+    Config.AdminUi.landing = 'home'
     Config.Tablet.access = { command = true, keybind = true, item = true, desk = true, requireItem = false }
     Config.Tablet.item = false
 end

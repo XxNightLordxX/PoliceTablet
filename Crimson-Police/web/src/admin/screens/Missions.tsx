@@ -1,6 +1,6 @@
 // Admin UI · Missions (screen key 'admin_missions', title key 'ui.screen.admin_missions').
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
     Badge,
     Button,
@@ -25,6 +25,7 @@ import {
 import { asArray } from '../../shared/data';
 import { useAction, usePush, useRequest } from '../../shared/hooks';
 import { t } from '../../shared/i18n';
+import { useNavigation } from '../../shared/navigation';
 import { useCan } from '../../shared/session';
 import { toast } from '../../shared/toast';
 import OperationPanel from '../../supervisor/components/OperationPanel';
@@ -111,6 +112,11 @@ export default function AdminMissions() {
         // the builder remembers its own three tabs; the Dispatch and admin-only tabs are not among them
         if (next === 'catalog' || next === 'builder' || next === 'operation') setEditorMemory('admin', { tab: next });
     };
+    // Home links here with navigate('admin_missions', { tab }): 'builder' (make a mission) or 'catalog' (on/off)
+    const { params } = useNavigation();
+    useEffect(() => {
+        if (params.tab === 'builder' || params.tab === 'catalog') setTab(params.tab);
+    }, [params]); // eslint-disable-line react-hooks/exhaustive-deps
     const missions = useRequest<AdminMissionsData>('admin:getMissions', {}, { pushTopic: 'operation', pollMs: 30000 });
     const builder = useRequest<BuilderList>('builder:list', {}, { pushTopic: 'builder', pollMs: 30000 });
     // the catalog (loaded missions, pool, eligibility) changes when a custom mission joins or leaves its pool

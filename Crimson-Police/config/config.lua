@@ -101,9 +101,13 @@ Config.AdminTheme = {
     text = '#f5f3f4',
 }
 Config.AdminUi = {
-    -- true = the Admin UI sidebar shows the everyday screens (Payouts, Missions, Live, Officers, Settings) and folds
-    -- the rest under More, whose badge adds up theirs; false = every screen in one flat list
+    -- true = the Admin UI sidebar shows the everyday screens (Home, Payouts, Missions, Live, Officers, Settings) and
+    -- folds the rest under More, whose badge adds up theirs; false = every screen in one flat list
     groupSidebar = true,
+    -- The screen the Admin UI opens on: 'home' = a landing screen with the common jobs (new mission, missions on or
+    -- off, pay, points, quick settings, what is wrong) and the live runs; 'payouts' or 'missions' = open straight
+    -- on that screen, with no Home screen
+    landing = 'home',
 }
 
 -- ============================================================================

@@ -167,6 +167,10 @@ do
     H.eq(E('AdminUi.groupSidebar').default, true, 'the Admin UI sidebar ships grouped')
     H.ok(E('AdminUi.groupSidebar').desc:find('folds the rest under More', 1, true) ~= nil,
         'groupSidebar: its config.lua comment is its description')
+    H.eq(E('AdminUi.landing').default, 'home', 'the Admin UI ships opening on Home')
+    H.eq(E('AdminUi.landing').kind, 'enum', 'landing is a choice')
+    H.ok(E('AdminUi.landing').desc:find('a landing screen with the common jobs', 1, true) ~= nil,
+        'landing: its config.lua comment is its description')
     H.eq(E('MissionTypes.patrol.dailyLimit').nullable, true, 'dailyLimit = nil is a setting that may stay unset')
     H.eq(E('MissionTypes.patrol.dailyLimit').default, nil, 'with no value in config.lua')
     H.eq(E('Blocks.escort.speed').kind, 'range', 'blocks.lua { min, max, default } edit as ranges')

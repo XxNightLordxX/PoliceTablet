@@ -133,7 +133,16 @@ const CONFIG: Session['config'] = {
     periods: ['weekly', 'monthly', 'season', 'alltime'],
     filters: ['overall', 'patrol', 'training', 'investigation', 'tactical', 'unit', 'cross', 'department'],
     // ?flatSidebar in the browser shows the Admin UI sidebar as Config.AdminUi.groupSidebar = false does
-    adminUi: { groupSidebar: !(typeof window !== 'undefined' && /[?&]flatSidebar\b/.test(window.location.search)) },
+    // ?landing=payouts or ?landing=missions opens the Admin UI there, with no Home screen (Config.AdminUi.landing)
+    adminUi: {
+        groupSidebar: !(typeof window !== 'undefined' && /[?&]flatSidebar\b/.test(window.location.search)),
+        landing:
+            typeof window !== 'undefined' && /[?&]landing=payouts\b/.test(window.location.search)
+                ? 'payouts'
+                : typeof window !== 'undefined' && /[?&]landing=missions\b/.test(window.location.search)
+                  ? 'missions'
+                  : 'home',
+    },
 };
 
 // getSession({ ui }) in browser mode. The officer is a supervisor (roles.supervisor = true).

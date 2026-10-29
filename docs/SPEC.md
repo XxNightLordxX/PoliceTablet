@@ -381,7 +381,9 @@ Personal accent and appearance
 
 - The Admin UI always uses Config.AdminTheme.
 
-- The Admin UI sidebar (Config.AdminUi.groupSidebar, on by default) shows the everyday screens (Payouts, Missions, Live, Officers, Settings) and a More button that unfolds the other eight. Folded, More carries the sum of their badges; opening one of them any other way unfolds it; whether More is open is kept per viewer in the browser. Screen keys and links are the same either way; groupSidebar = false shows one flat list.
+- The Admin UI sidebar (Config.AdminUi.groupSidebar, on by default) shows the everyday screens (Home, Payouts, Missions, Live, Officers, Settings) and a More button that unfolds the other eight. Folded, More carries the sum of their badges; opening one of them any other way unfolds it; whether More is open is kept per viewer in the browser. Screen keys and links are the same either way; groupSidebar = false shows one flat list.
+
+- The Admin UI opens on Config.AdminUi.landing (default 'home'). 'home' shows the Home screen (admin_home) first in the sidebar: a Live now strip (admin:getLiveRuns) and six tiles that open admin_missions (tab builder), admin_missions (tab catalog), admin_payouts, admin_officers (citizenid, when typed), admin_settings (q, when typed) and Something wrong? (admin:getMissionLoad loaded/refused, admin:getConfigHealth warnings, admin:getProblems total, the adminPayments count; each line opens its screen). 'payouts' or 'missions' hide Home and open on that screen; an unknown value counts as 'home'.
 
 Logo and watermark
 
@@ -2810,9 +2812,13 @@ Config.AdminTheme = {
     text = '#f5f3f4',
 }
 Config.AdminUi = {
-    -- true = the Admin UI sidebar shows the everyday screens (Payouts, Missions, Live, Officers, Settings) and folds
-    -- the rest under More, whose badge adds up theirs; false = every screen in one flat list
+    -- true = the Admin UI sidebar shows the everyday screens (Home, Payouts, Missions, Live, Officers, Settings) and
+    -- folds the rest under More, whose badge adds up theirs; false = every screen in one flat list
     groupSidebar = true,
+    -- The screen the Admin UI opens on: 'home' = a landing screen with the common jobs (new mission, missions on or
+    -- off, pay, points, quick settings, what is wrong) and the live runs; 'payouts' or 'missions' = open straight
+    -- on that screen, with no Home screen
+    landing = 'home',
 }
 
 -- ── Permissions ─────────────────────────────────────────────────────────────

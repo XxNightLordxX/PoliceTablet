@@ -953,6 +953,7 @@ local KNOWN = {
     },
     ['Cash.account'] = { tpl = Enum({ 'bank', 'cash' }), kind = 'enum' },
     ['Cash.source'] = { tpl = Enum({ 'server', 'society' }), kind = 'enum' },
+    ['AdminUi.landing'] = { tpl = Enum({ 'home', 'payouts', 'missions' }), kind = 'enum' },
     ['Units.invitePolicy'] = { tpl = Enum({ 'anyone', 'leader' }), kind = 'enum' },
     ['NpcDifficulty.preset'] = { tpl = Enum({ 'easy', 'normal', 'hard', 'custom' }), kind = 'enum' },
     ['NpcCombat.firingPattern'] = { tpl = Enum({ 'single', 'burst', 'delayed', 'default' }), kind = 'enum' },

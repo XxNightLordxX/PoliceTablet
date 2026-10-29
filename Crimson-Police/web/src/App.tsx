@@ -6,7 +6,7 @@ import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useSt
 import { AdminLayout } from './layouts/AdminLayout';
 import { OfficerLayout } from './layouts/OfficerLayout';
 import { SupervisorLayout } from './layouts/SupervisorLayout';
-import { defaultScreen, screensFor } from './layouts/screens';
+import { defaultScreen, landingScreen, screensFor } from './layouts/screens';
 import { TABLET_H, TABLET_W, tabletScale } from './layouts/TabletFrame';
 import BuilderOverlay from './hud/BuilderOverlay';
 import DebugOverlay from './hud/DebugOverlay';
@@ -169,7 +169,8 @@ export default function App() {
     // ---- NAVIGATION --------------------------------------------------------
     const available = useMemo(() => (ui ? screensFor(ui, session).map(s => s.key) : []), [ui, session]);
     const current = ui ? screens[ui] : null;
-    const screenKey: ScreenKey = current && available.includes(current.key) ? current.key : (available[0] ?? 'home');
+    const screenKey: ScreenKey =
+        current && available.includes(current.key) ? current.key : ui ? landingScreen(ui, session, available) : 'home';
 
     const navigate = useCallback(
         (key: ScreenKey, params?: ScreenParams) => {
