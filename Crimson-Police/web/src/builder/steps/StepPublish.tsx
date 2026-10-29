@@ -83,21 +83,24 @@ export function StepPublish({ ed, cfg, def, ro, goTo }: StepProps) {
 
     const publish = async () => {
         // publishing uses the stored draft: store what is on screen first (a stored change needs a new test)
-        if (ed.dirty && !(await ed.flush())) {
+        // (a never-published draft whose label changed is renamed first: the file is named after the label)
+        const id = ed.dirty ? await ed.flush() : ed.id;
+        if (!id) {
             setConfirm(null);
             toast('error', t('builder.pub.not_stored'));
             return;
         }
         const res = await run<BuilderPublishResult>(
             'server:builder:publish',
-            { id: ed.id },
+            { id },
             { success: 'builder.pub.published', successVars: { mission: def.label } },
         );
         setConfirm(null);
         if (res.ok && res.data) {
             setDone(res.data);
-            // the server cleared the draft and released the lock: load the live version (and lock it again)
-            void ed.reload();
+            // the server cleared the draft and released the lock: show the live version without locking it again
+            // (Edit again takes the lock)
+            void ed.reload({ lock: false });
         } else if (res.error === 'err.builder_not_tested') void ed.refresh();
     };
     const discard = async () => {

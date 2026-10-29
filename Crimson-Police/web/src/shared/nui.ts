@@ -22,6 +22,16 @@ export interface NuiOptions {
 const MOCK_LATENCY_MS = 120;
 
 // True in a normal browser (dev mode), false inside FiveM's CEF.
+// Whether the tablet is on screen, set by App before it opens or closes a UI. A screen that unmounts reads it to
+// tell "the officer went elsewhere in the tablet" from "the tablet closed" (e.g. a Builder tool hides it).
+let tabletShown = false;
+export function setTabletShown(v: boolean): void {
+    tabletShown = v;
+}
+export function isTabletShown(): boolean {
+    return tabletShown;
+}
+
 export function isEnvBrowser(): boolean {
     return typeof window === 'undefined' || !window.invokeNative;
 }

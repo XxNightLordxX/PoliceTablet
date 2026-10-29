@@ -737,7 +737,7 @@ Everything else works as shipped. These are the ones owners change most:
 | `Config.Rewards` | Item rewards, off by default (see [6.3](#63-item-rewards)) |
 | `Config.Disputes.windowHours` | How long officers have to dispute a run (48 hours) |
 | `Config.AntiCheat` | Flag limits, and the automatic suspension: 3 voided runs in 30 days = 7 days. `stunNeedsProof` (`'flag'`): a stun counts as before, and one the server did not see (the suspect did not fall) adds a note for staff in the Review run detail, so nobody's points are held. `'hold'` = the same, but that officer's points wait for review; `'strict'` = a fleeing person only gives up to a stun the server saw (a cheat menu cannot fake one); `'off'` = no check (the old way). A saved `true` from an earlier version reads as `'strict'`, `false` as `'off'`. `adminProbeLines` (5): a player who is not an admin and sends a request only admins may send (the money, void and other Admin UI tools; no officer or supervisor screen sends one, so it is almost always a cheat menu) is refused as always, and a console line, kept in **System → Problems**, names him and the request (`player 7 (Name) sent admin-only server:admin:adjustPoints while not an admin`): once a minute per player and request, at most this many lines a minute per player (0 = no line) |
-| `Config.Builder` | Mission Builder on or off, what builders may pick, `noBuildZones`, `minLocations` (`1`: one location is enough for a custom mission; the Locations step suggests 3 or more as a tip), `minLocationsOverride` (`3`: an edited built-in mission keeps at least this many), `requireTestToPublish` (`false` = testing is optional, as shipped), `supervisorItems` (`false` = only admins put items in a custom mission, as shipped; [4.5](#45-mission-builder-permissions)), and `spawnMargin` (40 m, 0-150): a custom mission's armed NPCs (a shootout and its boss, ambush and pursuit cars, warrant associates) must spawn outside the start circle plus this, e.g. 100 m from a 60 m start, so a fight never appears around your officers as they arrive (hostages and suspects keep `minSpawnFromStart`, 30 m), and `route.patrolSpacing` (300 m, 50-1000): a patrol (checkpoint route) recorded by driving is saved as checkpoints about this far apart, not judged as a road route, so a short beat publishes |
+| `Config.Builder` | Mission Builder on or off, what builders may pick, `noBuildZones`, `minLocations` (`1`: one location is enough for a custom mission; the Locations step suggests 3 or more as a tip), `minLocationsOverride` (`3`: an edited built-in mission keeps at least this many), `requireTestToPublish` (`false` = testing is optional, as shipped), `supervisorItems` (`false` = only admins put items in a custom mission, as shipped; [4.5](#45-mission-builder-permissions)), and `spawnMargin` (40 m, 0-150): a custom mission's armed NPCs (a shootout and its boss, ambush and pursuit cars, warrant associates) must spawn outside the start circle plus this, e.g. 100 m from a 60 m start, so a fight never appears around your officers as they arrive (hostages and suspects keep `minSpawnFromStart`, 30 m), and `route.patrolSpacing` (300 m, 50-1000): a patrol (checkpoint route) recorded by driving is saved as checkpoints about this far apart, not judged as a road route, so a short beat publishes, and `defaultTeam` (patrol, training and investigation 2, tactical 4): the most officers a new mission starts with, by type |
 | `Config.Testing` | Admin test mode: `enabled`, `maxTesters`, `allowTeleport`, `debugOverlay`, `panelKey` (`'F7'`: the default test controls key, see [8.2](#82-keys)), `panelKeyGuardMs` (300: the test controls key is ignored this long after the panel lets go, so the same press does not take it back; 0 = off), and `spawnCheck` (the spawn point check: `enabled`, `sceneTimeoutMs` 8000, `moveWithin` 150 m, `routes = false` checks no route points, `teleport = true` the Teleport here button next to a result) |
 | `Config.Retention` | Clean-up of old data: runs archived after 12 months, audit rows deleted after 180 days, mission calls after 90 days (0 = keep) |
 | `Config.Downed.dropOffs` | Where a downed officer is taken when no EMS is on duty |
@@ -1464,13 +1464,20 @@ in game, with no coding:
 1. Pick up to 6 objective blocks (fight waves, pursuit, escort, search an area, rescue, skill check and more).
 2. Fill in the details: name, type (it sets the points and pay), difficulty, officers, time limit, cooldown and
    which departments may get it. There is no payout field. Only admins can add mission items
-   ([4.5](#45-mission-builder-permissions)).
+   ([4.5](#45-mission-builder-permissions)). A new mission starts with the team size of its type
+   (`Config.Builder.defaultTeam`: 2 officers for patrol, training and investigation, 4 for tactical), so a patrol is
+   tested at the Reinforced tier, not Heavy.
 3. Place spots in the world and record road routes by driving them.
 4. Test it privately if you like. **Testing is optional**: a draft can be published without a test (the tablet asks
    "Publish without testing?" once). Only when `Config.Builder.requireTestToPublish = true` must a supervisor's draft
-   pass a test first; an admin never needs one.
+   pass a test first; an admin never needs one. The step bar marks **Scaling** and **Test** "(optional)" and ticks
+   them while they hold nothing wrong.
 5. Publish. The mission joins its type's pool, and a Lua file is written to `Crimson-Police/missions/custom/<id>.lua`
-   (with a `.bak` copy of each old version).
+   (with a `.bak` copy of each old version). Until the first publish the id follows the name: a mission renamed
+   "Grove Street Beat" publishes as `custom_grove_street_beat.lua`.
+
+One builder edits a mission at a time (the edit lock). Leaving the editor (Back, another sidebar screen) or
+publishing frees the lock; **Edit again** after a publish takes it back. Closing the tablet for a builder tool keeps it.
 
 Every block on the "New mission" step has a name and a short description (Field contact and Process the scene
 included). When a check fails, the Builder says it once, in plain words, naming the spots as the Builder names them:

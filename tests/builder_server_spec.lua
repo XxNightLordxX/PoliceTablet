@@ -2472,6 +2472,36 @@ local function Body()
         H.ok(okSpy, 'json.decode counted: ' .. tostring(errSpy))
     end
 
+    -- B4: a new mission's team size follows its type (Builder.defaultTeam); a label changed before the first publish
+    -- names the file (the tablet's publish flush saves, which renames; an autosave never does); publish frees the lock
+    do
+        local okC, made = act(1, 'create', { type = 'patrol', label = 'Patrol Draft' })
+        H.ok(okC, 'create a patrol: ' .. tostring(made))
+        local pid = okC and made.id or 'custom_patrol_draft'
+        H.eq(okC and made.record.definition.maxOfficers, 2, 'a new patrol starts with 2 officers (Builder.defaultTeam)')
+        H.eq(okC and made.record.requiredTier, 'reinforced', 'so its test tier is Reinforced, not Heavy')
+        local okT, tac = act(1, 'create', { type = 'tactical', label = 'Tactical Draft' })
+        H.eq(okT and tac.record.definition.maxOfficers, 4, 'a new tactical mission starts with 4')
+        local keep = Config.Builder.defaultTeam
+        Config.Builder.defaultTeam = { patrol = 9 }
+        local okBig, big = act(1, 'create', { type = 'patrol', label = 'Big Patrol' })
+        H.eq(okBig and big.record.definition.maxOfficers, 4, 'a team size over the allowed range is cut to it')
+        Config.Builder.defaultTeam = nil
+        local okNo, none = act(1, 'create', { type = 'patrol', label = 'Plain Patrol' })
+        H.eq(okNo and none.record.definition.maxOfficers, 4, 'without Builder.defaultTeam: the range maximum')
+        Config.Builder.defaultTeam = keep
+        local d = validDef()
+        d.label = 'Grove Street Beat'
+        local okA = act(1, 'autosave', { id = pid, definition = d })
+        H.ok(okA and row(pid) ~= nil, 'an autosave keeps the old id')
+        local okS, saved = act(1, 'save', { id = pid, definition = d })
+        H.eq(okS and saved.id, 'custom_grove_street_beat', 'the publish flush saves: renamed after the label')
+        local okP, pub = act(1, 'publish', { id = 'custom_grove_street_beat' })
+        H.ok(okP, 'publish the renamed draft: ' .. tostring(pub))
+        H.eq(okP and pub.filePath, TMP .. 'custom_grove_street_beat.lua', 'published as custom_grove_street_beat.lua')
+        H.eq(row('custom_grove_street_beat').locked_by, nil, 'publishing released the edit lock')
+    end
+
     -- the builder switch
     Config.Builder.enabled = false
     H.eq(select(2, act(1, 'save', { id = id, definition = validDef() })), 'err.builder_disabled',

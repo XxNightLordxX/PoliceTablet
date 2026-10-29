@@ -897,6 +897,31 @@ do
     Has(pub, 'version: rec?.draftVersion ?? 1, file: filePath', 'and so does the publish confirm')
 end
 
+-- B4: Builder small fixes in the tablet.
+do
+    local de = Read(WEB .. 'builder/useDraftEditor.ts') or ''
+    Has(de, '`custom_${labelSlug(d.label)}` !== idRef.current.replace(/_\\d+$/, \'\')',
+        'the publish/test flush notices a label that renames a never-published draft')
+    Has(de, 'return (await save({ quiet: true })) ? idRef.current : null;', 'and saves it (a save renames)')
+    Has(de,
+        'if (lockRef.current?.mine && isTabletShown()) void action(\'server:builder:unlock\', { id: idRef.current });',
+        'leaving the editor inside the tablet releases the own lock')
+    Has(de, 'if (opts?.lock !== false && editable) {', 'a reload can skip taking the lock')
+    local pub = Read(WEB .. 'builder/steps/StepPublish.tsx') or ''
+    Has(pub, 'void ed.reload({ lock: false });', 'after Publish the editor does not lock the mission again')
+    Has(pub, '\'server:builder:publish\',\n            { id },', 'Publish uses the id the flush stored under')
+    Has(Read(WEB .. 'builder/steps/StepTest.tsx') or '', 'const id = ed.dirty ? await ed.flush() : ed.id;',
+        'so does Test')
+    Has(Read(WEB .. 'builder/BuilderWorkspace.tsx') or '', 'key={editorKey}', 'a rename keeps the same editor')
+    local be = Read(WEB .. 'builder/BuilderEditor.tsx') or ''
+    Has(be, 'scaling: !counts.scaling,', 'Scaling untouched is done')
+    Has(be, 'test: !!rec.draftTested || !testRequired,', 'Test is done when testing is optional')
+    Has(be, 't(\'builder.step.optional\')', 'and both say (optional)')
+    local defUtils = Read(WEB .. 'builder/defUtils.ts') or ''
+    local body = defUtils:match('export function labelSlug%(label: string%): string {(.-)\n}')
+    H.ok(body ~= nil and body:find('.slice(0, 30)', 1, true) ~= nil, 'labelSlug cuts at 30 like B.slug (SLUG_MAX)')
+end
+
 -- ============================================================================
 --                                SHIPPED FILES
 -- ============================================================================

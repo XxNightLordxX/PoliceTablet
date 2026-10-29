@@ -425,6 +425,11 @@
     white-space: nowrap;
 }
 
+.builder_client-steps__optional {
+    color: var(--cp-muted);
+    font-weight: 400;
+}
+
 .builder_client-steps__err {
     position: absolute;
     top: -6px;

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { usePush } from '../shared/hooks';
 import { t } from '../shared/i18n';
-import { action, clientAction, request } from '../shared/nui';
+import { action, clientAction, isTabletShown, request } from '../shared/nui';
 import { toast } from '../shared/toast';
 import type {
     BuilderAutosaveResult,
@@ -26,7 +26,7 @@ import type {
     PointSpec,
 } from '../types/builder_client';
 import { applyResult } from './applyResult';
-import { clone, isRoute, listsOf, normalizeDefinition, pointsOf } from './defUtils';
+import { clone, isRoute, labelSlug, listsOf, normalizeDefinition, pointsOf } from './defUtils';
 import { armedKeepOut, searchCircleOf, startRadiusRange, syncStartRadius } from './schema';
 import {
     currentTool,
@@ -65,10 +65,11 @@ export interface DraftEditor {
     update: (fn: (d: BuilderDefinition) => void) => void;
     save: (opts?: { quiet?: boolean }) => Promise<boolean>;
     autosaveNow: () => Promise<boolean>;
-    // store unsaved changes now (autosave; an explicit save when autosave is rate-limited). false = not stored
-    flush: () => Promise<boolean>;
+    // store unsaved changes now (autosave; an explicit save when autosave is rate-limited or the label renames a
+    // never-published draft). The id the draft is stored under (a rename changes it), null = not stored
+    flush: () => Promise<string | null>;
     // drop the local draft and load the mission again (after publish / discard)
-    reload: () => Promise<void>;
+    reload: (opts?: { lock?: boolean }) => Promise<void>;
     // the mission is gone (deleted): close the editor
     gone: () => void;
     validateNow: () => Promise<BuilderValidateResult | null>;
@@ -213,41 +214,62 @@ export function useDraftEditor(
         }
     }, [config]);
 
-    const load = useCallback(async () => {
-        setLoading(true);
-        const rec = await fetchRecord();
-        if (!rec) {
+    // lock: false = only show the mission (after Publish the server released the lock; Edit again takes it)
+    const load = useCallback(
+        async (opts?: { lock?: boolean }) => {
+            setLoading(true);
+            const rec = await fetchRecord();
+            if (!rec) {
+                setLoading(false);
+                return;
+            }
+            const memory = recallDraft(rec.id);
+            const base = memory && memory.dirty ? memory.def : rec.definition;
+            const d = normalizeDefinition(base);
+            // a draft saved before the search-circle rule (start radius from the 20–150 m range): an editable one gets
+            // its start radii put on the search circle at once, as a pending change, so the locked field shows what is
+            // saved
+            const editable =
+                rec.source === 'custom' && rec.can.edit && rec.dbStatus !== 'archived' && !(rec.lock && !rec.lock.mine);
+            const synced = editable && syncStartRadius(d, configRef.current);
+            setDef(d);
+            setDirty(!!(memory && memory.dirty) || synced);
+            if (synced) rememberDraft(rec.id, d, true);
+            setErrors(Array.isArray(rec.errors) ? rec.errors : []);
+            setArmedServer(typeof rec.armed === 'number' ? rec.armed : null);
+            setLockLostBy(null);
+            if (opts?.lock !== false && editable) {
+                await takeLock();
+            } else {
+                setLock(rec.lock && rec.lock.mine ? rec.lock : null);
+            }
+            if (!mounted.current) return;
             setLoading(false);
+            await applyPending();
+        },
+        [fetchRecord, takeLock, applyPending],
+    );
+
+    // a save that renamed the draft already holds its record and lock under the new id: no second load
+    const renamedTo = useRef<string | null>(null);
+    useEffect(() => {
+        if (renamedTo.current === id) {
+            renamedTo.current = null;
             return;
         }
-        const memory = recallDraft(rec.id);
-        const base = memory && memory.dirty ? memory.def : rec.definition;
-        const d = normalizeDefinition(base);
-        // a draft saved before the search-circle rule (start radius from the 20–150 m range): an editable one gets its
-        // start radii put on the search circle at once, as a pending change, so the locked field shows what is saved
-        const editable =
-            rec.source === 'custom' && rec.can.edit && rec.dbStatus !== 'archived' && !(rec.lock && !rec.lock.mine);
-        const synced = editable && syncStartRadius(d, configRef.current);
-        setDef(d);
-        setDirty(!!(memory && memory.dirty) || synced);
-        if (synced) rememberDraft(rec.id, d, true);
-        setErrors(Array.isArray(rec.errors) ? rec.errors : []);
-        setArmedServer(typeof rec.armed === 'number' ? rec.armed : null);
-        setLockLostBy(null);
-        if (rec.source === 'custom' && rec.can.edit && rec.dbStatus !== 'archived' && !(rec.lock && !rec.lock.mine)) {
-            await takeLock();
-        } else {
-            setLock(rec.lock && rec.lock.mine ? rec.lock : null);
-        }
-        if (!mounted.current) return;
-        setLoading(false);
-        await applyPending();
-    }, [fetchRecord, takeLock, applyPending]);
-
-    useEffect(() => {
         void load();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [id]);
+
+    // leaving the editor inside the tablet (the sidebar, another UI) releases the own edit lock; an unsaved change
+    // stays in this tablet's memory and comes back when the mission is opened again. Closing the tablet (a Builder
+    // tool hides it) keeps the lock: the editor comes back when it opens again.
+    useEffect(
+        () => () => {
+            if (lockRef.current?.mine && isTabletShown()) void action('server:builder:unlock', { id: idRef.current });
+        },
+        [],
+    );
 
     // results that arrive while the editor is open
     useEffect(
@@ -375,6 +397,7 @@ export function useDraftEditor(
             if (data.previousId && data.id !== data.previousId) {
                 renameMission(data.previousId, data.id);
                 idRef.current = data.id;
+                renamedTo.current = data.id;
                 onRenamed(data.id);
             }
             if (rev.current === at) {
@@ -399,13 +422,27 @@ export function useDraftEditor(
     );
 
     // Test and publish use the STORED draft: make sure what the builder sees is stored first.
-    const flush = useCallback(async (): Promise<boolean> => {
-        if (!dirtyRef.current) return true;
-        if (!lockMine()) return false;
+    const flush = useCallback(async (): Promise<string | null> => {
+        if (!dirtyRef.current) return idRef.current;
+        if (!lockMine()) return null;
+        // a never-published draft whose label changed is renamed only by a save: the file is named after the label
+        const d = defRef.current;
+        const rec = recordRef.current;
+        if (
+            d &&
+            rec &&
+            rec.source === 'custom' &&
+            !rec.overridesBuiltin &&
+            rec.version == null &&
+            rec.dbStatus === 'draft' &&
+            d.label.trim() !== '' &&
+            `custom_${labelSlug(d.label)}` !== idRef.current.replace(/_\d+$/, '')
+        )
+            return (await save({ quiet: true })) ? idRef.current : null;
         const r = await autosaveRaw();
-        if (r === 'ok' || r === 'skip') return true;
-        if (r === 'rate') return save({ quiet: true });
-        return false;
+        if (r === 'ok' || r === 'skip') return idRef.current;
+        if (r === 'rate') return (await save({ quiet: true })) ? idRef.current : null;
+        return null;
     }, [autosaveRaw, save]);
 
     const validateNow = useCallback(async (): Promise<BuilderValidateResult | null> => {
@@ -445,10 +482,13 @@ export function useDraftEditor(
         await fetchRecord();
     }, [fetchRecord]);
 
-    const reload = useCallback(async () => {
-        forgetDraft(idRef.current);
-        await load();
-    }, [load]);
+    const reload = useCallback(
+        async (opts?: { lock?: boolean }) => {
+            forgetDraft(idRef.current);
+            await load(opts);
+        },
+        [load],
+    );
 
     const releaseLock = useCallback(async () => {
         if (!lockMine()) return;

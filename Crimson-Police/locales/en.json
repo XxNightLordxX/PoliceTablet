@@ -2670,6 +2670,7 @@
   "builder.step.blocks": "New mission",
   "builder.step.details": "Details",
   "builder.step.locations": "Locations",
+  "builder.step.optional": "(optional)",
   "builder.step.publish": "Publish",
   "builder.step.scaling": "Scaling",
   "builder.step.settings": "Block settings",

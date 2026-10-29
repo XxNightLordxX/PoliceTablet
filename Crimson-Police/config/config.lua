@@ -1461,8 +1461,10 @@ Config.Builder = {
     supervisorItems = false,                   -- false = only admins may put items in a custom mission (items a run
                                                -- hands out can be used or sold before they are taken back); true =
                                                -- supervisors too
-    testAtMaxTier = true,                      -- a test counts as passed only at the tier maxOfficers reaches
-    editLockMinutes = 30,                      -- one editor at a time; renewed while they keep editing
+    testAtMaxTier = true, -- a test counts as passed only at the tier maxOfficers reaches
+    editLockMinutes = 30, -- one editor at a time; renewed while they keep editing
+    defaultTeam = { patrol = 2, training = 2, investigation = 2, tactical = 4 }, -- most officers a new mission
+    -- starts with, by its type (the builder can change it on Details)
     autosaveSeconds = 30,
     exportPath = 'missions/custom/',           -- folder (inside missions/custom/) for missions made in the Builder.
                                                -- Another folder must be created by hand first, with archived,

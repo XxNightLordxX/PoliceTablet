@@ -298,3 +298,15 @@ export function remapScaling(
 export function round2(n: number): number {
     return Math.round(n * 100) / 100;
 }
+
+// The id part a label gives a custom mission: B.slug of modules/builder/server.lua (lower case, a-z 0-9 and _,
+// at most 30 characters, 'mission' when nothing is left).
+export function labelSlug(label: string): string {
+    const s = label
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .slice(0, 30)
+        .replace(/_$/, '');
+    return s || 'mission';
+}

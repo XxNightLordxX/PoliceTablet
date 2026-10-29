@@ -41,20 +41,22 @@ export function StepTest({ ed, cfg, def, ro }: StepProps) {
 
     const start = async () => {
         // the test runs the STORED draft: store what is on screen first
-        if (ed.dirty && !(await ed.flush())) {
+        // (a stored rename changes the id)
+        const id = ed.dirty ? await ed.flush() : ed.id;
+        if (!id) {
             toast('error', t('builder.test.not_stored'));
             return;
         }
         const loc = location === 'random' ? 'random' : Number(location);
         const res = await run<BuilderTestResult>('server:builder:test', {
-            id: ed.id,
+            id,
             tier,
             location: loc,
             useStartRoute: route,
         });
         if (!res.ok || !res.data) return;
-        setLastTest(ed.id, {
-            missionId: ed.id,
+        setLastTest(id, {
+            missionId: id,
             version: res.data.version,
             tier: res.data.tier,
             location: res.data.location,

@@ -3722,14 +3722,20 @@ local function NewSkeleton(id, label, missionType)
     local d = Details()
     local function def3(r, fallback) return type(r) == 'table' and r[3] or fallback end
     local vp = d.vehiclePenalties
+    local minO = type(d.officers) == 'table' and d.officers[1] or 1
+    local maxO = type(d.officers) == 'table' and d.officers[2] or 4
+    -- the team size a new mission starts with follows its type (Builder.defaultTeam), inside the allowed range
+    local teams = CfgB().defaultTeam
+    local team = type(teams) == 'table' and tonumber(teams[missionType]) or nil
+    if team then maxO = math.max(minO, math.min(maxO, math.floor(team))) end
     return {
         id = id,
         label = label,
         description = '',
         type = missionType,
         departments = {},
-        minOfficers = type(d.officers) == 'table' and d.officers[1] or 1,
-        maxOfficers = type(d.officers) == 'table' and d.officers[2] or 4,
+        minOfficers = minO,
+        maxOfficers = maxO,
         difficulty = def3(d.difficulty, 2),
         timeLimit = def3(d.timeLimit, 600),
         startTimeout = def3(d.startTimeout, 600),

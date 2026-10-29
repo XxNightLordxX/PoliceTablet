@@ -19,6 +19,8 @@ export interface BuilderWorkspaceProps {
 export function BuilderWorkspace({ scope, onOpenChange }: BuilderWorkspaceProps) {
     const { config, error, retry } = useBuilderConfig(scope);
     const [openId, setOpenId] = useState<string | null>(() => editorMemory(scope).openId);
+    // a new editor for every opened mission; a save that renames the draft keeps the same editor (and its lock)
+    const [editorKey, setEditorKey] = useState(0);
 
     // a tool result for a mission that is not open (e.g. the NUI reloaded): open it so it can be applied
     useEffect(
@@ -37,6 +39,7 @@ export function BuilderWorkspace({ scope, onOpenChange }: BuilderWorkspaceProps)
 
     const open = (id: string) => {
         setEditorMemory(scope, { openId: id });
+        setEditorKey(k => k + 1);
         setOpenId(id);
         onOpenChange?.(id);
     };
@@ -66,7 +69,7 @@ export function BuilderWorkspace({ scope, onOpenChange }: BuilderWorkspaceProps)
     if (openId) {
         return (
             <BuilderEditor
-                key={openId}
+                key={editorKey}
                 id={openId}
                 scope={scope}
                 config={config}

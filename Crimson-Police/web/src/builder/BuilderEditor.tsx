@@ -258,13 +258,16 @@ export function BuilderEditor({ id, scope, config, onClose, onRenamed, onOpen }:
         const s = stepOfError(e);
         counts[s] = (counts[s] ?? 0) + 1;
     });
+    const testRequired = !!config.requireTestToPublish;
+    const optional: Partial<Record<BuilderStepKey, boolean>> = { scaling: true, test: !testRequired };
     const done: Record<BuilderStepKey, boolean> = {
         blocks: def.objectives.length > 0,
         details: !!def.type && !!def.label.trim() && !counts.details,
         settings: def.objectives.length > 0 && !counts.settings,
         locations: def.locations.length >= minLocationsFor(config, rec.overridesBuiltin) && !counts.locations,
-        scaling: def.scaling.length > 0,
-        test: !!rec.draftTested,
+        // optional steps: done while they hold no error (no scaling rule is fine; testing only when the owner asks)
+        scaling: !counts.scaling,
+        test: !!rec.draftTested || !testRequired,
         publish: rec.dbStatus === 'published' && !rec.hasDraft,
     };
     const idx = STEPS.findIndex(s => s.key === step);
@@ -369,7 +372,12 @@ export function BuilderEditor({ id, scope, config, onClose, onRenamed, onOpen }:
                         <span className="builder_client-steps__num cp-num">
                             {done[s.key] && step !== s.key ? <Icon name="check" size={12} strokeWidth={3} /> : i + 1}
                         </span>
-                        <span className="builder_client-steps__label">{t(`builder.step.${s.key}`)}</span>
+                        <span className="builder_client-steps__label">
+                            {t(`builder.step.${s.key}`)}
+                            {optional[s.key] ? (
+                                <span className="builder_client-steps__optional"> {t('builder.step.optional')}</span>
+                            ) : null}
+                        </span>
                         {counts[s.key] ? (
                             <span className="builder_client-steps__err cp-num">{counts[s.key]}</span>
                         ) : null}

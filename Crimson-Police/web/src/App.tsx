@@ -18,7 +18,7 @@ import { QuietBoundary, Toasts } from './shared/components';
 import { closeTopLayer, useHudScale, useKeyRelease, usePush, useViewport } from './shared/hooks';
 import { LocaleProvider, t } from './shared/i18n';
 import { NavigationContext, type NavigationValue, type ScreenKey, type ScreenParams } from './shared/navigation';
-import { clientAction, fetchNui, isEnvBrowser, request, useNuiEvent } from './shared/nui';
+import { clientAction, fetchNui, isEnvBrowser, request, setTabletShown, useNuiEvent } from './shared/nui';
 import { SessionContext, type SessionContextValue } from './shared/session';
 import { applyTheme, DEFAULT_THEME } from './shared/theme';
 import { normalizeHud, normalizeResult, normalizeSession } from './shared/data';
@@ -85,19 +85,24 @@ export default function App() {
         } catch (e) {
             // Lua already took the NUI focus: hand it back rather than keep it on a page that shows nothing.
             console.error('[crimson-police:ui] open failed', e);
+            setTabletShown(false);
             setUi(null);
             void fetchNui('close', {});
             return;
         }
         const target: UiKind = m.ui ?? next.ui;
         setSession(next);
+        setTabletShown(true);
         setUi(target);
         if (typeof m.seq === 'number') setOpenSeq(m.seq);
         if (m.screen && screensFor(target, next).some(s => s.key === m.screen)) {
             setScreens(prev => ({ ...prev, [target]: { key: m.screen as ScreenKey, params: {} } }));
         }
     });
-    useNuiEvent('close', () => setUi(null));
+    useNuiEvent('close', () => {
+        setTabletShown(false);
+        setUi(null);
+    });
     useNuiEvent('session', m => {
         if (m.session) setSession(normalizeSession(m.session));
     });
@@ -129,6 +134,7 @@ export default function App() {
 
     // ---- TABLET CONTROLS ---------------------------------------------------
     const close = useCallback(() => {
+        setTabletShown(false);
         setUi(null);
         void fetchNui('close', {});
     }, []);
@@ -139,6 +145,7 @@ export default function App() {
         setSwitching(false);
         if (res.ok && res.data) {
             setSession(normalizeSession(res.data));
+            setTabletShown(true);
             setUi(target);
             return true;
         }

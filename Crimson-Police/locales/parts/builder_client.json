@@ -750,6 +750,7 @@
   "builder.step.locations": "Locations",
   "builder.step.publish": "Publish",
   "builder.step.scaling": "Scaling",
+  "builder.step.optional": "(optional)",
   "builder.step.settings": "Block settings",
   "builder.step.test": "Test",
   "builder.test.below_required": "This tier is below {tier}, the tier a full team reaches. Testing is optional; the result is still recorded.",
