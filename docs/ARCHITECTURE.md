@@ -2206,6 +2206,14 @@ Server:
   label when it is unique in the mission, else the number), `resetMission(src, id)` (`missionSwitchesReset`). After every
   change: `client:settings` to every client, the `settings` push to online admins, the hook `settings:changed (paths)`,
   and `CP.ConfigHealth.run()` in the reply.
+- Simple set (A7): `COMMON` lists about 25 everyday paths (Debug, Locale, the tablet key, NPC accuracy and damage,
+  the Flee times, spawning distances, the route line, Radio Silence, mission calls, the Builder minimums, payout
+  reasons, built-in editing, the test overlay, the resets); each has `settings.label.<path>` and `settings.help.<path>`
+  (the help also fills an empty config.lua description). `GROUPS` folds every section into 8 plain groups (tablet,
+  missions, npcs, pay, points, police, dispatch, server; titles `settings.group.<key>`, help
+  `settings.group_help.<key>`; a section no group names goes under server). The entry and `SettingView` carry
+  `common` and `help`, a schema section and `SettingsView.sections[]` carry `group`, and `SettingsView` carries
+  `groups` (`plainGroups()`: key, title, help, section keys) and `common` (`commonPaths()`).
 - Net: callbacks `admin:getSettings`, `admin:getSettingsHistory` (`{ page, path? }`: the audit rows of the actions above);
   actions `server:admin:setSetting` (`{ path, value? | json?, none? }`), `server:admin:resetSetting` (`{ path }`),
   `server:admin:resetAllSettings`, `server:admin:setMissionEnabled` (`{ missionId, enabled }`),

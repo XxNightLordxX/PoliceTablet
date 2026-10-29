@@ -230,6 +230,43 @@ do
     H.eq(S._isCode('(any mission), while another is free'), false, 'a bracketed continuation is not')
 end
 
+-- The Simple set: the everyday settings and the plain groups the sections fold into.
+do
+    local sc = S._schema()
+    H.ok(#S._common >= 20 and #S._common <= 30, ('about 25 everyday settings (%d)'):format(#S._common))
+    for _, path in ipairs(S._common) do
+        local e = S.entry(path)
+        H.ok(e ~= nil and e.common == true, path .. ': an everyday setting config.lua has, marked common')
+        H.ok(CP.Locale.has('settings.label.' .. path), path .. ': a plain label in locales/parts/settings.json')
+        H.ok(type(e and e.help) == 'string' and e.help ~= '' and e.desc ~= '',
+            path .. ': a help text and a description')
+    end
+    H.eq(S.entry('Tablet.command').common, nil, 'a setting off the list is not common')
+    H.eq(#S.commonPaths(), #S._common, 'every everyday setting is offered')
+    H.eq(#S._groups, 8, 'eight plain groups')
+    local seen = {}
+    for _, g in ipairs(S._groups) do
+        H.ok(CP.Locale.has('settings.group.' .. g.key) and CP.Locale.has('settings.group_help.' .. g.key),
+            g.key .. ': a title and a help text')
+        for _, key in ipairs(g.sections) do
+            H.eq(seen[key], nil, key .. ': in one group only')
+            seen[key] = g.key
+        end
+    end
+    for _, sec in ipairs(sc.sections) do
+        H.ok(seen[sec.key] ~= nil, sec.key .. ': a group names this section')
+        H.eq(sec.group, seen[sec.key], sec.key .. ': the section carries its group')
+    end
+    H.eq(seen.suspect_behaviour, 'npcs', 'NPC combat and running away are under NPCs')
+    local view = S.all()
+    local n = 0
+    for _, g in ipairs(view.groups) do n = n + #g.sections end
+    H.eq(n, #view.sections, 'the view lists every section under one group')
+    H.eq(view.groups[1].title, 'Tablet', 'group titles come from the locale')
+    H.eq(S.view('Flee.sprintSeconds').common, true, 'a setting view says it is common')
+    H.eq(S.view('Flee.sprintSeconds').label, 'Seconds a runner sprints', 'with its plain label')
+end
+
 -- ============================================================================
 --                               CHECKING A VALUE
 -- ============================================================================

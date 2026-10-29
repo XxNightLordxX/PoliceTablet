@@ -92,6 +92,97 @@ local RESTART = {
     'Backups.holdAfterFailedRestore',
 }
 
+-- The everyday settings an owner changes most, in the order the Settings screen's Simple view shows them. Each one
+-- has a plain label (settings.label.<path>) and a short help text (settings.help.<path>) in locales/parts.
+local COMMON = {
+    'Debug',
+    'Locale',
+    'Tablet.keybind',
+    'Tablet.deskDistance',
+    'Cash.account',
+    'Cash.dailyCap',
+    'Payouts.requireReason',
+    'AdminControl.editBuiltins',
+    'Spawning.activateRange',
+    'Spawning.minDistance',
+    'NpcCombat.accuracyMax',
+    'NpcCombat.aiDamage',
+    'NpcCombat.noCriticalHits',
+    'Flee.sprintSeconds',
+    'Flee.jogSeconds',
+    'Flee.walkSeconds',
+    'Markers.route',
+    'Markers.radioSilence',
+    'MissionCalls.maxOpen',
+    'MissionCalls.offerTime',
+    'Builder.minLocations',
+    'Builder.spawnMargin',
+    'Builder.requireTestToPublish',
+    'Testing.debugOverlay',
+    'Time.resetHour',
+    'Leaderboard.weekStartsOn',
+}
+
+-- The plain groups the Settings screen folds the config.lua sections into (title settings.group.<key>, help text
+-- settings.group_help.<key>). A section no group names (a new banner in config.lua) goes under Server.
+local GROUPS = {
+    { key = 'tablet', sections = { 'tablet_and_commands', 'formats', 'departments', 'officer_profile', 'names' } },
+    {
+        key = 'missions',
+        sections = {
+            'mission_types',
+            'difficulty',
+            'route_to_the_start',
+            'map_markers',
+            'random_draw',
+            'units',
+            'cross_department_missions',
+            'built_in_mission_tweaks',
+            'downed_participants',
+            'mission_builder',
+            'admin_test_mode',
+            'blocks',
+        },
+    },
+    { key = 'npcs', sections = { 'spawning', 'suspect_behaviour', 'scaling_by_participants' } },
+    { key = 'pay', sections = { 'cash', 'payout_editing', 'disputes' } },
+    {
+        key = 'points',
+        sections = {
+            'scoring_xp_levels_and_goals',
+            'bonuses_and_penalties',
+            'leaderboard',
+            'special_events',
+            'department_challenge',
+            'item_rewards',
+        },
+    },
+    {
+        key = 'police',
+        sections = { 'police_actions_and_custody', 'decisions', 'real_suspects', 'live_crimes', 'volunteer_suspects' },
+    },
+    { key = 'dispatch', sections = { 'dispatch', 'real_calls', 'alert_suppression' } },
+    {
+        key = 'server',
+        sections = {
+            'general',
+            'storage',
+            'permissions',
+            'admin_control',
+            'anti_exploit',
+            'time',
+            'retention',
+            'backups',
+            'other',
+        },
+    },
+}
+local FALLBACK_GROUP = 'server'
+local groupOfSection = {}
+for _, g in ipairs(GROUPS) do
+    for _, key in ipairs(g.sections) do groupOfSection[key] = g.key end
+end
+
 -- Read when the mission files load: a change reloads the missions (as Admin UI → Missions → Reload does).
 local RELOAD = {
     'MissionTweaks',
@@ -1940,6 +2031,7 @@ local function Describe(path, default)
     e.reload = UnderAny(RELOAD, path)
     e.points = InList(POINTS, path) or nil
     e.money = Contains(MONEY_SWITCHES, path) or nil
+    e.common = InList(COMMON, path) or nil
     return e
 end
 
@@ -1969,6 +2061,11 @@ local function BuildSchema()
         local lk, dk = 'settings.label.' .. path, 'settings.desc.' .. path
         e.label = CP.Locale.has(lk) and CP.L(lk) or Label(e.key)
         e.desc = CP.Locale.has(dk) and CP.L(dk) or (m and m.desc or '')
+        local hk = 'settings.help.' .. path
+        e.help = CP.Locale.has(hk) and CP.L(hk) or nil
+        if e.desc == '' and e.help then
+            e.desc = e.help
+        end -- a key config.lua leaves without a comment
         e.order = m and m.order or (1e6 + #list)
         local top = Top(path)
         local tm = meta[top]
@@ -2016,7 +2113,14 @@ local function BuildSchema()
     local secList, secByKey = {}, {}
     for _, key in ipairs(sections.order) do
         local s = sections.byKey[key]
-        local sec = { key = s.key, title = s.title, file = s.file, groups = {}, groupByPath = {} }
+        local sec = {
+            key = s.key,
+            title = s.title,
+            file = s.file,
+            group = groupOfSection[s.key] or FALLBACK_GROUP,
+            groups = {},
+            groupByPath = {},
+        }
         secList[#secList + 1] = sec
         secByKey[key] = sec
     end
@@ -2027,6 +2131,7 @@ local function BuildSchema()
                 key = e.section,
                 title = CP.L('settings.section.other'),
                 file = 'config',
+                group = groupOfSection[e.section] or FALLBACK_GROUP,
                 groups = {},
                 groupByPath = {},
             }
@@ -2463,6 +2568,8 @@ local function View(e)
         rows = e.rows,
         points = e.points,
         money = e.money,
+        common = e.common,
+        help = e.help,
     }
     if e.optionsFrom then
         v.options = Plain(Effective(e.optionsFrom))
@@ -2502,11 +2609,51 @@ local function Health()
     return ok and type(items) == 'table' and items or {}
 end
 
+-- The plain groups in order: key, title, help text and the section keys under each (sections no group names go under
+-- the fallback group, after its own).
+function Settings.plainGroups()
+    local out, byKey = {}, {}
+    for _, g in ipairs(GROUPS) do
+        local v = {
+            key = g.key,
+            title = CP.L('settings.group.' .. g.key),
+            help = CP.L('settings.group_help.' .. g.key),
+            sections = {},
+        }
+        out[#out + 1] = v
+        byKey[g.key] = v
+    end
+    for _, sec in ipairs(Schema().sections) do
+        local v = byKey[sec.group] or byKey[FALLBACK_GROUP]
+        v.sections[#v.sections + 1] = sec.key
+    end
+    return out
+end
+
+-- The everyday settings (COMMON) that config.lua has, in order.
+function Settings.commonPaths()
+    local out = {}
+    for _, path in ipairs(COMMON) do
+        if Schema().byPath[path] then out[#out + 1] = path end
+    end
+    return out
+end
+Settings._common = COMMON
+Settings._groups = GROUPS
+
 -- SettingsView: every section, group and setting, with the counts the screen shows.
 function Settings.all()
     local out = { sections = {}, changed = 0, pending = 0, invalid = 0, total = 0 }
     for _, sec in ipairs(Schema().sections) do
-        local s = { key = sec.key, title = sec.title, file = sec.file, groups = {}, changed = 0, count = 0 }
+        local s = {
+            key = sec.key,
+            title = sec.title,
+            file = sec.file,
+            group = sec.group,
+            groups = {},
+            changed = 0,
+            count = 0,
+        }
         for _, g in ipairs(sec.groups) do
             local gv = { path = g.path, label = g.label, desc = g.desc, settings = {} }
             for _, e in ipairs(g.settings) do
@@ -2534,6 +2681,8 @@ function Settings.all()
             weekly = okW and type(week) == 'number' and week + 7 * 86400 or nil,
         }
     end
+    out.groups = Settings.plainGroups()
+    out.common = Settings.commonPaths()
     out.safeMode = safeMode or nil
     out.added = Settings.addedDepartments()
     return out
