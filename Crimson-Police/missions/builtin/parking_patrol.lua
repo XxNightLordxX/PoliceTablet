@@ -6,11 +6,15 @@
   on metered and permit spots, tow-level on no-parking, hydrant and loading spots; free spots are legal or
   stolen), stolen 5%. A returning driver (25% per citation or impound, once) and a thief (50% on the first
   inspect of a stolen car, runs once an officer is within 15 m) may turn up.
-  Locations (7 districts): Alta Street, Downtown, Ginger Street, Little Seoul, Mirror Park Boulevard, Mirror Park, Prosperity Street, Del Perro, Magellan Avenue, Vespucci, Eclipse Boulevard, West Vinewood, Marina Drive, Sandy Shores.
-  Each district is one street with 10 kerb spots taken from the GTA V vehicle nodes: every spot sits 4.8 m
-  right of the road centre line in the driving direction, 26 m apart, facing the traffic; the posted rules
-  are spread so each street mixes meters, permits, no-parking, hydrants, a loading zone and free spots. The
-  entry point is on the centre line 45 m before the first spot, and every point is at least 200 m from any
+  Locations (7 districts): Alta Street, Downtown; Ginger Street, Little Seoul; Mirror Park Boulevard, Mirror
+  Park; Prosperity Street, Del Perro; Magellan Avenue, Vespucci; Eclipse Boulevard, West Vinewood; Bay City
+  Avenue, La Puerta.
+  Each district is one street with 10 kerb spots taken from the GTA V vehicle nodes: on districts 1-6 every
+  spot sits 4.8 m right of the road centre line in the driving direction, 26 m apart, facing the traffic.
+  Bay City Avenue (7) follows the street's 20 parking-meter props instead: 10 spots 13.6 m apart, 4.5 m right
+  of the south-west-bound lane, at the lane node height + 0.5 m, facing the traffic. The posted rules are spread
+  so each street mixes meters, permits, no-parking, hydrants, a loading zone and free spots. The entry point
+  is on the lane 45-46 m before the first spot, and every point is at least 200 m from any
   other mission's locations (tests/zone_lint_spec.lua). The start circle is 85 m (PLAN S19), so an officer
   arriving at its edge is 38 m or more from the first spot, past the 25 m approach plus
   Config.Spawning.sceneOutside (35 m): its car is there before he is on top of it.
@@ -130,19 +134,19 @@ RegisterMission({
       },
     },
     {
-      label = 'Marina Drive, Sandy Shores',
-      start = { coords = vec3(693.82, 3583.14, 33.04), radius = 85.0 },   -- patrol entry point, 45 m before the first spot
-      spots = {   -- 10 kerb spots, 26 m apart on the right-hand kerb, each with its posted rule
-        { coords = vec4(648.70, 3580.95, 32.42, 98.0), rule = 'metered'   , street = 'Marina Drive' },
-        { coords = vec4(623.25, 3578.34, 32.34, 93.1), rule = 'no_parking', street = 'Marina Drive' },
-        { coords = vec4(597.54, 3577.30, 32.59, 90.0), rule = 'permit'    , street = 'Marina Drive' },
-        { coords = vec4(571.83, 3577.48, 32.61, 86.7), rule = 'hydrant'   , street = 'Marina Drive' },
-        { coords = vec4(545.97, 3578.79, 32.56, 85.5), rule = 'free'      , street = 'Marina Drive' },
-        { coords = vec4(520.05, 3580.84, 32.40, 85.5), rule = 'metered'   , street = 'Marina Drive' },
-        { coords = vec4(494.47, 3583.64, 32.53, 82.3), rule = 'loading'   , street = 'Marina Drive' },
-        { coords = vec4(469.17, 3588.33, 32.84, 79.2), rule = 'permit'    , street = 'Marina Drive' },
-        { coords = vec4(444.28, 3594.33, 32.84, 74.5), rule = 'free'      , street = 'Marina Drive' },
-        { coords = vec4(419.33, 3601.62, 32.84, 74.5), rule = 'no_parking', street = 'Marina Drive' },
+      label = 'Bay City Avenue, La Puerta',
+      start = { coords = vec3(-969.12, -1570.64, 3.53), radius = 85.0 },   -- patrol entry point, 46 m before the first spot
+      spots = {   -- 10 kerb spots, 13.6 m apart on the right-hand kerb beside the street's parking meters
+        { coords = vec4(-999.90, -1604.31, 4.03, 143.2), rule = 'metered'   , street = 'Bay City Avenue' },
+        { coords = vec4(-1008.04, -1615.21, 4.03, 143.2), rule = 'no_parking', street = 'Bay City Avenue' },
+        { coords = vec4(-1016.19, -1626.11, 4.03, 143.2), rule = 'permit'    , street = 'Bay City Avenue' },
+        { coords = vec4(-1024.34, -1637.01, 4.03, 143.2), rule = 'hydrant'   , street = 'Bay City Avenue' },
+        { coords = vec4(-1032.48, -1647.91, 4.03, 143.2), rule = 'free'      , street = 'Bay City Avenue' },
+        { coords = vec4(-1040.63, -1658.81, 4.03, 143.2), rule = 'metered'   , street = 'Bay City Avenue' },
+        { coords = vec4(-1048.77, -1669.70, 4.03, 143.2), rule = 'loading'   , street = 'Bay City Avenue' },
+        { coords = vec4(-1056.92, -1680.60, 4.03, 143.2), rule = 'hydrant'   , street = 'Bay City Avenue' },
+        { coords = vec4(-1065.06, -1691.50, 4.03, 143.2), rule = 'free'      , street = 'Bay City Avenue' },
+        { coords = vec4(-1073.21, -1702.40, 4.03, 143.2), rule = 'no_parking', street = 'Bay City Avenue' },
       },
     },
   },

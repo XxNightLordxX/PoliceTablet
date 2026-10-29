@@ -119,6 +119,23 @@ do
         H.ok(d >= 30 and d <= 60,
             ('parking_patrol: the entry point is 30-60 m before the first spot (%.0f m)'):format(d))
     end
+    -- district 7 is Bay City Avenue in La Puerta, its cars at the kerb by the street's parking meters
+    -- (props from (-1072.0, -1708.3) to (-993.9, -1603.8)), not the empty desert road of Marina Drive
+    local bay = pp.locations[7]
+    H.eq(bay.label, 'Bay City Avenue, La Puerta', 'parking_patrol: district 7 is Bay City Avenue, La Puerta')
+    local ax, ay, bx, by = -993.9, -1603.8, -1072.0, -1708.3
+    local len = math.sqrt((bx - ax) ^ 2 + (by - ay) ^ 2)
+    for si, s in ipairs(bay.spots) do
+        local t = ((s.coords.x - ax) * (bx - ax) + (s.coords.y - ay) * (by - ay)) / len
+        local side = math.abs((s.coords.x - ax) * (by - ay) - (s.coords.y - ay) * (bx - ax)) / len
+        H.ok(t >= -5 and t <= len + 5 and side <= 8.0,
+            ('parking_patrol: Bay City Avenue spot %d is beside the meters (%.0f m along, %.1f m off)'):format(si, t,
+                side))
+        H.eq(s.street, 'Bay City Avenue', 'parking_patrol: Bay City Avenue spots name their street')
+    end
+    H.eq(bay.spots[8].rule, 'hydrant', 'parking_patrol: Bay City Avenue spot 8 is a hydrant')
+    H.ok(bay.start.radius - D2(bay.spots[1].coords, bay.start.coords) >= 35.0,
+        'parking_patrol: Bay City Avenue first spot is 35 m+ inside the start circle edge (S19)')
     H.eq(RawDef('beat_patrol').quietPatrol, true, 'beat_patrol still gets the lights penalty (quietPatrol)')
     H.eq(RawDef('business_check').quietPatrol, true, 'business_check still gets the lights penalty (quietPatrol)')
     local te = RawDef('traffic_enforcement')
