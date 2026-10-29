@@ -82,6 +82,7 @@ local C = {
     E_ALT = 51,
     HORN = 86,
     BACK = 194,
+    DELETE = 178,
     ENTER = 191,
     ENTER_ALT = 201,
     P = 199,
@@ -115,6 +116,7 @@ local PLACE_DISABLE = {
     141,
     142,
     177,
+    178,
     191,
     194,
     199,
@@ -382,6 +384,21 @@ end
 function B.armedKeepOut(ctx)
     if not (type(ctx) == 'table' and ctx.armed and IsNum(ctx.startRadius)) then return nil end
     return math.max(tonumber(ctx.minFromStart) or 0, ctx.startRadius + (tonumber(ctx.spawnMargin) or 0))
+end
+
+-- Metres the placement tool aims within to pick a placed point (Delete, Backspace).
+B.AIM_PICK_RANGE = 1.5
+
+-- Index of the placed point nearest to the aimed spot (2D, the point as stored), within range metres; nil when none.
+function B.aimedPoint(points, spot, range)
+    if type(points) ~= 'table' or type(spot) ~= 'table' or not spot.hit then return nil end
+    range = tonumber(range) or B.AIM_PICK_RANGE
+    local best, bestD = nil, range
+    for i, p in ipairs(points) do
+        local d = U.dist2d(spot, p)
+        if d <= bestD then best, bestD = i, d end
+    end
+    return best
 end
 
 function B.checkSpot(spot, ctx)
@@ -850,8 +867,23 @@ local function StartProbe(kind, x, y, gz, h, dims, ignore)
     return StartShapeTestCapsule(x + fx * a, y + fy * a, zc, x - fx * a, y - fy * a, zc, dims.r, 1 + 2 + 16, ignore, 7)
 end
 
+-- Metres every point of this key keeps from the start (the circle drawn as a zone); nil when the key has no start rule.
+local function KeepOutOf(o)
+    if not (o.spawn and o.start) then return nil end
+    local bc = BuilderCfg()
+    local floor = tonumber(bc.minSpawnFromStart) or 30.0
+    -- an armed key shows its real keep-out: the start circle plus the margin
+    return B.armedKeepOut({
+        armed = o.armed,
+        startRadius = o.startRadius,
+        minFromStart = floor,
+        spawnMargin = tonumber(bc.spawnMargin) or 40.0,
+    }) or floor
+end
+
 local function PlacementOverlay(tool, st, ok, reasonKey, vars)
     local o = tool.opts
+    local keepOut = KeepOutOf(o)
     return {
         kind = 'placement',
         key = o.key,
@@ -865,6 +897,9 @@ local function PlacementOverlay(tool, st, ok, reasonKey, vars)
         reason = (not ok and reasonKey) and CP.L(reasonKey, vars) or false,
         heading = o.heading and math.floor(st.heading + 0.5) % 360 or false,
         radius = (o.kind == 'start' or o.kind == 'area') and math.floor(st.radius + 0.5) or false,
+        keepOut = keepOut and math.floor(keepOut + 0.5) or false,
+        armed = o.armed == true,
+        aimed = st.aimed or false,
     }
 end
 
@@ -874,17 +909,8 @@ local function RefreshAreaZones(tool, st)
     if o.kind == 'start' or o.kind == 'area' then
         for _, p in ipairs(st.points) do AddZone(tool, p, st.radius) end
     end
-    if o.spawn and o.start then
-        local bc = BuilderCfg()
-        local floor = tonumber(bc.minSpawnFromStart) or 30.0
-        -- an armed key shows its real keep-out: the start circle plus the margin
-        AddZone(tool, o.start, B.armedKeepOut({
-            armed = o.armed,
-            startRadius = o.startRadius,
-            minFromStart = floor,
-            spawnMargin = tonumber(bc.spawnMargin) or 40.0,
-        }) or floor)
-    end
+    local keepOut = KeepOutOf(o)
+    if keepOut then AddZone(tool, o.start, keepOut) end
 end
 
 local function DrawPlaced(tool, st, pos)
@@ -893,9 +919,11 @@ local function DrawPlaced(tool, st, pos)
         if U.dist(pos, p) < POINT_DRAW_RANGE then
             local baseZ = p.z
             if o.kind == 'ped' then baseZ = p.z - PED_HEIGHT end
-            Marker(0, p.x, p.y, baseZ + 1.4, 0.35, 0.35, 0.35, COLOURS.point, 200)
-            Marker(25, p.x, p.y, baseZ + 0.05, 1.0, 1.0, 1.0, COLOURS.point, 150)
-            if o.heading and p.w then HeadingLine({ x = p.x, y = p.y, z = baseZ }, p.w, 1.4, COLOURS.point) end
+            -- the point under the aim (Delete removes it) is drawn red
+            local c = st.aimed == i and COLOURS.bad or COLOURS.point
+            Marker(0, p.x, p.y, baseZ + 1.4, 0.35, 0.35, 0.35, c, 200)
+            Marker(25, p.x, p.y, baseZ + 0.05, 1.0, 1.0, 1.0, c, 150)
+            if o.heading and p.w then HeadingLine({ x = p.x, y = p.y, z = baseZ }, p.w, 1.4, c) end
             if U.dist(pos, p) < LABEL_RANGE then Text3d(p.x, p.y, baseZ + 1.9, tostring(i)) end
         end
     end
@@ -966,9 +994,17 @@ local function RunPlacement(tool)
     }
     local function finish(cancelled)
         local r = NewResult(tool, cancelled)
-        r.points = st.points
-        if o.kind == 'start' or o.kind == 'area' then r.radius = Round2(st.radius) end
-        if o.streets then r.streets = StreetsOf(st.points) end
+        -- a cancelled tool (X, the tablet, an interruption) hands back the points it was given, unchanged
+        local pts = st.points
+        if cancelled then
+            pts = {}
+            for i, p in ipairs(o.points) do pts[i] = p end
+        end
+        r.points = pts
+        if o.kind == 'start' or o.kind == 'area' then
+            r.radius = Round2(cancelled and (o.radius or 0.0) or st.radius)
+        end
+        if o.streets then r.streets = StreetsOf(pts) end
         return r
     end
     Overlay(PlacementOverlay(tool, st, false, 'builder.place.reason.no_hit'))
@@ -1035,6 +1071,7 @@ local function RunPlacement(tool)
             end
         end
         local ok, reasonKey, vars = B.checkSpot(spot, ctx)
+        st.aimed = B.aimedPoint(st.points, spot)
 
         -- ghost and drawing
         if ghost and DoesEntityExist(ghost) then
@@ -1096,15 +1133,20 @@ local function RunPlacement(tool)
                 Sound(false)
             end
         end
-        if Pressed(C.BACK) then
-            if #st.points > 0 then
-                st.points[#st.points] = nil
+        -- Delete removes the point under the aim; Backspace too, else the last point
+        local del, back = Pressed(C.DELETE), Pressed(C.BACK)
+        if del or back then
+            local idx = st.aimed or (back and #st.points > 0 and #st.points) or nil
+            if idx then
+                table.remove(st.points, idx)
+                st.aimed = nil
                 RefreshAreaZones(tool, st)
                 Sound(true)
             else
                 Sound(false)
             end
         end
+        if Pressed(C.X) then return finish(true) end
         if Pressed(C.ENTER, C.ENTER_ALT) then return finish(false) end
         if now - st.overlayAt >= OVERLAY_MS then
             st.overlayAt = now

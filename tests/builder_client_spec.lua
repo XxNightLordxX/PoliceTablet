@@ -257,7 +257,7 @@ local function LastOverlay(kind)
 end
 local function LastPush() return T.pushes[#T.pushes] end
 local function Has(list, v) for _, x in ipairs(list) do if x == v then return true end end return false end
-local KEY = { E = 38, BACK = 194, ENTER = 191, P = 199, X = 73, WHEEL_UP = 15 }
+local KEY = { E = 38, BACK = 194, DELETE = 178, ENTER = 191, P = 199, X = 73, WHEEL_UP = 15 }
 local DOCKS = { x = 1017.52, y = -3108.44, z = 5.9 }
 
 -- ============================================================================
@@ -947,6 +947,95 @@ do
     H.eq(#LastPush().data.result.points, 0, 'a cancelled start placement keeps the existing points')
     H.advance(400)
     Act('builderResult', {})
+end
+
+-- ============================================================================
+--            X CANCELS, AIMED DELETE, THE HUD COUNTER AND KEEP-OUT
+-- ============================================================================
+
+do
+    local given = {
+        { x = 1050.0, y = -3108.4, z = 6.0, w = 0.0 },
+        { x = 1060.0, y = -3108.4, z = 6.0, w = 0.0 },
+        { x = 1070.0, y = -3108.4, z = 6.0, w = 0.0 },
+    }
+    local payload = {}
+    for k, v in pairs(placePayload) do payload[k] = v end
+    payload.points = given
+    payload.max = 5
+    W.groundZ = 5.0
+    W.pos = { x = 1060.0, y = -3100.0, z = 5.9 }
+
+    -- X: the result is cancelled and carries the given points, unchanged
+    T.isOpen = true
+    W.aim = { x = 1080.0, y = -3108.4, z = 5.0 }
+    H.eq(Act('builderPlace', payload), true, 'placement with given points starts')
+    Frames(12)
+    local ov = LastOverlay('placement')
+    H.eq(ov.keepOut, 30, 'the HUD names the start keep-out (30 m for an unarmed key)')
+    H.eq(ov.armed, false, 'an unarmed key')
+    Frame({ KEY.E })
+    Frames(10)
+    H.eq(LastOverlay('placement').placed, 4, 'a fourth point placed')
+    W.aim = { x = 1060.5, y = -3108.0, z = 5.0 }
+    Frames(3)
+    Frame({ KEY.DELETE })
+    Frames(10)
+    H.eq(LastOverlay('placement').placed, 3, 'Delete removed the aimed point')
+    Frame({ KEY.X })
+    Frame()
+    H.eq(B.active(), nil, 'X ends the tool')
+    local res = LastPush().data.result
+    H.eq(res.cancelled, true, 'X cancels')
+    H.eq(#res.points, 3, 'the cancelled result keeps the given points')
+    for i, p in ipairs(given) do H.eq(res.points[i].x, p.x, 'given point ' .. i .. ' unchanged') end
+    H.advance(400)
+    Act('builderResult', {})
+
+    -- Delete while aiming at the second point removes that one, not the last
+    T.isOpen = true
+    W.aim = { x = 1059.0, y = -3108.9, z = 5.0 }
+    Act('builderPlace', payload)
+    Frames(12)
+    H.eq(LastOverlay('placement').aimed, 2, 'the HUD knows the aimed point')
+    Frame({ KEY.DELETE })
+    Frames(3)
+    -- Backspace aimed at a point removes it too
+    W.aim = { x = 1050.4, y = -3108.4, z = 5.0 }
+    Frames(3)
+    Frame({ KEY.BACK })
+    Frames(3)
+    -- Delete aimed at nothing removes nothing
+    W.aim = { x = 1080.0, y = -3108.4, z = 5.0 }
+    Frames(3)
+    Frame({ KEY.DELETE })
+    Frames(10)
+    H.eq(LastOverlay('placement').placed, 1, 'Delete aimed at nothing removes nothing')
+    Frame({ KEY.ENTER })
+    Frame()
+    res = LastPush().data.result
+    H.eq(res.cancelled, false, 'Enter keeps the edits')
+    H.eq(#res.points, 1, 'one point left')
+    H.eq(res.points[1].x, 1070.0, 'the aimed points were removed, the third is kept')
+    H.advance(400)
+    Act('builderResult', {})
+
+    -- an armed key: the HUD keep-out is the start circle plus the margin
+    T.isOpen = true
+    payload.armed = true
+    payload.startRadius = 25
+    payload.points = {}
+    W.aim = { x = 1085.0, y = -3108.4, z = 5.0 }
+    Act('builderPlace', payload)
+    Frames(12)
+    ov = LastOverlay('placement')
+    H.eq(ov.armed, true, 'an armed key')
+    H.eq(ov.keepOut, 25 + (Config.Builder.spawnMargin or 40), 'armed keep-out = start radius + spawnMargin')
+    Frame({ KEY.X })
+    Frame()
+    H.advance(400)
+    Act('builderResult', {})
+    W.pos = { x = 1017.5, y = -3108.4, z = 5.9 }
 end
 
 -- ============================================================================

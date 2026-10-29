@@ -1237,7 +1237,9 @@ FiveM**, then look for the Crimson-Police lines.
   **Esc** only (Escape frees the mouse) and the test invitation toast names no key.
 - Mission Builder keys, shown on screen while you use a builder tool: **E** (or the horn) place or set,
   **Backspace** undo, **Enter** done or finish, **P** pause or resume, **X** stop point, close or stop a test drive,
-  **mouse wheel** radius or rotate, **Shift** fine steps.
+  **mouse wheel** radius or rotate, **Shift** fine steps. While placing points, **X** cancels (the points stay as they
+  were), and **Delete** (or Backspace) while aiming at a placed point within 1.5 m removes that point. The placing
+  HUD shows how many points are needed and placed, and how far from the start the points must stay.
 
 ### 8.3 Exports for other scripts
 

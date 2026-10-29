@@ -60,6 +60,8 @@ function Placement({ o }: { o: PlacementOverlay }) {
     const area = o.mode === 'start' || o.mode === 'area';
     const enough = placed >= Math.max(1, min);
     const reason = text(o.reason);
+    const keepOut = typeof o.keepOut === 'number' ? o.keepOut : null;
+    const aimed = typeof o.aimed === 'number' && o.aimed > 0;
     return (
         <>
             <Head
@@ -95,6 +97,14 @@ function Placement({ o }: { o: PlacementOverlay }) {
                     </span>
                 ) : null}
             </div>
+            {keepOut !== null ? (
+                <div className="builder_client-ov__warns">
+                    <span className="builder_client-ov__warn is-info">
+                        <Icon name="circle" size={13} />
+                        {t(o.armed ? 'builder.ov.keep_out_armed' : 'builder.ov.keep_out', { m: keepOut })}
+                    </span>
+                </div>
+            ) : null}
             {multiple && max > 0 ? (
                 <ProgressBar
                     value={Math.min(placed, max)}
@@ -110,6 +120,8 @@ function Placement({ o }: { o: PlacementOverlay }) {
                     label={area ? t('builder.ov.key_radius') : t('builder.ov.key_rotate')}
                 />
                 <Key k="⌫" label={t('builder.ov.key_undo')} off={!placed} />
+                <Key k="Del" label={t('builder.ov.key_delete')} off={!aimed} />
+                <Key k="X" label={t('builder.ov.key_cancel')} />
                 <Key k="↵" label={t('builder.ov.key_done')} />
             </div>
         </>

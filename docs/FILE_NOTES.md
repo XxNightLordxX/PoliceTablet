@@ -1360,7 +1360,8 @@ Stop: every value we set is removed.
       ghost (ped or vehicle at alpha 160, collision off, frozen) or a marker follows the point the gameplay
       camera aims at (StartExpensiveSynchronousShapeTestLosProbe from GetGameplayCamCoord). Scroll rotates
       (areas and starts: scroll changes the radius; Shift = fine steps), E places, Backspace undoes, Enter
-      returns to the tablet with the points. A spot that fails a check is drawn red and cannot be placed:
+      returns to the tablet with the points, X cancels (the result carries the given points unchanged). Delete
+      (or Backspace) aimed within B.AIM_PICK_RANGE (1.5 m) of a placed point removes that point (B.aimedPoint). A spot that fails a check is drawn red and cannot be placed:
       not on the ground (GetGroundZFor_3dCoord, surfaces steeper than ~45°), in water (TestProbeAgainstWater /
       GetWaterHeight), inside a wall, object or vehicle (StartShapeTestCapsule around the ped / vehicle volume),
       inside a Config.Builder.noBuildZones circle (2D), an armed spawn point (payload.armed) closer than the start
@@ -4127,7 +4128,8 @@ sent by modules/builder/client.lua every ~150 ms while a tool runs (shapes: src/
 Rendered full-screen by App while such an overlay is set; the tablet is closed at that time, there is no NUI
 focus (the keys are game controls read by the Lua tool), so this panel is display-only.
   placement  what is being placed, count placed / needed / max, valid or invalid spot with the reason,
-             heading or radius, key hints E / Scroll / Backspace / Enter
+             heading or radius, the start keep-out (keepOut, armed), key hints E / Scroll / Backspace /
+             Delete / X / Enter
   recording  REC or PAUSED, length, waypoints, samples, rejected samples, off-road / no-build zone /
              too-long warnings, stop points, loop closure, waiting states, key hints E / Backspace / P / X
   testdrive  waypoint progress, time left to the current waypoint, stop countdown, waypoints marked for

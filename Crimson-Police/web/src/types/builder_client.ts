@@ -35,6 +35,12 @@ export interface PlacementOverlay {
     heading?: number | false;
     // metres (starts and areas), else false
     radius?: number | false;
+    // metres every point keeps from the start (the drawn circle), false when the key has no start rule
+    keepOut?: number | false;
+    // the points are enemies (the keep-out is the start circle plus Config.Builder.spawnMargin)
+    armed?: boolean;
+    // 1-based index of the placed point under the aim (Delete removes it), else false
+    aimed?: number | false;
 }
 
 export type RecordingWaiting = false | 'vehicle' | 'return' | 'checking';

@@ -2020,7 +2020,7 @@ route = {
 speed = 60,             -- km/h: the block's own speed setting
 style = 'normal',       -- the block's own style setting; vehicles always keep to their lanes
 
-Placement tool: a ghost preview of the ped, vehicle or marker follows your aim; scroll rotates, E places, Backspace undoes, Enter returns to the tablet. Areas are drawn as ox_lib zones. A spot that fails a check below shows red and cannot be placed.
+Placement tool: a ghost preview of the ped, vehicle or marker follows your aim; scroll rotates, E places, Backspace undoes, Delete (or Backspace) aimed at a placed point removes it, X cancels and keeps the points as they were, Enter returns to the tablet. Areas are drawn as ox_lib zones. A spot that fails a check below shows red and cannot be placed.
 
 Guardrails (checked while placing, and again by the server on publish)
 
