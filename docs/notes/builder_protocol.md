@@ -136,6 +136,8 @@ text of the header line ("Sergeant John Doe (SAST, citizenid ABC12345)"), `reaso
   `CP.Scaling.tierFor(maxOfficers)` or a higher one. Any stored change of the draft content resets it to 0.
 - Edit lock: one editor per mission (`locked_by` citizenid, `locked_until`). `lock`, `save` and
   `autosave` take or renew it for `Config.Builder.editLockMinutes`; it lapses by itself after that. A
+  stored draft renews it in its own UPDATE; a separate renewal write runs only when the lock is not the
+  caller's or has less than half its time left (`lock` included). A
   lock held by someone else refuses `save`, `autosave`, `publish`, `test` and `discardDraft` with
   `err.builder_locked`. The lock is released on publish, on `unlock`, when its holder disconnects or
   unloads, and by `breakLock` (admins; supervisors with `breakEditLock`). The UI autosaves every

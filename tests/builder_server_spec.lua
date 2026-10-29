@@ -1378,6 +1378,58 @@ local function Body()
     local fast = H.findEvents('crimson-police:client:actionResult')
     H.eq(fast[#fast].args[3], 'err.rate_limited', 'autosave at most every 5 s')
 
+    -- a fresh lock is not renewed by a write of its own: one UPDATE of cp_custom_missions per autosave
+    -- (in files mode every write rewrites the whole missions document)
+    do
+        local realUpdate = MySQL.update.await
+        local writes = 0
+        MySQL.update.await = function(q, ...)
+            if tostring(q):find('cp_custom_missions', 1, true) then writes = writes + 1 end
+            return realUpdate(q, ...)
+        end
+        local okSpy, errSpy = pcall(function()
+            local lockLeft = function()
+                return tonumber(H.sql(
+                    'SELECT TIMESTAMPDIFF(SECOND, NOW(), locked_until) AS l FROM cp_custom_missions'
+                        .. ' WHERE id = ?',
+                    { id }
+                )[1].l)
+            end
+            for i = 1, 2 do
+                writes = 0
+                H.ok((act(1, 'autosave', { id = id, definition = validDef() })),
+                    'autosave ' .. i .. ' in the lock window')
+                H.eq(writes, 1, 'autosave ' .. i .. ' writes cp_custom_missions once')
+            end
+            -- the stored draft still renews the lock for editLockMinutes
+            H.sql('UPDATE cp_custom_missions SET locked_until = NOW() + INTERVAL 20 MINUTE WHERE id = ?', { id })
+            writes = 0
+            act(1, 'autosave', { id = id, definition = validDef() })
+            H.eq(writes, 1, 'a lock with more than half its time left is not renewed on its own')
+            H.ok(lockLeft() > 29 * 60, 'the lock runs editLockMinutes from the last stored draft')
+            -- less than half left: the lock is renewed explicitly, then the draft is stored
+            H.sql('UPDATE cp_custom_missions SET locked_until = NOW() + INTERVAL 10 MINUTE WHERE id = ?', { id })
+            writes = 0
+            local okR, r = act(1, 'lock', { id = id })
+            H.ok(okR and r.lock.secondsLeft > 29 * 60 and writes == 1, 'a lock with less than half left is renewed')
+            -- a skipped renewal still records the holder: unloading releases the lock
+            CP.Qbx._unload(1)
+            H.step(10)
+            H.eq(row(id).locked_by, nil, 'unload released the lock (and forgot the holder)')
+            H.sql('UPDATE cp_custom_missions SET locked_by = ?, locked_until = NOW() + INTERVAL 25 MINUTE WHERE id = ?',
+                { 'SUP00001', id })
+            writes = 0
+            act(1, 'autosave', { id = id, definition = validDef() })
+            H.eq(writes, 1, 'the own lock taken over without a renewal write')
+            CP.Qbx._unload(1)
+            H.step(10)
+            H.eq(row(id).locked_by, nil, 'the holder is recorded without the renewal write')
+            act(1, 'lock', { id = id })
+        end)
+        MySQL.update.await = realUpdate
+        H.ok(okSpy, 'lock renewal writes counted: ' .. tostring(errSpy))
+    end
+
     -- rename of a never-published draft on save
     do
         local d = validDef()

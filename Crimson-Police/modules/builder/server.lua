@@ -2869,10 +2869,16 @@ end
 
 local function AcquireLock(row, actor)
     if row.lockActive and row.lockedBy ~= actor.citizenid then return false end
+    local minutes = math.max(1, math.floor(tonumber(CfgB().editLockMinutes) or 30))
+    -- the row was just read: a lock of this officer with more than half its time left needs no renewal write
+    -- (a stored draft renews it anyway; in files mode each write rewrites the whole missions document)
+    if row.lockActive and row.lockedBy == actor.citizenid and (row.lockLeft or 0) > minutes * 60 / 2 then
+        if actor.src and actor.src > 0 then holders[actor.src] = actor.citizenid end
+        return true, row
+    end
     MySQL.update.await([[UPDATE cp_custom_missions SET locked_by = ?, locked_until = NOW() + INTERVAL ? MINUTE,
         updated_at = updated_at WHERE id = ? AND (locked_by IS NULL OR locked_by = ? OR locked_until IS NULL
-        OR locked_until <= NOW())]],
-        { actor.citizenid, math.max(1, math.floor(tonumber(CfgB().editLockMinutes) or 30)), row.id, actor.citizenid })
+        OR locked_until <= NOW())]], { actor.citizenid, minutes, row.id, actor.citizenid })
     local fresh = FetchRow(row.id)
     if fresh and fresh.lockActive and fresh.lockedBy == actor.citizenid then
         if actor.src and actor.src > 0 then holders[actor.src] = actor.citizenid end
