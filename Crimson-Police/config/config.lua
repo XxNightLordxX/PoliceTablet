@@ -1509,7 +1509,11 @@ Config.Builder = {
         { label = 'SASP HQ', coords = vec3(1560.38, 815.76, 76.21), radius = 80.0 },
         { label = 'Pillbox Hill Medical', coords = vec3(308.19, -595.35, 43.29), radius = 100.0 },
         { label = 'Paleto Bay Medical', coords = vec3(-254.54, 6331.78, 32.43), radius = 80.0 },
-        { label = 'Bolingbroke Penitentiary', coords = vec3(1691.5, 2578.5, 44.7), radius = 215.0 }, -- the whole prison, every tower
+        { label = 'Bolingbroke Penitentiary', coords = vec3(1691.5, 2578.5, 44.7), radius = 215.0 },  -- the whole prison, every tower
+        { label = 'Fort Zancudo', coords = vec3(-2075.0, 3225.0, 33.0), radius = 320.0 },             -- the base: 4 circles
+        { label = 'Fort Zancudo south-east', coords = vec3(-1875.0, 3050.0, 33.0), radius = 320.0 },
+        { label = 'Fort Zancudo south-west', coords = vec3(-2300.0, 2950.0, 33.0), radius = 280.0 },
+        { label = 'Fort Zancudo north-west', coords = vec3(-2250.0, 3300.0, 33.0), radius = 280.0 },
         { label = 'Crimson-Arena Trailer Park', coords = vec3(2344.43, 2565.06, 46.67), radius = 160.0 }, -- live match boundary (up to 135 m) + push-back
         { label = 'Crimson-Arena lobby', coords = vec3(-282.01, -2030.46, 30.15), radius = 60.0 }, -- where arena players return after a match
     },

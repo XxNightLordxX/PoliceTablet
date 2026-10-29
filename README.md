@@ -1159,9 +1159,10 @@ Good to know:
   Ask dispatchers to avoid Detach in the first minute.
 - **Anti-cheat**: Bomb Disposal plays a harmless explosion (explosion type 2, no damage) from an officer's game. If
   your anti-cheat bans players for client explosions, allow this one for Crimson-Police.
-- **Prison**: the Mission Builder can't place anything inside `Config.Builder.noBuildZones`. The 215-metre
-  `Bolingbroke Penitentiary` zone covers the whole prison, yards and every watchtower; if your prison MLO is
-  bigger, widen or move it.
+- **Prison and Fort Zancudo**: the Mission Builder can't place anything inside `Config.Builder.noBuildZones`. The
+  215-metre `Bolingbroke Penitentiary` zone covers the whole prison, yards and every watchtower; if your prison MLO
+  is bigger, widen or move it. Four `Fort Zancudo` circles cover the military base; no built-in mission uses it
+  (Drug Lab Raid's old Zancudo River cabin is now the Davis Quartz site office).
 - **Server time zone**: daily and weekly resets and the Weekly Boss days use the server machine's clock. Set the
   machine's time zone to your community's.
 

@@ -3,7 +3,7 @@
   Breach an urban gang hideout together, fight 16 hostiles in waves of 6 / 5 / 5 (scaled) from two of the
   three spawn sets rolled per run (the intel line names them; tactics hold 30 / balanced 50 / push 20), then
   the lieutenant, catch the runners, find and seize the weapons cache and process the scene.
-  Locations (7 hideouts): Yard, El Burro Heights, Dock warehouse, Elysian Island, Beach house, Vespucci Beach, House, Richman Glen, House, Vinewood Racetrack, Compound, El Burro Heights, House, Pacific Bluffs.
+  Locations (7 hideouts): Yard, El Burro Heights, Dock warehouse, Elysian Island, Beach house, Vespucci Beach, Projects, Rancho, House, Vinewood Racetrack, Compound, El Burro Heights, House, Pacific Bluffs.
   Every point sits on the GTA V vehicle-node network or 3 m beside it, at the hideout's ground level: the
   "house" set within 24 m of the building node, "front" on the approach side and "garage" behind it (6+
   points each), the lieutenant at the back, the 4 runner points on the lanes from there to the escape routes
@@ -151,43 +151,43 @@ RegisterMission({
       coroner    = vec4(-1360.00, -1526.75, 3.91, 56.4),   -- where the coroner van parks
     },
     {
-      label      = 'House, Richman Glen',
-      start      = { coords = vec3(-859.75, 706.50, 149.06), radius = 50.0 },   -- on the approach road, 65 m from the house
+      label      = 'Projects, Rancho',
+      start      = { coords = vec3(491.50, -2040.00, 24.31), radius = 50.0 },   -- on the approach road, 63 m from the house
       entries    = {   -- the two entry points: "Stack up and breach"
-        vec4(-907.50, 704.00, 151.16, 94.6), vec4(-918.56, 703.17, 151.73, 95.2),
+        vec4(465.75, -1995.82, 24.16, 327.2), vec4(470.81, -1987.86, 24.16, 326.7),
       },
       house      = {   -- spawn set "house" (6 points)
-        vec4(-924.50, 699.62, 152.11, 276.1), vec4(-928.83, 702.50, 152.34, 273.3),
-        vec4(-920.00, 699.75, 151.88, 276.4), vec4(-928.92, 696.50, 152.34, 278.2),
-        vec4(-933.20, 702.75, 152.58, 272.9), vec4(-915.75, 700.75, 151.59, 275.9),
+        vec4(472.71, -1979.51, 24.16, 197.3), vec4(477.34, -1977.93, 24.16, 192.9),
+        vec4(473.01, -1984.51, 24.16, 198.4), vec4(472.41, -1974.51, 24.16, 196.3),
+        vec4(468.01, -1981.22, 24.16, 201.8), vec4(479.70, -1974.69, 24.16, 190.2),
       },
       front      = {   -- spawn set "front" (6 points)
-        vec4(-915.06, 697.83, 151.59, 278.9), vec4(-912.72, 705.17, 151.38, 271.4),
-        vec4(-910.53, 699.58, 151.38, 277.8), vec4(-908.60, 706.79, 151.16, 269.7),
-        vec4(-906.55, 701.15, 151.16, 276.5), vec4(-904.32, 708.22, 150.94, 267.8),
+        vec4(467.04, -1988.21, 24.16, 205.3), vec4(464.49, -1992.21, 24.16, 209.5),
+        vec4(461.95, -1996.22, 24.16, 214.0), vec4(462.67, -2001.20, 24.16, 216.6),
+        vec4(457.40, -1998.35, 24.16, 219.3), vec4(460.76, -2004.74, 24.16, 221.1),
       },
       garage     = {   -- spawn set "garage" (6 points)
-        vec4(-933.55, 696.75, 152.58, 277.5), vec4(-937.58, 703.00, 152.81, 272.6),
-        vec4(-937.92, 697.00, 152.81, 276.9), vec4(-941.95, 703.25, 153.11, 272.3),
-        vec4(-942.30, 697.25, 153.11, 276.4), vec4(-946.33, 703.50, 153.41, 272.0),
+        vec4(474.85, -1971.15, 24.16, 193.6), vec4(482.06, -1971.46, 24.16, 187.8),
+        vec4(477.22, -1967.92, 24.16, 191.2), vec4(484.43, -1968.22, 24.16, 185.6),
+        vec4(479.58, -1964.68, 24.16, 189.0), vec4(486.78, -1964.98, 24.16, 183.6),
       },
-      lieutenant = vec4(-953.12, 700.50, 153.95, 90.0),   -- the lieutenant's spot
+      lieutenant = vec4(474.91, -1976.16, 24.16, 323.9),   -- the lieutenant's spot
       runners    = {   -- where the runners hide until they bolt: 4 points on the lanes from the back of the house
                        -- to the escape routes, 3 m+ apart and off the lieutenant
-        vec4(-963.49, 699.56, 155.01, 90.0), vec4(-973.91, 697.78, 156.18, 90.0),
-        vec4(-984.25, 696.66, 157.46, 90.0), vec4(-994.52, 697.12, 158.85, 90.0),
+        vec4(482.59, -1965.64, 24.16, 323.9), vec4(486.79, -1960.02, 24.16, 323.9),
+        vec4(493.02, -1952.15, 24.16, 323.9), vec4(499.28, -1944.71, 24.16, 323.9),
       },
       escapes    = {   -- escape routes away from the start
-        { vec3(-994.92, 697.20, 158.90), vec3(-1029.12, 716.21, 164.68), vec3(-1035.25, 726.00, 165.94) },
-        { vec3(-994.92, 697.20, 158.90), vec3(-1029.12, 716.21, 164.68), vec3(-1002.25, 798.75, 171.72) },
+        { vec3(499.41, -1944.56, 24.16), vec3(526.21, -1914.88, 24.16), vec3(533.17, -1907.76, 24.16) },
+        { vec3(499.41, -1944.56, 24.16), vec3(526.21, -1914.88, 24.16), vec3(580.99, -1975.99, 24.16) },
       },
       caches     = {   -- cache spots (the hidden ones are rolled)
-        vec4(-924.42, 696.63, 152.11, 91.6), vec4(-919.31, 696.83, 151.88, 283.2),
-        vec4(-933.38, 699.75, 152.58, 86.7), vec4(-911.62, 702.38, 151.38, 291.5),
-        vec4(-939.94, 700.12, 152.96, 86.7), vec4(-903.38, 705.38, 150.94, 288.4),
+        vec4(470.21, -1977.86, 24.16, 146.7), vec4(477.28, -1972.92, 24.16, 323.9),
+        vec4(465.80, -1984.56, 24.16, 146.7), vec4(468.29, -1991.82, 24.16, 147.6),
+        vec4(480.82, -1968.07, 24.16, 323.9), vec4(461.96, -1990.61, 24.16, 147.6),
       },
-      scene      = vec3(-929.00, 699.50, 151.54),   -- scene marker: Process the scene
-      coroner    = vec4(-881.75, 708.00, 149.44, 97.2),   -- where the coroner van parks
+      scene      = vec3(470.51, -1982.86, 23.36),   -- scene marker: Process the scene
+      coroner    = vec4(493.92, -2026.37, 23.12, 22.5),   -- where the coroner van parks
     },
     {
       label      = 'House, Vinewood Racetrack',

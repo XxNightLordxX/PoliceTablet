@@ -199,6 +199,26 @@ do
     H.eq(gs.objectives[3].bodies, 4, 'gang_shootout: at most 4 bodies kept')
 end
 
+-- L7: the raid places that made no sense move to real ones: Drug Lab Raid #7 leaves the Zancudo River cabin inside
+-- Fort Zancudo for the Davis Quartz site office; Gang Hideout Raid #4 leaves the Richman Glen mansion for the Rancho
+-- projects, its start on Carson Ave. No alias: a switch saved by an old label no longer matches a moved place.
+do
+    local function Near(p, x, y) return math.sqrt((p.x - x) ^ 2 + (p.y - y) ^ 2) end
+    local dl = RawDef('drug_lab_raid').locations[7]
+    H.eq(dl.label, 'Site office, Davis Quartz', 'drug_lab_raid: lab 7 is the Davis Quartz site office')
+    H.ok(Near(dl.lab, 2601.9, 2806.7) <= 1.0, 'drug_lab_raid: lab 7 is at the site office portacabin')
+    H.eq(dl.aliases, nil, 'drug_lab_raid: lab 7 has no alias')
+    local gh = RawDef('gang_hideout_raid').locations[4]
+    H.eq(gh.label, 'Projects, Rancho', 'gang_hideout_raid: hideout 4 is the Rancho projects')
+    H.ok(Near(gh.start.coords, 491.5, -2040.0) <= 1.0, 'gang_hideout_raid: hideout 4 starts on Carson Ave')
+    H.eq(gh.aliases, nil, 'gang_hideout_raid: hideout 4 has no alias')
+    local zancudo = 0
+    for _, z in ipairs(Config.Builder.noBuildZones) do
+        if z.label:find('Fort Zancudo', 1, true) then zancudo = zancudo + 1 end
+    end
+    H.eq(zancudo, 4, 'config.lua: Fort Zancudo is a no-build zone (4 circles)')
+end
+
 -- PLAN S19 (owner request of 2026-10-19: "make sure they dont spawn around the player"): a scene mission's start circle
 -- is wide enough that an officer arriving at its edge, from any side, is already further away than the spawn director
 -- asks for, so the scene is there before he is on top of it: Suspicious Activity's car and every person and Parking

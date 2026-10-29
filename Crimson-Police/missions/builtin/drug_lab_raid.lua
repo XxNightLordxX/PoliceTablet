@@ -4,7 +4,7 @@
   hold 50 / balanced 40 / push 10), catch the cooks when they bolt, find the stashes and seize the product,
   shut the lab down with three skill checks (two misses in a row start a toxic fire: a setback, never a
   fail) and process the scene.
-  Locations (7 labs): Cabin, Chiliad Mountain State Wilderness, Oil-field shed, El Burro Heights, Warehouse, Cypress Flats, Shack, Fort Zancudo Approach Road, Farmstead, south of Harmony, Trailer, north of Stab City, Cabin, Zancudo River.
+  Locations (7 labs): Cabin, Chiliad Mountain State Wilderness, Oil-field shed, El Burro Heights, Warehouse, Cypress Flats, Shack, Fort Zancudo Approach Road, Farmstead, south of Harmony, Trailer, north of Stab City, Site office, Davis Quartz.
   Every point sits on the GTA V vehicle-node network or 3 m beside it (driveways, yard lanes and dirt
   tracks), at the site's ground level, so no ped spawns inside a wall: the lab point is the node nearest the
   building, the two entries 6–18 m from it facing it, the "inside" set within 32 m and the "yard" set
@@ -244,39 +244,39 @@ RegisterMission({
       coroner = vec4(-332.00, 4012.25, 45.69, 221.3),   -- where the coroner van parks
     },
     {
-      label   = 'Cabin, Zancudo River',
-      start   = { coords = vec3(-2357.50, 3428.25, 28.38), radius = 50.0 },   -- on the approach road, 62 m from the lab
+      label   = 'Site office, Davis Quartz',
+      start   = { coords = vec3(2543.36, 2785.71, 32.08), radius = 50.0 },   -- on the approach road, 62 m from the lab
       entries = {   -- the two entry points: "Stack up and breach"
-        vec4(-2310.97, 3396.94, 30.88, 233.0), vec4(-2318.99, 3402.98, 30.70, 233.0),
+        vec4(2595.59, 2805.41, 32.72, 281.5), vec4(2594.00, 2796.42, 32.78, 322.5),
       },
       inside  = {   -- spawn set "inside" (7 points)
-        vec4(-2307.96, 3390.92, 30.99, 53.0), vec4(-2302.95, 3390.90, 31.06, 55.6),
-        vec4(-2311.17, 3393.33, 30.92, 53.0), vec4(-2306.60, 3386.14, 31.06, 50.4),
-        vec4(-2299.40, 3388.11, 31.09, 55.4), vec4(-2314.38, 3395.75, 30.84, 53.0),
-        vec4(-2303.10, 3383.39, 31.09, 50.5),
+        vec4(2598.94, 2807.20, 32.70, 111.1), vec4(2602.66, 2810.81, 32.70, 112.9),
+        vec4(2601.13, 2802.12, 32.73, 105.9), vec4(2596.75, 2811.89, 32.70, 116.1),
+        vec4(2603.43, 2814.96, 32.70, 116.0), vec4(2594.82, 2800.83, 32.75, 106.4),
+        vec4(2600.35, 2797.55, 32.77, 101.7),
       },
       yard    = {   -- spawn set "yard" (7 points)
-        vec4(-2322.40, 3401.79, 30.66, 53.0), vec4(-2296.10, 3377.89, 31.13, 50.6),
-        vec4(-2290.65, 3381.23, 31.14, 54.9), vec4(-2325.87, 3408.05, 30.44, 57.4),
-        vec4(-2290.86, 3373.87, 31.27, 50.8), vec4(-2329.38, 3403.20, 30.44, 48.3),
-        vec4(-2285.69, 3377.53, 31.38, 54.8),
+        vec4(2606.69, 2824.09, 32.70, 121.2), vec4(2598.56, 2788.62, 32.83, 93.0),
+        vec4(2592.66, 2789.72, 32.83, 94.7), vec4(2613.21, 2826.35, 32.70, 120.2),
+        vec4(2602.59, 2830.13, 32.70, 126.9), vec4(2597.38, 2782.32, 32.89, 86.4),
+        vec4(2608.98, 2830.59, 32.70, 124.4),
       },
       cook    = {   -- the cooks' hiding spot first, then 2 points on the tracks towards the escape routes (3 m+ apart)
-        vec4(-2282.39, 3375.13, 31.61, 234.0), vec4(-2244.25, 3367.00, 33.44, 234.0),
-        vec4(-2264.54, 3365.82, 33.00, 234.0),
+        vec4(2621.36, 2829.01, 32.71, 104.8), vec4(2661.88, 2829.54, 32.70, 104.8),
+        vec4(2641.61, 2833.04, 32.70, 104.8),
       },
       escapes = {   -- escape routes away from the start
-        { vec3(-2244.30, 3366.57, 33.42), vec3(-2262.58, 3332.05, 32.86), vec3(-2179.50, 3285.00, 32.78) },
-        { vec3(-2244.30, 3366.57, 33.42), vec3(-2262.58, 3332.05, 32.86), vec3(-2290.00, 3284.00, 32.84) },
+        { vec3(2662.32, 2829.46, 32.70), vec3(2701.69, 2822.42, 32.75), vec3(2743.88, 2897.66, 31.70) },
+        { vec3(2662.32, 2829.46, 32.70), vec3(2701.69, 2822.42, 32.75), vec3(2701.65, 2796.46, 32.98) },
       },
       stashes = {   -- stash spots (the hidden ones are rolled)
-        vec4(-2309.76, 3388.52, 30.99, 53.0), vec4(-2314.58, 3392.15, 30.88, 53.0),
-        vec4(-2301.25, 3385.75, 31.09, 231.8), vec4(-2314.17, 3399.35, 30.81, 53.0),
-        vec4(-2295.90, 3385.36, 31.11, 231.8), vec4(-2319.39, 3395.77, 30.77, 53.0),
+        vec4(2598.17, 2802.62, 32.73, 170.4), vec4(2600.47, 2815.50, 32.70, 349.6),
+        vec4(2596.94, 2795.83, 32.78, 168.7), vec4(2606.01, 2818.83, 32.70, 138.1),
+        vec4(2600.08, 2821.20, 32.70, 138.1), vec4(2595.61, 2789.17, 32.83, 168.7),
       },
-      lab     = vec4(-2306.15, 3393.31, 30.99, 53.0),   -- "Shut down the lab"
-      scene   = vec3(-2304.75, 3388.50, 30.26),   -- scene marker: Process the scene
-      coroner = vec4(-2338.50, 3413.50, 29.38, 238.0),   -- where the coroner van parks
+      lab     = vec4(2601.90, 2806.70, 32.70, 170.4),   -- "Shut down the lab"
+      scene   = vec3(2599.71, 2811.35, 31.90),   -- scene marker: Process the scene
+      coroner = vec4(2566.82, 2781.40, 32.39, 305.8),   -- where the coroner van parks
     },
   },
 
