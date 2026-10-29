@@ -130,3 +130,23 @@
         grid-template-columns: 1fr;
     }
 }
+
+/* A mission file that did not load: a greyed catalog row with the plain reason */
+.builder_client-catalog tr.is-muted td {
+    opacity: 0.6;
+}
+
+.builder_client-catalog tr.is-muted td:last-child {
+    opacity: 1;
+}
+
+.admin-missions-problem {
+    margin: 4px 0 0;
+    padding: 8px;
+    max-height: 200px;
+    overflow: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    border: 1px solid var(--cp-border);
+    border-radius: var(--cp-radius-sm);
+}

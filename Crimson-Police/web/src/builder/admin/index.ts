@@ -7,6 +7,7 @@ export { ChangeOwnerDialog, CopyLuaDialog, ImportDialog } from './MissionTransfe
 export {
     DeletedMissions,
     DispatchHistory,
+    LoadProblemDialog,
     LoadResultBanner,
     LoadSummaryBody,
     MissionStats,

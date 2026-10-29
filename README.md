@@ -1656,7 +1656,10 @@ Dispatch). Location switches are saved by the location's name: when an edit rena
 catalog shows "n location switches no longer match" with **Remap**.
 
 **Load result.** A banner above the catalog says when a mission file (or an edited built-in) did not load at the last
-start or reload, with the reason. The same appears as the `missions` line in Permissions → Config health.
+start or reload, with the reason. The same appears as the `missions` line in Permissions → Config health. A mission
+file that did not load also stays in the catalog as a greyed **Not loaded** row with the reason in plain words (for
+example "Time limit must be 1 to 60 minutes."); **Show the problem** opens the file name and the loader's own text.
+Fix the file (or remove it), then press **Reload mission files**.
 
 **History and stats.** The **History** tab lists every Cross-Department Mission (who launched it, who took part, the
 points; **Details** → **Void this operation's rows** opens the bulk void with that operation already chosen) and

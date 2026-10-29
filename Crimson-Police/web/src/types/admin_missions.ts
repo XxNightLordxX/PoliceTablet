@@ -62,7 +62,10 @@ export interface VersionDiff {
 export interface LoadFailure {
     id: string;
     file?: string;
+    // the loader's own text (the detail behind Show the problem)
     error: string;
+    // the same in plain words (missions.reason.*)
+    reason?: string;
 }
 
 export interface BuilderSync {

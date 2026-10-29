@@ -27,6 +27,7 @@ import { BulkVoidDialog } from '../../admin/components/BulkVoidDialog';
 import type {
     DeletedMission,
     DispatchHistoryRow,
+    LoadFailure,
     MissionLoadSummary,
     MissionStatsData,
     MissionStatsRow,
@@ -94,7 +95,8 @@ export function LoadSummaryBody({ summary }: { summary: MissionLoadSummary }) {
                             <Icon name="xCircle" size={13} />
                             <span>
                                 <b>{f.id}</b>
-                                {f.file ? ` (${f.file})` : ''}: {f.error}
+                                {f.file ? ` (${f.file})` : ''}: {f.reason ?? f.error}
+                                {f.reason ? <span className="admin-missions-muted"> {f.error}</span> : null}
                             </span>
                         </li>
                     ))}
@@ -142,6 +144,47 @@ export function LoadSummaryBody({ summary }: { summary: MissionLoadSummary }) {
                 </details>
             ) : null}
         </div>
+    );
+}
+
+// Show the problem: why a mission file did not load, in plain words, then the loader's own text.
+export function LoadProblemDialog({
+    failure,
+    label,
+    onClose,
+}: {
+    failure: LoadFailure | null;
+    label: string;
+    onClose: () => void;
+}) {
+    return (
+        <Dialog
+            open={!!failure}
+            onClose={onClose}
+            title={t('admin.missions.problem.title', { mission: label })}
+            size="md"
+            footer={<Button onClick={onClose}>{t('common.close')}</Button>}
+        >
+            {failure ? (
+                <div className="builder_client-form">
+                    <div className="builder_client-callout builder_client-callout--warning">
+                        <Icon name="xCircle" size={15} />
+                        <span>{failure.reason ?? failure.error}</span>
+                    </div>
+                    {failure.file ? (
+                        <div>
+                            <div className="admin-missions-muted">{t('admin.missions.problem.file')}</div>
+                            <span className="builder_client-mono">{failure.file}</span>
+                        </div>
+                    ) : null}
+                    <div>
+                        <div className="admin-missions-muted">{t('admin.missions.problem.detail')}</div>
+                        <pre className="builder_client-mono admin-missions-problem">{failure.error}</pre>
+                    </div>
+                    <div className="admin-missions-muted">{t('admin.missions.problem.fix')}</div>
+                </div>
+            ) : null}
+        </Dialog>
     );
 }
 

@@ -234,6 +234,30 @@ do
     H.ok(okA, 'archived again')
 end
 
+-- A6: a custom file the loader refuses: the load result gives the plain reason and keeps the raw text as detail
+do
+    local realLoad = CP.Builder.loadPublished
+    local good = CP.Missions.rawOf('beat_patrol')
+    local bad = CP.U.deepcopy(good or {})
+    bad.id = 'a6_broken'
+    bad.timeLimit = 5
+    CP.Builder.loadPublished = function()
+        local list = realLoad and realLoad() or {}
+        list[#list + 1] = { def = bad, meta = { id = 'a6_broken', filePath = 'missions/custom/a6_broken.lua' } }
+        return list
+    end
+    CP.Missions.reload()
+    CP.Builder.loadPublished = realLoad
+    local sum = X.cb('admin:getMissionLoad', 5)
+    local f
+    for _, e in ipairs(sum and sum.failed or {}) do if e.id == 'a6_broken' then f = e end end
+    H.ok(good ~= nil and f ~= nil, 'the refused custom file is in the load result')
+    H.eq(f and f.reason, 'Time limit must be 1 to 60 minutes.', 'with its plain reason')
+    H.eq(f and f.error, 'timeLimit must be 60 to 3600 seconds', 'and the loader\'s own text as the detail')
+    H.eq(f and f.file, 'missions/custom/a6_broken.lua', 'and its file')
+    CP.Missions.reload()
+end
+
 -- ============================================================================
 --           6. QUICK EDIT, checkTweak, THE SETTINGS TRIAL, THE REMAP
 -- ============================================================================

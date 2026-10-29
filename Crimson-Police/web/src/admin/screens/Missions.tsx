@@ -38,6 +38,7 @@ import {
     DeletedMissions,
     DispatchHistory,
     ImportDialog,
+    LoadProblemDialog,
     LoadResultBanner,
     LoadSummaryBody,
     MissionStats,
@@ -48,7 +49,7 @@ import {
     VersionsDialog,
 } from '../../builder/admin';
 import { useAdminAction } from '../components/kit';
-import type { MissionLoadSummary, OverrideView } from '../../types/admin_missions';
+import type { LoadFailure, MissionLoadSummary, OverrideView } from '../../types/admin_missions';
 import type {
     BuilderCreateResult,
     BuilderList,
@@ -87,6 +88,8 @@ interface CatalogRow {
     // a built-in for an admin: its override view (Edited, Original changed) and Edit in Builder
     override: OverrideView | null;
     canEditBuiltin: boolean;
+    // the last load refused this mission's file: the row is greyed with the plain reason (Show the problem)
+    loadError: LoadFailure | null;
 }
 
 type ReloadSummary = MissionLoadSummary;
@@ -119,6 +122,7 @@ export default function AdminMissions() {
     }, [params]); // eslint-disable-line react-hooks/exhaustive-deps
     const missions = useRequest<AdminMissionsData>('admin:getMissions', {}, { pushTopic: 'operation', pollMs: 30000 });
     const builder = useRequest<BuilderList>('builder:list', {}, { pushTopic: 'builder', pollMs: 30000 });
+    const load = useRequest<MissionLoadSummary>('admin:getMissionLoad', {}, { pushTopic: 'builder', pollMs: 60000 });
     // the catalog (loaded missions, pool, eligibility) changes when a custom mission joins or leaves its pool
     usePush<{ event?: string }>('builder', data => {
         const ev = data && typeof data === 'object' ? data.event : undefined;
@@ -134,6 +138,7 @@ export default function AdminMissions() {
     const [adminConfirm, setAdminConfirm] = useState<AdminConfirm>(null);
     const [openDialog, setOpenDialog] = useState<Open>(null);
     const [importOpen, setImportOpen] = useState(false);
+    const [problem, setProblem] = useState<CatalogRow | null>(null);
     const admin = useAdminAction();
 
     const rows = useMemo<CatalogRow[]>(() => {
@@ -162,6 +167,7 @@ export default function AdminMissions() {
                 mission: m,
                 override: builtin ? (builtins.get(m.id)?.override ?? entry?.override ?? null) : null,
                 canEditBuiltin: builtin && !!builtins.get(m.id)?.canEdit,
+                loadError: null,
             };
         });
         entries.forEach(e => {
@@ -184,10 +190,41 @@ export default function AdminMissions() {
                 mission: null,
                 override: e.override ?? null,
                 canEditBuiltin: false,
+                loadError: null,
+            });
+        });
+        // the files the last load refused: a mission in no pool gets the reason; one not listed gets its own row
+        asArray(load.data?.failed).forEach(f => {
+            const row = out.find(r => r.id === f.id);
+            if (row) {
+                if (!row.inPool && !row.loadError) row.loadError = f;
+                return;
+            }
+            const builtin = !!f.file && f.file.startsWith('missions/builtin/');
+            out.push({
+                id: f.id,
+                label: f.id,
+                type: '',
+                typeLabel: '',
+                source: builtin ? 'builtin' : 'custom',
+                version: null,
+                filePath: f.file ?? null,
+                editedInCode: false,
+                inPool: false,
+                enabled: false,
+                offInConfig: false,
+                isBoss: false,
+                eligible: false,
+                switch: null,
+                entry: null,
+                mission: null,
+                override: null,
+                canEditBuiltin: false,
+                loadError: f,
             });
         });
         return out;
-    }, [missions.data, builder.data]);
+    }, [missions.data, builder.data, load.data]);
 
     const switchRow = rows.find(r => r.id === locationsOf) ?? null;
 
@@ -225,6 +262,7 @@ export default function AdminMissions() {
     const refetchAll = () => {
         void missions.refetch();
         void builder.refetch();
+        void load.refetch();
     };
 
     const doConfirm = async () => {
@@ -440,6 +478,16 @@ export default function AdminMissions() {
             header: t('admin.missions.col.status'),
             width: 230,
             render: r => {
+                if (r.loadError) {
+                    return (
+                        <div className="builder_client-status-cell" title={t('admin.missions.not_loaded_hint')}>
+                            <Badge size="sm" tone="danger" icon="xCircle">
+                                {t('admin.missions.not_loaded')}
+                            </Badge>
+                            <span className="admin-missions-muted">{r.loadError.reason ?? r.loadError.error}</span>
+                        </div>
+                    );
+                }
                 const sw = r.switch ? (
                     <MissionSwitch row={r} busy={busy} onToggle={setMission} onLocations={setLocationsOf} />
                 ) : null;
@@ -490,8 +538,16 @@ export default function AdminMissions() {
             align: 'right',
             render: r => {
                 const e = r.entry;
+                const showProblem = r.loadError ? (
+                    <Button size="sm" variant="secondary" icon="alert" onClick={() => setProblem(r)}>
+                        {t('admin.missions.problem.open')}
+                    </Button>
+                ) : null;
+                // a file that never loaded and has no Builder entry: only its problem can be opened
+                if (r.loadError && !e) return <div className="builder_client-row-actions">{showProblem}</div>;
                 return (
                     <div className="builder_client-row-actions">
+                        {showProblem}
                         {r.eligible && canLaunch ? (
                             <IconButton
                                 icon="globe"
@@ -821,6 +877,7 @@ export default function AdminMissions() {
                             columns={columns}
                             rows={filtered}
                             rowKey={r => r.id}
+                            rowClassName={r => (r.loadError ? 'is-muted' : undefined)}
                             empty={t('admin.missions.none')}
                             aria-label={t('ui.screen.admin_missions')}
                         />
@@ -943,6 +1000,11 @@ export default function AdminMissions() {
                 onConfirm={doAdminConfirm}
                 onCancel={() => setAdminConfirm(null)}
                 busy={admin.busy}
+            />
+            <LoadProblemDialog
+                failure={problem?.loadError ?? null}
+                label={problem?.label ?? ''}
+                onClose={() => setProblem(null)}
             />
             <QuickEditDialog
                 missionId={openDialog?.kind === 'quick' ? openDialog.row.id : null}

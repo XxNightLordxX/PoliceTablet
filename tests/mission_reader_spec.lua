@@ -544,10 +544,92 @@ do
     for _, f in ipairs(view and view.failed or {}) do if f.id == ID then shown = f.error end end
     H.ok(shown and tostring(shown):find(where, 1, true) ~= nil,
         'Admin UI -> Missions -> Load result shows it: ' .. tostring(shown))
+    local plain
+    for _, f in ipairs(view and view.failed or {}) do if f.id == ID then plain = f.reason end end
+    H.eq(plain, CP.L('missions.reason.unreadable'), 'and the catalog\'s plain reason: a typo or code in the file')
     _G.LoadResourceFile = realLoad
     sum = CP.Missions.reload()
     H.eq(#(sum.failed or {}), 0, 'the file fixed: nothing rejected')
     H.ok(CP.Missions.get(ID) ~= nil, ID .. ' plays again')
+end
+
+-- ============================================================================
+--                   9. THE REFUSAL TEXTS IN PLAIN WORDS (A6)
+-- ============================================================================
+-- The catalog greys a file that did not load and gives this reason; Show the problem keeps the raw text.
+
+do
+    local cases = {
+        { 'timeLimit must be 60 to 3600 seconds', 'missions.reason.time_limit', 'Time limit must be 1 to 60 minutes.' },
+        {
+            'startTimeout must be 60 to 3600 seconds',
+            'missions.reason.start_timeout',
+            'The time to start must be 1 to 60 minutes.',
+        },
+        { 'cooldown must be 0 to 86400 seconds', 'missions.reason.cooldown', 'Cooldown must be 0 to 24 hours.' },
+        { 'label is missing', 'missions.reason.label', 'The mission has no name.' },
+        {
+            'type "heist" is not a key of Config.MissionTypes',
+            'missions.reason.type',
+            'The mission type "heist" does not exist on this server.',
+        },
+        {
+            'minOfficers/maxOfficers must be whole numbers with 1 <= min <= max <= 4',
+            'missions.reason.officers',
+            'Officers must be whole numbers from 1 to 4, the minimum not above the maximum.',
+        },
+        { 'difficulty must be 1 to 3 stars', 'missions.reason.difficulty', 'Difficulty must be 1 to 3 stars.' },
+        {
+            'quietPatrol must be true or false',
+            'missions.reason.on_off',
+            'quietPatrol must be on or off (true or false).',
+        },
+        {
+            'location 2 has no start = { coords = vec3(...), radius = n }',
+            'missions.reason.no_start',
+            'Location 2 has no start point.',
+        },
+        {
+            'location 3 (Docks): start is inside the no-build zone "Mission Row PD"',
+            'missions.reason.no_build',
+            'Location 3 (Docks) is inside the no-build zone "Mission Row PD".',
+        },
+        {
+            'objective 1 uses unknown block "fly"',
+            'missions.reason.unknown_block',
+            'Objective 1 uses the block "fly", which this server does not have.',
+        },
+        {
+            'objective 2 (arrest), location 1 (Docks): too many peds',
+            'missions.reason.objective_location',
+            'Objective 2 (arrest) at location 1: too many peds',
+        },
+        { 'file not found', 'missions.reason.no_file', 'The mission file is missing.' },
+        {
+            'its id "a" does not match the file name',
+            'missions.reason.id_mismatch',
+            'The id inside the file ("a") does not match the file name.',
+        },
+        {
+            'another mission already uses this id',
+            'missions.reason.duplicate',
+            'Another mission already uses this id.',
+        },
+        {
+            '@missions/custom/x.lua:7: a function is not data',
+            'missions.reason.unreadable',
+            'The file has a typo or code in it, so it cannot be read as mission data.',
+        },
+        {
+            'something new',
+            'missions.reason.other',
+            'The mission loader refused this file. Show the problem has the details.',
+        },
+    }
+    for _, c in ipairs(cases) do
+        H.ok(CP.Locale.has(c[2]), c[2] .. ' is a locale key')
+        H.eq(CP.Missions.plainReason(c[1]), c[3], c[1] .. ' -> ' .. c[2])
+    end
 end
 
 X.cleanup()

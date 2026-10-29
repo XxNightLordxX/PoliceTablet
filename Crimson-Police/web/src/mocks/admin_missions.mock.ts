@@ -35,6 +35,14 @@ let deleted: DeletedMission[] = [
 ];
 const hidden = new Set<number>();
 
+// a custom file the loader refused: the catalog greys it with the plain reason (Show the problem)
+const brokenFile = {
+    id: 'custom_broken_patrol',
+    file: 'missions/custom/custom_broken_patrol.lua',
+    error: 'timeLimit must be 60 to 3600 seconds',
+    reason: 'Time limit must be 1 to 60 minutes.',
+};
+
 registerMock('request', 'admin:getMissionLoad', (): MissionLoadSummary => ({
     loaded: 21,
     builtin: 19,
@@ -42,7 +50,7 @@ registerMock('request', 'admin:getMissionLoad', (): MissionLoadSummary => ({
     overridden: 1,
     warnings: 1,
     warningTexts: [{ id: 'custom_night_beat', text: 'location 3: the start is close to another location' }],
-    failed: [],
+    failed: [brokenFile],
     overrideFailed: [],
     builder: { checked: 3, edited: [], rejected: [], conflicts: [], rewritten: [] },
     at: now() - 3600,

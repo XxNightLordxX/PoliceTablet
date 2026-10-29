@@ -23,6 +23,8 @@ export interface TableProps<R> {
     onRowClick?: (row: R, index: number) => void;
     // Rows to highlight (e.g. the viewer's own leaderboard row).
     highlightRow?: (row: R, index: number) => boolean;
+    // An extra class for a row (e.g. 'is-muted' for a greyed row).
+    rowClassName?: (row: R, index: number) => string | undefined;
     // Shown when rows is empty: a string title or any node.
     empty?: ReactNode;
     loading?: boolean;
@@ -49,6 +51,7 @@ export function Table<R>({
     rowKey,
     onRowClick,
     highlightRow,
+    rowClassName,
     empty,
     loading,
     stickyHeader = true,
@@ -102,7 +105,7 @@ export function Table<R>({
                     {list.map((row, i) => (
                         <tr
                             key={keyOf(row, i)}
-                            className={cx(highlightRow?.(row, i) && 'is-highlight')}
+                            className={cx(highlightRow?.(row, i) && 'is-highlight', rowClassName?.(row, i))}
                             onClick={onRowClick ? () => onRowClick(row, i) : undefined}
                             onKeyDown={onRowClick ? onKey(row, i) : undefined}
                             tabIndex={onRowClick ? 0 : undefined}

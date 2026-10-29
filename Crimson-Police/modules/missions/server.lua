@@ -1204,10 +1204,76 @@ CP.Net.callback('getMissionDefs', function(src)
     return clientList
 end, { rate = 2 })
 
+-- The loader's common refusal texts in plain words: { Lua pattern of the raw text, locale key, names of its captures }.
+-- The first match wins; a text none matches gets missions.reason.other. The raw text stays the detail.
+local PLAIN_REASONS = {
+    { '^timeLimit must be', 'missions.reason.time_limit' },
+    { '^startTimeout must be', 'missions.reason.start_timeout' },
+    { '^cooldown must be', 'missions.reason.cooldown' },
+    { '^id must start with a letter', 'missions.reason.id' },
+    { '^label is missing', 'missions.reason.label' },
+    { '^description must be text', 'missions.reason.description' },
+    { '^type "(.-)" is not a key', 'missions.reason.type', { 'type' } },
+    { '^departments must be', 'missions.reason.departments' },
+    { '^minOfficers/maxOfficers must be .-<= (%d+)$', 'missions.reason.officers', { 'max' } },
+    { '^difficulty must be 1 to (%d+) stars', 'missions.reason.difficulty', { 'max' } },
+    { '^(%a+) must be true or false', 'missions.reason.on_off', { 'field' } },
+    { '^decisions must be a table', 'missions.reason.decisions' },
+    { '^locations must be a non%-empty list', 'missions.reason.no_locations' },
+    { '^location (%d+) has no start', 'missions.reason.no_start', { 'n' } },
+    { '^location (%d+): start%.radius', 'missions.reason.start_radius', { 'n' } },
+    {
+        '^location (%d+) %((.-)%): .- is inside the no%-build zone "(.-)"',
+        'missions.reason.no_build',
+        { 'n', 'label', 'zone' },
+    },
+    { '^location (%d+)', 'missions.reason.location', { 'n' } },
+    { '^objectives must be a non%-empty list', 'missions.reason.no_objectives' },
+    { '^objective (%d+) uses unknown block "(.-)"', 'missions.reason.unknown_block', { 'n', 'block' } },
+    { '^objective (%d+) has no block', 'missions.reason.no_block', { 'n' } },
+    {
+        '^objective (%d+) %(([%w_]+)%), location (%d+) %(.-%): (.+)$',
+        'missions.reason.objective_location',
+        { 'n', 'block', 'loc', 'why' },
+    },
+    { '^objective (%d+)', 'missions.reason.objective', { 'n' } },
+    { 'file not found', 'missions.reason.no_file' },
+    { 'was not found', 'missions.reason.no_file' },
+    { '^its id "(.-)" does not match the file name', 'missions.reason.id_mismatch', { 'id' } },
+    { '^another mission already uses this id', 'missions.reason.duplicate' },
+    { '^a built%-in mission already uses this id', 'missions.reason.duplicate' },
+    { 'never calls RegisterMission', 'missions.reason.no_register' },
+    { 'calls RegisterMission %d+ times', 'missions.reason.many_register' },
+    { 'larger than %d+ bytes', 'missions.reason.too_large' },
+    { 'syntax error', 'missions.reason.unreadable' },
+    { ':%d+: ', 'missions.reason.unreadable' },
+    { 'could not be read', 'missions.reason.unreadable' },
+    { '^items entry %d+: "(.-)" can never be', 'missions.reason.items', { 'item' } },
+}
+
+-- The plain-English reason for a loader refusal text (shown in the catalog; the raw text is the detail).
+function Missions.plainReason(err)
+    local text = tostring(err or '')
+    for _, r in ipairs(PLAIN_REASONS) do
+        local caps = { text:match(r[1]) }
+        if caps[1] ~= nil then
+            local vars = {}
+            for i, name in ipairs(r[3] or {}) do vars[name] = caps[i] end
+            return CP.L(r[2], vars)
+        end
+    end
+    return CP.L('missions.reason.other')
+end
+
 local function PlainList(list)
     local out = {}
     for i, f in ipairs(type(list) == 'table' and list or {}) do
-        out[i] = { id = tostring(f.id), file = f.file and tostring(f.file) or nil, error = tostring(f.error) }
+        out[i] = {
+            id = tostring(f.id),
+            file = f.file and tostring(f.file) or nil,
+            error = tostring(f.error),
+            reason = Missions.plainReason(f.error),
+        }
     end
     return out
 end
