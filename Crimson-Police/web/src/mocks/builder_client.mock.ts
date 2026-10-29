@@ -491,6 +491,7 @@ const FB_CONFIG: BuilderConfig = {
         loopClose: 50,
         undoMetres: 100,
         testDriveTimeout: 30,
+        patrolSpacing: 300,
     },
     startRadius: [20, 150, 60],
     maxItems: 10,

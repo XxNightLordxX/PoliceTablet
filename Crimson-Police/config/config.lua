@@ -1480,6 +1480,8 @@ Config.Builder = {
         loopClose = 50.0,       -- a race loop must end this close to its start
         undoMetres = 100.0,     -- Backspace removes this much of the recording
         testDriveTimeout = 30,  -- seconds to reach each waypoint in a test drive
+        patrolSpacing = 300.0,  -- a patrol (checkpoint route) recorded by driving is saved as checkpoints about
+                                -- this many metres apart along the drive, not as a road route
     },
     allowed = {                 -- the only models, weapons and animations builders can pick
         -- no automatic weapons: an NPC never gets one (Config.NpcCombat), so the Builder never offers one

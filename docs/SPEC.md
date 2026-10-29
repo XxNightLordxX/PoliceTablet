@@ -1814,7 +1814,7 @@ Flow
 
 - Place it in the world → the tablet closes into placement mode (see Placement tool) and reopens when done.
 
-- Record routes → blocks that move along roads (escort, pursuit, checkpoint route) record a road route by driving it (see Route recording).
+- Record routes → blocks that move along roads (escort, pursuit) record a road route by driving it; a checkpoint route recorded this way is saved as checkpoints (see Route recording).
 
 - Scaling → tick which counts scale with the tier; each block suggests a default.
 
@@ -2003,6 +2003,8 @@ Route recording
 - After recording, the tablet shows the route on the map with its length. Test drive spawns the vehicle and sends it along the route at the chosen speed so the builder can watch or follow; any waypoint it fails to reach within 30 s is marked for re-recording.
 
 - Checks: 0.8–8 km long; start and end at least 300 m apart (a race loop must end within 50 m of its start); a road path exists between each pair of waypoints (CalculateTravelDistanceBetweenPoints); no waypoint inside a no-build zone.
+
+- A patrol (checkpoint route) recorded by driving is not a road route: it is saved as plain checkpoints about `Config.Builder.route.patrolSpacing` (300 m) apart along the drive, plus its end (at most the block's checkpoint maximum), so the route checks above do not apply and a short beat publishes. **Place checkpoints** is its main button.
 
 Route data as stored in an objective of the mission file. Speed and style are the block's own settings, so the same route format works for escort, pursuit and checkpoint_route:
 
@@ -3985,6 +3987,8 @@ Config.Builder = {
         loopClose = 50.0,       -- a race loop must end this close to its start
         undoMetres = 100.0,     -- Backspace removes this much of the recording
         testDriveTimeout = 30,  -- seconds to reach each waypoint in a test drive
+        patrolSpacing = 300.0,  -- a patrol (checkpoint route) recorded by driving is saved as checkpoints about
+                                -- this many metres apart along the drive, not as a road route
     },
     allowed = {                 -- the only models, weapons and animations builders can pick
         -- no automatic weapons: an NPC never gets one (Config.NpcCombat), so the Builder never offers one

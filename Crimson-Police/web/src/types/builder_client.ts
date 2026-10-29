@@ -171,6 +171,9 @@ export interface PointSpec {
     placeable?: boolean;
     // route: at most this many waypoints are kept (checkpoint routes: Config.Blocks.checkpoint_route.checkpoints[2])
     thinTo?: number;
+    // route: a recording is saved as plain points about this many metres apart along the drive, not as a road route
+    // (checkpoint routes: Config.Builder.route.patrolSpacing)
+    spacing?: number;
     // kerb spots: each point is { coords, rule, street } (field_contact parked mode); the rule is picked per spot
     ruled?: boolean;
     // test drive vehicle, speed and style for routes

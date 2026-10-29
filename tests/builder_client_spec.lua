@@ -1701,7 +1701,7 @@ const pt = i => ({ x: 100 + i, y: 200 + i, z: 30 });
 const flee = { key: 'routes', field: 'routes', labelKey: 'builder.points.flee_paths', kind: 'marker', heading: false,
     multiple: true, lists: true, min: 2, max: 12, spawn: false, objective: 1 };
 const checkpoints = { key: 'checkpoints', field: 'checkpoints', labelKey: 'builder.points.checkpoints', kind: 'route',
-    heading: false, multiple: true, min: 2, max: 20, spawn: false, objective: 1, thinTo: 20 };
+    heading: false, multiple: true, min: 2, max: 20, spawn: false, objective: 1, thinTo: 20, spacing: 300 };
 let def = { locations: [{ label: 'L1', start: { coords: pt(0), radius: 60 } }], objectives: [] };
 const placed = (seq, n) => ({ kind: 'placement', missionId: 'm1', location: 1, key: 'routes', cancelled: false, seq,
     points: Array.from({ length: n }, (_, i) => pt(seq * 10 + i)) });
@@ -1721,8 +1721,24 @@ push({ kind: 'recording', missionId: 'm1', location: 1, key: 'checkpoints', canc
     rejected: 0, rejectedSamples: [], unreachable: [],
     route: { points: Array.from({ length: 45 }, (_, i) => pt(i * 3)), stops: [] } });
 def = applyPending(def);
-out.checkpoints = def.locations[0].checkpoints.points.length;
+out.checkpoints = def.locations[0].checkpoints.length;
+out.plain = Array.isArray(def.locations[0].checkpoints);
 out.thinned = out.meta.thinned;
+out.recMessage = out.message;
+// a 0.44 km beat driven around a block (waypoints 25 m apart): checkpoints about 300 m apart, not a road route
+const beat = Array.from({ length: 18 }, (_, i) => ({ x: 100 + i * 25, y: 200, z: 30 }));
+tool('recording', checkpoints);
+push({ kind: 'recording', missionId: 'm1', location: 1, key: 'checkpoints', cancelled: false, seq: 4, length: 440,
+    rejected: 0, rejectedSamples: [], unreachable: [], route: { points: beat, stops: [], loop: true } });
+def = applyPending(def);
+out.beat = def.locations[0].checkpoints.map(p => p.x);
+// a long patrol (45 waypoints 100 m apart) with a 50 m spacing keeps every waypoint, then at most 20
+tool('recording', { ...checkpoints, spacing: 50 });
+push({ kind: 'recording', missionId: 'm1', location: 1, key: 'checkpoints', cancelled: false, seq: 5, length: 4400,
+    rejected: 0, rejectedSamples: [], unreachable: [],
+    route: { points: Array.from({ length: 45 }, (_, i) => ({ x: i * 100, y: 0, z: 30 })), stops: [] } });
+def = applyPending(def);
+out.long = def.locations[0].checkpoints.length;
 console.log(JSON.stringify(out));
 ]]
         js = js:gsub('WEB_DIR', function() return root .. 'web/src/builder' end)
@@ -1747,8 +1763,12 @@ console.log(JSON.stringify(out));
         H.eq(got.autoOpen, true, 'a pending result of the running tool can open its editor (BuilderWorkspace)')
         H.eq(json.encode(got.paths), '[3,2]', 'a second flee path is added next to the first (a list of lists)')
         H.eq(got.toolAfter, true, 'the tool is forgotten once its result is applied')
-        H.eq(got.checkpoints, 20, 'a recorded checkpoint route is thinned to checkpoint_route.checkpoints[2]')
+        H.eq(got.checkpoints, 2, 'a 0.19 km recording with a 300 m spacing keeps its first and last point')
+        H.eq(got.plain, true, 'a recorded patrol is saved as plain checkpoints, not a road route')
         H.eq(got.thinned, 45, 'the route meta says how many waypoints were recorded')
+        H.eq(got.recMessage, 'builder.result.recorded_checkpoints', 'the confirmation says it was saved as checkpoints')
+        H.eq(json.encode(got.beat), '[100,400,525]', 'a 0.44 km beat: checkpoints about 300 m apart and its end')
+        H.eq(got.long, 20, 'a recorded patrol keeps at most checkpoint_route.checkpoints[2] checkpoints')
     end
 end
 

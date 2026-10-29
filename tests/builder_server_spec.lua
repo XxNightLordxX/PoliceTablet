@@ -964,6 +964,24 @@ local function Body()
         return B.validate(d)
     end
     H.eq(keysOf(withRoute(route(2000))), '', 'a 2 km open route passes')
+    do
+        -- a patrol (checkpoint_route) recorded by driving: a 0.44 km beat that ends where it began is not a road route
+        local d = U.deepcopy(good)
+        d.objectives[2] = {
+            block = 'checkpoint_route',
+            label = 'Patrol the beat',
+            checkpoints = 'beat',
+            minSeconds = 30,
+            presenceRange = 150,
+        }
+        local beat = { points = {}, loop = true }
+        for i = 0, 2 do beat.points[#beat.points + 1] = { x = 3000.0 + i * 100.0, y = 500.0, z = 30.0 } end
+        beat.points[#beat.points + 1] = { x = 3000.0, y = 520.0, z = 30.0 }
+        for li = 1, 3 do d.locations[li].beat = U.deepcopy(beat) end
+        H.eq(keysOf(B.validate(d)), '', 'a short driven beat stored as a route gets no route errors')
+        for li = 1, 3 do d.locations[li].beat = U.deepcopy(beat.points) end
+        H.eq(keysOf(B.validate(d)), '', 'the same beat as plain checkpoints passes')
+    end
     H.ok(hasError(withRoute(route(500)), 'builder.error.route_length'), 'a 0.5 km route is too short')
     H.ok(hasError(withRoute(route(9000)), 'builder.error.route_length'), 'a 9 km route is too long')
     do

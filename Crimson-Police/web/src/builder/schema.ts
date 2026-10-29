@@ -635,6 +635,7 @@ export function pointSpecs(cfg: BuilderConfig, obj: BuilderObjective, index: num
                 spawn: false,
                 placeable: true,
                 thinTo: cp.max,
+                spacing: cfg.route?.patrolSpacing ?? 300,
                 vehicle: allowedCar,
                 speed: 80,
                 style: 'normal',

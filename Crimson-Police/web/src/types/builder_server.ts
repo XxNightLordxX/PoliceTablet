@@ -252,6 +252,8 @@ export interface BuilderRouteConfig {
     loopClose: number;
     undoMetres: number;
     testDriveTimeout: number;
+    // metres between the checkpoints a driven patrol is saved as
+    patrolSpacing?: number;
 }
 
 export interface BuilderConfig {

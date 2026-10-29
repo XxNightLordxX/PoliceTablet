@@ -1862,6 +1862,7 @@ function B.validate(def, opts)
     local minTotal = 0
     local spawnKeys = {}   -- location key -> true
     local armedKeys = {}   -- location key -> true (armed spawns: outside the start circle plus the margin)
+    local patrolKeys = {}  -- location key -> true (a checkpoint_route's checkpoints: not judged as a road route)
     local pointLabels = {} -- location key -> builder.points.* (the name error texts use)
     local startReason = {} -- location index -> the block error that already says "too close to the start"
     local minFromStart = tonumber(bc.minSpawnFromStart) or 30
@@ -1957,6 +1958,9 @@ function B.validate(def, opts)
                 for _, field in ipairs(SPAWN_FIELDS[blockId] or {}) do
                     local key = U.getPath(eff, field)
                     if type(key) == 'string' then spawnKeys[key] = true end
+                end
+                if blockId == 'checkpoint_route' and type(eff.checkpoints) == 'string' then
+                    patrolKeys[eff.checkpoints] = true
                 end
                 ArmedKeys(blockId, eff, armedKeys)
             end
@@ -2075,7 +2079,8 @@ function B.validate(def, opts)
                         AddError(errors, kp, 'builder.error.spawn_start',
                             { key = name, location = li, min = Nice(minFromStart) })
                     end
-                    if IsRoute(v) then CheckRoute(errors, v, kp, li, name) end
+                    -- a patrol's checkpoints are only points to drive through: a short beat is not a race loop
+                    if IsRoute(v) and not patrolKeys[key] then CheckRoute(errors, v, kp, li, name) end
                 end
             end
         end

@@ -85,6 +85,23 @@ export function thin<T>(points: T[], max: number): T[] {
     return out;
 }
 
+// Points about `spacing` metres apart along a path: the first, then each point at least that far (along the path)
+// from the last one kept, and the end of the path.
+export function spaceOut(points: Vec3[], spacing: number): Vec3[] {
+    if (points.length < 2 || !(spacing > 0)) return points.slice();
+    const out: Vec3[] = [points[0]];
+    let run = 0;
+    for (let i = 1; i < points.length; i += 1) {
+        run += dist3d(points[i - 1], points[i]);
+        if (run >= spacing) {
+            out.push(points[i]);
+            run = 0;
+        }
+    }
+    if (out[out.length - 1] !== points[points.length - 1]) out.push(points[points.length - 1]);
+    return out;
+}
+
 // ============================================================================
 //                          NORMALISING (Lua {} → [])
 // ============================================================================

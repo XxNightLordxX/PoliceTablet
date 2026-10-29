@@ -657,6 +657,7 @@
   "builder.result.placed": "{n} points saved for location {location}.",
   "builder.result.recorded": "Route recorded: {km} km, {n} road waypoints (location {location}).",
   "builder.result.recorded_thinned": "Route recorded: {km} km; {from} waypoints thinned to {n} checkpoints.",
+  "builder.result.recorded_checkpoints": "Patrol recorded: {km} km, saved as {n} checkpoints about {m} m apart (location {location}).",
   "builder.result.start": "Start of location {location} placed.",
   "builder.retry": "Retry",
   "builder.route.drive_failed": "Test drive: waypoint {list} not reached within {s} s: re-record there",

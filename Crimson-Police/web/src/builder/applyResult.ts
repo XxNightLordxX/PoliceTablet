@@ -2,7 +2,7 @@
 
 import type { BuilderConfig, BuilderDefinition, BuilderRoute, Vec, Vec3 } from '../types/builder_server';
 import type { BuilderClientResultEx, PointSpec, RouteMeta } from '../types/builder_client';
-import { clone, isVec, listsOf, pointsOf, round2, thin } from './defUtils';
+import { clone, isVec, listsOf, pointsOf, round2, spaceOut, thin } from './defUtils';
 import { KERB_RULES, startRadiusRange } from './schema';
 
 export interface Applied {
@@ -113,6 +113,35 @@ export function applyResult(
         const route = result.route ?? { points: [] };
         let points = (Array.isArray(route.points) ? route.points : []).filter(isVec).map(vec3);
         if (points.length < 2) return { ...nothing, messageKey: 'builder.result.nothing_recorded', tone: 'warning' };
+        const length = typeof result.length === 'number' ? result.length : 0;
+        if (spec?.spacing) {
+            // a patrol: checkpoints to drive through, saved as plain points (never judged as a road route)
+            const recorded = points.length;
+            let cps = spaceOut(points, spec.spacing);
+            if (cps.length < spec.min) cps = thin(points, Math.max(2, spec.min));
+            if (spec.thinTo && cps.length > spec.thinTo) cps = thin(cps, spec.thinTo);
+            loc[key] = cps;
+            const meta: Partial<RouteMeta> = {
+                length,
+                rejected: typeof result.rejected === 'number' ? result.rejected : 0,
+                rejectedSamples: Array.isArray(result.rejectedSamples)
+                    ? result.rejectedSamples.filter(isVec).map(vec3)
+                    : [],
+                unreachable: [],
+                failed: [],
+                completed: undefined,
+                testedAt: undefined,
+                droppedStops: 0,
+                thinned: recorded,
+            };
+            return {
+                def,
+                meta,
+                messageKey: 'builder.result.recorded_checkpoints',
+                vars: { km: (length / 1000).toFixed(2), n: cps.length, m: Math.round(spec.spacing), location: li },
+                tone: meta.rejected ? 'warning' : 'success',
+            };
+        }
         let stops = Array.isArray(route.stops) ? route.stops.filter(s => s && Number.isInteger(s.at)) : [];
         let thinned = 0;
         if (spec?.thinTo && points.length > spec.thinTo) {
@@ -125,7 +154,7 @@ export function applyResult(
         if (spec?.loop || route.loop) value.loop = true;
         loc[key] = value;
         const meta: Partial<RouteMeta> = {
-            length: typeof result.length === 'number' ? result.length : 0,
+            length,
             rejected: typeof result.rejected === 'number' ? result.rejected : 0,
             rejectedSamples: Array.isArray(result.rejectedSamples)
                 ? result.rejectedSamples.filter(isVec).map(vec3)

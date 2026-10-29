@@ -794,7 +794,7 @@ function PointRow({
                             {spec.placeable ? (
                                 <Button
                                     size="sm"
-                                    variant="secondary"
+                                    variant="primary"
                                     icon="mapPin"
                                     disabled={disabled}
                                     onClick={() =>
