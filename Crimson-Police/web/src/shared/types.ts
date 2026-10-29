@@ -96,7 +96,8 @@ export interface Session {
         format?: { currency: string; currencyAfter: boolean };
         // Config.AdminUi: groupSidebar false = the Admin UI sidebar is one flat list
         // landing = the screen the Admin UI opens on ('home' shows the Home screen; the others hide it)
-        adminUi?: { groupSidebar: boolean; landing?: 'home' | 'payouts' | 'missions' };
+        // homeForms = the Home tiles hold the quick forms (false: they only open the screen)
+        adminUi?: { groupSidebar: boolean; landing?: 'home' | 'payouts' | 'missions'; homeForms?: boolean };
     };
     prefs?: Prefs;
     // how the tablet was opened: command, keybind, item, export, desk or dispatch (desk = its index)

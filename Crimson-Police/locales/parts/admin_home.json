@@ -30,5 +30,21 @@
   "admin.home.live_people": "On it: {n}",
   "admin.home.live_test": "Test",
   "admin.home.live_more": "and {n} more",
-  "admin.home.check_refused": "Refused starts today"
+  "admin.home.check_refused": "Refused starts today",
+  "admin.home.onoff_form": "Find a mission and switch it, or one of its locations, on or off",
+  "admin.home.pay_form": "Find a mission type or a mission and set what it pays",
+  "admin.home.points_form": "Find an officer, enter the points and a reason",
+  "admin.home.settings_form": "Find an everyday setting and change it here",
+  "admin.home.form_none": "Nothing matches",
+  "admin.home.form_more": "and {n} more: Open shows them all",
+  "admin.home.form_mission_search": "Find a mission",
+  "admin.home.form_mission_hint": "{n} missions, {off} off. Type part of a name",
+  "admin.home.form_pay_search": "Find a mission type or mission",
+  "admin.home.form_pay_type": "Type",
+  "admin.home.form_pay_mission": "Mission",
+  "admin.home.form_pay_now": "Pays {amount} now",
+  "admin.home.form_points_search": "Find an officer by name, callsign or citizen ID",
+  "admin.home.form_points_hint": "Below 0 takes points away",
+  "admin.home.form_settings_hint": "{n} everyday settings. Type part of a name",
+  "admin.home.form_settings_none": "No everyday setting matches: Open searches every setting"
 }

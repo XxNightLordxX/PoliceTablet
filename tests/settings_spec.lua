@@ -171,6 +171,10 @@ do
     H.eq(E('AdminUi.landing').kind, 'enum', 'landing is a choice')
     H.ok(E('AdminUi.landing').desc:find('a landing screen with the common jobs', 1, true) ~= nil,
         'landing: its config.lua comment is its description')
+    H.eq(E('AdminUi.homeForms').default, true, 'the Home tiles ship with their quick forms')
+    H.eq(E('AdminUi.homeForms').kind, 'boolean', 'homeForms is a switch')
+    H.ok(E('AdminUi.homeForms').desc:find('the Home tiles hold the quick forms', 1, true) ~= nil,
+        'homeForms: its config.lua comment is its description')
     H.eq(E('MissionTypes.patrol.dailyLimit').nullable, true, 'dailyLimit = nil is a setting that may stay unset')
     H.eq(E('MissionTypes.patrol.dailyLimit').default, nil, 'with no value in config.lua')
     H.eq(E('Blocks.escort.speed').kind, 'range', 'blocks.lua { min, max, default } edit as ranges')

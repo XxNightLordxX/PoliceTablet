@@ -111,6 +111,9 @@ Config.AdminUi = {
     -- The view Admin UI -> Settings opens in: 'simple' = only the everyday settings in plain groups, with plain
     -- labels and help texts ('All settings' is one click away); 'all' = every setting by config.lua section
     settingsView = 'simple',
+    -- true = the Home tiles hold the quick forms (switch missions and locations on or off, change pay, give or take
+    -- points, the everyday settings), each done right there; false = the tiles only open the full screen
+    homeForms = true,
 }
 
 -- ============================================================================

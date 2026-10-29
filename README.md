@@ -1321,8 +1321,13 @@ Which of these they can use is set in `Config.Permissions.supervisor` ([4.4](#44
 | **Audit Log** | Every supervisor and admin action, with filters and a CSV export |
 | **Testing** | Optional: every mission and location with its test result, test runs, testers, and an area coverage table ([9.13](#913-testing-tools)) |
 
-**Home** opens the right screen for each tile: Quick settings searches Settings for what you type, Give or take
-points opens that officer when you type a citizen ID. **Something wrong?** lists the last mission load (loaded and
+**Home** does the common jobs right on its tiles: **Turn missions on or off** (type part of a mission's name, flip
+its switch, or open its locations and flip one), **Change pay** (find a mission type or a mission, enter the amount
+and a reason), **Give or take points** (find the officer, enter the points, below 0 takes away, and a reason; from 500
+points up you also type their citizen ID) and **Quick settings** (find an everyday setting and change it there, with
+the same checks as the Settings screen). **Open** on each tile still opens the full screen. To have the tiles only
+open their screen, set `Config.AdminUi.homeForms = false` (Admin UI → **Settings**): Quick settings then searches
+Settings for what you type, Give or take points opens that officer when you type a citizen ID. **Something wrong?** lists the last mission load (loaded and
 refused), Config health warnings, System problems, stuck payments and **Refused starts today** (opens Live →
 **Refused**); click a line to open its screen. To open the
 panel straight on Payouts or Missions instead (with no Home), set `Config.AdminUi.landing = 'payouts'` or

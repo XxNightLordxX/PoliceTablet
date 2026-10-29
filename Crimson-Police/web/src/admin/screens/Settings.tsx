@@ -62,7 +62,7 @@ const PANELS: { key: Panel; labelKey: string; icon: 'sliders' | 'clock' | 'swap'
 type HealthLine = ConfigHealthItem & { fix?: string; cfgLine?: string };
 
 type Filter = 'all' | 'changed' | 'restart';
-type SavePayload = { value?: unknown; json?: string; none?: boolean; confirm?: string };
+export type SavePayload = { value?: unknown; json?: string; none?: boolean; confirm?: string };
 type Vec = { x: number; y: number; z?: number; w?: number };
 
 const VEC_PARTS = ['x', 'y', 'z', 'w'] as const;
@@ -543,7 +543,7 @@ function JsonEditor({ s, disabled, save }: EditorProps) {
     );
 }
 
-function Editor(props: EditorProps) {
+export function Editor(props: EditorProps) {
     // the item reward pools have their own editor (the slot handles the paths it knows)
     if (handlesRewardPool(props.s.path)) {
         return (
@@ -615,7 +615,7 @@ function PerMissionNote() {
     );
 }
 
-function SettingRow({
+export function SettingRow({
     s,
     disabled,
     save,
@@ -1079,6 +1079,124 @@ function RecheckBadges({ disabled }: { disabled?: boolean }) {
     );
 }
 
+// A reply carries the settings it changed: the settings data with them in place.
+export function mergeSettingsReply(prev: SettingsData | null, reply: SettingsReply): SettingsData | null {
+    if (!prev) return prev;
+    const byPath = new Map(asArray(reply.settings).map(s => [s.path, s]));
+    return {
+        ...prev,
+        sections: asArray(prev.sections).map(sec => ({
+            ...sec,
+            groups: asArray(sec.groups).map(g => ({
+                ...g,
+                settings: asArray(g.settings).map(s => byPath.get(s.path) ?? s),
+            })),
+        })),
+    };
+}
+
+// Saving and resetting one setting, with the looks some saves wait for (the missions it breaks, the money switch's
+// typed word, the point value's confirm). Settings and Home -> Quick settings both save through it; render `dialogs`.
+export function useSettingSave(onReply: (reply: SettingsReply | undefined) => void) {
+    const { run, busy } = useAction();
+    // a money switch turned on waits for the typed word (the server checks it too)
+    const [money, setMoney] = useState<{ s: SettingView; p: SavePayload; done: (ok: boolean) => void } | null>(null);
+    // a point value waits for its confirm: it applies to runs that end after the change
+    const [points, setPoints] = useState<{ s: SettingView; p: SavePayload; done: (ok: boolean) => void } | null>(null);
+    // one more look first (missions it breaks, the pay it moves, the standings it changes)
+    const [pre, setPre] = useState<
+        (Preflight & { s: SettingView; p: SavePayload; done: (ok: boolean) => void }) | null
+    >(null);
+
+    const send = async (s: SettingView, p: SavePayload) => {
+        const res = await run<SettingsReply>('server:admin:setSetting', { path: s.path, ...p });
+        if (res.ok) onReply(res.data);
+        return res.ok;
+    };
+    const proceed = (s: SettingView, p: SavePayload): Promise<boolean> => {
+        if (s.money && p.value === true && s.value !== true) {
+            return new Promise<boolean>(done => setMoney({ s, p, done }));
+        }
+        if (s.points) return new Promise<boolean>(done => setPoints({ s, p, done }));
+        return send(s, p);
+    };
+    const save = async (s: SettingView, p: SavePayload): Promise<boolean> => {
+        const look = await preflight(s, p);
+        if (!look) return proceed(s, p);
+        return new Promise<boolean>(done => setPre({ ...look, s, p, done }));
+    };
+    const reset = async (s: SettingView) => {
+        const res = await run<SettingsReply>(
+            'server:admin:resetSetting',
+            { path: s.path },
+            { success: 'settings.reset_done', successVars: { name: s.label } },
+        );
+        if (res.ok) onReply(res.data);
+    };
+    const dialogs = (
+        <>
+            <ConfirmDialog
+                open={!!money}
+                tone="danger"
+                title={t('settings.money_title', { name: money?.s.label ?? '' })}
+                message={t('settings.money_text')}
+                typedWord="ENABLE"
+                confirmLabel={t('settings.money_enable')}
+                onConfirm={async (_reason, typed) => {
+                    const m = money;
+                    if (!m) return;
+                    const ok = await send(m.s, { ...m.p, confirm: typed });
+                    setMoney(null);
+                    m.done(ok);
+                }}
+                onCancel={() => {
+                    money?.done(false);
+                    setMoney(null);
+                }}
+                busy={busy}
+            />
+            <ConfirmDialog
+                open={!!pre}
+                tone={pre?.tone ?? 'primary'}
+                title={pre?.title ?? ''}
+                message={pre?.message}
+                effect={pre?.effect}
+                confirmLabel={t('settings.save')}
+                onConfirm={async () => {
+                    const m = pre;
+                    if (!m) return;
+                    setPre(null);
+                    m.done(await proceed(m.s, m.p));
+                }}
+                onCancel={() => {
+                    pre?.done(false);
+                    setPre(null);
+                }}
+                busy={busy}
+            />
+            <ConfirmDialog
+                open={!!points}
+                title={t('sysadmin.ui.points_title', { name: points?.s.label ?? '' })}
+                message={t('sysadmin.ui.points_text')}
+                confirmLabel={t('settings.save')}
+                onConfirm={async () => {
+                    const m = points;
+                    if (!m) return;
+                    const ok = await send(m.s, m.p);
+                    setPoints(null);
+                    m.done(ok);
+                }}
+                onCancel={() => {
+                    points?.done(false);
+                    setPoints(null);
+                }}
+                busy={busy}
+            />
+        </>
+    );
+    return { save, reset, busy, dialogs };
+}
+
 export default function AdminSettings() {
     const { data, loading, error, refetch, setData } = useRequest<SettingsData>(
         'admin:getSettings',
@@ -1086,7 +1204,7 @@ export default function AdminSettings() {
         { pushTopic: 'settings' },
     );
     const health = useRequest<HealthLine[]>('admin:getConfigHealth', {});
-    const { run, busy } = useAction();
+    const { run, busy: resetting } = useAction();
     const [panel, setPanel] = useState<Panel>('settings');
     // Permissions → Config health → Open setting comes here with the path to show
     const { params } = useNavigation();
@@ -1098,14 +1216,6 @@ export default function AdminSettings() {
     const simple = view === 'simple';
     const [sectionKey, setSectionKey] = useState<string | null>(null);
     const [confirm, setConfirm] = useState<'resetAll' | null>(null);
-    // a money switch turned on waits for the typed word (the server checks it too)
-    const [money, setMoney] = useState<{ s: SettingView; p: SavePayload; done: (ok: boolean) => void } | null>(null);
-    // a point value waits for its confirm: it applies to runs that end after the change
-    const [points, setPoints] = useState<{ s: SettingView; p: SavePayload; done: (ok: boolean) => void } | null>(null);
-    // one more look first (missions it breaks, the pay it moves, the standings it changes)
-    const [pre, setPre] = useState<
-        (Preflight & { s: SettingView; p: SavePayload; done: (ok: boolean) => void }) | null
-    >(null);
 
     const sections = asArray(data?.sections);
     const all = useMemo(
@@ -1136,51 +1246,17 @@ export default function AdminSettings() {
     }, [jump]);
 
     // A reply carries the settings it changed: show them at once (the 'settings' push refetches the rest).
-    const apply = (reply: SettingsReply | undefined) => {
+    const {
+        save,
+        reset,
+        busy: saving,
+        dialogs,
+    } = useSettingSave(reply => {
         if (!reply) return;
-        const byPath = new Map(asArray(reply.settings).map(s => [s.path, s]));
-        setData(prev =>
-            prev
-                ? {
-                      ...prev,
-                      sections: asArray(prev.sections).map(sec => ({
-                          ...sec,
-                          groups: asArray(sec.groups).map(g => ({
-                              ...g,
-                              settings: asArray(g.settings).map(s => byPath.get(s.path) ?? s),
-                          })),
-                      })),
-                  }
-                : prev,
-        );
+        setData(prev => mergeSettingsReply(prev, reply));
         if (reply.health) health.setData(asArray(reply.health));
-    };
-
-    const send = async (s: SettingView, p: SavePayload) => {
-        const res = await run<SettingsReply>('server:admin:setSetting', { path: s.path, ...p });
-        if (res.ok) apply(res.data);
-        return res.ok;
-    };
-    const proceed = (s: SettingView, p: SavePayload): Promise<boolean> => {
-        if (s.money && p.value === true && s.value !== true) {
-            return new Promise<boolean>(done => setMoney({ s, p, done }));
-        }
-        if (s.points) return new Promise<boolean>(done => setPoints({ s, p, done }));
-        return send(s, p);
-    };
-    const save = async (s: SettingView, p: SavePayload): Promise<boolean> => {
-        const look = await preflight(s, p);
-        if (!look) return proceed(s, p);
-        return new Promise<boolean>(done => setPre({ ...look, s, p, done }));
-    };
-    const reset = async (s: SettingView) => {
-        const res = await run<SettingsReply>(
-            'server:admin:resetSetting',
-            { path: s.path },
-            { success: 'settings.reset_done', successVars: { name: s.label } },
-        );
-        if (res.ok) apply(res.data);
-    };
+    });
+    const busy = saving || resetting;
     const doConfirm = async () => {
         const res = await run<SettingsReply>(
             'server:admin:resetAllSettings',
@@ -1423,63 +1499,7 @@ export default function AdminSettings() {
                 }))}
             />
             {body}
-            <ConfirmDialog
-                open={!!money}
-                tone="danger"
-                title={t('settings.money_title', { name: money?.s.label ?? '' })}
-                message={t('settings.money_text')}
-                typedWord="ENABLE"
-                confirmLabel={t('settings.money_enable')}
-                onConfirm={async (_reason, typed) => {
-                    const m = money;
-                    if (!m) return;
-                    const ok = await send(m.s, { ...m.p, confirm: typed });
-                    setMoney(null);
-                    m.done(ok);
-                }}
-                onCancel={() => {
-                    money?.done(false);
-                    setMoney(null);
-                }}
-                busy={busy}
-            />
-            <ConfirmDialog
-                open={!!pre}
-                tone={pre?.tone ?? 'primary'}
-                title={pre?.title ?? ''}
-                message={pre?.message}
-                effect={pre?.effect}
-                confirmLabel={t('settings.save')}
-                onConfirm={async () => {
-                    const m = pre;
-                    if (!m) return;
-                    setPre(null);
-                    m.done(await proceed(m.s, m.p));
-                }}
-                onCancel={() => {
-                    pre?.done(false);
-                    setPre(null);
-                }}
-                busy={busy}
-            />
-            <ConfirmDialog
-                open={!!points}
-                title={t('sysadmin.ui.points_title', { name: points?.s.label ?? '' })}
-                message={t('sysadmin.ui.points_text')}
-                confirmLabel={t('settings.save')}
-                onConfirm={async () => {
-                    const m = points;
-                    if (!m) return;
-                    const ok = await send(m.s, m.p);
-                    setPoints(null);
-                    m.done(ok);
-                }}
-                onCancel={() => {
-                    points?.done(false);
-                    setPoints(null);
-                }}
-                busy={busy}
-            />
+            {dialogs}
             <ConfirmDialog
                 open={!!confirm}
                 tone="danger"

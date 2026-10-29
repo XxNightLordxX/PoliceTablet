@@ -3760,6 +3760,17 @@ web/dist was not rebuilt after a source change (the shipped UI must be the revie
 algorithms identical: files sorted by their path relative to Crimson-Police/ (posix), hashed as path \0 bytes \0.
 ```
 
+## Crimson-Police/web/src/admin/components/HomeForms.tsx
+
+```text
+Admin UI · Home quick forms (Config.AdminUi.homeForms): the common jobs done on the Home tile itself. Each form
+sends the same action as its full screen (the server checks everything again):
+  MissionSwitchForm  server:admin:setMissionEnabled / setLocationEnabled (Missions -> mission list)
+  PayForm            server:admin:setTypePayout / setMissionPayout (Payouts)
+  PointsForm         server:admin:adjustPoints (Officers; the citizen ID is typed at or above the confirm size)
+  QuickSettingsForm  the everyday settings (SettingsData.common) with the Settings screen's own rows and saves
+```
+
 ## Crimson-Police/web/src/admin/components/MissionDrawer.tsx
 
 ```text
@@ -3819,6 +3830,16 @@ Each department in Config.Departments: name, tag, jobs, colours, logo thumbnail 
 load), member count, officers on duty and the society balance (only when Config.Cash.source = 'society').
 "Preview theme" renders a read-only mini tablet in that department's colours.
 Data: callback admin:getDepartments (modules/admin).
+```
+
+## Crimson-Police/web/src/admin/screens/Home.tsx
+
+```text
+Admin UI · Home (screen key 'admin_home', Config.AdminUi.landing = 'home'): the landing screen. Six tiles open the
+screens of the common jobs (navigate with params where the screen takes them) and a Live now strip shows the runs
+of the Live screen. Every number comes from a request another screen already makes. With Config.AdminUi.homeForms
+on, four tiles hold a quick form (admin/components/HomeForms) that does the job right there; Open still opens the
+full screen.
 ```
 
 ## Crimson-Police/web/src/admin/screens/Leaderboards.tsx

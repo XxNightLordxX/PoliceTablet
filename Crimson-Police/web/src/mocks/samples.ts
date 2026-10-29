@@ -134,6 +134,7 @@ const CONFIG: Session['config'] = {
     filters: ['overall', 'patrol', 'training', 'investigation', 'tactical', 'unit', 'cross', 'department'],
     // ?flatSidebar in the browser shows the Admin UI sidebar as Config.AdminUi.groupSidebar = false does
     // ?landing=payouts or ?landing=missions opens the Admin UI there, with no Home screen (Config.AdminUi.landing)
+    // ?homeLinks: the Home tiles only open their screen (Config.AdminUi.homeForms = false)
     adminUi: {
         groupSidebar: !(typeof window !== 'undefined' && /[?&]flatSidebar\b/.test(window.location.search)),
         landing:
@@ -142,6 +143,7 @@ const CONFIG: Session['config'] = {
                 : typeof window !== 'undefined' && /[?&]landing=missions\b/.test(window.location.search)
                   ? 'missions'
                   : 'home',
+        homeForms: !(typeof window !== 'undefined' && /[?&]homeLinks\b/.test(window.location.search)),
     },
 };
 

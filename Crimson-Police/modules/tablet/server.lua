@@ -321,7 +321,11 @@ local function ExtraConfig(deptKey)
             currency = type(fmt.currency) == 'string' and fmt.currency or '$',
             currencyAfter = fmt.currencyAfter == true,
         },
-        adminUi = { groupSidebar = aui.groupSidebar ~= false, landing = AdminLanding(aui.landing) },
+        adminUi = {
+            groupSidebar = aui.groupSidebar ~= false,
+            landing = AdminLanding(aui.landing),
+            homeForms = aui.homeForms ~= false,
+        },
     }
 end
 

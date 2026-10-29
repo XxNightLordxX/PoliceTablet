@@ -1,6 +1,4 @@
 // Admin UI · Home (screen key 'admin_home', Config.AdminUi.landing = 'home'): the landing screen. Six tiles open the
-// screens of the common jobs (navigate with params where the screen takes them) and a Live now strip shows the runs
-// of the Live screen. Every number comes from a request another screen already makes.
 
 import { useState, type ReactNode } from 'react';
 import { Badge, Button, Card, Icon, Screen, SearchInput, TextInput, type IconName } from '../../shared/components';
@@ -10,7 +8,9 @@ import { useRequest } from '../../shared/hooks';
 import { t } from '../../shared/i18n';
 import { useNavigate, type AdminScreenKey, type ScreenParams } from '../../shared/navigation';
 import type { ConfigHealthItem } from '../../shared/types';
+import { useSession } from '../../shared/session';
 import { useNavCounts } from '../../layouts/navBadges';
+import { MissionSwitchForm, PayForm, PointsForm, QuickSettingsForm } from '../components/HomeForms';
 import type { AdminLiveRunsData, AdminRefusalsData } from '../../types/admin_live';
 import type { MissionLoadSummary } from '../../types/admin_missions';
 import type { ProblemsData } from '../../types/admin_system';
@@ -234,6 +234,8 @@ function LiveNow() {
 }
 
 export default function AdminHome() {
+    // Config.AdminUi.homeForms: the quick forms on the tiles (false = the tiles only open the screen)
+    const forms = useSession().config?.adminUi?.homeForms !== false;
     return (
         <Screen title={t('ui.screen.admin_home')} subtitle={t('admin.home.subtitle')} className="admin-home-screen">
             <LiveNow />
@@ -248,33 +250,59 @@ export default function AdminHome() {
                 <Tile
                     icon="layers"
                     title={t('admin.home.onoff_title')}
-                    text={t('admin.home.onoff_text')}
+                    text={forms ? t('admin.home.onoff_form') : t('admin.home.onoff_text')}
                     screen="admin_missions"
                     params={{ tab: 'catalog' }}
-                />
+                >
+                    {forms ? <MissionSwitchForm /> : null}
+                </Tile>
                 <Tile
                     icon="dollar"
                     title={t('admin.home.pay_title')}
-                    text={t('admin.home.pay_text')}
+                    text={forms ? t('admin.home.pay_form') : t('admin.home.pay_text')}
                     screen="admin_payouts"
-                />
-                <InputTile
-                    icon="star"
-                    title={t('admin.home.points_title')}
-                    text={t('admin.home.points_text')}
-                    screen="admin_officers"
-                    param="citizenid"
-                    placeholder={t('admin.home.points_placeholder')}
-                />
-                <InputTile
-                    icon="sliders"
-                    title={t('admin.home.settings_title')}
-                    text={t('admin.home.settings_text')}
-                    screen="admin_settings"
-                    param="q"
-                    search
-                    placeholder={t('admin.home.settings_placeholder')}
-                />
+                >
+                    {forms ? <PayForm /> : null}
+                </Tile>
+                {forms ? (
+                    <Tile
+                        icon="star"
+                        title={t('admin.home.points_title')}
+                        text={t('admin.home.points_form')}
+                        screen="admin_officers"
+                    >
+                        <PointsForm />
+                    </Tile>
+                ) : (
+                    <InputTile
+                        icon="star"
+                        title={t('admin.home.points_title')}
+                        text={t('admin.home.points_text')}
+                        screen="admin_officers"
+                        param="citizenid"
+                        placeholder={t('admin.home.points_placeholder')}
+                    />
+                )}
+                {forms ? (
+                    <Tile
+                        icon="sliders"
+                        title={t('admin.home.settings_title')}
+                        text={t('admin.home.settings_form')}
+                        screen="admin_settings"
+                    >
+                        <QuickSettingsForm />
+                    </Tile>
+                ) : (
+                    <InputTile
+                        icon="sliders"
+                        title={t('admin.home.settings_title')}
+                        text={t('admin.home.settings_text')}
+                        screen="admin_settings"
+                        param="q"
+                        search
+                        placeholder={t('admin.home.settings_placeholder')}
+                    />
+                )}
                 <SomethingWrong />
             </div>
         </Screen>

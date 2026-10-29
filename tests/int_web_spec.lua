@@ -369,9 +369,12 @@ do
     local app = Read(WEB .. 'App.tsx')
     Has(app, ': ui ? landingScreen(ui, session, available) :', 'a screen not shown falls back to the landing screen')
     local home = Read(WEB .. 'admin/screens/Home.tsx') or ''
-    local tiles = 0
-    for _ in home:gmatch('<Tile%s') do tiles = tiles + 1 end
-    for _ in home:gmatch('<InputTile%s') do tiles = tiles + 1 end
+    -- one tile per title (Config.AdminUi.homeForms picks a form or a link tile for some), plus Something wrong?
+    local tiles, titles = 0, {}
+    local grid = home:match('export default function AdminHome%(%).*') or ''
+    for k in grid:gmatch('title={t%(\'admin%.home%.([%w_]+)_title\'%)}') do
+        if not titles[k] then titles[k], tiles = true, tiles + 1 end
+    end
     for _ in home:gmatch('<SomethingWrong%s') do tiles = tiles + 1 end
     H.eq(tiles, 6, 'Home has six tiles')
     Has(home, 'screen="admin_missions" params={{ tab: \'builder\' }}', 'Make a new mission opens the builder tab')
@@ -405,6 +408,66 @@ do
     H.ok(keys['admin.live.tab.refused'], 'the Refused tab has a label')
     for k in home:gmatch('t%(\'(admin%.home%.[%w_]+)\'') do H.ok(keys[k], 'locale key ' .. k) end
     H.ok(keys['ui.screen.admin_home'], 'Home has a title key')
+end
+
+-- ============================================================================
+--                                  ADMIN HOME
+-- ============================================================================
+-- QUICK FORMS (switch missions, pay, points, settings).
+-- Config.AdminUi.homeForms = true: four tiles do their job on Home with the same actions as the full screens.
+
+do
+    local home = Read(WEB .. 'admin/screens/Home.tsx') or ''
+    local forms = Read(WEB .. 'admin/components/HomeForms.tsx') or ''
+    Has(home, 'const forms = useSession().config?.adminUi?.homeForms !== false;', 'the forms follow the config')
+    for _, f in ipairs({ 'MissionSwitchForm', 'PayForm', 'PointsForm', 'QuickSettingsForm' }) do
+        Has(home, '<' .. f .. ' />', 'Home shows the ' .. f)
+        Has(forms, 'export function ' .. f .. '()', f .. ' is in HomeForms')
+    end
+    Has(home, 'param="citizenid"', 'homeForms = false: the points tile still opens the officer')
+    Has(home, 'param="q"', 'homeForms = false: Quick settings still searches Settings')
+    -- the four actions, with the payloads of the full screens
+    Has(forms, '\'server:admin:setMissionEnabled\', { missionId: m.id, enabled }', 'a mission switch')
+    Has(forms, '\'server:admin:setLocationEnabled\', { missionId: m.id, index, enabled }', 'a location switch')
+    Has(forms, 'target.kind === \'type\' ? \'server:admin:setTypePayout\' : \'server:admin:setMissionPayout\'',
+        'pay for a type or a mission')
+    Has(forms, 'unlock: !!target.unlocked', 'a type left open to supervisors stays open')
+    Has(forms, '\'server:admin:adjustPoints\',', 'points')
+    Has(forms, 'const word = cid && Math.abs(points ?? 0) >= confirmAbove ? cid : \'\';',
+        'at or above the confirm size the citizen ID is typed')
+    Has(forms, 'requestId: newRequestId()', 'a points save acts once')
+    Has(forms, 'asArray(data?.common)', 'Quick settings lists the everyday settings')
+    Has(forms, '<SettingRow', 'Quick settings uses the Settings screen\'s rows')
+    Has(forms, 'useSettingSave(', 'and its saves (preflight, money word, point confirm)')
+    local settings = Read(WEB .. 'admin/screens/Settings.tsx') or ''
+    Has(settings, 'export function SettingRow(', 'SettingRow is exported')
+    Has(settings, 'export function Editor(', 'Editor is exported')
+    Has(settings, 'export function useSettingSave(', 'the save flow is shared')
+    Has(settings, 'const { save, reset, busy: saving, dialogs } = useSettingSave(', 'Settings saves through it too')
+    -- every request and action of the forms has a browser mock
+    local mocks = ''
+    for _, f in ipairs({ 'builder_client', 'economy', 'admin_officers', 'oversight', 'settings' }) do
+        mocks = mocks .. (Read(WEB .. 'mocks/' .. f .. '.mock.ts') or '')
+    end
+    for _, name in ipairs({
+        'request\', \'admin:getMissions',
+        'request\', \'admin:getPayouts',
+        'request\', \'admin:getOfficerPoints',
+        'request\', \'admin:searchOfficers',
+        'request\', \'admin:getSettings',
+        'action\', \'server:admin:setMissionEnabled',
+        'action\', \'server:admin:setLocationEnabled',
+        'action\', \'server:admin:setTypePayout',
+        'action\', \'server:admin:setMissionPayout',
+        'action\', \'server:admin:setSetting',
+    }) do
+        Has(mocks, 'registerMock(\'' .. name .. '\'', (name:gsub('\', \'', ' ')) .. ' has a mock')
+    end
+    H.ok(mocks:find('\'server:admin:adjustPoints\',', 1, true) ~= nil, 'adjustPoints has a mock')
+    for k in forms:gmatch('t%(\'(admin%.home%.[%w_]+)\'') do H.ok(keys[k], 'locale key ' .. k) end
+    for k in home:gmatch('t%(\'(admin%.home%.[%w_]+)\'') do H.ok(keys[k], 'locale key ' .. k) end
+    local samples = Read(WEB .. 'mocks/samples.ts') or ''
+    Has(samples, 'homeForms: !(', 'the browser mock can show the link tiles (?homeLinks)')
 end
 
 -- ============================================================================

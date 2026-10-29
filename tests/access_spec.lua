@@ -134,6 +134,11 @@ do
     adm = Cb('getSession', 9, { ui = 'admin', via = 'command' })
     H.eq(adm.data.config.adminUi.landing, 'home', 'an unknown landing falls back to Home')
     Config.AdminUi.landing = 'home'
+    H.eq(adm.data.config.adminUi.homeForms, true, 'Config.AdminUi.homeForms ships on: the Home tiles hold forms')
+    Config.AdminUi.homeForms = false
+    adm = Cb('getSession', 9, { ui = 'admin', via = 'command' })
+    H.eq(adm.data.config.adminUi.homeForms, false, 'homeForms = false: the Home tiles only open their screen')
+    Config.AdminUi.homeForms = true
     Config.Tablet.access = { command = true, keybind = true, item = true, desk = true, requireItem = false }
     Config.Tablet.item = false
 end
