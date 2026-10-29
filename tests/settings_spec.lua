@@ -164,6 +164,9 @@ do
     H.ok(groups.Database and groups.Database.desc:find('enabled = false: database off', 1, true) ~= nil,
         'the comment under a banner describes the first table')
     H.eq(E('Database.enabled').locked, 'settings.locked.database', 'where the settings live: config.lua only')
+    H.eq(E('AdminUi.groupSidebar').default, true, 'the Admin UI sidebar ships grouped')
+    H.ok(E('AdminUi.groupSidebar').desc:find('folds the rest under More', 1, true) ~= nil,
+        'groupSidebar: its config.lua comment is its description')
     H.eq(E('MissionTypes.patrol.dailyLimit').nullable, true, 'dailyLimit = nil is a setting that may stay unset')
     H.eq(E('MissionTypes.patrol.dailyLimit').default, nil, 'with no value in config.lua')
     H.eq(E('Blocks.escort.speed').kind, 'range', 'blocks.lua { min, max, default } edit as ranges')

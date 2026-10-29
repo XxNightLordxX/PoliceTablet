@@ -200,6 +200,7 @@ local CONFIG_SECTIONS = {
     'Format',
     'Tablet',
     'AdminTheme',
+    'AdminUi',
     'Permissions',
     'AdminControl',
     'Departments',

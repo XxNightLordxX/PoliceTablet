@@ -94,6 +94,8 @@ export interface Session {
         commendationKinds?: string[];
         rewards?: { enabled: boolean };
         format?: { currency: string; currencyAfter: boolean };
+        // Config.AdminUi: groupSidebar false = the Admin UI sidebar is one flat list
+        adminUi?: { groupSidebar: boolean };
     };
     prefs?: Prefs;
     // how the tablet was opened: command, keybind, item, export, desk or dispatch (desk = its index)

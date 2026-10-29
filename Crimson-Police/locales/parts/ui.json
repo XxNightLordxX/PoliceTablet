@@ -5,6 +5,7 @@
   "ui.nav.officer": "Officer",
   "ui.nav.supervisor": "Supervisor",
   "ui.nav.admin": "Administration",
+  "ui.nav.more": "More",
   "ui.switch.supervisor": "Supervisor",
   "ui.switch.officer": "Officer",
   "ui.close": "Close",

@@ -100,6 +100,11 @@ Config.AdminTheme = {
     surface = '#161a1d',
     text = '#f5f3f4',
 }
+Config.AdminUi = {
+    -- true = the Admin UI sidebar shows the everyday screens (Payouts, Missions, Live, Officers, Settings) and folds
+    -- the rest under More, whose badge adds up theirs; false = every screen in one flat list
+    groupSidebar = true,
+}
 
 -- ============================================================================
 --                                 PERMISSIONS

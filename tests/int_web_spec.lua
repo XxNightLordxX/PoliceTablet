@@ -325,6 +325,34 @@ do
 end
 
 -- ============================================================================
+--           ADMIN UI SIDEBAR: EVERYDAY SCREENS, THE REST UNDER MORE
+-- ============================================================================
+-- Config.AdminUi.groupSidebar: the same screen keys either way, so every link keeps working.
+
+do
+    local reg = Read(WEB .. 'layouts/screens.ts') or ''
+    local admin = reg:match('ADMIN_SCREENS.-\n%];') or ''
+    local groups = { main = {}, more = {} }
+    for entry in admin:gmatch('{(.-)}') do
+        local key, group = entry:match('key: \'([%w_]+)\''), entry:match('group: \'(%w+)\'')
+        if key and groups[group or ''] then groups[group][#groups[group] + 1] = key end
+    end
+    H.eq(table.concat(groups.main, ','), 'admin_payouts,admin_missions,admin_live,admin_officers,admin_settings',
+        'the everyday admin screens stay in the sidebar')
+    H.eq(#groups.more, 8, 'the other eight fold under More (' .. table.concat(groups.more, ',') .. ')')
+    local bar = Read(WEB .. 'layouts/Sidebar.tsx')
+    Has(bar, 'const folded = more ? items.filter(it => it.group === \'more\') : [];', 'no More label: one flat list')
+    Has(bar, 'if (activeFolded) setOpen(true);', 'opening a folded screen by a link unfolds More')
+    Has(bar, '{!open && foldedBadge ? <span className="cp-nav-item__badge">{foldedBadge}</span> : null}',
+        'a folded More carries the sum of its badges')
+    Has(bar, 'window.localStorage.setItem(MORE_KEY', 'the open state is kept per viewer')
+    local layout = Read(WEB .. 'layouts/AdminLayout.tsx')
+    Has(layout, 'const grouped = session.config?.adminUi?.groupSidebar !== false;', 'the layout follows the config')
+    Has(layout, 'more={grouped ? t(\'ui.nav.more\') : undefined}', 'grouped: the More label is passed')
+    H.ok(keys['ui.nav.more'], 'the More label has a locale key')
+end
+
+-- ============================================================================
 --                        RUN BAR AFTER A FAILED REFETCH
 -- ============================================================================
 

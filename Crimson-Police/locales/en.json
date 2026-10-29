@@ -5939,6 +5939,7 @@
   "ui.maintenance.title.restore_failed": "A backup restore stopped part way",
   "ui.maintenance.title.storage": "Crimson-Police is locked for maintenance",
   "ui.nav.admin": "Administration",
+  "ui.nav.more": "More",
   "ui.nav.officer": "Officer",
   "ui.nav.supervisor": "Supervisor",
   "ui.role.admin": "Admin",

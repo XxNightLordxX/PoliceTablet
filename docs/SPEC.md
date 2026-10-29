@@ -381,6 +381,8 @@ Personal accent and appearance
 
 - The Admin UI always uses Config.AdminTheme.
 
+- The Admin UI sidebar (Config.AdminUi.groupSidebar, on by default) shows the everyday screens (Payouts, Missions, Live, Officers, Settings) and a More button that unfolds the other eight. Folded, More carries the sum of their badges; opening one of them any other way unfolds it; whether More is open is kept per viewer in the browser. Screen keys and links are the same either way; groupSidebar = false shows one flat list.
+
 Logo and watermark
 
 - Put the logo in the resource's logos/ folder (PNG, WebP or SVG; a square transparent PNG of at least 1024 × 1024 works best) and set logo.file, or set logo.url to a direct https:// image link. No UI rebuild is needed; restart the resource.
@@ -2806,6 +2808,11 @@ Config.AdminTheme = {
     background = '#0b090a',
     surface = '#161a1d',
     text = '#f5f3f4',
+}
+Config.AdminUi = {
+    -- true = the Admin UI sidebar shows the everyday screens (Payouts, Missions, Live, Officers, Settings) and folds
+    -- the rest under More, whose badge adds up theirs; false = every screen in one flat list
+    groupSidebar = true,
 }
 
 -- ── Permissions ─────────────────────────────────────────────────────────────

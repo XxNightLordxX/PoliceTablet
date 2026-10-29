@@ -532,3 +532,16 @@
 .cp-main--admin .cp-main__scroll {
     padding: 26px 34px 36px;
 }
+
+/* Grouped sidebar (Config.AdminUi.groupSidebar): the More button and the screens it unfolds */
+.cp-nav-item--more {
+    color: var(--cp-subtle);
+}
+
+.cp-nav-item--more.is-open {
+    color: var(--cp-text);
+}
+
+.cp-sidebar__more-item .cp-nav-item {
+    padding-left: 22px;
+}

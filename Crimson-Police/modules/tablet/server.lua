@@ -304,6 +304,7 @@ local function ExtraConfig(deptKey)
         end
     end
     local fmt = Config.Format or {}
+    local aui = Config.AdminUi or {}
     return {
         dispatch = { enabled = mc.enabled ~= false, areas = areas },
         leaderboardMetrics = metrics,
@@ -314,6 +315,7 @@ local function ExtraConfig(deptKey)
             currency = type(fmt.currency) == 'string' and fmt.currency or '$',
             currencyAfter = fmt.currencyAfter == true,
         },
+        adminUi = { groupSidebar = aui.groupSidebar ~= false },
     }
 end
 

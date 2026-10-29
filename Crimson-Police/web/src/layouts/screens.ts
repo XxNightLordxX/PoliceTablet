@@ -45,6 +45,8 @@ export interface ScreenDef<K extends ScreenKey = ScreenKey> {
     component: ComponentType;
     // Hidden when this returns false (permissions from session.actions).
     visible?: (session: Session) => boolean;
+    // Admin sidebar (Config.AdminUi.groupSidebar): 'main' items always show, 'more' items fold under More.
+    group?: 'main' | 'more';
 }
 
 const has = (s: Session, ...actions: string[]) => Array.isArray(s.actions) && actions.some(a => s.actions.includes(a));
@@ -106,29 +108,79 @@ export const SUPERVISOR_SCREENS: ScreenDef<SupervisorScreenKey>[] = [
 ];
 
 export const ADMIN_SCREENS: ScreenDef<AdminScreenKey>[] = [
-    { key: 'admin_payouts', titleKey: 'ui.screen.admin_payouts', icon: 'dollar', component: AdminPayouts },
-    { key: 'admin_payments', titleKey: 'ui.screen.admin_payments', icon: 'creditCard', component: AdminPayments },
-    { key: 'admin_missions', titleKey: 'ui.screen.admin_missions', icon: 'layers', component: AdminMissions },
-    { key: 'admin_live', titleKey: 'ui.screen.admin_live', icon: 'activity', component: AdminLive },
-    { key: 'admin_seasons', titleKey: 'ui.screen.admin_seasons', icon: 'calendar', component: AdminSeasons },
+    {
+        key: 'admin_payouts',
+        titleKey: 'ui.screen.admin_payouts',
+        icon: 'dollar',
+        component: AdminPayouts,
+        group: 'main',
+    },
+    {
+        key: 'admin_payments',
+        titleKey: 'ui.screen.admin_payments',
+        icon: 'creditCard',
+        component: AdminPayments,
+        group: 'more',
+    },
+    {
+        key: 'admin_missions',
+        titleKey: 'ui.screen.admin_missions',
+        icon: 'layers',
+        component: AdminMissions,
+        group: 'main',
+    },
+    { key: 'admin_live', titleKey: 'ui.screen.admin_live', icon: 'activity', component: AdminLive, group: 'main' },
+    {
+        key: 'admin_seasons',
+        titleKey: 'ui.screen.admin_seasons',
+        icon: 'calendar',
+        component: AdminSeasons,
+        group: 'more',
+    },
     {
         key: 'admin_leaderboards',
         titleKey: 'ui.screen.admin_leaderboards',
         icon: 'podium',
         component: AdminLeaderboards,
+        group: 'more',
     },
-    { key: 'admin_officers', titleKey: 'ui.screen.admin_officers', icon: 'search', component: AdminOfficers },
+    {
+        key: 'admin_officers',
+        titleKey: 'ui.screen.admin_officers',
+        icon: 'search',
+        component: AdminOfficers,
+        group: 'main',
+    },
     {
         key: 'admin_departments',
         titleKey: 'ui.screen.admin_departments',
         icon: 'building',
         component: AdminDepartments,
+        group: 'more',
     },
-    { key: 'admin_permissions', titleKey: 'ui.screen.admin_permissions', icon: 'key', component: AdminPermissions },
-    { key: 'admin_settings', titleKey: 'ui.screen.admin_settings', icon: 'sliders', component: AdminSettings },
-    { key: 'admin_system', titleKey: 'ui.screen.admin_system', icon: 'server', component: AdminSystem },
-    { key: 'admin_audit', titleKey: 'ui.screen.admin_audit', icon: 'fileText', component: AdminAudit },
-    { key: 'admin_testing', titleKey: 'ui.screen.admin_testing', icon: 'flask', component: AdminTesting },
+    {
+        key: 'admin_permissions',
+        titleKey: 'ui.screen.admin_permissions',
+        icon: 'key',
+        component: AdminPermissions,
+        group: 'more',
+    },
+    {
+        key: 'admin_settings',
+        titleKey: 'ui.screen.admin_settings',
+        icon: 'sliders',
+        component: AdminSettings,
+        group: 'main',
+    },
+    { key: 'admin_system', titleKey: 'ui.screen.admin_system', icon: 'server', component: AdminSystem, group: 'more' },
+    { key: 'admin_audit', titleKey: 'ui.screen.admin_audit', icon: 'fileText', component: AdminAudit, group: 'more' },
+    {
+        key: 'admin_testing',
+        titleKey: 'ui.screen.admin_testing',
+        icon: 'flask',
+        component: AdminTesting,
+        group: 'more',
+    },
 ];
 
 const ALL: Record<UiKind, ScreenDef[]> = {

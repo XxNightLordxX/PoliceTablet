@@ -119,7 +119,13 @@ do
     H.eq(Refused(Open(1, { via = 'bogus' })), 'err.access_off', 'an unknown way counts as the command (off here)')
     H.ok(Open(1, { via = 'desk', desk = 1, silent = true }).ok, 'the silent theme session opens nothing: no checks')
     H.eq(Refused(Open(3, { via = 'export' })), 'err.not_police', 'the officer checks still come first')
-    H.ok(Cb('getSession', 9, { ui = 'admin', via = 'command' }).ok, 'the Admin UI has its own command: no way checks')
+    local adm = Cb('getSession', 9, { ui = 'admin', via = 'command' })
+    H.ok(adm.ok, 'the Admin UI has its own command: no way checks')
+    H.eq(adm.data.config.adminUi.groupSidebar, true, 'Config.AdminUi.groupSidebar ships on: the sidebar is grouped')
+    Config.AdminUi.groupSidebar = false
+    adm = Cb('getSession', 9, { ui = 'admin', via = 'command' })
+    H.eq(adm.data.config.adminUi.groupSidebar, false, 'groupSidebar = false: the session asks for the flat list')
+    Config.AdminUi.groupSidebar = true
     Config.Tablet.access = { command = true, keybind = true, item = true, desk = true, requireItem = false }
     Config.Tablet.item = false
 end

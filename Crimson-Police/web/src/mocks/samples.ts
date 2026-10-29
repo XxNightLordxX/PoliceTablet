@@ -132,6 +132,8 @@ const CONFIG: Session['config'] = {
     disputeWindowHours: 48,
     periods: ['weekly', 'monthly', 'season', 'alltime'],
     filters: ['overall', 'patrol', 'training', 'investigation', 'tactical', 'unit', 'cross', 'department'],
+    // ?flatSidebar in the browser shows the Admin UI sidebar as Config.AdminUi.groupSidebar = false does
+    adminUi: { groupSidebar: !(typeof window !== 'undefined' && /[?&]flatSidebar\b/.test(window.location.search)) },
 };
 
 // getSession({ ui }) in browser mode. The officer is a supervisor (roles.supervisor = true).

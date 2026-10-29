@@ -1312,6 +1312,11 @@ Which of these they can use is set in `Config.Permissions.supervisor` ([4.4](#44
 | **Audit Log** | Every supervisor and admin action, with filters and a CSV export |
 | **Testing** | Optional: every mission and location with its test result, test runs, testers, and an area coverage table ([9.13](#913-testing-tools)) |
 
+The sidebar shows the everyday screens (**Payouts**, **Missions**, **Live**, **Officers**, **Settings**) and a
+**More** button with the other eight. While More is folded its badge adds up theirs, so nothing waiting is hidden; a
+link or notification that opens one of them unfolds it, and the panel remembers whether you left it open. To get one
+flat list again, set `Config.AdminUi.groupSidebar = false` (Admin UI → **Settings**).
+
 ### 9.4 The missions
 
 18 missions plus the Weekly Boss. "Officers" is the unit size the mission accepts.

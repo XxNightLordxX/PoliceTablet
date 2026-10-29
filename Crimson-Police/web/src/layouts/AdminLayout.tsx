@@ -1,5 +1,6 @@
 // Admin UI: a separate full-screen panel (not the tablet), neutral admin theme (session.theme =
-// Config.AdminTheme), no watermark, 13-screen sidebar with the admin-only badges, the maintenance banner.
+// Config.AdminTheme), no watermark, sidebar with the admin-only badges (everyday screens, the rest under
+// More),, the maintenance banner.
 
 import { useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { Icon, IconButton, LayerRootContext, MaintenanceBanner } from '../shared/components';
@@ -20,6 +21,8 @@ export function AdminLayout() {
     const { screen, navigate } = useNavigation();
     const screens = screensFor('admin', session);
     const counts = useNavCounts();
+    // Config.AdminUi.groupSidebar: everyday screens first, the rest under More (false = one flat list)
+    const grouped = session.config?.adminUi?.groupSidebar !== false;
     const root = useRef<HTMLDivElement>(null);
     const [layer, setLayer] = useState<HTMLDivElement | null>(null);
     const { width, height } = useViewport();
@@ -66,8 +69,10 @@ export function AdminLayout() {
                         key: s.key,
                         label: t(s.titleKey),
                         icon: s.icon,
+                        group: s.group,
                         ...navBadge(s.key, counts),
                     }))}
+                    more={grouped ? t('ui.nav.more') : undefined}
                     active={screen}
                     onSelect={k => navigate(k as ScreenKey)}
                     className="cp-sidebar--admin"
