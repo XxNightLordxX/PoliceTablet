@@ -135,6 +135,17 @@ do
         H.ok(#loc.fleeTo >= 2, ('suspicious_activity: scene %d has 2+ escape paths'):format(li))
         local d = D2(loc.car, loc.start.coords)
         H.ok(d >= 40 and d <= 60, ('suspicious_activity: the start is 40-60 m from the scene (%.0f m)'):format(d))
+        -- L2: the start and the van are on the scene's own road, not a road above or below it (the old Paleto start
+        -- was 99 m below the car, the LSIA start and van on the terminal flyover 20 m above it), and no escape path
+        -- runs back past the start.
+        local dz = math.abs(loc.start.coords.z - loc.car.z)
+        H.ok(dz <= 18, ('suspicious_activity: scene %d start is level with the car (%.1f m)'):format(li, dz))
+        dz = math.abs(loc.transport.z - loc.car.z)
+        H.ok(dz <= 10, ('suspicious_activity: scene %d van is level with the car (%.1f m)'):format(li, dz))
+        EachPoint(loc.fleeTo, function(p)
+            local f = D2(p, loc.start.coords)
+            H.ok(f >= 30, ('suspicious_activity: scene %d escape point %.0f m from the start (30 m+)'):format(li, f))
+        end)
     end
     for _, id in ipairs({ 'drug_lab_raid', 'gang_hideout_raid' }) do
         local rd = RawDef(id)

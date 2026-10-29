@@ -5,7 +5,7 @@
   (Config.Custody.profileSets.scene) and whether the car is stolen (15%). When the first officer is within
   25 m each person reacts by demeanour: stays, walks away, runs, or shows a tell and draws. Talk / Check ID,
   frisk, detain, look inside, run the plate and search the car (with probable cause), then decide.
-  Locations (7 scenes): Container yard, Elysian Island, Lookout, Vinewood Hills, Car park, Rockford Hills, Truck stop, Grand Senora, Farm lot, Grapeseed, Lumber yard, Paleto Forest, Terminal car park, LSIA.
+  Locations (7 scenes): Container yard, Elysian Island, Lookout, Vinewood Hills, Car park, Rockford Hills, Truck stop, Grand Senora, Farm lot, Grapeseed, Logging track, Mount Chiliad, Terminal car park, LSIA.
   Each scene is a car park or yard lane from the GTA V vehicle nodes (a back-road or non-GPS node): the car
   sits on the lane, three person spots are 3–5 m around it, two escape paths follow the lanes away from
   the start, and the transport point is on the nearest main road. The start marker is 44–58 m from the car
@@ -102,8 +102,8 @@ RegisterMission({
       transport = vec4(1456.00, 4496.75, 50.06, 148.2),   -- where the prisoner van parks, on the road 40 m away
     },
     {
-      label     = 'Lumber yard, Paleto Forest',
-      start     = { coords = vec3(-263.75, 4739.75, 137.44), radius = 100.0 },   -- 51 m from the car
+      label     = 'Logging track, Mount Chiliad',
+      start     = { coords = vec3(-323.00, 4742.25, 230.31), radius = 100.0 },   -- 47 m from the car, on its lane
       car       = vec4(-298.00, 4702.50, 236.28, 212.7),   -- the parked car at the scene
       people    = {   -- person spots around the car
         vec4(-300.36, 4700.99, 236.78, 302.7), vec4(-301.79, 4705.06, 236.78, 242.7),
@@ -111,13 +111,13 @@ RegisterMission({
       },
       fleeTo    = {   -- escape paths along the lanes, away from the start
         { vec3(-291.66, 4671.81, 243.34), vec3(-319.72, 4689.70, 249.86), vec3(-366.50, 4682.75, 254.78) },
-        { vec3(-316.23, 4732.30, 231.81), vec3(-336.11, 4761.05, 227.11), vec3(-352.25, 4784.50, 222.59) },
+        { vec3(-310.50, 4685.50, 248.66), vec3(-353.25, 4686.75, 253.41), vec3(-425.75, 4733.25, 253.88) },
       },
       transport = vec4(-319.00, 4736.25, 230.72, 215.0),   -- where the prisoner van parks, on the road 40 m away
     },
     {
       label     = 'Terminal car park, LSIA',
-      start     = { coords = vec3(-1011.00, -2591.25, 33.97), radius = 100.0 },   -- 50 m from the car
+      start     = { coords = vec3(-996.50, -2633.00, 13.81), radius = 100.0 },   -- 51 m from the car, on the ground road
       car       = vec4(-961.25, -2596.50, 13.34, 103.0),   -- the parked car at the scene
       people    = {   -- person spots around the car
         vec4(-961.88, -2593.77, 13.84, 193.0), vec4(-957.56, -2593.80, 13.84, 133.0),
@@ -127,7 +127,7 @@ RegisterMission({
         { vec3(-935.27, -2583.79, 13.84), vec3(-905.21, -2576.94, 13.81), vec3(-886.00, -2593.00, 13.84) },
         { vec3(-963.80, -2576.34, 13.81), vec3(-966.09, -2547.71, 13.81), vec3(-963.50, -2488.00, 13.81) },
       },
-      transport = vec4(-941.50, -2631.25, 28.72, 149.0),   -- where the prisoner van parks, on the road 40 m away
+      transport = vec4(-1002.50, -2643.25, 13.31, 329.7),   -- where the prisoner van parks, on New Empire Way 62 m away
     },
   },
 
