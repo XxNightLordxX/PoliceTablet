@@ -1,6 +1,6 @@
 // One settings panel per objective block (SPEC "Mission Builder → Block settings"),
 
-import type { ComponentType, ReactNode } from 'react';
+import { createContext, useContext, type ComponentType, type ReactNode } from 'react';
 import {
     Checkbox,
     Field,
@@ -16,6 +16,7 @@ import { asArray } from '../shared/data';
 import { t } from '../shared/i18n';
 import type { BuilderConfig, BuilderDefinition, BuilderError, BuilderObjective } from '../types/builder_server';
 import { GroupTitle, MultiPick, OptionPick, RangeNumber, nameOf } from './controls';
+import { HW_DIFFICULTIES, foldsAdvanced, hwDifficultyOf, hwDifficultyStats, perWaveOf } from './blockBasics';
 import { getAt, messageAt } from './defUtils';
 import {
     flagOf,
@@ -67,13 +68,39 @@ function Note({ children, tone = 'info' }: { children: ReactNode; tone?: 'info' 
     );
 }
 
-function Group({ title, aside, children }: { title: ReactNode; aside?: ReactNode; children: ReactNode }) {
+// Which groups a panel draws (Config.Builder.foldAdvanced): 'all' every group as before (folding off), 'basic' the
+// groups that stay open, 'advanced' the ones under "More settings". A panel is drawn once per pass.
+type Fold = 'all' | 'basic' | 'advanced';
+const FoldCtx = createContext<Fold>('all');
+
+// advanced: only under "More settings" when folding is on; summary: only when folding is on (the few basics that
+// stand in for the folded groups)
+function Group({
+    title,
+    aside,
+    advanced,
+    summary,
+    children,
+}: {
+    title: ReactNode;
+    aside?: ReactNode;
+    advanced?: boolean;
+    summary?: boolean;
+    children: ReactNode;
+}) {
+    const fold = useContext(FoldCtx);
+    if (fold === 'all' ? summary : (fold === 'advanced') !== !!advanced) return null;
     return (
         <section className="builder_client-group">
             <GroupTitle aside={aside}>{title}</GroupTitle>
             {children}
         </section>
     );
+}
+
+// What sits outside a group (a closing note): drawn once, with the basics
+function Basic({ children }: { children: ReactNode }) {
+    return useContext(FoldCtx) === 'advanced' ? null : <>{children}</>;
 }
 
 // ============================================================================
@@ -93,28 +120,86 @@ function HostileWaves({ cfg, obj, ro, set, patch }: PanelProps) {
     const allowedWeapons = asArray(cfg.allowed?.weapons);
     const largest = waves.length ? Math.max(...waves) : 0;
     const per = numOf(cfg, b, 'spawnPointsPerHostile', 1.5);
+    const folded = useContext(FoldCtx) === 'advanced';
+    const spawnNeed = t('builder.hw.spawn_need', { n: Math.ceil(per * largest - 1e-9), per });
+    const wavesCount = (
+        <RangeNumber
+            label={t('builder.hw.waves')}
+            value={waves.length}
+            range={wavesR}
+            disabled={ro}
+            onChange={n =>
+                patch(o => {
+                    const list = asArray(o.waves as number[]).slice(0, n);
+                    while (list.length < n) list.push(list.length ? list[list.length - 1] : perR.def);
+                    o.waves = list;
+                })
+            }
+        />
+    );
+    const weapons = (
+        <MultiPick
+            label={t('builder.field.weapons')}
+            value={strs(obj, 'weapons', listOf(cfg, b, 'weapons'))}
+            options={allowedWeapons}
+            disabled={ro}
+            onChange={v => set('weapons', v)}
+        />
+    );
+    const perWave = perWaveOf(waves, perR.def);
+    const level = hwDifficultyOf(cfg, {
+        accuracy: num(obj, 'accuracy', 25),
+        armour: num(obj, 'armour', 0),
+        health: num(obj, 'health', 200),
+    });
     return (
         <>
-            <Group
-                title={t('builder.hw.waves_group')}
-                aside={t('builder.hw.spawn_need', { n: Math.ceil(per * largest - 1e-9), per })}
-            >
+            <Group title={t('builder.hw.basics_group')} aside={spawnNeed} summary>
                 <Grid cols={2} gap={3}>
+                    {wavesCount}
                     <RangeNumber
-                        label={t('builder.hw.waves')}
-                        value={waves.length}
-                        range={wavesR}
+                        label={t('builder.hw.per_wave')}
+                        value={perWave.value}
+                        range={perR}
                         disabled={ro}
-                        onChange={n =>
+                        note={perWave.mixed ? t('builder.hw.per_wave_mixed') : undefined}
+                        onChange={v =>
                             patch(o => {
-                                const list = asArray(o.waves as number[]).slice(0, n);
-                                while (list.length < n) list.push(list.length ? list[list.length - 1] : perR.def);
-                                o.waves = list;
+                                o.waves = asArray(o.waves as number[]).map(() => v);
                             })
                         }
                     />
-                    <div />
                 </Grid>
+                {weapons}
+                <Field
+                    label={t('builder.hw.difficulty')}
+                    hint={level ? t(`builder.hw.difficulty_${level}_hint`) : t('builder.hw.difficulty_custom')}
+                >
+                    <SegmentedControl
+                        items={HW_DIFFICULTIES.map(k => ({
+                            key: k,
+                            label: t(`builder.hw.difficulty_${k}`),
+                            disabled: ro,
+                        }))}
+                        value={level ?? ('' as (typeof HW_DIFFICULTIES)[number])}
+                        onChange={k =>
+                            !ro &&
+                            patch(o => {
+                                Object.assign(o, hwDifficultyStats(cfg, k));
+                            })
+                        }
+                        size="sm"
+                        aria-label={t('builder.hw.difficulty')}
+                    />
+                </Field>
+            </Group>
+            <Group title={t('builder.hw.waves_group')} aside={spawnNeed} advanced>
+                {folded ? null : (
+                    <Grid cols={2} gap={3}>
+                        {wavesCount}
+                        <div />
+                    </Grid>
+                )}
                 <div className="builder_client-waves">
                     {waves.map((w, i) => (
                         <Field key={i} label={t('builder.hw.wave_n', { n: i + 1 })}>
@@ -157,14 +242,8 @@ function HostileWaves({ cfg, obj, ro, set, patch }: PanelProps) {
                     />
                 </Grid>
             </Group>
-            <Group title={t('builder.hw.hostiles_group')}>
-                <MultiPick
-                    label={t('builder.field.weapons')}
-                    value={strs(obj, 'weapons', listOf(cfg, b, 'weapons'))}
-                    options={allowedWeapons}
-                    disabled={ro}
-                    onChange={v => set('weapons', v)}
-                />
+            <Group title={t('builder.hw.hostiles_group')} advanced>
+                {folded ? null : weapons}
                 <MultiPick
                     label={t('builder.field.peds')}
                     value={strs(obj, 'peds', listOf(cfg, b, 'peds'))}
@@ -217,7 +296,7 @@ function HostileWaves({ cfg, obj, ro, set, patch }: PanelProps) {
                     />
                 </Grid>
             </Group>
-            <Group title={t('builder.hw.boss_group')}>
+            <Group title={t('builder.hw.boss_group')} advanced>
                 <Toggle
                     checked={!!boss}
                     disabled={ro}
@@ -291,7 +370,7 @@ function HostileWaves({ cfg, obj, ro, set, patch }: PanelProps) {
                     </>
                 ) : null}
             </Group>
-            <Group title={t('builder.hw.traffic_group')}>
+            <Group title={t('builder.hw.traffic_group')} advanced>
                 <RangeNumber
                     label={t('builder.hw.block_traffic')}
                     unit={t('builder.unit.m')}
@@ -378,7 +457,7 @@ function Escort({ cfg, obj, ro, set }: PanelProps) {
                     {t('builder.esc.route_note', { max: stops.max, min: wait.min, maxWait: wait.max, def: wait.def })}
                 </Note>
             </Group>
-            <Group title={t('builder.esc.ambush_group')}>
+            <Group title={t('builder.esc.ambush_group')} advanced>
                 <Grid cols={3} gap={3}>
                     <RangeNumber
                         label={t('builder.esc.ambush_waves')}
@@ -502,7 +581,7 @@ function Pursuit({ cfg, obj, ro, set, patch }: PanelProps) {
                     onChange={v => set('models', v)}
                 />
             </Group>
-            <Group title={t('builder.pur.route_group')}>
+            <Group title={t('builder.pur.route_group')} advanced>
                 <Field label={t('builder.pur.route')} hint={t(`builder.pur.route_${routeMode}_hint`)}>
                     <SegmentedControl
                         size="sm"
@@ -554,7 +633,7 @@ function Pursuit({ cfg, obj, ro, set, patch }: PanelProps) {
                 ) : null}
             </Group>
             {mode === 'follow' ? (
-                <Group title={t('builder.pur.follow_group')}>
+                <Group title={t('builder.pur.follow_group')} advanced>
                     <Grid cols={2} gap={3}>
                         <RangeNumber
                             label={t('builder.pur.hold')}
@@ -670,7 +749,7 @@ function CheckpointRoute({ cfg, obj, ro, set, patch }: PanelProps) {
                 />
                 <Note>{t('builder.cp.points_note', { min: cp.min, max: cp.max })}</Note>
             </Group>
-            <Group title={t('builder.cp.medals_group')}>
+            <Group title={t('builder.cp.medals_group')} advanced>
                 <Toggle
                     checked={!!medals}
                     disabled={ro}
@@ -787,7 +866,7 @@ function InteractPoints({ cfg, obj, ro, set, patch }: PanelProps) {
                 </Grid>
                 <Note>{t('builder.ip.points_note', { min: pr.min, max: pr.max })}</Note>
             </Group>
-            <Group title={t('builder.ip.log_group')}>
+            <Group title={t('builder.ip.log_group')} advanced>
                 <Toggle
                     checked={!!lr}
                     disabled={ro || hidden}
@@ -924,7 +1003,7 @@ function SkillCheck({ cfg, def, obj, index, ro, set, patch }: PanelProps) {
                     />
                 </Grid>
             </Group>
-            <Group title={t('builder.sc.targets_group')}>
+            <Group title={t('builder.sc.targets_group')} advanced>
                 {earlierSearch || shared ? (
                     <Field label={t('builder.sc.targets')}>
                         <SegmentedControl
@@ -1151,7 +1230,7 @@ function FleeArrest({ cfg, obj, ro, set, patch }: PanelProps) {
                     onChange={v => set('weapons', v)}
                 />
             </Group>
-            <Group title={t('builder.fa.escape_group')}>
+            <Group title={t('builder.fa.escape_group')} advanced>
                 <Grid cols={2} gap={3}>
                     <RangeNumber
                         label={t('builder.fa.escape_distance')}
@@ -1171,7 +1250,7 @@ function FleeArrest({ cfg, obj, ro, set, patch }: PanelProps) {
                     />
                 </Grid>
             </Group>
-            <Group title={t('builder.fa.gives_up_group')}>
+            <Group title={t('builder.fa.gives_up_group')} advanced>
                 <div className="builder_client-gives-up">
                     <Checkbox
                         checked={g.aim !== false}
@@ -1375,7 +1454,7 @@ function FieldContact({ cfg, obj, ro, set, patch }: PanelProps) {
                     onChange={v => set('profileSet', v)}
                 />
             </Group>
-            <Group title={t('builder.fc.rules_group')}>
+            <Group title={t('builder.fc.rules_group')} advanced>
                 <Grid cols={2} gap={3}>
                     {mode === 'scene' ? (
                         <RangeNumber
@@ -1426,7 +1505,9 @@ function FieldContact({ cfg, obj, ro, set, patch }: PanelProps) {
                     label={t('builder.fc.escape_fails')}
                 />
             </Group>
-            <Note>{t(`builder.fc.spots_${mode}_note`)}</Note>
+            <Basic>
+                <Note>{t(`builder.fc.spots_${mode}_note`)}</Note>
+            </Basic>
         </>
     );
 }
@@ -1485,7 +1566,9 @@ function ProcessScene({ cfg, obj, ro, set, patch }: PanelProps) {
                     }
                 />
             </Group>
-            <Note>{t('builder.ps.note')}</Note>
+            <Basic>
+                <Note>{t('builder.ps.note')}</Note>
+            </Basic>
         </>
     );
 }
@@ -1542,7 +1625,7 @@ function PursuitParity({ cfg, obj, ro, set, patch }: PanelProps) {
     const over = observe && Array.isArray(observe.over) ? (observe.over as number[]) : [20, 45];
     if (str(obj, 'mode', 'stop') !== 'stop') return null;
     return (
-        <Group title={t('builder.pur.parity_group')}>
+        <Group title={t('builder.pur.parity_group')} advanced>
             <Shares
                 label={t('builder.pur.responses')}
                 keys={['yield', 'flee', 'fight']}
@@ -1654,7 +1737,7 @@ function InteractParity({ cfg, obj, ro, set, patch }: PanelProps) {
     const together = obj.together && typeof obj.together === 'object' ? (obj.together as Record<string, number>) : null;
     const hidden = obj.hidden && typeof obj.hidden === 'object' ? (obj.hidden as Record<string, unknown>) : null;
     return (
-        <Group title={t('builder.ip.parity_group')}>
+        <Group title={t('builder.ip.parity_group')} advanced>
             <Grid cols={3} gap={3}>
                 <RangeNumber
                     label={t('builder.ip.together')}
@@ -1735,7 +1818,7 @@ function FleeParity({ cfg, obj, ro, set }: PanelProps) {
     const b = 'flee_arrest';
     const r = (k: string, fb: [number, number, number]) => rangeOf(cfg, b, k, fb);
     return (
-        <Group title={t('builder.fa.parity_group')}>
+        <Group title={t('builder.fa.parity_group')} advanced>
             <OptionPick
                 label={t('builder.fa.demeanour')}
                 value={typeof obj.demeanour === 'string' ? obj.demeanour : 'rolled'}
@@ -1772,7 +1855,7 @@ function SkillParity({ cfg, obj, ro, patch, set }: PanelProps) {
     const f = obj.onFail && typeof obj.onFail === 'object' ? (obj.onFail as Record<string, unknown>) : null;
     const sb = f && f.setback && typeof f.setback === 'object' ? (f.setback as Record<string, unknown>) : null;
     return (
-        <Group title={t('builder.sc.parity_group')}>
+        <Group title={t('builder.sc.parity_group')} advanced>
             <OptionPick
                 label={t('builder.sc.on_fail')}
                 value={f ? 'setback' : 'fail'}
@@ -1821,7 +1904,7 @@ function HostileParity({ cfg, obj, ro, patch }: PanelProps) {
     const ss = obj.spawnSets && typeof obj.spawnSets === 'object' ? (obj.spawnSets as Record<string, unknown>) : null;
     const keys = ss && Array.isArray(ss.keys) ? (ss.keys as string[]) : [];
     return (
-        <Group title={t('builder.hw.parity_group')}>
+        <Group title={t('builder.hw.parity_group')} advanced>
             <Toggle
                 checked={rolled}
                 disabled={ro}
@@ -1903,7 +1986,8 @@ const PANELS: Record<string, ComponentType<PanelProps>> = {
     process_scene: ProcessScene,
 };
 
-// The settings panel of one objective: label, minimum time and presence range, then the block's own settings.
+// The settings panel of one objective: its name, then the block's own settings. With Config.Builder.foldAdvanced the
+// block's basics stay open and the rest (the checks, the advanced groups) fold under a closed "More settings".
 export function BlockPanel(props: PanelProps) {
     const { cfg, def, obj, index, ro, errors, set } = props;
     const Panel = PANELS[obj.block];
@@ -1912,46 +1996,83 @@ export function BlockPanel(props: PanelProps) {
     const presence = rangeOf(cfg, obj.block, 'presenceRange', [50, 800, 150]);
     const minDefault = asArray(cfg.blockList).find(x => x.id === obj.block)?.minSeconds ?? 30;
     const labelMax = cfg.limits?.objectiveLabel ?? 64;
-    return (
-        <div className="builder_client-panel">
-            <Group title={t('builder.settings.common')}>
-                <Field label={t('builder.settings.label')} error={messageAt(errors, `${p}.label`)} required>
-                    <TextInput
-                        value={str(obj, 'label', '')}
-                        maxLength={labelMax}
-                        disabled={ro}
-                        onChange={v => set('label', v.slice(0, labelMax))}
-                    />
-                </Field>
-                <Grid cols={2} gap={3}>
-                    <RangeNumber
-                        label={t('builder.settings.min_seconds')}
-                        unit={t('builder.unit.s')}
-                        value={num(obj, 'minSeconds', minDefault)}
-                        range={{ min: 1, max: Math.max(1, def.timeLimit || 1200), def: minDefault }}
-                        disabled={ro}
-                        error={messageAt(errors, `${p}.minSeconds`)}
-                        onChange={v => set('minSeconds', v)}
-                        note={t('builder.settings.min_seconds_note')}
-                    />
-                    <RangeNumber
-                        label={t('builder.settings.presence')}
-                        unit={t('builder.unit.m')}
-                        value={num(obj, 'presenceRange', presence.def)}
-                        range={presence}
-                        disabled={ro}
-                        error={messageAt(errors, `${p}.presenceRange`)}
-                        onChange={v => set('presenceRange', v)}
-                        note={t(`builder.presence.${obj.block}`)}
-                    />
-                </Grid>
-            </Group>
+    const fold = foldsAdvanced(cfg);
+    const label = (
+        <Field label={t('builder.settings.label')} error={messageAt(errors, `${p}.label`)} required>
+            <TextInput
+                value={str(obj, 'label', '')}
+                maxLength={labelMax}
+                disabled={ro}
+                onChange={v => set('label', v.slice(0, labelMax))}
+            />
+        </Field>
+    );
+    const checks = (
+        <Grid cols={2} gap={3}>
+            <RangeNumber
+                label={t('builder.settings.min_seconds')}
+                unit={t('builder.unit.s')}
+                value={num(obj, 'minSeconds', minDefault)}
+                range={{ min: 1, max: Math.max(1, def.timeLimit || 1200), def: minDefault }}
+                disabled={ro}
+                error={messageAt(errors, `${p}.minSeconds`)}
+                onChange={v => set('minSeconds', v)}
+                note={t('builder.settings.min_seconds_note')}
+            />
+            <RangeNumber
+                label={t('builder.settings.presence')}
+                unit={t('builder.unit.m')}
+                value={num(obj, 'presenceRange', presence.def)}
+                range={presence}
+                disabled={ro}
+                error={messageAt(errors, `${p}.presenceRange`)}
+                onChange={v => set('presenceRange', v)}
+                note={t(`builder.presence.${obj.block}`)}
+            />
+        </Grid>
+    );
+    const own = (
+        <>
             {Panel ? (
                 <Panel {...props} />
             ) : (
                 <Note tone="warning">{t('builder.settings.unknown_block', { block: obj.block })}</Note>
             )}
             {Extra ? <Extra {...props} /> : null}
+        </>
+    );
+    if (!fold) {
+        return (
+            <div className="builder_client-panel">
+                <Group title={t('builder.settings.common')}>
+                    {label}
+                    {checks}
+                </Group>
+                {own}
+            </div>
+        );
+    }
+    // an error on this objective opens the fold, so a refused value is never hidden
+    const hidden = errors.some(e => e.path.startsWith(`${p}.`) && e.path !== `${p}.label`);
+    return (
+        <div className="builder_client-panel">
+            <Group title={t('builder.settings.common')}>{label}</Group>
+            <FoldCtx.Provider value="basic">{own}</FoldCtx.Provider>
+            <details key={`${index}:${obj.block}`} className="builder_client-more" open={hidden || undefined}>
+                <summary className="builder_client-more-title">
+                    <Icon name="chevronRight" size={14} />
+                    <span>{t('builder.settings.more')}</span>
+                </summary>
+                <div className="builder_client-more-body">
+                    <FoldCtx.Provider value="advanced">
+                        <Group title={t('builder.settings.checks')} advanced>
+                            {checks}
+                        </Group>
+                        {Panel ? <Panel {...props} /> : null}
+                        {Extra ? <Extra {...props} /> : null}
+                    </FoldCtx.Provider>
+                </div>
+            </details>
         </div>
     );
 }

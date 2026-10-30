@@ -21,6 +21,7 @@ import type { BuilderBonusEntry, BuilderBonusOption } from '../../types/builder_
 import { MinutesField, RangeNumber, RemoveButton, StarPicker } from '../controls';
 import { messageAt } from '../defUtils';
 import { detailRange, requiredTierFor, suggestsNoVehiclePenalties, totalArmed } from '../schema';
+import { foldsAdvanced } from '../blockBasics';
 import { StepIntro, type StepProps } from './common';
 
 // the server sends its list (cfg.forbiddenItems; a trailing * is a prefix) and checks again on every save
@@ -48,210 +49,285 @@ export function StepDetails({ ed, cfg, def, ro }: StepProps) {
             d[k] = v;
         });
 
+    const nameField = (
+        <Field
+            label={t('builder.details.name')}
+            required
+            error={messageAt(e, 'label')}
+            hint={t('builder.details.name_hint', { max: limits.label })}
+        >
+            <TextInput
+                value={def.label}
+                maxLength={limits.label}
+                disabled={ro}
+                onChange={v => set('label', v.slice(0, limits.label))}
+            />
+        </Field>
+    );
+    const descriptionField = (
+        <Field label={t('builder.details.description')} error={messageAt(e, 'description')}>
+            <Textarea
+                value={def.description}
+                maxLength={limits.description}
+                rows={3}
+                disabled={ro}
+                onChange={v => set('description', v.slice(0, limits.description))}
+            />
+        </Field>
+    );
+    const typeField = (
+        <Field
+            label={t('builder.details.type')}
+            required
+            error={messageAt(e, 'type')}
+            hint={t('builder.details.type_hint')}
+        >
+            <Select
+                value={def.type ?? ''}
+                disabled={ro}
+                placeholder={t('builder.details.type_pick')}
+                onChange={v => set('type', v)}
+                options={types.map(m => ({
+                    value: m.key,
+                    label: t('builder.details.type_option', { label: m.label, points: m.points }),
+                }))}
+            />
+        </Field>
+    );
+    const noPayout = (
+        <div className="builder_client-callout">
+            <Icon name="info" size={15} />
+            <span>{t('builder.details.no_payout')}</span>
+        </div>
+    );
+    const bonusesCard = (
+        <Card
+            title={t('builder.details.bonuses')}
+            icon="star"
+            padding="md"
+            subtitle={t('builder.details.bonuses_sub', {
+                points: cfg.bonusCap?.points ?? 50,
+                pct: cfg.bonusCap?.pct ?? 25,
+            })}
+        >
+            <BonusList kind="bonuses" {...{ ed, cfg, def, ro }} />
+            <div className="builder_client-divider" />
+            <BonusList kind="penalties" {...{ ed, cfg, def, ro }} />
+        </Card>
+    );
+    const teamCard = (
+        <Card title={t('builder.details.difficulty_group')} icon="users" padding="md">
+            <div className="builder_client-form">
+                <Field
+                    label={t('builder.details.difficulty')}
+                    error={messageAt(e, 'difficulty')}
+                    hint={t('builder.details.difficulty_hint')}
+                >
+                    <StarPicker
+                        value={def.difficulty}
+                        min={stars.min}
+                        max={stars.max}
+                        disabled={ro}
+                        onChange={n => set('difficulty', n)}
+                    />
+                </Field>
+                <Grid cols={2} gap={3}>
+                    <RangeNumber
+                        label={t('builder.details.min_officers')}
+                        value={def.minOfficers}
+                        range={{ ...off, def: off.min }}
+                        disabled={ro}
+                        onChange={v =>
+                            ed.update(d => {
+                                d.minOfficers = v;
+                                if (d.maxOfficers < v) d.maxOfficers = v;
+                            })
+                        }
+                    />
+                    <RangeNumber
+                        label={t('builder.details.max_officers')}
+                        value={def.maxOfficers}
+                        range={{ ...off, def: off.max }}
+                        disabled={ro}
+                        error={messageAt(e, 'maxOfficers', 'minOfficers')}
+                        onChange={v =>
+                            ed.update(d => {
+                                d.maxOfficers = v;
+                                if (d.minOfficers > v) d.minOfficers = v;
+                            })
+                        }
+                    />
+                </Grid>
+                <div className="builder_client-tier-line">
+                    <span>{t('builder.details.required_tier')}</span>
+                    <TierBadge tier={required} size="sm" />
+                </div>
+            </div>
+        </Card>
+    );
+    const timingCard = (
+        <Card title={t('builder.details.timing')} icon="clock" padding="md">
+            <div className="builder_client-form">
+                <MinutesField
+                    label={t('builder.details.time_limit')}
+                    seconds={def.timeLimit}
+                    range={detailRange(cfg, 'timeLimit', [120, 1200, 600])}
+                    disabled={ro}
+                    error={messageAt(e, 'timeLimit')}
+                    onChange={s => set('timeLimit', s)}
+                />
+                <MinutesField
+                    label={t('builder.details.start_timeout')}
+                    seconds={def.startTimeout}
+                    range={detailRange(cfg, 'startTimeout', [300, 900, 600])}
+                    disabled={ro}
+                    error={messageAt(e, 'startTimeout')}
+                    onChange={s => set('startTimeout', s)}
+                />
+                <MinutesField
+                    label={t('builder.details.cooldown')}
+                    seconds={def.cooldown}
+                    range={detailRange(cfg, 'cooldown', [300, 3600, 1200])}
+                    disabled={ro}
+                    error={messageAt(e, 'cooldown')}
+                    onChange={s => set('cooldown', s)}
+                />
+            </div>
+        </Card>
+    );
+    const availableCard = (
+        <Card title={t('builder.details.available_to')} icon="building" padding="md">
+            <Field
+                error={messageAt(e, 'departments')}
+                hint={def.departments.length ? t('builder.details.available_some') : t('builder.details.available_all')}
+            >
+                <div className="builder_client-depts">
+                    {depts.map(d => (
+                        <Checkbox
+                            key={d.key}
+                            checked={def.departments.includes(d.key)}
+                            disabled={ro}
+                            label={`${d.short} · ${d.label}`}
+                            onChange={on =>
+                                ed.update(x => {
+                                    const set2 = new Set(asArray(x.departments));
+                                    if (on) set2.add(d.key);
+                                    else set2.delete(d.key);
+                                    x.departments = depts.map(z => z.key).filter(k => set2.has(k));
+                                })
+                            }
+                        />
+                    ))}
+                </div>
+            </Field>
+        </Card>
+    );
+    const vehicleCard = (
+        <Card title={t('builder.details.vehicle_group')} icon="car" padding="md">
+            <Toggle
+                checked={def.vehiclePenalties}
+                disabled={ro}
+                label={t('builder.details.vehicle_penalties')}
+                description={t('builder.details.vehicle_penalties_desc')}
+                onChange={v => set('vehiclePenalties', v)}
+            />
+            {suggest && def.vehiclePenalties ? (
+                <div className="builder_client-callout builder_client-callout--warning">
+                    <Icon name="alert" size={15} />
+                    <span>{t('builder.details.vehicle_suggest', { armed: totalArmed(def) })}</span>
+                    {!ro ? (
+                        <Button size="sm" variant="ghost" onClick={() => set('vehiclePenalties', false)}>
+                            {t('builder.details.vehicle_suggest_apply')}
+                        </Button>
+                    ) : null}
+                </div>
+            ) : null}
+        </Card>
+    );
+    const itemsCard = (
+        <Card
+            title={t('builder.details.items')}
+            icon="inbox"
+            padding="md"
+            subtitle={t('builder.details.items_sub', { max: cfg.maxItems ?? 10 })}
+        >
+            <Items {...{ ed, cfg, def, ro }} />
+        </Card>
+    );
+    const fold = foldsAdvanced(cfg);
+    // an error in a folded field opens "More settings", so a refused value is never hidden
+    const folded = asArray(e).some(x =>
+        /^(description|timeLimit|startTimeout|cooldown|departments|items|bonuses|penalties)\b/.test(x.path),
+    );
+    const intro = (
+        <StepIntro icon="fileText" title={t('builder.details.title')}>
+            {t('builder.details.intro')}
+        </StepIntro>
+    );
+
+    if (!fold) {
+        return (
+            <div className="builder_client-step">
+                {intro}
+                <Grid cols="3fr 2fr" gap={4} align="start">
+                    <div className="builder_client-col">
+                        <Card title={t('builder.details.mission')} icon="edit" padding="md">
+                            <div className="builder_client-form">
+                                {nameField}
+                                {descriptionField}
+                                {typeField}
+                                {noPayout}
+                            </div>
+                        </Card>
+                        {bonusesCard}
+                    </div>
+                    <div className="builder_client-col">
+                        {teamCard}
+                        {timingCard}
+                        {availableCard}
+                        {vehicleCard}
+                        {itemsCard}
+                    </div>
+                </Grid>
+            </div>
+        );
+    }
+    // Config.Builder.foldAdvanced: name, type, difficulty and team size open; the rest under "More settings"
     return (
         <div className="builder_client-step">
-            <StepIntro icon="fileText" title={t('builder.details.title')}>
-                {t('builder.details.intro')}
-            </StepIntro>
+            {intro}
             <Grid cols="3fr 2fr" gap={4} align="start">
-                <div className="builder_client-col">
-                    <Card title={t('builder.details.mission')} icon="edit" padding="md">
-                        <div className="builder_client-form">
-                            <Field
-                                label={t('builder.details.name')}
-                                required
-                                error={messageAt(e, 'label')}
-                                hint={t('builder.details.name_hint', { max: limits.label })}
-                            >
-                                <TextInput
-                                    value={def.label}
-                                    maxLength={limits.label}
-                                    disabled={ro}
-                                    onChange={v => set('label', v.slice(0, limits.label))}
-                                />
-                            </Field>
-                            <Field label={t('builder.details.description')} error={messageAt(e, 'description')}>
-                                <Textarea
-                                    value={def.description}
-                                    maxLength={limits.description}
-                                    rows={3}
-                                    disabled={ro}
-                                    onChange={v => set('description', v.slice(0, limits.description))}
-                                />
-                            </Field>
-                            <Field
-                                label={t('builder.details.type')}
-                                required
-                                error={messageAt(e, 'type')}
-                                hint={t('builder.details.type_hint')}
-                            >
-                                <Select
-                                    value={def.type ?? ''}
-                                    disabled={ro}
-                                    placeholder={t('builder.details.type_pick')}
-                                    onChange={v => set('type', v)}
-                                    options={types.map(m => ({
-                                        value: m.key,
-                                        label: t('builder.details.type_option', { label: m.label, points: m.points }),
-                                    }))}
-                                />
-                            </Field>
-                            <div className="builder_client-callout">
-                                <Icon name="info" size={15} />
-                                <span>{t('builder.details.no_payout')}</span>
-                            </div>
-                        </div>
-                    </Card>
-                    <Card
-                        title={t('builder.details.bonuses')}
-                        icon="star"
-                        padding="md"
-                        subtitle={t('builder.details.bonuses_sub', {
-                            points: cfg.bonusCap?.points ?? 50,
-                            pct: cfg.bonusCap?.pct ?? 25,
-                        })}
-                    >
-                        <BonusList kind="bonuses" {...{ ed, cfg, def, ro }} />
-                        <div className="builder_client-divider" />
-                        <BonusList kind="penalties" {...{ ed, cfg, def, ro }} />
-                    </Card>
-                </div>
-                <div className="builder_client-col">
-                    <Card title={t('builder.details.difficulty_group')} icon="users" padding="md">
-                        <div className="builder_client-form">
-                            <Field
-                                label={t('builder.details.difficulty')}
-                                error={messageAt(e, 'difficulty')}
-                                hint={t('builder.details.difficulty_hint')}
-                            >
-                                <StarPicker
-                                    value={def.difficulty}
-                                    min={stars.min}
-                                    max={stars.max}
-                                    disabled={ro}
-                                    onChange={n => set('difficulty', n)}
-                                />
-                            </Field>
-                            <Grid cols={2} gap={3}>
-                                <RangeNumber
-                                    label={t('builder.details.min_officers')}
-                                    value={def.minOfficers}
-                                    range={{ ...off, def: off.min }}
-                                    disabled={ro}
-                                    onChange={v =>
-                                        ed.update(d => {
-                                            d.minOfficers = v;
-                                            if (d.maxOfficers < v) d.maxOfficers = v;
-                                        })
-                                    }
-                                />
-                                <RangeNumber
-                                    label={t('builder.details.max_officers')}
-                                    value={def.maxOfficers}
-                                    range={{ ...off, def: off.max }}
-                                    disabled={ro}
-                                    error={messageAt(e, 'maxOfficers', 'minOfficers')}
-                                    onChange={v =>
-                                        ed.update(d => {
-                                            d.maxOfficers = v;
-                                            if (d.minOfficers > v) d.minOfficers = v;
-                                        })
-                                    }
-                                />
-                            </Grid>
-                            <div className="builder_client-tier-line">
-                                <span>{t('builder.details.required_tier')}</span>
-                                <TierBadge tier={required} size="sm" />
-                            </div>
-                        </div>
-                    </Card>
-                    <Card title={t('builder.details.timing')} icon="clock" padding="md">
-                        <div className="builder_client-form">
-                            <MinutesField
-                                label={t('builder.details.time_limit')}
-                                seconds={def.timeLimit}
-                                range={detailRange(cfg, 'timeLimit', [120, 1200, 600])}
-                                disabled={ro}
-                                error={messageAt(e, 'timeLimit')}
-                                onChange={s => set('timeLimit', s)}
-                            />
-                            <MinutesField
-                                label={t('builder.details.start_timeout')}
-                                seconds={def.startTimeout}
-                                range={detailRange(cfg, 'startTimeout', [300, 900, 600])}
-                                disabled={ro}
-                                error={messageAt(e, 'startTimeout')}
-                                onChange={s => set('startTimeout', s)}
-                            />
-                            <MinutesField
-                                label={t('builder.details.cooldown')}
-                                seconds={def.cooldown}
-                                range={detailRange(cfg, 'cooldown', [300, 3600, 1200])}
-                                disabled={ro}
-                                error={messageAt(e, 'cooldown')}
-                                onChange={s => set('cooldown', s)}
-                            />
-                        </div>
-                    </Card>
-                    <Card title={t('builder.details.available_to')} icon="building" padding="md">
-                        <Field
-                            error={messageAt(e, 'departments')}
-                            hint={
-                                def.departments.length
-                                    ? t('builder.details.available_some')
-                                    : t('builder.details.available_all')
-                            }
-                        >
-                            <div className="builder_client-depts">
-                                {depts.map(d => (
-                                    <Checkbox
-                                        key={d.key}
-                                        checked={def.departments.includes(d.key)}
-                                        disabled={ro}
-                                        label={`${d.short} · ${d.label}`}
-                                        onChange={on =>
-                                            ed.update(x => {
-                                                const set2 = new Set(asArray(x.departments));
-                                                if (on) set2.add(d.key);
-                                                else set2.delete(d.key);
-                                                x.departments = depts.map(z => z.key).filter(k => set2.has(k));
-                                            })
-                                        }
-                                    />
-                                ))}
-                            </div>
-                        </Field>
-                    </Card>
-                    <Card title={t('builder.details.vehicle_group')} icon="car" padding="md">
-                        <Toggle
-                            checked={def.vehiclePenalties}
-                            disabled={ro}
-                            label={t('builder.details.vehicle_penalties')}
-                            description={t('builder.details.vehicle_penalties_desc')}
-                            onChange={v => set('vehiclePenalties', v)}
-                        />
-                        {suggest && def.vehiclePenalties ? (
-                            <div className="builder_client-callout builder_client-callout--warning">
-                                <Icon name="alert" size={15} />
-                                <span>{t('builder.details.vehicle_suggest', { armed: totalArmed(def) })}</span>
-                                {!ro ? (
-                                    <Button size="sm" variant="ghost" onClick={() => set('vehiclePenalties', false)}>
-                                        {t('builder.details.vehicle_suggest_apply')}
-                                    </Button>
-                                ) : null}
-                            </div>
-                        ) : null}
-                    </Card>
-                    <Card
-                        title={t('builder.details.items')}
-                        icon="inbox"
-                        padding="md"
-                        subtitle={t('builder.details.items_sub', { max: cfg.maxItems ?? 10 })}
-                    >
-                        <Items {...{ ed, cfg, def, ro }} />
-                    </Card>
-                </div>
+                <Card title={t('builder.details.mission')} icon="edit" padding="md">
+                    <div className="builder_client-form">
+                        {nameField}
+                        {typeField}
+                        {noPayout}
+                    </div>
+                </Card>
+                {teamCard}
             </Grid>
+            <details className="builder_client-more" open={folded || undefined}>
+                <summary className="builder_client-more-title">
+                    <Icon name="chevronRight" size={14} />
+                    <span>{t('builder.settings.more')}</span>
+                </summary>
+                <div className="builder_client-more-body">
+                    <Grid cols="3fr 2fr" gap={4} align="start">
+                        <div className="builder_client-col">
+                            <Card title={t('builder.details.more_group')} icon="edit" padding="md">
+                                <div className="builder_client-form">{descriptionField}</div>
+                            </Card>
+                            {bonusesCard}
+                        </div>
+                        <div className="builder_client-col">
+                            {timingCard}
+                            {availableCard}
+                            {vehicleCard}
+                            {itemsCard}
+                        </div>
+                    </Grid>
+                </div>
+            </details>
         </div>
     );
 }

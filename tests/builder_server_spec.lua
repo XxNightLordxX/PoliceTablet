@@ -2363,6 +2363,11 @@ local function Body()
         local okW, confW = cb(1, 'builder:config', {})
         H.eq(okW and confW.quickWizard, false, 'Config.Builder.quickWizard = false: the dialog and full editor only')
         Config.Builder.quickWizard = true
+        H.eq(okCfg and conf.foldAdvanced, true, 'block settings fold the advanced ones (Config.Builder.foldAdvanced)')
+        Config.Builder.foldAdvanced = false
+        local okF, confF = cb(1, 'builder:config', {})
+        H.eq(okF and confF.foldAdvanced, false, 'Config.Builder.foldAdvanced = false: every block setting open')
+        Config.Builder.foldAdvanced = true
         local okL, list = cb(1, 'builder:list', {})
         local entry = nil
         for _, e in ipairs(okL and list.missions or {}) do if e.id == hid then entry = e end end

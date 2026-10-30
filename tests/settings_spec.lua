@@ -236,6 +236,12 @@ do
         'Builder.quickWizard is a true/false setting, shipped on, with its comment'
     )
     H.ok(
+        E('Builder.foldAdvanced') ~= nil and E('Builder.foldAdvanced').kind == 'boolean'
+            and E('Builder.foldAdvanced').default == true
+            and (E('Builder.foldAdvanced').desc or ''):find('More settings', 1, true) ~= nil,
+        'Builder.foldAdvanced is a true/false setting, shipped on, with its comment'
+    )
+    H.ok(
         E('Builder.templates') ~= nil and E('Builder.templates').kind == 'list'
             and #(E('Builder.templates').default or {}) == 10
             and (E('Builder.templates').desc or ''):find('none of their locations', 1, true) ~= nil,

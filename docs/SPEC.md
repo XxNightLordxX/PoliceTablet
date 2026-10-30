@@ -1810,7 +1810,7 @@ Flow
 
 - Details → name, description, mission type (required; it sets the points and the base payout), difficulty (1–3 stars), min and max officers (1–4), time limit (2–20 min), start timeout (5–15 min), cooldown (5–60 min), "Available to" (departments from Config.Departments; none selected = every department), vehicle-damage penalties on or off (off is suggested when the mission has a pursuit or escort block or armed NPCs), optional items (admins only: a supervisor's save, validate, test and publish refuse any item with builder.error.item_forbidden while Config.Builder.supervisorItems is false, as shipped, and the Details step locks the field with a sentence saying why; an officer can use or sell a mission item before the run takes it back. Armour, bandages, ammo-*, weapon_*, money, black_money and cash are never mission items, for anyone. A run hands out a custom mission's items only when the version was published by an admin or the console, or edited in code; a version a supervisor published, or one with no record of who published it, hands out none and says so once in System → Problems: "items skipped: saved by a supervisor"), and bonuses and penalties picked from the standard list in Config.Bonuses (a flat bonus or penalty is capped at 50 points, a percentage one at 25% of P; block settings such as a hostage-hit penalty keep their own ranges). There is no payout field.
 
-- Block settings → every block has its own settings panel (tables below). Each value has the minimum, maximum and default shown, and the tablet will not accept anything outside that range. These ranges and defaults live in config/blocks.lua, so they can be changed without touching code.
+- Block settings → every block has its own settings panel (tables below). Each value has the minimum, maximum and default shown, and the tablet will not accept anything outside that range. These ranges and defaults live in config/blocks.lua, so they can be changed without touching code. While Config.Builder.foldAdvanced is true (as shipped) a panel shows the objective name and the block's basics (hostile_waves: Waves, Enemies per wave, Weapons, Difficulty Easy/Normal/Hard, which set accuracy, armour and health inside their ranges) and folds the rest, with the minimum time ("Flag runs finished faster than") and presence range ("Officers must stay within"), under a closed "More settings"; Details folds everything but name, type, difficulty and team size the same way. An error opens the fold; false shows every setting open.
 
 - Place it in the world → the tablet closes into placement mode (see Placement tool) and reopens when done.
 
@@ -3993,6 +3993,10 @@ Config.Builder = {
                                                -- Where, Check, Publish): pick a template, stand at the spot, fill
                                                -- the points, publish; Open the full editor is on every step;
                                                -- false = the New mission dialog and the full editor only
+    foldAdvanced = true,                       -- true = each block's settings show the few that matter
+                                               -- (e.g. a shootout: waves, enemies per wave, weapons, difficulty)
+                                               -- and fold the rest under "More settings"; false = every setting
+                                               -- is shown open, as before
 
     -- On: a Teleport button next to each point on the Locations step puts you on the ground there (the server reads
     -- the saved point and logs it). Admins always; others only with Permissions.builderTeleport. Off: no button.

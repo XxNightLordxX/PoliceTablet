@@ -1482,6 +1482,10 @@ Config.Builder = {
                                                -- Where, Check, Publish): pick a template, stand at the spot, fill
                                                -- the points, publish; Open the full editor is on every step;
                                                -- false = the New mission dialog and the full editor only
+    foldAdvanced = true,                       -- true = each block's settings show the few that matter
+                                               -- (e.g. a shootout: waves, enemies per wave, weapons, difficulty)
+                                               -- and fold the rest under "More settings"; false = every setting
+                                               -- is shown open, as before
 
     -- On: a Teleport button next to each point on the Locations step puts you on the ground there (the server reads
     -- the saved point and logs it). Admins always; others only with Permissions.builderTeleport. Off: no button.

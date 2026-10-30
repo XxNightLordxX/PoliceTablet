@@ -937,6 +937,43 @@
     gap: 12px;
 }
 
+/* "More settings" (Config.Builder.foldAdvanced): the advanced groups of a block and of Details, closed at first */
+.builder_client-more {
+    border-radius: var(--cp-radius);
+    border: 1px dashed var(--cp-border);
+}
+
+.builder_client-more-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 14px;
+    cursor: pointer;
+    font-weight: 700;
+    font-size: var(--cp-fs-sm);
+    list-style: none;
+    user-select: none;
+}
+
+.builder_client-more-title::-webkit-details-marker {
+    display: none;
+}
+
+.builder_client-more-title svg {
+    transition: transform 0.15s ease;
+}
+
+.builder_client-more[open] > .builder_client-more-title svg {
+    transform: rotate(90deg);
+}
+
+.builder_client-more-body {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 0 10px 10px;
+}
+
 .builder_client-panel-head {
     display: flex;
     align-items: center;
