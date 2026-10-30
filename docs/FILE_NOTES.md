@@ -4720,6 +4720,15 @@ Colours must be 6-digit hex (#1f4e8c); anything else falls back per key to the C
 default (text falls back to the best contrast for the background, as CP.U.contrastText does).
 ```
 
+## Crimson-Police/web/src/supervisor/components/ClearCooldownDialog.tsx
+
+```text
+Supervisor UI · Department Report · Clear cooldown (step P7, Config.MissionControls.controls.clearCooldown): the
+officer's current type and mission cooldowns (sup:getOfficerCooldowns), each with Clear; a reason is required.
+The server refuses the supervisor's own character, an officer on a run, the officer's daily clears (all staff) and
+the supervisor's own clears a day.
+```
+
 ## Crimson-Police/web/src/supervisor/components/OperationPanel.tsx
 
 ```text
@@ -5062,6 +5071,15 @@ the footpath point the game of the officer at the car picks, or round the car an
 game gives none in time, and walk up to the car once an officer's game has put them on the ground. Before (a1 4.1
 items 5-6) the scene popped in 4-17 m from the officer crossing the start circle and the driver / thief appeared
 14 m / 30 m from the car at a random angle, behind the officer as often as not.
+```
+
+## tests/fixtures/admin_live_world.lua
+
+```text
+The world of tests/admin_live_spec.lua, tests/admin_runctl_spec.lua and tests/sup_actions_spec.lua: the real
+permissions, access, admin, adminkit, deptcontrols, tablet, schedule, scaling, events, units, runs and livectl
+modules, stand-ins for the rest (Qbox, the Mission Board, scoring, cash, operations, the downed follow-up) and a
+one-objective mission whose block spawns one object.
 ```
 
 ## tests/fixtures/admin_missions/boot.lua

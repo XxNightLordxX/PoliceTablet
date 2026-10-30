@@ -189,7 +189,7 @@ Config.AdminControl = {
 -- { on, min, max } }); they win over the ones below for it. Every change needs a reason and is in the audit log.
 -- The cooldown controls are server-wide (one value for every department), outside the master switch and ship
 -- on: a supervisor may change them out of the box; until one does, every cooldown stays as config.lua sets it.
--- Every other control ships off.
+-- Clearing one officer's cooldown is a cooldown control too (server-wide, ships on). Every other control ships off.
 Config.MissionControls = {
     changeWait = 300,   -- seconds between two changes of one control in one department
     selfExempt = true,  -- a control that relaxes a rule never applies to the supervisor who set it or a unit he is in
@@ -207,8 +207,23 @@ Config.MissionControls = {
         dailyCap = { on = true, min = 0, max = 40 },
         -- happy hour minutes: no mission cooldowns for anyone on the server (abandon cooldown and caps stay)
         happyHour = { on = true, min = 5, max = 30 },
+        -- Department Report: a supervisor clears one officer's mission or type cooldown (any department, never his
+        -- own character, never while the officer is on a run); each officer still at most
+        -- AdminControl.cooldownClearsPerDay clears a day by all staff together
+        clearCooldown = { on = true },
+        -- Live Missions: a supervisor adds min to max minutes per click to a running mission of his department
+        -- (never his own); the time limit the fast-finish bonus is judged on stays the same
+        addRunTime = { on = false, min = 1, max = 5 },
     },
     happyHourPerDay = 1, -- happy hours a supervisor may start a day (admins any); never for the one who started it
+
+    -- officers' cooldowns one supervisor may clear a day (admins any)
+    clearCooldownPerDay = 5,
+    -- times one supervisor may add minutes to a running mission a day (admins any)
+    addRunTimePerDay = 10,
+    -- seconds supervisors may add to one running mission in all, counted together with an admin's additions and
+    -- never above AdminControl.runTimeAddMax
+    addRunTimeMax = 300,
 }
 
 -- ============================================================================

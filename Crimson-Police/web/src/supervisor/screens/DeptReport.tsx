@@ -39,6 +39,7 @@ import { formatDay } from '../../officer/screens/Leaderboard';
 import { ResultCell, missionTypeLabel } from '../../officer/screens/Profile';
 import { CommendationsCard } from '../../officer/components/CommendationsCard';
 import type { Commendation } from '../../types/profile';
+import { ClearCooldownDialog } from '../components/ClearCooldownDialog';
 import { CommendDialog } from '../components/CommendDialog';
 import './DeptReport.css';
 
@@ -53,6 +54,7 @@ function ActivityDialog({ officer, onClose }: { officer: ReportOfficer | null; o
     const session = useSession();
     const can = useCan();
     const [commending, setCommending] = useState(false);
+    const [clearing, setClearing] = useState(false);
     const [revoking, setRevoking] = useState<Commendation | null>(null);
     const [revokeReason, setRevokeReason] = useState('');
     const { run: act, busy } = useAction();
@@ -153,6 +155,11 @@ function ActivityDialog({ officer, onClose }: { officer: ReportOfficer | null; o
             }
             footer={
                 <>
+                    {officer && current?.cooldownClear ? (
+                        <Button variant="secondary" icon="clock" onClick={() => setClearing(true)}>
+                            {t('sup.cd.button')}
+                        </Button>
+                    ) : null}
                     {officer && can('issueCommendation') && officer.citizenid !== session.officer?.citizenid ? (
                         <Button variant="secondary" icon="medal" onClick={() => setCommending(true)}>
                             {t('profile.commend.give')}
@@ -164,6 +171,10 @@ function ActivityDialog({ officer, onClose }: { officer: ReportOfficer | null; o
                 </>
             }
         >
+            <ClearCooldownDialog
+                officer={clearing && officer ? { citizenid: officer.citizenid, name: officer.name } : null}
+                onClose={() => setClearing(false)}
+            />
             <CommendDialog
                 open={commending}
                 onClose={() => setCommending(false)}

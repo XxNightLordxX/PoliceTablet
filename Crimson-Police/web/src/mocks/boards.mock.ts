@@ -17,6 +17,7 @@ import type {
     DeptContributors,
     DeptReport,
     OfficerActivity,
+    OfficerCooldowns,
     ProfileData,
     ProfileRunView,
     ReportOfficer,
@@ -1248,6 +1249,52 @@ reg('request', 'sup:getOfficerActivity', (args: { citizenid?: string } | null) =
                 mine: false,
             },
         ],
+        // step P7: Clear cooldown offered (never on the viewer's own character)
+        cooldownClear: o.citizenid === me.citizenid ? null : { perDay: 5, usedToday: supClears.length },
     };
     return activity;
 });
+
+// ============================================================================
+//                 CLEAR COOLDOWN (DEPARTMENT REPORT, STEP P7)
+// ============================================================================
+// Every officer has a Patrol type cooldown and one mission cooldown until cleared; the officer's clears a day (3, all
+// staff) and the supervisor's (5) are counted in this mock session.
+
+const supClears: { citizenid: string; scope: string; key: string }[] = [];
+const cleared = (cid: string, scope: string, key: string) =>
+    supClears.some(c => c.citizenid === cid && c.scope === scope && c.key === key);
+
+reg('request', 'sup:getOfficerCooldowns', (args: { citizenid?: string } | null) => {
+    const o = args?.citizenid ? byCid(args.citizenid) : undefined;
+    if (!o) throw new Error('err.unknown_officer');
+    const t0 = now();
+    const types = cleared(o.citizenid, 'type', 'patrol') ? [] : [{ key: 'patrol', label: 'Patrol', until: t0 + 540 }];
+    const missions = cleared(o.citizenid, 'mission', 'gang_shootout')
+        ? []
+        : [{ id: 'gang_shootout', label: 'Gang Shootout', until: t0 + 1080 }];
+    const view: OfficerCooldowns = {
+        citizenid: o.citizenid,
+        online: true,
+        onRun: false,
+        cooldowns: { types, missions },
+        clears: { used: supClears.filter(c => c.citizenid === o.citizenid).length, max: 3 },
+        mine: { perDay: 5, usedToday: supClears.length },
+        serverTime: t0,
+    };
+    return view;
+});
+
+reg(
+    'action',
+    'server:sup:clearCooldowns',
+    (p: { citizenid?: string; scope?: string; key?: string; reason?: string }) => {
+        if (!p?.citizenid || !byCid(p.citizenid)) throw new Error('err.unknown_officer');
+        if (p.scope !== 'type' && p.scope !== 'mission') throw new Error('err.invalid_payload');
+        if (!p.reason || !String(p.reason).trim()) throw new Error('err.reason_required');
+        if (supClears.filter(c => c.citizenid === p.citizenid).length >= 3) throw new Error('err.live_clear_limit');
+        if (supClears.length >= 5) throw new Error('err.sup_clear_used');
+        supClears.push({ citizenid: p.citizenid, scope: p.scope, key: String(p.key ?? '') });
+        return { used: supClears.filter(c => c.citizenid === p.citizenid).length, max: 3 };
+    },
+);

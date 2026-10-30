@@ -129,3 +129,16 @@
 .oversight-live-recall-placeholder {
     width: 0;
 }
+
+/* "+ minutes" (step P7) */
+.oversight-live-addtime {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.oversight-live-addtime__done {
+    color: var(--cp-muted);
+    font-size: var(--cp-fs-sm);
+}

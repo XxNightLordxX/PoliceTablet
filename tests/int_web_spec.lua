@@ -1074,7 +1074,7 @@ do
         Has(screen, use[1], 'Mission controls uses ' .. use[1])
         Has(mock, use[2], 'with a browser mock')
     end
-    Has(screen, '.filter(c => c.active)', 'only the controls an admin switched on')
+    Has(screen, 'c => c.active && c.kind !== \'action\'', 'only the controls an admin switched on, never an action')
     Has(screen, '<ReasonChips value={reason} onChange={setReason} disabled={busy} />', 'the reason dialog has chips')
     Has(screen, '<Countdown seconds={c.waitLeft} onDone={onWaitDone} />', 'the change-wait countdown')
     Has(screen, 't(\'sup.controls.self_note\')', 'the self rule note')

@@ -114,7 +114,7 @@ function BoundsFields({
     switchLabel?: string;
     onSave: (next: MissionControlBounds) => void;
 }) {
-    const numeric = control.kind !== 'bool';
+    const numeric = control.kind !== 'bool' && control.bounded !== false;
     const key = JSON.stringify(bounds);
     const [on, setOn] = useState<boolean | undefined>(bounds.on);
     const [min, setMin] = useState<number | null>(bounds.min ?? null);
@@ -185,6 +185,17 @@ function BoundsFields({
     );
 }
 
+// An action control (step P7): the limits it is used with, set in Settings (Mission controls).
+function ActionLimits({ control }: { control: MissionControlState }) {
+    const parts: string[] = [];
+    if (control.perDay !== undefined) parts.push(t('admin.perms.mc.per_day', { n: control.perDay }));
+    if (control.maxSeconds !== undefined) {
+        parts.push(t('admin.perms.mc.time_total', { minutes: Math.floor(control.maxSeconds / 60) }));
+    }
+    if (parts.length === 0) return null;
+    return <span className="oversight-perm-desc">{parts.join(' · ')}</span>;
+}
+
 // ============================================================================
 //                       ONE DEPARTMENT (OWN LIMITS, NOW)
 // ============================================================================
@@ -216,7 +227,7 @@ function DepartmentRow({
                     {control.active ? t('admin.perms.mc.dept_on') : t('admin.perms.mc.dept_off')}
                 </Badge>
             </div>
-            <StateLine s={control} busy={busy} onReset={onReset} />
+            {control.kind === 'action' ? null : <StateLine s={control} busy={busy} onReset={onReset} />}
             {dept.boundsPath ? (
                 <>
                     <Checkbox
@@ -299,7 +310,8 @@ function ControlRow({
             </div>
             {controlDesc(control.key) ? <span className="oversight-perm-desc">{controlDesc(control.key)}</span> : null}
             <BoundsFields control={control} bounds={bounds} busy={busy} onSave={onSaveBounds} />
-            {control.serverWide ? (
+            {control.kind === 'action' ? <ActionLimits control={control} /> : null}
+            {control.kind === 'action' && control.serverWide ? null : control.serverWide ? (
                 <StateLine s={control} busy={busy} onReset={() => onReset()} />
             ) : (
                 <>

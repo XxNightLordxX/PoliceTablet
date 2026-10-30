@@ -2408,11 +2408,15 @@ CP.Net.callback('sup:getLiveRuns', function(src)
                 local shorts = {}
                 for _, d in ipairs(RunDeptList(run)) do shorts[#shorts + 1] = DeptShort(d) end
                 s.departments = shorts
+                -- "+ minutes" (step P7): what was added so far, and never on the viewer's own run
+                s.timeAdded = math.floor(tonumber(run.timeAdded) or 0)
+                s.own = not run.test and select(2, Call('AdminKit', 'selfRun', src, run.id)) == true or false
                 out[#out + 1] = s
             end
         end
     end
-    return { runs = out, serverTime = os.time(), canRecall = canRecall }
+    local _, addTime = Call('LiveCtl', 'supTimeView', src)
+    return { runs = out, serverTime = os.time(), canRecall = canRecall, addTime = addTime }
 end, { rate = 3 })
 
 -- Flag events recorded by CP.AntiCheat.flag (cp_audit 'runFlagged') and staff notes by CP.AntiCheat.note

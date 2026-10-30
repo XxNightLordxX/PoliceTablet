@@ -866,6 +866,18 @@ do
                 and E('MissionControls.happyHourPerDay').desc:find('a supervisor may start a day', 1, true) ~= nil,
             'step P6: once a day, with its comment'
         )
+        H.ok(
+            d.clearCooldown.on == true and d.addRunTime.on == false and d.addRunTime.min == 1 and d.addRunTime.max == 5,
+            'step P7: Clear cooldown ships on, + minutes off (1-5 a click)')
+        H.ok(
+            E('MissionControls.clearCooldownPerDay').default == 5 and E('MissionControls.clearCooldownPerDay').max == 50
+                and E('MissionControls.clearCooldownPerDay').desc:find('one supervisor may clear a day', 1, true) ~= nil
+                and E('MissionControls.addRunTimePerDay').default == 10
+                and E('MissionControls.addRunTimeMax').default == 300
+                and E('MissionControls.addRunTimeMax').desc:find('never above AdminControl.runTimeAddMax', 1, true)
+                    ~= nil,
+            'step P7: the per-day counts and the per-run total, with their comments'
+        )
     end
     H.ok(
         E('Permissions.supervisor.missionControls').default == false

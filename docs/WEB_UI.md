@@ -93,7 +93,7 @@ the `*ScreenKey` types of `shared/navigation.tsx` and one registry entry.
    | UI | keys (sidebar order) |
    |---|---|
    | Officer | `home` `board` `dispatch` (hidden when `Config.MissionCalls.enabled = false`) `unit` `active` `leaderboard` `challenge` `profile` |
-   | Supervisor | `sup_missions` `sup_crossdept` (launchCrossDept) `sup_live` `sup_controls` (missionControls, or `session.config.missionControls`; happy hour: Start with minutes, countdown, End now) `sup_review` (reviewFlagged or handleDisputes) `sup_payouts` (setTypePayout) `sup_builder` (builderEdit) `sup_report` |
+   | Supervisor | `sup_missions` `sup_crossdept` (launchCrossDept) `sup_live` (+ minutes: addTime) `sup_controls` (missionControls, or `session.config.missionControls`; happy hour: Start with minutes, countdown, End now) `sup_review` (reviewFlagged or handleDisputes) `sup_payouts` (setTypePayout) `sup_builder` (builderEdit) `sup_report` (officer dialog: Clear cooldown) |
    | Admin | `admin_home` `admin_payouts` `admin_payments` `admin_missions` `admin_live` `admin_seasons` `admin_leaderboards` `admin_officers` `admin_departments` `admin_permissions` `admin_settings` `admin_system` `admin_audit` `admin_testing` |
 
    `navigate(key, params)` passes params; read them with `useNavigation().params`

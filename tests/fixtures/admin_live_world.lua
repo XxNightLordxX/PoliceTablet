@@ -1,6 +1,4 @@
--- The world of tests/admin_live_spec.lua and tests/admin_runctl_spec.lua: the real permissions, access, admin, adminkit,
--- tablet, schedule, scaling, events, units, runs and livectl modules, stand-ins for the rest (Qbox, the Mission Board,
--- scoring, cash, operations, the downed follow-up) and a one-objective mission whose block spawns one object.
+-- The world of tests/admin_live_spec.lua, tests/admin_runctl_spec.lua and tests/sup_actions_spec.lua: the real
 
 return function(H)
     local W = { log = {} }
@@ -275,7 +273,14 @@ return function(H)
     }
 
     -- ---- THE REAL MODULES --------------------------------------------------
-    for _, t in ipairs({ 'cp_audit', 'cp_admin_requests', 'cp_officers', 'cp_mission_runs', 'cp_mission_runs_archive' }) do
+    for _, t in ipairs({
+        'cp_audit',
+        'cp_admin_requests',
+        'cp_officers',
+        'cp_mission_runs',
+        'cp_mission_runs_archive',
+        'cp_dept_controls',
+    }) do
         H.sql('DELETE FROM ' .. t)
     end
     for _, m in ipairs({
@@ -283,6 +288,7 @@ return function(H)
         'modules/access/server.lua',
         'modules/admin/server.lua',
         'modules/adminkit/server.lua',
+        'modules/deptcontrols/server.lua',
         'modules/tablet/server.lua',
         'modules/schedule/server.lua',
         'modules/scaling/server.lua',

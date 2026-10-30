@@ -367,6 +367,23 @@ export interface OfficerActivity {
     runs: ActivityRun[];
     // active commendations, newest first (mine = the viewer issued it)
     commendations?: Commendation[];
+    // step P7: the viewer may clear this officer's cooldowns (admins: no counts)
+    cooldownClear?: { perDay?: number; usedToday?: number } | null;
+}
+
+// sup:getOfficerCooldowns (step P7): the officer's cooldowns for Clear cooldown
+export interface OfficerCooldowns {
+    citizenid: string;
+    online: boolean;
+    onRun: boolean;
+    cooldowns: {
+        types: { key: string; label: string; until: number }[];
+        missions: { id: string; label: string; until: number; scale?: number }[];
+    };
+    // the officer's clears today by all staff (Config.AdminControl.cooldownClearsPerDay)
+    clears: { used: number; max: number };
+    mine?: { perDay?: number; usedToday?: number } | null;
+    serverTime: number;
 }
 
 // Lua encodes an empty table as {} (not []): anything that is not an array is an empty list.

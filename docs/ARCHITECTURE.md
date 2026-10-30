@@ -3420,6 +3420,23 @@ pattern, so a missing module reads as config).
   byRole, self } | nil` is in the session (`happyHour`), `getMissionTypes` (`happyHour`) and `admin:getLiveRuns`;
   push `happyHour` (the state or false) goes to every online officer and admin on a start, an end now or the end.
   End now = `server:admin:resetMissionControl { department = '*', key = 'happyHour' }` (or the supervisor reset).
+- Action controls (step P7, modules/livectl): kind `action` = a staff action with no saved value; `DC.get` reads
+  nil, `DC.set` / `DC.reset` refuse it (`err.control_unknown`), `DC.available` ignores it, `DC.canChange` says who
+  may use it; option `bounded = false` (no min / max on the admin card). `clearCooldown` (`serverWide`, `master =
+  false`, shipped on, owner decision: a cooldown change is for every department): `server:sup:clearCooldowns
+  { citizenid, scope = 'type'|'mission', key, reason }` through `Kit.supAction` (permission `DC.canChange`; self
+  `err.self_target`; `LiveCtl.clearCooldowns`, so the officer's `cooldown_clears` count shared with admins
+  `err.live_clear_limit` and `err.live_officer_on_run`; a supervisor at most `Config.MissionControls.clearCooldownPerDay`
+  a day `err.sup_clear_used`, `Kit.dailyCount('cooldownClear', { actor })`; audit `cooldownClear` role supervisor;
+  toast `sup.notice.cooldowns_cleared`), `sup:getOfficerCooldowns { citizenid }` -> `LiveCtl.officerCooldowns`
+  (cooldowns, the officer's clears, `mine = { perDay, usedToday }`), and `sup:getOfficerActivity` gains
+  `cooldownClear` (`LiveCtl.supClearView`). `addRunTime` (per department, under the master switch, range 1-10
+  minutes, shipped off with 1-5): `server:sup:addRunTime { runId, minutes, reason }` (a run with a participant of his
+  department `err.other_department`, never a test or his own run `err.own_run`, `Runs.addTime` with
+  `LiveCtl.supTimeMax()` = min(`Config.MissionControls.addRunTimeMax`, `Config.AdminControl.runTimeAddMax`) counted
+  on `run.timeAdded` with an admin's additions, so `run.timeLimit` and the fast-finish bonus stay;
+  `Config.MissionControls.addRunTimePerDay` `err.sup_time_used`; audit `runTimeAdd` role supervisor; toast
+  `sup.notice.time_added`); `sup:getLiveRuns` gains `addTime` (`LiveCtl.supTimeView`) and per run `timeAdded`, `own`.
 - Rows are cached per department, cleared on every write and on `settings:changed` for `MissionControls.*`,
   `Permissions.supervisor.missionControls` and `Departments.*`. Bounds are always read live.
 - Net: §8.3 (`sup:getMissionControls`, `server:sup:setMissionControl`, `server:sup:resetMissionControl` through
@@ -3795,8 +3812,8 @@ Callbacks (read): `getSession`, `getMissionTypes`, `getUnit`, `getRun`, `getHome
 Parity-plus: `getMissionCalls`, `getNavCounts`, `getOptions` (§5.48), `getProfileEdit`, `getRewardsLocker`, `sup:getMissionCalls`,
 `sup:getProfileQueue`, `admin:getRewards` (`{ page }`), `admin:getAreaCoverage`, `admin:getLocationStats`
 (`{ missionId }`), `admin:getOfficerProfile` (`{ citizenid }`), `admin:getConfigHealth`, `admin:getTabletAccess`,
-`admin:getSettings`, `admin:getSettingsHistory` (`{ page, path? }`), `sup:getMissionControls` and
-`admin:getMissionControls` (§5.49; rate 3);
+`admin:getSettings`, `admin:getSettingsHistory` (`{ page, path? }`), `sup:getMissionControls`,
+`sup:getOfficerCooldowns` (`{ citizenid }`, step P7) and `admin:getMissionControls` (§5.49; rate 3);
 `getBoard` gains `metric`, `getSession` gains `via` and `desk`.
 
 Actions (write), each checks `CP.Permissions.can`:
@@ -3807,6 +3824,8 @@ Actions (write), each checks `CP.Permissions.can`:
 | `server:admin:setMissionPayout` | `{ missionId, amount (nil=clear), reason }` | setMissionPayout | payouts |
 | `server:sup:setMissionControl` / `server:admin:setMissionControl` | `{ key, value, reason, requestId, department? (admin) }` → `{ department, key, value }` (rate 2; §5.49) | missionControls (supervisor: own department) / admin | deptcontrols |
 | `server:sup:resetMissionControl` / `server:admin:resetMissionControl` | `{ key, reason, requestId, department? (admin) }` → `{ department, key }` | missionControls / admin | deptcontrols |
+| `server:sup:clearCooldowns` | `{ citizenid, scope = type\|mission, key, reason }` → `{ used, max }` (§5.49, step P7) | Mission control clearCooldown | livectl |
+| `server:sup:addRunTime` | `{ runId, minutes, reason }` → `{ runId, timeAdded }` (§5.49, step P7) | Mission control addRunTime (own department) | livectl |
 | `server:sup:opLaunch` / `server:admin:opLaunch` | `{ missionId }` | launchCrossDept | operations |
 | `server:sup:opStart` / `server:admin:opStart` | — | launchCrossDept | operations |
 | `server:sup:opRelaunch` / `server:admin:opRelaunch` | — | launchCrossDept | operations |

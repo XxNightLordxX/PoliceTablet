@@ -525,6 +525,21 @@ Supervisor UI → **Mission controls** (below).
     Officers see a banner on Home and the Mission Board ("Happy hour: no mission cooldowns for 14:32, set by Sgt
     Doe"); admins see a chip with **End now** in Admin UI → Live. `Config.MissionControls.happyHourPerDay` (`1`):
     happy hours a supervisor may start a day (`0` = none); admins may start more, one at a time.
+  - `clearCooldown = { on = true }` (**Clear cooldown**, on when you install: it is a cooldown control): in Supervisor
+    UI → **Department Report** a supervisor opens an officer and presses **Clear cooldown**. He sees the officer's
+    mission type and mission cooldowns with the time left and clears one at a time, with a reason. Any department's
+    officer (a cooldown change is server-wide), never his own character, never while the officer is on a run, and
+    each officer at most `Config.AdminControl.cooldownClearsPerDay` (`3`) clears a day by all staff together.
+    `Config.MissionControls.clearCooldownPerDay` (`5`): clears one supervisor may make a day. The officer gets a
+    toast; the clear is in the audit log and in Admin UI → Officers → Today & cooldowns.
+
+- **+ minutes on a live mission** (`addRunTime = { on = false, min = 1, max = 5 }`, off when you install, under the
+  master switch): in Supervisor UI → **Live Missions** a supervisor presses **+ minutes** on a running mission of his
+  department (never one he is on) and adds `min` to `max` minutes per click, with a reason. Everyone on it is told and
+  the HUD timer shows the new time. The fast-finish bonus is still judged on the original time limit.
+  `Config.MissionControls.addRunTimeMax` (`300` seconds) caps what may be added to one mission in all, an admin's
+  additions counted, never above `Config.AdminControl.runTimeAddMax`; `Config.MissionControls.addRunTimePerDay` (`10`):
+  additions one supervisor may make a day.
 
 - To switch them on: set `Config.Permissions.supervisor.missionControls = true` (the master switch; Admin UI →
   **Permissions**), then switch on each control you want in `Config.MissionControls.controls`, with the only values a

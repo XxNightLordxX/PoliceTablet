@@ -791,6 +791,212 @@ Kit.action('server:admin:setTypeOfDay', 'liveRuns', function(ctx)
 end, { reason = true, category = 'audit' })
 
 -- ============================================================================
+--                                 SUPERVISORS
+-- ============================================================================
+-- CLEAR ONE OFFICER'S COOLDOWN, ADD TIME (STEP P7).
+-- Two Mission controls of kind 'action' (CP.DeptControls): clearCooldown (Department Report) is a cooldown control,
+-- so it is server-wide, outside the master switch and ships on (owner decision 2026-10-19: a supervisor may clear the
+-- cooldown of an officer of any department); addRunTime (Live Missions) is for runs of the supervisor's own
+-- department, under the master switch, and ships off. Admins keep their own tools (server:admin:clearCooldowns and
+-- server:admin:addRunTime); both share the per-officer clear count and the per-run time total with these.
+
+local CLEAR_KEY, TIME_KEY = 'clearCooldown', 'addRunTime'
+local SUP_SCOPES = { type = true, mission = true }   -- never 'all' for a supervisor
+
+local function McCfg() return type(Config.MissionControls) == 'table' and Config.MissionControls or {} end
+
+local function McNum(key, default) return math.max(0, math.floor(Num(McCfg()[key], default))) end
+
+-- Clears one supervisor may make a day (Config.MissionControls.clearCooldownPerDay).
+function LiveCtl.supClearPerDay() return McNum('clearCooldownPerDay', 5) end
+
+-- Times one supervisor may add minutes a day (Config.MissionControls.addRunTimePerDay).
+function LiveCtl.supTimePerDay() return McNum('addRunTimePerDay', 10) end
+
+-- Seconds supervisors may add to one run in all: Config.MissionControls.addRunTimeMax, never above the admin's
+-- Config.AdminControl.runTimeAddMax (both count run.timeAdded, the additions of admins and supervisors together).
+function LiveCtl.supTimeMax() return math.min(McNum('addRunTimeMax', 300), Limit('runTimeAddMax', 600)) end
+
+local function DC() return CP.DeptControls end
+
+local function CanUse(src, key)
+    local dc = DC()
+    if not (dc and dc.canChange) then return false, 'err.module_unavailable' end
+    return dc.canChange(src, key, nil)
+end
+
+-- Today's uses of one action by one actor (cp_audit rows; a restart never resets them).
+local function UsedToday(action, actor)
+    return Kit.dailyCount(action, { actor = actor })
+end
+
+-- The actor its audit rows carry (as CP.AdminKit writes them): the citizenid.
+local function ActorOf(src)
+    local _, info = Call('Qbx', 'getInfo', src)
+    return type(info) == 'table' and info.citizenid or ('player:%d'):format(src)
+end
+
+local function RegisterSupControls()
+    local dc = DC()
+    if not (dc and dc.register) then return false end
+    dc.register(CLEAR_KEY, {
+        kind = 'action',
+        serverWide = true,
+        master = false,
+        bounded = false,
+        viewExtra = function() return { perDay = LiveCtl.supClearPerDay() } end,
+    })
+    dc.register(TIME_KEY, {
+        kind = 'action',
+        integer = true,
+        range = { 1, ADD_MINUTES_MAX },
+        viewExtra = function() return { perDay = LiveCtl.supTimePerDay(), maxSeconds = LiveCtl.supTimeMax() } end,
+    })
+    return true
+end
+RegisterSupControls()
+LiveCtl.registerSupControls = RegisterSupControls
+
+-- The scope and key of a clear: 'type' (a mission type) or 'mission' (a mission id). scope, key | nil, errKey.
+local function ClearTarget(payload, scopes)
+    local scope = payload.scope
+    if not scopes[scope] then return nil, 'err.invalid_payload' end
+    local key = payload.key
+    if scope == 'type' then
+        if type(key) ~= 'string' or not (Config.MissionTypes and Config.MissionTypes[key]) then
+            return nil, 'err.unknown_type'
+        end
+    elseif type(key) ~= 'string' or key == '' or #key > MISSION_ID_MAX then
+        return nil, 'err.unknown_mission'
+    end
+    return scope, key
+end
+
+-- What the Department Report's officer dialog needs to show Clear cooldown: nil when that player may not clear this
+-- officer's cooldowns (the control is off, not a supervisor, his own character), else { perDay, usedToday }.
+function LiveCtl.supClearView(src, citizenid)
+    local n = ToSrc(src)
+    if not n or n == 0 or not CanUse(n, CLEAR_KEY) then return nil end
+    if Kit.isSelf(n, citizenid) ~= false then return nil end
+    local admin = CP.Access and CP.Access.isAdmin and CP.Access.isAdmin(n) == true
+    return {
+        perDay = not admin and LiveCtl.supClearPerDay() or nil,
+        usedToday = not admin and (UsedToday('cooldownClear', ActorOf(n)) or 0) or nil,
+    }
+end
+
+-- The officer's cooldowns as the Clear cooldown dialog shows them (LiveCtl.officerRunState trimmed: no cash, no
+-- counts, no board). nil, errKey when unknown.
+function LiveCtl.officerCooldowns(citizenid)
+    local okO, exists, _, clears = pcall(ReadMarker, citizenid, 'cooldown_clears')
+    if not okO or not exists then return nil, 'err.unknown_officer' end
+    local run, src = RunOfCitizen(citizenid)
+    return {
+        citizenid = citizenid,
+        online = src ~= nil,
+        onRun = run ~= nil,
+        cooldowns = CooldownList(citizenid),
+        clears = {
+            used = clears.day == DayKey() and math.floor(Num(clears.n, 0)) or 0,
+            max = Limit('cooldownClearsPerDay', 3),
+        },
+        serverTime = os.time(),
+    }
+end
+
+-- Live Missions' "+ minutes" for that player: nil when he may not add time, else { min, max (minutes per click),
+-- maxSeconds (per run), perDay, usedToday }. Admins use Admin UI -> Live.
+function LiveCtl.supTimeView(src)
+    local n = ToSrc(src)
+    if not n or n == 0 then return nil end
+    if CP.Access and CP.Access.isAdmin and CP.Access.isAdmin(n) then return nil end
+    local ok, _, _, dept = CanUse(n, TIME_KEY)
+    if not ok then return nil end
+    local b = DC().bounds(dept, TIME_KEY)
+    local lo = math.max(1, math.floor(Num(b.min, 1)))
+    local hi = math.min(ADD_MINUTES_MAX, math.floor(Num(b.max, 5)))
+    if hi < lo then return nil end
+    return {
+        min = lo,
+        max = hi,
+        maxSeconds = LiveCtl.supTimeMax(),
+        perDay = LiveCtl.supTimePerDay(),
+        usedToday = UsedToday('runTimeAdd', ActorOf(n)) or 0,
+    }
+end
+
+local function RunHasDept(run, dept)
+    for _, p in pairs(type(run.participants) == 'table' and run.participants or {}) do
+        if type(p) == 'table' and p.department == dept then return true end
+    end
+    return false
+end
+
+CP.Net.callback('sup:getOfficerCooldowns', function(src, args)
+    local cid = Cid(type(args) == 'table' and args.citizenid or nil)
+    if not cid then return nil, 'err.invalid_payload' end
+    local ok, err = CanUse(src, CLEAR_KEY)
+    if not ok then return nil, err or 'err.no_permission' end
+    local view, errV = LiveCtl.officerCooldowns(cid)
+    if not view then return nil, errV end
+    view.mine = LiveCtl.supClearView(src, cid)
+    return view
+end, { rate = 3 })
+
+-- One officer's type or mission cooldown (never all at once): the officer's daily clears (cooldown_clears, shared
+-- with admins) and the supervisor's own Config.MissionControls.clearCooldownPerDay.
+Kit.supAction('server:sup:clearCooldowns', 'missionControls', function(ctx)
+    local cid = Cid(ctx.payload.citizenid)
+    if not cid then return false, 'err.invalid_payload' end
+    local scope, key = ClearTarget(ctx.payload, SUP_SCOPES)
+    if not scope then return false, key end
+    local sup = ctx.role == 'supervisor'
+    if sup then
+        local used = UsedToday('cooldownClear', ctx.actor)
+        if used == nil then return false, 'err.internal' end
+        if used >= LiveCtl.supClearPerDay() then return false, 'err.sup_clear_used' end
+    end
+    local ok, res = LiveCtl.clearCooldowns(cid, scope, key)
+    if not ok then return false, res end
+    ctx.audit('cooldownClear', cid, scope, U.clip(key, 64), { category = 'flags' })
+    ctx.changed('cooldowns', cid)
+    ctx.notify(cid, 'info', sup and 'sup.notice.cooldowns_cleared' or 'admin.live.notice.cooldowns_cleared', {})
+    return true, res
+end, {
+    reason = true,
+    self = OfficerTarget,
+    targetRate = { 1, 3000 },
+    category = 'flags',
+    permission = function(src) return CanUse(src, CLEAR_KEY) end,
+})
+
+-- Minutes on a running mission of the supervisor's department (never one he is or was on, never a test): inside the
+-- admin's min and max per click; the run's total (with every admin's) within LiveCtl.supTimeMax().
+Kit.supAction('server:sup:addRunTime', 'missionControls', function(ctx)
+    local view = LiveCtl.supTimeView(ctx.src)
+    if not view then return false, 'err.control_off' end
+    local minutes = math.tointeger(tonumber(ctx.payload.minutes) or 0)
+    if not minutes or minutes < view.min or minutes > view.max then return false, 'err.live_minutes_range' end
+    local runId = RunIdOf(ctx.payload.runId)
+    local run = runId and LiveRun(runId)
+    if not run or run.test then return false, 'err.invalid_run' end
+    local _, _, _, dept = CanUse(ctx.src, TIME_KEY)
+    if not RunHasDept(run, dept) then return false, 'err.other_department' end
+    if view.usedToday >= view.perDay then return false, 'err.sup_time_used' end
+    if not Has('Runs', 'addTime') then return false, 'err.module_unavailable' end
+    local okA, total = CP.Runs.addTime(run, minutes * 60, view.maxSeconds)
+    if not okA then return false, total end
+    NotifyRun(run, 'sup.notice.time_added', { minutes = minutes })
+    ctx.audit('runTimeAdd', run.id, tostring(total - minutes * 60), tostring(total), { category = 'operations' })
+    return true, { runId = run.id, timeAdded = total }
+end, {
+    reason = true,
+    self = RunTargets,
+    category = 'operations',
+    permission = function(src) return CanUse(src, TIME_KEY) end,
+})
+
+-- ============================================================================
 --                           SIDEBAR COUNT, START-UP
 -- ============================================================================
 

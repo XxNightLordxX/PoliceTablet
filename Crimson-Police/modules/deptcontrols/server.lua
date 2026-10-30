@@ -10,7 +10,7 @@ local KEY_PATTERN = '^%a[%w_]*$'
 local KEY_MAX = 40                -- characters (cp_dept_controls.control_key)
 local MAP_MAX = 64                -- entries of a map value (one number per mission type)
 local AUDIT_TEXT = 64             -- characters cp_audit keeps of an old or new value
-local KINDS = { number = true, bool = true, map = true }
+local KINDS = { number = true, bool = true, map = true, action = true }
 local SCOPES = { between = true, run = true }
 local WATCHED = { 'MissionControls', 'Permissions.supervisor.missionControls', 'Departments' }
 
@@ -82,7 +82,9 @@ end
 -- ============================================================================
 
 -- DC.register(key, def): a control other modules read with DC.get.
---   kind        'number' (one number), 'bool' (true or false) or 'map' (a number per key, e.g. per mission type)
+--   kind        'number' (one number), 'bool' (true or false), 'map' (a number per key, e.g. per mission type) or
+--               'action' (a staff action with no saved value, e.g. clearing an officer's cooldown: only its admin
+--               switch and bounds; DC.canChange says who may use it, DC.get / DC.set / DC.reset never apply)
 --   scope       'between' (read between runs: cooldowns, limits) or 'run' (copied into run.controls at the start,
 --               DC.snapshot)
 --   configValue fn(officer) -> the value while no change applies (the config.lua rule)
@@ -99,13 +101,17 @@ end
 --   overlays    optional { [other key] = fn(value, thisValue) -> value }: while this control has a live change, DC.get
 --               of the other key returns fn's value (the self rule of this change still applies)
 --   viewExtra   optional fn(dept) -> table: more fields for this control's row in DC.view
+--   bounded     false: the control has no min and max (the admin's card shows only its switch)
 function DC.register(key, def)
     if type(key) ~= 'string' or #key > KEY_MAX or not key:match(KEY_PATTERN) then
         CP.err(TAG, 'register: a control key is a name of at most %d characters (%s)', KEY_MAX, tostring(key))
         return false
     end
+    if type(def) == 'table' and def.kind == 'action' and def.configValue == nil then
+        def.configValue = function() return nil end
+    end
     if type(def) ~= 'table' or not KINDS[def.kind] or type(def.configValue) ~= 'function' then
-        CP.err(TAG, 'register(%s): kind number, bool or map and a configValue function are needed', key)
+        CP.err(TAG, 'register(%s): kind number, bool, map or action and a configValue function are needed', key)
         return false
     end
     local scope = def.scope or 'between'
@@ -130,6 +136,7 @@ function DC.register(key, def)
         allow = type(def.allow) == 'function' and def.allow or nil,
         overlays = type(def.overlays) == 'table' and def.overlays or nil,
         viewExtra = type(def.viewExtra) == 'function' and def.viewExtra or nil,
+        bounded = def.bounded ~= false and def.kind ~= 'bool',
     }
     return true
 end
@@ -391,7 +398,7 @@ end
 
 function DC.get(dept, key, officer)
     local def = defs[key]
-    if not def then return nil end
+    if not def or def.kind == 'action' then return nil end
     local v, row = Own(def, dept, key, officer)
     local ov, orow = Overlay(dept, key, officer, v)
     if orow then return ov, orow end
@@ -464,7 +471,7 @@ end
 -- Mission controls screen then; with the shipped config the cooldown controls, outside the master switch).
 function DC.available(src)
     for _, key in ipairs(order) do
-        if DC.canChange(src, key, nil) then return true end
+        if defs[key].kind ~= 'action' and DC.canChange(src, key, nil) then return true end
     end
     return false
 end
@@ -528,6 +535,7 @@ end
 -- Returns true, { department, key, value } | false, errKey (opts.waitLeft on err.control_wait: seconds).
 function DC.set(src, key, value, reason, opts)
     opts = type(opts) == 'table' and opts or {}
+    if defs[key] and defs[key].kind == 'action' then return false, 'err.control_unknown' end
     local ok, err, role, dept = DC.canChange(src, key, opts.department)
     if not ok then return false, err end
     local def = defs[key]
@@ -581,6 +589,7 @@ end
 -- DC.reset(src, dept, key, reason): back to the config value (the row is deleted). A supervisor: his own department
 -- (or a server-wide control); an admin: any. true, { department, key } | false, errKey.
 function DC.reset(src, dept, key, reason)
+    if defs[key] and defs[key].kind == 'action' then return false, 'err.control_unknown' end
     local ok, err, role, where = DC.canChange(src, key, dept)
     if not ok then return false, err end
     local cleanReason, errR = CP.AdminKit.reason(reason)
@@ -646,6 +655,7 @@ local function ControlFields(def, dept)
         timeLeft = row and row.expiresAt and math.max(0, row.expiresAt - now) or nil,
         waitLeft = WaitLeft(where, def.key, row),
         integer = def.integer,
+        bounded = def.bounded,
         range = def.range and { def.range[1], def.range[2] } or nil,
         own = OwnBounds(def, dept),
     }

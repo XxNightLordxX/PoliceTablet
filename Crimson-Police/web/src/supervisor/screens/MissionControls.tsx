@@ -462,8 +462,10 @@ export default function MissionControls() {
 
     const dept = asArray(data?.departments)[0];
     const deptShort = dept?.short ?? session.officer?.departmentShort ?? '';
-    // only the controls an admin switched on
-    const controls = [...asArray(data?.serverWide), ...asArray(dept?.controls)].filter(c => c.active);
+    // only the controls an admin switched on; an action control (step P7) is used from its own screen
+    const controls = [...asArray(data?.serverWide), ...asArray(dept?.controls)].filter(
+        c => c.active && c.kind !== 'action',
+    );
     const groups = GROUPS.map(g => ({ key: g, rows: controls.filter(c => groupOf(c) === g) })).filter(
         g => g.rows.length > 0,
     );

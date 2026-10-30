@@ -314,11 +314,30 @@ if (EDGE) {
     liveRuns[1].operationId = 12;
 }
 
+// "+ minutes" (step P7): offered in the default mock, stateful per run (the server's caps)
+const supAddTime = { min: 1, max: 5, maxSeconds: 300, perDay: 10, usedToday: 0 };
+
 registerMock('request', 'sup:getLiveRuns', (): LiveRunsData => ({
     runs: emptyIf(liveRuns.filter(r => r.participants.some(p => p.status === 'active'))),
     serverTime: now(),
     canRecall: true,
+    addTime: EMPTY ? null : { ...supAddTime },
 }));
+registerMock('action', 'server:sup:addRunTime', (p: { runId?: string; minutes?: number; reason?: string }) => {
+    const run = liveRuns.find(r => r.runId === p?.runId);
+    if (!run || run.state !== 'in_progress') throw new Error('err.invalid_run');
+    if (!p.reason || !String(p.reason).trim()) throw new Error('err.reason_required');
+    const minutes = Number(p.minutes);
+    if (!Number.isInteger(minutes) || minutes < supAddTime.min || minutes > supAddTime.max)
+        throw new Error('err.live_minutes_range');
+    if (supAddTime.usedToday >= supAddTime.perDay) throw new Error('err.sup_time_used');
+    const total = (run.timeAdded ?? 0) + minutes * 60;
+    if (total > supAddTime.maxSeconds) throw new Error('err.live_time_max');
+    run.timeAdded = total;
+    run.remaining = (run.remaining ?? 0) + minutes * 60;
+    supAddTime.usedToday += 1;
+    return { runId: run.runId, timeAdded: total };
+});
 registerMock('action', 'server:sup:forceRecall', (p: { runId: string; src: number }) => {
     const run = liveRuns.find(r => r.runId === p?.runId);
     const part = run?.participants.find(x => x.src === p?.src);
@@ -1307,6 +1326,8 @@ registerMock('request', 'admin:getMissionControls', (): MissionControlsView => {
         hourlyCap: { on: true, min: 1, max: 16 },
         dailyCap: { on: true, min: 0, max: 40 },
         happyHour: { on: true, min: 5, max: 30 },
+        clearCooldown: { on: true },
+        addRunTime: { on: false, min: 1, max: 5 },
         ...(EDGE ? { edgeDepartmentControlWithAVeryLongKey: { on: true, min: 0, max: 100 } } : {}),
     };
     const serverWide = [
@@ -1316,24 +1337,37 @@ registerMock('request', 'admin:getMissionControls', (): MissionControlsView => {
         mcState('*', 'hourlyCap', 'number', 8, bounds.hourlyCap, { integer: true, range: [1, 1000] }),
         mcState('*', 'dailyCap', 'number', 0, bounds.dailyCap, { integer: true, range: [0, 1000] }),
         mcState('*', 'happyHour', 'map', {}, bounds.happyHour, { integer: true, range: [1, 240], ...hhCounts() }),
+        // step P7: the two supervisor actions (no value; only the switch, bounds and the limits from Settings)
+        mcState('*', 'clearCooldown', 'action', {}, bounds.clearCooldown, { bounded: false, perDay: 5 }),
     ];
+    const addRunTime = (key: string) =>
+        mcState(key, 'addRunTime', 'action', {}, bounds.addRunTime, {
+            master: true,
+            integer: true,
+            range: [1, 10],
+            perDay: 10,
+            maxSeconds: 300,
+        });
     const dept = (key: string, label: string, short: string) => ({
         key,
         label,
         short,
         boundsPath: `Departments.${key}.missionControls`,
-        controls: EDGE
-            ? [
-                  mcState(
-                      key,
-                      'edgeDepartmentControlWithAVeryLongKey',
-                      'number',
-                      10,
-                      key === 'sast' ? { on: true, min: 5, max: 100 } : { on: true, min: 0, max: 100 },
-                      { master: true, integer: true, own: key === 'sast' ? { min: 5 } : undefined },
-                  ),
-              ]
-            : [],
+        controls: [
+            addRunTime(key),
+            ...(EDGE
+                ? [
+                      mcState(
+                          key,
+                          'edgeDepartmentControlWithAVeryLongKey',
+                          'number',
+                          10,
+                          key === 'sast' ? { on: true, min: 5, max: 100 } : { on: true, min: 0, max: 100 },
+                          { master: true, integer: true, own: key === 'sast' ? { min: 5 } : undefined },
+                      ),
+                  ]
+                : []),
+        ],
     });
     return {
         master: !EMPTY,

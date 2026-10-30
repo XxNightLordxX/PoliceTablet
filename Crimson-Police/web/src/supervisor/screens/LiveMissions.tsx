@@ -7,13 +7,17 @@ import {
     Card,
     ConfirmDialog,
     Countdown,
+    Dialog,
     EmptyState,
     ErrorState,
+    Field,
     Icon,
     IconButton,
     LoadingBlock,
+    NumberInput,
     Row,
     Screen,
+    Textarea,
     TierBadge,
 } from '../../shared/components';
 import { asArray } from '../../shared/data';
@@ -21,7 +25,7 @@ import { formatDateTime } from '../../shared/format';
 import { useAction, useRequest } from '../../shared/hooks';
 import { t } from '../../shared/i18n';
 import { useCan, useSession } from '../../shared/session';
-import type { LiveParticipant, LiveRunEx, LiveRunsData } from '../../types/oversight';
+import type { LiveParticipant, LiveRunEx, LiveRunsData, SupAddTime } from '../../types/oversight';
 import MissionCallsPanel from '../components/MissionCallsPanel';
 import './LiveMissions.css';
 
@@ -34,15 +38,82 @@ function typeLabel(session: ReturnType<typeof useSession>, key: string): string 
     return asArray(session.config.missionTypes).find(m => m.key === key)?.label ?? key;
 }
 
+// "+ minutes" (step P7, Config.MissionControls.controls.addRunTime): minutes a click inside the admin's min and max,
+// a reason; the server keeps the run's total within addRunTimeMax (with an admin's additions) and the time limit the
+// fast-finish bonus is judged on.
+function AddTimeDialog({
+    run,
+    addTime,
+    busy,
+    onClose,
+    onConfirm,
+}: {
+    run: LiveRunEx | null;
+    addTime: SupAddTime | null | undefined;
+    busy: boolean;
+    onClose: () => void;
+    onConfirm: (minutes: number, reason: string) => void;
+}) {
+    const [minutes, setMinutes] = useState<number | null>(null);
+    const [reason, setReason] = useState('');
+    useEffect(() => {
+        setMinutes(addTime?.min ?? 1);
+        setReason('');
+    }, [run?.runId, addTime?.min]);
+    if (!run || !addTime) return null;
+    const leftMin = Math.max(0, Math.floor((addTime.maxSeconds - (run.timeAdded ?? 0)) / 60));
+    const leftToday = Math.max(0, addTime.perDay - addTime.usedToday);
+    const ok = !busy && minutes !== null && reason.trim() !== '' && minutes <= leftMin && leftToday > 0;
+    return (
+        <Dialog
+            open
+            onClose={busy ? () => undefined : onClose}
+            size="sm"
+            title={t('sup.live.add_time_title', { mission: run.missionLabel })}
+            description={t('sup.live.add_time_text')}
+            footer={
+                <>
+                    <Button variant="ghost" onClick={onClose} disabled={busy}>
+                        {t('common.cancel')}
+                    </Button>
+                    <Button
+                        variant="primary"
+                        icon="clock"
+                        loading={busy}
+                        disabled={!ok}
+                        onClick={() => minutes !== null && onConfirm(minutes, reason.trim())}
+                    >
+                        {t('sup.live.add_time')}
+                    </Button>
+                </>
+            }
+        >
+            <p className="oversight-live-addtime__done">
+                {t('sup.live.add_time_left', { left: leftMin, n: leftToday })}
+            </p>
+            <Field label={t('sup.live.add_time_minutes')}>
+                <NumberInput value={minutes} onChange={setMinutes} min={addTime.min} max={addTime.max} integer />
+            </Field>
+            <Field label={t('common.reason')} required>
+                <Textarea value={reason} onChange={setReason} maxLength={255} rows={2} />
+            </Field>
+        </Dialog>
+    );
+}
+
 function RunCard({
     run,
     canRecall,
     onRecall,
+    canAddTime,
+    onAddTime,
     fetchKey,
 }: {
     run: LiveRunEx;
     canRecall: boolean;
     onRecall: (p: LiveParticipant) => void;
+    canAddTime: boolean;
+    onAddTime: () => void;
     fetchKey: number;
 }) {
     const session = useSession();
@@ -158,6 +229,18 @@ function RunCard({
                     );
                 })}
             </ul>
+            {canAddTime && inProgress && !run.test && !run.own ? (
+                <div className="oversight-live-addtime">
+                    <Button size="sm" variant="secondary" icon="clock" onClick={onAddTime}>
+                        {t('sup.live.add_time')}
+                    </Button>
+                    {run.timeAdded ? (
+                        <span className="oversight-live-addtime__done">
+                            {t('sup.live.time_added', { minutes: Math.round(run.timeAdded / 60) })}
+                        </span>
+                    ) : null}
+                </div>
+            ) : null}
         </Card>
     );
 }
@@ -172,10 +255,12 @@ export default function SupLiveMissions() {
     );
     const { run, busy } = useAction();
     const [target, setTarget] = useState<RecallTarget | null>(null);
+    const [timeRun, setTimeRun] = useState<LiveRunEx | null>(null);
     const [fetchKey, setFetchKey] = useState(0);
 
     const runs = asArray(data?.runs);
     const canRecall = !!data?.canRecall && can('forceRecall');
+    const addTime = data?.addTime ?? null;
     const isAdminView = !session.officer;
 
     // Every answer (poll, push or refresh) re-syncs the local countdowns, also when `remaining` did not
@@ -197,6 +282,19 @@ export default function SupLiveMissions() {
         );
         setTarget(null);
         if (res.ok) void reload();
+    };
+
+    const confirmAddTime = async (minutes: number, reason: string) => {
+        if (!timeRun) return;
+        const res = await run(
+            'server:sup:addRunTime',
+            { runId: timeRun.runId, minutes, reason },
+            { success: 'sup.live.add_time_done', successVars: { minutes } },
+        );
+        if (res.ok) {
+            setTimeRun(null);
+            void reload();
+        }
     };
 
     let body;
@@ -223,6 +321,8 @@ export default function SupLiveMissions() {
                         canRecall={canRecall}
                         fetchKey={fetchKey}
                         onRecall={p => setTarget({ run: r, p })}
+                        canAddTime={!!addTime}
+                        onAddTime={() => setTimeRun(r)}
                     />
                 ))}
             </div>
@@ -255,6 +355,13 @@ export default function SupLiveMissions() {
             className="oversight-screen"
         >
             {body}
+            <AddTimeDialog
+                run={timeRun}
+                addTime={addTime}
+                busy={busy}
+                onClose={() => setTimeRun(null)}
+                onConfirm={(m, reason) => void confirmAddTime(m, reason)}
+            />
             {can('missionCalls') ? <MissionCallsPanel scope={isAdminView ? 'admin' : 'sup'} /> : null}
             <ConfirmDialog
                 open={!!target}

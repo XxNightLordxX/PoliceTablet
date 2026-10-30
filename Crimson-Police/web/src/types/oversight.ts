@@ -59,11 +59,24 @@ export interface LiveRunEx extends Omit<LiveRun, 'participants'> {
     startedAt: number | null;
     isBoss: boolean;
     departments: string[];
+    // step P7: seconds admins and supervisors added so far; own = the viewer is or was on it (no + minutes)
+    timeAdded?: number;
+    own?: boolean;
+}
+// "+ minutes" for this supervisor (step P7, Config.MissionControls.controls.addRunTime): minutes per click, seconds
+// per run in all, additions a day and today's
+export interface SupAddTime {
+    min: number;
+    max: number;
+    maxSeconds: number;
+    perDay: number;
+    usedToday: number;
 }
 export interface LiveRunsData {
     runs: LiveRunEx[];
     serverTime: number;
     canRecall: boolean;
+    addTime?: SupAddTime | null;
 }
 
 // ============================================================================
@@ -322,7 +335,8 @@ export type MissionControlValue = number | boolean | Record<string, number>;
 // A registered control as one department (or the whole server) has it now (CP.DeptControls ControlView).
 export interface MissionControlState {
     key: string;
-    kind: 'number' | 'bool' | 'map';
+    // 'action' (step P7): a supervisor action with no value (clearCooldown, addRunTime): only its switch and bounds
+    kind: 'number' | 'bool' | 'map' | 'action';
     scope: 'between' | 'run';
     serverWide: boolean;
     // false = outside the master switch (Config.Permissions.supervisor.missionControls)
@@ -342,13 +356,18 @@ export interface MissionControlState {
     timeLeft?: number;
     waitLeft: number;
     integer?: boolean;
+    // false: no min and max (only the admin switch)
+    bounded?: boolean;
     // the min and max an admin may set
     range?: [number, number];
     // Config.Departments.<key>.missionControls[key] (never for a server-wide control)
     own?: MissionControlBounds;
-    // happyHour (step P6): Config.MissionControls.happyHourPerDay and how many started today
+    // happyHour (step P6): Config.MissionControls.happyHourPerDay and how many started today; clearCooldown and
+    // addRunTime (step P7): uses a supervisor may make a day
     perDay?: number;
     usedToday?: number;
+    // addRunTime (step P7): seconds supervisors may add to one run in all
+    maxSeconds?: number;
 }
 export interface MissionControlsDepartment {
     key: string;

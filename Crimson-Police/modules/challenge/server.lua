@@ -1469,6 +1469,9 @@ CP.Net.callback('sup:getOfficerActivity', function(src, args)
     local viewer = CP.Access.getOfficer(src)
     local okList, list = Call('Profile', 'commendations', args.citizenid, { viewer = viewer and viewer.citizenid })
     view.commendations = okList and type(list) == 'table' and list or {}
+    -- Clear cooldown (step P7, Config.MissionControls.controls.clearCooldown): { perDay, usedToday } when allowed
+    local _, clear = Call('LiveCtl', 'supClearView', src, args.citizenid)
+    view.cooldownClear = clear
     return view
 end)
 
