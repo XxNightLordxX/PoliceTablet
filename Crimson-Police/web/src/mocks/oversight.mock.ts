@@ -13,6 +13,8 @@ import type {
     FlaggedRow,
     LiveRunsData,
     MissionListData,
+    MissionControlState,
+    MissionControlsView,
     MissionListEntry,
     OfficerDetail,
     OfficerSearchData,
@@ -1192,7 +1194,12 @@ registerMock('request', 'admin:getPermissions', (): PermissionsData =>
                   { action: 'builderEditAny', enabled: false },
                   { action: 'builderRollback', enabled: false },
                   { action: 'breakEditLock', enabled: false },
+                  { action: 'missionCalls', enabled: true },
+                  { action: 'issueCommendation', enabled: true },
+                  { action: 'reviewProfiles', enabled: true },
+                  { action: 'missionControls', enabled: true },
               ],
+              missionGrants: { sast: { minGrade: 4 } },
               adminOnly: [
                   'setMissionPayout',
                   'clearPayout',
@@ -1231,6 +1238,112 @@ registerMock('request', 'admin:getPermissions', (): PermissionsData =>
               },
           },
 );
+
+// ============================================================================
+//                  MISSION CONTROLS (ADMIN UI -> PERMISSIONS)
+// ============================================================================
+// Default: the master switch on, mission cooldowns at x0.5 for tactical (set by a supervisor, 12 minutes ago) and
+// the hourly cap at 6; ?oversight=empty: the master switch off and nothing changed; ?oversight=edge also adds a
+// per-department control with SAST's own limits. Reset is stateful.
+
+const MC_TYPES = { patrol: 1, training: 1, investigation: 1, tactical: 1 };
+const mcSaved: Record<string, { value: MissionControlState['value']; setBy: string; setRole: string; at: number }> =
+    EMPTY
+        ? {}
+        : {
+              '*|cooldownScale': {
+                  value: { ...MC_TYPES, tactical: 0.5 },
+                  setBy: 'SUP00002',
+                  setRole: 'supervisor',
+                  at: now() - 720,
+              },
+              '*|hourlyCap': { value: 6, setBy: 'ADMIN001', setRole: 'admin', at: now() - 3 * H },
+          };
+
+function mcState(
+    dept: string,
+    key: string,
+    kind: MissionControlState['kind'],
+    configValue: MissionControlState['value'],
+    b: { on?: boolean; min?: number; max?: number },
+    extra: Partial<MissionControlState> = {},
+): MissionControlState {
+    const row = mcSaved[`${dept}|${key}`];
+    const active = b.on === true && (extra.master === false || !EMPTY);
+    return {
+        key,
+        kind,
+        scope: 'between',
+        serverWide: dept === '*',
+        master: false,
+        on: b.on === true,
+        active,
+        min: b.min,
+        max: b.max,
+        value: active && row ? row.value : configValue,
+        configValue,
+        saved: row?.value,
+        setBy: row?.setBy,
+        setRole: row?.setRole,
+        at: row?.at,
+        waitLeft: row && now() - row.at < 300 ? 300 - (now() - row.at) : 0,
+        ...extra,
+    };
+}
+
+registerMock('request', 'admin:getMissionControls', (): MissionControlsView => {
+    const bounds = {
+        cooldownScale: { on: true, min: 0, max: 2 },
+        abandonCooldown: { on: true, min: 0, max: 900 },
+        noRepeat: { on: true },
+        hourlyCap: { on: true, min: 1, max: 16 },
+        dailyCap: { on: true, min: 0, max: 40 },
+        ...(EDGE ? { edgeDepartmentControlWithAVeryLongKey: { on: true, min: 0, max: 100 } } : {}),
+    };
+    const serverWide = [
+        mcState('*', 'cooldownScale', 'map', MC_TYPES, bounds.cooldownScale, { range: [0, 4] }),
+        mcState('*', 'abandonCooldown', 'number', 180, bounds.abandonCooldown, { integer: true, range: [0, 86400] }),
+        mcState('*', 'noRepeat', 'bool', true, bounds.noRepeat),
+        mcState('*', 'hourlyCap', 'number', 8, bounds.hourlyCap, { integer: true, range: [1, 1000] }),
+        mcState('*', 'dailyCap', 'number', 0, bounds.dailyCap, { integer: true, range: [0, 1000] }),
+    ];
+    const dept = (key: string, label: string, short: string) => ({
+        key,
+        label,
+        short,
+        boundsPath: `Departments.${key}.missionControls`,
+        controls: EDGE
+            ? [
+                  mcState(
+                      key,
+                      'edgeDepartmentControlWithAVeryLongKey',
+                      'number',
+                      10,
+                      key === 'sast' ? { on: true, min: 5, max: 100 } : { on: true, min: 0, max: 100 },
+                      { master: true, integer: true, own: key === 'sast' ? { min: 5 } : undefined },
+                  ),
+              ]
+            : [],
+    });
+    return {
+        master: !EMPTY,
+        changeWait: 300,
+        selfExempt: true,
+        departments: [
+            dept('fib', 'Federal Investigation Bureau', 'FIB'),
+            dept('sast', 'San Andreas State Troopers', 'SAST'),
+        ],
+        serverWide,
+        bounds,
+    };
+});
+
+registerMock('action', 'server:admin:resetMissionControl', (p: { key?: string; department?: string }) => {
+    const id = `${p.department ?? '*'}|${p.key ?? ''}`;
+    if (!mcSaved[id]) throw new Error('err.control_not_set');
+    delete mcSaved[id];
+    return { department: p.department ?? '*', key: p.key };
+});
 
 // ============================================================================
 //                                  AUDIT LOG

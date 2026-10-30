@@ -3011,6 +3011,28 @@ local function DepartmentGrades(d, jobs)
     return out
 end
 
+-- One grant of Config.Permissions.builderTeleport or Config.MissionControls.grants: { minGrade } | { grades } | nil.
+local function GradeGrant(g)
+    if type(g) == 'table' and math.tointeger(tonumber(g.minGrade)) then
+        return { minGrade = math.tointeger(tonumber(g.minGrade)) }
+    elseif type(g) == 'table' and type(g.grades) == 'table' and #g.grades > 0 then
+        return { grades = U.deepcopy(g.grades) }
+    end
+    return nil
+end
+
+-- Admin UI -> Permissions -> Mission controls: Config.MissionControls.grants by department key (absent = every
+-- supervisor of that department).
+local function MissionGrants()
+    local mc = type(Config.MissionControls) == 'table' and Config.MissionControls or {}
+    local grants = type(mc.grants) == 'table' and mc.grants or {}
+    local out = {}
+    for key, d in pairs(type(Config.Departments) == 'table' and Config.Departments or {}) do
+        if type(key) == 'string' and type(d) == 'table' then out[key] = GradeGrant(grants[key]) end
+    end
+    return out
+end
+
 local function TeleportGrants()
     local okJ, jobs = pcall(function() return CP.Qbx and CP.Qbx.getJobs and CP.Qbx.getJobs() or nil end)
     if not okJ then jobs = nil end
@@ -3019,13 +3041,7 @@ local function TeleportGrants()
     local deps = {}
     for key, d in pairs(type(Config.Departments) == 'table' and Config.Departments or {}) do
         if type(key) == 'string' and type(d) == 'table' then
-            local g = grants[key]
-            local grant = nil
-            if type(g) == 'table' and math.tointeger(tonumber(g.minGrade)) then
-                grant = { minGrade = math.tointeger(tonumber(g.minGrade)) }
-            elseif type(g) == 'table' and type(g.grades) == 'table' and #g.grades > 0 then
-                grant = { grades = U.deepcopy(g.grades) }
-            end
+            local grant = GradeGrant(grants[key])
             deps[#deps + 1] = {
                 key = key,
                 label = d.label or key,
@@ -3062,7 +3078,13 @@ CP.Net.callback('admin:getPermissions', function(src)
     for _, k in ipairs(keys) do
         list[#list + 1] = { action = k, enabled = sup[k] == true and not adminOnlySet[k] }
     end
-    return { supervisor = list, adminOnly = ADMIN_ONLY, always = SUPERVISOR_ALWAYS, teleport = TeleportGrants() }
+    return {
+        supervisor = list,
+        adminOnly = ADMIN_ONLY,
+        always = SUPERVISOR_ALWAYS,
+        teleport = TeleportGrants(),
+        missionGrants = MissionGrants(),
+    }
 end, { rate = 3 })
 
 -- ============================================================================

@@ -304,6 +304,65 @@ export interface PermissionsData {
     always: string[];
     // Admin UI -> Permissions -> Builder teleport (enabled = Config.Builder.teleport and the builder are on)
     teleport?: { enabled: boolean; departments: TeleportDepartment[] };
+    // Config.MissionControls.grants by department key (absent = every supervisor of that department)
+    missionGrants?: Record<string, TeleportGrant>;
+}
+
+// ============================================================================
+//              admin:getMissionControls / sup:getMissionControls
+// ============================================================================
+
+// One control's bounds: on = the admin switch, min / max = the only values a supervisor may pick.
+export interface MissionControlBounds {
+    on?: boolean;
+    min?: number;
+    max?: number;
+}
+export type MissionControlValue = number | boolean | Record<string, number>;
+// A registered control as one department (or the whole server) has it now (CP.DeptControls ControlView).
+export interface MissionControlState {
+    key: string;
+    kind: 'number' | 'bool' | 'map';
+    scope: 'between' | 'run';
+    serverWide: boolean;
+    // false = outside the master switch (Config.Permissions.supervisor.missionControls)
+    master: boolean;
+    on: boolean;
+    // on, and the master switch when the control sits under it
+    active: boolean;
+    min?: number;
+    max?: number;
+    value: MissionControlValue;
+    configValue: MissionControlValue;
+    saved?: MissionControlValue;
+    setBy?: string;
+    setRole?: string;
+    at?: number;
+    expiresAt?: number;
+    timeLeft?: number;
+    waitLeft: number;
+    integer?: boolean;
+    // the min and max an admin may set
+    range?: [number, number];
+    // Config.Departments.<key>.missionControls[key] (never for a server-wide control)
+    own?: MissionControlBounds;
+}
+export interface MissionControlsDepartment {
+    key: string;
+    label: string;
+    short: string;
+    controls: MissionControlState[];
+    // admins: the setting the department's own bounds are saved in (none for a department added in game)
+    boundsPath?: string;
+}
+export interface MissionControlsView {
+    master: boolean;
+    changeWait: number;
+    selfExempt: boolean;
+    departments: MissionControlsDepartment[];
+    serverWide: MissionControlState[];
+    // admins: Config.MissionControls.controls as saved
+    bounds?: Record<string, MissionControlBounds>;
 }
 
 // ============================================================================

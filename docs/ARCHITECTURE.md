@@ -3308,6 +3308,13 @@ pattern, so a missing module reads as config).
 - Net: §8.3 (`sup:getMissionControls`, `server:sup:setMissionControl`, `server:sup:resetMissionControl` through
   `Kit.supAction`; `admin:getMissionControls`, `server:admin:setMissionControl`, `server:admin:resetMissionControl`
   through `Kit.callback` / `Kit.action`).
+- Admin UI → Permissions → Mission controls (step P4, web/src/admin/components/MissionControlsCard.tsx): the admin
+  view also carries `bounds` (Config.MissionControls.controls as saved), each control's `own` (the department's
+  bounds), `integer` and `range`, and each department's `boundsPath` (`Departments.<key>.missionControls`, a setting
+  for a config.lua department: optional, read live, no missions reload). The card saves through
+  `server:admin:setSetting` (`MissionControls.controls` and `MissionControls.grants` as whole maps, a department's
+  bounds or none) and resets through `server:admin:resetMissionControl`; `admin:getPermissions` gains
+  `missionGrants` (department key -> `{ minGrade }` | `{ grades }`).
 
 ## 6. Cross-cutting conventions
 

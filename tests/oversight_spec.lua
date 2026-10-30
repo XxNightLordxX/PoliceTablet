@@ -1681,6 +1681,15 @@ do
     )
     Config.Permissions.builderTeleport, CP.Qbx.getJobs = keepGrants, keepJobs
 end
+-- P4: Mission controls grants by department (absent = every supervisor)
+H.ok(gp.data.missionGrants ~= nil and next(gp.data.missionGrants) == nil, 'mission grants: none ship')
+do
+    local keep = Config.MissionControls.grants
+    Config.MissionControls.grants = { sast = { minGrade = 4 }, fib = { grades = { 3 } } }
+    local mg = Cb('admin:getPermissions', 1).data.missionGrants
+    H.ok(mg.sast.minGrade == 4 and mg.fib.grades[1] == 3, 'mission grants: from a grade or these grades')
+    Config.MissionControls.grants = keep
+end
 H.eq(#gp.data.adminOnly, 29, 'admin-only list (the 11 of the spec and the 18 keys of full admin control)')
 
 -- audit log

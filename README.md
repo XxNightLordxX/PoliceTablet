@@ -495,7 +495,8 @@ Related settings: `Config.Payouts.supervisorRange` (`{ 0.5, 2.0 }` = 50–200%),
 
 **Mission controls** let a department's supervisors change a few mission rules for their own department, inside
 limits you set. They are **off on install** except the two cooldown controls below: nothing changes until you switch
-them on. This version has no screen for them yet (a later update adds it); the server part is in place.
+them on. You set them in Admin UI → **Permissions** → **Mission controls** (below); supervisors get their own screen
+in a later update.
 
 - **Mission cooldowns** (on when you install, owner decision): any department's supervisor may change them, without
   the master switch, and a change counts for **every department** (server-wide):
@@ -531,6 +532,14 @@ them on. This version has no screen for them yet (a later update adds it); the s
   who set it, his other characters, or a unit he is in.
 - Every change needs a reason and is in the audit log (who, old and new value). Admins can change or reset any
   department's controls, still inside the limits.
+- **In game: Admin UI → Permissions → Mission controls.** The master switch stays the **Mission controls** row of the
+  supervisor table. The card under it has one row per control: its admin switch and the **Lowest** and **Highest**
+  value a supervisor may pick (both save `Config.MissionControls.controls`), what applies now (the value, the
+  config.lua value, who changed it and when, how long it still runs) and **Reset** (back to config.lua, with a reason).
+  A control that is not server-wide also has **Departments**: per department its own limits (saved as
+  `Config.Departments.<key>.missionControls`; a department added in game uses the shared ones), what applies there
+  and **Reset**. **Who may use them** sets `Config.MissionControls.grants` per department: every supervisor, from a
+  grade, or these grades.
 
 ### 4.5 Mission Builder permissions
 
@@ -1367,7 +1376,7 @@ Which of these they can use is set in `Config.Permissions.supervisor` ([4.4](#44
 | **Officers** | Search officers: history, suspend or unsuspend, disputes about failed runs, profile moderation, commendations, service record |
 | **Departments** | Each department's jobs, colours, logo, desks, member count and (with society payouts) account balance |
 | **Missions** (switches) | Turn any mission, or single locations of it, on or off ([5.8](#58-turn-missions-and-locations-on-or-off)) |
-| **Permissions** | What supervisors may do (a switch for each), and **Config health**: the start-up check, with a **Check again** button |
+| **Permissions** | What supervisors may do (a switch for each), **Mission controls** (each control's switch, limits, current value and Reset; [4.4](#44-what-supervisors-may-do)), and **Config health**: the start-up check, with a **Check again** button |
 | **Live** | Every live run and unit, with the controls to recall, end, add time or split a unit, and the **Refused** tab: mission starts the server refused and why ([9.15.3](#9153-live-runs-units-and-anti-farm)) |
 | **Settings** | Every setting of `config.lua` and `blocks.lua`, changed in game, with a change history ([5.7](#57-change-any-setting-in-game-the-settings-screen)) |
 | **System** | Storage, backups, the webhook states, recent console problems, the other resources and the nightly clean-up ([9.15.5](#9155-system-departments-and-settings)) |

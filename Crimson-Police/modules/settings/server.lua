@@ -1682,10 +1682,12 @@ local function CheckControls(map, _, ctx)
     if not CP.DeptControls then return nil end
     return (CP.DeptControls.checkConfig(map, ctx and ctx.boot))
 end
-KNOWN['MissionControls.controls'] = {
-    tpl = MapOf(Record({ on = true, min = Num(-MAX_ABS, MAX_ABS), max = Num(-MAX_ABS, MAX_ABS) }), '^%a[%w_]*$'),
-    check = CheckControls,
-}
+local CONTROLS_TPL = MapOf(Record({ on = true, min = Num(-MAX_ABS, MAX_ABS), max = Num(-MAX_ABS, MAX_ABS) }),
+    '^%a[%w_]*$')
+KNOWN['MissionControls.controls'] = { tpl = CONTROLS_TPL, check = CheckControls }
+-- A department's own bounds (Admin UI -> Permissions -> Mission controls): optional, checked by the department
+-- validator (registered controls only).
+KNOWN['Departments.*.missionControls'] = { tpl = Alts(NIL, CONTROLS_TPL), nullable = true, kind = 'json' }
 
 -- ============================================================================
 --                                   CHECKING
@@ -2080,7 +2082,8 @@ local function Describe(path, default)
     end
     e.locked = Lookup(LOCKED, path)
     e.restart = InList(RESTART, path) or UnderAny(RESTART, path)
-    e.reload = UnderAny(RELOAD, path)
+    -- a department's Mission controls bounds are read live (no missions reload)
+    e.reload = UnderAny(RELOAD, path) and not Matches(path, 'Departments.*.missionControls')
     e.points = InList(POINTS, path) or nil
     e.money = Contains(MONEY_SWITCHES, path) or nil
     e.common = InList(COMMON, path) or nil
@@ -2144,10 +2147,10 @@ local function BuildSchema()
             end
         end
     end
-    -- a department's logo link and text colour are optional (config.lua leaves them out or comments them)
+    -- a department's logo link, text colour and Mission controls bounds are optional (config.lua leaves them out)
     for key, d in pairs(type(DEFAULTS.Departments) == 'table' and DEFAULTS.Departments or {}) do
         if type(key) == 'string' and type(d) == 'table' then
-            for _, leaf in ipairs({ 'logo.url', 'logo.file', 'theme.text' }) do
+            for _, leaf in ipairs({ 'logo.url', 'logo.file', 'theme.text', 'missionControls' }) do
                 local path = ('Departments.%s.%s'):format(key, leaf)
                 if not byPath[path] and U.getPath(DEFAULTS, path) == nil then add(path, nil) end
             end

@@ -130,3 +130,51 @@
     flex-wrap: wrap;
     gap: 8px 16px;
 }
+
+/* Mission controls (step P4) */
+.oversight-mc-badges,
+.oversight-mc-bounds,
+.oversight-mc-state {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.oversight-mc-bounds {
+    align-items: flex-end;
+}
+
+.oversight-mc-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 140px;
+    color: var(--cp-muted);
+    font-size: var(--cp-fs-sm);
+}
+
+.oversight-mc-depts {
+    list-style: none;
+    margin: 0;
+    padding: 0 0 0 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    border-left: 2px solid var(--cp-border);
+}
+
+.oversight-mc-dept {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.oversight-mc-grants {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top: 1px solid var(--cp-border);
+}

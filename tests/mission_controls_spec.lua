@@ -324,6 +324,38 @@ do
         'a good department override')
 end
 
+-- ============================================================================
+--                              6. THE ADMIN VIEW
+-- ============================================================================
+-- STEP P4: ADMIN UI -> PERMISSIONS CARD.
+
+do
+    Config.Permissions.supervisor.missionControls = true
+    Config.MissionControls.controls = { t_wait = { on = true, min = 300, max = 900 }, t_global = { on = false } }
+    Config.Departments.sast.missionControls = { t_wait = { min = 500 } }
+    DC.clearCache()
+    local r = Cb('admin:getMissionControls', 1)
+    local sast, fib
+    for _, d in ipairs(r.ok and r.data.departments or {}) do
+        if d.key == 'sast' then sast = d elseif d.key == 'fib' then fib = d end
+    end
+    H.ok(
+        r.ok and r.data.bounds.t_wait.min == 300 and r.data.bounds.t_wait.max == 900
+            and r.data.bounds.t_global.on == false,
+        'the admin view: the shared switches and bounds as saved: ' .. cjson.encode(r.data and r.data.bounds or {})
+    )
+    H.ok(
+        sast and sast.controls[1].own.min == 500 and sast.controls[1].min == 500
+            and sast.boundsPath == 'Departments.sast.missionControls' and fib and fib.controls[1].own == nil,
+        'each department: its own bounds and the setting they are saved in'
+    )
+    H.ok(r.data.serverWide[1].own == nil and r.data.serverWide[1].key == 't_global',
+        'a server-wide control has no department bounds')
+    local sv = Cb('sup:getMissionControls', 2)
+    H.ok(sv.ok and sv.data.bounds == nil and sv.data.departments[1].boundsPath == nil,
+        'a supervisor\'s view carries neither')
+end
+
 Config.Permissions.supervisor = keepSup
 Config.MissionControls = keepMC
 Config.Departments.sast.missionControls = nil

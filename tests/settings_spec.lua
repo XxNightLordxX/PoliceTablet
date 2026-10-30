@@ -883,6 +883,14 @@ do
         'a department\'s missionControls: registered controls only')
     H.eq(S.checkDepartments('Departments.sast.missionControls', { t_ctl = { max = 1 } }), nil,
         'a good department override')
+    -- step P4: Admin UI -> Permissions -> Mission controls saves a department's own bounds as one setting
+    local own = S.entry('Departments.sast.missionControls')
+    H.ok(own ~= nil and own.nullable == true and own.reload ~= true,
+        'P4: a config department\'s missionControls is a setting, optional, read live (no missions reload)')
+    H.ok((Check('Departments.sast.missionControls', { t_ctl = { on = false, min = 1 } })), 'P4: its bounds')
+    H.ok((Check('Departments.sast.missionControls', nil, true)), 'P4: or none (the shared bounds)')
+    Err('Departments.sast.missionControls', { t_ctl = { on = 'yes' } }, 'err.setting_type', 'P4: on is true or false')
+    H.eq(S.entry('Departments.sast.logo.file').reload, true, 'P4: other department settings still reload')
     DC.unregister('t_ctl')
 end
 

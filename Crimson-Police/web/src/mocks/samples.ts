@@ -93,6 +93,10 @@ const SUPERVISOR_ACTIONS = [
     'builderEdit',
     'builderPublish',
     'builderArchive',
+    'missionCalls',
+    'issueCommendation',
+    'reviewProfiles',
+    'missionControls',
 ];
 const ADMIN_ACTIONS = [
     ...SUPERVISOR_ACTIONS,

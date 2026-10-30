@@ -3796,6 +3796,15 @@ sends the same action as its full screen (the server checks everything again):
   QuickSettingsForm  the everyday settings (SettingsData.common) with the Settings screen's own rows and saves
 ```
 
+## Crimson-Police/web/src/admin/components/MissionControlsCard.tsx
+
+```text
+Admin UI · Permissions · Mission controls (step P4): one row per registered control (CP.DeptControls): the admin
+switch and the min / max a supervisor may pick (Config.MissionControls.controls), what applies now with who set it
+and a Reset, each department's own limits (Config.Departments.<key>.missionControls, not for a server-wide control)
+and who may use them (Config.MissionControls.grants). The master switch stays the 'missionControls' table row.
+```
+
 ## Crimson-Police/web/src/admin/components/MissionDrawer.tsx
 
 ```text

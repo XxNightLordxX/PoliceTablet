@@ -536,6 +536,14 @@ end
 --                                     VIEW
 -- ============================================================================
 
+-- The department's own bounds of a control (Config.Departments.<key>.missionControls), nil for a server-wide one.
+local function OwnBounds(def, dept)
+    if def.serverWide or not DeptKnown(dept) then return nil end
+    local mc = Config.Departments[dept].missionControls
+    local own = type(mc) == 'table' and mc[def.key] or nil
+    return type(own) == 'table' and U.deepcopy(own) or nil
+end
+
 local function ControlView(def, dept)
     local bounds = BoundsOf(def, dept)
     local where = StoreDept(def, dept)
@@ -568,27 +576,38 @@ local function ControlView(def, dept)
         expiresAt = row and row.expiresAt or nil,
         timeLeft = row and row.expiresAt and math.max(0, row.expiresAt - now) or nil,
         waitLeft = WaitLeft(where, def.key, row),
+        integer = def.integer,
+        range = def.range and { def.range[1], def.range[2] } or nil,
+        own = OwnBounds(def, dept),
     }
 end
 
-local function DeptView(dept, serverWide)
+local function DeptView(dept, serverWide, admin)
     local d = Config.Departments[dept]
     local controls = {}
     for _, key in ipairs(order) do
         local def = defs[key]
         if def.serverWide == serverWide then controls[#controls + 1] = ControlView(def, dept) end
     end
-    return { key = dept, label = d and d.label or dept, short = d and d.short or dept, controls = controls }
+    local out = { key = dept, label = d and d.label or dept, short = d and d.short or dept, controls = controls }
+    -- the setting an admin saves this department's own bounds in (a department added in game has none)
+    local path = ('Departments.%s.missionControls'):format(dept)
+    if admin and not serverWide and CP.Settings and CP.Settings.entry and CP.Settings.entry(path) then
+        out.boundsPath = path
+    end
+    return out
 end
 
 -- DC.view(src): what the Mission controls screens show. A supervisor: his department (with the master switch, or
--- while a control outside it is on); an admin (or the console): every department. { master, changeWait, selfExempt, departments = { { key, label, controls } }, serverWide =
--- { controls } }, or nil, errKey.
+-- while a control outside it is on); an admin (or the console): every department. { master, changeWait, selfExempt,
+-- departments = { { key, label, controls, boundsPath? } }, serverWide = { controls }, bounds? (admins) }, or nil,
+-- errKey.
 function DC.view(src)
     local n = math.tointeger(tonumber(src))
     if not n or n < 0 or not CP.Access then return nil, 'err.no_permission' end
     local depts = {}
-    if n == 0 or CP.Access.isAdmin(n) then
+    local admin = n == 0 or CP.Access.isAdmin(n) == true
+    if admin then
         for key, d in pairs(type(Config.Departments) == 'table' and Config.Departments or {}) do
             if type(key) == 'string' and type(d) == 'table' then depts[#depts + 1] = key end
         end
@@ -613,8 +632,16 @@ function DC.view(src)
         selfExempt = Cfg().selfExempt ~= false,
         departments = {},
     }
-    for _, dept in ipairs(depts) do out.departments[#out.departments + 1] = DeptView(dept, false) end
-    out.serverWide = DeptView(SERVER_WIDE, true).controls
+    for _, dept in ipairs(depts) do out.departments[#out.departments + 1] = DeptView(dept, false, admin) end
+    out.serverWide = DeptView(SERVER_WIDE, true, admin).controls
+    -- an admin: Config.MissionControls.controls as saved (the admin switches and bounds the Permissions card edits)
+    if admin then
+        local all = type(Cfg().controls) == 'table' and Cfg().controls or {}
+        out.bounds = {}
+        for _, key in ipairs(order) do
+            out.bounds[key] = type(all[key]) == 'table' and U.deepcopy(all[key]) or {}
+        end
+    end
     return out
 end
 

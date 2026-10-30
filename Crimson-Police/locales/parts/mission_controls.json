@@ -6,5 +6,17 @@
   "err.control_not_set": "This Mission control already uses the config value.",
   "err.control_config": "A Mission control here is unknown, or has a minimum above its maximum.",
   "err.setting_grant_department": "Each Mission controls grant needs a department key of Config.Departments (such as sast).",
-  "err.setting_grant_grant": "Each Mission controls grant needs either minGrade (that grade and up) or grades (only those), not both."
+  "err.setting_grant_grant": "Each Mission controls grant needs either minGrade (that grade and up) or grades (only those), not both.",
+  "mc.control.cooldownScale": "Mission cooldowns",
+  "mc.control_desc.cooldownScale": "Multiplies every mission's cooldown, one number per mission type, for the whole server (0 = no cooldown).",
+  "mc.control.abandonCooldown": "Abandon cooldown",
+  "mc.control_desc.abandonCooldown": "Seconds an officer waits after abandoning a run or going down on one, for the whole server (0 = none).",
+  "mc.control.noRepeat": "No-repeat rule",
+  "mc.control_desc.noRepeat": "Off lets the same mission come up twice in a row, for the whole server.",
+  "mc.control.hourlyCap": "Hourly mission cap",
+  "mc.control_desc.hourlyCap": "Completed missions per officer per hour, for the whole server.",
+  "mc.control.dailyCap": "Daily mission cap",
+  "mc.control_desc.dailyCap": "Completed missions per officer per day, for the whole server (0 = no cap).",
+  "mc.unit.cooldownScale": "×{n}",
+  "mc.unit.abandonCooldown": "{n} s"
 }

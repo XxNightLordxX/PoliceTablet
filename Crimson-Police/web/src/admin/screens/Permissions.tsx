@@ -1,11 +1,9 @@
 // Admin UI · Permissions (screen key 'admin_permissions'): supervisor powers, admin-only actions and Config health.
 
-import { useEffect, useState } from 'react';
 import {
     Badge,
     Button,
     Card,
-    Checkbox,
     EmptyState,
     ErrorState,
     Grid,
@@ -13,7 +11,6 @@ import {
     IconButton,
     LoadingBlock,
     Screen,
-    Select,
     Table,
     Toggle,
     type TableColumn,
@@ -24,6 +21,8 @@ import { hasKey, t } from '../../shared/i18n';
 import { useNavigate } from '../../shared/navigation';
 import type { ConfigHealthItem } from '../../shared/types';
 import { copyLine } from '../components/copyText';
+import { GradeGrantRow } from '../components/GradeGrantRow';
+import { MissionControlsCard } from '../components/MissionControlsCard';
 import type { PermissionsData, TeleportDepartment, TeleportGrant } from '../../types/oversight';
 import './Permissions.css';
 import '../components/access-admin.css';
@@ -121,105 +120,6 @@ function ConfigHealthCard() {
     );
 }
 
-type TeleportMode = 'off' | 'min' | 'list';
-
-const gradeName = (d: TeleportDepartment, level: number) => {
-    const g = d.grades.find(x => x.level === level);
-    return g?.name ? `${level} ${g.name}` : String(level);
-};
-
-function summary(d: TeleportDepartment): string {
-    const g = d.grant;
-    if (g?.minGrade !== undefined) return t('admin.perms.teleport.summary_min', { grade: gradeName(d, g.minGrade) });
-    if (g?.grades) return t('admin.perms.teleport.summary_list', { grades: g.grades.join(', ') });
-    return t('admin.perms.teleport.summary_off');
-}
-
-// One department: Off / From grade N / These grades, saved with the whole Config.Permissions.builderTeleport map.
-function TeleportRow({
-    dept,
-    busy,
-    onSave,
-}: {
-    dept: TeleportDepartment;
-    busy: boolean;
-    onSave: (grant: TeleportGrant | undefined) => void;
-}) {
-    const initialMode = (): TeleportMode =>
-        dept.grant?.minGrade !== undefined ? 'min' : dept.grant?.grades ? 'list' : 'off';
-    const lowest = dept.supervisorGrade ?? dept.grades[0]?.level ?? 0;
-    const [mode, setMode] = useState<TeleportMode>(initialMode);
-    const [minGrade, setMinGrade] = useState<number>(dept.grant?.minGrade ?? lowest);
-    const [picked, setPicked] = useState<number[]>(dept.grant?.grades ?? []);
-    const grantKey = JSON.stringify(dept.grant ?? null);
-    useEffect(() => {
-        setMode(initialMode());
-        setMinGrade(dept.grant?.minGrade ?? lowest);
-        setPicked(dept.grant?.grades ?? []);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [grantKey]);
-    const next: TeleportGrant | undefined =
-        mode === 'min' ? { minGrade } : mode === 'list' ? { grades: [...picked].sort((a, b) => a - b) } : undefined;
-    const dirty = JSON.stringify(next ?? null) !== grantKey;
-    const invalid = mode === 'list' && picked.length === 0;
-    const toggle = (level: number, on: boolean) =>
-        setPicked(p => (on ? [...p.filter(x => x !== level), level] : p.filter(x => x !== level)));
-    return (
-        <li className="oversight-teleport-row">
-            <div className="oversight-teleport-row__head">
-                <div className="oversight-perm-name">
-                    <strong>{dept.label}</strong>
-                    <code>{dept.key}</code>
-                </div>
-                <Badge tone={dept.grant ? 'success' : 'grey'} size="sm">
-                    {summary(dept)}
-                </Badge>
-            </div>
-            <div className="oversight-teleport-row__controls">
-                <Select
-                    aria-label={t('admin.perms.teleport.mode')}
-                    value={mode}
-                    onChange={v => setMode(v as TeleportMode)}
-                    options={[
-                        { value: 'off', label: t('admin.perms.teleport.mode_off') },
-                        { value: 'min', label: t('admin.perms.teleport.mode_min') },
-                        { value: 'list', label: t('admin.perms.teleport.mode_list') },
-                    ]}
-                />
-                {mode === 'min' ? (
-                    <Select
-                        aria-label={t('admin.perms.teleport.min_grade')}
-                        value={String(minGrade)}
-                        onChange={v => setMinGrade(Number(v))}
-                        options={dept.grades.map(g => ({ value: String(g.level), label: gradeName(dept, g.level) }))}
-                    />
-                ) : null}
-                <Button size="sm" icon="check" disabled={busy || !dirty || invalid} onClick={() => onSave(next)}>
-                    {t('admin.perms.teleport.save')}
-                </Button>
-            </div>
-            {mode === 'list' ? (
-                <div className="oversight-teleport-row__grades">
-                    {dept.grades.map(g => (
-                        <Checkbox
-                            key={g.level}
-                            checked={picked.includes(g.level)}
-                            onChange={on => toggle(g.level, on)}
-                            label={gradeName(dept, g.level)}
-                        />
-                    ))}
-                    {invalid ? <span className="oversight-perm-desc">{t('admin.perms.teleport.pick_one')}</span> : null}
-                </div>
-            ) : null}
-            {dept.supervisorGrade !== undefined ? (
-                <span className="oversight-perm-desc">
-                    {t('admin.perms.teleport.supervisor_from', { grade: gradeName(dept, dept.supervisorGrade) })}
-                </span>
-            ) : null}
-        </li>
-    );
-}
-
 // Admin UI -> Permissions -> Builder teleport: the setting Config.Permissions.builderTeleport, saved and audited like
 // every other setting (server:admin:setSetting).
 function TeleportCard({
@@ -245,7 +145,7 @@ function TeleportCard({
             ) : (
                 <ul className="oversight-teleport">
                     {depts.map(d => (
-                        <TeleportRow key={d.key} dept={d} busy={busy} onSave={g => onSave(d, g)} />
+                        <GradeGrantRow key={d.key} dept={d} busy={busy} onSave={g => onSave(d, g)} />
                     ))}
                 </ul>
             )}
@@ -357,6 +257,13 @@ export default function AdminPermissions() {
                         aria-label={t('admin.perms.supervisor')}
                     />
                 </Card>
+                <MissionControlsCard
+                    master={rows.some(r => r.action === 'missionControls' && r.enabled)}
+                    grantDepartments={asArray(data?.teleport?.departments)}
+                    grants={data?.missionGrants && !Array.isArray(data.missionGrants) ? data.missionGrants : {}}
+                    stamp={data}
+                    onSettingsSaved={() => void refetch()}
+                />
                 {data?.teleport ? (
                     <TeleportCard data={data.teleport} busy={busy} onSave={(d, g) => void saveTeleport(d, g)} />
                 ) : null}
