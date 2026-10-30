@@ -584,6 +584,8 @@ local function BuildSession(src, ui, args)
         options = options,
         access = { via = via, desk = desk },
         maintenance = CP.Maintenance and CP.Maintenance.view and CP.Maintenance.view() or nil,
+        -- a happy hour running now (CP.HappyHour.state; push 'happyHour' keeps it current), false when none
+        happyHour = officer and CP.HappyHour and CP.HappyHour.state and CP.HappyHour.state(officer) or false,
         serverTime = os.time(),
     }
 end

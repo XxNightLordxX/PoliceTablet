@@ -1,5 +1,7 @@
 // Full admin control, live runs, units and anti-farm (modules/livectl/server.lua, docs/ARCHITECTURE.md §5.39 and §9.5).
 
+import type { HappyHourState } from '../shared/types';
+
 // ============================================================================
 //                                  LIVE RUNS
 // ============================================================================
@@ -54,6 +56,8 @@ export interface AdminLiveRunsData {
     addMinutesMax: number;
     // seconds all additions to one run may add up to (Config.AdminControl.runTimeAddMax)
     runTimeAddMax: number;
+    // a happy hour running now (step P6), false when none: the chip with End now
+    happyHour?: HappyHourState | false | null;
 }
 
 // ============================================================================

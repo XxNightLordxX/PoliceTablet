@@ -153,8 +153,8 @@ do
     local shipped = {}
     for k in pairs(Config.MissionControls.controls) do shipped[#shipped + 1] = k end
     table.sort(shipped)
-    H.eq(table.concat(shipped, ','), 'abandonCooldown,cooldownScale,dailyCap,hourlyCap,noRepeat',
-        'only the cooldown controls ship (P2, P3)')
+    H.eq(table.concat(shipped, ','), 'abandonCooldown,cooldownScale,dailyCap,happyHour,hourlyCap,noRepeat',
+        'only the cooldown controls ship (P2, P3, P6 happy hour)')
     H.ok(next(Config.MissionControls.grants) == nil, 'no grant ships')
     H.eq(Config.MissionControls.changeWait, 300, 'change wait 300 s')
     H.eq(Config.MissionControls.selfExempt, true, 'the self rule ships on')

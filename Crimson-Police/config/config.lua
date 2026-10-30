@@ -205,7 +205,10 @@ Config.MissionControls = {
         hourlyCap = { on = true, min = 1, max = 16 },
         -- completed missions per officer per day (Limits.maxCompletionsDay) for every department; 0 = no cap
         dailyCap = { on = true, min = 0, max = 40 },
+        -- happy hour minutes: no mission cooldowns for anyone on the server (abandon cooldown and caps stay)
+        happyHour = { on = true, min = 5, max = 30 },
     },
+    happyHourPerDay = 1, -- happy hours a supervisor may start a day (admins any); never for the one who started it
 }
 
 -- ============================================================================

@@ -1,6 +1,14 @@
 // Response shapes of the run_ui slice (Mission Board and Active Mission screens,
 
-import type { ActiveMissionView, BoardCard, BoardData, Goal, LevelInfo, TwistCaps } from '../shared/types';
+import type {
+    ActiveMissionView,
+    BoardCard,
+    BoardData,
+    Goal,
+    HappyHourState,
+    LevelInfo,
+    TwistCaps,
+} from '../shared/types';
 import type { ContactView } from './custody';
 
 // ============================================================================
@@ -35,6 +43,8 @@ export interface MissionBoardData extends Omit<BoardData, 'operation'> {
     todMultiplier?: number;
     // the caps of stacked twists, for the accept step's bonus line (each card lists its own twists)
     twistMax?: TwistCaps;
+    // a happy hour running now (step P6), false when none
+    happyHour?: HappyHourState | false | null;
 }
 
 // Reply of server:acceptType (payload: the type key, or { missionType, twists }).

@@ -1937,6 +1937,19 @@ Public API (docs/ARCHITECTURE.md §5.19)
 Both query the database: call them from a thread.
 ```
 
+## Crimson-Police/modules/happyhour/server.lua
+
+```text
+CP.HappyHour (server): the happy hour Mission control (step P6). A supervisor (or an admin) starts it for N minutes
+(inside the admin's min and max, Config.MissionControls.controls.happyHour): while it runs no mission has a
+cooldown for anyone on the server (cooldownScale 0 for every type) and, when ticked, the no-repeat rule is off.
+The abandon type cooldown, the hourly and daily caps and the cash cap stay. Server-wide (owner decision: anything
+that changes cooldowns is), outside the master switch, Config.MissionControls.happyHourPerDay a day for
+supervisors, never for the supervisor who started it or a unit he is in (the self rule). It is one timed row of
+cp_dept_controls (expires_at), so a restart keeps the window; when it ends every cooldown is read against its real
+end time again (read-time cooldowns, step P2).
+```
+
 ## Crimson-Police/modules/integrations/qbx/client.lua
 
 ```text
@@ -5112,6 +5125,15 @@ the officer at the lab (8 seeds): each cook runs the route that starts by him, n
 nearestRoute = false some seed sends one across). Every hideout with the officer at the lieutenant's body (objective
 3's start): a runner appears once the director allows his point (40 m+ before waveDelayMax, 20 m+ after), the rest
 once the officer moves off.
+```
+
+## tests/happy_hour_spec.lua
+
+```text
+Happy hour (step P6): a supervisor starts N minutes (inside the admin's min and max) with no mission cooldowns
+for anyone on the server (server-wide, owner decision), the no-repeat rule off when ticked; the abandon type cooldown
+stays; the setter and a unit with him in it keep their cooldowns; once a day for supervisors; an admin ends it;
+a restart keeps the window; when it ends every cooldown is read against its real end time again.
 ```
 
 ## tests/harness.lua

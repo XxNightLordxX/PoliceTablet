@@ -346,6 +346,9 @@ export interface MissionControlState {
     range?: [number, number];
     // Config.Departments.<key>.missionControls[key] (never for a server-wide control)
     own?: MissionControlBounds;
+    // happyHour (step P6): Config.MissionControls.happyHourPerDay and how many started today
+    perDay?: number;
+    usedToday?: number;
 }
 export interface MissionControlsDepartment {
     key: string;

@@ -517,6 +517,14 @@ Supervisor UI → **Mission controls** (below).
     `Config.Limits.maxCompletionsDay`, `0` = no cap); `0` here also means no cap.
   - These three count for every department too, and the self rule applies: the supervisor who switched the
     no-repeat rule off or raised a cap keeps the config.lua rule himself (and so does any unit he is in).
+  - `happyHour = { on = true, min = 5, max = 30 }` (happy hour): a supervisor picks the minutes (here 5 to 30) and
+    presses **Start happy hour** in Supervisor UI → Mission controls. Until it ends no mission has a cooldown for
+    anyone on the server, and with the box ticked the no-repeat rule is off too. The abandon cooldown, the hourly and
+    daily caps and the cash rules stay. When it ends every officer's cooldowns count again from when his runs really
+    ended. The supervisor who started it keeps his own cooldowns (and so does any unit he is in). A restart keeps it.
+    Officers see a banner on Home and the Mission Board ("Happy hour: no mission cooldowns for 14:32, set by Sgt
+    Doe"); admins see a chip with **End now** in Admin UI → Live. `Config.MissionControls.happyHourPerDay` (`1`):
+    happy hours a supervisor may start a day (`0` = none); admins may start more, one at a time.
 
 - To switch them on: set `Config.Permissions.supervisor.missionControls = true` (the master switch; Admin UI →
   **Permissions**), then switch on each control you want in `Config.MissionControls.controls`, with the only values a

@@ -564,6 +564,8 @@ Kit.callback('admin:getLiveRuns', 'liveRuns', function(ctx)
         serverTime = os.time(),
         addMinutesMax = ADD_MINUTES_MAX,
         runTimeAddMax = Limit('runTimeAddMax', 600),
+        -- a happy hour running now (CP.HappyHour.state): the chip with End now
+        happyHour = CP.HappyHour and CP.HappyHour.state and CP.HappyHour.state(nil) or false,
     }
 end)
 

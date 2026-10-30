@@ -25,6 +25,7 @@ import { useSession } from '../../shared/session';
 import type { Goal, HomeData } from '../../shared/types';
 import type { HomeStreak, HomeTypeOfTheDay } from '../../types/economy';
 import type { HomeExtras } from '../../types/profile';
+import { HappyHourBanner } from '../components/HappyHourBanner';
 import { RewardsLocker } from '../components/RewardsLocker';
 import './Home.css';
 
@@ -375,6 +376,7 @@ export default function Home() {
             }
             className="economy-home"
         >
+            <HappyHourBanner />
             {!data && loading ? <LoadingBlock /> : null}
             {!data && !loading && error ? <ErrorState error={error} onRetry={() => void refetch()} /> : null}
             {data ? (

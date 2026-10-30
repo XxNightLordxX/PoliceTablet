@@ -38,6 +38,7 @@ const CONTROL_GROUP: Record<string, GroupKey> = {
     noRepeat: 'delays',
     hourlyCap: 'delays',
     dailyCap: 'delays',
+    happyHour: 'delays',
 };
 
 export function groupOf(c: MissionControlState): GroupKey {
@@ -156,7 +157,126 @@ function Editor({
 type Pending =
     { kind: 'set'; c: MissionControlState; value: MissionControlValue } | { kind: 'reset'; c: MissionControlState };
 
+// Happy hour (step P6): minutes and the no-repeat box, Start; while it runs the countdown and End now.
+function HappyHourRow({
+    c,
+    busy,
+    onAsk,
+    onWaitDone,
+}: {
+    c: MissionControlState;
+    busy: boolean;
+    onAsk: (p: Pending) => void;
+    onWaitDone: () => void;
+}) {
+    const text = useValueText();
+    const [minutes, setMinutes] = useState(() => fit(c, 15));
+    const [noRepeat, setNoRepeat] = useState(false);
+    const running = c.saved !== undefined && c.saved !== null && (c.timeLeft ?? 0) > 0;
+    const perDay = c.perDay ?? 1;
+    const usedUp = (c.usedToday ?? 0) >= perDay;
+    const waiting = c.waitLeft > 0;
+    return (
+        <div className="sup-mc-row">
+            <div className="sup-mc-row__head">
+                <div>
+                    <div className="sup-mc-row__title">
+                        <strong>{controlName(c.key)}</strong>
+                        <Badge size="sm" tone="neutral" variant="outline" icon="globe">
+                            {t('sup.controls.whole_server')}
+                        </Badge>
+                    </div>
+                    <p className="sup-mc-row__desc">{t('mc.control_desc.happyHour')}</p>
+                </div>
+            </div>
+            <div className="sup-mc-row__facts">
+                <span>{t('sup.hh.used', { used: c.usedToday ?? 0, perDay })}</span>
+                {running ? (
+                    <span className="sup-mc-row__who">
+                        {t('sup.controls.changed_by', {
+                            who: c.setBy ?? '?',
+                            role: c.setRole ?? '?',
+                            when: fmtDateTime(c.at),
+                        })}
+                    </span>
+                ) : null}
+            </div>
+            {running ? (
+                <div className="sup-mc-row__actions">
+                    <span className="sup-mc-row__wait">
+                        <Icon name="clock" size={13} />
+                        <span>{`${t('sup.hh.running')} `}</span>
+                        <Countdown seconds={c.timeLeft ?? 0} resetKey={c.at} onDone={onWaitDone} />
+                        <span>{` · ${text(c.key, c.value)}`}</span>
+                    </span>
+                    <Button
+                        size="sm"
+                        variant="secondary"
+                        icon="undo"
+                        disabled={busy}
+                        onClick={() => onAsk({ kind: 'reset', c })}
+                    >
+                        {t('sup.hh.end')}
+                    </Button>
+                </div>
+            ) : (
+                <>
+                    <Slider
+                        c={c}
+                        label={t('sup.hh.minutes')}
+                        value={minutes}
+                        disabled={busy || usedUp}
+                        onChange={setMinutes}
+                    />
+                    <Toggle
+                        checked={noRepeat}
+                        disabled={busy || usedUp}
+                        label={t('sup.hh.norepeat')}
+                        onChange={v => setNoRepeat(v)}
+                    />
+                    <div className="sup-mc-row__actions">
+                        {usedUp ? <span className="sup-mc-row__wait">{t('sup.hh.used_up')}</span> : null}
+                        {waiting ? (
+                            <span className="sup-mc-row__wait">
+                                <Icon name="clock" size={13} />
+                                <span>{t('sup.controls.wait')}</span>
+                                <Countdown seconds={c.waitLeft} onDone={onWaitDone} />
+                            </span>
+                        ) : null}
+                        <Button
+                            size="sm"
+                            variant="primary"
+                            icon="check"
+                            disabled={busy || waiting || usedUp}
+                            onClick={() => onAsk({ kind: 'set', c, value: { minutes, noRepeat: noRepeat ? 1 : 0 } })}
+                        >
+                            {t('sup.hh.start')}
+                        </Button>
+                    </div>
+                </>
+            )}
+        </div>
+    );
+}
+
 function ControlRow({
+    c,
+    dept,
+    busy,
+    onAsk,
+    onWaitDone,
+}: {
+    c: MissionControlState;
+    dept: string;
+    busy: boolean;
+    onAsk: (p: Pending) => void;
+    onWaitDone: () => void;
+}) {
+    if (c.key === 'happyHour') return <HappyHourRow c={c} busy={busy} onAsk={onAsk} onWaitDone={onWaitDone} />;
+    return <PlainRow c={c} dept={dept} busy={busy} onAsk={onAsk} onWaitDone={onWaitDone} />;
+}
+
+function PlainRow({
     c,
     dept,
     busy,
@@ -278,16 +398,27 @@ function ReasonDialog({
     const c = pending.c;
     const next = pending.kind === 'set' ? pending.value : c.configValue;
     const ok = reason.trim().length > 0 && !busy;
+    const hh = c.key === 'happyHour';
+    const minutes = hh && pending.kind === 'set' ? (pending.value as Record<string, number>).minutes : 0;
+    const title = hh
+        ? pending.kind === 'set'
+            ? t('sup.hh.confirm_start', { minutes })
+            : t('sup.hh.confirm_end')
+        : pending.kind === 'set'
+          ? t('sup.controls.confirm_set', { control: controlName(c.key) })
+          : t('sup.controls.confirm_reset', { control: controlName(c.key) });
+    const description = hh
+        ? t(pending.kind === 'set' ? 'sup.hh.confirm_text' : 'sup.hh.confirm_end_text')
+        : t('sup.controls.confirm_text', { from: text(c.key, c.value), to: text(c.key, next) });
+    const confirmLabel = hh
+        ? t(pending.kind === 'set' ? 'sup.hh.start' : 'sup.hh.end')
+        : t(pending.kind === 'set' ? 'sup.controls.save' : 'sup.controls.back_to_config');
     return (
         <Dialog
             open
             onClose={busy ? () => undefined : onClose}
-            title={
-                pending.kind === 'set'
-                    ? t('sup.controls.confirm_set', { control: controlName(c.key) })
-                    : t('sup.controls.confirm_reset', { control: controlName(c.key) })
-            }
-            description={t('sup.controls.confirm_text', { from: text(c.key, c.value), to: text(c.key, next) })}
+            title={title}
+            description={description}
             size="md"
             footer={
                 <>
@@ -301,7 +432,7 @@ function ReasonDialog({
                         disabled={!ok}
                         onClick={() => onConfirm(reason.trim())}
                     >
-                        {pending.kind === 'set' ? t('sup.controls.save') : t('sup.controls.back_to_config')}
+                        {confirmLabel}
                     </Button>
                 </>
             }
@@ -344,12 +475,19 @@ export default function MissionControls() {
                 ? await run(
                       'server:sup:setMissionControl',
                       { key: pending.c.key, value: pending.value, reason },
-                      { success: 'sup.controls.saved', successVars: { control: controlName(pending.c.key) } },
+                      pending.c.key === 'happyHour'
+                          ? { success: 'sup.hh.started' }
+                          : { success: 'sup.controls.saved', successVars: { control: controlName(pending.c.key) } },
                   )
                 : await run(
                       'server:sup:resetMissionControl',
                       { key: pending.c.key, reason },
-                      { success: 'sup.controls.reset_done', successVars: { control: controlName(pending.c.key) } },
+                      pending.c.key === 'happyHour'
+                          ? { success: 'sup.hh.ended' }
+                          : {
+                                success: 'sup.controls.reset_done',
+                                successVars: { control: controlName(pending.c.key) },
+                            },
                   );
         if (res.ok) setPending(null);
         void refetch();

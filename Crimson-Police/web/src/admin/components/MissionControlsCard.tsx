@@ -48,6 +48,12 @@ export function useValueText(): (key: string, v: MissionControlValue | undefined
         const one = (n: number) =>
             hasKey(`mc.unit.${key}`) ? t(`mc.unit.${key}`, { n: formatFactor(n) }) : formatFactor(n);
         if (typeof v === 'number') return one(v);
+        if (key === 'happyHour') {
+            // { minutes, noRepeat } while one runs (step P6); {} = none
+            const hh = asMap<number>(v);
+            if (!hh.minutes) return t('admin.perms.mc.value_off');
+            return t(hh.noRepeat ? 'mc.value.happyHour_norepeat' : 'mc.value.happyHour', { n: hh.minutes });
+        }
         const parts = Object.entries(asMap<number>(v)).map(([k, n]) => `${typeLabel(k)} ${one(n)}`);
         return parts.length > 0 ? parts.join(', ') : '-';
     };

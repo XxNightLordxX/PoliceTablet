@@ -1045,6 +1045,8 @@ function Draw.boardCards(src)
         todMultiplier = tonumber(Config.Events and Config.Events.todMultiplier) or 2,
         -- the twists' caps (each card lists its own twists) for the accept step's total bonus line
         twistMax = Draw.twistCaps(),
+        -- a happy hour running now (CP.HappyHour.state: endsAt, by, self ...), false when none
+        happyHour = CP.HappyHour and CP.HappyHour.state and CP.HappyHour.state(officers) or false,
     }
 
     -- While a Cross-Department Mission is active the board shows only its card.

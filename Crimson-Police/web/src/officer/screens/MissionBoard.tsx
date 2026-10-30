@@ -36,6 +36,7 @@ import type {
     TypeCard,
 } from '../../types/run_ui';
 import type { BoardCallsInfo } from '../../types/missioncalls';
+import { HappyHourBanner } from '../components/HappyHourBanner';
 import { CallsOpenLink, DailyLimitBadge, readyCheckSentText } from '../components/MissionCallsLink';
 import { TwistPicker } from '../components/TwistPicker';
 import { arrangeTypeCards, typeKeys } from './boardOrder';
@@ -840,6 +841,7 @@ export default function MissionBoard() {
 
             {data ? (
                 <>
+                    <HappyHourBanner state={data.happyHour ?? false} onChange={() => schedule()} />
                     {data.activeRunId ? (
                         <Notice
                             icon="target"

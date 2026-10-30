@@ -126,7 +126,24 @@ export interface Session {
     access?: { via: string; desk: number | null };
     // CP.Maintenance.view(): a storage copy or switch, a backup restore or a store left behind holds the lock
     maintenance?: MaintenanceView | null;
+    // a happy hour running now (CP.HappyHour.state, step P6); push 'happyHour' sends the new one (false = none)
+    happyHour?: HappyHourState | false | null;
     serverTime: number; // os.time() at session build
+}
+
+// CP.HappyHour.state: no mission cooldowns for anyone until endsAt (step P6).
+export interface HappyHourState {
+    endsAt: number;
+    // seconds left when it was sent
+    left: number;
+    minutes: number;
+    // the no-repeat rule is off too
+    noRepeat: boolean;
+    // "Sgt Doe" while the officer who started it is online
+    by?: string | null;
+    byRole?: string | null;
+    // it does not apply to this officer or his unit (he started it, Config.MissionControls.selfExempt)
+    self?: boolean;
 }
 
 // ============================================================================

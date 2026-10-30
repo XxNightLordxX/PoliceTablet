@@ -1247,18 +1247,24 @@ registerMock('request', 'admin:getPermissions', (): PermissionsData =>
 // per-department control with SAST's own limits. Reset is stateful.
 
 const MC_TYPES = { patrol: 1, training: 1, investigation: 1, tactical: 1 };
-const mcSaved: Record<string, { value: MissionControlState['value']; setBy: string; setRole: string; at: number }> =
-    EMPTY
-        ? {}
-        : {
-              '*|cooldownScale': {
-                  value: { ...MC_TYPES, tactical: 0.5 },
-                  setBy: 'SUP00002',
-                  setRole: 'supervisor',
-                  at: now() - 720,
-              },
-              '*|hourlyCap': { value: 6, setBy: 'ADMIN001', setRole: 'admin', at: now() - 3 * H },
-          };
+const mcSaved: Record<
+    string,
+    { value: MissionControlState['value']; setBy: string; setRole: string; at: number; endsAt?: number }
+> = EMPTY
+    ? {}
+    : {
+          '*|cooldownScale': {
+              value: { ...MC_TYPES, tactical: 0.5 },
+              setBy: 'SUP00002',
+              setRole: 'supervisor',
+              at: now() - 720,
+          },
+          '*|hourlyCap': { value: 6, setBy: 'ADMIN001', setRole: 'admin', at: now() - 3 * H },
+      };
+
+// happy hour (step P6): how many a supervisor started today in this mock session (once a day)
+let hhStarted = 0;
+const hhCounts = () => ({ perDay: 1, usedToday: hhStarted });
 
 function mcState(
     dept: string,
@@ -1287,6 +1293,8 @@ function mcState(
         setRole: row?.setRole,
         at: row?.at,
         waitLeft: row && now() - row.at < 300 ? 300 - (now() - row.at) : 0,
+        expiresAt: row?.endsAt,
+        timeLeft: row?.endsAt !== undefined ? Math.max(0, row.endsAt - now()) : undefined,
         ...extra,
     };
 }
@@ -1298,6 +1306,7 @@ registerMock('request', 'admin:getMissionControls', (): MissionControlsView => {
         noRepeat: { on: true },
         hourlyCap: { on: true, min: 1, max: 16 },
         dailyCap: { on: true, min: 0, max: 40 },
+        happyHour: { on: true, min: 5, max: 30 },
         ...(EDGE ? { edgeDepartmentControlWithAVeryLongKey: { on: true, min: 0, max: 100 } } : {}),
     };
     const serverWide = [
@@ -1306,6 +1315,7 @@ registerMock('request', 'admin:getMissionControls', (): MissionControlsView => {
         mcState('*', 'noRepeat', 'bool', true, bounds.noRepeat),
         mcState('*', 'hourlyCap', 'number', 8, bounds.hourlyCap, { integer: true, range: [1, 1000] }),
         mcState('*', 'dailyCap', 'number', 0, bounds.dailyCap, { integer: true, range: [0, 1000] }),
+        mcState('*', 'happyHour', 'map', {}, bounds.happyHour, { integer: true, range: [1, 240], ...hhCounts() }),
     ];
     const dept = (key: string, label: string, short: string) => ({
         key,
@@ -1358,6 +1368,7 @@ registerMock('request', 'sup:getMissionControls', (): MissionControlsView => {
         noRepeat: { on: !EMPTY },
         hourlyCap: { on: !EMPTY, min: 1, max: 16 },
         dailyCap: { on: !EMPTY, min: 0, max: 40 },
+        happyHour: { on: !EMPTY, min: 5, max: 30 },
     };
     return {
         master: !EMPTY,
@@ -1392,11 +1403,12 @@ registerMock('request', 'sup:getMissionControls', (): MissionControlsView => {
             mcState('*', 'noRepeat', 'bool', true, bounds.noRepeat),
             mcState('*', 'hourlyCap', 'number', 8, bounds.hourlyCap, { integer: true }),
             mcState('*', 'dailyCap', 'number', 0, bounds.dailyCap, { integer: true }),
+            mcState('*', 'happyHour', 'map', {}, bounds.happyHour, { integer: true, ...hhCounts() }),
         ],
     };
 });
 
-const MC_SERVER_WIDE = ['cooldownScale', 'abandonCooldown', 'noRepeat', 'hourlyCap', 'dailyCap'];
+const MC_SERVER_WIDE = ['cooldownScale', 'abandonCooldown', 'noRepeat', 'hourlyCap', 'dailyCap', 'happyHour'];
 const mcId = (key: string | undefined) => `${MC_SERVER_WIDE.includes(key ?? '') ? '*' : 'sast'}|${key ?? ''}`;
 
 registerMock(
@@ -1407,7 +1419,14 @@ registerMock(
         const id = mcId(p.key);
         const row = mcSaved[id];
         if (row && now() - row.at < 300) throw new Error('err.control_wait');
+        // step P6: happy hour is a timed change, once a day for supervisors
+        if (p.key === 'happyHour' && hhStarted >= 1) throw new Error('err.happy_hour_used');
         mcSaved[id] = { value: p.value ?? 0, setBy: 'ABC12345', setRole: 'supervisor', at: now() };
+        if (p.key === 'happyHour') {
+            hhStarted += 1;
+            const minutes = (p.value as Record<string, number> | undefined)?.minutes ?? 15;
+            mcSaved[id].endsAt = now() + minutes * 60;
+        }
         return { department: id.split('|')[0], key: p.key, value: p.value };
     },
 );

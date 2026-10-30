@@ -14,7 +14,7 @@ local KINDS = { number = true, bool = true, map = true }
 local SCOPES = { between = true, run = true }
 local WATCHED = { 'MissionControls', 'Permissions.supervisor.missionControls', 'Departments' }
 
-local defs = {}           -- key -> { kind, scope, master, serverWide, integer, configValue, check, clamp, relaxes }
+local defs = {}           -- key -> { kind, scope, master, serverWide, integer, configValue, check, clamp, relaxes, ... }
 local order = {}          -- the registered keys in the order they were registered
 local cache = {}          -- department -> { [key] = row } (rows of cp_dept_controls, decoded)
 local lastChange = {}     -- 'department|key' -> os.time() of the last set or reset (a reset leaves no row behind)
@@ -94,6 +94,11 @@ end
 --   serverWide  true: one value for every department (saved under '*'); a supervisor of any department changes it
 --   master      false: the master switch does not apply (the control's own on still does)
 --   range       optional { lo, hi }: the admin's min and max (config and Settings) must lie inside it
+--   duration    optional fn(value) -> seconds: a timed control; DC.set makes the change end that long after it starts
+--   allow       optional fn({ role, src, dept, value, row }) -> errKey | nil, extra: one more rule before a change
+--   overlays    optional { [other key] = fn(value, thisValue) -> value }: while this control has a live change, DC.get
+--               of the other key returns fn's value (the self rule of this change still applies)
+--   viewExtra   optional fn(dept) -> table: more fields for this control's row in DC.view
 function DC.register(key, def)
     if type(key) ~= 'string' or #key > KEY_MAX or not key:match(KEY_PATTERN) then
         CP.err(TAG, 'register: a control key is a name of at most %d characters (%s)', KEY_MAX, tostring(key))
@@ -121,6 +126,10 @@ function DC.register(key, def)
         clamp = def.clamp,
         relaxes = def.relaxes,
         range = type(def.range) == 'table' and IsNum(def.range[1]) and IsNum(def.range[2]) and def.range or nil,
+        duration = type(def.duration) == 'function' and def.duration or nil,
+        allow = type(def.allow) == 'function' and def.allow or nil,
+        overlays = type(def.overlays) == 'table' and def.overlays or nil,
+        viewExtra = type(def.viewExtra) == 'function' and def.viewExtra or nil,
     }
     return true
 end
@@ -350,9 +359,7 @@ end
 -- has not expired, moved into today's bounds; else the config value. The config value too for the supervisor who set
 -- a change that relaxes the rule, any character of his and any unit he is in (Config.MissionControls.selfExempt).
 -- Returns value, row (nil when the config value applies).
-function DC.get(dept, key, officer)
-    local def = defs[key]
-    if not def then return nil end
+local function Own(def, dept, key, officer)
     local configValue = ConfigValue(def, officer)
     local bounds = BoundsOf(def, dept)
     if not Active(def, bounds) then return configValue end
@@ -364,6 +371,36 @@ function DC.get(dept, key, officer)
     if v == nil then return configValue end
     if officer ~= nil and SelfHeld(officer, row) and Relaxes(def, v, configValue) then return configValue end
     return v, row
+end
+
+-- Another control's live change laid over the value (a happy hour over the cooldowns): value, its row | nil.
+local function Overlay(dept, key, officer, value)
+    for _, k in ipairs(order) do
+        local od = defs[k]
+        local fn = od.overlays and od.overlays[key]
+        local where = fn and StoreDept(od, dept)
+        local row = type(where) == 'string' and Active(od, BoundsOf(od, dept)) and LiveRow(where, k) or nil
+        if row and not (officer ~= nil and SelfHeld(officer, row)) then
+            local ok, v = pcall(fn, value, row.value)
+            if ok and v ~= nil then return v, row end
+            if not ok then CP.err(TAG, 'the overlay of %s on %s failed: %s', k, key, tostring(v)) end
+        end
+    end
+    return nil
+end
+
+function DC.get(dept, key, officer)
+    local def = defs[key]
+    if not def then return nil end
+    local v, row = Own(def, dept, key, officer)
+    local ov, orow = Overlay(dept, key, officer, v)
+    if orow then return ov, orow end
+    return v, row
+end
+
+-- True when the change in row does not apply to officer (an officer, a unit's members): the self rule.
+function DC.heldBy(officer, row)
+    return type(row) == 'table' and officer ~= nil and SelfHeld(officer, row) or false
 end
 
 -- The scope 'run' values for run.controls, read for the leader (an officer table with its department) at the start.
@@ -477,6 +514,15 @@ local function Changed(dept, key)
     Push(dept, key)
 end
 
+-- A timed change ran out (nobody changed it): the readers that keep their own caches and the open screens hear it.
+function DC.expired(dept, key)
+    if type(dept) ~= 'string' or not defs[key] then return false end
+    cache[dept] = nil
+    CP.Hooks.fire('deptControls:changed', { dept = dept, key = key, expired = true })
+    Push(dept, key)
+    return true
+end
+
 -- DC.set(src, key, value, reason, opts): the only write. opts.department: the department (admins; a supervisor's
 -- own when left out), opts.expiresAt: os.time() the change ends (server code only, never from a screen).
 -- Returns true, { department, key, value } | false, errKey (opts.waitLeft on err.control_wait: seconds).
@@ -496,9 +542,23 @@ function DC.set(src, key, value, reason, opts)
         local left = WaitLeft(dept, key, Rows(dept)[key])
         if left > 0 then return false, 'err.control_wait', { waitLeft = left } end
     end
+    if def.allow then
+        local okA, errA, extra = pcall(def.allow, { role = role, src = n, dept = dept, value = clean, row = row })
+        if not okA then
+            CP.err(TAG, 'the rule of %s failed: %s', key, tostring(errA))
+            return false, 'err.internal'
+        end
+        if errA then return false, errA, extra end
+    end
     local text = Encode(clean)
     if not text then return false, 'err.control_value' end
     local expires = math.tointeger(tonumber(opts.expiresAt))
+    if def.duration then
+        local okD, secs = pcall(def.duration, clean)
+        secs = okD and math.tointeger(tonumber(secs)) or nil
+        if not secs or secs <= 0 then return false, 'err.control_value' end
+        expires = os.time() + secs
+    end
     Db()
     local okW, errW = pcall(MySQL.query.await, [[
         INSERT INTO cp_dept_controls (department, control_key, value_json, expires_at, set_by, set_role, updated_at)
@@ -553,7 +613,7 @@ local function OwnBounds(def, dept)
     return type(own) == 'table' and U.deepcopy(own) or nil
 end
 
-local function ControlView(def, dept)
+local function ControlFields(def, dept)
     local bounds = BoundsOf(def, dept)
     local where = StoreDept(def, dept)
     local row = Rows(where)[def.key]
@@ -589,6 +649,19 @@ local function ControlView(def, dept)
         range = def.range and { def.range[1], def.range[2] } or nil,
         own = OwnBounds(def, dept),
     }
+end
+
+local function ControlView(def, dept)
+    local view = ControlFields(def, dept)
+    if def.viewExtra then
+        local ok, extra = pcall(def.viewExtra, dept)
+        if ok and type(extra) == 'table' then
+            for k, v in pairs(extra) do if view[k] == nil then view[k] = v end end
+        elseif not ok then
+            CP.err(TAG, 'the view of %s failed: %s', def.key, tostring(extra))
+        end
+    end
+    return view
 end
 
 local function DeptView(dept, serverWide, admin)

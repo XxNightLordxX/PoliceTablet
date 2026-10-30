@@ -859,6 +859,13 @@ do
                 and d.dailyCap.on == true and d.dailyCap.min == 0 and d.dailyCap.max == 40,
             'step P3: the no-repeat rule and the hourly and daily caps ship on'
         )
+        H.ok(d.happyHour.on == true and d.happyHour.min == 5 and d.happyHour.max == 30,
+            'step P6: happy hour ships on, 5-30 minutes')
+        H.ok(
+            E('MissionControls.happyHourPerDay').default == 1 and E('MissionControls.happyHourPerDay').max == 24
+                and E('MissionControls.happyHourPerDay').desc:find('a supervisor may start a day', 1, true) ~= nil,
+            'step P6: once a day, with its comment'
+        )
     end
     H.ok(
         E('Permissions.supervisor.missionControls').default == false

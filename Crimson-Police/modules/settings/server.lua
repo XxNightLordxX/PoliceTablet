@@ -384,6 +384,7 @@ local RANGES = {
     ['AdminControl.jobProgressEveryMs'] = { 0, 5000 },
     ['AdminControl.refusalsKept'] = { 10, 2000 },
     ['MissionControls.changeWait'] = { 0, 86400 },
+    ['MissionControls.happyHourPerDay'] = { 0, 24 },
     ['Cash.addFundsMax'] = { 0, 10000000 },
     ['Cash.manualDailyLimit'] = { 0, 10000000 },
     ['Cash.lowBalanceWarn'] = { 0, 100000000 },

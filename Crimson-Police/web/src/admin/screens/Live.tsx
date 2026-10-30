@@ -22,7 +22,7 @@ import {
 } from '../../shared/components';
 import { asArray } from '../../shared/data';
 import { formatDateTime, formatDuration } from '../../shared/format';
-import { useRequest } from '../../shared/hooks';
+import { usePush, useRequest } from '../../shared/hooks';
 import { t } from '../../shared/i18n';
 import { useNavigate, useNavigation } from '../../shared/navigation';
 import { useSession } from '../../shared/session';
@@ -35,6 +35,7 @@ import type {
     AdminUnit,
     AdminUnitsData,
 } from '../../types/admin_live';
+import { happyHourBy } from '../../officer/components/HappyHourBanner';
 import { useAdminAction } from '../components/kit';
 import './Live.css';
 
@@ -414,6 +415,10 @@ export default function AdminLive() {
     const [unitDialog, setUnitDialog] = useState<UnitDialog | null>(null);
     const [minutes, setMinutes] = useState<number | null>(5);
     const [fetchKey, setFetchKey] = useState(0);
+    // happy hour (step P6): the chip with End now
+    const [hhEnding, setHhEnding] = useState(false);
+    usePush('happyHour', () => void runsReq.refetch());
+    const happyHour = runsReq.data?.happyHour || null;
 
     const runs = asArray(runsReq.data?.runs);
     const units = asArray(unitsReq.data?.units);
@@ -463,6 +468,16 @@ export default function AdminLive() {
             );
         }
         setRunDialog(null);
+        if (res.ok) void runsReq.refetch();
+    };
+
+    const confirmHappyHour = async (reason: string) => {
+        const res = await run(
+            'server:admin:resetMissionControl',
+            { department: '*', key: 'happyHour', reason },
+            { success: 'sup.hh.ended' },
+        );
+        setHhEnding(false);
         if (res.ok) void runsReq.refetch();
     };
 
@@ -558,6 +573,22 @@ export default function AdminLive() {
             subtitle={t('admin.live.subtitle')}
             actions={
                 <Row gap={2}>
+                    {happyHour ? (
+                        <span className="admin-live-hh">
+                            <Badge tone="accent" icon="clock">
+                                {`${t('admin.live.hh_chip')} `}
+                                <Countdown
+                                    seconds={happyHour.left}
+                                    resetKey={happyHour}
+                                    onDone={() => void runsReq.refetch()}
+                                />
+                                {` · ${happyHourBy(happyHour)}`}
+                            </Badge>
+                            <Button size="sm" variant="secondary" disabled={busy} onClick={() => setHhEnding(true)}>
+                                {t('admin.live.hh_end')}
+                            </Button>
+                        </span>
+                    ) : null}
                     {runs.length ? (
                         <Badge tone="success" dot>
                             {t('admin.live.count', { n: runs.length })}
@@ -602,6 +633,17 @@ export default function AdminLive() {
                 reason={{ required: true, label: t('common.reason'), maxLength: 255 }}
                 onConfirm={confirmRun}
                 onCancel={() => setRunDialog(null)}
+                busy={busy}
+            />
+            <ConfirmDialog
+                open={hhEnding}
+                tone="danger"
+                title={t('sup.hh.confirm_end')}
+                message={t('sup.hh.confirm_end_text')}
+                confirmLabel={t('admin.live.hh_end')}
+                reason={{ required: true, label: t('common.reason'), maxLength: 255 }}
+                onConfirm={reason => void confirmHappyHour(reason)}
+                onCancel={() => setHhEnding(false)}
                 busy={busy}
             />
             <ConfirmDialog

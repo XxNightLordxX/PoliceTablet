@@ -264,3 +264,10 @@
         gap: 2px;
     }
 }
+
+/* happy hour (step P6): the chip with End now */
+.admin-live-hh {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}

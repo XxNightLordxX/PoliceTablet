@@ -3407,6 +3407,19 @@ pattern, so a missing module reads as config).
   rule). `noRepeat = false`: `Draw.draw` and the calls' `BuildTypeState` give every member an empty history. The caps
   feed the accept checks, the board and boss locks (modules/events), livectl `Counts` and the home screen's
   `missionsToday`; the calls' count cache is re-read at the lower of the config and server-wide cap.
+- Happy hour (step P6, modules/happyhour `CP.HappyHour`): control `happyHour` (map `{ minutes, noRepeat = 0|1 }`,
+  `serverWide`, `master = false`, shipped on with min 5 / max 30 minutes). New `DC.register` options: `duration`
+  (fn(value) -> seconds: `DC.set` saves `expires_at = now + duration`, so the window survives a restart), `allow`
+  (one more rule: one running at a time `err.happy_hour_running`; a supervisor at most
+  `Config.MissionControls.happyHourPerDay` a day `err.happy_hour_used`, counted with
+  `Kit.dailyCount('missionControlSet', { target = '*:happyHour' })`), `overlays` (while the row is live, `DC.get`
+  of `cooldownScale` reads 0 for every mission type and, when ticked, `noRepeat` reads false; the self rule of the
+  happy hour row still applies, so the setter and his unit keep their cooldowns) and `viewExtra` (`perDay`,
+  `usedToday` on its view row). `DC.heldBy(officer, row)`, `DC.expired(dept, key)` (a 15 s tick finds the end and
+  fires `deptControls:changed` with `expired = true`). `HH.state(officer) -> { endsAt, left, minutes, noRepeat, by,
+  byRole, self } | nil` is in the session (`happyHour`), `getMissionTypes` (`happyHour`) and `admin:getLiveRuns`;
+  push `happyHour` (the state or false) goes to every online officer and admin on a start, an end now or the end.
+  End now = `server:admin:resetMissionControl { department = '*', key = 'happyHour' }` (or the supervisor reset).
 - Rows are cached per department, cleared on every write and on `settings:changed` for `MissionControls.*`,
   `Permissions.supervisor.missionControls` and `Departments.*`. Bounds are always read live.
 - Net: §8.3 (`sup:getMissionControls`, `server:sup:setMissionControl`, `server:sup:resetMissionControl` through
